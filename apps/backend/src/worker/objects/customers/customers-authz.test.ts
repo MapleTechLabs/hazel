@@ -65,6 +65,8 @@ const PAYLOADS = {
 	"customers.signals.history": {},
 	"customers.rule.dryRun": { draft: ruleDraft },
 	"customers.health.dryRun": { draft: DEFAULT_HEALTH_SETTINGS },
+	"customers.revenue.preview": { rules: [], variableMrrMonths: 3 },
+	"customers.revenue.catalog": {},
 	"customers.unmatched.list": {},
 	"customers.ignoreRules.list": {},
 	"customers.plans.list": {},
@@ -131,6 +133,8 @@ const PAYLOADS = {
 const ADMIN_ONLY = new Set([
 	"customers.rule.dryRun",
 	"customers.health.dryRun",
+	"customers.revenue.preview",
+	"customers.revenue.catalog",
 	"customers.unmatched.list",
 	"customers.ignoreRules.list",
 	"customers.view.create", // `shared: true`

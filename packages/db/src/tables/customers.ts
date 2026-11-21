@@ -32,6 +32,9 @@ import type {
 	CustomerSource,
 	ViewLayoutKey,
 	SuggestionReason,
+	InvoiceLineDoc,
+	RevenueRule,
+	SubscriptionItemDoc,
 } from "@hazel/domain/customers"
 import {
 	DEFAULT_ATTENTION_SETTINGS,
@@ -137,6 +140,16 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 		 * source, not revenue: no MRR movement.
 		 */
 		mrrSource: SQLite.nullable(textEnum(CustomerProvider.literals)),
+		/**
+		 * Variable MRR (`docs/customers/revenue.md`): the trailing monthly average of the lines classed
+		 * `variable`. Run-rate MRR is `mrrMinor + variableMrrMinor`.
+		 */
+		variableMrrMinor: money(),
+		/**
+		 * The revenue basis (rules and window, `revenueBasisOf`) `mrrMinor` was computed under; null
+		 * before. A change restates history instead of writing a movement.
+		 */
+		mrrBasis: SQLite.nullable(SQLite.text),
 		/** List price of the trial's plan per month: ranks trials in the queue (they have no MRR yet). */
 		trialListMrrMinor: SQLite.nullable(SQLite.integer),
 		trialEndsAt: SQLite.nullable(timestamptz),
@@ -368,6 +381,8 @@ export const customerSubscriptionsTable = SQLite.table("customer_subscriptions",
 		listMrrMinor: SQLite.nullable(SQLite.integer),
 		/** Billed on usage with no fixed price (`UpsertSubscription.billsByUsage`): paying at MRR 0. */
 		billsByUsage: SQLite.column(SQLite.boolean, { default: false }),
+		/** What it bills, per price (`docs/customers/revenue.md`); null when the provider sent none. */
+		items: SQLite.nullable(jsonb<ReadonlyArray<SubscriptionItemDoc>>()),
 		currency: SQLite.text,
 		interval: textEnum(BillingInterval.literals),
 		quantity: SQLite.column(SQLite.integer, { default: 1 }),
@@ -413,6 +428,10 @@ export const customerInvoicesTable = SQLite.table("customer_invoices", {
 		nextRetryAt: SQLite.nullable(timestamptz),
 		declineReason: SQLite.nullable(SQLite.text),
 		hostedUrl: SQLite.nullable(SQLite.text),
+		/** Its lines (`docs/customers/revenue.md`); null when the provider sent none. */
+		lines: SQLite.nullable(jsonb<ReadonlyArray<InvoiceLineDoc>>()),
+		/** The earliest service period start of its lines: when the account was first billed for. */
+		servicePeriodStart: SQLite.nullable(timestamptz),
 		/** The newest applied op's `observedAt` (the provider read time): an older op changes nothing. */
 		observedAt: SQLite.nullable(timestamptz),
 		createdAt: createdAt(),
@@ -427,6 +446,40 @@ export const customerInvoicesTable = SQLite.table("customer_invoices", {
 })
 export type CustomerInvoice = SQLite.SelectRowOf<typeof customerInvoicesTable>
 export type NewCustomerInvoice = SQLite.InsertRowOf<typeof customerInvoicesTable>
+
+/**
+ * A billing provider's price catalog, each price with its product: what revenue rules match a line's
+ * price and product on (`docs/customers/revenue.md`), and what the rules editor offers.
+ */
+export const customerPricesTable = SQLite.table("customer_prices", {
+	columns: {
+		provider: textEnum(CustomerProvider.literals),
+		externalId: SQLite.text,
+		productId: SQLite.nullable(SQLite.text),
+		productName: SQLite.nullable(SQLite.text),
+		nickname: SQLite.nullable(SQLite.text),
+		lookupKey: SQLite.nullable(SQLite.text),
+		/** `recurring` or `one_time`. */
+		priceType: SQLite.nullable(SQLite.text),
+		/** `licensed` or `metered`. */
+		usageType: SQLite.nullable(SQLite.text),
+		/** `per_unit` or `tiered`. */
+		billingScheme: SQLite.nullable(SQLite.text),
+		currency: SQLite.nullable(SQLite.text),
+		unitAmountMinor: SQLite.nullable(SQLite.real),
+		interval: SQLite.nullable(SQLite.text),
+		intervalCount: SQLite.nullable(SQLite.integer),
+		active: SQLite.column(SQLite.boolean, { default: true }),
+		metadata: SQLite.column(jsonb<Readonly<Record<string, string>>>(), { default: {} }),
+		productMetadata: SQLite.column(jsonb<Readonly<Record<string, string>>>(), { default: {} }),
+		observedAt: SQLite.nullable(timestamptz),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+	},
+	primaryKey: ["provider", "externalId"],
+	indexes: [SQLite.index("customer_prices_product_idx", ["productId"])],
+})
+export type CustomerPrice = SQLite.SelectRowOf<typeof customerPricesTable>
 
 // ---------------------------------------------------------------------------
 // Usage
@@ -499,6 +552,8 @@ export const customerOrgDailyTable = SQLite.table("customer_org_daily", {
 	columns: {
 		day,
 		mrrMinor: money(),
+		/** Σ variable MRR (`docs/customers/revenue.md`): run-rate MRR is `mrrMinor + variableMrrMinor`. */
+		variableMrrMinor: money(),
 		payingAccounts: count(),
 		trialingAccounts: count(),
 		/** ≥ 1 active user in the 30 days up to `day`. */
@@ -565,6 +620,24 @@ export const customerMrrMovementsTable = SQLite.table("customer_mrr_movements", 
 	],
 })
 export type CustomerMrrMovement = SQLite.SelectRowOf<typeof customerMrrMovementsTable>
+
+/**
+ * An account's variable MRR changes (`docs/customers/revenue.md`), one row per account and day, like
+ * `customer_mrr_movements` for MRR: run-rate MRR on a past day is the account's MRR and variable MRR
+ * then (run-rate NRR, the customer page's history).
+ */
+export const customerVariableMrrChangesTable = SQLite.table("customer_variable_mrr_changes", {
+	columns: {
+		accountId: uuid(CustomerAccountId),
+		day,
+		fromMinor: SQLite.integer,
+		toMinor: SQLite.integer,
+		currency: SQLite.text,
+	},
+	primaryKey: ["accountId", "day"],
+	indexes: [SQLite.index("customer_variable_mrr_changes_day_idx", ["day"])],
+})
+export type CustomerVariableMrrChange = SQLite.SelectRowOf<typeof customerVariableMrrChangesTable>
 
 // ---------------------------------------------------------------------------
 // Signals and queue
@@ -671,8 +744,12 @@ export const customerSettingsTable = SQLite.table("customer_settings", {
 		reportingCurrency: SQLite.column(SQLite.text, { default: "usd" }),
 		/** Plan names billed on top of a base plan: not an account's `planName` while it has one. */
 		addOnPlans: SQLite.column(jsonb<ReadonlyArray<string>>(), { default: [] }),
-		/** MRR from each Stripe subscription's last paid invoice (usage overage, discounts) once one exists. */
+		/** Unused (usage MRR is the revenue rules' now); the column stays. */
 		overageInMrr: SQLite.column(SQLite.boolean, { default: false }),
+		/** Revenue classification rules, first match wins (`docs/customers/revenue.md`). */
+		revenueRules: SQLite.column(jsonb<ReadonlyArray<RevenueRule>>(), { default: [] }),
+		/** Full calendar months variable MRR averages over. */
+		variableMrrMonths: SQLite.column(SQLite.integer, { default: 3 }),
 		/** The working week SLA policies on business hours count (`docs/customers/sla.md`). */
 		businessHours: SQLite.column(jsonb<BusinessHours>(), { default: DEFAULT_BUSINESS_HOURS }),
 		lastComputedAt: SQLite.nullable(timestamptz),

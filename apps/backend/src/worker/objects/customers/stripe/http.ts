@@ -25,17 +25,20 @@ type StripePath =
 	| "/account"
 	| "/customers"
 	| "/products"
+	| "/prices"
 	| "/subscriptions"
 	| "/invoices"
 	| "/events"
 	| `/customers/${string}`
 	| `/subscriptions/${string}`
 	| `/invoices/${string}`
+	| `/prices/${string}`
 
 export type StripeQuery = ProviderQuery
 
-/** `/customers/cus_…` → `/customers/{id}`: a route never carries an object id. */
-const routeOf = (path: StripePath): string => path.replace(/^(\/[a-z_]+)\/[^/]+$/, "$1/{id}")
+/** `/customers/cus_…` → `/customers/{id}`, `/invoices/in_…/lines` → `/invoices/{id}/lines`: a route never carries an object id. */
+const routeOf = (path: StripePath): string =>
+	path.replace(/^(\/[a-z_]+)\/[^/]+(\/[a-z_]+)?$/, "$1/{id}$2")
 
 const StripeErrorBody = Schema.Struct({
 	error: Schema.optionalKey(Schema.Struct({ message: Schema.optionalKey(Schema.String) })),

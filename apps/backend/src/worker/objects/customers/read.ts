@@ -18,11 +18,22 @@ import type {
 	MrrMovementType,
 	NewTrial,
 	OverviewResult,
+	RevenueBucket,
+	SeriesPoint,
 } from "@hazel/domain/customers"
 import { HealthStatus, logoOf } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerContactId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { type AccountFacts, type HealthPoint, type MetricPoint, mrrSeries, seriesOf } from "./facts"
+import {
+	addRevenue,
+	type BilledInvoice,
+	emptySplit,
+	loadRevenueBasis,
+	recurringMrrOf,
+	type RevenueSplit,
+	totalOf,
+} from "./revenue"
 import { inList, isActive } from "./sql"
 import { addDays, dayOf, dayRange } from "./time"
 
@@ -112,6 +123,64 @@ export const bucketOf = (day: Day, bucket: OverviewResult["bucket"]): Day => {
 // Overview
 // ---------------------------------------------------------------------------
 
+/** Retention of `end` over `start` for the accounts that had a value at the start, percent; null without. */
+const retention = (pairs: ReadonlyArray<{ start: number; end: number }>) => {
+	const cohort = pairs.filter((pair) => pair.start > 0)
+	const start = cohort.reduce((sum, pair) => sum + pair.start, 0)
+	if (start <= 0) return null
+	const end = cohort.reduce((sum, pair) => sum + pair.end, 0)
+	return Math.round((end / start) * 1000) / 10
+}
+
+/**
+ * Run-rate NRR over the range and the one before: per account, run-rate MRR (MRR + variable MRR)
+ * at a day is its current one less the MRR movements and variable MRR changes after it; the
+ * customers with run-rate at a range's start, their run-rate at its end over theirs at its start.
+ */
+const runRateRetention = (
+	accounts: ReadonlyArray<
+		Pick<schema.CustomerAccount, "id" | "mrrMinor" | "variableMrrMinor" | "deletedAt">
+	>,
+	movements: ReadonlyArray<schema.CustomerMrrMovement>,
+	previousStart: Day,
+	start: Day,
+) =>
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		const changes = yield* db.run(
+			SQLite.from(schema.customerVariableMrrChangesTable)
+				.select()
+				.where(($) => [$.day.gte(previousStart)]),
+		)
+		const deltas = new Map<CustomerAccountId, { current: number; previous: number }>()
+		const add = (accountId: CustomerAccountId, day: Day, delta: number) => {
+			const entry = deltas.get(accountId) ?? { current: 0, previous: 0 }
+			if (day >= start) entry.current += delta
+			else entry.previous += delta
+			deltas.set(accountId, entry)
+		}
+		for (const movement of movements) add(movement.accountId, movement.day, movement.deltaMinor)
+		for (const change of changes) add(change.accountId, change.day, change.toMinor - change.fromMinor)
+		// A deleted account is gone from its deletion on (compute stops there: what it stored is where
+		// its deltas lead back from).
+		const goneBy = (account: { deletedAt: Date | null }, day: Day) =>
+			account.deletedAt !== null && account.deletedAt < new Date(`${day}T00:00:00.000Z`)
+		const runRates = accounts.map((account) => {
+			const delta = deltas.get(account.id) ?? { current: 0, previous: 0 }
+			const stored = account.mrrMinor + account.variableMrrMinor
+			const atStart = stored - delta.current
+			return {
+				end: account.deletedAt === null ? stored : 0,
+				atStart: goneBy(account, start) ? 0 : atStart,
+				atPreviousStart: goneBy(account, previousStart) ? 0 : atStart - delta.previous,
+			}
+		})
+		return {
+			now: retention(runRates.map((rate) => ({ start: rate.atStart, end: rate.end }))),
+			before: retention(runRates.map((rate) => ({ start: rate.atPreviousStart, end: rate.atStart }))),
+		}
+	})
+
 export const overview = Effect.fn("Customers.overview")(function* (range: CustomersRange, now: Date) {
 	const db = yield* Database.Database
 	const today = dayOf(now)
@@ -173,11 +242,20 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 	const nrrBefore = nrr(inPrevious, previousStartMrr)
 	const wau = value(current, "wau")
 	const mau = value(current, "mau")
-	// Revenue collected: paid invoices in the reporting currency, recurring and one-off alike.
+	// Revenue collected: paid invoices in the reporting currency, their lines by class, without tax.
 	const rangeStart = new Date(`${start}T00:00:00.000Z`)
+	const basis = yield* loadRevenueBasis
 	const paid = yield* db.run(
 		SQLite.from(schema.customerInvoicesTable)
-			.select("amountPaidMinor", "paidAt")
+			.select(
+				"status",
+				"currency",
+				"issuedAt",
+				"paidAt",
+				"amountPaidMinor",
+				"servicePeriodStart",
+				"lines",
+			)
 			.where(($) => [
 				$.status.eq("paid"),
 				$.currency.eq(currency),
@@ -185,12 +263,25 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 				$.paidAt.lte(now),
 			]),
 	)
-	const revenue = { current: 0, previous: 0 }
+	const revenue = emptySplit()
+	const previousRevenue = emptySplit()
+	const revenueBy = new Map<Day, RevenueSplit>(
+		dayRange(today, days).map((day) => [bucketOf(day, bucket), emptySplit()]),
+	)
 	for (const invoice of paid) {
 		if (invoice.paidAt === null) continue
-		if (invoice.paidAt >= rangeStart) revenue.current += invoice.amountPaidMinor
-		else revenue.previous += invoice.amountPaidMinor
+		if (invoice.paidAt < rangeStart) {
+			addRevenue(previousRevenue, invoice, basis)
+			continue
+		}
+		addRevenue(revenue, invoice, basis)
+		const split = revenueBy.get(bucketOf(dayOf(invoice.paidAt), bucket))
+		if (split !== undefined) addRevenue(split, invoice, basis)
 	}
+	const revenueBuckets: Array<RevenueBucket> = [...revenueBy].map(([key, split]) => ({
+		start: key,
+		...split,
+	}))
 
 	// MRR movements per bucket.
 	const buckets = new Map<Day, MrrMovementBucket>()
@@ -267,11 +358,21 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 	}
 
 	// Health now, from the accounts.
-	const accounts = yield* db.run(
-		SQLite.from(schema.customerAccountsTable)
-			.select("id", "name", "logoUrl", "companyProfile", "planName", "mrrMinor", "healthStatus")
-			.where(($) => [$.deletedAt.isNull()]),
+	const everyAccount = yield* db.run(
+		SQLite.from(schema.customerAccountsTable).select(
+			"id",
+			"name",
+			"logoUrl",
+			"companyProfile",
+			"planName",
+			"mrrMinor",
+			"variableMrrMinor",
+			"healthStatus",
+			"deletedAt",
+		),
 	)
+	const accounts = everyAccount.filter((account) => account.deletedAt === null)
+	const runRateNrr = yield* runRateRetention(everyAccount, movements, previousStart, start)
 	const healthDistribution: Array<HealthDistributionRow> = HealthStatus.literals.map((status) => {
 		const rows = accounts.filter((account) => account.healthStatus === status)
 		return { status, count: rows.length, mrrMinor: rows.reduce((sum, row) => sum + row.mrrMinor, 0) }
@@ -390,15 +491,23 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 		bucket,
 		kpis: {
 			mrrMinor: kpi(value(current, "mrrMinor"), prior("mrrMinor")),
+			variableMrrMinor: kpi(value(current, "variableMrrMinor"), prior("variableMrrMinor")),
+			runRateMrrMinor: kpi(
+				value(current, "mrrMinor") + value(current, "variableMrrMinor"),
+				previous === null ? null : previous.mrrMinor + previous.variableMrrMinor,
+			),
 			payingCustomers: kpi(value(current, "payingAccounts"), prior("payingAccounts")),
 			activeCustomers: kpi(value(current, "activeAccounts"), prior("activeAccounts")),
 			wau: kpi(wau, prior("wau")),
 			mau: kpi(mau, prior("mau")),
-			revenueMinor: kpi(revenue.current, revenue.previous),
+			revenueMinor: kpi(totalOf(revenue), totalOf(previousRevenue)),
 			logoChurn: kpi(churnCount(inCurrent), churnCount(inPrevious)),
 			atRiskMrrMinor: kpi(value(current, "atRiskMrrMinor"), prior("atRiskMrrMinor")),
 			nrrPct: nrrNow === null ? null : kpi(nrrNow, nrrBefore),
+			runRateNrrPct: runRateNrr.now === null ? null : kpi(runRateNrr.now, runRateNrr.before),
 		},
+		revenue,
+		revenueBuckets,
 		mrrMovements,
 		activeUsers,
 		healthDistribution,
@@ -485,6 +594,32 @@ const accountFacts = (account: schema.CustomerAccount, days: number, now: Date) 
 		} satisfies AccountFacts
 	})
 
+/** An account's variable MRR on each day, carried back from now through its changes (`customer_variable_mrr_changes`). */
+const variableMrrSeries = (account: schema.CustomerAccount, last: Day, count: number) =>
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		const changes = yield* db.run(
+			SQLite.from(schema.customerVariableMrrChangesTable)
+				.select()
+				.where(($) => [$.accountId.eq(account.id), $.day.gt(addDays(last, -count))])
+				.orderBy(($) => [[$.day, "desc"]]),
+		)
+		// Newest first: walking back from today, a change on a day was in effect from that day.
+		let value = account.variableMrrMinor
+		let next = 0
+		return dayRange(last, count)
+			.reverse()
+			.map((day): SeriesPoint => {
+				const point = { day, value }
+				while (next < changes.length && changes[next].day === day) {
+					value = changes[next].fromMinor
+					next++
+				}
+				return point
+			})
+			.reverse()
+	})
+
 export const accountSeries = Effect.fn("Customers.accountSeries")(function* (
 	account: schema.CustomerAccount,
 	metricKeys: ReadonlyArray<string>,
@@ -496,8 +631,11 @@ export const accountSeries = Effect.fn("Customers.accountSeries")(function* (
 	const facts = yield* accountFacts(account, days, now)
 	const definitions = yield* db.run(SQLite.from(schema.customerMetricDefinitionsTable).select())
 	const today = dayOf(now)
+	const variable = metricKeys.includes("variable_mrr") ? yield* variableMrrSeries(account, today, days) : []
 	return metricKeys.map((key): MetricSeries => {
 		const definition = definitions.find((row) => row.key === key)
+		if (key === "variable_mrr")
+			return { metricKey: key, name: "Variable MRR", unit: "minor", points: variable, limit: null }
 		// The newest day's limit: a feature that has since stopped recording one has none now.
 		const history = facts.metrics.get(key) ?? []
 		return {
@@ -563,6 +701,73 @@ export const contactsPage = Effect.fn("Customers.contactsPage")(function* (
 	return { items: yield* contactRows(result.items, now), nextCursor: result.nextCursor }
 })
 
+/** Midnight UTC of the first of `months` months before `day`'s month. */
+const monthsBefore = (day: Day, months: number): Day => {
+	const date = new Date(`${day.slice(0, 8)}01T00:00:00.000Z`)
+	date.setUTCMonth(date.getUTCMonth() - months)
+	return dayOf(date)
+}
+
+/** What an account paid (its paid invoices' lines, without tax): 30 days, 12 months, by month. */
+const accountRevenue = (account: schema.CustomerAccount, now: Date) =>
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		const today = dayOf(now)
+		const first = monthsBefore(today, 12)
+		const basis = yield* loadRevenueBasis
+		const paid = yield* db.run(
+			SQLite.from(schema.customerInvoicesTable)
+				.select(
+					"status",
+					"currency",
+					"issuedAt",
+					"paidAt",
+					"amountPaidMinor",
+					"servicePeriodStart",
+					"lines",
+				)
+				.where(($) => [
+					$.accountId.eq(account.id),
+					$.status.eq("paid"),
+					$.currency.eq(account.currency),
+					$.paidAt.gte(new Date(`${first}T00:00:00.000Z`)),
+					$.paidAt.lte(now),
+				]),
+		)
+		const last30Days = emptySplit()
+		const last12Months = emptySplit()
+		const byMonth = new Map<Day, RevenueSplit>(
+			Array.from({ length: 13 }, (_, index) => [monthsBefore(today, 12 - index), emptySplit()]),
+		)
+		const since30 = new Date(`${addDays(today, -29)}T00:00:00.000Z`)
+		const since12 = new Date(`${addDays(today, -364)}T00:00:00.000Z`)
+		for (const invoice of paid) {
+			if (invoice.paidAt === null) continue
+			if (invoice.paidAt >= since30) addRevenue(last30Days, invoice, basis)
+			if (invoice.paidAt >= since12) addRevenue(last12Months, invoice, basis)
+			const month = byMonth.get(`${dayOf(invoice.paidAt).slice(0, 8)}01`)
+			if (month !== undefined) addRevenue(month, invoice, basis)
+		}
+		return {
+			last30Days,
+			last12Months,
+			byMonth: [...byMonth].map(([start, split]): RevenueBucket => ({ start, ...split })),
+		}
+	})
+
+/** Invoices with what their lines bill by class (any status; null without lines). */
+export const invoiceRows = (invoices: ReadonlyArray<schema.CustomerInvoice>) =>
+	Effect.gen(function* () {
+		const basis = yield* loadRevenueBasis
+		return invoices.map((invoice) => {
+			if (invoice.lines === null) return { invoice, revenue: null }
+			const split = emptySplit()
+			// Its lines whatever its status: what it bills, not what was collected.
+			addRevenue(split, { ...invoice, amountPaidMinor: 0 } satisfies BilledInvoice, basis)
+			return { invoice, revenue: split }
+		})
+	})
+
 export const accountDetail = Effect.fn("Customers.accountDetail")(function* (
 	account: schema.CustomerAccount,
 	now: Date,
@@ -626,7 +831,13 @@ export const accountDetail = Effect.fn("Customers.accountDetail")(function* (
 			.limit(10),
 	)
 	const live = subscriptions.filter((sub) => sub.status !== "canceled")
+	const basis = yield* loadRevenueBasis
 	return {
+		revenue: yield* accountRevenue(account, now),
+		subscriptionMrr: subscriptions.map((sub) => ({
+			subscriptionId: sub.id,
+			mrrMinor: recurringMrrOf(sub, basis),
+		})),
 		account,
 		refs,
 		subscriptions: [...live, ...subscriptions.filter((sub) => sub.status === "canceled")],

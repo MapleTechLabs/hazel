@@ -6,8 +6,9 @@
  * | Phase | Request | Writes |
  * |---|---|---|
  * | `customers` | `/customers` | accounts (matched by shared id or domain) and their billing contacts |
+ * | `prices` | `/prices` (`expand[]=data.product`) | the price catalog revenue rules match on |
  * | `subscriptions` | `/subscriptions?status=all` (expanded, `subscriptionExpands`) + `/products?ids[]=…` per page | subscriptions, MRR |
- * | `invoices` | `/invoices`, the last {@link INVOICE_BACKFILL_DAYS} days | invoices |
+ * | `invoices` | `/invoices`, the last {@link INVOICE_BACKFILL_DAYS} days (+ `/lines` past the first 10) | invoices and their lines |
  * | `events` | `/events?types[]=…&created[gte]=since` + one read per changed object | whatever changed |
  *
  * Paging is Stripe's own `starting_after`, which is id-based: a record deleted mid-walk cannot
@@ -42,12 +43,21 @@ import type { ConnectionConfig, IngestOp, IsoTimestamp, SyncProgress } from "@ha
 import { Clock, Effect, Option, Schema } from "effect"
 import type { PullPage } from "../providers"
 import type { StripeGet, StripeQuery } from "./http"
-import { customerOps, invoiceOp } from "./map"
-import { isTransient, NOTHING_READ, opsOfReads, readEvent, STRIPE_EVENT_TYPES } from "./webhook"
+import { customerOps, invoiceOp, priceOp } from "./map"
 import {
+	isTransient,
+	NOTHING_READ,
+	opsOfReads,
+	readEvent,
+	readInvoiceLines,
+	STRIPE_EVENT_TYPES,
+} from "./webhook"
+import {
+	objectOf,
 	StripeCustomersPage,
 	StripeEventsPage,
 	StripeInvoicesPage,
+	StripePricesPage,
 	StripeSubscriptionsPage,
 	subscriptionExpands,
 } from "./wire"
@@ -63,7 +73,7 @@ const EVENT_READ_CONCURRENCY = 4
 /** Events per page: at most this many object reads are redone when a page fails. */
 const EVENTS_PAGE_SIZE = 25
 
-const StripePhase = Schema.Literals(["customers", "subscriptions", "invoices", "events"])
+const StripePhase = Schema.Literals(["customers", "prices", "subscriptions", "invoices", "events"])
 type StripePhase = typeof StripePhase.Type
 
 /** Which phase the walk is in, and Stripe's paging cursor. */
@@ -84,7 +94,8 @@ export const decodeCursor = (cursor: string): Option.Option<StripeCursor> => dec
 export const encodeCursor = (cursor: StripeCursor): string => JSON.stringify(cursor)
 
 const NEXT_PHASE = {
-	customers: "subscriptions",
+	customers: "prices",
+	prices: "subscriptions",
 	subscriptions: "invoices",
 	invoices: null,
 	events: null,
@@ -136,6 +147,16 @@ const customersPage = Effect.fnUntraced(function* (
 	return pageOf(cursor, ops, body.data, body.has_more)
 })
 
+/** Every price, active or not (an old invoice's line names an archived one), with its product. */
+const pricesPage = Effect.fnUntraced(function* (get: StripeGet, cursor: StripeCursor, at: IsoTimestamp) {
+	const body = yield* get("/prices", query(cursor, [["expand[]", "data.product"]]), StripePricesPage)
+	const ops = body.data.flatMap((price) => {
+		const op = priceOp(price, objectOf(price.product), at)
+		return op === null ? [] : [op]
+	})
+	return pageOf(cursor, ops, body.data, body.has_more)
+})
+
 const subscriptionsPage = Effect.fnUntraced(function* (
 	get: StripeGet,
 	cursor: StripeCursor,
@@ -162,11 +183,14 @@ const invoicesPage = Effect.fnUntraced(function* (
 		query(cursor, [["created[gte]", secondsOf(nowMs - INVOICE_BACKFILL_DAYS * 86_400_000)]]),
 		StripeInvoicesPage,
 	)
-	const ops = body.data.flatMap((invoice) => {
-		const op = invoiceOp(invoice, { observedAt: at })
-		return op === null ? [] : [op]
-	})
-	return pageOf(cursor, ops, body.data, body.has_more)
+	// An invoice with more than the 10 lines Stripe embeds reads the rest, one at a time.
+	const ops = yield* Effect.forEach(body.data, (invoice) =>
+		Effect.map(readInvoiceLines(get, invoice), (lines) => {
+			const op = invoiceOp(invoice, { observedAt: at, lines })
+			return op === null ? [] : [op]
+		}),
+	)
+	return pageOf(cursor, ops.flat(), body.data, body.has_more)
 })
 
 const ObjectId = Schema.Struct({ id: Schema.String })
@@ -249,7 +273,9 @@ export const pullPage = Effect.fn("Stripe.pullPage")(function* (input: {
 	const page: PullPage =
 		cursor.phase === "customers"
 			? yield* customersPage(get, cursor, config, at)
-			: cursor.phase === "subscriptions"
+			: cursor.phase === "prices"
+				? yield* pricesPage(get, cursor, at)
+				: cursor.phase === "subscriptions"
 				? yield* subscriptionsPage(get, cursor, at)
 				: cursor.phase === "invoices"
 					? yield* invoicesPage(get, cursor, nowMs, at)

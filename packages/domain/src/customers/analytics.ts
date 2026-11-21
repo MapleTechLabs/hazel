@@ -2,7 +2,7 @@
  * What the read RPCs answer: aggregates, time series, per-account detail and dry runs
  * (`docs/customers/tech-design.md` §2 "RPC-only"). Live lists come from the synced collections.
  */
-import { CustomerAccountId } from "@hazel/schema"
+import { CustomerAccountId, CustomerSubscriptionId } from "@hazel/schema"
 import { Schema } from "effect"
 import { JsonDate } from "../models/utils"
 import {
@@ -15,6 +15,7 @@ import {
 } from "./enums"
 import { Day, SeriesPoint, SignalEvidence } from "./evidence"
 import { HealthBreakdown } from "./health"
+import { BillingLineSource, RevenueClass } from "./revenue"
 import { Account, Contact, Event, ExternalRef, Invoice, Subscription } from "./models"
 
 /** A page of `items`; pass `nextCursor` back as `cursor` for the next one (null: no more). */
@@ -39,21 +40,48 @@ export const Kpi = Schema.Struct({
 })
 export type Kpi = typeof Kpi.Type
 
+/**
+ * Revenue by class (`docs/customers/revenue.md`), minor units without tax. `unclassified`: paid on
+ * invoices Hazel holds no lines for.
+ */
+export const RevenueSplit = Schema.Struct({
+	recurring: Schema.Int,
+	variable: Schema.Int,
+	oneOff: Schema.Int,
+	unclassified: Schema.Int,
+})
+export type RevenueSplit = typeof RevenueSplit.Type
+
+/** Revenue collected in one bucket (month, week or day), by class. */
+export const RevenueBucket = Schema.Struct({ start: Day, ...RevenueSplit.fields })
+export type RevenueBucket = typeof RevenueBucket.Type
+
 export const OverviewKpis = Schema.Struct({
+	/** Contracted recurring revenue per month. */
 	mrrMinor: Kpi,
+	/** The trailing monthly average of variable (usage) billing. */
+	variableMrrMinor: Kpi,
+	/** MRR + variable MRR. */
+	runRateMrrMinor: Kpi,
+	/** Customers with run-rate MRR (a customer billed only on usage pays too). */
 	payingCustomers: Kpi,
 	/** ≥ 1 active user in 30 days. */
 	activeCustomers: Kpi,
 	wau: Kpi,
 	mau: Kpi,
-	/** Revenue collected in the range (paid invoices, recurring and one-off), minor units. */
+	/** Revenue collected in the range (paid invoices' lines, without tax), minor units. */
 	revenueMinor: Kpi,
 	/** Accounts that churned in the range. */
 	logoChurn: Kpi,
 	/** MRR of accounts with an open high-severity risk signal (now; `previous` from `customer_org_daily`). */
 	atRiskMrrMinor: Kpi,
-	/** Net revenue retention over the range, percent; null without MRR at its start. */
+	/** Net revenue retention of MRR over the range, percent; null without MRR at its start. */
 	nrrPct: Schema.NullOr(Kpi),
+	/**
+	 * Net revenue retention of run-rate MRR: the run-rate now of the customers that had one at the
+	 * range's start, over theirs then, percent; null without run-rate at its start.
+	 */
+	runRateNrrPct: Schema.NullOr(Kpi),
 })
 export type OverviewKpis = typeof OverviewKpis.Type
 
@@ -131,6 +159,10 @@ export const OverviewResult = Schema.Struct({
 	/** The charts' bucket size: day for 7d/30d, week for 90d, month for 12m. */
 	bucket: Schema.Literals(["day", "week", "month"]),
 	kpis: OverviewKpis,
+	/** Revenue collected in the range by class (`kpis.revenueMinor` is its total). */
+	revenue: RevenueSplit,
+	/** Revenue collected per bucket, by class. */
+	revenueBuckets: Schema.Array(RevenueBucket),
 	mrrMovements: Schema.Array(MrrMovementBucket),
 	activeUsers: Schema.Array(ActiveUsersPoint),
 	healthDistribution: Schema.Array(HealthDistributionRow),
@@ -179,8 +211,29 @@ export const AccountDetail = Schema.Struct({
 	contactsToReach: Schema.Array(ContactRow),
 	/** The latest ≤ 10 timeline events. */
 	recentEvents: Schema.Array(Event.Schema),
+	/**
+	 * Each subscription's contracted MRR under the revenue rules (its `mrrMinor` is what Stripe's
+	 * prices add up to, whatever their class): what the subscription cards show and MRR sums.
+	 */
+	subscriptionMrr: Schema.Array(
+		Schema.Struct({ subscriptionId: CustomerSubscriptionId, mrrMinor: Schema.Int }),
+	),
+	/** Revenue collected (paid invoices' lines, without tax), in the account's currency. */
+	revenue: Schema.Struct({
+		last30Days: RevenueSplit,
+		last12Months: RevenueSplit,
+		/** The last 12 months and this one, oldest first. */
+		byMonth: Schema.Array(RevenueBucket),
+	}),
 })
 export type AccountDetail = typeof AccountDetail.Type
+
+/** An invoice with what its lines bill by class (null: Hazel holds no lines for it). */
+export const InvoiceRow = Schema.Struct({
+	invoice: Invoice.Schema,
+	revenue: Schema.NullOr(RevenueSplit),
+})
+export type InvoiceRow = typeof InvoiceRow.Type
 
 export const MetricSeries = Schema.Struct({
 	metricKey: Schema.String,
@@ -233,6 +286,65 @@ export const RuleDryRunResult = Schema.Struct({
 	...DryRunCoverage.fields,
 })
 export type RuleDryRunResult = typeof RuleDryRunResult.Type
+
+/** How lines of one price (or, without one, of one description) classify now and under a draft. */
+export const RevenuePreviewGroup = Schema.Struct({
+	priceId: Schema.NullOr(Schema.String),
+	productId: Schema.NullOr(Schema.String),
+	/** The product's name, else the price's nickname or lookup key, else the lines' description. */
+	label: Schema.String,
+	/** The price's nickname or lookup key, when the label is the product's. */
+	detail: Schema.NullOr(Schema.String),
+	source: BillingLineSource,
+	proration: Schema.Boolean,
+	usageType: Schema.NullOr(Schema.String),
+	billingScheme: Schema.NullOr(Schema.String),
+	/** Invoice lines billed in the last 90 days, reporting currency; their net amount. */
+	lineCount: Schema.Int,
+	amountMinor: Schema.Int,
+	/** Items of live subscriptions on this price, and their monthly amount (reporting currency). */
+	itemCount: Schema.Int,
+	monthlyMinor: Schema.Int,
+	current: Schema.Struct({ classification: RevenueClass, ruleId: Schema.NullOr(Schema.String) }),
+	proposed: Schema.Struct({ classification: RevenueClass, ruleId: Schema.NullOr(Schema.String) }),
+})
+export type RevenuePreviewGroup = typeof RevenuePreviewGroup.Type
+
+const RevenueTotals = Schema.Struct({ mrrMinor: Schema.Int, variableMrrMinor: Schema.Int })
+
+/** The org's MRR and variable MRR under the saved revenue rules and under a draft, and what moves. */
+export const RevenuePreviewResult = Schema.Struct({
+	currency: Schema.String,
+	current: RevenueTotals,
+	proposed: RevenueTotals,
+	/** Most billed first. */
+	groups: Schema.Array(RevenuePreviewGroup),
+})
+export type RevenuePreviewResult = typeof RevenuePreviewResult.Type
+
+/** A price of the catalog, for the rules editor. */
+export const CatalogPriceRow = Schema.Struct({
+	priceId: Schema.String,
+	productId: Schema.NullOr(Schema.String),
+	productName: Schema.NullOr(Schema.String),
+	nickname: Schema.NullOr(Schema.String),
+	lookupKey: Schema.NullOr(Schema.String),
+	priceType: Schema.NullOr(Schema.String),
+	usageType: Schema.NullOr(Schema.String),
+	billingScheme: Schema.NullOr(Schema.String),
+	currency: Schema.NullOr(Schema.String),
+	unitAmountMinor: Schema.NullOr(Schema.Number),
+	interval: Schema.NullOr(Schema.String),
+	active: Schema.Boolean,
+})
+export type CatalogPriceRow = typeof CatalogPriceRow.Type
+
+export const RevenueCatalog = Schema.Struct({
+	prices: Schema.Array(CatalogPriceRow),
+	/** Metadata keys on the prices, products and recent invoice lines: what a metadata condition can test. */
+	metadataKeys: Schema.Array(Schema.String),
+})
+export type RevenueCatalog = typeof RevenueCatalog.Type
 
 export const HealthDryRunResult = Schema.Struct({
 	current: Schema.Array(HealthDistributionRow),

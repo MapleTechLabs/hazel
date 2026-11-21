@@ -30,8 +30,8 @@ links it.
     | Customers       | the accounts and their billing contacts                |
     | Subscriptions   | MRR, plan, status, trial, scheduled cancellation       |
     | Invoices        | amounts, due dates, failed payments, the hosted copy   |
-    | Products        | the plan names (a price only carries its product's id) |
-    | Prices          | the amounts and intervals embedded in a subscription   |
+    | Products        | plan names; product metadata for revenue rules         |
+    | Prices          | the catalog revenue rules classify lines by            |
     | Payment methods | the card brand, last four and expiry on file           |
     | Events          | the scheduled pull's change feed (`GET /v1/events`)    |
 
@@ -71,7 +71,8 @@ links it.
     `customer.subscription.resumed`, `invoice.finalized`, `invoice.paid`,
     `invoice.payment_failed`, `invoice.payment_action_required`, `invoice.voided`,
     `invoice.marked_uncollectible`, `payment_method.attached`, `payment_method.updated`,
-    `payment_method.automatically_updated`, `payment_method.detached`
+    `payment_method.automatically_updated`, `payment_method.detached`, `price.created`,
+    `price.updated`, `price.deleted`, `product.updated`
 
     The webhook is optional: without one every change still arrives through the scheduled pull's
     event feed, up to 6 hours late.

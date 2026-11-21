@@ -29,12 +29,15 @@
 import type {
 	ConnectionConfig,
 	IngestOp,
+	InvoiceLineDoc,
 	IsoTimestamp,
 	ProviderRef,
+	SubscriptionItemDoc,
 	SubscriptionStatus,
 	UpsertAccount,
 	UpsertContact,
 	UpsertInvoice,
+	UpsertPrice,
 	UpsertSubscription,
 } from "@hazel/domain/customers"
 import type { Types } from "effect"
@@ -51,8 +54,10 @@ import {
 	priceOf,
 	type StripeCustomer,
 	type StripeInvoice,
+	type StripeInvoiceLine,
 	type StripePaymentMethod,
 	type StripePrice,
+	type StripeProduct,
 	type StripeSource,
 	type StripeSubscription,
 	type StripeSubscriptionItem,
@@ -317,10 +322,64 @@ export const monthlyMrrOf = (subscription: StripeSubscription): SubscriptionMrr 
 	}
 }
 
+/** Metadata as revenue rules read it: string values only. */
+const metadataRecordOf = (metadata: Readonly<Record<string, unknown>> | null | undefined) =>
+	Object.fromEntries(metadataOf(metadata))
+
+/**
+ * Spreads `total` over `weights` in proportion, in whole minor units that sum to it exactly
+ * (largest remainder), so a subscription's items add up to its MRR.
+ */
+const apportion = (total: number, weights: ReadonlyArray<number>): Array<number> => {
+	const sum = weights.reduce((acc, weight) => acc + weight, 0)
+	if (sum <= 0) return weights.map(() => 0)
+	const exact = weights.map((weight) => (total * weight) / sum)
+	const floors = exact.map(Math.floor)
+	let left = total - floors.reduce((acc, value) => acc + value, 0)
+	const order = exact
+		.map((value, index) => ({ index, remainder: value - floors[index] }))
+		.sort((a, b) => b.remainder - a.remainder)
+	for (const { index } of order) {
+		if (left <= 0) break
+		floors[index]++
+		left--
+	}
+	return floors
+}
+
+/**
+ * What the subscription bills, per item (`docs/customers/revenue.md`): each priced item's monthly
+ * amount, the subscription's discounts spread over the priced items in proportion, so the items sum
+ * to {@link monthlyMrrOf}'s `mrrMinor`; null for an item billed by usage.
+ */
+export const subscriptionItemsOf = (subscription: StripeSubscription): Array<SubscriptionItemDoc> => {
+	const items = subscription.items?.data ?? []
+	const mrr = monthlyMrrOf(subscription)
+	const monthly = items.map(itemMonthlyMinor)
+	const priced = monthly.map((value) => value ?? 0)
+	const list = apportion(mrr.listMrrMinor, priced)
+	const net = apportion(mrr.mrrMinor, priced)
+	return items.map((item, index) => {
+		const price = priceOf(item)
+		return {
+			externalId: item.id ?? `${subscription.id}:${index}`,
+			priceId: price?.id ?? null,
+			productId: idOf(price?.product),
+			quantity: item.quantity ?? 1,
+			monthlyMinor: monthly[index] === null ? null : net[index],
+			listMonthlyMinor: monthly[index] === null ? null : list[index],
+			lookupKey: price?.lookup_key ?? null,
+			usageType: price?.recurring?.usage_type ?? price?.usage_type ?? null,
+			billingScheme: price?.billing_scheme ?? null,
+			metadata: metadataRecordOf(price?.metadata),
+		}
+	})
+}
+
 /** The product behind the item that carries the subscription's amount: the plan to name it after. */
 export const primaryProductIdOf = (subscription: StripeSubscription): string | null => {
 	const primary = monthlyMrrOf(subscription).primary
-	return (primary === null ? null : priceOf(primary)?.product) ?? null
+	return idOf(primary === null ? null : priceOf(primary)?.product)
 }
 
 /**
@@ -330,7 +389,8 @@ export const primaryProductIdOf = (subscription: StripeSubscription): string | n
  */
 const planNameOf = (price: StripePrice | null, productNames: ReadonlyMap<string, string>): string | null => {
 	if (price === null) return null
-	const product = price.product == null ? undefined : productNames.get(price.product)
+	const productId = idOf(price.product)
+	const product = productId === null ? undefined : productNames.get(productId)
 	return product ?? price.nickname ?? price.lookup_key ?? null
 }
 
@@ -409,6 +469,7 @@ export const subscriptionOp = (
 		status,
 		mrrMinor: mrr.mrrMinor,
 		listMrrMinor: mrr.listMrrMinor,
+		items: subscriptionItemsOf(subscription),
 		currency: mrr.currency,
 		interval: billingIntervalOf(price),
 		quantity: mrr.primary?.quantity ?? 1,
@@ -454,8 +515,71 @@ export const invoiceStatusOf = (status: string | null | undefined): UpsertInvoic
 /** What a failed collection records: Stripe keeps its own decline message on the payment intent. */
 const FAILED_REASON = "Stripe could not collect this payment"
 
+const sumOf = (amounts: ReadonlyArray<{ readonly amount?: number | null }> | null | undefined) =>
+	(amounts ?? []).reduce((sum, entry) => sum + (entry.amount ?? 0), 0)
+
 /**
- * An invoice, read at `observedAt` (ingest drops a read older than one it applied). Null for one
+ * One invoice line (`docs/customers/revenue.md`): its net amount is Stripe's `amount` less its
+ * discounts, its credit-balance credits (billing credits; discounts are listed there too, and counted
+ * once) and inclusive tax. Null without an id.
+ */
+export const invoiceLineOf = (line: StripeInvoiceLine): InvoiceLineDoc | null => {
+	if (line.id == null) return null
+	const parent = line.parent
+	const details = parent?.subscription_item_details ?? parent?.invoice_item_details ?? null
+	const credits = (line.pretax_credit_amounts ?? []).filter(
+		(credit) => credit.type === "credit_balance_transaction",
+	)
+	const inclusiveTax = (line.taxes ?? []).filter((tax) => tax.tax_behavior === "inclusive")
+	const net = (line.amount ?? 0) - sumOf(line.discount_amounts) - sumOf(credits) - sumOf(inclusiveTax)
+	return {
+		externalId: line.id,
+		source: parent?.type === "subscription_item_details" ? "subscription" : "invoice_item",
+		proration: details?.proration === true,
+		priceId: line.pricing?.price_details?.price ?? null,
+		productId: line.pricing?.price_details?.product ?? null,
+		description: line.description ?? null,
+		quantity: line.quantity ?? null,
+		amountMinor: Math.round(net),
+		periodStart: isoOf(line.period?.start),
+		periodEnd: isoOf(line.period?.end),
+		metadata: metadataRecordOf(line.metadata),
+	}
+}
+
+/** A price of the catalog, with its product when the read expanded it (`data.product`). */
+export const priceOp = (
+	price: StripePrice,
+	product: StripeProduct | null,
+	observedAt?: IsoTimestamp,
+): UpsertPrice | null => {
+	if (price.id == null) return null
+	const amount = amountMinorOf(price)
+	const op: Types.Mutable<UpsertPrice> = {
+		_tag: "price",
+		externalId: price.id,
+		productId: idOf(price.product),
+		productName: product?.name ?? null,
+		nickname: price.nickname ?? null,
+		lookupKey: price.lookup_key ?? null,
+		priceType: price.type ?? (intervalOf(price) === null ? null : "recurring"),
+		usageType: price.recurring?.usage_type ?? price.usage_type ?? null,
+		billingScheme: price.billing_scheme ?? null,
+		currency: price.currency?.toLowerCase() ?? null,
+		unitAmountMinor: amount,
+		interval: intervalOf(price),
+		intervalCount: intervalOf(price) === null ? null : intervalCountOf(price),
+		active: price.active !== false,
+		metadata: metadataRecordOf(price.metadata),
+		productMetadata: metadataRecordOf(product?.metadata),
+	}
+	if (observedAt !== undefined) op.observedAt = observedAt
+	return op
+}
+
+/**
+ * An invoice, read at `observedAt` (ingest drops a read older than one it applied), with all its
+ * `lines` when the caller read them (Stripe embeds the first 10 only: `readInvoiceLines`). Null for one
  * Hazel does not record: a preview with no id yet (`invoice.upcoming`), a draft, an invoice with no
  * customer, or a status Stripe added since.
  *
@@ -468,7 +592,11 @@ const FAILED_REASON = "Stripe could not collect this payment"
  */
 export const invoiceOp = (
 	invoice: StripeInvoice,
-	options: { readonly paymentFailed?: boolean; readonly observedAt?: IsoTimestamp } = {},
+	options: {
+		readonly paymentFailed?: boolean
+		readonly observedAt?: IsoTimestamp
+		readonly lines?: ReadonlyArray<StripeInvoiceLine> | undefined
+	} = {},
 ): UpsertInvoice | null => {
 	const externalId = invoice.id ?? null
 	const customerId = idOf(invoice.customer)
@@ -493,6 +621,8 @@ export const invoiceOp = (
 		nextRetryAt: isoOf(invoice.next_payment_attempt),
 		hostedUrl: invoice.hosted_invoice_url ?? null,
 	}
+	if (options.lines !== undefined)
+		op.lines = options.lines.map(invoiceLineOf).filter((line) => line !== null)
 	if (options.paymentFailed === true && status === "open") op.declineReason = FAILED_REASON
 	if (options.observedAt !== undefined) op.observedAt = options.observedAt
 	return op

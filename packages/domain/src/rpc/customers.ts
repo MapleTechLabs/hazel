@@ -37,10 +37,13 @@ import {
 	AccountDetail,
 	ContactRow,
 	HealthDryRunResult,
+	InvoiceRow,
 	MetricSeries,
 	OverviewResult,
 	Page,
 	PageRequest,
+	RevenueCatalog,
+	RevenuePreviewResult,
 	RuleDryRunResult,
 	Sparkline,
 } from "../customers/analytics"
@@ -66,7 +69,6 @@ import {
 	Event,
 	FeatureFlag,
 	IgnoreRule,
-	Invoice,
 	Issue,
 	Note,
 	SavedView,
@@ -77,6 +79,7 @@ import {
 	UnmatchedRecord,
 } from "../customers/models"
 import { AuthorSideOverride } from "../customers/author-side"
+import { RevenueRules, VariableMrrMonths } from "../customers/revenue"
 import { AttentionSettings, RuleDraft } from "../customers/rules"
 import { BusinessHours, SlaPolicyDraft, SupportReport } from "../customers/sla"
 import { ViewDraft, ViewLayoutDraft } from "../customers/views"
@@ -306,7 +309,7 @@ export class CustomerReadRpcs extends RpcGroup.make(
 		Schema.Struct({ contacts: Schema.Array(Contact.Schema) }),
 	),
 
-	read("customers.invoices.list", { accountId: CustomerAccountId, ...PageRequest }, Page(Invoice.Schema)),
+	read("customers.invoices.list", { accountId: CustomerAccountId, ...PageRequest }, Page(InvoiceRow)),
 
 	/** The timeline, newest first; one account's, or the org's. */
 	read(
@@ -344,6 +347,16 @@ export class CustomerReadRpcs extends RpcGroup.make(
 
 	/** Score every account under draft health settings, without writing. */
 	read("customers.health.dryRun", { draft: HealthSettings }, HealthDryRunResult),
+
+	/** MRR and variable MRR under draft revenue rules, and how each price's lines classify, without writing. */
+	read(
+		"customers.revenue.preview",
+		{ rules: RevenueRules, variableMrrMonths: VariableMrrMonths },
+		RevenuePreviewResult,
+	),
+
+	/** The billing providers' prices and the metadata keys seen: what revenue rules can name. */
+	read("customers.revenue.catalog", {}, RevenueCatalog),
 
 	read(
 		"customers.unmatched.list",
@@ -652,6 +665,9 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 			reportingCurrency: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^[A-Za-z]{3}$/))),
 			/** The whole list of add-on plan names. */
 			addOnPlans: Schema.optionalKey(Schema.Array(Schema.String)),
+			/** The whole list of revenue rules (`docs/customers/revenue.md`): the history is restated under them. */
+			revenueRules: Schema.optionalKey(RevenueRules),
+			variableMrrMonths: Schema.optionalKey(VariableMrrMonths),
 		},
 		Tx,
 	),

@@ -63,6 +63,7 @@ import {
 import { linkChannelNow, publishChannelCustomers } from "../../worker/objects/customers/channels"
 import { seedDemo } from "../../worker/objects/customers/demo"
 import { healthDryRun, ruleDryRun } from "../../worker/objects/customers/dry-run"
+import { revenueCatalog, revenuePreview } from "../../worker/objects/customers/revenue-preview"
 import {
 	accountsWithFlag,
 	sendFeatureFlags,
@@ -90,6 +91,7 @@ import {
 	accountDetail,
 	accountSeries,
 	contactsPage,
+	invoiceRows,
 	liveAccount,
 	overview,
 	pageOf,
@@ -391,7 +393,8 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 							.limit(page.limit + 1)
 							.offset(page.offset),
 					)
-					return pageResult(rows, page)
+					const result = pageResult(rows, page)
+					return { items: yield* invoiceRows(result.items), nextCursor: result.nextCursor }
 				}).pipe(remap),
 
 			"customers.events.list": ({ accountId, providers, types, ...request }) =>
@@ -480,6 +483,18 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 				Effect.gen(function* () {
 					yield* requireAdmin
 					return yield* healthDryRun(draft, yield* currentTime)
+				}).pipe(remap),
+
+			"customers.revenue.preview": (draft) =>
+				Effect.gen(function* () {
+					yield* requireAdmin
+					return yield* revenuePreview(draft, yield* currentTime)
+				}).pipe(remap),
+
+			"customers.revenue.catalog": () =>
+				Effect.gen(function* () {
+					yield* requireAdmin
+					return yield* revenueCatalog(yield* currentTime)
 				}).pipe(remap),
 
 			"customers.unmatched.list": ({ connectionId, status, ...request }) =>
@@ -1694,7 +1709,14 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.settings.update": ({ health, attention, reportingCurrency, addOnPlans }) =>
+			"customers.settings.update": ({
+				health,
+				attention,
+				reportingCurrency,
+				addOnPlans,
+				revenueRules,
+				variableMrrMonths,
+			}) =>
 				Effect.gen(function* () {
 					const actor = yield* requireAdmin
 					const now = yield* currentTime
@@ -1708,6 +1730,9 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 										attention,
 										reportingCurrency: reportingCurrency?.toLowerCase(),
 										addOnPlans,
+										// The next compute restates the history under them (`followRevenueBasis`).
+										revenueRules,
+										variableMrrMonths,
 										updatedBy: actor.userId,
 										updatedAt: now,
 									})

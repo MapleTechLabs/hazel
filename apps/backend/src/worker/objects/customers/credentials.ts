@@ -147,6 +147,7 @@ export const switchProviderAccount = Effect.fn("Customers.switchProviderAccount"
 		SQLite.deleteFrom(schema.customerSubscriptionsTable).where(($) => [$.provider.eq(provider)]),
 	)
 	yield* db.run(SQLite.deleteFrom(schema.customerInvoicesTable).where(($) => [$.provider.eq(provider)]))
+	yield* db.run(SQLite.deleteFrom(schema.customerPricesTable).where(($) => [$.provider.eq(provider)]))
 	yield* db.run(SQLite.deleteFrom(schema.customerEventsTable).where(($) => [$.provider.eq(provider)]))
 	yield* db.run(
 		SQLite.deleteFrom(schema.customerUnmatchedRecordsTable).where(($) => [
@@ -203,8 +204,11 @@ export const switchProviderAccount = Effect.fn("Customers.switchProviderAccount"
 		const first = addDays(dayOf(now), -HISTORY_DAYS)
 		yield* db.run(SQLite.deleteFrom(schema.customerMrrMovementsTable).where(($) => [$.day.gte(first)]))
 		yield* db.run(
+			SQLite.deleteFrom(schema.customerVariableMrrChangesTable).where(($) => [$.day.gte(first)]),
+		)
+		yield* db.run(
 			SQLite.update(schema.customerOrgDailyTable)
-				.set({ mrrMinor: 0, payingAccounts: 0, trialingAccounts: 0, atRiskMrrMinor: 0 })
+				.set({ mrrMinor: 0, variableMrrMinor: 0, payingAccounts: 0, trialingAccounts: 0, atRiskMrrMinor: 0 })
 				.where(($) => [$.day.gte(first)]),
 		)
 		yield* requestHistoryRebuild

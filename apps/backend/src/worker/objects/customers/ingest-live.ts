@@ -49,9 +49,11 @@ import {
 	type DefineMetric,
 	type SyncStats,
 	type UnmatchedEntityType,
+	type InvoiceLineDoc,
 	type UpsertAccount,
 	type UpsertContact,
 	type UpsertInvoice,
+	type UpsertPrice,
 	type UpsertSubscription,
 } from "@hazel/domain/customers"
 import {
@@ -223,6 +225,12 @@ const mergeAccountOps = (held: UpsertAccount, op: UpsertAccount): UpsertAccount 
 		: { ...merged, attributes: { ...older.attributes, ...newer.attributes } }
 }
 
+/** The earliest service period start of an invoice's lines: when the account was first billed for. */
+const servicePeriodStartOf = (lines: ReadonlyArray<InvoiceLineDoc>): Date | null => {
+	const starts = lines.flatMap((line) => (line.periodStart === null ? [] : [Date.parse(line.periodStart)]))
+	return starts.length === 0 ? null : new Date(Math.min(...starts))
+}
+
 /** Equal as stored: instants by time, documents by their JSON. */
 const same = (a: unknown, b: unknown) =>
 	a instanceof Date || b instanceof Date
@@ -279,6 +287,7 @@ const STAT_OF = {
 	activity: "activityDays",
 	metric: "metricDays",
 	metric_definition: null,
+	price: null,
 } satisfies Record<IngestOp["_tag"], keyof SyncStats | null>
 
 const encodeOp = Schema.encodeUnknownSync(IngestOp)
@@ -1368,6 +1377,7 @@ const make = Effect.gen(function* () {
 				// `undefined` leaves a column as it is (and its default on insert).
 				listMrrMinor: op.listMrrMinor,
 				billsByUsage: op.billsByUsage,
+				items: op.items,
 				cancellationReason: op.cancellationReason,
 				paymentMethod: op.paymentMethod,
 			}
@@ -1525,6 +1535,8 @@ const make = Effect.gen(function* () {
 				nextRetryAt: op.nextRetryAt === undefined ? undefined : toDate(op.nextRetryAt),
 				declineReason: op.declineReason,
 				hostedUrl: providerLink(session.context.provider, op.hostedUrl),
+				lines: op.lines,
+				servicePeriodStart: op.lines === undefined ? undefined : servicePeriodStartOf(op.lines),
 			}
 			const existing = yield* db.first(
 				SQLite.from(schema.customerInvoicesTable)
@@ -1601,6 +1613,57 @@ const make = Effect.gen(function* () {
 			)
 			yield* events
 			return outcome.updated(invoice.id)
+		})
+
+	/** A price of the provider's catalog (`docs/customers/revenue.md`): no account, keyed on its id. */
+	const applyPrice = (session: Session, op: UpsertPrice) =>
+		Effect.gen(function* () {
+			const { provider } = session.context
+			const values = {
+				productId: op.productId,
+				productName: op.productName,
+				nickname: op.nickname,
+				lookupKey: op.lookupKey,
+				priceType: op.priceType,
+				usageType: op.usageType,
+				billingScheme: op.billingScheme,
+				currency: op.currency,
+				unitAmountMinor: op.unitAmountMinor,
+				interval: op.interval,
+				intervalCount: op.intervalCount,
+				active: op.active,
+				metadata: op.metadata,
+				productMetadata: op.productMetadata,
+			}
+			const observedAt = toDate(op.observedAt)
+			const existing = yield* db.first(
+				SQLite.from(schema.customerPricesTable)
+					.select()
+					.where(($) => [$.provider.eq(provider), $.externalId.eq(op.externalId)])
+					.limit(1),
+			)
+			if (Option.isNone(existing)) {
+				yield* db.run(
+					SQLite.insertInto(schema.customerPricesTable).values({
+						provider,
+						externalId: op.externalId,
+						...values,
+						observedAt,
+					}),
+				)
+				return outcome.created(op.externalId)
+			}
+			const price = existing.value
+			if (readBefore(op.observedAt, price)) return outcome.unchanged(op.externalId)
+			const row: Record<string, unknown> = price
+			if (Object.entries(values).every(([field, value]) => same(row[field], value)))
+				return outcome.unchanged(op.externalId)
+			yield* db.run(
+				SQLite.update(schema.customerPricesTable)
+					.set({ ...values, observedAt: observedAt ?? price.observedAt, updatedAt: session.now })
+					.where(($) => [$.provider.eq(provider), $.externalId.eq(op.externalId)]),
+			)
+			return outcome.updated(op.externalId)
 		})
 
 	// -----------------------------------------------------------------------
@@ -1933,6 +1996,8 @@ const make = Effect.gen(function* () {
 				return applyDefinition(session, op, index)
 			case "event":
 				return applyEvent(session, op)
+			case "price":
+				return applyPrice(session, op)
 		}
 	}
 

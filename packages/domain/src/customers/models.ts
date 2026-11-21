@@ -68,6 +68,7 @@ import {
 } from "./enums"
 import { SignalEvidence } from "./evidence"
 import { HealthSettings } from "./health"
+import { RevenueRules, VariableMrrMonths } from "./revenue"
 import { AttentionSettings, RuleConfig, RuleScope } from "./rules"
 import { BusinessHours, SlaAppliesTo, SlaHours, SlaState, SlaTargets } from "./sla"
 import { CompanyProfile } from "./company"
@@ -95,7 +96,10 @@ class AccountModel extends M.Class<AccountModel>("CustomerAccount")({
 	lifecycleStage: LifecycleStage,
 	lifecycleStageOverride: S.NullOr(LifecycleStage),
 	planName: S.NullOr(S.String),
+	/** Contracted MRR (`docs/customers/revenue.md`). */
 	mrrMinor: S.Int,
+	/** The trailing average of variable billing; run-rate MRR is `mrrMinor + variableMrrMinor`. */
+	variableMrrMinor: S.Int,
 	currency: S.String,
 	trialListMrrMinor: S.NullOr(S.Int),
 	trialEndsAt: NullDate,
@@ -375,8 +379,12 @@ class SettingsModel extends M.Class<SettingsModel>("CustomerSettings")({
 	reportingCurrency: S.String,
 	/** Plan names billed on top of a base plan, never shown as an account's plan while it has one. */
 	addOnPlans: S.Array(S.String),
-	/** Unused: MRR always adds usage billing now (the backend's `usageMrrOf`); the column stays. */
+	/** Unused (usage MRR is the revenue rules' now); the column stays. */
 	overageInMrr: S.Boolean,
+	/** Revenue classification rules, first match wins (`docs/customers/revenue.md`). */
+	revenueRules: RevenueRules,
+	/** Full calendar months variable MRR averages over. */
+	variableMrrMonths: VariableMrrMonths,
 	/** The working week of SLA policies on business hours. */
 	businessHours: BusinessHours,
 	lastComputedAt: NullDate,

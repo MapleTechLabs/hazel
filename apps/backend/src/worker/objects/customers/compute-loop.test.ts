@@ -1440,52 +1440,191 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
-	it("adds a subscription's average usage overage over its last 3 months' paid Stripe invoices to MRR", () =>
+	it("keeps usage out of MRR as variable MRR; a rule change restates the history, no movement for it", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
 				yield* quietOrg(world)
+				world.object.storage.db
+					.prepare(
+						`UPDATE customer_connections SET backfilledAt = '2026-01-01 00:00:00.000' WHERE id = ?`,
+					)
+					.run(world.connection("stripe"))
+				const at = (iso: string) => new Date(iso).toISOString()
+				const usageLine = (month: string, next: string, amountMinor: number) => ({
+					externalId: `il_api_${month}`,
+					source: "subscription" as const,
+					proration: false,
+					priceId: "price_api",
+					productId: "prod_api",
+					description: null,
+					quantity: null,
+					amountMinor,
+					periodStart: at(`2026-${month}-01T00:00:00Z`),
+					periodEnd: at(`2026-${next}-01T00:00:00Z`),
+					metadata: {},
+				})
+				const next = (month: string) => String(Number(month) + 1).padStart(2, "0")
+				// Billed on the 1st: the base for the month ahead, usage for the month before.
+				const invoice = (month: string, previous: string, usage: number): IngestOp => ({
+					_tag: "invoice",
+					externalId: `in_${month}`,
+					account: { provider: "clerk", externalId: "org_1" },
+					subscriptionExternalId: "sub_1",
+					number: month,
+					status: "paid",
+					amountDueMinor: 19_900 + usage,
+					amountPaidMinor: 19_900 + usage,
+					currency: "usd",
+					issuedAt: at(`2026-${month}-01T00:00:00Z`),
+					dueAt: null,
+					paidAt: at(`2026-${month}-01T00:00:00Z`),
+					attemptCount: 1,
+					lines: [
+						{
+							...usageLine(month, next(month), 19_900),
+							externalId: `il_base_${month}`,
+							priceId: "price_base",
+							productId: "prod_base",
+						},
+						usageLine(previous, month, usage),
+					],
+				})
 				yield* world.ingest("stripe", [
-					subscription(60),
-					...[
-						{ id: "in_1", amount: 21_000, daysAgo: 35 },
-						{ id: "in_2", amount: 24_350, daysAgo: 5 },
-					].map(({ id, amount, daysAgo }): IngestOp => ({
-						_tag: "invoice",
-						externalId: id,
-						account: { provider: "clerk", externalId: "org_1" },
-						subscriptionExternalId: "sub_1",
-						number: id,
-						status: "paid",
-						amountDueMinor: amount,
-						amountPaidMinor: amount,
-						currency: "usd",
-						issuedAt: new Date(NOW.getTime() - daysAgo * DAY).toISOString(),
-						dueAt: null,
-						paidAt: new Date(NOW.getTime() - daysAgo * DAY).toISOString(),
-						attemptCount: 1,
-					})),
+					{
+						...subscription(120),
+						items: [
+							{
+								externalId: "si_base",
+								priceId: "price_base",
+								productId: "prod_base",
+								quantity: 1,
+								monthlyMinor: 19_900,
+								listMonthlyMinor: 19_900,
+								lookupKey: null,
+								usageType: "licensed",
+								billingScheme: "per_unit",
+								metadata: {},
+							},
+							{
+								externalId: "si_api",
+								priceId: "price_api",
+								productId: "prod_api",
+								quantity: 1,
+								monthlyMinor: null,
+								listMonthlyMinor: null,
+								lookupKey: null,
+								usageType: "metered",
+								billingScheme: "per_unit",
+								metadata: {},
+							},
+						],
+					},
+					invoice("04", "03", 3_000),
+					invoice("05", "04", 0),
+					invoice("06", "05", 6_000),
 				])
-				const mrr = () => world.rows(`SELECT mrrMinor FROM customer_accounts`)
-				// 19_900 + (1_100 + 4_450) / 2.
-				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
-				expect(mrr()).toEqual([{ mrrMinor: 22_675 }])
+				const account = () => world.rows(`SELECT mrrMinor, variableMrrMinor FROM customer_accounts`)
+				const movements = () =>
+					world.rows(
+						`SELECT day, type, fromMrrMinor, toMrrMinor FROM customer_mrr_movements ORDER BY day`,
+					)
 
-				// A history rebuild ends at the plans' MRR; the compute after it adds the usage back as
-				// today's movement.
-				yield* world.object.run(requestHistoryRebuild).pipe(Effect.orDie)
+				// MRR is the plan; usage (March 3_000, April 0, May 6_000) is variable MRR.
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(account()).toEqual([{ mrrMinor: 19_900, variableMrrMinor: 3_000 }])
+				expect(movements()).toEqual([
+					{ day: day(0), type: "new", fromMrrMinor: 0, toMrrMinor: 19_900 },
+				])
+				expect(
+					world.rows(`SELECT day, fromMinor, toMinor FROM customer_variable_mrr_changes`),
+				).toEqual([{ day: day(0), fromMinor: 0, toMinor: 3_000 }])
+				const result = yield* world.object.run(overview("30d", NOW)).pipe(Effect.orDie)
+				expect(result.kpis).toMatchObject({
+					mrrMinor: { value: 19_900 },
+					variableMrrMinor: { value: 3_000 },
+					runRateMrrMinor: { value: 22_900 },
+					revenueMinor: { value: 25_900 },
+				})
+				expect(result.revenue).toEqual({
+					recurring: 19_900,
+					variable: 6_000,
+					oneOff: 0,
+					unclassified: 0,
+				})
+
+				// The metered price is committed usage: a rule makes it recurring. The history is restated
+				// (usage averaged into MRR month by month), and the reclassification is no movement.
+				world.rows(
+					`UPDATE customer_settings SET revenueRules = '[{"id":"api","name":"Committed API","conditions":[{"field":"product","values":["prod_api"]}],"classification":"recurring"}]'`,
+				)
 				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
 				expect(meta(world, "rebuildHistory")).toBeUndefined()
 				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
-				expect(mrr()).toEqual([{ mrrMinor: 22_675 }])
+				expect(account()).toEqual([{ mrrMinor: 22_900, variableMrrMinor: 0 }])
+				expect(movements()).toEqual([
+					{ day: day(-120), type: "new", fromMrrMinor: 0, toMrrMinor: 19_900 },
+					// April: March alone (its first month billed); May: (3_000 + 0) / 2; June: 9_000 / 3.
+					{ day: "2026-04-01", type: "expansion", fromMrrMinor: 19_900, toMrrMinor: 22_900 },
+					{ day: "2026-05-01", type: "contraction", fromMrrMinor: 22_900, toMrrMinor: 21_400 },
+					{ day: "2026-06-01", type: "expansion", fromMrrMinor: 21_400, toMrrMinor: 22_900 },
+				])
+				expect(world.rows(`SELECT count(*) AS n FROM customer_variable_mrr_changes`)).toEqual([
+					{ n: 0 },
+				])
 				expect(
 					world.rows(
-						`SELECT day, type, fromMrrMinor, toMrrMinor FROM customer_mrr_movements ORDER BY day`,
+						`SELECT mrrMinor, variableMrrMinor FROM customer_org_daily WHERE day = ?`,
+						day(-1),
 					),
-				).toEqual([
-					{ day: day(-60), type: "new", fromMrrMinor: 0, toMrrMinor: 19_900 },
-					{ day: day(0), type: "expansion", fromMrrMinor: 19_900, toMrrMinor: 22_675 },
+				).toEqual([{ mrrMinor: 22_900, variableMrrMinor: 0 }])
+			}),
+		))
+
+	it("upgrades an org computed before lines: walks Stripe once, restates only after that import", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* quietOrg(world)
+				const stripe = world.connection("stripe")
+				const backfilled = world.object.storage.db.prepare(
+					`UPDATE customer_connections SET backfilledAt = '2026-01-01 00:00:00.000', lastSuccessAt = '2026-01-01 00:00:00.000' WHERE id = ?`,
+				)
+				backfilled.run(stripe)
+				yield* world.ingest("stripe", [subscription(40)])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				// As an org left by the previous release: a stale MRR with usage in it, no revenue meta.
+				world.rows(`UPDATE customer_accounts SET mrrMinor = 25000, mrrBasis = NULL`)
+				world.rows(`UPDATE customer_mrr_movements SET toMrrMinor = 25000, deltaMinor = 25000`)
+				world.rows(`DELETE FROM _object_meta WHERE key IN ('revenueData', 'revenueBasis')`)
+
+				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
+				expect(
+					world.rows(
+						`SELECT backfilledAt, lastSuccessAt FROM customer_connections WHERE id = ?`,
+						stripe,
+					),
+				).toEqual([{ backfilledAt: null, lastSuccessAt: null }])
+				expect(meta(world, "restateRevenue")).toBe("1")
+				// Waiting for the walk: no rebuild, and the drop from the old MRR is not a contraction.
+				expect(meta(world, "rebuildHistory")).toBeUndefined()
+				expect(world.rows(`SELECT type FROM customer_mrr_movements`)).toEqual([{ type: "new" }])
+				expect(world.rows(`SELECT mrrMinor FROM customer_accounts`)).toEqual([{ mrrMinor: 19_900 }])
+
+				// The import is done: the next step restates from the billing data, once.
+				backfilled.run(stripe)
+				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
+				expect(meta(world, "restateRevenue")).toBeUndefined()
+				expect(world.rows(`SELECT day, type, toMrrMinor FROM customer_mrr_movements`)).toEqual([
+					{ day: day(-40), type: "new", toMrrMinor: 19_900 },
 				])
+				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
+				expect(
+					world.rows(
+						`SELECT backfilledAt IS NOT NULL AS kept FROM customer_connections WHERE id = ?`,
+						stripe,
+					),
+				).toEqual([{ kept: 1 }])
 			}),
 		))
 

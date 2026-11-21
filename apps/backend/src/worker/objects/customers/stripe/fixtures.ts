@@ -235,6 +235,70 @@ export const DISCOUNT_20_PERCENT = {
 	},
 }
 
+/** An invoice line as `2025-08-27.basil` returns it: the price and product under `pricing`, the source under `parent`. */
+export const invoiceLine = (overrides: Record<string, unknown>) => ({
+	id: "il_2acme00000001",
+	object: "line_item",
+	amount: 120_000,
+	currency: "usd",
+	description: "12 × Pro (at $1,200.00 / year)",
+	discount_amounts: [],
+	discountable: true,
+	invoice: "in_2acme00000001",
+	livemode: true,
+	metadata: {},
+	parent: {
+		type: "subscription_item_details",
+		invoice_item_details: null,
+		subscription_item_details: {
+			invoice_item: null,
+			proration: false,
+			proration_details: { credited_items: null },
+			subscription: "sub_2acme00000001",
+			subscription_item: "si_2acme00000001",
+		},
+	},
+	period: { start: SEC("2026-11-01T09:25:00.000Z"), end: SEC("2027-11-01T09:25:00.000Z") },
+	pretax_credit_amounts: [],
+	pricing: {
+		type: "price_details",
+		price_details: { price: "price_2pro_year0001", product: PRODUCT_PRO.id },
+		unit_amount_decimal: "10000",
+	},
+	quantity: 12,
+	taxes: [],
+	...overrides,
+})
+
+/** The catalog: every price the subscriptions above bill, as `/v1/prices` lists them. */
+export const PRICES = [
+	price({
+		id: "price_2pro_year0001",
+		unit_amount: 120_000,
+		unit_amount_decimal: "120000",
+		recurring: { interval: "year", interval_count: 1, usage_type: "licensed" },
+		metadata: { revenue: "core" },
+	}),
+	price({ id: "price_2pro000000001" }),
+	price({
+		id: "price_2seats_month1",
+		currency: "eur",
+		product: PRODUCT_SEATS.id,
+		unit_amount: 4_900,
+		unit_amount_decimal: "4900",
+	}),
+	price({
+		id: "price_2events_meter",
+		currency: "eur",
+		product: PRODUCT_EVENTS.id,
+		unit_amount: null,
+		unit_amount_decimal: null,
+		billing_scheme: "tiered",
+		tiers_mode: "graduated",
+		recurring: { interval: "month", interval_count: 1, usage_type: "metered" },
+	}),
+]
+
 export const INVOICE_ACME_PAID = {
 	id: "in_2acme00000001",
 	object: "invoice",
@@ -251,6 +315,7 @@ export const INVOICE_ACME_PAID = {
 	attempt_count: 1,
 	next_payment_attempt: null,
 	hosted_invoice_url: "https://invoice.stripe.com/i/acct_1Hazel00000000000/live_YWNbe",
+	lines: { object: "list", has_more: false, url: "/v1/invoices/in_2acme00000001/lines", data: [invoiceLine({})] },
 	status_transitions: {
 		finalized_at: SEC("2026-11-01T09:26:00.000Z"),
 		paid_at: SEC("2026-11-01T09:27:00.000Z"),

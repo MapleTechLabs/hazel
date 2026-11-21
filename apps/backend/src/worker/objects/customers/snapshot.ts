@@ -17,7 +17,7 @@ import {
 	MAX_WINDOW_DAYS,
 	type SignalTemplate,
 } from "@hazel/domain/customers"
-import type { CustomerAccountId, CustomerContactId, CustomerSubscriptionId } from "@hazel/schema"
+import type { CustomerAccountId, CustomerContactId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { type RuleInput, activityWindowDays } from "./evaluate"
 import { groupFacts } from "./group-facts"
@@ -32,6 +32,15 @@ import {
 	type OrgFacts,
 	pays,
 } from "./facts"
+import {
+	accountRevenueOf,
+	type BilledInvoice,
+	isBilled,
+	loadRevenueBasis,
+	type RevenueBasis,
+	recurringMrrOf,
+	windowMonths,
+} from "./revenue"
 import { inList, isActive } from "./sql"
 import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "./time"
 
@@ -40,7 +49,12 @@ const accountIdText = schema.typed<CustomerAccountId>()(SQLite.text)
 
 /** The account fields compute owns, derived from its subscriptions, contacts and activity. */
 export interface Rollup {
+	/** Contracted MRR (`docs/customers/revenue.md`). */
 	readonly mrrMinor: number
+	/** The trailing average of variable billing; run-rate MRR adds it to `mrrMinor`. */
+	readonly variableMrrMinor: number
+	/** The revenue basis both were computed under. */
+	readonly mrrBasis: string
 	readonly currency: string
 	/** Whose subscriptions `mrrMinor` counts (`billingProviderOf`); null without any. */
 	readonly mrrSource: CustomerProvider | null
@@ -121,6 +135,8 @@ export interface SnapshotBase {
 	readonly groups: ReadonlyArray<ReadonlyArray<CustomerAccountId>>
 	/** The first day of activity loaded (the rules' window). */
 	readonly from: Day
+	/** Revenue rules, window and price catalog (`./revenue.ts`). */
+	readonly revenue: RevenueBasis
 	/** `inactive` rules' prior windows (days). */
 	readonly priorWindows: ReadonlyArray<number>
 }
@@ -144,49 +160,6 @@ const topOf = (subs: ReadonlyArray<schema.CustomerSubscription>) =>
 	subs.find((sub) => sub.status === "trialing") ??
 	subs[0]
 
-/** How far back usage billing averages (`usageMrrOf`): 3 months. */
-export const USAGE_WINDOW_DAYS = 92
-
-/** The usage component of one subscription's MRR, per month. */
-export interface UsageMrr {
-	readonly subscriptionId: CustomerSubscriptionId
-	readonly mrrMinor: number
-	readonly currency: string
-}
-
-/**
- * Usage billing on top of the plans' MRR, best effort: for each billed (`billed`) monthly Stripe
- * subscription, the average of what its paid invoices of the last 3 months (`USAGE_WINDOW_DAYS`)
- * charged above its plan price (metered and tiered prices, which the plan's MRR leaves out), over the
- * invoices there are when fewer than 3. A discount (paid below the plan) adds nothing. Any provider's
- * account: Autumn bills through Stripe subscriptions.
- */
-export const usageMrrOf = (
-	/** The account's, any provider. */
-	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
-	/** The account's paid Stripe invoices. */
-	paidInvoices: ReadonlyArray<schema.CustomerInvoice>,
-	now: Date,
-): ReadonlyArray<UsageMrr> =>
-	subscriptions.flatMap((sub) => {
-		if (sub.provider !== "stripe" || sub.interval !== "month" || !billed(sub)) return []
-		const recent = paidInvoices
-			.filter(
-				(invoice) =>
-					invoice.subscriptionId === sub.id &&
-					invoice.currency === sub.currency &&
-					invoice.paidAt !== null &&
-					invoice.paidAt <= now &&
-					now.getTime() - invoice.paidAt.getTime() <= USAGE_WINDOW_DAYS * DAY_MS,
-			)
-			.sort((a, b) => Number(b.paidAt) - Number(a.paidAt))
-			.slice(0, 3)
-		if (recent.length === 0) return []
-		const usage = sum(recent.map((invoice) => Math.max(0, invoice.amountPaidMinor - sub.mrrMinor)))
-		const mrrMinor = Math.round(usage / recent.length)
-		return mrrMinor === 0 ? [] : [{ subscriptionId: sub.id, mrrMinor, currency: sub.currency }]
-	})
-
 /** The fields compute derives for one account (pure). */
 export const rollupAccount = (input: {
 	readonly account: schema.CustomerAccount
@@ -195,8 +168,9 @@ export const rollupAccount = (input: {
 	readonly mrrSource: CustomerProvider | null
 	/** Add-on plan names (settings' `addOnPlans`): `planName` is a base plan's while there is one. */
 	readonly addOnPlans: ReadonlyArray<string>
-	/** Its usage billing per month (`usageMrrOf`), added on top of the plans' MRR. */
-	readonly usageMrr: ReadonlyArray<UsageMrr>
+	readonly revenue: RevenueBasis
+	/** Its billed invoices (any provider's), for variable MRR (`accountRevenueOf`). */
+	readonly invoices: ReadonlyArray<BilledInvoice>
 	readonly contacts: ReadonlyArray<ContactFacts>
 	readonly activity: AccountFacts["activity"]
 	readonly lastActiveDay: Day | null
@@ -207,12 +181,17 @@ export const rollupAccount = (input: {
 	const { account, subscriptions, now, today, currency } = input
 	const live = subscriptions.filter((sub) => sub.status !== "canceled")
 	const paying = live.filter(billed)
-	const mrrMinor =
-		sum(paying.filter((sub) => sub.currency === currency).map((sub) => sub.mrrMinor)) +
-		sum(input.usageMrr.filter((row) => row.currency === currency).map((row) => row.mrrMinor))
 	// Paying in any currency (MRR counts only the reporting currency's; `attributes.foreignMrr` the rest),
 	// or on usage at MRR 0: never `churned` or `lead` for want of MRR.
 	const paid = paying.some(pays)
+	const recurring = (sub: schema.CustomerSubscription) => recurringMrrOf(sub, input.revenue)
+	const { mrrMinor, variableMrrMinor } = accountRevenueOf({
+		subscriptions,
+		invoices: input.invoices,
+		basis: input.revenue,
+		currency,
+		now,
+	})
 	const foreign = paying.filter((sub) => sub.currency !== currency)
 	const trialing = live.filter((sub) => sub.status === "trialing")
 	const addOns = new Set(input.addOnPlans)
@@ -274,6 +253,8 @@ export const rollupAccount = (input: {
 
 	return {
 		mrrMinor,
+		variableMrrMinor,
+		mrrBasis: input.revenue.key,
 		currency,
 		mrrSource: input.mrrSource,
 		planName: top?.planName ?? null,
@@ -304,7 +285,7 @@ export const rollupAccount = (input: {
 							[...new Set(foreign.map((sub) => sub.currency))].map((code) => [
 								code,
 								sum(
-									foreign.filter((sub) => sub.currency === code).map((sub) => sub.mrrMinor),
+									foreign.filter((sub) => sub.currency === code).map(recurring),
 								),
 							]),
 						),
@@ -515,6 +496,7 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 				connection.backfilledAt !== null &&
 				(connection.lastSuccessAt === null || connection.lastSuccessAt >= connection.connectedAt),
 		),
+		revenue: yield* loadRevenueBasis,
 		accountIds,
 		groups: [...groups]
 			.sort(([a], [b]) => (a < b ? -1 : 1))
@@ -611,15 +593,25 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			.select()
 			.where(($) => [inList($.accountId, ids), $.status.eq("open"), $.provider.eq("stripe")]),
 	)
-	const paidInvoices = yield* db.run(
+	// Variable MRR's window, and a year before it for lines whose service period reaches into it.
+	const usageFrom = new Date(windowMonths(now, base.revenue.months)[0] - 365 * DAY_MS)
+	const billedInvoices = yield* db.run(
 		SQLite.from(schema.customerInvoicesTable)
-			.select()
+			.select(
+				"accountId",
+				"status",
+				"currency",
+				"issuedAt",
+				"paidAt",
+				"amountPaidMinor",
+				"servicePeriodStart",
+				"lines",
+			)
 			.where(($) => [
 				inList($.accountId, ids),
-				$.status.eq("paid"),
-				$.provider.eq("stripe"),
-				$.subscriptionId.isNotNull(),
-				$.paidAt.gte(new Date(now.getTime() - USAGE_WINDOW_DAYS * DAY_MS)),
+				$.status.in_("open", "paid"),
+				$.currency.eq(currency),
+				$.issuedAt.gte(usageFrom),
 			]),
 	)
 	const metrics = yield* db.run(
@@ -685,8 +677,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 		new Map(accounts.map((account) => [account.id, account.mrrSource])),
 	)
 	const invoicesBy = groupBy(openInvoices, (invoice) => invoice.accountId)
-	const subscriptionsBy = groupBy(subscriptions, (sub) => sub.accountId)
-	const paidInvoicesBy = groupBy(paidInvoices, (invoice) => invoice.accountId)
+	const billedInvoicesBy = groupBy(billedInvoices.filter(isBilled), (invoice) => invoice.accountId)
 	const metricsBy = groupBy(metrics, (row) => row.accountId)
 	const movementsBy = groupBy(movements, (row) => row.accountId)
 	const healthBy = groupBy(health, (row) => row.accountId)
@@ -716,11 +707,8 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			subscriptions: accountSubs,
 			mrrSource: billing?.source ?? null,
 			addOnPlans: base.settings.addOnPlans,
-			usageMrr: usageMrrOf(
-				subscriptionsBy.get(stored.id) ?? [],
-				paidInvoicesBy.get(stored.id) ?? [],
-				now,
-			),
+			revenue: base.revenue,
+			invoices: billedInvoicesBy.get(stored.id) ?? [],
 			contacts: accountContacts,
 			activity: byDay,
 			lastActiveDay,

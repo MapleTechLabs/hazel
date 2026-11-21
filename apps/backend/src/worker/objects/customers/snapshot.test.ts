@@ -1,12 +1,19 @@
 /**
  * The pure account rollup (`rollupAccount`): which subscription names the plan when some plans are
- * add-ons, that add-ons still count for MRR, and usage billing on top (`usageMrrOf`).
+ * add-ons, that add-ons still count for MRR, and MRR and variable MRR from classified billing
+ * (`docs/customers/revenue.md`).
  */
 import type { schema } from "@hazel/db"
-import type { CustomerProvider } from "@hazel/domain/customers"
+import type {
+	CustomerProvider,
+	InvoiceLineDoc,
+	RevenueRule,
+	SubscriptionItemDoc,
+} from "@hazel/domain/customers"
 import type { CustomerSubscriptionId } from "@hazel/schema"
 import { describe, expect, it } from "vitest"
-import { rollupAccount, usageMrrOf } from "./snapshot"
+import { makeRevenueBasis } from "./revenue"
+import { rollupAccount } from "./snapshot"
 import { factsOf, NOW, TODAY } from "./test-kit"
 
 const rollupOf = (
@@ -19,7 +26,8 @@ const rollupOf = (
 		subscriptions: facts.subscriptions,
 		mrrSource: "autumn",
 		addOnPlans,
-		usageMrr: [],
+		revenue: basisOf(),
+		invoices: [],
 		contacts: facts.contacts,
 		activity: facts.activity,
 		lastActiveDay: facts.lastActiveDay,
@@ -104,29 +112,96 @@ describe("account rollup", () => {
 	})
 })
 
-const DAY = 86_400_000
-const paidDaysAgo = (days: number) => new Date(NOW.getTime() - days * DAY)
 const subId = (name: string) => `sub-${name}` as CustomerSubscriptionId
 
-/**
- * `invoices` are paid Stripe ones (`subscriptionId` a sub's `id`); the rollup gets `mrrSource`'s
- * subscriptions, the usage all of them.
- */
+const item = (overrides: Partial<SubscriptionItemDoc>): SubscriptionItemDoc => ({
+	externalId: `si_${overrides.priceId ?? "x"}`,
+	priceId: "price_base",
+	productId: "prod_base",
+	quantity: 1,
+	monthlyMinor: 19_900,
+	listMonthlyMinor: 19_900,
+	lookupKey: null,
+	usageType: "licensed",
+	billingScheme: "per_unit",
+	metadata: {},
+	...overrides,
+})
+
+const line = (overrides: Partial<InvoiceLineDoc>): InvoiceLineDoc => ({
+	externalId: `il_${Math.random()}`,
+	source: "subscription",
+	proration: false,
+	priceId: "price_api",
+	productId: "prod_api",
+	description: null,
+	quantity: null,
+	amountMinor: 0,
+	periodStart: null,
+	periodEnd: null,
+	metadata: {},
+	...overrides,
+})
+
+/** A billed invoice issued on the first of `month` (2026), with usage lines for the month before. */
+const usageInvoice = (month: number, amountMinor: number, overrides: Partial<schema.CustomerInvoice> = {}) => {
+	const issued = new Date(Date.UTC(2026, month - 1, 1))
+	return {
+		status: "paid" as const,
+		currency: "usd",
+		issuedAt: issued,
+		paidAt: issued,
+		amountPaidMinor: amountMinor,
+		servicePeriodStart: new Date(Date.UTC(2026, month - 2, 1)),
+		lines: [
+			line({
+				amountMinor,
+				periodStart: new Date(Date.UTC(2026, month - 2, 1)).toISOString(),
+				periodEnd: issued.toISOString(),
+			}),
+		],
+		...overrides,
+	}
+}
+
+const METERED_PRICES = [
+	{ externalId: "price_api", productId: "prod_api", usageType: "metered", billingScheme: "per_unit", priceType: "recurring" },
+	{ externalId: "price_base", productId: "prod_base", usageType: "licensed", billingScheme: "per_unit", priceType: "recurring" },
+].map((price) => ({
+	provider: "stripe" as const,
+	productName: null,
+	nickname: null,
+	lookupKey: null,
+	currency: "usd",
+	unitAmountMinor: null,
+	interval: "month",
+	intervalCount: 1,
+	active: true,
+	metadata: {},
+	productMetadata: {},
+	observedAt: null,
+	createdAt: NOW,
+	updatedAt: NOW,
+	...price,
+}))
+
+const basisOf = (rules: ReadonlyArray<RevenueRule> = []) => makeRevenueBasis(rules, 3, "usd", METERED_PRICES)
+
+/** `invoices` are the account's billed ones; the rollup gets `mrrSource`'s subscriptions. */
 const usageRollupOf = (
 	subscriptions: ReadonlyArray<Partial<schema.CustomerSubscription>>,
 	invoices: ReadonlyArray<Partial<schema.CustomerInvoice>>,
-	mrrSource: CustomerProvider = "stripe",
+	options: { readonly mrrSource?: CustomerProvider; readonly rules?: ReadonlyArray<RevenueRule> } = {},
 ) => {
-	const facts = factsOf({
-		subscriptions,
-		openInvoices: invoices.map((invoice) => ({ status: "paid", ...invoice })),
-	})
+	const mrrSource = options.mrrSource ?? "stripe"
+	const facts = factsOf({ subscriptions, openInvoices: invoices })
 	return rollupAccount({
 		account: facts.account,
 		subscriptions: facts.subscriptions.filter((sub) => sub.provider === mrrSource),
 		mrrSource,
 		addOnPlans: [],
-		usageMrr: usageMrrOf(facts.subscriptions, facts.openInvoices, NOW),
+		revenue: basisOf(options.rules),
+		invoices: facts.openInvoices,
 		contacts: facts.contacts,
 		activity: facts.activity,
 		lastActiveDay: facts.lastActiveDay,
@@ -136,89 +211,102 @@ const usageRollupOf = (
 	})
 }
 
-describe("MRR: the plans plus usage billing", () => {
-	const team = { id: subId("team"), mrrMinor: 19_900 }
+// NOW is 2026-06-15: variable MRR averages March, April and May.
+describe("MRR and variable MRR", () => {
+	const team = {
+		id: subId("team"),
+		mrrMinor: 19_900,
+		items: [item({}), item({ priceId: "price_api", productId: "prod_api", usageType: "metered", monthlyMinor: null, listMonthlyMinor: null })],
+	}
+	const usage = [usageInvoice(4, 3_000), usageInvoice(5, 0), usageInvoice(6, 6_000), usageInvoice(3, 99_000)]
 
-	it("is the plans' MRR without paid invoices", () => {
-		expect(usageRollupOf([team], []).mrrMinor).toBe(19_900)
+	it("counts the recurring items in MRR, and averages usage into variable MRR by service month", () => {
+		const rollup = usageRollupOf([team], usage)
+		expect(rollup.mrrMinor).toBe(19_900)
+		// March 3_000, April 0, May 6_000; February's 99_000 is before the window.
+		expect(rollup.variableMrrMinor).toBe(3_000)
+		expect(rollup.lifecycleStage).toBe("active")
+		expect(rollup.mrrBasis).toBe(basisOf().key)
 	})
 
-	it("adds the last 3 months' average overage above the plan", () => {
+	it("counts a subscription without items at its MRR", () => {
+		expect(usageRollupOf([{ mrrMinor: 4_900, items: null }], []).mrrMinor).toBe(4_900)
+	})
+
+	it("moves a metered price into MRR (its trailing average) when a rule classes it recurring", () => {
+		const rollup = usageRollupOf([team], usage, {
+			rules: [
+				{
+					id: "api",
+					name: "Committed API usage",
+					conditions: [{ field: "product", values: ["prod_api"] }],
+					classification: "recurring",
+				},
+			],
+		})
+		expect(rollup).toMatchObject({ mrrMinor: 22_900, variableMrrMinor: 0 })
+	})
+
+	it("drops a fixed price from MRR when a rule classes it otherwise", () => {
+		const rollup = usageRollupOf([team], usage, {
+			rules: [
+				{
+					id: "base",
+					name: "Seats are variable",
+					conditions: [{ field: "price", values: ["price_base"] }],
+					classification: "variable",
+				},
+			],
+		})
+		expect(rollup).toMatchObject({ mrrMinor: 0, variableMrrMinor: 3_000 })
+	})
+
+	it("averages a new customer over the months it was billed in", () => {
+		const rollup = usageRollupOf([team], [usageInvoice(6, 6_000)])
+		expect(rollup.variableMrrMinor).toBe(6_000)
+	})
+
+	it("leaves out void, other-currency and not yet issued invoices", () => {
 		const rollup = usageRollupOf(
 			[team],
 			[
-				{ subscriptionId: team.id, amountPaidMinor: 99_000, paidAt: paidDaysAgo(100) },
-				{ subscriptionId: team.id, amountPaidMinor: 22_900, paidAt: paidDaysAgo(70) },
-				{ subscriptionId: team.id, amountPaidMinor: 19_900, paidAt: paidDaysAgo(40) },
-				{ subscriptionId: team.id, amountPaidMinor: 25_900, paidAt: paidDaysAgo(10) },
-				{ subscriptionId: team.id, amountPaidMinor: 50_000, paidAt: paidDaysAgo(-2) },
+				usageInvoice(4, 3_000),
+				usageInvoice(5, 50_000, { status: "void" }),
+				usageInvoice(6, 70_000, { currency: "eur" }),
+				usageInvoice(6, 80_000, { issuedAt: new Date(NOW.getTime() + 86_400_000) }),
 			],
 		)
-		// (3_000 + 0 + 6_000) / 3; the invoices 100 days ago and 2 days ahead are out of the window.
-		expect(rollup.mrrMinor).toBe(22_900)
-		expect(rollup.lifecycleStage).toBe("active")
+		// March 3_000 alone (still averaged over the 3 months since it was first billed).
+		expect(rollup.variableMrrMinor).toBe(1_000)
 	})
 
-	it("averages over the invoices there are when fewer than 3", () => {
-		expect(
-			usageRollupOf(
-				[team],
-				[
-					{ subscriptionId: team.id, amountPaidMinor: 21_900, paidAt: paidDaysAgo(40) },
-					{ subscriptionId: team.id, amountPaidMinor: 25_900, paidAt: paidDaysAgo(10) },
-				],
-			).mrrMinor,
-		).toBe(23_900)
+	it("counts no usage once the account stops paying", () => {
+		const rollup = usageRollupOf([{ ...team, status: "canceled", canceledAt: NOW }], usage)
+		expect(rollup).toMatchObject({ mrrMinor: 0, variableMrrMinor: 0 })
 	})
 
-	it("counts a usage-only subscription's whole invoices", () => {
-		const metered = { id: subId("metered"), mrrMinor: 0, billsByUsage: true }
-		expect(
-			usageRollupOf(
-				[metered],
-				[{ subscriptionId: metered.id, amountPaidMinor: 4_200, paidAt: paidDaysAgo(12) }],
-			).mrrMinor,
-		).toBe(4_200)
+	it("counts an invoice-only customer's usage while it was billed last month", () => {
+		expect(usageRollupOf([], usage).variableMrrMinor).toBe(3_000)
+		expect(usageRollupOf([], [usageInvoice(4, 3_000)]).variableMrrMinor).toBe(0)
 	})
 
-	it("adds nothing for a discount, a yearly plan, or a canceled subscription", () => {
-		const yearly = { id: subId("yearly"), interval: "year" as const, mrrMinor: 15_000 }
-		const old = { id: subId("old"), status: "canceled" as const, mrrMinor: 9_900 }
-		expect(
-			usageRollupOf(
-				[team, yearly, old],
-				[
-					{ subscriptionId: team.id, amountPaidMinor: 15_000, paidAt: paidDaysAgo(5) },
-					{ subscriptionId: yearly.id, amountPaidMinor: 190_000, paidAt: paidDaysAgo(20) },
-					{ subscriptionId: old.id, amountPaidMinor: 50_000, paidAt: paidDaysAgo(5) },
-				],
-			).mrrMinor,
-		).toBe(34_900)
-	})
-
-	it("adds only reporting-currency usage", () => {
-		const euro = { id: subId("euro"), currency: "eur", mrrMinor: 5_000 }
-		const rollup = usageRollupOf(
-			[team, euro],
-			[
-				{ subscriptionId: team.id, amountPaidMinor: 20_500, paidAt: paidDaysAgo(5) },
-				{ subscriptionId: euro.id, amountPaidMinor: 7_000, currency: "eur", paidAt: paidDaysAgo(5) },
-			],
-		)
-		expect(rollup.mrrMinor).toBe(20_500)
+	it("keeps another currency's subscriptions out of MRR", () => {
+		const euro = { id: subId("euro"), currency: "eur", mrrMinor: 5_000, items: null }
+		const rollup = usageRollupOf([team, euro], usage)
+		expect(rollup.mrrMinor).toBe(19_900)
 		expect(rollup.attributes.foreignMrr).toEqual({ eur: 5_000 })
 	})
 
-	it("adds an Autumn-sourced account's Stripe usage on top of its Autumn plan", () => {
+	it("adds an Autumn-sourced account's Stripe usage as variable MRR beside its Autumn plan", () => {
 		const rollup = usageRollupOf(
 			[
-				{ provider: "autumn", planName: "Pro", mrrMinor: 4_900 },
-				{ id: subId("stripe"), provider: "stripe", planName: "Pro", mrrMinor: 4_900 },
+				{ provider: "autumn", planName: "Pro", mrrMinor: 4_900, items: null },
+				{ id: subId("stripe"), provider: "stripe", planName: "Pro", mrrMinor: 4_900, items: team.items },
 			],
-			[{ subscriptionId: subId("stripe"), amountPaidMinor: 6_200, paidAt: paidDaysAgo(12) }],
-			"autumn",
+			usage,
+			{ mrrSource: "autumn" },
 		)
-		expect(rollup).toMatchObject({ mrrMinor: 6_200, mrrSource: "autumn", planName: "Pro" })
+		expect(rollup).toMatchObject({ mrrMinor: 4_900, variableMrrMinor: 3_000, mrrSource: "autumn" })
 	})
 })
 
@@ -230,7 +318,8 @@ describe("champion inactivity", () => {
 			subscriptions: facts.subscriptions,
 			mrrSource: "autumn",
 			addOnPlans: [],
-			usageMrr: [],
+			revenue: basisOf(),
+			invoices: [],
 			contacts: facts.contacts,
 			activity: facts.activity,
 			lastActiveDay: facts.lastActiveDay,

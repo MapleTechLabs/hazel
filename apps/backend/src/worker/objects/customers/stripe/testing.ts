@@ -17,6 +17,9 @@ export interface FakeStripeState {
 	readonly apiKey: string
 	readonly customers: ReadonlyArray<Row>
 	readonly products: ReadonlyArray<Row>
+	readonly prices: ReadonlyArray<Row>
+	/** Every line of an invoice, by its id: what `/v1/invoices/{id}/lines` pages through. */
+	readonly invoiceLines: Readonly<Record<string, ReadonlyArray<Row>>>
 	readonly subscriptions: ReadonlyArray<Row>
 	readonly invoices: ReadonlyArray<Row>
 	/** Expanded into a subscription's `default_payment_method` when a request asks for it. */
@@ -55,6 +58,8 @@ export const makeFakeStripe = (options: Partial<FakeStripeState> = {}): FakeStri
 	apiKey: "rk_test_fake000000000000000000",
 	customers: [],
 	products: [],
+	prices: [],
+	invoiceLines: {},
 	subscriptions: [],
 	invoices: [],
 	paymentMethods: [],
@@ -116,6 +121,12 @@ const listOf = (rows: ReadonlyArray<Row>, params: UrlParams.UrlParams) => {
 const byId = (rows: ReadonlyArray<Row>, id: unknown): Row | undefined =>
 	typeof id === "string" ? rows.find((row) => row.id === id) : undefined
 
+/** A price with its product expanded (`expand[]=product`). */
+const withProduct = (fake: FakeStripeState, price: Row): Row => ({
+	...price,
+	product: byId(fake.products, price["product"]) ?? price["product"],
+})
+
 /** What Stripe returns for a subscription: ids, unless the request expanded them (`prefix.path`). */
 const expandSubscription = (
 	fake: FakeStripeState,
@@ -164,6 +175,14 @@ const serve = (fake: FakeStripeState, path: string, params: UrlParams.UrlParams)
 	if (fake.failing.includes(path)) return stripeError(503, "Stripe is having a bad moment", "api_error")
 	if (fake.invalid.includes(path)) return stripeError(400, "Invalid request", "parameter_invalid")
 	if (fake.garbled.includes(path)) return json(200, { object: "garbled" })
+	const lines = /^\/invoices\/([^/]+)\/lines$/.exec(path)
+	if (lines !== null) return listOf(fake.invoiceLines[lines[1] ?? ""] ?? [], params)
+	const priced = /^\/prices\/([^/]+)$/.exec(path)
+	if (priced !== null) {
+		const found = byId(fake.prices, priced[1])
+		if (found === undefined) return missing(priced[1] ?? "")
+		return json(200, all(params, "expand[]").includes("product") ? withProduct(fake, found) : found)
+	}
 	const one = /^\/(customers|subscriptions|invoices)\/([^/]+)$/.exec(path)
 	if (one !== null) {
 		const kind = one[1] as "customers" | "subscriptions" | "invoices"
@@ -184,6 +203,16 @@ const serve = (fake: FakeStripeState, path: string, params: UrlParams.UrlParams)
 			return listOf(fake.customers, params)
 		case "/products":
 			return listOf(fake.products, params)
+		case "/prices": {
+			const product = first(params, "product")
+			const expanded = all(params, "expand[]").includes("data.product")
+			return listOf(
+				fake.prices
+					.filter((row) => product === undefined || row["product"] === product)
+					.map((row) => (expanded ? withProduct(fake, row) : row)),
+				params,
+			)
+		}
 		case "/subscriptions": {
 			const status = first(params, "status")
 			const customer = first(params, "customer")

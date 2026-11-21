@@ -20,7 +20,9 @@
  * | `customer.created` / `updated` / `deleted` | `GET /v1/customers/{id}` | account + billing contact; a deleted customer → its deletion |
  * | `customer.updated` changing `invoice_settings` or `default_source` | also `GET /v1/subscriptions?customer=…` | the customer's subscriptions, for the default card they fall back to |
  * | `customer.subscription.created` / `updated` / `deleted` / `paused` / `resumed` | `GET /v1/subscriptions/{id}` | the subscription |
- * | `invoice.finalized` / `paid` / `payment_failed` / `payment_action_required` / `voided` / `marked_uncollectible` | `GET /v1/invoices/{id}` | the invoice |
+ * | `invoice.finalized` / `paid` / `payment_failed` / `payment_action_required` / `voided` / `marked_uncollectible` | `GET /v1/invoices/{id}` (+ `/lines` past the first 10) | the invoice and its lines |
+ * | `price.created` / `updated` / `deleted` | `GET /v1/prices/{id}?expand[]=product` | the price in the catalog |
+ * | `product.updated` | `GET /v1/prices?product=…&expand[]=data.product` | its prices in the catalog (name, metadata) |
  * | `payment_method.attached` / `updated` / `automatically_updated` / `detached` | `GET /v1/subscriptions?customer=…` | the customer's subscriptions, for the card on file |
  *
  * Writing subscriptions also reads their plans' names, one `GET /v1/products?ids[]=…` per 100
@@ -51,14 +53,26 @@ import {
 } from "../provider-errors"
 import { issueSummary } from "../provider-http"
 import type { StripeGet } from "./http"
-import { accountDeletedOp, customerOps, invoiceOp, primaryProductIdOf, subscriptionOp } from "./map"
+import {
+	accountDeletedOp,
+	customerOps,
+	invoiceOp,
+	primaryProductIdOf,
+	priceOp,
+	subscriptionOp,
+} from "./map"
 import { verifyStripeSignature } from "./signature"
 import {
 	idOf,
+	objectOf,
 	StripeCustomer,
 	StripeEvent,
 	StripeInvoice,
+	type StripeInvoiceLine,
+	StripeInvoiceLinesPage,
 	StripePaymentMethod,
+	StripePrice,
+	StripePricesPage,
 	StripeProductsPage,
 	StripeSubscription,
 	StripeSubscriptionsPage,
@@ -92,12 +106,17 @@ const PAYMENT_METHOD_EVENTS: ReadonlySet<string> = new Set([
 	"payment_method.detached",
 ])
 
+const PRICE_EVENTS: ReadonlySet<string> = new Set(["price.created", "price.updated", "price.deleted"])
+const PRODUCT_EVENTS: ReadonlySet<string> = new Set(["product.updated"])
+
 /** Every event type Hazel handles: the webhook endpoint's subscription, and the pull's `types[]`. */
 export const STRIPE_EVENT_TYPES: ReadonlyArray<string> = [
 	...CUSTOMER_EVENTS,
 	...SUBSCRIPTION_EVENTS,
 	...INVOICE_EVENTS,
 	...PAYMENT_METHOD_EVENTS,
+	...PRICE_EVENTS,
+	...PRODUCT_EVENTS,
 ]
 
 /** Refuse an event: logged with the reason (never the payload), a delivery is answered 400 with `message`. */
@@ -134,6 +153,37 @@ const current = <A>(read: Effect.Effect<A, CustomerProviderError>) =>
 			error.httpStatus === 404 ? Effect.succeed(Option.none<A>()) : Effect.fail(error),
 		),
 	)
+
+/**
+ * All of an invoice's lines: Stripe embeds the first 10, and `/v1/invoices/{id}/lines` pages the rest
+ * (100 at a time). `undefined` when the read carried no `lines` at all: the stored ones stay.
+ */
+export const readInvoiceLines = Effect.fn("Stripe.invoiceLines")(function* (
+	get: StripeGet,
+	invoice: StripeInvoice,
+) {
+	if (invoice.lines?.data === undefined) return undefined
+	const lines: Array<StripeInvoiceLine> = [...invoice.lines.data]
+	let more = invoice.lines.has_more === true
+	while (more && invoice.id != null) {
+		const after = lines[lines.length - 1]?.id
+		const page = yield* get(
+			`/invoices/${encodeURIComponent(invoice.id)}/lines`,
+			[["limit", "100"], ...(after == null ? [] : [["starting_after", after] as const])],
+			StripeInvoiceLinesPage,
+		)
+		lines.push(...page.data)
+		more = page.has_more === true && page.data.length > 0
+	}
+	return lines
+})
+
+/** A price's catalog op, its product expanded (`expand[]=product`). */
+const catalogOpsOf = (prices: ReadonlyArray<StripePrice>, observedAt: IsoTimestamp): Array<IngestOp> =>
+	prices.flatMap((price) => {
+		const op = priceOp(price, objectOf(price.product), observedAt)
+		return op === null ? [] : [op]
+	})
 
 /** Stripe's `/v1/products` takes at most 100 `ids[]` (its `limit`). */
 const PRODUCTS_PER_LOOKUP = 100
@@ -263,8 +313,37 @@ export const readEvent = Effect.fn("Stripe.readEvent")(function* (
 		const { id } = yield* decodeAs(ObjectId, data, type)
 		const invoice = yield* current(get(`/invoices/${encodeURIComponent(id)}`, [], StripeInvoice))
 		if (Option.isNone(invoice)) return NOTHING_READ
-		const op = invoiceOp(invoice.value, { paymentFailed: type === "invoice.payment_failed", observedAt })
+		const lines = yield* readInvoiceLines(get, invoice.value)
+		const op = invoiceOp(invoice.value, {
+			paymentFailed: type === "invoice.payment_failed",
+			observedAt,
+			lines,
+		})
 		return { ops: op === null ? [] : [op], subscriptions: [] }
+	}
+	if (PRICE_EVENTS.has(type)) {
+		const { id } = yield* decodeAs(ObjectId, data, type)
+		const price = yield* current(
+			get(`/prices/${encodeURIComponent(id)}`, [["expand[]", "product"]], StripePrice),
+		)
+		return { ops: catalogOpsOf(Option.toArray(price), observedAt), subscriptions: [] }
+	}
+	if (PRODUCT_EVENTS.has(type)) {
+		const { id } = yield* decodeAs(ObjectId, data, type)
+		const prices = yield* current(
+			get(
+				"/prices",
+				[["product", id], ["limit", "100"], ["expand[]", "data.product"]],
+				StripePricesPage,
+			),
+		)
+		return {
+			ops: catalogOpsOf(
+				Option.match(prices, { onNone: () => [], onSome: (page) => page.data }),
+				observedAt,
+			),
+			subscriptions: [],
+		}
 	}
 	if (PAYMENT_METHOD_EVENTS.has(type)) {
 		const method = yield* decodeAs(StripePaymentMethod, data, type)

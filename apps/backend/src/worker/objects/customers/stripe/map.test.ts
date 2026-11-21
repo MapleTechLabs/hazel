@@ -12,8 +12,11 @@ import {
 	billingIntervalOf,
 	clerkOrgIdsOf,
 	customerOps,
+	invoiceLineOf,
 	invoiceOp,
 	monthlyMrrOf,
+	priceOp,
+	subscriptionItemsOf,
 	primaryProductIdOf,
 	statusOf,
 	subscriptionOp,
@@ -31,12 +34,14 @@ import {
 	PAYMENT_METHOD_ACME,
 	PRODUCT_PRO,
 	PRODUCT_SEATS,
+	PRICES,
+	invoiceLine,
 	SEC,
 	SUB_ACME,
 	SUB_GLOBEX,
 	SUB_PERSONAL_CANCELED,
 } from "./fixtures"
-import { StripeCustomer, StripeInvoice, StripeSubscription } from "./wire"
+import { StripeCustomer, StripeInvoice, StripeInvoiceLine, StripePrice, StripeSubscription } from "./wire"
 
 const CONFIG: ConnectionConfig = {
 	_tag: "stripe",
@@ -377,6 +382,20 @@ describe("a Stripe subscription", () => {
 			canceledAt: null,
 			cancellationReason: null,
 			billsByUsage: false,
+			items: [
+				{
+					externalId: "si_2acme00000001",
+					priceId: "price_2pro_year0001",
+					productId: PRODUCT_PRO.id,
+					quantity: 12,
+					monthlyMinor: 120_000,
+					listMonthlyMinor: 120_000,
+					lookupKey: null,
+					usageType: "licensed",
+					billingScheme: "per_unit",
+					metadata: {},
+				},
+			],
 		})
 	})
 
@@ -635,5 +654,129 @@ describe("a Stripe invoice", () => {
 		expect(
 			invoiceOp(invoice({ ...INVOICE_ACME_PAID, amount_due: -5_000, amount_paid: -1 })),
 		).toMatchObject({ amountDueMinor: 0, amountPaidMinor: 0 })
+	})
+})
+
+const line = Schema.decodeUnknownSync(StripeInvoiceLine)
+const priceObject = Schema.decodeUnknownSync(StripePrice)
+
+describe("a Stripe subscription's items", () => {
+	it("spreads the discounts over the priced items so they sum to the subscription's MRR", () => {
+		const discounted = subscription({
+			...SUB_GLOBEX,
+			discounts: [DISCOUNT_20_PERCENT],
+			items: {
+				data: [
+					...SUB_GLOBEX.items.data,
+					{ id: "si_extra", quantity: 1, price: { ...SUB_GLOBEX.items.data[0]!.price, id: "price_x", unit_amount: 1_001 } },
+				],
+			},
+		})
+		const items = subscriptionItemsOf(discounted)
+		expect(items.map((item) => [item.priceId, item.monthlyMinor, item.listMonthlyMinor, item.usageType])).toEqual([
+			["price_2seats_month1", 11_760, 14_700, "licensed"],
+			["price_2events_meter", null, null, "metered"],
+			["price_x", 801, 1_001, "licensed"],
+		])
+		const mrr = monthlyMrrOf(discounted)
+		expect(11_760 + 801).toBe(mrr.mrrMinor)
+		expect(items[1]).toMatchObject({ billingScheme: "tiered", productId: "prod_2events000001" })
+	})
+})
+
+describe("a Stripe invoice line", () => {
+	it("maps a subscription item's line: its price, product, service period and amount", () => {
+		expect(invoiceLineOf(line(invoiceLine({})))).toEqual({
+			externalId: "il_2acme00000001",
+			source: "subscription",
+			proration: false,
+			priceId: "price_2pro_year0001",
+			productId: PRODUCT_PRO.id,
+			description: "12 × Pro (at $1,200.00 / year)",
+			quantity: 12,
+			amountMinor: 120_000,
+			periodStart: "2026-11-01T09:25:00.000Z",
+			periodEnd: "2027-11-01T09:25:00.000Z",
+			metadata: {},
+		})
+	})
+
+	it("nets out discounts, billing credits and inclusive tax, but not exclusive tax or discounts twice", () => {
+		const net = invoiceLineOf(
+			line(
+				invoiceLine({
+					amount: 10_000,
+					discount_amounts: [{ amount: 1_000, discount: "di_1" }],
+					pretax_credit_amounts: [
+						{ amount: 1_000, type: "discount", discount: "di_1" },
+						{ amount: 500, type: "credit_balance_transaction", credit_balance_transaction: "cbtxn_1" },
+					],
+					taxes: [
+						{ amount: 1_200, tax_behavior: "inclusive", type: "tax_rate_details" },
+						{ amount: 900, tax_behavior: "exclusive", type: "tax_rate_details" },
+					],
+				}),
+			),
+		)
+		expect(net?.amountMinor).toBe(7_300)
+	})
+
+	it("tells an invoice item and a proration from a subscription item's line", () => {
+		const proration = invoiceLineOf(
+			line(
+				invoiceLine({
+					amount: -4_000,
+					parent: {
+						type: "subscription_item_details",
+						subscription_item_details: { proration: true, subscription: SUB_ACME.id },
+					},
+				}),
+			),
+		)
+		expect(proration).toMatchObject({ source: "subscription", proration: true, amountMinor: -4_000 })
+		const setup = invoiceLineOf(
+			line(
+				invoiceLine({
+					pricing: null,
+					metadata: { kind: "setup" },
+					parent: { type: "invoice_item_details", invoice_item_details: { proration: false } },
+				}),
+			),
+		)
+		expect(setup).toMatchObject({ source: "invoice_item", priceId: null, productId: null, metadata: { kind: "setup" } })
+	})
+
+	it("carries all the lines it was given on the invoice", () => {
+		const op = invoiceOp(invoice(INVOICE_ACME_PAID), { lines: [line(invoiceLine({})), line(invoiceLine({ id: null }))] })
+		expect(op?.lines?.map((entry) => entry.externalId)).toEqual(["il_2acme00000001"])
+		expect(invoiceOp(invoice(INVOICE_ACME_PAID))?.lines).toBeUndefined()
+	})
+})
+
+describe("a Stripe price", () => {
+	it("maps the catalog entry rules match on, with its product's name and metadata", () => {
+		const metered = priceObject({
+			...PRICES[3],
+			metadata: { revenue: "usage", empty: "" },
+			product: { id: "prod_2events000001", name: "Events", metadata: { family: "usage" } },
+		})
+		expect(priceOp(metered, { id: "prod_2events000001", name: "Events", metadata: { family: "usage" } })).toEqual({
+			_tag: "price",
+			externalId: "price_2events_meter",
+			productId: "prod_2events000001",
+			productName: "Events",
+			nickname: null,
+			lookupKey: null,
+			priceType: "recurring",
+			usageType: "metered",
+			billingScheme: "tiered",
+			currency: "eur",
+			unitAmountMinor: null,
+			interval: "month",
+			intervalCount: 1,
+			active: true,
+			metadata: { revenue: "usage" },
+			productMetadata: { family: "usage" },
+		})
 	})
 })

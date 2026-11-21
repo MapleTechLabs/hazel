@@ -721,5 +721,22 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "customer_enrichments_next_attempt_idx" ON "customer_enrichments" ("nextAttemptAt")',
 			],
 		},
+		{
+			id: "0026_revenue_classification",
+			statements: [
+				'ALTER TABLE "customer_accounts" ADD COLUMN "variableMrrMinor" integer NOT NULL DEFAULT 0',
+				'ALTER TABLE "customer_accounts" ADD COLUMN "mrrBasis" text',
+				'ALTER TABLE "customer_invoices" ADD COLUMN "lines" text',
+				'ALTER TABLE "customer_invoices" ADD COLUMN "servicePeriodStart" text',
+				'ALTER TABLE "customer_org_daily" ADD COLUMN "variableMrrMinor" integer NOT NULL DEFAULT 0',
+				'ALTER TABLE "customer_settings" ADD COLUMN "revenueRules" text NOT NULL DEFAULT \'[]\'',
+				'ALTER TABLE "customer_settings" ADD COLUMN "variableMrrMonths" integer NOT NULL DEFAULT 3',
+				'ALTER TABLE "customer_subscriptions" ADD COLUMN "items" text',
+				'CREATE TABLE IF NOT EXISTS "customer_prices" (\n\t"provider" text NOT NULL,\n\t"externalId" text NOT NULL,\n\t"productId" text,\n\t"productName" text,\n\t"nickname" text,\n\t"lookupKey" text,\n\t"priceType" text,\n\t"usageType" text,\n\t"billingScheme" text,\n\t"currency" text,\n\t"unitAmountMinor" real,\n\t"interval" text,\n\t"intervalCount" integer,\n\t"active" integer NOT NULL DEFAULT true,\n\t"metadata" text NOT NULL DEFAULT \'{}\',\n\t"productMetadata" text NOT NULL DEFAULT \'{}\',\n\t"observedAt" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\tPRIMARY KEY ("provider", "externalId")\n)',
+				'CREATE TABLE IF NOT EXISTS "customer_variable_mrr_changes" (\n\t"accountId" text NOT NULL,\n\t"day" text NOT NULL,\n\t"fromMinor" integer NOT NULL,\n\t"toMinor" integer NOT NULL,\n\t"currency" text NOT NULL,\n\tPRIMARY KEY ("accountId", "day")\n)',
+				'CREATE INDEX IF NOT EXISTS "customer_prices_product_idx" ON "customer_prices" ("productId")',
+				'CREATE INDEX IF NOT EXISTS "customer_variable_mrr_changes_day_idx" ON "customer_variable_mrr_changes" ("day")',
+			],
+		},
 	],
 }
