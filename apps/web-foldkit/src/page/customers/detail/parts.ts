@@ -150,3 +150,30 @@ export const skeletonRows = (h: HtmlBuilder<Message>, count: number): ReadonlyAr
 			[h.span([h.Class("block h-3 w-full animate-pulse rounded bg-secondary")])],
 		),
 	)
+
+/** One row of a sidebar section: a label and its value. */
+export const property = (h: HtmlBuilder<Message>, label: string, value: Html | string) =>
+	h.div(
+		[h.Class("grid min-h-8 grid-cols-[7rem_1fr] items-center gap-2 text-sm")],
+		[h.span([h.Class("text-muted-fg")], [label]), h.div([h.Class("min-w-0 text-fg")], [value])],
+	)
+
+export const sidebarSection = (
+	h: HtmlBuilder<Message>,
+	title: string,
+	aside: string | null,
+	children: ReadonlyArray<Html>,
+) =>
+	h.section(
+		[h.Class("flex flex-col border-border border-b px-5 py-4 last:border-b-0 max-md:px-4")],
+		[
+			h.div(
+				[h.Class("flex items-center justify-between pb-2")],
+				[
+					heading(h, { variant: "subsection", level: 2 }, [title]),
+					...(aside === null ? [] : [h.span([h.Class("text-muted-fg text-xs")], [aside])]),
+				],
+			),
+			...children,
+		],
+	)

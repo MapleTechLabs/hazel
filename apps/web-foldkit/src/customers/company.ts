@@ -159,7 +159,7 @@ export const linkLabel = (link: CompanyLink): string =>
 
 /** The socials worth a chip, most useful first, at most `limit`. */
 const SOCIAL_ORDER = ["linkedin", "x", "twitter", "github", "crunchbase", "producthunt", "youtube"]
-export const headerSocials = (profile: CompanyProfile, limit = 4): ReadonlyArray<CompanyLink> =>
+export const headerSocials = (profile: CompanyProfile, limit = 3): ReadonlyArray<CompanyLink> =>
 	[...profile.socials].sort((a, b) => rankOf(a.type) - rankOf(b.type)).slice(0, limit)
 
 const rankOf = (type: string) => {

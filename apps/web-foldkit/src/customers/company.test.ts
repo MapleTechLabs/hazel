@@ -21,12 +21,7 @@ describe("company profile labels", () => {
 		expect(fundingLabel(RICH_COMPANY)).toBe("Series B · $58M")
 		expect(revenueLabel(RICH_COMPANY)).toBe("$20M–$50M")
 		expect(companyTypeLabel(RICH_COMPANY)).toBe("Private")
-		expect(headerSocials(RICH_COMPANY).map((link) => link.type)).toEqual([
-			"linkedin",
-			"x",
-			"github",
-			"crunchbase",
-		])
+		expect(headerSocials(RICH_COMPANY).map((link) => link.type)).toEqual(["linkedin", "x", "github"])
 		expect(companyPages(RICH_COMPANY).map((link) => link.type)).toEqual(["careers", "pricing", "blog"])
 	})
 

@@ -46,6 +46,7 @@ import {
 	LinkCustomerChannel,
 	SetChatAuthorSide,
 	SetCustomerEnvironment,
+	RefreshCustomerCompany,
 	SetCustomerFeatureFlags,
 	SetCustomerPrimary,
 	StartCustomerImpersonation,
@@ -75,6 +76,7 @@ import {
 	EventType,
 	groupOfModel,
 	IMPERSONATE_MODAL_ID,
+	isCompanyRefreshPending,
 	LINK_MODAL_ID,
 	linkCandidates,
 	METRIC_MENU_ID,
@@ -301,6 +303,7 @@ const initialModel = (route: Route): Model => ({
 	environmentModal: Modal.init(ENVIRONMENT_MODAL_ID),
 	environmentDraft: "",
 	isSavingEnvironment: false,
+	companyRefreshAtMs: null,
 	deletingNoteId: null,
 	deleteNoteModal: Modal.init(DELETE_NOTE_MODAL_ID),
 	isImpersonator: false,
@@ -948,6 +951,29 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 				(accountOf(model)?.tags ?? []).filter((entry) => entry !== tag),
 			),
 		SucceededAccountUpdate: () => ({ model }),
+		PressedRefreshCompany: () => {
+			const args = target(model, shared)
+			if (args === null || isCompanyRefreshPending(model, shared.nowMs, null)) return { model }
+			return {
+				model: modifyFields(model, { companyRefreshAtMs: () => shared.nowMs }),
+				commands: [RefreshCustomerCompany(args)],
+			}
+		},
+		SucceededCompanyRefresh: () => ({ model }),
+		FailedCompanyRefresh: ({ reason, message }) => ({
+			model: modifyFields(model, { companyRefreshAtMs: () => null }),
+			outMessage: toast(
+				errorToastOf(
+					failureMessage(reason, {
+						NotFound: {
+							title: "Couldn't look up the company",
+							description: "The customer was removed.",
+						},
+						Stale: { title: "Couldn't look up the company", description: message ?? undefined },
+					}),
+				),
+			),
+		}),
 		FailedAccountUpdate: ({ reason }) => ({
 			model,
 			outMessage: toast(

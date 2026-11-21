@@ -82,7 +82,8 @@ import {
 import { notesTab } from "./notes-tab"
 import { peopleInChat } from "./people-in-chat"
 import { overviewTab } from "./overview-tab"
-import { type Context, icon, memberOf, menu } from "./parts"
+import { companyDescription, companySection, companySocialChips } from "./company-section"
+import { type Context, icon, memberOf, menu, property, sidebarSection } from "./parts"
 import { usersTab } from "./users-tab"
 import { heading } from "../../../ui/heading"
 
@@ -444,6 +445,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 											),
 										],
 									),
+									...companyDescription(h, context),
 									h.div(
 										[h.Class("flex flex-wrap items-center gap-1.5 pt-2")],
 										[
@@ -479,6 +481,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 													[`No ${SOURCE_LABEL[provider]} record`],
 												),
 											),
+											...companySocialChips(h, context),
 										],
 									),
 								],
@@ -579,32 +582,6 @@ const tabsRow = (h: HtmlBuilder<Message>, model: Model, context: Context): Html 
 }
 
 // SIDEBAR
-
-const property = (h: HtmlBuilder<Message>, label: string, value: Html | string) =>
-	h.div(
-		[h.Class("grid min-h-8 grid-cols-[7rem_1fr] items-center gap-2 text-sm")],
-		[h.span([h.Class("text-muted-fg")], [label]), h.div([h.Class("min-w-0 text-fg")], [value])],
-	)
-
-export const sidebarSection = (
-	h: HtmlBuilder<Message>,
-	title: string,
-	aside: string | null,
-	children: ReadonlyArray<Html>,
-) =>
-	h.section(
-		[h.Class("flex flex-col border-border border-b px-5 py-4 last:border-b-0 max-md:px-4")],
-		[
-			h.div(
-				[h.Class("flex items-center justify-between pb-2")],
-				[
-					heading(h, { variant: "subsection", level: 2 }, [title]),
-					...(aside === null ? [] : [h.span([h.Class("text-muted-fg text-xs")], [aside])]),
-				],
-			),
-			...children,
-		],
-	)
 
 const tags = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =>
 	h.div(
@@ -1036,6 +1013,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 			),
 		],
 		[
+			companySection(h, model, context),
 			sidebarSection(h, "Properties", null, [
 				property(
 					h,
