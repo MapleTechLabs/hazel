@@ -3,12 +3,12 @@ import { AssistantItemId, AssistantThreadId, OrganizationId } from "@hazel/schem
 import { Effect, Match, Option, Schema } from "effect"
 import { Command } from "foldkit"
 import * as Dom from "foldkit/dom"
-import { type CommonReason, commonMessage } from "~/lib/error-messages"
+import { type CommonReason, commonMessage, isRetryableReason } from "~/lib/error-messages"
 import { catchCommon } from "../data/actions"
 import { readStored, writeStored } from "../data/storage"
 import { HazelRpc } from "../rpc"
 import { Message } from "./message"
-import { COMPOSER_ID, type Connection, Stored } from "./model"
+import { COMPOSER_ID, type Connection, PANEL_ID, Stored, TOGGLE_ID } from "./model"
 
 /** The panel's RPCs, its stored open state and width, and the composer's focus. */
 
@@ -36,20 +36,15 @@ export const MakeAssistantMessageId = Command.define("MakeAssistantMessageId", {
 	),
 })
 
-/** A new thread, with the id its first message got. */
-export const StartAssistantThread = Command.define("StartAssistantThread", {
-	args: { ...target, message: Schema.String, context: Schema.NullOr(Assistant.Context) },
-	messages: [Message.SucceededSend, Message.FailedSend],
-	execute: (args) =>
-		HazelRpc.use((rpc) => rpc("assistant.start", args)).pipe(
-			Effect.map(({ threadId }) => Message.SucceededSend({ threadId })),
-			Effect.catchTags(writeFailure((text) => Message.FailedSend({ message: text }))),
-			catchCommon((reason) => Message.FailedSend({ message: reasonText(reason) })),
-		),
-})
+const sendIds = { threadId: AssistantThreadId, messageId: AssistantItemId }
+/** A send's ids: its outcome carries them, so a late answer never touches another message. */
+type SendIds = Readonly<{ threadId: AssistantThreadId; messageId: AssistantItemId }>
 
-/** A follow-up; its id makes a retried send a no-op. */
-export const SendAssistantMessage = Command.define("SendAssistantMessage", {
+const failedSend = (ids: SendIds, message: string, isRetryable: boolean) =>
+	Message.FailedSend({ threadId: ids.threadId, messageId: ids.messageId, message, isRetryable })
+
+/** A new thread, with the id its first message got (the first item's id is the thread's). */
+export const StartAssistantThread = Command.define("StartAssistantThread", {
 	args: {
 		...target,
 		messageId: AssistantItemId,
@@ -57,11 +52,36 @@ export const SendAssistantMessage = Command.define("SendAssistantMessage", {
 		context: Schema.NullOr(Assistant.Context),
 	},
 	messages: [Message.SucceededSend, Message.FailedSend],
+	execute: ({ messageId, ...args }) =>
+		HazelRpc.use((rpc) => rpc("assistant.start", args)).pipe(
+			Effect.as(Message.SucceededSend({ threadId: args.threadId, messageId })),
+			Effect.catchTags(
+				writeFailure((text) => failedSend({ threadId: args.threadId, messageId }, text, false)),
+			),
+			catchCommon((reason) =>
+				failedSend(
+					{ threadId: args.threadId, messageId },
+					reasonText(reason),
+					isRetryableReason(reason),
+				),
+			),
+		),
+})
+
+/** A follow-up; its id makes a retried send a no-op. */
+export const SendAssistantMessage = Command.define("SendAssistantMessage", {
+	args: {
+		...sendIds,
+		organizationId: OrganizationId,
+		message: Schema.String,
+		context: Schema.NullOr(Assistant.Context),
+	},
+	messages: [Message.SucceededSend, Message.FailedSend],
 	execute: (args) =>
 		HazelRpc.use((rpc) => rpc("assistant.send", args)).pipe(
-			Effect.map(({ threadId }) => Message.SucceededSend({ threadId })),
-			Effect.catchTags(writeFailure((text) => Message.FailedSend({ message: text }))),
-			catchCommon((reason) => Message.FailedSend({ message: reasonText(reason) })),
+			Effect.as(Message.SucceededSend({ threadId: args.threadId, messageId: args.messageId })),
+			Effect.catchTags(writeFailure((text) => failedSend(args, text, false))),
+			catchCommon((reason) => failedSend(args, reasonText(reason), isRetryableReason(reason))),
 		),
 })
 
@@ -70,13 +90,20 @@ export const AnswerAssistantQuestion = Command.define("AnswerAssistantQuestion",
 	messages: [Message.SucceededAnswer, Message.FailedAnswer],
 	execute: (args) =>
 		HazelRpc.use((rpc) => rpc("assistant.answer", args)).pipe(
-			Effect.as(Message.SucceededAnswer()),
+			Effect.as(Message.SucceededAnswer({ itemId: args.itemId })),
 			Effect.catchTags({
-				...writeFailure((text) => Message.FailedAnswer({ message: text })),
+				...writeFailure((text) => Message.FailedAnswer({ itemId: args.itemId, message: text })),
 				AssistantQuestionClosedError: () =>
-					Effect.succeed(Message.FailedAnswer({ message: "This question was already answered." })),
+					Effect.succeed(
+						Message.FailedAnswer({
+							itemId: args.itemId,
+							message: "This question was already answered.",
+						}),
+					),
 			}),
-			catchCommon((reason) => Message.FailedAnswer({ message: reasonText(reason) })),
+			catchCommon((reason) =>
+				Message.FailedAnswer({ itemId: args.itemId, message: reasonText(reason) }),
+			),
 		),
 })
 
@@ -134,6 +161,19 @@ export const FocusAssistantComposer = Command.define("FocusAssistantComposer", {
 		Effect.ignoreCause,
 		Effect.as(Message.CompletedFocusComposer()),
 	),
+})
+
+/**
+ * Back to the toggle once the panel closed, when focus was in the panel (it is gone now, so focus
+ * fell to the page's body); focus the member moved elsewhere stays there.
+ */
+export const FocusAssistantToggle = Command.define("FocusAssistantToggle", {
+	messages: [Message.CompletedFocusToggle],
+	execute: Effect.suspend(() => {
+		const active = document.activeElement
+		const isLost = active === null || active === document.body || active.closest(`#${PANEL_ID}`) !== null
+		return isLost ? Dom.focus(`#${TOGGLE_ID}`) : Effect.void
+	}).pipe(Effect.ignoreCause, Effect.as(Message.CompletedFocusToggle())),
 })
 
 // STORAGE

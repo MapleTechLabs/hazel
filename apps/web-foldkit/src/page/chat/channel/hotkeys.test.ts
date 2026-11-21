@@ -45,6 +45,25 @@ describe("channel hotkeys", () => {
 		expect(fired).toEqual(["EmojiPicker", "GifPicker", "Upload", "Pins", "ScrollUp", "ScrollDown"])
 	})
 
+	test("keys pressed inside the AI panel are left to it: nothing fires, nothing is prevented", async () => {
+		const panel = document.createElement("aside")
+		panel.setAttribute("data-ai-panel", "")
+		const textarea = document.createElement("textarea")
+		const closeButton = document.createElement("button")
+		panel.append(textarea, closeButton)
+		document.body.append(panel)
+		const prevented: Array<boolean> = []
+		const fired = await run((press) => {
+			prevented.push(press(mod({ key: "e" }), textarea).defaultPrevented)
+			prevented.push(press(mod({ key: "U", shiftKey: true }), textarea).defaultPrevented)
+			prevented.push(press({ key: "PageDown" }, textarea).defaultPrevented)
+			prevented.push(press({ key: "Escape" }, closeButton).defaultPrevented)
+		})
+		panel.remove()
+		expect(fired).toEqual([])
+		expect(prevented).toEqual([false, false, false, false])
+	})
+
 	test("Escape outside a field marks the channel read and leaves the event to others", async () => {
 		const prevented: Array<boolean> = []
 		const fired = await run((press) => prevented.push(press({ key: "Escape" }).defaultPrevented))

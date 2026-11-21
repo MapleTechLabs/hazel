@@ -1,5 +1,5 @@
 import type { Assistant } from "@hazel/domain/models"
-import { type AssistantItemId, AssistantThreadId } from "@hazel/schema"
+import { type AssistantItemId, AssistantThreadId, type OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, type Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
@@ -11,6 +11,7 @@ import {
 	AnswerAssistantQuestion,
 	FetchAssistantStatus,
 	FocusAssistantComposer,
+	FocusAssistantToggle,
 	MakeAssistantMessageId,
 	SaveAssistantPanel,
 	SendAssistantMessage,
@@ -25,6 +26,7 @@ import {
 	type Model,
 	NEW_CHAT_KEY,
 	PANEL_ID,
+	type Retry,
 	type Stored,
 	type ThreadRow,
 } from "./model"
@@ -48,7 +50,7 @@ export const MIN_WIDTH = 320
 /** The page always keeps this much room beside the panel. */
 export const MIN_PAGE_WIDTH = 480
 /** Arrow keys have no layout to read, so they stop here; the panel's CSS max-width still applies. */
-const MAX_KEYBOARD_WIDTH = 960
+export const MAX_KEYBOARD_WIDTH = 960
 
 export const widthOf = (model: Pick<Model, "width">): number => model.width ?? DEFAULT_WIDTH
 
@@ -69,11 +71,14 @@ export const init = (stored: Stored): Model => ({
 	draft: "",
 	isContextIncluded: true,
 	pending: null,
+	retry: null,
 	error: null,
 	expandedWork: [],
 	answerDrafts: {},
 	answeringItemId: null,
+	answerError: null,
 	isUpdatingVisibility: false,
+	isStopping: false,
 	historyMenu: Menu.init({ id: HISTORY_MENU_ID, placement: "bottom end" }),
 })
 
@@ -115,13 +120,22 @@ const saveCommands = (model: Model, shared: Shared) =>
 
 export const open = (model: Model, inputs: Inputs): Return => {
 	if (model.isOpen) return { model, commands: [FocusAssistantComposer()] }
-	const next = modifyFields(model, { isOpen: () => true, error: () => null })
-	const organizationId = inputs.shared.organization?.id
+	const organizationId = inputs.shared.organization?.id ?? null
+	// Opened in another organization than the one its thread is from: start over there.
+	const base =
+		organizationId !== null && model.organizationId !== null && organizationId !== model.organizationId
+			? forOrganization(model, organizationId)
+			: model
+	const next = modifyFields(base, {
+		isOpen: () => true,
+		error: () => null,
+		organizationId: (current) => organizationId ?? current,
+	})
 	return {
 		model: next,
 		commands: [
 			FocusAssistantComposer(),
-			...(organizationId === undefined ? [] : [FetchAssistantStatus({ organizationId })]),
+			...(organizationId === null ? [] : [FetchAssistantStatus({ organizationId })]),
 			...saveCommands(next, inputs.shared),
 		],
 	}
@@ -134,7 +148,14 @@ export const close = (model: Model, inputs: Inputs): Return => {
 		drag: () => null,
 		historyMenu: (menu) => modifyFields(menu, { popup: () => ({ _tag: "Closed" as const }) }),
 	})
-	return { model: next, commands: saveCommands(next, inputs.shared) }
+	return {
+		model: next,
+		// A phone's sheet hands focus back itself (the dialog returns it to its opener).
+		commands: [
+			...saveCommands(next, inputs.shared),
+			...(inputs.shared.isMobile ? [] : [FocusAssistantToggle()]),
+		],
+	}
 }
 
 export const toggle = (model: Model, inputs: Inputs): Return =>
@@ -152,35 +173,50 @@ const showThread = (model: Model, threadId: Model["threadId"]): Return => ({
 		threadId: () => threadId,
 		items: () => [],
 		pending: () => null,
+		retry: () => null,
 		error: () => null,
 		expandedWork: () => [],
 		answerDrafts: () => ({}),
 		answeringItemId: () => null,
+		answerError: () => null,
+		isStopping: () => false,
 		isContextIncluded: () => true,
 	}),
 	commands: [FocusAssistantComposer()],
 })
 
+/** Another organization: a new chat there, its own threads and its own T3 Code status. */
+const forOrganization = (model: Model, organizationId: OrganizationId): Model =>
+	modifyFields(showThread(model, null).model, {
+		organizationId: () => organizationId,
+		threads: () => [],
+		draft: () => "",
+		connection: () => "Checking",
+	})
+
+export const GONE_THREAD = "This chat is no longer available."
+
 const updatedThreads = (
 	model: Model,
-	organizationId: NonNullable<Model["organizationId"]>,
+	organizationId: OrganizationId,
 	threads: ReadonlyArray<ThreadRow>,
 ): Return => {
-	if (organizationId === model.organizationId)
-		return { model: modifyFields(model, { threads: () => threads }) }
-	// Another organization: its own threads, and its own T3 Code status.
-	const shown = showThread(
-		modifyFields(model, {
-			organizationId: () => organizationId,
-			threads: () => threads,
-			draft: () => "",
-		}),
-		null,
-	)
-	return {
-		model: modifyFields(shown.model, { connection: () => "Checking" }),
-		commands: model.isOpen ? [FetchAssistantStatus({ organizationId })] : [],
-	}
+	// The first answer after a load only names the organization; a later one from another is a switch.
+	if (model.organizationId !== null && organizationId !== model.organizationId)
+		return {
+			model: modifyFields(forOrganization(model, organizationId), { threads: () => threads }),
+			commands: model.isOpen ? [FetchAssistantStatus({ organizationId })] : [],
+		}
+	const next = modifyFields(model, { organizationId: () => organizationId, threads: () => threads })
+	// The open thread was here and is gone (unshared, or deleted). A start whose row has not synced
+	// yet was never here.
+	const isGone =
+		model.threadId !== null &&
+		model.threads.some((thread) => thread.id === model.threadId) &&
+		!threads.some((thread) => thread.id === model.threadId)
+	if (!isGone) return { model: next }
+	const shown = showThread(next, null)
+	return { ...shown, model: modifyFields(shown.model, { error: () => GONE_THREAD }) }
 }
 
 const pickedHistory = (model: Model, key: string): Return => {
@@ -191,9 +227,20 @@ const pickedHistory = (model: Model, key: string): Return => {
 
 // SENDING
 
+/** The failed send to reuse for `message`: the same text, in the same conversation. */
+const retryFor = (model: Model, message: string): Retry | null => {
+	const retry = model.retry
+	return retry !== null &&
+		retry.text === message &&
+		(retry.isNewThread ? model.threadId === null : retry.threadId === model.threadId)
+		? retry
+		: null
+}
+
 /**
- * Sends `text`: shown at once, then sent once its id is made (`MakeAssistantMessageId`). The draft is
- * cleared only when it is `text`; the page's context goes along unless the member turned it off.
+ * Sends `text`: shown at once, then sent once its id is made (`MakeAssistantMessageId`), or at once
+ * with the ids of the same message that failed in transit. The draft is cleared only when it is
+ * `text`; the page's context goes along unless the member turned it off.
  */
 const send = (model: Model, text: string, inputs: Inputs, isDraft: boolean): Return => {
 	const message = text.trim()
@@ -206,22 +253,24 @@ const send = (model: Model, text: string, inputs: Inputs, isDraft: boolean): Ret
 		return { model }
 	if (message.length > MAX_MESSAGE_LENGTH)
 		return { model: modifyFields(model, { error: () => "This message is too long to send." }) }
-	return {
-		model: modifyFields(model, {
-			draft: (draft) => (isDraft ? "" : draft),
-			pending: () => ({
-				text: message,
-				threadId: model.threadId,
-				messageId: null,
-				context: model.isContextIncluded ? inputs.context : null,
-				isNewThread: model.threadId === null,
-				isSending: true,
-			}),
-			error: () => null,
-			isContextIncluded: () => true,
+	const retry = retryFor(model, message)
+	const next = modifyFields(model, {
+		draft: (draft) => (isDraft ? "" : draft),
+		pending: () => ({
+			text: message,
+			threadId: model.threadId,
+			messageId: null,
+			context: retry?.context ?? (model.isContextIncluded ? inputs.context : null),
+			isNewThread: model.threadId === null,
+			isSending: true,
 		}),
-		commands: [MakeAssistantMessageId()],
-	}
+		retry: () => null,
+		error: () => null,
+		isContextIncluded: () => true,
+	})
+	return retry === null
+		? { model: next, commands: [MakeAssistantMessageId()] }
+		: madeMessageId(next, retry.messageId, inputs)
 }
 
 const decodeThreadId = Schema.decodeSync(AssistantThreadId)
@@ -235,34 +284,24 @@ const madeMessageId = (model: Model, messageId: AssistantItemId, inputs: Inputs)
 	const organizationId = inputs.shared.organization?.id
 	if (pending === null || pending.messageId !== null || organizationId === undefined) return { model }
 	const threadId = pending.threadId ?? decodeThreadId(messageId)
+	const sent = { organizationId, threadId, messageId, message: pending.text, context: pending.context }
 	return {
 		model: modifyFields(model, {
 			threadId: () => threadId,
 			pending: () => modifyFields(pending, { threadId: () => threadId, messageId: () => messageId }),
 		}),
-		commands: [
-			pending.isNewThread
-				? StartAssistantThread({
-						organizationId,
-						threadId,
-						message: pending.text,
-						context: pending.context,
-					})
-				: SendAssistantMessage({
-						organizationId,
-						threadId,
-						messageId,
-						message: pending.text,
-						context: pending.context,
-					}),
-		],
+		commands: [pending.isNewThread ? StartAssistantThread(sent) : SendAssistantMessage(sent)],
 	}
 }
 
-const succeededSend = (model: Model, threadId: AssistantThreadId): Return => {
-	const pending = pendingOf(model)
-	// The member moved to another thread meanwhile: theirs has the message once it syncs.
-	if (pending === null || pending.threadId !== threadId) return { model }
+/** The pending message, when it is the one an answer is about. */
+const pendingWithId = (model: Model, messageId: AssistantItemId) =>
+	model.pending !== null && model.pending.messageId === messageId ? model.pending : null
+
+const succeededSend = (model: Model, messageId: AssistantItemId): Return => {
+	const pending = pendingWithId(model, messageId)
+	// Another message is pending now (the member moved on): this one shows once it syncs.
+	if (pending === null) return { model }
 	return {
 		model: reconciled(
 			modifyFields(model, { pending: () => modifyFields(pending, { isSending: () => false }) }),
@@ -271,22 +310,54 @@ const succeededSend = (model: Model, threadId: AssistantThreadId): Return => {
 }
 
 /**
- * The message comes back into the composer, unless the member has typed another meanwhile. A
- * thread that never started is left for a new chat.
+ * The message comes back into the composer, unless the member has typed another meanwhile; in
+ * transit, with its ids kept for a retry. A thread that never started is left for a new chat.
  */
-const failedSend = (model: Model, message: string): Return => {
-	const pending = pendingOf(model)
-	const isUnstarted = pending?.isNewThread === true && threadOf(model) === null
+const failedSend = (
+	model: Model,
+	{
+		threadId,
+		messageId,
+		message,
+		isRetryable,
+	}: Readonly<{
+		threadId: AssistantThreadId
+		messageId: AssistantItemId
+		message: string
+		isRetryable: boolean
+	}>,
+): Return => {
+	const pending = pendingWithId(model, messageId)
+	if (pending === null) return { model }
+	const isUnstarted = pending.isNewThread && !model.threads.some((thread) => thread.id === threadId)
+	const isRestored = model.draft === ""
 	return {
 		model: modifyFields(model, {
-			threadId: (threadId) => (isUnstarted ? null : threadId),
+			threadId: (current) => (isUnstarted ? null : current),
 			items: (items) => (isUnstarted ? [] : items),
-			draft: (draft) => (draft === "" && pending !== null ? pending.text : draft),
+			draft: (draft) => (isRestored ? pending.text : draft),
 			pending: () => null,
+			retry: () =>
+				isRetryable && isRestored
+					? {
+							text: pending.text,
+							threadId,
+							messageId,
+							context: pending.context,
+							isNewThread: pending.isNewThread,
+						}
+					: null,
 			error: () => message,
 		}),
 	}
 }
+
+/** An edit makes it another message: a failed send's ids no longer apply. */
+const changedDraft = (model: Model, value: string): Model =>
+	modifyFields(model, {
+		draft: () => value,
+		retry: (retry) => (retry !== null && retry.text !== value.trim() ? null : retry),
+	})
 
 // QUESTIONS
 
@@ -324,9 +395,12 @@ const pickedAnswer = (
 }
 
 /** Every question of the item answered, as `assistant.answer` takes them; null while one is not. */
-export const answersOf = (model: Model, item: ItemRow): Record<string, string> | null => {
+export const answersOf = (
+	answerDrafts: Model["answerDrafts"],
+	item: ItemRow,
+): Record<string, string> | null => {
 	const questions = item.question?.questions ?? []
-	const drafts = model.answerDrafts[item.id] ?? {}
+	const drafts = answerDrafts[item.id] ?? {}
 	const answers = Object.fromEntries(
 		questions.map((question) => [question.id, (drafts[question.id] ?? []).join(", ").trim()]),
 	)
@@ -336,7 +410,7 @@ export const answersOf = (model: Model, item: ItemRow): Record<string, string> |
 const submittedAnswers = (model: Model, itemId: AssistantItemId, inputs: Inputs): Return => {
 	const item = model.items.find((candidate) => candidate.id === itemId)
 	const organizationId = inputs.shared.organization?.id
-	const answers = item === undefined ? null : answersOf(model, item)
+	const answers = item === undefined ? null : answersOf(model.answerDrafts, item)
 	if (
 		item === undefined ||
 		answers === null ||
@@ -346,9 +420,31 @@ const submittedAnswers = (model: Model, itemId: AssistantItemId, inputs: Inputs)
 	)
 		return { model }
 	return {
-		model: modifyFields(model, { answeringItemId: () => itemId, error: () => null }),
+		model: modifyFields(model, { answeringItemId: () => itemId, answerError: () => null }),
 		commands: [AnswerAssistantQuestion({ organizationId, threadId: item.threadId, itemId, answers })],
 	}
+}
+
+export const isAnswered = (item: ItemRow): boolean =>
+	item.question?.answered === true || item.status !== "running"
+
+/**
+ * New items: the optimistic message goes once its own item is here, and an answered question's
+ * drafts (and its in-flight answer) once it syncs as answered.
+ */
+const updatedItems = (model: Model, items: ReadonlyArray<ItemRow>): Model => {
+	const sorted = sortItems(items)
+	const answered = new Set<string>(
+		sorted.filter((item) => item.kind === "question" && isAnswered(item)).map((item) => item.id),
+	)
+	return reconciled(
+		modifyFields(model, {
+			items: () => sorted,
+			answerDrafts: (drafts) =>
+				Object.fromEntries(Object.entries(drafts).filter(([itemId]) => !answered.has(itemId))),
+			answeringItemId: (itemId) => (itemId !== null && answered.has(itemId) ? null : itemId),
+		}),
+	)
 }
 
 // THREAD ACTIONS
@@ -362,12 +458,16 @@ const ownThread = (model: Model, inputs: Inputs) => {
 		: { thread, organizationId }
 }
 
+/** The agent is at work, or waiting on the member: Stop ends the run. */
+export const isStoppable = (thread: ThreadRow | null): boolean =>
+	thread?.status === "running" || thread?.status === "waiting"
+
 const clickedStop = (model: Model, inputs: Inputs): Return => {
 	const own = ownThread(model, inputs)
-	return own === null
+	return own === null || model.isStopping || !isStoppable(own.thread)
 		? { model }
 		: {
-				model,
+				model: modifyFields(model, { isStopping: () => true, error: () => null }),
 				commands: [
 					StopAssistantThread({ organizationId: own.organizationId, threadId: own.thread.id }),
 				],
@@ -449,9 +549,7 @@ export const update = (model: Model, message: Message, inputs: Inputs): Return =
 		GotSheetMessage: ({ message }) => gotSheetMessage(model, message, inputs),
 		UpdatedThreads: ({ organizationId, threads }) => updatedThreads(model, organizationId, threads),
 		UpdatedItems: ({ threadId, items }) =>
-			threadId === model.threadId
-				? { model: reconciled(modifyFields(model, { items: () => sortItems(items) })) }
-				: { model },
+			threadId === model.threadId ? { model: updatedItems(model, items) } : { model },
 		SucceededFetchStatus: ({ connection, environmentLabel }) => ({
 			model: modifyFields(model, {
 				connection: () => connection,
@@ -459,23 +557,25 @@ export const update = (model: Model, message: Message, inputs: Inputs): Return =
 			}),
 		}),
 		FailedFetchStatus: () => ({ model: modifyFields(model, { connection: () => "Unknown" }) }),
-		ChangedDraft: ({ value }) => ({ model: modifyFields(model, { draft: () => value }) }),
+		ChangedDraft: ({ value }) => ({ model: changedDraft(model, value) }),
 		SubmittedComposer: () => send(model, model.draft, inputs, true),
 		ClickedSuggestion: ({ text }) => send(model, text, inputs, false),
 		ToggledContext: () => ({
 			model: modifyFields(model, { isContextIncluded: (isIncluded) => !isIncluded }),
 		}),
 		MadeMessageId: ({ messageId }) => madeMessageId(model, messageId, inputs),
-		SucceededSend: ({ threadId }) => succeededSend(model, threadId),
-		FailedSend: ({ message }) => failedSend(model, message),
+		SucceededSend: ({ messageId }) => succeededSend(model, messageId),
+		FailedSend: (failed) => failedSend(model, failed),
 		ClickedNewChat: () =>
 			model.threadId === null
 				? { model, commands: [FocusAssistantComposer()] }
 				: showThread(model, null),
 		GotHistoryMenuMessage: ({ message }) => gotHistoryMenuMessage(model, message),
 		ClickedStop: () => clickedStop(model, inputs),
-		SucceededStop: () => ({ model }),
-		FailedStop: ({ message }) => ({ model: modifyFields(model, { error: () => message }) }),
+		SucceededStop: () => ({ model: modifyFields(model, { isStopping: () => false }) }),
+		FailedStop: ({ message }) => ({
+			model: modifyFields(model, { isStopping: () => false, error: () => message }),
+		}),
 		ClickedShare: () => clickedShare(model, inputs),
 		SucceededUpdateVisibility: () => ({
 			model: modifyFields(model, { isUpdatingVisibility: () => false }),
@@ -494,17 +594,13 @@ export const update = (model: Model, message: Message, inputs: Inputs): Return =
 			model: setAnswer(model, itemId, questionId, [value]),
 		}),
 		SubmittedAnswers: ({ itemId }) => submittedAnswers(model, itemId, inputs),
-		SucceededAnswer: () => ({
+		// The answer stays in flight until the question syncs as answered (`updatedItems`).
+		SucceededAnswer: () => ({ model }),
+		FailedAnswer: ({ itemId, message }) => ({
 			model: modifyFields(model, {
-				answerDrafts: (drafts) =>
-					Object.fromEntries(
-						Object.entries(drafts).filter(([itemId]) => itemId !== model.answeringItemId),
-					),
-				answeringItemId: () => null,
+				answeringItemId: (current) => (current === itemId ? null : current),
+				answerError: () => ({ itemId, message }),
 			}),
-		}),
-		FailedAnswer: ({ message }) => ({
-			model: modifyFields(model, { answeringItemId: () => null, error: () => message }),
 		}),
 		PressedEdge: ({ clientX, startWidth, maxWidth }) => pressedEdge(model, clientX, startWidth, maxWidth),
 		MovedEdge: ({ clientX }) => movedEdge(model, clientX),
@@ -512,4 +608,5 @@ export const update = (model: Model, message: Message, inputs: Inputs): Return =
 		NudgedEdge: ({ delta }) => nudgedEdge(model, delta),
 		CompletedSaveStored: () => ({ model }),
 		CompletedFocusComposer: () => ({ model }),
+		CompletedFocusToggle: () => ({ model }),
 	})

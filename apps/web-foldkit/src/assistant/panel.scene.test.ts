@@ -96,7 +96,7 @@ describe("the panel", () => {
 			type(role("textbox", { name: "Message the assistant" }), "What changed this week?"),
 			click(role("button", { name: "Send" })),
 			Command.resolve(MakeAssistantMessageId, Message.MadeMessageId({ messageId })),
-			Command.resolve(StartAssistantThread, Message.SucceededSend({ threadId })),
+			Command.resolve(StartAssistantThread, Message.SucceededSend({ threadId, messageId })),
 			sceneExpect(text("What changed this week?")).toExist(),
 			sceneExpect(role("textbox", { name: "Message the assistant" })).toHaveValue(""),
 		)

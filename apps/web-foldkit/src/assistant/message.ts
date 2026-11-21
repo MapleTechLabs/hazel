@@ -21,9 +21,17 @@ export const Message = defineMessageUnion({
 	ToggledContext: {},
 	/** The pending message's id (and a new thread's), made by `MakeAssistantMessageId`. */
 	MadeMessageId: { messageId: AssistantItemId },
-	SucceededSend: { threadId: AssistantThreadId },
-	/** The message is the one to show (the engine's own, or the common copy). */
-	FailedSend: { message: Schema.String },
+	SucceededSend: { threadId: AssistantThreadId, messageId: AssistantItemId },
+	/**
+	 * `message` is the one to show (the engine's own, or the common copy); `isRetryable`: it failed
+	 * in transit, so sending it again reuses its ids.
+	 */
+	FailedSend: {
+		threadId: AssistantThreadId,
+		messageId: AssistantItemId,
+		message: Schema.String,
+		isRetryable: Schema.Boolean,
+	},
 	ClickedNewChat: {},
 	GotHistoryMenuMessage: { message: Menu.Message },
 	ClickedStop: {},
@@ -42,8 +50,8 @@ export const Message = defineMessageUnion({
 	},
 	ChangedAnswer: { itemId: AssistantItemId, questionId: Schema.String, value: Schema.String },
 	SubmittedAnswers: { itemId: AssistantItemId },
-	SucceededAnswer: {},
-	FailedAnswer: { message: Schema.String },
+	SucceededAnswer: { itemId: AssistantItemId },
+	FailedAnswer: { itemId: AssistantItemId, message: Schema.String },
 	/** The resize edge was grabbed: the panel's width and the widest the page leaves room for. */
 	PressedEdge: { clientX: Schema.Finite, startWidth: Schema.Finite, maxWidth: Schema.Finite },
 	MovedEdge: { clientX: Schema.Finite },
@@ -52,5 +60,6 @@ export const Message = defineMessageUnion({
 	NudgedEdge: { delta: Schema.Finite },
 	CompletedSaveStored: {},
 	CompletedFocusComposer: {},
+	CompletedFocusToggle: {},
 })
 export type Message = typeof Message.Type

@@ -210,7 +210,10 @@ const orgShellView = (model: Model, h: HtmlBuilder<Message>, data: ShellData): H
 				slotId: "ai-panel",
 				model: model.aiPanel,
 				view: AiPanel.view,
-				viewInputs: aiPanelInputsOf(model),
+				viewInputs: {
+					...aiPanelInputsOf(model),
+					isSidebarCollapsed: model.shell.isSidebarCollapsed,
+				},
 				toParentMessage: toAiPanelMessage,
 			}),
 			toggle: AiPanel.toggleButton(h, {

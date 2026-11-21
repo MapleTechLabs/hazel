@@ -14,7 +14,6 @@ export const HOTKEYS = {
 	createChannel: hotkeyLabel("Mod+Alt+N"),
 	createDm: hotkeyLabel("Mod+Alt+D"),
 	invite: hotkeyLabel("Mod+Alt+I"),
-	aiPanel: hotkeyLabel("Mod+J"),
 } as const
 
 /** A page's palette item: `go:<id>`, matched by its label, group and keywords. */

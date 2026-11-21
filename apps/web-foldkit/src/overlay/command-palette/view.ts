@@ -14,6 +14,7 @@ import {
 	IconUsersPlus,
 } from "../../icons"
 import { destination, isDestinationId } from "../../shell/destinations"
+import { hotkeyLabel } from "../../shell/channels-sidebar/hotkey-label"
 import { environmentBadge } from "../../customers/ui/badges"
 import { companyLogo } from "../../customers/ui/identity"
 import type { Shared } from "../../page/contract"
@@ -88,7 +89,15 @@ const channelContent = (h: HtmlBuilder<Message>, key: string, channel: ChannelSu
 	channel ? [channelIcon(h, channel.icon), label(h, key, [channel.name])] : []
 
 const QUICK_ACTIONS: Readonly<
-	Record<string, { icon: (h: HtmlBuilder<Message>) => Html; text: string; shortcut?: string }>
+	Record<
+		string,
+		{
+			icon: (h: HtmlBuilder<Message>) => Html
+			text: string
+			/** A label, or one read off the member's keys (a rebindable action's). */
+			shortcut?: string | ((shared: Shared) => string | null)
+		}
+	>
 > = {
 	"action:search": { icon: (h) => IconMagnifier3(h), text: "Search messages", shortcut: HOTKEYS.search },
 	"action:create-channel": {
@@ -102,7 +111,10 @@ const QUICK_ACTIONS: Readonly<
 	"action:ai-panel": {
 		icon: (h) => IconSparkles(h),
 		text: "Ask the AI assistant",
-		shortcut: HOTKEYS.aiPanel,
+		shortcut: (shared) => {
+			const key = shared.keys["aiPanel.toggle"]
+			return key === null ? null : hotkeyLabel(key, shared.keyboardPlatform)
+		},
 	},
 	"pref:status": { icon: (h) => IconCircleDottedUser(h), text: "Set status..." },
 	"pref:appearance": { icon: (h) => IconPaintbrush(h), text: "Change appearance..." },
@@ -139,12 +151,14 @@ const itemContent = (
 	key: string,
 ): ReadonlyArray<Html> => {
 	const action = QUICK_ACTIONS[key]
-	if (action)
+	if (action) {
+		const shortcut = typeof action.shortcut === "function" ? action.shortcut(shared) : action.shortcut
 		return [
 			action.icon(h),
 			label(h, key, [action.text]),
-			...(action.shortcut ? [commandMenuShortcut(h, MENU_ID, key, action.shortcut)] : []),
+			...(shortcut ? [commandMenuShortcut(h, MENU_ID, key, shortcut)] : []),
 		]
+	}
 	const { kind, value } = parseKey(key)
 	if (kind === "go" && isDestinationId(value)) {
 		const page = destination(value)

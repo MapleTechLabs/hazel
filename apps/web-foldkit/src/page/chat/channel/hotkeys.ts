@@ -1,7 +1,8 @@
-import { Schema } from "effect"
+import { Schema, Stream } from "effect"
 import { Dom } from "foldkit"
 import { type AppKeys, appKeymap } from "~/lib/keybindings/app-keymap"
 import { KeyCombo } from "~/lib/keybindings/key-combo"
+import { isInAssistantPanel } from "../../../assistant/keyboard"
 
 /**
  * Discord's channel shortcuts that this page owns, on the user's keys (`Shared.keys`). The Mod combos
@@ -54,11 +55,15 @@ export type ChannelKeys = typeof ChannelKeys.Type
 export const channelKeysOf = (keys: AppKeys): ChannelKeys =>
 	Object.fromEntries(CHANNEL_ACTIONS.map((id) => [id, keys[id]])) as ChannelKeys
 
+/**
+ * Keys pressed inside the AI panel are the panel's (its composer, its scroll): they neither fire
+ * nor have their default prevented here.
+ */
 export const channelHotkeysStream = <Message>(
 	toMessage: (action: ChannelHotkey) => Message,
 	options: { readonly isDialogOpen: boolean; readonly keys?: ChannelKeys },
 ) =>
-	Dom.streamFromKeyBindings<Message>({
+	Dom.streamFromKeyBindings<Message | null>({
 		bindings: appKeymap.bindings(
 			options.keys ?? channelKeysOf(appKeymap.defaults),
 			CHANNEL_ACTIONS,
@@ -67,10 +72,14 @@ export const channelHotkeysStream = <Message>(
 				return {
 					whileTyping: whileTyping ? "Allow" : "Suppress",
 					isEnabled: inDialogs || !options.isDialogOpen,
-					// Escape is only noticed: whatever else listens for it still gets it.
-					preventDefault: action !== "MarkRead",
-					mapEvent: () => toMessage(action),
+					preventDefault: false,
+					mapEvent: (event: KeyboardEvent) => {
+						if (isInAssistantPanel(event.target)) return null
+						// Escape is only noticed: whatever else listens for it still gets it.
+						if (action !== "MarkRead") event.preventDefault()
+						return toMessage(action)
+					},
 				}
 			},
 		),
-	})
+	}).pipe(Stream.filter((message): message is Message => message !== null))

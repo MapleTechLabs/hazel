@@ -19,6 +19,8 @@ export interface ResizeEdgeOptions<Message> {
 	readonly position: Position
 	readonly width: number
 	readonly minWidth: number
+	/** The widest the panel gets (`aria-valuemax`). */
+	readonly maxWidth: number
 	readonly isDragging: boolean
 	/** The edge was grabbed (primary button): the pointer's x and the event target to measure from. */
 	readonly onPress: (clientX: number, target: EventTarget | null) => Message
@@ -36,6 +38,7 @@ export const resizeEdge = <Message>(h: HtmlBuilder<Message>, options: ResizeEdge
 			h.AriaLabel(options.label),
 			h.Attribute("aria-orientation", "vertical"),
 			h.Attribute("aria-valuemin", String(options.minWidth)),
+			h.Attribute("aria-valuemax", String(options.maxWidth)),
 			h.Attribute("aria-valuenow", String(options.width)),
 			h.Attribute("tabindex", "0"),
 			h.Attribute("data-dragging", String(options.isDragging)),

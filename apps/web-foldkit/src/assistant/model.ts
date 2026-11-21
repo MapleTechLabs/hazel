@@ -72,6 +72,19 @@ export const Pending = Schema.Struct({
 })
 export type Pending = typeof Pending.Type
 
+/**
+ * A send that failed in transit, with the ids it went out with: sending the same text again reuses
+ * them (the server takes a repeated id as the same message); editing the draft drops them.
+ */
+export const Retry = Schema.Struct({
+	text: Schema.String,
+	threadId: AssistantThreadId,
+	messageId: AssistantItemId,
+	context: Schema.NullOr(Assistant.Context),
+	isNewThread: Schema.Boolean,
+})
+export type Retry = typeof Retry.Type
+
 /** The resize edge's drag: where it started, and the widest the page leaves room for. */
 export const Drag = Schema.Struct({
 	startX: Schema.Finite,
@@ -108,19 +121,26 @@ export const Model = Schema.Struct({
 	/** The page's context goes with the next message; turned off, only that message goes without. */
 	isContextIncluded: Schema.Boolean,
 	pending: Schema.NullOr(Pending),
+	retry: Schema.NullOr(Retry),
 	/** The last write's failure, shown above the composer. */
 	error: Schema.NullOr(Schema.String),
 	/** The work-log rows expanded, by their first item's id. */
 	expandedWork: Schema.Array(Schema.String),
 	answerDrafts: AnswerDrafts,
+	/** The question whose answer is on its way, until the item syncs as answered. */
 	answeringItemId: Schema.NullOr(AssistantItemId),
+	/** The last answer's failure, shown on its question. */
+	answerError: Schema.NullOr(Schema.Struct({ itemId: AssistantItemId, message: Schema.String })),
 	isUpdatingVisibility: Schema.Boolean,
+	/** `assistant.stop` is on its way. */
+	isStopping: Schema.Boolean,
 	historyMenu: Menu.Model,
 })
 export type Model = typeof Model.Type
 
 export const PANEL_ID = "ai-panel"
 export const COMPOSER_ID = "ai-panel-composer"
+export const TOGGLE_ID = "ai-panel-toggle"
 export const HISTORY_MENU_ID = "ai-panel-history"
 /** The history menu's first item. */
 export const NEW_CHAT_KEY = "new-chat"

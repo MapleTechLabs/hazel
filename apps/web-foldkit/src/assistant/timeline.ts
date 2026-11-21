@@ -22,14 +22,20 @@ export type Entry =
 
 const isWork = (item: ItemRow) => item.kind === "reasoning" || item.kind === "tool"
 
-export const timelineOf = (items: ReadonlyArray<ItemRow>): Array<Entry> =>
-	items.reduce<Array<Entry>>((entries, item) => {
-		if (!isWork(item)) return [...entries, { _tag: "Item", item }]
-		const last = entries.at(-1)
-		return last?._tag === "Work"
-			? [...entries.slice(0, -1), { ...last, items: [...last.items, item] }]
-			: [...entries, { _tag: "Work", key: item.id, items: [item] }]
-	}, [])
+export const timelineOf = (items: ReadonlyArray<ItemRow>): Array<Entry> => {
+	const entries: Array<Entry> = []
+	let work: Array<ItemRow> | null = null
+	for (const item of items) {
+		if (!isWork(item)) {
+			work = null
+			entries.push({ _tag: "Item", item })
+		} else if (work === null) {
+			work = [item]
+			entries.push({ _tag: "Work", key: item.id, items: work })
+		} else work.push(item)
+	}
+	return entries
+}
 
 /** A work log's summary: "Working" while a step runs, its step count, and whether one failed. */
 export const workSummaryOf = (items: ReadonlyArray<ItemRow>) => ({

@@ -7,7 +7,7 @@ import type { Shared } from "../page/contract"
 import { sharedDefaults } from "../page/test-shared"
 import { Message } from "./message"
 import type { ItemRow, Model, ThreadRow } from "./model"
-import { init, type Inputs, open, pendingOf, update } from "./update"
+import { GONE_THREAD, init, type Inputs, open, pendingOf, update } from "./update"
 
 /** The panel's sending (optimistic, then reconciled by id), failures, sharing and questions. */
 
@@ -115,10 +115,13 @@ describe("a new chat", () => {
 		// The thread's id is its first message's.
 		expect(made.model.threadId).toBe(threadId)
 		expect(made.commands?.map((command) => [command.name, command.args])).toEqual([
-			["StartAssistantThread", { organizationId, threadId, message: "How is Acme doing?", context }],
+			[
+				"StartAssistantThread",
+				{ organizationId, threadId, messageId, message: "How is Acme doing?", context },
+			],
 		])
 
-		const sent = run(made.model, Message.SucceededSend({ threadId }))
+		const sent = run(made.model, Message.SucceededSend({ threadId, messageId }))
 		expect(pendingOf(sent.model)).toMatchObject({ messageId, isSending: false })
 
 		// The synced user item with the same id replaces the optimistic one.
@@ -137,13 +140,40 @@ describe("a new chat", () => {
 			Message.ChangedDraft({ value: "Hello" }),
 			Message.SubmittedComposer(),
 			Message.MadeMessageId({ messageId: itemId(10) }),
-			Message.FailedSend({ message: "T3 Code is not running on your machine." }),
+			Message.FailedSend({
+				threadId,
+				messageId: itemId(10),
+				message: "T3 Code is not running on your machine.",
+				isRetryable: false,
+			}),
 		])
 		expect(model.draft).toBe("Hello")
 		expect(model.error).toBe("T3 Code is not running on your machine.")
 		expect(model.pending).toBeNull()
 		// The thread never started: back to a new chat.
 		expect(model.threadId).toBeNull()
+		// The engine refused it: nothing to retry with the same ids.
+		expect(model.retry).toBeNull()
+	})
+
+	test("a late failure of an abandoned start leaves the member's next message alone", () => {
+		// Start A hangs; the member opens a new chat and sends B.
+		const model = runAll(opened, [
+			Message.ChangedDraft({ value: "A" }),
+			Message.SubmittedComposer(),
+			Message.MadeMessageId({ messageId: itemId(10) }),
+			Message.ClickedNewChat(),
+			Message.ChangedDraft({ value: "B" }),
+			Message.SubmittedComposer(),
+			Message.MadeMessageId({ messageId: itemId(20) }),
+		])
+		const late = runAll(model, [
+			Message.FailedSend({ threadId, messageId: itemId(10), message: "Timed out", isRetryable: true }),
+			Message.SucceededSend({ threadId, messageId: itemId(10) }),
+		])
+		expect(late.pending).toMatchObject({ text: "B", messageId: itemId(20), isSending: true })
+		expect(late.draft).toBe("")
+		expect(late.error).toBeNull()
 	})
 
 	test("a suggestion sends at once and keeps what the member typed", () => {
@@ -207,6 +237,54 @@ describe("a follow-up", () => {
 	})
 })
 
+describe("retrying", () => {
+	const failedInTransit = runAll(onThread([thread()]), [
+		Message.ChangedDraft({ value: "And their invoices?" }),
+		Message.SubmittedComposer(),
+		Message.MadeMessageId({ messageId: itemId(20) }),
+		Message.FailedSend({
+			threadId,
+			messageId: itemId(20),
+			message: "Connection lost",
+			isRetryable: true,
+		}),
+	])
+
+	test("the same text is sent again with the ids it first went out with", () => {
+		expect(failedInTransit.draft).toBe("And their invoices?")
+		const result = run(failedInTransit, Message.SubmittedComposer())
+		expect(commandNames(result)).not.toContain("MakeAssistantMessageId")
+		expect(result.commands?.[0]?.args).toMatchObject({ threadId, messageId: itemId(20) })
+		expect(pendingOf(result.model)).toMatchObject({ messageId: itemId(20), isSending: true })
+	})
+
+	test("an edited draft is a new message, with a new id", () => {
+		const edited = run(
+			failedInTransit,
+			Message.ChangedDraft({ value: "And their invoices, please?" }),
+		).model
+		expect(edited.retry).toBeNull()
+		expect(commandNames(run(edited, Message.SubmittedComposer()))).toContain("MakeAssistantMessageId")
+	})
+
+	test("a new chat's start is retried with the same thread id", () => {
+		const model = runAll(opened, [
+			Message.ChangedDraft({ value: "Hello" }),
+			Message.SubmittedComposer(),
+			Message.MadeMessageId({ messageId: itemId(10) }),
+			Message.FailedSend({ threadId, messageId: itemId(10), message: "Timed out", isRetryable: true }),
+		])
+		expect(model.threadId).toBeNull()
+		const result = run(model, Message.SubmittedComposer())
+		expect(result.commands?.map((command) => [command.name, command.args])).toEqual([
+			[
+				"StartAssistantThread",
+				{ organizationId, threadId, messageId: itemId(10), message: "Hello", context },
+			],
+		])
+	})
+})
+
 describe("someone else's shared thread", () => {
 	const shared = onThread([
 		thread({ ownerId: grace, ownerName: "Grace Hopper", visibility: "organization" }),
@@ -227,9 +305,22 @@ describe("the owner's thread", () => {
 		expect(result.commands?.[0]?.args).toEqual({ organizationId, threadId, visibility: "organization" })
 	})
 
-	test("Stop stops the running thread", () => {
+	test("Stop stops the running thread, once until it answers", () => {
 		const result = run(onThread([thread({ status: "running" })]), Message.ClickedStop())
 		expect(commandNames(result)).toEqual(["StopAssistantThread"])
+		expect(result.model.isStopping).toBe(true)
+		expect(run(result.model, Message.ClickedStop()).commands ?? []).toEqual([])
+		const stopped = run(result.model, Message.SucceededStop()).model
+		expect(stopped.isStopping).toBe(false)
+	})
+
+	test("Stop also ends a run waiting on the member", () => {
+		const result = run(onThread([thread({ status: "waiting" })]), Message.ClickedStop())
+		expect(commandNames(result)).toEqual(["StopAssistantThread"])
+	})
+
+	test("an idle thread has nothing to stop", () => {
+		expect(run(onThread([thread()]), Message.ClickedStop()).commands ?? []).toEqual([])
 	})
 })
 
@@ -269,6 +360,38 @@ describe("questions", () => {
 		})
 	})
 
+	test("the answer stays in flight, drafts kept, until the question syncs as answered", () => {
+		const answering = runAll(asked, [
+			pick("plan", "Pro"),
+			pick("areas", "Usage", true),
+			Message.SubmittedAnswers({ itemId: question.id }),
+			Message.SucceededAnswer({ itemId: question.id }),
+		])
+		expect(answering.answeringItemId).toBe(question.id)
+		expect(answering.answerDrafts[question.id]).toEqual({ plan: ["Pro"], areas: ["Usage"] })
+		const synced = run(
+			answering,
+			Message.UpdatedItems({ threadId, items: [{ ...question, status: "completed" }] }),
+		).model
+		expect(synced.answeringItemId).toBeNull()
+		expect(synced.answerDrafts[question.id]).toBeUndefined()
+	})
+
+	test("a failed answer is shown on its own question", () => {
+		const failed = runAll(asked, [
+			pick("plan", "Pro"),
+			pick("areas", "Usage", true),
+			Message.SubmittedAnswers({ itemId: question.id }),
+			Message.FailedAnswer({ itemId: question.id, message: "This question was already answered." }),
+		])
+		expect(failed.answeringItemId).toBeNull()
+		expect(failed.answerError).toEqual({
+			itemId: question.id,
+			message: "This question was already answered.",
+		})
+		expect(failed.answerDrafts[question.id]).toEqual({ plan: ["Pro"], areas: ["Usage"] })
+	})
+
 	test("a multi-select pick toggles; a single pick replaces", () => {
 		const model = runAll(asked, [
 			pick("plan", "Pro"),
@@ -281,6 +404,48 @@ describe("questions", () => {
 })
 
 describe("organizations", () => {
+	test("the first threads after a load only name the organization: nothing resets", () => {
+		const loaded = init({ isOpen: true, width: null })
+		const typed = runAll(loaded, [Message.ChangedDraft({ value: "Draft" }), Message.SubmittedComposer()])
+		const result = run(typed, Message.UpdatedThreads({ organizationId, threads: [] }))
+		expect(result.model.organizationId).toBe(organizationId)
+		expect(result.model.pending).toMatchObject({ text: "Draft" })
+		expect(commandNames(result)).not.toContain("FetchAssistantStatus")
+	})
+
+	test("opening the panel in another organization starts a new chat there", () => {
+		const other = Schema.decodeSync(OrganizationId)(uuid(4))
+		const closed = run(onThread([thread()]), Message.ClickedClose()).model
+		const elsewhere: Inputs = {
+			...inputs,
+			shared: { ...shared, organization: { id: other, name: "Other", slug: "other", logoUrl: null } },
+		}
+		const reopened = open(closed, elsewhere).model
+		expect(reopened.organizationId).toBe(other)
+		expect(reopened.threadId).toBeNull()
+		expect(reopened.threads).toEqual([])
+	})
+
+	test("an open thread that is unshared or deleted goes back to a new chat, and says so", () => {
+		const gone = run(
+			onThread([thread({ ownerId: grace, visibility: "organization" })]),
+			Message.UpdatedThreads({ organizationId, threads: [] }),
+		).model
+		expect(gone.threadId).toBeNull()
+		expect(gone.error).toBe(GONE_THREAD)
+	})
+
+	test("the member's own start whose row has not synced yet stays open", () => {
+		const starting = runAll(opened, [
+			Message.ChangedDraft({ value: "Hello" }),
+			Message.SubmittedComposer(),
+			Message.MadeMessageId({ messageId: itemId(10) }),
+			Message.UpdatedThreads({ organizationId, threads: [] }),
+		])
+		expect(starting.threadId).toBe(threadId)
+		expect(starting.error).toBeNull()
+	})
+
 	test("another organization's threads start a new chat and check T3 Code again", () => {
 		const other = Schema.decodeSync(OrganizationId)(uuid(4))
 		const result = run(

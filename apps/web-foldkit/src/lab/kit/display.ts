@@ -215,6 +215,7 @@ const splitPanels = (h: H): Html =>
 								position: "right",
 								width: 192,
 								minWidth: 160,
+								maxWidth: 320,
 								isDragging: false,
 								onPress: () => Message.PressedAction({ label: "Resize panel" }),
 								onNudge: () => Message.PressedAction({ label: "Resize panel" }),

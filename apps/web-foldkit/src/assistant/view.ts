@@ -1,7 +1,7 @@
 import type { Assistant } from "@hazel/domain/models"
 import { Match, Option } from "effect"
 import { Submodel } from "foldkit"
-import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
+import { type ChildAttribute, createKeyedLazy, createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { markdownView } from "../chat/markdown/markdown-view"
 import {
@@ -35,6 +35,7 @@ import { suggestionsFor } from "./context"
 import { Message } from "./message"
 import {
 	COMPOSER_ID,
+	TOGGLE_ID,
 	type ItemRow,
 	type Model,
 	NEW_CHAT_KEY,
@@ -45,7 +46,10 @@ import {
 import { historyOf, timelineOf, workSummaryOf } from "./timeline"
 import {
 	answersOf,
+	isAnswered,
 	isReadOnly,
+	isStoppable,
+	MAX_KEYBOARD_WIDTH,
 	MIN_PAGE_WIDTH,
 	MIN_WIDTH,
 	pendingOf,
@@ -63,11 +67,22 @@ import {
 export interface ViewInputs {
 	readonly shared: Shared
 	readonly context: Assistant.Context | null
+	/** The left sidebar is docked to its nav rail: the page beside the panel has more room. */
+	readonly isSidebarCollapsed: boolean
 }
+
+/** Every element of the panel carries this, so page hotkeys can leave its keys alone (`keyboard.ts`). */
+const PANEL_MARK = "data-ai-panel"
 
 type H = HtmlBuilder<Message>
 
 const ICON = "size-4"
+
+/** Escape on a header control closes the panel, as it does below the header. */
+const closesOnEscape = (h: H) =>
+	h.OnKeyDownSelfPreventDefault((key) =>
+		key === "Escape" ? Option.some(Message.ClickedClose()) : Option.none(),
+	)
 
 const iconButton = (
 	h: H,
@@ -82,7 +97,7 @@ const iconButton = (
 			intent: "plain",
 			size: "sq-sm",
 			onPress,
-			attributes: [h.AriaLabel(label), h.Attribute("title", label), ...extra],
+			attributes: [h.AriaLabel(label), h.Attribute("title", label), closesOnEscape(h), ...extra],
 		},
 		[icon],
 	)
@@ -102,6 +117,7 @@ const externalLink = (
 			h.Attribute("rel", "noopener noreferrer"),
 			h.AriaLabel(label),
 			h.Attribute("title", label),
+			closesOnEscape(h),
 			h.Class(buttonClassName({ intent: "plain", size: "sq-sm" }, className)),
 		],
 		[...children],
@@ -197,6 +213,7 @@ const shareButton = (h: H, model: Model, thread: ThreadRow): Html => {
 				h.AriaLabel(label),
 				h.Attribute("title", label),
 				h.AriaPressed(isShared ? "true" : "false"),
+				closesOnEscape(h),
 			],
 		},
 		[isShared ? IconUsers(h, { className: ICON }) : IconLock(h, { className: ICON })],
@@ -243,6 +260,12 @@ const header = (h: H, model: Model, inputs: ViewInputs): Html => {
 
 // TIMELINE
 
+/**
+ * The timeline is a lazy view over Model fields and primitives, so the panel's other Messages (and
+ * the app's) never rebuild it; inside, replies and steps are memoized per item by what they show, so
+ * a growing reply re-parses only its own markdown.
+ */
+
 const userBubble = (h: H, text: string, isSending = false): Html =>
 	h.div(
 		[h.Class("flex justify-end")],
@@ -261,61 +284,84 @@ const userBubble = (h: H, text: string, isSending = false): Html =>
 		],
 	)
 
-const assistantReply = (h: H, item: ItemRow): Html =>
-	item.title === "Plan"
+const assistantReply = (h: H, text: string, title: string | null): Html =>
+	title === "Plan"
 		? h.div(
 				[h.Class("flex flex-col gap-2 rounded-lg border border-border bg-bg p-3 shadow-xs")],
-				[heading(h, { variant: "label", level: 3 }, ["Plan"]), markdownView(h, item.text)],
+				[heading(h, { variant: "label", level: 3 }, ["Plan"]), markdownView(h, text)],
 			)
-		: h.div([h.Class("text-fg")], [markdownView(h, item.text)])
+		: h.div([h.Class("text-fg")], [markdownView(h, text)])
 
-const stepIcon = (h: H, item: ItemRow): Html =>
-	item.status === "running"
+const noticeView = (h: H, text: string, title: string | null): Html =>
+	h.p([h.Class("text-center text-muted-fg text-xs")], [text || title || ""])
+
+/** A message, reply or notice: what it shows is its kind, text and title. */
+const messageView = (kind: ItemRow["kind"], text: string, title: string | null, h: H): Html =>
+	kind === "user"
+		? userBubble(h, text)
+		: kind === "assistant"
+			? assistantReply(h, text, title)
+			: noticeView(h, text, title)
+
+const stepIcon = (h: H, kind: ItemRow["kind"], status: string | null): Html =>
+	status === "running"
 		? loader(h, { className: "size-3.5", ariaLabel: "Running" })
-		: item.status === "failed"
+		: status === "failed"
 			? IconWarning(h, { className: "size-3.5 text-danger" })
-			: item.kind === "reasoning"
+			: kind === "reasoning"
 				? IconBrainSparkle(h, { className: "size-3.5" })
 				: IconCode(h, { className: "size-3.5" })
 
-const stepRow = (h: H, item: ItemRow): Html => {
-	const isReasoning = item.kind === "reasoning"
-	const isFailed = item.status === "failed"
+const stepRow = (
+	kind: ItemRow["kind"],
+	title: string | null,
+	input: string | null,
+	text: string,
+	status: string | null,
+	h: H,
+): Html => {
+	const isReasoning = kind === "reasoning"
 	return h.li(
-		[h.Class(twMerge("flex flex-col gap-1 text-muted-fg text-xs", isFailed && "text-danger"))],
+		[h.Class(twMerge("flex flex-col gap-1 text-muted-fg text-xs", status === "failed" && "text-danger"))],
 		[
 			h.div(
 				[h.Class("flex min-w-0 items-center gap-2")],
 				[
-					stepIcon(h, item),
-					h.span(
-						[h.Class("shrink-0 font-medium")],
-						[item.title ?? (isReasoning ? "Thinking" : "Tool")],
-					),
-					item.input === null
+					stepIcon(h, kind, status),
+					h.span([h.Class("shrink-0 font-medium")], [title ?? (isReasoning ? "Thinking" : "Tool")]),
+					input === null
 						? h.empty
-						: h.code([h.Class("min-w-0 truncate font-mono text-2xs")], [item.input]),
+						: h.code([h.Class("min-w-0 truncate font-mono text-2xs")], [input]),
 				],
 			),
-			item.text === ""
+			text === ""
 				? h.empty
 				: isReasoning
-					? h.p([h.Class("whitespace-pre-wrap pl-5.5 text-muted-fg/80")], [item.text])
+					? h.p([h.Class("whitespace-pre-wrap pl-5.5 text-muted-fg/80")], [text])
 					: h.pre(
 							[
 								h.Class(
 									"ml-5.5 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-secondary/60 p-2 font-mono text-2xs",
 								),
 							],
-							[item.text],
+							[text],
 						),
 		],
 	)
 }
 
-const workLog = (h: H, model: Model, key: string, items: ReadonlyArray<ItemRow>): Html => {
+// Keyed by item id: one slot per message or step, re-run only when what it shows changed.
+const lazyMessages = createKeyedLazy()
+const lazySteps = createKeyedLazy()
+
+const memoMessage = (h: H, item: ItemRow): Html =>
+	lazyMessages(item.id, messageView, [item.kind, item.text, item.title, h]) ?? h.empty
+
+const memoStep = (h: H, item: ItemRow): Html =>
+	lazySteps(item.id, stepRow, [item.kind, item.title, item.input, item.text, item.status, h]) ?? h.empty
+
+const workLog = (h: H, key: string, items: ReadonlyArray<ItemRow>, isExpanded: boolean): Html => {
 	const { isRunning, hasFailed, steps } = workSummaryOf(items)
-	const isExpanded = model.expandedWork.includes(key)
 	const listId = `${PANEL_ID}-work-${key}`
 	return h.div(
 		[h.Class("flex flex-col gap-2")],
@@ -346,21 +392,28 @@ const workLog = (h: H, model: Model, key: string, items: ReadonlyArray<ItemRow>)
 			isExpanded
 				? h.ul(
 						[h.Id(listId), h.Class("flex flex-col gap-2 border-border border-l pl-3")],
-						items.map((item) => stepRow(h, item)),
+						items.map((item) => h.keyed("div")(item.id, [], [memoStep(h, item)])),
 					)
 				: h.empty,
 		],
 	)
 }
 
+/** What a question card reads besides its item. */
+interface QuestionState {
+	readonly answerDrafts: Model["answerDrafts"]
+	readonly answeringItemId: Model["answeringItemId"]
+	readonly answerError: Model["answerError"]
+	readonly isReadOnly: boolean
+}
+
 const questionField = (
 	h: H,
-	model: Model,
+	picked: ReadonlyArray<string>,
 	item: ItemRow,
 	question: QuestionData["questions"][number],
 	isLocked: boolean,
 ) => {
-	const picked = model.answerDrafts[item.id]?.[question.id] ?? []
 	const options = question.options ?? []
 	return h.div(
 		[h.Class("flex flex-col gap-2")],
@@ -420,23 +473,29 @@ const answeredView = (h: H, data: QuestionData): Html =>
 		]),
 	)
 
-const questionCard = (h: H, model: Model, item: ItemRow, isReadOnlyThread: boolean): Html => {
+const questionCard = (h: H, item: ItemRow, state: QuestionState): Html => {
 	const data = item.question
 	if (data === null) return h.empty
-	const isAnswered = data.answered === true || item.status !== "running"
-	const isSubmitting = model.answeringItemId === item.id
-	const isLocked = isReadOnlyThread || isSubmitting
+	const isSubmitting = state.answeringItemId === item.id
+	const isLocked = state.isReadOnly || isSubmitting
+	const drafts = state.answerDrafts[item.id] ?? {}
+	const error = state.answerError?.itemId === item.id ? state.answerError.message : null
 	return h.form(
 		[
 			h.Class("flex flex-col gap-3 rounded-lg border border-border bg-bg p-3 shadow-xs"),
 			h.AriaLabel("The assistant asks"),
 			h.OnSubmit(Message.SubmittedAnswers({ itemId: item.id })),
 		],
-		isAnswered
+		isAnswered(item)
 			? [answeredView(h, data)]
 			: [
-					...data.questions.map((question) => questionField(h, model, item, question, isLocked)),
-					isReadOnlyThread
+					...data.questions.map((question) =>
+						questionField(h, drafts[question.id] ?? [], item, question, isLocked),
+					),
+					error === null
+						? h.empty
+						: h.p([h.Role("alert"), h.Class("text-danger text-sm")], [error]),
+					state.isReadOnly
 						? h.empty
 						: h.div(
 								[h.Class("flex justify-end")],
@@ -445,7 +504,7 @@ const questionCard = (h: H, model: Model, item: ItemRow, isReadOnlyThread: boole
 										h,
 										{
 											size: "sm",
-											isDisabled: answersOf(model, item) === null,
+											isDisabled: answersOf(state.answerDrafts, item) === null,
 											isPending: isSubmitting,
 											attributes: [h.Type("submit")],
 										},
@@ -457,10 +516,9 @@ const questionCard = (h: H, model: Model, item: ItemRow, isReadOnlyThread: boole
 	)
 }
 
-const approvalNotice = (h: H, item: ItemRow, thread: ThreadRow | null): Html =>
+const approvalNotice = (h: H, item: ItemRow, externalLink: string | null): Html =>
 	h.div(
 		[
-			h.Role("status"),
 			h.Class(
 				"flex items-start gap-2 rounded-lg border border-warning/20 bg-warning-subtle p-3 text-warning-subtle-fg text-sm",
 			),
@@ -474,39 +532,25 @@ const approvalNotice = (h: H, item: ItemRow, thread: ThreadRow | null): Html =>
 					item.title === null && item.text === ""
 						? h.empty
 						: h.p([h.Class("opacity-90")], [item.title ?? item.text]),
-					thread?.externalLink
-						? h.a(
+					externalLink === null
+						? h.empty
+						: h.a(
 								[
-									h.Href(thread.externalLink),
+									h.Href(externalLink),
 									h.Attribute("target", "_blank"),
 									h.Attribute("rel", "noopener noreferrer"),
 									h.Class("w-fit font-medium underline underline-offset-2"),
 								],
 								["Open in T3 Code"],
-							)
-						: h.empty,
+							),
 				],
 			),
 		],
 	)
 
-const noticeView = (h: H, item: ItemRow): Html =>
-	h.p([h.Class("text-center text-muted-fg text-xs")], [item.text || item.title || ""])
-
-const itemView = (h: H, model: Model, item: ItemRow, inputs: ViewInputs): Html =>
-	Match.value(item.kind).pipe(
-		Match.when("user", () => userBubble(h, item.text)),
-		Match.when("assistant", () => assistantReply(h, item)),
-		Match.when("question", () => questionCard(h, model, item, isReadOnly(model, inputs.shared))),
-		Match.when("approval", () => approvalNotice(h, item, threadOf(model))),
-		// Reasoning and tool items are folded into work logs before they get here.
-		Match.whenOr("notice", "reasoning", "tool", () => noticeView(h, item)),
-		Match.exhaustive,
-	)
-
 const workingIndicator = (h: H): Html =>
 	h.div(
-		[h.Role("status"), h.Class("flex items-center gap-2 text-muted-fg text-xs")],
+		[h.Class("flex items-center gap-2 text-muted-fg text-xs")],
 		[loader(h, { className: "size-3", ariaLabel: "Working" }), "Working…"],
 	)
 
@@ -521,7 +565,7 @@ const threadError = (h: H, message: string): Html =>
 		[IconWarning(h, { className: "mt-0.5 size-4 shrink-0" }), h.p([], [message])],
 	)
 
-const newChat = (h: H, model: Model, inputs: ViewInputs): Html =>
+const newChat = (h: H, suggestions: ReadonlyArray<string>, isSending: boolean): Html =>
 	h.div(
 		[h.Class("flex flex-col gap-4 py-6")],
 		[
@@ -539,13 +583,13 @@ const newChat = (h: H, model: Model, inputs: ViewInputs): Html =>
 			),
 			h.div(
 				[h.Class("flex flex-col items-start gap-2"), h.Role("group"), h.AriaLabel("Suggestions")],
-				suggestionsFor(inputs.context).map((text) =>
+				suggestions.map((text) =>
 					button(
 						h,
 						{
 							intent: "outline",
 							size: "sm",
-							isDisabled: model.pending?.isSending === true,
+							isDisabled: isSending,
 							onPress: Message.ClickedSuggestion({ text }),
 						},
 						[text],
@@ -555,47 +599,114 @@ const newChat = (h: H, model: Model, inputs: ViewInputs): Html =>
 		],
 	)
 
-const timeline = (h: H, model: Model, inputs: ViewInputs): Html => {
-	const thread = threadOf(model)
-	const pending = pendingOf(model)
-	const isEmpty = model.threadId === null && pending === null
-	return h.div(
+const threadEntries = (
+	h: H,
+	items: ReadonlyArray<ItemRow>,
+	expandedWork: ReadonlyArray<string>,
+	questions: QuestionState,
+	externalLink: string | null,
+): Array<Html> =>
+	timelineOf(items).map((entry) =>
+		entry._tag === "Work"
+			? h.keyed("div")(
+					entry.key,
+					[],
+					[workLog(h, entry.key, entry.items, expandedWork.includes(entry.key))],
+				)
+			: h.keyed("div")(
+					entry.item.id,
+					[],
+					[
+						Match.value(entry.item.kind).pipe(
+							Match.when("question", () => questionCard(h, entry.item, questions)),
+							Match.when("approval", () => approvalNotice(h, entry.item, externalLink)),
+							// Reasoning and tool items are folded into work logs before they get here.
+							Match.whenOr("user", "assistant", "notice", "reasoning", "tool", () =>
+								memoMessage(h, entry.item),
+							),
+							Match.exhaustive,
+						),
+					],
+				),
+	)
+
+const timelineView = (
+	items: ReadonlyArray<ItemRow>,
+	pending: Model["pending"],
+	expandedWork: ReadonlyArray<string>,
+	answerDrafts: Model["answerDrafts"],
+	answeringItemId: Model["answeringItemId"],
+	answerError: Model["answerError"],
+	isReadOnlyThread: boolean,
+	// The open thread's row fields as primitives: its row is rebuilt on every sync.
+	status: ThreadRow["status"] | null,
+	errorMessage: string | null,
+	externalLink: string | null,
+	isEmpty: boolean,
+	suggestions: ReadonlyArray<string>,
+	h: H,
+): Html =>
+	h.div(
 		// Reversed, the scroll stays at the newest content as it grows, unless the member scrolled up.
 		[h.Class("flex min-h-0 flex-1 flex-col-reverse overflow-y-auto overscroll-contain")],
 		[
 			h.div(
-				[h.Class("flex flex-col gap-4 px-4 py-4"), h.Attribute("aria-live", "polite")],
+				[h.Class("flex flex-col gap-4 px-4 py-4")],
 				isEmpty
-					? [newChat(h, model, inputs)]
+					? [newChat(h, suggestions, pending?.isSending === true)]
 					: [
-							...timelineOf(model.items).map((entry) =>
-								entry._tag === "Work"
-									? h.keyed("div")(
-											entry.key,
-											[],
-											[workLog(h, model, entry.key, entry.items)],
-										)
-									: h.keyed("div")(
-											entry.item.id,
-											[],
-											[itemView(h, model, entry.item, inputs)],
-										),
+							...threadEntries(
+								h,
+								items,
+								expandedWork,
+								{ answerDrafts, answeringItemId, answerError, isReadOnly: isReadOnlyThread },
+								externalLink,
 							),
 							pending === null ? h.empty : userBubble(h, pending.text, pending.isSending),
-							thread?.status === "running" || pending?.isSending === true
+							status === "running" || pending?.isSending === true
 								? workingIndicator(h)
 								: h.empty,
-							thread?.status === "error"
-								? threadError(
-										h,
-										thread.errorMessage ?? "The assistant stopped with an error.",
-									)
+							status === "error"
+								? threadError(h, errorMessage ?? "The assistant stopped with an error.")
 								: h.empty,
 						],
 			),
 		],
 	)
+
+const lazyTimeline = createLazy()
+
+const timeline = (h: H, model: Model, inputs: ViewInputs): Html => {
+	const pending = pendingOf(model)
+	const thread = threadOf(model)
+	return (
+		lazyTimeline(timelineView, [
+			model.items,
+			pending,
+			model.expandedWork,
+			model.answerDrafts,
+			model.answeringItemId,
+			model.answerError,
+			isReadOnly(model, inputs.shared),
+			thread?.status ?? null,
+			thread?.errorMessage ?? null,
+			thread?.externalLink ?? null,
+			model.threadId === null && pending === null,
+			suggestionsFor(inputs.context),
+			h,
+		]) ?? h.empty
+	)
 }
+
+/** What a screen reader hears as the thread moves: "Working", then "Assistant replied". */
+const announcementOf = (model: Model): string => {
+	const thread = threadOf(model)
+	if (thread?.status === "running" || model.pending?.isSending === true) return "Working"
+	return model.items.at(-1)?.kind === "assistant" ? "Assistant replied" : ""
+}
+
+const liveRegion = (h: H, model: Model): Html =>
+	h.div([h.Role("status"), h.Class("sr-only")], [announcementOf(model)])
 
 // COMPOSER
 
@@ -604,7 +715,7 @@ const composerKey = (key: string, modifiers: { readonly shiftKey: boolean }) =>
 
 const composer = (h: H, model: Model, inputs: ViewInputs): Html => {
 	const thread = threadOf(model)
-	const isRunning = thread?.status === "running"
+	const canStop = isStoppable(thread)
 	const isSending = model.pending?.isSending === true
 	const context = inputs.context
 	const engineLabel = thread?.engineLabel ?? model.environmentLabel
@@ -656,13 +767,14 @@ const composer = (h: H, model: Model, inputs: ViewInputs): Html => {
 								[h.Class("min-w-0 truncate pl-1 text-muted-fg text-xs")],
 								[engineLabel === null ? "T3 Code" : `T3 Code · ${engineLabel}`],
 							),
-							isRunning
+							canStop
 								? button(
 										h,
 										{
 											intent: "secondary",
 											size: "sq-sm",
 											onPress: Message.ClickedStop(),
+											isPending: model.isStopping,
 											attributes: [h.AriaLabel("Stop"), h.Attribute("title", "Stop")],
 										},
 										[h.span([h.Class("size-2.5 rounded-xs bg-current")], [])],
@@ -729,6 +841,7 @@ const content = (h: H, model: Model, inputs: ViewInputs): ReadonlyArray<Html> =>
 	const isConnected = model.connection !== "NotConnected" && model.connection !== "Expired"
 	return [
 		header(h, model, inputs),
+		liveRegion(h, model),
 		h.div(
 			[
 				h.Class("flex min-h-0 flex-1 flex-col"),
@@ -749,24 +862,40 @@ const content = (h: H, model: Model, inputs: ViewInputs): ReadonlyArray<Html> =>
 	]
 }
 
-/** The panel and the page beside it, read off the grabbed edge. */
+/**
+ * The panel and the page beside it (the sidebar inset), read off the grabbed edge: the panel may
+ * take what the page has beyond its own minimum.
+ */
 const measureEdge = (target: EventTarget | null, fallbackWidth: number) => {
 	const panel = target instanceof Element ? target.closest(`#${PANEL_ID}`) : null
-	const root = panel?.parentElement ?? null
+	const page = panel?.parentElement?.querySelector('[data-slot="sidebar-inset"]') ?? null
+	const startWidth = panel?.getBoundingClientRect().width ?? fallbackWidth
 	return {
-		startWidth: panel?.getBoundingClientRect().width ?? fallbackWidth,
-		maxWidth: root === null ? fallbackWidth : root.getBoundingClientRect().width - MIN_PAGE_WIDTH,
+		startWidth,
+		maxWidth:
+			page === null ? fallbackWidth : page.getBoundingClientRect().width + startWidth - MIN_PAGE_WIDTH,
 	}
 }
+
+/**
+ * The widest the panel may be: the window less the page's minimum and the sidebar (its nav rail
+ * when docked). On a narrow window it stays at its own minimum rather than getting squeezed.
+ */
+const maxWidthStyle = (isSidebarCollapsed: boolean) =>
+	`max(${MIN_WIDTH}px, calc(100% - ${MIN_PAGE_WIDTH}px - var(${isSidebarCollapsed ? "--sidebar-width-dock" : "--sidebar-width"})))`
 
 const desktopPanel = (h: H, model: Model, inputs: ViewInputs): Html => {
 	const width = widthOf(model)
 	return h.aside(
 		[
 			h.Id(PANEL_ID),
+			h.Attribute(PANEL_MARK, ""),
 			h.AriaLabel("AI assistant"),
 			h.Class(splitPanelClassName("right", "sticky top-0 h-dvh")),
-			h.Attribute("style", `width: ${width}px; max-width: calc(100% - ${MIN_PAGE_WIDTH}px);`),
+			h.Attribute(
+				"style",
+				`width: ${width}px; min-width: ${MIN_WIDTH}px; max-width: ${maxWidthStyle(inputs.isSidebarCollapsed)};`,
+			),
 		],
 		[
 			resizeEdge(h, {
@@ -774,6 +903,7 @@ const desktopPanel = (h: H, model: Model, inputs: ViewInputs): Html => {
 				position: "right",
 				width,
 				minWidth: MIN_WIDTH,
+				maxWidth: MAX_KEYBOARD_WIDTH,
 				isDragging: model.drag !== null,
 				onPress: (clientX, target) => {
 					const { startWidth, maxWidth } = measureEdge(target, width)
@@ -797,7 +927,10 @@ const phoneSheet = (h: H, model: Model, inputs: ViewInputs): Html =>
 		view: Sheet.view,
 		viewInputs: {
 			toContent: () => [
-				h.div([h.Class("flex h-full min-h-0 flex-col")], [...content(h, model, inputs)]),
+				h.div(
+					[h.Attribute(PANEL_MARK, ""), h.Class("flex h-full min-h-0 flex-col")],
+					[...content(h, model, inputs)],
+				),
 			],
 			side: "right",
 			isFloat: false,
@@ -830,6 +963,7 @@ export const toggleButton = <M>(
 			className: options.isOpen ? "bg-sidebar-accent text-sidebar-accent-fg" : undefined,
 			onPress: options.onPress,
 			attributes: [
+				h.Id(TOGGLE_ID),
 				h.AriaLabel("AI assistant"),
 				h.Attribute("title", label),
 				h.AriaPressed(options.isOpen ? "true" : "false"),

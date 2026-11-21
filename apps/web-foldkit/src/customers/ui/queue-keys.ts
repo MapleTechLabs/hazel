@@ -1,3 +1,5 @@
+import { isInAssistantPanel } from "../../assistant/keyboard"
+
 /**
  * The keyboard of the Customers worklists (Needs attention, the Support inbox): which keydown is
  * one of the page's keys. Typing in a field, a modifier, or a dialog or open menu holding the
@@ -54,7 +56,8 @@ export const queueKeyFilter =
 			// Some layouts need Shift for "/".
 			(event.shiftKey && event.key !== "/") ||
 			isEditable(event.target) ||
-			isInOverlay(event.target)
+			isInOverlay(event.target) ||
+			isInAssistantPanel(event.target)
 		)
 			return null
 		const key = keys.get(event.key.length === 1 ? event.key.toLowerCase() : event.key)
