@@ -10,6 +10,6 @@
 		"build:web": "bun run --cwd ../web-foldkit build:desktop"
 	},
 	"devDependencies": {
-		"@tauri-apps/cli": "^2.12.4"
+		"@tauri-apps/cli-cef": "3.0.0-alpha.27"
 	}
 }

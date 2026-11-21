@@ -137,12 +137,28 @@ fn enable_press_and_hold() {
     unsafe { NSUserDefaults::standardUserDefaults().registerDefaults(&defaults) };
 }
 
+/// The CEF runtime. A debug build started with `HAZEL_DEVTOOLS_PORT` serves Chromium's DevTools
+/// protocol on that port (localhost only), for profiling; release builds never do.
+fn cef_runtime() -> tauri_runtime_cef::Cef {
+    let cef = tauri_runtime_cef::Cef::default();
+    #[cfg(debug_assertions)]
+    if let Some(port) = std::env::var("HAZEL_DEVTOOLS_PORT").ok().and_then(|port| port.parse().ok()) {
+        return cef.remote_debugging(tauri_runtime_cef::RemoteDebugging::Port {
+            port,
+            allowed_origins: Vec::new(),
+        });
+    }
+    cef
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "macos")]
     enable_press_and_hold();
 
-    let builder = tauri::Builder::default();
+    // Chromium (CEF) instead of the system webview: WKWebView paces the page at 60 fps on 120 Hz
+    // displays, and the same engine on every OS.
+    let builder = tauri::Builder::default().runtime(cef_runtime());
 
     // Must be the first plugin: a second launch (a `com.hazel.app://` link on Windows and
     // Linux) hands its arguments to the running app, and the deep-link plugin picks them up.
