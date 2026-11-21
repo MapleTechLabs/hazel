@@ -61,6 +61,7 @@ import { makeOrgSource } from "./sources/org-source"
 import { makeUserSource } from "./sources/user-source"
 import { makeCustomersSource } from "./sources/customers-source"
 import { pollDueRssFeeds, rssDeadlines } from "./org/rss"
+import { assistantDeadlines, AssistantTickCall } from "./org/assistant"
 import { prepareMessageSearch, SEARCH_MIGRATION_ID } from "./org/message-search"
 import { channelDeadlines, runChannelTimers } from "./channel/timers"
 import { makePresenceHooks } from "./user/presence"
@@ -181,9 +182,10 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 			)
 		}
 
-		// OrgObject: RSS polls and the presence copies' leases share the alarm.
-		const orgDeadlines = Effect.map(Effect.all([rssDeadlines, presenceLeaseDeadlines]), (lists) =>
-			lists.flat(),
+		// OrgObject: RSS polls, the presence copies' leases and the AI panel's followers share the alarm.
+		const orgDeadlines = Effect.map(
+			Effect.all([rssDeadlines, presenceLeaseDeadlines, assistantDeadlines]),
+			(lists) => lists.flat(),
 		)
 
 		// UserObject presence: one session per sync socket, expiry on the alarm.
@@ -440,6 +442,17 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 			if (kind === "org" && (yield* run(pollDueRssFeeds)) > 0) yield* afterCommit
 			// OrgObject: presence copies nobody renewed in time go offline.
 			if (kind === "org" && (yield* run(expirePresenceLeases)) > 0) yield* afterCommit
+			// OrgObject: step the AI panel threads that are due (each a bounded wait on T3 Code).
+			if (kind === "org") {
+				const stepped = yield* ownCall(AssistantTickCall, {})
+				if (
+					Option.isSome(stepped) &&
+					Exit.isSuccess(stepped.value) &&
+					stepped.value.value.stepped > 0
+				) {
+					yield* afterCommit
+				}
+			}
 			// CustomersObject: compute, snooze wake-ups and pulls that are due.
 			if (kind === "customers") {
 				yield* prepare

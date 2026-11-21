@@ -2,6 +2,7 @@
 // `renderStoreSchema` (`../schema-ddl.ts`) writes their DDL.
 
 export * from "./agents"
+export * from "./assistant"
 export * from "./attachments"
 export * from "./auth"
 export * from "./bot-commands"

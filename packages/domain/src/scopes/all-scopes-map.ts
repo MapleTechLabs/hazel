@@ -1,4 +1,5 @@
 import {
+	AssistantRpcs,
 	AttachmentRpcs,
 	BotRpcs,
 	ChannelMemberRpcs,
@@ -58,4 +59,5 @@ export const RPC_SCOPE_MAP: ScopeMap = mergeScopeMaps(
 	scopeMapFromRpcGroup(RssSubscriptionRpcs.requests),
 	scopeMapFromRpcGroup(IntegrationRequestRpcs.requests),
 	scopeMapFromRpcGroup(ChatSyncRpcs.requests),
+	scopeMapFromRpcGroup(AssistantRpcs.requests),
 )

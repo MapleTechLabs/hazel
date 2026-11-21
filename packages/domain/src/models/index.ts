@@ -1,6 +1,7 @@
 // Model utilities
 
 // Model definitions
+export * as Assistant from "./assistant-model"
 export * as Attachment from "./attachment-model"
 export * as Bot from "./bot-model"
 export * as BotCommand from "./bot-command-model"

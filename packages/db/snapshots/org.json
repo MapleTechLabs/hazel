@@ -1,6 +1,27 @@
 {
-	"migration": "0011_discord_presence",
+	"migration": "0012_assistant_panel",
 	"entities": [
+		{
+			"kind": "table",
+			"name": "assistant_followers",
+			"primaryKey": {
+				"columns": ["threadId"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "assistant_items",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "assistant_threads",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
 		{
 			"kind": "table",
 			"name": "bot_commands",
@@ -196,6 +217,348 @@
 			"primaryKey": {
 				"columns": ["id"]
 			}
+		},
+		{
+			"kind": "column",
+			"table": "assistant_followers",
+			"name": "threadId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_followers",
+			"name": "cursor",
+			"position": 1,
+			"type": "real",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_followers",
+			"name": "pendingQuestion",
+			"position": 2,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_followers",
+			"name": "nextStepAt",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_followers",
+			"name": "failures",
+			"position": 4,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "assistant_followers",
+			"name": "updatedAt",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "assistant_items",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "assistant_items",
+			"name": "threadId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_items",
+			"name": "organizationId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_items",
+			"name": "ownerId",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_items",
+			"name": "visibility",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": "'private'"
+		},
+		{
+			"kind": "column",
+			"table": "assistant_items",
+			"name": "kind",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_items",
+			"name": "externalId",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_items",
+			"name": "runId",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_items",
+			"name": "status",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_items",
+			"name": "title",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_items",
+			"name": "text",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": "''"
+		},
+		{
+			"kind": "column",
+			"table": "assistant_items",
+			"name": "data",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_items",
+			"name": "authorId",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_items",
+			"name": "createdAt",
+			"position": 13,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "assistant_items",
+			"name": "updatedAt",
+			"position": 14,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "assistant_items",
+			"name": "deletedAt",
+			"position": 15,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_threads",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "assistant_threads",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_threads",
+			"name": "ownerId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_threads",
+			"name": "title",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_threads",
+			"name": "visibility",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": "'private'"
+		},
+		{
+			"kind": "column",
+			"table": "assistant_threads",
+			"name": "engine",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_threads",
+			"name": "status",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "'idle'"
+		},
+		{
+			"kind": "column",
+			"table": "assistant_threads",
+			"name": "errorMessage",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_threads",
+			"name": "context",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_threads",
+			"name": "externalThreadId",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_threads",
+			"name": "externalLink",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_threads",
+			"name": "engineLabel",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "assistant_threads",
+			"name": "lastActivityAt",
+			"position": 12,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "assistant_threads",
+			"name": "createdAt",
+			"position": 13,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "assistant_threads",
+			"name": "updatedAt",
+			"position": 14,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "assistant_threads",
+			"name": "deletedAt",
+			"position": 15,
+			"type": "text",
+			"notNull": false,
+			"default": null
 		},
 		{
 			"kind": "column",
@@ -3040,6 +3403,41 @@
 			"type": "text",
 			"notNull": false,
 			"default": null
+		},
+		{
+			"kind": "index",
+			"table": "assistant_followers",
+			"name": "assistant_followers_next_step_idx",
+			"unique": false,
+			"columns": ["\"nextStepAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "assistant_items",
+			"name": "assistant_items_external_unique",
+			"unique": true,
+			"columns": ["\"threadId\"", "\"externalId\""]
+		},
+		{
+			"kind": "index",
+			"table": "assistant_items",
+			"name": "assistant_items_thread_idx",
+			"unique": false,
+			"columns": ["\"threadId\"", "\"createdAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "assistant_threads",
+			"name": "assistant_threads_owner_idx",
+			"unique": false,
+			"columns": ["\"ownerId\"", "\"lastActivityAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "assistant_threads",
+			"name": "assistant_threads_status_idx",
+			"unique": false,
+			"columns": ["\"status\""]
 		},
 		{
 			"kind": "index",

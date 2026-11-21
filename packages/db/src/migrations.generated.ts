@@ -337,6 +337,19 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'ALTER TABLE "user_presence_status" ADD COLUMN "afk" integer NOT NULL DEFAULT true',
 			],
 		},
+		{
+			id: "0012_assistant_panel",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "assistant_followers" (\n\t"threadId" text PRIMARY KEY NOT NULL,\n\t"cursor" real,\n\t"pendingQuestion" text,\n\t"nextStepAt" text,\n\t"failures" integer NOT NULL DEFAULT 0,\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+				'CREATE TABLE IF NOT EXISTS "assistant_items" (\n\t"id" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || \'-\' || lower(hex(randomblob(2))) || \'-4\' || substr(lower(hex(randomblob(2))), 2) || \'-\' || substr(\'89ab\', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || \'-\' || lower(hex(randomblob(6)))),\n\t"threadId" text NOT NULL,\n\t"organizationId" text NOT NULL,\n\t"ownerId" text NOT NULL,\n\t"visibility" text NOT NULL DEFAULT \'private\',\n\t"kind" text NOT NULL,\n\t"externalId" text,\n\t"runId" text,\n\t"status" text,\n\t"title" text,\n\t"text" text NOT NULL DEFAULT \'\',\n\t"data" text,\n\t"authorId" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"deletedAt" text\n)',
+				'CREATE TABLE IF NOT EXISTS "assistant_threads" (\n\t"id" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || \'-\' || lower(hex(randomblob(2))) || \'-4\' || substr(lower(hex(randomblob(2))), 2) || \'-\' || substr(\'89ab\', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || \'-\' || lower(hex(randomblob(6)))),\n\t"organizationId" text NOT NULL,\n\t"ownerId" text NOT NULL,\n\t"title" text NOT NULL,\n\t"visibility" text NOT NULL DEFAULT \'private\',\n\t"engine" text NOT NULL,\n\t"status" text NOT NULL DEFAULT \'idle\',\n\t"errorMessage" text,\n\t"context" text,\n\t"externalThreadId" text,\n\t"externalLink" text,\n\t"engineLabel" text,\n\t"lastActivityAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"deletedAt" text\n)',
+				'CREATE INDEX IF NOT EXISTS "assistant_followers_next_step_idx" ON "assistant_followers" ("nextStepAt")',
+				'CREATE UNIQUE INDEX IF NOT EXISTS "assistant_items_external_unique" ON "assistant_items" ("threadId", "externalId")',
+				'CREATE INDEX IF NOT EXISTS "assistant_items_thread_idx" ON "assistant_items" ("threadId", "createdAt")',
+				'CREATE INDEX IF NOT EXISTS "assistant_threads_owner_idx" ON "assistant_threads" ("ownerId", "lastActivityAt")',
+				'CREATE INDEX IF NOT EXISTS "assistant_threads_status_idx" ON "assistant_threads" ("status")',
+			],
+		},
 	],
 	channel: [
 		{

@@ -272,6 +272,22 @@ export const RssSubscriptionId = Schema.String.check(Schema.isUUID())
 	})
 export type RssSubscriptionId = Schema.Schema.Type<typeof RssSubscriptionId>
 
+export const AssistantThreadId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/AssistantThreadId"))
+	.annotate({
+		description: "The ID of an AI panel thread",
+		title: "Assistant Thread ID",
+	})
+export type AssistantThreadId = Schema.Schema.Type<typeof AssistantThreadId>
+
+export const AssistantItemId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/AssistantItemId"))
+	.annotate({
+		description: "The ID of one entry in an AI panel thread",
+		title: "Assistant Item ID",
+	})
+export type AssistantItemId = Schema.Schema.Type<typeof AssistantItemId>
+
 export const IntegrationRequestId = Schema.String.check(Schema.isUUID())
 	.pipe(Schema.brand("@HazelChat/IntegrationRequestId"))
 	.annotate({
