@@ -40,7 +40,7 @@ export const timelineOf = (items: ReadonlyArray<ItemRow>): Array<Entry> => {
 /** A work log's summary: "Working" while a step runs, its step count, and whether one failed. */
 export const workSummaryOf = (items: ReadonlyArray<ItemRow>) => ({
 	isRunning: items.some((item) => item.status === "running"),
-	hasFailed: items.some((item) => item.status === "failed"),
+	failed: items.filter((item) => item.status === "failed").length,
 	steps: items.length,
 })
 

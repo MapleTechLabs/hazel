@@ -54,8 +54,8 @@ describe("workSummaryOf", () => {
 	test("reads running and failed steps", () => {
 		expect(
 			workSummaryOf([item(1, "tool", { status: "completed" }), item(2, "tool", { status: "running" })]),
-		).toEqual({ isRunning: true, hasFailed: false, steps: 2 })
-		expect(workSummaryOf([item(1, "tool", { status: "failed" })])).toMatchObject({ hasFailed: true })
+		).toEqual({ isRunning: true, failed: 0, steps: 2 })
+		expect(workSummaryOf([item(1, "tool", { status: "failed" })])).toMatchObject({ failed: 1 })
 	})
 })
 

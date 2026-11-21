@@ -313,6 +313,7 @@ const stepIcon = (h: H, kind: ItemRow["kind"], status: string | null): Html =>
 				: IconCode(h, { className: "size-3.5" })
 
 const stepRow = (
+	id: string,
 	kind: ItemRow["kind"],
 	title: string | null,
 	input: string | null,
@@ -321,7 +322,9 @@ const stepRow = (
 	h: H,
 ): Html => {
 	const isReasoning = kind === "reasoning"
-	return h.li(
+	// Keyed itself: the list holds its rows directly.
+	return h.keyed("li")(
+		id,
 		[h.Class(twMerge("flex flex-col gap-1 text-muted-fg text-xs", status === "failed" && "text-danger"))],
 		[
 			h.div(
@@ -358,10 +361,11 @@ const memoMessage = (h: H, item: ItemRow): Html =>
 	lazyMessages(item.id, messageView, [item.kind, item.text, item.title, h]) ?? h.empty
 
 const memoStep = (h: H, item: ItemRow): Html =>
-	lazySteps(item.id, stepRow, [item.kind, item.title, item.input, item.text, item.status, h]) ?? h.empty
+	lazySteps(item.id, stepRow, [item.id, item.kind, item.title, item.input, item.text, item.status, h]) ??
+	h.empty
 
 const workLog = (h: H, key: string, items: ReadonlyArray<ItemRow>, isExpanded: boolean): Html => {
-	const { isRunning, hasFailed, steps } = workSummaryOf(items)
+	const { isRunning, failed, steps } = workSummaryOf(items)
 	const listId = `${PANEL_ID}-work-${key}`
 	return h.div(
 		[h.Class("flex flex-col gap-2")],
@@ -383,16 +387,16 @@ const workLog = (h: H, key: string, items: ReadonlyArray<ItemRow>, isExpanded: b
 					}),
 					isRunning
 						? loader(h, { className: "size-3", ariaLabel: "Working" })
-						: hasFailed
+						: failed > 0
 							? IconWarning(h, { className: "size-3 text-danger" })
 							: IconCheck(h, { className: "size-3" }),
-					`${isRunning ? "Working" : "Worked"} · ${steps} ${steps === 1 ? "step" : "steps"}`,
+					`${isRunning ? "Working" : "Worked"} · ${steps} ${steps === 1 ? "step" : "steps"}${failed > 0 ? ` · ${failed} failed` : ""}`,
 				],
 			),
 			isExpanded
 				? h.ul(
 						[h.Id(listId), h.Class("flex flex-col gap-2 border-border border-l pl-3")],
-						items.map((item) => h.keyed("div")(item.id, [], [memoStep(h, item)])),
+						items.map((item) => memoStep(h, item)),
 					)
 				: h.empty,
 		],
