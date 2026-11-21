@@ -1,5 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
+import { queueNameOf } from "../../../customers/groups"
 import type { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
 import { resolvedAtMsOf } from "../../../customers/queries"
 import { formatDate, formatMoney, formatWeekdayTime } from "../../../customers/format"
@@ -123,6 +124,12 @@ const rowShell = (
 	)
 }
 
+/** The row's account, named as the queue names it. */
+const rowAccount = (context: RowContext, accountId: string): AccountRow | undefined => {
+	const account = context.accountsById.get(accountId)
+	return account === undefined ? undefined : { ...account, name: queueNameOf(account) }
+}
+
 /** Open tab, one row per signal. */
 export const signalRow = (
 	h: HtmlBuilder<Message>,
@@ -131,7 +138,7 @@ export const signalRow = (
 	context: RowContext,
 	run: AccountRunMark,
 ): Html => {
-	const account = context.accountsById.get(signal.accountId)
+	const account = rowAccount(context, signal.accountId)
 	if (account === undefined) return h.empty
 	const isSelected = signal.id === context.selectedId
 	return queueRow(h, {
@@ -160,7 +167,7 @@ export const compactRow = (
 	context: RowContext,
 	run: AccountRunMark,
 ): Html => {
-	const account = context.accountsById.get(signal.accountId)
+	const account = rowAccount(context, signal.accountId)
 	if (account === undefined) return h.empty
 	return rowShell(h, signal, context, run, [
 		h.span(
@@ -222,7 +229,7 @@ export const accountGroupRow = (
 	context: RowContext,
 ): Html => {
 	const { lead } = group
-	const account = context.accountsById.get(group.accountId)
+	const account = rowAccount(context, group.accountId)
 	if (account === undefined) return h.empty
 	const oldest = Math.min(...group.signals.map((signal) => signal.openedAtMs))
 	const assignees = [...new Set(group.signals.map((signal) => signal.assigneeUserId))]
@@ -356,7 +363,7 @@ export const snoozedRow = (
 	context: RowContext,
 	run: AccountRunMark,
 ): Html => {
-	const account = context.accountsById.get(signal.accountId)
+	const account = rowAccount(context, signal.accountId)
 	if (account === undefined) return h.empty
 	return rowShell(h, signal, context, run, [
 		accountCell(h, account, run, context),
@@ -440,7 +447,7 @@ export const doneRow = (
 	context: RowContext,
 	run: AccountRunMark,
 ): Html => {
-	const account = context.accountsById.get(signal.accountId)
+	const account = rowAccount(context, signal.accountId)
 	if (account === undefined) return h.empty
 	const resolvedMs = resolvedAtMsOf(signal) ?? context.nowMs
 	const note =

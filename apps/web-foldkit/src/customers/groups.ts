@@ -82,6 +82,15 @@ export const environmentCounts = (accounts: ReadonlyArray<GroupMember>): Readonl
 	return counts
 }
 
+/** How a queue names an account: an environment by its label (it may share its primary's name). */
+export const queueNameOf = (
+	account: Readonly<{
+		name: string
+		environment: string | null
+		primaryAccountId: CustomerAccountId | null
+	}>,
+): string => (account.primaryAccountId === null ? account.name : accountLabelOf(account))
+
 /** `+2 environments`, or null for none. */
 export const environmentsHintOf = (count: number): string | null =>
 	count === 0 ? null : `+${count} environment${count === 1 ? "" : "s"}`

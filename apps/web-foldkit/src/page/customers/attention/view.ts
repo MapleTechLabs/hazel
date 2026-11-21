@@ -3,7 +3,7 @@ import { Submodel } from "foldkit"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { formatMoney, formatRelative, formatWeekdayTime } from "../../../customers/format"
-import { environmentCounts } from "../../../customers/groups"
+import { environmentCounts, queueNameOf } from "../../../customers/groups"
 import { KIND_LABEL, SEVERITY_LABEL } from "../../../customers/ui/badges"
 import { companyLogo } from "../../../customers/ui/identity"
 import {
@@ -530,7 +530,10 @@ const allClear = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html =
 													logoUrl: account.logoUrl,
 													size: "xs",
 												}),
-												h.span([h.Class("font-medium text-fg")], [account.name]),
+												h.span(
+													[h.Class("font-medium text-fg")],
+													[queueNameOf(account)],
+												),
 												h.span(
 													[h.Class("truncate text-muted-fg text-xs")],
 													[signal.title],

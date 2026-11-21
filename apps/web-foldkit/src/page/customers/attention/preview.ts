@@ -2,7 +2,7 @@ import { TEMPLATES } from "@hazel/domain/customers"
 import type * as Customers from "@hazel/domain/customers"
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { customerAccountOf } from "../../../customers/groups"
+import { customerAccountOf, queueNameOf } from "../../../customers/groups"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { formatCount, formatDate, formatMoney, formatRelative } from "../../../customers/format"
 import { environmentCounts, environmentsHintOf } from "../../../customers/groups"
@@ -244,7 +244,7 @@ export const previewPanel = (
 	const owner = ownerUserId === null ? null : (membersById.get(ownerUserId)?.name ?? null)
 	return h.aside(
 		[
-			h.AriaLabel(`${account.name}: ${signal.title}`),
+			h.AriaLabel(`${queueNameOf(account)}: ${signal.title}`),
 			h.Class(
 				// Below lg it slides over the queue (a row press opens it there too); a phone's fills the
 				// screen, clear of the notch and the home indicator.
@@ -291,7 +291,7 @@ export const previewPanel = (
 						[h.Class("flex min-w-0 flex-1 flex-col")],
 						[
 							heading(h, { variant: "title", className: "truncate" }, [
-								toCustomer(h, href, [], [account.name], "hover:underline"),
+								toCustomer(h, href, [], [queueNameOf(account)], "hover:underline"),
 							]),
 							h.span(
 								[h.Class("truncate text-muted-fg text-xs")],

@@ -3,7 +3,7 @@ import { CustomerAccountId, CustomerSignalId, type UserId } from "@hazel/schema"
 import { Array, Option, Order, Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
-import { customerAccountOf } from "../../../customers/groups"
+import { customerAccountOf, queueNameOf } from "../../../customers/groups"
 import {
 	AccountRow,
 	type AccountRow as AccountRowType,
@@ -186,7 +186,7 @@ const matchesFilters = (
 		(filters.severity === null || signal.severity === filters.severity) &&
 		(filters.plan === null || account.planName === filters.plan) &&
 		(query === "" ||
-			account.name.toLowerCase().includes(query) ||
+			queueNameOf(account).toLowerCase().includes(query) ||
 			signal.title.toLowerCase().includes(query))
 	)
 }
@@ -211,9 +211,10 @@ const sortedForTab = (
 	const accountOf = (signal: SignalRowType) => accountsById.get(signal.accountId)
 	const order = {
 		priority: byPriority,
-		account: Order.mapInput(Order.String, (signal: SignalRowType) =>
-			(accountOf(signal)?.name ?? "").toLowerCase(),
-		),
+		account: Order.mapInput(Order.String, (signal: SignalRowType) => {
+			const account = accountOf(signal)
+			return account === undefined ? "" : queueNameOf(account).toLowerCase()
+		}),
 		signal: Order.mapInput(Order.String, (signal: SignalRowType) => signal.title.toLowerCase()),
 		severity: bySeverity,
 		age: byOpened,

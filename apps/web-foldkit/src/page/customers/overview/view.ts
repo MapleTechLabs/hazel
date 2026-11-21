@@ -29,7 +29,7 @@ import {
 	healthDot,
 	severityGlyph,
 } from "../../../customers/ui/badges"
-import { environmentCounts, customerAccountOf } from "../../../customers/groups"
+import { customerAccountOf, environmentCounts, queueNameOf } from "../../../customers/groups"
 import { connectCard } from "../../../customers/ui/connect-card"
 import { companyLogo } from "../../../customers/ui/identity"
 import { definedLabel, deltaPill, type Delta } from "../../../customers/ui/kpi-tile"
@@ -407,7 +407,7 @@ const attentionSection = (
 									[
 										h.span(
 											[h.Class("truncate font-medium text-fg text-sm")],
-											[account.name],
+											[queueNameOf(account)],
 										),
 										...environmentsHint(
 											h,
