@@ -18,7 +18,7 @@ import {
 	type SyncChannelLinkId,
 	type SyncConnectionId,
 } from "@hazel/schema"
-import { Effect, Layer, Option, Schema } from "effect"
+import { Clock, Effect, Layer, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
 import {
 	emitImportedMessage,
@@ -26,12 +26,13 @@ import {
 	type MessageEvent,
 } from "../../worker/objects/channel/message-events"
 import { setThreadChannel } from "../../worker/objects/channel/thread"
-import type { EffectReceivers } from "../../worker/objects/effects/registry"
+import { enqueueEffect, type EffectReceivers } from "../../worker/objects/effects/registry"
 import { readObjectMeta, writeObjectMeta } from "../../worker/objects/meta"
 import {
 	type AttachThreadPayload,
 	type ChannelChatSyncIngestPayload,
 	ChatSyncChannelEffects,
+	ChatSyncDeliveryEffects,
 	InboundChatSyncWrite,
 	type ReassignAuthorsPayload,
 	SetChatSyncLinksPayload,
@@ -60,10 +61,75 @@ export const readChatSyncLinks: Effect.Effect<SetChatSyncLinksPayload, never, Da
 export const writeChatSyncLinks = (payload: SetChatSyncLinksPayload) =>
 	writeObjectMeta(LINKS_KEY, JSON.stringify(Schema.encodeSync(SetChatSyncLinksPayload)(payload)))
 
+/** How far back a newly linked thread looks for Hazel messages written before its link arrived. */
+const THREAD_CATCH_UP_MS = 15 * 60 * 1000
+const THREAD_CATCH_UP_MAX = 50
+
+/**
+ * A Hazel thread is linked to a provider thread only after its first replies may be written (the
+ * parent's outbox creates the provider thread, then the org links it here): send what Hazel wrote
+ * in it meanwhile, oldest first. Only for a thread's link, only recent messages, and only those not
+ * already linked (an inbound message has its link from the moment it is written).
+ */
+const catchUpNewThreadLinks = Effect.fn("ChannelObject.chatSyncThreadCatchUp")(function* (
+	previous: SetChatSyncLinksPayload,
+	next: SetChatSyncLinksPayload,
+) {
+	const known = new Set(previous.links.map((link) => link.channelLinkId))
+	const added = next.links.filter(
+		(link) =>
+			!known.has(link.channelLinkId) &&
+			link.parent !== undefined &&
+			link.direction !== "external_to_hazel",
+	)
+	if (added.length === 0) return
+	const db = yield* Database.Database
+	const since = new Date((yield* Clock.currentTimeMillis) - THREAD_CATCH_UP_MS)
+	const recent = yield* db.run(
+		SQLite.from(schema.messagesTable)
+			.select("id")
+			.where(($) => [$.createdAt.gte(since), $.deletedAt.isNull()])
+			.orderBy(($) => [
+				[$.createdAt, "asc"],
+				[$.id, "asc"],
+			])
+			.limit(THREAD_CATCH_UP_MAX),
+	)
+	if (recent.length === 0) return
+	for (const link of added) {
+		const linked = yield* db.run(
+			SQLite.from(schema.chatSyncMessageLinksTable)
+				.select("hazelMessageId")
+				.where(($) => [
+					$.channelLinkId.eq(link.channelLinkId),
+					$.hazelMessageId.in_(...recent.map((row) => row.id)),
+				]),
+		)
+		const done = new Set<string>(linked.map((row) => row.hazelMessageId))
+		const pending = recent.filter((row) => !done.has(row.id))
+		yield* Effect.forEach(
+			pending,
+			(row) =>
+				enqueueEffect(
+					ChatSyncDeliveryEffects.outbound,
+					{ kind: "chat-sync" },
+					{
+						channelLinkId: link.channelLinkId,
+						event: { _tag: "MessageCreate", messageId: row.id },
+					},
+				),
+			{ discard: true },
+		)
+		yield* Effect.annotateCurrentSpan({ "chat_sync.caught_up": pending.length })
+	}
+})
+
 const setChatSyncLinks = Effect.fn("ChannelObject.setChatSyncLinks")(function* (
 	payload: SetChatSyncLinksPayload,
 ) {
+	const previous = yield* readChatSyncLinks
 	yield* writeChatSyncLinks(payload)
+	yield* catchUpNewThreadLinks(previous, payload)
 	yield* Effect.annotateCurrentSpan({ "chat_sync.links": payload.links.length })
 })
 

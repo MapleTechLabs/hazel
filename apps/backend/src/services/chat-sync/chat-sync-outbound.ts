@@ -163,6 +163,8 @@ const MENTION_PATTERN = /@\[userId:([^\]]+)\]/g
 const threadNameOf = (definition: ChatSyncProviderDefinition, content: string) =>
 	content
 		.replace(MENTION_PATTERN, "")
+		// Bold markers (an email's subject line) are formatting, not the name.
+		.replace(/\*\*/g, "")
 		.split("\n")[0]!
 		.replace(/\s+/g, " ")
 		.trim()
@@ -312,6 +314,8 @@ const deliver = (
 
 		switch (event._tag) {
 			case "MessageCreate": {
+				// Email has no channel to post in: a top-level message is the team's own note.
+				if (definition.threadsOnly && link.parent === undefined) return ignored("threads_only")
 				const message = yield* findMessage(event.messageId)
 				if (Option.isNone(message)) return ignored("missing_message")
 				if (

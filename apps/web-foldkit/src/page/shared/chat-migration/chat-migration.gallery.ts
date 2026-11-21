@@ -57,7 +57,11 @@ const wrap = (message: Message) => ChatSync.Message.GotMigrationMessage({ messag
 const settingsStep = (model: ChatSync.Model, message: ChatSync.Message) =>
 	updateChatSync(model, message, shared).model
 const settingsList = [
-	ChatSync.Message.SucceededListConnections({ organizationId, connections: [connection, slackConnection] }),
+	ChatSync.Message.SucceededListConnections({
+		organizationId,
+		emailInboxes: [],
+		connections: [connection, slackConnection],
+	}),
 ].reduce(settingsStep, initChatSync(undefined, shared).model)
 const settings = (...messages: ReadonlyArray<ChatSync.Message>) =>
 	[ChatSync.Message.ClickedImport(), ...messages].reduce(settingsStep, settingsList)

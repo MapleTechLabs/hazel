@@ -167,7 +167,8 @@ export const upsertShadowUser = (
 ) =>
 	upsertExternalUser({
 		externalId: `${provider}-user-${externalUserId}`,
-		email: `${provider}-user-${externalUserId}@${provider}.internal`,
+		// An email author's id is their address: its `@` would make the placeholder no address.
+		email: `${provider}-user-${externalUserId.replaceAll("@", "=")}@${provider}.internal`,
 		displayName,
 		avatarUrl,
 	})

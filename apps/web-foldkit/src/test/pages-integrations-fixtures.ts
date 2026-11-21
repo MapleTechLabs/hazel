@@ -1,6 +1,6 @@
-import { BotId, ExternalChannelId, SyncConnectionId } from "@hazel/schema"
+import { BotId, ChannelId, ExternalChannelId, SyncConnectionId } from "@hazel/schema"
 import { Schema } from "effect"
-import type { Connection } from "../page/settings/chat-sync/model"
+import type { Connection, EmailInbox, HazelChannel } from "../page/settings/chat-sync/model"
 import type { ExternalChannel, Workspace } from "../page/settings/chat-sync/providers"
 import type { Bot } from "../page/settings/integrations/shared/bots"
 import { uuid } from "./pages-fixtures"
@@ -29,6 +29,23 @@ export const slackConnection: Connection = {
 	externalWorkspaceId: "T024BE7LD",
 	errorMessage: null,
 	lastSyncedAtMs: null,
+}
+
+export const emailSyncConnectionId = Schema.decodeSync(SyncConnectionId)(uuid(22))
+
+/** The org's #support channel, where its email inbox's threads arrive. */
+export const supportChannel: HazelChannel = { id: Schema.decodeSync(ChannelId)(uuid(42)), name: "support" }
+export const salesChannel: HazelChannel = { id: Schema.decodeSync(ChannelId)(uuid(43)), name: "sales" }
+
+/** An email support inbox forwarding to #support. */
+export const emailInbox: EmailInbox = {
+	id: emailSyncConnectionId,
+	displayName: "Acme Support",
+	status: "active",
+	errorMessage: null,
+	inboundAddress: "acme-support-7f3k@in.hazel.sh",
+	supportAddress: "support@acme.com",
+	hazelChannelId: supportChannel.id,
 }
 
 export const guild: Workspace = { id: "918273645500901", name: "Design Systems Guild", owner: true }

@@ -14,6 +14,7 @@ export const slackTarget = (externalChannelId: string) => {
 export const slack: ChatSyncProviderDefinition = {
 	id: "slack",
 	displayName: "Slack",
+	threadsOnly: false,
 	workspaceIsInstall: true,
 	// `markdown_text`'s limit (`text` allows more, but we post markdown).
 	maxMessageLength: 12_000,

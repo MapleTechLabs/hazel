@@ -313,6 +313,8 @@ export const routes: RouteTable = {
 	"chatSync.channelLink.list": orgHint("chatSync.channelLink.list"),
 	"chatSync.channelLink.update": orgHint("chatSync.channelLink.update"),
 	"chatSync.channelLink.delete": orgHint("chatSync.channelLink.delete"),
+	"chatSync.email.create": byOrg,
+	"chatSync.email.update": byOrg,
 
 	// Directory (D1, in the api Worker). TODO(do-sync): the ones marked * write org rows too and
 	// must fan out through the outbox (or move to the org) when ported.

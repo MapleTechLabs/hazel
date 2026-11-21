@@ -6,6 +6,8 @@
  * - `customers.chatMessage`: one message in a linked channel or one of its threads. Runs every
  *   hook of `customerChatMessageHooks` in the receiving transaction, in order: the first keeps
  *   `customer_chat_participants`; support issues and SLAs add theirs after it.
+ * - `customers.inboxMessage`: one message in a support inbox (an email mailbox's channel): matched
+ *   to a customer (`./inbox.ts`), then handled like `customers.chatMessage`.
  * - `customers.chatAuthorChanged`: a member changed someone's side; their rows follow.
  * - `customers.chatAuthorsBackfill`: a newly linked channel's past authors.
  */
@@ -19,8 +21,10 @@ import {
 	type ChatAuthorWire,
 	type ChatMessagePayload,
 	CustomerChatEffects,
+	type InboxMessagePayload,
 } from "../customer-chat-wire"
 import type { EffectReceivers } from "../effects/registry"
+import { inboxAccountOf } from "./inbox"
 import { supportIssueHook } from "./issues"
 
 /**
@@ -155,6 +159,14 @@ const chatMessage = Effect.fn("CustomersChat.chatMessage")(function* (payload: C
 	for (const hook of customerChatMessageHooks) yield* hook(payload)
 })
 
+/** A support inbox's message: placed on its customer, then handled like a linked channel's. */
+const inboxMessage = Effect.fn("CustomersChat.inboxMessage")(function* (payload: InboxMessagePayload) {
+	const accountId = yield* inboxAccountOf(payload)
+	yield* Effect.annotateCurrentSpan({ "customer_chat.inbox_matched": Option.isSome(accountId) })
+	if (Option.isNone(accountId)) return
+	yield* chatMessage({ ...payload, accountId: accountId.value, inbox: payload.inbox })
+})
+
 const chatAuthorChanged = Effect.fn("CustomersChat.chatAuthorChanged")(function* (
 	payload: ChatAuthorChangedPayload,
 ) {
@@ -183,6 +195,7 @@ const chatAuthorsBackfill = Effect.fn("CustomersChat.chatAuthorsBackfill")(funct
 
 export const customerChatReceivers = {
 	"customers.chatMessage": chatMessage,
+	"customers.inboxMessage": inboxMessage,
 	"customers.chatAuthorChanged": chatAuthorChanged,
 	"customers.chatAuthorsBackfill": chatAuthorsBackfill,
 } satisfies EffectReceivers<typeof CustomerChatEffects, Database.Database | SqlClient>

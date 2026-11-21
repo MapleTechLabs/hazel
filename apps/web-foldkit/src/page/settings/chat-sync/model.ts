@@ -1,4 +1,4 @@
-import { OrganizationId, SyncConnectionId } from "@hazel/schema"
+import { ChannelId, OrganizationId, SyncConnectionId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { defineMessageUnion } from "foldkit/message"
@@ -41,6 +41,68 @@ export const CreateConnectionFailure = Schema.Union([
 ])
 export type CreateConnectionFailure = typeof CreateConnectionFailure.Type
 
+/** A Hazel channel as the inbox channel picker lists it (the org's public and private channels). */
+export const HazelChannel = Schema.Struct({ id: ChannelId, name: Schema.String })
+export type HazelChannel = typeof HazelChannel.Type
+
+/**
+ * An email support inbox: a chat-sync connection with `provider: "email"` and its one channel link
+ * (`docs/customers/email.md`).
+ */
+export const EmailInbox = Schema.Struct({
+	id: SyncConnectionId,
+	/** `externalWorkspaceName`: the name replies are sent as. */
+	displayName: Schema.String,
+	status: ConnectionStatus,
+	errorMessage: Schema.NullOr(Schema.String),
+	/** `metadata.inboundAddress`: where the team forwards its support address. */
+	inboundAddress: Schema.NullOr(Schema.String),
+	/** The link's `settings.email.replyTo`: the team's own support address, if set. */
+	supportAddress: Schema.NullOr(Schema.String),
+	/** The channel its emails arrive in (null while the link is missing). */
+	hazelChannelId: Schema.NullOr(ChannelId),
+})
+export type EmailInbox = typeof EmailInbox.Type
+
+/** Why creating or editing an inbox failed. */
+export const EmailInboxFailure = Schema.Union([
+	Schema.Literals(["ChannelNotFound", "ChannelLinked", "NotFound"]),
+	CommonReason,
+])
+export type EmailInboxFailure = typeof EmailInboxFailure.Type
+
+/**
+ * The inbox modal's step: a new inbox's form, an inbox's edit form, or an inbox's forwarding setup
+ * (`isNew`: shown right after creating it).
+ */
+export const EmailStep = defineTaggedUnion({
+	Create: {},
+	Edit: { inbox: EmailInbox },
+	Setup: { inbox: EmailInbox, isNew: Schema.Boolean },
+})
+export type EmailStep = typeof EmailStep.Type
+
+export const EmailSubmission = defineTaggedUnion({
+	NotSubmitted: {},
+	Submitting: {},
+	Failed: { reason: EmailInboxFailure },
+})
+export type EmailSubmission = typeof EmailSubmission.Type
+
+/** The inbox modal's form. */
+export const EmailForm = Schema.Struct({
+	step: EmailStep,
+	name: Schema.String,
+	supportAddress: Schema.String,
+	channel: Schema.NullOr(HazelChannel),
+	channelSearch: Schema.String,
+	isChannelSearchFocused: Schema.Boolean,
+	/** Set by the first Create/Save press: the fields show their errors from then on. */
+	isValidated: Schema.Boolean,
+	submission: EmailSubmission,
+})
+export type EmailForm = typeof EmailForm.Type
+
 /** The add modal's Connect: not pressed yet, creating, or failed (the modal stays open to retry). */
 export const Submission = defineTaggedUnion({
 	NotSubmitted: {},
@@ -75,11 +137,22 @@ export const Model = Schema.Struct({
 	/** "Import from Slack or Discord": the migration wizard in a modal. */
 	migrationModal: Modal.Model,
 	migration: ChatMigration.Model,
+	/** The email support inboxes, listed with the connections. */
+	emailInboxes: Schema.Array(EmailInbox),
+	/** The org's public and private channels: the inbox channel picker, and each inbox's channel name. */
+	hazelChannels: Schema.Array(HazelChannel),
+	emailModal: Modal.Model,
+	emailForm: EmailForm,
+	removeInboxConfirm: ConfirmAction.Model(DeleteTarget),
 })
 export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
-	SucceededListConnections: { organizationId: OrganizationId, connections: Schema.Array(Connection) },
+	SucceededListConnections: {
+		organizationId: OrganizationId,
+		connections: Schema.Array(Connection),
+		emailInboxes: Schema.Array(EmailInbox),
+	},
 	FailedListConnections: { organizationId: OrganizationId, reason: CommonReason },
 	ClickedRetryListConnections: {},
 	SucceededListWorkspaces: {
@@ -116,6 +189,30 @@ export const Message = defineMessageUnion({
 	ClickedImport: {},
 	GotMigrationModalMessage: { message: Modal.Message },
 	GotMigrationMessage: { message: ChatMigration.Message },
+	UpdatedHazelChannels: { channels: Schema.Array(HazelChannel) },
+	ClickedAddEmailInbox: {},
+	ClickedEditEmailInbox: { inbox: EmailInbox },
+	ClickedEmailSetup: { inbox: EmailInbox },
+	GotEmailModalMessage: { message: Modal.Message },
+	ChangedEmailName: { value: Schema.String },
+	ChangedEmailSupportAddress: { value: Schema.String },
+	ChangedEmailChannelSearch: { value: Schema.String },
+	FocusedEmailChannelSearch: {},
+	BlurredEmailChannelSearch: {},
+	ClickedEmailChannel: { channel: HazelChannel },
+	ClickedChangeEmailChannel: {},
+	ClickedSubmitEmailInbox: {},
+	SucceededCreateEmailInbox: { inbox: EmailInbox },
+	SucceededUpdateEmailInbox: {},
+	FailedSaveEmailInbox: { reason: EmailInboxFailure },
+	ClickedCopyInboundAddress: { address: Schema.String },
+	SucceededCopyInboundAddress: {},
+	FailedCopyInboundAddress: {},
+	ClickedRemoveEmailInbox: { target: DeleteTarget },
+	ClickedConfirmRemoveEmailInbox: {},
+	SucceededRemoveEmailInbox: {},
+	FailedRemoveEmailInbox: { reason: DeleteConnectionFailure },
+	GotRemoveInboxConfirmMessage: { message: ConfirmAction.Message },
 })
 export type Message = typeof Message.Type
 
@@ -140,4 +237,16 @@ export const addMenuEntries: ReadonlyArray<Menu.Entry> = ChatSyncProvider.litera
 export const chosenWorkspace = (model: Model): Workspace | null => {
 	if (PROVIDERS[model.addProvider].picksWorkspace) return model.selectedWorkspace
 	return AsyncData.isSuccess(model.workspaces) ? (model.workspaces.data[0] ?? null) : null
+}
+
+/** A closed, empty inbox form. */
+export const emptyEmailForm: EmailForm = {
+	step: EmailStep.Create(),
+	name: "",
+	supportAddress: "",
+	channel: null,
+	channelSearch: "",
+	isChannelSearchFocused: false,
+	isValidated: false,
+	submission: EmailSubmission.NotSubmitted(),
 }

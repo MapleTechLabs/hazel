@@ -54,7 +54,7 @@ describe("chat sync connections", () => {
 	test("deleting closes the dialog, toasts, and refreshes the list while keeping it shown", () => {
 		const loaded = updateWithShared(
 			init(undefined, shared).model,
-			Message.SucceededListConnections({ organizationId, connections: [connection] }),
+			Message.SucceededListConnections({ organizationId, emailInboxes: [], connections: [connection] }),
 		).model
 		story(
 			updateWithShared,
@@ -77,7 +77,7 @@ describe("chat sync connections", () => {
 			// The add modal stays mounted through a refresh, so the guilds are not queried again.
 			Command.resolve(
 				ListConnections,
-				Message.SucceededListConnections({ organizationId, connections: [] }),
+				Message.SucceededListConnections({ organizationId, emailInboxes: [], connections: [] }),
 			),
 			Command.expectNone(),
 			model((current) => expect(current.connections).toEqual(Connections.Success({ data: [] }))),
@@ -89,7 +89,13 @@ describe("chat sync connections", () => {
 		story(
 			updateWithShared,
 			given(init(undefined, shared).model),
-			message(Message.SucceededListConnections({ organizationId, connections: [connection] })),
+			message(
+				Message.SucceededListConnections({
+					organizationId,
+					emailInboxes: [],
+					connections: [connection],
+				}),
+			),
 			Command.expectExact(ListWorkspaces({ organizationId, provider: "discord", version: 1 })),
 			Command.resolve(
 				ListWorkspaces,
@@ -103,7 +109,7 @@ describe("chat sync connections", () => {
 		const guild = { id: "918273645500120", name: "Hazel Community", owner: true }
 		const listing = updateWithShared(
 			init(undefined, shared).model,
-			Message.SucceededListConnections({ organizationId, connections: [connection] }),
+			Message.SucceededListConnections({ organizationId, emailInboxes: [], connections: [connection] }),
 		).model
 		const refetching = { ...listing, workspacesVersion: 2 }
 		const stale = updateWithShared(
@@ -121,7 +127,7 @@ describe("chat sync connections", () => {
 	test("a failed guild list keeps its reason, and Try again queries the guilds anew", () => {
 		const listing = updateWithShared(
 			init(undefined, shared).model,
-			Message.SucceededListConnections({ organizationId, connections: [connection] }),
+			Message.SucceededListConnections({ organizationId, emailInboxes: [], connections: [connection] }),
 		).model
 		story(
 			updateWithShared,
@@ -152,7 +158,11 @@ describe("chat sync connections", () => {
 			model((current) => expect(current.connections).toEqual(Connections.Loading())),
 			Command.resolve(
 				ListConnections,
-				Message.SucceededListConnections({ organizationId, connections: [connection] }),
+				Message.SucceededListConnections({
+					organizationId,
+					emailInboxes: [],
+					connections: [connection],
+				}),
 			),
 			// The list mounts the add modal now, so the guilds are queried.
 			Command.expectHas(ListWorkspaces),
@@ -166,7 +176,7 @@ describe("chat sync connections", () => {
 	test("a failed refresh keeps the shown list and toasts", () => {
 		const loaded = updateWithShared(
 			init(undefined, shared).model,
-			Message.SucceededListConnections({ organizationId, connections: [connection] }),
+			Message.SucceededListConnections({ organizationId, emailInboxes: [], connections: [connection] }),
 		).model
 		const failed = updateWithShared(
 			{ ...loaded, connections: Connections.Refreshing({ data: [connection] }) },
@@ -189,7 +199,11 @@ describe("chat sync connections", () => {
 		const loaded = updateWithShared(
 			updateWithShared(
 				init(undefined, shared).model,
-				Message.SucceededListConnections({ organizationId, connections: [connection] }),
+				Message.SucceededListConnections({
+					organizationId,
+					emailInboxes: [],
+					connections: [connection],
+				}),
 			).model,
 			Message.SucceededListWorkspaces({ organizationId, version: 1, workspaces: [guild] }),
 		).model
@@ -223,7 +237,11 @@ describe("chat sync connections", () => {
 			}),
 			Command.resolve(
 				ListConnections,
-				Message.SucceededListConnections({ organizationId, connections: [connection] }),
+				Message.SucceededListConnections({
+					organizationId,
+					emailInboxes: [],
+					connections: [connection],
+				}),
 			),
 		)
 	})
@@ -251,7 +269,7 @@ describe("chat sync guards", () => {
 	const guild = { id: "918273645500901", name: "Design Systems Guild", owner: true }
 	const loaded = updateWithShared(
 		init(undefined, shared).model,
-		Message.SucceededListConnections({ organizationId, connections: [connection] }),
+		Message.SucceededListConnections({ organizationId, emailInboxes: [], connections: [connection] }),
 	).model
 
 	test("a list for a previous organization is ignored", () => {
@@ -262,6 +280,7 @@ describe("chat sync guards", () => {
 				Message.SucceededListConnections({
 					organizationId: otherOrganizationId,
 					connections: [connection],
+					emailInboxes: [],
 				}),
 			),
 			Command.expectNone(),
@@ -360,7 +379,7 @@ describe("chat sync providers", () => {
 	const loaded = updateWithShared(
 		updateWithShared(
 			init(undefined, shared).model,
-			Message.SucceededListConnections({ organizationId, connections: [connection] }),
+			Message.SucceededListConnections({ organizationId, emailInboxes: [], connections: [connection] }),
 		).model,
 		Message.SucceededListWorkspaces({ organizationId, version: 1, workspaces: [guild] }),
 	).model

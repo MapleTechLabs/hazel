@@ -147,6 +147,25 @@ export default Api.make(
 			),
 		)
 
+		// Support mailboxes (`docs/customers/email.md`): Email Routing on the inbound domain sends
+		// every message here. Routing is set up once in the dashboard, so no `zone` here.
+		yield* Cloudflare.Workers.email().subscribe((message) =>
+			Effect.promise(() => import("./services/email/inbound-entry")).pipe(
+				Effect.flatMap(({ readStream, receiveWorkerEmail }) =>
+					receiveWorkerEmail(
+						{
+							to: message.to,
+							rawSize: message.bodySize,
+							raw: () => readStream(message.body),
+							setReject: (reason) => message.raw.setReject(reason),
+						},
+						env as Record<string, unknown>,
+					),
+				),
+				Effect.asVoid,
+			),
+		)
+
 		return { fetch: makeFetch(app, env) }
 	}).pipe(
 		Effect.provide(
@@ -159,6 +178,7 @@ export default Api.make(
 				CustomersObjectLive,
 				MessageLiveObjectLive,
 				Cloudflare.Workers.CronEventSourceLive,
+				Cloudflare.Workers.EmailEventSourceLive,
 				Cloudflare.Workers.RateLimitBinding,
 				hazelTelemetry("api"),
 			),

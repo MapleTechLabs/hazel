@@ -17,9 +17,11 @@ import {
 	type AuthorSideOverride,
 	classifyAuthor,
 	type ExternalWorkspace,
+	shadowEmailOf,
 	shadowProviderOf,
 } from "@hazel/domain/customers"
 import type { ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
+import { EMAIL_CHAT_SYNC_PROVIDER } from "@hazel/domain/rpc"
 import { Clock, Effect, Option } from "effect"
 import {
 	type ChatAuthorsReportedPayload,
@@ -30,6 +32,7 @@ import {
 import { enqueueEffect, type EffectSender } from "../effects/registry"
 import { channelTarget, customersTarget } from "../kinds"
 import { deleteObjectMeta, readObjectMeta, writeObjectMeta } from "../meta"
+import { isCustomersEnabled } from "./customers-enabled"
 
 /** At most this many threads of a channel are asked for their authors. */
 const BACKFILL_THREADS_MAX = 500
@@ -144,10 +147,12 @@ export const classifyChatAuthor = Effect.fn("OrgObject.classifyChatAuthor")(func
 			reason,
 			name: `${found.firstName} ${found.lastName}`.trim() || "Unknown",
 			avatarUrl: found.avatarUrl === "" ? null : found.avatarUrl,
+			// An email author's address is their shadow's id; other shadows have none.
 			email:
-				shadowProviderOf(found.externalId) !== null || found.email.endsWith(".internal")
+				shadowEmailOf(found.externalId) ??
+				(shadowProviderOf(found.externalId) !== null || found.email.endsWith(".internal")
 					? null
-					: found.email,
+					: found.email),
 		}),
 	}) satisfies ChatAuthorWire
 })
@@ -229,6 +234,63 @@ export const forgetChatAuthorsBackfill = (channelId: ChannelId) => deleteObjectM
 /** What a message carries of its text: a support issue's title comes from it. */
 const SUPPORT_CONTENT_MAX = 500
 
+/** Whether `channelId` is a support inbox: an email mailbox's channel (`docs/customers/email.md`). */
+const isEmailInbox = (channelId: ChannelId) =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.first(
+			SQLite.from(schema.chatSyncChannelLinksTable, "link")
+				.innerJoin(schema.chatSyncConnectionsTable, "connection", (link, connection) =>
+					connection.id.eq(link.syncConnectionId),
+				)
+				.select(($) => ({ id: $.id }))
+				.where(($) => [
+					$.hazelChannelId.eq(channelId),
+					$.deletedAt.isNull(),
+					$.connection.provider.eq(EMAIL_CHAT_SYNC_PROVIDER),
+					$.connection.deletedAt.isNull(),
+				])
+				.limit(1),
+		),
+	).pipe(Effect.map(Option.isSome))
+
+/**
+ * A message in a support inbox's channel (or a conversation's thread in it) goes on to Customers,
+ * which matches it to an account (`customers/inbox.ts`). Only once the org uses Customers.
+ */
+const recordInboxMessage = Effect.fn("OrgObject.recordInboxMessage")(function* (
+	channel: { readonly id: ChannelId; readonly organizationId: OrganizationId },
+	inboxChannelId: ChannelId,
+	message: {
+		readonly messageId: MessageId
+		readonly authorId: UserId
+		readonly createdAt?: string
+		readonly threadRootMessageId?: MessageId | null
+		readonly content?: string
+	},
+) {
+	if (!(yield* isCustomersEnabled) || !(yield* isEmailInbox(inboxChannelId))) return
+	const author = yield* classifyChatAuthor(channel.organizationId, message.authorId)
+	const createdAt = message.createdAt ?? new Date(yield* Clock.currentTimeMillis).toISOString()
+	yield* enqueueEffect(
+		CustomerChatEffects.inboxMessage,
+		customersTarget(channel.organizationId),
+		{
+			organizationId: channel.organizationId,
+			channelId: inboxChannelId,
+			messageChannelId: channel.id,
+			messageId: message.messageId,
+			createdAt,
+			author,
+			threadRootMessageId: message.threadRootMessageId ?? null,
+			content: Array.from(message.content ?? "")
+				.slice(0, SUPPORT_CONTENT_MAX)
+				.join(""),
+			inbox: "email",
+		},
+		{ id: `customer-chat:${message.messageId}` },
+	)
+})
+
 /** From `org.messageCreated`: a message in a linked channel (or a thread of one) goes on to Customers. */
 export const recordCustomerChatMessage = Effect.fn("OrgObject.recordCustomerChatMessage")(function* (
 	channel: {
@@ -246,7 +308,7 @@ export const recordCustomerChatMessage = Effect.fn("OrgObject.recordCustomerChat
 ) {
 	const linkedChannelId = channel.parentChannelId ?? channel.id
 	const link = yield* linkOf(linkedChannelId)
-	if (Option.isNone(link)) return
+	if (Option.isNone(link)) return yield* recordInboxMessage(channel, linkedChannelId, message)
 	const author = yield* classifyChatAuthor(channel.organizationId, message.authorId)
 	const createdAt = message.createdAt ?? new Date(yield* Clock.currentTimeMillis).toISOString()
 	yield* enqueueEffect(
