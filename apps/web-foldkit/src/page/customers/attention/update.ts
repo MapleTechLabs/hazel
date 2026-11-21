@@ -3,7 +3,7 @@ import { Command } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
-import type { SignalRow } from "../../../customers/queries"
+import { type SignalRow, subjectIdOf } from "../../../customers/queries"
 import { errorToastOf, successToast } from "../../../data/actions"
 import { customerRoute } from "../../../route"
 import * as Menu from "../../../ui/menu"
@@ -26,6 +26,7 @@ import {
 	ASSIGN_ME,
 	ASSIGN_MENU_ID,
 	ASSIGN_NONE,
+	accountsByIdOfModel,
 	areActionsShown,
 	assignEntries,
 	canReopen,
@@ -97,12 +98,13 @@ const withDetail = (model: Model, shared: Shared): Return => {
 	const signal = selectedSignal(model)
 	const organizationId = shared.organization?.id
 	if (!model.isPreviewOpen || signal === undefined || organizationId === undefined) return { model }
-	if (model.detail !== null && model.detail.accountId === signal.accountId) return { model }
+	const accountId = subjectIdOf(signal, accountsByIdOfModel(model))
+	if (model.detail !== null && model.detail.accountId === accountId) return { model }
 	return {
 		model: modifyFields(model, {
-			detail: () => ({ accountId: signal.accountId, data: AsyncData.Loading() }),
+			detail: () => ({ accountId, data: AsyncData.Loading() }),
 		}),
-		commands: [FetchAccountDetail({ organizationId, accountId: signal.accountId })],
+		commands: [FetchAccountDetail({ organizationId, accountId })],
 	}
 }
 
@@ -381,7 +383,7 @@ const openCustomer = (model: Model, shared: Shared, signal: SignalRow | undefine
 		: {
 				model,
 				outMessage: requestedOrgNavigation(shared.orgSlug, (orgSlug) =>
-					customerRoute(orgSlug, signal.accountId),
+					customerRoute(orgSlug, subjectIdOf(signal, accountsByIdOfModel(model))),
 				),
 			}
 

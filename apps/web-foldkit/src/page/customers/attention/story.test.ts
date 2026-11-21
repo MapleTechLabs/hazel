@@ -25,6 +25,7 @@ import {
 import { Message } from "./message"
 import {
 	accountGroups,
+	accountsByIdOfModel,
 	assignEntries,
 	filterEntries,
 	isNarrowed,
@@ -355,7 +356,7 @@ describe("needs attention: what shows", () => {
 
 	test("grouping by account steps through each account's lead signal", () => {
 		const current = pageUpdate(loaded(), Message.ClickedGrouping({ grouping: "accounts" })).model
-		const groups = accountGroups(visibleSignals(current, viewer))
+		const groups = accountGroups(visibleSignals(current, viewer), accountsByIdOfModel(current))
 		expect(groups.map((group) => ids(group.signals))).toEqual([
 			ids([paymentFailed, usageDown]),
 			ids([stoppedLogging]),
@@ -408,6 +409,41 @@ describe("needs attention: keyboard", () => {
 		expect(closed.isPreviewOpen).toBe(false)
 		expect(closed.selectedId).toBe(paymentFailed.id)
 		expect(pageUpdate(closed, key("close")).model.selectedId).toBeNull()
+	})
+
+	test("a limit signal shows and opens the environment at the limit, not its primary", () => {
+		const dev: AccountRow = {
+			...account(4, "Kestrel Dev", null, 0, "Scale"),
+			primaryAccountId: kestrel.id,
+			environment: "dev",
+		}
+		const atLimit: SignalRow = {
+			...stoppedLogging,
+			evidence: {
+				_tag: "limit",
+				step: 2,
+				metricKey: "sessions",
+				metricName: "Sessions",
+				value: 12_000,
+				limit: 5_000,
+				pct: 240,
+				accountId: dev.id,
+			},
+		}
+		const current: Model = {
+			...withSelection(stoppedLogging),
+			accounts: [acme, kestrel, northwind, dev],
+			signals: [atLimit],
+		}
+		expect(accountGroups([atLimit], accountsByIdOfModel(current))[0]?.accountId).toBe(dev.id)
+		story(
+			pageUpdate,
+			given(current),
+			message(key("open")),
+			expectOutMessage(
+				PageOutMessage.RequestedNavigation({ route: customerRoute("hazel", dev.id), replace: false }),
+			),
+		)
 	})
 
 	test("Enter opens the customer", () => {

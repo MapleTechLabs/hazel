@@ -2,7 +2,7 @@ import { TEMPLATES } from "@hazel/domain/customers"
 import type * as Customers from "@hazel/domain/customers"
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import type { AccountRow, SignalRow } from "../../../customers/queries"
+import { type AccountRow, type SignalRow, subjectIdOf } from "../../../customers/queries"
 import { formatCount, formatDate, formatMoney, formatRelative } from "../../../customers/format"
 import { environmentCounts, environmentsHintOf } from "../../../customers/groups"
 import { healthBadge, kindChip, severityChip, STAGE_LABEL } from "../../../customers/ui/badges"
@@ -222,12 +222,17 @@ export const previewPanel = (
 ): Html => {
 	const accountsById = new Map((model.accounts ?? []).map((account) => [account.id, account]))
 	const membersById = new Map(model.members.map((member) => [member.id, member]))
-	const account = accountsById.get(signal.accountId)
+	const subjectId = subjectIdOf(signal, accountsById)
+	const account = accountsById.get(subjectId)
 	if (account === undefined) return h.empty
+	const holder = accountsById.get(signal.accountId) ?? account
 	const ids = rowIds(model, viewer)
 	const position = ids.indexOf(signal.id)
 	const others = (model.signals ?? []).filter(
-		(other) => other.accountId === signal.accountId && other.id !== signal.id && other.status === "open",
+		(other) =>
+			subjectIdOf(other, accountsById) === subjectId &&
+			other.id !== signal.id &&
+			other.status === "open",
 	)
 	const counts = environmentCounts(model.accounts ?? [])
 	const context: RowContext = {
@@ -239,7 +244,7 @@ export const previewPanel = (
 		actions: [],
 	}
 	const href = orgSlug === null ? null : hrefOf(customerRoute(orgSlug, account.id))
-	const owner = account.ownerUserId === null ? null : (membersById.get(account.ownerUserId)?.name ?? null)
+	const owner = holder.ownerUserId === null ? null : (membersById.get(holder.ownerUserId)?.name ?? null)
 	return h.aside(
 		[
 			h.AriaLabel(`${account.name}: ${signal.title}`),

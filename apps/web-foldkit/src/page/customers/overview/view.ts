@@ -20,7 +20,7 @@ import {
 	formatPct,
 	formatRelative,
 } from "../../../customers/format"
-import { type AccountRow, msOf, type SignalRow } from "../../../customers/queries"
+import { type AccountRow, msOf, type SignalRow, subjectIdOf } from "../../../customers/queries"
 import { shownSuggestions, suggestionRow } from "../../../customers/suggestions"
 import {
 	environmentsHint,
@@ -380,7 +380,7 @@ const attentionSection = (
 		(signal) => userId !== null && context.accountsById.get(signal.accountId)?.ownerUserId === userId,
 	).length
 	const row = (signal: SignalRow) => {
-		const account = context.accountsById.get(signal.accountId)
+		const account = context.accountsById.get(subjectIdOf(signal, context.accountsById))
 		if (account === undefined) return h.empty
 		return h.li(
 			[h.Key(signal.id)],

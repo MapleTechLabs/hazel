@@ -4,6 +4,7 @@ import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { formatMoney, formatRelative, formatWeekdayTime } from "../../../customers/format"
 import { environmentCounts } from "../../../customers/groups"
+import { subjectIdOf } from "../../../customers/queries"
 import { KIND_LABEL, SEVERITY_LABEL } from "../../../customers/ui/badges"
 import { companyLogo } from "../../../customers/ui/identity"
 import {
@@ -520,7 +521,7 @@ const allClear = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html =
 								h.ul(
 									[h.Class("divide-y divide-border rounded-lg border border-border")],
 									upcoming.map((signal) => {
-										const account = accountsById.get(signal.accountId)
+										const account = accountsById.get(subjectIdOf(signal, accountsById))
 										if (account === undefined) return h.empty
 										return h.li(
 											[h.Class("flex items-center gap-3 px-3 py-2 text-sm")],
@@ -623,7 +624,9 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 				["Snoozed by", "w-36 max-lg:hidden"],
 				["Health", "w-28 text-right"],
 			]),
-			...signals.map((signal, index) => snoozedRow(h, signal, context, accountRunOf(signals, index))),
+			...signals.map((signal, index) =>
+				snoozedRow(h, signal, context, accountRunOf(signals, index, context.accountsById)),
+			),
 			h.div(
 				[h.Class("flex items-center gap-2 border-border border-t px-4 py-2.5 text-muted-fg text-xs")],
 				[
@@ -642,18 +645,26 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 				["Open for", "w-16 text-right whitespace-nowrap"],
 				["Resolved", "w-16 text-right"],
 			]),
-			...signals.map((signal, index) => doneRow(h, signal, context, accountRunOf(signals, index))),
+			...signals.map((signal, index) =>
+				doneRow(h, signal, context, accountRunOf(signals, index, context.accountsById)),
+			),
 		])
 	if (model.isPreviewOpen && selectedSignal(model) !== undefined)
 		return queueList(
 			h,
 			{ ariaLabel: "Open signals" },
 			model.grouping === "accounts"
-				? accountGroups(signals).map((group, index) =>
+				? accountGroups(signals, context.accountsById).map((group, index) =>
 						compactRow(h, group.lead, index + 1, context, NO_ACCOUNT_RUN),
 					)
 				: signals.map((signal, index) =>
-						compactRow(h, signal, index + 1, context, accountRunOf(signals, index)),
+						compactRow(
+							h,
+							signal,
+							index + 1,
+							context,
+							accountRunOf(signals, index, context.accountsById),
+						),
 					),
 		)
 	return model.grouping === "accounts"
@@ -666,7 +677,7 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 					["", "w-10"],
 					["Health", "w-28 text-right", "health"],
 				]),
-				...accountGroups(signals).map((group, index) =>
+				...accountGroups(signals, context.accountsById).map((group, index) =>
 					accountGroupRow(h, group, index + 1, context),
 				),
 			])
@@ -682,7 +693,13 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 					["Health", "w-28 text-right", "health"],
 				]),
 				...signals.map((signal, index) =>
-					signalRow(h, signal, index + 1, context, accountRunOf(signals, index)),
+					signalRow(
+						h,
+						signal,
+						index + 1,
+						context,
+						accountRunOf(signals, index, context.accountsById),
+					),
 				),
 			])
 }
