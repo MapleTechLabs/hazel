@@ -78,6 +78,21 @@ describe("Customers overview", () => {
 		)
 	})
 
+	test("beside the queue: the biggest usage drops and the support numbers", () => {
+		const drops = Scene.role("region", { name: "Biggest usage drops" })
+		const support = Scene.role("region", { name: "Support" })
+		Scene.scene(
+			pageScene(update, view, shared),
+			Scene.given(answered({ billing: true, signals: true })),
+			Scene.inside(drops, Scene.expectAll(Scene.all.role("listitem")).toHaveCount(3)),
+			Scene.expect(Scene.within(drops, Scene.role("link", { name: /Kestrel Systems.*64%/ }))).toExist(),
+			Scene.expect(Scene.within(support, Scene.text("47m"))).toExist(),
+			Scene.expect(Scene.within(support, Scene.text("86%"))).toExist(),
+			Scene.expect(Scene.within(support, Scene.text("Breaches · 1 overdue now"))).toExist(),
+			Scene.expect(Scene.within(support, Scene.text("11"))).toExist(),
+		)
+	})
+
 	test("with nothing open the queue says all clear", () => {
 		Scene.scene(
 			pageScene(update, view, shared),
