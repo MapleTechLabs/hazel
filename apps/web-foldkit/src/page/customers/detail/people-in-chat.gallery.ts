@@ -21,7 +21,7 @@ import type { Model } from "./model"
 import type { Context } from "./parts"
 import { peopleInChat } from "./people-in-chat"
 import { init } from "./update"
-import { sidebarSection } from "./view"
+import { sidebarSection } from "./parts"
 
 /**
  * The customer page's "People in chat" section: empty, with customers and a person marked as our

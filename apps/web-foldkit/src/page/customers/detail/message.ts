@@ -126,6 +126,15 @@ export const Message = defineMessageUnion({
 	RemovedTag: { tag: Schema.String },
 	SucceededAccountUpdate: {},
 	FailedAccountUpdate: { reason: ActionFailure },
+	/** Refresh / Look up now in the Company section (`docs/customers/enrichment.md`). */
+	PressedRefreshCompany: {},
+	SucceededCompanyRefresh: { accountId: CustomerAccountId },
+	/** `message` is the store's reason it refused (no usable domain, lookups not set up). */
+	FailedCompanyRefresh: {
+		accountId: CustomerAccountId,
+		reason: ActionFailure,
+		message: Schema.NullOr(Schema.String),
+	},
 	GotRawModalMessage: { message: Modal.Message },
 
 	GotEnvironmentMenuMessage: { message: Menu.Message },

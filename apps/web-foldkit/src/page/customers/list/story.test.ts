@@ -66,6 +66,8 @@ const account = (n: number, name: string, fields: Partial<AccountRow> = {}): Acc
 	name,
 	domain: `${name.toLowerCase().replace(/\s/g, "")}.io`,
 	logoUrl: null,
+	company: null,
+	companyCheckedAtMs: null,
 	ownerUserId: ada,
 	lifecycleStage: "active",
 	planName: "Growth",

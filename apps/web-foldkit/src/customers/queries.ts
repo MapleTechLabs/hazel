@@ -41,7 +41,12 @@ export const AccountRow = Schema.Struct({
 	name: Schema.String,
 	/** The first of its domains. */
 	domain: Schema.NullOr(Schema.String),
+	/** Its own logo, else its company's (`logoOf`). */
 	logoUrl: Schema.NullOr(Schema.String),
+	/** The company behind its domain (`docs/customers/enrichment.md`); null until a lookup finds it. */
+	company: Schema.NullOr(Customers.CompanyProfile),
+	/** When its domain was last looked up, found or not; null: never. */
+	companyCheckedAtMs: Schema.NullOr(Schema.Finite),
 	ownerUserId: Schema.NullOr(UserId),
 	lifecycleStage: Customers.LifecycleStage,
 	planName: Schema.NullOr(Schema.String),
@@ -153,7 +158,9 @@ export const toAccountRow = (account: Customers.Account): AccountRow => ({
 	id: account.id,
 	name: account.name,
 	domain: account.domains[0] ?? null,
-	logoUrl: account.logoUrl,
+	logoUrl: Customers.logoOf(account),
+	company: account.companyProfile,
+	companyCheckedAtMs: msOrNull(account.companyCheckedAt),
 	ownerUserId: account.ownerUserId,
 	lifecycleStage: account.lifecycleStage,
 	planName: account.planName,

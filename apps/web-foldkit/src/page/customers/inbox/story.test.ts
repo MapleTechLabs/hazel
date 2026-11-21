@@ -74,6 +74,8 @@ const acme: AccountRow = {
 	name: "Acme Robotics",
 	domain: null,
 	logoUrl: null,
+	company: null,
+	companyCheckedAtMs: null,
 	ownerUserId: ada,
 	lifecycleStage: "active",
 	planName: "Growth",

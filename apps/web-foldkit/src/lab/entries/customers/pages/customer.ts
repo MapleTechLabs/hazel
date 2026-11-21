@@ -29,6 +29,7 @@ import {
 	JONAS,
 	MAYA,
 	NOW,
+	RICH_COMPANY,
 	SIGNALS,
 	TEAM,
 	dayOf,
@@ -45,12 +46,15 @@ const State = Schema.Literals(STATES)
 const ROLES = ["member", "admin"] as const
 const VIEWED = ["us", "eu"] as const
 const DIALOGS = ["none", "link", "environment"] as const
+/** The Company section's states (`docs/customers/enrichment.md`). */
+const COMPANIES = ["sparse", "rich", "not-found", "not-checked", "no-domain"] as const
 const Flags = Schema.Struct({
 	tab: CustomerTab,
 	state: State,
 	as: Schema.Literals(ROLES),
 	account: Schema.Literals(VIEWED),
 	dialog: Schema.Literals(DIALOGS),
+	company: Schema.Literals(COMPANIES),
 })
 
 const DAY = 86_400_000
@@ -288,10 +292,28 @@ const usageOf = (metricKey: string, range: Customers.CustomersRange) =>
 
 const MRR_HISTORY = series("mrr", "MRR", 365, (day) => (day < 245 ? 62_000 : 124_000))
 
+/** Acme with the company profile `?company=` asks for. */
+const withCompany = (account: Customers.Account): Customers.Account => {
+	const value = new URLSearchParams(window.location.search).get("company")
+	const company = COMPANIES.find((entry) => entry === value) ?? "sparse"
+	switch (company) {
+		case "sparse":
+			return account
+		case "rich":
+			return { ...account, companyProfile: { ...RICH_COMPANY, domain: "acmerobotics.io" } }
+		case "not-found":
+			return { ...account, companyProfile: null }
+		case "not-checked":
+			return { ...account, companyProfile: null, companyCheckedAt: null }
+		case "no-domain":
+			return { ...account, domains: ["gmail.com"], companyProfile: null, companyCheckedAt: null }
+	}
+}
+
 const detailFor = (state: typeof State.Type): Customers.AccountDetail => {
 	const healthy: Customers.AccountDetail = {
 		...ACME_DETAIL,
-		account: ACCOUNT,
+		account: withCompany(ACCOUNT),
 		subscriptions: [{ ...SUBSCRIPTION, status: "active", planName: "Pro", mrrMinor: 124_000 }],
 		openInvoices: [],
 		upcomingInvoice: UPCOMING,
@@ -465,6 +487,9 @@ const answer = (command: AnyCommand, current: typeof State.Type): Message | null
 			return Message.SucceededGroupAction({ accountId: accountId(), action: "set_primary" })
 		case "SetCustomerEnvironment":
 			return Message.SucceededGroupAction({ accountId: accountId(), action: "set_environment" })
+		case "RefreshCustomerCompany":
+			// Accepted; the lookup itself never lands here, so the section stays "Looking up…" a while.
+			return Message.SucceededCompanyRefresh({ accountId: accountId() })
 		default:
 			return command.name.startsWith("Update") ||
 				command.name.startsWith("Delete") ||
@@ -572,6 +597,7 @@ const labView = (model: Model, h: HtmlBuilder<Message>): Html => {
 				{ name: "as", values: ROLES, current: params.get("as") ?? "member" },
 				{ name: "account", values: VIEWED, current: params.get("account") ?? "us" },
 				{ name: "dialog", values: DIALOGS, current: params.get("dialog") ?? "none" },
+				{ name: "company", values: COMPANIES, current: params.get("company") ?? "sparse" },
 			],
 		},
 		[
@@ -600,6 +626,7 @@ export const lab = defineLabWithFlags("Customer", {
 		as: queryParam("as", ROLES, "member"),
 		account: queryParam("account", VIEWED, "us"),
 		dialog: queryParam("dialog", DIALOGS, "none"),
+		company: queryParam("company", COMPANIES, "sparse"),
 	}),
 	init: initial,
 	// Tabs navigate in the app; here they switch in place. Prev/next stay on Acme.

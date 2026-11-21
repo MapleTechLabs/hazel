@@ -245,6 +245,37 @@ export const SetCustomerEnvironment = Command.define("SetCustomerEnvironment", {
 	execute: (args) => setEnvironmentAction(args).pipe(settleGroup("set_environment", args.accountId)),
 })
 
+/** Look the customer's company up again (`customers.account.refreshCompany`); the profile syncs in after. */
+export const RefreshCustomerCompany = Command.define("RefreshCustomerCompany", {
+	args: target,
+	messages: [Message.SucceededCompanyRefresh, Message.FailedCompanyRefresh],
+	execute: (args) =>
+		HazelRpc.use((rpc) => rpc("customers.account.refreshCompany", args)).pipe(
+			Effect.as(Message.SucceededCompanyRefresh({ accountId: args.accountId })),
+			Effect.catchTags({
+				CustomersNotFoundError: () =>
+					Effect.succeed(
+						Message.FailedCompanyRefresh({
+							accountId: args.accountId,
+							reason: "NotFound",
+							message: null,
+						}),
+					),
+				CustomersInvalidRequestError: (error) =>
+					Effect.succeed(
+						Message.FailedCompanyRefresh({
+							accountId: args.accountId,
+							reason: "Stale",
+							message: error.message,
+						}),
+					),
+			}),
+			catchCommon((reason) =>
+				Message.FailedCompanyRefresh({ accountId: args.accountId, reason, message: null }),
+			),
+		),
+})
+
 /** Mute the customer in Needs attention until `untilMs` (null: until unmuted), or unmute it (`mute` null). */
 export const SetCustomerAttentionMute = Command.define("SetCustomerAttentionMute", {
 	args: {

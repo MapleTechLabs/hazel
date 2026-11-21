@@ -25,8 +25,10 @@ import { Message } from "./message"
 import {
 	actionEntries,
 	canImpersonate,
+	COMPANY_REFRESH_PENDING_MS,
 	EMPTY_NOTE_DRAFTS,
 	environmentEntries,
+	isCompanyRefreshPending,
 	isNotFound,
 	linkCandidates,
 	type Model,
@@ -83,6 +85,8 @@ const account = (n: number, name: string): AccountRow => ({
 	name,
 	domain: null,
 	logoUrl: null,
+	company: null,
+	companyCheckedAtMs: null,
 	ownerUserId: ada,
 	lifecycleStage: "active",
 	planName: "Growth",
@@ -692,6 +696,47 @@ describe("customer page: signals", () => {
 		const patched = update(loaded(), Message.RemovedTag({ tag: "pilot" }), shared).model
 		const rolledBack = run(patched, [Message.UpdatedAccounts({ accounts: [acme, beta, gamma] })])
 		expect(rolledBack.accounts?.find((row) => row.id === beta.id)?.tags).toEqual(["pilot"])
+	})
+})
+
+describe("customer page: company", () => {
+	test("Refresh asks once, shows the lookup on its way until the account is checked again", () => {
+		const pressed = update(loaded(), Message.PressedRefreshCompany(), shared)
+		expect(commandNames(pressed)).toEqual(["RefreshCustomerCompany"])
+		expect(pressed.commands?.[0]?.args).toMatchObject({ accountId: beta.id })
+		expect(isCompanyRefreshPending(pressed.model, NOW, null)).toBe(true)
+		// A second press while it is on its way does nothing.
+		expect(commandNames(update(pressed.model, Message.PressedRefreshCompany(), shared))).toEqual([])
+		// Once the lookup landed (the account checked after the press), a press asks again.
+		const landed = run(pressed.model, [
+			Message.UpdatedAccounts({
+				accounts: [acme, { ...beta, companyCheckedAtMs: NOW + 1_000 }, gamma],
+			}),
+		])
+		expect(commandNames(update(landed, Message.PressedRefreshCompany(), shared))).toEqual([
+			"RefreshCustomerCompany",
+		])
+		// The lookup landed (the account was checked after the press), or it has been too long.
+		expect(isCompanyRefreshPending(pressed.model, NOW + 1_000, NOW + 500)).toBe(false)
+		expect(isCompanyRefreshPending(pressed.model, NOW + COMPANY_REFRESH_PENDING_MS, null)).toBe(false)
+	})
+
+	test("a refused refresh says why and can be asked again", () => {
+		const pressed = update(loaded(), Message.PressedRefreshCompany(), shared).model
+		const refused = update(
+			pressed,
+			Message.FailedCompanyRefresh({
+				accountId: beta.id,
+				reason: "Stale",
+				message: "This customer has no company domain to look up",
+			}),
+			shared,
+		)
+		expect(refused.outMessage?._tag).toBe("RequestedToast")
+		expect(refused.model.companyRefreshAtMs).toBeNull()
+		expect(commandNames(update(refused.model, Message.PressedRefreshCompany(), shared))).toEqual([
+			"RefreshCustomerCompany",
+		])
 	})
 })
 

@@ -87,6 +87,8 @@ const account = (
 	name,
 	domain: null,
 	logoUrl: null,
+	company: null,
+	companyCheckedAtMs: null,
 	ownerUserId,
 	lifecycleStage: "active",
 	planName,

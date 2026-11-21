@@ -196,6 +196,11 @@ export const Model = Schema.Struct({
 	linkPrimaryId: Schema.NullOr(CustomerAccountId),
 	isLinking: Schema.Boolean,
 	linkError: Schema.NullOr(Schema.String),
+	/**
+	 * When this page last asked for a company lookup: "Looking up…" until the account's
+	 * `companyCheckedAtMs` passes it (or `COMPANY_REFRESH_PENDING_MS` goes by).
+	 */
+	companyRefreshAtMs: Schema.NullOr(Schema.Finite),
 	/** "Name environment": the text, an RPC on its way. */
 	environmentModal: Modal.Model,
 	environmentDraft: Schema.String,
@@ -474,3 +479,12 @@ export const signalMoreEntries: ReadonlyArray<Menu.Entry> = [
 	Menu.separator,
 	Menu.item(OPEN_QUEUE),
 ]
+
+/** A lookup asked for this long ago and still unanswered stops showing as pending. */
+export const COMPANY_REFRESH_PENDING_MS = 2 * 60_000
+
+/** Whether this page's company lookup is still on its way: asked, and the account not checked since. */
+export const isCompanyRefreshPending = (model: Model, nowMs: number, checkedAtMs: number | null): boolean =>
+	model.companyRefreshAtMs !== null &&
+	nowMs - model.companyRefreshAtMs < COMPANY_REFRESH_PENDING_MS &&
+	(checkedAtMs === null || checkedAtMs < model.companyRefreshAtMs)
