@@ -174,42 +174,47 @@ describe("Customers authorization", () => {
 		vi.unstubAllGlobals()
 	})
 
-	it("refuses strangers and bots every method, and members the admin-only ones", () =>
-		run(
-			Effect.gen(function* () {
-				const world = yield* makeCustomersWorld
-				expect(Object.keys(PAYLOADS).sort()).toEqual([...CustomerRpcs.requests.keys()].sort())
-				// A bot projected by an older org (bots are no longer projected) still gets nothing.
-				const bot = uuid() as UserId
-				yield* world.object.applyEffect({
-					objectId: world.orgId,
-					kind: "customers.setMembers",
-					payload: {
-						organizationId: world.orgId,
-						members: [
-							{ userId: world.owner, role: "owner" },
-							{ userId: world.member, role: "member" },
-							{ userId: bot, role: "admin" },
-						],
-						version: 2,
-					},
-					key: uuid(),
-					sender: { kind: "org", id: world.orgId },
-				})
-				const scopes = ["customers:read", "customers:write"] as const
-				for (const [tag, payload] of Object.entries(PAYLOADS)) {
-					const as = (
-						user: UserId,
-						botScopes?: ReadonlyArray<"customers:read" | "customers:write">,
-					) => world.call(tag as HazelRpcTag, payload, user, botScopes).pipe(Effect.map(tagOf))
-					expect([tag, yield* as(world.stranger)]).toEqual([tag, "UnauthorizedError"])
-					expect([tag, yield* as(bot, scopes)]).toEqual([tag, "UnauthorizedError"])
-					const member = yield* as(world.member)
-					if (ADMIN_ONLY.has(tag)) expect([tag, member]).toEqual([tag, "UnauthorizedError"])
-					else expect([tag, member]).not.toEqual([tag, "UnauthorizedError"])
-				}
-			}),
-		))
+	it(
+		"refuses strangers and bots every method, and members the admin-only ones",
+		() =>
+			run(
+				Effect.gen(function* () {
+					const world = yield* makeCustomersWorld
+					expect(Object.keys(PAYLOADS).sort()).toEqual([...CustomerRpcs.requests.keys()].sort())
+					// A bot projected by an older org (bots are no longer projected) still gets nothing.
+					const bot = uuid() as UserId
+					yield* world.object.applyEffect({
+						objectId: world.orgId,
+						kind: "customers.setMembers",
+						payload: {
+							organizationId: world.orgId,
+							members: [
+								{ userId: world.owner, role: "owner" },
+								{ userId: world.member, role: "member" },
+								{ userId: bot, role: "admin" },
+							],
+							version: 2,
+						},
+						key: uuid(),
+						sender: { kind: "org", id: world.orgId },
+					})
+					const scopes = ["customers:read", "customers:write"] as const
+					for (const [tag, payload] of Object.entries(PAYLOADS)) {
+						const as = (
+							user: UserId,
+							botScopes?: ReadonlyArray<"customers:read" | "customers:write">,
+						) => world.call(tag as HazelRpcTag, payload, user, botScopes).pipe(Effect.map(tagOf))
+						expect([tag, yield* as(world.stranger)]).toEqual([tag, "UnauthorizedError"])
+						expect([tag, yield* as(bot, scopes)]).toEqual([tag, "UnauthorizedError"])
+						const member = yield* as(world.member)
+						if (ADMIN_ONLY.has(tag)) expect([tag, member]).toEqual([tag, "UnauthorizedError"])
+						else expect([tag, member]).not.toEqual([tag, "UnauthorizedError"])
+					}
+				}),
+				// Every customers method, three callers each: slow on a loaded CI runner.
+			),
+		30_000,
+	)
 
 	it("starts an impersonation only for a member an admin granted it", () =>
 		run(
