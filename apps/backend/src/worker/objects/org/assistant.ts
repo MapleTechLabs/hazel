@@ -29,8 +29,11 @@ import { FetchHttpClient } from "effect/http"
 import { defineCall } from "../calls"
 import { markT3CodeExpired, t3CodeAccess } from "./t3code"
 
-/** One step's `t3_thread_wait`: short, so an alarm (which also runs the org's other timers) stays short. */
-export const STEP_WAIT_MS = 10_000
+/**
+ * One step's `t3_thread_wait`. T3 Code answers early only when the run ends, not as a reply grows,
+ * so a short wait is what lets the reply stream in: each step reads the text written so far.
+ */
+export const STEP_WAIT_MS = 1_500
 /** Threads stepped per alarm, at once. */
 const STEPS_PER_TICK = 4
 /** While a question waits on the member, check now and then whether it was answered in T3 Code. */
@@ -148,12 +151,70 @@ export const viewOf = (item: T3Item): ItemView | null => {
 		case "checkpoint":
 			return null
 		default:
-			return {
-				kind: "tool",
-				title: item.title ?? item.type.replaceAll("_", " "),
-				text: truncate(text, 2000),
-				data: null,
-			}
+			return toolView(item, text)
+	}
+}
+
+/** `mcp__hazel__list_channels` → "List channels"; `ToolSearch` → "Tool search". */
+export const toolNameLabel = (name: string) => {
+	// MCP tools are `mcp__<server>__<tool>`.
+	const bare = name.replace(/^mcp__.+?__/, "")
+	const words = bare
+		.replace(/([a-z])([A-Z])/g, "$1 $2")
+		.replaceAll("_", " ")
+		.trim()
+		.toLowerCase()
+	return words === "" ? name : `${words.charAt(0).toUpperCase()}${words.slice(1)}`
+}
+
+const ToolCall = Schema.fromJsonString(
+	Schema.Struct({
+		toolName: Schema.String,
+		input: Schema.optional(Schema.Unknown),
+		output: Schema.optional(Schema.Unknown),
+	}),
+)
+const decodeToolCall = Schema.decodeUnknownOption(ToolCall)
+
+/** `{ a: 1, b: "x" }` → `a: 1, b: x`: one line to read a call's input at a glance. */
+const inputLine = (input: unknown): string | null => {
+	if (input === undefined || input === null) return null
+	if (typeof input !== "object") return truncate(String(input), 300)
+	const pairs = Object.entries(input).map(
+		([key, value]) => `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`,
+	)
+	return pairs.length === 0 ? null : truncate(pairs.join(", "), 300)
+}
+
+const outputText = (output: unknown) =>
+	output === undefined || output === null
+		? ""
+		: truncate(typeof output === "string" ? output : JSON.stringify(output, null, 2), 2000)
+
+/**
+ * Any other activity item, as a tool step. T3 Code writes a tool call (an MCP tool, `ToolSearch`)
+ * as JSON `{ toolName, input, output }`: shown as its name, a one-line input and its output.
+ */
+const toolView = (item: T3Item, text: string): ItemView => {
+	const call = decodeToolCall(text)
+	if (call._tag === "None") {
+		return {
+			kind: "tool",
+			title: item.title ?? item.type.replaceAll("_", " "),
+			text: truncate(text, 2000),
+			data: null,
+		}
+	}
+	const input = inputLine(call.value.input)
+	return {
+		kind: "tool",
+		// T3's own title, unless it only names the item type.
+		title:
+			item.title == null || item.title === item.type.replaceAll("_", " ")
+				? toolNameLabel(call.value.toolName)
+				: item.title,
+		text: outputText(call.value.output),
+		data: input === null ? null : { input },
 	}
 }
 
