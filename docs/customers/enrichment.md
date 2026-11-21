@@ -32,7 +32,7 @@ One lookup (`worker/objects/customers/enrichment/client.ts`) is:
    whose `error_code` (the docs say `code`; the API sends `error_code`) is `NOT_FOUND`,
    `WEBSITE_NOT_FOUND`, `WEBSITE_ACCESS_ERROR` or `WEBSITE_BLOCKED`; any other 400 is a failure.
 2. When Brand found a company, `POST /v1/company/search` (`fast`, 2 credits) with its name and
-   domain. A result counts only when its domain is the same company's (`isSameCompany`); it adds
+   the domain Brand resolved to (a redirect may land elsewhere). A result counts only when its domain is the same company's (`isSameCompany`); it adds
    founded year, company type, operating status, funding rounds and an estimated revenue range,
    never replacing what Brand had. A failed search never fails the lookup.
 
@@ -50,17 +50,18 @@ and buckets headcounts into `EmployeeRange`.
   all deleted is stopped without a lookup. The earliest `nextAttemptAt` is one of the object's
   alarm deadlines; a turn that fails before its rows move on moves every due row a lease ahead.
 
-| Answer                             | Row                                                       | Next lookup                   |
-| ---------------------------------- | --------------------------------------------------------- | ----------------------------- |
-| Found                              | `enriched`, profile copied to the accounts                | 90 days                       |
-| No company (400, see above)        | `not_found`, accounts checked; an earlier profile is kept | 90 days                       |
-| Mail provider or disposable (422)  | `skipped`                                                 | 1 year                        |
-| Too little time, cold domain (422) | `failed`, `failures` + 1                                  | backoff, as below             |
-| Rate limited (429)                 | unchanged                                                 | after `Retry-After`           |
-| Refused key (401/403)              | `failed`                                                  | 6 hours                       |
-| Anything else                      | `failed`, `failures` + 1                                  | 10 min × 4^failures, ≤ 7 days |
+| Answer                                                                               | Row                                                       | Next lookup                   |
+| ------------------------------------------------------------------------------------ | --------------------------------------------------------- | ----------------------------- |
+| Found                                                                                | `enriched`, profile copied to the accounts                | 90 days                       |
+| No company (400, see above)                                                          | `not_found`, accounts checked; an earlier profile is kept | 90 days                       |
+| Mail provider or disposable (422 `FREE_EMAIL_DETECTED`, `DISPOSABLE_EMAIL_DETECTED`) | `skipped`                                                 | 1 year                        |
+| Any other 422 (e.g. `COLD_DOMAIN_TIMEOUT_TOO_LOW`)                                   | `failed`, `failures` + 1                                  | backoff, as below             |
+| Rate limited (429)                                                                   | unchanged                                                 | after `Retry-After`           |
+| Refused key (401/403)                                                                | `failed`                                                  | 6 hours                       |
+| Anything else                                                                        | `failed`, `failures` + 1                                  | 10 min × 4^failures, ≤ 7 days |
 
-Each lookup first moves its row 5 minutes ahead (and takes its refresh ask), so one the runtime
+Retry deadlines count from when the answers came, not the turn's start. A failed refresh keeps
+the profile found before. Each lookup first moves its row 5 minutes ahead (and takes its refresh ask), so one the runtime
 kills retries then. A refresh asked while a lookup is out keeps its row due now. Round dates are
 kept only as real `YYYY-MM-DD` days, and a known headcount decides the size bucket (sources' ranges
 lag it). Account writes go in chunks of 90 ids (SQLite binds at most 100 values).

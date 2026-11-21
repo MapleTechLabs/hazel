@@ -16,7 +16,7 @@
 import { Database, SQLite, schema } from "@hazel/db"
 import { type CompanyProfile, enrichmentDomainOf } from "@hazel/domain/customers"
 import type { CustomerAccountId } from "@hazel/schema"
-import { Array as Arr, Cause, Effect, Exit, Option } from "effect"
+import { Array as Arr, Cause, Clock, Effect, Exit, Option } from "effect"
 import { ContextDev, type CompanyLookup, EnrichmentLookupError } from "./client"
 
 export const ENRICH_PER_TURN = 10
@@ -129,10 +129,8 @@ export const seedEnrichments = Effect.fn("CustomersObject.seedEnrichments")(func
 	yield* applyToAccounts(withoutDomain, null, null, now)
 	for (const [domain, accounts] of byDomain) {
 		const row = known.get(domain)
-		const answered =
-			row !== undefined &&
-			row.fetchedAt !== null &&
-			(row.status === "enriched" || row.status === "not_found" || row.status === "skipped")
+		// An answer, whatever the latest attempt did: a refresh that failed keeps the profile it had.
+		const answered = row !== undefined && row.fetchedAt !== null
 		// Not answered yet: clear only a profile some other domain gave.
 		yield* answered
 			? applyToAccounts(accounts, row.profile, row.fetchedAt, now)
@@ -313,6 +311,7 @@ export const runDueEnrichments = Effect.fn("CustomersObject.runDueEnrichments")(
 	for (const row of due) {
 		if (!byDomain.has(row.domain)) yield* setRow(row.domain, { nextAttemptAt: null, updatedAt: now })
 	}
+	const startedMs = yield* Clock.currentTimeMillis
 	const answers = yield* Effect.forEach(
 		used,
 		(row) =>
@@ -322,6 +321,8 @@ export const runDueEnrichments = Effect.fn("CustomersObject.runDueEnrichments")(
 			})),
 		{ concurrency: CONCURRENCY },
 	)
+	// Retry delays count from when the answers came, not from the turn's start before the lookups.
+	const answeredAt = new Date(now.getTime() + Math.max(0, (yield* Clock.currentTimeMillis) - startedMs))
 	let found = 0
 	let credits = 0
 	for (const { row, exit } of answers) {
@@ -337,7 +338,7 @@ export const runDueEnrichments = Effect.fn("CustomersObject.runDueEnrichments")(
 				})
 			}
 		}
-		yield* recordAnswer(row.domain, exit, byDomain.get(row.domain) ?? [], now)
+		yield* recordAnswer(row.domain, exit, byDomain.get(row.domain) ?? [], answeredAt)
 	}
 	yield* Effect.annotateCurrentSpan({ "enrichment.found": found, "enrichment.credits": credits })
 })

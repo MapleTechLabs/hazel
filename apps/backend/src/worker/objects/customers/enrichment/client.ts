@@ -7,8 +7,8 @@
  * Failures (`EnrichmentLookupError`):
  * - A Brand 400 whose `error_code` says there is no company there (`NO_COMPANY`: no brand, or no
  *   site it can read) is an answer, not a failure: `found: false`. Any other 400 is a failure.
- * - 422 (`FREE_EMAIL_DETECTED`, `DISPOSABLE_EMAIL_DETECTED`, …) → `skipped`: never retried soon;
- *   `COLD_DOMAIN_TIMEOUT_TOO_LOW` → `failed`, retried.
+ * - 422 `FREE_EMAIL_DETECTED` / `DISPOSABLE_EMAIL_DETECTED` → `skipped`: never retried soon; any
+ *   other 422 (`COLD_DOMAIN_TIMEOUT_TOO_LOW`, or one without a code) → `failed`, retried.
  * - 401/403 → `auth`; 429 → `rate_limited` with the delay; 5xx, timeouts, unreadable bodies → `failed`.
  * A failed search never fails the lookup: Brand's profile stands alone.
  */
@@ -29,8 +29,12 @@ const NO_COMPANY: ReadonlySet<string> = new Set([
 	"WEBSITE_ACCESS_ERROR",
 	"WEBSITE_BLOCKED",
 ])
-/** A 422 that a retry with more time fixes, unlike a mail provider's or a disposable address. */
-const RETRYABLE_422 = "COLD_DOMAIN_TIMEOUT_TOO_LOW"
+/**
+ * The 422s that mean the domain is not a company's to look up (a mail provider's, a disposable
+ * address's): skipped for long. Any other 422 (`COLD_DOMAIN_TIMEOUT_TOO_LOW`, one without a code) fails
+ * and is retried after the usual backoff.
+ */
+const NOT_A_COMPANY: ReadonlySet<string> = new Set(["FREE_EMAIL_DETECTED", "DISPOSABLE_EMAIL_DETECTED"])
 
 /** Nominal credits, for when an answer does not say what it cost. */
 const BRAND_CREDITS = 10
@@ -87,7 +91,9 @@ const lookupErrorOf = (error: CustomerProviderError): EnrichmentLookupError =>
 				? "auth"
 				: error.code === "rate_limited"
 					? "rate_limited"
-					: error.httpStatus === 422 && error.providerCode !== RETRYABLE_422
+					: error.httpStatus === 422 &&
+						  error.providerCode !== undefined &&
+						  NOT_A_COMPANY.has(error.providerCode)
 						? "skipped"
 						: "failed",
 		message: error.message,
@@ -167,7 +173,9 @@ export const makeContextDev = (
 			})
 			const found = yield* brand(normal, options.fresh)
 			const name = found.brand?.title?.trim() ?? ""
-			const extra = name === "" ? { result: null, credits: 0 } : yield* search(normal, name)
+			// The company Brand found may live at another domain than the one asked (a redirect).
+			const canonical = normalizeDomain(found.brand?.domain?.trim() || normal)
+			const extra = name === "" ? { result: null, credits: 0 } : yield* search(canonical, name)
 			const profile = toCompanyProfile(normal, found.brand, extra.result)
 			const creditsUsed = found.credits + extra.credits
 			yield* Effect.annotateCurrentSpan({
