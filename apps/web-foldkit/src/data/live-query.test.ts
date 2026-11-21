@@ -194,4 +194,35 @@ describe("liveQueryStream", () => {
 		await Effect.runPromise(Fiber.interrupt(fiber))
 		expect(listeners.size).toBe(0)
 	})
+
+	type Account = { id: string; checkedAt?: Date }
+
+	// A cached account missing a field made the customers list wait for rows forever.
+	test("rows it cannot map are reported as stalled, and a later change is tried again", async () => {
+		const accounts = createCollection(
+			localOnlyCollectionOptions({
+				id: "live-query-map-throws",
+				getKey: (row: Account) => row.id,
+				initialData: [{ id: "a1" }] as Array<Account>,
+			}),
+		)
+		await accounts.preload()
+		const error = vi.spyOn(console, "error").mockImplementation(() => {})
+		const emissions: Array<string> = []
+		const fiber = Effect.runFork(
+			liveQueryStream<Account, string>(
+				(q) => q.from({ account: accounts }),
+				(rows) => rows.map((row) => `${row.id}:${row.checkedAt!.getTime()}`).join(","),
+				{ onStalled: () => "stalled" },
+			).pipe(Stream.runForEach((message) => Effect.sync(() => emissions.push(message)))),
+		)
+		await vi.waitFor(() => expect(emissions).toEqual(["stalled"]))
+		expect(error).toHaveBeenCalledOnce()
+		accounts.update("a1", (row) => {
+			row.checkedAt = new Date(5)
+		})
+		await vi.waitFor(() => expect(emissions).toEqual(["stalled", "a1:5"]))
+		await Effect.runPromise(Fiber.interrupt(fiber))
+		error.mockRestore()
+	})
 })
