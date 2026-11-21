@@ -929,7 +929,9 @@ const linkedRecords = (h: HtmlBuilder<Message>, model: Model, context: Context):
 	const now = new Date(context.nowMs)
 	const refs = (detail?.refs ?? []).filter((ref) => ref.entityType === "account")
 	const linked = new Set(refs.map((ref) => ref.provider))
-	const unlinked = model.connectedProviders.filter((provider) => !linked.has(provider))
+	// A source is unlinked only once the detail says so; while it loads the section says Loading.
+	const unlinked =
+		detail === null ? [] : model.connectedProviders.filter((provider) => !linked.has(provider))
 	return sidebarSection(h, "Linked records", null, [
 		...refs.map((ref) =>
 			h.div(
