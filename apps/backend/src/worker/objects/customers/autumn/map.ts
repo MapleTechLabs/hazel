@@ -507,14 +507,21 @@ const definitionOf = (key: string, name: string, unit: string | null): DefineMet
 })
 
 /**
- * The plan limit a `near_limit` signal measures against: the granted units, unless the feature is
- * unlimited or the plan grants nothing (then there is no limit to be near).
+ * The plan limit a `near_limit` signal measures against: the granted units, when they are a cap.
+ * None when the feature is unlimited, the plan grants nothing, or use past the grant is billed
+ * (overage allowed, or a `usage_based` price): the grant is then only what the base price covers,
+ * and going past it is the plan working as sold, not a limit being hit.
  */
 const limitOf = (balance: AutumnBalance): number | null => {
 	if (balance.unlimited === true) return null
+	if (billsOverage(balance)) return null
 	const granted = balance.granted ?? null
 	return granted != null && granted > 0 ? granted : null
 }
+
+const billsOverage = (balance: AutumnBalance): boolean =>
+	balance.overage_allowed === true ||
+	(balance.breakdown ?? []).some((grant) => grant.price?.billing_method === "usage_based")
 
 /**
  * A customer's feature usage for `at`'s day: one metric per balance, declared as it is written.

@@ -192,7 +192,8 @@ describe("Autumn ops through CustomerIngest", () => {
 					{ key: "autumn.seats", name: "Seats", provider: "autumn", aggregation: "max" },
 				])
 				expect(metrics(world)).toEqual([
-					{ metricKey: "autumn.messages", value: 8_200, limitValue: 10_000 },
+					// Messages bills overage, so its grant is no cap; seats are.
+					{ metricKey: "autumn.messages", value: 8_200, limitValue: null },
 					{ metricKey: "autumn.seats", value: 12, limitValue: 25 },
 				])
 				// An unlimited feature has no limit to be near.

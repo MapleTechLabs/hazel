@@ -285,9 +285,9 @@ describe("balance events", () => {
 			"subscription",
 			"event",
 		])
-		// The metric and its limit are what the `near_limit` signal reads.
+		// The metric and its limit are what the `near_limit` signal reads (Messages bills overage: no cap).
 		expect(metrics(written).map((op) => [op.metricKey, op.value, op.limitValue])).toEqual([
-			["autumn.messages", 8_200, 10_000],
+			["autumn.messages", 8_200, null],
 			["autumn.seats", 12, 25],
 		])
 		expect(events(written)[0]).toMatchObject({

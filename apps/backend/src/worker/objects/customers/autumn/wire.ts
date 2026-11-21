@@ -150,6 +150,8 @@ export const AutumnBalance = Schema.Struct({
 	granted: Nullable(Schema.Finite),
 	usage: Nullable(Schema.Finite),
 	unlimited: Nullable(Schema.Boolean),
+	/** Whether use past `granted` is billed (pay as you go) rather than refused. */
+	overage_allowed: Nullable(Schema.Boolean),
 	/** Unix ms of the next reset; null for a balance that never resets (seats, lifetime units). */
 	next_reset_at: Nullable(Schema.Finite),
 	breakdown: Nullable(Schema.Array(AutumnBalanceGrant)),
