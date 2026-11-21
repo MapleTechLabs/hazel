@@ -285,6 +285,36 @@ describe("retrying", () => {
 	})
 })
 
+describe("late answers", () => {
+	test("a first message whose thread started before the failure arrived is resent with its ids", () => {
+		const model = runAll(opened, [
+			Message.ChangedDraft({ value: "Hello" }),
+			Message.SubmittedComposer(),
+			Message.MadeMessageId({ messageId: itemId(10) }),
+			Message.UpdatedThreads({ organizationId, threads: [thread()] }),
+			Message.FailedSend({ threadId, messageId: itemId(10), message: "Timed out", isRetryable: true }),
+		])
+		expect(model.threadId).toBe(threadId)
+		const result = run(model, Message.SubmittedComposer())
+		expect(commandNames(result)).not.toContain("MakeAssistantMessageId")
+		expect(result.commands?.[0]?.args).toMatchObject({ threadId, messageId: itemId(10) })
+	})
+
+	test("an engine status for an org the panel has left is ignored", () => {
+		const other = Schema.decodeSync(OrganizationId)(uuid(4))
+		const model = run(
+			opened,
+			Message.SucceededFetchStatus({
+				organizationId: other,
+				connection: "Connected",
+				environmentLabel: "Old",
+			}),
+		).model
+		expect(model.connection).toBe(opened.connection)
+		expect(model.environmentLabel).toBe(opened.environmentLabel)
+	})
+})
+
 describe("someone else's shared thread", () => {
 	const shared = onThread([
 		thread({ ownerId: grace, ownerName: "Grace Hopper", visibility: "organization" }),

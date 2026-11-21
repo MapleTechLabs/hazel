@@ -8,7 +8,7 @@ import { Message as RootMessage } from "../app/message"
 import { update } from "../main"
 import * as CommandPalette from "../overlay/command-palette"
 import * as CommandMenu from "../ui/command-menu"
-import { after, rootScene, signedIn } from "../test/root-fixtures"
+import { after, hazelOrg, rootScene, signedIn } from "../test/root-fixtures"
 import * as Menu from "../ui/menu"
 import { FocusTriggerOnPress } from "../ui/menu-view"
 import {
@@ -86,7 +86,11 @@ describe("the panel", () => {
 			menuMounted,
 			Command.resolve(
 				FetchAssistantStatus,
-				Message.SucceededFetchStatus({ connection: "Connected", environmentLabel: "MacBook" }),
+				Message.SucceededFetchStatus({
+					organizationId: hazelOrg.id,
+					connection: "Connected",
+					environmentLabel: "MacBook",
+				}),
 			),
 			sceneExpect(role("complementary", { name: "AI assistant" })).toExist(),
 			sceneExpect(role("button", { name: 'Send "Settings" as context' })).toHaveAttr(
@@ -111,7 +115,11 @@ describe("the panel", () => {
 			menuMounted,
 			Command.resolve(
 				FetchAssistantStatus,
-				Message.SucceededFetchStatus({ connection: "NotConnected", environmentLabel: null }),
+				Message.SucceededFetchStatus({
+					organizationId: hazelOrg.id,
+					connection: "NotConnected",
+					environmentLabel: null,
+				}),
 			),
 			sceneExpect(role("link", { name: "Open T3 Code settings" })).toHaveAttr(
 				"href",

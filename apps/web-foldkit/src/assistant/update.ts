@@ -232,7 +232,8 @@ const retryFor = (model: Model, message: string): Retry | null => {
 	const retry = model.retry
 	return retry !== null &&
 		retry.text === message &&
-		(retry.isNewThread ? model.threadId === null : retry.threadId === model.threadId)
+		// A first message's thread may have started (its row synced) before the failure arrived.
+		(retry.threadId === model.threadId || (retry.isNewThread && model.threadId === null))
 		? retry
 		: null
 }
@@ -550,13 +551,20 @@ export const update = (model: Model, message: Message, inputs: Inputs): Return =
 		UpdatedThreads: ({ organizationId, threads }) => updatedThreads(model, organizationId, threads),
 		UpdatedItems: ({ threadId, items }) =>
 			threadId === model.threadId ? { model: updatedItems(model, items) } : { model },
-		SucceededFetchStatus: ({ connection, environmentLabel }) => ({
-			model: modifyFields(model, {
-				connection: () => connection,
-				environmentLabel: () => environmentLabel,
-			}),
-		}),
-		FailedFetchStatus: () => ({ model: modifyFields(model, { connection: () => "Unknown" }) }),
+		// An answer for an org the panel has left is stale.
+		SucceededFetchStatus: ({ organizationId, connection, environmentLabel }) =>
+			organizationId !== model.organizationId
+				? { model }
+				: {
+						model: modifyFields(model, {
+							connection: () => connection,
+							environmentLabel: () => environmentLabel,
+						}),
+					},
+		FailedFetchStatus: ({ organizationId }) =>
+			organizationId !== model.organizationId
+				? { model }
+				: { model: modifyFields(model, { connection: () => "Unknown" }) },
 		ChangedDraft: ({ value }) => ({ model: changedDraft(model, value) }),
 		SubmittedComposer: () => send(model, model.draft, inputs, true),
 		ClickedSuggestion: ({ text }) => send(model, text, inputs, false),
@@ -573,8 +581,12 @@ export const update = (model: Model, message: Message, inputs: Inputs): Return =
 		GotHistoryMenuMessage: ({ message }) => gotHistoryMenuMessage(model, message),
 		ClickedStop: () => clickedStop(model, inputs),
 		SucceededStop: () => ({ model: modifyFields(model, { isStopping: () => false }) }),
-		FailedStop: ({ message }) => ({
-			model: modifyFields(model, { isStopping: () => false, error: () => message }),
+		// The error belongs to the chat that was stopped: shown only while it is on screen.
+		FailedStop: ({ threadId, message }) => ({
+			model: modifyFields(model, {
+				isStopping: () => false,
+				error: (error) => (threadId === model.threadId ? message : error),
+			}),
 		}),
 		ClickedShare: () => clickedShare(model, inputs),
 		SucceededUpdateVisibility: () => ({

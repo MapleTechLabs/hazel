@@ -113,8 +113,12 @@ export const StopAssistantThread = Command.define("StopAssistantThread", {
 	execute: (args) =>
 		HazelRpc.use((rpc) => rpc("assistant.stop", args)).pipe(
 			Effect.as(Message.SucceededStop()),
-			Effect.catchTags(writeFailure((text) => Message.FailedStop({ message: text }))),
-			catchCommon((reason) => Message.FailedStop({ message: reasonText(reason) })),
+			Effect.catchTags(
+				writeFailure((text) => Message.FailedStop({ threadId: args.threadId, message: text })),
+			),
+			catchCommon((reason) =>
+				Message.FailedStop({ threadId: args.threadId, message: reasonText(reason) }),
+			),
 		),
 })
 
@@ -147,11 +151,12 @@ export const FetchAssistantStatus = Command.define("FetchAssistantStatus", {
 		HazelRpc.use((rpc) => rpc("assistant.status", args)).pipe(
 			Effect.map(({ t3code }) =>
 				Message.SucceededFetchStatus({
+					organizationId: args.organizationId,
 					connection: connectionOf(t3code.state),
 					environmentLabel: t3code.environmentLabel,
 				}),
 			),
-			catchCommon(() => Message.FailedFetchStatus()),
+			catchCommon(() => Message.FailedFetchStatus({ organizationId: args.organizationId })),
 		),
 })
 
