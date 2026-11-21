@@ -455,6 +455,19 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 	),
 
 	/**
+	 * Look the account's company up again from its domain (`docs/customers/enrichment.md`), skipping
+	 * the source's cache; the profile lands on the account a moment later. Refused without a usable
+	 * domain (none, or only a mail provider's) or when lookups are not set up.
+	 */
+	write(
+		"customers.account.refreshCompany",
+		{ accountId: CustomerAccountId },
+		Tx,
+		CustomersNotFoundError,
+		CustomersInvalidRequestError,
+	),
+
+	/**
 	 * Change a support issue (`docs/customers/issues.md`): any field given. Closing records who and
 	 * when; a closed issue set to any other status reopens. The assignee must be a member.
 	 */

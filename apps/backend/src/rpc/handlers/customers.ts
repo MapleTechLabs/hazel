@@ -79,6 +79,8 @@ import { ignoreRuleMatches, normalizeDomain } from "../../worker/objects/custome
 import { regionOfAccountId as mapleRegionOf } from "../../worker/objects/customers/maple/adapter"
 import { configProblem as mapleConfigProblem } from "../../worker/objects/customers/maple/pull"
 import { CustomerProviders } from "../../worker/objects/customers/providers"
+import { ContextDev } from "../../worker/objects/customers/enrichment/client"
+import { requestCompanyRefresh } from "../../worker/objects/customers/enrichment/job"
 import { CustomersServicesLive } from "../../worker/objects/customers/services"
 import {
 	accountDetail,
@@ -787,6 +789,22 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					)
 				}).pipe(remap),
 
+			"customers.account.refreshCompany": ({ accountId }) =>
+				Effect.gen(function* () {
+					yield* requireMember
+					const now = yield* currentTime
+					return yield* txOnly(
+						Effect.gen(function* () {
+							const account = yield* requireAccount(accountId)
+							const outcome = yield* requestCompanyRefresh(account, now)
+							if (outcome === "no_domain")
+								return yield* invalid("This customer has no company domain to look up")
+							if (outcome === "disabled")
+								return yield* invalid("Company lookups are not set up on this server")
+						}),
+					)
+				}).pipe(remap),
+
 			"customers.account.update": ({
 				accountId,
 				ownerUserId,
@@ -1296,7 +1314,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 				}).pipe(remap),
 		}
 	}),
-)
+).pipe(Layer.provide(ContextDev.layer))
 
 // ---------------------------------------------------------------------------
 // Settings and data sources

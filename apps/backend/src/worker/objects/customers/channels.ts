@@ -13,7 +13,7 @@
  * (`linkOwnerOf`), regrouping moves it (`./groups.ts`), and the snapshot names the primary.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import type { CustomerProvider, HealthBreakdown } from "@hazel/domain/customers"
+import { type CustomerProvider, type HealthBreakdown, logoOf } from "@hazel/domain/customers"
 import { ChannelCustomer } from "@hazel/domain/models"
 import type {
 	ChannelId,
@@ -89,7 +89,9 @@ export const channelCustomerSnapshot = Effect.gen(function* () {
 			(row.primaryAccountId === null ? undefined : accounts.get(row.primaryAccountId)) ??
 			accounts.get(row.accountId)
 		// Pictured by the customer's logo, else the linked environment's own.
-		const accountLogoUrl = customer?.logoUrl ?? accounts.get(row.accountId)?.logoUrl ?? null
+		const own = accounts.get(row.accountId)
+		const accountLogoUrl =
+			(customer === undefined ? null : logoOf(customer)) ?? (own === undefined ? null : logoOf(own))
 		return customer === undefined ? [] : [{ channelId: row.channelId, customer, accountLogoUrl }]
 	})
 	const glances = yield* glancesOf([...new Set(linked.map((link) => link.customer))])

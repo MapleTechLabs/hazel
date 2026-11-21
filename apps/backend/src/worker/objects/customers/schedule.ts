@@ -15,11 +15,13 @@
  * - the earliest `snoozedUntil` (wake);
  * - the earliest `attentionMutedUntil` (unmute);
  * - each active connection's `nextSyncAt` (scheduled pulls);
- * - the earliest SLA warning or breach (`./sla.ts`).
+ * - the earliest SLA warning or breach (`./sla.ts`);
+ * - the earliest due company lookup (`./enrichment/job.ts`).
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { Clock, Effect, Option } from "effect"
 import { deleteObjectMeta, readObjectMeta, writeObjectMeta } from "../meta"
+import { enrichmentDeadline } from "./enrichment/job"
 
 export const COMPUTE_INTERVAL_MS = 60 * 60_000
 export const COMPUTE_DEBOUNCE_MS = 2 * 60_000
@@ -199,6 +201,7 @@ export const customersDeadlines = Effect.gen(function* () {
 		Option.getOrUndefined(
 			Option.flatMap(slaAlert, (row) => Option.fromNullishOr(row.nextAlertAt?.getTime())),
 		),
+		yield* enrichmentDeadline,
 	]
 }).pipe(
 	Effect.catchTags({

@@ -75,6 +75,7 @@ const PAYLOADS = {
 	"customers.note.update": { noteId: uuid(), body: "Hi" },
 	"customers.note.delete": { noteId: uuid() },
 	"customers.account.update": { accountId: uuid(), tags: [] },
+	"customers.account.refreshCompany": { accountId: uuid() },
 	"customers.account.bulkUpdate": { accountIds: [] },
 	"customers.channel.link": { accountId: uuid(), channelId: uuid() },
 	"customers.channel.unlink": { channelId: uuid() },

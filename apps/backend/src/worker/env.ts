@@ -79,6 +79,8 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 		optionalSecret("GITHUB_WEBHOOK_SECRET"),
 		optionalPlain("GITHUB_WEBHOOK_SKIP_SIGNATURE"),
 		optionalSecret("KLIPY_API_KEY"),
+		// Customers: company enrichment (`docs/customers/enrichment.md`); unset: off.
+		optionalSecret("CONTEXT_DEV_API_KEY"),
 		// Thread naming (services/thread-namer.ts); unset disables it.
 		optionalSecret("OPENROUTER_API_KEY"),
 		// iOS push (services/apns.ts): an APNs auth key (.p8); any one unset disables push.

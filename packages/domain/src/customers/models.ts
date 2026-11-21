@@ -70,6 +70,7 @@ import { SignalEvidence } from "./evidence"
 import { HealthSettings } from "./health"
 import { AttentionSettings, RuleConfig, RuleScope } from "./rules"
 import { BusinessHours, SlaAppliesTo, SlaHours, SlaState, SlaTargets } from "./sla"
+import { CompanyProfile } from "./company"
 import { ListColumn, ViewColor, ViewFilters, ViewIcon, ViewLayoutKey, ViewSort } from "./views"
 
 const NullDate = S.NullOr(JsonDate)
@@ -133,6 +134,9 @@ class AccountModel extends M.Class<AccountModel>("CustomerAccount")({
 	primaryAccountId: S.NullOr(CustomerAccountId),
 	/** What the team calls this environment (`US`, `EU`): set in Hazel, never by a sync. */
 	environment: S.NullOr(S.String),
+	/** The company behind its domain (context.dev); never overwrites the fields above. */
+	companyProfile: S.NullOr(CompanyProfile),
+	companyCheckedAt: NullDate,
 	...timestamps,
 	deletedAt: M.GeneratedByApp(NullDate),
 }) {}

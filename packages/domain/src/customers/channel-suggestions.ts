@@ -7,6 +7,7 @@
  * Pure and explainable, like signals: every suggestion carries the reasons that produced it, and
  * `describeReason` renders each as one sentence ("3 of 4 external members have @acme.com").
  */
+import { FREE_MAIL_DOMAINS } from "./company"
 import {
 	ChannelId,
 	ConnectConversationId,
@@ -169,34 +170,6 @@ export interface SuggestionIndex {
 	/** `${provider}:${workspaceId}` → the account each already linked channel of it belongs to. */
 	readonly workspaceLinks: ReadonlyMap<string, ReadonlyArray<CustomerAccountId>>
 }
-
-/** Free-mail domains never identify a company. */
-export const FREE_MAIL_DOMAINS: ReadonlySet<string> = new Set([
-	"gmail.com",
-	"googlemail.com",
-	"yahoo.com",
-	"hotmail.com",
-	"outlook.com",
-	"live.com",
-	"msn.com",
-	"icloud.com",
-	"me.com",
-	"mac.com",
-	"aol.com",
-	"proton.me",
-	"protonmail.com",
-	"pm.me",
-	"gmx.com",
-	"gmx.de",
-	"web.de",
-	"yandex.com",
-	"mail.com",
-	"zoho.com",
-	"qq.com",
-	"163.com",
-	"hey.com",
-	"fastmail.com",
-])
 
 export const workspaceKey = (provider: string, workspaceId: string) => `${provider}:${workspaceId}`
 
