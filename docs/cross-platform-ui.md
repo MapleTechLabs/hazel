@@ -6,9 +6,9 @@ Status: phase 0 spike done (branch `t3/cross-platform-ui-spike`), see "Spike res
 
 Every screen has one Foldkit view. The view says what is on screen in a small, platform-neutral
 vocabulary, and each platform draws it with its own components: the DOM on the web, SwiftUI on iOS
-(and macOS), Rune on desktop later. Model, update, routing and data stay shared as they are.
+(and macOS); the Tauri app keeps the web view on desktop. Model, update, routing and data stay shared as they are.
 
-Rune and the WebView hybrid both tried to make one _web_ view pass as native: Rune by emulating HTML
+Rune (the GPU renderer, since removed) and the WebView hybrid both tried to make one _web_ view pass as native: Rune by emulating HTML
 and CSS (a long tail of bugs), the hybrid by staying web (not native). Neither reaches native. A view
 that describes _what_ it shows rather than _how the web draws it_ can.
 
@@ -24,9 +24,9 @@ that describes _what_ it shows rather than _how the web draws it_ can.
    asks which platform it is on. One counted escape hatch: `webOnly(...)`.
 3. **Unconverted screens fall back to the web view** inside the native navigation stack
    (`apps/ios-hybrid`), so the whole app works on iOS from the start and screens convert one by one.
-4. **One wire for native renderers.** Generalize `packages/foldkit-rune`'s wire (stable paths,
+4. **One wire for native renderers.** Generalize the wire Rune used (`packages/foldkit-rune`, removed: see git history; stable paths,
    handler ids, unchanged subtrees by reference) into `packages/foldkit-native`, carrying semantic
-   nodes instead of CSS, fed by Foldkit's `RenderTarget`. SwiftUI and Rune hosts both consume it.
+   nodes instead of CSS, fed by Foldkit's `RenderTarget`, for the SwiftUI host.
 5. **Native owns the hot paths.** Scrolling, typing, gestures and animation never wait on JS. Lists
    get row data with stable ids; text fields own their text while editing (revisioned echoes);
    swipe-back completes natively, then sends a Message.
@@ -42,8 +42,7 @@ that describes _what_ it shows rather than _how the web draws it_ can.
 | Overlays    | `menu`, `contextMenu`, `sheet`, `dialog`, `popover`, `toast`                             |
 | Structure   | `navigation` (from the route), `screen` (title, toolbar, back), `tabBar`, `splitView`    |
 
-Tokens (spacing, semantic colors, type, radii) come from `theme.css` and are exported to Swift and
-Rune. A primitive lands only with every renderer it targets and a conformance test.
+Tokens (spacing, semantic colors, type, radii) come from `theme.css` and are exported to Swift. A primitive lands only with every renderer it targets and a conformance test.
 
 ## Phases
 
@@ -56,8 +55,7 @@ Rune. A primitive lands only with every renderer it targets and a conformance te
    iOS), threads, activity. Geometry Mounts move inside the primitives. TestFlight.
 3. **Breadth**: search and palette, profiles, sheets and dialogs, form primitives (SwiftUI `Form`).
    Long-tail screens convert when touched.
-4. **Desktop**: macOS through the SwiftUI renderer (`splitView`); Rune retargeted to the primitive
-   wire (its CSS emulation deleted), then a measured decision on Rune for Windows/Linux vs Tauri.
+4. **Desktop**: macOS through the SwiftUI renderer (`splitView`); Windows and Linux stay on Tauri.
 5. **Finish**: `no-raw-layout` to zero, fallback removed.
 
 ## Risks
@@ -68,7 +66,6 @@ Rune. A primitive lands only with every renderer it targets and a conformance te
 | Vocabulary bloat                | Every renderer plus a conformance test per primitive; extend props first |
 | Bridge cost on large channels   | Row data, native hot paths, measured on device in phases 0 and 2         |
 | Rich text and composer are deep | Their own milestones; the web fallback keeps everything usable meanwhile |
-| Rune keeps consuming time       | Freeze Rune fixes except blockers until phase 4                          |
 
 ## Spike results (phase 0)
 

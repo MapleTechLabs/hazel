@@ -1,8 +1,8 @@
 import { Effect } from "effect"
 
 /**
- * This device's push registration, where the app runs in a shell that has one: the iOS app
- * (`apps/native/src/push.ts`) registers its APNs token with the API itself, and installs this on
+ * This device's push registration, where the app runs in a shell that has one: a native iOS app
+ * registers its APNs token with the API itself, and installs this on
  * the global object before the app starts, as it installs `system-ui.ts`'s controls. Sign-out
  * forgets the device first, while the session can still say whose it is. A browser has none.
  */

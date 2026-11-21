@@ -99,12 +99,11 @@ export const downloadConfig: Record<Platform, PlatformConfig> = {
 				pattern: /Hazel.*x64.*\.dmg$/i,
 			},
 		],
-		// The native (Rune) app: GPU-drawn with Metal, LSMinimumSystemVersion 13.0.
 		requirements: {
-			os: "macOS 13 (Ventura) or later",
+			os: "macOS 10.15 (Catalina) or later",
 			processor: "Apple Silicon or Intel 64-bit",
 			memory: "512 MB RAM",
-			storage: "200 MB available space",
+			storage: "150 MB available space",
 		},
 	},
 	windows: {

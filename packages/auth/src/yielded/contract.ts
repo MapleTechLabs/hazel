@@ -71,8 +71,8 @@ export const desktopClient = {
 } as const
 
 /**
- * The Rune-native app (apps/native): the same browser sign-in under its own scheme, so a Mac
- * with both apps installed hands each callback to the app that asked for it.
+ * The native iOS shell (apps/ios-hybrid): the same browser sign-in under its own scheme, so each
+ * callback reaches the app that asked for it.
  */
 export const nativeClient = {
 	clientId: "native",

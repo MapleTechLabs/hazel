@@ -7,7 +7,7 @@ export default defineConfig({
 			"apps/backend",
 			"apps/link-preview-worker",
 			"apps/web-foldkit",
-			"apps/native",
+			"apps/ios-hybrid",
 			"libs/*",
 			"apps/bot-gateway",
 			"bots/t3code-bot",

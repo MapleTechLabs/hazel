@@ -201,7 +201,7 @@ const DesktopAuthLive = Layer.effect(
 	Layer.provide(
 		Layer.sync(FetchHttpClient.Fetch, () => {
 			const core = getTauriCore()
-			// The native Mac app's host answers only the vault; its fetch is not a browser's.
+			// Only Tauri's host answers `auth_http`; the iOS shell replaces this line (`apps/ios-hybrid`).
 			return core === undefined || !isTauri() ? globalThis.fetch : hostFetch(core)
 		}),
 	),

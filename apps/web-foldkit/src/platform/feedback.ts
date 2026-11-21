@@ -19,8 +19,8 @@ export type Feedback = "selection" | "impact" | "success" | "warning" | "error"
 export type PressFeedback = Extract<Feedback, "selection" | "impact">
 
 /**
- * Marks the pressed element: the native host plays it the moment the finger lifts, before the
- * press reaches the runtime (`apps/native/host/src/render/handlers.rs`). Put it on the element
+ * Marks the pressed element: the iOS shell plays it the moment the finger lifts, before the
+ * press reaches the page (`apps/ios-hybrid/web/bridge.ts`). Put it on the element
  * that carries the press handler.
  */
 export const pressFeedback = <Message>(h: HtmlBuilder<Message>, kind: PressFeedback): Attribute<Message> =>

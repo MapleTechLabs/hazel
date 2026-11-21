@@ -80,7 +80,7 @@ Real cost (all done in this PR's contracts):
   `objectReceivers` + `senderGuards` (`effects/deliver.ts`), `callReceivers`
   (`call-receivers.ts`), `SYNC_PATH` (`sync-route.ts:60`), mux `SOURCE_PATH`
   (`libs/effect-db-collection/src/mux.ts:32`), native fixture record
-  (`apps/native/src/fixture/snapshot.ts`), DO class (`worker/objects/customers-object.ts`) bound in
+  (`apps/ios-hybrid/fixture/snapshot.ts`), DO class (`worker/objects/customers-object.ts`) bound in
   `worker.ts`. Alchemy derives the new SQLite class migration from the class list.
 - Routing: every `customers.*` RPC → `customersTarget(payload.organizationId)`
   (`rpc/routing.ts:164`).
