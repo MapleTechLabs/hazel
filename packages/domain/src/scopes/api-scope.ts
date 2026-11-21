@@ -15,6 +15,8 @@ export const ApiScope = Schema.Literals([
 	"bots:write",
 	"attachments:read",
 	"attachments:write",
+	"assistant:read",
+	"assistant:write",
 	"channel-sections:read",
 	"channel-sections:write",
 	"channel-webhooks:read",

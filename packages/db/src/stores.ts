@@ -75,6 +75,10 @@ export const orgTables = [
 	schema.channelCustomersTable,
 	// Who writes in the linked channels: customer, team, bot (`docs/customers/author-side.md`).
 	schema.customerChatAuthorsTable,
+	// The AI panel's threads and items; its followers are not synced (`docs/assistant.md`).
+	schema.assistantThreadsTable,
+	schema.assistantItemsTable,
+	schema.assistantFollowersTable,
 ] as const
 
 /** `ChannelObject`, one per channel (threads too). */

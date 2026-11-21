@@ -61,6 +61,7 @@ import { makeOrgSource } from "./sources/org-source"
 import { makeUserSource } from "./sources/user-source"
 import { makeCustomersSource } from "./sources/customers-source"
 import { pollDueRssFeeds, rssDeadlines } from "./org/rss"
+import { assistantDeadlines, AssistantTickCall } from "./org/assistant"
 import { prepareMessageSearch, SEARCH_MIGRATION_ID } from "./org/message-search"
 import { channelDeadlines, runChannelTimers } from "./channel/timers"
 import { makePresenceHooks } from "./user/presence"
@@ -181,9 +182,10 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 			)
 		}
 
-		// OrgObject: RSS polls and the presence copies' leases share the alarm.
-		const orgDeadlines = Effect.map(Effect.all([rssDeadlines, presenceLeaseDeadlines]), (lists) =>
-			lists.flat(),
+		// OrgObject: RSS polls, the presence copies' leases and the AI panel's followers share the alarm.
+		const orgDeadlines = Effect.map(
+			Effect.all([rssDeadlines, presenceLeaseDeadlines, assistantDeadlines]),
+			(lists) => lists.flat(),
 		)
 
 		// UserObject presence: one session per sync socket, expiry on the alarm.
@@ -447,6 +449,18 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 				yield* afterCommit
 			}
 			yield* run(synced.alarm)
+			// OrgObject: the AI panel's steps last, so their waits never hold back the timers above;
+			// the commit rearms the alarm for the next step.
+			if (kind === "org") {
+				const stepped = yield* ownCall(AssistantTickCall, {})
+				if (
+					Option.isSome(stepped) &&
+					Exit.isSuccess(stepped.value) &&
+					stepped.value.value.stepped > 0
+				) {
+					yield* afterCommit
+				}
+			}
 		}).pipe(Effect.withSpan("ObjectRpc.alarm", { attributes: { "object.kind": kind } }))
 
 		return {

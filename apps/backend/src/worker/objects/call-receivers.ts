@@ -26,6 +26,7 @@ import {
 	MessageThreadCall,
 } from "./channel/api-messages"
 import { agentChannels, AgentChannelsCall } from "./org/agent"
+import { assistantTick, AssistantTickCall } from "./org/assistant"
 import { agentNotifications, AgentNotificationsCall } from "./user/agent"
 import { liveAccess, LiveAccessCall } from "./channel/live-access"
 import { supportMessage, SupportMessageCall } from "./channel/support-message"
@@ -155,6 +156,8 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(ChannelEvidenceCall, channelEvidence),
 		receiver(ConnectGuestEvidenceCall, connectGuestEvidence),
 		receiver(VisibleChannelsCall, visibleChannels),
+		// The AI panel's followers, on the alarm.
+		receiver(AssistantTickCall, () => assistantTick()),
 	]),
 	channel: byName([
 		receiver(ListMessagesCall, listMessages),

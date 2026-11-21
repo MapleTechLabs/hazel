@@ -1,4 +1,5 @@
 import {
+	AssistantRpcs,
 	AttachmentRpcs,
 	BotRpcs,
 	ChannelMemberRpcs,
@@ -31,6 +32,7 @@ import {
 } from "@hazel/domain/rpc"
 import { validateRpcGroupScopes } from "@hazel/domain/scopes"
 import { Layer } from "effect"
+import { AssistantRpcLive } from "./handlers/assistant"
 import { AttachmentRpcLive } from "./handlers/attachments"
 import { BotRpcLive } from "./handlers/bots"
 import { ChannelMemberRpcLive } from "./handlers/channel-members"
@@ -106,6 +108,7 @@ export const AllRpcs = BaseRpcs.merge(
 	CustomerSlaRpcs,
 	CustomerDirectoryRpcs,
 	CustomerChatRpcs,
+	AssistantRpcs,
 ).middleware(ScopeInjectionMiddleware)
 
 // Startup validation: ensure all RPCs have RequiredScopes annotations
@@ -139,6 +142,7 @@ const rpcGroups = [
 	["CustomerSlaRpcs", CustomerSlaRpcs],
 	["CustomerDirectoryRpcs", CustomerDirectoryRpcs],
 	["CustomerChatRpcs", CustomerChatRpcs],
+	["AssistantRpcs", AssistantRpcs],
 ] as const
 
 for (const [name, group] of rpcGroups) {
@@ -189,4 +193,5 @@ export const RpcHandlersLive = Layer.empty
 		Layer.provideMerge(CustomerSlaRpcLive),
 		Layer.provideMerge(CustomerDirectoryRpcLive),
 		Layer.provideMerge(CustomerChatRpcLive),
+		Layer.provideMerge(AssistantRpcLive),
 	)

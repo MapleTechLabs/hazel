@@ -182,6 +182,20 @@ const toMembersAndPeers =
 		affectedPrincipals: affected,
 	})
 
+/** The principal's own rows, and the rows their owner shared with the org; never a guest's. */
+const byOwnerOrShared =
+	(table: Spec["table"]) =>
+	(affected: Affected): Spec => ({
+		table,
+		visible: (p, $) => [
+			$.deletedAt!.isNull(),
+			isMember(p.userId),
+			SQLite.or($.ownerId!.eq(p.userId), $.visibility!.eq("organization")),
+		],
+		dependsOn: MEMBERSHIP,
+		affectedPrincipals: affected,
+	})
+
 /** Every row to members (the installed bots). */
 const toMembers =
 	(table: Spec["table"], softDelete: boolean) =>
@@ -228,6 +242,9 @@ const orgSyncTables: ReadonlyArray<(affected: Affected) => Spec> = [
 		...toMembers(schema.customerChatAuthorsTable, false)(affected),
 		key: ["organizationId", "userId"],
 	}),
+	// The AI panel: the owner's threads and items, and those they shared with the org; members only.
+	byOwnerOrShared(schema.assistantThreadsTable),
+	byOwnerOrShared(schema.assistantItemsTable),
 	byConversation(schema.connectConversationsTable, "id"),
 	// Every mount of the conversation (the host's copies of the guests', a guest's of the host's).
 	byConversation(schema.connectConversationChannelsTable, "conversationId"),

@@ -1,5 +1,7 @@
 // Re-export all RPC definitions, errors, and types
 
+export * from "./assistant"
+export * as Assistant from "./assistant"
 export * from "./attachments"
 // Also export as namespaces for convenience
 export * as Attachments from "./attachments"

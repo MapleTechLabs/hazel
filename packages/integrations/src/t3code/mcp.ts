@@ -365,12 +365,20 @@ export const makeT3CodeMcpSession = Effect.fn("T3CodeMcp.session")(function* (ta
 			callTool("orchestrator_capabilities", {}, Capabilities).pipe(
 				Effect.map((result) => result.providers),
 			),
-		launchThread: (input: {
-			readonly projectId: string
-			readonly title: string
-			readonly message: string
-			readonly modelSelection?: T3ModelSelection
-		}) => callTool("t3_thread_launch", { ...input }, T3Launched),
+		/**
+		 * A thread in `projectId`, or with `scratch` in a new empty folder (no project needed).
+		 * `clientRequestId` makes a retried launch start one thread.
+		 */
+		launchThread: (
+			input: {
+				readonly title: string
+				readonly message: string
+				readonly modelSelection?: T3ModelSelection
+				readonly clientRequestId?: string
+				/** `plan`: the agent proposes instead of acting. */
+				readonly interactionMode?: "default" | "plan"
+			} & ({ readonly projectId: string } | { readonly scratch: true }),
+		) => callTool("t3_thread_launch", { ...input }, T3Launched),
 		send: (input: {
 			readonly threadId: string
 			readonly message: string

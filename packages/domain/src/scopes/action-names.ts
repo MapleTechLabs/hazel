@@ -1,4 +1,5 @@
 import type {
+	AssistantRpcs,
 	AttachmentRpcs,
 	BotRpcs,
 	ChannelMemberRpcs,
@@ -33,6 +34,7 @@ type ActionOf<G> = RpcsOf<G> extends { readonly _tag: infer T extends string } ?
  * Extracted from the RPC group definitions at the type level.
  */
 export type RpcActionName =
+	| ActionOf<AssistantRpcs>
 	| ActionOf<AttachmentRpcs>
 	| ActionOf<BotRpcs>
 	| ActionOf<ChannelMemberRpcs>
