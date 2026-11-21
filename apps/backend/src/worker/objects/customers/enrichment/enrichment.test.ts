@@ -2,7 +2,7 @@ import { CompanyProfile, type UpsertAccount } from "@hazel/domain/customers"
 import { Effect, Schema, type Scope } from "effect"
 import { TestClock } from "effect/testing"
 import { describe, expect, it } from "vitest"
-import { type CustomersWorld, makeCustomersWorld, NOW, tagOf } from "../test-kit"
+import { type CustomersWorld, makeCustomersWorld, NOW, ok, tagOf } from "../test-kit"
 import { ContextDev, type ContextDevApi } from "./client"
 import { FakeStatus, makeFakeContextDev, northwindBrand, northwindSearch } from "./fixtures"
 import {
@@ -496,6 +496,20 @@ describe("company enrichment", () => {
 				expect(msOf(enrichmentOf(world, "busy.io")!.nextAttemptAt)).toBe(
 					NOW.getTime() + 5_000 + 30_000,
 				)
+			}),
+		))
+
+	it("the demo seed queues its accounts' company lookups at once", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				// The seed only fills providers with no real connection; the world has one of each.
+				world.object.storage.db.prepare(`DELETE FROM customer_connections`).run()
+				ok(yield* world.call("customers.demo.seed", { accounts: 3, seed: 7 }, world.owner))
+				const due = world.rows<{ n: number }>(
+					`SELECT COUNT(*) AS n FROM customer_enrichments WHERE nextAttemptAt IS NOT NULL`,
+				)[0]!.n
+				expect(due).toBeGreaterThan(0)
 			}),
 		))
 })

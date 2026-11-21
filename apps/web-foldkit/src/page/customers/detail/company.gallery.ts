@@ -53,7 +53,7 @@ afterEach(() => {
 const NOW_MS = NOW.getTime()
 const DAY = 86_400_000
 
-type State = "rich" | "sparse" | "not-found" | "not-checked" | "pending"
+type State = "rich" | "sparse" | "not-found" | "not-checked" | "pending" | "failed"
 
 const accountFor = (state: State): Customers.Account => {
 	const base = ACME_DETAIL.account
@@ -66,6 +66,7 @@ const accountFor = (state: State): Customers.Account => {
 			return { ...base, companyProfile: null, companyCheckedAt: new Date(NOW_MS - 3 * DAY) }
 		case "not-checked":
 		case "pending":
+		case "failed":
 			return { ...base, companyProfile: null, companyCheckedAt: null }
 	}
 }
@@ -86,7 +87,12 @@ const modelFor = (
 		shared,
 	).model
 	return {
-		model: state === "pending" ? { ...loaded, companyRefreshAtMs: NOW_MS - 5_000 } : loaded,
+		model:
+			state === "pending"
+				? { ...loaded, companyRefreshAtMs: NOW_MS - 5_000 }
+				: state === "failed"
+					? { ...loaded, companyRefreshAtMs: NOW_MS - 5 * 60_000 }
+					: loaded,
 		shared,
 	}
 }
@@ -131,4 +137,5 @@ test("sparse light", () => shoot("sparse-light", "sparse"))
 test("not found", () => shoot("not-found-light", "not-found"))
 test("not checked", () => shoot("not-checked-light", "not-checked"))
 test("pending", () => shoot("pending-light", "pending"))
+test("failed", () => shoot("failed-light", "failed"))
 test("mobile", () => shoot("rich-mobile", "rich", { mobile: true }))
