@@ -58,7 +58,19 @@ export const liveQueryStream = <Row, Message>(
 				const emit = () => {
 					const rows = collection.toArray as ReadonlyArray<Row>
 					isEmptyHeld = isHeld(rows)
-					if (!isEmptyHeld) Queue.offerUnsafe(queue, toMessage(rows))
+					if (isEmptyHeld) return
+					// A throw here would end in TanStack's change callback, and the screen would wait
+					// for rows forever without a word (a cached row missing a field did once). Say so,
+					// and report the query stalled; a later change is tried again.
+					let message: Message
+					try {
+						message = toMessage(rows)
+					} catch (cause) {
+						console.error(`Live query on "${collection.id}" could not map its rows`, cause)
+						if (options.onStalled !== undefined) Queue.offerUnsafe(queue, options.onStalled())
+						return
+					}
+					Queue.offerUnsafe(queue, message)
 				}
 				// A held empty result goes out once the hold settles.
 				const unsubscribeHold =

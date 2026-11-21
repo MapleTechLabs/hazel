@@ -61,20 +61,36 @@ export const parseTimestamps = (row: unknown): unknown => {
 }
 
 /**
- * The local cache's version of every stored row (`./local-cache.ts`): bump it when a synced model's
- * shape changes, and the stored rows are dropped.
+ * Bump it when what the cache stores changes outside the models (e.g. `parseTimestamps`): every
+ * collection's stored rows are dropped. A model's own changes need no bump (`cacheVersionOf`).
  */
-const CACHE_SCHEMA_VERSION = 4
+const CACHE_EPOCH = 5
+
+/**
+ * The local cache's version of a collection's stored rows (`./local-cache.ts`): a hash of its model,
+ * so a changed model drops that collection's rows and stored seq, and its source sends a snapshot.
+ * Stored rows are not decoded again, so a row kept from before a field was added would lack it.
+ */
+export const cacheVersionOf = (schema: Schema.Top): number => {
+	const text = `${CACHE_EPOCH}:${JSON.stringify(Schema.toJsonSchemaDocument(schema))}`
+	// FNV-1a, 32 bits: a non-negative integer, as the persistence requires.
+	let hash = 0x811c9dc5
+	for (let index = 0; index < text.length; index++) {
+		hash ^= text.charCodeAt(index)
+		hash = Math.imul(hash, 0x01000193)
+	}
+	return hash >>> 0
+}
 
 /** Keeps an eager collection's rows on disk while the local cache is on. */
-const persist =
+const persist = (schema: Schema.Top) =>
 	localCachePersistence === undefined
 		? undefined
 		: <O extends object>(options: O) =>
 				persistedCollectionOptions({
 					...(options as O & Parameters<typeof persistedCollectionOptions>[0]),
 					persistence: localCachePersistence!,
-					schemaVersion: CACHE_SCHEMA_VERSION,
+					schemaVersion: cacheVersionOf(schema),
 				})
 
 const syncedCollection = <A extends { readonly id: string }>(
@@ -93,7 +109,7 @@ const syncedCollection = <A extends { readonly id: string }>(
 			sources,
 		},
 		// Channel-partitioned collections keep nothing: a channel's source sends its snapshot.
-		"partition" in sources ? undefined : persist,
+		"partition" in sources ? undefined : persist(schema),
 	)
 
 const orgCollection = <A extends { readonly id: string }>(table: string, schema: Schema.Schema<A>) =>
@@ -119,7 +135,7 @@ export const userOrganizationCollection = createEffectCollection(
 		hub: syncHub,
 		sources: userSources,
 	},
-	persist,
+	persist(UserOrganization),
 )
 
 export const organizationCollection = orgCollection("organizations", Organization.Schema)
@@ -176,7 +192,7 @@ export const channelCustomerCollection = createEffectCollection(
 		hub: syncHub,
 		sources: orgSources,
 	},
-	persist,
+	persist(ChannelCustomer.Schema),
 )
 /**
  * Who writes in the org's channels linked to customers (`customer_chat_authors`,
@@ -193,7 +209,7 @@ export const customerChatAuthorCollection = createEffectCollection(
 		hub: syncHub,
 		sources: orgSources,
 	},
-	persist,
+	persist(CustomerChatAuthor.Schema),
 )
 export const botCollection = orgCollection("bots", Bot.Schema)
 export const botCommandCollection = orgCollection("bot_commands", BotCommand.Schema)
@@ -254,7 +270,7 @@ export const customerChatParticipantCollection = createEffectCollection(
 		hub: syncHub,
 		sources: customersSources,
 	},
-	persist,
+	persist(Customers.ChatParticipant),
 )
 export const customerFeatureFlagCollection = customersCollection(
 	"customer_feature_flags",
