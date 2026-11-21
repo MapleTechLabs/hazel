@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "1.1.4"
+version = "1.2.0"
 description = "Hazel, the desktop app for Windows and Linux"
 authors = ["Hazel"]
 license-file = "../../../LICENSE"
