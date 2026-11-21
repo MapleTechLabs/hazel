@@ -726,6 +726,14 @@ describe("customer page: company", () => {
 			false,
 		)
 		expect(isCompanyRefreshUnanswered(pressed.model, NOW + 1_000, null)).toBe(false)
+		// Checked 30 s before the press: the server skipped the refresh (its cooldown), and that check
+		// is the answer, neither pending nor failed.
+		expect(isCompanyRefreshPending(pressed.model, NOW + 1_000, NOW - 30_000)).toBe(false)
+		expect(
+			isCompanyRefreshUnanswered(pressed.model, NOW + COMPANY_REFRESH_PENDING_MS, NOW - 30_000),
+		).toBe(false)
+		// Checked long before: still a lookup to wait for.
+		expect(isCompanyRefreshPending(pressed.model, NOW + 1_000, NOW - 5 * 60_000)).toBe(true)
 	})
 
 	test("a refused refresh says why and can be asked again", () => {

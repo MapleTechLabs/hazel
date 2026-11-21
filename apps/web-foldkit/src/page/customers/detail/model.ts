@@ -481,6 +481,16 @@ export const signalMoreEntries: ReadonlyArray<Menu.Entry> = [
 ]
 
 /**
+ * A refresh within this long of the last answer changes nothing on the server (its double-click
+ * guard, `REFRESH_COOLDOWN_MS` in `enrichment/job.ts`): that answer is the press's.
+ */
+const COMPANY_REFRESH_COOLDOWN_MS = 60_000
+
+/** The account was checked recently enough to answer the press made at `requestedAtMs`. */
+const answers = (checkedAtMs: number | null, requestedAtMs: number) =>
+	checkedAtMs !== null && checkedAtMs >= requestedAtMs - COMPANY_REFRESH_COOLDOWN_MS
+
+/**
  * How long a requested lookup may still be running: Brand plus Company Search, each up to 75 s
  * (`enrichment/client.ts`), after the next alarm picks it up. Past it, an unchecked account means it failed.
  */
@@ -490,7 +500,7 @@ export const COMPANY_REFRESH_PENDING_MS = 5 * 60_000
 export const isCompanyRefreshPending = (model: Model, nowMs: number, checkedAtMs: number | null): boolean =>
 	model.companyRefreshAtMs !== null &&
 	nowMs - model.companyRefreshAtMs < COMPANY_REFRESH_PENDING_MS &&
-	(checkedAtMs === null || checkedAtMs < model.companyRefreshAtMs)
+	!answers(checkedAtMs, model.companyRefreshAtMs)
 
 /**
  * This page asked for a lookup, the pending window passed, and the account was not checked since:
@@ -503,4 +513,4 @@ export const isCompanyRefreshUnanswered = (
 ): boolean =>
 	model.companyRefreshAtMs !== null &&
 	!isCompanyRefreshPending(model, nowMs, checkedAtMs) &&
-	(checkedAtMs === null || checkedAtMs < model.companyRefreshAtMs)
+	!answers(checkedAtMs, model.companyRefreshAtMs)
