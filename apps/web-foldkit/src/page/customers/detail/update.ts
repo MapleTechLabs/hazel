@@ -953,7 +953,9 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		SucceededAccountUpdate: () => ({ model }),
 		PressedRefreshCompany: () => {
 			const args = target(model, shared)
-			if (args === null || isCompanyRefreshPending(model, shared.nowMs, null)) return { model }
+			// The same check the view makes: once the lookup landed, a press asks again.
+			const checkedAtMs = accountOf(model)?.companyCheckedAtMs ?? null
+			if (args === null || isCompanyRefreshPending(model, shared.nowMs, checkedAtMs)) return { model }
 			return {
 				model: modifyFields(model, { companyRefreshAtMs: () => shared.nowMs }),
 				commands: [RefreshCustomerCompany(args)],

@@ -707,6 +707,15 @@ describe("customer page: company", () => {
 		expect(isCompanyRefreshPending(pressed.model, NOW, null)).toBe(true)
 		// A second press while it is on its way does nothing.
 		expect(commandNames(update(pressed.model, Message.PressedRefreshCompany(), shared))).toEqual([])
+		// Once the lookup landed (the account checked after the press), a press asks again.
+		const landed = run(pressed.model, [
+			Message.UpdatedAccounts({
+				accounts: [acme, { ...beta, companyCheckedAtMs: NOW + 1_000 }, gamma],
+			}),
+		])
+		expect(commandNames(update(landed, Message.PressedRefreshCompany(), shared))).toEqual([
+			"RefreshCustomerCompany",
+		])
 		// The lookup landed (the account was checked after the press), or it has been too long.
 		expect(isCompanyRefreshPending(pressed.model, NOW + 1_000, NOW + 500)).toBe(false)
 		expect(isCompanyRefreshPending(pressed.model, NOW + COMPANY_REFRESH_PENDING_MS, null)).toBe(false)
