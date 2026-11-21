@@ -10,22 +10,21 @@
 		],
 		"catalogs": {
 			"effect": {
-				"effect": "4.1.2",
-				"@effect/platform-bun": "4.1.2",
-				"@effect/platform-browser": "4.1.2",
-				"@effect/platform-node": "4.1.2",
-				"@effect/sql-sqlite-node": "4.1.2",
-				"@effect/sql-sqlite-do": "4.1.2",
-				"@effect/sql-d1": "4.1.2",
-				"@effect/ai-openrouter": "4.1.2",
-				"@effect/vitest": "4.1.2"
+				"effect": "4.1.4",
+				"@effect/platform-bun": "4.1.4",
+				"@effect/platform-browser": "4.1.4",
+				"@effect/platform-node": "4.1.4",
+				"@effect/sql-sqlite-node": "4.1.4",
+				"@effect/sql-sqlite-do": "4.1.4",
+				"@effect/sql-d1": "4.1.4",
+				"@effect/ai-openrouter": "4.1.4",
+				"@effect/vitest": "4.1.4"
 			},
 			"alchemy": {
-				"@alchemy.run/cloudflare": "2.0.0-beta.85",
-				"@alchemy.run/domain": "2.0.0-beta.85",
+				"@alchemy.run/cloudflare": "2.0.0-beta.87",
 				"@cloudflare/workers-types": "4.20260603.1",
 				"@maple-dev/alchemy": "0.3.0",
-				"alchemy": "2.0.0-beta.85"
+				"alchemy": "2.0.0-beta.87"
 			},
 			"tooling": {
 				"typescript": "^7.0.2"
@@ -58,7 +57,6 @@
 	},
 	"devDependencies": {
 		"@alchemy.run/cloudflare": "catalog:alchemy",
-		"@alchemy.run/domain": "catalog:alchemy",
 		"@cloudflare/workers-types": "catalog:alchemy",
 		"@effect/tsgo": "0.73.2",
 		"@effect/vitest": "catalog:effect",
@@ -81,7 +79,7 @@
 	},
 	"packageManager": "bun@1.4.3",
 	"patchedDependencies": {
-		"@alchemy.run/cloudflare@2.0.0-beta.85": "patches/@alchemy.run%2Fcloudflare@2.0.0-beta.85.patch",
+		"@alchemy.run/cloudflare@2.0.0-beta.87": "patches/@alchemy.run%2Fcloudflare@2.0.0-beta.87.patch",
 		"foldkit@0.170.0": "patches/foldkit@0.170.0.patch"
 	},
 	"trustedDependencies": []
