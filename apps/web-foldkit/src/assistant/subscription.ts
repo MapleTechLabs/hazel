@@ -64,13 +64,14 @@ const threadsStream = (organizationId: OrganizationId) =>
 		(rows) => Message.UpdatedThreads({ organizationId, threads: rows.map(toThreadRow) }),
 	)
 
+/** One collection and no join: the query's rows are the items themselves. */
 const itemsStream = (threadId: AssistantThreadId) =>
-	liveQueryStream<{ readonly item: Assistant.Item }, Message>(
+	liveQueryStream<Assistant.Item, Message>(
 		(q) =>
 			q
 				.from({ item: assistantItemCollection })
 				.where(({ item }) => and(eq(item.threadId, threadId), isNull(item.deletedAt))),
-		(rows) => Message.UpdatedItems({ threadId, items: rows.map((row) => toItemRow(row.item)) }),
+		(rows) => Message.UpdatedItems({ threadId, items: rows.map(toItemRow) }),
 	)
 
 export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
