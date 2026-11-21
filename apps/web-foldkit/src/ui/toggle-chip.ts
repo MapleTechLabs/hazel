@@ -13,6 +13,8 @@ export interface ToggleChipOptions<Message> {
 	readonly onPress?: Message
 	/** `aria-label` when the visible label is abbreviated ("Mon" for Monday). */
 	readonly ariaLabel?: string
+	/** Fully rounded: a choice among a question's answers, a context chip. */
+	readonly isPill?: boolean
 	readonly className?: string
 }
 
@@ -27,7 +29,8 @@ export const toggleChip = <Message>(h: HtmlBuilder<Message>, options: ToggleChip
 				...(options.ariaLabel === undefined ? [] : [h.AriaLabel(options.ariaLabel)]),
 			],
 			className: twMerge(
-				"inline-flex h-8 max-w-full cursor-pointer items-center justify-center rounded-md border px-2.5 font-medium text-sm outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-default disabled:opacity-60 sm:h-7",
+				"inline-flex h-8 max-w-full cursor-pointer items-center justify-center border px-2.5 font-medium text-sm outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-default disabled:opacity-60 sm:h-7",
+				options.isPill ? "rounded-full px-3" : "rounded-md",
 				options.isPressed
 					? "border-primary/50 bg-primary-subtle/50 text-fg"
 					: "border-border text-muted-fg hover:bg-secondary hover:text-fg",

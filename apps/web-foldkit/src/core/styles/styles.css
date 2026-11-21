@@ -146,6 +146,20 @@ If you want to use the typography plugin, uncomment the line below.
 	--animate-count-down: count-down 180ms cubic-bezier(0.2, 0, 0, 1);
 	/* An indeterminate progress segment (40% of its track) sweeping in from the left edge and out the right. */
 	--animate-progress-slide: progress-slide 1.6s ease-in-out infinite;
+	/* A new line in a list that grows live (the AI panel's steps): a short fade up into place. */
+	--animate-step-enter: step-enter 180ms cubic-bezier(0.23, 1, 0.32, 1);
+
+	@keyframes step-enter {
+		from {
+			opacity: 0;
+			transform: translateY(4px);
+		}
+
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
 
 	@keyframes progress-slide {
 		from {
@@ -536,6 +550,61 @@ If you want to use the typography plugin, uncomment the line below.
    beside it moves (`data-current:faux-medium`). */
 @utility faux-medium {
 	-webkit-text-stroke: 0.011em currentColor;
+}
+
+/* Text that is still happening ("Thinking", a running step): a soft light sweeps across muted text
+   (`shimmer`, `ui/shimmer-text.ts`). Reduced motion leaves it still and muted. */
+@keyframes text-shimmer {
+	from {
+		background-position: 100% 0;
+	}
+
+	to {
+		background-position: 0% 0;
+	}
+}
+
+@utility shimmer {
+	color: transparent;
+	background-image: linear-gradient(
+		90deg,
+		var(--muted-fg) 0%,
+		var(--muted-fg) 35%,
+		var(--fg) 50%,
+		var(--muted-fg) 65%,
+		var(--muted-fg) 100%
+	);
+	background-size: 250% 100%;
+	background-position: 100% 0;
+	-webkit-background-clip: text;
+	background-clip: text;
+	animation: text-shimmer 2s linear infinite;
+}
+
+/* A reply still streaming in (`data-streaming` on its markdown's wrapper): a soft caret after the
+   last line written so far. */
+[data-streaming] [data-slate-editor] > :is(p, h1, h2, h3, blockquote):last-child::after,
+[data-streaming] [data-slate-editor] > :is(ul, ol):last-child > li:last-child::after {
+	content: "";
+	display: inline-block;
+	width: 0.5em;
+	height: 0.5em;
+	margin-left: 0.25em;
+	border-radius: 9999px;
+	background-color: var(--muted-fg);
+	vertical-align: middle;
+	animation: stream-caret 1.2s ease-in-out infinite;
+}
+
+@keyframes stream-caret {
+	0%,
+	100% {
+		opacity: 0.9;
+	}
+
+	50% {
+		opacity: 0.3;
+	}
 }
 
 /* Tabular numbers for dynamic content (counters, timestamps, prices) */

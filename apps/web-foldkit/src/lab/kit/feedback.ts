@@ -3,6 +3,7 @@ import { IconEmojiAdd, IconMsgs, IconPin, IconPlus } from "../../icons"
 import { button } from "../../ui/button"
 import { emptyState } from "../../ui/empty-state"
 import { loader } from "../../ui/loader"
+import { shimmerText } from "../../ui/shimmer-text"
 import { progressBar, progressBarTrack, valueText } from "../../ui/progress-bar"
 import * as Tooltip from "../../ui/tooltip"
 import { group, kitSection, pair, specimen } from "./chrome"
@@ -117,6 +118,18 @@ const loaders = (h: H): Html =>
 		],
 	)
 
+const shimmers = (h: H): Html =>
+	specimen(
+		h,
+		{
+			name: "Shimmer text",
+			file: "ui/shimmer-text.ts",
+			note: "Something still happening, said in words: a light sweeps across muted text until it is done.",
+			className: "flex-col items-start gap-2 text-sm",
+		},
+		[shimmerText(h, {}, "Thinking"), shimmerText(h, { isActive: false }, "Read 3 channels")],
+	)
+
 const tooltips = (h: H, model: Model): Html =>
 	specimen(
 		h,
@@ -214,5 +227,5 @@ const empty = (h: H): Html =>
 export const feedback = (h: H, model: Model): Html =>
 	kitSection(h, "feedback", [
 		pair(h, [toasts(h), tooltips(h, model)]),
-		pair(h, [progress(h), h.div([h.Class("flex flex-col gap-8")], [loaders(h), empty(h)])]),
+		pair(h, [progress(h), h.div([h.Class("flex flex-col gap-8")], [loaders(h), shimmers(h), empty(h)])]),
 	])

@@ -202,6 +202,8 @@ const chips = (h: H, model: Model): Html =>
 				),
 			),
 			toggleChip(h, { label: "Sat", ariaLabel: "Saturday", isPressed: false, isDisabled: true }),
+			toggleChip(h, { label: "Pill", isPressed: false, isPill: true }),
+			toggleChip(h, { label: "Pressed pill", isPressed: true, isPill: true }),
 		],
 	)
 
