@@ -3,8 +3,9 @@
  * (`docs/customers/author-side.md`): wire schemas and effect kinds. A leaf module.
  *
  * - `OrgObject` → `CustomersObject`: `customers.chatMessage` (each message in a linked channel, its
- *   author classified), `customers.chatAuthorChanged` (a member changed someone's side),
- *   `customers.chatAuthorsBackfill` (a newly linked channel's past authors).
+ *   author classified), `customers.inboxMessage` (each message in a support inbox's channel),
+ *   `customers.chatAuthorChanged` (a member changed someone's side), `customers.chatAuthorsBackfill`
+ *   (a newly linked channel's past authors).
  * - `OrgObject` → `ChannelObject`: `channel.reportChatAuthors` asks a linked channel (or one of its
  *   threads) for its authors; the channel answers `org.chatAuthorsReported`.
  */
@@ -42,8 +43,32 @@ export const ChatMessagePayload = Schema.Struct({
 	threadRootMessageId: Schema.optionalKey(Schema.NullOr(MessageId)),
 	/** The text, shortened: a support issue's title when the message opens one. */
 	content: Schema.optionalKey(Schema.String),
+	/**
+	 * Set when the message is in a support inbox (an email mailbox's channel) rather than a channel
+	 * linked to the customer: `accountId` was matched from the sender, not from a channel link.
+	 */
+	inbox: Schema.optionalKey(Schema.Literals(["email"])),
 })
 export type ChatMessagePayload = typeof ChatMessagePayload.Type
+
+/**
+ * A message in a support inbox's channel or one of its threads (`docs/customers/email.md`): its
+ * account is matched by the customers object, from the sender (a new conversation) or the
+ * conversation's issue (a reply).
+ */
+export const InboxMessagePayload = Schema.Struct({
+	organizationId: OrganizationId,
+	/** The inbox's channel (a thread's parent). */
+	channelId: ChannelId,
+	messageChannelId: ChannelId,
+	messageId: MessageId,
+	createdAt: Timestamp,
+	author: ChatAuthorWire,
+	threadRootMessageId: Schema.NullOr(MessageId),
+	content: Schema.String,
+	inbox: Schema.Literals(["email"]),
+})
+export type InboxMessagePayload = typeof InboxMessagePayload.Type
 
 export const ChatAuthorChangedPayload = Schema.Struct({
 	organizationId: OrganizationId,
@@ -63,6 +88,7 @@ export type ChatAuthorsBackfillPayload = typeof ChatAuthorsBackfillPayload.Type
 
 export const CustomerChatEffects = {
 	chatMessage: defineEffect("customers.chatMessage", "customers", ChatMessagePayload),
+	inboxMessage: defineEffect("customers.inboxMessage", "customers", InboxMessagePayload),
 	chatAuthorChanged: defineEffect("customers.chatAuthorChanged", "customers", ChatAuthorChangedPayload),
 	chatAuthorsBackfill: defineEffect(
 		"customers.chatAuthorsBackfill",

@@ -30,7 +30,7 @@ const step = (model: Model, message: Message) => update(model, message, shared).
 const initial = init(undefined, shared).model
 const loadedWith = (connections: ReadonlyArray<typeof connection>) =>
 	step(
-		step(initial, Message.SucceededListConnections({ organizationId, connections })),
+		step(initial, Message.SucceededListConnections({ organizationId, emailInboxes: [], connections })),
 		Message.SucceededListWorkspaces({ organizationId, version: 1, workspaces: [guild, otherGuild] }),
 	)
 const loaded = loadedWith([connection])
@@ -76,7 +76,11 @@ describe("list states", () => {
 			Scene.expect(Scene.text("Loading connections...")).toExist(),
 			Scene.Command.resolve(
 				ListConnections,
-				Message.SucceededListConnections({ organizationId, connections: [connection] }),
+				Message.SucceededListConnections({
+					organizationId,
+					emailInboxes: [],
+					connections: [connection],
+				}),
 			),
 			Scene.Command.resolve(
 				ListWorkspaces,
@@ -162,7 +166,7 @@ describe("delete a connection", () => {
 			Scene.expect(Scene.text("Hazel Community")).toExist(),
 			Scene.Command.resolve(
 				ListConnections,
-				Message.SucceededListConnections({ organizationId, connections: [] }),
+				Message.SucceededListConnections({ organizationId, emailInboxes: [], connections: [] }),
 			),
 			Scene.expect(Scene.text("No sync connections yet")).toExist(),
 			addTriggerMounted,
@@ -240,7 +244,11 @@ describe("connect a Discord server", () => {
 			Scene.Mount.expectEnded(Modal.AcquireResources),
 			Scene.Command.resolve(
 				ListConnections,
-				Message.SucceededListConnections({ organizationId, connections: [connection] }),
+				Message.SucceededListConnections({
+					organizationId,
+					emailInboxes: [],
+					connections: [connection],
+				}),
 			),
 			Scene.expect(Scene.text("Hazel Community")).toExist(),
 		)
@@ -352,6 +360,7 @@ describe("connect a Slack workspace", () => {
 				ListConnections,
 				Message.SucceededListConnections({
 					organizationId,
+					emailInboxes: [],
 					connections: [connection, slackConnection],
 				}),
 			),

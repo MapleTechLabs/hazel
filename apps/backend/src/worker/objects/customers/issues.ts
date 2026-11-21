@@ -17,7 +17,14 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import type { AuthorSide, IssueStatus } from "@hazel/domain/customers"
-import { ChannelId, type CustomerIssueId, MessageId, UserId } from "@hazel/schema"
+import {
+	ChannelId,
+	type CustomerAccountId,
+	type CustomerIssueId,
+	MessageId,
+	type OrganizationId,
+	UserId,
+} from "@hazel/schema"
 import { Clock, Effect, Option } from "effect"
 import { slaIssueWritten } from "./sla"
 import type { ChatMessagePayload } from "../customer-chat-wire"
@@ -158,11 +165,13 @@ export const joinsIssue = (
 
 /** The root message's first non-empty line, shortened; a message with no text says so. */
 export const titleOf = (content: string) => {
-	const line =
+	const first =
 		content
 			.split("\n")
 			.map((part) => part.trim())
 			.find((part) => part !== "") ?? ""
+	// A line that is all bold (an email's subject, `**Subject**`) is titled by its text.
+	const line = /^\*\*(.+)\*\*$/.exec(first)?.[1]?.replace(/\\\*/g, "*").trim() ?? first
 	if (line === "") return "Message with no text"
 	const chars = Array.from(line)
 	return chars.length <= TITLE_MAX
@@ -303,6 +312,13 @@ export interface SupportMessageInput {
 	readonly channelId: ChannelId
 	readonly thread: Option.Option<{ readonly threadChannelId: ChannelId; readonly rootMessageId: MessageId }>
 	readonly message: SupportMessage
+	/**
+	 * A support inbox's message (`./inbox.ts`): the account matched from its sender, used in place of
+	 * the channel's link. Each conversation is its own issue: quick follow-ups do not merge.
+	 */
+	readonly inbox?:
+		| { readonly accountId: CustomerAccountId; readonly organizationId: OrganizationId }
+		| undefined
 }
 
 /** What a relayed message did, for the span and tests. */
@@ -313,7 +329,8 @@ export const receiveSupportMessage = Effect.fn("CustomersObject.receiveSupportMe
 ) {
 	const db = yield* Database.Database
 	const outcome: SupportMessageOutcome = yield* Effect.gen(function* () {
-		const link = yield* linkedAccountOf(input.channelId)
+		const link =
+			input.inbox === undefined ? yield* linkedAccountOf(input.channelId) : Option.some(input.inbox)
 		if (Option.isNone(link)) return "ignored" as const
 
 		if (Option.isSome(input.thread)) {
@@ -344,7 +361,7 @@ export const receiveSupportMessage = Effect.fn("CustomersObject.receiveSupportMe
 				.orderBy(($) => [[$.lastMessageAt, "desc"]])
 				.limit(1),
 		)
-		if (Option.isSome(latest) && joinsIssue(latest.value, input.message)) {
+		if (input.inbox === undefined && Option.isSome(latest) && joinsIssue(latest.value, input.message)) {
 			yield* updateIssueRow(latest.value, {
 				...foldMessage(latest.value, input.message),
 				joinedMessageIds: [...latest.value.joinedMessageIds, input.message.messageId],
@@ -527,6 +544,10 @@ export const supportIssueHook = (payload: ChatMessagePayload) => {
 				sentAt: new Date(payload.createdAt),
 				content: payload.content ?? "",
 			},
+			inbox:
+				payload.inbox === undefined
+					? undefined
+					: { accountId: payload.accountId, organizationId: payload.organizationId },
 		}),
 	)
 }

@@ -21,9 +21,10 @@ import { CustomerMember, CustomersEffects } from "../effects/customers-effects"
 import { enqueueEffect } from "../effects/registry"
 import { customersTarget } from "../kinds"
 import { readObjectMeta, writeObjectMeta } from "../meta"
+import { CUSTOMERS_ENABLED_KEY } from "./customers-enabled"
 
 /** Set once the org's customers object pulled its members: from then on changes are pushed. */
-const ENABLED_KEY = "customersEnabled"
+const ENABLED_KEY = CUSTOMERS_ENABLED_KEY
 const VERSION_KEY = "customersMembersVersion"
 
 export const CustomerMembersCall = defineCall("org.customerMembers", "org", {

@@ -20,7 +20,7 @@ import type { ChatSyncInbound } from "./chat-sync-inbound"
 
 export type { ChatSyncOutboundAttachment }
 
-export const ChatSyncProviderId = Schema.Literals(["discord", "slack"])
+export const ChatSyncProviderId = Schema.Literals(["discord", "slack", "email"])
 export type ChatSyncProviderId = typeof ChatSyncProviderId.Type
 
 export const isChatSyncProviderId = Schema.is(ChatSyncProviderId)
@@ -76,6 +76,11 @@ export interface ChatSyncProviderDefinition {
 	 * installed in: a sync connection may only be to that workspace.
 	 */
 	readonly workspaceIsInstall: boolean
+	/**
+	 * The provider has no channel to post in, only conversations (email): a Hazel message at the top
+	 * level of a linked channel stays in Hazel; only replies in a linked thread go out.
+	 */
+	readonly threadsOnly: boolean
 	readonly maxMessageLength: number
 	readonly maxThreadNameLength: number
 	/**

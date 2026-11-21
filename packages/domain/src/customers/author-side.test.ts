@@ -1,6 +1,12 @@
 import { OrganizationId } from "@hazel/schema"
 import { describe, expect, it } from "vitest"
-import { type AuthorFacts, classifyAuthor, isConversational, shadowProviderOf } from "./author-side"
+import {
+	type AuthorFacts,
+	classifyAuthor,
+	isConversational,
+	shadowEmailOf,
+	shadowProviderOf,
+} from "./author-side"
 
 const guest: AuthorFacts = {
 	_tag: "ConnectGuest",
@@ -61,10 +67,19 @@ describe("isConversational", () => {
 	})
 })
 
+describe("shadowEmailOf", () => {
+	it("reads an email shadow's address only", () => {
+		expect(shadowEmailOf("email-user-ana@acme.com")).toBe("ana@acme.com")
+		expect(shadowEmailOf("slack-user-U123")).toBeNull()
+		expect(shadowEmailOf("email-user-")).toBeNull()
+	})
+})
+
 describe("shadowProviderOf", () => {
 	it("reads chat-sync shadows only", () => {
 		expect(shadowProviderOf("slack-user-U123")).toBe("slack")
 		expect(shadowProviderOf("discord-user-42")).toBe("discord")
+		expect(shadowProviderOf("email-user-ana@acme.com")).toBe("email")
 		expect(shadowProviderOf("integration-bot-slack")).toBeNull()
 		expect(shadowProviderOf("user_2abc")).toBeNull()
 	})

@@ -23,6 +23,7 @@ export const discordWebhookConfigOf = (
 export const discord: ChatSyncProviderDefinition = {
 	id: "discord",
 	displayName: "Discord",
+	threadsOnly: false,
 	// One bot for every guild; the org's connection is the user who added it.
 	workspaceIsInstall: false,
 	maxMessageLength: 2000,

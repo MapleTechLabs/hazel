@@ -20,6 +20,7 @@
 		"./maple/browser": "./src/maple/browser.ts",
 		"./craft": "./src/craft/index.ts",
 		"./discord": "./src/discord/index.ts",
+		"./email": "./src/email/index.ts",
 		"./rss": "./src/rss/index.ts",
 		"./slack": "./src/slack/index.ts",
 		"./slack/format": "./src/slack/format.ts",
@@ -29,6 +30,7 @@
 		"@linear/sdk": "^100.0.0",
 		"effect": "catalog:effect",
 		"he": "^2.0.0",
+		"postal-mime": "^4.2.1",
 		"rss-parser": "^3.13.0"
 	},
 	"devDependencies": {

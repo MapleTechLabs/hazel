@@ -1,5 +1,5 @@
 {
-	"migration": "0005_agent_access",
+	"migration": "0006_email_inboxes",
 	"entities": [
 		{
 			"kind": "table",
@@ -123,6 +123,20 @@
 			"name": "connect_invites",
 			"primaryKey": {
 				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "email_thread_messages",
+			"primaryKey": {
+				"columns": ["mailboxId", "messageId"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "email_threads",
+			"primaryKey": {
+				"columns": ["mailboxId", "rootMessageId"]
 			}
 		},
 		{
@@ -1830,6 +1844,132 @@
 		},
 		{
 			"kind": "column",
+			"table": "email_thread_messages",
+			"name": "mailboxId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "email_thread_messages",
+			"name": "messageId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "email_thread_messages",
+			"name": "rootMessageId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "email_thread_messages",
+			"name": "direction",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "email_thread_messages",
+			"name": "createdAt",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "email_threads",
+			"name": "mailboxId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "email_threads",
+			"name": "rootMessageId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "email_threads",
+			"name": "organizationId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "email_threads",
+			"name": "subject",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "email_threads",
+			"name": "participants",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": "'[]'"
+		},
+		{
+			"kind": "column",
+			"table": "email_threads",
+			"name": "referenceIds",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": "'[]'"
+		},
+		{
+			"kind": "column",
+			"table": "email_threads",
+			"name": "lastMessageId",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "email_threads",
+			"name": "createdAt",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "email_threads",
+			"name": "updatedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
 			"table": "integration_index",
 			"name": "provider",
 			"position": 0,
@@ -2536,6 +2676,13 @@
 			"name": "connect_invites_target_idx",
 			"unique": false,
 			"columns": ["\"targetKind\"", "\"targetValue\""]
+		},
+		{
+			"kind": "index",
+			"table": "email_threads",
+			"name": "email_threads_organization_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
 		},
 		{
 			"kind": "index",

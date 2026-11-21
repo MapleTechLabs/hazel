@@ -20,7 +20,8 @@ import { Directory } from "../../services/directory"
 import { HtmlRenders } from "../../services/html-renders"
 import { ThreadNamer } from "../../services/thread-namer"
 import { ChatSyncProviders } from "../../services/chat-sync/chat-sync-providers"
-import { directoryBinding, htmlRenderStoreLive, servicesPlatformLive } from "../platform"
+import { EmailSender } from "../../services/email/sender"
+import { directoryBinding, EMAIL_BINDING, htmlRenderStoreLive, servicesPlatformLive } from "../platform"
 import { objectHandlersLive } from "./handlers"
 import type { ObjectKind } from "./kinds"
 import type { CallRequest } from "./calls"
@@ -70,7 +71,15 @@ export const activateObject = (kind: ObjectKind) =>
 						Layer.provide(Layer.mergeAll(FetchHttpClient.layer, workerEnvLayer(env))),
 					),
 					ChatSyncProviders.layer.pipe(
-						Layer.provide(Layer.mergeAll(workerEnvLayer(env), directory)),
+						Layer.provide(
+							Layer.mergeAll(
+								workerEnvLayer(env),
+								directory,
+								EmailSender.layerEnv(env, EMAIL_BINDING).pipe(
+									Layer.provide(workerEnvLayer(env)),
+								),
+							),
+						),
 						Layer.orDie,
 					),
 					HtmlRenders.layer.pipe(

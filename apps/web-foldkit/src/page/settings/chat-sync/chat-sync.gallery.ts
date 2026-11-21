@@ -11,18 +11,21 @@ import { page } from "vitest/browser"
 import { makeShared, organizationId, uuid } from "../../../test/pages-fixtures"
 import {
 	connection,
+	emailInbox,
 	guild,
+	salesChannel,
 	slackChannels,
 	slackConnection,
 	slackSyncConnectionId,
 	slackWorkspace,
+	supportChannel,
 } from "../../../test/pages-integrations-fixtures"
 import * as Modal from "../../../ui/modal"
 import * as ConnectionPage from "../chat-sync-connection/model"
 import { init as initConnection, update as updateConnection } from "../chat-sync-connection/update"
 import { view as connectionView } from "../chat-sync-connection/view"
 import type { PageViewInputs, Shared } from "../../contract"
-import { Message, type Model, Model as ListModel } from "./model"
+import { EmailStep, emptyEmailForm, Message, type Model, Model as ListModel } from "./model"
 import { Workspaces } from "./providers"
 import { init, update } from "./update"
 import { view } from "./view"
@@ -37,7 +40,11 @@ const inputs = { shared }
 
 const listStep = (model: Model, message: Message) => update(model, message, shared).model
 const listed = [
-	Message.SucceededListConnections({ organizationId, connections: [connection, slackConnection] }),
+	Message.SucceededListConnections({
+		organizationId,
+		emailInboxes: [],
+		connections: [connection, slackConnection],
+	}),
 	Message.SucceededListWorkspaces({ organizationId, version: 1, workspaces: [guild] }),
 ].reduce(listStep, init(undefined, shared).model)
 const withSlackModal = (workspaces: Model["workspaces"]): Model => ({
@@ -45,6 +52,21 @@ const withSlackModal = (workspaces: Model["workspaces"]): Model => ({
 	addModal: Modal.open(listed.addModal).model,
 	addProvider: "slack",
 	workspaces,
+})
+
+const withEmail = [
+	Message.SucceededListConnections({
+		organizationId,
+		connections: [connection, slackConnection],
+		emailInboxes: [emailInbox],
+	}),
+	Message.SucceededListWorkspaces({ organizationId, version: 1, workspaces: [guild] }),
+	Message.UpdatedHazelChannels({ channels: [supportChannel, salesChannel] }),
+].reduce(listStep, init(undefined, shared).model)
+const withEmailModal = (emailForm: Model["emailForm"]): Model => ({
+	...withEmail,
+	emailModal: Modal.open(withEmail.emailModal).model,
+	emailForm,
 })
 
 const hazelChannel = { id: Schema.decodeSync(ChannelId)(uuid(41)), name: "engineering" }
@@ -112,6 +134,24 @@ const screens: ReadonlyArray<readonly [string, () => void]> = [
 	["list", listPage(listed)],
 	["add-slack", listPage(withSlackModal(Workspaces.Success({ data: [slackWorkspace] })))],
 	["slack-connect-first", listPage(withSlackModal(Workspaces.Failure({ error: "NotConnected" })))],
+	["email-list", listPage(withEmail)],
+	[
+		"email-add",
+		listPage(
+			withEmailModal({
+				...emptyEmailForm,
+				name: "Acme Support",
+				supportAddress: "support@acme",
+				isValidated: true,
+			}),
+		),
+	],
+	[
+		"email-setup",
+		listPage(
+			withEmailModal({ ...emptyEmailForm, step: EmailStep.Setup({ inbox: emailInbox, isNew: true }) }),
+		),
+	],
 	[
 		"slack-channel-picker",
 		() =>

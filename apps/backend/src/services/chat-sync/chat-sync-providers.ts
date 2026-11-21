@@ -16,6 +16,7 @@ import {
 import { chatSyncProviders } from "./providers"
 import { ChatSyncInstallations } from "./chat-sync-installations"
 import { makeDiscordClient } from "./providers/discord/client"
+import { makeEmailClient } from "./providers/email/client"
 import { makeSlackClient } from "./providers/slack/client"
 
 /** A provider this build syncs with: its definition and its client. */
@@ -49,14 +50,19 @@ export class ChatSyncProviders extends Context.Service<ChatSyncProviders, ChatSy
 ) {
 	/**
 	 * The providers' APIs over fetch; reads Discord's token and `S3_PUBLIC_URL`, and Slack's
-	 * per-workspace tokens from the globally provided `Directory`.
+	 * per-workspace tokens from the globally provided `Directory`. Email sends through the
+	 * `EmailSender` the caller provides.
 	 */
 	static readonly layer = Layer.effect(
 		this,
 		Effect.gen(function* () {
 			const publicUrl = yield* Config.String("S3_PUBLIC_URL").pipe(Config.option)
 			return chatSyncProvidersOf(
-				{ discord: yield* makeDiscordClient, slack: yield* makeSlackClient },
+				{
+					discord: yield* makeDiscordClient,
+					slack: yield* makeSlackClient,
+					email: yield* makeEmailClient,
+				},
 				Option.filter(
 					Option.map(publicUrl, (url) => url.trim()),
 					(url) => url.length > 0,

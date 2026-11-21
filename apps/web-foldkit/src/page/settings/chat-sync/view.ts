@@ -26,6 +26,7 @@ import {
 import type { PageViewInputs } from "../../contract"
 import { addConnectionModal } from "./add-connection-view"
 import { confirmDialog } from "./confirm-dialog"
+import { emailModals, emailSection } from "./email-view"
 import { formatSyncedAt } from "./rpc"
 import { addMenuEntries, type Connection, Message, type Model, STATUS_CONFIG } from "./model"
 import { isChatSyncProvider, PROVIDERS } from "./providers"
@@ -359,9 +360,11 @@ const loaded = (h: HtmlBuilder<Message>, model: Model, connections: ReadonlyArra
 			addConnectionDropdown(h, "add-connection", model.addMenu, toAddMenuMessage),
 		]),
 		loadedBody(h, model, connections),
+		emailSection(h, model),
 		addConnectionModal(h, model),
 		deleteModal(h, model),
 		migrationModal(h, model),
+		...emailModals(h, model),
 	])
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) =>

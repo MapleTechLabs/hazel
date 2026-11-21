@@ -107,6 +107,14 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "agent_tokens_grant_idx" ON "agent_tokens" ("grantId")',
 			],
 		},
+		{
+			id: "0006_email_inboxes",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "email_thread_messages" (\n\t"mailboxId" text NOT NULL,\n\t"messageId" text NOT NULL,\n\t"rootMessageId" text NOT NULL,\n\t"direction" text NOT NULL,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\tPRIMARY KEY ("mailboxId", "messageId")\n)',
+				'CREATE TABLE IF NOT EXISTS "email_threads" (\n\t"mailboxId" text NOT NULL,\n\t"rootMessageId" text NOT NULL,\n\t"organizationId" text NOT NULL,\n\t"subject" text NOT NULL,\n\t"participants" text NOT NULL DEFAULT \'[]\',\n\t"referenceIds" text NOT NULL DEFAULT \'[]\',\n\t"lastMessageId" text NOT NULL,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\tPRIMARY KEY ("mailboxId", "rootMessageId")\n)',
+				'CREATE INDEX IF NOT EXISTS "email_threads_organization_idx" ON "email_threads" ("organizationId")',
+			],
+		},
 	],
 	org: [
 		{

@@ -35,9 +35,12 @@ import {
 	ChatSyncRpcs,
 	ChannelNotFoundError,
 	CHAT_SYNC_MIGRATION_MAX_MESSAGES,
+	ChatSyncEmailMailboxResponse,
 	chatSyncHistorySince,
+	EMAIL_CHAT_SYNC_PROVIDER,
+	type EmailMailboxSettings,
 } from "@hazel/domain/rpc"
-import { Effect, Option } from "effect"
+import { Effect, Option, Schema } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { IntegrationConnectionPolicy } from "../../policies/integration-connection-policy"
 import { indexedLinkOwner, indexedLinkOwners } from "../../services/chat-sync/chat-sync-index"
@@ -50,6 +53,9 @@ import {
 import { normalizeChannelLinkSettings } from "../../services/chat-sync/chat-sync-settings"
 import { isChatSyncProviderId } from "../../services/chat-sync/provider"
 import { chatSyncProviders } from "../../services/chat-sync/providers"
+import { emailSettingsOf } from "../../services/chat-sync/providers/email/client"
+import { newMailboxId } from "../../services/chat-sync/providers/email/definition"
+import { EmailDomainsConfig, inboundAddressOf } from "../../services/email/config"
 import { BotGatewayEffects } from "../../worker/objects/effects/bot-gateway-effects"
 import { enqueueEffect } from "../../worker/objects/effects/registry"
 import { syncChannelAccess } from "../../worker/objects/org/channel-access"
@@ -161,6 +167,13 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 						Effect.gen(function* () {
 							yield* integrationConnectionPolicy.canInsert(payload.organizationId)
 							const currentUser = yield* CurrentUser.Context
+							// A mailbox's id is its inbound address: only `chatSync.email.create` picks one.
+							if (payload.provider === EMAIL_CHAT_SYNC_PROVIDER) {
+								return yield* new ChatSyncIntegrationNotConnectedError({
+									organizationId: payload.organizationId,
+									provider: payload.provider,
+								})
+							}
 
 							// A chat-sync provider needs the org's own connection to it; one whose
 							// installs are per workspace (Slack) only to the workspace it installed in,
@@ -174,6 +187,7 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 									organizationId: payload.organizationId,
 									provider,
 								})
+								if (provider === "email") return yield* notConnected
 								const integration = yield* integrationConnectionRepo.findOrgConnection(
 									payload.organizationId,
 									provider,
@@ -281,6 +295,12 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 							}
 							const connection = connectionOption.value
 							yield* integrationConnectionPolicy.canInsert(connection.organizationId)
+							// A mailbox has its one link, made with it (`chatSync.email.create`).
+							if (connection.provider === EMAIL_CHAT_SYNC_PROVIDER) {
+								return yield* new ChatSyncConnectionNotFoundError({
+									syncConnectionId: payload.syncConnectionId,
+								})
+							}
 
 							// Only a live channel of the connection's own org (this OrgObject's), not a thread:
 							// a thread syncs through its channel's link.
@@ -379,7 +399,9 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 							const connectionOption = yield* connectionRepo.findById(payload.syncConnectionId)
 							if (
 								Option.isNone(connectionOption) ||
-								connectionOption.value.organizationId !== payload.organizationId
+								connectionOption.value.organizationId !== payload.organizationId ||
+								// A mailbox has no channels to migrate.
+								connectionOption.value.provider === EMAIL_CHAT_SYNC_PROVIDER
 							) {
 								return yield* new ChatSyncConnectionNotFoundError({
 									syncConnectionId: payload.syncConnectionId,
@@ -670,6 +692,147 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 						}),
 					)
 					.pipe(withRemapDbErrors("ChatSyncChannelLink", "update")),
+
+			"chatSync.email.create": (payload) =>
+				Effect.gen(function* () {
+					const domains = yield* EmailDomainsConfig.pipe(Effect.orDie)
+					return yield* db.transaction(
+						Effect.gen(function* () {
+							yield* integrationConnectionPolicy.canInsert(payload.organizationId)
+							const currentUser = yield* CurrentUser.Context
+							// A live public or private channel of this org: mail lands at its top level.
+							const channel = yield* db.first(
+								SQLite.from(schema.channelsTable)
+									.select("id", "type")
+									.where(($) => [
+										$.id.eq(payload.hazelChannelId),
+										$.organizationId.eq(payload.organizationId),
+										$.deletedAt.isNull(),
+									])
+									.limit(1),
+							)
+							if (
+								Option.isNone(channel) ||
+								(channel.value.type !== "public" && channel.value.type !== "private")
+							) {
+								return yield* new ChannelNotFoundError({ channelId: payload.hazelChannelId })
+							}
+
+							const mailboxId = newMailboxId()
+							const inboundAddress = inboundAddressOf(domains, mailboxId)
+							const displayName = payload.displayName
+							const [connection] = yield* connectionRepo.insert({
+								organizationId: payload.organizationId,
+								integrationConnectionId: null,
+								provider: EMAIL_CHAT_SYNC_PROVIDER,
+								externalWorkspaceId: mailboxId,
+								externalWorkspaceName: displayName,
+								status: "active",
+								settings: null,
+								metadata: { inboundAddress },
+								errorMessage: null,
+								lastSyncedAt: null,
+								createdBy: currentUser.id,
+								deletedAt: null,
+							})
+							yield* indexChatSync(connection!, { deleted: false })
+							const email: EmailMailboxSettings = {
+								displayName,
+								replyTo: payload.supportAddress?.toLowerCase() ?? null,
+							}
+							const link = yield* insertLink(connection!, {
+								hazelChannelId: payload.hazelChannelId,
+								externalChannelId: ExternalChannelId.make(mailboxId),
+								externalChannelName: inboundAddress,
+								direction: "both",
+								settings: { email },
+								history: { remaining: 0, since: null },
+							})
+							yield* Effect.annotateCurrentSpan({
+								"chat_sync.provider": EMAIL_CHAT_SYNC_PROVIDER,
+							})
+							return new ChatSyncEmailMailboxResponse({
+								connection: connection!,
+								link: {
+									...link,
+									externalChannelId: link.externalChannelId as ExternalChannelId,
+								},
+								inboundAddress,
+								transactionId: yield* generateTransactionId(),
+							})
+						}),
+					)
+				}).pipe(withRemapDbErrors("ChatSyncConnection", "create")),
+
+			"chatSync.email.update": (payload) =>
+				db
+					.transaction(
+						Effect.gen(function* () {
+							const connectionOption = yield* connectionRepo.findById(payload.syncConnectionId)
+							if (
+								Option.isNone(connectionOption) ||
+								connectionOption.value.organizationId !== payload.organizationId ||
+								connectionOption.value.provider !== EMAIL_CHAT_SYNC_PROVIDER
+							) {
+								return yield* new ChatSyncConnectionNotFoundError({
+									syncConnectionId: payload.syncConnectionId,
+								})
+							}
+							yield* integrationConnectionPolicy.canUpdate(payload.organizationId)
+							const links = yield* channelLinkRepo.findBySyncConnection(
+								payload.syncConnectionId,
+							)
+							// The mailbox's own link (its threads' links carry no settings of their own).
+							const link = links.find(
+								(entry) =>
+									entry.externalChannelId === connectionOption.value.externalWorkspaceId,
+							)
+							if (link === undefined) {
+								return yield* new ChatSyncConnectionNotFoundError({
+									syncConnectionId: payload.syncConnectionId,
+								})
+							}
+							const held = emailSettingsOf(link.settings)
+							const email: EmailMailboxSettings = {
+								displayName: payload.displayName ?? held.displayName,
+								replyTo:
+									payload.supportAddress === undefined
+										? held.replyTo
+										: (payload.supportAddress?.toLowerCase() ?? null),
+							}
+							const now = new Date()
+							const [connection] = yield* db.run(
+								SQLite.update(schema.chatSyncConnectionsTable)
+									.set({ externalWorkspaceName: email.displayName, updatedAt: now })
+									.where(($) => [$.id.eq(payload.syncConnectionId)])
+									.returning(),
+							)
+							const [updatedLink] = yield* db.run(
+								SQLite.update(schema.chatSyncChannelLinksTable)
+									.set({ settings: { ...link.settings, email }, updatedAt: now })
+									.where(($) => [$.id.eq(link.id)])
+									.returning(),
+							)
+							// The channel and its conversations' threads read the mailbox's settings.
+							yield* publishChatSyncLinks(link.hazelChannelId)
+							const metadata = Schema.decodeUnknownOption(
+								Schema.Struct({ inboundAddress: Schema.String }),
+							)(connection!.metadata)
+							return new ChatSyncEmailMailboxResponse({
+								connection: connection!,
+								link: {
+									...updatedLink!,
+									externalChannelId: updatedLink!.externalChannelId as ExternalChannelId,
+								},
+								inboundAddress: Option.match(metadata, {
+									onNone: () => link.externalChannelName ?? "",
+									onSome: (value) => value.inboundAddress,
+								}),
+								transactionId: yield* generateTransactionId(),
+							})
+						}),
+					)
+					.pipe(withRemapDbErrors("ChatSyncConnection", "update")),
 		}
 	}),
 )

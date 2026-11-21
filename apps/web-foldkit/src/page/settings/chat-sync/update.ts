@@ -2,7 +2,7 @@ import { OrganizationId, SyncConnectionId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { Command, Update } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
-import { modifyFields } from "foldkit/struct"
+import { makeModifyFieldsFor, modifyFields } from "foldkit/struct"
 import { orgOfChatSyncConnection } from "~/db/routing-hints"
 import { failureMessage } from "~/lib/error-messages"
 import { AppRoute, hrefOf } from "../../../route"
@@ -15,9 +15,31 @@ import type { PageReturn, PageSubscriptionInput, Shared } from "../../contract"
 import { PageOutMessage, requestedOrgNavigation } from "../../out-message"
 import * as ChatMigration from "../../shared/chat-migration"
 import * as ConfirmAction from "../../shared/confirm-action"
-import { chosenWorkspace, Connections, type DeleteTarget, Message, type Model, Submission } from "./model"
+import {
+	chosenWorkspace,
+	Connections,
+	type DeleteTarget,
+	type EmailForm,
+	type EmailInbox,
+	EmailStep,
+	EmailSubmission,
+	emptyEmailForm,
+	Message,
+	type Model,
+	Submission,
+} from "./model"
 import { type ChatSyncProvider, isChatSyncProvider, PROVIDERS, Workspaces } from "./providers"
-import { fetchConnections } from "./rpc"
+import { fetchChatSync } from "./rpc"
+import {
+	CopyInboundAddress,
+	CreateEmailInbox,
+	EMAIL_MODAL_ID,
+	emailFailureMessage,
+	isEmailFormValid,
+	RemoveEmailInbox,
+	supportAddressOf,
+	UpdateEmailInbox,
+} from "./email"
 import {
 	ADD_CONNECTION_MODAL_ID,
 	CreateConnection,
@@ -43,8 +65,10 @@ export const ListConnections = Command.define("ListConnections", {
 	args: { organizationId: OrganizationId },
 	messages: [Message.SucceededListConnections, Message.FailedListConnections],
 	execute: ({ organizationId }) =>
-		fetchConnections(organizationId).pipe(
-			Effect.map((connections) => Message.SucceededListConnections({ organizationId, connections })),
+		fetchChatSync(organizationId).pipe(
+			Effect.map(({ connections, emailInboxes }) =>
+				Message.SucceededListConnections({ organizationId, connections, emailInboxes }),
+			),
 			catchCommon((reason) => Message.FailedListConnections({ organizationId, reason })),
 		),
 })
@@ -119,6 +143,11 @@ export const init = (_route: unknown, shared: Shared): Return => {
 			interaction: Interaction.init(),
 			migrationModal: Modal.init(MIGRATION_MODAL_ID),
 			migration: freshMigration(shared),
+			emailInboxes: [],
+			hazelChannels: [],
+			emailModal: Modal.init(EMAIL_MODAL_ID),
+			emailForm: emptyEmailForm,
+			removeInboxConfirm: ConfirmAction.init("chat-sync-remove-inbox"),
 		},
 		shared,
 	)
@@ -336,12 +365,97 @@ const withDeleteConfirm = (model: Model, deleteConfirm: ConfirmAction.Model<Dele
 const isCurrentWorkspaceList = (model: Model, organizationId: OrganizationId, version: number) =>
 	organizationId === model.requestedOrganizationId && version === model.workspacesVersion
 
+// EMAIL INBOXES
+
+/** A closed inbox modal forgets its form, unless a save is still running (its reply must land). */
+const emailModal = {
+	read: (model: Model) => Option.some(model.emailModal),
+	write: (model: Model, modal: Modal.Model): Model =>
+		modal.isOpen || model.emailForm.submission._tag === "Submitting"
+			? modifyFields(model, { emailModal: () => modal })
+			: modifyFields(model, { emailModal: () => modal, emailForm: () => emptyEmailForm }),
+	toParentMessage: (message: Modal.Message) => Message.GotEmailModalMessage({ message }),
+	foldOutMessage: Modal.ignoreOutMessage,
+}
+const foldEmailModal = Update.foldChild({ update: Modal.update, ...emailModal })
+const openEmailModal = Update.foldChildStep({ update: Modal.open, ...emailModal })
+const closeEmailModal = Update.foldChildStep({ update: Modal.close, ...emailModal })
+
+const modifyEmailForm = makeModifyFieldsFor<EmailForm>()
+
+const withEmailForm = (model: Model, transforms: Parameters<typeof modifyEmailForm>[1]): Model =>
+	modifyFields(model, { emailForm: (form) => modifyEmailForm(form, transforms) })
+
+const isSavingEmail = (model: Model) => model.emailForm.submission._tag === "Submitting"
+
+/** Opens the inbox modal on a form (a running save keeps its form). */
+const openEmailForm = (model: Model, form: EmailForm): Return =>
+	isSavingEmail(model) ? { model } : openEmailModal(modifyFields(model, { emailForm: () => form }))
+
+const editFormOf = (inbox: EmailInbox): EmailForm => ({
+	...emptyEmailForm,
+	step: EmailStep.Edit({ inbox }),
+	name: inbox.displayName,
+	supportAddress: inbox.supportAddress ?? "",
+})
+
+/** Create or Save: the fields show their errors until they pass, then the request runs. */
+const submitEmailForm = (model: Model): Return => {
+	const form = model.emailForm
+	const organizationId = model.requestedOrganizationId
+	if (organizationId === null || isSavingEmail(model) || form.step._tag === "Setup") return { model }
+	if (!isEmailFormValid(form)) return { model: withEmailForm(model, { isValidated: () => true }) }
+	const submitting = withEmailForm(model, {
+		isValidated: () => true,
+		submission: () => EmailSubmission.Submitting(),
+	})
+	const displayName = form.name.trim()
+	const supportAddress = supportAddressOf(form)
+	if (form.step._tag === "Edit")
+		return {
+			model: submitting,
+			commands: [
+				UpdateEmailInbox({
+					organizationId,
+					syncConnectionId: form.step.inbox.id,
+					displayName,
+					supportAddress,
+				}),
+			],
+		}
+	if (form.channel === null) return { model }
+	return {
+		model: submitting,
+		commands: [
+			CreateEmailInbox({
+				organizationId,
+				displayName,
+				supportAddress,
+				hazelChannelId: form.channel.id,
+			}),
+		],
+	}
+}
+
+const foldRemoveInboxConfirm = Update.foldChild({
+	update: (confirm: ConfirmAction.Model<DeleteTarget>, message: ConfirmAction.Message) =>
+		ConfirmAction.update(confirm, message),
+	read: (model: Model) => Option.some(model.removeInboxConfirm),
+	write: (model: Model, removeInboxConfirm: ConfirmAction.Model<DeleteTarget>): Model =>
+		modifyFields(model, { removeInboxConfirm: () => removeInboxConfirm }),
+	toParentMessage: (message: ConfirmAction.Message) => Message.GotRemoveInboxConfirmMessage({ message }),
+})
+
+const withRemoveInboxConfirm = (model: Model, confirm: ConfirmAction.Model<DeleteTarget>): Model =>
+	modifyFields(model, { removeInboxConfirm: () => confirm })
+
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		SucceededListConnections: ({ organizationId, connections }) => {
+		SucceededListConnections: ({ organizationId, connections, emailInboxes }) => {
 			if (organizationId !== model.requestedOrganizationId) return { model }
 			const next = modifyFields(model, {
 				connections: () => Connections.Success({ data: connections }),
+				emailInboxes: () => emailInboxes,
 			})
 			// The add modal mounts with the first list and queries the workspaces then; a refresh keeps it mounted.
 			return AsyncData.hasData(model.connections)
@@ -471,6 +585,127 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		GotMigrationMessage: ({ message: migrationMessage }) =>
 			foldMigration(model, migrationMessage, shared),
 		GotInteractionMessage: ({ message }) => interaction.fold(model, message),
+		UpdatedHazelChannels: ({ channels }) => ({
+			model: modifyFields(model, {
+				hazelChannels: () => [...channels].sort((a, b) => a.name.localeCompare(b.name)),
+			}),
+		}),
+		ClickedAddEmailInbox: () => openEmailForm(model, emptyEmailForm),
+		ClickedEditEmailInbox: ({ inbox }) => openEmailForm(model, editFormOf(inbox)),
+		ClickedEmailSetup: ({ inbox }) =>
+			openEmailForm(model, { ...emptyEmailForm, step: EmailStep.Setup({ inbox, isNew: false }) }),
+		GotEmailModalMessage: ({ message: modalMessage }) => foldEmailModal(model, modalMessage),
+		ChangedEmailName: ({ value }) => ({ model: withEmailForm(model, { name: () => value }) }),
+		ChangedEmailSupportAddress: ({ value }) => ({
+			model: withEmailForm(model, { supportAddress: () => value }),
+		}),
+		ChangedEmailChannelSearch: ({ value }) => ({
+			model: withEmailForm(model, { channelSearch: () => value }),
+		}),
+		FocusedEmailChannelSearch: () => ({
+			model: withEmailForm(model, { isChannelSearchFocused: () => true }),
+		}),
+		BlurredEmailChannelSearch: () => ({
+			model: withEmailForm(model, { isChannelSearchFocused: () => false }),
+		}),
+		ClickedEmailChannel: ({ channel }) => ({
+			model: withEmailForm(model, { channel: () => channel, isChannelSearchFocused: () => false }),
+		}),
+		ClickedChangeEmailChannel: () =>
+			isSavingEmail(model)
+				? { model }
+				: { model: withEmailForm(model, { channel: () => null, channelSearch: () => "" }) },
+		ClickedSubmitEmailInbox: () => submitEmailForm(model),
+		// The modal moves on to the forwarding setup; closed meanwhile, the toast is enough.
+		SucceededCreateEmailInbox: ({ inbox }) => {
+			const created = model.emailModal.isOpen
+				? withEmailForm(model, {
+						step: () => EmailStep.Setup({ inbox, isNew: true }),
+						submission: () => EmailSubmission.NotSubmitted(),
+					})
+				: modifyFields(model, { emailForm: () => emptyEmailForm })
+			return {
+				...reloadConnections(
+					modifyFields(created, {
+						emailInboxes: (inboxes) => [...inboxes.filter((each) => each.id !== inbox.id), inbox],
+					}),
+				),
+				outMessage: PageOutMessage.RequestedToast({ toast: successToast("Email inbox created") }),
+			}
+		},
+		SucceededUpdateEmailInbox: () => ({
+			...Update.combine(withEmailForm(model, { submission: () => EmailSubmission.NotSubmitted() }), [
+				closeEmailModal,
+				reloadConnections,
+			]),
+			outMessage: PageOutMessage.RequestedToast({ toast: successToast("Inbox updated") }),
+		}),
+		FailedSaveEmailInbox: ({ reason }) => ({
+			model: withEmailForm(model, { submission: () => EmailSubmission.Failed({ reason }) }),
+			outMessage: PageOutMessage.RequestedToast({ toast: errorToastOf(emailFailureMessage(reason)) }),
+		}),
+		ClickedCopyInboundAddress: ({ address }) => ({
+			model,
+			commands: [CopyInboundAddress({ address })],
+		}),
+		SucceededCopyInboundAddress: () => ({
+			model,
+			outMessage: PageOutMessage.RequestedToast({ toast: successToast("Forwarding address copied") }),
+		}),
+		FailedCopyInboundAddress: () => ({
+			model,
+			outMessage: PageOutMessage.RequestedToast({
+				toast: errorToastOf({
+					title: "Failed to copy the address",
+					description: "Select the address and copy it by hand.",
+				}),
+			}),
+		}),
+		ClickedRemoveEmailInbox: ({ target }) => ({
+			model: withRemoveInboxConfirm(model, ConfirmAction.ask(model.removeInboxConfirm, target)),
+		}),
+		ClickedConfirmRemoveEmailInbox: () => {
+			const organizationId = model.requestedOrganizationId
+			return Option.match(ConfirmAction.confirm(model.removeInboxConfirm), {
+				onNone: () => ({ model }),
+				onSome: ([running, target]) =>
+					organizationId === null
+						? { model }
+						: {
+								model: withRemoveInboxConfirm(model, running),
+								commands: [RemoveEmailInbox({ organizationId, syncConnectionId: target.id })],
+							},
+			})
+		},
+		SucceededRemoveEmailInbox: () => {
+			const removed = Option.getOrNull(ConfirmAction.targetOf(model.removeInboxConfirm))
+			const closed = modifyFields(
+				withRemoveInboxConfirm(model, ConfirmAction.close(model.removeInboxConfirm)),
+				{
+					emailInboxes: (inboxes) =>
+						removed === null ? inboxes : inboxes.filter((inbox) => inbox.id !== removed.id),
+				},
+			)
+			return {
+				...reloadConnections(closed),
+				outMessage: PageOutMessage.RequestedToast({ toast: successToast("Inbox removed") }),
+			}
+		},
+		FailedRemoveEmailInbox: ({ reason }) => ({
+			model: withRemoveInboxConfirm(model, ConfirmAction.failed(model.removeInboxConfirm)),
+			outMessage: PageOutMessage.RequestedToast({
+				toast: errorToastOf(
+					failureMessage(reason, {
+						NotFound: {
+							title: "Inbox not found",
+							description: "This inbox may have already been removed.",
+						},
+					}),
+				),
+			}),
+		}),
+		GotRemoveInboxConfirmMessage: ({ message: confirmMessage }) =>
+			foldRemoveInboxConfirm(model, confirmMessage),
 		// `onSuccess()` reloads the list (a new query key), then `handleClose()`.
 		SucceededCreateConnection: () => ({
 			...Update.combine(modifyFields(model, { submission: () => Submission.NotSubmitted() }), [

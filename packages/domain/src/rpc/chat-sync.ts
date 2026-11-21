@@ -98,7 +98,7 @@ export type ChatSyncHistoryRange = typeof ChatSyncHistoryRange.Type
  * per provider. A migration imports its channels one after another at the provider's pace, so the
  * cap keeps a large workspace's import to hours, not days (Slack pages 20 messages every 1.5s).
  */
-export const CHAT_SYNC_MIGRATION_MAX_MESSAGES = { discord: 10_000, slack: 2_000 } as const
+export const CHAT_SYNC_MIGRATION_MAX_MESSAGES = { discord: 10_000, slack: 2_000, email: 0 } as const
 
 /** The most channels one `chatSync.migrate` call takes. */
 export const CHAT_SYNC_MIGRATION_MAX_CHANNELS = 500
@@ -135,6 +135,45 @@ export class ChatSyncMigrateResponse extends Schema.Class<
 	skipped: Schema.Array(ExternalChannelId),
 	/** Channels another Hazel organization syncs (first claim wins): not linked here. */
 	takenElsewhere: Schema.Array(ExternalChannelId),
+	transactionId: TransactionId,
+}) {}
+
+/** The chat-sync provider of email support inboxes (`docs/customers/email.md`). */
+export const EMAIL_CHAT_SYNC_PROVIDER = "email"
+
+/** An email address as people type it: trimmed, one `@`, a dot in the domain. */
+export const SupportEmailAddress = Schema.Trim.check(
+	Schema.isPattern(/^[^\s@<>",;]+@[^\s@<>",;]+\.[^\s@<>",;]+$/),
+	Schema.isMaxLength(254),
+)
+
+/** A mailbox's sender name ("Acme Support"). */
+export const EmailMailboxDisplayName = Schema.Trim.check(Schema.isNonEmpty(), Schema.isMaxLength(80))
+
+/**
+ * What an email mailbox's channel link keeps in `settings.email`: the name replies are sent as and
+ * their `Reply-To` (the team's own support address; null: the inbound address).
+ */
+export const EmailMailboxSettings = Schema.Struct({
+	displayName: Schema.String,
+	replyTo: Schema.NullOr(Schema.String),
+})
+export type EmailMailboxSettings = typeof EmailMailboxSettings.Type
+
+/** A mailbox's connection `metadata`: where to forward the support address. */
+export const EmailMailboxMetadata = Schema.Struct({
+	inboundAddress: Schema.String,
+})
+export type EmailMailboxMetadata = typeof EmailMailboxMetadata.Type
+
+export class ChatSyncEmailMailboxResponse extends Schema.Class<
+	ChatSyncEmailMailboxResponse,
+	{ readonly brand: unique symbol }
+>("ChatSyncEmailMailboxResponse")({
+	connection: ChatSyncConnection.Schema,
+	link: ChatSyncChannelLink.Schema,
+	/** Forward the support address here. */
+	inboundAddress: Schema.String,
 	transactionId: TransactionId,
 }) {}
 
@@ -265,6 +304,44 @@ export class ChatSyncRpcs extends RpcGroup.make(
 		}),
 		success: ChatSyncChannelLinkResponse,
 		error: Schema.Union([ChatSyncChannelLinkNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["integration-connections:write"])
+		.middleware(AuthMiddleware),
+
+	/**
+	 * Make an email support inbox: a connection whose id the server picks, linked two-way to
+	 * `hazelChannelId`. Forward the support address to the answered `inboundAddress`.
+	 */
+	Rpc.make("chatSync.email.create", {
+		payload: Schema.Struct({
+			organizationId: OrganizationId,
+			displayName: EmailMailboxDisplayName,
+			/** The address customers write to; replies carry it as `Reply-To`. */
+			supportAddress: Schema.optional(SupportEmailAddress),
+			hazelChannelId: ChannelId,
+		}),
+		success: ChatSyncEmailMailboxResponse,
+		error: Schema.Union([
+			/** `hazelChannelId` is not a live public or private channel of the organization. */
+			ChannelNotFoundError,
+			ChatSyncChannelLinkExistsError,
+			UnauthorizedError,
+			InternalServerError,
+		]),
+	})
+		.annotate(RequiredScopes, ["integration-connections:write"])
+		.middleware(AuthMiddleware),
+
+	/** Rename an email inbox, or change (`null`: clear) the address replies carry as `Reply-To`. */
+	Rpc.make("chatSync.email.update", {
+		payload: Schema.Struct({
+			organizationId: OrganizationId,
+			syncConnectionId: SyncConnectionId,
+			displayName: Schema.optional(EmailMailboxDisplayName),
+			supportAddress: Schema.optional(Schema.NullOr(SupportEmailAddress)),
+		}),
+		success: ChatSyncEmailMailboxResponse,
+		error: Schema.Union([ChatSyncConnectionNotFoundError, UnauthorizedError, InternalServerError]),
 	})
 		.annotate(RequiredScopes, ["integration-connections:write"])
 		.middleware(AuthMiddleware),

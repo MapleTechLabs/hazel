@@ -32,6 +32,8 @@ export const directoryTables = [
 	schema.integrationIndexTable,
 	schema.chatSyncIndexTable,
 	schema.chatSyncInstallationsTable,
+	schema.emailThreadsTable,
+	schema.emailThreadMessagesTable,
 	schema.pushDeviceTokensTable,
 	schema.agentClientsTable,
 	schema.agentGrantsTable,

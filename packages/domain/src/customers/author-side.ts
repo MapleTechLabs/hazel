@@ -107,14 +107,20 @@ export const authorSideReasonLabel = {
 	connect_guest: "From the other organization in this Connect channel",
 	external_other_workspace: "From another Slack workspace",
 	external_home_workspace: "From your Slack workspace",
-	external: "Posted through Slack or Discord",
+	external: "Posted through Slack, Discord or email",
 	bot: "Bot or integration",
 	unknown: "Not known",
 } satisfies Record<AuthorSideReason, string>
 
 /** Chat-sync shadow users' `externalId`: `<provider>-user-<provider user id>`. */
-const SHADOW_EXTERNAL_ID = /^(slack|discord)-user-/
+const SHADOW_EXTERNAL_ID = /^(slack|discord|email)-user-/
 
 /** The provider of a chat-sync shadow user, from its directory `externalId`; `null` for anyone else. */
 export const shadowProviderOf = (externalId: string): string | null =>
 	SHADOW_EXTERNAL_ID.exec(externalId)?.[1] ?? null
+
+/** An email author's address: an email shadow's provider user id is the lower-cased address. */
+export const shadowEmailOf = (externalId: string): string | null =>
+	externalId.startsWith("email-user-") && externalId.includes("@")
+		? externalId.slice("email-user-".length)
+		: null
