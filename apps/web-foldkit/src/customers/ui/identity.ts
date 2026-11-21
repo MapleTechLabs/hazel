@@ -49,20 +49,30 @@ export const sourceLogo = <M>(h: HtmlBuilder<M>, source: CustomerSource, classNa
 export const sourceMark = <M>(
 	h: HtmlBuilder<M>,
 	source: CustomerSource,
-	options: Readonly<{ size?: "sm" | "md"; className?: string }> = {},
+	options: Readonly<{ size?: "xs" | "sm" | "md"; className?: string }> = {},
 ): Html =>
 	h.span(
 		[
 			h.Class(
 				twMerge(
 					"inline-flex shrink-0 items-center justify-center rounded-lg bg-secondary",
-					options.size === "md" ? "size-10" : "size-8",
+					options.size === "md"
+						? "size-10"
+						: options.size === "xs"
+							? "size-6 rounded-md"
+							: "size-8",
 					options.className,
 				),
 			),
 			h.Title(SOURCE_LABEL[source]),
 		],
-		[logoImage(h, source, options.size === "md" ? "size-6" : "size-5")],
+		[
+			logoImage(
+				h,
+				source,
+				options.size === "md" ? "size-6" : options.size === "xs" ? "size-4" : "size-5",
+			),
+		],
 	)
 
 const chipClassName =

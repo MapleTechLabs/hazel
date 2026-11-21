@@ -16,7 +16,6 @@ import {
 	menuAvatar,
 	personLabel,
 	SOURCE_LABEL,
-	sourceLinkChip,
 	sourceLogo,
 } from "../../../customers/ui/identity"
 import {
@@ -82,7 +81,7 @@ import {
 import { notesTab } from "./notes-tab"
 import { peopleInChat } from "./people-in-chat"
 import { overviewTab } from "./overview-tab"
-import { companyDescription, companySection, companySocialChips } from "./company-section"
+import { companySection } from "./company-section"
 import { type Context, icon, memberOf, menu, property, sidebarSection } from "./parts"
 import { usersTab } from "./users-tab"
 import { heading } from "../../../ui/heading"
@@ -129,15 +128,6 @@ const MATCH_LABEL = {
 
 const attentionMutedBadge = (h: HtmlBuilder<Message>, account: Context["account"]): ReadonlyArray<Html> =>
 	isAttentionMuted(account) ? [badge(h, { intent: "secondary" }, ["Attention muted"])] : []
-
-/** A source chip's label: the source, and the record's name when the source has several. */
-const refLabel = (ref: Customers.ExternalRef, refs: ReadonlyArray<Customers.ExternalRef>): string => {
-	const several =
-		refs.filter((other) => other.entityType === "account" && other.provider === ref.provider).length > 1
-	return several
-		? `${SOURCE_LABEL[ref.provider]} · ${ref.name ?? ref.externalId}`
-		: SOURCE_LABEL[ref.provider]
-}
 
 /** The account's site: a link only when the domain is a plain host (it is provider data). */
 const domainLink = (h: HtmlBuilder<Message>, domain: string): Html => {
@@ -266,9 +256,9 @@ const ownerMenu = (h: HtmlBuilder<Message>, model: Model, context: Context): Htm
 				h,
 				{
 					intent: "outline",
-					size: "xs",
+					size: "sm",
 					// A long owner name truncates in the button, not past the page's edge.
-					className: "max-w-full",
+					className: "max-w-48",
 					attributes: [...attributes, h.AriaLabel("Owner")],
 				},
 				[
@@ -372,46 +362,37 @@ const topBar = (h: HtmlBuilder<Message>, model: Model, context: Context | null, 
 }
 
 const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
-	const { account, detail } = context
-	const now = new Date(context.nowMs)
-	const refs = detail?.refs ?? []
-	const linked = new Set(refs.map((ref) => ref.provider))
-	const unlinked = model.connectedProviders.filter((provider) => !linked.has(provider))
+	const { account } = context
 	const meta = [
 		account.planName,
-		account.mrrMinor > 0 ? `${formatMoney(account.mrrMinor, account.currency)} MRR` : null,
-		`Customer since ${formatDate(new Date(account.firstSeenAtMs), { now, withYear: true })}`,
+		account.mrrMinor > 0 ? `${formatMoney(account.mrrMinor, account.currency)}/mo` : null,
 	].filter((part) => part !== null)
 	return h.div(
-		[h.Class("flex flex-col gap-4 px-4 pt-6 lg:px-6")],
+		[h.Class("px-4 pt-5 lg:px-6")],
 		[
 			h.div(
 				[
 					h.Class(
-						"flex items-start justify-between gap-4 max-md:flex-col max-md:items-stretch max-md:gap-3",
+						"flex items-center justify-between gap-4 max-md:flex-col max-md:items-stretch max-md:gap-3",
 					),
 				],
 				[
 					h.div(
-						[h.Class("flex min-w-0 gap-3.5")],
+						[h.Class("flex min-w-0 items-center gap-3")],
 						[
 							companyLogo(h, { name: account.name, logoUrl: account.logoUrl, size: "md" }),
 							h.div(
-								[h.Class("flex min-w-0 flex-col gap-1")],
+								[h.Class("flex min-w-0 flex-col gap-0.5")],
 								[
 									h.div(
 										[h.Class("flex flex-wrap items-center gap-2")],
 										[
 											heading(
 												h,
-												{
-													variant: "display",
-													className: "wrap-anywhere max-md:text-xl",
-												},
+												{ variant: "title", level: 1, className: "wrap-anywhere" },
 												[account.name],
 											),
 											...environmentSwitch(h, model, context),
-											stageBadge(h, account.lifecycleStage),
 											healthBadge(h, {
 												status: account.healthStatus,
 												score: account.healthScore,
@@ -445,45 +426,6 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 											),
 										],
 									),
-									...companyDescription(h, context),
-									h.div(
-										[h.Class("flex flex-wrap items-center gap-1.5 pt-2")],
-										[
-											ownerMenu(h, model, context),
-											// A phone wraps the chips: the divider would end a line.
-											h.span([
-												h.AriaHidden(true),
-												h.Class("mx-1 h-4 w-px bg-border max-md:hidden"),
-											]),
-											...refs
-												.filter(
-													(ref) =>
-														ref.externalUrl !== null &&
-														ref.entityType === "account",
-												)
-												.map((ref) =>
-													sourceLinkChip(h, {
-														source: ref.provider,
-														label: refLabel(ref, refs),
-														href: ref.externalUrl ?? "",
-														className:
-															ref.staleAt === null ? undefined : "opacity-60",
-													}),
-												),
-											...unlinked.map((provider) =>
-												h.span(
-													[
-														h.Title("Link records from Data sources › Unmatched"),
-														h.Class(
-															"inline-flex h-7 items-center rounded-md border border-border border-dashed px-2 text-muted-fg text-xs",
-														),
-													],
-													[`No ${SOURCE_LABEL[provider]} record`],
-												),
-											),
-											...companySocialChips(h, context),
-										],
-									),
 								],
 							),
 						],
@@ -491,6 +433,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 					h.div(
 						[h.Class("flex shrink-0 items-center gap-2")],
 						[
+							ownerMenu(h, model, context),
 							button(h, { intent: "outline", size: "sm", onPress: Message.PressedAddNote() }, [
 								IconEdit(h, icon),
 								"Add note",
@@ -547,10 +490,9 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 	)
 }
 
-const tabsRow = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
-	const healthAt = context.detail?.account.healthUpdatedAt ?? null
-	return h.div(
-		[h.Class("flex items-end justify-between gap-4 border-border border-b px-4 lg:px-6")],
+const tabsRow = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =>
+	h.div(
+		[h.Class("border-border border-b px-4 lg:px-6")],
 		[
 			viewTabs(h, {
 				ariaLabel: "Customer",
@@ -569,17 +511,8 @@ const tabsRow = (h: HtmlBuilder<Message>, model: Model, context: Context): Html 
 				selected: model.tab,
 				onSelect: (tab) => Message.ClickedTab({ tab }),
 			}),
-			...(healthAt === null
-				? []
-				: [
-						h.span(
-							[h.Class("whitespace-nowrap pb-3 text-muted-fg text-xs max-md:hidden")],
-							[`Health computed ${formatRelative(healthAt, new Date(context.nowMs))}`],
-						),
-					]),
 		],
 	)
-}
 
 // SIDEBAR
 
@@ -989,20 +922,137 @@ const attributeValue = (value: unknown): string =>
 		? String(value)
 		: JSON.stringify(value)
 
-/** Beside the tab on a desktop (hidden below lg); under the overview on a phone (`isStacked`). */
+/** Each source record the customer is linked to, one line each; the match is in the tooltip. */
+const linkedRecords = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
+	const { detail } = context
+	const now = new Date(context.nowMs)
+	const refs = (detail?.refs ?? []).filter((ref) => ref.entityType === "account")
+	const linked = new Set(refs.map((ref) => ref.provider))
+	const unlinked = model.connectedProviders.filter((provider) => !linked.has(provider))
+	return sidebarSection(h, "Linked records", null, [
+		...refs.map((ref) =>
+			h.div(
+				[
+					h.Key(ref.id),
+					h.Title(
+						[
+							ref.externalId,
+							`Matched by ${MATCH_LABEL[ref.matchMethod]}`,
+							ref.lastSyncedAt === null
+								? null
+								: `synced ${formatRelative(ref.lastSyncedAt, now)}`,
+							ref.staleAt === null ? null : "stale (source disconnected)",
+						]
+							.filter((part) => part !== null)
+							.join(" · "),
+					),
+					h.Class(
+						twMerge(
+							"flex min-h-8 items-center gap-2 text-sm",
+							ref.staleAt !== null && "opacity-60",
+						),
+					),
+				],
+				[
+					sourceLogo(h, ref.provider),
+					h.span([h.Class("shrink-0 text-fg")], [LINK_LABEL[ref.provider]]),
+					h.span([h.Class("min-w-0 flex-1 truncate text-muted-fg")], [ref.name ?? ""]),
+					...recordLink(h, ref),
+				],
+			),
+		),
+		...unlinked.map((provider) =>
+			h.div(
+				[h.Key(provider), h.Class("flex min-h-8 items-center gap-2 text-sm")],
+				[
+					sourceLogo(h, provider),
+					h.span(
+						[h.Class("min-w-0 flex-1 truncate text-muted-fg")],
+						[`No ${SOURCE_LABEL[provider]} record`],
+					),
+					h.a(
+						[
+							h.Href(hrefOf(AppRoute.CustomersUnmatched({ orgSlug: context.orgSlug }))),
+							h.Class(twMerge(linkClass, "shrink-0 text-xs")),
+						],
+						["Find"],
+					),
+				],
+			),
+		),
+		...(refs.length === 0 && unlinked.length === 0
+			? [
+					h.p(
+						[h.Class("text-muted-fg text-sm")],
+						[detail === null ? "Loading…" : "Not linked to any source."],
+					),
+				]
+			: []),
+	])
+}
+
+/** The account's attributes from its sources; left out when there are none. */
+const attributesSection = (h: HtmlBuilder<Message>, context: Context): ReadonlyArray<Html> => {
+	const fieldSources = context.detail?.account.fieldSources ?? {}
+	const attributes = Object.entries(context.detail?.account.attributes ?? {}).filter(
+		([, value]) => value !== null,
+	)
+	return attributes.length === 0
+		? []
+		: [
+				sidebarSection(
+					h,
+					"Attributes",
+					formatCount(attributes.length),
+					attributes.map(([key, value]) =>
+						h.div(
+							[
+								h.Key(key),
+								h.Class("grid min-h-8 grid-cols-[7rem_1fr_auto] items-center gap-2 text-sm"),
+							],
+							[
+								h.span(
+									[h.Class("truncate text-muted-fg")],
+									[
+										key
+											.replace(/([A-Z])/g, " $1")
+											.replace(/^./, (first) => first.toUpperCase()),
+									],
+								),
+								h.span([h.Class("truncate text-fg")], [attributeValue(value)]),
+								...(fieldSources[key] === undefined
+									? []
+									: [
+											h.span(
+												[h.Class("text-muted-fg text-xs")],
+												[SOURCE_LABEL[fieldSources[key]]],
+											),
+										]),
+							],
+						),
+					),
+				),
+			]
+}
+
+/**
+ * Beside the tab on a desktop (hidden below lg); under the overview on a phone (`isStacked`). The
+ * facts people look up (owner, stage, plan) first; the company and where they talk next; the
+ * plumbing (flags, attributes, source records) last.
+ */
 const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStacked = false): Html => {
 	const { account, detail } = context
 	const now = new Date(context.nowMs)
 	const fieldSources = detail?.account.fieldSources ?? {}
-	const attributes = Object.entries(detail?.account.attributes ?? {}).filter(([, value]) => value !== null)
-	const refs = (detail?.refs ?? []).filter((ref) => ref.entityType === "account")
-	const linked = new Set(refs.map((ref) => ref.provider))
 	const sourceOf = (field: string): ReadonlyArray<Html> => {
 		const source = fieldSources[field]
 		return source === undefined
 			? []
 			: [h.span([h.Class("ml-auto text-muted-fg text-xs")], [SOURCE_LABEL[source]])]
 	}
+	const subscriptions = detail?.subscriptions ?? []
+	const subscription = subscriptions.find((entry) => entry.status !== "canceled")
+	const hasFlags = Object.keys(account.featureFlags).some((key) => hasFlag(account, key))
 	return h.aside(
 		[
 			h.AriaLabel("Customer details"),
@@ -1013,8 +1063,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 			),
 		],
 		[
-			companySection(h, model, context),
-			sidebarSection(h, "Properties", null, [
+			sidebarSection(h, "Details", null, [
 				property(
 					h,
 					"Owner",
@@ -1030,183 +1079,39 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 				),
 				property(h, "Plan", account.planName ?? "—"),
 				property(h, "MRR", formatMoney(account.mrrMinor, account.currency)),
-				property(
-					h,
-					"Seats",
-					account.seatsUsed === null
-						? "—"
-						: account.seatsLimit === null
-							? formatCount(account.seatsUsed)
-							: `${formatCount(account.seatsUsed)} of ${formatCount(account.seatsLimit)}`,
-				),
+				...(account.seatsUsed === null
+					? []
+					: [
+							property(
+								h,
+								"Seats",
+								account.seatsLimit === null
+									? formatCount(account.seatsUsed)
+									: `${formatCount(account.seatsUsed)} of ${formatCount(account.seatsLimit)}`,
+							),
+						]),
+				...(subscription === undefined || subscription.currentPeriodEnd === null
+					? []
+					: [
+							property(
+								h,
+								subscription.cancelAtPeriodEnd ? "Cancels" : "Renews",
+								formatDate(subscription.currentPeriodEnd, { now, withYear: true }),
+							),
+						]),
 				property(
 					h,
 					"Customer since",
 					formatDate(new Date(account.firstSeenAtMs), { now, withYear: true }),
 				),
-				property(
-					h,
-					"Paying since",
-					account.customerSinceMs === null
-						? "—"
-						: formatDate(new Date(account.customerSinceMs), { now, withYear: true }),
-				),
-				property(
-					h,
-					"Last active",
-					account.lastActiveAtMs === null
-						? "Never"
-						: formatRelative(new Date(account.lastActiveAtMs), now),
-				),
 				property(h, "Tags", tags(h, model, context)),
 			]),
+			companySection(h, model, context),
 			channelsSection(h, model, context),
 			sidebarSection(h, "People in chat", null, peopleInChat(h, model, context)),
-			featureFlagsSection(h, model, context),
-			sidebarSection(
-				h,
-				"Attributes",
-				null,
-				attributes.length === 0
-					? [
-							h.p(
-								[h.Class("text-muted-fg text-sm")],
-								[detail === null ? "Loading…" : "No attributes from your sources."],
-							),
-						]
-					: attributes.map(([key, value]) =>
-							h.div(
-								[
-									h.Key(key),
-									h.Class(
-										"grid min-h-8 grid-cols-[7rem_1fr_auto] items-center gap-2 text-sm",
-									),
-								],
-								[
-									h.span(
-										[h.Class("truncate text-muted-fg")],
-										[
-											key
-												.replace(/([A-Z])/g, " $1")
-												.replace(/^./, (first) => first.toUpperCase()),
-										],
-									),
-									h.span([h.Class("truncate text-fg")], [attributeValue(value)]),
-									...(fieldSources[key] === undefined
-										? []
-										: [
-												h.span(
-													[h.Class("text-muted-fg text-xs")],
-													[SOURCE_LABEL[fieldSources[key]]],
-												),
-											]),
-								],
-							),
-						),
-			),
-			sidebarSection(
-				h,
-				"Linked records",
-				refs.length === 0
-					? null
-					: `${refs.length} of ${refs.length + model.connectedProviders.filter((provider) => !linked.has(provider)).length}`,
-				[
-					...refs.map((ref) =>
-						h.div(
-							[
-								h.Key(ref.id),
-								h.Class(
-									twMerge(
-										"mb-2 flex flex-col gap-0.5 rounded-lg border border-border p-3 last:mb-0",
-										ref.staleAt !== null && "opacity-60",
-									),
-								),
-							],
-							[
-								h.div(
-									[h.Class("flex items-center justify-between gap-2")],
-									[
-										h.span(
-											[
-												h.Class(
-													"inline-flex items-center gap-2 font-medium text-fg text-sm",
-												),
-											],
-											[sourceLogo(h, ref.provider), LINK_LABEL[ref.provider]],
-										),
-										...recordLink(h, ref),
-									],
-								),
-								...(ref.name === null
-									? []
-									: [h.span([h.Class("truncate text-fg text-sm")], [ref.name])]),
-								h.span([h.Class("truncate font-mono text-fg-2 text-xs")], [ref.externalId]),
-								h.span(
-									[h.Class("text-muted-fg text-xs")],
-									[
-										[
-											`Matched by ${MATCH_LABEL[ref.matchMethod]}`,
-											ref.lastSyncedAt === null
-												? null
-												: `synced ${formatRelative(ref.lastSyncedAt, now)}`,
-											ref.staleAt === null ? null : "stale (source disconnected)",
-										]
-											.filter((part) => part !== null)
-											.join(" · "),
-									],
-								),
-							],
-						),
-					),
-					...model.connectedProviders
-						.filter((provider) => !linked.has(provider))
-						.map((provider) =>
-							h.div(
-								[
-									h.Key(provider),
-									h.Class(
-										"mb-2 flex items-center gap-2.5 rounded-lg border border-border border-dashed p-3 last:mb-0",
-									),
-								],
-								[
-									sourceLogo(h, provider),
-									h.div(
-										[h.Class("flex min-w-0 flex-col")],
-										[
-											h.span(
-												[h.Class("font-medium text-fg text-sm")],
-												[SOURCE_LABEL[provider]],
-											),
-											h.span(
-												[h.Class("text-muted-fg text-xs")],
-												["No record matched this customer."],
-											),
-										],
-									),
-									h.a(
-										[
-											h.Href(
-												hrefOf(
-													AppRoute.CustomersUnmatched({ orgSlug: context.orgSlug }),
-												),
-											),
-											h.Class(twMerge(linkClass, "ml-auto shrink-0 text-xs")),
-										],
-										["Find record"],
-									),
-								],
-							),
-						),
-					...(refs.length === 0 && model.connectedProviders.length === 0
-						? [
-								h.p(
-									[h.Class("text-muted-fg text-sm")],
-									[detail === null ? "Loading…" : "Not linked to any source."],
-								),
-							]
-						: []),
-				],
-			),
+			...(hasFlags || context.isAdmin ? [featureFlagsSection(h, model, context)] : []),
+			...attributesSection(h, context),
+			linkedRecords(h, model, context),
 		],
 	)
 }
