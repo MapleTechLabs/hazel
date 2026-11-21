@@ -32,6 +32,23 @@ describe("viewOf", () => {
 		})
 	})
 
+	it("shows an MCP result's structured part, not its envelope", () => {
+		const view = viewOf(
+			item(
+				"dynamic_tool",
+				JSON.stringify({
+					toolName: "mcp__hazel__list_notifications",
+					input: { limit: 30 },
+					output: {
+						content: '{"notifications":[]}',
+						structuredContent: { notifications: [] },
+					},
+				}),
+			),
+		)
+		expect(view?.text).toBe(JSON.stringify({ notifications: [] }, null, 2))
+	})
+
 	it("keeps T3's own title, but not one that only names the item type", () => {
 		const call = JSON.stringify({ toolName: "ToolSearch", input: {} })
 		expect(viewOf(item("dynamic_tool", call, "List channels"))?.title).toBe("List channels")

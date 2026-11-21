@@ -190,10 +190,18 @@ const inputLine = (input: unknown): string | null => {
 	return pairs.length === 0 ? null : truncate(pairs.join(", "), 300)
 }
 
-const outputText = (output: unknown) =>
-	output === undefined || output === null
+/** An MCP tool result `{ content, structuredContent }` reads as its structured part alone. */
+const resultOf = (output: unknown): unknown =>
+	typeof output === "object" && output !== null && "structuredContent" in output
+		? output.structuredContent
+		: output
+
+const outputText = (output: unknown) => {
+	const result = resultOf(output)
+	return result === undefined || result === null
 		? ""
-		: truncate(typeof output === "string" ? output : JSON.stringify(output, null, 2), 2000)
+		: truncate(typeof result === "string" ? result : JSON.stringify(result, null, 2), 2000)
+}
 
 /**
  * Any other activity item, as a tool step. T3 Code writes a tool call (an MCP tool, `ToolSearch`)
