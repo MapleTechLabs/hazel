@@ -201,6 +201,9 @@ export const Model = Schema.Struct({
 	 * `companyCheckedAtMs` passes it (or `COMPANY_REFRESH_PENDING_MS` goes by).
 	 */
 	companyRefreshAtMs: Schema.NullOr(Schema.Finite),
+	/** "Add domain" (no company domain yet): the text, an RPC on its way. */
+	domainDraft: Schema.String,
+	isSavingDomain: Schema.Boolean,
 	/** "Name environment": the text, an RPC on its way. */
 	environmentModal: Modal.Model,
 	environmentDraft: Schema.String,
@@ -238,6 +241,7 @@ export const ENVIRONMENT_INPUT_ID = "customer-environment-name"
 export const DELETE_NOTE_MODAL_ID = "customer-delete-note"
 export const IMPERSONATE_MODAL_ID = "customer-impersonate"
 export const COMPOSER_ID = "customer-note-composer"
+export const DOMAIN_INPUT_ID = "customer-company-domain"
 
 export const PAGE_SIZE = 50
 const DAY_MS = 86_400_000

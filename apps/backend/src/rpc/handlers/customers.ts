@@ -811,14 +811,28 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 				tags,
 				lifecycleStageOverride,
 				name,
+				domains,
 				attentionMute,
 			}) =>
 				Effect.gen(function* () {
-					// Owner, tags and the mute are queue work; the name and the stage change what everyone sees.
-					const actor = yield* name !== undefined || lifecycleStageOverride !== undefined
+					// Owner, tags and the mute are queue work; the name, the stage and the domains (which
+					// match chat and contacts to the customer) change what everyone sees.
+					const actor = yield* name !== undefined ||
+					lifecycleStageOverride !== undefined ||
+					domains !== undefined
 						? requireAdmin
 						: requireMember
 					yield* requirePerson(ownerUserId)
+					// Hostnames only (`https://www.acme.com/` is `acme.com`); a mail provider's is not a company's.
+					const cleanDomains =
+						domains === undefined
+							? undefined
+							: yield* Effect.forEach(domains, (value) => {
+									const domain = normalizeDomain(value)
+									return domain === null
+										? Effect.fail(invalid(`"${value.trim()}" is not a company domain`))
+										: Effect.succeed(domain)
+								}).pipe(Effect.map((list) => [...new Set(list)]))
 					const now = yield* currentTime
 					// The mute's columns: absent leaves them, null unmutes.
 					const mute =
@@ -847,6 +861,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 										lifecycleStage: lifecycleStageOverride ?? undefined,
 										// A manual name beats every source (`FIELD_PRECEDENCE`).
 										name,
+										domains: cleanDomains,
 										fieldSources:
 											name === undefined
 												? undefined
@@ -891,7 +906,21 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 									now,
 								)
 							}
-							if (lifecycleStageOverride !== undefined) yield* requestCompute
+							const domainsChanged =
+								cleanDomains !== undefined &&
+								cleanDomains.join(" ") !== account.domains.join(" ")
+							if (domainsChanged) {
+								yield* hazelEvent(
+									accountId,
+									actor.userId,
+									"account.domains_changed",
+									"Domains changed",
+									{ from: account.domains, to: cleanDomains },
+									now,
+								)
+							}
+							// A compute turn also seeds the company lookup for a new domain (`seedEnrichments`).
+							if (lifecycleStageOverride !== undefined || domainsChanged) yield* requestCompute
 							// Chat shows linked channels' customer: its name and owner.
 							if (name !== undefined || ownerUserId !== undefined) {
 								yield* publishChannelCustomers(account.organizationId)

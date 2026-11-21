@@ -78,6 +78,7 @@ interface AccountUpdatePayload {
 	tags?: ReadonlyArray<string>
 	lifecycleStageOverride?: Customers.LifecycleStage | null
 	name?: string
+	domains?: ReadonlyArray<string>
 }
 interface BulkUpdatePayload {
 	organizationId: OrganizationId
@@ -308,7 +309,7 @@ export const deleteNoteAction = optimisticAction({
 
 // ACCOUNTS
 
-/** Owner, tags, stage override (null clears it) or name; only the fields given change. */
+/** Owner, tags, stage override (null clears it), name or domains; only the fields given change. */
 interface AccountUpdate {
 	readonly organizationId: OrganizationId
 	readonly accountId: CustomerAccountId
@@ -316,6 +317,8 @@ interface AccountUpdate {
 	readonly tags?: ReadonlyArray<string>
 	readonly lifecycleStageOverride?: Customers.LifecycleStage | null
 	readonly name?: string
+	/** The whole list; the store cleans each one (`https://www.acme.com/` is `acme.com`). */
+	readonly domains?: ReadonlyArray<string>
 }
 
 /** `customers.account.update`'s payload: only the fields given. */
@@ -326,6 +329,7 @@ export const accountUpdatePayload = (props: AccountUpdate): AccountUpdatePayload
 	if (props.lifecycleStageOverride !== undefined)
 		payload.lifecycleStageOverride = props.lifecycleStageOverride
 	if (props.name !== undefined) payload.name = props.name
+	if (props.domains !== undefined) payload.domains = props.domains
 	return payload
 }
 
@@ -336,6 +340,7 @@ export const updateAccountAction = optimisticAction({
 			if (props.ownerUserId !== undefined) account.ownerUserId = props.ownerUserId
 			if (props.tags !== undefined) account.tags = [...props.tags]
 			if (props.name !== undefined) account.name = props.name
+			if (props.domains !== undefined) account.domains = [...props.domains]
 			if (props.lifecycleStageOverride !== undefined) {
 				account.lifecycleStageOverride = props.lifecycleStageOverride
 				// The derived stage shows once compute runs again; until then keep the current one.

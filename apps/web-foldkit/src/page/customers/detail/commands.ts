@@ -189,6 +189,37 @@ export const UpdateCustomerAccount = Command.define("UpdateCustomerAccount", {
 		),
 })
 
+/** Give the customer a company domain, first, so its company is looked up by it. */
+export const AddCustomerDomain = Command.define("AddCustomerDomain", {
+	args: { ...target, domains: Schema.Array(Schema.String) },
+	messages: [Message.SucceededAddDomain, Message.FailedAddDomain],
+	execute: (args) =>
+		updateAccountAction(args).pipe(
+			Effect.as(Message.SucceededAddDomain({ accountId: args.accountId })),
+			Effect.catchTags({
+				CustomersNotFoundError: () =>
+					Effect.succeed(
+						Message.FailedAddDomain({
+							accountId: args.accountId,
+							reason: "NotFound",
+							message: null,
+						}),
+					),
+				CustomersInvalidRequestError: (error) =>
+					Effect.succeed(
+						Message.FailedAddDomain({
+							accountId: args.accountId,
+							reason: "Stale",
+							message: error.message,
+						}),
+					),
+			}),
+			catchCommon((reason) =>
+				Message.FailedAddDomain({ accountId: args.accountId, reason, message: null }),
+			),
+		),
+})
+
 // GROUPS
 
 type GroupAnswer = Extract<Message, { readonly _tag: "SucceededGroupAction" | "FailedGroupAction" }>
