@@ -104,10 +104,8 @@ describe("the panel", () => {
 			// The composer's engine menu.
 			menuMounted,
 			sceneExpect(role("complementary", { name: "AI assistant" })).toExist(),
-			sceneExpect(role("button", { name: 'Send "Settings" as context' })).toHaveAttr(
-				"aria-pressed",
-				"true",
-			),
+			// The page goes along by default: the composer shows it with a way to leave it out.
+			sceneExpect(role("button", { name: 'Don\'t send "Settings" with this message' })).toExist(),
 			type(role("textbox", { name: "Message the assistant" }), "What changed this week?"),
 			click(role("button", { name: "Send" })),
 			Command.resolve(MakeAssistantMessageId, Message.MadeMessageId({ messageId })),

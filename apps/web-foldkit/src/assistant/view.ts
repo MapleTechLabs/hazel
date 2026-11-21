@@ -13,6 +13,7 @@ import {
 	IconClock,
 	IconClose,
 	IconExternalLink,
+	IconEye,
 	IconLock,
 	IconPlus,
 	IconSparkles,
@@ -1059,6 +1060,55 @@ const liveRegion = (h: H, model: Model): Html =>
 const composerKey = (key: string, modifiers: { readonly shiftKey: boolean }) =>
 	key === "Enter" && !modifiers.shiftKey ? Option.some(Message.SubmittedComposer()) : Option.none()
 
+/**
+ * The page the next message is about, inside the composer like an attachment: the page's name with
+ * an × to leave it out; left out, a quiet "Add page" brings it back.
+ */
+const contextAttachment = (h: H, label: string, isIncluded: boolean): Html =>
+	h.div(
+		[h.Class("flex min-w-0 px-2 pt-2")],
+		[
+			isIncluded
+				? h.span(
+						[
+							h.Class(
+								"inline-flex h-6 min-w-0 max-w-full items-center gap-1.5 rounded-md border border-border bg-secondary/60 pr-0.5 pl-1.5 text-fg text-xs",
+							),
+						],
+						[
+							IconEye(h, { className: "size-3.5 shrink-0 text-muted-fg" }),
+							h.span([h.Class("min-w-0 truncate")], [label]),
+							ariaButton(
+								h,
+								{
+									onPress: Message.ToggledContext(),
+									className:
+										"flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-fg outline-hidden transition-colors duration-150 hover:bg-secondary hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70",
+									attributes: [
+										h.AriaLabel(`Don't send "${label}" with this message`),
+										h.Attribute("title", "Don't send this page"),
+									],
+								},
+								[IconClose(h, { className: "size-3" })],
+							),
+						],
+					)
+				: ariaButton(
+						h,
+						{
+							onPress: Message.ToggledContext(),
+							className:
+								"inline-flex h-6 min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-muted-fg text-xs outline-hidden transition-colors duration-150 hover:bg-secondary/60 hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70",
+							attributes: [h.AriaLabel(`Send "${label}" with this message`)],
+						},
+						[
+							IconPlus(h, { className: "size-3.5 shrink-0" }),
+							h.span([h.Class("min-w-0 truncate")], [`Add ${label}`]),
+						],
+					),
+		],
+	)
+
 const composer = (h: H, model: Model, inputs: ViewInputs): Html => {
 	const thread = threadOf(model)
 	const canStop = isStoppable(thread)
@@ -1070,21 +1120,6 @@ const composer = (h: H, model: Model, inputs: ViewInputs): Html => {
 			model.error === null
 				? h.empty
 				: h.p([h.Role("alert"), h.Class("px-1 text-danger text-sm")], [model.error]),
-			context === null
-				? h.empty
-				: h.div(
-						[h.Class("flex min-w-0")],
-						[
-							toggleChip(h, {
-								label: context.label,
-								isPressed: model.isContextIncluded,
-								isPill: true,
-								onPress: Message.ToggledContext(),
-								ariaLabel: `Send "${context.label}" as context`,
-								className: "h-7 max-w-full px-2.5 font-normal text-xs sm:h-6",
-							}),
-						],
-					),
 			h.form(
 				[
 					h.Class(
@@ -1093,6 +1128,7 @@ const composer = (h: H, model: Model, inputs: ViewInputs): Html => {
 					h.OnSubmit(Message.SubmittedComposer()),
 				],
 				[
+					context === null ? h.empty : contextAttachment(h, context.label, model.isContextIncluded),
 					textarea(h, {
 						placeholder: context === null ? "Ask anything" : `Ask about ${context.label}`,
 						className:
