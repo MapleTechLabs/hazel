@@ -16,7 +16,7 @@
 	},
 	"scripts": {
 		"test": "vitest run",
-		"typecheck": "effect-tsgo tsc --noEmit"
+		"typecheck": "effect-tsgo tsrs --noEmit"
 	},
 	"dependencies": {
 		"@alchemy.run/cloudflare": "catalog:alchemy",

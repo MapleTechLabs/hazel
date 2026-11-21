@@ -8,7 +8,7 @@
 		"./api": "./src/api.ts"
 	},
 	"scripts": {
-		"typecheck": "effect-tsgo tsc --noEmit && effect-tsgo tsc --noEmit -p tsconfig.worker.json",
+		"typecheck": "effect-tsgo tsrs --noEmit && effect-tsgo tsrs --noEmit -p tsconfig.worker.json",
 		"test": "vitest run src/**/*.test.ts",
 		"test:sync": "vitest run src/services/chat-sync",
 		"test:watch": "vitest src/**/*.test.ts",

@@ -50,7 +50,7 @@
 		"alchemy:deploy:pr": "bun scripts/alchemy-deploy.ts --yes --adopt --stage pr-${PR_NUMBER}",
 		"alchemy:destroy:pr": "alchemy destroy --yes --stage pr-${PR_NUMBER}",
 		"alchemy:dev": "ALCHEMY_LOCAL_STATE=1 alchemy dev --stage dev_${USER} --env-file .env.local",
-		"alchemy:typecheck": "effect-tsgo tsc -p tsconfig.alchemy.json",
+		"alchemy:typecheck": "effect-tsgo tsrs -p tsconfig.alchemy.json",
 		"knip": "knip",
 		"knip:fix": "knip --fix --allow-remove-files",
 		"format:check": "oxfmt --check"
@@ -70,6 +70,7 @@
 		"knip": "^6.43.0",
 		"oxfmt": "^0.75.0",
 		"oxlint": "1.89.0",
+		"tsrs": "7.1.0-beta.tsrs3",
 		"turbo": "^2.11.10",
 		"typescript": "catalog:tooling",
 		"vitest": "^5.0.5"

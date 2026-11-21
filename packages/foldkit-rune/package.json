@@ -8,7 +8,7 @@
 		".": "./src/index.ts"
 	},
 	"scripts": {
-		"typecheck": "effect-tsgo tsc --noEmit",
+		"typecheck": "effect-tsgo tsrs --noEmit",
 		"test": "vitest run",
 		"conformance:extract": "bun conformance/extract.ts"
 	},

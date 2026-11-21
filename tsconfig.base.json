@@ -1,6 +1,7 @@
 {
-	// Shared by every package tsconfig. `typecheck` runs `effect-tsgo tsc`, the Effect-patched TypeScript-Go,
-	// which reads this plugin entry and reports Effect diagnostics as ordinary tsc errors (see @effect/tsgo).
+	// Shared by every package tsconfig. `typecheck` runs `effect-tsgo tsrs`, the Effect-patched tsrs (the Rust
+	// port of the TypeScript 7 compiler), which reads this plugin entry and reports Effect diagnostics as
+	// ordinary compiler errors (see @effect/tsgo).
 	// Effect diagnostics at error or warning severity fail `typecheck`; suggestions only print.
 	"compilerOptions": {
 		"plugins": [
