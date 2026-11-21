@@ -75,6 +75,7 @@ import {
 	OWNER_NONE,
 	ownerEntries,
 	positionOf,
+	renewingSubscriptionOf,
 	primaryOf,
 	userIdOfOwnerKey,
 } from "./model"
@@ -1036,7 +1037,7 @@ const attributesSection = (h: HtmlBuilder<Message>, context: Context): ReadonlyA
 }
 
 /**
- * Beside the tab on a desktop (hidden below lg); under the overview on a phone (`isStacked`). The
+ * Beside the tab from lg, under it on a tablet; inside the overview on a phone (`isStacked`). The
  * facts people look up (owner, stage, plan) first; the company and where they talk next; the
  * plumbing (flags, attributes, source records) last.
  */
@@ -1050,8 +1051,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 			? []
 			: [h.span([h.Class("ml-auto text-muted-fg text-xs")], [SOURCE_LABEL[source]])]
 	}
-	const subscriptions = detail?.subscriptions ?? []
-	const subscription = subscriptions.find((entry) => entry.status !== "canceled")
+	const subscription = renewingSubscriptionOf(detail?.subscriptions ?? [])
 	const hasFlags = Object.keys(account.featureFlags).some((key) => hasFlag(account, key))
 	return h.aside(
 		[
@@ -1059,7 +1059,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 			h.Class(
 				isStacked
 					? "flex flex-col rounded-xl border border-border"
-					: "flex w-80 shrink-0 flex-col overflow-y-auto border-border border-l max-lg:hidden",
+					: "flex shrink-0 flex-col border-border max-lg:border-t lg:w-80 lg:overflow-y-auto lg:border-l",
 			),
 		],
 		[
@@ -1465,11 +1465,13 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		[h.Class("flex h-full min-h-0 flex-col")],
 		[
 			topBar(h, model, context, orgSlug),
+			// From lg the panel is a column beside the tab, each scrolling on its own. Below lg (a
+			// tablet) the two stack and scroll as one, so the panel stays reachable.
 			h.div(
-				[h.Class("flex min-h-0 flex-1")],
+				[h.Class("flex min-h-0 flex-1 max-lg:flex-col max-lg:overflow-y-auto")],
 				[
 					h.div(
-						[h.Class("min-w-0 flex-1 overflow-y-auto")],
+						[h.Class("min-w-0 max-lg:shrink-0 lg:flex-1 lg:overflow-y-auto")],
 						[
 							header(h, model, context),
 							h.div([h.Class("pt-4")], [tabsRow(h, model, context)]),

@@ -514,3 +514,25 @@ export const isCompanyRefreshUnanswered = (
 	model.companyRefreshAtMs !== null &&
 	!isCompanyRefreshPending(model, nowMs, checkedAtMs) &&
 	!answers(checkedAtMs, model.companyRefreshAtMs)
+
+/** Which subscription's renewal the panel shows: a billing one first; a canceled one never. */
+const RENEWAL_RANK = {
+	active: 0,
+	trialing: 0,
+	past_due: 0,
+	unpaid: 1,
+	paused: 2,
+	canceled: 3,
+} as const satisfies Record<Customers.SubscriptionStatus, number>
+
+/**
+ * The subscription whose period end is the customer's next renewal: an active, trialing or past-due
+ * one before an unpaid or paused one. The detail lists them newest first, and among equals the
+ * newest wins (the sort is stable).
+ */
+export const renewingSubscriptionOf = (
+	subscriptions: ReadonlyArray<Customers.Subscription>,
+): Customers.Subscription | undefined =>
+	subscriptions
+		.filter((entry) => entry.status !== "canceled")
+		.toSorted((left, right) => RENEWAL_RANK[left.status] - RENEWAL_RANK[right.status])[0]
