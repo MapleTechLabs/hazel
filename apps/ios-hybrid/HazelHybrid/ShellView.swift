@@ -131,9 +131,9 @@ struct ShellView: View {
                     .padding(.horizontal, 20)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             } else if let kept = shownKept, !kept.tabs.isEmpty {
-                GlassTabBar(tabs: kept.tabs, icons: bridge.icons, onSelect: { _ in })
+                // The kept screen's bar: a tab pressed on it is selected once the page settles.
+                GlassTabBar(tabs: kept.tabs, icons: bridge.icons, onSelect: bridge.selectTab)
                     .padding(.horizontal, 20)
-                    .allowsHitTesting(false)
             }
         }
     }

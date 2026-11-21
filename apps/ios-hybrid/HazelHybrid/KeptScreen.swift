@@ -5,7 +5,7 @@ import UIKit
 /// a blank screen while the page loads, signs in and syncs (the shell's side of the web app's
 /// `paint-boot.js`). It is shown only under the same light or dark appearance it was taken in, takes
 /// no touches, and goes as soon as the page has settled on its own screen (`WebBridge.receiveScreen`).
-struct KeptScreen: Codable {
+struct KeptScreen: Codable, Equatable {
     /// `"light"` or `"dark"`: the screen's looks carry that appearance's colours.
     let appearance: String
     /// The page's `screen` and `tabs` messages, as JSON.
