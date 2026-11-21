@@ -130,6 +130,27 @@ export const FREE_MAIL_DOMAINS: ReadonlySet<string> = new Set([
 	"163.com",
 ])
 
+/**
+ * A hostname (no user, port or path) of at least two labels: each 1–63 letters, digits or hyphens,
+ * not starting or ending with a hyphen; 253 characters at most (RFC 1035).
+ */
+const HOSTNAME =
+	/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/
+
+/**
+ * A company domain from what a provider or a person gave (`https://www.Acme.com/pricing` is
+ * `acme.com`); null when it is not a hostname or is a mail provider's.
+ */
+export const normalizeDomain = (value: string): string | null => {
+	const domain = value
+		.trim()
+		.toLowerCase()
+		.replace(/^[a-z]+:\/\//, "")
+		.replace(/^www\./, "")
+		.split(/[/?#]/)[0]
+	return domain !== undefined && HOSTNAME.test(domain) && !FREE_MAIL_DOMAINS.has(domain) ? domain : null
+}
+
 /** The domain an account's company profile is looked up by: its first one that is not a mail provider's. */
 export const enrichmentDomainOf = (domains: ReadonlyArray<string>): string | null =>
 	domains

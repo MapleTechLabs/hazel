@@ -108,3 +108,43 @@ describe("customer page: suggested channel links", () => {
 		)
 	})
 })
+
+describe("customer page: adding a company domain", () => {
+	const acme = ACCOUNTS_BY_KEY.acme
+	const noDomain = { ...acme, domains: [], companyProfile: null, companyCheckedAt: null }
+	const openedAs = (role: "owner" | "member") => {
+		const as = makeShared({ member: memberWithRole(role) })
+		const model = {
+			...init(AppRoute.CustomerDetail({ orgSlug: "hazel", accountId: acme.id, tab: Option.none() }), as)
+				.model,
+			accounts: ACCOUNTS.map((account) => toAccountRow(account.id === acme.id ? noDomain : account)),
+		}
+		return { as, model }
+	}
+	const field = Scene.role("textbox", { name: "Company domain" })
+
+	test("an admin with no company domain gets the form", () => {
+		const { as, model } = openedAs("owner")
+		Scene.scene(
+			pageScene(update, view, as),
+			Scene.given(model),
+			menusMounted(4),
+			Scene.expect(
+				Scene.text("Add the customer's website domain and Hazel looks up their company."),
+			).toExist(),
+			Scene.expect(field).toExist(),
+			Scene.expect(Scene.role("button", { name: "Add" })).toExist(),
+		)
+	})
+
+	test("a member is told an admin can add one", () => {
+		const { as, model } = openedAs("member")
+		Scene.scene(
+			pageScene(update, view, as),
+			Scene.given(model),
+			menusMounted(4),
+			Scene.expect(Scene.text("No company domain to look up. An admin can add one.")).toExist(),
+			Scene.expect(field).toBeAbsent(),
+		)
+	})
+})

@@ -393,6 +393,39 @@ describe("customer page: owner and tags", () => {
 	})
 })
 
+describe("customer page: company domain", () => {
+	const submit = (model: Model) => update(model, Message.SubmittedDomain(), shared)
+
+	test("a submit adds the domain (the store puts it first, keeping the others)", () => {
+		const result = submit(run(loaded(), [Message.ChangedDomainDraft({ value: " acme.com " })]))
+		expect(result.model.isSavingDomain).toBe(true)
+		expect(result.commands?.[0]).toMatchObject({
+			name: "AddCustomerDomain",
+			args: { accountId: beta.id, addDomain: "acme.com" },
+		})
+		// A second press while it saves sends nothing; nor does an empty draft.
+		expect(commandNames(submit(result.model))).toEqual([])
+		expect(commandNames(submit(run(loaded(), [Message.ChangedDomainDraft({ value: "  " })])))).toEqual([])
+	})
+
+	test("success clears the draft; a refusal keeps it and says why", () => {
+		const saving = submit(run(loaded(), [Message.ChangedDomainDraft({ value: "acme.com" })])).model
+		const done = update(saving, Message.SucceededAddDomain({ accountId: beta.id }), shared)
+		expect(done.model).toMatchObject({ domainDraft: "", isSavingDomain: false })
+		const refused = update(
+			saving,
+			Message.FailedAddDomain({
+				accountId: beta.id,
+				reason: "Stale",
+				message: '"gmail.com" is not a company domain',
+			}),
+			shared,
+		)
+		expect(refused.model).toMatchObject({ domainDraft: "acme.com", isSavingDomain: false })
+		expect(refused.outMessage).toBeDefined()
+	})
+})
+
 describe("customer page: feature flags", () => {
 	test("the ticked flags turn on at once, and one turns off", () => {
 		const added = update(

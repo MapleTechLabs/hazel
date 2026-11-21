@@ -16,9 +16,10 @@ import {
 import { formatCount, formatDate, formatRelative } from "../../../customers/format"
 import { IconArrowPath, IconLink } from "../../../icons"
 import { button } from "../../../ui/button"
+import { input } from "../../../ui/input"
 import { disclosure } from "../../../customers/ui/disclosure"
 import { Message } from "./message"
-import { isCompanyRefreshPending, isCompanyRefreshUnanswered, type Model } from "./model"
+import { DOMAIN_INPUT_ID, isCompanyRefreshPending, isCompanyRefreshUnanswered, type Model } from "./model"
 import { type Context, icon, property, sidebarSection } from "./parts"
 
 /**
@@ -86,16 +87,70 @@ const refreshButton = (
 		options.iconOnly ? [IconArrowPath(h, icon)] : [IconArrowPath(h, icon), options.label],
 	)
 
+/** "Add domain", for a customer with no company domain: the company is then looked up by it. */
+const addDomainForm = (h: HtmlBuilder<Message>, model: Model): Html =>
+	h.form(
+		[h.Class("flex items-center gap-1.5 pb-2"), h.OnSubmit(Message.SubmittedDomain())],
+		[
+			h.div(
+				[h.Class("min-w-0 flex-1")],
+				[
+					input(h, {
+						placeholder: "acme.com",
+						attributes: [
+							h.Id(DOMAIN_INPUT_ID),
+							h.AriaLabel("Company domain"),
+							h.Type("text"),
+							h.Attribute("autocomplete", "off"),
+							h.Attribute("spellcheck", "false"),
+							h.Value(model.domainDraft),
+							h.OnInput((value) => Message.ChangedDomainDraft({ value })),
+						],
+					}),
+				],
+			),
+			button(
+				h,
+				{
+					intent: "outline",
+					size: "sm",
+					isPending: model.isSavingDomain,
+					isDisabled: model.domainDraft.trim() === "",
+					attributes: [h.Type("submit")],
+				},
+				["Add"],
+			),
+		],
+	)
+
 export const companySection = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
 	const { account } = context
 	const company = account.company
 	const now = new Date(context.nowMs)
 	const isPending = isCompanyRefreshPending(model, context.nowMs, account.companyCheckedAtMs)
 	const isUnanswered = isCompanyRefreshUnanswered(model, context.nowMs, account.companyCheckedAtMs)
-	const domains = context.detail?.account.domains ?? (account.domain === null ? [] : [account.domain])
+	// The synced row's domain first: the detail is not read again after a domain is added here.
+	const domains = [
+		...(account.domain === null ? [] : [account.domain]),
+		...(context.detail?.account.domains ?? []),
+	]
 	const domain = enrichmentDomainOf(domains)
 	const checked =
 		account.companyCheckedAtMs === null ? null : formatRelative(new Date(account.companyCheckedAtMs), now)
+
+	if (company === null && domain === null) {
+		return sidebarSection(h, "Company", null, [
+			h.p(
+				[h.Class("pb-2 text-muted-fg text-sm")],
+				[
+					context.isAdmin
+						? "Add the customer's website domain and Hazel looks up their company."
+						: "No company domain to look up. An admin can add one.",
+				],
+			),
+			...(context.isAdmin ? [addDomainForm(h, model)] : []),
+		])
+	}
 
 	if (company === null) {
 		const [text, action] =

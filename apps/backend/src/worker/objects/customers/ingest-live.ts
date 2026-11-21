@@ -37,7 +37,7 @@ import {
 	type CustomerSource,
 	EMPTY_SYNC_STATS,
 	FIELD_PRECEDENCE,
-	FREE_MAIL_DOMAINS,
+	normalizeDomain,
 	IngestOp,
 	type IngestOutcome,
 	type ProviderRef,
@@ -71,7 +71,8 @@ import { requestCompute, requestComputeAfterIngest, requestHistoryRebuild, setBa
 /** Ops per transaction. */
 const INGEST_CHUNK = 500
 /** Domains an account op brings (they bind as parameters of the domain match). */
-const MAX_DOMAINS = 20
+/** The most domains an account keeps (a provider's beyond are dropped; Hazel refuses more). */
+export const MAX_DOMAINS = 20
 /**
  * A sweep removes at most this share of a provider's live records of one type, or at most
  * `SWEEP_CAP_MIN` of them (`completeSweep`); past both, it removes none of that type.
@@ -115,18 +116,8 @@ export const ignoreRuleMatches = (
 	return candidates.some((value) => value != null && globMatches(rule.pattern, value))
 }
 
-/** A hostname (no user, port or path), with at least two labels. */
-const HOSTNAME = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/
-
-export const normalizeDomain = (value: string): string | null => {
-	const domain = value
-		.trim()
-		.toLowerCase()
-		.replace(/^[a-z]+:\/\//, "")
-		.replace(/^www\./, "")
-		.split(/[/?#]/)[0]
-	return HOSTNAME.test(domain) && !FREE_MAIL_DOMAINS.has(domain) ? domain : null
-}
+/** Shared with the web app, which cleans a domain the same way before the store answers. */
+export { normalizeDomain }
 
 /** The hosts a provider's links (dashboard pages, hosted invoices) live on, subdomains included. */
 const LINK_HOSTS = {

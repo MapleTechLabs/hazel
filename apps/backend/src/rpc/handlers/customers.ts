@@ -75,7 +75,11 @@ import {
 	unlinkAccount,
 } from "../../worker/objects/customers/groups"
 import { CustomerIngest } from "../../worker/objects/customers/ingest"
-import { ignoreRuleMatches, normalizeDomain } from "../../worker/objects/customers/ingest-live"
+import {
+	ignoreRuleMatches,
+	MAX_DOMAINS as MAX_ACCOUNT_DOMAINS,
+	normalizeDomain,
+} from "../../worker/objects/customers/ingest-live"
 import { regionOfAccountId as mapleRegionOf } from "../../worker/objects/customers/maple/adapter"
 import { configProblem as mapleConfigProblem } from "../../worker/objects/customers/maple/pull"
 import { CustomerProviders } from "../../worker/objects/customers/providers"
@@ -811,14 +815,23 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 				tags,
 				lifecycleStageOverride,
 				name,
+				addDomain,
 				attentionMute,
 			}) =>
 				Effect.gen(function* () {
-					// Owner, tags and the mute are queue work; the name and the stage change what everyone sees.
-					const actor = yield* name !== undefined || lifecycleStageOverride !== undefined
+					// Owner, tags and the mute are queue work; the name, the stage and a domain (domains
+					// match chat and contacts to the customer) change what everyone sees.
+					const actor = yield* name !== undefined ||
+					lifecycleStageOverride !== undefined ||
+					addDomain !== undefined
 						? requireAdmin
 						: requireMember
 					yield* requirePerson(ownerUserId)
+					// A hostname only (`https://www.acme.com/` is `acme.com`); a mail provider's is not a company's.
+					const newDomain = addDomain === undefined ? null : normalizeDomain(addDomain)
+					if (addDomain !== undefined && newDomain === null) {
+						return yield* invalid(`"${addDomain.trim()}" is not a company domain`)
+					}
 					const now = yield* currentTime
 					// The mute's columns: absent leaves them, null unmutes.
 					const mute =
@@ -837,6 +850,23 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					return yield* txOnly(
 						Effect.gen(function* () {
 							const account = yield* requireAccount(accountId)
+							// Added to the list as it is now, never replacing it: first, so the company is
+							// looked up by it; one already there moves first. A full list is refused, not trimmed.
+							if (
+								newDomain !== null &&
+								!account.domains.includes(newDomain) &&
+								account.domains.length >= MAX_ACCOUNT_DOMAINS
+							) {
+								return yield* invalid(
+									`This customer already has ${MAX_ACCOUNT_DOMAINS} domains, the most it can have`,
+								)
+							}
+							const domains =
+								newDomain === null
+									? undefined
+									: [newDomain, ...account.domains.filter((domain) => domain !== newDomain)]
+							const domainsChanged =
+								domains !== undefined && domains.join(" ") !== account.domains.join(" ")
 							yield* db.run(
 								SQLite.update(schema.customerAccountsTable)
 									// `undefined` leaves a column as it is.
@@ -847,6 +877,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 										lifecycleStage: lifecycleStageOverride ?? undefined,
 										// A manual name beats every source (`FIELD_PRECEDENCE`).
 										name,
+										domains: domainsChanged ? domains : undefined,
 										fieldSources:
 											name === undefined
 												? undefined
@@ -891,7 +922,18 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 									now,
 								)
 							}
-							if (lifecycleStageOverride !== undefined) yield* requestCompute
+							if (domainsChanged) {
+								yield* hazelEvent(
+									accountId,
+									actor.userId,
+									"account.domains_changed",
+									"Domains changed",
+									{ from: account.domains, to: domains },
+									now,
+								)
+							}
+							// A compute turn also seeds the company lookup for a new domain (`seedEnrichments`).
+							if (lifecycleStageOverride !== undefined || domainsChanged) yield* requestCompute
 							// Chat shows linked channels' customer: its name and owner.
 							if (name !== undefined || ownerUserId !== undefined) {
 								yield* publishChannelCustomers(account.organizationId)

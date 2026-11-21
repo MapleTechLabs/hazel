@@ -135,6 +135,16 @@ export const Message = defineMessageUnion({
 		reason: ActionFailure,
 		message: Schema.NullOr(Schema.String),
 	},
+	/** "Add domain" in the Company section, for a customer with no company domain. */
+	ChangedDomainDraft: { value: Schema.String },
+	SubmittedDomain: {},
+	SucceededAddDomain: { accountId: CustomerAccountId },
+	/** `message` is the store's reason it refused (not a company domain). */
+	FailedAddDomain: {
+		accountId: CustomerAccountId,
+		reason: ActionFailure,
+		message: Schema.NullOr(Schema.String),
+	},
 	GotRawModalMessage: { message: Modal.Message },
 
 	GotEnvironmentMenuMessage: { message: Menu.Message },

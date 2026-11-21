@@ -8,6 +8,7 @@
  * optional key as absent, never as `undefined`.
  */
 import type * as Customers from "@hazel/domain/customers"
+import { normalizeDomain } from "@hazel/domain/customers"
 import {
 	type CustomerAccountId,
 	CustomerFeatureFlagId,
@@ -78,6 +79,7 @@ interface AccountUpdatePayload {
 	tags?: ReadonlyArray<string>
 	lifecycleStageOverride?: Customers.LifecycleStage | null
 	name?: string
+	addDomain?: string
 }
 interface BulkUpdatePayload {
 	organizationId: OrganizationId
@@ -308,7 +310,7 @@ export const deleteNoteAction = optimisticAction({
 
 // ACCOUNTS
 
-/** Owner, tags, stage override (null clears it) or name; only the fields given change. */
+/** Owner, tags, stage override (null clears it), name or a domain to add; only the fields given change. */
 interface AccountUpdate {
 	readonly organizationId: OrganizationId
 	readonly accountId: CustomerAccountId
@@ -316,6 +318,8 @@ interface AccountUpdate {
 	readonly tags?: ReadonlyArray<string>
 	readonly lifecycleStageOverride?: Customers.LifecycleStage | null
 	readonly name?: string
+	/** Put first in the account's domains; the store cleans it (`https://www.acme.com/` is `acme.com`). */
+	readonly addDomain?: string
 }
 
 /** `customers.account.update`'s payload: only the fields given. */
@@ -326,7 +330,17 @@ export const accountUpdatePayload = (props: AccountUpdate): AccountUpdatePayload
 	if (props.lifecycleStageOverride !== undefined)
 		payload.lifecycleStageOverride = props.lifecycleStageOverride
 	if (props.name !== undefined) payload.name = props.name
+	if (props.addDomain !== undefined) payload.addDomain = props.addDomain
 	return payload
+}
+
+/**
+ * The domains an account shows once `raw` is added, before the store answers: cleaned as the store
+ * cleans it and put first (one it has moves first); one the store will refuse changes nothing.
+ */
+export const withAddedDomain = (domains: ReadonlyArray<string>, raw: string): Array<string> => {
+	const added = normalizeDomain(raw)
+	return added === null ? [...domains] : [added, ...domains.filter((domain) => domain !== added)]
 }
 
 export const updateAccountAction = optimisticAction({
@@ -336,6 +350,8 @@ export const updateAccountAction = optimisticAction({
 			if (props.ownerUserId !== undefined) account.ownerUserId = props.ownerUserId
 			if (props.tags !== undefined) account.tags = [...props.tags]
 			if (props.name !== undefined) account.name = props.name
+			if (props.addDomain !== undefined)
+				account.domains = withAddedDomain(account.domains, props.addDomain)
 			if (props.lifecycleStageOverride !== undefined) {
 				account.lifecycleStageOverride = props.lifecycleStageOverride
 				// The derived stage shows once compute runs again; until then keep the current one.
@@ -352,6 +368,28 @@ export const updateAccountAction = optimisticAction({
 			return { data: result, transactionId: result.transactionId }
 		}),
 })
+
+/** Adding `raw` shows a different list: an optimistic write to make (else there is none to make). */
+export const addingDomainChanges = (domains: ReadonlyArray<string>, raw: string): boolean =>
+	withAddedDomain(domains, raw).join(" ") !== domains.join(" ")
+
+/**
+ * Add a domain to the account (`addDomain`). One the list would not show differently (the store will
+ * refuse it, or it is already first) is a plain RPC: an optimistic action with no write never runs
+ * its RPC, and the store's refusal is the answer to show.
+ */
+export const addDomainAction = (
+	props: Readonly<{ organizationId: OrganizationId; accountId: CustomerAccountId; addDomain: string }>,
+) => {
+	const current = customerAccountCollection.get(props.accountId)
+	return current !== undefined && addingDomainChanges(current.domains, props.addDomain)
+		? Effect.asVoid(updateAccountAction(props))
+		: Effect.gen(function* () {
+				const client = yield* HazelRpc
+				const result = yield* client("customers.account.update", accountUpdatePayload(props))
+				yield* Effect.ignore(customerAccountCollection.utils.awaitSeqEffect(result.transactionId))
+			})
+}
 
 /** `mute`: until `until` (null: until unmuted); null unmutes. */
 type AttentionMuteProps = Readonly<{

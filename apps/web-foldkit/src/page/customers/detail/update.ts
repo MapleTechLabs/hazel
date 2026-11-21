@@ -47,6 +47,7 @@ import {
 	SetChatAuthorSide,
 	SetCustomerEnvironment,
 	RefreshCustomerCompany,
+	AddCustomerDomain,
 	SetCustomerFeatureFlags,
 	SetCustomerPrimary,
 	StartCustomerImpersonation,
@@ -304,6 +305,8 @@ const initialModel = (route: Route): Model => ({
 	environmentDraft: "",
 	isSavingEnvironment: false,
 	companyRefreshAtMs: null,
+	domainDraft: "",
+	isSavingDomain: false,
 	deletingNoteId: null,
 	deleteNoteModal: Modal.init(DELETE_NOTE_MODAL_ID),
 	isImpersonator: false,
@@ -972,6 +975,33 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 							description: "The customer was removed.",
 						},
 						Stale: { title: "Couldn't look up the company", description: message ?? undefined },
+					}),
+				),
+			),
+		}),
+		ChangedDomainDraft: ({ value }) => ({ model: modifyFields(model, { domainDraft: () => value }) }),
+		SubmittedDomain: () => {
+			const args = target(model, shared)
+			const domain = model.domainDraft.trim()
+			if (args === null || domain === "" || model.isSavingDomain) return { model }
+			return {
+				model: modifyFields(model, { isSavingDomain: () => true }),
+				commands: [AddCustomerDomain({ ...args, addDomain: domain })],
+			}
+		},
+		SucceededAddDomain: () => ({
+			model: modifyFields(model, { domainDraft: () => "", isSavingDomain: () => false }),
+		}),
+		FailedAddDomain: ({ reason, message }) => ({
+			model: modifyFields(model, { isSavingDomain: () => false }),
+			outMessage: toast(
+				errorToastOf(
+					failureMessage(reason, {
+						NotFound: {
+							title: "Couldn't add the domain",
+							description: "The customer was removed.",
+						},
+						Stale: { title: "Couldn't add the domain", description: message ?? undefined },
 					}),
 				),
 			),

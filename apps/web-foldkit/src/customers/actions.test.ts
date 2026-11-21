@@ -1,7 +1,7 @@
 import { CustomerAccountId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { describe, expect, test } from "vitest"
-import { accountUpdatePayload, bulkUpdatePayloads } from "./actions"
+import { accountUpdatePayload, addingDomainChanges, bulkUpdatePayloads, withAddedDomain } from "./actions"
 
 /** The actions' RPC payloads: optional keys stay absent, and bulk updates go out in batches. */
 
@@ -27,5 +27,30 @@ describe("customers actions: payloads", () => {
 		expect(
 			bulkUpdatePayloads({ organizationId, accountIds: [accountId(1)], ownerUserId: owner }),
 		).toEqual([{ organizationId, accountIds: [accountId(1)], ownerUserId: owner }])
+	})
+})
+
+describe("withAddedDomain", () => {
+	test("a pasted URL shows as its domain, first, and one the account has moves first", () => {
+		expect(withAddedDomain(["gmail.com"], " https://www.Acme.com/pricing ")).toEqual([
+			"acme.com",
+			"gmail.com",
+		])
+		expect(withAddedDomain(["acme.io", "acme.com"], "ACME.com")).toEqual(["acme.com", "acme.io"])
+	})
+
+	test("a domain the store will refuse changes nothing", () => {
+		expect(withAddedDomain(["acme.com"], "gmail.com")).toEqual(["acme.com"])
+		expect(withAddedDomain(["acme.com"], `${"a".repeat(64)}.com`)).toEqual(["acme.com"])
+	})
+})
+
+describe("addingDomainChanges", () => {
+	test("only a domain the list would show differently is an optimistic write", () => {
+		expect(addingDomainChanges(["gmail.com"], "https://acme.com")).toBe(true)
+		expect(addingDomainChanges(["acme.io", "acme.com"], "acme.com")).toBe(true)
+		// These go out as a plain RPC: the store's refusal, or nothing to show.
+		expect(addingDomainChanges(["acme.com"], "gmail.com")).toBe(false)
+		expect(addingDomainChanges(["acme.com", "acme.io"], "ACME.com")).toBe(false)
 	})
 })

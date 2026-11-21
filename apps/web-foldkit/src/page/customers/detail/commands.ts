@@ -13,6 +13,7 @@ import { Command } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { type CommonError, failureMessage } from "~/lib/error-messages"
 import {
+	addDomainAction,
 	createNoteAction,
 	deleteNoteAction,
 	linkAccountAction,
@@ -186,6 +187,37 @@ export const UpdateCustomerAccount = Command.define("UpdateCustomerAccount", {
 					Effect.succeed(Message.FailedAccountUpdate({ reason: "Stale" })),
 			}),
 			catchCommon((reason) => Message.FailedAccountUpdate({ reason })),
+		),
+})
+
+/** Give the customer a company domain, first, so its company is looked up by it. */
+export const AddCustomerDomain = Command.define("AddCustomerDomain", {
+	args: { ...target, addDomain: Schema.String },
+	messages: [Message.SucceededAddDomain, Message.FailedAddDomain],
+	execute: (args) =>
+		addDomainAction(args).pipe(
+			Effect.as(Message.SucceededAddDomain({ accountId: args.accountId })),
+			Effect.catchTags({
+				CustomersNotFoundError: () =>
+					Effect.succeed(
+						Message.FailedAddDomain({
+							accountId: args.accountId,
+							reason: "NotFound",
+							message: null,
+						}),
+					),
+				CustomersInvalidRequestError: (error) =>
+					Effect.succeed(
+						Message.FailedAddDomain({
+							accountId: args.accountId,
+							reason: "Stale",
+							message: error.message,
+						}),
+					),
+			}),
+			catchCommon((reason) =>
+				Message.FailedAddDomain({ accountId: args.accountId, reason, message: null }),
+			),
 		),
 })
 
