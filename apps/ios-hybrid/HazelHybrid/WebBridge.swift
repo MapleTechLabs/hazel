@@ -37,6 +37,8 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
     /// The page has settled once and said what it shows (a native screen, or none): until then the
     /// shell shows neither, so nothing draws half-filled and then jumps.
     private(set) var hasSettled = false
+    /// The screen the app last started on (`KeptScreen`), drawn until the page has settled.
+    private(set) var kept: Kept?
     /// The page's own icons, rasterized by the page (`web/look.ts`), by key.
     private(set) var icons: [String: UIImage] = [:]
     /// Where the page's message list is (its viewport), while it shows one: the native list goes there.
@@ -67,6 +69,73 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
     @ObservationIgnored private let host = HostBridge()
     @ObservationIgnored private let navigation = PageNavigation()
     @ObservationIgnored private var pageScroll: NSKeyValueObservation?
+    /// What the next `KeptScreen` is made of: the page's last tabs, and every icon it sent.
+    @ObservationIgnored private var tabsData = Data("[]".utf8)
+    @ObservationIgnored private var iconURLs: [String: String] = [:]
+    /// Where this page load first settled: its screen there is the one kept for the next launch.
+    @ObservationIgnored private var startLocation: String?
+    @ObservationIgnored private var keepSoon: DispatchWorkItem?
+    /// A press on the kept screen, by its place (`SemanticNode.path`), carried out once the page settles.
+    @ObservationIgnored private var waitingPress: [String]?
+
+    struct Kept {
+        let screen: SemanticNode
+        let tabs: [WebTab]
+        let appearance: String
+    }
+
+    override init() {
+        super.init()
+        guard let kept = KeptScreen.read(),
+              let screen = try? JSONDecoder().decode(SemanticNode.self, from: kept.screen)
+        else { return }
+        self.kept = Kept(
+            screen: screen,
+            tabs: (try? JSONDecoder().decode([WebTab].self, from: kept.tabs)) ?? [],
+            appearance: kept.appearance
+        )
+        iconURLs = kept.icons
+        icons = Self.decodeIcons(kept.icons)
+    }
+
+    nonisolated private static func decodeIcons(_ urls: [String: String]) -> [String: UIImage] {
+        var decoded: [String: UIImage] = [:]
+        for (key, url) in urls {
+            guard let comma = url.firstIndex(of: ","),
+                  let data = Data(base64Encoded: String(url[url.index(after: comma)...])),
+                  let image = UIImage(data: data, scale: 3)?.preparingForDisplay()
+            else { continue }
+            decoded[key] = image
+        }
+        return decoded
+    }
+
+    /// The page settled on `screenData` (`nil`: no native screen): kept for the next launch when it
+    /// is where this page load started, and forgotten when the page started on none (signed out).
+    private func keep(_ screenData: Data?) {
+        if startLocation == nil {
+            startLocation = location
+            if screenData == nil {
+                keepSoon?.cancel()
+                KeptScreen.forget()
+                return
+            }
+        }
+        guard let screenData, location == startLocation else { return }
+        keepSoon?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            KeptScreen(
+                appearance: KeptScreen.appearance(of: webView.traitCollection.userInterfaceStyle),
+                screen: screenData,
+                tabs: tabsData,
+                icons: iconURLs
+            ).write()
+        }
+        keepSoon = work
+        // The screen changes in bursts (a sync's rows): written once they stop.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
+    }
 
     func selectTab(_ id: String) {
         UISelectionFeedbackGenerator().selectionChanged()
@@ -114,10 +183,30 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
         }
     }
 
-    func press(_ node: SemanticNode) { evaluate("__hazelHybrid.press(\(jsString(node.id)))") }
+    func press(_ node: SemanticNode) {
+        // A press on the kept screen: its ids are an earlier page's, so it waits for the page's own
+        // screen and is carried out on the node in the same place there (`pressWaiting`).
+        if !hasSettled, let kept {
+            waitingPress = kept.screen.path(to: node.id)
+            UISelectionFeedbackGenerator().selectionChanged()
+            return
+        }
+        evaluate("__hazelHybrid.press(\(jsString(node.id)))")
+    }
 
     func choose(_ node: SemanticNode, key: String) {
+        // A menu on the kept screen does nothing: its choices are the page's to carry out.
+        guard hasSettled else { return }
         evaluate("__hazelHybrid.chooseFromMenu(\(jsString(node.id)), \(jsString(key)))")
+    }
+
+    /// The page settled: a press made on the kept screen goes to the node in the same place on the
+    /// page's, if it has one (the screen it started on is not always the one kept).
+    private func pressWaiting() {
+        guard let path = waitingPress else { return }
+        waitingPress = nil
+        guard let node = screen?.node(at: path) else { return }
+        evaluate("__hazelHybrid.press(\(jsString(node.id)))")
     }
 
     private func evaluate(_ script: String) {
@@ -139,7 +228,7 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.isInspectable = true
         webView.isOpaque = false
-        webView.backgroundColor = .systemBackground
+        webView.backgroundColor = .pageBackground
         // The page is one screen high and keeps clear of the notch, bars and home indicator itself
         // (`env(safe-area-inset-*)`); its lists scroll inside it, so the page itself never does.
         webView.scrollView.contentInsetAdjustmentBehavior = .never
@@ -150,7 +239,10 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
         webView.navigationDelegate = navigation
         webView.uiDelegate = navigation
         host.webView = webView
-        navigation.load = { [weak webView] url in webView.map { Self.loadPage($0, at: url) } }
+        navigation.load = { [weak self, weak webView] url in
+            self?.startLocation = nil
+            webView.map { Self.loadPage($0, at: url) }
+        }
         Self.loadPage(webView, at: HostBridge.pageOrigin)
         return webView
     }
@@ -183,6 +275,7 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
             switch type {
             case "tabs":
                 let decoded = tabsData.flatMap { try? JSONDecoder().decode([WebTab].self, from: $0) } ?? []
+                self.tabsData = tabsData ?? Data("[]".utf8)
                 withAnimation(.smooth(duration: 0.25)) { tabs = decoded }
             case "list":
                 receiveList(listJSON)
@@ -191,15 +284,9 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
                 if decoded != composer { composer = decoded }
             case "icons":
                 // Decoded (base64, PNG) off the main thread; prepared for drawing there too.
+                self.iconURLs.merge(iconURLs) { _, new in new }
                 decodeQueue.async { [weak self] in
-                    var decoded: [String: UIImage] = [:]
-                    for (key, url) in iconURLs {
-                        guard let comma = url.firstIndex(of: ","),
-                              let data = Data(base64Encoded: String(url[url.index(after: comma)...])),
-                              let image = UIImage(data: data, scale: 3)?.preparingForDisplay()
-                        else { continue }
-                        decoded[key] = image
-                    }
+                    let decoded = Self.decodeIcons(iconURLs)
                     DispatchQueue.main.async {
                         self?.icons.merge(decoded) { _, new in new }
                         self?.iconsArrived?(Set(decoded.keys))
@@ -207,11 +294,14 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
                 }
             case "screen":
                 hasSettled = true
+                kept = nil
+                keep(screenData)
                 do {
                     screen = try screenData.map { try JSONDecoder().decode(SemanticNode.self, from: $0) }
                 } catch {
                     Self.log.error("[shell] screen decode: \(String(describing: error), privacy: .public)")
                 }
+                pressWaiting()
             case "swipeBack":
                 canSwipeBack = enabled ?? false
             case "overlay":

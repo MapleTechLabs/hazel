@@ -11,6 +11,31 @@ struct SemanticNode: Decodable, Identifiable, Equatable {
 
     var title: String { props["title"]?.string ?? "" }
     var text: String { props["text"]?.string ?? "" }
+
+    /// Where the node `id` is, in terms that hold across page loads (ids do not: `web/semantic-tree.ts`
+    /// numbers them as it meets them): from the root, each node's kind and title, and which of its
+    /// siblings alike it is.
+    func path(to id: String) -> [String]? {
+        if self.id == id { return [] }
+        for (index, child) in children.enumerated() {
+            if let rest = child.path(to: id) { return [step(index)] + rest }
+        }
+        return nil
+    }
+
+    /// The node at `path` (`path(to:)`) in this tree, if it has one.
+    func node(at path: [String]) -> SemanticNode? {
+        guard let first = path.first else { return self }
+        guard let index = children.indices.first(where: { step($0) == first }) else { return nil }
+        return children[index].node(at: Array(path.dropFirst()))
+    }
+
+    private func step(_ index: Int) -> String {
+        let child = children[index]
+        let key = "\(child.kind):\(child.title.isEmpty ? child.text : child.title)"
+        let alike = children[..<index].filter { "\($0.kind):\($0.title.isEmpty ? $0.text : $0.title)" == key }.count
+        return "\(key)#\(alike)"
+    }
 }
 
 /// A row's long-press menu entry (`NativeMenuItem` in `web-foldkit/src/platform/native-island.ts`).
