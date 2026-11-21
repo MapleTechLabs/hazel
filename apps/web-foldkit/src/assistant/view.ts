@@ -506,9 +506,81 @@ const thinkingLine = (h: H): Html =>
 		],
 	)
 
+/** The live line's words for one step, or for the wait before the next one (`null`). */
+const liveWords = (h: H, step: ItemRow | null): Array<Html> => {
+	if (step === null || step.status !== "running") {
+		return [
+			loader(h, { className: twMerge(STEP_ICON, "text-muted-fg"), ariaLabel: "Working" }),
+			shimmerText(h, { className: "min-w-0 truncate" }, "Thinking"),
+		]
+	}
+	const { label, detail } = stepWords(step.kind, step.title, step.input, step.text)
+	return [
+		stepIcon(h, step.kind, step.status),
+		shimmerText(
+			h,
+			{
+				className: twMerge(
+					"min-w-0 truncate",
+					detail !== null && detail !== "" && "max-w-[60%] shrink-0",
+				),
+			},
+			step.kind === "reasoning" ? "Thinking" : (label ?? "Tool"),
+		),
+		detail === null || detail === ""
+			? h.empty
+			: h.span([h.Class("min-w-0 truncate text-muted-fg")], [`· ${detail}`]),
+	]
+}
+
+const LIVE_ROW =
+	"col-start-1 row-start-1 flex min-w-0 items-center gap-2 py-0.5 text-muted-fg text-sm leading-6"
+
 /**
- * A turn's activity: live, one line per step as they come; once the reply begins (or the turn is
- * done) the lines fold under one summary that opens them again.
+ * A live turn's one line: what the agent is doing now, swapping in place as it moves on. The new
+ * step sharpens in while the one before blurs out in the same spot (both stacked in one grid cell);
+ * pressing it opens every step so far.
+ */
+const liveLine = (h: H, turn: Turn, listId: string): Html => {
+	const last = turn.steps.at(-1) ?? null
+	const current = last !== null && last.status === "running" ? last : null
+	// Between steps the line reads "Thinking"; the step that just finished blurs out under it.
+	const previous = current === null ? last : (turn.steps.at(-2) ?? null)
+	const currentKey = current?.id ?? `wait-${last?.id ?? turn.key}`
+	return ariaButton(
+		h,
+		{
+			onPress: Message.ToggledWork({ key: turn.key }),
+			className:
+				"grid w-full min-w-0 cursor-pointer rounded-md text-left outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70",
+			attributes: [h.AriaExpanded(false), h.Attribute("aria-controls", listId)],
+		},
+		[
+			...(previous === null || previous.id === current?.id
+				? []
+				: [
+						h.keyed("span")(
+							`out-${previous.id}`,
+							[
+								h.Class(twMerge(LIVE_ROW, "pointer-events-none animate-step-swap-out")),
+								h.AriaHidden(true),
+							],
+							liveWords(h, { ...previous, status: "running" }),
+						),
+					]),
+			h.keyed("span")(
+				`in-${currentKey}`,
+				[h.Class(twMerge(LIVE_ROW, "animate-step-swap-in"))],
+				liveWords(h, current),
+			),
+		],
+	)
+}
+
+/**
+ * A turn's activity. Live, one line that swaps in place as the agent moves from step to step (open,
+ * every step so far); once the reply begins (or the turn is done) the steps fold under one summary
+ * that opens them again.
  */
 const activityList = (
 	h: H,
@@ -523,29 +595,28 @@ const activityList = (
 	const isWaiting = isLive && !turn.steps.some((step) => step.status === "running")
 	if (turn.steps.length === 0 && !isLive) return h.empty
 	const summary = workSummaryOf(turn.steps)
+	if (isLive && !isExpanded) return liveLine(h, turn, listId)
 	return h.div(
 		[h.Class("flex flex-col")],
 		[
-			isLive
-				? h.empty
-				: ariaButton(
-						h,
-						{
-							onPress: Message.ToggledWork({ key: turn.key }),
-							className:
-								"group animate-step-enter flex w-fit cursor-pointer items-center gap-1.5 rounded-md py-0.5 text-muted-fg text-sm leading-6 outline-hidden transition-colors duration-150 hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70",
-							attributes: [h.AriaExpanded(isExpanded), h.Attribute("aria-controls", listId)],
-						},
-						[
-							h.span([], [summary.label]),
-							IconChevronRight(h, {
-								className: twMerge(
-									"size-3 shrink-0 transition-[rotate] duration-200 ease-out",
-									isExpanded && "rotate-90",
-								),
-							}),
-						],
-					),
+			ariaButton(
+				h,
+				{
+					onPress: Message.ToggledWork({ key: turn.key }),
+					className:
+						"group animate-step-enter flex w-fit cursor-pointer items-center gap-1.5 rounded-md py-0.5 text-muted-fg text-sm leading-6 outline-hidden transition-colors duration-150 hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70",
+					attributes: [h.AriaExpanded(isExpanded), h.Attribute("aria-controls", listId)],
+				},
+				[
+					h.span([], [isLive ? "Working" : summary.label]),
+					IconChevronRight(h, {
+						className: twMerge(
+							"size-3 shrink-0 transition-[rotate] duration-200 ease-out",
+							isExpanded && "rotate-90",
+						),
+					}),
+				],
+			),
 			// Collapsing animates its height (0fr ⇄ 1fr); folded, its lines leave the tab order.
 			h.div(
 				[

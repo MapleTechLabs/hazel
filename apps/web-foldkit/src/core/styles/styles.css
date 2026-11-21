@@ -148,6 +148,38 @@ If you want to use the typography plugin, uncomment the line below.
 	--animate-progress-slide: progress-slide 1.6s ease-in-out infinite;
 	/* A new line in a list that grows live (the AI panel's steps): a short fade up into place. */
 	--animate-step-enter: step-enter 180ms cubic-bezier(0.23, 1, 0.32, 1);
+	/* A live line swapping in place (the AI panel's current step): the new one sharpens in from below… */
+	--animate-step-swap-in: step-swap-in 260ms cubic-bezier(0.23, 1, 0.32, 1) both;
+	/* …while the one it replaces blurs out upward, in the same spot. */
+	--animate-step-swap-out: step-swap-out 200ms cubic-bezier(0.4, 0, 1, 1) both;
+
+	@keyframes step-swap-in {
+		from {
+			opacity: 0;
+			filter: blur(6px);
+			transform: translateY(6px);
+		}
+
+		to {
+			opacity: 1;
+			filter: blur(0);
+			transform: translateY(0);
+		}
+	}
+
+	@keyframes step-swap-out {
+		from {
+			opacity: 1;
+			filter: blur(0);
+			transform: translateY(0);
+		}
+
+		to {
+			opacity: 0;
+			filter: blur(6px);
+			transform: translateY(-6px);
+		}
+	}
 
 	@keyframes step-enter {
 		from {
