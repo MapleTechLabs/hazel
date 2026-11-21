@@ -1,6 +1,6 @@
 /**
  * The iOS shell's page: the web app's own entry, live against production (signing in as the native
- * app, `host.ts`), or built `--mode offline` with the native app's fixture as the page's `fetch` and
+ * app, `host.ts`), or built `--mode offline` with the offline fixture (`../fixture`) as the page's `fetch` and
  * `WebSocket` (no backend); and the bridge to the SwiftUI shell.
  */
 import { forwardConsole, installBridge } from "./bridge"
@@ -9,10 +9,9 @@ import { installHost } from "./host"
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3003"
 
 const installOffline = async () => {
-	const { makeOfflineFetch } = await import("../../native/src/offline-backend")
-	const { makeFixtureServer, makeFixtureWebSocket } =
-		await import("../../native/src/fixture/fixture-socket")
-	const offline = await import("../../native/src/offline-session")
+	const { makeOfflineFetch } = await import("../fixture/offline-backend")
+	const { makeFixtureServer, makeFixtureWebSocket } = await import("../fixture/fixture-socket")
+	const offline = await import("../fixture/offline-session")
 	const server = makeFixtureServer()
 	// The performance bar's big channel: #engineering with thousands of messages.
 	const { bigChannel } = await import("./big-channel")
@@ -20,7 +19,7 @@ const installOffline = async () => {
 	server.write("channel", big.channelId, "messages", big.messages)
 	server.write("channel", big.channelId, "message_reactions", big.reactions)
 	// Pictures for the native list to load: an avatar from the app's bundle and one from the network.
-	const { orgId, userRows } = await import("../../native/src/fixture/snapshot")
+	const { orgId, userRows } = await import("../fixture/snapshot")
 	const [, second, third] = userRows
 	if (second !== undefined && third !== undefined) {
 		server.write("org", orgId, "users", [
@@ -29,12 +28,12 @@ const installOffline = async () => {
 		])
 	}
 	// An HTML render in #general, when the build names a page (`VITE_FIXTURE_HTML`, as served by
-	// `apps/native/scripts/serve-fixture-html.ts`).
+	// `apps/ios-hybrid/scripts/serve-fixture-html.ts`).
 	const fixtureHtml = import.meta.env.VITE_FIXTURE_HTML
 	const render =
 		fixtureHtml === undefined
 			? undefined
-			: (await import("../../native/src/fixture/html-render-message")).fixtureHtmlRenderAt(fixtureHtml)
+			: (await import("../fixture/html-render-message")).fixtureHtmlRenderAt(fixtureHtml)
 	if (render !== undefined) {
 		// Three renders in a row, each at its own URL as the api mints one per message.
 		const messages = [0, 1, 2].map((n) => ({
@@ -50,7 +49,7 @@ const installOffline = async () => {
 			? undefined
 			: () => ({ url: `${render.url().url}?n=${++minted}`, expiresAt: render.url().expiresAt })
 	// A thread on #general's last message, with a few replies (the offline fixture has none).
-	const fixture = await import("../../native/src/fixture/snapshot")
+	const fixture = await import("../fixture/snapshot")
 	const threadId = "00000000-0000-4000-8000-0000000e0001"
 	const parent = fixture.generalMessageRows.at(-1)
 	const [template] = fixture.channelRows

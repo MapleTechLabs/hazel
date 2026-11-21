@@ -8,8 +8,8 @@
  *   `Sent an attachment` for a message with only attachments.
  * - path: `/<orgSlug>/chat/<channelId>` (a thread is a channel with its own route).
  * - sender: the author's id, name and picture, and conversation: the channel's name when it is a
- *   group (`pushConversation`). The iOS app's notification service shows the push as a message
- *   from them, their picture in place of the app's icon (`apps/native/host/ios/notification-service`).
+ *   group (`pushConversation`). An iOS notification service extension can show the push as a
+ *   message from them, their picture in place of the app's icon.
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"

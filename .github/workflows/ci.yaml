@@ -67,7 +67,7 @@ jobs:
             - name: Install dependencies
               run: bun install --frozen-lockfile
 
-            # Two tasks at a time: backend, native and web-foldkit's tsc running together exhaust the
+            # Two tasks at a time: backend and web-foldkit's tsc running together exhaust the
             # runner's memory and it is shut down mid-step (which blocks Deploy PRD, gated on this run).
             - name: Type check
               run: bunx turbo build typecheck --concurrency=2

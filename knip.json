@@ -37,27 +37,9 @@
 		"apps/link-preview-worker": {
 			"entry": ["alchemy.run.ts"]
 		},
-		"apps/native": {
-			// The runtime the Rune host spawns, the iOS worker's runtime and its bundler (run by
-			// `scripts/ios.ts`), the benchmark runners and the browser bench page.
-			"entry": [
-				"src/entry.ts",
-				"src/ios.ts",
-				"scripts/build-ios.ts",
-				"bench/web/run.ts",
-				"bench/interaction/run.ts",
-				"bench/parity/run.ts",
-				"bench/web/web-entry.ts",
-				"bench/web/vite.config.ts"
-			],
-			// Left external by `bun run build` and loaded at runtime from the bundle.
-			"ignoreDependencies": ["@tailwindcss/node", "@tailwindcss/oxide", "postcss", "prismjs"],
-			// macOS's plist tool, for the app bundle and iOS scripts.
-			"ignoreBinaries": ["plutil"]
-		},
 		"apps/ios-hybrid": {
 			// web-foldkit's Vite config (which this package's spreads) imports these, resolved here.
-			"ignoreDependencies": ["effect", "foldkit", "@foldkit/vite-plugin"]
+			"ignoreDependencies": ["foldkit", "@foldkit/vite-plugin"]
 		},
 		"apps/raycast": {
 			// Raycast provides React to extensions at runtime.

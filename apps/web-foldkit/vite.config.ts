@@ -49,8 +49,7 @@ const immutableAssetHeaders = (): Plugin => ({
 
 /**
  * Prism's language files use the global its core sets, without importing it: each gets the import,
- * so the core runs first in whatever chunk they land (the native bundle does the same,
- * `apps/native/scripts/prism-plugin.ts`).
+ * so the core runs first in whatever chunk they land.
  */
 const prismLanguagesImportCore = (): Plugin => ({
 	name: "hazel:prism-languages-import-core",

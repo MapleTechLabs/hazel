@@ -7,16 +7,13 @@ import { getTauriUpdater, isTauri, isTauriMacOS } from "./tauri"
  */
 export const isDesktop: boolean = typeof window !== "undefined" && isTauri()
 
-/**
- * Whether this build can update itself: the Tauri app, and the native (Rune) Mac app, whose host
- * answers the same updater calls (`apps/native/src/desktop-bridge.ts`). Never the browser.
- */
+/** Whether this build can update itself: the Tauri app, never the browser. */
 export const hasUpdater: boolean = typeof window !== "undefined" && getTauriUpdater() !== undefined
 
 /**
  * The app this build signs in as through the system browser, keeping its session in the OS
- * keychain (`desktop-auth.ts`); `null` when it uses the API's cookie. The Rune-native app
- * replaces this line with its own client (apps/native/src/overlay-plugin.ts).
+ * keychain (`desktop-auth.ts`); `null` when it uses the API's cookie. The iOS shell
+ * replaces this line with its own client (`apps/ios-hybrid/web/vite.config.mts`).
  */
 export const desktopAuthClient: BrowserLoginClient | null = isDesktop ? desktopClient : null
 

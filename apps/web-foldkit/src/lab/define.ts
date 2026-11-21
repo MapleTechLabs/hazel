@@ -19,7 +19,7 @@ type ProgramKeys = "Model" | "update" | "view" | "subscriptions"
 
 export interface LabEntry {
 	readonly title: string
-	/** Into a DOM container (`{ container }`), or a render target (the native app's Rune). */
+	/** Into a DOM container (`{ container }`), or a render target. */
 	readonly start: (surface: Runtime.RenderSurfaceConfig) => void
 }
 

@@ -3,7 +3,7 @@
  * `count` messages of the kinds a busy channel has (one-liners, paragraphs, code, mentions, lists,
  * reactions), deterministic so every run scrolls the same content.
  */
-import { channelIds, userRows } from "../../native/src/fixture/snapshot"
+import { channelIds, userRows } from "../fixture/snapshot"
 
 const MINUTE = 60_000
 

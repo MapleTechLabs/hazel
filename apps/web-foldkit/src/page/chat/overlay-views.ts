@@ -56,7 +56,7 @@ export const trackHoverAttribute = (h: H) =>
 export const messageToolbarOverlay = (h: H, model: Model): Html => {
 	const overlays = model.overlays
 	// The image viewer covers the list: its toolbar would otherwise stay on the image's message
-	// (Rune draws the portalled toolbar over the viewer, and the pointer never left the message).
+	// (the pointer never left the message).
 	if (Overlays.imageViewerOf(overlays) !== null) return h.empty
 	const messageId = Overlays.hoveredMessageIdOf(overlays)
 	// A row of the channel's list, or a reply in the open thread panel: both get the same toolbar.

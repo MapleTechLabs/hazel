@@ -1,7 +1,7 @@
 /**
  * The desktop host's APIs, as the page sees them on `window.__TAURI__` (`withGlobalTauri`): the
- * one module that reads them. The Tauri app (Windows, Linux) installs every one; the native Mac
- * app (`apps/native/src/desktop-bridge.ts`) installs the ones its host answers. So a feature
+ * one module that reads them. The Tauri app installs every one; another shell may install only
+ * the ones its host answers (the iOS shell's `apps/ios-hybrid/web/bridge.ts`). So a feature
  * checks for the API it uses (`getTauriUpdater() !== undefined`), not for Tauri itself; the
  * browser has none of them.
  */

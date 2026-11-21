@@ -2,7 +2,7 @@ import type { Feedback } from "./feedback"
 
 /**
  * The phone's own controls, where the app runs in a native shell that has them: the iOS app
- * (`apps/native/src/ios.ts`) installs them on the global object before the app starts, as the
+ * (`apps/ios-hybrid/web/bridge.ts`) installs them on the global object before the app starts, as the
  * desktop shells install `window.__TAURI__`: a tap of the finger, and the swipe from the screen's
  * left edge that goes back. A browser has none. (Native views that stand in for the app's own
  * elements are islands: `platform/native-island.ts`.)
@@ -18,11 +18,6 @@ export type SystemUi = Readonly<{
 	 * plain chevron on screen.
 	 */
 	setSwipeBack: (href: string, onBack?: () => void) => () => void
-	/**
-	 * From now on a horizontal swipe pages (`onPage(1)` toward the next, `-1` the previous) instead
-	 * of going back, until the function this returns runs. An image viewer's slides.
-	 */
-	setSwipePager?: (onPage: (step: -1 | 1) => void) => () => void
 	/**
 	 * The shell draws message lists itself from the rows the page lays out (the iOS shell's native
 	 * list): the page renders every row it holds, not only those near its own (unseen) scroll.

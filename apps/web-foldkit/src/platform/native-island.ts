@@ -1,8 +1,8 @@
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 
 /**
- * Native islands: marks an element the Rune-native app may show or drive with a real platform
- * view (`apps/native/host/src/islands.rs`): a `UITabBar` for the mobile nav, a system menu for a
+ * Native islands: marks an element a native shell may show or drive with a real platform
+ * view (the iOS shell, `apps/ios-hybrid`): a `UITabBar` for the mobile nav, a system menu for a
  * Select, the system's long-press menu for a row (`nativeContextMenu`). The element and its
  * children stay the whole UI everywhere else: the browser ignores these attributes, and a native shell without the component draws the element as it is.
  *

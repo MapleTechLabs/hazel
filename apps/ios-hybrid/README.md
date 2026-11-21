@@ -27,7 +27,7 @@ BUILD=<n> bash scripts/release.sh            # TestFlight (HazelChat, `hazel.app
 ```
 
 An HTML render in the offline #general: serve a page with
-`bun apps/native/scripts/serve-fixture-html.ts page.html 4310` and build with
+`bun run serve-fixture-html page.html 4310` and build with
 `VITE_FIXTURE_HTML=http://127.0.0.1:4310/html-renders/fixture`.
 
 Debug the page with Safari's Develop menu (the web view is inspectable); the page's console is in
