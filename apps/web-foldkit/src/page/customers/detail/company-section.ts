@@ -143,8 +143,11 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 			h.p(
 				[h.Class("pb-2 text-muted-fg text-sm")],
 				[
+					// The form waits on the detail (its domains); without it, no promise of one.
 					context.isAdmin
-						? "Add the customer's website domain and Hazel looks up their company."
+						? context.detail === null
+							? "No company domain to look up."
+							: "Add the customer's website domain and Hazel looks up their company."
 						: "No company domain to look up. An admin can add one.",
 				],
 			),
