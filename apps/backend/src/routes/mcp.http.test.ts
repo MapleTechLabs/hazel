@@ -15,7 +15,7 @@ import { AgentAccess } from "../services/agent-access"
 import { Directory } from "../services/directory"
 import { ObjectStorage, type PresignPutOptions } from "../services/object-storage"
 import { RateLimiterAllowAll } from "../services/rate-limiter"
-import { channelTarget, orgTarget, userTarget } from "../worker/objects/kinds"
+import { channelTarget, customersTarget, orgTarget, userTarget } from "../worker/objects/kinds"
 import { ObjectStubs } from "../worker/objects/protocol"
 import { makeTestObjects, type TestObject } from "../worker/objects/testing"
 import { AgentOAuthRoutes } from "./agent-oauth"
@@ -611,6 +611,274 @@ describe("MCP server", () => {
 				expect(picked()).toBe("invisible")
 				const bad = yield* callTool(world, token, "set_status", { presence: "offline" })
 				expect(bad.isError).toBe(true)
+			}),
+		))
+
+	it("customers: read-only tools for customers:read grants, routed and authorized like the RPCs", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				// Alice is a member of the org's Customers area (the OrgObject's projection).
+				const customers = yield* world.objects.get(customersTarget(world.orgId))
+				yield* customers.applyEffect({
+					objectId: world.orgId,
+					kind: "customers.setMembers",
+					payload: {
+						organizationId: world.orgId,
+						members: [{ userId: world.alice, role: "member" }],
+						version: 1,
+					},
+					key: uuid(),
+					sender: { kind: "org", id: world.orgId },
+				})
+
+				const CUSTOMER_TOOLS = [
+					"customers_overview",
+					"list_customers",
+					"get_customer",
+					"list_customer_signals",
+					"list_customer_contacts",
+					"list_customer_events",
+					"list_customer_invoices",
+				]
+
+				// A messages-only grant: no customers tools, and calling one is refused.
+				const reader = yield* world.access.createPersonalToken({
+					userId: world.alice,
+					name: "Reader",
+					scopes: ["messages:read", "messages:write"],
+				})
+				const readerTools = (yield* mcp(world, reader.token, "tools/list")).result.tools.map(
+					(tool: { name: string }) => tool.name,
+				)
+				for (const name of CUSTOMER_TOOLS) expect(readerTools).not.toContain(name)
+				const refused = yield* callTool(world, reader.token, "list_customers", {
+					organization_id: world.orgId,
+				})
+				expect(refused.isError).toBe(true)
+				expect(refused.content[0].text).toContain("customers:read")
+
+				// A customers-only grant: the customers tools (all read-only) and list_organizations.
+				const { token } = yield* world.access.createPersonalToken({
+					userId: world.alice,
+					name: "Side panel",
+					scopes: ["customers:read"],
+				})
+				const listed = (yield* mcp(world, token, "tools/list")).result.tools as Array<{
+					name: string
+					annotations: { readOnlyHint: boolean }
+				}>
+				expect(listed.map((tool) => tool.name).sort()).toEqual(
+					[...CUSTOMER_TOOLS, "list_organizations"].sort(),
+				)
+				expect(listed.every((tool) => tool.annotations.readOnlyHint)).toBe(true)
+				const orgs = yield* callTool(world, token, "list_organizations")
+				expect(orgs.structuredContent.organizations).toEqual([
+					{ id: world.orgId, name: "Acme", slug: "acme" },
+				])
+				expect(
+					(yield* callTool(world, token, "read_messages", { channel_id: world.channelId })).isError,
+				).toBe(true)
+
+				// The first call wakes (and bootstraps) the customers object.
+				const overview = yield* callTool(world, token, "customers_overview", {
+					organization_id: world.orgId,
+				})
+				expect(overview.isError).toBeUndefined()
+				expect(overview.structuredContent).toMatchObject({
+					range: "30d",
+					reporting_currency: "usd",
+					has_billing_data: false,
+					has_activity_data: false,
+				})
+				// No billing data: no movements, rather than zeros.
+				expect(overview.structuredContent.mrr_movements).toBeNull()
+
+				const globex = uuid()
+				const initech = uuid()
+				const db = customers.storage.db
+				const insertAccount = db.prepare(
+					`INSERT INTO customer_accounts (id, organizationId, name, domains, planName, mrrMinor, currency,
+					healthStatus, healthScore, lifecycleStage, openRiskHigh) VALUES (?, ?, ?, ?, ?, ?, 'usd', ?, ?, ?, ?)`,
+				)
+				insertAccount.run(
+					globex,
+					world.orgId,
+					"Globex",
+					'["globex.com"]',
+					"Scale",
+					129_900,
+					"at_risk",
+					41,
+					"active",
+					1,
+				)
+				insertAccount.run(
+					initech,
+					world.orgId,
+					"Initech",
+					'["initech.io"]',
+					"Team",
+					19_900,
+					"healthy",
+					88,
+					"active",
+					0,
+				)
+				const evidence = JSON.stringify({
+					_tag: "last_active",
+					step: 1,
+					lastActiveAt: null,
+					daysInactive: 20,
+					priorActiveUsers: 3,
+					contactId: null,
+					contactName: null,
+					contactEmail: null,
+				})
+				const insertSignal = db.prepare(
+					`INSERT INTO customer_signals (id, organizationId, accountId, ruleId, template, kind, severity,
+					status, title, reason, evidence, openingEvidence, priorityScore) VALUES (?, ?, ?, ?, 'inactive', 'risk', 'high',
+					'open', ?, 'No one active for 20 days', ?, ?, 90)`,
+				)
+				insertSignal.run(
+					uuid(),
+					world.orgId,
+					globex,
+					uuid(),
+					"Stopped using the product",
+					evidence,
+					evidence,
+				)
+				// Globex was scored 7 days ago, and never before: earlier days are unknown, not 0.
+				const daysAgo = (days: number) =>
+					new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10)
+				db.prepare(
+					`INSERT INTO customer_health_daily (accountId, day, score, status, breakdown) VALUES (?, ?, 55, 'at_risk', ?)`,
+				).run(globex, daysAgo(7), JSON.stringify({ score: 55, status: "at_risk", components: [] }))
+
+				const all = yield* callTool(world, token, "list_customers", { organization_id: world.orgId })
+				expect(all.isError).toBeUndefined()
+				expect(all.structuredContent.customers.map((row: { name: string }) => row.name)).toEqual([
+					"Globex",
+					"Initech",
+				])
+				expect(all.structuredContent.customers[0]).toMatchObject({
+					id: globex,
+					domains: ["globex.com"],
+					plan: "Scale",
+					mrr: "$1,299.00",
+					health: "at_risk",
+					health_score: 41,
+					lifecycle_stage: "active",
+					open_risks: 1,
+				})
+				const byDomain = yield* callTool(world, token, "list_customers", {
+					organization_id: world.orgId,
+					query: "initech.io",
+				})
+				expect(byDomain.structuredContent.customers.map((row: { id: string }) => row.id)).toEqual([
+					initech,
+				])
+				const atRisk = yield* callTool(world, token, "list_customers", {
+					organization_id: world.orgId,
+					health: ["at_risk", "critical"],
+				})
+				expect(atRisk.structuredContent.customers.map((row: { id: string }) => row.id)).toEqual([
+					globex,
+				])
+				const badFilter = yield* callTool(world, token, "list_customers", {
+					organization_id: world.orgId,
+					health: ["sad"],
+				})
+				expect(badFilter.isError).toBe(true)
+
+				const detail = yield* callTool(world, token, "get_customer", {
+					organization_id: world.orgId,
+					customer_id: globex,
+				})
+				expect(detail.isError).toBeUndefined()
+				expect(detail.structuredContent.customer).toMatchObject({ name: "Globex", mrr: "$1,299.00" })
+				expect(detail.structuredContent.health.score_7d_ago).toBe(55)
+				expect(detail.structuredContent.health).not.toHaveProperty("score_30d_ago")
+				expect(detail.structuredContent.health).not.toHaveProperty("score_90d_ago")
+				expect(detail.structuredContent).not.toHaveProperty("more_open_signals")
+				expect(detail.structuredContent.open_signals).toEqual([
+					expect.objectContaining({
+						kind: "risk",
+						severity: "high",
+						title: "Stopped using the product",
+						reason: "No one active for 20 days",
+					}),
+				])
+				const missing = yield* callTool(world, token, "get_customer", {
+					organization_id: world.orgId,
+					customer_id: uuid(),
+				})
+				expect(missing.isError).toBe(true)
+				expect(missing.content[0].text).toMatch(/^No account /)
+
+				const signals = yield* callTool(world, token, "list_customer_signals", {
+					organization_id: world.orgId,
+				})
+				expect(signals.structuredContent.signals).toHaveLength(1)
+				// An empty page still has its list; next_cursor only when there is more.
+				for (const [name, key] of [
+					["list_customer_contacts", "contacts"],
+					["list_customer_events", "events"],
+					["list_customer_invoices", "invoices"],
+				] as const) {
+					const page = yield* callTool(world, token, name, {
+						organization_id: world.orgId,
+						customer_id: globex,
+					})
+					expect(page.isError).toBeUndefined()
+					expect(page.structuredContent).toEqual({ [key]: [] })
+				}
+
+				// More open signals than get_customer shows: it says so, and where the rest are.
+				for (let i = 0; i < 21; i++)
+					insertSignal.run(uuid(), world.orgId, initech, uuid(), `Signal ${i}`, evidence, evidence)
+				const busy = yield* callTool(world, token, "get_customer", {
+					organization_id: world.orgId,
+					customer_id: initech,
+				})
+				expect(busy.structuredContent.open_signals).toHaveLength(20)
+				expect(busy.structuredContent.more_open_signals).toContain("list_customer_signals")
+				const firstPage = yield* callTool(world, token, "list_customer_signals", {
+					organization_id: world.orgId,
+					customer_id: initech,
+					limit: 15,
+				})
+				expect(firstPage.structuredContent.signals).toHaveLength(15)
+				expect(firstPage.structuredContent.next_cursor).toBe("15")
+
+				// Event type prefixes match literally (`_` is no wildcard), and overlong ones are refused.
+				const insertEvent = db.prepare(
+					`INSERT INTO customer_events (id, accountId, provider, type, title, occurredAt) VALUES (?, ?, 'hazel', ?, ?, ?)`,
+				)
+				insertEvent.run(uuid(), globex, "signal.opened", "Signal opened", new Date().toISOString())
+				insertEvent.run(uuid(), globex, "a_b.c", "Odd type", new Date().toISOString())
+				const eventTypes = (types: ReadonlyArray<string>) =>
+					callTool(world, token, "list_customer_events", {
+						organization_id: world.orgId,
+						customer_id: globex,
+						types,
+					})
+				expect((yield* eventTypes(["signal.open_d"])).structuredContent).toEqual({ events: [] })
+				expect(
+					(yield* eventTypes(["a_b."])).structuredContent.events.map(
+						(event: { type: string }) => event.type,
+					),
+				).toEqual(["a_b.c"])
+				expect((yield* eventTypes(["signal."])).structuredContent.events).toHaveLength(1)
+				const overlong = yield* eventTypes(["x".repeat(101)])
+				expect(overlong.isError).toBe(true)
+				expect(overlong.content[0].text).toContain("100 characters")
+
+				// Another organization's customers: refused before its object is reached.
+				const elsewhere = yield* callTool(world, token, "list_customers", { organization_id: uuid() })
+				expect(elsewhere.isError).toBe(true)
+				expect(elsewhere.content[0].text).toContain("not a member")
 			}),
 		))
 })

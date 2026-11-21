@@ -164,8 +164,15 @@ export const AccountDetail = Schema.Struct({
 	openInvoices: Schema.Array(Invoice.Schema),
 	/** Today's breakdown; null before the first compute. */
 	health: Schema.NullOr(HealthBreakdown),
-	/** 90 days of the health score. */
+	/** 90 days of the health score (a day without a score is 0, for the chart). */
 	healthSeries: Schema.Array(SeriesPoint),
+	/**
+	 * The scores actually recorded in those 90 days, oldest first: a day missing here was never
+	 * scored (`score` null: scored without enough data). Optional: older answers lack it.
+	 */
+	healthScores: Schema.optionalKey(
+		Schema.Array(Schema.Struct({ day: Day, score: Schema.NullOr(Schema.Finite) })),
+	),
 	/** 30 days of daily active users. */
 	activeUsersSeries: Schema.Array(SeriesPoint),
 	/** The most active contacts and admins, ≤ 5: who to reach. */
