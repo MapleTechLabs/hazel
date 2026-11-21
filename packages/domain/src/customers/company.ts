@@ -130,8 +130,12 @@ export const FREE_MAIL_DOMAINS: ReadonlySet<string> = new Set([
 	"163.com",
 ])
 
-/** A hostname (no user, port or path), with at least two labels. */
-const HOSTNAME = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/
+/**
+ * A hostname (no user, port or path) of at least two labels: each 1–63 letters, digits or hyphens,
+ * not starting or ending with a hyphen; 253 characters at most (RFC 1035).
+ */
+const HOSTNAME =
+	/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/
 
 /**
  * A company domain from what a provider or a person gave (`https://www.Acme.com/pricing` is

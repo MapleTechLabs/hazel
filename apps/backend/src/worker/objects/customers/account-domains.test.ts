@@ -1,4 +1,4 @@
-import type { UpsertAccount } from "@hazel/domain/customers"
+import { normalizeDomain, type UpsertAccount } from "@hazel/domain/customers"
 import type { CustomerAccountId } from "@hazel/schema"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
@@ -43,6 +43,10 @@ describe("customers.account.update addDomain", () => {
 				expect(tagOf(yield* add("acme.com", world.member))).not.toBe("Success")
 				// A mail provider's domain is not a company's.
 				expect(tagOf(yield* add("gmail.com"))).toBe("CustomersInvalidRequestError")
+				// Nor is what DNS would not take: a label over 63 characters, or one edged by a hyphen.
+				expect(tagOf(yield* add(`${"a".repeat(64)}.com`))).toBe("CustomersInvalidRequestError")
+				expect(tagOf(yield* add("-acme.com"))).toBe("CustomersInvalidRequestError")
+				expect(normalizeDomain(`${"a".repeat(63)}.com`)).toBe(`${"a".repeat(63)}.com`)
 
 				// The ingest's compute is done: only the domain asks for the next one.
 				world.object.storage.db.prepare(`DELETE FROM _object_meta WHERE key = 'computeDueAt'`).run()
