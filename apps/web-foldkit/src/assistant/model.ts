@@ -48,6 +48,8 @@ export const ItemRow = Schema.Struct({
 	input: Schema.NullOr(Schema.String),
 	question: Schema.NullOr(QuestionData),
 	createdAtMs: Schema.Finite,
+	/** When it last changed: a step's end, for how long a turn worked. */
+	updatedAtMs: Schema.Finite,
 })
 export type ItemRow = typeof ItemRow.Type
 
@@ -167,8 +169,10 @@ export const Model = Schema.Struct({
 	retry: Schema.NullOr(Retry),
 	/** The last write's failure, shown above the composer. */
 	error: Schema.NullOr(Schema.String),
-	/** The work-log rows expanded, by their first item's id. */
+	/** The turns whose finished activity list the member opened, by the turn's key (`timeline.ts`). */
 	expandedWork: Schema.Array(Schema.String),
+	/** The steps whose output (a tool's) or whole text (a thought's) the member opened, by item id. */
+	expandedSteps: Schema.Array(Schema.String),
 	answerDrafts: AnswerDrafts,
 	/** The question whose answer is on its way, until the item syncs as answered. */
 	answeringItemId: Schema.NullOr(AssistantItemId),

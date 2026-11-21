@@ -87,6 +87,7 @@ export const init = (stored: Stored): Model => ({
 	retry: null,
 	error: null,
 	expandedWork: [],
+	expandedSteps: [],
 	answerDrafts: {},
 	answeringItemId: null,
 	answerError: null,
@@ -190,6 +191,7 @@ const showThread = (model: Model, threadId: Model["threadId"]): Return => ({
 		retry: () => null,
 		error: () => null,
 		expandedWork: () => [],
+		expandedSteps: () => [],
 		answerDrafts: () => ({}),
 		answeringItemId: () => null,
 		answerError: () => null,
@@ -725,6 +727,12 @@ export const update = (model: Model, message: Message, inputs: Inputs): Return =
 			model: modifyFields(model, {
 				expandedWork: (keys) =>
 					keys.includes(key) ? keys.filter((current) => current !== key) : [...keys, key],
+			}),
+		}),
+		ToggledStep: ({ itemId }) => ({
+			model: modifyFields(model, {
+				expandedSteps: (ids) =>
+					ids.includes(itemId) ? ids.filter((current) => current !== itemId) : [...ids, itemId],
 			}),
 		}),
 		PickedAnswer: (picked) => ({ model: pickedAnswer(model, picked) }),

@@ -2,9 +2,18 @@ import { AssistantItemId, AssistantThreadId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { describe, expect, test } from "vitest"
 import type { ItemRow, ThreadRow } from "./model"
-import { historyOf, sortItems, timelineOf, workSummaryOf } from "./timeline"
+import {
+	firstSentenceOf,
+	formatDuration,
+	hasReplyStarted,
+	historyOf,
+	isTurnLive,
+	sortItems,
+	timelineOf,
+	workSummaryOf,
+} from "./timeline"
 
-/** How a thread reads: order, work logs, and the history menu's groups. */
+/** How a thread reads: order, turns and their summary lines, and the history menu's groups. */
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
 const threadId = Schema.decodeSync(AssistantThreadId)(uuid(100))
@@ -21,18 +30,27 @@ const item = (n: number, kind: ItemRow["kind"], overrides: Partial<ItemRow> = {}
 	input: null,
 	question: null,
 	createdAtMs: n,
+	updatedAtMs: n,
 	...overrides,
 })
 
-const entryKinds = (items: ReadonlyArray<ItemRow>) =>
+const turnOf = (items: ReadonlyArray<ItemRow>) => {
+	const [entry] = timelineOf(items)
+	if (entry?._tag !== "Turn") throw new Error("expected a turn")
+	return entry.turn
+}
+
+const turnsOf = (items: ReadonlyArray<ItemRow>) =>
 	timelineOf(items).map((entry) =>
-		entry._tag === "Work" ? `work(${entry.items.length})` : entry.item.kind,
+		entry._tag === "User"
+			? "user"
+			: `turn(${entry.turn.steps.map((step) => step.kind).join(",")} | ${entry.turn.said.map((said) => said.kind).join(",")})`,
 	)
 
 describe("timelineOf", () => {
-	test("folds consecutive tool calls into one work log; thinking stays where it happened", () => {
+	test("everything between two of the member's messages is one turn: steps, then what it said", () => {
 		expect(
-			entryKinds([
+			turnsOf([
 				item(1, "user"),
 				item(2, "reasoning"),
 				item(3, "tool"),
@@ -41,22 +59,82 @@ describe("timelineOf", () => {
 				item(6, "tool"),
 				item(7, "assistant"),
 				item(8, "question"),
+				item(9, "user"),
+				item(10, "assistant"),
 			]),
-		).toEqual(["user", "reasoning", "work(2)", "reasoning", "work(1)", "assistant", "question"])
+		).toEqual([
+			"user",
+			"turn(reasoning,tool,tool,reasoning,tool | assistant,question)",
+			"user",
+			"turn( | assistant)",
+		])
 	})
 
-	test("a work log is keyed by its first item", () => {
-		const [entry] = timelineOf([item(3, "tool"), item(4, "tool")])
-		expect(entry?._tag === "Work" ? entry.key : null).toBe(uuid(3))
+	test("a turn is keyed by its first item, and items before any message still make a turn", () => {
+		const turn = turnOf([item(3, "notice"), item(4, "tool")])
+		expect(turn.key).toBe(uuid(3))
+		expect(turn.steps.map((step) => step.id)).toEqual([uuid(4)])
+	})
+
+	test("no items, no entries", () => {
+		expect(timelineOf([])).toEqual([])
+	})
+})
+
+describe("isTurnLive", () => {
+	test("its steps show live while it runs, until the reply has text", () => {
+		const working = turnOf([item(1, "tool", { status: "running" }), item(2, "assistant", { text: " " })])
+		expect(isTurnLive(working, true)).toBe(true)
+		expect(isTurnLive(working, false)).toBe(false)
+		const replying = turnOf([item(1, "tool"), item(2, "assistant", { text: "Here is" })])
+		expect(hasReplyStarted(replying)).toBe(true)
+		expect(isTurnLive(replying, true)).toBe(false)
 	})
 })
 
 describe("workSummaryOf", () => {
-	test("reads running and failed steps", () => {
+	test("says how long the steps took and how many there were", () => {
 		expect(
-			workSummaryOf([item(1, "tool", { status: "completed" }), item(2, "tool", { status: "running" })]),
-		).toEqual({ isRunning: true, failed: 0, steps: 2 })
-		expect(workSummaryOf([item(1, "tool", { status: "failed" })])).toMatchObject({ failed: 1 })
+			workSummaryOf([
+				item(1, "reasoning", { createdAtMs: 1_000, updatedAtMs: 3_000 }),
+				item(2, "tool", { createdAtMs: 3_000, updatedAtMs: 13_400, status: "completed" }),
+			]),
+		).toEqual({ failed: 0, steps: 2, label: "Worked for 12s · 2 steps" })
+	})
+
+	test("counts failed steps, and a quick single step still reads as a second", () => {
+		expect(
+			workSummaryOf([item(1, "tool", { status: "failed", createdAtMs: 5, updatedAtMs: 80 })]).label,
+		).toBe("Worked for 1s · 1 step · 1 failed")
+	})
+
+	test("minutes past a minute", () => {
+		expect(formatDuration(72_000)).toBe("1m 12s")
+		expect(formatDuration(59_400)).toBe("59s")
+	})
+})
+
+describe("firstSentenceOf", () => {
+	test("the first sentence, as plain text", () => {
+		expect(
+			firstSentenceOf("I need to bring in the Hazel tools. The customer tools aren't loaded yet."),
+		).toBe("I need to bring in the Hazel tools.")
+		expect(firstSentenceOf("Is it today? Maybe.")).toBe("Is it today?")
+	})
+
+	test("a bold title line is the sentence; markdown marks are dropped", () => {
+		expect(firstSentenceOf("**Checking the channels**\n\nI'll read #general first.")).toBe(
+			"Checking the channels",
+		)
+		expect(firstSentenceOf("  \n- Reading `list_channels` output")).toBe("Reading list_channels output")
+	})
+
+	test("a decimal or a version does not end the sentence", () => {
+		expect(firstSentenceOf("Version 1.2 is out. Next")).toBe("Version 1.2 is out.")
+	})
+
+	test("no text, no sentence", () => {
+		expect(firstSentenceOf("   ")).toBe("")
 	})
 })
 

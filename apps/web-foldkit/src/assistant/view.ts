@@ -12,7 +12,6 @@ import {
 	IconChevronRight,
 	IconClock,
 	IconClose,
-	IconCode,
 	IconExternalLink,
 	IconLock,
 	IconPlus,
@@ -23,12 +22,14 @@ import {
 import type { Shared } from "../page/contract"
 import { integrationRoute, hrefOf } from "../route"
 import { ariaButton, button, buttonClassName } from "../ui/button"
+import { getBrandfetchIcon } from "~/lib/integrations/__data"
 import { emptyState } from "../ui/empty-state"
 import { heading } from "../ui/heading"
 import { loader } from "../ui/loader"
 import * as Menu from "../ui/menu"
 import { menuDescription, menuLabel, view as menuView } from "../ui/menu-view"
 import * as Sheet from "../ui/sheet"
+import { shimmerText } from "../ui/shimmer-text"
 import { resizeEdge, splitPanelClassName } from "../ui/split-panel"
 import { textField } from "../ui/text-field"
 import { textarea } from "../ui/textarea"
@@ -50,7 +51,7 @@ import {
 	type QuestionData,
 	type ThreadRow,
 } from "./model"
-import { historyOf, timelineOf, workSummaryOf } from "./timeline"
+import { firstSentenceOf, historyOf, isTurnLive, type Turn, timelineOf, workSummaryOf } from "./timeline"
 import {
 	answersOf,
 	isAnswered,
@@ -270,18 +271,21 @@ const header = (h: H, model: Model, inputs: ViewInputs): Html => {
 /**
  * The timeline is a lazy view over Model fields and primitives, so the panel's other Messages (and
  * the app's) never rebuild it; inside, replies and steps are memoized per item by what they show, so
- * a growing reply re-parses only its own markdown.
+ * a growing reply re-parses only its own markdown and a running step redraws only its own line.
+ *
+ * It reads like a conversation: the member's messages as soft bubbles on the right, and each agent
+ * run as one turn under the agent's mark: one line per step, then what it said.
  */
 
 const userBubble = (h: H, text: string, isSending = false): Html =>
 	h.div(
-		[h.Class("flex justify-end")],
+		[h.Class("flex justify-end pl-8")],
 		[
 			h.div(
 				[
 					h.Class(
 						twMerge(
-							"max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-secondary px-3 py-2 text-fg text-sm",
+							"wrap-break-word max-w-full whitespace-pre-wrap rounded-2xl rounded-br-md bg-secondary px-3.5 py-2 text-secondary-fg text-sm leading-relaxed transition-opacity duration-150",
 							isSending && "opacity-70",
 						),
 					),
@@ -291,97 +295,183 @@ const userBubble = (h: H, text: string, isSending = false): Html =>
 		],
 	)
 
-const assistantReply = (h: H, text: string, title: string | null): Html =>
-	title === "Plan"
-		? h.div(
-				[h.Class("flex flex-col gap-2 rounded-lg border border-border bg-bg p-3 shadow-xs")],
-				[heading(h, { variant: "label", level: 3 }, ["Plan"]), markdownView(h, text)],
-			)
-		: h.div([h.Class("text-fg")], [markdownView(h, text)])
+/**
+ * Markdown at the panel's size: text-sm with relaxed leading, headings scaled down to the body's
+ * size, lists and paragraphs close together, inline code small.
+ */
+const PROSE =
+	"text-fg text-sm leading-relaxed [&_[data-slate-editor]]:text-sm [&_[data-slate-editor]]:leading-relaxed [&_h1]:mt-4 [&_h1]:mb-1 [&_h1]:text-base [&_h2]:mt-3.5 [&_h2]:mb-1 [&_h2]:text-sm [&_h3]:mt-3 [&_h3]:mb-0.5 [&_h3]:text-sm [&_ol]:ml-4 [&_ul]:ml-4 [&_li]:my-1 [&_li]:pl-0.5 [&_.font-mono]:rounded-sm [&_.font-mono]:px-1 [&_.font-mono]:py-px [&_.font-mono]:text-xs"
 
-const noticeView = (h: H, text: string, title: string | null): Html =>
-	h.p([h.Class("text-center text-muted-fg text-xs")], [text || title || ""])
-
-/** A message, reply or notice: what it shows is its kind, text and title. */
-/** The agent's thinking, where it happened: muted, under a "Thinking" label while it runs. */
-const reasoningView = (h: H, text: string, status: string | null): Html =>
+const assistantReply = (h: H, text: string, title: string | null, isStreaming: boolean): Html =>
 	h.div(
-		[h.Class("flex flex-col gap-1 border-border border-l-2 pl-3 text-muted-fg")],
+		[h.Class("flex flex-col gap-1.5"), ...(isStreaming ? [h.Attribute("data-streaming", "")] : [])],
 		[
-			h.div(
-				[h.Class("flex items-center gap-1.5 font-medium text-xs")],
-				[
-					status === "running"
-						? loader(h, { className: "size-3", ariaLabel: "Thinking" })
-						: IconBrainSparkle(h, { className: "size-3" }),
-					status === "running" ? "Thinking…" : "Thought",
-				],
-			),
-			h.div([h.Class("text-muted-fg text-sm [&_*]:text-muted-fg")], [markdownView(h, text)]),
+			title === "Plan" ? heading(h, { variant: "label", level: 3 }, ["Plan"]) : h.empty,
+			h.div([h.Class(PROSE)], [markdownView(h, text)]),
 		],
 	)
 
+const noticeView = (h: H, text: string, title: string | null): Html =>
+	h.p([h.Class("text-muted-fg text-xs leading-relaxed")], [text || title || ""])
+
+/** A reply or notice: what it shows is its kind, text and title, and whether it is still arriving. */
 const messageView = (
 	kind: ItemRow["kind"],
 	text: string,
 	title: string | null,
-	status: string | null,
+	isStreaming: boolean,
 	h: H,
-): Html =>
-	kind === "user"
-		? userBubble(h, text)
-		: kind === "assistant"
-			? assistantReply(h, text, title)
-			: kind === "reasoning"
-				? reasoningView(h, text, status)
-				: noticeView(h, text, title)
+): Html => (kind === "assistant" ? assistantReply(h, text, title, isStreaming) : noticeView(h, text, title))
+
+// The agent's mark
+
+const MARK_SOURCES = {
+	t3code: "/images/integrations/t3code.svg",
+	anthropic: getBrandfetchIcon("claude.ai", { theme: "light", size: 64, type: "icon" }),
+	openai: getBrandfetchIcon("openai.com", { theme: "light", size: 64, type: "icon" }),
+} satisfies Record<Assistant.Engine, string>
+
+/** The engine's small round mark: T3 Code's glyph on a quiet disc, a provider's own icon. */
+const engineMark = (h: H, engine: Assistant.Engine, className = "size-5"): Html =>
+	h.span(
+		[
+			h.AriaHidden(true),
+			h.Class(
+				twMerge(
+					"inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-border",
+					engine === "t3code" && "bg-bg",
+					className,
+				),
+			),
+		],
+		[
+			h.img([
+				h.Src(MARK_SOURCES[engine]),
+				h.Alt(""),
+				h.Attribute("draggable", "false"),
+				h.Class(engine === "t3code" ? "size-3/5 dark:invert" : "size-full object-cover"),
+			]),
+		],
+	)
+
+// Steps
+
+const STEP_ICON = "size-3.5 shrink-0"
 
 const stepIcon = (h: H, kind: ItemRow["kind"], status: string | null): Html =>
 	status === "running"
-		? loader(h, { className: "size-3.5", ariaLabel: "Running" })
+		? loader(h, { className: twMerge(STEP_ICON, "text-muted-fg"), ariaLabel: "Running" })
 		: status === "failed"
-			? IconWarning(h, { className: "size-3.5 text-danger" })
+			? IconWarning(h, { className: twMerge(STEP_ICON, "text-danger") })
 			: kind === "reasoning"
-				? IconBrainSparkle(h, { className: "size-3.5" })
-				: IconCode(h, { className: "size-3.5" })
+				? IconBrainSparkle(h, { className: twMerge(STEP_ICON, "text-muted-fg/70") })
+				: IconCheck(h, { className: twMerge(STEP_ICON, "text-muted-fg/70") })
+
+/** What a step's line says: its label, and the detail after "·". */
+const stepWords = (kind: ItemRow["kind"], title: string | null, input: string | null, text: string) =>
+	kind === "reasoning"
+		? { label: null, detail: text.trim() === "" ? null : firstSentenceOf(text) }
+		: { label: title ?? "Tool", detail: input }
+
+/** A step has more to show than its line: a tool's output, a thought longer than its first sentence. */
+const hasMore = (kind: ItemRow["kind"], text: string, detail: string | null) =>
+	kind === "reasoning"
+		? text.trim() !== "" && text.replace(/\s+/g, " ").trim().length > (detail?.length ?? 0) + 4
+		: text.trim() !== ""
+
+const stepOutput = (h: H, id: string, kind: ItemRow["kind"], text: string): Html =>
+	h.div(
+		[h.Id(id), h.Class("animate-step-enter pt-1 pb-1.5 pl-5.5")],
+		[
+			kind === "reasoning"
+				? h.div(
+						[h.Class(twMerge(PROSE, "text-muted-fg [&_*]:text-muted-fg"))],
+						[markdownView(h, text)],
+					)
+				: h.pre(
+						[
+							h.Class(
+								"max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-2xs text-muted-fg leading-4",
+							),
+							h.Attribute("tabindex", "0"),
+							h.AriaLabel("Output"),
+						],
+						[text],
+					),
+		],
+	)
 
 const stepRow = (
-	id: string,
+	id: ItemRow["id"],
 	kind: ItemRow["kind"],
 	title: string | null,
 	input: string | null,
 	text: string,
 	status: string | null,
+	isExpanded: boolean,
 	h: H,
 ): Html => {
-	const isReasoning = kind === "reasoning"
+	const isRunning = status === "running"
+	const { label, detail } = stepWords(kind, title, input, text)
+	const canExpand = hasMore(kind, text, detail)
+	const outputId = `${PANEL_ID}-step-${id}`
+	const words = [
+		kind === "reasoning"
+			? shimmerText(
+					h,
+					{ isActive: isRunning, className: "shrink-0" },
+					isRunning ? "Thinking" : "Thought",
+				)
+			: shimmerText(
+					h,
+					{
+						isActive: isRunning,
+						className: twMerge(
+							"min-w-0 truncate",
+							detail !== null && detail !== "" && "max-w-[60%] shrink-0",
+							!isRunning && "text-fg",
+						),
+					},
+					label ?? "Tool",
+				),
+		detail === null || detail === ""
+			? h.empty
+			: h.span([h.Class("min-w-0 truncate text-muted-fg")], [`· ${detail}`]),
+	]
+	const line = [
+		stepIcon(h, kind, status),
+		h.span([h.Class("flex min-w-0 flex-1 items-baseline gap-1.5")], words),
+		canExpand
+			? IconChevronRight(h, {
+					className: twMerge(
+						"size-3 shrink-0 text-muted-fg opacity-0 transition-[opacity,rotate] duration-150 ease-out group-hover:opacity-100 group-focus-visible:opacity-100",
+						isExpanded && "rotate-90 opacity-100",
+					),
+				})
+			: h.empty,
+	]
+	const lineClass =
+		"group flex w-full min-w-0 items-center gap-2 py-0.5 text-left text-muted-fg text-sm leading-6"
 	// Keyed itself: the list holds its rows directly.
 	return h.keyed("li")(
 		id,
-		[h.Class(twMerge("flex flex-col gap-1 text-muted-fg text-xs", status === "failed" && "text-danger"))],
+		[h.Class("animate-step-enter")],
 		[
-			h.div(
-				[h.Class("flex min-w-0 items-center gap-2")],
-				[
-					stepIcon(h, kind, status),
-					h.span([h.Class("shrink-0 font-medium")], [title ?? (isReasoning ? "Thinking" : "Tool")]),
-					input === null
-						? h.empty
-						: h.code([h.Class("min-w-0 truncate font-mono text-2xs")], [input]),
-				],
-			),
-			text === ""
-				? h.empty
-				: isReasoning
-					? h.p([h.Class("whitespace-pre-wrap pl-5.5 text-muted-fg/80")], [text])
-					: h.pre(
-							[
-								h.Class(
-									"ml-5.5 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-secondary/60 p-2 font-mono text-2xs",
-								),
-							],
-							[text],
-						),
+			canExpand
+				? ariaButton(
+						h,
+						{
+							onPress: Message.ToggledStep({ itemId: id }),
+							className: twMerge(
+								lineClass,
+								"cursor-pointer rounded-md outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70",
+							),
+							attributes: [h.AriaExpanded(isExpanded), h.Attribute("aria-controls", outputId)],
+						},
+						line,
+					)
+				: h.div([h.Class(lineClass)], line),
+			canExpand && isExpanded ? stepOutput(h, outputId, kind, text) : h.empty,
 		],
 	)
 }
@@ -390,48 +480,96 @@ const stepRow = (
 const lazyMessages = createKeyedLazy()
 const lazySteps = createKeyedLazy()
 
-const memoMessage = (h: H, item: ItemRow): Html =>
-	lazyMessages(item.id, messageView, [item.kind, item.text, item.title, item.status, h]) ?? h.empty
+const memoMessage = (h: H, item: ItemRow, isStreaming: boolean): Html =>
+	lazyMessages(item.id, messageView, [item.kind, item.text, item.title, isStreaming, h]) ?? h.empty
 
-const memoStep = (h: H, item: ItemRow): Html =>
-	lazySteps(item.id, stepRow, [item.id, item.kind, item.title, item.input, item.text, item.status, h]) ??
-	h.empty
+const memoStep = (h: H, item: ItemRow, isExpanded: boolean): Html =>
+	lazySteps(item.id, stepRow, [
+		item.id,
+		item.kind,
+		item.title,
+		item.input,
+		item.text,
+		item.status,
+		isExpanded,
+		h,
+	]) ?? h.empty
 
-const workLog = (h: H, key: string, items: ReadonlyArray<ItemRow>, isExpanded: boolean): Html => {
-	const { isRunning, failed, steps } = workSummaryOf(items)
-	const listId = `${PANEL_ID}-work-${key}`
-	return h.div(
-		[h.Class("flex flex-col gap-2")],
+/** While a live turn waits between steps: the next one is on its way. */
+const thinkingLine = (h: H): Html =>
+	h.keyed("li")(
+		"thinking",
+		[h.Class("animate-step-enter flex items-center gap-2 py-0.5 text-sm leading-6")],
 		[
-			ariaButton(
-				h,
-				{
-					onPress: Message.ToggledWork({ key }),
-					className:
-						"flex w-fit cursor-pointer items-center gap-1.5 rounded-md text-muted-fg text-xs outline-hidden transition-colors hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70",
-					attributes: [h.AriaExpanded(isExpanded), h.Attribute("aria-controls", listId)],
-				},
+			loader(h, { className: twMerge(STEP_ICON, "text-muted-fg"), ariaLabel: "Thinking" }),
+			shimmerText(h, {}, "Thinking"),
+		],
+	)
+
+/**
+ * A turn's activity: live, one line per step as they come; once the reply begins (or the turn is
+ * done) the lines fold under one summary that opens them again.
+ */
+const activityList = (
+	h: H,
+	turn: Turn,
+	isLive: boolean,
+	isExpanded: boolean,
+	expandedSteps: ReadonlyArray<string>,
+): Html => {
+	const listId = `${PANEL_ID}-work-${turn.key}`
+	const isOpen = isLive || isExpanded
+	const steps = turn.steps.map((step) => memoStep(h, step, expandedSteps.includes(step.id)))
+	const isWaiting = isLive && !turn.steps.some((step) => step.status === "running")
+	if (turn.steps.length === 0 && !isLive) return h.empty
+	const summary = workSummaryOf(turn.steps)
+	return h.div(
+		[h.Class("flex flex-col")],
+		[
+			isLive
+				? h.empty
+				: ariaButton(
+						h,
+						{
+							onPress: Message.ToggledWork({ key: turn.key }),
+							className:
+								"group animate-step-enter flex w-fit cursor-pointer items-center gap-1.5 rounded-md py-0.5 text-muted-fg text-sm leading-6 outline-hidden transition-colors duration-150 hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70",
+							attributes: [h.AriaExpanded(isExpanded), h.Attribute("aria-controls", listId)],
+						},
+						[
+							h.span([], [summary.label]),
+							IconChevronRight(h, {
+								className: twMerge(
+									"size-3 shrink-0 transition-[rotate] duration-200 ease-out",
+									isExpanded && "rotate-90",
+								),
+							}),
+						],
+					),
+			// Collapsing animates its height (0fr ⇄ 1fr); folded, its lines leave the tab order.
+			h.div(
 				[
-					IconChevronRight(h, {
-						className: twMerge(
-							"size-3 transition-transform duration-150",
-							isExpanded && "rotate-90",
+					h.Id(listId),
+					h.Class(
+						twMerge(
+							"grid transition-[grid-template-rows,opacity] duration-200 ease-out",
+							isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
 						),
-					}),
-					isRunning
-						? loader(h, { className: "size-3", ariaLabel: "Working" })
-						: failed > 0
-							? IconWarning(h, { className: "size-3 text-danger" })
-							: IconCheck(h, { className: "size-3" }),
-					`${isRunning ? "Working" : "Worked"} · ${steps} ${steps === 1 ? "step" : "steps"}${failed > 0 ? ` · ${failed} failed` : ""}`,
+					),
+					...(isOpen ? [] : [h.Attribute("inert", ""), h.AriaHidden(true)]),
+				],
+				[
+					h.div(
+						[h.Class("min-h-0 overflow-hidden")],
+						[
+							h.ul(
+								[h.Class(twMerge("flex flex-col", !isLive && "pt-1"))],
+								isWaiting ? [...steps, thinkingLine(h)] : steps,
+							),
+						],
+					),
 				],
 			),
-			isExpanded
-				? h.ul(
-						[h.Id(listId), h.Class("flex flex-col gap-2 border-border border-l pl-3")],
-						items.map((item) => memoStep(h, item)),
-					)
-				: h.empty,
 		],
 	)
 }
@@ -452,13 +590,27 @@ const questionField = (
 	isLocked: boolean,
 ) => {
 	const options = question.options ?? []
+	const hasDescriptions = options.some((option) => option.description !== undefined)
+	const pill = (option: (typeof options)[number]) =>
+		toggleChip(h, {
+			label: option.label,
+			isPressed: picked.includes(option.label),
+			isDisabled: isLocked,
+			isPill: true,
+			onPress: Message.PickedAnswer({
+				itemId: item.id,
+				questionId: question.id,
+				label: option.label,
+				isMultiSelect: question.multiSelect ?? false,
+			}),
+		})
 	return h.div(
-		[h.Class("flex flex-col gap-2")],
+		[h.Class("flex flex-col gap-2.5")],
 		[
 			question.header === undefined
 				? h.empty
 				: heading(h, { variant: "label", level: 3 }, [question.header]),
-			h.p([h.Class("text-fg text-sm")], [question.question]),
+			h.p([h.Class("text-fg text-sm leading-relaxed")], [question.question]),
 			options.length === 0
 				? textarea(h, {
 						isDisabled: isLocked,
@@ -474,27 +626,28 @@ const questionField = (
 						],
 					})
 				: h.div(
-						[h.Class("flex flex-col gap-1.5"), h.Role("group"), h.AriaLabel(question.question)],
-						options.map((option) =>
-							h.div(
-								[h.Class("flex flex-wrap items-baseline gap-x-2 gap-y-1")],
-								[
-									toggleChip(h, {
-										label: option.label,
-										isPressed: picked.includes(option.label),
-										isDisabled: isLocked,
-										onPress: Message.PickedAnswer({
-											itemId: item.id,
-											questionId: question.id,
-											label: option.label,
-											isMultiSelect: question.multiSelect ?? false,
-										}),
-									}),
-									option.description === undefined
-										? h.empty
-										: h.span([h.Class("text-muted-fg text-xs")], [option.description]),
-								],
+						[
+							h.Class(
+								hasDescriptions ? "flex flex-col items-start gap-2" : "flex flex-wrap gap-2",
 							),
+							h.Role("group"),
+							h.AriaLabel(question.question),
+						],
+						options.map((option) =>
+							hasDescriptions
+								? h.div(
+										[h.Class("flex max-w-full flex-wrap items-baseline gap-x-2 gap-y-1")],
+										[
+											pill(option),
+											option.description === undefined
+												? h.empty
+												: h.span(
+														[h.Class("text-muted-fg text-xs leading-relaxed")],
+														[option.description],
+													),
+										],
+									)
+								: pill(option),
 						),
 					),
 		],
@@ -503,10 +656,16 @@ const questionField = (
 
 const answeredView = (h: H, data: QuestionData): Html =>
 	h.dl(
-		[h.Class("flex flex-col gap-1.5 text-sm")],
+		[h.Class("flex flex-col gap-2 text-sm leading-relaxed")],
 		data.questions.flatMap((question) => [
-			h.dt([h.Class("text-muted-fg text-xs")], [question.header ?? question.question]),
-			h.dd([h.Class("text-fg")], [data.answers?.[question.id] ?? "Answered"]),
+			h.dt([h.Class("text-muted-fg")], [question.header ?? question.question]),
+			h.dd(
+				[h.Class("flex items-center gap-1.5 text-fg")],
+				[
+					IconCheck(h, { className: "size-3.5 shrink-0 text-muted-fg" }),
+					data.answers?.[question.id] ?? "Answered",
+				],
+			),
 		]),
 	)
 
@@ -519,7 +678,7 @@ const questionCard = (h: H, item: ItemRow, state: QuestionState): Html => {
 	const error = state.answerError?.itemId === item.id ? state.answerError.message : null
 	return h.form(
 		[
-			h.Class("flex flex-col gap-3 rounded-lg border border-border bg-bg p-3 shadow-xs"),
+			h.Class("flex flex-col gap-4"),
 			h.AriaLabel("The assistant asks"),
 			h.OnSubmit(Message.SubmittedAnswers({ itemId: item.id })),
 		],
@@ -535,12 +694,13 @@ const questionCard = (h: H, item: ItemRow, state: QuestionState): Html => {
 					state.isReadOnly
 						? h.empty
 						: h.div(
-								[h.Class("flex justify-end")],
+								[h.Class("flex")],
 								[
 									button(
 										h,
 										{
 											size: "sm",
+											isCircle: true,
 											isDisabled: answersOf(state.answerDrafts, item) === null,
 											isPending: isSubmitting,
 											attributes: [h.Type("submit")],
@@ -555,63 +715,113 @@ const questionCard = (h: H, item: ItemRow, state: QuestionState): Html => {
 
 const approvalNotice = (h: H, item: ItemRow, externalLink: string | null): Html =>
 	h.div(
+		[h.Class("flex flex-col items-start gap-2.5 text-sm leading-relaxed")],
 		[
-			h.Class(
-				"flex items-start gap-2 rounded-lg border border-warning/20 bg-warning-subtle p-3 text-warning-subtle-fg text-sm",
-			),
-		],
-		[
-			IconWarning(h, { className: "mt-0.5 size-4 shrink-0" }),
-			h.div(
-				[h.Class("flex min-w-0 flex-col gap-1")],
+			h.p(
+				[h.Class("flex items-center gap-2 text-fg")],
 				[
-					h.p([h.Class("font-medium")], ["Waiting for approval in T3 Code"]),
-					item.title === null && item.text === ""
-						? h.empty
-						: h.p([h.Class("opacity-90")], [item.title ?? item.text]),
-					externalLink === null
-						? h.empty
-						: h.a(
-								[
-									h.Href(externalLink),
-									h.Attribute("target", "_blank"),
-									h.Attribute("rel", "noopener noreferrer"),
-									h.Class("w-fit font-medium underline underline-offset-2"),
-								],
-								["Open in T3 Code"],
-							),
+					IconWarning(h, { className: "size-3.5 shrink-0 text-warning" }),
+					"Waiting for approval in T3 Code",
 				],
 			),
+			item.title === null && item.text === ""
+				? h.empty
+				: h.p([h.Class("text-muted-fg")], [item.title ?? item.text]),
+			externalLink === null
+				? h.empty
+				: h.a(
+						[
+							h.Href(externalLink),
+							h.Attribute("target", "_blank"),
+							h.Attribute("rel", "noopener noreferrer"),
+							h.Class(buttonClassName({ intent: "outline", size: "sm", isCircle: true })),
+						],
+						["Open in T3 Code", IconExternalLink(h, { attributes: { "data-slot": "icon" } })],
+					),
 		],
-	)
-
-const workingIndicator = (h: H): Html =>
-	h.div(
-		[h.Class("flex items-center gap-2 text-muted-fg text-xs")],
-		[loader(h, { className: "size-3", ariaLabel: "Working" }), "Working…"],
 	)
 
 const threadError = (h: H, message: string): Html =>
 	h.div(
-		[
-			h.Role("alert"),
-			h.Class(
-				"flex items-start gap-2 rounded-lg border border-danger/15 bg-danger/5 p-3 text-danger text-sm",
-			),
-		],
-		[IconWarning(h, { className: "mt-0.5 size-4 shrink-0" }), h.p([], [message])],
+		[h.Role("alert"), h.Class("flex items-start gap-2 text-danger text-sm leading-relaxed")],
+		[IconWarning(h, { className: "mt-1 size-3.5 shrink-0" }), h.p([], [message])],
 	)
 
-const newChat = (h: H, suggestions: ReadonlyArray<string>, isSending: boolean): Html =>
-	h.div(
-		[h.Class("flex flex-col gap-4 py-6")],
+/** One agent run: its mark, its activity, then what it said. */
+interface TurnState {
+	readonly engine: Assistant.Engine
+	readonly isRunning: boolean
+	readonly isExpanded: boolean
+	readonly expandedSteps: ReadonlyArray<string>
+	readonly questions: QuestionState
+	readonly externalLink: string | null
+	readonly status: ThreadRow["status"] | null
+	readonly errorMessage: string | null
+}
+
+const turnLayout = (h: H, key: string, engine: Assistant.Engine, children: ReadonlyArray<Html>): Html =>
+	h.keyed("div")(
+		key,
+		[h.Class("flex gap-3")],
 		[
+			h.div([h.Class("flex h-6 shrink-0 items-center")], [engineMark(h, engine)]),
+			h.div([h.Class("flex min-w-0 flex-1 flex-col gap-3")], [...children]),
+		],
+	)
+
+const turnView = (h: H, turn: Turn, state: TurnState): Html => {
+	const isLive = isTurnLive(turn, state.isRunning)
+	const lastSaid = turn.said.at(-1)
+	return turnLayout(h, turn.key, state.engine, [
+		activityList(h, turn, isLive, state.isExpanded, state.expandedSteps),
+		...turn.said.map((item) =>
+			h.keyed("div")(
+				item.id,
+				[],
+				[
+					Match.value(item.kind).pipe(
+						Match.when("question", () => questionCard(h, item, state.questions)),
+						Match.when("approval", () => approvalNotice(h, item, state.externalLink)),
+						Match.whenOr("assistant", "notice", () =>
+							memoMessage(
+								h,
+								item,
+								state.isRunning && item === lastSaid && item.kind === "assistant",
+							),
+						),
+						// Steps and the member's messages never land among what a turn said.
+						Match.whenOr("user", "reasoning", "tool", () => h.empty),
+						Match.exhaustive,
+					),
+				],
+			),
+		),
+		state.status === "error"
+			? threadError(h, state.errorMessage ?? "The assistant stopped with an error.")
+			: h.empty,
+	])
+}
+
+/** The member's message is out and nothing of the run has synced yet. */
+const pendingTurn = (h: H, engine: Assistant.Engine): Html =>
+	turnLayout(h, "pending-turn", engine, [h.ul([h.Class("flex flex-col")], [thinkingLine(h)])])
+
+const newChat = (
+	h: H,
+	suggestions: ReadonlyArray<string>,
+	isSending: boolean,
+	engine: Assistant.Engine | null,
+): Html =>
+	h.div(
+		[h.Class("flex flex-col gap-5 py-6")],
+		[
+			engine === null ? h.empty : engineMark(h, engine, "size-7"),
 			h.div(
-				[h.Class("flex flex-col gap-1")],
+				[h.Class("flex flex-col gap-1.5")],
 				[
 					heading(h, { variant: "section", level: 3 }, ["Ask about what you're looking at"]),
 					h.p(
-						[h.Class("text-muted-fg text-sm")],
+						[h.Class("text-muted-fg text-sm leading-relaxed")],
 						[
 							"The assistant reads this page and recommends what to do; it never changes anything itself.",
 						],
@@ -619,15 +829,17 @@ const newChat = (h: H, suggestions: ReadonlyArray<string>, isSending: boolean): 
 				],
 			),
 			h.div(
-				[h.Class("flex flex-col items-start gap-2"), h.Role("group"), h.AriaLabel("Suggestions")],
+				[h.Class("flex flex-wrap gap-2"), h.Role("group"), h.AriaLabel("Suggestions")],
 				suggestions.map((text) =>
 					button(
 						h,
 						{
 							intent: "outline",
 							size: "sm",
+							isCircle: true,
 							isDisabled: isSending,
 							onPress: Message.ClickedSuggestion({ text }),
+							className: "h-auto max-w-full whitespace-normal text-left font-normal",
 						},
 						[text],
 					),
@@ -640,37 +852,44 @@ const threadEntries = (
 	h: H,
 	items: ReadonlyArray<ItemRow>,
 	expandedWork: ReadonlyArray<string>,
+	expandedSteps: ReadonlyArray<string>,
 	questions: QuestionState,
+	engine: Assistant.Engine,
+	isRunning: boolean,
+	status: ThreadRow["status"] | null,
+	errorMessage: string | null,
 	externalLink: string | null,
-): Array<Html> =>
-	timelineOf(items).map((entry) =>
-		entry._tag === "Work"
-			? h.keyed("div")(
-					entry.key,
-					[],
-					[workLog(h, entry.key, entry.items, expandedWork.includes(entry.key))],
-				)
-			: h.keyed("div")(
-					entry.item.id,
-					[],
-					[
-						Match.value(entry.item.kind).pipe(
-							Match.when("question", () => questionCard(h, entry.item, questions)),
-							Match.when("approval", () => approvalNotice(h, entry.item, externalLink)),
-							// Tool items are folded into work logs before they get here.
-							Match.whenOr("user", "assistant", "notice", "reasoning", "tool", () =>
-								memoMessage(h, entry.item),
-							),
-							Match.exhaustive,
-						),
-					],
-				),
+): Array<Html> => {
+	const entries = timelineOf(items)
+	const lastEntry = entries.at(-1)
+	// Only the newest turn can still be running, or carry the thread's error.
+	const lastTurnKey = lastEntry?._tag === "Turn" ? lastEntry.turn.key : null
+	return entries.map((entry) =>
+		Match.value(entry).pipe(
+			Match.tag("User", ({ item }) => h.keyed("div")(item.id, [], [userBubble(h, item.text)])),
+			Match.tag("Turn", ({ turn }) => {
+				const isLast = turn.key === lastTurnKey
+				return turnView(h, turn, {
+					engine,
+					isRunning: isLast && isRunning,
+					isExpanded: expandedWork.includes(turn.key),
+					expandedSteps,
+					questions,
+					externalLink,
+					status: isLast ? status : null,
+					errorMessage,
+				})
+			}),
+			Match.exhaustive,
+		),
 	)
+}
 
 const timelineView = (
 	items: ReadonlyArray<ItemRow>,
 	pending: Model["pending"],
 	expandedWork: ReadonlyArray<string>,
+	expandedSteps: ReadonlyArray<string>,
 	answerDrafts: Model["answerDrafts"],
 	answeringItemId: Model["answeringItemId"],
 	answerError: Model["answerError"],
@@ -679,37 +898,54 @@ const timelineView = (
 	status: ThreadRow["status"] | null,
 	errorMessage: string | null,
 	externalLink: string | null,
+	engine: Assistant.Engine | null,
 	isEmpty: boolean,
 	suggestions: ReadonlyArray<string>,
 	h: H,
-): Html =>
-	h.div(
+): Html => {
+	const markEngine = engine ?? "t3code"
+	const isRunning = status === "running"
+	const isLastEntryTurn = items.length > 0 && items.at(-1)?.kind !== "user"
+	// A run that has started but shows nothing yet: the turn's mark and "Thinking".
+	const isAwaitingTurn = pending !== null ? pending.isSending || isRunning : isRunning && !isLastEntryTurn
+	const isErrorOutsideTurn = status === "error" && !isLastEntryTurn
+	return h.div(
 		// Reversed, the scroll stays at the newest content as it grows, unless the member scrolled up.
 		[h.Class("flex min-h-0 flex-1 flex-col-reverse overflow-y-auto overscroll-contain")],
 		[
 			h.div(
-				[h.Class("flex flex-col gap-4 px-4 py-4")],
+				[h.Class("flex flex-col gap-6 px-4 py-5")],
 				isEmpty
-					? [newChat(h, suggestions, pending?.isSending === true)]
+					? [newChat(h, suggestions, pending?.isSending === true, engine)]
 					: [
 							...threadEntries(
 								h,
 								items,
 								expandedWork,
+								expandedSteps,
 								{ answerDrafts, answeringItemId, answerError, isReadOnly: isReadOnlyThread },
+								markEngine,
+								isRunning && pending === null,
+								status,
+								errorMessage,
 								externalLink,
 							),
-							pending === null ? h.empty : userBubble(h, pending.text, pending.isSending),
-							status === "running" || pending?.isSending === true
-								? workingIndicator(h)
-								: h.empty,
-							status === "error"
+							pending === null
+								? h.empty
+								: h.keyed("div")(
+										"pending",
+										[],
+										[userBubble(h, pending.text, pending.isSending)],
+									),
+							isAwaitingTurn ? pendingTurn(h, markEngine) : h.empty,
+							isErrorOutsideTurn
 								? threadError(h, errorMessage ?? "The assistant stopped with an error.")
 								: h.empty,
 						],
 			),
 		],
 	)
+}
 
 const lazyTimeline = createLazy()
 
@@ -721,6 +957,7 @@ const timeline = (h: H, model: Model, inputs: ViewInputs): Html => {
 			model.items,
 			pending,
 			model.expandedWork,
+			model.expandedSteps,
 			model.answerDrafts,
 			model.answeringItemId,
 			model.answerError,
@@ -728,6 +965,7 @@ const timeline = (h: H, model: Model, inputs: ViewInputs): Html => {
 			thread?.status ?? null,
 			thread?.errorMessage ?? null,
 			thread?.externalLink ?? null,
+			thread?.engine ?? model.engines.preferred,
 			model.threadId === null && pending === null,
 			suggestionsFor(inputs.context),
 			h,
@@ -769,9 +1007,10 @@ const composer = (h: H, model: Model, inputs: ViewInputs): Html => {
 							toggleChip(h, {
 								label: context.label,
 								isPressed: model.isContextIncluded,
+								isPill: true,
 								onPress: Message.ToggledContext(),
 								ariaLabel: `Send "${context.label}" as context`,
-								className: "h-7 max-w-full text-xs sm:h-6",
+								className: "h-7 max-w-full px-2.5 font-normal text-xs sm:h-6",
 							}),
 						],
 					),
@@ -803,8 +1042,18 @@ const composer = (h: H, model: Model, inputs: ViewInputs): Html => {
 							thread === null
 								? engineMenu(h, model)
 								: h.span(
-										[h.Class("min-w-0 truncate pl-1 text-muted-fg text-xs")],
-										[engineText(thread.engine, thread.engineLabel)],
+										[
+											h.Class(
+												"flex min-w-0 items-center gap-1.5 pl-1 text-muted-fg text-xs",
+											),
+										],
+										[
+											engineMark(h, thread.engine, "size-4"),
+											h.span(
+												[h.Class("truncate")],
+												[engineText(thread.engine, thread.engineLabel)],
+											),
+										],
 									),
 							canStop
 								? button(
@@ -907,6 +1156,7 @@ const engineMenu = (h: H, model: Model): Html => {
 						className: "min-w-0 text-muted-fg",
 					},
 					[
+						preferred === null ? h.empty : engineMark(h, preferred, "size-4"),
 						h.span([h.Class("truncate")], [label]),
 						IconChevronDown(h, { className: "size-3 shrink-0" }),
 						overlay,

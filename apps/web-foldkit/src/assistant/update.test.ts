@@ -73,6 +73,7 @@ const item = (n: number, overrides: Partial<ItemRow> = {}): ItemRow => ({
 	input: null,
 	question: null,
 	createdAtMs: n,
+	updatedAtMs: n,
 	...overrides,
 })
 

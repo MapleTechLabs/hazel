@@ -68,8 +68,10 @@ export const Message = defineMessageUnion({
 	ClickedShare: {},
 	SucceededUpdateVisibility: {},
 	FailedUpdateVisibility: { message: Schema.String },
-	/** A work-log row, by its first item's id. */
+	/** A finished turn's activity list, by the turn's key. */
 	ToggledWork: { key: Schema.String },
+	/** A step's output or full thought, by its item's id. */
+	ToggledStep: { itemId: AssistantItemId },
 	PickedAnswer: {
 		itemId: AssistantItemId,
 		questionId: Schema.String,

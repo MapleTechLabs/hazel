@@ -51,6 +51,7 @@ export const toItemRow = (item: Assistant.Item): ItemRow => ({
 	input: item.kind === "tool" ? inputOf(item.data) : null,
 	question: item.kind === "question" ? Option.getOrNull(decodeQuestion(item.data)) : null,
 	createdAtMs: msOf(item.createdAt),
+	updatedAtMs: msOf(item.updatedAt),
 })
 
 const threadsStream = (organizationId: OrganizationId) =>
