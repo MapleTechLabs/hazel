@@ -738,6 +738,8 @@ export const SORT_COLUMNS: ReadonlyArray<Customers.ListColumn> = [
 	"last_active",
 	"open_signals",
 	"customer_since",
+	"company_size",
+	"funding",
 ]
 
 /** `<column>:<direction>`. */

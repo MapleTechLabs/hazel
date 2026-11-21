@@ -28,7 +28,8 @@ one is never looked up.
 One lookup (`worker/objects/customers/enrichment/client.ts`) is:
 
 1. `POST /v1/brand/retrieve` `{ type: "by_domain", domain }`: identity, industry (EIC), headcount
-   range, address, socials, pages, colours, logos. 10 credits; a miss is free. A miss is a 400
+   range, address, socials, pages, colours, logos. Its own deadline is 60 s (a domain context.dev
+   has not seen often takes over 30 s; past the deadline it answers 408). 10 credits; a miss is free. A miss is a 400
    whose `error_code` (the docs say `code`; the API sends `error_code`) is `NOT_FOUND`,
    `WEBSITE_NOT_FOUND`, `WEBSITE_ACCESS_ERROR` or `WEBSITE_BLOCKED`; any other 400 is a failure.
 2. When Brand found a company, `POST /v1/company/search` (`fast`, 2 credits) with its name and
@@ -41,7 +42,7 @@ and buckets headcounts into `EmployeeRange`.
 
 ## Schedule (`enrichment/job.ts`)
 
-- After each compute turn, `seedEnrichments` adds a row (due now) for every live account's domain,
+- After each compute turn (and after the demo seed, whose compute runs outside the alarm), `seedEnrichments` adds a row (due now) for every live account's domain,
   stops rows no account uses, and gives each account its domain's answer: a new account at a known
   domain its profile, an account whose domain changed or went none (a profile from its old domain
   is cleared).

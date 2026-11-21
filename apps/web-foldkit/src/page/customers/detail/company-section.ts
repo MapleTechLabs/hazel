@@ -17,7 +17,7 @@ import { formatCount, formatDate, formatRelative } from "../../../customers/form
 import { IconArrowPath, IconLink } from "../../../icons"
 import { button } from "../../../ui/button"
 import { Message } from "./message"
-import { isCompanyRefreshPending, type Model } from "./model"
+import { isCompanyRefreshPending, isCompanyRefreshUnanswered, type Model } from "./model"
 import { type Context, icon, property, sidebarSection } from "./parts"
 
 /**
@@ -108,6 +108,7 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 	const company = account.company
 	const now = new Date(context.nowMs)
 	const isPending = isCompanyRefreshPending(model, context.nowMs, account.companyCheckedAtMs)
+	const isUnanswered = isCompanyRefreshUnanswered(model, context.nowMs, account.companyCheckedAtMs)
 	const domains = context.detail?.account.domains ?? (account.domain === null ? [] : [account.domain])
 	const domain = enrichmentDomainOf(domains)
 	const checked =
@@ -119,9 +120,11 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 				? ["No company domain to look up.", null]
 				: isPending
 					? [`Looking up ${domain}…`, "Looking up"]
-					: checked === null
-						? [`Not looked up yet. Hazel looks up ${domain} automatically.`, "Look up now"]
-						: [`context.dev has no company at ${domain}.`, "Look up again"]
+					: isUnanswered
+						? [`Couldn't look up ${domain} just now. Hazel tries again shortly.`, "Try again"]
+						: checked === null
+							? [`Not looked up yet. Hazel looks up ${domain} automatically.`, "Look up now"]
+							: [`context.dev has no company at ${domain}.`, "Look up again"]
 		return sidebarSection(h, "Company", checked === null ? null : `Checked ${checked}`, [
 			h.p([h.AriaLive("polite"), h.Class("pb-2 text-muted-fg text-sm")], [text]),
 			...(action === null
@@ -155,7 +158,9 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 			[
 				h.span(
 					[h.AriaLive("polite")],
-					[`context.dev · ${isPending ? "looking up…" : (checked ?? "")}`],
+					[
+						`context.dev · ${isPending ? "looking up…" : isUnanswered ? "refresh failed, retrying soon" : (checked ?? "")}`,
+					],
 				),
 				refreshButton(h, { label: "Refresh company profile", isPending, iconOnly: true }),
 			],
@@ -163,11 +168,22 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 		property(
 			h,
 			"Industry",
+			// The industry the list shows and filters by; the sub-industry under it.
 			company.industry === null
 				? muted(h, "—")
 				: h.span(
-						[h.Class("block truncate"), h.Title(company.industry)],
-						[company.subindustry ?? company.industry],
+						[h.Class("flex min-w-0 flex-col py-1")],
+						[
+							h.span([h.Class("truncate")], [company.industry]),
+							...(company.subindustry === null
+								? []
+								: [
+										h.span(
+											[h.Class("truncate text-muted-fg text-xs")],
+											[company.subindustry],
+										),
+									]),
+						],
 					),
 		),
 		property(

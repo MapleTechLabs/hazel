@@ -29,6 +29,7 @@ import {
 	EMPTY_NOTE_DRAFTS,
 	environmentEntries,
 	isCompanyRefreshPending,
+	isCompanyRefreshUnanswered,
 	isNotFound,
 	linkCandidates,
 	type Model,
@@ -719,6 +720,20 @@ describe("customer page: company", () => {
 		// The lookup landed (the account was checked after the press), or it has been too long.
 		expect(isCompanyRefreshPending(pressed.model, NOW + 1_000, NOW + 500)).toBe(false)
 		expect(isCompanyRefreshPending(pressed.model, NOW + COMPANY_REFRESH_PENDING_MS, null)).toBe(false)
+		// Not checked by then: the lookup failed, and the page says so.
+		expect(isCompanyRefreshUnanswered(pressed.model, NOW + COMPANY_REFRESH_PENDING_MS, null)).toBe(true)
+		expect(isCompanyRefreshUnanswered(pressed.model, NOW + COMPANY_REFRESH_PENDING_MS, NOW + 500)).toBe(
+			false,
+		)
+		expect(isCompanyRefreshUnanswered(pressed.model, NOW + 1_000, null)).toBe(false)
+		// Checked 30 s before the press: the server skipped the refresh (its cooldown), and that check
+		// is the answer, neither pending nor failed.
+		expect(isCompanyRefreshPending(pressed.model, NOW + 1_000, NOW - 30_000)).toBe(false)
+		expect(
+			isCompanyRefreshUnanswered(pressed.model, NOW + COMPANY_REFRESH_PENDING_MS, NOW - 30_000),
+		).toBe(false)
+		// Checked long before: still a lookup to wait for.
+		expect(isCompanyRefreshPending(pressed.model, NOW + 1_000, NOW - 5 * 60_000)).toBe(true)
 	})
 
 	test("a refused refresh says why and can be asked again", () => {

@@ -9,6 +9,7 @@ import { type CustomerProvider, DEFAULT_CONNECTION_CONFIG } from "@hazel/domain/
 import type { CustomerConnectionId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { rebuildHistory, runCompute } from "./compute"
+import { seedEnrichments } from "./enrichment/job"
 import { seedDemoIssues } from "./issues"
 import { CustomerIngest } from "./ingest"
 import { loadBase } from "./snapshot"
@@ -93,6 +94,8 @@ export const seedDemo = Effect.fn("Customers.seedDemo")(function* (input: {
 	// A compute spread over turns before the seed counted none of its accounts: start over.
 	yield* clearComputeProgress
 	yield* runCompute(input.now)
+	// The alarm's compute seeds company lookups; this one runs here, so seed them too.
+	yield* seedEnrichments(input.now)
 	yield* db.transaction(seedDemoIssues({ organizationId: input.organizationId, now: input.now }))
 	return seed.accounts.length
 })
