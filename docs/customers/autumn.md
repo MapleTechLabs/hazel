@@ -83,7 +83,7 @@ request would answer in different shapes for different Hazel customers.
 | `current_period_end`, else `expires_at`                      | `subscription.currentPeriodEnd`                         |
 | `canceled_at` on a plan still running (not a downgrade)      | `cancelAtPeriodEnd`, `canceledAt`                       |
 | balance `usage`                                              | `metric_daily.value` for `autumn.<feature_id>`          |
-| balance `granted` (not unlimited, > 0)                       | `metric_daily.limitValue` — what `near_limit` measures  |
+| balance `granted` (not unlimited, no overage billed, > 0)    | `metric_daily.limitValue` — what `near_limit` measures  |
 | feature `name`                                               | the metric definition's name (`aggregation: max`)       |
 | `balances.limit_reached`                                     | timeline `usage.limit_reached`                          |
 | `balances.usage_alert_triggered`                             | timeline `usage.limit_approaching`                      |

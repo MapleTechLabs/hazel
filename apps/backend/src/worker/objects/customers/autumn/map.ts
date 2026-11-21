@@ -18,7 +18,8 @@
  *   currency, so the amount is scaled by that currency's minor-unit factor.
  * - **Feature balance → metric.** One metric per feature (`autumn.<feature_id>`, namespaced because
  *   ingest refuses a key another provider owns), its value the period's usage and its `limitValue`
- *   the granted amount — which is what the `near_limit` signal reads.
+ *   the granted amount when that caps use (not unlimited, overage not billed) — which is what the
+ *   `near_limit` signal reads ({@link limitOf}).
  * - **Timeline events.** Subscription lifecycle entries are ingest's (it raises
  *   `subscription.started` / `plan_changed` / `canceled` / `cancel_scheduled` from the state these
  *   ops describe), so the adapter raises only what ingest cannot see: a feature limit reached

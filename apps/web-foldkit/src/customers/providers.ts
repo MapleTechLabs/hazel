@@ -414,7 +414,7 @@ export const PROVIDERS: Descriptors = {
 				group: "Feature balance → Metrics",
 				fields: [
 					{ from: "balance usage", to: "metric_daily.value (autumn.<feature>)" },
-					{ from: "balance granted", to: "metric_daily.limitValue" },
+					{ from: "balance granted (when overage is refused)", to: "metric_daily.limitValue" },
 					{ from: "balances.limit_reached", to: "timeline: usage.limit_reached" },
 					{ from: "balances.usage_alert_triggered", to: "timeline: usage.limit_approaching" },
 				],
