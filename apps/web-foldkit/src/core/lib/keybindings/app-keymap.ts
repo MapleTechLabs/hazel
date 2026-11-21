@@ -91,6 +91,12 @@ export const appKeymap = defineKeymap({
 		// Slack's; Mod+B is bold in the composer.
 		defaultKey: "Mod+Shift+D",
 	},
+	"aiPanel.toggle": {
+		label: "Toggle AI Assistant",
+		description: "Show or hide the AI assistant panel.",
+		category: navigation,
+		defaultKey: "Mod+J",
+	},
 	"history.back": {
 		label: "Go Back",
 		description: "Go back to the previous page.",

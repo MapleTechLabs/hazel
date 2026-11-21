@@ -3,6 +3,7 @@ import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { UrlRequest } from "foldkit/navigation"
 import { Url } from "foldkit/url"
+import * as AiPanel from "../assistant"
 import { CommonReason } from "~/lib/error-messages"
 import * as CommandPalette from "../overlay/command-palette"
 import { LayoutHotkeyActionId } from "../overlay/hotkeys"
@@ -82,6 +83,7 @@ export const Message = defineMessageUnion({
 	GotShellMessage: { message: Shell.Message },
 	GotModalMessage: { message: Modal.Message },
 	GotCommandPaletteMessage: { message: CommandPalette.Message },
+	GotAiPanelMessage: { message: AiPanel.Message },
 	GotToastsMessage: { message: Toasts.Message },
 	/** A Command's own toast (`overlay/background-toasts.ts`). */
 	ReceivedBackgroundToast: { toast: Toasts.ToastRequest },

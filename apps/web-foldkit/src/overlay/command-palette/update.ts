@@ -149,6 +149,7 @@ const selectedItem = (model: Model, key: string, shared: Shared, current: PageSt
 	if (page !== undefined) return navigateTo(model, page, shared, current)
 	if (key === "action:start-dm")
 		return { model: close(model), outMessage: OutMessage.RequestedModal({ modal: { _tag: "CreateDm" } }) }
+	if (key === "action:ai-panel") return { model: close(model), outMessage: OutMessage.RequestedAiPanel() }
 	if (key === "action:invite")
 		return {
 			model: close(model),

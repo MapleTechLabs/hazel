@@ -306,7 +306,7 @@ describe("RequestedSoundSettings", () => {
 
 describe("RequestedKeybindings", () => {
 	test("the Keybinds page's new key is stored by the root and rebinds the hotkeys", () => {
-		const overrides = { "inbox.open": combo("Mod+J") }
+		const overrides = { "inbox.open": combo("Mod+Shift+J") }
 		story(
 			update,
 			given(signedIn("/hazel/my-settings/keybinds")),
@@ -322,7 +322,7 @@ describe("RequestedKeybindings", () => {
 				Message.GotPageMessage({
 					message: {
 						_tag: "MySettingsKeybinds",
-						message: { _tag: "PressedCombo", combo: combo("Mod+J") },
+						message: { _tag: "PressedCombo", combo: combo("Mod+Shift+J") },
 					},
 				}),
 			),
@@ -330,7 +330,7 @@ describe("RequestedKeybindings", () => {
 			Command.resolveAll([SaveKeybindings, Message.CompletedSaveKeybindings()]),
 			model((m) => {
 				expect(m.keybindingOverrides).toEqual(overrides)
-				expect(sharedOf(m).keys["inbox.open"]).toBe("Mod+J")
+				expect(sharedOf(m).keys["inbox.open"]).toBe("Mod+Shift+J")
 			}),
 		)
 	})

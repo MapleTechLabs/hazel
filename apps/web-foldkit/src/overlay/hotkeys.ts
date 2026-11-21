@@ -25,6 +25,7 @@ const LAYOUT_ACTIONS = [
 	"inbox.open",
 	"shortcuts.open",
 	"sidebar.toggle",
+	"aiPanel.toggle",
 	"history.back",
 	"history.forward",
 ] as const
@@ -67,6 +68,7 @@ const NOT_UNDER_OVERLAY: ReadonlySet<LayoutHotkeyActionId> = new Set([
 	"history.back",
 	"history.forward",
 	"sidebar.toggle",
+	"aiPanel.toggle",
 	"inbox.open",
 ])
 

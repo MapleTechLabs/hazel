@@ -1,6 +1,7 @@
+import { customerContext } from "../../../assistant/context"
 import { definePage } from "../../contract"
 import { Message } from "./message"
-import { Model } from "./model"
+import { accountOf, Model } from "./model"
 import { subscriptions } from "./subscription"
 import { init, routeChanged, sharedChanged, update } from "./update"
 import { view } from "./view"
@@ -19,5 +20,13 @@ export const page = definePage(
 		sharedChanged,
 		view,
 		subscriptions,
+		assistantContext: (model, shared) =>
+			shared.orgSlug === null
+				? null
+				: customerContext(
+						shared.orgSlug,
+						{ id: model.accountId, name: accountOf(model)?.name ?? null },
+						model.tab,
+					),
 	},
 )

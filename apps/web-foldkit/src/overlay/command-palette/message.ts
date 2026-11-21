@@ -80,6 +80,8 @@ export const OutMessage = defineMessageUnion({
 	RequestedToast: { toast: ToastRequest },
 	/** `setTheme(mode)`: the root applies and persists it. */
 	RequestedTheme: { preference: ThemePreference },
+	/** The AI panel: the root opens it. */
+	RequestedAiPanel: {},
 	/** `setStatus(status)`: presence keeps it ahead of the AFK-derived status. */
 	RequestedPresenceStatus: { status: PresenceStatus },
 })

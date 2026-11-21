@@ -14,6 +14,7 @@ import type { PageSubscriptionInput } from "../../contract"
 import { viewRowsStream } from "./data"
 import { Message } from "./message"
 import type { ListKey, Model } from "./model"
+import { isInAssistantPanel } from "../../../assistant/keyboard"
 
 /** The list's live rows, and its keyboard while nothing else holds it. */
 
@@ -42,7 +43,7 @@ export const listKeyOf = (event: {
 	readonly metaKey: boolean
 }): ListKey | null => {
 	const element = elementOf(event.target)
-	if (event.altKey || event.ctrlKey || event.metaKey) return null
+	if (event.altKey || event.ctrlKey || event.metaKey || isInAssistantPanel(event.target)) return null
 	if (
 		element !== null &&
 		(element.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName))

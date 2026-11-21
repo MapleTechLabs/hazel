@@ -29,6 +29,7 @@ import {
 } from "./app/command"
 import { Message } from "./app/message"
 import {
+	aiPanelInputsOf,
 	authOf,
 	dmRequestKey,
 	MemberData,
@@ -48,6 +49,7 @@ import { loadSoundSettings, SoundSettings } from "./notification-sound"
 import { loadKeybindingOverrides } from "./keybindings"
 import { detectPlatform, Platform as KeyboardPlatform } from "~/lib/keybindings/key-combo"
 import { Overrides } from "~/lib/keybindings/keymap"
+import * as AiPanel from "./assistant"
 import * as CommandPalette from "./overlay/command-palette"
 import type { LayoutHotkeyActionId } from "./overlay/hotkeys"
 import * as Modal from "./overlay/modal"
@@ -105,6 +107,8 @@ export const Flags = Schema.Struct({
 	isCreateChannelHintDismissed: Schema.Boolean,
 	/** The last session's user (`app/remembered-user.ts`): an app route starts signed in as them. */
 	rememberedUser: Schema.NullOr(CurrentUser),
+	/** The AI panel's stored open state and width: an open panel is there from the first frame. */
+	aiPanel: AiPanel.Stored,
 })
 export type Flags = typeof Flags.Type
 
@@ -118,6 +122,7 @@ export const flags: Effect.Effect<Flags> = Effect.all({
 	isMobile: Effect.sync(() => globalThis.matchMedia?.(MOBILE_QUERY).matches ?? false),
 	isCreateChannelHintDismissed: loadIsCreateChannelHintDismissed,
 	rememberedUser: loadRememberedUser,
+	aiPanel: AiPanel.loadStored,
 })
 
 /** Production builds skip the dev-only routes. Read once here, never inside `update`. */
@@ -232,6 +237,21 @@ const foldPlatform = Update.foldChild({
 	toParentMessage: (message: Platform.Message) => Message.GotPlatformMessage({ message }),
 })
 
+const foldAiPanel = Update.foldChild({
+	update: (panel: AiPanel.Model, step: (panel: AiPanel.Model) => ReturnType<typeof AiPanel.update>) =>
+		step(panel),
+	read: (model: Model) => Option.some(model.aiPanel),
+	write: (model, aiPanel) => modifyFields(model, { aiPanel: () => aiPanel }),
+	toParentMessage: (message: AiPanel.Message) => Message.GotAiPanelMessage({ message }),
+})
+
+/** Mod+J, the nav rail's button and the palette: the AI panel opens beside the page (a sheet on phones). */
+const toggleAiPanel: Step = (model) =>
+	foldAiPanel(model, (panel) => AiPanel.toggle(panel, aiPanelInputsOf(model)))
+
+const openAiPanel: Step = (model) =>
+	foldAiPanel(model, (panel) => AiPanel.open(panel, aiPanelInputsOf(model)))
+
 const foldCommandPalette = Update.foldChild({
 	update: (
 		palette: CommandPalette.Model,
@@ -251,6 +271,7 @@ const foldCommandPalette = Update.foldChild({
 			RequestedModal: ({ modal }) => openModal(modal),
 			RequestedToast: ({ toast }) => showToast(toast),
 			RequestedTheme: ({ preference }) => requestedTheme(preference),
+			RequestedAiPanel: () => openAiPanel,
 			RequestedPresenceStatus: ({ status }) =>
 				foldPlatform((platform) => Platform.pickPresenceStatus(platform, status)),
 		}),
@@ -387,6 +408,7 @@ const hotkeySteps = {
 	"inbox.open": () => openInbox,
 	"shortcuts.open": () => openModal({ _tag: "KeyboardShortcuts" }),
 	"sidebar.toggle": () => toggleSidebar,
+	"aiPanel.toggle": () => toggleAiPanel,
 	"history.back": () => command(NavigateHistory({ direction: "Back" })),
 	"history.forward": () => command(NavigateHistory({ direction: "Forward" })),
 } satisfies { readonly [K in LayoutHotkeyActionId]: () => Step }
@@ -726,6 +748,8 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 			shell: Shell.init({ isCreateChannelHintDismissed: flags.isCreateChannelHintDismissed }),
 			modal: Modal.initialModel,
 			commandPalette: CommandPalette.init(),
+			// A phone opens the panel as a sheet over the page: it never starts open.
+			aiPanel: AiPanel.init(flags.isMobile ? { ...flags.aiPanel, isOpen: false } : flags.aiPanel),
 			toasts: Toasts.init(),
 			platform: Platform.init(),
 			desktopUpdate: Updates.init(),
@@ -849,6 +873,8 @@ export const update = (model: Model, message: Message): Return =>
 			foldModal(model, (modal) => Modal.update(modal, message, modalContextOf(model))),
 		GotCommandPaletteMessage: ({ message }) =>
 			foldCommandPalette(model, (palette) => CommandPalette.update(palette, message, sharedOf(model))),
+		GotAiPanelMessage: ({ message }) =>
+			foldAiPanel(model, (panel) => AiPanel.update(panel, message, aiPanelInputsOf(model))),
 		PressedHotkey: ({ actionId }) => pressedHotkey(actionId)(model),
 		GotToastsMessage: ({ message }) => foldToastsWithAction(model, message),
 		ReceivedBackgroundToast: ({ toast }) => showToast(toast)(model),

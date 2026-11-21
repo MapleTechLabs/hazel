@@ -4,6 +4,7 @@ import { FetchHttpClient } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
 import { RpcClient, RpcSerialization } from "effect/rpc"
 import {
+	AssistantRpcs,
 	AttachmentRpcs,
 	BotRpcs,
 	ChannelMemberRpcs,
@@ -59,7 +60,7 @@ const AllRpcs = MessageRpcs.merge(
 	BotRpcs,
 	ConnectShareRpcs,
 	InvitationRpcs,
-).merge(ChatSyncRpcs, CustomerRpcs, CustomerChatRpcs, PushDeviceRpcs)
+).merge(ChatSyncRpcs, CustomerRpcs, CustomerChatRpcs, PushDeviceRpcs, AssistantRpcs)
 
 const makeClient = RpcClient.make(AllRpcs, { flatten: true })
 

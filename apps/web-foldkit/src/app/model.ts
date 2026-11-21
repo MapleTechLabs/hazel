@@ -1,6 +1,7 @@
 import { Option, Schema } from "effect"
 import type { OrganizationId, UserId } from "@hazel/schema"
 import { AsyncData } from "foldkit"
+import * as AiPanel from "../assistant"
 import { defineTaggedUnion } from "foldkit/schema"
 import { CommonReason } from "~/lib/error-messages"
 import * as CommandPalette from "../overlay/command-palette"
@@ -8,7 +9,7 @@ import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
 import type { PageHost, Shared } from "../page/contract"
 import { can } from "../page/contract"
-import { PageSlot } from "../page/registry"
+import { assistantContextOf, PageSlot } from "../page/registry"
 import { AppRoute, orgSectionOf, orgSlugOf } from "../route"
 import { type Auth, CurrentUser, Member, Organization } from "../session"
 import { SoundSettings } from "../notification-sound"
@@ -101,6 +102,8 @@ export const Model = Schema.Struct({
 	shell: Shell.Model,
 	modal: Modal.Model,
 	commandPalette: CommandPalette.Model,
+	/** The AI side panel (`assistant/`). */
+	aiPanel: AiPanel.Model,
 	toasts: Toasts.Model,
 	/** Presence (legacy `PresenceProvider`). */
 	platform: Platform.Model,
@@ -186,6 +189,15 @@ export const pageHostOf = (model: Model): PageHost => {
 	const host = { page: model.page, shared: sharedOf(model) }
 	pageHostCache.set(model, host)
 	return host
+}
+
+/** What the AI panel reads: the shared state, and what the page shows (else its route). */
+export const aiPanelInputsOf = (model: Model): AiPanel.Inputs => {
+	const shared = sharedOf(model)
+	return {
+		shared,
+		context: assistantContextOf(model.page, shared) ?? AiPanel.routeContextOf(model.route),
+	}
 }
 
 export const shellContextOf = (model: Model): ShellUpdateContext => ({

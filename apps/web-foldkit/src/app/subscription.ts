@@ -16,6 +16,7 @@ import { type NotificationSinks, wireNotificationSinks } from "./notification-si
 import { chatChannelIdOf, isChatRoute, orgSlugOf } from "../route"
 import type { Member, Organization } from "../session"
 import * as ShellSubscription from "../shell/subscription"
+import * as AiPanel from "../assistant"
 import * as CommandPalette from "../overlay/command-palette"
 import { LayoutKeys, layoutHotkeys, layoutKeysOf } from "../overlay/hotkeys"
 import * as Modal from "../overlay/modal"
@@ -267,6 +268,16 @@ const commandPaletteSubscriptions = Subscription.lift(CommandPalette.subscriptio
 	toParentMessage: (message): Message => ({ _tag: "GotCommandPaletteMessage", message }),
 })
 
+const aiPanelSubscriptions = Subscription.lift(AiPanel.subscriptions)<Model, Message>({
+	read: (model) =>
+		Option.some({
+			model: model.aiPanel,
+			organizationId: Option.getOrNull(Option.map(loadedOrgOf(model), (org) => org.organization.id)),
+		}),
+	// Literal wrapper: the constructor would re-validate every synced row.
+	toParentMessage: (message): Message => ({ _tag: "GotAiPanelMessage", message }),
+})
+
 const modalSubscriptions = Subscription.lift(Modal.subscriptions)<Model, Message>({
 	read: (model) => Option.some({ modal: model.modal, shared: sharedOf(model) }),
 	toParentMessage: (message): Message => ({ _tag: "GotModalMessage", message }),
@@ -318,6 +329,7 @@ export const subscriptions = Subscription.aggregate(
 	notificationSubscriptions,
 	overlaySubscriptions,
 	commandPaletteSubscriptions,
+	aiPanelSubscriptions,
 	modalSubscriptions,
 	toastSubscriptions,
 	shellSubscriptions,
