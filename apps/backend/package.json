@@ -19,6 +19,8 @@
 		"@alchemy.run/cloudflare": "catalog:alchemy",
 		"@clerk/backend": "^3.26.5",
 		"@distilled.cloud/aws4signer": "1.0.0-rc.20",
+		"@effect/ai-anthropic": "catalog:effect",
+		"@effect/ai-openai": "catalog:effect",
 		"@effect/sql-sqlite-do": "catalog:effect",
 		"@hazel/auth": "workspace:*",
 		"@hazel/backend-core": "workspace:*",

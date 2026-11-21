@@ -31,6 +31,8 @@
         "@alchemy.run/cloudflare": "catalog:alchemy",
         "@clerk/backend": "^3.26.5",
         "@distilled.cloud/aws4signer": "1.0.0-rc.20",
+        "@effect/ai-anthropic": "catalog:effect",
+        "@effect/ai-openai": "catalog:effect",
         "@effect/sql-sqlite-do": "catalog:effect",
         "@hazel/auth": "workspace:*",
         "@hazel/backend-core": "workspace:*",
@@ -482,6 +484,8 @@
       "alchemy": "2.0.0-beta.87",
     },
     "effect": {
+      "@effect/ai-anthropic": "4.1.4",
+      "@effect/ai-openai": "4.1.4",
       "@effect/ai-openrouter": "4.1.4",
       "@effect/platform-browser": "4.1.4",
       "@effect/platform-bun": "4.1.4",
@@ -678,6 +682,10 @@
     "@distilled.cloud/iceberg": ["@distilled.cloud/iceberg@1.0.0-rc.20", "", { "dependencies": { "@distilled.cloud/core": "1.0.0-rc.20" }, "peerDependencies": { "effect": "^4.1.2" } }, "sha512-m0JErahIw1Z+/EDYJRqDA0A8iW9Xv5xHGFeUqSn/ne8VdZX1GAqX4uxesAFQV0ZdoW2yPh4zoKj3JLWphYTtbw=="],
 
     "@distilled.cloud/s3": ["@distilled.cloud/s3@1.0.0-rc.20", "", { "dependencies": { "@distilled.cloud/aws4signer": "1.0.0-rc.20", "@distilled.cloud/core": "1.0.0-rc.20" }, "peerDependencies": { "effect": "^4.1.2" } }, "sha512-MqJlG+CVCgkIX7iPDo8hb4YlcEELYTlJFLg2Whp8TjBPieViNiiRAJR/5TtDApa38dzrTsMc69ul965Myagrdg=="],
+
+    "@effect/ai-anthropic": ["@effect/ai-anthropic@4.1.4", "", { "peerDependencies": { "effect": "^4.1.4" } }, "sha512-VDcsyL3k76HhF7YqH8z0gQ0bUybX4ti5RHv3JadDXZvEgNpvUT3p4YBssvKR2HAGa7NXr9yfmFedRilhQM7tdQ=="],
+
+    "@effect/ai-openai": ["@effect/ai-openai@4.1.4", "", { "peerDependencies": { "effect": "^4.1.4" } }, "sha512-xodZLHmt1N7Ziw94jr0nTfG/fgyMZioYKS85fyy2L1kscNurWGllaDaTQyHUSYd8wghqMoc8vV3XPei0+c9NIQ=="],
 
     "@effect/ai-openrouter": ["@effect/ai-openrouter@4.1.4", "", { "peerDependencies": { "effect": "^4.1.4" } }, "sha512-xnubaIw9iGhHUcjSDVgwzcelm2bftBmTpn9lxywpJEO7KBbErqXYmLhXyARo6KH8Tz7Egut52360JEsTfWhkfg=="],
 

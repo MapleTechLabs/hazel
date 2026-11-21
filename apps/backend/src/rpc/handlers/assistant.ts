@@ -1,8 +1,13 @@
 import { Database, SQLite, schema } from "@hazel/db"
 import { CurrentUser, UnauthorizedError, withRemapDbErrors } from "@hazel/domain"
-import { AssistantQuestionClosedError, AssistantRpcs, AssistantThreadNotFoundError } from "@hazel/domain/rpc"
+import {
+	AssistantEngineError,
+	AssistantQuestionClosedError,
+	AssistantRpcs,
+	AssistantThreadNotFoundError,
+} from "@hazel/domain/rpc"
 import type { AssistantThreadId, OrganizationId, UserId } from "@hazel/schema"
-import { Effect, Option } from "effect"
+import { Effect, Option, Redacted } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import {
 	answerQuestion,
@@ -13,7 +18,13 @@ import {
 	stopThread,
 	updateThread,
 } from "../../worker/objects/org/assistant"
-import { t3CodeLink } from "../../worker/objects/org/t3code"
+import { HostedModels, providerName } from "../../worker/objects/org/assistant-hosted"
+import {
+	assistantStatusOf,
+	removeHostedKey,
+	saveHostedKey,
+	setPreferredEngine,
+} from "../../worker/objects/org/assistant-keys"
 
 /**
  * The AI panel's RPC handlers. Run in the `OrgObject` (`rpc/routing.ts`), which also follows the
@@ -67,20 +78,48 @@ export const AssistantRpcLive = AssistantRpcs.toLayer(
 				Effect.gen(function* () {
 					const user = yield* CurrentUser.Context
 					yield* requireMember(organizationId, user.id)
-					const link = yield* t3CodeLink({ userId: user.id })
-					return {
-						t3code:
-							link === null
-								? { state: "not_connected" as const, environmentLabel: null }
-								: {
-										state:
-											link.status === "active"
-												? ("connected" as const)
-												: ("expired" as const),
-										environmentLabel: link.metadata.environmentLabel,
-									},
-					}
+					return yield* assistantStatusOf(user.id)
 				}).pipe(withRemapDbErrors("AssistantThread", "select")),
+
+			// The key is checked with the provider, then stored encrypted; it is never logged or returned.
+			"assistant.saveKey": ({ organizationId, provider, apiKey }) =>
+				Effect.gen(function* () {
+					const user = yield* CurrentUser.Context
+					yield* requireMember(organizationId, user.id)
+					const key = Redacted.make(apiKey.trim())
+					const models = yield* HostedModels
+					yield* models.checkKey(provider, key)
+					yield* saveHostedKey({ userId: user.id, provider, apiKey: key })
+					yield* setPreferredEngine({ userId: user.id, engine: provider })
+					yield* Effect.annotateCurrentSpan({ "assistant.provider": provider })
+					return yield* assistantStatusOf(user.id)
+				}).pipe(withRemapDbErrors("AssistantThread", "update")),
+
+			"assistant.removeKey": ({ organizationId, provider }) =>
+				Effect.gen(function* () {
+					const user = yield* CurrentUser.Context
+					yield* requireMember(organizationId, user.id)
+					yield* removeHostedKey({ userId: user.id, provider })
+					return yield* assistantStatusOf(user.id)
+				}).pipe(withRemapDbErrors("AssistantThread", "update")),
+
+			"assistant.setEngine": ({ organizationId, engine }) =>
+				Effect.gen(function* () {
+					const user = yield* CurrentUser.Context
+					yield* requireMember(organizationId, user.id)
+					const status = yield* assistantStatusOf(user.id)
+					if (status[engine].state !== "connected") {
+						return yield* new AssistantEngineError({
+							reason: "not_connected",
+							message:
+								engine === "t3code"
+									? "Link T3 Code in Settings → Integrations first."
+									: `Add your ${providerName(engine)} API key first.`,
+						})
+					}
+					yield* setPreferredEngine({ userId: user.id, engine })
+					return { ...status, preferredEngine: engine }
+				}).pipe(withRemapDbErrors("AssistantThread", "update")),
 
 			"assistant.start": ({ organizationId, threadId, message, context }) =>
 				Effect.gen(function* () {
@@ -92,7 +131,22 @@ export const AssistantRpcLive = AssistantRpcs.toLayer(
 						if (existing.value.ownerId !== user.id) return yield* refuse("Not your chat")
 						return yield* written(threadId)
 					}
-					yield* startThread({ organizationId, ownerId: user.id, threadId, message, context })
+					// New chats start on the member's preferred engine; follow-ups stay on their thread's.
+					const { preferredEngine } = yield* assistantStatusOf(user.id)
+					if (preferredEngine === null) {
+						return yield* new AssistantEngineError({
+							reason: "not_connected",
+							message: "Link T3 Code or add an API key to use the AI panel.",
+						})
+					}
+					yield* startThread({
+						organizationId,
+						ownerId: user.id,
+						threadId,
+						message,
+						context,
+						engine: preferredEngine,
+					})
 					return yield* written(threadId)
 				}).pipe(withRemapDbErrors("AssistantThread", "create")),
 

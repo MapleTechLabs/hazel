@@ -1,5 +1,7 @@
 /**
- * The AI panel's engine in the `OrgObject` (`docs/assistant.md`). A thread runs on its owner's
+ * The AI panel's engines in the `OrgObject` (`docs/assistant.md`). A thread runs on the engine it
+ * was started on: the hosted ones (`anthropic`, `openai`) are Hazel's own loop
+ * (`./assistant-hosted.ts`), run on this alarm too. A `t3code` thread runs on its owner's
  * linked T3 Code environment: a message launches or continues a T3 Code thread over its MCP
  * server, and the object's alarm follows it (`assistantTick`), one bounded `t3_thread_wait` and
  * an activity read per step, mirroring T3's items into `assistant_items`. Following on the alarm
@@ -27,6 +29,8 @@ import { AssistantItemId, type AssistantThreadId, type OrganizationId, type User
 import { Clock, Effect, Option, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { defineCall } from "../calls"
+import { AssistantHost, cutOffTurn, isHosted, providerName, runHostedTurn } from "./assistant-hosted"
+import { HOSTED_MODELS, hasHostedKey } from "./assistant-keys"
 import { markT3CodeExpired, t3CodeAccess } from "./t3code"
 
 /**
@@ -325,6 +329,8 @@ const followSoon = (threadId: AssistantThreadId, now: Date) =>
 					pendingQuestion: null,
 					nextStepAt: now,
 					failures: 0,
+					// A hosted turn in progress keeps its mark: the next turn starts when it ends.
+					turnStartedAt: null,
 					updatedAt: now,
 				})
 				.onConflictDoUpdate({
@@ -384,7 +390,10 @@ export const startThread = Effect.fn("Assistant.start")(function* (input: {
 	readonly threadId: AssistantThreadId
 	readonly message: string
 	readonly context: Assistant.Context | null
+	readonly engine: Assistant.Engine
 }) {
+	yield* Effect.annotateCurrentSpan({ "assistant.engine": input.engine })
+	if (isHosted(input.engine)) return yield* startHostedThread({ ...input, engine: input.engine })
 	const db = yield* Database.Database
 	const { mcp, environmentLabel } = yield* ownerSession(input.ownerId)
 	const title = titleFor(input.message)
@@ -433,7 +442,62 @@ export const startThread = Effect.fn("Assistant.start")(function* (input: {
 	})
 })
 
-/** A follow-up: T3 Code queues it behind a run in progress. */
+/** A hosted engine's key must be saved before a message goes to it. */
+const requireHostedKey = (ownerId: UserId, provider: Assistant.HostedProvider) =>
+	Effect.flatMap(hasHostedKey(ownerId, provider), (has) =>
+		has
+			? Effect.void
+			: Effect.fail(
+					new AssistantEngineError({
+						reason: "not_connected",
+						message: `Add your ${providerName(provider)} API key in the AI panel to use it.`,
+					}),
+				),
+	)
+
+/** A hosted thread: recorded with its first message; the alarm runs the turn. */
+const startHostedThread = Effect.fn("Assistant.startHosted")(function* (input: {
+	readonly organizationId: OrganizationId
+	readonly ownerId: UserId
+	readonly threadId: AssistantThreadId
+	readonly message: string
+	readonly context: Assistant.Context | null
+	readonly engine: Assistant.HostedProvider
+}) {
+	const db = yield* Database.Database
+	yield* requireHostedKey(input.ownerId, input.engine)
+	const now = new Date(yield* Clock.currentTimeMillis)
+	const thread = {
+		id: input.threadId,
+		organizationId: input.organizationId,
+		ownerId: input.ownerId,
+		title: titleFor(input.message),
+		visibility: "private" as const,
+		engine: input.engine,
+		status: "running" as const,
+		errorMessage: null,
+		context: contextRow(input.context),
+		externalThreadId: null,
+		externalLink: null,
+		engineLabel: HOSTED_MODELS[input.engine],
+		lastActivityAt: now,
+		createdAt: now,
+		updatedAt: now,
+		deletedAt: null,
+	}
+	yield* db.transaction(
+		Effect.gen(function* () {
+			yield* db.run(
+				SQLite.insertInto(schema.assistantThreadsTable).values(thread).onConflictDoNothing(),
+			)
+			yield* insertUserItem(thread, AssistantItemId.make(input.threadId), input.message, now)
+			yield* followSoon(thread.id, now)
+		}),
+	)
+	yield* Effect.annotateCurrentSpan({ "assistant.thread_id": thread.id })
+})
+
+/** A follow-up: T3 Code queues it behind a run in progress; a hosted turn answers it next. */
 export const sendMessage = Effect.fn("Assistant.send")(function* (input: {
 	readonly organizationId: OrganizationId
 	readonly thread: schema.AssistantThread
@@ -444,6 +508,16 @@ export const sendMessage = Effect.fn("Assistant.send")(function* (input: {
 }) {
 	const db = yield* Database.Database
 	const { thread } = input
+	if (isHosted(thread.engine)) {
+		const sent = yield* db.first(
+			SQLite.from(schema.assistantItemsTable)
+				.select("id")
+				.where(($) => [$.id.eq(input.messageId)]),
+		)
+		if (Option.isSome(sent)) return
+		yield* requireHostedKey(thread.ownerId, thread.engine)
+		return yield* recordFollowUp(input)
+	}
 	if (thread.externalThreadId === null) {
 		return yield* new AssistantEngineError({
 			reason: "refused",
@@ -473,29 +547,42 @@ export const sendMessage = Effect.fn("Assistant.send")(function* (input: {
 			clientRequestId: itemId,
 		}),
 	)
-	const now = new Date(yield* Clock.currentTimeMillis)
-	yield* db.transaction(
-		Effect.gen(function* () {
-			// As the thread is now: the owner may have unshared or deleted it during T3 Code's round trip.
-			const current = Option.getOrNull(yield* findThread(thread.id))
-			if (current === null) return
-			yield* insertUserItem(current, itemId, input.message, now)
-			yield* db.run(
-				SQLite.update(schema.assistantThreadsTable)
-					.set({
-						status: "running",
-						errorMessage: null,
-						lastActivityAt: now,
-						updatedAt: now,
-						// No context this time: the thread keeps the last one.
-						context: input.context === null ? thread.context : contextRow(input.context),
-					})
-					.where(($) => [$.id.eq(thread.id)]),
-			)
-			yield* followSoon(thread.id, now)
-		}),
-	)
+	yield* recordFollowUp(input)
 })
+
+/** The follow-up's item, the thread running again, and its follower due. */
+const recordFollowUp = (input: {
+	readonly thread: schema.AssistantThread
+	readonly messageId: AssistantItemId
+	readonly message: string
+	readonly context: Assistant.Context | null
+}) =>
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		const { thread } = input
+		const now = new Date(yield* Clock.currentTimeMillis)
+		yield* db.transaction(
+			Effect.gen(function* () {
+				// As the thread is now: the owner may have unshared or deleted it meanwhile.
+				const current = Option.getOrNull(yield* findThread(thread.id))
+				if (current === null) return
+				yield* insertUserItem(current, input.messageId, input.message, now)
+				yield* db.run(
+					SQLite.update(schema.assistantThreadsTable)
+						.set({
+							status: "running",
+							errorMessage: null,
+							lastActivityAt: now,
+							updatedAt: now,
+							// No context this time: the thread keeps the last one.
+							context: input.context === null ? thread.context : contextRow(input.context),
+						})
+						.where(($) => [$.id.eq(thread.id)]),
+				)
+				yield* followSoon(thread.id, now)
+			}),
+		)
+	})
 
 const QuestionData = Schema.Struct({
 	requestId: Schema.String,
@@ -571,6 +658,27 @@ export const answerQuestion = Effect.fn("Assistant.answer")(function* (input: {
 
 /** Stop the run; the follower records how it ended. */
 export const stopThread = Effect.fn("Assistant.stop")(function* (thread: schema.AssistantThread) {
+	if (isHosted(thread.engine)) {
+		const running = (yield* AssistantHost).turns.get(thread.id)
+		// The turn writes how it ended; a turn not started yet is dropped here.
+		if (running !== undefined) return yield* running.stop
+		const db = yield* Database.Database
+		const now = new Date(yield* Clock.currentTimeMillis)
+		return yield* db.transaction(
+			Effect.gen(function* () {
+				yield* db.run(
+					SQLite.update(schema.assistantThreadsTable)
+						.set({ status: "idle", errorMessage: null, updatedAt: now })
+						.where(($) => [$.id.eq(thread.id), $.status.eq("running")]),
+				)
+				yield* db.run(
+					SQLite.update(schema.assistantFollowersTable)
+						.set({ nextStepAt: null, turnStartedAt: null, updatedAt: now })
+						.where(($) => [$.threadId.eq(thread.id)]),
+				)
+			}),
+		)
+	}
 	if (thread.externalThreadId === null) return
 	const externalThreadId = thread.externalThreadId
 	const { mcp } = yield* ownerSession(thread.ownerId)
@@ -612,6 +720,9 @@ export const updateThread = Effect.fn("Assistant.update")(function* (input: {
 /** Delete for everyone; a run in progress is left to finish in T3 Code, unfollowed. */
 export const deleteThread = Effect.fn("Assistant.delete")(function* (thread: schema.AssistantThread) {
 	const db = yield* Database.Database
+	// A hosted turn in progress stops; its last writes land deleted.
+	const running = (yield* AssistantHost).turns.get(thread.id)
+	if (running !== undefined) yield* running.stop
 	const now = new Date(yield* Clock.currentTimeMillis)
 	yield* db.transaction(
 		Effect.gen(function* () {
@@ -667,6 +778,17 @@ export const AssistantTickCall = defineCall("org.assistantTick", "org", {
 
 export const assistantTick = Effect.fn("Assistant.tick")(function* () {
 	const db = yield* Database.Database
+	const host = yield* AssistantHost
+	// Hosted turns this instance does not run were cut off by an eviction.
+	const marked = yield* db
+		.run(
+			SQLite.from(schema.assistantFollowersTable)
+				.select("threadId")
+				.where(($) => [$.turnStartedAt.isNotNull()]),
+		)
+		.pipe(Effect.orDie)
+	const cutOff = marked.filter((row) => !host.turns.has(row.threadId))
+	yield* Effect.forEach(cutOff, (row) => cutOffTurn(row.threadId).pipe(Effect.orDie), { discard: true })
 	const now = new Date(yield* Clock.currentTimeMillis)
 	// At most one wait's length per alarm: the rest are due again at once and go next time.
 	const due = yield* db
@@ -678,8 +800,9 @@ export const assistantTick = Effect.fn("Assistant.tick")(function* () {
 				.limit(STEPS_PER_TICK),
 		)
 		.pipe(Effect.orDie)
+	const toStep = due.filter((follower) => !host.turns.has(follower.threadId))
 	yield* Effect.forEach(
-		due,
+		toStep,
 		(follower) =>
 			stepThread(follower).pipe(
 				// A defect is a failed step too: it backs off and gives up, never loops.
@@ -692,7 +815,7 @@ export const assistantTick = Effect.fn("Assistant.tick")(function* () {
 			),
 		{ concurrency: STEPS_PER_TICK, discard: true },
 	)
-	return { stepped: due.length }
+	return { stepped: toStep.length + cutOff.length }
 })
 
 /** Stop following, leaving the thread in `status`. */
@@ -744,6 +867,9 @@ const unfollow = (threadId: AssistantThreadId) =>
 const stepThread = Effect.fn("Assistant.step")(function* (follower: schema.AssistantFollower) {
 	const db = yield* Database.Database
 	const thread = Option.getOrNull(yield* findThread(follower.threadId).pipe(Effect.orDie))
+	if (thread !== null && isHosted(thread.engine)) {
+		return yield* runHostedTurn(thread, toolNameLabel).pipe(Effect.orDie)
+	}
 	if (thread === null || thread.externalThreadId === null) {
 		return yield* unfollow(follower.threadId).pipe(Effect.orDie)
 	}

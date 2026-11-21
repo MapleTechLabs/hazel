@@ -62,6 +62,7 @@ import { makeUserSource } from "./sources/user-source"
 import { makeCustomersSource } from "./sources/customers-source"
 import { pollDueRssFeeds, rssDeadlines } from "./org/rss"
 import { assistantDeadlines, AssistantTickCall } from "./org/assistant"
+import { AssistantHost, makeAssistantHost } from "./org/assistant-hosted"
 import { prepareMessageSearch, SEARCH_MIGRATION_ID } from "./org/message-search"
 import { channelDeadlines, runChannelTimers } from "./channel/timers"
 import { makePresenceHooks } from "./user/presence"
@@ -130,8 +131,16 @@ const sourceOf = (
 export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 	Effect.gen(function* () {
 		const { kind } = options
+		// The AI panel's hooks into this instance (`./org/assistant-hosted.ts`): its running hosted
+		// turns, and (bound below, once the sync runtime and dispatcher exist) the mid-run flush and
+		// the object's own calls. In `base`, so the RPC handlers and the alarm's calls share it.
+		const assistantHost = makeAssistantHost()
 		const base = yield* Layer.build(
-			Database.layerSqlite.pipe(Layer.provideMerge(options.sql), Layer.provideMerge(options.platform)),
+			Database.layerSqlite.pipe(
+				Layer.provideMerge(options.sql),
+				Layer.provideMerge(options.platform),
+				Layer.provideMerge(Layer.succeed(AssistantHost, assistantHost)),
+			),
 		)
 		const run = <A, E, R extends Database.Database | SqlClient | ObjectPlatform>(
 			effect: Effect.Effect<A, E, R>,
@@ -258,6 +267,28 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 				)
 				return Option.some(exit as Exit.Exit<C["success"]["Type"], unknown>)
 			})
+
+		// A hosted turn streams its reply: each write is broadcast as it lands, mid-alarm (`sync.flush`
+		// only: the outbox and the alarm wait for the end of the alarm, as for any other write).
+		assistantHost.flush = Effect.asVoid(run(synced.sync.flush))
+		assistantHost.self = {
+			get target() {
+				return { kind, id: identity.current() ?? "" }
+			},
+			call: (call, payload) =>
+				Effect.map(ownCall(call, payload), (exit) =>
+					Option.getOrElse(exit, () => Exit.die(`${kind} object does not know its id yet`)),
+				),
+			rpc: (tag, payload, principal) =>
+				Effect.suspend(() => {
+					const id = identity.current()
+					if (id === undefined)
+						return Effect.succeed(Exit.die(`${kind} object does not know its id yet`))
+					return dispatcher
+						.dispatch(tag, payload, principal)
+						.pipe(Effect.provideService(CurrentObject, { kind, id }))
+				}),
+		}
 
 		/**
 		 * CustomersObject: before its first request, install its defaults and pull its members from

@@ -501,7 +501,10 @@ describe("AI panel", () => {
 				const status = ok(
 					yield* world.call("assistant.status", { organizationId: world.orgId }, world.alice),
 				)
-				expect(status).toEqual({ t3code: { state: "not_connected", environmentLabel: null } })
+				expect(status).toMatchObject({
+					t3code: { state: "not_connected", environmentLabel: null },
+					preferredEngine: null,
+				})
 				const { exit } = yield* start(world)
 				expect(failure(exit)).toMatchObject({ _tag: "AssistantEngineError", reason: "not_connected" })
 				expect(world.rows(`SELECT id FROM assistant_threads`)).toHaveLength(0)

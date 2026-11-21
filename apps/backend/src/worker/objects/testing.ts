@@ -24,6 +24,7 @@ import { makeRpcDispatcher, type RpcDispatcherShape } from "../../rpc/dispatch"
 import { objectHandlersLive } from "./handlers"
 import type { InvokePrincipal } from "./principal"
 import { formatTarget, type ObjectTarget } from "./kinds"
+import { HostedModels, type HostedModelsShape } from "./org/assistant-hosted"
 import { ObjectStubs } from "./protocol"
 import { makeObjectRuntime, type ObjectRuntime } from "./runtime"
 
@@ -119,6 +120,8 @@ export interface TestObjectsOptions {
 	readonly migrations?: Partial<Record<ObjectTarget["kind"], ReadonlyArray<StoreMigration>>>
 	/** APNs configured (default true): the fake records pushes. */
 	readonly apns?: boolean
+	/** The AI panel's hosted models (a fake `LanguageModel`); default: the real providers. */
+	readonly hostedModels?: HostedModelsShape
 }
 
 export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
@@ -251,6 +254,9 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			threadNamer,
 			chatSync.layer,
 			htmlRenders,
+			options.hostedModels === undefined
+				? Layer.empty
+				: Layer.succeed(HostedModels, options.hostedModels),
 		)
 
 		const appPlatform = Layer.mergeAll(
