@@ -516,7 +516,8 @@ const onKey = (model: Model, shared: Shared, key: QueueKey): Return => {
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		UpdatedSignals: ({ signals }) => ({ model: modifyFields(model, { signals: () => signals }) }),
+		// A compute can move the selected signal to another environment: the preview follows it.
+		UpdatedSignals: ({ signals }) => withDetail(modifyFields(model, { signals: () => signals }), shared),
 		UpdatedAccounts: ({ accounts }) => ({ model: modifyFields(model, { accounts: () => accounts }) }),
 		UpdatedMembers: ({ members }) => ({ model: modifyFields(model, { members: () => members }) }),
 		UpdatedLastComputedAt: ({ lastComputedAtMs }) => ({
