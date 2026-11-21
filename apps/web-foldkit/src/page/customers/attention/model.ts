@@ -3,6 +3,7 @@ import { CustomerAccountId, CustomerSignalId, type UserId } from "@hazel/schema"
 import { Array, Option, Order, Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
+import { customerAccountOf } from "../../../customers/groups"
 import {
 	AccountRow,
 	type AccountRow as AccountRowType,
@@ -13,7 +14,6 @@ import {
 	resolvedAtMsOf,
 	SignalRow,
 	type SignalRow as SignalRowType,
-	subjectIdOf,
 } from "../../../customers/queries"
 import {
 	isSnoozeKey,
@@ -173,19 +173,20 @@ const matchesFilters = (
 	signal: SignalRowType,
 ): boolean => {
 	const account = accountsById.get(signal.accountId)
+	if (account === undefined) return false
+	const customer = customerAccountOf(account, accountsById)
 	// A muted customer stays out of every tab until it is unmuted (its page shows its signals).
-	if (account === undefined || isAttentionMuted(account)) return false
+	if (isAttentionMuted(customer)) return false
 	const { filters } = model
 	const query = model.search.trim().toLowerCase()
 	return (
-		matchesOwner(filters.owner, viewer, account.ownerUserId) &&
+		matchesOwner(filters.owner, viewer, customer.ownerUserId) &&
 		(filters.kind === null || signal.kind === filters.kind) &&
 		(filters.template === null || signal.template === filters.template) &&
 		(filters.severity === null || signal.severity === filters.severity) &&
 		(filters.plan === null || account.planName === filters.plan) &&
 		(query === "" ||
 			account.name.toLowerCase().includes(query) ||
-			accountsById.get(subjectIdOf(signal, accountsById))?.name.toLowerCase().includes(query) ||
 			signal.title.toLowerCase().includes(query))
 	)
 }
@@ -207,7 +208,7 @@ const sortedForTab = (
 ): ReadonlyArray<SignalRowType> => {
 	if (model.tab === "snoozed") return Array.sort(signals, byWake)
 	if (model.tab === "done") return Array.sort(signals, byResolved)
-	const accountOf = (signal: SignalRowType) => accountsById.get(subjectIdOf(signal, accountsById))
+	const accountOf = (signal: SignalRowType) => accountsById.get(signal.accountId)
 	const order = {
 		priority: byPriority,
 		account: Order.mapInput(Order.String, (signal: SignalRowType) =>
@@ -230,15 +231,11 @@ const sortedForTab = (
 }
 
 /** Keeps each account's signals together, at its first signal's place in the sorted order. */
-const clusterByAccount = (
-	signals: ReadonlyArray<SignalRowType>,
-	accountsById: ReadonlyMap<string, AccountRowType>,
-): ReadonlyArray<SignalRowType> => {
+const clusterByAccount = (signals: ReadonlyArray<SignalRowType>): ReadonlyArray<SignalRowType> => {
 	const byAccount = new Map<CustomerAccountId, Array<SignalRowType>>()
 	for (const signal of signals) {
-		const accountId = subjectIdOf(signal, accountsById)
-		const cluster = byAccount.get(accountId)
-		if (cluster === undefined) byAccount.set(accountId, [signal])
+		const cluster = byAccount.get(signal.accountId)
+		if (cluster === undefined) byAccount.set(signal.accountId, [signal])
 		else cluster.push(signal)
 	}
 	return [...byAccount.values()].flat()
@@ -256,7 +253,6 @@ export const visibleSignals = (model: Model, viewer: Viewer): ReadonlyArray<Sign
 					isInTab(model.tab, viewer, signal) && matchesFilters(model, viewer, accountsById, signal),
 			),
 		),
-		accountsById,
 	)
 }
 
@@ -266,20 +262,10 @@ export interface AccountRun {
 	readonly continuesBelow: boolean
 }
 
-export const accountRunOf = (
-	signals: ReadonlyArray<SignalRowType>,
-	index: number,
-	accountsById: ReadonlyMap<string, AccountRowType>,
-): AccountRun => {
-	const subjectAt = (at: number) => {
-		const signal = signals[at]
-		return signal === undefined ? undefined : subjectIdOf(signal, accountsById)
-	}
-	return {
-		continuesAbove: index > 0 && subjectAt(index - 1) === subjectAt(index),
-		continuesBelow: subjectAt(index + 1) === subjectAt(index),
-	}
-}
+export const accountRunOf = (signals: ReadonlyArray<SignalRowType>, index: number): AccountRun => ({
+	continuesAbove: index > 0 && signals[index - 1]?.accountId === signals[index]?.accountId,
+	continuesBelow: signals[index + 1]?.accountId === signals[index]?.accountId,
+})
 
 /** Each tab's count under the current filters. */
 export const tabCounts = (model: Model, viewer: Viewer): Readonly<Record<QueueTab, number>> => {
@@ -301,15 +287,11 @@ export interface AccountGroup {
 }
 
 /** Account grouping: accounts ordered by their best signal (`visibleSignals` keeps each one's together). */
-export const accountGroups = (
-	signals: ReadonlyArray<SignalRowType>,
-	accountsById: ReadonlyMap<string, AccountRowType>,
-): ReadonlyArray<AccountGroup> => {
+export const accountGroups = (signals: ReadonlyArray<SignalRowType>): ReadonlyArray<AccountGroup> => {
 	const groups = new Map<CustomerAccountId, { lead: SignalRowType; signals: Array<SignalRowType> }>()
 	for (const signal of signals) {
-		const accountId = subjectIdOf(signal, accountsById)
-		const group = groups.get(accountId)
-		if (group === undefined) groups.set(accountId, { lead: signal, signals: [signal] })
+		const group = groups.get(signal.accountId)
+		if (group === undefined) groups.set(signal.accountId, { lead: signal, signals: [signal] })
 		else group.signals.push(signal)
 	}
 	return [...groups].map(([accountId, group]) => ({ accountId, lead: group.lead, signals: group.signals }))
@@ -319,7 +301,7 @@ export const accountGroups = (
 export const rowIds = (model: Model, viewer: Viewer): ReadonlyArray<CustomerSignalId> => {
 	const signals = visibleSignals(model, viewer)
 	return model.grouping === "accounts"
-		? accountGroups(signals, accountsByIdOfModel(model)).map((group) => group.lead.id)
+		? accountGroups(signals).map((group) => group.lead.id)
 		: signals.map((signal) => signal.id)
 }
 

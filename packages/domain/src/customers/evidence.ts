@@ -110,7 +110,7 @@ export const LimitEvidence = Schema.TaggedStruct("limit", {
 	pct: Schema.Finite,
 	/** Null with under two days of the current period; absent on evidence from before forecasts. */
 	forecast: Schema.optionalKey(Schema.NullOr(LimitForecast)),
-	/** The account at the limit: on a customer with several environments, the one (limits are per environment). */
+	/** On evidence from when these signals sat on the primary: the environment to move it to. */
 	accountId: Schema.optionalKey(CustomerAccountId),
 })
 

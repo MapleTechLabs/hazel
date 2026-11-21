@@ -15,6 +15,13 @@ export const groupIdOf = (account: GroupMember, liveIds: ReadonlySet<string>): C
 		? account.primaryAccountId
 		: account.id
 
+/** The customer an account belongs to: its live primary, else itself. Owner and mute are the customer's. */
+export const customerAccountOf = <A extends GroupMember>(
+	account: A,
+	accountsById: ReadonlyMap<string, A>,
+): A =>
+	account.primaryAccountId === null ? account : (accountsById.get(account.primaryAccountId) ?? account)
+
 const idsOf = (accounts: ReadonlyArray<GroupMember>): ReadonlySet<string> =>
 	new Set(accounts.map((account) => account.id))
 

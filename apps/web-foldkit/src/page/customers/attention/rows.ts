@@ -1,7 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import type { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
-import { resolvedAtMsOf, subjectIdOf } from "../../../customers/queries"
+import { resolvedAtMsOf } from "../../../customers/queries"
 import { formatDate, formatMoney, formatWeekdayTime } from "../../../customers/format"
 import {
 	environmentsHint,
@@ -131,7 +131,7 @@ export const signalRow = (
 	context: RowContext,
 	run: AccountRunMark,
 ): Html => {
-	const account = context.accountsById.get(subjectIdOf(signal, context.accountsById))
+	const account = context.accountsById.get(signal.accountId)
 	if (account === undefined) return h.empty
 	const isSelected = signal.id === context.selectedId
 	return queueRow(h, {
@@ -160,7 +160,7 @@ export const compactRow = (
 	context: RowContext,
 	run: AccountRunMark,
 ): Html => {
-	const account = context.accountsById.get(subjectIdOf(signal, context.accountsById))
+	const account = context.accountsById.get(signal.accountId)
 	if (account === undefined) return h.empty
 	return rowShell(h, signal, context, run, [
 		h.span(
@@ -356,7 +356,7 @@ export const snoozedRow = (
 	context: RowContext,
 	run: AccountRunMark,
 ): Html => {
-	const account = context.accountsById.get(subjectIdOf(signal, context.accountsById))
+	const account = context.accountsById.get(signal.accountId)
 	if (account === undefined) return h.empty
 	return rowShell(h, signal, context, run, [
 		accountCell(h, account, run, context),
@@ -440,7 +440,7 @@ export const doneRow = (
 	context: RowContext,
 	run: AccountRunMark,
 ): Html => {
-	const account = context.accountsById.get(subjectIdOf(signal, context.accountsById))
+	const account = context.accountsById.get(signal.accountId)
 	if (account === undefined) return h.empty
 	const resolvedMs = resolvedAtMsOf(signal) ?? context.nowMs
 	const note =

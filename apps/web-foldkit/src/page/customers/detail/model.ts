@@ -329,14 +329,17 @@ export const linkCandidates = (model: Model): ReadonlyArray<AccountRow> => {
 }
 
 /**
- * Open and snoozed signals of this customer, highest priority first: an environment's are its
- * primary's (signals are raised for the whole customer, on the primary).
+ * Open and snoozed signals of this account, highest priority first: its own, and on an environment
+ * the customer-wide ones its primary holds (not the primary's own environment-level ones).
  */
 export const openSignals = (model: Model): ReadonlyArray<SignalRow> => {
-	const accountId = primaryOf(model)?.id ?? model.accountId
+	const primaryId = primaryOf(model)?.id
 	return (model.signals ?? []).filter(
 		(signal) =>
-			signal.accountId === accountId && (signal.status === "open" || signal.status === "snoozed"),
+			(signal.status === "open" || signal.status === "snoozed") &&
+			(signal.accountId === model.accountId ||
+				(signal.accountId === primaryId &&
+					!Customers.ENVIRONMENT_TEMPLATES.includes(signal.template))),
 	)
 }
 

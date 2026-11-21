@@ -20,7 +20,7 @@ import {
 	formatPct,
 	formatRelative,
 } from "../../../customers/format"
-import { type AccountRow, msOf, type SignalRow, subjectIdOf } from "../../../customers/queries"
+import { type AccountRow, msOf, type SignalRow } from "../../../customers/queries"
 import { shownSuggestions, suggestionRow } from "../../../customers/suggestions"
 import {
 	environmentsHint,
@@ -29,7 +29,7 @@ import {
 	healthDot,
 	severityGlyph,
 } from "../../../customers/ui/badges"
-import { environmentCounts } from "../../../customers/groups"
+import { environmentCounts, customerAccountOf } from "../../../customers/groups"
 import { connectCard } from "../../../customers/ui/connect-card"
 import { companyLogo } from "../../../customers/ui/identity"
 import { definedLabel, deltaPill, type Delta } from "../../../customers/ui/kpi-tile"
@@ -376,11 +376,16 @@ const attentionSection = (
 	const open = openSignals(model)
 	const top = open.slice(0, ATTENTION_SHOWN)
 	// "Mine" as the queue and the sidebar badge count it: signals on accounts I own.
-	const mine = open.filter(
-		(signal) => userId !== null && context.accountsById.get(signal.accountId)?.ownerUserId === userId,
-	).length
+	const mine = open.filter((signal) => {
+		const account = context.accountsById.get(signal.accountId)
+		return (
+			userId !== null &&
+			account !== undefined &&
+			customerAccountOf(account, context.accountsById).ownerUserId === userId
+		)
+	}).length
 	const row = (signal: SignalRow) => {
-		const account = context.accountsById.get(subjectIdOf(signal, context.accountsById))
+		const account = context.accountsById.get(signal.accountId)
 		if (account === undefined) return h.empty
 		return h.li(
 			[h.Key(signal.id)],

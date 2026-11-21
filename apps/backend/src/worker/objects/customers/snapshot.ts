@@ -10,10 +10,12 @@ import { Database, SQLite, schema } from "@hazel/db"
 import {
 	type CustomerProvider,
 	type Day,
+	ENVIRONMENT_TEMPLATES,
 	type HealthBreakdown,
 	type HealthSettings,
 	type LifecycleStage,
 	MAX_WINDOW_DAYS,
+	type SignalTemplate,
 } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerContactId, CustomerSubscriptionId } from "@hazel/schema"
 import { Effect, Option } from "effect"
@@ -66,9 +68,30 @@ export interface AccountSnapshot {
 	readonly facts: AccountFacts
 	/**
 	 * What signals evaluate: its own facts, its group's on a primary with environments, null on an
-	 * environment of a primary (its primary's signals stand for it).
+	 * environment of a primary (its primary's signals stand for it, but for `ENVIRONMENT_TEMPLATES`:
+	 * see `evaluatedFor`).
 	 */
 	readonly evaluated: AccountFacts | null
+}
+
+/**
+ * What a rule evaluates on each account. An environment template reads the account's own usage and
+ * billing, under the customer's stage, scope and value (a free dev environment of a paying customer
+ * is still covered); null where the primary's signal stands for the account.
+ */
+export const evaluatedFor = (accounts: ReadonlyArray<AccountSnapshot>) => {
+	const byId = new Map(accounts.map((account) => [account.stored.id, account]))
+	return (template: SignalTemplate, account: AccountSnapshot): AccountFacts | null => {
+		if (!ENVIRONMENT_TEMPLATES.includes(template)) return account.evaluated
+		const primaryId = account.stored.primaryAccountId
+		const customer =
+			account.evaluated ?? (primaryId === null ? undefined : byId.get(primaryId)?.evaluated)
+		return {
+			...(customer ?? account.facts),
+			metrics: account.facts.metrics,
+			subscriptions: account.facts.subscriptions,
+		}
+	}
 }
 
 /** What a snapshot knows about the whole org. */

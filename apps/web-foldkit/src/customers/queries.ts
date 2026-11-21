@@ -98,18 +98,6 @@ export const attentionMuteLabel = (
 			? "Muted until unmuted"
 			: `Muted until ${formatDate(new Date(account.attentionMutedUntilMs), { now: new Date(nowMs) })}`
 
-/**
- * The account a signal is about: it is held by the customer's primary, but a plan limit is one
- * environment's. The holder when that environment is gone. Owner and mute stay the holder's.
- */
-export const subjectIdOf = (
-	signal: Readonly<{ accountId: CustomerAccountId; evidence: Customers.SignalEvidence }>,
-	accountsById: ReadonlyMap<string, unknown>,
-): CustomerAccountId => {
-	const subject = signal.evidence._tag === "limit" ? signal.evidence.accountId : undefined
-	return subject !== undefined && accountsById.has(subject) ? subject : signal.accountId
-}
-
 /** A queue item as pages keep it. */
 export const SignalRow = Schema.Struct({
 	id: CustomerSignalId,

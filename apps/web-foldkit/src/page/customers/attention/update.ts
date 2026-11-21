@@ -3,7 +3,8 @@ import { Command } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
-import { type SignalRow, subjectIdOf } from "../../../customers/queries"
+import { customerAccountOf } from "../../../customers/groups"
+import type { SignalRow } from "../../../customers/queries"
 import { errorToastOf, successToast } from "../../../data/actions"
 import { customerRoute } from "../../../route"
 import * as Menu from "../../../ui/menu"
@@ -98,13 +99,12 @@ const withDetail = (model: Model, shared: Shared): Return => {
 	const signal = selectedSignal(model)
 	const organizationId = shared.organization?.id
 	if (!model.isPreviewOpen || signal === undefined || organizationId === undefined) return { model }
-	const accountId = subjectIdOf(signal, accountsByIdOfModel(model))
-	if (model.detail !== null && model.detail.accountId === accountId) return { model }
+	if (model.detail !== null && model.detail.accountId === signal.accountId) return { model }
 	return {
 		model: modifyFields(model, {
-			detail: () => ({ accountId, data: AsyncData.Loading() }),
+			detail: () => ({ accountId: signal.accountId, data: AsyncData.Loading() }),
 		}),
-		commands: [FetchAccountDetail({ organizationId, accountId })],
+		commands: [FetchAccountDetail({ organizationId, accountId: signal.accountId })],
 	}
 }
 
@@ -242,10 +242,14 @@ const muteAccount = (model: Model, shared: Shared, signal: SignalRow, key: MuteK
 	const actor = actorOf(shared)
 	if (actor === undefined) return { model }
 	const untilMs = muteUntil(key, new Date(shared.nowMs))?.getTime() ?? null
+	const accountsById = accountsByIdOfModel(model)
+	const held = accountsById.get(signal.accountId)
+	const customer = held === undefined ? undefined : customerAccountOf(held, accountsById)
+	const customerId = customer?.id ?? signal.accountId
 	const patched = modifyFields(model, {
 		accounts: (accounts) =>
 			accounts?.map((account) =>
-				account.id === signal.accountId
+				account.id === customerId
 					? {
 							...account,
 							attentionMutedAtMs: shared.nowMs,
@@ -255,14 +259,14 @@ const muteAccount = (model: Model, shared: Shared, signal: SignalRow, key: MuteK
 					: account,
 			) ?? null,
 	})
-	const name = model.accounts?.find((account) => account.id === signal.accountId)?.name ?? "Customer"
+	const name = customer?.name ?? "Customer"
 	return {
 		...actOn(
 			model,
 			patched,
 			shared,
 			signal,
-			MuteAccountAttention({ ...actor, accountId: signal.accountId, untilMs }),
+			MuteAccountAttention({ ...actor, accountId: customerId, untilMs }),
 		),
 		outMessage: toast(
 			successToast(
@@ -383,7 +387,7 @@ const openCustomer = (model: Model, shared: Shared, signal: SignalRow | undefine
 		: {
 				model,
 				outMessage: requestedOrgNavigation(shared.orgSlug, (orgSlug) =>
-					customerRoute(orgSlug, subjectIdOf(signal, accountsByIdOfModel(model))),
+					customerRoute(orgSlug, signal.accountId),
 				),
 			}
 

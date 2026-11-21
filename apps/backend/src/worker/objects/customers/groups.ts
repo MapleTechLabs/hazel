@@ -3,8 +3,8 @@
  * `setEnvironment`). Accounts are never merged: each Clerk organization stays its own account (an
  * environment, e.g. a US and an EU region), and accounts link into a group with one primary
  * (`primaryAccountId` on the others; no chains). Rollups and health stay per account; signals are
- * evaluated over the group's combined facts (`./group-facts.ts`) and are only ever written on the
- * primary, so its other environments hold no unclosed signal.
+ * evaluated over the group's combined facts (`./group-facts.ts`) and written on the primary, so its
+ * other environments hold no unclosed signal, but for `ENVIRONMENT_TEMPLATES`' (each its own).
  *
  * Linked channels are the customer's (`./channels.ts`): they stay on the group's primary, so linking
  * into a group or changing its primary moves them, and unlinking an environment leaves them with
@@ -15,6 +15,7 @@
  * primary's id): the next turn starts over.
  */
 import { Database, SQLite, schema } from "@hazel/db"
+import { ENVIRONMENT_TEMPLATES } from "@hazel/domain/customers"
 import { CustomerGroupError } from "@hazel/domain/rpc"
 import type { CustomerAccountId, UserId } from "@hazel/schema"
 import { Effect } from "effect"
@@ -60,8 +61,9 @@ const recordEvent = (
 
 /**
  * `source` and the environments it is primary of join `primary`'s group (both live, checked by the
- * caller). Their unclosed signals close, the group's being the primary's from now on: open or
- * snoozed ones auto-resolve, done or dismissed ones (waiting to reopen) close as they are.
+ * caller). Their unclosed signals close, the group's being the primary's from now on (an
+ * environment template's stays, being theirs): open or snoozed ones auto-resolve, done or dismissed
+ * ones (waiting to reopen) close as they are.
  */
 export const linkAccounts = Effect.fn("Customers.linkAccounts")(function* (
 	source: schema.CustomerAccount,
@@ -90,12 +92,21 @@ export const linkAccounts = Effect.fn("Customers.linkAccounts")(function* (
 	yield* db.run(
 		SQLite.update(schema.customerSignalsTable)
 			.set({ status: "auto_resolved", resolvedAt: now, closedAt: now, updatedAt: now })
-			.where(($) => [$.accountId.in_(...ids), $.closedAt.isNull(), $.status.in_("open", "snoozed")]),
+			.where(($) => [
+				$.accountId.in_(...ids),
+				$.closedAt.isNull(),
+				$.status.in_("open", "snoozed"),
+				$.template.notIn(...ENVIRONMENT_TEMPLATES),
+			]),
 	)
 	yield* db.run(
 		SQLite.update(schema.customerSignalsTable)
 			.set({ closedAt: now, updatedAt: now })
-			.where(($) => [$.accountId.in_(...ids), $.closedAt.isNull()]),
+			.where(($) => [
+				$.accountId.in_(...ids),
+				$.closedAt.isNull(),
+				$.template.notIn(...ENVIRONMENT_TEMPLATES),
+			]),
 	)
 	for (const account of moved)
 		yield* recordEvent(
@@ -199,11 +210,16 @@ export const setPrimaryAccount = Effect.fn("Customers.setPrimaryAccount")(functi
 			.set({ primaryAccountId: account.id, updatedAt: now })
 			.where(($) => [$.primaryAccountId.eq(oldId), $.id.neq(account.id)]),
 	)
-	// An environment holds no unclosed signal: one episode per rule and account still holds.
+	// Environment templates' stay with their environment; the new primary holds no other unclosed
+	// signal, so one episode per rule and account still holds.
 	yield* db.run(
 		SQLite.update(schema.customerSignalsTable)
 			.set({ accountId: account.id, updatedAt: now })
-			.where(($) => [$.accountId.eq(oldId), $.closedAt.isNull()]),
+			.where(($) => [
+				$.accountId.eq(oldId),
+				$.closedAt.isNull(),
+				$.template.notIn(...ENVIRONMENT_TEMPLATES),
+			]),
 	)
 	yield* db.run(
 		SQLite.update(schema.customerAccountsTable)
