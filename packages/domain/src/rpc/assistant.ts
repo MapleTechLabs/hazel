@@ -80,11 +80,12 @@ export class AssistantRpcs extends RpcGroup.make(
 		.annotate(RequiredScopes, ["assistant:write"])
 		.middleware(AuthMiddleware),
 
-	/** A follow-up: queued behind the current run if one is going. */
+	/** A follow-up: queued behind the current run if one is going. `messageId` (client-made) makes a retry send once. */
 	Rpc.make("assistant.send", {
 		payload: Schema.Struct({
 			organizationId: OrganizationId,
 			threadId: AssistantThreadId,
+			messageId: AssistantItemId,
 			message: Message,
 			context: Schema.NullOr(Assistant.Context),
 		}),

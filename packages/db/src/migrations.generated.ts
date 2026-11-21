@@ -347,7 +347,6 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE UNIQUE INDEX IF NOT EXISTS "assistant_items_external_unique" ON "assistant_items" ("threadId", "externalId")',
 				'CREATE INDEX IF NOT EXISTS "assistant_items_thread_idx" ON "assistant_items" ("threadId", "createdAt")',
 				'CREATE INDEX IF NOT EXISTS "assistant_threads_owner_idx" ON "assistant_threads" ("ownerId", "lastActivityAt")',
-				'CREATE INDEX IF NOT EXISTS "assistant_threads_status_idx" ON "assistant_threads" ("status")',
 			],
 		},
 	],

@@ -55,6 +55,8 @@ const makeFakeT3 = () => {
 		items: [] as Array<FakeItem>,
 		pending: [] as Array<{ requestId: string; questions: Array<unknown> }>,
 		calls: [] as Array<{ tool: string; args: Record<string, unknown> }>,
+		/** Runs while a step waits: the member acting meanwhile. */
+		onWait: null as (() => void) | null,
 	}
 	const reply = (id: unknown, result: unknown, headers: Record<string, string> = {}) =>
 		new Response(JSON.stringify({ jsonrpc: "2.0", id, result }), {
@@ -76,6 +78,8 @@ const makeFakeT3 = () => {
 				state.waitStatus = "running"
 				return { threadId: "t3-thread-1", runId: "run-2", status: "running" }
 			case "t3_thread_wait":
+				state.onWait?.()
+				state.onWait = null
 				return {
 					threadId: "t3-thread-1",
 					runId: state.activeRunId,
@@ -378,6 +382,7 @@ describe("AI panel", () => {
 						{
 							organizationId: world.orgId,
 							threadId,
+							messageId: uuid(),
 							message: "Should we call them?",
 							context: customerContext,
 						},
@@ -450,7 +455,13 @@ describe("AI panel", () => {
 
 				const bobSends = yield* world.call(
 					"assistant.send",
-					{ organizationId: world.orgId, threadId, message: "hi", context: null },
+					{
+						organizationId: world.orgId,
+						threadId,
+						messageId: uuid(),
+						message: "hi",
+						context: null,
+					},
 					world.bob,
 				)
 				expect(failure(bobSends)).toMatchObject({ _tag: "UnauthorizedError" })
@@ -514,6 +525,157 @@ describe("AI panel", () => {
 					_tag: "AssistantEngineError",
 					reason: "unreachable",
 				})
+			}),
+		))
+
+	it("mirrors a run with more items than one statement can look up", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				yield* world.link
+				const { threadId } = yield* start(world)
+				// A long tool call still running keeps the cursor before everything after it.
+				t3.state.items = [
+					{
+						position: 1,
+						itemId: "long",
+						runId: "run-1",
+						type: "command_execution",
+						status: "running",
+						title: null,
+						text: "$ sleep",
+					},
+					...Array.from({ length: 150 }, (_, i) => ({
+						position: i + 2,
+						itemId: `r${i}`,
+						runId: "run-1",
+						type: "reasoning",
+						status: "completed",
+						title: null,
+						text: `step ${i}`,
+					})),
+				]
+				yield* world.org.alarm
+				yield* world.org.alarm
+				expect(
+					world.rows(`SELECT id FROM assistant_items WHERE threadId = ?`, threadId),
+				).toHaveLength(152)
+				expect(
+					world.rows<{ failures: number }>(
+						`SELECT failures FROM assistant_followers WHERE threadId = ?`,
+						threadId,
+					),
+				).toEqual([{ failures: 0 }])
+			}),
+		))
+
+	it("what a step reads lands as the thread is now: deleted, or made private, during the wait", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				yield* world.link
+				const { threadId } = yield* start(world)
+				ok(
+					yield* world.call(
+						"assistant.update",
+						{ organizationId: world.orgId, threadId, visibility: "organization" },
+						world.alice,
+					),
+				)
+				t3.state.items = [
+					{
+						position: 1,
+						itemId: "a1",
+						runId: "run-1",
+						type: "assistant_message",
+						status: "running",
+						title: null,
+						text: "Hi",
+					},
+				]
+				t3.state.onWait = () =>
+					world.org.storage.db
+						.prepare(`UPDATE assistant_threads SET visibility = 'private' WHERE id = ?`)
+						.run(threadId)
+				yield* world.org.alarm
+				expect(
+					world.rows(
+						`SELECT visibility FROM assistant_items WHERE threadId = ? AND kind = 'assistant'`,
+						threadId,
+					),
+				).toEqual([{ visibility: "private" }])
+
+				t3.state.items.push({
+					position: 2,
+					itemId: "a2",
+					runId: "run-1",
+					type: "reasoning",
+					status: "completed",
+					title: null,
+					text: "more",
+				})
+				t3.state.onWait = () =>
+					world.org.storage.db
+						.prepare(
+							`UPDATE assistant_threads SET deletedAt = '2026-01-01T00:00:00.000Z' WHERE id = ?`,
+						)
+						.run(threadId)
+				yield* world.org.alarm
+				expect(world.rows(`SELECT id FROM assistant_items WHERE externalId = 'a2'`)).toHaveLength(0)
+				expect(
+					world.rows(`SELECT threadId FROM assistant_followers WHERE threadId = ?`, threadId),
+				).toHaveLength(0)
+			}),
+		))
+
+	it("a follow-up sent while a step waits is not dropped when the earlier run ends", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				yield* world.link
+				const { threadId } = yield* start(world)
+				t3.state.waitStatus = "completed"
+				t3.state.activeRunId = null
+				t3.state.onWait = () =>
+					world.org.storage.db
+						.prepare(
+							`UPDATE assistant_followers SET updatedAt = '2099-01-01T00:00:00.000Z' WHERE threadId = ?`,
+						)
+						.run(threadId)
+				yield* world.org.alarm
+				expect(world.rows(`SELECT status FROM assistant_threads WHERE id = ?`, threadId)).toEqual([
+					{ status: "running" },
+				])
+				const [follower] = world.rows<{ nextStepAt: string | null }>(
+					`SELECT nextStepAt FROM assistant_followers WHERE threadId = ?`,
+					threadId,
+				)
+				expect(follower!.nextStepAt).not.toBeNull()
+			}),
+		))
+
+	it("a retried send reaches T3 Code once", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				yield* world.link
+				const { threadId } = yield* start(world)
+				const payload = {
+					organizationId: world.orgId,
+					threadId,
+					messageId: uuid(),
+					message: "Again?",
+					context: null,
+				}
+				ok(yield* world.call("assistant.send", payload, world.alice))
+				ok(yield* world.call("assistant.send", payload, world.alice))
+				expect(t3.state.calls.filter((c) => c.tool === "t3_thread_send")).toHaveLength(1)
+				expect(
+					world.rows(
+						`SELECT id FROM assistant_items WHERE threadId = ? AND kind = 'user'`,
+						threadId,
+					),
+				).toHaveLength(2)
 			}),
 		))
 })

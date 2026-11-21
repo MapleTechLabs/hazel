@@ -11,10 +11,16 @@
 import { Database, SQLite, schema } from "@hazel/db"
 import { Assistant } from "@hazel/domain/models"
 import { AssistantEngineError } from "@hazel/domain/rpc"
+import type { T3CodeAccessDeniedError, T3CodeExpiredError, T3CodeNotConnectedError } from "@hazel/domain/http"
 import {
 	makeT3CodeMcpSession,
 	type T3CodeMcpSession,
+	type T3CodeProtocolError,
+	type T3CodeToolError,
+	type T3CodeUnauthorizedError,
+	type T3CodeUnreachableError,
 	type T3Item,
+	type T3Question,
 	TERMINAL_RUN_STATUSES,
 } from "@hazel/integrations/t3code"
 import { AssistantItemId, type AssistantThreadId, type OrganizationId, type UserId } from "@hazel/schema"
@@ -23,15 +29,17 @@ import { FetchHttpClient } from "effect/http"
 import { defineCall } from "../calls"
 import { markT3CodeExpired, t3CodeAccess } from "./t3code"
 
-/** One step's `t3_thread_wait`: short, so a step (and the alarm) never runs long. */
-export const STEP_WAIT_MS = 20_000
+/** One step's `t3_thread_wait`: short, so an alarm (which also runs the org's other timers) stays short. */
+export const STEP_WAIT_MS = 10_000
+/** Threads stepped per alarm, at once. */
+const STEPS_PER_TICK = 4
 /** While a question waits on the member, check now and then whether it was answered in T3 Code. */
 const WAITING_STEP_MS = 30_000
-/** An unreachable environment: back off, and give up after this many steps in a row. */
+/** The run ended but T3 Code has not started the queued one yet. */
+const QUEUED_STEP_MS = 2_000
+/** A step that cannot reach the environment (or fails): back off, give up after this many in a row. */
 const MAX_FAILURES = 20
 const MAX_BACKOFF_MS = 5 * 60_000
-/** Steps run at once in one alarm. */
-const STEP_CONCURRENCY = 4
 const READ_PAGES = 20
 
 const truncate = (text: string, max: number) => (text.length <= max ? text : `${text.slice(0, max - 1)}…`)
@@ -149,19 +157,35 @@ export const viewOf = (item: T3Item): ItemView | null => {
 	}
 }
 
-const itemStatus = (item: T3Item) =>
-	isFinal(item) ? (item.status === "failed" ? "failed" : "completed") : "running"
+/** An item of a run that is no longer active will not finish: it counts as finished. */
+const itemStatus = (item: T3Item, activeRunId: string | null) =>
+	!isFinal(item) && item.runId === activeRunId
+		? "running"
+		: item.status === "failed"
+			? "failed"
+			: "completed"
 
 // ============================================================================
 // Errors
 // ============================================================================
 
-const tagOf = (error: unknown) =>
-	typeof error === "object" && error !== null && "_tag" in error ? String(error._tag) : ""
+/** Every way a call to the owner's environment fails. */
+type EnvironmentFailure =
+	| T3CodeNotConnectedError
+	| T3CodeAccessDeniedError
+	| T3CodeExpiredError
+	| T3CodeUnauthorizedError
+	| T3CodeUnreachableError
+	| T3CodeProtocolError
+	| T3CodeToolError
 
-/** A failure reaching the owner's environment, as the panel's error. */
-export const engineErrorOf = (error: unknown): AssistantEngineError => {
-	switch (tagOf(error)) {
+/**
+ * A failure reaching the owner's environment, as the panel's error. `unreachable` is retried by
+ * the follower; a reply Hazel cannot read (a tunnel's error page, a lost session) counts as one.
+ * The environment's own response text never reaches the message: it syncs to everyone shared on.
+ */
+export const engineErrorOf = (error: EnvironmentFailure): AssistantEngineError => {
+	switch (error._tag) {
 		case "T3CodeNotConnectedError":
 		case "T3CodeAccessDeniedError":
 			return new AssistantEngineError({
@@ -179,23 +203,25 @@ export const engineErrorOf = (error: unknown): AssistantEngineError => {
 				reason: "unreachable",
 				message: "T3 Code is not answering. Is the machine awake and T3 Code running?",
 			})
-		default:
+		case "T3CodeProtocolError":
+			return new AssistantEngineError({
+				reason: "unreachable",
+				message: "T3 Code answered something Hazel could not read. Try again in a moment.",
+			})
+		case "T3CodeToolError":
 			return new AssistantEngineError({
 				reason: "refused",
-				message:
-					error !== null && typeof error === "object" && "message" in error
-						? `T3 Code refused: ${String(error.message)}`
-						: "T3 Code refused the message.",
+				message: `T3 Code refused: ${truncate(error.message, 200)}`,
 			})
 	}
 }
 
 /** Run a call on the owner's environment; a refused credential marks their link expired. */
-const onEnvironment = <A, E, R>(ownerId: UserId, effect: Effect.Effect<A, E, R>) =>
+const onEnvironment = <A, R>(ownerId: UserId, effect: Effect.Effect<A, EnvironmentFailure, R>) =>
 	effect.pipe(
 		Effect.provide(FetchHttpClient.layer),
 		Effect.tapError((error) =>
-			tagOf(error) === "T3CodeUnauthorizedError" ? markT3CodeExpired({ ownerId }) : Effect.void,
+			error._tag === "T3CodeUnauthorizedError" ? markT3CodeExpired({ ownerId }) : Effect.void,
 		),
 		Effect.mapError(engineErrorOf),
 	)
@@ -247,31 +273,35 @@ const followSoon = (threadId: AssistantThreadId, now: Date) =>
 		),
 	)
 
+/** The member's message; its id makes a retried write land once. */
 const insertUserItem = (
 	thread: Pick<schema.AssistantThread, "id" | "organizationId" | "ownerId" | "visibility">,
+	id: AssistantItemId,
 	text: string,
 	now: Date,
 ) =>
 	Effect.flatMap(Database.Database, (db) =>
 		db.run(
-			SQLite.insertInto(schema.assistantItemsTable).values({
-				id: AssistantItemId.make(crypto.randomUUID()),
-				threadId: thread.id,
-				organizationId: thread.organizationId,
-				ownerId: thread.ownerId,
-				visibility: thread.visibility,
-				kind: "user",
-				externalId: null,
-				runId: null,
-				status: null,
-				title: null,
-				text,
-				data: null,
-				authorId: thread.ownerId,
-				createdAt: now,
-				updatedAt: now,
-				deletedAt: null,
-			}),
+			SQLite.insertInto(schema.assistantItemsTable)
+				.values({
+					id,
+					threadId: thread.id,
+					organizationId: thread.organizationId,
+					ownerId: thread.ownerId,
+					visibility: thread.visibility,
+					kind: "user",
+					externalId: null,
+					runId: null,
+					status: null,
+					title: null,
+					text,
+					data: null,
+					authorId: thread.ownerId,
+					createdAt: now,
+					updatedAt: now,
+					deletedAt: null,
+				})
+				.onConflictDoNothing(),
 		),
 	)
 
@@ -331,7 +361,8 @@ export const startThread = Effect.fn("Assistant.start")(function* (input: {
 			yield* db.run(
 				SQLite.insertInto(schema.assistantThreadsTable).values(thread).onConflictDoNothing(),
 			)
-			yield* insertUserItem(thread, input.message, now)
+			// The first message shares the thread's id: two starts in flight write it once.
+			yield* insertUserItem(thread, AssistantItemId.make(input.threadId), input.message, now)
 			yield* followSoon(thread.id, now)
 		}),
 	)
@@ -345,6 +376,8 @@ export const startThread = Effect.fn("Assistant.start")(function* (input: {
 export const sendMessage = Effect.fn("Assistant.send")(function* (input: {
 	readonly organizationId: OrganizationId
 	readonly thread: schema.AssistantThread
+	/** Made by the client: a retried send reaches T3 Code once and records one item. */
+	readonly messageId: AssistantItemId
 	readonly message: string
 	readonly context: Assistant.Context | null
 }) {
@@ -357,7 +390,13 @@ export const sendMessage = Effect.fn("Assistant.send")(function* (input: {
 		})
 	}
 	const externalThreadId = thread.externalThreadId
-	const itemId = AssistantItemId.make(crypto.randomUUID())
+	const itemId = input.messageId
+	const sent = yield* db.first(
+		SQLite.from(schema.assistantItemsTable)
+			.select("id")
+			.where(($) => [$.id.eq(itemId)]),
+	)
+	if (Option.isSome(sent)) return
 	const { mcp } = yield* ownerSession(thread.ownerId)
 	yield* onEnvironment(
 		thread.ownerId,
@@ -376,7 +415,7 @@ export const sendMessage = Effect.fn("Assistant.send")(function* (input: {
 	const now = new Date(yield* Clock.currentTimeMillis)
 	yield* db.transaction(
 		Effect.gen(function* () {
-			yield* insertUserItem(thread, input.message, now)
+			yield* insertUserItem(thread, itemId, input.message, now)
 			yield* db.run(
 				SQLite.update(schema.assistantThreadsTable)
 					.set({
@@ -552,7 +591,7 @@ export const assistantDeadlines = Effect.gen(function* () {
 	),
 )
 
-/** The alarm's work: step every thread that is due. */
+/** The alarm's work: step the threads that are due, the most overdue first. */
 export const AssistantTickCall = defineCall("org.assistantTick", "org", {
 	payload: Schema.Struct({}),
 	success: Schema.Struct({ stepped: Schema.Finite }),
@@ -562,22 +601,29 @@ export const AssistantTickCall = defineCall("org.assistantTick", "org", {
 export const assistantTick = Effect.fn("Assistant.tick")(function* () {
 	const db = yield* Database.Database
 	const now = new Date(yield* Clock.currentTimeMillis)
+	// At most one wait's length per alarm: the rest are due again at once and go next time.
 	const due = yield* db
 		.run(
 			SQLite.from(schema.assistantFollowersTable)
 				.select()
-				.where(($) => [$.nextStepAt.isNotNull(), $.nextStepAt.lte(now)]),
+				.where(($) => [$.nextStepAt.isNotNull(), $.nextStepAt.lte(now)])
+				.orderBy(($) => [[$.nextStepAt, "asc"]])
+				.limit(STEPS_PER_TICK),
 		)
 		.pipe(Effect.orDie)
 	yield* Effect.forEach(
 		due,
 		(follower) =>
 			stepThread(follower).pipe(
+				// A defect is a failed step too: it backs off and gives up, never loops.
 				Effect.catchCause((cause) =>
-					Effect.logError("Assistant step failed", { threadId: follower.threadId, cause }),
+					Effect.logError("Assistant step failed", { threadId: follower.threadId, cause }).pipe(
+						Effect.andThen(failedStep(follower, "Following this chat failed.")),
+						Effect.orDie,
+					),
 				),
 			),
-		{ concurrency: STEP_CONCURRENCY, discard: true },
+		{ concurrency: STEPS_PER_TICK, discard: true },
 	)
 	return { stepped: due.length }
 })
@@ -603,20 +649,36 @@ const settle = (
 		)
 	})
 
-/** One step of one thread: wait for news, read it, mirror it, decide when to look again. */
+/** A step that made no progress: try again later, or give up with `message` after too many. */
+const failedStep = (follower: schema.AssistantFollower, message: string) =>
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		const now = new Date(yield* Clock.currentTimeMillis)
+		const failures = follower.failures + 1
+		if (failures >= MAX_FAILURES) return yield* settle(follower.threadId, "error", message, now)
+		const delay = Math.min(MAX_BACKOFF_MS, 15_000 * 2 ** Math.min(failures - 1, 5))
+		yield* db.run(
+			SQLite.update(schema.assistantFollowersTable)
+				.set({ failures, nextStepAt: new Date(now.getTime() + delay), updatedAt: now })
+				.where(($) => [$.threadId.eq(follower.threadId)]),
+		)
+	})
+
+const unfollow = (threadId: AssistantThreadId) =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.run(SQLite.deleteFrom(schema.assistantFollowersTable).where(($) => [$.threadId.eq(threadId)])),
+	)
+
+/**
+ * One step of one thread: wait for news, read it, then in one transaction mirror it and decide when
+ * to look again. The thread and follower are read again inside it: the owner may have shared,
+ * deleted or sent a follow-up during the wait.
+ */
 const stepThread = Effect.fn("Assistant.step")(function* (follower: schema.AssistantFollower) {
 	const db = yield* Database.Database
 	const thread = Option.getOrNull(yield* findThread(follower.threadId).pipe(Effect.orDie))
-	const startedAt = new Date(yield* Clock.currentTimeMillis)
 	if (thread === null || thread.externalThreadId === null) {
-		yield* db
-			.run(
-				SQLite.deleteFrom(schema.assistantFollowersTable).where(($) => [
-					$.threadId.eq(follower.threadId),
-				]),
-			)
-			.pipe(Effect.orDie)
-		return
+		return yield* unfollow(follower.threadId).pipe(Effect.orDie)
 	}
 	const externalThreadId = thread.externalThreadId
 	yield* Effect.annotateCurrentSpan({
@@ -636,76 +698,89 @@ const stepThread = Effect.fn("Assistant.step")(function* (follower: schema.Assis
 		)
 		const question =
 			waited.status === "waiting"
-				? yield* onEnvironment(thread.ownerId, openQuestion(mcp, thread, follower))
+				? yield* onEnvironment(thread.ownerId, pendingQuestion(mcp, externalThreadId))
 				: null
 		return { waited, activity, question }
 	}).pipe(Effect.result)
 
-	const now = new Date(yield* Clock.currentTimeMillis)
 	if (outcome._tag === "Failure") {
 		const error = outcome.failure
-		if (error.reason === "unreachable" && follower.failures + 1 < MAX_FAILURES) {
-			const failures = follower.failures + 1
-			const delay = Math.min(MAX_BACKOFF_MS, 15_000 * 2 ** Math.min(failures - 1, 5))
-			yield* db
-				.run(
-					SQLite.update(schema.assistantFollowersTable)
-						.set({ failures, nextStepAt: new Date(now.getTime() + delay), updatedAt: now })
-						.where(($) => [$.threadId.eq(thread.id)]),
-				)
-				.pipe(Effect.orDie)
-			return
-		}
-		yield* settle(thread.id, "error", error.message, now).pipe(Effect.orDie)
+		yield* (
+			error.reason === "unreachable"
+				? failedStep(follower, error.message)
+				: settle(thread.id, "error", error.message, new Date(yield* Clock.currentTimeMillis))
+		).pipe(Effect.orDie)
 		return
 	}
 
 	const { waited, activity, question } = outcome.success
+	yield* Effect.annotateCurrentSpan({
+		"t3.run_status": waited.status,
+		"assistant.items": activity.items.length,
+	})
 	const runEnded = waited.status === "idle" || TERMINAL_RUN_STATUSES.has(waited.status)
 	const waiting = waited.status === "waiting"
 	yield* db
 		.transaction(
 			Effect.gen(function* () {
-				yield* writeItems(thread, activity.items, startedAt)
+				const now = new Date(yield* Clock.currentTimeMillis)
+				const current = Option.getOrNull(yield* findThread(thread.id))
+				const latest = Option.getOrNull(
+					yield* db.first(
+						SQLite.from(schema.assistantFollowersTable)
+							.select()
+							.where(($) => [$.threadId.eq(thread.id)]),
+					),
+				)
+				// Deleted during the wait: nothing more is written for it.
+				if (current === null || latest === null) return yield* unfollow(thread.id)
+				// A follow-up or an answer re-armed the follower during the wait: keep going.
+				const rearmed = latest.updatedAt.getTime() !== follower.updatedAt.getTime()
+
+				yield* writeItems(current, activity.items, activity.activeRunId, now)
+				const asked =
+					question !== null && latest.pendingQuestion?.requestId !== question.requestId
+						? yield* insertQuestion(current, question, now)
+						: null
 				yield* db.run(
 					SQLite.update(schema.assistantFollowersTable)
 						.set({
 							cursor: activity.cursor,
 							failures: 0,
 							updatedAt: now,
-							...(question === null ? {} : { pendingQuestion: question }),
+							...(asked === null ? {} : { pendingQuestion: asked }),
 						})
 						.where(($) => [$.threadId.eq(thread.id)]),
 				)
-				if (activity.items.length > 0) {
+				if (activity.items.length > 0 || asked !== null) {
 					yield* db.run(
 						SQLite.update(schema.assistantThreadsTable)
 							.set({ lastActivityAt: now, updatedAt: now })
 							.where(($) => [$.id.eq(thread.id)]),
 					)
 				}
-				// A follow-up queued behind the run keeps the thread going.
-				if (runEnded && activity.activeRunId === null) {
+				if (runEnded && activity.activeRunId === null && !rearmed) {
 					const failed = waited.status === "failed"
-					yield* settle(
+					return yield* settle(
 						thread.id,
 						failed ? "error" : "idle",
 						failed ? "The run failed in T3 Code." : null,
 						now,
 					)
-					return
 				}
 				const status = waiting ? "waiting" : "running"
-				if (thread.status !== status) {
+				if (current.status !== status) {
 					yield* db.run(
 						SQLite.update(schema.assistantThreadsTable)
 							.set({ status, errorMessage: null, updatedAt: now })
 							.where(($) => [$.id.eq(thread.id)]),
 					)
 				}
+				// Waiting on the member, or a queued run T3 Code has not started: look again a bit later.
+				const delay = waiting ? WAITING_STEP_MS : runEnded ? QUEUED_STEP_MS : 0
 				yield* db.run(
 					SQLite.update(schema.assistantFollowersTable)
-						.set({ nextStepAt: waiting ? new Date(now.getTime() + WAITING_STEP_MS) : now })
+						.set({ nextStepAt: new Date(now.getTime() + delay) })
 						.where(($) => [$.threadId.eq(thread.id)]),
 				)
 			}),
@@ -750,67 +825,87 @@ const readActivity = (mcp: T3CodeMcpSession, externalThreadId: string, from: num
 		return { items, cursor, activeRunId }
 	})
 
-/** The agent's open question as a `question` item, once per request. */
-const openQuestion = (
-	mcp: T3CodeMcpSession,
-	thread: schema.AssistantThread,
-	follower: schema.AssistantFollower,
-) =>
+interface OpenQuestion {
+	readonly requestId: string
+	readonly questions: ReadonlyArray<T3Question>
+}
+
+/** The agent's first open question, if any. */
+const pendingQuestion = (mcp: T3CodeMcpSession, externalThreadId: string) =>
 	Effect.gen(function* () {
-		const externalThreadId = thread.externalThreadId!
-		const requestIds = yield* mcp.pendingQuestions(externalThreadId)
-		const requestId = requestIds[0]
-		if (requestId === undefined || follower.pendingQuestion?.requestId === requestId) return null
+		const requestId = (yield* mcp.pendingQuestions(externalThreadId))[0]
+		if (requestId === undefined) return null
 		const pending = yield* mcp.readQuestion(externalThreadId, requestId)
-		const db = yield* Database.Database
-		const now = new Date(yield* Clock.currentTimeMillis)
-		const itemId = AssistantItemId.make(crypto.randomUUID())
-		yield* db
-			.run(
-				SQLite.insertInto(schema.assistantItemsTable)
-					.values({
-						id: itemId,
-						threadId: thread.id,
-						organizationId: thread.organizationId,
-						ownerId: thread.ownerId,
-						visibility: thread.visibility,
-						kind: "question",
-						externalId: `question:${requestId}`,
-						runId: null,
-						status: "running",
-						title: null,
-						text: pending.questions.map((q) => q.question).join("\n"),
-						data: { requestId, questions: pending.questions.map((q) => ({ ...q })) },
-						authorId: null,
-						createdAt: now,
-						updatedAt: now,
-						deletedAt: null,
-					})
-					.onConflictDoNothing(),
-			)
-			.pipe(Effect.orDie)
-		return { requestId, itemId: itemId as string }
+		return { requestId, questions: pending.questions } satisfies OpenQuestion
 	})
 
-/** Insert the new items and update the changed ones; untouched rows are not written (no sync churn). */
-const writeItems = (thread: schema.AssistantThread, items: ReadonlyArray<ReadItem>, base: Date) =>
+/** The question as a `question` item, once per request. */
+const insertQuestion = (thread: schema.AssistantThread, question: OpenQuestion, now: Date) =>
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		const itemId = AssistantItemId.make(crypto.randomUUID())
+		yield* db.run(
+			SQLite.insertInto(schema.assistantItemsTable)
+				.values({
+					id: itemId,
+					threadId: thread.id,
+					organizationId: thread.organizationId,
+					ownerId: thread.ownerId,
+					visibility: thread.visibility,
+					kind: "question",
+					externalId: `question:${question.requestId}`,
+					runId: null,
+					status: "running",
+					title: null,
+					text: question.questions.map((q) => q.question).join("\n"),
+					data: {
+						requestId: question.requestId,
+						questions: question.questions.map((q) => ({ ...q })),
+					},
+					authorId: null,
+					createdAt: now,
+					updatedAt: now,
+					deletedAt: null,
+				})
+				.onConflictDoNothing(),
+		)
+		return { requestId: question.requestId, itemId: itemId as string }
+	})
+
+/** SQLite on Durable Objects binds at most 100 parameters per statement. */
+const LOOKUP_BATCH = 90
+
+/**
+ * Insert the new items and update the changed ones, as `thread` is now (its visibility); untouched
+ * rows are not written (no sync churn). New items are stamped from `now`, a millisecond apart in
+ * read order, so they sort after anything the member sent before this step committed.
+ */
+const writeItems = (
+	thread: schema.AssistantThread,
+	items: ReadonlyArray<ReadItem>,
+	activeRunId: string | null,
+	now: Date,
+) =>
 	Effect.gen(function* () {
 		if (items.length === 0) return
 		const db = yield* Database.Database
 		const externalIds = items.map(({ item }) => item.itemId)
-		const existing = yield* db.run(
-			SQLite.from(schema.assistantItemsTable)
-				.select()
-				.where(($) => [$.threadId.eq(thread.id), $.externalId.in_(...externalIds)]),
-		)
-		const byExternal = new Map(existing.map((row) => [row.externalId, row]))
+		const byExternal = new Map<string | null, schema.AssistantItem>()
+		for (let start = 0; start < externalIds.length; start += LOOKUP_BATCH) {
+			const batch = externalIds.slice(start, start + LOOKUP_BATCH)
+			const rows = yield* db.run(
+				SQLite.from(schema.assistantItemsTable)
+					.select()
+					.where(($) => [$.threadId.eq(thread.id), $.externalId.in_(...batch)]),
+			)
+			for (const row of rows) byExternal.set(row.externalId, row)
+		}
 		let offset = 0
 		for (const { item, view } of items) {
-			const status = itemStatus(item)
+			const status = itemStatus(item, activeRunId)
 			const row = byExternal.get(item.itemId)
 			if (row === undefined) {
-				// Read in order: a millisecond apart keeps that order on the client.
-				const createdAt = new Date(base.getTime() + offset++)
+				const createdAt = new Date(now.getTime() + offset++)
 				yield* db.run(
 					SQLite.insertInto(schema.assistantItemsTable)
 						.values({
@@ -838,7 +933,7 @@ const writeItems = (thread: schema.AssistantThread, items: ReadonlyArray<ReadIte
 			if (row.text === view.text && row.status === status && row.title === view.title) continue
 			yield* db.run(
 				SQLite.update(schema.assistantItemsTable)
-					.set({ text: view.text, status, title: view.title, data: view.data, updatedAt: base })
+					.set({ text: view.text, status, title: view.title, data: view.data, updatedAt: now })
 					.where(($) => [$.id.eq(row.id)]),
 			)
 		}

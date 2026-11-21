@@ -3434,13 +3434,6 @@
 		},
 		{
 			"kind": "index",
-			"table": "assistant_threads",
-			"name": "assistant_threads_status_idx",
-			"unique": false,
-			"columns": ["\"status\""]
-		},
-		{
-			"kind": "index",
 			"table": "bot_commands",
 			"name": "bot_commands_bot_id_idx",
 			"unique": false,

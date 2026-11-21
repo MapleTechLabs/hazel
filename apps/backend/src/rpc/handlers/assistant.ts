@@ -96,10 +96,10 @@ export const AssistantRpcLive = AssistantRpcs.toLayer(
 					return yield* written(threadId)
 				}).pipe(withRemapDbErrors("AssistantThread", "create")),
 
-			"assistant.send": ({ organizationId, threadId, message, context }) =>
+			"assistant.send": ({ organizationId, threadId, messageId, message, context }) =>
 				Effect.gen(function* () {
 					const thread = yield* ownThread(organizationId, threadId)
-					yield* sendMessage({ organizationId, thread, message, context })
+					yield* sendMessage({ organizationId, thread, messageId, message, context })
 					return yield* written(threadId)
 				}).pipe(withRemapDbErrors("AssistantItem", "create")),
 

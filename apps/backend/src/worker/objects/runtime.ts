@@ -442,7 +442,15 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 			if (kind === "org" && (yield* run(pollDueRssFeeds)) > 0) yield* afterCommit
 			// OrgObject: presence copies nobody renewed in time go offline.
 			if (kind === "org" && (yield* run(expirePresenceLeases)) > 0) yield* afterCommit
-			// OrgObject: step the AI panel threads that are due (each a bounded wait on T3 Code).
+			// CustomersObject: compute, snooze wake-ups and pulls that are due.
+			if (kind === "customers") {
+				yield* prepare
+				yield* ownCall(CustomersTickCall, {})
+				yield* afterCommit
+			}
+			yield* run(synced.alarm)
+			// OrgObject: the AI panel's steps last, so their waits never hold back the timers above;
+			// the commit rearms the alarm for the next step.
 			if (kind === "org") {
 				const stepped = yield* ownCall(AssistantTickCall, {})
 				if (
@@ -453,13 +461,6 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 					yield* afterCommit
 				}
 			}
-			// CustomersObject: compute, snooze wake-ups and pulls that are due.
-			if (kind === "customers") {
-				yield* prepare
-				yield* ownCall(CustomersTickCall, {})
-				yield* afterCommit
-			}
-			yield* run(synced.alarm)
 		}).pipe(Effect.withSpan("ObjectRpc.alarm", { attributes: { "object.kind": kind } }))
 
 		return {

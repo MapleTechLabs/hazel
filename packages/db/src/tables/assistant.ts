@@ -53,10 +53,7 @@ export const assistantThreadsTable = SQLite.table("assistant_threads", {
 		deletedAt: SQLite.nullable(timestamptz),
 	},
 	primaryKey: ["id"],
-	indexes: [
-		SQLite.index("assistant_threads_owner_idx", ["ownerId", "lastActivityAt"]),
-		SQLite.index("assistant_threads_status_idx", ["status"]),
-	],
+	indexes: [SQLite.index("assistant_threads_owner_idx", ["ownerId", "lastActivityAt"])],
 })
 export type AssistantThread = SQLite.SelectRowOf<typeof assistantThreadsTable>
 export type NewAssistantThread = SQLite.InsertRowOf<typeof assistantThreadsTable>
