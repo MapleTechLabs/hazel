@@ -369,6 +369,28 @@ export const updateAccountAction = optimisticAction({
 		}),
 })
 
+/** Adding `raw` shows a different list: an optimistic write to make (else there is none to make). */
+export const addingDomainChanges = (domains: ReadonlyArray<string>, raw: string): boolean =>
+	withAddedDomain(domains, raw).join(" ") !== domains.join(" ")
+
+/**
+ * Add a domain to the account (`addDomain`). One the list would not show differently (the store will
+ * refuse it, or it is already first) is a plain RPC: an optimistic action with no write never runs
+ * its RPC, and the store's refusal is the answer to show.
+ */
+export const addDomainAction = (
+	props: Readonly<{ organizationId: OrganizationId; accountId: CustomerAccountId; addDomain: string }>,
+) => {
+	const current = customerAccountCollection.get(props.accountId)
+	return current !== undefined && addingDomainChanges(current.domains, props.addDomain)
+		? Effect.asVoid(updateAccountAction(props))
+		: Effect.gen(function* () {
+				const client = yield* HazelRpc
+				const result = yield* client("customers.account.update", accountUpdatePayload(props))
+				yield* Effect.ignore(customerAccountCollection.utils.awaitSeqEffect(result.transactionId))
+			})
+}
+
 /** `mute`: until `until` (null: until unmuted); null unmutes. */
 type AttentionMuteProps = Readonly<{
 	organizationId: OrganizationId

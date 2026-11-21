@@ -13,6 +13,7 @@ import { Command } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { type CommonError, failureMessage } from "~/lib/error-messages"
 import {
+	addDomainAction,
 	createNoteAction,
 	deleteNoteAction,
 	linkAccountAction,
@@ -194,7 +195,7 @@ export const AddCustomerDomain = Command.define("AddCustomerDomain", {
 	args: { ...target, addDomain: Schema.String },
 	messages: [Message.SucceededAddDomain, Message.FailedAddDomain],
 	execute: (args) =>
-		updateAccountAction(args).pipe(
+		addDomainAction(args).pipe(
 			Effect.as(Message.SucceededAddDomain({ accountId: args.accountId })),
 			Effect.catchTags({
 				CustomersNotFoundError: () =>
