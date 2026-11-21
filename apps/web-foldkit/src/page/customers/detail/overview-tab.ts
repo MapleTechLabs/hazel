@@ -39,6 +39,7 @@ import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { button } from "../../../ui/button"
 import { heading } from "../../../ui/heading"
 import { menuLabel } from "../../../ui/menu-view"
+import { disclosure } from "../../../customers/ui/disclosure"
 import { Message } from "./message"
 import {
 	ASSIGN_ME,
@@ -54,7 +55,7 @@ import {
 	sortedNotes,
 	UNASSIGN,
 } from "./model"
-import { type Context, disclosure, headerLink, icon, memberOf, menu } from "./parts"
+import { type Context, headerLink, icon, memberOf, menu } from "./parts"
 
 /**
  * The overview tab, read top to bottom as "what needs me, how are they doing, what happened": the

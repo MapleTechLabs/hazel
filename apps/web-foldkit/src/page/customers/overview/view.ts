@@ -7,7 +7,7 @@ import { twMerge } from "tailwind-merge"
 import { commonMessage } from "~/lib/error-messages"
 import { activeUsersChart } from "../../../customers/charts/line-chart"
 import { chartLegend } from "../../../customers/charts/frame"
-import { healthDistribution } from "../../../customers/charts/distribution"
+import { distributionBar, healthDistribution } from "../../../customers/charts/distribution"
 import { sparkline } from "../../../customers/charts/sparkline"
 import { mrrLegend, mrrMovementChart } from "../../../customers/charts/stacked-bar-chart"
 import {
@@ -22,12 +22,19 @@ import {
 } from "../../../customers/format"
 import { type AccountRow, msOf, type SignalRow } from "../../../customers/queries"
 import { shownSuggestions, suggestionRow } from "../../../customers/suggestions"
-import { environmentsHint, healthDot, severityGlyph } from "../../../customers/ui/badges"
+import {
+	environmentsHint,
+	HEALTH_FILL,
+	HEALTH_LABEL,
+	healthDot,
+	severityGlyph,
+} from "../../../customers/ui/badges"
 import { environmentCounts } from "../../../customers/groups"
 import { connectCard } from "../../../customers/ui/connect-card"
 import { companyLogo } from "../../../customers/ui/identity"
-import { deltaPill, type Delta, kpiTile } from "../../../customers/ui/kpi-tile"
-import { supportTiles } from "../../../customers/support-report"
+import { deltaPill, type Delta } from "../../../customers/ui/kpi-tile"
+import { disclosure } from "../../../customers/ui/disclosure"
+import { formatResponse, formatWithin } from "../../../customers/support-report"
 import { rangePicker } from "../../../customers/ui/filter-bar"
 import {
 	moreLink,
@@ -119,185 +126,469 @@ const header = (h: HtmlBuilder<Message>, model: Model, result: Result | undefine
 	})
 }
 
-// KPIS
-
-const kpiDelta = (
-	model: Model,
-	kpi: Customers.Kpi,
-	format: (value: number) => string,
-	goodWhen: "up" | "down" = "up",
-): Delta | null =>
-	!model.isComparing || kpi.previous === null
-		? null
-		: { value: kpi.value - kpi.previous, text: format(kpi.value - kpi.previous), goodWhen }
+// HEADLINE
 
 const pctDelta = (model: Model, kpi: Customers.Kpi, goodWhen: "up" | "down" = "up"): Delta | null =>
 	!model.isComparing || kpi.deltaPct === null
 		? null
 		: { value: kpi.deltaPct, text: formatDeltaPct(kpi.deltaPct), goodWhen }
 
-const loadingTiles = (h: HtmlBuilder<Message>, labels: ReadonlyArray<string>): ReadonlyArray<Html> =>
-	labels.map((label) => kpiTile(h, { id: `kpi-${label}`, label, state: "loading" }))
+const countDelta = (model: Model, kpi: Customers.Kpi, goodWhen: "up" | "down" = "up"): Delta | null =>
+	!model.isComparing || kpi.previous === null
+		? null
+		: { value: kpi.value - kpi.previous, text: formatDeltaCount(kpi.value - kpi.previous), goodWhen }
 
-const kpiRow = (
+const CELL =
+	"flex min-w-0 flex-col gap-1 px-5 py-4 max-md:px-4 md:border-l md:border-border md:first:border-l-0"
+
+/** One of the three headline numbers: a label, the number, and one line under it. */
+const headlineCell = (
+	h: HtmlBuilder<Message>,
+	options: Readonly<{
+		id: string
+		label: string
+		definition: string
+		value: string
+		valueClass?: string
+		suffix?: string
+		delta?: Delta | null
+		detail?: string
+		footer?: Html
+	}>,
+): Html =>
+	h.div(
+		[h.Id(options.id), h.Class(CELL)],
+		[
+			h.span([h.Class("text-muted-fg text-sm"), h.Title(options.definition)], [options.label]),
+			h.span(
+				[h.Class("flex min-w-0 items-baseline gap-2")],
+				[
+					h.span(
+						[
+							h.Class(
+								twMerge(
+									"whitespace-nowrap font-semibold text-2xl text-fg tabular-nums tracking-tight",
+									options.valueClass,
+								),
+							),
+						],
+						[options.value],
+					),
+					...(options.suffix === undefined
+						? []
+						: [
+								h.span(
+									[h.Class("whitespace-nowrap text-muted-fg text-sm tabular-nums")],
+									[options.suffix],
+								),
+							]),
+				],
+			),
+			h.span(
+				[h.Class("flex min-w-0 items-center gap-2 text-muted-fg text-xs")],
+				[
+					...(options.delta == null ? [] : [deltaPill(h, options.delta, "text-xs")]),
+					...(options.detail === undefined
+						? []
+						: [h.span([h.Class("truncate")], [options.detail])]),
+				],
+			),
+			...(options.footer === undefined ? [] : [options.footer]),
+		],
+	)
+
+/**
+ * The three numbers worth reading every day: revenue, the revenue at risk, and who is using the
+ * product. The rest of the KPIs follow in one quiet line.
+ */
+const headline = (
 	h: HtmlBuilder<Message>,
 	model: Model,
 	result: Result | undefined,
 	context: Context,
 ): Html => {
-	const grid = (tiles: ReadonlyArray<Html>) =>
-		h.div([h.Class("grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6")], [...tiles])
+	const strip = (cells: ReadonlyArray<Html>) =>
+		h.div(
+			[
+				h.AriaLabel("Key numbers"),
+				h.Role("group"),
+				h.Class(
+					"grid divide-border rounded-xl border border-border bg-bg max-md:divide-y md:grid-cols-3",
+				),
+			],
+			[...cells],
+		)
 	if (result === undefined)
-		return grid(
-			loadingTiles(h, [
-				"MRR",
-				"Revenue",
-				"Paying customers",
-				"Logo churn",
-				"At-risk MRR",
-				"Active customers",
-			]),
+		return strip(
+			["MRR", "MRR at risk", "Active customers"].map((label) =>
+				h.div(
+					[h.Key(label), h.Class(CELL)],
+					[
+						h.span([h.Class("text-muted-fg text-sm")], [label]),
+						h.span([h.Class("mt-1 block h-7 w-28 animate-pulse rounded bg-secondary")]),
+					],
+				),
+			),
 		)
 	const { kpis, currency } = result
-	const comparison = model.isComparing ? "vs prev" : undefined
 	const total = model.accounts?.length ?? 0
-	const usage = [
-		kpiTile(h, {
-			id: "kpi-active",
-			label: "Active customers",
-			definition: "Customers with at least one active user in the last 30 days.",
-			value: formatCount(kpis.activeCustomers.value),
-			detail: `of ${formatCount(total)}`,
-			delta: pctDelta(model, kpis.activeCustomers),
-			comparison,
-		}),
-	]
+	const comparing = model.isComparing ? "vs previous period" : undefined
+	const active = headlineCell(h, {
+		id: "kpi-active",
+		label: "Active customers",
+		definition: "Customers with at least one active user in the last 30 days.",
+		value: formatCount(kpis.activeCustomers.value),
+		suffix: `of ${formatCount(total)}`,
+		delta: pctDelta(model, kpis.activeCustomers),
+		detail: `${formatCount(kpis.mau.value)} monthly users`,
+	})
 	if (!result.hasData.billing)
-		return grid([
+		return strip([
 			h.div(
+				[h.Class(twMerge(CELL, "md:col-span-2"))],
 				[
-					h.Class(
-						"col-span-2 flex items-center justify-between gap-4 rounded-xl border border-border border-dashed p-4 max-md:flex-col max-md:items-start max-md:gap-3 md:col-span-2 xl:col-span-5",
-					),
-				],
-				[
-					h.div(
-						[h.Class("flex flex-col gap-0.5")],
+					h.span([h.Class("text-muted-fg text-sm")], ["MRR · MRR at risk"]),
+					h.span([h.Class("font-medium text-fg")], ["Connect Stripe or Autumn to see revenue"]),
+					h.span(
+						[h.Class("flex flex-wrap items-center gap-x-3 text-muted-fg text-xs")],
 						[
-							h.span(
-								[h.Class("text-muted-fg text-xs")],
-								["MRR · Revenue · Paying customers · Logo churn · At-risk MRR"],
-							),
-							h.span(
-								[h.Class("font-medium text-fg text-sm")],
-								["Connect Stripe or Autumn to see revenue"],
-							),
-							h.span(
-								[h.Class("text-muted-fg text-xs")],
-								[
-									`Subscriptions are matched to your ${formatCount(total)} customers automatically.`,
-								],
+							`Subscriptions are matched to your ${formatCount(total)} customers automatically.`,
+							link(
+								h,
+								hrefOf(AppRoute.CustomersSettingsSources({ orgSlug: context.orgSlug })),
+								"Connect billing",
 							),
 						],
 					),
-					link(
-						h,
-						hrefOf(AppRoute.CustomersSettingsSources({ orgSlug: context.orgSlug })),
-						"Connect billing",
-					),
 				],
 			),
-			...usage,
+			active,
 		])
-	const churnBase = kpis.payingCustomers.previous ?? kpis.payingCustomers.value
-	const churnPct = churnBase === 0 ? 0 : (kpis.logoChurn.value / churnBase) * 100
 	const atRiskPct = kpis.mrrMinor.value === 0 ? 0 : (kpis.atRiskMrrMinor.value / kpis.mrrMinor.value) * 100
-	return grid([
-		kpiTile(h, {
+	const risky = result.healthDistribution
+		.filter((row) => row.status === "at_risk" || row.status === "critical")
+		.reduce((sum, row) => sum + row.count, 0)
+	return strip([
+		headlineCell(h, {
 			id: "kpi-mrr",
 			label: "MRR",
 			definition:
 				"Monthly recurring revenue of every active subscription, plus usage billing averaged over the last 3 months, in the reporting currency.",
 			value: formatMoney(kpis.mrrMinor.value, currency),
 			delta: pctDelta(model, kpis.mrrMinor),
-			comparison,
+			detail: comparing,
 		}),
-		kpiTile(h, {
-			id: "kpi-revenue",
-			label: "Revenue",
-			definition:
-				"Revenue collected in the period from paid invoices, recurring and one-off, in the reporting currency.",
-			value: formatMoney(kpis.revenueMinor.value, currency),
-			delta: pctDelta(model, kpis.revenueMinor),
-			comparison,
-		}),
-		kpiTile(h, {
-			id: "kpi-paying",
-			label: "Paying customers",
-			definition: "Customers with MRR above zero.",
-			value: formatCount(kpis.payingCustomers.value),
-			detail: `of ${formatCount(total)}`,
-			delta: kpiDelta(model, kpis.payingCustomers, formatDeltaCount),
-			comparison,
-		}),
-		kpiTile(h, {
-			id: "kpi-churn",
-			label: "Logo churn",
-			definition: "Paying customers lost in the period, as a share of those paying at its start.",
-			value: formatPct(churnPct),
-			detail: `${formatCount(kpis.logoChurn.value)} of ${formatCount(churnBase)}`,
-			delta: kpiDelta(model, kpis.logoChurn, formatDeltaCount, "down"),
-			comparison,
-		}),
-		kpiTile(h, {
+		headlineCell(h, {
 			id: "kpi-at-risk",
-			label: "At-risk MRR",
+			label: "MRR at risk",
 			definition: "MRR of customers with an open high-severity risk signal.",
 			value: formatMoney(kpis.atRiskMrrMinor.value, currency),
-			detail: formatPct(atRiskPct, { digits: 0 }),
-			delta: kpiDelta(
-				model,
-				kpis.atRiskMrrMinor,
-				(value) => formatMoney(value, currency, { signed: true }),
-				"down",
-			),
-			comparison,
+			valueClass: kpis.atRiskMrrMinor.value > 0 ? "text-warning-subtle-fg" : undefined,
+			detail: `${formatPct(atRiskPct, { digits: 0 })} of MRR · ${formatCount(risky)} customers at risk or critical`,
+			footer: distributionBar(h, {
+				ariaLabel: "MRR by health",
+				className: "mt-1.5 h-1.5",
+				segments: HEALTH_ORDER.map((status) => ({
+					key: status,
+					label: HEALTH_LABEL[status],
+					value: result.healthDistribution.find((row) => row.status === status)?.mrrMinor ?? 0,
+					fillClass: HEALTH_FILL[status],
+				})),
+			}),
 		}),
-		...usage,
+		active,
 	])
 }
 
-// SUPPORT
+const HEALTH_ORDER: ReadonlyArray<Customers.HealthStatus> = ["healthy", "at_risk", "critical", "unknown"]
 
-/** Response times and breaches for the range, each tile a way into the Support report. */
-const supportRow = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
+/** Revenue, paying customers and logo churn: worth a glance, not a tile each. */
+const secondaryLine = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	result: Result | undefined,
+): ReadonlyArray<Html> => {
+	if (result === undefined || !result.hasData.billing) return []
+	const { kpis, currency } = result
+	const total = model.accounts?.length ?? 0
+	const churnBase = kpis.payingCustomers.previous ?? kpis.payingCustomers.value
+	const churnPct = churnBase === 0 ? 0 : (kpis.logoChurn.value / churnBase) * 100
+	const part = (id: string, label: string, value: string, delta: Delta | null, detail?: string) =>
+		h.span(
+			[h.Id(id), h.Class("inline-flex items-baseline gap-1.5 whitespace-nowrap")],
+			[
+				h.span([h.Class("text-muted-fg")], [label]),
+				h.span([h.Class("font-medium text-fg tabular-nums")], [value]),
+				...(detail === undefined ? [] : [h.span([h.Class("text-muted-fg tabular-nums")], [detail])]),
+				...(delta === null ? [] : [deltaPill(h, delta, "self-center text-xs")]),
+			],
+		)
+	return [
+		h.p(
+			[h.Class("flex flex-wrap items-center gap-x-6 gap-y-1 px-1 text-sm")],
+			[
+				part(
+					"kpi-revenue",
+					"Revenue",
+					formatMoney(kpis.revenueMinor.value, currency),
+					pctDelta(model, kpis.revenueMinor),
+				),
+				part(
+					"kpi-paying",
+					"Paying customers",
+					formatCount(kpis.payingCustomers.value),
+					countDelta(model, kpis.payingCustomers),
+					`of ${formatCount(total)}`,
+				),
+				part(
+					"kpi-churn",
+					"Logo churn",
+					formatPct(churnPct),
+					countDelta(model, kpis.logoChurn, "down"),
+					`${formatCount(kpis.logoChurn.value)} of ${formatCount(churnBase)}`,
+				),
+			],
+		),
+	]
+}
+
+// NEEDS ATTENTION
+
+/** The queue's top rows: the page's main list. Each row opens the customer. */
+const attentionSection = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	context: Context,
+	userId: string | null,
+): Html => {
+	const open = openSignals(model)
+	const top = open.slice(0, ATTENTION_SHOWN)
+	// "Mine" as the queue and the sidebar badge count it: signals on accounts I own.
+	const mine = open.filter(
+		(signal) => userId !== null && context.accountsById.get(signal.accountId)?.ownerUserId === userId,
+	).length
+	const row = (signal: SignalRow) => {
+		const account = context.accountsById.get(signal.accountId)
+		if (account === undefined) return h.empty
+		return h.li(
+			[h.Key(signal.id)],
+			[
+				h.a(
+					[
+						h.Href(hrefOf(customerRoute(context.orgSlug, account.id))),
+						h.Class(
+							"flex items-center gap-3 px-4 py-3 outline-hidden transition-colors hover:bg-wash focus-visible:bg-wash",
+						),
+					],
+					[
+						companyLogo(h, { name: account.name, logoUrl: account.logoUrl, size: "sm" }),
+						h.div(
+							[h.Class("flex min-w-0 flex-1 flex-col gap-0.5")],
+							[
+								h.span(
+									[h.Class("flex min-w-0 items-baseline gap-2")],
+									[
+										h.span(
+											[h.Class("truncate font-medium text-fg text-sm")],
+											[account.name],
+										),
+										...environmentsHint(
+											h,
+											context.environmentCounts.get(account.id) ?? 0,
+										),
+									],
+								),
+								h.span(
+									[h.Class("flex min-w-0 items-center gap-1.5 text-muted-fg text-xs")],
+									[
+										severityGlyph(h, signal.severity),
+										h.span([h.Class("shrink-0 text-fg-2")], [signal.title]),
+										h.span([h.Class("truncate")], [`· ${signal.reason}`]),
+									],
+								),
+							],
+						),
+						h.span(
+							[h.Class("shrink-0 text-muted-fg text-xs tabular-nums")],
+							[
+								account.mrrMinor > 0
+									? `${formatMoney(account.mrrMinor, account.currency)}/mo`
+									: "",
+							],
+						),
+					],
+				),
+			],
+		)
+	}
+	return h.section(
+		[h.AriaLabel("Needs attention"), h.Class(twMerge(panelClass, "flex min-w-0 flex-col lg:col-span-2"))],
+		[
+			h.header(
+				[h.Class("flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 pt-4 pb-2")],
+				[
+					h.div(
+						[h.Class("flex min-w-0 items-baseline gap-2")],
+						[
+							heading(h, { variant: "section" }, ["Needs attention"]),
+							h.span(
+								[h.Class("text-muted-fg text-sm tabular-nums")],
+								[
+									open.length === 0
+										? ""
+										: `${formatCount(open.length)} open${mine > 0 ? ` · ${formatCount(mine)} on your accounts` : ""}`,
+								],
+							),
+						],
+					),
+					link(h, hrefOf(AppRoute.CustomersAttention({ orgSlug: context.orgSlug })), "View queue"),
+				],
+			),
+			model.signals === null
+				? h.div([h.Class("m-4 h-48 animate-pulse rounded-lg bg-secondary/40")])
+				: top.length === 0
+					? h.p(
+							[h.Class("px-4 py-10 text-center text-muted-fg text-sm")],
+							["All clear: no open signals."],
+						)
+					: h.ul(
+							[h.Class("flex flex-col divide-y divide-border border-border border-t")],
+							top.map(row),
+						),
+		],
+	)
+}
+
+const ATTENTION_SHOWN = 6
+
+// SIDE COLUMN: DROPS AND SUPPORT
+
+/** The customers whose usage fell most, beside the queue: the ones a signal may not have caught yet. */
+const dropsCard = (h: HtmlBuilder<Message>, result: Result, context: Context): Html => {
+	const drops = result.topMovers.decliners.slice(0, 4)
+	return h.section(
+		[h.AriaLabel("Biggest usage drops"), h.Class(twMerge(panelClass, "flex min-w-0 flex-col"))],
+		[
+			h.header(
+				[h.Class("flex flex-col gap-0.5 px-4 pt-4 pb-2")],
+				[
+					heading(h, { variant: "subsection", level: 2 }, ["Biggest usage drops"]),
+					h.span(
+						[h.Class("text-muted-fg text-xs")],
+						[
+							result.range === "12m"
+								? "Daily active users, last 90 days"
+								: "Daily active users, this period",
+						],
+					),
+				],
+			),
+			drops.length === 0
+				? h.p([h.Class("px-4 pb-4 text-muted-fg text-sm")], ["No big drops in this period."])
+				: h.ul(
+						[h.Class("flex flex-col pb-1.5")],
+						drops.map((mover) =>
+							h.li(
+								[h.Key(mover.accountId)],
+								[
+									h.a(
+										[
+											h.Href(hrefOf(customerRoute(context.orgSlug, mover.accountId))),
+											h.Class(
+												"flex items-center gap-2.5 px-4 py-2 text-sm outline-hidden transition-colors hover:bg-wash focus-visible:bg-wash",
+											),
+										],
+										[
+											companyLogo(h, {
+												name: mover.name,
+												logoUrl: mover.logoUrl,
+												size: "xs",
+											}),
+											h.span(
+												[h.Class("min-w-0 flex-1 truncate text-fg")],
+												[mover.name],
+											),
+											deltaPill(
+												h,
+												{
+													value: mover.changePct,
+													text: formatDeltaPct(mover.changePct),
+												},
+												"shrink-0 text-xs",
+											),
+										],
+									),
+								],
+							),
+						),
+					),
+		],
+	)
+}
+
+/** First response and breaches for the range, in a small card that opens the Support report. */
+const supportCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
 	const href = hrefOf(AppRoute.CustomersSupportReport({ orgSlug: context.orgSlug }))
 	const report = Option.getOrUndefined(AsyncData.getData(model.support))
 	const failed = report === undefined && AsyncData.getError(model.support)._tag === "Some"
+	const stat = (id: string, label: string, value: string, tone?: "danger") =>
+		h.div(
+			[h.Id(id), h.Class("flex items-baseline justify-between gap-3 py-1 text-sm")],
+			[
+				h.span([h.Class("text-muted-fg")], [label]),
+				h.span(
+					[
+						h.Class(
+							twMerge(
+								"font-medium text-fg tabular-nums",
+								tone === "danger" && "text-danger-subtle-fg",
+							),
+						),
+					],
+					[value],
+				),
+			],
+		)
 	return h.section(
-		[h.AriaLabel("Support"), h.Class("flex flex-col gap-2.5")],
+		[h.AriaLabel("Support"), h.Class(twMerge(panelClass, "flex min-w-0 flex-col gap-1 px-4 py-4"))],
 		[
 			h.div(
-				[h.Class("flex items-center justify-between gap-4")],
-				[heading(h, { variant: "label", level: 2 }, ["Support"]), link(h, href, "Support report")],
+				[h.Class("flex items-center justify-between gap-4 pb-1")],
+				[heading(h, { variant: "subsection", level: 2 }, ["Support"]), link(h, href, "Report")],
 			),
-			h.div(
-				[h.Class("grid grid-cols-2 gap-3 xl:grid-cols-4")],
-				[
-					...supportTiles(h, {
-						report,
-						idPrefix: "kpi-support",
-						href,
-						failure: failed
-							? button(
-									h,
-									{ intent: "plain", size: "xs", onPress: Message.PressedRetrySupport() },
-									[IconArrowPath(h, { attributes: { "data-slot": "icon" } }), "Retry"],
-								)
-							: undefined,
-					}),
-				],
-			),
+			...(report === undefined
+				? failed
+					? [
+							button(
+								h,
+								{ intent: "plain", size: "xs", onPress: Message.PressedRetrySupport() },
+								[
+									IconArrowPath(h, { attributes: { "data-slot": "icon" } }),
+									"Couldn't load · Retry",
+								],
+							),
+						]
+					: [h.div([h.Class("h-20 animate-pulse rounded-lg bg-secondary/40")])]
+				: [
+						stat(
+							"kpi-support-median",
+							"Median first response",
+							formatResponse(report.firstResponse.medianMs),
+						),
+						stat(
+							"kpi-support-within",
+							"Within SLA",
+							formatWithin(report.firstResponse.withinPct),
+						),
+						stat(
+							"kpi-support-breaches",
+							report.overdueNow > 0
+								? `Breaches · ${formatCount(report.overdueNow)} overdue now`
+								: "Breaches",
+							formatCount(report.breaches),
+							report.overdueNow > 0 ? "danger" : undefined,
+						),
+					]),
 		],
 	)
 }
@@ -422,109 +713,6 @@ const activeUsersCard = (h: HtmlBuilder<Message>, model: Model, result: Result):
 			hoveredIndex: model.hoveredActiveUsers,
 			onHover: toHoverActiveUsers,
 		}),
-	])
-}
-
-// QUEUE PREVIEW
-
-const attentionCard = (
-	h: HtmlBuilder<Message>,
-	model: Model,
-	context: Context,
-	userId: string | null,
-): Html => {
-	const open = openSignals(model)
-	const top = open.slice(0, 5)
-	const risks = open.filter((signal) => signal.kind === "risk").length
-	// "Mine" as the queue and the sidebar badge count it: signals on accounts I own.
-	const mine = open.filter(
-		(signal) => userId !== null && context.accountsById.get(signal.accountId)?.ownerUserId === userId,
-	).length
-	const row = (signal: SignalRow) => {
-		const account = context.accountsById.get(signal.accountId)
-		if (account === undefined) return h.empty
-		return h.li(
-			[],
-			[
-				h.a(
-					[
-						h.Href(hrefOf(customerRoute(context.orgSlug, account.id))),
-						h.Class(
-							"-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 outline-hidden transition-colors hover:bg-wash focus-visible:bg-wash",
-						),
-					],
-					[
-						companyLogo(h, { name: account.name, logoUrl: account.logoUrl, size: "sm" }),
-						h.div(
-							[h.Class("flex min-w-0 flex-1 flex-col")],
-							[
-								h.span(
-									[h.Class("flex items-center justify-between gap-2")],
-									[
-										h.span(
-											[h.Class("flex min-w-0 items-baseline gap-2")],
-											[
-												h.span(
-													[h.Class("truncate font-medium text-fg text-sm")],
-													[account.name],
-												),
-												...environmentsHint(
-													h,
-													context.environmentCounts.get(account.id) ?? 0,
-												),
-											],
-										),
-										h.span(
-											[h.Class("shrink-0 text-muted-fg text-xs tabular-nums")],
-											[`${formatMoney(account.mrrMinor, account.currency)}/mo`],
-										),
-									],
-								),
-								h.span(
-									[h.Class("flex items-center gap-1.5 text-muted-fg text-xs")],
-									[
-										severityGlyph(h, signal.severity),
-										h.span([h.Class("truncate")], [`${signal.title} · ${signal.reason}`]),
-									],
-								),
-							],
-						),
-					],
-				),
-			],
-		)
-	}
-	return card(h, "", [
-		cardHeader(
-			h,
-			heading(h, { variant: "section", className: "flex items-baseline gap-2 whitespace-nowrap" }, [
-				"Needs attention",
-				h.span([h.Class("font-normal text-muted-fg text-sm tabular-nums")], [String(open.length)]),
-			]),
-			"Top 5 by priority",
-			link(h, hrefOf(AppRoute.CustomersAttention({ orgSlug: context.orgSlug })), "View queue"),
-		),
-		model.signals === null
-			? h.div([h.Class("h-48 animate-pulse rounded-lg bg-secondary/40")])
-			: top.length === 0
-				? h.p([h.Class("py-8 text-center text-muted-fg text-sm")], ["All clear: no open signals."])
-				: h.ul([h.Class("flex flex-col")], top.map(row)),
-		h.footer(
-			[
-				h.Class(
-					"mt-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-border border-t pt-3 text-muted-fg text-xs",
-				),
-			],
-			[
-				h.span(
-					[],
-					[
-						`${risks} risk${risks === 1 ? "" : "s"} · ${open.length - risks} opportunit${open.length - risks === 1 ? "y" : "ies"}`,
-					],
-				),
-				h.span([], [`${mine} on your accounts`]),
-			],
-		),
 	])
 }
 
@@ -722,77 +910,106 @@ const listRow = (
 		],
 	)
 
-const listCard = (
+// THIS PERIOD
+
+const LIFECYCLE_SHOWN = 4
+
+/** One column of the This period panel: a title, a one-line summary, a few rows and a way to all of them. */
+const lifecycleColumn = (
 	h: HtmlBuilder<Message>,
 	options: Readonly<{
 		title: string
-		description: string
+		summary: string
 		aside: Html
 		rows: ReadonlyArray<Html>
 		empty: string
 	}>,
 ): Html =>
-	card(h, "", [
-		cardHeader(h, options.title, options.description, options.aside),
-		options.rows.length === 0
-			? h.p([h.Class("py-6 text-center text-muted-fg text-sm")], [options.empty])
-			: h.ul([h.Class("flex flex-col")], [...options.rows]),
-	])
+	h.div(
+		[h.Class("flex min-w-0 flex-col gap-1 px-4 py-4 sm:px-5")],
+		[
+			h.div(
+				[h.Class("flex items-center justify-between gap-3")],
+				[heading(h, { variant: "subsection", level: 3 }, [options.title]), options.aside],
+			),
+			h.span([h.Class("text-muted-fg text-xs")], [options.summary]),
+			options.rows.length === 0
+				? h.p([h.Class("py-4 text-muted-fg text-sm")], [options.empty])
+				: h.ul([h.Class("flex flex-col pt-1")], options.rows.slice(0, LIFECYCLE_SHOWN)),
+		],
+	)
 
 /** A trial's subscription that went on to bill (anything but still trialing, paused or canceled). */
 const isConverted = (status: Customers.SubscriptionStatus) =>
 	status === "active" || status === "past_due" || status === "unpaid"
 
-const lifecycleRow = (h: HtmlBuilder<Message>, model: Model, result: Result, context: Context): Html => {
-	if (!result.hasData.billing) {
-		const fresh = newAccounts(model, context.nowMs, 5)
-		const quiet = quietAccounts(model, context.nowMs, 5)
-		return h.div(
-			[h.Class("grid gap-4 lg:grid-cols-2")],
+/** Who arrived, who is trying it and who left in the range: one panel, three columns. */
+const lifecycleSection = (h: HtmlBuilder<Message>, model: Model, result: Result, context: Context): Html => {
+	const panelOf = (columns: ReadonlyArray<Html>) =>
+		h.section(
+			[h.AriaLabel("This period"), h.Class("flex min-w-0 flex-col gap-2.5")],
 			[
-				listCard(h, {
-					title: "New accounts",
-					description: "First seen in this period",
-					aside: link(h, hrefOf(customersListRoute(context.orgSlug)), "View all"),
-					rows: fresh.map((account) =>
-						listRow(h, context, {
-							accountId: account.id,
-							name: account.name,
-							logoUrl: account.logoUrl,
-							detail: account.domain ?? "",
-							date: account.firstSeenAtMs,
-							value: `${formatCount(account.activeUsers30d)} of ${formatCount(account.contactCount)}`,
-						}),
-					),
-					empty: "No new accounts in this period.",
-				}),
-				listCard(h, {
-					title: "Went quiet",
-					description: `No activity for ${QUIET_AFTER_DAYS}+ days after being active. Churn needs billing data.`,
-					aside: link(
-						h,
-						hrefOf(AppRoute.CustomersSettingsSources({ orgSlug: context.orgSlug })),
-						"Connect billing",
-					),
-					rows: quiet.map((account) =>
-						listRow(h, context, {
-							accountId: account.id,
-							name: account.name,
-							logoUrl: account.logoUrl,
-							detail: `${formatCount(account.activeUsers30d)} active users`,
-							date: account.lastActiveAtMs ?? context.nowMs,
-							value: h.span(
-								[h.Class("text-warning-subtle-fg")],
-								[
-									`${Math.floor((context.nowMs - (account.lastActiveAtMs ?? context.nowMs)) / 86_400_000)}d`,
-								],
+				heading(h, { variant: "section" }, ["This period"]),
+				h.div(
+					[
+						h.Class(
+							twMerge(
+								panelClass,
+								"grid divide-border max-lg:divide-y lg:divide-x",
+								columns.length === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2",
 							),
-						}),
-					),
-					empty: "Nobody went quiet.",
-				}),
+						),
+					],
+					[...columns],
+				),
 			],
 		)
+	if (!result.hasData.billing) {
+		const fresh = newAccounts(model, context.nowMs, LIFECYCLE_SHOWN)
+		const quiet = quietAccounts(model, context.nowMs, LIFECYCLE_SHOWN)
+		return panelOf([
+			lifecycleColumn(h, {
+				title: "New accounts",
+				summary: "First seen in this period",
+				aside: link(h, hrefOf(customersListRoute(context.orgSlug)), "View all"),
+				rows: fresh.map((account) =>
+					listRow(h, context, {
+						accountId: account.id,
+						name: account.name,
+						logoUrl: account.logoUrl,
+						detail: account.domain ?? "",
+						date: account.firstSeenAtMs,
+						value: `${formatCount(account.activeUsers30d)} of ${formatCount(account.contactCount)}`,
+					}),
+				),
+				empty: "No new accounts in this period.",
+			}),
+			lifecycleColumn(h, {
+				title: "Went quiet",
+				summary: `No activity for ${QUIET_AFTER_DAYS}+ days after being active. Churn needs billing data.`,
+				aside: link(
+					h,
+					hrefOf(AppRoute.CustomersSettingsSources({ orgSlug: context.orgSlug })),
+					"Connect billing",
+				),
+				rows: quiet.map((account) =>
+					listRow(h, context, {
+						accountId: account.id,
+						name: account.name,
+						logoUrl: account.logoUrl,
+						detail: `${formatCount(account.activeUsers30d)} active users`,
+						date: account.lastActiveAtMs ?? context.nowMs,
+						value: h.span(
+							[h.Class("text-warning-subtle-fg")],
+							[
+								`${Math.floor((context.nowMs - (account.lastActiveAtMs ?? context.nowMs)) / 86_400_000)}d`,
+							],
+						),
+					}),
+				),
+				empty: "Nobody went quiet.",
+			}),
+		])
 	}
 	const brief = (entry: Customers.AccountBrief, value: Html | string) =>
 		listRow(h, context, {
@@ -806,51 +1023,93 @@ const lifecycleRow = (h: HtmlBuilder<Message>, model: Model, result: Result, con
 	const newMrr = result.recentNew.reduce((sum, entry) => sum + entry.mrrMinor, 0)
 	const lostMrr = result.recentChurn.reduce((sum, entry) => sum + entry.mrrMinor, 0)
 	const converted = result.newTrials.filter((trial) => isConverted(trial.status)).length
-	return h.div(
-		[h.Class("grid gap-4 lg:grid-cols-3")],
+	return panelOf([
+		lifecycleColumn(h, {
+			title: "New customers",
+			summary: `${accountsLabel(result.recentNew.length)} · ${formatMoney(newMrr, result.currency, { signed: true })} MRR`,
+			aside: link(h, hrefOf(customersListRoute(context.orgSlug, "paying")), "View all"),
+			rows: result.recentNew.map((entry) => brief(entry, formatMoney(entry.mrrMinor, result.currency))),
+			empty: "No new paying customers.",
+		}),
+		lifecycleColumn(h, {
+			title: "New trials",
+			summary: `${accountsLabel(result.newTrials.length)} · ${formatCount(converted)} converted`,
+			aside: link(h, hrefOf(customersListRoute(context.orgSlug, "trialing")), "View all"),
+			rows: result.newTrials.map((trial) =>
+				brief(
+					trial,
+					trial.status === "trialing"
+						? formatMoney(trial.mrrMinor, result.currency)
+						: isConverted(trial.status)
+							? h.span([h.Class("text-success-subtle-fg")], ["Converted"])
+							: h.span([h.Class("text-muted-fg")], ["Ended"]),
+				),
+			),
+			empty: "No trials started.",
+		}),
+		lifecycleColumn(h, {
+			title: "Churned",
+			summary: `${accountsLabel(result.recentChurn.length)}${lostMrr > 0 ? ` · ${formatMoney(-lostMrr, result.currency)} MRR` : ""}`,
+			aside: link(h, hrefOf(customersListRoute(context.orgSlug, "churned")), "View all"),
+			rows: result.recentChurn.map((entry) =>
+				brief(
+					entry,
+					entry.mrrMinor > 0
+						? h.span(
+								[h.Class("text-danger-subtle-fg")],
+								[formatMoney(-entry.mrrMinor, result.currency)],
+							)
+						: h.span([h.Class("text-muted-fg")], ["—"]),
+				),
+			),
+			empty: "Nobody churned.",
+		}),
+	])
+}
+
+// TRENDS
+
+/** The charts, folded: worth opening on a review, not on every visit. */
+const trendsSection = (h: HtmlBuilder<Message>, model: Model, result: Result, context: Context): Html => {
+	const bands = model.settings?.bands ?? Customers.DEFAULT_HEALTH_SETTINGS.bands
+	return h.section(
+		[h.AriaLabel("Charts and trends")],
 		[
-			listCard(h, {
-				title: "New customers",
-				description: `${accountsLabel(result.recentNew.length)} · ${formatMoney(newMrr, result.currency, { signed: true })} MRR · first paid invoice in period`,
-				aside: link(h, hrefOf(customersListRoute(context.orgSlug, "paying")), "View all"),
-				rows: result.recentNew.map((entry) =>
-					brief(entry, formatMoney(entry.mrrMinor, result.currency)),
-				),
-				empty: "No new paying customers in this period.",
-			}),
-			listCard(h, {
-				title: "New trials",
-				description: `${accountsLabel(result.newTrials.length)} · ${formatCount(converted)} converted`,
-				aside: link(h, hrefOf(customersListRoute(context.orgSlug, "trialing")), "View trials"),
-				rows: result.newTrials.map((trial) =>
-					brief(
-						trial,
-						trial.status === "trialing"
-							? formatMoney(trial.mrrMinor, result.currency)
-							: isConverted(trial.status)
-								? h.span([h.Class("text-success-subtle-fg")], ["Converted"])
-								: h.span([h.Class("text-muted-fg")], ["Ended"]),
+			disclosure(
+				h,
+				{
+					summaryClassName: "py-1 text-sm",
+					summary: [
+						h.span([h.Class("font-medium text-fg")], ["Charts and trends"]),
+						h.span(
+							[h.Class("text-muted-fg text-xs max-sm:hidden")],
+							["MRR movement, active users, health distribution, top movers"],
+						),
+					],
+				},
+				[
+					h.div(
+						[h.Class("flex flex-col gap-4 pt-3")],
+						[
+							mrrCard(h, model, result),
+							h.div(
+								[h.Class("grid gap-4 lg:grid-cols-2")],
+								[
+									activeUsersCard(h, model, result),
+									healthDistribution(h, {
+										rows: result.healthDistribution,
+										bands,
+										currency: result.currency,
+										metric: model.healthMetric,
+										onMetric: toHealthMetric,
+									}),
+								],
+							),
+							moversCard(h, result, context),
+						],
 					),
-				),
-				empty: "No trials started in this period.",
-			}),
-			listCard(h, {
-				title: "Recent churn",
-				description: `${accountsLabel(result.recentChurn.length)}${lostMrr > 0 ? ` · ${formatMoney(-lostMrr, result.currency)} MRR` : ""}`,
-				aside: link(h, hrefOf(customersListRoute(context.orgSlug, "churned")), "View churned"),
-				rows: result.recentChurn.map((entry) =>
-					brief(
-						entry,
-						entry.mrrMinor > 0
-							? h.span(
-									[h.Class("text-danger-subtle-fg")],
-									[formatMoney(-entry.mrrMinor, result.currency)],
-								)
-							: h.span([h.Class("text-muted-fg")], ["—"]),
-					),
-				),
-				empty: "Nobody churned in this period.",
-			}),
+				],
+			),
 		],
 	)
 }
@@ -922,34 +1181,28 @@ const dashboard = (
 	const result = Option.getOrUndefined(AsyncData.getData(model.overview))
 	const failed = AsyncData.getError(model.overview)
 	if (result === undefined && failed._tag === "Some") return [failure(h, failed.value)]
-	const bands = model.settings?.bands ?? Customers.DEFAULT_HEALTH_SETTINGS.bands
 	return [
-		kpiRow(h, model, result, context),
-		supportRow(h, model, context),
+		h.div(
+			[h.Class("flex flex-col gap-3")],
+			[headline(h, model, result, context), ...secondaryLine(h, model, result)],
+		),
+		h.div(
+			[h.Class("grid items-start gap-4 lg:grid-cols-3")],
+			[
+				attentionSection(h, model, context, userId),
+				h.div(
+					[h.Class("flex min-w-0 flex-col gap-4")],
+					[
+						...(result === undefined ? [] : [dropsCard(h, result, context)]),
+						supportCard(h, model, context),
+					],
+				),
+			],
+		),
+		suggestionsCard(h, model, context),
 		...(result === undefined
-			? [h.div([h.Class("h-96 animate-pulse rounded-xl border border-border bg-secondary/30")])]
-			: [
-					h.div(
-						[h.Class("grid gap-4 lg:grid-cols-3")],
-						[mrrCard(h, model, result), attentionCard(h, model, context, userId)],
-					),
-					suggestionsCard(h, model, context),
-					h.div(
-						[h.Class("grid gap-4 lg:grid-cols-2")],
-						[
-							activeUsersCard(h, model, result),
-							healthDistribution(h, {
-								rows: result.healthDistribution,
-								bands,
-								currency: result.currency,
-								metric: model.healthMetric,
-								onMetric: toHealthMetric,
-							}),
-						],
-					),
-					moversCard(h, result, context),
-					lifecycleRow(h, model, result, context),
-				]),
+			? [h.div([h.Class("h-64 animate-pulse rounded-xl border border-border bg-secondary/30")])]
+			: [lifecycleSection(h, model, result, context), trendsSection(h, model, result, context)]),
 	]
 }
 
@@ -966,7 +1219,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		[h.Class("h-full overflow-y-auto")],
 		[
 			h.div(
-				[h.Class("mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 lg:px-8")],
+				[h.Class("mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 lg:px-8")],
 				[
 					// On a phone the top bar names the section; with nothing connected the header holds no
 					// controls, only its title and a subtitle the setup below says again.
