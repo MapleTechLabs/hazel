@@ -201,9 +201,13 @@ export const Model = Schema.Struct({
 	 * `companyCheckedAtMs` passes it (or `COMPANY_REFRESH_PENDING_MS` goes by).
 	 */
 	companyRefreshAtMs: Schema.NullOr(Schema.Finite),
-	/** "Add domain" (no company domain yet): the text, an RPC on its way. */
+	/**
+	 * "Add domain" (no company domain yet) or "Change" (swap the one it has): the text, an RPC on its
+	 * way. `editingDomain`: the domain being changed, null while adding or not editing.
+	 */
 	domainDraft: Schema.String,
 	isSavingDomain: Schema.Boolean,
+	editingDomain: Schema.NullOr(Schema.String),
 	/** "Name environment": the text, an RPC on its way. */
 	environmentModal: Modal.Model,
 	environmentDraft: Schema.String,

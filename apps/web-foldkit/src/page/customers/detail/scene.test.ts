@@ -16,6 +16,8 @@ import { AppRoute } from "../../../route"
 import { makeShared, memberWithRole, pageScene } from "../../../test/pages-fixtures"
 import * as Menu from "../../../ui/menu"
 import { FocusTriggerOnPress } from "../../../ui/menu-view"
+import { FocusDomainInput } from "./commands"
+import { Message } from "./message"
 import { init, update } from "./update"
 import { view } from "./view"
 
@@ -134,6 +136,44 @@ describe("customer page: adding a company domain", () => {
 			).toExist(),
 			Scene.expect(field).toExist(),
 			Scene.expect(Scene.role("button", { name: "Add" })).toExist(),
+		)
+	})
+
+	test("an admin changes the domain it has; a member only reads it", () => {
+		const withDomain = { ...acme, domains: ["acme.com"], companyProfile: null, companyCheckedAt: null }
+		const openedWith = (role: "owner" | "member") => {
+			const as = makeShared({ member: memberWithRole(role) })
+			const model = {
+				...init(
+					AppRoute.CustomerDetail({ orgSlug: "hazel", accountId: acme.id, tab: Option.none() }),
+					as,
+				).model,
+				accounts: ACCOUNTS.map((account) =>
+					toAccountRow(account.id === acme.id ? withDomain : account),
+				),
+			}
+			return { as, model }
+		}
+		const change = Scene.role("button", { name: "Change domain acme.com" })
+		const admin = openedWith("owner")
+		Scene.scene(
+			pageScene(update, view, admin.as),
+			Scene.given(admin.model),
+			menusMounted(4),
+			Scene.click(change),
+			Scene.Command.resolve(FocusDomainInput, Message.CompletedFocusDomainInput()),
+			Scene.expect(field).toExist(),
+			Scene.expect(Scene.role("button", { name: "Save" })).toExist(),
+			Scene.click(Scene.role("button", { name: "Cancel" })),
+			Scene.expect(field).toBeAbsent(),
+		)
+		const member = openedWith("member")
+		Scene.scene(
+			pageScene(update, view, member.as),
+			Scene.given(member.model),
+			menusMounted(4),
+			Scene.expect(Scene.text("acme.com")).toExist(),
+			Scene.expect(change).toBeAbsent(),
 		)
 	})
 

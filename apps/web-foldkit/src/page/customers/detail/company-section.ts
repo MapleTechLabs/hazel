@@ -87,8 +87,11 @@ const refreshButton = (
 		options.iconOnly ? [IconArrowPath(h, icon)] : [IconArrowPath(h, icon), options.label],
 	)
 
-/** "Add domain", for a customer with no company domain: the company is then looked up by it. */
-const addDomainForm = (h: HtmlBuilder<Message>, model: Model): Html =>
+/**
+ * "Add domain", for a customer with no company domain, or the domain being changed (Save / Cancel):
+ * the company is then looked up by it.
+ */
+const domainForm = (h: HtmlBuilder<Message>, model: Model): Html =>
 	h.form(
 		[h.Class("flex items-center gap-1.5 pb-2"), h.OnSubmit(Message.SubmittedDomain())],
 		[
@@ -118,10 +121,53 @@ const addDomainForm = (h: HtmlBuilder<Message>, model: Model): Html =>
 					isDisabled: model.domainDraft.trim() === "",
 					attributes: [h.Type("submit")],
 				},
-				["Add"],
+				[model.editingDomain === null ? "Add" : "Save"],
 			),
+			...(model.editingDomain === null
+				? []
+				: [
+						button(
+							h,
+							{
+								intent: "plain",
+								size: "sm",
+								isDisabled: model.isSavingDomain,
+								onPress: Message.PressedCancelDomain(),
+							},
+							["Cancel"],
+						),
+					]),
 		],
 	)
+
+/** The domain the company is looked up by; an admin changes it in place. */
+const domainRow = (h: HtmlBuilder<Message>, model: Model, context: Context, domain: string): Html =>
+	context.isAdmin && model.editingDomain === domain
+		? domainForm(h, model)
+		: property(
+				h,
+				"Domain",
+				h.span(
+					[h.Class("flex min-w-0 items-center justify-between gap-2")],
+					[
+						h.span([h.Class("truncate"), h.Title(domain)], [domain]),
+						...(context.isAdmin
+							? [
+									button(
+										h,
+										{
+											intent: "plain",
+											size: "xs",
+											onPress: Message.PressedChangeDomain({ domain }),
+											attributes: [h.AriaLabel(`Change domain ${domain}`)],
+										},
+										["Change"],
+									),
+								]
+							: []),
+					],
+				),
+			)
 
 export const companySection = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
 	const { account } = context
@@ -148,7 +194,7 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 						: "No company domain to look up. An admin can add one.",
 				],
 			),
-			...(context.isAdmin ? [addDomainForm(h, model)] : []),
+			...(context.isAdmin ? [domainForm(h, model)] : []),
 		])
 	}
 
@@ -164,6 +210,7 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 							? [`Not looked up yet. Hazel looks up ${domain} automatically.`, "Look up now"]
 							: [`context.dev has no company at ${domain}.`, "Look up again"]
 		return sidebarSection(h, "Company", checked === null ? null : `Checked ${checked}`, [
+			...(domain === null ? [] : [domainRow(h, model, context, domain)]),
 			h.p([h.AriaLive("polite"), h.Class("pb-2 text-muted-fg text-sm")], [text]),
 			...(action === null
 				? []
@@ -209,6 +256,7 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 		...(description === null
 			? []
 			: [h.p([h.Class("line-clamp-3 pb-1.5 text-fg-2 text-sm"), h.Title(description)], [description])]),
+		...(domain === null ? [] : [domainRow(h, model, context, domain)]),
 		property(
 			h,
 			"Industry",

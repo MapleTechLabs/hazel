@@ -40,6 +40,7 @@ import {
 	FetchCustomerMrrHistory,
 	FetchCustomerSupport,
 	FetchCustomerUsage,
+	FocusDomainInput,
 	FocusNoteComposer,
 	LoadNoteDrafts,
 	LinkCustomerAccount,
@@ -307,6 +308,7 @@ const initialModel = (route: Route): Model => ({
 	companyRefreshAtMs: null,
 	domainDraft: "",
 	isSavingDomain: false,
+	editingDomain: null,
 	deletingNoteId: null,
 	deleteNoteModal: Modal.init(DELETE_NOTE_MODAL_ID),
 	isImpersonator: false,
@@ -980,17 +982,39 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 			),
 		}),
 		ChangedDomainDraft: ({ value }) => ({ model: modifyFields(model, { domainDraft: () => value }) }),
+		PressedChangeDomain: ({ domain }) => ({
+			model: modifyFields(model, { editingDomain: () => domain, domainDraft: () => domain }),
+			commands: [FocusDomainInput()],
+		}),
+		PressedCancelDomain: () => ({
+			model: model.isSavingDomain
+				? model
+				: modifyFields(model, { editingDomain: () => null, domainDraft: () => "" }),
+		}),
 		SubmittedDomain: () => {
 			const args = target(model, shared)
 			const domain = model.domainDraft.trim()
 			if (args === null || domain === "" || model.isSavingDomain) return { model }
+			const replacing = model.editingDomain
+			// Unchanged: nothing to send, the edit just closes.
+			if (replacing !== null && domain.toLowerCase() === replacing) {
+				return { model: modifyFields(model, { editingDomain: () => null, domainDraft: () => "" }) }
+			}
 			return {
 				model: modifyFields(model, { isSavingDomain: () => true }),
-				commands: [AddCustomerDomain({ ...args, addDomain: domain })],
+				commands: [
+					replacing === null
+						? AddCustomerDomain({ ...args, addDomain: domain })
+						: AddCustomerDomain({ ...args, addDomain: domain, removeDomain: replacing }),
+				],
 			}
 		},
 		SucceededAddDomain: () => ({
-			model: modifyFields(model, { domainDraft: () => "", isSavingDomain: () => false }),
+			model: modifyFields(model, {
+				domainDraft: () => "",
+				isSavingDomain: () => false,
+				editingDomain: () => null,
+			}),
 		}),
 		FailedAddDomain: ({ reason, message }) => ({
 			model: modifyFields(model, { isSavingDomain: () => false }),
@@ -998,10 +1022,19 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 				errorToastOf(
 					failureMessage(reason, {
 						NotFound: {
-							title: "Couldn't add the domain",
+							title:
+								model.editingDomain === null
+									? "Couldn't add the domain"
+									: "Couldn't change the domain",
 							description: "The customer was removed.",
 						},
-						Stale: { title: "Couldn't add the domain", description: message ?? undefined },
+						Stale: {
+							title:
+								model.editingDomain === null
+									? "Couldn't add the domain"
+									: "Couldn't change the domain",
+							description: message ?? undefined,
+						},
 					}),
 				),
 			),
@@ -1522,4 +1555,5 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 			),
 		}),
 		CompletedFocusComposer: () => ({ model }),
+		CompletedFocusDomainInput: () => ({ model }),
 	})

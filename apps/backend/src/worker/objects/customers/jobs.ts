@@ -45,6 +45,7 @@ import { installDefaults } from "./defaults"
 import { runSlaAlerts } from "./sla"
 import { ContextDev } from "./enrichment/client"
 import { postponeDueEnrichments, runDueEnrichments, seedEnrichments } from "./enrichment/job"
+import { inferAccountDomains } from "./domain-inference"
 import { CustomerIngest } from "./ingest"
 import type { CustomerProviderAdapter, CustomerProviderError } from "./providers"
 import { CustomerProviders } from "./providers"
@@ -467,7 +468,13 @@ export const tick = Effect.fn("CustomersObject.tick")(function* () {
 				(cause) => Effect.logError("Customers compute failed", { cause: Cause.pretty(cause) }),
 			),
 		)
-		// New accounts (or domains) get their company looked up on a later turn.
+		// Accounts no source gave a domain take the one their members' emails show, then new accounts
+		// (or domains) get their company looked up on a later turn.
+		yield* inferAccountDomains(now).pipe(
+			Effect.catchTag("DatabaseError", (error) =>
+				Effect.logError("Inferring account domains failed", { error: error.message }),
+			),
+		)
 		yield* seedEnrichments(now).pipe(
 			Effect.catchTag("DatabaseError", (error) =>
 				Effect.logError("Company enrichment seeding failed", { error: error.message }),

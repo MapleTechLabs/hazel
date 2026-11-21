@@ -137,6 +137,9 @@ export const Message = defineMessageUnion({
 	},
 	/** "Add domain" in the Company section, for a customer with no company domain. */
 	ChangedDomainDraft: { value: Schema.String },
+	/** "Change" on the Company section's domain: edit it in place; cancel leaves it. */
+	PressedChangeDomain: { domain: Schema.String },
+	PressedCancelDomain: {},
 	SubmittedDomain: {},
 	SucceededAddDomain: { accountId: CustomerAccountId },
 	/** `message` is the store's reason it refused (not a company domain). */
@@ -233,5 +236,6 @@ export const Message = defineMessageUnion({
 	PressedCopy: { text: Schema.String, label: Schema.String },
 	CompletedCopy: { label: Schema.String, isCopied: Schema.Boolean },
 	CompletedFocusComposer: {},
+	CompletedFocusDomainInput: {},
 })
 export type Message = typeof Message.Type
