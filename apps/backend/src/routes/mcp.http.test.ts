@@ -685,7 +685,14 @@ describe("MCP server", () => {
 					organization_id: world.orgId,
 				})
 				expect(overview.isError).toBeUndefined()
-				expect(overview.structuredContent.range).toBe("30d")
+				expect(overview.structuredContent).toMatchObject({
+					range: "30d",
+					reporting_currency: "usd",
+					has_billing_data: false,
+					has_activity_data: false,
+				})
+				// No billing data: no movements, rather than zeros.
+				expect(overview.structuredContent.mrr_movements).toBeNull()
 
 				const globex = uuid()
 				const initech = uuid()
@@ -718,28 +725,36 @@ describe("MCP server", () => {
 					"active",
 					0,
 				)
-				db.prepare(
+				const evidence = JSON.stringify({
+					_tag: "last_active",
+					step: 1,
+					lastActiveAt: null,
+					daysInactive: 20,
+					priorActiveUsers: 3,
+					contactId: null,
+					contactName: null,
+					contactEmail: null,
+				})
+				const insertSignal = db.prepare(
 					`INSERT INTO customer_signals (id, organizationId, accountId, ruleId, template, kind, severity,
 					status, title, reason, evidence, openingEvidence, priorityScore) VALUES (?, ?, ?, ?, 'inactive', 'risk', 'high',
-					'open', 'Stopped using the product', 'No one active for 20 days', ?, ?, 90)`,
-				).run(
+					'open', ?, 'No one active for 20 days', ?, ?, 90)`,
+				)
+				insertSignal.run(
 					uuid(),
 					world.orgId,
 					globex,
 					uuid(),
-					...Array(2).fill(
-						JSON.stringify({
-							_tag: "last_active",
-							step: 1,
-							lastActiveAt: null,
-							daysInactive: 20,
-							priorActiveUsers: 3,
-							contactId: null,
-							contactName: null,
-							contactEmail: null,
-						}),
-					),
+					"Stopped using the product",
+					evidence,
+					evidence,
 				)
+				// Globex was scored 7 days ago, and never before: earlier days are unknown, not 0.
+				const daysAgo = (days: number) =>
+					new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10)
+				db.prepare(
+					`INSERT INTO customer_health_daily (accountId, day, score, status, breakdown) VALUES (?, ?, 55, 'at_risk', ?)`,
+				).run(globex, daysAgo(7), JSON.stringify({ score: 55, status: "at_risk", components: [] }))
 
 				const all = yield* callTool(world, token, "list_customers", { organization_id: world.orgId })
 				expect(all.isError).toBeUndefined()
@@ -783,6 +798,10 @@ describe("MCP server", () => {
 				})
 				expect(detail.isError).toBeUndefined()
 				expect(detail.structuredContent.customer).toMatchObject({ name: "Globex", mrr: "$1,299.00" })
+				expect(detail.structuredContent.health.score_7d_ago).toBe(55)
+				expect(detail.structuredContent.health).not.toHaveProperty("score_30d_ago")
+				expect(detail.structuredContent.health).not.toHaveProperty("score_90d_ago")
+				expect(detail.structuredContent).not.toHaveProperty("more_open_signals")
 				expect(detail.structuredContent.open_signals).toEqual([
 					expect.objectContaining({
 						kind: "risk",
@@ -802,17 +821,59 @@ describe("MCP server", () => {
 					organization_id: world.orgId,
 				})
 				expect(signals.structuredContent.signals).toHaveLength(1)
-				for (const name of [
-					"list_customer_contacts",
-					"list_customer_events",
-					"list_customer_invoices",
-				]) {
+				// An empty page still has its list; next_cursor only when there is more.
+				for (const [name, key] of [
+					["list_customer_contacts", "contacts"],
+					["list_customer_events", "events"],
+					["list_customer_invoices", "invoices"],
+				] as const) {
 					const page = yield* callTool(world, token, name, {
 						organization_id: world.orgId,
 						customer_id: globex,
 					})
 					expect(page.isError).toBeUndefined()
+					expect(page.structuredContent).toEqual({ [key]: [] })
 				}
+
+				// More open signals than get_customer shows: it says so, and where the rest are.
+				for (let i = 0; i < 21; i++)
+					insertSignal.run(uuid(), world.orgId, initech, uuid(), `Signal ${i}`, evidence, evidence)
+				const busy = yield* callTool(world, token, "get_customer", {
+					organization_id: world.orgId,
+					customer_id: initech,
+				})
+				expect(busy.structuredContent.open_signals).toHaveLength(20)
+				expect(busy.structuredContent.more_open_signals).toContain("list_customer_signals")
+				const firstPage = yield* callTool(world, token, "list_customer_signals", {
+					organization_id: world.orgId,
+					customer_id: initech,
+					limit: 15,
+				})
+				expect(firstPage.structuredContent.signals).toHaveLength(15)
+				expect(firstPage.structuredContent.next_cursor).toBe("15")
+
+				// Event type prefixes match literally (`_` is no wildcard), and overlong ones are refused.
+				const insertEvent = db.prepare(
+					`INSERT INTO customer_events (id, accountId, provider, type, title, occurredAt) VALUES (?, ?, 'hazel', ?, ?, ?)`,
+				)
+				insertEvent.run(uuid(), globex, "signal.opened", "Signal opened", new Date().toISOString())
+				insertEvent.run(uuid(), globex, "a_b.c", "Odd type", new Date().toISOString())
+				const eventTypes = (types: ReadonlyArray<string>) =>
+					callTool(world, token, "list_customer_events", {
+						organization_id: world.orgId,
+						customer_id: globex,
+						types,
+					})
+				expect((yield* eventTypes(["signal.open_d"])).structuredContent).toEqual({ events: [] })
+				expect(
+					(yield* eventTypes(["a_b."])).structuredContent.events.map(
+						(event: { type: string }) => event.type,
+					),
+				).toEqual(["a_b.c"])
+				expect((yield* eventTypes(["signal."])).structuredContent.events).toHaveLength(1)
+				const overlong = yield* eventTypes(["x".repeat(101)])
+				expect(overlong.isError).toBe(true)
+				expect(overlong.content[0].text).toContain("100 characters")
 
 				// Another organization's customers: refused before its object is reached.
 				const elsewhere = yield* callTool(world, token, "list_customers", { organization_id: uuid() })

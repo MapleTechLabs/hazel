@@ -145,6 +145,12 @@ export const notFound = (entity: CustomersNotFoundError["entity"], id: string) =
 
 export const invalid = (message: string) => new CustomersInvalidRequestError({ message })
 
+/**
+ * Text matched as itself inside a `LIKE` pattern: effect-orm adds `ESCAPE '\'` on SQLite, so an
+ * escaped `%`, `_` or `\` is literal (a raw `LIKE` must say `ESCAPE '\'` itself).
+ */
+const likeLiteral = (text: string) => text.replace(/[\\%_]/g, "\\$&")
+
 /** Run `body` in a transaction and answer with its write position. */
 export const withTx = <A, E, R>(body: Effect.Effect<A, E, R>) =>
 	Effect.flatMap(Database.Database, (db) =>
@@ -278,8 +284,7 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 					yield* requireMember
 					const page = pageOf(request)
 					const text = query?.trim() ?? ""
-					// effect-orm adds `ESCAPE '\'` on SQLite: typed `%` and `_` match themselves.
-					const pattern = `%${text.replace(/[\\%_]/g, "\\$&")}%`
+					const pattern = `%${likeLiteral(text)}%`
 					const rows = yield* db.run(
 						SQLite.from(schema.customerAccountsTable)
 							.select()
@@ -349,8 +354,7 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 					yield* requireMember
 					const text = query.trim()
 					if (text === "") return { contacts: [] }
-					// effect-orm adds `ESCAPE '\'` on SQLite: typed `%` and `_` match themselves.
-					const pattern = `%${text.replace(/[\\%_]/g, "\\$&")}%`
+					const pattern = `%${likeLiteral(text)}%`
 					const contacts = yield* db.run(
 						SQLite.from(schema.customerContactsTable)
 							.select()
@@ -400,7 +404,7 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 									: $.provider.in_(...providers),
 								types === undefined || types.length === 0
 									? undefined
-									: SQLite.or(...types.map((type) => $.type.like(`${type}%`))),
+									: SQLite.or(...types.map((type) => $.type.like(`${likeLiteral(type)}%`))),
 							])
 							.orderBy(($) => [
 								[$.occurredAt, "desc"],

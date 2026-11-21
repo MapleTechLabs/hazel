@@ -47,6 +47,7 @@ import { Context, DateTime, Effect, Option, Schema, Stream } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import type { HazelRpcTag } from "../rpc/dispatch"
 import { resolveTarget } from "../rpc/routing"
+import { formatMoney } from "../worker/objects/customers/facts"
 import { AgentAccess, type AgentPrincipal } from "../services/agent-access"
 import { createAttachmentInChannel } from "../services/attachment-uploads"
 import { ObjectStorage } from "../services/object-storage"
@@ -542,6 +543,27 @@ type CustomersReadPayload =
 	| TimelinePayload
 	| AccountPayload
 
+/** `customers.events.list`'s bounds on `types`. */
+const MAX_EVENT_TYPES = 20
+const MAX_EVENT_TYPE_LENGTH = 100
+
+/** Event type prefixes: refused when out of bounds, never dropped (a dropped one widens the filter). */
+const argEventTypes = (args: Record<string, unknown>) => {
+	const raw = args.types
+	if (raw === undefined || raw === null) return Effect.succeed<ReadonlyArray<string>>([])
+	if (
+		!Array.isArray(raw) ||
+		raw.length > MAX_EVENT_TYPES ||
+		!raw.every((type) => typeof type === "string" && type !== "" && type.length <= MAX_EVENT_TYPE_LENGTH)
+	)
+		return Effect.fail(
+			toolError(
+				`types must be a list of at most ${MAX_EVENT_TYPES} prefixes, each 1 to ${MAX_EVENT_TYPE_LENGTH} characters`,
+			),
+		)
+	return Effect.succeed<ReadonlyArray<string>>(raw)
+}
+
 /** One literal or a list of them, each one of `allowed`; none given is undefined. */
 const optLiterals = <L extends string>(
 	args: Record<string, unknown>,
@@ -561,15 +583,7 @@ const isoOf = (at: Date | DateTime.Utc | null | undefined) =>
 	at === null || at === undefined ? null : at instanceof Date ? at.toISOString() : DateTime.formatIso(at)
 
 /** Minor units as the currency writes them, e.g. `$1,234.50`. */
-const money = (minor: number, currency: string) => {
-	const code = currency.toUpperCase()
-	try {
-		const format = new Intl.NumberFormat("en-US", { style: "currency", currency: code })
-		return format.format(minor / 10 ** (format.resolvedOptions().maximumFractionDigits ?? 2))
-	} catch {
-		return `${(minor / 100).toFixed(2)} ${code}`
-	}
-}
+const money = formatMoney
 
 /** The object without its null, undefined and empty-list fields: less for the agent to read. */
 const compact = (value: Record<string, unknown>) =>
@@ -598,7 +612,10 @@ const customersRead = <A>(
 				RouteRefusedError: () =>
 					Effect.fail(toolError("The user is not a member of this organization")),
 				RoutingError: (error) => Effect.fail(toolError(error.message)),
-				DatabaseError: (error) => Effect.die(error),
+				DatabaseError: (error) =>
+					Effect.logError("MCP customers routing failed", { error: error.message }).pipe(
+						Effect.andThen(Effect.fail(toolError("Hazel is unavailable; try again shortly"))),
+					),
 			}),
 		)
 		if (target.kind !== "customers") return yield* toolError(`${tag} is not a Customers read`)
@@ -685,13 +702,20 @@ interface PageOf<A> {
 	readonly nextCursor: string | null
 }
 
+/** A page as a tool answers it: the list always (empty too), `next_cursor` only when there is more. */
 const pageOut = <A, R>(key: string, page: PageOf<A>, row: (a: A) => R) =>
-	compact({ [key]: page.items.map(row), next_cursor: page.nextCursor })
+	page.nextCursor === null
+		? { [key]: page.items.map(row) }
+		: { [key]: page.items.map(row), next_cursor: page.nextCursor }
 
-const customerDetail = (detail: AccountDetail, signals: ReadonlyArray<Signal>) => {
+const customerDetail = (detail: AccountDetail, signals: PageOf<Signal>) => {
 	const { account } = detail
-	const healthAt = (daysAgo: number) =>
-		detail.healthSeries[detail.healthSeries.length - 1 - daysAgo]?.value ?? null
+	// Only recorded scores: the chart series holds 0 for a day never scored, which is unknown.
+	const recorded = new Map((detail.healthScores ?? []).map((point) => [point.day, point.score]))
+	const healthAt = (daysAgo: number) => {
+		const day = detail.healthSeries[detail.healthSeries.length - 1 - daysAgo]?.day
+		return day === undefined ? null : (recorded.get(day) ?? null)
+	}
 	return {
 		customer: compact({
 			...customerRow(account),
@@ -713,9 +737,9 @@ const customerDetail = (detail: AccountDetail, signals: ReadonlyArray<Signal>) =
 			status: account.healthStatus,
 			score: account.healthScore,
 			updated_at: isoOf(account.healthUpdatedAt),
-			score_7d_ago: detail.healthSeries.length > 7 ? healthAt(7) : null,
-			score_30d_ago: detail.healthSeries.length > 30 ? healthAt(30) : null,
-			score_90d_ago: detail.healthSeries.length > 0 ? (detail.healthSeries[0]?.value ?? null) : null,
+			score_7d_ago: healthAt(7),
+			score_30d_ago: healthAt(30),
+			score_90d_ago: healthAt(89),
 			components: detail.health?.components.map((component) =>
 				compact({
 					key: component.key,
@@ -728,7 +752,12 @@ const customerDetail = (detail: AccountDetail, signals: ReadonlyArray<Signal>) =
 		}),
 		/** Daily active users, oldest first, the last 30 days. */
 		active_users_30d_daily: detail.activeUsersSeries.map((point) => point.value),
-		open_signals: signals.map(signalRow),
+		open_signals: signals.items.map(signalRow),
+		// Left out (undefined) when every open signal is shown.
+		more_open_signals:
+			signals.nextCursor === null
+				? undefined
+				: `Not all shown: call list_customer_signals with this customer_id and cursor "${signals.nextCursor}" for the rest`,
 		subscriptions: detail.subscriptions.map((sub) =>
 			compact({
 				plan: sub.planName,
@@ -792,7 +821,10 @@ const overviewOut = (overview: OverviewResult) => {
 	})
 	return {
 		range: overview.range,
-		currency,
+		/** Every amount below: the organization's reporting currency, not each customer's own. */
+		reporting_currency: currency,
+		has_billing_data: overview.hasData.billing,
+		has_activity_data: overview.hasData.activity,
 		kpis: compact({
 			mrr: kpiOut(kpis.mrrMinor, currency),
 			paying_customers: kpiOut(kpis.payingCustomers),
@@ -804,14 +836,17 @@ const overviewOut = (overview: OverviewResult) => {
 			mrr_at_high_risk: kpiOut(kpis.atRiskMrrMinor, currency),
 			net_revenue_retention_pct: kpiOut(kpis.nrrPct),
 		}),
-		mrr_movements: {
-			new: movement("new"),
-			expansion: movement("expansion"),
-			reactivation: movement("reactivation"),
-			contraction: movement("contraction"),
-			churn: movement("churn"),
-			net: movement("net"),
-		},
+		// Without billing data there were no movements to measure: none, not zeros.
+		mrr_movements: overview.hasData.billing
+			? {
+					new: movement("new"),
+					expansion: movement("expansion"),
+					reactivation: movement("reactivation"),
+					contraction: movement("contraction"),
+					churn: movement("churn"),
+					net: movement("net"),
+				}
+			: null,
 		health: overview.healthDistribution.map((row) => ({
 			status: row.status,
 			customers: row.count,
@@ -836,7 +871,7 @@ const customerTools: ReadonlyArray<Tool> = [
 		name: "customers_overview",
 		title: "Customers overview",
 		description:
-			"An organization's customer KPIs over a range: MRR, paying and active customers, churn, revenue, net retention, MRR movements, health distribution, biggest usage gainers and decliners, recent churn, new customers and trials.",
+			"An organization's customer KPIs over a range: MRR, paying and active customers, churn, revenue, net retention, MRR movements, health distribution, biggest usage gainers and decliners, recent churn, new customers and trials. Amounts are in the organization's reporting currency; has_billing_data and has_activity_data say which data exists.",
 		scopes: ["customers:read"],
 		readOnly: true,
 		inputSchema: obj(
@@ -933,7 +968,7 @@ const customerTools: ReadonlyArray<Tool> = [
 						limit: 20,
 					},
 				)
-				return customerDetail(detail, signals.items)
+				return customerDetail(detail, signals)
 			}),
 	},
 	{
@@ -1006,9 +1041,9 @@ const customerTools: ReadonlyArray<Tool> = [
 				customer_id: str("Only this customer's"),
 				types: {
 					type: "array",
-					items: { type: "string" },
-					maxItems: 20,
-					description: "Type prefixes to keep",
+					items: { type: "string", minLength: 1, maxLength: MAX_EVENT_TYPE_LENGTH },
+					maxItems: MAX_EVENT_TYPES,
+					description: `Type prefixes to keep (at most ${MAX_EVENT_TYPES}, each 1 to ${MAX_EVENT_TYPE_LENGTH} characters)`,
 				},
 				...pageSchema(25),
 			},
@@ -1018,12 +1053,7 @@ const customerTools: ReadonlyArray<Tool> = [
 			Effect.gen(function* () {
 				const organizationId = yield* argOrg(args)
 				const accountId = yield* optAccount(args)
-				const types = (Array.isArray(args.types) ? args.types : [])
-					.filter(
-						(type): type is string =>
-							typeof type === "string" && type !== "" && type.length <= 100,
-					)
-					.slice(0, 20)
+				const types = yield* argEventTypes(args)
 				const payload: TimelinePayload = pageArgs(args, 25)
 				if (accountId !== undefined) payload.accountId = accountId
 				if (types.length > 0) payload.types = types
