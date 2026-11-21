@@ -520,8 +520,9 @@ const limitOf = (balance: AutumnBalance): number | null => {
 	return granted != null && granted > 0 ? granted : null
 }
 
+/** Autumn's `overage_allowed` decides; without it, a `usage_based` price on any grant says so. */
 const billsOverage = (balance: AutumnBalance): boolean =>
-	balance.overage_allowed === true ||
+	balance.overage_allowed ??
 	(balance.breakdown ?? []).some((grant) => grant.price?.billing_method === "usage_based")
 
 /**

@@ -366,6 +366,17 @@ describe("signal evaluation", () => {
 			_tag: "NoMatch",
 			reason: "No data",
 		})
+		// The newest day decides: yesterday's cap does not stand in for a day recorded with none.
+		const uncapped = new Map([
+			[
+				"api_calls",
+				[
+					{ day: addDays(TODAY, -1), value: 1050, limitValue: 1000 },
+					{ day: TODAY, value: 1100, limitValue: null },
+				],
+			],
+		])
+		expect(run("near_limit", { metrics: uncapped })).toEqual({ _tag: "NoMatch", reason: "No data" })
 		// Autumn is its source.
 		expect(
 			run("near_limit", { metrics: metric(950) }, orgFacts({ connected: new Set(["clerk"]) })),

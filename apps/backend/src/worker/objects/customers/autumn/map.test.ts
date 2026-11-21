@@ -524,6 +524,21 @@ describe("Autumn balance → metric", () => {
 		])
 	})
 
+	it("takes a refused overage over a usage-based price", () => {
+		expect(
+			balanceOps(
+				named({
+					...CUSTOMER_ACME,
+					balances: { messages: { ...CUSTOMER_ACME.balances.messages, overage_allowed: false } },
+				}),
+				{ at: AT },
+			),
+		).toMatchObject([
+			{ _tag: "metric_definition", key: "autumn.messages" },
+			{ _tag: "metric", value: 8_200, limitValue: 10_000 },
+		])
+	})
+
 	it("reads a usage-based price as overage, when the flag is missing", () => {
 		const { overage_allowed: _, ...flagless } = CUSTOMER_ACME.balances.messages
 		expect(
