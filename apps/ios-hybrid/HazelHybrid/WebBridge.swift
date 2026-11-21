@@ -267,6 +267,7 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
         let kind = body["kind"] as? String
         let enabled = body["enabled"] as? Bool
         let open = body["open"] as? Bool
+        let isLoading = body["loading"] as? Bool ?? false
         let level = body["level"] as? String ?? "log"
         let text = body["text"] as? String ?? ""
         MainActor.assumeIsolated {
@@ -295,7 +296,8 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
             case "screen":
                 hasSettled = true
                 kept = nil
-                keep(screenData)
+                // Shown still loading (`web/bridge.ts`, `MAX_LOADING_MS`): not where the app starts.
+                if !isLoading { keep(screenData) }
                 do {
                     screen = try screenData.map { try JSONDecoder().decode(SemanticNode.self, from: $0) }
                 } catch {

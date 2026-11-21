@@ -5,6 +5,7 @@
  */
 import { forwardConsole, installBridge } from "./bridge"
 import { installHost } from "./host"
+import { installWorkerOrigin } from "./worker-origin"
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3003"
 
@@ -131,6 +132,8 @@ const installOffline = async () => {
 }
 
 forwardConsole()
+// Before the app's modules: the local cache starts its OPFS worker as they load.
+installWorkerOrigin()
 // Live against production unless built `--mode offline` (the fixture, for the simulator).
 if (import.meta.env.VITE_HYBRID_OFFLINE === "1") await installOffline()
 else installHost()
