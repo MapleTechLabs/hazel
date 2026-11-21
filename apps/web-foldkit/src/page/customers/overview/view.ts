@@ -32,7 +32,7 @@ import {
 import { environmentCounts } from "../../../customers/groups"
 import { connectCard } from "../../../customers/ui/connect-card"
 import { companyLogo } from "../../../customers/ui/identity"
-import { deltaPill, type Delta } from "../../../customers/ui/kpi-tile"
+import { definedLabel, deltaPill, type Delta } from "../../../customers/ui/kpi-tile"
 import { disclosure } from "../../../customers/ui/disclosure"
 import { formatResponse, formatWithin } from "../../../customers/support-report"
 import { rangePicker } from "../../../customers/ui/filter-bar"
@@ -159,7 +159,7 @@ const headlineCell = (
 	h.div(
 		[h.Id(options.id), h.Class(CELL)],
 		[
-			h.span([h.Class("text-muted-fg text-sm"), h.Title(options.definition)], [options.label]),
+			definedLabel(h, { id: options.id, label: options.label, definition: options.definition }),
 			h.span(
 				[h.Class("flex min-w-0 items-baseline gap-2")],
 				[
@@ -313,11 +313,18 @@ const secondaryLine = (
 	const total = model.accounts?.length ?? 0
 	const churnBase = kpis.payingCustomers.previous ?? kpis.payingCustomers.value
 	const churnPct = churnBase === 0 ? 0 : (kpis.logoChurn.value / churnBase) * 100
-	const part = (id: string, label: string, value: string, delta: Delta | null, detail?: string) =>
+	const part = (
+		id: string,
+		label: string,
+		definition: string,
+		value: string,
+		delta: Delta | null,
+		detail?: string,
+	) =>
 		h.span(
 			[h.Id(id), h.Class("inline-flex items-baseline gap-1.5 whitespace-nowrap")],
 			[
-				h.span([h.Class("text-muted-fg")], [label]),
+				definedLabel(h, { id, label, definition, className: "self-center" }),
 				h.span([h.Class("font-medium text-fg tabular-nums")], [value]),
 				...(detail === undefined ? [] : [h.span([h.Class("text-muted-fg tabular-nums")], [detail])]),
 				...(delta === null ? [] : [deltaPill(h, delta, "self-center text-xs")]),
@@ -330,12 +337,14 @@ const secondaryLine = (
 				part(
 					"kpi-revenue",
 					"Revenue",
+					"Revenue collected in the period from paid invoices, recurring and one-off, in the reporting currency.",
 					formatMoney(kpis.revenueMinor.value, currency),
 					pctDelta(model, kpis.revenueMinor),
 				),
 				part(
 					"kpi-paying",
 					"Paying customers",
+					"Customers with MRR above zero.",
 					formatCount(kpis.payingCustomers.value),
 					countDelta(model, kpis.payingCustomers),
 					`of ${formatCount(total)}`,
@@ -343,6 +352,7 @@ const secondaryLine = (
 				part(
 					"kpi-churn",
 					"Logo churn",
+					"Paying customers lost in the period, as a share of those paying at its start.",
 					formatPct(churnPct),
 					countDelta(model, kpis.logoChurn, "down"),
 					`${formatCount(kpis.logoChurn.value)} of ${formatCount(churnBase)}`,
