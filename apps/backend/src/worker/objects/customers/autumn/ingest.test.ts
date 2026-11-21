@@ -192,7 +192,8 @@ describe("Autumn ops through CustomerIngest", () => {
 					{ key: "autumn.seats", name: "Seats", provider: "autumn", aggregation: "max" },
 				])
 				expect(metrics(world)).toEqual([
-					{ metricKey: "autumn.messages", value: 8_200, limitValue: 10_000 },
+					// Messages bills overage, so its grant is no cap; seats are.
+					{ metricKey: "autumn.messages", value: 8_200, limitValue: null },
 					{ metricKey: "autumn.seats", value: 12, limitValue: 25 },
 				])
 				// An unlimited feature has no limit to be near.
@@ -227,7 +228,8 @@ describe("Autumn ops through CustomerIngest", () => {
 				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
 
 				const nearLimit = signals(world).find((signal) => signal.template === "near_limit")
-				// 8 200 of 10 000 messages is 82%: below the default 90% threshold.
+				// 12 of 25 seats is 48%: below the default 90% threshold. Messages bills overage, so its
+				// grant is no limit at all.
 				expect(nearLimit).toBeUndefined()
 
 				// Usage climbs past the threshold; the next compute opens the signal.
@@ -235,22 +237,22 @@ describe("Autumn ops through CustomerIngest", () => {
 					{
 						_tag: "metric",
 						account: { provider: "autumn", externalId: ORG_ACME },
-						metricKey: "autumn.messages",
+						metricKey: "autumn.seats",
 						day: TODAY,
-						value: 9_600,
-						limitValue: 10_000,
+						value: 24,
+						limitValue: 25,
 					},
 				])
 				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
 
 				const opened = signals(world).find((signal) => signal.template === "near_limit")
-				expect(opened?.reason).toBe("Messages at 96% of the plan limit (9600 of 10000)")
+				expect(opened?.reason).toBe("Seats at 96% of the plan limit (24 of 25)")
 				expect(JSON.parse(opened?.evidence ?? "{}")).toMatchObject({
 					_tag: "limit",
-					metricKey: "autumn.messages",
-					metricName: "Messages",
-					value: 9_600,
-					limit: 10_000,
+					metricKey: "autumn.seats",
+					metricName: "Seats",
+					value: 24,
+					limit: 25,
 					pct: 96,
 				})
 			}),

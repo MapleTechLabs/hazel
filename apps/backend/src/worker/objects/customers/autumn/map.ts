@@ -18,7 +18,8 @@
  *   currency, so the amount is scaled by that currency's minor-unit factor.
  * - **Feature balance → metric.** One metric per feature (`autumn.<feature_id>`, namespaced because
  *   ingest refuses a key another provider owns), its value the period's usage and its `limitValue`
- *   the granted amount — which is what the `near_limit` signal reads.
+ *   the granted amount when that caps use (not unlimited, overage not billed) — which is what the
+ *   `near_limit` signal reads ({@link limitOf}).
  * - **Timeline events.** Subscription lifecycle entries are ingest's (it raises
  *   `subscription.started` / `plan_changed` / `canceled` / `cancel_scheduled` from the state these
  *   ops describe), so the adapter raises only what ingest cannot see: a feature limit reached
@@ -507,14 +508,22 @@ const definitionOf = (key: string, name: string, unit: string | null): DefineMet
 })
 
 /**
- * The plan limit a `near_limit` signal measures against: the granted units, unless the feature is
- * unlimited or the plan grants nothing (then there is no limit to be near).
+ * The plan limit a `near_limit` signal measures against: the granted units, when they are a cap.
+ * None when the feature is unlimited, the plan grants nothing, or use past the grant is billed
+ * (overage allowed, or a `usage_based` price): the grant is then only what the base price covers,
+ * and going past it is the plan working as sold, not a limit being hit.
  */
 const limitOf = (balance: AutumnBalance): number | null => {
 	if (balance.unlimited === true) return null
+	if (billsOverage(balance)) return null
 	const granted = balance.granted ?? null
 	return granted != null && granted > 0 ? granted : null
 }
+
+/** Autumn's `overage_allowed` decides; without it, a `usage_based` price on any grant says so. */
+const billsOverage = (balance: AutumnBalance): boolean =>
+	balance.overage_allowed ??
+	(balance.breakdown ?? []).some((grant) => grant.price?.billing_method === "usage_based")
 
 /**
  * A customer's feature usage for `at`'s day: one metric per balance, declared as it is written.
