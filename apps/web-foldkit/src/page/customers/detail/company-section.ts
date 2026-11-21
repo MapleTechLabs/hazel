@@ -16,9 +16,10 @@ import {
 import { formatCount, formatDate, formatRelative } from "../../../customers/format"
 import { IconArrowPath, IconLink } from "../../../icons"
 import { button } from "../../../ui/button"
+import { disclosure } from "../../../customers/ui/disclosure"
 import { Message } from "./message"
 import { isCompanyRefreshPending, isCompanyRefreshUnanswered, type Model } from "./model"
-import { type Context, disclosure, icon, property, sidebarSection } from "./parts"
+import { type Context, icon, property, sidebarSection } from "./parts"
 
 /**
  * The customer's company, enriched from its domain (`docs/customers/enrichment.md`): the sidebar's
