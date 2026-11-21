@@ -63,7 +63,7 @@ const makeFakeT3 = () => {
 			status: 200,
 			headers: { "content-type": "application/json", ...headers },
 		})
-	const tool = (name: string, args: Record<string, unknown>): unknown => {
+	const tool = (name: string, args: Record<string, unknown>): object => {
 		state.calls.push({ tool: name, args })
 		switch (name) {
 			case "t3_thread_launch":
@@ -122,6 +122,7 @@ const makeFakeT3 = () => {
 		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url
 		if (!url.startsWith("https://mac.t3.example/mcp")) throw new Error(`unexpected fetch ${url}`)
 		if (!state.reachable) return new Response("offline", { status: 530 })
+		// SAFETY: the body is what Hazel's MCP client sends: a JSON-RPC request it built itself.
 		const body = JSON.parse(String(init?.body)) as {
 			id?: unknown
 			method: string
@@ -141,7 +142,8 @@ const makeFakeT3 = () => {
 const makeWorld = Effect.gen(function* () {
 	const objects = yield* makeTestObjects
 	const orgId = uuid() as OrganizationId
-	const [alice, bob] = [uuid(), uuid()] as UserId[] as [UserId, UserId]
+	const alice = uuid() as UserId
+	const bob = uuid() as UserId
 	const org = yield* objects.get(orgTarget(orgId))
 	const db = org.storage.db
 	db.prepare(`INSERT INTO organizations (id, name, slug) VALUES (?, 'Acme', 'acme')`).run(orgId)

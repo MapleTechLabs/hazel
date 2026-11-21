@@ -423,7 +423,8 @@ export const sendMessage = Effect.fn("Assistant.send")(function* (input: {
 						errorMessage: null,
 						lastActivityAt: now,
 						updatedAt: now,
-						...(input.context === null ? {} : { context: contextRow(input.context) }),
+						// No context this time: the thread keeps the last one.
+						context: input.context === null ? thread.context : contextRow(input.context),
 					})
 					.where(($) => [$.id.eq(thread.id)]),
 			)
@@ -460,21 +461,23 @@ export const answerQuestion = Effect.fn("Assistant.answer")(function* (input: {
 	const { mcp } = yield* ownerSession(thread.ownerId)
 	const open = yield* onEnvironment(thread.ownerId, mcp.pendingQuestions(externalThreadId))
 	const now = new Date(yield* Clock.currentTimeMillis)
-	const closeItem = (answers: Record<string, string> | null) =>
-		db.run(
+	const closeItem = (answers: Record<string, string> | null) => {
+		const closed = {
+			requestId: question.requestId,
+			questions: question.questions.map((q) => ({ ...q })),
+			answered: true,
+		}
+		const data = answers === null ? closed : { ...closed, answers }
+		return db.run(
 			SQLite.update(schema.assistantItemsTable)
 				.set({
-					data: {
-						requestId: question.requestId,
-						questions: question.questions.map((q) => ({ ...q })),
-						answered: true,
-						...(answers === null ? {} : { answers }),
-					},
+					data,
 					status: "completed",
 					updatedAt: now,
 				})
 				.where(($) => [$.id.eq(input.itemId)]),
 		)
+	}
 	if (!open.includes(question.requestId)) {
 		// Answered in T3 Code meanwhile: close it here too.
 		yield* closeItem(null)
@@ -526,8 +529,8 @@ export const updateThread = Effect.fn("Assistant.update")(function* (input: {
 				SQLite.update(schema.assistantThreadsTable)
 					.set({
 						updatedAt: now,
-						...(input.title === undefined ? {} : { title: input.title }),
-						...(visibility === undefined ? {} : { visibility }),
+						title: input.title ?? input.thread.title,
+						visibility: visibility ?? input.thread.visibility,
 					})
 					.where(($) => [$.id.eq(input.thread.id)]),
 			)
@@ -748,7 +751,7 @@ const stepThread = Effect.fn("Assistant.step")(function* (follower: schema.Assis
 							cursor: activity.cursor,
 							failures: 0,
 							updatedAt: now,
-							...(asked === null ? {} : { pendingQuestion: asked }),
+							pendingQuestion: asked ?? latest.pendingQuestion,
 						})
 						.where(($) => [$.threadId.eq(thread.id)]),
 				)
@@ -805,13 +808,13 @@ const readActivity = (mcp: T3CodeMcpSession, externalThreadId: string, from: num
 		let activeRunId: string | null = null
 		const items: Array<ReadItem> = []
 		for (let page = 0; page < READ_PAGES; page++) {
-			const read = yield* mcp.read({
+			const request = {
 				threadId: externalThreadId,
-				view: "activity",
-				...(after === null ? {} : { afterPosition: after }),
+				view: "activity" as const,
 				limit: 50,
 				maxCharsPerItem: 8000,
-			})
+			}
+			const read = yield* mcp.read(after === null ? request : { ...request, afterPosition: after })
 			activeRunId = read.thread.activeRunId ?? null
 			for (const item of read.items) {
 				const view = viewOf(item)
