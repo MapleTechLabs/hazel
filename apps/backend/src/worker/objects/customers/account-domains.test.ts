@@ -60,10 +60,29 @@ describe("customers.account.update addDomain", () => {
 				ok(yield* add("acme.com"))
 				expect(domainsOf()).toEqual(["acme.com", "acme.io"])
 
+				// A full list refuses another rather than dropping one; one it has still moves first.
+				const full = Array.from({ length: 20 }, (_, index) => `full${index}.com`)
+				yield* world.ingest("clerk", [clerkOrg("org_full", "Full", full)])
+				const fullId = world.rows<{ id: CustomerAccountId }>(
+					`SELECT id FROM customer_accounts WHERE name = 'Full'`,
+				)[0]!.id
+				const addFull = (addDomain: string) =>
+					world.call("customers.account.update", { accountId: fullId, addDomain }, world.owner)
+				expect(tagOf(yield* addFull("one-more.com"))).toBe("CustomersInvalidRequestError")
+				ok(yield* addFull("full19.com"))
+				const fullNow = JSON.parse(
+					world.rows<{ domains: string }>(
+						`SELECT json(domains) AS domains FROM customer_accounts WHERE id = ?`,
+						fullId,
+					)[0]!.domains,
+				)
+				expect(fullNow).toEqual(["full19.com", ...full.slice(0, 19)])
+
 				// The compute turn seeds its lookup.
 				yield* world.object.run(seedEnrichments(NOW))
-				expect(world.rows(`SELECT domain FROM customer_enrichments`)).toEqual([
+				expect(world.rows(`SELECT domain FROM customer_enrichments ORDER BY domain`)).toEqual([
 					{ domain: "acme.com" },
+					{ domain: "full19.com" },
 				])
 			}),
 		))

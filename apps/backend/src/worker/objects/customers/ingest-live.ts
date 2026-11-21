@@ -71,7 +71,8 @@ import { requestCompute, requestComputeAfterIngest, requestHistoryRebuild, setBa
 /** Ops per transaction. */
 const INGEST_CHUNK = 500
 /** Domains an account op brings (they bind as parameters of the domain match). */
-const MAX_DOMAINS = 20
+/** The most domains an account keeps (a provider's beyond are dropped; Hazel refuses more). */
+export const MAX_DOMAINS = 20
 /**
  * A sweep removes at most this share of a provider's live records of one type, or at most
  * `SWEEP_CAP_MIN` of them (`completeSweep`); past both, it removes none of that type.

@@ -75,7 +75,11 @@ import {
 	unlinkAccount,
 } from "../../worker/objects/customers/groups"
 import { CustomerIngest } from "../../worker/objects/customers/ingest"
-import { ignoreRuleMatches, normalizeDomain } from "../../worker/objects/customers/ingest-live"
+import {
+	ignoreRuleMatches,
+	MAX_DOMAINS as MAX_ACCOUNT_DOMAINS,
+	normalizeDomain,
+} from "../../worker/objects/customers/ingest-live"
 import { regionOfAccountId as mapleRegionOf } from "../../worker/objects/customers/maple/adapter"
 import { configProblem as mapleConfigProblem } from "../../worker/objects/customers/maple/pull"
 import { CustomerProviders } from "../../worker/objects/customers/providers"
@@ -847,14 +851,20 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 						Effect.gen(function* () {
 							const account = yield* requireAccount(accountId)
 							// Added to the list as it is now, never replacing it: first, so the company is
-							// looked up by it; one already there moves first.
+							// looked up by it; one already there moves first. A full list is refused, not trimmed.
+							if (
+								newDomain !== null &&
+								!account.domains.includes(newDomain) &&
+								account.domains.length >= MAX_ACCOUNT_DOMAINS
+							) {
+								return yield* invalid(
+									`This customer already has ${MAX_ACCOUNT_DOMAINS} domains, the most it can have`,
+								)
+							}
 							const domains =
 								newDomain === null
 									? undefined
-									: [
-											newDomain,
-											...account.domains.filter((domain) => domain !== newDomain),
-										].slice(0, 20)
+									: [newDomain, ...account.domains.filter((domain) => domain !== newDomain)]
 							const domainsChanged =
 								domains !== undefined && domains.join(" ") !== account.domains.join(" ")
 							yield* db.run(
