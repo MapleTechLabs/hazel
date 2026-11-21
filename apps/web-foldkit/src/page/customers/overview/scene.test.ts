@@ -50,6 +50,11 @@ describe("Customers overview", () => {
 			Scene.expect(Scene.within(keyNumbers, Scene.role("button", { name: "MRR at risk" }))).toExist(),
 			Scene.expect(Scene.within(keyNumbers, Scene.text("$48,210"))).toExist(),
 			Scene.expect(Scene.role("button", { name: "Logo churn" })).toExist(),
+			Scene.expect(
+				Scene.role("img", {
+					name: "MRR by health: Healthy $35,980, At risk $8,140, Critical $3,310, Unknown $780",
+				}),
+			).toExist(),
 		)
 	})
 
@@ -60,6 +65,16 @@ describe("Customers overview", () => {
 			Scene.inside(attention, Scene.expectAll(Scene.all.role("listitem")).toHaveCount(6)),
 			Scene.expect(Scene.within(attention, Scene.text("Acme Robotics"))).toExist(),
 			Scene.expect(Scene.within(attention, Scene.role("link", { name: "View queue" }))).toExist(),
+		)
+	})
+
+	test("each This period link names the list it opens", () => {
+		Scene.scene(
+			pageScene(update, view, shared),
+			Scene.given(answered({ billing: true, signals: true })),
+			Scene.expect(Scene.role("link", { name: "View paying" })).toExist(),
+			Scene.expect(Scene.role("link", { name: "View trials" })).toExist(),
+			Scene.expect(Scene.role("link", { name: "View churned" })).toExist(),
 		)
 	})
 

@@ -265,6 +265,12 @@ const headline = (
 			active,
 		])
 	const atRiskPct = kpis.mrrMinor.value === 0 ? 0 : (kpis.atRiskMrrMinor.value / kpis.mrrMinor.value) * 100
+	const mrrByHealth = HEALTH_ORDER.map((status) => ({
+		key: status,
+		label: HEALTH_LABEL[status],
+		value: result.healthDistribution.find((row) => row.status === status)?.mrrMinor ?? 0,
+		fillClass: HEALTH_FILL[status],
+	}))
 	const risky = result.healthDistribution
 		.filter((row) => row.status === "at_risk" || row.status === "critical")
 		.reduce((sum, row) => sum + row.count, 0)
@@ -284,16 +290,12 @@ const headline = (
 			definition: "MRR of customers with an open high-severity risk signal.",
 			value: formatMoney(kpis.atRiskMrrMinor.value, currency),
 			valueClass: kpis.atRiskMrrMinor.value > 0 ? "text-warning-subtle-fg" : undefined,
-			detail: `${formatPct(atRiskPct, { digits: 0 })} of MRR · ${formatCount(risky)} customers at risk or critical`,
+			detail: `${formatPct(atRiskPct, { digits: 0 })} of MRR · ${formatCount(risky)} ${risky === 1 ? "customer" : "customers"} at risk or critical`,
 			footer: distributionBar(h, {
-				ariaLabel: "MRR by health",
+				// The bar is an image: its name says what each segment holds.
+				ariaLabel: `MRR by health: ${mrrByHealth.map((segment) => `${segment.label} ${formatMoney(segment.value, currency)}`).join(", ")}`,
 				className: "mt-1.5 h-1.5",
-				segments: HEALTH_ORDER.map((status) => ({
-					key: status,
-					label: HEALTH_LABEL[status],
-					value: result.healthDistribution.find((row) => row.status === status)?.mrrMinor ?? 0,
-					fillClass: HEALTH_FILL[status],
-				})),
+				segments: mrrByHealth,
 			}),
 		}),
 		active,
@@ -981,7 +983,7 @@ const lifecycleSection = (h: HtmlBuilder<Message>, model: Model, result: Result,
 			lifecycleColumn(h, {
 				title: "New accounts",
 				summary: "First seen in this period",
-				aside: link(h, hrefOf(customersListRoute(context.orgSlug)), "View all"),
+				aside: link(h, hrefOf(customersListRoute(context.orgSlug)), "View customers"),
 				rows: fresh.map((account) =>
 					listRow(h, context, {
 						accountId: account.id,
@@ -1037,14 +1039,14 @@ const lifecycleSection = (h: HtmlBuilder<Message>, model: Model, result: Result,
 		lifecycleColumn(h, {
 			title: "New customers",
 			summary: `${accountsLabel(result.recentNew.length)} · ${formatMoney(newMrr, result.currency, { signed: true })} MRR`,
-			aside: link(h, hrefOf(customersListRoute(context.orgSlug, "paying")), "View all"),
+			aside: link(h, hrefOf(customersListRoute(context.orgSlug, "paying")), "View paying"),
 			rows: result.recentNew.map((entry) => brief(entry, formatMoney(entry.mrrMinor, result.currency))),
 			empty: "No new paying customers.",
 		}),
 		lifecycleColumn(h, {
 			title: "New trials",
 			summary: `${accountsLabel(result.newTrials.length)} · ${formatCount(converted)} converted`,
-			aside: link(h, hrefOf(customersListRoute(context.orgSlug, "trialing")), "View all"),
+			aside: link(h, hrefOf(customersListRoute(context.orgSlug, "trialing")), "View trials"),
 			rows: result.newTrials.map((trial) =>
 				brief(
 					trial,
@@ -1060,7 +1062,7 @@ const lifecycleSection = (h: HtmlBuilder<Message>, model: Model, result: Result,
 		lifecycleColumn(h, {
 			title: "Churned",
 			summary: `${accountsLabel(result.recentChurn.length)}${lostMrr > 0 ? ` · ${formatMoney(-lostMrr, result.currency)} MRR` : ""}`,
-			aside: link(h, hrefOf(customersListRoute(context.orgSlug, "churned")), "View all"),
+			aside: link(h, hrefOf(customersListRoute(context.orgSlug, "churned")), "View churned"),
 			rows: result.recentChurn.map((entry) =>
 				brief(
 					entry,
