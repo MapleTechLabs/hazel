@@ -103,9 +103,10 @@ The hosted engines share steps 1 and 4 (without the T3 Code calls); their turns 
    thread with Hazel's instructions and the context, then records the thread, the member's item and
    a follower due now. A retried start with the same id launches once (`clientRequestId`).
 2. The object's alarm (`assistantTick`, `worker/objects/org/assistant.ts`) steps each due thread:
-   one `t3_thread_wait` of at most 20 s, an activity read from the follower's cursor, and the new or
-   changed items written in one transaction. Unchanged items are not rewritten, so nothing syncs
-   for them. The reply's text grows step by step: it streams in chunks, not tokens.
+   one `t3_thread_wait` of at most 1.5 s, an activity read from the follower's cursor, and the new
+   or changed items written in one transaction. Unchanged items are not rewritten, so nothing syncs
+   for them. T3 Code's wait answers early only when a run ends, so the short wait is what lets the
+   reply stream in: every step or two it reads the text written so far (chunks, not tokens).
 3. When T3 Code waits on a question, a `question` item carries it; `assistant.answer` responds over
    MCP. An approval cannot be given over MCP: the `approval` item links to T3 Code.
 4. When the run ends with nothing queued, the thread goes `idle` (or `error`) and the follower stops.
