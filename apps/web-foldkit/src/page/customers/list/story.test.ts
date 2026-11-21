@@ -1,3 +1,4 @@
+import type { CompanyProfile, ListColumn } from "@hazel/domain/customers"
 import { CustomerAccountId, CustomerSavedViewId, OrganizationId, UserId } from "@hazel/schema"
 import { DragAndDrop } from "@foldkit/ui"
 import { Option, Schema } from "effect"
@@ -11,6 +12,9 @@ import { Message } from "./message"
 import {
 	ALL_VIEW_KEY,
 	bestFilterToRemove,
+	countriesOf,
+	fundingStagesOf,
+	industriesOf,
 	isEdited,
 	matchesFilters,
 	type Model,
@@ -18,12 +22,14 @@ import {
 	nextSort,
 	orderedTabsOf,
 	ownerEntries,
+	sortLabel,
 	toggleColumn,
 	type ViewRow,
 	viewMenuEntries,
 	viewTabsOf,
 	visibleAccounts,
 } from "./model"
+import { chipOf } from "./controls"
 import { listKeyOf } from "./subscription"
 import { toCsv } from "./table"
 import { init, routeChanged, update, viewerOf } from "./update"
@@ -642,6 +648,191 @@ describe("customers list: CSV", () => {
 		expect(
 			toCsv([{ ...acme, mrrMinor: -500 }], ["mrr"], { membersById: new Map(), nowMs: NOW }),
 		).toContain("-5.00")
+	})
+})
+
+describe("customers list: company columns and filters", () => {
+	const profile = (fields: Partial<CompanyProfile>): CompanyProfile => ({
+		domain: "example.com",
+		name: null,
+		description: null,
+		industry: null,
+		subindustry: null,
+		employeeRange: null,
+		employeeCount: null,
+		headquarters: null,
+		foundedYear: null,
+		companyType: null,
+		operatingStatus: null,
+		stock: null,
+		funding: null,
+		revenue: null,
+		socials: [],
+		pages: [],
+		colors: [],
+		logoUrl: null,
+		...fields,
+	})
+	const place = (city: string | null, country: string | null, countryCode: string | null) => ({
+		street: null,
+		city,
+		region: null,
+		postalCode: null,
+		country,
+		countryCode,
+	})
+	const funding = (stage: string | null, rounds: ReadonlyArray<string> = []) => ({
+		stage,
+		totalUsd: null,
+		rounds: rounds.map((type) => ({ type, date: null, amountUsd: null })),
+	})
+	const enriched = [
+		{
+			...acme,
+			company: profile({
+				industry: "Manufacturing",
+				subindustry: "Industrial robots",
+				employeeRange: "51-200",
+				headquarters: place("Berlin", "Germany", "DE"),
+				funding: funding("series_a"),
+			}),
+		},
+		// No company on record.
+		brightfield,
+		{
+			...kestrel,
+			company: profile({
+				industry: "Technology",
+				employeeRange: "1001-5000",
+				headquarters: place("Austin", "United States", "us"),
+				funding: funding("seed"),
+			}),
+		},
+		{
+			...northwind,
+			company: profile({
+				industry: "Technology",
+				employeeRange: "11-50",
+				headquarters: place(null, "United Kingdom", "GB"),
+				// No stage: its latest round's.
+				funding: funding(null, ["series_b", "seed"]),
+			}),
+		},
+		// A profile that knows none of the four.
+		account(5, "Zephyr", { company: profile({}) }),
+	]
+	const model = run(loaded(), [Message.UpdatedAccounts({ accounts: enriched })])
+	const matches = (filters: Parameters<typeof matchesFilters>[0]) =>
+		enriched.filter((row) => matchesFilters(filters, row, viewer)).map((row) => row.name)
+	const csvOf = (column: ListColumn) =>
+		toCsv(enriched, [column], { membersById: new Map(), nowMs: NOW }).split("\n").slice(1)
+
+	test("the columns are opt-in: none is in the default columns", () => {
+		expect(model.draft.columns).not.toContain("industry")
+		const shown = run(model, [
+			Message.ToggledColumn({ column: "industry", isShown: true }),
+			Message.ToggledColumn({ column: "company_size", isShown: true }),
+		])
+		expect(shown.draft.columns.slice(-2)).toEqual(["industry", "company_size"])
+		expect(isEdited(shown)).toBe(true)
+	})
+
+	test("each column reads the profile; an account without one stays empty", () => {
+		expect(csvOf("industry")).toEqual(["Manufacturing", "", "Technology", "Technology", ""])
+		expect(csvOf("company_size")).toEqual(["51–200", "", '"1,001–5,000"', "11–50", ""])
+		expect(csvOf("headquarters")).toEqual([
+			'"Berlin, Germany"',
+			"",
+			'"Austin, United States"',
+			"United Kingdom",
+			"",
+		])
+		expect(csvOf("funding")).toEqual(["Series A", "", "Seed", "Series B", ""])
+	})
+
+	test("each company filter narrows, and drops accounts without the value", () => {
+		expect(matches({ industries: ["Technology"] })).toEqual(["Kestrel Systems", "Northwind Labs"])
+		expect(matches({ employeeRanges: ["51-200", "11-50"] })).toEqual(["Acme Robotics", "Northwind Labs"])
+		// The code matches whatever case the profile has it in.
+		expect(matches({ countryCodes: ["US", "DE"] })).toEqual(["Acme Robotics", "Kestrel Systems"])
+		expect(matches({ fundingStages: ["series_b"] })).toEqual(["Northwind Labs"])
+		expect(matches({ industries: ["Technology"], fundingStages: ["seed"] })).toEqual(["Kestrel Systems"])
+		expect(matches({ industries: [] })).toHaveLength(5)
+	})
+
+	test("the builder offers the values the accounts have; a chip names the pick and clears it", () => {
+		expect(industriesOf(enriched)).toEqual(["Manufacturing", "Technology"])
+		expect(countriesOf(enriched).map((country) => country.code)).toEqual(["DE", "GB", "US"])
+		expect(fundingStagesOf(enriched)).toEqual(["seed", "series_a", "series_b"])
+		// A saved pick no account has any more stays on offer, so it can be unpicked.
+		expect(industriesOf(enriched, ["Retail"])).toEqual(["Manufacturing", "Retail", "Technology"])
+		const applied = run(model, [
+			Message.PressedEditFilter({ field: "company_size" }),
+			Message.ChangedPendingFilters({ filters: { employeeRanges: ["1001-5000"] } }),
+			Message.AppliedFilter(),
+		])
+		expect(names(applied)).toEqual(["Kestrel Systems"])
+		expect(chipOf("company_size", applied.draft.filters, [], "USD")).toEqual({
+			field: "Company size",
+			operator: "is",
+			value: "1,001–5,000",
+		})
+		expect(chipOf("country", { countryCodes: ["DE", "GB"] }, [], "USD")).toMatchObject({
+			operator: "is any of",
+			value: "Germany, United Kingdom",
+		})
+		expect(chipOf("funding", { fundingStages: ["series_b"] }, [], "USD")?.value).toBe("Series B")
+		expect(run(applied, [Message.ClearedFilter({ field: "company_size" })]).draft.filters).toEqual({})
+	})
+
+	test("size sorts by headcount, largest first, with unknown sizes last either way", () => {
+		const bySize = run(model, [Message.ClickedSortHeader({ column: "company_size" })])
+		expect(bySize.draft.sort).toEqual({ column: "company_size", direction: "desc" })
+		expect(names(bySize)).toEqual([
+			"Kestrel Systems",
+			"Acme Robotics",
+			"Northwind Labs",
+			"Brightfield",
+			"Zephyr",
+		])
+		expect(names(run(bySize, [Message.ClickedSortHeader({ column: "company_size" })]))).toEqual([
+			"Northwind Labs",
+			"Acme Robotics",
+			"Kestrel Systems",
+			"Brightfield",
+			"Zephyr",
+		])
+	})
+
+	test("text columns sort A–Z first, unknowns last either way", () => {
+		const byIndustry = run(model, [Message.ClickedSortHeader({ column: "industry" })])
+		expect(byIndustry.draft.sort).toEqual({ column: "industry", direction: "asc" })
+		expect(names(byIndustry).slice(0, 3)).toEqual(["Acme Robotics", "Kestrel Systems", "Northwind Labs"])
+		expect(names(byIndustry).slice(3)).toEqual(["Brightfield", "Zephyr"])
+		const descending = run(byIndustry, [Message.ClickedSortHeader({ column: "industry" })])
+		expect(names(descending).slice(-2)).toEqual(["Brightfield", "Zephyr"])
+		expect(sortLabel(descending.draft.sort)).toBe("Industry Z–A")
+		// Funding sorts by stage, latest first: Series B, Series A, Seed.
+		const byFunding = run(model, [Message.ClickedSortHeader({ column: "funding" })])
+		expect(byFunding.draft.sort).toEqual({ column: "funding", direction: "desc" })
+		expect(names(byFunding)).toEqual([
+			"Northwind Labs",
+			"Acme Robotics",
+			"Kestrel Systems",
+			"Brightfield",
+			"Zephyr",
+		])
+		const byHq = run(model, [
+			Message.ClickedSortHeader({ column: "headquarters" }),
+			Message.ClickedSortHeader({ column: "headquarters" }),
+		])
+		expect(names(byHq)).toEqual([
+			"Northwind Labs",
+			"Acme Robotics",
+			"Kestrel Systems",
+			"Brightfield",
+			"Zephyr",
+		])
 	})
 })
 

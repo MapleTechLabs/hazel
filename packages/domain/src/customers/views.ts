@@ -4,6 +4,7 @@
  */
 import { UserId } from "@hazel/schema"
 import { Schema } from "effect"
+import { EmployeeRange } from "./company"
 import { HealthStatus, LifecycleStage } from "./enums"
 
 export const ListColumn = Schema.Literals([
@@ -19,6 +20,11 @@ export const ListColumn = Schema.Literals([
 	"open_signals",
 	"customer_since",
 	"tags",
+	// The enriched company profile (`docs/customers/enrichment.md`); opt-in, none is a default column.
+	"industry",
+	"company_size",
+	"headquarters",
+	"funding",
 ])
 export type ListColumn = typeof ListColumn.Type
 
@@ -51,6 +57,21 @@ export const ViewFilters = Schema.Struct({
 	),
 	tagsAny: Schema.optionalKey(
 		Schema.Array(Schema.String.check(Schema.isMaxLength(50))).check(Schema.isMaxLength(50)),
+	),
+	/** The enriched company's (`CompanyProfile`); an account without one matches none of these four. */
+	industries: Schema.optionalKey(
+		Schema.Array(Schema.String.check(Schema.isMaxLength(100))).check(Schema.isMaxLength(50)),
+	),
+	employeeRanges: Schema.optionalKey(Schema.Array(EmployeeRange).check(Schema.isMaxLength(8))),
+	/** Of the headquarters: ISO 3166-1 alpha-2, upper case. */
+	countryCodes: Schema.optionalKey(
+		Schema.Array(Schema.String.check(Schema.isMinLength(2), Schema.isMaxLength(2))).check(
+			Schema.isMaxLength(50),
+		),
+	),
+	/** As the source names them (`seed`, `series_b`, …). */
+	fundingStages: Schema.optionalKey(
+		Schema.Array(Schema.String.check(Schema.isMaxLength(50))).check(Schema.isMaxLength(20)),
 	),
 	minMrrMinor: Schema.optionalKey(Schema.Int),
 	maxMrrMinor: Schema.optionalKey(Schema.Int),

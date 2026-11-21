@@ -2,6 +2,13 @@ import * as Customers from "@hazel/domain/customers"
 import { DragAndDrop } from "@foldkit/ui"
 import { CustomerAccountId, CustomerSavedViewId, CustomerViewLayoutId, UserId } from "@hazel/schema"
 import { Array, Order, Schema } from "effect"
+import {
+	countryCodeOf,
+	countryNameOf,
+	fundingStageOf,
+	fundingStageRank,
+	headquartersLabel,
+} from "../../../customers/company"
 import { groupRows } from "../../../customers/groups"
 import { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
 import { lookOf, type ViewLook } from "../../../customers/ui/view-look"
@@ -52,6 +59,10 @@ export const FilterField = Schema.Literals([
 	"mrr",
 	"last_active",
 	"signals",
+	"industry",
+	"company_size",
+	"country",
+	"funding",
 ])
 export type FilterField = typeof FilterField.Type
 
@@ -290,6 +301,19 @@ const matchesOwner = (filters: Customers.ViewFilters, account: AccountRow, viewe
 		: (filters.ownedByMe === true && owner === viewer.userId) || ids.includes(owner)
 }
 
+/** The company fields the list shows and filters by; null when the account has no profile or no value. */
+export const industryOf = (account: AccountRow): string | null => account.company?.industry ?? null
+export const employeeRangeOf = (account: AccountRow): Customers.EmployeeRange | null =>
+	account.company?.employeeRange ?? null
+export const countryOf = (account: AccountRow): string | null =>
+	account.company === null ? null : countryCodeOf(account.company)
+export const fundingOf = (account: AccountRow): string | null =>
+	account.company === null ? null : fundingStageOf(account.company)
+
+/** A company filter: an account without the value (or without a profile) matches none. */
+const inKnownList = <A>(list: ReadonlyArray<A> | undefined, value: A | null) =>
+	list === undefined || list.length === 0 || (value !== null && list.includes(value))
+
 /** One account against a view's filters (`ViewFilters`: every field narrows). */
 export const matchesFilters = (
 	filters: Customers.ViewFilters,
@@ -301,6 +325,10 @@ export const matchesFilters = (
 		list === undefined || list.length === 0 || list.includes(value)
 	return (
 		matchesOwner(filters, account, viewer) &&
+		inKnownList(filters.industries, industryOf(account)) &&
+		inKnownList(filters.employeeRanges, employeeRangeOf(account)) &&
+		inKnownList(filters.countryCodes, countryOf(account)) &&
+		inKnownList(filters.fundingStages, fundingOf(account)) &&
 		inList(filters.lifecycleStages, account.lifecycleStage) &&
 		inList(filters.healthStatuses, account.healthStatus) &&
 		inList(filters.planNames, account.planName ?? "") &&
@@ -341,13 +369,15 @@ const STAGE_ORDER = { lead: 0, trialing: 1, active: 2, past_due: 3, churned: 4 }
 const nullsLast = (value: number | null, direction: "asc" | "desc") =>
 	value === null ? (direction === "asc" ? Infinity : -Infinity) : value
 
-/** The column's sort key; text columns compare as text. */
+const lowerOrNull = (text: string | null) => (text === null ? null : text.toLowerCase())
+
+/** The column's sort key; text columns compare as text, and a null key sorts last either way. */
 const sortKeyOf = (
 	column: Customers.ListColumn,
 	account: AccountRow,
 	ownerName: (id: UserId | null) => string,
 	direction: "asc" | "desc",
-): number | string => {
+): number | string | null => {
 	switch (column) {
 		case "name":
 			return account.name.toLowerCase()
@@ -373,6 +403,18 @@ const sortKeyOf = (
 			return account.firstSeenAtMs
 		case "tags":
 			return account.tags.length
+		case "industry":
+			return lowerOrNull(industryOf(account))
+		case "company_size": {
+			const range = employeeRangeOf(account)
+			return range === null ? null : Customers.EmployeeRange.literals.indexOf(range)
+		}
+		case "headquarters":
+			return lowerOrNull(account.company === null ? null : headquartersLabel(account.company))
+		case "funding": {
+			const stage = fundingOf(account)
+			return stage === null ? null : fundingStageRank(stage)
+		}
 	}
 }
 
@@ -387,17 +429,22 @@ export const sortAccounts = (
 		account,
 		key: sortKeyOf(sort.column, account, ownerName, sort.direction),
 	}))
-	const byKey = Order.make<(typeof keyed)[number]>((left, right) => {
+	type Entry = (typeof keyed)[number]
+	/** Unknowns after every known value, whichever the direction. */
+	const knownFirst = Order.mapInput(Order.Boolean, (entry: Entry) => entry.key === null)
+	const byKey = Order.make<Entry>((left, right) => {
+		if (left.key === null || right.key === null) return 0
 		const order =
 			typeof left.key === "string" && typeof right.key === "string"
 				? left.key.localeCompare(right.key)
 				: Number(left.key) - Number(right.key)
 		return order < 0 ? -1 : order > 0 ? 1 : 0
 	})
-	const byName = Order.mapInput(Order.String, (entry: (typeof keyed)[number]) => entry.account.name)
-	return Array.sort(keyed, Order.combine(sort.direction === "asc" ? byKey : Order.flip(byKey), byName)).map(
-		(entry) => entry.account,
-	)
+	const byName = Order.mapInput(Order.String, (entry: Entry) => entry.account.name)
+	return Array.sort(
+		keyed,
+		Order.combineAll([knownFirst, sort.direction === "asc" ? byKey : Order.flip(byKey), byName]),
+	).map((entry) => entry.account)
 }
 
 /**
@@ -486,7 +533,17 @@ export const nextSort = (sort: Customers.ViewSort, column: Customers.ListColumn)
 		? { column, direction: sort.direction === "asc" ? "desc" : "asc" }
 		: { column, direction: TEXT_COLUMNS.includes(column) ? "asc" : "desc" }
 
-const TEXT_COLUMNS: ReadonlyArray<Customers.ListColumn> = ["name", "owner", "plan", "stage"]
+const TEXT_COLUMNS: ReadonlyArray<Customers.ListColumn> = [
+	"name",
+	"owner",
+	"plan",
+	"stage",
+	"industry",
+	"headquarters",
+]
+
+/** Text columns whose sort reads as A–Z rather than low to high. */
+const ALPHABETICAL_COLUMNS: ReadonlyArray<Customers.ListColumn> = ["industry", "headquarters"]
 
 // COLUMNS
 
@@ -503,6 +560,10 @@ export const COLUMN_LABEL = {
 	open_signals: "Signals",
 	customer_since: "Since",
 	tags: "Tags",
+	industry: "Industry",
+	company_size: "Size",
+	headquarters: "HQ",
+	funding: "Funding",
 } as const satisfies Record<Customers.ListColumn, string>
 
 /** The picker's longer names. */
@@ -512,6 +573,8 @@ export const COLUMN_NAME = {
 	usage_trend: "Usage trend",
 	open_signals: "Open signals",
 	customer_since: "Customer since",
+	company_size: "Company size",
+	headquarters: "Headquarters",
 } as const satisfies Record<Customers.ListColumn, string>
 
 /** The name column always shows, first. */
@@ -561,6 +624,10 @@ const FIELD_KEYS = {
 	mrr: ["minMrrMinor", "maxMrrMinor", "payingOnly"],
 	last_active: ["lastActiveWithinDays", "inactiveForDays"],
 	signals: ["hasOpenRiskSignals"],
+	industry: ["industries"],
+	company_size: ["employeeRanges"],
+	country: ["countryCodes"],
+	funding: ["fundingStages"],
 } as const satisfies Record<FilterField, ReadonlyArray<keyof Customers.ViewFilters>>
 
 /** The filters without one field's keys. */
@@ -600,6 +667,35 @@ export const plansOf = (accounts: ReadonlyArray<AccountRow>): ReadonlyArray<stri
 
 export const tagsOf = (accounts: ReadonlyArray<AccountRow>): ReadonlyArray<string> =>
 	[...new Set(accounts.flatMap((account) => account.tags))].sort()
+
+const distinct = (values: ReadonlyArray<string | null>): ReadonlyArray<string> => [
+	...new Set(values.filter((value) => value !== null)),
+]
+
+/** The company filters' options: the values the accounts have, plus any the filter already holds. */
+export const industriesOf = (
+	accounts: ReadonlyArray<AccountRow>,
+	selected: ReadonlyArray<string> = [],
+): ReadonlyArray<string> =>
+	[...distinct([...accounts.map(industryOf), ...selected])].sort((a, b) => a.localeCompare(b))
+
+/** Countries by name: `{ code: "DE", name: "Germany" }`. */
+export const countriesOf = (
+	accounts: ReadonlyArray<AccountRow>,
+	selected: ReadonlyArray<string> = [],
+): ReadonlyArray<Readonly<{ code: string; name: string }>> =>
+	distinct([...accounts.map(countryOf), ...selected])
+		.map((code) => ({ code, name: countryNameOf(code) }))
+		.sort((a, b) => a.name.localeCompare(b.name))
+
+/** Funding stages as the source names them, ordered by their label. */
+export const fundingStagesOf = (
+	accounts: ReadonlyArray<AccountRow>,
+	selected: ReadonlyArray<string> = [],
+): ReadonlyArray<string> =>
+	[...distinct([...accounts.map(fundingOf), ...selected])].sort(
+		(a, b) => fundingStageRank(a) - fundingStageRank(b) || a.localeCompare(b),
+	)
 
 /** Adds or removes `value` from a list filter; an empty list drops the key. */
 export const toggleIn = <A>(list: ReadonlyArray<A> | undefined, value: A): ReadonlyArray<A> | undefined => {
@@ -653,6 +749,8 @@ export const sortEntries: ReadonlyArray<Menu.Entry> = SORT_COLUMNS.flatMap((colu
 
 export const sortLabel = (sort: Customers.ViewSort): string => {
 	if (sort.column === "name") return sort.direction === "asc" ? "Name A–Z" : "Name Z–A"
+	if (ALPHABETICAL_COLUMNS.includes(sort.column))
+		return `${COLUMN_NAME[sort.column]} ${sort.direction === "asc" ? "A–Z" : "Z–A"}`
 	return `${COLUMN_NAME[sort.column]}, ${sort.direction === "desc" ? "high to low" : "low to high"}`
 }
 
