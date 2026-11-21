@@ -190,14 +190,12 @@ const inputLine = (input: unknown): string | null => {
 	return pairs.length === 0 ? null : truncate(pairs.join(", "), 300)
 }
 
-/** An MCP tool result `{ content, structuredContent }` reads as its structured part alone. */
-const resultOf = (output: unknown): unknown =>
-	typeof output === "object" && output !== null && "structuredContent" in output
-		? output.structuredContent
-		: output
-
-const outputText = (output: unknown) => {
-	const result = resultOf(output)
+/** A tool's output as text; an MCP result `{ content, structuredContent }` reads as its structured part. */
+const outputText = (output: unknown): string => {
+	const result =
+		typeof output === "object" && output !== null && "structuredContent" in output
+			? output.structuredContent
+			: output
 	return result === undefined || result === null
 		? ""
 		: truncate(typeof result === "string" ? result : JSON.stringify(result, null, 2), 2000)
