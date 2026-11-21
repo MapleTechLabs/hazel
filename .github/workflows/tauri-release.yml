@@ -86,7 +86,9 @@ jobs:
               with:
                   projectPath: apps/desktop
                   # No tag in a build-only run: tauri-action then builds without touching a release.
-                  tagName: ${{ inputs.build_only && '' || 'v__VERSION__' }}
+                  # (`!build_only && tag || ''`, not `build_only && '' || tag`: an empty string is
+                  # falsy in an expression, so the latter always gives the tag.)
+                  tagName: ${{ !inputs.build_only && 'v__VERSION__' || '' }}
                   releaseName: "Hazel v__VERSION__"
                   releaseBody: "See the assets to download this version and install."
                   releaseDraft: true
