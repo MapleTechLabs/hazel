@@ -137,10 +137,21 @@ fn enable_press_and_hold() {
     unsafe { NSUserDefaults::standardUserDefaults().registerDefaults(&defaults) };
 }
 
-/// The CEF runtime. A debug build started with `HAZEL_DEVTOOLS_PORT` serves Chromium's DevTools
-/// protocol on that port (localhost only), for profiling; release builds never do.
+/// The CEF runtime. Chrome's background services the app has no use for are off: the
+/// optimization guide (hint fetches, model downloads, the on-device model service it starts a
+/// few minutes in) and the media router (Cast discovery, which scans the local network).
+/// A debug build started with `HAZEL_DEVTOOLS_PORT` serves Chromium's DevTools protocol on that
+/// port (localhost only), for profiling; release builds never do.
+#[cfg(target_os = "macos")]
 fn cef_runtime() -> tauri_runtime_cef::Cef {
-    let cef = tauri_runtime_cef::Cef::default();
+    let cef = tauri_runtime_cef::Cef::default().disable_features([
+        "OptimizationHints",
+        "OptimizationHintsFetching",
+        "OptimizationGuideModelDownloading",
+        "OptimizationGuideOnDeviceModel",
+        "MediaRouter",
+        "DialMediaRouteProvider",
+    ]);
     #[cfg(debug_assertions)]
     if let Some(port) = std::env::var("HAZEL_DEVTOOLS_PORT").ok().and_then(|port| port.parse().ok()) {
         return cef.remote_debugging(tauri_runtime_cef::RemoteDebugging::Port {
@@ -156,9 +167,12 @@ pub fn run() {
     #[cfg(target_os = "macos")]
     enable_press_and_hold();
 
-    // Chromium (CEF) instead of the system webview: WKWebView paces the page at 60 fps on 120 Hz
-    // displays, and the same engine on every OS.
+    // macOS: Chromium (CEF) instead of WKWebView, which paces the page at 60 fps on 120 Hz
+    // displays. Windows and Linux: the system webview (WebView2, WebKitGTK).
+    #[cfg(target_os = "macos")]
     let builder = tauri::Builder::default().runtime(cef_runtime());
+    #[cfg(not(target_os = "macos"))]
+    let builder = tauri::Builder::default().runtime(tauri_runtime_wry::Wry::default());
 
     // Must be the first plugin: a second launch (a `com.hazel.app://` link on Windows and
     // Linux) hands its arguments to the running app, and the deep-link plugin picks them up.
