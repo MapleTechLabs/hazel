@@ -101,8 +101,8 @@ It changes only when a month ends or an invoice is billed, never day to day, so 
 ## Revenue
 
 Per period: the paid invoices whose `paidAt` falls in it, each line's net amount by its class. An
-invoice Hazel holds no lines for (read before lines were stored, Autumn) counts its paid amount as
-**unclassified**. Credit notes and refunds are not read yet: revenue is gross of refunds.
+invoice Hazel holds no lines for (read before lines were stored, Autumn) counts its whole paid amount,
+tax included, as **unclassified**. Credit notes and refunds are not read yet: revenue is gross of refunds.
 
 ## Changing the rules
 

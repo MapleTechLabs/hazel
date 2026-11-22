@@ -310,7 +310,7 @@ const headline = (
 			id: "kpi-revenue",
 			label: "Revenue",
 			definition:
-				"Money collected in the period from paid invoices, by paid date: excluding tax, net of discounts. Credit notes and refunds are not deducted.",
+				"Money collected in the period from paid invoices, by paid date: excluding tax, net of discounts. Invoices without line detail count their full paid amount, tax included, as unclassified. Credit notes and refunds are not deducted.",
 			value: formatMoney(kpis.revenueMinor.value, currency),
 			delta: pctDelta(model, kpis.revenueMinor),
 			detail: comparing ?? "Collected in the period",
