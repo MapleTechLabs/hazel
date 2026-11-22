@@ -1173,7 +1173,6 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 		yield* db.run(SQLite.from(schema.customerSubscriptionsTable).select()),
 		new Map(accounts.map((account) => [account.id, account.mrrSource])),
 	)
-	const endedInvoicesBy = yield* endedPlanInvoices(billingBy)
 	// Today's movement alone is not history: one a compute wrote while billing was still importing
 	// (a partial MRR's jump) is replaced by the rebuilt series.
 	const recordedMovements = yield* db.run(
@@ -1193,49 +1192,58 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 	const trialing = Array.from({ length: days.length }, () => 0)
 	const movements: Array<Record<string, unknown>> = []
 	const mrrNow: Array<{ id: CustomerAccountId; mrrMinor: number }> = []
-	for (const account of accounts) {
-		const subs = billingBy.get(account.id)?.subscriptions ?? []
-		const unpaidSince = unpaidEndOf(subs, endedInvoicesBy.get(account.id) ?? [])?.since ?? null
-		// Kept movements not moved back yet: the days keep its MRR until `backdateUnpaidChurn` moves both.
-		const notMoved =
-			unpaidSince !== null &&
-			withMovements.has(account.id) &&
-			(lastMovement.get(account.id) ?? "") > dayOf(unpaidSince)
-		const series = mrrHistory(subs, currency, [before, ...days], notMoved ? null : unpaidSince)
-		const trial = new Uint8Array(days.length)
-		for (const sub of subs) {
-			if (sub.trialEndsAt === null || sub.startedAt === null) continue
-			const end =
-				sub.canceledAt !== null && sub.canceledAt < sub.trialEndsAt ? sub.canceledAt : sub.trialEndsAt
-			const from = Math.max(0, daysBetween(first, dayOf(sub.startedAt)))
-			const until = Math.min(days.length, daysBetween(first, dayOf(end)))
-			for (let index = from; index < until; index++) trial[index] = 1
+	// A chunk's invoices at a time: the table keeps every invoice ever issued.
+	for (const chunk of accountChunks(accounts)) {
+		const endedInvoicesBy = yield* endedPlanInvoices(
+			billingBy,
+			chunk.map((account) => account.id),
+		)
+		for (const account of chunk) {
+			const subs = billingBy.get(account.id)?.subscriptions ?? []
+			const unpaidSince = unpaidEndOf(subs, endedInvoicesBy.get(account.id) ?? [])?.since ?? null
+			// Kept movements not moved back yet: the days keep its MRR until `backdateUnpaidChurn` moves both.
+			const notMoved =
+				unpaidSince !== null &&
+				withMovements.has(account.id) &&
+				(lastMovement.get(account.id) ?? "") > dayOf(unpaidSince)
+			const series = mrrHistory(subs, currency, [before, ...days], notMoved ? null : unpaidSince)
+			const trial = new Uint8Array(days.length)
+			for (const sub of subs) {
+				if (sub.trialEndsAt === null || sub.startedAt === null) continue
+				const end =
+					sub.canceledAt !== null && sub.canceledAt < sub.trialEndsAt
+						? sub.canceledAt
+						: sub.trialEndsAt
+				const from = Math.max(0, daysBetween(first, dayOf(sub.startedAt)))
+				const until = Math.min(days.length, daysBetween(first, dayOf(end)))
+				for (let index = from; index < until; index++) trial[index] = 1
+			}
+			for (let index = 0; index < days.length; index++) {
+				mrr[index] += series[index + 1]
+				if (series[index + 1] > 0) paying[index]++
+				trialing[index] += trial[index]
+			}
+			if (withMovements.has(account.id)) continue
+			let everPaid = false
+			for (let index = 1; index < series.length; index++) {
+				const from = series[index - 1]
+				const to = series[index]
+				if (from > 0) everPaid = true
+				if (from === to) continue
+				movements.push({
+					accountId: account.id,
+					day: days[index - 1],
+					type: movementType(from, to, everPaid),
+					deltaMinor: to - from,
+					fromMrrMinor: from,
+					toMrrMinor: to,
+					currency,
+				})
+			}
+			const current = series[series.length - 1]
+			if (current === account.mrrMinor) continue
+			mrrNow.push({ id: account.id, mrrMinor: current })
 		}
-		for (let index = 0; index < days.length; index++) {
-			mrr[index] += series[index + 1]
-			if (series[index + 1] > 0) paying[index]++
-			trialing[index] += trial[index]
-		}
-		if (withMovements.has(account.id)) continue
-		let everPaid = false
-		for (let index = 1; index < series.length; index++) {
-			const from = series[index - 1]
-			const to = series[index]
-			if (from > 0) everPaid = true
-			if (from === to) continue
-			movements.push({
-				accountId: account.id,
-				day: days[index - 1],
-				type: movementType(from, to, everPaid),
-				deltaMinor: to - from,
-				fromMrrMinor: from,
-				toMrrMinor: to,
-				currency,
-			})
-		}
-		const current = series[series.length - 1]
-		if (current === account.mrrMinor) continue
-		mrrNow.push({ id: account.id, mrrMinor: current })
 	}
 	const users = yield* activeCounts(first, today)
 	const health = new Map(

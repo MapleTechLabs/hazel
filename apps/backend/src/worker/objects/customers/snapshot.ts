@@ -396,8 +396,9 @@ export const billingByAccount = (
 /** The Stripe plan invoices of the accounts whose paid plans all ended, for `unpaidEndOf`. */
 export const endedPlanInvoices = Effect.fnUntraced(function* (
 	billingBy: ReturnType<typeof billingByAccount>,
+	accountIds: ReadonlyArray<CustomerAccountId>,
 ) {
-	const ids = [...billingBy].flatMap(([id, billing]) => (endedPaying(billing.subscriptions) ? [id] : []))
+	const ids = accountIds.filter((id) => endedPaying(billingBy.get(id)?.subscriptions ?? []))
 	if (ids.length === 0) return new Map<CustomerAccountId, Array<EndedPlanInvoice>>()
 	const db = yield* Database.Database
 	const invoices = yield* db.run(
@@ -725,7 +726,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 		subscriptions,
 		new Map(accounts.map((account) => [account.id, account.mrrSource])),
 	)
-	const endedInvoicesBy = yield* endedPlanInvoices(billingBy)
+	const endedInvoicesBy = yield* endedPlanInvoices(billingBy, ids)
 	const churnSignalsBy = groupBy(
 		yield* db.run(
 			SQLite.from(schema.customerSignalsTable)
