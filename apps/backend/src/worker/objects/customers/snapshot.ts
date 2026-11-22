@@ -77,7 +77,7 @@ export interface AccountSnapshot {
 /**
  * What a rule evaluates on each account. An environment template reads the account's own usage and
  * billing, under the customer's stage, scope and value (a free dev environment of a paying customer
- * is still covered); null where the primary's signal stands for the account.
+ * is still covered, by the customer's subscriptions too); null where the primary's signal stands for the account.
  */
 export const evaluatedFor = (accounts: ReadonlyArray<AccountSnapshot>) => {
 	const byId = new Map(accounts.map((account) => [account.stored.id, account]))
@@ -89,7 +89,7 @@ export const evaluatedFor = (accounts: ReadonlyArray<AccountSnapshot>) => {
 		return {
 			...(customer ?? account.facts),
 			metrics: account.facts.metrics,
-			subscriptions: account.facts.subscriptions,
+			ownSubscriptions: account.facts.subscriptions,
 		}
 	}
 }

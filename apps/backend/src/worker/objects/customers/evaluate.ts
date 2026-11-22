@@ -495,7 +495,7 @@ const forecastOf = (
 		spread === 0
 			? 0
 			: span.reduce((sum, point) => sum + (point.x - meanX) * (point.y - meanY), 0) / spread
-	const periodEnd = facts.subscriptions
+	const periodEnd = (facts.ownSubscriptions ?? facts.subscriptions)
 		.flatMap((sub) =>
 			sub.currentPeriodEnd === null || sub.currentPeriodEnd <= org.now
 				? []

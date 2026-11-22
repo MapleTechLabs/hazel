@@ -21,7 +21,7 @@ import type { CustomerAccountId, CustomerSignalRuleId } from "@hazel/schema"
 import { Clock, Effect } from "effect"
 import { scoreAll } from "./compute"
 import { evaluate, missingSources, type RuleInput } from "./evaluate"
-import { priorityScore, valueOf } from "./lifecycle"
+import { limitSignalTarget, priorityScore, valueOf } from "./lifecycle"
 import { evaluatedFor, groupChunks, loadAccounts, loadBase, type SnapshotBase } from "./snapshot"
 
 const MAX_CHUNKS = 8
@@ -102,14 +102,20 @@ export const ruleDryRun = Effect.fn("Customers.ruleDryRun")(function* (
 			top.splice(10)
 		}
 	}
-	const existing =
+	const stored =
 		ruleId === undefined
 			? []
 			: yield* db.run(
 					SQLite.from(schema.customerSignalsTable)
-						.select("accountId", "status")
+						.select("ruleId", "accountId", "status", "evidence")
 						.where(($) => [$.ruleId.eq(ruleId), $.closedAt.isNull()]),
 				)
+	// Where compute would have them: a limit signal still on the primary moves to its environment.
+	const held = new Set(stored.map((signal) => `${signal.ruleId}:${signal.accountId}`))
+	const existing = stored.map((signal) => ({
+		...signal,
+		accountId: limitSignalTarget(signal, evaluated, held) ?? signal.accountId,
+	}))
 	const queued = new Set(
 		existing
 			.filter(

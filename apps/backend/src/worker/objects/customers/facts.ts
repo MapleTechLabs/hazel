@@ -75,6 +75,8 @@ export interface AccountFacts {
 	readonly health: ReadonlyArray<HealthPoint>
 	/** Open (not closed, not deleted) support issues with SLA clocks. */
 	readonly openIssueSlas: ReadonlyArray<IssueSlaFacts>
+	/** On an environment template's facts: its own subscriptions, whose period the forecast ends at. */
+	readonly ownSubscriptions?: ReadonlyArray<schema.CustomerSubscription>
 }
 
 export interface OrgFacts {

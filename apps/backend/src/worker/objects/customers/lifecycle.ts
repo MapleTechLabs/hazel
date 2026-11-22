@@ -32,6 +32,24 @@ export const priorityScore = (severity: SignalSeverity, valueMinor: number, open
 export const valueOf = (account: Pick<schema.CustomerAccount, "mrrMinor" | "trialListMrrMinor">) =>
 	account.mrrMinor > 0 ? account.mrrMinor : (account.trialListMrrMinor ?? 0)
 
+/**
+ * Where a limit signal from when these sat on the primary moves: the live environment its evidence
+ * names, unless that one holds an episode of the rule (`held`: `ruleId:accountId`).
+ */
+export const limitSignalTarget = (
+	signal: Pick<schema.CustomerSignal, "ruleId" | "accountId" | "evidence">,
+	liveIds: ReadonlySet<string>,
+	held: ReadonlySet<string>,
+) => {
+	const target = signal.evidence._tag === "limit" ? signal.evidence.accountId : undefined
+	return target !== undefined &&
+		target !== signal.accountId &&
+		liveIds.has(target) &&
+		!held.has(`${signal.ruleId}:${target}`)
+		? target
+		: null
+}
+
 /** "Worse by a full step" than the evidence a human acted on. */
 export const isWorse = (evidence: SignalEvidence, acted: SignalEvidence | null) =>
 	evidence.step > (acted?.step ?? 0)

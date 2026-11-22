@@ -40,7 +40,7 @@ import { publishChannelCustomersAfterCompute } from "./channels"
 import { evaluate, type Match } from "./evaluate"
 import type { AccountFacts } from "./facts"
 import { type HealthInputs, scoreHealth } from "./health"
-import { type LifecycleEvent, transition, valueOf, wakeDue } from "./lifecycle"
+import { type LifecycleEvent, limitSignalTarget, transition, valueOf, wakeDue } from "./lifecycle"
 import {
 	baselineConnections,
 	clearBaselineFor,
@@ -529,17 +529,8 @@ const moveLimitSignals = Effect.fn("Customers.moveLimitSignals")(function* (snap
 	const db = yield* Database.Database
 	const ids = new Set(snapshot.accounts.map((account) => account.stored.id))
 	const held = new Set(snapshot.signals.map((signal) => `${signal.ruleId}:${signal.accountId}`))
-	const targetOf = (signal: schema.CustomerSignal) => {
-		const target = signal.evidence._tag === "limit" ? signal.evidence.accountId : undefined
-		return target !== undefined &&
-			target !== signal.accountId &&
-			ids.has(target) &&
-			!held.has(`${signal.ruleId}:${target}`)
-			? target
-			: null
-	}
 	const moves = snapshot.signals.flatMap((signal) => {
-		const target = targetOf(signal)
+		const target = limitSignalTarget(signal, ids, held)
 		return target === null ? [] : [{ signal, target }]
 	})
 	if (moves.length === 0) return snapshot.signals
@@ -557,7 +548,6 @@ const moveLimitSignals = Effect.fn("Customers.moveLimitSignals")(function* (snap
 						SQLite.update(schema.customerEventsTable)
 							.set({ accountId: target })
 							.where(($) => [
-								$.accountId.eq(signal.accountId),
 								$.provider.eq("hazel"),
 								SQLite.jsonExtract($.data, "$.signalId", SQLite.nullable(SQLite.text)).eq(
 									signal.id,
