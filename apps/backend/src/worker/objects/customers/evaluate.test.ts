@@ -626,6 +626,28 @@ describe("signal evaluation", () => {
 		expect(run("churned", { ...churned, subscriptions: [trial] })).toEqual(noMatch)
 	})
 
+	it("churned: a churn dated back to its failed invoice is announced from the plan's end", () => {
+		const ago = (days: number) => new Date(NOW.getTime() - days * 86_400_000)
+		const backdated = (endedDaysAgo: number): FactsInput => ({
+			account: { lifecycleStage: "churned", mrrMinor: 0, churnedAt: ago(90) },
+			movements: [{ type: "churn", fromMrrMinor: 3_900, toMrrMinor: 0, day: addDays(TODAY, -90) }],
+			subscriptions: [{ status: "canceled", mrrMinor: 3_900, canceledAt: ago(endedDaysAgo) }],
+		})
+		expect(match("churned", backdated(3)).reason).toBe(`Lost ${formatMoney(3_900, "usd")}/mo 3 days ago`)
+		expect(run("churned", backdated(20))).toEqual({ _tag: "NoMatch", reason: "Below threshold" })
+		// A free plan ending later says nothing about when the paid one did.
+		const freeLater = backdated(20)
+		expect(
+			run("churned", {
+				...freeLater,
+				subscriptions: [
+					...freeLater.subscriptions!,
+					{ status: "canceled", mrrMinor: 0, canceledAt: ago(1) },
+				],
+			}),
+		).toEqual({ _tag: "NoMatch", reason: "Below threshold" })
+	})
+
 	it("churned: the customer's last entry, for the window after it churned", () => {
 		const churned = (days: number, input: FactsInput = {}): FactsInput => ({
 			account: {

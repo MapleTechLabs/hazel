@@ -699,25 +699,32 @@ const churned =
 		// Before this compute's movement is loaded, the day it ended: a scheduled cancellation's period
 		// end once passed (an immediate one keeps a later period end it never reached), else
 		// `canceledAt`.
-		const ended = facts.subscriptions
-			.flatMap((sub) =>
-				sub.canceledAt === null
-					? []
-					: [
-							sub.cancelAtPeriodEnd &&
-							sub.currentPeriodEnd !== null &&
-							sub.currentPeriodEnd > sub.canceledAt &&
-							sub.currentPeriodEnd <= org.now
-								? sub.currentPeriodEnd
-								: sub.canceledAt,
-						],
-			)
-			.reduce<Date>((latest, date) => (date > latest ? date : latest), churnedAt)
+		const ends = facts.subscriptions.flatMap((sub) =>
+			sub.canceledAt === null
+				? []
+				: [
+						{
+							at:
+								sub.cancelAtPeriodEnd &&
+								sub.currentPeriodEnd !== null &&
+								sub.currentPeriodEnd > sub.canceledAt &&
+								sub.currentPeriodEnd <= org.now
+									? sub.currentPeriodEnd
+									: sub.canceledAt,
+							paid: pays(sub),
+						},
+					],
+		)
+		const ended = ends.reduce<Date>((latest, end) => (end.at > latest ? end.at : latest), churnedAt)
 		// Announced once: it takes a payment or a new paid plan before this end to be a new churn.
 		const notified = facts.churnNotifiedAt
 		if (!facts.churnSignalOpen && notified !== null && !renewedBetween(facts, notified, ended))
 			return "Below threshold"
-		const churnDay = churn?.day ?? dayOf(ended)
+		// A churn dated back to its failed invoice is announced from when the paid plan actually ended.
+		const churnDay = ends
+			.filter((end) => end.paid)
+			.map((end) => dayOf(end.at))
+			.reduce((latest, day) => (day > latest ? day : latest), churn?.day ?? dayOf(ended))
 		const days = daysBetween(churnDay, org.today)
 		if (days >= config.windowDays) return "Below threshold"
 		const canceled = [...facts.subscriptions]
