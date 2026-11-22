@@ -150,7 +150,12 @@ const own = Subscription.make<Input, Message>()((entry) => ({
 								const channel = rows[0]
 								return Message.UpdatedSettingsChannel({
 									channel: channel
-										? { id: channel.id, name: channel.name, icon: channel.icon ?? null }
+										? {
+												id: channel.id,
+												name: channel.name,
+												type: channel.type,
+												icon: channel.icon ?? null,
+											}
 										: null,
 								})
 							},

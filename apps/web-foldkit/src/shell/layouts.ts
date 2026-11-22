@@ -111,6 +111,7 @@ export const channelSettingsLayout = <Message>(
 												[
 													channelIcon(h, {
 														icon: options.channel?.icon ?? null,
+														isPrivate: options.channel?.type === "private",
 														links: options.links,
 														size: "md",
 														surface: "secondary",

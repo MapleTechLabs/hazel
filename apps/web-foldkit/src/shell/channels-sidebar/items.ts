@@ -241,6 +241,7 @@ export const discoverableItem = <M>(
 	h: HtmlBuilder<M>,
 	channel: DiscoverableChannel,
 	context: ItemContext,
+	links: ChannelLinks,
 ): Html => {
 	const href = chatHref(context, channel.id)
 	return sidebarItem(h, { className: "opacity-50 hover:opacity-100 [&:has(.active)]:opacity-100" }, [
@@ -251,7 +252,7 @@ export const discoverableItem = <M>(
 				isActive: context.activeChannelId === channel.id,
 				activeClassName: `active ${CHANNEL_ACTIVE}`,
 			},
-			[channelIcon(h, { icon: channel.icon, surface: "sidebar" }), label(h, [channel.name])],
+			[channelIcon(h, { icon: channel.icon, links, surface: "sidebar" }), label(h, [channel.name])],
 		),
 	])
 }

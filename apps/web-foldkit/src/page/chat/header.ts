@@ -75,6 +75,7 @@ const threadTitle = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs, channel: Channe
 						[
 							channelIcon(h, {
 								icon: inputs.parentChannel.icon,
+								isPrivate: inputs.parentChannel.type === "private",
 								links: inputs.parentLinks ?? NO_CHANNEL_LINKS,
 								className: "size-4",
 							}),

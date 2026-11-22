@@ -159,6 +159,7 @@ export const joinChannelPage = (
 												[
 													channelIcon(h, {
 														icon: channel.icon,
+														isPrivate: channel.type === "private",
 														links: channelLinksOf(shared, channel.id),
 														className: "text-muted-fg",
 													}),

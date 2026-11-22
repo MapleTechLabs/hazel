@@ -448,7 +448,7 @@ const customersSection = <M>(
 }
 
 /** `DiscoverableChannels`: shown while the user is in fewer than three channels. */
-const discoverSection = <M>(h: HtmlBuilder<M>, model: Model, context: ItemContext): Html[] => {
+const discoverSection = <M>(h: HtmlBuilder<M>, model: Model, context: SectionsContext<M>): Html[] => {
 	const memberCount = model.memberChannelIds?.length ?? 0
 	if (model.discoverableChannels.length === 0 || memberCount >= 3) return []
 	return [
@@ -461,7 +461,9 @@ const discoverSection = <M>(h: HtmlBuilder<M>, model: Model, context: ItemContex
 				),
 				...model.discoverableChannels
 					.slice(0, MAX_DISCOVERABLE)
-					.map((channel) => discoverableItem(h, channel, context)),
+					.map((channel) =>
+						discoverableItem(h, channel, context, linksFor(context.channelLinks, channel.id)),
+					),
 				...(model.discoverableChannels.length > MAX_DISCOVERABLE
 					? [
 							h.button(
