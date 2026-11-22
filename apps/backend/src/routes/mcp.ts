@@ -43,7 +43,8 @@ import {
 } from "@hazel/schema"
 import { isActiveContentType, MAX_ATTACHMENT_SIZE } from "@hazel/domain/http"
 import { uuidv7 as randomUUIDv7 } from "@hazel/domain/uuid"
-import { Context, DateTime, Effect, Option, Schema, Stream } from "effect"
+import { Context, DateTime, Effect, Option, Result, Schema, Stream } from "effect"
+import { Base64 } from "effect/encoding"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import type { HazelRpcTag } from "../rpc/dispatch"
 import { resolveTarget } from "../rpc/routing"
@@ -473,13 +474,8 @@ const startUpload = (ctx: ToolContext, channelId: ChannelId, fileName: string, f
 		return id
 	})
 
-const decodeBase64 = (value: string) => {
-	try {
-		return Option.some(Uint8Array.from(atob(value.replace(/\s+/g, "")), (char) => char.charCodeAt(0)))
-	} catch {
-		return Option.none<Uint8Array<ArrayBuffer>>()
-	}
-}
+/** Either Base64 alphabet, padded or not, and wrapped across lines: what MCP clients send varies. */
+const decodeBase64 = (value: string) => Result.getSuccess(Base64.decodeLenient(value.replace(/\s+/g, "")))
 
 const PRESENCE = ["online", "idle", "dnd", "invisible"] as const
 /** Names agents may still use for the statuses: `away` is Idle, `busy` is Do Not Disturb. */

@@ -34,7 +34,7 @@
 		"rss-parser": "^3.13.0"
 	},
 	"devDependencies": {
-		"@types/bun": "1.4.3",
+		"@types/bun": "1.4.5",
 		"@types/he": "^1.2.3",
 		"typescript": "catalog:tooling"
 	}

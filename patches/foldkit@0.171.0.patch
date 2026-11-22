@@ -1,5 +1,5 @@
 diff --git a/dist/dom/dom.d.ts b/dist/dom/dom.d.ts
-index af18b344c2c8e0dc39f564cae0c23064160adb75..caca1acdd7f45bf37e49bef26295990677bab5e4 100644
+index 643a4ed95bf38c81789edc4e8afdba784b7a6efd..549b1a18d8792541cedd6569055e2a58f3f04825 100644
 --- a/dist/dom/dom.d.ts
 +++ b/dist/dom/dom.d.ts
 @@ -1,5 +1,6 @@
@@ -9,7 +9,7 @@ index af18b344c2c8e0dc39f564cae0c23064160adb75..caca1acdd7f45bf37e49bef262959906
  /**
   * Focuses an element matching the given selector after the next render has
   * committed.
-@@ -222,8 +223,7 @@ export declare const scrollIntoViewIfNotVisible: (selector: string, options?: Re
+@@ -229,8 +230,7 @@ export declare const scrollIntoViewIfNotVisible: (selector: string, options?: Re
      block?: ScrollLogicalPosition;
      when?: 'Paint' | 'Commit';
  }>) => Effect.Effect<void, ElementNotFound>;
@@ -19,17 +19,8 @@ index af18b344c2c8e0dc39f564cae0c23064160adb75..caca1acdd7f45bf37e49bef262959906
  /**
   * Focuses the next or previous focusable element in the document relative to the element matching the given selector.
   * Fails with `ElementNotFound` if the selector does not match an `HTMLElement`.
-diff --git a/dist/dom/dom.d.ts.map b/dist/dom/dom.d.ts.map
-index 9bbc2998a02d6dc9cb3f172d3a84908e46638f00..30be4180ef1888c54c12382a28c757be0ec2a050 100644
---- a/dist/dom/dom.d.ts.map
-+++ b/dist/dom/dom.d.ts.map
-@@ -1 +1 @@
--{"version":3,"file":"dom.d.ts","sourceRoot":"","sources":["../../src/dom/dom.ts"],"names":[],"mappings":"AAAA,OAAO,EAEL,MAAM,EAOP,MAAM,QAAQ,CAAA;AAIf,OAAO,EAAE,eAAe,EAAE,MAAM,YAAY,CAAA;AA2Q5C;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;GA+CG;AACH,eAAO,MAAM,KAAK,aACN,MAAM,YACN,QAAQ,CAAC;IAAE,aAAa,CAAC,EAAE,OAAO,CAAC;IAAC,aAAa,CAAC,EAAE,OAAO,CAAA;CAAE,CAAC,KACvE,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAQlC,CAAA;AAEJ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;GA8BG;AACH,eAAO,MAAM,UAAU,aACX,MAAM,YACN,QAAQ,CAAC;IACjB,aAAa,CAAC,EAAE,MAAM,CAAA;IACtB,OAAO,CAAC,EAAE,OAAO,CAAA;IACjB,uBAAuB,CAAC,EAAE,aAAa,CAAC,MAAM,CAAC,CAAA;CAChD,CAAC,KACD,MAAM,CAAC,MAAM,CAAC,OAAO,EAAE,eAAe,CA4FrC,CAAA;AA4CJ;;;;;;;;;;;;;;;;;GAiBG;AACH,eAAO,MAAM,WAAW,aACZ,MAAM,KACf,MAAM,CAAC,MAAM,CAAC,OAAO,EAAE,eAAe,CAQrC,CAAA;AA0DJ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;GAiCG;AACH,eAAO,MAAM,sBAAsB,OAAQ,MAAM,KAAG,MAAM,CAAC,MAAM,CAAC,OAAO,CAOrE,CAAA;AAEJ;;;;;;;;GAQG;AACH,eAAO,MAAM,YAAY,aACb,MAAM,KACf,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAKlC,CAAA;AAEJ;;;;;;;;;;;;;;GAcG;AACH,eAAO,MAAM,cAAc,aACf,MAAM,YACN,QAAQ,CAAC;IAAE,KAAK,CAAC,EAAE,qBAAqB,CAAA;CAAE,CAAC,KACpD,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAKlC,CAAA;AAEJ;;;;;;;;;;;;;;;;;;;;GAoBG;AACH,eAAO,MAAM,wBAAwB,aACzB,MAAM,YACN,QAAQ,CAAC;IAAE,KAAK,CAAC,EAAE,qBAAqB,CAAA;CAAE,CAAC,KACpD,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAKlC,CAAA;AAcJ;;;;;;;;;;;;;;;;;;;;;;;GAuBG;AACH,eAAO,MAAM,0BAA0B,aAC3B,MAAM,YACN,QAAQ,CAAC;IACjB,KAAK,CAAC,EAAE,qBAAqB,CAAA;IAC7B,IAAI,CAAC,EAAE,OAAO,GAAG,QAAQ,CAAA;CAC1B,CAAC,KACD,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAuBlC,CAAA;AAEJ,yEAAyE;AACzE,MAAM,MAAM,cAAc,GAAG,MAAM,GAAG,UAAU,CAAA;AAEhD;;;;;;;;GAQG;AACH,eAAO,MAAM,YAAY,aACb,MAAM,aACL,cAAc,KACxB,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CA+BlC,CAAA"}
-\ No newline at end of file
-+{"version":3,"file":"dom.d.ts","sourceRoot":"","sources":["../../src/dom/dom.ts"],"names":[],"mappings":"AAAA,OAAO,EAEL,MAAM,EAOP,MAAM,QAAQ,CAAA;AAIf,OAAO,EAAE,eAAe,EAAE,MAAM,YAAY,CAAA;AAG5C,OAAO,EACL,KAAK,cAAc,EAIpB,MAAM,gBAAgB,CAAA;AAyQvB;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;GA+CG;AACH,eAAO,MAAM,KAAK,aACN,MAAM,YACN,QAAQ,CAAC;IAAE,aAAa,CAAC,EAAE,OAAO,CAAC;IAAC,aAAa,CAAC,EAAE,OAAO,CAAA;CAAE,CAAC,KACvE,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAclC,CAAA;AAEJ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;GA8BG;AACH,eAAO,MAAM,UAAU,aACX,MAAM,YACN,QAAQ,CAAC;IACjB,aAAa,CAAC,EAAE,MAAM,CAAA;IACtB,OAAO,CAAC,EAAE,OAAO,CAAA;IACjB,uBAAuB,CAAC,EAAE,aAAa,CAAC,MAAM,CAAC,CAAA;CAChD,CAAC,KACD,MAAM,CAAC,MAAM,CAAC,OAAO,EAAE,eAAe,CAcrC,CAAA;AA+IJ;;;;;;;;;;;;;;;;;GAiBG;AACH,eAAO,MAAM,WAAW,aACZ,MAAM,KACf,MAAM,CAAC,MAAM,CAAC,OAAO,EAAE,eAAe,CAYtC,CAAA;AA0DH;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;GAiCG;AACH,eAAO,MAAM,sBAAsB,OAAQ,MAAM,KAAG,MAAM,CAAC,MAAM,CAAC,OAAO,CAWrE,CAAA;AAEJ;;;;;;;;GAQG;AACH,eAAO,MAAM,YAAY,aACb,MAAM,KACf,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAQlC,CAAA;AAEJ;;;;;;;;;;;;;;GAcG;AACH,eAAO,MAAM,cAAc,aACf,MAAM,YACN,QAAQ,CAAC;IAAE,KAAK,CAAC,EAAE,qBAAqB,CAAA;CAAE,CAAC,KACpD,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAIlC,CAAA;AAEJ;;;;;;;;;;;;;;;;;;;;GAoBG;AACH,eAAO,MAAM,wBAAwB,aACzB,MAAM,YACN,QAAQ,CAAC;IAAE,KAAK,CAAC,EAAE,qBAAqB,CAAA;CAAE,CAAC,KACpD,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAIlC,CAAA;AA0BJ;;;;;;;;;;;;;;;;;;;;;;;GAuBG;AACH,eAAO,MAAM,0BAA0B,aAC3B,MAAM,YACN,QAAQ,CAAC;IACjB,KAAK,CAAC,EAAE,qBAAqB,CAAA;IAC7B,IAAI,CAAC,EAAE,OAAO,GAAG,QAAQ,CAAA;CAC1B,CAAC,KACD,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAgBlC,CAAA;AAoBJ,YAAY,EAAE,cAAc,EAAE,MAAM,gBAAgB,CAAA;AAEpD;;;;;;;;GAQG;AACH,eAAO,MAAM,YAAY,aACb,MAAM,aACL,cAAc,KACxB,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAQlC,CAAA"}
-\ No newline at end of file
 diff --git a/dist/dom/dom.js b/dist/dom/dom.js
-index d45098dbb9bafbb75a8d13b7e425204fb974f596..8e8519310d1518979aa6966269ae43636be24b3b 100644
+index bf4f7d73d27f2e70a2892d10bff0ca18b4f8320a..bba8f7c97705cef8e136aeb470175f14d57e970b 100644
 --- a/dist/dom/dom.js
 +++ b/dist/dom/dom.js
 @@ -4,6 +4,7 @@ import { DialogRuntime } from './dialogRuntime.js';
@@ -40,7 +31,7 @@ index d45098dbb9bafbb75a8d13b7e425204fb974f596..8e8519310d1518979aa6966269ae4363
  const BASE_DIALOG_Z_INDEX = 2147483600;
  let openDialogCount = 0;
  const dialogHygieneById = new Map();
-@@ -217,11 +218,13 @@ const queryHTMLElement = (selector) => Effect.suspend(() => {
+@@ -209,11 +210,13 @@ const queryHTMLElement = (selector) => Effect.suspend(() => {
   */
  export const focus = (selector, options) => Effect.gen(function* () {
      yield* afterCommit;
@@ -59,22 +50,22 @@ index d45098dbb9bafbb75a8d13b7e425204fb974f596..8e8519310d1518979aa6966269ae4363
  });
  /**
   * Opens a dialog element using `show()` with high z-index, focus trapping,
-@@ -256,6 +259,14 @@ export const focus = (selector, options) => Effect.gen(function* () {
-  */
- export const showDialog = (selector, options) => Effect.gen(function* () {
-     yield* afterCommit;
+@@ -261,6 +264,14 @@ export const showDialog = (selector, options) => Effect.gen(function* () {
+     if (!isRuntimeActive()) {
+         return false;
+     }
 +    return yield* dialogOnTarget(selector, dom => dom.showDialog(selector, {
 +        isModal: options?.isModal ?? false,
 +        ...(options?.focusSelector !== undefined && {
 +            focusSelector: options.focusSelector,
 +        }),
-+    }), showDialogInDocument(selector, options));
++    }), showDialogInDocument(selector, options, isRuntimeActive));
 +});
-+const showDialogInDocument = (selector, options) => Effect.gen(function* () {
++const showDialogInDocument = (selector, options, isRuntimeActive) => Effect.gen(function* () {
      const element = document.querySelector(selector);
      if (!(element instanceof HTMLDialogElement)) {
          return yield* Effect.fail(new ElementNotFound({ selector }));
-@@ -366,14 +377,14 @@ const trapFocusWithinDialog = (event, dialog) => {
+@@ -398,7 +409,7 @@ const trapFocusWithinDialog = (event, dialog) => {
   * Dom.closeDialog('#my-dialog')
   * ```
   */
@@ -82,8 +73,9 @@ index d45098dbb9bafbb75a8d13b7e425204fb974f596..8e8519310d1518979aa6966269ae4363
 +export const closeDialog = (selector) => dialogOnTarget(selector, dom => dom.closeDialog(selector), Effect.suspend(() => {
      const element = document.querySelector(selector);
      if (element instanceof HTMLDialogElement) {
-         element.close();
-         return Effect.succeed(releaseDialogHygieneById(element.id));
+         const isAcquiring = dialogHygieneById.get(element.id)?.isAcquiring ?? false;
+@@ -407,7 +418,7 @@ export const closeDialog = (selector) => Effect.suspend(() => {
+         return Effect.succeed(isReleased && !isAcquiring);
      }
      return Effect.fail(new ElementNotFound({ selector }));
 -});
@@ -91,28 +83,32 @@ index d45098dbb9bafbb75a8d13b7e425204fb974f596..8e8519310d1518979aa6966269ae4363
  const releaseDialogHygieneById = (id) => {
      const hygiene = dialogHygieneById.get(id);
      if (hygiene === undefined) {
-@@ -446,12 +457,16 @@ const releaseDialogHygieneById = (id) => {
+@@ -482,13 +493,21 @@ const releaseDialogHygieneById = (id) => {
   * Dom.releaseDialogResources('my-dialog')
   * ```
   */
 -export const releaseDialogResources = (id) => Effect.suspend(() => {
--    const released = releaseDialogHygieneById(id);
 +export const releaseDialogResources = (id) => Effect.gen(function* () {
 +    const maybeDom = yield* Effect.serviceOption(TargetDom);
-+    const released = Option.match(maybeDom, {
-+        onNone: () => releaseDialogHygieneById(id),
-+        onSome: dom => dom.releaseDialog(id),
-+    });
-     if (released) {
++    if (Option.isSome(maybeDom)) {
++        const released = maybeDom.value.releaseDialog(id);
++        if (released) {
++            yield* unlockScroll;
++        }
++        return released;
++    }
+     const isAcquiring = dialogHygieneById.get(id)?.isAcquiring ?? false;
+     const released = releaseDialogHygieneById(id);
+     if (released && !isAcquiring) {
 -        return Effect.as(unlockScroll, true);
 +        yield* unlockScroll;
      }
--    return Effect.succeed(false);
+-    return Effect.succeed(released);
 +    return released;
  });
  /**
   * Programmatically clicks an element matching the given selector.
-@@ -464,8 +479,7 @@ export const releaseDialogResources = (id) => Effect.suspend(() => {
+@@ -501,8 +520,7 @@ export const releaseDialogResources = (id) => Effect.suspend(() => {
   */
  export const clickElement = (selector) => Effect.gen(function* () {
      yield* afterCommit;
@@ -122,7 +118,7 @@ index d45098dbb9bafbb75a8d13b7e425204fb974f596..8e8519310d1518979aa6966269ae4363
  });
  /**
   * Scrolls an element into view by selector. Resolves the selector after
-@@ -484,8 +498,7 @@ export const clickElement = (selector) => Effect.gen(function* () {
+@@ -521,8 +539,7 @@ export const clickElement = (selector) => Effect.gen(function* () {
   */
  export const scrollIntoView = (selector, options) => Effect.gen(function* () {
      yield* afterCommit;
@@ -132,7 +128,7 @@ index d45098dbb9bafbb75a8d13b7e425204fb974f596..8e8519310d1518979aa6966269ae4363
  });
  /**
   * Like `scrollIntoView`, but waits for `Render.afterPaint` instead of
-@@ -510,9 +523,9 @@ export const scrollIntoView = (selector, options) => Effect.gen(function* () {
+@@ -547,9 +564,9 @@ export const scrollIntoView = (selector, options) => Effect.gen(function* () {
   */
  export const scrollIntoViewAfterPaint = (selector, options) => Effect.gen(function* () {
      yield* afterPaint;
@@ -144,7 +140,7 @@ index d45098dbb9bafbb75a8d13b7e425204fb974f596..8e8519310d1518979aa6966269ae4363
  const findScrollParent = (element) => {
      let candidate = element.parentElement;
      while (candidate !== null) {
-@@ -551,19 +564,20 @@ const findScrollParent = (element) => {
+@@ -588,19 +605,20 @@ const findScrollParent = (element) => {
  export const scrollIntoViewIfNotVisible = (selector, options) => Effect.gen(function* () {
      const when = options?.when ?? 'Paint';
      yield* Match.value(when).pipe(Match.when('Paint', () => afterPaint), Match.when('Commit', () => afterCommit), Match.exhaustive);
@@ -178,7 +174,7 @@ index d45098dbb9bafbb75a8d13b7e425204fb974f596..8e8519310d1518979aa6966269ae4363
  });
  /**
   * Focuses the next or previous focusable element in the document relative to the element matching the given selector.
-@@ -576,6 +590,9 @@ export const scrollIntoViewIfNotVisible = (selector, options) => Effect.gen(func
+@@ -613,6 +631,9 @@ export const scrollIntoViewIfNotVisible = (selector, options) => Effect.gen(func
   */
  export const advanceFocus = (selector, direction) => Effect.gen(function* () {
      yield* afterCommit;
@@ -704,7 +700,7 @@ index 0000000000000000000000000000000000000000..cb0ff5c3b541f646105198ee23ac0fc3
 @@ -0,0 +1 @@
 +export {};
 diff --git a/dist/runtime/renderer.d.ts b/dist/runtime/renderer.d.ts
-index 26f3400a68068c50eaa09f0e2c5bc78d015d9462..683c41661b8b0abf38ca0a97601df56b1afa6c2b 100644
+index b832699a9fd4dc8be66658d32ed86f72428c53d6..fee7b51ae9b2e5c4831487a504e324084d9250a3 100644
 --- a/dist/runtime/renderer.d.ts
 +++ b/dist/runtime/renderer.d.ts
 @@ -5,6 +5,7 @@ import { type CrashConfig } from './crashUI.js';
@@ -729,8 +725,8 @@ index 26f3400a68068c50eaa09f0e2c5bc78d015d9462..683c41661b8b0abf38ca0a97601df56b
   * last-registered first, and the container must be restored only after
   * those fibers are interrupted.
   */
--export declare const makeRenderer: <Model, Message>({ status, container, view, htmlBuilder, manageDocument, crash, buildId, initModel, maybeHydrationRoot, maybeSlowView, maybeSlowPatch, duplicateIdScanner, maybeResolvedViewTransition, commitNotifier, runtimeContext, readLiveModel, messageQueue, devToolsIntegration, }: Readonly<{
-+export declare const makeRenderer: <Model, Message>({ status, surface, view, htmlBuilder, manageDocument, crash, buildId, initModel, maybeHydrationRoot, maybeSlowView, maybeSlowPatch, duplicateIdScanner, maybeResolvedViewTransition, commitNotifier, runtimeContext, readLiveModel, messageQueue, devToolsIntegration, }: Readonly<{
+-export declare const makeRenderer: <Model, Message>({ status, container, view, htmlBuilder, manageDocument, crash, buildId, initModel, maybeHydrationRoot, maybeSlowView, maybeSlowPatch, duplicateIdScanner, maybeResolvedViewTransition, commitNotifier, runtimeContext, readLiveModel, readAnimationFrame, messageQueue, devToolsIntegration, releaseDialogs, }: Readonly<{
++export declare const makeRenderer: <Model, Message>({ status, surface, view, htmlBuilder, manageDocument, crash, buildId, initModel, maybeHydrationRoot, maybeSlowView, maybeSlowPatch, duplicateIdScanner, maybeResolvedViewTransition, commitNotifier, runtimeContext, readLiveModel, readAnimationFrame, messageQueue, devToolsIntegration, releaseDialogs, }: Readonly<{
      status: RuntimeStatus;
 -    container: HTMLElement;
 +    surface: RenderSurface;
@@ -738,10 +734,10 @@ index 26f3400a68068c50eaa09f0e2c5bc78d015d9462..683c41661b8b0abf38ca0a97601df56b
      htmlBuilder: HtmlBuilder<Message>;
      manageDocument: boolean;
 diff --git a/dist/runtime/renderer.js b/dist/runtime/renderer.js
-index efc3b2b23a01728fc336fcdb133271b29bf50f16..0891355cef449c67ae60ec3e5350957243d2d808 100644
+index 1916888b60ad64582bf927950a5fc80337bb877e..09d1f1616475d05d37fecfb6fd415d3fda6bfd2e 100644
 --- a/dist/runtime/renderer.js
 +++ b/dist/runtime/renderer.js
-@@ -13,15 +13,15 @@ import { __decideViewTransition, __silenceViewTransitionRejections, } from './vi
+@@ -14,15 +14,15 @@ const QUEUE_REFUSAL_LIMIT = 3;
   * Builds the render side of one runtime: the current vnode and, when
   * hydrating, the server-rendered root the first render adopts, the crash
   * renderer, the `Dispatch` service the view binds handlers to, the
@@ -755,21 +751,21 @@ index efc3b2b23a01728fc336fcdb133271b29bf50f16..0891355cef449c67ae60ec3e53509572
   * last-registered first, and the container must be restored only after
   * those fibers are interrupted.
   */
--export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocument, crash, buildId, initModel, maybeHydrationRoot, maybeSlowView, maybeSlowPatch, duplicateIdScanner, maybeResolvedViewTransition, commitNotifier, runtimeContext, readLiveModel, messageQueue, devToolsIntegration, }) => Effect.gen(function* () {
-+export const makeRenderer = ({ status, surface, view, htmlBuilder, manageDocument, crash, buildId, initModel, maybeHydrationRoot, maybeSlowView, maybeSlowPatch, duplicateIdScanner, maybeResolvedViewTransition, commitNotifier, runtimeContext, readLiveModel, messageQueue, devToolsIntegration, }) => Effect.gen(function* () {
-     const { enqueueMessage, enqueueMessageEffect, drainPendingMessages, resetDrainBudget, isAnyMessageDeferred, } = messageQueue;
+-export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocument, crash, buildId, initModel, maybeHydrationRoot, maybeSlowView, maybeSlowPatch, duplicateIdScanner, maybeResolvedViewTransition, commitNotifier, runtimeContext, readLiveModel, readAnimationFrame, messageQueue, devToolsIntegration, releaseDialogs, }) => Effect.gen(function* () {
++export const makeRenderer = ({ status, surface, view, htmlBuilder, manageDocument, crash, buildId, initModel, maybeHydrationRoot, maybeSlowView, maybeSlowPatch, duplicateIdScanner, maybeResolvedViewTransition, commitNotifier, runtimeContext, readLiveModel, readAnimationFrame, messageQueue, devToolsIntegration, releaseDialogs, }) => Effect.gen(function* () {
+     const { enqueueMessage, enqueueMessageEffect, drainPendingMessages, drainQueuedPrefix, resetDrainBudget, isAnyMessageDeferred, } = messageQueue;
      const { mountTracker, mountRuntime, drainMountEvents, readViewState, setViewState, isPausedNow, resumeDevTools, attachRenderedMounts, } = devToolsIntegration;
      const settlePendingCommit = () => {
-@@ -73,7 +73,7 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
-     // rendering, the dispose finalizer, the replay render) read the same
+@@ -78,7 +78,7 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
      // slot synchronously, so no Ref is needed.
      const vnodeSlot = { maybeCurrentVNode: Option.none() };
+     const boundaryRegistry = createHtmlBoundaryRegistry();
 -    const patchRuntimeVNode = (maybeCurrentVNode, nextVNode, seen) => {
 +    const patchRuntimeVNode = (container, maybeCurrentVNode, nextVNode, seen) => {
          try {
              return __patchVNode(maybeCurrentVNode, nextVNode, container, seen, patchedVNode => {
                  vnodeSlot.maybeCurrentVNode = Option.some(patchedVNode);
-@@ -109,6 +109,10 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
+@@ -114,6 +114,10 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
          if (!Exit.hasInterrupts(exit)) {
              return;
          }
@@ -780,16 +776,16 @@ index efc3b2b23a01728fc336fcdb133271b29bf50f16..0891355cef449c67ae60ec3e53509572
          const maybeCurrentVNode = vnodeSlot.maybeCurrentVNode;
          yield* Option.match(maybeCurrentVNode, {
              onNone: () => Effect.void,
-@@ -143,7 +147,7 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
-         const model = readLiveModel();
-         const squashed = Cause.squash(cause);
+@@ -150,7 +154,7 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
          const error = squashed instanceof Error ? squashed : new Error(String(squashed));
--        renderCrashView({ error, model, message: maybeMessage }, crash, container, vnodeSlot, manageDocument);
-+        renderCrashView({ error, model, message: maybeMessage }, crash, surface, vnodeSlot, manageDocument);
-         settlePendingCommit();
-     });
-     // NOTE: `maybeLastDirtyMessage` holds the most recent dirtying Message,
-@@ -156,6 +160,13 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
+         yield* releaseDialogs;
+         try {
+-            renderCrashView({ error, model, message: maybeMessage }, crash, container, vnodeSlot, manageDocument);
++            renderCrashView({ error, model, message: maybeMessage }, crash, surface, vnodeSlot, manageDocument);
+         }
+         finally {
+             clearKeyedLazyCaches(boundaryRegistry);
+@@ -167,6 +171,13 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
      const setLastDirtyMessage = (message) => {
          maybeLastDirtyMessage = Option.some(message);
      };
@@ -803,48 +799,49 @@ index efc3b2b23a01728fc336fcdb133271b29bf50f16..0891355cef449c67ae60ec3e53509572
      const dispatchSync = (message) => {
          /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
          enqueueMessage(message);
-@@ -200,6 +211,19 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
-             thresholdMs,
-         }));
-         const { maybeCurrentVNode } = vnodeSlot;
-+        if (surface._tag === 'Target') {
-+            const [, maybeCommitDuration] = measureSlowPhase(maybeLiveSlowPatch, () => surface.target.commit(nextDocument));
-+            vnodeSlot.maybeCurrentVNode = Option.fromNullishOr(nextVNode);
-+            reportSlowPhase(maybeLiveSlowPatch, maybeCommitDuration, (durationMs, thresholdMs) => ({
-+                _tag: 'Patch',
-+                model,
-+                message: maybeMessage,
-+                durationMs,
-+                thresholdMs,
-+            }));
-+            return;
-+        }
-+        const { container } = surface;
-         const [patchedVNode, maybePatchDuration] = measureSlowPhase(maybeLiveSlowPatch, () => {
-             if (Option.isNone(maybeCurrentVNode) &&
-                 pendingHydrationRoot !== null) {
-@@ -220,7 +244,7 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
-                 // caller that reached here another way.
-                 return __hydrateVNode(hydrationRoot, nextVNode, boundaryRegistry.dedupeSeen, buildId ?? '');
-             }
--            return patchRuntimeVNode(maybeCurrentVNode, nextVNode, boundaryRegistry.dedupeSeen);
-+            return patchRuntimeVNode(container, maybeCurrentVNode, nextVNode, boundaryRegistry.dedupeSeen);
-         });
-         vnodeSlot.maybeCurrentVNode = Option.some(patchedVNode);
-         reportSlowPhase(maybeLiveSlowPatch, maybePatchDuration, (durationMs, thresholdMs) => ({
-@@ -391,7 +415,7 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
-     const renderFramePlain = () => {
-         // NOTE: retain the scheduled frame's pending commit while the drain waits.
-         if (isLiveModelBehindQueue()) {
--            requestAnimationFrame(renderFramePlain);
-+            requestFrame(renderFramePlain);
-             return;
-         }
-         isRenderFrameScheduled = false;
-@@ -449,7 +473,7 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
-         }
+@@ -215,6 +226,20 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
+                 thresholdMs,
+             }));
+             const { maybeCurrentVNode } = vnodeSlot;
++            if (surface._tag === 'Target') {
++                const [, maybeCommitDuration] = measureSlowPhase(maybeLiveSlowPatch, () => surface.target.commit(nextDocument));
++                vnodeSlot.maybeCurrentVNode = Option.fromNullishOr(nextVNode);
++                reportSlowPhase(maybeLiveSlowPatch, maybeCommitDuration, (durationMs, thresholdMs) => ({
++                    _tag: 'Patch',
++                    model,
++                    message: maybeMessage,
++                    durationMs,
++                    thresholdMs,
++                }));
++                endHtmlRender(boundaryRegistry);
++                return;
++            }
++            const { container } = surface;
+             const [patchedVNode, maybePatchDuration] = measureSlowPhase(maybeLiveSlowPatch, () => {
+                 if (Option.isNone(maybeCurrentVNode) &&
+                     pendingHydrationRoot !== null) {
+@@ -235,7 +260,7 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
+                     // caller that reached here another way.
+                     return __hydrateVNode(hydrationRoot, nextVNode, boundaryRegistry.dedupeSeen, buildId ?? '');
+                 }
+-                return patchRuntimeVNode(maybeCurrentVNode, nextVNode, boundaryRegistry.dedupeSeen);
++                return patchRuntimeVNode(container, maybeCurrentVNode, nextVNode, boundaryRegistry.dedupeSeen);
+             });
+             vnodeSlot.maybeCurrentVNode = Option.some(patchedVNode);
+             reportSlowPhase(maybeLiveSlowPatch, maybePatchDuration, (durationMs, thresholdMs) => ({
+@@ -494,14 +519,15 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
          isRenderFrameScheduled = true;
          commitNotifier.markCommitPending();
+         const maybeFrame = readAnimationFrame();
+-        if (Option.isSome(maybeFrame) &&
++        if (surface._tag === 'Container' &&
++            Option.isSome(maybeFrame) &&
+             !isRunningRenderFrame &&
+             !Option.exists(maybeEarlyRenderFrame, frame => frame === maybeFrame.value)) {
+             maybeEarlyRenderFrame = maybeFrame;
+             queueMicrotask(renderFramePlain);
+             return;
+         }
 -        requestAnimationFrame(renderFramePlain);
 +        requestFrame(renderFramePlain);
      };
@@ -883,18 +880,18 @@ index 68f5c4bb27c825bb50a1b6e4ba044ac1fbdc7e20..7f8cc9becbb1b881babd37065b9e7aa0
  //# sourceMappingURL=runtime.d.ts.map
 \ No newline at end of file
 diff --git a/dist/runtime/runtime.js b/dist/runtime/runtime.js
-index a26ae8ea901f2dc0af1a6977ade3ddc12df85b99..47c599347dcdda8c59755a610ea8862833323781 100644
+index e47e18872246972f4944ecc39b98a7c695076096..59ae8a83141481e30492b8623f3d224627ee3ce2 100644
 --- a/dist/runtime/runtime.js
 +++ b/dist/runtime/runtime.js
 @@ -1,6 +1,7 @@
- import { Array, Duration, Effect, Exit, Option, Predicate, PubSub, Schema, pipe, } from 'effect';
+ import { Array, Cause, Duration, Effect, Exit, Option, Predicate, PubSub, Schema, pipe, } from 'effect';
  import { DialogRuntime } from '../dom/dialogRuntime.js';
  import { releaseDialogResources } from '../dom/dom.js';
 +import { TargetDom } from '../dom/targetDom.js';
  import { __htmlBuilder as htmlBuilderFor, } from '../html/index.js';
  import { RenderCommit, createCommitNotifier } from '../render/commit.js';
  import { fromString as urlFromString } from '../url/index.js';
-@@ -23,7 +24,23 @@ import { forkSubscriptionFibers } from './subscriptionFibers.js';
+@@ -24,7 +25,23 @@ import { forkSubscriptionFibers } from './subscriptionFibers.js';
  import { __resolveStartViewTransition, } from './viewTransition.js';
  import { isVisible } from './visibility.js';
  export const runtimeInternals = new WeakMap();
@@ -919,7 +916,7 @@ index a26ae8ea901f2dc0af1a6977ade3ddc12df85b99..47c599347dcdda8c59755a610ea88628
      const isSlowVisible = (show) => isVisible(show, !!import.meta.hot);
      const htmlBuilder = htmlBuilderFor();
      const maybeResolvedSlow = __resolveSlowConfig(slow, isSlowVisible);
-@@ -35,7 +52,9 @@ export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredF
+@@ -36,7 +53,9 @@ export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredF
      // that configured the option. Resolved eagerly it would read
      // `document.startViewTransition` and call `window.matchMedia` during
      // `makeRuntime`, which otherwise touches no DOM global at construction.
@@ -930,7 +927,7 @@ index a26ae8ea901f2dc0af1a6977ade3ddc12df85b99..47c599347dcdda8c59755a610ea88628
          decide,
          startViewTransition,
          reducedMotionQuery: window.matchMedia('(prefers-reduced-motion: reduce)'),
-@@ -51,13 +70,15 @@ export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredF
+@@ -52,13 +71,15 @@ export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredF
      }
      const runtimeId = hydration !== undefined && hydration.runtimeId !== ''
          ? hydration.runtimeId
@@ -945,10 +942,10 @@ index a26ae8ea901f2dc0af1a6977ade3ddc12df85b99..47c599347dcdda8c59755a610ea88628
          // `Render.afterCommit` awaiting inside another.
 -        const commitNotifier = createCommitNotifier();
 +        const commitNotifier = createCommitNotifier(surface._tag === 'Target' ? targetFrame(surface.target) : undefined);
+         const animationFrameRuntime = createAnimationFrameRuntime();
          const dialogIds = new Set();
-         return Effect.scoped(Effect.gen(function* () {
-             if (runtimeId === '') {
-@@ -93,7 +114,7 @@ export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredF
+         let maybeRuntimeStatus = Option.none();
+@@ -96,7 +117,7 @@ export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredF
                  isFlagsRequired,
                  FlagsCodec,
                  preservedModel,
@@ -957,7 +954,7 @@ index a26ae8ea901f2dc0af1a6977ade3ddc12df85b99..47c599347dcdda8c59755a610ea88628
                  buildId,
                  provideResources,
              });
-@@ -172,7 +193,8 @@ export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredF
+@@ -176,7 +197,8 @@ export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredF
              const initModel = maybeFreezeModel(initModelRaw);
              const modelPubSub = yield* PubSub.unbounded();
              const devToolsIntegration = yield* makeDevToolsIntegration({
@@ -967,8 +964,8 @@ index a26ae8ea901f2dc0af1a6977ade3ddc12df85b99..47c599347dcdda8c59755a610ea88628
                  update,
                  maybeFreezeModel,
                  enqueueMessageEffect,
-@@ -200,7 +222,7 @@ export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredF
-             const runtimeContext = yield* Effect.context();
+@@ -207,7 +229,7 @@ export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredF
+             }))), { discard: true }));
              const { crashWith, render, setLastDirtyMessage, scheduleRenderFrame, skipPendingViewTransition, devToolsRenderBridge, } = yield* makeRenderer({
                  status,
 -                container,
@@ -976,114 +973,15 @@ index a26ae8ea901f2dc0af1a6977ade3ddc12df85b99..47c599347dcdda8c59755a610ea88628
                  view,
                  htmlBuilder,
                  manageDocument,
-@@ -375,7 +397,7 @@ export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredF
+@@ -384,7 +406,7 @@ export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredF
              // runtime scope open until interruption (an embedded app's dispose)
              // or the document goes away.
              return yield* Effect.never;
--        })).pipe(Effect.provideService(RenderCommit, commitNotifier.service), Effect.provideService(DialogRuntime, {
-+        })).pipe(Effect.provideService(RenderCommit, commitNotifier.service), provideTargetDom(surface), Effect.provideService(DialogRuntime, {
-             register: id => {
-                 dialogIds.add(id);
-             },
-diff --git a/dist/runtime/subscriptionFibers.js b/dist/runtime/subscriptionFibers.js
-index 8984e250b228da2774aec037862856290813eeae..6d93873d4ebb9e6ac39fd241af18cfc144d09ee8 100644
---- a/dist/runtime/subscriptionFibers.js
-+++ b/dist/runtime/subscriptionFibers.js
-@@ -1,33 +1,19 @@
--import { Effect, Option, PubSub, Record, Ref, Schema, Scope, Stream, pipe, } from 'effect';
-+import { Effect, Option, PubSub, Queue, Record, Schema, Scope, Stream, pipe, } from 'effect';
- import { measureSlowPhase, reportSlowPhase, } from './slowPhase.js';
- /**
-- * Forks one fiber per Subscription into the runtime scope. Each fiber
-- * derives the Subscription's dependencies from every Model, restarts its
-- * stream when they change under its equivalence, and feeds the Messages
-- * the stream emits into the queue. A defect anywhere in that pipeline
-- * crashes the runtime instead of dying silently in the fiber.
-+ * Forks one fiber per Subscription into the runtime scope, and one fiber
-+ * that follows the Model for all of them. On every Model that one fiber
-+ * derives each Subscription's dependencies in a single synchronous pass and
-+ * hands them on only to the Subscriptions whose dependencies changed under
-+ * their equivalence; each Subscription's fiber restarts its stream on what
-+ * it is handed and feeds the Messages the stream emits into the queue. (One
-+ * Model subscriber per Subscription woke every fiber on every Message: with
-+ * hundreds of Subscriptions that cost milliseconds per Message.) A defect
-+ * anywhere in that pipeline crashes the runtime instead of dying silently in
-+ * the fiber.
-  */
--export const forkSubscriptionFibers = ({ subscriptions, initModel, modelPubSub, runtimeScope, maybeSlowSubscriptionDependencies, enqueueMessageEffect, provideAllResources, crashWith, }) => pipe(subscriptions, Record.toEntries, Effect.forEach(([key, { dependenciesSchema, modelToDependencies, keepAliveEquivalence, dependenciesToStream, },]) => Effect.gen(function* () {
--    const equivalence = keepAliveEquivalence ?? Schema.toEquivalence(dependenciesSchema);
--    const [initDependencies, maybeInitDependenciesDuration] = measureSlowPhase(maybeSlowSubscriptionDependencies, () => modelToDependencies(initModel));
--    reportSlowPhase(maybeSlowSubscriptionDependencies, maybeInitDependenciesDuration, (durationMs, thresholdMs) => ({
--        _tag: 'SubscriptionDependencies',
--        subscriptionKey: key,
--        model: initModel,
--        durationMs,
--        thresholdMs,
--    }));
--    const latestDependenciesRef = yield* Ref.make(initDependencies);
--    const modelSubscription = yield* PubSub.subscribe(modelPubSub).pipe(Effect.provideService(Scope.Scope, runtimeScope));
--    const modelChangesStream = Stream.fromSubscription(modelSubscription).pipe(
--    // NOTE: Ref.set runs upstream of Stream.changesWith on
--    // every model change, so readDependencies() returns
--    // current values even when the equivalence filter
--    // doesn't emit. Moving this into a tap after
--    // changesWith would silently break subscribers whose
--    // dependencies are equivalence-stable across model
--    // changes.
--    Stream.mapEffect(model => Effect.gen(function* () {
-+export const forkSubscriptionFibers = ({ subscriptions, initModel, modelPubSub, runtimeScope, maybeSlowSubscriptionDependencies, enqueueMessageEffect, provideAllResources, crashWith, }) => Effect.gen(function* () {
-+    const deriveDependencies = (key, modelToDependencies, model) => {
-         const [dependencies, maybeDependenciesDuration] = measureSlowPhase(maybeSlowSubscriptionDependencies, () => modelToDependencies(model));
-         reportSlowPhase(maybeSlowSubscriptionDependencies, maybeDependenciesDuration, (durationMs, thresholdMs) => ({
-             _tag: 'SubscriptionDependencies',
-@@ -36,13 +22,38 @@ export const forkSubscriptionFibers = ({ subscriptions, initModel, modelPubSub,
-             durationMs,
-             thresholdMs,
-         }));
--        yield* Ref.set(latestDependenciesRef, dependencies);
-         return dependencies;
--    })));
--    yield* Effect.forkIn(runtimeScope)(Stream.concat(Stream.make(initDependencies), modelChangesStream).pipe(Stream.changesWith(equivalence), Stream.switchMap(dependencies => dependenciesToStream(dependencies, () => Ref.getUnsafe(latestDependenciesRef))), Stream.runForEach(message => 
--    /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
--    enqueueMessageEffect(message)), provideAllResources, Effect.catchCause(cause => crashWith(cause, Option.none()))));
--}), {
--    concurrency: 'unbounded',
--    discard: true,
--}));
-+    };
-+    const entries = yield* Effect.forEach(Record.toEntries(subscriptions), ([key, { dependenciesSchema, modelToDependencies, keepAliveEquivalence, dependenciesToStream, },]) => Effect.gen(function* () {
-+        const equivalence = keepAliveEquivalence ?? Schema.toEquivalence(dependenciesSchema);
-+        const initDependencies = deriveDependencies(key, modelToDependencies, initModel);
-+        const changes = yield* Queue.unbounded();
-+        // NOTE: `latest` is set on every Model, so readDependencies() returns
-+        // current values even when the equivalence holds and nothing is handed
-+        // on; `emitted` is what the stream last restarted on, which a new
-+        // value is compared against, as `Stream.changesWith` compared it.
-+        const entry = {
-+            key,
-+            modelToDependencies,
-+            equivalence,
-+            changes,
-+            latest: initDependencies,
-+            emitted: initDependencies,
-+        };
-+        yield* Effect.forkIn(runtimeScope)(Stream.concat(Stream.make(initDependencies), Stream.fromQueue(changes)).pipe(Stream.switchMap(dependencies => dependenciesToStream(dependencies, () => entry.latest)), Stream.runForEach(message =>
-+        /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-+        enqueueMessageEffect(message)), provideAllResources, Effect.catchCause(cause => crashWith(cause, Option.none()))));
-+        return entry;
-+    }), { discard: false });
-+    const modelSubscription = yield* PubSub.subscribe(modelPubSub).pipe(Effect.provideService(Scope.Scope, runtimeScope));
-+    yield* Effect.forkIn(runtimeScope)(Stream.fromSubscription(modelSubscription).pipe(Stream.runForEach(model => Effect.sync(() => {
-+        for (const entry of entries) {
-+            const dependencies = deriveDependencies(entry.key, entry.modelToDependencies, model);
-+            entry.latest = dependencies;
-+            if (!entry.equivalence(entry.emitted, dependencies)) {
-+                entry.emitted = dependencies;
-+                Queue.offerUnsafe(entry.changes, dependencies);
-+            }
-+        }
-+    })), Effect.catchCause(cause => crashWith(cause, Option.none()))));
-+});
+-        })).pipe(animationFrameRuntime.provide, Effect.provideService(RenderCommit, commitNotifier.service), Effect.provideService(DialogRuntime, {
++        })).pipe(animationFrameRuntime.provide, Effect.provideService(RenderCommit, commitNotifier.service), provideTargetDom(surface), Effect.provideService(DialogRuntime, {
+             isActive: () => Option.match(maybeRuntimeStatus, {
+                 onNone: () => true,
+                 onSome: status => !status.isCrashed && !status.isRuntimeDisposed,
 diff --git a/dist/snabbdom/init.js b/dist/snabbdom/init.js
 index c6cf75791ab75e3f98231b41e11e8bbca26f551c..aa1246d50373de7fb245285da2b13725d7304600 100644
 --- a/dist/snabbdom/init.js

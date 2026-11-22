@@ -488,7 +488,7 @@ const settleNote =
 			),
 		)
 
-const noteMessages = [Message.SucceededNoteAction, Message.FailedNoteAction]
+const noteMessages = [Message.SucceededNoteAction, Message.FailedNoteAction] as const
 
 export const CreateCustomerNote = Command.define("CreateCustomerNote", {
 	args: { ...target, authorUserId: UserId, body: Schema.String, pinned: Schema.Boolean },

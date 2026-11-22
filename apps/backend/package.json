@@ -37,7 +37,7 @@
 	"devDependencies": {
 		"@cloudflare/workers-types": "catalog:alchemy",
 		"@effect/platform-node": "catalog:effect",
-		"@types/bun": "1.4.3",
+		"@types/bun": "1.4.5",
 		"typescript": "catalog:tooling"
 	}
 }

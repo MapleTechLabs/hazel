@@ -75,7 +75,7 @@ const memoRow = (
 	context: RowContext<Message>,
 ): Html => {
 	let slot = rowSlots.get(row)
-	// createKeyedLazy never evicts and message rows are unbounded, so slots live with their row.
+	// Slots live with their row (a WeakMap), so a row's memo goes when the row does.
 	// oxlint-disable-next-line foldkit/lazy-view-stable-references
 	if (slot === undefined) rowSlots.set(row, (slot = createLazy()))
 	return slot(rowView, [row, isStuck, isHovered, context, h]) ?? h.div([])

@@ -91,6 +91,7 @@ const ProbeRoutes = Layer.unwrap(
 						{
 							client: {} as never,
 							requestId: 1n as never,
+							remoteParentSpan: undefined,
 							rpc: {} as never,
 							payload: undefined,
 							headers: request.headers,
