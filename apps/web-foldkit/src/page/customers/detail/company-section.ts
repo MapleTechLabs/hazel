@@ -398,16 +398,18 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 				...(pages.length === 0
 					? []
 					: [h.div([h.Class("-ml-1.5 flex flex-wrap gap-0.5 pt-2")], pages)]),
-				h.div(
-					[h.Class("flex items-center justify-between gap-2 pt-3 text-muted-fg text-xs")],
-					[
-						h.span(
-							[h.AriaLive("polite"), h.Class("truncate")],
-							[status === "" ? "From context.dev" : `From context.dev · ${status}`],
-						),
-						refreshButton(h, { label: "Refresh company profile", isPending, iconOnly: true }),
-					],
+			],
+		),
+		// Outside the keyed profile: the live region stays mounted across a lookup, so "Looking up…"
+		// turning into "just now" is announced, and the button keeps focus.
+		h.div(
+			[h.Class("flex items-center justify-between gap-2 pt-3 text-muted-fg text-xs")],
+			[
+				h.span(
+					[h.AriaLive("polite"), h.Class("truncate")],
+					[status === "" ? "From context.dev" : `From context.dev · ${status}`],
 				),
+				refreshButton(h, { label: "Refresh company profile", isPending, iconOnly: true }),
 			],
 		),
 	])
