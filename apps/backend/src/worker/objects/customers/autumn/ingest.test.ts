@@ -6,6 +6,7 @@
  * finished — Autumn's subscriptions, not Stripe's, have to be the account's MRR.
  */
 import type { IngestOp } from "@hazel/domain/customers"
+import type { CustomerAccountId } from "@hazel/schema"
 import { Effect, Schema, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { runCompute } from "../compute"
@@ -255,6 +256,72 @@ describe("Autumn ops through CustomerIngest", () => {
 					limit: 25,
 					pct: 96,
 				})
+			}),
+		))
+
+	it("stores a near-limit signal on the environment at the limit, moving one held by the primary", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				world.rows(
+					`UPDATE customer_settings SET attention = '{"stages":["lead","trialing","active","past_due"],"requiredSources":["autumn"]}'`,
+				)
+				yield* world.ingest("clerk", clerkBefore)
+				yield* world.ingest("autumn", backfill)
+				markBackfilled(world, "autumn")
+				const [acme, globex] = world.rows<{ id: CustomerAccountId; name: string }>(
+					`SELECT id, name FROM customer_accounts ORDER BY name`,
+				)
+				if (acme === undefined || globex === undefined) throw new Error("expected two accounts")
+				yield* world.call(
+					"customers.account.link",
+					{ accountId: acme.id, primaryAccountId: globex.id },
+					world.owner,
+				)
+				expect(
+					world.rows(`SELECT primaryAccountId FROM customer_accounts WHERE id = ?`, acme.id),
+				).toEqual([{ primaryAccountId: globex.id }])
+				yield* world.ingest("autumn", [
+					{
+						_tag: "metric",
+						account: { provider: "autumn", externalId: ORG_ACME },
+						metricKey: "autumn.messages",
+						day: TODAY,
+						value: 12_000,
+						limitValue: 10_000,
+					},
+				])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				const held = () =>
+					world.rows<{ accountId: string; status: string }>(
+						`SELECT accountId, status FROM customer_signals WHERE template = 'near_limit' AND closedAt IS NULL`,
+					)
+				expect(held()).toEqual([{ accountId: acme.id, status: "open" }])
+
+				// One from when these sat on the primary moves back, its snooze and history with it.
+				const [{ id } = { id: "" }] = world.rows<{ id: string }>(
+					`SELECT id FROM customer_signals WHERE template = 'near_limit'`,
+				)
+				world.rows(
+					`UPDATE customer_signals SET accountId = ?, status = 'snoozed', snoozedUntil = '2099-01-01T00:00:00.000Z',
+					evidence = json_set(evidence, '$.accountId', ?), actionEvidence = evidence WHERE id = ?`,
+					globex.id,
+					acme.id,
+					id,
+				)
+				world.rows(
+					`UPDATE customer_events SET accountId = ? WHERE json_extract(data, '$.signalId') = ?`,
+					globex.id,
+					id,
+				)
+				yield* world.object.run(runCompute(new Date(NOW.getTime() + 60_000))).pipe(Effect.orDie)
+				expect(held()).toEqual([{ accountId: acme.id, status: "snoozed" }])
+				expect(
+					world.rows(
+						`SELECT DISTINCT accountId FROM customer_events WHERE json_extract(data, '$.signalId') = ?`,
+						id,
+					),
+				).toEqual([{ accountId: acme.id }])
 			}),
 		))
 

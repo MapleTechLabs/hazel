@@ -10,6 +10,7 @@ import * as Modal from "../../../ui/modal"
 import { input } from "../../../ui/input"
 import { textarea } from "../../../ui/textarea"
 import { Message } from "./message"
+import { queueNameOf } from "../../../customers/groups"
 import {
 	accountsByIdOfModel,
 	localDateOf,
@@ -95,7 +96,7 @@ const content = (
 								[
 									h.span(
 										[h.Class("truncate font-medium text-fg text-sm")],
-										[`${account.name} · ${signal.title}`],
+										[`${queueNameOf(account)} · ${signal.title}`],
 									),
 									h.span([h.Class("truncate text-muted-fg text-xs")], [signal.reason]),
 								],

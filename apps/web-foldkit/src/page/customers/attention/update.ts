@@ -3,6 +3,7 @@ import { Command } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
+import { customerAccountOf } from "../../../customers/groups"
 import type { SignalRow } from "../../../customers/queries"
 import { errorToastOf, successToast } from "../../../data/actions"
 import { customerRoute } from "../../../route"
@@ -26,6 +27,7 @@ import {
 	ASSIGN_ME,
 	ASSIGN_MENU_ID,
 	ASSIGN_NONE,
+	accountsByIdOfModel,
 	areActionsShown,
 	assignEntries,
 	canReopen,
@@ -240,10 +242,14 @@ const muteAccount = (model: Model, shared: Shared, signal: SignalRow, key: MuteK
 	const actor = actorOf(shared)
 	if (actor === undefined) return { model }
 	const untilMs = muteUntil(key, new Date(shared.nowMs))?.getTime() ?? null
+	const accountsById = accountsByIdOfModel(model)
+	const held = accountsById.get(signal.accountId)
+	const customer = held === undefined ? undefined : customerAccountOf(held, accountsById)
+	const customerId = customer?.id ?? signal.accountId
 	const patched = modifyFields(model, {
 		accounts: (accounts) =>
 			accounts?.map((account) =>
-				account.id === signal.accountId
+				account.id === customerId
 					? {
 							...account,
 							attentionMutedAtMs: shared.nowMs,
@@ -253,14 +259,14 @@ const muteAccount = (model: Model, shared: Shared, signal: SignalRow, key: MuteK
 					: account,
 			) ?? null,
 	})
-	const name = model.accounts?.find((account) => account.id === signal.accountId)?.name ?? "Customer"
+	const name = customer?.name ?? "Customer"
 	return {
 		...actOn(
 			model,
 			patched,
 			shared,
 			signal,
-			MuteAccountAttention({ ...actor, accountId: signal.accountId, untilMs }),
+			MuteAccountAttention({ ...actor, accountId: customerId, untilMs }),
 		),
 		outMessage: toast(
 			successToast(
@@ -510,7 +516,8 @@ const onKey = (model: Model, shared: Shared, key: QueueKey): Return => {
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		UpdatedSignals: ({ signals }) => ({ model: modifyFields(model, { signals: () => signals }) }),
+		// A compute can move the selected signal to another environment: the preview follows it.
+		UpdatedSignals: ({ signals }) => withDetail(modifyFields(model, { signals: () => signals }), shared),
 		UpdatedAccounts: ({ accounts }) => ({ model: modifyFields(model, { accounts: () => accounts }) }),
 		UpdatedMembers: ({ members }) => ({ model: modifyFields(model, { members: () => members }) }),
 		UpdatedLastComputedAt: ({ lastComputedAtMs }) => ({

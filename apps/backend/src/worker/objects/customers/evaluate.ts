@@ -495,7 +495,7 @@ const forecastOf = (
 		spread === 0
 			? 0
 			: span.reduce((sum, point) => sum + (point.x - meanX) * (point.y - meanY), 0) / spread
-	const periodEnd = facts.subscriptions
+	const periodEnd = (facts.ownSubscriptions ?? facts.subscriptions)
 		.flatMap((sub) =>
 			sub.currentPeriodEnd === null || sub.currentPeriodEnd <= org.now
 				? []
@@ -525,38 +525,30 @@ const nearLimit =
 	(config: Extract<RuleConfig, { _tag: "near_limit" }>): Check =>
 	(facts, org) => {
 		const recent = addDays(org.today, -2)
-		// A plan limit is one environment's: each is measured against its own, the closest one named.
-		const candidates = (facts.environments ?? [facts])
-			.flatMap((own) =>
-				[...own.metrics.entries()]
-					.filter(([key]) => config.metricKeys.length === 0 || config.metricKeys.includes(key))
-					.flatMap(([key, points]) => {
-						// The newest recent day decides: an older cap never stands in for a day with none.
-						const latest = points.at(-1)
-						const limit = latest?.limitValue ?? null
-						return latest === undefined || latest.day < recent || limit === null || limit <= 0
-							? []
-							: [{ own, key, points, latest, limit, pct: round1((latest.value / limit) * 100) }]
-					}),
-			)
+		const candidates = [...facts.metrics.entries()]
+			.filter(([key]) => config.metricKeys.length === 0 || config.metricKeys.includes(key))
+			.flatMap(([key, points]) => {
+				// The newest recent day decides: an older cap never stands in for a day with none.
+				const latest = points.at(-1)
+				const limit = latest?.limitValue ?? null
+				return latest === undefined || latest.day < recent || limit === null || limit <= 0
+					? []
+					: [{ key, points, latest, limit, pct: round1((latest.value / limit) * 100) }]
+			})
 			.sort((a, b) => b.pct - a.pct)
 		const top = candidates[0]
 		if (top === undefined) return "No data"
 		if (top.pct < config.thresholdPct) return "Below threshold"
 		const step = stepOf(top.pct >= 120, top.pct >= 100)
 		const name = org.metricNames.get(top.key) ?? top.key
-		const forecast = forecastOf(top.points, top.latest, top.limit, top.own, org)
+		const forecast = forecastOf(top.points, top.latest, top.limit, facts, org)
 		const pace =
 			forecast === undefined || forecast.value <= top.latest.value
 				? ""
 				: `; on pace for ${Math.round(forecast.pct)}% ${forecast.periodEnd ? "by the period end" : `in ${FORECAST_FALLBACK_DAYS} days`}`
-		const where =
-			facts.environments === undefined
-				? ""
-				: ` in ${top.own.account.name}${top.own.account.environment === null ? "" : ` (${top.own.account.environment})`}`
 		return {
 			step,
-			reason: `${name} at ${Math.round(top.pct)}% of the plan limit${where} (${round1(top.latest.value)} of ${round1(top.limit)})${pace}`,
+			reason: `${name} at ${Math.round(top.pct)}% of the plan limit (${round1(top.latest.value)} of ${round1(top.limit)})${pace}`,
 			evidence: {
 				_tag: "limit",
 				step,
@@ -566,7 +558,6 @@ const nearLimit =
 				limit: top.limit,
 				pct: top.pct,
 				forecast: forecast ?? null,
-				accountId: top.own.account.id,
 			},
 		}
 	}

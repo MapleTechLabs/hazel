@@ -3,6 +3,7 @@ import { CustomerAccountId, CustomerSignalId, type UserId } from "@hazel/schema"
 import { Array, Option, Order, Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
+import { customerAccountOf, queueNameOf } from "../../../customers/groups"
 import {
 	AccountRow,
 	type AccountRow as AccountRowType,
@@ -172,18 +173,20 @@ const matchesFilters = (
 	signal: SignalRowType,
 ): boolean => {
 	const account = accountsById.get(signal.accountId)
-	// A muted customer stays out of every tab until it is unmuted (its page shows its signals).
-	if (account === undefined || isAttentionMuted(account)) return false
+	if (account === undefined) return false
+	const customer = customerAccountOf(account, accountsById)
+	// A muted customer or environment stays out of every tab until unmuted (its page shows its signals).
+	if (isAttentionMuted(account) || isAttentionMuted(customer)) return false
 	const { filters } = model
 	const query = model.search.trim().toLowerCase()
 	return (
-		matchesOwner(filters.owner, viewer, account.ownerUserId) &&
+		matchesOwner(filters.owner, viewer, customer.ownerUserId) &&
 		(filters.kind === null || signal.kind === filters.kind) &&
 		(filters.template === null || signal.template === filters.template) &&
 		(filters.severity === null || signal.severity === filters.severity) &&
 		(filters.plan === null || account.planName === filters.plan) &&
 		(query === "" ||
-			account.name.toLowerCase().includes(query) ||
+			queueNameOf(account).toLowerCase().includes(query) ||
 			signal.title.toLowerCase().includes(query))
 	)
 }
@@ -208,9 +211,10 @@ const sortedForTab = (
 	const accountOf = (signal: SignalRowType) => accountsById.get(signal.accountId)
 	const order = {
 		priority: byPriority,
-		account: Order.mapInput(Order.String, (signal: SignalRowType) =>
-			(accountOf(signal)?.name ?? "").toLowerCase(),
-		),
+		account: Order.mapInput(Order.String, (signal: SignalRowType) => {
+			const account = accountOf(signal)
+			return account === undefined ? "" : queueNameOf(account).toLowerCase()
+		}),
 		signal: Order.mapInput(Order.String, (signal: SignalRowType) => signal.title.toLowerCase()),
 		severity: bySeverity,
 		age: byOpened,

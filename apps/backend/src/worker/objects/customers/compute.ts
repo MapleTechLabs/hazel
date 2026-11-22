@@ -40,7 +40,7 @@ import { publishChannelCustomersAfterCompute } from "./channels"
 import { evaluate, type Match } from "./evaluate"
 import type { AccountFacts } from "./facts"
 import { type HealthInputs, scoreHealth } from "./health"
-import { type LifecycleEvent, transition, valueOf, wakeDue } from "./lifecycle"
+import { type LifecycleEvent, limitSignalTarget, transition, valueOf, wakeDue } from "./lifecycle"
 import {
 	baselineConnections,
 	clearBaselineFor,
@@ -61,6 +61,7 @@ import {
 	accountChunks,
 	billingByAccount,
 	billsNow,
+	evaluatedFor,
 	groupChunks,
 	loadAccounts,
 	loadBase,
@@ -520,18 +521,63 @@ const closedForGood = (signal: Pick<schema.CustomerSignal, "status">, now: Date)
 		: { closedAt: now, lastEvaluatedAt: now }
 
 /**
+ * Limit signals from when they sat on the primary move, with their history, to the environment
+ * their evidence names (what people did with them stays). One that environment already has stays
+ * put and resolves.
+ */
+const moveLimitSignals = Effect.fn("Customers.moveLimitSignals")(function* (snapshot: Snapshot) {
+	const db = yield* Database.Database
+	const ids = new Set(snapshot.accounts.map((account) => account.stored.id))
+	const held = new Set(snapshot.signals.map((signal) => `${signal.ruleId}:${signal.accountId}`))
+	const moves = snapshot.signals.flatMap((signal) => {
+		const target = limitSignalTarget(signal, ids, held)
+		return target === null ? [] : [{ signal, target }]
+	})
+	if (moves.length === 0) return snapshot.signals
+	yield* db.transaction(
+		Effect.forEach(
+			moves,
+			({ signal, target }) =>
+				Effect.gen(function* () {
+					yield* db.run(
+						SQLite.update(schema.customerSignalsTable)
+							.set({ accountId: target, updatedAt: snapshot.org.now })
+							.where(($) => [$.id.eq(signal.id)]),
+					)
+					yield* db.run(
+						SQLite.update(schema.customerEventsTable)
+							.set({ accountId: target })
+							.where(($) => [
+								$.provider.eq("hazel"),
+								SQLite.jsonExtract($.data, "$.signalId", SQLite.nullable(SQLite.text)).eq(
+									signal.id,
+								),
+							]),
+					)
+				}),
+			{ discard: true },
+		),
+	)
+	const moved = new Map(moves.map(({ signal, target }) => [signal.id, target]))
+	return snapshot.signals.map((signal) => ({
+		...signal,
+		accountId: moved.get(signal.id) ?? signal.accountId,
+	}))
+})
+
+/**
  * Every rule against the chunk's accounts (a primary with environments over its group's facts, its
- * environments not at all), then their counters (their signals are final). Returns the chunk's
+ * environments only for `ENVIRONMENT_TEMPLATES`), then their counters (their signals are final). Returns the chunk's
  * unclosed signals.
  */
 const writeSignals = Effect.fn("Customers.writeSignals")(function* (snapshot: Snapshot, run: SignalRun) {
 	const db = yield* Database.Database
 	const { now } = snapshot.org
 	const { matches, triggered, counts } = run
-	const unclosed = new Map(
-		snapshot.signals.map((signal) => [`${signal.ruleId}:${signal.accountId}`, signal]),
-	)
+	const signals = yield* moveLimitSignals(snapshot)
+	const unclosed = new Map(signals.map((signal) => [`${signal.ruleId}:${signal.accountId}`, signal]))
 	const live: Live = new Map(unclosed)
+	const factsOf = evaluatedFor(snapshot.accounts)
 
 	for (const rule of snapshot.rules) {
 		const ruleBaseline = inBaseline(rule.template, run.baseline)
@@ -539,8 +585,10 @@ const writeSignals = Effect.fn("Customers.writeSignals")(function* (snapshot: Sn
 		yield* db.transaction(
 			Effect.forEach(
 				snapshot.accounts,
-				({ stored, evaluated: facts }) =>
+				(account) =>
 					Effect.gen(function* () {
+						const { stored } = account
+						const facts = factsOf(rule.template, account)
 						if (facts === null) return
 						const key = `${rule.id}:${stored.id}`
 						const result = evaluate(rule, facts, snapshot.org)

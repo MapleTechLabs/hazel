@@ -3,6 +3,7 @@ import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
 import { ChannelOption } from "../../../customers/channels"
+import { customerAccountOf } from "../../../customers/groups"
 import { AccountRow, isAttentionMuted, SettingsSummary, SignalRow } from "../../../customers/queries"
 import { SuggestionList } from "../../../customers/suggestions"
 
@@ -68,8 +69,14 @@ export const previousPeriodOf = (
 
 /** Open signals as the queue shows them (not on muted customers), highest priority first. */
 export const openSignals = (model: Model): ReadonlyArray<SignalRow> => {
+	const accountsById = new Map((model.accounts ?? []).map((account) => [account.id, account]))
 	const muted = new Set(
-		(model.accounts ?? []).filter((account) => isAttentionMuted(account)).map((account) => account.id),
+		(model.accounts ?? [])
+			.filter(
+				(account) =>
+					isAttentionMuted(account) || isAttentionMuted(customerAccountOf(account, accountsById)),
+			)
+			.map((account) => account.id),
 	)
 	return (model.signals ?? []).filter((signal) => signal.status === "open" && !muted.has(signal.accountId))
 }

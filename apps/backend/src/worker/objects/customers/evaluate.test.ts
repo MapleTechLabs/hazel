@@ -386,6 +386,29 @@ describe("signal evaluation", () => {
 		})
 	})
 
+	it("near_limit: an environment's forecast ends at its own period, the customer's plans keep it in scope", () => {
+		const end = new Date(NOW.getTime() + 10 * 86_400_000)
+		const customer = factsOf({
+			metrics: new Map([
+				[
+					"api_calls",
+					[
+						{ day: addDays(TODAY, -1), value: 940, limitValue: 1000 },
+						{ day: TODAY, value: 950, limitValue: 1000 },
+					],
+				],
+			]),
+			subscriptions: [{ mrrMinor: 0, billsByUsage: true, currentPeriodEnd: null }],
+			account: { mrrMinor: 0 },
+		})
+		const own = factsOf({ subscriptions: [{ mrrMinor: 0, currentPeriodEnd: end }] }).subscriptions
+		const rule = ruleOf(defaults("near_limit"), { scope: { payingOnly: true } })
+		expect(evaluate(rule, { ...customer, ownSubscriptions: own }, orgFacts())).toMatchObject({
+			_tag: "Match",
+			evidence: { forecast: { day: addDays(TODAY, 10), periodEnd: true } },
+		})
+	})
+
 	it("near_limit: forecasts the current period's run rate to the billing period end", () => {
 		const series = (values: ReadonlyArray<number>, limit = 1000) =>
 			new Map([

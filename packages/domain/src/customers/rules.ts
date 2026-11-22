@@ -372,6 +372,12 @@ export const TEMPLATES: TemplateTable = {
 /** The SLA templates: they cover every customer, outside Needs attention's stages and sources. */
 export const SLA_TEMPLATES: ReadonlyArray<SignalTemplate> = ["response_overdue", "resolution_overdue"]
 
+/**
+ * Templates about one environment, not the whole customer: a plan limit is one subscription's. Their
+ * signals are stored on that environment; every other template's on the customer's primary.
+ */
+export const ENVIRONMENT_TEMPLATES: ReadonlyArray<SignalTemplate> = ["near_limit"]
+
 /** `severity` raised by `step` levels, capped at `high`. */
 export const escalate = (floor: SignalSeverity, step: 0 | 1 | 2): SignalSeverity => {
 	const order = SignalSeverity.literals

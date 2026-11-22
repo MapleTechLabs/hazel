@@ -8,6 +8,7 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import {
+	ENVIRONMENT_TEMPLATES,
 	type HealthBreakdown,
 	type HealthDryRunResult,
 	type HealthSettings,
@@ -20,8 +21,8 @@ import type { CustomerAccountId, CustomerSignalRuleId } from "@hazel/schema"
 import { Clock, Effect } from "effect"
 import { scoreAll } from "./compute"
 import { evaluate, missingSources, type RuleInput } from "./evaluate"
-import { priorityScore, valueOf } from "./lifecycle"
-import { groupChunks, loadAccounts, loadBase, type SnapshotBase } from "./snapshot"
+import { limitSignalTarget, priorityScore, valueOf } from "./lifecycle"
+import { evaluatedFor, groupChunks, loadAccounts, loadBase, type SnapshotBase } from "./snapshot"
 
 const MAX_CHUNKS = 8
 const BUDGET_MS = 5_000
@@ -71,21 +72,26 @@ export const ruleDryRun = Effect.fn("Customers.ruleDryRun")(function* (
 		const snapshot = yield* loadAccounts(base, chunks[done])
 		// A primary with environments over its group's facts, as compute evaluates it; its environments
 		// are covered by it.
-		for (const { stored, evaluated: facts } of snapshot.accounts) {
+		const factsOf = evaluatedFor(snapshot.accounts)
+		for (const account of snapshot.accounts) {
+			const { stored } = account
 			evaluated.add(stored.id)
+			const facts = factsOf(rule.template, account)
 			if (facts === null) continue
 			const result = evaluate(rule, facts, snapshot.org)
 			if (result._tag === "NoMatch") {
 				reasons.set(result.reason, (reasons.get(result.reason) ?? 0) + 1)
 				continue
 			}
-			matched.add(facts.account.id)
-			mrrMinor += facts.account.mrrMinor
+			// An environment template's facts carry the customer's account: the row is this one.
+			const own = ENVIRONMENT_TEMPLATES.includes(rule.template) ? account.facts.account : facts.account
+			matched.add(own.id)
+			mrrMinor += own.mrrMinor
 			top.push({
-				accountId: facts.account.id,
-				name: facts.account.name,
-				logoUrl: facts.account.logoUrl,
-				mrrMinor: facts.account.mrrMinor,
+				accountId: own.id,
+				name: own.name,
+				logoUrl: own.logoUrl,
+				mrrMinor: own.mrrMinor,
 				severity: result.severity,
 				title: result.title,
 				reason: result.reason,
@@ -96,14 +102,20 @@ export const ruleDryRun = Effect.fn("Customers.ruleDryRun")(function* (
 			top.splice(10)
 		}
 	}
-	const existing =
+	const stored =
 		ruleId === undefined
 			? []
 			: yield* db.run(
 					SQLite.from(schema.customerSignalsTable)
-						.select("accountId", "status")
+						.select("ruleId", "accountId", "status", "evidence")
 						.where(($) => [$.ruleId.eq(ruleId), $.closedAt.isNull()]),
 				)
+	// Where compute would have them: a limit signal still on the primary moves to its environment.
+	const held = new Set(stored.map((signal) => `${signal.ruleId}:${signal.accountId}`))
+	const existing = stored.map((signal) => ({
+		...signal,
+		accountId: limitSignalTarget(signal, evaluated, held) ?? signal.accountId,
+	}))
 	const queued = new Set(
 		existing
 			.filter(

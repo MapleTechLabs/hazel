@@ -44,7 +44,6 @@ import { Message } from "./message"
 import {
 	ASSIGN_ME,
 	doneEntries,
-	groupOfModel,
 	metricEntries,
 	type Model,
 	OPEN_QUEUE,
@@ -492,7 +491,7 @@ const signalButtons = (
 	]
 }
 
-/** On an environment's page: its signals are the customer's, raised on the primary. */
+/** On an environment's page: besides its own, the customer-wide signals raised on the primary. */
 const primaryNote = (h: HtmlBuilder<Message>, model: Model, context: Context): ReadonlyArray<Html> => {
 	const primary = primaryOf(model)
 	return primary === null
@@ -501,36 +500,13 @@ const primaryNote = (h: HtmlBuilder<Message>, model: Model, context: Context): R
 				h.p(
 					[h.Class("px-4 pb-3 text-muted-fg text-sm sm:px-5")],
 					[
-						"Signals are raised for the whole customer, on its primary, ",
+						"Customer-wide signals are raised on its primary, ",
 						h.a(
 							[h.Href(hrefOf(customerRoute(context.orgSlug, primary.id))), h.Class(linkClass)],
 							[accountLabelOf(primary)],
 						),
 						".",
 					],
-				),
-			]
-}
-
-/** The environment a signal is about, when not the whole customer's (a plan limit is one environment's). */
-const environmentLink = (
-	h: HtmlBuilder<Message>,
-	model: Model,
-	context: Context,
-	signal: SignalRow,
-): ReadonlyArray<Html> => {
-	const group = groupOfModel(model)
-	const accountId = signal.evidence._tag === "limit" ? signal.evidence.accountId : undefined
-	const account = group.find((candidate) => candidate.id === accountId)
-	return account === undefined || account.id === model.accountId || group.length < 2
-		? []
-		: [
-				h.a(
-					[
-						h.Href(hrefOf(customerRoute(context.orgSlug, account.id))),
-						h.Class(twMerge(linkClass, "text-xs")),
-					],
-					[`in ${accountLabelOf(account)}`],
 				),
 			]
 }
@@ -607,7 +583,6 @@ const attentionSection = (h: HtmlBuilder<Message>, model: Model, context: Contex
 												: formatDate(new Date(signal.openedAtMs), { now }),
 										],
 									),
-									...environmentLink(h, model, context, signal),
 								],
 							),
 							h.p([h.Class("text-fg-2 text-sm")], [signal.reason]),

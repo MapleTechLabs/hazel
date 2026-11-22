@@ -15,6 +15,13 @@ export const groupIdOf = (account: GroupMember, liveIds: ReadonlySet<string>): C
 		? account.primaryAccountId
 		: account.id
 
+/** The customer an account belongs to: its live primary, else itself. Owner and mute are the customer's. */
+export const customerAccountOf = <A extends GroupMember>(
+	account: A,
+	accountsById: ReadonlyMap<string, A>,
+): A =>
+	account.primaryAccountId === null ? account : (accountsById.get(account.primaryAccountId) ?? account)
+
 const idsOf = (accounts: ReadonlyArray<GroupMember>): ReadonlySet<string> =>
 	new Set(accounts.map((account) => account.id))
 
@@ -74,6 +81,15 @@ export const environmentCounts = (accounts: ReadonlyArray<GroupMember>): Readonl
 	}
 	return counts
 }
+
+/** How a queue names an account: an environment by its label (it may share its primary's name). */
+export const queueNameOf = (
+	account: Readonly<{
+		name: string
+		environment: string | null
+		primaryAccountId: CustomerAccountId | null
+	}>,
+): string => (account.primaryAccountId === null ? account.name : accountLabelOf(account))
 
 /** `+2 environments`, or null for none. */
 export const environmentsHintOf = (count: number): string | null =>
