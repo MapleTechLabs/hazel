@@ -283,7 +283,7 @@ const conditionRow = (
 			...(canEdit
 				? [
 						iconButton(h, {
-							label: "Remove condition",
+							label: `Remove condition ${index + 1} of ${rule.name.trim() || "this rule"}`,
 							isDisabled: model.isSaving,
 							onPress: Message.PressedRemoveCondition({ ruleId: rule.id, index }),
 							icon: IconClose(h, icon),
@@ -326,13 +326,13 @@ const ruleCard = (
 					...(canEdit
 						? [
 								iconButton(h, {
-									label: "Move up",
+									label: `Move rule ${index + 1} up`,
 									isDisabled: isBusy || index === 0,
 									onPress: Message.PressedMoveRule({ ruleId: rule.id, step: -1 }),
 									icon: IconArrowUp(h, icon),
 								}),
 								iconButton(h, {
-									label: "Move down",
+									label: `Move rule ${index + 1} down`,
 									isDisabled: isBusy || index === count - 1,
 									onPress: Message.PressedMoveRule({ ruleId: rule.id, step: 1 }),
 									icon: IconArrowUp(h, {
@@ -341,7 +341,7 @@ const ruleCard = (
 									}),
 								}),
 								iconButton(h, {
-									label: "Delete rule",
+									label: `Delete rule ${index + 1}`,
 									isDisabled: isBusy,
 									onPress: Message.PressedDeleteRule({ ruleId: rule.id }),
 									icon: IconTrash(h, icon),

@@ -10,7 +10,7 @@ import { IntegrationEncryption } from "../../../services/integration-encryption"
 import { HISTORY_DAYS } from "./compute"
 import { CustomerIngest } from "./ingest"
 import type { ProviderCredentials } from "./providers"
-import { requestHistoryRebuild } from "./schedule"
+import { requestHistoryRebuild, requestPayingRefresh, revenueWalk, saveRevenueWalk } from "./schedule"
 import { addDays, dayOf } from "./time"
 
 /** Encrypt the API key and the webhook secret for storing, both under the current key version. */
@@ -229,6 +229,14 @@ export const switchProviderAccount = Effect.fn("Customers.switchProviderAccount"
 				.set({ variableMrrMinor: 0 })
 				.where(($) => [$.day.gte(first)]),
 		)
+		// Rebuilt once the new account's invoices are in, with who paid on usage.
+		const walk = Option.getOrUndefined(yield* revenueWalk)
+		yield* saveRevenueWalk({
+			...walk,
+			ids: [...new Set([...(walk?.ids ?? []), connection.id])],
+			at: now.getTime(),
+		})
+		yield* requestPayingRefresh
 		yield* requestHistoryRebuild
 	}
 	yield* (yield* CustomerIngest).completeSweep(connection.id, now, ["account", "contact"], {

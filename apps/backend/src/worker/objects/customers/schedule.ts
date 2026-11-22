@@ -19,7 +19,7 @@
  * - the earliest due company lookup (`./enrichment/job.ts`).
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import { Clock, Effect, Option } from "effect"
+import { Clock, Effect, Option, Schema } from "effect"
 import { deleteObjectMeta, readObjectMeta, writeObjectMeta } from "../meta"
 import { enrichmentDeadline } from "./enrichment/job"
 
@@ -146,6 +146,34 @@ export const clearHistoryRebuild = Effect.andThen(
 	deleteObjectMeta(REBUILD_KEY),
 	deleteObjectMeta(REBUILD_ATTEMPTS_KEY),
 )
+
+const REVENUE_WALK_KEY = "revenueWalk"
+const PAYING_REFRESH_KEY = "refreshPayingHistory"
+
+/**
+ * Stripe connections importing again for what a rebuild reads (`docs/customers/revenue.md`), and when
+ * that was asked. `owed`: a restatement had to run before they finished, so it runs again after.
+ */
+const RevenueWalk = Schema.fromJsonString(
+	Schema.Struct({
+		ids: Schema.Array(Schema.String),
+		at: Schema.Finite,
+		owed: Schema.optionalKey(Schema.Boolean),
+	}),
+)
+export type RevenueWalk = typeof RevenueWalk.Type
+const decodeRevenueWalk = Schema.decodeUnknownOption(RevenueWalk)
+const encodeRevenueWalk = Schema.encodeSync(RevenueWalk)
+
+export const revenueWalk = Effect.map(readObjectMeta(REVENUE_WALK_KEY), Option.flatMap(decodeRevenueWalk))
+export const saveRevenueWalk = (walk: RevenueWalk) =>
+	writeObjectMeta(REVENUE_WALK_KEY, encodeRevenueWalk(walk))
+export const clearRevenueWalk = deleteObjectMeta(REVENUE_WALK_KEY)
+
+/** The next rebuild also replaces the org's daily paying counts (a Stripe switch changed who paid). */
+export const requestPayingRefresh = writeObjectMeta(PAYING_REFRESH_KEY, "1")
+export const payingRefreshPending = Effect.map(readObjectMeta(PAYING_REFRESH_KEY), Option.isSome)
+export const clearPayingRefresh = deleteObjectMeta(PAYING_REFRESH_KEY)
 
 /** Count a rebuild attempt before it runs (a killed one counts too); the attempts before this one. */
 export const takeRebuildAttempt = Effect.gen(function* () {

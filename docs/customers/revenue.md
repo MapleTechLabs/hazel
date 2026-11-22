@@ -115,6 +115,11 @@ written for the change itself. A reclassification is never expansion or contract
 A restated day's MRR is what the subscription's invoices billed for it: the fixed-price recurring
 lines in effect then, prorations aside, so an upgrade appears on the renewal that billed it.
 
+While Stripe imports, an account's variable MRR (and MRR, when a rule can put usage in it) stays at
+the end of its recorded series; the first compute after the import records the whole change. A
+restatement waits for the connections importing again, for up to a day; one that finishes later gets
+a second restatement. Deleted accounts keep their recorded movements, which retention reads.
+
 ## Known limits
 
 - Credit notes and refunds are not read: revenue is gross of them.

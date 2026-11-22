@@ -46,13 +46,18 @@ import {
 	clearBaselineFor,
 	clearComputeProgress,
 	clearHistoryRebuild,
+	clearPayingRefresh,
+	clearRevenueWalk,
 	COMPUTE_DEBOUNCE_MS,
 	COMPUTE_INTERVAL_MS,
 	computeProgress,
 	historyRebuildPending,
+	payingRefreshPending,
 	requestHistoryRebuild,
 	resetComputeFailures,
+	revenueWalk,
 	saveComputeProgress,
+	saveRevenueWalk,
 	scheduleComputeAt,
 	takeComputeAgain,
 	takeRebuildAttempt,
@@ -112,13 +117,6 @@ const REVENUE_BASIS_KEY = "revenueBasis"
 const RESTATE_KEY = "restateRevenue"
 /** The billing data's version: below {@link REVENUE_DATA_VERSION}, Stripe is walked again. */
 const REVENUE_DATA_KEY = "revenueData"
-/** The connections that upgrade walked again: a restatement waits for their imports. */
-const REVENUE_WALK_KEY = "revenueWalk"
-const RevenueWalk = Schema.fromJsonString(
-	Schema.Struct({ ids: Schema.Array(Schema.String), at: Schema.Finite }),
-)
-const decodeRevenueWalk = Schema.decodeUnknownOption(RevenueWalk)
-const encodeRevenueWalk = Schema.encodeSync(RevenueWalk)
 /** 1: invoice lines and the price catalog (`docs/customers/revenue.md`). */
 const REVENUE_DATA_VERSION = "1"
 /** Set once the recorded days' user counts were redone from activity (rows written before it was backfilled). */
@@ -282,13 +280,22 @@ const writeRollups = Effect.fn("Customers.writeRollups")(function* (
 	const db = yield* Database.Database
 	const { now, today } = snapshot.org
 	let switched = 0
+	const stripeImporting = importing.has("stripe")
+	// A rule can put usage in MRR, and invoices are Stripe's whichever source holds the plan.
+	const usageCanBeMrr = snapshot.revenue.rules.some((rule) => rule.classification === "recurring")
 	yield* db.transaction(
 		Effect.forEach(
 			snapshot.accounts,
 			(account) =>
 				Effect.gen(function* () {
 					const { stored, rollup } = account
-					if (switchedSource(account)) switched++
+					const isSwitch = switchedSource(account)
+					// While Stripe imports, a balance built on its invoices is partial: it stays where its
+					// series ends, and the first compute after the import records the whole change.
+					const holdsVariable = stripeImporting && stored.mrrBasis === rollup.mrrBasis
+					const holdsMrr =
+						holdsVariable && usageCanBeMrr && !isSwitch && rollup.mrrSource !== "stripe"
+					if (isSwitch) switched++
 					else if (
 						!rebuildPending &&
 						!fromImporting(account, importing) &&
@@ -297,11 +304,14 @@ const writeRollups = Effect.fn("Customers.writeRollups")(function* (
 						// One never billed has no basis to change from.
 						(stored.mrrBasis === rollup.mrrBasis || neverBilled(stored))
 					) {
-						yield* writeMovement(stored, rollup, today)
-						// Invoices are Stripe's whichever source holds the MRR: partial while it imports.
-						if (!importing.has("stripe")) yield* writeVariableChange(stored, rollup, today)
+						if (!holdsMrr) yield* writeMovement(stored, rollup, today)
+						if (!holdsVariable) yield* writeVariableChange(stored, rollup, today)
 					}
-					const changes = diff(stored, rollup)
+					const changes = diff(stored, {
+						...rollup,
+						mrrMinor: holdsMrr ? stored.mrrMinor : rollup.mrrMinor,
+						variableMrrMinor: holdsVariable ? stored.variableMrrMinor : rollup.variableMrrMinor,
+					})
 					if (Object.keys(changes).length === 0) return
 					yield* db.run(
 						SQLite.update(schema.customerAccountsTable)
@@ -1169,12 +1179,21 @@ const usageHistory = (
  * Restating (a new revenue basis): the last year's movements and the org's daily billing columns go.
  * At-risk MRR stays as recorded: who was at risk on a past day cannot be rebuilt.
  */
-const clearBillingHistory = (first: Day, today: Day) =>
+const clearBillingHistory = (first: Day, today: Day, accountIds: ReadonlyArray<CustomerAccountId>) =>
 	Effect.gen(function* () {
 		const db = yield* Database.Database
-		yield* db.run(SQLite.deleteFrom(schema.customerMrrMovementsTable).where(($) => [$.day.gte(first)]))
+		// Live accounts only: a rebuild does not restore a deleted one's, and retention reads them.
 		yield* db.run(
-			SQLite.deleteFrom(schema.customerVariableMrrChangesTable).where(($) => [$.day.gte(first)]),
+			SQLite.deleteFrom(schema.customerMrrMovementsTable).where(($) => [
+				$.day.gte(first),
+				inList($.accountId, accountIds),
+			]),
+		)
+		yield* db.run(
+			SQLite.deleteFrom(schema.customerVariableMrrChangesTable).where(($) => [
+				$.day.gte(first),
+				inList($.accountId, accountIds),
+			]),
 		)
 		yield* db.run(
 			SQLite.update(schema.customerOrgDailyTable)
@@ -1202,6 +1221,7 @@ const clearBillingHistory = (first: Day, today: Day) =>
 export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (
 	base: SnapshotBase,
 	restate = false,
+	refreshPaying = false,
 ) {
 	const db = yield* Database.Database
 	const { today, currency } = base.org
@@ -1402,7 +1422,12 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (
 	const now = base.org.now
 	yield* db.transaction(
 		Effect.gen(function* () {
-			if (restate) yield* clearBillingHistory(first, today)
+			if (restate)
+				yield* clearBillingHistory(
+					first,
+					today,
+					accounts.map((account) => account.id),
+				)
 			yield* db.run(
 				SQLite.deleteFrom(schema.customerMrrMovementsTable).where(($) => [
 					$.day.eq(today),
@@ -1483,11 +1508,9 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (
 									excluded.variableMrrMinor,
 									$.variableMrrMinor,
 								),
-								payingAccounts: SQLite.iif(
-									noBilling,
-									excluded.payingAccounts,
-									$.payingAccounts,
-								),
+								payingAccounts: refreshPaying
+									? excluded.payingAccounts
+									: SQLite.iif(noBilling, excluded.payingAccounts, $.payingAccounts),
 								trialingAccounts: SQLite.iif(
 									noBilling,
 									excluded.trialingAccounts,
@@ -1566,10 +1589,7 @@ const upgradeRevenueData = (now: Date) =>
 						])
 						.returning("id"),
 				)
-				yield* writeObjectMeta(
-					REVENUE_WALK_KEY,
-					encodeRevenueWalk({ ids: rows.map((row) => row.id), at: now.getTime() }),
-				)
+				yield* saveRevenueWalk({ ids: rows.map((row) => row.id), at: now.getTime() })
 				yield* writeObjectMeta(REVENUE_DATA_KEY, REVENUE_DATA_VERSION)
 				return rows
 			}),
@@ -1579,23 +1599,41 @@ const upgradeRevenueData = (now: Date) =>
 		})
 	})
 
+/** Of the connections walked again, one that has yet to finish its import (in error too). */
+const walkUnfinished = (ids: ReadonlyArray<string>) =>
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		const row = yield* db.first(
+			SQLite.from(schema.customerConnectionsTable)
+				.select("id")
+				.where(($) => [$.status.neq("disconnected"), $.backfilledAt.isNull(), inList($.id, ids)])
+				.limit(1),
+		)
+		return Option.isSome(row)
+	})
+
 /**
- * A connection walked again (`upgradeRevenueData`) has not brought its lines in yet: a restatement
- * waits. One that stopped (in error, disconnected) does not hold it, nor one past the age a backfill
- * counts as importing.
+ * A rebuild waits for the connections walked again, up to the age a backfill counts as importing. Past
+ * it (one stuck, or in error) it runs on what is there, and `settleRevenueWalk` keeps the debt.
  */
 const awaitingRevenueWalk = (now: Date) =>
 	Effect.gen(function* () {
-		const walk = Option.flatMap(yield* readObjectMeta(REVENUE_WALK_KEY), decodeRevenueWalk)
-		if (Option.isNone(walk) || now.getTime() - walk.value.at >= BACKFILL_MAX_AGE_MS) return false
-		const db = yield* Database.Database
-		const pending = yield* db.first(
-			SQLite.from(schema.customerConnectionsTable)
-				.select("id")
-				.where(($) => [$.status.eq("active"), $.backfilledAt.isNull(), inList($.id, walk.value.ids)])
-				.limit(1),
-		)
-		return Option.isSome(pending)
+		const walk = Option.getOrUndefined(yield* revenueWalk)
+		if (walk === undefined || now.getTime() - walk.at >= BACKFILL_MAX_AGE_MS) return false
+		return yield* walkUnfinished(walk.ids)
+	})
+
+/** After a rebuild: a restatement that ran before the walk finished is owed again once it has. */
+const settleRevenueWalk = (restated: boolean) =>
+	Effect.gen(function* () {
+		yield* deleteObjectMeta(RESTATE_KEY)
+		const walk = Option.getOrUndefined(yield* revenueWalk)
+		if (walk !== undefined && (yield* walkUnfinished(walk.ids))) {
+			if (restated) yield* saveRevenueWalk({ ...walk, owed: true })
+			return
+		}
+		yield* clearRevenueWalk
+		yield* clearPayingRefresh
 	})
 
 /**
@@ -1607,6 +1645,11 @@ const followRevenueBasis = Effect.fnUntraced(function* (now: Date) {
 	const db = yield* Database.Database
 	const settings = yield* db.first(SQLite.from(schema.customerSettingsTable).select("id").limit(1))
 	if (Option.isNone(settings)) return
+	const walk = Option.getOrUndefined(yield* revenueWalk)
+	if (walk !== undefined && !(yield* walkUnfinished(walk.ids))) {
+		if (walk.owed === true) yield* writeObjectMeta(RESTATE_KEY, "1")
+		yield* clearRevenueWalk
+	}
 	const { key } = yield* loadRevenueBasis
 	const recorded = Option.getOrUndefined(yield* readObjectMeta(REVENUE_BASIS_KEY))
 	if (recorded !== key) {
@@ -1655,9 +1698,9 @@ export const runComputeStep = Effect.fn("Customers.computeStep")(function* (now:
 	) {
 		const attempts = yield* takeRebuildAttempt
 		if (attempts < MAX_REBUILD_ATTEMPTS) {
-			yield* rebuildHistory(yield* loadBase(now), Option.isSome(yield* readObjectMeta(RESTATE_KEY)))
-			yield* deleteObjectMeta(RESTATE_KEY)
-			yield* deleteObjectMeta(REVENUE_WALK_KEY)
+			const restate = Option.isSome(yield* readObjectMeta(RESTATE_KEY))
+			yield* rebuildHistory(yield* loadBase(now), restate, yield* payingRefreshPending)
+			yield* settleRevenueWalk(restate)
 			yield* clearHistoryRebuild
 			// It reset MRR to the plans': a compute spread over turns starts over to add usage to all.
 			yield* clearComputeProgress
@@ -1666,8 +1709,7 @@ export const runComputeStep = Effect.fn("Customers.computeStep")(function* (now:
 		}
 		// It keeps failing: charts go without the rebuilt history rather than computes stopping for good.
 		yield* Effect.logError("Customers history rebuild given up", { attempts })
-		yield* deleteObjectMeta(RESTATE_KEY)
-		yield* deleteObjectMeta(REVENUE_WALK_KEY)
+		yield* settleRevenueWalk(Option.isSome(yield* readObjectMeta(RESTATE_KEY)))
 		yield* clearHistoryRebuild
 	}
 	yield* runCompute(now)

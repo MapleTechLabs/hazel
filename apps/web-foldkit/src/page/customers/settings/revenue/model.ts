@@ -211,7 +211,7 @@ export const valueLabelOf = (
 
 /** The window options; a saved window outside them (the API takes 1–12) stays selectable. */
 export const windowOptionsOf = (months: number): ReadonlyArray<number> =>
-	[...new Set([1, 3, 6, 12, months])].sort((a, b) => a - b)
+	[...new Set([...Array.from({ length: 12 }, (_, index) => index + 1), months])].sort((a, b) => a - b)
 
 // READS
 

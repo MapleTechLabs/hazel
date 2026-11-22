@@ -207,6 +207,33 @@ const withoutEntriesOf = (model: Model, ruleId: string): Model => ({
 	),
 })
 
+/** A condition is gone: its text goes, and the entries after it follow their conditions up one. */
+const withoutEntryOf = (model: Model, ruleId: string, removed: number): Model => ({
+	...model,
+	valueEntries: Object.fromEntries(
+		Object.entries(model.valueEntries).flatMap(([key, text]) => {
+			if (!key.startsWith(`${ruleId}:`)) return [[key, text]]
+			const index = Number(key.slice(ruleId.length + 1))
+			return index === removed ? [] : [[entryKeyOf(ruleId, index > removed ? index - 1 : index), text]]
+		}),
+	),
+})
+
+/** What is still typed in a value input joins its condition: Save means what the page shows. */
+const withEntriesCommitted = (model: Model): Model => {
+	if (model.draft === null) return model
+	const rules = model.draft.rules.map((rule) => ({
+		...rule,
+		conditions: rule.conditions.map((condition, index) => {
+			const value = (model.valueEntries[entryKeyOf(rule.id, index)] ?? "").trim()
+			return value === "" || condition.values.includes(value) || condition.values.length >= MAX_VALUES
+				? condition
+				: { ...condition, values: [...condition.values, value] }
+		}),
+	}))
+	return { ...model, draft: { ...model.draft, rules }, valueEntries: {} }
+}
+
 const saved = (model: Model, shared: Shared): Return => {
 	const organizationId = shared.organization?.id
 	const valid = model.draft === null ? null : validOf(model.draft)
@@ -268,7 +295,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				),
 			),
 		PressedRemoveCondition: ({ ruleId, index }) =>
-			edited(withoutEntriesOf(model, ruleId), shared, (draft) =>
+			edited(withoutEntryOf(model, ruleId, index), shared, (draft) =>
 				withRule(draft, ruleId, (rule) => ({
 					...rule,
 					conditions: rule.conditions.filter((_, at) => at !== index),
@@ -291,10 +318,18 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model.isSaving ? { model } : previewed({ ...model, draft: null, valueEntries: {} }),
 		// A change of the basis rewrites history: that gets a confirmation. A rename saves as is.
 		PressedSave: () => {
-			if (model.draft === null || validOf(model.draft) === null || model.isSaving) return { model }
-			return restatesHistory(model)
-				? { model: { ...model, confirmModal: Modal.open(model.confirmModal).model } }
-				: saved(model, shared)
+			const committed = withEntriesCommitted(model)
+			if (committed.draft === null || validOf(committed.draft) === null || model.isSaving)
+				return { model }
+			if (!restatesHistory(committed)) return saved(committed, shared)
+			// The confirmation shows the preview of what will be saved, typed values included.
+			const next = Equal.equals(committed.draft, model.draft)
+				? { model: committed }
+				: previewed(committed)
+			return {
+				...next,
+				model: { ...next.model, confirmModal: Modal.open(next.model.confirmModal).model },
+			}
 		},
 		PressedConfirmSave: () => saved(model, shared),
 		GotConfirmModalMessage: ({ message: modalMessage }) => {
@@ -348,7 +383,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model: { ...model, catalog: AsyncData.Failure({ error: reason }) },
 		}),
 		SucceededSaveRevenueSettings: () => ({
-			...previewed(settled({ ...model, isSaving: false })),
+			...previewed(settled({ ...model, isSaving: false, valueEntries: {} })),
 			outMessage: PageOutMessage.RequestedToast({
 				toast: successToast(
 					"Revenue settings saved",

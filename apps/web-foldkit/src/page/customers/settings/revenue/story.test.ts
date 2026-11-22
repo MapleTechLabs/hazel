@@ -243,6 +243,37 @@ describe("revenue settings", () => {
 		expect(failed.outMessage).toBeDefined()
 	})
 
+	test("removing a condition keeps what is typed in the others, under their new position", () => {
+		const two = step(loaded(), Message.PressedAddCondition({ ruleId: "rule-2" }))
+		const typed = step(
+			step(two, Message.ChangedValueEntry({ ruleId: "rule-2", index: 0, text: "gold" })),
+			Message.ChangedValueEntry({ ruleId: "rule-2", index: 1, text: "silver" }),
+		)
+		const removed = step(typed, Message.PressedRemoveCondition({ ruleId: "rule-2", index: 0 }))
+		expect(removed.valueEntries).toEqual({ "rule-2:0": "silver" })
+	})
+
+	test("Save takes a value still typed in its input, and leaves the input empty", () => {
+		const typed = step(
+			step(loaded(), Message.ChangedValueEntry({ ruleId: "rule-2", index: 0, text: " gold " })),
+			Message.ChangedRuleName({ ruleId: "rule-2", name: "Metals" }),
+		)
+		const asked = update(typed, Message.PressedSave(), admin)
+		expect(asked.model.confirmModal.isOpen).toBe(true)
+		expect(commandNames(asked)).toEqual([DelayRevenuePreview.name])
+		const saving = update(asked.model, Message.PressedConfirmSave(), admin)
+		expect(saving.commands?.[0]).toMatchObject({
+			name: SaveRevenueSettings.name,
+			args: {
+				rules: [
+					expect.anything(),
+					{ conditions: [{ key: "kind", values: ["pass_through", "gold"] }] },
+				],
+			},
+		})
+		expect(saving.model.valueEntries).toEqual({})
+	})
+
 	test("members cannot change anything", () => {
 		const member = sharedAs("member")
 		const model = loaded()

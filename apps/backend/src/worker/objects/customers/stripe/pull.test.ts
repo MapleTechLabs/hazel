@@ -203,7 +203,7 @@ describe("the Stripe pull's full walk", () => {
 		])
 	})
 
-	it("bounds the invoices to the last two years", async () => {
+	it("bounds the invoices to what a history rebuild can read", async () => {
 		const fake = account()
 		await walk(fake)
 		const gte = Number(
@@ -212,8 +212,8 @@ describe("the Stripe pull's full walk", () => {
 				.params.find(([key]) => key === "created[gte]")![1],
 		)
 		const days = (Date.now() / 1000 - gte) / 86_400
-		expect(days).toBeGreaterThan(729)
-		expect(days).toBeLessThan(731)
+		expect(days).toBeGreaterThan(1134)
+		expect(days).toBeLessThan(1136)
 	})
 
 	it("pages a phase with Stripe's own cursor until it runs out", async () => {

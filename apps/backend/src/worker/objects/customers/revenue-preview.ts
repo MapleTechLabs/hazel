@@ -6,6 +6,7 @@
 import { Database, SQLite, schema } from "@hazel/db"
 import {
 	type ClassifiableLine,
+	type Classified,
 	classifyLine,
 	type RevenueCatalog,
 	type RevenuePreviewGroup,
@@ -14,6 +15,7 @@ import {
 } from "@hazel/domain/customers"
 import type { CustomerAccountId } from "@hazel/schema"
 import { Effect } from "effect"
+import { billed } from "./facts"
 import {
 	accountRevenueOf,
 	type BilledInvoice,
@@ -77,10 +79,23 @@ export const revenueCatalog = Effect.fn("Customers.revenueCatalog")(function* (n
 	} satisfies RevenueCatalog
 })
 
-const groupKey = (line: ClassifiableLine, description: string | null) =>
-	line.priceId === null
-		? `none:${line.source}:${line.proration}:${description ?? ""}`
-		: `${line.priceId}:${line.source}:${line.proration}`
+/** One group's identity: a tuple, since rule ids and descriptions can hold any delimiter. */
+const groupKey = (
+	line: ClassifiableLine,
+	description: string | null,
+	before: Classified,
+	after: Classified,
+) =>
+	JSON.stringify([
+		line.priceId,
+		line.priceId === null ? description : null,
+		line.source,
+		line.proration,
+		before.classification,
+		before.ruleId,
+		after.classification,
+		after.ruleId,
+	])
 
 export const revenuePreview = Effect.fn("Customers.revenuePreview")(function* (
 	draft: { readonly rules: ReadonlyArray<RevenueRule>; readonly variableMrrMonths: number },
@@ -146,13 +161,20 @@ export const revenuePreview = Effect.fn("Customers.revenuePreview")(function* (
 				]),
 		)
 		const invoicesBy = new Map<CustomerAccountId, Array<BilledInvoice>>()
-		for (const invoice of invoices)
-			invoicesBy.set(invoice.accountId, [...(invoicesBy.get(invoice.accountId) ?? []), invoice])
+		for (const invoice of invoices) {
+			const list = invoicesBy.get(invoice.accountId)
+			if (list === undefined) invoicesBy.set(invoice.accountId, [invoice])
+			else list.push(invoice)
+		}
 		for (const account of chunk) {
 			for (const total of [current, next]) {
+				// What compute would read under this basis's window (`loadAccounts`).
+				const from = windowMonths(now, total.basis.months)[0] - USAGE_LOOKBACK_MS
 				const result = accountRevenueOf({
 					subscriptions: billingBy.get(account.id)?.subscriptions ?? [],
-					invoices: invoicesBy.get(account.id) ?? [],
+					invoices: (invoicesBy.get(account.id) ?? []).filter(
+						(invoice) => invoice.issuedAt !== null && invoice.issuedAt.getTime() >= from,
+					),
 					basis: total.basis,
 					currency,
 					now,
@@ -169,13 +191,7 @@ export const revenuePreview = Effect.fn("Customers.revenuePreview")(function* (
 		// Same price, different metadata: rules may class such lines apart, so they group apart.
 		const before = classifyLine(line, saved.rules, saved.catalog)
 		const after = classifyLine(line, proposed.rules, proposed.catalog)
-		const key = [
-			groupKey(line, description),
-			before.classification,
-			before.ruleId,
-			after.classification,
-			after.ruleId,
-		].join(":")
+		const key = groupKey(line, description, before, after)
 		const existing = groups.get(key)
 		if (existing !== undefined) return existing
 		const price = line.priceId === null ? undefined : catalog.get(line.priceId)
@@ -219,12 +235,15 @@ export const revenuePreview = Effect.fn("Customers.revenuePreview")(function* (
 			group.amountMinor += line.amountMinor
 		}
 	}
-	for (const sub of subscriptions) {
-		if (sub.status === "canceled" || sub.currency !== currency) continue
-		for (const item of sub.items ?? []) {
-			const group = groupOf(itemLine(item), null) as { itemCount: number; monthlyMinor: number }
-			group.itemCount++
-			group.monthlyMinor += item.monthlyMinor ?? 0
+	// The subscriptions MRR counts: each live account's billing source's, billed in this currency.
+	for (const account of accounts) {
+		for (const sub of billingBy.get(account.id)?.subscriptions ?? []) {
+			if (!billed(sub) || sub.currency !== currency) continue
+			for (const item of sub.items ?? []) {
+				const group = groupOf(itemLine(item), null) as { itemCount: number; monthlyMinor: number }
+				group.itemCount++
+				group.monthlyMinor += item.monthlyMinor ?? 0
+			}
 		}
 	}
 	return {

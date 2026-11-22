@@ -145,6 +145,7 @@ const runRateRetention = (
 	movements: ReadonlyArray<schema.CustomerMrrMovement>,
 	previousStart: Day,
 	start: Day,
+	currency: string,
 ) =>
 	Effect.gen(function* () {
 		const db = yield* Database.Database
@@ -174,6 +175,8 @@ const runRateRetention = (
 		// its deltas lead back from).
 		const goneBy = (account: { deletedAt: Date | null }, day: Day) =>
 			account.deletedAt !== null && account.deletedAt < new Date(`${day}T00:00:00.000Z`)
+		const mixedSince = (day: Day) =>
+			[...movements, ...changes].some((row) => row.day >= day && row.currency !== currency)
 		const runRates = accounts.map((account) => {
 			const delta = deltas.get(account.id) ?? { current: 0, previous: 0 }
 			const stored = account.mrrMinor + account.variableMrrMinor
@@ -185,8 +188,13 @@ const runRateRetention = (
 			}
 		})
 		return {
-			now: retention(runRates.map((rate) => ({ start: rate.atStart, end: rate.end }))),
-			before: retention(runRates.map((rate) => ({ start: rate.atPreviousStart, end: rate.atStart }))),
+			now: mixedSince(start)
+				? null
+				: retention(runRates.map((rate) => ({ start: rate.atStart, end: rate.end }))),
+			// History from before a change of reporting currency cannot be subtracted from today's.
+			before: mixedSince(previousStart)
+				? null
+				: retention(runRates.map((rate) => ({ start: rate.atPreviousStart, end: rate.atStart }))),
 			contractedAtStart: accounts.filter(
 				(account) =>
 					!goneBy(account, start) && account.mrrMinor - (mrrSinceStart.get(account.id) ?? 0) > 0,
@@ -251,8 +259,10 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 	}
 	const startMrr = value(at(previousEnd), "mrrMinor")
 	const previousStartMrr = value(at(addDays(previousStart, -1)), "mrrMinor")
-	const nrrNow = nrr(inCurrent, startMrr)
-	const nrrBefore = nrr(inPrevious, previousStartMrr)
+	const inReportingCurrency = (list: ReadonlyArray<schema.CustomerMrrMovement>) =>
+		list.every((movement) => movement.currency === currency)
+	const nrrNow = inReportingCurrency(inCurrent) ? nrr(inCurrent, startMrr) : null
+	const nrrBefore = inReportingCurrency(inPrevious) ? nrr(inPrevious, previousStartMrr) : null
 	const wau = value(current, "wau")
 	const mau = value(current, "mau")
 	// Revenue collected: paid invoices in the reporting currency, their lines by class, without tax.
@@ -385,7 +395,7 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 		),
 	)
 	const accounts = everyAccount.filter((account) => account.deletedAt === null)
-	const runRateNrr = yield* runRateRetention(everyAccount, movements, previousStart, start)
+	const runRateNrr = yield* runRateRetention(everyAccount, movements, previousStart, start, currency)
 	const healthDistribution: Array<HealthDistributionRow> = HealthStatus.literals.map((status) => {
 		const rows = accounts.filter((account) => account.healthStatus === status)
 		return { status, count: rows.length, mrrMinor: rows.reduce((sum, row) => sum + row.mrrMinor, 0) }

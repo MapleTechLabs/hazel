@@ -444,7 +444,10 @@ const invoiceSplit = (
 	const parts = SPLIT_PARTS.filter(([key]) => revenue[key] !== 0)
 	// Lines that add up to nothing here (a trial's, or all excluded) read as zero, not as no data.
 	if (parts.length === 0)
-		return h.span([h.Class("whitespace-nowrap text-muted-fg text-xs")], [formatMoney(0, currency)])
+		return h.span(
+			[h.Class("whitespace-nowrap text-muted-fg text-xs")],
+			[formatMoney(0, currency, { cents: true })],
+		)
 	return h.span(
 		[h.Class("flex flex-wrap items-center gap-x-2.5 whitespace-nowrap text-xs")],
 		parts.map(([key, label, color]) =>
@@ -456,7 +459,7 @@ const invoiceSplit = (
 						h.Class(twMerge("size-2 rounded-xs", CHART_COLOR[color].bg)),
 					]),
 					h.span([h.Class("sr-only")], [`${label} `]),
-					formatMoney(revenue[key], currency),
+					formatMoney(revenue[key], currency, { cents: true }),
 				],
 			),
 		),

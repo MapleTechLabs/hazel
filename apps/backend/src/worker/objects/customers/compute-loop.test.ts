@@ -1581,6 +1581,151 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	it("restates again when a walked connection finishes after the rebuild stopped waiting for it", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* quietOrg(world)
+				const stripe = world.connection("stripe")
+				const backfilled = world.object.storage.db.prepare(
+					`UPDATE customer_connections SET status = 'active', backfilledAt = '2026-01-01 00:00:00.000' WHERE id = ?`,
+				)
+				backfilled.run(stripe)
+				yield* world.ingest("stripe", [subscription(40)])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				world.rows(`DELETE FROM _object_meta WHERE key IN ('revenueData', 'revenueBasis')`)
+				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
+				expect(meta(world, "restateRevenue")).toBe("1")
+
+				// In error past the wait: the rebuild runs without its lines, and the debt is kept.
+				world.rows(`UPDATE customer_connections SET status = 'error' WHERE id = ?`, stripe)
+				const later = new Date(NOW.getTime() + 25 * 60 * 60_000)
+				yield* world.object.run(runComputeStep(later)).pipe(Effect.orDie)
+				expect(meta(world, "restateRevenue")).toBeUndefined()
+				expect(JSON.parse(meta(world, "revenueWalk") ?? "{}")).toMatchObject({ owed: true })
+
+				backfilled.run(stripe)
+				yield* world.object.run(runComputeStep(later)).pipe(Effect.orDie)
+				expect(meta(world, "restateRevenue")).toBeUndefined()
+				expect(meta(world, "revenueWalk")).toBeUndefined()
+				expect(meta(world, "rebuildHistory")).toBeUndefined()
+			}),
+		))
+
+	it("holds variable MRR at its series' end while Stripe imports, and records the change after", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* quietOrg(world)
+				const stripe = world.connection("stripe")
+				world.object.storage.db
+					.prepare(
+						`UPDATE customer_connections SET backfilledAt = '2026-01-01 00:00:00.000' WHERE id = ?`,
+					)
+					.run(stripe)
+				const usage = (id: string, month: string, next: string, amountMinor: number): IngestOp => ({
+					_tag: "invoice",
+					externalId: id,
+					account: { provider: "clerk", externalId: "org_1" },
+					subscriptionExternalId: "sub_1",
+					number: id,
+					status: "paid",
+					amountDueMinor: amountMinor,
+					amountPaidMinor: amountMinor,
+					currency: "usd",
+					issuedAt: `2026-${next}-01T00:00:00.000Z`,
+					dueAt: null,
+					paidAt: `2026-${next}-01T00:00:00.000Z`,
+					attemptCount: 1,
+					lines: [
+						{
+							externalId: `il_${id}`,
+							source: "invoice_item",
+							proration: false,
+							priceId: "price_api",
+							productId: "prod_api",
+							description: null,
+							quantity: null,
+							amountMinor,
+							periodStart: `2026-${month}-01T00:00:00.000Z`,
+							periodEnd: `2026-${next}-01T00:00:00.000Z`,
+							metadata: {},
+						},
+					],
+				})
+				world.rows(
+					`UPDATE customer_settings SET revenueRules = '[{"id":"api","name":"Usage","conditions":[{"field":"price","values":["price_api"]}],"classification":"variable"}]'`,
+				)
+				world.rows(`UPDATE _object_meta SET value = 'stale' WHERE key = 'revenueBasis'`)
+				yield* world.ingest("stripe", [subscription(120), usage("in_may", "05", "06", 3_000)])
+				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
+				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
+				const variable = () => world.rows(`SELECT variableMrrMinor FROM customer_accounts`)
+				const changes = () =>
+					world.rows(`SELECT toMinor FROM customer_variable_mrr_changes ORDER BY day`)
+				expect(variable()).toEqual([{ variableMrrMinor: 3_000 }])
+				const recorded = changes()
+
+				const backfill = yield* world.object
+					.run(
+						Effect.flatMap(CustomerIngest, (ingest) => ingest.startRun(stripe, "backfill")).pipe(
+							Effect.provide(CustomerIngest.layer),
+						),
+					)
+					.pipe(Effect.orDie)
+				yield* world.ingest("stripe", [usage("in_apr", "04", "05", 9_000)])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(variable()).toEqual([{ variableMrrMinor: 3_000 }])
+				expect(changes()).toEqual(recorded)
+
+				yield* world.object
+					.run(
+						Effect.flatMap(CustomerIngest, (ingest) =>
+							ingest.finishRun(backfill.id, { _tag: "Succeeded", cursor: null }),
+						).pipe(Effect.provide(CustomerIngest.layer)),
+					)
+					.pipe(Effect.orDie)
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				// April 9_000 and May 3_000, over the two months billed.
+				expect(variable()).toEqual([{ variableMrrMinor: 6_000 }])
+				expect(changes().at(-1)).toEqual({ toMinor: 6_000 })
+			}),
+		))
+
+	it("keeps a deleted account's movements through a restatement: retention still reads them", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* quietOrg(world)
+				yield* world.ingest("clerk", [
+					{ _tag: "account", externalId: "org_2", name: "Gone", sameAs: [], onNoMatch: "create" },
+				])
+				const gone = world.rows<{ id: string }>(
+					`SELECT id FROM customer_accounts WHERE name = 'Gone'`,
+				)[0]!.id
+				world.rows(
+					`INSERT INTO customer_mrr_movements (id, accountId, day, type, deltaMinor, fromMrrMinor, toMrrMinor, currency)
+					VALUES (?, ?, ?, 'new', 5000, 0, 5000, 'usd')`,
+					uuid(),
+					gone,
+					day(-5),
+				)
+				world.rows(
+					`UPDATE customer_accounts SET mrrMinor = 5000, deletedAt = '2026-06-14 00:00:00.000' WHERE id = ?`,
+					gone,
+				)
+				world.rows(`UPDATE _object_meta SET value = 'stale' WHERE key = 'revenueBasis'`)
+				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
+				expect(meta(world, "restateRevenue")).toBeUndefined()
+				expect(
+					world.rows(
+						`SELECT day, toMrrMinor FROM customer_mrr_movements WHERE accountId = ?`,
+						gone,
+					),
+				).toEqual([{ day: day(-5), toMrrMinor: 5_000 }])
+			}),
+		))
+
 	it("upgrades an org computed before lines: walks Stripe once, restates only after that import", () =>
 		run(
 			Effect.gen(function* () {
