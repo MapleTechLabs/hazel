@@ -19,6 +19,7 @@ import {
 	CONFIRM_MODAL_ID,
 	draftOf,
 	draftOfSaved,
+	normalizedDraft,
 	entryKeyOf,
 	isSameBasis,
 	MAX_CONDITIONS,
@@ -75,7 +76,7 @@ const settled = (model: Model): Model =>
 	!model.isSaving &&
 	model.draft !== null &&
 	model.settings !== null &&
-	Equal.equals(model.draft, draftOfSaved(model.settings))
+	Equal.equals(normalizedDraft(model.draft), draftOfSaved(model.settings))
 		? { ...model, draft: null }
 		: model
 

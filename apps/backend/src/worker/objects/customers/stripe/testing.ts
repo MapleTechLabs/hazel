@@ -205,10 +205,13 @@ const serve = (fake: FakeStripeState, path: string, params: UrlParams.UrlParams)
 			return listOf(fake.products, params)
 		case "/prices": {
 			const product = first(params, "product")
+			// Like Stripe: active prices unless asked for the archived ones.
+			const active = first(params, "active") ?? "true"
 			const expanded = all(params, "expand[]").includes("data.product")
 			return listOf(
 				fake.prices
 					.filter((row) => product === undefined || row["product"] === product)
+					.filter((row) => String(row["active"] !== false) === active)
 					.map((row) => (expanded ? withProduct(fake, row) : row)),
 				params,
 			)

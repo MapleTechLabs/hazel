@@ -1611,6 +1611,12 @@ describe("Customers compute and sync loop", () => {
 				expect(world.rows(`SELECT type FROM customer_mrr_movements`)).toEqual([{ type: "new" }])
 				expect(world.rows(`SELECT mrrMinor FROM customer_accounts`)).toEqual([{ mrrMinor: 19_900 }])
 
+				// A rebuild asked for meanwhile waits for the walk too, and keeps the restatement.
+				yield* world.object.run(requestHistoryRebuild).pipe(Effect.orDie)
+				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
+				expect(meta(world, "rebuildHistory")).toBe("1")
+				expect(meta(world, "restateRevenue")).toBe("1")
+
 				// The import is done: the next step restates from the billing data, once.
 				backfilled.run(stripe)
 				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)

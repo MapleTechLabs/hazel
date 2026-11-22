@@ -218,6 +218,18 @@ export const switchProviderAccount = Effect.fn("Customers.switchProviderAccount"
 				.where(($) => [$.day.gte(first)]),
 		)
 		yield* requestHistoryRebuild
+	} else if (provider === "stripe") {
+		// Autumn holds the contracted MRR, but variable MRR came from this account's Stripe invoices.
+		const first = addDays(dayOf(now), -HISTORY_DAYS)
+		yield* db.run(
+			SQLite.deleteFrom(schema.customerVariableMrrChangesTable).where(($) => [$.day.gte(first)]),
+		)
+		yield* db.run(
+			SQLite.update(schema.customerOrgDailyTable)
+				.set({ variableMrrMinor: 0 })
+				.where(($) => [$.day.gte(first)]),
+		)
+		yield* requestHistoryRebuild
 	}
 	yield* (yield* CustomerIngest).completeSweep(connection.id, now, ["account", "contact"], {
 		manual: true,

@@ -6,7 +6,7 @@
  * | Phase | Request | Writes |
  * |---|---|---|
  * | `customers` | `/customers` | accounts (matched by shared id or domain) and their billing contacts |
- * | `prices` | `/prices` (`expand[]=data.product`) | the price catalog revenue rules match on |
+ * | `prices`, `archived_prices` | `/prices?active=true`, `?active=false` (`expand[]=data.product`) | the price catalog revenue rules match on |
  * | `subscriptions` | `/subscriptions?status=all` (expanded, `subscriptionExpands`) + `/products?ids[]=…` per page | subscriptions, MRR |
  * | `invoices` | `/invoices`, the last {@link INVOICE_BACKFILL_DAYS} days (+ `/lines` past the first 10) | invoices and their lines |
  * | `events` | `/events?types[]=…&created[gte]=since` + one read per changed object | whatever changed |
@@ -50,7 +50,8 @@ import {
 	opsOfReads,
 	readEvent,
 	readInvoiceLines,
-	STRIPE_EVENT_TYPES,
+	STRIPE_BILLING_EVENT_TYPES,
+	STRIPE_CATALOG_EVENT_TYPES,
 } from "./webhook"
 import {
 	objectOf,
@@ -76,7 +77,15 @@ const EVENT_READ_CONCURRENCY = 4
 /** Events per page: at most this many object reads are redone when a page fails. */
 const EVENTS_PAGE_SIZE = 25
 
-const StripePhase = Schema.Literals(["customers", "prices", "subscriptions", "invoices", "events"])
+const StripePhase = Schema.Literals([
+	"customers",
+	"prices",
+	"archived_prices",
+	"subscriptions",
+	"invoices",
+	"events",
+	"catalog_events",
+])
 type StripePhase = typeof StripePhase.Type
 
 /** Which phase the walk is in, and Stripe's paging cursor. */
@@ -98,10 +107,12 @@ export const encodeCursor = (cursor: StripeCursor): string => JSON.stringify(cur
 
 const NEXT_PHASE = {
 	customers: "prices",
-	prices: "subscriptions",
+	prices: "archived_prices",
+	archived_prices: "subscriptions",
 	subscriptions: "invoices",
 	invoices: null,
-	events: null,
+	events: "catalog_events",
+	catalog_events: null,
 } satisfies Readonly<Record<StripePhase, StripePhase | null>>
 
 const doneOf = (cursor: StripeCursor): number => cursor.done ?? 0
@@ -125,7 +136,7 @@ const pageOf = (
 	// Stripe's lists carry no total; only `has_more`.
 	const progress: SyncProgress = { step: cursor.phase, done, total: null }
 	// Only the full walk's last page: it listed every customer of the account.
-	return nextCursor === null && cursor.phase !== "events"
+	return nextCursor === null && cursor.phase === "invoices"
 		? { ops, nextCursor, progress, sweep: ["account"] }
 		: { ops, nextCursor, progress }
 }
@@ -150,9 +161,20 @@ const customersPage = Effect.fnUntraced(function* (
 	return pageOf(cursor, ops, body.data, body.has_more)
 })
 
-/** Every price, active or not (an old invoice's line names an archived one), with its product. */
+/**
+ * One page of prices with their products. `/v1/prices` lists only active ones unless told otherwise,
+ * so archived ones are a phase of their own: an old invoice's line names them.
+ */
 const pricesPage = Effect.fnUntraced(function* (get: StripeGet, cursor: StripeCursor, at: IsoTimestamp) {
-	const body = yield* get("/prices", query(cursor, [["expand[]", "data.product"]]), StripePricesPage)
+	const active = cursor.phase === "prices" ? "true" : "false"
+	const body = yield* get(
+		"/prices",
+		query(cursor, [
+			["active", active],
+			["expand[]", "data.product"],
+		]),
+		StripePricesPage,
+	)
 	const ops = body.data.flatMap((price) => {
 		const op = priceOp(price, objectOf(price.product), at)
 		return op === null ? [] : [op]
@@ -186,12 +208,15 @@ const invoicesPage = Effect.fnUntraced(function* (
 		query(cursor, [["created[gte]", secondsOf(nowMs - INVOICE_BACKFILL_DAYS * 86_400_000)]]),
 		StripeInvoicesPage,
 	)
-	// An invoice with more than the 10 lines Stripe embeds reads the rest, one at a time.
-	const ops = yield* Effect.forEach(body.data, (invoice) =>
-		Effect.map(readInvoiceLines(get, invoice), (lines) => {
-			const op = invoiceOp(invoice, { observedAt: at, lines })
-			return op === null ? [] : [op]
-		}),
+	// An invoice with more than the 10 lines Stripe embeds reads the rest; results keep their order.
+	const ops = yield* Effect.forEach(
+		body.data,
+		(invoice) =>
+			Effect.map(readInvoiceLines(get, invoice), (lines) => {
+				const op = invoiceOp(invoice, { observedAt: at, lines })
+				return op === null ? [] : [op]
+			}),
+		{ concurrency: EVENT_READ_CONCURRENCY },
 	)
 	return pageOf(cursor, ops.flat(), body.data, body.has_more)
 })
@@ -212,7 +237,9 @@ const eventsPage = Effect.fnUntraced(function* (
 			cursor,
 			[
 				...(since === null ? [] : [["created[gte]", secondsOf(since.getTime())] as const]),
-				...STRIPE_EVENT_TYPES.map((type) => ["types[]", type] as const),
+				...(cursor.phase === "events" ? STRIPE_BILLING_EVENT_TYPES : STRIPE_CATALOG_EVENT_TYPES).map(
+					(type) => ["types[]", type] as const,
+				),
 			],
 			EVENTS_PAGE_SIZE,
 		),
@@ -276,7 +303,7 @@ export const pullPage = Effect.fn("Stripe.pullPage")(function* (input: {
 	const page: PullPage =
 		cursor.phase === "customers"
 			? yield* customersPage(get, cursor, config, at)
-			: cursor.phase === "prices"
+			: cursor.phase === "prices" || cursor.phase === "archived_prices"
 				? yield* pricesPage(get, cursor, at)
 				: cursor.phase === "subscriptions"
 					? yield* subscriptionsPage(get, cursor, at)

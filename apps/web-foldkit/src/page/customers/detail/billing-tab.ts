@@ -400,7 +400,7 @@ const revenueHistoryCard = (
 	context: Context,
 	detail: Customers.AccountDetail,
 ): Html => {
-	const { byMonth, last12Months } = detail.revenue
+	const { byMonth } = detail.revenue
 	const currency = context.account.currency
 	return card(
 		h,
@@ -412,7 +412,7 @@ const revenueHistoryCard = (
 			h.div(
 				[h.Class("flex flex-col gap-3")],
 				[
-					chartLegend(h, revenueLegend(byMonth, last12Months, currency)),
+					chartLegend(h, revenueLegend(byMonth, currency)),
 					revenueChart(h, {
 						buckets: byMonth,
 						bucket: "month",

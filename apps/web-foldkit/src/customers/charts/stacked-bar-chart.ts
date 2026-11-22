@@ -311,14 +311,16 @@ const revenueStacks = (buckets: ReadonlyArray<RevenueBucket>): ReadonlyArray<Rev
 		(stack) => stack.key !== "unclassified" || buckets.some((entry) => entry.unclassified !== 0),
 	)
 
-/** The chart's legend, each class with its total over `split`. */
+/** The chart's legend, each class with its total over the bars shown. */
 export const revenueLegend = (
 	buckets: ReadonlyArray<RevenueBucket>,
-	split: RevenueSplit,
 	currency: string,
 ): ReadonlyArray<LegendItem> =>
 	revenueStacks(buckets).map((stack) => ({
-		label: `${stack.label} ${formatMoney(split[stack.key], currency)}`,
+		label: `${stack.label} ${formatMoney(
+			buckets.reduce((sum, entry) => sum + entry[stack.key], 0),
+			currency,
+		)}`,
 		color: stack.color,
 	}))
 

@@ -72,7 +72,7 @@ links it.
     `invoice.payment_failed`, `invoice.payment_action_required`, `invoice.voided`,
     `invoice.marked_uncollectible`, `payment_method.attached`, `payment_method.updated`,
     `payment_method.automatically_updated`, `payment_method.detached`, `price.created`,
-    `price.updated`, `price.deleted`, `product.updated`
+    `price.updated`, `product.updated`
 
     The webhook is optional: without one every change still arrives through the scheduled pull's
     event feed, up to 6 hours late.

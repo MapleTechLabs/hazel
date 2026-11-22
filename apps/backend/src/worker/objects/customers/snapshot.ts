@@ -39,6 +39,7 @@ import {
 	loadRevenueBasis,
 	type RevenueBasis,
 	recurringMrrOf,
+	USAGE_LOOKBACK_MS,
 	windowMonths,
 } from "./revenue"
 import { inList, isActive } from "./sql"
@@ -592,7 +593,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			.where(($) => [inList($.accountId, ids), $.status.eq("open"), $.provider.eq("stripe")]),
 	)
 	// Variable MRR's window, and a year before it for lines whose service period reaches into it.
-	const usageFrom = new Date(windowMonths(now, base.revenue.months)[0] - 365 * DAY_MS)
+	const usageFrom = new Date(windowMonths(now, base.revenue.months)[0] - USAGE_LOOKBACK_MS)
 	const billedInvoices = yield* db.run(
 		SQLite.from(schema.customerInvoicesTable)
 			.select(

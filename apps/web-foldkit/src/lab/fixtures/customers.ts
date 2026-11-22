@@ -1651,6 +1651,7 @@ export const overviewFixture = (
 			atRiskMrrMinor: kpi(billing ? 545_000 : 0, billing ? 612_000 : 0),
 			nrrPct: billing ? kpi(104.2, 101.8) : null,
 			runRateNrrPct: billing ? kpi(107.6, 103.1) : null,
+			contractedCustomersAtStart: billing ? 96 : 0,
 		},
 		revenue: splitOf(revenueBuckets),
 		revenueBuckets,

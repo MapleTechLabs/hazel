@@ -1656,8 +1656,17 @@ const make = Effect.gen(function* () {
 			const price = existing.value
 			if (readBefore(op.observedAt, price)) return outcome.unchanged(op.externalId)
 			const row: Record<string, unknown> = price
-			if (Object.entries(values).every(([field, value]) => same(row[field], value)))
+			if (Object.entries(values).every(([field, value]) => same(row[field], value))) {
+				// The newer read is recorded, so a slower read of an older state cannot land after it.
+				if (observedAt !== null && !same(observedAt, price.observedAt)) {
+					yield* db.run(
+						SQLite.update(schema.customerPricesTable)
+							.set({ observedAt })
+							.where(($) => [$.provider.eq(provider), $.externalId.eq(op.externalId)]),
+					)
+				}
 				return outcome.unchanged(op.externalId)
+			}
 			yield* db.run(
 				SQLite.update(schema.customerPricesTable)
 					.set({ ...values, observedAt: observedAt ?? price.observedAt, updatedAt: session.now })

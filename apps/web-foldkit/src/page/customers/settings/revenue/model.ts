@@ -245,6 +245,17 @@ export const toRules = (draft: RevenueDraft): ReadonlyArray<Customers.RevenueRul
 		classification: rule.classification,
 	}))
 
+/** The draft as it is saved: metadata keys trimmed. A draft equal to the saved rules once saved is clean. */
+export const normalizedDraft = (draft: RevenueDraft): RevenueDraft => ({
+	...draft,
+	rules: draft.rules.map((rule) => ({
+		...rule,
+		conditions: rule.conditions.map((condition) =>
+			condition.field === "metadata" ? { ...condition, key: condition.key.trim() } : condition,
+		),
+	})),
+})
+
 /** What keeps a rule from being saved, in a line; null when it is complete. */
 export const problemOf = (rule: RuleDraft): string | null => {
 	if (rule.conditions.length === 0) return "Add at least one condition."
@@ -276,7 +287,7 @@ export const validOf = (draft: RevenueDraft): ValidDraft | null => {
 export const isDirty = (model: Model): boolean =>
 	model.draft !== null &&
 	model.settings !== null &&
-	!Equal.equals(model.draft, draftOfSaved(model.settings))
+	!Equal.equals(normalizedDraft(model.draft), draftOfSaved(model.settings))
 
 const basisOf = (draft: RevenueDraft, currency: string) =>
 	Customers.revenueBasisOf(toRules(draft), draft.variableMrrMonths, currency, 0)

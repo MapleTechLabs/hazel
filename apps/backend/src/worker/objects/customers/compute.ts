@@ -78,6 +78,7 @@ import {
 	recurringHistoryOf,
 	type SubscriptionInvoice,
 	type TrailingUsage,
+	USAGE_LOOKBACK_MS,
 	trailingUsageOf,
 	windowMonths,
 } from "./revenue"
@@ -113,7 +114,11 @@ const RESTATE_KEY = "restateRevenue"
 const REVENUE_DATA_KEY = "revenueData"
 /** The connections that upgrade walked again: a restatement waits for their imports. */
 const REVENUE_WALK_KEY = "revenueWalk"
-const decodeWalkedConnections = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Array(Schema.String)))
+const RevenueWalk = Schema.fromJsonString(
+	Schema.Struct({ ids: Schema.Array(Schema.String), at: Schema.Finite }),
+)
+const decodeRevenueWalk = Schema.decodeUnknownOption(RevenueWalk)
+const encodeRevenueWalk = Schema.encodeSync(RevenueWalk)
 /** 1: invoice lines and the price catalog (`docs/customers/revenue.md`). */
 const REVENUE_DATA_VERSION = "1"
 /** Set once the recorded days' user counts were redone from activity (rows written before it was backfilled). */
@@ -293,7 +298,8 @@ const writeRollups = Effect.fn("Customers.writeRollups")(function* (
 						(stored.mrrBasis === rollup.mrrBasis || neverBilled(stored))
 					) {
 						yield* writeMovement(stored, rollup, today)
-						yield* writeVariableChange(stored, rollup, today)
+						// Invoices are Stripe's whichever source holds the MRR: partial while it imports.
+						if (!importing.has("stripe")) yield* writeVariableChange(stored, rollup, today)
 					}
 					const changes = diff(stored, rollup)
 					if (Object.keys(changes).length === 0) return
@@ -1118,13 +1124,14 @@ export const mrrHistory = (
 	)
 }
 
-/** Whether the account paid on each day: a subscription that pays (`pays`, any currency) in its paid span. */
+/** Whether the account paid in `currency` on each day: a subscription that pays (`pays`) in its paid span. */
 const paidHistory = (
 	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
+	currency: string,
 	days: ReadonlyArray<Day>,
 ): Array<boolean> => {
 	const spans = subscriptions.flatMap((sub) => {
-		const span = pays(sub) ? paidSpanOf(sub) : null
+		const span = sub.currency === currency && pays(sub) ? paidSpanOf(sub) : null
 		return span === null ? [] : [span]
 	})
 	return days.map((day) => spans.some((span) => within(day, span)))
@@ -1158,7 +1165,10 @@ const usageHistory = (
 	})
 }
 
-/** Restating (a new revenue basis): the last year's movements and the org's daily billing columns go. */
+/**
+ * Restating (a new revenue basis): the last year's movements and the org's daily billing columns go.
+ * At-risk MRR stays as recorded: who was at risk on a past day cannot be rebuilt.
+ */
 const clearBillingHistory = (first: Day, today: Day) =>
 	Effect.gen(function* () {
 		const db = yield* Database.Database
@@ -1173,7 +1183,6 @@ const clearBillingHistory = (first: Day, today: Day) =>
 					variableMrrMinor: 0,
 					payingAccounts: 0,
 					trialingAccounts: 0,
-					atRiskMrrMinor: 0,
 				})
 				.where(($) => [$.day.gte(first), $.day.lt(today)]),
 		)
@@ -1236,7 +1245,7 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (
 	const variableChanges: Array<Record<string, unknown>> = []
 	// Invoices billed in the window of the year's first day and a year before it (long service periods).
 	const invoicesFrom = new Date(
-		windowMonths(new Date(`${first}T00:00:00.000Z`), revenue.months)[0] - 365 * DAY_MS,
+		windowMonths(new Date(`${first}T00:00:00.000Z`), revenue.months)[0] - USAGE_LOOKBACK_MS,
 	)
 	const series = [before, ...days]
 	const mrr = Array.from({ length: days.length }, () => 0)
@@ -1244,7 +1253,12 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (
 	const paying = Array.from({ length: days.length }, () => 0)
 	const trialing = Array.from({ length: days.length }, () => 0)
 	const movements: Array<Record<string, unknown>> = []
-	const current: Array<{ id: CustomerAccountId; mrrMinor: number; variableMrrMinor: number }> = []
+	const current: Array<{
+		id: CustomerAccountId
+		mrrMinor: number
+		variableMrrMinor: number
+		mrrBasis: string | null
+	}> = []
 	// In chunks: an account's invoices carry their lines.
 	for (const chunk of accountChunks(accounts)) {
 		const invoices = yield* db.run(
@@ -1280,7 +1294,7 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (
 			const subs = billingBy.get(account.id)?.subscriptions ?? []
 			const own = invoicesBy.get(account.id) ?? []
 			const recurring = mrrHistory(subs, currency, series, revenue, own)
-			const paid = paidHistory(subs, series)
+			const paid = paidHistory(subs, currency, series)
 			const usage = usageHistory(own, revenue, currency, series)
 			// As the rollup counts them (`rollupAccount`): usage while billed by a subscription, or
 			// (with none) billed last month.
@@ -1310,15 +1324,20 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (
 				trialing[index] += trial[index]
 			}
 			const last = series.length - 1
+			// A series kept as recorded keeps its balance: the next compute records the change to it.
+			const mrrNow = withMovements.has(account.id) ? account.mrrMinor : accountMrr[last]
+			const variableNow = withChanges.has(account.id) ? account.variableMrrMinor : accountVariable[last]
+			const basisNow = withMovements.has(account.id) ? account.mrrBasis : revenue.key
 			if (
-				accountMrr[last] !== account.mrrMinor ||
-				accountVariable[last] !== account.variableMrrMinor ||
-				account.mrrBasis !== revenue.key
+				mrrNow !== account.mrrMinor ||
+				variableNow !== account.variableMrrMinor ||
+				basisNow !== account.mrrBasis
 			)
 				current.push({
 					id: account.id,
-					mrrMinor: accountMrr[last],
-					variableMrrMinor: accountVariable[last],
+					mrrMinor: mrrNow,
+					variableMrrMinor: variableNow,
+					mrrBasis: basisNow,
 				})
 			if (!withChanges.has(account.id)) {
 				for (let index = 1; index < accountVariable.length; index++) {
@@ -1420,7 +1439,7 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (
 						.set({
 							mrrMinor: account.mrrMinor,
 							variableMrrMinor: account.variableMrrMinor,
-							mrrBasis: revenue.key,
+							mrrBasis: account.mrrBasis,
 							updatedAt: now,
 						})
 						.where(($) => [$.id.eq(account.id)]),
@@ -1458,8 +1477,9 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (
 								wau: excluded.wau,
 								mau: excluded.mau,
 								mrrMinor: SQLite.iif(noBilling, excluded.mrrMinor, $.mrrMinor),
+								// Its own test: a Stripe switch clears it while Autumn's MRR stays.
 								variableMrrMinor: SQLite.iif(
-									noBilling,
+									$.variableMrrMinor.eq(0),
 									excluded.variableMrrMinor,
 									$.variableMrrMinor,
 								),
@@ -1533,21 +1553,49 @@ const upgradeRevenueData = (now: Date) =>
 	Effect.gen(function* () {
 		if (Option.getOrUndefined(yield* readObjectMeta(REVENUE_DATA_KEY)) === REVENUE_DATA_VERSION) return
 		const db = yield* Database.Database
-		const walked = yield* db.run(
-			SQLite.update(schema.customerConnectionsTable)
-				.set({ backfilledAt: null, lastSuccessAt: null, nextSyncAt: now, updatedAt: now })
-				.where(($) => [
-					$.provider.eq("stripe"),
-					$.status.neq("disconnected"),
-					$.backfilledAt.isNotNull(),
-				])
-				.returning("id"),
+		// Together: a retry after a partial write would find the reset connections and record none.
+		const walked = yield* db.transaction(
+			Effect.gen(function* () {
+				const rows = yield* db.run(
+					SQLite.update(schema.customerConnectionsTable)
+						.set({ backfilledAt: null, lastSuccessAt: null, nextSyncAt: now, updatedAt: now })
+						.where(($) => [
+							$.provider.eq("stripe"),
+							$.status.neq("disconnected"),
+							$.backfilledAt.isNotNull(),
+						])
+						.returning("id"),
+				)
+				yield* writeObjectMeta(
+					REVENUE_WALK_KEY,
+					encodeRevenueWalk({ ids: rows.map((row) => row.id), at: now.getTime() }),
+				)
+				yield* writeObjectMeta(REVENUE_DATA_KEY, REVENUE_DATA_VERSION)
+				return rows
+			}),
 		)
-		yield* writeObjectMeta(REVENUE_WALK_KEY, JSON.stringify(walked.map((row) => row.id)))
-		yield* writeObjectMeta(REVENUE_DATA_KEY, REVENUE_DATA_VERSION)
 		yield* Effect.logInfo("Customers billing walked again for revenue data", {
 			connections: walked.length,
 		})
+	})
+
+/**
+ * A connection walked again (`upgradeRevenueData`) has not brought its lines in yet: a restatement
+ * waits. One that stopped (in error, disconnected) does not hold it, nor one past the age a backfill
+ * counts as importing.
+ */
+const awaitingRevenueWalk = (now: Date) =>
+	Effect.gen(function* () {
+		const walk = Option.flatMap(yield* readObjectMeta(REVENUE_WALK_KEY), decodeRevenueWalk)
+		if (Option.isNone(walk) || now.getTime() - walk.value.at >= BACKFILL_MAX_AGE_MS) return false
+		const db = yield* Database.Database
+		const pending = yield* db.first(
+			SQLite.from(schema.customerConnectionsTable)
+				.select("id")
+				.where(($) => [$.status.eq("active"), $.backfilledAt.isNull(), inList($.id, walk.value.ids)])
+				.limit(1),
+		)
+		return Option.isSome(pending)
 	})
 
 /**
@@ -1555,7 +1603,7 @@ const upgradeRevenueData = (now: Date) =>
  * billing history is restated under it by the next rebuild, once no billing import runs. Computes in
  * between write no movement for the change (`mrrBasis`).
  */
-const followRevenueBasis = Effect.gen(function* () {
+const followRevenueBasis = Effect.fnUntraced(function* (now: Date) {
 	const db = yield* Database.Database
 	const settings = yield* db.first(SQLite.from(schema.customerSettingsTable).select("id").limit(1))
 	if (Option.isNone(settings)) return
@@ -1580,19 +1628,7 @@ const followRevenueBasis = Effect.gen(function* () {
 		yield* writeObjectMeta(REVENUE_BASIS_KEY, key)
 	}
 	if (Option.isNone(yield* readObjectMeta(RESTATE_KEY))) return
-	// Not before the connections walked again have brought the lines it restates from; one that
-	// stopped (in error, disconnected) does not hold it.
-	const walked = Option.getOrElse(
-		Option.flatMap(yield* readObjectMeta(REVENUE_WALK_KEY), decodeWalkedConnections),
-		(): ReadonlyArray<string> => [],
-	)
-	const awaiting = yield* db.first(
-		SQLite.from(schema.customerConnectionsTable)
-			.select("id")
-			.where(($) => [$.status.eq("active"), $.backfilledAt.isNull(), inList($.id, walked)])
-			.limit(1),
-	)
-	if (Option.isNone(awaiting)) yield* requestHistoryRebuild
+	if (!(yield* awaitingRevenueWalk(now))) yield* requestHistoryRebuild
 })
 
 /**
@@ -1610,9 +1646,13 @@ export const markRevenueCurrent = Effect.gen(function* () {
  */
 export const runComputeStep = Effect.fn("Customers.computeStep")(function* (now: Date) {
 	yield* upgradeRevenueData(now)
-	yield* followRevenueBasis
+	yield* followRevenueBasis(now)
 	const importing = yield* importingProviders(now)
-	if (!billingImporting(importing) && (yield* historyRebuildPending)) {
+	if (
+		!billingImporting(importing) &&
+		!(yield* awaitingRevenueWalk(now)) &&
+		(yield* historyRebuildPending)
+	) {
 		const attempts = yield* takeRebuildAttempt
 		if (attempts < MAX_REBUILD_ATTEMPTS) {
 			yield* rebuildHistory(yield* loadBase(now), Option.isSome(yield* readObjectMeta(RESTATE_KEY)))
@@ -1639,6 +1679,8 @@ const ComputeProgress = Schema.Struct({
 	startedAt: Schema.Finite,
 	day: Day,
 	autumnReady: Schema.Boolean,
+	/** The revenue basis its totals were summed under: another one starts over. */
+	basis: Schema.String,
 	/** The primary of the last group of accounts done (groups go in their primary's id order). */
 	after: CustomerAccountId,
 	armed: Schema.Array(Schema.String),
@@ -1679,6 +1721,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 			(saved) =>
 				saved.day === base.org.today &&
 				saved.autumnReady === base.autumnReady &&
+				saved.basis === base.revenue.key &&
 				now.getTime() - saved.startedAt < COMPUTE_PROGRESS_MAX_AGE_MS,
 		),
 	)
@@ -1739,6 +1782,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 				startedAt: progress?.startedAt ?? now.getTime(),
 				day: base.org.today,
 				autumnReady: base.autumnReady,
+				basis: base.revenue.key,
 				after: last[last.length - 1][0],
 				armed: signals.armed,
 				totals,

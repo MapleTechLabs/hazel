@@ -21,8 +21,8 @@
  * | `customer.updated` changing `invoice_settings` or `default_source` | also `GET /v1/subscriptions?customer=…` | the customer's subscriptions, for the default card they fall back to |
  * | `customer.subscription.created` / `updated` / `deleted` / `paused` / `resumed` | `GET /v1/subscriptions/{id}` | the subscription |
  * | `invoice.finalized` / `paid` / `payment_failed` / `payment_action_required` / `voided` / `marked_uncollectible` | `GET /v1/invoices/{id}` (+ `/lines` past the first 10) | the invoice and its lines |
- * | `price.created` / `updated` / `deleted` | `GET /v1/prices/{id}?expand[]=product` | the price in the catalog |
- * | `product.updated` | `GET /v1/prices?product=…&expand[]=data.product` | its prices in the catalog (name, metadata) |
+ * | `price.created` / `updated` | `GET /v1/prices/{id}?expand[]=product` | the price in the catalog |
+ * | `product.updated` | `GET /v1/prices?product=…&active=…&expand[]=data.product`, active and archived | its prices in the catalog (name, metadata) |
  * | `payment_method.attached` / `updated` / `automatically_updated` / `detached` | `GET /v1/subscriptions?customer=…` | the customer's subscriptions, for the card on file |
  *
  * Writing subscriptions also reads their plans' names, one `GET /v1/products?ids[]=…` per 100
@@ -99,18 +99,21 @@ const PAYMENT_METHOD_EVENTS: ReadonlySet<string> = new Set([
 	"payment_method.detached",
 ])
 
-const PRICE_EVENTS: ReadonlySet<string> = new Set(["price.created", "price.updated", "price.deleted"])
+// Not `price.deleted`: only a price never billed can be deleted, and its catalog row is harmless.
+const PRICE_EVENTS: ReadonlySet<string> = new Set(["price.created", "price.updated"])
 const PRODUCT_EVENTS: ReadonlySet<string> = new Set(["product.updated"])
 
-/** Every event type Hazel handles: the webhook endpoint's subscription, and the pull's `types[]`. */
-export const STRIPE_EVENT_TYPES: ReadonlyArray<string> = [
+/**
+ * The event types the pull lists, in two batches: `/v1/events` takes at most 20 `types[]`, and
+ * Hazel handles more. Together they are what a webhook endpoint subscribes to.
+ */
+export const STRIPE_BILLING_EVENT_TYPES: ReadonlyArray<string> = [
 	...CUSTOMER_EVENTS,
 	...SUBSCRIPTION_EVENTS,
 	...INVOICE_EVENTS,
 	...PAYMENT_METHOD_EVENTS,
-	...PRICE_EVENTS,
-	...PRODUCT_EVENTS,
 ]
+export const STRIPE_CATALOG_EVENT_TYPES: ReadonlyArray<string> = [...PRICE_EVENTS, ...PRODUCT_EVENTS]
 
 /** Refuse an event: logged with the reason (never the payload), a delivery is answered 400 with `message`. */
 const reject = (reason: string, message: string, detail: Record<string, unknown> = {}) =>
@@ -169,6 +172,32 @@ export const readInvoiceLines = Effect.fn("Stripe.invoiceLines")(function* (
 		more = page.has_more === true && page.data.length > 0
 	}
 	return lines
+})
+
+/** All of a product's prices with the product expanded: `/v1/prices` lists active or archived, not both. */
+const pricesOfProduct = Effect.fn("Stripe.pricesOfProduct")(function* (get: StripeGet, productId: string) {
+	const prices: Array<StripePrice> = []
+	for (const active of ["true", "false"]) {
+		let after: string | null = null
+		let more = true
+		while (more) {
+			const page: typeof StripePricesPage.Type = yield* get(
+				"/prices",
+				[
+					["product", productId],
+					["active", active],
+					["limit", "100"],
+					["expand[]", "data.product"],
+					...(after === null ? [] : [["starting_after", after] as const]),
+				],
+				StripePricesPage,
+			)
+			prices.push(...page.data)
+			after = page.data.at(-1)?.id ?? null
+			more = page.has_more === true && after !== null
+		}
+	}
+	return prices
 })
 
 /** A price's catalog op, its product expanded (`expand[]=product`). */
@@ -323,20 +352,10 @@ export const readEvent = Effect.fn("Stripe.readEvent")(function* (
 	}
 	if (PRODUCT_EVENTS.has(type)) {
 		const { id } = yield* decodeAs(ObjectId, data, type)
-		const prices = yield* current(
-			get(
-				"/prices",
-				[
-					["product", id],
-					["limit", "100"],
-					["expand[]", "data.product"],
-				],
-				StripePricesPage,
-			),
-		)
+		const prices = yield* current(pricesOfProduct(get, id))
 		return {
 			ops: catalogOpsOf(
-				Option.match(prices, { onNone: () => [], onSome: (page) => page.data }),
+				Option.getOrElse(prices, () => []),
 				observedAt,
 			),
 			subscriptions: [],

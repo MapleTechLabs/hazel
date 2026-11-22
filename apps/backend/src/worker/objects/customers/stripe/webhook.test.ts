@@ -305,6 +305,18 @@ describe("Stripe webhook events", () => {
 		expect(ops[0]).toMatchObject({ productMetadata: { family: "core" } })
 	})
 
+	it("a product event reads every page of its prices, active and archived", async () => {
+		const many = Array.from({ length: 101 }, (_, index) => ({
+			...PRICES[1]!,
+			id: `price_${String(index).padStart(3, "0")}`,
+		}))
+		const archived = { ...PRICES[1]!, id: "price_old", active: false }
+		const fake = makeFakeStripe({ ...stripe(), prices: [...many, archived] })
+		const ops = await run(deliver(event("product.updated", PRODUCT_PRO), { fake }))
+		expect(ops).toHaveLength(102)
+		expect(ops.at(-1)).toMatchObject({ externalId: "price_old", active: false })
+	})
+
 	it("an invoice event reads the lines past the first 10", async () => {
 		const lines = Array.from({ length: 11 }, (_, index) =>
 			invoiceLine({ id: `il_${String(index).padStart(2, "0")}` }),

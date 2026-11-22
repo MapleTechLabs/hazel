@@ -73,6 +73,8 @@ export const OverviewKpis = Schema.Struct({
 	revenueMinor: Kpi,
 	/** Accounts that churned in the range. */
 	logoChurn: Kpi,
+	/** Accounts with contracted MRR at the range's start: what logo churn is a share of. */
+	contractedCustomersAtStart: Schema.Int,
 	/** MRR of accounts with an open high-severity risk signal (now; `previous` from `customer_org_daily`). */
 	atRiskMrrMinor: Kpi,
 	/** Net revenue retention of MRR over the range, percent; null without MRR at its start. */

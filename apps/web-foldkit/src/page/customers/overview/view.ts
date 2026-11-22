@@ -310,7 +310,7 @@ const headline = (
 			id: "kpi-revenue",
 			label: "Revenue",
 			definition:
-				"Money collected in the period from paid invoices, by paid date: excluding tax, net of discounts and credits, before refunds.",
+				"Money collected in the period from paid invoices, by paid date: excluding tax, net of discounts. Credit notes and refunds are not deducted.",
 			value: formatMoney(kpis.revenueMinor.value, currency),
 			delta: pctDelta(model, kpis.revenueMinor),
 			detail: comparing ?? "Collected in the period",
@@ -353,7 +353,7 @@ const secondaryLine = (
 	if (result === undefined || !result.hasData.billing) return []
 	const { kpis } = result
 	const total = model.accounts?.length ?? 0
-	const churnBase = kpis.payingCustomers.previous ?? kpis.payingCustomers.value
+	const churnBase = kpis.contractedCustomersAtStart
 	const churnPct = churnBase === 0 ? 0 : (kpis.logoChurn.value / churnBase) * 100
 	const part = (
 		id: string,
@@ -387,7 +387,7 @@ const secondaryLine = (
 				part(
 					"kpi-churn",
 					"Logo churn",
-					"Paying customers lost in the period, as a share of those paying at its start.",
+					"Customers whose contracted MRR ended in the period, as a share of those with contracted MRR at its start. Usage-only customers are not counted.",
 					formatPct(churnPct),
 					countDelta(model, kpis.logoChurn, "down"),
 					`${formatCount(kpis.logoChurn.value)} of ${formatCount(churnBase)}`,
@@ -746,7 +746,7 @@ const revenueCard = (h: HtmlBuilder<Message>, model: Model, result: Result): Htm
 				[formatMoney(result.kpis.revenueMinor.value, result.currency)],
 			),
 		),
-		chartLegend(h, revenueLegend(result.revenueBuckets, result.revenue, result.currency)),
+		chartLegend(h, revenueLegend(result.revenueBuckets, result.currency)),
 		revenueChart(h, {
 			buckets: result.revenueBuckets,
 			bucket: result.bucket,

@@ -236,6 +236,9 @@ export type BilledInvoice = Pick<
 	"status" | "currency" | "issuedAt" | "paidAt" | "amountPaidMinor" | "servicePeriodStart" | "lines"
 >
 
+/** How far before a usage window invoices are read: a line billed annually can still reach into it. */
+export const USAGE_LOOKBACK_MS = 370 * DAY_MS
+
 /** Billed: finalized and still owed or paid. Void and uncollectible invoices are not revenue. */
 export const isBilled = (invoice: Pick<schema.CustomerInvoice, "status">) =>
 	invoice.status === "open" || invoice.status === "paid"
@@ -343,15 +346,16 @@ export const accountRevenueOf = (input: {
 	readonly now: Date
 }): { readonly mrrMinor: number; readonly variableMrrMinor: number } => {
 	const { subscriptions, basis, currency } = input
-	const paying = subscriptions.filter((sub) => sub.status !== "canceled" && billed(sub))
+	// In `currency`: a subscription in another one does not keep this currency's usage counted.
+	const paying = subscriptions.filter(
+		(sub) => sub.status !== "canceled" && billed(sub) && sub.currency === currency,
+	)
 	const paid = paying.some(pays)
 	const usage = trailingUsageOf(input.invoices, basis, currency, input.now)
 	const current = paid || (subscriptions.length === 0 && usage.billedLastMonth)
 	return {
 		mrrMinor:
-			paying
-				.filter((sub) => sub.currency === currency)
-				.reduce((sum, sub) => sum + recurringMrrOf(sub, basis), 0) +
+			paying.reduce((sum, sub) => sum + recurringMrrOf(sub, basis), 0) +
 			(paid ? usage.recurringUsageMinor : 0),
 		variableMrrMinor: current ? usage.variableMinor : 0,
 	}

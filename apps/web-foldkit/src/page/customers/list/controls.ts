@@ -141,10 +141,14 @@ export const chipOf = (
 						: max !== undefined
 							? `≤ ${formatMoney(max, currency)}`
 							: null
-			if (value !== null) return { field: "MRR", operator: "", value }
-			return filters.payingOnly
-				? { field: "Run-rate MRR", operator: "", value: `> ${formatMoney(0, currency)}` }
-				: null
+			const paying = `> ${formatMoney(0, currency)}`
+			if (value !== null)
+				return {
+					field: "MRR",
+					operator: "",
+					value: filters.payingOnly ? `${value}, run-rate ${paying}` : value,
+				}
+			return filters.payingOnly ? { field: "Run-rate MRR", operator: "", value: paying } : null
 		}
 		case "last_active":
 			return filters.inactiveForDays !== undefined

@@ -161,6 +161,14 @@ const runRateRetention = (
 			deltas.set(accountId, entry)
 		}
 		for (const movement of movements) add(movement.accountId, movement.day, movement.deltaMinor)
+		const mrrSinceStart = new Map<CustomerAccountId, number>()
+		for (const movement of movements) {
+			if (movement.day < start) continue
+			mrrSinceStart.set(
+				movement.accountId,
+				(mrrSinceStart.get(movement.accountId) ?? 0) + movement.deltaMinor,
+			)
+		}
 		for (const change of changes) add(change.accountId, change.day, change.toMinor - change.fromMinor)
 		// A deleted account is gone from its deletion on (compute stops there: what it stored is where
 		// its deltas lead back from).
@@ -179,6 +187,10 @@ const runRateRetention = (
 		return {
 			now: retention(runRates.map((rate) => ({ start: rate.atStart, end: rate.end }))),
 			before: retention(runRates.map((rate) => ({ start: rate.atPreviousStart, end: rate.atStart }))),
+			contractedAtStart: accounts.filter(
+				(account) =>
+					!goneBy(account, start) && account.mrrMinor - (mrrSinceStart.get(account.id) ?? 0) > 0,
+			).length,
 		}
 	})
 
@@ -503,6 +515,7 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 			mau: kpi(mau, prior("mau")),
 			revenueMinor: kpi(totalOf(revenue), totalOf(previousRevenue)),
 			logoChurn: kpi(churnCount(inCurrent), churnCount(inPrevious)),
+			contractedCustomersAtStart: runRateNrr.contractedAtStart,
 			atRiskMrrMinor: kpi(value(current, "atRiskMrrMinor"), prior("atRiskMrrMinor")),
 			nrrPct: nrrNow === null ? null : kpi(nrrNow, nrrBefore),
 			runRateNrrPct: runRateNrr.now === null ? null : kpi(runRateNrr.now, runRateNrr.before),

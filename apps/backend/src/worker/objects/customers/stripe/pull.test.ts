@@ -109,9 +109,16 @@ describe("the Stripe pull's full walk", () => {
 	it("walks customers, prices, subscriptions and invoices, and stops", async () => {
 		const fake = account()
 		const pages = await walk(fake)
-		expect(pages.map((entry) => entry.step)).toEqual(["customers", "prices", "subscriptions", "invoices"])
+		expect(pages.map((entry) => entry.step)).toEqual([
+			"customers",
+			"prices",
+			"archived_prices",
+			"subscriptions",
+			"invoices",
+		])
 		expect(fake.calls.map((call) => call.path)).toEqual([
 			"/customers",
+			"/prices",
 			"/prices",
 			"/subscriptions",
 			"/products",
@@ -135,7 +142,7 @@ describe("the Stripe pull's full walk", () => {
 	})
 
 	it("writes the accounts with their billing contacts, the catalog, the subscriptions, then the invoices", async () => {
-		const [customers, prices, subscriptions, invoices] = await walk(account())
+		const [customers, prices, , subscriptions, invoices] = await walk(account())
 		// Three customers, two of which have an email to bill.
 		expect(tags(customers!.ops)).toEqual(["account", "contact", "account", "account", "contact"])
 		expect(tags(prices!.ops)).toEqual(["price", "price", "price", "price"])
@@ -145,7 +152,7 @@ describe("the Stripe pull's full walk", () => {
 
 	it("names the plans from one product lookup per page, however many products there are", async () => {
 		const fake = account()
-		const [, , subscriptions] = await walk(fake)
+		const [, , , subscriptions] = await walk(fake)
 		expect(
 			subscriptions!.ops
 				.filter((op): op is UpsertSubscription => op._tag === "subscription")
@@ -163,7 +170,7 @@ describe("the Stripe pull's full walk", () => {
 	})
 
 	it("carries the card and the discounts Stripe only sends when asked", async () => {
-		const [, , subscriptions] = await walk(
+		const [, , , subscriptions] = await walk(
 			account({
 				subscriptions: [{ ...SUB_ACME, discounts: [DISCOUNT_20_PERCENT.id] }],
 				discounts: [DISCOUNT_20_PERCENT],
@@ -188,6 +195,7 @@ describe("the Stripe pull's full walk", () => {
 
 	it("asks core to remove what it did not see on its last page", async () => {
 		expect((await walk(account())).map((entry) => entry.sweep)).toEqual([
+			undefined,
 			undefined,
 			undefined,
 			undefined,
@@ -236,6 +244,7 @@ describe("the Stripe pull's full walk", () => {
 		const [, prices] = await walk(fake)
 		expect(fake.calls.find((call) => call.path === "/prices")!.params).toEqual([
 			["limit", "100"],
+			["active", "true"],
 			["expand[]", "data.product"],
 		])
 		expect(prices!.ops[0]).toMatchObject({
@@ -255,6 +264,13 @@ describe("the Stripe pull's full walk", () => {
 		})
 	})
 
+	it("walks archived prices too: Stripe lists only active ones unless asked", async () => {
+		const archived = { ...PRICES[1]!, id: "price_archived", active: false }
+		const [, active, inactive] = await walk(account({ prices: [PRICES[0]!, archived] }))
+		expect(active!.ops).toMatchObject([{ externalId: "price_2pro_year0001", active: true }])
+		expect(inactive!.ops).toMatchObject([{ externalId: "price_archived", active: false }])
+	})
+
 	it("writes each invoice with all its lines, reading past the 10 Stripe embeds", async () => {
 		const lines = Array.from({ length: 12 }, (_, index) =>
 			invoiceLine({ id: `il_${String(index).padStart(2, "0")}`, amount: 1_000 + index }),
@@ -269,7 +285,7 @@ describe("the Stripe pull's full walk", () => {
 			],
 			invoiceLines: { [INVOICE_ACME_PAID.id]: lines },
 		})
-		const [, , , invoices] = await walk(fake)
+		const [, , , , invoices] = await walk(fake)
 		const op = invoices!.ops[0] as { lines?: ReadonlyArray<{ externalId: string; amountMinor: number }> }
 		expect(op.lines?.map((line) => line.externalId)).toEqual(lines.map((line) => line.id))
 		expect(
@@ -325,7 +341,20 @@ describe("the Stripe pull's events", () => {
 	it("reads the events since the last success, and each changed object's current state once", async () => {
 		const fake = account({ events: EVENTS })
 		const pages = await walk(fake, SINCE)
-		expect(pages.map((entry) => [entry.step, entry.sweep])).toEqual([["events", undefined]])
+		expect(pages.map((entry) => [entry.step, entry.sweep])).toEqual([
+			["events", undefined],
+			["catalog_events", undefined],
+		])
+		// `/v1/events` refuses more than 20 `types[]`: the catalog's are a list of their own.
+		const listed = fake.calls.filter((call) => call.path === "/events")
+		expect(listed).toHaveLength(2)
+		for (const call of listed)
+			expect(call.params.filter(([key]) => key === "types[]").length).toBeLessThanOrEqual(20)
+		expect(listed[1]!.params.filter(([key]) => key === "types[]").map(([, type]) => type)).toEqual([
+			"price.created",
+			"price.updated",
+			"product.updated",
+		])
 		const [events] = fake.calls
 		expect(events!.path).toBe("/events")
 		expect(events!.params.find(([key]) => key === "created[gte]")?.[1]).toBe(
@@ -339,6 +368,7 @@ describe("the Stripe pull's events", () => {
 			fake.calls
 				.slice(1)
 				.map((call) => call.path)
+				.filter((path) => path !== "/events")
 				.sort(),
 		).toEqual([
 			`/customers/${CUSTOMER_GLOBEX.id}`,
@@ -417,7 +447,13 @@ describe("the Stripe pull's events", () => {
 
 	it("walks everything instead once the last success is older than Stripe keeps events", async () => {
 		const pages = await walk(account({ events: EVENTS }), new Date(Date.now() - 40 * 86_400_000))
-		expect(pages.map((entry) => entry.step)).toEqual(["customers", "prices", "subscriptions", "invoices"])
+		expect(pages.map((entry) => entry.step)).toEqual([
+			"customers",
+			"prices",
+			"archived_prices",
+			"subscriptions",
+			"invoices",
+		])
 		expect(pages.at(-1)!.sweep).toEqual(["account"])
 	})
 })

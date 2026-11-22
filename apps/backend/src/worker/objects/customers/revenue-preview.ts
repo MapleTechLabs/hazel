@@ -22,6 +22,7 @@ import {
 	loadCatalog,
 	makeRevenueBasis,
 	type RevenueBasis,
+	USAGE_LOOKBACK_MS,
 	windowMonths,
 } from "./revenue"
 import { accountChunks, billingByAccount, loadBase } from "./snapshot"
@@ -117,7 +118,7 @@ export const revenuePreview = Effect.fn("Customers.revenuePreview")(function* (
 		new Map(accounts.map((account) => [account.id, account.mrrSource])),
 	)
 	const longest = Math.max(saved.months, proposed.months)
-	const invoicesFrom = new Date(windowMonths(now, longest)[0] - 365 * DAY_MS)
+	const invoicesFrom = new Date(windowMonths(now, longest)[0] - USAGE_LOOKBACK_MS)
 	const totals = (basis: RevenueBasis) => ({ mrrMinor: 0, variableMrrMinor: 0, basis })
 	const current = totals(saved)
 	const next = totals(proposed)
@@ -165,7 +166,16 @@ export const revenuePreview = Effect.fn("Customers.revenuePreview")(function* (
 	// Groups: the last 90 days' invoice lines, and live subscriptions' items, by price.
 	const groups = new Map<string, RevenuePreviewGroup>()
 	const groupOf = (line: ClassifiableLine, description: string | null) => {
-		const key = groupKey(line, description)
+		// Same price, different metadata: rules may class such lines apart, so they group apart.
+		const before = classifyLine(line, saved.rules, saved.catalog)
+		const after = classifyLine(line, proposed.rules, proposed.catalog)
+		const key = [
+			groupKey(line, description),
+			before.classification,
+			before.ruleId,
+			after.classification,
+			after.ruleId,
+		].join(":")
 		const existing = groups.get(key)
 		if (existing !== undefined) return existing
 		const price = line.priceId === null ? undefined : catalog.get(line.priceId)
@@ -183,8 +193,8 @@ export const revenuePreview = Effect.fn("Customers.revenuePreview")(function* (
 			amountMinor: 0,
 			itemCount: 0,
 			monthlyMinor: 0,
-			current: classifyLine(line, saved.rules, saved.catalog),
-			proposed: classifyLine(line, proposed.rules, proposed.catalog),
+			current: before,
+			proposed: after,
 		}
 		groups.set(key, group)
 		return group
