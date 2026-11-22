@@ -424,9 +424,7 @@ const companyBlock = <M>(h: HtmlBuilder<M>, company: CompanyProfile): ReadonlyAr
 	const links = companyLinks(h, company)
 	const parts = [
 		// The clamp on the text alone: padding on a clamped box would show a third line's top.
-		...(description === ""
-			? []
-			: [h.p([h.Class("line-clamp-2 text-muted-fg text-xs")], [description])]),
+		...(description === "" ? [] : [h.p([h.Class("line-clamp-2 text-muted-fg text-xs")], [description])]),
 		...(facts.length === 0 ? [] : [h.div([h.Class("flex flex-wrap gap-1")], facts)]),
 		// `-ml-1.5`: the marks' hover boxes overhang, so the first mark lines up with the text.
 		...(links.length === 0 ? [] : [h.div([h.Class("-ml-1.5 flex flex-wrap items-center")], links)]),
