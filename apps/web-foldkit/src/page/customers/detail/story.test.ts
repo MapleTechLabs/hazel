@@ -796,6 +796,8 @@ describe("customer page: company", () => {
 		expect(isCompanyRefreshAnswered(pressed.model, NOW - 30_000)).toBe(false)
 		expect(isCompanyRefreshAnswered(pressed.model, NOW - 2_000)).toBe(true)
 		expect(isCompanyRefreshAnswered(pressed.model, NOW + 500)).toBe(true)
+		// A background check long after the press is not this lookup's answer.
+		expect(isCompanyRefreshAnswered(pressed.model, NOW + COMPANY_REFRESH_PENDING_MS + 1_000)).toBe(false)
 	})
 
 	test("a refused refresh says why and can be asked again", () => {
