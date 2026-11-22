@@ -796,6 +796,16 @@ describe("customer page: company", () => {
 		expect(isCompanyRefreshAnswered(pressed.model, NOW - 30_000)).toBe(false)
 		expect(isCompanyRefreshAnswered(pressed.model, NOW - 2_000)).toBe(true)
 		expect(isCompanyRefreshAnswered(pressed.model, NOW + 500)).toBe(true)
+		// The check on screen at the press never replays, however recent: only a different, later one does.
+		const justChecked = run(loaded(), [
+			Message.UpdatedAccounts({
+				accounts: [acme, { ...beta, companyCheckedAtMs: NOW - 2_000 }, gamma],
+			}),
+		])
+		const pressedAgain = update(justChecked, Message.PressedRefreshCompany(), shared).model
+		expect(pressedAgain.companyCheckedAtPressMs).toBe(NOW - 2_000)
+		expect(isCompanyRefreshAnswered(pressedAgain, NOW - 2_000)).toBe(false)
+		expect(isCompanyRefreshAnswered(pressedAgain, NOW + 500)).toBe(true)
 		// A background check long after the press is not this lookup's answer.
 		expect(isCompanyRefreshAnswered(pressed.model, NOW + COMPANY_REFRESH_PENDING_MS + 1_000)).toBe(false)
 	})

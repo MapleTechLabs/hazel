@@ -306,6 +306,7 @@ const initialModel = (route: Route): Model => ({
 	environmentDraft: "",
 	isSavingEnvironment: false,
 	companyRefreshAtMs: null,
+	companyCheckedAtPressMs: null,
 	domainDraft: "",
 	isSavingDomain: false,
 	editingDomain: null,
@@ -962,7 +963,10 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 			const checkedAtMs = accountOf(model)?.companyCheckedAtMs ?? null
 			if (args === null || isCompanyRefreshPending(model, shared.nowMs, checkedAtMs)) return { model }
 			return {
-				model: modifyFields(model, { companyRefreshAtMs: () => shared.nowMs }),
+				model: modifyFields(model, {
+					companyRefreshAtMs: () => shared.nowMs,
+					companyCheckedAtPressMs: () => checkedAtMs,
+				}),
 				commands: [RefreshCustomerCompany(args)],
 			}
 		},

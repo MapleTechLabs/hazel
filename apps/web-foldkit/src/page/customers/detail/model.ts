@@ -201,6 +201,8 @@ export const Model = Schema.Struct({
 	 * `companyCheckedAtMs` passes it (or `COMPANY_REFRESH_PENDING_MS` goes by).
 	 */
 	companyRefreshAtMs: Schema.NullOr(Schema.Finite),
+	/** When the account had last been checked at that press: a later check is the lookup's answer. */
+	companyCheckedAtPressMs: Schema.NullOr(Schema.Finite),
 	/**
 	 * "Add domain" (no company domain yet) or "Change" (swap the one it has): the text, an RPC on its
 	 * way. `editingDomain`: the domain being changed, null while adding or not editing.
@@ -514,13 +516,15 @@ export const isCompanyRefreshPending = (model: Model, nowMs: number, checkedAtMs
 const COMPANY_REFRESH_SKEW_MS = 5_000
 
 /**
- * This page asked for a lookup and the account was checked after the press, within the lookup's
- * window: new data just landed, and the profile blurs in. Not the cooldown's earlier check that
- * `answers` accepts (already on screen), nor a background check long after the press.
+ * This page asked for a lookup and the account was checked again since the press, within the
+ * lookup's window: new data just landed, and the profile blurs in. The check already on screen at
+ * the press (even one seconds old, which the cooldown counts as the answer) never replays, nor
+ * does a background check long after.
  */
 export const isCompanyRefreshAnswered = (model: Model, checkedAtMs: number | null): boolean =>
 	model.companyRefreshAtMs !== null &&
 	checkedAtMs !== null &&
+	checkedAtMs !== model.companyCheckedAtPressMs &&
 	checkedAtMs >= model.companyRefreshAtMs - COMPANY_REFRESH_SKEW_MS &&
 	checkedAtMs <= model.companyRefreshAtMs + COMPANY_REFRESH_PENDING_MS
 
