@@ -47,6 +47,33 @@ export const workSummaryOf = (items: ReadonlyArray<ItemRow>) => ({
 	steps: items.length,
 })
 
+/**
+ * Whether a thinking or work-log row shows its body: open while it runs and folded once done,
+ * unless the member opened or folded it (`folds`, by item id).
+ */
+export const isFoldOpen = (
+	folds: Readonly<Record<string, boolean>>,
+	key: string,
+	isRunning: boolean,
+): boolean => folds[key] ?? isRunning
+
+/**
+ * A running thinking or tool row: its thought line shows the work, so the panel's "Working…" steps
+ * aside. A streaming reply shows none, so it does not.
+ */
+export const hasOwnWorkingState = (item: ItemRow): boolean =>
+	item.status === "running" && (item.kind === "reasoning" || item.kind === "tool")
+
+/**
+ * The panel's own "Working…" under the timeline: while a message is on its way, or the thread runs
+ * and nothing running shows its own work (a streaming reply does not).
+ */
+export const showsWorkingIndicator = (
+	status: ThreadRow["status"] | null,
+	items: ReadonlyArray<ItemRow>,
+	isSending: boolean,
+): boolean => isSending || (status === "running" && !items.some(hasOwnWorkingState))
+
 /** The history menu: the member's own threads, then those shared with them; newest activity first. */
 export const historyOf = (threads: ReadonlyArray<ThreadRow>, userId: UserId | null) => {
 	const newestFirst = [...threads].sort((left, right) => right.lastActivityAtMs - left.lastActivityAtMs)

@@ -44,8 +44,8 @@ export const Message = defineMessageUnion({
 	ClickedShare: {},
 	SucceededUpdateVisibility: {},
 	FailedUpdateVisibility: { message: Schema.String },
-	/** A work-log row, by its first item's id. */
-	ToggledWork: { key: Schema.String },
+	/** A thinking or work-log row opened or folded, by its item id (a work log's first item's). */
+	ToggledFold: { key: Schema.String, isOpen: Schema.Boolean },
 	PickedAnswer: {
 		itemId: AssistantItemId,
 		questionId: Schema.String,

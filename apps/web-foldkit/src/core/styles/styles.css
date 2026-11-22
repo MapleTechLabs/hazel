@@ -559,6 +559,69 @@ If you want to use the typography plugin, uncomment the line below.
 	font-variant-numeric: tabular-nums;
 }
 
+/* A thought line's running label (`ui/thought-line.ts`): a highlight sweeps across the text. The fill
+   goes transparent, not `color`, so the gradient's `currentColor` is still the label's colour. The
+   text rests at its own colour and the highlight is `--fg`, stronger in both themes, so no stop drops
+   below the label's own contrast. */
+@utility thought-shimmer {
+	background-image: linear-gradient(100deg, currentColor 35%, var(--fg) 50%, currentColor 65%);
+	background-size: 250% 100%;
+	background-position: 125% 0;
+	background-clip: text;
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	animation: thought-shimmer 1.8s linear infinite;
+
+	@media (prefers-reduced-motion: reduce) {
+		background-image: none;
+		-webkit-text-fill-color: currentColor;
+	}
+}
+
+@keyframes thought-shimmer {
+	to {
+		background-position: -125% 0;
+	}
+}
+
+/* A thought line's glyph breathing while it runs. */
+@utility thought-breathe {
+	animation: thought-breathe 1.6s var(--ease-in-out) infinite;
+}
+
+@keyframes thought-breathe {
+	0%,
+	100% {
+		opacity: 0.55;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+
+/* A live seconds clock with no timer in the app: an integer property counts up once a second from
+   when the element mounts, and a counter prints it. */
+@property --thought-seconds {
+	syntax: "<integer>";
+	inherits: false;
+	initial-value: 0;
+}
+
+@keyframes thought-clock {
+	to {
+		--thought-seconds: 86400;
+	}
+}
+
+@utility thought-clock {
+	animation: thought-clock 86400s steps(86400, end) both;
+	counter-reset: thought-seconds var(--thought-seconds);
+
+	&::after {
+		content: counter(thought-seconds) "s";
+	}
+}
+
 @layer base {
 	*,
 	::after,
@@ -658,6 +721,11 @@ If you want to use the typography plugin, uncomment the line below.
 		animation-iteration-count: 1 !important;
 		transition-duration: 0.01ms !important;
 		scroll-behavior: auto !important;
+	}
+
+	/* A clock is not motion: it keeps counting. */
+	.thought-clock {
+		animation-duration: 86400s !important;
 	}
 }
 

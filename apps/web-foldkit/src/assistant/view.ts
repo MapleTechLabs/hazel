@@ -7,8 +7,6 @@ import { markdownView } from "../chat/markdown/markdown-view"
 import {
 	IconArrowUp,
 	IconBrainSparkle,
-	IconCheck,
-	IconChevronRight,
 	IconClock,
 	IconClose,
 	IconCode,
@@ -21,7 +19,7 @@ import {
 } from "../icons"
 import type { Shared } from "../page/contract"
 import { integrationRoute, hrefOf } from "../route"
-import { ariaButton, button, buttonClassName } from "../ui/button"
+import { button, buttonClassName } from "../ui/button"
 import { emptyState } from "../ui/empty-state"
 import { heading } from "../ui/heading"
 import { loader } from "../ui/loader"
@@ -30,6 +28,8 @@ import { menuDescription, menuLabel, view as menuView } from "../ui/menu-view"
 import * as Sheet from "../ui/sheet"
 import { resizeEdge, splitPanelClassName } from "../ui/split-panel"
 import { textarea } from "../ui/textarea"
+import { revealRow } from "../ui/reveal"
+import { thoughtLine } from "../ui/thought-line"
 import { toggleChip } from "../ui/toggle-chip"
 import { suggestionsFor } from "./context"
 import { Message } from "./message"
@@ -44,7 +44,7 @@ import {
 	type QuestionData,
 	type ThreadRow,
 } from "./model"
-import { historyOf, timelineOf, workSummaryOf } from "./timeline"
+import { historyOf, isFoldOpen, showsWorkingIndicator, timelineOf, workSummaryOf } from "./timeline"
 import {
 	answersOf,
 	isAnswered,
@@ -296,25 +296,34 @@ const assistantReply = (h: H, text: string, title: string | null): Html =>
 const noticeView = (h: H, text: string, title: string | null): Html =>
 	h.p([h.Class("text-center text-muted-fg text-xs")], [text || title || ""])
 
-/** A message, reply or notice: what it shows is its kind, text and title. */
-/** The agent's thinking, where it happened: muted, under a "Thinking" label while it runs. */
-const reasoningView = (h: H, text: string, status: string | null): Html =>
-	h.div(
-		[h.Class("flex flex-col gap-1 border-border border-l-2 pl-3 text-muted-fg")],
+/**
+ * The agent's thinking, where it happened: a thought line, its text open under it while it runs and
+ * folded into "Thought" once the reply starts.
+ */
+const reasoningView = (id: string, text: string, status: string | null, isOpen: boolean, h: H): Html => {
+	const isRunning = status === "running"
+	return thoughtLine(
+		h,
+		{
+			isRunning,
+			label: "Thinking…",
+			doneLabel: "Thought",
+			icon: IconBrainSparkle(h, {}),
+			hasClock: true,
+			isOpen,
+			onToggle: (next) => Message.ToggledFold({ key: id, isOpen: next }),
+			bodyId: `${PANEL_ID}-thought-${id}`,
+		},
 		[
 			h.div(
-				[h.Class("flex items-center gap-1.5 font-medium text-xs")],
-				[
-					status === "running"
-						? loader(h, { className: "size-3", ariaLabel: "Thinking" })
-						: IconBrainSparkle(h, { className: "size-3" }),
-					status === "running" ? "Thinking…" : "Thought",
-				],
+				[h.Class("border-border border-l-2 pl-3 text-muted-fg text-sm [&_*]:text-muted-fg")],
+				[markdownView(h, text)],
 			),
-			h.div([h.Class("text-muted-fg text-sm [&_*]:text-muted-fg")], [markdownView(h, text)]),
 		],
 	)
+}
 
+/** A message, reply or notice: what it shows is its kind, text and title. */
 const messageView = (
 	kind: ItemRow["kind"],
 	text: string,
@@ -326,9 +335,7 @@ const messageView = (
 		? userBubble(h, text)
 		: kind === "assistant"
 			? assistantReply(h, text, title)
-			: kind === "reasoning"
-				? reasoningView(h, text, status)
-				: noticeView(h, text, title)
+			: noticeView(h, text, title)
 
 const stepIcon = (h: H, kind: ItemRow["kind"], status: string | null): Html =>
 	status === "running"
@@ -350,39 +357,60 @@ const stepRow = (
 ): Html => {
 	const isReasoning = kind === "reasoning"
 	// Keyed itself: the list holds its rows directly.
-	return h.keyed("li")(
-		id,
-		[h.Class(twMerge("flex flex-col gap-1 text-muted-fg text-xs", status === "failed" && "text-danger"))],
-		[
-			h.div(
-				[h.Class("flex min-w-0 items-center gap-2")],
-				[
-					stepIcon(h, kind, status),
-					h.span([h.Class("shrink-0 font-medium")], [title ?? (isReasoning ? "Thinking" : "Tool")]),
-					input === null
-						? h.empty
-						: h.code([h.Class("min-w-0 truncate font-mono text-2xs")], [input]),
-				],
-			),
-			text === ""
-				? h.empty
-				: isReasoning
-					? h.p([h.Class("whitespace-pre-wrap pl-5.5 text-muted-fg/80")], [text])
-					: h.pre(
-							[
-								h.Class(
-									"ml-5.5 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-secondary/60 p-2 font-mono text-2xs",
-								),
-							],
-							[text],
+	return revealRow(h, id, { element: "li", spacing: "sm" }, [
+		h.div(
+			[
+				h.Class(
+					twMerge(
+						"flex flex-col gap-1 text-muted-fg text-xs",
+						status === "failed" && "text-danger",
+					),
+				),
+			],
+			[
+				h.div(
+					[h.Class("flex min-w-0 items-center gap-2")],
+					[
+						stepIcon(h, kind, status),
+						h.span(
+							[h.Class("shrink-0 font-medium")],
+							[title ?? (isReasoning ? "Thinking" : "Tool")],
 						),
-		],
-	)
+						input === null
+							? h.empty
+							: h.code([h.Class("min-w-0 truncate font-mono text-2xs")], [input]),
+					],
+				),
+				text === ""
+					? h.empty
+					: isReasoning
+						? h.p([h.Class("whitespace-pre-wrap pl-5.5 text-muted-fg/80")], [text])
+						: h.pre(
+								[
+									h.Class(
+										"ml-5.5 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-secondary/60 p-2 font-mono text-2xs",
+									),
+								],
+								[text],
+							),
+			],
+		),
+	])
 }
 
 // Keyed by item id: one slot per message or step, re-run only when what it shows changed.
 const lazyMessages = createKeyedLazy()
+const lazyReasoning = createKeyedLazy()
 const lazySteps = createKeyedLazy()
+
+const memoReasoning = (h: H, item: ItemRow, folds: Model["folds"]): Html =>
+	lazyReasoning(item.id, reasoningView, [
+		item.id,
+		item.text,
+		item.status,
+		isFoldOpen(folds, item.id, item.status === "running"),
+		h,
+	]) ?? h.empty
 
 const memoMessage = (h: H, item: ItemRow): Html =>
 	lazyMessages(item.id, messageView, [item.kind, item.text, item.title, item.status, h]) ?? h.empty
@@ -391,41 +419,27 @@ const memoStep = (h: H, item: ItemRow): Html =>
 	lazySteps(item.id, stepRow, [item.id, item.kind, item.title, item.input, item.text, item.status, h]) ??
 	h.empty
 
-const workLog = (h: H, key: string, items: ReadonlyArray<ItemRow>, isExpanded: boolean): Html => {
+const workLog = (h: H, key: string, items: ReadonlyArray<ItemRow>, folds: Model["folds"]): Html => {
 	const { isRunning, failed, steps } = workSummaryOf(items)
-	const listId = `${PANEL_ID}-work-${key}`
-	return h.div(
-		[h.Class("flex flex-col gap-2")],
+	const summary = `${steps} ${steps === 1 ? "step" : "steps"}${failed > 0 ? ` · ${failed} failed` : ""}`
+	return thoughtLine(
+		h,
+		{
+			isRunning,
+			label: `Working · ${summary}`,
+			doneLabel: `Worked · ${summary}`,
+			icon: failed > 0 && !isRunning ? IconWarning(h, {}) : IconCode(h, {}),
+			hasClock: true,
+			isOpen: isFoldOpen(folds, key, isRunning),
+			onToggle: (next) => Message.ToggledFold({ key, isOpen: next }),
+			bodyId: `${PANEL_ID}-work-${key}`,
+			tone: failed > 0 && !isRunning ? "danger" : "default",
+		},
 		[
-			ariaButton(
-				h,
-				{
-					onPress: Message.ToggledWork({ key }),
-					className:
-						"flex w-fit cursor-pointer items-center gap-1.5 rounded-md text-muted-fg text-xs outline-hidden transition-colors hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70",
-					attributes: [h.AriaExpanded(isExpanded), h.Attribute("aria-controls", listId)],
-				},
-				[
-					IconChevronRight(h, {
-						className: twMerge(
-							"size-3 transition-transform duration-150",
-							isExpanded && "rotate-90",
-						),
-					}),
-					isRunning
-						? loader(h, { className: "size-3", ariaLabel: "Working" })
-						: failed > 0
-							? IconWarning(h, { className: "size-3 text-danger" })
-							: IconCheck(h, { className: "size-3" }),
-					`${isRunning ? "Working" : "Worked"} · ${steps} ${steps === 1 ? "step" : "steps"}${failed > 0 ? ` · ${failed} failed` : ""}`,
-				],
+			h.ul(
+				[h.Class("flex flex-col border-border border-l pl-3")],
+				items.map((item) => memoStep(h, item)),
 			),
-			isExpanded
-				? h.ul(
-						[h.Id(listId), h.Class("flex flex-col gap-2 border-border border-l pl-3")],
-						items.map((item) => memoStep(h, item)),
-					)
-				: h.empty,
 		],
 	)
 }
@@ -581,8 +595,11 @@ const approvalNotice = (h: H, item: ItemRow, externalLink: string | null): Html 
 
 const workingIndicator = (h: H): Html =>
 	h.div(
-		[h.Class("flex items-center gap-2 text-muted-fg text-xs")],
-		[loader(h, { className: "size-3", ariaLabel: "Working" }), "Working…"],
+		[h.Class("flex items-center gap-1.5 font-medium text-muted-fg text-xs"), h.Role("status")],
+		[
+			IconSparkles(h, { className: "thought-breathe size-3.5", attributes: { "aria-hidden": "true" } }),
+			h.span([h.Class("thought-shimmer")], ["Working…"]),
+		],
 	)
 
 const threadError = (h: H, message: string): Html =>
@@ -633,38 +650,29 @@ const newChat = (h: H, suggestions: ReadonlyArray<string>, isSending: boolean): 
 const threadEntries = (
 	h: H,
 	items: ReadonlyArray<ItemRow>,
-	expandedWork: ReadonlyArray<string>,
+	folds: Model["folds"],
 	questions: QuestionState,
 	externalLink: string | null,
 ): Array<Html> =>
 	timelineOf(items).map((entry) =>
 		entry._tag === "Work"
-			? h.keyed("div")(
-					entry.key,
-					[],
-					[workLog(h, entry.key, entry.items, expandedWork.includes(entry.key))],
-				)
-			: h.keyed("div")(
-					entry.item.id,
-					[],
-					[
-						Match.value(entry.item.kind).pipe(
-							Match.when("question", () => questionCard(h, entry.item, questions)),
-							Match.when("approval", () => approvalNotice(h, entry.item, externalLink)),
-							// Tool items are folded into work logs before they get here.
-							Match.whenOr("user", "assistant", "notice", "reasoning", "tool", () =>
-								memoMessage(h, entry.item),
-							),
-							Match.exhaustive,
-						),
-					],
-				),
+			? revealRow(h, entry.key, { spacing: "md" }, [workLog(h, entry.key, entry.items, folds)])
+			: revealRow(h, entry.item.id, { spacing: "md" }, [
+					Match.value(entry.item.kind).pipe(
+						Match.when("question", () => questionCard(h, entry.item, questions)),
+						Match.when("approval", () => approvalNotice(h, entry.item, externalLink)),
+						Match.when("reasoning", () => memoReasoning(h, entry.item, folds)),
+						// Tool items are folded into work logs before they get here.
+						Match.whenOr("user", "assistant", "notice", "tool", () => memoMessage(h, entry.item)),
+						Match.exhaustive,
+					),
+				]),
 	)
 
 const timelineView = (
 	items: ReadonlyArray<ItemRow>,
 	pending: Model["pending"],
-	expandedWork: ReadonlyArray<string>,
+	folds: Model["folds"],
 	answerDrafts: Model["answerDrafts"],
 	answeringItemId: Model["answeringItemId"],
 	answerError: Model["answerError"],
@@ -682,23 +690,34 @@ const timelineView = (
 		[h.Class("flex min-h-0 flex-1 flex-col-reverse overflow-y-auto overscroll-contain")],
 		[
 			h.div(
-				[h.Class("flex flex-col gap-4 px-4 py-4")],
+				// No gap: each row's spacing is its own, so it opens with the row (`revealRow`).
+				[h.Class(twMerge("flex flex-col px-4 py-4", isEmpty && "gap-4"))],
 				isEmpty
 					? [newChat(h, suggestions, pending?.isSending === true)]
 					: [
 							...threadEntries(
 								h,
 								items,
-								expandedWork,
+								folds,
 								{ answerDrafts, answeringItemId, answerError, isReadOnly: isReadOnlyThread },
 								externalLink,
 							),
-							pending === null ? h.empty : userBubble(h, pending.text, pending.isSending),
-							status === "running" || pending?.isSending === true
-								? workingIndicator(h)
+							// Keyed by its message id, so the synced item that replaces it does not open again.
+							pending === null
+								? h.empty
+								: revealRow(h, pending.messageId ?? "pending", { spacing: "md" }, [
+										userBubble(h, pending.text, pending.isSending),
+									]),
+							showsWorkingIndicator(status, items, pending?.isSending === true)
+								? revealRow(h, "working", { spacing: "md" }, [workingIndicator(h)])
 								: h.empty,
 							status === "error"
-								? threadError(h, errorMessage ?? "The assistant stopped with an error.")
+								? revealRow(h, "error", { spacing: "md" }, [
+										threadError(
+											h,
+											errorMessage ?? "The assistant stopped with an error.",
+										),
+									])
 								: h.empty,
 						],
 			),
@@ -714,7 +733,7 @@ const timeline = (h: H, model: Model, inputs: ViewInputs): Html => {
 		lazyTimeline(timelineView, [
 			model.items,
 			pending,
-			model.expandedWork,
+			model.folds,
 			model.answerDrafts,
 			model.answeringItemId,
 			model.answerError,

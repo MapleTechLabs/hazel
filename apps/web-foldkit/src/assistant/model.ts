@@ -126,8 +126,11 @@ export const Model = Schema.Struct({
 	retry: Schema.NullOr(Retry),
 	/** The last write's failure, shown above the composer. */
 	error: Schema.NullOr(Schema.String),
-	/** The work-log rows expanded, by their first item's id. */
-	expandedWork: Schema.Array(Schema.String),
+	/**
+	 * Thinking and work-log rows the member opened or folded, by item id (a work log's first item's).
+	 * A row not in it is open while it runs and folded once it is done.
+	 */
+	folds: Schema.Record(Schema.String, Schema.Boolean),
 	answerDrafts: AnswerDrafts,
 	/** The question whose answer is on its way, until the item syncs as answered. */
 	answeringItemId: Schema.NullOr(AssistantItemId),

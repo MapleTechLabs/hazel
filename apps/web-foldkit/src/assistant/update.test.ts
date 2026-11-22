@@ -516,3 +516,20 @@ describe("width", () => {
 		expect(model.edgeMaxWidth).toBe(610)
 	})
 })
+
+describe("folding", () => {
+	test("opening or folding a row records the member's choice, by its id", () => {
+		const folded = runAll(opened, [
+			Message.ToggledFold({ key: "work-1", isOpen: true }),
+			Message.ToggledFold({ key: "thought-2", isOpen: true }),
+			Message.ToggledFold({ key: "work-1", isOpen: false }),
+		])
+		expect(folded.folds).toEqual({ "work-1": false, "thought-2": true })
+	})
+
+	test("another thread starts with no choices", () => {
+		const inThread = modifyFields(opened, { threadId: () => threadId })
+		const folded = run(inThread, Message.ToggledFold({ key: "work-1", isOpen: true })).model
+		expect(run(folded, Message.ClickedNewChat()).model.folds).toEqual({})
+	})
+})

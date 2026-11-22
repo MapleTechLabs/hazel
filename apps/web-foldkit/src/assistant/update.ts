@@ -75,7 +75,7 @@ export const init = (stored: Stored): Model => ({
 	pending: null,
 	retry: null,
 	error: null,
-	expandedWork: [],
+	folds: {},
 	answerDrafts: {},
 	answeringItemId: null,
 	answerError: null,
@@ -177,7 +177,7 @@ const showThread = (model: Model, threadId: Model["threadId"]): Return => ({
 		pending: () => null,
 		retry: () => null,
 		error: () => null,
-		expandedWork: () => [],
+		folds: () => ({}),
 		answerDrafts: () => ({}),
 		answeringItemId: () => null,
 		answerError: () => null,
@@ -606,11 +606,8 @@ export const update = (model: Model, message: Message, inputs: Inputs): Return =
 		FailedUpdateVisibility: ({ message }) => ({
 			model: modifyFields(model, { isUpdatingVisibility: () => false, error: () => message }),
 		}),
-		ToggledWork: ({ key }) => ({
-			model: modifyFields(model, {
-				expandedWork: (keys) =>
-					keys.includes(key) ? keys.filter((current) => current !== key) : [...keys, key],
-			}),
+		ToggledFold: ({ key, isOpen }) => ({
+			model: modifyFields(model, { folds: (folds) => ({ ...folds, [key]: isOpen }) }),
 		}),
 		PickedAnswer: (picked) => ({ model: pickedAnswer(model, picked) }),
 		ChangedAnswer: ({ itemId, questionId, value }) => ({
