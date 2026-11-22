@@ -64,6 +64,16 @@ export const isFoldOpen = (
 export const hasOwnWorkingState = (item: ItemRow): boolean =>
 	item.status === "running" && (item.kind === "reasoning" || item.kind === "tool")
 
+/**
+ * The panel's own "Working…" under the timeline: while a message is on its way, or the thread runs
+ * and nothing running shows its own work (a streaming reply does not).
+ */
+export const showsWorkingIndicator = (
+	status: ThreadRow["status"] | null,
+	items: ReadonlyArray<ItemRow>,
+	isSending: boolean,
+): boolean => isSending || (status === "running" && !items.some(hasOwnWorkingState))
+
 /** The history menu: the member's own threads, then those shared with them; newest activity first. */
 export const historyOf = (threads: ReadonlyArray<ThreadRow>, userId: UserId | null) => {
 	const newestFirst = [...threads].sort((left, right) => right.lastActivityAtMs - left.lastActivityAtMs)

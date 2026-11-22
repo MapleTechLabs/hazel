@@ -2,7 +2,15 @@ import { AssistantItemId, AssistantThreadId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { describe, expect, test } from "vitest"
 import type { ItemRow, ThreadRow } from "./model"
-import { hasOwnWorkingState, historyOf, isFoldOpen, sortItems, timelineOf, workSummaryOf } from "./timeline"
+import {
+	hasOwnWorkingState,
+	historyOf,
+	showsWorkingIndicator,
+	isFoldOpen,
+	sortItems,
+	timelineOf,
+	workSummaryOf,
+} from "./timeline"
 
 /** How a thread reads: order, work logs, and the history menu's groups. */
 
@@ -120,5 +128,27 @@ describe("hasOwnWorkingState", () => {
 
 	test("a finished one does not", () => {
 		expect(hasOwnWorkingState(item(4, "tool", { status: "completed" }))).toBe(false)
+	})
+})
+
+describe("showsWorkingIndicator", () => {
+	test("shows while the thread runs and only a reply streams", () => {
+		expect(showsWorkingIndicator("running", [item(1, "assistant", { status: "running" })], false)).toBe(
+			true,
+		)
+		expect(showsWorkingIndicator("running", [], false)).toBe(true)
+	})
+
+	test("steps aside while a thought or tool step runs: its thought line shows the work", () => {
+		expect(showsWorkingIndicator("running", [item(1, "reasoning", { status: "running" })], false)).toBe(
+			false,
+		)
+		expect(showsWorkingIndicator("running", [item(2, "tool", { status: "running" })], false)).toBe(false)
+	})
+
+	test("shows while a message is on its way, and not once the thread is idle", () => {
+		expect(showsWorkingIndicator("idle", [], true)).toBe(true)
+		expect(showsWorkingIndicator("idle", [], false)).toBe(false)
+		expect(showsWorkingIndicator(null, [], false)).toBe(false)
 	})
 })
