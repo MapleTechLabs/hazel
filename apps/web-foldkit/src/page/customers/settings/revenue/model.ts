@@ -284,6 +284,24 @@ export const validOf = (draft: RevenueDraft): ValidDraft | null => {
 		: null
 }
 
+/** What is still typed in a value input joins its condition: Save means what the page shows. */
+export const withEntriesCommitted = (model: Model): Model => {
+	if (model.draft === null) return model
+	const rules = model.draft.rules.map((rule) => ({
+		...rule,
+		conditions: rule.conditions.map((condition, index) => {
+			const value = (model.valueEntries[entryKeyOf(rule.id, index)] ?? "").trim()
+			return condition.field !== "metadata" ||
+				value === "" ||
+				condition.values.includes(value) ||
+				condition.values.length >= MAX_VALUES
+				? condition
+				: { ...condition, values: [...condition.values, value] }
+		}),
+	}))
+	return { ...model, draft: { ...model.draft, rules }, valueEntries: {} }
+}
+
 export const isDirty = (model: Model): boolean =>
 	model.draft !== null &&
 	model.settings !== null &&

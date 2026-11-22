@@ -8,7 +8,7 @@ import * as Modal from "../../../../ui/modal"
 import type { PageViewInputs } from "../../../contract"
 import { isCustomersAdmin, readOnlyNotice, settingsHeader, settingsPage } from "../shared"
 import { Message } from "./message"
-import { draftOf, isDirty, type Model, restatesHistory, validOf } from "./model"
+import { draftOf, isDirty, type Model, restatesHistory, validOf, withEntriesCommitted } from "./model"
 import { previewCard } from "./preview-view"
 import { defaultsCard, rulesCard, windowCard } from "./rules-view"
 
@@ -108,7 +108,9 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		rulesCard(h, model, draft, canEdit),
 		defaultsCard(h),
 		previewCard(h, model, dirty),
-		...(canEdit && dirty ? [unsavedBar(h, model, validOf(draft) !== null)] : []),
+		...(canEdit && dirty
+			? [unsavedBar(h, model, validOf(withEntriesCommitted(model).draft ?? draft) !== null)]
+			: []),
 		confirmModal(h, model),
 	])
 })

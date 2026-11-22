@@ -9,8 +9,10 @@ import {
 	classifyLine,
 	type InvoiceLineDoc,
 	type RevenueRule,
+	RevenueRules,
 	revenueBasisOf,
 } from "@hazel/domain/customers"
+import { Schema } from "effect"
 import { describe, expect, it } from "vitest"
 import {
 	addRevenue,
@@ -151,6 +153,19 @@ describe("classification rules", () => {
 			"excluded",
 		)
 		expect(classify({ priceId: "price_seat" }, rules).classification).toBe("recurring")
+	})
+})
+
+describe("a rule's conditions", () => {
+	it("refuses a metadata condition without a key: it could never match", () => {
+		const isRules = Schema.is(RevenueRules)
+		const of = (condition: { field: string; key?: string; values: ReadonlyArray<string> }) => [
+			{ id: "r", name: "", conditions: [condition], classification: "variable" },
+		]
+		expect(isRules(of({ field: "metadata", values: ["gold"] }))).toBe(false)
+		expect(isRules(of({ field: "metadata", key: "  ", values: ["gold"] }))).toBe(false)
+		expect(isRules(of({ field: "metadata", key: "tier", values: ["gold"] }))).toBe(true)
+		expect(isRules(of({ field: "product", values: ["prod_1"] }))).toBe(true)
 	})
 })
 

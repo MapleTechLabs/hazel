@@ -34,10 +34,16 @@ const Value = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(500)
  */
 export const RevenueCondition = Schema.Struct({
 	field: RevenueConditionField,
-	/** The metadata key; only for `metadata`. */
+	/** The metadata key; required for `metadata`, which could match nothing without one. */
 	key: Schema.optionalKey(Value),
 	values: Schema.Array(Value).check(Schema.isMinLength(1), Schema.isMaxLength(200)),
-})
+}).check(
+	Schema.makeFilter((condition) =>
+		condition.field !== "metadata" || (condition.key ?? "").trim() !== ""
+			? undefined
+			: "A metadata condition needs a key",
+	),
+)
 export type RevenueCondition = typeof RevenueCondition.Type
 
 export const RevenueRule = Schema.Struct({

@@ -20,6 +20,7 @@ import {
 	draftOf,
 	draftOfSaved,
 	normalizedDraft,
+	withEntriesCommitted,
 	entryKeyOf,
 	isSameBasis,
 	MAX_CONDITIONS,
@@ -225,24 +226,6 @@ const withoutEntryOf = (model: Model, ruleId: string, removed: number): Model =>
 		}),
 	),
 })
-
-/** What is still typed in a value input joins its condition: Save means what the page shows. */
-const withEntriesCommitted = (model: Model): Model => {
-	if (model.draft === null) return model
-	const rules = model.draft.rules.map((rule) => ({
-		...rule,
-		conditions: rule.conditions.map((condition, index) => {
-			const value = (model.valueEntries[entryKeyOf(rule.id, index)] ?? "").trim()
-			return condition.field !== "metadata" ||
-				value === "" ||
-				condition.values.includes(value) ||
-				condition.values.length >= MAX_VALUES
-				? condition
-				: { ...condition, values: [...condition.values, value] }
-		}),
-	}))
-	return { ...model, draft: { ...model.draft, rules }, valueEntries: {} }
-}
 
 const saved = (model: Model, shared: Shared): Return => {
 	const organizationId = shared.organization?.id

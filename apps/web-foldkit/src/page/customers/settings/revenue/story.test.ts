@@ -21,6 +21,7 @@ import {
 	type SelectTarget,
 	selectIdOf,
 	validOf,
+	withEntriesCommitted,
 } from "./model"
 import { init, update } from "./update"
 
@@ -295,6 +296,15 @@ describe("revenue settings", () => {
 		const changed = picked(typed, { _tag: "Field", ruleId: "rule-2", index: 0 }, "product").model
 		expect(changed.valueEntries).toEqual({})
 		expect(draftOf(changed)?.rules[1]?.conditions[0]).toMatchObject({ field: "product", values: [] })
+	})
+
+	test("a rule whose only value is still typed can be saved, as Save commits it", () => {
+		const added = step(loaded(), Message.PressedAddCondition({ ruleId: "rule-2" }))
+		const metadata = picked(added, { _tag: "Field", ruleId: "rule-2", index: 1 }, "metadata").model
+		const keyed = step(metadata, Message.ChangedMetadataKey({ ruleId: "rule-2", index: 1, key: "tier" }))
+		const typed = step(keyed, Message.ChangedValueEntry({ ruleId: "rule-2", index: 1, text: "gold" }))
+		expect(validOf(draftOf(typed)!)).toBeNull()
+		expect(validOf(withEntriesCommitted(typed).draft!)).not.toBeNull()
 	})
 
 	test("members cannot change anything", () => {
