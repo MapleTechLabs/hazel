@@ -315,17 +315,44 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 	// afresh and its parts blur in one after another. A profile already there on open stays still.
 	// The domain row sits between the two keyed parts, so an open domain form survives a check.
 	const isArriving = isCompanyRefreshAnswered(model, account.companyCheckedAtMs)
-	const arriving = (part: string, children: ReadonlyArray<Html>) =>
+	const figures = grid(h, [
+		...stat(
+			h,
+			"Employees",
+			employeesLabel(company),
+			company.employeeCount === null || company.employeeRange === null
+				? null
+				: `${formatCount(company.employeeCount)} on record`,
+		),
+		...stat(
+			h,
+			"Funding",
+			stage === null ? (totalUsd === null ? null : usdLabel(totalUsd)) : fundingStageLabel(stage),
+			stage === null || totalUsd === null ? null : `${usdLabel(totalUsd)} raised`,
+		),
+		...stat(h, "Est. revenue", revenueLabel(company), revenueLabel(company) === null ? null : "per year"),
+		...stat(
+			h,
+			"Founded",
+			founded,
+			age === null || age < 1 ? null : `${age} ${age === 1 ? "year" : "years"} ago`,
+		),
+	])
+	const summaryParts = (description === null ? 0 : 1) + figures.length
+	// `startAt`: how many parts come before it, so the facts continue the summary's stagger.
+	const arriving = (part: string, startAt: number, children: ReadonlyArray<Html>) =>
 		h.keyed("div")(
 			`company-${part}-${account.companyCheckedAtMs ?? "unchecked"}`,
 			[
 				h.Class(twMerge("flex flex-col", isArriving && "blur-in-stagger")),
-				...(isArriving ? [h.DataAttribute("arriving", "true")] : []),
+				...(isArriving
+					? [h.DataAttribute("arriving", part), h.Style({ "--stagger-start": `${startAt * 40}ms` })]
+					: []),
 			],
 			children,
 		)
 	return sidebarSection(h, "Company", null, [
-		arriving("summary", [
+		arriving("summary", 0, [
 			...(description === null
 				? []
 				: [
@@ -345,41 +372,10 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 							],
 						),
 					]),
-			...grid(h, [
-				...stat(
-					h,
-					"Employees",
-					employeesLabel(company),
-					company.employeeCount === null || company.employeeRange === null
-						? null
-						: `${formatCount(company.employeeCount)} on record`,
-				),
-				...stat(
-					h,
-					"Funding",
-					stage === null
-						? totalUsd === null
-							? null
-							: usdLabel(totalUsd)
-						: fundingStageLabel(stage),
-					stage === null || totalUsd === null ? null : `${usdLabel(totalUsd)} raised`,
-				),
-				...stat(
-					h,
-					"Est. revenue",
-					revenueLabel(company),
-					revenueLabel(company) === null ? null : "per year",
-				),
-				...stat(
-					h,
-					"Founded",
-					founded,
-					age === null || age < 1 ? null : `${age} ${age === 1 ? "year" : "years"} ago`,
-				),
-			]),
+			...figures,
 		]),
 		...(domain === null ? [] : [domainRow(h, model, context, domain)]),
-		arriving("facts", [
+		arriving("facts", summaryParts + (domain === null ? 0 : 1), [
 			property(
 				h,
 				"Industry",

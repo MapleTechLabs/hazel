@@ -205,7 +205,7 @@ describe("customer page: looking up the company", () => {
 	})
 	const notLookedUp = { ...acme, domains: ["acme.com"], companyProfile: null, companyCheckedAt: null }
 	const skeleton = Scene.selector('[data-lookup-skeleton="true"]')
-	const arriving = Scene.selector('[data-arriving="true"]')
+	const arriving = Scene.selector("[data-arriving]")
 
 	test("while the lookup runs: the button turns at full strength, placeholders hold the profile's place", () => {
 		Scene.scene(
@@ -242,6 +242,9 @@ describe("customer page: looking up the company", () => {
 			menusMounted(4),
 			Scene.expect(arriving).toExist(),
 			Scene.expect(arriving).toHaveClass("blur-in-stagger"),
+			// The facts continue the sequence after the description, the figures and the domain row.
+			Scene.expect(Scene.selector('[data-arriving="summary"]')).toHaveStyle("--stagger-start", "0ms"),
+			Scene.expect(Scene.selector('[data-arriving="facts"]')).toHaveStyle("--stagger-start", "120ms"),
 		)
 		Scene.scene(
 			pageScene(update, view, as),

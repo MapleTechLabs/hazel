@@ -612,31 +612,33 @@ If you want to use the typography plugin, uncomment the line below.
 }
 
 /* A block that just arrived: its children blur in one after another, 40ms apart (the company
-   lookup's answer). Past the eighth they come in together. */
+   lookup's answer), from `--stagger-start` (0ms unless set: a later block continues an earlier
+   one's sequence). Past the eighth they come in together. */
 @utility blur-in-stagger {
 	& > * {
 		animation: var(--animate-blur-in);
+		animation-delay: var(--stagger-start, 0ms);
 	}
 	& > :nth-child(2) {
-		animation-delay: 40ms;
+		animation-delay: calc(var(--stagger-start, 0ms) + 40ms);
 	}
 	& > :nth-child(3) {
-		animation-delay: 80ms;
+		animation-delay: calc(var(--stagger-start, 0ms) + 80ms);
 	}
 	& > :nth-child(4) {
-		animation-delay: 120ms;
+		animation-delay: calc(var(--stagger-start, 0ms) + 120ms);
 	}
 	& > :nth-child(5) {
-		animation-delay: 160ms;
+		animation-delay: calc(var(--stagger-start, 0ms) + 160ms);
 	}
 	& > :nth-child(6) {
-		animation-delay: 200ms;
+		animation-delay: calc(var(--stagger-start, 0ms) + 200ms);
 	}
 	& > :nth-child(7) {
-		animation-delay: 240ms;
+		animation-delay: calc(var(--stagger-start, 0ms) + 240ms);
 	}
 	& > :nth-child(n + 8) {
-		animation-delay: 280ms;
+		animation-delay: calc(var(--stagger-start, 0ms) + 280ms);
 	}
 	/* The reduced-motion rule below shortens the animation, not its delay: without this, the later
 	   children would sit invisible for their delay and then pop in. */
