@@ -11,6 +11,12 @@ struct ShellView: View {
     @State private var path: [String] = []
     /// The native screen under a pushed page, kept while the page no longer shows it.
     @State private var root: SemanticNode?
+    /// The tabs `root` was shown with: its bar stays under a pushed page, as a system tab bar does
+    /// under a push, so the root never resizes as a page comes or goes.
+    @State private var rootTabs: [WebTab] = []
+    /// A page was popped and the page is going back: `root` stays drawn (and nothing is pushed
+    /// again) until the page says what it shows now.
+    @State private var isReturning = false
     /// The native composer's height: the list ends above it.
     @State private var isKeyboardUp = false
     @State private var composerHeight: CGFloat = 80
@@ -36,16 +42,30 @@ struct ShellView: View {
         }
         .tint(Self.brand)
         .onChange(of: bridge.screen) { _, screen in follow(screen: screen, tabs: bridge.tabs) }
-        .onChange(of: bridge.tabs) { _, tabs in follow(screen: bridge.screen, tabs: tabs) }
+        .onChange(of: bridge.tabs) { _, tabs in
+            if !tabs.isEmpty { rootTabs = tabs }
+            follow(screen: bridge.screen, tabs: tabs)
+        }
         .onChange(of: bridge.isThreadOpen) { _, isOpen in followThread(isOpen) }
         // The page went somewhere without a native screen or tab bar changing (back from a thread
         // opened as a page to its channel): a conversation is pushed again.
         .onChange(of: bridge.location) { _, _ in follow(screen: bridge.screen, tabs: bridge.tabs) }
         .onChange(of: path) { old, new in
             // The user popped the page (the back button or the swipe): the page goes back too.
-            if new.isEmpty, !old.isEmpty, bridge.screen == nil { bridge.swipeBack() }
+            if new.isEmpty, !old.isEmpty, bridge.screen == nil {
+                isReturning = true
+                bridge.swipeBack()
+            }
             // The user popped the thread: the page closes it (its swipe-back closes the panel).
             else if old.last == "thread", new.last != "thread", bridge.isThreadOpen { bridge.swipeBack() }
+        }
+        // The page never answered with a screen of its own (it went back to another conversation,
+        // say): what it shows is followed after all.
+        .task(id: isReturning) {
+            guard isReturning else { return }
+            try? await Task.sleep(for: .seconds(1))
+            isReturning = false
+            follow(screen: bridge.screen, tabs: bridge.tabs)
         }
     }
 
@@ -109,7 +129,7 @@ struct ShellView: View {
             // Always in the window (`WebSlot`); a native screen covers it.
             WebSlot(bridge: bridge, isActive: path.isEmpty)
                 .ignoresSafeArea()
-            if let screen = bridge.screen ?? (path.isEmpty ? nil : root) {
+            if let screen = bridge.screen ?? (showsRoot ? root : nil) {
                 // Under a web overlay (the palette, a dialog) the page shows: the overlay is in it.
                 NativeScreen(screen: screen, bridge: bridge)
                     .opacity(bridge.isOverlayOpen ? 0 : 1)
@@ -124,10 +144,12 @@ struct ShellView: View {
                 Color(uiColor: .pageBackground).ignoresSafeArea()
             }
         }
-        .toolbar(bridge.screen == nil && path.isEmpty ? .hidden : .automatic, for: .navigationBar)
+        // Every screen draws its own header: the bar is never shown, so it never comes or goes
+        // during a push or pop (which moved the whole screen by its height as the transition ended).
+        .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .bottom) {
-            if bridge.hasSettled && !bridge.tabs.isEmpty && path.isEmpty && !bridge.isOverlayOpen {
-                GlassTabBar(tabs: bridge.tabs, icons: bridge.icons, onSelect: bridge.selectTab)
+            if bridge.hasSettled && !barTabs.isEmpty && !(path.isEmpty && bridge.isOverlayOpen) {
+                GlassTabBar(tabs: barTabs, icons: bridge.icons, onSelect: bridge.selectTab)
                     .padding(.horizontal, 20)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             } else if let kept = shownKept, !kept.tabs.isEmpty {
@@ -136,6 +158,18 @@ struct ShellView: View {
                     .padding(.horizontal, 20)
             }
         }
+    }
+
+    /// The root shows `root` while the page has no screen of its own to show there: under a pushed
+    /// page, as one is about to be pushed (the page went to a conversation a moment before the
+    /// push), and after a pop until the page has gone back.
+    private var showsRoot: Bool {
+        !path.isEmpty || isReturning || (bridge.hasSettled && bridge.tabs.isEmpty && root != nil)
+    }
+
+    /// The root's tab bar: the page's, or `root`'s own while it is shown in place of the page's.
+    private var barTabs: [WebTab] {
+        bridge.tabs.isEmpty && showsRoot && root != nil ? rootTabs : bridge.tabs
     }
 
     /// The kept launch screen (`KeptScreen`), while the page has not settled and the appearance is
@@ -154,10 +188,12 @@ struct ShellView: View {
     }
 
     private func follow(screen: SemanticNode?, tabs: [WebTab]) {
+        // The page has said where it went back to.
+        if isReturning, screen != nil || !tabs.isEmpty { isReturning = false }
         if let screen {
             root = screen
             if !path.isEmpty { path = [] }
-        } else if tabs.isEmpty, root != nil, path.isEmpty {
+        } else if tabs.isEmpty, root != nil, path.isEmpty, !isReturning {
             path = ["page"]
         }
     }
