@@ -284,9 +284,7 @@ export const rollupAccount = (input: {
 						foreignMrr: Object.fromEntries(
 							[...new Set(foreign.map((sub) => sub.currency))].map((code) => [
 								code,
-								sum(
-									foreign.filter((sub) => sub.currency === code).map(recurring),
-								),
+								sum(foreign.filter((sub) => sub.currency === code).map(recurring)),
 							]),
 						),
 					},

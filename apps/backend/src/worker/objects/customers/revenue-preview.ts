@@ -39,14 +39,18 @@ export const revenueCatalog = Effect.fn("Customers.revenueCatalog")(function* (n
 	const recent = yield* db.run(
 		SQLite.from(schema.customerInvoicesTable)
 			.select("lines")
-			.where(($) => [$.issuedAt.gte(new Date(now.getTime() - PREVIEW_DAYS * DAY_MS)), $.lines.isNotNull()]),
+			.where(($) => [
+				$.issuedAt.gte(new Date(now.getTime() - PREVIEW_DAYS * DAY_MS)),
+				$.lines.isNotNull(),
+			]),
 	)
 	const keys = new Set<string>()
 	for (const price of prices) {
 		for (const key of Object.keys(price.metadata)) keys.add(key)
 		for (const key of Object.keys(price.productMetadata)) keys.add(key)
 	}
-	for (const invoice of recent) for (const line of invoice.lines ?? []) for (const key of Object.keys(line.metadata)) keys.add(key)
+	for (const invoice of recent)
+		for (const line of invoice.lines ?? []) for (const key of Object.keys(line.metadata)) keys.add(key)
 	return {
 		prices: prices
 			.map((price) => ({
@@ -63,7 +67,11 @@ export const revenueCatalog = Effect.fn("Customers.revenueCatalog")(function* (n
 				interval: price.interval,
 				active: price.active,
 			}))
-			.sort((a, b) => (a.productName ?? "").localeCompare(b.productName ?? "") || a.priceId.localeCompare(b.priceId)),
+			.sort(
+				(a, b) =>
+					(a.productName ?? "").localeCompare(b.productName ?? "") ||
+					a.priceId.localeCompare(b.priceId),
+			),
 		metadataKeys: [...keys].sort(),
 	} satisfies RevenueCatalog
 })
@@ -82,7 +90,13 @@ export const revenuePreview = Effect.fn("Customers.revenuePreview")(function* (
 	const base = yield* loadBase(now)
 	const { currency } = base.org
 	const { prices, items } = yield* loadCatalog
-	const saved = makeRevenueBasis(base.settings.revenueRules, base.settings.variableMrrMonths, currency, prices, items)
+	const saved = makeRevenueBasis(
+		base.settings.revenueRules,
+		base.settings.variableMrrMonths,
+		currency,
+		prices,
+		items,
+	)
 	const proposed = makeRevenueBasis(draft.rules, draft.variableMrrMonths, currency, prices, items)
 	const catalog = new Map(prices.map((price) => [price.externalId, price]))
 
@@ -110,7 +124,16 @@ export const revenuePreview = Effect.fn("Customers.revenuePreview")(function* (
 	for (const chunk of accountChunks(accounts)) {
 		const invoices = yield* db.run(
 			SQLite.from(schema.customerInvoicesTable)
-				.select("accountId", "status", "currency", "issuedAt", "paidAt", "amountPaidMinor", "servicePeriodStart", "lines")
+				.select(
+					"accountId",
+					"status",
+					"currency",
+					"issuedAt",
+					"paidAt",
+					"amountPaidMinor",
+					"servicePeriodStart",
+					"lines",
+				)
 				.where(($) => [
 					inList(
 						$.accountId,
@@ -122,7 +145,8 @@ export const revenuePreview = Effect.fn("Customers.revenuePreview")(function* (
 				]),
 		)
 		const invoicesBy = new Map<CustomerAccountId, Array<BilledInvoice>>()
-		for (const invoice of invoices) invoicesBy.set(invoice.accountId, [...(invoicesBy.get(invoice.accountId) ?? []), invoice])
+		for (const invoice of invoices)
+			invoicesBy.set(invoice.accountId, [...(invoicesBy.get(invoice.accountId) ?? []), invoice])
 		for (const account of chunk) {
 			for (const total of [current, next]) {
 				const result = accountRevenueOf({
@@ -177,7 +201,10 @@ export const revenuePreview = Effect.fn("Customers.revenuePreview")(function* (
 	)
 	for (const invoice of recent) {
 		for (const line of invoice.lines ?? []) {
-			const group = groupOf(invoiceLine(line), line.description) as { lineCount: number; amountMinor: number }
+			const group = groupOf(invoiceLine(line), line.description) as {
+				lineCount: number
+				amountMinor: number
+			}
 			group.lineCount++
 			group.amountMinor += line.amountMinor
 		}
@@ -195,7 +222,10 @@ export const revenuePreview = Effect.fn("Customers.revenuePreview")(function* (
 		current: { mrrMinor: current.mrrMinor, variableMrrMinor: current.variableMrrMinor },
 		proposed: { mrrMinor: next.mrrMinor, variableMrrMinor: next.variableMrrMinor },
 		groups: [...groups.values()]
-			.sort((a, b) => Math.abs(b.amountMinor) + b.monthlyMinor - (Math.abs(a.amountMinor) + a.monthlyMinor))
+			.sort(
+				(a, b) =>
+					Math.abs(b.amountMinor) + b.monthlyMinor - (Math.abs(a.amountMinor) + a.monthlyMinor),
+			)
 			.slice(0, MAX_GROUPS),
 	} satisfies RevenuePreviewResult
 })

@@ -129,7 +129,8 @@ const holds = (line: ClassifiableLine, price: CatalogPrice | undefined, conditio
 
 /** Billed by usage: metered, or tiered (its amount is on the tiers, not the price). */
 export const isUsagePriced = (line: ClassifiableLine, price: CatalogPrice | undefined): boolean =>
-	(price?.usageType ?? line.usageType) === "metered" || (price?.billingScheme ?? line.billingScheme) === "tiered"
+	(price?.usageType ?? line.usageType) === "metered" ||
+	(price?.billingScheme ?? line.billingScheme) === "tiered"
 
 /**
  * Stripe's semantics: usage-priced → variable; a recurring price or a subscription item → recurring;

@@ -12,7 +12,15 @@ import {
 	revenueBasisOf,
 } from "@hazel/domain/customers"
 import { describe, expect, it } from "vitest"
-import { addRevenue, emptySplit, makeRevenueBasis, recurringMrrOf, trailingUsageOf, windowMonths } from "./revenue"
+import {
+	addRevenue,
+	emptySplit,
+	makeRevenueBasis,
+	recurringHistoryOf,
+	recurringMrrOf,
+	trailingUsageOf,
+	windowMonths,
+} from "./revenue"
 
 const NOW = new Date("2026-06-15T12:00:00.000Z")
 
@@ -41,7 +49,12 @@ const price = (overrides: Partial<schema.CustomerPrice>): schema.CustomerPrice =
 
 const CATALOG = [
 	price({ externalId: "price_seat", productId: "prod_seat", metadata: { tier: "core" } }),
-	price({ externalId: "price_api", productId: "prod_api", usageType: "metered", productMetadata: { family: "usage" } }),
+	price({
+		externalId: "price_api",
+		productId: "prod_api",
+		usageType: "metered",
+		productMetadata: { family: "usage" },
+	}),
 	price({ externalId: "price_gb", productId: "prod_gb", billingScheme: "tiered" }),
 	price({ externalId: "price_setup", productId: "prod_setup", priceType: "one_time", usageType: null }),
 ]
@@ -58,7 +71,11 @@ const classify = (line: Partial<ClassifiableLine>, rules: ReadonlyArray<RevenueR
 	)
 }
 
-const rule = (id: string, conditions: RevenueRule["conditions"], classification: RevenueRule["classification"]) => ({
+const rule = (
+	id: string,
+	conditions: RevenueRule["conditions"],
+	classification: RevenueRule["classification"],
+) => ({
 	id,
 	name: id,
 	conditions,
@@ -90,10 +107,14 @@ describe("classification defaults (Stripe's pricing semantics)", () => {
 describe("classification rules", () => {
 	it("takes the first rule whose every condition holds", () => {
 		const rules = [
-			rule("both", [
-				{ field: "product", values: ["prod_api"] },
-				{ field: "proration", values: ["true"] },
-			], "excluded"),
+			rule(
+				"both",
+				[
+					{ field: "product", values: ["prod_api"] },
+					{ field: "proration", values: ["true"] },
+				],
+				"excluded",
+			),
 			rule("api", [{ field: "product", values: ["prod_api"] }], "recurring"),
 			rule("later", [{ field: "usage_type", values: ["metered"] }], "one_off"),
 		]
@@ -101,13 +122,16 @@ describe("classification rules", () => {
 			classification: "recurring",
 			ruleId: "api",
 		})
-		expect(classify({ priceId: "price_api", productId: "prod_api", proration: true }, rules).ruleId).toBe("both")
+		expect(classify({ priceId: "price_api", productId: "prod_api", proration: true }, rules).ruleId).toBe(
+			"both",
+		)
 	})
 
 	it("matches a product from the catalog when the line names only its price", () => {
 		expect(
-			classify({ priceId: "price_api" }, [rule("api", [{ field: "product", values: ["prod_api"] }], "one_off")])
-				.classification,
+			classify({ priceId: "price_api" }, [
+				rule("api", [{ field: "product", values: ["prod_api"] }], "one_off"),
+			]).classification,
 		).toBe("one_off")
 	})
 
@@ -123,7 +147,9 @@ describe("classification rules", () => {
 
 	it("matches the line's source, so invoice items can be told from subscription items", () => {
 		const rules = [rule("items", [{ field: "line_source", values: ["invoice_item"] }], "excluded")]
-		expect(classify({ priceId: "price_seat", source: "invoice_item" }, rules).classification).toBe("excluded")
+		expect(classify({ priceId: "price_seat", source: "invoice_item" }, rules).classification).toBe(
+			"excluded",
+		)
 		expect(classify({ priceId: "price_seat" }, rules).classification).toBe("recurring")
 	})
 })
@@ -201,7 +227,11 @@ describe("trailing usage", () => {
 	})
 
 	it("is nothing for a customer first billed this month", () => {
-		const june = line({ amountMinor: 9_000, periodStart: "2026-06-01T00:00:00.000Z", periodEnd: "2026-07-01T00:00:00.000Z" })
+		const june = line({
+			amountMinor: 9_000,
+			periodStart: "2026-06-01T00:00:00.000Z",
+			periodEnd: "2026-07-01T00:00:00.000Z",
+		})
 		expect(
 			trailingUsageOf(
 				[invoice([june], { servicePeriodStart: new Date("2026-06-01T00:00:00.000Z") })],
@@ -252,8 +282,81 @@ describe("recurring MRR of a subscription", () => {
 		const items = [item("price_seat", 20_000), item("price_api", null), item("price_x", 5_000)]
 		expect(recurringMrrOf(sub(items), basisOf())).toBe(25_000)
 		expect(
-			recurringMrrOf(sub(items), basisOf([rule("x", [{ field: "price", values: ["price_x"] }], "one_off")])),
+			recurringMrrOf(
+				sub(items),
+				basisOf([rule("x", [{ field: "price", values: ["price_x"] }], "one_off")]),
+			),
 		).toBe(20_000)
 		expect(recurringMrrOf(sub(null), basisOf())).toBe(25_000)
+	})
+})
+
+describe("a subscription's MRR history", () => {
+	const sub = {
+		id: "sub_1" as schema.CustomerSubscription["id"],
+		items: null,
+		mrrMinor: 29_900,
+		currency: "usd",
+	}
+	const seat = (
+		month: string,
+		next: string,
+		amountMinor: number,
+		overrides: Partial<InvoiceLineDoc> = {},
+	) =>
+		line({
+			priceId: "price_seat",
+			productId: "prod_seat",
+			amountMinor,
+			periodStart: `2026-${month}-01T00:00:00.000Z`,
+			periodEnd: `2026-${next}-01T00:00:00.000Z`,
+			...overrides,
+		})
+	const billed = (
+		lines: ReadonlyArray<InvoiceLineDoc>,
+		overrides: Partial<schema.CustomerInvoice> = {},
+	) => ({
+		...invoice(lines),
+		subscriptionId: sub.id,
+		...overrides,
+	})
+	const DAYS = ["2026-03-15", "2026-04-15", "2026-05-15", "2026-06-15"]
+
+	it("follows what each period billed, so an upgrade lands on the renewal; the last day is MRR now", () => {
+		const invoices = [
+			billed([seat("04", "05", 19_900)]),
+			billed([seat("05", "06", 29_900), seat("05", "06", -5_000, { proration: true })]),
+			billed([
+				line({
+					priceId: "price_api",
+					amountMinor: 70_000,
+					periodStart: "2026-04-01T00:00:00.000Z",
+					periodEnd: "2026-05-01T00:00:00.000Z",
+				}),
+			]),
+			billed([seat("04", "05", 90_000)], { status: "void" }),
+			billed([seat("04", "05", 80_000)], {
+				subscriptionId: "sub_2" as schema.CustomerSubscription["id"],
+			}),
+		]
+		expect(recurringHistoryOf(sub, invoices, basisOf(), DAYS)).toEqual([19_900, 19_900, 29_900, 29_900])
+	})
+
+	it("normalizes an annual line to a month", () => {
+		const annual = billed([
+			line({
+				priceId: "price_seat",
+				amountMinor: 120_000,
+				periodStart: "2026-01-01T00:00:00.000Z",
+				periodEnd: "2027-01-01T00:00:00.000Z",
+			}),
+		])
+		expect(recurringHistoryOf({ ...sub, mrrMinor: 10_000 }, [annual], basisOf(), DAYS)).toEqual([
+			10_000, 10_000, 10_000, 10_000,
+		])
+	})
+
+	it("is the MRR now throughout without lines", () => {
+		expect(recurringHistoryOf(sub, [], basisOf(), DAYS)).toEqual([29_900, 29_900, 29_900, 29_900])
 	})
 })

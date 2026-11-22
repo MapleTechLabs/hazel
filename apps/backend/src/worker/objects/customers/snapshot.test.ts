@@ -144,7 +144,11 @@ const line = (overrides: Partial<InvoiceLineDoc>): InvoiceLineDoc => ({
 })
 
 /** A billed invoice issued on the first of `month` (2026), with usage lines for the month before. */
-const usageInvoice = (month: number, amountMinor: number, overrides: Partial<schema.CustomerInvoice> = {}) => {
+const usageInvoice = (
+	month: number,
+	amountMinor: number,
+	overrides: Partial<schema.CustomerInvoice> = {},
+) => {
 	const issued = new Date(Date.UTC(2026, month - 1, 1))
 	return {
 		status: "paid" as const,
@@ -165,8 +169,20 @@ const usageInvoice = (month: number, amountMinor: number, overrides: Partial<sch
 }
 
 const METERED_PRICES = [
-	{ externalId: "price_api", productId: "prod_api", usageType: "metered", billingScheme: "per_unit", priceType: "recurring" },
-	{ externalId: "price_base", productId: "prod_base", usageType: "licensed", billingScheme: "per_unit", priceType: "recurring" },
+	{
+		externalId: "price_api",
+		productId: "prod_api",
+		usageType: "metered",
+		billingScheme: "per_unit",
+		priceType: "recurring",
+	},
+	{
+		externalId: "price_base",
+		productId: "prod_base",
+		usageType: "licensed",
+		billingScheme: "per_unit",
+		priceType: "recurring",
+	},
 ].map((price) => ({
 	provider: "stripe" as const,
 	productName: null,
@@ -216,9 +232,23 @@ describe("MRR and variable MRR", () => {
 	const team = {
 		id: subId("team"),
 		mrrMinor: 19_900,
-		items: [item({}), item({ priceId: "price_api", productId: "prod_api", usageType: "metered", monthlyMinor: null, listMonthlyMinor: null })],
+		items: [
+			item({}),
+			item({
+				priceId: "price_api",
+				productId: "prod_api",
+				usageType: "metered",
+				monthlyMinor: null,
+				listMonthlyMinor: null,
+			}),
+		],
 	}
-	const usage = [usageInvoice(4, 3_000), usageInvoice(5, 0), usageInvoice(6, 6_000), usageInvoice(3, 99_000)]
+	const usage = [
+		usageInvoice(4, 3_000),
+		usageInvoice(5, 0),
+		usageInvoice(6, 6_000),
+		usageInvoice(3, 99_000),
+	]
 
 	it("counts the recurring items in MRR, and averages usage into variable MRR by service month", () => {
 		const rollup = usageRollupOf([team], usage)
@@ -301,7 +331,13 @@ describe("MRR and variable MRR", () => {
 		const rollup = usageRollupOf(
 			[
 				{ provider: "autumn", planName: "Pro", mrrMinor: 4_900, items: null },
-				{ id: subId("stripe"), provider: "stripe", planName: "Pro", mrrMinor: 4_900, items: team.items },
+				{
+					id: subId("stripe"),
+					provider: "stripe",
+					planName: "Pro",
+					mrrMinor: 4_900,
+					items: team.items,
+				},
 			],
 			usage,
 			{ mrrSource: "autumn" },

@@ -668,12 +668,18 @@ describe("a Stripe subscription's items", () => {
 			items: {
 				data: [
 					...SUB_GLOBEX.items.data,
-					{ id: "si_extra", quantity: 1, price: { ...SUB_GLOBEX.items.data[0]!.price, id: "price_x", unit_amount: 1_001 } },
+					{
+						id: "si_extra",
+						quantity: 1,
+						price: { ...SUB_GLOBEX.items.data[0]!.price, id: "price_x", unit_amount: 1_001 },
+					},
 				],
 			},
 		})
 		const items = subscriptionItemsOf(discounted)
-		expect(items.map((item) => [item.priceId, item.monthlyMinor, item.listMonthlyMinor, item.usageType])).toEqual([
+		expect(
+			items.map((item) => [item.priceId, item.monthlyMinor, item.listMonthlyMinor, item.usageType]),
+		).toEqual([
 			["price_2seats_month1", 11_760, 14_700, "licensed"],
 			["price_2events_meter", null, null, "metered"],
 			["price_x", 801, 1_001, "licensed"],
@@ -709,7 +715,11 @@ describe("a Stripe invoice line", () => {
 					discount_amounts: [{ amount: 1_000, discount: "di_1" }],
 					pretax_credit_amounts: [
 						{ amount: 1_000, type: "discount", discount: "di_1" },
-						{ amount: 500, type: "credit_balance_transaction", credit_balance_transaction: "cbtxn_1" },
+						{
+							amount: 500,
+							type: "credit_balance_transaction",
+							credit_balance_transaction: "cbtxn_1",
+						},
 					],
 					taxes: [
 						{ amount: 1_200, tax_behavior: "inclusive", type: "tax_rate_details" },
@@ -743,11 +753,18 @@ describe("a Stripe invoice line", () => {
 				}),
 			),
 		)
-		expect(setup).toMatchObject({ source: "invoice_item", priceId: null, productId: null, metadata: { kind: "setup" } })
+		expect(setup).toMatchObject({
+			source: "invoice_item",
+			priceId: null,
+			productId: null,
+			metadata: { kind: "setup" },
+		})
 	})
 
 	it("carries all the lines it was given on the invoice", () => {
-		const op = invoiceOp(invoice(INVOICE_ACME_PAID), { lines: [line(invoiceLine({})), line(invoiceLine({ id: null }))] })
+		const op = invoiceOp(invoice(INVOICE_ACME_PAID), {
+			lines: [line(invoiceLine({})), line(invoiceLine({ id: null }))],
+		})
 		expect(op?.lines?.map((entry) => entry.externalId)).toEqual(["il_2acme00000001"])
 		expect(invoiceOp(invoice(INVOICE_ACME_PAID))?.lines).toBeUndefined()
 	})
@@ -760,7 +777,9 @@ describe("a Stripe price", () => {
 			metadata: { revenue: "usage", empty: "" },
 			product: { id: "prod_2events000001", name: "Events", metadata: { family: "usage" } },
 		})
-		expect(priceOp(metered, { id: "prod_2events000001", name: "Events", metadata: { family: "usage" } })).toEqual({
+		expect(
+			priceOp(metered, { id: "prod_2events000001", name: "Events", metadata: { family: "usage" } }),
+		).toEqual({
 			_tag: "price",
 			externalId: "price_2events_meter",
 			productId: "prod_2events000001",

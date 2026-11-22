@@ -236,7 +236,9 @@ export const StripeInvoiceLine = Schema.Struct({
 		Schema.Array(Schema.Struct({ amount: Nullable(Schema.Number), type: Nullable(Schema.String) })),
 	),
 	taxes: Nullable(
-		Schema.Array(Schema.Struct({ amount: Nullable(Schema.Number), tax_behavior: Nullable(Schema.String) })),
+		Schema.Array(
+			Schema.Struct({ amount: Nullable(Schema.Number), tax_behavior: Nullable(Schema.String) }),
+		),
 	),
 	pricing: Nullable(
 		Schema.Struct({

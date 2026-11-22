@@ -17,7 +17,7 @@
  * **The full walk (`since: null`) lists everything**, so its last page sets `sweep: ["account"]` and
  * core removes the customers it did not see (deleted while no webhook reached Hazel). Contacts are
  * not swept: a Stripe contact row is usually the Clerk member's too, and removing Stripe's ref
- * would soft-delete the person. Invoices older than a year are not read, so a decade of them cannot
+ * would soft-delete the person. Invoices older than two years are not read, so a decade of them cannot
  * stall a connection.
  *
  * **A scheduled pull reads Stripe's event log.** None of Stripe's list endpoints filter by a change
@@ -64,8 +64,11 @@ import {
 
 /** Stripe's list endpoints cap `limit` at 100. */
 export const PAGE_SIZE = 100
-/** How far back a backfill reads invoices. Older ones answer no signal and no rollup. */
-const INVOICE_BACKFILL_DAYS = 365
+/**
+ * How far back a backfill reads invoices: the year of history a rebuild covers, and a year before it
+ * for the trailing window of its first days (`docs/customers/revenue.md`).
+ */
+const INVOICE_BACKFILL_DAYS = 730
 /** Stripe keeps events for 30 days; a day of margin for the clock and the run's own length. */
 const EVENTS_RETENTION_MS = 29 * 86_400_000
 /** Objects an events page reads at once: Stripe's test mode allows 25 requests a second. */
@@ -276,10 +279,10 @@ export const pullPage = Effect.fn("Stripe.pullPage")(function* (input: {
 			: cursor.phase === "prices"
 				? yield* pricesPage(get, cursor, at)
 				: cursor.phase === "subscriptions"
-				? yield* subscriptionsPage(get, cursor, at)
-				: cursor.phase === "invoices"
-					? yield* invoicesPage(get, cursor, nowMs, at)
-					: yield* eventsPage(get, cursor, since, config, at)
+					? yield* subscriptionsPage(get, cursor, at)
+					: cursor.phase === "invoices"
+						? yield* invoicesPage(get, cursor, nowMs, at)
+						: yield* eventsPage(get, cursor, since, config, at)
 	yield* Effect.annotateCurrentSpan({
 		"stripe.phase": cursor.phase,
 		"stripe.received": page.progress.done - doneOf(cursor),

@@ -30,6 +30,7 @@ import {
 	type BilledInvoice,
 	emptySplit,
 	loadRevenueBasis,
+	type RevenueBasis,
 	recurringMrrOf,
 	type RevenueSplit,
 	totalOf,
@@ -709,12 +710,11 @@ const monthsBefore = (day: Day, months: number): Day => {
 }
 
 /** What an account paid (its paid invoices' lines, without tax): 30 days, 12 months, by month. */
-const accountRevenue = (account: schema.CustomerAccount, now: Date) =>
+const accountRevenue = (account: schema.CustomerAccount, basis: RevenueBasis, now: Date) =>
 	Effect.gen(function* () {
 		const db = yield* Database.Database
 		const today = dayOf(now)
 		const first = monthsBefore(today, 12)
-		const basis = yield* loadRevenueBasis
 		const paid = yield* db.run(
 			SQLite.from(schema.customerInvoicesTable)
 				.select(
@@ -833,7 +833,7 @@ export const accountDetail = Effect.fn("Customers.accountDetail")(function* (
 	const live = subscriptions.filter((sub) => sub.status !== "canceled")
 	const basis = yield* loadRevenueBasis
 	return {
-		revenue: yield* accountRevenue(account, now),
+		revenue: yield* accountRevenue(account, basis, now),
 		subscriptionMrr: subscriptions.map((sub) => ({
 			subscriptionId: sub.id,
 			mrrMinor: recurringMrrOf(sub, basis),

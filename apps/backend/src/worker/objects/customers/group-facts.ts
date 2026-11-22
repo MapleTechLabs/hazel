@@ -191,6 +191,7 @@ export const groupFacts = (
 			...primary.account,
 			lifecycleStage: stage,
 			mrrMinor: accounts.reduce((sum, account) => sum + account.mrrMinor, 0),
+			variableMrrMinor: accounts.reduce((sum, account) => sum + account.variableMrrMinor, 0),
 			trialListMrrMinor: sumOrNull(accounts.map((account) => account.trialListMrrMinor)),
 			trialEndsAt: earliest(accounts.map((account) => account.trialEndsAt)),
 			planName: groupPlanName(primary.account, accounts),

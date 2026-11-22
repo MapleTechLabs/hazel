@@ -195,7 +195,7 @@ describe("the Stripe pull's full walk", () => {
 		])
 	})
 
-	it("bounds the invoices to the last year", async () => {
+	it("bounds the invoices to the last two years", async () => {
 		const fake = account()
 		await walk(fake)
 		const gte = Number(
@@ -204,8 +204,8 @@ describe("the Stripe pull's full walk", () => {
 				.params.find(([key]) => key === "created[gte]")![1],
 		)
 		const days = (Date.now() / 1000 - gte) / 86_400
-		expect(days).toBeGreaterThan(364)
-		expect(days).toBeLessThan(366)
+		expect(days).toBeGreaterThan(729)
+		expect(days).toBeLessThan(731)
 	})
 
 	it("pages a phase with Stripe's own cursor until it runs out", async () => {
@@ -248,7 +248,11 @@ describe("the Stripe pull's full walk", () => {
 			interval: "year",
 			metadata: { revenue: "core" },
 		})
-		expect(prices!.ops[3]).toMatchObject({ usageType: "metered", billingScheme: "tiered", unitAmountMinor: null })
+		expect(prices!.ops[3]).toMatchObject({
+			usageType: "metered",
+			billingScheme: "tiered",
+			unitAmountMinor: null,
+		})
 	})
 
 	it("writes each invoice with all its lines, reading past the 10 Stripe embeds", async () => {
@@ -268,7 +272,9 @@ describe("the Stripe pull's full walk", () => {
 		const [, , , invoices] = await walk(fake)
 		const op = invoices!.ops[0] as { lines?: ReadonlyArray<{ externalId: string; amountMinor: number }> }
 		expect(op.lines?.map((line) => line.externalId)).toEqual(lines.map((line) => line.id))
-		expect(fake.calls.find((call) => call.path === `/invoices/${INVOICE_ACME_PAID.id}/lines`)!.params).toEqual([
+		expect(
+			fake.calls.find((call) => call.path === `/invoices/${INVOICE_ACME_PAID.id}/lines`)!.params,
+		).toEqual([
 			["limit", "100"],
 			["starting_after", "il_09"],
 		])

@@ -53,14 +53,7 @@ import {
 } from "../provider-errors"
 import { issueSummary } from "../provider-http"
 import type { StripeGet } from "./http"
-import {
-	accountDeletedOp,
-	customerOps,
-	invoiceOp,
-	primaryProductIdOf,
-	priceOp,
-	subscriptionOp,
-} from "./map"
+import { accountDeletedOp, customerOps, invoiceOp, primaryProductIdOf, priceOp, subscriptionOp } from "./map"
 import { verifyStripeSignature } from "./signature"
 import {
 	idOf,
@@ -333,7 +326,11 @@ export const readEvent = Effect.fn("Stripe.readEvent")(function* (
 		const prices = yield* current(
 			get(
 				"/prices",
-				[["product", id], ["limit", "100"], ["expand[]", "data.product"]],
+				[
+					["product", id],
+					["limit", "100"],
+					["expand[]", "data.product"],
+				],
 				StripePricesPage,
 			),
 		)

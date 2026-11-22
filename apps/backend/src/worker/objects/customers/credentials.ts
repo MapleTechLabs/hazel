@@ -208,7 +208,13 @@ export const switchProviderAccount = Effect.fn("Customers.switchProviderAccount"
 		)
 		yield* db.run(
 			SQLite.update(schema.customerOrgDailyTable)
-				.set({ mrrMinor: 0, variableMrrMinor: 0, payingAccounts: 0, trialingAccounts: 0, atRiskMrrMinor: 0 })
+				.set({
+					mrrMinor: 0,
+					variableMrrMinor: 0,
+					payingAccounts: 0,
+					trialingAccounts: 0,
+					atRiskMrrMinor: 0,
+				})
 				.where(($) => [$.day.gte(first)]),
 		)
 		yield* requestHistoryRebuild

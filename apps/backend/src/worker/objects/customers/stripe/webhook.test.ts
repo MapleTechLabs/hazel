@@ -279,7 +279,12 @@ describe("Stripe webhook events", () => {
 		const fake = makeFakeStripe({ ...stripe(), prices: PRICES })
 		const ops = await run(deliver(event("price.updated", PRICES[0]), { fake }))
 		expect(ops).toMatchObject([
-			{ _tag: "price", externalId: "price_2pro_year0001", productName: "Pro", metadata: { revenue: "core" } },
+			{
+				_tag: "price",
+				externalId: "price_2pro_year0001",
+				productName: "Pro",
+				metadata: { revenue: "core" },
+			},
 		])
 		expect(fake.calls.map((call) => [call.path, call.params])).toEqual([
 			["/prices/price_2pro_year0001", [["expand[]", "product"]]],
@@ -301,15 +306,22 @@ describe("Stripe webhook events", () => {
 	})
 
 	it("an invoice event reads the lines past the first 10", async () => {
-		const lines = Array.from({ length: 11 }, (_, index) => invoiceLine({ id: `il_${String(index).padStart(2, "0")}` }))
+		const lines = Array.from({ length: 11 }, (_, index) =>
+			invoiceLine({ id: `il_${String(index).padStart(2, "0")}` }),
+		)
 		const fake = makeFakeStripe({
 			...stripe(),
-			invoices: [{ ...INVOICE_ACME_PAID, lines: { object: "list", has_more: true, data: lines.slice(0, 10) } }],
+			invoices: [
+				{ ...INVOICE_ACME_PAID, lines: { object: "list", has_more: true, data: lines.slice(0, 10) } },
+			],
 			invoiceLines: { [INVOICE_ACME_PAID.id]: lines },
 		})
 		const ops = await run(deliver(event("invoice.paid", INVOICE_ACME_PAID), { fake }))
 		expect((ops[0] as { lines?: ReadonlyArray<unknown> }).lines).toHaveLength(11)
-		expect(paths(fake)).toEqual([`/invoices/${INVOICE_ACME_PAID.id}`, `/invoices/${INVOICE_ACME_PAID.id}/lines`])
+		expect(paths(fake)).toEqual([
+			`/invoices/${INVOICE_ACME_PAID.id}`,
+			`/invoices/${INVOICE_ACME_PAID.id}/lines`,
+		])
 	})
 
 	it("a payment method event refreshes the card on the customer's subscriptions", async () => {

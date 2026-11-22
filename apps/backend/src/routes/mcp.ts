@@ -628,7 +628,11 @@ const customerRow = (account: Account) =>
 		name: account.name,
 		domains: account.domains,
 		plan: account.planName,
+		/** Contracted recurring revenue per month. */
 		mrr: money(account.mrrMinor, account.currency),
+		/** The trailing average of usage billing; run_rate_mrr is mrr + this. */
+		variable_mrr: money(account.variableMrrMinor, account.currency),
+		run_rate_mrr: money(account.mrrMinor + account.variableMrrMinor, account.currency),
 		lifecycle_stage: account.lifecycleStage,
 		health: account.healthStatus,
 		health_score: account.healthScore,
@@ -763,7 +767,10 @@ const customerDetail = (detail: AccountDetail, signals: PageOf<Signal>) => {
 				plan: sub.planName,
 				status: sub.status,
 				provider: sub.provider,
-				mrr: money(sub.mrrMinor, sub.currency),
+				mrr: money(
+					detail.subscriptionMrr.find((row) => row.subscriptionId === sub.id)?.mrrMinor ?? 0,
+					sub.currency,
+				),
 				interval: sub.interval,
 				quantity: sub.quantity,
 				started_at: isoOf(sub.startedAt),
@@ -827,6 +834,8 @@ const overviewOut = (overview: OverviewResult) => {
 		has_activity_data: overview.hasData.activity,
 		kpis: compact({
 			mrr: kpiOut(kpis.mrrMinor, currency),
+			variable_mrr: kpiOut(kpis.variableMrrMinor, currency),
+			run_rate_mrr: kpiOut(kpis.runRateMrrMinor, currency),
 			paying_customers: kpiOut(kpis.payingCustomers),
 			active_customers: kpiOut(kpis.activeCustomers),
 			weekly_active_users: kpiOut(kpis.wau),
@@ -835,7 +844,17 @@ const overviewOut = (overview: OverviewResult) => {
 			churned_customers: kpiOut(kpis.logoChurn),
 			mrr_at_high_risk: kpiOut(kpis.atRiskMrrMinor, currency),
 			net_revenue_retention_pct: kpiOut(kpis.nrrPct),
+			run_rate_net_revenue_retention_pct: kpiOut(kpis.runRateNrrPct),
 		}),
+		/** Revenue collected in the range by class, without tax. */
+		revenue_by_class: overview.hasData.billing
+			? {
+					recurring: money(overview.revenue.recurring, currency),
+					variable: money(overview.revenue.variable, currency),
+					one_off: money(overview.revenue.oneOff, currency),
+					unclassified: money(overview.revenue.unclassified, currency),
+				}
+			: undefined,
 		// Without billing data there were no movements to measure: none, not zeros.
 		mrr_movements: overview.hasData.billing
 			? {

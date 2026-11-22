@@ -6,11 +6,11 @@ org's **revenue rules** (Settings → Revenue), applied to every Stripe line Haz
 
 ## The three numbers
 
-| Number           | What it is                                                                                     | Source                                      |
-| ---------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| **MRR**          | Contracted recurring revenue per month, now                                                     | subscription items classed `recurring`      |
-| **Run-rate MRR** | MRR + **variable MRR** (the trailing average of variable billing)                               | MRR, and invoice lines classed `variable`   |
-| **Revenue**      | Money collected in a period, excluding tax, split recurring / variable / one-off               | paid invoices' lines, by paid date          |
+| Number           | What it is                                                                       | Source                                    |
+| ---------------- | -------------------------------------------------------------------------------- | ----------------------------------------- |
+| **MRR**          | Contracted recurring revenue per month, now                                      | subscription items classed `recurring`    |
+| **Run-rate MRR** | MRR + **variable MRR** (the trailing average of variable billing)                | MRR, and invoice lines classed `variable` |
+| **Revenue**      | Money collected in a period, excluding tax, split recurring / variable / one-off | paid invoices' lines, by paid date        |
 
 - MRR is the stable number: movements (new, expansion, contraction, churn, reactivation), NRR,
   at-risk MRR and the customer list's MRR column are on it. Usage swings never show up as
@@ -25,12 +25,12 @@ All three are in the org's reporting currency; billing in another currency is le
 
 Each **billing line** gets one class:
 
-| Class       | MRR                                     | Run-rate             | Revenue    |
-| ----------- | --------------------------------------- | -------------------- | ---------- |
-| `recurring` | yes (fixed price), or trailing average | yes                  | recurring  |
-| `variable`  | no                                      | trailing average     | variable   |
-| `one_off`   | no                                      | no                   | one-off    |
-| `excluded`  | no                                      | no                   | no         |
+| Class       | MRR                                    | Run-rate         | Revenue   |
+| ----------- | -------------------------------------- | ---------------- | --------- |
+| `recurring` | yes (fixed price), or trailing average | yes              | recurring |
+| `variable`  | no                                     | trailing average | variable  |
+| `one_off`   | no                                     | no               | one-off   |
+| `excluded`  | no                                     | no               | no        |
 
 A billing line is a subscription item (what a subscription bills each period) or an invoice line.
 Both name a Stripe price and product, so one rule classifies both the same way.
@@ -46,16 +46,16 @@ the **defaults**, which follow Stripe's own pricing semantics:
 
 A condition tests one field of the line:
 
-| Field            | Values                                                     |
-| ---------------- | ---------------------------------------------------------- |
-| `product`        | Stripe product ids                                          |
-| `price`          | Stripe price ids                                            |
-| `lookup_key`     | price lookup keys                                           |
-| `usage_type`     | `licensed`, `metered`                                       |
-| `billing_scheme` | `per_unit`, `tiered`                                        |
-| `price_type`     | `recurring`, `one_time`                                     |
-| `line_source`    | `subscription` (a subscription item), `invoice_item`        |
-| `proration`      | `true`, `false`                                             |
+| Field            | Values                                                                                  |
+| ---------------- | --------------------------------------------------------------------------------------- |
+| `product`        | Stripe product ids                                                                      |
+| `price`          | Stripe price ids                                                                        |
+| `lookup_key`     | price lookup keys                                                                       |
+| `usage_type`     | `licensed`, `metered`                                                                   |
+| `billing_scheme` | `per_unit`, `tiered`                                                                    |
+| `price_type`     | `recurring`, `one_time`                                                                 |
+| `line_source`    | `subscription` (a subscription item), `invoice_item`                                    |
+| `proration`      | `true`, `false`                                                                         |
 | `metadata`       | a key, and values: matched on the line's, then the price's, then the product's metadata |
 
 A condition holds when the line's value is one of its values (`metadata`: the key's value). The
@@ -111,3 +111,15 @@ under (`mrrBasis`); when it changes (an edit in settings, or a release that chan
 the next compute restates the last 12 months from the billing data under the new basis, as it does
 after a billing backfill: MRR movements and the org's daily MRR are rebuilt, and no movement is
 written for the change itself. A reclassification is never expansion or contraction.
+
+A restated day's MRR is what the subscription's invoices billed for it: the fixed-price recurring
+lines in effect then, prorations aside, so an upgrade appears on the renewal that billed it.
+
+## Known limits
+
+- Credit notes and refunds are not read: revenue is gross of them.
+- Revenue counts a paid invoice's lines, so an invoice settled from a customer's credit balance counts
+  in full though less cash moved on it.
+- Editing a Stripe price or product (its metadata, say) that a rule matches changes the class without
+  changing the basis: the MRR it moves is written as a normal movement, not restated.
+- A customer billed only on usage has no MRR, so no MRR movements: it is absent from logo churn.

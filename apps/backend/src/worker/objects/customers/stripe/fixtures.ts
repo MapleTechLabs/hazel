@@ -315,7 +315,12 @@ export const INVOICE_ACME_PAID = {
 	attempt_count: 1,
 	next_payment_attempt: null,
 	hosted_invoice_url: "https://invoice.stripe.com/i/acct_1Hazel00000000000/live_YWNbe",
-	lines: { object: "list", has_more: false, url: "/v1/invoices/in_2acme00000001/lines", data: [invoiceLine({})] },
+	lines: {
+		object: "list",
+		has_more: false,
+		url: "/v1/invoices/in_2acme00000001/lines",
+		data: [invoiceLine({})],
+	},
 	status_transitions: {
 		finalized_at: SEC("2026-11-01T09:26:00.000Z"),
 		paid_at: SEC("2026-11-01T09:27:00.000Z"),

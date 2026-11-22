@@ -19,6 +19,7 @@ import {
 } from "@hazel/domain/customers"
 import { Effect, Option } from "effect"
 import { billed, pays } from "./facts"
+import { DAY_MS } from "./time"
 
 /**
  * The method's version, part of the basis: bumping it restates every org's MRR history under the new
@@ -71,7 +72,8 @@ export const makeRevenueBasis = (
 ): RevenueBasis => {
 	const catalog = new Map(prices.map((row) => [row.externalId, catalogPriceOf(row)]))
 	for (const item of items) {
-		if (item.priceId !== null && !catalog.has(item.priceId)) catalog.set(item.priceId, itemPriceOf(item, item.priceId))
+		if (item.priceId !== null && !catalog.has(item.priceId))
+			catalog.set(item.priceId, itemPriceOf(item, item.priceId))
 	}
 	return { rules, months, catalog, key: revenueBasisOf(rules, months, currency, REVENUE_METHOD_VERSION) }
 }
@@ -99,7 +101,10 @@ export const loadRevenueBasis = Effect.gen(function* () {
 	const catalog = yield* loadCatalog
 	return makeRevenueBasis(
 		Option.match(settings, { onNone: () => [], onSome: (row) => row.revenueRules }),
-		Option.match(settings, { onNone: () => DEFAULT_VARIABLE_MRR_MONTHS, onSome: (row) => row.variableMrrMonths }),
+		Option.match(settings, {
+			onNone: () => DEFAULT_VARIABLE_MRR_MONTHS,
+			onSome: (row) => row.variableMrrMonths,
+		}),
 		Option.match(settings, { onNone: () => "usd", onSome: (row) => row.reportingCurrency }),
 		catalog.prices,
 		catalog.items,
@@ -160,6 +165,66 @@ export const recurringMrrOf = (
 						: sum,
 				0,
 			)
+
+/** An invoice as a subscription's MRR history reads it. */
+export type SubscriptionInvoice = BilledInvoice & Pick<schema.CustomerInvoice, "subscriptionId">
+
+const DAYS_PER_MONTH = 365.25 / 12
+
+/** Months a line's service period covers: whole for a month or more, so a monthly line is its amount. */
+const monthsOfPeriod = (start: number, end: number) => {
+	const months = (end - start) / DAY_MS / DAYS_PER_MONTH
+	return months >= 0.9 ? Math.max(1, Math.round(months)) : months
+}
+
+/**
+ * A subscription's contracted MRR on each day, from what its invoices billed: the monthly amount of
+ * its fixed-price recurring lines in effect at the end of that day (prorations aside), so an upgrade
+ * shows on the renewal that billed it. Before its first such line, that line's amount; after its
+ * last, and on the last day, its MRR now (`recurringMrrOf`). Without lines, its MRR now throughout.
+ */
+export const recurringHistoryOf = (
+	sub: Pick<schema.CustomerSubscription, "id" | "items" | "mrrMinor" | "currency">,
+	invoices: ReadonlyArray<SubscriptionInvoice>,
+	basis: RevenueBasis,
+	days: ReadonlyArray<string>,
+): Array<number> => {
+	const current = recurringMrrOf(sub, basis)
+	const periods = invoices.flatMap((invoice) => {
+		if (invoice.subscriptionId !== sub.id || !isBilled(invoice) || invoice.currency !== sub.currency)
+			return []
+		return (invoice.lines ?? []).flatMap((line) => {
+			if (line.source !== "subscription" || line.proration) return []
+			if (line.periodStart === null || line.periodEnd === null) return []
+			const classifiable = invoiceLine(line)
+			if (classifyLine(classifiable, basis.rules, basis.catalog).classification !== "recurring")
+				return []
+			if (isUsagePriced(classifiable, priceOf(classifiable, basis))) return []
+			const start = Date.parse(line.periodStart)
+			const end = Date.parse(line.periodEnd)
+			return end <= start
+				? []
+				: [{ start, end, monthly: line.amountMinor / monthsOfPeriod(start, end) }]
+		})
+	})
+	if (periods.length === 0) return days.map(() => current)
+	const firstStart = Math.min(...periods.map((period) => period.start))
+	const lastEnd = Math.max(...periods.map((period) => period.end))
+	const inEffect = (at: number) => periods.filter((period) => period.start <= at && at < period.end)
+	const first = Math.round(inEffect(firstStart).reduce((sum, period) => sum + period.monthly, 0))
+	let carried = first
+	return days.map((day, index) => {
+		if (index === days.length - 1) return current
+		const at = Date.parse(`${day}T00:00:00.000Z`) + DAY_MS - 1
+		if (at < firstStart) return first
+		if (at >= lastEnd) return current
+		const active = inEffect(at)
+		// A gap between two periods keeps the amount billed before it.
+		if (active.length > 0)
+			carried = Math.max(0, Math.round(active.reduce((sum, period) => sum + period.monthly, 0)))
+		return carried
+	})
+}
 
 // ---------------------------------------------------------------------------
 // Trailing averages

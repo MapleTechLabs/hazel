@@ -75,7 +75,8 @@ import {
 	type BilledInvoice,
 	loadRevenueBasis,
 	type RevenueBasis,
-	recurringMrrOf,
+	recurringHistoryOf,
+	type SubscriptionInvoice,
 	type TrailingUsage,
 	trailingUsageOf,
 	windowMonths,
@@ -1097,22 +1098,22 @@ const within = (day: Day, span: { from: Day; until: Day | null }) =>
 
 /**
  * An account's contracted MRR per day from its subscriptions' paid periods (trials and cancellations
- * end them), each at its recurring amount under `revenue` (`recurringMrrOf`).
+ * end them), each at what its invoices billed then (`recurringHistoryOf`).
  */
 export const mrrHistory = (
 	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
 	currency: string,
 	days: ReadonlyArray<Day>,
 	revenue: RevenueBasis,
+	invoices: ReadonlyArray<SubscriptionInvoice> = [],
 ): Array<number> => {
 	const periods = subscriptions.flatMap((sub) => {
 		if (sub.currency !== currency) return []
-		const mrr = recurringMrrOf(sub, revenue)
 		const span = paidSpanOf(sub)
-		return mrr > 0 && span !== null ? [{ ...span, mrr }] : []
+		return span === null ? [] : [{ ...span, mrr: recurringHistoryOf(sub, invoices, revenue, days) }]
 	})
-	return days.map((day) =>
-		periods.reduce((sum, period) => (within(day, period) ? sum + period.mrr : sum), 0),
+	return days.map((day, index) =>
+		periods.reduce((sum, period) => (within(day, period) ? sum + period.mrr[index] : sum), 0),
 	)
 }
 
@@ -1249,6 +1250,7 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (
 			SQLite.from(schema.customerInvoicesTable)
 				.select(
 					"accountId",
+					"subscriptionId",
 					"status",
 					"currency",
 					"issuedAt",
@@ -1267,7 +1269,7 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (
 					$.issuedAt.gte(invoicesFrom),
 				]),
 		)
-		const invoicesBy = new Map<CustomerAccountId, Array<BilledInvoice>>()
+		const invoicesBy = new Map<CustomerAccountId, Array<SubscriptionInvoice>>()
 		for (const invoice of invoices) {
 			const list = invoicesBy.get(invoice.accountId)
 			if (list === undefined) invoicesBy.set(invoice.accountId, [invoice])
@@ -1275,9 +1277,10 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (
 		}
 		for (const account of chunk) {
 			const subs = billingBy.get(account.id)?.subscriptions ?? []
-			const recurring = mrrHistory(subs, currency, series, revenue)
+			const own = invoicesBy.get(account.id) ?? []
+			const recurring = mrrHistory(subs, currency, series, revenue, own)
 			const paid = paidHistory(subs, series)
-			const usage = usageHistory(invoicesBy.get(account.id) ?? [], revenue, currency, series)
+			const usage = usageHistory(own, revenue, currency, series)
 			// As the rollup counts them (`rollupAccount`): usage while billed by a subscription, or
 			// (with none) billed last month.
 			const accountMrr = series.map(
