@@ -22,8 +22,24 @@ industry, size, country and funding stage.
 An account's domain is its first one that is not a mail provider's (`enrichmentDomainOf`,
 `FREE_MAIL_DOMAINS`, the list account matching and channel suggestions use too). An account without
 one is never looked up; an admin can give it one from the customer page's Company section
-(`customers.account.update` `addDomain`, put first, the others kept), which asks for a compute turn, so the new domain
-is seeded and looked up on the next alarms.
+(`customers.account.update` `addDomain`, put first, the others kept), or change the one it has
+(`addDomain` with `removeDomain`: swapped in place). Either asks for a compute turn, so the new
+domain is seeded and looked up on the next alarms, and marks the account's domains as set by hand
+(`fieldSources.domains: "hazel"`).
+
+### Domains from member emails
+
+Clerk sends only an organization's verified domains, and a Stripe billing email teaches none when
+the customer names its Clerk organization, so most accounts arrive without one. Each compute turn,
+before seeding, `inferAccountDomains` (`worker/objects/customers/domain-inference.ts`) gives an
+account with no domains, and none set by hand, the work domain most of its contacts' emails use:
+
+- Mail providers (`FREE_MAIL_DOMAINS`) never count; an admin-role contact counts twice.
+- A domain among the contacts of `SHARED_DOMAIN_CUSTOMERS` (4) customers or more (an environment
+  group counts once) is not one company's (the workspace's own staff invited to help, an agency's)
+  and does not count.
+- Only a domain that leads every other one is taken; a tie guesses nothing.
+- It logs `account.domain_inferred`. An admin who changes or removes it is never overruled.
 
 ## Lookups
 

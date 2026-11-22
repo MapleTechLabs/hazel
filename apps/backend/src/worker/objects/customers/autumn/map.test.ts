@@ -470,7 +470,7 @@ describe("Autumn plan → subscription", () => {
 })
 
 describe("Autumn balance → metric", () => {
-	it("writes the period's usage with the granted amount as its limit", () => {
+	it("writes the period's usage, with the granted amount as its limit only where it caps use", () => {
 		expect(balanceOps(named(CUSTOMER_ACME), { at: AT })).toEqual([
 			{
 				_tag: "metric_definition",
@@ -486,7 +486,8 @@ describe("Autumn balance → metric", () => {
 				metricKey: "autumn.messages",
 				day: "2026-11-10",
 				value: 8_200,
-				limitValue: 10_000,
+				// Pay as you go: use past the grant is billed, so there is no limit to be near.
+				limitValue: null,
 			},
 			{
 				_tag: "metric_definition",
@@ -504,6 +505,47 @@ describe("Autumn balance → metric", () => {
 				value: 12,
 				limitValue: 25,
 			},
+		])
+	})
+
+	it("caps a feature at its grant when overage is refused", () => {
+		const { breakdown: _, ...capped } = CUSTOMER_ACME.balances.messages
+		expect(
+			balanceOps(
+				named({
+					...CUSTOMER_ACME,
+					balances: { messages: { ...capped, overage_allowed: false } },
+				}),
+				{ at: AT },
+			),
+		).toMatchObject([
+			{ _tag: "metric_definition", key: "autumn.messages" },
+			{ _tag: "metric", value: 8_200, limitValue: 10_000 },
+		])
+	})
+
+	it("takes a refused overage over a usage-based price", () => {
+		expect(
+			balanceOps(
+				named({
+					...CUSTOMER_ACME,
+					balances: { messages: { ...CUSTOMER_ACME.balances.messages, overage_allowed: false } },
+				}),
+				{ at: AT },
+			),
+		).toMatchObject([
+			{ _tag: "metric_definition", key: "autumn.messages" },
+			{ _tag: "metric", value: 8_200, limitValue: 10_000 },
+		])
+	})
+
+	it("reads a usage-based price as overage, when the flag is missing", () => {
+		const { overage_allowed: _, ...flagless } = CUSTOMER_ACME.balances.messages
+		expect(
+			balanceOps(named({ ...CUSTOMER_ACME, balances: { messages: flagless } }), { at: AT }),
+		).toMatchObject([
+			{ _tag: "metric_definition", key: "autumn.messages" },
+			{ _tag: "metric", value: 8_200, limitValue: null },
 		])
 	})
 

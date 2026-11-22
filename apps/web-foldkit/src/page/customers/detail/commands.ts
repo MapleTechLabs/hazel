@@ -34,7 +34,7 @@ import { catchCommon, errorToastOf } from "../../../data/actions"
 import { showBackgroundToast } from "../../../overlay/background-toasts"
 import { HazelRpc } from "../../../rpc"
 import { type GroupAction, Message, type NoteAction, type NoteDraft } from "./message"
-import { COMPOSER_ID, PAGE_SIZE } from "./model"
+import { COMPOSER_ID, DOMAIN_INPUT_ID, PAGE_SIZE } from "./model"
 import { draftToRestore, readNoteDrafts, restoreNoteDraft } from "./note-drafts"
 
 /** The customer page's Commands: its reads, the account, note and signal actions, impersonation. */
@@ -190,9 +190,12 @@ export const UpdateCustomerAccount = Command.define("UpdateCustomerAccount", {
 		),
 })
 
-/** Give the customer a company domain, first, so its company is looked up by it. */
+/**
+ * Give the customer a company domain, first, so its company is looked up by it; with
+ * `removeDomain`, in place of that one.
+ */
 export const AddCustomerDomain = Command.define("AddCustomerDomain", {
-	args: { ...target, addDomain: Schema.String },
+	args: { ...target, addDomain: Schema.String, removeDomain: Schema.optionalKey(Schema.String) },
 	messages: [Message.SucceededAddDomain, Message.FailedAddDomain],
 	execute: (args) =>
 		addDomainAction(args).pipe(
@@ -540,6 +543,15 @@ export const CopyCustomerText = Command.define("CopyCustomerText", {
 				onFailure: () => Message.CompletedCopy({ label, isCopied: false }),
 			}),
 		),
+})
+
+/** The domain field, once "Change" shows it. */
+export const FocusDomainInput = Command.define("FocusDomainInput", {
+	messages: [Message.CompletedFocusDomainInput],
+	execute: Dom.focus(`#${DOMAIN_INPUT_ID}`).pipe(
+		Effect.ignore,
+		Effect.as(Message.CompletedFocusDomainInput()),
+	),
 })
 
 export const FocusNoteComposer = Command.define("FocusNoteComposer", {

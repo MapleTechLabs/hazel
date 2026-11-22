@@ -74,7 +74,8 @@ const liveAccounts = Effect.gen(function* () {
 
 /**
  * Give accounts their domain's answer: `profile` (null clears one left from a domain they no longer
- * have) and when it was checked (null: keep theirs). Only accounts that change are written.
+ * have) and when it was checked (null: keep theirs). Only accounts that change are written; returns
+ * how many got a different profile.
  */
 const applyToAccounts = (
 	accounts: ReadonlyArray<AccountCompany>,
@@ -103,6 +104,7 @@ const applyToAccounts = (
 					.where(($) => [$.id.in_(...chunk)]),
 			)
 		}
+		return changed.filter((account) => !sameProfile(account.companyProfile, profile)).length
 	})
 
 /**
@@ -213,7 +215,7 @@ const recordAnswer = (
 				.where(($) => [$.domain.eq(domain)])
 				.limit(1),
 		)
-		if (Option.isNone(current)) return
+		if (Option.isNone(current)) return 0
 		const row = current.value
 		const next = (ms: number) => (row.forceRefresh ? now : new Date(now.getTime() + ms))
 		if (Exit.isSuccess(exit)) {
@@ -253,13 +255,14 @@ const recordAnswer = (
 				})
 				return yield* applyToAccounts(accounts, row.profile, now, now)
 			case "rate_limited":
-				return yield* setRow(domain, {
+				yield* setRow(domain, {
 					nextAttemptAt: new Date(now.getTime() + Math.max(1_000, error.retryAfterMs ?? 60_000)),
 					updatedAt: now,
 				})
+				return 0
 			case "auth":
 			case "failed":
-				return yield* setRow(domain, {
+				yield* setRow(domain, {
 					status: "failed",
 					nextAttemptAt: new Date(
 						now.getTime() + (error.reason === "auth" ? AUTH_RETRY_MS : backoffMs(row.failures)),
@@ -268,10 +271,14 @@ const recordAnswer = (
 					error: error.message,
 					updatedAt: now,
 				})
+				return 0
 		}
 	})
 
-/** Up to `ENRICH_PER_TURN` due lookups, refreshes a person asked for first. */
+/**
+ * Up to `ENRICH_PER_TURN` due lookups, refreshes a person asked for first. Returns how many accounts
+ * got a different profile (the caller then resends the channel projection, which carries it).
+ */
 export const runDueEnrichments = Effect.fn("CustomersObject.runDueEnrichments")(function* (now: Date) {
 	const db = yield* Database.Database
 	const contextDev = yield* ContextDev
@@ -289,7 +296,7 @@ export const runDueEnrichments = Effect.fn("CustomersObject.runDueEnrichments")(
 		"enrichment.due": due.length,
 		"enrichment.enabled": contextDev.enabled,
 	})
-	if (due.length === 0) return
+	if (due.length === 0) return 0
 	const domains = due.map((row) => row.domain)
 	if (!contextDev.enabled) {
 		yield* db.run(
@@ -297,7 +304,7 @@ export const runDueEnrichments = Effect.fn("CustomersObject.runDueEnrichments")(
 				.set({ nextAttemptAt: new Date(now.getTime() + DISABLED_RETRY_MS), updatedAt: now })
 				.where(($) => [$.domain.in_(...domains)]),
 		)
-		return
+		return 0
 	}
 	// The lease, which also takes the refresh asks: one arriving during the lookups is a new one.
 	yield* db.run(
@@ -324,6 +331,7 @@ export const runDueEnrichments = Effect.fn("CustomersObject.runDueEnrichments")(
 	const answeredAt = new Date(Math.max(now.getTime(), yield* Clock.currentTimeMillis))
 	let found = 0
 	let credits = 0
+	let changed = 0
 	for (const { row, exit } of answers) {
 		if (Exit.isSuccess(exit)) {
 			credits += exit.value.creditsUsed
@@ -337,9 +345,14 @@ export const runDueEnrichments = Effect.fn("CustomersObject.runDueEnrichments")(
 				})
 			}
 		}
-		yield* recordAnswer(row.domain, exit, byDomain.get(row.domain) ?? [], answeredAt)
+		changed += yield* recordAnswer(row.domain, exit, byDomain.get(row.domain) ?? [], answeredAt)
 	}
-	yield* Effect.annotateCurrentSpan({ "enrichment.found": found, "enrichment.credits": credits })
+	yield* Effect.annotateCurrentSpan({
+		"enrichment.found": found,
+		"enrichment.credits": credits,
+		"enrichment.changed": changed,
+	})
+	return changed
 })
 
 export type RefreshOutcome = "queued" | "no_domain" | "disabled"

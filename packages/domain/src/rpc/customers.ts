@@ -458,7 +458,8 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 
 	/**
 	 * Owner, tags, stage override (null clears it), name (a manual name beats every source),
-	 * a domain to add (put first, so the company is looked up by it; the others stay), and the Needs
+	 * a domain to add (put first, so the company is looked up by it; the others stay), a domain to
+	 * remove (both at once swaps one for the other), and the Needs
 	 * attention mute: `{ until }` mutes (`until` null: until unmuted), null unmutes.
 	 */
 	write(
@@ -470,6 +471,7 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 			lifecycleStageOverride: Schema.optionalKey(Schema.NullOr(LifecycleStage)),
 			name: Schema.optionalKey(NonEmptyText(200)),
 			addDomain: Schema.optionalKey(NonEmptyText(253)),
+			removeDomain: Schema.optionalKey(NonEmptyText(253)),
 			attentionMute: Schema.optionalKey(
 				Schema.NullOr(Schema.Struct({ until: Schema.NullOr(JsonDate) })),
 			),

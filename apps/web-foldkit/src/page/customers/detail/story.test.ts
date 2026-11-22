@@ -408,6 +408,27 @@ describe("customer page: company domain", () => {
 		expect(commandNames(submit(run(loaded(), [Message.ChangedDomainDraft({ value: "  " })])))).toEqual([])
 	})
 
+	test("Change edits the domain in place; Save swaps it, Cancel or no change sends nothing", () => {
+		const editing = update(loaded(), Message.PressedChangeDomain({ domain: "old.com" }), shared)
+		expect(editing.model).toMatchObject({ editingDomain: "old.com", domainDraft: "old.com" })
+		expect(commandNames(editing)).toEqual(["FocusDomainInput"])
+
+		const swapped = submit(run(editing.model, [Message.ChangedDomainDraft({ value: "acme.com" })]))
+		expect(swapped.commands?.[0]).toMatchObject({
+			name: "AddCustomerDomain",
+			args: { accountId: beta.id, addDomain: "acme.com", removeDomain: "old.com" },
+		})
+		const done = update(swapped.model, Message.SucceededAddDomain({ accountId: beta.id }), shared)
+		expect(done.model).toMatchObject({ editingDomain: null, domainDraft: "", isSavingDomain: false })
+
+		const unchanged = submit(run(editing.model, [Message.ChangedDomainDraft({ value: " OLD.com " })]))
+		expect(commandNames(unchanged)).toEqual([])
+		expect(unchanged.model.editingDomain).toBeNull()
+
+		const cancelled = update(editing.model, Message.PressedCancelDomain(), shared)
+		expect(cancelled.model).toMatchObject({ editingDomain: null, domainDraft: "" })
+	})
+
 	test("success clears the draft; a refusal keeps it and says why", () => {
 		const saving = submit(run(loaded(), [Message.ChangedDomainDraft({ value: "acme.com" })])).model
 		const done = update(saving, Message.SucceededAddDomain({ accountId: beta.id }), shared)

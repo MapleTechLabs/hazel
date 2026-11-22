@@ -498,13 +498,14 @@ export const accountSeries = Effect.fn("Customers.accountSeries")(function* (
 	const today = dayOf(now)
 	return metricKeys.map((key): MetricSeries => {
 		const definition = definitions.find((row) => row.key === key)
-		const limits = (facts.metrics.get(key) ?? []).filter((point) => point.limitValue !== null)
+		// The newest day's limit: a feature that has since stopped recording one has none now.
+		const history = facts.metrics.get(key) ?? []
 		return {
 			metricKey: key,
 			name: definition?.name ?? key,
 			unit: definition?.customUnit ?? definition?.unit ?? null,
 			points: seriesOf(facts, key, today, days, definition?.aggregation),
-			limit: limits[limits.length - 1]?.limitValue ?? null,
+			limit: history[history.length - 1]?.limitValue ?? null,
 		}
 	})
 })

@@ -39,12 +39,14 @@ import { applyMembers, CUSTOMERS_MEMBERS_VERSION_KEY } from "../effects/customer
 import { orgTarget } from "../kinds"
 import { readObjectMeta, writeObjectMeta } from "../meta"
 import { CustomerMembersCall } from "../org/customer-members"
+import { publishChannelCustomersAfterCompute } from "./channels"
 import { runComputeStep, unmuteExpired, wakeSnoozed } from "./compute"
 import { loadCredentials } from "./credentials"
 import { installDefaults } from "./defaults"
 import { runSlaAlerts } from "./sla"
 import { ContextDev } from "./enrichment/client"
 import { postponeDueEnrichments, runDueEnrichments, seedEnrichments } from "./enrichment/job"
+import { inferAccountDomains } from "./domain-inference"
 import { CustomerIngest } from "./ingest"
 import type { CustomerProviderAdapter, CustomerProviderError } from "./providers"
 import { CustomerProviders } from "./providers"
@@ -467,7 +469,13 @@ export const tick = Effect.fn("CustomersObject.tick")(function* () {
 				(cause) => Effect.logError("Customers compute failed", { cause: Cause.pretty(cause) }),
 			),
 		)
-		// New accounts (or domains) get their company looked up on a later turn.
+		// Accounts no source gave a domain take the one their members' emails show, then new accounts
+		// (or domains) get their company looked up on a later turn.
+		yield* inferAccountDomains(now).pipe(
+			Effect.catchTag("DatabaseError", (error) =>
+				Effect.logError("Inferring account domains failed", { error: error.message }),
+			),
+		)
 		yield* seedEnrichments(now).pipe(
 			Effect.catchTag("DatabaseError", (error) =>
 				Effect.logError("Company enrichment seeding failed", { error: error.message }),
@@ -478,7 +486,7 @@ export const tick = Effect.fn("CustomersObject.tick")(function* () {
 	yield* runDuePulls(now)
 	yield* db.transaction(Effect.andThen(wakeSnoozed(now), unmuteExpired(now)))
 	// Last: its lookups take seconds, and nothing above should wait on them.
-	yield* runDueEnrichments(now).pipe(
+	const companiesChanged = yield* runDueEnrichments(now).pipe(
 		Effect.provide(ContextDev.layer),
 		Effect.catchCauseIf(
 			(cause) => !Cause.hasInterruptsOnly(cause),
@@ -489,9 +497,13 @@ export const tick = Effect.fn("CustomersObject.tick")(function* () {
 					Effect.catchTag("DatabaseError", (error) =>
 						Effect.logError("Postponing company lookups failed", { error: error.message }),
 					),
+					Effect.as(0),
 				),
 		),
 	)
+	// Linked channels show the company (`channel_customers`): a new profile reaches them now, not
+	// at the next compute.
+	if (companiesChanged > 0) yield* publishChannelCustomersAfterCompute
 	return { computed: false }
 }, Effect.orDie)
 

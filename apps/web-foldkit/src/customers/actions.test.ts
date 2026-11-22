@@ -39,6 +39,16 @@ describe("withAddedDomain", () => {
 		expect(withAddedDomain(["acme.io", "acme.com"], "ACME.com")).toEqual(["acme.com", "acme.io"])
 	})
 
+	test("a change puts the new domain in the old one's place", () => {
+		expect(withAddedDomain(["old.com", "acme.io"], "https://acme.com", "old.com")).toEqual([
+			"acme.com",
+			"acme.io",
+		])
+		// A refused one changes nothing: the store refuses the swap whole.
+		expect(withAddedDomain(["old.com"], "gmail.com", "old.com")).toEqual(["old.com"])
+		expect(addingDomainChanges(["old.com"], "acme.com", "old.com")).toBe(true)
+	})
+
 	test("a domain the store will refuse changes nothing", () => {
 		expect(withAddedDomain(["acme.com"], "gmail.com")).toEqual(["acme.com"])
 		expect(withAddedDomain(["acme.com"], `${"a".repeat(64)}.com`)).toEqual(["acme.com"])

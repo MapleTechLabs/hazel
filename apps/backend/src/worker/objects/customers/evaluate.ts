@@ -528,11 +528,10 @@ const nearLimit =
 		const candidates = [...facts.metrics.entries()]
 			.filter(([key]) => config.metricKeys.length === 0 || config.metricKeys.includes(key))
 			.flatMap(([key, points]) => {
-				const latest = [...points]
-					.reverse()
-					.find((point) => point.day >= recent && (point.limitValue ?? 0) > 0)
+				// The newest recent day decides: an older cap never stands in for a day with none.
+				const latest = points.at(-1)
 				const limit = latest?.limitValue ?? null
-				return latest === undefined || limit === null
+				return latest === undefined || latest.day < recent || limit === null || limit <= 0
 					? []
 					: [{ key, points, latest, limit, pct: round1((latest.value / limit) * 100) }]
 			})

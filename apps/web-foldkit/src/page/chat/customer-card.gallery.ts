@@ -64,6 +64,42 @@ const base: ChannelCustomer.Type = {
 	accountId: "5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d" as CustomerAccountId,
 	accountName: "Acme Corp",
 	accountLogoUrl: null,
+	company: {
+		domain: "acme.com",
+		name: "Acme Corp",
+		description:
+			"Acme builds developer infrastructure for real-time collaboration: hosted sync, presence and conflict-free storage for teams shipping multiplayer apps.",
+		industry: "Software",
+		subindustry: "Developer Tools",
+		employeeRange: "51-200",
+		employeeCount: null,
+		headquarters: {
+			street: null,
+			city: "San Francisco",
+			region: "CA",
+			postalCode: null,
+			country: "United States",
+			countryCode: "US",
+		},
+		foundedYear: 2019,
+		companyType: "privately_held",
+		operatingStatus: "active",
+		stock: null,
+		funding: { stage: "series_b", totalUsd: 42_000_000, rounds: [] },
+		revenue: null,
+		socials: [
+			{ type: "linkedin", url: "https://www.linkedin.com/company/acme" },
+			{ type: "x", url: "https://x.com/acme" },
+			{ type: "github", url: "https://github.com/acme" },
+		],
+		pages: [
+			{ type: "careers", url: "https://acme.com/careers" },
+			{ type: "pricing", url: "https://acme.com/pricing" },
+			{ type: "blog", url: "https://acme.com/blog" },
+		],
+		colors: ["#6938ef"],
+		logoUrl: null,
+	},
 	healthStatus: "at_risk",
 	healthScore: 48,
 	healthWhy: "No sign-ins for 18 days; 12 weekly active users before",
@@ -109,6 +145,8 @@ const manySignals: ChannelCustomer.Type = {
 const unknownHealth: ChannelCustomer.Type = {
 	...base,
 	accountName: "Initech",
+	// No enriched company: no company block.
+	company: null,
 	healthStatus: "unknown",
 	healthScore: null,
 	healthWhy: null,
@@ -186,7 +224,7 @@ const frame = (
 			h.div(
 				[
 					h.Class("relative overflow-hidden rounded-xl border border-border bg-bg"),
-					h.Style({ width: `${options.width}px`, height: options.isMobile ? "720px" : "640px" }),
+					h.Style({ width: `${options.width}px`, height: options.isMobile ? "820px" : "760px" }),
 				],
 				[
 					header(h, customer, options.isMobile ?? false, customer === null ? "closed" : "pinned"),
@@ -248,7 +286,7 @@ const screen = (h: HtmlBuilder<M>) =>
 for (const theme of ["light", "dark"] as const) {
 	test(theme, async () => {
 		if (theme === "dark") document.documentElement.classList.add("dark")
-		await page.viewport(1720, 1500)
+		await page.viewport(1720, 1800)
 		render(screen)
 		await document.fonts.ready
 		const label = import.meta.env.VITE_GALLERY_LABEL ? `${import.meta.env.VITE_GALLERY_LABEL}-` : ""
