@@ -53,7 +53,8 @@ export const thoughtLine = <Message>(
 				{
 					onPress: options.onToggle(!isOpen),
 					className: twMerge(
-						"group flex w-fit cursor-pointer items-center gap-1.5 rounded-md font-medium text-muted-fg text-xs outline-hidden transition-colors hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70",
+						// On touch, an invisible 44px-tall hit area around the compact header.
+						"group relative flex w-fit cursor-pointer items-center gap-1.5 rounded-md font-medium text-muted-fg text-xs outline-hidden transition-colors hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70 pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-3.5",
 						options.tone === "danger" && "text-danger hover:text-danger",
 					),
 					attributes: [h.AriaExpanded(isOpen), h.Attribute("aria-controls", options.bodyId)],

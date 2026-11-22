@@ -544,14 +544,11 @@ If you want to use the typography plugin, uncomment the line below.
 }
 
 /* A thought line's running label (`ui/thought-line.ts`): a highlight sweeps across the text. The fill
-   goes transparent, not `color`, so the gradient's `currentColor` is still the label's colour. */
+   goes transparent, not `color`, so the gradient's `currentColor` is still the label's colour. The
+   text rests at its own colour and the highlight is `--fg`, stronger in both themes, so no stop drops
+   below the label's own contrast. */
 @utility thought-shimmer {
-	background-image: linear-gradient(
-		100deg,
-		color-mix(in oklab, currentColor 45%, transparent) 30%,
-		currentColor 50%,
-		color-mix(in oklab, currentColor 45%, transparent) 70%
-	);
+	background-image: linear-gradient(100deg, currentColor 35%, var(--fg) 50%, currentColor 65%);
 	background-size: 250% 100%;
 	background-position: 125% 0;
 	background-clip: text;
