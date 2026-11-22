@@ -10,7 +10,7 @@ import { type ChannelIconProps, channelIcon, NO_CHANNEL_LINKS } from "./channel-
 type Model = ChannelIconProps
 type Message = never
 
-const update = (model: Model): readonly [Model, ReadonlyArray<never>] => [model, []]
+const update = (model: Model) => ({ model })
 const view = (model: Model, h: HtmlBuilder<Message>) => h.div([], [channelIcon(h, model)])
 
 const icon = Scene.selector("[data-channel-icon]")
@@ -24,13 +24,11 @@ const northwind = {
 	logoUrl: null,
 }
 
-const scene = (model: Model, ...steps: ReadonlyArray<Parameters<typeof Scene.scene>[2]>) =>
-	Scene.scene({ update, view }, Scene.given(model), ...steps)
-
 describe("channel icon", () => {
 	test("an emoji wins over the hashtag, with no marks", () => {
-		scene(
-			{ icon: "🚀" },
+		Scene.scene(
+			{ update, view },
+			Scene.given({ icon: "🚀" }),
 			Scene.expect(icon).toHaveText("🚀"),
 			Scene.expect(inIcon("svg")).toBeAbsent(),
 			Scene.expect(inIcon("[title]")).toBeAbsent(),
@@ -38,16 +36,18 @@ describe("channel icon", () => {
 	})
 
 	test("a private channel without an emoji draws a lock, not a hashtag, and no lock mark", () => {
-		scene(
-			{ icon: null, isPrivate: true, links: NO_CHANNEL_LINKS },
+		Scene.scene(
+			{ update, view },
+			Scene.given({ icon: null, isPrivate: true, links: NO_CHANNEL_LINKS }),
 			Scene.expect(inIcon("svg")).toExist(),
 			Scene.expect(titled("Private channel")).toBeAbsent(),
 		)
 	})
 
 	test("a customer's initial replaces the emoji, and a private one gets the lock mark", () => {
-		scene(
-			{ icon: "🚀", isPrivate: true, links: { ...NO_CHANNEL_LINKS, customer: acme } },
+		Scene.scene(
+			{ update, view },
+			Scene.given({ icon: "🚀", isPrivate: true, links: { ...NO_CHANNEL_LINKS, customer: acme } }),
 			Scene.expect(icon).not.toHaveText("🚀"),
 			Scene.expect(icon).toHaveText("A"),
 			Scene.expect(titled("Private channel")).toExist(),
@@ -55,16 +55,21 @@ describe("channel icon", () => {
 	})
 
 	test("Connect partners and the sync platform are marked together", () => {
-		scene(
-			{ icon: null, links: { customer: null, partners: [northwind], syncProvider: "slack" } },
+		Scene.scene(
+			{ update, view },
+			Scene.given({
+				icon: null,
+				links: { customer: null, partners: [northwind], syncProvider: "slack" },
+			}),
 			Scene.expect(titled("Shared with Northwind")).toExist(),
 			Scene.expect(titled("Synced with Slack")).toExist(),
 		)
 	})
 
 	test("Discord is named as Discord", () => {
-		scene(
-			{ icon: null, links: { ...NO_CHANNEL_LINKS, syncProvider: "discord" } },
+		Scene.scene(
+			{ update, view },
+			Scene.given({ icon: null, links: { ...NO_CHANNEL_LINKS, syncProvider: "discord" } }),
 			Scene.expect(titled("Synced with Discord")).toExist(),
 			Scene.expect(titled("Synced with Slack")).toBeAbsent(),
 		)
