@@ -15,8 +15,14 @@ struct ShellView: View {
     /// under a push, so the root never resizes as a page comes or goes.
     @State private var rootTabs: [WebTab] = []
     /// A page was popped and the page is going back: `root` stays drawn (and nothing is pushed
-    /// again) until the page says what it shows now.
-    @State private var isReturning = false
+    /// again) until the page says what it shows now, or for this long at most.
+    @State private var returnWait: Duration?
+    private var isReturning: Bool { returnWait != nil }
+    /// The longest a return waits for the page's screen.
+    private static let returnLimit: Duration = .seconds(1)
+    /// The page's tabs came without a screen: its screen comes right after them in the same pass
+    /// (`web/bridge.ts`), or never, when it went back to a tab drawn by the page itself (Activity).
+    private static let screenAfterTabs: Duration = .milliseconds(150)
     /// The native composer's height: the list ends above it.
     @State private var isKeyboardUp = false
     @State private var composerHeight: CGFloat = 80
@@ -53,7 +59,7 @@ struct ShellView: View {
         .onChange(of: path) { old, new in
             // The user popped the page (the back button or the swipe): the page goes back too.
             if new.isEmpty, !old.isEmpty, bridge.screen == nil {
-                isReturning = true
+                returnWait = Self.returnLimit
                 bridge.swipeBack()
             }
             // The user popped the thread: the page closes it (its swipe-back closes the panel).
@@ -61,10 +67,11 @@ struct ShellView: View {
         }
         // The page never answered with a screen of its own (it went back to another conversation,
         // say): what it shows is followed after all.
-        .task(id: isReturning) {
-            guard isReturning else { return }
-            try? await Task.sleep(for: .seconds(1))
-            isReturning = false
+        .task(id: returnWait) {
+            guard let returnWait else { return }
+            // Cancelled: the return ended or its wait changed, and that state is the one to keep.
+            do { try await Task.sleep(for: returnWait) } catch { return }
+            self.returnWait = nil
             follow(screen: bridge.screen, tabs: bridge.tabs)
         }
     }
@@ -188,8 +195,12 @@ struct ShellView: View {
     }
 
     private func follow(screen: SemanticNode?, tabs: [WebTab]) {
-        // The page has said where it went back to.
-        if isReturning, screen != nil || !tabs.isEmpty { isReturning = false }
+        // The page has said where it went back to: its screen ends the return, its tabs alone
+        // only shorten it (the screen follows them, if it has one).
+        if isReturning {
+            if screen != nil { returnWait = nil }
+            else if !tabs.isEmpty, returnWait != Self.screenAfterTabs { returnWait = Self.screenAfterTabs }
+        }
         if let screen {
             root = screen
             if !path.isEmpty { path = [] }
