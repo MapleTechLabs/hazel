@@ -70,7 +70,7 @@ import {
 	type SnapshotBase,
 } from "./snapshot"
 import { inList, isActive, rowsPerInsert } from "./sql"
-import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "./time"
+import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "@hazel/customer-integrations/kit/time"
 
 /** Days of history a rebuild covers. */
 export const HISTORY_DAYS = 365

@@ -21,7 +21,7 @@ import type { schema } from "@hazel/db"
 import type { Day, LifecycleStage } from "@hazel/domain/customers"
 import type { CustomerContactId } from "@hazel/schema"
 import type { AccountFacts, ContactFacts, MetricPoint } from "./facts"
-import { addDays } from "./time"
+import { addDays } from "@hazel/customer-integrations/kit/time"
 
 const STAGE_RANK = { churned: 0, lead: 1, trialing: 2, past_due: 3, active: 4 } satisfies Record<
 	LifecycleStage,

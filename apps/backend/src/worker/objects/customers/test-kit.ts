@@ -29,7 +29,7 @@ import { encodeInvokePrincipal } from "../principal"
 import { makeTestObjects, type TestObject, type TestObjects } from "../testing"
 import type { AccountFacts, ContactFacts, OrgFacts } from "./facts"
 import { CustomerIngest } from "./ingest"
-import { addDays, dayOf } from "./time"
+import { addDays, dayOf } from "@hazel/customer-integrations/kit/time"
 
 export const uuid = () => crypto.randomUUID()
 

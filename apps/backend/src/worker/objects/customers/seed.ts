@@ -25,7 +25,7 @@ import type {
 	UpsertAccount,
 	UpsertContact,
 } from "@hazel/domain/customers"
-import { DAY_MS, dayOf } from "./time"
+import { DAY_MS, dayOf } from "@hazel/customer-integrations/kit/time"
 
 export interface DemoSeedOptions {
 	/** Number of customer accounts (default 200). */

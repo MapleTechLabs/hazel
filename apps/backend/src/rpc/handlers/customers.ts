@@ -80,8 +80,8 @@ import {
 	MAX_DOMAINS as MAX_ACCOUNT_DOMAINS,
 	normalizeDomain,
 } from "../../worker/objects/customers/ingest-live"
-import { regionOfAccountId as mapleRegionOf } from "../../worker/objects/customers/maple/adapter"
-import { configProblem as mapleConfigProblem } from "../../worker/objects/customers/maple/pull"
+import { regionOfAccountId as mapleRegionOf } from "@hazel/customer-integrations/maple/adapter"
+import { configProblem as mapleConfigProblem } from "@hazel/customer-integrations/maple/pull"
 import { CustomerProviders } from "../../worker/objects/customers/providers"
 import { ContextDev } from "../../worker/objects/customers/enrichment/client"
 import { requestCompanyRefresh } from "../../worker/objects/customers/enrichment/job"

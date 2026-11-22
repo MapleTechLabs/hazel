@@ -17,7 +17,7 @@ const clerk = vi.hoisted(() => ({
 vi.mock("./providers", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("./providers")>()
 	const { Effect, Layer, Option } = await import("effect")
-	const { CustomerProviderError } = await import("./provider-errors")
+	const { CustomerProviderError } = await import("@hazel/customer-integrations/kit/errors")
 	const adapter: import("./providers").CustomerProviderAdapter = {
 		provider: "clerk",
 		validate: () => Effect.succeed({ externalAccountId: "ins_1", externalAccountName: null }),

@@ -37,7 +37,7 @@ import {
 	rollingActiveSeries,
 	seriesOf,
 } from "./facts"
-import { addDays, DAY_MS, dayOf, daysBetween, daysSince } from "./time"
+import { addDays, DAY_MS, dayOf, daysBetween, daysSince } from "@hazel/customer-integrations/kit/time"
 
 /** The parts of a rule evaluation reads. */
 export interface RuleInput {

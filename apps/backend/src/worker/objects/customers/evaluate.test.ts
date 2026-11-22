@@ -16,7 +16,7 @@ import { formatMoney, metricSeries } from "./facts"
 import { billingProviderOf } from "./snapshot"
 import type { IssueSlaFacts } from "./facts"
 import { factsOf, type FactsInput, NOW, orgFacts, TODAY, uuid } from "./test-kit"
-import { addDays } from "./time"
+import { addDays } from "@hazel/customer-integrations/kit/time"
 
 const ruleOf = (config: RuleConfig, overrides: Partial<RuleInput> = {}): RuleInput => ({
 	name: TEMPLATES[config._tag].name,

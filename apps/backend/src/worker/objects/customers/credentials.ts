@@ -11,7 +11,7 @@ import { HISTORY_DAYS } from "./compute"
 import { CustomerIngest } from "./ingest"
 import type { ProviderCredentials } from "./providers"
 import { requestHistoryRebuild } from "./schedule"
-import { addDays, dayOf } from "./time"
+import { addDays, dayOf } from "@hazel/customer-integrations/kit/time"
 
 /** Encrypt the API key and the webhook secret for storing, both under the current key version. */
 export const encryptSecrets = Effect.fn("Customers.encryptSecrets")(function* (

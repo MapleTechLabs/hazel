@@ -33,7 +33,7 @@ import {
 	pays,
 } from "./facts"
 import { inList, isActive } from "./sql"
-import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "./time"
+import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "@hazel/customer-integrations/kit/time"
 
 /** A JSON key or value holding an account id. */
 const accountIdText = schema.typed<CustomerAccountId>()(SQLite.text)

@@ -16,7 +16,7 @@ import type {
 	SlaTargets,
 } from "@hazel/domain/customers"
 import type { CustomerContactId, CustomerIssueId } from "@hazel/schema"
-import { addDays, dayRange } from "./time"
+import { addDays, dayRange } from "@hazel/customer-integrations/kit/time"
 
 export interface ContactFacts {
 	readonly id: CustomerContactId

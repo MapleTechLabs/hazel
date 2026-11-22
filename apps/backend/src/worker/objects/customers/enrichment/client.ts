@@ -15,8 +15,8 @@
 import type { CompanyProfile } from "@hazel/domain/customers"
 import { Config, Context, Effect, Layer, Option, type Redacted, Schema } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
-import type { CustomerProviderError } from "../provider-errors"
-import { makeProviderPost } from "../provider-http"
+import type { CustomerProviderError } from "@hazel/customer-integrations/kit/errors"
+import { makeProviderPost } from "@hazel/customer-integrations/kit/http"
 import { isSameCompany, normalizeDomain, toCompanyProfile } from "./map"
 import { BrandResponse, CompanySearchResponse, ContextDevErrorBody } from "./wire"
 

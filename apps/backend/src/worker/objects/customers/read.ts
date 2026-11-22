@@ -24,7 +24,7 @@ import type { CustomerAccountId, CustomerContactId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { type AccountFacts, type HealthPoint, type MetricPoint, mrrSeries, seriesOf } from "./facts"
 import { inList, isActive } from "./sql"
-import { addDays, dayOf, dayRange } from "./time"
+import { addDays, dayOf, dayRange } from "@hazel/customer-integrations/kit/time"
 
 /** A mover needs a baseline: this many average daily active users in the previous window. Below
  * it a percentage is noise (1 user-day to 9 reads +800%). */

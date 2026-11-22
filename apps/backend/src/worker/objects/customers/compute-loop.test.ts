@@ -34,7 +34,7 @@ import {
 } from "./schedule"
 import { loadBase } from "./snapshot"
 import { type CustomersWorld, makeCustomersWorld, NOW, ok, uuid } from "./test-kit"
-import { addDays, dayOf } from "./time"
+import { addDays, dayOf } from "@hazel/customer-integrations/kit/time"
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
