@@ -105,17 +105,17 @@ export const stepDay = (key: string, index: number | null, count: number): Optio
 
 const LEVEL_CLASS = {
 	0: "fill-secondary",
-	1: "fill-chart-series-1/25",
-	2: "fill-chart-series-1/50",
-	3: "fill-chart-series-1/75",
+	1: "fill-chart-series-1/35",
+	2: "fill-chart-series-1/60",
+	3: "fill-chart-series-1/80",
 	4: "fill-chart-series-1",
 } as const satisfies Record<HeatLevel, string>
 
 const LEVEL_SWATCH = {
 	0: "bg-secondary",
-	1: "bg-chart-series-1/25",
-	2: "bg-chart-series-1/50",
-	3: "bg-chart-series-1/75",
+	1: "bg-chart-series-1/35",
+	2: "bg-chart-series-1/60",
+	3: "bg-chart-series-1/80",
 	4: "bg-chart-series-1",
 } as const satisfies Record<HeatLevel, string>
 
@@ -123,9 +123,9 @@ const LEVEL_SWATCH = {
 const CELL = 10
 const GAP = 3
 const STEP = CELL + GAP
-/** Room for the weekday labels on the left and the month labels on top. */
-const LEFT = 26
-const TOP = 16
+/** Room for the weekday labels on the left and the month labels on top (HTML, at text size). */
+const LEFT = 32
+const TOP = 20
 
 const WEEKDAY_LABELS = [
 	[0, "Mon"],
@@ -133,15 +133,25 @@ const WEEKDAY_LABELS = [
 	[4, "Fri"],
 ] as const
 
+const axisLabel = <M>(h: HtmlBuilder<M>, label: string, style: Record<string, string>): Html =>
+	h.span(
+		[
+			h.AriaHidden(true),
+			h.Class("pointer-events-none absolute text-muted-fg text-xs leading-none"),
+			h.Style(style),
+		],
+		[label],
+	)
+
 export const heatLegend = <M>(h: HtmlBuilder<M>): Html =>
 	h.div(
 		[h.AriaHidden(true), h.Class("flex items-center gap-1 text-muted-fg text-xs")],
 		[
-			h.span([h.Class("mr-1")], ["Less"]),
+			h.span([h.Class("mr-1.5")], ["Less"]),
 			...([0, 1, 2, 3, 4] as const).map((level) =>
 				h.span([h.Class(twMerge("size-2.5 rounded-xs", LEVEL_SWATCH[level]))]),
 			),
-			h.span([h.Class("ml-1")], ["More"]),
+			h.span([h.Class("ml-1.5")], ["More"]),
 		],
 	)
 
@@ -207,47 +217,34 @@ export const calendarHeatmap = <M>(
 							h.AriaHidden(true),
 							h.Class("block h-auto w-full overflow-visible"),
 						],
-						[
-							...layout.months.map(({ week, label }) =>
-								h.text(
-									[
-										h.Attribute("x", String(LEFT + week * STEP)),
-										h.Attribute("y", "9"),
-										h.Attribute("font-size", "9"),
-										h.Class("fill-muted-fg"),
-									],
-									[label],
-								),
-							),
-							...WEEKDAY_LABELS.map(([weekday, label]) =>
-								h.text(
-									[
-										h.Attribute("x", "0"),
-										h.Attribute("y", String(TOP + weekday * STEP + CELL - 1.5)),
-										h.Attribute("font-size", "9"),
-										h.Class("fill-muted-fg"),
-									],
-									[label],
-								),
-							),
-							...layout.cells.map((cell) =>
-								h.rect([
-									h.Id(`${options.idPrefix}-${cell.index}`),
-									h.Attribute("x", String(LEFT + cell.week * STEP)),
-									h.Attribute("y", String(TOP + cell.weekday * STEP)),
-									h.Attribute("width", String(CELL)),
-									h.Attribute("height", String(CELL)),
-									h.Attribute("rx", "2"),
-									h.OnMouseEnter(options.onHover(cell.index)),
-									h.Class(
-										twMerge(
-											LEVEL_CLASS[cell.level],
-											cell.index === options.hoveredIndex && "stroke-fg/70",
-										),
+						layout.cells.map((cell) =>
+							h.rect([
+								h.Id(`${options.idPrefix}-${cell.index}`),
+								h.Attribute("x", String(LEFT + cell.week * STEP)),
+								h.Attribute("y", String(TOP + cell.weekday * STEP)),
+								h.Attribute("width", String(CELL)),
+								h.Attribute("height", String(CELL)),
+								h.Attribute("rx", "2"),
+								h.OnMouseEnter(options.onHover(cell.index)),
+								h.Class(
+									twMerge(
+										LEVEL_CLASS[cell.level],
+										cell.index === options.hoveredIndex && "stroke-fg/70",
 									),
-								]),
-							),
-						],
+								),
+							]),
+						),
+					),
+					// Labels in HTML, so they keep the text size wherever the grid scales.
+					...layout.months.map(({ week, label }) =>
+						axisLabel(h, label, { left: `${((LEFT + week * STEP) / width) * 100}%`, top: "0" }),
+					),
+					...WEEKDAY_LABELS.map(([weekday, label]) =>
+						axisLabel(h, label, {
+							left: "0",
+							top: `${((TOP + weekday * STEP + CELL / 2) / height) * 100}%`,
+							transform: "translateY(-50%)",
+						}),
 					),
 					...(hovered === undefined
 						? []

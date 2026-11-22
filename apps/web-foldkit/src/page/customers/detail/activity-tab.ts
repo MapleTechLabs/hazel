@@ -8,9 +8,9 @@ import { formatDayLong } from "../../../customers/format"
 import { msOf } from "../../../customers/queries"
 import { segmentClass, segmentedTrackClass } from "../../../customers/ui/filter-bar"
 import { SOURCE_LABEL, sourceLogo, sourceMark } from "../../../customers/ui/identity"
-import { panelHeader } from "../../../customers/ui/surface"
 import { IconChevronDown } from "../../../icons"
 import { button } from "../../../ui/button"
+import { heading } from "../../../ui/heading"
 import { menuLabel } from "../../../ui/menu-view"
 import { RevealCalendarDay } from "./commands"
 import { Message } from "./message"
@@ -112,23 +112,28 @@ const yearCalendar = (h: HtmlBuilder<Message>, model: Model): Html => {
 		(most, point) => (point.value > (most?.value ?? 0) ? point : most),
 		undefined,
 	)
-	const description =
+	// The year's headline leads; the busiest day backs it; the key sits under the grid it explains.
+	const title =
 		points === undefined
-			? "Daily active users over the last year"
+			? "Activity in the last year"
 			: activeDays === 0
 				? "No activity in the last year"
-				: [
-						`${activeDays} active ${activeDays === 1 ? "day" : "days"} in the last year`,
-						...(busiest === undefined
-							? []
-							: [
-									`busiest ${formatDayLong(busiest.day)} (${activeUsers(busiest.value).toLowerCase()})`,
-								]),
-					].join(" · ")
+				: `${activeDays} active ${activeDays === 1 ? "day" : "days"} in the last year`
+	const detail =
+		busiest === undefined
+			? null
+			: `Busiest on ${formatDayLong(busiest.day)}, ${activeUsers(busiest.value).toLowerCase()}`
+	const description = [title, ...(detail === null ? [] : [detail])].join(". ")
 	return h.section(
-		[h.AriaLabel("Activity calendar"), h.Class("flex min-w-0 flex-col gap-3")],
+		[h.AriaLabel("Activity calendar"), h.Class("flex min-w-0 flex-col gap-4 pb-2")],
 		[
-			panelHeader(h, { title: "Activity", description, aside: heatLegend(h) }),
+			h.header(
+				[h.Class("flex flex-col gap-0.5")],
+				[
+					heading(h, { variant: "subsection", level: 2 }, [title]),
+					...(detail === null ? [] : [h.p([h.Class("text-muted-fg text-sm")], [detail])]),
+				],
+			),
 			points === undefined
 				? failed
 					? h.div(
@@ -160,6 +165,14 @@ const yearCalendar = (h: HtmlBuilder<Message>, model: Model): Html => {
 								h.OnMount(RevealCalendarDay({ dayId })),
 							]),
 					}),
+			h.footer(
+				[
+					h.Class(
+						"flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-muted-fg text-xs",
+					),
+				],
+				[h.span([], ["Each square is a day, shaded by its active users"]), heatLegend(h)],
+			),
 		],
 	)
 }
