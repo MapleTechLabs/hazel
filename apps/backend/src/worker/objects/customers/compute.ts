@@ -1071,7 +1071,7 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 			.where(($) => [$.deletedAt.isNull()]),
 	)).filter((account) => live.has(account.id))
 	const billingBy = billingByAccount(
-		base.autumnReady,
+		new Set(base.billingReady),
 		yield* db.run(SQLite.from(schema.customerSubscriptionsTable).select()),
 		new Map(accounts.map((account) => [account.id, account.mrrSource])),
 	)
@@ -1298,7 +1298,7 @@ const ComputeProgress = Schema.Struct({
 	/** When its first turn ran, its day and the billing sources' readiness: another one starts over. */
 	startedAt: Schema.Finite,
 	day: Day,
-	autumnReady: Schema.Boolean,
+	billingReady: Schema.Array(Schema.String),
 	/** The primary of the last group of accounts done (groups go in their primary's id order). */
 	after: CustomerAccountId,
 	armed: Schema.Array(Schema.String),
@@ -1337,7 +1337,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 			Option.flatMap(yield* computeProgress, decodeComputeProgress),
 			(saved) =>
 				saved.day === base.org.today &&
-				saved.autumnReady === base.autumnReady &&
+				saved.billingReady.join() === base.billingReady.join() &&
 				now.getTime() - saved.startedAt < COMPUTE_PROGRESS_MAX_AGE_MS,
 		),
 	)
@@ -1381,7 +1381,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	yield* Effect.annotateCurrentSpan({
 		"customers.accounts": base.accountIds.length,
 		"customers.rules": base.rules.length,
-		"customers.billing_ready": base.autumnReady,
+		"customers.billing_ready": base.billingReady.join(","),
 		"customers.mrr_source_switches": switched,
 		"customers.billing_importing": billingImporting(importing),
 		"customers.history_rebuild_pending": rebuildPending,
@@ -1396,7 +1396,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 			encodeComputeProgress({
 				startedAt: progress?.startedAt ?? now.getTime(),
 				day: base.org.today,
-				autumnReady: base.autumnReady,
+				billingReady: base.billingReady,
 				after: last[last.length - 1][0],
 				armed: signals.armed,
 				totals,

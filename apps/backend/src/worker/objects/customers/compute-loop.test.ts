@@ -1877,7 +1877,9 @@ describe("Customers compute and sync loop", () => {
 						autumnId,
 					)
 				const autumnReady = () =>
-					world.object.run(Effect.map(loadBase(NOW), (base) => base.autumnReady)).pipe(Effect.orDie)
+					world.object
+						.run(Effect.map(loadBase(NOW), (base) => base.billingReady.includes("autumn")))
+						.pipe(Effect.orDie)
 				expect(yield* autumnReady()).toBe(false)
 				yield* compute(1)
 				expect(state()).toEqual({
@@ -2220,7 +2222,10 @@ describe("Customers compute and sync loop", () => {
 				expect(first).toMatchObject({ day: day(0), startedAt: NOW.getTime() })
 				// Each starts over: the first chunk again, and the same progress after it.
 				for (const saved of [
-					JSON.stringify({ ...first, autumnReady: !first.autumnReady }),
+					JSON.stringify({
+						...first,
+						billingReady: ["changed"],
+					}),
 					JSON.stringify({ ...first, day: day(-1) }),
 					JSON.stringify({ ...first, startedAt: NOW.getTime() - 2 * 60 * 60_000 }),
 					JSON.stringify({ ...first, after: 42 }),

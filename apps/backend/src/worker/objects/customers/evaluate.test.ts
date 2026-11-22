@@ -18,6 +18,9 @@ import type { IssueSlaFacts } from "./facts"
 import { factsOf, type FactsInput, NOW, orgFacts, TODAY, uuid } from "./test-kit"
 import { addDays } from "@hazel/customer-integrations/kit/time"
 
+const READY: ReadonlySet<string> = new Set(["autumn"])
+const NOT_READY: ReadonlySet<string> = new Set()
+
 const ruleOf = (config: RuleConfig, overrides: Partial<RuleInput> = {}): RuleInput => ({
 	name: TEMPLATES[config._tag].name,
 	template: config._tag,
@@ -159,37 +162,37 @@ describe("signal evaluation", () => {
 		const subs = (...subscriptions: NonNullable<FactsInput["subscriptions"]>) =>
 			factsOf({ subscriptions }).subscriptions
 		const both = subs({ provider: "stripe" }, { provider: "autumn" })
-		expect(billingProviderOf(false, both, null)).toBe("stripe")
-		expect(billingProviderOf(true, both, "stripe")).toBe("autumn")
+		expect(billingProviderOf(NOT_READY, both, null)).toBe("stripe")
+		expect(billingProviderOf(READY, both, "stripe")).toBe("autumn")
 		// Unknown to Autumn, or billed in Stripe outside it.
-		expect(billingProviderOf(true, subs({ provider: "stripe" }), null)).toBe("stripe")
+		expect(billingProviderOf(READY, subs({ provider: "stripe" }), null)).toBe("stripe")
 		// Autumn bills only on a billed paying subscription: a free plan or a trial leaves Stripe's.
 		const free = { provider: "autumn", mrrMinor: 0 } as const
 		const trial = { provider: "autumn", status: "trialing" } as const
 		const ended = { provider: "autumn", status: "canceled" } as const
-		expect(billingProviderOf(true, subs({ provider: "stripe" }, free), "autumn")).toBe("stripe")
-		expect(billingProviderOf(true, subs({ provider: "stripe" }, trial), null)).toBe("stripe")
-		expect(billingProviderOf(true, subs({ provider: "stripe" }, free, ended), "autumn")).toBe("stripe")
+		expect(billingProviderOf(READY, subs({ provider: "stripe" }, free), "autumn")).toBe("stripe")
+		expect(billingProviderOf(READY, subs({ provider: "stripe" }, trial), null)).toBe("stripe")
+		expect(billingProviderOf(READY, subs({ provider: "stripe" }, free, ended), "autumn")).toBe("stripe")
 		const usage = { provider: "autumn", mrrMinor: 0, billsByUsage: true } as const
-		expect(billingProviderOf(true, subs({ provider: "stripe" }, usage), "stripe")).toBe("autumn")
+		expect(billingProviderOf(READY, subs({ provider: "stripe" }, usage), "stripe")).toBe("autumn")
 		expect(
 			billingProviderOf(
-				true,
+				READY,
 				subs({ provider: "stripe" }, { provider: "autumn", status: "past_due" }),
 				null,
 			),
 		).toBe("autumn")
 		// Neither billing now: the stored source; without one, the one that paid, Stripe's first.
 		const stripeEnded = { provider: "stripe", status: "canceled" } as const
-		expect(billingProviderOf(true, subs(stripeEnded, trial), "stripe")).toBe("stripe")
-		expect(billingProviderOf(true, subs(stripeEnded, ended), "autumn")).toBe("autumn")
-		expect(billingProviderOf(true, subs(stripeEnded, ended), null)).toBe("stripe")
-		expect(billingProviderOf(true, subs({ ...stripeEnded, mrrMinor: 0 }, ended), null)).toBe("autumn")
-		expect(billingProviderOf(true, subs(stripeEnded, free), null)).toBe("stripe")
+		expect(billingProviderOf(READY, subs(stripeEnded, trial), "stripe")).toBe("stripe")
+		expect(billingProviderOf(READY, subs(stripeEnded, ended), "autumn")).toBe("autumn")
+		expect(billingProviderOf(READY, subs(stripeEnded, ended), null)).toBe("stripe")
+		expect(billingProviderOf(READY, subs({ ...stripeEnded, mrrMinor: 0 }, ended), null)).toBe("autumn")
+		expect(billingProviderOf(READY, subs(stripeEnded, free), null)).toBe("stripe")
 		// One provider's only: kept while Autumn imports or after a disconnect, never zeroed.
-		expect(billingProviderOf(false, subs({ provider: "autumn" }), "stripe")).toBe("autumn")
-		expect(billingProviderOf(true, subs(free), null)).toBe("autumn")
-		expect(billingProviderOf(true, [], null)).toBe("stripe")
+		expect(billingProviderOf(NOT_READY, subs({ provider: "autumn" }), "stripe")).toBe("autumn")
+		expect(billingProviderOf(READY, subs(free), null)).toBe("autumn")
+		expect(billingProviderOf(READY, [], null)).toBe("stripe")
 	})
 
 	it("payment_failed: past due, or an invoice open 7+ days past due; escalates by age and unpaid", () => {

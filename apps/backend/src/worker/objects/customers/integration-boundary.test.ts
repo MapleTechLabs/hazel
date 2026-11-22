@@ -92,9 +92,9 @@ describe("billingProviderOf", () => {
 							[...a, ...s],
 							[...s, ...a],
 						]) {
-							expect(billingProviderOf(ready, subscriptions, stored)).toBe(
-								twoProviderBillingOf(ready, subscriptions, stored),
-							)
+							expect(
+								billingProviderOf(new Set(ready ? ["autumn"] : []), subscriptions, stored),
+							).toBe(twoProviderBillingOf(ready, subscriptions, stored))
 							compared += 1
 						}
 					}
@@ -113,7 +113,7 @@ describe("billingProviderOf", () => {
 					for (const s of stripe) {
 						const subscriptions = [...a, ...s]
 						if (
-							billingProviderOf(ready, subscriptions, stored) !==
+							billingProviderOf(new Set(ready ? ["autumn"] : []), subscriptions, stored) !==
 							twoProviderBillingOf(ready, subscriptions, stored)
 						) {
 							expect.fail(JSON.stringify({ ready, stored, subscriptions }))

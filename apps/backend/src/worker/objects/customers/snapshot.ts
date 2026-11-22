@@ -116,11 +116,11 @@ export interface SnapshotBase {
 	/** Billing data exists (a billing source, or subscriptions). */
 	readonly hasBillingData: boolean
 	/**
-	 * The billing sources needing a first import can count for MRR (it is done, and a run succeeded
-	 * since they were last connected); each account's source is `billingProviderOf`'s. The name is
-	 * the stored compute progress's key.
+	 * The billing sources needing a first import that can count for MRR (it is done, and a run
+	 * succeeded since they were last connected), in registry order; each account's source is
+	 * `billingProviderOf`'s.
 	 */
-	readonly autumnReady: boolean
+	readonly billingReady: ReadonlyArray<CustomerProvider>
 	/** The live accounts, loaded in chunks (`loadAccounts`). */
 	readonly accountIds: ReadonlyArray<CustomerAccountId>
 	/**
@@ -360,13 +360,15 @@ export const billsNow = (sub: schema.CustomerSubscription) => billed(sub) && pay
  * zero its MRR.
  */
 export const billingProviderOf = (
-	firstImportDone: boolean,
+	ready: ReadonlySet<CustomerProvider>,
 	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
 	stored: CustomerProvider | null,
 ): CustomerProvider => {
 	const holding = billingPreferenceOrder.flatMap(({ provider, requiresFirstImport }) => {
 		const subs = subscriptions.filter((sub) => sub.provider === provider)
-		return subs.length === 0 ? [] : [{ provider, subs, counts: firstImportDone || !requiresFirstImport }]
+		return subs.length === 0
+			? []
+			: [{ provider, subs, counts: !requiresFirstImport || ready.has(provider) }]
 	})
 	const last = holding[holding.length - 1]
 	if (last === undefined) return billingPreferenceOrder[billingPreferenceOrder.length - 1].provider
@@ -382,13 +384,13 @@ export const billingProviderOf = (
  * `mrrSource`) and its subscriptions.
  */
 export const billingByAccount = (
-	firstImportDone: boolean,
+	ready: ReadonlySet<CustomerProvider>,
 	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
 	storedSources: ReadonlyMap<CustomerAccountId, CustomerProvider | null>,
 ) =>
 	new Map(
 		[...groupBy(subscriptions, (sub) => sub.accountId)].map(([accountId, subs]) => {
-			const source = billingProviderOf(firstImportDone, subs, storedSources.get(accountId) ?? null)
+			const source = billingProviderOf(ready, subs, storedSources.get(accountId) ?? null)
 			return [accountId, { source, subscriptions: subs.filter((sub) => sub.provider === source) }]
 		}),
 	)
@@ -521,7 +523,7 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 			billingProviders.some((provider) => connected.has(provider)) || Option.isSome(anySubscription),
 		// A reconnect keeps what it imported before, stale meanwhile: it counts again once the run the
 		// reconnect started succeeds (`lastSuccessAt`, that run's start, not before `connectedAt`).
-		autumnReady: firstImportProviders.every((provider) =>
+		billingReady: firstImportProviders.filter((provider) =>
 			connections.some(
 				(connection) =>
 					connection.provider === provider &&
@@ -699,7 +701,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 	}
 
 	const billingBy = billingByAccount(
-		base.autumnReady,
+		new Set(base.billingReady),
 		subscriptions,
 		new Map(accounts.map((account) => [account.id, account.mrrSource])),
 	)
