@@ -231,6 +231,13 @@ describe("customer page: tabs", () => {
 		const retried = update(failed, retry, shared)
 		expect(commandNames(retried)).toEqual(["FetchCustomerYearActivity"])
 		expect(retried.model.yearActivity._tag).toBe("Loading")
+		const settled = update(
+			retried.model,
+			Message.SucceededFetchYearActivity({ accountId: opened.accountId, series: [] }),
+			shared,
+		).model
+		expect(commandNames(update(settled, retry, shared))).toEqual([])
+		expect(update(settled, retry, shared).model.yearActivity._tag).toBe("Success")
 		const billing = routeChanged(loaded(), route("billing"), shared)
 		expect(billing.model.tab).toBe("billing")
 		expect(commandNames(billing)).toContain("FetchCustomerInvoices")

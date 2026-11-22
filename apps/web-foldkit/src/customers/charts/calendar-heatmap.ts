@@ -154,6 +154,13 @@ export const calendarHeatmap = <M>(
 		describe: (value: number) => string
 		hoveredIndex: number | null
 		onHover: (index: number | null) => M
+		/** Prefixes each day's element id (`<idPrefix>-<index>`), for `revealDay`. */
+		idPrefix: string
+		/**
+		 * Mounted, keyed by the hovered day, beside the chart: the page scrolls that day's element into
+		 * view, so a day the arrow keys reach off the narrow screen's scroll comes into sight.
+		 */
+		revealDay?: (dayElementId: string) => Html
 		className?: string
 	}>,
 ): Html => {
@@ -185,6 +192,9 @@ export const calendarHeatmap = <M>(
 					),
 				],
 				[
+					...(hovered === undefined || options.revealDay === undefined
+						? []
+						: [options.revealDay(`${options.idPrefix}-${hovered.index}`)]),
 					h.span(
 						[h.AriaLive("polite"), h.Class("sr-only")],
 						hovered === undefined
@@ -222,6 +232,7 @@ export const calendarHeatmap = <M>(
 							),
 							...layout.cells.map((cell) =>
 								h.rect([
+									h.Id(`${options.idPrefix}-${cell.index}`),
 									h.Attribute("x", String(LEFT + cell.week * STEP)),
 									h.Attribute("y", String(TOP + cell.weekday * STEP)),
 									h.Attribute("width", String(CELL)),

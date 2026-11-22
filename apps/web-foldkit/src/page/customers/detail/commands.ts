@@ -9,7 +9,7 @@ import {
 	UserId,
 } from "@hazel/schema"
 import { Effect, Schema } from "effect"
-import { Command } from "foldkit"
+import { Command, Mount } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { type CommonError, failureMessage } from "~/lib/error-messages"
 import {
@@ -107,6 +107,18 @@ export const FetchCustomerMrrHistory = Command.define("FetchCustomerMrrHistory",
 			),
 			catchCommon((reason) => Message.FailedFetchMrrHistory({ accountId: args.accountId, reason })),
 		),
+})
+
+/** Keeps the calendar's selected day on screen where the year scrolls (narrow screens). */
+export const RevealCalendarDay = Mount.define("RevealCalendarDay", {
+	args: { dayId: Schema.String },
+	messages: [Message.CompletedRevealDay],
+	execute: ({ element, dayId }) =>
+		Effect.sync(() =>
+			element.ownerDocument
+				.getElementById(dayId)
+				?.scrollIntoView({ block: "nearest", inline: "nearest" }),
+		).pipe(Effect.as(Message.CompletedRevealDay())),
 })
 
 /** A year of daily active users: the Activity tab's calendar. */

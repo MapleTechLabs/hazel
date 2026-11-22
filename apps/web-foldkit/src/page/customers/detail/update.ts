@@ -845,6 +845,7 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 			AsyncData.isFailure(model.yearActivity)
 				? load(modifyFields(model, { yearActivity: () => AsyncData.Idle() }), shared)
 				: { model },
+		CompletedRevealDay: () => ({ model }),
 		HoveredYearDay: ({ index }) => ({ model: modifyFields(model, { hoveredYearDay: () => index }) }),
 		SucceededFetchMrrHistory: ({ series }) => ({
 			model: modifyFields(model, { mrrHistory: (current) => settle(current, Result.succeed(series)) }),

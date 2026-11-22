@@ -12,6 +12,7 @@ import { panel, panelHeader } from "../../../customers/ui/surface"
 import { IconChevronDown } from "../../../icons"
 import { button } from "../../../ui/button"
 import { menuLabel } from "../../../ui/menu-view"
+import { RevealCalendarDay } from "./commands"
 import { Message } from "./message"
 import { type EventType, eventTypeEntries, type Model } from "./model"
 import { type Context, memberOf, menu, pageFooter, skeletonRows } from "./parts"
@@ -150,6 +151,12 @@ const yearCalendar = (h: HtmlBuilder<Message>, model: Model): Html => {
 					describe: activeUsers,
 					hoveredIndex: model.hoveredYearDay,
 					onHover: (index) => Message.HoveredYearDay({ index }),
+					idPrefix: "year-day",
+					revealDay: (dayId) =>
+						h.keyed("span")(`reveal-${dayId}`, [
+							h.Class("hidden"),
+							h.OnMount(RevealCalendarDay({ dayId })),
+						]),
 				}),
 	])
 }
