@@ -4,7 +4,8 @@
  * Stripe's refusals come back (`auth` stops pulls, a short 429 is waited out, a long one is handed
  * to the alarm, a body Hazel cannot read fails the run).
  */
-import type { ConnectionConfig, IngestOp, UpsertSubscription } from "@hazel/domain/customers"
+import type { IngestOp, UpsertSubscription } from "@hazel/domain/customers"
+import type { StripeConnectionConfig } from "./config"
 import { Effect, Fiber, Layer, Option, Redacted } from "effect"
 import { HttpClient, HttpClientError, HttpClientResponse } from "effect/http"
 import { TestClock } from "effect/testing"
@@ -33,7 +34,7 @@ import { type FakeStripeState, fakeStripeHttpClient, makeFakeStripe } from "./te
 import { StripeCustomersPage } from "./wire"
 
 const API_KEY = "rk_test_fake000000000000000000"
-const CONFIG: ConnectionConfig = {
+const CONFIG: StripeConnectionConfig = {
 	_tag: "stripe",
 	clerkOrgMetadataKey: "clerk_org_id",
 	matchByDomain: true,

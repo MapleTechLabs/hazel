@@ -1,3 +1,4 @@
+import { IntegrationConfig } from "@hazel/customer-integrations"
 import type * as Customers from "@hazel/domain/customers"
 import type { CustomerConnectionId, UserId } from "@hazel/schema"
 import { Record, Redacted, Result } from "effect"
@@ -156,7 +157,7 @@ const openConnect = (model: Model, form: ConnectForm): Return => ({
 const newConnectForm = (
 	provider: Customers.CustomerProvider,
 	reconnectId: CustomerConnectionId | null,
-	config: Customers.ConnectionConfig,
+	config: IntegrationConfig,
 ): ConnectForm => ({
 	provider,
 	reconnectId,
@@ -211,7 +212,7 @@ const updateModal = (
 const editConfig = (
 	model: Model,
 	target: ConfigTarget,
-	edit: (config: Customers.ConnectionConfig) => Customers.ConnectionConfig,
+	edit: (config: IntegrationConfig) => IntegrationConfig,
 ): Model => {
 	if (target === "connect")
 		return withConnectForm(model, (form) => ({ ...form, config: edit(form.config), failure: null }))
@@ -219,13 +220,13 @@ const editConfig = (
 	return connection === undefined ? model : { ...model, settingsDraft: edit(settingsOf(model, connection)) }
 }
 
-type MapleConfig = Extract<Customers.ConnectionConfig, { _tag: "maple" }>
+type MapleConfig = Extract<IntegrationConfig, { _tag: "maple" }>
 
 const editMaple = (model: Model, edit: (config: MapleConfig) => MapleConfig): Model =>
 	editConfig(model, "settings", (config) => (config._tag === "maple" ? edit(config) : config))
 
 /** What a save sends: Maple's lists trimmed, blank activity events dropped. */
-const cleaned = (config: Customers.ConnectionConfig): Customers.ConnectionConfig =>
+const cleaned = (config: IntegrationConfig): IntegrationConfig =>
 	config._tag === "maple"
 		? {
 				...config,

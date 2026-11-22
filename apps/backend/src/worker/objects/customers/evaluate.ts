@@ -6,6 +6,7 @@
  * it is: the signal's severity is the rule's raised by `step` (the rule's is the floor), and "worse
  * by a full step" compares steps. A non-match says why, for the dry run's histogram.
  */
+import { requiredSourcesOf } from "@hazel/customer-integrations"
 import {
 	type CustomerProvider,
 	escalate,
@@ -22,7 +23,6 @@ import {
 	SLA_TEMPLATES,
 	type SlaState,
 	type SlaTarget,
-	TEMPLATES,
 } from "@hazel/domain/customers"
 import {
 	type AccountFacts,
@@ -754,7 +754,7 @@ const churned =
 
 /** The template needs one of its sources connected. */
 export const missingSources = (template: SignalTemplate, org: OrgFacts): ReadonlyArray<CustomerProvider> => {
-	const required = TEMPLATES[template].requiredSources
+	const required = requiredSourcesOf(template)
 	return required.length === 0 || required.some((provider) => org.connected.has(provider)) ? [] : required
 }
 

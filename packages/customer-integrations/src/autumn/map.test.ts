@@ -3,7 +3,7 @@
  * year, a quantity, prepaid units, a free plan, a zero-decimal currency), the plan states Hazel
  * records and the ones it skips, and what a feature balance becomes as a metric and a plan limit.
  */
-import type { ConnectionConfig } from "@hazel/domain/customers"
+import type { AutumnConnectionConfig } from "./config"
 import { Schema } from "effect"
 import { describe, expect, it } from "vitest"
 import {
@@ -49,8 +49,8 @@ import {
 } from "./fixtures"
 import { AutumnBalanceEvent, AutumnCustomer, AutumnPlan, AutumnSubscription } from "./wire"
 
-const CONFIG: ConnectionConfig = { _tag: "autumn", customerIdIsClerkOrgId: true }
-const BY_DOMAIN: ConnectionConfig = { _tag: "autumn", customerIdIsClerkOrgId: false }
+const CONFIG: AutumnConnectionConfig = { _tag: "autumn", customerIdIsClerkOrgId: true }
+const BY_DOMAIN: AutumnConnectionConfig = { _tag: "autumn", customerIdIsClerkOrgId: false }
 
 const customer = Schema.decodeUnknownSync(AutumnCustomer)
 const subscription = Schema.decodeUnknownSync(AutumnSubscription)

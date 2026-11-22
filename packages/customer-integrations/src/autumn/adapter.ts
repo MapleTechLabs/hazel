@@ -23,9 +23,11 @@
  */
 import { Effect, Option, Redacted } from "effect"
 import { HttpClient } from "effect/http"
+import { asWebhookRejection, configReader } from "../kit/config"
 import { CustomerProviderError, CustomerWebhookRejectedError } from "../kit/errors"
 import { type ProviderRequestOptions, WEBHOOK_REQUESTS } from "../kit/http"
 import type { CustomerProviderAdapter, ProviderCredentials } from "../kit/contract"
+import { AutumnConnectionConfig } from "./config"
 import { type AutumnApi, makeAutumnApi } from "./http"
 import { pullPage } from "./pull"
 import { cachedPricing, readPricing } from "./read"
@@ -118,6 +120,8 @@ const validateWith = Effect.fn("Autumn.validate")(function* (
 /** Why a connection's environment is unknown: it never finished validating. */
 const UNVALIDATED = "The Autumn connection has no validated account; reconnect it"
 
+const readConfig = configReader(AutumnConnectionConfig, "Autumn")
+
 export const makeAutumnAdapter = Effect.gen(function* () {
 	const client = yield* HttpClient.HttpClient
 
@@ -143,30 +147,36 @@ export const makeAutumnAdapter = Effect.gen(function* () {
 		webhook: (request, credentials) =>
 			Option.match(connectionOf(credentials, WEBHOOK_REQUESTS), {
 				onNone: () => Effect.fail(new CustomerWebhookRejectedError({ message: UNVALIDATED })),
-				onSome: (connection) =>
-					credentials.webhookSecret === null
-						? Effect.die("Autumn webhook called without a signing secret")
-						: receiveWebhook({
-								// A delivery answers fast (`../kit/http.ts`, `./webhook.ts`).
-								...connection,
-								headers: request.headers,
-								body: request.body,
-								webhookSecret: credentials.webhookSecret,
-								config: credentials.config,
-							}),
+				onSome: (connection) => {
+					const { webhookSecret } = credentials
+					if (webhookSecret === null)
+						return Effect.die("Autumn webhook called without a signing secret")
+					return Effect.flatMap(asWebhookRejection(readConfig(credentials.config)), (config) =>
+						receiveWebhook({
+							// A delivery answers fast (`../kit/http.ts`, `./webhook.ts`).
+							...connection,
+							headers: request.headers,
+							body: request.body,
+							webhookSecret,
+							config,
+						}),
+					)
+				},
 			}),
 
 		pull: (input) =>
 			Option.match(connectionOf(input.credentials), {
 				onNone: () => Effect.fail(refused(UNVALIDATED)),
 				onSome: (connection) =>
-					pullPage({
-						...connection,
-						cursor: input.cursor,
-						config: input.credentials.config,
-						usageHistory:
-							input.since === null || input.since.getTime() < AUTUMN_USAGE_HISTORY_FROM,
-					}),
+					Effect.flatMap(readConfig(input.credentials.config), (config) =>
+						pullPage({
+							...connection,
+							cursor: input.cursor,
+							config,
+							usageHistory:
+								input.since === null || input.since.getTime() < AUTUMN_USAGE_HISTORY_FROM,
+						}),
+					),
 			}),
 
 		pullIntervalMs: AUTUMN_PULL_INTERVAL_MS,

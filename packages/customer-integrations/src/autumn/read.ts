@@ -15,7 +15,8 @@
  * `GET /v1/organization`. Both change rarely, so the adapter keeps them a few minutes per
  * connection ({@link cachedPricing}).
  */
-import type { ConnectionConfig, IngestOp, IsoTimestamp } from "@hazel/domain/customers"
+import type { IngestOp, IsoTimestamp } from "@hazel/domain/customers"
+import type { AutumnConnectionConfig } from "./config"
 import { Clock, Effect, Option } from "effect"
 import { type CustomerProviderError, CustomerWebhookRejectedError } from "../kit/errors"
 import type { AutumnApi } from "./http"
@@ -111,7 +112,7 @@ export const readCustomer = Effect.fn("Autumn.readCustomer")(function* (input: {
 	readonly pricing: Effect.Effect<Pricing, CustomerProviderError>
 	readonly customerId: string
 	readonly env: AutumnEnv
-	readonly config: ConnectionConfig
+	readonly config: AutumnConnectionConfig
 	readonly at: Date
 	readonly observedAt: IsoTimestamp
 	readonly expired: Option.Option<{ readonly planId: string | null }>

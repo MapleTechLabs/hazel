@@ -4,12 +4,20 @@
  */
 import { Schema } from "effect"
 
-/** The providers that write customer data. `hazel` marks what Hazel itself wrote (manual edits, compute). */
-export const CustomerProvider = Schema.Literals(["clerk", "stripe", "autumn", "maple"])
+/**
+ * The id of an integration that writes customer data, as stored. Open here: the registry
+ * (`@hazel/customer-integrations`) knows the ids, and every RPC or route taking one checks it there.
+ */
+export const CustomerProvider = Schema.String
 export type CustomerProvider = typeof CustomerProvider.Type
 
-export const CustomerSource = Schema.Literals(["clerk", "stripe", "autumn", "maple", "hazel"])
+/** A provider id, or `hazel`: what Hazel itself wrote (manual edits, compute). */
+export const CustomerSource = Schema.String
 export type CustomerSource = typeof CustomerSource.Type
+
+/** What a signal template needs of its sources; integrations declare these. */
+export const SourceCapability = Schema.Literals(["activity", "billing", "meteredLimits"])
+export type SourceCapability = typeof SourceCapability.Type
 
 export const LifecycleStage = Schema.Literals(["lead", "trialing", "active", "past_due", "churned"])
 export type LifecycleStage = typeof LifecycleStage.Type

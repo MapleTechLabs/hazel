@@ -42,7 +42,8 @@
  * `invoice.upcoming` (a preview with no id), `customer.subscription.trial_will_end` (a reminder that
  * changes nothing).
  */
-import type { ConnectionConfig, IngestOp, IsoTimestamp } from "@hazel/domain/customers"
+import type { IngestOp, IsoTimestamp } from "@hazel/domain/customers"
+import type { StripeConnectionConfig } from "./config"
 import { Array as Arr, Clock, Effect, Option, Redacted, Schema } from "effect"
 import {
 	type CustomerProviderError,
@@ -232,7 +233,7 @@ const changedDefaultCard = (type: string, previous: unknown): boolean =>
 export const readEvent = Effect.fn("Stripe.readEvent")(function* (
 	get: StripeGet,
 	event: StripeEvent,
-	config: ConnectionConfig,
+	config: StripeConnectionConfig,
 	observedAt: IsoTimestamp,
 ): Effect.fn.Return<EventRead, CustomerProviderError | RejectedError> {
 	const { type } = event
@@ -299,7 +300,7 @@ export const receiveWebhook = Effect.fn("Stripe.receiveWebhook")(function* (inpu
 	readonly webhookSecret: Redacted.Redacted<string>
 	readonly accountId: string | null
 	readonly livemode: boolean | null
-	readonly config: ConnectionConfig
+	readonly config: StripeConnectionConfig
 }): Effect.fn.Return<ReadonlyArray<IngestOp>, RejectedError> {
 	const nowMs = yield* Clock.currentTimeMillis
 	yield* verifyStripeSignature({

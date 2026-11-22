@@ -3,6 +3,7 @@
  * `IntegrationEncryption` on connect, decrypted only to call the provider. Never synced, never
  * returned by an RPC.
  */
+import { billingProviders } from "@hazel/customer-integrations"
 import { Database, SQLite, schema } from "@hazel/db"
 import type { CustomerConnectionId } from "@hazel/schema"
 import { Clock, Effect, Option, Redacted } from "effect"
@@ -199,7 +200,7 @@ export const switchProviderAccount = Effect.fn("Customers.switchProviderAccount"
 				.distinct(),
 		)).map((row) => row.mrrSource),
 	)
-	if ((provider === "stripe" || provider === "autumn") && (sources.size === 0 || sources.has(provider))) {
+	if (billingProviders.includes(provider) && (sources.size === 0 || sources.has(provider))) {
 		const first = addDays(dayOf(now), -HISTORY_DAYS)
 		yield* db.run(SQLite.deleteFrom(schema.customerMrrMovementsTable).where(($) => [$.day.gte(first)]))
 		yield* db.run(

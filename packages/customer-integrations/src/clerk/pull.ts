@@ -32,9 +32,10 @@
  * nothing is removed on the strength of a listing that may have missed a record. Ops carry the time Clerk was asked as
  * `observedAt`, so a record removed wrongly all the same comes back on the next sweep.
  */
-import type { ConnectionConfig, IngestOp, IsoTimestamp, SyncProgress } from "@hazel/domain/customers"
+import type { IngestOp, IsoTimestamp, SyncProgress } from "@hazel/domain/customers"
 import { Clock, Effect, Option, Schema } from "effect"
 import type { PullPage } from "../kit/contract"
+import type { ClerkConnectionConfig } from "./config"
 import type { CustomerProviderError } from "../kit/errors"
 import type { ClerkGet } from "./http"
 import { accountOp, domainsAccountOp, membershipOps, onNoMatchOf, type OnNoMatch } from "./map"
@@ -214,7 +215,7 @@ const domainsPage = (get: ClerkGet, cursor: ClerkCursor, onNoMatch: OnNoMatch, a
 export const pullPage = Effect.fn("Clerk.pullPage")(function* (input: {
 	readonly get: ClerkGet
 	readonly cursor: string | null
-	readonly config: ConnectionConfig
+	readonly config: ClerkConnectionConfig
 }) {
 	const decoded = decodeCursor(input.cursor)
 	// Restarting is safe (ingest is idempotent), but a sweep that keeps restarting never finishes.

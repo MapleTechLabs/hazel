@@ -1,4 +1,4 @@
-import type * as Customers from "@hazel/domain/customers"
+import type { IntegrationConfig, IntegrationId } from "@hazel/customer-integrations"
 import { Option } from "effect"
 import type { Html } from "foldkit/html"
 import { type ConfigField, providerOf } from "../../../../customers/providers"
@@ -32,8 +32,8 @@ import { heading } from "../../../../ui/heading"
 export const configFieldView = (
 	h: H,
 	options: Readonly<{
-		field: ConfigField<Customers.CustomerProvider>
-		config: Customers.ConnectionConfig
+		field: ConfigField<IntegrationId>
+		config: IntegrationConfig
 		target: ConfigTarget
 		isDisabled: boolean
 	}>,
@@ -107,7 +107,7 @@ const toLookback = (key: LookbackKey) => Message.ClickedLookback({ days: Number(
 const lookbackKeyOf = (days: number): LookbackKey =>
 	LOOKBACK.find((option) => option.key === String(days))?.key ?? "90"
 
-type MapleConfig = Extract<Customers.ConnectionConfig, { _tag: "maple" }>
+type MapleConfig = Extract<IntegrationConfig, { _tag: "maple" }>
 
 const block = (h: H, title: string, description: string, children: ReadonlyArray<Html>): Html =>
 	h.div(

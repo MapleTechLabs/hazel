@@ -21,12 +21,13 @@
  * again, and core drops the old account's data when it differs. The account id entered in the form
  * is read only then: changing it alone moves nothing.
  */
-import type { ConnectionConfig } from "@hazel/domain/customers"
 import { Effect, Redacted, Result } from "effect"
 import { HttpClient } from "effect/http"
+import { asWebhookRejection, configReader } from "../kit/config"
 import { CustomerProviderError } from "../kit/errors"
 import { WEBHOOK_REQUESTS } from "../kit/http"
 import type { CustomerProviderAdapter, ProviderCredentials } from "../kit/contract"
+import { StripeConnectionConfig } from "./config"
 import { makeStripeGet, type StripeGet } from "./http"
 import { pullPage } from "./pull"
 import { receiveWebhook } from "./webhook"
@@ -96,7 +97,7 @@ const hostedInvoiceAccounts = Effect.fnUntraced(function* (get: StripeGet) {
 const validateWith = Effect.fn("Stripe.validate")(function* (
 	get: StripeGet,
 	apiKey: Redacted.Redacted<string>,
-	config: ConnectionConfig,
+	config: StripeConnectionConfig,
 ) {
 	const one = [["limit", "1"]] as const
 	yield* get("/customers", one, StripeCustomersPage)
@@ -108,7 +109,7 @@ const validateWith = Effect.fn("Stripe.validate")(function* (
 	yield* get("/invoices", one, StripeInvoicesPage)
 	yield* get("/products", one, StripeProductsPage)
 	yield* get("/events", one, StripeEventsPage)
-	const entered = config._tag === "stripe" ? config.accountId.trim() : ""
+	const entered = config.accountId.trim()
 	if (entered !== "" && !ACCOUNT_ID.test(entered)) {
 		return yield* refused(`"${entered}" is not a Stripe account id (acct_…, ${WHERE_TO_FIND})`)
 	}
@@ -149,36 +150,40 @@ const validateWith = Effect.fn("Stripe.validate")(function* (
 	return { externalAccountId: entered, externalAccountName: null }
 })
 
+const readConfig = configReader(StripeConnectionConfig, "Stripe")
+
 export const makeStripeAdapter = Effect.gen(function* () {
 	const client = yield* HttpClient.HttpClient
 	const getOf = (credentials: ProviderCredentials) => makeStripeGet(client, credentials.apiKey)
 
 	const adapter: CustomerProviderAdapter = {
 		provider: "stripe",
-		validate: (credentials) => validateWith(getOf(credentials), credentials.apiKey, credentials.config),
+		validate: (credentials) =>
+			Effect.flatMap(readConfig(credentials.config), (config) =>
+				validateWith(getOf(credentials), credentials.apiKey, config),
+			),
 
 		// Core calls `webhook` only for a connection with a signing secret.
-		webhook: (request, credentials) =>
-			credentials.webhookSecret === null
+		webhook: (request, { apiKey, config, externalAccountId, webhookSecret }) =>
+			webhookSecret === null
 				? Effect.die("Stripe webhook called without a signing secret")
-				: receiveWebhook({
-						// A delivery answers fast (`../kit/http.ts`, `./webhook.ts`).
-						get: makeStripeGet(client, credentials.apiKey, WEBHOOK_REQUESTS),
-						headers: request.headers,
-						body: request.body,
-						webhookSecret: credentials.webhookSecret,
-						accountId: credentials.externalAccountId,
-						livemode: livemodeOfKey(credentials.apiKey),
-						config: credentials.config,
-					}),
+				: Effect.flatMap(asWebhookRejection(readConfig(config)), (decoded) =>
+						receiveWebhook({
+							// A delivery answers fast (`../kit/http.ts`, `./webhook.ts`).
+							get: makeStripeGet(client, apiKey, WEBHOOK_REQUESTS),
+							headers: request.headers,
+							body: request.body,
+							webhookSecret,
+							accountId: externalAccountId,
+							livemode: livemodeOfKey(apiKey),
+							config: decoded,
+						}),
+					),
 
 		pull: (input) =>
-			pullPage({
-				get: getOf(input.credentials),
-				cursor: input.cursor,
-				since: input.since,
-				config: input.credentials.config,
-			}),
+			Effect.flatMap(readConfig(input.credentials.config), (config) =>
+				pullPage({ get: getOf(input.credentials), cursor: input.cursor, since: input.since, config }),
+			),
 
 		pullIntervalMs: STRIPE_PULL_INTERVAL_MS,
 	}

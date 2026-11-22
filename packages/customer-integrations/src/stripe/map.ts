@@ -27,7 +27,6 @@
  *   subscription or invoice cannot overwrite a newer one.
  */
 import type {
-	ConnectionConfig,
 	IngestOp,
 	IsoTimestamp,
 	ProviderRef,
@@ -37,6 +36,7 @@ import type {
 	UpsertInvoice,
 	UpsertSubscription,
 } from "@hazel/domain/customers"
+import type { StripeConnectionConfig } from "./config"
 import type { Types } from "effect"
 import {
 	couponsOf,
@@ -63,13 +63,12 @@ export const stripeRef = (externalId: string): ProviderRef => ({ provider: "stri
 const clerkRef = (externalId: string): ProviderRef => ({ provider: "clerk", externalId })
 
 /** Whether this connection may land a customer on an account by the domain of its email. */
-export const matchesByDomain = (config: ConnectionConfig): boolean =>
-	config._tag !== "stripe" || config.matchByDomain
+export const matchesByDomain = (config: StripeConnectionConfig): boolean => config.matchByDomain
 
 /**
  * The metadata key Autumn writes the Autumn customer id under on the Stripe customers it creates
  * (Autumn's `createStripeCustomer`). That id is the Clerk organization id when Autumn is keyed by
- * it (`connections.ts`, `AutumnConnectionConfig`), which is what makes an Autumn-managed Stripe
+ * it (`../autumn/config.ts`, `AutumnConnectionConfig`), which is what makes an Autumn-managed Stripe
  * account match with no configuration.
  */
 const AUTUMN_ID_KEY = "autumn_id"
@@ -80,9 +79,12 @@ const AUTUMN_ID_KEY = "autumn_id"
  * organization id. Nothing else in the metadata is read, so an `org_…` value some other tool wrote
  * cannot link the customer to the wrong account.
  */
-export const clerkOrgIdsOf = (customer: StripeCustomer, config: ConnectionConfig): ReadonlyArray<string> => {
+export const clerkOrgIdsOf = (
+	customer: StripeCustomer,
+	config: StripeConnectionConfig,
+): ReadonlyArray<string> => {
 	const entries = new Map(metadataOf(customer.metadata))
-	const key = config._tag === "stripe" ? config.clerkOrgMetadataKey.trim() : ""
+	const key = config.clerkOrgMetadataKey.trim()
 	const configured = key === "" ? undefined : entries.get(key)
 	if (configured !== undefined) return [configured]
 	const autumn = entries.get(AUTUMN_ID_KEY)
@@ -112,7 +114,7 @@ const emailDomainOf = (email: string | null | undefined): string | null => {
  */
 export const accountOp = (
 	customer: StripeCustomer,
-	config: ConnectionConfig,
+	config: StripeConnectionConfig,
 	observedAt?: IsoTimestamp,
 ): UpsertAccount => {
 	const op: Types.Mutable<UpsertAccount> = {
@@ -174,7 +176,7 @@ export const billingContactOp = (
 /** A customer, then its billing contact: ingest needs the account before the contact names it. */
 export const customerOps = (
 	customer: StripeCustomer,
-	config: ConnectionConfig,
+	config: StripeConnectionConfig,
 	observedAt?: IsoTimestamp,
 ): Array<IngestOp> => {
 	const contact = billingContactOp(customer, observedAt)

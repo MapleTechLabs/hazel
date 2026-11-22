@@ -2,7 +2,7 @@
  * Connecting: `validate` proves the key reads everything a pull needs, and names the account: read
  * with a secret key, entered (and checked where Stripe gives it away) with a restricted one.
  */
-import type { ConnectionConfig } from "@hazel/domain/customers"
+import type { StripeConnectionConfig } from "./config"
 import { Effect, Redacted } from "effect"
 import { describe, expect, it } from "vitest"
 import { livemodeOfKey, makeStripeAdapter } from "./adapter"
@@ -10,7 +10,7 @@ import { ACCOUNT, INVOICE_ACME_PAID } from "./fixtures"
 import { type FakeStripeState, fakeStripeHttpClient, makeFakeStripe } from "./testing"
 
 const API_KEY = "rk_test_fake000000000000000000"
-const CONFIG: ConnectionConfig = {
+const CONFIG: StripeConnectionConfig = {
 	_tag: "stripe",
 	clerkOrgMetadataKey: "clerk_org_id",
 	matchByDomain: true,

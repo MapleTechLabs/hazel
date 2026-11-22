@@ -1,12 +1,14 @@
 /**
- * Feature flags (`docs/customers/clerk.md`, "Feature flags"): the boolean keys of a Clerk
- * organization's `public_metadata`. Clerk is the source of truth; ingest copies them onto the
+ * Feature flags: the boolean flags of an account record at the source holding them (the registered
+ * integration with `featureFlags`). That source is the source of truth; ingest copies them onto the
  * account (`featureFlags`) and this writes them back.
  *
- * A change goes to Clerk first, one request per organization (an account may hold several), and
- * each account Clerk accepted is written here from what Clerk answered. An account Clerk refused is
- * left unchanged and the call fails with `CustomerFeatureFlagsError`, after the others were written. Clerk's `organization.updated` webhook that follows brings the same set.
+ * A change goes to the source first, one request per record (an account may hold several), and each
+ * account it accepted is written here from what it answered. An account it refused is left unchanged
+ * and the call fails with `CustomerFeatureFlagsError`, after the others were written. The source's
+ * webhook that follows brings the same set.
  */
+import { featureFlagsIntegration } from "@hazel/customer-integrations"
 import { Database, SQLite, schema } from "@hazel/db"
 import { InternalServerError } from "@hazel/domain"
 import { CustomerFeatureFlagsError, CustomersInvalidRequestError } from "@hazel/domain/rpc"
@@ -16,35 +18,37 @@ import { loadCredentials } from "./credentials"
 import { CustomerProviders } from "./providers"
 import { inList } from "./sql"
 
-/** Clerk's Backend API allows 100 requests per 10 s on a development instance: stay well under. */
+/** Stay well under what a source's API allows (100 requests per 10 s at the tightest). */
 const CONCURRENCY = 4
 
 const invalid = (message: string) => new CustomersInvalidRequestError({ message })
 
-const credentialsUnreadable = (cause: { readonly _tag: string }) =>
-	Effect.fail(
-		InternalServerError.withCause({
-			message: "Could not read the Clerk credentials",
-			detail: cause._tag,
-			cause,
-		}),
-	)
-
-/** The org's Clerk connection, its credentials and the adapter's write. */
-const clerkWriter = Effect.gen(function* () {
+/** The org's connection to the flags' source, its credentials and the adapter's write. */
+const flagsWriter = Effect.gen(function* () {
 	const db = yield* Database.Database
+	if (featureFlagsIntegration === undefined) return yield* invalid("No data source manages feature flags")
+	const { id: provider, presentation } = featureFlagsIntegration
+	const notConnected = `Connect ${presentation.name} to manage feature flags`
+	const credentialsUnreadable = (cause: { readonly _tag: string }) =>
+		Effect.fail(
+			InternalServerError.withCause({
+				message: `Could not read the ${presentation.name} credentials`,
+				detail: cause._tag,
+				cause,
+			}),
+		)
 	const connection = yield* db.first(
 		SQLite.from(schema.customerConnectionsTable)
 			.select()
-			.where(($) => [$.provider.eq("clerk"), $.status.neq("disconnected")])
+			.where(($) => [$.provider.eq(provider), $.status.neq("disconnected")])
 			.limit(1),
 	)
-	if (Option.isNone(connection)) return yield* invalid("Connect Clerk to manage feature flags")
-	// A refused key would only be refused again; a sync failing for another reason (Clerk down, rate
-	// limited) leaves the key good, so flags stay writable.
+	if (Option.isNone(connection)) return yield* invalid(notConnected)
+	// A refused key would only be refused again; a sync failing for another reason (the source down,
+	// rate limited) leaves the key good, so flags stay writable.
 	if (connection.value.status === "error" && connection.value.lastError?.code === "auth")
 		return yield* invalid(
-			"Clerk rejected the secret key: update it under Data sources to manage feature flags",
+			`${presentation.name} rejected the secret key: update it under Data sources to manage feature flags`,
 		)
 	const credentials = yield* loadCredentials(connection.value).pipe(
 		Effect.catchTags({
@@ -53,19 +57,20 @@ const clerkWriter = Effect.gen(function* () {
 		}),
 	)
 	const providers = yield* CustomerProviders
-	const setFeatureFlags = Option.getOrUndefined(providers.get("clerk"))?.setFeatureFlags
-	if (Option.isNone(credentials) || setFeatureFlags === undefined)
-		return yield* invalid("Connect Clerk to manage feature flags")
+	const setFeatureFlags = Option.getOrUndefined(providers.get(provider))?.setFeatureFlags
+	if (Option.isNone(credentials) || setFeatureFlags === undefined) return yield* invalid(notConnected)
 	return {
+		provider,
+		presentation,
 		connectionId: connection.value.id,
-		set: (organizationId: string, changes: Readonly<Record<string, boolean | null>>) =>
-			setFeatureFlags(credentials.value, organizationId, changes),
+		set: (externalId: string, changes: Readonly<Record<string, boolean | null>>) =>
+			setFeatureFlags(credentials.value, externalId, changes),
 	}
 })
 
 /**
- * An account to write in the caller's transaction: with Clerk's answer, that set; without (no
- * organization to ask), the change applied to what the account holds when it is written.
+ * An account to write in the caller's transaction: with the source's answer, that set; without (no
+ * record to ask about), the change applied to what the account holds when it is written.
  */
 export interface FeatureFlagWrite {
 	readonly accountId: CustomerAccountId
@@ -73,26 +78,26 @@ export interface FeatureFlagWrite {
 }
 
 /**
- * Send `changes` to the accounts' Clerk organizations; answer what to write for each account Clerk
+ * Send `changes` to the accounts' records at the source; answer what to write for each account it
  * accepted, and the error naming the ones it refused. No store write: the caller writes in its
- * transaction, which must not span the requests. With `requireClerk`, an account holding no live
- * organization of the connection is refused before any request; without it (a flag being deleted)
- * such an account only has the keys removed here.
+ * transaction, which must not span the requests. With `requireRecord`, an account holding no live
+ * record of the connection is refused before any request; without it (a flag being deleted) such
+ * an account only has the keys removed here.
  */
 export const sendFeatureFlags = Effect.fn("Customers.sendFeatureFlags")(function* (input: {
 	readonly accountIds: ReadonlyArray<CustomerAccountId>
 	readonly changes: Readonly<Record<string, boolean | null>>
-	readonly requireClerk: boolean
+	readonly requireRecord: boolean
 }) {
 	const db = yield* Database.Database
 	const accountIds = [...new Set(input.accountIds)]
-	const writer = yield* clerkWriter
+	const writer = yield* flagsWriter
 	const refs = yield* db.run(
 		SQLite.from(schema.customerExternalRefsTable)
 			.select("accountId", "externalId")
 			.where(($) => [
 				$.entityType.eq("account"),
-				$.provider.eq("clerk"),
+				$.provider.eq(writer.provider),
 				$.connectionId.eq(writer.connectionId),
 				$.staleAt.isNull(),
 				inList($.accountId, accountIds),
@@ -104,11 +109,11 @@ export const sendFeatureFlags = Effect.fn("Customers.sendFeatureFlags")(function
 			.where(($) => [$.deletedAt.isNull(), inList($.id, accountIds)]),
 	)
 	const withRefs = new Set(refs.map((ref) => ref.accountId))
-	if (input.requireClerk) {
+	if (input.requireRecord) {
 		const missing = accounts.filter((account) => !withRefs.has(account.id))
 		if (missing.length > 0) {
 			return yield* invalid(
-				`${missing.map((account) => account.name).join(", ")} ${missing.length === 1 ? "has" : "have"} no Clerk organization`,
+				`${missing.map((account) => account.name).join(", ")} ${missing.length === 1 ? "has" : "have"} no ${writer.presentation.name} ${writer.presentation.accountNoun}`,
 			)
 		}
 	}
@@ -137,7 +142,10 @@ export const sendFeatureFlags = Effect.fn("Customers.sendFeatureFlags")(function
 		.map((account) => ({ accountId: account.id, answered: answered.get(account.id) ?? null }))
 
 	if (failed.size === 0) return { writes, error: Option.none<CustomerFeatureFlagsError>() }
-	yield* Effect.logWarning("Clerk refused some feature flag changes", { failed: failed.size, reason })
+	yield* Effect.logWarning(`${writer.presentation.name} refused some feature flag changes`, {
+		failed: failed.size,
+		reason,
+	})
 	return {
 		writes,
 		error: Option.some(
@@ -150,7 +158,7 @@ export const sendFeatureFlags = Effect.fn("Customers.sendFeatureFlags")(function
 })
 
 /**
- * Write each account, reading it again here: another request may have changed it while Clerk was
+ * Write each account, reading it again here: another request may have changed it while the source was
  * asked, and a change applied locally must merge into that, not into what was read before.
  */
 export const writeFeatureFlags = Effect.fn("Customers.writeFeatureFlags")(function* (

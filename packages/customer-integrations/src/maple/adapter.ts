@@ -24,11 +24,12 @@
  * metrics and parked records and imports from scratch, but not the activity, which sits on Clerk's
  * contacts (`docs/customers/maple.md`, "Known gaps").
  */
-import type { ConnectionConfig, MapleRegion } from "@hazel/domain/customers"
-import { Effect, Option, Redacted } from "effect"
+import { Effect, Redacted } from "effect"
 import { HttpClient } from "effect/http"
+import { configReader } from "../kit/config"
 import { CustomerProviderError, CustomerWebhookRejectedError } from "../kit/errors"
 import type { CustomerProviderAdapter, ProviderCredentials } from "../kit/contract"
+import { MapleConnectionConfig, type MapleRegion, regionOfAccountId } from "./config"
 import { makeMapleApi } from "./http"
 import { MAPLE_PULL_INTERVAL_MS, pullPage } from "./pull"
 import { MapleProbeRow, orgIdOf } from "./wire"
@@ -37,8 +38,7 @@ export { MAPLE_PULL_INTERVAL_MS }
 
 const KEY_PREFIX = "maple_ak_"
 
-/** Why a connection cannot be read: it holds no Maple config, or never finished validating. */
-const UNCONFIGURED = "The Maple connection has no Maple settings; reconnect it"
+/** Why a connection cannot be read: it never finished validating, or its region moved since. */
 const UNVALIDATED = "The Maple connection has no validated account; reconnect it"
 const REGION_CHANGED = "The region was changed since the key was checked; reconnect with a key of it"
 
@@ -46,21 +46,12 @@ const REGION_CHANGED = "The region was changed since the key was checked; reconn
 export const accountIdOf = (organizationId: string, region: MapleRegion): string =>
 	`${organizationId}:${region}`
 
-/** The region half of the connection's account id, from what `validate` stored. */
-export const regionOfAccountId = (externalAccountId: string | null): MapleRegion | null => {
-	if (externalAccountId === null) return null
-	if (externalAccountId.endsWith(":us")) return "us"
-	return externalAccountId.endsWith(":eu") ? "eu" : null
-}
-
 const WHERE_TO_FIND = "Maple → Settings → MCP, or Settings → Keys"
 
 const refused = (message: string) =>
 	new CustomerProviderError({ code: "auth", message, httpStatus: null, retryAfterMs: null })
 
-/** The connection's config, when it is Maple's. */
-const mapleConfig = (config: ConnectionConfig) =>
-	config._tag === "maple" ? Option.some(config) : Option.none()
+const readConfig = configReader(MapleConnectionConfig, "Maple")
 
 /** A day far in the past: the probe proves the key's access, not the data behind it. */
 const PROBE_WINDOW = { start: "2019-01-01 00:00:00", end: "2019-01-02 00:00:00" }
@@ -81,9 +72,7 @@ const validateWith = Effect.fn("Maple.validate")(function* (
 	credentials: ProviderCredentials,
 	client: HttpClient.HttpClient,
 ) {
-	const config = mapleConfig(credentials.config)
-	if (Option.isNone(config)) return yield* refused(UNCONFIGURED)
-	const { region } = config.value
+	const { region } = yield* readConfig(credentials.config)
 	if (!Redacted.value(credentials.apiKey).startsWith(KEY_PREFIX)) {
 		return yield* refused(`"${KEY_PREFIX}…" is what a Maple API key looks like (${WHERE_TO_FIND})`)
 	}
@@ -119,21 +108,18 @@ export const makeMapleAdapter = Effect.gen(function* () {
 			Effect.fail(new CustomerWebhookRejectedError({ message: "Maple sends Hazel no webhooks" })),
 
 		pull: (input) =>
-			Option.match(mapleConfig(input.credentials.config), {
-				onNone: () => Effect.fail(refused(UNCONFIGURED)),
-				onSome: (config) => {
-					const validated = regionOfAccountId(input.credentials.externalAccountId)
-					if (validated === null) return Effect.fail(refused(UNVALIDATED))
-					// The update refuses a region change without a key; a config stored otherwise would
-					// read a region the key is not of, which answers 401 for no stated reason.
-					if (validated !== config.region) return Effect.fail(refused(REGION_CHANGED))
-					return pullPage({
-						api: makeMapleApi(client, input.credentials.apiKey, config.region),
-						config,
-						cursor: input.cursor,
-						since: input.since,
-					})
-				},
+			Effect.flatMap(readConfig(input.credentials.config), (config) => {
+				const validated = regionOfAccountId(input.credentials.externalAccountId)
+				if (validated === null) return Effect.fail(refused(UNVALIDATED))
+				// The update refuses a region change without a key; a config stored otherwise would
+				// read a region the key is not of, which answers 401 for no stated reason.
+				if (validated !== config.region) return Effect.fail(refused(REGION_CHANGED))
+				return pullPage({
+					api: makeMapleApi(client, input.credentials.apiKey, config.region),
+					config,
+					cursor: input.cursor,
+					since: input.since,
+				})
 			}),
 
 		pullIntervalMs: MAPLE_PULL_INTERVAL_MS,

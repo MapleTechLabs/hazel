@@ -3,7 +3,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { getBrandfetchIcon } from "~/lib/integrations/__data"
 import { IconUser } from "../../icons"
-import { safeSourceUrl } from "../providers"
+import { safeSourceUrl, type SourceText } from "../providers"
 
 /**
  * Who and where (Foundations › Source Chips, Avatars And Company Logos): data source marks and
@@ -12,20 +12,20 @@ import { safeSourceUrl } from "../providers"
 
 // SOURCES
 
-export const SOURCE_LABEL = {
+export const SOURCE_LABEL: SourceText = {
 	clerk: "Clerk",
 	stripe: "Stripe",
 	autumn: "Autumn",
 	maple: "Maple",
 	hazel: "Hazel",
-} as const satisfies Record<CustomerSource, string>
+}
 
-const SOURCE_DOMAIN = {
+const SOURCE_DOMAIN: SourceText = {
 	clerk: "clerk.com",
 	stripe: "stripe.com",
 	autumn: "useautumn.com",
 	maple: "maple.dev",
-} as const satisfies Record<Exclude<CustomerSource, "hazel">, string>
+}
 
 /** The brand mark's image: Brandfetch for providers, Hazel's own icon for Hazel. */
 export const sourceLogoSrc = (source: CustomerSource): string =>

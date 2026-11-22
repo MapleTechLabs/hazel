@@ -1,4 +1,5 @@
-import { DEFAULT_CONNECTION_CONFIG, EMPTY_SYNC_STATS } from "@hazel/domain/customers"
+import { DEFAULT_CONNECTION_CONFIG } from "@hazel/customer-integrations"
+import { EMPTY_SYNC_STATS } from "@hazel/domain/customers"
 import {
 	CustomerConnectionId,
 	CustomerImpersonatorId,

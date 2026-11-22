@@ -2,7 +2,7 @@
  * Connecting: `validate` proves the key, and names the instance it opens. Feature flags:
  * `setFeatureFlags` merges into the metadata and never overwrites a non-boolean key.
  */
-import type { ConnectionConfig } from "@hazel/domain/customers"
+import type { ClerkConnectionConfig } from "./config"
 import { Effect, Redacted } from "effect"
 import { describe, expect, it } from "vitest"
 import { makeClerkAdapter } from "./adapter"
@@ -10,7 +10,7 @@ import { INSTANCE } from "./fixtures"
 import { type FakeClerkState, fakeClerkHttpClient, makeFakeClerk } from "./testing"
 
 const API_KEY = "sk_test_fake000000000000000000"
-const CONFIG: ConnectionConfig = { _tag: "clerk", createAccounts: true }
+const CONFIG: ClerkConnectionConfig = { _tag: "clerk", createAccounts: true }
 
 const validateWith = (fake: FakeClerkState, apiKey: string) =>
 	Effect.gen(function* () {

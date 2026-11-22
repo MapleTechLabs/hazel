@@ -5,7 +5,8 @@
  * refusals come back (`auth` stops pulls, a short 429 is waited out, a long one is handed to the
  * alarm, a body Hazel cannot read fails the run).
  */
-import type { ConnectionConfig, UpsertSubscription } from "@hazel/domain/customers"
+import type { UpsertSubscription } from "@hazel/domain/customers"
+import type { AutumnConnectionConfig } from "./config"
 import { Effect, Fiber, Layer, Option, Redacted } from "effect"
 import { HttpClient, HttpClientError } from "effect/http"
 import { TestClock } from "effect/testing"
@@ -37,7 +38,7 @@ import { type FakeAutumnState, fakeAutumnHttpClient, makeFakeAutumn } from "./te
 import { AutumnCustomersPage } from "./wire"
 
 const API_KEY = "am_sk_live_fake0000000000000000"
-const CONFIG: ConnectionConfig = { _tag: "autumn", customerIdIsClerkOrgId: true }
+const CONFIG: AutumnConnectionConfig = { _tag: "autumn", customerIdIsClerkOrgId: true }
 
 const organization = (options: Partial<FakeAutumnState> = {}) =>
 	makeFakeAutumn({

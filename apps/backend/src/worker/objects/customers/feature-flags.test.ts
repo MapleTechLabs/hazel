@@ -2,7 +2,8 @@
  * Feature flags through the RPCs, against a fake Clerk that holds each organization's
  * `public_metadata` and merges writes the way Clerk does (a `null` removes the key).
  */
-import { DEFAULT_CONNECTION_CONFIG, type UpsertAccount } from "@hazel/domain/customers"
+import { DEFAULT_CONNECTION_CONFIG } from "@hazel/customer-integrations"
+import { type UpsertAccount } from "@hazel/domain/customers"
 import { Cause, Effect, Exit, type Scope } from "effect"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCustomersWorld, ok, tagOf, type CustomersWorld } from "./test-kit"

@@ -1,3 +1,4 @@
+import type { SourceText } from "../../../customers/providers"
 import * as Customers from "@hazel/domain/customers"
 import { Option } from "effect"
 import { Submodel } from "foldkit"
@@ -1136,12 +1137,12 @@ const trendsSection = (h: HtmlBuilder<Message>, model: Model, result: Result, co
 const PROVIDERS: ReadonlyArray<Customers.CustomerProvider> = ["clerk", "stripe", "autumn", "maple"]
 
 /** What each source brings, in a line: how it matches records is the Sources settings' to explain. */
-const SETUP_SUMMARY = {
+const SETUP_SUMMARY: SourceText = {
 	clerk: "Your customer list: accounts and their contacts.",
 	stripe: "Subscriptions, invoices and MRR.",
 	autumn: "Plans, metered features and limits.",
 	maple: "Product usage and active users.",
-} as const satisfies Record<Customers.CustomerProvider, string>
+}
 
 const setup = (h: HtmlBuilder<Message>, nowMs: number): Html =>
 	h.div(

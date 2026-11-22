@@ -38,7 +38,7 @@ import {
 } from "../../../customers/channels"
 import { shownSuggestions, suggestionRow } from "../../../customers/suggestions"
 import { featureFlagKeysOf, hasFlag } from "../../../customers/feature-flags"
-import { safeSourceUrl } from "../../../customers/providers"
+import { safeSourceUrl, type SourceText } from "../../../customers/providers"
 import { attentionMuteLabel, isAttentionMuted } from "../../../customers/queries"
 import { isMuteKey, MUTE_LABEL } from "../../../customers/ui/menus"
 import { AppRoute, hrefOf } from "../../../route"
@@ -111,12 +111,12 @@ const ACTION_REASON = new Map<ActionKey, string>([
 	["archive", "Not available yet."],
 ])
 
-const LINK_LABEL = {
+const LINK_LABEL: SourceText = {
 	clerk: "Clerk organization",
 	stripe: "Stripe customer",
 	autumn: "Autumn customer",
 	maple: "Maple group",
-} as const satisfies Record<Customers.CustomerProvider, string>
+}
 
 const MATCH_LABEL = {
 	existing: "existing link",

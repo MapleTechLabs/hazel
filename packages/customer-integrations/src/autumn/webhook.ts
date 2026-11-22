@@ -42,7 +42,8 @@
  * Not handled: `billing.auto_topup_succeeded` / `billing.auto_topup_failed` (a prepaid balance
  * recharge, whose invoice is Stripe's to report) and the `vercel.*` marketplace events.
  */
-import type { ConnectionConfig, IngestOp, IsoTimestamp } from "@hazel/domain/customers"
+import type { IngestOp, IsoTimestamp } from "@hazel/domain/customers"
+import type { AutumnConnectionConfig } from "./config"
 import { Clock, Effect, Option, Redacted, Schema } from "effect"
 import {
 	type CustomerProviderError,
@@ -105,7 +106,7 @@ export const receiveWebhook = Effect.fn("Autumn.receiveWebhook")(function* (inpu
 	readonly body: string
 	readonly webhookSecret: Redacted.Redacted<string>
 	readonly env: AutumnEnv
-	readonly config: ConnectionConfig
+	readonly config: AutumnConnectionConfig
 }): Effect.fn.Return<ReadonlyArray<IngestOp>, RejectedError> {
 	const svixId = headerOf(input.headers, "svix-id")
 	if (svixId !== undefined) yield* Effect.annotateCurrentSpan("svix.id", svixId)

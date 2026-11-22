@@ -3,9 +3,8 @@
  * §3): a provider adapter turns webhooks and pulls into these ops, and ingest resolves identities,
  * applies per-field precedence and upserts, idempotently on `(provider, externalId)`.
  *
- * A record names other records by `ProviderRef` (any provider's id), so cross-provider ids resolve
- * through the refs: Autumn's customer id is the Clerk organization id, Maple's `UserId` is the
- * Clerk user id.
+ * A record names other records by `ProviderRef` (any provider's id), so an id one source shares
+ * with another resolves through the refs.
  */
 import { CustomerIgnoreRuleId, CustomerUnmatchedRecordId } from "@hazel/schema"
 import { Schema } from "effect"
@@ -13,7 +12,6 @@ import { SyncStats } from "./connections"
 import {
 	BillingInterval,
 	CustomerProvider,
-	CustomerSource,
 	InvoiceStatus,
 	MetricAggregation,
 	SubscriptionStatus,
@@ -42,8 +40,7 @@ const ObservedAt = optional(IsoTimestamp)
 const BillingObservedAt = optional(IsoTimestamp)
 
 /**
- * A provider's account record (Clerk organization, Stripe customer, Autumn customer). Absent
- * fields are left as they are; `null` clears.
+ * A provider's account record. Absent fields are left as they are; `null` clears.
  */
 export const UpsertAccount = Schema.TaggedStruct("account", {
 	externalId: Schema.String,
@@ -57,25 +54,25 @@ export const UpsertAccount = Schema.TaggedStruct("account", {
 	attributes: optional(Schema.Record(Schema.String, Schema.Unknown)),
 	/** When the provider created it: the account's `firstSeenAt` if earlier. */
 	createdAt: optional(IsoTimestamp),
-	/** Shared ids naming the same customer elsewhere, e.g. Stripe `metadata.clerk_org_id`. */
+	/** Shared ids naming the same customer in another provider. */
 	sameAs: Schema.Array(ProviderRef),
 	/**
 	 * Match an existing account by a shared domain when no ref or `sameAs` id places it (billing
-	 * sources; Stripe's `matchByDomain` config can still turn it off). Identity sources leave it
+	 * sources; the integration's ingest policy can still turn it off). Identity sources leave it
 	 * unset: two organizations sharing a domain are two customers.
 	 */
 	matchByDomain: optional(Schema.Boolean),
-	/** With no match: create the account (Clerk), or park it as an unmatched record (billing sources). */
+	/** With no match: create the account (identity sources), or park it as an unmatched record (billing sources). */
 	onNoMatch: Schema.Literals(["create", "unmatched"]),
 	/** The provider deleted it: its ref goes stale; the account is soft-deleted when no live ref is left. */
 	deleted: optional(Schema.Boolean),
-	/** The record's whole set of feature flags (Clerk's boolean `public_metadata`): replaces the account's. */
+	/** The record's whole set of feature flags: replaces the account's. */
 	featureFlags: optional(Schema.Record(Schema.String, Schema.Boolean)),
 	observedAt: ObservedAt,
 })
 export type UpsertAccount = typeof UpsertAccount.Type
 
-/** A user of an account (Clerk membership). Matched by ref, then by email within the account. */
+/** A user of an account. Matched by ref, then by email within the account. */
 export const UpsertContact = Schema.TaggedStruct("contact", {
 	externalId: Schema.String,
 	account: ProviderRef,
@@ -237,19 +234,16 @@ export const IngestReport = Schema.Struct({
 export type IngestReport = typeof IngestReport.Type
 
 /**
- * Who may set an account or contact field, best first. A source writes a field only when no
- * better source set it (`fieldSources`); `hazel` (a manual edit) beats every provider. Fields not
- * listed are written by any source.
+ * The account and contact fields with a precedence, in order; `manual` when a manual edit (`hazel`)
+ * outranks every source. Each integration ranks the ones it sets; the registry derives the order.
  */
-export const FIELD_PRECEDENCE: ReadonlyMap<string, ReadonlyArray<CustomerSource>> = new Map<
-	string,
-	ReadonlyArray<CustomerSource>
->([
-	["name", ["hazel", "clerk", "stripe", "autumn", "maple"]],
-	["logoUrl", ["hazel", "clerk", "stripe", "autumn"]],
-	["seatsUsed", ["hazel", "autumn", "clerk"]],
-	["seatsLimit", ["hazel", "autumn", "clerk"]],
-	["email", ["clerk", "stripe", "autumn", "maple"]],
-	["avatarUrl", ["clerk", "maple"]],
-	["role", ["clerk"]],
-])
+export const PRECEDENCE_FIELDS = [
+	{ field: "name", manual: true },
+	{ field: "logoUrl", manual: true },
+	{ field: "seatsUsed", manual: true },
+	{ field: "seatsLimit", manual: true },
+	{ field: "email", manual: false },
+	{ field: "avatarUrl", manual: false },
+	{ field: "role", manual: false },
+] as const
+export type PrecedenceField = (typeof PRECEDENCE_FIELDS)[number]["field"]

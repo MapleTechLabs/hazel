@@ -6,17 +6,16 @@
  * entry (and flips `isAvailable`) instead of touching page code.
  */
 import {
-	type ConnectionConfig,
-	type CustomerProvider,
-	type CustomerSource,
 	DEFAULT_CONNECTION_CONFIG,
-	type SignalTemplate,
-	TEMPLATES,
-} from "@hazel/domain/customers"
+	type IntegrationConfig,
+	type IntegrationId,
+	requiredSourcesOf,
+} from "@hazel/customer-integrations"
+import type { CustomerProvider, CustomerSource, SignalTemplate } from "@hazel/domain/customers"
 import type { CustomerConnectionId, OrganizationId } from "@hazel/schema"
 
 /** A boolean, text or one-of field of the provider's `ConnectionConfig`, shown in the connect form. */
-export type ConfigField<P extends CustomerProvider> =
+export type ConfigField<P extends IntegrationId> =
 	| Readonly<{
 			_tag: "Toggle"
 			key: BooleanKeys<ConfigOf<P>>
@@ -41,7 +40,10 @@ export type ConfigField<P extends CustomerProvider> =
 			options: ReadonlyArray<Readonly<{ value: string; label: string }>>
 	  }>
 
-export type ConfigOf<P extends CustomerProvider> = Extract<ConnectionConfig, { readonly _tag: P }>
+/** Text per source; a lookup by a stored id, which the registry knows. */
+export type SourceText = Readonly<Record<CustomerSource, string>>
+
+export type ConfigOf<P extends IntegrationId> = Extract<IntegrationConfig, { readonly _tag: P }>
 type BooleanKeys<C> = { [K in keyof C]: C[K] extends boolean ? K : never }[keyof C] & string
 type StringKeys<C> = {
 	[K in keyof C]: C[K] extends string ? (K extends "_tag" ? never : K) : never
@@ -60,7 +62,7 @@ export interface FieldMapping {
 	readonly to: string
 }
 
-export interface ProviderDescriptor<P extends CustomerProvider = CustomerProvider> {
+export interface ProviderDescriptor<P extends IntegrationId = IntegrationId> {
 	readonly provider: P
 	readonly name: string
 	/** Brandfetch domain for the logo (the kit's `sourceMark` uses the same). */
@@ -109,7 +111,7 @@ export interface ProviderDescriptor<P extends CustomerProvider = CustomerProvide
 	readonly dashboardHref: string
 }
 
-type Descriptors = { readonly [P in CustomerProvider]: ProviderDescriptor<P> }
+type Descriptors = { readonly [P in IntegrationId]: ProviderDescriptor<P> }
 
 export const PROVIDERS: Descriptors = {
 	clerk: {
@@ -494,8 +496,8 @@ export const PROVIDERS: Descriptors = {
 
 export const PROVIDER_ORDER: ReadonlyArray<CustomerProvider> = ["clerk", "stripe", "autumn", "maple"]
 
-export const providerOf = <P extends CustomerProvider>(provider: P): ProviderDescriptor<P> =>
-	PROVIDERS[provider] as ProviderDescriptor<P>
+export const providerOf = (provider: CustomerProvider): ProviderDescriptor =>
+	PROVIDERS[provider as IntegrationId] as ProviderDescriptor
 
 /**
  * `url` (provider data: a record's or an invoice's page) if it is https on one of `source`'s
@@ -505,7 +507,7 @@ export const safeSourceUrl = (source: CustomerSource, url: string | null): strin
 	if (url === null || source === "hazel") return null
 	try {
 		const { protocol, hostname } = new URL(url)
-		const isOwnHost = PROVIDERS[source].linkHosts.some((host) =>
+		const isOwnHost = providerOf(source).linkHosts.some((host) =>
 			host.startsWith("*.") ? hostname.endsWith(host.slice(1)) : hostname === host,
 		)
 		return protocol === "https:" && isOwnHost ? url : null
@@ -515,8 +517,8 @@ export const safeSourceUrl = (source: CustomerSource, url: string | null): strin
 }
 
 /** The config a new connection starts from. */
-export const defaultConfigOf = <P extends CustomerProvider>(provider: P): ConnectionConfig & { _tag: P } =>
-	DEFAULT_CONNECTION_CONFIG[provider]
+export const defaultConfigOf = (provider: CustomerProvider): IntegrationConfig =>
+	DEFAULT_CONNECTION_CONFIG[provider as IntegrationId]
 
 /**
  * The endpoint a provider posts webhooks to (`routes/customers-webhooks.http.ts`): the org and
@@ -531,13 +533,13 @@ export const webhookUrlOf = (
 
 /** "Clerk or Maple", "Stripe or Autumn", "Autumn"; empty: built in (needs no source). */
 export const sourcesLabel = (sources: ReadonlyArray<CustomerSource>): string =>
-	sources.map((source) => (source === "hazel" ? "Hazel" : PROVIDERS[source].name)).join(" or ")
+	sources.map((source) => (source === "hazel" ? "Hazel" : providerOf(source).name)).join(" or ")
 
 /** A template can match with any one of its sources connected; none listed = always available. */
 export const isTemplateAvailable = (
 	template: SignalTemplate,
 	connected: ReadonlyArray<CustomerProvider>,
 ): boolean => {
-	const required = TEMPLATES[template].requiredSources
+	const required = requiredSourcesOf(template)
 	return required.length === 0 || required.some((provider) => connected.includes(provider))
 }

@@ -2,13 +2,10 @@
  * The registered adapters as a service (`docs/customers/integrations.md`). A provider with no adapter
  * answers `CustomerProviderUnavailableError` on connect.
  */
-import type { CustomerProvider } from "@hazel/domain/customers"
-import { makeAutumnAdapter } from "@hazel/customer-integrations/autumn/adapter"
-import { makeClerkAdapter } from "@hazel/customer-integrations/clerk/adapter"
+import { integrations } from "@hazel/customer-integrations"
 import type { CustomerProviderAdapter } from "@hazel/customer-integrations/kit/contract"
 import { CustomerProviderError, CustomerWebhookRejectedError } from "@hazel/customer-integrations/kit/errors"
-import { makeMapleAdapter } from "@hazel/customer-integrations/maple/adapter"
-import { makeStripeAdapter } from "@hazel/customer-integrations/stripe/adapter"
+import type { CustomerProvider } from "@hazel/domain/customers"
 import { Context, Effect, Layer, Option } from "effect"
 import { FetchHttpClient } from "effect/http"
 
@@ -27,19 +24,22 @@ export class CustomerProviders extends Context.Service<CustomerProviders, Custom
 	"@hazel/backend/CustomerProviders",
 ) {
 	/**
-	 * The registered adapters. Provider PRs add theirs here. The layer brings its own
-	 * `FetchHttpClient` so every consumer (the RPC handlers, the alarm, the webhook call) keeps
-	 * taking the service with no requirement of its own.
+	 * Every registered integration's adapter, its server half imported here (never in global scope:
+	 * a layer builds inside an object or a request). The layer brings its own `FetchHttpClient` so
+	 * every consumer (the RPC handlers, the alarm, the webhook call) keeps taking the service with no
+	 * requirement of its own.
 	 */
 	static readonly layer = Layer.effect(
 		this,
 		Effect.gen(function* () {
-			const adapters = new Map<CustomerProvider, CustomerProviderAdapter>([
-				["clerk", yield* makeClerkAdapter],
-				["stripe", yield* makeStripeAdapter],
-				["autumn", yield* makeAutumnAdapter],
-				["maple", yield* makeMapleAdapter],
-			])
+			const adapters = new Map<CustomerProvider, CustomerProviderAdapter>(
+				yield* Effect.forEach(integrations, (integration) =>
+					Effect.promise(integration.server).pipe(
+						Effect.flatMap((server) => server.makeAdapter),
+						Effect.map((adapter) => [integration.id, adapter] as const),
+					),
+				),
+			)
 			return CustomerProviders.of({ get: (provider) => Option.fromNullishOr(adapters.get(provider)) })
 		}),
 	).pipe(Layer.provide(FetchHttpClient.layer))

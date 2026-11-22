@@ -1,3 +1,4 @@
+import { integrations } from "@hazel/customer-integrations"
 import * as Customers from "@hazel/domain/customers"
 import { Option } from "effect"
 import * as AsyncData from "foldkit/asyncData"
@@ -177,7 +178,11 @@ const yearCalendar = (h: HtmlBuilder<Message>, model: Model): Html => {
 	)
 }
 
-const SOURCES: ReadonlyArray<Customers.CustomerSource | null> = [null, ...Customers.CustomerSource.literals]
+const SOURCES: ReadonlyArray<Customers.CustomerSource | null> = [
+	null,
+	...integrations.map((integration) => integration.id),
+	"hazel",
+]
 
 const filters = (h: HtmlBuilder<Message>, model: Model): Html =>
 	h.div(

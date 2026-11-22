@@ -3,7 +3,7 @@ import { Option } from "effect"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { formatCount, formatMoney } from "../../../../customers/format"
-import { providerOf } from "../../../../customers/providers"
+import { providerOf, type SourceText } from "../../../../customers/providers"
 import type { AccountRow } from "../../../../customers/queries"
 import { companyLogo, sourceMark } from "../../../../customers/ui/identity"
 import { kbd } from "../../../../customers/ui/shortcuts"
@@ -41,12 +41,12 @@ import {
 
 // COPY
 
-const ACCOUNT_NOUN = {
+const ACCOUNT_NOUN: SourceText = {
 	clerk: "organizations",
 	stripe: "customers",
 	autumn: "customers",
 	maple: "groups",
-} as const satisfies Record<CustomerProvider, string>
+}
 
 /** What a source calls its records of a kind: Stripe "customers", Maple "groups". */
 export const nounOf = (provider: CustomerProvider, entityType: UnmatchedEntityType): string =>

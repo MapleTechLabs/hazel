@@ -33,7 +33,6 @@
  *   watched being created, keyed on the organization so a redelivery dedupes.
  */
 import type {
-	ConnectionConfig,
 	IngestOp,
 	IsoTimestamp,
 	ProviderRef,
@@ -42,6 +41,7 @@ import type {
 	UpsertAccount,
 	UpsertContact,
 } from "@hazel/domain/customers"
+import type { ClerkConnectionConfig } from "./config"
 import type { Types } from "effect"
 import { addDays, dayOf } from "../kit/time"
 import {
@@ -63,8 +63,8 @@ export const clerkRef = (externalId: string): ProviderRef => ({ provider: "clerk
 /** `create` while the connection may create accounts (the default: Clerk is the identity source). */
 export type OnNoMatch = UpsertAccount["onNoMatch"]
 
-export const onNoMatchOf = (config: ConnectionConfig): OnNoMatch =>
-	config._tag === "clerk" && !config.createAccounts ? "unmatched" : "create"
+export const onNoMatchOf = (config: ClerkConnectionConfig): OnNoMatch =>
+	config.createAccounts ? "create" : "unmatched"
 
 /** Clerk's seat cap, where `0` means unlimited. */
 const seatsLimitOf = (max: number | null | undefined): number | null =>

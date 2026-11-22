@@ -65,7 +65,8 @@
  * (`usageHistoryOps`). Later walks write today's balance, so history is read once. A key without
  * Autumn's analytics scope (403) ends the phase without failing the walk.
  */
-import type { ConnectionConfig, Day, IngestOp, IsoTimestamp, SyncProgress } from "@hazel/domain/customers"
+import type { Day, IngestOp, IsoTimestamp, SyncProgress } from "@hazel/domain/customers"
+import type { AutumnConnectionConfig } from "./config"
 import { SweepEntityType } from "@hazel/domain/customers"
 import { Clock, Effect, Option, Schema, type Types } from "effect"
 import type { CustomerProviderError } from "../kit/errors"
@@ -263,7 +264,7 @@ const featuresPage = Effect.fnUntraced(function* (api: AutumnApi, cursor: Autumn
 interface PageInput {
 	readonly api: AutumnApi
 	readonly pricing: Effect.Effect<Pricing, CustomerProviderError>
-	readonly config: ConnectionConfig
+	readonly config: AutumnConnectionConfig
 	readonly env: AutumnEnv
 	readonly at: Date
 	readonly observedAt: IsoTimestamp
@@ -473,7 +474,7 @@ export const pullPage = Effect.fn("Autumn.pullPage")(function* (input: {
 	readonly api: AutumnApi
 	readonly pricing: Effect.Effect<Pricing, CustomerProviderError>
 	readonly cursor: string | null
-	readonly config: ConnectionConfig
+	readonly config: AutumnConnectionConfig
 	readonly env: AutumnEnv
 	/** Rebuild the last {@link USAGE_HISTORY_DAYS} days of usage at the walk's end (a fresh walk only). */
 	readonly usageHistory?: boolean

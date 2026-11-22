@@ -2,17 +2,11 @@
  * Test helpers for the Customers area: hand-built facts for the pure parts (evaluation, health,
  * lifecycle), and a `CustomersObject` with members over node SQLite for the object tests.
  */
+import { DEFAULT_ATTENTION_SETTINGS, DEFAULT_CONNECTION_CONFIG } from "@hazel/customer-integrations"
 import type { schema } from "@hazel/db"
 import { CurrentUser } from "@hazel/domain"
 import type { ApiScope } from "@hazel/domain/scopes"
-import {
-	type CustomerProvider,
-	type Day,
-	DEFAULT_ATTENTION_SETTINGS,
-	DEFAULT_CONNECTION_CONFIG,
-	type IngestOp,
-	type SignalEvidence,
-} from "@hazel/domain/customers"
+import { type CustomerProvider, type Day, type IngestOp, type SignalEvidence } from "@hazel/domain/customers"
 import type {
 	CustomerAccountId,
 	CustomerConnectionId,

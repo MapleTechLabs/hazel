@@ -1,4 +1,5 @@
-import { CustomerProvider, SignalTemplate } from "@hazel/domain/customers"
+import { RegisteredProvider } from "@hazel/customer-integrations"
+import { SignalTemplate } from "@hazel/domain/customers"
 import {
 	ChannelId,
 	CustomerAccountId,
@@ -129,7 +130,7 @@ export const AppRoute = defineRouteUnion({
 	CustomersSettingsSla: { orgSlug: Schema.String },
 	CustomersSettingsFeatureFlags: { orgSlug: Schema.String },
 	CustomersSettingsSources: { orgSlug: Schema.String },
-	CustomersSourceDetail: { orgSlug: Schema.String, provider: CustomerProvider },
+	CustomersSourceDetail: { orgSlug: Schema.String, provider: RegisteredProvider },
 	CustomersUnmatched: { orgSlug: Schema.String },
 	NotFound: { path: Schema.String },
 })
@@ -390,7 +391,7 @@ const routers = {
 	),
 	CustomersSourceDetail: pipe(
 		orgPath("customers", "settings", "sources"),
-		slash(schemaSegment("provider", CustomerProvider)),
+		slash(schemaSegment("provider", RegisteredProvider)),
 		Route.mapTo(AppRoute.CustomersSourceDetail),
 	),
 	CustomersUnmatched: pipe(

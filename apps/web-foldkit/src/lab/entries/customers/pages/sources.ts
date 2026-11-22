@@ -5,7 +5,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import type { Shared } from "../../../../page/contract"
 import { Message } from "../../../../page/customers/settings/sources/message"
 import { Model } from "../../../../page/customers/settings/sources/model"
-import { toConnectionRow, toSyncRunRow } from "../../../../page/customers/settings/sources/queries"
+import { toConnectionRows, toSyncRunRow } from "../../../../page/customers/settings/sources/queries"
 import { init, update } from "../../../../page/customers/settings/sources/update"
 import { view } from "../../../../page/customers/settings/sources/view"
 import { AppRoute } from "../../../../route"
@@ -106,7 +106,7 @@ const answered = (model: Model, shared: Shared): Model => {
 		...(model.isSeedingDemo
 			? [
 					Message.SucceededSeedDemo(),
-					Message.UpdatedConnections({ connections: SOURCE_CONNECTIONS.map(toConnectionRow) }),
+					Message.UpdatedConnections({ connections: toConnectionRows(SOURCE_CONNECTIONS) }),
 					Message.UpdatedSyncRuns({ runs: SOURCE_SYNC_RUNS.map(toSyncRunRow) }),
 				]
 			: []),
@@ -143,7 +143,7 @@ const stateModel = (state: State): Model => {
 			init(routeOf(state), shared).model,
 			[
 				Message.UpdatedConnections({
-					connections: isEmpty ? [] : SOURCE_CONNECTIONS.map(toConnectionRow),
+					connections: isEmpty ? [] : toConnectionRows(SOURCE_CONNECTIONS),
 				}),
 				Message.UpdatedSyncRuns({ runs: isEmpty ? [] : SOURCE_SYNC_RUNS.map(toSyncRunRow) }),
 				Message.UpdatedAccountCount({ count: isEmpty ? 0 : ACCOUNTS.length }),

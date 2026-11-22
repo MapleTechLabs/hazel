@@ -6,6 +6,14 @@
  * whole groups of linked accounts (`./groups.ts`): a primary's signals evaluate its group's
  * combined facts (`./group-facts.ts`).
  */
+import {
+	activityProviders,
+	billingPreferenceOrder,
+	billingProviders,
+	firstImportProviders,
+	invoiceProviders,
+	usageInvoiceProviders,
+} from "@hazel/customer-integrations"
 import { Database, SQLite, schema } from "@hazel/db"
 import {
 	type CustomerProvider,
@@ -108,8 +116,9 @@ export interface SnapshotBase {
 	/** Billing data exists (a billing source, or subscriptions). */
 	readonly hasBillingData: boolean
 	/**
-	 * Autumn's subscriptions can count for MRR (its first import done, and a run succeeded since it
-	 * was last connected); each account's source is `billingProviderOf`'s.
+	 * The billing sources needing a first import can count for MRR (it is done, and a run succeeded
+	 * since they were last connected); each account's source is `billingProviderOf`'s. The name is
+	 * the stored compute progress's key.
 	 */
 	readonly autumnReady: boolean
 	/** The live accounts, loaded in chunks (`loadAccounts`). */
@@ -155,21 +164,23 @@ export interface UsageMrr {
 }
 
 /**
- * Usage billing on top of the plans' MRR, best effort: for each billed (`billed`) monthly Stripe
- * subscription, the average of what its paid invoices of the last 3 months (`USAGE_WINDOW_DAYS`)
- * charged above its plan price (metered and tiered prices, which the plan's MRR leaves out), over the
- * invoices there are when fewer than 3. A discount (paid below the plan) adds nothing. Any provider's
- * account: Autumn bills through Stripe subscriptions.
+ * Usage billing on top of the plans' MRR, best effort: for each billed (`billed`) monthly
+ * subscription of a source whose invoices carry usage (`usageFromInvoices`), the average of what its
+ * paid invoices of the last 3 months (`USAGE_WINDOW_DAYS`) charged above its plan price (metered and
+ * tiered prices, which the plan's MRR leaves out), over the invoices there are when fewer than 3. A
+ * discount (paid below the plan) adds nothing. Any provider's account: another billing source may
+ * bill through that one's subscriptions.
  */
 export const usageMrrOf = (
 	/** The account's, any provider. */
 	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
-	/** The account's paid Stripe invoices. */
+	/** The account's paid invoices (`invoiceProviders`). */
 	paidInvoices: ReadonlyArray<schema.CustomerInvoice>,
 	now: Date,
 ): ReadonlyArray<UsageMrr> =>
 	subscriptions.flatMap((sub) => {
-		if (sub.provider !== "stripe" || sub.interval !== "month" || !billed(sub)) return []
+		if (!usageInvoiceProviders.includes(sub.provider) || sub.interval !== "month" || !billed(sub))
+			return []
 		const recent = paidInvoices
 			.filter(
 				(invoice) =>
@@ -322,7 +333,7 @@ const groupBy = <A, K>(items: ReadonlyArray<A>, key: (item: A) => K) => {
 	return groups
 }
 
-const ACTIVITY_PROVIDERS: ReadonlySet<CustomerProvider> = new Set(["clerk", "maple"])
+const ACTIVITY_PROVIDERS: ReadonlySet<CustomerProvider> = new Set(activityProviders)
 
 /** A day plus the longest pull interval (6 hours): a source silent for longer has stopped delivering. */
 const STALE_AFTER_MS = 30 * 60 * 60_000
@@ -336,33 +347,34 @@ const stoppedDelivering = (connection: schema.CustomerConnection, now: Date) =>
 	connection.nextSyncAt !== null &&
 	(connection.lastSuccessAt === null || connection.lastSuccessAt.getTime() < now.getTime() - STALE_AFTER_MS)
 
-const BILLING_PROVIDERS: ReadonlyArray<CustomerProvider> = ["stripe", "autumn"]
-
 /** Bills the account now: a live billed subscription that pays (not a trial, not a free plan). */
 export const billsNow = (sub: schema.CustomerSubscription) => billed(sub) && pays(sub)
 
 /**
- * Whose subscriptions count for one account's MRR, from its subscriptions (any status): Autumn once
- * its connection finished its first import (until then its data is partial) and it bills the
- * account now (`billsNow`), else Stripe when it does (a customer Autumn does not know, or billed in
- * Stripe outside it). With neither billing now, the source stored last run (`stored`), so a payer
- * ending in one provider churns there rather than switching; without one, the one that paid
- * (Stripe's first), else Stripe's. An account with only one provider's subscriptions keeps that
- * one either way, so an Autumn disconnect does not zero its MRR.
+ * Whose subscriptions count for one account's MRR, from its subscriptions (any status). Over the
+ * billing sources holding some, best preference first: the first that bills the account now
+ * (`billsNow`), one needing a first import only once that is done (until then its data is partial).
+ * With none billing now, the source stored last run (`stored`), so a payer ending in one provider
+ * churns there rather than switching; without one, the one that paid (last preference first), else
+ * the last preference. An account held by one source keeps it either way, so a disconnect does not
+ * zero its MRR.
  */
 export const billingProviderOf = (
-	autumnReady: boolean,
+	firstImportDone: boolean,
 	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
 	stored: CustomerProvider | null,
 ): CustomerProvider => {
-	const autumn = subscriptions.filter((sub) => sub.provider === "autumn")
-	if (autumn.length === 0) return "stripe"
-	const stripe = subscriptions.filter((sub) => sub.provider === "stripe")
-	if (stripe.length === 0) return "autumn"
-	if (autumnReady && autumn.some(billsNow)) return "autumn"
-	if (stripe.some(billsNow)) return "stripe"
+	const holding = billingPreferenceOrder.flatMap(({ provider, requiresFirstImport }) => {
+		const subs = subscriptions.filter((sub) => sub.provider === provider)
+		return subs.length === 0 ? [] : [{ provider, subs, counts: firstImportDone || !requiresFirstImport }]
+	})
+	const last = holding[holding.length - 1]
+	if (last === undefined) return billingPreferenceOrder[billingPreferenceOrder.length - 1].provider
+	if (holding.length === 1) return last.provider
+	const billing = holding.find(({ subs, counts }) => counts && subs.some(billsNow))
+	if (billing !== undefined) return billing.provider
 	if (stored !== null) return stored
-	return autumnReady && autumn.some(pays) && !stripe.some(pays) ? "autumn" : "stripe"
+	return ([...holding].reverse().find(({ subs, counts }) => counts && subs.some(pays)) ?? last).provider
 }
 
 /**
@@ -370,13 +382,13 @@ export const billingProviderOf = (
  * `mrrSource`) and its subscriptions.
  */
 export const billingByAccount = (
-	autumnReady: boolean,
+	firstImportDone: boolean,
 	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
 	storedSources: ReadonlyMap<CustomerAccountId, CustomerProvider | null>,
 ) =>
 	new Map(
 		[...groupBy(subscriptions, (sub) => sub.accountId)].map(([accountId, subs]) => {
-			const source = billingProviderOf(autumnReady, subs, storedSources.get(accountId) ?? null)
+			const source = billingProviderOf(firstImportDone, subs, storedSources.get(accountId) ?? null)
 			return [accountId, { source, subscriptions: subs.filter((sub) => sub.provider === source) }]
 		}),
 	)
@@ -446,7 +458,7 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 	const anySubscription = yield* db.first(
 		SQLite.from(schema.customerSubscriptionsTable)
 			.select("id")
-			.where(($) => [inList($.provider, BILLING_PROVIDERS)])
+			.where(($) => [inList($.provider, billingProviders)])
 			.limit(1),
 	)
 	const rules = yield* db.run(
@@ -505,15 +517,18 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 			activityConnections.length > 0
 				? activityConnections.some((connection) => connected.has(connection.provider))
 				: Option.isSome(anyActivity),
-		hasBillingData: connected.has("stripe") || connected.has("autumn") || Option.isSome(anySubscription),
-		// A reconnect keeps what Autumn imported before, stale meanwhile: it counts again once the run
-		// the reconnect started succeeds (`lastSuccessAt`, that run's start, not before `connectedAt`).
-		autumnReady: connections.some(
-			(connection) =>
-				connection.provider === "autumn" &&
-				connection.status !== "disconnected" &&
-				connection.backfilledAt !== null &&
-				(connection.lastSuccessAt === null || connection.lastSuccessAt >= connection.connectedAt),
+		hasBillingData:
+			billingProviders.some((provider) => connected.has(provider)) || Option.isSome(anySubscription),
+		// A reconnect keeps what it imported before, stale meanwhile: it counts again once the run the
+		// reconnect started succeeds (`lastSuccessAt`, that run's start, not before `connectedAt`).
+		autumnReady: firstImportProviders.every((provider) =>
+			connections.some(
+				(connection) =>
+					connection.provider === provider &&
+					connection.status !== "disconnected" &&
+					connection.backfilledAt !== null &&
+					(connection.lastSuccessAt === null || connection.lastSuccessAt >= connection.connectedAt),
+			),
 		),
 		accountIds,
 		groups: [...groups]
@@ -603,13 +618,17 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 	const subscriptions = yield* db.run(
 		SQLite.from(schema.customerSubscriptionsTable)
 			.select()
-			.where(($) => [inList($.accountId, ids), inList($.provider, BILLING_PROVIDERS)]),
+			.where(($) => [inList($.accountId, ids), inList($.provider, billingProviders)]),
 	)
-	// Invoices come from Stripe only (Autumn bills through it).
+	// Invoices come only from the sources that hold them (`invoices`); others bill through those.
 	const openInvoices = yield* db.run(
 		SQLite.from(schema.customerInvoicesTable)
 			.select()
-			.where(($) => [inList($.accountId, ids), $.status.eq("open"), $.provider.eq("stripe")]),
+			.where(($) => [
+				inList($.accountId, ids),
+				$.status.eq("open"),
+				inList($.provider, invoiceProviders),
+			]),
 	)
 	const paidInvoices = yield* db.run(
 		SQLite.from(schema.customerInvoicesTable)
@@ -617,7 +636,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			.where(($) => [
 				inList($.accountId, ids),
 				$.status.eq("paid"),
-				$.provider.eq("stripe"),
+				inList($.provider, invoiceProviders),
 				$.subscriptionId.isNotNull(),
 				$.paidAt.gte(new Date(now.getTime() - USAGE_WINDOW_DAYS * DAY_MS)),
 			]),
@@ -670,8 +689,8 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			.select("accountId", "provider")
 			.where(($) => [inList($.accountId, ids), $.entityType.eq("account")]),
 	)
-	// The sources holding a record of each account: its refs, and its subscriptions (Autumn's are
-	// keyed to the Clerk organization, with no ref of their own).
+	// The sources holding a record of each account: its refs, and its subscriptions (a source keyed
+	// to another's id has no ref of its own).
 	const providersBy = new Map<CustomerAccountId, Set<CustomerProvider>>()
 	for (const { accountId, provider } of [...refs, ...subscriptions]) {
 		const providers = providersBy.get(accountId) ?? new Set<CustomerProvider>()

@@ -5,7 +5,7 @@
  * to the alarm, a body Hazel cannot read fails the run without a retry, and a tool or protocol
  * failure (Maple's warehouse having a bad moment) is retried.
  */
-import type { ConnectionConfig } from "@hazel/domain/customers"
+import type { MapleConnectionConfig } from "./config"
 import { Effect, Fiber, Redacted, Schema } from "effect"
 import { HttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
@@ -29,7 +29,7 @@ import { MapleActivityRow, RunSqlAnswer, RUN_SQL_ROW_CAP } from "./wire"
 const API_KEY = "maple_ak_fake0000000000000000"
 const NOW = new Date("2026-06-15T12:00:00.000Z")
 
-const config = (overrides: Partial<Extract<ConnectionConfig, { _tag: "maple" }>> = {}) =>
+const config = (overrides: Partial<MapleConnectionConfig> = {}) =>
 	({
 		_tag: "maple",
 		region: "us",
@@ -37,14 +37,14 @@ const config = (overrides: Partial<Extract<ConnectionConfig, { _tag: "maple" }>>
 		metricMappings: [],
 		lookbackDays: 2,
 		...overrides,
-	}) satisfies Extract<ConnectionConfig, { _tag: "maple" }>
+	}) satisfies MapleConnectionConfig
 
 const pageOf = (
 	fake: FakeMapleState,
 	options: {
 		readonly cursor?: string | null
 		readonly since?: Date | null
-		readonly config?: Extract<ConnectionConfig, { _tag: "maple" }>
+		readonly config?: MapleConnectionConfig
 		readonly apiKey?: string
 	} = {},
 ) =>

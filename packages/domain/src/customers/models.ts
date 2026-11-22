@@ -120,7 +120,7 @@ class AccountModel extends M.Class<AccountModel>("CustomerAccount")({
 	churnedAt: NullDate,
 	tags: S.Array(S.String),
 	attributes: Attributes,
-	/** The Clerk organization's boolean `public_metadata` keys. */
+	/** The account record's boolean flags, as the source holding them has them. */
 	featureFlags: S.Record(S.String, S.Boolean),
 	/** Set while Needs attention leaves the account out; `attentionMutedUntil` null: until unmuted. */
 	attentionMutedAt: NullDate,
@@ -309,7 +309,7 @@ class FeatureFlagModel extends M.Class<FeatureFlagModel>("CustomerFeatureFlag")(
 export const FeatureFlag = M.expose(FeatureFlagModel)
 export type FeatureFlag = typeof FeatureFlag.Schema.Type
 
-/** A member an admin let sign in as customers' users (Clerk impersonation). */
+/** A member an admin let sign in as customers' users (a source's impersonation). */
 class ImpersonatorModel extends M.Class<ImpersonatorModel>("CustomerImpersonator")({
 	id: M.Generated(CustomerImpersonatorId),
 	organizationId: OrganizationId,

@@ -4,16 +4,17 @@
  * region from being read as the other's.
  */
 import type { ConnectionConfig } from "@hazel/domain/customers"
+import { regionOfAccountId, type MapleConnectionConfig } from "./config"
 import { Effect, Redacted } from "effect"
 import { describe, expect, it } from "vitest"
-import { accountIdOf, makeMapleAdapter, regionOfAccountId } from "./adapter"
+import { accountIdOf, makeMapleAdapter } from "./adapter"
 import { MAPLE_ORG } from "./fixtures"
 import { encodeCursor } from "./pull"
 import { type FakeMapleState, fakeMapleHttpClient, makeFakeMaple, originOf } from "./testing"
 
 const API_KEY = "maple_ak_fake0000000000000000"
 
-const config = (overrides: Partial<Extract<ConnectionConfig, { _tag: "maple" }>> = {}) =>
+const config = (overrides: Partial<MapleConnectionConfig> = {}) =>
 	({
 		_tag: "maple",
 		region: "us",
@@ -21,7 +22,7 @@ const config = (overrides: Partial<Extract<ConnectionConfig, { _tag: "maple" }>>
 		metricMappings: [],
 		lookbackDays: 90,
 		...overrides,
-	}) satisfies Extract<ConnectionConfig, { _tag: "maple" }>
+	}) satisfies MapleConnectionConfig
 
 const validateWith = (
 	fake: FakeMapleState,

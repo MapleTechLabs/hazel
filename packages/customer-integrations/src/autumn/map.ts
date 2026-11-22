@@ -33,7 +33,6 @@
  *   base plan only marks the current one's cancellation as a downgrade).
  */
 import type {
-	ConnectionConfig,
 	Day,
 	DefineMetric,
 	IngestOp,
@@ -45,6 +44,7 @@ import type {
 	UpsertAccount,
 	UpsertSubscription,
 } from "@hazel/domain/customers"
+import type { AutumnConnectionConfig } from "./config"
 import type { Types } from "effect"
 import { addDays, DAY_MS, dayOf, startOfDay } from "../kit/time"
 import {
@@ -71,8 +71,7 @@ export const METRIC_PREFIX = "autumn."
 export const metricKeyOf = (featureId: string): string => `${METRIC_PREFIX}${featureId}`
 
 /** Whether this connection takes the Autumn customer id for the Clerk organization id. */
-export const idIsClerkOrgId = (config: ConnectionConfig): boolean =>
-	config._tag !== "autumn" || config.customerIdIsClerkOrgId
+export const idIsClerkOrgId = (config: AutumnConnectionConfig): boolean => config.customerIdIsClerkOrgId
 
 const emailDomainOf = (email: string | null | undefined): string | null => {
 	if (email == null) return null
@@ -107,7 +106,7 @@ const seatsOf = (
  */
 export const accountOp = (
 	customer: AutumnCustomer & { readonly id: string },
-	config: ConnectionConfig,
+	config: AutumnConnectionConfig,
 	env: AutumnEnv,
 	observedAt?: IsoTimestamp,
 ): UpsertAccount => {
@@ -562,7 +561,7 @@ export const balanceOps = (
 export const customerOps = (
 	customer: AutumnCustomer & { readonly id: string },
 	options: {
-		readonly config: ConnectionConfig
+		readonly config: AutumnConnectionConfig
 		readonly env: AutumnEnv
 		readonly names?: ReadonlyMap<string, string>
 		readonly at: Date

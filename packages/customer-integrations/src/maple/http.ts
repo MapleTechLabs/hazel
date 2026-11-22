@@ -22,7 +22,7 @@
  */
 import { Effect, type Redacted, Schema } from "effect"
 import type { HttpClient } from "effect/http"
-import type { MapleRegion } from "@hazel/domain/customers"
+import type { MapleRegion } from "./config"
 import { CustomerProviderError } from "../kit/errors"
 import { makeProviderPost, type ProviderRequestOptions } from "../kit/http"
 import { detailOf, MAPLE_API_URL, MapleErrorBody, MCP_HEADERS, MCP_PATH, RunSqlAnswer } from "./wire"

@@ -1,4 +1,9 @@
 import {
+	DEFAULT_ATTENTION_SETTINGS,
+	DEFAULT_CONNECTION_CONFIG,
+	defaultConfigOf,
+} from "@hazel/customer-integrations"
+import {
 	type Account,
 	type AccountDetail,
 	type ActiveUsersPoint,
@@ -7,8 +12,6 @@ import {
 	type Connection,
 	type ContactRow,
 	type CustomersRange,
-	DEFAULT_CONNECTION_CONFIG,
-	DEFAULT_ATTENTION_SETTINGS,
 	DEFAULT_BUSINESS_HOURS,
 	DEFAULT_HEALTH_SETTINGS,
 	EMPTY_SYNC_STATS,
@@ -1389,7 +1392,7 @@ const connection = (
 	status: "active",
 	externalAccountId: null,
 	externalAccountName: null,
-	config: DEFAULT_CONNECTION_CONFIG[provider],
+	config: defaultConfigOf(provider),
 	connectedBy: MAYA.id,
 	connectedAt: daysAgo(120),
 	hasWebhookSecret: true,

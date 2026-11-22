@@ -3,7 +3,8 @@
  * and mode checks, then each subscribed event type's ops over the recorded payloads. Deliveries are
  * signed here exactly as Stripe signs them, so the verification path is the real one.
  */
-import type { ConnectionConfig, IngestOp, UpsertAccount, UpsertSubscription } from "@hazel/domain/customers"
+import type { IngestOp, UpsertAccount, UpsertSubscription } from "@hazel/domain/customers"
+import type { StripeConnectionConfig } from "./config"
 import { Effect, Redacted } from "effect"
 import { HttpClient } from "effect/http"
 import { describe, expect, it } from "vitest"
@@ -28,7 +29,7 @@ import { receiveWebhook } from "./webhook"
 
 const SECRET = "whsec_hazeltest00000000000000000000"
 const API_KEY = "rk_test_fake000000000000000000"
-const CONFIG: ConnectionConfig = {
+const CONFIG: StripeConnectionConfig = {
 	_tag: "stripe",
 	clerkOrgMetadataKey: "clerk_org_id",
 	matchByDomain: true,
@@ -57,7 +58,7 @@ const deliver = (
 		readonly header?: string
 		readonly accountId?: string | null
 		readonly livemode?: boolean | null
-		readonly config?: ConnectionConfig
+		readonly config?: StripeConnectionConfig
 		readonly fake?: FakeStripeState
 	} = {},
 ) =>

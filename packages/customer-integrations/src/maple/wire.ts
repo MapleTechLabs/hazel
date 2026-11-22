@@ -23,7 +23,7 @@
  * by day *and* by offset inside a day (`./pull.ts`).
  */
 import { Schema } from "effect"
-import type { MapleRegion } from "@hazel/domain/customers"
+import type { MapleRegion } from "./config"
 
 /** Maple's MCP endpoint per region; a key of one region is refused by the other. */
 export const MAPLE_API_URL = {

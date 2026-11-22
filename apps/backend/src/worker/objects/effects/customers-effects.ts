@@ -5,8 +5,8 @@
  * snapshot with `organizationDeleted`), which shuts the customers object down; and the messages
  * of linked channels, relayed by the `OrgObject` for support issues (`../customers/issues.ts`).
  */
+import { defaultConfigOf } from "@hazel/customer-integrations"
 import { Database, SQLite, schema } from "@hazel/db"
-import { DEFAULT_CONNECTION_CONFIG } from "@hazel/domain/customers"
 import { OrganizationMember } from "@hazel/domain/models"
 import { ChannelId, MessageId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Clock, Effect, Option, Schema } from "effect"
@@ -148,7 +148,7 @@ const shutDown = Effect.gen(function* () {
 			SQLite.update(schema.customerConnectionsTable)
 				.set({
 					externalAccountName: null,
-					config: DEFAULT_CONNECTION_CONFIG[connection.provider],
+					config: defaultConfigOf(connection.provider),
 					lastError: null,
 					updatedAt: now,
 				})

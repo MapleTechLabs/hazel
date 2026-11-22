@@ -4,7 +4,8 @@
  * (`auth` stops pulls, a short 429 is waited out, a long one is handed to the alarm, a body Hazel
  * cannot read fails the run).
  */
-import type { ConnectionConfig, IngestOp, UpsertAccount } from "@hazel/domain/customers"
+import type { IngestOp, UpsertAccount } from "@hazel/domain/customers"
+import type { ClerkConnectionConfig } from "./config"
 import { Effect, Fiber, Layer, Option, Redacted } from "effect"
 import { HttpClient, HttpClientError, HttpClientResponse } from "effect/http"
 import { TestClock } from "effect/testing"
@@ -26,7 +27,7 @@ import { decodeCursor, encodeCursor, PAGE_OVERLAP, PAGE_SIZE, pullPage } from ".
 import { type FakeClerkState, fakeClerkHttpClient, makeFakeClerk } from "./testing"
 
 const API_KEY = "sk_test_fake000000000000000000"
-const CONFIG: ConnectionConfig = { _tag: "clerk", createAccounts: true }
+const CONFIG: ClerkConnectionConfig = { _tag: "clerk", createAccounts: true }
 
 const instance = (options: Partial<FakeClerkState> = {}) =>
 	makeFakeClerk({

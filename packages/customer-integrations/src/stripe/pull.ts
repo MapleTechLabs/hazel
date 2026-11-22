@@ -38,7 +38,8 @@
  * (a connection idle for a month) runs the full walk instead. This is what keeps a connection
  * without a webhook endpoint correct, if up to a pull interval late (`./adapter.ts`).
  */
-import type { ConnectionConfig, IngestOp, IsoTimestamp, SyncProgress } from "@hazel/domain/customers"
+import type { IngestOp, IsoTimestamp, SyncProgress } from "@hazel/domain/customers"
+import type { StripeConnectionConfig } from "./config"
 import { Clock, Effect, Option, Schema } from "effect"
 import type { PullPage } from "../kit/contract"
 import type { StripeGet, StripeQuery } from "./http"
@@ -128,7 +129,7 @@ const query = (cursor: StripeCursor, extra: StripeQuery = [], limit = PAGE_SIZE)
 const customersPage = Effect.fnUntraced(function* (
 	get: StripeGet,
 	cursor: StripeCursor,
-	config: ConnectionConfig,
+	config: StripeConnectionConfig,
 	at: IsoTimestamp,
 ) {
 	const body = yield* get("/customers", query(cursor), StripeCustomersPage)
@@ -176,7 +177,7 @@ const eventsPage = Effect.fnUntraced(function* (
 	get: StripeGet,
 	cursor: StripeCursor,
 	since: Date | null,
-	config: ConnectionConfig,
+	config: StripeConnectionConfig,
 	at: IsoTimestamp,
 ) {
 	const body = yield* get(
@@ -230,7 +231,7 @@ export const pullPage = Effect.fn("Stripe.pullPage")(function* (input: {
 	readonly get: StripeGet
 	readonly cursor: string | null
 	readonly since: Date | null
-	readonly config: ConnectionConfig
+	readonly config: StripeConnectionConfig
 }) {
 	const nowMs = yield* Clock.currentTimeMillis
 	// Taken before any request: the ops' `observedAt` (a listing proves its records live as of it,

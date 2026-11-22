@@ -1,3 +1,4 @@
+import { IntegrationConfig } from "@hazel/customer-integrations"
 import * as Customers from "@hazel/domain/customers"
 import { CustomerConnectionId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
@@ -58,7 +59,7 @@ export const ConnectForm = Schema.Struct({
 	/** Rotating the key of this connection (`customers.connection.update`); null: a new connection. */
 	reconnectId: Schema.NullOr(CustomerConnectionId),
 	apiKey: Schema.String,
-	config: Customers.ConnectionConfig,
+	config: IntegrationConfig,
 	/** The connection the key opened: the webhook URL needs its id. */
 	connected: Schema.NullOr(
 		Schema.Struct({ connectionId: CustomerConnectionId, accountName: Schema.NullOr(Schema.String) }),
@@ -107,7 +108,7 @@ export const Model = Schema.Struct({
 	disconnectModal: Modal.Model,
 	isDisconnecting: Schema.Boolean,
 	/** The detail's provider settings while edited; null shows the connection's own. */
-	settingsDraft: Schema.NullOr(Customers.ConnectionConfig),
+	settingsDraft: Schema.NullOr(IntegrationConfig),
 	/** Maple's "add an activity event" field. */
 	activityEventInput: Schema.String,
 	isSavingSettings: Schema.Boolean,
@@ -162,48 +163,43 @@ export const visibleRuns = (model: Model, connectionId: CustomerConnectionId): R
 export const grantableMembers = (model: Model): ReadonlyArray<MemberRow> =>
 	model.members.filter((member) => !model.impersonators.some((row) => row.userId === member.id))
 
-const isSameConfig = Schema.toEquivalence(Customers.ConnectionConfig)
+const isSameConfig = Schema.toEquivalence(IntegrationConfig)
 
 /** The provider settings the detail shows: the draft while edited, else the connection's. */
-export const settingsOf = (model: Model, connection: ConnectionRow): Customers.ConnectionConfig =>
+export const settingsOf = (model: Model, connection: ConnectionRow): IntegrationConfig =>
 	model.settingsDraft ?? connection.config
 
 export const isSettingsDirty = (model: Model, connection: ConnectionRow): boolean =>
 	model.settingsDraft !== null && !isSameConfig(model.settingsDraft, connection.config)
 
 /** Why the settings can't be saved yet: each Maple metric row needs both halves. */
-export const settingsProblemOf = (config: Customers.ConnectionConfig): string | null =>
+export const settingsProblemOf = (config: IntegrationConfig): string | null =>
 	config._tag !== "maple" ||
 	config.metricMappings.every((mapping) => mapping.event.trim() !== "" && mapping.metricKey.trim() !== "")
 		? null
 		: "Fill in or remove the empty metric rows"
 
-export const isSettingsValid = (config: Customers.ConnectionConfig): boolean =>
-	settingsProblemOf(config) === null
+export const isSettingsValid = (config: IntegrationConfig): boolean => settingsProblemOf(config) === null
 
 /**
  * `config` with one of its fields set, when the value fits the field: a descriptor's `ConfigField`
  * names the key, and the config's schema checks it.
  */
 export const withConfigField = (
-	config: Customers.ConnectionConfig,
+	config: IntegrationConfig,
 	key: string,
 	value: string | boolean,
-): Customers.ConnectionConfig =>
-	Option.getOrElse(
-		Schema.decodeOption(Customers.ConnectionConfig)({ ...config, [key]: value }),
-		() => config,
-	)
+): IntegrationConfig =>
+	Option.getOrElse(Schema.decodeOption(IntegrationConfig)({ ...config, [key]: value }), () => config)
 
-const fieldOf = (config: Customers.ConnectionConfig, key: string) =>
+const fieldOf = (config: IntegrationConfig, key: string) =>
 	Object.entries(config).find(([field]) => field === key)?.[1]
 
 /** A descriptor's Toggle field in `config`. */
-export const configFlag = (config: Customers.ConnectionConfig, key: string): boolean =>
-	fieldOf(config, key) === true
+export const configFlag = (config: IntegrationConfig, key: string): boolean => fieldOf(config, key) === true
 
 /** A descriptor's Text field in `config`. */
-export const configText = (config: Customers.ConnectionConfig, key: string): string => {
+export const configText = (config: IntegrationConfig, key: string): string => {
 	const value = fieldOf(config, key)
 	return typeof value === "string" ? value : ""
 }

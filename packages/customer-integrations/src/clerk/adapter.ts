@@ -18,9 +18,11 @@
  */
 import { Effect } from "effect"
 import { HttpClient } from "effect/http"
-import { CustomerProviderError } from "../kit/errors"
+import { asWebhookRejection, configReader } from "../kit/config"
 import type { CustomerProviderAdapter, ProviderCredentials } from "../kit/contract"
+import { CustomerProviderError } from "../kit/errors"
 import { WEBHOOK_REQUESTS } from "../kit/http"
+import { ClerkConnectionConfig } from "./config"
 import { makeClerkGet, makeClerkPatch } from "./http"
 import { createActorToken } from "./impersonate"
 import { featureFlagsOf, onNoMatchOf } from "./map"
@@ -34,6 +36,8 @@ import { ClerkInstance, ClerkOrganization, ClerkOrganizationsPage } from "./wire
  * than every minute.
  */
 export const CLERK_PULL_INTERVAL_MS = 6 * 60 * 60_000
+
+const readConfig = configReader(ClerkConnectionConfig, "Clerk")
 
 export const makeClerkAdapter = Effect.gen(function* () {
 	const client = yield* HttpClient.HttpClient
@@ -81,25 +85,25 @@ export const makeClerkAdapter = Effect.gen(function* () {
 		validate,
 
 		// Core calls `webhook` only for a connection with a signing secret.
-		webhook: (request, credentials) =>
-			credentials.webhookSecret === null
+		webhook: (request, { apiKey, config, externalAccountId, webhookSecret }) =>
+			webhookSecret === null
 				? Effect.die("Clerk webhook called without a signing secret")
-				: receiveWebhook({
-						// A delivery answers fast (`./http.ts`, `./webhook.ts`).
-						get: makeClerkGet(client, credentials.apiKey, WEBHOOK_REQUESTS),
-						headers: request.headers,
-						body: request.body,
-						webhookSecret: credentials.webhookSecret,
-						instanceId: credentials.externalAccountId,
-						onNoMatch: onNoMatchOf(credentials.config),
-					}),
+				: Effect.flatMap(asWebhookRejection(readConfig(config)), (decoded) =>
+						receiveWebhook({
+							// A delivery answers fast (`./http.ts`, `./webhook.ts`).
+							get: makeClerkGet(client, apiKey, WEBHOOK_REQUESTS),
+							headers: request.headers,
+							body: request.body,
+							webhookSecret,
+							instanceId: externalAccountId,
+							onNoMatch: onNoMatchOf(decoded),
+						}),
+					),
 
 		pull: (input) =>
-			pullPage({
-				get: getOf(input.credentials),
-				cursor: input.cursor,
-				config: input.credentials.config,
-			}),
+			Effect.flatMap(readConfig(input.credentials.config), (config) =>
+				pullPage({ get: getOf(input.credentials), cursor: input.cursor, config }),
+			),
 
 		pullIntervalMs: CLERK_PULL_INTERVAL_MS,
 

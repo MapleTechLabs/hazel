@@ -3,13 +3,9 @@
  * stop on bad credentials or a disconnect, compute that backs off and leases its run, signals of deleted accounts, baseline mode during a backfill, the one-time history rebuild,
  * and usage data that stops counting once its source is gone.
  */
+import { DEFAULT_ATTENTION_SETTINGS } from "@hazel/customer-integrations"
 import { Database, SQLite, schema } from "@hazel/db"
-import {
-	DEFAULT_ATTENTION_SETTINGS,
-	type IngestOp,
-	type ProviderRef,
-	type UpsertSubscription,
-} from "@hazel/domain/customers"
+import { type IngestOp, type ProviderRef, type UpsertSubscription } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerSignalRuleId, OrganizationId } from "@hazel/schema"
 import { ConfigProvider, Effect, Exit, Layer, Option, type Scope } from "effect"
 import { describe, expect, it } from "vitest"

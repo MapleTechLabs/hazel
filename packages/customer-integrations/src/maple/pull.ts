@@ -7,12 +7,12 @@
  * | `activity` | day × `GroupId` × `UserId` | an account reference and a contact's day of activity |
  * | `metrics` | day × `GroupId` × metric key | an account reference and a day's count per mapped metric |
  *
- * **Why a day at a time.** Maple's `run_sql` hands back at most {@link RUN_SQL_ROW_CAP} rows of a
+ * **Why a day at a time.** Maple's `run_sql` hands back at most `RUN_SQL_ROW_CAP` rows of a
  * result whatever the query matched (`./wire.ts`), so a page has to be small enough to fit
  * and the walk has to be able to ask for the rest. A day is the natural unit: it is what the ops
  * are keyed by, and its rows stop changing once it is over. Within a day the page is
  * `LIMIT <cap + 1> OFFSET <rows read>` over a total order (`account, contact` / `account, metric`):
- * Maple renders the first {@link RUN_SQL_ROW_CAP} and says `truncated` when it fetched more, which
+ * Maple renders the first `RUN_SQL_ROW_CAP` and says `truncated` when it fetched more, which
  * is what tells the walk another page follows. So an organization with more than a page of active
  * users a day is read over several pages instead of being cut, and a page cut shorter than the cap
  * is still followed.
@@ -34,17 +34,15 @@
  *
  * **No sweeps.** Maple is authoritative for nothing: what it did not see is not gone.
  */
-import type { ConnectionConfig, Day, IsoTimestamp, SyncProgress } from "@hazel/domain/customers"
+import type { Day, IsoTimestamp, SyncProgress } from "@hazel/domain/customers"
 import { Clock, Effect, Option, Schema } from "effect"
 import type { PullPage } from "../kit/contract"
 import { addDays, dayOf } from "../kit/time"
+import type { MapleConnectionConfig } from "./config"
 import type { MapleApi } from "./http"
 import { activityOps, type MetricMap, metricDefinitionOps, metricMapOf, metricOps } from "./map"
-import { isEventName, isMetricKey, MapleActivityRow, MapleMetricRow, RUN_SQL_ROW_CAP } from "./wire"
-
-/** The two Maple columns that carry identity (`maple/docs/product-events-catalog.md`). */
-const ACCOUNT_COLUMN = "GroupId"
-const CONTACT_COLUMN = "UserId"
+import { activityEventsOf, activitySql, metricsSql, PAGE_LIMIT } from "./query"
+import { MapleActivityRow, MapleMetricRow } from "./wire"
 
 /**
  * Maple's webhooks do not exist for product events, so the walk is the only signal; a day's counts
@@ -76,80 +74,8 @@ export const decodeCursor = (cursor: string): Option.Option<MapleCursor> => deco
 
 export const encodeCursor = (cursor: MapleCursor): string => JSON.stringify(cursor)
 
-/** A SQL string literal: the only values Hazel interpolates are names its config checked. */
-const quoted = (values: Iterable<string>) => [...values].map((value) => `'${value}'`).join(", ")
-
-/** One past the rendered cap, so Maple's `truncated` says whether another page follows. */
-const PAGE_LIMIT = RUN_SQL_ROW_CAP + 1
-
-const activitySql = (events: ReadonlyArray<string>, offset: number) => `
-SELECT toDate(Timestamp) AS day,
-       ${ACCOUNT_COLUMN} AS account,
-       ${CONTACT_COLUMN} AS contact,
-       count() AS events,
-       uniqExactIf(SessionId, SessionId != '') AS sessions
-FROM product_events
-WHERE $__orgFilter
-  AND Timestamp >= $__startTime AND Timestamp < $__endTime
-  AND ${ACCOUNT_COLUMN} != '' AND ${CONTACT_COLUMN} != ''${
-		events.length === 0 ? "" : `\n  AND EventName IN (${quoted(events)})`
-  }
-GROUP BY day, account, contact
-ORDER BY account, contact
-LIMIT ${PAGE_LIMIT} OFFSET ${offset}`
-
-/** Counts per metric key: `transform` maps each mapped event to its (namespaced) key. */
-const metricsSql = (map: MetricMap, offset: number) => `
-SELECT toDate(Timestamp) AS day,
-       ${ACCOUNT_COLUMN} AS account,
-       transform(EventName, [${quoted(map.keys())}], [${quoted(map.values())}]) AS metric,
-       count() AS events
-FROM product_events
-WHERE $__orgFilter
-  AND Timestamp >= $__startTime AND Timestamp < $__endTime
-  AND ${ACCOUNT_COLUMN} != ''
-  AND EventName IN (${quoted(map.keys())})
-GROUP BY day, account, metric
-ORDER BY account, metric
-LIMIT ${PAGE_LIMIT} OFFSET ${offset}`
-
-/** The longest statement Maple's `run_sql` takes. */
-const MAX_SQL_LENGTH = 32_768
-
-/**
- * Why the config cannot be saved, or `null`. A pull drops an event name or metric key it may not
- * put in a query, so one is refused here instead of silently left out; and the queries spell out
- * the allowlist and the mappings, so they must fit `run_sql` (measured at an offset longer than any
- * page reaches).
- */
-export const configProblem = (config: Extract<ConnectionConfig, { _tag: "maple" }>): string | null => {
-	const listed = (values: ReadonlyArray<string>) => values.map((value) => JSON.stringify(value)).join(", ")
-	const events = config.activityEvents.filter((event) => !isEventName(event.trim()))
-	if (events.length > 0) {
-		return `Maple event names are 1–120 letters, digits or _ $ . : / -; fix or remove ${listed(events)}`
-	}
-	const mappings = config.metricMappings.filter(
-		(mapping) => !isEventName(mapping.event.trim()) || !isMetricKey(mapping.metricKey.trim()),
-	)
-	if (mappings.length > 0) {
-		return `Mapped events are 1–120 letters, digits or _ $ . : / -, metric keys 1–80 letters, digits or _ . -; fix or remove ${listed(mappings.map((mapping) => `${mapping.event} → ${mapping.metricKey}`))}`
-	}
-	const offset = Number.MAX_SAFE_INTEGER
-	const fits =
-		activitySql(activityEventsOf(config), offset).length < MAX_SQL_LENGTH &&
-		metricsSql(metricMapOf(config.metricMappings), offset).length < MAX_SQL_LENGTH
-	return fits ? null : "The activity events and metric mappings are too long for a Maple query; remove some"
-}
-
 /** One UTC day, half-open, as Maple takes a window. */
 const windowOf = (day: Day) => ({ start: `${day} 00:00:00`, end: `${addDays(day, 1)} 00:00:00` })
-
-/**
- * The configured activity allowlist Hazel can act on; empty means every identified event counts, so
- * a config naming an unusable event is refused when it is saved rather than read with it dropped.
- */
-const activityEventsOf = (config: Extract<ConnectionConfig, { _tag: "maple" }>) =>
-	config.activityEvents.map((event) => event.trim()).filter(isEventName)
 
 /**
  * The first day of a walk: `lookbackDays` back for a backfill, else the day `since` falls in. Never
@@ -181,7 +107,7 @@ const nextCursor = (
 
 interface PageInput {
 	readonly api: MapleApi
-	readonly config: Extract<ConnectionConfig, { _tag: "maple" }>
+	readonly config: MapleConnectionConfig
 	readonly observedAt: IsoTimestamp
 }
 
@@ -223,7 +149,7 @@ const NO_METRICS = { rows: 0, more: false, ops: [], skipped: 0 }
 
 export const pullPage = Effect.fn("Maple.pullPage")(function* (input: {
 	readonly api: MapleApi
-	readonly config: Extract<ConnectionConfig, { _tag: "maple" }>
+	readonly config: MapleConnectionConfig
 	readonly cursor: string | null
 	readonly since: Date | null
 }) {

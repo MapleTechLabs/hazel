@@ -2,7 +2,7 @@
  * The Stripe mapping: how a customer finds its account, and how a subscription's items, intervals,
  * quantities and coupons become one monthly amount in the currency's minor units.
  */
-import type { ConnectionConfig } from "@hazel/domain/customers"
+import type { StripeConnectionConfig } from "./config"
 import { Schema } from "effect"
 import { describe, expect, it } from "vitest"
 import {
@@ -38,13 +38,13 @@ import {
 } from "./fixtures"
 import { StripeCustomer, StripeInvoice, StripeSubscription } from "./wire"
 
-const CONFIG: ConnectionConfig = {
+const CONFIG: StripeConnectionConfig = {
 	_tag: "stripe",
 	clerkOrgMetadataKey: "clerk_org_id",
 	matchByDomain: true,
 	accountId: "",
 }
-const NO_DOMAINS: ConnectionConfig = { ...CONFIG, matchByDomain: false }
+const NO_DOMAINS: StripeConnectionConfig = { ...CONFIG, matchByDomain: false }
 
 const customer = Schema.decodeUnknownSync(StripeCustomer)
 const subscription = Schema.decodeUnknownSync(StripeSubscription)

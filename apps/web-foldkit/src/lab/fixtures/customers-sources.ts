@@ -1,6 +1,6 @@
+import { DEFAULT_CONNECTION_CONFIG } from "@hazel/customer-integrations"
 import {
 	type Connection,
-	DEFAULT_CONNECTION_CONFIG,
 	EMPTY_SYNC_STATS,
 	type SyncRun,
 	type SyncRunStatus,
