@@ -27,7 +27,12 @@ import {
 	SUB_GLOBEX_LAPSED,
 	SUB_GLOBEX_TRIAL,
 } from "@hazel/customer-integrations/autumn/fixtures"
-import { customerOps, featureDefinitionOps, plansById, subscriptionOps } from "@hazel/customer-integrations/autumn/map"
+import {
+	customerOps,
+	featureDefinitionOps,
+	plansById,
+	subscriptionOps,
+} from "@hazel/customer-integrations/autumn/map"
 import { AutumnCustomer, AutumnPlan, AutumnSubscription } from "@hazel/customer-integrations/autumn/wire"
 
 const CONFIG = { _tag: "autumn", customerIdIsClerkOrgId: true } as const

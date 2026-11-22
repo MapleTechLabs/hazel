@@ -13,7 +13,12 @@ import { runCompute } from "../compute"
 import { type CustomersWorld, makeCustomersWorld, NOW } from "../test-kit"
 import { addDays, dayOf } from "@hazel/customer-integrations/kit/time"
 import { ORG_ACME, ORG_UNKNOWN, USER_ADA, USER_LIN } from "@hazel/customer-integrations/maple/fixtures"
-import { activityOps, metricDefinitionOps, metricMapOf, metricOps } from "@hazel/customer-integrations/maple/map"
+import {
+	activityOps,
+	metricDefinitionOps,
+	metricMapOf,
+	metricOps,
+} from "@hazel/customer-integrations/maple/map"
 import type { MapleActivityRow, MapleMetricRow } from "@hazel/customer-integrations/maple/wire"
 
 const OBSERVED = NOW.toISOString()

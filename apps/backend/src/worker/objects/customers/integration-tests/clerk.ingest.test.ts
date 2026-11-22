@@ -23,10 +23,21 @@ import {
 	USER_GRACE,
 } from "@hazel/customer-integrations/clerk/fixtures"
 import { makeClerkGet } from "@hazel/customer-integrations/clerk/http"
-import { accountDeletedOp, accountOp, domainsAccountOp, membershipOps, sessionOps } from "@hazel/customer-integrations/clerk/map"
+import {
+	accountDeletedOp,
+	accountOp,
+	domainsAccountOp,
+	membershipOps,
+	sessionOps,
+} from "@hazel/customer-integrations/clerk/map"
 import { pullPage } from "@hazel/customer-integrations/clerk/pull"
 import { fakeClerkHttpClient, makeFakeClerk } from "@hazel/customer-integrations/clerk/testing"
-import { ClerkMembership, ClerkOrganization, ClerkSession, ClerkUser } from "@hazel/customer-integrations/clerk/wire"
+import {
+	ClerkMembership,
+	ClerkOrganization,
+	ClerkSession,
+	ClerkUser,
+} from "@hazel/customer-integrations/clerk/wire"
 
 const org = Schema.decodeUnknownSync(ClerkOrganization)
 const user = Schema.decodeUnknownSync(ClerkUser)

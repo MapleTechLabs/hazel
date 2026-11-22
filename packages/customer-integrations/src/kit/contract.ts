@@ -126,4 +126,3 @@ export interface CustomerProviderAdapter {
 		input: { readonly externalUserId: string; readonly actorUserId: UserId },
 	) => Effect.Effect<{ readonly url: string; readonly tokenId: string }, CustomerImpersonationError>
 }
-

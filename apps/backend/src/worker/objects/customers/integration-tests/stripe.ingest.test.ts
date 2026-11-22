@@ -22,7 +22,12 @@ import {
 	SUB_ACME,
 	SUB_GLOBEX,
 } from "@hazel/customer-integrations/stripe/fixtures"
-import { accountDeletedOp, customerOps, invoiceOp, subscriptionOp } from "@hazel/customer-integrations/stripe/map"
+import {
+	accountDeletedOp,
+	customerOps,
+	invoiceOp,
+	subscriptionOp,
+} from "@hazel/customer-integrations/stripe/map"
 import { StripeCustomer, StripeInvoice, StripeSubscription } from "@hazel/customer-integrations/stripe/wire"
 
 const CONFIG = {
