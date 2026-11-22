@@ -192,6 +192,31 @@ describe("signal evaluation", () => {
 		expect(billingProviderOf(true, [], null)).toBe("stripe")
 	})
 
+	it("payment_failed: an ended plan's unpaid auto-charged invoice counts from its issue date", () => {
+		const invoice = {
+			id: "inv_1" as never,
+			status: "open",
+			amountDueMinor: 3_900,
+			attemptCount: 9,
+			dueAt: null,
+			issuedAt: new Date(NOW.getTime() - 30 * 86_400_000),
+		} as const
+		const open = factsOf({ subscriptions: [{ status: "canceled" }], openInvoices: [invoice] })
+		expect(
+			match("payment_failed", {
+				subscriptions: [{ status: "canceled" }],
+				openInvoices: [invoice],
+				unpaidInvoices: open.openInvoices,
+			}).evidence,
+		).toMatchObject({ amountMinor: 3_900, daysOverdue: 30, attemptCount: 9, step: 2 })
+		expect(
+			run("payment_failed", { subscriptions: [{ status: "canceled" }], openInvoices: [invoice] }),
+		).toEqual({
+			_tag: "NoMatch",
+			reason: "Below threshold",
+		})
+	})
+
 	it("payment_failed: past due, or an invoice open 7+ days past due; escalates by age and unpaid", () => {
 		const overdue = (days: number) => ({
 			dueAt: new Date(NOW.getTime() - days * 86_400_000),

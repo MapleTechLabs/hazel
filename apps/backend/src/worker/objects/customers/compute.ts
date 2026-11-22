@@ -38,7 +38,7 @@ import { readObjectMeta, writeObjectMeta } from "../meta"
 import { refreshSuggestionsAfterCompute } from "./channel-suggestions"
 import { publishChannelCustomersAfterCompute } from "./channels"
 import { evaluate, type Match } from "./evaluate"
-import type { AccountFacts } from "./facts"
+import { type AccountFacts, unpaidEndOf } from "./facts"
 import { type HealthInputs, scoreHealth } from "./health"
 import { type LifecycleEvent, limitSignalTarget, transition, valueOf, wakeDue } from "./lifecycle"
 import {
@@ -61,6 +61,7 @@ import {
 	accountChunks,
 	billingByAccount,
 	billsNow,
+	endedPlanInvoices,
 	evaluatedFor,
 	groupChunks,
 	loadAccounts,
@@ -173,13 +174,90 @@ const writeMovement = (account: schema.CustomerAccount, rollup: Rollup, today: D
 				type: movementType(
 					from,
 					rollup.mrrMinor,
-					account.customerSince !== null && account.churnedAt !== null,
+					account.customerSince !== null &&
+						(account.churnedAt !== null || account.lifecycleStage === "past_due"),
 				),
 				deltaMinor: rollup.mrrMinor - from,
 				fromMrrMinor: from,
 				toMrrMinor: rollup.mrrMinor,
 				currency: rollup.currency,
 			}),
+		)
+	})
+
+/**
+ * A plan that ended on a failed payment stopped paying at that invoice, not when dunning gave up:
+ * its movements from that day on become one churn there (none if it had no MRR before it), and the
+ * org's recorded days in between lose its MRR. Once moved, nothing is left to move.
+ */
+const backdateUnpaidChurn = (accountId: CustomerAccountId, since: Date, currency: string) =>
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		const from = dayOf(since)
+		const moved = yield* db.run(
+			SQLite.from(schema.customerMrrMovementsTable)
+				.select()
+				.where(($) => [$.accountId.eq(accountId), $.day.gte(from)])
+				.orderBy(($) => [[$.day, "asc"]]),
+		)
+		const first = moved[0]
+		const last = moved[moved.length - 1]
+		if (first === undefined || last === undefined || last.day === from || last.toMrrMinor !== 0) return
+		if (moved.some((movement) => movement.currency !== currency)) return
+		const before = first.fromMrrMinor
+		const points = [
+			{ day: from, mrr: before },
+			...moved.map((row) => ({ day: row.day, mrr: row.toMrrMinor })),
+		]
+		const counted = (day: Day) => points.reduce((mrr, point) => (point.day <= day ? point.mrr : mrr), 0)
+		const recorded = yield* db.run(
+			SQLite.from(schema.customerOrgDailyTable)
+				.select("day", "mrrMinor", "payingAccounts")
+				.where(($) => [$.day.gte(from), $.day.lt(last.day)]),
+		)
+		const corrected = recorded.flatMap((row) => {
+			const mrr = counted(row.day)
+			return mrr === 0
+				? []
+				: [
+						{
+							day: row.day,
+							mrrMinor: Math.max(0, row.mrrMinor - mrr),
+							payingAccounts: Math.max(0, row.payingAccounts - 1),
+						},
+					]
+		})
+		yield* db.run(
+			SQLite.deleteFrom(schema.customerMrrMovementsTable).where(($) => [
+				$.accountId.eq(accountId),
+				$.day.gte(from),
+			]),
+		)
+		if (before > 0)
+			yield* db.run(
+				SQLite.insertInto(schema.customerMrrMovementsTable).values({
+					accountId,
+					day: from,
+					type: "churn",
+					deltaMinor: -before,
+					fromMrrMinor: before,
+					toMrrMinor: 0,
+					currency,
+				}),
+			)
+		if (corrected.length === 0) return
+		yield* db.run(
+			SQLite.update(schema.customerOrgDailyTable)
+				.from(
+					SQLite.jsonRows(corrected, {
+						day: SQLite.text,
+						mrrMinor: SQLite.integer,
+						payingAccounts: SQLite.integer,
+					}),
+					"j",
+				)
+				.set(($) => ({ mrrMinor: $.j.mrrMinor, payingAccounts: $.j.payingAccounts }))
+				.where(($) => [$.day.eq($.j.day)]),
 		)
 	})
 
@@ -227,8 +305,11 @@ const writeRollups = Effect.fn("Customers.writeRollups")(function* (
 						!rebuildPending &&
 						!fromImporting(account, importing) &&
 						stored.currency === rollup.currency
-					)
+					) {
 						yield* writeMovement(stored, rollup, today)
+						if (account.unpaidSince !== null && rollup.mrrMinor === 0)
+							yield* backdateUnpaidChurn(stored.id, account.unpaidSince, rollup.currency)
+					}
 					const changes = diff(stored, rollup)
 					if (Object.keys(changes).length === 0) return
 					yield* db.run(
@@ -283,9 +364,11 @@ export const healthInputsOf = (
 		trendPct: rollup.activeUsersTrendPct,
 		daysSinceActive: facts.lastActiveDay === null ? null : daysBetween(facts.lastActiveDay, today),
 		billing:
-			snapshot.hasBillingData && live.length > 0
+			snapshot.hasBillingData && (live.length > 0 || facts.unpaidInvoices.length > 0)
 				? {
-						pastDue: live.some((sub) => sub.status === "past_due" || sub.status === "unpaid"),
+						pastDue:
+							facts.unpaidInvoices.length > 0 ||
+							live.some((sub) => sub.status === "past_due" || sub.status === "unpaid"),
 						overdueOverWeek: overdue.some((dueAt) => dueAt.getTime() < weekAgo),
 						overdue: overdue.length > 0,
 						cancelScheduled: live.some((sub) => sub.cancelAtPeriodEnd),
@@ -1016,7 +1099,11 @@ export const mrrHistory = (
 	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
 	currency: string,
 	days: ReadonlyArray<Day>,
+	/** Its plans ended on a failed payment (`unpaidEndOf`): they stopped paying then. */
+	unpaidSince: Date | null = null,
 ): Array<number> => {
+	const endOf = (canceledAt: Date) =>
+		dayOf(unpaidSince !== null && unpaidSince < canceledAt ? unpaidSince : canceledAt)
 	const periods = subscriptions
 		.filter(
 			(sub) =>
@@ -1034,7 +1121,7 @@ export const mrrHistory = (
 					from: dayOf(start),
 					// An active subscription may carry the date it is scheduled to cancel on.
 					until:
-						sub.status === "canceled" && sub.canceledAt !== null ? dayOf(sub.canceledAt) : null,
+						sub.status === "canceled" && sub.canceledAt !== null ? endOf(sub.canceledAt) : null,
 					mrr: sub.mrrMinor,
 				},
 			]
@@ -1073,6 +1160,7 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 		yield* db.run(SQLite.from(schema.customerSubscriptionsTable).select()),
 		new Map(accounts.map((account) => [account.id, account.mrrSource])),
 	)
+	const endedInvoicesBy = yield* endedPlanInvoices(billingBy)
 	// Today's movement alone is not history: one a compute wrote while billing was still importing
 	// (a partial MRR's jump) is replaced by the rebuilt series.
 	const withMovements = new Set(
@@ -1090,7 +1178,8 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 	const mrrNow: Array<{ id: CustomerAccountId; mrrMinor: number }> = []
 	for (const account of accounts) {
 		const subs = billingBy.get(account.id)?.subscriptions ?? []
-		const series = mrrHistory(subs, currency, [before, ...days])
+		const unpaidSince = unpaidEndOf(subs, endedInvoicesBy.get(account.id) ?? [])?.since ?? null
+		const series = mrrHistory(subs, currency, [before, ...days], unpaidSince)
 		const trial = new Uint8Array(days.length)
 		for (const sub of subs) {
 			if (sub.trialEndsAt === null || sub.startedAt === null) continue

@@ -6,6 +6,7 @@ import type { schema } from "@hazel/db"
 import type { CustomerProvider } from "@hazel/domain/customers"
 import type { CustomerSubscriptionId } from "@hazel/schema"
 import { describe, expect, it } from "vitest"
+import { unpaidEndOf } from "./facts"
 import { rollupAccount, usageMrrOf } from "./snapshot"
 import { factsOf, NOW, TODAY } from "./test-kit"
 
@@ -244,5 +245,83 @@ describe("champion inactivity", () => {
 		expect(championOf([-20, -10, -1]).championInactiveSince).toBeNull()
 		expect(championOf([-20, -10, -6]).championInactiveSince).toBeNull()
 		expect(championOf([-20, -10, -7]).championInactiveSince).not.toBeNull()
+	})
+})
+
+describe("a plan that ended on a failed payment", () => {
+	const DAY = 86_400_000
+	const ago = (days: number) => new Date(NOW.getTime() - days * DAY)
+	const ended = { status: "canceled", mrrMinor: 3_900, canceledAt: ago(2) } as const
+	const failed = { status: "open", amountDueMinor: 3_900, attemptCount: 9, issuedAt: ago(90) } as const
+
+	const rollupWith = (
+		invoices: ReadonlyArray<Partial<schema.CustomerInvoice>>,
+		subscriptions: ReadonlyArray<Partial<schema.CustomerSubscription>> = [ended],
+	) => {
+		const facts = factsOf({ subscriptions, openInvoices: invoices })
+		const unpaidEnd = unpaidEndOf(facts.subscriptions, facts.openInvoices)
+		return {
+			unpaidEnd,
+			rollup: rollupAccount({
+				account: { ...facts.account, customerSince: ago(100), churnedAt: ago(2) },
+				subscriptions: facts.subscriptions,
+				mrrSource: "autumn",
+				unpaidEnd,
+				addOnPlans: [],
+				usageMrr: [],
+				contacts: facts.contacts,
+				activity: facts.activity,
+				lastActiveDay: facts.lastActiveDay,
+				currency: "usd",
+				now: NOW,
+				today: TODAY,
+			}),
+		}
+	}
+
+	it("is past due, not churned, while the invoice is open", () => {
+		const { rollup, unpaidEnd } = rollupWith([failed])
+		expect(unpaidEnd?.since).toEqual(ago(90))
+		expect(rollup).toMatchObject({ lifecycleStage: "past_due", churnedAt: null, mrrMinor: 0 })
+	})
+
+	it("churns from the failed invoice once it is voided or uncollectible", () => {
+		for (const status of ["void", "uncollectible"] as const) {
+			expect(rollupWith([{ ...failed, status }]).rollup).toMatchObject({
+				lifecycleStage: "churned",
+				churnedAt: ago(90),
+			})
+		}
+	})
+
+	it("dates the end from the first failed invoice since the last paid one", () => {
+		const { unpaidEnd } = rollupWith([
+			{ ...failed, issuedAt: ago(200) },
+			{ status: "paid", amountPaidMinor: 3_900, issuedAt: ago(120) },
+			failed,
+			{ ...failed, issuedAt: ago(60) },
+		])
+		expect(unpaidEnd?.since).toEqual(ago(90))
+	})
+
+	it("does not count a $0 paid invoice as the last payment", () => {
+		const { unpaidEnd } = rollupWith([
+			{ status: "paid", amountDueMinor: 0, amountPaidMinor: 0, issuedAt: ago(80) },
+			failed,
+		])
+		expect(unpaidEnd?.since).toEqual(ago(90))
+	})
+
+	it("leaves a customer churned when its bills were paid or the invoice came after the end", () => {
+		expect(
+			rollupWith([{ ...failed, status: "paid", amountPaidMinor: 3_900 }]).rollup.lifecycleStage,
+		).toBe("churned")
+		expect(rollupWith([{ ...failed, issuedAt: ago(1) }]).rollup.lifecycleStage).toBe("churned")
+		expect(rollupWith([{ ...failed, attemptCount: 0 }]).rollup.lifecycleStage).toBe("churned")
+	})
+
+	it("ignores failed invoices while a paying plan is live", () => {
+		const { unpaidEnd } = rollupWith([failed], [ended, { status: "active", mrrMinor: 3_900 }])
+		expect(unpaidEnd).toBeNull()
 	})
 })

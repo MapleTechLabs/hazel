@@ -67,6 +67,8 @@ export interface AccountFacts {
 	/** The billing source's subscriptions (Autumn when connected, else Stripe). */
 	readonly subscriptions: ReadonlyArray<schema.CustomerSubscription>
 	readonly openInvoices: ReadonlyArray<schema.CustomerInvoice>
+	/** The open invoices its ended plans went unpaid on (`unpaidEndOf`): a payment still owed. */
+	readonly unpaidInvoices: ReadonlyArray<schema.CustomerInvoice>
 	/** Source metrics over the loaded window, oldest first. */
 	readonly metrics: ReadonlyMap<string, ReadonlyArray<MetricPoint>>
 	/** MRR movements, oldest first. */
@@ -220,3 +222,58 @@ const unconverted = (sub: schema.CustomerSubscription) =>
  */
 export const pays = (sub: schema.CustomerSubscription) =>
 	(sub.mrrMinor > 0 || sub.billsByUsage) && !unconverted(sub)
+
+/** Every plan that paid has ended, and no trial is running: a churned customer, unless it still owes. */
+export const endedPaying = (subscriptions: ReadonlyArray<schema.CustomerSubscription>) =>
+	subscriptions.some((sub) => sub.status === "canceled" && pays(sub)) &&
+	!subscriptions.some((sub) => sub.status === "trialing" || (billed(sub) && pays(sub)))
+
+/** How a customer's paid plans ended when the payment before the end failed. */
+export interface UnpaidEnd {
+	/** The first failed invoice's issue date: when the customer stopped paying. */
+	readonly since: Date
+	/** Those still open. None left (voided, uncollectible) and the customer has churned, from `since`. */
+	readonly open: ReadonlyArray<schema.CustomerInvoice>
+}
+
+/**
+ * The unpaid end of a customer's plans, if they ended on a failed payment: invoices collection failed
+ * on, issued after the last one paid and before the plans ended (a final invoice raised by the
+ * cancellation itself is not why they ended). Null for a customer that left with its bills paid.
+ */
+export const unpaidEndOf = (
+	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
+	invoices: ReadonlyArray<schema.CustomerInvoice>,
+): UnpaidEnd | null => {
+	if (!endedPaying(subscriptions)) return null
+	const endedAt = Math.max(
+		...subscriptions
+			.filter((sub) => sub.status === "canceled" && pays(sub))
+			.map((sub) => sub.canceledAt?.getTime() ?? Number.POSITIVE_INFINITY),
+	)
+	const lastPaid = Math.max(
+		0,
+		...invoices
+			.filter((invoice) => invoice.status === "paid" && invoice.amountPaidMinor > 0)
+			.map((invoice) => invoice.issuedAt?.getTime() ?? 0),
+	)
+	const failed = invoices
+		.flatMap((invoice) => {
+			const issued = invoice.issuedAt?.getTime() ?? null
+			return issued !== null &&
+				issued > lastPaid &&
+				issued <= endedAt &&
+				invoice.status !== "paid" &&
+				invoice.attemptCount > 0 &&
+				invoice.amountDueMinor > invoice.amountPaidMinor
+				? [{ invoice, issued }]
+				: []
+		})
+		.sort((a, b) => a.issued - b.issued)
+	const first = failed[0]
+	if (first === undefined) return null
+	return {
+		since: new Date(first.issued),
+		open: failed.flatMap(({ invoice }) => (invoice.status === "open" ? [invoice] : [])),
+	}
+}

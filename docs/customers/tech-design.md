@@ -320,7 +320,10 @@ Rules:
   `trialListMrrMinor` = Σ `listMrrMinor` of trialing subs.
 - Stage (unless overridden): any `past_due|unpaid` → `past_due`; any `active` with MRR > 0 or
   `billsByUsage` → `active`; any `trialing` → `trialing`; paid before (MRR or `billsByUsage`) and
-  not now → `churned` (`churnedAt` set); else `lead`. `customerSince` = the earliest paid
+  not now → `churned` (`churnedAt` set), unless the plans ended on a failed payment (`unpaidEndOf`:
+  a failed invoice since the last paid one, issued before the end). Then it is `past_due` while
+  that invoice is open and `churned` once it is voided or uncollectible, its MRR and `churnedAt`
+  dated from the first failed invoice; else `lead`. `customerSince` = the earliest paid
   subscription's start (after its trial), a usage-billed one at MRR 0 included. `billsByUsage`
   changes no MRR, so it writes no movement; the paying-accounts count and the MRR history still
   count MRR > 0 only. A `payingOnly` rule scope covers a usage-billed account.

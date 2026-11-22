@@ -213,6 +213,7 @@ export const groupFacts = (
 		priorActive,
 		subscriptions: group.flatMap((facts) => facts.subscriptions),
 		openInvoices: group.flatMap((facts) => facts.openInvoices),
+		unpaidInvoices: group.flatMap((facts) => facts.unpaidInvoices),
 		metrics: new Map(
 			[...metrics].map(([key, days]) => [
 				key,

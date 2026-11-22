@@ -99,6 +99,7 @@ export interface FactsInput {
 	readonly idle?: ReadonlyArray<string>
 	readonly subscriptions?: ReadonlyArray<Partial<schema.CustomerSubscription>>
 	readonly openInvoices?: ReadonlyArray<Partial<schema.CustomerInvoice>>
+	readonly unpaidInvoices?: ReadonlyArray<schema.CustomerInvoice>
 	readonly metrics?: AccountFacts["metrics"]
 	readonly movements?: ReadonlyArray<Partial<schema.CustomerMrrMovement>>
 	readonly health?: AccountFacts["health"]
@@ -210,6 +211,7 @@ export const factsOf = (input: FactsInput = {}): AccountFacts => {
 			updatedAt: NOW,
 			...invoice,
 		})),
+		unpaidInvoices: input.unpaidInvoices ?? [],
 		metrics: input.metrics ?? new Map(),
 		movements: (input.movements ?? []).map((movement) => ({
 			id: uuid() as never,

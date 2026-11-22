@@ -26,11 +26,14 @@ import {
 	activeUsersIn,
 	billed,
 	type ContactFacts,
+	endedPaying,
 	type HealthPoint,
 	type IssueSlaFacts,
 	type MetricPoint,
 	type OrgFacts,
 	pays,
+	type UnpaidEnd,
+	unpaidEndOf,
 } from "./facts"
 import { inList, isActive } from "./sql"
 import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "./time"
@@ -66,6 +69,8 @@ export interface AccountSnapshot {
 	readonly rollup: Rollup
 	/** Facts over the rolled-up account. */
 	readonly facts: AccountFacts
+	/** When it stopped paying, if its plans ended on a failed payment (`unpaidEndOf`). */
+	readonly unpaidSince: Date | null
 	/**
 	 * What signals evaluate: its own facts, its group's on a primary with environments, null on an
 	 * environment of a primary (its primary's signals stand for it, but for `ENVIRONMENT_TEMPLATES`:
@@ -193,6 +198,8 @@ export const rollupAccount = (input: {
 	/** The billing provider's (`mrrSource`). */
 	readonly subscriptions: ReadonlyArray<schema.CustomerSubscription>
 	readonly mrrSource: CustomerProvider | null
+	/** Its plans ended on a failed payment: past due while the invoice is open, else churned from it. */
+	readonly unpaidEnd?: UnpaidEnd | null
 	/** Add-on plan names (settings' `addOnPlans`): `planName` is a base plan's while there is one. */
 	readonly addOnPlans: ReadonlyArray<string>
 	/** Its usage billing per month (`usageMrrOf`), added on top of the plans' MRR. */
@@ -219,6 +226,8 @@ export const rollupAccount = (input: {
 	const named = live.filter((sub) => sub.planName !== null)
 	const top = topOf(named.filter((sub) => !addOns.has(sub.planName ?? ""))) ?? topOf(named) ?? topOf(live)
 	const trialEnds = trialing.map((sub) => sub.trialEndsAt).filter((date) => date !== null)
+	const unpaidEnd = input.unpaidEnd ?? null
+	const owing = unpaidEnd !== null && unpaidEnd.open.length > 0
 	const derived: LifecycleStage = live.some((sub) => sub.status === "past_due" || sub.status === "unpaid")
 		? "past_due"
 		: paid
@@ -227,7 +236,9 @@ export const rollupAccount = (input: {
 				? "trialing"
 				: account.customerSince !== null ||
 					  subscriptions.some((sub) => pays(sub) && sub.status === "canceled")
-					? "churned"
+					? owing
+						? "past_due"
+						: "churned"
 					: "lead"
 	const paidStarts = subscriptions
 		.filter((sub) => pays(sub) && sub.status !== "trialing")
@@ -240,8 +251,8 @@ export const rollupAccount = (input: {
 	const canceled = subscriptions.map((sub) => sub.canceledAt?.getTime() ?? 0)
 	const churnedAt =
 		derived === "churned"
-			? (account.churnedAt ?? new Date(Math.max(...canceled, 0) || now.getTime()))
-			: paid
+			? (unpaidEnd?.since ?? account.churnedAt ?? new Date(Math.max(...canceled, 0) || now.getTime()))
+			: paid || owing
 				? null
 				: account.churnedAt
 
@@ -380,6 +391,21 @@ export const billingByAccount = (
 			return [accountId, { source, subscriptions: subs.filter((sub) => sub.provider === source) }]
 		}),
 	)
+
+/** The Stripe invoices of the accounts whose paid plans all ended, for `unpaidEndOf`. */
+export const endedPlanInvoices = Effect.fnUntraced(function* (
+	billingBy: ReturnType<typeof billingByAccount>,
+) {
+	const ids = [...billingBy].flatMap(([id, billing]) => (endedPaying(billing.subscriptions) ? [id] : []))
+	if (ids.length === 0) return new Map<CustomerAccountId, Array<schema.CustomerInvoice>>()
+	const db = yield* Database.Database
+	const invoices = yield* db.run(
+		SQLite.from(schema.customerInvoicesTable)
+			.select()
+			.where(($) => [inList($.accountId, ids), $.provider.eq("stripe"), $.status.neq("upcoming")]),
+	)
+	return groupBy(invoices, (invoice) => invoice.accountId)
+})
 
 /** Accounts loaded (and their activity held in memory) at a time. */
 const ACCOUNT_CHUNK = 250
@@ -684,6 +710,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 		subscriptions,
 		new Map(accounts.map((account) => [account.id, account.mrrSource])),
 	)
+	const endedInvoicesBy = yield* endedPlanInvoices(billingBy)
 	const invoicesBy = groupBy(openInvoices, (invoice) => invoice.accountId)
 	const subscriptionsBy = groupBy(subscriptions, (sub) => sub.accountId)
 	const paidInvoicesBy = groupBy(paidInvoices, (invoice) => invoice.accountId)
@@ -711,10 +738,12 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 		const lastActiveDay = lastActiveDayBy.get(stored.id) ?? null
 		const billing = billingBy.get(stored.id)
 		const accountSubs = billing?.subscriptions ?? []
+		const unpaidEnd = unpaidEndOf(accountSubs, endedInvoicesBy.get(stored.id) ?? [])
 		const rollup = rollupAccount({
 			account: stored,
 			subscriptions: accountSubs,
 			mrrSource: billing?.source ?? null,
+			unpaidEnd,
 			addOnPlans: base.settings.addOnPlans,
 			usageMrr: usageMrrOf(
 				subscriptionsBy.get(stored.id) ?? [],
@@ -738,6 +767,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 		return {
 			stored,
 			rollup,
+			unpaidSince: unpaidEnd?.since ?? null,
 			facts: {
 				account,
 				stage: rollup.lifecycleStage,
@@ -751,6 +781,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 				),
 				subscriptions: accountSubs,
 				openInvoices: invoicesBy.get(stored.id) ?? [],
+				unpaidInvoices: unpaidEnd?.open ?? [],
 				metrics: metricMap,
 				movements: movementsBy.get(stored.id) ?? [],
 				health: (healthBy.get(stored.id) ?? []).map((row): HealthPoint => ({

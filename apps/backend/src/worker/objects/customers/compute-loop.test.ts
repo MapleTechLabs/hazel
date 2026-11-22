@@ -1387,6 +1387,96 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	it("moves an ended plan's churn back to its failed invoice, and reads it past due until that is settled", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [
+					{
+						_tag: "account",
+						externalId: "org_1",
+						name: "Unpaid Co",
+						sameAs: [],
+						onNoMatch: "create",
+					},
+				])
+				yield* world.ingest("stripe", [subscription(10)])
+				yield* world.object.run(runCompute(new Date(NOW.getTime() - 10 * DAY))).pipe(Effect.orDie)
+				for (const offset of [-6, -5, -2]) {
+					world.rows(
+						`INSERT OR REPLACE INTO customer_org_daily (day, mrrMinor, payingAccounts, trialingAccounts, activeAccounts, dau, wau, mau, healthy, atRisk, critical, atRiskMrrMinor)
+						 VALUES ('${day(offset)}', 19900, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0)`,
+					)
+				}
+				const invoice = (status: "open" | "void"): IngestOp => ({
+					_tag: "invoice",
+					externalId: "in_1",
+					account: { provider: "clerk", externalId: "org_1" },
+					subscriptionExternalId: "sub_1",
+					number: "INV-2",
+					status,
+					amountDueMinor: 19_900,
+					amountPaidMinor: 0,
+					currency: "usd",
+					issuedAt: new Date(NOW.getTime() - 5 * DAY).toISOString(),
+					dueAt: null,
+					paidAt: null,
+					attemptCount: 9,
+					nextRetryAt: null,
+					hostedUrl: null,
+				})
+				yield* world.ingest("stripe", [
+					invoice("open"),
+					{
+						...subscription(10),
+						status: "canceled",
+						canceledAt: new Date(NOW.getTime() - DAY).toISOString(),
+					},
+				])
+				const account = () =>
+					world.rows<{ lifecycleStage: string; churnedAt: string | null; mrrMinor: number }>(
+						`SELECT lifecycleStage, churnedAt, mrrMinor FROM customer_accounts`,
+					)[0]!
+				const movements = () =>
+					world.rows<{ day: string; type: string; deltaMinor: number }>(
+						`SELECT day, type, deltaMinor FROM customer_mrr_movements ORDER BY day`,
+					)
+				const expected = [
+					{ day: day(-10), type: "new", deltaMinor: 19_900 },
+					{ day: day(-5), type: "churn", deltaMinor: -19_900 },
+				]
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(account()).toEqual({ lifecycleStage: "past_due", churnedAt: null, mrrMinor: 0 })
+				expect(movements()).toEqual(expected)
+				expect(
+					world.rows(
+						`SELECT day, mrrMinor, payingAccounts FROM customer_org_daily WHERE day IN ('${day(-6)}', '${day(-5)}', '${day(-2)}') ORDER BY day`,
+					),
+				).toEqual([
+					{ day: day(-6), mrrMinor: 19_900, payingAccounts: 1 },
+					{ day: day(-5), mrrMinor: 0, payingAccounts: 0 },
+					{ day: day(-2), mrrMinor: 0, payingAccounts: 0 },
+				])
+
+				// Run again: nothing left to move, the recorded days are not reduced twice.
+				world.rows(
+					`UPDATE customer_org_daily SET mrrMinor = 500, payingAccounts = 1 WHERE day = '${day(-2)}'`,
+				)
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(movements()).toEqual(expected)
+				expect(
+					world.rows(`SELECT mrrMinor FROM customer_org_daily WHERE day = '${day(-2)}'`),
+				).toEqual([{ mrrMinor: 500 }])
+
+				// Written off: churned, from the day it stopped paying.
+				yield* world.ingest("stripe", [invoice("void")])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(account().lifecycleStage).toBe("churned")
+				expect(epoch(account().churnedAt!)).toBe(NOW.getTime() - 5 * DAY)
+				expect(movements()).toEqual(expected)
+			}),
+		))
+
 	it("keeps Stripe's billing for an account on an auto-enabled free Autumn plan", () =>
 		run(
 			Effect.gen(function* () {
