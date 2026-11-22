@@ -1,0 +1,57 @@
+import { describe, expect, it } from "vitest"
+import { calendarLayout, heatLevel } from "./calendar-heatmap"
+
+const days = (from: string, count: number) =>
+	Array.from({ length: count }, (_, index) => ({
+		day: new Date(Date.parse(`${from}T00:00:00Z`) + index * 86_400_000).toISOString().slice(0, 10),
+		value: 0,
+	}))
+
+describe("heatLevel", () => {
+	it("is none for zero and at least one for any activity", () => {
+		expect(heatLevel(0, 40)).toBe(0)
+		expect(heatLevel(1, 40)).toBe(1)
+		expect(heatLevel(20, 40)).toBe(2)
+		expect(heatLevel(31, 40)).toBe(4)
+		expect(heatLevel(40, 40)).toBe(4)
+		expect(heatLevel(3, 0)).toBe(0)
+	})
+})
+
+describe("calendarLayout", () => {
+	it("puts Monday on top and starts a new column each week", () => {
+		// 2026-11-18 is a Wednesday.
+		const layout = calendarLayout(days("2026-11-18", 7))
+		expect(layout.cells.map((cell) => [cell.week, cell.weekday])).toEqual([
+			[0, 2],
+			[0, 3],
+			[0, 4],
+			[0, 5],
+			[0, 6],
+			[1, 0],
+			[1, 1],
+		])
+		expect(layout.weeks).toBe(2)
+	})
+
+	it("covers a year in 53 weeks and labels each month once, with room between", () => {
+		const layout = calendarLayout(days("2025-11-23", 365))
+		expect(layout.weeks).toBe(53)
+		const labels = layout.months.map((month) => month.label)
+		expect(new Set(labels).size).toBe(labels.length)
+		for (const [index, month] of layout.months.entries()) {
+			if (index > 0) expect(month.week - layout.months[index - 1].week).toBeGreaterThanOrEqual(3)
+		}
+	})
+
+	it("shades days against the busiest one", () => {
+		const points = days("2026-11-16", 3).map((point, index) => ({ ...point, value: [0, 2, 8][index] }))
+		const layout = calendarLayout(points)
+		expect(layout.max).toBe(8)
+		expect(layout.cells.map((cell) => cell.level)).toEqual([0, 1, 4])
+	})
+
+	it("is empty with no points", () => {
+		expect(calendarLayout([])).toEqual({ cells: [], weeks: 0, months: [], max: 0 })
+	})
+})

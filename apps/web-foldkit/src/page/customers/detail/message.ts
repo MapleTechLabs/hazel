@@ -89,6 +89,12 @@ export const Message = defineMessageUnion({
 	SucceededFetchMrrHistory: { accountId: CustomerAccountId, series: Schema.Array(Customers.MetricSeries) },
 	FailedFetchMrrHistory: { accountId: CustomerAccountId, reason: CommonReason },
 	HoveredMrr: { index: Schema.NullOr(Schema.Int) },
+	SucceededFetchYearActivity: {
+		accountId: CustomerAccountId,
+		series: Schema.Array(Customers.MetricSeries),
+	},
+	FailedFetchYearActivity: { accountId: CustomerAccountId, reason: CommonReason },
+	HoveredYearDay: { index: Schema.NullOr(Schema.Int) },
 
 	UpdatedSupportIssues: { issues: Schema.Array(IssueRow) },
 	UpdatedSupportSlas: { slas: Schema.Array(IssueSlaRow) },

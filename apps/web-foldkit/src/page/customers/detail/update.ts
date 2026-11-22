@@ -38,6 +38,7 @@ import {
 	FetchCustomerEvents,
 	FetchCustomerInvoices,
 	FetchCustomerMrrHistory,
+	FetchCustomerYearActivity,
 	FetchCustomerSupport,
 	FetchCustomerUsage,
 	FocusDomainInput,
@@ -201,6 +202,10 @@ const load = (model: Model, shared: Shared): Return => {
 			commands.push(FetchCustomerMrrHistory(args))
 		}
 	}
+	if (next.tab === "activity" && AsyncData.isIdle(next.yearActivity)) {
+		next = modifyFields(next, { yearActivity: () => AsyncData.Loading() })
+		commands.push(FetchCustomerYearActivity(args))
+	}
 	if (next.tab === "activity" && next.events.status === "Idle") {
 		const fetched = fetchEvents(next, shared, null)
 		next = fetched.model
@@ -258,6 +263,8 @@ const initialModel = (route: Route): Model => ({
 	usage: AsyncData.Idle(),
 	hoveredUsage: null,
 	mrrHistory: AsyncData.Idle(),
+	yearActivity: AsyncData.Idle(),
+	hoveredYearDay: null,
 	hoveredMrr: null,
 	supportIssues: null,
 	supportSlas: [],
@@ -825,6 +832,15 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		FailedFetchSupport: ({ reason }) => ({
 			model: modifyFields(model, { support: (current) => settle(current, Result.fail(reason)) }),
 		}),
+		SucceededFetchYearActivity: ({ series }) => ({
+			model: modifyFields(model, {
+				yearActivity: (current) => settle(current, Result.succeed(series)),
+			}),
+		}),
+		FailedFetchYearActivity: ({ reason }) => ({
+			model: modifyFields(model, { yearActivity: (current) => settle(current, Result.fail(reason)) }),
+		}),
+		HoveredYearDay: ({ index }) => ({ model: modifyFields(model, { hoveredYearDay: () => index }) }),
 		SucceededFetchMrrHistory: ({ series }) => ({
 			model: modifyFields(model, { mrrHistory: (current) => settle(current, Result.succeed(series)) }),
 		}),

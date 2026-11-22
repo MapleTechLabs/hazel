@@ -109,6 +109,26 @@ export const FetchCustomerMrrHistory = Command.define("FetchCustomerMrrHistory",
 		),
 })
 
+/** A year of daily active users: the Activity tab's calendar. */
+export const FetchCustomerYearActivity = Command.define("FetchCustomerYearActivity", {
+	args: target,
+	messages: [Message.SucceededFetchYearActivity, Message.FailedFetchYearActivity],
+	execute: (args) =>
+		HazelRpc.use((rpc) =>
+			rpc("customers.account.series", { ...args, metricKeys: ["active_users"], range: "12m" }),
+		).pipe(
+			Effect.map(({ series }) =>
+				Message.SucceededFetchYearActivity({ accountId: args.accountId, series }),
+			),
+			Effect.catchTag("CustomersNotFoundError", () =>
+				Effect.succeed(
+					Message.FailedFetchYearActivity({ accountId: args.accountId, reason: "Unexpected" }),
+				),
+			),
+			catchCommon((reason) => Message.FailedFetchYearActivity({ accountId: args.accountId, reason })),
+		),
+})
+
 const page = (cursor: string | null) =>
 	cursor === null ? { limit: PAGE_SIZE } : { cursor, limit: PAGE_SIZE }
 
