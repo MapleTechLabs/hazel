@@ -95,6 +95,7 @@ export const Message = defineMessageUnion({
 	},
 	FailedFetchYearActivity: { accountId: CustomerAccountId, reason: CommonReason },
 	HoveredYearDay: { index: Schema.NullOr(Schema.Int) },
+	PressedRetryYearActivity: {},
 
 	UpdatedSupportIssues: { issues: Schema.Array(IssueRow) },
 	UpdatedSupportSlas: { slas: Schema.Array(IssueSlaRow) },

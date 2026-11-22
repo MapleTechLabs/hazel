@@ -1,3 +1,4 @@
+import { Option } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { dayToMs, formatDayLong, formatMonthShort } from "../format"
@@ -74,6 +75,34 @@ export const calendarLayout = (
 	return { cells, weeks: (cells.at(-1)?.week ?? 0) + 1, months, max }
 }
 
+/**
+ * The day a key moves to from `index` (none: the chart's last day): up and down a day, left and
+ * right a week, Home and End the ends, Escape off the chart (`null`). Other keys are not the chart's.
+ */
+export const stepDay = (key: string, index: number | null, count: number): Option.Option<number | null> => {
+	const last = count - 1
+	const from = index ?? last
+	const to = (target: number) => Option.some(Math.min(last, Math.max(0, target)))
+	switch (key) {
+		case "ArrowUp":
+			return to(from - 1)
+		case "ArrowDown":
+			return to(from + 1)
+		case "ArrowLeft":
+			return to(from - 7)
+		case "ArrowRight":
+			return to(from + 7)
+		case "Home":
+			return to(0)
+		case "End":
+			return to(last)
+		case "Escape":
+			return Option.some(null)
+		default:
+			return Option.none()
+	}
+}
+
 const LEVEL_CLASS = {
 	0: "fill-secondary",
 	1: "fill-chart-series-1/25",
@@ -141,15 +170,31 @@ export const calendarHeatmap = <M>(
 			h.div(
 				[
 					h.Dir("ltr"),
-					h.Class("relative min-w-160 sm:min-w-0"),
+					// One tab stop for the year: the arrow keys move the day, read out by the live region.
+					h.Tabindex(0),
+					h.Role("group"),
+					h.AriaLabel(`${options.ariaLabel}. Use the arrow keys to read each day.`),
+					h.Class(
+						"relative min-w-160 rounded-md outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70 sm:min-w-0",
+					),
 					h.OnMouseLeave(options.onHover(null)),
+					h.OnFocus(options.onHover(options.hoveredIndex ?? layout.cells.length - 1)),
+					h.OnBlur(options.onHover(null)),
+					h.OnKeyDownPreventDefault((key) =>
+						Option.map(stepDay(key, options.hoveredIndex, layout.cells.length), options.onHover),
+					),
 				],
 				[
+					h.span(
+						[h.AriaLive("polite"), h.Class("sr-only")],
+						hovered === undefined
+							? []
+							: [`${options.describe(hovered.value)}, ${formatDayLong(hovered.day)}`],
+					),
 					h.svg(
 						[
 							h.Attribute("viewBox", `0 0 ${width} ${height}`),
-							h.Role("img"),
-							h.AriaLabel(options.ariaLabel),
+							h.AriaHidden(true),
 							h.Class("block h-auto w-full overflow-visible"),
 						],
 						[
@@ -186,7 +231,7 @@ export const calendarHeatmap = <M>(
 									h.Class(
 										twMerge(
 											LEVEL_CLASS[cell.level],
-											cell.index === options.hoveredIndex && "stroke-fg/40",
+											cell.index === options.hoveredIndex && "stroke-fg/70",
 										),
 									),
 								]),

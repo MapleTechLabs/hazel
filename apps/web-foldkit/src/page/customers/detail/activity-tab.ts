@@ -128,7 +128,21 @@ const yearCalendar = (h: HtmlBuilder<Message>, model: Model): Html => {
 		panelHeader(h, { title: "Activity", description, aside: heatLegend(h) }),
 		points === undefined
 			? failed
-				? h.p([h.Class("py-8 text-center text-muted-fg text-sm")], ["Couldn't load activity."])
+				? h.div(
+						[h.Class("flex flex-col items-center gap-3 py-8 text-muted-fg text-sm")],
+						[
+							h.p([], ["Couldn't load activity."]),
+							button(
+								h,
+								{
+									intent: "outline",
+									size: "sm",
+									onPress: Message.PressedRetryYearActivity(),
+								},
+								["Try again"],
+							),
+						],
+					)
 				: h.div([h.Class("aspect-[7/1] w-full animate-pulse rounded-lg bg-secondary/40")])
 			: calendarHeatmap(h, {
 					points,

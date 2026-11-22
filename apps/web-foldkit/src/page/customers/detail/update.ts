@@ -840,6 +840,11 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		FailedFetchYearActivity: ({ reason }) => ({
 			model: modifyFields(model, { yearActivity: (current) => settle(current, Result.fail(reason)) }),
 		}),
+		// Only a failed year is asked again: a loading one is on its way, a loaded one is kept.
+		PressedRetryYearActivity: () =>
+			AsyncData.isFailure(model.yearActivity)
+				? load(modifyFields(model, { yearActivity: () => AsyncData.Idle() }), shared)
+				: { model },
 		HoveredYearDay: ({ index }) => ({ model: modifyFields(model, { hoveredYearDay: () => index }) }),
 		SucceededFetchMrrHistory: ({ series }) => ({
 			model: modifyFields(model, { mrrHistory: (current) => settle(current, Result.succeed(series)) }),

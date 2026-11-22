@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { calendarLayout, heatLevel } from "./calendar-heatmap"
+import { Option } from "effect"
+import { calendarLayout, heatLevel, stepDay } from "./calendar-heatmap"
 
 const days = (from: string, count: number) =>
 	Array.from({ length: count }, (_, index) => ({
@@ -60,5 +61,17 @@ describe("calendarLayout", () => {
 
 	it("is empty with no points", () => {
 		expect(calendarLayout([])).toEqual({ cells: [], weeks: 0, months: [], max: 0 })
+	})
+})
+
+describe("stepDay", () => {
+	it("starts on the latest day and moves a day vertically, a week sideways, within the year", () => {
+		expect(stepDay("ArrowUp", null, 365)).toEqual(Option.some(363))
+		expect(stepDay("ArrowLeft", 100, 365)).toEqual(Option.some(93))
+		expect(stepDay("ArrowRight", 362, 365)).toEqual(Option.some(364))
+		expect(stepDay("ArrowLeft", 3, 365)).toEqual(Option.some(0))
+		expect(stepDay("Home", 200, 365)).toEqual(Option.some(0))
+		expect(stepDay("Escape", 200, 365)).toEqual(Option.some(null))
+		expect(stepDay("a", 200, 365)).toEqual(Option.none())
 	})
 })

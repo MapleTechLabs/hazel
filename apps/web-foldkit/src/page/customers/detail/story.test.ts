@@ -217,6 +217,20 @@ describe("customer page: tabs", () => {
 				),
 			),
 		).not.toContain("FetchCustomerYearActivity")
+	})
+
+	test("a failed year can be asked again; a loading or loaded one is not", () => {
+		const opened = routeChanged(loaded(), route("activity"), shared).model
+		const retry = Message.PressedRetryYearActivity()
+		expect(commandNames(update(opened, retry, shared))).toEqual([])
+		const failed = update(
+			opened,
+			Message.FailedFetchYearActivity({ accountId: opened.accountId, reason: "Offline" }),
+			shared,
+		).model
+		const retried = update(failed, retry, shared)
+		expect(commandNames(retried)).toEqual(["FetchCustomerYearActivity"])
+		expect(retried.model.yearActivity._tag).toBe("Loading")
 		const billing = routeChanged(loaded(), route("billing"), shared)
 		expect(billing.model.tab).toBe("billing")
 		expect(commandNames(billing)).toContain("FetchCustomerInvoices")
