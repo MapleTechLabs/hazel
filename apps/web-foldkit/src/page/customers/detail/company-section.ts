@@ -122,7 +122,11 @@ const lookupSkeleton = (h: HtmlBuilder<Message>): Html => {
 	const bar = (className: string) =>
 		h.div([h.Class(twMerge("animate-pulse rounded-sm bg-secondary", className))])
 	return h.div(
-		[h.AriaHidden(true), h.Class("blur-in-stagger flex flex-col gap-3 pb-3")],
+		[
+			h.AriaHidden(true),
+			h.DataAttribute("lookup-skeleton", "true"),
+			h.Class("blur-in-stagger flex flex-col gap-3 pb-3"),
+		],
 		[
 			h.div(
 				[h.Class("grid grid-cols-2 gap-2")],
@@ -309,97 +313,101 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 
 	// The answer to a lookup asked on this page: keyed by when it was checked, so the profile mounts
 	// afresh and its parts blur in one after another. A profile already there on open stays still.
+	// The domain row sits between the two keyed parts, so an open domain form survives a check.
 	const isArriving = isCompanyRefreshAnswered(model, account.companyCheckedAtMs)
-	return sidebarSection(h, "Company", null, [
+	const arriving = (part: string, children: ReadonlyArray<Html>) =>
 		h.keyed("div")(
-			`company-${account.companyCheckedAtMs ?? "unchecked"}`,
-			[h.Class(twMerge("flex flex-col", isArriving && "blur-in-stagger"))],
+			`company-${part}-${account.companyCheckedAtMs ?? "unchecked"}`,
 			[
-				...(description === null
-					? []
-					: [
-							// The clamp sits on the text alone: padding inside it would show a cut line.
-							h.div(
-								[h.Class("pb-3")],
-								[
-									h.p(
-										[
-											h.Class(
-												"line-clamp-3 wrap-anywhere text-fg-2 text-sm leading-relaxed",
-											),
-											h.Title(description),
-										],
-										[description],
-									),
-								],
-							),
-						]),
-				...grid(h, [
-					...stat(
-						h,
-						"Employees",
-						employeesLabel(company),
-						company.employeeCount === null || company.employeeRange === null
-							? null
-							: `${formatCount(company.employeeCount)} on record`,
-					),
-					...stat(
-						h,
-						"Funding",
-						stage === null
-							? totalUsd === null
-								? null
-								: usdLabel(totalUsd)
-							: fundingStageLabel(stage),
-						stage === null || totalUsd === null ? null : `${usdLabel(totalUsd)} raised`,
-					),
-					...stat(
-						h,
-						"Est. revenue",
-						revenueLabel(company),
-						revenueLabel(company) === null ? null : "per year",
-					),
-					...stat(
-						h,
-						"Founded",
-						founded,
-						age === null || age < 1 ? null : `${age} ${age === 1 ? "year" : "years"} ago`,
-					),
-				]),
-				...(domain === null ? [] : [domainRow(h, model, context, domain)]),
-				property(
-					h,
-					"Industry",
-					// The industry the list shows and filters by; the sub-industry under it.
-					company.industry === null
-						? muted(h, "—")
-						: stacked(h, company.industry, company.subindustry),
-				),
-				property(
-					h,
-					"Headquarters",
-					headquarters === null
-						? muted(h, "—")
-						: h.span(
-								[h.Class("block truncate"), ...(address === null ? [] : [h.Title(address)])],
-								[flag === "" ? headquarters : `${flag} ${headquarters}`],
-							),
-				),
-				...(type === null ? [] : [property(h, "Type", type)]),
-				...(latestParts.length === 0 || latest === null
-					? []
-					: [
-							property(
-								h,
-								"Last round",
-								stacked(h, fundingStageLabel(latest.type), latestParts.join(" · ")),
-							),
-						]),
-				...(pages.length === 0
-					? []
-					: [h.div([h.Class("-ml-1.5 flex flex-wrap gap-0.5 pt-2")], pages)]),
+				h.Class(twMerge("flex flex-col", isArriving && "blur-in-stagger")),
+				...(isArriving ? [h.DataAttribute("arriving", "true")] : []),
 			],
-		),
+			children,
+		)
+	return sidebarSection(h, "Company", null, [
+		arriving("summary", [
+			...(description === null
+				? []
+				: [
+						// The clamp sits on the text alone: padding inside it would show a cut line.
+						h.div(
+							[h.Class("pb-3")],
+							[
+								h.p(
+									[
+										h.Class(
+											"line-clamp-3 wrap-anywhere text-fg-2 text-sm leading-relaxed",
+										),
+										h.Title(description),
+									],
+									[description],
+								),
+							],
+						),
+					]),
+			...grid(h, [
+				...stat(
+					h,
+					"Employees",
+					employeesLabel(company),
+					company.employeeCount === null || company.employeeRange === null
+						? null
+						: `${formatCount(company.employeeCount)} on record`,
+				),
+				...stat(
+					h,
+					"Funding",
+					stage === null
+						? totalUsd === null
+							? null
+							: usdLabel(totalUsd)
+						: fundingStageLabel(stage),
+					stage === null || totalUsd === null ? null : `${usdLabel(totalUsd)} raised`,
+				),
+				...stat(
+					h,
+					"Est. revenue",
+					revenueLabel(company),
+					revenueLabel(company) === null ? null : "per year",
+				),
+				...stat(
+					h,
+					"Founded",
+					founded,
+					age === null || age < 1 ? null : `${age} ${age === 1 ? "year" : "years"} ago`,
+				),
+			]),
+		]),
+		...(domain === null ? [] : [domainRow(h, model, context, domain)]),
+		arriving("facts", [
+			property(
+				h,
+				"Industry",
+				// The industry the list shows and filters by; the sub-industry under it.
+				company.industry === null ? muted(h, "—") : stacked(h, company.industry, company.subindustry),
+			),
+			property(
+				h,
+				"Headquarters",
+				headquarters === null
+					? muted(h, "—")
+					: h.span(
+							[h.Class("block truncate"), ...(address === null ? [] : [h.Title(address)])],
+							[flag === "" ? headquarters : `${flag} ${headquarters}`],
+						),
+			),
+			...(type === null ? [] : [property(h, "Type", type)]),
+			...(latestParts.length === 0 || latest === null
+				? []
+				: [
+						property(
+							h,
+							"Last round",
+							stacked(h, fundingStageLabel(latest.type), latestParts.join(" · ")),
+						),
+					]),
+			...(pages.length === 0 ? [] : [h.div([h.Class("-ml-1.5 flex flex-wrap gap-0.5 pt-2")], pages)]),
+		]),
 		// Outside the keyed profile: the live region stays mounted across a lookup, so "Looking up…"
 		// turning into "just now" is announced, and the button keeps focus.
 		h.div(

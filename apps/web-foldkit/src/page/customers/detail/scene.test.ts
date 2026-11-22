@@ -4,7 +4,13 @@ import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
 import { toAccountRow } from "../../../customers/queries"
 import { receivedSuggestions, EMPTY_SUGGESTIONS } from "../../../customers/suggestions"
-import { ACCOUNTS, ACCOUNTS_BY_KEY, type NamedAccount } from "../../../lab/fixtures/customers"
+import {
+	ACCOUNTS,
+	ACCOUNTS_BY_KEY,
+	type NamedAccount,
+	NOW,
+	RICH_COMPANY,
+} from "../../../lab/fixtures/customers"
 import {
 	LONG_SUGGESTION,
 	STRONG_SUGGESTION,
@@ -185,6 +191,63 @@ describe("customer page: adding a company domain", () => {
 			menusMounted(4),
 			Scene.expect(Scene.text("No company domain to look up. An admin can add one.")).toExist(),
 			Scene.expect(field).toBeAbsent(),
+		)
+	})
+})
+
+describe("customer page: looking up the company", () => {
+	const acme = ACCOUNTS_BY_KEY.acme
+	const as = makeShared({ nowMs: NOW.getTime() })
+	const openedWith = (account: typeof acme) => ({
+		...init(AppRoute.CustomerDetail({ orgSlug: "hazel", accountId: acme.id, tab: Option.none() }), as)
+			.model,
+		accounts: ACCOUNTS.map((row) => toAccountRow(row.id === acme.id ? account : row)),
+	})
+	const notLookedUp = { ...acme, domains: ["acme.com"], companyProfile: null, companyCheckedAt: null }
+	const skeleton = Scene.selector('[data-lookup-skeleton="true"]')
+	const arriving = Scene.selector('[data-arriving="true"]')
+
+	test("while the lookup runs: the button turns at full strength, placeholders hold the profile's place", () => {
+		Scene.scene(
+			pageScene(update, view, as),
+			Scene.given({ ...openedWith(notLookedUp), companyRefreshAtMs: NOW.getTime() }),
+			menusMounted(4),
+			Scene.expect(Scene.role("button", { name: "Looking up" })).toHaveAttr("data-pending", "true"),
+			Scene.expect(Scene.text("Looking up acme.com…")).toExist(),
+			Scene.expect(skeleton).toExist(),
+		)
+		Scene.scene(
+			pageScene(update, view, as),
+			Scene.given(openedWith(notLookedUp)),
+			menusMounted(4),
+			Scene.expect(Scene.role("button", { name: "Look up now" })).toExist(),
+			Scene.expect(skeleton).toBeAbsent(),
+		)
+	})
+
+	test("the profile that answers the press blurs in; one already there on open stays still", () => {
+		const answered = {
+			...acme,
+			domains: ["acme.com"],
+			companyProfile: RICH_COMPANY,
+			companyCheckedAt: new Date(NOW.getTime() + 1_000),
+		}
+		Scene.scene(
+			pageScene(update, view, as),
+			Scene.given({
+				...openedWith(answered),
+				companyRefreshAtMs: NOW.getTime(),
+				companyCheckedAtPressMs: null,
+			}),
+			menusMounted(4),
+			Scene.expect(arriving).toExist(),
+			Scene.expect(arriving).toHaveClass("blur-in-stagger"),
+		)
+		Scene.scene(
+			pageScene(update, view, as),
+			Scene.given(openedWith(answered)),
+			menusMounted(4),
+			Scene.expect(arriving).toBeAbsent(),
 		)
 	})
 })
