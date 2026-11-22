@@ -478,6 +478,7 @@ const accountFacts = (account: schema.CustomerAccount, days: number, now: Date) 
 			priorActive: new Map(),
 			subscriptions: [],
 			openInvoices: [],
+			unpaidInvoices: [],
 			metrics: metricMap,
 			movements,
 			health: health as ReadonlyArray<HealthPoint>,
