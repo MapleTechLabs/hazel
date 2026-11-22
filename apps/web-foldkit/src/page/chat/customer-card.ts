@@ -1,7 +1,7 @@
 /**
  * A linked channel's customer at a glance (`docs/customers/channels.md`, "In the channel"): the
  * header chip, and the card it opens: health and why, stage, plan, MRR, owner, seats, last active,
- * open signals and the ways out (the customer page, the queue, the providers). From the org source
+ * the enriched company (description, facts, links), open signals and the ways out (the customer page, the queue, the providers). From the org source
  * (`channel_customers`), so nothing opens the Customers source.
  *
  * Desktop: hovering the chip shows the card after a moment; it stays while the pointer is on the
@@ -9,7 +9,7 @@
  * same card in a bottom sheet.
  */
 import type { ChannelCustomer } from "@hazel/domain/models"
-import type { HealthStatus } from "@hazel/domain/customers"
+import type { CompanyProfile, HealthStatus } from "@hazel/domain/customers"
 import { Duration, Effect, Option, Schema } from "effect"
 import { Command, Mount } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
@@ -18,6 +18,7 @@ import { modifyFields } from "foldkit/struct"
 import { twMerge } from "tailwind-merge"
 import { dayToMs, formatMoney, formatRelative } from "../../customers/format"
 import { HEALTH_FILL, healthBadge, severityGlyph, stageBadge } from "../../customers/ui/badges"
+import { companyFacts, companyLinks } from "../../customers/ui/company"
 import { safeSourceUrl } from "../../customers/providers"
 import { companyLogo, SOURCE_LABEL, sourceLogo } from "../../customers/ui/identity"
 import { descriptionClass, linkClass, moreLink, titleClass } from "../../customers/ui/surface"
@@ -413,6 +414,26 @@ const lastActiveText = (day: string, nowMs: number): string => {
 	return formatRelative(new Date(at), new Date(nowMs))
 }
 
+/**
+ * The customer's enriched company under the header: what it does (two lines at most), its facts as
+ * chips (industry, headcount, headquarters, funding) and its links. Nothing when it has none.
+ */
+const companyBlock = <M>(h: HtmlBuilder<M>, company: CompanyProfile): ReadonlyArray<Html> => {
+	const description = company.description?.trim() ?? ""
+	const facts = companyFacts(h, company)
+	const links = companyLinks(h, company)
+	const parts = [
+		// The clamp on the text alone: padding on a clamped box would show a third line's top.
+		...(description === "" ? [] : [h.p([h.Class("line-clamp-2 text-muted-fg text-xs")], [description])]),
+		...(facts.length === 0 ? [] : [h.div([h.Class("flex flex-wrap gap-1")], facts)]),
+		// `-ml-1.5`: the marks' hover boxes overhang, so the first mark lines up with the text.
+		...(links.length === 0 ? [] : [h.div([h.Class("-ml-1.5 flex flex-wrap items-center")], links)]),
+	]
+	return parts.length === 0
+		? []
+		: [h.div([h.Class("flex flex-col gap-2 px-4 pb-3"), h.DataAttribute("slot", "company")], parts)]
+}
+
 /** The card's content, shared by the hover card, the sheet and the gallery. */
 /**
  * A row projected before the glance existed (its org has not had a snapshot since): every glance
@@ -509,6 +530,10 @@ export const cardBody = <M>(h: HtmlBuilder<M>, context: CardContext): Html => {
 				: customer.healthWhy === null
 					? []
 					: [h.p([h.Class(twMerge(descriptionClass, "px-4 pb-3 text-xs"))], [customer.healthWhy])]),
+			// What the company is (enriched), under the health it explains.
+			...(customer.company === undefined || customer.company === null
+				? []
+				: companyBlock(h, customer.company)),
 			// The account's facts.
 			h.dl(
 				[h.Class(twMerge(SECTION, "gap-1.5"))],

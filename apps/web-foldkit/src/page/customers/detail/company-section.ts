@@ -1,74 +1,84 @@
-import { type CompanyLink, enrichmentDomainOf } from "@hazel/domain/customers"
+import { enrichmentDomainOf } from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import {
 	addressLabel,
-	companyPages,
 	companyTypeLabel,
 	countryFlag,
 	employeesLabel,
-	fundingLabel,
+	fundingStageLabel,
+	fundingStageOf,
 	headquartersLabel,
-	linkLabel,
-	rankedSocials,
 	revenueLabel,
 	usdLabel,
 } from "../../../customers/company"
 import { formatCount, formatDate, formatRelative } from "../../../customers/format"
-import { IconArrowPath, IconLink } from "../../../icons"
+import { companyPageLinks } from "../../../customers/ui/company"
+import { IconArrowPath } from "../../../icons"
 import { button } from "../../../ui/button"
 import { input } from "../../../ui/input"
-import { disclosure } from "../../../customers/ui/disclosure"
 import { Message } from "./message"
 import { DOMAIN_INPUT_ID, isCompanyRefreshPending, isCompanyRefreshUnanswered, type Model } from "./model"
 import { type Context, icon, property, sidebarSection } from "./parts"
 
 /**
  * The customer's company, enriched from its domain (`docs/customers/enrichment.md`): the sidebar's
- * Company section: the description and key facts, the rest behind More. Every field may be missing.
+ * Company section: the description, the figures (headcount, funding, revenue, age) as a grid, the
+ * rest as rows, and the company's own pages. Its key facts sit under the name, its socials in the
+ * top bar. Every field may be missing.
  */
-
-/** Only `https:` links leave the page (the profile is third-party data). */
-const safeHref = (url: string): string | null => {
-	try {
-		return new URL(url).protocol === "https:" ? url : null
-	} catch {
-		return null
-	}
-}
-
-const linkChip = (h: HtmlBuilder<Message>, link: CompanyLink): ReadonlyArray<Html> => {
-	const href = safeHref(link.url)
-	return href === null
-		? []
-		: [
-				h.a(
-					[
-						h.Key(`${link.type}:${href}`),
-						h.Href(href),
-						h.Target("_blank"),
-						h.Rel("noreferrer"),
-						h.Title(href),
-						h.Class(
-							"inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2 font-medium text-fg text-xs outline-hidden transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/70",
-						),
-					],
-					[IconLink(h, { className: "size-3.5 text-muted-fg" }), linkLabel(link)],
-				),
-			]
-}
 
 const muted = (h: HtmlBuilder<Message>, text: string) => h.span([h.Class("text-muted-fg")], [text])
 
-/** A value with a quieter detail after it: `201–500 · 312`. */
-const withDetail = (h: HtmlBuilder<Message>, value: string | null, detail: string | null): Html | string =>
+/** A value with its quieter detail on a line under it. */
+const stacked = (h: HtmlBuilder<Message>, value: string, detail: string | null): Html =>
+	h.span(
+		[h.Class("flex min-w-0 flex-col py-1")],
+		[
+			h.span([h.Class("truncate"), h.Title(value)], [value]),
+			...(detail === null
+				? []
+				: [h.span([h.Class("truncate text-muted-fg text-xs"), h.Title(detail)], [detail])]),
+		],
+	)
+
+/** One figure of the stat grid: a small label over the value, a quieter detail under it. */
+const stat = (
+	h: HtmlBuilder<Message>,
+	label: string,
+	value: string | null,
+	detail: string | null,
+): ReadonlyArray<Html> =>
 	value === null
-		? muted(h, "—")
-		: detail === null
-			? value
-			: h.span(
-					[h.Class("flex min-w-0 gap-1.5")],
-					[h.span([h.Class("truncate")], [value]), muted(h, `· ${detail}`)],
-				)
+		? []
+		: [
+				h.div(
+					[h.Class("flex min-w-0 flex-col gap-0.5 rounded-lg border border-border px-3 py-2")],
+					[
+						h.span([h.Class("text-muted-fg text-xs")], [label]),
+						h.span(
+							[h.Class("truncate font-medium text-fg text-sm tabular-nums"), h.Title(value)],
+							[value],
+						),
+						...(detail === null
+							? []
+							: [
+									h.span(
+										[
+											h.Class("truncate text-muted-fg text-xs tabular-nums"),
+											h.Title(detail),
+										],
+										[detail],
+									),
+								]),
+					],
+				),
+			]
+
+/** The figures, two a row; a lone last one spans the row. Nothing when no figure is known. */
+const grid = (h: HtmlBuilder<Message>, stats: ReadonlyArray<Html>): ReadonlyArray<Html> =>
+	stats.length === 0
+		? []
+		: [h.div([h.Class("grid grid-cols-2 gap-2 pb-3 [&>*:last-child:nth-child(odd)]:col-span-2")], stats)]
 
 const refreshButton = (
 	h: HtmlBuilder<Message>,
@@ -222,72 +232,76 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 	// Third-party data: a date that does not parse is left out rather than breaking the page.
 	const latestMs = latest?.date == null ? Number.NaN : Date.parse(`${latest.date}T00:00:00Z`)
 	const latestParts = [
-		latest === null ? null : latest.amountUsd === null ? null : usdLabel(latest.amountUsd),
+		latest === null || latest.amountUsd === null ? null : usdLabel(latest.amountUsd),
 		Number.isNaN(latestMs) ? null : formatDate(new Date(latestMs), { now, withYear: true }),
 	].filter((part) => part !== null)
-	const latestLabel = latestParts.length === 0 ? null : latestParts.join(" · ")
+	const stage = fundingStageOf(company)
+	const totalUsd = company.funding?.totalUsd ?? null
 	const flag = countryFlag(company.headquarters?.countryCode ?? null)
 	const headquarters = headquartersLabel(company)
 	const address = addressLabel(company)
 	const type = companyTypeLabel(company)
-	const links = [...rankedSocials(company), ...companyPages(company)].flatMap((link) => linkChip(h, link))
 	const description = company.description
-	const more = [
-		property(h, "Founded", company.foundedYear === null ? muted(h, "—") : String(company.foundedYear)),
-		...(type === null ? [] : [property(h, "Type", type)]),
-		...(latestLabel === null ? [] : [property(h, "Last round", latestLabel)]),
-		property(h, "Est. revenue", withDetail(h, revenueLabel(company), null)),
-		...(links.length === 0 ? [] : [h.div([h.Class("flex flex-wrap gap-1.5 pt-2")], links)]),
-	]
+	// The company's own pages (pricing, blog, careers); its socials are in the top bar.
+	const pages = companyPageLinks(h, company)
+	const founded = company.foundedYear === null ? null : String(company.foundedYear)
+	const age = company.foundedYear === null ? null : now.getUTCFullYear() - company.foundedYear
+	const status = [isPending ? "Looking up…" : isUnanswered ? "Refresh failed, retrying soon" : checked]
+		.filter((part) => part !== null)
+		.join("")
 
 	return sidebarSection(h, "Company", null, [
-		h.div(
-			[h.Class("-mt-1 flex items-center justify-between gap-2 pb-1 text-muted-fg text-xs")],
-			[
-				h.span(
-					[h.AriaLive("polite")],
-					[
-						`context.dev · ${isPending ? "looking up…" : isUnanswered ? "refresh failed, retrying soon" : (checked ?? "")}`,
-					],
-				),
-				refreshButton(h, { label: "Refresh company profile", isPending, iconOnly: true }),
-			],
-		),
 		...(description === null
 			? []
-			: [h.p([h.Class("line-clamp-3 pb-1.5 text-fg-2 text-sm"), h.Title(description)], [description])]),
+			: [
+					// The clamp sits on the text alone: padding inside it would show a cut line.
+					h.div(
+						[h.Class("pb-3")],
+						[
+							h.p(
+								[
+									h.Class("line-clamp-3 wrap-anywhere text-fg-2 text-sm leading-relaxed"),
+									h.Title(description),
+								],
+								[description],
+							),
+						],
+					),
+				]),
+		...grid(h, [
+			...stat(
+				h,
+				"Employees",
+				employeesLabel(company),
+				company.employeeCount === null || company.employeeRange === null
+					? null
+					: `${formatCount(company.employeeCount)} on record`,
+			),
+			...stat(
+				h,
+				"Funding",
+				stage === null ? (totalUsd === null ? null : usdLabel(totalUsd)) : fundingStageLabel(stage),
+				stage === null || totalUsd === null ? null : `${usdLabel(totalUsd)} raised`,
+			),
+			...stat(
+				h,
+				"Est. revenue",
+				revenueLabel(company),
+				revenueLabel(company) === null ? null : "per year",
+			),
+			...stat(
+				h,
+				"Founded",
+				founded,
+				age === null || age < 1 ? null : `${age} ${age === 1 ? "year" : "years"} ago`,
+			),
+		]),
 		...(domain === null ? [] : [domainRow(h, model, context, domain)]),
 		property(
 			h,
 			"Industry",
 			// The industry the list shows and filters by; the sub-industry under it.
-			company.industry === null
-				? muted(h, "—")
-				: h.span(
-						[h.Class("flex min-w-0 flex-col py-1")],
-						[
-							h.span([h.Class("truncate")], [company.industry]),
-							...(company.subindustry === null
-								? []
-								: [
-										h.span(
-											[h.Class("truncate text-muted-fg text-xs")],
-											[company.subindustry],
-										),
-									]),
-						],
-					),
-		),
-		property(
-			h,
-			"Employees",
-			withDetail(
-				h,
-				employeesLabel(company),
-				company.employeeCount === null || company.employeeRange === null
-					? null
-					: formatCount(company.employeeCount),
-			),
+			company.industry === null ? muted(h, "—") : stacked(h, company.industry, company.subindustry),
 		),
 		property(
 			h,
@@ -299,9 +313,26 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 						[flag === "" ? headquarters : `${flag} ${headquarters}`],
 					),
 		),
-		property(h, "Funding", withDetail(h, fundingLabel(company), null)),
-		disclosure(h, { summary: ["More"], className: "pt-1.5", summaryClassName: "py-1" }, [
-			h.div([h.Class("pt-1")], more),
-		]),
+		...(type === null ? [] : [property(h, "Type", type)]),
+		...(latestParts.length === 0 || latest === null
+			? []
+			: [
+					property(
+						h,
+						"Last round",
+						stacked(h, fundingStageLabel(latest.type), latestParts.join(" · ")),
+					),
+				]),
+		...(pages.length === 0 ? [] : [h.div([h.Class("-ml-1.5 flex flex-wrap gap-0.5 pt-2")], pages)]),
+		h.div(
+			[h.Class("flex items-center justify-between gap-2 pt-3 text-muted-fg text-xs")],
+			[
+				h.span(
+					[h.AriaLive("polite"), h.Class("truncate")],
+					[status === "" ? "From context.dev" : `From context.dev · ${status}`],
+				),
+				refreshButton(h, { label: "Refresh company profile", isPending, iconOnly: true }),
+			],
+		),
 	])
 }

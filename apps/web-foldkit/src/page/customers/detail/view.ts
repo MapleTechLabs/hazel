@@ -82,6 +82,7 @@ import {
 import { notesTab } from "./notes-tab"
 import { peopleInChat } from "./people-in-chat"
 import { overviewTab } from "./overview-tab"
+import { companyFacts, companySocials } from "../../../customers/ui/company"
 import { companySection } from "./company-section"
 import { type Context, icon, memberOf, menu, property, sidebarSection } from "./parts"
 import { usersTab } from "./users-tab"
@@ -362,6 +363,33 @@ const topBar = (h: HtmlBuilder<Message>, model: Model, context: Context | null, 
 	)
 }
 
+/** The enriched company's key facts under the name; nothing until a lookup finds the company. */
+const companyRow = (h: HtmlBuilder<Message>, company: Context["account"]["company"]): ReadonlyArray<Html> => {
+	const facts = company === null ? [] : companyFacts(h, company)
+	return facts.length === 0
+		? []
+		: [h.div([h.Class("flex flex-wrap items-center gap-1.5 pt-3 md:pl-13")], facts)]
+}
+
+/**
+ * The company's socials as their platforms' marks, on the domain line: beside the website they
+ * belong to. A divider parts them from the plan and MRR.
+ */
+const companySocialsGroup = (
+	h: HtmlBuilder<Message>,
+	company: Context["account"]["company"],
+): ReadonlyArray<Html> => {
+	const socials = company === null ? [] : companySocials(h, company, true)
+	return socials.length === 0
+		? []
+		: [
+				h.div(
+					[h.AriaLabel("Company profiles"), h.Role("group"), h.Class("flex items-center")],
+					[h.span([h.AriaHidden(true), h.Class("mr-1.5 h-3.5 w-px bg-border")]), ...socials],
+				),
+			]
+}
+
 const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
 	const { account } = context
 	const meta = [
@@ -405,26 +433,32 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 									// with a part, not a dot: the dot of a line's first part is clipped.
 									// `pr-4` keeps a part's `max-w-full` inside: a long domain truncates.
 									h.div(
-										[h.Class("overflow-hidden text-muted-fg text-sm")],
+										[h.Class("flex min-w-0 flex-wrap items-center gap-x-2.5")],
 										[
-											h.p(
-												[h.Class("-ml-4 flex flex-wrap items-center pr-4")],
+											h.div(
+												[h.Class("min-w-0 overflow-hidden text-muted-fg text-sm")],
 												[
-													...(account.domain === null
-														? []
-														: [domainLink(h, account.domain)]),
-													...meta.map((part) => h.span([], [part])),
-												].map((part) =>
-													h.span(
+													h.p(
+														[h.Class("-ml-4 flex flex-wrap items-center pr-4")],
 														[
-															h.Class(
-																"relative ml-4 max-w-full whitespace-nowrap before:absolute before:-left-2.5 before:content-['·']",
+															...(account.domain === null
+																? []
+																: [domainLink(h, account.domain)]),
+															...meta.map((part) => h.span([], [part])),
+														].map((part) =>
+															h.span(
+																[
+																	h.Class(
+																		"relative ml-4 max-w-full whitespace-nowrap before:absolute before:-left-2.5 before:content-['·']",
+																	),
+																],
+																[part],
 															),
-														],
-														[part],
+														),
 													),
-												),
+												],
 											),
+											...companySocialsGroup(h, account.company),
 										],
 									),
 								],
@@ -487,6 +521,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 					),
 				],
 			),
+			...companyRow(h, account.company),
 		],
 	)
 }

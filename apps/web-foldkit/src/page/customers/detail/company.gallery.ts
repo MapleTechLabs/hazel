@@ -59,7 +59,20 @@ const accountFor = (state: State): Customers.Account => {
 	const base = ACME_DETAIL.account
 	switch (state) {
 		case "rich":
-			return { ...base, companyProfile: { ...RICH_COMPANY, domain: "acmerobotics.io" } }
+			return {
+				...base,
+				companyProfile: {
+					...RICH_COMPANY,
+					domain: "acmerobotics.io",
+					// Long enough to be cut short: the Company section shows three lines.
+					description:
+						"Developer platform for building and running data pipelines on the edge. Teams connect their sources, transform events in flight with typed functions, and ship them to any warehouse with exactly-once delivery, replay and per-tenant isolation built in.",
+					socials: [
+						...RICH_COMPANY.socials,
+						{ type: "appstore", url: "https://apps.apple.com/app/northwind" },
+					],
+				},
+			}
 		case "sparse":
 			return base
 		case "not-found":

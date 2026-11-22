@@ -1,8 +1,9 @@
 /**
  * Channels linked to customer accounts (`docs/customers/channels.md`), on the `CustomersObject`
  * side: the live links (`customer_channel_links`) and their projection to the `OrgObject`
- * (`org.setChannelCustomers`, a full snapshot of channel → the account's id, name and glance:
- * health and why, stage, plan, MRR, owner, seats, last active day, open signals, provider links).
+ * (`org.setChannelCustomers`, a full snapshot of channel → the account's id, name, logo, company
+ * profile and glance: health and why, stage, plan, MRR, owner, seats, last active day, open signals,
+ * provider links).
  *
  * The snapshot is sent when it changes (its fingerprint covers every field): after a link or
  * unlink, after a person changes an account's name or owner or a signal's status, and at the end
@@ -88,25 +89,37 @@ export const channelCustomerSnapshot = Effect.gen(function* () {
 		const customer =
 			(row.primaryAccountId === null ? undefined : accounts.get(row.primaryAccountId)) ??
 			accounts.get(row.accountId)
-		// Pictured by the customer's logo, else the linked environment's own.
+		// Pictured by the customer's logo and described by its company, else the linked environment's.
 		const own = accounts.get(row.accountId)
 		const accountLogoUrl =
 			(customer === undefined ? null : logoOf(customer)) ?? (own === undefined ? null : logoOf(own))
-		return customer === undefined ? [] : [{ channelId: row.channelId, customer, accountLogoUrl }]
+		const company = customer?.companyProfile ?? own?.companyProfile ?? null
+		return customer === undefined ? [] : [{ channelId: row.channelId, customer, accountLogoUrl, company }]
 	})
 	const glances = yield* glancesOf([...new Set(linked.map((link) => link.customer))])
-	const links: Array<ChannelCustomerEntry> = linked.flatMap(({ channelId, customer, accountLogoUrl }) => {
-		const glance = glances.get(customer.id)
-		return glance === undefined
-			? []
-			: [{ channelId, accountId: customer.id, accountName: customer.name, accountLogoUrl, ...glance }]
-	})
+	const links: Array<ChannelCustomerEntry> = linked.flatMap(
+		({ channelId, customer, accountLogoUrl, company }) => {
+			const glance = glances.get(customer.id)
+			return glance === undefined
+				? []
+				: [
+						{
+							channelId,
+							accountId: customer.id,
+							accountName: customer.name,
+							accountLogoUrl,
+							company,
+							...glance,
+						},
+					]
+		},
+	)
 	return links.sort((a, b) => (a.channelId < b.channelId ? -1 : a.channelId > b.channelId ? 1 : 0))
 })
 
 type Glance = Omit<
 	Required<ChannelCustomerEntry>,
-	"channelId" | "accountId" | "accountName" | "accountLogoUrl"
+	"channelId" | "accountId" | "accountName" | "accountLogoUrl" | "company"
 >
 
 /** Days of health history searched for a customer's latest breakdown. */

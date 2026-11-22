@@ -11,7 +11,7 @@
  *   channel's customer to the org's members who see the channel (never to Connect guests).
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import { HealthStatus, LifecycleStage } from "@hazel/domain/customers"
+import { CompanyProfile, HealthStatus, LifecycleStage } from "@hazel/domain/customers"
 import { ChannelCustomer } from "@hazel/domain/models"
 import { ChannelId, CustomerAccountId, OrganizationId, UserId } from "@hazel/schema"
 import { Clock, Effect, Option, Schema } from "effect"
@@ -102,6 +102,8 @@ export const ChannelCustomerEntry = Schema.Struct({
 	accountName: Schema.String,
 	/** Optional: snapshots queued before logos were sent have none. */
 	accountLogoUrl: Schema.optional(Schema.NullOr(Schema.String)),
+	/** The customer's enriched company. Optional: snapshots queued before it was sent have none. */
+	company: Schema.optional(Schema.NullOr(CompanyProfile)),
 	...glance,
 })
 export type ChannelCustomerEntry = typeof ChannelCustomerEntry.Type
@@ -111,6 +113,7 @@ const rowValuesOf = (link: ChannelCustomerEntry) => ({
 	accountId: link.accountId,
 	accountName: link.accountName,
 	accountLogoUrl: link.accountLogoUrl ?? null,
+	company: link.company ?? null,
 	healthStatus: link.healthStatus ?? "unknown",
 	healthScore: link.healthScore ?? null,
 	healthWhy: link.healthWhy ?? null,
@@ -153,6 +156,9 @@ export const ChannelCustomerOrgEffects = {
 
 const VERSION_KEY = "channelCustomersVersion"
 
+/** SQL NULL for the company column (`jsonb` would store a JS null as the text `null`). */
+const NO_COMPANY = SQLite.sql(SQLite.nullable(schema.jsonb<CompanyProfile>()))`NULL`
+
 /** Replace `channel_customers` with the snapshot, writing only what changed. */
 const applyChannelCustomers = Effect.fn("OrgObject.applyChannelCustomers")(function* (
 	payload: SetChannelCustomersPayload,
@@ -181,7 +187,12 @@ const applyChannelCustomers = Effect.fn("OrgObject.applyChannelCustomers")(funct
 		if (row !== undefined && row.accountId !== link.accountId) {
 			yield* forgetChatAuthorsBackfill(link.channelId)
 		}
-		const values = { organizationId: payload.organizationId, ...fields, updatedAt: now }
+		const values = {
+			organizationId: payload.organizationId,
+			...fields,
+			company: fields.company ?? NO_COMPANY,
+			updatedAt: now,
+		}
 		yield* db.run(
 			SQLite.insertInto(schema.channelCustomersTable)
 				.values({ channelId: link.channelId, ...values })
