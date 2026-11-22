@@ -1316,15 +1316,14 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (
 			const recurring = mrrHistory(subs, currency, series, revenue, own)
 			const paid = paidHistory(subs, currency, series)
 			const usage = usageHistory(own, revenue, currency, series)
+			const invoiceOnly = !subs.some((sub) => sub.currency === currency)
 			// As the rollup counts them (`rollupAccount`): usage while billed by a subscription, or
 			// (with none) billed last month.
 			const accountMrr = series.map(
 				(_, index) => recurring[index] + (paid[index] ? usage[index].recurringUsageMinor : 0),
 			)
 			const accountVariable = series.map((_, index) =>
-				paid[index] || (subs.length === 0 && usage[index].billedLastMonth)
-					? usage[index].variableMinor
-					: 0,
+				paid[index] || (invoiceOnly && usage[index].billedLastMonth) ? usage[index].variableMinor : 0,
 			)
 			const trial = new Uint8Array(days.length)
 			for (const sub of subs) {

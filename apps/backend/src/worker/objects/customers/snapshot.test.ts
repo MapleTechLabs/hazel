@@ -320,6 +320,13 @@ describe("MRR and variable MRR", () => {
 		expect(usageRollupOf([], [usageInvoice(4, 3_000)]).variableMrrMinor).toBe(0)
 	})
 
+	it("counts this currency's invoices beside a subscription in another, but not after its own ended", () => {
+		const euro = { id: subId("euro"), currency: "eur", mrrMinor: 5_000, items: null }
+		expect(usageRollupOf([euro], usage).variableMrrMinor).toBe(3_000)
+		const ended = { ...team, status: "canceled" as const, canceledAt: NOW }
+		expect(usageRollupOf([euro, ended], usage).variableMrrMinor).toBe(0)
+	})
+
 	it("keeps another currency's subscriptions out of MRR", () => {
 		const euro = { id: subId("euro"), currency: "eur", mrrMinor: 5_000, items: null }
 		const rollup = usageRollupOf([team, euro], usage)

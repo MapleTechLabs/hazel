@@ -352,7 +352,9 @@ export const accountRevenueOf = (input: {
 	)
 	const paid = paying.some(pays)
 	const usage = trailingUsageOf(input.invoices, basis, currency, input.now)
-	const current = paid || (subscriptions.length === 0 && usage.billedLastMonth)
+	// Invoice-only in this currency: no subscription in it, live or ended (an ended one is a churn).
+	const invoiceOnly = !subscriptions.some((sub) => sub.currency === currency)
+	const current = paid || (invoiceOnly && usage.billedLastMonth)
 	return {
 		mrrMinor:
 			paying.reduce((sum, sub) => sum + recurringMrrOf(sub, basis), 0) +

@@ -187,6 +187,31 @@ export const revenuePreview = Effect.fn("Customers.revenuePreview")(function* (
 
 	// Groups: the last 90 days' invoice lines, and live subscriptions' items, by price.
 	const groups = new Map<string, RevenuePreviewGroup>()
+	// A subscription without stored items counts its whole MRR (`recurringMrrOf`): no rule reaches it.
+	const itemlessGroupOf = (planName: string | null) => {
+		const key = JSON.stringify(["no-items", planName])
+		const existing = groups.get(key)
+		if (existing !== undefined) return existing
+		const recurring = { classification: "recurring", ruleId: null } as const
+		const group: RevenuePreviewGroup = {
+			priceId: null,
+			productId: null,
+			label: planName ?? "Subscription",
+			detail: "Plan amount, rules don't apply",
+			source: "subscription",
+			proration: false,
+			usageType: null,
+			billingScheme: null,
+			lineCount: 0,
+			amountMinor: 0,
+			itemCount: 0,
+			monthlyMinor: 0,
+			current: recurring,
+			proposed: recurring,
+		}
+		groups.set(key, group)
+		return group
+	}
 	const groupOf = (line: ClassifiableLine, description: string | null) => {
 		// Same price, different metadata: rules may class such lines apart, so they group apart.
 		const before = classifyLine(line, saved.rules, saved.catalog)
@@ -239,7 +264,13 @@ export const revenuePreview = Effect.fn("Customers.revenuePreview")(function* (
 	for (const account of accounts) {
 		for (const sub of billingBy.get(account.id)?.subscriptions ?? []) {
 			if (!billed(sub) || sub.currency !== currency) continue
-			for (const item of sub.items ?? []) {
+			if (sub.items === null) {
+				const group = itemlessGroupOf(sub.planName) as { itemCount: number; monthlyMinor: number }
+				group.itemCount++
+				group.monthlyMinor += sub.mrrMinor
+				continue
+			}
+			for (const item of sub.items) {
 				const group = groupOf(itemLine(item), null) as { itemCount: number; monthlyMinor: number }
 				group.itemCount++
 				group.monthlyMinor += item.monthlyMinor ?? 0

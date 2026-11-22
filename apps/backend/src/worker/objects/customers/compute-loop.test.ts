@@ -18,6 +18,7 @@ import { runCompute, runComputeStep } from "./compute"
 import { encryptSecrets, storeSecrets, switchProviderAccount } from "./credentials"
 import { CustomerIngest, type CustomerIngestApi } from "./ingest"
 import { overview } from "./read"
+import { revenuePreview } from "./revenue-preview"
 import { runDuePullsWith } from "./jobs"
 import {
 	type CustomerProviderAdapter,
@@ -1578,6 +1579,27 @@ describe("Customers compute and sync loop", () => {
 						day(-1),
 					),
 				).toEqual([{ mrrMinor: 22_900, variableMrrMinor: 0 }])
+			}),
+		))
+
+	it("previews a subscription without items as its own group, so the groups add up to MRR", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* quietOrg(world)
+				yield* world.ingest("stripe", [subscription(40)])
+				const preview = yield* world.object
+					.run(revenuePreview({ rules: [], variableMrrMonths: 3 }, NOW))
+					.pipe(Effect.orDie)
+				expect(preview.current.mrrMinor).toBe(19_900)
+				expect(preview.groups).toMatchObject([
+					{
+						label: "Team",
+						itemCount: 1,
+						monthlyMinor: 19_900,
+						current: { classification: "recurring", ruleId: null },
+					},
+				])
 			}),
 		))
 
