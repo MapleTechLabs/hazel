@@ -113,6 +113,7 @@ const RESTATE_KEY = "restateRevenue"
 const REVENUE_DATA_KEY = "revenueData"
 /** The connections that upgrade walked again: a restatement waits for their imports. */
 const REVENUE_WALK_KEY = "revenueWalk"
+const decodeWalkedConnections = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Array(Schema.String)))
 /** 1: invoice lines and the price catalog (`docs/customers/revenue.md`). */
 const REVENUE_DATA_VERSION = "1"
 /** Set once the recorded days' user counts were redone from activity (rows written before it was backfilled). */
@@ -1581,15 +1582,14 @@ const followRevenueBasis = Effect.gen(function* () {
 	if (Option.isNone(yield* readObjectMeta(RESTATE_KEY))) return
 	// Not before the connections walked again have brought the lines it restates from; one that
 	// stopped (in error, disconnected) does not hold it.
-	const walked = Option.getOrElse(yield* readObjectMeta(REVENUE_WALK_KEY), () => "[]")
+	const walked = Option.getOrElse(
+		Option.flatMap(yield* readObjectMeta(REVENUE_WALK_KEY), decodeWalkedConnections),
+		(): ReadonlyArray<string> => [],
+	)
 	const awaiting = yield* db.first(
 		SQLite.from(schema.customerConnectionsTable)
 			.select("id")
-			.where(($) => [
-				$.status.eq("active"),
-				$.backfilledAt.isNull(),
-				inList($.id, JSON.parse(walked) as ReadonlyArray<schema.CustomerConnection["id"]>),
-			])
+			.where(($) => [$.status.eq("active"), $.backfilledAt.isNull(), inList($.id, walked)])
 			.limit(1),
 	)
 	if (Option.isNone(awaiting)) yield* requestHistoryRebuild
