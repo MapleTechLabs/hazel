@@ -175,8 +175,8 @@ const matchesFilters = (
 	const account = accountsById.get(signal.accountId)
 	if (account === undefined) return false
 	const customer = customerAccountOf(account, accountsById)
-	// A muted customer stays out of every tab until it is unmuted (its page shows its signals).
-	if (isAttentionMuted(customer)) return false
+	// A muted customer or environment stays out of every tab until unmuted (its page shows its signals).
+	if (isAttentionMuted(account) || isAttentionMuted(customer)) return false
 	const { filters } = model
 	const query = model.search.trim().toLowerCase()
 	return (

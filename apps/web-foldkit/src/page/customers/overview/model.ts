@@ -72,7 +72,10 @@ export const openSignals = (model: Model): ReadonlyArray<SignalRow> => {
 	const accountsById = new Map((model.accounts ?? []).map((account) => [account.id, account]))
 	const muted = new Set(
 		(model.accounts ?? [])
-			.filter((account) => isAttentionMuted(customerAccountOf(account, accountsById)))
+			.filter(
+				(account) =>
+					isAttentionMuted(account) || isAttentionMuted(customerAccountOf(account, accountsById)),
+			)
 			.map((account) => account.id),
 	)
 	return (model.signals ?? []).filter((signal) => signal.status === "open" && !muted.has(signal.accountId))

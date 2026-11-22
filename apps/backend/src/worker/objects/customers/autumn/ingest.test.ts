@@ -278,6 +278,9 @@ describe("Autumn ops through CustomerIngest", () => {
 					{ accountId: acme.id, primaryAccountId: globex.id },
 					world.owner,
 				)
+				expect(
+					world.rows(`SELECT primaryAccountId FROM customer_accounts WHERE id = ?`, acme.id),
+				).toEqual([{ primaryAccountId: globex.id }])
 				yield* world.ingest("autumn", [
 					{
 						_tag: "metric",
