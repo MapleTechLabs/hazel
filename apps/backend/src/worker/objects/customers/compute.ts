@@ -1362,8 +1362,10 @@ const prune = Effect.fn("Customers.prune")(function* (now: Date) {
 		]),
 	)
 	yield* db.run(
+		// A churn signal stays: it is what keeps the same churn from being announced again.
 		SQLite.deleteFrom(schema.customerSignalsTable).where(($) => [
 			$.closedAt.lt(ago(CLOSED_SIGNAL_RETENTION_MS)),
+			$.template.neq("churned"),
 		]),
 	)
 	yield* db.run(

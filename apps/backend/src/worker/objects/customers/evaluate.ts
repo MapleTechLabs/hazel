@@ -34,6 +34,7 @@ import {
 	mrrSeries,
 	type OrgFacts,
 	pays,
+	renewedBetween,
 	rollingActiveSeries,
 	seriesOf,
 } from "./facts"
@@ -712,6 +713,10 @@ const churned =
 						],
 			)
 			.reduce<Date>((latest, date) => (date > latest ? date : latest), churnedAt)
+		// Announced once: it takes a payment or a new paid plan before this end to be a new churn.
+		const notified = facts.churnNotifiedAt
+		if (!facts.churnSignalOpen && notified !== null && !renewedBetween(facts, notified, ended))
+			return "Below threshold"
 		const churnDay = churn?.day ?? dayOf(ended)
 		const days = daysBetween(churnDay, org.today)
 		if (days >= config.windowDays) return "Below threshold"

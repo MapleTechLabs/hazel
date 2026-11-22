@@ -20,7 +20,7 @@ import {
 import type { CustomerAccountId, CustomerContactId, CustomerSubscriptionId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { type RuleInput, activityWindowDays } from "./evaluate"
-import { groupFacts } from "./group-facts"
+import { groupFacts, latest } from "./group-facts"
 import {
 	type AccountFacts,
 	activeUsersIn,
@@ -726,6 +726,44 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 		new Map(accounts.map((account) => [account.id, account.mrrSource])),
 	)
 	const endedInvoicesBy = yield* endedPlanInvoices(billingBy)
+	const churnSignalsBy = groupBy(
+		yield* db.run(
+			SQLite.from(schema.customerSignalsTable)
+				.select("accountId", "firstDetectedAt", "closedAt")
+				.where(($) => [inList($.accountId, ids), $.template.eq("churned")]),
+		),
+		(signal) => signal.accountId,
+	)
+	const churnNotifiedAt = (id: CustomerAccountId) =>
+		latest(
+			(churnSignalsBy.get(id) ?? []).map((signal) =>
+				signal.closedAt === null ? null : signal.firstDetectedAt,
+			),
+		)
+	// Payments since each account's last churn signal: only those can make a later churn a new one.
+	const notified = ids.flatMap((id) => {
+		const at = churnNotifiedAt(id)
+		return at === null ? [] : [{ id, at }]
+	})
+	const paymentsBy = groupBy(
+		notified.length === 0
+			? []
+			: yield* db.run(
+					SQLite.from(schema.customerInvoicesTable)
+						.select("accountId", "paidAt")
+						.where(($) => [
+							inList(
+								$.accountId,
+								notified.map(({ id }) => id),
+							),
+							$.provider.eq("stripe"),
+							$.status.eq("paid"),
+							$.amountPaidMinor.gt(0),
+							$.paidAt.gt(new Date(Math.min(...notified.map(({ at }) => at.getTime())))),
+						]),
+				),
+		(invoice) => invoice.accountId,
+	)
 	const invoicesBy = groupBy(openInvoices, (invoice) => invoice.accountId)
 	const subscriptionsBy = groupBy(subscriptions, (sub) => sub.accountId)
 	const paidInvoicesBy = groupBy(paidInvoices, (invoice) => invoice.accountId)
@@ -797,6 +835,13 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 				subscriptions: accountSubs,
 				openInvoices: invoicesBy.get(stored.id) ?? [],
 				unpaidInvoices: unpaidEnd?.open ?? [],
+				churnNotifiedAt: churnNotifiedAt(stored.id),
+				churnSignalOpen: (churnSignalsBy.get(stored.id) ?? []).some(
+					(signal) => signal.closedAt === null,
+				),
+				paymentsSinceChurn: (paymentsBy.get(stored.id) ?? []).flatMap((invoice) =>
+					invoice.paidAt === null ? [] : [invoice.paidAt],
+				),
 				metrics: metricMap,
 				movements: movementsBy.get(stored.id) ?? [],
 				health: (healthBy.get(stored.id) ?? []).map((row): HealthPoint => ({

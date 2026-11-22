@@ -597,6 +597,35 @@ describe("signal evaluation", () => {
 		).toEqual(notCovered)
 	})
 
+	it("churned: announced once, until the customer pays or starts a paid plan again", () => {
+		const ago = (days: number) => new Date(NOW.getTime() - days * 86_400_000)
+		const churned: FactsInput = {
+			account: { lifecycleStage: "churned", mrrMinor: 0, churnedAt: ago(3) },
+			movements: [{ type: "churn", fromMrrMinor: 3_900, toMrrMinor: 0, day: addDays(TODAY, -3) }],
+			subscriptions: [{ status: "canceled", mrrMinor: 3_900, startedAt: ago(40), canceledAt: ago(3) }],
+			churnNotifiedAt: ago(10),
+		}
+		const noMatch = { _tag: "NoMatch", reason: "Below threshold" }
+		expect(run("churned", churned)).toEqual(noMatch)
+		// Its own episode keeps running.
+		expect(run("churned", { ...churned, churnSignalOpen: true })._tag).toBe("Match")
+		expect(run("churned", { ...churned, paymentsSinceChurn: [ago(5)] })._tag).toBe("Match")
+		expect(run("churned", { ...churned, paymentsSinceChurn: [ago(11)] })).toEqual(noMatch)
+		// Settling an old invoice after the plan ended is no new churn; one before the end still counts.
+		expect(run("churned", { ...churned, paymentsSinceChurn: [ago(1)] })).toEqual(noMatch)
+		expect(run("churned", { ...churned, paymentsSinceChurn: [ago(5), ago(1)] })._tag).toBe("Match")
+		const resubscribed = {
+			status: "canceled",
+			mrrMinor: 3_900,
+			startedAt: ago(6),
+			canceledAt: ago(3),
+		} as const
+		expect(run("churned", { ...churned, subscriptions: [resubscribed] })._tag).toBe("Match")
+		// A trial it canceled before converting paid nothing.
+		const trial = { ...resubscribed, trialEndsAt: ago(1) }
+		expect(run("churned", { ...churned, subscriptions: [trial] })).toEqual(noMatch)
+	})
+
 	it("churned: the customer's last entry, for the window after it churned", () => {
 		const churned = (days: number, input: FactsInput = {}): FactsInput => ({
 			account: {

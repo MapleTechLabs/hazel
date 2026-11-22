@@ -69,6 +69,12 @@ export interface AccountFacts {
 	readonly openInvoices: ReadonlyArray<schema.CustomerInvoice>
 	/** The open invoices its ended plans went unpaid on (`unpaidEndOf`): a payment still owed. */
 	readonly unpaidInvoices: ReadonlyArray<EndedPlanInvoice>
+	/** When the latest closed churn signal first fired: a churn is announced once per time it paid. */
+	readonly churnNotifiedAt: Date | null
+	/** A churn signal's episode is still running (open, snoozed, done or dismissed). */
+	readonly churnSignalOpen: boolean
+	/** When invoices were paid since `churnNotifiedAt`. */
+	readonly paymentsSinceChurn: ReadonlyArray<Date>
 	/** Source metrics over the loaded window, oldest first. */
 	readonly metrics: ReadonlyMap<string, ReadonlyArray<MetricPoint>>
 	/** MRR movements, oldest first. */
@@ -227,6 +233,23 @@ export const pays = (sub: schema.CustomerSubscription) =>
 export const endedPaying = (subscriptions: ReadonlyArray<schema.CustomerSubscription>) =>
 	subscriptions.some((sub) => sub.status === "canceled" && pays(sub)) &&
 	!subscriptions.some((sub) => sub.status === "trialing" || (billed(sub) && pays(sub)))
+
+/**
+ * It paid an invoice, or started a paid plan, after the churn announced at `since` and before its
+ * plans ended at `endedAt`: this is a new churn. Settling an old invoice after the end is not one.
+ */
+export const renewedBetween = (facts: AccountFacts, since: Date, endedAt: Date) =>
+	facts.paymentsSinceChurn.some((paidAt) => paidAt > since && paidAt <= endedAt) ||
+	facts.subscriptions.some((sub) => {
+		const paidFrom = sub.trialEndsAt ?? sub.startedAt
+		return (
+			sub.status !== "trialing" &&
+			pays(sub) &&
+			paidFrom !== null &&
+			paidFrom > since &&
+			paidFrom <= endedAt
+		)
+	})
 
 /** What `unpaidEndOf` reads of an invoice. */
 export type EndedPlanInvoice = Pick<

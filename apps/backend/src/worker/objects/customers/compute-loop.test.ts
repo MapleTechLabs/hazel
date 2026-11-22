@@ -1519,6 +1519,61 @@ describe("Customers compute and sync loop", () => {
 		onNoMatch: "create",
 	})
 
+	it("announces a churn once, and again only after a payment", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [org("org_1")])
+				yield* world.ingest("stripe", [subscription(20)])
+				yield* world.object.run(runCompute(new Date(NOW.getTime() - 10 * DAY))).pipe(Effect.orDie)
+				yield* world.ingest("stripe", [
+					{
+						...subscription(20),
+						status: "canceled",
+						canceledAt: new Date(NOW.getTime() - DAY).toISOString(),
+					},
+				])
+				const churnSignals = () =>
+					world.rows<{ closedAt: string | null }>(
+						`SELECT closedAt FROM customer_signals WHERE template = 'churned' ORDER BY createdAt`,
+					)
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(churnSignals()).toHaveLength(1)
+
+				// Its episode ended; the same churn reads again: nothing new.
+				const stamp = (at: Date) => at.toISOString().replace("T", " ").replace("Z", "")
+				world.rows(
+					`UPDATE customer_signals SET status = 'auto_resolved', firstDetectedAt = '${stamp(NOW)}', closedAt = '${stamp(NOW)}' WHERE template = 'churned'`,
+				)
+				yield* world.object.run(runCompute(new Date(NOW.getTime() + 3_600_000))).pipe(Effect.orDie)
+				expect(churnSignals()).toHaveLength(1)
+
+				// It settles the old invoice with the plan still gone: the same churn.
+				const hour = 3_600_000
+				yield* world.ingest("stripe", [
+					{
+						...failedInvoice(),
+						status: "paid",
+						amountPaidMinor: 19_900,
+						paidAt: new Date(NOW.getTime() + 2 * hour).toISOString(),
+					},
+				])
+				yield* world.object.run(runCompute(new Date(NOW.getTime() + 3 * hour))).pipe(Effect.orDie)
+				expect(churnSignals()).toHaveLength(1)
+
+				// A plan that ends after that payment: a new churn.
+				yield* world.ingest("stripe", [
+					{
+						...subscription(20),
+						status: "canceled",
+						canceledAt: new Date(NOW.getTime() + 4 * hour).toISOString(),
+					},
+				])
+				yield* world.object.run(runCompute(new Date(NOW.getTime() + 5 * hour))).pipe(Effect.orDie)
+				expect(churnSignals()).toHaveLength(2)
+			}),
+		))
+
 	it("leaves recorded days alone when a source switch broke the account's movements", () =>
 		run(
 			Effect.gen(function* () {

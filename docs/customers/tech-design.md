@@ -368,7 +368,9 @@ Rules:
 Every enabled rule × every in-scope, non-churned account (silent accounts included) that Needs
 attention covers (`customer_settings.attention`: its stage is one of `stages`, and it has an account
 record (account ref or subscription) from one of `requiredSources`, empty = any; default every non-churned stage, Stripe). A churned
-account is evaluated by `churned` alone, so churn is its last entry. A template
+account is evaluated by `churned` alone, so churn is its last entry, and it is announced once: after
+a churn signal closes, a new one needs a payment or a new paid plan before the plans' latest end
+(closed churn signals are kept past retention for this). A template
 needs ≥ 1 of its `requiredSources` connected, else it matches nothing (dry-run reports it).
 Connected = `active`; an activity source (Clerk, Maple) also needs to be delivering: one that pulls
 (`nextSyncAt` set) and has not succeeded for 30 h (a day plus the longest pull interval), or not yet
