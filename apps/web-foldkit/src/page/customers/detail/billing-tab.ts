@@ -439,25 +439,29 @@ const invoiceSplit = (
 	h: HtmlBuilder<Message>,
 	revenue: Customers.RevenueSplit | null,
 	currency: string,
-): Html =>
-	revenue === null
-		? h.span([h.Class("text-muted-fg")], ["—"])
-		: h.span(
-				[h.Class("flex flex-wrap items-center gap-x-2.5 whitespace-nowrap text-xs")],
-				SPLIT_PARTS.filter(([key]) => revenue[key] !== 0).map(([key, label, color]) =>
-					h.span(
-						[h.Class("inline-flex items-center gap-1"), h.Title(label)],
-						[
-							h.span([
-								h.AriaHidden(true),
-								h.Class(twMerge("size-2 rounded-xs", CHART_COLOR[color].bg)),
-							]),
-							h.span([h.Class("sr-only")], [`${label} `]),
-							formatMoney(revenue[key], currency),
-						],
-					),
-				),
-			)
+): Html => {
+	if (revenue === null) return h.span([h.Class("text-muted-fg")], ["—"])
+	const parts = SPLIT_PARTS.filter(([key]) => revenue[key] !== 0)
+	// Lines that add up to nothing here (a trial's, or all excluded) read as zero, not as no data.
+	if (parts.length === 0)
+		return h.span([h.Class("whitespace-nowrap text-muted-fg text-xs")], [formatMoney(0, currency)])
+	return h.span(
+		[h.Class("flex flex-wrap items-center gap-x-2.5 whitespace-nowrap text-xs")],
+		parts.map(([key, label, color]) =>
+			h.span(
+				[h.Class("inline-flex items-center gap-1"), h.Title(label)],
+				[
+					h.span([
+						h.AriaHidden(true),
+						h.Class(twMerge("size-2 rounded-xs", CHART_COLOR[color].bg)),
+					]),
+					h.span([h.Class("sr-only")], [`${label} `]),
+					formatMoney(revenue[key], currency),
+				],
+			),
+		),
+	)
+}
 
 const invoicesCard = (
 	h: HtmlBuilder<Message>,
