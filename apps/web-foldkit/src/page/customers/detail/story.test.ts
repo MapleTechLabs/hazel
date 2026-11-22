@@ -28,6 +28,7 @@ import {
 	COMPANY_REFRESH_PENDING_MS,
 	EMPTY_NOTE_DRAFTS,
 	environmentEntries,
+	isCompanyRefreshAnswered,
 	isCompanyRefreshPending,
 	isCompanyRefreshUnanswered,
 	isNotFound,
@@ -820,6 +821,25 @@ describe("customer page: company", () => {
 		).toBe(false)
 		// Checked long before: still a lookup to wait for.
 		expect(isCompanyRefreshPending(pressed.model, NOW + 1_000, NOW - 5 * 60_000)).toBe(true)
+		// Only a check made after the press is new data the profile blurs in with: the cooldown's
+		// earlier check is already on screen. A few seconds of server clock skew still count.
+		expect(isCompanyRefreshAnswered(loaded(), NOW + 500)).toBe(false)
+		expect(isCompanyRefreshAnswered(pressed.model, null)).toBe(false)
+		expect(isCompanyRefreshAnswered(pressed.model, NOW - 30_000)).toBe(false)
+		expect(isCompanyRefreshAnswered(pressed.model, NOW - 2_000)).toBe(true)
+		expect(isCompanyRefreshAnswered(pressed.model, NOW + 500)).toBe(true)
+		// The check on screen at the press never replays, however recent: only a different, later one does.
+		const justChecked = run(loaded(), [
+			Message.UpdatedAccounts({
+				accounts: [acme, { ...beta, companyCheckedAtMs: NOW - 2_000 }, gamma],
+			}),
+		])
+		const pressedAgain = update(justChecked, Message.PressedRefreshCompany(), shared).model
+		expect(pressedAgain.companyCheckedAtPressMs).toBe(NOW - 2_000)
+		expect(isCompanyRefreshAnswered(pressedAgain, NOW - 2_000)).toBe(false)
+		expect(isCompanyRefreshAnswered(pressedAgain, NOW + 500)).toBe(true)
+		// A background check long after the press is not this lookup's answer.
+		expect(isCompanyRefreshAnswered(pressed.model, NOW + COMPANY_REFRESH_PENDING_MS + 1_000)).toBe(false)
 	})
 
 	test("a refused refresh says why and can be asked again", () => {
