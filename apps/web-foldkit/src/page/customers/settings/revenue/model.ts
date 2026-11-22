@@ -108,6 +108,12 @@ export const targetOfSelectId = (id: string): SelectTarget | null => {
 
 export const entryKeyOf = (ruleId: string, index: number) => `${ruleId}:${index}`
 
+/** The rule and condition an entry belongs to: a rule id may hold a colon, the index is what follows the last. */
+export const entryOfKey = (key: string): { readonly ruleId: string; readonly index: number } => {
+	const at = key.lastIndexOf(":")
+	return { ruleId: key.slice(0, at), index: Number(key.slice(at + 1)) }
+}
+
 // LABELS
 
 export const CLASS_LABEL = {
@@ -286,8 +292,9 @@ export const validOf = (draft: RevenueDraft): ValidDraft | null => {
 
 /** What is still typed in a value input joins its condition: Save means what the page shows. */
 export const withEntriesCommitted = (model: Model): Model => {
-	if (model.draft === null) return model
-	const rules = model.draft.rules.map((rule) => ({
+	const draft = draftOf(model)
+	if (draft === null || Object.values(model.valueEntries).every((text) => text.trim() === "")) return model
+	const rules = draft.rules.map((rule) => ({
 		...rule,
 		conditions: rule.conditions.map((condition, index) => {
 			const value = (model.valueEntries[entryKeyOf(rule.id, index)] ?? "").trim()
@@ -299,13 +306,14 @@ export const withEntriesCommitted = (model: Model): Model => {
 				: { ...condition, values: [...condition.values, value] }
 		}),
 	}))
-	return { ...model, draft: { ...model.draft, rules }, valueEntries: {} }
+	return { ...model, draft: { ...draft, rules }, valueEntries: {} }
 }
 
-export const isDirty = (model: Model): boolean =>
-	model.draft !== null &&
-	model.settings !== null &&
-	!Equal.equals(model.draft, draftOfSaved(model.settings))
+/** Unsaved: a draft that differs from the saved rules, or a value typed that would change them. */
+export const isDirty = (model: Model): boolean => {
+	const { draft } = withEntriesCommitted(model)
+	return draft !== null && model.settings !== null && !Equal.equals(draft, draftOfSaved(model.settings))
+}
 
 const basisOf = (draft: RevenueDraft, currency: string) =>
 	Customers.revenueBasisOf(toRules(draft), draft.variableMrrMonths, currency, 0)

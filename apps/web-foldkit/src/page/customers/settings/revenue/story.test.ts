@@ -307,6 +307,32 @@ describe("revenue settings", () => {
 		expect(validOf(withEntriesCommitted(typed).draft!)).not.toBeNull()
 	})
 
+	test("a value typed with no other edit counts as unsaved, and Save takes it", () => {
+		const typed = step(loaded(), Message.ChangedValueEntry({ ruleId: "rule-2", index: 0, text: "gold" }))
+		expect(typed.draft).toBeNull()
+		expect(isDirty(typed)).toBe(true)
+		const asked = step(typed, Message.PressedSave())
+		expect(asked.confirmModal.isOpen).toBe(true)
+		const saving = update(asked, Message.PressedConfirmSave(), admin)
+		expect(saving.commands?.[0]).toMatchObject({
+			args: {
+				rules: [
+					expect.anything(),
+					{ conditions: [{ key: "kind", values: ["pass_through", "gold"] }] },
+				],
+			},
+		})
+	})
+
+	test("removing a condition leaves another rule's entry alone, whatever its id", () => {
+		const typed = {
+			...loaded(),
+			valueEntries: { "rule-2:usage:0": "keep", "rule-2:1": "shifted", "rule-2:0": "gone" },
+		}
+		const removed = step(typed, Message.PressedRemoveCondition({ ruleId: "rule-2", index: 0 }))
+		expect(removed.valueEntries).toEqual({ "rule-2:usage:0": "keep", "rule-2:0": "shifted" })
+	})
+
 	test("members cannot change anything", () => {
 		const member = sharedAs("member")
 		const model = loaded()

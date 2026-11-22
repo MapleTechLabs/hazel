@@ -290,11 +290,14 @@ const writeRollups = Effect.fn("Customers.writeRollups")(function* (
 				Effect.gen(function* () {
 					const { stored, rollup } = account
 					const isSwitch = switchedSource(account)
-					// While Stripe imports, a balance built on its invoices is partial: it stays where its
-					// series ends, and the first compute after the import records the whole change.
-					const holdsVariable = stripeImporting && stored.mrrBasis === rollup.mrrBasis
+					// While Stripe imports, a balance built on it is partial: it stays where its series ends,
+					// and the first compute after the import records the whole change.
+					const sameBasis = stored.mrrBasis === rollup.mrrBasis
+					const holdsVariable = stripeImporting && sameBasis
 					const holdsMrr =
-						holdsVariable && usageCanBeMrr && !isSwitch && rollup.mrrSource !== "stripe"
+						holdsVariable &&
+						!isSwitch &&
+						(usageCanBeMrr || stored.mrrSource === "stripe" || rollup.mrrSource === "stripe")
 					if (isSwitch) switched++
 					else if (
 						!rebuildPending &&
@@ -1625,14 +1628,20 @@ const awaitingRevenueWalk = (now: Date) =>
 /** After a rebuild: a restatement that ran before the walk finished is owed again once it has. */
 const settleRevenueWalk = (restated: boolean) =>
 	Effect.gen(function* () {
-		yield* deleteObjectMeta(RESTATE_KEY)
-		const walk = Option.getOrUndefined(yield* revenueWalk)
-		if (walk !== undefined && (yield* walkUnfinished(walk.ids))) {
-			if (restated) yield* saveRevenueWalk({ ...walk, owed: true })
-			return
-		}
-		yield* clearRevenueWalk
-		yield* clearPayingRefresh
+		const db = yield* Database.Database
+		// Together: the request must not go without the debt that replaces it.
+		yield* db.transaction(
+			Effect.gen(function* () {
+				yield* deleteObjectMeta(RESTATE_KEY)
+				const walk = Option.getOrUndefined(yield* revenueWalk)
+				if (walk !== undefined && (yield* walkUnfinished(walk.ids))) {
+					if (restated) yield* saveRevenueWalk({ ...walk, owed: true })
+					return
+				}
+				yield* clearRevenueWalk
+				yield* clearPayingRefresh
+			}),
+		)
 	})
 
 /**

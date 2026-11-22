@@ -1714,6 +1714,51 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	it("holds a Stripe payer's MRR while Stripe imports, and records the change after", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* quietOrg(world)
+				const stripe = world.connection("stripe")
+				world.object.storage.db
+					.prepare(
+						`UPDATE customer_connections SET backfilledAt = '2026-01-01 00:00:00.000' WHERE id = ?`,
+					)
+					.run(stripe)
+				yield* world.ingest("stripe", [subscription(40)])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				const backfill = yield* world.object
+					.run(
+						Effect.flatMap(CustomerIngest, (ingest) => ingest.startRun(stripe, "backfill")).pipe(
+							Effect.provide(CustomerIngest.layer),
+						),
+					)
+					.pipe(Effect.orDie)
+				yield* world.ingest("stripe", [{ ...subscription(40), mrrMinor: 29_900 }])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				const state = () => ({
+					account: world.rows(`SELECT mrrMinor FROM customer_accounts`),
+					movements: world.rows(`SELECT toMrrMinor FROM customer_mrr_movements`),
+				})
+				expect(state()).toEqual({
+					account: [{ mrrMinor: 19_900 }],
+					movements: [{ toMrrMinor: 19_900 }],
+				})
+				yield* world.object
+					.run(
+						Effect.flatMap(CustomerIngest, (ingest) =>
+							ingest.finishRun(backfill.id, { _tag: "Succeeded", cursor: null }),
+						).pipe(Effect.provide(CustomerIngest.layer)),
+					)
+					.pipe(Effect.orDie)
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(state()).toEqual({
+					account: [{ mrrMinor: 29_900 }],
+					movements: [{ toMrrMinor: 29_900 }],
+				})
+			}),
+		))
+
 	it("keeps a deleted account's movements through a restatement: retention still reads them", () =>
 		run(
 			Effect.gen(function* () {

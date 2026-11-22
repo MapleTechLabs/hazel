@@ -22,6 +22,7 @@ import {
 	normalizedDraft,
 	withEntriesCommitted,
 	entryKeyOf,
+	entryOfKey,
 	isSameBasis,
 	MAX_CONDITIONS,
 	MAX_VALUES,
@@ -211,7 +212,7 @@ const entrySubmitted = (model: Model, shared: Shared, ruleId: string, index: num
 const withoutEntriesOf = (model: Model, ruleId: string): Model => ({
 	...model,
 	valueEntries: Object.fromEntries(
-		Object.entries(model.valueEntries).filter(([key]) => !key.startsWith(`${ruleId}:`)),
+		Object.entries(model.valueEntries).filter(([key]) => entryOfKey(key).ruleId !== ruleId),
 	),
 })
 
@@ -220,8 +221,8 @@ const withoutEntryOf = (model: Model, ruleId: string, removed: number): Model =>
 	...model,
 	valueEntries: Object.fromEntries(
 		Object.entries(model.valueEntries).flatMap(([key, text]) => {
-			if (!key.startsWith(`${ruleId}:`)) return [[key, text]]
-			const index = Number(key.slice(ruleId.length + 1))
+			const { ruleId: owner, index } = entryOfKey(key)
+			if (owner !== ruleId) return [[key, text]]
 			return index === removed ? [] : [[entryKeyOf(ruleId, index > removed ? index - 1 : index), text]]
 		}),
 	),
