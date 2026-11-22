@@ -1477,7 +1477,7 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
-	const failedInvoice = (): IngestOp => ({
+	const failedInvoice = (): Extract<IngestOp, { _tag: "invoice" }> => ({
 		_tag: "invoice",
 		externalId: "in_1",
 		account: { provider: "clerk", externalId: "org_1" },
