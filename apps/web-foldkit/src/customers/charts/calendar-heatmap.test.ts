@@ -44,6 +44,13 @@ describe("calendarLayout", () => {
 		}
 	})
 
+	it("labels a month starting in the last, partial week over that week, not past the grid", () => {
+		// The year ends Tue 2026-12-01: December starts mid-week in the last column.
+		const layout = calendarLayout(days("2025-12-02", 365))
+		expect(layout.months.at(-1)).toEqual({ week: layout.weeks - 1, label: "Dec" })
+		for (const month of layout.months) expect(month.week).toBeLessThan(layout.weeks)
+	})
+
 	it("shades days against the busiest one", () => {
 		const points = days("2026-11-16", 3).map((point, index) => ({ ...point, value: [0, 2, 8][index] }))
 		const layout = calendarLayout(points)

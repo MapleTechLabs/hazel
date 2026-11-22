@@ -55,12 +55,14 @@ export const calendarLayout = (
 		week: Math.floor((index + offset) / 7),
 		weekday: (index + offset) % 7,
 	}))
+	const lastWeek = cells.at(-1)?.week ?? 0
 	const months: Array<{ week: number; label: string }> = []
 	for (const cell of cells) {
 		const starts = cell.day.endsWith("-01") || cell.index === 0
 		if (!starts) continue
-		// A month starting mid-week is labelled over the next full week, as GitHub does.
-		const week = cell.weekday === 0 || cell.index === 0 ? cell.week : cell.week + 1
+		// A month starting mid-week is labelled over the next full week, as GitHub does; the last
+		// week has no next one, so its month is labelled over itself.
+		const week = Math.min(cell.weekday === 0 || cell.index === 0 ? cell.week : cell.week + 1, lastWeek)
 		const previous = months.at(-1)
 		if (previous !== undefined && week - previous.week < MONTH_GAP_WEEKS) {
 			// The first, partial month gives way to the first full one.

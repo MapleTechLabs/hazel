@@ -206,6 +206,17 @@ describe("customer page: tabs", () => {
 	test("each tab loads what it shows, once", () => {
 		expect(commandNames(init(route(null), shared))).toContain("FetchCustomerUsage")
 		expect(commandNames(init(route("users"), shared))).toContain("FetchCustomerContacts")
+		const activity = routeChanged(loaded(), route("activity"), shared)
+		expect(commandNames(activity).filter((name) => name === "FetchCustomerYearActivity")).toHaveLength(1)
+		expect(
+			commandNames(
+				routeChanged(
+					routeChanged(activity.model, route(null), shared).model,
+					route("activity"),
+					shared,
+				),
+			),
+		).not.toContain("FetchCustomerYearActivity")
 		const billing = routeChanged(loaded(), route("billing"), shared)
 		expect(billing.model.tab).toBe("billing")
 		expect(commandNames(billing)).toContain("FetchCustomerInvoices")
