@@ -8,7 +8,7 @@ import { formatDayLong } from "../../../customers/format"
 import { msOf } from "../../../customers/queries"
 import { segmentClass, segmentedTrackClass } from "../../../customers/ui/filter-bar"
 import { SOURCE_LABEL, sourceLogo, sourceMark } from "../../../customers/ui/identity"
-import { panel, panelHeader } from "../../../customers/ui/surface"
+import { panelHeader } from "../../../customers/ui/surface"
 import { IconChevronDown } from "../../../icons"
 import { button } from "../../../ui/button"
 import { menuLabel } from "../../../ui/menu-view"
@@ -125,40 +125,43 @@ const yearCalendar = (h: HtmlBuilder<Message>, model: Model): Html => {
 									`busiest ${formatDayLong(busiest.day)} (${activeUsers(busiest.value).toLowerCase()})`,
 								]),
 					].join(" · ")
-	return panel(h, "gap-3", [
-		panelHeader(h, { title: "Activity", description, aside: heatLegend(h) }),
-		points === undefined
-			? failed
-				? h.div(
-						[h.Class("flex flex-col items-center gap-3 py-8 text-muted-fg text-sm")],
-						[
-							h.p([], ["Couldn't load activity."]),
-							button(
-								h,
-								{
-									intent: "outline",
-									size: "sm",
-									onPress: Message.PressedRetryYearActivity(),
-								},
-								["Try again"],
-							),
-						],
-					)
-				: h.div([h.Class("aspect-[7/1] w-full animate-pulse rounded-lg bg-secondary/40")])
-			: calendarHeatmap(h, {
-					points,
-					ariaLabel: `Daily active users over the last year: ${description}`,
-					describe: activeUsers,
-					hoveredIndex: model.hoveredYearDay,
-					onHover: (index) => Message.HoveredYearDay({ index }),
-					idPrefix: "year-day",
-					revealDay: (dayId) =>
-						h.keyed("span")(`reveal-${dayId}`, [
-							h.Class("hidden"),
-							h.OnMount(RevealCalendarDay({ dayId })),
-						]),
-				}),
-	])
+	return h.section(
+		[h.AriaLabel("Activity calendar"), h.Class("flex min-w-0 flex-col gap-3")],
+		[
+			panelHeader(h, { title: "Activity", description, aside: heatLegend(h) }),
+			points === undefined
+				? failed
+					? h.div(
+							[h.Class("flex flex-col items-center gap-3 py-8 text-muted-fg text-sm")],
+							[
+								h.p([], ["Couldn't load activity."]),
+								button(
+									h,
+									{
+										intent: "outline",
+										size: "sm",
+										onPress: Message.PressedRetryYearActivity(),
+									},
+									["Try again"],
+								),
+							],
+						)
+					: h.div([h.Class("aspect-[7/1] w-full animate-pulse rounded-lg bg-secondary/40")])
+				: calendarHeatmap(h, {
+						points,
+						ariaLabel: `Daily active users over the last year: ${description}`,
+						describe: activeUsers,
+						hoveredIndex: model.hoveredYearDay,
+						onHover: (index) => Message.HoveredYearDay({ index }),
+						idPrefix: "year-day",
+						revealDay: (dayId) =>
+							h.keyed("span")(`reveal-${dayId}`, [
+								h.Class("hidden"),
+								h.OnMount(RevealCalendarDay({ dayId })),
+							]),
+					}),
+		],
+	)
 }
 
 const SOURCES: ReadonlyArray<Customers.CustomerSource | null> = [null, ...Customers.CustomerSource.literals]
