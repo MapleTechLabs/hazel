@@ -44,7 +44,7 @@ import {
 	type QuestionData,
 	type ThreadRow,
 } from "./model"
-import { historyOf, isFoldOpen, timelineOf, workSummaryOf } from "./timeline"
+import { hasOwnWorkingState, historyOf, isFoldOpen, timelineOf, workSummaryOf } from "./timeline"
 import {
 	answersOf,
 	isAnswered,
@@ -708,8 +708,9 @@ const timelineView = (
 								: revealRow(h, pending.messageId ?? "pending", { spacing: "md" }, [
 										userBubble(h, pending.text, pending.isSending),
 									]),
-							// A running thought or step already says it is working, in place.
-							(status === "running" && !items.some((item) => item.status === "running")) ||
+							// A running thought or tool step already says it is working, in place (its thought line); a
+							// streaming reply does not, so the indicator stays.
+							(status === "running" && !items.some(hasOwnWorkingState)) ||
 							pending?.isSending === true
 								? revealRow(h, "working", { spacing: "md" }, [workingIndicator(h)])
 								: h.empty,

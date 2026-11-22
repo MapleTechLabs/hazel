@@ -57,6 +57,13 @@ export const isFoldOpen = (
 	isRunning: boolean,
 ): boolean => folds[key] ?? isRunning
 
+/**
+ * A running thinking or tool row: its thought line shows the work, so the panel's "Working…" steps
+ * aside. A streaming reply shows none, so it does not.
+ */
+export const hasOwnWorkingState = (item: ItemRow): boolean =>
+	item.status === "running" && (item.kind === "reasoning" || item.kind === "tool")
+
 /** The history menu: the member's own threads, then those shared with them; newest activity first. */
 export const historyOf = (threads: ReadonlyArray<ThreadRow>, userId: UserId | null) => {
 	const newestFirst = [...threads].sort((left, right) => right.lastActivityAtMs - left.lastActivityAtMs)

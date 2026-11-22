@@ -2,7 +2,7 @@ import { AssistantItemId, AssistantThreadId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { describe, expect, test } from "vitest"
 import type { ItemRow, ThreadRow } from "./model"
-import { historyOf, isFoldOpen, sortItems, timelineOf, workSummaryOf } from "./timeline"
+import { hasOwnWorkingState, historyOf, isFoldOpen, sortItems, timelineOf, workSummaryOf } from "./timeline"
 
 /** How a thread reads: order, work logs, and the history menu's groups. */
 
@@ -108,5 +108,17 @@ describe("isFoldOpen", () => {
 
 	test("another row's choice does not apply", () => {
 		expect(isFoldOpen({ b: true }, "a", false)).toBe(false)
+	})
+})
+
+describe("hasOwnWorkingState", () => {
+	test("a running thought or tool step shows its own work; a streaming reply does not", () => {
+		expect(hasOwnWorkingState(item(1, "reasoning", { status: "running" }))).toBe(true)
+		expect(hasOwnWorkingState(item(2, "tool", { status: "running" }))).toBe(true)
+		expect(hasOwnWorkingState(item(3, "assistant", { status: "running" }))).toBe(false)
+	})
+
+	test("a finished one does not", () => {
+		expect(hasOwnWorkingState(item(4, "tool", { status: "completed" }))).toBe(false)
 	})
 })
