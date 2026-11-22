@@ -1,4 +1,4 @@
-import type { MrrMovementBucket } from "@hazel/domain/customers"
+import type { MrrMovementBucket, RevenueBucket, RevenueSplit } from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { bucketLabels, formatMoney, formatMoneyCompact } from "../format"
@@ -48,6 +48,8 @@ export type StackedBarChartOptions<M> = Readonly<{
 	bars: ReadonlyArray<StackedBar>
 	/** Draw the net line, with this label in the tooltip. */
 	netLabel?: string
+	/** A total row in the tooltip (each bar's `net`), without the line. */
+	totalLabel?: string
 	formatValue: (value: number) => string
 	formatAxis?: (value: number) => string
 	/** Whole-number y ticks, for counts. */
@@ -188,7 +190,14 @@ export const stackedBarChart = <M>(h: HtmlBuilder<M>, options: StackedBarChartOp
 														color: "net" as const,
 														mark: "line" as const,
 													}
-												: undefined,
+												: options.totalLabel
+													? {
+															label: options.totalLabel,
+															value: options.formatValue(hoveredBar.net),
+															color: "neutral" as const,
+															mark: "dot" as const,
+														}
+													: undefined,
 										}),
 									]),
 							...hoverBands(h, xs, band, options.onHover),
@@ -284,3 +293,69 @@ export const mrrMovementChart = <M>(
 		className: options.className,
 	})
 }
+
+// REVENUE
+
+type RevenueStack = Stack & Readonly<{ key: keyof RevenueSplit }>
+
+const REVENUE_STACKS: ReadonlyArray<RevenueStack> = [
+	{ key: "recurring", label: "Recurring", color: "series-1" },
+	{ key: "variable", label: "Variable", color: "series-2" },
+	{ key: "oneOff", label: "One-off", color: "series-3" },
+	{ key: "unclassified", label: "Unclassified", color: "neutral" },
+]
+
+/** The classes to draw: unclassified only when an invoice without lines was paid. */
+const revenueStacks = (buckets: ReadonlyArray<RevenueBucket>): ReadonlyArray<RevenueStack> =>
+	REVENUE_STACKS.filter(
+		(stack) => stack.key !== "unclassified" || buckets.some((entry) => entry.unclassified !== 0),
+	)
+
+/** The chart's legend, each class with its total over `split`. */
+export const revenueLegend = (
+	buckets: ReadonlyArray<RevenueBucket>,
+	split: RevenueSplit,
+	currency: string,
+): ReadonlyArray<LegendItem> =>
+	revenueStacks(buckets).map((stack) => ({
+		label: `${stack.label} ${formatMoney(split[stack.key], currency)}`,
+		color: stack.color,
+	}))
+
+/** Revenue collected per bucket, stacked by class; a net credit stacks below zero. */
+export const revenueChart = <M>(
+	h: HtmlBuilder<M>,
+	options: Readonly<{
+		buckets: ReadonlyArray<RevenueBucket>
+		bucket: "day" | "week" | "month"
+		currency: string
+		hoveredIndex: number | null
+		onHover: (index: number | null) => M
+		heightClass?: string
+	}>,
+): Html =>
+	stackedBarChart(h, {
+		ariaLabel: `Revenue collected by ${options.bucket}, by class, over ${options.buckets.length} ${options.bucket}s`,
+		stacks: revenueStacks(options.buckets),
+		bars: options.buckets.map((entry) => {
+			const labels = bucketLabels(options.bucket, entry.start)
+			return {
+				tick: labels.tick,
+				heading: labels.heading,
+				values: {
+					recurring: entry.recurring,
+					variable: entry.variable,
+					oneOff: entry.oneOff,
+					unclassified: entry.unclassified,
+				},
+				net: entry.recurring + entry.variable + entry.oneOff + entry.unclassified,
+			}
+		}),
+		totalLabel: "Revenue",
+		formatValue: (value) => formatMoney(value, options.currency),
+		formatAxis: (value) => formatMoneyCompact(value, options.currency),
+		hoveredIndex: options.hoveredIndex,
+		onHover: options.onHover,
+		maxXTicks: options.bucket === "day" ? 6 : 12,
+		heightClass: options.heightClass,
+	})

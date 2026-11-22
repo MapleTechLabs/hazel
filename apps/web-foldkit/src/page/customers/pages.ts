@@ -6,6 +6,7 @@ import * as CustomersOverview from "./overview"
 import * as CustomersSettingsHealth from "./settings/health"
 import * as CustomersSettingsFeatureFlags from "./settings/feature-flags"
 import * as CustomersSettingsPlans from "./settings/plans"
+import * as CustomersSettingsRevenue from "./settings/revenue"
 import * as CustomersSettingsSignals from "./settings/signals"
 import * as CustomersSettingsSla from "./settings/sla"
 import * as CustomersSettingsSources from "./settings/sources"
@@ -23,6 +24,7 @@ export const pages = [
 	CustomersSettingsSignals.page,
 	CustomersSettingsHealth.page,
 	CustomersSettingsPlans.page,
+	CustomersSettingsRevenue.page,
 	CustomersSettingsSla.page,
 	CustomersSettingsFeatureFlags.page,
 	CustomersSettingsSources.page,

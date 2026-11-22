@@ -478,6 +478,7 @@ export const view = <ParentMessage>(
 					item("customersHealth", on("CustomersSettingsHealth")),
 					item("customersSla", on("CustomersSettingsSla")),
 					item("customersPlans", on("CustomersSettingsPlans")),
+					item("customersRevenue", on("CustomersSettingsRevenue")),
 					item("customersFeatureFlags", on("CustomersSettingsFeatureFlags")),
 					item(
 						"customersSources",

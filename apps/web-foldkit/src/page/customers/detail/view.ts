@@ -39,7 +39,7 @@ import {
 import { shownSuggestions, suggestionRow } from "../../../customers/suggestions"
 import { featureFlagKeysOf, hasFlag } from "../../../customers/feature-flags"
 import { safeSourceUrl } from "../../../customers/providers"
-import { attentionMuteLabel, isAttentionMuted } from "../../../customers/queries"
+import { attentionMuteLabel, isAttentionMuted, runRateMrrOf } from "../../../customers/queries"
 import { isMuteKey, MUTE_LABEL } from "../../../customers/ui/menus"
 import { AppRoute, hrefOf } from "../../../route"
 import { badge } from "../../../ui/badge"
@@ -395,6 +395,9 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 	const meta = [
 		account.planName,
 		account.mrrMinor > 0 ? `${formatMoney(account.mrrMinor, account.currency)}/mo` : null,
+		account.variableMrrMinor > 0
+			? `${formatMoney(runRateMrrOf(account), account.currency)}/mo run-rate`
+			: null,
 	].filter((part) => part !== null)
 	return h.div(
 		[h.Class("px-4 pt-5 lg:px-6")],
@@ -1116,6 +1119,9 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 				),
 				property(h, "Plan", account.planName ?? "—"),
 				property(h, "MRR", formatMoney(account.mrrMinor, account.currency)),
+				...(account.variableMrrMinor > 0
+					? [property(h, "Run-rate MRR", formatMoney(runRateMrrOf(account), account.currency))]
+					: []),
 				...(account.seatsUsed === null
 					? []
 					: [

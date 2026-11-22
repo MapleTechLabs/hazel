@@ -84,6 +84,7 @@ export const init = (_route: unknown, shared: Shared): Return =>
 			support: AsyncData.Idle(),
 			healthMetric: "customers",
 			hoveredMrr: null,
+			hoveredRevenue: null,
 			hoveredActiveUsers: null,
 			signals: null,
 			accounts: null,
@@ -108,6 +109,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						modifyFields(model, {
 							range: () => range,
 							hoveredMrr: () => null,
+							hoveredRevenue: () => null,
 							hoveredActiveUsers: () => null,
 						}),
 						shared,
@@ -120,7 +122,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model:
 				chart === "mrr"
 					? modifyFields(model, { hoveredMrr: () => index })
-					: modifyFields(model, { hoveredActiveUsers: () => index }),
+					: chart === "revenue"
+						? modifyFields(model, { hoveredRevenue: () => index })
+						: modifyFields(model, { hoveredActiveUsers: () => index }),
 		}),
 		PressedRetry: () => fetch(model, shared),
 		PressedRetrySupport: () => fetchSupport(model, shared),

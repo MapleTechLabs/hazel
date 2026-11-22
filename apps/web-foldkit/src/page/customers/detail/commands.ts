@@ -95,7 +95,11 @@ export const FetchCustomerMrrHistory = Command.define("FetchCustomerMrrHistory",
 	messages: [Message.SucceededFetchMrrHistory, Message.FailedFetchMrrHistory],
 	execute: (args) =>
 		HazelRpc.use((rpc) =>
-			rpc("customers.account.series", { ...args, metricKeys: ["mrr"], range: "12m" }),
+			rpc("customers.account.series", {
+				...args,
+				metricKeys: ["mrr", "variable_mrr"],
+				range: "12m",
+			}),
 		).pipe(
 			Effect.map(({ series }) =>
 				Message.SucceededFetchMrrHistory({ accountId: args.accountId, series }),

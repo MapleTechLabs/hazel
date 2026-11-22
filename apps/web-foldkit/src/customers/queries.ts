@@ -51,6 +51,8 @@ export const AccountRow = Schema.Struct({
 	lifecycleStage: Customers.LifecycleStage,
 	planName: Schema.NullOr(Schema.String),
 	mrrMinor: Schema.Int,
+	/** The trailing average of variable billing (`docs/customers/revenue.md`). */
+	variableMrrMinor: Schema.Int,
 	currency: Schema.String,
 	trialListMrrMinor: Schema.NullOr(Schema.Int),
 	trialEndsAtMs: Schema.NullOr(Schema.Finite),
@@ -82,6 +84,10 @@ export const AccountRow = Schema.Struct({
 	attentionMutedByUserId: Schema.NullOr(UserId),
 })
 export type AccountRow = typeof AccountRow.Type
+
+/** MRR + variable MRR: what a customer on usage-based pricing pays per month. */
+export const runRateMrrOf = (account: Pick<AccountRow, "mrrMinor" | "variableMrrMinor">): number =>
+	account.mrrMinor + account.variableMrrMinor
 
 /** Needs attention leaves the account out (the server unmutes it once a timed mute ends). */
 export const isAttentionMuted = (account: Pick<AccountRow, "attentionMutedAtMs">): boolean =>
@@ -165,6 +171,7 @@ export const toAccountRow = (account: Customers.Account): AccountRow => ({
 	lifecycleStage: account.lifecycleStage,
 	planName: account.planName,
 	mrrMinor: account.mrrMinor,
+	variableMrrMinor: account.variableMrrMinor,
 	currency: account.currency,
 	trialListMrrMinor: account.trialListMrrMinor,
 	trialEndsAtMs: msOrNull(account.trialEndsAt),

@@ -3,7 +3,8 @@ import { Option } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { stackedBarChart } from "../../../customers/charts/stacked-bar-chart"
+import { CHART_COLOR, chartLegend, type ChartColor } from "../../../customers/charts/frame"
+import { revenueChart, revenueLegend, stackedBarChart } from "../../../customers/charts/stacked-bar-chart"
 import {
 	formatDate,
 	formatMoney,
@@ -12,6 +13,7 @@ import {
 	formatMonthShort,
 } from "../../../customers/format"
 import { safeSourceUrl } from "../../../customers/providers"
+import { runRateMrrOf } from "../../../customers/queries"
 import { stageBadge } from "../../../customers/ui/badges"
 import { dataTable } from "../../../customers/ui/data-table"
 import { linkClass } from "../../../customers/ui/surface"
@@ -22,7 +24,7 @@ import { Message } from "./message"
 import { type Model, paymentIssue } from "./model"
 import { card, type Context, icon, pageFooter } from "./parts"
 
-/** The billing tab: a payment issue, the subscriptions, MRR history and the invoices. */
+/** The billing tab: a payment issue, the revenue numbers, the subscriptions, MRR and revenue history, the invoices. */
 
 const INTERVAL_LABEL = { month: "Monthly", year: "Yearly", other: "Custom" } as const
 
@@ -135,10 +137,44 @@ const fact = (h: HtmlBuilder<Message>, label: string, value: Html | string) =>
 		],
 	)
 
+const splitTotal = (split: Customers.RevenueSplit) =>
+	split.recurring + split.variable + split.oneOff + split.unclassified
+
+/** MRR, variable MRR, run-rate MRR and what was collected. */
+const revenueSummary = (h: HtmlBuilder<Message>, context: Context, detail: Customers.AccountDetail): Html => {
+	const { account } = context
+	const money = (minor: number) => formatMoney(minor, account.currency)
+	return h.section(
+		[
+			h.AriaLabel("Revenue summary"),
+			h.Class(
+				"grid grid-cols-2 overflow-hidden rounded-xl border border-border bg-bg md:grid-cols-5 [&>*]:border-border max-md:[&>*]:border-b md:[&>*:not(:first-child)]:border-l",
+			),
+		],
+		[
+			fact(h, "MRR", money(account.mrrMinor)),
+			fact(h, "Variable MRR", money(account.variableMrrMinor)),
+			fact(h, "Run-rate MRR", money(runRateMrrOf(account))),
+			fact(h, "Revenue, last 30 days", money(splitTotal(detail.revenue.last30Days))),
+			fact(h, "Revenue, last 12 months", money(splitTotal(detail.revenue.last12Months))),
+		],
+	)
+}
+
+/** What a subscription adds to the account's MRR: only a billed one counts (a trial or a canceled one does not). */
+const contractedMrrOf = (
+	detail: Customers.AccountDetail,
+	subscription: Customers.Subscription,
+): number | null =>
+	subscription.status === "active" || subscription.status === "past_due" || subscription.status === "unpaid"
+		? (detail.subscriptionMrr.find((entry) => entry.subscriptionId === subscription.id)?.mrrMinor ?? null)
+		: null
+
 const subscriptionCard = (
 	h: HtmlBuilder<Message>,
 	context: Context,
 	subscription: Customers.Subscription,
+	mrrMinor: number | null,
 	overdue: Customers.Invoice | null,
 ): Html => {
 	const now = new Date(context.nowMs)
@@ -176,7 +212,7 @@ const subscriptionCard = (
 							h.span(
 								[h.Class("whitespace-nowrap font-semibold text-fg text-xl tabular-nums")],
 								[
-									formatMoney(subscription.mrrMinor, subscription.currency),
+									mrrMinor === null ? "—" : formatMoney(mrrMinor, subscription.currency),
 									h.span([h.Class("font-normal text-muted-fg text-xs")], [" MRR"]),
 								],
 							),
@@ -241,11 +277,22 @@ const monthly = (points: ReadonlyArray<Customers.SeriesPoint>): ReadonlyArray<Cu
 }
 
 const mrrHistoryCard = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
-	const series = Option.getOrUndefined(AsyncData.getData(model.mrrHistory))?.[0]
-	const months = monthly(series?.points ?? [])
+	const history = Option.getOrUndefined(AsyncData.getData(model.mrrHistory))
+	const mrr = history?.find((series) => series.metricKey === "mrr")
+	const variableByMonth = new Map(
+		monthly(history?.find((series) => series.metricKey === "variable_mrr")?.points ?? []).map((point) => [
+			point.day.slice(0, 7),
+			point.value,
+		]),
+	)
+	const months = monthly(mrr?.points ?? []).map((point) => {
+		const variable = variableByMonth.get(point.day.slice(0, 7)) ?? 0
+		return { day: point.day, mrr: point.value, variable, total: point.value + variable }
+	})
+	const hasVariable = months.some((month) => month.variable !== 0)
 	const currency = context.account.currency
-	const first = months[0]?.value ?? 0
-	const last = months.at(-1)?.value ?? 0
+	const first = months[0]?.total ?? 0
+	const last = months.at(-1)?.total ?? 0
 	const change = last - first
 	return card(
 		h,
@@ -256,7 +303,7 @@ const mrrHistoryCard = (h: HtmlBuilder<Message>, model: Model, context: Context)
 						[h.Class("py-10 text-center text-muted-fg text-sm")],
 						["Couldn't load the MRR history."],
 					)
-				: series === undefined
+				: mrr === undefined
 					? h.div([h.Class("h-48 animate-pulse rounded-lg bg-secondary/40")])
 					: h.div(
 							[h.Class("flex flex-wrap gap-6")],
@@ -269,7 +316,11 @@ const mrrHistoryCard = (h: HtmlBuilder<Message>, model: Model, context: Context)
 											[
 												h.span(
 													[h.Class("text-muted-fg text-xs")],
-													["Net change, 12 months"],
+													[
+														hasVariable
+															? "Run-rate change, 12 months"
+															: "Net change, 12 months",
+													],
 												),
 												h.span(
 													[
@@ -293,6 +344,14 @@ const mrrHistoryCard = (h: HtmlBuilder<Message>, model: Model, context: Context)
 												),
 											],
 										),
+										...(hasVariable
+											? [
+													chartLegend(h, [
+														{ label: "MRR", color: "series-1" },
+														{ label: "Variable MRR", color: "series-2" },
+													]),
+												]
+											: []),
 									],
 								),
 								h.div(
@@ -300,14 +359,26 @@ const mrrHistoryCard = (h: HtmlBuilder<Message>, model: Model, context: Context)
 									[h.Class("min-w-0 flex-1 basis-64")],
 									[
 										stackedBarChart(h, {
-											ariaLabel: "MRR at the end of each month, last 12 months",
-											stacks: [{ key: "mrr", label: "MRR", color: "series-1" }],
-											bars: months.map((point) => ({
-												tick: formatMonthShort(point.day),
-												heading: formatMonthLong(point.day),
-												values: { mrr: point.value },
-												net: point.value,
+											ariaLabel: `${hasVariable ? "Run-rate MRR" : "MRR"} at the end of each month, last 12 months`,
+											stacks: [
+												{ key: "mrr", label: "MRR", color: "series-1" },
+												...(hasVariable
+													? [
+															{
+																key: "variable",
+																label: "Variable MRR",
+																color: "series-2" as const,
+															},
+														]
+													: []),
+											],
+											bars: months.map((month) => ({
+												tick: formatMonthShort(month.day),
+												heading: formatMonthLong(month.day),
+												values: { mrr: month.mrr, variable: month.variable },
+												net: month.total,
 											})),
+											totalLabel: hasVariable ? "Run-rate MRR" : undefined,
 											formatValue: (value) => formatMoney(value, currency),
 											formatAxis: (value) => formatMoneyCompact(value, currency),
 											hoveredIndex: model.hoveredMrr,
@@ -322,6 +393,72 @@ const mrrHistoryCard = (h: HtmlBuilder<Message>, model: Model, context: Context)
 	)
 }
 
+/** What was collected each month, by class. */
+const revenueHistoryCard = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	context: Context,
+	detail: Customers.AccountDetail,
+): Html => {
+	const { byMonth, last12Months } = detail.revenue
+	const currency = context.account.currency
+	return card(
+		h,
+		{
+			title: "Revenue",
+			aside: h.span([h.Class("text-muted-fg text-xs")], ["Collected, excluding tax"]),
+		},
+		[
+			h.div(
+				[h.Class("flex flex-col gap-3")],
+				[
+					chartLegend(h, revenueLegend(byMonth, last12Months, currency)),
+					revenueChart(h, {
+						buckets: byMonth,
+						bucket: "month",
+						currency,
+						hoveredIndex: model.hoveredRevenue,
+						onHover: (index) => Message.HoveredRevenue({ index }),
+						heightClass: "h-44",
+					}),
+				],
+			),
+		],
+	)
+}
+
+const SPLIT_PARTS: ReadonlyArray<readonly [keyof Customers.RevenueSplit, string, ChartColor]> = [
+	["recurring", "Recurring", "series-1"],
+	["variable", "Variable", "series-2"],
+	["oneOff", "One-off", "series-3"],
+	["unclassified", "Unclassified", "neutral"],
+]
+
+/** An invoice's recurring / variable / one-off amounts, each behind its class's swatch. */
+const invoiceSplit = (
+	h: HtmlBuilder<Message>,
+	revenue: Customers.RevenueSplit | null,
+	currency: string,
+): Html =>
+	revenue === null
+		? h.span([h.Class("text-muted-fg")], ["—"])
+		: h.span(
+				[h.Class("flex flex-wrap items-center gap-x-2.5 whitespace-nowrap text-xs")],
+				SPLIT_PARTS.filter(([key]) => revenue[key] !== 0).map(([key, label, color]) =>
+					h.span(
+						[h.Class("inline-flex items-center gap-1"), h.Title(label)],
+						[
+							h.span([
+								h.AriaHidden(true),
+								h.Class(twMerge("size-2 rounded-xs", CHART_COLOR[color].bg)),
+							]),
+							h.span([h.Class("sr-only")], [`${label} `]),
+							formatMoney(revenue[key], currency),
+						],
+					),
+				),
+			)
+
 const invoicesCard = (
 	h: HtmlBuilder<Message>,
 	model: Model,
@@ -330,9 +467,9 @@ const invoicesCard = (
 ): Html => {
 	const now = new Date(context.nowMs)
 	const upcoming = detail.upcomingInvoice
-	const rows = [
-		...(upcoming === null ? [] : [upcoming]),
-		...model.invoices.items.filter((invoice) => invoice.id !== upcoming?.id),
+	const rows: ReadonlyArray<Customers.InvoiceRow> = [
+		...(upcoming === null ? [] : [{ invoice: upcoming, revenue: null }]),
+		...model.invoices.items.filter((row) => row.invoice.id !== upcoming?.id),
 	]
 	const date = (value: Customers.Invoice["dueAt"]) =>
 		value === null ? "—" : formatDate(value, { now, withYear: true })
@@ -348,7 +485,7 @@ const invoicesCard = (
 			id: "customer-invoices",
 			className: "rounded-none border-x-0 border-b-0",
 			rows,
-			rowKey: (invoice) => invoice.id,
+			rowKey: (row) => row.invoice.id,
 			loadingRows:
 				model.invoices.status === "Loading" && model.invoices.items.length === 0 ? 5 : undefined,
 			columns: [
@@ -356,7 +493,7 @@ const invoicesCard = (
 					key: "number",
 					label: "Invoice",
 					// The number opens the invoice in its provider: no link column a phone has no room for.
-					cell: (invoice) => {
+					cell: ({ invoice }) => {
 						if (invoice.status === "upcoming")
 							return h.span([h.Class("text-muted-fg")], ["Upcoming"])
 						const href = safeSourceUrl(invoice.provider, invoice.hostedUrl)
@@ -377,7 +514,7 @@ const invoicesCard = (
 				{
 					key: "status",
 					label: "Status",
-					cell: (invoice) =>
+					cell: ({ invoice }) =>
 						badge(h, { intent: INVOICE_STATUS[invoice.status][1] }, [
 							INVOICE_STATUS[invoice.status][0],
 						]),
@@ -387,7 +524,15 @@ const invoicesCard = (
 					label: "Amount",
 					align: "right",
 					widthClass: "w-28",
-					cell: (invoice) => formatMoney(invoice.amountDueMinor, invoice.currency, { cents: true }),
+					cell: ({ invoice }) =>
+						formatMoney(invoice.amountDueMinor, invoice.currency, { cents: true }),
+				},
+				{
+					key: "split",
+					label: "Split",
+					// Beside the sidebar the amounts need a wide table.
+					hideClass: "max-2xl:hidden",
+					cell: ({ invoice, revenue }) => invoiceSplit(h, revenue, invoice.currency),
 				},
 				{
 					key: "issued",
@@ -395,7 +540,7 @@ const invoicesCard = (
 					widthClass: "w-32",
 					// Beside the sidebar (lg) the table has the width of a tablet.
 					hideClass: "max-xl:hidden",
-					cell: (invoice) => h.span([h.Class("whitespace-nowrap")], [date(invoice.issuedAt)]),
+					cell: ({ invoice }) => h.span([h.Class("whitespace-nowrap")], [date(invoice.issuedAt)]),
 				},
 				{
 					key: "due",
@@ -403,13 +548,13 @@ const invoicesCard = (
 					widthClass: "w-28",
 					// A phone keeps the invoice, its status, amount and link.
 					hideClass: "max-sm:hidden",
-					cell: (invoice) => h.span([h.Class("whitespace-nowrap")], [date(invoice.dueAt)]),
+					cell: ({ invoice }) => h.span([h.Class("whitespace-nowrap")], [date(invoice.dueAt)]),
 				},
 				{
 					key: "paid",
 					label: "Paid",
 					hideClass: "max-sm:hidden",
-					cell: (invoice) =>
+					cell: ({ invoice }) =>
 						invoice.paidAt !== null
 							? h.span(
 									[h.Class("whitespace-nowrap")],
@@ -441,8 +586,14 @@ export const billingTab = (h: HtmlBuilder<Message>, model: Model, context: Conte
 		return [h.div([h.Class("h-64 animate-pulse rounded-xl border border-border bg-secondary/30")])]
 	const issue = paymentIssue(detail, context.nowMs)
 	const alert = banner(h, context, detail)
+	// A lead that was never billed: the notice below says so, without a row of zeros.
+	const hasBilling =
+		detail.subscriptions.length > 0 ||
+		runRateMrrOf(context.account) !== 0 ||
+		detail.revenue.byMonth.some((month) => splitTotal(month) !== 0)
 	return [
 		...(alert === null ? [] : [alert]),
+		...(hasBilling ? [revenueSummary(h, context, detail)] : []),
 		...(detail.subscriptions.length === 0
 			? [
 					h.div(
@@ -462,10 +613,12 @@ export const billingTab = (h: HtmlBuilder<Message>, model: Model, context: Conte
 						h,
 						context,
 						subscription,
+						contractedMrrOf(detail, subscription),
 						issue?.invoice?.subscriptionId === subscription.id ? issue.invoice : null,
 					),
 				)),
 		mrrHistoryCard(h, model, context),
+		...(hasBilling ? [revenueHistoryCard(h, model, context, detail)] : []),
 		invoicesCard(h, model, context, detail),
 	]
 }

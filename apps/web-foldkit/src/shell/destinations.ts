@@ -162,6 +162,12 @@ const DESTINATIONS = define({
 		to: (orgSlug) => AppRoute.CustomersSettingsPlans({ orgSlug }),
 		keywords: "pricing tiers",
 	},
+	customersRevenue: {
+		label: "Revenue",
+		icon: IconChartBar,
+		to: (orgSlug) => AppRoute.CustomersSettingsRevenue({ orgSlug }),
+		keywords: "mrr run-rate usage billing classification rules",
+	},
 	customersFeatureFlags: {
 		label: "Feature flags",
 		icon: IconRocket,
@@ -313,6 +319,7 @@ export const DESTINATION_GROUPS: ReadonlyArray<{
 			"customersHealth",
 			"customersSla",
 			"customersPlans",
+			"customersRevenue",
 			"customersFeatureFlags",
 			"customersSources",
 		],

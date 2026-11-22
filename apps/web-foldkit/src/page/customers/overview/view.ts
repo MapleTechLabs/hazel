@@ -9,12 +9,18 @@ import { activeUsersChart } from "../../../customers/charts/line-chart"
 import { chartLegend } from "../../../customers/charts/frame"
 import { distributionBar, healthDistribution } from "../../../customers/charts/distribution"
 import { sparkline } from "../../../customers/charts/sparkline"
-import { mrrLegend, mrrMovementChart } from "../../../customers/charts/stacked-bar-chart"
+import {
+	mrrLegend,
+	mrrMovementChart,
+	revenueChart,
+	revenueLegend,
+} from "../../../customers/charts/stacked-bar-chart"
 import {
 	formatCount,
 	formatDate,
 	formatDeltaCount,
 	formatDeltaPct,
+	formatDeltaPoints,
 	formatMetricValue,
 	formatMoney,
 	formatPct,
@@ -67,6 +73,7 @@ import { heading } from "../../../ui/heading"
 type Result = Customers.OverviewResult
 
 const toHoverMrr = (index: number | null) => Message.HoveredChart({ chart: "mrr", index })
+const toHoverRevenue = (index: number | null) => Message.HoveredChart({ chart: "revenue", index })
 const toHoverActiveUsers = (index: number | null) => Message.HoveredChart({ chart: "activeUsers", index })
 const toRange = (range: Customers.CustomersRange) => Message.ClickedRange({ range })
 const toHealthMetric = (metric: "customers" | "mrr") => Message.ClickedHealthMetric({ metric })
@@ -138,10 +145,16 @@ const countDelta = (model: Model, kpi: Customers.Kpi, goodWhen: "up" | "down" = 
 		? null
 		: { value: kpi.value - kpi.previous, text: formatDeltaCount(kpi.value - kpi.previous), goodWhen }
 
-const CELL =
-	"flex min-w-0 flex-col gap-1 px-5 py-4 max-md:px-4 md:border-l md:border-border md:first:border-l-0"
+/** A percentage's change, in points: a percent of a percent would read as a bigger move than it is. */
+const pointsDelta = (model: Model, kpi: Customers.Kpi): Delta | null =>
+	!model.isComparing || kpi.previous === null
+		? null
+		: { value: kpi.value - kpi.previous, text: formatDeltaPoints(kpi.value - kpi.previous) }
 
-/** One of the three headline numbers: a label, the number, and one line under it. */
+const CELL =
+	"flex min-w-0 flex-col gap-1 px-5 py-4 max-md:px-4 md:border-border md:border-l md:nth-[3n+1]:border-l-0 md:nth-[n+4]:border-t"
+
+/** One of the headline numbers: a label, the number, and one line under it. */
 const headlineCell = (
 	h: HtmlBuilder<Message>,
 	options: Readonly<{
@@ -198,8 +211,8 @@ const headlineCell = (
 	)
 
 /**
- * The three numbers worth reading every day: revenue, the revenue at risk, and who is using the
- * product. The rest of the KPIs follow in one quiet line.
+ * The numbers worth reading every day: MRR, run-rate MRR and revenue, then the MRR at risk, who is
+ * using the product and what the customers kept. The rest of the KPIs follow in one quiet line.
  */
 const headline = (
 	h: HtmlBuilder<Message>,
@@ -220,7 +233,7 @@ const headline = (
 		)
 	if (result === undefined)
 		return strip(
-			["MRR", "MRR at risk", "Active customers"].map((label) =>
+			["MRR", "Run-rate MRR", "Revenue", "MRR at risk", "Active customers", "NRR"].map((label) =>
 				h.div(
 					[h.Key(label), h.Class(CELL)],
 					[
@@ -279,10 +292,28 @@ const headline = (
 			id: "kpi-mrr",
 			label: "MRR",
 			definition:
-				"Monthly recurring revenue of every active subscription, plus usage billing averaged over the last 3 months, in the reporting currency.",
+				"Contracted recurring revenue per month, now, in the reporting currency. Variable usage billing is excluded.",
 			value: formatMoney(kpis.mrrMinor.value, currency),
 			delta: pctDelta(model, kpis.mrrMinor),
 			detail: comparing,
+		}),
+		headlineCell(h, {
+			id: "kpi-run-rate",
+			label: "Run-rate MRR",
+			definition:
+				"MRR plus variable MRR: the average monthly variable billing over the last full calendar months (the window is in Settings → Revenue).",
+			value: formatMoney(kpis.runRateMrrMinor.value, currency),
+			delta: pctDelta(model, kpis.runRateMrrMinor),
+			detail: `${formatMoney(kpis.variableMrrMinor.value, currency)} variable`,
+		}),
+		headlineCell(h, {
+			id: "kpi-revenue",
+			label: "Revenue",
+			definition:
+				"Money collected in the period from paid invoices, by paid date: excluding tax, net of discounts and credits, before refunds.",
+			value: formatMoney(kpis.revenueMinor.value, currency),
+			delta: pctDelta(model, kpis.revenueMinor),
+			detail: comparing ?? "Collected in the period",
 		}),
 		headlineCell(h, {
 			id: "kpi-at-risk",
@@ -299,19 +330,28 @@ const headline = (
 			}),
 		}),
 		active,
+		headlineCell(h, {
+			id: "kpi-nrr",
+			label: "NRR",
+			definition:
+				"Net revenue retention: the MRR now of customers who had MRR at the start of the period, as a percentage of their MRR then. Run-rate NRR is the same on run-rate MRR, so it moves with usage.",
+			value: kpis.nrrPct === null ? "—" : formatPct(kpis.nrrPct.value, { digits: 1 }),
+			delta: kpis.nrrPct === null ? null : pointsDelta(model, kpis.nrrPct),
+			detail: `Run-rate NRR ${kpis.runRateNrrPct === null ? "—" : formatPct(kpis.runRateNrrPct.value, { digits: 1 })}`,
+		}),
 	])
 }
 
 const HEALTH_ORDER: ReadonlyArray<Customers.HealthStatus> = ["healthy", "at_risk", "critical", "unknown"]
 
-/** Revenue, paying customers and logo churn: worth a glance, not a tile each. */
+/** Paying customers and logo churn: worth a glance, not a tile each. */
 const secondaryLine = (
 	h: HtmlBuilder<Message>,
 	model: Model,
 	result: Result | undefined,
 ): ReadonlyArray<Html> => {
 	if (result === undefined || !result.hasData.billing) return []
-	const { kpis, currency } = result
+	const { kpis } = result
 	const total = model.accounts?.length ?? 0
 	const churnBase = kpis.payingCustomers.previous ?? kpis.payingCustomers.value
 	const churnPct = churnBase === 0 ? 0 : (kpis.logoChurn.value / churnBase) * 100
@@ -337,16 +377,9 @@ const secondaryLine = (
 			[h.Class("flex flex-wrap items-center gap-x-6 gap-y-1 px-1 text-sm")],
 			[
 				part(
-					"kpi-revenue",
-					"Revenue",
-					"Revenue collected in the period from paid invoices, recurring and one-off, in the reporting currency.",
-					formatMoney(kpis.revenueMinor.value, currency),
-					pctDelta(model, kpis.revenueMinor),
-				),
-				part(
 					"kpi-paying",
 					"Paying customers",
-					"Customers with MRR above zero.",
+					"Customers with run-rate MRR above zero.",
 					formatCount(kpis.payingCustomers.value),
 					countDelta(model, kpis.payingCustomers),
 					`of ${formatCount(total)}`,
@@ -615,7 +648,11 @@ const supportCard = (h: HtmlBuilder<Message>, model: Model, context: Context): H
 const mrrCard = (h: HtmlBuilder<Message>, model: Model, result: Result): Html => {
 	if (!result.hasData.billing)
 		return card(h, "lg:col-span-2", [
-			cardHeader(h, "MRR movement", `New, expansion, contraction and churn by ${result.bucket}`),
+			cardHeader(
+				h,
+				"MRR movement",
+				`New, expansion, contraction and churn by ${result.bucket}. Usage is excluded.`,
+			),
 			h.div(
 				[
 					h.Class(
@@ -658,7 +695,7 @@ const mrrCard = (h: HtmlBuilder<Message>, model: Model, result: Result): Html =>
 		cardHeader(
 			h,
 			"MRR movement",
-			`${result.bucket === "day" ? "Daily" : result.bucket === "week" ? "Weekly" : "Monthly"} change by type`,
+			`${result.bucket === "day" ? "Daily" : result.bucket === "week" ? "Weekly" : "Monthly"} change by type. Usage is excluded.`,
 			h.div(
 				[h.Class("flex flex-col items-end max-sm:items-start")],
 				[
@@ -696,6 +733,28 @@ const mrrCard = (h: HtmlBuilder<Message>, model: Model, result: Result): Html =>
 		}),
 	])
 }
+
+/** What paid invoices brought in over the range, by class. */
+const revenueCard = (h: HtmlBuilder<Message>, model: Model, result: Result): Html =>
+	card(h, "", [
+		cardHeader(
+			h,
+			"Revenue",
+			"Collected from paid invoices, excluding tax, net of discounts",
+			h.span(
+				[h.Class("font-semibold text-fg text-sm tabular-nums")],
+				[formatMoney(result.kpis.revenueMinor.value, result.currency)],
+			),
+		),
+		chartLegend(h, revenueLegend(result.revenueBuckets, result.revenue, result.currency)),
+		revenueChart(h, {
+			buckets: result.revenueBuckets,
+			bucket: result.bucket,
+			currency: result.currency,
+			hoveredIndex: model.hoveredRevenue,
+			onHover: toHoverRevenue,
+		}),
+	])
 
 const activeUsersCard = (h: HtmlBuilder<Message>, model: Model, result: Result): Html => {
 	const last = result.activeUsers[result.activeUsers.length - 1]
@@ -1100,7 +1159,7 @@ const trendsSection = (h: HtmlBuilder<Message>, model: Model, result: Result, co
 						h.span([h.Class("font-medium text-fg")], ["Charts and trends"]),
 						h.span(
 							[h.Class("text-muted-fg text-xs max-sm:hidden")],
-							["MRR movement, active users, health distribution, top movers"],
+							["Revenue, MRR movement, active users, health distribution, top movers"],
 						),
 					],
 				},
@@ -1108,6 +1167,7 @@ const trendsSection = (h: HtmlBuilder<Message>, model: Model, result: Result, co
 					h.div(
 						[h.Class("flex flex-col gap-4 pt-3")],
 						[
+							...(result.hasData.billing ? [revenueCard(h, model, result)] : []),
 							mrrCard(h, model, result),
 							h.div(
 								[h.Class("grid gap-4 lg:grid-cols-2")],

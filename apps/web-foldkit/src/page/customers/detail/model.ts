@@ -62,7 +62,7 @@ const paged = <S extends Schema.Top>(item: S) =>
 	Schema.Struct({ items: Schema.Array(item), nextCursor: Schema.NullOr(Schema.String), status: PageStatus })
 
 export const Contacts = paged(Customers.ContactRow)
-export const Invoices = paged(Customers.Invoice.Schema)
+export const Invoices = paged(Customers.InvoiceRow)
 export const Events = paged(Customers.Event.Schema)
 export type Paged<A> = Readonly<{ items: ReadonlyArray<A>; nextCursor: string | null; status: PageStatus }>
 
@@ -142,6 +142,7 @@ export const Model = Schema.Struct({
 	/** The Activity tab's year calendar: daily active users over the last 12 months. */
 	yearActivity: Series.schema,
 	hoveredYearDay: Schema.NullOr(Schema.Int),
+	hoveredRevenue: Schema.NullOr(Schema.Int),
 	/** The Support block: the customer's live issues and SLA clocks, and their 30-day report row. */
 	supportIssues: Schema.NullOr(Schema.Array(IssueRow)),
 	supportSlas: Schema.Array(IssueSlaRow),

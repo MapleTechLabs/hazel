@@ -51,6 +51,7 @@ const account = (n: number, featureFlags: Record<string, boolean>): AccountRow =
 	lifecycleStage: "active",
 	planName: null,
 	mrrMinor: 0,
+	variableMrrMinor: 0,
 	currency: "usd",
 	trialListMrrMinor: null,
 	trialEndsAtMs: null,
