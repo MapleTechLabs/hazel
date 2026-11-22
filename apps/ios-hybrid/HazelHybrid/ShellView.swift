@@ -48,10 +48,7 @@ struct ShellView: View {
         }
         .tint(Self.brand)
         .onChange(of: bridge.screen) { _, screen in follow(screen: screen, tabs: bridge.tabs) }
-        .onChange(of: bridge.tabs) { _, tabs in
-            if !tabs.isEmpty { rootTabs = tabs }
-            follow(screen: bridge.screen, tabs: tabs)
-        }
+        .onChange(of: bridge.tabs) { _, tabs in follow(screen: bridge.screen, tabs: tabs) }
         .onChange(of: bridge.isThreadOpen) { _, isOpen in followThread(isOpen) }
         // The page went somewhere without a native screen or tab bar changing (back from a thread
         // opened as a page to its channel): a conversation is pushed again.
@@ -203,6 +200,8 @@ struct ShellView: View {
         }
         if let screen {
             root = screen
+            // Only a native screen's tabs: a tab the page draws itself (Activity) is not `root`'s.
+            if !tabs.isEmpty { rootTabs = tabs }
             if !path.isEmpty { path = [] }
         } else if tabs.isEmpty, root != nil, path.isEmpty, !isReturning {
             path = ["page"]
