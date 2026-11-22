@@ -1,5 +1,6 @@
 import { enrichmentDomainOf } from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
+import { twMerge } from "tailwind-merge"
 import {
 	addressLabel,
 	companyTypeLabel,
@@ -17,7 +18,13 @@ import { IconArrowPath } from "../../../icons"
 import { button } from "../../../ui/button"
 import { input } from "../../../ui/input"
 import { Message } from "./message"
-import { DOMAIN_INPUT_ID, isCompanyRefreshPending, isCompanyRefreshUnanswered, type Model } from "./model"
+import {
+	DOMAIN_INPUT_ID,
+	isCompanyRefreshAnswered,
+	isCompanyRefreshPending,
+	isCompanyRefreshUnanswered,
+	type Model,
+} from "./model"
 import { type Context, icon, property, sidebarSection } from "./parts"
 
 /**
@@ -91,11 +98,48 @@ const refreshButton = (
 			size: "xs",
 			isPending: options.isPending,
 			onPress: Message.PressedRefreshCompany(),
-			className: options.iconOnly ? "px-1.5" : undefined,
+			// Loading, not disabled: the turning arrow and the label say so at full strength.
+			className: twMerge(options.iconOnly && "px-1.5", "data-pending:opacity-100"),
 			attributes: options.iconOnly ? [h.AriaLabel(options.label), h.Title(options.label)] : [],
 		},
-		options.iconOnly ? [IconArrowPath(h, icon)] : [IconArrowPath(h, icon), options.label],
+		[
+			IconArrowPath(h, { ...icon, className: options.isPending ? "animate-spin" : undefined }),
+			// Keyed by the label: "Looking up" mounts in place of "Look up now" and blurs in.
+			...(options.iconOnly
+				? []
+				: [
+						h.keyed("span")(
+							`label-${options.label}`,
+							[h.Class(options.isPending ? "animate-blur-in" : "")],
+							[options.label],
+						),
+					]),
+		],
 	)
+
+/** Where the company's figures will be, while the lookup runs: the grid's cards, and two lines. */
+const lookupSkeleton = (h: HtmlBuilder<Message>): Html => {
+	const bar = (className: string) =>
+		h.div([h.Class(twMerge("animate-pulse rounded-sm bg-secondary", className))])
+	return h.div(
+		[h.AriaHidden(true), h.Class("blur-in-stagger flex flex-col gap-3 pb-3")],
+		[
+			h.div(
+				[h.Class("grid grid-cols-2 gap-2")],
+				[0, 1, 2, 3].map((index) =>
+					h.div(
+						[
+							h.Key(String(index)),
+							h.Class("flex flex-col gap-2 rounded-lg border border-border px-3 py-2.5"),
+						],
+						[bar("h-2.5 w-12"), bar("h-3.5 w-16")],
+					),
+				),
+			),
+			h.div([h.Class("flex flex-col gap-2")], [bar("h-3 w-4/5"), bar("h-3 w-3/5")]),
+		],
+	)
+}
 
 /**
  * "Add domain", for a customer with no company domain, or the domain being changed (Save / Cancel):
@@ -219,9 +263,22 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 						: checked === null
 							? [`Not looked up yet. Hazel looks up ${domain} automatically.`, "Look up now"]
 							: [`context.dev has no company at ${domain}.`, "Look up again"]
+		// A lookup asked on this page: its states change in view, so each new line blurs in.
+		const isAsked = model.companyRefreshAtMs !== null
 		return sidebarSection(h, "Company", checked === null ? null : `Checked ${checked}`, [
 			...(domain === null ? [] : [domainRow(h, model, context, domain)]),
-			h.p([h.AriaLive("polite"), h.Class("pb-2 text-muted-fg text-sm")], [text]),
+			// The live region stays; the line inside it is keyed, so a new one mounts and animates.
+			h.div(
+				[h.AriaLive("polite"), h.Class("pb-2")],
+				[
+					h.keyed("p")(
+						`status-${text}`,
+						[h.Class(twMerge("text-muted-fg text-sm", isAsked && "animate-blur-in"))],
+						[text],
+					),
+				],
+			),
+			...(isPending ? [lookupSkeleton(h)] : []),
 			...(action === null
 				? []
 				: [h.div([], [refreshButton(h, { label: action, isPending, iconOnly: false })])]),
@@ -250,88 +307,107 @@ export const companySection = (h: HtmlBuilder<Message>, model: Model, context: C
 		.filter((part) => part !== null)
 		.join("")
 
+	// The answer to a lookup asked on this page: keyed by when it was checked, so the profile mounts
+	// afresh and its parts blur in one after another. A profile already there on open stays still.
+	const isArriving = isCompanyRefreshAnswered(model, account.companyCheckedAtMs)
 	return sidebarSection(h, "Company", null, [
-		...(description === null
-			? []
-			: [
-					// The clamp sits on the text alone: padding inside it would show a cut line.
-					h.div(
-						[h.Class("pb-3")],
-						[
-							h.p(
-								[
-									h.Class("line-clamp-3 wrap-anywhere text-fg-2 text-sm leading-relaxed"),
-									h.Title(description),
-								],
-								[description],
-							),
-						],
-					),
-				]),
-		...grid(h, [
-			...stat(
-				h,
-				"Employees",
-				employeesLabel(company),
-				company.employeeCount === null || company.employeeRange === null
-					? null
-					: `${formatCount(company.employeeCount)} on record`,
-			),
-			...stat(
-				h,
-				"Funding",
-				stage === null ? (totalUsd === null ? null : usdLabel(totalUsd)) : fundingStageLabel(stage),
-				stage === null || totalUsd === null ? null : `${usdLabel(totalUsd)} raised`,
-			),
-			...stat(
-				h,
-				"Est. revenue",
-				revenueLabel(company),
-				revenueLabel(company) === null ? null : "per year",
-			),
-			...stat(
-				h,
-				"Founded",
-				founded,
-				age === null || age < 1 ? null : `${age} ${age === 1 ? "year" : "years"} ago`,
-			),
-		]),
-		...(domain === null ? [] : [domainRow(h, model, context, domain)]),
-		property(
-			h,
-			"Industry",
-			// The industry the list shows and filters by; the sub-industry under it.
-			company.industry === null ? muted(h, "—") : stacked(h, company.industry, company.subindustry),
-		),
-		property(
-			h,
-			"Headquarters",
-			headquarters === null
-				? muted(h, "—")
-				: h.span(
-						[h.Class("block truncate"), ...(address === null ? [] : [h.Title(address)])],
-						[flag === "" ? headquarters : `${flag} ${headquarters}`],
-					),
-		),
-		...(type === null ? [] : [property(h, "Type", type)]),
-		...(latestParts.length === 0 || latest === null
-			? []
-			: [
-					property(
-						h,
-						"Last round",
-						stacked(h, fundingStageLabel(latest.type), latestParts.join(" · ")),
-					),
-				]),
-		...(pages.length === 0 ? [] : [h.div([h.Class("-ml-1.5 flex flex-wrap gap-0.5 pt-2")], pages)]),
-		h.div(
-			[h.Class("flex items-center justify-between gap-2 pt-3 text-muted-fg text-xs")],
+		h.keyed("div")(
+			`company-${account.companyCheckedAtMs ?? "unchecked"}`,
+			[h.Class(twMerge("flex flex-col", isArriving && "blur-in-stagger"))],
 			[
-				h.span(
-					[h.AriaLive("polite"), h.Class("truncate")],
-					[status === "" ? "From context.dev" : `From context.dev · ${status}`],
+				...(description === null
+					? []
+					: [
+							// The clamp sits on the text alone: padding inside it would show a cut line.
+							h.div(
+								[h.Class("pb-3")],
+								[
+									h.p(
+										[
+											h.Class(
+												"line-clamp-3 wrap-anywhere text-fg-2 text-sm leading-relaxed",
+											),
+											h.Title(description),
+										],
+										[description],
+									),
+								],
+							),
+						]),
+				...grid(h, [
+					...stat(
+						h,
+						"Employees",
+						employeesLabel(company),
+						company.employeeCount === null || company.employeeRange === null
+							? null
+							: `${formatCount(company.employeeCount)} on record`,
+					),
+					...stat(
+						h,
+						"Funding",
+						stage === null
+							? totalUsd === null
+								? null
+								: usdLabel(totalUsd)
+							: fundingStageLabel(stage),
+						stage === null || totalUsd === null ? null : `${usdLabel(totalUsd)} raised`,
+					),
+					...stat(
+						h,
+						"Est. revenue",
+						revenueLabel(company),
+						revenueLabel(company) === null ? null : "per year",
+					),
+					...stat(
+						h,
+						"Founded",
+						founded,
+						age === null || age < 1 ? null : `${age} ${age === 1 ? "year" : "years"} ago`,
+					),
+				]),
+				...(domain === null ? [] : [domainRow(h, model, context, domain)]),
+				property(
+					h,
+					"Industry",
+					// The industry the list shows and filters by; the sub-industry under it.
+					company.industry === null
+						? muted(h, "—")
+						: stacked(h, company.industry, company.subindustry),
 				),
-				refreshButton(h, { label: "Refresh company profile", isPending, iconOnly: true }),
+				property(
+					h,
+					"Headquarters",
+					headquarters === null
+						? muted(h, "—")
+						: h.span(
+								[h.Class("block truncate"), ...(address === null ? [] : [h.Title(address)])],
+								[flag === "" ? headquarters : `${flag} ${headquarters}`],
+							),
+				),
+				...(type === null ? [] : [property(h, "Type", type)]),
+				...(latestParts.length === 0 || latest === null
+					? []
+					: [
+							property(
+								h,
+								"Last round",
+								stacked(h, fundingStageLabel(latest.type), latestParts.join(" · ")),
+							),
+						]),
+				...(pages.length === 0
+					? []
+					: [h.div([h.Class("-ml-1.5 flex flex-wrap gap-0.5 pt-2")], pages)]),
+				h.div(
+					[h.Class("flex items-center justify-between gap-2 pt-3 text-muted-fg text-xs")],
+					[
+						h.span(
+							[h.AriaLive("polite"), h.Class("truncate")],
+							[status === "" ? "From context.dev" : `From context.dev · ${status}`],
+						),
+						refreshButton(h, { label: "Refresh company profile", isPending, iconOnly: true }),
+					],
+				),
 			],
 		),
 	])

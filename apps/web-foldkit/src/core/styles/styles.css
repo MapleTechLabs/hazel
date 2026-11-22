@@ -146,6 +146,22 @@ If you want to use the typography plugin, uncomment the line below.
 	--animate-count-down: count-down 180ms cubic-bezier(0.2, 0, 0, 1);
 	/* An indeterminate progress segment (40% of its track) sweeping in from the left edge and out the right. */
 	--animate-progress-slide: progress-slide 1.6s ease-in-out infinite;
+	/* Content that just arrived (a lookup's answer, a swapped label): out of focus and faded, settling into place. */
+	--animate-blur-in: blur-in 260ms cubic-bezier(0.23, 1, 0.32, 1) both;
+
+	@keyframes blur-in {
+		from {
+			opacity: 0;
+			filter: blur(4px);
+			transform: translateY(3px);
+		}
+
+		to {
+			opacity: 1;
+			filter: blur(0);
+			transform: translateY(0);
+		}
+	}
 
 	@keyframes progress-slide {
 		from {
@@ -593,6 +609,35 @@ If you want to use the typography plugin, uncomment the line below.
 }
 .scrollbar-hide::-webkit-scrollbar {
 	display: none;
+}
+
+/* A block that just arrived: its children blur in one after another, 40ms apart (the company
+   lookup's answer). Past the eighth they come in together. */
+@utility blur-in-stagger {
+	& > * {
+		animation: var(--animate-blur-in);
+	}
+	& > :nth-child(2) {
+		animation-delay: 40ms;
+	}
+	& > :nth-child(3) {
+		animation-delay: 80ms;
+	}
+	& > :nth-child(4) {
+		animation-delay: 120ms;
+	}
+	& > :nth-child(5) {
+		animation-delay: 160ms;
+	}
+	& > :nth-child(6) {
+		animation-delay: 200ms;
+	}
+	& > :nth-child(7) {
+		animation-delay: 240ms;
+	}
+	& > :nth-child(n + 8) {
+		animation-delay: 280ms;
+	}
 }
 
 /* Reduced motion support for accessibility */
