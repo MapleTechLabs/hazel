@@ -638,6 +638,13 @@ If you want to use the typography plugin, uncomment the line below.
 	& > :nth-child(n + 8) {
 		animation-delay: 280ms;
 	}
+	/* The reduced-motion rule below shortens the animation, not its delay: without this, the later
+	   children would sit invisible for their delay and then pop in. */
+	@media (prefers-reduced-motion: reduce) {
+		& > * {
+			animation-delay: 0s !important;
+		}
+	}
 }
 
 /* Reduced motion support for accessibility */

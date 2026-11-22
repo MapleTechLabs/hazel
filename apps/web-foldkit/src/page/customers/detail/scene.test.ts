@@ -250,4 +250,28 @@ describe("customer page: looking up the company", () => {
 			Scene.expect(arriving).toBeAbsent(),
 		)
 	})
+
+	test("an open domain form sits outside the parts a check remounts", () => {
+		const answered = {
+			...acme,
+			domains: ["acme.com"],
+			companyProfile: RICH_COMPANY,
+			companyCheckedAt: new Date(NOW.getTime() + 1_000),
+		}
+		const field = Scene.role("textbox", { name: "Company domain" })
+		Scene.scene(
+			pageScene(update, view, as),
+			Scene.given({
+				...openedWith(answered),
+				companyRefreshAtMs: NOW.getTime(),
+				companyCheckedAtPressMs: null,
+			}),
+			menusMounted(4),
+			Scene.click(Scene.role("button", { name: "Change domain acme.com" })),
+			Scene.Command.resolve(FocusDomainInput, Message.CompletedFocusDomainInput()),
+			Scene.expect(field).toExist(),
+			Scene.expect(arriving).toExist(),
+			Scene.inside(arriving, Scene.expect(field).toBeAbsent()),
+		)
+	})
 })
