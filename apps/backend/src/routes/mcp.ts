@@ -28,6 +28,7 @@ import {
 	type Event as CustomerEvent,
 	HealthStatus,
 	type Invoice,
+	type InvoiceRow,
 	type Kpi,
 	LifecycleStage,
 	type OverviewResult,
@@ -675,6 +676,20 @@ const invoiceRow = (invoice: Invoice) =>
 		url: invoice.hostedUrl,
 	})
 
+/** A listed invoice, with what its lines bill by class, without tax (absent when Hazel holds no lines). */
+const invoiceListRow = ({ invoice, revenue }: InvoiceRow) =>
+	compact({
+		...invoiceRow(invoice),
+		billed_by_class:
+			revenue === null
+				? undefined
+				: {
+						recurring: money(revenue.recurring, invoice.currency),
+						variable: money(revenue.variable, invoice.currency),
+						one_off: money(revenue.oneOff, invoice.currency),
+					},
+	})
+
 const contactRow = (row: ContactRow) =>
 	compact({
 		id: row.contact.id,
@@ -1104,7 +1119,7 @@ const customerTools: ReadonlyArray<Tool> = [
 			Effect.gen(function* () {
 				const organizationId = yield* argOrg(args)
 				const accountId = yield* argAccount(args)
-				const page = yield* customersRead<PageOf<Invoice>>(
+				const page = yield* customersRead<PageOf<InvoiceRow>>(
 					ctx,
 					"customers.invoices.list",
 					organizationId,
@@ -1113,7 +1128,7 @@ const customerTools: ReadonlyArray<Tool> = [
 						...pageArgs(args, 20),
 					},
 				)
-				return pageOut("invoices", page, invoiceRow)
+				return pageOut("invoices", page, invoiceListRow)
 			}),
 	},
 ]
