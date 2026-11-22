@@ -22,7 +22,6 @@
 		"apps/web-foldkit/src/chat/video-player.ts": 1,
 		"apps/web-foldkit/src/customers/ui/identity.ts": 1,
 		"apps/web-foldkit/src/page/my-settings/appearance/cards.ts": 2,
-		"apps/web-foldkit/src/shell/channels-sidebar/items.ts": 2,
 		"apps/web-foldkit/src/shell/channels-sidebar/view.ts": 1
 	},
 	"no-kit-styles-in-pages": {

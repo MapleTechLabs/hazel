@@ -1,5 +1,4 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { IconHashtag } from "../../icons"
 import {
 	sectionHeaderGroup,
 	sectionHeaderHeading,
@@ -23,13 +22,3 @@ export const tabHeader = <Message>(
 			...actions,
 		]),
 	])
-
-/** `components/channel-icon.tsx` */
-export const channelIcon = <Message>(
-	h: HtmlBuilder<Message>,
-	icon: string | null,
-	className?: string,
-): Html =>
-	icon
-		? h.span([h.Attribute("data-slot", "icon"), ...(className ? [h.Class(className)] : [])], [icon])
-		: IconHashtag(h, { className })

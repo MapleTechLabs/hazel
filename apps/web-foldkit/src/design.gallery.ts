@@ -24,6 +24,7 @@ import { badge } from "./ui/badge"
 import { button } from "./ui/button"
 import { card, cardBody, cardDescription, cardHeader, cardTitle } from "./ui/card"
 import { textField } from "./ui/text-field"
+import { NO_CHANNEL_LINKS } from "./ui/channel-icon"
 
 /**
  * The design gallery: a sidebar, a settings card, the button and badge sets and an open menu, built
@@ -87,9 +88,10 @@ const sidebar = (h: HtmlBuilder<M>) =>
 						action: sectionPlusButton(h, "Create channel", []),
 					}),
 					...channels.map(([channel, isActive]) =>
-						channelItem(h, channel, channel.member.notificationCount, [], {
+						channelItem(h, channel, channel.member.notificationCount, {
 							orgSlug: "acme",
 							isActive,
+							links: NO_CHANNEL_LINKS,
 						}),
 					),
 				],

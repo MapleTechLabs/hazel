@@ -14,7 +14,7 @@ import {
 	sectionHeaderSubheading,
 } from "../../ui/section-header"
 import * as Tabs from "../../ui/tabs"
-import { can, type PageViewInputs, type Shared } from "../contract"
+import { can, channelLinksOf, type PageViewInputs, type Shared } from "../contract"
 import { channelCard, dmCard } from "./cards"
 import { Message } from "./message"
 import {
@@ -88,7 +88,7 @@ const panels = (
 				listOrEmpty(
 					groups.publicChannels,
 					"Public Channels",
-					(channel) => channelCard(h, orgSlug, channel, false),
+					(channel) => channelCard(h, orgSlug, channel, false, channelLinksOf(shared, channel.id)),
 					() =>
 						emptyState(h, {
 							icon: (className) => IconHashtag(h, { className }),
@@ -113,7 +113,7 @@ const panels = (
 				listOrEmpty(
 					groups.privateChannels,
 					"Private Channels",
-					(channel) => channelCard(h, orgSlug, channel, true),
+					(channel) => channelCard(h, orgSlug, channel, true, channelLinksOf(shared, channel.id)),
 					() =>
 						emptyState(h, {
 							icon: (className) => IconLock(h, { className }),

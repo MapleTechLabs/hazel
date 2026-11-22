@@ -4,24 +4,12 @@ import { twMerge } from "tailwind-merge"
 import { styles as avatarStyles } from "~/components/ui/avatar/styles"
 import { cx } from "~/utils/cx"
 import { getEffectivePresenceStatus } from "~/utils/presence"
-import { companyLogo } from "../../customers/ui/identity"
-import { IconHashtag, IconLock } from "../../icons"
-import { discordLogo, slackLogo } from "../../page/settings/chat-sync/brand-icons"
 import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
+import { type ChannelLinks, channelIcon } from "../../ui/channel-icon"
 import { presenceDot } from "../../ui/presence-dot"
 import { sidebarItem, sidebarLink } from "../../ui/sidebar"
-import type {
-	ChannelEntry,
-	DiscoverableChannel,
-	DmChannel,
-	DmMember,
-	PartnerOrg,
-	Presence,
-	RowCustomer,
-	SidebarThread,
-	SyncProvider,
-} from "./rows"
+import type { ChannelEntry, DiscoverableChannel, DmChannel, DmMember, Presence, SidebarThread } from "./rows"
 import { initialsOf, semantic } from "../../ui/semantic"
 import { dotsMenuTrigger } from "./tree"
 
@@ -45,10 +33,11 @@ const chatHref = (context: { readonly orgSlug: string }, channelId: ChannelId) =
 export interface RowLinkContext {
 	readonly orgSlug: string
 	readonly isActive: boolean
-	/** The platform the channel is bridged to by chat sync, marked on its icon. */
-	readonly syncProvider?: SyncProvider | null
-	/** The customer the channel is linked to: its logo replaces the `#` (Customers section only). */
-	readonly customer?: RowCustomer | null
+}
+
+export interface ChannelRowContext extends RowLinkContext {
+	/** What the channel is linked or connected to (customer, Connect, chat sync), marked on its icon. */
+	readonly links: ChannelLinks
 }
 
 /** `SidebarLabel` with a `className`. */
@@ -86,91 +75,16 @@ const badgeIf = <M>(h: HtmlBuilder<M>, count: number): Html[] => (count > 0 ? [s
 const channelSymbol = (type: ChannelEntry["channel"]["type"]): string =>
 	type === "private" ? "lock" : "number"
 
-/** `components/channel-icon.tsx`. */
-const channelIcon = <M>(h: HtmlBuilder<M>, icon: string | null): Html =>
-	icon ? h.span([h.Attribute("data-slot", "icon")], [icon]) : IconHashtag(h)
-
-const partnerOrgMarks = <M>(h: HtmlBuilder<M>, partners: ReadonlyArray<PartnerOrg>): Html[] => {
-	const first = partners[0]
-	if (!first) return []
-	return [
-		h.span(
-			[h.Class("absolute -right-1 -bottom-0.5 flex items-end -space-x-0.5")],
-			[
-				first.logoUrl
-					? h.img([
-							h.Attribute("src", first.logoUrl),
-							h.Attribute("alt", ""),
-							h.Class("size-2.5 rounded-sm object-cover ring-[1.5px] ring-sidebar"),
-						])
-					: h.span(
-							[
-								h.Class(
-									"flex size-2.5 items-center justify-center rounded-sm bg-muted text-[6px] font-semibold ring-[1.5px] ring-sidebar",
-								),
-							],
-							[first.name[0] ?? ""],
-						),
-				...(partners.length > 1
-					? [
-							h.span(
-								[
-									h.Class(
-										"flex h-2.5 items-center rounded-sm bg-muted px-0.5 text-[7px] font-semibold leading-none ring-[1.5px] ring-sidebar",
-									),
-								],
-								[`+${partners.length - 1}`],
-							),
-						]
-					: []),
-			],
-		),
-	]
-}
-
-/** A private customer channel's lock, on the logo's bottom-left (the platform marks take the right). */
-const lockMark = <M>(h: HtmlBuilder<M>): Html =>
-	h.span(
-		[
-			h.Class(
-				"absolute -bottom-0.5 -left-1 flex size-3 items-center justify-center rounded-full bg-sidebar",
-			),
-			h.Attribute("title", "Private channel"),
-		],
-		// `!`: the sidebar sizes every `data-slot=icon` (the lock is one) like the row icon.
-		[IconLock(h, { className: "size-2!" })],
-	)
-
-/** The Slack or Discord mark on a synced channel's icon; top corner when partner marks take the bottom. */
-const syncMark = <M>(h: HtmlBuilder<M>, provider: SyncProvider, hasPartners: boolean): Html =>
-	h.span(
-		[
-			h.Class(
-				cx(
-					"absolute -right-1 flex size-3 items-center justify-center rounded-full bg-sidebar",
-					hasPartners ? "-top-1" : "-bottom-0.5",
-				),
-			),
-			h.Attribute("title", provider === "slack" ? "Synced with Slack" : "Synced with Discord"),
-		],
-		[provider === "slack" ? slackLogo(h, "size-2") : discordLogo(h, "size-2.5")],
-	)
-
 export const channelItem = <M>(
 	h: HtmlBuilder<M>,
 	entry: ChannelEntry,
 	notificationCount: number,
-	partners: ReadonlyArray<PartnerOrg>,
-	context: RowLinkContext,
+	context: ChannelRowContext,
 	menu: Html = dotsMenuTrigger(h, "Channel options"),
 	/** The row's long-press menu (`rowLongPress`). */
 	longPress: ReadonlyArray<Attribute<M>> = [],
 ): Html => {
 	const href = chatHref(context, entry.channel.id)
-	const syncProvider = context.syncProvider ?? null
-	const customer = context.customer ?? null
-	const hasPartners = partners.length > 0
-	const isPrivateCustomer = customer !== null && entry.channel.type === "private"
 	const ui = semantic(h, {
 		kind: "item",
 		title: entry.channel.name,
@@ -183,28 +97,12 @@ export const channelItem = <M>(
 	})
 	return sidebarItem(h, { attributes: [...longPress, ...ui] }, [
 		sidebarLink(h, { href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE }, [
-			h.span(
-				// Positioned only for the marks: needless positioned spans slow every hit test.
-				[
-					h.Class(
-						hasPartners || syncProvider || isPrivateCustomer ? "relative shrink-0" : "shrink-0",
-					),
-				],
-				[
-					customer === null
-						? channelIcon(h, entry.channel.icon)
-						: companyLogo(h, {
-								name: customer.name,
-								logoUrl: customer.logoUrl,
-								size: "2xs",
-								// The `#` it replaces: 20px on phones, 16px from `sm`.
-								className: "size-5 sm:size-4",
-							}),
-					...(isPrivateCustomer ? [lockMark(h)] : []),
-					...partnerOrgMarks(h, partners),
-					...(syncProvider ? [syncMark(h, syncProvider, hasPartners)] : []),
-				],
-			),
+			channelIcon(h, {
+				icon: entry.channel.icon,
+				isPrivate: entry.channel.type === "private",
+				links: context.links,
+				surface: "sidebar",
+			}),
 			// Unread: the name steps up to full ink and medium, the count says how many.
 			label(h, [entry.channel.name], notificationCount > 0 ? "font-medium text-fg" : undefined),
 		]),
@@ -343,6 +241,7 @@ export const discoverableItem = <M>(
 	h: HtmlBuilder<M>,
 	channel: DiscoverableChannel,
 	context: ItemContext,
+	links: ChannelLinks,
 ): Html => {
 	const href = chatHref(context, channel.id)
 	return sidebarItem(h, { className: "opacity-50 hover:opacity-100 [&:has(.active)]:opacity-100" }, [
@@ -353,7 +252,7 @@ export const discoverableItem = <M>(
 				isActive: context.activeChannelId === channel.id,
 				activeClassName: `active ${CHANNEL_ACTIVE}`,
 			},
-			[channelIcon(h, channel.icon), label(h, [channel.name])],
+			[channelIcon(h, { icon: channel.icon, links, surface: "sidebar" }), label(h, [channel.name])],
 		),
 	])
 }

@@ -37,6 +37,7 @@ import type * as Menu from "../ui/menu"
 import type * as ModalKit from "../ui/modal"
 import { Message } from "./message"
 import { aiPanelInputsOf, type Model, OrgState, Session, sharedOf } from "./model"
+import { channelLinksOf } from "../page/contract"
 
 // Module-level and built as literals: memoized shell views compare them by reference, and
 // wrapper constructors would re-validate large payloads (sidebar rows, message pages) per dispatch.
@@ -120,6 +121,7 @@ const sectionBody = (model: Model, h: HtmlBuilder<Message>): Html => {
 				orgSlug: route.orgSlug,
 				channelId: route.channelId,
 				channel: model.shell.settingsChannel,
+				links: channelLinksOf(sharedOf(model), route.channelId),
 				selectedTab: tab,
 				onSelectTab: (tabRoute) => h.OnClick(Message.ClickedLayoutTab({ route: tabRoute })),
 				onChangeTab: (toRoute) =>

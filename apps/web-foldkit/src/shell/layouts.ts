@@ -1,8 +1,8 @@
 import type { ChannelId } from "@hazel/schema"
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
-import { IconHashtag } from "../icons"
 import { AppRoute, hrefOf } from "../route"
 import { button, buttonClassName } from "../ui/button"
+import { type ChannelLinks, channelIcon } from "../ui/channel-icon"
 import { emptyState } from "../ui/empty-state"
 import { progressBar, progressBarTrack } from "../ui/progress-bar"
 import { tabStrip, tabView } from "../ui/tab-strip"
@@ -33,12 +33,6 @@ const tabLabels: Readonly<Record<ChannelSettingsTab, string>> = {
 	connect: "Connect",
 }
 
-/** `ChannelIcon` */
-const channelIcon = <Message>(h: HtmlBuilder<Message>, icon: string | null | undefined, className: string) =>
-	icon
-		? h.span([h.Attribute("data-slot", "icon"), h.Class(className)], [icon])
-		: IconHashtag(h, { className })
-
 /** `channels/$channelId/settings/layout.tsx`: back link, channel header and the tab bar. */
 export const channelSettingsLayout = <Message>(
 	h: HtmlBuilder<Message>,
@@ -46,6 +40,8 @@ export const channelSettingsLayout = <Message>(
 		orgSlug: string
 		channelId: ChannelId
 		channel: ChannelSummary | null
+		/** What the channel is linked or connected to, marked on its icon. */
+		links: ChannelLinks
 		selectedTab: ChannelSettingsTab
 		/** Tabs navigate on selection, as `onSelectionChange` does. */
 		onSelectTab: (route: AppRoute) => Attribute<Message>
@@ -113,11 +109,14 @@ export const channelSettingsLayout = <Message>(
 													),
 												],
 												[
-													channelIcon(
-														h,
-														options.channel?.icon,
-														"size-5 text-muted-fg",
-													),
+													channelIcon(h, {
+														icon: options.channel?.icon ?? null,
+														isPrivate: options.channel?.type === "private",
+														links: options.links,
+														size: "md",
+														surface: "secondary",
+														className: "text-muted-fg",
+													}),
 												],
 											),
 											h.div(
