@@ -1,12 +1,18 @@
 import * as Customers from "@hazel/domain/customers"
+import { Option } from "effect"
+import * as AsyncData from "foldkit/asyncData"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
+import { calendarHeatmap, heatLegend } from "../../../customers/charts/calendar-heatmap"
+import { formatDayLong } from "../../../customers/format"
 import { msOf } from "../../../customers/queries"
 import { segmentClass, segmentedTrackClass } from "../../../customers/ui/filter-bar"
 import { SOURCE_LABEL, sourceLogo, sourceMark } from "../../../customers/ui/identity"
 import { IconChevronDown } from "../../../icons"
 import { button } from "../../../ui/button"
+import { heading } from "../../../ui/heading"
 import { menuLabel } from "../../../ui/menu-view"
+import { RevealCalendarDay } from "./commands"
 import { Message } from "./message"
 import { type EventType, eventTypeEntries, type Model } from "./model"
 import { type Context, memberOf, menu, pageFooter, skeletonRows } from "./parts"
@@ -94,6 +100,83 @@ const eventRow = (h: HtmlBuilder<Message>, event: Customers.Event, context: Cont
 	)
 }
 
+const activeUsers = (count: number) =>
+	`${count === 0 ? "No" : count} active ${count === 1 ? "user" : "users"}`
+
+/** The year at a glance: a day's square shaded by how many of the account's people were active. */
+const yearCalendar = (h: HtmlBuilder<Message>, model: Model): Html => {
+	const points = Option.getOrUndefined(AsyncData.getData(model.yearActivity))?.[0]?.points
+	const failed = AsyncData.getError(model.yearActivity)._tag === "Some"
+	const activeDays = points?.filter((point) => point.value > 0).length ?? 0
+	const busiest = points?.reduce<(typeof points)[number] | undefined>(
+		(most, point) => (point.value > (most?.value ?? 0) ? point : most),
+		undefined,
+	)
+	// The year's headline leads; the busiest day backs it; the key sits under the grid it explains.
+	const title =
+		points === undefined
+			? "Activity in the last year"
+			: activeDays === 0
+				? "No activity in the last year"
+				: `${activeDays} active ${activeDays === 1 ? "day" : "days"} in the last year`
+	const detail =
+		busiest === undefined
+			? null
+			: `Busiest on ${formatDayLong(busiest.day)}, ${activeUsers(busiest.value).toLowerCase()}`
+	const description = [title, ...(detail === null ? [] : [detail])].join(". ")
+	return h.section(
+		[h.AriaLabel("Activity calendar"), h.Class("flex min-w-0 flex-col gap-4 pb-2")],
+		[
+			h.header(
+				[h.Class("flex flex-col gap-0.5")],
+				[
+					heading(h, { variant: "subsection", level: 2 }, [title]),
+					...(detail === null ? [] : [h.p([h.Class("text-muted-fg text-sm")], [detail])]),
+				],
+			),
+			points === undefined
+				? failed
+					? h.div(
+							[h.Class("flex flex-col items-center gap-3 py-8 text-muted-fg text-sm")],
+							[
+								h.p([], ["Couldn't load activity."]),
+								button(
+									h,
+									{
+										intent: "outline",
+										size: "sm",
+										onPress: Message.PressedRetryYearActivity(),
+									},
+									["Try again"],
+								),
+							],
+						)
+					: h.div([h.Class("aspect-[7/1] w-full animate-pulse rounded-lg bg-secondary/40")])
+				: calendarHeatmap(h, {
+						points,
+						ariaLabel: `Daily active users over the last year: ${description}`,
+						describe: activeUsers,
+						hoveredIndex: model.hoveredYearDay,
+						onHover: (index) => Message.HoveredYearDay({ index }),
+						idPrefix: "year-day",
+						revealDay: (dayId) =>
+							h.keyed("span")(`reveal-${dayId}`, [
+								h.Class("hidden"),
+								h.OnMount(RevealCalendarDay({ dayId })),
+							]),
+					}),
+			h.footer(
+				[
+					h.Class(
+						"flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-muted-fg text-xs",
+					),
+				],
+				[h.span([], ["Each square is a day, shaded by its active users"]), heatLegend(h)],
+			),
+		],
+	)
+}
+
 const SOURCES: ReadonlyArray<Customers.CustomerSource | null> = [null, ...Customers.CustomerSource.literals]
 
 const filters = (h: HtmlBuilder<Message>, model: Model): Html =>
@@ -151,6 +234,7 @@ export const activityTab = (h: HtmlBuilder<Message>, model: Model, context: Cont
 		onMore: Message.PressedMoreEvents(),
 	})
 	return [
+		yearCalendar(h, model),
 		filters(h, model),
 		h.div(
 			[h.Class("flex flex-col")],

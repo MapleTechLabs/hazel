@@ -206,6 +206,38 @@ describe("customer page: tabs", () => {
 	test("each tab loads what it shows, once", () => {
 		expect(commandNames(init(route(null), shared))).toContain("FetchCustomerUsage")
 		expect(commandNames(init(route("users"), shared))).toContain("FetchCustomerContacts")
+		const activity = routeChanged(loaded(), route("activity"), shared)
+		expect(commandNames(activity).filter((name) => name === "FetchCustomerYearActivity")).toHaveLength(1)
+		expect(
+			commandNames(
+				routeChanged(
+					routeChanged(activity.model, route(null), shared).model,
+					route("activity"),
+					shared,
+				),
+			),
+		).not.toContain("FetchCustomerYearActivity")
+	})
+
+	test("a failed year can be asked again; a loading or loaded one is not", () => {
+		const opened = routeChanged(loaded(), route("activity"), shared).model
+		const retry = Message.PressedRetryYearActivity()
+		expect(commandNames(update(opened, retry, shared))).toEqual([])
+		const failed = update(
+			opened,
+			Message.FailedFetchYearActivity({ accountId: opened.accountId, reason: "Offline" }),
+			shared,
+		).model
+		const retried = update(failed, retry, shared)
+		expect(commandNames(retried)).toEqual(["FetchCustomerYearActivity"])
+		expect(retried.model.yearActivity._tag).toBe("Loading")
+		const settled = update(
+			retried.model,
+			Message.SucceededFetchYearActivity({ accountId: opened.accountId, series: [] }),
+			shared,
+		).model
+		expect(commandNames(update(settled, retry, shared))).toEqual([])
+		expect(update(settled, retry, shared).model.yearActivity._tag).toBe("Success")
 		const billing = routeChanged(loaded(), route("billing"), shared)
 		expect(billing.model.tab).toBe("billing")
 		expect(commandNames(billing)).toContain("FetchCustomerInvoices")

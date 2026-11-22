@@ -139,6 +139,9 @@ export const Model = Schema.Struct({
 	hoveredUsage: Schema.NullOr(Schema.Int),
 	mrrHistory: Series.schema,
 	hoveredMrr: Schema.NullOr(Schema.Int),
+	/** The Activity tab's year calendar: daily active users over the last 12 months. */
+	yearActivity: Series.schema,
+	hoveredYearDay: Schema.NullOr(Schema.Int),
 	/** The Support block: the customer's live issues and SLA clocks, and their 30-day report row. */
 	supportIssues: Schema.NullOr(Schema.Array(IssueRow)),
 	supportSlas: Schema.Array(IssueSlaRow),
