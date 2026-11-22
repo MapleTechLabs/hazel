@@ -161,6 +161,7 @@ export const joinChannelPage = (
 														icon: channel.icon,
 														isPrivate: channel.type === "private",
 														links: channelLinksOf(shared, channel.id),
+														surface: "overlay",
 														className: "text-muted-fg",
 													}),
 													h.span([h.Class("flex-1 truncate")], [channel.name]),
