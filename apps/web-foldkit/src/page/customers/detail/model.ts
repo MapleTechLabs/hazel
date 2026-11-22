@@ -510,9 +510,18 @@ export const isCompanyRefreshPending = (model: Model, nowMs: number, checkedAtMs
 	nowMs - model.companyRefreshAtMs < COMPANY_REFRESH_PENDING_MS &&
 	!answers(checkedAtMs, model.companyRefreshAtMs)
 
-/** This page asked for a lookup and the account has been checked since: the answer just landed. */
+/** How far the server's clock may run behind this page's when stamping a lookup that answered a press. */
+const COMPANY_REFRESH_SKEW_MS = 5_000
+
+/**
+ * This page asked for a lookup and the account was checked after the press: new data just landed,
+ * and the profile blurs in. Not the cooldown's earlier check that `answers` accepts: that one is
+ * already on screen, so it does not replay.
+ */
 export const isCompanyRefreshAnswered = (model: Model, checkedAtMs: number | null): boolean =>
-	model.companyRefreshAtMs !== null && answers(checkedAtMs, model.companyRefreshAtMs)
+	model.companyRefreshAtMs !== null &&
+	checkedAtMs !== null &&
+	checkedAtMs >= model.companyRefreshAtMs - COMPANY_REFRESH_SKEW_MS
 
 /**
  * This page asked for a lookup, the pending window passed, and the account was not checked since:
