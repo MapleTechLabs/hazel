@@ -202,12 +202,16 @@ const paymentFailed =
 		const pastDue = facts.subscriptions.filter(
 			(sub) => sub.status === "past_due" || sub.status === "unpaid",
 		)
-		// An auto-charged invoice has no due date: one an ended plan went unpaid on is late from its issue.
+		// One an ended plan went unpaid on counts before its due date too (0 days late), and an
+		// auto-charged one, with no due date, is late from its issue.
 		const unpaidIds = new Set(facts.unpaidInvoices.map((invoice) => invoice.id))
 		const overdue = facts.openInvoices
 			.flatMap((invoice) => {
-				const dueAt = invoice.dueAt ?? (unpaidIds.has(invoice.id) ? invoice.issuedAt : null)
-				return dueAt !== null && dueAt.getTime() < org.now.getTime() ? [{ ...invoice, dueAt }] : []
+				const owed = unpaidIds.has(invoice.id)
+				const dueAt = invoice.dueAt ?? (owed ? invoice.issuedAt : null)
+				return dueAt !== null && (owed || dueAt.getTime() < org.now.getTime())
+					? [{ ...invoice, dueAt }]
+					: []
 			})
 			.sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime())
 		const oldest = overdue[0]

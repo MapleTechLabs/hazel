@@ -209,6 +209,14 @@ describe("signal evaluation", () => {
 				unpaidInvoices: open.openInvoices,
 			}).evidence,
 		).toMatchObject({ amountMinor: 3_900, daysOverdue: 30, attemptCount: 9, step: 2 })
+		const notDueYet = { ...invoice, dueAt: new Date(NOW.getTime() + 5 * 86_400_000) }
+		expect(
+			match("payment_failed", {
+				subscriptions: [{ status: "canceled" }],
+				openInvoices: [notDueYet],
+				unpaidInvoices: open.openInvoices,
+			}).evidence,
+		).toMatchObject({ amountMinor: 3_900, daysOverdue: 0, invoiceId: "inv_1" })
 		expect(
 			run("payment_failed", { subscriptions: [{ status: "canceled" }], openInvoices: [invoice] }),
 		).toEqual({

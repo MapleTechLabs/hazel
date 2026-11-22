@@ -1477,6 +1477,100 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	const failedInvoice = (): IngestOp => ({
+		_tag: "invoice",
+		externalId: "in_1",
+		account: { provider: "clerk", externalId: "org_1" },
+		subscriptionExternalId: "sub_1",
+		number: "INV-2",
+		status: "open",
+		amountDueMinor: 19_900,
+		amountPaidMinor: 0,
+		currency: "usd",
+		issuedAt: new Date(NOW.getTime() - 5 * DAY).toISOString(),
+		dueAt: null,
+		paidAt: null,
+		attemptCount: 9,
+		nextRetryAt: null,
+		hostedUrl: null,
+	})
+	const endedOnFailedInvoice = (world: CustomersWorld) =>
+		world.ingest("stripe", [
+			failedInvoice(),
+			{
+				...subscription(20),
+				status: "canceled",
+				canceledAt: new Date(NOW.getTime() - DAY).toISOString(),
+			},
+		])
+	const recordChurn = (world: CustomersWorld, fromMrrMinor: number) => {
+		const { id } = world.rows<{ id: string }>(`SELECT id FROM customer_accounts WHERE name = 'org_1'`)[0]!
+		world.rows(
+			`INSERT INTO customer_mrr_movements (id, accountId, day, type, deltaMinor, fromMrrMinor, toMrrMinor, currency)
+			 VALUES ('${uuid()}', '${id}', '${day(-1)}', 'churn', ${-fromMrrMinor}, ${fromMrrMinor}, 0, 'usd')`,
+		)
+		world.rows(`UPDATE customer_accounts SET mrrMinor = 0 WHERE id = '${id}'`)
+	}
+	const org = (externalId: string): IngestOp => ({
+		_tag: "account",
+		externalId,
+		name: externalId,
+		sameAs: [],
+		onNoMatch: "create",
+	})
+
+	it("leaves recorded days alone when a source switch broke the account's movements", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [org("org_1")])
+				yield* world.ingest("stripe", [subscription(20)])
+				yield* world.object.run(runCompute(new Date(NOW.getTime() - 10 * DAY))).pipe(Effect.orDie)
+				world.rows(
+					`INSERT OR REPLACE INTO customer_org_daily (day, mrrMinor, payingAccounts, trialingAccounts, activeAccounts, dau, wau, mau, healthy, atRisk, critical, atRiskMrrMinor)
+					 VALUES ('${day(-3)}', 19900, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0)`,
+				)
+				yield* endedOnFailedInvoice(world)
+				recordChurn(world, 9_900)
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(world.rows(`SELECT lifecycleStage FROM customer_accounts`)).toEqual([
+					{ lifecycleStage: "past_due" },
+				])
+				expect(world.rows(`SELECT day, type FROM customer_mrr_movements ORDER BY day`)).toEqual([
+					{ day: day(-10), type: "new" },
+					{ day: day(-1), type: "churn" },
+				])
+				expect(
+					world.rows(`SELECT mrrMinor FROM customer_org_daily WHERE day = '${day(-3)}'`),
+				).toEqual([{ mrrMinor: 19_900 }])
+			}),
+		))
+
+	it("takes an unpaid account out of rebuilt days once, with its kept churn", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [org("org_1"), org("org_2")])
+				yield* world.ingest("stripe", [
+					subscription(20),
+					{
+						...subscription(20, { provider: "clerk", externalId: "org_2" }),
+						externalId: "sub_2",
+						mrrMinor: 5_000,
+					},
+				])
+				yield* world.object.run(runCompute(new Date(NOW.getTime() - 10 * DAY))).pipe(Effect.orDie)
+				yield* endedOnFailedInvoice(world)
+				recordChurn(world, 19_900)
+				yield* world.object.run(requestHistoryRebuild).pipe(Effect.orDie)
+				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(
+					world.rows(`SELECT mrrMinor FROM customer_org_daily WHERE day = '${day(-3)}'`),
+				).toEqual([{ mrrMinor: 5_000 }])
+			}),
+		))
+
 	it("keeps Stripe's billing for an account on an auto-enabled free Autumn plan", () =>
 		run(
 			Effect.gen(function* () {

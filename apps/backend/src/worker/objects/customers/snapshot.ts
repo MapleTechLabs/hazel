@@ -26,6 +26,7 @@ import {
 	activeUsersIn,
 	billed,
 	type ContactFacts,
+	type EndedPlanInvoice,
 	endedPaying,
 	type HealthPoint,
 	type IssueSlaFacts,
@@ -392,19 +393,33 @@ export const billingByAccount = (
 		}),
 	)
 
-/** The Stripe invoices of the accounts whose paid plans all ended, for `unpaidEndOf`. */
+/** The Stripe plan invoices of the accounts whose paid plans all ended, for `unpaidEndOf`. */
 export const endedPlanInvoices = Effect.fnUntraced(function* (
 	billingBy: ReturnType<typeof billingByAccount>,
 ) {
 	const ids = [...billingBy].flatMap(([id, billing]) => (endedPaying(billing.subscriptions) ? [id] : []))
-	if (ids.length === 0) return new Map<CustomerAccountId, Array<schema.CustomerInvoice>>()
+	if (ids.length === 0) return new Map<CustomerAccountId, Array<EndedPlanInvoice>>()
 	const db = yield* Database.Database
 	const invoices = yield* db.run(
 		SQLite.from(schema.customerInvoicesTable)
-			.select()
-			.where(($) => [inList($.accountId, ids), $.provider.eq("stripe"), $.status.neq("upcoming")]),
+			.select(
+				"id",
+				"accountId",
+				"subscriptionId",
+				"status",
+				"issuedAt",
+				"amountDueMinor",
+				"amountPaidMinor",
+				"attemptCount",
+			)
+			.where(($) => [
+				inList($.accountId, ids),
+				$.provider.eq("stripe"),
+				$.status.neq("upcoming"),
+				$.subscriptionId.isNotNull(),
+			]),
 	)
-	return groupBy(invoices, (invoice) => invoice.accountId)
+	return groupBy<EndedPlanInvoice, CustomerAccountId>(invoices, (invoice) => invoice.accountId)
 })
 
 /** Accounts loaded (and their activity held in memory) at a time. */

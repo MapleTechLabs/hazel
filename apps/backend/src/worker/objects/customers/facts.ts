@@ -68,7 +68,7 @@ export interface AccountFacts {
 	readonly subscriptions: ReadonlyArray<schema.CustomerSubscription>
 	readonly openInvoices: ReadonlyArray<schema.CustomerInvoice>
 	/** The open invoices its ended plans went unpaid on (`unpaidEndOf`): a payment still owed. */
-	readonly unpaidInvoices: ReadonlyArray<schema.CustomerInvoice>
+	readonly unpaidInvoices: ReadonlyArray<EndedPlanInvoice>
 	/** Source metrics over the loaded window, oldest first. */
 	readonly metrics: ReadonlyMap<string, ReadonlyArray<MetricPoint>>
 	/** MRR movements, oldest first. */
@@ -228,24 +228,39 @@ export const endedPaying = (subscriptions: ReadonlyArray<schema.CustomerSubscrip
 	subscriptions.some((sub) => sub.status === "canceled" && pays(sub)) &&
 	!subscriptions.some((sub) => sub.status === "trialing" || (billed(sub) && pays(sub)))
 
+/** What `unpaidEndOf` reads of an invoice. */
+export type EndedPlanInvoice = Pick<
+	schema.CustomerInvoice,
+	| "id"
+	| "accountId"
+	| "subscriptionId"
+	| "status"
+	| "issuedAt"
+	| "amountDueMinor"
+	| "amountPaidMinor"
+	| "attemptCount"
+>
+
 /** How a customer's paid plans ended when the payment before the end failed. */
 export interface UnpaidEnd {
 	/** The first failed invoice's issue date: when the customer stopped paying. */
 	readonly since: Date
 	/** Those still open. None left (voided, uncollectible) and the customer has churned, from `since`. */
-	readonly open: ReadonlyArray<schema.CustomerInvoice>
+	readonly open: ReadonlyArray<EndedPlanInvoice>
 }
 
 /**
- * The unpaid end of a customer's plans, if they ended on a failed payment: invoices collection failed
- * on, issued after the last one paid and before the plans ended (a final invoice raised by the
- * cancellation itself is not why they ended). Null for a customer that left with its bills paid.
+ * The unpaid end of a customer's plans, if they ended on a failed payment: plan invoices collection
+ * failed on, issued after the last plan invoice paid and before the plans ended (a final invoice
+ * raised by the cancellation itself is not why they ended). One-off invoices say nothing about a
+ * plan, paid or not. Null for a customer that left with its bills paid.
  */
 export const unpaidEndOf = (
 	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
-	invoices: ReadonlyArray<schema.CustomerInvoice>,
+	invoices: ReadonlyArray<EndedPlanInvoice>,
 ): UnpaidEnd | null => {
 	if (!endedPaying(subscriptions)) return null
+	const planInvoices = invoices.filter((invoice) => invoice.subscriptionId !== null)
 	const endedAt = Math.max(
 		...subscriptions
 			.filter((sub) => sub.status === "canceled" && pays(sub))
@@ -253,11 +268,11 @@ export const unpaidEndOf = (
 	)
 	const lastPaid = Math.max(
 		0,
-		...invoices
+		...planInvoices
 			.filter((invoice) => invoice.status === "paid" && invoice.amountPaidMinor > 0)
 			.map((invoice) => invoice.issuedAt?.getTime() ?? 0),
 	)
-	const failed = invoices
+	const failed = planInvoices
 		.flatMap((invoice) => {
 			const issued = invoice.issuedAt?.getTime() ?? null
 			return issued !== null &&

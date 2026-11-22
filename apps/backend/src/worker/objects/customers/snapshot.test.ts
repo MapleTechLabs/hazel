@@ -252,7 +252,14 @@ describe("a plan that ended on a failed payment", () => {
 	const DAY = 86_400_000
 	const ago = (days: number) => new Date(NOW.getTime() - days * DAY)
 	const ended = { status: "canceled", mrrMinor: 3_900, canceledAt: ago(2) } as const
-	const failed = { status: "open", amountDueMinor: 3_900, attemptCount: 9, issuedAt: ago(90) } as const
+	const plan = "sub_1" as CustomerSubscriptionId
+	const failed = {
+		subscriptionId: plan,
+		status: "open",
+		amountDueMinor: 3_900,
+		attemptCount: 9,
+		issuedAt: ago(90),
+	} as const
 
 	const rollupWith = (
 		invoices: ReadonlyArray<Partial<schema.CustomerInvoice>>,
@@ -297,7 +304,7 @@ describe("a plan that ended on a failed payment", () => {
 	it("dates the end from the first failed invoice since the last paid one", () => {
 		const { unpaidEnd } = rollupWith([
 			{ ...failed, issuedAt: ago(200) },
-			{ status: "paid", amountPaidMinor: 3_900, issuedAt: ago(120) },
+			{ subscriptionId: plan, status: "paid", amountPaidMinor: 3_900, issuedAt: ago(120) },
 			failed,
 			{ ...failed, issuedAt: ago(60) },
 		])
@@ -306,10 +313,35 @@ describe("a plan that ended on a failed payment", () => {
 
 	it("does not count a $0 paid invoice as the last payment", () => {
 		const { unpaidEnd } = rollupWith([
-			{ status: "paid", amountDueMinor: 0, amountPaidMinor: 0, issuedAt: ago(80) },
+			{
+				subscriptionId: plan,
+				status: "paid",
+				amountDueMinor: 0,
+				amountPaidMinor: 0,
+				issuedAt: ago(80),
+			},
 			failed,
 		])
 		expect(unpaidEnd?.since).toEqual(ago(90))
+	})
+
+	it("reads one-off invoices as saying nothing about the plan", () => {
+		const oneOffPaid = {
+			subscriptionId: null,
+			status: "paid",
+			amountPaidMinor: 900,
+			issuedAt: ago(20),
+		} as const
+		expect(rollupWith([failed, oneOffPaid]).unpaidEnd?.since).toEqual(ago(90))
+		expect(rollupWith([{ ...failed, subscriptionId: null }]).rollup.lifecycleStage).toBe("churned")
+	})
+
+	it("reads a plan invoice paid after the failure as the customer still paying", () => {
+		const { rollup } = rollupWith([
+			failed,
+			{ subscriptionId: plan, status: "paid", amountPaidMinor: 3_900, issuedAt: ago(30) },
+		])
+		expect(rollup.lifecycleStage).toBe("churned")
 	})
 
 	it("leaves a customer churned when its bills were paid or the invoice came after the end", () => {
