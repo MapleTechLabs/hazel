@@ -1744,6 +1744,10 @@ describe("Customers compute and sync loop", () => {
 					account: [{ mrrMinor: 19_900 }],
 					movements: [{ toMrrMinor: 19_900 }],
 				})
+				// The org's day is the sum of its accounts as they stand, partial import or not.
+				expect(world.rows(`SELECT mrrMinor FROM customer_org_daily WHERE day = ?`, day(0))).toEqual([
+					{ mrrMinor: 19_900 },
+				])
 				yield* world.object
 					.run(
 						Effect.flatMap(CustomerIngest, (ingest) =>

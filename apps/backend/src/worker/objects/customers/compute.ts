@@ -258,6 +258,32 @@ const switchedSource = ({ stored, rollup, facts }: AccountSnapshot) =>
 	stored.mrrMinor > 0 &&
 	facts.subscriptions.some((sub) => billsNow(sub) && sub.currency === rollup.currency)
 
+/**
+ * The balances an account keeps this run. While Stripe imports, one built on it is partial: it stays
+ * where its series ends, the org's totals count it there too, and the first compute after the import
+ * records the whole change. A rule can put usage in MRR whichever source holds the plan.
+ */
+const heldBalances = (
+	account: AccountSnapshot,
+	importing: ReadonlySet<CustomerProvider>,
+	revenue: RevenueBasis,
+) => {
+	const { stored, rollup } = account
+	const holdsVariable = importing.has("stripe") && stored.mrrBasis === rollup.mrrBasis
+	const holdsMrr =
+		holdsVariable &&
+		!switchedSource(account) &&
+		(revenue.rules.some((rule) => rule.classification === "recurring") ||
+			stored.mrrSource === "stripe" ||
+			rollup.mrrSource === "stripe")
+	return {
+		holdsMrr,
+		holdsVariable,
+		mrrMinor: holdsMrr ? stored.mrrMinor : rollup.mrrMinor,
+		variableMrrMinor: holdsVariable ? stored.variableMrrMinor : rollup.variableMrrMinor,
+	}
+}
+
 /** Its MRR comes, or came last run, from a billing provider still importing its backfill. */
 const fromImporting = ({ stored, rollup }: AccountSnapshot, importing: ReadonlySet<CustomerProvider>) =>
 	(stored.mrrSource !== null && importing.has(stored.mrrSource)) ||
@@ -280,9 +306,6 @@ const writeRollups = Effect.fn("Customers.writeRollups")(function* (
 	const db = yield* Database.Database
 	const { now, today } = snapshot.org
 	let switched = 0
-	const stripeImporting = importing.has("stripe")
-	// A rule can put usage in MRR, and invoices are Stripe's whichever source holds the plan.
-	const usageCanBeMrr = snapshot.revenue.rules.some((rule) => rule.classification === "recurring")
 	yield* db.transaction(
 		Effect.forEach(
 			snapshot.accounts,
@@ -290,14 +313,11 @@ const writeRollups = Effect.fn("Customers.writeRollups")(function* (
 				Effect.gen(function* () {
 					const { stored, rollup } = account
 					const isSwitch = switchedSource(account)
-					// While Stripe imports, a balance built on it is partial: it stays where its series ends,
-					// and the first compute after the import records the whole change.
-					const sameBasis = stored.mrrBasis === rollup.mrrBasis
-					const holdsVariable = stripeImporting && sameBasis
-					const holdsMrr =
-						holdsVariable &&
-						!isSwitch &&
-						(usageCanBeMrr || stored.mrrSource === "stripe" || rollup.mrrSource === "stripe")
+					const { holdsMrr, holdsVariable, mrrMinor, variableMrrMinor } = heldBalances(
+						account,
+						importing,
+						snapshot.revenue,
+					)
 					if (isSwitch) switched++
 					else if (
 						!rebuildPending &&
@@ -312,8 +332,8 @@ const writeRollups = Effect.fn("Customers.writeRollups")(function* (
 					}
 					const changes = diff(stored, {
 						...rollup,
-						mrrMinor: holdsMrr ? stored.mrrMinor : rollup.mrrMinor,
-						variableMrrMinor: holdsVariable ? stored.variableMrrMinor : rollup.variableMrrMinor,
+						mrrMinor,
+						variableMrrMinor,
 					})
 					if (Object.keys(changes).length === 0) return
 					yield* db.run(
@@ -1003,6 +1023,7 @@ const addTotals = (
 	snapshot: Snapshot,
 	scores: ReadonlyMap<CustomerAccountId, HealthBreakdown>,
 	live: Live,
+	importing: ReadonlySet<CustomerProvider>,
 ) => {
 	const highRisk = new Set(
 		[...live.values()]
@@ -1014,12 +1035,15 @@ const addTotals = (
 			)
 			.map((signal) => signal.accountId),
 	)
-	for (const { stored, rollup } of snapshot.accounts) {
-		totals.mrrMinor += rollup.mrrMinor
-		totals.variableMrrMinor += rollup.variableMrrMinor
-		if (rollup.mrrMinor + rollup.variableMrrMinor > 0) totals.payingAccounts++
+	for (const account of snapshot.accounts) {
+		const { stored, rollup } = account
+		// What the account row holds: org totals stay the sum of its accounts during an import.
+		const { mrrMinor, variableMrrMinor } = heldBalances(account, importing, snapshot.revenue)
+		totals.mrrMinor += mrrMinor
+		totals.variableMrrMinor += variableMrrMinor
+		if (mrrMinor + variableMrrMinor > 0) totals.payingAccounts++
 		if (rollup.lifecycleStage === "trialing") totals.trialingAccounts++
-		if (highRisk.has(stored.id)) totals.atRiskMrrMinor += rollup.mrrMinor
+		if (highRisk.has(stored.id)) totals.atRiskMrrMinor += mrrMinor
 		const status = scores.get(stored.id)?.status
 		if (status === "healthy") totals.healthy++
 		else if (status === "at_risk") totals.atRisk++
@@ -1804,7 +1828,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 		const scores = scoreAll(snapshot)
 		yield* writeHealth(snapshot, scores)
 		const live = yield* writeSignals(withTodayHealth(snapshot, scores), signals)
-		addTotals(totals, snapshot, scores, live)
+		addTotals(totals, snapshot, scores, live, importing)
 		done++
 		if (
 			done < chunks.length &&

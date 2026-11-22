@@ -22,7 +22,7 @@ const SUBTITLE =
 const RESTATE_NOTE = "Saving restates the last 12 months of MRR history."
 
 const unsavedBar = (h: H, model: Model, isValid: boolean): Html => {
-	const restates = restatesHistory(model)
+	const restates = restatesHistory(withEntriesCommitted(model))
 	return h.div(
 		[
 			h.Role("region"),
