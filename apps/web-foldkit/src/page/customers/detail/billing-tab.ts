@@ -304,7 +304,9 @@ const mrrHistoryCard = (h: HtmlBuilder<Message>, model: Model, context: Context)
 						["Couldn't load the MRR history."],
 					)
 				: mrr === undefined
-					? h.div([h.Class("h-48 animate-pulse rounded-lg bg-secondary/40")])
+					? Option.isSome(AsyncData.getData(model.mrrHistory))
+						? h.p([h.Class("py-10 text-center text-muted-fg text-sm")], ["No MRR history yet."])
+						: h.div([h.Class("h-48 animate-pulse rounded-lg bg-secondary/40")])
 					: h.div(
 							[h.Class("flex flex-wrap gap-6")],
 							[

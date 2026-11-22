@@ -76,7 +76,7 @@ const settled = (model: Model): Model =>
 	!model.isSaving &&
 	model.draft !== null &&
 	model.settings !== null &&
-	Equal.equals(normalizedDraft(model.draft), draftOfSaved(model.settings))
+	Equal.equals(model.draft, draftOfSaved(model.settings))
 		? { ...model, draft: null }
 		: model
 
@@ -148,11 +148,18 @@ const selected = (model: Model, shared: Shared, target: SelectTarget, key: strin
 		},
 		Field: ({ ruleId, index }) => {
 			const field = Customers.RevenueConditionField.literals.find((value) => value === key)
-			return field === undefined
-				? { model }
-				: edited(model, shared, (draft) =>
-						withCondition(draft, ruleId, index, (condition) => withField(condition, field)),
-					)
+			if (field === undefined) return { model }
+			// Only a metadata condition has a typed value: another field must not inherit it.
+			const entryKey = entryKeyOf(ruleId, index)
+			const valueEntries =
+				field === "metadata"
+					? model.valueEntries
+					: Object.fromEntries(
+							Object.entries(model.valueEntries).filter(([key]) => key !== entryKey),
+						)
+			return edited({ ...model, valueEntries }, shared, (draft) =>
+				withCondition(draft, ruleId, index, (condition) => withField(condition, field)),
+			)
 		},
 		AddValue: ({ ruleId, index }) =>
 			edited(model, shared, (draft) =>
@@ -226,7 +233,10 @@ const withEntriesCommitted = (model: Model): Model => {
 		...rule,
 		conditions: rule.conditions.map((condition, index) => {
 			const value = (model.valueEntries[entryKeyOf(rule.id, index)] ?? "").trim()
-			return value === "" || condition.values.includes(value) || condition.values.length >= MAX_VALUES
+			return condition.field !== "metadata" ||
+				value === "" ||
+				condition.values.includes(value) ||
+				condition.values.length >= MAX_VALUES
 				? condition
 				: { ...condition, values: [...condition.values, value] }
 		}),
@@ -246,7 +256,13 @@ const saved = (model: Model, shared: Shared): Return => {
 	)
 		return { model }
 	return {
-		model: { ...model, isSaving: true, confirmModal: Modal.close(model.confirmModal).model },
+		model: {
+			...model,
+			// As it is sent: the saved rules, once synced, settle it.
+			draft: model.draft === null ? null : normalizedDraft(model.draft),
+			isSaving: true,
+			confirmModal: Modal.close(model.confirmModal).model,
+		},
 		commands: [
 			SaveRevenueSettings({
 				organizationId,

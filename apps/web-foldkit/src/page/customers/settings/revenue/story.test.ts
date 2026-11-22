@@ -274,6 +274,29 @@ describe("revenue settings", () => {
 		expect(saving.model.valueEntries).toEqual({})
 	})
 
+	test("a metadata key keeps a space while typing, and is saved trimmed", () => {
+		const typing = step(
+			loaded(),
+			Message.ChangedMetadataKey({ ruleId: "rule-2", index: 0, key: "kind " }),
+		)
+		expect(draftOf(typing)?.rules[1]?.conditions[0]?.key).toBe("kind ")
+		const finished = step(
+			typing,
+			Message.ChangedMetadataKey({ ruleId: "rule-2", index: 0, key: "kind plan " }),
+		)
+		const saving = update(step(finished, Message.PressedSave()), Message.PressedConfirmSave(), admin)
+		expect(saving.commands?.[0]).toMatchObject({
+			args: { rules: [expect.anything(), { conditions: [{ key: "kind plan" }] }] },
+		})
+	})
+
+	test("a value typed for metadata does not follow its condition to another field", () => {
+		const typed = step(loaded(), Message.ChangedValueEntry({ ruleId: "rule-2", index: 0, text: "gold" }))
+		const changed = picked(typed, { _tag: "Field", ruleId: "rule-2", index: 0 }, "product").model
+		expect(changed.valueEntries).toEqual({})
+		expect(draftOf(changed)?.rules[1]?.conditions[0]).toMatchObject({ field: "product", values: [] })
+	})
+
 	test("members cannot change anything", () => {
 		const member = sharedAs("member")
 		const model = loaded()
