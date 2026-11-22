@@ -17,31 +17,16 @@ export interface LiveLoading {
 	readonly icon: "sparkle" | "brain"
 }
 
-const dot = <M>(h: HtmlBuilder<M>, delay: string | null): Html =>
-	h.span([
-		h.Class("size-1 rounded-full bg-current animate-[ai-thinking-dot_1.4s_ease-in-out_infinite]"),
-		...(delay === null ? [] : [h.Attribute("style", `animation-delay: ${delay};`)]),
-	])
-
 /** `MessageLiveLoading`. */
 const loadingView = <M>(h: HtmlBuilder<M>, loading: LiveLoading): Html =>
 	h.div(
-		[h.Class("flex items-center gap-2 text-muted-fg text-sm")],
+		[h.Class("flex items-center gap-2 text-muted-fg text-sm"), h.Role("status")],
 		[
 			(loading.icon === "brain" ? IconBrainSparkle : IconSparkles)(h, {
-				className: "size-4",
+				className: "thought-breathe size-4",
 				attributes: { "aria-hidden": "true" },
 			}),
-			h.span(
-				[h.Class("flex items-center gap-1")],
-				[
-					loading.text,
-					h.span(
-						[h.Class("inline-flex gap-0.5 ml-0.5")],
-						[dot(h, null), dot(h, "0.2s"), dot(h, "0.4s")],
-					),
-				],
-			),
+			h.span([h.Class("thought-shimmer")], [loading.text]),
 		],
 	)
 
