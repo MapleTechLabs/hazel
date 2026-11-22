@@ -4,7 +4,12 @@ import type { ChannelGroups, ChannelSummary, DmParticipant } from "./model"
 /** The legacy `useMemo`: group the joined rows by channel, keep the user's visible channels, split by type. */
 
 export interface ChannelRow {
-	readonly channel: { readonly id: ChannelId; readonly name: string; readonly type: string }
+	readonly channel: {
+		readonly id: ChannelId
+		readonly name: string
+		readonly type: string
+		readonly icon?: string | null
+	}
 	readonly member: {
 		readonly userId: UserId
 		readonly isHidden: boolean
@@ -50,6 +55,7 @@ export const groupChannels = (
 			id: channel.id,
 			name: channel.name,
 			type: channel.type,
+			icon: channel.icon ?? null,
 			isMuted: mine.isMuted,
 			isFavorite: mine.isFavorite,
 			notificationCount: mine.notificationCount || 0,

@@ -35,6 +35,7 @@ const channel = (n: number, name: string, type: string): ChannelSummary => ({
 	id: Schema.decodeSync(ChannelId)(`00000000-0000-4000-8000-${String(200 + n).padStart(12, "0")}`),
 	name,
 	type,
+	icon: null,
 	isMuted: false,
 	isFavorite: false,
 	notificationCount: 0,

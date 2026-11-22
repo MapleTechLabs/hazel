@@ -16,6 +16,7 @@ export const ChannelSummary = Schema.Struct({
 	id: ChannelId,
 	name: Schema.String,
 	type: Schema.String,
+	icon: Schema.NullOr(Schema.String),
 	isMuted: Schema.Boolean,
 	isFavorite: Schema.Boolean,
 	notificationCount: Schema.Finite,

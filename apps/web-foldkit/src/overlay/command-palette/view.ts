@@ -5,7 +5,6 @@ import { dropdownLabelBase } from "~/components/ui/dropdown.styles"
 import { cn } from "~/lib/utils"
 import {
 	IconCircleDottedUser,
-	IconHashtag,
 	IconMagnifier3,
 	IconMsgs,
 	IconPaintbrush,
@@ -17,8 +16,9 @@ import { destination, isDestinationId } from "../../shell/destinations"
 import { hotkeyLabel } from "../../shell/channels-sidebar/hotkey-label"
 import { environmentBadge } from "../../customers/ui/badges"
 import { companyLogo } from "../../customers/ui/identity"
-import type { Shared } from "../../page/contract"
+import { channelLinksOf, type Shared } from "../../page/contract"
 import { avatar } from "../../ui/avatar"
+import { channelIcon } from "../../ui/channel-icon"
 import type * as CommandMenu from "../../ui/command-menu"
 import { commandMenuShortcut, view as commandMenuView } from "../../ui/command-menu-view"
 import { labelId } from "../../ui/menu"
@@ -40,9 +40,6 @@ const label = (h: HtmlBuilder<Message>, key: string, children: Array<Html | stri
 	)
 
 const current = (h: HtmlBuilder<Message>) => h.span([h.Class("ml-2 text-muted-fg text-xs")], ["(current)"])
-
-const channelIcon = (h: HtmlBuilder<Message>, icon: string | null): Html =>
-	icon ? h.span([h.Attribute("data-slot", "icon")], [icon]) : IconHashtag(h)
 
 /** A DM's icon: the partner's avatar, or up to two stacked avatars and a "+N" for groups. */
 const dmIcon = (h: HtmlBuilder<Message>, dm: DmChannel): Html => {
@@ -85,8 +82,23 @@ const dmIcon = (h: HtmlBuilder<Message>, dm: DmChannel): Html => {
 	)
 }
 
-const channelContent = (h: HtmlBuilder<Message>, key: string, channel: ChannelSummary | undefined) =>
-	channel ? [channelIcon(h, channel.icon), label(h, key, [channel.name])] : []
+const channelContent = (
+	h: HtmlBuilder<Message>,
+	shared: Shared,
+	key: string,
+	channel: ChannelSummary | undefined,
+) =>
+	channel
+		? [
+				channelIcon(h, {
+					icon: channel.icon,
+					isPrivate: channel.type === "private",
+					links: channelLinksOf(shared, channel.id),
+					surface: "overlay",
+				}),
+				label(h, key, [channel.name]),
+			]
+		: []
 
 const QUICK_ACTIONS: Readonly<
 	Record<
@@ -167,6 +179,7 @@ const itemContent = (
 	if (kind === "channel")
 		return channelContent(
 			h,
+			shared,
 			key,
 			model.channels.find((channel) => channel.id === value),
 		)
@@ -228,7 +241,7 @@ const itemContent = (
 		const channel = recentChannelsOf(model).find((candidate) => candidate.id === value)
 		return dm && channel && channel.type !== "public" && channel.type !== "private"
 			? [dmIcon(h, dm), label(h, key, [dmDisplayName(dm)])]
-			: channelContent(h, key, channel)
+			: channelContent(h, shared, key, channel)
 	}
 	const status = STATUS_OPTIONS.find((option) => option.value === value)
 	if (kind === "status" && status)
@@ -275,7 +288,7 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, { sh
 							page._tag === "CreateChannel"
 								? createChannelPage(h, page)
 								: page._tag === "JoinChannel"
-									? joinChannelPage(h, model, page)
+									? joinChannelPage(h, model, page, shared)
 									: page._tag === "Search"
 										? searchPage(h, model, page, shared.nowMs)
 										: h.empty,

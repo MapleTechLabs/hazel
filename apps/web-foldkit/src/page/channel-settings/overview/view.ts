@@ -12,7 +12,8 @@ import * as Popover from "../../../ui/popover"
 import * as Field from "../../../ui/field"
 import { textField } from "../../../ui/text-field"
 import type { PageViewInputs } from "../../contract"
-import { channelIcon, tabHeader } from "../section-header"
+import { tabHeader } from "../section-header"
+import { channelIcon } from "../../../ui/channel-icon"
 import { Message } from "./message"
 import { canSave, type Form, isSubmitting, type Model, nameInputTarget, saveButtonTarget } from "./model"
 import { interaction } from "./update"
@@ -42,7 +43,7 @@ const iconField = (h: HtmlBuilder<Message>, form: Form): Html =>
 								h.Attribute("aria-expanded", "false"),
 							],
 						},
-						[channelIcon(h, form.icon)],
+						[channelIcon(h, { icon: form.icon, size: "md" })],
 					),
 					...(form.icon
 						? [

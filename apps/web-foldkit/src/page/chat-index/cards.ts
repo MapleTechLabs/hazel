@@ -1,10 +1,11 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { cn } from "~/lib/utils"
 import { getEffectivePresenceStatus } from "~/utils/presence"
-import { IconHashtag, IconLock, IconUsers, IconVolumeMute } from "../../icons"
+import { IconUsers, IconVolumeMute } from "../../icons"
 import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
 import { badge } from "../../ui/badge"
+import { type ChannelLinks, channelIcon } from "../../ui/channel-icon"
 import { type ChannelSummary, type DmParticipant, otherMembers, type Presence } from "./model"
 
 /** `ChannelCard`, `DmCard` and `SingleDmCard` from `routes/_app/$orgSlug/chat/index.tsx`. */
@@ -37,14 +38,20 @@ export const channelCard = <M>(
 	orgSlug: string,
 	channel: ChannelSummary,
 	isPrivate: boolean,
+	links: ChannelLinks,
 ): Html =>
 	cardLink(h, orgSlug, channel, [
 		h.div(
 			[h.Class("flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary")],
 			[
-				isPrivate
-					? IconLock(h, { className: "size-5 text-muted-fg" })
-					: IconHashtag(h, { className: "size-5 text-muted-fg" }),
+				channelIcon(h, {
+					icon: channel.icon,
+					isPrivate,
+					links,
+					size: "md",
+					surface: "secondary",
+					className: "text-muted-fg",
+				}),
 			],
 		),
 		h.div(

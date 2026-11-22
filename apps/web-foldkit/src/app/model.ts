@@ -19,6 +19,7 @@ import { Overrides } from "~/lib/keybindings/keymap"
 import * as Platform from "../platform"
 import * as Updates from "../platform/updates"
 import * as Shell from "../shell/model"
+import { channelLinksOf } from "../shell/channels-sidebar/channel-links"
 import type { Context as ShellUpdateContext } from "../shell/update"
 import { ResolvedTheme, resolveTheme, ThemePreference } from "../theme"
 
@@ -181,6 +182,7 @@ const computeShared = (model: Model): Shared => ({
 	keyboardPlatform: model.keyboardPlatform,
 	desktopUpdate: model.desktopUpdate,
 	isOverlayOpen: model.modal.current !== null || model.commandPalette.isOpen,
+	channelLinks: channelLinksOf(model.shell.channelsSidebar),
 })
 
 export const pageHostOf = (model: Model): PageHost => {

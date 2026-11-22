@@ -14,6 +14,7 @@ import { afterEach, test } from "vitest"
 import { page } from "vitest/browser"
 import * as CustomerCard from "./customer-card"
 import { chatHeaderView } from "./header"
+import { NO_CHANNEL_LINKS } from "../../ui/channel-icon"
 
 /**
  * The linked channel's customer at a glance (`customer-card.ts`): the header chip and the card in
@@ -190,7 +191,14 @@ const header = (
 			organizationId: ORG,
 			parentChannelId: null,
 		},
-		syncProvider: customer === null ? null : "slack",
+		links:
+			customer === null
+				? NO_CHANNEL_LINKS
+				: {
+						customer: { name: customer.accountName, logoUrl: customer.accountLogoUrl ?? null },
+						partners: [],
+						syncProvider: "slack",
+					},
 		parentChannel: null,
 		orgSlug: "hazel",
 		isMember: true,

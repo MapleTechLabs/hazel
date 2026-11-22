@@ -1,6 +1,8 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconHashtag, IconLock } from "../../icons"
+import { channelLinksOf, type Shared } from "../../page/contract"
 import { button } from "../../ui/button"
+import { channelIcon } from "../../ui/channel-icon"
 import {
 	commandMenuFormBody,
 	commandMenuFormContainer,
@@ -18,12 +20,6 @@ import { CREATE_CHANNEL_INPUT_ID, JOIN_CHANNEL_INPUT_ID } from "./update"
 
 type CreateChannelPage = Extract<PageState, { _tag: "CreateChannel" }>
 type JoinChannelPage = Extract<PageState, { _tag: "JoinChannel" }>
-
-/** Legacy `channelIcon` with a class (`ChannelIcon`). */
-const channelIcon = (h: HtmlBuilder<Message>, icon: string | null, className: string): Html =>
-	icon
-		? h.span([h.Attribute("data-slot", "icon"), h.Class(className)], [icon])
-		: IconHashtag(h, { className })
 
 const header = (h: HtmlBuilder<Message>, title: string, subtitle: string) =>
 	commandMenuFormHeader(h, {
@@ -98,7 +94,12 @@ export const createChannelPage = (h: HtmlBuilder<Message>, page: CreateChannelPa
 		),
 	])
 
-export const joinChannelPage = (h: HtmlBuilder<Message>, model: Model, page: JoinChannelPage): Html => {
+export const joinChannelPage = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	page: JoinChannelPage,
+	shared: Shared,
+): Html => {
 	const unjoined = model.unjoinedChannels ?? []
 	const query = page.searchQuery.trim().toLowerCase()
 	const filtered =
@@ -156,7 +157,11 @@ export const joinChannelPage = (h: HtmlBuilder<Message>, model: Model, page: Joi
 													),
 												],
 												[
-													channelIcon(h, channel.icon, "size-4 text-muted-fg"),
+													channelIcon(h, {
+														icon: channel.icon,
+														links: channelLinksOf(shared, channel.id),
+														className: "text-muted-fg",
+													}),
 													h.span([h.Class("flex-1 truncate")], [channel.name]),
 													h.span(
 														[
