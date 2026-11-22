@@ -47,6 +47,16 @@ export const workSummaryOf = (items: ReadonlyArray<ItemRow>) => ({
 	steps: items.length,
 })
 
+/**
+ * Whether a thinking or work-log row shows its body: open while it runs and folded once done,
+ * unless the member opened or folded it (`folds`, by item id).
+ */
+export const isFoldOpen = (
+	folds: Readonly<Record<string, boolean>>,
+	key: string,
+	isRunning: boolean,
+): boolean => folds[key] ?? isRunning
+
 /** The history menu: the member's own threads, then those shared with them; newest activity first. */
 export const historyOf = (threads: ReadonlyArray<ThreadRow>, userId: UserId | null) => {
 	const newestFirst = [...threads].sort((left, right) => right.lastActivityAtMs - left.lastActivityAtMs)

@@ -2,7 +2,7 @@ import { AssistantItemId, AssistantThreadId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { describe, expect, test } from "vitest"
 import type { ItemRow, ThreadRow } from "./model"
-import { historyOf, sortItems, timelineOf, workSummaryOf } from "./timeline"
+import { historyOf, isFoldOpen, sortItems, timelineOf, workSummaryOf } from "./timeline"
 
 /** How a thread reads: order, work logs, and the history menu's groups. */
 
@@ -92,5 +92,21 @@ describe("historyOf", () => {
 		)
 		expect(own.map((row) => row.title)).toEqual(["Thread 3", "Thread 1"])
 		expect(shared.map((row) => row.title)).toEqual(["Thread 2", "Thread 4"])
+	})
+})
+
+describe("isFoldOpen", () => {
+	test("a row nobody touched is open while it runs and folded once done", () => {
+		expect(isFoldOpen({}, "a", true)).toBe(true)
+		expect(isFoldOpen({}, "a", false)).toBe(false)
+	})
+
+	test("a row the member opened stays open once done, and one they folded stays folded while it runs", () => {
+		expect(isFoldOpen({ a: true }, "a", false)).toBe(true)
+		expect(isFoldOpen({ a: false }, "a", true)).toBe(false)
+	})
+
+	test("another row's choice does not apply", () => {
+		expect(isFoldOpen({ b: true }, "a", false)).toBe(false)
 	})
 })

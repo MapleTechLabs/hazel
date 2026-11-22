@@ -44,7 +44,7 @@ import {
 	type QuestionData,
 	type ThreadRow,
 } from "./model"
-import { historyOf, timelineOf, workSummaryOf } from "./timeline"
+import { historyOf, isFoldOpen, timelineOf, workSummaryOf } from "./timeline"
 import {
 	answersOf,
 	isAnswered,
@@ -295,10 +295,6 @@ const assistantReply = (h: H, text: string, title: string | null): Html =>
 
 const noticeView = (h: H, text: string, title: string | null): Html =>
 	h.p([h.Class("text-center text-muted-fg text-xs")], [text || title || ""])
-
-/** Open while it runs, folded once done, unless the member opened or folded it. */
-const isFoldOpen = (folds: Model["folds"], key: string, isRunning: boolean): boolean =>
-	folds[key] ?? isRunning
 
 /**
  * The agent's thinking, where it happened: a thought line, its text open under it while it runs and
