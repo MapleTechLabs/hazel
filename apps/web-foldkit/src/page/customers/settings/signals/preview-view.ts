@@ -366,6 +366,7 @@ const failure = (h: H, reason: Parameters<typeof commonMessage>[0]): Html => {
 	return emptyState(h, {
 		title: "Couldn't preview this rule",
 		description: message.description ?? message.title,
+		role: "alert",
 		className: "py-6",
 		action: button(h, { intent: "outline", size: "sm", onPress: Message.PressedRetryPreview() }, [
 			"Try again",

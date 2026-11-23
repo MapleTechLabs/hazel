@@ -12,11 +12,19 @@ export const emptyState = <Message>(
 		readonly description?: string
 		/** The action slot's children (legacy `action`; a FileTrigger renders a button and an input). */
 		readonly action?: Html | ReadonlyArray<Html>
+		/**
+		 * Announce the state when it appears: `alert` for a failure the person is waiting on (a load
+		 * or a preview that failed), `status` for a quiet change. Omit for a state that is just there.
+		 */
+		readonly role?: "alert" | "status"
 		readonly className?: string
 	},
 ): Html =>
 	h.div(
-		[h.Class(twMerge(emptyStateStyles.root, options.className))],
+		[
+			...(options.role === undefined ? [] : [h.Role(options.role)]),
+			h.Class(twMerge(emptyStateStyles.root, options.className)),
+		],
 		[
 			...(options.icon
 				? [
