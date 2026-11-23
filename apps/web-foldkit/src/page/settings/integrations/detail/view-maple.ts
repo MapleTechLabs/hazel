@@ -2,7 +2,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { button, buttonClassName } from "../../../../ui/button"
 import { callout } from "../../../../ui/callout"
 import type { MapleInstall } from "./model"
-import { sectionCard } from "./view-connection"
+import { sectionCard, steps } from "./view-connection"
 
 /**
  * Maple is two things in Hazel, both through one bot: an AI agent you ask in a channel (installed
@@ -60,28 +60,6 @@ const euLink = <M>(h: HtmlBuilder<M>, href: string, label: string): Html =>
 				[label],
 			),
 		],
-	)
-
-const steps = <M>(h: HtmlBuilder<M>, items: ReadonlyArray<string>): Html =>
-	h.ol(
-		[h.Class("flex flex-col gap-2 text-muted-fg text-sm")],
-		items.map((item, index) =>
-			h.keyed("li")(
-				item,
-				[h.Class("flex gap-2.5")],
-				[
-					h.span(
-						[
-							h.Class(
-								"flex size-5 shrink-0 items-center justify-center rounded-full bg-muted font-medium text-fg text-xs",
-							),
-						],
-						[String(index + 1)],
-					),
-					h.span([], [item]),
-				],
-			),
-		),
 	)
 
 const installedNote = <M>(h: HtmlBuilder<M>): Html =>

@@ -93,7 +93,7 @@ const mainColumn = (h: H, integration: Integration, model: Model, shared: Shared
 
 const featuresPanel = (h: H, integration: Integration): Html =>
 	h.div(
-		[h.Class("lg:sticky lg:top-6 lg:self-start")],
+		[h.Class("@3xl:sticky @3xl:top-6 @3xl:self-start")],
 		[
 			sectionCard(h, "Features", [
 				h.p([h.Class("mb-4 text-muted-fg text-sm leading-relaxed")], [integration.fullDescription]),
@@ -160,11 +160,20 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 					? model.mapleInstall !== null
 					: model.connection?.isActive === true,
 		),
+		// Columns by the page's own width, not the window's: the assistant panel and sidebar take a share.
 		h.div(
-			[h.Class("grid gap-8 lg:grid-cols-[1fr_320px]")],
+			[h.Class("@container")],
 			[
-				h.div([h.Class("flex flex-col gap-8")], mainColumn(h, integration, model, shared)),
-				featuresPanel(h, integration),
+				h.div(
+					[h.Class("grid gap-8 @3xl:grid-cols-[minmax(0,1fr)_20rem]")],
+					[
+						h.div(
+							[h.Class("flex min-w-0 flex-col gap-8")],
+							mainColumn(h, integration, model, shared),
+						),
+						featuresPanel(h, integration),
+					],
+				),
 			],
 		),
 	])
