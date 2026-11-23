@@ -101,6 +101,7 @@ import {
 	TAG_POPOVER_ID,
 	CHANNEL_POPOVER_ID,
 	CHAT_PERSON_MENU_ID,
+	OTHER_ACCOUNTS_POPOVER_ID,
 	FLAG_POPOVER_ID,
 	UNASSIGN,
 	userIdOfOwnerKey,
@@ -297,6 +298,8 @@ const initialModel = (route: Route): Model => ({
 	chatAuthors: [],
 	activeChatPersonId: null,
 	chatPersonMenu: Menu.init({ id: CHAT_PERSON_MENU_ID, placement: "bottom end" }),
+	otherAccountsContactId: null,
+	otherAccountsPopover: Popover.init(OTHER_ACCOUNTS_POPOVER_ID),
 	suggestions: EMPTY_SUGGESTIONS,
 	suggestionsFor: null,
 	createdFeatureFlags: [],
@@ -1247,6 +1250,37 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 					outMessage: toast(suggestionFailureToast(failed, reason)),
 				}),
 			}),
+		PressedOtherAccounts: ({ contactId }) => {
+			const opened = PopoverControl.open(model.otherAccountsPopover)
+			return {
+				model: modifyFields(model, {
+					otherAccountsContactId: () => contactId,
+					otherAccountsPopover: () => opened.model,
+				}),
+				commands: Command.mapMessages(opened.commands ?? [], (child) =>
+					Message.GotOtherAccountsPopoverMessage({ message: child }),
+				),
+			}
+		},
+		GotOtherAccountsPopoverMessage: ({ message: popoverMessage }) => {
+			const result = Popover.update(model.otherAccountsPopover, popoverMessage)
+			return {
+				model: modifyFields(model, { otherAccountsPopover: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (child) =>
+					Message.GotOtherAccountsPopoverMessage({ message: child }),
+				),
+			}
+		},
+		// The link itself navigates: this only closes the panel behind it.
+		PressedOtherAccount: () => {
+			const closed = PopoverControl.close(model.otherAccountsPopover)
+			return {
+				model: modifyFields(model, { otherAccountsPopover: () => closed.model }),
+				commands: Command.mapMessages(closed.commands ?? [], (child) =>
+					Message.GotOtherAccountsPopoverMessage({ message: child }),
+				),
+			}
+		},
 		UpdatedCreatedFeatureFlags: ({ keys }) => ({
 			model: modifyFields(model, { createdFeatureFlags: () => keys }),
 		}),

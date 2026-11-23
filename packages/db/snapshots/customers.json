@@ -1,5 +1,5 @@
 {
-	"migration": "0025_company_enrichment",
+	"migration": "0026_customer_contacts_email_lower",
 	"entities": [
 		{
 			"kind": "table",
@@ -4923,6 +4923,12 @@
 			"unique": true,
 			"on": ["channelId"],
 			"where": "\"deletedAt\" IS NULL"
+		},
+		{
+			"name": "customer_contacts_email_lower_idx",
+			"table": "customer_contacts",
+			"unique": false,
+			"on": ["lower(\"email\")"]
 		},
 		{
 			"name": "customer_events_external_unique",

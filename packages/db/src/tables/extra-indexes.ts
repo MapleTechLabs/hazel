@@ -101,6 +101,13 @@ export const extraIndexes: ReadonlyArray<ExtraIndex> = [
 		where: `"entityType" = 'contact'`,
 	},
 	{
+		// One person across customers: emails match in any case.
+		name: "customer_contacts_email_lower_idx",
+		table: "customer_contacts",
+		unique: false,
+		on: [`lower("email")`],
+	},
+	{
 		name: "customer_events_external_unique",
 		table: "customer_events",
 		unique: true,

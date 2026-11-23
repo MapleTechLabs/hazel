@@ -1032,6 +1032,7 @@ describe("customer page: impersonation", () => {
 		},
 		status: "active",
 		activity: [],
+		otherAccounts: [],
 	})
 	const linus = contactRow(1, "Linus")
 	const margaret = contactRow(2, "Margaret")

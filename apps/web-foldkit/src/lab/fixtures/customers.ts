@@ -1671,6 +1671,7 @@ const contactRow = (
 			lastSeenDays !== null && 29 - index >= lastSeenDays ? (index * 7 + n * 3) % 9 : 0,
 		),
 	),
+	otherAccounts: [],
 })
 
 export const ACME_DETAIL: AccountDetail = {

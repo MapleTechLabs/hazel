@@ -10,6 +10,7 @@ import {
 	CustomerProvider,
 	CustomersRange,
 	HealthStatus,
+	LifecycleStage,
 	SignalSeverity,
 	SubscriptionStatus,
 } from "./enums"
@@ -147,11 +148,25 @@ export type OverviewResult = typeof OverviewResult.Type
 // One account
 // ---------------------------------------------------------------------------
 
+/** Another customer the same person belongs to, with their role and last sighting there. */
+export const ContactOtherAccount = Schema.Struct({
+	accountId: CustomerAccountId,
+	name: Schema.String,
+	logoUrl: Schema.NullOr(Schema.String),
+	environment: Schema.NullOr(Schema.String),
+	lifecycleStage: LifecycleStage,
+	role: Schema.NullOr(Schema.String),
+	lastSeenAt: Schema.NullOr(JsonDate),
+})
+export type ContactOtherAccount = typeof ContactOtherAccount.Type
+
 /** A contact with its 30-day activity (events + sessions per day, oldest first). */
 export const ContactRow = Schema.Struct({
 	contact: Contact.Schema,
 	status: ContactActivityStatus,
 	activity: Schema.Array(SeriesPoint),
+	/** The person's other customers, most recently seen first. */
+	otherAccounts: Schema.Array(ContactOtherAccount),
 })
 export type ContactRow = typeof ContactRow.Type
 

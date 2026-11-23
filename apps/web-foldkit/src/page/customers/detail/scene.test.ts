@@ -20,10 +20,11 @@ import {
 	UNSEEN_SUGGESTION,
 	WORKSPACE_SUGGESTION,
 } from "../../../lab/fixtures/customers-suggestions"
-import { AppRoute } from "../../../route"
+import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { makeShared, memberWithRole, pageScene } from "../../../test/pages-fixtures"
 import * as Menu from "../../../ui/menu"
 import { FocusTriggerOnPress } from "../../../ui/menu-view"
+import * as Popover from "../../../ui/popover"
 import { CopyCustomerText, FocusDomainInput } from "./commands"
 import { Message } from "./message"
 import { init, update } from "./update"
@@ -313,6 +314,70 @@ describe("customer page: copying identifiers", () => {
 			Scene.click(Scene.role("button", { name: "Copy Slug" })),
 			Scene.Command.expectExact(CopyCustomerText({ text: "/acme", label: "Slug", isPath: false })),
 			Scene.Command.resolve(CopyCustomerText, Message.CompletedCopy({ label: "Slug", isCopied: true })),
+		)
+	})
+})
+
+describe("customer page: a user's other customers", () => {
+	const acme = ACCOUNTS_BY_KEY.acme
+	const northwind = ACCOUNTS_BY_KEY.northwind
+	const kestrel = ACCOUNTS_BY_KEY.kestrel
+	const as = makeShared({ nowMs: NOW.getTime() })
+	const other = (account: typeof northwind, role: string) => ({
+		accountId: account.id,
+		name: account.name,
+		logoUrl: null,
+		environment: null,
+		lifecycleStage: account.lifecycleStage,
+		role,
+		lastSeenAt: new Date(NOW.getTime() - 2 * 86_400_000),
+	})
+	const [row] = ACME_DETAIL.contactsToReach
+	const withUsers = update(
+		{
+			...init(
+				AppRoute.CustomerDetail({ orgSlug: "hazel", accountId: acme.id, tab: Option.some("users") }),
+				as,
+			).model,
+			accounts: ACCOUNTS.map(toAccountRow),
+			detail: AsyncData.Success({ data: ACME_DETAIL }),
+		},
+		Message.SucceededFetchContacts({
+			accountId: acme.id,
+			page: {
+				items: [{ ...row, otherAccounts: [other(northwind, "Admin"), other(kestrel, "Member")] }],
+				nextCursor: null,
+			},
+		}),
+		as,
+	).model
+
+	test("the row names the first one; pressing it lists each with role and a link to its users", () => {
+		const northwindLink = Scene.role("link", { name: /Northwind Labs/ })
+		Scene.scene(
+			pageScene(update, view, as),
+			Scene.given(withUsers),
+			menusMounted(3),
+			Scene.expect(Scene.role("button", { name: /is also in 2 other customers/ })).toHaveText(
+				/Also in Northwind Labs\s*\+1/,
+			),
+			Scene.click(Scene.role("button", { name: /is also in 2 other customers/ })),
+			Scene.Mount.resolve(
+				Popover.PortalPopoverBackdrop,
+				Popover.Message.CompletedPortalPopoverBackdrop(),
+			),
+			Scene.Mount.resolve(Popover.AnchorPopover, Popover.Message.CompletedAnchorPopover()),
+			Scene.expect(northwindLink).toHaveAttr(
+				"href",
+				hrefOf(customerRoute("hazel", northwind.id, "users")),
+			),
+			Scene.expect(northwindLink).toContainText("Admin"),
+			Scene.expect(Scene.role("link", { name: /Kestrel Systems/ })).toContainText("Member"),
+			Scene.click(northwindLink),
+			Scene.Command.resolve(Popover.FocusButton, Popover.Message.CompletedFocusButton()),
+			Scene.Mount.expectEnded(Popover.PortalPopoverBackdrop),
+			Scene.Mount.expectEnded(Popover.AnchorPopover),
+			Scene.expect(Scene.role("dialog")).toBeAbsent(),
 		)
 	})
 })
