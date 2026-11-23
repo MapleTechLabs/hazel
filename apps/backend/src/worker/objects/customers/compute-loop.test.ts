@@ -1572,6 +1572,9 @@ describe("Customers compute and sync loop", () => {
 				expect(titles()).toEqual(["Abandoned checkout for Team"])
 				yield* world.ingest("autumn", [abandoned])
 				expect(titles()).toEqual(["Abandoned checkout for Team"])
+				// A live plan reusing its id did start.
+				yield* world.ingest("autumn", [{ ...subscription(1), cancellationReason: null }])
+				expect(titles()).toEqual(["Started Team"])
 			}),
 		))
 
