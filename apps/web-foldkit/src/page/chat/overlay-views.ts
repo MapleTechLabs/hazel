@@ -16,6 +16,7 @@ import {
 } from "../../chat/message/toolbar"
 import { menuLabel, menuTriggerClassName, view as menuView } from "../../ui/menu-view"
 import * as Toolbar from "../../ui/toolbar"
+import { ariaButton } from "../../ui/button"
 import * as Overlays from "./overlays"
 import { factsOf, Message, type Model } from "./channel/page"
 
@@ -76,16 +77,16 @@ export const messageToolbarOverlay = (h: H, model: Model): Html => {
 		viewInputs: {
 			entries: Overlays.moreMenuEntries(facts, messageId),
 			toTrigger: (attributes, overlay) =>
-				h.button(
-					[
-						...attributes,
-						h.Attribute("aria-label", "More actions"),
-						h.Class(menuTriggerClassName("p-1.5! rounded-md hover:bg-secondary")),
-						h.Attribute("data-react-aria-pressable", "true"),
-						h.Attribute("data-slot", "menu-trigger"),
-						h.Attribute("tabindex", "0"),
-						h.Attribute("type", "button"),
-					],
+				ariaButton(
+					h,
+					{
+						className: menuTriggerClassName("p-1.5! rounded-md hover:bg-secondary"),
+						attributes: [
+							...attributes,
+							h.Attribute("aria-label", "More actions"),
+							h.Attribute("data-slot", "menu-trigger"),
+						],
+					},
 					[IconDotsVertical(h, { className: "size-3.5" }), overlay],
 				),
 			content: (key) =>

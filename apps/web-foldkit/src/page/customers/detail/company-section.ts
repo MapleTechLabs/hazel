@@ -26,6 +26,8 @@ import {
 	type Model,
 } from "./model"
 import { type Context, icon, property, sidebarSection } from "./parts"
+import { stat as figure } from "../shared-view"
+import { skeleton } from "../../../ui/skeleton"
 
 /**
  * The customer's company, enriched from its domain (`docs/customers/enrichment.md`): the sidebar's
@@ -48,7 +50,7 @@ const stacked = (h: HtmlBuilder<Message>, value: string, detail: string | null):
 		],
 	)
 
-/** One figure of the stat grid: a small label over the value, a quieter detail under it. */
+/** One figure of the stat grid, in its own bordered tile; nothing when there is no value. */
 const stat = (
 	h: HtmlBuilder<Message>,
 	label: string,
@@ -57,29 +59,7 @@ const stat = (
 ): ReadonlyArray<Html> =>
 	value === null
 		? []
-		: [
-				h.div(
-					[h.Class("flex min-w-0 flex-col gap-0.5 rounded-lg border border-border px-3 py-2")],
-					[
-						h.span([h.Class("text-muted-fg text-xs")], [label]),
-						h.span(
-							[h.Class("truncate font-medium text-fg text-sm tabular-nums"), h.Title(value)],
-							[value],
-						),
-						...(detail === null
-							? []
-							: [
-									h.span(
-										[
-											h.Class("truncate text-muted-fg text-xs tabular-nums"),
-											h.Title(detail),
-										],
-										[detail],
-									),
-								]),
-					],
-				),
-			]
+		: [figure(h, { label, value, detail, className: "rounded-lg border border-border px-3 py-2" })]
 
 /** The figures, two a row; a lone last one spans the row. Nothing when no figure is known. */
 const grid = (h: HtmlBuilder<Message>, stats: ReadonlyArray<Html>): ReadonlyArray<Html> =>
@@ -119,8 +99,7 @@ const refreshButton = (
 
 /** Where the company's figures will be, while the lookup runs: the grid's cards, and two lines. */
 const lookupSkeleton = (h: HtmlBuilder<Message>): Html => {
-	const bar = (className: string) =>
-		h.div([h.Class(twMerge("animate-pulse rounded-sm bg-secondary", className))])
+	const bar = (className: string) => skeleton(h, twMerge("rounded-sm", className))
 	return h.div(
 		[
 			h.AriaHidden(true),

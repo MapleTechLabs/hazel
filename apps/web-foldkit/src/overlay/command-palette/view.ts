@@ -1,7 +1,5 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { twMerge } from "tailwind-merge"
-import { dropdownLabelBase } from "~/components/ui/dropdown.styles"
 import { cn } from "~/lib/utils"
 import {
 	IconCircleDottedUser,
@@ -21,7 +19,7 @@ import { avatar } from "../../ui/avatar"
 import { channelIcon } from "../../ui/channel-icon"
 import type * as CommandMenu from "../../ui/command-menu"
 import { commandMenuShortcut, view as commandMenuView } from "../../ui/command-menu-view"
-import { labelId } from "../../ui/menu"
+import { menuLabel } from "../../ui/menu-view"
 import { createChannelPage, joinChannelPage } from "./form-pages"
 import { accountNameOf, dmDisplayName, HOTKEYS, parseKey, recentChannelsOf, STATUS_OPTIONS } from "./menu"
 import { Message } from "./message"
@@ -34,10 +32,7 @@ import { MENU_ID } from "./update"
 const toMenuMessage = (message: CommandMenu.Message): Message => Message.GotMenuMessage({ message })
 
 const label = (h: HtmlBuilder<Message>, key: string, children: Array<Html | string>): Html =>
-	h.span(
-		[h.Class(twMerge(dropdownLabelBase)), h.Id(labelId(MENU_ID, key)), h.Attribute("slot", "label")],
-		children,
-	)
+	menuLabel(h, MENU_ID, key, children)
 
 const current = (h: HtmlBuilder<Message>) => h.span([h.Class("ml-2 text-muted-fg text-xs")], ["(current)"])
 
@@ -136,19 +131,16 @@ const THEME_ICONS: Readonly<Record<string, (h: HtmlBuilder<Message>) => Html>> =
 	system: (h) =>
 		h.div(
 			[h.Class("flex size-4 overflow-hidden rounded-sm"), h.Attribute("data-slot", "icon")],
-			[h.div([h.Class("w-1/2 bg-white")], []), h.div([h.Class("w-1/2 bg-zinc-900")], [])],
+			[h.div([h.Class("w-1/2 bg-white")], []), h.div([h.Class("w-1/2 bg-black")], [])],
 		),
 	light: (h) =>
 		h.div(
-			[h.Class("size-4 rounded-sm border border-zinc-200 bg-white"), h.Attribute("data-slot", "icon")],
+			[h.Class("size-4 rounded-sm border border-black/10 bg-white"), h.Attribute("data-slot", "icon")],
 			[],
 		),
 	dark: (h) =>
 		h.div(
-			[
-				h.Class("size-4 rounded-sm border border-zinc-700 bg-zinc-900"),
-				h.Attribute("data-slot", "icon"),
-			],
+			[h.Class("size-4 rounded-sm border border-white/20 bg-black"), h.Attribute("data-slot", "icon")],
 			[],
 		),
 }

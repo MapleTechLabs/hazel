@@ -2,6 +2,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconCheck, IconConnect, IconMagnifier3, IconPlus } from "../../icons"
 import { button } from "../../ui/button"
+import { cardClassName } from "../../ui/card"
 import { emptyState } from "../../ui/empty-state"
 import { startingSource, suggestedBillingSource } from "../providers"
 
@@ -13,14 +14,7 @@ import { startingSource, suggestedBillingSource } from "../providers"
 const frame = <M>(h: HtmlBuilder<M>, framed: boolean, className: string | undefined, child: Html): Html =>
 	framed
 		? h.div(
-				[
-					h.Class(
-						twMerge(
-							"flex items-center justify-center rounded-xl border border-border px-6",
-							className,
-						),
-					),
-				],
+				[h.Class(cardClassName(twMerge("flex items-center justify-center px-6", className)))],
 				[child],
 			)
 		: child

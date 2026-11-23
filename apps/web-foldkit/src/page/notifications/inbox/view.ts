@@ -6,20 +6,18 @@ import { twMerge } from "tailwind-merge"
 import { IconBell, IconHashtag, IconMsgs, IconSupport } from "../../../icons"
 import { AppRoute, hrefOf } from "../../../route"
 import { avatar } from "../../../ui/avatar"
+import { card } from "../../../ui/card"
 import { emptyState } from "../../../ui/empty-state"
-import { loader } from "../../../ui/loader"
-import {
-	sectionHeaderGroup,
-	sectionHeaderHeading,
-	sectionHeaderRoot,
-	sectionHeaderSubheading,
-} from "../../../ui/section-header"
+import { heading } from "../../../ui/heading"
+import { iconTile } from "../../../ui/icon-tile"
+import { loadingState } from "../../../ui/loader"
+import { pageHeader, pageLayout } from "../../../ui/page-header"
+import { statusDot } from "../../../ui/status-dot"
 import type { PageViewInputs } from "../../contract"
 import { formatDistanceToNow } from "~/lib/format-distance"
 import { contextOf, filterByCategory, groupByTime, isSupportAlert, previewOf, supportAlertOf } from "./format"
 import { Message } from "./message"
 import type { Category, Model, NotificationItem } from "./model"
-import { heading } from "../../../ui/heading"
 
 /** Ports of `routes/_app/$orgSlug/notifications/{index,general,threads,dms}.tsx` and `NotificationList`. */
 
@@ -55,28 +53,17 @@ const COPY: Record<
 
 const leadingVisual = (h: HtmlBuilder<Message>, item: NotificationItem): Html => {
 	if (isSupportAlert(item))
-		return h.div(
-			[
-				h.Class(
-					twMerge(
-						"flex size-10 items-center justify-center rounded-lg",
-						supportAlertOf(item).isWarning
-							? "bg-warning-subtle text-warning-subtle-fg"
-							: "bg-danger-subtle text-danger-subtle-fg",
-					),
-				),
-			],
-			[IconSupport(h, { className: "size-5" })],
+		return iconTile(
+			h,
+			{ intent: supportAlertOf(item).isWarning ? "warning" : "danger", size: "md" },
+			IconSupport(h),
 		)
 	if (item.author !== null) {
 		const fullName = `${item.author.firstName} ${item.author.lastName}`
 		return avatar(h, { size: "md", src: item.author.avatarUrl, alt: fullName, seed: fullName })
 	}
 	const isChannel = item.channel?.type === "public" || item.channel?.type === "private"
-	return h.div(
-		[h.Class("flex size-10 items-center justify-center rounded-lg bg-secondary")],
-		[(isChannel ? IconHashtag : IconMsgs)(h, { className: "size-5 text-muted-fg" })],
-	)
+	return iconTile(h, { size: "md" }, (isChannel ? IconHashtag : IconMsgs)(h))
 }
 
 const decodeChannelId = Schema.decodeUnknownOption(ChannelId)
@@ -114,7 +101,7 @@ const notificationItem = (
 	const children = [
 		h.div(
 			[h.Class("flex h-10 w-2 shrink-0 items-center justify-center")],
-			item.isUnread ? [h.div([h.Class("size-2 rounded-full bg-primary")])] : [],
+			item.isUnread ? [statusDot(h, { tone: "primary", className: "size-2" })] : [],
 		),
 		h.div([h.Class("shrink-0")], [leadingVisual(h, item)]),
 		h.div(
@@ -170,10 +157,7 @@ const notificationList = (
 ): Html => {
 	const copy = COPY[model.category]
 	if (model.notifications._tag === "Loading") {
-		return h.div(
-			[h.Class("flex h-full items-center justify-center py-16")],
-			[loader(h, { className: "size-8" })],
-		)
+		return loadingState(h, { className: "h-full py-16" })
 	}
 	const filtered = filterByCategory(model.notifications.items, model.category)
 	if (filtered.length === 0) {
@@ -194,15 +178,12 @@ const notificationList = (
 						[h.Class("sticky top-0 z-10 bg-bg/95 backdrop-blur-sm px-4 py-2")],
 						[heading(h, { variant: "label", level: 2 }, [group.label])],
 					),
-					h.div(
-						[h.Class("overflow-hidden rounded-xl border border-border bg-bg shadow-sm")],
-						[
-							h.div(
-								[h.Class("divide-y divide-border")],
-								group.notifications.map((item) => notificationItem(h, item, orgSlug, nowMs)),
-							),
-						],
-					),
+					card(h, {}, [
+						h.div(
+							[h.Class("divide-y divide-border")],
+							group.notifications.map((item) => notificationItem(h, item, orgSlug, nowMs)),
+						),
+					]),
 				],
 			),
 		),
@@ -211,24 +192,11 @@ const notificationList = (
 
 export const inboxView = (model: Model, { shared }: PageViewInputs, h: HtmlBuilder<Message>): Html => {
 	const copy = COPY[model.category]
-	return h.div(
-		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
-		[
-			// On a phone the top bar names the inbox (`shell/mobile.ts`).
-			sectionHeaderRoot(h, { className: "border-none pb-0 max-md:hidden" }, [
-				sectionHeaderGroup(h, {}, [
-					h.div(
-						[h.Class("space-y-0.5")],
-						[
-							sectionHeaderHeading(h, { size: "xl" }, [copy.heading]),
-							sectionHeaderSubheading(h, {}, [copy.subheading]),
-						],
-					),
-				]),
-			]),
-			notificationList(h, model, shared.orgSlug, shared.nowMs),
-		],
-	)
+	return pageLayout(h, {}, [
+		// On a phone the top bar names the inbox (`shell/mobile.ts`).
+		pageHeader(h, { title: copy.heading, subtitle: copy.subheading, className: "max-md:hidden" }),
+		notificationList(h, model, shared.orgSlug, shared.nowMs),
+	])
 }
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>(inboxView)

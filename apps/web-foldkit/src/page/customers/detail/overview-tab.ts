@@ -55,7 +55,12 @@ import {
 	sortedNotes,
 	UNASSIGN,
 } from "./model"
-import { type Context, headerLink, icon, memberOf, menu } from "./parts"
+import { type Context, headerLink, icon, memberOf } from "./parts"
+import type * as Menu from "../../../ui/menu"
+import { menu } from "../shared-view"
+import { cardClassName } from "../../../ui/card"
+import { emptyState } from "../../../ui/empty-state"
+import { skeleton } from "../../../ui/skeleton"
 
 /**
  * The overview tab, read top to bottom as "what needs me, how are they doing, what happened": the
@@ -167,7 +172,7 @@ const pulse = (h: HtmlBuilder<Message>, context: Context): Html => {
 		[
 			h.AriaLabel("At a glance"),
 			h.Role("group"),
-			h.Class("grid grid-cols-2 rounded-xl border border-border bg-bg md:grid-cols-4"),
+			h.Class(cardClassName("grid grid-cols-2 md:grid-cols-4")),
 		],
 		[
 			pulseStat(h, {
@@ -286,14 +291,11 @@ const usageSection = (h: HtmlBuilder<Message>, model: Model, context: Context): 
 				),
 			),
 			failed._tag === "Some" && series === undefined
-				? h.p([h.Class("py-10 text-center text-muted-fg text-sm")], ["Couldn't load usage."])
+				? emptyState(h, { title: "Couldn't load usage.", className: "py-10" })
 				: series === undefined
-					? h.div([h.Class("h-32 animate-pulse rounded-lg bg-secondary/40")])
+					? skeleton(h, "h-32 w-full rounded-lg")
 					: values.every((value) => value === 0)
-						? h.p(
-								[h.Class("py-10 text-center text-muted-fg text-sm")],
-								["No usage recorded in this range."],
-							)
+						? emptyState(h, { title: "No usage recorded in this range.", className: "py-10" })
 						: stackedBarChart(h, {
 								ariaLabel: `${metricName}${unit === null ? "" : ` (${unit})`}, daily`,
 								stacks: [{ key: "value", label: metricName, color: "series-1" }],
@@ -344,7 +346,7 @@ const healthSection = (
 		.join(" · ")
 	return [
 		h.div(
-			[h.Class("rounded-xl border border-border bg-bg")],
+			[h.Class(cardClassName())],
 			[
 				disclosure(
 					h,
@@ -442,9 +444,9 @@ const signalButtons = (
 		label: string,
 		glyph: Html,
 		menuModel: Model["snoozeMenu"],
-		entries: ReadonlyArray<Parameters<typeof menu>[2]["entries"][number]>,
+		entries: ReadonlyArray<Menu.Entry>,
 		content: (key: string) => ReadonlyArray<Html | string>,
-		toMessage: Parameters<typeof menu>[2]["toMessage"],
+		toMessage: (message: Menu.Message) => Message,
 	): Html =>
 		isActive
 			? menu(h, menuModel, {
@@ -538,10 +540,7 @@ const attentionSection = (h: HtmlBuilder<Message>, model: Model, context: Contex
 	const now = new Date(context.nowMs)
 	return [
 		h.section(
-			[
-				h.AriaLabel("Needs attention"),
-				h.Class("flex min-w-0 flex-col rounded-xl border border-border bg-bg"),
-			],
+			[h.AriaLabel("Needs attention"), h.Class(cardClassName("flex min-w-0 flex-col"))],
 			[
 				h.div(
 					[h.Class("flex items-center justify-between gap-4 px-4 pt-3")],
@@ -657,9 +656,7 @@ export const supportCard = (h: HtmlBuilder<Message>, model: Model, context: Cont
 	return h.section(
 		[
 			h.AriaLabel("Support"),
-			h.Class(
-				"flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-border bg-bg px-4 py-3 text-sm",
-			),
+			h.Class(cardClassName("flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 text-sm")),
 		],
 		[
 			h.span([h.Class("font-medium text-fg")], ["Support"]),

@@ -21,6 +21,7 @@ import { button } from "../ui/button"
 import * as Modal from "../ui/modal"
 import * as Sheet from "../ui/sheet"
 import type { ShellContext } from "./context"
+import { countBadge } from "../ui/count-badge"
 import { mobileTopBar as topBar } from "../ui/mobile-top-bar"
 
 /** The phone shell (`useSidebar().isMobile`): tab bar, top bars, the sidebar sheet and its buttons. */
@@ -73,16 +74,14 @@ export const mobileNav = <Message>(
 		unreadNotificationCount > 0
 			? {
 					count: unreadNotificationCount,
-					html: h.span(
-						[
-							// The native tab shows the count as its badge, not in its title.
-							h.Attribute("data-native-skip", ""),
-							h.Class(
-								"absolute -top-1 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 font-semibold text-3xs text-white tabular-nums leading-none",
-							),
-						],
-						[unreadNotificationCount > 99 ? "99+" : String(unreadNotificationCount)],
-					),
+					html: countBadge(h, {
+						count: unreadNotificationCount,
+						isCapped: true,
+						className:
+							"absolute -top-1 -right-2 h-4 min-w-4 bg-danger px-1 font-semibold text-3xs text-white leading-none",
+						// The native tab shows the count as its badge, not in its title.
+						attributes: [h.Attribute("data-native-skip", "")],
+					}),
 				}
 			: undefined
 	return h.nav(

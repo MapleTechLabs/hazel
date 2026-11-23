@@ -1,15 +1,27 @@
 import { Option } from "effect"
-import type { Html, HtmlBuilder } from "foldkit/html"
+import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { failureMessage, type UserErrorMessage } from "~/lib/error-messages"
 import type { AuthFailure } from "../../auth/flows"
 import { AppRoute, hrefOf } from "../../route"
 import { backgroundImage, logoContent, panelCard, panelFrame } from "../onboarding/brand-panel"
 import { heading } from "../../ui/heading"
+import { link } from "../../ui/link"
 
 /** The auth pages' frame: the pixel-art panel on large screens, the form beside it. */
 
-const homeLink = <M>(h: HtmlBuilder<M>, className: string, children: ReadonlyArray<Html>): Html =>
+const logoLink = <M>(h: HtmlBuilder<M>, className: string, children: ReadonlyArray<Html>): Html =>
 	h.a([h.Class(className), h.Href(hrefOf(AppRoute.Root()))], [...children])
+
+/** The underlined text link the auth-framed pages end on (`Go to Hazel`, `Back to sign in`). */
+export const textLink = <M>(
+	h: HtmlBuilder<M>,
+	href: string,
+	label: string,
+	attributes?: ReadonlyArray<Attribute<M>>,
+): Html => link(h, { href, className: "text-fg text-sm underline underline-offset-2", attributes }, [label])
+
+/** `Go to Hazel`: where a dead-end auth-framed page sends the visitor. */
+export const homeLink = <M>(h: HtmlBuilder<M>): Html => textLink(h, hrefOf(AppRoute.Root()), "Go to Hazel")
 
 const DEFAULT_TAGLINE = "A calm place for your team to talk, decide and ship."
 
@@ -29,7 +41,7 @@ export const authShell = <M>(
 		[
 			panelFrame(h, [
 				backgroundImage(h, nowMs, "Background"),
-				homeLink(
+				logoLink(
 					h,
 					"relative z-20 flex items-center gap-2",
 					logoContent(h, { logoClassName: "size-8 text-white" }),
@@ -49,7 +61,7 @@ export const authShell = <M>(
 					h.div(
 						[h.Class("mb-8 lg:hidden")],
 						[
-							homeLink(
+							logoLink(
 								h,
 								"flex items-center gap-2",
 								logoContent(h, { logoClassName: "size-8", textClassName: "text-fg" }),
@@ -113,10 +125,4 @@ export const authFailureMessage = (reason: AuthFailure): UserErrorMessage | null
 			})
 
 export const signInLink = <M>(h: HtmlBuilder<M>, label: string): Html =>
-	h.a(
-		[
-			h.Class("text-fg text-sm underline underline-offset-2"),
-			h.Href(hrefOf(AppRoute.SignIn({ redirectUrl: Option.none(), error: Option.none() }))),
-		],
-		[label],
-	)
+	textLink(h, hrefOf(AppRoute.SignIn({ redirectUrl: Option.none(), error: Option.none() })), label)

@@ -6,6 +6,7 @@ import { IconExternalLink, IconGitHub, IconGoogle, IconLock, type IconOptions } 
 import { AppRoute, hrefOf } from "../../../route"
 import { button } from "../../../ui/button"
 import { loader } from "../../../ui/loader"
+import { separator } from "../../../ui/separator"
 import { textField } from "../../../ui/text-field"
 import type { PageViewInputs } from "../../contract"
 import type { UserErrorMessage } from "~/lib/error-messages"
@@ -66,7 +67,7 @@ const choice = (
 const divider = (h: HtmlBuilder<Message>): Html =>
 	h.div(
 		[h.Class("flex items-center gap-3 text-muted-fg text-xs")],
-		[h.div([h.Class("h-px flex-1 bg-border")]), "or", h.div([h.Class("h-px flex-1 bg-border")])],
+		[separator(h, { className: "flex-1" }), "or", separator(h, { className: "flex-1" })],
 	)
 
 const passkeyChoice = (h: HtmlBuilder<Message>, pending: Attempt | null): Html =>

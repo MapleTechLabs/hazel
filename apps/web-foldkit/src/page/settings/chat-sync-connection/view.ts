@@ -4,8 +4,11 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { type CommonReason, commonMessage, isRetryableReason } from "~/lib/error-messages"
 import * as SuggestionPrompt from "../../../customers/suggestion-prompt"
 import { IconPlus } from "../../../icons"
+import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
+import { card, cardHeader } from "../../../ui/card"
 import { emptyState } from "../../../ui/empty-state"
+import { loadingState } from "../../../ui/loader"
 import type { PageViewInputs } from "../../contract"
 import type * as ConfirmAction from "../../shared/confirm-action"
 import { confirmDialog } from "../chat-sync/confirm-dialog"
@@ -37,31 +40,15 @@ const toDisconnectConfirmMessage = (message: ConfirmAction.Message) =>
 	Message.GotDisconnectConfirmMessage({ message })
 
 const backLink = (h: HtmlBuilder<Message>): Html =>
-	h.button(
-		[
-			h.Type("button"),
-			h.OnClick(Message.ClickedBack()),
-			h.Class(
-				"-ml-1 flex w-fit items-center gap-1 text-muted-fg text-sm transition-colors hover:text-fg max-md:min-h-10",
-			),
-		],
-		[outlineIcon(h, { className: "size-4", d: "M15 19l-7-7 7-7" }), h.span([], ["Back to Chat Sync"])],
-	)
-
-const spinner = (h: HtmlBuilder<Message>, size: string, text: string, padding: string): Html =>
-	h.div(
-		[h.Class(`flex items-center justify-center ${padding}`)],
-		[
-			h.div(
-				[h.Class("flex items-center gap-3 text-muted-fg")],
-				[
-					h.div([
-						h.Class(`${size} animate-spin rounded-full border-2 border-border border-t-primary`),
-					]),
-					h.span([h.Class("text-sm")], [text]),
-				],
-			),
-		],
+	button(
+		h,
+		{
+			intent: "plain",
+			size: "sm",
+			className: "-ml-2 w-fit text-muted-fg",
+			onPress: Message.ClickedBack(),
+		},
+		[outlineIcon(h, { className: "size-4", d: "M15 19l-7-7 7-7" }), "Back to Chat Sync"],
 	)
 
 const linkChannelButton = (h: HtmlBuilder<Message>, intent: "primary" | "secondary"): Html =>
@@ -77,29 +64,13 @@ const linksBody = (
 	links: ReadonlyArray<ChannelLink>,
 ): Html =>
 	links.length === 0
-		? h.div(
-				[h.Class("flex flex-col items-center justify-center px-5 py-12 text-center")],
-				[
-					h.div(
-						[h.Class("mb-4 flex size-12 items-center justify-center rounded-xl bg-bg-muted")],
-						[
-							outlineIcon(h, {
-								className: "size-6 text-muted-fg",
-								d: LINK_PATH,
-								strokeWidth: "1.5",
-							}),
-						],
-					),
-					h.p([h.Class("mb-1 font-medium text-fg text-sm")], ["No channels linked"]),
-					h.p(
-						[h.Class("mb-4 text-muted-fg text-sm")],
-						[
-							`Link a Hazel channel to a ${PROVIDERS[connection.provider].name} channel to start syncing messages.`,
-						],
-					),
-					linkChannelButton(h, "primary"),
-				],
-			)
+		? emptyState(h, {
+				icon: (className) => outlineIcon(h, { className, d: LINK_PATH, strokeWidth: "1.5" }),
+				title: "No channels linked",
+				description: `Link a Hazel channel to a ${PROVIDERS[connection.provider].name} channel to start syncing messages.`,
+				action: linkChannelButton(h, "primary"),
+				className: "px-5 py-12",
+			})
 		: h.div(
 				[h.Class("divide-y divide-border")],
 				links.map((link) =>
@@ -116,75 +87,51 @@ const linksBody = (
 /** A first links list that failed: what went wrong, with "Try again" when it may pass. */
 const linksFailed = (h: HtmlBuilder<Message>, reason: ListLinksFailure): Html => {
 	const message = listLinksFailureMessage(reason)
-	return h.div(
-		[h.Class("flex flex-col items-center justify-center px-5 py-12 text-center")],
-		[
-			h.p([h.Class("mb-1 font-medium text-fg text-sm")], ["Failed to load channel links"]),
-			h.p([h.Class("mb-4 text-muted-fg text-sm")], [message.description ?? message.title]),
-			...(isRetryable(reason)
-				? [
-						button(
-							h,
-							{
-								intent: "secondary",
-								size: "sm",
-								onPress: Message.ClickedRetryListChannelLinks(),
-							},
-							["Try again"],
-						),
-					]
-				: []),
-		],
-	)
+	return emptyState(h, {
+		title: "Failed to load channel links",
+		description: message.description ?? message.title,
+		action: isRetryable(reason)
+			? button(
+					h,
+					{ intent: "secondary", size: "sm", onPress: Message.ClickedRetryListChannelLinks() },
+					["Try again"],
+				)
+			: undefined,
+		className: "px-5 py-12",
+	})
 }
 
 const linksCard = (h: HtmlBuilder<Message>, model: Model, connection: Connection): Html => {
 	const links = listedLinks(model)
-	return h.div(
-		[h.Class("overflow-hidden rounded-xl border border-border bg-bg")],
-		[
-			h.div(
-				[
-					h.Class(
-						"flex items-center justify-between border-border border-b bg-bg-muted/30 px-5 py-3",
-					),
-				],
-				[
-					h.div(
-						[h.Class("flex items-center gap-2")],
-						[
-							heading(h, { variant: "subsection" }, ["Channel Links"]),
-							...(links.length > 0
-								? [
-										h.span(
-											[
-												h.Class(
-													"rounded-sm bg-secondary px-2 py-0.5 text-muted-fg text-xs",
-												),
-											],
-											[`${links.length}`],
-										),
-									]
-								: []),
-						],
-					),
-					linkChannelButton(h, "secondary"),
-				],
-			),
-			AsyncData.match(model.links, {
-				onIdle: () => spinner(h, "size-5", "Loading channel links...", "p-8"),
-				onLoading: () => spinner(h, "size-5", "Loading channel links...", "p-8"),
-				onFailure: (reason) => linksFailed(h, reason),
-				onRefreshing: (data) => linksBody(h, model, connection, data),
-				onStale: ({ data }) => linksBody(h, model, connection, data),
-				onSuccess: (data) => linksBody(h, model, connection, data),
-			}),
-		],
-	)
+	const loading = () => loadingState(h, { label: "Loading channel links...", className: "py-8" })
+	return card(h, {}, [
+		cardHeader(
+			h,
+			[
+				h.div(
+					[h.Class("flex items-center gap-2")],
+					[
+						heading(h, { variant: "subsection" }, ["Channel Links"]),
+						...(links.length > 0 ? [badge(h, { intent: "secondary" }, [`${links.length}`])] : []),
+					],
+				),
+				linkChannelButton(h, "secondary"),
+			],
+			"flex-row items-center justify-between gap-3 py-3",
+		),
+		AsyncData.match(model.links, {
+			onIdle: loading,
+			onLoading: loading,
+			onFailure: (reason) => linksFailed(h, reason),
+			onRefreshing: (data) => linksBody(h, model, connection, data),
+			onStale: ({ data }) => linksBody(h, model, connection, data),
+			onSuccess: (data) => linksBody(h, model, connection, data),
+		}),
+	])
 }
 
 const warningIcon = (h: HtmlBuilder<Message>) =>
-	outlineIcon(h, { className: "size-6 text-danger", d: WARNING_PATH, strokeWidth: "1.5" })
+	outlineIcon(h, { className: "", d: WARNING_PATH, strokeWidth: "1.5" })
 
 const toSuggestionMessage = (message: SuggestionPrompt.Message) => Message.GotSuggestionMessage({ message })
 
@@ -292,8 +239,8 @@ const found = (h: HtmlBuilder<Message>, model: Model, connection: Connection | n
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) =>
 	AsyncData.match(model.connection, {
-		onIdle: () => spinner(h, "size-6", "Loading connection...", "py-24"),
-		onLoading: () => spinner(h, "size-6", "Loading connection...", "py-24"),
+		onIdle: () => loadingState(h, { label: "Loading connection...", className: "py-24" }),
+		onLoading: () => loadingState(h, { label: "Loading connection...", className: "py-24" }),
 		onFailure: (reason) => loadFailed(h, reason),
 		// A refresh (or a failed one, which toasts) keeps the shown connection.
 		onRefreshing: (connection) => found(h, model, connection),

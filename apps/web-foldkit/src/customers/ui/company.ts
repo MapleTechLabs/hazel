@@ -11,6 +11,7 @@ import {
 	linkLabel,
 	rankedSocials,
 } from "../company"
+import { badge } from "../../ui/badge"
 import { platformLogo, platformOf, platformTitle } from "../platform-logos"
 
 /**
@@ -121,14 +122,13 @@ export const companyFacts = <M>(h: HtmlBuilder<M>, company: CompanyProfile): Rea
 		fact === null
 			? []
 			: [
-					h.span(
-						[
-							h.Key(fact[2]),
-							h.Title(fact[2]),
-							h.Class(
-								"inline-flex h-6 max-w-full items-center gap-1.5 rounded-md border border-border px-2 text-fg-2 text-xs",
-							),
-						],
+					badge(
+						h,
+						{
+							intent: "outline",
+							className: "h-6 max-w-full gap-1.5 rounded-md px-2 font-normal text-fg-2",
+							attributes: [h.Key(fact[2]), h.Title(fact[2])],
+						},
 						[
 							fact[0](h, { className: "size-3.5 shrink-0 text-muted-fg" }),
 							h.span([h.Class("truncate")], [fact[1]]),

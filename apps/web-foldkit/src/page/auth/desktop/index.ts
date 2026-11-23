@@ -16,7 +16,7 @@ import {
 	type PageViewInputs,
 	type Shared,
 } from "../../contract"
-import { authError, authFrame, authHeading } from "../layout"
+import { authError, authFrame, authHeading, textLink } from "../layout"
 
 /**
  * `/auth/desktop?attempt=`: the desktop app opened this page to sign in. A signed-in browser
@@ -257,14 +257,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 							"You're signed in",
 							"Switch back to the Hazel app. You can close this tab.",
 						),
-						h.a(
-							[
-								h.Class("text-fg text-sm underline underline-offset-2"),
-								h.Href(callbackUrl),
-								h.Attribute("rel", "noreferrer"),
-							],
-							["Open Hazel"],
-						),
+						textLink(h, callbackUrl, "Open Hazel", [h.Attribute("rel", "noreferrer")]),
 					],
 					Failed: ({ reason }) => failed(h, reason),
 				}),

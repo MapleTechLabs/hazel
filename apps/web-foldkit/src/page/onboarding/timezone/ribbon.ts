@@ -1,4 +1,5 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
+import { ariaButton } from "../../../ui/button"
 import { Message } from "../message"
 
 /** `time-ribbon.tsx` */
@@ -27,16 +28,16 @@ export const timeRibbon = (h: HtmlBuilder<Message>, selectedOffset: number | nul
 				],
 				UTC_OFFSETS.map((item) => {
 					const isSelected = selectedOffset === item.offset
-					return h.button(
-						[
-							h.Class(
-								`${BASE} ${isSelected ? "bg-primary text-primary-fg" : "hover:bg-secondary text-muted-fg hover:text-fg"}`,
-							),
-							h.Tabindex(0),
-							h.OnClick(Message.ClickedOffset({ offset: item.offset })),
-							h.OnMouseEnter(Message.HoveredOffset({ offset: item.offset })),
-							h.OnMouseLeave(Message.HoveredOffset({ offset: null })),
-						],
+					return ariaButton(
+						h,
+						{
+							className: `${BASE} ${isSelected ? "bg-primary text-primary-fg" : "hover:bg-secondary text-muted-fg hover:text-fg"}`,
+							onPress: Message.ClickedOffset({ offset: item.offset }),
+							attributes: [
+								h.OnMouseEnter(Message.HoveredOffset({ offset: item.offset })),
+								h.OnMouseLeave(Message.HoveredOffset({ offset: null })),
+							],
+						},
 						[
 							item.label,
 							...(isSelected

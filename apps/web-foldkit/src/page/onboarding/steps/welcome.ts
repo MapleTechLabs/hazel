@@ -1,4 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
+import { cardClassName } from "../../../ui/card"
+import { heading } from "../../../ui/heading"
 import { Message } from "../message"
 import { onboardingNavigation, stepHeader } from "../navigation"
 
@@ -40,9 +42,9 @@ export const welcomeStep = (
 				{ title: "text-2xl sm:text-3xl", description: "text-base" },
 			),
 			h.div(
-				[h.Class("space-y-3 rounded-lg border border-border bg-muted/30 p-4 sm:space-y-4 sm:p-6")],
+				[h.Class(cardClassName("space-y-3 p-4 sm:space-y-4 sm:p-6"))],
 				[
-					h.h3([h.Class("font-medium text-fg")], ["What's next:"]),
+					heading(h, { variant: "section", level: 3 }, ["What's next:"]),
 					h.ul(
 						[h.Class("space-y-2 text-muted-fg text-sm sm:space-y-3")],
 						(options.isCreatingOrg ? CREATOR_ITEMS : INVITED_ITEMS).map((item) =>

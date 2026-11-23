@@ -4,6 +4,7 @@ import { fileIcon } from "../../../chat/file-icons"
 import { IconArrowLeft, IconDownload, IconFolders } from "../../../icons"
 import { avatar } from "../../../ui/avatar"
 import { button } from "../../../ui/button"
+import { emptyState } from "../../../ui/empty-state"
 import { searchField } from "../../../ui/search-field"
 import { view as selectView } from "../../../ui/select-view"
 import { documentsOf, filterAttachments, formatRelativeTime, mediaOf, uploaderIdentity } from "./derive"
@@ -132,27 +133,13 @@ const filesView = <M>(context: FilesContext<M>): Html => {
 						[
 							...(media.length === 0 && documents.length === 0
 								? [
-										h.div(
-											[
-												h.Class(
-													"flex flex-col items-center justify-center py-16 text-center",
-												),
-											],
-											[
-												IconFolders(h, { className: "mb-3 size-12 text-muted-fg" }),
-												heading(h, { variant: "title", level: 3 }, [
-													"No files found",
-												]),
-												h.p(
-													[h.Class("text-muted-fg text-sm")],
-													[
-														isFiltered
-															? "Try adjusting your search or filter"
-															: "Files shared in this channel will appear here",
-													],
-												),
-											],
-										),
+										emptyState(h, {
+											title: "No files found",
+											icon: (className) => IconFolders(h, { className }),
+											description: isFiltered
+												? "Try adjusting your search or filter"
+												: "Files shared in this channel will appear here",
+										}),
 									]
 								: []),
 							...(media.length > 0

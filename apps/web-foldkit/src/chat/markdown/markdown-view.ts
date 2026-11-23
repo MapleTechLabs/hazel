@@ -5,6 +5,8 @@ import { cx } from "~/utils/cx"
 import { deserializeFromMarkdown } from "../../editor/markdown"
 import type { ProseMirrorNode } from "../../editor/schema"
 import { IconCopy } from "../../icons"
+import { badge } from "../../ui/badge"
+import { ariaButton } from "../../ui/button"
 import { codeBlockLeaves, textLeaves, textNodeView, voidChildView } from "./leaves"
 
 /**
@@ -75,16 +77,7 @@ const codeBlockView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode): Html => 
 				[h.Class("absolute top-2 right-2 z-10 flex items-center gap-2")],
 				[
 					...(language !== "plaintext"
-						? [
-								h.span(
-									[
-										h.Class(
-											"rounded-md bg-info-subtle px-2 py-0.5 font-medium text-info-subtle-fg text-xs",
-										),
-									],
-									[language],
-								),
-							]
+						? [badge(h, { intent: "info", isPill: true }, [language])]
 						: []),
 					h.span(
 						[
@@ -136,21 +129,17 @@ const mentionView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode, env: Env): 
 	const fullName = env.refs.mentions.find((mention) => mention.userId === userId)?.name ?? displayName
 	const index = env.mentionCount++
 	const toTrigger = (attributes: ReadonlyArray<ChildAttribute>) =>
-		h.button(
-			[
-				// The trigger's attributes carry its own `aria-expanded` and `type`.
-				...(attributes.length === 0
-					? [h.Attribute("aria-expanded", "false"), h.Type("button")]
-					: attributes),
-				h.Class(
-					cn(
-						"inline-block cursor-pointer rounded bg-primary/10 px-1 py-0.5 align-baseline font-medium text-primary outline-hidden transition-colors hover:bg-primary/20",
-					),
-				),
-				h.Attribute("data-react-aria-pressable", "true"),
-				node,
-				h.Attribute("tabindex", "0"),
-			],
+		ariaButton(
+			h,
+			{
+				className:
+					"inline-block cursor-pointer rounded bg-primary/10 px-1 py-0.5 align-baseline font-medium text-primary outline-hidden transition-colors hover:bg-primary/20",
+				// The trigger's attributes carry its own `aria-expanded`.
+				attributes: [
+					...(attributes.length === 0 ? [h.Attribute("aria-expanded", "false")] : attributes),
+					node,
+				],
+			},
 			["@", fullName, voidChildView(h)],
 		)
 	return env.mentionTrigger === undefined ? toTrigger([]) : env.mentionTrigger({ userId, index }, toTrigger)

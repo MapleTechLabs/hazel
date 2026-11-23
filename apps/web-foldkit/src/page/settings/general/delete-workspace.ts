@@ -2,6 +2,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconWarning } from "../../../icons"
 import { button } from "../../../ui/button"
 import { dialogBody, dialogFooter, dialogHeader, dialogTitle } from "../../../ui/dialog"
+import { iconTile } from "../../../ui/icon-tile"
 import * as Field from "../../../ui/field"
 import * as Modal from "../../../ui/modal"
 import * as ConfirmAction from "../../shared/confirm-action"
@@ -31,14 +32,7 @@ export const deleteWorkspaceModal = (
 					h.div(
 						[h.Class("flex items-center gap-2")],
 						[
-							h.div(
-								[
-									h.Class(
-										"flex size-10 items-center justify-center rounded-full bg-danger/10",
-									),
-								],
-								[IconWarning(h, { className: "size-5 text-danger" })],
-							),
+							iconTile(h, { intent: "danger", size: "md" }, IconWarning(h)),
 							dialogTitle(
 								h,
 								{ id: Modal.titleId(model.deleteConfirm.modal.id) },

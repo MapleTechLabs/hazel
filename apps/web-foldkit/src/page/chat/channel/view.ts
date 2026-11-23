@@ -2,6 +2,7 @@ import { TrackMessageKeys } from "./message-keys"
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { contentStyles, rootStyles } from "~/components/ui/split-panel/split-panel.styles"
 import { cn } from "~/lib/utils"
+import { skeleton } from "../../../ui/skeleton"
 import { getEffectivePresenceStatus } from "~/utils/presence"
 import { htmlRenderFullscreenView } from "../../../chat/embeds/html-render"
 import type * as HtmlRender from "../../../chat/html-render"
@@ -114,12 +115,12 @@ const skeletonMessage = (h: H, lines: ReadonlyArray<string>): Html =>
 	h.div(
 		[h.Class("flex gap-3 px-4 py-2")],
 		[
-			h.div([h.Class("size-9 shrink-0 rounded-lg bg-wash")], []),
+			skeleton(h, "size-9 shrink-0 rounded-lg bg-wash"),
 			h.div(
 				[h.Class("flex min-w-0 flex-1 flex-col gap-2 pt-1")],
 				[
-					h.div([h.Class("h-3 w-28 rounded bg-wash-strong")], []),
-					...lines.map((width) => h.div([h.Class(`h-3 rounded bg-wash ${width}`)], [])),
+					skeleton(h, "h-3 w-28 rounded bg-wash-strong"),
+					...lines.map((width) => skeleton(h, `h-3 rounded bg-wash ${width}`)),
 				],
 			),
 		],
@@ -129,9 +130,7 @@ const skeletonMessage = (h: H, lines: ReadonlyArray<string>): Html =>
 const loadingView = (h: H): Html =>
 	h.div(
 		[
-			h.Class(
-				"flex size-full animate-skeleton-in flex-col justify-end pb-4 motion-safe:*:animate-pulse",
-			),
+			h.Class("flex size-full animate-skeleton-in flex-col justify-end pb-4"),
 			h.Attribute("aria-busy", "true"),
 			// The last screen's paint stays up while this shows (`app/paint.ts`).
 			h.Attribute("data-paint", "loading"),

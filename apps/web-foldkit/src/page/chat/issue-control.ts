@@ -20,6 +20,7 @@ import { ToastRequest } from "../../overlay/toasts"
 import type { HazelRpc } from "../../rpc"
 import { button } from "../../ui/button"
 import { link } from "../../ui/link"
+import { type StatusTone, statusDot } from "../../ui/status-dot"
 import * as Menu from "../../ui/menu"
 import { menuLabel, view as menuView } from "../../ui/menu-view"
 
@@ -280,16 +281,16 @@ export interface ViewInputs<M> {
 const iconAttributes = { "data-slot": "icon" }
 
 /** Each status's dot: a reply owed is the brand colour, waiting on us a warning, closed a success. */
-const STATUS_DOT = {
-	new: "bg-primary",
-	waiting_on_us: "bg-warning",
-	waiting_on_customer: "bg-muted-fg",
-	on_hold: "bg-muted-fg",
-	closed: "bg-success",
-} as const satisfies Record<Customers.IssueStatus, string>
+const STATUS_TONE = {
+	new: "primary",
+	waiting_on_us: "warning",
+	waiting_on_customer: "neutral",
+	on_hold: "neutral",
+	closed: "success",
+} as const satisfies Record<Customers.IssueStatus, StatusTone>
 
-const statusDot = <M>(h: HtmlBuilder<M>, status: Customers.IssueStatus): Html =>
-	h.span([h.Class(cn("size-2 shrink-0 rounded-full", STATUS_DOT[status])), h.AriaHidden(true)])
+const issueStatusDot = <M>(h: HtmlBuilder<M>, status: Customers.IssueStatus): Html =>
+	statusDot(h, { tone: STATUS_TONE[status], className: "size-2" })
 
 /** A chip: a small plain button that opens its menu. */
 const chip = <M>(
@@ -329,7 +330,7 @@ const statusMenuView = <M>(h: HtmlBuilder<M>, issue: IssueRow, inputs: ViewInput
 				chip(
 					h,
 					STATUS_LABEL[issue.status],
-					statusDot(h, issue.status),
+					issueStatusDot(h, issue.status),
 					[...attributes, h.AriaLabel(`Status: ${STATUS_LABEL[issue.status]}`)],
 					overlay,
 					"shrink-0",
@@ -337,7 +338,7 @@ const statusMenuView = <M>(h: HtmlBuilder<M>, issue: IssueRow, inputs: ViewInput
 			content: (key) =>
 				isStatus(key)
 					? [
-							h.span([h.Class("col-start-1 flex items-center")], [statusDot(h, key)]),
+							h.span([h.Class("col-start-1 flex items-center")], [issueStatusDot(h, key)]),
 							menuLabel(h, menu.id, key, STATUS_LABEL[key]),
 						]
 					: [key],

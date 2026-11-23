@@ -12,7 +12,8 @@ import {
 import { avatar } from "../../../../ui/avatar"
 import { badge } from "../../../../ui/badge"
 import type * as Interaction from "../../../../ui/aria/interaction"
-import { button } from "../../../../ui/button"
+import { ariaButton, button } from "../../../../ui/button"
+import { cardClassName } from "../../../../ui/card"
 import * as Menu from "../../../../ui/menu"
 import { menuLabel, menuTriggerClassName, view as menuView } from "../../../../ui/menu-view"
 import type { Bot, PublicBot } from "./bots"
@@ -78,8 +79,9 @@ const permissions = <Message>(h: HtmlBuilder<Message>, bot: Bot): ReadonlyArray<
 			]
 		: []
 
-const CARD_CLASS =
-	"flex h-full flex-col overflow-hidden rounded-xl border border-border bg-bg transition-[border-color,box-shadow] duration-200 hover:border-border-hover hover:shadow-md"
+const CARD_CLASS = cardClassName(
+	"flex h-full flex-col transition-[border-color,box-shadow] duration-200 hover:border-border-hover hover:shadow-md",
+)
 
 export const BOT_MENU_ENTRIES: ReadonlyArray<Menu.Entry> = [
 	Menu.item("edit"),
@@ -122,16 +124,16 @@ const actionsMenu = <Message>(
 			entries: BOT_MENU_ENTRIES,
 			// MenuTrigger renders a button around the Button and hands both the trigger props.
 			toTrigger: (attributes, overlay) =>
-				h.button(
-					[
-						...attributes,
-						h.AriaLabel("Bot actions"),
-						h.Class(menuTriggerClassName()),
-						h.DataAttribute("react-aria-pressable", "true"),
-						h.DataAttribute("slot", "menu-trigger"),
-						h.Tabindex(0),
-						h.Type("button"),
-					],
+				ariaButton(
+					h,
+					{
+						className: menuTriggerClassName(),
+						attributes: [
+							...attributes,
+							h.AriaLabel("Bot actions"),
+							h.DataAttribute("slot", "menu-trigger"),
+						],
+					},
 					[
 						button(
 							h,

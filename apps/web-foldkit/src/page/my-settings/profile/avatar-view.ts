@@ -5,7 +5,7 @@ import { IconEdit } from "../../../icons"
 import { avatar } from "../../../ui/avatar"
 import { ariaButton, button } from "../../../ui/button"
 import { dialogBody, dialogClose, dialogFooter, dialogHeader } from "../../../ui/dialog"
-import { loader } from "../../../ui/loader"
+import { loader, loadingState } from "../../../ui/loader"
 import * as Modal from "../../../ui/modal"
 import { cropArea } from "./crop"
 import { Message } from "./message"
@@ -97,13 +97,11 @@ export const profilePictureUpload = (
 							),
 						],
 						[
-							h.button([
-								h.AriaLabel("DropZone"),
-								h.Attribute("aria-labelledby", ""),
-								h.DataAttribute("react-aria-pressable", "true"),
-								h.Tabindex(0),
-								h.Type("button"),
-							]),
+							ariaButton(
+								h,
+								{ attributes: [h.AriaLabel("DropZone"), h.Attribute("aria-labelledby", "")] },
+								[],
+							),
 						],
 					),
 					ariaButton(
@@ -175,15 +173,14 @@ export const profilePictureUpload = (
 				],
 			),
 			h.p([h.Class("mt-2 text-center text-muted-fg text-xs")], ["Click or drop image"]),
-			h.button(
-				[
-					h.Type("button"),
-					h.OnClick(Message.ClickedResetAvatar()),
-					h.Disabled(model.avatarAction._tag !== "Idle"),
-					h.Class(
+			ariaButton(
+				h,
+				{
+					onPress: Message.ClickedResetAvatar(),
+					isDisabled: model.avatarAction._tag !== "Idle",
+					className:
 						"mt-1 w-full text-center text-muted-fg text-xs underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50",
-					),
-				],
+				},
 				[model.avatarAction._tag === "Resetting" ? "Removing..." : "Remove photo"],
 			),
 			Modal.controlledModal(h, {
@@ -213,11 +210,7 @@ const cropContent = (
 			h,
 			[
 				Option.match(image, {
-					onNone: () =>
-						h.div(
-							[h.Class("flex h-64 items-center justify-center")],
-							[loader(h, { className: "size-8" })],
-						),
+					onNone: () => loadingState(h, { className: "h-64 py-0" }),
 					onSome: (ready) =>
 						cropArea(h, ready, (mode, clientX, clientY) =>
 							Message.PressedCropHandle({ mode, clientX, clientY }),

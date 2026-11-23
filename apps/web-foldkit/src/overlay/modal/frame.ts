@@ -1,9 +1,10 @@
 import { Schema } from "effect"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
-import type { ModalSize } from "~/components/ui/modal.styles"
 import { dialogTitle } from "../../ui/dialog"
 import { description } from "../../ui/field"
 import * as KitModal from "../../ui/modal"
+
+type ModalSize = NonNullable<KitModal.ViewInputs["size"]>
 
 /**
  * Legacy controlled `<Modal isOpen onOpenChange><ModalContent>`: the kit Modal without a trigger.

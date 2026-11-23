@@ -116,7 +116,7 @@ export const barSparkline = <M>(
 			h.span([
 				h.Class(
 					twMerge(
-						"block min-h-px rounded-[1px] bg-chart-neutral",
+						"block min-h-px rounded-xs bg-chart-neutral",
 						options.highlightLast && index === options.values.length - 1 && "bg-chart-series-2",
 					),
 				),
@@ -196,7 +196,7 @@ export const evidenceBars = <M>(
 				h.span([
 					h.Class(
 						twMerge(
-							"block min-h-px rounded-t-[2px]",
+							"block min-h-px rounded-t-xs",
 							index >= options.highlightFrom ? recent : "bg-chart-neutral/60",
 						),
 					),

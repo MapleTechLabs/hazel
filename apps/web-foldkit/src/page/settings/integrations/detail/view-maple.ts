@@ -1,8 +1,8 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { button, buttonClassName } from "../../../../ui/button"
-import { CHECK, strokeIcon } from "../shared/view"
+import { callout } from "../../../../ui/callout"
 import type { MapleInstall } from "./model"
-import { panel } from "./view-connection"
+import { sectionCard } from "./view-connection"
 
 /**
  * Maple is two things in Hazel, both through one bot: an AI agent you ask in a channel (installed
@@ -85,24 +85,11 @@ const steps = <M>(h: HtmlBuilder<M>, items: ReadonlyArray<string>): Html =>
 	)
 
 const installedNote = <M>(h: HtmlBuilder<M>): Html =>
-	h.div(
-		[h.Class("flex items-start gap-2.5 rounded-lg bg-success-subtle p-3 text-sm")],
-		[
-			strokeIcon(h, {
-				className: "mt-0.5 size-4 shrink-0 text-success-subtle-fg",
-				strokeWidth: "3",
-				d: CHECK,
-			}),
-			h.p(
-				[h.Class("text-success-subtle-fg")],
-				[
-					"Maple is installed in this workspace. Mention ",
-					h.span([h.Class("font-medium")], ["@Maple"]),
-					" in any channel and it answers in a thread.",
-				],
-			),
-		],
-	)
+	callout(h, { intent: "success" }, [
+		"Maple is installed in this workspace. Mention ",
+		h.span([h.Class("font-medium")], ["@Maple"]),
+		" in any channel and it answers in a thread.",
+	])
 
 export interface MapleColumnOptions<M> {
 	readonly install: MapleInstall | null
@@ -135,7 +122,7 @@ const installedActions = <M>(h: HtmlBuilder<M>, options: MapleColumnOptions<M>, 
 }
 
 const agentPanel = <M>(h: HtmlBuilder<M>, options: MapleColumnOptions<M>): Html =>
-	panel(h, "AI agent", [
+	sectionCard(h, "AI agent", [
 		h.div(
 			[h.Class("flex flex-col gap-4")],
 			options.install !== null
@@ -171,7 +158,7 @@ const agentPanel = <M>(h: HtmlBuilder<M>, options: MapleColumnOptions<M>): Html 
 	])
 
 const alertsPanel = <M>(h: HtmlBuilder<M>, region: MapleRegion | null): Html =>
-	panel(h, "Alerts", [
+	sectionCard(h, "Alerts", [
 		h.div(
 			[h.Class("flex flex-col gap-4")],
 			[

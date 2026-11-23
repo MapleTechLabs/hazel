@@ -543,8 +543,9 @@ describe("composer emoji picker", () => {
 			mountedChannel(),
 			// Nucleo icons carry a <title>, so the button's accessible name is "<icon title> Emoji".
 			Scene.click(Scene.role("button", { name: /Emoji$/ })),
-			Scene.Command.expectExact(Picker.LoadEmojiData()),
+			Scene.Command.expectExact(Picker.LoadEmojiData(), Picker.LoadRecentEmojis()),
 			Scene.Command.resolve(Picker.LoadEmojiData, Picker.Message.SucceededLoadEmojiData({ data })),
+			Scene.Command.resolve(Picker.LoadRecentEmojis, Picker.Message.LoadedRecentEmojis({ recent: [] })),
 			Scene.Mount.resolveAll(
 				[
 					{ name: "PortalPickerPopover" },

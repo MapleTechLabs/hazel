@@ -78,10 +78,14 @@ describe("channel shortcuts", () => {
 			given(loadedModel()),
 			message(Message.PressedChannelHotkey({ action: "EmojiPicker" })),
 			model((current) => expect(current.draft.emojiPicker.isOpen).toBe(true)),
-			Command.expectExact(EmojiPicker.LoadEmojiData),
+			Command.expectExact(EmojiPicker.LoadEmojiData, EmojiPicker.LoadRecentEmojis),
 			Command.resolve(
 				EmojiPicker.LoadEmojiData,
 				EmojiPicker.Message.FailedLoadEmojiData({ reason: "Offline" }),
+			),
+			Command.resolve(
+				EmojiPicker.LoadRecentEmojis,
+				EmojiPicker.Message.LoadedRecentEmojis({ recent: [] }),
 			),
 		)
 	})

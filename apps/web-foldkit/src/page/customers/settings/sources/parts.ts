@@ -1,16 +1,16 @@
 import type * as Customers from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { twMerge } from "tailwind-merge"
 import type { UserErrorMessage } from "~/lib/error-messages"
 import { formatCount } from "../../../../customers/format"
-import { IconCopy, IconWarning } from "../../../../icons"
+
 import { badge } from "../../../../ui/badge"
-import { button } from "../../../../ui/button"
+import { callout } from "../../../../ui/callout"
+import { copyButton } from "../../../../ui/copy-button"
 import { loader } from "../../../../ui/loader"
+import { type StatusTone, statusDot } from "../../../../ui/status-dot"
 import { textField } from "../../../../ui/text-field"
 import { Message } from "./message"
 import type { SourceStatus } from "./model"
-import { heading } from "../../../../ui/heading"
 import { apiUrl } from "~/config/server"
 
 /** The Data sources views' shared pieces: status badges, record counts, error copy, fields, cards. */
@@ -22,18 +22,16 @@ export const BACKEND_URL = apiUrl()
 // STATUS
 
 const STATUS = {
-	connected: { label: "Connected", intent: "success", dot: "bg-success-subtle-fg" },
+	connected: { label: "Connected", intent: "success", dot: "success" },
 	syncing: { label: "Syncing", intent: "primary", dot: null },
-	failing: { label: "Sync failing", intent: "danger", dot: "bg-danger-subtle-fg" },
-	disconnected: { label: "Disconnected", intent: "secondary", dot: "bg-muted-fg" },
-} as const satisfies Record<SourceStatus, { label: string; intent: string; dot: string | null }>
+	failing: { label: "Sync failing", intent: "danger", dot: "danger" },
+	disconnected: { label: "Disconnected", intent: "secondary", dot: "neutral" },
+} as const satisfies Record<SourceStatus, { label: string; intent: string; dot: StatusTone | null }>
 
 export const statusBadge = (h: H, status: SourceStatus): Html => {
 	const { label, intent, dot } = STATUS[status]
 	return badge(h, { intent, isPill: true }, [
-		dot === null
-			? loader(h, { ariaLabel: "Syncing", className: "size-3" })
-			: h.span([h.AriaHidden(true), h.Class(twMerge("size-1.5 rounded-full", dot))]),
+		dot === null ? loader(h, { ariaLabel: "Syncing", className: "size-3" }) : statusDot(h, { tone: dot }),
 		label,
 	])
 }
@@ -120,80 +118,19 @@ export const syncErrorMessage = (error: Customers.SyncError, name: string): User
 	}
 }
 
-/** A danger (or, for `tone: "info"`, neutral) callout with a title, a description and actions. */
-export const callout = (
+/** A sync or connect failure (`UserErrorMessage`) as the kit callout's title and text. */
+export const messageCallout = (
 	h: H,
 	options: Readonly<{
 		message: UserErrorMessage
-		tone?: "danger" | "info" | "success"
+		intent?: "danger" | "info" | "success"
 		actions?: ReadonlyArray<Html>
-		children?: ReadonlyArray<Html>
 	}>,
-): Html => {
-	const tone = options.tone ?? "danger"
-	return h.div(
-		[
-			h.Role(tone === "danger" ? "alert" : "status"),
-			h.Class(
-				twMerge(
-					"flex flex-wrap items-start gap-3 rounded-lg px-3 py-3",
-					tone === "danger" && "bg-danger-subtle text-danger-subtle-fg",
-					tone === "info" && "bg-info-subtle text-info-subtle-fg",
-					tone === "success" && "bg-success-subtle text-success-subtle-fg",
-				),
-			),
-		],
-		[
-			IconWarning(h, { className: "mt-0.5 size-4 shrink-0" }),
-			h.div(
-				// A basis, so a narrow callout wraps its actions under the text instead of squeezing it.
-				[h.Class("flex min-w-0 flex-1 basis-48 flex-col gap-1")],
-				[
-					h.p([h.Class("font-medium text-sm")], [options.message.title]),
-					...(options.message.description === undefined
-						? []
-						: [h.p([h.Class("text-sm opacity-90")], [options.message.description])]),
-					...(options.children ?? []),
-				],
-			),
-			...(options.actions === undefined || options.actions.length === 0
-				? []
-				: [h.div([h.Class("flex flex-wrap items-center gap-2")], [...options.actions])]),
-		],
-	)
-}
-
-// LAYOUT
-
-export const card = (h: H, children: ReadonlyArray<Html>, className?: string): Html =>
-	h.section(
-		[
-			h.Class(
-				twMerge(
-					"flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-bg p-4 sm:p-5",
-					className,
-				),
-			),
-		],
-		[...children],
-	)
-
-export const cardHeader = (h: H, title: string, description?: string, aside?: Html): Html =>
-	h.header(
-		// Wraps, so a narrow card puts the aside under a long description instead of squeezing it.
-		[h.Class("flex flex-wrap items-start justify-between gap-x-4 gap-y-3")],
-		[
-			h.div(
-				[h.Class("flex min-w-0 flex-1 basis-64 flex-col gap-0.5")],
-				[
-					heading(h, { variant: "section" }, [title]),
-					...(description === undefined
-						? []
-						: [h.p([h.Class("text-muted-fg text-sm")], [description])]),
-				],
-			),
-			...(aside === undefined ? [] : [aside]),
-		],
+): Html =>
+	callout(
+		h,
+		{ intent: options.intent ?? "danger", title: options.message.title, actions: options.actions },
+		options.message.description === undefined ? [] : [options.message.description],
 	)
 
 /** A small label over a value (the source card's columns, the connection card's rows). */
@@ -204,16 +141,14 @@ export const eyebrow = (h: H, text: string): Html =>
 export const chips = (h: H, labels: ReadonlyArray<string>): Html =>
 	h.div(
 		[h.Class("flex flex-wrap gap-1.5")],
-		labels.map((label) =>
-			h.span([h.Class("rounded-md border border-border px-1.5 py-0.5 text-fg text-xs")], [label]),
-		),
+		labels.map((label) => badge(h, { intent: "outline" }, [label])),
 	)
 
 export const codeChips = (h: H, labels: ReadonlyArray<string>): Html =>
 	h.div(
 		[h.Class("flex flex-wrap gap-1.5")],
 		labels.map((label) =>
-			h.code([h.Class("rounded-md bg-secondary px-1.5 py-0.5 font-mono text-fg text-xs")], [label]),
+			badge(h, { intent: "secondary", className: "font-mono font-normal" }, [h.code([], [label])]),
 		),
 	)
 
@@ -271,9 +206,11 @@ export const webhookUrlField = (h: H, url: string): Html =>
 		],
 		[
 			h.code([h.Class("min-w-0 flex-1 truncate font-mono text-fg text-xs"), h.Title(url)], [url]),
-			button(h, { intent: "outline", size: "xs", onPress: Message.PressedCopyWebhookUrl({ url }) }, [
-				IconCopy(h, { attributes: { "data-slot": "icon" } }),
-				"Copy",
-			]),
+			copyButton(h, {
+				label: "Copy",
+				showLabel: true,
+				size: "xs",
+				onPress: Message.PressedCopyWebhookUrl({ url }),
+			}),
 		],
 	)

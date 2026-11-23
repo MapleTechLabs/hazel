@@ -5,17 +5,13 @@ import { getStatusDotColor } from "~/utils/status"
 import { IconCircleDottedUser, IconCopy, IconDots, IconMsgs, IconPhone } from "../../icons"
 import type * as Interaction from "../../ui/aria/interaction"
 import { avatar } from "../../ui/avatar"
-import { button } from "../../ui/button"
-import { loader } from "../../ui/loader"
+import { ariaButton, button } from "../../ui/button"
+import { emptyState } from "../../ui/empty-state"
+import { loadingState } from "../../ui/loader"
 import type * as Menu from "../../ui/menu"
 import { menuLabel, menuTriggerClassName, view as menuView } from "../../ui/menu-view"
+import { pageHeader, pageLayout } from "../../ui/page-header"
 import { searchField } from "../../ui/search-field"
-import {
-	sectionHeaderGroup,
-	sectionHeaderHeading,
-	sectionHeaderRoot,
-	sectionHeaderSubheading,
-} from "../../ui/section-header"
 import type { PageViewInputs } from "../contract"
 import { AutoFocusSearch } from "./commands"
 import { Message } from "./message"
@@ -53,23 +49,21 @@ const menuContent = (h: HtmlBuilder<Message>, id: string): ((key: string) => Rea
 const memberMenuTrigger =
 	(h: HtmlBuilder<Message>) =>
 	(attributes: ReadonlyArray<ChildAttribute>, overlay: Html): Html =>
-		h.button(
-			[
-				...attributes,
-				h.AriaLabel("Member actions"),
-				h.Class(
-					menuTriggerClassName(
-						cn(
-							"inline-flex size-8 items-center justify-center rounded-lg border border-transparent hover:border-border hover:bg-secondary max-md:size-10",
-							"data-pressed:bg-secondary group-hover:border-border",
-						),
+		ariaButton(
+			h,
+			{
+				className: menuTriggerClassName(
+					cn(
+						"inline-flex size-8 items-center justify-center rounded-lg border border-transparent hover:border-border hover:bg-secondary max-md:size-10",
+						"data-pressed:bg-secondary group-hover:border-border",
 					),
 				),
-				h.Attribute("data-react-aria-pressable", "true"),
-				h.Attribute("data-slot", "menu-trigger"),
-				h.Attribute("tabindex", "0"),
-				h.Attribute("type", "button"),
-			],
+				attributes: [
+					...attributes,
+					h.AriaLabel("Member actions"),
+					h.Attribute("data-slot", "menu-trigger"),
+				],
+			},
 			[IconDots(h, { className: "size-5 text-muted-fg" }), overlay],
 		)
 
@@ -188,68 +182,52 @@ const memberListContent = (
 	currentUserId: string | undefined,
 ): ReadonlyArray<Html> => {
 	if (model.members._tag === "Loading") {
-		return [
-			h.div([h.Class("flex items-center justify-center py-8")], [loader(h, { className: "size-8" })]),
-		]
+		return [loadingState(h, { className: "py-8" })]
 	}
 	const filtered = filterMembers(model.members.members, model.searchQuery)
 	if (filtered.length === 0) {
 		return [
-			h.div(
-				[h.Class("py-8 text-center text-muted-fg")],
-				[
-					model.searchQuery
-						? "No members found matching your search"
-						: "No members in this organization",
-				],
-			),
+			emptyState(h, {
+				title: model.searchQuery
+					? "No members found matching your search"
+					: "No members in this organization",
+				className: "py-8",
+			}),
 		]
 	}
 	return filtered.map((member) => memberRow(h, member, model.menus[member.id], currentUserId))
 }
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) =>
-	h.div(
-		[h.Class("flex flex-col gap-6 px-4 py-6 lg:px-8")],
-		[
-			sectionHeaderRoot(h, { className: "border-none pb-0" }, [
-				sectionHeaderGroup(h, {}, [
-					h.div(
-						[h.Class("space-y-0.5")],
-						[
-							sectionHeaderHeading(h, { size: "xl" }, ["Members"]),
-							sectionHeaderSubheading(h, {}, [
-								"Explore your organization and connect with fellow members.",
-							]),
-						],
-					),
-				]),
-			]),
-			h.div(
-				[h.Class("w-full")],
-				[
-					searchField(
-						h,
-						{
-							id: SEARCH_ID,
-							value: model.searchQuery,
-							onInput: (value) => Message.ChangedSearch({ value }),
-							onClear: Message.ClearedSearch(),
-							onClearPressStart: Message.PressedClearSearch(),
-							className: "w-full",
-							interaction: { model: model.interaction, toParentMessage: toInteractionMessage },
-						},
-						(parts) => [
-							parts.searchInput({
-								placeholder: "Search members...",
-								// A phone would raise its keyboard over the list on every visit.
-								attributes: shared.isMobile ? [] : [h.OnMount(AutoFocusSearch())],
-							}),
-						],
-					),
-				],
-			),
-			h.div([h.Class("w-full space-y-2")], [...memberListContent(h, model, shared.currentUser?.id)]),
-		],
-	),
+	pageLayout(h, { className: "py-6" }, [
+		pageHeader(h, {
+			title: "Members",
+			subtitle: "Explore your organization and connect with fellow members.",
+		}),
+		h.div(
+			[h.Class("w-full")],
+			[
+				searchField(
+					h,
+					{
+						id: SEARCH_ID,
+						value: model.searchQuery,
+						onInput: (value) => Message.ChangedSearch({ value }),
+						onClear: Message.ClearedSearch(),
+						onClearPressStart: Message.PressedClearSearch(),
+						className: "w-full",
+						interaction: { model: model.interaction, toParentMessage: toInteractionMessage },
+					},
+					(parts) => [
+						parts.searchInput({
+							placeholder: "Search members...",
+							// A phone would raise its keyboard over the list on every visit.
+							attributes: shared.isMobile ? [] : [h.OnMount(AutoFocusSearch())],
+						}),
+					],
+				),
+			],
+		),
+		h.div([h.Class("w-full space-y-2")], [...memberListContent(h, model, shared.currentUser?.id)]),
+	]),
 )
