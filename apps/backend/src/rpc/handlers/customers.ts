@@ -613,7 +613,7 @@ const actOnSignal = (
 		actor: CustomersActor,
 		now: Date,
 	) => Partial<schema.NewCustomerSignal>,
-	data: Record<string, unknown> = {},
+	data: Record<string, unknown> & { readonly note?: string | null } = {},
 ) =>
 	Effect.gen(function* () {
 		const actor = yield* requireMember
@@ -646,13 +646,30 @@ const actOnSignal = (
 						})
 						.where(($) => [$.id.eq(signalId)]),
 				)
+				// The note joins the account's notes. The event points at it, so the timeline follows
+				// an edit or a delete instead of keeping its own copy of the text.
+				const { note: written, ...details } = data
+				const noteBody = written?.trim()
+				const notes = noteBody
+					? yield* db.run(
+							SQLite.insertInto(schema.customerNotesTable)
+								.values({
+									organizationId: signal.organizationId,
+									accountId: signal.accountId,
+									authorUserId: actor.userId,
+									body: noteBody,
+									signalId,
+								})
+								.returning("id"),
+						)
+					: []
 				const [type, verb] = ACTION_EVENT[action]
 				yield* hazelEvent(
 					signal.accountId,
 					actor.userId,
 					type,
 					`${verb}: ${signal.title}`,
-					{ signalId, template: signal.template, ...data },
+					{ signalId, template: signal.template, ...details, noteId: notes[0]?.id ?? null },
 					now,
 				)
 				yield* refreshCounters(signal.accountId, now)

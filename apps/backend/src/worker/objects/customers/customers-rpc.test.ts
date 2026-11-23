@@ -505,6 +505,13 @@ describe("Customers RPCs", () => {
 							world.member,
 						),
 					)
+					// A note written while handling the signal is an account note too.
+					expect(
+						world.rows(
+							`SELECT body FROM customer_notes WHERE signalId = ? AND deletedAt IS NULL ORDER BY body`,
+							top.id,
+						),
+					).toEqual([{ body: "Card updated" }, { body: "Talking to them Friday" }])
 					expect(
 						tagOf(
 							yield* world.call("customers.signal.dismiss", { signalId: top.id }, world.member),
