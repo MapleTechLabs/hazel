@@ -1,8 +1,8 @@
 /**
  * Which deployment stage the backend runs on, for the routes that must never run on prd (the dev
- * sign-in, the import). The api Worker gets `HAZEL_STAGE` (`prd`, `pr` or `dev`, `worker/env.ts`);
+ * sign-in, the import). The api Worker gets `HAZEL_STAGE` (`prd`, `pr`, `customer` or `dev`, `worker/env.ts`);
  * where it is unset (bun dev, tests) `IS_DEV=true` marks a dev process. Anything else counts as
- * prd: a missing stage fails closed.
+ * prd (a `customer` install included): a missing stage fails closed.
  */
 import { Config, Option } from "effect"
 

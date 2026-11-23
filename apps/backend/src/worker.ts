@@ -5,7 +5,14 @@
  * class tags of the previous deploy.
  */
 import { bindBotGateways } from "@hazel/bot-gateway/object"
-import { HazelStack, hazelWorkerProps, stageProps } from "@hazel/infra/cloudflare"
+import {
+	HazelStack,
+	type HazelStackContext,
+	hazelWorkerProps,
+	isProductionStage,
+	resolveWorkerName,
+	stageProps,
+} from "@hazel/infra/cloudflare"
 import { cachedRecoverable } from "@hazel/infra/cached-recoverable"
 import { hazelTelemetry } from "@hazel/infra/maple"
 import { isolateContext } from "@hazel/infra/worker-http"
@@ -18,6 +25,7 @@ import {
 } from "./worker/discord-gateway-object"
 import { HTML_RENDER_PENDING_MAX_AGE_SECONDS, HTML_RENDER_PENDING_PREFIX } from "./services/html-renders"
 import { takeIsolateCold } from "./worker/cold-start"
+import { UPLOADS_S3_BINDING } from "./services/object-storage"
 import { apiEnv } from "./worker/env"
 import { makeFetch } from "./worker/fetch"
 import { MessageLiveObject, MessageLiveObjectLive } from "./worker/live/message-live-object"
@@ -63,6 +71,33 @@ export const HtmlRendersBucket = Cloudflare.R2.Bucket(
 	})),
 )
 
+/**
+ * A customer install's uploads bucket (`docs/self-hosting.md`): served from `cdn.<zone>`, written
+ * by browsers through URLs the api presigns with S3 credentials alchemy mints for it (a token scoped
+ * to this bucket, bound as `UPLOADS_S3`, read by `services/object-storage.ts`). Hazel's own stages
+ * bring their bucket through the `S3_*` keys instead.
+ */
+const customerUploads = (stack: HazelStackContext) =>
+	Cloudflare.R2.Bucket("uploads", {
+		name: resolveWorkerName("uploads", stack.stage),
+		domains: stack.domains.cdn ? [{ name: stack.domains.cdn }] : [],
+		cors: [
+			{
+				id: "browser-uploads",
+				allowedMethods: ["GET", "HEAD", "PUT"],
+				allowedOrigins: [stack.urls.web, "tauri://localhost", "http://tauri.localhost"],
+				allowedHeaders: ["content-type", "if-none-match"],
+				exposeHeaders: ["etag"],
+				maxAgeSeconds: 3600,
+			},
+		],
+	})
+
+/** The api's uploads credentials binding: present on a customer install only. */
+interface UploadsBinding {
+	[UPLOADS_S3_BINDING]?: Cloudflare.R2.S3Credentials
+}
+
 /** `__ALCHEMY_RUNTIME__` folds to `true` in the bundle, so the stack-side branch is tree-shaken. */
 const props = Effect.gen(function* () {
 	if (globalThis.__ALCHEMY_RUNTIME__) return { main: import.meta.url }
@@ -70,10 +105,15 @@ const props = Effect.gen(function* () {
 	const cache = yield* ApiCache
 	const htmlRenders = yield* HtmlRendersBucket
 	const email = yield* Cloudflare.Email.SendEmail(EMAIL_BINDING)
+	const uploadsBinding: UploadsBinding = {}
+	if (stack.stage.kind === "customer") {
+		const uploads = yield* customerUploads(stack)
+		uploadsBinding[UPLOADS_S3_BINDING] = Cloudflare.R2.S3Credentials(uploads, { access: "read-write" })
+	}
 	return {
 		main: import.meta.url,
 		...hazelWorkerProps("api", stack),
-		workersDev: stack.stage.kind !== "prd",
+		workersDev: !isProductionStage(stack.stage),
 		domain: stack.domains.api,
 		observability: {
 			enabled: true,
@@ -86,6 +126,7 @@ const props = Effect.gen(function* () {
 			[CACHE_BINDING]: cache,
 			[HTML_RENDERS_BINDING]: htmlRenders,
 			[EMAIL_BINDING]: email,
+			...uploadsBinding,
 			...(yield* apiEnv(stack)),
 		},
 	}

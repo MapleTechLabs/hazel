@@ -79,6 +79,27 @@ export const plainWithDefault = (key: string, fallback: string): Config.Config<P
 export const derived = (key: string, value: string): Config.Config<PlainEnv> =>
 	Config.succeed({ [key]: value })
 
+/**
+ * The commit of the checkout being deployed, for a deploy outside CI (a customer install run from a
+ * clone): `GET /health` and telemetry report it. Undefined outside a git checkout.
+ */
+const checkoutSha = (): string | undefined => {
+	// Not a static import: this module also lands in Worker bundles, which run no git.
+	const childProcess = globalThis.process?.getBuiltinModule?.("node:child_process") as
+		| typeof import("node:child_process")
+		| undefined
+	try {
+		return childProcess
+			?.execFileSync("git", ["rev-parse", "HEAD"], {
+				encoding: "utf8",
+				stdio: ["ignore", "pipe", "ignore"],
+			})
+			.trim()
+	} catch {
+		return undefined
+	}
+}
+
 /** Environment and revision stamping shared by every Effect Worker. */
 export const telemetryEnv = (stage: HazelStage): Config.Config<WorkerEnv> =>
 	merge(
@@ -88,7 +109,7 @@ export const telemetryEnv = (stage: HazelStage): Config.Config<WorkerEnv> =>
 		derived("NODE_ENV", stage.kind === "dev" ? "development" : "production"),
 		merge(optionalPlain("COMMIT_SHA"), optionalPlain("GITHUB_SHA")).pipe(
 			Config.map((record): PlainEnv => {
-				const sha = record.COMMIT_SHA ?? record.GITHUB_SHA
+				const sha = record.COMMIT_SHA ?? record.GITHUB_SHA ?? checkoutSha()
 				return typeof sha === "string" && sha ? { COMMIT_SHA: sha } : {}
 			}),
 		),

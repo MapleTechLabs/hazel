@@ -26,6 +26,20 @@ export {
 	nativeSession,
 	Registration,
 } from "./contract.ts"
+export {
+	domainRestrictionMessage,
+	emailDomain,
+	type InstanceAccess,
+	InstanceAccessConfig,
+	isEmailDomainAllowed,
+	isInstanceAdmin,
+	ORG_CREATION_REFUSED_MESSAGE,
+	type OrgCreation,
+	parseAdminEmails,
+	parseEmailDomains,
+	parseInstanceAccess,
+	parseOrgCreation,
+} from "./instance-access.ts"
 export { cleanupDesktopLogins, makeDesktopLoginRoutes } from "./desktop-login.ts"
 export {
 	type DevSignIn,

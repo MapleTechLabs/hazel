@@ -1,4 +1,3 @@
-import { Hooks } from "@yielded/auth"
 import { Context, Effect, FileSystem, Layer, Path, Redacted, Schema } from "effect"
 import { Base64Url } from "effect/encoding"
 import { Etag, type HttpBody, HttpClient, HttpClientResponse, HttpPlatform, HttpRouter } from "effect/http"
@@ -144,16 +143,15 @@ export const makeDevSignIn = Effect.fn("HazelAuth.makeDevSignIn")(function* (con
 		Path.Path,
 		Etag.Generator,
 	)(yield* Effect.context<DevSignInPlatform>())
-	const { http, Services, sessionCookieName } = makeHazelAuthLive(config)
-	const routes = http
-		.routes()
-		.pipe(
-			Layer.provide(http.layer),
-			Layer.provideMerge(Services),
-			Layer.provide(SimulatedGitHub),
-			Layer.provide(Hooks.LifecycleHooks.empty),
-			Layer.provide(Layer.succeedContext(platform)),
-		)
+	const { http, Services, hooks, sessionCookieName } = makeHazelAuthLive(config)
+	const routes = http.routes().pipe(
+		Layer.provide(http.layer),
+		Layer.provideMerge(Services),
+		Layer.provide(SimulatedGitHub),
+		// The same allowed-domain checks as the real routes.
+		Layer.provide(hooks),
+		Layer.provide(Layer.succeedContext(platform)),
+	)
 	const authApp = Effect.acquireRelease(
 		Effect.sync(() => HttpRouter.toWebHandler(routes, { disableLogger: true })),
 		(web) => Effect.promise(() => web.dispose()),

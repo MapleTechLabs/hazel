@@ -1,8 +1,8 @@
-import { Hooks } from "@yielded/auth"
 import {
 	AccessToken,
 	HazelAuth,
 	type HazelAuthConfig,
+	InstanceAccessConfig,
 	makeDesktopLoginRoutes,
 	makeHazelAuthLive,
 } from "@hazel/auth/server"
@@ -65,6 +65,8 @@ const AuthConfig = Config.all({
 	accessTokenKid: Config.String("AUTH_ACCESS_TOKEN_KID").pipe(Config.withDefault("v1")),
 	accessTokenJwk: Config.option(Config.Redacted("AUTH_ACCESS_TOKEN_PRIVATE_JWK")),
 	devSignInSecret: Config.option(Config.Redacted("DEV_SIGNIN_SECRET")),
+	// `ALLOWED_EMAIL_DOMAINS` and the rest (`@hazel/auth/server` `instance-access.ts`).
+	access: InstanceAccessConfig,
 })
 
 /** The GitHub client of a stage signed into only through the dev sign-in; GitHub rejects it. */
@@ -81,6 +83,11 @@ const make = Effect.gen(function* () {
 		yield* Effect.logError("[auth] DEV_SIGNIN_SECRET is set on prd; ignoring it (remove the secret)")
 	}
 	const devSignInSecret = nonProduction ? configuredDevSecret : Option.none<Redacted.Redacted<string>>()
+	if (env.access.allowedEmailDomains.length > 0) {
+		yield* Effect.logInfo("[auth] sign-in is limited to the allowed email domains", {
+			domains: env.access.allowedEmailDomains,
+		})
+	}
 	if (Option.isNone(env.githubClientId) && Option.isNone(devSignInSecret)) {
 		yield* Effect.logInfo("[auth] AUTH_GITHUB_CLIENT_ID is not set; Hazel sign-in is disabled")
 		return Option.none()
@@ -121,6 +128,7 @@ const make = Effect.gen(function* () {
 		returnTargets: ["/"],
 		registrationPath: "/auth/register",
 		continuePath: "/auth/continue",
+		access: env.access,
 	}
 
 	const accessTokens = Option.isNone(env.accessTokenJwk)
@@ -165,8 +173,9 @@ export const HazelAuthServicesLive = Layer.unwrap(
 	Effect.map(Effect.service(HazelAuthInstance), (instance) =>
 		Option.match(instance, {
 			onNone: () => Layer.empty,
-			onSome: ({ http, Services }) =>
-				http.layer.pipe(Layer.provideMerge(Services), Layer.provide(Hooks.LifecycleHooks.empty)),
+			// The hooks refuse sign-ins outside `ALLOWED_EMAIL_DOMAINS` (empty when unset).
+			onSome: ({ http, Services, hooks }) =>
+				http.layer.pipe(Layer.provideMerge(Services), Layer.provide(hooks)),
 		}),
 	),
 )

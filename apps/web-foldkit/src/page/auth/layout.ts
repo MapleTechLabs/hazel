@@ -99,7 +99,12 @@ export const authFailureMessage = (reason: AuthFailure): UserErrorMessage | null
 					title: "That sign-in expired or was already used",
 					description: "Please start again.",
 				},
-				Denied: { title: "This account can't sign in to Hazel" },
+				// The install's access rules refused it (`ALLOWED_EMAIL_DOMAINS`, `docs/self-hosting.md`).
+				Denied: {
+					title: "This account can't sign in to Hazel",
+					description:
+						"This workspace only accepts certain email addresses. Sign in with your work account, or ask your admin for access.",
+				},
 				AccountConflict: {
 					title: "That account is already linked to another Hazel user",
 					description: "Sign in with the account you used before.",
