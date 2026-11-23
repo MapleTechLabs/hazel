@@ -3,10 +3,12 @@
  * `VITE_*` keys in `env` are build inputs: they reach `vite build` via the process env and are
  * folded into the memo hash, so changing one rebuilds with no source change.
  */
-import { HazelStack, resolveWorkerName } from "@hazel/infra/cloudflare"
+import { HazelStack, isProductionStage, resolveWorkerName } from "@hazel/infra/cloudflare"
 import { plainFrom } from "@hazel/infra/env"
 import * as Cloudflare from "@alchemy.run/cloudflare"
 import { Effect } from "effect"
+
+const httpsOr = (domain: string | undefined, fallback: string) => `https://${domain ?? fallback}`
 
 const props = Effect.gen(function* () {
 	const { stage, domains, urls } = yield* HazelStack
@@ -26,11 +28,20 @@ const props = Effect.gen(function* () {
 			lockfile: true,
 		},
 		compatibility: { date: "2026-09-25" },
-		workersDev: stage.kind !== "prd",
+		workersDev: !isProductionStage(stage),
 		domain: domains.web,
 		env: {
 			VITE_BACKEND_URL: yield* plainFrom(["VITE_BACKEND_URL"], urls.api),
-			VITE_R2_PUBLIC_URL: yield* plainFrom(["VITE_R2_PUBLIC_URL"], "https://cdn.hazel.sh"),
+			// The stage's own hosts where it has them (prd, a customer install); Hazel's otherwise.
+			VITE_R2_PUBLIC_URL: yield* plainFrom(
+				["VITE_R2_PUBLIC_URL"],
+				httpsOr(domains.cdn, "cdn.hazel.sh"),
+			),
+			VITE_LINK_PREVIEW_URL: yield* plainFrom(
+				["VITE_LINK_PREVIEW_URL"],
+				httpsOr(domains.linkPreview, "link-preview.hazel.sh"),
+			),
+			VITE_APP_URL: yield* plainFrom(["VITE_APP_URL"], httpsOr(domains.web, "app.hazel.sh")),
 		},
 	}
 }).pipe(

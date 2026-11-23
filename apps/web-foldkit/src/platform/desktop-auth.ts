@@ -6,6 +6,7 @@ import { Context, Effect, Layer, ManagedRuntime, Option, Schema, SynchronizedRef
 import { FetchHttpClient } from "effect/http"
 import { desktopClient } from "@hazel/auth/contract"
 import { desktopAuthClient } from "./desktop"
+import { apiUrl, appOrigin } from "~/config/server"
 
 /**
  * Desktop sign-in (`@hazel/auth/desktop`) on Tauri: the session lives in the OS keychain (Rust
@@ -32,7 +33,7 @@ const invokeVault = <A>(command: string, args?: Record<string, unknown>) =>
 	})
 
 /** One JSON record in the OS keychain; the Rust side never interprets it. */
-const KeychainStore = {
+export const KeychainStore = {
 	read: invokeVault<string | null>("auth_vault_read"),
 	write: (record: string) => invokeVault<void>("auth_vault_write", { record }),
 }
@@ -139,11 +140,8 @@ export class DesktopAuthService extends Context.Service<DesktopAuthService, Desk
 	"@hazel/web-foldkit/DesktopAuthService",
 ) {}
 
-/** The web app's handoff page: where the API and web app live for this build. */
-const hostedUrl = () => {
-	const appOrigin = import.meta.env.VITE_APP_URL || "https://app.hazel.sh"
-	return `${new URL(appOrigin).origin}/auth/desktop`
-}
+/** The web app's handoff page, on the install the app talks to (`~/config/server`). */
+const hostedUrl = () => `${appOrigin()}/auth/desktop`
 
 export type HostResponse = { status: number; headers: Array<[string, string]>; body: string }
 
@@ -188,7 +186,7 @@ export const hostFetch =
 const DesktopAuthLive = Layer.effect(
 	DesktopAuthService,
 	makeDesktopAuth({
-		apiOrigin: import.meta.env.VITE_BACKEND_URL || "http://localhost:3003",
+		apiOrigin: apiUrl(),
 		hostedUrl: hostedUrl(),
 		client,
 	}),

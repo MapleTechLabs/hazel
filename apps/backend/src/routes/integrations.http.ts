@@ -35,8 +35,17 @@ import {
 import * as Duration from "effect/Duration"
 import { HazelApi } from "../api"
 import { Directory } from "../services/directory"
+import { handleBrokerProviderCallback } from "../services/oauth-broker/broker"
+import { brokerAuthorizationUrl } from "../services/oauth-broker/client"
+import { isBrokeredProvider, loadBrokerClientConfig } from "../services/oauth-broker/config"
+import { isBrokerState } from "../services/oauth-broker/crypto"
 import { requireMember } from "./integration-resources.http"
-import { OAuthProviderRegistry } from "../services/oauth"
+import {
+	type AccountInfoError,
+	type OAuthAccountInfo,
+	OAuthProviderRegistry,
+	type OAuthTokens,
+} from "../services/oauth"
 import { callObject } from "../worker/objects/calls"
 import { orgTarget } from "../worker/objects/kinds"
 import {
@@ -156,7 +165,7 @@ const craftConnectApiKeyErrorLogFields = (error: CraftConnectApiKeyError): Recor
 /**
  * Error codes for OAuth callback failures (used in redirect URL params)
  */
-type OAuthErrorCode =
+export type OAuthErrorCode =
 	| "token_exchange_failed"
 	| "account_info_failed"
 	| "db_error"
@@ -182,7 +191,7 @@ const isRetryableError = (error: { message: string; cause?: unknown }): boolean 
 /**
  * Build redirect URL with connection status query params
  */
-const buildRedirectUrl = (
+export const buildRedirectUrl = (
 	returnTo: string,
 	provider: string,
 	status: "success" | "error",
@@ -304,16 +313,22 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (
 
 	yield* requireMember(orgId)
 
-	// Get the OAuth provider from registry
+	// Get the OAuth provider from registry. Without its own app for a brokerable provider, a
+	// customer install connects through the OAuth broker instead (`services/oauth-broker`).
 	const registry = yield* OAuthProviderRegistry
-	const oauthProvider = yield* registry.getProvider(provider).pipe(
-		Effect.mapError((error) =>
-			InternalServerError.withCause({
-				message: `Provider not available: ${error._tag}`,
-				cause: error,
-			}),
-		),
-	)
+	const providerResult = yield* registry.getProvider(provider).pipe(Effect.result)
+	const broker =
+		providerResult._tag === "Failure" &&
+		providerResult.failure._tag === "ProviderNotConfiguredError" &&
+		isBrokeredProvider(provider)
+			? yield* loadBrokerClientConfig
+			: Option.none()
+	if (providerResult._tag === "Failure" && Option.isNone(broker)) {
+		return yield* InternalServerError.withCause({
+			message: `Provider not available: ${providerResult.failure._tag}`,
+			cause: providerResult.failure,
+		})
+	}
 
 	const frontendUrl = yield* Config.String("FRONTEND_URL")
 	const cookieDomain = yield* Config.String("COOKIE_DOMAIN")
@@ -355,6 +370,39 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (
 					: `${frontendUrl}/${org.slug}/settings/integrations/${provider}`,
 		environment,
 	}
+
+	if (Option.isSome(broker)) {
+		const brokerUrl = yield* Effect.promise(() =>
+			brokerAuthorizationUrl(broker.value, provider, {
+				organizationId: orgId,
+				userId: currentUser.id,
+				level,
+				returnTo: stateData.returnTo,
+			}),
+		)
+		yield* Effect.logInfo("OAuth flow initiated through the broker", {
+			event: "oauth_flow_initiated",
+			provider,
+			organizationId: orgId,
+			userId: currentUser.id,
+			level,
+			brokered: true,
+		})
+		return yield* HttpServerResponse.json({ authorizationUrl: brokerUrl }).pipe(
+			Effect.catchTag("HttpBodyError", (e) =>
+				Effect.fail(
+					InternalServerError.withCause({ message: "Failed to serialize response", cause: e }),
+				),
+			),
+		)
+	}
+	if (providerResult._tag === "Failure") {
+		return yield* InternalServerError.withCause({
+			message: `Provider not available: ${providerResult.failure._tag}`,
+			cause: providerResult.failure,
+		})
+	}
+	const oauthProvider = providerResult.success
 
 	// Keep state as raw JSON; URLSearchParams will apply encoding.
 	const state = JSON.stringify(stateData)
@@ -444,6 +492,16 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 ) {
 	const { provider } = path
 	const { code, state: encodedState, installation_id, setup_action, guild_id, permissions } = query
+
+	// The OAuth broker's own flows come back through this same redirect URI (Hazel's apps have
+	// one registered, and a GitHub App only one setup URL); their state says so.
+	if (isBrokerState(encodedState) && isBrokeredProvider(provider)) {
+		return yield* handleBrokerProviderCallback(provider, {
+			state: encodedState,
+			code,
+			installationId: installation_id,
+		})
+	}
 
 	// Get request to read cookies
 	const request = yield* HttpServerRequest.HttpServerRequest
@@ -726,13 +784,69 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 		expiresAt: tokens.expiresAt?.toISOString(),
 	})
 
-	// Get account info from provider (with retry for transient failures)
+	// For GitHub App, store the installation ID for token regeneration
+	const metadata = isGitHubAppCallback
+		? { installationId: installation_id }
+		: provider === "discord" && parsedState.level === "organization"
+			? {
+					guildId: guild_id ?? null,
+					permissions: permissions ?? null,
+				}
+			: null
+
+	const outcome = yield* completeConnection({
+		provider,
+		organizationId: parsedState.organizationId as OrganizationId,
+		userId: parsedState.userId as UserId,
+		level: parsedState.level,
+		tokens,
+		getAccountInfo: (accessToken) => oauthProvider.getAccountInfo(accessToken),
+		metadata,
+		audit: { isGitHubApp: !!isGitHubAppCallback, stateSource },
+	})
+	if (outcome._tag === "Failed") return redirectWithError(outcome.code)
+
+	// Redirect back to the settings page with success status (clears session cookie)
+	const successUrl = buildRedirectUrl(returnTo, provider, "success")
+	yield* Effect.logDebug("OAuth callback redirecting with success", {
+		event: "integration_callback_redirect",
+		provider,
+		status: "success",
+		stateSource,
+		redirectUrl: successUrl,
+	})
+
+	return buildRedirectWithCookieClear(successUrl)
+})
+
+export type ConnectionOutcome =
+	| { readonly _tag: "Connected"; readonly connectionId: string }
+	| { readonly _tag: "Failed"; readonly code: OAuthErrorCode }
+
+/**
+ * Saves a connection from fresh tokens: the account behind them, the workspace install of a
+ * chat-sync provider, then the connection and its tokens in the org's `OrgObject`. The install's
+ * own callback and a brokered one (`routes/oauth-broker.http.ts`) both end here.
+ */
+export const completeConnection = Effect.fn("integrations.completeConnection")(function* (input: {
+	readonly provider: IntegrationConnection.IntegrationProvider
+	readonly organizationId: OrganizationId
+	readonly userId: UserId
+	readonly level: IntegrationConnection.ConnectionLevel
+	readonly tokens: OAuthTokens
+	readonly getAccountInfo: (accessToken: string) => Effect.Effect<OAuthAccountInfo, AccountInfoError>
+	readonly metadata: Record<string, unknown> | null
+	readonly audit?: Record<string, unknown>
+}) {
+	const { provider, organizationId, userId, level, tokens } = input
+	const failed = (code: OAuthErrorCode): ConnectionOutcome => ({ _tag: "Failed", code })
+
 	yield* Effect.logDebug("OAuth account info fetch starting", {
 		event: "integration_account_info_attempt",
 		provider,
 	})
 
-	const accountInfoResult = yield* oauthProvider.getAccountInfo(tokens.accessToken).pipe(
+	const accountInfoResult = yield* input.getAccountInfo(tokens.accessToken).pipe(
 		Effect.retry({
 			schedule: oauthRetrySchedule,
 			while: isRetryableError,
@@ -747,7 +861,7 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 			provider,
 			error: error.message,
 		})
-		return redirectWithError("account_info_failed")
+		return failed("account_info_failed")
 	}
 
 	const accountInfo = accountInfoResult.success
@@ -758,39 +872,21 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 		externalAccountName: accountInfo.externalAccountName,
 	})
 
-	// Prepare connection metadata
-	// For GitHub App, store the installation ID for token regeneration
-	const metadata = isGitHubAppCallback
-		? { installationId: installation_id }
-		: provider === "discord" && parsedState.level === "organization"
-			? {
-					guildId: guild_id ?? null,
-					permissions: permissions ?? null,
-				}
-			: null
+	const installsPerWorkspace =
+		level === "organization" &&
+		isChatSyncProviderId(provider) &&
+		chatSyncProviders[provider].workspaceIsInstall
 
 	// A per-workspace install must have granted the bot: an authorize URL stripped of its bot
 	// scopes answers with a user token only, which is no install.
-	if (
-		parsedState.level === "organization" &&
-		isChatSyncProviderId(provider) &&
-		chatSyncProviders[provider].workspaceIsInstall &&
-		tokens.tokenType !== "bot"
-	) {
-		return redirectWithError("token_exchange_failed")
+	if (installsPerWorkspace && tokens.tokenType !== "bot") {
+		return failed("token_exchange_failed")
 	}
 
-	// Save the connection, its tokens and the org's integration bot in the org's `OrgObject`.
-	const organizationId = parsedState.organizationId as OrganizationId
-	const userId = parsedState.userId as UserId
 	// A provider that installs Hazel per workspace: its bot token is the workspace's, for every
 	// org synced with it (`chat_sync_installations`). Saved before the connection: an install
 	// without a connection is harmless, a connection without its install syncs nothing.
-	if (
-		parsedState.level === "organization" &&
-		isChatSyncProviderId(provider) &&
-		chatSyncProviders[provider].workspaceIsInstall
-	) {
+	if (installsPerWorkspace) {
 		const saved = yield* Effect.flatMap(ChatSyncInstallations, (installations) =>
 			installations.save({
 				provider,
@@ -807,18 +903,19 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 				provider,
 				error: String(saved.failure),
 			})
-			return redirectWithError("db_error")
+			return failed("db_error")
 		}
 	}
 
+	// Save the connection, its tokens and the org's integration bot in the org's `OrgObject`.
 	const connectResult = yield* callObject(ConnectIntegrationCall, orgTarget(organizationId), {
 		provider,
-		userId: parsedState.level === "user" ? userId : null,
+		userId: level === "user" ? userId : null,
 		connectedBy: userId,
 		externalAccountId: accountInfo.externalAccountId,
 		externalAccountName: accountInfo.externalAccountName,
 		settings: null,
-		metadata,
+		metadata: input.metadata,
 		tokens: {
 			accessToken: tokens.accessToken,
 			refreshToken: tokens.refreshToken ?? null,
@@ -834,33 +931,23 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 			provider,
 			error: error.message,
 		})
-		return redirectWithError(error._tag === "IntegrationConnectFailedError" ? error.stage : "db_error")
+		return failed(error._tag === "IntegrationConnectFailedError" ? error.stage : "db_error")
 	}
 
 	yield* Effect.logInfo("AUDIT: Integration connected", {
 		event: "integration_connected",
 		provider,
-		organizationId: parsedState.organizationId,
-		userId: parsedState.userId,
-		level: parsedState.level,
+		organizationId,
+		userId,
+		level,
 		externalAccountId: accountInfo.externalAccountId,
 		externalAccountName: accountInfo.externalAccountName,
-		isGitHubApp: isGitHubAppCallback,
 		connectionId: connectResult.success.connectionId,
 		botInstalled: connectResult.success.botInstalled,
+		...input.audit,
 	})
 
-	// Redirect back to the settings page with success status (clears session cookie)
-	const successUrl = buildRedirectUrl(returnTo, provider, "success")
-	yield* Effect.logDebug("OAuth callback redirecting with success", {
-		event: "integration_callback_redirect",
-		provider,
-		status: "success",
-		stateSource,
-		redirectUrl: successUrl,
-	})
-
-	return buildRedirectWithCookieClear(successUrl)
+	return { _tag: "Connected", connectionId: connectResult.success.connectionId } satisfies ConnectionOutcome
 })
 
 /**

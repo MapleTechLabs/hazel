@@ -16,10 +16,11 @@ import { formatDistanceToNow } from "~/lib/format-distance"
 import { rowMenu } from "./row-menu"
 import { tokenDisplay } from "./token-display"
 import { canCreate } from "./update-cards"
+import { apiUrl } from "~/config/server"
 
 /** The Custom Webhooks card: `CompactWebhookItem` and `CreateWebhookForm`. */
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
+const BACKEND_URL = apiUrl()
 
 const compactWebhookItem = (
 	h: HtmlBuilder<Message>,

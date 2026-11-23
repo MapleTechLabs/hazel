@@ -11,9 +11,26 @@ export class HazelStageError extends Schema.TaggedError<HazelStageError, { reado
 	},
 ) {}
 
-export type HazelStage = { kind: "prd" } | { kind: "pr"; prNumber: number } | { kind: "dev"; name: string }
+/**
+ * - `prd`: Hazel's own production (`*.hazel.sh`).
+ * - `pr`: a preview of a pull request (`*-pr-<n>.hazel.sh`).
+ * - `customer`: a production install in a customer's own Cloudflare account (stage
+ *   `customer-<name>`), on the zone named by `HAZEL_ZONE` (`docs/self-hosting.md`). Treated as
+ *   production everywhere: custom domains, no dev-only routes.
+ * - `dev`: a developer's stage (`alchemy dev`, or a deployed scratch stage) on workers.dev.
+ */
+export type HazelStage =
+	| { kind: "prd" }
+	| { kind: "pr"; prNumber: number }
+	| { kind: "customer"; name: string }
+	| { kind: "dev"; name: string }
+
+/** Stages that serve real users: custom domains, production env, no dev-only routes. */
+export const isProductionStage = (stage: HazelStage): boolean =>
+	stage.kind === "prd" || stage.kind === "customer"
 
 const PR_STAGE_RE = /^pr-(\d+)$/
+const CUSTOMER_STAGE_RE = /^customer-([a-z0-9][a-z0-9-]*)$/
 // Underscores allowed so alchemy's default `dev_${USER}` stage parses as a dev stage.
 const DEV_STAGE_RE = /^[a-z0-9][a-z0-9_-]*$/
 
@@ -25,6 +42,12 @@ export interface HazelDomains {
 	readonly api?: string
 	readonly linkPreview?: string
 	readonly botGateway?: string
+	/** Public uploads (the R2 bucket's custom domain). */
+	readonly cdn?: string
+	/** Sender domain of invitation and support emails (onboarded to Cloudflare Email Sending). */
+	readonly mail?: string
+	/** Domain support mailboxes receive at (Cloudflare Email Routing → the api Worker). */
+	readonly inboundMail?: string
 }
 
 export const ZONE = "hazel.sh"
@@ -36,7 +59,21 @@ const PRD_DOMAINS: HazelDomains = {
 	api: "api.hazel.sh",
 	linkPreview: "link-preview.hazel.sh",
 	botGateway: "bot-gateway.hazel.sh",
+	cdn: "cdn.hazel.sh",
+	mail: "mail.hazel.sh",
+	inboundMail: "inbound.hazel.sh",
 }
+
+/** A customer install's hostnames, all under its zone (`HAZEL_ZONE`). */
+export const customerDomains = (zone: string): HazelDomains => ({
+	web: `app.${zone}`,
+	api: `api.${zone}`,
+	linkPreview: `link-preview.${zone}`,
+	botGateway: `bot-gateway.${zone}`,
+	cdn: `cdn.${zone}`,
+	mail: `mail.${zone}`,
+	inboundMail: `inbound.${zone}`,
+})
 
 const hazelStageResult = (stage: string): Result.Result<HazelStage, HazelStageError> => {
 	const normalized = stage.trim().toLowerCase()
@@ -48,6 +85,9 @@ const hazelStageResult = (stage: string): Result.Result<HazelStage, HazelStageEr
 		if (Number.isSafeInteger(prNumber) && prNumber > 0) return Result.succeed({ kind: "pr", prNumber })
 	}
 
+	const customerName = normalized.match(CUSTOMER_STAGE_RE)?.[1]
+	if (customerName !== undefined) return Result.succeed({ kind: "customer", name: customerName })
+
 	if (DEV_STAGE_RE.test(normalized)) {
 		// Cloudflare names allow only [a-z0-9-].
 		return Result.succeed({ kind: "dev", name: normalized.replaceAll("_", "-") })
@@ -55,7 +95,7 @@ const hazelStageResult = (stage: string): Result.Result<HazelStage, HazelStageEr
 
 	return Result.fail(
 		new HazelStageError({
-			message: `Unsupported deployment stage "${stage}". Expected prd, pr-<number>, or a dev stage name matching [a-z0-9][a-z0-9_-]*.`,
+			message: `Unsupported deployment stage "${stage}". Expected prd, pr-<number>, customer-<name>, or a dev stage name matching [a-z0-9][a-z0-9_-]*.`,
 			rawStage: stage,
 		}),
 	)
@@ -76,6 +116,8 @@ export function formatHazelStage(stage: HazelStage): string {
 			return "prd"
 		case "pr":
 			return `pr-${stage.prNumber}`
+		case "customer":
+			return `customer-${stage.name}`
 		case "dev":
 			return stage.name
 	}
@@ -88,12 +130,15 @@ export function resolveDeploymentEnvironment(stage: HazelStage): string {
 			return "production"
 		case "pr":
 			return `pr-${stage.prNumber}`
+		case "customer":
+			return `customer-${stage.name}`
 		case "dev":
 			return "development"
 	}
 }
 
-export function resolveHazelDomains(stage: HazelStage): HazelDomains {
+/** `zone` is the customer's `HAZEL_ZONE`: required for a `customer` stage, ignored otherwise. */
+export function resolveHazelDomains(stage: HazelStage, zone?: string): HazelDomains {
 	switch (stage.kind) {
 		case "prd":
 			return PRD_DOMAINS
@@ -103,6 +148,8 @@ export function resolveHazelDomains(stage: HazelStage): HazelDomains {
 				web: `app-pr-${stage.prNumber}.${ZONE}`,
 				api: `api-pr-${stage.prNumber}.${ZONE}`,
 			}
+		case "customer":
+			return zone ? customerDomains(zone) : {}
 		case "dev":
 			return {}
 	}
@@ -118,6 +165,8 @@ export function resolveWorkerName(base: string, stage: HazelStage): string {
 			return LEGACY_PRD_NAMES[base] ?? `hazel-${base}`
 		case "pr":
 			return `hazel-${base}-pr-${stage.prNumber}`
+		case "customer":
+			return `hazel-${base}-${stage.name}`
 		case "dev":
 			return `hazel-${base}-dev-${stage.name}`
 	}

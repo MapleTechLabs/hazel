@@ -1,5 +1,5 @@
 /** The marketing site: the Astro static build served as Worker static assets. */
-import { HazelStack, resolveWorkerName } from "@hazel/infra/cloudflare"
+import { HazelStack, isProductionStage, resolveWorkerName } from "@hazel/infra/cloudflare"
 import * as Cloudflare from "@alchemy.run/cloudflare"
 import { Effect } from "effect"
 
@@ -13,7 +13,7 @@ const props = Effect.gen(function* () {
 		dev: { command: "bun run dev" },
 		memo: { include: ["**/*"], lockfile: true },
 		compatibility: { date: "2026-09-25" },
-		workersDev: stage.kind !== "prd",
+		workersDev: !isProductionStage(stage),
 		domain: domains.landing,
 	}
 })

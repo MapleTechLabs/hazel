@@ -97,6 +97,16 @@ describe("api fetch handler", () => {
 		expect((await send(fetch, preflight(appOrigin))).attributes.get("isolate.cold")).toBe(false)
 	})
 
+	it("answers /version from the env, without the graph", async () => {
+		const graph = gatedApp()
+		const fetch = makeFetch(graph.app, { ...env, COMMIT_SHA: "abc123", HAZEL_STAGE: "customer" })
+		const { response } = await send(fetch, new Request("https://api.test/version"))
+		expect(await response.json()).toEqual({ version: "abc123", stage: "customer" })
+		expect(graph.state.builds).toBe(0)
+		const bare = await send(makeFetch(graph.app, env), new Request("https://api.test/version"))
+		expect(await bare.response.json()).toEqual({ version: "unknown", stage: "unknown" })
+	})
+
 	it("answers a preflight without the graph, and starts the graph in the background", async () => {
 		const { state, app } = gatedApp()
 		const fetch = makeFetch(cached(cachedRecoverable(app)), env)

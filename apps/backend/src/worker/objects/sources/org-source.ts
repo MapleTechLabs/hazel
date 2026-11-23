@@ -45,6 +45,18 @@ const isMember = (userId: UserId) =>
 			.where(($) => [$.userId.eq(userId), $.deletedAt.isNull()]),
 	)
 
+/** `userId` is an active owner or admin of this org. */
+const isAdmin = (userId: UserId) =>
+	SQLite.exists(
+		SQLite.from(schema.organizationMembersTable)
+			.select("id")
+			.where(($) => [
+				$.userId.eq(userId),
+				$.deletedAt.isNull(),
+				SQLite.or($.role.eq("owner"), $.role.eq("admin")),
+			]),
+	)
+
 /** `col` is a user sharing one of `userId`'s channels (a guest's view of the host's users). */
 const sharesChannel = (userId: UserId, col: SQLite.Expr<any>) =>
 	SQLite.inSubquery(
@@ -245,6 +257,13 @@ const orgSyncTables: ReadonlyArray<(affected: Affected) => Spec> = [
 	// The AI panel: the owner's threads and items, and those they shared with the org; members only.
 	byOwnerOrShared(schema.assistantThreadsTable),
 	byOwnerOrShared(schema.assistantItemsTable),
+	// Data exports and their progress: owners and admins only (`../org/exports.ts`).
+	(affected) => ({
+		table: schema.organizationExportsTable,
+		visible: (p) => [isAdmin(p.userId)],
+		dependsOn: MEMBERSHIP,
+		affectedPrincipals: affected,
+	}),
 	byConversation(schema.connectConversationsTable, "id"),
 	// Every mount of the conversation (the host's copies of the guests', a guest's of the host's).
 	byConversation(schema.connectConversationChannelsTable, "conversationId"),

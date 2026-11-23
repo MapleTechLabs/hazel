@@ -1,10 +1,10 @@
 import { UnsupportedProviderError } from "@hazel/domain/http"
 import { GitHub } from "@hazel/integrations"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Option, Redacted } from "effect"
 import type { OAuthProvider } from "./oauth-provider"
 import { ProviderNotConfiguredError } from "./oauth-provider"
 import type { IntegrationProvider, OAuthIntegrationProvider, OAuthProviderConfig } from "./provider-config"
-import { loadProviderConfig } from "./provider-config"
+import { loadProviderConfig, PROVIDER_CONFIGS } from "./provider-config"
 import { createGitHubAppProvider } from "./providers/github-app-provider"
 import { createLinearOAuthProvider } from "./providers/linear-oauth-provider"
 import { createDiscordOAuthProvider } from "./providers/discord-oauth-provider"
@@ -144,8 +144,34 @@ export class OAuthProviderRegistry extends Context.Service<OAuthProviderRegistry
 				return oauthProvider
 			})
 
+		/**
+		 * Reads the account behind a token, for a provider this install has no app for: a
+		 * connection brokered through Hazel's app (`services/oauth-broker`) still names its account
+		 * here, and that needs only the token.
+		 */
+		const getAccountInfoReader = (
+			provider: IntegrationProvider,
+		): Option.Option<OAuthProvider["getAccountInfo"]> => {
+			if (provider === "github") {
+				return Option.some(
+					createGitHubAppProvider({ provider: "github" }, gitHubJwtService, gitHubApiClient)
+						.getAccountInfo,
+				)
+			}
+			const factory = PROVIDER_FACTORIES[provider as OAuthIntegrationProvider]
+			if (!factory) return Option.none()
+			const tokenOnly: OAuthProviderConfig = {
+				...PROVIDER_CONFIGS[provider as OAuthIntegrationProvider],
+				clientId: "",
+				clientSecret: Redacted.make(""),
+				redirectUri: "",
+			}
+			return Option.some(factory(tokenOnly).getAccountInfo)
+		}
+
 		return {
 			getProvider,
+			getAccountInfoReader,
 		}
 	}),
 }) {

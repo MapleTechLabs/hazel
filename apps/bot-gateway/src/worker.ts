@@ -8,7 +8,12 @@
  * bot's object (`gateway/relay.ts`).
  */
 import type { D1Database } from "@cloudflare/workers-types"
-import { DIRECTORY_DB_BINDING, HazelStack, hazelWorkerProps } from "@hazel/infra/cloudflare"
+import {
+	DIRECTORY_DB_BINDING,
+	HazelStack,
+	hazelWorkerProps,
+	isProductionStage,
+} from "@hazel/infra/cloudflare"
 import { merge, optionalPlain, telemetryEnv } from "@hazel/infra/env"
 import { hazelTelemetry } from "@hazel/infra/maple"
 import * as Cloudflare from "@alchemy.run/cloudflare"
@@ -39,7 +44,7 @@ const props = Effect.gen(function* () {
 	return {
 		main: import.meta.url,
 		...hazelWorkerProps(BOT_GATEWAY_APP, stack),
-		workersDev: stack.stage.kind !== "prd",
+		workersDev: !isProductionStage(stack.stage),
 		domain: stack.domains.botGateway,
 		// The directory D1, where bot tokens are looked up.
 		env: { [DIRECTORY_DB_BINDING]: stack.directoryDb, ...env },

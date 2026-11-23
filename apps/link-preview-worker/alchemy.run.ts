@@ -1,5 +1,5 @@
 /** The link-preview Worker: an async (non-Effect-runtime) Worker over its own `src/index.ts`. */
-import { HazelStack, hazelWorkerProps, stageProps } from "@hazel/infra/cloudflare"
+import { HazelStack, hazelWorkerProps, isProductionStage, stageProps } from "@hazel/infra/cloudflare"
 import * as Cloudflare from "@alchemy.run/cloudflare"
 import { Effect } from "effect"
 
@@ -20,7 +20,7 @@ export default Effect.gen(function* () {
 		// url-regex-safe (via metascraper) tries the native `re2` and falls back when it is missing.
 		build: { input: { external: ["re2"] } },
 		observability: { enabled: true },
-		workersDev: stack.stage.kind !== "prd",
+		workersDev: !isProductionStage(stack.stage),
 		domain: stack.domains.linkPreview,
 		env: { LINK_CACHE: linkCache },
 	})

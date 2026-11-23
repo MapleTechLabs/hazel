@@ -80,7 +80,7 @@ export class ThreadNamer extends Context.Service<
 			const apiKey = yield* Config.option(Config.Redacted("OPENROUTER_API_KEY")).pipe(
 				Effect.orElseSucceed(() => Option.none()),
 			)
-			const referrer = yield* Config.String("APP_URL").pipe(
+			const referrer = yield* Config.String("FRONTEND_URL").pipe(
 				Config.withDefault("https://app.hazel.sh"),
 				Effect.orElseSucceed(() => "https://app.hazel.sh"),
 			)

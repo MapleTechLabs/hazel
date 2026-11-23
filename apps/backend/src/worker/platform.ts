@@ -10,6 +10,7 @@ import { Layer } from "effect"
 import { type BotGatewayNamespace, BotGatewayTransport } from "../services/bot-gateway-transport"
 import { HtmlRenderStore } from "../services/html-renders"
 import { InviteMailer, isEmailBinding } from "../services/invite-mailer"
+import { OrgExportStore } from "../services/org-exports"
 import { layerKvResultPersistence } from "./kv-persistence"
 
 /** KV namespace backing the session/user-lookup caches. */
@@ -17,6 +18,9 @@ export const CACHE_BINDING = "CACHE"
 
 /** The private R2 bucket of HTML render pages (`services/html-renders.ts`). */
 export const HTML_RENDERS_BINDING = "HTML_RENDERS"
+
+/** The private R2 bucket of organization data exports (`services/org-exports.ts`). */
+export const ORG_EXPORTS_BINDING = "ORG_EXPORTS"
 
 /** Cloudflare Email Sending, for invitation emails. */
 export const EMAIL_BINDING = "EMAIL"
@@ -50,6 +54,15 @@ export const htmlRenderStoreLive = (env: Record<string, unknown>) =>
 		return HtmlRenderStore.layerR2(bucket as R2Bucket)
 	})
 
+/** The organization exports' bucket; suspended like the KV (no binding at plan time). */
+export const orgExportStoreLive = (env: Record<string, unknown>) =>
+	Layer.suspend(() => {
+		const bucket = env[ORG_EXPORTS_BINDING]
+		if (bucket === undefined)
+			throw new Error(`${ORG_EXPORTS_BINDING} R2 binding is missing from the Worker env`)
+		return OrgExportStore.layerR2(bucket as R2Bucket)
+	})
+
 /** The `DIRECTORY_DB` binding off a Worker env. */
 export const directoryBinding = (env: Record<string, unknown>): D1Database => {
 	const db = env[DIRECTORY_DB_BINDING]
@@ -59,7 +72,7 @@ export const directoryBinding = (env: Record<string, unknown>): D1Database => {
 
 /**
  * What the app services read besides `Database`: bot gateway transport, the KV caches, the
- * invite mailer, the HTML render pages' bucket and the env as `ConfigProvider`. Objects run these over their own SQLite.
+ * invite mailer, the HTML render pages' and exports' buckets and the env as `ConfigProvider`. Objects run these over their own SQLite.
  */
 export const servicesPlatformLive = (env: Record<string, unknown>, botGateways: BotGatewayNamespace) =>
 	Layer.mergeAll(
@@ -68,6 +81,7 @@ export const servicesPlatformLive = (env: Record<string, unknown>, botGateways: 
 		Layer.suspend(() => layerKvResultPersistence(cacheNamespace(env))),
 		inviteMailerLive(env).pipe(Layer.provide(workerEnvLayer(env))),
 		htmlRenderStoreLive(env),
+		orgExportStoreLive(env),
 		workerEnvLayer(env),
 	)
 

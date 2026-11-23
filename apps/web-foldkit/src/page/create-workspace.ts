@@ -6,6 +6,7 @@ import { load } from "foldkit/navigation"
 import { defineTaggedUnion } from "foldkit/schema"
 import { modifyFields } from "foldkit/struct"
 import { CommonReason, failureMessage } from "~/lib/error-messages"
+import { shareHost } from "../core/utils/share-origin"
 import { catchCommon } from "../data/actions"
 import { AppRoute, hrefOf } from "../route"
 import { HazelRpc } from "../rpc"
@@ -173,7 +174,7 @@ export const view = <ParentMessage>(
 				(field) => [
 					field.label(["Workspace URL"]),
 					field.input({ placeholder: "acme-corp" }),
-					field.description([`app.hazel.sh/${model.slug || "acme-corp"}`]),
+					field.description([`${shareHost()}/${model.slug || "acme-corp"}`]),
 					field.fieldError([slugInvalid ?? ""]),
 				],
 			),

@@ -5,6 +5,8 @@ import { GitHub } from "@hazel/integrations"
 import { IntegrationConnectionId as IntegrationConnectionIdSchema } from "@hazel/schema"
 import { Context, Effect, Layer, Option, PartitionedSemaphore, Redacted, Schema } from "effect"
 import { IntegrationEncryption } from "./integration-encryption"
+import { refreshViaBroker } from "./oauth-broker/client"
+import { loadBrokerClientConfig } from "./oauth-broker/config"
 import { OAuthHttpClient } from "./oauth/oauth-http-client"
 import { type OAuthIntegrationProvider, loadProviderConfig } from "./oauth/provider-config"
 
@@ -68,6 +70,36 @@ const refreshOAuthToken = (
 		Effect.provide(OAuthHttpClient.layer),
 		Effect.mapError((cause) => new TokenRefreshError({ provider, cause })),
 	)
+
+/** Made through Hazel's OAuth broker (`services/oauth-broker`): `metadata.brokered`. */
+const isBrokered = (connection: { readonly metadata: unknown }) =>
+	typeof connection.metadata === "object" &&
+	connection.metadata !== null &&
+	(connection.metadata as { readonly brokered?: unknown }).brokered === true
+
+/** Fresh tokens from the OAuth broker for a brokered connection. */
+const refreshThroughBroker = (
+	provider: IntegrationConnection.IntegrationProvider,
+	request: { readonly installationId?: string; readonly refreshToken?: string },
+): Effect.Effect<OAuthTokenResponse, TokenRefreshError> =>
+	Effect.gen(function* () {
+		const client = yield* loadBrokerClientConfig
+		if (Option.isNone(client)) {
+			return yield* new TokenRefreshError({
+				provider,
+				cause: "The connection was made through the OAuth broker, which is not configured here",
+			})
+		}
+		const tokens = yield* refreshViaBroker(client.value, provider, request).pipe(
+			Effect.mapError((cause) => new TokenRefreshError({ provider, cause: cause.message })),
+		)
+		return {
+			accessToken: tokens.accessToken,
+			refreshToken: tokens.refreshToken,
+			expiresAt: tokens.expiresAt !== undefined ? new Date(tokens.expiresAt) : undefined,
+			scope: tokens.scope,
+		}
+	})
 
 export class IntegrationTokenService extends Context.Service<IntegrationTokenService>()(
 	"IntegrationTokenService",
@@ -225,28 +257,36 @@ export class IntegrationTokenService extends Context.Service<IntegrationTokenSer
 					keyVersion: token.encryptionKeyVersion,
 				})
 
-				// Load provider config to get client credentials
-				const providerConfig = yield* loadProviderConfig(
-					connection.provider as OAuthIntegrationProvider,
-				).pipe(
-					Effect.mapError(
-						(cause) =>
-							new TokenRefreshError({
-								provider: connection.provider,
-								cause: `Failed to load provider config: ${cause}`,
-							}),
-					),
-				)
+				yield* Effect.logDebug("Refreshing OAuth token", {
+					provider: connection.provider,
+					brokered: isBrokered(connection),
+				})
 
-				yield* Effect.logDebug("Refreshing OAuth token", { provider: connection.provider })
-
-				// Call provider's token refresh endpoint
-				const newTokens = yield* refreshOAuthToken(
-					connection.provider as OAuthIntegrationProvider,
-					decryptedRefreshToken,
-					providerConfig.clientId,
-					Redacted.value(providerConfig.clientSecret),
-				)
+				// A connection made through Hazel's OAuth broker refreshes there (its client
+				// credentials are Hazel's); any other with the install's own.
+				const newTokens = isBrokered(connection)
+					? yield* refreshThroughBroker(connection.provider, {
+							refreshToken: decryptedRefreshToken,
+						})
+					: yield* Effect.gen(function* () {
+							const providerConfig = yield* loadProviderConfig(
+								connection.provider as OAuthIntegrationProvider,
+							).pipe(
+								Effect.mapError(
+									(cause) =>
+										new TokenRefreshError({
+											provider: connection.provider,
+											cause: `Failed to load provider config: ${cause}`,
+										}),
+								),
+							)
+							return yield* refreshOAuthToken(
+								connection.provider as OAuthIntegrationProvider,
+								decryptedRefreshToken,
+								providerConfig.clientId,
+								Redacted.value(providerConfig.clientSecret),
+							)
+						})
 
 				// Encrypt and store the new tokens
 				const encryptedAccess = yield* encryption.encrypt(newTokens.accessToken)
@@ -307,6 +347,27 @@ export class IntegrationTokenService extends Context.Service<IntegrationTokenSer
 					}
 
 					yield* Effect.logDebug("Regenerating GitHub App token", { installationId, connectionId })
+
+					// A brokered installation is Hazel's app's: only the broker can mint its tokens.
+					if (isBrokered(connection)) {
+						const brokered = yield* refreshThroughBroker("github", { installationId })
+						const encryptedBrokered = yield* encryption.encrypt(brokered.accessToken)
+						yield* tokenRepo.updateToken(tokenId, {
+							encryptedAccessToken: encryptedBrokered.ciphertext,
+							iv: encryptedBrokered.iv,
+							encryptionKeyVersion: encryptedBrokered.keyVersion,
+							expiresAt: brokered.expiresAt ?? null,
+						})
+						yield* Effect.logInfo("AUDIT: GitHub App token regenerated through the broker", {
+							event: "app_token_regenerate",
+							provider: "github",
+							connectionId,
+							installationId,
+							brokered: true,
+							success: true,
+						})
+						return brokered.accessToken
+					}
 
 					// Use GitHub App JWT service to generate a new installation token
 					const jwtService = yield* GitHub.GitHubAppJWTService

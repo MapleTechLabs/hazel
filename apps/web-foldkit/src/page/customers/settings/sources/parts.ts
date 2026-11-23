@@ -11,12 +11,13 @@ import { type StatusTone, statusDot } from "../../../../ui/status-dot"
 import { textField } from "../../../../ui/text-field"
 import { Message } from "./message"
 import type { SourceStatus } from "./model"
+import { apiUrl } from "~/config/server"
 
 /** The Data sources views' shared pieces: status badges, record counts, error copy, fields, cards. */
 
 export type H = HtmlBuilder<Message>
 
-export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
+export const BACKEND_URL = apiUrl()
 
 // STATUS
 

@@ -14,8 +14,9 @@ paths natively (see `docs/cross-platform-ui.md`):
 - **Menus, tab bar, swipe-back, haptics** are the system's, from the page's islands and
   `__HAZEL_SYSTEM_UI__`.
 
-The page is one inlined `index.html` loaded on the web app's origin (`https://app.hazel.sh`), so the
-API's CORS and sign-in take it. WebKit loads nothing from the bundle's own scheme into an https page.
+The page is one inlined `index.html` loaded on the web app's origin (`https://app.hazel.sh`, or the
+install chosen on the sign-in page: `ChosenServer` in `HostBridge.swift`, handed to the page as
+`window.__hazelServer`), so the API's CORS and sign-in take it. WebKit loads nothing from the bundle's own scheme into an https page.
 It signs in as the native client through the system's sign-in sheet; the session is kept in the
 keychain (`web/host.ts`, `HostBridge.swift`).
 

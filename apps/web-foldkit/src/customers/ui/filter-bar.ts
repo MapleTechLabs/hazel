@@ -147,14 +147,6 @@ export const rangePicker = <M>(
 		],
 	)
 
-/** How a range reads in a comparison: `vs previous 30 days`. */
-export const RANGE_COMPARISON = {
-	"7d": "vs previous 7 days",
-	"30d": "vs previous 30 days",
-	"90d": "vs previous 90 days",
-	"12m": "vs previous 12 months",
-} as const satisfies Record<CustomersRange, string>
-
 // SEARCH
 
 /** The app's search field with a `/` hint while empty (the page binds `/` to focus `searchFieldIds(id).input`). */

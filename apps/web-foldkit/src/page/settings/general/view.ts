@@ -12,6 +12,7 @@ import { textField } from "../../../ui/text-field"
 import type { Organization } from "../../../session"
 import type { PageViewInputs, Shared } from "../../contract"
 import { deleteWorkspaceModal } from "./delete-workspace"
+import { exportDataCard } from "./export-data"
 import { Message } from "./message"
 import { type CopyTarget, LogoUpload, type Model, NameSave, PublicModeSave } from "./model"
 import { isAdminOf, LOGO_INPUT_ID } from "./update"
@@ -298,6 +299,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	return pageLayout(h, {}, [
 		profileCard(h, model, shared, organization),
 		...(isAdminOf(shared) || isPermissionsLoading ? [publicInviteCard(h, model, shared)] : []),
+		...(isAdminOf(shared) ? [exportDataCard(h, model, shared.nowMs)] : []),
 		...(shared.member?.role === "owner" || isPermissionsLoading ? [dangerZoneCard(h, shared)] : []),
 		deleteWorkspaceModal(h, model, organization),
 	])

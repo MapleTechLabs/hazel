@@ -1,4 +1,4 @@
-import { OrganizationId } from "@hazel/schema"
+import { OrganizationExportId, OrganizationId } from "@hazel/schema"
 import { Array, Effect, Option, Schema } from "effect"
 import { Command, Update } from "foldkit"
 import * as Dom from "foldkit/dom"
@@ -18,12 +18,15 @@ import {
 	CopyTarget,
 	type DeleteTarget,
 	type DeleteWorkspaceFailure,
+	type DownloadExportFailure,
+	ExportStart,
 	LogoUpload,
 	type Model,
 	NameSave,
 	PublicModeSave,
 	type RenameFailure,
 	type SetPublicModeFailure,
+	type StartExportFailure,
 	type UploadLogoFailure,
 } from "./model"
 
@@ -143,6 +146,45 @@ export const DeleteOrganization = Command.define("DeleteOrganization", {
 	},
 })
 
+export const StartOrganizationExport = Command.define("StartOrganizationExport", {
+	args: { organizationId: OrganizationId },
+	messages: [Message.SucceededStartExport, Message.FailedStartExport],
+	execute: ({ organizationId }) => {
+		const failed = (reason: StartExportFailure) => Effect.succeed(Message.FailedStartExport({ reason }))
+		return HazelRpc.use((client) => client("organizationExport.start", { organizationId })).pipe(
+			Effect.as(Message.SucceededStartExport()),
+			Effect.catchTags({
+				OrganizationExportInProgressError: () => failed("InProgress"),
+				UnauthorizedError: () => failed("NotPermitted"),
+			}),
+			catchCommon((reason) => Message.FailedStartExport({ reason })),
+		)
+	},
+})
+
+/** Fetch a short-lived link to the export and hand it to the browser, which downloads the file. */
+export const DownloadOrganizationExport = Command.define("DownloadOrganizationExport", {
+	args: { organizationId: OrganizationId, exportId: OrganizationExportId },
+	messages: [Message.SucceededDownloadExport, Message.FailedDownloadExport],
+	execute: ({ organizationId, exportId }) => {
+		const failed = (reason: DownloadExportFailure) =>
+			Effect.succeed(Message.FailedDownloadExport({ reason }))
+		return HazelRpc.use((client) =>
+			client("organizationExport.downloadUrl", { organizationId, id: exportId }),
+		).pipe(
+			// Served as an attachment: the browser saves it and stays on the page.
+			Effect.tap(({ url }) => Effect.sync(() => window.location.assign(url))),
+			Effect.as(Message.SucceededDownloadExport()),
+			Effect.catchTags({
+				OrganizationExportNotFoundError: () => failed("NotFound"),
+				OrganizationExportUnavailableError: (error) => failed(error.reason),
+				UnauthorizedError: () => failed("NotPermitted"),
+			}),
+			catchCommon((reason) => Message.FailedDownloadExport({ reason })),
+		)
+	},
+})
+
 // INIT
 
 export const init = (route: RouteOf<"SettingsGeneral">, shared: Shared): Return => ({
@@ -157,6 +199,9 @@ export const init = (route: RouteOf<"SettingsGeneral">, shared: Shared): Return 
 		publicModeSave: PublicModeSave.Idle(),
 		deleteConfirm: ConfirmAction.init<DeleteTarget>("delete-workspace"),
 		confirmationText: "",
+		exports: [],
+		exportStart: ExportStart.Idle(),
+		downloadingExportId: null,
 	},
 	commands: [ReadOrigin()],
 })
@@ -191,6 +236,24 @@ const uploadLogoFailureMessage = (reason: UploadLogoFailure): UserErrorMessage =
 	isUploadProblem(reason)
 		? uploadProblemMessage("avatar", reason)
 		: failureMessage(reason, { NotFound: organizationNotFound, SlugTaken: slugTaken })
+
+const exportFailureCopy = {
+	InProgress: {
+		title: "An export is already running",
+		description: "Wait for it to finish before starting another one.",
+	},
+	NotPermitted: {
+		title: "Not allowed",
+		description: "Only owners and admins can export the workspace's data.",
+	},
+	NotFound: { title: "Export not found", description: "It may have been removed." },
+	NotReady: { title: "Export not ready", description: "It is still being prepared." },
+	Failed: { title: "Export failed", description: "Start a new export." },
+	Expired: {
+		title: "Export expired",
+		description: "Exports can be downloaded for 7 days. Start a new one.",
+	},
+} satisfies Record<string, UserErrorMessage>
 
 const COPIED: { readonly [T in CopyTarget]: { readonly success: string; readonly failure: string } } = {
 	WorkspaceUrl: { success: "Workspace URL copied to clipboard", failure: "Failed to copy URL" },
@@ -340,6 +403,44 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				route: AppRoute.Root(),
 				replace: false,
 				toast: successToast("Workspace deleted successfully"),
+			}),
+		}),
+		UpdatedExports: ({ exports }) => ({ model: modifyFields(model, { exports: () => exports }) }),
+		ClickedStartExport: () =>
+			shared.organization === null || ExportStart.guards.Starting(model.exportStart)
+				? { model }
+				: {
+						model: modifyFields(model, { exportStart: () => ExportStart.Starting() }),
+						commands: [StartOrganizationExport({ organizationId: shared.organization.id })],
+					},
+		SucceededStartExport: () => ({
+			model: modifyFields(model, { exportStart: () => ExportStart.Idle() }),
+			outMessage: PageOutMessage.RequestedToast({
+				toast: successToast("Export started", "It is ready to download here when it finishes."),
+			}),
+		}),
+		FailedStartExport: ({ reason }) => ({
+			model: modifyFields(model, { exportStart: () => ExportStart.Idle() }),
+			outMessage: PageOutMessage.RequestedToast({
+				toast: errorToastOf(failureMessage(reason, exportFailureCopy)),
+			}),
+		}),
+		ClickedDownloadExport: ({ exportId }) =>
+			shared.organization === null || model.downloadingExportId !== null
+				? { model }
+				: {
+						model: modifyFields(model, { downloadingExportId: () => exportId }),
+						commands: [
+							DownloadOrganizationExport({ organizationId: shared.organization.id, exportId }),
+						],
+					},
+		SucceededDownloadExport: () => ({
+			model: modifyFields(model, { downloadingExportId: () => null }),
+		}),
+		FailedDownloadExport: ({ reason }) => ({
+			model: modifyFields(model, { downloadingExportId: () => null }),
+			outMessage: PageOutMessage.RequestedToast({
+				toast: errorToastOf(failureMessage(reason, exportFailureCopy)),
 			}),
 		}),
 		FailedDeleteWorkspace: ({ reason }) => ({

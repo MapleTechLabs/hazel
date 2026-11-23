@@ -5,6 +5,7 @@ import { FetchHttpClient } from "effect/http"
 import { CommonReason } from "~/lib/error-messages"
 import { HazelAuthClient } from "./client"
 import { operationHttpReason } from "./flows"
+import { apiUrl } from "~/config/server"
 
 /**
  * The browser half of desktop sign-in: describe the desktop app's attempt, then authorize it
@@ -13,7 +14,7 @@ import { operationHttpReason } from "./flows"
 
 /** The handoff routes take the browser's session cookie, never a redirect. */
 const TransportLive = OperationHttpClient.layer({
-	baseUrl: import.meta.env.VITE_BACKEND_URL || "http://localhost:3003",
+	baseUrl: apiUrl(),
 	csrfHeader: "x-effect-auth-csrf",
 	csrfValue: "1",
 }).pipe(

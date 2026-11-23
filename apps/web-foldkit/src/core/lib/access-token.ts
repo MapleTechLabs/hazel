@@ -10,6 +10,7 @@
 
 import { Duration, Effect, Schedule, Schema } from "effect"
 import { sessionAuthorizationEffect } from "./session-bearer"
+import { apiUrl } from "../config/server"
 
 interface CachedToken {
 	readonly token: string
@@ -47,7 +48,7 @@ export class TokenExchangeError extends Schema.TaggedError<
 const TokenResponse = Schema.Struct({ token: Schema.String, expiresIn: Schema.Finite })
 const decodeTokenResponse = Schema.decodeUnknownEffect(TokenResponse)
 
-const backendUrl = () => import.meta.env.VITE_BACKEND_URL || "http://localhost:3003"
+const backendUrl = apiUrl
 
 /** The exchange `index.html` starts before the app's script has loaded. */
 interface EarlyToken {

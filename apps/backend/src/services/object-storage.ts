@@ -22,17 +22,55 @@ export interface PresignPutOptions {
 }
 
 /**
+ * The env key of a customer install's uploads credentials: alchemy's `Cloudflare.R2.S3Credentials`
+ * for the bucket the stack declares (`worker.ts`), a JSON `{ endpoint, bucketName, region,
+ * accessKeyId, secretAccessKey }`.
+ */
+export const UPLOADS_S3_BINDING = "UPLOADS_S3"
+
+const UploadsS3Credentials = Schema.fromJsonString(
+	Schema.Struct({
+		endpoint: Schema.String,
+		bucketName: Schema.String,
+		region: Schema.String,
+		accessKeyId: Schema.String,
+		secretAccessKey: Schema.String,
+	}),
+)
+
+/** The `S3_*` keys (Hazel's own stages, MinIO locally). */
+const s3FromKeys = Config.all({
+	endpoint: Config.String("S3_ENDPOINT"),
+	bucket: Config.String("S3_BUCKET"),
+	region: Config.String("S3_REGION").pipe(Config.withDefault("auto")),
+	accessKeyId: Config.Redacted("S3_ACCESS_KEY_ID"),
+	secretAccessKey: Config.Redacted("S3_SECRET_ACCESS_KEY"),
+})
+
+/** The stack-minted credentials of a customer install's bucket ({@link UPLOADS_S3_BINDING}). */
+const s3FromBinding = Config.schema(UploadsS3Credentials, UPLOADS_S3_BINDING).pipe(
+	Config.map((value) => ({
+		endpoint: value.endpoint,
+		bucket: value.bucketName,
+		region: value.region,
+		accessKeyId: Redacted.make(value.accessKeyId),
+		secretAccessKey: Redacted.make(value.secretAccessKey),
+	})),
+)
+
+/** The uploads bucket's S3 settings: the `S3_*` keys when set, else the stack's binding. */
+export const ObjectStorageConfig = s3FromKeys.pipe(Config.orElse(() => s3FromBinding))
+
+/**
  * Presigned uploads against the S3 API of the uploads bucket (R2 in every deployed stage, MinIO
  * locally). SigV4 via `@distilled.cloud/aws4signer` (an Effect port of `aws4fetch`'s signer) runs on
  * Workers and Bun alike, unlike Bun's built-in `s3`. Path-style URLs: `${S3_ENDPOINT}/${S3_BUCKET}/${key}`.
  */
 export class ObjectStorage extends Context.Service<ObjectStorage>()("ObjectStorage", {
 	make: Effect.gen(function* () {
-		const endpoint = (yield* Config.String("S3_ENDPOINT")).replace(/\/+$/, "")
-		const bucket = yield* Config.String("S3_BUCKET")
-		const region = yield* Config.String("S3_REGION").pipe(Config.withDefault("auto"))
-		const accessKeyId = yield* Config.Redacted("S3_ACCESS_KEY_ID")
-		const secretAccessKey = yield* Config.Redacted("S3_SECRET_ACCESS_KEY")
+		const settings = yield* ObjectStorageConfig
+		const endpoint = settings.endpoint.replace(/\/+$/, "")
+		const { bucket, region, accessKeyId, secretAccessKey } = settings
 
 		const signing = {
 			credentials: { accessKeyId: Redacted.value(accessKeyId), secretAccessKey },

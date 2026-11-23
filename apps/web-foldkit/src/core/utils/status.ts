@@ -38,24 +38,6 @@ export function getStatusBadgeIntent(
 }
 
 /**
- * Returns text + opacity background classes for status badges
- * @deprecated Use `getStatusBadgeIntent` with the Badge component instead
- */
-export function getStatusBadgeColor(status?: PresenceStatus | string): string {
-	switch (status) {
-		case "online":
-			return "text-success bg-success/10"
-		case "away":
-		case "busy":
-			return "text-warning bg-warning/10"
-		case "dnd":
-			return "text-danger bg-danger/10"
-		default:
-			return "text-muted-fg bg-muted/10"
-	}
-}
-
-/**
  * Returns formatted status label string
  */
 export function getStatusLabel(status?: PresenceStatus | string): string {

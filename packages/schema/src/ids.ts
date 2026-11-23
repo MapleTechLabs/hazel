@@ -272,6 +272,14 @@ export const RssSubscriptionId = Schema.String.check(Schema.isUUID())
 	})
 export type RssSubscriptionId = Schema.Schema.Type<typeof RssSubscriptionId>
 
+export const OrganizationExportId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/OrganizationExportId"))
+	.annotate({
+		description: "The ID of an organization data export",
+		title: "Organization Export ID",
+	})
+export type OrganizationExportId = Schema.Schema.Type<typeof OrganizationExportId>
+
 export const AssistantThreadId = Schema.String.check(Schema.isUUID())
 	.pipe(Schema.brand("@HazelChat/AssistantThreadId"))
 	.annotate({

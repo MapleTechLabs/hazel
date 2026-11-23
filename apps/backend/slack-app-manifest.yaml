@@ -1,7 +1,8 @@
 # Hazel's Slack app (chat sync). Create it at https://api.slack.com/apps → "From a manifest",
-# replacing https://api.hazel.sh with the stage's API_BASE_URL, then set SLACK_CLIENT_ID,
-# SLACK_CLIENT_SECRET and SLACK_SIGNING_SECRET from "Basic Information". Enable "Manage
-# Distribution" so other workspaces can install it.
+# then set SLACK_CLIENT_ID, SLACK_CLIENT_SECRET and SLACK_SIGNING_SECRET from "Basic Information".
+# Enable "Manage Distribution" so other workspaces can install it.
+# The URLs below are prd's api host. For another install, print the manifest with its API_BASE_URL:
+#   bun run slack:manifest --api-url https://api.<zone>   (scripts/slack-manifest.ts)
 display_information:
     name: Hazel
     description: Sync Slack channels with Hazel

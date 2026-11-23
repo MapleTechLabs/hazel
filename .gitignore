@@ -7,6 +7,8 @@ dist-ssr
 .turbo
 .idea
 .env
+# Customer installs' env files (`bun run customer:install`): production secrets
+.env.customer-*
 .claude
 .source
 version.json

@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { routeOfPath } from "../../../route"
+import type { OrganizationExport } from "@hazel/domain/models"
+import type { OrganizationExportId } from "@hazel/schema"
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
 import {
@@ -13,7 +15,15 @@ import { PageOutMessage } from "../../out-message"
 import { errorToast, reasonToast, successToast } from "../../../data/actions"
 import * as Modal from "../../../ui/modal"
 import { Message } from "./message"
-import { DeleteOrganization, init, SetPublicMode, update, UpdateOrganizationName } from "./update"
+import {
+	DeleteOrganization,
+	DownloadOrganizationExport,
+	init,
+	SetPublicMode,
+	StartOrganizationExport,
+	update,
+	UpdateOrganizationName,
+} from "./update"
 import { view } from "./view"
 
 /** The general settings page through its view: rename, public invites and the delete-workspace dialog. */
@@ -171,6 +181,88 @@ describe("delete workspace", () => {
 			pageScene(update, view, admin),
 			Scene.given(initialModel(admin)),
 			Scene.expect(Scene.text("Danger Zone")).toBeAbsent(),
+		)
+	})
+})
+
+describe("export data", () => {
+	const exportId = "6f1c1b62-3e1f-4f6e-8f0a-9a1d2c3b4e5f" as OrganizationExportId
+	const exportRow = (overrides: Partial<OrganizationExport.Type> = {}): OrganizationExport.Type => ({
+		id: exportId,
+		organizationId,
+		requestedBy: "1d2c3b4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e" as OrganizationExport.Type["requestedBy"],
+		status: "ready",
+		channelCount: 4,
+		channelsDone: 4,
+		partCount: 2,
+		rowCount: 1234,
+		byteSize: 2048,
+		error: null,
+		createdAt: new Date(owner.nowMs - 60_000),
+		updatedAt: null,
+		completedAt: new Date(owner.nowMs - 30_000),
+		expiresAt: new Date(owner.nowMs + 86_400_000),
+		...overrides,
+	})
+
+	test("an admin starts an export", () => {
+		Scene.scene(
+			pageScene(update, view, owner),
+			Scene.given(initialModel()),
+			Scene.click(Scene.role("button", { name: "Export data" })),
+			Scene.Command.expectExact(StartOrganizationExport({ organizationId })),
+			Scene.expect(Scene.role("button", { name: "Starting..." })).toBeDisabled(),
+			Scene.Command.resolve(StartOrganizationExport, Message.SucceededStartExport()),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: successToast("Export started", "It is ready to download here when it finishes."),
+				}),
+			),
+		)
+	})
+
+	test("a running export shows its progress and blocks another", () => {
+		Scene.scene(
+			pageScene(update, view, owner),
+			Scene.given({
+				...initialModel(),
+				exports: [
+					exportRow({ status: "running", channelsDone: 1, completedAt: null, expiresAt: null }),
+				],
+			}),
+			Scene.expect(Scene.role("button", { name: "Export data" })).toBeDisabled(),
+			Scene.expect(Scene.role("progressbar", { name: "Export progress" })).toExist(),
+			Scene.expect(Scene.role("button", { name: "Download" })).toBeAbsent(),
+		)
+	})
+
+	test("a ready export downloads through a signed link", () => {
+		Scene.scene(
+			pageScene(update, view, owner),
+			Scene.given({ ...initialModel(), exports: [exportRow()] }),
+			Scene.click(Scene.role("button", { name: "Download" })),
+			Scene.Command.expectExact(DownloadOrganizationExport({ organizationId, exportId })),
+			Scene.Command.resolve(
+				DownloadOrganizationExport,
+				Message.FailedDownloadExport({ reason: "Expired" }),
+			),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: errorToast(
+						"Export expired",
+						"Exports can be downloaded for 7 days. Start a new one.",
+					),
+				}),
+			),
+		)
+	})
+
+	test("members don't see the card", () => {
+		const member = makeShared({ member: memberWithRole("member") })
+		Scene.scene(
+			pageScene(update, view, member),
+			Scene.given(initialModel(member)),
+			Scene.expect(Scene.role("button", { name: "Export data" })).toBeAbsent(),
 		)
 	})
 })

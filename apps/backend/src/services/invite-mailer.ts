@@ -7,13 +7,17 @@ import { Config, Context, Effect, Layer, Schema } from "effect"
  */
 
 /**
- * The domain invitations are sent from. It is onboarded to Cloudflare Email Sending as a subdomain
- * of the hazel.sh zone (DKIM, SPF and return-path records live on the zone). That is done once in
- * the dashboard, not by the stack: the deploy token has no Email Sending permission. A sender on a
- * domain that is not onboarded can only reach verified addresses ("destination address is not a
- * verified address").
+ * The domain invitations are sent from: `INVITE_EMAIL_DOMAIN` (the stack sets `mail.<zone>`), else
+ * Hazel's. It is onboarded to Cloudflare Email Sending as a subdomain of the install's zone (DKIM,
+ * SPF and return-path records live on the zone). That is done once in the dashboard, not by the
+ * stack: the deploy token has no Email Sending permission. A sender on a domain that is not
+ * onboarded can only reach verified addresses ("destination address is not a verified address").
  */
-export const INVITE_EMAIL_DOMAIN = "mail.hazel.sh"
+export const DEFAULT_INVITE_EMAIL_DOMAIN = "mail.hazel.sh"
+
+export const InviteEmailDomainConfig = Config.String("INVITE_EMAIL_DOMAIN").pipe(
+	Config.withDefault(DEFAULT_INVITE_EMAIL_DOMAIN),
+)
 
 export interface InviteEmail {
 	readonly to: string
@@ -78,7 +82,7 @@ export class InviteMailer extends Context.Service<
 			InviteMailer,
 			Effect.gen(function* () {
 				const from = yield* Config.String("INVITE_EMAIL_FROM").pipe(
-					Config.withDefault(`invites@${INVITE_EMAIL_DOMAIN}`),
+					Config.withDefault(`invites@${yield* InviteEmailDomainConfig}`),
 				)
 				return {
 					send: Effect.fn("InviteMailer.send")(function* (invite: InviteEmail) {

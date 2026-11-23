@@ -17,6 +17,8 @@ export {
 	providerIssuers,
 } from "./identities.ts"
 export {
+	type AuthProviders,
+	authProviders,
 	Claims,
 	desktopClient,
 	nativeClient,
@@ -25,7 +27,23 @@ export {
 	nativeHeaders,
 	nativeSession,
 	Registration,
+	SignInProvider,
 } from "./contract.ts"
+export { enabledProviders, makeProvidersRoute } from "./providers.ts"
+export {
+	domainRestrictionMessage,
+	emailDomain,
+	type InstanceAccess,
+	InstanceAccessConfig,
+	isEmailDomainAllowed,
+	isInstanceAdmin,
+	ORG_CREATION_REFUSED_MESSAGE,
+	type OrgCreation,
+	parseAdminEmails,
+	parseEmailDomains,
+	parseInstanceAccess,
+	parseOrgCreation,
+} from "./instance-access.ts"
 export { cleanupDesktopLogins, makeDesktopLoginRoutes } from "./desktop-login.ts"
 export {
 	type DevSignIn,
@@ -38,9 +56,11 @@ export {
 } from "./dev-sign-in.ts"
 export {
 	CryptoLive,
+	devSignInGitHubClient,
 	type HazelAuthConfig,
 	type Keyring,
 	makeHazelAuthHttp,
 	makeHazelAuthLive,
+	type OAuthClient,
 	sessionCookieName,
 } from "./server.ts"

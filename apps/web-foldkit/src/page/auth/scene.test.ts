@@ -9,14 +9,17 @@ import { Message as RegisterMessage } from "./register/message"
 import { init as initRegister, update as updateRegister } from "./register/update"
 import { view as registerView } from "./register/view"
 import {
+	ChangeServer,
+	FetchSignInMethods,
 	RetireBrowserSignIn,
 	StartBrowserSignIn,
 	StartOAuthSignIn,
 	StartPasskeySignIn,
+	UseDefaultServer,
 } from "./sign-in/command"
 import { Message as SignInMessage } from "./sign-in/message"
 import { Submission } from "./sign-in/model"
-import { init as initSignIn, update as updateSignIn } from "./sign-in/update"
+import { init as initSignIn, initWith as initSignInWith, update as updateSignIn } from "./sign-in/update"
 import { view as signInView } from "./sign-in/view"
 
 /** Sign-in starts OAuth or a passkey with the route's redirect; registration submits a name. */
@@ -25,8 +28,20 @@ const signedOut = makeShared({ auth: "SignedOut", currentUser: null, organizatio
 const github = Scene.role("button", { name: "Continue with GitHub" })
 const passkey = Scene.role("button", { name: "Sign in with a passkey" })
 
-const signIn = (redirectUrl: Option.Option<string>) =>
-	initSignIn(AppRoute.SignIn.make({ redirectUrl, error: Option.none() })).model
+const google = Scene.role("button", { name: "Continue with Google" })
+
+type Providers = ReadonlyArray<"github" | "google">
+
+/** Sign-in once the install has said which methods it offers (both providers by default). */
+const signIn = (
+	redirectUrl: Option.Option<string>,
+	providers: Providers = ["github", "google"],
+	passkeys = true,
+) =>
+	updateSignIn(
+		initSignIn(AppRoute.SignIn.make({ redirectUrl, error: Option.none() })).model,
+		SignInMessage.SucceededFetchSignInMethods({ providers, passkeys }),
+	).model
 
 describe("sign in", () => {
 	test("a provider starts OAuth with the route's redirect, and disables the other choices", () => {
@@ -78,6 +93,74 @@ describe("sign in", () => {
 			),
 		)
 		expect(landed("<script>").submission).toEqual(Submission.Failed({ reason: "Unexpected" }))
+	})
+
+	test("asks the install for its methods, and shows none of them until it answers", () => {
+		const loading = initSignIn(AppRoute.SignIn.make({ redirectUrl: Option.none(), error: Option.none() }))
+		expect(loading.commands?.map((command) => command.name)).toEqual([FetchSignInMethods.name])
+		Scene.scene(
+			pageScene(updateSignIn, signInView, signedOut),
+			Scene.given(loading.model),
+			Scene.expect(Scene.label("Loading sign-in options")).toExist(),
+			Scene.expect(github).toBeAbsent(),
+			Scene.expect(google).toBeAbsent(),
+			Scene.expect(passkey).toBeAbsent(),
+		)
+	})
+
+	test("a Google-only install offers Google and passkeys, and names only Google", () => {
+		Scene.scene(
+			pageScene(updateSignIn, signInView, signedOut),
+			Scene.given(signIn(Option.none(), ["google"])),
+			Scene.expect(github).toBeAbsent(),
+			Scene.click(google),
+			Scene.Command.expectExact(StartOAuthSignIn({ provider: "google", returnTo: null })),
+			Scene.Command.resolve(StartOAuthSignIn, SignInMessage.FailedSignIn({ reason: "Cancelled" })),
+			Scene.click(passkey),
+			Scene.Command.resolve(
+				StartPasskeySignIn,
+				SignInMessage.FailedSignIn({ reason: "PasskeyUnsupported" }),
+			),
+			Scene.expect(Scene.role("alert")).toHaveText(
+				"This browser can't use passkeys. Continue with Google instead.",
+			),
+		)
+	})
+
+	test("a GitHub-only install offers GitHub alone", () => {
+		Scene.scene(
+			pageScene(updateSignIn, signInView, signedOut),
+			Scene.given(signIn(Option.none(), ["github"])),
+			Scene.expect(github).toExist(),
+			Scene.expect(google).toBeAbsent(),
+			Scene.expect(passkey).toExist(),
+		)
+	})
+
+	test("when the install can't answer, every method is offered", () => {
+		const failed = updateSignIn(
+			initSignIn(AppRoute.SignIn.make({ redirectUrl: Option.none(), error: Option.none() })).model,
+			SignInMessage.FailedFetchSignInMethods(),
+		).model
+		Scene.scene(
+			pageScene(updateSignIn, signInView, signedOut),
+			Scene.given(failed),
+			Scene.expect(github).toExist(),
+			Scene.expect(google).toExist(),
+			Scene.expect(passkey).toExist(),
+		)
+	})
+
+	test("/sign-up names only the offered providers", () => {
+		const signUp = updateSignIn(
+			initSignIn(AppRoute.SignUp.make({ redirectUrl: Option.none() })).model,
+			SignInMessage.SucceededFetchSignInMethods({ providers: ["google"], passkeys: true }),
+		).model
+		Scene.scene(
+			pageScene(updateSignIn, signInView, signedOut),
+			Scene.given(signUp),
+			Scene.expect(Scene.text("Sign up with Google. It takes a few seconds.")).toExist(),
+		)
 	})
 
 	test("/sign-up offers the same choices and links back to sign-in", () => {
@@ -168,5 +251,85 @@ describe("desktop sign-in", () => {
 			_tag: "Pending",
 			attempt: "browser",
 		})
+	})
+})
+
+describe("native sign-in: another install", () => {
+	const onHazel = { label: "hazel.sh", isDefault: true, form: null }
+	const onAcme = { label: "chat.acme.com", isDefault: false, form: null }
+	const nativeSignIn = (server: typeof onHazel) =>
+		initSignInWith(AppRoute.SignIn.make({ redirectUrl: Option.none(), error: Option.none() }), server)
+			.model
+	const change = Scene.role("button", { name: "Change from hazel.sh" })
+	const address = Scene.label("Web address")
+	const submit = Scene.role("button", { name: "Continue" })
+
+	test("the web never offers it", () => {
+		Scene.scene(
+			pageScene(updateSignIn, signInView, signedOut),
+			Scene.given(signIn(Option.none())),
+			Scene.expect(Scene.text("Signing in to")).toBeAbsent(),
+		)
+	})
+
+	test("Change opens the form; an address is resolved and the app moves to it", () => {
+		Scene.scene(
+			pageScene(updateSignIn, signInView, signedOut),
+			Scene.given(nativeSignIn(onHazel)),
+			Scene.expect(Scene.role("button", { name: "Sign in with your browser" })).toExist(),
+			Scene.click(change),
+			Scene.expect(Scene.role("heading", { name: "Sign in to another Hazel" })).toExist(),
+			// Hazel cloud is already the install: nothing to reset to.
+			Scene.expect(Scene.role("button", { name: "Use Hazel cloud" })).toBeAbsent(),
+			Scene.type(address, "chat.acme.com"),
+			Scene.click(submit),
+			Scene.Command.expectExact(ChangeServer({ address: "chat.acme.com" })),
+			Scene.expect(Scene.role("button", { name: "Connecting..." })).toBeDisabled(),
+			Scene.Command.resolve(ChangeServer, SignInMessage.LeftForServer()),
+		)
+	})
+
+	test("an empty address is refused without a request; a failed one says why and can be retried", () => {
+		Scene.scene(
+			pageScene(updateSignIn, signInView, signedOut),
+			Scene.given(nativeSignIn(onHazel)),
+			Scene.click(change),
+			Scene.click(submit),
+			Scene.Command.expectNone(),
+			Scene.expect(Scene.text("Enter your workspace's web address")).toExist(),
+			Scene.type(address, "http://chat.acme.com"),
+			Scene.click(submit),
+			Scene.Command.resolve(ChangeServer, SignInMessage.FailedServerChange({ problem: "Insecure" })),
+			Scene.expect(Scene.text("The address must use https")).toExist(),
+			Scene.expect(submit).toBeEnabled(),
+		)
+	})
+
+	test("Cancel closes the form and keeps the install", () => {
+		Scene.scene(
+			pageScene(updateSignIn, signInView, signedOut),
+			Scene.given(nativeSignIn(onHazel)),
+			Scene.click(change),
+			Scene.click(Scene.role("button", { name: "Cancel" })),
+			Scene.expect(Scene.text("hazel.sh")).toExist(),
+			Scene.expect(Scene.role("button", { name: "Sign in with your browser" })).toExist(),
+		)
+	})
+
+	test("on a customer's install, Use Hazel cloud goes back to the default", () => {
+		Scene.scene(
+			pageScene(updateSignIn, signInView, signedOut),
+			Scene.given(nativeSignIn(onAcme)),
+			Scene.expect(Scene.text("chat.acme.com")).toExist(),
+			Scene.click(Scene.role("button", { name: "Change from chat.acme.com" })),
+			Scene.click(Scene.role("button", { name: "Use Hazel cloud" })),
+			Scene.Command.expectExact(UseDefaultServer()),
+			Scene.Command.resolve(UseDefaultServer, SignInMessage.LeftForServer()),
+		)
+	})
+
+	test("the install can't change while a browser sign-in waits", () => {
+		const waiting = updateSignIn(nativeSignIn(onHazel), SignInMessage.ClickedBrowserSignIn()).model
+		expect(updateSignIn(waiting, SignInMessage.ClickedChangeServer()).model.server?.form).toBeNull()
 	})
 })
