@@ -86,6 +86,35 @@ const PEOPLE: ReadonlyArray<readonly [string, string, string, number | null, num
 	["Victor Alvarez", "Controls Engineer", "member", null, 0],
 ]
 
+const otherAccount = (
+	account: Customers.Account,
+	role: string,
+	seenDays: number | null,
+): Customers.ContactOtherAccount => ({
+	accountId: account.id,
+	name: account.name,
+	logoUrl: account.logoUrl,
+	environment: account.environment,
+	lifecycleStage: account.lifecycleStage,
+	role,
+	lastSeenAt: seenDays === null ? null : ago(seenDays),
+})
+
+/** By `PEOPLE` index: one other customer, several, and a linked environment. */
+const OTHER_ACCOUNTS = new Map<number, ReadonlyArray<Customers.ContactOtherAccount>>([
+	[0, [otherAccount(ACCOUNTS_BY_KEY.northwind, "Admin", 2)]],
+	[
+		1,
+		[
+			otherAccount(ACCOUNTS_BY_KEY.kestrel, "Admin", 1),
+			otherAccount(ACCOUNTS_BY_KEY.halcyon, "Member", 9),
+			otherAccount(ACCOUNTS_BY_KEY.brightfield, "Member", 44),
+			otherAccount(ACCOUNTS_BY_KEY.oakridge, "Member", null),
+		],
+	],
+	[3, [otherAccount(ACCOUNTS_BY_KEY.acmeEu, "Member", 6)]],
+])
+
 const CONTACTS: ReadonlyArray<Customers.ContactRow> = PEOPLE.map(
 	([name, title, role, seenDays, signIns], index) => {
 		const email = `${name.split(" ")[0].toLowerCase()}@acmerobotics.io`
@@ -116,6 +145,7 @@ const CONTACTS: ReadonlyArray<Customers.ContactRow> = PEOPLE.map(
 				day: dayOf(29 - day),
 				value: seenDays !== null && 29 - day >= seenDays ? (day * 7 + index * 3) % 9 : 0,
 			})),
+			otherAccounts: OTHER_ACCOUNTS.get(index) ?? [],
 		}
 	},
 )
@@ -447,7 +477,14 @@ const answer = (command: AnyCommand, current: typeof State.Type): Message | null
 		case "FetchCustomerContacts":
 			return Message.SucceededFetchContacts({
 				accountId: accountId(),
-				page: page(CONTACTS, args.cursor, 50),
+				page: page(
+					CONTACTS.map((row) => ({
+						...row,
+						otherAccounts: row.otherAccounts.filter((other) => other.accountId !== viewed().id),
+					})),
+					args.cursor,
+					50,
+				),
 			})
 		case "FetchCustomerInvoices":
 			return Message.SucceededFetchInvoices({

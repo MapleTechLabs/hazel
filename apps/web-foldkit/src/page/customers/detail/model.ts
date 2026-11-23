@@ -182,6 +182,9 @@ export const Model = Schema.Struct({
 	/** The person in "People in chat" whose menu shows (each row has its own button). */
 	activeChatPersonId: Schema.NullOr(UserId),
 	chatPersonMenu: Menu.Model,
+	/** The user whose other customers show (each row has its own trigger). */
+	otherAccountsContactId: Schema.NullOr(CustomerContactId),
+	otherAccountsPopover: Popover.Model,
 	/** The customer's open suggested channel links (`customers.channel.suggestions`, not synced). */
 	suggestions: SuggestionList,
 	/** The customer they were asked for; asked again when it changes. */
@@ -241,6 +244,7 @@ export const SIGNAL_MORE_MENU_ID = "customer-signal-more"
 export const TAG_POPOVER_ID = "customer-tag"
 export const CHANNEL_POPOVER_ID = "customer-channel"
 export const CHAT_PERSON_MENU_ID = "customer-chat-person"
+export const OTHER_ACCOUNTS_POPOVER_ID = "customer-user-other-accounts"
 export const FLAG_POPOVER_ID = "customer-feature-flags"
 export const RAW_MODAL_ID = "customer-raw"
 export const ENVIRONMENT_MENU_ID = "customer-environments"

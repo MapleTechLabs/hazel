@@ -201,6 +201,10 @@ export const Message = defineMessageUnion({
 	SucceededSetChatAuthorSide: {},
 	FailedSetChatAuthorSide: { reason: ActionFailure },
 
+	PressedOtherAccounts: { contactId: CustomerContactId },
+	GotOtherAccountsPopoverMessage: { message: Popover.Message },
+	PressedOtherAccount: {},
+
 	UpdatedCreatedFeatureFlags: { keys: Schema.Array(Schema.String) },
 	GotFlagPopoverMessage: { message: Popover.Message },
 	ToggledFlagSelection: { key: Schema.String, isSelected: Schema.Boolean },
