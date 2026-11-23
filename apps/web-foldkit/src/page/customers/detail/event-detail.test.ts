@@ -13,6 +13,7 @@ const context = {
 	notes: [NOTE],
 	nameOf: (id: UserId) => (id === USER ? "Sam" : null),
 	nowMs: Date.UTC(2026, 10, 23),
+	currency: "eur",
 }
 
 describe("eventDetail", () => {
@@ -65,6 +66,16 @@ describe("eventDetail", () => {
 				context,
 			).summary,
 		).toBe("$2,150.00 · Card expired")
+	})
+
+	it("shows subscription MRR in the account's currency", () => {
+		expect(eventDetail(event("subscription.started", { mrrMinor: 9900 }), context).summary).toBe("€99/mo")
+		expect(
+			eventDetail(
+				event("subscription.plan_changed", { fromMrrMinor: 9900, toMrrMinor: 19900 }),
+				context,
+			).summary,
+		).toBe("€99/mo → €199/mo")
 	})
 
 	it("shows nothing for data with no words in it", () => {

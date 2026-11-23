@@ -15,6 +15,8 @@ interface DetailContext {
 	readonly notes: ReadonlyArray<NoteRow> | null
 	readonly nameOf: (userId: UserId) => string | null
 	readonly nowMs: number
+	/** The account's: subscription events carry no currency of their own. */
+	readonly currency: string
 }
 
 const OUTCOME_SUMMARY = new Map<unknown, string>([
@@ -85,14 +87,14 @@ const summaryOf = (event: Customers.Event, context: DetailContext): string | nul
 				.join(" · ")
 		case "subscription.started": {
 			const mrr = count(data.mrrMinor)
-			return mrr === null || mrr === 0 ? null : `${formatMoney(mrr)}/mo`
+			return mrr === null || mrr === 0 ? null : `${formatMoney(mrr, context.currency)}/mo`
 		}
 		case "subscription.plan_changed": {
 			const from = count(data.fromMrrMinor)
 			const to = count(data.toMrrMinor)
 			return from === null || to === null || from === to
 				? null
-				: `${formatMoney(from)}/mo → ${formatMoney(to)}/mo`
+				: `${formatMoney(from, context.currency)}/mo → ${formatMoney(to, context.currency)}/mo`
 		}
 		case "health.status_changed": {
 			const from = count(data.fromScore)

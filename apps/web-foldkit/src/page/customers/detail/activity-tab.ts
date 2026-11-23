@@ -55,6 +55,7 @@ const eventRow = (
 		notes,
 		nameOf: (userId) => memberOf(context, userId)?.name ?? null,
 		nowMs: context.nowMs,
+		currency: context.account.currency,
 	})
 	const byline = [actor ?? SOURCE_LABEL[event.provider], ...(summary === null ? [] : [summary])]
 	return h.li(
