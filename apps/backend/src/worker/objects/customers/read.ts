@@ -559,21 +559,18 @@ const otherAccountsOf = (contacts: ReadonlyArray<schema.CustomerContact>) =>
 							.select("id", "email")
 							.where(($) => [$.deletedAt.isNull(), inList(SQLite.lower($.email), emails)]),
 					)
-		const idsByIdentity = new Map<string, Array<string>>()
-		const addIdentity = (identity: string, id: string) =>
+		const idsByIdentity = new Map<string, Array<CustomerContactId>>()
+		const addIdentity = (identity: string, id: CustomerContactId) =>
 			idsByIdentity.set(identity, [...(idsByIdentity.get(identity) ?? []), id])
-		for (const ref of sharedRefs) addIdentity(refIdentity(ref), ref.entityId)
+		for (const ref of sharedRefs) addIdentity(refIdentity(ref), ref.entityId as CustomerContactId)
 		for (const row of sameEmail) if (row.email !== null) addIdentity(emailIdentity(row.email), row.id)
 		const candidateIds = [...new Set([...idsByIdentity.values()].flat())]
-		if (candidateIds.length === 0) return new Map<string, ReadonlyArray<ContactOtherAccount>>()
+		if (candidateIds.length === 0) return new Map<CustomerContactId, ReadonlyArray<ContactOtherAccount>>()
 		// Most recently seen first (SQLite sorts nulls last here), so the first per customer is kept.
 		const candidates = yield* db.run(
 			SQLite.from(schema.customerContactsTable)
 				.select("id", "accountId", "role", "lastSeenAt")
-				.where(($) => [
-					$.deletedAt.isNull(),
-					inList($.id, candidateIds as ReadonlyArray<CustomerContactId>),
-				])
+				.where(($) => [$.deletedAt.isNull(), inList($.id, candidateIds)])
 				.orderBy(($) => [
 					[$.lastSeenAt, "desc"],
 					[$.id, "asc"],
@@ -588,7 +585,7 @@ const otherAccountsOf = (contacts: ReadonlyArray<schema.CustomerContact>) =>
 				]),
 		)
 		const accountById = new Map(accounts.map((account) => [account.id, account]))
-		return new Map(
+		return new Map<CustomerContactId, ReadonlyArray<ContactOtherAccount>>(
 			contacts.map((contact) => {
 				const identities = [
 					...ownRefs.filter((ref) => ref.entityId === contact.id).map(refIdentity),
@@ -617,7 +614,7 @@ const otherAccountsOf = (contacts: ReadonlyArray<schema.CustomerContact>) =>
 						lastSeenAt: candidate.lastSeenAt,
 					})
 				}
-				return [contact.id as string, [...others.values()] as ReadonlyArray<ContactOtherAccount>]
+				return [contact.id, [...others.values()]]
 			}),
 		)
 	})
