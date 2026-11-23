@@ -430,7 +430,7 @@ export const FetchCustomerSuggestions = Command.define("FetchCustomerSuggestions
 		),
 })
 
-/** Turn flags on (all of `keys`) or off for this customer, in Clerk. */
+/** Turn flags on (all of `keys`) or off for this customer, in its source. */
 export const SetCustomerFeatureFlags = Command.define("SetCustomerFeatureFlags", {
 	args: { ...target, keys: Schema.Array(Schema.String), enabled: Schema.Boolean },
 	messages: [Message.SucceededFeatureFlags, Message.FailedFeatureFlags],
@@ -532,7 +532,7 @@ export const LoadNoteDrafts = Command.define("LoadNoteDrafts", {
 // IMPERSONATION
 
 /**
- * A one-time sign-in link as the contact's user (Clerk, valid for a minute). `UnauthorizedError`
+ * A one-time sign-in link as the contact's user (valid for a minute). `UnauthorizedError`
  * is caught before `catchCommon`: here it means no grant, not a lost session.
  */
 export const StartCustomerImpersonation = Command.define("StartCustomerImpersonation", {

@@ -1,6 +1,7 @@
 import type { UserId } from "@hazel/schema"
 import type { Html } from "foldkit/html"
 import { formatDate, formatRelative } from "../../../../customers/format"
+import { impersonationSource } from "../../../../customers/providers"
 import type { MemberRow } from "../../../../customers/queries"
 import { menuAvatar, personAvatar } from "../../../../customers/ui/identity"
 import { IconPlus } from "../../../../icons"
@@ -12,10 +13,12 @@ import { Message } from "./message"
 import { grantableMembers, type Model } from "./model"
 import { card, cardHeader, type H } from "./parts"
 
-/** Clerk's impersonation section (admins): who may sign in as customers' users, and who did. */
+/** The impersonation section (admins): who may sign in as customers' users, and who did. */
 
-const EXPLANATION =
-	"Members added here can sign in as a customer's users from its Users tab; each sign-in is logged. Turn it on in the Clerk dashboard (Settings → User impersonation). Clerk allows 5 impersonations a month without the Administration add-on."
+const EXPLANATION = [
+	"Members added here can sign in as a customer's users from its Users tab; each sign-in is logged.",
+	...(impersonationSource.impersonationNote === undefined ? [] : [impersonationSource.impersonationNote]),
+].join(" ")
 
 const toMenuMessage = (message: Menu.Message) => Message.GotImpersonatorMenuMessage({ message })
 

@@ -3,7 +3,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { getBrandfetchIcon } from "~/lib/integrations/__data"
 import { IconUser } from "../../icons"
-import { safeSourceUrl, type SourceText } from "../providers"
+import { providerOf, safeSourceUrl, sourceLabel } from "../providers"
 
 /**
  * Who and where (Foundations › Source Chips, Avatars And Company Logos): data source marks and
@@ -12,26 +12,11 @@ import { safeSourceUrl, type SourceText } from "../providers"
 
 // SOURCES
 
-export const SOURCE_LABEL: SourceText = {
-	clerk: "Clerk",
-	stripe: "Stripe",
-	autumn: "Autumn",
-	maple: "Maple",
-	hazel: "Hazel",
-}
-
-const SOURCE_DOMAIN: SourceText = {
-	clerk: "clerk.com",
-	stripe: "stripe.com",
-	autumn: "useautumn.com",
-	maple: "maple.dev",
-}
-
 /** The brand mark's image: Brandfetch for providers, Hazel's own icon for Hazel. */
 export const sourceLogoSrc = (source: CustomerSource): string =>
 	source === "hazel"
 		? "/icon.svg"
-		: getBrandfetchIcon(SOURCE_DOMAIN[source], { theme: "light", type: "icon", size: 64 })
+		: getBrandfetchIcon(providerOf(source).domain, { theme: "light", type: "icon", size: 64 })
 
 const logoImage = <M>(h: HtmlBuilder<M>, source: CustomerSource, className: string): Html =>
 	h.img([
@@ -64,7 +49,7 @@ export const sourceMark = <M>(
 					options.className,
 				),
 			),
-			h.Title(SOURCE_LABEL[source]),
+			h.Title(sourceLabel(source)),
 		],
 		[
 			logoImage(
@@ -78,7 +63,7 @@ export const sourceMark = <M>(
 const chipClassName =
 	"inline-flex h-7 items-center gap-1.5 rounded-md border border-border pr-2 pl-1.5 font-medium text-fg text-xs"
 
-/** `[mark] Stripe`. */
+/** `[mark] Name`. */
 export const sourceChip = <M>(
 	h: HtmlBuilder<M>,
 	source: CustomerSource,
@@ -86,11 +71,11 @@ export const sourceChip = <M>(
 ): Html =>
 	h.span(
 		[h.Class(twMerge(chipClassName, options.className))],
-		[logoImage(h, source, "size-4"), options.label ?? SOURCE_LABEL[source]],
+		[logoImage(h, source, "size-4"), options.label ?? sourceLabel(source)],
 	)
 
 /**
- * `[mark] Stripe` as a link: opens the provider's record in a new tab (the accessible name says
+ * `[mark] Name` as a link: opens the provider's record in a new tab (the accessible name says
  * so); a plain chip when `href` is not on the provider's hosts (`safeSourceUrl`).
  */
 export const sourceLinkChip = <M>(
@@ -105,8 +90,8 @@ export const sourceLinkChip = <M>(
 			h.Href(href),
 			h.Target("_blank"),
 			h.Rel("noreferrer"),
-			h.AriaLabel(`${options.label} in ${SOURCE_LABEL[options.source]}`),
-			h.Title(`Open in ${SOURCE_LABEL[options.source]}`),
+			h.AriaLabel(`${options.label} in ${sourceLabel(options.source)}`),
+			h.Title(`Open in ${sourceLabel(options.source)}`),
 			h.Class(
 				twMerge(
 					chipClassName,

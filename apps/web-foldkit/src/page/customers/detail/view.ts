@@ -11,13 +11,7 @@ import { accountLabelOf, environmentCounts, environmentsHintOf } from "../../../
 import { environmentBadge, healthBadge, stageBadge } from "../../../customers/ui/badges"
 import { viewTabs } from "../../../customers/ui/filter-bar"
 import { linkClass } from "../../../customers/ui/surface"
-import {
-	companyLogo,
-	menuAvatar,
-	personLabel,
-	SOURCE_LABEL,
-	sourceLogo,
-} from "../../../customers/ui/identity"
+import { companyLogo, menuAvatar, personLabel, sourceLogo } from "../../../customers/ui/identity"
 import {
 	IconArrowPath,
 	IconChevronDown,
@@ -38,7 +32,7 @@ import {
 } from "../../../customers/channels"
 import { shownSuggestions, suggestionRow } from "../../../customers/suggestions"
 import { featureFlagKeysOf, hasFlag } from "../../../customers/feature-flags"
-import { safeSourceUrl, type SourceText } from "../../../customers/providers"
+import { providerOf, safeSourceUrl, sourceLabel } from "../../../customers/providers"
 import { attentionMuteLabel, isAttentionMuted } from "../../../customers/queries"
 import { isMuteKey, MUTE_LABEL } from "../../../customers/ui/menus"
 import { AppRoute, hrefOf } from "../../../route"
@@ -111,11 +105,10 @@ const ACTION_REASON = new Map<ActionKey, string>([
 	["archive", "Not available yet."],
 ])
 
-const LINK_LABEL: SourceText = {
-	clerk: "Clerk organization",
-	stripe: "Stripe customer",
-	autumn: "Autumn customer",
-	maple: "Maple group",
+/** A source's account record, as it calls it. */
+const linkLabel = (provider: Customers.CustomerProvider): string => {
+	const { name, accountNoun } = providerOf(provider)
+	return `${name} ${accountNoun}`
 }
 
 const MATCH_LABEL = {
@@ -169,7 +162,7 @@ const recordLink = (
 						h.Href(href),
 						h.Attribute("target", "_blank"),
 						h.Attribute("rel", "noreferrer"),
-						h.AriaLabel(`Open in ${SOURCE_LABEL[ref.provider]}`),
+						h.AriaLabel(`Open in ${sourceLabel(ref.provider)}`),
 						h.Class(twMerge(linkClass, "text-xs")),
 					],
 					["Open"],
@@ -901,7 +894,7 @@ const flagPicker = (
 		toParentMessage: (message) => Message.GotFlagPopoverMessage({ message }),
 	})
 
-/** The Clerk feature flags this customer has on, and (admins) adding and removing them. */
+/** The feature flags this customer has on, and (admins) adding and removing them. */
 const featureFlagsSection = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
 	const on = Object.keys(context.account.featureFlags)
 		.filter((key) => hasFlag(context.account, key))
@@ -993,7 +986,7 @@ const linkedRecords = (h: HtmlBuilder<Message>, model: Model, context: Context):
 				],
 				[
 					sourceLogo(h, ref.provider),
-					h.span([h.Class("shrink-0 text-fg")], [LINK_LABEL[ref.provider]]),
+					h.span([h.Class("shrink-0 text-fg")], [linkLabel(ref.provider)]),
 					h.span([h.Class("min-w-0 flex-1 truncate text-muted-fg")], [ref.name ?? ref.externalId]),
 					...recordLink(h, ref),
 				],
@@ -1006,7 +999,7 @@ const linkedRecords = (h: HtmlBuilder<Message>, model: Model, context: Context):
 					sourceLogo(h, provider),
 					h.span(
 						[h.Class("min-w-0 flex-1 truncate text-muted-fg")],
-						[`No ${SOURCE_LABEL[provider]} record`],
+						[`No ${sourceLabel(provider)} record`],
 					),
 					h.a(
 						[
@@ -1063,7 +1056,7 @@ const attributesSection = (h: HtmlBuilder<Message>, context: Context): ReadonlyA
 									: [
 											h.span(
 												[h.Class("text-muted-fg text-xs")],
-												[SOURCE_LABEL[fieldSources[key]]],
+												[sourceLabel(fieldSources[key])],
 											),
 										]),
 							],
@@ -1086,7 +1079,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 		const source = fieldSources[field]
 		return source === undefined
 			? []
-			: [h.span([h.Class("ml-auto text-muted-fg text-xs")], [SOURCE_LABEL[source]])]
+			: [h.span([h.Class("ml-auto text-muted-fg text-xs")], [sourceLabel(source)])]
 	}
 	const subscription = renewingSubscriptionOf(detail?.subscriptions ?? [])
 	const hasFlags = Object.keys(account.featureFlags).some((key) => hasFlag(account, key))

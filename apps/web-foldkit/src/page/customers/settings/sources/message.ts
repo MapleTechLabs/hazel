@@ -89,7 +89,7 @@ export const Message = defineMessageUnion({
 	SucceededDisconnect: { provider: Customers.CustomerProvider },
 	FailedDisconnect: { reason: DisconnectFailure },
 
-	// Provider settings (Maple's own fields beyond the descriptor's)
+	// Provider settings (the `settings` fields of the integration's presentation)
 	ChangedActivityEventInput: { value: Schema.String },
 	AddedActivityEvent: {},
 	RemovedActivityEvent: { event: Schema.String },
@@ -97,7 +97,7 @@ export const Message = defineMessageUnion({
 	RemovedMetricMapping: { index: Schema.Int },
 	ChangedMetricMapping: {
 		index: Schema.Int,
-		field: Schema.Literals(["event", "metricKey"]),
+		field: Schema.String,
 		value: Schema.String,
 	},
 	ClickedLookback: { days: Schema.Int },
@@ -112,7 +112,7 @@ export const Message = defineMessageUnion({
 	SucceededSaveUnit: {},
 	FailedSaveUnit: { reason: UnitFailure },
 
-	// Impersonation (Clerk)
+	// Impersonation
 	UpdatedImpersonators: { impersonators: Schema.Array(ImpersonatorRow) },
 	UpdatedImpersonations: { impersonations: Schema.Array(ImpersonationRow) },
 	GotImpersonatorMenuMessage: { message: Menu.Message },

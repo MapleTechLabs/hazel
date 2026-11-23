@@ -1,3 +1,4 @@
+import { integrationOf } from "@hazel/customer-integrations"
 import * as Customers from "@hazel/domain/customers"
 import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
 import { CustomerAuthorInfo, ChatParticipantRow } from "../../../customers/chat-authors"
@@ -369,9 +370,10 @@ export const visibleContacts = (model: Model): ReadonlyArray<Customers.ContactRo
 	)
 }
 
-/** Impersonate shows for a granted user while Clerk (the provider that can) is connected. */
+/** Impersonate shows for a granted user while a source that can impersonate is connected. */
 export const canImpersonate = (model: Model): boolean =>
-	model.isImpersonator && model.connectedProviders.includes("clerk")
+	model.isImpersonator &&
+	model.connectedProviders.some((provider) => integrationOf(provider)?.capabilities.impersonation === true)
 
 /** The loaded contacts per status. */
 export const contactCounts = (model: Model): Readonly<Record<ContactFilter, number>> => {

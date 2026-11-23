@@ -1,3 +1,4 @@
+import { billingProviders, invoiceProviders } from "@hazel/customer-integrations"
 import type * as Customers from "@hazel/domain/customers"
 import { Option } from "effect"
 import * as AsyncData from "foldkit/asyncData"
@@ -11,7 +12,7 @@ import {
 	formatMonthLong,
 	formatMonthShort,
 } from "../../../customers/format"
-import { safeSourceUrl } from "../../../customers/providers"
+import { providerOf, safeSourceUrl, sourcesLabel } from "../../../customers/providers"
 import { stageBadge } from "../../../customers/ui/badges"
 import { dataTable } from "../../../customers/ui/data-table"
 import { linkClass } from "../../../customers/ui/surface"
@@ -65,9 +66,16 @@ const banner = (h: HtmlBuilder<Message>, context: Context, detail: Customers.Acc
 		(typeof detail.account.attributes.billingEmail === "string"
 			? detail.account.attributes.billingEmail
 			: null)
-	const stripeUrl =
-		(invoice === null ? null : safeSourceUrl(invoice.provider, invoice.hostedUrl)) ??
-		safeSourceUrl("stripe", detail.refs.find((ref) => ref.provider === "stripe")?.externalUrl ?? null)
+	const recordLink = [
+		...(invoice === null ? [] : [{ provider: invoice.provider, url: invoice.hostedUrl }]),
+		...invoiceProviders.map((provider) => ({
+			provider,
+			url: detail.refs.find((ref) => ref.provider === provider)?.externalUrl ?? null,
+		})),
+	].flatMap(({ provider, url }) => {
+		const href = safeSourceUrl(provider, url)
+		return href === null ? [] : [{ href, label: `Open in ${providerOf(provider).name}` }]
+	})[0]
 	const title =
 		invoice === null
 			? `The subscription is ${issue.subscription?.status.replace("_", " ")}`
@@ -119,7 +127,7 @@ const banner = (h: HtmlBuilder<Message>, context: Context, detail: Customers.Acc
 									[IconCopy(h, icon), "Copy billing email"],
 								),
 							]),
-					...(stripeUrl === null ? [] : [externalLink(h, stripeUrl, "Open in Stripe")]),
+					...(recordLink === undefined ? [] : [externalLink(h, recordLink.href, recordLink.label)]),
 				],
 			),
 		],
@@ -453,7 +461,7 @@ export const billingTab = (h: HtmlBuilder<Message>, model: Model, context: Conte
 						],
 						[
 							stageBadge(h, context.account.lifecycleStage),
-							"No subscription from Stripe or Autumn for this customer.",
+							`No subscription from ${sourcesLabel(billingProviders)} for this customer.`,
 						],
 					),
 				]

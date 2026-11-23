@@ -1,3 +1,4 @@
+import { integrationOf } from "@hazel/customer-integrations"
 import type * as Customers from "@hazel/domain/customers"
 import { Option } from "effect"
 import * as AsyncData from "foldkit/asyncData"
@@ -221,7 +222,12 @@ const usageSection = (h: HtmlBuilder<Message>, model: Model, context: Context): 
 	const metricName = series?.name ?? metric?.name ?? "Active users"
 	// Built-ins read plainly by name ("Daily active users"); a source's metric needs its unit.
 	const unit = metric?.provider == null ? null : metric.unit
-	const isUnitMissing = metric?.provider === "autumn" && unit === null
+	const unitSource =
+		metric?.provider != null &&
+		unit === null &&
+		integrationOf(metric.provider)?.capabilities.meteredLimits === true
+			? metric.provider
+			: null
 	const points = series?.points ?? []
 	const values = points.map((point) => point.value)
 	return h.section(
@@ -253,7 +259,7 @@ const usageSection = (h: HtmlBuilder<Message>, model: Model, context: Context): 
 							],
 							toMessage: (message) => Message.GotMetricMenuMessage({ message }),
 						}),
-						...(isUnitMissing
+						...(unitSource !== null
 							? [
 									h.a(
 										[
@@ -261,7 +267,7 @@ const usageSection = (h: HtmlBuilder<Message>, model: Model, context: Context): 
 												hrefOf(
 													AppRoute.CustomersSourceDetail({
 														orgSlug: context.orgSlug,
-														provider: "autumn",
+														provider: unitSource,
 													}),
 												),
 											),

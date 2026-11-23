@@ -1,4 +1,4 @@
-import { requiredSourcesOf } from "@hazel/customer-integrations"
+import { meteredProviders, requiredSourcesOf } from "@hazel/customer-integrations"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { formatDate } from "../../../../customers/format"
@@ -355,11 +355,13 @@ const isMetricAvailable = (model: Model, metric: MetricRow): boolean =>
 	model.connectedProviders === null ||
 	model.connectedProviders.includes(metric.provider)
 
-/** `near_limit`'s features: the metered (Autumn) metrics; none picked = every limited metric. */
+/** `near_limit`'s features: the metered sources' metrics; none picked = every limited metric. */
 const limitMetrics = (h: H, context: ConditionContext): Html => {
 	const picked = context.form.config.metricKeys
 	const keys = Array.isArray(picked) ? picked : []
-	const metered = context.model.metrics.filter((metric) => metric.provider === "autumn")
+	const metered = context.model.metrics.filter(
+		(metric) => metric.provider !== null && meteredProviders.includes(metric.provider),
+	)
 	return h.div(
 		[h.Class("flex flex-wrap items-center gap-1.5")],
 		[

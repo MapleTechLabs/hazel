@@ -1,6 +1,6 @@
 /**
- * Feature flags (`docs/customers/clerk.md`, "Feature flags"): the boolean keys of each customer's
- * Clerk organization `public_metadata`, shown on the Feature flags settings page and the customer
+ * Feature flags: the boolean keys of each customer's record in the source with the `featureFlags`
+ * capability, shown on the Feature flags settings page and the customer
  * page. A customer has a flag when its key is `true`; a `false` key is off but still lists the flag.
  */
 import type {
@@ -26,7 +26,7 @@ export const featureFlagKeysOf = (
 
 export const hasFlag = (account: AccountRow, key: string): boolean => account.featureFlags[key] === true
 
-/** Why a change failed: the server's own words (what Clerk refused), else a common reason. */
+/** Why a change failed: the server's own words (what the source refused), else a common reason. */
 export const FeatureFlagFailure = Schema.Union([
 	Schema.Struct({ message: Schema.String }),
 	Schema.Struct({ reason: CommonReason }),

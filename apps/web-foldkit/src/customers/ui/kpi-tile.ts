@@ -96,7 +96,7 @@ export type KpiTileOptions = Readonly<{
 	/** Right of the value: a `sparkline(…, { size: "md", area: true })`. */
 	trend?: Html
 	state?: "ready" | "loading" | "empty"
-	/** Empty: the reason and the way out (`Connect Stripe to track revenue`, a link or button). */
+	/** Empty: the reason and the way out (`Connect billing to track revenue`, a link or button). */
 	emptyAction?: Html
 	/** The whole tile links here (the page behind the number); `linkLabel` names it for assistive tech. */
 	href?: string

@@ -3,6 +3,7 @@ import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { distributionBar } from "../../../customers/charts/distribution"
 import { currencySymbol, formatCount, formatMoney, toMajor, toMinor } from "../../../customers/format"
+import { namesLabel, providerOf, usageSources } from "../../../customers/providers"
 import type { AccountRow, MemberRow } from "../../../customers/queries"
 import { countryFlag, countryNameOf, fundingStageLabel } from "../../../customers/company"
 import { HEALTH_FILL, HEALTH_LABEL, STAGE_LABEL } from "../../../customers/ui/badges"
@@ -44,7 +45,7 @@ const FIELD_LABEL = {
 	company_size: "Company size",
 	country: "HQ country",
 	funding: "Funding stage",
-} as const satisfies Record<FilterField, string>
+} satisfies Record<FilterField, string>
 
 const FIELD_KIND = {
 	stage: "Select",
@@ -59,7 +60,7 @@ const FIELD_KIND = {
 	company_size: "Select",
 	country: "Select",
 	funding: "Select",
-} as const satisfies Record<FilterField, string>
+} satisfies Record<FilterField, string>
 
 const FIELD_GROUPS: ReadonlyArray<readonly [string, ReadonlyArray<FilterField>]> = [
 	["Account", ["stage", "plan", "owner", "tag"]],
@@ -76,13 +77,13 @@ const FIELD_DESCRIPTION = {
 	tag: "Tags your team added.",
 	health: "The account's health band from its latest score.",
 	mrr: "Monthly recurring revenue, in your reporting currency.",
-	last_active: "Most recent activity from any contact, from Maple events and Clerk sign-ins.",
+	last_active: `Most recent activity from any contact, from ${namesLabel(usageSources.map((source) => `${providerOf(source).name} ${providerOf(source).activityLabel?.noun}`))}.`,
 	signals: "Whether the account has an open risk signal now.",
 	industry: "The company's industry, from its enriched profile.",
 	company_size: "The company's headcount, from its enriched profile.",
 	country: "Where the company has its headquarters, from its enriched profile.",
 	funding: "The company's latest funding stage, from its enriched profile.",
-} as const satisfies Record<FilterField, string>
+} satisfies Record<FilterField, string>
 
 // CHIPS
 

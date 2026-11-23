@@ -3,7 +3,7 @@ import { Option } from "effect"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { formatCount, formatMoney } from "../../../../customers/format"
-import { providerOf, type SourceText } from "../../../../customers/providers"
+import { providerOf } from "../../../../customers/providers"
 import type { AccountRow } from "../../../../customers/queries"
 import { companyLogo, sourceMark } from "../../../../customers/ui/identity"
 import { kbd } from "../../../../customers/ui/shortcuts"
@@ -41,16 +41,13 @@ import {
 
 // COPY
 
-const ACCOUNT_NOUN: SourceText = {
-	clerk: "organizations",
-	stripe: "customers",
-	autumn: "customers",
-	maple: "groups",
-}
-
-/** What a source calls its records of a kind: Stripe "customers", Maple "groups". */
+/** What a source calls its records of a kind: "customers", "groups". */
 export const nounOf = (provider: CustomerProvider, entityType: UnmatchedEntityType): string =>
-	entityType === "account" ? ACCOUNT_NOUN[provider] : entityType === "contact" ? "users" : `${entityType}s`
+	entityType === "account"
+		? `${providerOf(provider).accountNoun}s`
+		: entityType === "contact"
+			? "users"
+			: `${entityType}s`
 
 const VALUE_SUFFIX = {
 	account: "MRR",
@@ -420,7 +417,7 @@ const moneyTotal = (records: RecordGroup["records"]): string | null => {
 		: [...totals].map(([currency, minor]) => formatMoney(minor, currency ?? undefined)).join(" + ")
 }
 
-/** `Stripe customers · 5 · $1,840 MRR`, `Maple groups · 9 · 6,951 events · 30d`. */
+/** `<Source> customers · 5 · $1,840 MRR`, `<Source> groups · 9 · 6,951 events · 30d`. */
 const groupSummary = (group: RecordGroup): string => {
 	const money = moneyTotal(group.records)
 	const events = group.records.reduce((sum, record) => sum + (record.eventCount30d ?? 0), 0)

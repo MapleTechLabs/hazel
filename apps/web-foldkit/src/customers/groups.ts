@@ -1,7 +1,7 @@
 import type { CustomerAccountId } from "@hazel/schema"
 
 /**
- * Customer groups: a customer with several environments (Maple's US and EU regions) is one account
+ * Customer groups: a customer with several environments (say, a US and an EU region) is one account
  * per environment, the environments pointing at the group's primary (`primaryAccountId`). Each
  * account keeps its own numbers; these helpers only keep a group's accounts together. An account
  * whose primary is not among the live accounts stands alone.

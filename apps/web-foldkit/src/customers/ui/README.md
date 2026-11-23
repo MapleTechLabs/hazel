@@ -61,7 +61,7 @@ string, so a title, a table head or a link reads the same on every page.
 - `personAvatar(h, person | null, { size? })` — `null` = dashed "Unassigned"; `personLabel(h, person | null)`; `avatarStack(h, people, { max? })`.
 - `sourceLogo(h, source)`, `sourceMark(h, source, { size? })` (tile), `sourceChip(h, source)`, `sourceLinkChip(h, { source, label, href })`
   (the chip itself is the link out; no arrow glyph, the accessible name and title say where it goes).
-- `SOURCE_LABEL`, `sourceLogoSrc(source)` (Brandfetch; Hazel uses `/icon.svg`), `initialsOf`, `tintIndex`.
+- `sourceLabel(source)` (`../providers`), `sourceLogoSrc(source)` (Brandfetch; Hazel uses `/icon.svg`), `initialsOf`, `tintIndex`.
 
 ## KPI and evidence — `ui/kpi-tile.ts`, `ui/evidence.ts`
 
