@@ -476,7 +476,14 @@ const answer = (command: AnyCommand, current: typeof State.Type): Message | null
 		case "FetchCustomerContacts":
 			return Message.SucceededFetchContacts({
 				accountId: accountId(),
-				page: page(CONTACTS, args.cursor, 50),
+				page: page(
+					CONTACTS.map((row) => ({
+						...row,
+						otherAccounts: row.otherAccounts.filter((other) => other.accountId !== viewed().id),
+					})),
+					args.cursor,
+					50,
+				),
 			})
 		case "FetchCustomerInvoices":
 			return Message.SucceededFetchInvoices({
