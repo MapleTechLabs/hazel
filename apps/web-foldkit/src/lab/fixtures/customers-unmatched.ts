@@ -9,16 +9,17 @@ import { CustomerIgnoreRuleId, CustomerUnmatchedRecordId } from "@hazel/schema"
 import { Schema } from "effect"
 import {
 	ACCOUNTS_BY_KEY,
-	MAPLE_CONNECTION,
+	ACTIVITY_CONNECTION,
 	MAYA as ME,
 	NOW,
 	type NamedAccount,
-	STRIPE_CONNECTION,
+	INVOICES_CONNECTION,
 } from "./customers"
+import { ACTIVITY, INVOICES } from "./customers-demo-sources"
 
 /**
- * Unmatched records for the resolver (Wonder `ids`): five Stripe customers and nine Maple groups with
- * mixed confidence, three ignored records and two ignore rules. Suggestions point at the named
+ * Unmatched records for the resolver (Wonder `ids`): five billing customers and nine activity groups
+ * with mixed confidence, three ignored records and two ignore rules. Suggestions point at the named
  * accounts of `./customers`.
  */
 
@@ -27,10 +28,8 @@ const ago = (ms: number) => new Date(NOW.getTime() - ms)
 const uuid = (kind: number, n: number) =>
 	`${String(kind).padStart(8, "0")}-0000-4000-8000-${String(n).padStart(12, "0")}`
 
-const CONNECTION_OF = { stripe: STRIPE_CONNECTION.id, maple: MAPLE_CONNECTION.id } as const
-
 type Seed = Readonly<{
-	provider: keyof typeof CONNECTION_OF
+	provider: CustomerProvider
 	entityType?: UnmatchedEntityType
 	externalId: string
 	label: string
@@ -46,7 +45,7 @@ type Seed = Readonly<{
 
 const record = (n: number, seed: Seed): UnmatchedRecord => ({
 	id: Schema.decodeSync(CustomerUnmatchedRecordId)(uuid(40, n)),
-	connectionId: CONNECTION_OF[seed.provider],
+	connectionId: seed.provider === INVOICES.id ? INVOICES_CONNECTION.id : ACTIVITY_CONNECTION.id,
 	provider: seed.provider,
 	entityType: seed.entityType ?? "account",
 	externalId: seed.externalId,
@@ -69,7 +68,7 @@ const record = (n: number, seed: Seed): UnmatchedRecord => ({
 
 const SEEDS: ReadonlyArray<Seed> = [
 	{
-		provider: "stripe",
+		provider: INVOICES.id,
 		externalId: "cus_Q8f2Lk",
 		label: "billing@northwind.io",
 		email: "billing@northwind.io",
@@ -80,7 +79,7 @@ const SEEDS: ReadonlyArray<Seed> = [
 		reason: "3 Northwind Labs contacts use @northwind.io",
 	},
 	{
-		provider: "stripe",
+		provider: INVOICES.id,
 		externalId: "cus_P1x9Wd",
 		label: "ap@acmerobotics.com",
 		email: "ap@acmerobotics.com",
@@ -91,7 +90,7 @@ const SEEDS: ReadonlyArray<Seed> = [
 		reason: "Same company name, different domain",
 	},
 	{
-		provider: "stripe",
+		provider: INVOICES.id,
 		externalId: "cus_R0mT3a",
 		label: "finance@kestrel.so",
 		email: "finance@kestrel.so",
@@ -102,7 +101,7 @@ const SEEDS: ReadonlyArray<Seed> = [
 		reason: "Same domain, but 2 accounts use kestrel.so",
 	},
 	{
-		provider: "stripe",
+		provider: INVOICES.id,
 		externalId: "cus_S7hL2q",
 		label: "jon.park@gmail.com",
 		email: "jon.park@gmail.com",
@@ -112,7 +111,7 @@ const SEEDS: ReadonlyArray<Seed> = [
 		reason: "Customer name only; gmail.com can't be matched",
 	},
 	{
-		provider: "stripe",
+		provider: INVOICES.id,
 		externalId: "cus_T4kN8v",
 		label: "ops@tallyhq.com",
 		email: "ops@tallyhq.com",
@@ -121,7 +120,7 @@ const SEEDS: ReadonlyArray<Seed> = [
 		reason: "tallyhq.com isn't on any account",
 	},
 	{
-		provider: "maple",
+		provider: ACTIVITY.id,
 		externalId: "org_2rM1vHcT9e",
 		label: "org_2rM1vHcT9e",
 		events: 58,
@@ -130,7 +129,7 @@ const SEEDS: ReadonlyArray<Seed> = [
 		reason: "Group name and 2 users match Lumen Health",
 	},
 	{
-		provider: "maple",
+		provider: ACTIVITY.id,
 		externalId: "org_2wR7aLmQ1c",
 		label: "org_2wR7aLmQ1c",
 		events: 842,
@@ -139,7 +138,7 @@ const SEEDS: ReadonlyArray<Seed> = [
 		reason: "All 6 users have @pinecone.studio emails",
 	},
 	{
-		provider: "maple",
+		provider: ACTIVITY.id,
 		externalId: "org_2xK9fPqLm4",
 		label: "org_2xK9fPqLm4",
 		events: 1_203,
@@ -148,7 +147,7 @@ const SEEDS: ReadonlyArray<Seed> = [
 		reason: "8 of 14 users are Cobalt Freight contacts",
 	},
 	{
-		provider: "maple",
+		provider: ACTIVITY.id,
 		externalId: "org_2vB3cXzK7p",
 		label: "org_2vB3cXzK7p",
 		events: 611,
@@ -157,7 +156,7 @@ const SEEDS: ReadonlyArray<Seed> = [
 		reason: "5 of 9 users are Halcyon Health contacts",
 	},
 	{
-		provider: "maple",
+		provider: ACTIVITY.id,
 		externalId: "staging-acme",
 		label: "staging-acme",
 		events: 3_410,
@@ -166,35 +165,35 @@ const SEEDS: ReadonlyArray<Seed> = [
 		reason: "Name contains “acme”; looks like internal staging",
 	},
 	{
-		provider: "maple",
+		provider: ACTIVITY.id,
 		externalId: "org_2tY8bpQwR3n",
 		label: "org_2tY8bpQwR3n",
 		events: 377,
 		reason: "Users have gmail.com and proton.me emails",
 	},
 	{
-		provider: "maple",
+		provider: ACTIVITY.id,
 		externalId: "org_2sN4kDe8Vb",
 		label: "Fernway",
 		events: 214,
 		reason: "No account named Fernway; fernway.app unknown",
 	},
 	{
-		provider: "maple",
+		provider: ACTIVITY.id,
 		externalId: "test-group-1",
 		label: "test-group-1",
 		events: 96,
 		reason: "Looks like test data",
 	},
 	{
-		provider: "maple",
+		provider: ACTIVITY.id,
 		externalId: "org_2qP6tJkW0a",
 		label: "org_2qP6tJkW0a",
 		events: 12,
 		reason: "Single user, no email on events",
 	},
 	{
-		provider: "maple",
+		provider: ACTIVITY.id,
 		externalId: "internal-tools",
 		label: "internal-tools",
 		events: 1_920,
@@ -202,7 +201,7 @@ const SEEDS: ReadonlyArray<Seed> = [
 		status: "ignored",
 	},
 	{
-		provider: "stripe",
+		provider: INVOICES.id,
 		externalId: "cus_Z0test1",
 		label: "test@hazel.sh",
 		email: "test@hazel.sh",
@@ -212,7 +211,7 @@ const SEEDS: ReadonlyArray<Seed> = [
 		status: "ignored",
 	},
 	{
-		provider: "maple",
+		provider: ACTIVITY.id,
 		externalId: "org_2demo0000",
 		label: "Demo workspace",
 		events: 44,
@@ -242,6 +241,6 @@ const rule = (
 })
 
 export const IGNORE_RULES: ReadonlyArray<IgnoreRule> = [
-	rule(1, "maple", "external_id", "internal-*"),
-	rule(2, "stripe", "domain", "hazel.sh"),
+	rule(1, ACTIVITY.id, "external_id", "internal-*"),
+	rule(2, INVOICES.id, "domain", "hazel.sh"),
 ]

@@ -1,6 +1,6 @@
 # Customers kit
 
-Stateless Foldkit views for the Customers pages (Wonder "Maple Design System" › Foundations). Every
+Stateless Foldkit views for the Customers pages (the Wonder design system › Foundations). Every
 view is `(h, options) → Html`; selection, hover and open state live in the page's Model and come in
 as options, Messages go out through `on*` callbacks. Try them all at `/lab/customers/kit/*`.
 

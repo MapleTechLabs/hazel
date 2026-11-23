@@ -9,6 +9,7 @@ import {
 import { CustomerMetricDefinitionId, type CustomerSignalRuleId } from "@hazel/schema"
 import { Schema } from "effect"
 import { ACCOUNTS, CONNECTIONS, CURRENCY, NOW, ORGANIZATION_ID, RULES, SIGNAL_ENTRIES } from "./customers"
+import { ACTIVITY, PLANS } from "./customers-demo-sources"
 
 /**
  * The signals settings lab's data beyond `customers.ts`: the metric definitions a usage rule can
@@ -47,7 +48,7 @@ export const METRIC_DEFINITIONS: ReadonlyArray<MetricDefinition> = [
 		key: "product_events",
 		name: "Product events",
 		unit: null,
-		provider: "maple",
+		provider: ACTIVITY.id,
 		description: "All tracked events per day",
 		builtIn: false,
 	}),
@@ -55,7 +56,7 @@ export const METRIC_DEFINITIONS: ReadonlyArray<MetricDefinition> = [
 		key: "dashboards_created",
 		name: "Dashboards created",
 		unit: null,
-		provider: "maple",
+		provider: ACTIVITY.id,
 		description: "Custom metric",
 		builtIn: false,
 	}),
@@ -63,7 +64,7 @@ export const METRIC_DEFINITIONS: ReadonlyArray<MetricDefinition> = [
 		key: "seats",
 		name: "Metered feature usage",
 		unit: null,
-		provider: "autumn",
+		provider: PLANS.id,
 		description: "Seats, credits and limits per plan",
 		builtIn: false,
 	}),

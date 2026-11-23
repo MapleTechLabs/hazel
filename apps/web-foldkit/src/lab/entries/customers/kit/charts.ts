@@ -11,6 +11,7 @@ import { rangePicker } from "../../../../customers/ui/filter-bar"
 import { defineLabWithFlags, queryParam } from "../../../define"
 import { labPage, labSection } from "../../../frame"
 import { SETTINGS, overviewFixture } from "../../../fixtures/customers"
+import { INVOICES, PLANS } from "../../../fixtures/customers-demo-sources"
 
 // `/lab/customers/kit/charts`: Foundations › Line Chart Active Users, Stacked Bar Chart MRR Movement,
 // Distribution Bar Health. Hover for tooltips; `?state=default|partial|empty`.
@@ -99,7 +100,7 @@ const view = (model: Model, h: HtmlBuilder<Message>): Html => {
 							: [
 									h.p(
 										[h.Class("py-16 text-center text-muted-fg text-sm")],
-										["Connect Stripe or Autumn to see MRR movement."],
+										[`Connect ${INVOICES.name} or ${PLANS.name} to see MRR movement.`],
 									),
 								],
 					),

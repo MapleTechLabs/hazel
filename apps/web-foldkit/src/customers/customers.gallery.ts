@@ -14,12 +14,12 @@ import { IconCheck, IconClock, IconDots, IconUser } from "../icons"
 import {
 	ACCOUNTS,
 	ACCOUNTS_BY_KEY,
-	CLERK_CONNECTION,
-	MAPLE_ERROR_AT,
+	DIRECTORY_CONNECTION,
+	ACTIVITY_ERROR_AT,
 	NOW,
 	OPEN_ENTRIES,
 	SETTINGS,
-	STRIPE_PROGRESS,
+	INVOICES_PROGRESS,
 	memberOf,
 	overviewFixture,
 } from "../lab/fixtures/customers"
@@ -70,6 +70,7 @@ import {
 	type SuggestionRow,
 	suggestionRow,
 } from "./suggestions"
+import { ACTIVITY, DIRECTORY, INVOICES } from "../lab/fixtures/customers-demo-sources"
 
 /**
  * The Customers kit gallery: the kit's real views over the lab fixtures, screenshotted in light and
@@ -169,7 +170,7 @@ const badges = (h: HtmlBuilder<M>) =>
 			stageBadge(h, "active"),
 			stageBadge(h, "past_due"),
 			stageBadge(h, "churned"),
-			sourceChip(h, "stripe"),
+			sourceChip(h, INVOICES.id),
 		],
 	)
 
@@ -370,32 +371,32 @@ const sources = (h: HtmlBuilder<M>) =>
 		[h.Class("grid grid-cols-[1fr_1fr_1fr_20rem] gap-4")],
 		[
 			connectCard(h, {
-				provider: "clerk",
+				provider: DIRECTORY.id,
 				now: NOW,
 				status: {
 					_tag: "Connected",
-					syncedAt: CLERK_CONNECTION.lastSyncAt,
+					syncedAt: DIRECTORY_CONNECTION.lastSyncAt,
 					summary: "214 organizations · 1,862 users",
 					onSyncNow: ignored,
 				},
 			}),
 			connectCard(h, {
-				provider: "stripe",
+				provider: INVOICES.id,
 				now: NOW,
 				status: {
 					_tag: "Syncing",
 					step: "invoices",
-					done: STRIPE_PROGRESS.done,
-					total: STRIPE_PROGRESS.total,
+					done: INVOICES_PROGRESS.done,
+					total: INVOICES_PROGRESS.total,
 					onCancel: ignored,
 				},
 			}),
 			connectCard(h, {
-				provider: "maple",
+				provider: ACTIVITY.id,
 				now: NOW,
 				status: {
 					_tag: "Error",
-					at: MAPLE_ERROR_AT,
+					at: ACTIVITY_ERROR_AT,
 					message: "API key was revoked.",
 					action: { label: "Update API key", onPress: ignored },
 				},

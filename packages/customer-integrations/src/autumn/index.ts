@@ -9,5 +9,6 @@ export const autumn = defineIntegration({
 	precedence: { name: 30, logoUrl: 30, seatsUsed: 10, seatsLimit: 10, email: 30 },
 	capabilities: { billing: { preference: 10, requiresFirstImport: true }, meteredLimits: true },
 	presentation,
+	demo: { role: "plans" },
 	server: () => import("./server"),
 })

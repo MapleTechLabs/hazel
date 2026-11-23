@@ -4,14 +4,14 @@ import * as AsyncData from "foldkit/asyncData"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import type { Shared } from "../../../../page/contract"
 import { Message } from "../../../../page/customers/settings/sources/message"
-import { Model } from "../../../../page/customers/settings/sources/model"
+import { configRows, Model, settingsFieldsOf } from "../../../../page/customers/settings/sources/model"
 import { toConnectionRows, toSyncRunRow } from "../../../../page/customers/settings/sources/queries"
 import { init, update } from "../../../../page/customers/settings/sources/update"
 import { view } from "../../../../page/customers/settings/sources/view"
 import { AppRoute } from "../../../../route"
 import { defineLabWithFlags, queryParam } from "../../../define"
 import { labPage } from "../../../frame"
-import { ACCOUNTS, NOW, STRIPE_CONNECTION, TEAM } from "../../../fixtures/customers"
+import { ACCOUNTS, NOW, INVOICES_CONNECTION, TEAM } from "../../../fixtures/customers"
 import {
 	ADMIN_SHARED,
 	IMPERSONATIONS,
@@ -21,25 +21,47 @@ import {
 	SOURCE_SYNC_RUNS,
 	UNMATCHED_OPEN_COUNT,
 } from "../../../fixtures/customers-sources"
+import { ACTIVITY, DIRECTORY, INVOICES, PLANS } from "../../../fixtures/customers-demo-sources"
 
 // `/lab/customers/pages/sources`: the real Data sources page (overview, connect modal, a source's
 // detail) over the fixtures. Its update runs; its Commands do not: every pending RPC is answered
 // with its success Message from here. `?state=` picks a Wonder artboard.
 
-const STATES = [
+const DETAIL_STATE = `detail-${DIRECTORY.id}`
+const SETTINGS_STATE = `detail-${ACTIVITY.id}-settings`
+
+const STATES: ReadonlyArray<string> = [
 	"overview",
 	"overview-empty",
 	"connect",
 	"connect-success",
 	"connect-failure",
 	"connect-unavailable",
-	"detail-clerk",
-	"detail-maple-settings",
+	DETAIL_STATE,
+	SETTINGS_STATE,
 	"detail-not-connected",
 	"read-only",
-] as const
+]
 const State = Schema.Literals(STATES)
 type State = typeof State.Type
+
+/** One edit of each kind on the activity source's settings: a row, its first cell, a number. */
+const settingsEdits: ReadonlyArray<Message> = settingsFieldsOf(ACTIVITY.demo.sampleConfig).flatMap(
+	(field): ReadonlyArray<Message> =>
+		"columns" in field
+			? [
+					Message.AddedSettingsRow({ key: field.key }),
+					Message.ChangedSettingsCell({
+						key: field.key,
+						index: configRows(ACTIVITY.demo.sampleConfig, field.key).length,
+						column: field.columns[0].key,
+						value: "ingest_batch",
+					}),
+				]
+			: "options" in field
+				? [Message.ClickedSettingsNumber({ key: field.key, value: 180 })]
+				: [],
+)
 
 const sharedOf = (state: string): Shared => (state === "read-only" ? MEMBER_SHARED : ADMIN_SHARED)
 const currentState = () => new URLSearchParams(window.location.search).get("state") ?? "overview"
@@ -92,7 +114,7 @@ const answered = (model: Model, shared: Shared): Model => {
 					form.connected === null
 						? Message.SucceededConnect({
 								provider: form.provider,
-								connectionId: STRIPE_CONNECTION.id,
+								connectionId: INVOICES_CONNECTION.id,
 								accountName: "Northwind Inc.",
 							})
 						: Message.SucceededSaveWebhookSecret({ connectionId: form.connected.connectionId }),
@@ -101,7 +123,7 @@ const answered = (model: Model, shared: Shared): Model => {
 		...(model.keysForm?.isPending === true ? [Message.SucceededUpdateKeys()] : []),
 		...model.syncing.map((connectionId) => Message.SucceededSyncNow({ connectionId })),
 		...(model.isDisconnecting
-			? [Message.SucceededDisconnect({ provider: model.provider ?? "clerk" })]
+			? [Message.SucceededDisconnect({ provider: model.provider ?? DIRECTORY.id })]
 			: []),
 		...(model.isSeedingDemo
 			? [
@@ -127,12 +149,12 @@ const answered = (model: Model, shared: Shared): Model => {
 }
 
 const routeOf = (state: State) =>
-	state === "detail-clerk"
-		? AppRoute.CustomersSourceDetail({ orgSlug: "lab", provider: "clerk" })
-		: state === "detail-maple-settings"
-			? AppRoute.CustomersSourceDetail({ orgSlug: "lab", provider: "maple" })
+	state === DETAIL_STATE
+		? AppRoute.CustomersSourceDetail({ orgSlug: "lab", provider: DIRECTORY.id })
+		: state === SETTINGS_STATE
+			? AppRoute.CustomersSourceDetail({ orgSlug: "lab", provider: ACTIVITY.id })
 			: state === "detail-not-connected"
-				? AppRoute.CustomersSourceDetail({ orgSlug: "lab", provider: "autumn" })
+				? AppRoute.CustomersSourceDetail({ orgSlug: "lab", provider: PLANS.id })
 				: AppRoute.CustomersSettingsSources({ orgSlug: "lab" })
 
 const stateModel = (state: State): Model => {
@@ -159,7 +181,7 @@ const stateModel = (state: State): Model => {
 	const connect = steps(
 		model,
 		[
-			Message.PressedConnect({ provider: "stripe" }),
+			Message.PressedConnect({ provider: INVOICES.id }),
 			Message.ChangedApiKey({ value: "rk_live_51NqA8f2Lk" }),
 		],
 		shared,
@@ -174,7 +196,7 @@ const stateModel = (state: State): Model => {
 				connect,
 				[
 					Message.SubmittedConnect(),
-					Message.FailedConnect({ provider: "stripe", reason: "Refused" }),
+					Message.FailedConnect({ provider: INVOICES.id, reason: "Refused" }),
 				],
 				shared,
 			)
@@ -183,25 +205,12 @@ const stateModel = (state: State): Model => {
 				connect,
 				[
 					Message.SubmittedConnect(),
-					Message.FailedConnect({ provider: "stripe", reason: "ComingSoon" }),
+					Message.FailedConnect({ provider: INVOICES.id, reason: "ComingSoon" }),
 				],
 				shared,
 			)
-		case "detail-maple-settings":
-			return steps(
-				model,
-				[
-					Message.AddedSettingsRow({ key: "metricMappings" }),
-					Message.ChangedSettingsCell({
-						key: "metricMappings",
-						index: 3,
-						column: "event",
-						value: "ingest_batch",
-					}),
-					Message.ClickedSettingsNumber({ key: "lookbackDays", value: 180 }),
-				],
-				shared,
-			)
+		case SETTINGS_STATE:
+			return steps(model, settingsEdits, shared)
 		default:
 			return model
 	}

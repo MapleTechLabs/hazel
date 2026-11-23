@@ -1,4 +1,3 @@
-import { DEFAULT_CONNECTION_CONFIG } from "@hazel/customer-integrations"
 import {
 	type Connection,
 	EMPTY_SYNC_STATS,
@@ -18,20 +17,22 @@ import type { Shared } from "../../page/contract"
 import { labShared } from "../../page/customers/lab-shared"
 import type { ImpersonationRow } from "../../page/customers/settings/sources/queries"
 import {
-	CLERK_CONNECTION,
+	DIRECTORY_CONNECTION,
 	JONAS,
-	MAPLE_CONNECTION,
+	ACTIVITY_CONNECTION,
 	MAYA,
-	MAPLE_ERROR_AT,
+	ACTIVITY_ERROR_AT,
 	NOW,
 	ORGANIZATION_ID,
-	STRIPE_CONNECTION,
+	INVOICES_CONNECTION,
 	SYNC_RUNS,
 } from "./customers"
+import { ACTIVITY } from "./customers-demo-sources"
 
 /**
- * Data sources fixtures beyond `customers.ts`: a week of sync runs for each connection (Clerk's
- * history, Maple's failures, Stripe's backfill), Maple's provider settings, and an admin `Shared`.
+ * Data sources fixtures beyond `customers.ts`: a week of sync runs for each connection (the
+ * directory's history, the activity source's failures, the invoice source's backfill), the activity
+ * source's provider settings, and an admin `Shared`.
  */
 
 const MINUTE = 60_000
@@ -45,32 +46,17 @@ export const ADMIN_SHARED: Shared = { ...labShared, member: { id: MEMBER_ID, rol
 /** A plain member: the read-only view. */
 export const MEMBER_SHARED: Shared = { ...labShared, member: { id: MEMBER_ID, role: "member" } }
 
-/** Maple with its settings filled in (Wonder `one`). */
-export const MAPLE_SETTINGS_CONNECTION: Connection = {
-	...MAPLE_CONNECTION,
+/** The activity source with its settings filled in (Wonder `one`). */
+export const ACTIVITY_SETTINGS_CONNECTION: Connection = {
+	...ACTIVITY_CONNECTION,
 	externalAccountName: "Northwind",
-	config: {
-		...DEFAULT_CONNECTION_CONFIG.maple,
-		activityEvents: [
-			"query_run",
-			"dashboard_viewed",
-			"trace_explored",
-			"dashboard_created",
-			"alert_rule_created",
-			"api_key_created",
-		],
-		metricMappings: [
-			{ event: "dashboard_created", metricKey: "dashboards_created" },
-			{ event: "alert_rule_created", metricKey: "alert_rules_created" },
-			{ event: "query_run", metricKey: "queries_run" },
-		],
-	},
+	config: ACTIVITY.demo.sampleConfig,
 }
 
 export const SOURCE_CONNECTIONS: ReadonlyArray<Connection> = [
-	CLERK_CONNECTION,
-	STRIPE_CONNECTION,
-	MAPLE_SETTINGS_CONNECTION,
+	DIRECTORY_CONNECTION,
+	INVOICES_CONNECTION,
+	ACTIVITY_SETTINGS_CONNECTION,
 ]
 
 const run = (
@@ -97,13 +83,16 @@ const run = (
 	cursor: null,
 })
 
-/** Clerk's week (Wonder `loy`): hourly pulls, a manual run, one rate-limited failure. */
-const CLERK_RUNS: ReadonlyArray<SyncRun> = [
-	run(1, CLERK_CONNECTION, "schedule", "succeeded", 100 * MINUTE, 41_000, { accounts: 3, contacts: 15 }),
-	run(2, CLERK_CONNECTION, "manual", "succeeded", 133 * MINUTE, 44_000, { contacts: 6 }),
+/** The directory's week (Wonder `loy`): hourly pulls, a manual run, one rate-limited failure. */
+const DIRECTORY_RUNS: ReadonlyArray<SyncRun> = [
+	run(1, DIRECTORY_CONNECTION, "schedule", "succeeded", 100 * MINUTE, 41_000, {
+		accounts: 3,
+		contacts: 15,
+	}),
+	run(2, DIRECTORY_CONNECTION, "manual", "succeeded", 133 * MINUTE, 44_000, { contacts: 6 }),
 	run(
 		3,
-		CLERK_CONNECTION,
+		DIRECTORY_CONNECTION,
 		"schedule",
 		"failed",
 		160 * MINUTE,
@@ -115,19 +104,28 @@ const CLERK_RUNS: ReadonlyArray<SyncRun> = [
 			httpStatus: 429,
 		},
 	),
-	run(4, CLERK_CONNECTION, "schedule", "succeeded", 220 * MINUTE, 39_000, { accounts: 2, contacts: 11 }),
-	run(5, CLERK_CONNECTION, "schedule", "succeeded", 1 * DAY, 37_000, { contacts: 4, activityDays: 212 }),
-	run(6, CLERK_CONNECTION, "backfill", "succeeded", 6 * DAY, 372_000, { accounts: 214, contacts: 1_862 }),
+	run(4, DIRECTORY_CONNECTION, "schedule", "succeeded", 220 * MINUTE, 39_000, {
+		accounts: 2,
+		contacts: 11,
+	}),
+	run(5, DIRECTORY_CONNECTION, "schedule", "succeeded", 1 * DAY, 37_000, {
+		contacts: 4,
+		activityDays: 212,
+	}),
+	run(6, DIRECTORY_CONNECTION, "backfill", "succeeded", 6 * DAY, 372_000, {
+		accounts: 214,
+		contacts: 1_862,
+	}),
 ]
 
-/** Maple's failures since its key was revoked. */
-const MAPLE_RUNS: ReadonlyArray<SyncRun> = [0, 1, 2].map((attempt) =>
+/** The activity source's failures since its key was revoked. */
+const ACTIVITY_RUNS: ReadonlyArray<SyncRun> = [0, 1, 2].map((attempt) =>
 	run(
 		10 + attempt,
-		MAPLE_CONNECTION,
+		ACTIVITY_CONNECTION,
 		"schedule",
 		"failed",
-		NOW.getTime() - MAPLE_ERROR_AT.getTime() + attempt * HOUR,
+		NOW.getTime() - ACTIVITY_ERROR_AT.getTime() + attempt * HOUR,
 		1_200,
 		{},
 		{
@@ -138,11 +136,13 @@ const MAPLE_RUNS: ReadonlyArray<SyncRun> = [0, 1, 2].map((attempt) =>
 	),
 )
 
-export const SOURCE_SYNC_RUNS: ReadonlyArray<SyncRun> = [...SYNC_RUNS, ...CLERK_RUNS, ...MAPLE_RUNS].sort(
-	(left, right) => msOf(right.startedAt) - msOf(left.startedAt),
-)
+export const SOURCE_SYNC_RUNS: ReadonlyArray<SyncRun> = [
+	...SYNC_RUNS,
+	...DIRECTORY_RUNS,
+	...ACTIVITY_RUNS,
+].sort((left, right) => msOf(right.startedAt) - msOf(left.startedAt))
 
-/** `customers.unmatched.list`'s `openCount` (Wonder: 5 Stripe customers and 9 Maple groups). */
+/** `customers.unmatched.list`'s `openCount` (Wonder: 5 billing customers and 9 activity groups). */
 export const UNMATCHED_OPEN_COUNT = 14
 
 /** Jonas may impersonate (Maya granted it) and signed in as one of Acme's users. */

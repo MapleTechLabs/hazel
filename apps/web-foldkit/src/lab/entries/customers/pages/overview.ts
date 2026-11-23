@@ -1,3 +1,4 @@
+import { billingProviders } from "@hazel/customer-integrations"
 import { CustomersRange } from "@hazel/domain/customers"
 import { Effect, Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
@@ -42,8 +43,7 @@ const stateModel = (flags: typeof Flags.Type): Model => {
 			flags.state === "empty"
 				? []
 				: CONNECTIONS.map((connection) => connection.provider).filter(
-						(provider) =>
-							flags.state !== "partial" || (provider !== "stripe" && provider !== "autumn"),
+						(provider) => flags.state !== "partial" || !billingProviders.includes(provider),
 					),
 		settings: {
 			lastComputedAtMs: SETTINGS.lastComputedAt === null ? null : msOf(SETTINGS.lastComputedAt),

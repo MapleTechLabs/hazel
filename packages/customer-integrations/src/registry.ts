@@ -14,6 +14,7 @@ import { AttentionStage, PRECEDENCE_FIELDS, TEMPLATES } from "@hazel/domain/cust
 import { Option, Schema } from "effect"
 import { autumn } from "./autumn"
 import { clerk } from "./clerk"
+import type { DemoRole, IntegrationDemo } from "./kit/demo"
 import type { IngestPolicy, IntegrationDefinition } from "./kit/define"
 import { maple } from "./maple"
 import { stripe } from "./stripe"
@@ -130,6 +131,22 @@ export const startingIntegration = suggestedIntegration("start")
 
 /** The billing source first-run copy suggests adding, and the primary of the connect buttons. */
 export const suggestedBillingIntegration = suggestedIntegration("billing")
+
+type DemoOf<Role extends DemoRole> = Extract<IntegrationDemo, { readonly role: Role }>
+
+const plays = <Role extends DemoRole>(demo: IntegrationDemo | undefined, role: Role): demo is DemoOf<Role> =>
+	demo?.role === role
+
+/** The integration playing `role` in the demo book and the lab. */
+export const demoSource = <Role extends DemoRole>(
+	role: Role,
+): { readonly id: IntegrationId; readonly name: string; readonly demo: DemoOf<Role> } => {
+	for (const integration of integrations) {
+		const demo: IntegrationDemo | undefined = integration.demo
+		if (plays(demo, role)) return { id: integration.id, name: integration.presentation.name, demo }
+	}
+	throw new Error(`No integration plays the demo role "${role}"`)
+}
 
 const providersFor = {
 	activity: activityProviders,

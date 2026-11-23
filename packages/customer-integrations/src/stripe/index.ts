@@ -1,5 +1,6 @@
 import { defineIntegration } from "../kit/define"
 import { DEFAULT_STRIPE_CONFIG, StripeConnectionConfig } from "./config"
+import { demo } from "./demo"
 import { presentation } from "./presentation"
 
 export const stripe = defineIntegration({
@@ -15,5 +16,6 @@ export const stripe = defineIntegration({
 		attentionDefault: true,
 	},
 	presentation,
+	demo,
 	server: () => import("./server"),
 })

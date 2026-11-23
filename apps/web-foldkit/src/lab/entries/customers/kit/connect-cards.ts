@@ -1,7 +1,8 @@
 import { connectCard } from "../../../../customers/ui/connect-card"
 import { defineStaticLab, ignored } from "../../../define"
 import { labPage, labSection } from "../../../frame"
-import { CLERK_CONNECTION, MAPLE_ERROR_AT, NOW, STRIPE_PROGRESS } from "../../../fixtures/customers"
+import { DIRECTORY_CONNECTION, ACTIVITY_ERROR_AT, NOW, INVOICES_PROGRESS } from "../../../fixtures/customers"
+import { ACTIVITY, DIRECTORY, INVOICES, PLANS } from "../../../fixtures/customers-demo-sources"
 
 // `/lab/customers/kit/connect-cards`: Foundations › Integration Connect Cards.
 
@@ -12,37 +13,37 @@ export const lab = defineStaticLab("Connect cards", (h) =>
 			"Connected · syncing · not connected · error",
 			[
 				connectCard(h, {
-					provider: "clerk",
+					provider: DIRECTORY.id,
 					now: NOW,
 					status: {
 						_tag: "Connected",
-						syncedAt: CLERK_CONNECTION.lastSyncAt,
+						syncedAt: DIRECTORY_CONNECTION.lastSyncAt,
 						summary: "214 organizations · 1,862 users",
 						onSyncNow: ignored,
 					},
 				}),
 				connectCard(h, {
-					provider: "stripe",
+					provider: INVOICES.id,
 					now: NOW,
 					status: {
 						_tag: "Syncing",
-						step: STRIPE_PROGRESS.step,
-						done: STRIPE_PROGRESS.done,
-						total: STRIPE_PROGRESS.total,
+						step: INVOICES_PROGRESS.step,
+						done: INVOICES_PROGRESS.done,
+						total: INVOICES_PROGRESS.total,
 						onCancel: ignored,
 					},
 				}),
 				connectCard(h, {
-					provider: "autumn",
+					provider: PLANS.id,
 					now: NOW,
 					status: { _tag: "NotConnected", onConnect: ignored },
 				}),
 				connectCard(h, {
-					provider: "maple",
+					provider: ACTIVITY.id,
 					now: NOW,
 					status: {
 						_tag: "Error",
-						at: MAPLE_ERROR_AT,
+						at: ACTIVITY_ERROR_AT,
 						message: "API key was revoked. Last good sync Nov 9, 18:42.",
 						action: { label: "Update API key", onPress: ignored },
 					},
@@ -55,7 +56,7 @@ export const lab = defineStaticLab("Connect cards", (h) =>
 			"Syncing, total unknown",
 			[
 				connectCard(h, {
-					provider: "stripe",
+					provider: INVOICES.id,
 					now: NOW,
 					status: { _tag: "Syncing", step: "customers", done: 412, total: null },
 				}),
