@@ -609,11 +609,18 @@ describe("signal evaluation", () => {
 		const ended = { _tag: "NoMatch", reason: "Plan ended" }
 		expect(run("inactive", left)).toEqual(ended)
 		expect(run("usage_drop", left)).toEqual(ended)
-		// A plan still live, no plan at all, or a stage set by hand: still someone to watch.
+		// A plan still live, one that paid (a group's churned environment beside a lead one), no plan
+		// at all, or a stage set by hand: still someone to watch.
 		expect(
 			run("inactive", {
 				...left,
 				subscriptions: [...left.subscriptions!, { status: "active", mrrMinor: 0 }],
+			})._tag,
+		).toBe("Match")
+		expect(
+			run("inactive", {
+				...left,
+				subscriptions: [...left.subscriptions!, { status: "canceled", mrrMinor: 3_900 }],
 			})._tag,
 		).toBe("Match")
 		expect(run("inactive", { ...left, subscriptions: [] })._tag).toBe("Match")

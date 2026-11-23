@@ -780,7 +780,7 @@ export const missingSources = (template: SignalTemplate, org: OrgFacts): Readonl
 const leftUnpaid = (facts: AccountFacts) =>
 	facts.stage === "lead" &&
 	facts.subscriptions.length > 0 &&
-	facts.subscriptions.every((sub) => sub.status === "canceled")
+	facts.subscriptions.every((sub) => sub.status === "canceled" && !pays(sub))
 
 export const evaluate = (rule: RuleInput, facts: AccountFacts, org: OrgFacts): Evaluation => {
 	// Churn is a customer's last entry: no other rule evaluates it after.
