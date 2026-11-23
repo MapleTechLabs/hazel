@@ -63,7 +63,7 @@ export const SaveListLayout = Command.define("SaveListLayout", {
 		),
 })
 
-const viewMessages = [Message.SucceededViewAction, Message.FailedViewAction]
+const viewMessages = [Message.SucceededViewAction, Message.FailedViewAction] as const
 
 export const CreateSavedView = Command.define("CreateSavedView", {
 	args: {
@@ -114,7 +114,7 @@ export const DeleteSavedView = Command.define("DeleteSavedView", {
 		),
 })
 
-const bulkMessages = [Message.SucceededBulkUpdate, Message.FailedBulkUpdate]
+const bulkMessages = [Message.SucceededBulkUpdate, Message.FailedBulkUpdate] as const
 const isBatched = (args: { readonly accountIds: ReadonlyArray<unknown> }) =>
 	args.accountIds.length > BULK_BATCH
 

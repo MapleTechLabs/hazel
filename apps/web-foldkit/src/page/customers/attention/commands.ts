@@ -24,7 +24,7 @@ import { SEARCH_ID } from "./model"
 
 /** The queue's Commands: the optimistic signal actions, the preview's detail, copying an email. */
 
-const signalMessages = [Message.SucceededSignalAction, Message.FailedSignalAction]
+const signalMessages = [Message.SucceededSignalAction, Message.FailedSignalAction] as const
 
 /** Every signal action settles alike: gone (`NotFound`), status moved on (`Stale`), or a common reason. */
 const settle =

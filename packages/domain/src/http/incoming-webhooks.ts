@@ -1,4 +1,4 @@
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
+import { HttpApi, HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { ChannelWebhookId } from "@hazel/schema"
 import { Schema } from "effect"
 import { InternalServerError } from "../errors"
@@ -223,7 +223,8 @@ export class InvalidWebhookPayloadError extends Schema.TaggedError<
 	{ httpApiStatus: 400 },
 ) {}
 
-// Public endpoint - no auth middleware, uses webhook token in URL
+// Public endpoint - no auth middleware, uses webhook token in URL. The token is redacted from the
+// server span and request log, which record `/webhooks/incoming/<id>/REDACTED` instead.
 export class IncomingWebhookGroup extends HttpApiGroup.make("incoming-webhooks")
 	.add(
 		HttpApiEndpoint.post("execute", `/:webhookId/:token`, {
@@ -329,4 +330,5 @@ export class IncomingWebhookGroup extends HttpApiGroup.make("incoming-webhooks")
 			)
 			.annotate(RequiredScopes, []),
 	)
-	.prefix("/webhooks/incoming") {}
+	.prefix("/webhooks/incoming")
+	.annotate(HttpApi.RedactedNames, { params: ["token"] }) {}

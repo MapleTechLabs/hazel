@@ -13,7 +13,7 @@
 	},
 	"dependencies": {
 		"@effect/platform-browser": "catalog:effect",
-		"@foldkit/ui": "0.170.0",
+		"@foldkit/ui": "0.171.0",
 		"@fontsource/inter": "^5.3.0",
 		"@hazel/auth": "workspace:*",
 		"@hazel/domain": "workspace:*",
@@ -22,13 +22,13 @@
 		"@journeyapps/wa-sqlite": "^1.4.1",
 		"@pierre/words": "0.3.0",
 		"@simplewebauthn/browser": "^14.0.0",
-		"@tanstack/browser-db-sqlite-persistence": "1.0.0-rc.1.1",
-		"@tanstack/db": "1.0.0-rc.1.1",
+		"@tanstack/browser-db-sqlite-persistence": "1.0.0-rc.1.5",
+		"@tanstack/db": "1.0.0-rc.1.5",
 		"@yielded/auth": "0.1.0-beta.47",
 		"@yielded/auth-simplewebauthn": "0.1.0-beta.47",
 		"effect": "catalog:effect",
 		"embla-carousel": "8.6.0",
-		"foldkit": "0.170.0",
+		"foldkit": "0.171.0",
 		"prismjs": "^1.30.0",
 		"prosemirror-commands": "^1.7.2",
 		"prosemirror-history": "^1.5.1",
@@ -39,9 +39,9 @@
 		"tailwind-variants": "^4.0.1"
 	},
 	"devDependencies": {
-		"@foldkit/devtools": "0.170.0",
+		"@foldkit/devtools": "0.171.0",
 		"@foldkit/oxlint-plugin": "0.15.4",
-		"@foldkit/vite-plugin": "0.29.0",
+		"@foldkit/vite-plugin": "0.29.1",
 		"@tailwindcss/vite": "^4.3.3",
 		"@tauri-apps/api": "~2.12.4",
 		"@tauri-apps/plugin-autostart": "~2.7.0",
@@ -52,12 +52,13 @@
 		"@tauri-apps/plugin-store": "~2.5.0",
 		"@tauri-apps/plugin-updater": "~2.14.1",
 		"@types/prismjs": "^1.26.6",
-		"@vitest/browser-playwright": "5.0.5",
+		"@vitest/browser-playwright": "5.1.1",
 		"jsdom": "^30.1.3",
+		"playwright": "1.64.1",
 		"tailwindcss": "^4.3.3",
 		"tw-animate-css": "^1.4.0",
 		"typescript": "catalog:tooling",
-		"vite": "8.3.5",
-		"vitest": "^5.0.5"
+		"vite": "8.3.8",
+		"vitest": "^5.1.1"
 	}
 }

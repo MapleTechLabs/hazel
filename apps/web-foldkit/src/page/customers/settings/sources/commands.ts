@@ -284,7 +284,7 @@ export const SaveMetricUnit = Command.define("SaveMetricUnit", {
 		),
 })
 
-const impersonatorMessages = [Message.SucceededImpersonatorAction, Message.FailedImpersonatorAction]
+const impersonatorMessages = [Message.SucceededImpersonatorAction, Message.FailedImpersonatorAction] as const
 
 export const GrantCustomerImpersonator = Command.define("GrantCustomerImpersonator", {
 	args: { ...org, userId: UserId, grantedBy: UserId },

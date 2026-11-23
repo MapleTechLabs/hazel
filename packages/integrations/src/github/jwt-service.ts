@@ -1,6 +1,7 @@
 import { createPrivateKey, type KeyObject } from "node:crypto"
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
 import { Context, Config, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Base64Url } from "effect/encoding"
 
 // ============================================================================
 // Error Types
@@ -100,13 +101,6 @@ export const loadGitHubAppConfig = Effect.withSpan("GitHubAppJWTService.loadConf
 
 const RS256 = { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" } as const
 
-const base64Url = (input: string | Uint8Array): string => {
-	const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input
-	let binary = ""
-	for (const byte of bytes) binary += String.fromCharCode(byte)
-	return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
-}
-
 /** What `signingKeyOf` reads from a private KeyObject: Node's and workerd's both have it. */
 export interface PrivateKeySource {
 	readonly toCryptoKey?: KeyObject["toCryptoKey"]
@@ -150,8 +144,8 @@ export const generateAppJWT = (
 	Effect.tryPromise({
 		try: async () => {
 			const now = Math.floor(Date.now() / 1000)
-			const header = base64Url(JSON.stringify({ alg: "RS256" }))
-			const payload = base64Url(
+			const header = Base64Url.encode(JSON.stringify({ alg: "RS256" }))
+			const payload = Base64Url.encode(
 				JSON.stringify({
 					iat: now - 30, // 30 seconds in the past for clock drift
 					exp: now + 600, // 10 minutes from now (max allowed by GitHub)
@@ -165,7 +159,7 @@ export const generateAppJWT = (
 				key,
 				new TextEncoder().encode(signingInput),
 			)
-			return `${signingInput}.${base64Url(new Uint8Array(signature))}`
+			return `${signingInput}.${Base64Url.encode(new Uint8Array(signature))}`
 		},
 		catch: (error) =>
 			new GitHubAppJWTError({

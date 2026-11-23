@@ -16,12 +16,12 @@
 		"@hazel/effect-db-collection": "workspace:*",
 		"@hazel/schema": "workspace:*",
 		"effect": "catalog:effect",
-		"foldkit": "0.170.0"
+		"foldkit": "0.171.0"
 	},
 	"devDependencies": {
-		"@foldkit/vite-plugin": "0.29.0",
+		"@foldkit/vite-plugin": "0.29.1",
 		"@types/node": "^24.19.2",
-		"vite": "8.3.5",
-		"vitest": "^5.0.5"
+		"vite": "8.3.8",
+		"vitest": "^5.1.1"
 	}
 }
