@@ -13,7 +13,7 @@ import { button } from "../../../ui/button"
 import { Message } from "./message"
 import { type ContactFilter, canImpersonate, contactCounts, type Model, visibleContacts } from "./model"
 import { otherAccounts } from "./other-accounts"
-import { type Context, icon, pageFooter } from "./parts"
+import { type Context, copyButton, icon, pageFooter } from "./parts"
 
 /** The users tab: who uses the product, who went quiet, who never started. */
 
@@ -204,14 +204,24 @@ const lastSeen = (h: HtmlBuilder<Message>, contact: Customers.Contact, nowMs: nu
 const subtitle = (h: HtmlBuilder<Message>, contact: Customers.Contact): Html | null => {
 	const { title, email } = contact
 	if (title === null && email === null) return null
-	return h.span(
-		[h.Class(twMerge("truncate text-muted-fg text-xs", title === null && "@6xl:hidden"))],
+	return h.div(
+		[h.Class(twMerge("flex min-w-0 items-center gap-1", title === null && "@6xl:hidden"))],
 		[
-			...(title === null ? [] : [h.span([h.Class(email === null ? "" : "max-sm:hidden")], [title])]),
-			...(title === null || email === null
+			h.span(
+				[h.Class("min-w-0 truncate text-muted-fg text-xs")],
+				[
+					...(title === null
+						? []
+						: [h.span([h.Class(email === null ? "" : "max-sm:hidden")], [title])]),
+					...(title === null || email === null
+						? []
+						: [h.span([h.Class("@6xl:hidden max-sm:hidden")], [" · "])]),
+					...(email === null ? [] : [h.span([h.Class("@6xl:hidden")], [email])]),
+				],
+			),
+			...(email === null
 				? []
-				: [h.span([h.Class("@6xl:hidden max-sm:hidden")], [" · "])]),
-			...(email === null ? [] : [h.span([h.Class("@6xl:hidden")], [email])]),
+				: [copyButton(h, email, "Email", { target: email, className: "-my-1 @6xl:hidden" })]),
 		],
 	)
 }
@@ -343,9 +353,17 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 							cell: (row) =>
 								row.contact.email === null
 									? "—"
-									: h.span(
-											[h.Class("block max-w-56 truncate"), h.Title(row.contact.email)],
-											[row.contact.email],
+									: h.div(
+											[h.Class("flex max-w-56 items-center gap-1")],
+											[
+												h.span(
+													[h.Class("min-w-0 truncate"), h.Title(row.contact.email)],
+													[row.contact.email],
+												),
+												copyButton(h, row.contact.email, "Email", {
+													target: row.contact.email,
+												}),
+											],
 										),
 						},
 						{
