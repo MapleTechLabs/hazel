@@ -360,7 +360,7 @@ describe("customer page: a user's other customers", () => {
 			menusMounted(3),
 			// One beside the Email column, one in the subtitle that replaces it on a narrow table.
 			Scene.expectAll(Scene.all.role("button", { name: `Copy ${email}` })).toHaveCount(2),
-			Scene.click(Scene.selector(`span[title="${email}"] + button`)),
+			Scene.click(Scene.selector(`.max-w-56 button[aria-label="Copy ${email}"]`)),
 			Scene.Command.expectExact(CopyCustomerText({ text: email, label: "Email", isPath: false })),
 			Scene.Command.resolve(
 				CopyCustomerText,
