@@ -55,15 +55,6 @@ export const DEFAULT_CONNECTION_CONFIG = Object.fromEntries(
 export const defaultConfigOf = (provider: CustomerProvider): ConnectionConfig =>
 	byId.get(provider)?.config.default ?? { _tag: provider }
 
-/** A stored or submitted config through its integration's schema; `None` for what it refuses. */
-export const decodeConnectionConfig = (
-	provider: CustomerProvider,
-	config: ConnectionConfig,
-): Option.Option<ConnectionConfig> => {
-	const integration = byId.get(provider)
-	return integration === undefined ? Option.none() : integration.config.decode(config)
-}
-
 const OPEN_POLICY: IngestPolicy = { matchByDomain: true, createAccounts: true }
 
 /** What the connection's current config allows; read when an op is applied, parked ops included. */

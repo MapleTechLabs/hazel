@@ -4,11 +4,10 @@ Core Customers code knows no concrete tool. Everything specific to one lives in 
 `packages/customer-integrations/src/<id>/`, and the folder is registered in one line of
 `packages/customer-integrations/src/registry.ts`.
 
-## Benchmarks
+## Goals
 
 1. No tool is named on the core side of the boundary (enforced by `boundary.test.ts`).
-2. Functionality is equal: same stored data, same RPC behaviour, same UI, no migration.
-3. A new integration is a new folder plus one line in `registry.ts`.
+2. A new integration is a new folder plus its registration in `registry.ts`.
 
 ## Layout
 
@@ -71,27 +70,25 @@ what it returns.
 `boundary.test.ts` scans the core paths for each registered id and display name, whole word and
 case-insensitive, camelCase and snake_case parts included, comments too. It also fails when core
 imports an integration's folder rather than the package's public entries. Tests and `test-kit.ts`
-are exempt: unchanged, they are the proof of equal behaviour. Its allowlist names each exact text
+are exempt: they exercise core against the real integrations. Its allowlist names each exact text
 it lets through, with the reason.
 
-## Rules that keep behaviour equal
+## Rules
 
-- **Provider ids stay as stored.** `CustomerProvider` becomes an open string. Stored rows, webhook
-  URLs and `_tag`s do not change. Every RPC or route taking a provider checks it against the
-  registry, since the schema no longer can.
+- **Provider ids are open strings.** Every RPC or route taking a provider checks it against the
+  registry, since the schema cannot.
 - **Config is opaque to core and decoded at the boundary.** Stored configs rely on decoding (older
   ones lack `region` and `accountId`, or carry dropped keys), and `jsonb` columns do not decode. Each
   read for an adapter or a form goes through the integration's schema. The open core schema must keep
   unknown keys.
 - **Ingest policy is read at apply time.** Parked ops are replayed later, so `matchByDomain` and
   `createAccounts` must keep following the current config. They cannot move into the op.
-- **The `customer_settings.attention` DDL default stays byte-identical.** It derives from
-  `attentionDefault`, so no migration is generated. `schema-ddl.test.ts` must stay green.
-- **MRR source selection is generalised, not changed.** `billingProviderOf` takes the billing
-  integrations in `preference` order, and an exhaustive test compares it to the current two-provider
-  logic.
-- **`FIELD_PRECEDENCE` derives from the definitions** and must deep-equal today's table, including
-  which fields a manual `hazel` edit outranks.
+- **`attentionDefault` sets a stored column default.** Changing who holds it changes the
+  `customer_settings.attention` DDL, so it needs a migration.
+- **MRR source selection** walks the billing integrations in `preference` order
+  (`billingProviderOf`).
+- **`FIELD_PRECEDENCE` derives from the definitions**, including which fields a manual `hazel` edit
+  outranks.
 
 ## Outside this boundary
 

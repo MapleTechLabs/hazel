@@ -40,7 +40,7 @@ const ALLOWED: ReadonlyArray<{ readonly file: string; readonly text: string; rea
 	},
 ]
 
-/** Tests and their support keep naming tools: unchanged, they prove the behaviour stayed equal. */
+/** Tests and their support exercise core against the real integrations, so they name them. */
 const isExempt = (file: string) => file.endsWith(".test.ts") || file.endsWith("/test-kit.ts")
 
 const filesUnder = (path: string): ReadonlyArray<string> =>

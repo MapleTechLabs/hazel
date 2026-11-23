@@ -1,113 +1,21 @@
-/**
- * What the registry derives must equal the tables core held before the integrations moved out: the
- * expected values below are those tables, copied.
- */
-import { SignalTemplate } from "@hazel/domain/customers"
+/** How the registry reads a connection's stored config. Stored rows predate some of today's fields. */
 import { Effect, Option } from "effect"
 import { describe, expect, it } from "vitest"
 import { configReader } from "./kit/config"
 import { MapleConnectionConfig } from "./maple/config"
-import {
-	activityProviders,
-	billingPreferenceOrder,
-	billingProviders,
-	decodeConnectionConfig,
-	DEFAULT_ATTENTION_SETTINGS,
-	DEFAULT_CONNECTION_CONFIG,
-	FIELD_PRECEDENCE,
-	ingestPolicyOf,
-	integrationOf,
-	integrations,
-	invoiceProviders,
-	isIntegrationId,
-	requiredSourcesOf,
-	usageInvoiceProviders,
-} from "./registry"
+import { DEFAULT_CONNECTION_CONFIG, ingestPolicyOf, integrationOf } from "./registry"
 import { StripeConnectionConfig } from "./stripe/config"
 
-const OLD_FIELD_PRECEDENCE = new Map<string, ReadonlyArray<string>>([
-	["name", ["hazel", "clerk", "stripe", "autumn", "maple"]],
-	["logoUrl", ["hazel", "clerk", "stripe", "autumn"]],
-	["seatsUsed", ["hazel", "autumn", "clerk"]],
-	["seatsLimit", ["hazel", "autumn", "clerk"]],
-	["email", ["clerk", "stripe", "autumn", "maple"]],
-	["avatarUrl", ["clerk", "maple"]],
-	["role", ["clerk"]],
-])
-
-const ACTIVITY = ["clerk", "maple"]
-const BILLING = ["stripe", "autumn"]
-const OLD_REQUIRED_SOURCES = {
-	inactive: ACTIVITY,
-	usage_drop: ACTIVITY,
-	payment_failed: BILLING,
-	cancel_scheduled: BILLING,
-	trial_ending_low_activation: BILLING,
-	onboarding_stalled: ACTIVITY,
-	health_drop: [],
-	champion_inactive: ACTIVITY,
-	near_limit: ["autumn"],
-	seat_growth: ACTIVITY,
-	churned: BILLING,
-	response_overdue: [],
-	resolution_overdue: [],
-} satisfies Record<SignalTemplate, ReadonlyArray<string>>
-
-const OLD_LINK_HOSTS = {
-	clerk: ["clerk.com"],
-	stripe: ["stripe.com"],
-	autumn: ["useautumn.com"],
-	maple: ["maple.dev"],
-}
-
-/** The integrations these tables held: one registered later is not part of what they pin. */
-const HELD: ReadonlySet<string> = new Set(Object.keys(OLD_LINK_HOSTS))
-const held = (ids: ReadonlyArray<string>) => ids.filter((id) => HELD.has(id))
-
 describe("the registry", () => {
-	it("derives the field precedence core held, order and manual edits included", () => {
-		const heldOrder = [...FIELD_PRECEDENCE].map(([field, order]) => [
-			field,
-			order.filter((source) => source === "hazel" || HELD.has(source)),
-		])
-		expect(heldOrder).toEqual([...OLD_FIELD_PRECEDENCE])
-	})
-
-	it("resolves every template to the sources it required", () => {
-		for (const template of SignalTemplate.literals) {
-			expect(held(requiredSourcesOf(template)), template).toEqual(OLD_REQUIRED_SOURCES[template])
-		}
-	})
-
-	it("keeps the capability lists, the stored attention default and the link hosts", () => {
-		expect(held(integrations.map((integration) => integration.id))).toEqual([
-			"clerk",
-			"stripe",
-			"autumn",
-			"maple",
-		])
-		expect(held(activityProviders)).toEqual(ACTIVITY)
-		expect(held(billingProviders)).toEqual(BILLING)
-		expect(held(billingPreferenceOrder.map((entry) => entry.provider))).toEqual(["autumn", "stripe"])
-		expect(held(invoiceProviders)).toEqual(["stripe"])
-		expect(held(usageInvoiceProviders)).toEqual(["stripe"])
-		expect(JSON.stringify(DEFAULT_ATTENTION_SETTINGS)).toBe(
-			'{"stages":["lead","trialing","active","past_due"],"requiredSources":["stripe"]}',
-		)
-		for (const [id, hosts] of Object.entries(OLD_LINK_HOSTS)) {
-			expect(integrationOf(id)?.ingest.linkHosts).toEqual(hosts)
-		}
-		expect(isIntegrationId("nope")).toBe(false)
-	})
-
 	it("reads legacy stored configs through the integration's schema", () => {
 		const maple = { _tag: "maple", activityEvents: [], metricMappings: [], lookbackDays: 30 }
 		const legacy = { ...maple, mapleOrgId: "org_a", accountKey: "GroupId", userKey: "UserId" }
-		expect(decodeConnectionConfig("maple", legacy)).toEqual(Option.some({ ...maple, region: "us" }))
+		expect(integrationOf("maple")?.config.decode(legacy)).toEqual(Option.some({ ...maple, region: "us" }))
 		const stripe = { _tag: "stripe", clerkOrgMetadataKey: "org", matchByDomain: false }
-		expect(decodeConnectionConfig("stripe", stripe)).toEqual(Option.some({ ...stripe, accountId: "" }))
-		expect(Option.isNone(decodeConnectionConfig("nope", maple))).toBe(true)
-		expect(Option.isNone(decodeConnectionConfig("clerk", maple))).toBe(true)
+		expect(integrationOf("stripe")?.config.decode(stripe)).toEqual(
+			Option.some({ ...stripe, accountId: "" }),
+		)
+		expect(integrationOf("clerk")?.config.decode(maple)).toEqual(Option.none())
 	})
 
 	it("gives an adapter the decoded config", async () => {

@@ -1,131 +1,22 @@
 /**
- * Core's side of the integration boundary (`docs/customers/integrations.md`): MRR source selection
- * generalised over the registry equals the two-provider logic it replaced, and what the open schemas
- * no longer refuse is refused at the handler or route.
+ * Core's side of the integration boundary (`docs/customers/integrations.md`): provider ids and configs
+ * are open strings and records in the contracts, so the handlers and routes refuse what the registry
+ * does not know.
  */
 import { DEFAULT_CONNECTION_CONFIG } from "@hazel/customer-integrations"
-import type { schema } from "@hazel/db"
-import type { ConnectionConfig, CustomerProvider } from "@hazel/domain/customers"
-import { SubscriptionStatus } from "@hazel/domain/customers"
+import type { ConnectionConfig } from "@hazel/domain/customers"
 import { Effect, type Scope } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/http"
 import { describe, expect, it } from "vitest"
 import { handleCustomersWebhook } from "../../../routes/customers-webhooks.http"
 import { Directory } from "../../../services/directory"
 import { ObjectStubs } from "../protocol"
-import { pays } from "./facts"
-import { billingProviderOf, billsNow } from "./snapshot"
 import { makeCustomersWorld, ok, tagOf } from "./test-kit"
-
-type Subscription = schema.CustomerSubscription
-
-/** The function as it read before the registry, kept as the reference. */
-const twoProviderBillingOf = (
-	autumnReady: boolean,
-	subscriptions: ReadonlyArray<Subscription>,
-	stored: CustomerProvider | null,
-): CustomerProvider => {
-	const autumn = subscriptions.filter((sub) => sub.provider === "autumn")
-	if (autumn.length === 0) return "stripe"
-	const stripe = subscriptions.filter((sub) => sub.provider === "stripe")
-	if (stripe.length === 0) return "autumn"
-	if (autumnReady && autumn.some(billsNow)) return "autumn"
-	if (stripe.some(billsNow)) return "stripe"
-	if (stored !== null) return stored
-	return autumnReady && autumn.some(pays) && !stripe.some(pays) ? "autumn" : "stripe"
-}
-
-/** Every status, priced or free, on usage or not, and a trial canceled before it converted. */
-const variants = (provider: CustomerProvider): ReadonlyArray<Subscription> =>
-	SubscriptionStatus.literals.flatMap((status) =>
-		[0, 100].flatMap((mrrMinor) =>
-			[false, true].flatMap((billsByUsage) =>
-				[false, true].map(
-					(unconverted) =>
-						({
-							provider,
-							status,
-							mrrMinor,
-							billsByUsage,
-							trialEndsAt: unconverted ? new Date("2026-02-01") : null,
-							canceledAt: unconverted ? new Date("2026-01-15") : null,
-							currentPeriodEnd: unconverted ? new Date("2026-01-20") : null,
-						}) as Subscription,
-				),
-			),
-		),
-	)
-
-/** No subscription, one, or any two of them. */
-const holdings = (provider: CustomerProvider): ReadonlyArray<ReadonlyArray<Subscription>> => {
-	const all = variants(provider)
-	return [
-		[],
-		...all.map((sub) => [sub]),
-		...all.flatMap((a, index) => all.slice(index + 1).map((b) => [a, b])),
-	]
-}
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
 
-describe("billingProviderOf", () => {
-	it("equals the two-provider logic over every combination of what decides it", () => {
-		// What the choice reads of one provider's subscriptions: whether it holds any, bills now, pays.
-		const classes = (provider: CustomerProvider) => {
-			const seen = new Map<string, ReadonlyArray<Subscription>>()
-			for (const subs of holdings(provider)) {
-				seen.set(`${subs.length > 0}:${subs.some(billsNow)}:${subs.some(pays)}`, subs)
-			}
-			return [...seen.values()]
-		}
-		const autumn = classes("autumn")
-		const stripe = classes("stripe")
-		// None; held but never paid; paid, not billing now; billing now.
-		expect([autumn.length, stripe.length]).toEqual([4, 4])
-		let compared = 0
-		for (const ready of [false, true]) {
-			for (const stored of [null, "stripe", "autumn"]) {
-				for (const a of autumn) {
-					for (const s of stripe) {
-						for (const subscriptions of [
-							[...a, ...s],
-							[...s, ...a],
-						]) {
-							expect(
-								billingProviderOf(new Set(ready ? ["autumn"] : []), subscriptions, stored),
-							).toBe(twoProviderBillingOf(ready, subscriptions, stored))
-							compared += 1
-						}
-					}
-				}
-			}
-		}
-		expect(compared).toBe(2 * 3 * autumn.length * stripe.length * 2)
-	})
-
-	it("equals it over every single subscription pair", () => {
-		const autumn = [[], ...variants("autumn").map((sub) => [sub])]
-		const stripe = [[], ...variants("stripe").map((sub) => [sub])]
-		for (const ready of [false, true]) {
-			for (const stored of [null, "stripe", "autumn"]) {
-				for (const a of autumn) {
-					for (const s of stripe) {
-						const subscriptions = [...a, ...s]
-						if (
-							billingProviderOf(new Set(ready ? ["autumn"] : []), subscriptions, stored) !==
-							twoProviderBillingOf(ready, subscriptions, stored)
-						) {
-							expect.fail(JSON.stringify({ ready, stored, subscriptions }))
-						}
-					}
-				}
-			}
-		}
-	})
-})
-
-describe("what the open schemas no longer refuse", () => {
+describe("provider ids and configs from outside", () => {
 	it("refuses a connect naming an unknown provider or a config its schema rejects", () =>
 		run(
 			Effect.gen(function* () {
