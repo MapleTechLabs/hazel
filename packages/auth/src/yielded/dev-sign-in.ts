@@ -3,7 +3,7 @@ import { Base64Url } from "effect/encoding"
 import { Etag, type HttpBody, HttpClient, HttpClientResponse, HttpPlatform, HttpRouter } from "effect/http"
 import { SqlClient } from "effect/sql"
 
-import { type HazelAuthConfig, makeHazelAuthLive } from "./server.ts"
+import { devSignInGitHubClient, type HazelAuthConfig, makeHazelAuthLive } from "./server.ts"
 
 /**
  * Dev/preview sign-in without an OAuth app: runs the real GitHub sign-in (`/auth/signIn`,
@@ -143,7 +143,12 @@ export const makeDevSignIn = Effect.fn("HazelAuth.makeDevSignIn")(function* (con
 		Path.Path,
 		Etag.Generator,
 	)(yield* Effect.context<DevSignInPlatform>())
-	const { http, Services, hooks, sessionCookieName } = makeHazelAuthLive(config)
+	// The simulated GitHub answers whatever client signs in, so an install without a GitHub app
+	// (Google only) signs in through the stand-in one.
+	const { http, Services, hooks, sessionCookieName } = makeHazelAuthLive({
+		...config,
+		github: config.github ?? devSignInGitHubClient,
+	})
 	const routes = http.routes().pipe(
 		Layer.provide(http.layer),
 		Layer.provideMerge(Services),
