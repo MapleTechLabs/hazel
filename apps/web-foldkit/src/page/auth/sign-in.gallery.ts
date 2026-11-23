@@ -9,6 +9,7 @@ import { Runtime } from "foldkit"
 import type { HtmlBuilder } from "foldkit/html"
 import { afterEach, expect, test } from "vitest"
 import { page } from "vitest/browser"
+import { AppRoute } from "../../route"
 import { makeShared } from "../../test/pages-fixtures"
 import { exportDataCard } from "../settings/general/export-data"
 import * as GeneralMessage from "../settings/general/message"
@@ -27,7 +28,7 @@ import { view } from "./sign-in/view"
 
 const signedOut = makeShared({ auth: "SignedOut", currentUser: null, organization: null, member: null })
 
-const route = { _tag: "SignIn", redirectUrl: Option.none(), error: Option.none() } as const
+const route = AppRoute.SignIn({ redirectUrl: Option.none(), error: Option.none() })
 
 const SIGN_IN_STATES = {
 	"both-providers": {
