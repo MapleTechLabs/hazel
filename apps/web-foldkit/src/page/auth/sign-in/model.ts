@@ -31,6 +31,30 @@ export const Methods = defineTaggedUnion({
 })
 export type Methods = typeof Methods.Type
 
+/** Why another install's address was not taken (`~/config/server`'s `ServerDiscoveryError`). */
+export const ServerProblem = Schema.Literals(["Empty", "Invalid", "Insecure", "Unreachable", "NotHazel"])
+export type ServerProblem = typeof ServerProblem.Type
+
+/** The native app's "sign in to another install" form. */
+export const ServerForm = Schema.Struct({
+	address: Schema.String,
+	/** Resolving the address, or switching to it (the app then reloads). */
+	isBusy: Schema.Boolean,
+	problem: Schema.NullOr(ServerProblem),
+})
+export type ServerForm = typeof ServerForm.Type
+
+/** The install the native app signs in to; `null` on the web, where it is the page's own. */
+export const ServerChoice = Schema.Struct({
+	/** How it is named on screen, e.g. `hazel.sh` or `chat.acme.com`. */
+	label: Schema.String,
+	/** The build's own install (Hazel cloud): nothing to reset to. */
+	isDefault: Schema.Boolean,
+	/** Open while the user enters another address. */
+	form: Schema.NullOr(ServerForm),
+})
+export type ServerChoice = typeof ServerChoice.Type
+
 export const Model = Schema.Struct({
 	/** `/sign-up` shows the same choices: the first OAuth sign-in creates the account. */
 	mode: Schema.Literals(["SignIn", "SignUp"]),
@@ -38,6 +62,7 @@ export const Model = Schema.Struct({
 	redirectUrl: Schema.NullOr(Schema.String),
 	submission: Submission,
 	methods: Methods,
+	server: Schema.NullOr(ServerChoice),
 })
 export type Model = typeof Model.Type
 

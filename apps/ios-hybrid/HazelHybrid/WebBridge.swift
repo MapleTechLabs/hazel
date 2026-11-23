@@ -305,9 +305,15 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
 
     /// The bundled page at `url` on the web app's origin: its own origin is the web app's, so the
     /// API's CORS and the sign-in flow take it, while every file comes from the bundle (`hazel://`).
+    /// A chosen install (`ChosenServer`) is handed to the page before its scripts run.
     private static func loadPage(_ webView: WKWebView, at url: URL) {
         let index = Bundle.main.resourceURL!.appendingPathComponent("web/index.html")
-        guard let html = try? String(contentsOf: index, encoding: .utf8) else { return }
+        guard var html = try? String(contentsOf: index, encoding: .utf8) else { return }
+        if let server = ChosenServer.document, let head = html.range(of: "<head>") {
+            // JSON is a script literal; `<` escaped so nothing in it can close the tag.
+            let literal = server.replacingOccurrences(of: "<", with: "\\u003c")
+            html.insert(contentsOf: "<script>window.__hazelServer=\(literal)</script>", at: head.upperBound)
+        }
         PageNavigation.isLoadingPage = true
         webView.loadHTMLString(html, baseURL: url)
     }

@@ -76,10 +76,10 @@ final class SchemeHandler: NSObject, WKURLSchemeHandler {
 
 /// Pictures from hosts that serve only web apps they know (Brandfetch's logo CDN): the page asks the
 /// shell for them (`hazel://app/__remote?u=…`, `web/bridge.ts`), and the shell fetches them with the
-/// web app's own origin as the referrer, as a browser on the web app would.
+/// web app's own origin as the referrer (the chosen install's), as a browser on the web app would.
 enum RemotePicture {
     static let hosts: Set<String> = ["cdn.brandfetch.io"]
-    private static let referrer = "https://app.hazel.sh/"
+    private static var referrer: String { HostBridge.appOrigin.absoluteString + "/" }
 
     /// The picture `url` stands for, when it is a proxied one.
     static func original(of url: URL) -> URL? {

@@ -1,6 +1,7 @@
 import { Match } from "effect"
 import type { Node as ProseMirrorNode } from "prosemirror-model"
 import { isSpecialMention, schema } from "./schema"
+import { currentServer } from "~/config/server"
 
 /**
  * Markdown <-> composer document, ported from the legacy
@@ -14,7 +15,7 @@ const normalizePathPrefix = (pathname: string) => (pathname.endsWith("/") ? path
 
 /** Accept only custom emoji URLs from the configured storage base; everything else is untrusted. */
 const isTrustedCustomEmojiUrl = (rawUrl: string): boolean => {
-	const customEmojiStorageBaseUrl: string | undefined = import.meta.env.VITE_R2_PUBLIC_URL
+	const customEmojiStorageBaseUrl = currentServer().cdn
 	if (!customEmojiStorageBaseUrl || !URL.canParse(rawUrl) || !URL.canParse(customEmojiStorageBaseUrl)) {
 		return false
 	}

@@ -121,10 +121,19 @@ bot in the install, put its token (`HAZEL_BOT_TOKEN`, ...) in the env file, and 
 
 ## Known limits
 
-- **Native apps** point at Hazel's own install (`app.hazel.sh`): the iOS app's origin is built in
-  (`apps/ios-hybrid`), and the desktop app's URLs are build inputs (`VITE_APP_URL`,
-  `VITE_BACKEND_URL`, `apps/web-foldkit/scripts/production-env.sh`). A customer install is used from
-  the browser, or from desktop/iOS builds made for it.
+- **Native apps** (desktop, iOS) start on Hazel's own install (`app.hazel.sh`). On the sign-in page,
+  "Signing in to hazel.sh · Change" takes the install's web address (`chat.acme.com` or
+  `https://app.chat.acme.com`; https only, http only for localhost). The app reads
+  `https://<address>/.well-known/hazel.json`, then `https://app.<address>/...` when the user typed
+  the zone: the web build writes that file from its build inputs (`VITE_APP_URL`,
+  `VITE_BACKEND_URL`, `VITE_R2_PUBLIC_URL`, `VITE_LINK_PREVIEW_URL`) and serves it to any origin
+  (`apps/web-foldkit/vite.config.ts`), so every install has it with no setup. Changing install signs
+  out of the previous one, empties the keychain record and restarts the app on the new one
+  (`apps/web-foldkit/src/core/config/server.ts`, `src/platform/server-switch.ts`); "Use Hazel cloud"
+  goes back. The desktop app keeps the choice in its own storage and opens the install's
+  `/auth/desktop` to sign in; the iOS app keeps it in the shell and loads its page on the install's
+  web origin, which the install's API allows as its `FRONTEND_URL` (`apps/backend/src/lib/cors.ts`).
+  Both sign in as Hazel's own desktop and native clients, which every install accepts.
 - **Connect** (shared channels between organizations) only connects organizations of the same
   install.
 - **Data export**: there is no self-serve export of an organization's data yet.

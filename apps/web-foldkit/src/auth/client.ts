@@ -2,15 +2,14 @@ import { type AuthProviders, authProviders, HazelAuthApi, SignInProvider } from 
 import { Client } from "@yielded/auth"
 import { Effect, Layer, Schema } from "effect"
 import type { ClientService } from "@yielded/auth/Client"
-
-const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:3003"
+import { apiUrl } from "~/config/server"
 
 /**
  * Hazel's sign-in client (`@hazel/auth/contract` over `/auth/*` on the API). The session is
  * an HttpOnly cookie on the API host; the client sends credentials and the CSRF header.
  */
 export const HazelAuthClient = Client.make(HazelAuthApi, {
-	baseUrl: backendUrl,
+	baseUrl: apiUrl(),
 })
 
 export type HazelAuthClient = ClientService<typeof HazelAuthApi.namespace, typeof HazelAuthApi.actions>
@@ -35,7 +34,7 @@ const decodeSignInMethods = Schema.decodeUnknownEffect(authProviders.schema)
 /** `GET /auth/providers`: the providers this install has OAuth apps for, and whether passkeys work. */
 export const fetchSignInMethods: Effect.Effect<AuthProviders, SignInMethodsError> = Effect.tryPromise({
 	try: async () => {
-		const response = await fetch(`${backendUrl}${authProviders.path}`, { credentials: "omit" })
+		const response = await fetch(`${apiUrl()}${authProviders.path}`, { credentials: "omit" })
 		if (!response.ok) throw new Error(`${authProviders.path} answered ${response.status}`)
 		return (await response.json()) as unknown
 	},

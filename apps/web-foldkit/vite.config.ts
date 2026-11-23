@@ -3,6 +3,13 @@ import { resolve } from "node:path"
 import { foldkit } from "@foldkit/vite-plugin"
 import tailwindcss from "@tailwindcss/vite"
 import type { Plugin } from "vite"
+import {
+	DISCOVERY_PATH,
+	discoveryAsset,
+	discoveryJson,
+	type ServerEnv,
+	serverFromEnv,
+} from "./src/core/config/discovery.ts"
 import { configDefaults, defineConfig } from "vitest/config"
 
 /** The desktop app's version (apps/desktop's tauri.conf.json is the single source of truth). */
@@ -34,18 +41,48 @@ const immutableAssetHeaders = (): Plugin => ({
 				.filter((file) => /^assets\/[\w.-]+\.(js|css|wasm)$/.test(file))
 				.sort()
 			const rules = [...files.map((file) => `/${file}`), "/assets/*.woff2", "/assets/*.woff"]
-			if (rules.length > MAX_HEADER_RULES)
-				this.error(`_headers: ${rules.length} rules, Cloudflare reads ${MAX_HEADER_RULES}`)
+			// The discovery document is read by the native apps from their own origins.
+			if (rules.length + 1 > MAX_HEADER_RULES)
+				this.error(`_headers: ${rules.length + 1} rules, Cloudflare reads ${MAX_HEADER_RULES}`)
 			this.emitFile({
 				type: "asset",
 				fileName: "_headers",
-				source: rules
-					.map((rule) => `${rule}\n  Cache-Control: public, max-age=31536000, immutable\n`)
-					.join(""),
+				source:
+					rules
+						.map((rule) => `${rule}\n  Cache-Control: public, max-age=31536000, immutable\n`)
+						.join("") +
+					`${DISCOVERY_PATH}\n  Access-Control-Allow-Origin: *\n  Cache-Control: public, max-age=300\n`,
 			})
 		},
 	},
 })
+
+/**
+ * Writes `/.well-known/hazel.json`, the install's addresses from the build inputs (`VITE_APP_URL`,
+ * `VITE_BACKEND_URL`, ...; `alchemy.run.ts`), so the native apps can be pointed at this install by
+ * its web address (`src/core/config/server.ts`). Cloudflare's static assets serve dot-directories
+ * (Alchemy uploads every file but `.assetsignore`'s); `_headers` lets any origin read it. The dev
+ * server answers it too.
+ */
+export const wellKnownDiscovery = (): Plugin => {
+	let env: ServerEnv = {}
+	return {
+		name: "hazel:well-known-discovery",
+		configResolved(config) {
+			env = config.env
+		},
+		configureServer(server) {
+			server.middlewares.use(DISCOVERY_PATH, (_request, response) => {
+				response.setHeader("Content-Type", "application/json")
+				response.setHeader("Access-Control-Allow-Origin", "*")
+				response.end(discoveryJson(serverFromEnv(env)))
+			})
+		},
+		generateBundle() {
+			this.emitFile(discoveryAsset(env))
+		},
+	}
+}
 
 /**
  * Prism's language files use the global its core sets, without importing it: each gets the import,
@@ -172,6 +209,7 @@ export default defineConfig({
 		preloadFirstPaintFonts(),
 		inlinePaintBoot(),
 		immutableAssetHeaders(),
+		wellKnownDiscovery(),
 	],
 	// The local cache's OPFS worker and wa-sqlite wasm resolve next to the package's own code.
 	optimizeDeps: { exclude: ["@tanstack/browser-db-sqlite-persistence"] },
