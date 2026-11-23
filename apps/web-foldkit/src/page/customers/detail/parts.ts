@@ -3,10 +3,12 @@ import type { UserId } from "@hazel/schema"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import type { AccountRow, MemberRow } from "../../../customers/queries"
+import { IconCopy } from "../../../icons"
+import { button } from "../../../ui/button"
 import { heading } from "../../../ui/heading"
 import type * as Menu from "../../../ui/menu"
 import { view as menuView } from "../../../ui/menu-view"
-import type { Message } from "./message"
+import { Message } from "./message"
 
 /** What every tab reads besides the Model. */
 export interface Context {
@@ -64,6 +66,20 @@ export const card = (
 			),
 			h.div([h.Class(twMerge("flex flex-col p-4 sm:px-5", options.bodyClassName))], [...children]),
 		],
+	)
+
+/** An icon button that copies an identifier; `label` names it in the tooltip and the toast. */
+export const copyButton = (h: HtmlBuilder<Message>, text: string, label: string): Html =>
+	button(
+		h,
+		{
+			intent: "plain",
+			size: "sq-xs",
+			className: "shrink-0",
+			onPress: Message.PressedCopy({ text, label }),
+			attributes: [h.AriaLabel(`Copy ${label}`), h.Title(`Copy ${label}`)],
+		},
+		[IconCopy(h, icon)],
 	)
 
 /** A text link-button in a card header (`View billing`, `All notes`). */

@@ -560,15 +560,13 @@ export const StartCustomerImpersonation = Command.define("StartCustomerImpersona
 
 // LOCAL
 
-/** Copies `text`; a path (`/…`) becomes a full link on this origin. */
+/** Copies `text` as is; with `isPath`, as a full link on this origin. */
 export const CopyCustomerText = Command.define("CopyCustomerText", {
-	args: { text: Schema.String, label: Schema.String },
+	args: { text: Schema.String, label: Schema.String, isPath: Schema.Boolean },
 	messages: [Message.CompletedCopy],
-	execute: ({ text, label }) =>
+	execute: ({ text, label, isPath }) =>
 		Effect.tryPromise(() =>
-			navigator.clipboard.writeText(
-				text.startsWith("/") ? new URL(text, window.location.origin).href : text,
-			),
+			navigator.clipboard.writeText(isPath ? new URL(text, window.location.origin).href : text),
 		).pipe(
 			Effect.match({
 				onSuccess: () => Message.CompletedCopy({ label, isCopied: true }),

@@ -490,6 +490,7 @@ const onAction = (model: Model, shared: Shared, key: string): Return => {
 					CopyCustomerText({
 						text: hrefOf(customerRoute(shared.orgSlug ?? "", model.accountId)),
 						label: "Link",
+						isPath: true,
 					}),
 				],
 			}
@@ -1571,13 +1572,16 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 			}),
 		}),
 
-		PressedCopy: ({ text, label }) => ({ model, commands: [CopyCustomerText({ text, label })] }),
+		PressedCopy: ({ text, label }) => ({
+			model,
+			commands: [CopyCustomerText({ text, label, isPath: false })],
+		}),
 		CompletedCopy: ({ label, isCopied }) => ({
 			model,
 			outMessage: toast(
 				isCopied
 					? successToast(`${label} copied`)
-					: errorToastOf({ title: `Couldn't copy the ${label.toLowerCase()}` }),
+					: errorToastOf({ title: `${label} wasn't copied` }),
 			),
 		}),
 		CompletedFocusComposer: () => ({ model }),
