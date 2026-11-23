@@ -78,7 +78,7 @@ import { peopleInChat } from "./people-in-chat"
 import { overviewTab } from "./overview-tab"
 import { companyFacts, companySocials } from "../../../customers/ui/company"
 import { companySection } from "./company-section"
-import { type Context, icon, memberOf, menu, property, sidebarSection } from "./parts"
+import { type Context, copyButton, icon, memberOf, menu, property, sidebarSection } from "./parts"
 import { usersTab } from "./users-tab"
 import { heading } from "../../../ui/heading"
 
@@ -951,6 +951,9 @@ const attributeValue = (value: unknown): string =>
 		? String(value)
 		: JSON.stringify(value)
 
+const attributeLabel = (key: string): string =>
+	key.replace(/([A-Z])/g, " $1").replace(/^./, (first) => first.toUpperCase())
+
 /** Each source record the customer is linked to, one line each; the match is in the tooltip. */
 const linkedRecords = (h: HtmlBuilder<Message>, model: Model, context: Context): Html => {
 	const { detail } = context
@@ -989,6 +992,7 @@ const linkedRecords = (h: HtmlBuilder<Message>, model: Model, context: Context):
 					h.span([h.Class("shrink-0 text-fg")], [linkLabel(ref.provider)]),
 					h.span([h.Class("min-w-0 flex-1 truncate text-muted-fg")], [ref.name ?? ref.externalId]),
 					...recordLink(h, ref),
+					copyButton(h, ref.externalId, `${linkLabel(ref.provider)} ID`),
 				],
 			),
 		),
@@ -1042,23 +1046,22 @@ const attributesSection = (h: HtmlBuilder<Message>, context: Context): ReadonlyA
 								h.Class("grid min-h-8 grid-cols-[7rem_1fr_auto] items-center gap-2 text-sm"),
 							],
 							[
-								h.span(
-									[h.Class("truncate text-muted-fg")],
+								h.span([h.Class("truncate text-muted-fg")], [attributeLabel(key)]),
+								h.span([h.Class("truncate text-fg")], [attributeValue(value)]),
+								h.div(
+									[h.Class("flex items-center gap-2")],
 									[
-										key
-											.replace(/([A-Z])/g, " $1")
-											.replace(/^./, (first) => first.toUpperCase()),
+										...(fieldSources[key] === undefined
+											? []
+											: [
+													h.span(
+														[h.Class("text-muted-fg text-xs")],
+														[sourceLabel(fieldSources[key])],
+													),
+												]),
+										copyButton(h, attributeValue(value), attributeLabel(key)),
 									],
 								),
-								h.span([h.Class("truncate text-fg")], [attributeValue(value)]),
-								...(fieldSources[key] === undefined
-									? []
-									: [
-											h.span(
-												[h.Class("text-muted-fg text-xs")],
-												[sourceLabel(fieldSources[key])],
-											),
-										]),
 							],
 						),
 					),

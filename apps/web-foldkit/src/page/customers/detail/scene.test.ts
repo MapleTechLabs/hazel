@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { Option } from "effect"
+import * as AsyncData from "foldkit/asyncData"
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
 import { toAccountRow } from "../../../customers/queries"
@@ -7,6 +8,7 @@ import { receivedSuggestions, EMPTY_SUGGESTIONS } from "../../../customers/sugge
 import {
 	ACCOUNTS,
 	ACCOUNTS_BY_KEY,
+	ACME_DETAIL,
 	type NamedAccount,
 	NOW,
 	RICH_COMPANY,
@@ -22,7 +24,7 @@ import { AppRoute } from "../../../route"
 import { makeShared, memberWithRole, pageScene } from "../../../test/pages-fixtures"
 import * as Menu from "../../../ui/menu"
 import { FocusTriggerOnPress } from "../../../ui/menu-view"
-import { FocusDomainInput } from "./commands"
+import { CopyCustomerText, FocusDomainInput } from "./commands"
 import { Message } from "./message"
 import { init, update } from "./update"
 import { view } from "./view"
@@ -275,6 +277,42 @@ describe("customer page: looking up the company", () => {
 			Scene.expect(field).toExist(),
 			Scene.expect(arriving).toExist(),
 			Scene.inside(arriving, Scene.expect(field).toBeAbsent()),
+		)
+	})
+})
+
+describe("customer page: copying identifiers", () => {
+	const acme = ACCOUNTS_BY_KEY.acme
+	const as = makeShared({ nowMs: NOW.getTime() })
+	const withDetail = {
+		...init(AppRoute.CustomerDetail({ orgSlug: "hazel", accountId: acme.id, tab: Option.none() }), as)
+			.model,
+		accounts: ACCOUNTS.map(toAccountRow),
+		detail: AsyncData.Success({
+			data: { ...ACME_DETAIL, account: { ...ACME_DETAIL.account, attributes: { slug: "/acme" } } },
+		}),
+	}
+
+	test("a linked record's ID and an attribute copy verbatim, even one that looks like a path", () => {
+		Scene.scene(
+			pageScene(update, view, as),
+			Scene.given(withDetail),
+			menusMounted(4),
+			Scene.click(Scene.role("button", { name: "Copy Clerk organization ID" })),
+			Scene.Command.expectExact(
+				CopyCustomerText({
+					text: "org_2acmeRobotics",
+					label: "Clerk organization ID",
+					isPath: false,
+				}),
+			),
+			Scene.Command.resolve(
+				CopyCustomerText,
+				Message.CompletedCopy({ label: "Clerk organization ID", isCopied: true }),
+			),
+			Scene.click(Scene.role("button", { name: "Copy Slug" })),
+			Scene.Command.expectExact(CopyCustomerText({ text: "/acme", label: "Slug", isPath: false })),
+			Scene.Command.resolve(CopyCustomerText, Message.CompletedCopy({ label: "Slug", isCopied: true })),
 		)
 	})
 })
