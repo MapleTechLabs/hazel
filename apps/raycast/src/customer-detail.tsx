@@ -9,6 +9,7 @@ import { call } from "./lib/rpc"
 export const fetchDetail = (organizationId: string, accountId: string) =>
 	call<AccountDetail>("customers.account.detail", { organizationId, accountId })
 
+const BILLED_STATUSES: ReadonlySet<string> = new Set(["active", "past_due", "unpaid"])
 const SEVERITY_ICON = { high: "🔴", medium: "🟠", low: "🟡" } as const
 const HEALTH_LABEL = {
 	usage: "Usage",
@@ -62,8 +63,12 @@ export const detailMarkdown = (
 		}
 		for (const subscription of detail.subscriptions) {
 			const ends = subscription.cancelAtPeriodEnd ? "cancels" : "renews"
+			// Only a billed subscription adds to MRR, by what the revenue rules class as recurring.
+			const mrr = BILLED_STATUSES.has(subscription.status)
+				? detail.subscriptionMrr.find((entry) => entry.subscriptionId === subscription.id)?.mrrMinor
+				: undefined
 			lines.push(
-				`- ${subscription.planName === null ? "Subscription" : md(subscription.planName)} · ${money(subscription.mrrMinor, subscription.currency)}/mo · ${subscription.status}` +
+				`- ${subscription.planName === null ? "Subscription" : md(subscription.planName)}${mrr === undefined ? "" : ` · ${money(mrr, subscription.currency)}/mo`} · ${subscription.status}` +
 					(subscription.currentPeriodEnd === null
 						? ""
 						: ` · ${ends} ${date(subscription.currentPeriodEnd)}`) +

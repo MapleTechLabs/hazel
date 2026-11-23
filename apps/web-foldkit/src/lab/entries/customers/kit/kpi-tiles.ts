@@ -28,7 +28,7 @@ export const lab = defineStaticLab("KPI tiles", (h) =>
 					id: "mrr",
 					label: "MRR",
 					definition:
-						"Monthly recurring revenue: the sum of every non-canceled subscription, normalized to a month.",
+						"Contracted recurring revenue per month, now. Variable usage billing is excluded.",
 					value: formatMoney(overview.kpis.mrrMinor.value),
 					delta: { value: 6.2, text: formatDeltaPct(6.2) },
 					comparison: "vs previous 30 days",

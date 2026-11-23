@@ -25,15 +25,15 @@ links it.
 1. **Restricted key** — Stripe Dashboard → Developers → **API keys** → _Create restricted key_,
    with **Read** on:
 
-    | Resource        | Why                                                    |
-    | --------------- | ------------------------------------------------------ |
-    | Customers       | the accounts and their billing contacts                |
-    | Subscriptions   | MRR, plan, status, trial, scheduled cancellation       |
-    | Invoices        | amounts, due dates, failed payments, the hosted copy   |
-    | Products        | the plan names (a price only carries its product's id) |
-    | Prices          | the amounts and intervals embedded in a subscription   |
-    | Payment methods | the card brand, last four and expiry on file           |
-    | Events          | the scheduled pull's change feed (`GET /v1/events`)    |
+    | Resource        | Why                                                  |
+    | --------------- | ---------------------------------------------------- |
+    | Customers       | the accounts and their billing contacts              |
+    | Subscriptions   | MRR, plan, status, trial, scheduled cancellation     |
+    | Invoices        | amounts, due dates, failed payments, the hosted copy |
+    | Products        | plan names; product metadata for revenue rules       |
+    | Prices          | the catalog revenue rules classify lines by          |
+    | Payment methods | the card brand, last four and expiry on file         |
+    | Events          | the scheduled pull's change feed (`GET /v1/events`)  |
 
     Everything else can stay **None**; Hazel only ever issues GETs. A full secret key works too.
     Connecting reads one record of each resource, with the same `expand[]` the pull uses, so a key
@@ -71,7 +71,8 @@ links it.
     `customer.subscription.resumed`, `invoice.finalized`, `invoice.paid`,
     `invoice.payment_failed`, `invoice.payment_action_required`, `invoice.voided`,
     `invoice.marked_uncollectible`, `payment_method.attached`, `payment_method.updated`,
-    `payment_method.automatically_updated`, `payment_method.detached`
+    `payment_method.automatically_updated`, `payment_method.detached`, `price.created`,
+    `price.updated`, `product.updated`
 
     The webhook is optional: without one every change still arrives through the scheduled pull's
     event feed, up to 6 hours late.
@@ -199,7 +200,7 @@ currency like JPY is right by construction.
 | --------------- | ------------------------------------------------------------------ | ----------------------------------- |
 | `customers`     | `/v1/customers`                                                    | accounts and their billing contacts |
 | `subscriptions` | `/v1/subscriptions?status=all` (expanded) + `/v1/products?ids[]=…` | subscriptions and MRR               |
-| `invoices`      | `/v1/invoices`, the last 365 days                                  | invoices                            |
+| `invoices`      | `/v1/invoices`, the last 1135 days (+ `/lines` past the first 10)  | invoices and their lines            |
 | `events`        | `/v1/events?types[]=…&created[gte]=since` + one read per object    | whatever changed                    |
 
 Paging is Stripe's own `starting_after`, which is id-based, so a record deleted mid-walk cannot
@@ -209,7 +210,7 @@ cannot read (an earlier deploy's format) is logged and the pull starts over.
 
 - **The backfill (`since: null`) walks `customers` → `subscriptions` → `invoices`**, so its last
   page sets `PullPage.sweep = ["account"]` and core removes the customers it did not see (deleted
-  while no webhook reached Hazel). Invoices are bounded to the last 365 days: nothing older answers
+  while no webhook reached Hazel). Invoices are bounded to the last 1135 days: nothing older answers
   a signal or a rollup, and a decade of invoices cannot stall a connection.
 - **A scheduled pull (every 6 hours, and "sync now") reads the event log.** None of Stripe's list
   endpoints filter by a change time, so listing what was _created_ since the last success would

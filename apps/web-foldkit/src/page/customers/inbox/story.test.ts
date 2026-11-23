@@ -80,6 +80,7 @@ const acme: AccountRow = {
 	lifecycleStage: "active",
 	planName: "Growth",
 	mrrMinor: 215_000,
+	variableMrrMinor: 0,
 	currency: "USD",
 	trialListMrrMinor: null,
 	trialEndsAtMs: null,

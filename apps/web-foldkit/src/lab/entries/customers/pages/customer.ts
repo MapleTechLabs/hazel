@@ -291,6 +291,16 @@ const usageOf = (metricKey: string, range: Customers.CustomersRange) =>
 	})
 
 const MRR_HISTORY = series("mrr", "MRR", 365, (day) => (day < 245 ? 62_000 : 124_000))
+const VARIABLE_HISTORY = series("variable_mrr", "Variable MRR", 365, (day) => (day < 245 ? 12_000 : 32_000))
+
+/** An invoice with what its lines bill by class. */
+const invoiceRow = (invoice: Customers.Invoice): Customers.InvoiceRow => {
+	const variable = Math.round(invoice.amountDueMinor * 0.15)
+	return {
+		invoice,
+		revenue: { recurring: invoice.amountDueMinor - variable, variable, oneOff: 0, unclassified: 0 },
+	}
+}
 
 /** Acme with the company profile `?company=` asks for. */
 const withCompany = (account: Customers.Account): Customers.Account => {
@@ -315,6 +325,7 @@ const detailFor = (state: typeof State.Type): Customers.AccountDetail => {
 		...ACME_DETAIL,
 		account: withCompany(ACCOUNT),
 		subscriptions: [{ ...SUBSCRIPTION, status: "active", planName: "Pro", mrrMinor: 124_000 }],
+		subscriptionMrr: ACME_DETAIL.subscriptionMrr.map((entry) => ({ ...entry, mrrMinor: 124_000 })),
 		openInvoices: [],
 		upcomingInvoice: UPCOMING,
 		contactsToReach: CONTACTS.slice(0, 4),
@@ -325,6 +336,7 @@ const detailFor = (state: typeof State.Type): Customers.AccountDetail => {
 			...healthy,
 			account: { ...ACCOUNT, lifecycleStage: "past_due", healthStatus: "critical", healthScore: 34 },
 			subscriptions: ACME_DETAIL.subscriptions,
+			subscriptionMrr: ACME_DETAIL.subscriptionMrr,
 			openInvoices: ACME_DETAIL.openInvoices,
 		}
 	if (state === "excluded-health")
@@ -441,7 +453,7 @@ const answer = (command: AnyCommand, current: typeof State.Type): Message | null
 		case "FetchCustomerMrrHistory":
 			return Message.SucceededFetchMrrHistory({
 				accountId: accountId(),
-				series: current === "excluded-health" ? [] : [MRR_HISTORY],
+				series: current === "excluded-health" ? [] : [MRR_HISTORY, VARIABLE_HISTORY],
 			})
 		case "FetchCustomerContacts":
 			return Message.SucceededFetchContacts({
@@ -452,9 +464,10 @@ const answer = (command: AnyCommand, current: typeof State.Type): Message | null
 			return Message.SucceededFetchInvoices({
 				accountId: accountId(),
 				page: page(
-					current === "payment-failed"
+					(current === "payment-failed"
 						? [...ACME_DETAIL.openInvoices, ...PAID_INVOICES]
-						: PAID_INVOICES,
+						: PAID_INVOICES
+					).map(invoiceRow),
 					args.cursor,
 				),
 			})

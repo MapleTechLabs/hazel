@@ -538,7 +538,7 @@ export const cardBody = <M>(h: HtmlBuilder<M>, context: CardContext): Html => {
 			h.dl(
 				[h.Class(twMerge(SECTION, "gap-1.5"))],
 				[
-					fact(h, "Revenue", revenue ?? muted(h, "No MRR")),
+					fact(h, "MRR", revenue ?? muted(h, "No MRR")),
 					fact(h, "Owner", context.ownerName ?? muted(h, "No owner")),
 					...(seats === null ? [] : [fact(h, "Seats", seats)]),
 					fact(

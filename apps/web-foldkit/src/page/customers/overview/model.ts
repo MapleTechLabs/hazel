@@ -16,7 +16,7 @@ export type Overview = typeof Overview.schema.Type
 export const Support = AsyncData.Schema(Customers.SupportReport, CommonReason)
 
 export const HealthMetric = Schema.Literals(["customers", "mrr"])
-export const Chart = Schema.Literals(["mrr", "activeUsers"])
+export const Chart = Schema.Literals(["mrr", "revenue", "activeUsers"])
 export type Chart = typeof Chart.Type
 
 export const Model = Schema.Struct({
@@ -28,6 +28,7 @@ export const Model = Schema.Struct({
 	support: Support.schema,
 	healthMetric: HealthMetric,
 	hoveredMrr: Schema.NullOr(Schema.Int),
+	hoveredRevenue: Schema.NullOr(Schema.Int),
 	hoveredActiveUsers: Schema.NullOr(Schema.Int),
 	/** Live rows; null until each query answers. */
 	signals: Schema.NullOr(Schema.Array(SignalRow)),

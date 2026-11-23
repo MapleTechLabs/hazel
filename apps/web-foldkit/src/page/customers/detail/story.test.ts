@@ -93,6 +93,7 @@ const account = (n: number, name: string): AccountRow => ({
 	lifecycleStage: "active",
 	planName: "Growth",
 	mrrMinor: 10_000,
+	variableMrrMinor: 0,
 	currency: "USD",
 	trialListMrrMinor: null,
 	trialEndsAtMs: null,

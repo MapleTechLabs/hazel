@@ -266,6 +266,7 @@ const initialModel = (route: Route): Model => ({
 	yearActivity: AsyncData.Idle(),
 	hoveredYearDay: null,
 	hoveredMrr: null,
+	hoveredRevenue: null,
 	supportIssues: null,
 	supportSlas: [],
 	support: AsyncData.Idle(),
@@ -856,6 +857,7 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 			model: modifyFields(model, { mrrHistory: (current) => settle(current, Result.fail(reason)) }),
 		}),
 		HoveredMrr: ({ index }) => ({ model: modifyFields(model, { hoveredMrr: () => index }) }),
+		HoveredRevenue: ({ index }) => ({ model: modifyFields(model, { hoveredRevenue: () => index }) }),
 
 		ClickedContactFilter: ({ filter }) => ({
 			model: modifyFields(model, { contactFilter: () => filter }),
@@ -897,7 +899,7 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		},
 		SucceededFetchInvoices: ({ page }) => ({
 			model: modifyFields(model, {
-				invoices: (invoices) => appendPage(invoices, page, (invoice) => invoice.id),
+				invoices: (invoices) => appendPage(invoices, page, (row) => row.invoice.id),
 			}),
 		}),
 		FailedFetchInvoices: () => ({

@@ -835,6 +835,37 @@ describe("MCP server", () => {
 					expect(page.structuredContent).toEqual({ [key]: [] })
 				}
 
+				// A listed invoice carries its fields, and what its lines bill by class.
+				db.prepare(
+					`INSERT INTO customer_invoices (id, accountId, provider, externalId, number, status, amountDueMinor,
+					amountPaidMinor, currency, lines) VALUES (?, ?, 'stripe', 'in_1', 'INV-1', 'paid', 2500, 2500, 'usd', ?)`,
+				).run(
+					uuid(),
+					globex,
+					JSON.stringify([
+						{
+							externalId: "il_1",
+							source: "invoice_item",
+							proration: false,
+							priceId: null,
+							productId: null,
+							description: "Setup",
+							quantity: 1,
+							amountMinor: 2_500,
+							periodStart: null,
+							periodEnd: null,
+							metadata: {},
+						},
+					]),
+				)
+				const invoices = yield* callTool(world, token, "list_customer_invoices", {
+					organization_id: world.orgId,
+					customer_id: globex,
+				})
+				expect(invoices.structuredContent.invoices).toMatchObject([
+					{ number: "INV-1", status: "paid", billed_by_class: { one_off: "$25.00" } },
+				])
+
 				// More open signals than get_customer shows: it says so, and where the rest are.
 				for (let i = 0; i < 21; i++)
 					insertSignal.run(uuid(), world.orgId, initech, uuid(), `Signal ${i}`, evidence, evidence)

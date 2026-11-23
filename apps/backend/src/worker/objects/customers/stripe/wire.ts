@@ -103,6 +103,9 @@ export const StripeProduct = Schema.Struct({
 	id: Schema.String,
 	name: Nullable(Schema.String),
 	active: Nullable(Schema.Boolean),
+	metadata: Metadata,
+	/** Only on a deleted product (an expanded reference to one). */
+	deleted: Nullable(Schema.Boolean),
 })
 export type StripeProduct = typeof StripeProduct.Type
 
@@ -124,8 +127,15 @@ export const StripePrice = Schema.Struct({
 	amount_decimal: Nullable(Schema.String),
 	/** `per_unit` or `tiered`; a tiered price's amount is not on the price. */
 	billing_scheme: Nullable(Schema.String),
-	/** The product id; expanding it on a list is past Stripe's four-level limit, so it stays an id. */
-	product: Nullable(Schema.String),
+	/**
+	 * The product id; expanding it on a subscription list is past Stripe's four-level limit, so there
+	 * it stays an id. The price catalog's walk expands it (`data.product`).
+	 */
+	product: Expandable(StripeProduct),
+	/** `recurring` or `one_time`. */
+	type: Nullable(Schema.String),
+	active: Nullable(Schema.Boolean),
+	metadata: Metadata,
 	recurring: Nullable(
 		Schema.Struct({
 			interval: Nullable(Schema.String),
@@ -201,6 +211,52 @@ export const StripeSubscription = Schema.Struct({
 })
 export type StripeSubscription = typeof StripeSubscription.Type
 
+/** Who generated a line (`2025-03-31.basil` on): a subscription item, or an invoice item. */
+const LineParentDetails = Schema.Struct({
+	proration: Nullable(Schema.Boolean),
+	subscription: Nullable(Schema.String),
+})
+
+/**
+ * An invoice line, as {@link STRIPE_API_VERSION} reads it (every event re-reads its invoice, so a
+ * webhook's own version never reaches here). `amount` is before discounts, and without tax unless the
+ * tax is inclusive.
+ */
+export const StripeInvoiceLine = Schema.Struct({
+	id: Nullable(Schema.String),
+	amount: Nullable(Schema.Number),
+	currency: Nullable(Schema.String),
+	description: Nullable(Schema.String),
+	quantity: Nullable(Schema.Number),
+	metadata: Metadata,
+	period: Nullable(Schema.Struct({ start: Nullable(Schema.Number), end: Nullable(Schema.Number) })),
+	discount_amounts: Nullable(Schema.Array(Schema.Struct({ amount: Nullable(Schema.Number) }))),
+	/** Discounts and billing credits applied before tax; only the credits are read (discounts are above). */
+	pretax_credit_amounts: Nullable(
+		Schema.Array(Schema.Struct({ amount: Nullable(Schema.Number), type: Nullable(Schema.String) })),
+	),
+	taxes: Nullable(
+		Schema.Array(
+			Schema.Struct({ amount: Nullable(Schema.Number), tax_behavior: Nullable(Schema.String) }),
+		),
+	),
+	pricing: Nullable(
+		Schema.Struct({
+			price_details: Nullable(
+				Schema.Struct({ price: Nullable(Schema.String), product: Nullable(Schema.String) }),
+			),
+		}),
+	),
+	parent: Nullable(
+		Schema.Struct({
+			type: Nullable(Schema.String),
+			subscription_item_details: Nullable(LineParentDetails),
+			invoice_item_details: Nullable(LineParentDetails),
+		}),
+	),
+})
+export type StripeInvoiceLine = typeof StripeInvoiceLine.Type
+
 export const StripeInvoice = Schema.Struct({
 	/** Null on an upcoming-invoice preview, which Hazel skips. */
 	id: Nullable(Schema.String),
@@ -222,6 +278,13 @@ export const StripeInvoice = Schema.Struct({
 	attempt_count: Nullable(Schema.Finite),
 	next_payment_attempt: Nullable(Schema.Finite),
 	hosted_invoice_url: Nullable(Schema.String),
+	/** The first lines (Stripe embeds up to 10); `has_more` sends the rest to `/invoices/{id}/lines`. */
+	lines: Nullable(
+		Schema.Struct({
+			data: Schema.optionalKey(Schema.Array(StripeInvoiceLine)),
+			has_more: Nullable(Schema.Boolean),
+		}),
+	),
 	status_transitions: Nullable(
 		Schema.Struct({
 			finalized_at: Nullable(Schema.Finite),
@@ -240,6 +303,8 @@ export const StripeList = <S extends Schema.Top>(item: S) =>
 
 export const StripeCustomersPage = StripeList(StripeCustomer)
 export const StripeProductsPage = StripeList(StripeProduct)
+export const StripePricesPage = StripeList(StripePrice)
+export const StripeInvoiceLinesPage = StripeList(StripeInvoiceLine)
 export const StripeSubscriptionsPage = StripeList(StripeSubscription)
 export const StripeInvoicesPage = StripeList(StripeInvoice)
 

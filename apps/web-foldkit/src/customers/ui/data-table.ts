@@ -48,6 +48,8 @@ export type DataTableOptions<Row, M, K extends string = string> = Readonly<{
 		/** Names a row's checkbox (`Select Acme`). */
 		rowLabel: (row: Row) => string
 	}>
+	/** An extra class per row (a preview marking the rows it changes). */
+	rowClassName?: (row: Row) => string | undefined
 	/** A press on a row (outside its checkbox and actions). */
 	onRowPress?: (row: Row) => M
 	/** The keyboard-focused row (j/k), drawn like a hover. */
@@ -172,6 +174,7 @@ export const dataTable = <Row, M, K extends string = string>(
 						"group/row transition-colors",
 						options.onRowPress && "cursor-pointer",
 						isSelected ? "bg-primary-subtle/40" : "hover:bg-wash data-focused:bg-wash",
+						options.rowClassName?.(entry),
 					),
 				),
 				...(options.onRowPress ? [h.OnClick(options.onRowPress(entry))] : []),

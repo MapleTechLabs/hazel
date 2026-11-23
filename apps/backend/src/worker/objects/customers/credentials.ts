@@ -10,7 +10,7 @@ import { IntegrationEncryption } from "../../../services/integration-encryption"
 import { HISTORY_DAYS } from "./compute"
 import { CustomerIngest } from "./ingest"
 import type { ProviderCredentials } from "./providers"
-import { requestHistoryRebuild } from "./schedule"
+import { requestHistoryRebuild, requestPayingRefresh, revenueWalk, saveRevenueWalk } from "./schedule"
 import { addDays, dayOf } from "./time"
 
 /** Encrypt the API key and the webhook secret for storing, both under the current key version. */
@@ -147,6 +147,7 @@ export const switchProviderAccount = Effect.fn("Customers.switchProviderAccount"
 		SQLite.deleteFrom(schema.customerSubscriptionsTable).where(($) => [$.provider.eq(provider)]),
 	)
 	yield* db.run(SQLite.deleteFrom(schema.customerInvoicesTable).where(($) => [$.provider.eq(provider)]))
+	yield* db.run(SQLite.deleteFrom(schema.customerPricesTable).where(($) => [$.provider.eq(provider)]))
 	yield* db.run(SQLite.deleteFrom(schema.customerEventsTable).where(($) => [$.provider.eq(provider)]))
 	yield* db.run(
 		SQLite.deleteFrom(schema.customerUnmatchedRecordsTable).where(($) => [
@@ -203,10 +204,39 @@ export const switchProviderAccount = Effect.fn("Customers.switchProviderAccount"
 		const first = addDays(dayOf(now), -HISTORY_DAYS)
 		yield* db.run(SQLite.deleteFrom(schema.customerMrrMovementsTable).where(($) => [$.day.gte(first)]))
 		yield* db.run(
+			SQLite.deleteFrom(schema.customerVariableMrrChangesTable).where(($) => [$.day.gte(first)]),
+		)
+		yield* db.run(
 			SQLite.update(schema.customerOrgDailyTable)
-				.set({ mrrMinor: 0, payingAccounts: 0, trialingAccounts: 0, atRiskMrrMinor: 0 })
+				.set({
+					mrrMinor: 0,
+					variableMrrMinor: 0,
+					payingAccounts: 0,
+					trialingAccounts: 0,
+					atRiskMrrMinor: 0,
+				})
 				.where(($) => [$.day.gte(first)]),
 		)
+		yield* requestHistoryRebuild
+	} else if (provider === "stripe") {
+		// Autumn holds the contracted MRR, but variable MRR came from this account's Stripe invoices.
+		const first = addDays(dayOf(now), -HISTORY_DAYS)
+		yield* db.run(
+			SQLite.deleteFrom(schema.customerVariableMrrChangesTable).where(($) => [$.day.gte(first)]),
+		)
+		yield* db.run(
+			SQLite.update(schema.customerOrgDailyTable)
+				.set({ variableMrrMinor: 0 })
+				.where(($) => [$.day.gte(first)]),
+		)
+		// Rebuilt once the new account's invoices are in, with who paid on usage.
+		const walk = Option.getOrUndefined(yield* revenueWalk)
+		yield* saveRevenueWalk({
+			...walk,
+			ids: [...new Set([...(walk?.ids ?? []), connection.id])],
+			at: now.getTime(),
+		})
+		yield* requestPayingRefresh
 		yield* requestHistoryRebuild
 	}
 	yield* (yield* CustomerIngest).completeSweep(connection.id, now, ["account", "contact"], {

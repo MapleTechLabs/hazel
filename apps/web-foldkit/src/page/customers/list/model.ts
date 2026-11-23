@@ -10,7 +10,7 @@ import {
 	headquartersLabel,
 } from "../../../customers/company"
 import { groupRows } from "../../../customers/groups"
-import { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
+import { AccountRow, MemberRow, runRateMrrOf, SignalRow } from "../../../customers/queries"
 import { lookOf, type ViewLook } from "../../../customers/ui/view-look"
 import { ALL_KEY, arrange, CURRENT_KEY } from "../../../customers/view-layout"
 import * as Menu from "../../../ui/menu"
@@ -337,7 +337,7 @@ export const matchesFilters = (
 			account.tags.some((tag) => filters.tagsAny?.includes(tag))) &&
 		(filters.minMrrMinor === undefined || account.mrrMinor >= filters.minMrrMinor) &&
 		(filters.maxMrrMinor === undefined || account.mrrMinor <= filters.maxMrrMinor) &&
-		(!filters.payingOnly || account.mrrMinor > 0) &&
+		(!filters.payingOnly || runRateMrrOf(account) > 0) &&
 		(filters.hasOpenRiskSignals === undefined || hasRisk(account) === filters.hasOpenRiskSignals) &&
 		(filters.lastActiveWithinDays === undefined ||
 			(account.lastActiveAtMs !== null &&
@@ -389,6 +389,8 @@ const sortKeyOf = (
 			return (account.planName ?? "￿").toLowerCase()
 		case "mrr":
 			return account.mrrMinor
+		case "run_rate_mrr":
+			return runRateMrrOf(account)
 		case "health":
 			return nullsLast(account.healthStatus === "unknown" ? null : account.healthScore, direction)
 		case "active_users_30d":
@@ -553,6 +555,7 @@ export const COLUMN_LABEL = {
 	stage: "Stage",
 	plan: "Plan",
 	mrr: "MRR",
+	run_rate_mrr: "Run-rate MRR",
 	health: "Health",
 	active_users_30d: "Active 30d",
 	usage_trend: "Trend",
@@ -732,6 +735,7 @@ export const missingSparklines = (model: Model, viewer: Viewer): ReadonlyArray<C
 export const SORT_COLUMNS: ReadonlyArray<Customers.ListColumn> = [
 	"name",
 	"mrr",
+	"run_rate_mrr",
 	"health",
 	"active_users_30d",
 	"usage_trend",

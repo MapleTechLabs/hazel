@@ -13,6 +13,8 @@ export const ListColumn = Schema.Literals([
 	"stage",
 	"plan",
 	"mrr",
+	/** MRR + variable MRR (`docs/customers/revenue.md`). */
+	"run_rate_mrr",
 	"health",
 	"active_users_30d",
 	"usage_trend",

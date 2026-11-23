@@ -13,7 +13,10 @@ import {
 	CUSTOMER_GLOBEX,
 	DISCOUNT_20_PERCENT,
 	event,
+	INVOICE_ACME_PAID,
 	INVOICE_GLOBEX_OPEN,
+	invoiceLine,
+	PRICES,
 	ORG_ACME,
 	PAYMENT_METHOD_ACME,
 	PRODUCT_PRO,
@@ -270,6 +273,67 @@ describe("Stripe webhook events", () => {
 		const late = await run(deliver(event("invoice.payment_failed", INVOICE_GLOBEX_OPEN), { fake: paid }))
 		expect(late[0]).toMatchObject({ status: "paid" })
 		expect(late[0]).not.toHaveProperty("declineReason")
+	})
+
+	it("a price event writes the price to the catalog, its product expanded", async () => {
+		const fake = makeFakeStripe({ ...stripe(), prices: PRICES })
+		const ops = await run(deliver(event("price.updated", PRICES[0]), { fake }))
+		expect(ops).toMatchObject([
+			{
+				_tag: "price",
+				externalId: "price_2pro_year0001",
+				productName: "Pro",
+				metadata: { revenue: "core" },
+			},
+		])
+		expect(fake.calls.map((call) => [call.path, call.params])).toEqual([
+			["/prices/price_2pro_year0001", [["expand[]", "product"]]],
+		])
+	})
+
+	it("a product event rewrites its prices, for its new name and metadata", async () => {
+		const fake = makeFakeStripe({
+			...stripe(),
+			products: [{ ...PRODUCT_PRO, name: "Pro (2026)", metadata: { family: "core" } }, PRODUCT_SEATS],
+			prices: PRICES,
+		})
+		const ops = await run(deliver(event("product.updated", PRODUCT_PRO), { fake }))
+		expect(ops.map((op) => [op._tag, (op as { productName?: string }).productName])).toEqual([
+			["price", "Pro (2026)"],
+			["price", "Pro (2026)"],
+		])
+		expect(ops[0]).toMatchObject({ productMetadata: { family: "core" } })
+	})
+
+	it("a product event reads every page of its prices, active and archived", async () => {
+		const many = Array.from({ length: 101 }, (_, index) => ({
+			...PRICES[1]!,
+			id: `price_${String(index).padStart(3, "0")}`,
+		}))
+		const archived = { ...PRICES[1]!, id: "price_old", active: false }
+		const fake = makeFakeStripe({ ...stripe(), prices: [...many, archived] })
+		const ops = await run(deliver(event("product.updated", PRODUCT_PRO), { fake }))
+		expect(ops).toHaveLength(102)
+		expect(ops.at(-1)).toMatchObject({ externalId: "price_old", active: false })
+	})
+
+	it("an invoice event reads the lines past the first 10", async () => {
+		const lines = Array.from({ length: 11 }, (_, index) =>
+			invoiceLine({ id: `il_${String(index).padStart(2, "0")}` }),
+		)
+		const fake = makeFakeStripe({
+			...stripe(),
+			invoices: [
+				{ ...INVOICE_ACME_PAID, lines: { object: "list", has_more: true, data: lines.slice(0, 10) } },
+			],
+			invoiceLines: { [INVOICE_ACME_PAID.id]: lines },
+		})
+		const ops = await run(deliver(event("invoice.paid", INVOICE_ACME_PAID), { fake }))
+		expect((ops[0] as { lines?: ReadonlyArray<unknown> }).lines).toHaveLength(11)
+		expect(paths(fake)).toEqual([
+			`/invoices/${INVOICE_ACME_PAID.id}`,
+			`/invoices/${INVOICE_ACME_PAID.id}/lines`,
+		])
 	})
 
 	it("a payment method event refreshes the card on the customer's subscriptions", async () => {

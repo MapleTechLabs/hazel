@@ -40,7 +40,7 @@ import { orgTarget } from "../kinds"
 import { readObjectMeta, writeObjectMeta } from "../meta"
 import { CustomerMembersCall } from "../org/customer-members"
 import { publishChannelCustomersAfterCompute } from "./channels"
-import { runComputeStep, unmuteExpired, wakeSnoozed } from "./compute"
+import { markRevenueCurrent, runComputeStep, unmuteExpired, wakeSnoozed } from "./compute"
 import { loadCredentials } from "./credentials"
 import { installDefaults } from "./defaults"
 import { runSlaAlerts } from "./sla"
@@ -126,6 +126,7 @@ export const bootstrap = Effect.fn("CustomersObject.bootstrap")(function* (paylo
 				Effect.gen(function* () {
 					yield* installDefaults(payload.organizationId)
 					yield* writeObjectMeta(DEFAULTS_KEY, "1")
+					yield* markRevenueCurrent
 					yield* scheduleComputeAt(yield* Clock.currentTimeMillis)
 				}),
 			)

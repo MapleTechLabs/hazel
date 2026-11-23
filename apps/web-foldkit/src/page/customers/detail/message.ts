@@ -97,6 +97,7 @@ export const Message = defineMessageUnion({
 	HoveredYearDay: { index: Schema.NullOr(Schema.Int) },
 	PressedRetryYearActivity: {},
 	CompletedRevealDay: {},
+	HoveredRevenue: { index: Schema.NullOr(Schema.Int) },
 
 	UpdatedSupportIssues: { issues: Schema.Array(IssueRow) },
 	UpdatedSupportSlas: { slas: Schema.Array(IssueSlaRow) },
@@ -112,7 +113,7 @@ export const Message = defineMessageUnion({
 	FailedFetchContacts: { accountId: CustomerAccountId, reason: CommonReason },
 
 	PressedMoreInvoices: {},
-	SucceededFetchInvoices: { accountId: CustomerAccountId, page: Customers.Page(Customers.Invoice.Schema) },
+	SucceededFetchInvoices: { accountId: CustomerAccountId, page: Customers.Page(Customers.InvoiceRow) },
 	FailedFetchInvoices: { accountId: CustomerAccountId, reason: CommonReason },
 
 	ClickedEventProvider: { provider: Schema.NullOr(Customers.CustomerSource) },

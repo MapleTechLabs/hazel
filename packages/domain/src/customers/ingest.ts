@@ -19,6 +19,7 @@ import {
 	SubscriptionStatus,
 } from "./enums"
 import { Day, IsoTimestamp } from "./evidence"
+import { BillingLineSource } from "./revenue"
 
 export const ProviderRef = Schema.Struct({ provider: CustomerProvider, externalId: Schema.String })
 export type ProviderRef = typeof ProviderRef.Type
@@ -99,6 +100,75 @@ export const UpsertContact = Schema.TaggedStruct("contact", {
 })
 export type UpsertContact = typeof UpsertContact.Type
 
+/** String-valued metadata (Stripe's), as revenue rules match it. */
+export const BillingMetadata = Schema.Record(Schema.String, Schema.String)
+
+/**
+ * What a subscription bills each period, one per price (`docs/customers/revenue.md`): revenue rules
+ * classify it, and MRR sums the monthly amounts of the recurring ones.
+ */
+export const SubscriptionItemDoc = Schema.Struct({
+	externalId: Schema.String,
+	priceId: Schema.NullOr(Schema.String),
+	productId: Schema.NullOr(Schema.String),
+	quantity: Schema.Int,
+	/** Per month, the subscription's discounts spread over its priced items; null without a fixed price. */
+	monthlyMinor: Schema.NullOr(Schema.Int),
+	/** The same before discounts. */
+	listMonthlyMinor: Schema.NullOr(Schema.Int),
+	lookupKey: Schema.NullOr(Schema.String),
+	usageType: Schema.NullOr(Schema.String),
+	billingScheme: Schema.NullOr(Schema.String),
+	metadata: BillingMetadata,
+})
+export type SubscriptionItemDoc = typeof SubscriptionItemDoc.Type
+
+/** One line of an invoice, in the invoice's currency (`docs/customers/revenue.md`). */
+export const InvoiceLineDoc = Schema.Struct({
+	externalId: Schema.String,
+	source: BillingLineSource,
+	proration: Schema.Boolean,
+	priceId: Schema.NullOr(Schema.String),
+	productId: Schema.NullOr(Schema.String),
+	description: Schema.NullOr(Schema.String),
+	quantity: Schema.NullOr(Schema.Number),
+	/** Net: after discounts and credit-balance credits, without tax. Negative for a credit. */
+	amountMinor: Schema.Int,
+	/** The service period: usage billed in arrears covers the month before the invoice. */
+	periodStart: When,
+	periodEnd: When,
+	metadata: BillingMetadata,
+})
+export type InvoiceLineDoc = typeof InvoiceLineDoc.Type
+
+/**
+ * A price of the provider's catalog, with its product (`customer_prices`): what revenue rules match
+ * a line's price and product fields on, and what the rules editor offers.
+ */
+export const UpsertPrice = Schema.TaggedStruct("price", {
+	externalId: Schema.String,
+	productId: Schema.NullOr(Schema.String),
+	productName: NullableText,
+	nickname: NullableText,
+	lookupKey: NullableText,
+	/** `recurring` or `one_time`. */
+	priceType: NullableText,
+	/** `licensed` or `metered`; null for a one-time price. */
+	usageType: NullableText,
+	/** `per_unit` or `tiered`. */
+	billingScheme: NullableText,
+	currency: NullableText,
+	/** Minor units; null for a tiered or decimal-only price. */
+	unitAmountMinor: Schema.NullOr(Schema.Number),
+	interval: NullableText,
+	intervalCount: Schema.NullOr(Schema.Int),
+	active: Schema.Boolean,
+	metadata: BillingMetadata,
+	productMetadata: BillingMetadata,
+	observedAt: BillingObservedAt,
+})
+export type UpsertPrice = typeof UpsertPrice.Type
+
 export const UpsertSubscription = Schema.TaggedStruct("subscription", {
 	externalId: Schema.String,
 	account: ProviderRef,
@@ -112,6 +182,8 @@ export const UpsertSubscription = Schema.TaggedStruct("subscription", {
 	 * paying even at `mrrMinor: 0`. MRR (and its movements) still come from `mrrMinor` alone.
 	 */
 	billsByUsage: optional(Schema.Boolean),
+	/** What it bills, per price; absent keeps the stored items (a provider that has none: Autumn). */
+	items: optional(Schema.Array(SubscriptionItemDoc)),
 	currency: Schema.String,
 	interval: BillingInterval,
 	quantity: Schema.Int,
@@ -151,6 +223,8 @@ export const UpsertInvoice = Schema.TaggedStruct("invoice", {
 	nextRetryAt: optional(When),
 	declineReason: optional(NullableText),
 	hostedUrl: optional(NullableText),
+	/** Its lines, all of them; absent keeps the stored ones (a provider that sends none). */
+	lines: optional(Schema.Array(InvoiceLineDoc)),
 	observedAt: BillingObservedAt,
 })
 export type UpsertInvoice = typeof UpsertInvoice.Type
@@ -208,6 +282,7 @@ export const IngestOp = Schema.Union([
 	UpsertContact,
 	UpsertSubscription,
 	UpsertInvoice,
+	UpsertPrice,
 	RecordActivity,
 	RecordMetric,
 	DefineMetric,

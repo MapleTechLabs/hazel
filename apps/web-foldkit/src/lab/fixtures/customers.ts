@@ -11,12 +11,15 @@ import {
 	DEFAULT_ATTENTION_SETTINGS,
 	DEFAULT_BUSINESS_HOURS,
 	DEFAULT_HEALTH_SETTINGS,
+	DEFAULT_VARIABLE_MRR_MONTHS,
 	EMPTY_SYNC_STATS,
 	type HealthDistributionRow,
 	type HealthStatus,
 	type LifecycleStage,
 	type MrrMovementBucket,
 	type OverviewResult,
+	type RevenueBucket,
+	type RevenueSplit,
 	type SeriesPoint,
 	type Settings,
 	type Signal,
@@ -117,6 +120,8 @@ type AccountSeed = Readonly<{
 	domain: string | null
 	plan: string | null
 	mrr: number
+	/** Variable MRR (usage billing, averaged), major units. */
+	variableMrr?: number
 	health: HealthStatus
 	score: number | null
 	stage?: LifecycleStage
@@ -313,6 +318,7 @@ const makeAccount = (seed: AccountSeed, n: number): Account => {
 		lifecycleStageOverride: null,
 		planName: seed.plan,
 		mrrMinor: seed.mrr * 100,
+		variableMrrMinor: (seed.variableMrr ?? 0) * 100,
 		currency: CURRENCY,
 		trialListMrrMinor: seed.trialListMrr === undefined ? null : seed.trialListMrr * 100,
 		trialEndsAt:
@@ -365,6 +371,7 @@ const makeAccount = (seed: AccountSeed, n: number): Account => {
 const NAMED_SEEDS = {
 	northwind: {
 		name: "Northwind Labs",
+		variableMrr: 640,
 		domain: "northwind.dev",
 		plan: "Scale",
 		mrr: 4_800,
@@ -382,6 +389,7 @@ const NAMED_SEEDS = {
 	},
 	acme: {
 		name: "Acme Robotics",
+		variableMrr: 320,
 		domain: "acmerobotics.io",
 		plan: "Growth",
 		mrr: 2_150,
@@ -436,6 +444,7 @@ const NAMED_SEEDS = {
 	},
 	halcyon: {
 		name: "Halcyon Health",
+		variableMrr: 1200,
 		domain: "halcyonhealth.com",
 		plan: "Enterprise",
 		mrr: 8_900,
@@ -1367,6 +1376,8 @@ export const SETTINGS: Settings = {
 	reportingCurrency: CURRENCY,
 	addOnPlans: [],
 	overageInMrr: false,
+	revenueRules: [],
+	variableMrrMonths: DEFAULT_VARIABLE_MRR_MONTHS,
 	businessHours: { ...DEFAULT_BUSINESS_HOURS, timeZone: "Europe/Berlin" },
 	lastComputedAt: ago(HOUR),
 	updatedBy: null,
@@ -1558,6 +1569,31 @@ const kpi = (value: number, previous: number) => ({
 	deltaPct: previous === 0 ? null : Math.round(((value - previous) / previous) * 1000) / 10,
 })
 
+/** `total` spread over the buckets by class; the buckets add up to it exactly. */
+const revenueBucketsOf = (starts: ReadonlyArray<string>, total: number): ReadonlyArray<RevenueBucket> => {
+	const weightOf = (index: number) => 8 + ((index * 5) % 7)
+	const weights = starts.reduce((sum, _, index) => sum + weightOf(index), 0)
+	let left = total
+	return starts.map((start, index) => {
+		const amount = index === starts.length - 1 ? left : Math.round((total * weightOf(index)) / weights)
+		left -= amount
+		const variable = Math.round(amount * 0.14)
+		const oneOff = Math.round(amount * 0.06)
+		return { start, recurring: amount - variable - oneOff, variable, oneOff, unclassified: 0 }
+	})
+}
+
+const splitOf = (buckets: ReadonlyArray<RevenueSplit>): RevenueSplit =>
+	buckets.reduce(
+		(sum, bucket) => ({
+			recurring: sum.recurring + bucket.recurring,
+			variable: sum.variable + bucket.variable,
+			oneOff: sum.oneOff + bucket.oneOff,
+			unclassified: sum.unclassified + bucket.unclassified,
+		}),
+		{ recurring: 0, variable: 0, oneOff: 0, unclassified: 0 },
+	)
+
 /** `customers.overview` for a range; `partial` = no billing source yet. */
 export const overviewFixture = (
 	range: CustomersRange,
@@ -1591,12 +1627,21 @@ export const overviewFixture = (
 					)
 				})
 	const billing = !options.partial
+	const variableMrr = ACCOUNTS.reduce((sum, account) => sum + account.variableMrrMinor, 0)
+	const revenueBuckets = billing
+		? revenueBucketsOf(
+				mrrMovements.map((entry) => entry.start),
+				5_310_400,
+			)
+		: []
 	return {
 		range,
 		currency: CURRENCY,
 		bucket,
 		kpis: {
 			mrrMinor: kpi(billing ? 4_821_000 : 0, billing ? 4_539_600 : 0),
+			variableMrrMinor: kpi(billing ? variableMrr : 0, billing ? 180_000 : 0),
+			runRateMrrMinor: kpi(billing ? 4_821_000 + variableMrr : 0, billing ? 4_719_600 : 0),
 			payingCustomers: kpi(billing ? 176 : 0, billing ? 171 : 0),
 			activeCustomers: kpi(168, 168),
 			wau: kpi(978, 951),
@@ -1605,7 +1650,11 @@ export const overviewFixture = (
 			logoChurn: { value: 2.8, previous: 1.9, deltaPct: 0.9 },
 			atRiskMrrMinor: kpi(billing ? 545_000 : 0, billing ? 612_000 : 0),
 			nrrPct: billing ? kpi(104.2, 101.8) : null,
+			runRateNrrPct: billing ? kpi(107.6, 103.1) : null,
+			contractedCustomersAtStart: billing ? 96 : 0,
 		},
+		revenue: splitOf(revenueBuckets),
+		revenueBuckets,
 		mrrMovements: billing ? mrrMovements : [],
 		activeUsers,
 		healthDistribution: HEALTH_DISTRIBUTION,
@@ -1673,6 +1722,15 @@ const contactRow = (
 	),
 })
 
+/** Acme's last 12 months and this one: the plan, usage on top, one setup fee. */
+const ACME_REVENUE_MONTHS: ReadonlyArray<RevenueBucket> = Array.from({ length: 13 }, (_, index) => ({
+	start: monthStart(12 - index),
+	recurring: 215_000,
+	variable: 28_000 + ((index * 37) % 9) * 1_000,
+	oneOff: index === 4 ? 50_000 : 0,
+	unclassified: 0,
+}))
+
 export const ACME_DETAIL: AccountDetail = {
 	account: ACCOUNTS_BY_KEY.acme,
 	refs: [
@@ -1738,6 +1796,14 @@ export const ACME_DETAIL: AccountDetail = {
 			updatedAt: daysAgo(9),
 		},
 	],
+	subscriptionMrr: [
+		{ subscriptionId: Schema.decodeSync(CustomerSubscriptionId)(uuid(32, 1)), mrrMinor: 215_000 },
+	],
+	revenue: {
+		last30Days: splitOf(ACME_REVENUE_MONTHS.slice(-1)),
+		last12Months: splitOf(ACME_REVENUE_MONTHS.slice(1)),
+		byMonth: ACME_REVENUE_MONTHS,
+	},
 	upcomingInvoice: null,
 	openInvoices: [
 		{

@@ -1,8 +1,5 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { IconClose } from "../../../../icons"
-import { badge } from "../../../../ui/badge"
-import { button } from "../../../../ui/button"
 import * as Field from "../../../../ui/field"
 import { heading } from "../../../../ui/heading"
 import * as Select from "../../../../ui/select"
@@ -104,24 +101,3 @@ export const selectField = (
 			Message.GotSelectMessage({ selectId: options.id, message }),
 	})
 }
-
-/** A chosen value as a chip, with a remove button for admins. */
-export const removableChip = (h: H, options: Readonly<{ label: string; onRemove: Message | null }>): Html =>
-	badge(h, { intent: "secondary", className: "max-w-full gap-1 pe-1" }, [
-		h.span([h.Class("truncate")], [options.label]),
-		...(options.onRemove === null
-			? []
-			: [
-					button(
-						h,
-						{
-							intent: "plain",
-							size: "sq-xs",
-							className: "size-5 sm:size-5",
-							onPress: options.onRemove,
-							attributes: [h.AriaLabel(`Remove ${options.label}`)],
-						},
-						[IconClose(h, { attributes: { "data-slot": "icon" } })],
-					),
-				]),
-	])

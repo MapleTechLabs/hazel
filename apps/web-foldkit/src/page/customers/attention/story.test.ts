@@ -93,6 +93,7 @@ const account = (
 	lifecycleStage: "active",
 	planName,
 	mrrMinor,
+	variableMrrMinor: 0,
 	currency: "USD",
 	trialListMrrMinor: null,
 	trialEndsAtMs: null,

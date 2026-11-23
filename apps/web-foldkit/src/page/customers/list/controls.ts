@@ -140,10 +140,15 @@ export const chipOf = (
 						? `≥ ${formatMoney(min, currency)}`
 						: max !== undefined
 							? `≤ ${formatMoney(max, currency)}`
-							: filters.payingOnly
-								? `> ${formatMoney(0, currency)}`
-								: null
-			return value === null ? null : { field: "MRR", operator: "", value }
+							: null
+			const paying = `> ${formatMoney(0, currency)}`
+			if (value !== null)
+				return {
+					field: "MRR",
+					operator: "",
+					value: filters.payingOnly ? `${value}, run-rate ${paying}` : value,
+				}
+			return filters.payingOnly ? { field: "Run-rate MRR", operator: "", value: paying } : null
 		}
 		case "last_active":
 			return filters.inactiveForDays !== undefined
@@ -411,7 +416,7 @@ const editor = (
 				option(
 					h,
 					optionId("paying"),
-					"Paying only (MRR above zero)",
+					"Paying only (run-rate MRR above zero)",
 					pending.payingOnly === true,
 					withFilter(pending, "payingOnly", pending.payingOnly ? undefined : true),
 				),

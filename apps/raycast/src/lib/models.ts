@@ -129,6 +129,8 @@ export interface AccountDetail {
 	readonly account: Account
 	readonly refs: ReadonlyArray<ExternalRef>
 	readonly subscriptions: ReadonlyArray<Subscription>
+	/** Each subscription's contracted MRR under the org's revenue rules. */
+	readonly subscriptionMrr: ReadonlyArray<{ readonly subscriptionId: string; readonly mrrMinor: number }>
 	readonly upcomingInvoice: Invoice | null
 	readonly openInvoices: ReadonlyArray<Invoice>
 	readonly health: {

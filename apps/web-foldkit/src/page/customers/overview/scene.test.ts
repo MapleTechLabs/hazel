@@ -42,11 +42,13 @@ const keyNumbers = Scene.role("group", { name: "Key numbers" })
 const attention = Scene.role("region", { name: "Needs attention" })
 
 describe("Customers overview", () => {
-	test("three numbers lead, each with a definition a keyboard reaches; the other KPIs share a line", () => {
+	test("the key numbers lead, each with a definition a keyboard reaches; the other KPIs share a line", () => {
 		Scene.scene(
 			pageScene(update, view, shared),
 			Scene.given(answered({ billing: true, signals: true })),
-			Scene.inside(keyNumbers, Scene.expectAll(Scene.all.role("button")).toHaveCount(3)),
+			Scene.inside(keyNumbers, Scene.expectAll(Scene.all.role("button")).toHaveCount(6)),
+			Scene.expect(Scene.within(keyNumbers, Scene.role("button", { name: "Run-rate MRR" }))).toExist(),
+			Scene.expect(Scene.within(keyNumbers, Scene.role("button", { name: "Revenue" }))).toExist(),
 			Scene.expect(Scene.within(keyNumbers, Scene.role("button", { name: "MRR at risk" }))).toExist(),
 			Scene.expect(Scene.within(keyNumbers, Scene.text("$48,210"))).toExist(),
 			Scene.expect(Scene.role("button", { name: "Logo churn" })).toExist(),

@@ -12,7 +12,7 @@ import {
 	formatRelative,
 } from "../../../customers/format"
 import { accountLabelOf } from "../../../customers/groups"
-import type { AccountRow, MemberRow } from "../../../customers/queries"
+import { type AccountRow, type MemberRow, runRateMrrOf } from "../../../customers/queries"
 import {
 	environmentBadge,
 	HEALTH_LABEL,
@@ -84,6 +84,8 @@ export const csvValue = (
 			return account.planName ?? ""
 		case "mrr":
 			return formatMajor(account.mrrMinor, account.currency)
+		case "run_rate_mrr":
+			return formatMajor(runRateMrrOf(account), account.currency)
 		case "health":
 			return account.healthStatus === "unknown"
 				? HEALTH_LABEL.unknown
@@ -187,6 +189,11 @@ const footerOf = <M>(
 				accounts.reduce((sum, account) => sum + account.mrrMinor, 0),
 				currency,
 			)
+		case "run_rate_mrr":
+			return formatMoney(
+				accounts.reduce((sum, account) => sum + runRateMrrOf(account), 0),
+				currency,
+			)
 		case "health": {
 			const scored = accounts.filter(
 				(account) => account.healthStatus !== "unknown" && account.healthScore !== null,
@@ -212,6 +219,15 @@ const footerOf = <M>(
 			return undefined
 	}
 }
+
+/** A lead with nothing billed reads as a dash; a customer at zero as a quiet amount. */
+const moneyCell = <M>(h: HtmlBuilder<M>, account: AccountRow, minor: number): Html =>
+	minor === 0 && account.lifecycleStage === "lead"
+		? muted(h, "—")
+		: h.span(
+				[h.Class(minor === 0 ? "text-muted-fg" : "font-medium")],
+				[formatMoney(minor, account.currency)],
+			)
 
 const cellOf = <M>(
 	h: HtmlBuilder<M>,
@@ -258,12 +274,9 @@ const cellOf = <M>(
 				? muted(h, "—")
 				: h.span([h.Class("block max-w-40 truncate"), h.Title(account.planName)], [account.planName])
 		case "mrr":
-			return account.mrrMinor === 0 && account.lifecycleStage === "lead"
-				? muted(h, "—")
-				: h.span(
-						[h.Class(account.mrrMinor === 0 ? "text-muted-fg" : "font-medium")],
-						[formatMoney(account.mrrMinor, account.currency)],
-					)
+			return moneyCell(h, account, account.mrrMinor)
+		case "run_rate_mrr":
+			return moneyCell(h, account, runRateMrrOf(account))
 		case "health":
 			return account.lifecycleStage === "churned"
 				? muted(h, "—")
@@ -364,6 +377,7 @@ const COLUMN_LAYOUT = {
 	stage: { widthClass: "w-24", hideClass: "@max-2xl:hidden" },
 	plan: { widthClass: "w-18", hideClass: "@max-3xl:hidden" },
 	mrr: { align: "right", widthClass: "w-20" },
+	run_rate_mrr: { align: "right", widthClass: "w-28", hideClass: "@max-3xl:hidden" },
 	health: { widthClass: "w-28 @max-xl:w-14" },
 	active_users_30d: { align: "right", widthClass: "w-28", hideClass: "@max-7xl:hidden" },
 	usage_trend: { align: "right", widthClass: "w-16", hideClass: "@max-5xl:hidden" },

@@ -29,7 +29,8 @@ import {
 	WARN_OPTIONS,
 	WARN_SELECT_ID,
 } from "./model"
-import { card, errorText, field, fieldLabel, help, removableChip, selectField } from "./parts"
+import { removableChip } from "../shared"
+import { card, errorText, field, fieldLabel, help, selectField } from "./parts"
 
 /** The policy editor, in place of the list: the policy, whom it applies to, and its targets. */
 

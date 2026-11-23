@@ -34,7 +34,7 @@ import {
 } from "@hazel/domain/customers"
 import { CustomerAccountId, type CustomerSignalId } from "@hazel/schema"
 import { Clock, Effect, Option, Schema } from "effect"
-import { readObjectMeta, writeObjectMeta } from "../meta"
+import { deleteObjectMeta, readObjectMeta, writeObjectMeta } from "../meta"
 import { refreshSuggestionsAfterCompute } from "./channel-suggestions"
 import { publishChannelCustomersAfterCompute } from "./channels"
 import { evaluate, type Match } from "./evaluate"
@@ -46,12 +46,18 @@ import {
 	clearBaselineFor,
 	clearComputeProgress,
 	clearHistoryRebuild,
+	clearPayingRefresh,
+	clearRevenueWalk,
 	COMPUTE_DEBOUNCE_MS,
 	COMPUTE_INTERVAL_MS,
 	computeProgress,
 	historyRebuildPending,
+	payingRefreshPending,
+	requestHistoryRebuild,
 	resetComputeFailures,
+	revenueWalk,
 	saveComputeProgress,
+	saveRevenueWalk,
 	scheduleComputeAt,
 	takeComputeAgain,
 	takeRebuildAttempt,
@@ -69,6 +75,18 @@ import {
 	type Snapshot,
 	type SnapshotBase,
 } from "./snapshot"
+import { pays } from "./facts"
+import {
+	type BilledInvoice,
+	loadRevenueBasis,
+	type RevenueBasis,
+	recurringHistoryOf,
+	type SubscriptionInvoice,
+	type TrailingUsage,
+	USAGE_LOOKBACK_MS,
+	trailingUsageOf,
+	windowMonths,
+} from "./revenue"
 import { inList, isActive, rowsPerInsert } from "./sql"
 import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "./time"
 
@@ -93,6 +111,14 @@ const CLOSED_SIGNAL_RETENTION_MS = 180 * DAY_MS
 const SYNC_RUN_RETENTION_MS = 30 * DAY_MS
 
 const PRUNED_KEY = "prunedOn"
+/** The revenue basis (`./revenue.ts`) the history was last restated under. */
+const REVENUE_BASIS_KEY = "revenueBasis"
+/** The next history rebuild restates the billing history (a new revenue basis), not only fills it in. */
+const RESTATE_KEY = "restateRevenue"
+/** The billing data's version: below {@link REVENUE_DATA_VERSION}, Stripe is walked again. */
+const REVENUE_DATA_KEY = "revenueData"
+/** 1: invoice lines and the price catalog (`docs/customers/revenue.md`). */
+const REVENUE_DATA_VERSION = "1"
 /** Set once the recorded days' user counts were redone from activity (rows written before it was backfilled). */
 const USER_COUNTS_REDONE_KEY = "userCountsRedone"
 
@@ -183,6 +209,43 @@ const writeMovement = (account: schema.CustomerAccount, rollup: Rollup, today: D
 		)
 	})
 
+/** Today's variable MRR change: merged with an earlier one of the same day, removed when it is back. */
+const writeVariableChange = (account: schema.CustomerAccount, rollup: Rollup, today: Day) =>
+	Effect.gen(function* () {
+		if (account.variableMrrMinor === rollup.variableMrrMinor) return
+		const db = yield* Database.Database
+		const existing = yield* db.first(
+			SQLite.from(schema.customerVariableMrrChangesTable)
+				.select("fromMinor")
+				.where(($) => [$.accountId.eq(account.id), $.day.eq(today)])
+				.limit(1),
+		)
+		const from = Option.match(existing, {
+			onNone: () => account.variableMrrMinor,
+			onSome: (row) => row.fromMinor,
+		})
+		yield* db.run(
+			SQLite.deleteFrom(schema.customerVariableMrrChangesTable).where(($) => [
+				$.accountId.eq(account.id),
+				$.day.eq(today),
+			]),
+		)
+		if (from === rollup.variableMrrMinor) return
+		yield* db.run(
+			SQLite.insertInto(schema.customerVariableMrrChangesTable).values({
+				accountId: account.id,
+				day: today,
+				fromMinor: from,
+				toMinor: rollup.variableMrrMinor,
+				currency: rollup.currency,
+			}),
+		)
+	})
+
+/** No MRR or variable MRR was ever computed for it: its first is revenue, under whatever basis. */
+const neverBilled = (account: schema.CustomerAccount) =>
+	account.mrrBasis === null && account.mrrMinor === 0 && account.variableMrrMinor === 0
+
 /**
  * A payer moved to another billing provider than last run (`mrrSource`) that bills it now in the
  * reporting currency: a migration, not revenue, so its MRR change writes no movement. A move to a
@@ -195,6 +258,32 @@ const switchedSource = ({ stored, rollup, facts }: AccountSnapshot) =>
 	stored.mrrMinor > 0 &&
 	facts.subscriptions.some((sub) => billsNow(sub) && sub.currency === rollup.currency)
 
+/**
+ * The balances an account keeps this run. While Stripe imports, one built on it is partial: it stays
+ * where its series ends, the org's totals count it there too, and the first compute after the import
+ * records the whole change. A rule can put usage in MRR whichever source holds the plan.
+ */
+const heldBalances = (
+	account: AccountSnapshot,
+	importing: ReadonlySet<CustomerProvider>,
+	revenue: RevenueBasis,
+) => {
+	const { stored, rollup } = account
+	const holdsVariable = importing.has("stripe") && stored.mrrBasis === rollup.mrrBasis
+	const holdsMrr =
+		holdsVariable &&
+		!switchedSource(account) &&
+		(revenue.rules.some((rule) => rule.classification === "recurring") ||
+			stored.mrrSource === "stripe" ||
+			rollup.mrrSource === "stripe")
+	return {
+		holdsMrr,
+		holdsVariable,
+		mrrMinor: holdsMrr ? stored.mrrMinor : rollup.mrrMinor,
+		variableMrrMinor: holdsVariable ? stored.variableMrrMinor : rollup.variableMrrMinor,
+	}
+}
+
 /** Its MRR comes, or came last run, from a billing provider still importing its backfill. */
 const fromImporting = ({ stored, rollup }: AccountSnapshot, importing: ReadonlySet<CustomerProvider>) =>
 	(stored.mrrSource !== null && importing.has(stored.mrrSource)) ||
@@ -206,7 +295,8 @@ const fromImporting = ({ stored, rollup }: AccountSnapshot, importing: ReadonlyS
  * after it), or while that rebuild is pending (`rebuildPending`: a movement would keep it from an
  * account without history). Other accounts' changes are revenue during another provider's import.
  * Neither does a payer whose MRR now comes from another billing provider that bills it
- * (`switchedSource`), nor a change of reporting currency. The number of accounts that switched.
+ * (`switchedSource`), nor a change of reporting currency or of revenue basis (`mrrBasis`: the
+ * history rebuild restates it). The number of accounts that switched.
  */
 const writeRollups = Effect.fn("Customers.writeRollups")(function* (
 	snapshot: Snapshot,
@@ -222,14 +312,29 @@ const writeRollups = Effect.fn("Customers.writeRollups")(function* (
 			(account) =>
 				Effect.gen(function* () {
 					const { stored, rollup } = account
-					if (switchedSource(account)) switched++
+					const isSwitch = switchedSource(account)
+					const { holdsMrr, holdsVariable, mrrMinor, variableMrrMinor } = heldBalances(
+						account,
+						importing,
+						snapshot.revenue,
+					)
+					if (isSwitch) switched++
 					else if (
 						!rebuildPending &&
 						!fromImporting(account, importing) &&
-						stored.currency === rollup.currency
-					)
-						yield* writeMovement(stored, rollup, today)
-					const changes = diff(stored, rollup)
+						stored.currency === rollup.currency &&
+						// Computed under other revenue rules: a reclassification, restated, not revenue.
+						// One never billed has no basis to change from.
+						(stored.mrrBasis === rollup.mrrBasis || neverBilled(stored))
+					) {
+						if (!holdsMrr) yield* writeMovement(stored, rollup, today)
+						if (!holdsVariable) yield* writeVariableChange(stored, rollup, today)
+					}
+					const changes = diff(stored, {
+						...rollup,
+						mrrMinor,
+						variableMrrMinor,
+					})
 					if (Object.keys(changes).length === 0) return
 					yield* db.run(
 						SQLite.update(schema.customerAccountsTable)
@@ -901,6 +1006,9 @@ const activeCounts = Effect.fn("Customers.activeCounts")(function* (from: Day, t
 /** The org's totals over the chunks, for today's row. */
 interface OrgTotals {
 	mrrMinor: number
+	/** Σ variable MRR: run-rate MRR is `mrrMinor + variableMrrMinor`. */
+	variableMrrMinor: number
+	/** Accounts with run-rate MRR: a customer billed only on usage pays too. */
 	payingAccounts: number
 	trialingAccounts: number
 	healthy: number
@@ -915,6 +1023,7 @@ const addTotals = (
 	snapshot: Snapshot,
 	scores: ReadonlyMap<CustomerAccountId, HealthBreakdown>,
 	live: Live,
+	importing: ReadonlySet<CustomerProvider>,
 ) => {
 	const highRisk = new Set(
 		[...live.values()]
@@ -926,11 +1035,15 @@ const addTotals = (
 			)
 			.map((signal) => signal.accountId),
 	)
-	for (const { stored, rollup } of snapshot.accounts) {
-		totals.mrrMinor += rollup.mrrMinor
-		if (rollup.mrrMinor > 0) totals.payingAccounts++
+	for (const account of snapshot.accounts) {
+		const { stored, rollup } = account
+		// What the account row holds: org totals stay the sum of its accounts during an import.
+		const { mrrMinor, variableMrrMinor } = heldBalances(account, importing, snapshot.revenue)
+		totals.mrrMinor += mrrMinor
+		totals.variableMrrMinor += variableMrrMinor
+		if (mrrMinor + variableMrrMinor > 0) totals.payingAccounts++
 		if (rollup.lifecycleStage === "trialing") totals.trialingAccounts++
-		if (highRisk.has(stored.id)) totals.atRiskMrrMinor += rollup.mrrMinor
+		if (highRisk.has(stored.id)) totals.atRiskMrrMinor += mrrMinor
 		const status = scores.get(stored.id)?.status
 		if (status === "healthy") totals.healthy++
 		else if (status === "at_risk") totals.atRisk++
@@ -1011,61 +1124,142 @@ const releaseOrphanedEnvironments = Effect.flatMap(Database.Database, (db) =>
 	),
 )
 
-/** An account's MRR per day from its subscriptions' paid periods (trials and cancellations end them). */
+/** A subscription's billed span: from its trial's end (or start) until it was canceled; null without one. */
+const paidSpanOf = (sub: schema.CustomerSubscription) => {
+	if (sub.status === "trialing" || sub.status === "paused") return null
+	const start = sub.trialEndsAt ?? sub.startedAt
+	if (start === null) return null
+	if (sub.status === "canceled" && sub.canceledAt === null) return null
+	// An active subscription may carry the date it is scheduled to cancel on.
+	return {
+		from: dayOf(start),
+		until: sub.status === "canceled" && sub.canceledAt !== null ? dayOf(sub.canceledAt) : null,
+	}
+}
+
+const within = (day: Day, span: { from: Day; until: Day | null }) =>
+	day >= span.from && (span.until === null || day < span.until)
+
+/**
+ * An account's contracted MRR per day from its subscriptions' paid periods (trials and cancellations
+ * end them), each at what its invoices billed then (`recurringHistoryOf`).
+ */
 export const mrrHistory = (
 	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
 	currency: string,
 	days: ReadonlyArray<Day>,
+	revenue: RevenueBasis,
+	invoices: ReadonlyArray<SubscriptionInvoice> = [],
 ): Array<number> => {
-	const periods = subscriptions
-		.filter(
-			(sub) =>
-				sub.currency === currency &&
-				sub.mrrMinor > 0 &&
-				sub.status !== "trialing" &&
-				sub.status !== "paused",
-		)
-		.flatMap((sub) => {
-			const start = sub.trialEndsAt ?? sub.startedAt
-			if (start === null) return []
-			if (sub.status === "canceled" && sub.canceledAt === null) return []
-			return [
-				{
-					from: dayOf(start),
-					// An active subscription may carry the date it is scheduled to cancel on.
-					until:
-						sub.status === "canceled" && sub.canceledAt !== null ? dayOf(sub.canceledAt) : null,
-					mrr: sub.mrrMinor,
-				},
-			]
-		})
-	return days.map((day) =>
-		periods.reduce(
-			(sum, period) =>
-				day >= period.from && (period.until === null || day < period.until) ? sum + period.mrr : sum,
-			0,
-		),
+	const periods = subscriptions.flatMap((sub) => {
+		if (sub.currency !== currency) return []
+		const span = paidSpanOf(sub)
+		return span === null ? [] : [{ ...span, mrr: recurringHistoryOf(sub, invoices, revenue, days) }]
+	})
+	return days.map((day, index) =>
+		periods.reduce((sum, period) => (within(day, period) ? sum + period.mrr[index] : sum), 0),
 	)
 }
 
+/** Whether the account paid in `currency` on each day: a subscription that pays (`pays`) in its paid span. */
+const paidHistory = (
+	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
+	currency: string,
+	days: ReadonlyArray<Day>,
+): Array<boolean> => {
+	const spans = subscriptions.flatMap((sub) => {
+		const span = sub.currency === currency && pays(sub) ? paidSpanOf(sub) : null
+		return span === null ? [] : [span]
+	})
+	return days.map((day) => spans.some((span) => within(day, span)))
+}
+
 /**
- * The last year rebuilt from the sources (after a connection's first backfill or the demo seed):
- * MRR movements of the accounts without any in that year before today (today's replaced; their MRR set to where
- * the movements end, in the same transaction, so a crash before the rollups cannot count them
- * twice), and the org's daily
- * rows (MRR, paying, trialing, active, DAU/WAU/MAU, health counts) for the days without one; a day
- * recorded before billing data existed (no MRR, no paying account) gets its billing columns.
+ * The trailing usage averages (`trailingUsageOf`) as of the end of each day. They change only when a
+ * month starts or an invoice is billed, so they are computed on those days and carried between.
  */
-export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (base: SnapshotBase) {
+const usageHistory = (
+	invoices: ReadonlyArray<BilledInvoice>,
+	revenue: RevenueBasis,
+	currency: string,
+	days: ReadonlyArray<Day>,
+): Array<TrailingUsage> => {
+	const changes = new Set(
+		invoices.flatMap((invoice) => (invoice.issuedAt === null ? [] : [dayOf(invoice.issuedAt)])),
+	)
+	let current: TrailingUsage | null = null
+	return days.map((day, index) => {
+		if (current === null || index === 0 || day.endsWith("-01") || changes.has(day)) {
+			// The end of the day: what was billed by then.
+			current = trailingUsageOf(
+				invoices,
+				revenue,
+				currency,
+				new Date(Date.parse(`${addDays(day, 1)}T00:00:00.000Z`) - 1),
+			)
+		}
+		return current
+	})
+}
+
+/**
+ * Restating (a new revenue basis): the last year's movements and the org's daily billing columns go.
+ * At-risk MRR stays as recorded: who was at risk on a past day cannot be rebuilt.
+ */
+const clearBillingHistory = (first: Day, today: Day, accountIds: ReadonlyArray<CustomerAccountId>) =>
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		// Live accounts only: a rebuild does not restore a deleted one's, and retention reads them.
+		yield* db.run(
+			SQLite.deleteFrom(schema.customerMrrMovementsTable).where(($) => [
+				$.day.gte(first),
+				inList($.accountId, accountIds),
+			]),
+		)
+		yield* db.run(
+			SQLite.deleteFrom(schema.customerVariableMrrChangesTable).where(($) => [
+				$.day.gte(first),
+				inList($.accountId, accountIds),
+			]),
+		)
+		yield* db.run(
+			SQLite.update(schema.customerOrgDailyTable)
+				.set({
+					mrrMinor: 0,
+					variableMrrMinor: 0,
+					payingAccounts: 0,
+					trialingAccounts: 0,
+				})
+				.where(($) => [$.day.gte(first), $.day.lt(today)]),
+		)
+	})
+
+/**
+ * The last year rebuilt from the sources (after a connection's first backfill, the demo seed, or a new
+ * revenue basis): MRR movements of the accounts without any in that year before today (today's
+ * replaced; their MRR, variable MRR and basis set to where the series end, in the same transaction,
+ * so a crash before the rollups cannot count them twice), and the org's daily rows (MRR, variable
+ * MRR, paying, trialing, active, DAU/WAU/MAU, health counts) for the days without one; a day recorded
+ * before billing data existed (no MRR, no paying account) gets its billing columns.
+ *
+ * `restate` (a new revenue basis, `docs/customers/revenue.md`): the year's movements and the org's
+ * daily billing columns are cleared first, so every account's history is rebuilt under the new basis.
+ */
+export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (
+	base: SnapshotBase,
+	restate = false,
+	refreshPaying = false,
+) {
 	const db = yield* Database.Database
 	const { today, currency } = base.org
+	const { revenue } = base
 	const days = dayRange(today, HISTORY_DAYS + 1)
 	const first = days[0]
 	const before = addDays(first, -1)
 	const live = new Set(base.accountIds)
 	const accounts = (yield* db.run(
 		SQLite.from(schema.customerAccountsTable)
-			.select("id", "mrrMinor", "mrrSource")
+			.select("id", "mrrMinor", "variableMrrMinor", "mrrBasis", "mrrSource")
 			.where(($) => [$.deletedAt.isNull()]),
 	)).filter((account) => live.has(account.id))
 	const billingBy = billingByAccount(
@@ -1074,57 +1268,153 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 		new Map(accounts.map((account) => [account.id, account.mrrSource])),
 	)
 	// Today's movement alone is not history: one a compute wrote while billing was still importing
-	// (a partial MRR's jump) is replaced by the rebuilt series.
-	const withMovements = new Set(
-		(yield* db.run(
-			SQLite.from(schema.customerMrrMovementsTable)
-				.select("accountId")
-				.where(($) => [$.day.gte(first), $.day.lt(today)])
-				.distinct(),
-		)).map((row) => row.accountId),
+	// (a partial MRR's jump) is replaced by the rebuilt series. Restating, there is none left.
+	const withMovements = restate
+		? new Set<CustomerAccountId>()
+		: new Set(
+				(yield* db.run(
+					SQLite.from(schema.customerMrrMovementsTable)
+						.select("accountId")
+						.where(($) => [$.day.gte(first), $.day.lt(today)])
+						.distinct(),
+				)).map((row) => row.accountId),
+			)
+	const withChanges = restate
+		? new Set<CustomerAccountId>()
+		: new Set(
+				(yield* db.run(
+					SQLite.from(schema.customerVariableMrrChangesTable)
+						.select("accountId")
+						.where(($) => [$.day.gte(first), $.day.lt(today)])
+						.distinct(),
+				)).map((row) => row.accountId),
+			)
+	const variableChanges: Array<Record<string, unknown>> = []
+	// Invoices billed in the window of the year's first day and a year before it (long service periods).
+	const invoicesFrom = new Date(
+		windowMonths(new Date(`${first}T00:00:00.000Z`), revenue.months)[0] - USAGE_LOOKBACK_MS,
 	)
+	const series = [before, ...days]
 	const mrr = Array.from({ length: days.length }, () => 0)
+	const variable = Array.from({ length: days.length }, () => 0)
 	const paying = Array.from({ length: days.length }, () => 0)
 	const trialing = Array.from({ length: days.length }, () => 0)
 	const movements: Array<Record<string, unknown>> = []
-	const mrrNow: Array<{ id: CustomerAccountId; mrrMinor: number }> = []
-	for (const account of accounts) {
-		const subs = billingBy.get(account.id)?.subscriptions ?? []
-		const series = mrrHistory(subs, currency, [before, ...days])
-		const trial = new Uint8Array(days.length)
-		for (const sub of subs) {
-			if (sub.trialEndsAt === null || sub.startedAt === null) continue
-			const end =
-				sub.canceledAt !== null && sub.canceledAt < sub.trialEndsAt ? sub.canceledAt : sub.trialEndsAt
-			const from = Math.max(0, daysBetween(first, dayOf(sub.startedAt)))
-			const until = Math.min(days.length, daysBetween(first, dayOf(end)))
-			for (let index = from; index < until; index++) trial[index] = 1
+	const current: Array<{
+		id: CustomerAccountId
+		mrrMinor: number
+		variableMrrMinor: number
+		mrrBasis: string | null
+	}> = []
+	// In chunks: an account's invoices carry their lines.
+	for (const chunk of accountChunks(accounts)) {
+		const invoices = yield* db.run(
+			SQLite.from(schema.customerInvoicesTable)
+				.select(
+					"accountId",
+					"subscriptionId",
+					"status",
+					"currency",
+					"issuedAt",
+					"paidAt",
+					"amountPaidMinor",
+					"servicePeriodStart",
+					"lines",
+				)
+				.where(($) => [
+					inList(
+						$.accountId,
+						chunk.map((account) => account.id),
+					),
+					$.status.in_("open", "paid"),
+					$.currency.eq(currency),
+					$.issuedAt.gte(invoicesFrom),
+				]),
+		)
+		const invoicesBy = new Map<CustomerAccountId, Array<SubscriptionInvoice>>()
+		for (const invoice of invoices) {
+			const list = invoicesBy.get(invoice.accountId)
+			if (list === undefined) invoicesBy.set(invoice.accountId, [invoice])
+			else list.push(invoice)
 		}
-		for (let index = 0; index < days.length; index++) {
-			mrr[index] += series[index + 1]
-			if (series[index + 1] > 0) paying[index]++
-			trialing[index] += trial[index]
+		for (const account of chunk) {
+			const subs = billingBy.get(account.id)?.subscriptions ?? []
+			const own = invoicesBy.get(account.id) ?? []
+			const recurring = mrrHistory(subs, currency, series, revenue, own)
+			const paid = paidHistory(subs, currency, series)
+			const usage = usageHistory(own, revenue, currency, series)
+			const invoiceOnly = !subs.some((sub) => sub.currency === currency)
+			// As the rollup counts them (`rollupAccount`): usage while billed by a subscription, or
+			// (with none) billed last month.
+			const accountMrr = series.map(
+				(_, index) => recurring[index] + (paid[index] ? usage[index].recurringUsageMinor : 0),
+			)
+			const accountVariable = series.map((_, index) =>
+				paid[index] || (invoiceOnly && usage[index].billedLastMonth) ? usage[index].variableMinor : 0,
+			)
+			const trial = new Uint8Array(days.length)
+			for (const sub of subs) {
+				if (sub.trialEndsAt === null || sub.startedAt === null) continue
+				const end =
+					sub.canceledAt !== null && sub.canceledAt < sub.trialEndsAt
+						? sub.canceledAt
+						: sub.trialEndsAt
+				const from = Math.max(0, daysBetween(first, dayOf(sub.startedAt)))
+				const until = Math.min(days.length, daysBetween(first, dayOf(end)))
+				for (let index = from; index < until; index++) trial[index] = 1
+			}
+			for (let index = 0; index < days.length; index++) {
+				mrr[index] += accountMrr[index + 1]
+				variable[index] += accountVariable[index + 1]
+				if (accountMrr[index + 1] + accountVariable[index + 1] > 0) paying[index]++
+				trialing[index] += trial[index]
+			}
+			const last = series.length - 1
+			// A series kept as recorded keeps its balance: the next compute records the change to it.
+			const mrrNow = withMovements.has(account.id) ? account.mrrMinor : accountMrr[last]
+			const variableNow = withChanges.has(account.id) ? account.variableMrrMinor : accountVariable[last]
+			const basisNow = withMovements.has(account.id) ? account.mrrBasis : revenue.key
+			if (
+				mrrNow !== account.mrrMinor ||
+				variableNow !== account.variableMrrMinor ||
+				basisNow !== account.mrrBasis
+			)
+				current.push({
+					id: account.id,
+					mrrMinor: mrrNow,
+					variableMrrMinor: variableNow,
+					mrrBasis: basisNow,
+				})
+			if (!withChanges.has(account.id)) {
+				for (let index = 1; index < accountVariable.length; index++) {
+					if (accountVariable[index - 1] === accountVariable[index]) continue
+					variableChanges.push({
+						accountId: account.id,
+						day: days[index - 1],
+						fromMinor: accountVariable[index - 1],
+						toMinor: accountVariable[index],
+						currency,
+					})
+				}
+			}
+			if (withMovements.has(account.id)) continue
+			let everPaid = false
+			for (let index = 1; index < accountMrr.length; index++) {
+				const from = accountMrr[index - 1]
+				const to = accountMrr[index]
+				if (from > 0) everPaid = true
+				if (from === to) continue
+				movements.push({
+					accountId: account.id,
+					day: days[index - 1],
+					type: movementType(from, to, everPaid),
+					deltaMinor: to - from,
+					fromMrrMinor: from,
+					toMrrMinor: to,
+					currency,
+				})
+			}
 		}
-		if (withMovements.has(account.id)) continue
-		let everPaid = false
-		for (let index = 1; index < series.length; index++) {
-			const from = series[index - 1]
-			const to = series[index]
-			if (from > 0) everPaid = true
-			if (from === to) continue
-			movements.push({
-				accountId: account.id,
-				day: days[index - 1],
-				type: movementType(from, to, everPaid),
-				deltaMinor: to - from,
-				fromMrrMinor: from,
-				toMrrMinor: to,
-				currency,
-			})
-		}
-		const current = series[series.length - 1]
-		if (current === account.mrrMinor) continue
-		mrrNow.push({ id: account.id, mrrMinor: current })
 	}
 	const users = yield* activeCounts(first, today)
 	const health = new Map(
@@ -1143,6 +1433,7 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 					{
 						day,
 						mrrMinor: mrr[index],
+						variableMrrMinor: variable[index],
 						payingAccounts: paying[index],
 						trialingAccounts: trialing[index],
 						...users(day),
@@ -1157,6 +1448,12 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 	const now = base.org.now
 	yield* db.transaction(
 		Effect.gen(function* () {
+			if (restate)
+				yield* clearBillingHistory(
+					first,
+					today,
+					accounts.map((account) => account.id),
+				)
 			yield* db.run(
 				SQLite.deleteFrom(schema.customerMrrMovementsTable).where(($) => [
 					$.day.eq(today),
@@ -1171,22 +1468,44 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 			for (const chunk of accountChunks(movements, rowsPerInsert(7))) {
 				yield* db.run(SQLite.insertInto(schema.customerMrrMovementsTable).values(chunk as never))
 			}
-			for (const account of mrrNow) {
+			yield* db.run(
+				SQLite.deleteFrom(schema.customerVariableMrrChangesTable).where(($) => [
+					$.day.eq(today),
+					SQLite.notInSubquery(
+						$.accountId,
+						SQLite.from(schema.customerVariableMrrChangesTable)
+							.select("accountId")
+							.where((m) => [m.day.gte(first), m.day.lt(today)]),
+					),
+				]),
+			)
+			for (const chunk of accountChunks(variableChanges, rowsPerInsert(5))) {
+				yield* db.run(
+					SQLite.insertInto(schema.customerVariableMrrChangesTable).values(chunk as never),
+				)
+			}
+			for (const account of current) {
 				yield* db.run(
 					SQLite.update(schema.customerAccountsTable)
-						.set({ mrrMinor: account.mrrMinor, updatedAt: now })
+						.set({
+							mrrMinor: account.mrrMinor,
+							variableMrrMinor: account.variableMrrMinor,
+							mrrBasis: account.mrrBasis,
+							updatedAt: now,
+						})
 						.where(($) => [$.id.eq(account.id)]),
 				)
 			}
 			// One statement, the days as one JSON parameter. Recorded days get their user counts again
 			// (activity may have been backfilled since), and their billing columns while still empty
-			// (recorded before any billing data came in).
+			// (recorded before any billing data came in, or cleared by a restatement).
 			yield* db.run(
 				SQLite.insertInto(schema.customerOrgDailyTable)
 					.select(
 						SQLite.jsonRows(orgDays, {
 							day: SQLite.text,
 							mrrMinor: SQLite.integer,
+							variableMrrMinor: SQLite.integer,
 							payingAccounts: SQLite.integer,
 							trialingAccounts: SQLite.integer,
 							activeAccounts: SQLite.integer,
@@ -1209,11 +1528,15 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 								wau: excluded.wau,
 								mau: excluded.mau,
 								mrrMinor: SQLite.iif(noBilling, excluded.mrrMinor, $.mrrMinor),
-								payingAccounts: SQLite.iif(
-									noBilling,
-									excluded.payingAccounts,
-									$.payingAccounts,
+								// Its own test: a Stripe switch clears it while Autumn's MRR stays.
+								variableMrrMinor: SQLite.iif(
+									$.variableMrrMinor.eq(0),
+									excluded.variableMrrMinor,
+									$.variableMrrMinor,
 								),
+								payingAccounts: refreshPaying
+									? excluded.payingAccounts
+									: SQLite.iif(noBilling, excluded.payingAccounts, $.payingAccounts),
 								trialingAccounts: SQLite.iif(
 									noBilling,
 									excluded.trialingAccounts,
@@ -1227,7 +1550,9 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 	)
 	yield* Effect.annotateCurrentSpan({
 		"customers.movements": movements.length,
-		"customers.rebuilt_accounts": mrrNow.length,
+		"customers.variable_changes": variableChanges.length,
+		"customers.rebuilt_accounts": current.length,
+		"customers.restated": restate,
 	})
 })
 
@@ -1269,15 +1594,145 @@ const prune = Effect.fn("Customers.prune")(function* (now: Date) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Billing data read before Hazel stored what revenue needs (`REVENUE_DATA_VERSION`): each Stripe
+ * connection imports again from scratch (a backfill: invoices with their lines, the price catalog),
+ * once. Its history is restated after that import (`followRevenueBasis`, the same release's new method).
+ */
+const upgradeRevenueData = (now: Date) =>
+	Effect.gen(function* () {
+		if (Option.getOrUndefined(yield* readObjectMeta(REVENUE_DATA_KEY)) === REVENUE_DATA_VERSION) return
+		const db = yield* Database.Database
+		// Together: a retry after a partial write would find the reset connections and record none.
+		const walked = yield* db.transaction(
+			Effect.gen(function* () {
+				const rows = yield* db.run(
+					SQLite.update(schema.customerConnectionsTable)
+						.set({ backfilledAt: null, lastSuccessAt: null, nextSyncAt: now, updatedAt: now })
+						.where(($) => [
+							$.provider.eq("stripe"),
+							$.status.neq("disconnected"),
+							$.backfilledAt.isNotNull(),
+						])
+						.returning("id"),
+				)
+				yield* saveRevenueWalk({ ids: rows.map((row) => row.id), at: now.getTime() })
+				yield* writeObjectMeta(REVENUE_DATA_KEY, REVENUE_DATA_VERSION)
+				return rows
+			}),
+		)
+		yield* Effect.logInfo("Customers billing walked again for revenue data", {
+			connections: walked.length,
+		})
+	})
+
+/** Of the connections walked again, one that has yet to finish its import (in error too). */
+const walkUnfinished = (ids: ReadonlyArray<string>) =>
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		const row = yield* db.first(
+			SQLite.from(schema.customerConnectionsTable)
+				.select("id")
+				.where(($) => [$.status.neq("disconnected"), $.backfilledAt.isNull(), inList($.id, ids)])
+				.limit(1),
+		)
+		return Option.isSome(row)
+	})
+
+/**
+ * A rebuild waits for the connections walked again, up to the age a backfill counts as importing. Past
+ * it (one stuck, or in error) it runs on what is there, and `settleRevenueWalk` keeps the debt.
+ */
+const awaitingRevenueWalk = (now: Date) =>
+	Effect.gen(function* () {
+		const walk = Option.getOrUndefined(yield* revenueWalk)
+		if (walk === undefined || now.getTime() - walk.at >= BACKFILL_MAX_AGE_MS) return false
+		return yield* walkUnfinished(walk.ids)
+	})
+
+/** After a rebuild: a restatement that ran before the walk finished is owed again once it has. */
+const settleRevenueWalk = (restated: boolean) =>
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		// Together: the request must not go without the debt that replaces it.
+		yield* db.transaction(
+			Effect.gen(function* () {
+				yield* deleteObjectMeta(RESTATE_KEY)
+				const walk = Option.getOrUndefined(yield* revenueWalk)
+				if (walk !== undefined && (yield* walkUnfinished(walk.ids))) {
+					if (restated) yield* saveRevenueWalk({ ...walk, owed: true })
+					return
+				}
+				yield* clearRevenueWalk
+				yield* clearPayingRefresh
+			}),
+		)
+	})
+
+/**
+ * The revenue basis changed (rules or window edited, or a new method, `REVENUE_METHOD_VERSION`): the
+ * billing history is restated under it by the next rebuild, once no billing import runs. Computes in
+ * between write no movement for the change (`mrrBasis`).
+ */
+const followRevenueBasis = Effect.fnUntraced(function* (now: Date) {
+	const db = yield* Database.Database
+	const settings = yield* db.first(SQLite.from(schema.customerSettingsTable).select("id").limit(1))
+	if (Option.isNone(settings)) return
+	const walk = Option.getOrUndefined(yield* revenueWalk)
+	if (walk !== undefined && !(yield* walkUnfinished(walk.ids))) {
+		if (walk.owed === true) yield* writeObjectMeta(RESTATE_KEY, "1")
+		yield* clearRevenueWalk
+	}
+	const { key } = yield* loadRevenueBasis
+	const recorded = Option.getOrUndefined(yield* readObjectMeta(REVENUE_BASIS_KEY))
+	if (recorded !== key) {
+		// None recorded yet: an org without billing history has nothing to restate.
+		const history =
+			recorded !== undefined ||
+			Option.isSome(
+				yield* db.first(SQLite.from(schema.customerMrrMovementsTable).select("id").limit(1)),
+			) ||
+			Option.isSome(
+				yield* db.first(
+					SQLite.from(schema.customerOrgDailyTable)
+						.select("day")
+						.where(($) => [SQLite.or($.mrrMinor.gt(0), $.payingAccounts.gt(0))])
+						.limit(1),
+				),
+			)
+		if (history) yield* writeObjectMeta(RESTATE_KEY, "1")
+		yield* writeObjectMeta(REVENUE_BASIS_KEY, key)
+	}
+	if (Option.isNone(yield* readObjectMeta(RESTATE_KEY))) return
+	if (!(yield* awaitingRevenueWalk(now))) yield* requestHistoryRebuild
+})
+
+/**
+ * A new org is current from the start: its billing data is read the current way (no walk again,
+ * `upgradeRevenueData`), and its history will be computed under its basis (nothing to restate).
+ */
+export const markRevenueCurrent = Effect.gen(function* () {
+	yield* writeObjectMeta(REVENUE_DATA_KEY, REVENUE_DATA_VERSION)
+	yield* writeObjectMeta(REVENUE_BASIS_KEY, (yield* loadRevenueBasis).key)
+})
+
+/**
  * One alarm turn's compute work: the history rebuild when one is pending and no billing backfill
  * is importing (alone in its turn, the compute right after), else the compute (or its next part).
  */
 export const runComputeStep = Effect.fn("Customers.computeStep")(function* (now: Date) {
+	yield* upgradeRevenueData(now)
+	yield* followRevenueBasis(now)
 	const importing = yield* importingProviders(now)
-	if (!billingImporting(importing) && (yield* historyRebuildPending)) {
+	if (
+		!billingImporting(importing) &&
+		!(yield* awaitingRevenueWalk(now)) &&
+		(yield* historyRebuildPending)
+	) {
 		const attempts = yield* takeRebuildAttempt
 		if (attempts < MAX_REBUILD_ATTEMPTS) {
-			yield* rebuildHistory(yield* loadBase(now))
+			const restate = Option.isSome(yield* readObjectMeta(RESTATE_KEY))
+			yield* rebuildHistory(yield* loadBase(now), restate, yield* payingRefreshPending)
+			yield* settleRevenueWalk(restate)
 			yield* clearHistoryRebuild
 			// It reset MRR to the plans': a compute spread over turns starts over to add usage to all.
 			yield* clearComputeProgress
@@ -1286,6 +1741,7 @@ export const runComputeStep = Effect.fn("Customers.computeStep")(function* (now:
 		}
 		// It keeps failing: charts go without the rebuilt history rather than computes stopping for good.
 		yield* Effect.logError("Customers history rebuild given up", { attempts })
+		yield* settleRevenueWalk(Option.isSome(yield* readObjectMeta(RESTATE_KEY)))
 		yield* clearHistoryRebuild
 	}
 	yield* runCompute(now)
@@ -1297,11 +1753,14 @@ const ComputeProgress = Schema.Struct({
 	startedAt: Schema.Finite,
 	day: Day,
 	autumnReady: Schema.Boolean,
+	/** The revenue basis its totals were summed under: another one starts over. */
+	basis: Schema.String,
 	/** The primary of the last group of accounts done (groups go in their primary's id order). */
 	after: CustomerAccountId,
 	armed: Schema.Array(Schema.String),
 	totals: Schema.Struct({
 		mrrMinor: Schema.Finite,
+		variableMrrMinor: Schema.Finite,
 		payingAccounts: Schema.Finite,
 		trialingAccounts: Schema.Finite,
 		healthy: Schema.Finite,
@@ -1336,6 +1795,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 			(saved) =>
 				saved.day === base.org.today &&
 				saved.autumnReady === base.autumnReady &&
+				saved.basis === base.revenue.key &&
 				now.getTime() - saved.startedAt < COMPUTE_PROGRESS_MAX_AGE_MS,
 		),
 	)
@@ -1348,6 +1808,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 		progress === undefined
 			? {
 					mrrMinor: 0,
+					variableMrrMinor: 0,
 					payingAccounts: 0,
 					trialingAccounts: 0,
 					healthy: 0,
@@ -1367,7 +1828,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 		const scores = scoreAll(snapshot)
 		yield* writeHealth(snapshot, scores)
 		const live = yield* writeSignals(withTodayHealth(snapshot, scores), signals)
-		addTotals(totals, snapshot, scores, live)
+		addTotals(totals, snapshot, scores, live, importing)
 		done++
 		if (
 			done < chunks.length &&
@@ -1395,6 +1856,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 				startedAt: progress?.startedAt ?? now.getTime(),
 				day: base.org.today,
 				autumnReady: base.autumnReady,
+				basis: base.revenue.key,
 				after: last[last.length - 1][0],
 				armed: signals.armed,
 				totals,

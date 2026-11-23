@@ -6,8 +6,9 @@
  * | Phase | Request | Writes |
  * |---|---|---|
  * | `customers` | `/customers` | accounts (matched by shared id or domain) and their billing contacts |
+ * | `prices`, `archived_prices` | `/prices?active=true`, `?active=false` (`expand[]=data.product`) | the price catalog revenue rules match on |
  * | `subscriptions` | `/subscriptions?status=all` (expanded, `subscriptionExpands`) + `/products?ids[]=…` per page | subscriptions, MRR |
- * | `invoices` | `/invoices`, the last {@link INVOICE_BACKFILL_DAYS} days | invoices |
+ * | `invoices` | `/invoices`, the last {@link INVOICE_BACKFILL_DAYS} days (+ `/lines` past the first 10) | invoices and their lines |
  * | `events` | `/events?types[]=…&created[gte]=since` + one read per changed object | whatever changed |
  *
  * Paging is Stripe's own `starting_after`, which is id-based: a record deleted mid-walk cannot
@@ -16,7 +17,7 @@
  * **The full walk (`since: null`) lists everything**, so its last page sets `sweep: ["account"]` and
  * core removes the customers it did not see (deleted while no webhook reached Hazel). Contacts are
  * not swept: a Stripe contact row is usually the Clerk member's too, and removing Stripe's ref
- * would soft-delete the person. Invoices older than a year are not read, so a decade of them cannot
+ * would soft-delete the person. Invoices older than about three years are not read, so a decade of them cannot
  * stall a connection.
  *
  * **A scheduled pull reads Stripe's event log.** None of Stripe's list endpoints filter by a change
@@ -42,20 +43,34 @@ import type { ConnectionConfig, IngestOp, IsoTimestamp, SyncProgress } from "@ha
 import { Clock, Effect, Option, Schema } from "effect"
 import type { PullPage } from "../providers"
 import type { StripeGet, StripeQuery } from "./http"
-import { customerOps, invoiceOp } from "./map"
-import { isTransient, NOTHING_READ, opsOfReads, readEvent, STRIPE_EVENT_TYPES } from "./webhook"
+import { customerOps, invoiceOp, priceOp } from "./map"
 import {
+	isTransient,
+	NOTHING_READ,
+	opsOfReads,
+	readEvent,
+	readInvoiceLines,
+	STRIPE_BILLING_EVENT_TYPES,
+	STRIPE_CATALOG_EVENT_TYPES,
+} from "./webhook"
+import {
+	objectOf,
 	StripeCustomersPage,
 	StripeEventsPage,
 	StripeInvoicesPage,
+	StripePricesPage,
 	StripeSubscriptionsPage,
 	subscriptionExpands,
 } from "./wire"
 
 /** Stripe's list endpoints cap `limit` at 100. */
 export const PAGE_SIZE = 100
-/** How far back a backfill reads invoices. Older ones answer no signal and no rollup. */
-const INVOICE_BACKFILL_DAYS = 365
+/**
+ * How far back a backfill reads invoices: what a rebuild loads (`docs/customers/revenue.md`), the year
+ * of history it covers (365), the longest trailing window of its first day (12 full months, up to
+ * 396), and how early a line reaching into that window can be billed (370).
+ */
+const INVOICE_BACKFILL_DAYS = 1135
 /** Stripe keeps events for 30 days; a day of margin for the clock and the run's own length. */
 const EVENTS_RETENTION_MS = 29 * 86_400_000
 /** Objects an events page reads at once: Stripe's test mode allows 25 requests a second. */
@@ -63,7 +78,15 @@ const EVENT_READ_CONCURRENCY = 4
 /** Events per page: at most this many object reads are redone when a page fails. */
 const EVENTS_PAGE_SIZE = 25
 
-const StripePhase = Schema.Literals(["customers", "subscriptions", "invoices", "events"])
+const StripePhase = Schema.Literals([
+	"customers",
+	"prices",
+	"archived_prices",
+	"subscriptions",
+	"invoices",
+	"events",
+	"catalog_events",
+])
 type StripePhase = typeof StripePhase.Type
 
 /** Which phase the walk is in, and Stripe's paging cursor. */
@@ -84,10 +107,13 @@ export const decodeCursor = (cursor: string): Option.Option<StripeCursor> => dec
 export const encodeCursor = (cursor: StripeCursor): string => JSON.stringify(cursor)
 
 const NEXT_PHASE = {
-	customers: "subscriptions",
+	customers: "prices",
+	prices: "archived_prices",
+	archived_prices: "subscriptions",
 	subscriptions: "invoices",
 	invoices: null,
-	events: null,
+	events: "catalog_events",
+	catalog_events: null,
 } satisfies Readonly<Record<StripePhase, StripePhase | null>>
 
 const doneOf = (cursor: StripeCursor): number => cursor.done ?? 0
@@ -111,7 +137,7 @@ const pageOf = (
 	// Stripe's lists carry no total; only `has_more`.
 	const progress: SyncProgress = { step: cursor.phase, done, total: null }
 	// Only the full walk's last page: it listed every customer of the account.
-	return nextCursor === null && cursor.phase !== "events"
+	return nextCursor === null && cursor.phase === "invoices"
 		? { ops, nextCursor, progress, sweep: ["account"] }
 		: { ops, nextCursor, progress }
 }
@@ -133,6 +159,27 @@ const customersPage = Effect.fnUntraced(function* (
 ) {
 	const body = yield* get("/customers", query(cursor), StripeCustomersPage)
 	const ops = body.data.flatMap((customer) => customerOps(customer, config, at))
+	return pageOf(cursor, ops, body.data, body.has_more)
+})
+
+/**
+ * One page of prices with their products. `/v1/prices` lists only active ones unless told otherwise,
+ * so archived ones are a phase of their own: an old invoice's line names them.
+ */
+const pricesPage = Effect.fnUntraced(function* (get: StripeGet, cursor: StripeCursor, at: IsoTimestamp) {
+	const active = cursor.phase === "prices" ? "true" : "false"
+	const body = yield* get(
+		"/prices",
+		query(cursor, [
+			["active", active],
+			["expand[]", "data.product"],
+		]),
+		StripePricesPage,
+	)
+	const ops = body.data.flatMap((price) => {
+		const op = priceOp(price, objectOf(price.product), at)
+		return op === null ? [] : [op]
+	})
 	return pageOf(cursor, ops, body.data, body.has_more)
 })
 
@@ -162,11 +209,17 @@ const invoicesPage = Effect.fnUntraced(function* (
 		query(cursor, [["created[gte]", secondsOf(nowMs - INVOICE_BACKFILL_DAYS * 86_400_000)]]),
 		StripeInvoicesPage,
 	)
-	const ops = body.data.flatMap((invoice) => {
-		const op = invoiceOp(invoice, { observedAt: at })
-		return op === null ? [] : [op]
-	})
-	return pageOf(cursor, ops, body.data, body.has_more)
+	// An invoice with more than the 10 lines Stripe embeds reads the rest; results keep their order.
+	const ops = yield* Effect.forEach(
+		body.data,
+		(invoice) =>
+			Effect.map(readInvoiceLines(get, invoice), (lines) => {
+				const op = invoiceOp(invoice, { observedAt: at, lines })
+				return op === null ? [] : [op]
+			}),
+		{ concurrency: EVENT_READ_CONCURRENCY },
+	)
+	return pageOf(cursor, ops.flat(), body.data, body.has_more)
 })
 
 const ObjectId = Schema.Struct({ id: Schema.String })
@@ -185,7 +238,9 @@ const eventsPage = Effect.fnUntraced(function* (
 			cursor,
 			[
 				...(since === null ? [] : [["created[gte]", secondsOf(since.getTime())] as const]),
-				...STRIPE_EVENT_TYPES.map((type) => ["types[]", type] as const),
+				...(cursor.phase === "events" ? STRIPE_BILLING_EVENT_TYPES : STRIPE_CATALOG_EVENT_TYPES).map(
+					(type) => ["types[]", type] as const,
+				),
 			],
 			EVENTS_PAGE_SIZE,
 		),
@@ -249,11 +304,13 @@ export const pullPage = Effect.fn("Stripe.pullPage")(function* (input: {
 	const page: PullPage =
 		cursor.phase === "customers"
 			? yield* customersPage(get, cursor, config, at)
-			: cursor.phase === "subscriptions"
-				? yield* subscriptionsPage(get, cursor, at)
-				: cursor.phase === "invoices"
-					? yield* invoicesPage(get, cursor, nowMs, at)
-					: yield* eventsPage(get, cursor, since, config, at)
+			: cursor.phase === "prices" || cursor.phase === "archived_prices"
+				? yield* pricesPage(get, cursor, at)
+				: cursor.phase === "subscriptions"
+					? yield* subscriptionsPage(get, cursor, at)
+					: cursor.phase === "invoices"
+						? yield* invoicesPage(get, cursor, nowMs, at)
+						: yield* eventsPage(get, cursor, since, config, at)
 	yield* Effect.annotateCurrentSpan({
 		"stripe.phase": cursor.phase,
 		"stripe.received": page.progress.done - doneOf(cursor),
