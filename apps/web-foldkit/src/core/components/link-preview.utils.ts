@@ -1,8 +1,13 @@
 /** URL detection and classification for message embeds. Framework-free so the Foldkit app shares it. */
 
+/**
+ * The URLs a message's text links to: `https://…`, `www.…`, and bare domains (`hazel.sh/docs`).
+ * A bare domain or `www.` must stand on its own, so an email address (`inbox@hazel.sh`,
+ * `first.last@hazel.sh`) is not a link.
+ */
 export function extractUrls(input: string): string[] {
 	const re =
-		/(https?:\/\/[^\s)]+|www\.[^\s)]+|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?:\/[^\s)]*)?)/gi
+		/(https?:\/\/[^\s)]+|(?<![@\w.-])(?:www\.[^\s)@]+|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?![\w@-])(?:\/[^\s)]*)?))/gi
 	const found: string[] = []
 	let m: RegExpExecArray | null
 	// biome-ignore lint/suspicious/noAssignInExpressions: ...
