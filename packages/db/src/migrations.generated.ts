@@ -368,6 +368,14 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "organization_exports_status_idx" ON "organization_exports" ("status")',
 			],
 		},
+		{
+			id: "0015_dm_last_message",
+			statements: [
+				'ALTER TABLE "channels" ADD COLUMN "lastMessageAt" text',
+				'ALTER TABLE "channels" ADD COLUMN "lastMessageAuthorId" text',
+				'ALTER TABLE "channels" ADD COLUMN "lastMessagePreview" text',
+			],
+		},
 	],
 	channel: [
 		{

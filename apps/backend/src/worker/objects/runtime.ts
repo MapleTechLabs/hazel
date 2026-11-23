@@ -63,6 +63,7 @@ import { makeCustomersSource } from "./sources/customers-source"
 import { pollDueRssFeeds, rssDeadlines } from "./org/rss"
 import { assistantDeadlines, AssistantTickCall } from "./org/assistant"
 import { exportDeadlines, OrgExportTickCall } from "./org/exports"
+import { fillDmLastMessages } from "./org/dm-last-message"
 import { prepareMessageSearch, SEARCH_MIGRATION_ID } from "./org/message-search"
 import { channelDeadlines, runChannelTimers } from "./channel/timers"
 import { makePresenceHooks } from "./user/presence"
@@ -179,6 +180,14 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 							Effect.logError("Message search backfill not started", error),
 						SchemaError: (error) => Effect.logError("Message search backfill not started", error),
 					}),
+				),
+			)
+			// DMs that predate their last-message columns, filled once from the index.
+			yield* run(
+				fillDmLastMessages().pipe(
+					Effect.catchTag("DatabaseError", (error) =>
+						Effect.logError("DM last messages not filled", error),
+					),
 				),
 			)
 		}

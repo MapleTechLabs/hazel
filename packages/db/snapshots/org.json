@@ -1,5 +1,5 @@
 {
-	"migration": "0014_organization_exports",
+	"migration": "0015_dm_last_message",
 	"entities": [
 		{
 			"kind": "table",
@@ -1542,8 +1542,35 @@
 		{
 			"kind": "column",
 			"table": "channels",
-			"name": "createdAt",
+			"name": "lastMessageAt",
 			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channels",
+			"name": "lastMessageAuthorId",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channels",
+			"name": "lastMessagePreview",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channels",
+			"name": "createdAt",
+			"position": 10,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -1552,7 +1579,7 @@
 			"kind": "column",
 			"table": "channels",
 			"name": "updatedAt",
-			"position": 8,
+			"position": 11,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -1561,7 +1588,7 @@
 			"kind": "column",
 			"table": "channels",
 			"name": "deletedAt",
-			"position": 9,
+			"position": 12,
 			"type": "text",
 			"notNull": false,
 			"default": null

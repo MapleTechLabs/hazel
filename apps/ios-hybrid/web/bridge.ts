@@ -23,8 +23,12 @@ type Tab = {
 	color: string | null
 }
 
+/** A screen's primary action (`data-native="screen-action"`): the shell's floating button. */
+type ScreenAction = { label: string; symbol: string }
+
 type ShellMessage =
 	| { type: "tabs"; tabs: Array<Tab> }
+	| { type: "action"; action: ScreenAction | null }
 	| { type: "haptic"; kind: string }
 	| { type: "swipeBack"; enabled: boolean }
 	| { type: "overlay"; open: boolean }
@@ -62,6 +66,7 @@ declare global {
 const post = (message: ShellMessage) => window.webkit?.messageHandlers?.hazel?.postMessage(message)
 
 const TAB_BAR = '[data-native="tab-bar"]'
+const SCREEN_ACTION = '[data-native="screen-action"]'
 
 /** How long the page's semantic tree must stay unchanged before its first native frame. */
 const SETTLE_MS = 250
@@ -96,6 +101,14 @@ const readTabs = (): Array<Tab> => {
 		image: tabIcon(item),
 		color: hex(getComputedStyle(item).color),
 	}))
+}
+
+const readScreenAction = (): ScreenAction | null => {
+	const element = document.querySelector<HTMLElement>(SCREEN_ACTION)
+	if (element === null) return null
+	// SAFETY: `nativeIsland` writes these props as JSON of `{ label, symbol }`; every field is optional here.
+	const props = JSON.parse(element.dataset.nativeProps ?? "{}") as Partial<ScreenAction>
+	return { label: props.label ?? "", symbol: props.symbol ?? "plus" }
 }
 
 /** A tab's icon: its first SVG (not the unread badge), rasterized in the tab's own colour. */
@@ -210,7 +223,7 @@ export const installBridge = () => {
 	const style = document.createElement("style")
 	// The message list is drawn natively over its own place (`list-capture.ts`): the web's stays
 	// laid out underneath, unseen.
-	style.textContent = `${TAB_BAR} { visibility: hidden !important; }
+	style.textContent = `${TAB_BAR}, ${SCREEN_ACTION} { visibility: hidden !important; }
 		:root:not([data-shell-overlay]) [data-list-count] { visibility: hidden !important; }
 		:root:not([data-shell-overlay]) [data-ui="composer"]:not([data-thread-panel] *) { opacity: 0 !important; pointer-events: none !important; }
 		* { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }`
@@ -230,6 +243,7 @@ export const installBridge = () => {
 	}).observe(document.documentElement, { subtree: true, childList: true })
 
 	let lastTabs = ""
+	let lastAction = ""
 	let lastListFrame = ""
 	let lastComposer = ""
 	let lastListCount = -1
@@ -253,6 +267,7 @@ export const installBridge = () => {
 	const sync = () => {
 		scheduled = false
 		const tabs = JSON.stringify(readTabs())
+		const action = JSON.stringify(readScreenAction())
 		const screen = readScreen()
 		const list = readList()
 		const composer = JSON.stringify(readComposer())
@@ -280,6 +295,10 @@ export const installBridge = () => {
 		if (tabs !== lastTabs) {
 			lastTabs = tabs
 			post({ type: "tabs", tabs: JSON.parse(tabs) })
+		}
+		if (action !== lastAction) {
+			lastAction = action
+			post({ type: "action", action: JSON.parse(action) })
 		}
 		if (composer !== lastComposer) {
 			lastComposer = composer
@@ -393,6 +412,7 @@ export const installBridge = () => {
 				)
 				item?.click()
 			},
+			screenAction: () => document.querySelector<HTMLElement>(SCREEN_ACTION)?.click(),
 			swipeBack: () => {
 				const back = current()
 				if (back === undefined) return

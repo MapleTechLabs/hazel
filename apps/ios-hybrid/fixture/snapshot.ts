@@ -223,6 +223,10 @@ export const channelRows: ReadonlyArray<Wire<typeof Channel.Schema>> = CHANNELS.
 	organizationId: orgId,
 	parentChannelId: null,
 	sectionId: c.sectionId,
+	// A DM's newest message (the org keeps it on the row): Grace's last one to Ada.
+	lastMessageAt: c.id === graceDm.id ? iso(-4 * MINUTE) : null,
+	lastMessageAuthorId: c.id === graceDm.id ? grace.id : null,
+	lastMessagePreview: c.id === graceDm.id ? "Sent it to you directly." : null,
 	createdAt: c.createdAt,
 	updatedAt: null,
 	deletedAt: null,
