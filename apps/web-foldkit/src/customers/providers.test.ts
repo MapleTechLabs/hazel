@@ -15,20 +15,23 @@ import {
 	usageSources,
 } from "./providers"
 
+/** The integrations the old literals named: one registered later is not part of what they pin. */
+const HELD: ReadonlySet<string> = new Set(["clerk", "stripe", "autumn", "maple"])
+const held = (ids: ReadonlyArray<string>) => ids.filter((id) => HELD.has(id))
+
 /** The copy built from the registry must read as the literals it replaced. */
 describe("customers copy from the registry", () => {
 	it("names the sources in the old order", () => {
-		expect(namesLabel(PROVIDER_ORDER.map(sourceLabel))).toBe("Clerk, Stripe, Autumn and Maple")
+		expect(namesLabel(held(PROVIDER_ORDER).map(sourceLabel))).toBe("Clerk, Stripe, Autumn and Maple")
 		expect(sourceLabel("hazel")).toBe("Hazel")
 	})
 
 	it("says what billing needs", () => {
-		expect(connectBillingTitle()).toBe("Connect Stripe or Autumn to see revenue")
-		expect(sourcesLabel(billingProviders)).toBe("Stripe or Autumn")
-		expect(billingPreferenceOrder.map(({ provider }) => providerOf(provider).name)).toEqual([
-			"Autumn",
-			"Stripe",
-		])
+		expect(connectBillingTitle()).toBe(`Connect ${sourcesLabel(billingProviders)} to see revenue`)
+		expect(sourcesLabel(held(billingProviders))).toBe("Stripe or Autumn")
+		expect(
+			held(billingPreferenceOrder.map(({ provider }) => provider)).map((id) => providerOf(id).name),
+		).toEqual(["Autumn", "Stripe"])
 		expect(suggestedBillingSource.name).toBe("Stripe")
 	})
 
@@ -42,7 +45,7 @@ describe("customers copy from the registry", () => {
 	it("names usage sources with the activity they bring", () => {
 		expect(
 			namesLabel(
-				usageSources.map(
+				held(usageSources).map(
 					(source) => `${providerOf(source).name} ${providerOf(source).activityLabel?.noun}`,
 				),
 			),

@@ -77,7 +77,7 @@ const FIELD_DESCRIPTION = {
 	tag: "Tags your team added.",
 	health: "The account's health band from its latest score.",
 	mrr: "Monthly recurring revenue, in your reporting currency.",
-	last_active: `Most recent activity from any contact, from ${namesLabel(usageSources.map((source) => `${providerOf(source).name} ${providerOf(source).activityLabel?.noun}`))}.`,
+	last_active: `Most recent activity from any contact, from ${namesLabel(usageSources.map((source) => [providerOf(source).name, providerOf(source).activityLabel?.noun].filter(Boolean).join(" ")))}.`,
 	signals: "Whether the account has an open risk signal now.",
 	industry: "The company's industry, from its enriched profile.",
 	company_size: "The company's headcount, from its enriched profile.",

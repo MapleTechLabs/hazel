@@ -73,12 +73,20 @@ const OLD_MAPLE_SETTINGS = {
 	},
 }
 
+type Registered = (typeof integrations)[number]
+type Held = Extract<Registered, { readonly id: keyof typeof OLD_DESCRIPTORS }>
+
+/** The integrations the old tables held: one registered later is not part of what they pin. */
+const held = integrations.filter((integration: Registered): integration is Held =>
+	Object.hasOwn(OLD_DESCRIPTORS, integration.id),
+)
+
 describe("integration presentation", () => {
 	it("lists the integrations in the old order", () => {
-		expect(integrations.map((integration) => integration.id)).toEqual(Object.keys(OLD_DESCRIPTORS))
+		expect(held.map((integration) => integration.id)).toEqual(Object.keys(OLD_DESCRIPTORS))
 	})
 
-	it.each(integrations)("$id deep-equals its old descriptor", (integration) => {
+	it.each(held)("$id deep-equals its old descriptor", (integration) => {
 		const { provider, ...old } = OLD_DESCRIPTORS[integration.id]
 		const moved = Object.fromEntries(
 			Object.entries(integration.presentation).filter(([key]) => Object.hasOwn(old, key)),
@@ -87,16 +95,16 @@ describe("integration presentation", () => {
 		expect(moved).toEqual(old)
 	})
 
-	it.each(integrations)("$id keeps the text the pages held", (integration) => {
+	it.each(held)("$id keeps the text the pages held", (integration) => {
 		const { accountNoun, setupSummary, sharedIdLabel } = integration.presentation
 		expect({ accountNoun, setupSummary, sharedIdLabel }).toEqual(OLD_TEXT[integration.id])
 	})
 
 	it("only the integration with those settings declares them, with the old labels", () => {
-		expect(
-			integrations.filter((integration) => integration.presentation.settings).map(({ id }) => id),
-		).toEqual(["maple"])
-		expect(integrations[3].presentation.settings).toEqual(OLD_MAPLE_SETTINGS)
+		expect(held.filter((integration) => integration.presentation.settings).map(({ id }) => id)).toEqual([
+			"maple",
+		])
+		expect(held.find(({ id }) => id === "maple")?.presentation.settings).toEqual(OLD_MAPLE_SETTINGS)
 	})
 
 	it("suggests one starting point and one billing source", () => {
@@ -111,7 +119,7 @@ describe("integration presentation", () => {
 	})
 
 	it("gates the tool-specific sections on the same integrations", () => {
-		expect(meteredProviders).toEqual(["autumn"])
+		expect(meteredProviders.filter((id) => Object.hasOwn(OLD_DESCRIPTORS, id))).toEqual(["autumn"])
 		expect(impersonationIntegration?.id).toBe("clerk")
 		expect(impersonationIntegration?.presentation.impersonationNote).toBe(
 			"Turn it on in the Clerk dashboard (Settings → User impersonation). Clerk allows 5 impersonations a month without the Administration add-on.",

@@ -32,7 +32,10 @@ export interface IntegrationCapabilities {
 	readonly meteredLimits?: true
 	readonly featureFlags?: true
 	readonly impersonation?: true
-	/** Needs attention covers only customers with a record here by default. */
+	/**
+	 * Needs attention covers only customers with a record here by default. It sets the stored column
+	 * default, so changing who holds it needs a migration.
+	 */
 	readonly attentionDefault?: true
 }
 

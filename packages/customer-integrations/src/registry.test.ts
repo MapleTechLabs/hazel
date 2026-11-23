@@ -60,29 +60,37 @@ const OLD_LINK_HOSTS = {
 	maple: ["maple.dev"],
 }
 
+/** The integrations these tables held: one registered later is not part of what they pin. */
+const HELD: ReadonlySet<string> = new Set(Object.keys(OLD_LINK_HOSTS))
+const held = (ids: ReadonlyArray<string>) => ids.filter((id) => HELD.has(id))
+
 describe("the registry", () => {
 	it("derives the field precedence core held, order and manual edits included", () => {
-		expect([...FIELD_PRECEDENCE]).toEqual([...OLD_FIELD_PRECEDENCE])
+		const heldOrder = [...FIELD_PRECEDENCE].map(([field, order]) => [
+			field,
+			order.filter((source) => source === "hazel" || HELD.has(source)),
+		])
+		expect(heldOrder).toEqual([...OLD_FIELD_PRECEDENCE])
 	})
 
 	it("resolves every template to the sources it required", () => {
 		for (const template of SignalTemplate.literals) {
-			expect(requiredSourcesOf(template), template).toEqual(OLD_REQUIRED_SOURCES[template])
+			expect(held(requiredSourcesOf(template)), template).toEqual(OLD_REQUIRED_SOURCES[template])
 		}
 	})
 
 	it("keeps the capability lists, the stored attention default and the link hosts", () => {
-		expect(integrations.map((integration) => integration.id)).toEqual([
+		expect(held(integrations.map((integration) => integration.id))).toEqual([
 			"clerk",
 			"stripe",
 			"autumn",
 			"maple",
 		])
-		expect(activityProviders).toEqual(ACTIVITY)
-		expect(billingProviders).toEqual(BILLING)
-		expect(billingPreferenceOrder.map((entry) => entry.provider)).toEqual(["autumn", "stripe"])
-		expect(invoiceProviders).toEqual(["stripe"])
-		expect(usageInvoiceProviders).toEqual(["stripe"])
+		expect(held(activityProviders)).toEqual(ACTIVITY)
+		expect(held(billingProviders)).toEqual(BILLING)
+		expect(held(billingPreferenceOrder.map((entry) => entry.provider))).toEqual(["autumn", "stripe"])
+		expect(held(invoiceProviders)).toEqual(["stripe"])
+		expect(held(usageInvoiceProviders)).toEqual(["stripe"])
 		expect(JSON.stringify(DEFAULT_ATTENTION_SETTINGS)).toBe(
 			'{"stages":["lead","trialing","active","past_due"],"requiredSources":["stripe"]}',
 		)
