@@ -15,7 +15,7 @@ import type * as ConfirmAction from "../../../shared/confirm-action"
 import { CHECK, strokeIcon } from "../shared/view"
 import { Message } from "./message"
 import type { Model, T3CodeLink, T3CodeMember } from "./model"
-import { apiField, centered, LINK_ICON, sectionCard, verifyingState } from "./view-connection"
+import { apiField, centered, LINK_ICON, sectionCard, steps, verifyingState } from "./view-connection"
 
 /**
  * T3 Code's connection and sharing panels. Unlike the other integrations the link is the member's own:
@@ -45,7 +45,10 @@ export const isExpiringSoon = (link: T3CodeLink, nowMs: number) =>
 
 const REVOKE_NOTE = "You can also revoke Hazel's access in T3 Code under Settings → Sharing & access."
 
-const notLinked = (h: H, integration: Integration, model: Model): Html => {
+/** A UI label in T3 Code the member looks for, set off from the instruction around it. */
+const emphasis = (h: H, label: string): Html => h.span([h.Class("font-medium text-fg")], [label])
+
+const notLinked = (h: H, model: Model): Html => {
 	const isConnecting = model.activity._tag === "Connecting"
 	return h.form(
 		[h.Class("flex flex-col gap-5 py-1"), h.OnSubmit(Message.SubmittedEnvironmentForm())],
@@ -56,16 +59,19 @@ const notLinked = (h: H, integration: Integration, model: Model): Html => {
 					h.p([h.Class("font-medium text-fg text-sm")], ["Link your T3 Code environment"]),
 					h.p(
 						[h.Class("text-muted-fg text-sm leading-relaxed")],
-						[
-							"Drive T3 Code threads on your machine from Hazel with /t3. Paste your environment's T3 Connect address or its MCP URL from T3 Code → Settings → Environments → Copy MCP URL.",
-						],
-					),
-					h.p(
-						[h.Class("text-muted-fg text-xs")],
-						["The link is yours alone: each member links their own machine."],
+						["Then start and steer threads on your own machine with /t3 from any conversation."],
 					),
 				],
 			),
+			steps(h, [
+				["In T3 Code, open ", emphasis(h, "Settings → Environments"), "."],
+				[
+					"Click ",
+					emphasis(h, "Copy MCP URL"),
+					" on your environment, or copy its T3 Connect address.",
+				],
+				["Paste it below. You'll sign in to T3 Code to approve Hazel."],
+			]),
 			apiField(h, {
 				id: "t3code-environment-url",
 				label: "Environment address",
@@ -73,7 +79,7 @@ const notLinked = (h: H, integration: Integration, model: Model): Html => {
 				placeholder: "https://my-machine.t3.chat/mcp",
 				field: model.environmentUrl,
 				onInput: (value) => Message.ChangedEnvironmentUrl({ value }),
-				hint: ["You'll sign in to T3 Code next to approve Hazel."],
+				hint: ["The link is yours alone: each member links their own machine."],
 			}),
 			button(
 				h,
@@ -400,7 +406,7 @@ const connectionBody = (h: H, integration: Integration, model: Model, nowMs: num
 			const link = model.t3Code.link
 			if (model.activity._tag === "Verifying" && link?.status !== "active")
 				return verifyingState(h, integration)
-			return link === null ? notLinked(h, integration, model) : linked(h, link, model, nowMs)
+			return link === null ? notLinked(h, model) : linked(h, link, model, nowMs)
 		}
 	}
 }

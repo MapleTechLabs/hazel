@@ -35,6 +35,32 @@ export const sectionCard = <Message>(
 		bodyClass === undefined ? cardBody(h, [...body]) : h.div([h.Class(bodyClass)], [...body]),
 	])
 
+/** A numbered list of setup steps; each item is text, or text with emphasised parts. */
+export const steps = <M>(
+	h: HtmlBuilder<M>,
+	items: ReadonlyArray<string | ReadonlyArray<Html | string>>,
+): Html =>
+	h.ol(
+		[h.Class("flex flex-col gap-2.5 text-muted-fg text-sm")],
+		items.map((item, index) =>
+			h.li(
+				[h.Class("flex gap-2.5")],
+				[
+					h.span(
+						[
+							h.AriaHidden(true),
+							h.Class(
+								"flex size-5 shrink-0 items-center justify-center rounded-full bg-muted font-medium text-fg text-xs",
+							),
+						],
+						[String(index + 1)],
+					),
+					h.span([h.Class("leading-5")], typeof item === "string" ? [item] : [...item]),
+				],
+			),
+		),
+	)
+
 export const centered = (
 	h: H,
 	icon: Html,

@@ -833,23 +833,32 @@ const sharedFooter = (h: H, thread: ThreadRow): Html =>
 
 // NOT CONNECTED
 
-const connectState = (h: H, model: Model, shared: Shared): Html => {
+const connectState = (h: H, model: Model, inputs: ViewInputs): Html => {
+	const { shared } = inputs
 	const isExpired = model.connection === "Expired"
+	const setupHref = shared.orgSlug === null ? null : hrefOf(integrationRoute(shared.orgSlug, "t3code"))
+	// Already on the setup page: point at its form instead of a link back to the same page.
+	const isOnSetupPage = setupHref !== null && inputs.context?.path === setupHref
 	return h.div(
 		[h.Class("flex flex-1 items-center justify-center p-6")],
 		[
 			emptyState(h, {
 				icon: (className) => IconSparkles(h, { className }),
 				title: isExpired ? "Your T3 Code sign-in expired" : "Connect T3 Code",
-				description:
-					"The assistant runs on your own T3 Code environment, so it sees what you can see. Link it in Settings to start a chat.",
+				description: isOnSetupPage
+					? isExpired
+						? "Reconnect your environment on this page to keep chatting."
+						: "Link your environment on this page, then chat with an agent that sees what you can see."
+					: isExpired
+						? "Sign in to T3 Code again to keep chatting with your environment."
+						: "The assistant runs on your own T3 Code environment, so it sees what you can see.",
 				action:
-					shared.orgSlug === null
+					setupHref === null || isOnSetupPage
 						? undefined
 						: h.a(
 								[
 									h.Id(SETUP_ID),
-									h.Href(hrefOf(integrationRoute(shared.orgSlug, "t3code"))),
+									h.Href(setupHref),
 									h.Class(buttonClassName({ size: "sm" })),
 									// On a phone the sheet covers the page it opens: close it on the way.
 									...(shared.isMobile ? [h.OnClick(Message.ClickedClose())] : []),
@@ -887,7 +896,7 @@ const content = (h: H, model: Model, inputs: ViewInputs): ReadonlyArray<Html> =>
 			model.connection === "Checking" && model.threadId === null
 				? [checkingState(h)]
 				: !isConnected && model.threadId === null
-					? [connectState(h, model, inputs.shared)]
+					? [connectState(h, model, inputs)]
 					: [
 							timeline(h, model, inputs),
 							thread !== null && isReadOnly(model, inputs.shared)
