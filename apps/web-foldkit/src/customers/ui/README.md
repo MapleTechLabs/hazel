@@ -110,7 +110,7 @@ Tables are the kit's `dataTable` and `primaryCell` (`src/ui/data-table.ts`).
 ## Controls — `ui/filter-bar.ts`, `ui/shortcuts.ts`
 
 - `viewTabs(h, { ariaLabel, tabs: [{ key, label, count? }], selected, onSelect, trailing? })` — `Open 12 · Snoozed 4 · Done`, saved views.
-- `rangePicker(h, { selected, onSelect, caption? })` (on the kit `segmented`), `RANGE_COMPARISON[range]`.
+- `rangePicker(h, { selected, onSelect, caption? })` (on the kit `segmented`).
 - `searchBox(h, { id, value, placeholder, onInput, onClear })` (app search field + `/` hint).
 - `filterChip(h, { field, operator, value, onRemove, attributes?, overlay? })`, `addFilterButton(h, { attributes?, overlay?, onPress? })`, `sortTrigger(h, { label, attributes?, overlay? })`, `filterBar(h, { start, end? })`.
 - `kbd(h, key)`, `shortcutBar(h, shortcuts)`, `QUEUE_SHORTCUTS`.

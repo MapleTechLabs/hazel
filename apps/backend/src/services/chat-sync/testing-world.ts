@@ -227,7 +227,7 @@ export const makeChatSyncOrg = (objects: TestObjects, options: ChatSyncOrgOption
 		}
 	})
 
-export type ChatSyncOrg = Effect.Success<ReturnType<typeof makeChatSyncOrg>>
+type ChatSyncOrg = Effect.Success<ReturnType<typeof makeChatSyncOrg>>
 
 /** An org (on fresh objects unless given) with its channel linked to `externalChannelId`. */
 export const makeChatSyncWorld = (
@@ -244,4 +244,4 @@ export const makeChatSyncWorld = (
 		return { ...org, channelLinkId: link.data.id }
 	})
 
-export type ChatSyncWorld = Effect.Success<ReturnType<typeof makeChatSyncWorld>>
+type ChatSyncWorld = Effect.Success<ReturnType<typeof makeChatSyncWorld>>

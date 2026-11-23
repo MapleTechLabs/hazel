@@ -12,7 +12,6 @@ import { desktopAuthClient } from "../../platform/desktop"
 import { DISCOVERY_PATH, type Server, serverFromEnv } from "./discovery"
 
 export type { Server } from "./discovery"
-export { DISCOVERY_PATH } from "./discovery"
 
 const trimSlashes = (url: string) => url.replace(/\/+$/, "")
 
