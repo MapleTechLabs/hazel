@@ -25,9 +25,10 @@ and the like refuse, whatever secrets are set).
 - An **API token** for the deploy, on that account: Workers Scripts, Workers KV, D1, R2,
   Workers Routes / Custom Domains and DNS on the zone, Account API Tokens (the stack mints a token
   scoped to the uploads bucket for presigned uploads), and the Durable Objects permissions.
-- A **GitHub OAuth app** (required: sign-in is on only with one) and optionally a **Google OAuth
-  client**, registered by the customer, with the callback URLs the installer prints
-  (`https://api.<zone>/auth/{github,google}/callback`).
+- A **GitHub OAuth app**, a **Google OAuth client** (Web application), or both: at least one is
+  required, since sign-in is on only with one. The customer registers them with the callback URLs
+  the installer prints (`https://api.<zone>/auth/{github,google}/callback`). The sign-in page
+  shows only the providers the install has (`GET /auth/providers`), plus passkeys.
 - **Email Sending** onboarded for `mail.<zone>` (dashboard, once: the deploy token has no Email
   Sending permission). Without it invitations only reach verified addresses. For support
   mailboxes, Email Routing on `inbound.<zone>` with a catch-all to the api Worker.
@@ -82,7 +83,8 @@ existing users: setting `ALLOWED_EMAIL_DOMAINS` stops anyone outside it from sig
 Every integration authenticates against an app **the customer registers**, pointed at their
 `api.<zone>`. Each is off until its keys are set (`apps/backend/src/worker/env.ts`):
 
-- **GitHub / Google sign-in**: `AUTH_GITHUB_*`, `AUTH_GOOGLE_*`.
+- **GitHub / Google sign-in**: `AUTH_GITHUB_*`, `AUTH_GOOGLE_*` (either or both; each needs its
+  client id and secret).
 - **Slack**: `bun run slack:manifest --api-url https://api.<zone>` prints the app manifest for
   their Slack app; then `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, `SLACK_SIGNING_SECRET`.
 - **Linear**, **Discord**, **GitHub App**: their `*_CLIENT_ID` / secrets, with redirect URIs under

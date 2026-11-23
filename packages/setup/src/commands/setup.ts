@@ -176,7 +176,7 @@ export const setupCommand = Command.make(
 			yield* Console.log(pc.cyan("\u2500\u2500\u2500 Step 2: Sign-in \u2500\u2500\u2500"))
 			yield* Console.log(
 				pc.dim(
-					"Hazel sign-in is off until AUTH_GITHUB_CLIENT_ID / AUTH_GITHUB_CLIENT_SECRET are set in .env.local.",
+					"Hazel sign-in is off until AUTH_GITHUB_CLIENT_ID/SECRET or AUTH_GOOGLE_CLIENT_ID/SECRET are set in .env.local.",
 				),
 			)
 			yield* Console.log(
