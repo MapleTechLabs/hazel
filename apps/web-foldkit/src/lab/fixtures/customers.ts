@@ -1,3 +1,4 @@
+import { DEFAULT_ATTENTION_SETTINGS, defaultConfigOf } from "@hazel/customer-integrations"
 import {
 	type Account,
 	type AccountDetail,
@@ -7,8 +8,6 @@ import {
 	type Connection,
 	type ContactRow,
 	type CustomersRange,
-	DEFAULT_CONNECTION_CONFIG,
-	DEFAULT_ATTENTION_SETTINGS,
 	DEFAULT_BUSINESS_HOURS,
 	DEFAULT_HEALTH_SETTINGS,
 	EMPTY_SYNC_STATS,
@@ -45,6 +44,7 @@ import {
 	UserId,
 } from "@hazel/schema"
 import { Schema } from "effect"
+import { ACTIVITY, DIRECTORY, INVOICES } from "./customers-demo-sources"
 
 /**
  * Customers lab fixtures: one fictional org, internally consistent with the Wonder designs.
@@ -349,7 +349,7 @@ const makeAccount = (seed: AccountSeed, n: number): Account => {
 		attentionMutedAt: null,
 		attentionMutedUntil: null,
 		attentionMutedByUserId: null,
-		fieldSources: { name: "clerk", mrrMinor: "stripe", lastActiveAt: "maple" },
+		fieldSources: { name: DIRECTORY.id, mrrMinor: INVOICES.id, lastActiveAt: ACTIVITY.id },
 		primaryAccountId: null,
 		environment: null,
 		companyProfile: profile,
@@ -1389,7 +1389,7 @@ const connection = (
 	status: "active",
 	externalAccountId: null,
 	externalAccountName: null,
-	config: DEFAULT_CONNECTION_CONFIG[provider],
+	config: defaultConfigOf(provider),
 	connectedBy: MAYA.id,
 	connectedAt: daysAgo(120),
 	hasWebhookSecret: true,
@@ -1407,43 +1407,46 @@ const connection = (
 	...overrides,
 })
 
-/** Clerk connected, Stripe syncing, Maple failing; Autumn is not connected (no row). */
-export const CLERK_CONNECTION = connection(1, "clerk", {
+/** The directory connected, invoices syncing, activity failing; plans not connected (no row). */
+export const DIRECTORY_CONNECTION = connection(1, DIRECTORY.id, {
 	externalAccountName: "Hazel production",
 	stats: { ...EMPTY_SYNC_STATS, accounts: 214, contacts: 1_862, events: 48_210 },
 })
-export const STRIPE_CONNECTION = connection(2, "stripe", {
+export const INVOICES_CONNECTION = connection(2, INVOICES.id, {
 	externalAccountName: "Hazel Inc.",
 	lastSyncAt: ago(2 * 60_000),
 	stats: { ...EMPTY_SYNC_STATS, accounts: 198, subscriptions: 203, invoices: 1_204 },
 })
-/** When Maple's sync last failed. */
-export const MAPLE_ERROR_AT = ago(2 * HOUR)
-export const MAPLE_CONNECTION = connection(4, "maple", {
+/** When the activity source's sync last failed. */
+export const ACTIVITY_ERROR_AT = ago(2 * HOUR)
+export const ACTIVITY_CONNECTION = connection(4, ACTIVITY.id, {
 	status: "error",
 	lastSyncAt: ago(2 * HOUR),
 	lastSuccessAt: new Date("2026-11-09T18:42:00Z"),
-	lastErrorAt: MAPLE_ERROR_AT,
+	lastErrorAt: ACTIVITY_ERROR_AT,
 	lastError: { code: "auth", message: "API key was revoked.", httpStatus: 401 },
 	consecutiveFailures: 3,
-	config: DEFAULT_CONNECTION_CONFIG.maple,
 })
-export const CONNECTIONS: ReadonlyArray<Connection> = [CLERK_CONNECTION, STRIPE_CONNECTION, MAPLE_CONNECTION]
+export const CONNECTIONS: ReadonlyArray<Connection> = [
+	DIRECTORY_CONNECTION,
+	INVOICES_CONNECTION,
+	ACTIVITY_CONNECTION,
+]
 
-/** The Stripe backfill in flight. */
-export const STRIPE_PROGRESS: SyncProgress = { step: "invoices", done: 1_204, total: 3_310 }
+/** The invoice source's backfill in flight. */
+export const INVOICES_PROGRESS: SyncProgress = { step: "invoices", done: 1_204, total: 3_310 }
 
 export const SYNC_RUNS: ReadonlyArray<SyncRun> = [
 	{
 		id: Schema.decodeSync(CustomerSyncRunId)(uuid(24, 1)),
 		organizationId: ORGANIZATION_ID,
-		connectionId: STRIPE_CONNECTION.id,
-		provider: "stripe",
+		connectionId: INVOICES_CONNECTION.id,
+		provider: INVOICES.id,
 		trigger: "backfill",
 		status: "running",
 		startedAt: ago(6 * 60_000),
 		finishedAt: null,
-		progress: STRIPE_PROGRESS,
+		progress: INVOICES_PROGRESS,
 		stats: { ...EMPTY_SYNC_STATS, invoices: 1_204 },
 		error: null,
 		cursor: "in_1Q8f2Lk",
@@ -1660,7 +1663,7 @@ const contactRow = (
 		signInCount30d: signIns,
 		eventCount30d: signIns * 41,
 		attributes: {},
-		fieldSources: { email: "clerk" },
+		fieldSources: { email: DIRECTORY.id },
 		createdAt: daysAgo(400),
 		updatedAt: daysAgo(1),
 		deletedAt: null,
@@ -1671,6 +1674,7 @@ const contactRow = (
 			lastSeenDays !== null && 29 - index >= lastSeenDays ? (index * 7 + n * 3) % 9 : 0,
 		),
 	),
+	otherAccounts: [],
 })
 
 export const ACME_DETAIL: AccountDetail = {
@@ -1678,15 +1682,14 @@ export const ACME_DETAIL: AccountDetail = {
 	refs: [
 		{
 			id: Schema.decodeSync(CustomerExternalRefId)(uuid(31, 1)),
-			connectionId: CLERK_CONNECTION.id,
-			provider: "clerk",
+			connectionId: DIRECTORY_CONNECTION.id,
+			provider: DIRECTORY.id,
 			entityType: "account",
 			entityId: ACCOUNTS_BY_KEY.acme.id,
 			accountId: ACCOUNTS_BY_KEY.acme.id,
 			externalId: "org_2acmeRobotics",
 			name: "Acme Robotics",
-			externalUrl:
-				"https://dashboard.clerk.com/apps/app_hazel/instances/ins_prod/organizations/org_2acmeRobotics",
+			externalUrl: DIRECTORY.demo.accountUrl("org_2acmeRobotics", "lab"),
 			matchMethod: "created",
 			matchedByUserId: null,
 			matchedAt: daysAgo(410),
@@ -1697,14 +1700,14 @@ export const ACME_DETAIL: AccountDetail = {
 		},
 		{
 			id: Schema.decodeSync(CustomerExternalRefId)(uuid(31, 2)),
-			connectionId: STRIPE_CONNECTION.id,
-			provider: "stripe",
+			connectionId: INVOICES_CONNECTION.id,
+			provider: INVOICES.id,
 			entityType: "account",
 			entityId: ACCOUNTS_BY_KEY.acme.id,
 			accountId: ACCOUNTS_BY_KEY.acme.id,
 			externalId: "cus_Q8f2Lk",
 			name: "Acme Robotics Inc.",
-			externalUrl: "https://dashboard.stripe.com/customers/cus_Q8f2Lk",
+			externalUrl: INVOICES.demo.customerUrl("cus_Q8f2Lk"),
 			matchMethod: "shared_id",
 			matchedByUserId: null,
 			matchedAt: daysAgo(400),
@@ -1718,7 +1721,7 @@ export const ACME_DETAIL: AccountDetail = {
 		{
 			id: Schema.decodeSync(CustomerSubscriptionId)(uuid(32, 1)),
 			accountId: ACCOUNTS_BY_KEY.acme.id,
-			provider: "stripe",
+			provider: INVOICES.id,
 			externalId: "sub_1Q8f2LkAcme",
 			planName: "Growth",
 			status: "past_due",
@@ -1744,7 +1747,7 @@ export const ACME_DETAIL: AccountDetail = {
 			id: Schema.decodeSync(CustomerInvoiceId)(uuid(33, 1)),
 			accountId: ACCOUNTS_BY_KEY.acme.id,
 			subscriptionId: Schema.decodeSync(CustomerSubscriptionId)(uuid(32, 1)),
-			provider: "stripe",
+			provider: INVOICES.id,
 			externalId: "in_1Q8f2LkAcme",
 			number: "INV-2041",
 			status: "open",
@@ -1757,7 +1760,7 @@ export const ACME_DETAIL: AccountDetail = {
 			attemptCount: 3,
 			nextRetryAt: new Date(NOW.getTime() + 2 * DAY),
 			declineReason: "Card declined: insufficient funds",
-			hostedUrl: "https://invoice.stripe.com/i/acct_hazel/in_1Q8f2LkAcme",
+			hostedUrl: INVOICES.demo.invoiceUrl("in_1Q8f2LkAcme", "lab"),
 			createdAt: daysAgo(39),
 			updatedAt: daysAgo(1),
 		},
@@ -1820,7 +1823,7 @@ export const ACME_DETAIL: AccountDetail = {
 			id: Schema.decodeSync(CustomerEventId)(uuid(34, 1)),
 			accountId: ACCOUNTS_BY_KEY.acme.id,
 			contactId: null,
-			provider: "stripe",
+			provider: INVOICES.id,
 			type: "invoice.payment_failed",
 			title: "Payment failed for INV-2041 ($2,150.00)",
 			data: { attempt: 3 },
@@ -1846,12 +1849,12 @@ export const ACME_DETAIL: AccountDetail = {
 			id: Schema.decodeSync(CustomerEventId)(uuid(34, 3)),
 			accountId: ACCOUNTS_BY_KEY.acme.id,
 			contactId: null,
-			provider: "clerk",
+			provider: DIRECTORY.id,
 			type: "contact.joined",
 			title: "Omar Haddad joined",
 			data: {},
 			occurredAt: daysAgo(15),
-			externalId: "evt_clerk_1",
+			externalId: `evt_${DIRECTORY.id}_1`,
 			actorUserId: null,
 			createdAt: daysAgo(15),
 		},

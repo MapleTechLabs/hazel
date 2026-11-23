@@ -1,3 +1,9 @@
+import {
+	billingPreferenceOrder,
+	startingIntegration,
+	suggestedBillingIntegration,
+} from "@hazel/customer-integrations"
+import { connectBillingTitle, PROVIDER_ORDER, providerOf, startingSource } from "../../../customers/providers"
 import * as Customers from "@hazel/domain/customers"
 import { Option } from "effect"
 import { Submodel } from "foldkit"
@@ -248,7 +254,7 @@ const headline = (
 				[h.Class(twMerge(CELL, "md:col-span-2"))],
 				[
 					h.span([h.Class("text-muted-fg text-sm")], ["MRR · MRR at risk"]),
-					h.span([h.Class("font-medium text-fg")], ["Connect Stripe or Autumn to see revenue"]),
+					h.span([h.Class("font-medium text-fg")], [connectBillingTitle()]),
 					h.span(
 						[h.Class("flex flex-wrap items-center gap-x-3 text-muted-fg text-xs")],
 						[
@@ -623,7 +629,7 @@ const mrrCard = (h: HtmlBuilder<Message>, model: Model, result: Result): Html =>
 					),
 				],
 				[
-					h.span([h.Class(titleClass)], ["Connect Stripe or Autumn to see revenue"]),
+					h.span([h.Class(titleClass)], [connectBillingTitle()]),
 					h.span(
 						[h.Class("max-w-sm text-muted-fg text-sm")],
 						[
@@ -632,22 +638,18 @@ const mrrCard = (h: HtmlBuilder<Message>, model: Model, result: Result): Html =>
 					),
 					h.div(
 						[h.Class("flex gap-2")],
-						[
+						billingPreferenceOrder.map(({ provider }) =>
 							button(
 								h,
 								{
-									intent: "outline",
+									intent:
+										provider === suggestedBillingIntegration.id ? "primary" : "outline",
 									size: "sm",
-									onPress: Message.PressedConnect({ provider: "autumn" }),
+									onPress: Message.PressedConnect({ provider }),
 								},
-								["Connect Autumn"],
+								[`Connect ${providerOf(provider).name}`],
 							),
-							button(
-								h,
-								{ size: "sm", onPress: Message.PressedConnect({ provider: "stripe" }) },
-								["Connect Stripe"],
-							),
-						],
+						),
 					),
 				],
 			),
@@ -1133,16 +1135,6 @@ const trendsSection = (h: HtmlBuilder<Message>, model: Model, result: Result, co
 
 // STATES
 
-const PROVIDERS: ReadonlyArray<Customers.CustomerProvider> = ["clerk", "stripe", "autumn", "maple"]
-
-/** What each source brings, in a line: how it matches records is the Sources settings' to explain. */
-const SETUP_SUMMARY = {
-	clerk: "Your customer list: accounts and their contacts.",
-	stripe: "Subscriptions, invoices and MRR.",
-	autumn: "Plans, metered features and limits.",
-	maple: "Product usage and active users.",
-} as const satisfies Record<Customers.CustomerProvider, string>
-
 const setup = (h: HtmlBuilder<Message>, nowMs: number): Html =>
 	h.div(
 		[h.Class("flex flex-col gap-6")],
@@ -1153,19 +1145,21 @@ const setup = (h: HtmlBuilder<Message>, nowMs: number): Html =>
 					heading(h, { variant: "title" }, ["Connect a data source"]),
 					h.p(
 						[h.Class("max-w-2xl text-muted-fg text-sm")],
-						["Start with Clerk for your customer list, then add billing and usage."],
+						[
+							`Start with ${startingSource.name} for your customer list, then add billing and usage.`,
+						],
 					),
 				],
 			),
 			h.div(
 				[h.Class("grid gap-4 md:grid-cols-2")],
-				PROVIDERS.map((provider) =>
+				PROVIDER_ORDER.map((provider) =>
 					connectCard(h, {
 						provider,
-						description: SETUP_SUMMARY[provider],
+						description: providerOf(provider).setupSummary,
 						now: new Date(nowMs),
 						status: { _tag: "NotConnected", onConnect: Message.PressedConnect({ provider }) },
-						className: provider === "clerk" ? "border-primary" : undefined,
+						className: provider === startingIntegration.id ? "border-primary" : undefined,
 					}),
 				),
 			),

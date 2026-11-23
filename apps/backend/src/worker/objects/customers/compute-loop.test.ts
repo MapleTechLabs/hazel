@@ -3,13 +3,9 @@
  * stop on bad credentials or a disconnect, compute that backs off and leases its run, signals of deleted accounts, baseline mode during a backfill, the one-time history rebuild,
  * and usage data that stops counting once its source is gone.
  */
+import { DEFAULT_ATTENTION_SETTINGS } from "@hazel/customer-integrations"
 import { Database, SQLite, schema } from "@hazel/db"
-import {
-	DEFAULT_ATTENTION_SETTINGS,
-	type IngestOp,
-	type ProviderRef,
-	type UpsertSubscription,
-} from "@hazel/domain/customers"
+import { type IngestOp, type ProviderRef, type UpsertSubscription } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerSignalRuleId, OrganizationId } from "@hazel/schema"
 import { ConfigProvider, Effect, Exit, Layer, Option, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
@@ -34,7 +30,7 @@ import {
 } from "./schedule"
 import { loadBase } from "./snapshot"
 import { type CustomersWorld, makeCustomersWorld, NOW, ok, uuid } from "./test-kit"
-import { addDays, dayOf } from "./time"
+import { addDays, dayOf } from "@hazel/customer-integrations/kit/time"
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
@@ -1881,7 +1877,9 @@ describe("Customers compute and sync loop", () => {
 						autumnId,
 					)
 				const autumnReady = () =>
-					world.object.run(Effect.map(loadBase(NOW), (base) => base.autumnReady)).pipe(Effect.orDie)
+					world.object
+						.run(Effect.map(loadBase(NOW), (base) => base.billingReady.includes("autumn")))
+						.pipe(Effect.orDie)
 				expect(yield* autumnReady()).toBe(false)
 				yield* compute(1)
 				expect(state()).toEqual({
@@ -2224,7 +2222,10 @@ describe("Customers compute and sync loop", () => {
 				expect(first).toMatchObject({ day: day(0), startedAt: NOW.getTime() })
 				// Each starts over: the first chunk again, and the same progress after it.
 				for (const saved of [
-					JSON.stringify({ ...first, autumnReady: !first.autumnReady }),
+					JSON.stringify({
+						...first,
+						billingReady: ["changed"],
+					}),
 					JSON.stringify({ ...first, day: day(-1) }),
 					JSON.stringify({ ...first, startedAt: NOW.getTime() - 2 * 60 * 60_000 }),
 					JSON.stringify({ ...first, after: 42 }),

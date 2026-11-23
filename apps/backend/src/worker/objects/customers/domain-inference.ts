@@ -1,8 +1,8 @@
 /**
  * A company domain for accounts no source gave one, guessed from their members' work emails
- * (`docs/customers/enrichment.md`, "Domains from member emails"). Clerk only sends verified
- * organization domains and a Stripe billing email teaches none when the customer names its Clerk
- * organization, so most accounts have no domain while their members sign in as `@acme.com`.
+ * (`docs/customers/enrichment.md`, "Domains from member emails"). Identity sources only send
+ * verified domains and a billing email teaches none when the customer is matched by a shared id, so
+ * most accounts have no domain while their members sign in as `@acme.com`.
  *
  * Runs on each compute turn, before `seedEnrichments`, so a guessed domain is looked up the same turn.
  * Only an account with no domains and whose domains no admin edited (`fieldSources.domains`): an
@@ -20,7 +20,7 @@ import { Effect } from "effect"
  */
 export const SHARED_DOMAIN_CUSTOMERS = 4
 
-/** A provider role that runs the org (Clerk `org:admin`): its email speaks for the company more. */
+/** A provider role that runs the org (an admin or owner): its email speaks for the company more. */
 const isAdminRole = (role: string | null) => role !== null && /admin|owner/i.test(role)
 
 export interface MemberEmail {

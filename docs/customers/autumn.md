@@ -5,7 +5,7 @@ lands on the account an identity source already created, the **plans** it holds 
 plan name, the trial and the payment state, and its **feature balances** become the daily usage
 metrics and plan limits the `near_limit` signal reads. Stripe keeps the invoices either way, and the
 MRR of an account Autumn bills nothing (no plan, or only a free one; `tech-design.md` §4.2).
-Adapter: `apps/backend/src/worker/objects/customers/autumn/`, registered in `customers/providers.ts`.
+Adapter: `packages/customer-integrations/src/autumn/`, registered in its `registry.ts`.
 It produces `IngestOp`s only — `CustomerIngest` does every write (`tech-design.md` §3).
 
 Autumn never creates a customer record on its own (`onNoMatch: "unmatched"`). It lands on one of

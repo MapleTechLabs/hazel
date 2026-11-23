@@ -70,7 +70,7 @@ export const AccountRow = Schema.Struct({
 	customerSinceMs: Schema.NullOr(Schema.Finite),
 	churnedAtMs: Schema.NullOr(Schema.Finite),
 	tags: Schema.Array(Schema.String),
-	/** The Clerk organization's flags: on when `true`; a `false` key is off. */
+	/** The account's flags in its source: on when `true`; a `false` key is off. */
 	featureFlags: Schema.Record(Schema.String, Schema.Boolean),
 	/** The primary of the customer it is an environment of; null when standalone or a primary (`groups.ts`). */
 	primaryAccountId: Schema.NullOr(CustomerAccountId),
@@ -466,7 +466,7 @@ export const orgMembersStream = <Message>(
 			),
 	)
 
-/** A member an admin let sign in as customers' users (Clerk impersonation). */
+/** A member an admin let sign in as customers' users. */
 export const ImpersonatorRow = Schema.Struct({
 	id: CustomerImpersonatorId,
 	userId: UserId,

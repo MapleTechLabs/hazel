@@ -1,4 +1,5 @@
-import { DEFAULT_ATTENTION_SETTINGS, type RuleDryRunResult } from "@hazel/domain/customers"
+import { DEFAULT_ATTENTION_SETTINGS } from "@hazel/customer-integrations"
+import { type RuleDryRunResult } from "@hazel/domain/customers"
 import { CustomerSettingsId, CustomerSignalRuleId, OrganizationId, OrganizationMemberId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"

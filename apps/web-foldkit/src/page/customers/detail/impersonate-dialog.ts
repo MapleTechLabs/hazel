@@ -1,5 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { failureMessage, type UserErrorMessage } from "~/lib/error-messages"
+import { impersonationSource } from "../../../customers/providers"
 import { buttonClassName } from "../../../ui/button"
 import { dialogBody, dialogClose, dialogFooter, dialogHeader } from "../../../ui/dialog"
 import { loader } from "../../../ui/loader"
@@ -18,7 +19,7 @@ const failureCopy = (failure: ImpersonationFailure, name: string): UserErrorMess
 		: failureMessage(failure, {
 				NotAllowed: {
 					title: "You're not allowed to impersonate",
-					description: "An admin can let you in the Clerk data source's settings.",
+					description: `An admin can let you in the ${impersonationSource.name} data source's settings.`,
 				},
 				NotFound: { title: "This user is gone", description: "They were removed from the customer." },
 			})
@@ -66,8 +67,11 @@ export const impersonateDialog = (h: HtmlBuilder<Message>, model: Model): Html =
 										h.Class("flex items-center gap-2 text-muted-fg text-sm"),
 									],
 									[
-										loader(h, { ariaLabel: "Asking Clerk", className: "size-4" }),
-										"Asking Clerk for a sign-in link…",
+										loader(h, {
+											ariaLabel: `Asking ${impersonationSource.name}`,
+											className: "size-4",
+										}),
+										`Asking ${impersonationSource.name} for a sign-in link…`,
 									],
 								)
 							: h.p(

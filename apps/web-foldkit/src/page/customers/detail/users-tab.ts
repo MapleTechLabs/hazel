@@ -12,11 +12,14 @@ import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
 import { Message } from "./message"
 import { type ContactFilter, canImpersonate, contactCounts, type Model, visibleContacts } from "./model"
+import { otherAccounts } from "./other-accounts"
 import { type Context, icon, pageFooter } from "./parts"
 
 /** The users tab: who uses the product, who went quiet, who never started. */
 
 const DAY_MS = 86_400_000
+
+const nonNull = (html: Html | null): ReadonlyArray<Html> => (html === null ? [] : [html])
 
 const STATUS = {
 	active: ["Active", "success", "seen in the last 30 days", "bg-health-healthy"],
@@ -189,10 +192,26 @@ const lastSeen = (h: HtmlBuilder<Message>, contact: Customers.Contact, nowMs: nu
 			],
 		)
 	return h.div(
-		[h.Class("flex flex-col")],
+		[h.Class("flex flex-col whitespace-nowrap")],
 		[
 			h.span([h.Class("text-fg")], [formatRelative(contact.lastSeenAt, now)]),
 			h.span([h.Class("text-muted-fg text-xs")], [formatDate(contact.lastSeenAt, { now })]),
+		],
+	)
+}
+
+/** The title, plus the email while a narrow table hides its column. A phone keeps the email only. */
+const subtitle = (h: HtmlBuilder<Message>, contact: Customers.Contact): Html | null => {
+	const { title, email } = contact
+	if (title === null && email === null) return null
+	return h.span(
+		[h.Class(twMerge("truncate text-muted-fg text-xs", title === null && "@6xl:hidden"))],
+		[
+			...(title === null ? [] : [h.span([h.Class(email === null ? "" : "max-sm:hidden")], [title])]),
+			...(title === null || email === null
+				? []
+				: [h.span([h.Class("@6xl:hidden max-sm:hidden")], [" · "])]),
+			...(email === null ? [] : [h.span([h.Class("@6xl:hidden")], [email])]),
 		],
 	)
 }
@@ -236,7 +255,8 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 			],
 		),
 		h.div(
-			[h.Class("flex flex-col overflow-hidden rounded-xl border border-border")],
+			// `@container`: the email column depends on the table's width, not the window's.
+			[h.Class("@container flex flex-col overflow-hidden rounded-xl border border-border")],
 			[
 				dataTable(h, {
 					ariaLabel: "Users",
@@ -308,31 +328,8 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 															: []),
 													],
 												),
-												...(row.contact.title === null
-													? []
-													: [
-															h.span(
-																[
-																	h.Class(
-																		"truncate text-muted-fg text-xs max-lg:hidden",
-																	),
-																],
-																[row.contact.title],
-															),
-														]),
-												// Below lg the email column is hidden: the email takes the title's line.
-												...(row.contact.email === null
-													? []
-													: [
-															h.span(
-																[
-																	h.Class(
-																		"truncate text-muted-fg text-xs lg:hidden",
-																	),
-																],
-																[row.contact.email],
-															),
-														]),
+												...nonNull(subtitle(h, row.contact)),
+												...nonNull(otherAccounts(h, model, context, row)),
 											],
 										),
 									],
@@ -342,7 +339,7 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 							key: "email",
 							label: "Email",
 							widthClass: "w-60",
-							hideClass: "max-lg:hidden",
+							hideClass: "@max-6xl:hidden",
 							cell: (row) =>
 								row.contact.email === null
 									? "—"
@@ -372,7 +369,7 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 						{
 							key: "seen",
 							label: "Last seen",
-							widthClass: "w-24",
+							widthClass: "w-28",
 							cell: (row) => lastSeen(h, row.contact, context.nowMs),
 						},
 						{

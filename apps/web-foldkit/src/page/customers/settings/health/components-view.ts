@@ -1,3 +1,4 @@
+import { activityProviders, billingProviders } from "@hazel/customer-integrations"
 import * as Customers from "@hazel/domain/customers"
 import type { Html } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
@@ -45,11 +46,11 @@ const DESCRIPTION = {
 } as const satisfies Record<ComponentKey, string>
 
 const SOURCES = {
-	usage: ["clerk", "maple"],
-	engagement: ["clerk", "maple"],
-	billing: ["stripe", "autumn"],
+	usage: activityProviders,
+	engagement: activityProviders,
+	billing: billingProviders,
 	signals: ["hazel"],
-} as const satisfies Record<ComponentKey, ReadonlyArray<Customers.CustomerSource>>
+} satisfies Record<ComponentKey, ReadonlyArray<Customers.CustomerSource>>
 
 const off = (total: number) => Math.abs(total - 100)
 

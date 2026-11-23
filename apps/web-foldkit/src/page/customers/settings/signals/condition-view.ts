@@ -1,8 +1,8 @@
-import * as Customers from "@hazel/domain/customers"
+import { meteredProviders, requiredSourcesOf } from "@hazel/customer-integrations"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { formatDate } from "../../../../customers/format"
-import { PROVIDERS } from "../../../../customers/providers"
+import { providerOf } from "../../../../customers/providers"
 import { sourceChip, sourceLogo } from "../../../../customers/ui/identity"
 import { AppRoute, hrefOf } from "../../../../route"
 import { switchControl } from "../../../../ui/switch"
@@ -355,11 +355,13 @@ const isMetricAvailable = (model: Model, metric: MetricRow): boolean =>
 	model.connectedProviders === null ||
 	model.connectedProviders.includes(metric.provider)
 
-/** `near_limit`'s features: the metered (Autumn) metrics; none picked = every limited metric. */
+/** `near_limit`'s features: the metered sources' metrics; none picked = every limited metric. */
 const limitMetrics = (h: H, context: ConditionContext): Html => {
 	const picked = context.form.config.metricKeys
 	const keys = Array.isArray(picked) ? picked : []
-	const metered = context.model.metrics.filter((metric) => metric.provider === "autumn")
+	const metered = context.model.metrics.filter(
+		(metric) => metric.provider !== null && meteredProviders.includes(metric.provider),
+	)
 	return h.div(
 		[h.Class("flex flex-wrap items-center gap-1.5")],
 		[
@@ -386,7 +388,7 @@ const metricRow = (h: H, context: ConditionContext, metric: MetricRow, selected:
 	const available = isMetricAvailable(context.model, metric)
 	const source = metric.provider ?? "hazel"
 	const detail = [
-		metric.description ?? (metric.provider === null ? "Built in" : PROVIDERS[metric.provider].name),
+		metric.description ?? (metric.provider === null ? "Built in" : providerOf(metric.provider).name),
 	]
 	const body = [
 		h.span(
@@ -420,7 +422,7 @@ const metricRow = (h: H, context: ConditionContext, metric: MetricRow, selected:
 				h.span(
 					[h.Class("flex shrink-0 items-center gap-3 text-xs max-sm:pl-7")],
 					[
-						h.span([h.Class("text-muted-fg")], [`Requires ${PROVIDERS[metric.provider].name}`]),
+						h.span([h.Class("text-muted-fg")], [`Requires ${providerOf(metric.provider).name}`]),
 						h.a(
 							[
 								h.Href(
@@ -574,7 +576,7 @@ const usageDropCards = (h: H, context: ConditionContext): ReadonlyArray<Html> =>
 
 /** "Activity from": the sources the template reads (any one of them suffices). */
 const activityFrom = (h: H, context: ConditionContext): Html | null => {
-	const required = Customers.TEMPLATES[context.form.template].requiredSources
+	const required = requiredSourcesOf(context.form.template)
 	if (required.length === 0) return null
 	const connected = context.model.connectedProviders
 	return h.span(

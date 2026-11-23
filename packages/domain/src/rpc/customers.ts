@@ -95,13 +95,13 @@ const NonEmptyText = (max: number) => Schema.String.check(Schema.isMinLength(1),
 /** An account's tags: ≤ 20, each ≤ 50 characters. */
 const Tags = Schema.Array(Text(50)).check(Schema.isMaxLength(20))
 /** An ignore rule's glob: ≤ 200 characters, ≤ 5 `*`. */
-/** A new feature flag's key, as it will read in Clerk's `public_metadata`. */
+/** A new feature flag's key, as it will read in the source holding the flags. */
 const NewFeatureFlagKey = Schema.String.check(
 	Schema.isPattern(/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/, {
 		message: "Letters, digits, `_`, `.`, `:` and `-`, at most 64, starting with a letter or digit",
 	}),
 )
-/** Any flag's key: one Clerk already holds may be any metadata key (Clerk caps metadata at 8 KB). */
+/** Any flag's key: one the source already holds may be any key it allows (bounded at 8 KB). */
 const FeatureFlagKey = NonEmptyText(8192)
 const GlobPattern = NonEmptyText(200).check(
 	Schema.makeFilter((pattern) => (pattern.split("*").length <= 6 ? undefined : "At most 5 wildcards")),
@@ -176,7 +176,7 @@ export class CustomerProviderUnavailableError extends Schema.TaggedError<
 >()("CustomerProviderUnavailableError", { provider: CustomerProvider }) {}
 
 /**
- * Clerk refused (or could not be reached for) some customers' feature flags: those listed are
+ * The source refused (or could not be reached for) some customers' feature flags: those listed are
  * unchanged, every other one was updated.
  */
 export class CustomerFeatureFlagsError extends Schema.TaggedError<
@@ -799,8 +799,7 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 	),
 
 	/**
-	 * Remove the key from the `public_metadata` of every Clerk organization that holds it, then
-	 * forget the flag. With `CustomerFeatureFlagsError` the flag stays, on the customers it lists.
+	 * Remove the key from every account record at the source that holds it, then forget the flag. With `CustomerFeatureFlagsError` the flag stays, on the customers it lists.
 	 */
 	write(
 		"customers.featureFlag.delete",
@@ -811,10 +810,10 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 	),
 
 	/**
-	 * Turn every key on (`true` in each account's Clerk organizations' `public_metadata`) or off (the
-	 * key removed) for every account. An account with no live Clerk organization, or no active Clerk
-	 * connection, is `CustomersInvalidRequestError` before anything is written. No list cap: the
-	 * pickers offer every customer and every flag, and Clerk bounds an organization's metadata (8 KB).
+	 * Turn every key on (`true` in each account's records at the source) or off (the key removed) for
+	 * every account. An account with no live record there, or no active connection to the source, is
+	 * `CustomersInvalidRequestError` before anything is written. No list cap: the pickers offer every
+	 * customer and every flag, and the source bounds a record's flags (8 KB).
 	 */
 	write(
 		"customers.featureFlags.set",
@@ -839,7 +838,7 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 		CustomersNotFoundError,
 	),
 
-	/** Let a member sign in as customers' users (Clerk impersonation). Admins and owners. */
+	/** Let a member sign in as customers' users (a source's impersonation). Admins and owners. */
 	write(
 		"customers.impersonator.grant",
 		{

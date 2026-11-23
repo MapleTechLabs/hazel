@@ -2,6 +2,7 @@ import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { FEATURE_FLAG_KEY } from "../../../../customers/feature-flags"
 import { formatCount } from "../../../../customers/format"
+import { featureFlagsSource } from "../../../../customers/providers"
 import { companyLogo } from "../../../../customers/ui/identity"
 import {
 	IconChevronDown,
@@ -27,8 +28,9 @@ import { isCustomersAdmin, readOnlyNotice, settingsHeader, settingsPage } from "
 import { Message } from "./message"
 import { customersWith, flagKeysOf, type Model } from "./model"
 
-const SUBTITLE =
-	"The boolean keys of your customers’ Clerk organization metadata. Turning a flag on or off writes to Clerk."
+const { name: SOURCE, accountNoun: RECORD } = featureFlagsSource
+
+const SUBTITLE = `The boolean keys of your customers’ ${SOURCE} ${RECORD} metadata. Turning a flag on or off writes to ${SOURCE}.`
 
 const CARD = "flex flex-col rounded-xl border border-border bg-bg"
 const icon = { attributes: { "data-slot": "icon" } }
@@ -288,8 +290,7 @@ const flagsCard = (h: HtmlBuilder<Message>, model: Model, orgSlug: string, canEd
 		return emptyState(h, {
 			title: "No feature flags yet",
 			icon: (className) => IconRocket(h, { className }),
-			description:
-				"Flags show up here once a Clerk organization has a boolean in its public metadata, or when you create one.",
+			description: `Flags show up here once a ${SOURCE} ${RECORD} has a boolean in its public metadata, or when you create one.`,
 			className: CARD,
 		})
 	return h.ul(
@@ -313,8 +314,8 @@ const deleteDialog = (h: HtmlBuilder<Message>, model: Model): Html => {
 				title: { id: Modal.titleId(model.deleteModal.id), text: `Delete ${key}?` },
 				description:
 					count === 0
-						? "No customer has it, so nothing changes in Clerk."
-						: `It's removed from the Clerk metadata of ${count === 1 ? "1 customer" : `${formatCount(count)} customers`}. This can't be undone.`,
+						? `No customer has it, so nothing changes in ${SOURCE}.`
+						: `It's removed from the ${SOURCE} metadata of ${count === 1 ? "1 customer" : `${formatCount(count)} customers`}. This can't be undone.`,
 			}),
 			dialogFooter(h, [
 				dialogClose(h, closeAttributes, ["Cancel"]),

@@ -7,8 +7,8 @@ import { button } from "../../ui/button"
 import { loader } from "../../ui/loader"
 import { progressBar, progressBarTrack } from "../../ui/progress-bar"
 import { formatCount, formatRelative, type Instant } from "../format"
-import { providerOf } from "../providers"
-import { SOURCE_LABEL, sourceMark } from "./identity"
+import { providerOf, sourceLabel } from "../providers"
+import { sourceMark } from "./identity"
 import { heading } from "../../ui/heading"
 
 /**
@@ -157,7 +157,7 @@ export const connectCard = <M>(
 	})
 	return h.article(
 		[
-			h.AriaLabel(SOURCE_LABEL[options.provider]),
+			h.AriaLabel(sourceLabel(options.provider)),
 			h.Class(
 				twMerge(
 					"flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-bg p-4 sm:p-5",
@@ -173,7 +173,7 @@ export const connectCard = <M>(
 					h.div(
 						[h.Class("flex min-w-0 flex-col gap-0.5")],
 						[
-							heading(h, { variant: "section", level: 3 }, [SOURCE_LABEL[options.provider]]),
+							heading(h, { variant: "section", level: 3 }, [sourceLabel(options.provider)]),
 							h.p(
 								[h.Class("text-muted-fg text-sm")],
 								[options.description ?? providerOf(options.provider).blurb],

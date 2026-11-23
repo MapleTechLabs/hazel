@@ -12,7 +12,7 @@ import {
 	formatDeltaPct,
 	formatMoney,
 } from "../../../../customers/format"
-import { PROVIDERS, sourcesLabel } from "../../../../customers/providers"
+import { providerOf, sourcesLabel } from "../../../../customers/providers"
 import { evidenceViz } from "../../../../customers/ui/evidence"
 import { companyLogo } from "../../../../customers/ui/identity"
 import { IconWarning } from "../../../../icons"
@@ -87,7 +87,7 @@ const missingSources = (h: H, result: Result, orgSlug: string): ReadonlyArray<Ht
 								h.Href(hrefOf(AppRoute.CustomersSourceDetail({ orgSlug, provider: first }))),
 								h.Class("shrink-0 font-medium underline underline-offset-2"),
 							],
-							[`Connect ${PROVIDERS[first].name}`],
+							[`Connect ${providerOf(first).name}`],
 						),
 					],
 				),

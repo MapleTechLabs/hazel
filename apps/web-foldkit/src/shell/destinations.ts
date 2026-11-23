@@ -1,3 +1,4 @@
+import { suggestedBillingIntegration } from "@hazel/customer-integrations"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import {
 	IconArrowPath,
@@ -171,7 +172,7 @@ const DESTINATIONS = define({
 		label: "Data sources",
 		icon: IconServers,
 		to: (orgSlug) => AppRoute.CustomersSettingsSources({ orgSlug }),
-		keywords: "stripe providers sync",
+		keywords: `${suggestedBillingIntegration.id} providers sync`,
 	},
 
 	// Organization settings

@@ -13,7 +13,7 @@
 import type { schema } from "@hazel/db"
 import { type SignalEvidence, SignalSeverity } from "@hazel/domain/customers"
 import type { Match } from "./evaluate"
-import { DAY_MS } from "./time"
+import { DAY_MS } from "@hazel/customer-integrations/kit/time"
 
 const SEVERITY_WEIGHT = { low: 1, medium: 2, high: 4 } as const
 

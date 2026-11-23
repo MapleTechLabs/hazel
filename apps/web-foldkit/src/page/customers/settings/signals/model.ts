@@ -36,7 +36,7 @@ export const MetricRow = Schema.Struct({
 	key: Schema.String,
 	name: Schema.String,
 	unit: Schema.NullOr(Schema.String),
-	/** Null: Hazel computes it (built in). `autumn`: metered, with a plan limit. */
+	/** Null: Hazel computes it (built in). A metered source's has a plan limit. */
 	provider: Schema.NullOr(Customers.CustomerProvider),
 	description: Schema.NullOr(Schema.String),
 })

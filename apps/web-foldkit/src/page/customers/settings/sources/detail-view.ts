@@ -1,3 +1,4 @@
+import { integrationOf } from "@hazel/customer-integrations"
 import type { CustomerProvider } from "@hazel/domain/customers"
 import type { OrganizationId } from "@hazel/schema"
 import type { Html } from "foldkit/html"
@@ -514,10 +515,11 @@ export const detailView = (h: H, model: Model, provider: CustomerProvider, conte
 											: []),
 										historyCard(h, model, live),
 										settingsCard(h, model, live, context.isAdmin),
-										...(provider === "autumn"
+										...(integrationOf(provider)?.capabilities.meteredLimits === true
 											? [unitsCard(h, model, live, context.isAdmin)]
 											: []),
-										...(provider === "clerk" && context.isAdmin
+										...(integrationOf(provider)?.capabilities.impersonation === true &&
+										context.isAdmin
 											? [impersonationCard(h, model, context.nowMs)]
 											: []),
 										mappingCard(h, provider),

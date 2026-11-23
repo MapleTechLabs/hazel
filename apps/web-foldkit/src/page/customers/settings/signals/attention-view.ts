@@ -1,6 +1,6 @@
 import * as Customers from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { PROVIDER_ORDER, PROVIDERS } from "../../../../customers/providers"
+import { PROVIDER_ORDER, providerOf } from "../../../../customers/providers"
 import { STAGE_LABEL } from "../../../../customers/ui/badges"
 import { Message } from "./message"
 import type { AttentionRow } from "./model"
@@ -53,7 +53,7 @@ export const attentionCard = (h: H, row: AttentionRow, isDisabled: boolean): Htm
 			"Any of these; none picked: any customer",
 			PROVIDER_ORDER.map((provider) =>
 				toggleChip(h, {
-					label: PROVIDERS[provider].name,
+					label: providerOf(provider).name,
 					isPressed: requiredSources.includes(provider),
 					isDisabled,
 					onPress: Message.ToggledAttentionSource({ provider }),

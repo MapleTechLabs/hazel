@@ -3,7 +3,8 @@
  * an API key of another provider account drops the old account's webhook secret, and an update
  * refuses a connection that changed while the provider checked the key.
  */
-import { DEFAULT_CONNECTION_CONFIG, MapleConnectionConfig } from "@hazel/domain/customers"
+import { DEFAULT_CONNECTION_CONFIG } from "@hazel/customer-integrations"
+import { MapleConnectionConfig } from "@hazel/customer-integrations/maple/config"
 import { Cause, Effect, Exit, Schema, type Scope } from "effect"
 import { describe, expect, it, vi } from "vitest"
 import { makeCustomersWorld, ok, tagOf } from "./test-kit"

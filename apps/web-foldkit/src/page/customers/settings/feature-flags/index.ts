@@ -5,7 +5,7 @@ import { subscriptions } from "./subscription"
 import { init, update } from "./update"
 import { view } from "./view"
 
-/** `/$orgSlug/customers/settings/feature-flags`: the Clerk feature flags and which customers have them. */
+/** `/$orgSlug/customers/settings/feature-flags`: the feature flags and which customers have them. */
 export const page = definePage(
 	"CustomersSettingsFeatureFlags",
 	{ Model, Message },

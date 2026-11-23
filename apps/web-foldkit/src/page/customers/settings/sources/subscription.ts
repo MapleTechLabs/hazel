@@ -14,7 +14,7 @@ const organizationOf = ({ shared }: Input) => ({ organizationId: shared.organiza
 
 /**
  * Connections, their runs, the account count (identity coverage), the people who connected them,
- * the sources' metrics (for their units), and who may impersonate and did (Clerk).
+ * the sources' metrics (for their units), and who may impersonate and did.
  */
 export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 	connections: entry(organization, {

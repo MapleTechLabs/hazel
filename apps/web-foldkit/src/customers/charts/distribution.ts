@@ -7,8 +7,7 @@ import { segmented } from "../ui/filter-bar"
 import { chartCard } from "./frame"
 
 /**
- * A segmented 100% bar and its legend table (Foundations › Distribution Bar Health), HTML like
- * Maple's `hbar-chart`.
+ * A segmented 100% bar and its legend table (Foundations › Distribution Bar Health), in HTML.
  */
 
 export type DistributionSegment = Readonly<{ key: string; label: string; value: number; fillClass: string }>

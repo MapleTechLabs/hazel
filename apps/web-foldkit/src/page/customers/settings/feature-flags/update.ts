@@ -172,7 +172,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			action === "delete"
 				? { model, outMessage: toast(successToast("Feature flag deleted")) }
 				: { model },
-		// The collections roll back; what Clerk accepted comes back through the stream.
+		// The collections roll back; what the source accepted comes back through the stream.
 		FailedFlagAction: ({ action, failure }) => ({
 			model,
 			outMessage: toast(featureFlagToast(FAILED_TITLE[action], failure)),

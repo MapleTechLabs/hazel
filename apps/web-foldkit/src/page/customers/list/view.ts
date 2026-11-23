@@ -1,3 +1,4 @@
+import { integrations, startingIntegration } from "@hazel/customer-integrations"
 import { CustomerAccountId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { Submodel } from "foldkit"
@@ -17,6 +18,7 @@ import {
 	sortTrigger,
 	viewTabs,
 } from "../../../customers/ui/filter-bar"
+import { namesLabel, PROVIDER_ORDER, sourceLabel, startingSource } from "../../../customers/providers"
 import { companyLogo, menuAvatar, personLabel } from "../../../customers/ui/identity"
 import { kbd } from "../../../customers/ui/shortcuts"
 import { dragGhost, sortableList, sortableRow } from "../../../customers/ui/sortable"
@@ -87,7 +89,12 @@ import { viewerOf } from "./update"
 
 const TABLE_ID = "customers-list-table"
 const icon = { attributes: { "data-slot": "icon" } }
-const PROVIDERS = ["clerk", "stripe", "autumn", "maple"] as const
+
+const SHARED_IDS = integrations
+	.flatMap(({ presentation: { name, sharedIdLabel } }) =>
+		sharedIdLabel === undefined ? [] : [`${name} ${sharedIdLabel}`],
+	)
+	.join(", ")
 
 const nameAnchorId = (accountId: string) => `customers-list-name-${accountId}`
 
@@ -155,7 +162,7 @@ const header = (
 		model.accounts === null
 			? "Loading…"
 			: tab.key === ALL_VIEW_KEY
-				? "Every account from Clerk, Stripe, Autumn and Maple, in one list."
+				? `Every account from ${namesLabel(PROVIDER_ORDER.map(sourceLabel))}, in one list.`
 				: `${formatCount(rows.length)} account${rows.length === 1 ? "" : "s"} in ${tab.name}, worth ${formatMoney(mrr, model.reportingCurrency)} MRR.`
 	return pageHeader(h, {
 		title: "Customers",
@@ -782,17 +789,16 @@ const firstRun = (h: HtmlBuilder<Message>, orgSlug: string, nowMs: number): Html
 			emptyState(h, {
 				title: "No customers yet",
 				icon: (className) => IconOffice(h, { className }),
-				description:
-					"Connect Clerk first: each organization becomes a customer account and its users become contacts. Stripe, Autumn and Maple then add revenue, limits and usage to the same accounts.",
+				description: `Connect ${startingSource.name} first: each ${startingSource.accountNoun} becomes a customer account and its users become contacts. ${namesLabel(PROVIDER_ORDER.filter((provider) => provider !== startingIntegration.id).map(sourceLabel))} then add revenue, limits and usage to the same accounts.`,
 			}),
 			h.div(
 				[h.Class("mx-auto grid w-full max-w-3xl gap-4 md:grid-cols-2")],
-				PROVIDERS.map((provider) =>
+				PROVIDER_ORDER.map((provider) =>
 					connectCard(h, {
 						provider,
 						now: new Date(nowMs),
 						status: { _tag: "NotConnected", onConnect: Message.PressedConnect({ provider }) },
-						className: provider === "clerk" ? "border-primary" : undefined,
+						className: provider === startingIntegration.id ? "border-primary" : undefined,
 					}),
 				),
 			),
@@ -804,7 +810,7 @@ const firstRun = (h: HtmlBuilder<Message>, orgSlug: string, nowMs: number): Html
 				],
 				[
 					h.span([h.Class("mr-2 font-medium text-fg")], ["How sources merge"]),
-					"Records join an account by shared ID first (Stripe metadata.clerk_org_id, Autumn customer ID, Maple GroupId), then by domain. Anything left over waits in Data sources for you to link by hand.",
+					`Records join an account by shared ID first (${SHARED_IDS}), then by domain. Anything left over waits in Data sources for you to link by hand.`,
 				],
 			),
 		],

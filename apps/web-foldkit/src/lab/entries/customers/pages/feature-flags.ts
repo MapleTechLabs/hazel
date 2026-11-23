@@ -13,8 +13,8 @@ import { labPage } from "../../../frame"
 import { ACCOUNTS } from "../../../fixtures/customers"
 
 // `/lab/customers/pages/feature-flags`: the real feature flags settings page over the fixture
-// accounts, with Clerk flags set here (`?state=`). Its update runs; the Clerk writes are dropped, the
-// popover's and the dialog's own Commands run.
+// accounts, with the source's flags set here (`?state=`). Its update runs; the writes to the source
+// are dropped, the popover's and the dialog's own Commands run.
 
 const STATES = ["default", "open", "long-names", "invalid-key", "empty", "read-only", "loading"] as const
 type State = (typeof STATES)[number]
@@ -37,7 +37,7 @@ const sharedOf = (): Shared => (currentState() === "read-only" ? labShared : adm
 const LONG_KEY = "enable_experimental_realtime_collaborative_dashboard_editor_v2:beta"
 const LONG_NAME = "Consolidated International Widget Manufacturing Holdings GmbH & Co. KG"
 
-/** An account's Clerk flags: every third has `new_dashboards`, every fifth `ai_assistant` off, the first two `beta_exports`. */
+/** An account's flags: every third has `new_dashboards`, every fifth `ai_assistant` off, the first two `beta_exports`. */
 const flagsOf = (state: State, index: number): Record<string, boolean> => {
 	const flags: Array<readonly [string, boolean]> = []
 	if (state === "empty") return {}

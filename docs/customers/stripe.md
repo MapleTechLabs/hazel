@@ -4,7 +4,7 @@ Hazel's billing source for Customers: a Stripe **customer** lands on the account
 already created, and its **subscriptions** and **invoices** become the MRR, the plan, the trial and
 the payment state that the billing signals (`payment_failed`, `cancel_scheduled`,
 `trial_ending_low_activation`) and the health score's billing component read. Adapter:
-`apps/backend/src/worker/objects/customers/stripe/`, registered in `customers/providers.ts`. It
+`packages/customer-integrations/src/stripe/`, registered in its `registry.ts`. It
 produces `IngestOp`s only — `CustomerIngest` does every write (`tech-design.md` §3).
 
 Stripe never creates a customer record on its own (`onNoMatch: "unmatched"`), and its account ops

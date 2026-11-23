@@ -34,6 +34,7 @@ import {
 	TEAM,
 	dayOf,
 } from "../../../fixtures/customers"
+import { ACTIVITY, DIRECTORY, INVOICES, PLANS } from "../../../fixtures/customers-demo-sources"
 
 // `/lab/customers/pages/customer`: the real customer page over Acme Robotics. Its update runs; every
 // read answers from the fixtures below, the mutations apply to the rows at once and go nowhere.
@@ -85,6 +86,35 @@ const PEOPLE: ReadonlyArray<readonly [string, string, string, number | null, num
 	["Victor Alvarez", "Controls Engineer", "member", null, 0],
 ]
 
+const otherAccount = (
+	account: Customers.Account,
+	role: string,
+	seenDays: number | null,
+): Customers.ContactOtherAccount => ({
+	accountId: account.id,
+	name: account.name,
+	logoUrl: account.logoUrl,
+	environment: account.environment,
+	lifecycleStage: account.lifecycleStage,
+	role,
+	lastSeenAt: seenDays === null ? null : ago(seenDays),
+})
+
+/** By `PEOPLE` index: one other customer, several, and a linked environment. */
+const OTHER_ACCOUNTS = new Map<number, ReadonlyArray<Customers.ContactOtherAccount>>([
+	[0, [otherAccount(ACCOUNTS_BY_KEY.northwind, "Admin", 2)]],
+	[
+		1,
+		[
+			otherAccount(ACCOUNTS_BY_KEY.kestrel, "Admin", 1),
+			otherAccount(ACCOUNTS_BY_KEY.halcyon, "Member", 9),
+			otherAccount(ACCOUNTS_BY_KEY.brightfield, "Member", 44),
+			otherAccount(ACCOUNTS_BY_KEY.oakridge, "Member", null),
+		],
+	],
+	[3, [otherAccount(ACCOUNTS_BY_KEY.acmeEu, "Member", 6)]],
+])
+
 const CONTACTS: ReadonlyArray<Customers.ContactRow> = PEOPLE.map(
 	([name, title, role, seenDays, signIns], index) => {
 		const email = `${name.split(" ")[0].toLowerCase()}@acmerobotics.io`
@@ -105,7 +135,7 @@ const CONTACTS: ReadonlyArray<Customers.ContactRow> = PEOPLE.map(
 				signInCount30d: signIns,
 				eventCount30d: signIns * 40,
 				attributes: {},
-				fieldSources: { email: "clerk" },
+				fieldSources: { email: DIRECTORY.id },
 				createdAt: ago(400),
 				updatedAt: ago(1),
 				deletedAt: null,
@@ -115,6 +145,7 @@ const CONTACTS: ReadonlyArray<Customers.ContactRow> = PEOPLE.map(
 				day: dayOf(29 - day),
 				value: seenDays !== null && 29 - day >= seenDays ? (day * 7 + index * 3) % 9 : 0,
 			})),
+			otherAccounts: OTHER_ACCOUNTS.get(index) ?? [],
 		}
 	},
 )
@@ -136,11 +167,11 @@ const ACCOUNT: Customers.Account = {
 	},
 	fieldSources: {
 		...acme.fieldSources,
-		industry: "clerk",
-		employees: "clerk",
-		country: "stripe",
-		region: "maple",
-		lifecycleStage: "stripe",
+		industry: DIRECTORY.id,
+		employees: DIRECTORY.id,
+		country: INVOICES.id,
+		region: ACTIVITY.id,
+		lifecycleStage: INVOICES.id,
 	},
 }
 
@@ -154,7 +185,7 @@ const invoice = (
 	id: Schema.decodeSync(CustomerInvoiceId)(uuid(33, 100 + n)),
 	accountId: acme.id,
 	subscriptionId: SUBSCRIPTION.id,
-	provider: "stripe",
+	provider: INVOICES.id,
 	externalId: `in_acme_${n}`,
 	number: `INV-${2040 - n}`,
 	status: "paid",
@@ -167,7 +198,7 @@ const invoice = (
 	attemptCount: 1,
 	nextRetryAt: null,
 	declineReason: null,
-	hostedUrl: `https://invoice.stripe.com/i/acct_hazel/in_acme_${n}`,
+	hostedUrl: INVOICES.demo.invoiceUrl(`in_acme_${n}`, "lab"),
 	createdAt: ago(monthsAgo * 30 + 9),
 	updatedAt: ago(monthsAgo * 30 + 9),
 	...fields,
@@ -224,12 +255,12 @@ const EVENTS: ReadonlyArray<Customers.Event> = [
 	event(2, 2, "hazel", "signal.opened", "Signal opened: Champion inactive", { severity: "medium" }),
 	event(3, 4, "hazel", "signal.opened", "Signal opened: Usage dropped", { severity: "high" }),
 	event(4, 4, "hazel", "health.status_changed", "Health changed: Healthy → At risk", { from: 71, to: 66 }),
-	event(5, 9, "stripe", "invoice.paid", "Invoice paid", { number: "INV-2039", amount: "$1,240.00" }),
-	event(6, 11, "clerk", "contact.joined", "2 contacts joined", { invitedBy: "Lucas Ferreira" }),
-	event(7, 16, "maple", "activity.last", "Last activity from Priya Shah", { events: 46 }),
-	event(8, 20, "clerk", "contact.removed", "Contact removed", { contact: "Stefan Vogel" }),
+	event(5, 9, INVOICES.id, "invoice.paid", "Invoice paid", { number: "INV-2039", amount: "$1,240.00" }),
+	event(6, 11, DIRECTORY.id, "contact.joined", "2 contacts joined", { invitedBy: "Lucas Ferreira" }),
+	event(7, 16, ACTIVITY.id, "activity.last", "Last activity from Priya Shah", { events: 46 }),
+	event(8, 20, DIRECTORY.id, "contact.removed", "Contact removed", { contact: "Stefan Vogel" }),
 	event(9, 27, "hazel", "signal.auto_resolved", "Signal resolved: Seat growth"),
-	event(10, 39, "stripe", "invoice.paid", "Invoice paid", { number: "INV-2038", amount: "$1,240.00" }),
+	event(10, 39, INVOICES.id, "invoice.paid", "Invoice paid", { number: "INV-2038", amount: "$1,240.00" }),
 ]
 
 const NOTES: ReadonlyArray<NoteRow> = [
@@ -367,7 +398,7 @@ const detailFor = (state: typeof State.Type): Customers.AccountDetail => {
 						weight: 20,
 						effectiveWeight: 0,
 						excluded: true,
-						why: "Left out: no Stripe or Autumn record is linked to this account, so its 20% is shared across the other three in proportion.",
+						why: `Left out: no ${INVOICES.name} or ${PLANS.name} record is linked to this account, so its 20% is shared across the other three in proportion.`,
 					},
 				],
 			},
@@ -446,7 +477,14 @@ const answer = (command: AnyCommand, current: typeof State.Type): Message | null
 		case "FetchCustomerContacts":
 			return Message.SucceededFetchContacts({
 				accountId: accountId(),
-				page: page(CONTACTS, args.cursor, 50),
+				page: page(
+					CONTACTS.map((row) => ({
+						...row,
+						otherAccounts: row.otherAccounts.filter((other) => other.accountId !== viewed().id),
+					})),
+					args.cursor,
+					50,
+				),
 			})
 		case "FetchCustomerInvoices":
 			return Message.SucceededFetchInvoices({
@@ -564,7 +602,7 @@ const initial = (flags: typeof Flags.Type) => {
 		metrics: [
 			{ key: "active_users", name: "Active users", unit: null, provider: null },
 			{ key: "mrr", name: "MRR", unit: "minor", provider: null },
-			{ key: "api_requests", name: "API requests", unit: null, provider: "autumn" },
+			{ key: "api_requests", name: "API requests", unit: null, provider: PLANS.id },
 		],
 		connectedProviders: CONNECTIONS.map((connection) => connection.provider),
 		isImpersonator: true,
