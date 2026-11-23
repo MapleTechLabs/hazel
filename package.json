@@ -40,6 +40,7 @@
 		"customer:check": "bun run packages/setup/src/index.ts customer-check",
 		"customer:deploy": "bun run packages/setup/src/index.ts customer-deploy",
 		"slack:manifest": "bun scripts/slack-manifest.ts",
+		"oauth-broker:keys": "bun scripts/oauth-broker-keys.ts",
 		"migrations:check": "bun scripts/check-migrations-append-only.ts",
 		"typecheck": "turbo build typecheck",
 		"format": "oxfmt",

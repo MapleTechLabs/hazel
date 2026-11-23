@@ -53,6 +53,11 @@ export interface InstallationToken {
 // API Response Schemas
 // ============================================================================
 
+const InstallationApiResponse = Schema.Struct({
+	created_at: Schema.String,
+	updated_at: Schema.String,
+})
+
 // GitHub API installation token response schema
 const InstallationTokenApiResponse = Schema.Struct({
 	token: Schema.String,
@@ -321,10 +326,59 @@ export class GitHubAppJWTService extends Context.Service<GitHubAppJWTService>()(
 			return token
 		})
 
+		/**
+		 * An installation's timestamps (`GET /app/installations/{id}`, as the app): the OAuth broker
+		 * accepts an installation id from a setup redirect only when it was just created or changed.
+		 */
+		const getInstallation = Effect.fn("GitHubAppJWTService.getInstallation")(
+			function* (installationId: string) {
+				const { appId, privateKey } = yield* requireConfig
+				const jwt = yield* generateAppJWT(appId, privateKey)
+				const response = yield* httpClient
+					.get(`${GITHUB_API_BASE_URL}/app/installations/${encodeURIComponent(installationId)}`, {
+						headers: {
+							Accept: "application/vnd.github+json",
+							Authorization: `Bearer ${jwt}`,
+							"X-GitHub-Api-Version": "2022-11-28",
+						},
+					})
+					.pipe(Effect.scoped)
+				if (response.status >= 400) {
+					return yield* new GitHubInstallationTokenError({
+						installationId,
+						message: `GitHub API error: ${response.status}`,
+						status: response.status,
+					})
+				}
+				const data = yield* response.json.pipe(
+					Effect.flatMap(Schema.decodeUnknownEffect(InstallationApiResponse)),
+					Effect.mapError(
+						(error) =>
+							new GitHubInstallationTokenError({
+								installationId,
+								message: `Failed to parse installation response: ${String(error)}`,
+								cause: error,
+							}),
+					),
+				)
+				return { createdAt: new Date(data.created_at), updatedAt: new Date(data.updated_at) }
+			},
+			Effect.catchTag("HttpClientError", (error) =>
+				Effect.fail(
+					new GitHubInstallationTokenError({
+						message: `Network error: ${String(error)}`,
+						installationId: "",
+						cause: error,
+					}),
+				),
+			),
+		)
+
 		return {
 			isConfigured: Option.isSome(config),
 			buildInstallationUrl,
 			getInstallationToken,
+			getInstallation,
 		}
 	}),
 }) {

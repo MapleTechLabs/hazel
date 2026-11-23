@@ -17,8 +17,11 @@ import {
 	type CustomerInput,
 	customerHosts,
 	envFileName,
+	type BrokerSettings,
+	brokerRegistryEntry,
 	GENERATED_KEYS,
 	type GeneratedSecrets,
+	generateBrokerPrivateKey,
 	NAME_RE,
 	normalizeZone,
 	oauthCallbackUrls,
@@ -502,6 +505,21 @@ export const customerCommand = Command.make("customer", installFlags, (flags) =>
 			yield* Console.log(pc.green("✓") + ` Generated ${GENERATED_KEYS.join(", ")}`)
 		}
 
+		// The broker identity: kept once generated (Hazel registers its public key).
+		const brokerPrivateKey =
+			(prior.OAUTH_BROKER_PRIVATE_KEY ?? "") !== ""
+				? (prior.OAUTH_BROKER_PRIVATE_KEY ?? "")
+				: yield* Effect.promise(generateBrokerPrivateKey)
+		const broker: BrokerSettings = {
+			instanceId:
+				(prior.OAUTH_BROKER_INSTANCE_ID ?? "") !== ""
+					? (prior.OAUTH_BROKER_INSTANCE_ID ?? name)
+					: name,
+			privateKey: brokerPrivateKey,
+			url: prior.OAUTH_BROKER_URL || undefined,
+			publicKey: prior.OAUTH_BROKER_PUBLIC_KEY || undefined,
+		}
+
 		const input: CustomerInput = {
 			name,
 			zone,
@@ -512,6 +530,7 @@ export const customerCommand = Command.make("customer", installFlags, (flags) =>
 			allowedEmailDomains: allowedEmailDomains || undefined,
 			instanceAdminEmails: instanceAdminEmails || undefined,
 			orgCreation,
+			broker,
 		}
 		const content = renderCustomerEnv(input, secrets, prior)
 		yield* Effect.promise(() => Bun.write(path, content))
@@ -537,6 +556,13 @@ export const customerCommand = Command.make("customer", installFlags, (flags) =>
 			`GitHub OAuth app callback: ${callbacks.github}` +
 				(google ? `\n     Google OAuth client redirect URI: ${callbacks.google}` : ""),
 			`Optional Slack sync: bun run slack:manifest --api-url https://${hosts.api}, then add SLACK_* to the env file.`,
+			`Optional: integrations through Hazel's OAuth broker instead of your own apps. Send Hazel this ` +
+				`instance's registry entry for OAUTH_BROKER_INSTANCES (public keys only):\n     ` +
+				Option.getOrElse(
+					brokerRegistryEntry(zone, broker),
+					() => "(OAUTH_BROKER_PRIVATE_KEY is invalid)",
+				) +
+				`\n     then set OAUTH_BROKER_URL and OAUTH_BROKER_PUBLIC_KEY from Hazel in ${envFileName(name)}.`,
 			`Back up ${envFileName(name)} (password manager or secret store): losing it means losing the install's keys.`,
 		]
 		for (const [index, step] of steps.entries()) yield* Console.log(`  ${index + 1}. ${step}`)

@@ -112,6 +112,18 @@ export const apiEnv = (stack: HazelStackContext) => {
 		optionalSecret("GITHUB_APP_PRIVATE_KEY"),
 		optionalSecret("GITHUB_WEBHOOK_SECRET"),
 		optionalPlain("GITHUB_WEBHOOK_SKIP_SIGNATURE"),
+		// OAuth broker (`docs/self-hosting.md#brokered-integrations`). On Hazel's own install: the
+		// broker, off unless OAUTH_BROKER_ENABLED=true; keys from `bun scripts/oauth-broker-keys.ts`.
+		plainWithDefault("OAUTH_BROKER_ENABLED", "false"),
+		optionalSecret("OAUTH_BROKER_STATE_KEY"),
+		optionalSecret("OAUTH_BROKER_SIGNING_KEY"),
+		optionalSecret("OAUTH_BROKER_INSTANCES"),
+		// On a customer install: connect Slack, Linear and the GitHub App through Hazel's apps, for
+		// any of them without its own keys above. The installer writes the instance id and key.
+		optionalPlain("OAUTH_BROKER_URL"),
+		optionalPlain("OAUTH_BROKER_INSTANCE_ID"),
+		optionalSecret("OAUTH_BROKER_PRIVATE_KEY"),
+		optionalPlain("OAUTH_BROKER_PUBLIC_KEY"),
 		optionalSecret("KLIPY_API_KEY"),
 		// Customers: company enrichment (`docs/customers/enrichment.md`); unset: off.
 		optionalSecret("CONTEXT_DEV_API_KEY"),
