@@ -1,8 +1,11 @@
+import { Option } from "effect"
 import { describe, expect, test } from "vitest"
 import {
+	brokerRegistryEntry,
 	checkCustomerEnv,
 	type CustomerInput,
 	type GeneratedSecrets,
+	generateBrokerPrivateKey,
 	hasSignInProvider,
 	oauthCallbackUrls,
 	parseEnv,
@@ -125,5 +128,43 @@ describe("checkCustomerEnv", () => {
 				INSTANCE_ADMIN_EMAILS: "ops@acme.com, nope",
 			}),
 		).toEqual(["HAZEL_ZONE", "CLOUDFLARE_ACCOUNT_ID", "ALLOWED_EMAIL_DOMAINS", "INSTANCE_ADMIN_EMAILS"])
+	})
+})
+
+describe("OAuth broker keys", () => {
+	test("are written with the install, and the registry entry carries only public keys", async () => {
+		const privateKey = await generateBrokerPrivateKey()
+		const env = parseEnv(
+			renderCustomerEnv({ ...input, broker: { instanceId: "acme", privateKey } }, secrets),
+		)
+		expect(env.OAUTH_BROKER_INSTANCE_ID).toBe("acme")
+		expect(env.OAUTH_BROKER_PRIVATE_KEY).toBe(privateKey)
+		expect(env.OAUTH_BROKER_URL).toBeUndefined()
+
+		const entry = JSON.parse(
+			Option.getOrThrow(brokerRegistryEntry(input.zone, { instanceId: "acme", privateKey })),
+		)
+		expect(entry.id).toBe("acme")
+		expect(entry.apiUrl).toBe("https://api.chat.acme.com")
+		expect(entry.publicKey.enc.d).toBeUndefined()
+		expect(entry.publicKey.sig.d).toBeUndefined()
+		expect(entry.publicKey.enc.x).toBe(JSON.parse(privateKey).enc.x)
+	})
+
+	test("the broker client is off until its URL is set, then needs every key", async () => {
+		const privateKey = await generateBrokerPrivateKey()
+		const env = parseEnv(
+			renderCustomerEnv({ ...input, broker: { instanceId: "acme", privateKey } }, secrets),
+		)
+		expect(failures(env)).toEqual([])
+		expect(failures({ ...env, OAUTH_BROKER_URL: "https://api.hazel.sh" })).toEqual(["OAuth broker"])
+		const publicKey = JSON.stringify({ kty: "EC", crv: "P-256", x: "x", y: "y" })
+		expect(
+			failures({
+				...env,
+				OAUTH_BROKER_URL: "https://api.hazel.sh",
+				OAUTH_BROKER_PUBLIC_KEY: publicKey,
+			}),
+		).toEqual([])
 	})
 })

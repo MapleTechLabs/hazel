@@ -18,6 +18,7 @@ import { makeLiveRoute } from "./live-route"
 import { HtmlRenderRoute } from "./html-render-route"
 import { AgentOAuthRoutes } from "../routes/agent-oauth"
 import { McpRoute } from "../routes/mcp"
+import { OAuthBrokerRoutes } from "../routes/oauth-broker.http"
 import { AgentAccess } from "../services/agent-access"
 import { workerLiveObjectStubs } from "./live/message-live-object"
 import type { BotGatewayNamespace } from "../services/bot-gateway-transport"
@@ -55,6 +56,7 @@ export const buildApp = (
 					HtmlRenderRoute,
 					AgentOAuthRoutes,
 					McpRoute,
+					OAuthBrokerRoutes,
 				),
 			).pipe(
 				Layer.provide(AppAuthorizationLive),

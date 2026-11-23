@@ -81,7 +81,9 @@ existing users: setting `ALLOWED_EMAIL_DOMAINS` stops anyone outside it from sig
 ## Integrations
 
 Every integration authenticates against an app **the customer registers**, pointed at their
-`api.<zone>`. Each is off until its keys are set (`apps/backend/src/worker/env.ts`):
+`api.<zone>`, or, for Slack, Linear and the GitHub App, against Hazel's own apps through the
+[OAuth broker](#brokered-integrations). Each is off until its keys are set
+(`apps/backend/src/worker/env.ts`):
 
 - **GitHub / Google sign-in**: `AUTH_GITHUB_*`, `AUTH_GOOGLE_*` (either or both; each needs its
   client id and secret).
@@ -96,6 +98,59 @@ Every integration authenticates against an app **the customer registers**, point
 
 The first-party bots (`bots/*`) deploy on a customer stage once their token is set: create the
 bot in the install, put its token (`HAZEL_BOT_TOKEN`, ...) in the env file, and deploy again.
+
+### Brokered integrations
+
+Registering a Slack app, a Linear OAuth app and a GitHub App per install is optional: Hazel's own
+install (`api.hazel.sh`) runs an **OAuth broker** that lets a registered customer install connect
+those three through Hazel's apps. A provider with its own keys in the env file keeps using them;
+the broker is used only for a provider without them.
+
+**Trust model.** The customer trusts Hazel with the moment of connection, not with storage:
+
+- The provider redirects to Hazel's broker, which exchanges the code with Hazel's client
+  credentials, encrypts the tokens to the instance's own public key (ECDH-ES P-256 + HKDF +
+  AES-256-GCM, signed by the broker's ECDSA key) and has the browser POST them to the instance.
+  The tokens exist on Hazel's side only in that request's memory; Hazel never stores them, and the
+  payload opens only on that instance, within 5 minutes.
+- Hazel stores only which instance a Slack team id or GitHub App installation id belongs to
+  (`oauth_broker_routes` in its directory D1), to route webhooks and token refreshes.
+- Slack events and GitHub webhooks for brokered installations arrive at Hazel's app URL: Hazel
+  verifies them with its signing secrets and relays the raw body to the instance, signed by the
+  broker (`POST https://api.<zone>/webhooks/<provider>/brokered`), so their content transits Hazel.
+- GitHub App installation tokens last an hour and only the app's private key can mint them, so a
+  brokered GitHub connection asks the broker for each new one (`POST /oauth-broker/github/refresh`,
+  signed by the instance, answered sealed to it). OAuth refresh tokens refresh there too.
+- Each side pins the other's key: the broker accepts only instances in its registry (checking the
+  instance's signature on its OAuth state), the instance accepts only payloads and relays signed by
+  the broker's key it was given.
+
+A customer that does not accept tokens and events transiting Hazel registers its own apps instead.
+**Discord cannot be brokered**: a bot token allows one gateway session, so a shared bot cannot
+serve several installs; register a Discord app per install.
+
+**Setting it up.**
+
+1. Once, on Hazel's install: `bun run oauth-broker:keys` prints `OAUTH_BROKER_STATE_KEY` and
+   `OAUTH_BROKER_SIGNING_KEY` (secrets) and `OAUTH_BROKER_PUBLIC_KEY` (public, for every instance).
+   Set the two secrets, `OAUTH_BROKER_ENABLED=true`, and `OAUTH_BROKER_INSTANCES='[]'`. The broker
+   reuses Hazel's existing redirect URIs (`https://api.hazel.sh/integrations/<provider>/callback`)
+   and webhook URLs: nothing changes in the provider apps.
+2. `bun run customer:install` writes the instance's id (`OAUTH_BROKER_INSTANCE_ID`, the install's
+   name) and its private key (`OAUTH_BROKER_PRIVATE_KEY`) to its env file, and prints its registry
+   entry: `{"id":"acme","apiUrl":"https://api.chat.acme.com","publicKey":{...}}` (public keys only).
+3. Hazel appends that entry to `OAUTH_BROKER_INSTANCES` (a JSON array) and deploys.
+4. The customer sets `OAUTH_BROKER_URL=https://api.hazel.sh` and `OAUTH_BROKER_PUBLIC_KEY` (from
+   step 1) in its env file, leaves `SLACK_*`, `LINEAR_*` and `GITHUB_APP_*` unset, checks
+   (`bun run customer:check`) and deploys.
+
+Removing an instance from the registry stops new connections, refreshes and relays for it at once.
+A connection made through the broker stays brokered (`metadata.brokered`): switching that provider
+to the customer's own app means reconnecting it. Known limits: a GitHub installation is accepted for
+an instance only when it is not held by another instance or by an org on Hazel's install, and when
+GitHub reports it created or changed during the flow; a GitHub "configure" visit that changes
+nothing therefore fails, and connecting again after a change works. A brokered installation that is
+uninstalled keeps its route row until Hazel deletes it (it is inert: GitHub stops sending events).
 
 ## Upgrades
 

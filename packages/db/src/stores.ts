@@ -39,6 +39,7 @@ export const directoryTables = [
 	schema.agentGrantsTable,
 	schema.agentTokensTable,
 	schema.agentAuthCodesTable,
+	schema.oauthBrokerRoutesTable,
 ] as const
 
 /** `OrgObject`, one per organization. */

@@ -115,6 +115,13 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "email_threads_organization_idx" ON "email_threads" ("organizationId")',
 			],
 		},
+		{
+			id: "0007_oauth_broker_routes",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "oauth_broker_routes" (\n\t"provider" text NOT NULL,\n\t"externalId" text NOT NULL,\n\t"instanceId" text NOT NULL,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\tPRIMARY KEY ("provider", "externalId")\n)',
+				'CREATE INDEX IF NOT EXISTS "oauth_broker_routes_instance_id_idx" ON "oauth_broker_routes" ("instanceId")',
+			],
+		},
 	],
 	org: [
 		{

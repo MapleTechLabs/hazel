@@ -57,6 +57,22 @@ export interface DirectoryShape {
 	) => Effect.Effect<Option.Option<IntegrationIndexRow>, DatabaseError>
 	readonly upsertIntegration: (row: IntegrationIndexRow) => Effect.Effect<void, DatabaseError>
 	readonly deleteIntegration: (row: IntegrationIndexRow) => Effect.Effect<void, DatabaseError>
+	/** The OAuth broker's instance for a provider installation (Hazel's own install only). */
+	readonly brokerRoute: (
+		provider: string,
+		externalId: string,
+	) => Effect.Effect<Option.Option<schema.OAuthBrokerRoute>, DatabaseError>
+	readonly upsertBrokerRoute: (row: {
+		readonly provider: string
+		readonly externalId: string
+		readonly instanceId: string
+	}) => Effect.Effect<void, DatabaseError>
+	/** Only the instance's own row: another instance may have claimed the installation since. */
+	readonly deleteBrokerRoute: (row: {
+		readonly provider: string
+		readonly externalId: string
+		readonly instanceId: string
+	}) => Effect.Effect<void, DatabaseError>
 	readonly membership: (
 		userId: UserId,
 		organizationId: OrganizationId,
@@ -214,6 +230,40 @@ export const makeDirectory = (db: Database.DatabaseShape): DirectoryShape => ({
 				]),
 			)
 			.pipe(Effect.asVoid, Effect.withSpan("Directory.deleteIntegration")),
+	brokerRoute: (provider, externalId) =>
+		db
+			.first(
+				SQLite.from(schema.oauthBrokerRoutesTable)
+					.select()
+					.where(($) => [$.provider.eq(provider), $.externalId.eq(externalId)])
+					.limit(1),
+			)
+			.pipe(
+				Effect.withSpan("Directory.brokerRoute", {
+					attributes: { "integration.provider": provider },
+				}),
+			),
+	upsertBrokerRoute: (row) =>
+		db
+			.run(
+				SQLite.insertInto(schema.oauthBrokerRoutesTable)
+					.values(row)
+					.onConflictDoUpdate({
+						target: ["provider", "externalId"],
+						set: { instanceId: row.instanceId },
+					}),
+			)
+			.pipe(Effect.asVoid, Effect.withSpan("Directory.upsertBrokerRoute")),
+	deleteBrokerRoute: (row) =>
+		db
+			.run(
+				SQLite.deleteFrom(schema.oauthBrokerRoutesTable).where(($) => [
+					$.provider.eq(row.provider),
+					$.externalId.eq(row.externalId),
+					$.instanceId.eq(row.instanceId),
+				]),
+			)
+			.pipe(Effect.asVoid, Effect.withSpan("Directory.deleteBrokerRoute")),
 	membership: (userId, organizationId) =>
 		db
 			.first(
