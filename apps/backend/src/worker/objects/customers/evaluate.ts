@@ -51,6 +51,7 @@ export interface RuleInput {
 
 export type NonMatchReason =
 	| "Churned"
+	| "Plan ended"
 	| "Not covered by Needs attention"
 	| "Out of scope"
 	| "Missing data source"
@@ -775,9 +776,17 @@ export const missingSources = (template: SignalTemplate, org: OrgFacts): Readonl
 	return required.length === 0 || required.some((provider) => org.connected.has(provider)) ? [] : required
 }
 
+/** Every plan it held ended and none was ever paid for: it left before becoming a customer. */
+const leftUnpaid = (facts: AccountFacts) =>
+	facts.stage === "lead" &&
+	facts.subscriptions.length > 0 &&
+	facts.subscriptions.every((sub) => sub.status === "canceled")
+
 export const evaluate = (rule: RuleInput, facts: AccountFacts, org: OrgFacts): Evaluation => {
 	// Churn is a customer's last entry: no other rule evaluates it after.
 	if (facts.stage === "churned" && rule.template !== "churned") return noMatch("Churned")
+	// Nor does one after an unpaid plan ended, but a support issue it opened is still owed a reply.
+	if (leftUnpaid(facts) && !SLA_TEMPLATES.includes(rule.template)) return noMatch("Plan ended")
 	// The SLA templates cover every customer: only the rule's own scope narrows them.
 	if (!SLA_TEMPLATES.includes(rule.template) && !covered(facts, org))
 		return noMatch("Not covered by Needs attention")
