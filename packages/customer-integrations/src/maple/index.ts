@@ -1,5 +1,6 @@
 import { defineIntegration } from "../kit/define"
 import { DEFAULT_MAPLE_CONFIG, MapleConnectionConfig, regionOfAccountId } from "./config"
+import { presentation } from "./presentation"
 import { configProblem } from "./query"
 
 export const maple = defineIntegration({
@@ -18,6 +19,6 @@ export const maple = defineIntegration({
 	ingest: { linkHosts: ["maple.dev"] },
 	precedence: { name: 40, email: 40, avatarUrl: 20 },
 	capabilities: { activity: true },
-	presentation: { name: "Maple", accountNoun: "group" },
+	presentation,
 	server: () => import("./server"),
 })

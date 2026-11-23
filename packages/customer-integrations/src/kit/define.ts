@@ -6,6 +6,7 @@ import type { ConnectionConfig, PrecedenceField } from "@hazel/domain/customers"
 import { type Effect, type Option, Schema } from "effect"
 import type { HttpClient } from "effect/http"
 import type { CustomerProviderAdapter } from "./contract"
+import type { IntegrationPresentation, PresentationOf } from "./presentation"
 
 /** What a config lets the store do with this integration's account ops, read when an op is applied. */
 export interface IngestPolicy {
@@ -32,12 +33,6 @@ export interface IntegrationCapabilities {
 	readonly impersonation?: true
 	/** Needs attention covers only customers with a record here by default. */
 	readonly attentionDefault?: true
-}
-
-export interface IntegrationPresentation {
-	readonly name: string
-	/** What the tool calls an account record, singular: "organization", "customer". */
-	readonly accountNoun: string
 }
 
 /** The server half, loaded on demand so the definition stays browser-safe. */
@@ -92,7 +87,7 @@ export const defineIntegration = <
 	}
 	readonly precedence: IntegrationDefinition["precedence"]
 	readonly capabilities: IntegrationCapabilities
-	readonly presentation: IntegrationPresentation
+	readonly presentation: IntegrationPresentation & PresentationOf<S["Type"]>
 	readonly server: () => Promise<IntegrationServer>
 }): IntegrationDefinition<Id, S["Type"]> & { readonly config: { readonly schema: S } } => ({
 	...definition,

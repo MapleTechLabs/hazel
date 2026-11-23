@@ -115,10 +115,26 @@ export const featureFlagsIntegration: IntegrationDefinition | undefined = integr
 	(integration) => integration.capabilities.featureFlags,
 )
 
+/** The sources with metered features and plan limits. */
+export const meteredProviders = idsWhere((integration) => integration.capabilities.meteredLimits === true)
+
+export const impersonationIntegration: IntegrationDefinition | undefined = integrations.find(
+	(integration) => integration.capabilities.impersonation,
+)
+
+const suggestedIntegration = (kind: "start" | "billing"): IntegrationDefinition =>
+	integrations.find((integration) => integration.presentation.suggested === kind) ?? integrations[0]
+
+/** Where first-run copy tells a new organization to start. */
+export const startingIntegration = suggestedIntegration("start")
+
+/** The billing source first-run copy suggests adding, and the primary of the connect buttons. */
+export const suggestedBillingIntegration = suggestedIntegration("billing")
+
 const providersFor = {
 	activity: activityProviders,
 	billing: billingProviders,
-	meteredLimits: idsWhere((integration) => integration.capabilities.meteredLimits === true),
+	meteredLimits: meteredProviders,
 } satisfies Record<SourceCapability, ReadonlyArray<CustomerProvider>>
 
 /** The sources a template needs at least one of; none for a template that reads no source. */

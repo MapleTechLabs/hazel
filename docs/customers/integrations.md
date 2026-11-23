@@ -20,6 +20,7 @@ packages/customer-integrations/src/
   <id>/
     index.ts         the definition: browser-safe, no server code
     config.ts        its config schema and default
+    presentation.ts  what the pages say and show about it: copy, connect and settings fields
     server.ts        its adapter, loaded with a dynamic import from the definition
     ...              wire, map, pull, webhook, fixtures, tests
 ```
@@ -49,6 +50,10 @@ defineIntegration({
 	server: () => import("./server"),
 })
 ```
+
+`presentation.settings` declares settings beyond the connect form, at most one of each kind: a
+string list, a key-value list, a number. `presentation.suggested` marks the first-run starting point
+(`"start"`) and the billing source to suggest (`"billing"`), one integration each.
 
 Capabilities are descriptive and combinable. An integration may hold any set of them, and no field
 is reserved for a type of integration.
