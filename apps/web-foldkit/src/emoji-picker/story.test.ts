@@ -10,12 +10,15 @@ import {
 	init,
 	isLoading,
 	LoadEmojiData,
+	LoadRecentEmojis,
 	Message,
 	OutMessage,
 	pickerData,
+	SaveRecentEmojis,
 	update,
 	viewportRange,
 } from "./picker"
+import { MAX_RECENT_EMOJIS, withRecentEmoji } from "./recent"
 
 /** frimousse behavior: rows of nine per category, its virtualized range, pointer and keyboard picks. */
 
@@ -70,6 +73,7 @@ describe("emoji picker", () => {
 			model((current) => expect(activeEmoji(current)?.label).toBe("s 12")),
 			message(Message.ClickedEmoji({ rowIndex: 1, columnIndex: 2 })),
 			expectOutMessage(OutMessage.SelectedEmoji({ emoji: "s11", label: "s 12", imageUrl: null })),
+			Command.resolve(SaveRecentEmojis, Message.CompletedSaveRecentEmojis()),
 		)
 	})
 
@@ -84,6 +88,7 @@ describe("emoji picker", () => {
 			message(Message.PressedNavigationKey({ key: "ArrowRight" })),
 			message(Message.PressedNavigationKey({ key: "Enter" })),
 			expectOutMessage(OutMessage.SelectedEmoji({ emoji: "s10", label: "s 11", imageUrl: null })),
+			Command.resolve(SaveRecentEmojis, Message.CompletedSaveRecentEmojis()),
 		)
 	})
 
@@ -144,9 +149,10 @@ describe("emoji picker", () => {
 			Dialog.update,
 			given(Dialog.init("reaction")),
 			message(Dialog.Message.ReceivedPopoverEvent({ event: PopoverEvent.ClickedTrigger() })),
-			Command.expectExact(LoadEmojiData()),
+			Command.expectExact(LoadEmojiData(), LoadRecentEmojis()),
 			model((current) => expect(AsyncData.isLoading(current.picker.data)).toBe(true)),
 			Command.resolve(LoadEmojiData, Message.SucceededLoadEmojiData({ data })),
+			Command.resolve(LoadRecentEmojis, Message.LoadedRecentEmojis({ recent: [] })),
 			message(
 				Dialog.Message.GotPickerMessage({
 					message: Message.ClickedCustomEmoji({ name: "shipit", imageUrl: "/shipit.png" }),
@@ -159,7 +165,69 @@ describe("emoji picker", () => {
 					imageUrl: "/shipit.png",
 				}),
 			),
+			Command.expectExact(
+				SaveRecentEmojis({
+					recent: [{ emoji: "custom:shipit", label: "shipit", imageUrl: "/shipit.png" }],
+				}),
+			),
+			Command.resolve(SaveRecentEmojis, Message.CompletedSaveRecentEmojis()),
 			model((current) => expect(current.isOpen).toBe(false)),
 		)
+	})
+
+	test("recently used emojis lead the list until a search, and a pick moves to the front", () => {
+		const recent = [
+			{ emoji: "p3", label: "p 4", imageUrl: null },
+			{ emoji: "custom:shipit", label: "shipit", imageUrl: "/shipit.png" },
+		]
+		story(
+			update,
+			given(update(loaded(), Message.LoadedRecentEmojis({ recent })).model),
+			model((current) => {
+				const rows = pickerData(current)!
+				expect(rows.categories[0]).toEqual({ label: "Recently used", rowsCount: 1, startRowIndex: 0 })
+				expect(rows.rows[0]!.emojis.map((emoji) => emoji.emoji)).toEqual(["p3", "custom:shipit"])
+				// Searching hides the recent row.
+				const searched = update(current, Message.UpdatedSearch({ search: "wave" })).model
+				expect(pickerData(searched)!.categories.map((category) => category.label)).toEqual([
+					"Smileys & emotion",
+					"People & body",
+				])
+			}),
+			// The custom emoji in the recent row keeps its image when picked again.
+			message(Message.ClickedEmoji({ rowIndex: 0, columnIndex: 1 })),
+			expectOutMessage(
+				OutMessage.SelectedEmoji({
+					emoji: "custom:shipit",
+					label: "shipit",
+					imageUrl: "/shipit.png",
+				}),
+			),
+			model((current) =>
+				expect(current.recent.map((emoji) => emoji.emoji)).toEqual(["custom:shipit", "p3"]),
+			),
+			Command.expectExact(SaveRecentEmojis({ recent: [recent[1]!, recent[0]!] })),
+			Command.resolve(SaveRecentEmojis, Message.CompletedSaveRecentEmojis()),
+			// A pick from a category joins the front.
+			message(Message.ClickedEmoji({ rowIndex: 1, columnIndex: 0 })),
+			model((current) =>
+				expect(current.recent.map((emoji) => emoji.emoji)).toEqual(["s0", "custom:shipit", "p3"]),
+			),
+			Command.resolve(SaveRecentEmojis, Message.CompletedSaveRecentEmojis()),
+		)
+	})
+
+	test("the recent list drops duplicates and keeps two rows", () => {
+		const many = Array.from({ length: 30 }, (_, index) => ({
+			emoji: `e${index}`,
+			label: `e ${index}`,
+			imageUrl: null,
+		})).reduce(withRecentEmoji, [])
+		expect(many.length).toBe(MAX_RECENT_EMOJIS)
+		expect(many[0]!.emoji).toBe("e29")
+		const again = withRecentEmoji(many, { emoji: "e20", label: "e 20", imageUrl: null })
+		expect(again.length).toBe(MAX_RECENT_EMOJIS)
+		expect(again.filter((emoji) => emoji.emoji === "e20").length).toBe(1)
+		expect(again[0]!.emoji).toBe("e20")
 	})
 })

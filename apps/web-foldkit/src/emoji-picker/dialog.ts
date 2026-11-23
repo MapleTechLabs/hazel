@@ -3,10 +3,9 @@ import { Update } from "foldkit"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
-import { cn } from "~/lib/utils"
 import { pickerPopover, PopoverEvent } from "../picker-popover/popover"
 import * as Picker from "./picker"
-import { CATEGORY_HEADER_CLASS, pickerView } from "./view"
+import { CATEGORY_HEADER_CLASS, EMOJI_CELL_CLASS, EMOJI_IMAGE_CLASS, pickerView } from "./view"
 
 /**
  * `EmojiPickerDialog`: a DialogTrigger whose Popover holds a Dialog ("Emoji picker") with the
@@ -88,14 +87,18 @@ const customSection = <M>(
 	const filtered = search ? emojis.filter((emoji) => emoji.name.toLowerCase().includes(search)) : emojis
 	if (filtered.length === 0) return h.empty
 	return h.div(
-		[h.Class("border-border border-t")],
+		// Capped at about two rows, so many custom emojis never squeeze the list away.
+		[h.Class("max-h-32 flex-none overflow-y-auto overscroll-contain border-border border-t")],
 		[
 			h.div(
-				[h.Class(CATEGORY_HEADER_CLASS), h.Attribute("data-slot", "emoji-picker-category-header")],
+				[
+					h.Class(`sticky top-0 ${CATEGORY_HEADER_CLASS}`),
+					h.Attribute("data-slot", "emoji-picker-category-header"),
+				],
 				["Custom"],
 			),
 			h.div(
-				[h.Class("grid grid-cols-9 gap-0 px-2 pb-2")],
+				[h.Class("grid grid-cols-9 gap-0 px-1.5 pb-1.5")],
 				filtered.map((emoji) =>
 					h.keyed("button")(
 						emoji.name,
@@ -110,9 +113,7 @@ const customSection = <M>(
 								),
 							),
 							h.Class(
-								cn(
-									"flex size-10 items-center justify-center rounded-md hover:bg-accent max-md:size-9",
-								),
+								`${EMOJI_CELL_CLASS} outline-hidden hover:bg-wash-strong focus-visible:bg-wash-strong`,
 							),
 							h.Attribute("title", `:${emoji.name}:`),
 						],
@@ -120,7 +121,8 @@ const customSection = <M>(
 							h.img([
 								h.Attribute("src", emoji.imageUrl),
 								h.Attribute("alt", emoji.name),
-								h.Class("size-7 object-contain"),
+								h.Attribute("draggable", "false"),
+								h.Class(EMOJI_IMAGE_CLASS),
 							]),
 						],
 					),
@@ -150,8 +152,10 @@ export const view = <M>(h: HtmlBuilder<M>, model: Model, inputs: DialogViewInput
 				[
 					pickerView(h, model.picker, {
 						toMessage: toPicker,
-						// A phone keeps room for the keyboard under the popover.
-						className: "h-[420px] max-md:h-[min(420px,60dvh)]",
+						// The popover's surface, as the kit's popovers draw it. A phone keeps room for the
+						// keyboard under the popover.
+						className:
+							"h-[420px] rounded-xl border border-fg/10 shadow-lg transition-opacity duration-150 ease-out starting:opacity-0 max-md:h-[min(420px,60dvh)]",
 						customSection: customSection(h, model.picker, inputs.customEmojis, toPicker),
 					}),
 				],

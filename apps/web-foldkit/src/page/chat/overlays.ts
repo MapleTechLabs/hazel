@@ -739,20 +739,21 @@ export const forgetMissingMessages = (model: Model, isShown: (messageId: Message
 /** The context menu's "Add Reaction" opens the picker modal, which loads its data. */
 export const openReactionModal = (model: Model, messageId: MessageId): OverlaysReturn => {
 	const opened = Modal.open(Modal.init("reaction-picker-modal"))
+	const picker = Picker.loadData(Picker.init("reaction-picker-modal-picker"))
 	return {
 		model: modifyFields(model, {
 			open: () =>
 				OpenOverlay.ReactionModal({
 					messageId,
 					modal: opened.model,
-					picker: Picker.init("reaction-picker-modal-picker"),
+					picker: picker.model,
 				}),
 		}),
 		commands: [
 			...Command.mapMessages(opened.commands ?? [], (message) =>
 				Message.GotReactionModalMessage({ message }),
 			),
-			...Command.mapMessages([Picker.LoadEmojiData()], (message) =>
+			...Command.mapMessages(picker.commands ?? [], (message) =>
 				Message.GotReactionModalPickerMessage({ message }),
 			),
 		],

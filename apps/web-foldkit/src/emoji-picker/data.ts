@@ -256,6 +256,8 @@ export const loadEmojiData = (
 export interface PickerEmoji {
 	readonly emoji: string
 	readonly label: string
+	/** A custom emoji's image (a recently used one); a unicode emoji draws as text. */
+	readonly imageUrl?: string | null
 }
 
 export interface PickerRow {
@@ -289,7 +291,15 @@ const searchEmojis = (emojis: ReadonlyArray<EmojiDataEmoji>, search: string) => 
 	return scored.sort((a, b) => b.score - a.score).map(({ emoji }) => emoji)
 }
 
-const buildPickerData = (data: EmojiData, columns: number, search: string): PickerData => {
+/** The "Recently used" category, shown above the dataset's while nothing is searched. */
+export const RECENT_CATEGORY_LABEL = "Recently used"
+
+const buildPickerData = (
+	data: EmojiData,
+	columns: number,
+	search: string,
+	recent: ReadonlyArray<PickerEmoji>,
+): PickerData => {
 	const emojis = searchEmojis(data.emojis, search)
 	const byCategory = new Map<number, Array<PickerEmoji>>()
 	for (const emoji of emojis) {
@@ -299,15 +309,16 @@ const buildPickerData = (data: EmojiData, columns: number, search: string): Pick
 	}
 	const rows: Array<PickerRow> = []
 	const categories: Array<PickerCategory> = []
-	for (const category of data.categories) {
-		const list = byCategory.get(category.index)
-		if (!list || list.length === 0) continue
+	const addCategory = (label: string, list: ReadonlyArray<PickerEmoji>) => {
+		if (list.length === 0) return
 		const categoryIndex = categories.length
 		const startRowIndex = rows.length
 		for (let index = 0; index < list.length; index += columns)
 			rows.push({ categoryIndex, emojis: list.slice(index, index + columns) })
-		categories.push({ label: category.label, rowsCount: rows.length - startRowIndex, startRowIndex })
+		categories.push({ label, rowsCount: rows.length - startRowIndex, startRowIndex })
 	}
+	if (!search) addCategory(RECENT_CATEGORY_LABEL, recent)
+	for (const category of data.categories) addCategory(category.label, byCategory.get(category.index) ?? [])
 	return {
 		count: emojis.length,
 		categories,
@@ -321,18 +332,26 @@ const CACHE_SIZE = 8
 
 const cache = new WeakMap<EmojiData, Map<string, PickerData>>()
 
-/** `getEmojiPickerData`, memoized per dataset in a small LRU keyed by columns and search. */
-export const pickerDataOf = (data: EmojiData, columns: number, search: string): PickerData => {
-	const recent = cache.get(data) ?? new Map<string, PickerData>()
-	cache.set(data, recent)
-	const key = `${columns}:${search}`
-	const hit = recent.get(key)
-	recent.delete(key)
-	const result = hit ?? buildPickerData(data, columns, search)
-	recent.set(key, result)
-	if (recent.size > CACHE_SIZE) {
-		const oldest = recent.keys().next()
-		if (!oldest.done) recent.delete(oldest.value)
+/**
+ * `getEmojiPickerData`, memoized per dataset in a small LRU keyed by columns, search and the
+ * recently used emojis (which lead the list while nothing is searched).
+ */
+export const pickerDataOf = (
+	data: EmojiData,
+	columns: number,
+	search: string,
+	recent: ReadonlyArray<PickerEmoji> = [],
+): PickerData => {
+	const entries = cache.get(data) ?? new Map<string, PickerData>()
+	cache.set(data, entries)
+	const key = `${columns}:${search}:${search ? "" : recent.map((emoji) => emoji.emoji).join(" ")}`
+	const hit = entries.get(key)
+	entries.delete(key)
+	const result = hit ?? buildPickerData(data, columns, search, recent)
+	entries.set(key, result)
+	if (entries.size > CACHE_SIZE) {
+		const oldest = entries.keys().next()
+		if (!oldest.done) entries.delete(oldest.value)
 	}
 	return result
 }
