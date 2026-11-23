@@ -17,6 +17,7 @@ import type { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import type { Directory } from "../../services/directory"
 import type { HtmlRenderStore } from "../../services/html-renders"
 import type { InviteMailer } from "../../services/invite-mailer"
+import type { OrgExportStore } from "../../services/org-exports"
 import { ObjectCalls } from "./call-receivers"
 import type { ObjectStubs } from "./protocol"
 
@@ -32,6 +33,7 @@ export type ObjectHandlersRequirements =
 	| BotGatewayTransport
 	| InviteMailer
 	| HtmlRenderStore
+	| OrgExportStore
 	| Persistence.Persistence
 
 /**

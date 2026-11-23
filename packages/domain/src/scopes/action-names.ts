@@ -14,6 +14,7 @@ import type {
 	MessageReactionRpcs,
 	MessageRpcs,
 	NotificationRpcs,
+	OrganizationExportRpcs,
 	OrganizationMemberRpcs,
 	OrganizationRpcs,
 	PinnedMessageRpcs,
@@ -49,6 +50,7 @@ export type RpcActionName =
 	| ActionOf<MessageReactionRpcs>
 	| ActionOf<MessageRpcs>
 	| ActionOf<NotificationRpcs>
+	| ActionOf<OrganizationExportRpcs>
 	| ActionOf<OrganizationMemberRpcs>
 	| ActionOf<OrganizationRpcs>
 	| ActionOf<PinnedMessageRpcs>

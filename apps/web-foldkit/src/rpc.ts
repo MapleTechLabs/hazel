@@ -22,6 +22,7 @@ import {
 	MessageReactionRpcs,
 	MessageRpcs,
 	NotificationRpcs,
+	OrganizationExportRpcs,
 	OrganizationMemberRpcs,
 	OrganizationRpcs,
 	PinnedMessageRpcs,
@@ -60,6 +61,7 @@ const AllRpcs = MessageRpcs.merge(
 	BotRpcs,
 	ConnectShareRpcs,
 	InvitationRpcs,
+	OrganizationExportRpcs,
 ).merge(ChatSyncRpcs, CustomerRpcs, CustomerChatRpcs, PushDeviceRpcs, AssistantRpcs)
 
 const makeClient = RpcClient.make(AllRpcs, { flatten: true })

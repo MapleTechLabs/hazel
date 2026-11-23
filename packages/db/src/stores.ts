@@ -79,6 +79,8 @@ export const orgTables = [
 	schema.assistantThreadsTable,
 	schema.assistantItemsTable,
 	schema.assistantFollowersTable,
+	// Data exports and where each build stands (`worker/objects/org/exports.ts`).
+	schema.organizationExportsTable,
 ] as const
 
 /** `ChannelObject`, one per channel (threads too). */

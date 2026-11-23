@@ -5,7 +5,7 @@
  */
 import { DatabaseSync, type SQLInputValue } from "node:sqlite"
 import { storeMigrations } from "@hazel/db"
-import { CACHE_BINDING, DIRECTORY_DB_BINDING, HTML_RENDERS_BINDING } from "./platform"
+import { CACHE_BINDING, DIRECTORY_DB_BINDING, HTML_RENDERS_BINDING, ORG_EXPORTS_BINDING } from "./platform"
 
 /** A binding whose every member is a function that records its call and never answers. */
 const recordingBinding = (name: string, calls: Array<string>) =>
@@ -96,6 +96,7 @@ export const makeFakeApiEnv = async (options: FakeApiEnvOptions = {}) => {
 		[DIRECTORY_DB_BINDING]: fakeDirectoryDb(calls, options.d1LatencyMs ?? 0),
 		[CACHE_BINDING]: recordingBinding("kv", calls),
 		[HTML_RENDERS_BINDING]: recordingBinding("r2", calls),
+		[ORG_EXPORTS_BINDING]: recordingBinding("r2", calls),
 	}
 	return { env, calls }
 }

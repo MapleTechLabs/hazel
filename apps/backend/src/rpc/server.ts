@@ -22,6 +22,7 @@ import {
 	MessageReactionRpcs,
 	MessageRpcs,
 	NotificationRpcs,
+	OrganizationExportRpcs,
 	OrganizationMemberRpcs,
 	OrganizationRpcs,
 	PinnedMessageRpcs,
@@ -53,6 +54,7 @@ import { RssSubscriptionRpcLive } from "./handlers/rss-subscriptions"
 import { MessageReactionRpcLive } from "./handlers/message-reactions"
 import { MessageRpcLive } from "./handlers/messages"
 import { NotificationRpcLive } from "./handlers/notifications"
+import { OrganizationExportRpcLive } from "./handlers/organization-exports"
 import { OrganizationMemberRpcLive } from "./handlers/organization-members"
 import { OrganizationRpcLive } from "./handlers/organizations"
 import { PinnedMessageRpcLive } from "./handlers/pinned-messages"
@@ -98,6 +100,7 @@ const BaseRpcs = MessageRpcs.merge(
 	BotRpcs,
 	CustomEmojiRpcs,
 	InvitationRpcs,
+	OrganizationExportRpcs,
 )
 
 export const AllRpcs = BaseRpcs.merge(
@@ -135,6 +138,7 @@ const rpcGroups = [
 	["BotRpcs", BotRpcs],
 	["CustomEmojiRpcs", CustomEmojiRpcs],
 	["InvitationRpcs", InvitationRpcs],
+	["OrganizationExportRpcs", OrganizationExportRpcs],
 	["ChatSyncRpcs", ChatSyncRpcs],
 	["CustomerReadRpcs", CustomerReadRpcs],
 	["CustomerQueueRpcs", CustomerQueueRpcs],
@@ -187,6 +191,7 @@ export const RpcHandlersLive = Layer.empty
 		Layer.provideMerge(BotRpcLive),
 		Layer.provideMerge(CustomEmojiRpcLive),
 		Layer.provideMerge(InvitationRpcLive),
+		Layer.provideMerge(OrganizationExportRpcLive),
 		Layer.provideMerge(CustomerReadRpcLive),
 		Layer.provideMerge(CustomerQueueRpcLive),
 		Layer.provideMerge(CustomerAdminRpcLive),

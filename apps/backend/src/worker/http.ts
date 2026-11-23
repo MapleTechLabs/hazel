@@ -16,6 +16,7 @@ import { workerObjectStubs } from "./objects/stubs"
 import { makeSyncRoute } from "./sync-route"
 import { makeLiveRoute } from "./live-route"
 import { HtmlRenderRoute } from "./html-render-route"
+import { OrgExportRoute } from "./org-export-route"
 import { AgentOAuthRoutes } from "../routes/agent-oauth"
 import { McpRoute } from "../routes/mcp"
 import { AgentAccess } from "../services/agent-access"
@@ -53,6 +54,7 @@ export const buildApp = (
 					makeSyncRoute(env),
 					makeLiveRoute(env),
 					HtmlRenderRoute,
+					OrgExportRoute,
 					AgentOAuthRoutes,
 					McpRoute,
 				),

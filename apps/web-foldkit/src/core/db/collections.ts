@@ -22,6 +22,7 @@ import {
 	MessageReaction,
 	Notification,
 	Organization,
+	OrganizationExport,
 	OrganizationMember,
 	PinnedMessage,
 	TypingIndicator,
@@ -216,6 +217,8 @@ export const botCollection = orgCollection("bots", Bot.Schema)
 export const botCommandCollection = orgCollection("bot_commands", BotCommand.Schema)
 export const botInstallationCollection = orgCollection("bot_installations", BotInstallation.Schema)
 export const customEmojiCollection = orgCollection("custom_emojis", CustomEmoji.Schema)
+/** Data exports and their progress (owners and admins only; `organizationExport.*`). */
+export const organizationExportCollection = orgCollection("organization_exports", OrganizationExport.Schema)
 /** The AI panel's threads and their items: the member's own, and those shared with the org. */
 export const assistantThreadCollection = orgCollection("assistant_threads", Assistant.Thread)
 export const assistantItemCollection = orgCollection("assistant_items", Assistant.Item)

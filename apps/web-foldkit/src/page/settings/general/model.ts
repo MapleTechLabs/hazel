@@ -1,4 +1,5 @@
-import { OrganizationId } from "@hazel/schema"
+import { OrganizationExport } from "@hazel/domain/models"
+import { OrganizationExportId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineTaggedUnion } from "foldkit/schema"
 import { CommonReason } from "~/lib/error-messages"
@@ -15,6 +16,24 @@ export type LogoUpload = typeof LogoUpload.Type
 
 export const PublicModeSave = defineTaggedUnion({ Idle: {}, Saving: { isPublic: Schema.Boolean } })
 export type PublicModeSave = typeof PublicModeSave.Type
+
+/** Starting an export, and fetching a ready one's download link. */
+export const ExportStart = defineTaggedUnion({ Idle: {}, Starting: {} })
+export type ExportStart = typeof ExportStart.Type
+
+/** `organizationExport.start` failures, beyond the shared reasons. */
+export const StartExportFailure = Schema.Union([
+	Schema.Literals(["InProgress", "NotPermitted"]),
+	CommonReason,
+])
+export type StartExportFailure = typeof StartExportFailure.Type
+
+/** `organizationExport.downloadUrl` failures, beyond the shared reasons. */
+export const DownloadExportFailure = Schema.Union([
+	Schema.Literals(["NotFound", "NotReady", "Failed", "Expired", "NotPermitted"]),
+	CommonReason,
+])
+export type DownloadExportFailure = typeof DownloadExportFailure.Type
 
 /** The workspace the delete dialog asks about. */
 export const DeleteTarget = Schema.Struct({ organizationId: OrganizationId })
@@ -58,5 +77,10 @@ export const Model = Schema.Struct({
 	deleteConfirm: ConfirmAction.Model(DeleteTarget),
 	/** The workspace name typed into the delete dialog; cleared whenever the dialog closes. */
 	confirmationText: Schema.String,
+	/** The organization's data exports, newest first (synced to owners and admins only). */
+	exports: Schema.Array(OrganizationExport.Schema),
+	exportStart: ExportStart,
+	/** The export whose download link is being fetched. */
+	downloadingExportId: Schema.NullOr(OrganizationExportId),
 })
 export type Model = typeof Model.Type
