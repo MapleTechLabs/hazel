@@ -144,6 +144,7 @@ describe("Autumn plan → subscription", () => {
 			currentPeriodEnd: "2026-12-01T09:20:00.000Z",
 			cancelAtPeriodEnd: false,
 			canceledAt: null,
+			cancellationReason: null,
 			observedAt: OBSERVED,
 		})
 	})
@@ -341,7 +342,33 @@ describe("Autumn plan → subscription", () => {
 		expect(subOp(lapsing)).toMatchObject({ status: "active", mrrMinor: 300_000 })
 	})
 
-	it("bills a card trial canceled before it converted nothing, from the plan's trial terms", () => {
+	it("reads a checkout never finished as abandoned, not as a plan that was canceled", () => {
+		const opened = SUB_ACME.started_at
+		const abandoned = {
+			...SUB_ACME,
+			status: "expired",
+			canceled_at: null,
+			expires_at: opened + 3_600_000,
+			current_period_start: null,
+			current_period_end: null,
+		}
+		expect(subOp(abandoned)).toMatchObject({
+			status: "canceled",
+			mrrMinor: 0,
+			cancelAtPeriodEnd: false,
+			cancellationReason: "checkout_abandoned",
+		})
+		// Someone canceled it, it outlived any checkout, or it was a free plan: not a checkout.
+		expect(subOp({ ...abandoned, canceled_at: opened + 60_000 })).toMatchObject({
+			cancellationReason: null,
+		})
+		expect(subOp({ ...abandoned, expires_at: opened + 2 * DAY })).toMatchObject({
+			cancellationReason: null,
+		})
+		expect(subOp({ ...abandoned, plan_id: "free" })).toMatchObject({ cancellationReason: null })
+	})
+
+	it("keeps a canceled card trial's price, from the plan's trial terms", () => {
 		// Autumn clears `trial_ends_at` once the trial is over; the billing period was the trial's.
 		const trialPlan = { ...PLAN_ENTERPRISE, free_trial: { duration_length: 14, duration_type: "day" } }
 		const started = SUB_GLOBEX_TRIAL.started_at
@@ -355,8 +382,10 @@ describe("Autumn plan → subscription", () => {
 		}
 		expect(subOp(canceled)).toMatchObject({
 			status: "canceled",
-			mrrMinor: 0,
+			mrrMinor: 300_000,
 			billsByUsage: false,
+			// It ran to the end of the trial it asked to leave.
+			cancelAtPeriodEnd: true,
 			trialEndsAt: new Date(started + 14 * DAY + 70 * 60_000).toISOString(),
 		})
 		// A month's trial ends on the calendar: Jan 31 + 1 month is Feb 28, not 31 days later.
@@ -370,7 +399,7 @@ describe("Autumn plan → subscription", () => {
 			expires_at: Date.UTC(2026, 1, 28, 12, 10),
 		}
 		expect(subOp(monthTrial)).toMatchObject({
-			mrrMinor: 0,
+			mrrMinor: 300_000,
 			trialEndsAt: new Date(Date.UTC(2026, 1, 28, 13, 10)).toISOString(),
 		})
 		const pastTrial = { ...monthTrial, expires_at: Date.UTC(2026, 2, 2, 12) }

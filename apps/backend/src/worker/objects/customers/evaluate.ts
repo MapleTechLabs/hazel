@@ -28,6 +28,7 @@ import {
 	type AccountFacts,
 	activeUsersIn,
 	billed,
+	canceledCardTrial,
 	DERIVED_METRICS,
 	formatMoney,
 	type MetricPoint,
@@ -37,6 +38,7 @@ import {
 	renewedBetween,
 	rollingActiveSeries,
 	seriesOf,
+	wasCustomer,
 } from "./facts"
 import { addDays, DAY_MS, dayOf, daysBetween, daysSince } from "./time"
 
@@ -712,7 +714,7 @@ const churned =
 								sub.currentPeriodEnd <= org.now
 									? sub.currentPeriodEnd
 									: sub.canceledAt,
-							paid: pays(sub),
+							paid: wasCustomer(sub),
 						},
 					],
 		)
@@ -748,7 +750,7 @@ const churned =
 		const currency = churn?.currency ?? org.currency
 		return {
 			step: 0,
-			reason: `${lost > 0 ? `Lost ${formatMoney(lost, currency)}/mo ` : ""}${days === 0 ? "today" : `${plural(days, "day")} ago`}`,
+			reason: `${lost > 0 ? `Lost ${formatMoney(lost, currency)}/mo ` : last !== undefined && canceledCardTrial(last) ? "Canceled during the trial " : ""}${days === 0 ? "today" : `${plural(days, "day")} ago`}`,
 			evidence: {
 				_tag: "delta",
 				step: 0,
@@ -776,11 +778,11 @@ export const missingSources = (template: SignalTemplate, org: OrgFacts): Readonl
 	return required.length === 0 || required.some((provider) => org.connected.has(provider)) ? [] : required
 }
 
-/** Every plan it held ended and none was ever paid for: it left before becoming a customer. */
+/** Every plan it held ended with no payment or card: it left before becoming a customer. */
 const leftUnpaid = (facts: AccountFacts) =>
 	facts.stage === "lead" &&
 	facts.subscriptions.length > 0 &&
-	facts.subscriptions.every((sub) => sub.status === "canceled" && !pays(sub))
+	facts.subscriptions.every((sub) => sub.status === "canceled" && !wasCustomer(sub))
 
 export const evaluate = (rule: RuleInput, facts: AccountFacts, org: OrgFacts): Evaluation => {
 	// Churn is a customer's last entry: no other rule evaluates it after.

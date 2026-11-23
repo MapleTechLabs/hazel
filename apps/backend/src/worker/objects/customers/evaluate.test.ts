@@ -656,6 +656,11 @@ describe("signal evaluation", () => {
 		// A trial it canceled before converting paid nothing.
 		const trial = { ...resubscribed, trialEndsAt: ago(1) }
 		expect(run("churned", { ...churned, subscriptions: [trial] })).toEqual(noMatch)
+		// With a card on file it was a customer: a new trial canceled is a new churn.
+		const paymentMethod = { brand: "visa", last4: "4242", expMonth: 1, expYear: 2030 }
+		expect(run("churned", { ...churned, subscriptions: [{ ...trial, paymentMethod }] })._tag).toBe(
+			"Match",
+		)
 	})
 
 	it("churned: a churn dated back to its failed invoice is announced from the plan's end", () => {

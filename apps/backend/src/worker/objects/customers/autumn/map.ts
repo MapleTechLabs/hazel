@@ -45,6 +45,7 @@ import type {
 	UpsertAccount,
 	UpsertSubscription,
 } from "@hazel/domain/customers"
+import { CHECKOUT_ABANDONED } from "@hazel/domain/customers"
 import type { Types } from "effect"
 import { addDays, DAY_MS, dayOf, startOfDay } from "../time"
 import {
@@ -311,6 +312,30 @@ const trialEndOf = (subscription: AutumnSubscription, plan: AutumnPlan | undefin
 	}
 }
 
+/** Whether a plan bills anything: a price, usage, or prepaid units. */
+const isPaidPlan = (subscription: AutumnSubscription, plan: AutumnPlan | undefined, currency: string) =>
+	subscriptionMrr(subscription, plan, currency) > 0 ||
+	billsOutsideMrr(subscription.plan_id, plan, []) ||
+	sellsPrepaid(plan)
+
+/**
+ * A checkout never finished. Autumn inserts a paid plan as pending when checkout opens, and expires
+ * it with the session (a day at most): ended, no cancellation asked for, no processor subscription.
+ */
+const abandonedCheckout = (
+	subscription: AutumnSubscription,
+	plan: AutumnPlan | undefined,
+	currency: string,
+) =>
+	subscription.status === "expired" &&
+	subscription.canceled_at == null &&
+	subscription.current_period_start == null &&
+	subscription.current_period_end == null &&
+	subscription.started_at != null &&
+	subscription.expires_at != null &&
+	subscription.expires_at - subscription.started_at <= DAY_MS &&
+	isPaidPlan(subscription, plan, currency)
+
 /**
  * A batch of plans, read at `observedAt` (ingest drops a read older than one it applied). Skipped:
  * an entity-scoped plan, a `scheduled` one, and a row whose customer Autumn did not name.
@@ -323,12 +348,15 @@ const trialEndOf = (subscription: AutumnSubscription, plan: AutumnPlan | undefin
  *   its period end, and Autumn marks the current one canceled. It is a plan change, not a
  *   cancellation, so the current plan keeps `cancelAtPeriodEnd` false. The free plan Autumn
  *   schedules on a cancel (its group's `auto_enable` one) is no downgrade: the plan is canceling.
- * - **Never billed**: a plan no processor ever billed (no billing period: a trial that lapsed
- *   unconverted, ended or still live until Autumn converts it), or one that ended within its trial
- *   ({@link trialEndOf}, sent as `trialEndsAt`: a card trial canceled before it converted has a
- *   billing period, the trial's), is MRR 0, so its account reads as a lead rather than a paying or
- *   churned customer. A customer Autumn gave no trial (one already used) that ends within the
- *   trial's length reads so too.
+ * - **Never billed**: a plan no processor ever held (no billing period: a trial that lapsed
+ *   unconverted, ended or still live until Autumn converts it) is MRR 0, so its account reads as a
+ *   lead rather than a paying or churned customer.
+ * - **Abandoned checkouts** ({@link abandonedCheckout}) are such a plan, sent with the reason
+ *   `CHECKOUT_ABANDONED`: the plan never started, and the timeline says so.
+ * - **Canceled card trials**: a plan that ended within its trial ({@link trialEndOf}, sent as
+ *   `trialEndsAt`) with a billing period, the trial's, keeps its price, and core reads it as a
+ *   customer who left (`canceledCardTrial`). A customer Autumn gave no trial (one already used) that
+ *   ends within the trial's length reads so too.
  * - **Converted trials**: Autumn clears a converted trial's `trial_ends_at`; a live plan whose
  *   billing period starts at or after the trial's end ({@link trialEndOf}) sends that end as
  *   `trialEndsAt`, so the account's `customerSince` and MRR history leave the trial days out. A
@@ -365,14 +393,10 @@ export const subscriptionOps = (
 		subscriptions.flatMap((subscription) => {
 			const plan = planOf(subscription)
 			// Prepaid units are priced from balances a scheduled plan has none of yet.
-			const paid =
-				subscriptionMrr(subscription, plan, currency) > 0 ||
-				billsOutsideMrr(subscription.plan_id, plan, []) ||
-				sellsPrepaid(plan)
 			return subscription.status === "scheduled" &&
 				base(subscription) &&
 				(subscription.auto_enable ?? plan?.auto_enable) !== true &&
-				paid
+				isPaidPlan(subscription, plan, currency)
 				? [slotOf(customerOf(subscription), plan)]
 				: []
 		}),
@@ -409,7 +433,9 @@ export const subscriptionOps = (
 		const expired = status === "canceled"
 		const trialEnd = subscription.trial_ends_at == null ? trialEndOf(subscription, plan) : null
 		const endedAt = subscription.expires_at ?? subscription.canceled_at
-		const endedInTrial = expired && trialEnd !== null && endedAt != null && endedAt <= trialEnd
+		const abandoned = abandonedCheckout(subscription, plan, currency)
+		const endedInTrial =
+			!abandoned && expired && trialEnd !== null && endedAt != null && endedAt <= trialEnd
 		// Live and billed for a period from its trial's end on: the trial converted (Autumn cleared
 		// `trial_ends_at`). The first paid period's start is the exact end, a later one's the terms'.
 		const periodStart = subscription.current_period_start
@@ -426,9 +452,8 @@ export const subscriptionOps = (
 		// processor's subscription (its `subscriptions` row, `getApiSubscription`): a billed plan whose
 		// mirror row is missing reads as never billed too.
 		const neverBilled =
-			endedInTrial ||
-			(subscription.current_period_end == null &&
-				(expired || (status === "active" && plan?.free_trial != null)))
+			subscription.current_period_end == null &&
+			(expired || (status === "active" && plan?.free_trial != null))
 		const balances = expired ? [] : (options.balances ?? [])
 		const mrrMinor = neverBilled
 			? 0
@@ -456,12 +481,21 @@ export const subscriptionOps = (
 			trialEndsAt: isoOf(endedInTrial ? trialEnd : (convertedAt ?? subscription.trial_ends_at)),
 			currentPeriodEnd: isoOf(subscription.current_period_end ?? subscription.expires_at),
 			// A cancellation Autumn has recorded but not yet carried out: the plan runs to `expires_at`.
-			cancelAtPeriodEnd: canceling,
+			// A card trial that ran out its period keeps it, so its churn dates from the end.
+			cancelAtPeriodEnd:
+				canceling ||
+				(endedInTrial &&
+					!neverBilled &&
+					subscription.canceled_at != null &&
+					endedAt != null &&
+					endedAt > subscription.canceled_at),
 			canceledAt: expired
 				? isoOf(subscription.canceled_at ?? subscription.expires_at)
 				: canceling
 					? isoOf(subscription.canceled_at)
 					: null,
+			// Sent on every plan: a live one reusing an abandoned checkout's id clears it.
+			cancellationReason: abandoned ? CHECKOUT_ABANDONED : null,
 			observedAt: options.observedAt,
 		}
 		// Unpriced, the op leaves the stored MRR as it is.

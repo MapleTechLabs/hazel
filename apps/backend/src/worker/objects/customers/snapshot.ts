@@ -35,6 +35,7 @@ import {
 	pays,
 	type UnpaidEnd,
 	unpaidEndOf,
+	wasCustomer,
 } from "./facts"
 import { inList, isActive } from "./sql"
 import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "./time"
@@ -236,7 +237,7 @@ export const rollupAccount = (input: {
 			: trialing.length > 0
 				? "trialing"
 				: account.customerSince !== null ||
-					  subscriptions.some((sub) => pays(sub) && sub.status === "canceled")
+					  subscriptions.some((sub) => wasCustomer(sub) && sub.status === "canceled")
 					? owing
 						? "past_due"
 						: "churned"
@@ -357,10 +358,10 @@ export const billsNow = (sub: schema.CustomerSubscription) => billed(sub) && pay
  * Whose subscriptions count for one account's MRR, from its subscriptions (any status): Autumn once
  * its connection finished its first import (until then its data is partial) and it bills the
  * account now (`billsNow`), else Stripe when it does (a customer Autumn does not know, or billed in
- * Stripe outside it). With neither billing now, the source stored last run (`stored`), so a payer
- * ending in one provider churns there rather than switching; without one, the one that paid
- * (Stripe's first), else Stripe's. An account with only one provider's subscriptions keeps that
- * one either way, so an Autumn disconnect does not zero its MRR.
+ * Stripe outside it). With neither billing now, Autumn when only it knows the customer held a plan
+ * (`wasCustomer`), else the source stored last run (`stored`), so a payer ending in one provider
+ * churns there rather than switching, else Stripe's. An account with only one provider's
+ * subscriptions keeps that one either way, so an Autumn disconnect does not zero its MRR.
  */
 export const billingProviderOf = (
 	autumnReady: boolean,
@@ -373,8 +374,8 @@ export const billingProviderOf = (
 	if (stripe.length === 0) return "autumn"
 	if (autumnReady && autumn.some(billsNow)) return "autumn"
 	if (stripe.some(billsNow)) return "stripe"
-	if (stored !== null) return stored
-	return autumnReady && autumn.some(pays) && !stripe.some(pays) ? "autumn" : "stripe"
+	if (autumnReady && autumn.some(wasCustomer) && !stripe.some(wasCustomer)) return "autumn"
+	return stored ?? "stripe"
 }
 
 /**

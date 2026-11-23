@@ -229,22 +229,35 @@ const unconverted = (sub: schema.CustomerSubscription) =>
 export const pays = (sub: schema.CustomerSubscription) =>
 	(sub.mrrMinor > 0 || sub.billsByUsage) && !unconverted(sub)
 
+/**
+ * A trial taken with a card and canceled before it converted: a customer who left, though it never
+ * paid. Autumn prices only a trial a processor held; a Stripe one needs a card on file.
+ */
+export const canceledCardTrial = (sub: schema.CustomerSubscription) =>
+	unconverted(sub) &&
+	(sub.mrrMinor > 0 || sub.billsByUsage) &&
+	(sub.provider !== "stripe" || sub.paymentMethod !== null)
+
+/** It was a customer on this plan: it paid for it, or gave a card for its trial. */
+export const wasCustomer = (sub: schema.CustomerSubscription) => pays(sub) || canceledCardTrial(sub)
+
 /** Every plan that paid has ended, and no trial is running: a churned customer, unless it still owes. */
 export const endedPaying = (subscriptions: ReadonlyArray<schema.CustomerSubscription>) =>
 	subscriptions.some((sub) => sub.status === "canceled" && pays(sub)) &&
 	!subscriptions.some((sub) => sub.status === "trialing" || (billed(sub) && pays(sub)))
 
 /**
- * It paid an invoice, or started a paid plan, after the churn announced at `since` and before its
- * plans ended at `endedAt`: this is a new churn. Settling an old invoice after the end is not one.
+ * It paid an invoice, or started a paid plan or card trial, after the churn announced at `since`
+ * and before its plans ended at `endedAt`: this is a new churn. Settling an old invoice after the
+ * end is not one.
  */
 export const renewedBetween = (facts: AccountFacts, since: Date, endedAt: Date) =>
 	facts.paymentsSinceChurn.some((paidAt) => paidAt > since && paidAt <= endedAt) ||
 	facts.subscriptions.some((sub) => {
-		const paidFrom = sub.trialEndsAt ?? sub.startedAt
+		const paidFrom = canceledCardTrial(sub) ? sub.startedAt : (sub.trialEndsAt ?? sub.startedAt)
 		return (
 			sub.status !== "trialing" &&
-			pays(sub) &&
+			wasCustomer(sub) &&
 			paidFrom !== null &&
 			paidFrom > since &&
 			paidFrom <= endedAt

@@ -32,6 +32,7 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import {
+	CHECKOUT_ABANDONED,
 	type ConnectionConfig,
 	type CustomerProvider,
 	type CustomerSource,
@@ -1394,12 +1395,22 @@ const make = Effect.gen(function* () {
 					externalId: `ingest:${type}:${provider}:${op.externalId}${type === "subscription.plan_changed" ? `:${op.planName}:${mrrMinor}` : ""}`,
 				})
 			const observedAt = toDate(op.observedAt)
+			const abandoned = op.cancellationReason === CHECKOUT_ABANDONED
+			const abandonedEvent = event(
+				"subscription.checkout_abandoned",
+				`Abandoned checkout for ${planLabel(op.planName)}`,
+				values.canceledAt,
+			)
 			if (Option.isNone(existing)) {
 				const [row] = yield* db.run(
 					SQLite.insertInto(schema.customerSubscriptionsTable)
 						.values({ provider, externalId: op.externalId, ...values, observedAt })
 						.returning("id"),
 				)
+				if (abandoned) {
+					yield* abandonedEvent
+					return outcome.created(row.id)
+				}
 				yield* event("subscription.started", `Started ${planLabel(op.planName)}`, values.startedAt, {
 					mrrMinor,
 					status: op.status,
@@ -1443,6 +1454,21 @@ const make = Effect.gen(function* () {
 					} as never)
 					.where(($) => [$.id.eq(sub.id)]),
 			)
+			if (abandoned) {
+				// Recorded as started and canceled before Hazel could tell: it never started.
+				if (sub.cancellationReason !== CHECKOUT_ABANDONED) {
+					for (const type of ["subscription.started", "subscription.canceled"]) {
+						yield* db.run(
+							SQLite.deleteFrom(schema.customerEventsTable).where(($) => [
+								$.provider.eq(provider),
+								$.externalId.eq(`ingest:${type}:${provider}:${op.externalId}`),
+							]),
+						)
+					}
+					yield* abandonedEvent
+				}
+				return outcome.updated(sub.id)
+			}
 			if (sub.planName !== op.planName || sub.mrrMinor !== mrrMinor) {
 				if (op.status !== "canceled" && sub.status !== "trialing") {
 					yield* event(
