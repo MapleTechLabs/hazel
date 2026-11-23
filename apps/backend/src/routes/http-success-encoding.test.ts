@@ -65,6 +65,8 @@ describe("HTTP success response encoding", () => {
 					get: (target) => ({
 						invoke: () => Effect.die("unused"),
 						call: () => Effect.die("unused"),
+						bookmark: () => Effect.die("unused"),
+						reset: () => Effect.die("unused"),
 						applyEffect: (request) =>
 							Effect.sync(() => {
 								applied.push(`${target.kind}:${target.id} ${request.kind}`)

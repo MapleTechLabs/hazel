@@ -571,6 +571,7 @@ export const customerCommand = Command.make("customer", installFlags, (flags) =>
 			instanceAdminEmails: instanceAdminEmails || undefined,
 			orgCreation,
 			broker,
+			operatorToken: prior.OPERATOR_TOKEN || secretsService.generatePassword(48),
 		}
 		const content = renderCustomerEnv(input, secrets, prior)
 		yield* Effect.promise(() => Bun.write(path, content))

@@ -360,6 +360,14 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			id: "0013_channel_customers_company",
 			statements: ['ALTER TABLE "channel_customers" ADD COLUMN "company" text'],
 		},
+		{
+			id: "0014_organization_exports",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "organization_exports" (\n\t"id" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || \'-\' || lower(hex(randomblob(2))) || \'-4\' || substr(lower(hex(randomblob(2))), 2) || \'-\' || substr(\'89ab\', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || \'-\' || lower(hex(randomblob(6)))),\n\t"organizationId" text NOT NULL,\n\t"requestedBy" text NOT NULL,\n\t"status" text NOT NULL DEFAULT \'pending\',\n\t"cursor" text,\n\t"channelCount" integer NOT NULL DEFAULT 0,\n\t"channelsDone" integer NOT NULL DEFAULT 0,\n\t"partCount" integer NOT NULL DEFAULT 0,\n\t"rowCount" integer NOT NULL DEFAULT 0,\n\t"byteSize" integer NOT NULL DEFAULT 0,\n\t"error" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"completedAt" text,\n\t"expiresAt" text\n)',
+				'CREATE INDEX IF NOT EXISTS "organization_exports_organization_id_idx" ON "organization_exports" ("organizationId")',
+				'CREATE INDEX IF NOT EXISTS "organization_exports_status_idx" ON "organization_exports" ("status")',
+			],
+		},
 	],
 	channel: [
 		{

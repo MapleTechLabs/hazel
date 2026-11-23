@@ -24,6 +24,7 @@ import {
 	DiscordGatewayObjectLive,
 } from "./worker/discord-gateway-object"
 import { HTML_RENDER_PENDING_MAX_AGE_SECONDS, HTML_RENDER_PENDING_PREFIX } from "./services/html-renders"
+import { ORG_EXPORT_PREFIX, ORG_EXPORT_RETENTION_DAYS } from "./services/org-exports"
 import { takeIsolateCold } from "./worker/cold-start"
 import { UPLOADS_S3_BINDING } from "./services/object-storage"
 import { apiEnv } from "./worker/env"
@@ -33,7 +34,13 @@ import { ChannelObject, ChannelObjectLive } from "./worker/objects/channel-objec
 import { CustomersObject, CustomersObjectLive } from "./worker/objects/customers-object"
 import { OrgObject, OrgObjectLive } from "./worker/objects/org-object"
 import { UserObject, UserObjectLive } from "./worker/objects/user-object"
-import { CACHE_BINDING, DIRECTORY_DB_BINDING, EMAIL_BINDING, HTML_RENDERS_BINDING } from "./worker/platform"
+import {
+	CACHE_BINDING,
+	DIRECTORY_DB_BINDING,
+	EMAIL_BINDING,
+	HTML_RENDERS_BINDING,
+	ORG_EXPORTS_BINDING,
+} from "./worker/platform"
 import { RateLimiterObject, RateLimiterObjectLive } from "./worker/rate-limiter-object"
 import { MESSAGE_RATE_LIMIT } from "./services/rate-limit-helpers"
 
@@ -65,6 +72,29 @@ export const HtmlRendersBucket = Cloudflare.R2.Bucket(
 				prefix: HTML_RENDER_PENDING_PREFIX,
 				deleteObjectsTransition: {
 					condition: { type: "Age" as const, maxAge: HTML_RENDER_PENDING_MAX_AGE_SECONDS },
+				},
+			},
+		],
+	})),
+)
+
+/**
+ * Organization data exports (`services/org-exports.ts`). Private, with no public domain: a file is
+ * only served by the api's signed `GET /exports/...`. Files go a day after their download window.
+ */
+export const OrgExportsBucket = Cloudflare.R2.Bucket(
+	"org-exports",
+	stageProps("org-exports", (name) => ({
+		name,
+		lifecycleRules: [
+			{
+				id: "expire-exports",
+				prefix: ORG_EXPORT_PREFIX,
+				deleteObjectsTransition: {
+					condition: {
+						type: "Age" as const,
+						maxAge: (ORG_EXPORT_RETENTION_DAYS + 1) * 24 * 60 * 60,
+					},
 				},
 			},
 		],
@@ -104,6 +134,7 @@ const props = Effect.gen(function* () {
 	const stack = yield* HazelStack
 	const cache = yield* ApiCache
 	const htmlRenders = yield* HtmlRendersBucket
+	const orgExports = yield* OrgExportsBucket
 	const email = yield* Cloudflare.Email.SendEmail(EMAIL_BINDING)
 	const uploadsBinding: UploadsBinding = {}
 	if (stack.stage.kind === "customer") {
@@ -125,6 +156,7 @@ const props = Effect.gen(function* () {
 			[DIRECTORY_DB_BINDING]: stack.directoryDb,
 			[CACHE_BINDING]: cache,
 			[HTML_RENDERS_BINDING]: htmlRenders,
+			[ORG_EXPORTS_BINDING]: orgExports,
 			[EMAIL_BINDING]: email,
 			...uploadsBinding,
 			...(yield* apiEnv(stack)),

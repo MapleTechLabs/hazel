@@ -16,9 +16,11 @@ import { workerObjectStubs } from "./objects/stubs"
 import { makeSyncRoute } from "./sync-route"
 import { makeLiveRoute } from "./live-route"
 import { HtmlRenderRoute } from "./html-render-route"
+import { OrgExportRoute } from "./org-export-route"
 import { AgentOAuthRoutes } from "../routes/agent-oauth"
 import { McpRoute } from "../routes/mcp"
 import { OAuthBrokerRoutes } from "../routes/oauth-broker.http"
+import { OperatorRoutes } from "../routes/operator.http"
 import { AgentAccess } from "../services/agent-access"
 import { workerLiveObjectStubs } from "./live/message-live-object"
 import type { BotGatewayNamespace } from "../services/bot-gateway-transport"
@@ -54,6 +56,8 @@ export const buildApp = (
 					makeSyncRoute(env),
 					makeLiveRoute(env),
 					HtmlRenderRoute,
+					OrgExportRoute,
+					OperatorRoutes,
 					AgentOAuthRoutes,
 					McpRoute,
 					OAuthBrokerRoutes,

@@ -17,6 +17,7 @@ import { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import { Directory } from "../../services/directory"
 import { HtmlRenderStore, HtmlRenders } from "../../services/html-renders"
 import { InviteMailer } from "../../services/invite-mailer"
+import { OrgExportStore } from "../../services/org-exports"
 import { ThreadNamer, type ThreadNamingContext } from "../../services/thread-namer"
 import type { ChatSyncInbound } from "../../services/chat-sync/chat-sync-inbound"
 import { type ChatSyncCall, makeRecordingChatSyncProviders } from "../../services/chat-sync/testing"
@@ -101,6 +102,8 @@ export interface TestObjects {
 	readonly setThreadName: (name: string) => void
 	/** The HTML render pages (`HtmlRenderStore`), by key. */
 	readonly bucket: Map<string, string>
+	/** The organization export files (`OrgExportStore`), by key. */
+	readonly exportFiles: Map<string, string>
 	/** What the objects sent APNs, in order. */
 	readonly pushes: Array<ApnsNotification>
 	/** APNs's answer to the next pushes (default 200). */
@@ -177,6 +180,9 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 							Effect.flatMap(get(target), (object) => object.call(structuredClone(request))),
 						),
 					).pipe(Effect.map((response) => structuredClone(response))),
+				// Point-in-time recovery is workerd's (`ctx.storage`): the fake storage has none.
+				bookmark: () => Effect.die("Point-in-time recovery is not available on test objects"),
+				reset: () => Effect.die("Test objects cannot be reset"),
 				applyEffect: (request) =>
 					Effect.suspend(() => {
 						if (unreachable.has(formatTarget(target))) {
@@ -233,6 +239,7 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(TEST_CONFIG))),
 			Layer.orDie,
 		)
+		const exportFiles = new Map<string, string>()
 		const pushes: Array<ApnsNotification> = []
 		let apnsResult: ApnsResult = { status: 200, reason: null }
 		const apns = Layer.succeed(ApnsClient, {
@@ -256,6 +263,7 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 		const appPlatform = Layer.mergeAll(
 			Persistence.layerMemory,
 			htmlRenderStore,
+			OrgExportStore.layerMemory(exportFiles),
 			// Logs links (IS_DEV) instead of sending.
 			InviteMailer.layerLog.pipe(
 				Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(TEST_CONFIG))),
@@ -345,6 +353,7 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			get,
 			reactivate,
 			bucket,
+			exportFiles,
 			pushes,
 			setApnsResult: (result) => {
 				apnsResult = result

@@ -133,5 +133,7 @@ export const apiEnv = (stack: HazelStackContext) => {
 		optionalSecret("APNS_KEY_ID"),
 		optionalSecret("APNS_TEAM_ID"),
 		optionalSecret("APNS_PRIVATE_KEY"),
+		// Operator point-in-time recovery (routes/operator.http.ts); unset: the endpoints answer 404.
+		optionalSecret("OPERATOR_TOKEN"),
 	)
 }
