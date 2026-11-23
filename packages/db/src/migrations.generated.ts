@@ -721,5 +721,11 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "customer_enrichments_next_attempt_idx" ON "customer_enrichments" ("nextAttemptAt")',
 			],
 		},
+		{
+			id: "0026_customer_contacts_email_lower",
+			statements: [
+				'CREATE INDEX IF NOT EXISTS "customer_contacts_email_lower_idx" ON "customer_contacts" (lower("email"))',
+			],
+		},
 	],
 }
