@@ -4,6 +4,7 @@ import {
 	type IntegrationConfig,
 	type KeyValueListField,
 	type NumberField,
+	type SettingsField,
 	type StringListField,
 } from "@hazel/customer-integrations"
 import { Option } from "effect"
@@ -25,6 +26,7 @@ import {
 	isSettingsDirty,
 	isSettingsValid,
 	type Model,
+	settingsFieldsOf,
 	settingsOf,
 	settingsProblemOf,
 } from "./model"
@@ -34,7 +36,7 @@ import { heading } from "../../../../ui/heading"
 
 /**
  * A source's provider settings: the config fields of its presentation, then its `settings` fields
- * (a string list, a key-value list, a number). Saved with `customers.connection.update({ config })`.
+ * (string lists, key-value lists, numbers), in the order declared. Saved with `customers.connection.update({ config })`.
  * A metered source's units are saved one by one (`customers.metric.setUnit`).
  */
 
@@ -129,13 +131,13 @@ const stringList = (
 	isDisabled: boolean,
 ): Html => {
 	const values = configList(config, field.key)
-	const typed = model.activityEventInput.trim()
+	const typed = (model.settingsListInputs[field.key] ?? "").trim()
 	return block(h, field.title, field.description, [
 		values.length === 0
 			? h.p([h.Class("text-muted-fg text-sm")], [field.emptyText])
 			: h.ul(
 					[h.AriaLabel(field.title), h.Class("flex flex-wrap gap-1.5")],
-					values.map((event) =>
+					values.map((item) =>
 						h.li(
 							[
 								h.Class(
@@ -143,18 +145,23 @@ const stringList = (
 								),
 							],
 							[
-								event,
+								item,
 								...(isDisabled
 									? []
 									: [
 											h.button(
 												[
 													h.Type("button"),
-													h.AriaLabel(`Remove ${event}`),
+													h.AriaLabel(`Remove ${item}`),
 													h.Class(
 														"rounded p-0.5 text-muted-fg hover:bg-bg hover:text-fg",
 													),
-													h.OnClick(Message.RemovedActivityEvent({ event })),
+													h.OnClick(
+														Message.RemovedSettingsListItem({
+															key: field.key,
+															item,
+														}),
+													),
 												],
 												[IconClose(h, { className: "size-3" })],
 											),
@@ -167,15 +174,20 @@ const stringList = (
 			? []
 			: [
 					h.form(
-						[h.Class("flex items-center gap-2"), h.OnSubmit(Message.AddedActivityEvent())],
+						[
+							h.Class("flex items-center gap-2"),
+							h.OnSubmit(Message.AddedSettingsListItem({ key: field.key })),
+						],
 						[
 							input(h, {
 								placeholder: field.placeholder,
 								className: "font-mono text-sm",
 								attributes: [
 									h.AriaLabel(field.addLabel),
-									h.Value(model.activityEventInput),
-									h.OnInput((value) => Message.ChangedActivityEventInput({ value })),
+									h.Value(model.settingsListInputs[field.key] ?? ""),
+									h.OnInput((value) =>
+										Message.ChangedSettingsListInput({ key: field.key, value }),
+									),
 								],
 							}),
 							button(
@@ -229,9 +241,10 @@ const keyValueList = (
 											h.AriaLabel(`${column.label} of ${field.itemNoun} ${index + 1}`),
 											h.Value(cellOf(row, column.key)),
 											h.OnInput((value) =>
-												Message.ChangedMetricMapping({
+												Message.ChangedSettingsCell({
+													key: field.key,
 													index,
-													field: column.key,
+													column: column.key,
 													value,
 												}),
 											),
@@ -245,7 +258,10 @@ const keyValueList = (
 											{
 												intent: "plain",
 												size: "sq-sm",
-												onPress: Message.RemovedMetricMapping({ index }),
+												onPress: Message.RemovedSettingsRow({
+													key: field.key,
+													index,
+												}),
 												attributes: [
 													h.AriaLabel(`Remove ${field.itemNoun} ${index + 1}`),
 												],
@@ -265,7 +281,7 @@ const keyValueList = (
 							intent: "outline",
 							size: "sm",
 							className: "self-start",
-							onPress: Message.AddedMetricMapping(),
+							onPress: Message.AddedSettingsRow({ key: field.key }),
 						},
 						[IconPlus(h, { attributes: { "data-slot": "icon" } }), `Add ${field.itemNoun}`],
 					),
@@ -289,11 +305,25 @@ const numberChoice = (h: H, config: IntegrationConfig, field: NumberField, isDis
 						label: option.label,
 					})),
 					selected: String(shown),
-					onSelect: (key: string) => Message.ClickedLookback({ days: Number(key) }),
+					onSelect: (key: string) =>
+						Message.ClickedSettingsNumber({ key: field.key, value: Number(key) }),
 					className: "self-start",
 				}),
 	])
 }
+
+const settingsFieldView = (
+	h: H,
+	model: Model,
+	config: IntegrationConfig,
+	field: SettingsField,
+	isDisabled: boolean,
+): Html =>
+	"columns" in field
+		? keyValueList(h, config, field, isDisabled)
+		: "options" in field
+			? numberChoice(h, config, field, isDisabled)
+			: stringList(h, model, config, field, isDisabled)
 
 const unitRow = (h: H, model: Model, metric: UnitMetricRow, isDisabled: boolean): ReadonlyArray<Html> => {
 	const toSubmit = Message.SubmittedUnit({ metricKey: metric.key })
@@ -370,15 +400,7 @@ export const settingsCard = (h: H, model: Model, connection: ConnectionRow, isAd
 						),
 					),
 				]),
-		...(descriptor.settings?.stringList === undefined
-			? []
-			: [stringList(h, model, config, descriptor.settings.stringList, isDisabled)]),
-		...(descriptor.settings?.keyValueList === undefined
-			? []
-			: [keyValueList(h, config, descriptor.settings.keyValueList, isDisabled)]),
-		...(descriptor.settings?.number === undefined
-			? []
-			: [numberChoice(h, config, descriptor.settings.number, isDisabled)]),
+		...settingsFieldsOf(config).map((field) => settingsFieldView(h, model, config, field, isDisabled)),
 		...(isAdmin && isDirty
 			? [
 					h.div(

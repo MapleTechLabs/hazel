@@ -191,9 +191,14 @@ const stateModel = (state: State): Model => {
 			return steps(
 				model,
 				[
-					Message.AddedMetricMapping(),
-					Message.ChangedMetricMapping({ index: 3, field: "event", value: "ingest_batch" }),
-					Message.ClickedLookback({ days: 180 }),
+					Message.AddedSettingsRow({ key: "metricMappings" }),
+					Message.ChangedSettingsCell({
+						key: "metricMappings",
+						index: 3,
+						column: "event",
+						value: "ingest_batch",
+					}),
+					Message.ClickedSettingsNumber({ key: "lookbackDays", value: 180 }),
 				],
 				shared,
 			)

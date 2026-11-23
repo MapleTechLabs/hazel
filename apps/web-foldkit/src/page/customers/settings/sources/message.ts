@@ -90,17 +90,18 @@ export const Message = defineMessageUnion({
 	FailedDisconnect: { reason: DisconnectFailure },
 
 	// Provider settings (the `settings` fields of the integration's presentation)
-	ChangedActivityEventInput: { value: Schema.String },
-	AddedActivityEvent: {},
-	RemovedActivityEvent: { event: Schema.String },
-	AddedMetricMapping: {},
-	RemovedMetricMapping: { index: Schema.Int },
-	ChangedMetricMapping: {
+	ChangedSettingsListInput: { key: Schema.String, value: Schema.String },
+	AddedSettingsListItem: { key: Schema.String },
+	RemovedSettingsListItem: { key: Schema.String, item: Schema.String },
+	AddedSettingsRow: { key: Schema.String },
+	RemovedSettingsRow: { key: Schema.String, index: Schema.Int },
+	ChangedSettingsCell: {
+		key: Schema.String,
 		index: Schema.Int,
-		field: Schema.String,
+		column: Schema.String,
 		value: Schema.String,
 	},
-	ClickedLookback: { days: Schema.Int },
+	ClickedSettingsNumber: { key: Schema.String, value: Schema.Int },
 	PressedDiscardSettings: {},
 	PressedSaveSettings: {},
 	SucceededSaveSettings: {},

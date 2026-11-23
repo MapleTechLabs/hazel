@@ -51,8 +51,9 @@ defineIntegration({
 })
 ```
 
-`presentation.settings` declares settings beyond the connect form, at most one of each kind: a
-string list, a key-value list, a number. `presentation.suggested` marks the first-run starting point
+`presentation.settings` declares settings beyond the connect form: any number of string lists,
+key-value lists and numbers, shown in declaration order and keyed by each field's config `key`.
+`presentation.suggested` marks the first-run starting point
 (`"start"`) and the billing source to suggest (`"billing"`), one integration each.
 
 Capabilities are descriptive and combinable. An integration may hold any set of them, and no field

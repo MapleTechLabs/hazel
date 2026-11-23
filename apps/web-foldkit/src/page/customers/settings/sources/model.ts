@@ -1,4 +1,4 @@
-import { IntegrationConfig } from "@hazel/customer-integrations"
+import { IntegrationConfig, type SettingsField } from "@hazel/customer-integrations"
 import type { ConnectionConfig } from "@hazel/domain/customers"
 import * as Customers from "@hazel/domain/customers"
 import { CustomerConnectionId, UserId } from "@hazel/schema"
@@ -110,8 +110,8 @@ export const Model = Schema.Struct({
 	isDisconnecting: Schema.Boolean,
 	/** The detail's provider settings while edited; null shows the connection's own. */
 	settingsDraft: Schema.NullOr(IntegrationConfig),
-	/** The settings' string list: what is typed in its "add" field. */
-	activityEventInput: Schema.String,
+	/** What is typed in each settings string list's "add" field, by the field's config key. */
+	settingsListInputs: Schema.Record(Schema.String, Schema.String),
 	isSavingSettings: Schema.Boolean,
 	/** The sources' own metrics; null until the query answers. */
 	unitMetrics: Schema.NullOr(Schema.Array(UnitMetricRow)),
@@ -173,16 +173,20 @@ export const settingsOf = (model: Model, connection: ConnectionRow): Integration
 export const isSettingsDirty = (model: Model, connection: ConnectionRow): boolean =>
 	model.settingsDraft !== null && !isSameConfig(model.settingsDraft, connection.config)
 
-/** Why the settings can't be saved yet: a row of the key-value list has a blank cell. */
-export const settingsProblemOf = (config: IntegrationConfig): string | null => {
-	const field = providerOf(config._tag).settings?.keyValueList
-	return field === undefined ||
-		configRows(config, field.key).every((row) =>
-			field.columns.every((column) => cellOf(row, column.key).trim() !== ""),
+/** The `settings` fields the config's integration declares, in order. */
+export const settingsFieldsOf = (config: ConnectionConfig): ReadonlyArray<SettingsField> =>
+	Object.values(providerOf(config._tag).settings ?? {})
+
+/** Why the settings can't be saved yet: a row of a key-value list has a blank cell. */
+export const settingsProblemOf = (config: IntegrationConfig): string | null =>
+	settingsFieldsOf(config).flatMap((field) =>
+		"columns" in field &&
+		configRows(config, field.key).some((row) =>
+			field.columns.some((column) => cellOf(row, column.key).trim() === ""),
 		)
-		? null
-		: field.incompleteProblem
-}
+			? [field.incompleteProblem]
+			: [],
+	)[0] ?? null
 
 export const isSettingsValid = (config: IntegrationConfig): boolean => settingsProblemOf(config) === null
 

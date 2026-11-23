@@ -7,6 +7,7 @@ export type {
 	KeyValueListField,
 	NumberField,
 	ProviderPermission,
+	SettingsField,
 	SettingsFields,
 	StringListField,
 } from "./kit/presentation"

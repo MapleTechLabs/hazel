@@ -89,17 +89,23 @@ export interface NumberField<Key extends string = string> {
 	readonly unit: string
 }
 
-/** The settings beyond `configFields`, shown only on the source's settings card, in this order. */
-export interface SettingsFields<
+export type SettingsField<
 	ListKey extends string = string,
 	RowsKey extends string = string,
 	ColumnKey extends string = string,
 	NumberKey extends string = string,
-> {
-	readonly stringList?: StringListField<ListKey>
-	readonly keyValueList?: KeyValueListField<RowsKey, ColumnKey>
-	readonly number?: NumberField<NumberKey>
-}
+> = StringListField<ListKey> | KeyValueListField<RowsKey, ColumnKey> | NumberField<NumberKey>
+
+/**
+ * The settings beyond `configFields`, any number of each kind, shown only on the source's settings
+ * card in declaration order. A field is identified by its config `key`; the names here only label it.
+ */
+export type SettingsFields<
+	ListKey extends string = string,
+	RowsKey extends string = string,
+	ColumnKey extends string = string,
+	NumberKey extends string = string,
+> = Readonly<Record<string, SettingsField<ListKey, RowsKey, ColumnKey, NumberKey>>>
 
 /** One permission the API key needs, e.g. `Invoices: Read`. */
 export interface ProviderPermission {
