@@ -293,7 +293,7 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 												h.div(
 													[
 														h.Class(
-															"flex min-w-0 items-center gap-2 font-medium text-fg",
+															"flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-medium text-fg",
 														),
 													],
 													[

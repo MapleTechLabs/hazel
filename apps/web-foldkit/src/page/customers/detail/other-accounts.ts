@@ -94,8 +94,8 @@ export const otherAccounts = (
 	if (accounts.length === 0) return null
 	const label = `${row.contact.name ?? row.contact.email ?? "This user"} is also in ${accounts.length} other ${accounts.length === 1 ? "customer" : "customers"}`
 	const className = "h-6 w-fit max-w-full justify-start gap-1.5 px-1.5 text-xs"
-	// Beside the name, and the first to give up width so the name stays readable.
-	const besideName = (control: Html) => h.div([h.Class("min-w-0 shrink-2")], [control])
+	// Beside the name; a row too narrow for both wraps it underneath, so the name stays readable.
+	const besideName = (control: Html) => h.div([h.Class("min-w-0 max-w-full")], [control])
 	if (model.otherAccountsContactId !== row.contact.id)
 		return besideName(
 			button(
