@@ -13,7 +13,7 @@ product, and what makes this work is that Maple stamps its product events with _
 the accounts and contacts Clerk already created. Generalizing it (other identity keys, other
 warehouses) is deliberately left for later.
 
-Implementation: `apps/backend/src/worker/objects/customers/maple/` — `adapter.ts` (connect, pull),
+Implementation: `packages/customer-integrations/src/maple/` — `adapter.ts` (connect, pull),
 `http.ts` (one `run_sql` call), `pull.ts` (the day-by-day walk), `map.ts` (rows → `IngestOp`s),
 `wire.ts` (the transport and the row shapes). Contracts: `docs/customers/tech-design.md` §3 and §5.
 

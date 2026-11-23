@@ -163,8 +163,8 @@ rows, `evidence`, `rules`, `health`, `views`, `connections`, `ingest`, `analytic
 
 ## 3. Ingest API (`apps/backend/src/worker/objects/customers/ingest.ts`)
 
-Integrations never write tables. An adapter (`customers/providers.ts`) turns a webhook or a pull
-page into `IngestOp`s (`packages/domain/src/customers/ingest.ts`); `CustomerIngest` applies them
+Integrations never write tables. An adapter (`packages/customer-integrations/src/<id>/`, listed in
+its `registry.ts`; see `integrations.md`) turns a webhook or a pull page into `IngestOp`s (`packages/domain/src/customers/ingest.ts`); `CustomerIngest` applies them
 inside the `CustomersObject`.
 
 ```ts
@@ -472,12 +472,13 @@ Needs attention coverage: they evaluate every non-churned account in the rule's 
   rate limits aside), fail the run with a client-safe message, no sweep applied; the next scheduled
   pull starts a new run from the start.
 - **Sync now** = a `manual` run scheduled immediately.
-- Adapter contract: `apps/backend/src/worker/objects/customers/providers.ts`
+- Adapter contract: `packages/customer-integrations/src/kit/contract.ts`
   (`validate`, which always returns the provider account id, `webhook`, `pull` (with `sweep` on a
   full listing's last page; `subscription` only from a listing of every status, and every sweep
   capped), `pullIntervalMs`; ops carry `observedAt`, billing sources' accounts
   `matchByDomain`; deliveries and records of another account than `credentials.externalAccountId`
-  are refused); provider PRs register theirs in `CustomerProviders.layer`.
+  are refused); a new integration registers in `packages/customer-integrations/src/registry.ts`, and
+  `CustomerProviders` (`customers/providers.ts`) serves every registered adapter.
 - A webhook to an org with a live `org_index` row wakes its customers object even when Customers
   was never opened there (no cheap directory flag says so); the org id is unguessable and the
   object refuses the unknown connection.
@@ -577,7 +578,9 @@ deterministic generator (seeded PRNG) produces ~120 accounts, ~1.5k contacts, 12
 subscriptions with upgrades/downgrades/churn, invoices incl. failures, Autumn-like metered metrics,
 events — as `IngestOp`s with fake `clerk`/`stripe`/`autumn`/`maple` connections (status `active`,
 no secrets) — applied through `CustomerIngest.apply`, then a history rebuild and compute (baseline
-off, so the queue is populated). A "Load demo data" button on the Data Sources page in dev.
+off, so the queue is populated). A "Load demo data" button on the Data Sources page in dev. The
+generator (`customers/seed.ts`) writes each part of the book for the integration playing that role;
+the tool's own id shapes and links are in `packages/customer-integrations/src/<id>/demo.ts`.
 
 ## 7. Work breakdown (4 agents, disjoint files)
 
