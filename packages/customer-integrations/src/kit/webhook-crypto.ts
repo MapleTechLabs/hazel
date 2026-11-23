@@ -1,6 +1,6 @@
 /**
- * What every webhook signature scheme here needs (Svix for Clerk and Autumn, `./svix.ts`; Stripe's
- * own, `./stripe/signature.ts`): header lookup, an HMAC-SHA256 and a constant-time comparison.
+ * What every webhook signature scheme needs (`./svix.ts`, or an integration's own): header lookup,
+ * an HMAC-SHA256 and a constant-time comparison.
  * WebCrypto only: `crypto.subtle` is present on workerd, Node and vitest.
  */
 import { Effect } from "effect"

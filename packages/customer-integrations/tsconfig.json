@@ -5,6 +5,7 @@
 		"target": "ES2022",
 		"module": "ESNext",
 		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"types": ["bun"],
 
 		/* Bundler mode */
 		"moduleResolution": "bundler",

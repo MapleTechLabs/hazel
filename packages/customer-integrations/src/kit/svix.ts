@@ -1,6 +1,6 @@
 /**
  * Svix (Standard Webhooks) signature verification, used by every Customers data source that
- * delivers through Svix — Clerk today, Autumn next.
+ * delivers through Svix.
  *
  * Scheme: `svix-signature` carries space-separated `v1,<base64>` entries (one per active secret
  * during rotation). Each is HMAC-SHA256 over `${svix-id}.${svix-timestamp}.${rawBody}`, keyed with

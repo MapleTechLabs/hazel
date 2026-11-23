@@ -1,7 +1,6 @@
 /**
- * The failures a provider adapter can answer with. They live apart from `./providers.ts` so that an
- * adapter's own modules (`./clerk/*`) can raise them without importing the registry that imports
- * the adapters — `providers.ts` re-exports both names, so every existing import keeps working.
+ * The failures a provider adapter can answer with. They live in the kit so an integration's own
+ * modules (`../<id>/*`) can raise them without importing the registry that imports the integrations.
  */
 import { Schema } from "effect"
 
@@ -30,8 +29,8 @@ export class CustomerProviderError extends Schema.TaggedError<
 }) {}
 
 /**
- * A webhook delivery whose signature or payload does not check out: answered 400. Svix (Clerk,
- * Autumn) retries every non-2xx on its schedule until it gives up, so refuse only what a retry
+ * A webhook delivery whose signature or payload does not check out: answered 400. A delivery service
+ * such as Svix retries every non-2xx on its schedule until it gives up, so refuse only what a retry
  * cannot fix and acknowledge the rest.
  */
 export class CustomerWebhookRejectedError extends Schema.TaggedError<

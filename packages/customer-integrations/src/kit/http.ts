@@ -1,7 +1,6 @@
 /**
- * One authenticated request against a provider's REST API — a GET (Clerk, Stripe) or, for an
- * RPC-shaped API, a POST with a JSON body (Autumn) — decoded, with the provider's failures mapped
- * onto `CustomerProviderError`:
+ * One authenticated request against a provider's REST API — a GET or, for an RPC-shaped API, a POST
+ * with a JSON body — decoded, with the provider's failures mapped onto `CustomerProviderError`:
  *
  * - 401/403 → `auth`: the connection goes to `error` and scheduled pulls stop until the key changes.
  *   The message carries the provider's own explanation (`detailOf`, truncated).
@@ -50,7 +49,7 @@ export type ProviderQuery = ReadonlyArray<readonly [string, string]>
 
 /**
  * The verbs these integrations use: a REST GET, an RPC-style POST whose body is the query, or a
- * PATCH (the one write Hazel makes: Clerk feature flags).
+ * PATCH (the one write Hazel makes: feature flags).
  */
 export type ProviderMethod = "GET" | "POST" | "PATCH"
 
@@ -64,12 +63,12 @@ interface ProviderCall<Path extends string> {
 }
 
 interface ProviderApi<Path extends string, Refusal> {
-	/** As messages and spans name it, e.g. `Stripe`. */
+	/** As messages and spans name it: the tool's display name. */
 	readonly name: string
 	readonly baseUrl: string
 	/** The path's route template, for messages, logs and spans: never an object id. */
 	readonly routeOf: (path: Path) => string
-	/** Sent with every request besides the key (Stripe's version pin); overrides `accept`. */
+	/** Sent with every request besides the key (an API version pin); overrides `accept`. */
 	readonly headers?: Readonly<Record<string, string>>
 	/** The provider's error body; one that does not decode explains nothing. */
 	readonly refusal: Schema.Decoder<Refusal>
@@ -108,7 +107,7 @@ const retryAfterMsOf = (response: HttpClientResponse.HttpClientResponse): number
 
 /**
  * The caller holds the key; the result is curried over the client so an adapter binds it once.
- * `makeProviderGet` (Clerk, Stripe) and `makeProviderPost` (Autumn) are the two shapes adapters use.
+ * `makeProviderGet` and `makeProviderPost` are the two shapes adapters read with.
  */
 const makeProviderCall = <Path extends string, Refusal>(
 	api: ProviderApi<Path, Refusal>,
@@ -224,8 +223,8 @@ const makeProviderCall = <Path extends string, Refusal>(
 		).pipe(
 			HttpClientRequest.bearerToken(apiKey),
 			HttpClientRequest.acceptJson,
-			// Last, so a provider's own headers win: Maple's MCP endpoint answers 406 unless `accept`
-			// offers `text/event-stream` beside JSON.
+			// Last, so a provider's own headers win: an MCP endpoint answers 406 unless `accept` offers
+			// `text/event-stream` beside JSON.
 			HttpClientRequest.setHeaders(api.headers ?? {}),
 		)
 		const response = yield* client.execute(request).pipe(
@@ -286,7 +285,7 @@ const makeProviderCall = <Path extends string, Refusal>(
 		}
 	}
 
-	// One span name per verb, named at creation: `Autumn.post`, `Stripe.get`.
+	// One span name per verb, named at creation: `<name>.get`, `<name>.post`.
 	const withRetry = {
 		GET: Effect.fn(`${api.name}.get`)(attempt),
 		POST: Effect.fn(`${api.name}.post`)(attempt),
@@ -305,7 +304,7 @@ const makeProviderCall = <Path extends string, Refusal>(
 		)
 }
 
-/** A REST read: `get(path, query, schema)` (Clerk, Stripe). */
+/** A REST read: `get(path, query, schema)`. */
 export const makeProviderGet = <Path extends string, Refusal>(
 	api: ProviderApi<Path, Refusal>,
 	client: HttpClient.HttpClient,
@@ -317,7 +316,7 @@ export const makeProviderGet = <Path extends string, Refusal>(
 		call({ method: "GET", path, query }, schema)
 }
 
-/** An RPC-shaped read: `post(path, body, schema)` (Autumn). */
+/** An RPC-shaped read: `post(path, body, schema)`. */
 export const makeProviderPost = <Path extends string, Refusal>(
 	api: ProviderApi<Path, Refusal>,
 	client: HttpClient.HttpClient,
@@ -329,7 +328,7 @@ export const makeProviderPost = <Path extends string, Refusal>(
 		call({ method: "POST", path, body }, schema)
 }
 
-/** A REST write: `patch(path, body, schema)` (Clerk's organization metadata). */
+/** A REST write: `patch(path, body, schema)`. */
 export const makeProviderPatch = <Path extends string, Refusal>(
 	api: ProviderApi<Path, Refusal>,
 	client: HttpClient.HttpClient,
