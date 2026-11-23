@@ -14,7 +14,7 @@ const opsOf = <T extends IngestOp["_tag"]>(tag: T) =>
 
 const dayAgo = (ago: number) => new Date(Date.parse("2026-11-10") - ago * DAY_MS).toISOString().slice(0, 10)
 const orgsOf = (archetype: DemoArchetype) =>
-	seed.accounts.filter((account) => account.archetype === archetype).map((account) => account.clerkOrgId)
+	seed.accounts.filter((account) => account.archetype === archetype).map((account) => account.sharedId)
 const activityOf = (org: string) =>
 	opsOf("activity")
 		.map(({ op }) => op)

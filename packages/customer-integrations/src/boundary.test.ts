@@ -38,11 +38,6 @@ const ALLOWED: ReadonlyArray<{ readonly file: string; readonly text: string; rea
 		text: '"Maple",',
 		reason: "A word in the generated company names; dropping it changes the seeded data.",
 	},
-	{
-		file: SEED,
-		text: "clerkOrgId",
-		reason: "`DemoAccount`'s field: `seed.test.ts` reads it and is the unchanged proof of the seed.",
-	},
 ]
 
 /** Tests and their support keep naming tools: unchanged, they prove the behaviour stayed equal. */

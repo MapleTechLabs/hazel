@@ -68,7 +68,7 @@ export type DemoArchetype =
 	| "lead"
 
 export interface DemoAccount {
-	readonly clerkOrgId: string
+	readonly sharedId: string
 	readonly name: string
 	readonly archetype: DemoArchetype
 }
@@ -1360,7 +1360,7 @@ export const generateDemoSeed = (options: DemoSeedOptions): DemoSeed => {
 			},
 		],
 		accounts: accounts.map(({ sharedId, name, archetype }) => ({
-			clerkOrgId: sharedId,
+			sharedId,
 			name,
 			archetype,
 		})),
