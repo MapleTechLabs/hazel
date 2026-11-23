@@ -20,7 +20,7 @@ import { badge } from "../../../ui/badge"
 import { buttonClassName, button } from "../../../ui/button"
 import { Message } from "./message"
 import { type Model, paymentIssue } from "./model"
-import { card, type Context, icon, pageFooter } from "./parts"
+import { card, type Context, copyButton, icon, pageFooter } from "./parts"
 
 /** The billing tab: a payment issue, the subscriptions, MRR history and the invoices. */
 
@@ -180,7 +180,16 @@ const subscriptionCard = (
 									h.span([h.Class("font-normal text-muted-fg text-xs")], [" MRR"]),
 								],
 							),
-							h.span([h.Class("font-mono text-muted-fg text-xs")], [subscription.externalId]),
+							h.div(
+								[h.Class("flex items-center gap-1")],
+								[
+									h.span(
+										[h.Class("font-mono text-muted-fg text-xs")],
+										[subscription.externalId],
+									),
+									copyButton(h, subscription.externalId, "Subscription ID"),
+								],
+							),
 						],
 					),
 				],
