@@ -3,6 +3,7 @@
  * `docs/self-hosting.md#brokered-integrations`): starts a connection at the broker, opens what it
  * hands back, asks it for fresh tokens and checks the webhooks it relays.
  */
+import type { OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import { FetchHttpClient, HttpBody, HttpClient } from "effect/http"
 import { BROKER_HEADERS, BrokeredTokens, ConnectData } from "./protocol"
@@ -27,8 +28,8 @@ export const brokerAuthorizationUrl = async (
 	client: BrokerClientConfig,
 	provider: string,
 	state: {
-		readonly organizationId: string
-		readonly userId: string
+		readonly organizationId: OrganizationId
+		readonly userId: UserId
 		readonly level: "organization" | "user"
 		readonly returnTo: string
 	},

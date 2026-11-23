@@ -1,4 +1,5 @@
 /** The OAuth broker's cryptography: what opens, and every way a payload or state is refused. */
+import { OrganizationId, UserId } from "@hazel/schema"
 import { describe, expect, it } from "vitest"
 import {
 	generateBrokerSigningKey,
@@ -122,12 +123,15 @@ describe("sealed payloads", () => {
 	})
 })
 
+const ORG_ID = OrganizationId.make("0b9c4f0e-9b64-4c1f-a8a3-6f3f6b0f0a01")
+const USER_ID = UserId.make("5f0a5b7e-1c2d-4e3f-8a9b-0c1d2e3f4a5b")
+
 describe("the instance's signed state", () => {
 	const fields = {
 		instance: "acme",
 		provider: "slack",
-		organizationId: "org-1",
-		userId: "user-1",
+		organizationId: ORG_ID,
+		userId: USER_ID,
 		level: "organization" as const,
 		returnTo: "https://app.acme.test/acme/settings/integrations/slack",
 	}
@@ -138,7 +142,7 @@ describe("the instance's signed state", () => {
 			instanceId: "acme",
 			provider: "slack",
 		})
-		expect(verified).toMatchObject({ ok: true, value: { organizationId: "org-1", userId: "user-1" } })
+		expect(verified).toMatchObject({ ok: true, value: { organizationId: ORG_ID, userId: USER_ID } })
 	})
 
 	it("refuses another instance's key, a tampered body, another provider or a late one", async () => {

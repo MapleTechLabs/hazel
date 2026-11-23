@@ -15,6 +15,7 @@
  * is encrypt-then-sign: ECDH-ES (an ephemeral key) + HKDF + AES-GCM, with the instance id bound into
  * the key derivation and the AAD, then the whole compact string signed by the broker.
  */
+import { OrganizationId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 
 export type Jwk = JsonWebKey
@@ -311,8 +312,8 @@ const CustomerState = Schema.Struct({
 	provider: Schema.String,
 	exp: Schema.Finite,
 	nonce: Schema.String,
-	organizationId: Schema.String,
-	userId: Schema.String,
+	organizationId: OrganizationId,
+	userId: UserId,
 	level: ConnectionLevel,
 	returnTo: Schema.String,
 })

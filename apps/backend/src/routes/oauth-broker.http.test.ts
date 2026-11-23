@@ -4,6 +4,7 @@
  * directory and a fake org object.
  */
 import { GitHub, Slack } from "@hazel/integrations"
+import { OrganizationId, UserId } from "@hazel/schema"
 import { ConfigProvider, Effect, Exit, Layer, Option, Redacted, Schema } from "effect"
 import { HttpClient, HttpClientResponse, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -39,8 +40,8 @@ const acme = await generateInstanceKeys()
 const stateKey = generateStateKey()
 const FRONTEND = "https://app.acme.test"
 const ACME_API = "https://api.acme.test"
-const ORG = "0b9c4f0e-9b64-4c1f-a8a3-6f3f6b0f0a01"
-const USER = "5f0a5b7e-1c2d-4e3f-8a9b-0c1d2e3f4a5b"
+const ORG = OrganizationId.make("0b9c4f0e-9b64-4c1f-a8a3-6f3f6b0f0a01")
+const USER = UserId.make("5f0a5b7e-1c2d-4e3f-8a9b-0c1d2e3f4a5b")
 
 const brokerEnv = {
 	OAUTH_BROKER_ENABLED: "true",

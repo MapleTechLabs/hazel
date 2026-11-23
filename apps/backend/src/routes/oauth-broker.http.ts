@@ -27,7 +27,6 @@ import {
 } from "../services/oauth-broker/config"
 import { buildRedirectUrl, completeConnection, isFrontendUrl, type OAuthErrorCode } from "./integrations.http"
 import { applySlackDelivery, dispatchGitHubEvent } from "./webhooks.http"
-import type { OrganizationId, UserId } from "@hazel/schema"
 
 const notFound = () => HttpServerResponse.text("Not found", { status: 404 })
 
@@ -139,8 +138,8 @@ export const handleBrokerCallbackRoute = Effect.gen(function* () {
 
 	const outcome = yield* completeConnection({
 		provider: provider.value,
-		organizationId: state.organizationId as OrganizationId,
-		userId: state.userId as UserId,
+		organizationId: state.organizationId,
+		userId: state.userId,
 		level: state.level,
 		tokens: {
 			accessToken: data.tokens.accessToken,
