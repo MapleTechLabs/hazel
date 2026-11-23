@@ -38,18 +38,11 @@ import {
 } from "./format"
 import { healthBadge, healthDot, kindChip, severityChip, stageBadge } from "./ui/badges"
 import { connectCard } from "./ui/connect-card"
-import { dataTable, primaryCell } from "./ui/data-table"
+import { dataTable, primaryCell } from "../ui/data-table"
 import { allClearState } from "./ui/empty-states"
 import { evidenceViz } from "./ui/evidence"
-import {
-	addFilterButton,
-	filterBar,
-	filterChip,
-	rangePicker,
-	segmented,
-	sortTrigger,
-	viewTabs,
-} from "./ui/filter-bar"
+import { addFilterButton, filterBar, filterChip, rangePicker, sortTrigger, viewTabs } from "./ui/filter-bar"
+import { segmented } from "../ui/segmented-control"
 import { companyLogo, personLabel, sourceChip } from "./ui/identity"
 import { kpiTile } from "./ui/kpi-tile"
 import { queueAction, queueList, queueRow } from "./ui/queue-row"

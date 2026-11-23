@@ -12,7 +12,7 @@ import { companyLogo, personAvatar } from "../../../customers/ui/identity"
 import { queueAction, queueColumnHeader, queueList } from "../../../customers/ui/queue-row"
 import { kbd, shortcutBar, type Shortcut } from "../../../customers/ui/shortcuts"
 import { slaChip } from "../../../customers/ui/sla-chip"
-import { pageHeader } from "../../../customers/ui/surface"
+import { pageHeader } from "../../../ui/page-header"
 import {
 	IconChartBar,
 	IconCheck,

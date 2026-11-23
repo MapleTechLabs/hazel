@@ -42,14 +42,9 @@ import { definedLabel, deltaPill, type Delta } from "../../../customers/ui/kpi-t
 import { disclosure } from "../../../customers/ui/disclosure"
 import { formatResponse, formatWithin } from "../../../customers/support-report"
 import { rangePicker } from "../../../customers/ui/filter-bar"
-import {
-	moreLink,
-	pageHeader,
-	panel,
-	panelClass,
-	panelHeader,
-	titleClass,
-} from "../../../customers/ui/surface"
+import { moreLink, titleClass } from "../../../customers/ui/surface"
+import { cardClassName, panel, panelHeader } from "../../../ui/card"
+import { pageHeader } from "../../../ui/page-header"
 import { IconArrowPath } from "../../../icons"
 import { AppRoute, customerRoute, customersListRoute, hrefOf } from "../../../route"
 import { button } from "../../../ui/button"
@@ -87,7 +82,6 @@ interface Context {
 }
 
 const link = moreLink
-const card = panel
 
 const cardHeader = (h: HtmlBuilder<Message>, title: Html | string, description: string, aside?: Html): Html =>
 	panelHeader(h, { title, description, aside })
@@ -445,7 +439,7 @@ const attentionSection = (
 		)
 	}
 	return h.section(
-		[h.AriaLabel("Needs attention"), h.Class(twMerge(panelClass, "flex min-w-0 flex-col lg:col-span-2"))],
+		[h.AriaLabel("Needs attention"), h.Class(cardClassName("flex min-w-0 flex-col lg:col-span-2"))],
 		[
 			h.header(
 				[h.Class("flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 pt-4 pb-2")],
@@ -490,7 +484,7 @@ const ATTENTION_SHOWN = 6
 const dropsCard = (h: HtmlBuilder<Message>, result: Result, context: Context): Html => {
 	const drops = result.topMovers.decliners.slice(0, 4)
 	return h.section(
-		[h.AriaLabel("Biggest usage drops"), h.Class(twMerge(panelClass, "flex min-w-0 flex-col"))],
+		[h.AriaLabel("Biggest usage drops"), h.Class(cardClassName("flex min-w-0 flex-col"))],
 		[
 			h.header(
 				[h.Class("flex flex-col gap-0.5 px-4 pt-4 pb-2")],
@@ -573,7 +567,7 @@ const supportCard = (h: HtmlBuilder<Message>, model: Model, context: Context): H
 			],
 		)
 	return h.section(
-		[h.AriaLabel("Support"), h.Class(twMerge(panelClass, "flex min-w-0 flex-col gap-1 px-4 py-4"))],
+		[h.AriaLabel("Support"), h.Class(cardClassName("flex min-w-0 flex-col gap-1 px-4 py-4"))],
 		[
 			h.div(
 				[h.Class("flex items-center justify-between gap-4 pb-1")],
@@ -620,7 +614,7 @@ const supportCard = (h: HtmlBuilder<Message>, model: Model, context: Context): H
 
 const mrrCard = (h: HtmlBuilder<Message>, model: Model, result: Result): Html => {
 	if (!result.hasData.billing)
-		return card(h, "lg:col-span-2", [
+		return panel(h, { className: "lg:col-span-2" }, [
 			cardHeader(h, "MRR movement", `New, expansion, contraction and churn by ${result.bucket}`),
 			h.div(
 				[
@@ -656,7 +650,7 @@ const mrrCard = (h: HtmlBuilder<Message>, model: Model, result: Result): Html =>
 		])
 	const net = result.mrrMovements.reduce((sum, entry) => sum + entry.net, 0)
 	const first = result.mrrMovements[0]
-	return card(h, "lg:col-span-2", [
+	return panel(h, { className: "lg:col-span-2" }, [
 		cardHeader(
 			h,
 			"MRR movement",
@@ -716,7 +710,7 @@ const activeUsersCard = (h: HtmlBuilder<Message>, model: Model, result: Result):
 				),
 			],
 		)
-	return card(h, "", [
+	return panel(h, { className: "" }, [
 		cardHeader(h, "Active users", "Distinct contacts with a sign-in or product event"),
 		h.div(
 			[h.Class("grid grid-cols-3 gap-3 max-md:gap-2")],
@@ -742,7 +736,7 @@ const suggestionsCard = (h: HtmlBuilder<Message>, model: Model, context: Context
 	const shown = shownSuggestions(model.suggestions, model.channelOptions)
 	if (shown.length === 0) return h.empty
 	const more = shown.length - SUGGESTIONS_SHOWN
-	return card(h, "", [
+	return panel(h, { className: "" }, [
 		cardHeader(
 			h,
 			heading(h, { variant: "section", className: "flex items-baseline gap-2 whitespace-nowrap" }, [
@@ -868,7 +862,7 @@ const moversCard = (h: HtmlBuilder<Message>, result: Result, context: Context): 
 						),
 			],
 		)
-	return card(h, "", [
+	return panel(h, { className: "" }, [
 		cardHeader(
 			h,
 			"Top movers",
@@ -972,10 +966,11 @@ const lifecycleSection = (h: HtmlBuilder<Message>, model: Model, result: Result,
 				h.div(
 					[
 						h.Class(
-							twMerge(
-								panelClass,
-								"grid divide-border max-lg:divide-y lg:divide-x",
-								columns.length === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2",
+							cardClassName(
+								twMerge(
+									"grid divide-border max-lg:divide-y lg:divide-x",
+									columns.length === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2",
+								),
 							),
 						),
 					],
@@ -1169,7 +1164,7 @@ const setup = (h: HtmlBuilder<Message>, nowMs: number): Html =>
 const failure = (h: HtmlBuilder<Message>, reason: Parameters<typeof commonMessage>[0]): Html => {
 	const message = commonMessage(reason)
 	return h.div(
-		[h.Class(twMerge("flex flex-col items-center gap-3 px-6 py-14 text-center", panelClass))],
+		[h.Class(cardClassName("flex flex-col items-center gap-3 px-6 py-14 text-center"))],
 		[
 			h.span([h.Class(titleClass)], [message.title]),
 			...(message.description

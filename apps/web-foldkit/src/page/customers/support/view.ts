@@ -11,11 +11,14 @@ import { chartCard } from "../../../customers/charts/frame"
 import { formatCount, formatDay, formatDayLong } from "../../../customers/format"
 import { formatSlaDuration } from "../../../customers/sla"
 import { formatResponse, formatWithin, supportTiles } from "../../../customers/support-report"
-import { type Column, dataTable, primaryCell } from "../../../customers/ui/data-table"
-import { rangePicker, segmented } from "../../../customers/ui/filter-bar"
+import { type Column, dataTable, primaryCell } from "../../../ui/data-table"
+import { rangePicker } from "../../../customers/ui/filter-bar"
+import { segmented } from "../../../ui/segmented-control"
 import { companyLogo } from "../../../customers/ui/identity"
 import { kpiTile } from "../../../customers/ui/kpi-tile"
-import { pageHeader, panel, panelClass, panelHeader, titleClass } from "../../../customers/ui/surface"
+import { titleClass } from "../../../customers/ui/surface"
+import { cardClassName, panel, panelHeader } from "../../../ui/card"
+import { pageHeader } from "../../../ui/page-header"
 import { IconArrowPath, IconSupport } from "../../../icons"
 import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { button, buttonClassName } from "../../../ui/button"
@@ -285,7 +288,7 @@ const tableCard = (
 	h: HtmlBuilder<Message>,
 	options: Readonly<{ title: string; description: string; table: Html }>,
 ): Html =>
-	panel(h, "gap-3 px-0 pb-0 sm:px-0 sm:pb-0", [
+	panel(h, { className: "gap-3 px-0 pb-0 sm:px-0 sm:pb-0" }, [
 		panelHeader(h, {
 			title: options.title,
 			description: options.description,
@@ -299,7 +302,7 @@ const tableCard = (
 const failure = (h: HtmlBuilder<Message>, reason: Parameters<typeof commonMessage>[0]): Html => {
 	const message = commonMessage(reason)
 	return h.div(
-		[h.Class(twMerge("flex flex-col items-center gap-3 px-6 py-14 text-center", panelClass))],
+		[h.Class(cardClassName("flex flex-col items-center gap-3 px-6 py-14 text-center"))],
 		[
 			h.span([h.Class(titleClass)], ["Couldn't load the Support report"]),
 			h.span([h.Class("max-w-sm text-muted-fg text-sm")], [message.description ?? message.title]),
@@ -323,7 +326,7 @@ const empty = (h: HtmlBuilder<Message>, model: Model, orgSlug: string): Html =>
 			],
 			["Open SLA settings"],
 		),
-		className: panelClass,
+		className: cardClassName(),
 	})
 
 const content = (h: HtmlBuilder<Message>, model: Model, orgSlug: string): ReadonlyArray<Html> => {

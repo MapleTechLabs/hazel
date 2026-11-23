@@ -3,7 +3,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { formatCount, formatMoney, formatPct } from "../format"
 import { HEALTH_FILL, HEALTH_LABEL } from "../ui/badges"
-import { segmented } from "../ui/filter-bar"
+import { segmented } from "../../ui/segmented-control"
 import { chartCard } from "./frame"
 
 /**

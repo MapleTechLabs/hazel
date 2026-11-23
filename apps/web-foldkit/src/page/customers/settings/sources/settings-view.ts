@@ -10,7 +10,7 @@ import {
 import { Option } from "effect"
 import type { Html } from "foldkit/html"
 import { providerOf } from "../../../../customers/providers"
-import { segmented } from "../../../../customers/ui/filter-bar"
+import { segmented } from "../../../../ui/segmented-control"
 import { IconClose, IconPlus, IconTrash } from "../../../../icons"
 import { button } from "../../../../ui/button"
 import { input } from "../../../../ui/input"

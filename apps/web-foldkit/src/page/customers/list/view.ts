@@ -9,7 +9,7 @@ import { accountLabelOf, nestedIdsOf } from "../../../customers/groups"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { environmentBadge, healthBadge, severityGlyph } from "../../../customers/ui/badges"
 import { connectCard } from "../../../customers/ui/connect-card"
-import { dataTable } from "../../../customers/ui/data-table"
+import { dataTable } from "../../../ui/data-table"
 import {
 	addFilterButton,
 	filterBar,
@@ -26,7 +26,7 @@ import { lookPicker, viewGlyph } from "../../../customers/ui/view-look"
 import { isInSidebar, layoutOf } from "../../../customers/view-layout"
 import * as Customers from "@hazel/domain/customers"
 import { DragAndDrop } from "@foldkit/ui"
-import { freshness, pageHeader } from "../../../customers/ui/surface"
+import { freshness, pageHeader } from "../../../ui/page-header"
 import {
 	IconClose,
 	IconDots,

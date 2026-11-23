@@ -1,5 +1,5 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { type Crumb, pageHeader } from "../../../customers/ui/surface"
+import { type Crumb, pageHeader } from "../../../ui/page-header"
 import type { Shared } from "../../contract"
 
 /**

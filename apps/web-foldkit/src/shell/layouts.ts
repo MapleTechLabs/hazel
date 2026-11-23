@@ -7,6 +7,7 @@ import { emptyState } from "../ui/empty-state"
 import { progressBar, progressBarTrack } from "../ui/progress-bar"
 import { tabStrip, tabView } from "../ui/tab-strip"
 import type { ChannelSummary } from "./model"
+import { pageLayout } from "../ui/page-header"
 
 /** Route layouts as view helpers: each wraps the page body the way the legacy `layout.tsx` does. */
 
@@ -19,7 +20,7 @@ export const sectionLayout = <Message>(h: HtmlBuilder<Message>, page: Html): Htm
 
 /** `settings/integrations/layout.tsx` and `settings/chat-sync/layout.tsx` (inside `sectionLayout`). */
 export const contentColumnLayout = <Message>(h: HtmlBuilder<Message>, page: Html): Html =>
-	h.div([h.Class("flex flex-col gap-6 px-4 lg:px-8")], [page])
+	pageLayout(h, {}, [page])
 
 export const ChannelSettingsTab = ["overview", "integrations", "connect"] as const
 export type ChannelSettingsTab = (typeof ChannelSettingsTab)[number]

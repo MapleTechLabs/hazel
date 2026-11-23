@@ -14,7 +14,7 @@ import {
 } from "../../../customers/format"
 import { providerOf, safeSourceUrl, sourcesLabel } from "../../../customers/providers"
 import { stageBadge } from "../../../customers/ui/badges"
-import { dataTable } from "../../../customers/ui/data-table"
+import { dataTable } from "../../../ui/data-table"
 import { linkClass } from "../../../customers/ui/surface"
 import { IconCopy, IconWarning } from "../../../icons"
 import { badge } from "../../../ui/badge"

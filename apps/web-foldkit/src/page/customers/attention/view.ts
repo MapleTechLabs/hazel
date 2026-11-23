@@ -11,14 +11,14 @@ import {
 	filterBar,
 	filterChip,
 	searchBox,
-	segmented,
 	sortTrigger,
 	viewTabs,
 } from "../../../customers/ui/filter-bar"
+import { segmented } from "../../../ui/segmented-control"
 import { isMuteKey, MUTE_LABEL, snoozeMenuContent } from "../../../customers/ui/menus"
 import { queueAction, queueColumnHeader, type QueueColumn, queueList } from "../../../customers/ui/queue-row"
 import { kbd, shortcutBar, type Shortcut } from "../../../customers/ui/shortcuts"
-import { freshness, pageHeader } from "../../../customers/ui/surface"
+import { freshness, pageHeader } from "../../../ui/page-header"
 import { IconArrowPath, IconCheck, IconClock, IconLightbulb, IconMagnifier3, IconUser } from "../../../icons"
 import { AppRoute, hrefOf } from "../../../route"
 import { buttonClassName } from "../../../ui/button"

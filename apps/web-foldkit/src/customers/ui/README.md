@@ -17,7 +17,7 @@ string, so a title, a table head or a link reads the same on every page.
   title, `section` for a panel's, `subsection` for a group inside a panel or the sidebar. `pageHeader`
   and `panelHeader` render them for you.
 - Type for everything that is not a heading: `titleClass` (an emphasised line, 14px semibold),
-  `descriptionClass` (14px muted), `tableHeadClass` (12px medium muted). Labels are sentence case; nothing is uppercase.
+  `descriptionClass` (14px muted); a table head is `dataTable`'s (`src/ui/data-table.ts`). Labels are sentence case; nothing is uppercase.
 - `pageHeader(h, { title, subtitle?, crumbs?, leading?, badges?, actions? })` — every page's title row
   (`settingsHeader` is this); `breadcrumb(h, crumbs)`; `freshness(h, "Synced 1h ago")` beside the actions.
 - `panel(h, className, children)`, `panelHeader(h, { title, count?, description?, aside? })`,
