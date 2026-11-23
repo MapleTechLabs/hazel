@@ -1,3 +1,4 @@
+import { IntegrationConfig, IntegrationId, isIntegrationId } from "@hazel/customer-integrations"
 import * as Customers from "@hazel/domain/customers"
 import {
 	CustomerConnectionId,
@@ -8,7 +9,7 @@ import {
 	UserId,
 } from "@hazel/schema"
 import { and, eq } from "@tanstack/db"
-import { Schema, type Stream } from "effect"
+import { Option, Schema, type Stream } from "effect"
 import {
 	customerAccountCollection,
 	customerConnectionCollection,
@@ -26,10 +27,10 @@ import { liveQueryStream } from "../../../../data/live-query"
 
 export const ConnectionRow = Schema.Struct({
 	id: CustomerConnectionId,
-	provider: Customers.CustomerProvider,
+	provider: IntegrationId,
 	status: Customers.ConnectionStatus,
 	externalAccountName: Schema.NullOr(Schema.String),
-	config: Customers.ConnectionConfig,
+	config: IntegrationConfig,
 	connectedBy: UserId,
 	connectedAtMs: Schema.Finite,
 	hasWebhookSecret: Schema.Boolean,
@@ -83,12 +84,33 @@ export type ImpersonationRow = typeof ImpersonationRow.Type
 type JsonDate = Customers.Connection["connectedAt"]
 const msOrNull = (date: JsonDate | null): number | null => (date === null ? null : msOf(date))
 
-export const toConnectionRow = (connection: Customers.Connection): ConnectionRow => ({
+const decodeConfig = Schema.decodeUnknownOption(IntegrationConfig)
+
+/**
+ * The rows the page can show, each config through its integration's schema (stored ones rely on it
+ * for defaults and dropped keys); a row of a provider this build does not know is left out.
+ */
+export const toConnectionRows = (
+	connections: ReadonlyArray<Customers.Connection>,
+): ReadonlyArray<ConnectionRow> =>
+	connections.flatMap((connection) => {
+		const { provider } = connection
+		const config = decodeConfig(connection.config)
+		return isIntegrationId(provider) && Option.isSome(config)
+			? [toConnectionRow(connection, provider, config.value)]
+			: []
+	})
+
+const toConnectionRow = (
+	connection: Customers.Connection,
+	provider: IntegrationId,
+	config: IntegrationConfig,
+): ConnectionRow => ({
 	id: connection.id,
-	provider: connection.provider,
+	provider,
 	status: connection.status,
 	externalAccountName: connection.externalAccountName,
-	config: connection.config,
+	config,
 	connectedBy: connection.connectedBy,
 	connectedAtMs: msOf(connection.connectedAt),
 	hasWebhookSecret: connection.hasWebhookSecret,
@@ -125,7 +147,7 @@ export const connectionsStream = <Message>(
 				q
 					.from({ connection: customerConnectionCollection })
 					.where(({ connection }) => eq(connection.organizationId, organizationId)),
-			(rows) => toMessage(rows.map(toConnectionRow)),
+			(rows) => toMessage(toConnectionRows(rows)),
 		),
 	)
 

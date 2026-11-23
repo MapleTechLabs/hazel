@@ -1,11 +1,11 @@
 /**
- * The demo seed (`docs/customers/tech-design.md` §6.5): fake Clerk, Autumn, Stripe and Maple
- * connections (active, no credentials) and the generator's ops (`./seed.ts`) applied through
- * `CustomerIngest`, then a history rebuild and a compute. Not a backfill, so no baseline: the
- * queue fills. Dev and preview stages only (`customers.demo.seed`).
+ * The demo seed (`docs/customers/tech-design.md` §6.5): fake connections of the seeded sources
+ * (active, no credentials) and the generator's ops (`./seed.ts`) applied through `CustomerIngest`,
+ * then a history rebuild and a compute. Not a backfill, so no baseline: the queue fills. Dev and preview stages only (`customers.demo.seed`).
  */
+import { defaultConfigOf } from "@hazel/customer-integrations"
 import { Database, SQLite, schema } from "@hazel/db"
-import { type CustomerProvider, DEFAULT_CONNECTION_CONFIG } from "@hazel/domain/customers"
+import type { CustomerProvider } from "@hazel/domain/customers"
 import type { CustomerConnectionId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { rebuildHistory, runCompute } from "./compute"
@@ -52,7 +52,7 @@ const connectionFor = (provider: CustomerProvider, organizationId: OrganizationI
 					// Not a real account: connecting one replaces the demo data.
 					externalAccountId: DEMO_ACCOUNT_ID,
 					externalAccountName: `Demo ${provider}`,
-					config: DEFAULT_CONNECTION_CONFIG[provider],
+					config: defaultConfigOf(provider),
 					connectedBy: by,
 					connectedAt: now,
 					backfilledAt: now,

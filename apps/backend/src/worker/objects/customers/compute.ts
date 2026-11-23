@@ -18,11 +18,12 @@
  * memory holds one chunk's activity and signals; the org's distinct user counts come from SQL. A
  * compute past `COMPUTE_TURN_BUDGET_MS` or `MAX_CHUNKS_PER_TURN` stops after a chunk and continues
  * in the next alarm turn from where it stopped (`computeProgress`; started over when it is stale, or
- * the day or Autumn's readiness changed); step 4's rule counts, 5 and 6 run after the last chunk.
+ * the day or the billing sources' readiness changed); step 4's rule counts, 5 and 6 run after the last chunk.
  *
  * Per-account built-in series are not stored daily: they derive from their sources at read time
  * (active users from activity, MRR from movements, health from `customer_health_daily`).
  */
+import { billingProviders, requiredSourcesOf } from "@hazel/customer-integrations"
 import { Database, SQLite, schema } from "@hazel/db"
 import {
 	type CustomerProvider,
@@ -70,7 +71,7 @@ import {
 	type SnapshotBase,
 } from "./snapshot"
 import { inList, isActive, rowsPerInsert } from "./sql"
-import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "./time"
+import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "@hazel/customer-integrations/kit/time"
 
 /** Days of history a rebuild covers. */
 export const HISTORY_DAYS = 365
@@ -461,7 +462,7 @@ const importingProviders = (now: Date) =>
 
 /** A billing source is still importing: MRR is partial, its history not rebuilt yet. */
 const billingImporting = (importing: ReadonlySet<CustomerProvider>) =>
-	importing.has("stripe") || importing.has("autumn")
+	billingProviders.some((provider) => importing.has(provider))
 
 /**
  * The providers in baseline mode: those whose backfill finished since the last compute
@@ -484,7 +485,8 @@ const baselineProviders = (importing: ReadonlySet<CustomerProvider>, armed: Read
 
 /** A template is in baseline mode when one of its sources (any, for a source-less one) is. */
 const inBaseline = (template: SignalTemplate, providers: ReadonlySet<CustomerProvider>) => {
-	const { baselineOnBackfill, requiredSources } = TEMPLATES[template]
+	const { baselineOnBackfill } = TEMPLATES[template]
+	const requiredSources = requiredSourcesOf(template)
 	if (!baselineOnBackfill || providers.size === 0) return false
 	return requiredSources.length === 0 || requiredSources.some((provider) => providers.has(provider))
 }
@@ -581,7 +583,7 @@ const writeSignals = Effect.fn("Customers.writeSignals")(function* (snapshot: Sn
 
 	for (const rule of snapshot.rules) {
 		const ruleBaseline = inBaseline(rule.template, run.baseline)
-		const sourceGone = TEMPLATES[rule.template].requiredSources.some((provider) => run.gone.has(provider))
+		const sourceGone = requiredSourcesOf(rule.template).some((provider) => run.gone.has(provider))
 		yield* db.transaction(
 			Effect.forEach(
 				snapshot.accounts,
@@ -1069,7 +1071,7 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 			.where(($) => [$.deletedAt.isNull()]),
 	)).filter((account) => live.has(account.id))
 	const billingBy = billingByAccount(
-		base.autumnReady,
+		new Set(base.billingReady),
 		yield* db.run(SQLite.from(schema.customerSubscriptionsTable).select()),
 		new Map(accounts.map((account) => [account.id, account.mrrSource])),
 	)
@@ -1293,10 +1295,10 @@ export const runComputeStep = Effect.fn("Customers.computeStep")(function* (now:
 
 /** Where a compute spread over several alarm turns stopped, and what it has gathered so far. */
 const ComputeProgress = Schema.Struct({
-	/** When its first turn ran, its day and Autumn's readiness: another one starts over. */
+	/** When its first turn ran, its day and the billing sources' readiness: another one starts over. */
 	startedAt: Schema.Finite,
 	day: Day,
-	autumnReady: Schema.Boolean,
+	billingReady: Schema.Array(Schema.String),
 	/** The primary of the last group of accounts done (groups go in their primary's id order). */
 	after: CustomerAccountId,
 	armed: Schema.Array(Schema.String),
@@ -1329,13 +1331,13 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	const base = yield* loadBase(now)
 	const importing = yield* importingProviders(now)
 	const rebuildPending = yield* historyRebuildPending
-	// The previous turn's, unless unreadable, stale, or from another day or Autumn readiness.
+	// The previous turn's, unless unreadable, stale, or from another day or billing readiness.
 	const progress = Option.getOrUndefined(
 		Option.filter(
 			Option.flatMap(yield* computeProgress, decodeComputeProgress),
 			(saved) =>
 				saved.day === base.org.today &&
-				saved.autumnReady === base.autumnReady &&
+				saved.billingReady.join() === base.billingReady.join() &&
 				now.getTime() - saved.startedAt < COMPUTE_PROGRESS_MAX_AGE_MS,
 		),
 	)
@@ -1379,7 +1381,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	yield* Effect.annotateCurrentSpan({
 		"customers.accounts": base.accountIds.length,
 		"customers.rules": base.rules.length,
-		"customers.autumn_ready": base.autumnReady,
+		"customers.billing_ready": base.billingReady.join(","),
 		"customers.mrr_source_switches": switched,
 		"customers.billing_importing": billingImporting(importing),
 		"customers.history_rebuild_pending": rebuildPending,
@@ -1394,7 +1396,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 			encodeComputeProgress({
 				startedAt: progress?.startedAt ?? now.getTime(),
 				day: base.org.today,
-				autumnReady: base.autumnReady,
+				billingReady: base.billingReady,
 				after: last[last.length - 1][0],
 				armed: signals.armed,
 				totals,

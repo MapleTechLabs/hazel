@@ -16,7 +16,7 @@ import type {
 	SlaTargets,
 } from "@hazel/domain/customers"
 import type { CustomerContactId, CustomerIssueId } from "@hazel/schema"
-import { addDays, dayRange } from "./time"
+import { addDays, dayRange } from "@hazel/customer-integrations/kit/time"
 
 export interface ContactFacts {
 	readonly id: CustomerContactId
@@ -64,7 +64,7 @@ export interface AccountFacts {
 	readonly everActiveContacts: number
 	/** Window (days) → distinct users active in the window ending on `lastActiveDay`. */
 	readonly priorActive: ReadonlyMap<number, number>
-	/** The billing source's subscriptions (Autumn when connected, else Stripe). */
+	/** The billing source's subscriptions (`billingProviderOf`). */
 	readonly subscriptions: ReadonlyArray<schema.CustomerSubscription>
 	readonly openInvoices: ReadonlyArray<schema.CustomerInvoice>
 	/** Source metrics over the loaded window, oldest first. */
@@ -205,7 +205,7 @@ export const billed = (sub: schema.CustomerSubscription) =>
 /**
  * Canceled before its trial ended and never billed past it: it never converted, so never paid. A
  * billing period ending after the trial (`currentPeriodEnd`) is one it was billed for, even when
- * the cancellation was asked for during the trial (Stripe's `cancel_at` a later date).
+ * the cancellation was asked for during the trial (a `cancel_at` of a later date).
  */
 const unconverted = (sub: schema.CustomerSubscription) =>
 	sub.status === "canceled" &&

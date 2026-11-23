@@ -1,3 +1,4 @@
+import { requiredSourcesOf } from "@hazel/customer-integrations"
 import * as Customers from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
@@ -99,7 +100,7 @@ const headerRow = (h: H): Html =>
 	)
 
 const requires = (h: H, rule: RuleRow, orgSlug: string): Html => {
-	const required = Customers.TEMPLATES[rule.template].requiredSources
+	const required = requiredSourcesOf(rule.template)
 	const first = required[0]
 	return h.span(
 		[h.Class("col-span-2 hidden items-center justify-end gap-2 text-muted-fg text-sm @4xl:flex")],

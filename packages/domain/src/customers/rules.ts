@@ -11,6 +11,7 @@ import {
 	type SignalKind,
 	SignalSeverity,
 	type SignalTemplate,
+	type SourceCapability,
 } from "./enums"
 
 /** The longest window a rule looks back over: compute loads every account's activity for it. */
@@ -155,12 +156,6 @@ export const AttentionSettings = Schema.Struct({
 })
 export type AttentionSettings = typeof AttentionSettings.Type
 
-/** Customers that have not churned and have a Stripe customer. */
-export const DEFAULT_ATTENTION_SETTINGS: AttentionSettings = {
-	stages: AttentionStage.literals,
-	requiredSources: ["stripe"],
-}
-
 /** A rule as the editor submits it (create, update, dry-run). */
 export const RuleDraft = Schema.Struct({
 	name: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(120)),
@@ -179,8 +174,8 @@ export interface TemplateMeta {
 	readonly description: string
 	readonly defaultSeverity: SignalSeverity
 	readonly defaultConfig: RuleConfig
-	/** The template can only match with at least one of these connected. */
-	readonly requiredSources: ReadonlyArray<CustomerProvider>
+	/** The template can only match with a source of this capability connected; null: any or none. */
+	readonly requiredCapability: SourceCapability | null
 	readonly viz: EvidenceViz
 	/**
 	 * The first evaluation after a backfill records its matches as `dismissed` (reason `baseline`)
@@ -191,9 +186,6 @@ export interface TemplateMeta {
 	/** Signals of this template are left out of the health score's `signals` component by default. */
 	readonly excludedFromHealth: boolean
 }
-
-const ACTIVITY: ReadonlyArray<CustomerProvider> = ["clerk", "maple"]
-const BILLING: ReadonlyArray<CustomerProvider> = ["stripe", "autumn"]
 
 /** Each template's metadata, keyed by its own name. */
 type TemplateTable = { readonly [T in SignalTemplate]: TemplateMeta & { readonly template: T } }
@@ -206,7 +198,7 @@ export const TEMPLATES: TemplateTable = {
 		description: "No activity for {inactiveDays} days after being active",
 		defaultSeverity: "medium",
 		defaultConfig: { _tag: "inactive", inactiveDays: 14, priorWindowDays: 30, minPriorActiveUsers: 1 },
-		requiredSources: ACTIVITY,
+		requiredCapability: "activity",
 		viz: "last_active",
 		baselineOnBackfill: true,
 		excludedFromHealth: false,
@@ -225,7 +217,7 @@ export const TEMPLATES: TemplateTable = {
 			baselineDays: 28,
 			dropPct: 30,
 		},
-		requiredSources: ACTIVITY,
+		requiredCapability: "activity",
 		viz: "series",
 		baselineOnBackfill: true,
 		excludedFromHealth: false,
@@ -237,7 +229,7 @@ export const TEMPLATES: TemplateTable = {
 		description: "Subscription past due, or an invoice open {overdueDays} days past due",
 		defaultSeverity: "high",
 		defaultConfig: { _tag: "payment_failed", overdueDays: 7 },
-		requiredSources: BILLING,
+		requiredCapability: "billing",
 		viz: "amount",
 		baselineOnBackfill: false,
 		excludedFromHealth: false,
@@ -249,7 +241,7 @@ export const TEMPLATES: TemplateTable = {
 		description: "Set to cancel at period end, or downgraded",
 		defaultSeverity: "high",
 		defaultConfig: { _tag: "cancel_scheduled", includeDowngrades: true, downgradeWindowDays: 14 },
-		requiredSources: BILLING,
+		requiredCapability: "billing",
 		viz: "delta",
 		baselineOnBackfill: false,
 		excludedFromHealth: false,
@@ -266,7 +258,7 @@ export const TEMPLATES: TemplateTable = {
 			minActiveUsers: 2,
 			activeWindowDays: 7,
 		},
-		requiredSources: BILLING,
+		requiredCapability: "billing",
 		viz: "ratio",
 		baselineOnBackfill: false,
 		excludedFromHealth: false,
@@ -278,7 +270,7 @@ export const TEMPLATES: TemplateTable = {
 		description: "{minAgeDays}–{maxAgeDays} days old with under {minActiveContacts} active contacts",
 		defaultSeverity: "low",
 		defaultConfig: { _tag: "onboarding_stalled", minAgeDays: 7, maxAgeDays: 30, minActiveContacts: 2 },
-		requiredSources: ACTIVITY,
+		requiredCapability: "activity",
 		viz: "ratio",
 		baselineOnBackfill: true,
 		excludedFromHealth: false,
@@ -290,7 +282,7 @@ export const TEMPLATES: TemplateTable = {
 		description: "Health fell {dropPoints} points in {windowDays} days, or turned critical",
 		defaultSeverity: "medium",
 		defaultConfig: { _tag: "health_drop", dropPoints: 20, windowDays: 7, onCritical: true },
-		requiredSources: [],
+		requiredCapability: null,
 		viz: "delta",
 		baselineOnBackfill: true,
 		excludedFromHealth: true,
@@ -302,7 +294,7 @@ export const TEMPLATES: TemplateTable = {
 		description: "The most active user of the last {windowDays} days inactive for {inactiveDays} days",
 		defaultSeverity: "medium",
 		defaultConfig: { _tag: "champion_inactive", windowDays: 30, inactiveDays: 14 },
-		requiredSources: ACTIVITY,
+		requiredCapability: "activity",
 		viz: "last_active",
 		baselineOnBackfill: true,
 		excludedFromHealth: false,
@@ -314,7 +306,7 @@ export const TEMPLATES: TemplateTable = {
 		description: "A metered feature at {thresholdPct}% of its plan limit",
 		defaultSeverity: "medium",
 		defaultConfig: { _tag: "near_limit", thresholdPct: 90, metricKeys: [] },
-		requiredSources: ["autumn"],
+		requiredCapability: "meteredLimits",
 		viz: "limit",
 		baselineOnBackfill: true,
 		excludedFromHealth: true,
@@ -326,7 +318,7 @@ export const TEMPLATES: TemplateTable = {
 		description: "Active users up {growthPct}% in {windowDays} days",
 		defaultSeverity: "low",
 		defaultConfig: { _tag: "seat_growth", growthPct: 50, windowDays: 30, minActiveUsers: 3 },
-		requiredSources: ACTIVITY,
+		requiredCapability: "activity",
 		viz: "delta",
 		baselineOnBackfill: true,
 		excludedFromHealth: true,
@@ -338,7 +330,7 @@ export const TEMPLATES: TemplateTable = {
 		description: "Churned in the last {windowDays} days",
 		defaultSeverity: "medium",
 		defaultConfig: { _tag: "churned", windowDays: 14 },
-		requiredSources: BILLING,
+		requiredCapability: "billing",
 		viz: "delta",
 		baselineOnBackfill: false,
 		excludedFromHealth: true,
@@ -350,7 +342,7 @@ export const TEMPLATES: TemplateTable = {
 		description: "A support reply is overdue by {graceMinutes}+ minutes",
 		defaultSeverity: "high",
 		defaultConfig: { _tag: "response_overdue", graceMinutes: 0 },
-		requiredSources: [],
+		requiredCapability: null,
 		viz: "overdue",
 		baselineOnBackfill: false,
 		excludedFromHealth: false,
@@ -362,7 +354,7 @@ export const TEMPLATES: TemplateTable = {
 		description: "A support issue is past its resolution target by {graceMinutes}+ minutes",
 		defaultSeverity: "medium",
 		defaultConfig: { _tag: "resolution_overdue", graceMinutes: 0 },
-		requiredSources: [],
+		requiredCapability: null,
 		viz: "overdue",
 		baselineOnBackfill: false,
 		excludedFromHealth: false,

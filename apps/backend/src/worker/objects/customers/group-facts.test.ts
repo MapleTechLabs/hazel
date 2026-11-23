@@ -4,7 +4,7 @@ import { evaluate } from "./evaluate"
 import type { AccountFacts } from "./facts"
 import { groupFacts, groupMovements } from "./group-facts"
 import { factsOf, orgFacts, TODAY } from "./test-kit"
-import { addDays } from "./time"
+import { addDays } from "@hazel/customer-integrations/kit/time"
 
 const FROM = addDays(TODAY, -61)
 

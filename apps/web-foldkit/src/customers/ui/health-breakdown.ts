@@ -6,7 +6,9 @@ import type {
 } from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
+import { activityProviders, billingProviders } from "@hazel/customer-integrations"
 import { heading } from "../../ui/heading"
+import { sourceLabel, usageSources } from "../providers"
 import { healthBadge } from "./badges"
 
 /**
@@ -25,11 +27,11 @@ export const COMPONENT_LABEL = {
 
 /** Where a component's inputs come from. */
 export const COMPONENT_SOURCES = {
-	usage: "Maple · Clerk",
-	engagement: "Clerk · Maple",
-	billing: "Stripe · Autumn",
-	signals: "Hazel",
-} as const satisfies Record<HealthComponentKey, string>
+	usage: usageSources.map(sourceLabel).join(" · "),
+	engagement: activityProviders.map(sourceLabel).join(" · "),
+	billing: billingProviders.map(sourceLabel).join(" · "),
+	signals: sourceLabel("hazel"),
+} satisfies Record<HealthComponentKey, string>
 
 const bandFill = (score: number, bands: HealthBands) =>
 	score >= bands.healthyMin

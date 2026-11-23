@@ -6,7 +6,7 @@ import * as Modal from "../../../../ui/modal"
 import * as Popover from "../../../../ui/popover"
 
 /**
- * Feature flags: the boolean keys of the customers' Clerk `public_metadata`, plus the ones created
+ * Feature flags: the boolean keys of the customers' metadata in their source, plus the ones created
  * here. A flag opens to the customers that have it; admins create, delete and assign flags.
  */
 

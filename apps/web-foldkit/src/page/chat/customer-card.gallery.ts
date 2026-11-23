@@ -15,6 +15,7 @@ import { page } from "vitest/browser"
 import * as CustomerCard from "./customer-card"
 import { chatHeaderView } from "./header"
 import { NO_CHANNEL_LINKS } from "../../ui/channel-icon"
+import { ACTIVITY, DIRECTORY, INVOICES } from "../../lab/fixtures/customers-demo-sources"
 
 /**
  * The linked channel's customer at a glance (`customer-card.ts`): the header chip and the card in
@@ -118,12 +119,9 @@ const base: ChannelCustomer.Type = {
 		signal(2, "Usage dropped", "Daily active users down 42% vs the previous 4 weeks", "medium"),
 	],
 	sourceLinks: [
-		{
-			provider: "clerk",
-			url: "https://dashboard.clerk.com/apps/app_1/instances/ins_1/organizations/org_1",
-		},
-		{ provider: "stripe", url: "https://dashboard.stripe.com/customers/cus_1" },
-		{ provider: "maple", url: "https://app.maple.dev/groups/org_1" },
+		{ provider: DIRECTORY.id, url: DIRECTORY.demo.accountUrl("org_1", "gallery") },
+		{ provider: INVOICES.id, url: INVOICES.demo.customerUrl("cus_1") },
+		{ provider: ACTIVITY.id, url: ACTIVITY.demo.accountUrl("org_1") },
 	],
 	updatedAt: new Date(NOW),
 }
@@ -160,12 +158,7 @@ const unknownHealth: ChannelCustomer.Type = {
 	lastActiveDay: null,
 	openSignalCount: 0,
 	topSignals: [],
-	sourceLinks: [
-		{
-			provider: "clerk",
-			url: "https://dashboard.clerk.com/apps/app_1/instances/ins_1/organizations/org_2",
-		},
-	],
+	sourceLinks: [{ provider: DIRECTORY.id, url: DIRECTORY.demo.accountUrl("org_2", "gallery") }],
 }
 
 const context = (customer: ChannelCustomer.Type): CustomerCard.CardContext => ({

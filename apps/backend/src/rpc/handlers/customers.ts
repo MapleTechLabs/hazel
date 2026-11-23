@@ -11,6 +11,7 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { InternalServerError } from "@hazel/domain"
+import { integrationOf, isIntegrationId } from "@hazel/customer-integrations"
 import { type ConnectionConfig, type CustomerProvider, MAX_VIEWS, TEMPLATES } from "@hazel/domain/customers"
 import {
 	CustomerAdminRpcs,
@@ -80,8 +81,6 @@ import {
 	MAX_DOMAINS as MAX_ACCOUNT_DOMAINS,
 	normalizeDomain,
 } from "../../worker/objects/customers/ingest-live"
-import { regionOfAccountId as mapleRegionOf } from "../../worker/objects/customers/maple/adapter"
-import { configProblem as mapleConfigProblem } from "../../worker/objects/customers/maple/pull"
 import { CustomerProviders } from "../../worker/objects/customers/providers"
 import { ContextDev } from "../../worker/objects/customers/enrichment/client"
 import { requestCompanyRefresh } from "../../worker/objects/customers/enrichment/job"
@@ -1481,13 +1480,21 @@ const storeFailed = (cause: { readonly _tag: string }) =>
 	InternalServerError.withCause({ message: "Could not store the credentials", detail: cause._tag, cause })
 
 /**
- * What the config schema cannot say: Maple needs names it can ask for in a query that fits
- * (`maple/pull.ts`).
+ * A submitted config through its integration: the schema the open payload cannot apply (defaults,
+ * dropped keys), then what the schema cannot say. An unknown provider is unavailable.
  */
-const checkConfig = (config: ConnectionConfig) => {
-	if (config._tag !== "maple") return Effect.void
-	const problem = mapleConfigProblem(config)
-	return problem === null ? Effect.void : Effect.fail(invalid(problem))
+const submittedConfig = (provider: CustomerProvider, config: ConnectionConfig) => {
+	const integration = integrationOf(provider)
+	if (integration === undefined) return Effect.fail(new CustomerProviderUnavailableError({ provider }))
+	return Option.match(integration.config.decode(config), {
+		onNone: () => Effect.fail(invalid(`The ${integration.presentation.name} settings are not valid`)),
+		onSome: (decoded) => {
+			const problem = integration.config.problem?.(decoded) ?? null
+			return problem === null
+				? Effect.succeed({ integration, config: decoded })
+				: Effect.fail(invalid(problem))
+		},
+	})
 }
 
 const credentialsError =
@@ -1584,8 +1591,8 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 			switchProviderAccount(connection, now).pipe(Effect.provideService(CustomerIngest, ingest))
 
 		/**
-		 * Clerk first, then the accounts it accepted (and `also`) in one transaction, committed even when
-		 * Clerk refused some: the error comes after.
+		 * The source first, then the accounts it accepted (and `also`) in one transaction, committed even
+		 * when it refused some: the error comes after.
 		 */
 		const featureFlags = (
 			input: Parameters<typeof sendFeatureFlags>[0],
@@ -1697,6 +1704,11 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 			"customers.settings.update": ({ health, attention, reportingCurrency, addOnPlans }) =>
 				Effect.gen(function* () {
 					const actor = yield* requireAdmin
+					// The open payload schema no longer refuses an unknown source, and this RPC declares no
+					// request error: it fails as the schema's refusal did, with nothing written.
+					const unknown = attention?.requiredSources.find((source) => !isIntegrationId(source))
+					if (unknown !== undefined)
+						return yield* new InternalServerError({ message: `Unknown data source: ${unknown}` })
 					const now = yield* currentTime
 					return yield* txOnly(
 						Effect.gen(function* () {
@@ -1722,16 +1734,16 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 				provider,
 				apiKey,
 				webhookSecret: given,
-				config,
+				config: submitted,
 				organizationId: payloadOrg,
 			}) =>
 				Effect.gen(function* () {
 					const organizationId = yield* requireOwnOrganization(payloadOrg)
 					const actor = yield* requireAdmin
 					const webhookSecret = secretOf(given)
-					if (config._tag !== provider)
-						return yield* invalid(`The config is for ${config._tag}, not ${provider}`)
-					yield* checkConfig(config)
+					if (submitted._tag !== provider)
+						return yield* invalid(`The config is for ${submitted._tag}, not ${provider}`)
+					const { config } = yield* submittedConfig(provider, submitted)
 					const adapter = yield* adapterOf(provider)
 					const account = yield* adapter
 						.validate({
@@ -1786,7 +1798,12 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.connection.update": ({ connectionId, config, apiKey, webhookSecret: given }) =>
+			"customers.connection.update": ({
+				connectionId,
+				config: submitted,
+				apiKey,
+				webhookSecret: given,
+			}) =>
 				Effect.gen(function* () {
 					yield* requireAdmin
 					const webhookSecret = given === undefined ? undefined : secretOf(given)
@@ -1794,22 +1811,22 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					// Its secrets were deleted: new ones come with a connect.
 					if (connection.status === "disconnected")
 						return yield* invalid("The connection is disconnected: connect it again")
-					if (config !== undefined && config._tag !== connection.provider) {
-						return yield* invalid(`The config is for ${config._tag}, not ${connection.provider}`)
-					}
-					if (config !== undefined) yield* checkConfig(config)
-					// Without a new key nothing is validated: Maple's region must stay the one the stored
-					// key was checked against.
-					if (
-						config?._tag === "maple" &&
-						apiKey === undefined &&
-						config.region !== mapleRegionOf(connection.externalAccountId)
-					) {
+					if (submitted !== undefined && submitted._tag !== connection.provider) {
 						return yield* invalid(
-							"The stored key was checked against another Maple region: enter a key with the change",
+							`The config is for ${submitted._tag}, not ${connection.provider}`,
 						)
 					}
-					const nextConfig = config ?? connection.config
+					const decoded =
+						submitted === undefined
+							? undefined
+							: yield* submittedConfig(connection.provider, submitted)
+					// Without a new key nothing is validated: the config must still suit the stored key.
+					const changeProblem =
+						apiKey === undefined && decoded !== undefined
+							? (decoded.integration.config.changeProblem?.(decoded.config, connection) ?? null)
+							: null
+					if (changeProblem !== null) return yield* invalid(changeProblem)
+					const nextConfig = decoded?.config ?? connection.config
 					// Rotating either credential re-encrypts both under the current key (one key version
 					// per row); the one not given is kept as stored, except a webhook secret when the API
 					// key opens another provider account (its deliveries are signed with another one).
@@ -2150,7 +2167,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					const accountIds = yield* accountsWithFlag(key)
 					if (accountIds.length === 0) return yield* txOnly(deleteFlag)
 					return yield* featureFlags(
-						{ accountIds, changes: { [key]: null }, requireClerk: false },
+						{ accountIds, changes: { [key]: null }, requireRecord: false },
 						deleteFlag,
 					)
 				}).pipe(remap),
@@ -2162,7 +2179,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					return yield* featureFlags({
 						accountIds,
 						changes: Object.fromEntries(keys.map((key) => [key, enabled ? true : null])),
-						requireClerk: true,
+						requireRecord: true,
 					})
 				}).pipe(remap),
 
@@ -2226,7 +2243,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					if (Option.isNone(contact)) return yield* notFound("contact", contactId)
 					const account = yield* liveAccount(contact.value.accountId)
 					if (Option.isNone(account)) return yield* notFound("contact", contactId)
-					// The live connections whose provider can impersonate (Clerk).
+					// The live connections whose provider can impersonate.
 					const connections = (yield* db.run(
 						SQLite.from(schema.customerConnectionsTable)
 							.select()
@@ -2282,7 +2299,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 						"customers.provider": target.connection.provider,
 						"customers.contact_id": contactId,
 					})
-					// The grant or the contact may have gone while Clerk answered: then no link (the token
+					// The grant or the contact may have gone while the source answered: then no link (the token
 					// expires unused).
 					yield* requireImpersonator
 					const still = yield* db.first(

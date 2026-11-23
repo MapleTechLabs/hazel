@@ -14,6 +14,7 @@
  * (`linkOwnerOf`), regrouping moves it (`./groups.ts`), and the snapshot names the primary.
  */
 import { Database, SQLite, schema } from "@hazel/db"
+import { integrations } from "@hazel/customer-integrations"
 import { type CustomerProvider, type HealthBreakdown, logoOf } from "@hazel/domain/customers"
 import { ChannelCustomer } from "@hazel/domain/models"
 import type {
@@ -262,7 +263,7 @@ const sourceLinksOf = (
 	}>,
 	customerId: CustomerAccountId,
 ): Array<ChannelCustomer.SourceLink> =>
-	PROVIDER_ORDER.flatMap((provider) => {
+	integrations.flatMap(({ id: provider }) => {
 		const of = refs.flatMap((ref) =>
 			ref.provider === provider && ref.externalUrl !== null
 				? [{ accountId: ref.accountId, url: ref.externalUrl }]
@@ -271,8 +272,6 @@ const sourceLinksOf = (
 		const ref = of.find((candidate) => candidate.accountId === customerId) ?? of[0]
 		return ref === undefined ? [] : [{ provider, url: ref.url }]
 	})
-
-const PROVIDER_ORDER: ReadonlyArray<CustomerProvider> = ["clerk", "stripe", "autumn", "maple"]
 
 /** Covers every field: any change to a link's customer or its glance resends the snapshot. */
 const fingerprint = (links: ReadonlyArray<ChannelCustomerEntry>) =>

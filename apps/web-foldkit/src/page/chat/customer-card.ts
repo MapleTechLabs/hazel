@@ -19,8 +19,8 @@ import { twMerge } from "tailwind-merge"
 import { dayToMs, formatMoney, formatRelative } from "../../customers/format"
 import { HEALTH_FILL, healthBadge, severityGlyph, stageBadge } from "../../customers/ui/badges"
 import { companyFacts, companyLinks } from "../../customers/ui/company"
-import { safeSourceUrl } from "../../customers/providers"
-import { companyLogo, SOURCE_LABEL, sourceLogo } from "../../customers/ui/identity"
+import { safeSourceUrl, sourceLabel } from "../../customers/providers"
+import { companyLogo, sourceLogo } from "../../customers/ui/identity"
 import { descriptionClass, linkClass, moreLink, titleClass } from "../../customers/ui/surface"
 import { IconOffice } from "../../icons"
 import { ariaButton } from "../../ui/button"
@@ -635,9 +635,9 @@ export const cardBody = <M>(h: HtmlBuilder<M>, context: CardContext): Html => {
 											h.Target("_blank"),
 											h.Rel("noreferrer"),
 											h.AriaLabel(
-												`${customer.accountName} in ${SOURCE_LABEL[link.provider]}`,
+												`${customer.accountName} in ${sourceLabel(link.provider)}`,
 											),
-											h.Title(`Open in ${SOURCE_LABEL[link.provider]}`),
+											h.Title(`Open in ${sourceLabel(link.provider)}`),
 											h.Class(
 												"inline-flex size-7 items-center justify-center rounded-md border border-border bg-bg outline-hidden transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/70",
 											),

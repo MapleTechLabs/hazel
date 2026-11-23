@@ -2,8 +2,8 @@
 
 Hazel's identity source for Customers: a Clerk **organization** is a customer account, its
 **members** are that account's contacts, and **sign-ins** are the activity every usage signal and
-health score reads. Adapter: `apps/backend/src/worker/objects/customers/clerk/`, registered in
-`customers/providers.ts`. It produces `IngestOp`s only — `CustomerIngest` does every write
+health score reads. Adapter: `packages/customer-integrations/src/clerk/`, registered in
+its `registry.ts`. It produces `IngestOp`s only — `CustomerIngest` does every write
 (`tech-design.md` §3).
 
 The Clerk organization id is the account's primary external ref, which is what lets the other

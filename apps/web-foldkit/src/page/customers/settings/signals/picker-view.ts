@@ -1,7 +1,8 @@
+import { requiredSourcesOf } from "@hazel/customer-integrations"
 import * as Customers from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { PROVIDERS, sourcesLabel } from "../../../../customers/providers"
+import { providerOf, sourcesLabel } from "../../../../customers/providers"
 import { KIND_LABEL } from "../../../../customers/ui/badges"
 import { searchBox, segmented } from "../../../../customers/ui/filter-bar"
 import { sourceLogo } from "../../../../customers/ui/identity"
@@ -48,7 +49,7 @@ const usageOf = (model: Model, template: Customers.SignalTemplate): string => {
 }
 
 const sources = (h: H, template: Customers.SignalTemplate): Html => {
-	const required = Customers.TEMPLATES[template].requiredSources
+	const required = requiredSourcesOf(template)
 	return h.span(
 		[h.Class("flex min-w-0 items-center gap-1.5 text-muted-fg text-xs")],
 		required.length === 0
@@ -88,7 +89,7 @@ const cardHead = (h: H, template: Customers.SignalTemplate): ReadonlyArray<Html>
 }
 
 const templateCard = (h: H, model: Model, template: Customers.SignalTemplate, orgSlug: string): Html => {
-	const required = Customers.TEMPLATES[template].requiredSources
+	const required = requiredSourcesOf(template)
 	if (!isAvailable(model, template)) {
 		const first = required[0]
 		return h.div(
@@ -120,7 +121,7 @@ const templateCard = (h: H, model: Model, template: Customers.SignalTemplate, or
 											),
 											h.Class("font-medium text-primary hover:underline"),
 										],
-										[`Connect ${PROVIDERS[first].name}`],
+										[`Connect ${providerOf(first).name}`],
 									),
 								]),
 					],
@@ -230,7 +231,7 @@ export const pickerModal = (h: H, model: Model, shared: Shared): Html =>
 														"Connected",
 														...model.connectedProviders.map((provider) =>
 															h.span(
-																[h.Title(PROVIDERS[provider].name)],
+																[h.Title(providerOf(provider).name)],
 																[sourceLogo(h, provider, "size-4")],
 															),
 														),

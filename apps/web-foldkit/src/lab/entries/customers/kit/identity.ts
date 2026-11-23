@@ -11,10 +11,11 @@ import {
 	sourceMark,
 } from "../../../../customers/ui/identity"
 import { DANA, JONAS, MAYA, PRIYA } from "../../../fixtures/customers"
+import { ACTIVITY, DIRECTORY, INVOICES, PLANS } from "../../../fixtures/customers-demo-sources"
 
 // `/lab/customers/kit/identity`: Foundations › Source Chips, Avatars And Company Logos.
 
-const SOURCES: ReadonlyArray<CustomerSource> = ["clerk", "stripe", "autumn", "maple", "hazel"]
+const SOURCES: ReadonlyArray<CustomerSource> = [DIRECTORY.id, INVOICES.id, PLANS.id, ACTIVITY.id, "hazel"]
 
 export const lab = defineStaticLab("Identity", (h) =>
 	labPage(h, { title: "Logos, avatars and sources" }, [
@@ -62,9 +63,9 @@ export const lab = defineStaticLab("Identity", (h) =>
 				h,
 				[
 					sourceLinkChip(h, {
-						source: "stripe",
+						source: INVOICES.id,
 						label: "cus_Q8f2Lk",
-						href: "https://dashboard.stripe.com/customers/cus_Q8f2Lk",
+						href: INVOICES.demo.customerUrl("cus_Q8f2Lk"),
 					}),
 				],
 				"Links out to the provider record",

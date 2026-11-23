@@ -1,3 +1,4 @@
+import { integrations } from "@hazel/customer-integrations"
 import * as Customers from "@hazel/domain/customers"
 import { Option } from "effect"
 import * as AsyncData from "foldkit/asyncData"
@@ -7,7 +8,8 @@ import { calendarHeatmap, heatLegend } from "../../../customers/charts/calendar-
 import { formatDayLong } from "../../../customers/format"
 import { msOf } from "../../../customers/queries"
 import { segmentClass, segmentedTrackClass } from "../../../customers/ui/filter-bar"
-import { SOURCE_LABEL, sourceLogo, sourceMark } from "../../../customers/ui/identity"
+import { sourceLabel } from "../../../customers/providers"
+import { sourceLogo, sourceMark } from "../../../customers/ui/identity"
 import { IconChevronDown } from "../../../icons"
 import { button } from "../../../ui/button"
 import { heading } from "../../../ui/heading"
@@ -72,7 +74,7 @@ const eventRow = (h: HtmlBuilder<Message>, event: Customers.Event, context: Cont
 									h.span([h.Class("font-medium text-fg text-sm")], [event.title]),
 									h.span(
 										[h.Class("text-muted-fg text-xs")],
-										[[actor ?? SOURCE_LABEL[event.provider], event.type].join(" · ")],
+										[[actor ?? sourceLabel(event.provider), event.type].join(" · ")],
 									),
 								],
 							),
@@ -177,7 +179,11 @@ const yearCalendar = (h: HtmlBuilder<Message>, model: Model): Html => {
 	)
 }
 
-const SOURCES: ReadonlyArray<Customers.CustomerSource | null> = [null, ...Customers.CustomerSource.literals]
+const SOURCES: ReadonlyArray<Customers.CustomerSource | null> = [
+	null,
+	...integrations.map((integration) => integration.id),
+	"hazel",
+]
 
 const filters = (h: HtmlBuilder<Message>, model: Model): Html =>
 	h.div(
@@ -199,7 +205,7 @@ const filters = (h: HtmlBuilder<Message>, model: Model): Html =>
 							h.OnClick(Message.ClickedEventProvider({ provider: source })),
 							h.Class(segmentClass(isSelected)),
 						],
-						source === null ? ["All"] : [sourceLogo(h, source, "size-3.5"), SOURCE_LABEL[source]],
+						source === null ? ["All"] : [sourceLogo(h, source, "size-3.5"), sourceLabel(source)],
 					)
 				}),
 			),

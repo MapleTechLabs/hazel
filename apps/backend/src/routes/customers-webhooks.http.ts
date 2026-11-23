@@ -8,10 +8,10 @@
  *
  * 400: bad signature or payload, unreadable body. 404: unknown org, connection or provider. 413:
  * body too large. 500: storage failed, 503: directory or object unreachable. Providers retry every
- * non-2xx on their own schedule until they give up (Stripe for up to three days, Svix for Clerk and
- * Autumn); ingest is idempotent, so a retry that does go through is safe.
+ * non-2xx on their own schedule until they give up (up to days); ingest is idempotent, so a retry
+ * that does go through is safe.
  */
-import { CustomerProvider } from "@hazel/domain/customers"
+import { RegisteredProvider } from "@hazel/customer-integrations"
 import { CustomerConnectionId, OrganizationId } from "@hazel/schema"
 import { ByteSize, Effect, Option, Schema } from "effect"
 import { HttpIncomingMessage, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
@@ -25,7 +25,7 @@ const PATH = /^\/webhooks\/customers\/([^/]+)\/([^/]+)\/([^/?]+)/
 
 const decodeParams = Schema.decodeUnknownOption(
 	Schema.Struct({
-		provider: CustomerProvider,
+		provider: RegisteredProvider,
 		organizationId: OrganizationId,
 		connectionId: CustomerConnectionId,
 	}),

@@ -23,6 +23,7 @@
 		"@hazel/auth": "workspace:*",
 		"@hazel/backend-core": "workspace:*",
 		"@hazel/bot-gateway": "workspace:*",
+		"@hazel/customer-integrations": "workspace:*",
 		"@hazel/db": "workspace:*",
 		"@hazel/domain": "workspace:*",
 		"@hazel/infra": "workspace:*",
