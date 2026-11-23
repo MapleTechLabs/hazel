@@ -107,15 +107,66 @@ bot in the install, put its token (`HAZEL_BOT_TOKEN`, ...) in the env file, and 
 
 ## Backups and restore
 
-- **Directory (D1)**: Time Travel restores the database to any minute of the last 30 days
-  (`wrangler d1 time-travel restore <db> --timestamp ...`). The database is
-  `hazel-directory-<name>`.
-- **Organizations, channels, users (Durable Objects)**: SQLite-backed objects keep 30 days of
-  point-in-time recovery per object (`ctx.storage.getBookmarkForTime` /
-  `onNextSessionRestoreBookmark`). There is no tooling around it yet: a restore is a per-object
-  operation run by Hazel.
+Every store keeps 30 days of point-in-time history; restores go through
+`bun run operator:restore` (`scripts/operator-restore.ts`). `--dry-run` only looks the point up;
+a restore asks you to type the object id (or database name) unless `--yes`.
+
+- **Directory (D1)**: Time Travel restores the database to any minute of the last 30 days. The
+  database is `hazel-directory-<name>`; the script runs `wrangler d1 time-travel` with the
+  Cloudflare credentials in your env (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, from the
+  install's env file):
+
+    ```bash
+    bun run operator:restore --kind directory --customer <name> --at 2026-11-20T09:00:00Z --dry-run   # info
+    bun run operator:restore --kind directory --customer <name> --at 2026-11-20T09:00:00Z             # restore
+    ```
+
+- **Organizations, channels, users, Customers (Durable Objects)**: each SQLite-backed object keeps
+  30 days of point-in-time recovery, restored one object at a time through the api's operator
+  endpoints. They are on only when the install has an `OPERATOR_TOKEN` (the installer generates
+  one; any random string works, and it can be rotated with a redeploy); without it they answer 404.
+
+    ```bash
+    export OPERATOR_TOKEN=...   # from .env.customer-<name>
+    bun run operator:restore --api https://api.<zone> --kind org --id <organizationId> --at 2026-11-20T09:00:00Z --dry-run
+    bun run operator:restore --api https://api.<zone> --kind org --id <organizationId> --at 2026-11-20T09:00:00Z
+    ```
+
+    `--kind` is `org` (id: the organization id), `channel` (a channel or thread id), `user` (a
+    user id) or `customers` (the organization id). The endpoints are
+    `GET /internal/operator/bookmark?kind&id&timestamp` (dry run) and
+    `POST /internal/operator/restore` `{ kind, id, timestamp }`, with
+    `Authorization: Bearer <OPERATOR_TOKEN>`. A restore arms the object's bookmark for that time
+    (`ctx.storage.getBookmarkForTime` / `onNextSessionRestoreBookmark`) and restarts it; the answer
+    carries the bookmark and the object's state before the restore (`current`). To undo, restore
+    the same object to a time just before you ran it.
+
+    A restore rolls back one object only. What it wrote to other stores since then stays: rows it
+    projected into the directory or other objects (members, channel indexes, notifications) keep
+    their newer values until the next write updates them, and clients resync the object from scratch.
+    Restore the matching objects together (an org and its channels) when the incident spans them.
+
 - **Uploads (R2)**: the `hazel-uploads-<name>` bucket; replicate it with R2's own tooling if the
   customer needs off-account copies.
+- **Organization exports**: owners and admins can download a copy of their organization's data
+  themselves (below); it is a copy for them, not a restore source.
+
+## Data export
+
+An organization's owners and admins export its data from **Settings → General → Export data**.
+The organization's object builds the file in the background, a bounded step per alarm, reading
+each channel and thread from its own object in pages, so it works for organizations of any size;
+the page shows its progress live. The result is one NDJSON file (one `{ "table", "row" }` per
+line, a header line first and an `end` line with the row count last) with the organization,
+members, the members' public profiles (names, avatars, time zones; no emails), sections,
+channels, threads, channel members, custom emojis, connected integrations (provider and account
+name only), incoming webhooks (no tokens), and every channel's messages, reactions, pins and
+attachment metadata with each file's public URL. Secrets are never read: integration tokens,
+webhook tokens, auth data, bot tokens. Deleted messages are left out.
+
+Files live in the install's private `hazel-org-exports-<name>` bucket and are downloaded through
+a link the api signs for 15 minutes. An export can be downloaded for 7 days; the bucket deletes it
+a day later. One export per organization runs at a time.
 
 ## Known limits
 
@@ -125,7 +176,8 @@ bot in the install, put its token (`HAZEL_BOT_TOKEN`, ...) in the env file, and 
   the browser, or from desktop/iOS builds made for it.
 - **Connect** (shared channels between organizations) only connects organizations of the same
   install.
-- **Data export**: there is no self-serve export of an organization's data yet.
+- **Data export** covers what an organization owns: a Connect channel's messages are in the host
+  organization's export only, and the Customers area's data is not included.
 - **Observability**: Hazel sees nothing of a customer install unless the customer sets a
   `MAPLE_API_KEY` (their own Maple org, or one Hazel gives them), which exports the Workers'
   traces, logs and metrics. Monitoring rules are declared for `prd` only.

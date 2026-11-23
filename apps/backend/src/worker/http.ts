@@ -19,6 +19,7 @@ import { HtmlRenderRoute } from "./html-render-route"
 import { OrgExportRoute } from "./org-export-route"
 import { AgentOAuthRoutes } from "../routes/agent-oauth"
 import { McpRoute } from "../routes/mcp"
+import { OperatorRoutes } from "../routes/operator.http"
 import { AgentAccess } from "../services/agent-access"
 import { workerLiveObjectStubs } from "./live/message-live-object"
 import type { BotGatewayNamespace } from "../services/bot-gateway-transport"
@@ -55,6 +56,7 @@ export const buildApp = (
 					makeLiveRoute(env),
 					HtmlRenderRoute,
 					OrgExportRoute,
+					OperatorRoutes,
 					AgentOAuthRoutes,
 					McpRoute,
 				),

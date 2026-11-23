@@ -27,10 +27,17 @@ import type { ObjectKind } from "./kinds"
 import type { CallRequest } from "./calls"
 import type { ApplyEffectRequest } from "./effects/registry"
 import { WARM_HEADER } from "./principal"
-import type { InvokeRequest } from "./protocol"
+import type { BookmarkRequest, InvokeRequest } from "./protocol"
 import { makeObjectRuntime } from "./runtime"
 import { makeSocketTokenVerifier } from "./socket-token"
 import { workerObjectStubs } from "./stubs"
+
+/** The point-in-time recovery calls of `DurableObjectStorage` (SQLite-backed objects). */
+interface PointInTimeStorage {
+	getCurrentBookmark(): Promise<string>
+	getBookmarkForTime(timestamp: number | Date): Promise<string>
+	onNextSessionRestoreBookmark(bookmark: string): Promise<string>
+}
 
 export const activateObject = (kind: ObjectKind) =>
 	Effect.gen(function* () {
@@ -125,6 +132,31 @@ export const activateObject = (kind: ObjectKind) =>
 				applyEffect: (request: ApplyEffectRequest) =>
 					object.applyEffect(request).pipe(logFailure("applyEffect")),
 				call: (request: CallRequest) => object.call(request).pipe(logFailure("call")),
+				// Point-in-time recovery (`routes/operator.http.ts`): 30 days of bookmarks per object.
+				bookmark: (request: BookmarkRequest) =>
+					Effect.promise(async () => {
+						const pitr = storage as unknown as PointInTimeStorage
+						const current = await pitr.getCurrentBookmark()
+						const bookmark = await pitr.getBookmarkForTime(request.at)
+						if (request.apply) await pitr.onNextSessionRestoreBookmark(bookmark)
+						return { bookmark, current }
+					}).pipe(
+						Effect.tap((result) =>
+							Effect.logWarning(
+								`${kind} object point-in-time ${request.apply ? "restore armed" : "lookup"}`,
+								{
+									at: new Date(request.at).toISOString(),
+									bookmark: result.bookmark,
+									current: result.current,
+								},
+							),
+						),
+						logFailure("bookmark"),
+					),
+				reset: () =>
+					Effect.sync(() =>
+						(raw as unknown as { abort(reason?: string): void }).abort("operator reset"),
+					),
 				fetch,
 				webSocketMessage: (socket: Cloudflare.WebSocket, message: string | ArrayBuffer) =>
 					object.onMessage(socket.ws as unknown as SyncSocket, message),

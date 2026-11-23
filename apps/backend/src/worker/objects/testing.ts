@@ -180,6 +180,9 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 							Effect.flatMap(get(target), (object) => object.call(structuredClone(request))),
 						),
 					).pipe(Effect.map((response) => structuredClone(response))),
+				// Point-in-time recovery is workerd's (`ctx.storage`): the fake storage has none.
+				bookmark: () => Effect.die("Point-in-time recovery is not available on test objects"),
+				reset: () => Effect.die("Test objects cannot be reset"),
 				applyEffect: (request) =>
 					Effect.suspend(() => {
 						if (unreachable.has(formatTarget(target))) {

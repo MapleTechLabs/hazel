@@ -44,6 +44,17 @@ describe("customer env file", () => {
 		expect(failures(env)).toEqual([])
 	})
 
+	test("writes the operator token, and keeps the one already there", () => {
+		const env = parseEnv(renderCustomerEnv({ ...input, operatorToken: "op-token" }, secrets))
+		expect(env.OPERATOR_TOKEN).toBe("op-token")
+		// A hand-added copy never shadows the managed key.
+		const again = parseEnv(
+			renderCustomerEnv({ ...input, operatorToken: "op-token" }, secrets, { OPERATOR_TOKEN: "old" }),
+		)
+		expect(again.OPERATOR_TOKEN).toBe("op-token")
+		expect(parseEnv(renderCustomerEnv(input, secrets)).OPERATOR_TOKEN).toBeUndefined()
+	})
+
 	test("keeps keys added by hand", () => {
 		const env = parseEnv(
 			renderCustomerEnv(input, secrets, { SLACK_CLIENT_ID: "123", HAZEL_ZONE: "old.example" }),
