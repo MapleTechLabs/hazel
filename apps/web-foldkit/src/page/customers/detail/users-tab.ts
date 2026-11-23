@@ -290,10 +290,10 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 										h.div(
 											[h.Class("flex min-w-0 flex-col")],
 											[
-												h.span(
+												h.div(
 													[
 														h.Class(
-															"flex min-w-0 items-center gap-2 font-medium text-fg",
+															"flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-medium text-fg",
 														),
 													],
 													[
@@ -326,10 +326,10 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 																	),
 																]
 															: []),
+														...nonNull(otherAccounts(h, model, context, row)),
 													],
 												),
 												...nonNull(subtitle(h, row.contact)),
-												...nonNull(otherAccounts(h, model, context, row)),
 											],
 										),
 									],

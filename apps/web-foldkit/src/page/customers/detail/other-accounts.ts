@@ -93,54 +93,60 @@ export const otherAccounts = (
 	const accounts = row.otherAccounts
 	if (accounts.length === 0) return null
 	const label = `${row.contact.name ?? row.contact.email ?? "This user"} is also in ${accounts.length} other ${accounts.length === 1 ? "customer" : "customers"}`
-	const className = "mt-1 h-6 w-fit max-w-full justify-start gap-1.5 px-1.5 text-xs"
+	const className = "h-6 w-fit max-w-full justify-start gap-1.5 px-1.5 text-xs"
+	// Beside the name; a row too narrow for both wraps it underneath, so the name stays readable.
+	const besideName = (control: Html) => h.div([h.Class("min-w-0 max-w-full")], [control])
 	if (model.otherAccountsContactId !== row.contact.id)
-		return button(
-			h,
-			{
-				intent: "outline",
-				size: "xs",
-				className,
-				attributes: [h.AriaLabel(label)],
-				onPress: Message.PressedOtherAccounts({ contactId: row.contact.id }),
-			},
-			[...triggerContent(h, accounts)],
+		return besideName(
+			button(
+				h,
+				{
+					intent: "outline",
+					size: "xs",
+					className,
+					attributes: [h.AriaLabel(label)],
+					onPress: Message.PressedOtherAccounts({ contactId: row.contact.id }),
+				},
+				[...triggerContent(h, accounts)],
+			),
 		)
-	return h.submodel({
-		slotId: model.otherAccountsPopover.id,
-		model: model.otherAccountsPopover,
-		view: Popover.view,
-		viewInputs: {
-			toTrigger: (attributes) =>
-				button(
-					h,
-					{
-						intent: "outline",
-						size: "xs",
-						className,
-						attributes: [...attributes, h.AriaLabel(label)],
-					},
-					[...triggerContent(h, accounts)],
-				),
-			toContent: () => [
-				h.div(
-					[h.Class("flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-1 p-2")],
-					[
-						h.p(
-							[h.Class("px-2 py-1 font-medium text-muted-fg text-xs")],
-							[
-								`Also in ${accounts.length} other ${accounts.length === 1 ? "customer" : "customers"}`,
-							],
-						),
-						h.div(
-							[h.Class("flex max-h-72 flex-col overflow-y-auto")],
-							accounts.map((account) => accountLink(h, account, context)),
-						),
-					],
-				),
-			],
-			placement: "bottom start",
-		},
-		toParentMessage: (message) => Message.GotOtherAccountsPopoverMessage({ message }),
-	})
+	return besideName(
+		h.submodel({
+			slotId: model.otherAccountsPopover.id,
+			model: model.otherAccountsPopover,
+			view: Popover.view,
+			viewInputs: {
+				toTrigger: (attributes) =>
+					button(
+						h,
+						{
+							intent: "outline",
+							size: "xs",
+							className,
+							attributes: [...attributes, h.AriaLabel(label)],
+						},
+						[...triggerContent(h, accounts)],
+					),
+				toContent: () => [
+					h.div(
+						[h.Class("flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-1 p-2")],
+						[
+							h.p(
+								[h.Class("px-2 py-1 font-medium text-muted-fg text-xs")],
+								[
+									`Also in ${accounts.length} other ${accounts.length === 1 ? "customer" : "customers"}`,
+								],
+							),
+							h.div(
+								[h.Class("flex max-h-72 flex-col overflow-y-auto")],
+								accounts.map((account) => accountLink(h, account, context)),
+							),
+						],
+					),
+				],
+				placement: "bottom start",
+			},
+			toParentMessage: (message) => Message.GotOtherAccountsPopoverMessage({ message }),
+		}),
+	)
 }
