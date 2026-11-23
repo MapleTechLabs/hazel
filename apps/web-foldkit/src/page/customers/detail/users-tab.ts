@@ -13,7 +13,7 @@ import { button } from "../../../ui/button"
 import { Message } from "./message"
 import { type ContactFilter, canImpersonate, contactCounts, type Model, visibleContacts } from "./model"
 import { otherAccounts } from "./other-accounts"
-import { type Context, icon, pageFooter } from "./parts"
+import { type Context, copyButton, icon, pageFooter } from "./parts"
 
 /** The users tab: who uses the product, who went quiet, who never started. */
 
@@ -343,9 +343,15 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 							cell: (row) =>
 								row.contact.email === null
 									? "—"
-									: h.span(
-											[h.Class("block max-w-56 truncate"), h.Title(row.contact.email)],
-											[row.contact.email],
+									: h.div(
+											[h.Class("flex max-w-56 items-center gap-1")],
+											[
+												h.span(
+													[h.Class("min-w-0 truncate"), h.Title(row.contact.email)],
+													[row.contact.email],
+												),
+												copyButton(h, row.contact.email, "Email"),
+											],
 										),
 						},
 						{

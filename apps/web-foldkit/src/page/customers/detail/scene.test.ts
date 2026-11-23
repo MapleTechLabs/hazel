@@ -352,6 +352,21 @@ describe("customer page: a user's other customers", () => {
 		as,
 	).model
 
+	test("a user's email copies from its row", () => {
+		const email = row.contact.email ?? ""
+		Scene.scene(
+			pageScene(update, view, as),
+			Scene.given(withUsers),
+			menusMounted(3),
+			Scene.click(Scene.role("button", { name: "Copy Email" })),
+			Scene.Command.expectExact(CopyCustomerText({ text: email, label: "Email", isPath: false })),
+			Scene.Command.resolve(
+				CopyCustomerText,
+				Message.CompletedCopy({ label: "Email", isCopied: true }),
+			),
+		)
+	})
+
 	test("the row names the first one; pressing it lists each with role and a link to its users", () => {
 		const northwindLink = Scene.role("link", { name: /Northwind Labs/ })
 		Scene.scene(
