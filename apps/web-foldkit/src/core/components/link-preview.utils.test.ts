@@ -10,6 +10,13 @@ describe("extractUrls", () => {
 		])
 	})
 
+	it("keeps an @ in a link's path", () => {
+		expect(extractUrls("www.medium.com/@ada/post and medium.com/@ada")).toEqual([
+			"https://www.medium.com/@ada/post",
+			"https://medium.com/@ada",
+		])
+	})
+
 	it("does not treat an email address as a link", () => {
 		expect(extractUrls("send emails to inbox@hazel.sh or some bs like this")).toEqual([])
 		expect(extractUrls("mail first.last@mail.hazel.sh")).toEqual([])

@@ -7,7 +7,7 @@
  */
 export function extractUrls(input: string): string[] {
 	const re =
-		/(https?:\/\/[^\s)]+|(?<![@\w.-])(?:www\.[^\s)@]+|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?![\w@-])(?:\/[^\s)]*)?))/gi
+		/(https?:\/\/[^\s)]+|(?<![@\w.-])(?:www\.[^\s)]+|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?![\w@-])(?:\/[^\s)]*)?))/gi
 	const found: string[] = []
 	let m: RegExpExecArray | null
 	// biome-ignore lint/suspicious/noAssignInExpressions: ...
