@@ -1,5 +1,8 @@
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { IconCirclePause, IconDotsVertical, IconHashtag, IconPlay, IconTrash } from "../../../icons"
+import { badge } from "../../../ui/badge"
+import { ariaButton } from "../../../ui/button"
+import { card, cardBody, cardHeader } from "../../../ui/card"
 import type * as Menu from "../../../ui/menu"
 import { menuLabel, menuTriggerClassName, view as menuView } from "../../../ui/menu-view"
 import { type ChatSyncProvider, PROVIDERS } from "../chat-sync/providers"
@@ -48,11 +51,11 @@ export const directionIcon = <M>(h: HtmlBuilder<M>, direction: SyncDirection, sl
 	outlineIcon(h, { className: "size-4", d: DIRECTION_PATHS[direction], slot })
 
 const WEBHOOK_PERMISSION_LABELS: Readonly<
-	Record<WebhookPermission, { readonly label: string; readonly badgeClass: string }>
+	Record<WebhookPermission, { readonly label: string; readonly intent: "success" | "warning" | "muted" }>
 > = {
-	allowed: { label: "Webhook", badgeClass: "bg-success-subtle text-success-subtle-fg" },
-	denied: { label: "Bot fallback", badgeClass: "bg-warning-subtle text-warning-subtle-fg" },
-	unknown: { label: "Checking", badgeClass: "bg-muted text-muted-fg" },
+	allowed: { label: "Webhook", intent: "success" },
+	denied: { label: "Bot fallback", intent: "warning" },
+	unknown: { label: "Checking", intent: "muted" },
 }
 
 const isDirectionKey = (key: string): key is SyncDirection => key in DIRECTION_PATHS
@@ -131,29 +134,11 @@ export const channelLinkRow = (
 				[
 					// How Discord posts for this link; Slack always posts as the author.
 					...(hasWebhookIdentity
-						? [
-								h.span(
-									[
-										h.Class(
-											`inline-flex rounded-sm px-2 py-0.5 text-xs ${permission.badgeClass}`,
-										),
-									],
-									[permission.label],
-								),
-							]
+						? [badge(h, { intent: permission.intent }, [permission.label])]
 						: []),
-					h.span(
-						[
-							h.Class(
-								`inline-flex rounded-sm px-2 py-0.5 text-xs ${
-									link.isActive
-										? "bg-success-subtle font-medium text-success-subtle-fg"
-										: "bg-muted text-muted-fg"
-								}`,
-							),
-						],
-						[link.isActive ? "Active" : "Paused"],
-					),
+					badge(h, { intent: link.isActive ? "success" : "muted" }, [
+						link.isActive ? "Active" : "Paused",
+					]),
 					...(menu === undefined
 						? []
 						: [
@@ -167,20 +152,18 @@ export const channelLinkRow = (
 											attributes: ReadonlyArray<ChildAttribute>,
 											overlay: Html,
 										) =>
-											h.button(
-												[
-													...attributes,
-													h.AriaLabel("Channel link actions"),
-													h.Class(
-														menuTriggerClassName(
-															"inline-flex size-7 items-center justify-center rounded-lg text-muted-fg hover:bg-secondary hover:text-fg max-md:-my-1.5 max-md:size-10",
-														),
+											ariaButton(
+												h,
+												{
+													className: menuTriggerClassName(
+														"inline-flex size-7 items-center justify-center rounded-lg text-muted-fg hover:bg-secondary hover:text-fg max-md:-my-1.5 max-md:size-10",
 													),
-													h.Attribute("data-react-aria-pressable", "true"),
-													h.Attribute("data-slot", "menu-trigger"),
-													h.Attribute("tabindex", "0"),
-													h.Attribute("type", "button"),
-												],
+													attributes: [
+														...attributes,
+														h.AriaLabel("Channel link actions"),
+														h.Attribute("data-slot", "menu-trigger"),
+													],
+												},
 												[IconDotsVertical(h, { className: "size-4" }), overlay],
 											),
 										content: linkMenuContent(h, link, provider),
@@ -209,50 +192,41 @@ export const aboutCard = <M>(h: HtmlBuilder<M>, provider: ChatSyncProvider): Htm
 	h.div(
 		[h.Class("lg:sticky lg:top-6 lg:self-start")],
 		[
-			h.div(
-				[h.Class("overflow-hidden rounded-xl border border-border bg-bg")],
-				[
-					h.div(
-						[h.Class("border-border border-b bg-bg-muted/30 px-5 py-3")],
-						[heading(h, { variant: "subsection" }, ["About Chat Sync"])],
-					),
-					h.div(
-						[h.Class("p-5")],
+			card(h, {}, [
+				cardHeader(h, [heading(h, { variant: "subsection" }, ["About Chat Sync"])], "py-3"),
+				cardBody(h, [
+					h.p(
+						[h.Class("mb-4 text-muted-fg text-sm leading-relaxed")],
 						[
-							h.p(
-								[h.Class("mb-4 text-muted-fg text-sm leading-relaxed")],
-								[
-									`Chat Sync keeps messages in sync between Hazel and ${PROVIDERS[provider].name}. Messages sent in either platform are automatically mirrored to the linked channel, including edits and deletions.`,
-								],
-							),
-							h.ul(
-								[h.Class("flex flex-col gap-2.5")],
-								FEATURES.map((feature) =>
-									h.li(
-										[h.Class("flex items-center gap-2.5 text-sm")],
-										[
-											h.div(
-												[
-													h.Class(
-														"flex size-5 shrink-0 items-center justify-center rounded-sm bg-success-subtle",
-													),
-												],
-												[
-													outlineIcon(h, {
-														className: "size-3 text-success-subtle-fg",
-														d: "M5 13l4 4L19 7",
-														strokeWidth: "3",
-													}),
-												],
-											),
-											h.span([h.Class("text-fg")], [feature]),
-										],
-									),
-								),
-							),
+							`Chat Sync keeps messages in sync between Hazel and ${PROVIDERS[provider].name}. Messages sent in either platform are automatically mirrored to the linked channel, including edits and deletions.`,
 						],
 					),
-				],
-			),
+					h.ul(
+						[h.Class("flex flex-col gap-2.5")],
+						FEATURES.map((feature) =>
+							h.li(
+								[h.Class("flex items-center gap-2.5 text-sm")],
+								[
+									h.div(
+										[
+											h.Class(
+												"flex size-5 shrink-0 items-center justify-center rounded-sm bg-success-subtle",
+											),
+										],
+										[
+											outlineIcon(h, {
+												className: "size-3 text-success-subtle-fg",
+												d: "M5 13l4 4L19 7",
+												strokeWidth: "3",
+											}),
+										],
+									),
+									h.span([h.Class("text-fg")], [feature]),
+								],
+							),
+						),
+					),
+				]),
+			]),
 		],
 	)

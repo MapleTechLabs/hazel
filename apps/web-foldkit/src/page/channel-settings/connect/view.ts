@@ -8,9 +8,11 @@ import { avatar } from "../../../ui/avatar"
 import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
 import { emptyState } from "../../../ui/empty-state"
-import { sectionHeaderActions } from "../../../ui/section-header"
+import { callout } from "../../../ui/callout"
+import { card, cardHeader } from "../../../ui/card"
+import { type Column, dataTable } from "../../../ui/data-table"
+import { pageHeader, pageLayout } from "../../../ui/page-header"
 import type { PageViewInputs, Shared } from "../../contract"
-import { tabHeader } from "../section-header"
 import { type Invite, Message, type Model, type Mount, rowRoles } from "./model"
 import type * as ShareModal from "./share-modal"
 import { shareChannelModal } from "./share-modal-view"
@@ -75,164 +77,109 @@ const connectionRow = (h: HtmlBuilder<Message>, model: Model, mount: Mount, shar
 }
 
 const activeConnections = (h: HtmlBuilder<Message>, model: Model, shared: Shared): Html =>
-	h.div(
-		[h.Class("overflow-hidden rounded-xl border border-border bg-bg shadow-sm")],
-		[
+	card(h, {}, [
+		cardHeader(h, [
 			h.div(
-				[h.Class("border-border border-b bg-bg px-4 py-4 md:px-6")],
+				[h.Class("flex items-center gap-2")],
 				[
-					h.div(
-						[h.Class("flex items-center gap-2")],
-						[
-							heading(h, { variant: "subsection" }, ["Active connections"]),
-							badge(h, { intent: "success", size: "sm" }, [
-								`${model.mounts.filter((mount) => mount.organizationId !== shared.organization?.id).length}`,
-							]),
-						],
-					),
+					heading(h, { variant: "subsection" }, ["Active connections"]),
+					badge(h, { intent: "success", size: "sm" }, [
+						`${model.mounts.filter((mount) => mount.organizationId !== shared.organization?.id).length}`,
+					]),
 				],
 			),
+		]),
+		h.div(
+			[h.Class("divide-y divide-border")],
+			model.mounts.map((mount) => connectionRow(h, model, mount, shared)),
+		),
+	])
+
+const inviteColumns = (h: HtmlBuilder<Message>, model: Model): ReadonlyArray<Column<Invite>> => [
+	{
+		key: "target",
+		label: "Target",
+		cell: (invite) =>
 			h.div(
-				[h.Class("divide-y divide-border")],
-				model.mounts.map((mount) => connectionRow(h, model, mount, shared)),
-			),
-		],
-	)
-
-/** A low-priority column a phone leaves out (its cells carry the same class). */
-const PHONE_HIDDEN = "max-md:hidden"
-
-const headerCell = (h: HtmlBuilder<Message>, label: string, align: "left" | "right", className?: string) =>
-	h.th(
-		[
-			h.Class(
-				`px-4 py-3 text-${align} font-medium text-muted-fg text-xs${className ? ` ${className}` : ""}`,
-			),
-		],
-		[label],
-	)
-
-const inviteRow = (h: HtmlBuilder<Message>, model: Model, invite: Invite): Html => {
-	const statusBadge = getConnectInviteStatusBadge(invite.status)
-	const isRevoking = model.revokingInviteIds.includes(invite.id)
-	return h.keyed("tr")(
-		invite.id,
-		[h.Class("hover:bg-secondary/50")],
-		[
-			h.td(
-				[h.Class("px-4 py-4")],
+				[h.Class("flex min-w-0 flex-col")],
 				[
-					h.div(
-						[h.Class("flex flex-col")],
-						[
-							h.span([h.Class("font-medium text-fg text-sm")], [invite.targetValue]),
-							h.span([h.Class("text-muted-fg text-xs")], ["Workspace"]),
-						],
-					),
+					h.span([h.Class("truncate font-medium")], [invite.targetValue]),
+					h.span([h.Class("text-muted-fg text-xs")], ["Workspace"]),
 				],
 			),
-			h.td(
-				[h.Class("px-4 py-4")],
-				[badge(h, { intent: statusBadge.intent, size: "sm" }, [statusBadge.label])],
-			),
-			h.td(
-				[h.Class(`px-4 py-4 ${PHONE_HIDDEN}`)],
-				[
-					h.span(
-						[h.Class("text-muted-fg text-sm")],
-						[new Date(invite.createdAtMs).toLocaleDateString()],
-					),
-				],
-			),
-			h.td(
-				[h.Class("px-4 py-4 text-right")],
-				invite.status === "pending"
-					? [
-							button(
-								h,
-								{
-									intent: "outline",
-									size: "sm",
-									isDisabled: isRevoking,
-									onPress: Message.ClickedRevokeInvite({ inviteId: invite.id }),
-									interaction: {
-										wiring: interaction.wiring(model),
-										target: revokeTarget(invite.id),
-									},
-								},
-								[isRevoking ? "Revoking..." : "Revoke"],
-							),
-						]
-					: [],
-			),
-		],
-	)
-}
+	},
+	{
+		key: "status",
+		label: "Status",
+		widthClass: "w-32",
+		cell: (invite) => {
+			const statusBadge = getConnectInviteStatusBadge(invite.status)
+			return badge(h, { intent: statusBadge.intent, size: "sm" }, [statusBadge.label])
+		},
+	},
+	{
+		key: "sent",
+		label: "Sent",
+		widthClass: "w-36",
+		hideClass: "max-md:hidden",
+		cell: (invite) =>
+			h.span([h.Class("text-muted-fg")], [new Date(invite.createdAtMs).toLocaleDateString()]),
+	},
+	{
+		key: "actions",
+		label: "Actions",
+		align: "right",
+		widthClass: "w-32",
+		cell: (invite) => {
+			if (invite.status !== "pending") return ""
+			const isRevoking = model.revokingInviteIds.includes(invite.id)
+			return button(
+				h,
+				{
+					intent: "outline",
+					size: "sm",
+					isDisabled: isRevoking,
+					onPress: Message.ClickedRevokeInvite({ inviteId: invite.id }),
+					interaction: {
+						wiring: interaction.wiring(model),
+						target: revokeTarget(invite.id),
+					},
+				},
+				[isRevoking ? "Revoking..." : "Revoke"],
+			)
+		},
+	},
+]
 
 const invitations = (h: HtmlBuilder<Message>, model: Model, invites: ReadonlyArray<Invite>): Html =>
-	h.div(
-		[h.Class("overflow-hidden rounded-xl border border-border bg-bg shadow-sm")],
-		[
-			h.div(
-				[h.Class("border-border border-b bg-bg px-4 py-4 md:px-6")],
-				[heading(h, { variant: "subsection" }, ["Invitations"])],
-			),
-			h.div(
-				[h.Class("overflow-x-auto")],
-				[
-					h.table(
-						[h.Class("w-full min-w-full")],
-						[
-							h.thead(
-								[h.Class("border-border border-b bg-bg")],
-								[
-									h.tr(
-										[],
-										[
-											headerCell(h, "Target", "left"),
-											headerCell(h, "Status", "left"),
-											headerCell(h, "Sent", "left", PHONE_HIDDEN),
-											headerCell(h, "Actions", "right"),
-										],
-									),
-								],
-							),
-							h.tbody(
-								[h.Class("divide-y divide-border")],
-								invites.map((invite) => inviteRow(h, model, invite)),
-							),
-						],
-					),
-				],
-			),
-		],
-	)
+	card(h, {}, [
+		cardHeader(h, [heading(h, { variant: "subsection" }, ["Invitations"])]),
+		dataTable(h, {
+			ariaLabel: "Invitations",
+			id: "channel-connect-invites",
+			columns: inviteColumns(h, model),
+			rows: invites,
+			rowKey: (invite) => invite.id,
+			isFramed: false,
+		}),
+	])
 
 const invitesFailed = (h: HtmlBuilder<Message>, reason: CommonReason): Html => {
 	const message = commonMessage(reason)
-	return h.div(
-		[
-			h.Class(
-				"flex items-center justify-between gap-4 rounded-xl border border-border bg-bg px-4 py-4 md:px-6",
-			),
-			h.Role("alert"),
-		],
-		[
-			h.div(
-				[h.Class("flex flex-col")],
-				[
-					h.span([h.Class("font-medium text-fg text-sm")], ["Couldn't load invitations"]),
-					h.span([h.Class("text-muted-fg text-xs")], [message.description ?? message.title]),
-				],
-			),
-			...(isRetryableReason(reason)
+	return callout(
+		h,
+		{
+			intent: "danger",
+			title: "Couldn't load invitations",
+			actions: isRetryableReason(reason)
 				? [
 						button(h, { intent: "outline", size: "sm", onPress: Message.ClickedRetryInvites() }, [
 							"Try again",
 						]),
 					]
-				: []),
-		],
+				: [],
+		},
+		[message.description ?? message.title],
 	)
 }
 
@@ -265,29 +212,23 @@ const notShared = (h: HtmlBuilder<Message>): Html =>
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
 	const isConnected = model.mounts.length > 0
-	return h.div(
-		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
-		[
-			tabHeader(
-				h,
-				"Hazel Connect",
-				"Share this channel with another organization to collaborate together.",
-				[
-					sectionHeaderActions(h, {}, [
-						button(
-							h,
-							{ intent: "secondary", size: "md", onPress: Message.ClickedShareChannel() },
-							[plusIcon(h), "Share channel"],
-						),
-					]),
-				],
-			),
-			...(isConnected ? [activeConnections(h, model, shared)] : []),
-			...invitationsSection(h, model, isConnected),
-			// `{channel && <ShareChannelModal />}`; its overlay portals to the body.
-			...(model.channelName === null
-				? []
-				: [shareChannelModal(h, model.share, model.channelName, toShareModalMessage)]),
-		],
-	)
+	return pageLayout(h, {}, [
+		pageHeader(h, {
+			title: "Hazel Connect",
+			size: "title",
+			subtitle: "Share this channel with another organization to collaborate together.",
+			actions: [
+				button(h, { intent: "secondary", size: "md", onPress: Message.ClickedShareChannel() }, [
+					plusIcon(h),
+					"Share channel",
+				]),
+			],
+		}),
+		...(isConnected ? [activeConnections(h, model, shared)] : []),
+		...invitationsSection(h, model, isConnected),
+		// `{channel && <ShareChannelModal />}`; its overlay portals to the body.
+		...(model.channelName === null
+			? []
+			: [shareChannelModal(h, model.share, model.channelName, toShareModalMessage)]),
+	])
 })

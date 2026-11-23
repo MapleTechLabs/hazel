@@ -1,5 +1,6 @@
-import type { Html, HtmlBuilder } from "foldkit/html"
+import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { IconDownload } from "../icons"
+import { ariaButton } from "../ui/button"
 import { videoIcons } from "./video-icons"
 
 /**
@@ -37,10 +38,10 @@ const btnCls =
 
 const sliderCls = {
 	root: "group/slider relative flex flex-1 items-center justify-center rounded-full outline-none data-[orientation=horizontal]:min-w-20 data-[orientation=horizontal]:w-full data-[orientation=horizontal]:h-5 data-[orientation=vertical]:w-5 data-[orientation=vertical]:h-[4.5rem]",
-	track: "relative isolate overflow-hidden bg-current/20 rounded-[inherit] select-none shadow-[0_0_0_1px_oklch(0_0_0/0.05)] data-[orientation=horizontal]:w-full data-[orientation=horizontal]:h-0.75 data-[orientation=vertical]:w-0.75 data-[orientation=vertical]:h-full",
+	track: "relative isolate overflow-hidden bg-current/20 rounded-[inherit] select-none ring-1 ring-black/5 data-[orientation=horizontal]:w-full data-[orientation=horizontal]:h-0.75 data-[orientation=vertical]:w-0.75 data-[orientation=vertical]:h-full",
 	fill: "absolute rounded-[inherit] pointer-events-none bg-current data-[orientation=horizontal]:inset-y-0 data-[orientation=horizontal]:left-0 data-[orientation=horizontal]:w-(--media-slider-fill,0) data-[orientation=vertical]:inset-x-0 data-[orientation=vertical]:bottom-0 data-[orientation=vertical]:h-(--media-slider-fill,0)",
 	buffer: "absolute rounded-[inherit] pointer-events-none bg-current/20 duration-250 ease-out data-[orientation=horizontal]:inset-y-0 data-[orientation=horizontal]:left-0 data-[orientation=horizontal]:transition-[width] data-[orientation=horizontal]:w-(--media-slider-buffer,0) data-[orientation=vertical]:inset-x-0 data-[orientation=vertical]:bottom-0 data-[orientation=vertical]:transition-[height] data-[orientation=vertical]:h-(--media-slider-buffer)",
-	thumb: "z-10 absolute size-3 -translate-x-1/2 -translate-y-1/2 bg-current rounded-full shadow-[0_0_0_1px_oklch(0_0_0/0.1),0_1px_3px_0_oklch(0_0_0/0.15),0_1px_2px_-1px_oklch(0_0_0/0.15)] transition-[opacity,scale,outline-offset] duration-150 ease-out select-none outline-2 outline-transparent -outline-offset-2 focus-visible:outline-current focus-visible:outline-offset-2 data-[orientation=horizontal]:top-1/2 data-[orientation=horizontal]:left-(--media-slider-fill,0) data-[orientation=vertical]:left-1/2 data-[orientation=vertical]:top-[calc(100%-var(--media-slider-fill,0))] opacity-0 scale-70 origin-center group-hover/slider:opacity-100 group-hover/slider:scale-100 group-focus-within/slider:opacity-100 group-focus-within/slider:scale-100",
+	thumb: "z-10 absolute size-3 -translate-x-1/2 -translate-y-1/2 bg-current rounded-full shadow-sm ring-1 ring-black/10 transition-[opacity,scale,outline-offset] duration-150 ease-out select-none outline-2 outline-transparent -outline-offset-2 focus-visible:outline-current focus-visible:outline-offset-2 data-[orientation=horizontal]:top-1/2 data-[orientation=horizontal]:left-(--media-slider-fill,0) data-[orientation=vertical]:left-1/2 data-[orientation=vertical]:top-[calc(100%-var(--media-slider-fill,0))] opacity-0 scale-70 origin-center group-hover/slider:opacity-100 group-hover/slider:scale-100 group-focus-within/slider:opacity-100 group-focus-within/slider:scale-100",
 }
 
 const timeCls = {
@@ -55,7 +56,7 @@ const controlsCls =
 	"peer/controls @container/media-controls flex items-center [--media-controls-current-shadow-color:oklch(from_currentColor_0_0_0/clamp(0,calc((l-0.5)*0.5),0.25))] text-shadow-[0_0_1px_var(--media-controls-current-shadow-color)] absolute bottom-0 inset-x-0 pt-8 px-1.5 pb-1.5 gap-2 text-white z-10 will-change-[translate,filter,opacity] transition-[translate,filter,opacity] ease-out delay-0 duration-75 not-data-visible:opacity-0 not-data-visible:translate-y-full not-data-visible:blur-sm not-data-visible:pointer-events-none not-data-visible:delay-500 not-data-visible:duration-500 motion-reduce:not-data-visible:duration-100 motion-reduce:not-data-visible:translate-y-0 motion-reduce:not-data-visible:blur-none @sm/media-root:pt-10 @sm/media-root:px-3 @sm/media-root:pb-3 @sm/media-root:gap-3.5"
 
 const rootCls =
-	"block relative isolate @container/media-root rounded-(--media-border-radius,0.75rem) font-[Inter_Variable,Inter,ui-sans-serif,system-ui,sans-serif] text-[0.8125rem] leading-normal subpixel-antialiased **:box-border **:m-0 [&_button]:font-[inherit] motion-safe:[interpolate-size:allow-keywords] bg-black after:absolute after:pointer-events-none after:rounded-[inherit] after:z-10 after:inset-0 after:ring-1 after:ring-inset after:ring-black/15 dark:after:ring-white/15 [&_video]:block [&_video]:w-full [&_video]:h-full [&_video]:rounded-[inherit] [&:fullscreen]:rounded-none"
+	"block relative isolate @container/media-root rounded-(--media-border-radius,0.75rem) font-[Inter_Variable,Inter,ui-sans-serif,system-ui,sans-serif] text-xs leading-normal subpixel-antialiased **:box-border **:m-0 [&_button]:font-[inherit] motion-safe:[interpolate-size:allow-keywords] bg-black after:absolute after:pointer-events-none after:rounded-[inherit] after:z-10 after:inset-0 after:ring-1 after:ring-inset after:ring-black/15 dark:after:ring-white/15 [&_video]:block [&_video]:w-full [&_video]:h-full [&_video]:rounded-[inherit] [&:fullscreen]:rounded-none"
 
 const overlayCls =
 	"absolute inset-0 flex flex-col items-start pointer-events-none rounded-[inherit] opacity-0 bg-linear-to-t from-black/70 via-black/50 via-[7.5rem] to-transparent backdrop-blur-none backdrop-saturate-120 backdrop-brightness-90 transition-[opacity,backdrop-filter] ease-out duration-500 delay-500 peer-data-visible/controls:opacity-100 peer-data-visible/controls:duration-150 peer-data-visible/controls:delay-0 motion-reduce:duration-100"
@@ -78,19 +79,31 @@ const triggerAttributes = <M>(h: HtmlBuilder<M>, anchor: string) => [
 	h.Attribute("data-align", "center"),
 	h.Attribute("data-side", "top"),
 	h.Attribute("style", `anchor-name: --${anchor};`),
-	h.Type("button"),
 ]
 
 export const videoPlayerView = <M>(h: HtmlBuilder<M>, props: VideoPlayerProps<M>): Html => {
 	const icons = videoIcons(h)
 	const anchor = (part: string) => `${props.id}-${part}`
-	const mediaButtonAttributes = (label: string, part: string, group: string) => [
-		h.AriaLabel(label),
-		h.Class(`${btnCls} ${group}`),
-		...triggerAttributes(h, anchor(part)),
-		h.Role("button"),
-		h.Tabindex(0),
-	]
+	const mediaButton = (
+		label: string,
+		part: string,
+		group: string,
+		extra: ReadonlyArray<Attribute<M>>,
+		children: Array<Html>,
+	) =>
+		ariaButton(
+			h,
+			{
+				className: `${btnCls} ${group}`,
+				attributes: [
+					h.AriaLabel(label),
+					...triggerAttributes(h, anchor(part)),
+					h.Role("button"),
+					...extra,
+				],
+			},
+			children,
+		)
 	const time = (type: "current" | "duration", label: string, className: string) =>
 		h.time(
 			[
@@ -126,11 +139,11 @@ export const videoPlayerView = <M>(h: HtmlBuilder<M>, props: VideoPlayerProps<M>
 							h.span(
 								[h.Class(buttonGroupCls)],
 								[
-									h.button(
-										[
-											...mediaButtonAttributes("Play", "play", iconState.play.button),
-											h.Attribute("data-paused", ""),
-										],
+									mediaButton(
+										"Play",
+										"play",
+										iconState.play.button,
+										[h.Attribute("data-paused", "")],
 										[
 											icons.restart(`${iconCls} ${iconState.play.restart}`),
 											icons.play(`${iconCls} ${iconState.play.play}`),
@@ -187,9 +200,11 @@ export const videoPlayerView = <M>(h: HtmlBuilder<M>, props: VideoPlayerProps<M>
 							h.span(
 								[h.Class(buttonGroupCls)],
 								[
-									h.button(
+									mediaButton(
+										"Mute",
+										"mute",
+										iconState.mute.button,
 										[
-											...mediaButtonAttributes("Mute", "mute", iconState.mute.button),
 											h.Attribute("aria-controls", `popup-${anchor("volume")}`),
 											h.Attribute("aria-expanded", "false"),
 											h.Attribute("aria-haspopup", "dialog"),
@@ -201,29 +216,28 @@ export const videoPlayerView = <M>(h: HtmlBuilder<M>, props: VideoPlayerProps<M>
 											icons.volumeHigh(`${iconCls} ${iconState.mute.volumeHigh}`),
 										],
 									),
-									h.button(
-										[
-											...mediaButtonAttributes(
-												"Enter fullscreen",
-												"fullscreen",
-												iconState.fullscreen.button,
-											),
-											h.Attribute("data-availability", "available"),
-										],
+									mediaButton(
+										"Enter fullscreen",
+										"fullscreen",
+										iconState.fullscreen.button,
+										[h.Attribute("data-availability", "available")],
 										[
 											icons.fullscreenEnter(`${iconCls} ${iconState.fullscreen.enter}`),
 											icons.fullscreenExit(`${iconCls} ${iconState.fullscreen.exit}`),
 										],
 									),
-									h.button(
-										[
-											h.AriaLabel("Download video"),
-											h.Class(btnCls),
-											...triggerAttributes(h, anchor("download")),
-											...(props.onDownload === undefined
-												? []
-												: [h.OnClick(props.onDownload, { propagation: "Stop" })]),
-										],
+									ariaButton(
+										h,
+										{
+											className: btnCls,
+											attributes: [
+												h.AriaLabel("Download video"),
+												...triggerAttributes(h, anchor("download")),
+												...(props.onDownload === undefined
+													? []
+													: [h.OnClick(props.onDownload, { propagation: "Stop" })]),
+											],
+										},
 										[IconDownload(h, { className: iconCls })],
 									),
 								],

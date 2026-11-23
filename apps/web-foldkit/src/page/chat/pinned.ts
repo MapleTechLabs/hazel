@@ -1,6 +1,11 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconClose, IconPin } from "../../icons"
+import { formatTime } from "../../chat/message/parts"
 import { avatar } from "../../ui/avatar"
+import { badge } from "../../ui/badge"
+import { ariaButton, iconButton } from "../../ui/button"
+import { card } from "../../ui/card"
+import { emptyState } from "../../ui/empty-state"
 import * as Popover from "../../ui/popover"
 import { pinnedButton } from "./header"
 import type { PinnedInfo } from "./lookups"
@@ -11,12 +16,6 @@ import { heading } from "../../ui/heading"
 const pad = (value: number) => String(value).padStart(2, "0")
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-
-/** "14:05" in the local time zone. */
-const formatTime = (ms: number) => {
-	const date = new Date(ms)
-	return `${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
 
 /** "Mar 12 at 2:05 PM" in the local time zone. */
 const formatPinnedAt = (ms: number) => {
@@ -31,14 +30,9 @@ const fullName = (pin: PinnedInfo) =>
 
 /** `UserProfilePopover`'s closed trigger (the avatar). */
 const authorAvatar = <M>(h: HtmlBuilder<M>, pin: PinnedInfo): Html =>
-	h.button(
-		[
-			h.Attribute("aria-expanded", "false"),
-			h.Class("size-fit outline-hidden"),
-			h.Attribute("data-react-aria-pressable", "true"),
-			h.Attribute("tabindex", "0"),
-			h.Attribute("type", "button"),
-		],
+	ariaButton(
+		h,
+		{ className: "size-fit outline-hidden", attributes: [h.Attribute("aria-expanded", "false")] },
 		[
 			avatar(h, {
 				size: "md",
@@ -52,23 +46,21 @@ const authorAvatar = <M>(h: HtmlBuilder<M>, pin: PinnedInfo): Html =>
 const pinRow = <M>(h: HtmlBuilder<M>, pin: PinnedInfo): Html => {
 	const isEdited = pin.updatedAtMs !== null && pin.updatedAtMs > pin.createdAtMs
 	const time = formatTime(pin.createdAtMs)
-	return h.button(
-		[
-			h.Class(
+	return ariaButton(
+		h,
+		{
+			className:
 				"group relative w-full cursor-pointer border-border border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-secondary",
-			),
-			h.Attribute("type", "button"),
-		],
+		},
 		[
-			h.button(
-				[
-					h.Class(
-						"absolute top-2 right-2 rounded p-1 opacity-0 transition-opacity hover:bg-secondary group-hover:opacity-100",
-					),
-					h.Attribute("aria-label", "Unpin message"),
-					h.Attribute("type", "button"),
-				],
-				[IconClose(h, { className: "size-3.5 text-muted-fg" })],
+			iconButton(
+				h,
+				{
+					label: "Unpin message",
+					size: "sq-xs",
+					className: "absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100",
+				},
+				IconClose(h, { attributes: { "data-slot": "icon" } }),
 			),
 			h.div(
 				[h.Class("flex gap-3 pr-8")],
@@ -101,48 +93,37 @@ const pinRow = <M>(h: HtmlBuilder<M>, pin: PinnedInfo): Html => {
 }
 
 const content = <M>(h: HtmlBuilder<M>, pins: ReadonlyArray<PinnedInfo>): ReadonlyArray<Html> => [
-	h.div(
-		[h.Class("rounded-xl border border-border bg-bg shadow-lg")],
-		[
-			h.div(
-				[h.Class("flex items-center gap-2 border-border border-b px-4 py-3")],
-				[
-					IconPin(h, { className: "size-4 text-muted-fg" }),
-					heading(h, { variant: "subsection" }, ["Pinned Messages"]),
-					h.span(
-						[
-							h.Class(
-								"ml-auto rounded-full bg-secondary px-2 py-0.5 font-medium text-muted-fg text-xs",
-							),
-						],
-						[String(pins.length), " ", pins.length === 1 ? "pin" : "pins"],
-					),
-				],
-			),
-			h.div(
-				[h.Class("max-h-[400px] overflow-y-auto")],
-				pins.length === 0
-					? [
-							h.div(
-								[h.Class("px-4 py-8 text-center")],
-								[
-									h.p([h.Class("text-muted-fg text-sm")], ["No pinned messages yet"]),
-									h.p(
-										[h.Class("mt-1 text-muted-fg/60 text-xs")],
-										["Pin important messages to keep them easily accessible"],
-									),
-								],
-							),
-						]
-					: [
-							h.div(
-								[h.Class("flex flex-col")],
-								pins.map((pin) => pinRow(h, pin)),
-							),
-						],
-			),
-		],
-	),
+	card(h, { className: "shadow-lg" }, [
+		h.div(
+			[h.Class("flex items-center gap-2 border-border border-b px-4 py-3")],
+			[
+				IconPin(h, { className: "size-4 text-muted-fg" }),
+				heading(h, { variant: "subsection" }, ["Pinned Messages"]),
+				badge(h, { intent: "muted", isPill: true, className: "ml-auto" }, [
+					String(pins.length),
+					" ",
+					pins.length === 1 ? "pin" : "pins",
+				]),
+			],
+		),
+		h.div(
+			[h.Class("max-h-[400px] overflow-y-auto")],
+			pins.length === 0
+				? [
+						emptyState(h, {
+							title: "No pinned messages yet",
+							description: "Pin important messages to keep them easily accessible",
+							className: "px-4 py-8",
+						}),
+					]
+				: [
+						h.div(
+							[h.Class("flex flex-col")],
+							pins.map((pin) => pinRow(h, pin)),
+						),
+					],
+		),
+	]),
 ]
 
 export const pinnedPopoverView = <M>(

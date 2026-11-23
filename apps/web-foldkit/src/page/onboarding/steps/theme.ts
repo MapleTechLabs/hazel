@@ -1,6 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { visuallyHiddenStyle } from "../../../ui/checkbox"
+import { ariaRadioGroup } from "../../../ui/aria-radio"
+import { separator } from "../../../ui/separator"
 import { Message } from "../message"
 import type { ThemeState } from "../../../theme"
 import type { Theme } from "../model"
@@ -32,153 +33,108 @@ const rgbOf = (hex: string) => {
 	return `rgb(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255})`
 }
 
-/** React Aria's `<Radio>`: a label around a visually hidden input. */
-const ariaRadio = (
-	h: HtmlBuilder<Message>,
-	options: {
-		readonly name: string
-		readonly value: string
-		readonly ariaLabel: string
-		readonly isSelected: boolean
-		readonly className: string
-		readonly onSelect: Message
-	},
-	children: Array<Html>,
-): Html =>
-	h.label(
-		[
-			h.Class(options.className),
-			h.DataAttribute("react-aria-pressable", "true"),
-			...(options.isSelected ? [h.DataAttribute("selected", "true")] : []),
-		],
-		[
-			h.span(
-				[h.Attribute("style", visuallyHiddenStyle)],
-				[
-					h.input([
-						h.AriaLabel(options.ariaLabel),
-						h.DataAttribute("react-aria-pressable", "true"),
-						h.Name(options.name),
-						h.Attribute("style", ""),
-						h.Tabindex(options.isSelected ? 0 : -1),
-						h.Attribute("title", ""),
-						h.Type("radio"),
-						h.Attribute("value", options.value),
-						h.Checked(options.isSelected),
-						h.OnChange(() => options.onSelect),
-					]),
-				],
-			),
-			...children,
-		],
-	)
-
-const radioGroup = (h: HtmlBuilder<Message>, ariaLabel: string, className: string, children: Array<Html>) =>
-	h.div(
-		[
-			h.AriaLabel(ariaLabel),
-			h.Attribute("aria-orientation", "vertical"),
-			h.Class(className),
-			h.DataAttribute("orientation", "vertical"),
-			h.Role("radiogroup"),
-		],
-		children,
-	)
-
 const brandColors = (h: HtmlBuilder<Message>, theme: ThemeState): Html =>
-	radioGroup(h, "Brand color", "flex items-center", [
-		h.div(
-			[h.Class("flex flex-wrap gap-2")],
-			SWATCHES.map((swatch) => {
-				const isSelected = theme.customization.primary.toLowerCase() === swatch.hex.toLowerCase()
-				return ariaRadio(
-					h,
-					{
-						name: "onboarding-brand-color",
-						value: swatch.hex,
-						ariaLabel: swatch.name,
-						isSelected,
-						className: "react-aria-Radio",
-						onSelect: Message.SelectedBrandColor({ hex: swatch.hex }),
-					},
-					[
-						h.div([
-							h.AriaLabel(swatch.name),
-							h.Attribute("aria-roledescription", "color swatch"),
-							h.Class(
-								twMerge(
-									"size-7 cursor-pointer rounded-full outline-1 outline-black/10 -outline-offset-1",
-									isSelected && "ring-2 ring-ring ring-offset-2 ring-offset-bg",
+	ariaRadioGroup(
+		h,
+		{
+			id: "onboarding-brand-color",
+			value:
+				SWATCHES.find(
+					(swatch) => swatch.hex.toLowerCase() === theme.customization.primary.toLowerCase(),
+				)?.hex ?? null,
+			onChange: (hex) => Message.SelectedBrandColor({ hex }),
+			ariaLabel: "Brand color",
+			className: "flex items-center",
+		},
+		(radio) => [
+			h.div(
+				[h.Class("flex flex-wrap gap-2")],
+				SWATCHES.map((swatch) =>
+					radio(
+						swatch.hex,
+						{ className: "react-aria-Radio", ariaLabel: swatch.name },
+						({ isSelected }) => [
+							h.div([
+								h.AriaLabel(swatch.name),
+								h.Attribute("aria-roledescription", "color swatch"),
+								h.Class(
+									twMerge(
+										"size-7 cursor-pointer rounded-full outline-1 outline-black/10 -outline-offset-1",
+										isSelected && "ring-2 ring-ring ring-offset-2 ring-offset-bg",
+									),
 								),
-							),
-							h.Id(`color-${swatch.hex}`),
-							h.Role("img"),
-							h.Attribute(
-								"style",
-								`background-color: ${rgbOf(swatch.hex)}; forced-color-adjust: none;`,
-							),
-						]),
-					],
-				)
-			}),
-		),
-	])
+								h.Id(`color-${swatch.hex}`),
+								h.Role("img"),
+								h.Attribute(
+									"style",
+									`background-color: ${rgbOf(swatch.hex)}; forced-color-adjust: none;`,
+								),
+							]),
+						],
+					),
+				),
+			),
+		],
+	)
+
+const isTheme = (value: string): value is Theme => THEMES.some((option) => option.value === value)
 
 const displayPreferences = (h: HtmlBuilder<Message>, theme: ThemeState): Html =>
-	radioGroup(
+	ariaRadioGroup(
 		h,
-		"Display preference",
-		"flex gap-4 sm:gap-5",
-		THEMES.map((option) => {
-			const isSelected = theme.mode === option.value
-			return ariaRadio(
-				h,
-				{
-					name: "onboarding-display-preference",
-					value: option.value,
-					ariaLabel: option.label,
-					isSelected,
-					className: "flex shrink-0 cursor-pointer flex-col gap-2 sm:gap-3",
-					onSelect: Message.SelectedTheme({ theme: option.value }),
-				},
-				[
-					h.section(
-						[
-							h.Class(
-								twMerge(
-									"relative h-24 w-36 rounded-[10px] bg-secondary sm:h-33 sm:w-50",
-									isSelected && "outline-2 outline-ring outline-offset-2",
+		{
+			id: "onboarding-display-preference",
+			value: theme.mode,
+			onChange: (value) => Message.SelectedTheme({ theme: isTheme(value) ? value : "system" }),
+			ariaLabel: "Display preference",
+			className: "flex gap-4 sm:gap-5",
+		},
+		(radio) =>
+			THEMES.map((option) =>
+				radio(
+					option.value,
+					{
+						className: "flex shrink-0 cursor-pointer flex-col gap-2 sm:gap-3",
+						ariaLabel: option.label,
+					},
+					({ isSelected }) => [
+						h.section(
+							[
+								h.Class(
+									twMerge(
+										"relative h-24 w-36 rounded-xl bg-secondary sm:h-33 sm:w-50",
+										isSelected && "outline-2 outline-ring outline-offset-2",
+									),
 								),
-							),
-						],
-						[
-							h.img([
-								h.Src(option.preview),
-								h.Alt(""),
-								h.Attribute("draggable", "false"),
-								h.Class("size-full"),
-							]),
-							...(isSelected
-								? [
-										h.div(
-											[
-												h.Class(
-													"absolute bottom-2 left-2 flex size-5 items-center justify-center rounded-full border-2 border-fg bg-primary",
-												),
-											],
-											[h.div([h.Class("size-2.5 rounded-full bg-fg")])],
-										),
-									]
-								: []),
-						],
-					),
-					h.section(
-						[h.Class("w-full")],
-						[h.p([h.Class("font-semibold text-fg text-sm")], [option.label])],
-					),
-				],
-			)
-		}),
+							],
+							[
+								h.img([
+									h.Src(option.preview),
+									h.Alt(""),
+									h.Attribute("draggable", "false"),
+									h.Class("size-full"),
+								]),
+								...(isSelected
+									? [
+											h.div(
+												[
+													h.Class(
+														"absolute bottom-2 left-2 flex size-5 items-center justify-center rounded-full border-2 border-fg bg-primary",
+													),
+												],
+												[h.div([h.Class("size-2.5 rounded-full bg-fg")])],
+											),
+										]
+									: []),
+							],
+						),
+						h.section(
+							[h.Class("w-full")],
+							[h.p([h.Class("font-semibold text-fg text-sm")], [option.label])],
+						),
+					],
+				),
+			),
 	)
 
 const sectionHeading = (h: HtmlBuilder<Message>, title: string, description: string): Array<Html> => [
@@ -204,7 +160,7 @@ export const themeStep = (h: HtmlBuilder<Message>, theme: ThemeState): Html =>
 							brandColors(h, theme),
 						],
 					),
-					h.hr([h.Class("h-px w-full border-none bg-border")]),
+					separator(h),
 					h.div(
 						[h.Class("space-y-3")],
 						[

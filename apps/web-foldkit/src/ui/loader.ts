@@ -107,3 +107,25 @@ export const loader = <Message>(
 		[variant === "ring" ? ring(h, className, options.ariaLabel) : spin(h, className, options.ariaLabel)],
 	)
 }
+
+/**
+ * A region that is loading: the spinner and what is loading (`Loading invitations...`), centred.
+ * `className` sizes the region (`h-64`, `py-12`); pages don't rebuild spinners from bordered divs.
+ */
+export const loadingState = <Message>(
+	h: HtmlBuilder<Message>,
+	options: { readonly label?: string; readonly size?: "sm" | "md"; readonly className?: string } = {},
+): Html =>
+	h.div(
+		[
+			h.Class(twMerge("flex items-center justify-center gap-3 py-12 text-muted-fg", options.className)),
+			h.AriaLive("polite"),
+		],
+		[
+			loader(h, {
+				ariaLabel: options.label ?? "Loading",
+				className: options.size === "sm" ? "size-4" : "size-6",
+			}),
+			...(options.label === undefined ? [] : [h.span([h.Class("text-sm")], [options.label])]),
+		],
+	)

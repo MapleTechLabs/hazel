@@ -3,7 +3,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { formatCount, formatMoney, formatPct } from "../format"
 import { HEALTH_FILL, HEALTH_LABEL } from "../ui/badges"
-import { segmented } from "../ui/filter-bar"
+import { segmented } from "../../ui/segmented-control"
 import { chartCard } from "./frame"
 
 /**
@@ -159,7 +159,7 @@ export const healthDistribution = <M>(
 													h.span([
 														h.Class(
 															twMerge(
-																"size-2.5 rounded-[2px]",
+																"size-2.5 rounded-xs",
 																HEALTH_FILL[row.status],
 															),
 														),

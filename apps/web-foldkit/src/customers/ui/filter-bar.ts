@@ -3,9 +3,10 @@ import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { tabsStyles } from "~/components/ui/tabs.styles"
 import { IconChevronDown, IconClose, IconPlus } from "../../icons"
-import { button } from "../../ui/button"
+import { ariaButton, button } from "../../ui/button"
 import { searchField } from "../../ui/search-field"
 import { formatCount } from "../format"
+import { type Segment, segmented } from "../../ui/segmented-control"
 import { kbd } from "./shortcuts"
 
 /**
@@ -69,23 +70,23 @@ export const viewTabs = <M, K extends string>(
 				options.tabs.map((tab, index) => {
 					const isSelected = tab.key === options.selected
 					const extra = options.tabProps?.(tab, index)
-					return h.button(
-						[
-							...(extra?.attributes ?? []),
-							h.Key(tab.key),
-							h.Type("button"),
-							h.Role("tab"),
-							h.AriaSelected(isSelected),
-							...(isSelected ? [h.DataAttribute("selected", "true")] : []),
-							h.Class(
-								twMerge(
-									...tabsStyles.tab("horizontal", false),
-									"cursor-pointer gap-1.5",
-									extra?.className,
-								),
+					return ariaButton(
+						h,
+						{
+							className: twMerge(
+								...tabsStyles.tab("horizontal", false),
+								"cursor-pointer gap-1.5",
+								extra?.className,
 							),
-							h.OnClick(options.onSelect(tab.key)),
-						],
+							onPress: options.onSelect(tab.key),
+							attributes: [
+								...(extra?.attributes ?? []),
+								h.Key(tab.key),
+								h.Role("tab"),
+								h.AriaSelected(isSelected),
+								...(isSelected ? [h.DataAttribute("selected", "true")] : []),
+							],
+						},
 						[
 							...(tab.leading === undefined ? [] : [tab.leading]),
 							tab.label,
@@ -114,54 +115,6 @@ export const viewTabs = <M, K extends string>(
 	)
 
 // SEGMENTED
-
-export type Segment<K extends string> = Readonly<{ key: K; label: string }>
-
-/** The track a segmented control's segments sit in. */
-export const segmentedTrackClass = "inline-flex items-center gap-0.5 rounded-lg bg-secondary/70 p-0.5"
-
-/** One segment: the selected one is a raised chip on the track, never a brand fill. */
-export const segmentClass = (isSelected: boolean): string =>
-	twMerge(
-		"inline-flex h-7 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 font-medium text-xs tabular-nums outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-default max-md:h-9 max-md:text-sm",
-		isSelected ? "bg-bg text-fg shadow-xs ring-1 ring-fg/10" : "text-muted-fg hover:text-fg",
-	)
-
-/** A radio group drawn as joined buttons: `7d 30d 90d 12m`, `Signals | Accounts`, `Customers | MRR`. */
-export const segmented = <M, K extends string>(
-	h: HtmlBuilder<M>,
-	options: Readonly<{
-		ariaLabel: string
-		segments: ReadonlyArray<Segment<K>>
-		selected: K
-		onSelect: (key: K) => M
-		/** Shown but not pressable (a form saving). */
-		isDisabled?: boolean
-		className?: string
-	}>,
-): Html =>
-	h.div(
-		[
-			h.Role("radiogroup"),
-			h.AriaLabel(options.ariaLabel),
-			h.Class(twMerge(segmentedTrackClass, options.className)),
-		],
-		options.segments.map((segment) => {
-			const isSelected = segment.key === options.selected
-			return h.button(
-				[
-					h.Type("button"),
-					h.Role("radio"),
-					h.AriaChecked(isSelected),
-					h.Class(segmentClass(isSelected)),
-					...(options.isDisabled === true
-						? [h.Disabled(true)]
-						: [h.OnClick(options.onSelect(segment.key))]),
-				],
-				[segment.label],
-			)
-		}),
-	)
 
 export const RANGE_SEGMENTS: ReadonlyArray<Segment<CustomersRange>> = [
 	{ key: "7d", label: "7d" },
@@ -263,14 +216,13 @@ export const filterChip = <M>(
 			),
 		],
 		[
-			h.button(
-				[
-					h.Type("button"),
-					h.Class(
+			ariaButton(
+				h,
+				{
+					className:
 						"inline-flex min-w-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded-l-lg px-2.5 outline-hidden hover:bg-secondary focus-visible:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/70",
-					),
-					...(options.attributes ?? []),
-				],
+					attributes: options.attributes ?? [],
+				},
 				[
 					h.span([h.Class("shrink-0 text-muted-fg")], [`${options.field} ${options.operator}`]),
 					// A long value (`High, Medium, Low, …`) truncates on one line; the chip's height is fixed.
@@ -281,15 +233,16 @@ export const filterChip = <M>(
 					...(options.overlay ? [options.overlay] : []),
 				],
 			),
-			h.button(
-				[
-					h.Type("button"),
-					h.AriaLabel(`Remove filter: ${options.field} ${options.operator} ${options.value}`),
-					h.Class(
+			ariaButton(
+				h,
+				{
+					className:
 						"inline-flex w-7 shrink-0 cursor-pointer items-center justify-center rounded-r-lg border-border border-l text-muted-fg outline-hidden hover:bg-secondary hover:text-fg focus-visible:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/70 max-md:w-10",
-					),
-					h.OnClick(options.onRemove),
-				],
+					onPress: options.onRemove,
+					attributes: [
+						h.AriaLabel(`Remove filter: ${options.field} ${options.operator} ${options.value}`),
+					],
+				},
 				[IconClose(h, { className: "size-3" })],
 			),
 		],

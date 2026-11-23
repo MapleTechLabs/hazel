@@ -1,7 +1,7 @@
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconChevronDown, IconDots, IconPlus } from "../../icons"
-import { button } from "../../ui/button"
+import { ariaButton, button } from "../../ui/button"
 import { semantic } from "../../ui/semantic"
 
 /**
@@ -68,18 +68,12 @@ export const sectionGroupHeader = <M>(
 	h.div(
 		[h.Class("col-span-full flex items-center justify-between gap-x-2 pl-2.5 text-muted-fg text-xs/5")],
 		[
-			h.button(
-				[
-					h.Attribute("type", "button"),
-					h.Class("flex items-center gap-1 hover:text-fg active:text-fg"),
-				],
-				[
-					IconChevronDown(h, {
-						className: `size-3 transition-transform ${options.isCollapsed ? "-rotate-90" : ""}`,
-					}),
-					strong(h, [options.name]),
-				],
-			),
+			ariaButton(h, { className: "flex items-center gap-1 hover:text-fg active:text-fg" }, [
+				IconChevronDown(h, {
+					className: `size-3 transition-transform ${options.isCollapsed ? "-rotate-90" : ""}`,
+				}),
+				strong(h, [options.name]),
+			]),
 			options.action,
 		],
 	)
@@ -216,21 +210,21 @@ const dragButton = <M>(
 	allowsDragging: boolean,
 	onActiveMount: Attribute<M> | null,
 ): Html =>
-	h.button(
-		[
-			...(allowsDragging
-				? [
-						h.Attribute("aria-describedby", DRAG_DESCRIPTION_ID),
-						h.Attribute("aria-label", `Drag ${label}`),
-					]
-				: []),
-			h.Class("sr-only"),
-			h.Attribute("data-react-aria-pressable", "true"),
-			h.Attribute("slot", "drag"),
-			h.Style({ pointerEvents: "none" }),
-			h.Attribute("tabindex", "0"),
-			h.Attribute("type", "button"),
-		],
+	ariaButton(
+		h,
+		{
+			className: "sr-only",
+			attributes: [
+				...(allowsDragging
+					? [
+							h.Attribute("aria-describedby", DRAG_DESCRIPTION_ID),
+							h.Attribute("aria-label", `Drag ${label}`),
+						]
+					: []),
+				h.Attribute("slot", "drag"),
+				h.Style({ pointerEvents: "none" }),
+			],
+		},
 		// `display: none`, so inserting it creates no layout object (and no name or a11y node).
 		onActiveMount === null ? ["Drag"] : ["Drag", h.span([h.Attribute("hidden", ""), onActiveMount])],
 	)

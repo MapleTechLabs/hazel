@@ -19,6 +19,7 @@ import {
 } from "../icons"
 import { AppRoute, hrefOf } from "../route"
 import { avatar } from "../ui/avatar"
+import { ariaButton } from "../ui/button"
 import * as Menu from "../ui/menu"
 import { menuLabel, menuTriggerClassName, view as menuView } from "../ui/menu-view"
 import { sidebarFooter, sidebarHeader, sidebarLabel } from "../ui/sidebar"
@@ -310,31 +311,29 @@ export const userMenuFooter = <M>(
 					destructive: ["logout"],
 				},
 				toTrigger: (attributes, overlay) =>
-					h.button(
-						[
-							...attributes,
-							...semantic(h, {
-								kind: "item",
-								title: displayName,
-								subtitle: context.currentUser?.email,
-								avatar: {
-									url: context.currentUser?.avatarUrl ?? null,
-									initials: initialsOf(displayName),
-								},
-								trailingSymbol: "chevron.up.chevron.down",
-								pin: "bottom",
-							}),
-							h.Attribute("data-slot", "menu-trigger"),
-							h.Class(
-								menuTriggerClassName(
-									"flex w-full items-center justify-between rounded-lg border bg-accent/20 px-2 py-1 hover:bg-accent/50",
-								),
+					ariaButton(
+						h,
+						{
+							className: menuTriggerClassName(
+								"flex w-full items-center justify-between rounded-lg border bg-accent/20 px-2 py-1 hover:bg-accent/50",
 							),
-							h.Attribute("type", "button"),
-							h.Attribute("tabindex", "0"),
-							h.Attribute("data-react-aria-pressable", "true"),
-							h.Attribute("aria-label", "Profile"),
-						],
+							attributes: [
+								...attributes,
+								...semantic(h, {
+									kind: "item",
+									title: displayName,
+									subtitle: context.currentUser?.email,
+									avatar: {
+										url: context.currentUser?.avatarUrl ?? null,
+										initials: initialsOf(displayName),
+									},
+									trailingSymbol: "chevron.up.chevron.down",
+									pin: "bottom",
+								}),
+								h.Attribute("data-slot", "menu-trigger"),
+								h.Attribute("aria-label", "Profile"),
+							],
+						},
 						[
 							h.div(
 								[h.Class("flex min-w-0 items-center gap-x-2")],
@@ -490,26 +489,25 @@ const orgSwitcherMenu = <M>(
 				},
 			},
 			toTrigger: (attributes, overlay) =>
-				h.button(
-					[
-						...attributes,
-						...semantic(h, {
-							kind: "item",
-							title: context.organization?.name ?? "",
-							avatar: {
-								url: context.organization?.logoUrl ?? null,
-								initials: initialsOf(context.organization?.name ?? ""),
-							},
-							trailingSymbol: "chevron.up.chevron.down",
-							pin: "top",
-						}),
-						h.Class(
+				ariaButton(
+					h,
+					{
+						className:
 							"group/switcher relative flex items-center justify-between gap-x-2 font-semibold outline-hidden text-fg/80 hover:text-fg transition-colors focus-visible:ring focus-visible:ring-primary",
-						),
-						h.Attribute("type", "button"),
-						h.Attribute("tabindex", "0"),
-						h.Attribute("data-react-aria-pressable", "true"),
-					],
+						attributes: [
+							...attributes,
+							...semantic(h, {
+								kind: "item",
+								title: context.organization?.name ?? "",
+								avatar: {
+									url: context.organization?.logoUrl ?? null,
+									initials: initialsOf(context.organization?.name ?? ""),
+								},
+								trailingSymbol: "chevron.up.chevron.down",
+								pin: "top",
+							}),
+						],
+					},
 					[
 						h.div(
 							[h.Class("flex w-full items-center gap-1")],

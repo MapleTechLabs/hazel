@@ -4,15 +4,18 @@ import type { Integration } from "~/lib/integrations/__data"
 import { IconWarning } from "../../../../icons"
 import { avatar } from "../../../../ui/avatar"
 import { button } from "../../../../ui/button"
+import { callout } from "../../../../ui/callout"
 import { checkbox } from "../../../../ui/checkbox"
+import { iconTile } from "../../../../ui/icon-tile"
 import { input, inputGroup } from "../../../../ui/input"
+import { loader, loadingState } from "../../../../ui/loader"
 import { radioGroup } from "../../../../ui/radio"
 import { confirmDialog } from "../../chat-sync/confirm-dialog"
 import type * as ConfirmAction from "../../../shared/confirm-action"
-import { CHECK, spinner, strokeIcon } from "../shared/view"
+import { CHECK, strokeIcon } from "../shared/view"
 import { Message } from "./message"
 import type { Model, T3CodeLink, T3CodeMember } from "./model"
-import { apiField, centered, LINK_ICON, panel, verifyingState } from "./view-connection"
+import { apiField, centered, LINK_ICON, sectionCard, verifyingState } from "./view-connection"
 
 /**
  * T3 Code's connection and sharing panels. Unlike the other integrations the link is the member's own:
@@ -41,27 +44,6 @@ export const isExpiringSoon = (link: T3CodeLink, nowMs: number) =>
 	link.expiresAtMs - nowMs < EXPIRY_WARNING_MS
 
 const REVOKE_NOTE = "You can also revoke Hazel's access in T3 Code under Settings → Sharing & access."
-
-const callout = (h: H, tone: "warning" | "danger", title: string, body: ReadonlyArray<Html | string>) =>
-	h.div(
-		[
-			h.Role("status"),
-			h.Class(
-				`flex gap-3 rounded-lg border p-3 ${
-					tone === "warning"
-						? "border-warning/20 bg-warning-subtle text-warning-subtle-fg"
-						: "border-danger/15 bg-danger/5 text-danger"
-				}`,
-			),
-		],
-		[
-			IconWarning(h, { className: "mt-0.5 size-4 shrink-0" }),
-			h.div(
-				[h.Class("flex flex-col gap-0.5 text-sm")],
-				[h.p([h.Class("font-medium")], [title]), h.p([h.Class("opacity-90")], [...body])],
-			),
-		],
-	)
 
 const notLinked = (h: H, integration: Integration, model: Model): Html => {
 	const isConnecting = model.activity._tag === "Connecting"
@@ -102,7 +84,7 @@ const notLinked = (h: H, integration: Integration, model: Model): Html => {
 					isDisabled: isConnecting,
 					attributes: [h.Type("submit")],
 				},
-				isConnecting ? [spinner(h, "size-4 animate-spin"), "Connecting..."] : ["Connect"],
+				isConnecting ? [loader(h), "Connecting..."] : ["Connect"],
 			),
 		],
 	)
@@ -112,27 +94,12 @@ const environmentSummary = (h: H, link: T3CodeLink, isActive: boolean): Html =>
 	h.div(
 		[h.Class("flex min-w-0 items-center gap-3")],
 		[
-			h.div(
-				[
-					h.Class(
-						`flex size-10 shrink-0 items-center justify-center rounded-xl ${
-							isActive ? "bg-success-subtle" : "bg-bg-muted"
-						}`,
-					),
-				],
-				[
-					isActive
-						? strokeIcon(h, {
-								className: "size-5 text-success-subtle-fg",
-								strokeWidth: "2",
-								d: CHECK,
-							})
-						: strokeIcon(h, {
-								className: "size-5 text-muted-fg",
-								strokeWidth: "1.5",
-								d: LINK_ICON,
-							}),
-				],
+			iconTile(
+				h,
+				{ intent: isActive ? "success" : "neutral", size: "md" },
+				isActive
+					? strokeIcon(h, { className: "", strokeWidth: "2", d: CHECK })
+					: strokeIcon(h, { className: "", strokeWidth: "1.5", d: LINK_ICON }),
 			),
 			h.div(
 				[h.Class("flex min-w-0 flex-col gap-0.5")],
@@ -182,7 +149,7 @@ const reconnectButton = (h: H, isConnecting: boolean, intent: "primary" | "secon
 			onPress: Message.ClickedReconnectT3Code(),
 			isDisabled: isConnecting,
 		},
-		isConnecting ? [spinner(h, "size-4 animate-spin"), "Redirecting..."] : ["Reconnect"],
+		isConnecting ? [loader(h), "Redirecting..."] : ["Reconnect"],
 	)
 
 const STATUS_COPY: Record<Exclude<T3CodeLink["status"], "active">, { title: string; body: string }> = {
@@ -230,14 +197,18 @@ const linked = (h: H, link: T3CodeLink, model: Model, nowMs: number): Html => {
 			...(status === "active"
 				? isExpiringSoon(link, nowMs) && link.expiresAtMs !== null
 					? [
-							callout(h, "warning", "Your T3 Code sign-in expires soon", [
+							callout(h, { intent: "warning", title: "Your T3 Code sign-in expires soon" }, [
 								"T3 sign-ins last 30 days and can't be renewed in the background. It expires on ",
 								formatDate(link.expiresAtMs),
 								"; reconnect before then to keep using /t3.",
 							]),
 						]
 					: []
-				: [callout(h, "danger", STATUS_COPY[status].title, [STATUS_COPY[status].body])]),
+				: [
+						callout(h, { intent: "danger", title: STATUS_COPY[status].title }, [
+							STATUS_COPY[status].body,
+						]),
+					]),
 			dates(h, link, nowMs),
 			h.p([h.Class("text-muted-fg text-xs")], [REVOKE_NOTE]),
 		],
@@ -258,7 +229,7 @@ const saveStatus = (h: H, model: Model): Html =>
 	h.span(
 		[h.AriaLive("polite"), h.Class("flex items-center gap-1.5 text-muted-fg text-xs")],
 		model.sharingSave === "Saving"
-			? [spinner(h, "size-3 animate-spin"), "Saving..."]
+			? [loader(h, { className: "size-3" }), "Saving..."]
 			: model.sharingSave === "Saved"
 				? [strokeIcon(h, { className: "size-3", strokeWidth: "3", d: CHECK }), "Saved"]
 				: [],
@@ -394,7 +365,7 @@ const disconnectDialog = (h: H, model: Model): Html =>
 	confirmDialog(h, {
 		slotId: "t3code-disconnect",
 		confirm: model.disconnectConfirm,
-		icon: IconWarning(h, { className: "size-6 text-danger" }),
+		icon: IconWarning(h),
 		title: "Disconnect T3 Code",
 		description: (label) => [
 			"Hazel will stop driving",
@@ -410,17 +381,11 @@ const disconnectDialog = (h: H, model: Model): Html =>
 const connectionBody = (h: H, integration: Integration, model: Model, nowMs: number): Html => {
 	switch (model.t3Code._tag) {
 		case "Loading":
-			return centered(
-				h,
-				spinner(h, "size-6 animate-spin text-muted-fg"),
-				"Loading your link...",
-				[],
-				[],
-			)
+			return loadingState(h, { label: "Loading your link...", className: "py-8" })
 		case "Failed":
 			return centered(
 				h,
-				strokeIcon(h, { className: "size-6 text-muted-fg", strokeWidth: "1.5", d: LINK_ICON }),
+				strokeIcon(h, { className: "", strokeWidth: "1.5", d: LINK_ICON }),
 				"Couldn't load your T3 Code link",
 				["Check your connection and try again."],
 				[
@@ -444,8 +409,8 @@ const connectionBody = (h: H, integration: Integration, model: Model, nowMs: num
 export const t3CodeColumn = (h: H, integration: Integration, model: Model, nowMs: number): Array<Html> => {
 	const link = model.t3Code._tag === "Loaded" ? model.t3Code.link : null
 	return [
-		panel(h, "Your environment", [connectionBody(h, integration, model, nowMs)]),
-		...(link === null ? [] : [panel(h, "Sharing", [sharing(h, link, model)])]),
+		sectionCard(h, "Your environment", [connectionBody(h, integration, model, nowMs)]),
+		...(link === null ? [] : [sectionCard(h, "Sharing", [sharing(h, link, model)])]),
 		disconnectDialog(h, model),
 	]
 }

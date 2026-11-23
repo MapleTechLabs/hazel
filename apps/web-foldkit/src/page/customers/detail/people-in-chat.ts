@@ -12,7 +12,8 @@ import * as Menu from "../../../ui/menu"
 import { menuLabel } from "../../../ui/menu-view"
 import { Message } from "./message"
 import { customerOfAccount, type Model } from "./model"
-import { type Context, icon, menu } from "./parts"
+import { type Context, icon } from "./parts"
+import { menu } from "../shared-view"
 
 /**
  * The sidebar's "People in chat" (`docs/customers/author-side.md`): who wrote for the customer in its

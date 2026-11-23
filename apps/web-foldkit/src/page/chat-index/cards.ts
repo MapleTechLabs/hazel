@@ -6,6 +6,8 @@ import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
 import { badge } from "../../ui/badge"
 import { type ChannelLinks, channelIcon } from "../../ui/channel-icon"
+import { heading } from "../../ui/heading"
+import { iconTile } from "../../ui/icon-tile"
 import { type ChannelSummary, type DmParticipant, otherMembers, type Presence } from "./model"
 
 /** `ChannelCard`, `DmCard` and `SingleDmCard` from `routes/_app/$orgSlug/chat/index.tsx`. */
@@ -13,8 +15,13 @@ import { type ChannelSummary, type DmParticipant, otherMembers, type Presence } 
 const cardLinkClass =
 	"group flex items-center justify-between gap-4 px-4 py-3 transition-colors duration-200 hover:bg-secondary/50"
 
-const titleClass = (channel: ChannelSummary) =>
-	cn("truncate font-semibold text-fg text-sm", channel.isMuted && "text-muted-fg")
+/** A card's name: the list's subsection heading, quieter while the channel is muted. */
+const title = <M>(h: HtmlBuilder<M>, channel: ChannelSummary, children: ReadonlyArray<Html | string>): Html =>
+	heading(
+		h,
+		{ variant: "subsection", className: cn("truncate", channel.isMuted && "text-muted-fg") },
+		children,
+	)
 
 const notificationBadge = <M>(h: HtmlBuilder<M>, count: number): Html =>
 	count <= 0
@@ -41,18 +48,17 @@ export const channelCard = <M>(
 	links: ChannelLinks,
 ): Html =>
 	cardLink(h, orgSlug, channel, [
-		h.div(
-			[h.Class("flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary")],
-			[
-				channelIcon(h, {
-					icon: channel.icon,
-					isPrivate,
-					links,
-					size: "md",
-					surface: "secondary",
-					className: "text-muted-fg",
-				}),
-			],
+		iconTile(
+			h,
+			{ size: "md" },
+			channelIcon(h, {
+				icon: channel.icon,
+				isPrivate,
+				links,
+				size: "md",
+				surface: "secondary",
+				className: "text-muted-fg",
+			}),
 		),
 		h.div(
 			[h.Class("min-w-0")],
@@ -60,7 +66,7 @@ export const channelCard = <M>(
 				h.div(
 					[h.Class("flex items-center gap-2")],
 					[
-						h.h3([h.Class(titleClass(channel))], [channel.name]),
+						title(h, channel, [channel.name]),
 						channel.isFavorite ? h.span([h.Class("shrink-0 text-favorite")], ["★"]) : h.empty,
 					],
 				),
@@ -123,7 +129,7 @@ const singleDmCard = <M>(
 		h.div(
 			[h.Class("min-w-0")],
 			[
-				h.h3([h.Class(titleClass(channel))], [member.firstName, " ", member.lastName]),
+				title(h, channel, [member.firstName, " ", member.lastName]),
 				h.p([h.Class("text-muted-fg text-xs")], [text]),
 			],
 		),
@@ -162,15 +168,12 @@ export const dmCard = <M>(
 		h.div(
 			[h.Class("min-w-0")],
 			[
-				h.h3(
-					[h.Class(titleClass(channel))],
-					[
-						shown.map((member) => member.firstName).join(", "),
-						others.length > 3
-							? h.span([h.Class("text-muted-fg")], [` +${others.length - 3}`])
-							: h.empty,
-					],
-				),
+				title(h, channel, [
+					shown.map((member) => member.firstName).join(", "),
+					others.length > 3
+						? h.span([h.Class("text-muted-fg")], [` +${others.length - 3}`])
+						: h.empty,
+				]),
 				h.p([h.Class("text-muted-fg text-xs")], [`${others.length} participants`]),
 			],
 		),

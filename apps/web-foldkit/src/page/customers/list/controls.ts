@@ -8,7 +8,7 @@ import type { AccountRow, MemberRow } from "../../../customers/queries"
 import { countryFlag, countryNameOf, fundingStageLabel } from "../../../customers/company"
 import { HEALTH_FILL, HEALTH_LABEL, STAGE_LABEL } from "../../../customers/ui/badges"
 import { IconChevronDown, IconChevronRight } from "../../../icons"
-import { button } from "../../../ui/button"
+import { ariaButton, button, iconButton } from "../../../ui/button"
 import { checkbox } from "../../../ui/checkbox"
 import { input } from "../../../ui/input"
 import { switchControl } from "../../../ui/switch"
@@ -29,6 +29,8 @@ import {
 	type Viewer,
 	withFilter,
 } from "./model"
+import { label as fieldLabel } from "../../../ui/field"
+import { statusDot } from "../../../ui/status-dot"
 
 /** The filter builder's panes, the chips' wording and the column picker. */
 
@@ -201,19 +203,16 @@ const radio = (
 	isSelected: boolean,
 	next: Customers.ViewFilters,
 ): Html =>
-	h.button(
-		[
-			h.Type("button"),
-			h.Role("radio"),
-			h.AriaChecked(isSelected),
-			h.OnClick(Message.ChangedPendingFilters({ filters: next })),
-			h.Class(
-				twMerge(
-					"flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border px-2.5 text-left text-sm outline-hidden hover:bg-wash focus-visible:ring-2 focus-visible:ring-ring/70",
-					isSelected && "border-primary bg-primary-subtle/40",
-				),
+	ariaButton(
+		h,
+		{
+			onPress: Message.ChangedPendingFilters({ filters: next }),
+			className: twMerge(
+				"flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border px-2.5 text-left text-sm outline-hidden hover:bg-wash focus-visible:ring-2 focus-visible:ring-ring/70",
+				isSelected && "border-primary bg-primary-subtle/40",
 			),
-		],
+			attributes: [h.Role("radio"), h.AriaChecked(isSelected)],
+		},
 		[
 			h.span(
 				[
@@ -236,25 +235,22 @@ const numberField = (
 	value: number | undefined,
 	onInput: (value: number | undefined) => Customers.ViewFilters,
 ): Html =>
-	h.label(
-		[h.Class("flex flex-col gap-1 text-muted-fg text-xs")],
-		[
-			label,
-			input(h, {
-				attributes: [
-					h.Type("number"),
-					h.Attribute("min", "0"),
-					h.Value(value === undefined ? "" : String(value)),
-					h.OnInput((raw) => {
-						const parsed = Number.parseFloat(raw)
-						return Message.ChangedPendingFilters({
-							filters: onInput(raw.trim() === "" || Number.isNaN(parsed) ? undefined : parsed),
-						})
-					}),
-				],
-			}),
-		],
-	)
+	fieldLabel(h, { className: "flex flex-col gap-1 text-muted-fg text-xs sm:text-xs" }, [
+		label,
+		input(h, {
+			attributes: [
+				h.Type("number"),
+				h.Attribute("min", "0"),
+				h.Value(value === undefined ? "" : String(value)),
+				h.OnInput((raw) => {
+					const parsed = Number.parseFloat(raw)
+					return Message.ChangedPendingFilters({
+						filters: onInput(raw.trim() === "" || Number.isNaN(parsed) ? undefined : parsed),
+					})
+				}),
+			],
+		}),
+	])
 
 const DAY_PRESETS = [7, 14, 30, 60, 90] as const
 
@@ -292,7 +288,10 @@ const editor = (
 					h.span(
 						[h.Class("inline-flex items-center gap-2")],
 						[
-							h.span([h.Class(twMerge("size-2 rounded-full", HEALTH_FILL[status]))]),
+							statusDot(h, {
+								tone: "neutral",
+								className: twMerge("size-2", HEALTH_FILL[status]),
+							}),
 							HEALTH_LABEL[status],
 						],
 					),
@@ -613,18 +612,18 @@ export const filterBuilder = (
 							[
 								h.span([h.Class("px-2 py-1 text-muted-fg text-xs max-sm:hidden")], [group]),
 								...fields.map((field) =>
-									h.button(
-										[
-											h.Type("button"),
-											h.AriaCurrent(field === builder.field ? "true" : "false"),
-											h.OnClick(Message.ClickedBuilderField({ field })),
-											h.Class(
-												twMerge(
-													"flex h-8 cursor-pointer items-center justify-between gap-2 rounded-md px-2 text-left text-fg text-sm outline-hidden hover:bg-wash focus-visible:ring-2 focus-visible:ring-ring/70",
-													field === builder.field && "bg-secondary",
-												),
+									ariaButton(
+										h,
+										{
+											onPress: Message.ClickedBuilderField({ field }),
+											className: twMerge(
+												"flex h-8 cursor-pointer items-center justify-between gap-2 rounded-md px-2 text-left text-fg text-sm outline-hidden hover:bg-wash focus-visible:ring-2 focus-visible:ring-ring/70",
+												field === builder.field && "bg-secondary",
 											),
-										],
+											attributes: [
+												h.AriaCurrent(field === builder.field ? "true" : "false"),
+											],
+										},
 										[
 											FIELD_LABEL[field],
 											h.span(
@@ -712,17 +711,15 @@ export const columnPicker = (
 			[h.span([h.Class("sr-only")], [`Show ${COLUMN_NAME[column]}`])],
 		)
 	const moveButton = (column: Customers.ListColumn, step: -1 | 1, isDisabled: boolean) =>
-		h.button(
-			[
-				h.Type("button"),
-				h.AriaLabel(`Move ${COLUMN_NAME[column]} ${step === -1 ? "up" : "down"}`),
-				h.Disabled(isDisabled),
-				h.OnClick(Message.MovedColumn({ column, step })),
-				h.Class(
-					"inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-fg hover:bg-secondary hover:text-fg disabled:cursor-default disabled:opacity-30",
-				),
-			],
-			[IconChevronDown(h, { className: twMerge("size-3", step === -1 && "rotate-180") })],
+		iconButton(
+			h,
+			{
+				label: `Move ${COLUMN_NAME[column]} ${step === -1 ? "up" : "down"}`,
+				size: "sq-xs",
+				isDisabled,
+				onPress: Message.MovedColumn({ column, step }),
+			},
+			IconChevronDown(h, { className: twMerge("size-3", step === -1 && "rotate-180") }),
 		)
 	return [
 		h.div(

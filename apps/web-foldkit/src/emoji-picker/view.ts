@@ -3,8 +3,9 @@ import { AsyncData, Mount } from "foldkit"
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { failureMessage } from "~/lib/error-messages"
 import { cn } from "~/lib/utils"
-import { IconLoader, IconMagnifier3 } from "../icons"
-import { button } from "../ui/button"
+import { IconMagnifier3 } from "../icons"
+import { ariaButton, button } from "../ui/button"
+import { loader } from "../ui/loader"
 import { EMOJI_FONT_FAMILY, type PickerCategory, type PickerData, type PickerEmoji } from "./data"
 import {
 	activeEmoji,
@@ -49,19 +50,22 @@ const emojiButton = <M>(
 	isActive: boolean,
 	events: ReadonlyArray<Attribute<M>>,
 ): Html =>
-	h.button(
-		[
-			...events,
-			h.Attribute("aria-colindex", String(columnIndex)),
-			...(isActive ? [h.Attribute("aria-selected", "true"), h.Attribute("data-active", "")] : []),
-			h.Attribute("aria-label", emoji.label),
-			h.Class(EMOJI_CLASS),
-			h.Attribute("data-slot", "emoji-picker-emoji"),
-			h.Attribute("frimousse-emoji", ""),
-			h.Role("gridcell"),
-			h.Attribute("style", "font-family: var(--frimousse-emoji-font);"),
-			h.Attribute("tabindex", "-1"),
-		],
+	ariaButton(
+		h,
+		{
+			className: EMOJI_CLASS,
+			excludeFromTabOrder: true,
+			attributes: [
+				...events,
+				h.Attribute("aria-colindex", String(columnIndex)),
+				...(isActive ? [h.Attribute("aria-selected", "true"), h.Attribute("data-active", "")] : []),
+				h.Attribute("aria-label", emoji.label),
+				h.Attribute("data-slot", "emoji-picker-emoji"),
+				h.Attribute("frimousse-emoji", ""),
+				h.Role("gridcell"),
+				h.Attribute("style", "font-family: var(--frimousse-emoji-font);"),
+			],
+		},
 		[
 			emoji.imageUrl
 				? h.img([
@@ -308,7 +312,7 @@ const viewportView = <M>(h: HtmlBuilder<M>, model: Model, toMessage: (message: M
 							h.Attribute("data-slot", "emoji-picker-loading"),
 							h.Attribute("frimousse-loading", ""),
 						],
-						[IconLoader(h, { className: "size-4 animate-spin" })],
+						[loader(h, { className: "size-4" })],
 					)
 				: h.empty,
 			data !== null && data.count === 0

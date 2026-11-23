@@ -1,8 +1,9 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import * as Interaction from "../../../ui/aria/interaction"
+import { button } from "../../../ui/button"
 import { input, inputGroup, type InteractionTarget } from "../../../ui/input"
 
-/** Markup the chat sync modals repeat: the picked row, the searchable list and the spinner. */
+/** Markup the chat sync modals repeat: the picked row, and the searchable list. */
 
 type Children = ReadonlyArray<Html | string>
 
@@ -16,14 +17,9 @@ export const selectedRow = <Message>(h: HtmlBuilder<Message>, content: Children,
 		],
 		[
 			h.div([h.Class("flex items-center gap-2")], [...content]),
-			h.button(
-				[
-					h.Type("button"),
-					h.OnClick(onChange),
-					h.Class("text-muted-fg text-xs transition-colors hover:text-fg"),
-				],
-				["Change"],
-			),
+			button(h, { intent: "plain", size: "xs", className: "text-muted-fg", onPress: onChange }, [
+				"Change",
+			]),
 		],
 	)
 
@@ -83,16 +79,6 @@ export const scrollList = <Message>(
 		rows.length === 0
 			? [h.div([h.Class("px-3 py-6 text-center text-muted-fg text-sm")], [emptyText])]
 			: [...rows],
-	)
-
-/** `<div className="size-5 animate-spin rounded-full border-2 border-border border-t-primary" />` and its text. */
-export const spinnerLine = <Message>(h: HtmlBuilder<Message>, text: string): Html =>
-	h.div(
-		[h.Class("flex items-center gap-3 text-muted-fg")],
-		[
-			h.div([h.Class("size-5 animate-spin rounded-full border-2 border-border border-t-primary")]),
-			h.span([h.Class("text-sm")], [text]),
-		],
 	)
 
 /** Case-insensitive name filter; a blank search keeps every item. */

@@ -10,9 +10,11 @@ import {
 import { Option } from "effect"
 import type { Html } from "foldkit/html"
 import { providerOf } from "../../../../customers/providers"
-import { segmented } from "../../../../customers/ui/filter-bar"
+import { segmented } from "../../../../ui/segmented-control"
 import { IconClose, IconPlus, IconTrash } from "../../../../icons"
-import { button } from "../../../../ui/button"
+import { badge } from "../../../../ui/badge"
+import { button, iconButton } from "../../../../ui/button"
+import { label } from "../../../../ui/field"
 import { input } from "../../../../ui/input"
 import { switchControl } from "../../../../ui/switch"
 import { type ConfigTarget, Message } from "./message"
@@ -30,7 +32,8 @@ import {
 	settingsOf,
 	settingsProblemOf,
 } from "./model"
-import { card, cardHeader, eyebrow, formField, type H } from "./parts"
+import { eyebrow, formField, type H } from "./parts"
+import { panel, panelHeader } from "../../../../ui/card"
 import type { ConnectionRow, UnitMetricRow } from "./queries"
 import { heading } from "../../../../ui/heading"
 
@@ -59,7 +62,7 @@ export const configFieldView = (
 				h.div(
 					[h.Class("flex min-w-0 flex-col gap-0.5")],
 					[
-						h.label([h.For(id), h.Class("font-medium text-fg text-sm")], [field.label]),
+						label(h, { htmlFor: id, className: "font-medium sm:text-sm" }, [field.label]),
 						h.p([h.Class("text-muted-fg text-xs")], [field.description]),
 					],
 				),
@@ -139,33 +142,35 @@ const stringList = (
 					[h.AriaLabel(field.title), h.Class("flex flex-wrap gap-1.5")],
 					values.map((item) =>
 						h.li(
+							[],
 							[
-								h.Class(
-									"inline-flex items-center gap-1 rounded-md bg-secondary py-0.5 pr-0.5 pl-2 font-mono text-fg text-xs",
+								badge(
+									h,
+									{
+										intent: "secondary",
+										className: "max-w-full gap-1 pe-1 font-mono font-normal",
+									},
+									[
+										h.span([h.Class("truncate")], [item]),
+										...(isDisabled
+											? []
+											: [
+													iconButton(
+														h,
+														{
+															size: "sq-xs",
+															className: "size-5 sm:size-5",
+															label: `Remove ${item}`,
+															onPress: Message.RemovedSettingsListItem({
+																key: field.key,
+																item,
+															}),
+														},
+														IconClose(h, { attributes: { "data-slot": "icon" } }),
+													),
+												]),
+									],
 								),
-							],
-							[
-								item,
-								...(isDisabled
-									? []
-									: [
-											h.button(
-												[
-													h.Type("button"),
-													h.AriaLabel(`Remove ${item}`),
-													h.Class(
-														"rounded p-0.5 text-muted-fg hover:bg-bg hover:text-fg",
-													),
-													h.OnClick(
-														Message.RemovedSettingsListItem({
-															key: field.key,
-															item,
-														}),
-													),
-												],
-												[IconClose(h, { className: "size-3" })],
-											),
-										]),
 							],
 						),
 					),
@@ -357,12 +362,11 @@ const unitRow = (h: H, model: Model, metric: UnitMetricRow, isDisabled: boolean)
 export const unitsCard = (h: H, model: Model, connection: ConnectionRow, isAdmin: boolean): Html => {
 	const name = providerOf(connection.provider).name
 	const metrics = (model.unitMetrics ?? []).filter((metric) => metric.provider === connection.provider)
-	return card(h, [
-		cardHeader(
-			h,
-			"Usage units",
-			`What one unit of each metered feature is, e.g. GB or requests. Charts show values in it. Blank uses ${name}'s own, when it has one.`,
-		),
+	return panel(h, {}, [
+		panelHeader(h, {
+			title: "Usage units",
+			description: `What one unit of each metered feature is, e.g. GB or requests. Charts show values in it. Blank uses ${name}'s own, when it has one.`,
+		}),
 		metrics.length === 0
 			? h.p(
 					[h.Class("text-muted-fg text-sm")],
@@ -388,8 +392,11 @@ export const settingsCard = (h: H, model: Model, connection: ConnectionRow, isAd
 	const config = settingsOf(model, connection)
 	const isDirty = isSettingsDirty(model, connection)
 	const isDisabled = !isAdmin || model.isSavingSettings
-	return card(h, [
-		cardHeader(h, "Provider settings", `How Hazel matches and reads ${descriptor.name} records.`),
+	return panel(h, {}, [
+		panelHeader(h, {
+			title: "Provider settings",
+			description: `How Hazel matches and reads ${descriptor.name} records.`,
+		}),
 		...(descriptor.configFields.length === 0
 			? []
 			: [

@@ -4,8 +4,8 @@ import { cx } from "~/utils/cx"
 import { IconEmoji1, IconEmojiAdd, IconTrash } from "../../../icons"
 import { visuallyHiddenStyle } from "../../../ui/checkbox"
 import { badge } from "../../../ui/badge"
-import { button } from "../../../ui/button"
-import { card, cardHeader } from "../../../ui/card"
+import { ariaButton, button } from "../../../ui/button"
+import { card, cardClassName, cardHeader } from "../../../ui/card"
 import { emptyState } from "../../../ui/empty-state"
 import { inputGroup } from "../../../ui/input"
 import { textField } from "../../../ui/text-field"
@@ -17,7 +17,8 @@ import { deleteEmojiModal, restoreEmojiModal } from "./modals"
 import { Message } from "./message"
 import type { Draft, Emoji, Model } from "./model"
 import { EMOJI_NAME_ID, isBusy } from "./update"
-import { heading } from "../../../ui/heading"
+import { pageHeader, pageLayout } from "../../../ui/page-header"
+import { type Column, dataTable } from "../../../ui/data-table"
 
 /** Port of `routes/_app/$orgSlug/settings/custom-emojis.tsx`. */
 
@@ -56,31 +57,25 @@ const dropZone = (h: HtmlBuilder<Message>, model: Model, isDisabled: boolean): H
 			h.div(
 				[h.Attribute("style", visuallyHiddenStyle)],
 				[
-					h.button([
-						h.AriaLabel("DropZone"),
-						h.Attribute("aria-labelledby", ""),
-						h.DataAttribute("react-aria-pressable", "true"),
-						h.Tabindex(0),
-						h.Type("button"),
-					]),
+					ariaButton(
+						h,
+						{ attributes: [h.AriaLabel("DropZone"), h.Attribute("aria-labelledby", "")] },
+						[],
+					),
 				],
 			),
-			h.button(
-				[
-					h.Class(
-						cx(
-							"flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 transition-colors",
-							model.dropZone.isOver
-								? "border-primary bg-primary/5"
-								: "border-border bg-secondary/20 hover:border-muted-fg/40 hover:bg-secondary/40",
-							isDisabled && "pointer-events-none opacity-50",
-						),
+			ariaButton(
+				h,
+				{
+					className: cx(
+						"flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 transition-colors",
+						model.dropZone.isOver
+							? "border-primary bg-primary/5"
+							: "border-border bg-secondary/20 hover:border-muted-fg/40 hover:bg-secondary/40",
+						isDisabled && "pointer-events-none opacity-50",
 					),
-					h.DataAttribute("react-aria-pressable", "true"),
-					h.Tabindex(0),
-					h.Type("button"),
-					h.OnClick(Message.ClickedBrowse({ inputId: DROP_ZONE_INPUT_ID })),
-				],
+					onPress: Message.ClickedBrowse({ inputId: DROP_ZONE_INPUT_ID }),
+				},
 				[
 					IconEmojiAdd(h, { className: "size-8 text-muted-fg" }),
 					h.div(
@@ -104,7 +99,7 @@ const draftForm = (h: HtmlBuilder<Message>, model: Model, draft: Draft): Html =>
 	const nameError = draft.name._tag === "Invalid" ? draft.name.errors[0] : null
 	const isInvalid = nameError !== null
 	return h.div(
-		[h.Class("rounded-lg border border-border bg-bg p-4")],
+		[h.Class(cardClassName("p-4"))],
 		[
 			h.div(
 				[h.Class("flex flex-col gap-4 sm:flex-row sm:items-start")],
@@ -200,165 +195,99 @@ const draftForm = (h: HtmlBuilder<Message>, model: Model, draft: Draft): Html =>
 	)
 }
 
-/** A low-priority column a phone leaves out (its cells carry the same class). */
-const PHONE_HIDDEN = "max-md:hidden"
+const columns = (h: HtmlBuilder<Message>, isAdmin: boolean, nowMs: number): ReadonlyArray<Column<Emoji>> => [
+	{
+		key: "emoji",
+		label: "Emoji",
+		widthClass: "w-20",
+		cell: (emoji) =>
+			h.img([h.Src(emoji.imageUrl), h.Alt(emoji.name), h.Class("size-8 rounded object-contain")]),
+	},
+	{
+		key: "shortcode",
+		label: "Shortcode",
+		cell: (emoji) => h.span([h.Class("font-medium")], [":", emoji.name, ":"]),
+	},
+	{
+		key: "creator",
+		label: "Added by",
+		hideClass: "max-md:hidden",
+		widthClass: "w-48",
+		cell: (emoji) =>
+			h.span([h.Class("text-muted-fg")], [emoji.creatorFirstName, " ", emoji.creatorLastName]),
+	},
+	{
+		key: "added",
+		label: "Added",
+		hideClass: "max-md:hidden",
+		widthClass: "w-36",
+		cell: (emoji) =>
+			h.span(
+				[h.Class("text-muted-fg")],
+				[emoji.createdAtMs === null ? "—" : formatDistanceToNow(new Date(emoji.createdAtMs), nowMs)],
+			),
+	},
+	{
+		key: "actions",
+		label: "Actions",
+		align: "right",
+		widthClass: "w-24",
+		cell: (emoji) =>
+			isAdmin
+				? button(
+						h,
+						{
+							intent: "danger",
+							size: "sq-sm",
+							onPress: Message.ClickedDeleteEmoji({ id: emoji.id, name: emoji.name }),
+							attributes: [h.AriaLabel(`Delete :${emoji.name}:`)],
+						},
+						[IconTrash(h, { attributes: { "data-slot": "icon" } })],
+					)
+				: "",
+	},
+]
 
-const headerCell = (h: HtmlBuilder<Message>, label: string, align: "left" | "right", className?: string) =>
-	h.th(
-		[
-			h.Class(
-				`px-4 py-3 text-${align} font-medium text-muted-fg text-xs${className ? ` ${className}` : ""}`,
-			),
-		],
-		[label],
-	)
-
-const table = (h: HtmlBuilder<Message>, rows: ReadonlyArray<Html>): Html =>
-	h.div(
-		[h.Class("overflow-x-auto")],
-		[
-			h.table(
-				[h.Class("w-full min-w-full")],
-				[
-					h.thead(
-						[h.Class("border-border border-b bg-bg")],
-						[
-							h.tr(
-								[],
-								[
-									headerCell(h, "Emoji", "left"),
-									headerCell(h, "Shortcode", "left"),
-									headerCell(h, "Added by", "left", PHONE_HIDDEN),
-									headerCell(h, "Added", "left", PHONE_HIDDEN),
-									headerCell(h, "Actions", "right"),
-								],
-							),
-						],
-					),
-					h.tbody([h.Class("divide-y divide-border")], [...rows]),
-				],
-			),
-		],
-	)
-
-const pulse = (h: HtmlBuilder<Message>, className: string, cellClassName?: string) =>
-	h.td(
-		[h.Class(`px-4 py-4${cellClassName ? ` ${cellClassName}` : ""}`)],
-		[h.div([h.Class(`${className} animate-pulse rounded-sm bg-secondary`)])],
-	)
-
-const skeletonRow = (h: HtmlBuilder<Message>, index: number): Html =>
-	h.keyed("tr")(
-		String(index),
-		[],
-		[
-			pulse(h, "size-8"),
-			pulse(h, "h-4 w-24"),
-			pulse(h, "h-4 w-28", PHONE_HIDDEN),
-			pulse(h, "h-4 w-20", PHONE_HIDDEN),
-			h.td(
-				[h.Class("px-4 py-4 text-right")],
-				[h.div([h.Class("size-8 animate-pulse rounded-sm bg-secondary")])],
-			),
-		],
-	)
-
-const emojiRow = (h: HtmlBuilder<Message>, emoji: Emoji, isAdmin: boolean, nowMs: number): Html =>
-	h.keyed("tr")(
-		emoji.id,
-		[h.Class("hover:bg-secondary/50")],
-		[
-			h.td(
-				[h.Class("px-4 py-4")],
-				[h.img([h.Src(emoji.imageUrl), h.Alt(emoji.name), h.Class("size-8 rounded object-contain")])],
-			),
-			h.td(
-				[h.Class("px-4 py-4")],
-				[h.span([h.Class("font-medium text-fg text-sm")], [":", emoji.name, ":"])],
-			),
-			h.td(
-				[h.Class(`px-4 py-4 ${PHONE_HIDDEN}`)],
-				[
-					h.span(
-						[h.Class("text-muted-fg text-sm")],
-						[emoji.creatorFirstName, " ", emoji.creatorLastName],
-					),
-				],
-			),
-			h.td(
-				[h.Class(`px-4 py-4 ${PHONE_HIDDEN}`)],
-				[
-					h.span(
-						[h.Class("text-muted-fg text-sm")],
-						[
-							emoji.createdAtMs === null
-								? "—"
-								: formatDistanceToNow(new Date(emoji.createdAtMs), nowMs),
-						],
-					),
-				],
-			),
-			h.td(
-				[h.Class("px-4 py-4")],
-				isAdmin
-					? [
-							h.div(
-								[h.Class("flex justify-end")],
-								[
-									button(
-										h,
-										{
-											intent: "danger",
-											size: "sq-sm",
-											onPress: Message.ClickedDeleteEmoji({
-												id: emoji.id,
-												name: emoji.name,
-											}),
-											attributes: [h.AriaLabel(`Delete :${emoji.name}:`)],
-										},
-										[IconTrash(h, { attributes: { "data-slot": "icon" } })],
-									),
-								],
-							),
-						]
-					: [],
-			),
-		],
-	)
+const emojiTable = (
+	h: HtmlBuilder<Message>,
+	emojis: ReadonlyArray<Emoji> | null,
+	isAdmin: boolean,
+	nowMs: number,
+): Html =>
+	dataTable(h, {
+		ariaLabel: "Custom emojis",
+		id: "custom-emojis",
+		columns: columns(h, isAdmin, nowMs),
+		rows: emojis ?? [],
+		rowKey: (emoji) => emoji.id,
+		isFramed: false,
+		loadingRows: emojis === null ? 5 : undefined,
+	})
 
 const emojiList = (h: HtmlBuilder<Message>, model: Model, isAdmin: boolean, nowMs: number): Html => {
-	if (model.emojis === null)
-		return table(
-			h,
-			[0, 1, 2, 3, 4].map((index) => skeletonRow(h, index)),
-		)
+	if (model.emojis === null) return emojiTable(h, null, isAdmin, nowMs)
 	if (model.emojis.length === 0) {
 		return emptyState(h, {
 			icon: (className) => IconEmoji1(h, { className }),
 			title: "No custom emojis yet",
 			description: "Upload custom emojis to use in messages across your workspace.",
-			...(isAdmin
-				? {
-						action: [
-							button(
-								h,
-								{
-									intent: "primary",
-									size: "sm",
-									onPress: Message.ClickedBrowse({ inputId: EMPTY_STATE_INPUT_ID }),
-								},
-								["Upload emoji"],
-							),
-							fileInput(h, EMPTY_STATE_INPUT_ID),
-						],
-					}
-				: {}),
+			action: isAdmin
+				? [
+						button(
+							h,
+							{
+								intent: "primary",
+								size: "sm",
+								onPress: Message.ClickedBrowse({ inputId: EMPTY_STATE_INPUT_ID }),
+							},
+							["Upload emoji"],
+						),
+						fileInput(h, EMPTY_STATE_INPUT_ID),
+					]
+				: undefined,
 		})
 	}
-	return table(
-		h,
-		model.emojis.map((emoji) => emojiRow(h, emoji, isAdmin, nowMs)),
-	)
+	return emojiTable(h, model.emojis, isAdmin, nowMs)
 }
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
@@ -366,49 +295,38 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	const isAdmin = isAdminOf(shared)
 	const isPermissionsLoading = shared.member === null
 	const count = model.emojis?.length ?? 0
-	return h.div(
-		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
-		[
-			card(h, {}, [
-				cardHeader(h, [
-					h.div(
-						[h.Class("flex flex-col gap-0.5")],
-						[
-							h.div(
-								[h.Class("flex items-center gap-2")],
-								[
-									IconEmoji1(h, { className: "size-5 text-muted-fg" }),
-									heading(h, { variant: "title" }, ["Custom Emojis"]),
-									badge(h, { intent: "secondary" }, [
-										`${count}`,
-										" emoji",
-										...(count !== 1 ? ["s"] : []),
-									]),
-								],
-							),
-							h.p(
-								[h.Class("text-muted-fg text-sm")],
-								["Upload and manage custom emojis for your workspace."],
-							),
-						],
-					),
-				]),
-				...(isAdmin || isPermissionsLoading
-					? [
-							h.div(
-								[h.Class("border-border border-b px-4 py-4 md:px-6")],
-								[
-									model.draft === null
-										? dropZone(h, model, isPermissionsLoading || !isAdmin)
-										: draftForm(h, model, model.draft),
-								],
-							),
-						]
-					: []),
-				emojiList(h, model, isAdmin, shared.nowMs),
+	return pageLayout(h, {}, [
+		card(h, {}, [
+			cardHeader(h, [
+				pageHeader(h, {
+					title: "Custom Emojis",
+					size: "title",
+					leading: IconEmoji1(h, { className: "mt-0.5 size-5 text-muted-fg" }),
+					badges: [
+						badge(h, { intent: "secondary" }, [
+							`${count}`,
+							" emoji",
+							...(count !== 1 ? ["s"] : []),
+						]),
+					],
+					subtitle: "Upload and manage custom emojis for your workspace.",
+				}),
 			]),
-			deleteEmojiModal(h, model),
-			restoreEmojiModal(h, model),
-		],
-	)
+			...(isAdmin || isPermissionsLoading
+				? [
+						h.div(
+							[h.Class("border-border border-b px-4 py-4 md:px-6")],
+							[
+								model.draft === null
+									? dropZone(h, model, isPermissionsLoading || !isAdmin)
+									: draftForm(h, model, model.draft),
+							],
+						),
+					]
+				: []),
+			emojiList(h, model, isAdmin, shared.nowMs),
+		]),
+		deleteEmojiModal(h, model),
+		restoreEmojiModal(h, model),
+	])
 })

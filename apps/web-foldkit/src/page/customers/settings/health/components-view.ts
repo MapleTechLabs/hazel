@@ -5,9 +5,11 @@ import { twMerge } from "tailwind-merge"
 import { severityGlyph } from "../../../../customers/ui/badges"
 import { sourceMark } from "../../../../customers/ui/identity"
 import { IconCheck, IconWarning } from "../../../../icons"
-import { button } from "../../../../ui/button"
+import { badge } from "../../../../ui/badge"
+import { ariaButton, button } from "../../../../ui/button"
+import { panel } from "../../../../ui/card"
 import * as Slider from "../../../../ui/slider"
-import { card, type Context, type H, numberInput, parseNumber, ruleHeading, ruleRow, textOf } from "./fields"
+import { type Context, type H, numberInput, parseNumber, ruleHeading, ruleRow, textOf } from "./fields"
 import { Message } from "./message"
 import {
 	COMPONENT_LABEL,
@@ -65,33 +67,23 @@ export const scaleButton = (h: H, className?: string): Html =>
 
 const totalPill = (h: H, total: number): Html =>
 	total === 100
-		? h.span(
-				[
-					h.Class(
-						"inline-flex items-center gap-1 rounded-full bg-success-subtle px-2 py-0.5 font-medium text-success-subtle-fg text-xs tabular-nums",
-					),
-				],
-				[IconCheck(h, { className: "size-3" }), "100%", h.span([h.Class("font-normal")], ["total"])],
-			)
-		: h.span(
-				[
-					h.Class(
-						"inline-flex items-center gap-1 rounded-full bg-danger-subtle px-2 py-0.5 font-medium text-danger-subtle-fg text-xs tabular-nums",
-					),
-				],
-				[
-					IconWarning(h, { className: "size-3" }),
-					`${total}%`,
-					h.span([h.Class("font-normal")], [`${off(total)} ${total > 100 ? "over" : "under"}`]),
-				],
-			)
+		? badge(h, { intent: "success", isPill: true }, [
+				IconCheck(h, { attributes: { "data-slot": "icon" } }),
+				"100%",
+				h.span([h.Class("font-normal")], ["total"]),
+			])
+		: badge(h, { intent: "danger", isPill: true }, [
+				IconWarning(h, { attributes: { "data-slot": "icon" } }),
+				`${total}%`,
+				h.span([h.Class("font-normal")], [`${off(total)} ${total > 100 ? "over" : "under"}`]),
+			])
 
 /** "Score = weighted average of four parts": the stacked weights, their legend and total. */
 export const weightsCard = (h: H, context: Context): Html => {
 	const { draft, saved, total } = context
 	const isOff = total !== 100
 	const scale = Math.max(total, 100)
-	return card(h, twMerge(isOff && "border-danger"), [
+	return panel(h, { className: isOff ? "border-danger" : undefined }, [
 		h.div(
 			[h.Class("flex flex-wrap items-start justify-between gap-3")],
 			[
@@ -165,7 +157,7 @@ export const weightsCard = (h: H, context: Context): Html => {
 					h.span(
 						[h.Class("inline-flex items-center gap-1.5")],
 						[
-							h.span([h.Class(twMerge("size-2.5 rounded-[2px]", COMPONENT_FILL[key]))]),
+							h.span([h.Class(twMerge("size-2.5 rounded-xs", COMPONENT_FILL[key]))]),
 							h.span([h.Class("text-muted-fg")], [COMPONENT_LABEL[key]]),
 							h.span([h.Class("font-medium text-fg tabular-nums")], [`${draft.weights[key]}%`]),
 							...(draft.weights[key] === saved.weights[key]
@@ -192,16 +184,15 @@ const stepper = (h: H, key: ComponentKey, context: Context): Html => {
 	const value = context.draft.weights[key]
 	const isChanged = value !== context.saved.weights[key]
 	const stepButton = (label: string, ariaLabel: string, next: number) =>
-		h.button(
-			[
-				h.Type("button"),
-				h.AriaLabel(ariaLabel),
-				h.Disabled(!context.canEdit || next === value),
-				h.OnClick(Message.ChangedWeight({ key, value: next })),
-				h.Class(
+		ariaButton(
+			h,
+			{
+				isDisabled: !context.canEdit || next === value,
+				onPress: Message.ChangedWeight({ key, value: next }),
+				attributes: [h.AriaLabel(ariaLabel)],
+				className:
 					"flex h-7 w-7 cursor-pointer items-center justify-center text-muted-fg outline-hidden hover:text-fg focus-visible:text-fg disabled:cursor-default disabled:opacity-50",
-				),
-			],
+			},
 			[label],
 		)
 	return h.div(
@@ -516,7 +507,7 @@ export const componentCard = (
 	const { weights } = context.draft
 	const others = context.total - weights[key]
 	const note = footnote(key, gaps)
-	return card(h, "", [
+	return panel(h, {}, [
 		h.div(
 			[h.Class("flex items-start justify-between gap-3")],
 			[
@@ -526,7 +517,7 @@ export const componentCard = (
 						h.div(
 							[h.Class("flex items-center gap-2")],
 							[
-								h.span([h.Class(twMerge("size-2.5 rounded-[2px]", COMPONENT_FILL[key]))]),
+								h.span([h.Class(twMerge("size-2.5 rounded-xs", COMPONENT_FILL[key]))]),
 								heading(h, { variant: "subsection" }, [COMPONENT_LABEL[key]]),
 							],
 						),

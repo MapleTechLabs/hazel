@@ -1,4 +1,5 @@
 import { MessageId } from "@hazel/schema"
+import { iconTile } from "../../ui/icon-tile"
 import { Effect, Schema } from "effect"
 import { Command, Submodel } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
@@ -94,14 +95,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 		{ size: "md" },
 		() => [
 			dialogHeader(h, {}, [
-				h.div(
-					[
-						h.Class(
-							"flex size-12 items-center justify-center rounded-lg border border-danger/10 bg-danger/5",
-						),
-					],
-					[IconWarning(h, { className: "size-6 text-danger" })],
-				),
+				iconTile(h, { intent: "danger" }, IconWarning(h)),
 				modalTitle(h, model.frame, "Delete message"),
 				modalDescription(
 					h,

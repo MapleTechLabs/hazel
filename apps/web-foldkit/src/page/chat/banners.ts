@@ -1,4 +1,5 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
+import { heading } from "../../ui/heading"
 import { button } from "../../ui/button"
 import { type ChannelLinks, channelIcon } from "../../ui/channel-icon"
 import type { ChannelMemberInfo, TypingInfo, UserInfo } from "./lookups"
@@ -45,7 +46,7 @@ export const joinBannerView = <M>(
 							h.div(
 								[h.Class("flex flex-col items-center gap-1")],
 								[
-									h.h2([h.Class("font-semibold text-fg text-xl")], [channel.name]),
+									heading(h, { variant: "title" }, [channel.name]),
 									h.p(
 										[h.Class("max-w-sm text-center text-muted-fg text-sm")],
 										["You're previewing this channel. Join to start chatting."],

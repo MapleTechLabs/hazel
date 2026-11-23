@@ -1,6 +1,7 @@
 export const emptyStateStyles = {
 	root: "flex flex-col items-center justify-center py-16 text-center",
-	iconWrapper: "mb-4 flex size-12 items-center justify-center rounded-xl bg-secondary",
+	/** Spacing under the `iconTile` (neutral, lg) that heads the state. */
+	iconWrapper: "mb-4",
 	icon: "size-6 text-muted-fg",
 	title: "font-semibold text-fg",
 	description: "mt-1 max-w-sm text-muted-fg text-sm",

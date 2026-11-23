@@ -13,7 +13,9 @@ import { markdownView } from "../../chat/markdown/markdown-view"
 import { IconClose, IconEdit, IconMaximize, IconPenSparkle, IconThread } from "../../icons"
 import { avatar } from "../../ui/avatar"
 import { button, buttonClassName } from "../../ui/button"
+import { iconTile } from "../../ui/icon-tile"
 import { loader } from "../../ui/loader"
+import { separator } from "../../ui/separator"
 import { systemUi } from "../../platform/system-ui"
 import { MIN_CHANNEL_WIDTH, MIN_THREAD_PANEL_WIDTH } from "./channel/thread-width"
 import { type DeriveContext, authorIdentity, authorOf, htmlRendersOf } from "./derive"
@@ -220,11 +222,8 @@ const introView = <M>(h: HtmlBuilder<M>, threadName: string, starterName: string
 	h.div(
 		[h.Class("px-2.5 pt-6 pb-2")],
 		[
-			h.div(
-				[h.Class("mb-3 flex size-12 items-center justify-center rounded-full bg-secondary")],
-				[IconThread(h, { className: "size-6 text-fg" })],
-			),
-			h.h3([h.Class("break-words font-semibold text-fg text-xl")], [threadName]),
+			iconTile(h, { size: "lg", className: "mb-3" }, IconThread(h)),
+			heading(h, { variant: "title", level: 3, className: "break-words" }, [threadName]),
 			starterName === null
 				? h.empty
 				: h.p(
@@ -279,7 +278,7 @@ const dividerView = <M>(h: HtmlBuilder<M>, count: number): Html =>
 		[h.Class("mx-2.5 my-2 flex items-center gap-2 text-muted-fg text-xs")],
 		[
 			h.span([], [count === 0 ? "No replies yet" : `${count} ${count === 1 ? "reply" : "replies"}`]),
-			h.div([h.Class("h-px flex-1 bg-border")]),
+			separator(h, { className: "w-auto flex-1" }),
 		],
 	)
 

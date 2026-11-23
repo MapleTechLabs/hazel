@@ -1,7 +1,12 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { IconCheck, IconCopy } from "../../../icons"
+import { IconCopy } from "../../../icons"
 import { badge } from "../../../ui/badge"
-import { button } from "../../../ui/button"
+import { button, iconButton } from "../../../ui/button"
+import { callout } from "../../../ui/callout"
+import { card, cardBody, cardHeader, panel } from "../../../ui/card"
+import { copyButton } from "../../../ui/copy-button"
+import { inputElement } from "../../../ui/input"
+import { link } from "../../../ui/link"
 import type { Shared } from "../../contract"
 import { PROVIDER_LOGOS } from "./command"
 import { Message } from "./message"
@@ -14,18 +19,12 @@ import { providerWebhook } from "./update-cards"
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
 
 const readonlyInput = <M>(h: HtmlBuilder<M>, value: string, className: string): Html =>
-	h.input([
-		h.Class(className),
-		h.Attribute("readonly", ""),
-		h.Attribute("style", ""),
-		h.Type("text"),
-		h.Value(value),
-	])
+	inputElement(h, {
+		className,
+		attributes: [h.Attribute("readonly", ""), h.Type("text"), h.Value(value)],
+	})
 
-const copyIcon = <M>(h: HtmlBuilder<M>, isCopied: boolean): Html =>
-	isCopied ? IconCheck(h, { className: "size-4 text-success" }) : IconCopy(h, { className: "size-4" })
-
-const heading = (h: HtmlBuilder<Message>, name: string, extra: ReadonlyArray<Html>) =>
+const title = (h: HtmlBuilder<Message>, name: string, extra: ReadonlyArray<Html>) =>
 	h.div([h.Class("flex items-center gap-2")], [h.span([h.Class("font-medium text-fg")], [name]), ...extra])
 
 export const providerCard = (
@@ -35,243 +34,188 @@ export const providerCard = (
 	shared: Shared,
 ): Html => {
 	const config = INTEGRATION_CONFIG[provider]
-	const card = model.providers[provider]
+	const state = model.providers[provider]
 	const webhook = providerWebhook(model, provider)
 	const logo = h.img([h.Src(PROVIDER_LOGOS[provider]), h.Alt(config.name), h.Class("size-10 rounded-lg")])
 	const isCopied = model.copiedIds.includes(`provider:${provider}`)
-	const isConnecting = card.action._tag === "Connecting"
-	const isConfirming = card.action._tag === "ConfirmingDelete"
+	const isConnecting = state.action._tag === "Connecting"
+	const isConfirming = state.action._tag === "ConfirmingDelete"
 
 	// Just created: the token is shown once.
-	if (card.createdToken !== null && webhook !== null) {
-		const fullUrl = `${BACKEND_URL}/webhooks/incoming/${webhook.id}/${card.createdToken}/${config.urlSuffix}`
-		return h.div(
-			[h.Class("rounded-xl border border-border bg-bg")],
-			[
-				h.div(
-					[h.Class("flex items-center gap-3 border-border border-b p-4")],
+	if (state.createdToken !== null && webhook !== null) {
+		const fullUrl = `${BACKEND_URL}/webhooks/incoming/${webhook.id}/${state.createdToken}/${config.urlSuffix}`
+		return card(h, {}, [
+			cardHeader(
+				h,
+				[
+					logo,
+					h.div(
+						[h.Class("flex-1")],
+						[
+							title(h, config.name, [badge(h, { intent: "success" }, ["Connected"])]),
+							h.p([h.Class("text-muted-fg text-sm")], [config.description]),
+						],
+					),
+				],
+				"flex-row items-center gap-3",
+			),
+			cardBody(h, [
+				callout(
+					h,
+					{
+						intent: "warning",
+						actions: [
+							link(
+								h,
+								{
+									href: config.docsUrl,
+									className: "text-primary text-xs underline",
+									attributes: [h.Target("_blank"), h.Rel("noopener noreferrer")],
+								},
+								["View setup instructions"],
+							),
+							button(
+								h,
+								{
+									intent: "secondary",
+									size: "sm",
+									className: "ml-auto",
+									onPress: Message.ClickedDismissProviderToken({ provider }),
+								},
+								["Done"],
+							),
+						],
+					},
 					[
-						logo,
+						"Copy this URL now. The token won't be shown again.",
 						h.div(
-							[h.Class("flex-1")],
+							[h.Class("mt-3 flex gap-2")],
 							[
-								heading(h, config.name, [badge(h, { intent: "success" }, ["Connected"])]),
-								h.p([h.Class("text-muted-fg text-sm")], [config.description]),
+								readonlyInput(h, fullUrl, "flex-1 font-mono text-xs max-md:min-w-0"),
+								copyButton(h, {
+									label: "Copy URL",
+									isCopied,
+									onPress: Message.ClickedCopy({
+										id: `provider:${provider}`,
+										value: fullUrl,
+										successMessage: "URL copied",
+										failureMessage: "Failed to copy",
+									}),
+								}),
 							],
 						),
 					],
 				),
-				h.div(
-					[h.Class("bg-warning-subtle/30 p-4")],
-					[
-						h.div(
-							[h.Class("mb-3 flex items-start gap-2")],
-							[
-								h.div(
-									[
-										h.Class(
-											"mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-warning-subtle",
-										),
-									],
-									[
-										h.svg(
-											[
-												h.Class("size-3 text-warning-subtle-fg"),
-												h.Attribute("fill", "none"),
-												h.Attribute("stroke", "currentColor"),
-												h.Attribute("stroke-width", "2.5"),
-												h.Attribute("viewBox", "0 0 24 24"),
-											],
-											[
-												h.path([
-													h.Attribute("d", "M12 9v2m0 4h.01"),
-													h.Attribute("stroke-linecap", "round"),
-													h.Attribute("stroke-linejoin", "round"),
-												]),
-											],
-										),
-									],
-								),
-								h.p(
-									[h.Class("text-warning-subtle-fg text-sm")],
-									["Copy this URL now. The token won't be shown again."],
-								),
-							],
-						),
-						h.div(
-							[h.Class("flex gap-2")],
-							[
-								readonlyInput(
-									h,
-									fullUrl,
-									"flex-1 rounded-lg border border-border bg-bg px-3 py-2 font-mono text-xs max-md:min-w-0",
-								),
-								button(
-									h,
-									{
-										intent: "outline",
-										size: "sq-sm",
-										onPress: Message.ClickedCopy({
-											id: `provider:${provider}`,
-											value: fullUrl,
-											successMessage: "URL copied",
-											failureMessage: "Failed to copy",
-										}),
-										attributes: [h.AriaLabel("Copy URL")],
-									},
-									[copyIcon(h, isCopied)],
-								),
-							],
-						),
-						h.div(
-							[h.Class("mt-3 flex items-center justify-between")],
-							[
-								h.a(
-									[
-										h.Href(config.docsUrl),
-										h.Target("_blank"),
-										h.Rel("noopener noreferrer"),
-										h.Class("text-primary text-xs underline"),
-									],
-									["View setup instructions"],
-								),
-								button(
-									h,
-									{
-										intent: "secondary",
-										size: "sm",
-										onPress: Message.ClickedDismissProviderToken({ provider }),
-									},
-									["Done"],
-								),
-							],
-						),
-					],
-				),
-			],
-		)
+			]),
+		])
 	}
 
 	if (webhook === null)
-		return h.div(
-			[h.Class("rounded-xl border border-border bg-bg p-4")],
-			[
-				h.div(
-					[h.Class("flex items-center justify-between max-md:gap-3")],
-					[
-						h.div(
-							[h.Class("flex items-center gap-3")],
-							[
-								logo,
-								h.div(
-									[],
-									[
-										heading(h, config.name, []),
-										h.p([h.Class("text-muted-fg text-sm")], [config.description]),
-									],
-								),
-							],
-						),
-						button(
-							h,
-							{
-								intent: "primary",
-								size: "sm",
-								isDisabled: isConnecting,
-								onPress: Message.ClickedConnectProvider({ provider }),
-							},
-							[isConnecting ? "Connecting..." : "Connect"],
-						),
-					],
-				),
-			],
-		)
-
-	const webhookUrl = `${BACKEND_URL}/webhooks/incoming/${webhook.id}/`
-	return h.div(
-		[h.Class("rounded-xl border border-border bg-bg p-4")],
-		[
+		return panel(h, {}, [
 			h.div(
-				[h.Class("flex items-start justify-between gap-4")],
+				[h.Class("flex items-center justify-between max-md:gap-3")],
 				[
 					h.div(
-						[h.Class("flex items-start gap-3")],
+						[h.Class("flex items-center gap-3")],
 						[
 							logo,
 							h.div(
-								[h.Class("flex flex-col gap-1")],
+								[],
 								[
-									heading(h, config.name, [
-										badge(h, { intent: webhook.isEnabled ? "success" : "secondary" }, [
-											webhook.isEnabled ? "Active" : "Disabled",
-										]),
-									]),
+									title(h, config.name, []),
 									h.p([h.Class("text-muted-fg text-sm")], [config.description]),
-									...(webhook.lastUsedAtMs === null
-										? []
-										: [
-												h.p(
-													[h.Class("text-muted-fg text-xs")],
-													[
-														"Last alert",
-														" ",
-														formatDistanceToNow(
-															webhook.lastUsedAtMs,
-															shared.nowMs,
-														),
-													],
-												),
-											]),
 								],
 							),
 						],
 					),
-					h.div(
-						[h.Class("flex shrink-0 items-center gap-2")],
-						[
-							button(
-								h,
-								{
-									intent: "outline",
-									size: "sm",
-									onPress: Message.ClickedToggleProvider({ provider }),
-								},
-								[webhook.isEnabled ? "Disable" : "Enable"],
-							),
-							button(
-								h,
-								{
-									intent: isConfirming ? "danger" : "outline",
-									size: "sm",
-									isDisabled: card.action._tag === "Deleting",
-									onPress: Message.ClickedDeleteProvider({ provider }),
-								},
-								[isConfirming ? "Confirm?" : "Delete"],
-							),
-						],
-					),
-				],
-			),
-			h.div(
-				[h.Class("mt-3 flex gap-2")],
-				[
-					readonlyInput(
-						h,
-						`${webhookUrl}****${webhook.tokenSuffix}/${config.urlSuffix}`,
-						"flex-1 rounded-lg border border-border bg-secondary/30 px-3 py-2 font-mono text-muted-fg text-xs max-md:min-w-0",
-					),
 					button(
 						h,
 						{
-							intent: "outline",
-							size: "sq-sm",
-							onPress: Message.ClickedProviderUrlInfo(),
-							attributes: [h.AriaLabel("URL info")],
+							intent: "primary",
+							size: "sm",
+							isDisabled: isConnecting,
+							onPress: Message.ClickedConnectProvider({ provider }),
 						},
-						[IconCopy(h, { className: "size-4" })],
+						[isConnecting ? "Connecting..." : "Connect"],
 					),
 				],
 			),
-		],
-	)
+		])
+
+	const webhookUrl = `${BACKEND_URL}/webhooks/incoming/${webhook.id}/`
+	return panel(h, { className: "gap-3" }, [
+		h.div(
+			[h.Class("flex items-start justify-between gap-4")],
+			[
+				h.div(
+					[h.Class("flex items-start gap-3")],
+					[
+						logo,
+						h.div(
+							[h.Class("flex flex-col gap-1")],
+							[
+								title(h, config.name, [
+									badge(h, { intent: webhook.isEnabled ? "success" : "secondary" }, [
+										webhook.isEnabled ? "Active" : "Disabled",
+									]),
+								]),
+								h.p([h.Class("text-muted-fg text-sm")], [config.description]),
+								...(webhook.lastUsedAtMs === null
+									? []
+									: [
+											h.p(
+												[h.Class("text-muted-fg text-xs")],
+												[
+													"Last alert",
+													" ",
+													formatDistanceToNow(webhook.lastUsedAtMs, shared.nowMs),
+												],
+											),
+										]),
+							],
+						),
+					],
+				),
+				h.div(
+					[h.Class("flex shrink-0 items-center gap-2")],
+					[
+						button(
+							h,
+							{
+								intent: "outline",
+								size: "sm",
+								onPress: Message.ClickedToggleProvider({ provider }),
+							},
+							[webhook.isEnabled ? "Disable" : "Enable"],
+						),
+						button(
+							h,
+							{
+								intent: isConfirming ? "danger" : "outline",
+								size: "sm",
+								isDisabled: state.action._tag === "Deleting",
+								onPress: Message.ClickedDeleteProvider({ provider }),
+							},
+							[isConfirming ? "Confirm?" : "Delete"],
+						),
+					],
+				),
+			],
+		),
+		h.div(
+			[h.Class("flex gap-2")],
+			[
+				readonlyInput(
+					h,
+					`${webhookUrl}****${webhook.tokenSuffix}/${config.urlSuffix}`,
+					"flex-1 bg-secondary/30 font-mono text-muted-fg text-xs max-md:min-w-0",
+				),
+				iconButton(
+					h,
+					{ label: "URL info", intent: "outline", onPress: Message.ClickedProviderUrlInfo() },
+					IconCopy(h, { attributes: { "data-slot": "icon" } }),
+				),
+			],
+		),
+	])
 }

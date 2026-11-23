@@ -1,9 +1,8 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { twMerge } from "tailwind-merge"
 import { formatDate, formatRelative } from "../../../customers/format"
 import { personAvatar } from "../../../customers/ui/identity"
 import { IconEdit, IconPin, IconTrash, IconUnpin } from "../../../icons"
-import { button } from "../../../ui/button"
+import { button, iconButton } from "../../../ui/button"
 import { checkbox } from "../../../ui/checkbox"
 import { textarea } from "../../../ui/textarea"
 import { Message } from "./message"
@@ -11,37 +10,17 @@ import { COMPOSER_ID, type Model, type NoteRow, sortedNotes } from "./model"
 import { noteBody } from "./overview-tab"
 import { type Context, memberOf } from "./parts"
 import { heading } from "../../../ui/heading"
+import { cardClassName } from "../../../ui/card"
+import { skeleton } from "../../../ui/skeleton"
+import { emptyState } from "../../../ui/empty-state"
 
 /** The notes tab: a markdown composer, then pinned notes and the rest, newest first. */
-
-const iconButton = (
-	h: HtmlBuilder<Message>,
-	label: string,
-	glyph: Html,
-	onPress: Message,
-	className?: string,
-): Html =>
-	h.button(
-		[
-			h.Type("button"),
-			h.AriaLabel(label),
-			h.Title(label),
-			h.OnClick(onPress),
-			h.Class(
-				twMerge(
-					"inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-fg outline-hidden hover:bg-secondary hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70",
-					className,
-				),
-			),
-		],
-		[glyph],
-	)
 
 const composer = (h: HtmlBuilder<Message>, model: Model, organizationName: string): Html =>
 	h.form(
 		[
 			h.OnSubmit(Message.SubmittedNote()),
-			h.Class("flex flex-col rounded-xl border border-border bg-bg focus-within:border-primary"),
+			h.Class(cardClassName("flex flex-col focus-within:border-primary")),
 		],
 		[
 			textarea(h, {
@@ -102,7 +81,7 @@ const noteCard = (h: HtmlBuilder<Message>, model: Model, note: NoteRow, context:
 		note.signalId === null ? undefined : model.signals?.find((entry) => entry.id === note.signalId)
 	const editing = model.editingNote?.noteId === note.id ? model.editingNote : null
 	return h.article(
-		[h.Key(note.id), h.Class("group/note flex flex-col gap-2 rounded-xl border border-border bg-bg p-4")],
+		[h.Key(note.id), h.Class(cardClassName("group/note flex flex-col gap-2 p-4"))],
 		[
 			h.header(
 				[h.Class("flex items-center justify-between gap-3")],
@@ -153,20 +132,29 @@ const noteCard = (h: HtmlBuilder<Message>, model: Model, note: NoteRow, context:
 						[
 							iconButton(
 								h,
-								note.pinned ? "Unpin" : "Pin to top",
+								{
+									label: note.pinned ? "Unpin" : "Pin to top",
+									size: "sq-xs",
+									onPress: Message.PressedPinNote({
+										noteId: note.id,
+										pinned: !note.pinned,
+									}),
+									className: note.pinned ? "text-primary" : undefined,
+								},
 								note.pinned
 									? IconUnpin(h, { className: "size-4" })
 									: IconPin(h, { className: "size-4" }),
-								Message.PressedPinNote({ noteId: note.id, pinned: !note.pinned }),
-								note.pinned ? "text-primary" : undefined,
 							),
 							...(isMine && editing === null
 								? [
 										iconButton(
 											h,
-											"Edit",
+											{
+												label: "Edit",
+												size: "sq-xs",
+												onPress: Message.PressedEditNote({ noteId: note.id }),
+											},
 											IconEdit(h, { className: "size-4" }),
-											Message.PressedEditNote({ noteId: note.id }),
 										),
 									]
 								: []),
@@ -174,10 +162,13 @@ const noteCard = (h: HtmlBuilder<Message>, model: Model, note: NoteRow, context:
 								? [
 										iconButton(
 											h,
-											"Delete",
+											{
+												label: "Delete",
+												size: "sq-xs",
+												onPress: Message.PressedDeleteNote({ noteId: note.id }),
+												className: "hover:text-danger-subtle-fg",
+											},
 											IconTrash(h, { className: "size-4" }),
-											Message.PressedDeleteNote({ noteId: note.id }),
-											"hover:text-danger-subtle-fg",
 										),
 									]
 								: []),
@@ -249,17 +240,13 @@ export const notesTab = (
 			],
 		),
 		...(model.notes === null
-			? [h.div([h.Class("h-24 animate-pulse rounded-xl border border-border bg-secondary/30")])]
+			? [skeleton(h, "h-24 w-full rounded-xl")]
 			: notes.length === 0
 				? [
-						h.p(
-							[
-								h.Class(
-									"rounded-xl border border-border border-dashed py-10 text-center text-muted-fg text-sm",
-								),
-							],
-							["No notes yet. Write the first one above."],
-						),
+						emptyState(h, {
+							title: "No notes yet. Write the first one above.",
+							className: "rounded-xl border border-border border-dashed py-10",
+						}),
 					]
 				: [
 						...section(

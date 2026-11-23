@@ -3,13 +3,15 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { currencySymbol, formatCount } from "../../../../customers/format"
 import { STAGE_LABEL } from "../../../../customers/ui/badges"
 import { IconClose, IconPlus } from "../../../../icons"
-import { button } from "../../../../ui/button"
+import { button, iconButton } from "../../../../ui/button"
 import { inputGroup, inputElement } from "../../../../ui/input"
 import { switchControl } from "../../../../ui/switch"
 import { evaluatedAccounts, isInScope, planNamesOf, scopeOf } from "./draft"
 import { Message } from "./message"
 import { currencyOf, type Model, type RuleForm, type ScopeCondition } from "./model"
-import { card, errorIdOf, fieldError, toggleChip } from "./parts"
+import { errorIdOf, fieldError } from "./parts"
+import { toggleChip } from "../../../../ui/toggle-chip"
+import { panel, panelHeader } from "../../../../ui/card"
 
 /**
  * "Applies to": the rule's scope as removable conditions (stage any of, plan any of, MRR at least,
@@ -62,17 +64,14 @@ const conditionRow = (
 			),
 			...(options.isAdmin
 				? [
-						button(
+						iconButton(
 							h,
 							{
-								intent: "plain",
 								size: "sq-xs",
+								label: `Remove the ${CONDITION_LABEL[options.condition]} condition`,
 								onPress: Message.RemovedScopeCondition({ condition: options.condition }),
-								attributes: [
-									h.AriaLabel(`Remove the ${CONDITION_LABEL[options.condition]} condition`),
-								],
 							},
-							[IconClose(h, { attributes: { "data-slot": "icon" } })],
+							IconClose(h, { attributes: { "data-slot": "icon" } }),
 						),
 					]
 				: []),
@@ -214,9 +213,8 @@ export const scopeCard = (
 			(condition === "plan" && scope.plans === null) ||
 			(condition === "mrr" && scope.minMrr === null),
 	)
-	return card(
-		h,
-		{
+	return panel(h, {}, [
+		panelHeader(h, {
 			title: "Applies to",
 			aside: h.span(
 				[h.Class("text-muted-fg text-xs tabular-nums")],
@@ -226,47 +224,43 @@ export const scopeCard = (
 						: `${formatCount(inScope)} of ${formatCount(accounts.length)} accounts in scope`,
 				],
 			),
-		},
-		[
-			conditions.length === 0
-				? h.p([h.Class("text-muted-fg text-sm")], ["Every account that hasn't churned."])
-				: h.div(
-						[h.Class("flex flex-col divide-y divide-border")],
-						conditions.map((condition, index) =>
-							conditionRow(h, { ...condition, index, isAdmin }),
-						),
-					),
-			...(isAdmin && addable.length > 0
-				? [
-						h.div(
-							[h.Class("flex flex-wrap items-center gap-1.5")],
-							addable.map((condition) =>
-								button(
-									h,
-									{
-										intent: "outline",
-										size: "xs",
-										onPress: Message.AddedScopeCondition({ condition }),
-									},
-									[
-										IconPlus(h, { attributes: { "data-slot": "icon" } }),
-										CONDITION_LABEL[condition],
-									],
-								),
+		}),
+		conditions.length === 0
+			? h.p([h.Class("text-muted-fg text-sm")], ["Every account that hasn't churned."])
+			: h.div(
+					[h.Class("flex flex-col divide-y divide-border")],
+					conditions.map((condition, index) => conditionRow(h, { ...condition, index, isAdmin })),
+				),
+		...(isAdmin && addable.length > 0
+			? [
+					h.div(
+						[h.Class("flex flex-wrap items-center gap-1.5")],
+						addable.map((condition) =>
+							button(
+								h,
+								{
+									intent: "outline",
+									size: "xs",
+									onPress: Message.AddedScopeCondition({ condition }),
+								},
+								[
+									IconPlus(h, { attributes: { "data-slot": "icon" } }),
+									CONDITION_LABEL[condition],
+								],
 							),
 						),
-					]
-				: []),
-			switchControl(
-				h,
-				{
-					id: "signal-rule-paying-only",
-					isSelected: scope.payingOnly,
-					isDisabled: !isAdmin,
-					onChange: toPayingOnly,
-				},
-				"Only paying customers (MRR above zero, or trialing)",
-			),
-		],
-	)
+					),
+				]
+			: []),
+		switchControl(
+			h,
+			{
+				id: "signal-rule-paying-only",
+				isSelected: scope.payingOnly,
+				isDisabled: !isAdmin,
+				onChange: toPayingOnly,
+			},
+			"Only paying customers (MRR above zero, or trialing)",
+		),
+	])
 }

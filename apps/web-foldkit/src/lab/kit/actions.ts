@@ -1,7 +1,8 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconBell, IconChevronDown, IconDots, IconDownload, IconPlus, IconStar, IconTrash } from "../../icons"
 import { badge } from "../../ui/badge"
-import { button } from "../../ui/button"
+import { button, iconButton } from "../../ui/button"
+import { copyButton } from "../../ui/copy-button"
 import { kbd, shortcut } from "../../ui/kbd"
 import { link } from "../../ui/link"
 import { loader } from "../../ui/loader"
@@ -92,50 +93,51 @@ const buttons = (h: H): Html =>
 			]),
 			group(
 				h,
-				"Icon only",
+				"Icon only (iconButton)",
 				[
 					...SQUARES.map((entry) =>
 						h.keyed("span")(
 							entry.size,
 							[h.Class("contents")],
 							[
-								button(
+								iconButton(
 									h,
 									{
 										intent: "outline",
 										size: entry.size,
+										label: entry.label,
 										onPress: press(entry.label),
-										attributes: [h.AriaLabel(entry.label)],
 									},
-									[IconPlus(h)],
+									IconPlus(h),
 								),
 							],
 						),
 					),
-					button(
-						h,
-						{
-							intent: "plain",
-							size: "sq-sm",
-							onPress: press("More"),
-							attributes: [h.AriaLabel("More")],
-						},
-						[IconDots(h)],
-					),
-					button(
+					iconButton(h, { label: "More", onPress: press("More") }, IconDots(h)),
+					iconButton(
 						h,
 						{
 							intent: "secondary",
-							size: "sq-sm",
 							isCircle: true,
+							label: "Notifications",
 							onPress: press("Notifications"),
-							attributes: [h.AriaLabel("Notifications")],
 						},
-						[IconBell(h)],
+						IconBell(h),
 					),
 				],
 				"items-end",
 			),
+			group(h, "Copy (copyButton)", [
+				copyButton(h, { label: "Copy token", onPress: press("Copy token") }),
+				copyButton(h, { label: "Copy token", isCopied: true, onPress: press("Copied") }),
+				copyButton(h, { label: "Copy email", showLabel: true, onPress: press("Copy email") }),
+				copyButton(h, {
+					label: "Copy link",
+					intent: "plain",
+					size: "sq-xs",
+					onPress: press("Copy link"),
+				}),
+			]),
 			group(h, "States", [
 				button(h, { intent: "primary", isDisabled: true }, ["Disabled"]),
 				button(h, { intent: "outline", isDisabled: true }, ["Disabled"]),

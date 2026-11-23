@@ -11,7 +11,8 @@ import * as Menu from "../../../../ui/menu"
 import { menuLabel, view as menuView } from "../../../../ui/menu-view"
 import { Message } from "./message"
 import { grantableMembers, type Model } from "./model"
-import { card, cardHeader, type H } from "./parts"
+import type { H } from "./parts"
+import { panel, panelHeader } from "../../../../ui/card"
 
 /** The impersonation section (admins): who may sign in as customers' users, and who did. */
 
@@ -53,13 +54,12 @@ const nameOf = (model: Model, userId: UserId): string =>
 export const impersonationCard = (h: H, model: Model, nowMs: number): Html => {
 	const now = new Date(nowMs)
 	const grantable = grantableMembers(model)
-	return card(h, [
-		cardHeader(
-			h,
-			"Impersonation",
-			EXPLANATION,
-			grantable.length === 0 ? undefined : addMemberMenu(h, model, grantable),
-		),
+	return panel(h, {}, [
+		panelHeader(h, {
+			title: "Impersonation",
+			description: EXPLANATION,
+			aside: grantable.length === 0 ? undefined : addMemberMenu(h, model, grantable),
+		}),
 		model.impersonators.length === 0
 			? h.p([h.Class("text-muted-fg text-sm")], ["No one can impersonate yet."])
 			: h.ul(

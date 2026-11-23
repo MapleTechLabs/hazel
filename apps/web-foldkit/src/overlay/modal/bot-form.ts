@@ -132,27 +132,24 @@ export const botFormFields = <Message>(
 				h.div(
 					[h.Class("grid gap-2 sm:grid-cols-2")],
 					BOT_SCOPES.map((scope) =>
-						h.label(
-							[h.Class(scopeLabelClass)],
-							[
-								checkbox(
-									h,
-									{
-										id: `${options.id}-scope-${scope.id}`,
-										isSelected: form.scopes.includes(scope.id),
-										onChange: () => options.onToggleScope(scope.id),
-									},
-									[],
-								),
-								h.div(
-									[h.Class("flex flex-col gap-0.5")],
-									[
-										h.span([h.Class("font-medium text-fg text-sm")], [scope.label]),
-										h.span([h.Class("text-muted-fg text-xs")], [scope.description]),
-									],
-								),
-							],
-						),
+						label(h, { className: scopeLabelClass }, [
+							checkbox(
+								h,
+								{
+									id: `${options.id}-scope-${scope.id}`,
+									isSelected: form.scopes.includes(scope.id),
+									onChange: () => options.onToggleScope(scope.id),
+								},
+								[],
+							),
+							h.div(
+								[h.Class("flex flex-col gap-0.5")],
+								[
+									h.span([h.Class("font-medium text-fg text-sm")], [scope.label]),
+									h.span([h.Class("text-muted-fg text-xs")], [scope.description]),
+								],
+							),
+						]),
 					),
 				),
 			],

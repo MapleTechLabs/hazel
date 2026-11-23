@@ -7,6 +7,7 @@ import { loader } from "../../../ui/loader"
 import * as Modal from "../../../ui/modal"
 import { Message } from "./message"
 import type { ImpersonationFailure, Model } from "./model"
+import { callout } from "../../../ui/callout"
 
 /**
  * "Sign in as": the one-time link `customers.impersonation.start` answered, as a real link the user
@@ -46,19 +47,10 @@ export const impersonateDialog = (h: HtmlBuilder<Message>, model: Model): Html =
 				}),
 				dialogBody(h, [
 					failure !== null
-						? h.div(
-								[
-									h.Role("alert"),
-									h.Class(
-										"flex flex-col gap-1 rounded-lg bg-danger-subtle px-3 py-2 text-danger-subtle-fg text-sm",
-									),
-								],
-								[
-									h.p([h.Class("font-medium")], [failure.title]),
-									...(failure.description === undefined
-										? []
-										: [h.p([h.Class("opacity-90")], [failure.description])]),
-								],
+						? callout(
+								h,
+								{ intent: "danger", title: failure.title, icon: null },
+								failure.description === undefined ? [] : [failure.description],
 							)
 						: impersonation?.url == null
 							? h.p(

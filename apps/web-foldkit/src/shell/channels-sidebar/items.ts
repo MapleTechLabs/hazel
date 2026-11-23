@@ -8,6 +8,8 @@ import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
 import { type ChannelLinks, channelIcon } from "../../ui/channel-icon"
 import { presenceDot } from "../../ui/presence-dot"
+import { ariaButton } from "../../ui/button"
+import { countBadge } from "../../ui/count-badge"
 import { sidebarItem, sidebarLink } from "../../ui/sidebar"
 import type { ChannelEntry, DiscoverableChannel, DmChannel, DmMember, Presence, SidebarThread } from "./rows"
 import { initialsOf, semantic } from "../../ui/semantic"
@@ -59,15 +61,11 @@ export const label = <M>(h: HtmlBuilder<M>, children: Array<Html | string>, clas
 
 /** `SidebarItem`'s expanded unread badge. */
 const sidebarBadge = <M>(h: HtmlBuilder<M>, count: number): Html =>
-	h.span(
-		[
-			h.Attribute("data-slot", "sidebar-badge"),
-			h.Class(
-				"absolute inset-y-1/2 right-1.5 flex h-5 min-w-5 -translate-y-1/2 items-center justify-center rounded-full bg-primary px-1.5 font-medium text-2xs text-primary-fg tabular-nums group-hover/sidebar-item:right-8",
-			),
-		],
-		[String(count)],
-	)
+	countBadge(h, {
+		count,
+		className: "absolute inset-y-1/2 right-1.5 -translate-y-1/2 group-hover/sidebar-item:right-8",
+		attributes: [h.Attribute("data-slot", "sidebar-badge")],
+	})
 
 const badgeIf = <M>(h: HtmlBuilder<M>, count: number): Html[] => (count > 0 ? [sidebarBadge(h, count)] : [])
 
@@ -197,16 +195,7 @@ const threadItem = <M>(
 		[
 			threadBranch(h, hasEmojiIcon, isFirst, isLast),
 			h.span([h.Class("min-w-0 flex-1 truncate")], [thread.name]),
-			count > 0
-				? h.span(
-						[
-							h.Class(
-								"flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 font-medium text-2xs text-primary-fg tabular-nums",
-							),
-						],
-						[String(count)],
-					)
-				: h.empty,
+			count > 0 ? countBadge(h, { count }) : h.empty,
 		],
 	)
 }
@@ -273,18 +262,14 @@ export const dmDisplayName = (channel: DmChannel, partners: ReadonlyArray<DmMemb
 const statusEmoji = <M>(h: HtmlBuilder<M>, presence: Presence | undefined): Html[] =>
 	presence?.statusEmoji
 		? [
-				h.button(
-					[
-						h.Class(
-							twMerge(
-								"cursor-default border-none bg-transparent p-0 text-sm",
-								"ml-1 text-xs opacity-80",
-							),
+				ariaButton(
+					h,
+					{
+						className: twMerge(
+							"cursor-default border-none bg-transparent p-0 text-sm",
+							"ml-1 text-xs opacity-80",
 						),
-						h.Attribute("type", "button"),
-						h.Attribute("tabindex", "0"),
-						h.Attribute("data-react-aria-pressable", "true"),
-					],
+					},
 					[presence.statusEmoji],
 				),
 			]

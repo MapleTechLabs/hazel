@@ -1,9 +1,10 @@
 import { Submodel } from "foldkit"
 import { IconArrowPath } from "../../../../icons"
 import { button } from "../../../../ui/button"
-import { loader } from "../../../../ui/loader"
+import { loadingState } from "../../../../ui/loader"
 import type { PageViewInputs } from "../../../contract"
-import { isCustomersAdmin, readOnlyNotice, settingsHeader, settingsPage } from "../shared"
+import { isCustomersAdmin, readOnlyNotice, settingsPage } from "../shared"
+import { pageHeader } from "../../../../ui/page-header"
 import { componentCard, weightsCard } from "./components-view"
 import type { Context } from "./fields"
 import { Message } from "./message"
@@ -29,11 +30,8 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	const draft = draftOf(model)
 	if (model.settings === null || draft === null)
 		return settingsPage(h, [
-			settingsHeader(h, { title: "Health score", subtitle: SUBTITLE }),
-			h.div(
-				[h.Class("flex justify-center py-16")],
-				[loader(h, { ariaLabel: "Loading health settings" })],
-			),
+			pageHeader(h, { title: "Health score", subtitle: SUBTITLE }),
+			loadingState(h, { label: "Loading health settings", className: "py-16" }),
 		])
 	const context: Context = {
 		saved: model.settings.health,
@@ -47,7 +45,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	const valid = validDraftOf(model)
 	const gaps = model.accounts === null ? null : dataGapsOf(model.accounts)
 	return settingsPage(h, [
-		settingsHeader(h, {
+		pageHeader(h, {
 			title: "Health score",
 			subtitle: SUBTITLE,
 			actions: canEdit

@@ -1,11 +1,13 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { IconChevronDown } from "../../icons"
-import { checkbox } from "../../ui/checkbox"
-import { tableHeadClass } from "./surface"
+import { IconChevronDown } from "../icons"
+import { checkbox } from "./checkbox"
+
+/** A column head's type: 12px medium muted, one line. */
+export const tableHeadClass = "h-9 whitespace-nowrap font-medium text-muted-fg text-xs"
 
 /**
- * A dense, sortable data table (Foundations › Table Customers States): sticky header, sort
+ * The app's one table (Foundations › Table): a dense, sortable data table: sticky header, sort
  * indicators, optional selection checkboxes, hover/selected rows, row actions on hover, skeleton
  * rows while loading and a footer summary row. A real `<table>`; the page owns sort, selection and
  * which rows to show.
@@ -58,6 +60,11 @@ export type DataTableOptions<Row, M, K extends string = string> = Readonly<{
 	loadingRows?: number
 	/** Stick the header to the top of the scrolling container. */
 	stickyHeader?: boolean
+	/**
+	 * Draw its own rounded border (the default). Off when the table fills a `card` that already
+	 * frames it, so the two borders don't double up.
+	 */
+	isFramed?: boolean
 	className?: string
 }>
 
@@ -263,7 +270,15 @@ export const dataTable = <Row, M, K extends string = string>(
 		)
 
 	return h.div(
-		[h.Class(twMerge("overflow-x-auto rounded-xl border border-border", options.className))],
+		[
+			h.Class(
+				twMerge(
+					"overflow-x-auto",
+					(options.isFramed ?? true) && "rounded-xl border border-border",
+					options.className,
+				),
+			),
+		],
 		[
 			h.table(
 				[

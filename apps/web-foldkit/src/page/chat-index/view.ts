@@ -5,14 +5,10 @@ import { badge } from "../../ui/badge"
 import { button } from "../../ui/button"
 import { card } from "../../ui/card"
 import { emptyState } from "../../ui/empty-state"
-import { loader } from "../../ui/loader"
+import { heading as headingText } from "../../ui/heading"
+import { loadingState } from "../../ui/loader"
 import { mobileTopBar } from "../../ui/mobile-top-bar"
-import {
-	sectionHeaderGroup,
-	sectionHeaderHeading,
-	sectionHeaderRoot,
-	sectionHeaderSubheading,
-} from "../../ui/section-header"
+import { pageHeader, pageLayout } from "../../ui/page-header"
 import * as Tabs from "../../ui/tabs"
 import { can, channelLinksOf, type PageViewInputs, type Shared } from "../contract"
 import { channelCard, dmCard } from "./cards"
@@ -57,7 +53,7 @@ const tabLabel = (h: HtmlBuilder<Message>, tab: ChatIndexTab, count: number): Ht
 
 const channelList = (h: HtmlBuilder<Message>, heading: string, rows: ReadonlyArray<Html>): Html =>
 	card(h, {}, [
-		h.h2([h.Class("sr-only")], [heading]),
+		headingText(h, { variant: "section", className: "sr-only" }, [heading]),
 		h.div([h.Class("divide-y divide-border")], [...rows]),
 	])
 
@@ -94,15 +90,9 @@ const panels = (
 							icon: (className) => IconHashtag(h, { className }),
 							title: "No public channels",
 							description: "Public channels are open for everyone in the organization to join.",
-							...(canCreate
-								? {
-										action: createButton(
-											h,
-											"Create a channel",
-											Message.PressedCreateChannel(),
-										),
-									}
-								: {}),
+							action: canCreate
+								? createButton(h, "Create a channel", Message.PressedCreateChannel())
+								: undefined,
 						}),
 				),
 			],
@@ -119,15 +109,9 @@ const panels = (
 							icon: (className) => IconLock(h, { className }),
 							title: "No private channels",
 							description: "Private channels are invite-only spaces for focused discussions.",
-							...(canCreate
-								? {
-										action: createButton(
-											h,
-											"Create a private channel",
-											Message.PressedCreateChannel(),
-										),
-									}
-								: {}),
+							action: canCreate
+								? createButton(h, "Create a private channel", Message.PressedCreateChannel())
+								: undefined,
 						}),
 				),
 			],
@@ -192,71 +176,48 @@ const dmList = (h: HtmlBuilder<Message>, model: Model, groups: ChannelGroups, sh
 				h.div([h.Class("flex flex-col gap-4 p-4")], list),
 			],
 		)
-	return h.div(
-		[h.Class("flex flex-col gap-6 px-4 py-6 lg:px-8")],
-		[
-			sectionHeaderRoot(h, { className: "border-none pb-0" }, [
-				h.div(
-					[h.Class("flex items-center justify-between gap-4")],
-					[
-						sectionHeaderHeading(h, { size: "xl" }, ["Direct messages"]),
-						createButton(h, "New message", Message.PressedStartConversation()),
-					],
-				),
-			]),
-			...list,
-		],
-	)
+	return pageLayout(h, { className: "py-6" }, [
+		pageHeader(h, {
+			title: "Direct messages",
+			actions: [createButton(h, "New message", Message.PressedStartConversation())],
+		}),
+		...list,
+	])
 }
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
 	if (model.channels._tag === "Loading") {
-		return h.div(
-			[h.Class("flex h-screen items-center justify-center")],
-			[loader(h, { className: "size-8" })],
-		)
+		return loadingState(h, { className: "h-screen py-0" })
 	}
 	const { groups } = model.channels
 	if (model.isDmList) return dmList(h, model, groups, shared)
-	return h.div(
-		[h.Class("flex flex-col gap-6 px-4 py-6 lg:px-8")],
-		[
-			sectionHeaderRoot(h, { className: "border-none pb-0" }, [
-				sectionHeaderGroup(h, {}, [
-					h.div(
-						[h.Class("space-y-0.5")],
-						[
-							sectionHeaderHeading(h, { size: "xl" }, ["All channels"]),
-							sectionHeaderSubheading(h, {}, [
-								"Discover communities and join the discussions that matter to you.",
-							]),
-						],
-					),
-				]),
-			]),
-			h.submodel({
-				slotId: "tabs",
-				model: model.tabs,
-				view: ChatIndexTabs.view,
-				viewInputs: {
-					tabs: TABS,
-					selectedValue: model.tab,
-					ariaLabel: "Channels",
-					toView: (render) =>
-						Tabs.layout(h, render, {
-							listClassName: "w-full",
-							tab: (tab) => [tabLabel(h, tab, countOf(groups, tab))],
-							// The cards link into the org, so the panels wait for its slug.
-							panel: (tab) =>
-								shared.orgSlug === null
-									? []
-									: (panels(h, model, groups, shared, shared.orgSlug).find(
-											(panel) => panel.key === tab,
-										)?.content ?? []),
-						}),
-				},
-				toParentMessage: toTabsMessage,
-			}),
-		],
-	)
+	return pageLayout(h, { className: "py-6" }, [
+		pageHeader(h, {
+			title: "All channels",
+			subtitle: "Discover communities and join the discussions that matter to you.",
+		}),
+		h.submodel({
+			slotId: "tabs",
+			model: model.tabs,
+			view: ChatIndexTabs.view,
+			viewInputs: {
+				tabs: TABS,
+				selectedValue: model.tab,
+				ariaLabel: "Channels",
+				toView: (render) =>
+					Tabs.layout(h, render, {
+						listClassName: "w-full",
+						tab: (tab) => [tabLabel(h, tab, countOf(groups, tab))],
+						// The cards link into the org, so the panels wait for its slug.
+						panel: (tab) =>
+							shared.orgSlug === null
+								? []
+								: (panels(h, model, groups, shared, shared.orgSlug).find(
+										(panel) => panel.key === tab,
+									)?.content ?? []),
+					}),
+			},
+			toParentMessage: toTabsMessage,
+		}),
+	])
 })

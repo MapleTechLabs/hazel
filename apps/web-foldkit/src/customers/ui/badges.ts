@@ -2,6 +2,7 @@ import type { HealthStatus, LifecycleStage, SignalKind, SignalSeverity } from "@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { badge } from "../../ui/badge"
+import { type StatusTone, statusDot } from "../../ui/status-dot"
 import { formatDaysLeft } from "../format"
 import { environmentsHintOf } from "../groups"
 import { IconOpportunity, IconRisk } from "./icons"
@@ -27,6 +28,13 @@ const HEALTH_INTENT = {
 	critical: "danger",
 	unknown: "secondary",
 } as const
+
+const HEALTH_TONE = {
+	healthy: "success",
+	at_risk: "warning",
+	critical: "danger",
+	unknown: "neutral",
+} as const satisfies Record<HealthStatus, StatusTone>
 
 /** The dot's color: the badge's own foreground, so dot and label always agree. */
 const HEALTH_DOT = {
@@ -63,7 +71,7 @@ export const healthBadge = <M>(
 			),
 		},
 		[
-			h.span([h.Class(twMerge("size-1.5 shrink-0 rounded-full", HEALTH_DOT[options.status]))]),
+			statusDot(h, { tone: HEALTH_TONE[options.status], className: HEALTH_DOT[options.status] }),
 			HEALTH_LABEL[options.status],
 			...(options.score === undefined
 				? []
@@ -94,7 +102,10 @@ export const healthDot = <M>(
 			h.Title(HEALTH_LABEL[options.status]),
 		],
 		[
-			h.span([h.Class(twMerge("size-2 shrink-0 rounded-full", HEALTH_DOT[options.status]))]),
+			statusDot(h, {
+				tone: HEALTH_TONE[options.status],
+				className: twMerge("size-2", HEALTH_DOT[options.status]),
+			}),
 			h.span([h.Class("sr-only")], [`${HEALTH_LABEL[options.status]} `]),
 			h.span(
 				[h.Class(options.status === "unknown" ? "text-muted-fg" : "text-fg")],
@@ -137,7 +148,7 @@ export const severityGlyph = <M>(
 					]),
 		],
 		SEVERITY_BARS[severity].map((fill, index) =>
-			h.span([h.Class(twMerge("block w-[3px] rounded-[1px]", BAR_HEIGHTS[index], fill))]),
+			h.span([h.Class(twMerge("block w-[3px] rounded-xs", BAR_HEIGHTS[index], fill))]),
 		),
 	)
 
