@@ -1,7 +1,7 @@
 import { Option } from "effect"
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import type { Provider } from "../../../auth/client"
+import { allSignInMethods, type Provider } from "../../../auth/client"
 import { IconExternalLink, IconGitHub, IconGoogle, IconLock, type IconOptions } from "../../../icons"
 import { desktopAuthClient } from "../../../platform/desktop"
 import { AppRoute, hrefOf } from "../../../route"
@@ -11,16 +11,21 @@ import type { PageViewInputs } from "../../contract"
 import type { UserErrorMessage } from "~/lib/error-messages"
 import { authError, authFailureMessage, authFrame, authHeading } from "../layout"
 import { Message } from "./message"
-import { type Attempt, type Model, pendingAttempt, type SignInFailure } from "./model"
+import { type Attempt, Methods, type Model, pendingAttempt, type SignInFailure } from "./model"
 
-const providers: ReadonlyArray<{
-	readonly id: Provider
+interface ProviderOption {
 	readonly label: string
 	readonly icon: (h: HtmlBuilder<Message>, options?: IconOptions) => Html
-}> = [
-	{ id: "github", label: "GitHub", icon: IconGitHub },
-	{ id: "google", label: "Google", icon: IconGoogle },
-]
+}
+
+const providerOptions = {
+	github: { label: "GitHub", icon: IconGitHub },
+	google: { label: "Google", icon: IconGoogle },
+} satisfies Record<Provider, ProviderOption>
+
+/** "GitHub", "GitHub or Google": the offered providers, for copy. */
+const providerNames = (providers: ReadonlyArray<Provider>): string =>
+	providers.map((provider) => providerOptions[provider].label).join(" or ")
 
 /** Brand marks keep their own colors, so they skip the button's muted `data-slot="icon"` tint. */
 const brandIconOptions: IconOptions = {
@@ -55,29 +60,40 @@ const divider = (h: HtmlBuilder<Message>): Html =>
 		[h.div([h.Class("h-px flex-1 bg-border")]), "or", h.div([h.Class("h-px flex-1 bg-border")])],
 	)
 
-const choices = (h: HtmlBuilder<Message>, pending: Attempt | null): Html =>
-	h.div(
-		[h.Class("flex flex-col gap-3")],
-		[
-			...providers.map(({ id, label, icon }) =>
+const passkeyChoice = (h: HtmlBuilder<Message>, pending: Attempt | null): Html =>
+	choice(h, {
+		label: "Sign in with a passkey",
+		icon: IconLock(h, { className: "size-4", attributes: { "aria-hidden": "true" } }),
+		isPending: pending === "passkey",
+		isDisabled: pending !== null,
+		onPress: Message.ClickedPasskey(),
+	})
+
+/** Only the methods the install offers; until it answers, a quiet placeholder of the same weight. */
+const choices = (h: HtmlBuilder<Message>, methods: Methods, pending: Attempt | null): Html =>
+	Methods.match(methods, {
+		Loading: () =>
+			h.div(
+				[h.Class("flex min-h-24 items-center justify-center")],
+				[loader(h, { className: "size-5", ariaLabel: "Loading sign-in options" })],
+			),
+		Ready: ({ providers, passkeys }) => {
+			const oauth = providers.map((id) =>
 				choice(h, {
-					label: `Continue with ${label}`,
-					icon: icon(h, brandIconOptions),
+					label: `Continue with ${providerOptions[id].label}`,
+					icon: providerOptions[id].icon(h, brandIconOptions),
 					isPending: pending === id,
 					isDisabled: pending !== null,
 					onPress: Message.ClickedProvider({ provider: id }),
 				}),
-			),
-			divider(h),
-			choice(h, {
-				label: "Sign in with a passkey",
-				icon: IconLock(h, { className: "size-4", attributes: { "aria-hidden": "true" } }),
-				isPending: pending === "passkey",
-				isDisabled: pending !== null,
-				onPress: Message.ClickedPasskey(),
-			}),
-		],
-	)
+			)
+			const passkey = passkeys ? [passkeyChoice(h, pending)] : []
+			return h.div(
+				[h.Class("flex flex-col gap-3")],
+				[...oauth, ...(oauth.length > 0 && passkey.length > 0 ? [divider(h)] : []), ...passkey],
+			)
+		},
+	})
 
 const switchLink = (h: HtmlBuilder<Message>, model: Model): Html => {
 	const isSignIn = model.mode === "SignIn"
@@ -97,18 +113,40 @@ const switchLink = (h: HtmlBuilder<Message>, model: Model): Html => {
 	)
 }
 
+/** The offered providers, or every one before the install answers. */
+const offeredProviders = (methods: Methods): ReadonlyArray<Provider> =>
+	Methods.match(methods, { Loading: () => allSignInMethods.providers, Ready: ({ providers }) => providers })
+
 /** What a failed sign-in says, including the desktop browser's own failures. */
-const signInFailureMessage = (reason: SignInFailure): UserErrorMessage | null =>
-	reason === "BrowserTimedOut"
-		? { title: "Signing in took too long", description: "Please try again." }
-		: reason === "BrowserBusy"
-			? { title: "A sign-in is already in progress in your browser" }
-			: reason === "BrowserIndeterminate"
-				? { title: "Couldn't finish signing in", description: "Please try again." }
-				: authFailureMessage(reason)
+const signInFailureMessage = (reason: SignInFailure, methods: Methods): UserErrorMessage | null => {
+	const providers = offeredProviders(methods)
+	return reason === "PasskeyUnsupported"
+		? {
+				title: "This browser can't use passkeys",
+				description:
+					providers.length === 0
+						? "Try a browser that supports passkeys."
+						: `Continue with ${providerNames(providers)} instead.`,
+			}
+		: reason === "BrowserTimedOut"
+			? { title: "Signing in took too long", description: "Please try again." }
+			: reason === "BrowserBusy"
+				? { title: "A sign-in is already in progress in your browser" }
+				: reason === "BrowserIndeterminate"
+					? { title: "Couldn't finish signing in", description: "Please try again." }
+					: authFailureMessage(reason)
+}
 
 const failureOf = (model: Model): UserErrorMessage | null =>
-	model.submission._tag === "Failed" ? signInFailureMessage(model.submission.reason) : null
+	model.submission._tag === "Failed" ? signInFailureMessage(model.submission.reason, model.methods) : null
+
+/** `/sign-up`'s subtitle names the providers once the install has said which it has. */
+const signUpDescription = (methods: Methods): string => {
+	const providers = Methods.match(methods, { Loading: () => [], Ready: ({ providers }) => providers })
+	return providers.length === 0
+		? "It takes a few seconds."
+		: `Sign up with ${providerNames(providers)}. It takes a few seconds.`
+}
 
 /** The desktop app signs in through the system browser, where GitHub, Google and passkeys work. */
 const desktopChoices = (h: HtmlBuilder<Message>, model: Model): ReadonlyArray<Html> => [
@@ -145,12 +183,8 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		: authFrame(h, shared.nowMs, [
 				model.mode === "SignIn"
 					? authHeading(h, "Sign in to Hazel", "Welcome back. Pick how you'd like to sign in.")
-					: authHeading(
-							h,
-							"Create your Hazel account",
-							"Sign up with GitHub or Google. It takes a few seconds.",
-						),
-				choices(h, pendingAttempt(model)),
+					: authHeading(h, "Create your Hazel account", signUpDescription(model.methods)),
+				choices(h, model.methods, pendingAttempt(model)),
 				authError(h, failureOf(model)),
 				switchLink(h, model),
 			]),

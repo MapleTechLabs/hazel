@@ -2,7 +2,7 @@ import type { DesktopAuth } from "@hazel/auth/desktop"
 import { Effect, Match, Schema } from "effect"
 import { Command } from "foldkit"
 import { load } from "foldkit/navigation"
-import { Provider } from "../../../auth/client"
+import { fetchSignInMethods, Provider } from "../../../auth/client"
 import { operationReasons, signInWithPasskey, startOAuthSignIn } from "../../../auth/flows"
 import { type DesktopAuthUnavailableError, runDesktopAuth } from "../../../platform/desktop-auth"
 import { Message } from "./message"
@@ -10,6 +10,17 @@ import type { SignInFailure } from "./model"
 
 const failedSignIn = (error: { readonly reason: SignInFailure }) =>
 	Effect.succeed(Message.FailedSignIn({ reason: error.reason }))
+
+/** Which providers the install has OAuth apps for. */
+export const FetchSignInMethods = Command.define("FetchSignInMethods", {
+	messages: [Message.SucceededFetchSignInMethods, Message.FailedFetchSignInMethods],
+	execute: fetchSignInMethods.pipe(
+		Effect.map((methods) => Message.SucceededFetchSignInMethods(methods)),
+		Effect.catchTags({
+			SignInMethodsError: () => Effect.succeed(Message.FailedFetchSignInMethods()),
+		}),
+	),
+})
 
 export const StartOAuthSignIn = Command.define("StartOAuthSignIn", {
 	args: { provider: Schema.Literals(Provider), returnTo: Schema.NullOr(Schema.String) },
