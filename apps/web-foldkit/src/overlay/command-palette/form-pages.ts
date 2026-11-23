@@ -1,4 +1,5 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
+import { emptyState } from "../../ui/empty-state"
 import { IconHashtag, IconLock } from "../../icons"
 import { channelLinksOf, type Shared } from "../../page/contract"
 import { button } from "../../ui/button"
@@ -127,16 +128,11 @@ export const joinChannelPage = (
 					[h.Class("max-h-64 overflow-y-auto p-2")],
 					[
 						unjoined.length === 0
-							? h.div(
-									[h.Class("flex flex-col items-center justify-center py-8 text-center")],
-									[
-										IconHashtag(h, { className: "mb-3 size-8 text-muted-fg" }),
-										h.p(
-											[h.Class("text-muted-fg text-sm")],
-											["You've joined all available channels"],
-										),
-									],
-								)
+							? emptyState(h, {
+									title: "You've joined all available channels",
+									icon: (className) => IconHashtag(h, { className }),
+									className: "py-8",
+								})
 							: filtered.length === 0
 								? h.div(
 										[h.Class("py-4 text-center text-muted-fg text-sm")],

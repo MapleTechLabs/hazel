@@ -2,6 +2,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { embedSectionStyles } from "~/components/embeds/embed.styles"
 import { cn } from "~/lib/utils"
 import { badge } from "../../ui/badge"
+import { ariaButton } from "../../ui/button"
 import { embedMarkdownView } from "./embed-markdown"
 import type { EmbedBadge, EmbedField } from "./types"
 import { heading } from "../../ui/heading"
@@ -161,15 +162,14 @@ export const embedImageView = <M>(
 					)
 				: onOpen === undefined
 					? img
-					: h.button(
-							[
-								h.Type("button"),
-								h.Class(
+					: ariaButton(
+							h,
+							{
+								className:
 									"block w-fit max-w-full cursor-zoom-in rounded-md outline-hidden transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring",
-								),
-								h.AriaLabel("Open image"),
-								h.OnClick(onOpen),
-							],
+								onPress: onOpen,
+								attributes: [h.AriaLabel("Open image")],
+							},
 							[img],
 						),
 		],

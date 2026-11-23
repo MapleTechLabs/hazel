@@ -16,12 +16,17 @@ import { providerOf, safeSourceUrl, sourcesLabel } from "../../../customers/prov
 import { stageBadge } from "../../../customers/ui/badges"
 import { dataTable } from "../../../ui/data-table"
 import { linkClass } from "../../../customers/ui/surface"
-import { IconCopy, IconWarning } from "../../../icons"
+import { IconCopy } from "../../../icons"
+import { callout } from "../../../ui/callout"
+import { cardClassName, panel, panelHeader } from "../../../ui/card"
+import { emptyState } from "../../../ui/empty-state"
+import { skeleton } from "../../../ui/skeleton"
 import { badge } from "../../../ui/badge"
 import { buttonClassName, button } from "../../../ui/button"
 import { Message } from "./message"
 import { type Model, paymentIssue } from "./model"
-import { card, type Context, copyButton, icon, pageFooter } from "./parts"
+import { stat } from "../shared-view"
+import { type Context, copyButton, icon, pageFooter } from "./parts"
 
 /** The billing tab: a payment issue, the subscriptions, MRR history and the invoices. */
 
@@ -86,62 +91,38 @@ const banner = (h: HtmlBuilder<Message>, context: Context, detail: Customers.Acc
 			? null
 			: `The provider tries again on ${formatDate(invoice.nextRetryAt, { now })}.`,
 	].filter((part) => part !== null)
-	return h.div(
-		[
-			h.Role("alert"),
-			h.Class(
-				"flex flex-wrap items-start justify-between gap-4 rounded-xl border border-danger-subtle-fg/30 bg-danger-subtle p-4 sm:px-5",
-			),
-		],
-		[
-			h.div(
-				[h.Class("flex min-w-0 flex-1 gap-3")],
-				[
-					IconWarning(h, { className: "mt-0.5 size-4 shrink-0 text-danger-subtle-fg" }),
-					h.div(
-						[h.Class("flex min-w-0 flex-col gap-1")],
-						[
-							h.span([h.Class("font-semibold text-fg")], [title.replace("  ", " ")]),
-							// A line each: the decline reason is the provider's, without a full stop.
-							...details.map((part) => h.p([h.Class("text-fg-2 text-sm")], [part])),
-						],
-					),
-				],
-			),
-			h.div(
-				[h.Class("flex min-w-0 flex-wrap items-center gap-2")],
-				[
-					...(billingEmail === null
-						? []
-						: [
-								button(
-									h,
-									{
-										intent: "outline",
-										size: "xs",
-										onPress: Message.PressedCopy({
-											text: billingEmail,
-											label: "Billing email",
-										}),
-									},
-									[IconCopy(h, icon), "Copy billing email"],
-								),
-							]),
-					...(recordLink === undefined ? [] : [externalLink(h, recordLink.href, recordLink.label)]),
-				],
-			),
-		],
+	return callout(
+		h,
+		{
+			intent: "danger",
+			title: title.replace("  ", " "),
+			actions: [
+				...(billingEmail === null
+					? []
+					: [
+							button(
+								h,
+								{
+									intent: "outline",
+									size: "xs",
+									onPress: Message.PressedCopy({
+										text: billingEmail,
+										label: "Billing email",
+									}),
+								},
+								[IconCopy(h, icon), "Copy billing email"],
+							),
+						]),
+				...(recordLink === undefined ? [] : [externalLink(h, recordLink.href, recordLink.label)]),
+			],
+		},
+		// A line each: the decline reason is the provider's, without a full stop.
+		details.map((part) => h.p([], [part])),
 	)
 }
 
 const fact = (h: HtmlBuilder<Message>, label: string, value: Html | string) =>
-	h.div(
-		[h.Class("flex min-w-0 flex-col gap-0.5 px-4 py-3 sm:px-5")],
-		[
-			h.span([h.Class("text-muted-fg text-xs")], [label]),
-			h.span([h.Class("truncate text-fg text-sm")], [value]),
-		],
-	)
+	stat(h, { label, value, className: "px-4 py-3 sm:px-5" })
 
 const subscriptionCard = (
 	h: HtmlBuilder<Message>,
@@ -154,10 +135,7 @@ const subscriptionCard = (
 	const date = (value: Customers.Subscription["startedAt"]) =>
 		value === null ? "—" : formatDate(value, { now, withYear: true })
 	return h.section(
-		[
-			h.Key(subscription.id),
-			h.Class("flex flex-col overflow-hidden rounded-xl border border-border bg-bg"),
-		],
+		[h.Key(subscription.id), h.Class(cardClassName("flex flex-col"))],
 		[
 			h.header(
 				[h.Class("flex items-start justify-between gap-4 p-4 sm:px-5")],
@@ -264,79 +242,76 @@ const mrrHistoryCard = (h: HtmlBuilder<Message>, model: Model, context: Context)
 	const first = months[0]?.value ?? 0
 	const last = months.at(-1)?.value ?? 0
 	const change = last - first
-	return card(
-		h,
-		{ title: "MRR history", aside: h.span([h.Class("text-muted-fg text-xs")], ["Last 12 months"]) },
-		[
-			AsyncData.isFailure(model.mrrHistory)
-				? h.p(
-						[h.Class("py-10 text-center text-muted-fg text-sm")],
-						["Couldn't load the MRR history."],
-					)
-				: series === undefined
-					? h.div([h.Class("h-48 animate-pulse rounded-lg bg-secondary/40")])
-					: h.div(
-							[h.Class("flex flex-wrap gap-6")],
-							[
-								h.div(
-									[h.Class("flex w-40 flex-col gap-3")],
-									[
-										h.div(
-											[h.Class("flex flex-col")],
-											[
-												h.span(
-													[h.Class("text-muted-fg text-xs")],
-													["Net change, 12 months"],
-												),
-												h.span(
-													[
-														h.Class(
-															twMerge(
-																"font-semibold text-lg tabular-nums",
-																change > 0
-																	? "text-success-subtle-fg"
-																	: change < 0
-																		? "text-danger-subtle-fg"
-																		: "text-fg",
-															),
+	return panel(h, {}, [
+		panelHeader(h, {
+			title: "MRR history",
+			aside: h.span([h.Class("text-muted-fg text-xs")], ["Last 12 months"]),
+		}),
+		AsyncData.isFailure(model.mrrHistory)
+			? emptyState(h, { title: "Couldn't load the MRR history.", className: "py-10" })
+			: series === undefined
+				? skeleton(h, "h-48 w-full rounded-lg")
+				: h.div(
+						[h.Class("flex flex-wrap gap-6")],
+						[
+							h.div(
+								[h.Class("flex w-40 flex-col gap-3")],
+								[
+									h.div(
+										[h.Class("flex flex-col")],
+										[
+											h.span(
+												[h.Class("text-muted-fg text-xs")],
+												["Net change, 12 months"],
+											),
+											h.span(
+												[
+													h.Class(
+														twMerge(
+															"font-semibold text-lg tabular-nums",
+															change > 0
+																? "text-success-subtle-fg"
+																: change < 0
+																	? "text-danger-subtle-fg"
+																	: "text-fg",
 														),
-													],
-													[
-														formatMoney(change, currency, { signed: true }),
-														...(first === 0
-															? []
-															: [` (${Math.round((change / first) * 100)}%)`]),
-													],
-												),
-											],
-										),
-									],
-								),
-								h.div(
-									// Under the net change once the card is too narrow for both (a phone).
-									[h.Class("min-w-0 flex-1 basis-64")],
-									[
-										stackedBarChart(h, {
-											ariaLabel: "MRR at the end of each month, last 12 months",
-											stacks: [{ key: "mrr", label: "MRR", color: "series-1" }],
-											bars: months.map((point) => ({
-												tick: formatMonthShort(point.day),
-												heading: formatMonthLong(point.day),
-												values: { mrr: point.value },
-												net: point.value,
-											})),
-											formatValue: (value) => formatMoney(value, currency),
-											formatAxis: (value) => formatMoneyCompact(value, currency),
-											hoveredIndex: model.hoveredMrr,
-											onHover: (index) => Message.HoveredMrr({ index }),
-											heightClass: "h-44",
-										}),
-									],
-								),
-							],
-						),
-		],
-	)
+													),
+												],
+												[
+													formatMoney(change, currency, { signed: true }),
+													...(first === 0
+														? []
+														: [` (${Math.round((change / first) * 100)}%)`]),
+												],
+											),
+										],
+									),
+								],
+							),
+							h.div(
+								// Under the net change once the card is too narrow for both (a phone).
+								[h.Class("min-w-0 flex-1 basis-64")],
+								[
+									stackedBarChart(h, {
+										ariaLabel: "MRR at the end of each month, last 12 months",
+										stacks: [{ key: "mrr", label: "MRR", color: "series-1" }],
+										bars: months.map((point) => ({
+											tick: formatMonthShort(point.day),
+											heading: formatMonthLong(point.day),
+											values: { mrr: point.value },
+											net: point.value,
+										})),
+										formatValue: (value) => formatMoney(value, currency),
+										formatAxis: (value) => formatMoneyCompact(value, currency),
+										hoveredIndex: model.hoveredMrr,
+										onHover: (index) => Message.HoveredMrr({ index }),
+										heightClass: "h-44",
+									}),
+								],
+							),
+						],
+					),
+	])
 }
 
 const invoicesCard = (
@@ -359,103 +334,108 @@ const invoicesCard = (
 		label: "Show more",
 		onMore: Message.PressedMoreInvoices(),
 	})
-	return card(h, { title: "Invoices", count: rows.length, bodyClassName: "p-0 sm:px-0 pt-3" }, [
-		dataTable(h, {
-			ariaLabel: "Invoices",
-			id: "customer-invoices",
-			className: "rounded-none border-x-0 border-b-0",
-			rows,
-			rowKey: (invoice) => invoice.id,
-			loadingRows:
-				model.invoices.status === "Loading" && model.invoices.items.length === 0 ? 5 : undefined,
-			columns: [
-				{
-					key: "number",
-					label: "Invoice",
-					// The number opens the invoice in its provider: no link column a phone has no room for.
-					cell: (invoice) => {
-						if (invoice.status === "upcoming")
-							return h.span([h.Class("text-muted-fg")], ["Upcoming"])
-						const href = safeSourceUrl(invoice.provider, invoice.hostedUrl)
-						const number = invoice.number ?? "—"
-						return href === null
-							? h.span([h.Class("whitespace-nowrap")], [number])
-							: h.a(
-									[
-										h.Href(href),
-										h.Attribute("target", "_blank"),
-										h.Attribute("rel", "noreferrer"),
-										h.Class(twMerge(linkClass, "whitespace-nowrap")),
-									],
-									[number],
-								)
-					},
-				},
-				{
-					key: "status",
-					label: "Status",
-					cell: (invoice) =>
-						badge(h, { intent: INVOICE_STATUS[invoice.status][1] }, [
-							INVOICE_STATUS[invoice.status][0],
-						]),
-				},
-				{
-					key: "amount",
-					label: "Amount",
-					align: "right",
-					widthClass: "w-28",
-					cell: (invoice) => formatMoney(invoice.amountDueMinor, invoice.currency, { cents: true }),
-				},
-				{
-					key: "issued",
-					label: "Issued",
-					widthClass: "w-32",
-					// Beside the sidebar (lg) the table has the width of a tablet.
-					hideClass: "max-xl:hidden",
-					cell: (invoice) => h.span([h.Class("whitespace-nowrap")], [date(invoice.issuedAt)]),
-				},
-				{
-					key: "due",
-					label: "Due",
-					widthClass: "w-28",
-					// A phone keeps the invoice, its status, amount and link.
-					hideClass: "max-sm:hidden",
-					cell: (invoice) => h.span([h.Class("whitespace-nowrap")], [date(invoice.dueAt)]),
-				},
-				{
-					key: "paid",
-					label: "Paid",
-					hideClass: "max-sm:hidden",
-					cell: (invoice) =>
-						invoice.paidAt !== null
-							? h.span(
-									[h.Class("whitespace-nowrap")],
-									[
-										`${date(invoice.paidAt)}${invoice.attemptCount > 1 ? ` · attempt ${invoice.attemptCount}` : ""}`,
-									],
-								)
-							: invoice.status === "open"
-								? h.span(
-										[h.Class("text-danger-subtle-fg")],
+	return h.section(
+		[h.Class(cardClassName("flex min-w-0 flex-col"))],
+		[
+			panelHeader(h, { title: "Invoices", count: rows.length, className: "px-4 pt-4 pb-3 sm:px-5" }),
+			dataTable(h, {
+				ariaLabel: "Invoices",
+				id: "customer-invoices",
+				isFramed: false,
+				className: "border-border border-t",
+				rows,
+				rowKey: (invoice) => invoice.id,
+				loadingRows:
+					model.invoices.status === "Loading" && model.invoices.items.length === 0 ? 5 : undefined,
+				columns: [
+					{
+						key: "number",
+						label: "Invoice",
+						// The number opens the invoice in its provider: no link column a phone has no room for.
+						cell: (invoice) => {
+							if (invoice.status === "upcoming")
+								return h.span([h.Class("text-muted-fg")], ["Upcoming"])
+							const href = safeSourceUrl(invoice.provider, invoice.hostedUrl)
+							const number = invoice.number ?? "—"
+							return href === null
+								? h.span([h.Class("whitespace-nowrap")], [number])
+								: h.a(
 										[
-											`Unpaid · ${invoice.attemptCount} failed attempt${invoice.attemptCount === 1 ? "" : "s"}`,
+											h.Href(href),
+											h.Attribute("target", "_blank"),
+											h.Attribute("rel", "noreferrer"),
+											h.Class(twMerge(linkClass, "whitespace-nowrap")),
+										],
+										[number],
+									)
+						},
+					},
+					{
+						key: "status",
+						label: "Status",
+						cell: (invoice) =>
+							badge(h, { intent: INVOICE_STATUS[invoice.status][1] }, [
+								INVOICE_STATUS[invoice.status][0],
+							]),
+					},
+					{
+						key: "amount",
+						label: "Amount",
+						align: "right",
+						widthClass: "w-28",
+						cell: (invoice) =>
+							formatMoney(invoice.amountDueMinor, invoice.currency, { cents: true }),
+					},
+					{
+						key: "issued",
+						label: "Issued",
+						widthClass: "w-32",
+						// Beside the sidebar (lg) the table has the width of a tablet.
+						hideClass: "max-xl:hidden",
+						cell: (invoice) => h.span([h.Class("whitespace-nowrap")], [date(invoice.issuedAt)]),
+					},
+					{
+						key: "due",
+						label: "Due",
+						widthClass: "w-28",
+						// A phone keeps the invoice, its status, amount and link.
+						hideClass: "max-sm:hidden",
+						cell: (invoice) => h.span([h.Class("whitespace-nowrap")], [date(invoice.dueAt)]),
+					},
+					{
+						key: "paid",
+						label: "Paid",
+						hideClass: "max-sm:hidden",
+						cell: (invoice) =>
+							invoice.paidAt !== null
+								? h.span(
+										[h.Class("whitespace-nowrap")],
+										[
+											`${date(invoice.paidAt)}${invoice.attemptCount > 1 ? ` · attempt ${invoice.attemptCount}` : ""}`,
 										],
 									)
-								: h.span([h.Class("text-muted-fg")], ["—"]),
-				},
-			],
-		}),
-		...(model.invoices.status === "Loaded" && rows.length === 0
-			? [h.p([h.Class("py-8 text-center text-muted-fg text-sm")], ["No invoices yet."])]
-			: []),
-		...(footer === null ? [] : [footer]),
-	])
+								: invoice.status === "open"
+									? h.span(
+											[h.Class("text-danger-subtle-fg")],
+											[
+												`Unpaid · ${invoice.attemptCount} failed attempt${invoice.attemptCount === 1 ? "" : "s"}`,
+											],
+										)
+									: h.span([h.Class("text-muted-fg")], ["—"]),
+					},
+				],
+			}),
+			...(model.invoices.status === "Loaded" && rows.length === 0
+				? [emptyState(h, { title: "No invoices yet.", className: "py-8" })]
+				: []),
+			...(footer === null ? [] : [footer]),
+		],
+	)
 }
 
 export const billingTab = (h: HtmlBuilder<Message>, model: Model, context: Context): ReadonlyArray<Html> => {
 	const { detail } = context
-	if (detail === null)
-		return [h.div([h.Class("h-64 animate-pulse rounded-xl border border-border bg-secondary/30")])]
+	if (detail === null) return [skeleton(h, "h-64 w-full rounded-xl")]
 	const issue = paymentIssue(detail, context.nowMs)
 	const alert = banner(h, context, detail)
 	return [

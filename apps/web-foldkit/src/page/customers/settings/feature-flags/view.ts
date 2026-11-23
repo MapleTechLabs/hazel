@@ -13,18 +13,20 @@ import {
 	IconTrash,
 } from "../../../../icons"
 import { customerRoute, hrefOf } from "../../../../route"
-import { button } from "../../../../ui/button"
+import { button, iconButton } from "../../../../ui/button"
+import { cardClassName } from "../../../../ui/card"
 import { checkbox } from "../../../../ui/checkbox"
 import { dialogClose, dialogFooter, dialogHeader } from "../../../../ui/dialog"
 import { emptyState } from "../../../../ui/empty-state"
 import * as Field from "../../../../ui/field"
 import { input } from "../../../../ui/input"
 import { link } from "../../../../ui/link"
-import { loader } from "../../../../ui/loader"
+import { loadingState } from "../../../../ui/loader"
 import * as Modal from "../../../../ui/modal"
 import * as Popover from "../../../../ui/popover"
 import type { PageViewInputs } from "../../../contract"
-import { isCustomersAdmin, readOnlyNotice, settingsHeader, settingsPage } from "../shared"
+import { isCustomersAdmin, readOnlyNotice, settingsPage } from "../shared"
+import { pageHeader } from "../../../../ui/page-header"
 import { Message } from "./message"
 import { customersWith, flagKeysOf, type Model } from "./model"
 
@@ -32,7 +34,6 @@ const { name: SOURCE, accountNoun: RECORD } = featureFlagsSource
 
 const SUBTITLE = `The boolean keys of your customers’ ${SOURCE} ${RECORD} metadata. Turning a flag on or off writes to ${SOURCE}.`
 
-const CARD = "flex flex-col rounded-xl border border-border bg-bg"
 const icon = { attributes: { "data-slot": "icon" } }
 
 const KEY_ERROR_ID = "feature-flag-new-key-error"
@@ -65,12 +66,9 @@ const createForm = (h: HtmlBuilder<Message>, model: Model): Html => {
 			),
 			...(isInvalid
 				? [
-						h.p(
-							[h.Id(KEY_ERROR_ID), h.Class("text-danger-subtle-fg text-xs")],
-							[
-								"Use letters, digits, _ . : or -, at most 64 characters, starting with a letter or digit.",
-							],
-						),
+						Field.fieldError(h, { id: KEY_ERROR_ID, className: "text-xs" }, [
+							"Use letters, digits, _ . : or -, at most 64 characters, starting with a letter or digit.",
+						]),
 					]
 				: []),
 		],
@@ -206,19 +204,16 @@ const flagCustomers = (
 								),
 								...(canEdit
 									? [
-											button(
+											iconButton(
 												h,
 												{
-													intent: "plain",
 													size: "sq-xs",
+													label: `Turn ${key} off for ${account.name}`,
 													onPress: Message.PressedRemoveCustomer({
 														accountId: account.id,
 													}),
-													attributes: [
-														h.AriaLabel(`Turn ${key} off for ${account.name}`),
-													],
 												},
-												[IconClose(h, icon)],
+												IconClose(h, icon),
 											),
 										]
 									: []),
@@ -265,15 +260,14 @@ const flagRow = (
 					),
 					...(canEdit
 						? [
-								button(
+								iconButton(
 									h,
 									{
-										intent: "plain",
 										size: "sq-xs",
+										label: `Delete ${key}`,
 										onPress: Message.PressedDeleteFlag({ key }),
-										attributes: [h.AriaLabel(`Delete ${key}`)],
 									},
-									[IconTrash(h, icon)],
+									IconTrash(h, icon),
 								),
 							]
 						: []),
@@ -291,10 +285,10 @@ const flagsCard = (h: HtmlBuilder<Message>, model: Model, orgSlug: string, canEd
 			title: "No feature flags yet",
 			icon: (className) => IconRocket(h, { className }),
 			description: `Flags show up here once a ${SOURCE} ${RECORD} has a boolean in its public metadata, or when you create one.`,
-			className: CARD,
+			className: cardClassName(),
 		})
 	return h.ul(
-		[h.Class(`${CARD} divide-y divide-border`)],
+		[h.Class(cardClassName("flex flex-col divide-y divide-border"))],
 		keys.map((key) => flagRow(h, model, key, orgSlug, canEdit)),
 	)
 }
@@ -330,13 +324,10 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	const canEdit = isCustomersAdmin(shared)
 	const orgSlug = shared.orgSlug ?? ""
 	return settingsPage(h, [
-		settingsHeader(h, { title: "Feature flags", subtitle: SUBTITLE }),
+		pageHeader(h, { title: "Feature flags", subtitle: SUBTITLE }),
 		...(canEdit ? [createForm(h, model)] : [readOnlyNotice(h, "feature flags")]),
 		model.accounts === null
-			? h.div(
-					[h.Class("flex justify-center py-16")],
-					[loader(h, { ariaLabel: "Loading feature flags" })],
-				)
+			? loadingState(h, { label: "Loading feature flags", className: "py-16" })
 			: flagsCard(h, model, orgSlug, canEdit),
 		deleteDialog(h, model),
 	])

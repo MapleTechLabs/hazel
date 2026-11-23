@@ -1,17 +1,12 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconChevronRight } from "../../icons"
-import { heading } from "../../ui/heading"
+import { link, linkClassName } from "../../ui/link"
 
 /**
- * The Customers pages' one visual grammar: page titles, panels, panel headers, labels and text
- * links. Every page builds from these, so a title, a table head or a link reads the same on the
- * overview, a customer and the settings.
- *
- * - Headings come from the app's `heading` kit: `display` for a page's title, `section` for a
- *   panel's, `subsection` for a group inside a panel or the sidebar. Body and descriptions: 14px.
- * - Labels (table heads, field names, eyebrows): 12px medium, sentence case, never uppercase.
- * - A panel is a 12px-radius hairline box on the page background; nothing is shadowed.
+ * The Customers pages' text grammar that the kit has no component for: an emphasised line, a
+ * description, and text links (on the kit `link`). Headings, panels, page headers and tables come
+ * from `src/ui` (`heading`, `panel`/`panelHeader`, `pageHeader`, `dataTable`).
  */
 
 // TYPE
@@ -20,18 +15,21 @@ import { heading } from "../../ui/heading"
 export const titleClass = "font-semibold text-fg text-sm/6"
 export const descriptionClass = "text-muted-fg text-sm"
 
-/** An inline text link. */
-export const linkClass =
-	"rounded-sm font-medium text-primary text-sm outline-hidden hover:underline focus-visible:ring-2 focus-visible:ring-ring/70"
+/** An inline text link: the kit `link`'s classes, in the primary colour (for an element `link` can't render). */
+export const linkClass = linkClassName({
+	hasHref: true,
+	className: "rounded-sm text-primary text-sm hover:underline",
+})
 
 // LINKS
 
 /** `View queue ›`: a link out of a panel to the page behind it. */
 export const moreLink = <M>(h: HtmlBuilder<M>, href: string, label: string): Html =>
-	h.a(
-		[
-			h.Href(href),
-			h.Class(twMerge("inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap", linkClass)),
-		],
+	link(
+		h,
+		{
+			href,
+			className: twMerge(linkClass, "inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap"),
+		},
 		[label, IconChevronRight(h, { className: "size-3.5" })],
 	)

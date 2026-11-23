@@ -9,7 +9,7 @@ import {
 import { cn } from "~/lib/utils"
 import { cx } from "~/utils/cx"
 import { IconArrowUp, IconEmoji1, IconGif, IconPaperclip2 } from "../icons"
-import { button } from "../ui/button"
+import { ariaButton, button } from "../ui/button"
 import { ACCEPT_ATTRIBUTE } from "../editor/file-types"
 import { autocompletePopover } from "./autocomplete-view"
 import { commandInputPanel } from "./trigger-views"
@@ -46,19 +46,10 @@ const pickerButton =
 		h.div(
 			[h.Class("contents")],
 			[
-				h.button(
-					[
-						...attributes,
-						h.Class(PICKER_BUTTON_CLASS),
-						h.Attribute("data-react-aria-pressable", "true"),
-						h.Attribute("tabindex", "0"),
-						h.Attribute("type", "button"),
-					],
-					[
-						(label === "GIF" ? IconGif : IconEmoji1)(h, { className: "size-4 text-muted-fg" }),
-						label,
-					],
-				),
+				ariaButton(h, { className: PICKER_BUTTON_CLASS, attributes }, [
+					(label === "GIF" ? IconGif : IconEmoji1)(h, { className: "size-4 text-muted-fg" }),
+					label,
+				]),
 				overlay,
 			],
 		)
@@ -104,14 +95,13 @@ const actions = <M>(h: HtmlBuilder<M>, model: Model, extras: BoxExtras<M>): Arra
 			h.div(
 				[h.Class("flex items-center gap-3")],
 				[
-					h.button(
-						[
-							h.Attribute("type", "button"),
-							h.Class(
+					ariaButton(
+						h,
+						{
+							className:
 								"inline-flex items-center gap-1.5 rounded-xs p-0 font-semibold text-muted-fg text-xs transition-colors hover:text-fg disabled:opacity-50 max-md:-my-2 max-md:min-h-10",
-							),
-							...(extras.attachAttributes ?? []),
-						],
+							attributes: extras.attachAttributes,
+						},
 						[IconPaperclip2(h, { className: "size-4 text-muted-fg" }), "Attach"],
 					),
 					(extras.gifTrigger ?? closedPicker(h))(pickerButton(h, "GIF")),

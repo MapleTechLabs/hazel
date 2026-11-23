@@ -1,20 +1,20 @@
 import { Submodel } from "foldkit"
-import * as AsyncData from "foldkit/asyncData"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { type CommonReason, commonMessage, isRetryableReason } from "~/lib/error-messages"
-import { IconClose, IconDots, IconPlus, IconUsersPlus, IconWarning } from "../../../icons"
+import { IconClose, IconDots, IconPlus, IconUsersPlus } from "../../../icons"
 import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
-import { card, cardHeader, cardHeaderGroup } from "../../../ui/card"
+import { card, cardHeader } from "../../../ui/card"
+import { type Column, dataTable } from "../../../ui/data-table"
 import { emptyState } from "../../../ui/empty-state"
-import { loader } from "../../../ui/loader"
 import * as Menu from "../../../ui/menu"
 import { menuLabel, view as menuView } from "../../../ui/menu-view"
 import type { PageViewInputs } from "../../contract"
 import { Message } from "./message"
 import type { Invitation, Model, RowMenu } from "./model"
 import { invitationsOf, rowMenuEntries } from "./update"
-import { heading } from "../../../ui/heading"
+import { pageHeader, pageLayout } from "../../../ui/page-header"
+import { statusDot } from "../../../ui/status-dot"
+import { asyncListBody } from "../async-list"
 
 /** Port of `routes/_app/$orgSlug/settings/invitations.tsx`. */
 
@@ -27,19 +27,6 @@ const roleLabel = (role: string) =>
 		: role === "org:member" || role === "member"
 			? "Member"
 			: role
-
-/** A low-priority column a phone leaves out (its cells carry the same class). */
-const PHONE_HIDDEN = "max-md:hidden"
-
-const headerCell = (h: HtmlBuilder<Message>, label: string, align: "left" | "right", className?: string) =>
-	h.th(
-		[
-			h.Class(
-				`px-4 py-3 text-${align} font-medium text-muted-fg text-xs${className ? ` ${className}` : ""}`,
-			),
-		],
-		[label],
-	)
 
 const plusIcon = (h: HtmlBuilder<Message>) => IconPlus(h, { attributes: { "data-slot": "icon" } })
 
@@ -72,117 +59,61 @@ const rowActions = (h: HtmlBuilder<Message>, row: RowMenu, isRevoking: boolean):
 			Message.GotRowMenuMessage({ invitationId: row.invitationId, message }),
 	})
 
-const invitationRow = (h: HtmlBuilder<Message>, model: Model, invitation: Invitation): Html => {
-	const row = model.menus.find((candidate) => candidate.invitationId === invitation.id)
-	return h.keyed("tr")(
-		invitation.id,
-		[h.Class("hover:bg-secondary/50")],
-		[
-			h.td(
-				[h.Class("px-4 py-4")],
-				[h.p([h.Class("font-medium text-fg text-sm max-md:break-all")], [invitation.emailAddress])],
+const columns = (h: HtmlBuilder<Message>, model: Model): ReadonlyArray<Column<Invitation>> => [
+	{
+		key: "email",
+		label: "Email",
+		cell: (invitation) =>
+			h.span(
+				[h.Class("block truncate font-medium max-md:whitespace-normal max-md:break-all")],
+				[invitation.emailAddress],
 			),
-			h.td(
-				[h.Class("px-4 py-4")],
-				[h.p([h.Class("text-muted-fg text-sm")], [roleLabel(invitation.role)])],
-			),
-			h.td(
-				[h.Class(`px-4 py-4 ${PHONE_HIDDEN}`)],
-				[
-					badge(h, { intent: "warning" }, [
-						h.span([h.Class("size-1.5 rounded-full bg-current")]),
-						"Pending",
-					]),
-				],
-			),
-			h.td(
-				[h.Class(`px-4 py-4 ${PHONE_HIDDEN}`)],
-				[h.p([h.Class("text-muted-fg text-sm")], [formatSent(invitation.createdAtMs)])],
-			),
-			h.td(
-				[h.Class("px-4 py-4 text-right")],
-				row === undefined ? [] : [rowActions(h, row, model.revokingId === invitation.id)],
-			),
-		],
-	)
-}
+	},
+	{
+		key: "role",
+		label: "Role",
+		widthClass: "w-32",
+		cell: (invitation) => h.span([h.Class("text-muted-fg")], [roleLabel(invitation.role)]),
+	},
+	{
+		key: "status",
+		label: "Status",
+		widthClass: "w-32",
+		hideClass: "max-md:hidden",
+		cell: () => badge(h, { intent: "warning" }, [statusDot(h, { tone: "warning" }), "Pending"]),
+	},
+	{
+		key: "sent",
+		label: "Sent",
+		widthClass: "w-36",
+		hideClass: "max-md:hidden",
+		cell: (invitation) => h.span([h.Class("text-muted-fg")], [formatSent(invitation.createdAtMs)]),
+	},
+	{
+		key: "actions",
+		label: "Actions",
+		align: "right",
+		widthClass: "w-24",
+		cell: (invitation) => {
+			const row = model.menus.find((candidate) => candidate.invitationId === invitation.id)
+			return row === undefined ? "" : rowActions(h, row, model.revokingId === invitation.id)
+		},
+	},
+]
 
 const invitationsTable = (
 	h: HtmlBuilder<Message>,
 	model: Model,
 	invitations: ReadonlyArray<Invitation>,
 ): Html =>
-	h.div(
-		[h.Class("overflow-x-auto")],
-		[
-			h.table(
-				[h.Class("w-full min-w-full")],
-				[
-					h.thead(
-						[h.Class("border-border border-b bg-bg")],
-						[
-							h.tr(
-								[],
-								[
-									headerCell(h, "Email", "left"),
-									headerCell(h, "Role", "left"),
-									headerCell(h, "Status", "left", PHONE_HIDDEN),
-									headerCell(h, "Sent", "left", PHONE_HIDDEN),
-									headerCell(h, "Actions", "right"),
-								],
-							),
-						],
-					),
-					h.tbody(
-						[h.Class("divide-y divide-border")],
-						invitations.map((invitation) => invitationRow(h, model, invitation)),
-					),
-				],
-			),
-		],
-	)
-
-const retryButton = (h: HtmlBuilder<Message>, reason: CommonReason): ReadonlyArray<Html> =>
-	isRetryableReason(reason)
-		? [
-				button(
-					h,
-					{ intent: "secondary", size: "sm", onPress: Message.ClickedRetryFetchInvitations() },
-					["Try again"],
-				),
-			]
-		: []
-
-const loadingState = (h: HtmlBuilder<Message>): Html =>
-	h.div(
-		[h.Class("flex h-64 items-center justify-center gap-3 text-muted-fg")],
-		[loader(h, { className: "size-6" }), h.span([h.Class("text-sm")], ["Loading invitations..."])],
-	)
-
-/** The first load failed: nothing to show but the reason. */
-const failedState = (h: HtmlBuilder<Message>, reason: CommonReason): Html => {
-	const message = commonMessage(reason)
-	return emptyState(h, {
-		icon: (className) => IconWarning(h, { className }),
-		title: "Couldn't load invitations",
-		description: message.description ?? message.title,
-		action: retryButton(h, reason),
-		className: "h-64",
+	dataTable(h, {
+		ariaLabel: "Pending invitations",
+		id: "invitations",
+		columns: columns(h, model),
+		rows: invitations,
+		rowKey: (invitation) => invitation.id,
+		isFramed: false,
 	})
-}
-
-/** A refetch failed: the last loaded rows stay, with the reason above them. */
-const staleNotice = (h: HtmlBuilder<Message>, reason: CommonReason): Html =>
-	h.div(
-		[
-			h.Class("flex items-center justify-between gap-3 border-border border-b px-4 py-3"),
-			h.Role("alert"),
-		],
-		[
-			h.p([h.Class("text-danger text-sm")], [`Couldn't refresh: ${commonMessage(reason).title}`]),
-			...retryButton(h, reason),
-		],
-	)
 
 const loadedBody = (h: HtmlBuilder<Message>, model: Model, invitations: ReadonlyArray<Invitation>): Html =>
 	invitations.length === 0
@@ -199,57 +130,33 @@ const loadedBody = (h: HtmlBuilder<Message>, model: Model, invitations: Readonly
 		: invitationsTable(h, model, invitations)
 
 const body = (h: HtmlBuilder<Message>, model: Model): Html =>
-	AsyncData.match(model.invitations, {
-		onIdle: () => loadingState(h),
-		onLoading: () => loadingState(h),
-		onFailure: (reason) => failedState(h, reason),
-		onRefreshing: (invitations) => loadedBody(h, model, invitations),
-		onStale: ({ error, data }) => h.div([], [staleNotice(h, error), loadedBody(h, model, data)]),
-		onSuccess: (invitations) => loadedBody(h, model, invitations),
+	asyncListBody(h, model.invitations, {
+		loadingLabel: "Loading invitations...",
+		failedTitle: "Couldn't load invitations",
+		onRetry: Message.ClickedRetryFetchInvitations(),
+		loaded: (invitations) => loadedBody(h, model, invitations),
 	})
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) => {
 	const count = invitationsOf(model).length
-	return h.div(
-		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
-		[
-			card(h, {}, [
-				cardHeader(h, [
-					cardHeaderGroup(h, [
-						h.div(
-							[h.Class("flex flex-1 flex-col gap-0.5")],
-							[
-								h.div(
-									[h.Class("flex items-center gap-2")],
-									[
-										heading(h, { variant: "title" }, ["Pending invitations"]),
-										...(count > 0
-											? [badge(h, { intent: "secondary" }, [`${count}`, " pending"])]
-											: []),
-									],
-								),
-								h.p(
-									[h.Class("text-muted-fg text-sm")],
-									[
-										"Pending invitations to this workspace. Each link expires 7 days after it was sent.",
-									],
-								),
-							],
-						),
-						h.div(
-							[h.Class("flex gap-3")],
-							[
-								button(
-									h,
-									{ intent: "secondary", size: "md", onPress: Message.ClickedInviteUser() },
-									[plusIcon(h), "Invite user"],
-								),
-							],
-						),
-					]),
-				]),
-				body(h, model),
+	return pageLayout(h, {}, [
+		card(h, {}, [
+			cardHeader(h, [
+				pageHeader(h, {
+					title: "Pending invitations",
+					size: "title",
+					badges: count > 0 ? [badge(h, { intent: "secondary" }, [`${count}`, " pending"])] : [],
+					subtitle:
+						"Pending invitations to this workspace. Each link expires 7 days after it was sent.",
+					actions: [
+						button(h, { intent: "secondary", size: "md", onPress: Message.ClickedInviteUser() }, [
+							plusIcon(h),
+							"Invite user",
+						]),
+					],
+				}),
 			]),
-		],
-	)
+			body(h, model),
+		]),
+	])
 })

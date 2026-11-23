@@ -2,7 +2,9 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconPlus } from "../../../icons"
 import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
-import { cardTitle, emptyList, listBody, menuOf, spinner } from "./cards"
+import { card, cardBody, cardHeader } from "../../../ui/card"
+import { iconTile } from "../../../ui/icon-tile"
+import { CARD_HEADER_ROW, cardTitle, emptyList, listBody, menuOf, spinner } from "./cards"
 import { Message } from "./message"
 import { itemsOf, type Model, type RssFeed } from "./model"
 import { rowMenu } from "./row-menu"
@@ -28,6 +30,9 @@ const rssIcon = (h: HtmlBuilder<Message>, className: string): Html =>
 		],
 	)
 
+/** RSS orange on its tint. */
+const RSS_TILE = "border-transparent bg-[#F26522]/10 text-[#F26522]"
+
 const INTERVAL_LABELS: Readonly<Record<number, string>> = {
 	5: "5 min",
 	15: "15 min",
@@ -39,10 +44,7 @@ const INTERVAL_LABELS: Readonly<Record<number, string>> = {
 const feedIcon = (h: HtmlBuilder<Message>, url: string | null): Html =>
 	url
 		? h.img([h.Src(url), h.Alt(""), h.Class("size-8 rounded object-cover")])
-		: h.div(
-				[h.Class("flex size-8 items-center justify-center rounded bg-[#F26522]/10")],
-				[rssIcon(h, "size-4 text-[#F26522]")],
-			)
+		: iconTile(h, { size: "sm", className: RSS_TILE }, rssIcon(h, ""))
 
 const rssItem = (h: HtmlBuilder<Message>, model: Model, feed: RssFeed): Html => {
 	const intervalLabel = INTERVAL_LABELS[feed.pollingIntervalMinutes] ?? `${feed.pollingIntervalMinutes} min`
@@ -102,64 +104,52 @@ const rssItem = (h: HtmlBuilder<Message>, model: Model, feed: RssFeed): Html => 
 
 export const rssCard = (h: HtmlBuilder<Message>, model: Model): Html => {
 	const feeds = itemsOf(model.rss)
-	return h.div(
-		[h.Class("rounded-xl border border-border bg-bg")],
-		[
-			h.div(
-				[h.Class("flex items-center justify-between border-border border-b p-4 max-md:gap-3")],
-				[
-					h.div(
-						[h.Class("flex items-center gap-3")],
-						[
-							h.div(
-								[
-									h.Class(
-										"flex size-10 items-center justify-center rounded-lg bg-[#F26522]/10",
-									),
-								],
-								[rssIcon(h, "size-5 text-[#F26522]")],
-							),
-							cardTitle(
-								h,
-								"RSS Feeds",
-								feeds.length > 0
-									? [
-											badge(h, { intent: "success" }, [
-												`${feeds.length}`,
-												" ",
-												feeds.length === 1 ? "feed" : "feeds",
-											]),
-										]
-									: [],
-								"Subscribe to RSS and Atom feeds",
-							),
-						],
+	return card(h, {}, [
+		cardHeader(
+			h,
+			[
+				h.div(
+					[h.Class("flex items-center gap-3")],
+					[
+						iconTile(h, { size: "md", className: RSS_TILE }, rssIcon(h, "")),
+						cardTitle(
+							h,
+							"RSS Feeds",
+							feeds.length > 0
+								? [
+										badge(h, { intent: "success" }, [
+											`${feeds.length}`,
+											" ",
+											feeds.length === 1 ? "feed" : "feeds",
+										]),
+									]
+								: [],
+							"Subscribe to RSS and Atom feeds",
+						),
+					],
+				),
+				button(h, { intent: "primary", size: "sm", onPress: Message.ClickedAddFeed() }, [
+					IconPlus(h, { attributes: { "data-slot": "icon" } }),
+					"Add Feed",
+				]),
+			],
+			CARD_HEADER_ROW,
+		),
+		cardBody(h, [
+			listBody(h, "rss", model.rss.data, {
+				loading: () => spinner(h),
+				empty: () =>
+					emptyList(
+						h,
+						"No RSS feeds subscribed",
+						"Add a feed to receive new articles in this channel",
 					),
-					button(h, { intent: "primary", size: "sm", onPress: Message.ClickedAddFeed() }, [
-						IconPlus(h, { className: "size-4" }),
-						"Add Feed",
-					]),
-				],
-			),
-			h.div(
-				[h.Class("p-4")],
-				[
-					listBody(h, "rss", model.rss.data, {
-						loading: () => spinner(h),
-						empty: () =>
-							emptyList(
-								h,
-								"No RSS feeds subscribed",
-								"Add a feed to receive new articles in this channel",
-							),
-						rows: (items) =>
-							h.div(
-								[h.Class("flex flex-col gap-2")],
-								items.map((feed) => rssItem(h, model, feed)),
-							),
-					}),
-				],
-			),
-		],
-	)
+				rows: (items) =>
+					h.div(
+						[h.Class("flex flex-col gap-2")],
+						items.map((feed) => rssItem(h, model, feed)),
+					),
+			}),
+		]),
+	])
 }

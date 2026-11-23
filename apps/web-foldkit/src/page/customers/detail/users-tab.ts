@@ -8,13 +8,18 @@ import { dataTable } from "../../../ui/data-table"
 import { searchBox } from "../../../customers/ui/filter-bar"
 import { segmented } from "../../../ui/segmented-control"
 import { personAvatar } from "../../../customers/ui/identity"
-import { IconCircleDottedUser, IconCopy, IconStar, IconWarning } from "../../../icons"
+import { IconCircleDottedUser, IconStar } from "../../../icons"
 import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
 import { Message } from "./message"
 import { type ContactFilter, canImpersonate, contactCounts, type Model, visibleContacts } from "./model"
 import { otherAccounts } from "./other-accounts"
-import { type Context, copyButton, icon, pageFooter } from "./parts"
+import { type Context, copyButton, pageFooter } from "./parts"
+import { cardClassName } from "../../../ui/card"
+import { copyButton as kitCopyButton } from "../../../ui/copy-button"
+import { callout } from "../../../ui/callout"
+import { statusDot } from "../../../ui/status-dot"
+import { emptyState } from "../../../ui/empty-state"
 
 /** The users tab: who uses the product, who went quiet, who never started. */
 
@@ -40,9 +45,7 @@ const heatStrip = (h: HtmlBuilder<Message>, row: Customers.ContactRow): Html => 
 		],
 		values.map((value) =>
 			h.span([
-				h.Class(
-					twMerge("block w-1 rounded-[1px]", value === 0 ? "bg-secondary" : "bg-chart-series-1"),
-				),
+				h.Class(twMerge("block w-1 rounded-xs", value === 0 ? "bg-secondary" : "bg-chart-series-1")),
 				...(value === 0 ? [] : [h.Style({ opacity: String(0.35 + (0.65 * value) / max) })]),
 			]),
 		),
@@ -53,7 +56,7 @@ const summary = (h: HtmlBuilder<Message>, model: Model, context: Context): Html 
 	const counts = contactCounts(model)
 	const { account } = context
 	return h.div(
-		[h.Class("flex flex-wrap items-center gap-6 rounded-xl border border-border bg-bg p-4 sm:px-5")],
+		[h.Class(cardClassName("flex flex-wrap items-center gap-6 p-4 sm:px-5"))],
 		[
 			h.div(
 				[h.Class("flex flex-col")],
@@ -83,7 +86,7 @@ const summary = (h: HtmlBuilder<Message>, model: Model, context: Context): Html 
 							h.span(
 								[h.Class("inline-flex items-center gap-1.5")],
 								[
-									h.span([h.Class(twMerge("size-1.5 rounded-full", STATUS[status][3]))]),
+									statusDot(h, { tone: "neutral", className: STATUS[status][3] }),
 									h.span(
 										[h.Class("font-medium text-fg")],
 										[`${counts[status]} ${STATUS[status][0].toLowerCase()}`],
@@ -130,40 +133,24 @@ const championCallout = (h: HtmlBuilder<Message>, model: Model, context: Context
 	const since = msOf(account.championInactiveSince)
 	const days = Math.floor((context.nowMs - since) / DAY_MS)
 	const name = champion?.name ?? champion?.email ?? "Your champion"
-	return h.div(
-		[
-			h.Role("status"),
-			h.Class(
-				"flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning-subtle px-4 py-3 sm:px-5",
-			),
-		],
-		[
-			h.p(
-				[h.Class("flex min-w-0 flex-1 basis-64 items-start gap-2 text-sm text-warning-subtle-fg")],
-				[
-					IconWarning(h, { className: "mt-0.5 size-4 shrink-0" }),
-					h.span(
-						[],
-						[
-							h.span([h.Class("font-semibold")], ["Your champion went quiet. "]),
-							`${name} was the most active user before ${formatDate(new Date(since), { now: new Date(context.nowMs) })} and has not been seen for ${days} day${days === 1 ? "" : "s"}.`,
-						],
-					),
-				],
-			),
-			...(champion?.email
+	return callout(
+		h,
+		{
+			intent: "warning",
+			actions: champion?.email
 				? [
-						button(
-							h,
-							{
-								intent: "outline",
-								size: "xs",
-								onPress: Message.PressedCopy({ text: champion.email, label: "Email" }),
-							},
-							[IconCopy(h, icon), "Copy email"],
-						),
+						kitCopyButton(h, {
+							label: "Copy email",
+							showLabel: true,
+							size: "xs",
+							onPress: Message.PressedCopy({ text: champion.email, label: "Email" }),
+						}),
 					]
-				: []),
+				: [],
+		},
+		[
+			h.span([h.Class("font-semibold")], ["Your champion went quiet. "]),
+			`${name} was the most active user before ${formatDate(new Date(since), { now: new Date(context.nowMs) })} and has not been seen for ${days} day${days === 1 ? "" : "s"}.`,
 		],
 	)
 }
@@ -231,7 +218,7 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 	const counts = contactCounts(model)
 	const rows = visibleContacts(model)
 	const championId = context.detail?.account.championContactId ?? null
-	const callout = championCallout(h, model, context)
+	const champion = championCallout(h, model, context)
 	const footer = pageFooter(h, {
 		status: model.contacts.status,
 		hasMore: model.contacts.nextCursor !== null,
@@ -241,7 +228,7 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 	})
 	return [
 		summary(h, model, context),
-		...(callout === null ? [] : [callout]),
+		...(champion === null ? [] : [champion]),
 		h.div(
 			[h.Class("flex flex-wrap items-center gap-2")],
 			[
@@ -267,12 +254,12 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 		),
 		h.div(
 			// `@container`: the email column depends on the table's width, not the window's.
-			[h.Class("@container flex flex-col overflow-hidden rounded-xl border border-border")],
+			[h.Class(cardClassName("@container flex flex-col"))],
 			[
 				dataTable(h, {
 					ariaLabel: "Users",
 					id: "customer-users",
-					className: "rounded-none border-0",
+					isFramed: false,
 					rows,
 					rowKey: (row) => row.contact.id,
 					loadingRows:
@@ -443,7 +430,7 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 					],
 				}),
 				...(model.contacts.status === "Loaded" && rows.length === 0
-					? [h.p([h.Class("py-10 text-center text-muted-fg text-sm")], ["No user matches."])]
+					? [emptyState(h, { title: "No user matches.", className: "py-10" })]
 					: []),
 				...(footer === null ? [] : [footer]),
 			],

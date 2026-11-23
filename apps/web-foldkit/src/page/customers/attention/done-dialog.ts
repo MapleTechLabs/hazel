@@ -4,7 +4,7 @@ import { twMerge } from "tailwind-merge"
 import { severityChip } from "../../../customers/ui/badges"
 import { companyLogo } from "../../../customers/ui/identity"
 import { IconArrowPath, IconCheck } from "../../../icons"
-import { button } from "../../../ui/button"
+import { ariaButton, button } from "../../../ui/button"
 import { dialogBody, dialogClose, dialogFooter, dialogHeader } from "../../../ui/dialog"
 import * as Modal from "../../../ui/modal"
 import { input } from "../../../ui/input"
@@ -19,6 +19,8 @@ import {
 	signalById,
 	type Viewer,
 } from "./model"
+import { label } from "../../../ui/field"
+import { callout } from "../../../ui/callout"
 
 /** "Mark signal as done" (Wonder: Queue Mark Done Dialog): outcome and note. */
 
@@ -33,19 +35,16 @@ const OUTCOMES = {
 
 const outcomeCard = (h: HtmlBuilder<Message>, outcome: SignalOutcome, isSelected: boolean): Html => {
 	const [label, description] = OUTCOMES[outcome]
-	return h.button(
-		[
-			h.Type("button"),
-			h.Role("radio"),
-			h.AriaChecked(isSelected),
-			h.OnClick(Message.ChangedDoneOutcome({ outcome })),
-			h.Class(
-				twMerge(
-					"flex cursor-pointer items-start gap-2.5 rounded-lg border border-border p-3 text-left outline-hidden transition-colors hover:bg-wash focus-visible:ring-2 focus-visible:ring-ring/70",
-					isSelected && "border-primary bg-primary-subtle/40",
-				),
+	return ariaButton(
+		h,
+		{
+			onPress: Message.ChangedDoneOutcome({ outcome }),
+			className: twMerge(
+				"flex cursor-pointer items-start gap-2.5 rounded-lg border border-border p-3 text-left outline-hidden transition-colors hover:bg-wash focus-visible:ring-2 focus-visible:ring-ring/70",
+				isSelected && "border-primary bg-primary-subtle/40",
 			),
-		],
+			attributes: [h.Role("radio"), h.AriaChecked(isSelected)],
+		},
 		[
 			h.span(
 				[
@@ -123,37 +122,33 @@ const content = (
 							),
 						],
 					),
-					h.label(
-						[h.Class("flex flex-col gap-2")],
+					label(h, { className: "flex flex-col gap-2" }, [
+						h.span(
+							[h.Class("text-fg text-sm")],
+							[
+								h.span([h.Class("font-medium")], ["Note "]),
+								h.span(
+									[h.Class("text-muted-fg text-xs")],
+									["Optional · saved to the customer timeline"],
+								),
+							],
+						),
+						textarea(h, {
+							placeholder: "What did you do?",
+							attributes: [
+								h.Value(form.note),
+								h.OnInput((value) => Message.ChangedDoneNote({ value })),
+								h.Attribute("rows", "3"),
+							],
+						}),
+					]),
+					callout(
+						h,
+						{
+							icon: IconArrowPath(h, { className: "mt-0.5 size-3.5 shrink-0" }),
+							className: "text-xs",
+						},
 						[
-							h.span(
-								[h.Class("text-fg text-sm")],
-								[
-									h.span([h.Class("font-medium")], ["Note "]),
-									h.span(
-										[h.Class("text-muted-fg text-xs")],
-										["Optional · saved to the customer timeline"],
-									),
-								],
-							),
-							textarea(h, {
-								placeholder: "What did you do?",
-								attributes: [
-									h.Value(form.note),
-									h.OnInput((value) => Message.ChangedDoneNote({ value })),
-									h.Attribute("rows", "3"),
-								],
-							}),
-						],
-					),
-					h.p(
-						[
-							h.Class(
-								"flex items-start gap-2 rounded-lg bg-info-subtle px-3 py-2.5 text-info-subtle-fg text-xs",
-							),
-						],
-						[
-							IconArrowPath(h, { className: "mt-0.5 size-3.5 shrink-0" }),
 							"Stays off the queue while this is true. If it clears and happens again, a new signal opens.",
 						],
 					),

@@ -2,14 +2,11 @@ import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { categories, type Integration, integrations } from "~/lib/integrations/__data"
 import { IconPlus } from "../../../../icons"
-import { button } from "../../../../ui/button"
+import { ariaButton, button } from "../../../../ui/button"
 import { emptyState } from "../../../../ui/empty-state"
-import {
-	sectionHeaderGroup,
-	sectionHeaderHeading,
-	sectionHeaderRoot,
-	sectionHeaderSubheading,
-} from "../../../../ui/section-header"
+import { cardClassName } from "../../../../ui/card"
+import { pageHeader } from "../../../../ui/page-header"
+import { type StatusTone, statusLine } from "../../../../ui/status-dot"
 import type { PageViewInputs } from "../../../contract"
 import type { Connection } from "../shared/connections"
 import { CHEVRON_RIGHT, fragment, integrationLogo, strokeIcon } from "../shared/view"
@@ -21,22 +18,14 @@ import { heading } from "../../../../ui/heading"
 
 type Status = "connected" | "disconnected" | "coming-soon"
 
-const STATUS: Readonly<
-	Record<Status, { readonly label: string; readonly dot: string; readonly text: string }>
-> = {
-	connected: { label: "Connected", dot: "bg-success", text: "text-success" },
-	disconnected: { label: "Not connected", dot: "bg-muted-fg/40", text: "text-muted-fg" },
-	"coming-soon": { label: "Coming soon", dot: "bg-muted-fg/40", text: "text-muted-fg" },
+const STATUS: Readonly<Record<Status, { readonly label: string; readonly tone: StatusTone }>> = {
+	connected: { label: "Connected", tone: "success" },
+	disconnected: { label: "Not connected", tone: "neutral" },
+	"coming-soon": { label: "Coming soon", tone: "neutral" },
 }
 
 const connectionStatus = (h: HtmlBuilder<Message>, status: Status): Html =>
-	h.div(
-		[h.Class("flex items-center gap-1.5")],
-		[
-			h.span([h.Class(`size-1.5 rounded-full ${STATUS[status].dot}`)]),
-			h.span([h.Class(`text-xs ${STATUS[status].text}`)], [STATUS[status].label]),
-		],
-	)
+	statusLine(h, { tone: STATUS[status].tone }, STATUS[status].label)
 
 const cardContent = (h: HtmlBuilder<Message>, integration: Integration, status: Status): Array<Html> => [
 	h.div(
@@ -65,24 +54,24 @@ const cardContent = (h: HtmlBuilder<Message>, integration: Integration, status: 
 	h.p([h.Class("text-muted-fg text-sm leading-relaxed")], [integration.description]),
 ]
 
-const CARD = "flex flex-col gap-4 rounded-xl border border-border bg-bg p-5 text-left"
+const CARD = "flex flex-col gap-4 p-5 text-left"
 
 const integrationCard = (h: HtmlBuilder<Message>, integration: Integration, connected: boolean): Html =>
 	integration.comingSoon
 		? h.keyed("div")(
 				integration.id,
-				[h.Class(`${CARD} bg-bg-muted/30`)],
+				[h.Class(cardClassName(`${CARD} bg-bg-muted/30`))],
 				cardContent(h, integration, "coming-soon"),
 			)
-		: h.keyed("button")(
-				integration.id,
-				[
-					h.Type("button"),
-					h.OnClick(Message.ClickedIntegration({ integrationId: integration.id })),
-					h.Class(
+		: ariaButton(
+				h,
+				{
+					className: cardClassName(
 						`${CARD} group cursor-pointer outline-none transition-colors duration-150 hover:border-border-hover hover:bg-bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring`,
 					),
-				],
+					onPress: Message.ClickedIntegration({ integrationId: integration.id }),
+					attributes: [h.Key(integration.id)],
+				},
 				cardContent(h, integration, connected ? "connected" : "disconnected"),
 			)
 
@@ -106,15 +95,11 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	const isConnected = isConnectedWith(model)
 
 	return fragment(h, [
-		sectionHeaderRoot(h, { className: "border-none pb-0" }, [
-			sectionHeaderGroup(h, {}, [
-				h.div(
-					[h.Class("flex flex-1 flex-col justify-center gap-1")],
-					[
-						sectionHeaderHeading(h, {}, ["Integrations"]),
-						sectionHeaderSubheading(h, {}, ["Connect your favorite tools to your workspace."]),
-					],
-				),
+		pageHeader(h, {
+			title: "Integrations",
+			subtitle: "Connect your favorite tools to your workspace.",
+			size: "title",
+			actions: [
 				button(
 					h,
 					{
@@ -125,8 +110,8 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 					},
 					[IconPlus(h, { attributes: { "data-slot": "icon" } }), "Request integration"],
 				),
-			]),
-		]),
+			],
+		}),
 		h.div(
 			[h.Class("flex flex-wrap gap-1")],
 			categories.map((category) =>

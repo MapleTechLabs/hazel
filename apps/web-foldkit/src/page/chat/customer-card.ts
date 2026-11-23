@@ -26,6 +26,7 @@ import { IconOffice } from "../../icons"
 import { ariaButton } from "../../ui/button"
 import * as Modal from "../../ui/modal"
 import * as Sheet from "../../ui/sheet"
+import { statusDot } from "../../ui/status-dot"
 
 // MODEL
 
@@ -299,12 +300,7 @@ export const chip = <M>(
 		[
 			customer.healthStatus === "unknown"
 				? IconOffice(h, { className: "size-3 shrink-0" })
-				: h.span([
-						h.AriaHidden(true),
-						h.Class(
-							twMerge("size-1.5 shrink-0 rounded-full", HEALTH_FILL[customer.healthStatus]),
-						),
-					]),
+				: statusDot(h, { tone: "neutral", className: HEALTH_FILL[customer.healthStatus] }),
 			h.span([h.Class("truncate")], [customer.accountName]),
 		],
 	)

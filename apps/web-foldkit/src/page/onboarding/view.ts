@@ -5,6 +5,7 @@ import { appLoader } from "../../shell/layouts"
 import { link } from "../../ui/link"
 import { failureMessage } from "~/lib/error-messages"
 import { button } from "../../ui/button"
+import { emptyState } from "../../ui/empty-state"
 import { loader } from "../../ui/loader"
 import type { PageViewInputs, Shared } from "../contract"
 import { backgroundImage, logoContent, panelCard, panelFrame } from "./brand-panel"
@@ -72,22 +73,20 @@ const leftPanel = (h: HtmlBuilder<Message>, running: Running, nowMs: number): Ht
 const finalizationView = (h: HtmlBuilder<Message>, step: StepOf<"Finalizing">): Html =>
 	Option.match(step.failure, {
 		onNone: () =>
-			h.div(
-				[h.Class("flex flex-col items-center justify-center space-y-4 py-12 text-center")],
-				[
-					loader(h, { className: "size-12" }),
-					h.p([h.Class("font-medium text-lg")], ["Setting up your workspace..."]),
-					h.p([h.Class("text-muted-fg text-sm")], ["This will just take a moment"]),
-				],
-			),
+			emptyState(h, {
+				icon: () => loader(h, { className: "size-12" }),
+				title: "Setting up your workspace...",
+				description: "This will just take a moment",
+				className: "py-12",
+			}),
 		onSome: (reason) => {
 			const message = failureMessage(reason, {})
-			return h.div(
-				[h.Class("flex flex-col items-center justify-center space-y-4 py-12 text-center")],
-				[
-					h.p([h.Class("font-medium text-lg")], ["Couldn't finish setting up your workspace"]),
+			return emptyState(h, {
+				title: "Couldn't finish setting up your workspace",
+				className: "py-12",
+				action: [
 					h.p(
-						[h.Class("text-danger text-sm"), h.Role("alert")],
+						[h.Class("mb-4 text-danger text-sm"), h.Role("alert")],
 						[
 							message.description === undefined
 								? message.title
@@ -96,7 +95,7 @@ const finalizationView = (h: HtmlBuilder<Message>, step: StepOf<"Finalizing">): 
 					),
 					button(h, { intent: "primary", onPress: Message.ClickedRetryFinalize() }, ["Try again"]),
 				],
-			)
+			})
 		},
 	})
 

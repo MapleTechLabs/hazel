@@ -9,7 +9,7 @@ import { segmented } from "../../../../ui/segmented-control"
 import { sourceLogo } from "../../../../customers/ui/identity"
 import { IconCheck } from "../../../../icons"
 import { AppRoute, hrefOf } from "../../../../route"
-import { button } from "../../../../ui/button"
+import { ariaButton, button } from "../../../../ui/button"
 import { dialogBody, dialogClose, dialogFooter, dialogHeader } from "../../../../ui/dialog"
 import * as Modal from "../../../../ui/modal"
 import type { Shared } from "../../../contract"
@@ -131,19 +131,16 @@ const templateCard = (h: H, model: Model, template: Customers.SignalTemplate, or
 		)
 	}
 	const isSelected = model.picker.selected === template
-	return h.button(
-		[
-			h.Type("button"),
-			h.Role("radio"),
-			h.AriaChecked(isSelected),
-			h.OnClick(Message.ClickedTemplate({ template })),
-			h.Class(
-				twMerge(
-					"relative flex cursor-pointer flex-col gap-3 rounded-xl border border-border p-4 text-left outline-hidden transition-colors hover:bg-secondary/40 focus-visible:ring-2 focus-visible:ring-ring/70",
-					isSelected && "border-primary bg-primary-subtle/30 hover:bg-primary-subtle/30",
-				),
+	return ariaButton(
+		h,
+		{
+			onPress: Message.ClickedTemplate({ template }),
+			attributes: [h.Role("radio"), h.AriaChecked(isSelected)],
+			className: twMerge(
+				"relative flex cursor-pointer flex-col gap-3 rounded-xl border border-border p-4 text-left outline-hidden transition-colors hover:bg-secondary/40 focus-visible:ring-2 focus-visible:ring-ring/70",
+				isSelected && "border-primary bg-primary-subtle/30 hover:bg-primary-subtle/30",
 			),
-		],
+		},
 		[
 			h.span([h.Class("flex items-start gap-3")], [...cardHead(h, template)]),
 			h.span(

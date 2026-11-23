@@ -38,6 +38,7 @@ owner in `src/ui`, and a page never redraws it with its own class string or loca
 | An icon-only button; a copy button                        | `iconButton` (ui/button); `copyButton` (ui/copy-button)                                                                |
 | Joined toggle buttons (`7d 30d 90d`)                      | `segmented` (ui/segmented-control)                                                                                     |
 | A pill, tag or count                                      | `badge` (ui/badge), `toggleChip` for a filter                                                                          |
+| An unread count on a row or tab                           | `countBadge` (ui/count-badge)                                                                                          |
 | A hairline between blocks                                 | `separator` (ui/separator)                                                                                             |
 
 Domain views (a customer's health badge, a company logo) live with their feature, built from these.

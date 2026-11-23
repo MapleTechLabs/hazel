@@ -1,4 +1,5 @@
 import { Submodel } from "foldkit"
+import { separator } from "../../ui/separator"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import * as EmojiDialog from "../../emoji-picker/dialog"
 import { button } from "../../ui/button"
@@ -196,7 +197,7 @@ export const view = Submodel.defineView<Model, Message, ModalViewInputs>((model,
 							),
 						],
 					),
-					h.hr([h.Class("h-px w-full border-none bg-border")]),
+					separator(h),
 					presetButtons(h, model),
 				],
 				"flex flex-col gap-5",

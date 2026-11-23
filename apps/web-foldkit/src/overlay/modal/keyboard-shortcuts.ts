@@ -1,4 +1,5 @@
 import { Schema } from "effect"
+import { heading } from "../../ui/heading"
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
@@ -81,14 +82,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, { shar
 						h.section(
 							[h.AriaLabel(category)],
 							[
-								h.h3(
-									[
-										h.Class(
-											"mb-1 font-medium text-muted-fg text-xs uppercase tracking-wide",
-										),
-									],
-									[category],
-								),
+								heading(h, { variant: "label", className: "mb-1" }, [category]),
 								h.ul(
 									[h.Class("divide-y divide-border")],
 									appKeymap.actions

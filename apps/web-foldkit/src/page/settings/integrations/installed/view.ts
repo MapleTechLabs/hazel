@@ -2,38 +2,30 @@ import { Submodel } from "foldkit"
 import { IconPlus, IconRobot } from "../../../../icons"
 import { button } from "../../../../ui/button"
 import { emptyState } from "../../../../ui/empty-state"
-import {
-	sectionHeaderGroup,
-	sectionHeaderHeading,
-	sectionHeaderRoot,
-	sectionHeaderSubheading,
-} from "../../../../ui/section-header"
+import { loadingState } from "../../../../ui/loader"
+import { pageHeader } from "../../../../ui/page-header"
 import type { PageViewInputs } from "../../../contract"
 import { botCard } from "../shared/bot-card"
-import { fragment, listSpinner } from "../shared/view"
+import { fragment } from "../shared/view"
 import { Message } from "./message"
 import type { Model } from "./model"
 
 /** Port of `routes/_app/$orgSlug/settings/integrations/installed.tsx`. */
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) =>
 	fragment(h, [
-		sectionHeaderRoot(h, { className: "border-none pb-0" }, [
-			sectionHeaderGroup(h, {}, [
-				h.div(
-					[h.Class("flex flex-1 flex-col justify-center gap-1")],
-					[
-						sectionHeaderHeading(h, {}, ["Installed Apps"]),
-						sectionHeaderSubheading(h, {}, ["Manage applications installed in your workspace."]),
-					],
-				),
+		pageHeader(h, {
+			title: "Installed Apps",
+			subtitle: "Manage applications installed in your workspace.",
+			size: "title",
+			actions: [
 				button(h, { intent: "outline", onPress: Message.ClickedInstallById() }, [
-					IconPlus(h, { className: "size-4" }),
+					IconPlus(h, { attributes: { "data-slot": "icon" } }),
 					"Install by ID",
 				]),
-			]),
-		]),
+			],
+		}),
 		model.bots === null
-			? listSpinner(h)
+			? loadingState(h)
 			: model.bots.length === 0
 				? emptyState(h, {
 						icon: (className) => IconRobot(h, { className }),

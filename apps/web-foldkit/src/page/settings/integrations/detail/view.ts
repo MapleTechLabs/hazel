@@ -1,12 +1,10 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { getIntegrationById, type Integration } from "~/lib/integrations/__data"
-import {
-	sectionHeaderGroup,
-	sectionHeaderHeading,
-	sectionHeaderRoot,
-	sectionHeaderSubheading,
-} from "../../../../ui/section-header"
+import { badge } from "../../../../ui/badge"
+import { button } from "../../../../ui/button"
+import { pageHeader, pageLayout } from "../../../../ui/page-header"
+import { statusDot } from "../../../../ui/status-dot"
 import type { PageViewInputs, Shared } from "../../../contract"
 import { CHECK, integrationLogo, strokeIcon } from "../shared/view"
 import { Message } from "./message"
@@ -16,7 +14,7 @@ import {
 	configOptionRow,
 	connectedState,
 	disconnectedState,
-	panel,
+	sectionCard,
 	verifyingState,
 } from "./view-connection"
 import { mapleColumn } from "./view-maple"
@@ -29,47 +27,22 @@ type H = HtmlBuilder<Message>
 const WEBHOOK_INTEGRATIONS = ["openstatus", "railway", "rss", "maple"]
 
 const connectionBadge = (h: H, connected: boolean): Html =>
-	h.span(
-		[
-			h.Class(
-				`inline-flex items-center gap-1.5 rounded-sm px-2.5 py-0.5 font-medium text-xs ${
-					connected ? "bg-success-subtle text-success-subtle-fg" : "bg-muted text-muted-fg"
-				}`,
-			),
-		],
-		[
-			h.span([h.Class(`size-1.5 rounded-full ${connected ? "bg-success" : "bg-muted-fg"}`)], []),
-			connected ? "Connected" : "Not connected",
-		],
-	)
+	badge(h, { intent: connected ? "success" : "muted" }, [
+		statusDot(h, { tone: connected ? "success" : "neutral" }),
+		connected ? "Connected" : "Not connected",
+	])
 
 /** Not ported yet: the per-channel webhook content and the GitHub repository and subscription sections. */
 const unported = (h: H, name: string): Html => h.div([h.Attribute("data-page-placeholder", name)], [])
 
 const header = (h: H, integration: Integration, isWebhook: boolean, isConnected: boolean): Html =>
-	sectionHeaderRoot(h, { className: "border-none pb-0" }, [
-		sectionHeaderGroup(h, {}, [
-			h.div(
-				[h.Class("flex items-center gap-4")],
-				[
-					integrationLogo(h, integration, "lg"),
-					h.div(
-						[h.Class("flex flex-col gap-1")],
-						[
-							h.div(
-								[h.Class("flex items-center gap-3")],
-								[
-									sectionHeaderHeading(h, {}, [integration.name]),
-									...(isWebhook ? [] : [connectionBadge(h, isConnected)]),
-								],
-							),
-							sectionHeaderSubheading(h, {}, [integration.description]),
-						],
-					),
-				],
-			),
-		]),
-	])
+	pageHeader(h, {
+		title: integration.name,
+		subtitle: integration.description,
+		size: "title",
+		leading: integrationLogo(h, integration, "lg"),
+		badges: isWebhook ? [] : [connectionBadge(h, isConnected)],
+	})
 
 const mainColumn = (h: H, integration: Integration, model: Model, shared: Shared) => {
 	const hasOrganization = shared.organization !== null
@@ -85,7 +58,7 @@ const mainColumn = (h: H, integration: Integration, model: Model, shared: Shared
 		return hasOrganization ? [unported(h, `IntegrationContent:${integration.id}`)] : []
 	if (integration.connectionType === "api-key")
 		return [
-			panel(h, "Connection", [
+			sectionCard(h, "Connection", [
 				isConnected
 					? connectedState(h, integration, model, { canConfigure: false })
 					: apiKeyConnectionForm(h, integration, model),
@@ -93,7 +66,7 @@ const mainColumn = (h: H, integration: Integration, model: Model, shared: Shared
 		]
 	const isVerifying = model.activity._tag === "Verifying" && !isConnected
 	return [
-		panel(h, "Connection", [
+		sectionCard(h, "Connection", [
 			isVerifying
 				? verifyingState(h, integration)
 				: isConnected
@@ -102,7 +75,7 @@ const mainColumn = (h: H, integration: Integration, model: Model, shared: Shared
 		]),
 		...(isConnected
 			? [
-					panel(
+					sectionCard(
 						h,
 						"Configuration",
 						integration.configOptions.map((option) =>
@@ -122,7 +95,7 @@ const featuresPanel = (h: H, integration: Integration): Html =>
 	h.div(
 		[h.Class("lg:sticky lg:top-6 lg:self-start")],
 		[
-			panel(h, "Features", [
+			sectionCard(h, "Features", [
 				h.p([h.Class("mb-4 text-muted-fg text-sm leading-relaxed")], [integration.fullDescription]),
 				h.ul(
 					[h.Class("flex flex-col gap-2.5")],
@@ -155,17 +128,17 @@ const featuresPanel = (h: H, integration: Integration): Html =>
 	)
 
 const backLink = (h: H): Html =>
-	h.button(
-		[
-			h.Type("button"),
-			h.OnClick(Message.ClickedBack()),
-			h.Class(
-				"-ml-1 flex w-fit items-center gap-1 text-muted-fg text-sm transition-colors hover:text-fg",
-			),
-		],
+	button(
+		h,
+		{
+			intent: "plain",
+			size: "sm",
+			className: "-ml-2 w-fit text-muted-fg",
+			onPress: Message.ClickedBack(),
+		},
 		[
 			strokeIcon(h, { className: "size-4", strokeWidth: "2", d: "M15 19l-7-7 7-7" }),
-			h.span([], ["Back to integrations"]),
+			"Back to integrations",
 		],
 	)
 
@@ -175,27 +148,24 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	if (integration === undefined) return h.empty
 	// Maple's badge is its agent: installed here or not.
 	const isWebhook = WEBHOOK_INTEGRATIONS.includes(integration.id) && integration.id !== "maple"
-	return h.div(
-		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
-		[
-			backLink(h),
-			header(
-				h,
-				integration,
-				isWebhook,
-				integration.connectionType === "environment"
-					? isT3CodeConnected(model, shared.nowMs)
-					: integration.id === "maple"
-						? model.mapleInstall !== null
-						: model.connection?.isActive === true,
-			),
-			h.div(
-				[h.Class("grid gap-8 lg:grid-cols-[1fr_320px]")],
-				[
-					h.div([h.Class("flex flex-col gap-8")], mainColumn(h, integration, model, shared)),
-					featuresPanel(h, integration),
-				],
-			),
-		],
-	)
+	return pageLayout(h, {}, [
+		backLink(h),
+		header(
+			h,
+			integration,
+			isWebhook,
+			integration.connectionType === "environment"
+				? isT3CodeConnected(model, shared.nowMs)
+				: integration.id === "maple"
+					? model.mapleInstall !== null
+					: model.connection?.isActive === true,
+		),
+		h.div(
+			[h.Class("grid gap-8 lg:grid-cols-[1fr_320px]")],
+			[
+				h.div([h.Class("flex flex-col gap-8")], mainColumn(h, integration, model, shared)),
+				featuresPanel(h, integration),
+			],
+		),
+	])
 })

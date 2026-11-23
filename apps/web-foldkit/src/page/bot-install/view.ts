@@ -1,20 +1,13 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { commonMessage, failureMessage, type UserErrorMessage } from "~/lib/error-messages"
-import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
-import { button } from "../../ui/button"
+import { ariaButton, button } from "../../ui/button"
 import { loader } from "../../ui/loader"
-import { authError, authFrame, authHeading } from "../auth/layout"
+import { authError, authFrame, authHeading, homeLink } from "../auth/layout"
 import { isSessionLoading, type PageViewInputs, type Shared } from "../contract"
 import { Message } from "./message"
 import { type ApproveFailure, type BotSummary, type InstallTarget, Lookup, type Model } from "./model"
-
-const homeLink = (h: HtmlBuilder<Message>): Html =>
-	h.a(
-		[h.Class("text-fg text-sm underline underline-offset-2"), h.Href(hrefOf(AppRoute.Root()))],
-		["Go to Hazel"],
-	)
 
 const approveFailureMessage = (reason: ApproveFailure): UserErrorMessage =>
 	failureMessage(reason, {
@@ -27,23 +20,24 @@ const approveFailureMessage = (reason: ApproveFailure): UserErrorMessage =>
 	})
 
 const targetOption = (h: HtmlBuilder<Message>, target: InstallTarget, isSelected: boolean): Html =>
-	h.keyed("button")(
+	h.keyed("div")(
 		target.id,
+		[],
 		[
-			h.Type("button"),
-			h.Role("radio"),
-			h.AriaChecked(isSelected),
-			h.AriaLabel(target.name),
-			h.OnClick(Message.SelectedOrganization({ organizationId: target.id })),
-			h.Class(
-				`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-					isSelected ? "border-primary bg-primary/5" : "border-border hover:bg-secondary/50"
-				}`,
+			ariaButton(
+				h,
+				{
+					onPress: Message.SelectedOrganization({ organizationId: target.id }),
+					attributes: [h.Role("radio"), h.AriaChecked(isSelected), h.AriaLabel(target.name)],
+					className: `flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+						isSelected ? "border-primary bg-primary/5" : "border-border hover:bg-secondary/50"
+					}`,
+				},
+				[
+					avatar(h, { src: target.logoUrl, seed: target.name, className: "size-8" }),
+					h.span([h.Class("flex-1 truncate font-medium text-fg text-sm")], [target.name]),
+				],
 			),
-		],
-		[
-			avatar(h, { src: target.logoUrl, seed: target.name, className: "size-8" }),
-			h.span([h.Class("flex-1 truncate font-medium text-fg text-sm")], [target.name]),
 		],
 	)
 

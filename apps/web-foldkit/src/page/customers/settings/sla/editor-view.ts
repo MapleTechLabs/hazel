@@ -14,7 +14,8 @@ import { textField } from "../../../../ui/text-field"
 import { toggleChip } from "../../../../ui/toggle-chip"
 import { AppRoute, hrefOf } from "../../../../route"
 import type { Shared } from "../../../contract"
-import { type Crumb, readOnlyNotice, settingsHeader, settingsPage } from "../shared"
+import { type Crumb, readOnlyNotice, settingsPage } from "../shared"
+import { pageHeader } from "../../../../ui/page-header"
 import { exampleLine, HOURS_LABEL, type PolicyErrors, policyErrors } from "./draft"
 import { Message } from "./message"
 import {
@@ -502,7 +503,7 @@ export const editorView = (h: H, model: Model, editor: Editor, shared: Shared, c
 		{ label: isNew ? "New policy" : canEdit ? "Edit policy" : "Policy" },
 	]
 	return settingsPage(h, [
-		settingsHeader(h, {
+		pageHeader(h, {
 			title: isNew ? "New policy" : editor.form.name || "Policy",
 			crumbs,
 			actions: canEdit

@@ -1,4 +1,5 @@
 import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
+import { emptyState } from "../../ui/empty-state"
 import { eq, inArray, not, or } from "@tanstack/db"
 import { Effect, Schema, Stream } from "effect"
 import { Command, Submodel, Subscription } from "foldkit"
@@ -213,17 +214,11 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 						[h.Class("max-h-[400px] overflow-y-auto")],
 						[
 							filtered.length === 0
-								? h.div(
-										[
-											h.Class(
-												"flex flex-col items-center justify-center py-8 text-center",
-											),
-										],
-										[
-											IconHashtag(h, { className: "mb-3 size-12 text-muted-fg" }),
-											h.p([h.Class("text-muted-fg text-sm")], [emptyText]),
-										],
-									)
+								? emptyState(h, {
+										title: emptyText,
+										icon: (className) => IconHashtag(h, { className }),
+										className: "py-8",
+									})
 								: h.div(
 										[h.Class("space-y-2")],
 										filtered.map((channel) =>

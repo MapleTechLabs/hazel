@@ -159,7 +159,7 @@ export const healthDistribution = <M>(
 													h.span([
 														h.Class(
 															twMerge(
-																"size-2.5 rounded-[2px]",
+																"size-2.5 rounded-xs",
 																HEALTH_FILL[row.status],
 															),
 														),

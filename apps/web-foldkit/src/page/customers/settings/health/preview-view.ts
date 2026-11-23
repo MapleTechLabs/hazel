@@ -11,11 +11,18 @@ import { HEALTH_FILL, HEALTH_LABEL, healthBadge } from "../../../../customers/ui
 import { segmented } from "../../../../ui/segmented-control"
 import { IconChevronRight } from "../../../../icons"
 import { button } from "../../../../ui/button"
+import { callout } from "../../../../ui/callout"
+import { panel, panelHeader } from "../../../../ui/card"
+import { type Column, dataTable } from "../../../../ui/data-table"
+import { emptyState } from "../../../../ui/empty-state"
+import { loadingState } from "../../../../ui/loader"
+import { statusDot } from "../../../../ui/status-dot"
+
 import * as Select from "../../../../ui/select"
 import { view as selectView } from "../../../../ui/select-view"
 import * as Slider from "../../../../ui/slider"
 import { scaleButton } from "./components-view"
-import { card, cardTitle, type Context, type H, numberInput, parseNumber, textOf } from "./fields"
+import { type Context, type H, numberInput, parseNumber, textOf } from "./fields"
 import { Message } from "./message"
 import {
 	type BandKey,
@@ -106,7 +113,10 @@ const atLeast = (h: H): Html =>
 const statusLabel = (h: H, status: Status): Html =>
 	h.span(
 		[h.Class("inline-flex w-20 shrink-0 items-center gap-2 text-fg")],
-		[h.span([h.Class(twMerge("size-2 rounded-full", HEALTH_FILL[status]))]), HEALTH_LABEL[status]],
+		[
+			statusDot(h, { tone: "neutral", className: twMerge("size-2", HEALTH_FILL[status]) }),
+			HEALTH_LABEL[status],
+		],
 	)
 
 export const bandsCard = (h: H, model: Model, context: Context): Html => {
@@ -122,8 +132,8 @@ export const bandsCard = (h: H, model: Model, context: Context): Html => {
 				h.span([h.Class("w-14 shrink-0 text-right text-muted-fg tabular-nums")], [range]),
 			],
 		)
-	return card(h, "", [
-		cardTitle(h, "Bands", "Where a score turns into a status"),
+	return panel(h, {}, [
+		panelHeader(h, { title: "Bands", description: "Where a score turns into a status" }),
 		h.div(
 			[h.Class("flex flex-col gap-1 pt-5")],
 			[
@@ -238,13 +248,9 @@ export const transitionsText = (result: Customers.HealthDryRunResult): string =>
 	return `${formatCount(moved)} ${moved === 1 ? "customer changes" : "customers change"} band: ${parts.join(", ")}.`
 }
 
-/** A table that scrolls sideways when the card is narrower than its columns (phones). */
-const scrolling = (h: H, table: Html): Html => h.div([h.Class("overflow-x-auto")], [table])
-
-const th = (h: H, label: string, className = "text-right") =>
-	h.th([h.Class(twMerge("whitespace-nowrap py-2 pl-3 font-medium text-xs first:pl-0", className))], [label])
-const td = (h: H, text: string, className = "") =>
-	h.td([h.Class(twMerge("whitespace-nowrap py-2 pl-3 text-right text-fg tabular-nums", className))], [text])
+/** A number cell, quieted or tinted by `className`. */
+const numberCell = (h: H, text: string, className?: string): Html | string =>
+	className === undefined ? text : h.span([h.Class(className)], [text])
 
 const distributionTable = (
 	h: H,
@@ -252,81 +258,67 @@ const distributionTable = (
 	proposed: ReadonlyArray<Row> | null,
 	bands: Customers.HealthBands,
 	currency: string,
-): Html =>
-	h.table(
-		[h.Class("w-full text-sm")],
-		[
-			h.thead(
-				[],
+): Html => {
+	const name: Column<Status> = {
+		key: "status",
+		label: "Status",
+		cell: (status) =>
+			h.span(
+				[h.Class("inline-flex items-center gap-2 whitespace-nowrap")],
 				[
-					h.tr(
-						[h.Class("border-border border-b text-muted-fg text-xs")],
-						proposed === null
-							? [th(h, "Status", "text-left"), th(h, "Customers"), th(h, "MRR")]
-							: [
-									th(h, "Status", "text-left"),
-									th(h, "Saved"),
-									th(h, "With changes"),
-									th(h, "Change"),
-									th(h, "MRR"),
-								],
-					),
+					h.span([h.Class(twMerge("size-2.5 shrink-0 rounded-xs", HEALTH_FILL[status]))]),
+					h.span([h.Class("text-fg")], [HEALTH_LABEL[status]]),
+					h.span([h.Class("text-muted-fg text-xs")], [bandText(status, bands)]),
 				],
 			),
-			h.tbody(
-				[],
-				STATUSES.map((status) => {
-					const before = byStatus(saved, status)
-					const after = proposed === null ? null : byStatus(proposed, status)
-					const name = h.td(
-						[h.Class("py-2")],
-						[
-							h.span(
-								[h.Class("inline-flex items-center gap-2")],
-								[
-									h.span([
-										h.Class(
-											twMerge("size-2.5 shrink-0 rounded-[2px]", HEALTH_FILL[status]),
-										),
-									]),
-									h.span([h.Class("text-fg")], [HEALTH_LABEL[status]]),
-									h.span([h.Class("text-muted-fg text-xs")], [bandText(status, bands)]),
-								],
-							),
-						],
-					)
-					if (after === null)
-						return h.tr(
-							[],
-							[
-								name,
-								td(h, formatCount(before.count)),
-								td(h, formatMoney(before.mrrMinor, currency)),
-							],
+	}
+	const number = (key: string, label: string, cell: (status: Status) => Html | string): Column<Status> => ({
+		key,
+		label,
+		align: "right",
+		widthClass: "w-28",
+		cell,
+	})
+	const columns: ReadonlyArray<Column<Status>> =
+		proposed === null
+			? [
+					name,
+					number("customers", "Customers", (status) => formatCount(byStatus(saved, status).count)),
+					number("mrr", "MRR", (status) => formatMoney(byStatus(saved, status).mrrMinor, currency)),
+				]
+			: [
+					name,
+					number("saved", "Saved", (status) =>
+						numberCell(h, formatCount(byStatus(saved, status).count), "text-muted-fg"),
+					),
+					number("proposed", "With changes", (status) =>
+						formatCount(byStatus(proposed, status).count),
+					),
+					number("change", "Change", (status) => {
+						const change = byStatus(proposed, status).count - byStatus(saved, status).count
+						return numberCell(
+							h,
+							change === 0 ? "—" : formatDeltaCount(change),
+							change === 0
+								? "text-muted-fg"
+								: (status === "healthy") === change > 0
+									? "text-success-subtle-fg"
+									: "text-danger-subtle-fg",
 						)
-					const change = after.count - before.count
-					return h.tr(
-						[],
-						[
-							name,
-							td(h, formatCount(before.count), "text-muted-fg"),
-							td(h, formatCount(after.count)),
-							td(
-								h,
-								change === 0 ? "—" : formatDeltaCount(change),
-								change === 0
-									? "text-muted-fg"
-									: (status === "healthy") === change > 0
-										? "text-success-subtle-fg"
-										: "text-danger-subtle-fg",
-							),
-							td(h, formatMoney(after.mrrMinor, currency)),
-						],
-					)
-				}),
-			),
-		],
-	)
+					}),
+					number("mrr", "MRR", (status) =>
+						formatMoney(byStatus(proposed, status).mrrMinor, currency),
+					),
+				]
+	return dataTable(h, {
+		ariaLabel: "Customers by status",
+		id: "health-distribution",
+		columns,
+		rows: STATUSES,
+		rowKey: (status) => status,
+		isFramed: false,
+	})
+}
 
 const metricToggle = (h: H, metric: PreviewMetric): Html =>
 	segmented(h, {
@@ -340,20 +332,7 @@ const metricToggle = (h: H, metric: PreviewMetric): Html =>
 	})
 
 const pausedPanel = (h: H, title: string, body: string): Html =>
-	h.div(
-		[h.Class("flex flex-1 flex-col items-center justify-center gap-2 py-10 text-center")],
-		[
-			h.div(
-				[h.AriaHidden(true), h.Class("flex w-48 flex-col gap-1.5 opacity-60")],
-				[
-					h.span([h.Class("h-2 rounded-full bg-secondary")]),
-					h.span([h.Class("h-2 rounded-full bg-secondary")]),
-				],
-			),
-			h.p([h.Class("font-medium text-fg text-sm")], [title]),
-			h.p([h.Class("max-w-xs text-muted-fg text-xs")], [body]),
-		],
-	)
+	emptyState(h, { title, description: body, className: "flex-1 py-10" })
 
 export const distributionCard = (
 	h: H,
@@ -369,11 +348,12 @@ export const distributionCard = (
 			currency,
 		)} MRR`
 	const frame = (subtitle: string, children: ReadonlyArray<Html>) =>
-		card(h, "", [
-			h.div(
-				[h.Class("flex flex-wrap items-start justify-between gap-3")],
-				[cardTitle(h, "Distribution preview", subtitle), metricToggle(h, model.previewMetric)],
-			),
+		panel(h, {}, [
+			panelHeader(h, {
+				title: "Distribution preview",
+				description: subtitle,
+				aside: metricToggle(h, model.previewMetric),
+			}),
 			...children,
 		])
 
@@ -382,13 +362,13 @@ export const distributionCard = (
 		const saved = distributionOf(accounts)
 		return frame(`${totals(saved)} · as saved`, [
 			bar(h, "Saved", saved, model.previewMetric),
-			scrolling(h, distributionTable(h, saved, null, context.saved.bands, currency)),
+			distributionTable(h, saved, null, context.saved.bands, currency),
 		])
 	}
 	if (valid === null) {
 		const customers = accounts === null ? "customers" : `${formatCount(accounts.length)} customers`
 		const first = context.total === 100 ? "Fix the highlighted fields" : "Weights must add up to 100%"
-		return card(h, "", [
+		return panel(h, {}, [
 			pausedPanel(
 				h,
 				"Preview paused",
@@ -448,14 +428,10 @@ const previewResult = (
 							bar(h, "With changes", result.proposed, model.previewMetric),
 						],
 					),
-					scrolling(
-						h,
-						distributionTable(h, result.current, result.proposed, valid.bands, currency),
-					),
-					h.p(
-						[h.Class("rounded-lg bg-warning-subtle/60 px-3 py-2 text-fg text-xs")],
-						[transitionsText(result)],
-					),
+					distributionTable(h, result.current, result.proposed, valid.bands, currency),
+					callout(h, { intent: "warning", icon: null, className: "py-2 text-xs" }, [
+						transitionsText(result),
+					]),
 				],
 			),
 		],
@@ -466,64 +442,70 @@ const previewResult = (
 const formatWeight = (weight: number) => `${Math.round(weight)}%`
 
 const breakdownTable = (h: H, breakdown: Customers.HealthBreakdown): Html =>
-	h.table(
-		[h.Class("w-full text-sm")],
+	h.div(
+		[h.Class("flex flex-col gap-2")],
 		[
-			h.thead(
-				[],
-				[
-					h.tr(
-						[h.Class("border-border border-b text-muted-fg text-xs")],
-						[
-							th(h, "Part", "text-left"),
-							th(h, "Why", "text-left"),
-							th(h, "Part score"),
-							th(h, "Weight"),
-							th(h, "Points"),
-						],
-					),
-				],
-			),
-			h.tbody(
-				[],
-				breakdown.components.map((part) =>
-					h.tr(
-						[h.Class("border-border border-b")],
-						[
-							h.td([h.Class("py-2 text-fg")], [COMPONENT_LABEL[part.key]]),
-							h.td(
-								[h.Class("py-2 pl-3 text-muted-fg text-xs")],
+			dataTable(h, {
+				ariaLabel: "Score breakdown",
+				id: "health-breakdown",
+				isFramed: false,
+				rows: breakdown.components,
+				rowKey: (part) => part.key,
+				columns: [
+					{
+						key: "part",
+						label: "Part",
+						widthClass: "w-28 whitespace-nowrap",
+						cell: (part) => COMPONENT_LABEL[part.key],
+					},
+					{
+						key: "why",
+						label: "Why",
+						cell: (part) =>
+							h.span(
+								[h.Class("text-muted-fg text-xs")],
 								[part.excluded ? `${part.why} · no data, weight shared` : part.why],
 							),
-							td(h, part.score === null ? "—" : String(part.score)),
-							td(h, part.excluded ? "—" : formatWeight(part.effectiveWeight), "text-muted-fg"),
-							td(
+					},
+					{
+						key: "score",
+						label: "Part score",
+						align: "right",
+						widthClass: "w-24",
+						cell: (part) => (part.score === null ? "—" : String(part.score)),
+					},
+					{
+						key: "weight",
+						label: "Weight",
+						align: "right",
+						widthClass: "w-20",
+						cell: (part) =>
+							numberCell(
 								h,
-								part.score === null
-									? "—"
-									: ((part.effectiveWeight * part.score) / 100).toFixed(1),
+								part.excluded ? "—" : formatWeight(part.effectiveWeight),
+								"text-muted-fg",
 							),
-						],
-					),
-				),
-			),
-			h.tfoot(
-				[],
-				[
-					h.tr(
-						[],
-						[
-							h.td(
-								[h.Class("py-2 pr-3 text-muted-fg text-xs"), h.Attribute("colspan", "3")],
-								[
-									"Rounded to the nearest whole number. The same table appears on every customer page.",
-								],
-							),
-							h.td([h.Class("py-2 pl-3 text-right text-muted-fg text-xs")], ["Score"]),
-							td(h, breakdown.score === null ? "—" : String(breakdown.score), "font-semibold"),
-						],
-					),
+						footer: h.span([h.Class("font-normal text-muted-fg text-xs")], ["Score"]),
+					},
+					{
+						key: "points",
+						label: "Points",
+						align: "right",
+						widthClass: "w-20",
+						cell: (part) =>
+							part.score === null
+								? "—"
+								: ((part.effectiveWeight * part.score) / 100).toFixed(1),
+						footer: h.span(
+							[h.Class("font-semibold")],
+							[breakdown.score === null ? "—" : String(breakdown.score)],
+						),
+					},
 				],
+			}),
+			h.p(
+				[h.Class("text-muted-fg text-xs")],
+				["Rounded to the nearest whole number. The same table appears on every customer page."],
 			),
 		],
 	)
@@ -566,17 +548,17 @@ export const checkCard = (h: H, model: Model, context: Context): Html => {
 			return [
 				h.p([h.Class("text-muted-fg text-sm")], ["Pick a customer to see how its score is built."]),
 			]
-		if (sample !== null) return [scrolling(h, breakdownTable(h, sample.proposed))]
+		if (sample !== null) return [breakdownTable(h, sample.proposed)]
 		return AsyncData.match(model.check.saved, {
 			onIdle: () => [],
-			onLoading: () => [h.p([h.Class("text-muted-fg text-sm")], ["Loading…"])],
+			onLoading: () => [loadingState(h, { label: "Loading…", size: "sm", className: "py-4" })],
 			onRefreshing: (health) => breakdownOrNone(h, health, context, result !== null),
 			onSuccess: (health) => breakdownOrNone(h, health, context, result !== null),
 			onStale: ({ data: health }) => breakdownOrNone(h, health, context, result !== null),
 			onFailure: (reason) => [h.p([h.Class("text-muted-fg text-sm")], [commonMessage(reason).title])],
 		})
 	}
-	return card(h, "", [
+	return panel(h, {}, [
 		h.div(
 			[h.Class("flex flex-wrap items-center gap-3")],
 			[
@@ -611,7 +593,7 @@ const breakdownOrNone = (
 				[h.Class("text-muted-fg text-sm")],
 				["Not scored yet: it gets a breakdown on the next compute."],
 			)
-		: scrolling(h, breakdownTable(h, health)),
+		: breakdownTable(h, health),
 ]
 
 // UNSAVED CHANGES
@@ -635,10 +617,7 @@ export const unsavedBar = (
 			),
 		],
 		[
-			h.span([
-				h.AriaHidden(true),
-				h.Class(twMerge("size-2 rounded-full", isValid ? "bg-warning" : "bg-danger")),
-			]),
+			statusDot(h, { tone: isValid ? "warning" : "danger", className: "size-2" }),
 			h.span(
 				[h.Class("font-medium text-fg text-sm")],
 				[isValid ? "Unsaved changes" : "Can't save yet"],

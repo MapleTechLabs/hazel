@@ -3,6 +3,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { cn } from "~/lib/utils"
 import { formatStatusExpiration } from "~/utils/status"
 import type { AggregatedReaction, StatusEmoji } from "../../page/chat/rows"
+import { ariaButton } from "../../ui/button"
 import * as TooltipHost from "../tooltip-host"
 
 /** Tooltip-wrapped message parts: `ReactionButton` and `StatusEmojiWithTooltip`. */
@@ -169,12 +170,9 @@ export const statusEmojiView = <M>(
 		toMessage: context.toMessage,
 		placement: "top",
 		toTrigger: (attributes, overlay) =>
-			h.button(
-				[
-					...attributes,
-					h.Class(cn("cursor-default border-none bg-transparent p-0 text-sm")),
-					...PRESSABLE(h),
-				],
+			ariaButton(
+				h,
+				{ className: "cursor-default border-none bg-transparent p-0 text-sm", attributes },
 				[status.emoji, overlay],
 			),
 		content:

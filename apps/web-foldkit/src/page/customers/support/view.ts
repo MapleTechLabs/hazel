@@ -16,16 +16,17 @@ import { rangePicker } from "../../../customers/ui/filter-bar"
 import { segmented } from "../../../ui/segmented-control"
 import { companyLogo } from "../../../customers/ui/identity"
 import { kpiTile } from "../../../customers/ui/kpi-tile"
-import { titleClass } from "../../../customers/ui/surface"
 import { cardClassName, panel, panelHeader } from "../../../ui/card"
 import { pageHeader } from "../../../ui/page-header"
-import { IconArrowPath, IconSupport } from "../../../icons"
+import { IconSupport } from "../../../icons"
 import { AppRoute, customerRoute, hrefOf } from "../../../route"
-import { button, buttonClassName } from "../../../ui/button"
+import { buttonClassName } from "../../../ui/button"
 import { emptyState } from "../../../ui/empty-state"
 import type { PageViewInputs } from "../../contract"
 import { Message } from "./message"
 import { type DailyChart, isEmptyReport, type Model } from "./model"
+import { loadFailure } from "../shared-view"
+import { skeleton } from "../../../ui/skeleton"
 
 /** The Support report page: tiles, a daily chart, and the by-account and by-policy tables. */
 
@@ -301,17 +302,11 @@ const tableCard = (
 
 const failure = (h: HtmlBuilder<Message>, reason: Parameters<typeof commonMessage>[0]): Html => {
 	const message = commonMessage(reason)
-	return h.div(
-		[h.Class(cardClassName("flex flex-col items-center gap-3 px-6 py-14 text-center"))],
-		[
-			h.span([h.Class(titleClass)], ["Couldn't load the Support report"]),
-			h.span([h.Class("max-w-sm text-muted-fg text-sm")], [message.description ?? message.title]),
-			button(h, { intent: "outline", size: "sm", onPress: Message.PressedRetry() }, [
-				IconArrowPath(h, { attributes: { "data-slot": "icon" } }),
-				"Try again",
-			]),
-		],
-	)
+	return loadFailure(h, {
+		title: "Couldn't load the Support report",
+		description: message.description ?? message.title,
+		onRetry: Message.PressedRetry(),
+	})
 }
 
 const empty = (h: HtmlBuilder<Message>, model: Model, orgSlug: string): Html =>
@@ -333,11 +328,7 @@ const content = (h: HtmlBuilder<Message>, model: Model, orgSlug: string): Readon
 	const report = Option.getOrUndefined(AsyncData.getData(model.report))
 	const failed = AsyncData.getError(model.report)
 	if (report === undefined && failed._tag === "Some") return [failure(h, failed.value)]
-	if (report === undefined)
-		return [
-			tiles(h, undefined),
-			h.div([h.Class("h-72 animate-pulse rounded-xl border border-border bg-secondary/30")]),
-		]
+	if (report === undefined) return [tiles(h, undefined), skeleton(h, "h-72 w-full rounded-xl")]
 	if (isEmptyReport(report)) return [empty(h, model, orgSlug)]
 	return [
 		tiles(h, report),
@@ -351,7 +342,8 @@ const content = (h: HtmlBuilder<Message>, model: Model, orgSlug: string): Readon
 				columns: accountColumns(h, orgSlug),
 				rows: report.byAccount,
 				rowKey: (row) => row.key,
-				className: "rounded-none rounded-b-xl border-x-0 border-b-0",
+				isFramed: false,
+				className: "border-border border-t",
 			}),
 		}),
 		tableCard(h, {
@@ -363,7 +355,8 @@ const content = (h: HtmlBuilder<Message>, model: Model, orgSlug: string): Readon
 				columns: policyColumns(h),
 				rows: report.byPolicy,
 				rowKey: (row) => row.key,
-				className: "rounded-none rounded-b-xl border-x-0 border-b-0",
+				isFramed: false,
+				className: "border-border border-t",
 			}),
 		}),
 	]

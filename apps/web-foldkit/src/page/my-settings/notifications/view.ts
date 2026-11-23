@@ -5,10 +5,12 @@ import { ariaRadioGroup } from "../../../ui/aria-radio"
 import type * as Interaction from "../../../ui/aria/interaction"
 import { button } from "../../../ui/button"
 import { dateField } from "../../../ui/date-field"
+import { pageHeader, pageLayout } from "../../../ui/page-header"
+import { separator } from "../../../ui/separator"
 import * as Slider from "../../../ui/slider"
 import { switchControl } from "../../../ui/switch"
 import type { PageViewInputs } from "../../contract"
-import { divider, pageHeader, settingsRow } from "../shared"
+import { settingsRow } from "../shared"
 import { Message } from "./message"
 import { type Model, settingsOf, type SoundFile, type SoundSettings } from "./model"
 import { interaction, toQuietHoursMessage, toVolumeMessage } from "./update"
@@ -244,25 +246,31 @@ const doNotDisturb = (h: HtmlBuilder<Message>, model: Model, wiring: Interaction
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
 	const wiring = interaction.wiring(model)
 	return h.form(
-		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
+		[],
 		[
-			pageHeader(h, "Notifications", "Manage how and when you receive notifications."),
-			h.div(
-				[h.Class("flex flex-col gap-5")],
-				[
-					settingsRow(
-						h,
-						{ title: "Sound settings", description: "Notification sounds" },
-						soundSettings(h, model, shared.soundSettings, wiring),
-					),
-					divider(h),
-					settingsRow(
-						h,
-						{ title: "Do not disturb", description: "Quiet hours and DND mode" },
-						doNotDisturb(h, model, wiring),
-					),
-				],
-			),
+			pageLayout(h, {}, [
+				pageHeader(h, {
+					title: "Notifications",
+					subtitle: "Manage how and when you receive notifications.",
+					size: "title",
+				}),
+				h.div(
+					[h.Class("flex flex-col gap-5")],
+					[
+						settingsRow(
+							h,
+							{ title: "Sound settings", description: "Notification sounds" },
+							soundSettings(h, model, shared.soundSettings, wiring),
+						),
+						separator(h),
+						settingsRow(
+							h,
+							{ title: "Do not disturb", description: "Quiet hours and DND mode" },
+							doNotDisturb(h, model, wiring),
+						),
+					],
+				),
+			]),
 		],
 	)
 })

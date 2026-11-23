@@ -3,7 +3,7 @@ import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { tabsStyles } from "~/components/ui/tabs.styles"
 import { IconChevronDown, IconClose, IconPlus } from "../../icons"
-import { button } from "../../ui/button"
+import { ariaButton, button } from "../../ui/button"
 import { searchField } from "../../ui/search-field"
 import { formatCount } from "../format"
 import { type Segment, segmented } from "../../ui/segmented-control"
@@ -70,23 +70,23 @@ export const viewTabs = <M, K extends string>(
 				options.tabs.map((tab, index) => {
 					const isSelected = tab.key === options.selected
 					const extra = options.tabProps?.(tab, index)
-					return h.button(
-						[
-							...(extra?.attributes ?? []),
-							h.Key(tab.key),
-							h.Type("button"),
-							h.Role("tab"),
-							h.AriaSelected(isSelected),
-							...(isSelected ? [h.DataAttribute("selected", "true")] : []),
-							h.Class(
-								twMerge(
-									...tabsStyles.tab("horizontal", false),
-									"cursor-pointer gap-1.5",
-									extra?.className,
-								),
+					return ariaButton(
+						h,
+						{
+							className: twMerge(
+								...tabsStyles.tab("horizontal", false),
+								"cursor-pointer gap-1.5",
+								extra?.className,
 							),
-							h.OnClick(options.onSelect(tab.key)),
-						],
+							onPress: options.onSelect(tab.key),
+							attributes: [
+								...(extra?.attributes ?? []),
+								h.Key(tab.key),
+								h.Role("tab"),
+								h.AriaSelected(isSelected),
+								...(isSelected ? [h.DataAttribute("selected", "true")] : []),
+							],
+						},
 						[
 							...(tab.leading === undefined ? [] : [tab.leading]),
 							tab.label,
@@ -216,14 +216,13 @@ export const filterChip = <M>(
 			),
 		],
 		[
-			h.button(
-				[
-					h.Type("button"),
-					h.Class(
+			ariaButton(
+				h,
+				{
+					className:
 						"inline-flex min-w-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded-l-lg px-2.5 outline-hidden hover:bg-secondary focus-visible:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/70",
-					),
-					...(options.attributes ?? []),
-				],
+					attributes: options.attributes ?? [],
+				},
 				[
 					h.span([h.Class("shrink-0 text-muted-fg")], [`${options.field} ${options.operator}`]),
 					// A long value (`High, Medium, Low, …`) truncates on one line; the chip's height is fixed.
@@ -234,15 +233,16 @@ export const filterChip = <M>(
 					...(options.overlay ? [options.overlay] : []),
 				],
 			),
-			h.button(
-				[
-					h.Type("button"),
-					h.AriaLabel(`Remove filter: ${options.field} ${options.operator} ${options.value}`),
-					h.Class(
+			ariaButton(
+				h,
+				{
+					className:
 						"inline-flex w-7 shrink-0 cursor-pointer items-center justify-center rounded-r-lg border-border border-l text-muted-fg outline-hidden hover:bg-secondary hover:text-fg focus-visible:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/70 max-md:w-10",
-					),
-					h.OnClick(options.onRemove),
-				],
+					onPress: options.onRemove,
+					attributes: [
+						h.AriaLabel(`Remove filter: ${options.field} ${options.operator} ${options.value}`),
+					],
+				},
 				[IconClose(h, { className: "size-3" })],
 			),
 		],

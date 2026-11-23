@@ -7,7 +7,8 @@ import { dialogClose, dialogFooter, dialogHeader } from "../../../ui/dialog"
 import * as Modal from "../../../ui/modal"
 import type { PageViewInputs } from "../../contract"
 import * as ConfirmAction from "../../shared/confirm-action"
-import { tabHeader } from "../section-header"
+import { iconTile } from "../../../ui/icon-tile"
+import { pageHeader, pageLayout } from "../../../ui/page-header"
 import { gitHubCard } from "./cards"
 import { rssCard } from "./rss-card"
 import { Message } from "./message"
@@ -83,10 +84,7 @@ const comingSoon = (h: HtmlBuilder<Message>): Html =>
 			),
 		],
 		[
-			h.div(
-				[h.Class("flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary")],
-				[IconPlus(h, { className: "size-5 text-muted-fg" })],
-			),
+			iconTile(h, { size: "md" }, IconPlus(h)),
 			h.div(
 				[h.Class("flex flex-col gap-0.5")],
 				[
@@ -101,22 +99,23 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	const regular = itemsOf(model.webhooks).filter(
 		(webhook) => webhook.name !== "OpenStatus" && webhook.name !== "Railway",
 	)
-	return h.div(
-		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
-		[
-			tabHeader(h, "Integrations", "Connect external services to this channel."),
-			h.div(
-				[h.Class("flex flex-col gap-4")],
-				[
-					gitHubCard(h, model, shared.theme.resolved),
-					rssCard(h, model),
-					providerCard(h, model, "openstatus", shared),
-					providerCard(h, model, "railway", shared),
-					customWebhooksCard(h, model, regular, shared),
-					comingSoon(h),
-				],
-			),
-			confirmModal(h, model),
-		],
-	)
+	return pageLayout(h, {}, [
+		pageHeader(h, {
+			title: "Integrations",
+			subtitle: "Connect external services to this channel.",
+			size: "title",
+		}),
+		h.div(
+			[h.Class("flex flex-col gap-4")],
+			[
+				gitHubCard(h, model, shared.theme.resolved),
+				rssCard(h, model),
+				providerCard(h, model, "openstatus", shared),
+				providerCard(h, model, "railway", shared),
+				customWebhooksCard(h, model, regular, shared),
+				comingSoon(h),
+			],
+		),
+		confirmModal(h, model),
+	])
 })

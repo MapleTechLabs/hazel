@@ -48,7 +48,7 @@ const swatch = <M>(h: HtmlBuilder<M>, color: ChartColor, mark: "line" | "square"
 					? "h-0.5 w-3 rounded-full"
 					: mark === "dot"
 						? "size-2 rounded-full"
-						: "size-2.5 rounded-[2px]",
+						: "size-2.5 rounded-xs",
 			),
 		),
 	])

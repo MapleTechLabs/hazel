@@ -2,6 +2,8 @@ import { Option } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { cx } from "~/utils/cx"
 import { avatar } from "../ui/avatar"
+import { button } from "../ui/button"
+import { input as textInput } from "../ui/input"
 import { type BotCommand, type CommandInput, Message, type Model } from "./composer"
 import { commandFieldId } from "./editor-commands"
 import { listBox } from "./autocomplete-view"
@@ -148,34 +150,33 @@ export const commandInputPanel = <M>(
 												: h.empty,
 										],
 									),
-									h.input([
-										h.Id(commandFieldId(editorId, index)),
-										h.Attribute("type", arg.type === "number" ? "number" : "text"),
-										h.Value(input.values[arg.name] ?? ""),
-										h.Attribute("placeholder", arg.placeholder ?? arg.description ?? ""),
-										h.AriaRequired(arg.required),
-										h.OnInput((value) =>
-											toMessage(
-												Message.UpdatedCommandValue({ argName: arg.name, value }),
+									textInput(h, {
+										placeholder: arg.placeholder ?? arg.description ?? "",
+										attributes: [
+											h.Id(commandFieldId(editorId, index)),
+											h.Type(arg.type === "number" ? "number" : "text"),
+											h.Value(input.values[arg.name] ?? ""),
+											h.AriaRequired(arg.required),
+											h.OnInput((value) =>
+												toMessage(
+													Message.UpdatedCommandValue({ argName: arg.name, value }),
+												),
 											),
-										),
-										h.OnKeyDownPreventDefault((key, modifiers) =>
-											commandKeys.includes(key)
-												? Option.some(
-														toMessage(
-															Message.PressedCommandFieldKey({
-																index,
-																key,
-																shiftKey: modifiers.shiftKey,
-															}),
-														),
-													)
-												: Option.none(),
-										),
-										h.Class(
-											"w-full rounded-md border border-border bg-field px-3 py-2 text-sm focus:border-primary focus:outline-none",
-										),
-									]),
+											h.OnKeyDownPreventDefault((key, modifiers) =>
+												commandKeys.includes(key)
+													? Option.some(
+															toMessage(
+																Message.PressedCommandFieldKey({
+																	index,
+																	key,
+																	shiftKey: modifiers.shiftKey,
+																}),
+															),
+														)
+													: Option.none(),
+											),
+										],
+									}),
 								],
 							),
 						),
@@ -184,25 +185,20 @@ export const commandInputPanel = <M>(
 			h.div(
 				[h.Class("mt-4 flex justify-end gap-2")],
 				[
-					h.button(
-						[
-							h.Attribute("type", "button"),
-							h.OnClick(toMessage(Message.ClickedCancelCommand())),
-							h.Class(
-								"rounded-md px-3 py-1.5 text-muted-fg text-sm hover:bg-muted hover:text-fg",
-							),
-						],
+					button(
+						h,
+						{ intent: "plain", size: "sm", onPress: toMessage(Message.ClickedCancelCommand()) },
 						["Cancel"],
 					),
-					h.button(
-						[
-							h.Attribute("type", "button"),
-							h.OnClick(toMessage(Message.ClickedExecuteCommand())),
-							...(isExecuting ? [h.Disabled(true), h.AriaBusy(true)] : []),
-							h.Class(
-								"rounded-md bg-primary px-3 py-1.5 text-primary-fg text-sm hover:bg-primary/90 disabled:opacity-50",
-							),
-						],
+					button(
+						h,
+						{
+							intent: "primary",
+							size: "sm",
+							isDisabled: isExecuting,
+							onPress: toMessage(Message.ClickedExecuteCommand()),
+							attributes: isExecuting ? [h.AriaBusy(true)] : [],
+						},
 						[isExecuting ? "Executing…" : "Execute"],
 					),
 				],

@@ -4,6 +4,8 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { htmlRenderDialogStyles, htmlRenderStyles } from "~/components/embeds/html-render.styles"
 import type { HtmlRenderRow } from "../../page/chat/rows"
 import { IconMaximize } from "../../icons"
+import { ariaButton } from "../../ui/button"
+import { heading } from "../../ui/heading"
 import { controlledModal, titleId } from "../../ui/modal"
 import * as HtmlRender from "../html-render"
 import type { EmbedType } from "./types"
@@ -119,34 +121,27 @@ export const htmlRenderView = <M>(
 						[h.Class(styles.controls())],
 						[
 							row?.isTall
-								? h.button(
-										[
-											h.Type("button"),
-											h.Class(styles.control()),
-											h.AriaExpanded(row.isExpanded),
-											h.OnClick(
-												toMessage(
-													HtmlRender.Message.ClickedToggleExpanded({
-														ref,
-														surface,
-													}),
-												),
+								? ariaButton(
+										h,
+										{
+											className: styles.control(),
+											onPress: toMessage(
+												HtmlRender.Message.ClickedToggleExpanded({ ref, surface }),
 											),
-										],
+											attributes: [h.AriaExpanded(row.isExpanded)],
+										},
 										[row.isExpanded ? "Show less" : "Show more"],
 									)
 								: h.empty,
-							h.button(
-								[
-									h.Type("button"),
-									h.Class(styles.control()),
-									h.AriaLabel(`Open ${html.title} full screen`),
-									h.OnClick(
-										toMessage(
-											HtmlRender.Message.ClickedFullscreen({ ref, title: html.title }),
-										),
+							ariaButton(
+								h,
+								{
+									className: styles.control(),
+									onPress: toMessage(
+										HtmlRender.Message.ClickedFullscreen({ ref, title: html.title }),
 									),
-								],
+									attributes: [h.AriaLabel(`Open ${html.title} full screen`)],
+								},
 								[IconMaximize(h), "Full screen"],
 							),
 						],
@@ -176,8 +171,14 @@ export const htmlRenderFullscreenView = <M>(
 			h.header(
 				[h.Class(dialogStyles.header())],
 				[
-					h.h2(
-						[h.Id(titleId(fullscreen.modal.id)), h.Class(dialogStyles.title())],
+					heading(
+						h,
+						{
+							variant: "subsection",
+							level: 2,
+							className: "truncate",
+							attributes: [h.Id(titleId(fullscreen.modal.id))],
+						},
 						[fullscreen.title],
 					),
 				],

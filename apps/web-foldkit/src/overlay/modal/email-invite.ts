@@ -1,4 +1,5 @@
 import { Effect, Option, Schema } from "effect"
+import { iconTile } from "../../ui/icon-tile"
 import { Command, Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
@@ -230,14 +231,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 		{ size: "lg" },
 		() => [
 			dialogHeader(h, {}, [
-				h.div(
-					[
-						h.Class(
-							"mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-primary/50",
-						),
-					],
-					[IconUsersPlus(h, { className: "size-6 text-primary" })],
-				),
+				iconTile(h, { intent: "primary", className: "mx-auto mb-4" }, IconUsersPlus(h)),
 				modalTitle(h, model.frame, "Invite team members"),
 				modalDescription(
 					h,

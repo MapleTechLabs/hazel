@@ -1,8 +1,9 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { button } from "../../../ui/button"
+import { cardClassName } from "../../../ui/card"
+import { pageHeader, pageLayout } from "../../../ui/page-header"
 import type { PageViewInputs } from "../../contract"
-import { pageHeader } from "../shared"
 import { Message } from "./message"
 import { LinkedProvider, type Model, PROVIDER_LABELS } from "./model"
 import { interaction } from "./update"
@@ -43,7 +44,7 @@ const accountCard = (h: HtmlBuilder<Message>, model: Model, provider: LinkedProv
 			)
 	return h.keyed("div")(
 		provider,
-		[h.Class("rounded-xl border border-border bg-bg p-4")],
+		[h.Class(cardClassName("p-4"))],
 		[
 			h.div(
 				[h.Class("flex items-start gap-4")],
@@ -76,14 +77,15 @@ const accountCard = (h: HtmlBuilder<Message>, model: Model, provider: LinkedProv
 }
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) =>
-	h.div(
-		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
-		[
-			pageHeader(h, "Linked Accounts", "Connect external accounts to enhance your experience."),
-			h.div(
-				[h.Class("flex max-w-xl flex-col gap-3")],
-				LinkedProvider.literals.map((provider) => accountCard(h, model, provider)),
-			),
-		],
-	),
+	pageLayout(h, {}, [
+		pageHeader(h, {
+			title: "Linked Accounts",
+			subtitle: "Connect external accounts to enhance your experience.",
+			size: "title",
+		}),
+		h.div(
+			[h.Class("flex max-w-xl flex-col gap-3")],
+			LinkedProvider.literals.map((provider) => accountCard(h, model, provider)),
+		),
+	]),
 )

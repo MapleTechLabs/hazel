@@ -35,7 +35,7 @@ export const cardTitle = <Message>(
 	h: HtmlBuilder<Message>,
 	options: { readonly className?: string },
 	children: Array<Html | string>,
-): Html => h.h2([h.Class(twMerge(cardStyles.cardTitle, options.className))], children)
+): Html => heading(h, { variant: "section", className: options.className }, children)
 
 export const cardDescription = <Message>(
 	h: HtmlBuilder<Message>,

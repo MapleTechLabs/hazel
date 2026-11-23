@@ -4,17 +4,10 @@ import { avatar } from "../../ui/avatar"
 import { button } from "../../ui/button"
 import { loader } from "../../ui/loader"
 import { commonMessage, failureMessage, type UserErrorMessage } from "~/lib/error-messages"
-import { AppRoute, hrefOf } from "../../route"
-import { authError, authFrame, authHeading } from "../auth/layout"
+import { authError, authFrame, authHeading, homeLink } from "../auth/layout"
 import { isSessionLoading, type PageViewInputs, type Shared } from "../contract"
 import { Message } from "./message"
 import { type AcceptFailure, Lookup, type Model, type Preview } from "./model"
-
-const homeLink = (h: HtmlBuilder<Message>): Html =>
-	h.a(
-		[h.Class("text-fg text-sm underline underline-offset-2"), h.Href(hrefOf(AppRoute.Root()))],
-		["Go to Hazel"],
-	)
 
 const unavailable = (h: HtmlBuilder<Message>, title: string, description: string): ReadonlyArray<Html> => [
 	authHeading(h, title, description),

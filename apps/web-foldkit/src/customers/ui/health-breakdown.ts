@@ -7,6 +7,8 @@ import type {
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { activityProviders, billingProviders } from "@hazel/customer-integrations"
+import { cardClassName } from "../../ui/card"
+import { dataTable } from "../../ui/data-table"
 import { heading } from "../../ui/heading"
 import { sourceLabel, usageSources } from "../providers"
 import { healthBadge } from "./badges"
@@ -45,6 +47,24 @@ const pointsOf = (component: HealthComponentResult) =>
 
 const formatWeight = (weight: number) => `${Math.round(weight)}%`
 
+/** A score on a track, filled in its band's colour. */
+const meter = <M>(
+	h: HtmlBuilder<M>,
+	score: number,
+	bands: HealthBands,
+	trackClass: string,
+	fillClass?: string,
+): Html =>
+	h.span(
+		[h.Class(twMerge("block overflow-hidden rounded-full bg-secondary", trackClass))],
+		[
+			h.span([
+				h.Class(twMerge("block h-full", fillClass, bandFill(score, bands))),
+				h.Style({ width: `${score}%` }),
+			]),
+		],
+	)
+
 export const healthBreakdown = <M>(
 	h: HtmlBuilder<M>,
 	options: Readonly<{
@@ -69,11 +89,9 @@ export const healthBreakdown = <M>(
 	return h.section(
 		[
 			h.Class(
-				twMerge(
-					"flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-bg",
-					options.isBare === true && "rounded-none border-0 bg-transparent",
-					options.className,
-				),
+				options.isBare === true
+					? twMerge("flex min-w-0 flex-col", options.className)
+					: cardClassName(twMerge("flex min-w-0 flex-col", options.className)),
 			),
 		],
 		[
@@ -137,20 +155,7 @@ export const healthBreakdown = <M>(
 									h.Style({ width: `${component.effectiveWeight}%` }),
 								],
 								[
-									h.span(
-										[h.Class("block h-1.5 overflow-hidden rounded-full bg-secondary")],
-										[
-											h.span([
-												h.Class(
-													twMerge(
-														"block h-full rounded-full",
-														bandFill(component.score ?? 0, bands),
-													),
-												),
-												h.Style({ width: `${component.score ?? 0}%` }),
-											]),
-										],
-									),
+									meter(h, component.score ?? 0, bands, "h-1.5", "rounded-full"),
 									h.span(
 										// A phone has no room for these under the bars; the table below says the same.
 										[
@@ -168,180 +173,126 @@ export const healthBreakdown = <M>(
 					),
 				],
 			),
-			h.table(
-				[h.Class("w-full border-separate border-spacing-0 text-sm")],
-				[
-					h.thead(
-						[],
-						[
-							h.tr(
+			dataTable(h, {
+				ariaLabel: "Health components",
+				id: "health-breakdown",
+				isFramed: false,
+				className: "border-border border-t",
+				rows: ordered,
+				rowKey: (component) => component.key,
+				columns: [
+					{
+						key: "component",
+						label: "Component",
+						widthClass: "w-32 max-sm:w-28",
+						cell: (component) =>
+							h.div(
+								[h.Class("py-3")],
 								[
-									h.Class(
-										"[&>th]:h-9 [&>th]:border-border [&>th]:border-y [&>th]:font-medium [&>th]:text-muted-fg [&>th]:text-xs",
-									),
-								],
-								[
-									h.th(
-										[h.Scope("col"), h.Class("w-32 pl-4 text-left max-sm:w-28 sm:pl-5")],
-										["Component"],
-									),
-									h.th([h.Scope("col"), h.Class("px-3 text-left")], ["Why"]),
-									h.th(
+									h.div(
 										[
-											h.Scope("col"),
-											// A phone keeps the points (they sum to the score) and drops the score and weight.
-											h.Class("w-32 px-3 text-right max-sm:hidden"),
+											h.Class(
+												twMerge(
+													"font-medium",
+													component.excluded ? "text-muted-fg" : "text-fg",
+												),
+											),
 										],
-										["Score"],
+										[COMPONENT_LABEL[component.key]],
 									),
-									h.th(
-										[h.Scope("col"), h.Class("w-24 px-3 text-right max-sm:hidden")],
-										["Weight"],
-									),
-									h.th(
-										[h.Scope("col"), h.Class("w-20 pr-4 text-right sm:pr-5")],
-										["Points"],
+									h.div(
+										[h.Class("text-muted-fg text-xs")],
+										[component.excluded ? "No data" : COMPONENT_SOURCES[component.key]],
 									),
 								],
 							),
-						],
-					),
-					h.tbody(
-						[
-							h.Class(
-								"[&>tr+tr>td]:border-border [&>tr+tr>td]:border-t [&_td]:py-3 [&_td]:align-top",
-							),
-						],
-						ordered.map((component) => {
+					},
+					{
+						key: "why",
+						label: "Why",
+						cell: (component) => {
 							const action = component.excluded
 								? (options.excludedAction?.(component.key) ?? null)
 								: null
-							return h.tr(
+							return h.div(
+								[h.Class("py-3")],
 								[
-									h.Key(component.key),
-									...(component.excluded ? [h.Class("text-muted-fg")] : []),
-								],
-								[
-									h.td(
-										[h.Class("pl-4 sm:pl-5")],
-										[
-											h.div(
-												[
-													h.Class(
-														twMerge(
-															"font-medium",
-															component.excluded ? "text-muted-fg" : "text-fg",
-														),
-													),
-												],
-												[COMPONENT_LABEL[component.key]],
-											),
-											h.div(
-												[h.Class("text-muted-fg text-xs")],
-												[
-													component.excluded
-														? "No data"
-														: COMPONENT_SOURCES[component.key],
-												],
-											),
-										],
+									h.p(
+										[h.Class(component.excluded ? "text-muted-fg" : "text-fg-2")],
+										[component.why],
 									),
-									h.td(
-										[h.Class("px-3")],
-										[
-											h.p(
-												[h.Class(component.excluded ? "text-muted-fg" : "text-fg-2")],
-												[component.why],
-											),
-											...(action === null ? [] : [h.div([h.Class("mt-1")], [action])]),
-										],
-									),
-									h.td(
-										[h.Class("px-3 text-right max-sm:hidden")],
-										[
-											component.score === null
-												? h.span(
-														[
-															h.Class(
-																"rounded border border-border border-dashed px-1.5 py-0.5 text-xs",
-															),
-														],
-														["Excluded"],
-													)
-												: h.span(
-														[
-															h.Class(
-																"inline-flex items-center justify-end gap-3",
-															),
-														],
-														[
-															h.span(
-																[
-																	h.Class(
-																		"block h-1 w-10 overflow-hidden rounded-full bg-secondary",
-																	),
-																],
-																[
-																	h.span([
-																		h.Class(
-																			twMerge(
-																				"block h-full",
-																				bandFill(
-																					component.score,
-																					bands,
-																				),
-																			),
-																		),
-																		h.Style({
-																			width: `${component.score}%`,
-																		}),
-																	]),
-																],
-															),
-															h.span(
-																[
-																	h.Class(
-																		"w-8 font-medium text-fg tabular-nums",
-																	),
-																],
-																[String(component.score)],
-															),
-														],
-													),
-										],
-									),
-									h.td(
-										[h.Class("px-3 text-right tabular-nums max-sm:hidden")],
-										[
-											...(isRedistributed &&
-											Math.round(component.effectiveWeight) !== component.weight
-												? [
-														h.span(
-															[
-																h.Class(
-																	"mr-1.5 text-muted-fg text-xs line-through",
-																),
-															],
-															[formatWeight(component.weight)],
-														),
-													]
-												: []),
-											h.span(
-												[h.Class(component.excluded ? "text-muted-fg" : "text-fg-2")],
-												[formatWeight(component.effectiveWeight)],
-											),
-										],
-									),
-									h.td(
-										[h.Class("pr-4 text-right font-medium tabular-nums sm:pr-5")],
-										[component.excluded ? "—" : pointsOf(component).toFixed(1)],
-									),
+									...(action === null ? [] : [h.div([h.Class("mt-1")], [action])]),
 								],
 							)
-						}),
-					),
+						},
+					},
+					{
+						key: "score",
+						label: "Score",
+						align: "right",
+						widthClass: "w-32",
+						// A phone keeps the points (they sum to the score) and drops the score and weight.
+						hideClass: "max-sm:hidden",
+						cell: (component) =>
+							component.score === null
+								? h.span(
+										[
+											h.Class(
+												"rounded-sm border border-border border-dashed px-1.5 py-0.5 text-muted-fg text-xs",
+											),
+										],
+										["Excluded"],
+									)
+								: h.span(
+										[h.Class("inline-flex items-center justify-end gap-3")],
+										[
+											meter(h, component.score, bands, "h-1 w-10"),
+											h.span(
+												[h.Class("w-8 font-medium text-fg tabular-nums")],
+												[String(component.score)],
+											),
+										],
+									),
+					},
+					{
+						key: "weight",
+						label: "Weight",
+						align: "right",
+						widthClass: "w-24",
+						hideClass: "max-sm:hidden",
+						cell: (component) =>
+							h.span(
+								[],
+								[
+									...(isRedistributed &&
+									Math.round(component.effectiveWeight) !== component.weight
+										? [
+												h.span(
+													[h.Class("mr-1.5 text-muted-fg text-xs line-through")],
+													[formatWeight(component.weight)],
+												),
+											]
+										: []),
+									h.span(
+										[h.Class(component.excluded ? "text-muted-fg" : "text-fg-2")],
+										[formatWeight(component.effectiveWeight)],
+									),
+								],
+							),
+					},
+					{
+						key: "points",
+						label: "Points",
+						align: "right",
+						widthClass: "w-20",
+						cell: (component) =>
+							h.span(
+								[h.Class(component.excluded ? "font-medium text-muted-fg" : "font-medium")],
+								[component.excluded ? "—" : pointsOf(component).toFixed(1)],
+							),
+					},
 				],
-			),
+			}),
 			h.footer(
 				[
 					h.Class(

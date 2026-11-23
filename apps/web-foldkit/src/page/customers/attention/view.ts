@@ -1,6 +1,6 @@
 import { TEMPLATES } from "@hazel/domain/customers"
 import { Submodel } from "foldkit"
-import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
+import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { formatMoney, formatRelative, formatWeekdayTime } from "../../../customers/format"
 import { environmentCounts, queueNameOf } from "../../../customers/groups"
@@ -19,11 +19,11 @@ import { isMuteKey, MUTE_LABEL, snoozeMenuContent } from "../../../customers/ui/
 import { queueAction, queueColumnHeader, type QueueColumn, queueList } from "../../../customers/ui/queue-row"
 import { kbd, shortcutBar, type Shortcut } from "../../../customers/ui/shortcuts"
 import { freshness, pageHeader } from "../../../ui/page-header"
-import { IconArrowPath, IconCheck, IconClock, IconLightbulb, IconMagnifier3, IconUser } from "../../../icons"
+import { IconArrowPath, IconCheck, IconClock, IconLightbulb, IconUser } from "../../../icons"
 import { AppRoute, hrefOf } from "../../../route"
 import { buttonClassName } from "../../../ui/button"
 import type * as Menu from "../../../ui/menu"
-import { menuLabel, view as menuView } from "../../../ui/menu-view"
+import { menuLabel } from "../../../ui/menu-view"
 import type { PageViewInputs } from "../../contract"
 import { doneDialog, snoozeDateDialog } from "./done-dialog"
 import { Message } from "./message"
@@ -58,6 +58,12 @@ import { accountGroupRow, compactRow, doneRow, type RowContext, rowIdOf, signalR
 import { ScrollRowIntoView } from "./commands"
 import { viewerOf } from "./update"
 import { heading } from "../../../ui/heading"
+import { menu } from "../shared-view"
+import { cardClassName } from "../../../ui/card"
+import { iconTile } from "../../../ui/icon-tile"
+import { noResultsState } from "../../../customers/ui/empty-states"
+import { skeleton } from "../../../ui/skeleton"
+import { emptyState } from "../../../ui/empty-state"
 
 /** The Needs-attention page (Wonder: Needs Attention). */
 
@@ -91,30 +97,6 @@ const OWNER_SCOPE = {
 } as const
 
 // MENUS
-
-const menu = (
-	h: HtmlBuilder<Message>,
-	model: Menu.Model,
-	options: Readonly<{
-		entries: ReadonlyArray<Menu.Entry>
-		trigger: (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) => Html
-		content: (key: string) => ReadonlyArray<Html | string>
-		toMessage: (message: Menu.Message) => Message
-		className?: string
-	}>,
-): Html =>
-	h.submodel({
-		slotId: model.id,
-		model,
-		view: menuView,
-		viewInputs: {
-			entries: options.entries,
-			toTrigger: options.trigger,
-			content: options.content,
-			className: options.className,
-		},
-		toParentMessage: options.toMessage,
-	})
 
 const icon = { attributes: { "data-slot": "icon" } }
 
@@ -465,16 +447,9 @@ const allClear = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html =
 	const upcoming = visibleSignals({ ...model, tab: "snoozed" }, viewer).slice(0, 3)
 	const accountsById = accountsByIdOfModel(model)
 	return h.div(
-		[h.Class("flex flex-col items-center gap-4 rounded-xl border border-border px-6 py-14 text-center")],
+		[h.Class(cardClassName("flex flex-col items-center gap-4 px-6 py-14 text-center"))],
 		[
-			h.div(
-				[
-					h.Class(
-						"flex size-11 items-center justify-center rounded-xl bg-success-subtle text-success-subtle-fg",
-					),
-				],
-				[IconCheck(h, { className: "size-5" })],
-			),
+			iconTile(h, { intent: "success", size: "md" }, IconCheck(h)),
 			h.div(
 				[h.Class("flex flex-col gap-1")],
 				[
@@ -560,26 +535,12 @@ const allClear = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html =
 }
 
 const noMatches = (h: HtmlBuilder<Message>): Html =>
-	h.div(
-		[h.Class("flex flex-col items-center gap-4 rounded-xl border border-border px-6 py-14 text-center")],
-		[
-			h.div(
-				[h.Class("flex size-11 items-center justify-center rounded-xl bg-secondary text-muted-fg")],
-				[IconMagnifier3(h, { className: "size-5" })],
-			),
-			h.div(
-				[h.Class("flex flex-col gap-1")],
-				[
-					heading(h, { variant: "subsection", level: 2 }, ["No matches"]),
-					h.p(
-						[h.Class("max-w-sm text-muted-fg text-sm")],
-						["No signals in this tab match your search and filters."],
-					),
-				],
-			),
-			queueAction(h, { label: "Clear search and filters", onPress: Message.PressedClearNarrowing() }),
-		],
-	)
+	noResultsState(h, {
+		title: "No matches",
+		description: "No signals in this tab match your search and filters.",
+		onClear: Message.PressedClearNarrowing(),
+		clearLabel: "Clear search and filters",
+	})
 
 const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 	if (model.signals === null || model.accounts === null)
@@ -592,7 +553,7 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 						h.Class("flex h-16 items-center gap-4 border-border border-t px-4 first:border-t-0"),
 						h.Key(`skeleton-${index}`),
 					],
-					[h.div([h.Class("h-3 w-full animate-pulse rounded bg-secondary")])],
+					[skeleton(h, "h-3 w-full rounded")],
 				),
 			),
 		)
@@ -601,14 +562,13 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 	if (signals.length === 0)
 		return model.tab === "open"
 			? allClear(h, model, viewer)
-			: h.div(
-					[h.Class("rounded-xl border border-border px-6 py-14 text-center text-muted-fg text-sm")],
-					[
+			: emptyState(h, {
+					title:
 						model.tab === "snoozed"
 							? "Nothing is snoozed."
 							: "Nothing muted, or resolved in the last 7 days.",
-					],
-				)
+					className: cardClassName("px-6 py-14"),
+				})
 	const context: RowContext = {
 		nowMs: viewer.nowMs,
 		accountsById: accountsByIdOfModel(model),

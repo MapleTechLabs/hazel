@@ -1,4 +1,5 @@
 import type { ChannelId } from "@hazel/schema"
+import { heading } from "../ui/heading"
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { AppRoute, hrefOf } from "../route"
 import { button, buttonClassName } from "../ui/button"
@@ -123,10 +124,9 @@ export const channelSettingsLayout = <Message>(
 											h.div(
 												[h.Class("flex flex-col")],
 												[
-													h.h1(
-														[h.Class("font-semibold text-fg text-xl")],
-														[options.channel?.name ?? "Channel"],
-													),
+													heading(h, { variant: "title", level: 1 }, [
+														options.channel?.name ?? "Channel",
+													]),
 													h.span(
 														[h.Class("text-muted-fg text-sm")],
 														["Channel settings"],
