@@ -109,7 +109,7 @@ export const userTables = [
 
 /**
  * `CustomersObject`, one per organization (`docs/customers/tech-design.md`): customer accounts,
- * their billing and usage, signals, health and data sources.
+ * their billing and usage, signals and data sources.
  */
 export const customersTables = [
 	schema.customerAccountsTable,
@@ -127,7 +127,6 @@ export const customersTables = [
 	schema.customerSignalsTable,
 	schema.customerSettingsTable,
 	schema.customerSlaPoliciesTable,
-	schema.customerHealthDailyTable,
 	schema.customerNotesTable,
 	schema.customerSavedViewsTable,
 	schema.customerViewLayoutsTable,

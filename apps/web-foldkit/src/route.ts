@@ -105,7 +105,7 @@ export const AppRoute = defineRouteUnion({
 		connectionStatus: Schema.Option(Schema.String),
 		errorCode: Schema.Option(Schema.String),
 	},
-	/** `/$orgSlug/customers`: revenue, usage and health across the org's customers. */
+	/** `/$orgSlug/customers`: revenue and usage across the org's customers. */
 	CustomersOverview: { orgSlug: Schema.String },
 	/** The ranked signal queue. */
 	CustomersAttention: { orgSlug: Schema.String },
@@ -113,7 +113,7 @@ export const AppRoute = defineRouteUnion({
 	CustomersInbox: { orgSlug: Schema.String },
 	/** Response times, % within SLA and breaches over a range (`docs/customers/sla.md`). */
 	CustomersSupportReport: { orgSlug: Schema.String },
-	/** `?view=`: a saved view's id, or a built-in view's key (`BuiltInViewKey`, e.g. `at_risk`). */
+	/** `?view=`: a saved view's id, or a built-in view's key (`BuiltInViewKey`, e.g. `paying`). */
 	CustomersList: { orgSlug: Schema.String, view: Schema.Option(Schema.String) },
 	/** One customer; `?tab=` picks the tab (none: overview). */
 	CustomerDetail: {
@@ -125,7 +125,6 @@ export const AppRoute = defineRouteUnion({
 	/** The rule editor for a new rule; `?template=` preselects the template picked in the modal. */
 	CustomersSettingsSignalNew: { orgSlug: Schema.String, template: Schema.Option(SignalTemplate) },
 	CustomersSettingsSignalRule: { orgSlug: Schema.String, ruleId: CustomerSignalRuleId },
-	CustomersSettingsHealth: { orgSlug: Schema.String },
 	CustomersSettingsPlans: { orgSlug: Schema.String },
 	CustomersSettingsSla: { orgSlug: Schema.String },
 	CustomersSettingsFeatureFlags: { orgSlug: Schema.String },
@@ -369,10 +368,6 @@ const routers = {
 		slash(schemaSegment("ruleId", CustomerSignalRuleId)),
 		Route.mapTo(AppRoute.CustomersSettingsSignalRule),
 	),
-	CustomersSettingsHealth: pipe(
-		orgPath("customers", "settings", "health"),
-		Route.mapTo(AppRoute.CustomersSettingsHealth),
-	),
 	CustomersSettingsPlans: pipe(
 		orgPath("customers", "settings", "plans"),
 		Route.mapTo(AppRoute.CustomersSettingsPlans),
@@ -461,7 +456,6 @@ export const urlToAppRoute = Route.parseUrlWithFallback(
 		routers.CustomersSettingsSignals,
 		routers.CustomersSettingsSignalNew,
 		routers.CustomersSettingsSignalRule,
-		routers.CustomersSettingsHealth,
 		routers.CustomersSettingsPlans,
 		routers.CustomersSettingsSla,
 		routers.CustomersSettingsFeatureFlags,
@@ -556,7 +550,6 @@ export const isCustomersRoute = AppRoute.isAnyOf([
 	"CustomersSettingsSignals",
 	"CustomersSettingsSignalNew",
 	"CustomersSettingsSignalRule",
-	"CustomersSettingsHealth",
 	"CustomersSettingsPlans",
 	"CustomersSettingsSla",
 	"CustomersSettingsFeatureFlags",

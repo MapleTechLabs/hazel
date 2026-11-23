@@ -6,7 +6,6 @@ import {
 	IconChartBar,
 	IconCirclePause,
 	IconClock,
-	IconHeart,
 	IconLeave,
 	IconLoader,
 	IconPresentationChart,
@@ -35,7 +34,6 @@ export const TEMPLATE_ICON = {
 	cancel_scheduled: IconCirclePause,
 	trial_ending_low_activation: IconRocket,
 	onboarding_stalled: IconLoader,
-	health_drop: IconHeart,
 	champion_inactive: IconStar,
 	near_limit: IconChartBar,
 	seat_growth: IconUsers,
@@ -52,7 +50,6 @@ export const TEMPLATE_BLURB = {
 	cancel_scheduled: "Set to cancel at period end, or moved to a cheaper plan",
 	trial_ending_low_activation: "Trial ends soon and only a few people are using the product",
 	onboarding_stalled: "A new account where hardly anyone has become active yet",
-	health_drop: "Health score fell sharply, or entered Critical",
 	champion_inactive: "The account's most active person stops showing up",
 	near_limit: "A metered feature is close to the plan's limit",
 	seat_growth: "Active users growing fast: a good moment to talk expansion",
@@ -141,14 +138,6 @@ export const conditionParts = (
 				" ago and fewer than ",
 				bold(counted(config.minActiveContacts, "contact")),
 				" ever active",
-			]
-		case "health_drop":
-			return [
-				"Health fell ",
-				bold(`${v("dropPoints")} points`),
-				" or more in ",
-				bold(counted(config.windowDays, "day")),
-				...(isOn(config.onCritical) ? [", or turned ", bold("Critical")] : []),
 			]
 		case "champion_inactive":
 			return [

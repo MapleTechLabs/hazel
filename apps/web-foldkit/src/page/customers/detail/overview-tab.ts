@@ -20,9 +20,8 @@ import { accountLabelOf } from "../../../customers/groups"
 import { msOf, type SignalRow } from "../../../customers/queries"
 import { overdueByMs } from "../../../customers/sla"
 import { formatResponse, formatWithin } from "../../../customers/support-report"
-import { HEALTH_LABEL, severityGlyph } from "../../../customers/ui/badges"
+import { severityGlyph } from "../../../customers/ui/badges"
 import { rangePicker } from "../../../customers/ui/filter-bar"
-import { healthBreakdown } from "../../../customers/ui/health-breakdown"
 import { personLabel, sourceMark } from "../../../customers/ui/identity"
 import { snoozeMenuContent } from "../../../customers/ui/menus"
 import { queueAction } from "../../../customers/ui/queue-row"
@@ -40,7 +39,6 @@ import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { button } from "../../../ui/button"
 import { heading } from "../../../ui/heading"
 import { menuLabel } from "../../../ui/menu-view"
-import { disclosure } from "../../../customers/ui/disclosure"
 import { Message } from "./message"
 import {
 	ASSIGN_ME,
@@ -59,9 +57,9 @@ import { type Context, headerLink, icon, memberOf, menu } from "./parts"
 
 /**
  * The overview tab, read top to bottom as "what needs me, how are they doing, what happened": the
- * open signals with their actions, one strip of numbers, usage, the health score's reasons (folded),
- * support in a line, then pinned notes and recent activity. Billing facts live in the Billing tab and
- * the side panel, so nothing here repeats them.
+ * open signals with their actions, one strip of numbers, support in a line, usage, then pinned notes
+ * and recent activity. Billing facts live in the Billing tab and the side panel, so nothing here
+ * repeats them.
  */
 
 const DAY_MS = 86_400_000
@@ -74,13 +72,6 @@ const sectionTitle = (h: HtmlBuilder<Message>, title: string, aside?: Html): Htm
 
 // PULSE
 
-const HEALTH_TEXT = {
-	healthy: "text-success-subtle-fg",
-	at_risk: "text-warning-subtle-fg",
-	critical: "text-danger-subtle-fg",
-	unknown: "text-muted-fg",
-} as const satisfies Record<Customers.HealthStatus, string>
-
 /** One cell of the pulse strip: a label, a number, and what it is measured against. */
 const pulseStat = (
 	h: HtmlBuilder<Message>,
@@ -92,15 +83,14 @@ const pulseStat = (
 		suffix?: string | undefined
 		detail?: string | undefined
 		valueClass?: string | undefined
-		detailClass?: string | undefined
 	}>,
 ): Html =>
 	h.div(
 		[
 			h.Id(`customer-kpi-${options.id}`),
 			h.Class(
-				// Two by two on a phone: the second row gets a top rule, the second column a left one.
-				"flex min-w-0 flex-col gap-0.5 border-border px-4 py-3 md:border-l md:first:border-l-0 max-md:even:border-l max-md:[&:nth-child(n+3)]:border-t",
+				// Two columns on a phone, the third cell across both under a top rule.
+				"flex min-w-0 flex-col gap-0.5 border-border px-4 py-3 md:border-l md:first:border-l-0 max-md:even:border-l max-md:last:col-span-2 max-md:last:border-t",
 			),
 		],
 		[
@@ -133,18 +123,12 @@ const pulseStat = (
 				? []
 				: [
 						h.span(
-							[
-								h.Class(twMerge("truncate text-muted-fg text-xs", options.detailClass)),
-								h.Title(options.detail),
-							],
+							[h.Class("truncate text-muted-fg text-xs"), h.Title(options.detail)],
 							[options.detail],
 						),
 					]),
 		],
 	)
-
-/** The health score a week ago, from the daily series. */
-const healthWeekAgo = (context: Context): number | undefined => context.detail?.healthSeries.at(-8)?.value
 
 const pulse = (h: HtmlBuilder<Message>, context: Context): Html => {
 	const { account } = context
@@ -154,9 +138,6 @@ const pulse = (h: HtmlBuilder<Message>, context: Context): Html => {
 		context.detail?.contactsToReach.find(
 			(row) => row.contact.id === context.detail?.account.lastActiveContactId,
 		)?.contact.name ?? null
-	const weekAgo = healthWeekAgo(context)
-	const healthChange =
-		weekAgo === undefined || account.healthScore === null ? null : account.healthScore - weekAgo
 	const trendTone =
 		trend === null || Math.abs(trend) < 5
 			? undefined
@@ -167,7 +148,7 @@ const pulse = (h: HtmlBuilder<Message>, context: Context): Html => {
 		[
 			h.AriaLabel("At a glance"),
 			h.Role("group"),
-			h.Class("grid grid-cols-2 rounded-xl border border-border bg-bg md:grid-cols-4"),
+			h.Class("grid grid-cols-2 rounded-xl border border-border bg-bg md:grid-cols-3"),
 		],
 		[
 			pulseStat(h, {
@@ -183,22 +164,6 @@ const pulse = (h: HtmlBuilder<Message>, context: Context): Html => {
 				value: trend === null ? "—" : formatDeltaPct(Math.round(trend)),
 				valueClass: trendTone,
 				detail: "7d vs prior 28d",
-			}),
-			pulseStat(h, {
-				id: "health",
-				label: "Health",
-				value: account.healthScore === null ? "—" : String(account.healthScore),
-				valueClass: HEALTH_TEXT[account.healthStatus],
-				detail:
-					healthChange === null || healthChange === 0
-						? HEALTH_LABEL[account.healthStatus]
-						: `${healthChange < 0 ? "−" : "+"}${Math.abs(healthChange)} in 7 days`,
-				detailClass:
-					healthChange === null || healthChange === 0
-						? undefined
-						: healthChange < 0
-							? "text-danger-subtle-fg"
-							: "text-success-subtle-fg",
 			}),
 			pulseStat(h, {
 				id: "last-active",
@@ -316,98 +281,6 @@ const usageSection = (h: HtmlBuilder<Message>, model: Model, context: Context): 
 							}),
 		],
 	)
-}
-
-// HEALTH
-
-/**
- * Why the score is what it is, folded: the pulse strip already shows the number, so the per-component
- * table opens on request.
- */
-const healthSection = (
-	h: HtmlBuilder<Message>,
-	context: Context,
-	bands: Customers.HealthBands,
-): ReadonlyArray<Html> => {
-	const breakdown = context.detail?.health ?? null
-	if (breakdown === null || breakdown.score === null) return []
-	const weekAgo = healthWeekAgo(context)
-	const computedAt = context.detail?.account.healthUpdatedAt ?? null
-	const note = [
-		weekAgo === undefined || weekAgo === breakdown.score
-			? null
-			: `${breakdown.score < weekAgo ? "Down" : "Up"} ${Math.abs(breakdown.score - weekAgo)} points in 7 days`,
-		`at risk is ${bands.atRiskMin}–${bands.healthyMin - 1}`,
-		computedAt === null ? null : `computed ${formatRelative(computedAt, new Date(context.nowMs))}`,
-	]
-		.filter((part) => part !== null)
-		.join(" · ")
-	return [
-		h.div(
-			[h.Class("rounded-xl border border-border bg-bg")],
-			[
-				disclosure(
-					h,
-					{
-						summaryClassName: "px-4 py-3 text-sm",
-						summary: [
-							h.span(
-								[h.Class("shrink-0 font-medium text-fg")],
-								[`Why health is ${breakdown.score}`],
-							),
-							h.span([h.Class("min-w-0 truncate text-muted-fg text-xs max-sm:hidden")], [note]),
-						],
-					},
-					[
-						h.div(
-							[h.Class("border-border border-t")],
-							[
-								healthBreakdown(h, {
-									breakdown,
-									bands,
-									isBare: true,
-									excludedAction: (key) =>
-										key === "billing"
-											? h.a(
-													[
-														h.Href(
-															hrefOf(
-																AppRoute.CustomersSettingsSources({
-																	orgSlug: context.orgSlug,
-																}),
-															),
-														),
-														h.Class(linkClass),
-													],
-													["Connect a billing source"],
-												)
-											: null,
-								}),
-								h.div(
-									[h.Class("flex justify-end border-border border-t px-4 py-2.5 sm:px-5")],
-									[
-										h.a(
-											[
-												h.Href(
-													hrefOf(
-														AppRoute.CustomersSettingsHealth({
-															orgSlug: context.orgSlug,
-														}),
-													),
-												),
-												h.Class(twMerge(linkClass, "text-xs")),
-											],
-											["Edit weights"],
-										),
-									],
-								),
-							],
-						),
-					],
-				),
-			],
-		),
-	]
 }
 
 // SIGNALS
@@ -772,19 +645,14 @@ const activitySection = (h: HtmlBuilder<Message>, model: Model, context: Context
 	)
 }
 
-export const overviewTab = (
-	h: HtmlBuilder<Message>,
-	model: Model,
-	context: Context,
-	bands: Customers.HealthBands,
-): ReadonlyArray<Html> => [
+export const overviewTab = (h: HtmlBuilder<Message>, model: Model, context: Context): ReadonlyArray<Html> => [
 	h.div(
 		[h.Class("flex min-w-0 flex-col gap-6")],
 		[
 			...attentionSection(h, model, context),
 			h.div(
 				[h.Class("flex min-w-0 flex-col gap-3")],
-				[pulse(h, context), ...healthSection(h, context, bands), supportCard(h, model, context)],
+				[pulse(h, context), supportCard(h, model, context)],
 			),
 			usageSection(h, model, context),
 			activitySection(h, model, context),

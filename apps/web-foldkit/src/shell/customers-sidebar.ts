@@ -118,7 +118,6 @@ const BUILT_IN_VIEWS: ReadonlyArray<{ readonly key: Customers.BuiltInViewKey; re
 	{ key: "my_customers", name: "My customers" },
 	{ key: "paying", name: "Paying" },
 	{ key: "trialing", name: "Trialing" },
-	{ key: "at_risk", name: "At risk" },
 	{ key: "churned", name: "Churned" },
 ]
 
@@ -475,7 +474,6 @@ export const view = <ParentMessage>(
 							"CustomersSettingsSignalRule",
 						),
 					),
-					item("customersHealth", on("CustomersSettingsHealth")),
 					item("customersSla", on("CustomersSettingsSla")),
 					item("customersPlans", on("CustomersSettingsPlans")),
 					item("customersFeatureFlags", on("CustomersSettingsFeatureFlags")),

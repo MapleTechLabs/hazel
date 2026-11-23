@@ -1,8 +1,7 @@
 /**
  * A customer with several environments (`./groups.ts`) is alerted on as one: signals evaluate its
  * primary over the group's combined facts (pure), so "logins stopped" does not fire for one
- * environment while another still has logins. Each account's own facts keep feeding its rollups and
- * health.
+ * environment while another still has logins. Each account's own facts keep feeding its rollups.
  *
  * - Contacts and activity: unioned, a person in several environments counted once (the same email,
  *   case-insensitive, else the same contact); the last active day, ever-active contacts and the
@@ -12,7 +11,6 @@
  *   on each day one of them moved.
  * - Metrics: values (and limits) summed per day. `ENVIRONMENT_TEMPLATES` read an environment's own
  *   (`evaluatedFor` in `./snapshot.ts`), and their signals are stored on it.
- * - Health: the primary's.
  * - The account: the primary's row with MRR, trial list price and seats summed, the earliest first
  *   seen, customer since and trial end, the latest activity, the tags of all, and the most advanced
  *   stage (churned only when every environment is).
@@ -220,7 +218,6 @@ export const groupFacts = (
 			]),
 		),
 		movements: groupMovements(group),
-		health: primary.health,
 		openIssueSlas: group.flatMap((facts) => facts.openIssueSlas),
 	}
 }

@@ -3,7 +3,7 @@ import { type Crumb, pageHeader } from "../../../customers/ui/surface"
 import type { Shared } from "../../contract"
 
 /**
- * What the Customers settings pages (signals, health, sources, unmatched) share: who may change
+ * What the Customers settings pages (signals, sources, unmatched) share: who may change
  * settings, and the page frame (breadcrumb, title, actions, read-only notice).
  */
 

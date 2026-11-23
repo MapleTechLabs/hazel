@@ -7,7 +7,7 @@
  * - Settings, rules, shared views, data sources, unmatched records, the demo seed: admins and owners.
  *
  * Mutations answer the `customers:<orgId>` write position; queue and settings changes ask for a
- * compute soon (health and counters follow from them).
+ * compute soon (signals and at-risk MRR follow from them).
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { InternalServerError } from "@hazel/domain"
@@ -63,7 +63,7 @@ import {
 } from "../../worker/objects/customers/channel-suggestions"
 import { linkChannelNow, publishChannelCustomers } from "../../worker/objects/customers/channels"
 import { seedDemo } from "../../worker/objects/customers/demo"
-import { healthDryRun, ruleDryRun } from "../../worker/objects/customers/dry-run"
+import { ruleDryRun } from "../../worker/objects/customers/dry-run"
 import {
 	accountsWithFlag,
 	sendFeatureFlags,
@@ -282,7 +282,7 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 					return yield* overview(range, yield* currentTime)
 				}).pipe(remap),
 
-			"customers.accounts.list": ({ query, healthStatuses, lifecycleStages, ...request }) =>
+			"customers.accounts.list": ({ query, lifecycleStages, ...request }) =>
 				Effect.gen(function* () {
 					yield* requireMember
 					const page = pageOf(request)
@@ -300,9 +300,6 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 											SQLite.sql
 												.cond`EXISTS (SELECT 1 FROM json_each(${$.domains}) WHERE json_each.value LIKE ${pattern} ESCAPE '\\')`,
 										),
-								healthStatuses === undefined || healthStatuses.length === 0
-									? undefined
-									: $.healthStatus.in_(...healthStatuses),
 								lifecycleStages === undefined || lifecycleStages.length === 0
 									? undefined
 									: $.lifecycleStage.in_(...lifecycleStages),
@@ -468,17 +465,11 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 					return pageResult(rows, page)
 				}).pipe(remap),
 
-			// Admins only: a dry run reads every account (the rule editor and health settings are theirs).
+			// Admins only: a dry run reads every account (the rule editor is theirs).
 			"customers.rule.dryRun": ({ draft, ruleId }) =>
 				Effect.gen(function* () {
 					yield* requireAdmin
 					return yield* ruleDryRun(draft, ruleId, yield* currentTime)
-				}).pipe(remap),
-
-			"customers.health.dryRun": ({ draft }) =>
-				Effect.gen(function* () {
-					yield* requireAdmin
-					return yield* healthDryRun(draft, yield* currentTime)
 				}).pipe(remap),
 
 			"customers.unmatched.list": ({ connectionId, status, ...request }) =>
@@ -598,8 +589,7 @@ const ACTION_EVENT = {
 	reopen: ["signal.reopened", "Reopened"],
 } satisfies Record<SignalAction, readonly [string, string]>
 
-const countsTowardHealth = (status: schema.CustomerSignal["status"]) =>
-	status === "open" || status === "snoozed"
+const isUnresolved = (status: schema.CustomerSignal["status"]) => status === "open" || status === "snoozed"
 
 /**
  * A human acted on a signal: check the action applies, write `patch` with the evidence it saw
@@ -676,8 +666,9 @@ const actOnSignal = (
 				const next = typeof changes.status === "string" ? changes.status : signal.status
 				// A linked channel shows the customer's open signals: only a status change moves them.
 				if (next !== signal.status) yield* publishChannelCustomers(signal.organizationId)
-				// Health counts open and snoozed risk signals: rescore only when that set changed.
-				if (countsTowardHealth(next) !== countsTowardHealth(signal.status)) yield* requestCompute
+				// The org's at-risk MRR counts unresolved high risk signals, and only compute writes it:
+				// recompute when a signal enters or leaves the unresolved set.
+				if (isUnresolved(next) !== isUnresolved(signal.status)) yield* requestCompute
 			}),
 		)
 	}).pipe(remap)
@@ -1718,7 +1709,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.settings.update": ({ health, attention, reportingCurrency, addOnPlans }) =>
+			"customers.settings.update": ({ attention, reportingCurrency, addOnPlans }) =>
 				Effect.gen(function* () {
 					const actor = yield* requireAdmin
 					// The open payload schema no longer refuses an unknown source, and this RPC declares no
@@ -1733,7 +1724,6 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 								SQLite.update(schema.customerSettingsTable)
 									// `undefined` leaves a column as it is.
 									.set({
-										health,
 										attention,
 										reportingCurrency: reportingCurrency?.toLowerCase(),
 										addOnPlans,

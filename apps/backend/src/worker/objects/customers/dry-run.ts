@@ -1,25 +1,20 @@
 /**
- * Dry runs (`docs/customers/tech-design.md` §4.8): a draft rule or draft health settings evaluated
- * over the current data with the same pure functions compute uses, without writing. Admins only
- * (they read the accounts); accounts load in chunks, a rule's with only the activity its own
- * window needs, and a group of linked accounts evaluates over its combined facts. One RPC
- * evaluates at most `MAX_CHUNKS` chunks, and none after `BUDGET_MS`: past that the result is
- * partial (`evaluatedAccounts` of `totalAccounts`, groups in their primary's id order).
+ * The rule dry run (`docs/customers/tech-design.md` §4.8): a draft rule evaluated over the current
+ * data with the same pure functions compute uses, without writing. Admins only (they read the
+ * accounts); accounts load in chunks, with only the activity the rule's window needs, and a group
+ * of linked accounts evaluates over its combined facts. One RPC evaluates at most `MAX_CHUNKS`
+ * chunks, and none after `BUDGET_MS`: past that the result is partial (`evaluatedAccounts` of
+ * `totalAccounts`, groups in their primary's id order).
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import {
 	ENVIRONMENT_TEMPLATES,
-	type HealthBreakdown,
-	type HealthDryRunResult,
-	type HealthSettings,
-	HealthStatus,
 	type RuleDraft,
 	type RuleDryRunResult,
 	type RuleMatch,
 } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerSignalRuleId } from "@hazel/schema"
 import { Clock, Effect } from "effect"
-import { scoreAll } from "./compute"
 import { evaluate, missingSources, type RuleInput } from "./evaluate"
 import { limitSignalTarget, priorityScore, valueOf } from "./lifecycle"
 import { evaluatedFor, groupChunks, loadAccounts, loadBase, type SnapshotBase } from "./snapshot"
@@ -143,74 +138,4 @@ export const ruleDryRun = Effect.fn("Customers.ruleDryRun")(function* (
 		evaluatedAccounts: evaluated.size,
 		totalAccounts: base.accountIds.length,
 	} satisfies RuleDryRunResult
-})
-
-type Account = { readonly id: CustomerAccountId; readonly name: string; readonly mrrMinor: number }
-
-export const healthDryRun = Effect.fn("Customers.healthDryRun")(function* (
-	draft: HealthSettings,
-	now: Date,
-	budgetMs = BUDGET_MS,
-) {
-	// Health reads 30 days of activity (the 35-day trend at most): the shortest window.
-	const base = yield* loadBase(now, { windowRules: [] })
-	const distribution = () =>
-		new Map(HealthStatus.literals.map((status) => [status, { status, count: 0, mrrMinor: 0 }]))
-	const current = distribution()
-	const proposed = distribution()
-	const transitions = new Map<string, number>()
-	const changed: Array<{ account: Account; current: HealthBreakdown; proposed: HealthBreakdown }> = []
-	let evaluatedAccounts = 0
-	const { chunks, more } = yield* chunksWithinBudget(base, budgetMs)
-	for (let done = 0; yield* more(done); done++) {
-		const snapshot = yield* loadAccounts(base, chunks[done])
-		evaluatedAccounts += snapshot.accounts.length
-		const before = scoreAll(snapshot)
-		const after = scoreAll(snapshot, draft)
-		for (const { facts } of snapshot.accounts) {
-			const account = {
-				id: facts.account.id,
-				name: facts.account.name,
-				mrrMinor: facts.account.mrrMinor,
-			}
-			const was = before.get(account.id)
-			const will = after.get(account.id)
-			// `scoreAll` scores every account of the snapshot.
-			if (was === undefined || will === undefined) continue
-			for (const [into, breakdown] of [
-				[current, was],
-				[proposed, will],
-			] as const) {
-				const bucket = into.get(breakdown.status)
-				if (bucket === undefined) continue
-				bucket.count++
-				bucket.mrrMinor += account.mrrMinor
-			}
-			if (was.status === will.status) continue
-			const key = `${was.status}:${will.status}`
-			transitions.set(key, (transitions.get(key) ?? 0) + 1)
-			// The 5 largest by MRR are shown: keep only those.
-			changed.push({ account, current: was, proposed: will })
-			changed.sort((a, b) => b.account.mrrMinor - a.account.mrrMinor)
-			changed.splice(5)
-		}
-	}
-	const counts = (buckets: typeof current) =>
-		[...buckets.values()].map(({ status, count, mrrMinor }) => ({ status, count, mrrMinor }))
-	return {
-		current: counts(current),
-		proposed: counts(proposed),
-		transitions: [...transitions.entries()].map(([key, count]) => {
-			const [from, to] = key.split(":") as [HealthStatus, HealthStatus]
-			return { from, to, count }
-		}),
-		samples: changed.map((sample) => ({
-			accountId: sample.account.id,
-			name: sample.account.name,
-			current: sample.current,
-			proposed: sample.proposed,
-		})),
-		evaluatedAccounts,
-		totalAccounts: base.accountIds.length,
-	} satisfies HealthDryRunResult
 })

@@ -72,7 +72,6 @@ const SORT_LABEL = {
 	signal: "Signal",
 	severity: "Severity",
 	age: "Age",
-	health: "Health",
 	mrr: "MRR",
 } as const satisfies Record<Sort, string>
 const OWNER_LABEL = {
@@ -624,7 +623,6 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 				["Signal and snooze note", "flex-1"],
 				["Wakes up", "w-44"],
 				["Snoozed by", "w-36 max-lg:hidden"],
-				["Health", "w-28 text-right"],
 			]),
 			...signals.map((signal, index) => snoozedRow(h, signal, context, accountRunOf(signals, index))),
 			h.div(
@@ -667,7 +665,6 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 					["Open signals", "flex-1"],
 					["Oldest", "w-8 text-right", "age"],
 					["", "w-10"],
-					["Health", "w-28 text-right", "health"],
 				]),
 				...accountGroups(signals).map((group, index) =>
 					accountGroupRow(h, group, index + 1, context),
@@ -682,7 +679,6 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 					["Severity", "w-24", "severity"],
 					["Age", "w-8 text-right", "age"],
 					["", "w-6"],
-					["Health", "w-28 text-right", "health"],
 				]),
 				...signals.map((signal, index) =>
 					signalRow(h, signal, index + 1, context, accountRunOf(signals, index)),

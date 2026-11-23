@@ -15,7 +15,6 @@ here is an ordinary page (`definePage`), registered in `pages.ts`, the Customers
 | `CustomersSettingsSignals`      | `/settings/signals`               |                                         | `settings/signals/`       |
 | `CustomersSettingsSignalNew`    | `/settings/signals/new?template=` | `template: Option<SignalTemplate>`      | `settings/signals/`       |
 | `CustomersSettingsSignalRule`   | `/settings/signals/$ruleId`       | `ruleId`                                | `settings/signals/`       |
-| `CustomersSettingsHealth`       | `/settings/health`                |                                         | `settings/health/`        |
 | `CustomersSettingsPlans`        | `/settings/plans`                 |                                         | `settings/plans/`         |
 | `CustomersSettingsSla`          | `/settings/sla`                   |                                         | `settings/sla/`           |
 | `CustomersSettingsFeatureFlags` | `/settings/feature-flags`         |                                         | `settings/feature-flags/` |
@@ -23,8 +22,8 @@ here is an ordinary page (`definePage`), registered in `pages.ts`, the Customers
 | `CustomersSourceDetail`         | `/settings/sources/$provider`     | `provider: CustomerProvider`            | `settings/sources/`       |
 | `CustomersUnmatched`            | `/settings/sources/unmatched`     |                                         | `settings/unmatched/`     |
 
-- `view` is a built-in view's key (`BuiltInViewKey`: `my_customers`, `paying`, `trialing`, `at_risk`,
-  `churned`) or a saved view's id; the sidebar links built-ins by key, so they work before views sync.
+- `view` is a built-in view's key (`BuiltInViewKey`: `my_customers`, `paying`, `trialing`, `churned`)
+  or a saved view's id; the sidebar links built-ins by key, so they work before views sync.
 - `CustomerTab` = `overview | users | billing | activity | notes` (none = overview).
 - Helpers: `customersListRoute(orgSlug, view?)`, `customerRoute(orgSlug, accountId, tab?)`;
   `isCustomersRoute`. Links are `h.Href(hrefOf(route))`; navigation from `update` is `requestedOrgNavigation(shared.orgSlug, (orgSlug) => customerRoute(orgSlug, id))`.
@@ -54,7 +53,7 @@ Synced rows become plain page rows (dates as epoch ms), the same shape the lab f
     - `myOpenSignalCountStream(orgId, userId, toMessage)`: the sidebar badge.
     - `savedViewsStream(orgId, userId, toMessage)`: shared + mine, by position.
     - `connectedProvidersStream(orgId, toMessage)`: providers not disconnected.
-    - `settingsSummaryStream(orgId, toMessage)`: `{ lastComputedAtMs, bands, reportingCurrency }` or null.
+    - `settingsSummaryStream(orgId, toMessage)`: `{ lastComputedAtMs, reportingCurrency }` or null.
     - `orgMembersStream(orgId, toMessage)`: `MemberRow`s (owners, assignees); from the org source.
     - `impersonatorsStream(orgId, toMessage)`: `ImpersonatorRow`s, the members who may impersonate.
 - "Mine" everywhere (queue filter, sidebar badge, overview) = signals on accounts I own.

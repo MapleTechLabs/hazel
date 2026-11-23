@@ -1,4 +1,4 @@
-import type { HealthStatus, LifecycleStage, SignalKind, SignalSeverity } from "@hazel/domain/customers"
+import type { LifecycleStage, SignalKind, SignalSeverity } from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { badge } from "../../ui/badge"
@@ -7,101 +7,8 @@ import { environmentsHintOf } from "../groups"
 import { IconOpportunity, IconRisk } from "./icons"
 
 /**
- * Status badges and chips (Foundations › Health Badge States, Severity And Kind Chips, Lifecycle
- * Stage Badges). Health is a pill with a dot; stage is square with no dot, so the two never read as
- * the same thing.
+ * Status badges and chips (Foundations › Severity And Kind Chips, Lifecycle Stage Badges).
  */
-
-// HEALTH
-
-export const HEALTH_LABEL = {
-	healthy: "Healthy",
-	at_risk: "At risk",
-	critical: "Critical",
-	unknown: "Unknown",
-} as const satisfies Record<HealthStatus, string>
-
-const HEALTH_INTENT = {
-	healthy: "success",
-	at_risk: "warning",
-	critical: "danger",
-	unknown: "secondary",
-} as const
-
-/** The dot's color: the badge's own foreground, so dot and label always agree. */
-const HEALTH_DOT = {
-	healthy: "bg-success-subtle-fg",
-	at_risk: "bg-warning-subtle-fg",
-	critical: "bg-danger-subtle-fg",
-	unknown: "bg-muted-fg",
-} as const satisfies Record<HealthStatus, string>
-
-/** The chart color of a status (distribution bar, legend squares). */
-export const HEALTH_FILL = {
-	healthy: "bg-health-healthy",
-	at_risk: "bg-health-at-risk",
-	critical: "bg-health-critical",
-	unknown: "bg-health-unknown",
-} as const satisfies Record<HealthStatus, string>
-
-const scoreText = (status: HealthStatus, score: number | null): string =>
-	status === "unknown" || score === null ? "—" : String(score)
-
-/** `● Healthy 82`. Without `score` (undefined) the number is left out; `null` shows `—`. */
-export const healthBadge = <M>(
-	h: HtmlBuilder<M>,
-	options: Readonly<{ status: HealthStatus; score?: number | null; className?: string }>,
-): Html =>
-	badge(
-		h,
-		{
-			intent: HEALTH_INTENT[options.status],
-			className: twMerge(
-				"shrink-0 whitespace-nowrap rounded-full px-2",
-				options.status === "unknown" && "[--badge-fg:var(--color-muted-fg)]",
-				options.className,
-			),
-		},
-		[
-			h.span([h.Class(twMerge("size-1.5 shrink-0 rounded-full", HEALTH_DOT[options.status]))]),
-			HEALTH_LABEL[options.status],
-			...(options.score === undefined
-				? []
-				: [
-						h.span(
-							[
-								h.Class(
-									twMerge(
-										"font-semibold",
-										options.status === "unknown" ? "text-muted-fg" : "text-fg",
-									),
-								),
-							],
-							[scoreText(options.status, options.score)],
-						),
-					]),
-		],
-	)
-
-/** `● 82`: dense table cells. The status is in the accessible name, not only the color. */
-export const healthDot = <M>(
-	h: HtmlBuilder<M>,
-	options: Readonly<{ status: HealthStatus; score: number | null; className?: string }>,
-): Html =>
-	h.span(
-		[
-			h.Class(twMerge("inline-flex items-center gap-1.5 text-sm tabular-nums", options.className)),
-			h.Title(HEALTH_LABEL[options.status]),
-		],
-		[
-			h.span([h.Class(twMerge("size-2 shrink-0 rounded-full", HEALTH_DOT[options.status]))]),
-			h.span([h.Class("sr-only")], [`${HEALTH_LABEL[options.status]} `]),
-			h.span(
-				[h.Class(options.status === "unknown" ? "text-muted-fg" : "text-fg")],
-				[scoreText(options.status, options.score)],
-			),
-		],
-	)
 
 // SEVERITY
 

@@ -437,7 +437,7 @@ describe("Clerk ops through CustomerIngest", () => {
 					cursor = page.nextCursor
 				} while (cursor !== null)
 				expect(world.rows(`SELECT count(*) AS n FROM customer_unmatched_records`)).toEqual([{ n: 0 }])
-				// A paying customer: leads get no health score.
+				// A paying customer.
 				yield* world.ingest("stripe", [
 					{
 						_tag: "subscription",
@@ -458,11 +458,6 @@ describe("Clerk ops through CustomerIngest", () => {
 				])
 
 				yield* world.object.run(runCompute(now)).pipe(Effect.orDie)
-				const [account] = world.rows<{ healthStatus: string; healthScore: number | null }>(
-					`SELECT healthStatus, healthScore FROM customer_accounts`,
-				)
-				expect(account!.healthStatus).not.toBe("critical")
-				expect(account!.healthScore).not.toBeNull()
 				expect(
 					world.rows(
 						`SELECT template FROM customer_signals

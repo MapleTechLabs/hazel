@@ -23,7 +23,7 @@ const SCOPE_ABILITIES = {
 		"Set your status",
 	],
 	"customers:read": [
-		"See your organizations' customers: health, revenue, billing and signals",
+		"See your organizations' customers: revenue, billing and signals",
 		"See which channels each customer is linked to",
 	],
 } satisfies Readonly<Record<AgentScope, ReadonlyArray<string>>>

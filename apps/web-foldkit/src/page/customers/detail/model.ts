@@ -72,7 +72,7 @@ export const EMPTY_PAGE = { items: [], nextCursor: null, status: "Idle" } as con
 export const ContactFilter = Schema.Literals(["all", "active", "dormant", "never_active"])
 export type ContactFilter = typeof ContactFilter.Type
 
-export const EventType = Schema.Literals(["all", "billing", "signals", "contacts", "health", "notes"])
+export const EventType = Schema.Literals(["all", "billing", "signals", "contacts", "notes"])
 export type EventType = typeof EventType.Type
 
 /** `customers.events.list` type prefixes per filter. */
@@ -81,7 +81,6 @@ export const EVENT_TYPE_PREFIXES = {
 	billing: ["invoice.", "subscription."],
 	signals: ["signal."],
 	contacts: ["contact."],
-	health: ["health."],
 	notes: ["note."],
 } as const satisfies Record<EventType, ReadonlyArray<string>>
 
@@ -131,8 +130,6 @@ export const Model = Schema.Struct({
 	members: Schema.Array(MemberRow),
 	metrics: Schema.Array(MetricRow),
 	connectedProviders: Schema.Array(Customers.CustomerProvider),
-	/** The org's health bands (the breakdown's colors and "At risk is 40–69"). */
-	bands: Customers.HealthBands,
 	detail: Detail.schema,
 	usageMetric: Schema.String,
 	usageRange: Customers.CustomersRange,

@@ -6,7 +6,6 @@ const account = (id: string, name: string) => ({
 	name,
 	domains: [`${name.toLowerCase()}.com`],
 	mrrMinor: 1200,
-	healthStatus: "healthy",
 	// Columns the extension does not keep.
 	attributes: { plan: "pro" },
 	fieldSources: { name: "clerk" },

@@ -98,7 +98,6 @@ const overviewModel = (): OverviewModel => ({
 	connectedProviders: CONNECTIONS.map((connection) => connection.provider),
 	settings: {
 		lastComputedAtMs: SETTINGS.lastComputedAt === null ? null : msOf(SETTINGS.lastComputedAt),
-		bands: SETTINGS.health.bands,
 		reportingCurrency: SETTINGS.reportingCurrency,
 	},
 })

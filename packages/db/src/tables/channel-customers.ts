@@ -2,13 +2,13 @@
  * An `OrgObject`'s projection of its `CustomersObject`'s channel links
  * (`docs/customers/channels.md`), written only by `org.setChannelCustomers` (a full, versioned
  * snapshot). Chat shows a channel's customer from it without opening the Customers source: the
- * name, and the account at a glance (health, stage, plan, MRR, owner, seats, last active day, open
+ * name, and the account at a glance (stage, plan, MRR, owner, seats, last active day, open
  * signals, provider links).
  *
  * The glance columns came after the table (objects migrate lazily, old snapshots lack them): all
  * nullable or defaulted.
  */
-import { type CompanyProfile, HealthStatus, LifecycleStage } from "@hazel/domain/customers"
+import { type CompanyProfile, LifecycleStage } from "@hazel/domain/customers"
 import type { ChannelCustomer as ChannelCustomerModel } from "@hazel/domain/models"
 import { ChannelId, CustomerAccountId, OrganizationId, UserId } from "@hazel/schema"
 import * as SQLite from "@maple-dev/effect-orm/sqlite"
@@ -23,9 +23,6 @@ export const channelCustomersTable = SQLite.table("channel_customers", {
 		/** The customer's logo (its account's `logoUrl`); null when it has none. */
 		accountLogoUrl: SQLite.nullable(SQLite.text),
 		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
-		healthStatus: SQLite.column(textEnum(HealthStatus.literals), { default: "unknown" }),
-		healthScore: SQLite.nullable(SQLite.integer),
-		healthWhy: SQLite.nullable(SQLite.text),
 		lifecycleStage: SQLite.nullable(textEnum(LifecycleStage.literals)),
 		planName: SQLite.nullable(SQLite.text),
 		mrrMinor: SQLite.nullable(SQLite.integer),

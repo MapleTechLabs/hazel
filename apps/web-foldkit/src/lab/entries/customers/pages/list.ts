@@ -31,7 +31,6 @@ import {
 
 const STATES = [
 	"all",
-	"at-risk",
 	"filter",
 	"columns",
 	"company",
@@ -71,7 +70,6 @@ export const LIST_VIEWS: ReadonlyArray<ViewRow> = [
 	builtIn(0, "my_customers", "My customers", { ownedByMe: true }),
 	builtIn(1, "paying", "Paying", { payingOnly: true }),
 	builtIn(2, "trialing", "Trialing", { lifecycleStages: ["trialing"] }),
-	builtIn(3, "at_risk", "At risk", { healthStatuses: ["at_risk", "critical"] }),
 	builtIn(4, "churned", "Churned", { lifecycleStages: ["churned"] }),
 	{
 		id: VIEW_IDS[5],
@@ -81,7 +79,7 @@ export const LIST_VIEWS: ReadonlyArray<ViewRow> = [
 		position: 5,
 		filters: { planNames: ["Scale"] },
 		sort: { column: "customer_since", direction: "asc" },
-		columns: ["name", "owner", "mrr", "health", "last_active", "customer_since", "tags"],
+		columns: ["name", "owner", "mrr", "last_active", "customer_since", "tags"],
 		icon: "rocket",
 		color: "teal",
 	},
@@ -189,8 +187,6 @@ const stateOf = (state: typeof State.Type) => {
 			return run(init(routeOf(null)).model, [])
 		case "first-run":
 			return loadedList(null, true)
-		case "at-risk":
-			return loadedList("at_risk")
 		case "filter": {
 			const base = loadedList(null)
 			return run(base.model, [

@@ -21,7 +21,7 @@ import { labPage, labSection } from "../../../frame"
 // `/lab/customers/kit/controls`: Foundations › Filter Bar And Tabs, live.
 
 const QueueTab = Schema.Literals(["open", "snoozed", "done"])
-const SavedView = Schema.Literals(["current", "mine", "paying", "trialing", "at_risk", "churned", "all"])
+const SavedView = Schema.Literals(["current", "mine", "paying", "trialing", "churned", "all"])
 const Grouping = Schema.Literals(["signals", "accounts"])
 const CHIPS = [
 	{ key: "kind", field: "Kind", operator: "is", value: "Risk" },
@@ -132,7 +132,6 @@ const view = (model: Model, h: HtmlBuilder<Message>): Html =>
 					{ key: "mine", label: "My customers" },
 					{ key: "paying", label: "Paying" },
 					{ key: "trialing", label: "Trialing" },
-					{ key: "at_risk", label: "At risk" },
 					{ key: "churned", label: "Churned" },
 					{ key: "all", label: "All customers" },
 				],

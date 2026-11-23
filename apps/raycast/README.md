@@ -1,7 +1,7 @@
 # Hazel for Raycast
 
-Search your organization's customers from Raycast: health, MRR, open risks and billing at a glance,
-then jump to the customer's channel, their page in Hazel, or their record in Clerk, Stripe, Autumn or
+Search your organization's customers from Raycast: MRR, open risks and billing at a glance, then
+jump to the customer's channel, their page in Hazel, or their record in Clerk, Stripe, Autumn or
 Maple.
 
 **Search Customers** opens on the cached list at once, then the chosen organization's list catches up

@@ -8,7 +8,7 @@ import { twMerge } from "tailwind-merge"
 import { commonMessage } from "~/lib/error-messages"
 import { formatCount, formatDate, formatMoney, formatRelative } from "../../../customers/format"
 import { accountLabelOf, environmentCounts, environmentsHintOf } from "../../../customers/groups"
-import { environmentBadge, healthBadge, stageBadge } from "../../../customers/ui/badges"
+import { environmentBadge, stageBadge } from "../../../customers/ui/badges"
 import { viewTabs } from "../../../customers/ui/filter-bar"
 import { linkClass } from "../../../customers/ui/surface"
 import { companyLogo, menuAvatar, personLabel, sourceLogo } from "../../../customers/ui/identity"
@@ -89,7 +89,7 @@ const ACTION_LABEL = {
 	change_owner: "Change owner…",
 	mute_attention: "Mute in Needs attention",
 	unmute_attention: "Unmute in Needs attention",
-	recompute: "Recompute health and signals",
+	recompute: "Recompute signals",
 	link_source: "Link a source record…",
 	link_customer: "Link to another customer…",
 	make_primary: "Make primary",
@@ -415,10 +415,6 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 												[account.name],
 											),
 											...environmentSwitch(h, model, context),
-											healthBadge(h, {
-												status: account.healthStatus,
-												score: account.healthScore,
-											}),
 											...attentionMutedBadge(h, account),
 										],
 									),
@@ -1492,7 +1488,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 					? activityTab(h, model, context)
 					: model.tab === "notes"
 						? notesTab(h, model, context, shared.organization?.name ?? "your workspace")
-						: overviewTab(h, model, context, model.bands)
+						: overviewTab(h, model, context)
 	const hasSidebar = model.isSidebarOpen && model.tab !== "users" && !shared.isMobile
 	return h.div(
 		[h.Class("flex h-full min-h-0 flex-col")],

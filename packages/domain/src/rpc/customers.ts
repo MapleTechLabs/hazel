@@ -36,7 +36,6 @@ import { Rpc, RpcGroup } from "effect/rpc"
 import {
 	AccountDetail,
 	ContactRow,
-	HealthDryRunResult,
 	MetricSeries,
 	OverviewResult,
 	Page,
@@ -50,14 +49,12 @@ import {
 	CustomerProvider,
 	CustomerSource,
 	CustomersRange,
-	HealthStatus,
 	IssuePriority,
 	IssueStatus,
 	LifecycleStage,
 	SignalOutcome,
 	SignalStatus,
 } from "../customers/enums"
-import { HealthSettings } from "../customers/health"
 import {
 	Account,
 	ChannelLink,
@@ -246,18 +243,17 @@ const write = customersRpc("customers:write")
 // ---------------------------------------------------------------------------
 
 export class CustomerReadRpcs extends RpcGroup.make(
-	/** KPIs, MRR movements, active users, health distribution, movers, recent churn and new. */
+	/** KPIs, MRR movements, active users, movers, recent churn and new. */
 	read("customers.overview", { range: CustomersRange }, OverviewResult),
 
 	/**
 	 * Live accounts, highest MRR first, for a client without the synced store (an agent): `query`
-	 * matches the name or a domain; `healthStatuses` and `lifecycleStages` keep only those.
+	 * matches the name or a domain; `lifecycleStages` keeps only those.
 	 */
 	read(
 		"customers.accounts.list",
 		{
 			query: Schema.optionalKey(Text(200)),
-			healthStatuses: Schema.optionalKey(Schema.Array(HealthStatus).check(Schema.isMaxLength(4))),
 			lifecycleStages: Schema.optionalKey(Schema.Array(LifecycleStage).check(Schema.isMaxLength(5))),
 			...PageRequest,
 		},
@@ -267,7 +263,7 @@ export class CustomerReadRpcs extends RpcGroup.make(
 	/** Everything the customer page shows beyond the synced account row. */
 	read("customers.account.detail", { accountId: CustomerAccountId }, AccountDetail, CustomersNotFoundError),
 
-	/** Daily series of metrics (`active_users`, `mrr`, `health_score`, source metrics) over `range`. */
+	/** Daily series of metrics (`active_users`, `mrr`, source metrics) over `range`. */
 	read(
 		"customers.account.series",
 		{ accountId: CustomerAccountId, metricKeys: Schema.Array(Schema.String), range: CustomersRange },
@@ -341,9 +337,6 @@ export class CustomerReadRpcs extends RpcGroup.make(
 		{ draft: RuleDraft, ruleId: Schema.optionalKey(CustomerSignalRuleId) },
 		RuleDryRunResult,
 	),
-
-	/** Score every account under draft health settings, without writing. */
-	read("customers.health.dryRun", { draft: HealthSettings }, HealthDryRunResult),
 
 	read(
 		"customers.unmatched.list",
@@ -642,11 +635,10 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 	/** Its open signals close (`auto_resolved`). */
 	write("customers.rule.delete", { ruleId: CustomerSignalRuleId }, Tx, CustomersNotFoundError),
 
-	/** Health weights, bands, steps; who Needs attention covers; the reporting currency; add-on plans. Recomputes soon. */
+	/** Who Needs attention covers; the reporting currency; add-on plans. Recomputes soon. */
 	write(
 		"customers.settings.update",
 		{
-			health: Schema.optionalKey(HealthSettings),
 			attention: Schema.optionalKey(AttentionSettings),
 			/** An ISO 4217 code, e.g. `usd`. */
 			reportingCurrency: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^[A-Za-z]{3}$/))),

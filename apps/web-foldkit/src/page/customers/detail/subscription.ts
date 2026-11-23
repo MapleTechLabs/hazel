@@ -1,4 +1,3 @@
-import { DEFAULT_HEALTH_SETTINGS } from "@hazel/domain/customers"
 import { CustomerAccountId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
@@ -8,7 +7,6 @@ import {
 	createdFeatureFlagsStream,
 	impersonatorsStream,
 	orgMembersStream,
-	settingsSummaryStream,
 	signalsStream,
 } from "../../../customers/queries"
 import { channelLinksStream, channelOptionsStream } from "../../../customers/channels"
@@ -127,15 +125,6 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 			organizationId === null
 				? Stream.empty
 				: metricsStream(organizationId, (metrics) => Message.UpdatedMetrics({ metrics })),
-	}),
-	bands: entry(organization, {
-		modelToDependencies: organizationOf,
-		dependenciesToStream: ({ organizationId }) =>
-			organizationId === null
-				? Stream.empty
-				: settingsSummaryStream(organizationId, (settings) =>
-						Message.UpdatedBands({ bands: settings?.bands ?? DEFAULT_HEALTH_SETTINGS.bands }),
-					),
 	}),
 	channelLinks: entry(organization, {
 		modelToDependencies: organizationOf,

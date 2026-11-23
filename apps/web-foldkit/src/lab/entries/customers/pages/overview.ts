@@ -47,7 +47,6 @@ const stateModel = (flags: typeof Flags.Type): Model => {
 					),
 		settings: {
 			lastComputedAtMs: SETTINGS.lastComputedAt === null ? null : msOf(SETTINGS.lastComputedAt),
-			bands: SETTINGS.health.bands,
 			reportingCurrency: SETTINGS.reportingCurrency,
 		},
 	}

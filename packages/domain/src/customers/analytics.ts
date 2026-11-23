@@ -9,13 +9,11 @@ import {
 	ContactActivityStatus,
 	CustomerProvider,
 	CustomersRange,
-	HealthStatus,
 	LifecycleStage,
 	SignalSeverity,
 	SubscriptionStatus,
 } from "./enums"
 import { Day, SeriesPoint, SignalEvidence } from "./evidence"
-import { HealthBreakdown } from "./health"
 import { Account, Contact, Event, ExternalRef, Invoice, Subscription } from "./models"
 
 /** A page of `items`; pass `nextCursor` back as `cursor` for the next one (null: no more). */
@@ -86,13 +84,6 @@ export const ActiveUsersPoint = Schema.Struct({
 })
 export type ActiveUsersPoint = typeof ActiveUsersPoint.Type
 
-export const HealthDistributionRow = Schema.Struct({
-	status: HealthStatus,
-	count: Schema.Int,
-	mrrMinor: Schema.Int,
-})
-export type HealthDistributionRow = typeof HealthDistributionRow.Type
-
 export const AccountBrief = Schema.Struct({
 	accountId: CustomerAccountId,
 	name: Schema.String,
@@ -134,7 +125,6 @@ export const OverviewResult = Schema.Struct({
 	kpis: OverviewKpis,
 	mrrMovements: Schema.Array(MrrMovementBucket),
 	activeUsers: Schema.Array(ActiveUsersPoint),
-	healthDistribution: Schema.Array(HealthDistributionRow),
 	topMovers: Schema.Struct({ gainers: Schema.Array(Mover), decliners: Schema.Array(Mover) }),
 	recentChurn: Schema.Array(AccountBrief),
 	recentNew: Schema.Array(AccountBrief),
@@ -177,17 +167,6 @@ export const AccountDetail = Schema.Struct({
 	upcomingInvoice: Schema.NullOr(Invoice.Schema),
 	/** Open and past-due invoices (the payment issue banner). */
 	openInvoices: Schema.Array(Invoice.Schema),
-	/** Today's breakdown; null before the first compute. */
-	health: Schema.NullOr(HealthBreakdown),
-	/** 90 days of the health score (a day without a score is 0, for the chart). */
-	healthSeries: Schema.Array(SeriesPoint),
-	/**
-	 * The scores actually recorded in those 90 days, oldest first: a day missing here was never
-	 * scored (`score` null: scored without enough data). Optional: older answers lack it.
-	 */
-	healthScores: Schema.optionalKey(
-		Schema.Array(Schema.Struct({ day: Day, score: Schema.NullOr(Schema.Finite) })),
-	),
 	/** 30 days of daily active users. */
 	activeUsersSeries: Schema.Array(SeriesPoint),
 	/** The most active contacts and admins, ≤ 5: who to reach. */
@@ -248,21 +227,3 @@ export const RuleDryRunResult = Schema.Struct({
 	...DryRunCoverage.fields,
 })
 export type RuleDryRunResult = typeof RuleDryRunResult.Type
-
-export const HealthDryRunResult = Schema.Struct({
-	current: Schema.Array(HealthDistributionRow),
-	proposed: Schema.Array(HealthDistributionRow),
-	/** Accounts per `(from, to)` status pair that changes. */
-	transitions: Schema.Array(Schema.Struct({ from: HealthStatus, to: HealthStatus, count: Schema.Int })),
-	/** A few accounts that change band, with both breakdowns. */
-	samples: Schema.Array(
-		Schema.Struct({
-			accountId: CustomerAccountId,
-			name: Schema.String,
-			current: HealthBreakdown,
-			proposed: HealthBreakdown,
-		}),
-	),
-	...DryRunCoverage.fields,
-})
-export type HealthDryRunResult = typeof HealthDryRunResult.Type

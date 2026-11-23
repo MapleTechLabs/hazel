@@ -1,8 +1,6 @@
 import { defineStaticLab } from "../../../define"
 import { labPage, labRow, labSection } from "../../../frame"
 import {
-	healthBadge,
-	healthDot,
 	kindChip,
 	severityChip,
 	severityGlyph,
@@ -10,34 +8,10 @@ import {
 	stageBadge,
 } from "../../../../customers/ui/badges"
 
-// `/lab/customers/kit/badges`: Foundations › Health Badge States, Severity And Kind Chips, Lifecycle Stage Badges.
+// `/lab/customers/kit/badges`: Foundations › Severity And Kind Chips, Lifecycle Stage Badges.
 
 export const lab = defineStaticLab("Badges", (h) =>
 	labPage(h, { title: "Badges and chips" }, [
-		labSection(h, "Health badge", [
-			labRow(h, [
-				healthBadge(h, { status: "healthy" }),
-				healthBadge(h, { status: "at_risk" }),
-				healthBadge(h, { status: "critical" }),
-				healthBadge(h, { status: "unknown" }),
-			]),
-			labRow(h, [
-				healthBadge(h, { status: "healthy", score: 82 }),
-				healthBadge(h, { status: "at_risk", score: 54 }),
-				healthBadge(h, { status: "critical", score: 27 }),
-				healthBadge(h, { status: "unknown", score: null }),
-			]),
-			labRow(
-				h,
-				[
-					healthDot(h, { status: "healthy", score: 82 }),
-					healthDot(h, { status: "at_risk", score: 54 }),
-					healthDot(h, { status: "critical", score: 27 }),
-					healthDot(h, { status: "unknown", score: null }),
-				],
-				"Compact, for dense table cells",
-			),
-		]),
 		labSection(h, "Severity chip", [
 			labRow(h, [severityChip(h, "high"), severityChip(h, "medium"), severityChip(h, "low")]),
 			labRow(
@@ -61,7 +35,7 @@ export const lab = defineStaticLab("Badges", (h) =>
 					stageBadge(h, "trialing", { trialDaysLeft: 4 }),
 					stageBadge(h, "trialing", { trialDaysLeft: 0 }),
 				],
-				"Square corners, no dot: stage, not health",
+				"Square corners, no dot",
 			),
 		]),
 		labSection(h, "Open signals (list cell)", [

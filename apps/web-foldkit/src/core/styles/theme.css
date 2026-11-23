@@ -378,10 +378,9 @@
 }
 
 /*
- * Customers: chart, health and severity colors (Wonder "Maple Design System" › Foundations › Color
- * Token Reference). Chart hues fill marks only; text never takes a chart color, and every color is
- * paired with a label or legend. Health and severity reuse the chart hues for marks (bars, legend
- * squares, dots in charts); badges keep the semantic `*-subtle` pairs.
+ * Customers: chart and severity colors (Wonder "Maple Design System" › Foundations › Color Token
+ * Reference). Chart hues fill marks only; text never takes a chart color, and every color is paired
+ * with a label or legend. Severity marks use the semantic `*-subtle` foregrounds, as badges do.
  */
 @theme inline {
 	--color-chart-new: var(--chart-new);
@@ -394,11 +393,6 @@
 	--color-chart-series-3: var(--chart-series-3);
 	--color-chart-grid: var(--chart-grid);
 	--color-chart-net: var(--chart-net);
-
-	--color-health-healthy: var(--health-healthy);
-	--color-health-at-risk: var(--health-at-risk);
-	--color-health-critical: var(--health-critical);
-	--color-health-unknown: var(--health-unknown);
 
 	--color-severity-high: var(--severity-high);
 	--color-severity-medium: var(--severity-medium);
@@ -428,11 +422,6 @@
 	--chart-series-3: rgb(189 180 254);
 	--chart-grid: var(--border);
 	--chart-net: var(--fg);
-
-	--health-healthy: var(--chart-new);
-	--health-at-risk: var(--chart-contraction);
-	--health-critical: var(--chart-churn);
-	--health-unknown: var(--chart-neutral);
 
 	--severity-high: var(--danger-subtle-fg);
 	--severity-medium: var(--warning-subtle-fg);

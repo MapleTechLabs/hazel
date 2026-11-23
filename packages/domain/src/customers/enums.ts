@@ -22,9 +22,6 @@ export type SourceCapability = typeof SourceCapability.Type
 export const LifecycleStage = Schema.Literals(["lead", "trialing", "active", "past_due", "churned"])
 export type LifecycleStage = typeof LifecycleStage.Type
 
-export const HealthStatus = Schema.Literals(["healthy", "at_risk", "critical", "unknown"])
-export type HealthStatus = typeof HealthStatus.Type
-
 export const SubscriptionStatus = Schema.Literals([
 	"trialing",
 	"active",
@@ -76,7 +73,6 @@ export const SignalTemplate = Schema.Literals([
 	"cancel_scheduled",
 	"trial_ending_low_activation",
 	"onboarding_stalled",
-	"health_drop",
 	"champion_inactive",
 	"near_limit",
 	"seat_growth",
@@ -117,9 +113,6 @@ export type UnmatchedStatus = typeof UnmatchedStatus.Type
 export const MrrMovementType = Schema.Literals(["new", "expansion", "contraction", "churn", "reactivation"])
 export type MrrMovementType = typeof MrrMovementType.Type
 
-export const HealthComponentKey = Schema.Literals(["usage", "engagement", "billing", "signals"])
-export type HealthComponentKey = typeof HealthComponentKey.Type
-
 /** How a signal's evidence is drawn (queue mini-viz, side panel chart). */
 export const EvidenceViz = Schema.Literals([
 	"amount",
@@ -137,7 +130,7 @@ export const ContactActivityStatus = Schema.Literals(["active", "dormant", "neve
 export type ContactActivityStatus = typeof ContactActivityStatus.Type
 
 /** The seeded shared views; admins may edit them, nobody deletes them. */
-export const BuiltInViewKey = Schema.Literals(["my_customers", "paying", "trialing", "at_risk", "churned"])
+export const BuiltInViewKey = Schema.Literals(["my_customers", "paying", "trialing", "churned"])
 export type BuiltInViewKey = typeof BuiltInViewKey.Type
 
 /** The overview's range picker. */

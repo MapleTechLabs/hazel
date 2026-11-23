@@ -44,8 +44,8 @@ all of them.
    dropped); the receiver writes only what changed. Its sender guard accepts only the org's own customers object.
 4. The snapshot is sent only when its SHA-256 fingerprint (over every field) changed: after link /
    unlink, after a person changes an account's name or owner (one or in bulk) or a signal's status
-   (assign, snooze, done, dismiss, reopen), and at the end of every compute (names, numbers,
-   health and signals set by sources and rules; accounts a source deleted).
+   (assign, snooze, done, dismiss, reopen), and at the end of every compute (names, numbers and
+   signals set by sources and rules; accounts a source deleted).
 5. Org deletion purges `customer_channel_links` with the rest of the customer data.
 
 Deleting a channel that has a customer: the `OrgObject` sends `customers.channelDeleted` (from
@@ -63,8 +63,6 @@ next one, whose fingerprint differs, fills them).
 
 | Field                           | From                                                                                                      |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `healthStatus`, `healthScore`   | The customer (the group's primary).                                                                       |
-| `healthWhy`                     | The scored component with the lowest score in its latest `customer_health_daily` (7 d).                   |
 | `ownerUserId`                   | The customer.                                                                                             |
 | `lifecycleStage`, `planName`    | The group's rules (`group-facts.ts`): the most advanced stage; the primary's plan, else an environment's. |
 | `mrrMinor`, `currency`          | Σ over the group (compute keeps MRR in the reporting currency).                                           |
@@ -80,12 +78,11 @@ A row projected before the glance (an org with no snapshot since the deploy: the
 the hour, sends one) has no stage; the card then shows only the name and the way to the customer
 page, not blanks that read as an empty account.
 
-UI (`src/page/chat/customer-card.ts`): the header chip shows the health dot and the name. On
+UI (`src/page/chat/customer-card.ts`): the header chip shows an office mark and the name. On
 desktop, hovering it shows the card after 350 ms; it stays while the pointer is on the chip or the
 card (200 ms grace), and a click pins it until Escape or a click outside. On a phone a tap opens
-the same card in a bottom sheet. The card: logo, name (to the customer page), health badge and
-stage, the health reason (or "No health score yet"), revenue and plan, owner, seats, last active,
-open signals (count, top 3, "N more", the queue), then the customer page and provider links. The
+the same card in a bottom sheet. The card: logo, name (to the customer page), stage, revenue and
+plan, owner, seats, last active, open signals (count, top 3, "N more", the queue), then the customer page and provider links. The
 card takes a `support` slot between the signals and the links for support issues and SLAs
 (later sessions). Gallery: `customer-card.gallery.ts`.
 

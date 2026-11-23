@@ -31,11 +31,8 @@ export const LAB_DESCRIPTIONS: ReadonlyMap<string, string> = new Map([
 		"/lab/kit",
 		"Every src/ui component, live: tokens, buttons, fields, selection, navigation, feedback, overlays.",
 	],
-	["/lab/customers/kit/tokens", "Chart, health and severity color tokens in light and dark."],
-	[
-		"/lab/customers/kit/badges",
-		"Health badges and dots, severity and kind chips, lifecycle stages, open-signal counts.",
-	],
+	["/lab/customers/kit/tokens", "Chart and severity color tokens in light and dark."],
+	["/lab/customers/kit/badges", "Severity and kind chips, lifecycle stages, open-signal counts."],
 	["/lab/customers/kit/identity", "Company logos and tints, owner avatars, source marks and chips."],
 	[
 		"/lab/customers/kit/kpi-tiles",
@@ -45,7 +42,7 @@ export const LAB_DESCRIPTIONS: ReadonlyMap<string, string> = new Map([
 	["/lab/customers/kit/evidence", "Every evidence viz, compact (queue) and detailed (side panel)."],
 	[
 		"/lab/customers/kit/charts",
-		"Active users lines, MRR movement bars, health distribution, with hover tooltips (`?range=`).",
+		"Active users lines and MRR movement bars, with hover tooltips (`?range=`).",
 	],
 	[
 		"/lab/customers/kit/table",

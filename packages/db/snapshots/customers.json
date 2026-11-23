@@ -1,5 +1,5 @@
 {
-	"migration": "0026_customer_contacts_email_lower",
+	"migration": "0027_remove_customer_health_score",
 	"entities": [
 		{
 			"kind": "table",
@@ -83,13 +83,6 @@
 			"name": "customer_feature_flags",
 			"primaryKey": {
 				"columns": ["id"]
-			}
-		},
-		{
-			"kind": "table",
-			"name": "customer_health_daily",
-			"primaryKey": {
-				"columns": ["accountId", "day"]
 			}
 		},
 		{
@@ -375,7 +368,7 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "healthScore",
+			"name": "seatsUsed",
 			"position": 14,
 			"type": "integer",
 			"notNull": false,
@@ -384,35 +377,8 @@
 		{
 			"kind": "column",
 			"table": "customer_accounts",
-			"name": "healthStatus",
-			"position": 15,
-			"type": "text",
-			"notNull": true,
-			"default": "'unknown'"
-		},
-		{
-			"kind": "column",
-			"table": "customer_accounts",
-			"name": "healthUpdatedAt",
-			"position": 16,
-			"type": "text",
-			"notNull": false,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_accounts",
-			"name": "seatsUsed",
-			"position": 17,
-			"type": "integer",
-			"notNull": false,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_accounts",
 			"name": "seatsLimit",
-			"position": 18,
+			"position": 15,
 			"type": "integer",
 			"notNull": false,
 			"default": null
@@ -421,7 +387,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "contactCount",
-			"position": 19,
+			"position": 16,
 			"type": "integer",
 			"notNull": true,
 			"default": "0"
@@ -430,7 +396,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "activeUsers30d",
-			"position": 20,
+			"position": 17,
 			"type": "integer",
 			"notNull": true,
 			"default": "0"
@@ -439,7 +405,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "activeUsersTrendPct",
-			"position": 21,
+			"position": 18,
 			"type": "real",
 			"notNull": false,
 			"default": null
@@ -448,7 +414,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "openRiskHigh",
-			"position": 22,
+			"position": 19,
 			"type": "integer",
 			"notNull": true,
 			"default": "0"
@@ -457,7 +423,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "openRiskMedium",
-			"position": 23,
+			"position": 20,
 			"type": "integer",
 			"notNull": true,
 			"default": "0"
@@ -466,7 +432,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "openRiskLow",
-			"position": 24,
+			"position": 21,
 			"type": "integer",
 			"notNull": true,
 			"default": "0"
@@ -475,7 +441,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "openOpportunities",
-			"position": 25,
+			"position": 22,
 			"type": "integer",
 			"notNull": true,
 			"default": "0"
@@ -484,7 +450,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "championContactId",
-			"position": 26,
+			"position": 23,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -493,7 +459,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "championInactiveSince",
-			"position": 27,
+			"position": 24,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -502,7 +468,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "lastActiveContactId",
-			"position": 28,
+			"position": 25,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -511,7 +477,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "firstSeenAt",
-			"position": 29,
+			"position": 26,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -520,7 +486,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "lastActiveAt",
-			"position": 30,
+			"position": 27,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -529,7 +495,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "customerSince",
-			"position": 31,
+			"position": 28,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -538,7 +504,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "churnedAt",
-			"position": 32,
+			"position": 29,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -547,7 +513,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "tags",
-			"position": 33,
+			"position": 30,
 			"type": "text",
 			"notNull": true,
 			"default": "'[]'"
@@ -556,7 +522,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "attributes",
-			"position": 34,
+			"position": 31,
 			"type": "text",
 			"notNull": true,
 			"default": "'{}'"
@@ -565,7 +531,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "featureFlags",
-			"position": 35,
+			"position": 32,
 			"type": "text",
 			"notNull": true,
 			"default": "'{}'"
@@ -574,7 +540,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "attentionMutedAt",
-			"position": 36,
+			"position": 33,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -583,7 +549,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "attentionMutedUntil",
-			"position": 37,
+			"position": 34,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -592,7 +558,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "attentionMutedByUserId",
-			"position": 38,
+			"position": 35,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -601,7 +567,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "fieldSources",
-			"position": 39,
+			"position": 36,
 			"type": "text",
 			"notNull": true,
 			"default": "'{}'"
@@ -610,7 +576,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "primaryAccountId",
-			"position": 40,
+			"position": 37,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -619,7 +585,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "environment",
-			"position": 41,
+			"position": 38,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -628,7 +594,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "companyProfile",
-			"position": 42,
+			"position": 39,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -637,7 +603,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "companyCheckedAt",
-			"position": 43,
+			"position": 40,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -646,7 +612,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "createdAt",
-			"position": 44,
+			"position": 41,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -655,7 +621,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "updatedAt",
-			"position": 45,
+			"position": 42,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -664,7 +630,7 @@
 			"kind": "column",
 			"table": "customer_accounts",
 			"name": "deletedAt",
-			"position": 46,
+			"position": 43,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -1856,51 +1822,6 @@
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
-		},
-		{
-			"kind": "column",
-			"table": "customer_health_daily",
-			"name": "accountId",
-			"position": 0,
-			"type": "text",
-			"notNull": true,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_health_daily",
-			"name": "day",
-			"position": 1,
-			"type": "text",
-			"notNull": true,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_health_daily",
-			"name": "score",
-			"position": 2,
-			"type": "integer",
-			"notNull": false,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_health_daily",
-			"name": "status",
-			"position": 3,
-			"type": "text",
-			"notNull": true,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_health_daily",
-			"name": "breakdown",
-			"position": 4,
-			"type": "text",
-			"notNull": true,
-			"default": null
 		},
 		{
 			"kind": "column",
@@ -3138,35 +3059,8 @@
 		{
 			"kind": "column",
 			"table": "customer_org_daily",
-			"name": "healthy",
-			"position": 8,
-			"type": "integer",
-			"notNull": true,
-			"default": "0"
-		},
-		{
-			"kind": "column",
-			"table": "customer_org_daily",
-			"name": "atRisk",
-			"position": 9,
-			"type": "integer",
-			"notNull": true,
-			"default": "0"
-		},
-		{
-			"kind": "column",
-			"table": "customer_org_daily",
-			"name": "critical",
-			"position": 10,
-			"type": "integer",
-			"notNull": true,
-			"default": "0"
-		},
-		{
-			"kind": "column",
-			"table": "customer_org_daily",
 			"name": "atRiskMrrMinor",
-			"position": 11,
+			"position": 8,
 			"type": "integer",
 			"notNull": true,
 			"default": "0"
@@ -3327,17 +3221,8 @@
 		{
 			"kind": "column",
 			"table": "customer_settings",
-			"name": "health",
-			"position": 2,
-			"type": "text",
-			"notNull": true,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_settings",
 			"name": "attention",
-			"position": 3,
+			"position": 2,
 			"type": "text",
 			"notNull": true,
 			"default": "'{\"stages\":[\"lead\",\"trialing\",\"active\",\"past_due\"],\"requiredSources\":[\"stripe\"]}'"
@@ -3346,7 +3231,7 @@
 			"kind": "column",
 			"table": "customer_settings",
 			"name": "reportingCurrency",
-			"position": 4,
+			"position": 3,
 			"type": "text",
 			"notNull": true,
 			"default": "'usd'"
@@ -3355,7 +3240,7 @@
 			"kind": "column",
 			"table": "customer_settings",
 			"name": "addOnPlans",
-			"position": 5,
+			"position": 4,
 			"type": "text",
 			"notNull": true,
 			"default": "'[]'"
@@ -3364,7 +3249,7 @@
 			"kind": "column",
 			"table": "customer_settings",
 			"name": "overageInMrr",
-			"position": 6,
+			"position": 5,
 			"type": "integer",
 			"notNull": true,
 			"default": "false"
@@ -3373,7 +3258,7 @@
 			"kind": "column",
 			"table": "customer_settings",
 			"name": "businessHours",
-			"position": 7,
+			"position": 6,
 			"type": "text",
 			"notNull": true,
 			"default": "'{\"timeZone\":\"UTC\",\"days\":[1,2,3,4,5],\"start\":\"09:00\",\"end\":\"17:00\"}'"
@@ -3382,7 +3267,7 @@
 			"kind": "column",
 			"table": "customer_settings",
 			"name": "lastComputedAt",
-			"position": 8,
+			"position": 7,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -3391,7 +3276,7 @@
 			"kind": "column",
 			"table": "customer_settings",
 			"name": "updatedBy",
-			"position": 9,
+			"position": 8,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -3400,7 +3285,7 @@
 			"kind": "column",
 			"table": "customer_settings",
 			"name": "createdAt",
-			"position": 10,
+			"position": 9,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -3409,7 +3294,7 @@
 			"kind": "column",
 			"table": "customer_settings",
 			"name": "updatedAt",
-			"position": 11,
+			"position": 10,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -4540,13 +4425,6 @@
 		{
 			"kind": "index",
 			"table": "customer_accounts",
-			"name": "customer_accounts_health_idx",
-			"unique": false,
-			"columns": ["\"healthStatus\""]
-		},
-		{
-			"kind": "index",
-			"table": "customer_accounts",
 			"name": "customer_accounts_owner_idx",
 			"unique": false,
 			"columns": ["\"ownerUserId\""]
@@ -4690,13 +4568,6 @@
 			"name": "customer_feature_flags_key_unique",
 			"unique": true,
 			"columns": ["\"key\""]
-		},
-		{
-			"kind": "index",
-			"table": "customer_health_daily",
-			"name": "customer_health_daily_day_idx",
-			"unique": false,
-			"columns": ["\"day\""]
 		},
 		{
 			"kind": "index",

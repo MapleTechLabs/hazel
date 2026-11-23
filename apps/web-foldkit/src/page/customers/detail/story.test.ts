@@ -96,8 +96,6 @@ const account = (n: number, name: string): AccountRow => ({
 	currency: "USD",
 	trialListMrrMinor: null,
 	trialEndsAtMs: null,
-	healthScore: 80,
-	healthStatus: "healthy",
 	seatsUsed: null,
 	seatsLimit: null,
 	contactCount: 10,

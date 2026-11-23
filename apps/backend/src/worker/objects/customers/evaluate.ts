@@ -369,57 +369,6 @@ const onboardingStalled =
 		}
 	}
 
-const healthDrop =
-	(config: Extract<RuleConfig, { _tag: "health_drop" }>): Check =>
-	(facts, org) => {
-		const today = facts.health.find((point) => point.day === org.today)
-		if (today === undefined || today.score === null) return "No data"
-		const since = addDays(org.today, -config.windowDays)
-		const before = facts.health.flatMap((point) =>
-			point.day >= since && point.day < org.today && point.score !== null ? [point.score] : [],
-		)
-		const peak = before.reduce((max, score) => Math.max(max, score), today.score)
-		const drop = peak - today.score
-		// Entered critical: a scored, non-critical day in the window before (a new account first
-		// scored critical has not "entered" it).
-		const critical =
-			config.onCritical &&
-			today.status === "critical" &&
-			facts.health.some(
-				(point) =>
-					point.day >= since &&
-					point.day < org.today &&
-					point.status !== "critical" &&
-					point.status !== "unknown",
-			)
-		if (drop < config.dropPoints && !critical) return "Below threshold"
-		const step = stepOf(drop >= 50, drop >= 35)
-		const series = facts.health
-			.filter((point) => point.day >= addDays(org.today, -29))
-			.map((point) => ({ day: point.day, value: point.score ?? 0 }))
-		return {
-			step,
-			reason:
-				drop > 0
-					? `Health fell ${drop} points in ${plural(config.windowDays, "day")} (${peak} → ${today.score})${critical ? ", now critical" : ""}`
-					: `Health is critical (${today.score})`,
-			evidence: {
-				_tag: "delta",
-				step,
-				unit: "points",
-				from: peak,
-				to: today.score,
-				changePct: peak === 0 ? null : round1(((today.score - peak) / peak) * 100),
-				currency: null,
-				effectiveAt: null,
-				fromLabel: null,
-				toLabel: today.status,
-				reason: null,
-				series,
-			},
-		}
-	}
-
 const championInactive =
 	(config: Extract<RuleConfig, { _tag: "champion_inactive" }>): Check =>
 	(facts, org) => {
@@ -662,8 +611,6 @@ const checkOf = (config: RuleConfig): Check => {
 			return trialEnding(config)
 		case "onboarding_stalled":
 			return onboardingStalled(config)
-		case "health_drop":
-			return healthDrop(config)
 		case "champion_inactive":
 			return championInactive(config)
 		case "near_limit":

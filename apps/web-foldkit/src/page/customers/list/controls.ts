@@ -1,12 +1,11 @@
 import * as Customers from "@hazel/domain/customers"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { distributionBar } from "../../../customers/charts/distribution"
 import { currencySymbol, formatCount, formatMoney, toMajor, toMinor } from "../../../customers/format"
 import { namesLabel, providerOf, usageSources } from "../../../customers/providers"
 import type { AccountRow, MemberRow } from "../../../customers/queries"
 import { countryFlag, countryNameOf, fundingStageLabel } from "../../../customers/company"
-import { HEALTH_FILL, HEALTH_LABEL, STAGE_LABEL } from "../../../customers/ui/badges"
+import { STAGE_LABEL } from "../../../customers/ui/badges"
 import { IconChevronDown, IconChevronRight } from "../../../icons"
 import { button } from "../../../ui/button"
 import { checkbox } from "../../../ui/checkbox"
@@ -37,7 +36,6 @@ const FIELD_LABEL = {
 	plan: "Plan",
 	owner: "Owner",
 	tag: "Tag",
-	health: "Health",
 	mrr: "MRR",
 	last_active: "Last active",
 	signals: "Open risk signals",
@@ -52,7 +50,6 @@ const FIELD_KIND = {
 	plan: "Select",
 	owner: "Person",
 	tag: "Select",
-	health: "Status",
 	mrr: "Amount",
 	last_active: "Date",
 	signals: "Yes / no",
@@ -64,7 +61,7 @@ const FIELD_KIND = {
 
 const FIELD_GROUPS: ReadonlyArray<readonly [string, ReadonlyArray<FilterField>]> = [
 	["Account", ["stage", "plan", "owner", "tag"]],
-	["Health and usage", ["health", "last_active"]],
+	["Usage", ["last_active"]],
 	["Revenue", ["mrr"]],
 	["Signals", ["signals"]],
 	["Company", ["industry", "company_size", "country", "funding"]],
@@ -75,7 +72,6 @@ const FIELD_DESCRIPTION = {
 	plan: "The plan of its largest subscription.",
 	owner: "Who in your team looks after the account.",
 	tag: "Tags your team added.",
-	health: "The account's health band from its latest score.",
 	mrr: "Monthly recurring revenue, in your reporting currency.",
 	last_active: `Most recent activity from any contact, from ${namesLabel(usageSources.map((source) => [providerOf(source).name, providerOf(source).activityLabel?.noun].filter(Boolean).join(" ")))}.`,
 	signals: "Whether the account has an open risk signal now.",
@@ -107,8 +103,6 @@ export const chipOf = (
 	switch (field) {
 		case "stage":
 			return anyOf(filters.lifecycleStages?.map((stage) => STAGE_LABEL[stage]))
-		case "health":
-			return anyOf(filters.healthStatuses?.map((status) => HEALTH_LABEL[status]))
 		case "plan":
 			return anyOf(filters.planNames)
 		case "tag":
@@ -282,22 +276,6 @@ const editor = (
 					STAGE_LABEL[stage],
 					pending.lifecycleStages?.includes(stage) ?? false,
 					withFilter(pending, "lifecycleStages", toggleIn(pending.lifecycleStages, stage)),
-				),
-			)
-		case "health":
-			return Customers.HealthStatus.literals.map((status) =>
-				option(
-					h,
-					optionId(status),
-					h.span(
-						[h.Class("inline-flex items-center gap-2")],
-						[
-							h.span([h.Class(twMerge("size-2 rounded-full", HEALTH_FILL[status]))]),
-							HEALTH_LABEL[status],
-						],
-					),
-					pending.healthStatuses?.includes(status) ?? false,
-					withFilter(pending, "healthStatuses", toggleIn(pending.healthStatuses, status)),
 				),
 			)
 		case "plan":
@@ -529,7 +507,7 @@ const editor = (
 	}
 }
 
-/** The preview under the editor: how many accounts the pending filters keep, their MRR and health. */
+/** The preview under the editor: how many accounts the pending filters keep, and their MRR. */
 const matchPreview = (
 	h: HtmlBuilder<Message>,
 	builder: Builder,
@@ -544,39 +522,13 @@ const matchPreview = (
 	const filters = search.trim() === "" ? builder.pending : { ...builder.pending, search }
 	const matches = accounts.filter((account) => matchesFilters(filters, account, viewer))
 	const mrr = matches.reduce((sum, account) => sum + account.mrrMinor, 0)
-	const counts = Customers.HealthStatus.literals.map((status) => ({
-		status,
-		count: matches.filter((account) => account.healthStatus === status).length,
-	}))
-	return h.div(
-		[h.Class("flex flex-col gap-2 rounded-lg border border-border p-3")],
+	return h.p(
+		[h.Class("rounded-lg border border-border p-3 text-sm"), h.AriaLive("polite")],
 		[
-			h.p(
-				[h.Class("text-sm"), h.AriaLive("polite")],
-				[
-					h.span([h.Class("font-semibold text-fg")], [`${formatCount(matches.length)} customers`]),
-					h.span(
-						[h.Class("text-muted-fg")],
-						[` of ${formatCount(accounts.length)} · ${formatMoney(mrr, options.currency)} MRR`],
-					),
-				],
-			),
-			distributionBar(h, {
-				ariaLabel: "Health of the matching customers",
-				segments: counts.map(({ status, count }) => ({
-					key: status,
-					label: HEALTH_LABEL[status],
-					value: count,
-					fillClass: HEALTH_FILL[status],
-				})),
-			}),
-			h.p(
-				[h.Class("text-muted-fg text-xs")],
-				[
-					counts
-						.map(({ status, count }) => `${count} ${HEALTH_LABEL[status].toLowerCase()}`)
-						.join(" · "),
-				],
+			h.span([h.Class("font-semibold text-fg")], [`${formatCount(matches.length)} customers`]),
+			h.span(
+				[h.Class("text-muted-fg")],
+				[` of ${formatCount(accounts.length)} · ${formatMoney(mrr, options.currency)} MRR`],
 			),
 		],
 	)

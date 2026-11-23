@@ -6,7 +6,7 @@ import { customerAccountOf, queueNameOf } from "../../../customers/groups"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { formatCount, formatDate, formatMoney, formatRelative } from "../../../customers/format"
 import { environmentCounts, environmentsHintOf } from "../../../customers/groups"
-import { healthBadge, kindChip, severityChip, STAGE_LABEL } from "../../../customers/ui/badges"
+import { kindChip, severityChip, STAGE_LABEL } from "../../../customers/ui/badges"
 import { evidenceDetail } from "../../../customers/ui/evidence"
 import { companyLogo, personLabel, sourceMark } from "../../../customers/ui/identity"
 import { kbd } from "../../../customers/ui/shortcuts"
@@ -46,33 +46,21 @@ const section = (h: HtmlBuilder<Message>, title: string, children: ReadonlyArray
 		],
 	)
 
-const stat = (h: HtmlBuilder<Message>, label: string, value: Html | string, detail: string | null): Html =>
+const stat = (h: HtmlBuilder<Message>, label: string, value: string, detail: string | null): Html =>
 	h.div(
 		[h.Class("flex min-w-0 flex-col gap-0.5")],
 		[
 			h.span([h.Class("text-muted-fg text-xs")], [label]),
-			typeof value === "string"
-				? h.span([h.Class("truncate font-medium text-fg text-sm tabular-nums")], [value])
-				: value,
+			h.span([h.Class("truncate font-medium text-fg text-sm tabular-nums")], [value]),
 			...(detail === null ? [] : [h.span([h.Class("truncate text-muted-fg text-xs")], [detail])]),
 		],
 	)
 
 const summary = (h: HtmlBuilder<Message>, account: AccountRow, owner: string | null): Html =>
 	h.div(
-		[h.Class("grid grid-cols-2 gap-3 px-5 py-4 md:grid-cols-4")],
+		[h.Class("grid grid-cols-3 gap-3 px-5 py-4")],
 		[
 			stat(h, "MRR", formatMoney(account.mrrMinor, account.currency), account.planName),
-			stat(
-				h,
-				"Health",
-				healthBadge(h, {
-					status: account.healthStatus,
-					score: account.healthScore,
-					className: "w-fit",
-				}),
-				null,
-			),
 			stat(
 				h,
 				"Active 30d",

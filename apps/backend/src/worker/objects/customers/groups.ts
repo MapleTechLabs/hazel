@@ -2,7 +2,7 @@
  * Customers with several environments (`customers.account.link`, `unlink`, `setPrimary`,
  * `setEnvironment`). Accounts are never merged: each source record stays its own account (an
  * environment, e.g. a US and an EU region), and accounts link into a group with one primary
- * (`primaryAccountId` on the others; no chains). Rollups and health stay per account; signals are
+ * (`primaryAccountId` on the others; no chains). Rollups stay per account; signals are
  * evaluated over the group's combined facts (`./group-facts.ts`) and written on the primary, so its
  * other environments hold no unclosed signal, but for `ENVIRONMENT_TEMPLATES`' (each its own).
  *

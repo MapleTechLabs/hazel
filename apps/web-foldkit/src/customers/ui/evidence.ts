@@ -24,16 +24,14 @@ import {
 
 type Of<Tag extends SignalEvidence["_tag"]> = Extract<SignalEvidence, { _tag: Tag }>
 
-const DELTA_UNIT_TEXT = { points: "pts", users: "users" } as const
-
 const deltaValue = (evidence: Of<"delta">, value: number): string =>
 	evidence.unit === "minor" ? formatMoney(value, evidence.currency ?? "USD") : formatCount(value)
 
-/** `$1,240 → $0`, `62 → 48`, `8 → 20 users`, or the labels (`Scale → Growth`) when set. */
+/** `$1,240 → $0`, `8 → 20 users`, or the labels (`Scale → Growth`) when set. */
 export const deltaSummary = (evidence: Of<"delta">): string =>
 	evidence.fromLabel !== null && evidence.toLabel !== null
 		? `${evidence.fromLabel} → ${evidence.toLabel}`
-		: `${deltaValue(evidence, evidence.from)} → ${deltaValue(evidence, evidence.to)}${evidence.unit === "minor" ? "" : ` ${DELTA_UNIT_TEXT[evidence.unit]}`}`
+		: `${deltaValue(evidence, evidence.from)} → ${deltaValue(evidence, evidence.to)}${evidence.unit === "minor" ? "" : " users"}`
 
 const stack = <M>(
 	h: HtmlBuilder<M>,

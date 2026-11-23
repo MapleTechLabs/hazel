@@ -235,31 +235,6 @@ const sentenceRows = (h: H, context: ConditionContext): ReadonlyArray<Html> => {
 					),
 				]),
 			]
-		case "health_drop":
-			return [
-				rows(h, [
-					row(
-						h,
-						context,
-						"Drop",
-						[
-							"Health fell",
-							num(h, context, "dropPoints", "Points"),
-							"points or more within",
-							num(h, context, "windowDays", "Window in days"),
-							"days",
-						],
-						["dropPoints", "windowDays"],
-					),
-					row(
-						h,
-						context,
-						"Critical",
-						[flag(h, context, "onCritical", "Also when it turns Critical")],
-						[],
-					),
-				]),
-			]
 		case "champion_inactive":
 			return [
 				rows(h, [

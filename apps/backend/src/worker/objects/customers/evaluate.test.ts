@@ -305,30 +305,6 @@ describe("signal evaluation", () => {
 		)
 	})
 
-	it("health_drop: −20 points within 7 days, or entered critical", () => {
-		const health = (
-			before: number,
-			now: number,
-			status: "healthy" | "at_risk" | "critical" = "at_risk",
-		) => ({
-			health: [
-				{ day: addDays(TODAY, -5), score: before, status: "healthy" as const },
-				{ day: TODAY, score: now, status },
-			],
-		})
-		const found = match("health_drop", health(80, 55))
-		expect(found.evidence).toMatchObject({ _tag: "delta", unit: "points", from: 80, to: 55, step: 0 })
-		expect(match("health_drop", health(90, 50)).evidence.step).toBe(1)
-		expect(run("health_drop", health(70, 60))._tag).toBe("NoMatch")
-		expect(match("health_drop", health(38, 35, "critical")).reason).toContain("now critical")
-		// Entered critical: a new account first scored critical has not.
-		expect(run("health_drop", { health: [{ day: TODAY, score: 35, status: "critical" }] })).toEqual({
-			_tag: "NoMatch",
-			reason: "Below threshold",
-		})
-		expect(run("health_drop", {})).toEqual({ _tag: "NoMatch", reason: "No data" })
-	})
-
 	it("champion_inactive: the most active user of the window before went quiet 14+ days", () => {
 		const found = match("champion_inactive", {
 			activity: { ann: range(-40, -16), bob: [-30, -20, -2] },
@@ -857,7 +833,7 @@ describe("signal evaluation", () => {
 			expect(run("response_overdue", lead, narrow)._tag).toBe("Match")
 			expect(run("resolution_overdue", lead, narrow)._tag).toBe("Match")
 			// Other templates stay behind the coverage.
-			expect(run("health_drop", lead, narrow)).toEqual({
+			expect(run("inactive", lead, narrow)).toEqual({
 				_tag: "NoMatch",
 				reason: "Not covered by Needs attention",
 			})

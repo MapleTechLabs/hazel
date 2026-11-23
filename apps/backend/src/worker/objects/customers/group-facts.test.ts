@@ -76,8 +76,7 @@ describe("groupFacts", () => {
 		expect(group.priorActive.get(30)).toBe(2)
 	})
 
-	it("sums MRR, seats and metrics; takes the earliest and latest dates and the primary's health", () => {
-		const health = [{ day: TODAY, score: 80, status: "healthy" as const }]
+	it("sums MRR, seats and metrics; takes the earliest and latest dates", () => {
 		const us = factsOf({
 			account: {
 				mrrMinor: 10_000,
@@ -88,7 +87,6 @@ describe("groupFacts", () => {
 				tags: ["vip"],
 			},
 			metrics: new Map([["events", [{ day: TODAY, value: 3, limitValue: 10 }]]]),
-			health,
 		})
 		const eu = factsOf({
 			account: {
@@ -108,7 +106,6 @@ describe("groupFacts", () => {
 					],
 				],
 			]),
-			health: [{ day: TODAY, score: 20, status: "critical" as const }],
 		})
 		const group = groupFacts(us, [eu], FROM)
 		expect(group.account).toMatchObject({
@@ -124,7 +121,6 @@ describe("groupFacts", () => {
 			{ day: addDays(TODAY, -1), value: 1, limitValue: null },
 			{ day: TODAY, value: 7, limitValue: 15 },
 		])
-		expect(group.health).toBe(health)
 	})
 
 	it("takes the most advanced stage: churned only when every environment is", () => {

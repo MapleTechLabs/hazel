@@ -12,7 +12,6 @@ import {
 	IconGear,
 	IconGridCirclePlus,
 	IconHashtag,
-	IconHeart,
 	IconIntegratio,
 	IconKeyboard,
 	IconLightbulb,
@@ -145,11 +144,6 @@ const DESTINATIONS = define({
 		icon: IconLightbulb,
 		to: (orgSlug) => AppRoute.CustomersSettingsSignals({ orgSlug }),
 		keywords: "rules",
-	},
-	customersHealth: {
-		label: "Health score",
-		icon: IconHeart,
-		to: (orgSlug) => AppRoute.CustomersSettingsHealth({ orgSlug }),
 	},
 	customersSla: {
 		label: "Support SLAs",
@@ -311,7 +305,6 @@ export const DESTINATION_GROUPS: ReadonlyArray<{
 			"customersSupportReport",
 			"customersList",
 			"customersSignals",
-			"customersHealth",
 			"customersSla",
 			"customersPlans",
 			"customersFeatureFlags",

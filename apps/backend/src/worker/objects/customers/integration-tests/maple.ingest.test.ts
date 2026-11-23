@@ -3,8 +3,8 @@
  * on node SQLite: a day of product events has to land on the Clerk contacts of the Clerk account
  * its `GroupId` names, a group Clerk does not hold has to wait in the unmatched list instead of
  * becoming a customer, a mapped event has to become a metric only Maple may write — and a world
- * where Clerk and Maple are the only sources has to come out with a health score and a
- * `usage_drop` signal when the usage falls away.
+ * where Clerk and Maple are the only sources has to come out with a `usage_drop` signal when the
+ * usage falls away.
  */
 import type { IngestOp } from "@hazel/domain/customers"
 import { Effect, type Scope } from "effect"
@@ -73,8 +73,8 @@ const DROPPING: ReadonlyArray<MapleActivityRow> = [
 ]
 
 const accounts = (world: CustomersWorld) =>
-	world.rows<{ name: string; activeUsers30d: number; healthStatus: string; healthScore: number | null }>(
-		`SELECT name, activeUsers30d, healthStatus, healthScore FROM customer_accounts
+	world.rows<{ name: string; activeUsers30d: number }>(
+		`SELECT name, activeUsers30d FROM customer_accounts
 		 WHERE deletedAt IS NULL ORDER BY name`,
 	)
 
@@ -252,7 +252,7 @@ describe("Maple ingest", () => {
 		)
 	})
 
-	it("computes a health score and opens usage_drop in a Clerk-and-Maple world", async () => {
+	it("opens usage_drop in a Clerk-and-Maple world", async () => {
 		await run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
@@ -270,7 +270,7 @@ describe("Maple ingest", () => {
 							).ops,
 					),
 				)
-				// A paying customer: leads get no health score.
+				// A paying customer.
 				yield* world.ingest("stripe", [
 					{
 						_tag: "subscription",
@@ -292,9 +292,6 @@ describe("Maple ingest", () => {
 				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
 
 				const [account] = accounts(world)
-				// Usage data is live, so health is scored rather than unknown.
-				expect(account?.healthStatus).not.toBe("unknown")
-				expect(typeof account?.healthScore).toBe("number")
 				expect(account?.activeUsers30d).toBe(4)
 
 				const drop = signals(world).find((signal) => signal.template === "usage_drop")

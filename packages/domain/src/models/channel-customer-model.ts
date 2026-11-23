@@ -2,19 +2,13 @@
  * A linked channel's customer as the `OrgObject` holds it (`channel_customers`, projected by the
  * `CustomersObject`): what chat shows on the channel. Keyed by `channelId`.
  *
- * Beyond the name, the account at a glance (`docs/customers/channels.md`, "In the channel"): health
- * and why, stage, plan, MRR, owner, seats, last active day, open signals and the provider deep
- * links. A row written before these existed (or by an older snapshot) has them null or empty.
+ * Beyond the name, the account at a glance (`docs/customers/channels.md`, "In the channel"): stage,
+ * plan, MRR, owner, seats, last active day, open signals and the provider deep links. A row written
+ * before these existed (or by an older snapshot) has them null or empty.
  */
 import { ChannelId, CustomerAccountId, CustomerSignalId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema as S } from "effect"
-import {
-	CustomerProvider,
-	HealthStatus,
-	LifecycleStage,
-	SignalKind,
-	SignalSeverity,
-} from "../customers/enums"
+import { CustomerProvider, LifecycleStage, SignalKind, SignalSeverity } from "../customers/enums"
 import { CompanyProfile } from "../customers/company"
 import { JsonDate } from "./utils"
 
@@ -42,10 +36,6 @@ export const Schema = S.Struct({
 	accountName: S.String,
 	/** Optional: rows synced or cached before logos were projected have none. */
 	accountLogoUrl: S.optional(S.NullOr(S.String)),
-	healthStatus: HealthStatus,
-	healthScore: S.NullOr(S.Int),
-	/** The weakest health component's plain reason; null without a score. */
-	healthWhy: S.NullOr(S.String),
 	lifecycleStage: S.NullOr(LifecycleStage),
 	planName: S.NullOr(S.String),
 	/** Summed over the customer's environments in its currency. */

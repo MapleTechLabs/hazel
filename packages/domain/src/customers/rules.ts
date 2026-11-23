@@ -66,13 +66,6 @@ export const OnboardingStalledConfig = Schema.TaggedStruct("onboarding_stalled",
 	),
 )
 
-/** Health fell ≥ `dropPoints` within `windowDays`, or (with `onCritical`) entered `critical`. */
-export const HealthDropConfig = Schema.TaggedStruct("health_drop", {
-	dropPoints: Count,
-	windowDays: Days,
-	onCritical: Schema.Boolean,
-})
-
 /** The most active contact of the last `windowDays` has been inactive for `inactiveDays`. */
 export const ChampionInactiveConfig = Schema.TaggedStruct("champion_inactive", {
 	windowDays: Days,
@@ -115,7 +108,6 @@ export const RuleConfig = Schema.Union([
 	CancelScheduledConfig,
 	TrialEndingLowActivationConfig,
 	OnboardingStalledConfig,
-	HealthDropConfig,
 	ChampionInactiveConfig,
 	NearLimitConfig,
 	SeatGrowthConfig,
@@ -183,8 +175,6 @@ export interface TemplateMeta {
 	 * time-bounded, act-now templates (billing, trials).
 	 */
 	readonly baselineOnBackfill: boolean
-	/** Signals of this template are left out of the health score's `signals` component by default. */
-	readonly excludedFromHealth: boolean
 }
 
 /** Each template's metadata, keyed by its own name. */
@@ -201,7 +191,6 @@ export const TEMPLATES: TemplateTable = {
 		requiredCapability: "activity",
 		viz: "last_active",
 		baselineOnBackfill: true,
-		excludedFromHealth: false,
 	},
 	usage_drop: {
 		template: "usage_drop",
@@ -220,7 +209,6 @@ export const TEMPLATES: TemplateTable = {
 		requiredCapability: "activity",
 		viz: "series",
 		baselineOnBackfill: true,
-		excludedFromHealth: false,
 	},
 	payment_failed: {
 		template: "payment_failed",
@@ -232,7 +220,6 @@ export const TEMPLATES: TemplateTable = {
 		requiredCapability: "billing",
 		viz: "amount",
 		baselineOnBackfill: false,
-		excludedFromHealth: false,
 	},
 	cancel_scheduled: {
 		template: "cancel_scheduled",
@@ -244,7 +231,6 @@ export const TEMPLATES: TemplateTable = {
 		requiredCapability: "billing",
 		viz: "delta",
 		baselineOnBackfill: false,
-		excludedFromHealth: false,
 	},
 	trial_ending_low_activation: {
 		template: "trial_ending_low_activation",
@@ -261,7 +247,6 @@ export const TEMPLATES: TemplateTable = {
 		requiredCapability: "billing",
 		viz: "ratio",
 		baselineOnBackfill: false,
-		excludedFromHealth: false,
 	},
 	onboarding_stalled: {
 		template: "onboarding_stalled",
@@ -273,19 +258,6 @@ export const TEMPLATES: TemplateTable = {
 		requiredCapability: "activity",
 		viz: "ratio",
 		baselineOnBackfill: true,
-		excludedFromHealth: false,
-	},
-	health_drop: {
-		template: "health_drop",
-		kind: "risk",
-		name: "Health dropped",
-		description: "Health fell {dropPoints} points in {windowDays} days, or turned critical",
-		defaultSeverity: "medium",
-		defaultConfig: { _tag: "health_drop", dropPoints: 20, windowDays: 7, onCritical: true },
-		requiredCapability: null,
-		viz: "delta",
-		baselineOnBackfill: true,
-		excludedFromHealth: true,
 	},
 	champion_inactive: {
 		template: "champion_inactive",
@@ -297,7 +269,6 @@ export const TEMPLATES: TemplateTable = {
 		requiredCapability: "activity",
 		viz: "last_active",
 		baselineOnBackfill: true,
-		excludedFromHealth: false,
 	},
 	near_limit: {
 		template: "near_limit",
@@ -309,7 +280,6 @@ export const TEMPLATES: TemplateTable = {
 		requiredCapability: "meteredLimits",
 		viz: "limit",
 		baselineOnBackfill: true,
-		excludedFromHealth: true,
 	},
 	seat_growth: {
 		template: "seat_growth",
@@ -321,7 +291,6 @@ export const TEMPLATES: TemplateTable = {
 		requiredCapability: "activity",
 		viz: "delta",
 		baselineOnBackfill: true,
-		excludedFromHealth: true,
 	},
 	churned: {
 		template: "churned",
@@ -333,7 +302,6 @@ export const TEMPLATES: TemplateTable = {
 		requiredCapability: "billing",
 		viz: "delta",
 		baselineOnBackfill: false,
-		excludedFromHealth: true,
 	},
 	response_overdue: {
 		template: "response_overdue",
@@ -345,7 +313,6 @@ export const TEMPLATES: TemplateTable = {
 		requiredCapability: null,
 		viz: "overdue",
 		baselineOnBackfill: false,
-		excludedFromHealth: false,
 	},
 	resolution_overdue: {
 		template: "resolution_overdue",
@@ -357,7 +324,6 @@ export const TEMPLATES: TemplateTable = {
 		requiredCapability: null,
 		viz: "overdue",
 		baselineOnBackfill: false,
-		excludedFromHealth: false,
 	},
 }
 
