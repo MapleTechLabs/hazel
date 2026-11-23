@@ -13,8 +13,10 @@ import { button } from "../../../ui/button"
 import { heading } from "../../../ui/heading"
 import { menuLabel } from "../../../ui/menu-view"
 import { RevealCalendarDay } from "./commands"
+import { eventDetail } from "./event-detail"
 import { Message } from "./message"
 import { type EventType, eventTypeEntries, type Model } from "./model"
+import { noteBody } from "./overview-tab"
 import { type Context, memberOf, menu, pageFooter, skeletonRows } from "./parts"
 
 /** The activity tab: the account's timeline by day, filtered by source and type, paged. */
@@ -42,20 +44,19 @@ const dayHeading = (ms: number, nowMs: number): readonly [string, string] => {
 	return [weekday, date]
 }
 
-/** The event's data worth showing: a note's body, or its plain values (a grouping event's title says it all). */
-const detailOf = (event: Customers.Event): string | null => {
-	if (event.type.startsWith("account.")) return null
-	const body = event.data.body
-	if (typeof body === "string") return `“${body}”`
-	const parts = Object.entries(event.data)
-		.filter(([, value]) => typeof value === "string" || typeof value === "number")
-		.map(([key, value]) => `${key.replace(/([A-Z])/g, " $1").toLowerCase()} ${value}`)
-	return parts.length === 0 ? null : parts.join(" · ")
-}
-
-const eventRow = (h: HtmlBuilder<Message>, event: Customers.Event, context: Context): Html => {
+const eventRow = (
+	h: HtmlBuilder<Message>,
+	event: Customers.Event,
+	notes: Model["notes"],
+	context: Context,
+): Html => {
 	const actor = memberOf(context, event.actorUserId)?.name ?? null
-	const detail = detailOf(event)
+	const { summary, quote } = eventDetail(event, {
+		notes,
+		nameOf: (userId) => memberOf(context, userId)?.name ?? null,
+		nowMs: context.nowMs,
+	})
+	const byline = [actor ?? SOURCE_LABEL[event.provider], ...(summary === null ? [] : [summary])]
 	return h.li(
 		[h.Key(event.id), h.Class("flex gap-3 py-3")],
 		[
@@ -70,10 +71,7 @@ const eventRow = (h: HtmlBuilder<Message>, event: Customers.Event, context: Cont
 								[h.Class("flex min-w-0 flex-col")],
 								[
 									h.span([h.Class("font-medium text-fg text-sm")], [event.title]),
-									h.span(
-										[h.Class("text-muted-fg text-xs")],
-										[[actor ?? SOURCE_LABEL[event.provider], event.type].join(" · ")],
-									),
+									h.span([h.Class("text-muted-fg text-xs")], [byline.join(" · ")]),
 								],
 							),
 							h.span(
@@ -82,18 +80,9 @@ const eventRow = (h: HtmlBuilder<Message>, event: Customers.Event, context: Cont
 							),
 						],
 					),
-					...(detail === null
+					...(quote === null
 						? []
-						: [
-								h.p(
-									[
-										h.Class(
-											"rounded-lg border border-border bg-wash px-3 py-2 text-fg-2 text-sm",
-										),
-									],
-									[detail],
-								),
-							]),
+						: [noteBody(h, quote, "rounded-lg border border-border bg-wash px-3 py-2")]),
 				],
 			),
 		],
@@ -270,7 +259,7 @@ export const activityTab = (h: HtmlBuilder<Message>, model: Model, context: Cont
 							),
 							h.ul(
 								[h.Class("flex flex-col")],
-								events.map((event) => eventRow(h, event, context)),
+								events.map((event) => eventRow(h, event, model.notes, context)),
 							),
 						],
 					)

@@ -614,7 +614,7 @@ const actOnSignal = (
 		actor: CustomersActor,
 		now: Date,
 	) => Partial<schema.NewCustomerSignal>,
-	data: Record<string, unknown> = {},
+	data: Record<string, unknown> & { readonly note?: string | null } = {},
 ) =>
 	Effect.gen(function* () {
 		const actor = yield* requireMember
@@ -656,6 +656,19 @@ const actOnSignal = (
 					{ signalId, template: signal.template, ...data },
 					now,
 				)
+				// The note joins the account's notes; this action's event already shows it in the timeline.
+				const noteBody = data.note?.trim()
+				if (noteBody) {
+					yield* db.run(
+						SQLite.insertInto(schema.customerNotesTable).values({
+							organizationId: signal.organizationId,
+							accountId: signal.accountId,
+							authorUserId: actor.userId,
+							body: noteBody,
+							signalId,
+						}),
+					)
+				}
 				yield* refreshCounters(signal.accountId, now)
 				const next = typeof changes.status === "string" ? changes.status : signal.status
 				// A linked channel shows the customer's open signals: only a status change moves them.
