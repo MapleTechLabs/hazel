@@ -3,15 +3,23 @@ import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import type { Provider } from "../../../auth/client"
 import { IconExternalLink, IconGitHub, IconGoogle, IconLock, type IconOptions } from "../../../icons"
-import { desktopAuthClient } from "../../../platform/desktop"
 import { AppRoute, hrefOf } from "../../../route"
 import { button } from "../../../ui/button"
 import { loader } from "../../../ui/loader"
+import { textField } from "../../../ui/text-field"
 import type { PageViewInputs } from "../../contract"
 import type { UserErrorMessage } from "~/lib/error-messages"
 import { authError, authFailureMessage, authFrame, authHeading } from "../layout"
 import { Message } from "./message"
-import { type Attempt, type Model, pendingAttempt, type SignInFailure } from "./model"
+import {
+	type Attempt,
+	type Model,
+	pendingAttempt,
+	type ServerChoice,
+	type ServerForm,
+	type ServerProblem,
+	type SignInFailure,
+} from "./model"
 
 const providers: ReadonlyArray<{
 	readonly id: Provider
@@ -139,9 +147,130 @@ const desktopChoices = (h: HtmlBuilder<Message>, model: Model): ReadonlyArray<Ht
 	...[authError(h, failureOf(model))].filter((html): html is Html => html !== null),
 ]
 
+const serverProblemText = (problem: ServerProblem): string =>
+	problem === "Empty"
+		? "Enter your workspace's web address"
+		: problem === "Invalid"
+			? "That isn't a web address, e.g. chat.acme.com"
+			: problem === "Insecure"
+				? "The address must use https"
+				: problem === "Unreachable"
+					? "Couldn't reach that address. Check it and your connection."
+					: "No Hazel workspace answers at that address"
+
+const toServerAddress = (value: string) => Message.ChangedServerAddress({ value })
+
+/** Native: another install's address (a customer's), resolved through its `/.well-known/hazel.json`. */
+const serverFormView = (
+	h: HtmlBuilder<Message>,
+	server: ServerChoice,
+	form: ServerForm,
+): ReadonlyArray<Html> => [
+	authHeading(
+		h,
+		"Sign in to another Hazel",
+		"Enter the web address your workspace uses, e.g. chat.acme.com.",
+	),
+	h.form(
+		[h.Class("flex flex-col gap-4"), h.OnSubmit(Message.SubmittedServerAddress())],
+		[
+			textField(
+				h,
+				{
+					id: "sign-in-server-address",
+					value: form.address,
+					isRequired: true,
+					isDisabled: form.isBusy,
+					isInvalid: form.problem !== null,
+					onInput: toServerAddress,
+				},
+				(parts) => [
+					parts.label(["Web address"]),
+					parts.input({
+						attributes: [
+							h.Attribute("inputmode", "url"),
+							h.Attribute("autocapitalize", "none"),
+							h.Attribute("autocorrect", "off"),
+							h.Attribute("spellcheck", "false"),
+							h.Attribute("placeholder", "chat.acme.com"),
+							h.Autofocus(true),
+						],
+					}),
+					parts.fieldError([form.problem === null ? "" : serverProblemText(form.problem)]),
+				],
+			),
+			h.div(
+				[h.Class("flex flex-col gap-3")],
+				[
+					button(
+						h,
+						{
+							intent: "primary",
+							className: "w-full",
+							isDisabled: form.isBusy,
+							onPress: Message.SubmittedServerAddress(),
+						},
+						form.isBusy ? [loader(h, { className: "size-4" }), "Connecting..."] : ["Continue"],
+					),
+					button(
+						h,
+						{
+							intent: "outline",
+							className: "w-full",
+							isDisabled: form.isBusy,
+							onPress: Message.ClickedCancelServerChange(),
+						},
+						["Cancel"],
+					),
+					...(server.isDefault
+						? []
+						: [
+								button(
+									h,
+									{
+										intent: "plain",
+										className: "w-full",
+										isDisabled: form.isBusy,
+										onPress: Message.ClickedUseHazelCloud(),
+									},
+									["Use Hazel cloud"],
+								),
+							]),
+				],
+			),
+		],
+	),
+]
+
+/** Native: which install the app signs in to, and the way to another. */
+const serverLine = (h: HtmlBuilder<Message>, model: Model, server: ServerChoice): Html =>
+	h.div(
+		[h.Class("mt-8 flex items-center gap-1 text-muted-fg text-sm")],
+		[
+			h.span([], ["Signing in to ", h.span([h.Class("font-medium text-fg")], [server.label])]),
+			h.span([h.Attribute("aria-hidden", "true")], ["·"]),
+			button(
+				h,
+				{
+					intent: "plain",
+					size: "xs",
+					isDisabled: pendingAttempt(model) !== null,
+					onPress: Message.ClickedChangeServer(),
+					attributes: [h.AriaLabel(`Change from ${server.label}`)],
+				},
+				["Change"],
+			),
+		],
+	)
+
+const nativeView = (h: HtmlBuilder<Message>, model: Model, server: ServerChoice): ReadonlyArray<Html> =>
+	server.form === null
+		? [...desktopChoices(h, model), serverLine(h, model, server)]
+		: serverFormView(h, server, server.form)
+
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) =>
-	desktopAuthClient !== null
-		? authFrame(h, shared.nowMs, desktopChoices(h, model))
+	model.server !== null
+		? authFrame(h, shared.nowMs, nativeView(h, model, model.server))
 		: authFrame(h, shared.nowMs, [
 				model.mode === "SignIn"
 					? authHeading(h, "Sign in to Hazel", "Welcome back. Pick how you'd like to sign in.")

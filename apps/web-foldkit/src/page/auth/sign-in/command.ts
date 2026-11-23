@@ -4,7 +4,9 @@ import { Command } from "foldkit"
 import { load } from "foldkit/navigation"
 import { Provider } from "../../../auth/client"
 import { operationReasons, signInWithPasskey, startOAuthSignIn } from "../../../auth/flows"
+import { currentServer, discoverServer, sameServer } from "~/config/server"
 import { type DesktopAuthUnavailableError, runDesktopAuth } from "../../../platform/desktop-auth"
+import { switchServer } from "../../../platform/server-switch"
 import { Message } from "./message"
 import type { SignInFailure } from "./model"
 
@@ -76,4 +78,34 @@ export const RetireBrowserSignIn = Command.define("RetireBrowserSignIn", {
 		Effect.ignore,
 		Effect.as(Message.CompletedRetireBrowserSignIn()),
 	),
+})
+
+type ChangeServerOutcome =
+	| ReturnType<typeof Message.ClickedCancelServerChange>
+	| ReturnType<typeof Message.LeftForServer>
+
+/**
+ * Native: resolves the address to an install (`/.well-known/hazel.json`) and starts over on it,
+ * signed out of the previous one. The install it already talks to only closes the form.
+ */
+export const ChangeServer = Command.define("ChangeServer", {
+	args: { address: Schema.String },
+	messages: [Message.LeftForServer, Message.ClickedCancelServerChange, Message.FailedServerChange],
+	execute: ({ address }) =>
+		discoverServer(address).pipe(
+			Effect.flatMap((server) =>
+				sameServer(server, currentServer())
+					? Effect.succeed<ChangeServerOutcome>(Message.ClickedCancelServerChange())
+					: switchServer(server).pipe(Effect.as<ChangeServerOutcome>(Message.LeftForServer())),
+			),
+			Effect.catchTag("ServerDiscoveryError", ({ reason }) =>
+				Effect.succeed(Message.FailedServerChange({ problem: reason })),
+			),
+		),
+})
+
+/** Native: back to the build's own install (Hazel cloud), signed out of the previous one. */
+export const UseDefaultServer = Command.define("UseDefaultServer", {
+	messages: [Message.LeftForServer],
+	execute: switchServer(null).pipe(Effect.as(Message.LeftForServer())),
 })

@@ -2,13 +2,14 @@ import { HazelAuthApi } from "@hazel/auth/contract"
 import { Client } from "@yielded/auth"
 import { Layer } from "effect"
 import type { ClientService } from "@yielded/auth/Client"
+import { apiUrl } from "~/config/server"
 
 /**
  * Hazel's sign-in client (`@hazel/auth/contract` over `/auth/*` on the API). The session is
  * an HttpOnly cookie on the API host; the client sends credentials and the CSRF header.
  */
 export const HazelAuthClient = Client.make(HazelAuthApi, {
-	baseUrl: import.meta.env.VITE_BACKEND_URL || "http://localhost:3003",
+	baseUrl: apiUrl(),
 })
 
 export type HazelAuthClient = ClientService<typeof HazelAuthApi.namespace, typeof HazelAuthApi.actions>

@@ -8,10 +8,11 @@ import { Message } from "./message"
 import { INTEGRATION_CONFIG, type Model, type Provider } from "./model"
 import { formatDistanceToNow } from "~/lib/format-distance"
 import { providerWebhook } from "./update-cards"
+import { apiUrl } from "~/config/server"
 
 /** Port of `components/channel-settings/integration-card.tsx` (OpenStatus and Railway). */
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
+const BACKEND_URL = apiUrl()
 
 const readonlyInput = <M>(h: HtmlBuilder<M>, value: string, className: string): Html =>
 	h.input([

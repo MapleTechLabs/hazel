@@ -37,6 +37,7 @@ import { HazelAuthClient, HazelAuthClientLive } from "./auth/client"
 import type { NotificationSinks } from "./app/notification-sinks"
 import { MessageWindows, MessageWindowsLive } from "./data/message-windows"
 import { EditorRegistry, EditorRegistryLive } from "./editor/registry"
+import { apiUrl } from "~/config/server"
 
 /** Same groups, transport and auth middleware as the legacy `HazelRpcClient`, as a plain Effect service. */
 const AllRpcs = MessageRpcs.merge(
@@ -66,7 +67,7 @@ const makeClient = RpcClient.make(AllRpcs, { flatten: true })
 
 export class HazelRpc extends Context.Service<HazelRpc, Effect.Success<typeof makeClient>>()("HazelRpc") {}
 
-const ProtocolLive = RpcClient.layerProtocolHttp({ url: `${import.meta.env.VITE_BACKEND_URL}/rpc` }).pipe(
+const ProtocolLive = RpcClient.layerProtocolHttp({ url: `${apiUrl()}/rpc` }).pipe(
 	Layer.provide(FetchHttpClient.layer.pipe(Layer.provide(RpcCredentialsLive))),
 	Layer.provide(RpcSerialization.layerNdjson),
 )
@@ -76,7 +77,7 @@ export const HazelRpcLive = Layer.effect(HazelRpc, makeClient).pipe(
 )
 
 const makeApiClient = HttpApiClient.make(HazelApi, {
-	baseUrl: import.meta.env.VITE_BACKEND_URL || "http://localhost:3003",
+	baseUrl: apiUrl(),
 	transformClient: withSessionFetch,
 })
 

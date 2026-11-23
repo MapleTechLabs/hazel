@@ -1,5 +1,7 @@
-/** The web app's address, where links people share open: the install's (`VITE_APP_URL`), else Hazel's. */
-const WEB_APP_ORIGIN = new URL(import.meta.env.VITE_APP_URL || "https://app.hazel.sh").origin
+import { appOrigin } from "../config/server"
+
+/** The web app's address, where links people share open: the install this page talks to. */
+const webAppOrigin = appOrigin
 
 /** Where Tauri serves the app's own bundle when the scheme is http(s): Windows, and the Mac on CEF. */
 const TAURI_BUNDLE_HOST = "tauri.localhost"
@@ -13,10 +15,10 @@ export const shareOriginOf = (location: Pick<Location, "protocol" | "hostname" |
 	(location.protocol === "http:" || location.protocol === "https:") &&
 	location.hostname !== TAURI_BUNDLE_HOST
 		? location.origin
-		: WEB_APP_ORIGIN
+		: webAppOrigin()
 
 export const shareOrigin = (): string => shareOriginOf(window.location)
 
 /** The host of {@link shareOrigin} (`app.acme.com`), for showing where a workspace lives. */
 export const shareHost = (): string =>
-	new URL(typeof window === "undefined" ? WEB_APP_ORIGIN : shareOrigin()).host
+	new URL(typeof window === "undefined" ? webAppOrigin() : shareOrigin()).host
