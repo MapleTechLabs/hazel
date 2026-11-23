@@ -13,6 +13,7 @@ export const init = (route: RouteOf<"ChatIndex" | "ChatDms">): PageReturn<Model,
 		presence: {},
 		tab: route._tag === "ChatDms" ? "dms" : "public",
 		isDmList: route._tag === "ChatDms",
+		dmFilter: "all",
 		tabs: Tabs.init({ id: TABS_ID }),
 	},
 })
@@ -40,6 +41,7 @@ export const update = (model: Model, message: Message): PageReturn<Model, Messag
 			model,
 			outMessage: PageOutMessage.RequestedModal({ modal: { _tag: "NewChannel" } }),
 		}),
+		PressedDmFilter: ({ filter }) => ({ model: modifyFields(model, { dmFilter: () => filter }) }),
 		PressedStartConversation: () => ({
 			model,
 			outMessage: PageOutMessage.RequestedModal({ modal: { _tag: "CreateDm" } }),

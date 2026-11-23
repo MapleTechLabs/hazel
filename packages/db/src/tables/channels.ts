@@ -51,6 +51,14 @@ export const channelsTable = SQLite.table("channels", {
 		organizationId: uuid(OrganizationId),
 		parentChannelId: SQLite.nullable(uuid(ChannelId)),
 		sectionId: SQLite.nullable(uuid(ChannelSectionId)),
+		/**
+		 * A DM's (`single`, `direct`) newest message, for the DM list: kept by the org from its
+		 * search feed (`objects/org/dm-last-message.ts`). Null on other channels.
+		 */
+		lastMessageAt: SQLite.nullable(timestamptz),
+		lastMessageAuthorId: SQLite.nullable(uuid(UserId)),
+		/** Plain text, shortened; null for a message with only attachments. */
+		lastMessagePreview: SQLite.nullable(SQLite.text),
 		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 		deletedAt: SQLite.nullable(timestamptz),

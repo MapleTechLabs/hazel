@@ -21,6 +21,11 @@ export const ChannelSummary = Schema.Struct({
 	isFavorite: Schema.Boolean,
 	notificationCount: Schema.Finite,
 	memberCount: Schema.Finite,
+	/** A DM's newest message (the org keeps it on the channel row); null elsewhere or before any. */
+	lastMessageAtMs: Schema.NullOr(Schema.Finite),
+	lastMessageAuthorId: Schema.NullOr(UserId),
+	/** Plain text; null for a message with only attachments. */
+	lastMessagePreview: Schema.NullOr(Schema.String),
 	/** Every member, in query order (DM cards use them). */
 	members: Schema.Array(DmParticipant),
 })
@@ -49,6 +54,10 @@ export type Channels = typeof Channels.Type
 export const ChatIndexTab = Schema.Literals(["public", "private", "dms"])
 export type ChatIndexTab = typeof ChatIndexTab.Type
 
+/** The phone DMs tab's chips: every DM, or only those with unread messages. */
+export const DmFilter = Schema.Literals(["all", "unreads"])
+export type DmFilter = typeof DmFilter.Type
+
 export const Model = Schema.Struct({
 	channels: Channels,
 	/** `useUserPresence` for the other member of each single DM, keyed by user id. */
@@ -56,6 +65,7 @@ export const Model = Schema.Struct({
 	tab: ChatIndexTab,
 	/** `ChatDms`: only the direct messages, without the channel tabs (a phone's DMs tab). */
 	isDmList: Schema.Boolean,
+	dmFilter: DmFilter,
 	/** The tab list's roving focus; the selected tab is `tab`. */
 	tabs: Tabs.Model,
 })

@@ -1,17 +1,17 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { IconHashtag, IconLock, IconMsgPen, IconMsgs, IconPlus } from "../../icons"
+import { IconHashtag, IconLock, IconMsgs, IconPlus } from "../../icons"
 import { badge } from "../../ui/badge"
 import { button } from "../../ui/button"
 import { card } from "../../ui/card"
 import { emptyState } from "../../ui/empty-state"
 import { heading as headingText } from "../../ui/heading"
 import { loadingState } from "../../ui/loader"
-import { mobileTopBar } from "../../ui/mobile-top-bar"
 import { pageHeader, pageLayout } from "../../ui/page-header"
 import * as Tabs from "../../ui/tabs"
 import { can, channelLinksOf, type PageViewInputs, type Shared } from "../contract"
 import { channelCard, dmCard } from "./cards"
+import { mobileDmList } from "./mobile-dms"
 import { Message } from "./message"
 import {
 	type ChannelGroups,
@@ -145,8 +145,8 @@ const panels = (
 }
 
 /**
- * `ChatDms`: the direct messages alone. On a phone (the DMs tab) under a top bar like every tab's,
- * with compose at its end as a phone's messages app has it; elsewhere a page header with "New message".
+ * `ChatDms`: the direct messages alone. On a phone (the DMs tab) Slack's layout (`mobile-dms.ts`);
+ * elsewhere a page header with "New message".
  */
 const dmList = (h: HtmlBuilder<Message>, model: Model, groups: ChannelGroups, shared: Shared): Html => {
 	const list =
@@ -154,27 +154,11 @@ const dmList = (h: HtmlBuilder<Message>, model: Model, groups: ChannelGroups, sh
 			? []
 			: (panels(h, model, groups, shared, shared.orgSlug).find((panel) => panel.key === "dms")
 					?.content ?? [])
-	if (shared.isMobile)
-		return h.div(
-			[h.Class("flex min-h-full flex-col")],
-			[
-				mobileTopBar(h, {
-					title: "Direct messages",
-					isSticky: true,
-					trailing: button(
-						h,
-						{
-							intent: "plain",
-							size: "sq-md",
-							className: "size-11 text-primary",
-							onPress: Message.PressedStartConversation(),
-							attributes: [h.AriaLabel("New message")],
-						},
-						[IconMsgPen(h, { className: "size-5" })],
-					),
-				}),
-				h.div([h.Class("flex flex-col gap-4 p-4")], list),
-			],
+	if (shared.isMobile && shared.orgSlug !== null)
+		return mobileDmList(
+			h,
+			{ orgSlug: shared.orgSlug, currentUserId: shared.currentUser?.id, nowMs: shared.nowMs, model },
+			groups.dmChannels,
 		)
 	return pageLayout(h, { className: "py-6" }, [
 		pageHeader(h, {

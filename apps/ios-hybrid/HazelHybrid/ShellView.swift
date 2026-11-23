@@ -28,7 +28,7 @@ struct ShellView: View {
     @State private var composerHeight: CGFloat = 80
     @Environment(\.colorScheme) private var colorScheme
 
-    private static let brand = Color(red: 0x69 / 255, green: 0x38 / 255, blue: 0xEF / 255)
+    static let brand = Color(red: 0x69 / 255, green: 0x38 / 255, blue: 0xEF / 255)
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -153,7 +153,14 @@ struct ShellView: View {
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .bottom) {
             if bridge.hasSettled && !barTabs.isEmpty && !(path.isEmpty && bridge.isOverlayOpen) {
-                GlassTabBar(tabs: barTabs, icons: bridge.icons, onSelect: bridge.selectTab)
+                VStack(alignment: .trailing, spacing: 12) {
+                    // Only over the page's own screen: not under a pushed conversation.
+                    if let action = bridge.screenAction, path.isEmpty || path == ["page"] {
+                        GlassScreenAction(action: action, onPress: bridge.pressScreenAction)
+                            .transition(.scale(scale: 0.6).combined(with: .opacity))
+                    }
+                    GlassTabBar(tabs: barTabs, icons: bridge.icons, onSelect: bridge.selectTab)
+                }
                     .padding(.horizontal, 20)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             } else if let kept = shownKept, !kept.tabs.isEmpty {
@@ -206,6 +213,26 @@ struct ShellView: View {
         } else if tabs.isEmpty, root != nil, path.isEmpty, !isReturning {
             path = ["page"]
         }
+    }
+}
+
+/// A screen's primary action (`WebScreenAction`) as a floating Liquid Glass button in the accent
+/// colour, over the tab bar's trailing end, as the system's own compose buttons sit.
+struct GlassScreenAction: View {
+    let action: WebScreenAction
+    let onPress: () -> Void
+
+    var body: some View {
+        Button(action: onPress) {
+            Image(systemName: action.symbol)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.tint(ShellView.brand).interactive(), in: .circle)
+        .accessibilityLabel(action.label)
     }
 }
 
