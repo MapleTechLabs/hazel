@@ -71,7 +71,7 @@ export const apiEnv = (stack: HazelStackContext) => {
 		// 503 without this key.
 		optionalSecret("CLERK_SECRET_KEY"),
 
-		// Auth (Hazel sign-in): off until AUTH_GITHUB_CLIENT_ID is set. Keys come from
+		// Auth (Hazel sign-in): off until AUTH_GITHUB_CLIENT_ID or AUTH_GOOGLE_CLIENT_ID is set. Keys come from
 		// `bun run --cwd packages/auth generate-keys`.
 		optionalPlain("AUTH_GITHUB_CLIENT_ID"),
 		optionalSecret("AUTH_GITHUB_CLIENT_SECRET"),

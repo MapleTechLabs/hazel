@@ -4,6 +4,12 @@ import { Provider } from "../../../auth/client"
 import { SignInFailure } from "./model"
 
 export const Message = defineMessageUnion({
+	SucceededFetchSignInMethods: {
+		providers: Schema.Array(Schema.Literals(Provider)),
+		passkeys: Schema.Boolean,
+	},
+	/** The install didn't answer: every method is offered, and a missing one fails on press. */
+	FailedFetchSignInMethods: {},
 	ClickedProvider: { provider: Schema.Literals(Provider) },
 	ClickedPasskey: {},
 	/** The browser is leaving for the provider or the app; nothing to render. */

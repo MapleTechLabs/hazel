@@ -17,6 +17,8 @@ export {
 	providerIssuers,
 } from "./identities.ts"
 export {
+	type AuthProviders,
+	authProviders,
 	Claims,
 	desktopClient,
 	nativeClient,
@@ -25,7 +27,9 @@ export {
 	nativeHeaders,
 	nativeSession,
 	Registration,
+	SignInProvider,
 } from "./contract.ts"
+export { enabledProviders, makeProvidersRoute } from "./providers.ts"
 export {
 	domainRestrictionMessage,
 	emailDomain,
@@ -52,9 +56,11 @@ export {
 } from "./dev-sign-in.ts"
 export {
 	CryptoLive,
+	devSignInGitHubClient,
 	type HazelAuthConfig,
 	type Keyring,
 	makeHazelAuthHttp,
 	makeHazelAuthLive,
+	type OAuthClient,
 	sessionCookieName,
 } from "./server.ts"

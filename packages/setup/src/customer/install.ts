@@ -58,13 +58,25 @@ export const GENERATED_KEYS = [
 
 export type GeneratedSecrets = Record<(typeof GENERATED_KEYS)[number], string>
 
+export interface OAuthApp {
+	readonly clientId: string
+	readonly clientSecret: string
+}
+
+/** Sign-in needs an OAuth app: GitHub, Google or both (`apps/backend/src/services/hazel-auth.ts`). */
+export const hasSignInProvider = (input: Pick<CustomerInput, "github" | "google">): boolean =>
+	[input.github, input.google].some(
+		(app) => app !== undefined && app.clientId !== "" && app.clientSecret !== "",
+	)
+
 export interface CustomerInput {
 	readonly name: string
 	readonly zone: string
 	readonly cloudflareAccountId: string
 	readonly cloudflareApiToken: string
-	readonly github: { readonly clientId: string; readonly clientSecret: string }
-	readonly google?: { readonly clientId: string; readonly clientSecret: string } | undefined
+	/** Sign-in providers: at least one of the two (`hasSignInProvider`). */
+	readonly github?: OAuthApp | undefined
+	readonly google?: OAuthApp | undefined
 	readonly allowedEmailDomains?: string | undefined
 	readonly instanceAdminEmails?: string | undefined
 	readonly orgCreation?: (typeof ORG_CREATION_MODES)[number] | undefined
@@ -150,8 +162,8 @@ export const renderCustomerEnv = (
 		"# Sign-in. Callback URLs:",
 		`#   GitHub: ${oauthCallbackUrls(zone).github}`,
 		`#   Google: ${oauthCallbackUrls(zone).google}`,
-		line("AUTH_GITHUB_CLIENT_ID", input.github.clientId),
-		line("AUTH_GITHUB_CLIENT_SECRET", input.github.clientSecret),
+		line("AUTH_GITHUB_CLIENT_ID", input.github?.clientId),
+		line("AUTH_GITHUB_CLIENT_SECRET", input.github?.clientSecret),
 		line("AUTH_GOOGLE_CLIENT_ID", input.google?.clientId),
 		line("AUTH_GOOGLE_CLIENT_SECRET", input.google?.clientSecret),
 		"",
@@ -243,23 +255,25 @@ export const checkCustomerEnv = (name: string, env: Record<string, string | unde
 	)
 	checks.push(checkJwk(env.AUTH_ACCESS_TOKEN_PRIVATE_JWK))
 
-	// `apps/backend/src/services/hazel-auth.ts` turns sign-in on with a GitHub client only.
-	if (!present("AUTH_GITHUB_CLIENT_ID")) {
-		checks.push(fail("GitHub sign-in", "AUTH_GITHUB_CLIENT_ID is missing: nobody could sign in"))
-	} else if (!present("AUTH_GITHUB_CLIENT_SECRET")) {
-		checks.push(fail("GitHub sign-in", "AUTH_GITHUB_CLIENT_SECRET is missing"))
-	} else {
-		checks.push(ok("GitHub sign-in", "configured"))
+	// `apps/backend/src/services/hazel-auth.ts` turns sign-in on with a GitHub or a Google client.
+	const providers = [
+		{ name: "GitHub sign-in", id: "AUTH_GITHUB_CLIENT_ID", secret: "AUTH_GITHUB_CLIENT_SECRET" },
+		{ name: "Google sign-in", id: "AUTH_GOOGLE_CLIENT_ID", secret: "AUTH_GOOGLE_CLIENT_SECRET" },
+	] as const
+	for (const provider of providers) {
+		checks.push(
+			present(provider.id) !== present(provider.secret)
+				? fail(provider.name, `set both ${provider.id} and ${provider.secret}, or neither`)
+				: ok(provider.name, present(provider.id) ? "configured" : "off"),
+		)
 	}
-	if (present("AUTH_GOOGLE_CLIENT_ID") !== present("AUTH_GOOGLE_CLIENT_SECRET")) {
+	if (!providers.some((provider) => present(provider.id) && present(provider.secret))) {
 		checks.push(
 			fail(
-				"Google sign-in",
-				"set both AUTH_GOOGLE_CLIENT_ID and AUTH_GOOGLE_CLIENT_SECRET, or neither",
+				"Sign-in",
+				"no OAuth app: set AUTH_GITHUB_CLIENT_ID/SECRET or AUTH_GOOGLE_CLIENT_ID/SECRET, or nobody could sign in",
 			),
 		)
-	} else {
-		checks.push(ok("Google sign-in", present("AUTH_GOOGLE_CLIENT_ID") ? "configured" : "off"))
 	}
 
 	const domains = list(env.ALLOWED_EMAIL_DOMAINS)

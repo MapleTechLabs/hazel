@@ -3,6 +3,7 @@ import {
 	checkCustomerEnv,
 	type CustomerInput,
 	type GeneratedSecrets,
+	hasSignInProvider,
 	oauthCallbackUrls,
 	parseEnv,
 	renderCustomerEnv,
@@ -44,6 +45,18 @@ describe("customer env file", () => {
 		expect(failures(env)).toEqual([])
 	})
 
+	test("a Google-only install writes Google and leaves GitHub commented out", () => {
+		const content = renderCustomerEnv(
+			{ ...input, github: undefined, google: { clientId: "g-id", clientSecret: "g-secret" } },
+			secrets,
+		)
+		expect(content).toContain("# AUTH_GITHUB_CLIENT_ID=")
+		const env = parseEnv(content)
+		expect(env.AUTH_GITHUB_CLIENT_ID).toBeUndefined()
+		expect(env.AUTH_GOOGLE_CLIENT_ID).toBe("g-id")
+		expect(failures(env)).toEqual([])
+	})
+
 	test("keeps keys added by hand", () => {
 		const env = parseEnv(
 			renderCustomerEnv(input, secrets, { SLACK_CLIENT_ID: "123", HAZEL_ZONE: "old.example" }),
@@ -74,11 +87,27 @@ describe("checkCustomerEnv", () => {
 		).toEqual(["INTEGRATION_ENCRYPTION_KEY", "AUTH_BINDING_KEY", "AUTH_ACCESS_TOKEN_PRIVATE_JWK"])
 	})
 
-	test("requires GitHub sign-in and a complete Google pair", () => {
+	test("needs at least one sign-in provider, each with its id and secret", () => {
+		const noGitHub = { ...good, AUTH_GITHUB_CLIENT_ID: "", AUTH_GITHUB_CLIENT_SECRET: "" }
+		expect(failures(noGitHub)).toEqual(["Sign-in"])
+		expect(
+			failures({ ...noGitHub, AUTH_GOOGLE_CLIENT_ID: "g", AUTH_GOOGLE_CLIENT_SECRET: "gs" }),
+		).toEqual([])
 		expect(failures({ ...good, AUTH_GITHUB_CLIENT_ID: "", AUTH_GOOGLE_CLIENT_ID: "g" })).toEqual([
 			"GitHub sign-in",
 			"Google sign-in",
+			"Sign-in",
 		])
+		expect(failures({ ...good, AUTH_GOOGLE_CLIENT_ID: "g" })).toEqual(["Google sign-in"])
+	})
+
+	test("hasSignInProvider wants a complete GitHub or Google app", () => {
+		const app = { clientId: "id", clientSecret: "secret" }
+		expect(hasSignInProvider({ github: app })).toBe(true)
+		expect(hasSignInProvider({ google: app })).toBe(true)
+		expect(hasSignInProvider({ github: app, google: app })).toBe(true)
+		expect(hasSignInProvider({})).toBe(false)
+		expect(hasSignInProvider({ github: { clientId: "id", clientSecret: "" } })).toBe(false)
 	})
 
 	test("org creation by admins needs admins", () => {

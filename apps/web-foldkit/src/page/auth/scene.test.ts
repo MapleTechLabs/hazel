@@ -9,6 +9,7 @@ import { Message as RegisterMessage } from "./register/message"
 import { init as initRegister, update as updateRegister } from "./register/update"
 import { view as registerView } from "./register/view"
 import {
+	FetchSignInMethods,
 	RetireBrowserSignIn,
 	StartBrowserSignIn,
 	StartOAuthSignIn,
@@ -25,8 +26,20 @@ const signedOut = makeShared({ auth: "SignedOut", currentUser: null, organizatio
 const github = Scene.role("button", { name: "Continue with GitHub" })
 const passkey = Scene.role("button", { name: "Sign in with a passkey" })
 
-const signIn = (redirectUrl: Option.Option<string>) =>
-	initSignIn(AppRoute.SignIn.make({ redirectUrl, error: Option.none() })).model
+const google = Scene.role("button", { name: "Continue with Google" })
+
+type Providers = ReadonlyArray<"github" | "google">
+
+/** Sign-in once the install has said which methods it offers (both providers by default). */
+const signIn = (
+	redirectUrl: Option.Option<string>,
+	providers: Providers = ["github", "google"],
+	passkeys = true,
+) =>
+	updateSignIn(
+		initSignIn(AppRoute.SignIn.make({ redirectUrl, error: Option.none() })).model,
+		SignInMessage.SucceededFetchSignInMethods({ providers, passkeys }),
+	).model
 
 describe("sign in", () => {
 	test("a provider starts OAuth with the route's redirect, and disables the other choices", () => {
@@ -78,6 +91,74 @@ describe("sign in", () => {
 			),
 		)
 		expect(landed("<script>").submission).toEqual(Submission.Failed({ reason: "Unexpected" }))
+	})
+
+	test("asks the install for its methods, and shows none of them until it answers", () => {
+		const loading = initSignIn(AppRoute.SignIn.make({ redirectUrl: Option.none(), error: Option.none() }))
+		expect(loading.commands?.map((command) => command.name)).toEqual([FetchSignInMethods.name])
+		Scene.scene(
+			pageScene(updateSignIn, signInView, signedOut),
+			Scene.given(loading.model),
+			Scene.expect(Scene.label("Loading sign-in options")).toExist(),
+			Scene.expect(github).toBeAbsent(),
+			Scene.expect(google).toBeAbsent(),
+			Scene.expect(passkey).toBeAbsent(),
+		)
+	})
+
+	test("a Google-only install offers Google and passkeys, and names only Google", () => {
+		Scene.scene(
+			pageScene(updateSignIn, signInView, signedOut),
+			Scene.given(signIn(Option.none(), ["google"])),
+			Scene.expect(github).toBeAbsent(),
+			Scene.click(google),
+			Scene.Command.expectExact(StartOAuthSignIn({ provider: "google", returnTo: null })),
+			Scene.Command.resolve(StartOAuthSignIn, SignInMessage.FailedSignIn({ reason: "Cancelled" })),
+			Scene.click(passkey),
+			Scene.Command.resolve(
+				StartPasskeySignIn,
+				SignInMessage.FailedSignIn({ reason: "PasskeyUnsupported" }),
+			),
+			Scene.expect(Scene.role("alert")).toHaveText(
+				"This browser can't use passkeys. Continue with Google instead.",
+			),
+		)
+	})
+
+	test("a GitHub-only install offers GitHub alone", () => {
+		Scene.scene(
+			pageScene(updateSignIn, signInView, signedOut),
+			Scene.given(signIn(Option.none(), ["github"])),
+			Scene.expect(github).toExist(),
+			Scene.expect(google).toBeAbsent(),
+			Scene.expect(passkey).toExist(),
+		)
+	})
+
+	test("when the install can't answer, every method is offered", () => {
+		const failed = updateSignIn(
+			initSignIn(AppRoute.SignIn.make({ redirectUrl: Option.none(), error: Option.none() })).model,
+			SignInMessage.FailedFetchSignInMethods(),
+		).model
+		Scene.scene(
+			pageScene(updateSignIn, signInView, signedOut),
+			Scene.given(failed),
+			Scene.expect(github).toExist(),
+			Scene.expect(google).toExist(),
+			Scene.expect(passkey).toExist(),
+		)
+	})
+
+	test("/sign-up names only the offered providers", () => {
+		const signUp = updateSignIn(
+			initSignIn(AppRoute.SignUp.make({ redirectUrl: Option.none() })).model,
+			SignInMessage.SucceededFetchSignInMethods({ providers: ["google"], passkeys: true }),
+		).model
+		Scene.scene(
+			pageScene(updateSignIn, signInView, signedOut),
+			Scene.given(signUp),
+			Scene.expect(Scene.text("Sign up with Google. It takes a few seconds.")).toExist(),
+		)
 	})
 
 	test("/sign-up offers the same choices and links back to sign-in", () => {

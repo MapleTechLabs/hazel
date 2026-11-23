@@ -1,13 +1,21 @@
 import { Option, Schema } from "effect"
 import type { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
+import { allSignInMethods } from "../../../auth/client"
 import { safeReturnTo } from "../../../auth/return-to"
+import { desktopAuthClient } from "../../../platform/desktop"
 import type { RouteOf } from "../../../route"
 import type { Resources } from "../../../rpc"
 import type { PageReturn } from "../../contract"
-import { RetireBrowserSignIn, StartBrowserSignIn, StartOAuthSignIn, StartPasskeySignIn } from "./command"
+import {
+	FetchSignInMethods,
+	RetireBrowserSignIn,
+	StartBrowserSignIn,
+	StartOAuthSignIn,
+	StartPasskeySignIn,
+} from "./command"
 import { Message } from "./message"
-import { type Attempt, type Model, pendingAttempt, SignInFailure, Submission } from "./model"
+import { type Attempt, Methods, type Model, pendingAttempt, SignInFailure, Submission } from "./model"
 
 type Return = PageReturn<Model, Message>
 
@@ -20,13 +28,16 @@ const callbackFailure = (route: RouteOf<"SignIn" | "SignUp">): Submission => {
 	return Submission.Failed({ reason: isSignInFailure(error) ? error : "Unexpected" })
 }
 
-export const init = (route: RouteOf<"SignIn" | "SignUp">): Return => ({
-	model: {
+/** The desktop app signs in through the system browser, which lists the methods itself. */
+export const init = (route: RouteOf<"SignIn" | "SignUp">): Return => {
+	const model: Model = {
 		mode: route._tag,
 		redirectUrl: safeReturnTo(Option.getOrNull(route.redirectUrl)),
 		submission: callbackFailure(route),
-	},
-})
+		methods: Methods.Loading(),
+	}
+	return desktopAuthClient === null ? { model, commands: [FetchSignInMethods()] } : { model }
+}
 
 /** One attempt at a time: a press while another is pending does nothing. */
 const start = (model: Model, attempt: Attempt, command: Command.Command<Message, never, Resources>): Return =>
@@ -39,6 +50,12 @@ const start = (model: Model, attempt: Attempt, command: Command.Command<Message,
 
 export const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
+		SucceededFetchSignInMethods: ({ providers, passkeys }) => ({
+			model: modifyFields(model, { methods: () => Methods.Ready({ providers, passkeys }) }),
+		}),
+		FailedFetchSignInMethods: () => ({
+			model: modifyFields(model, { methods: () => Methods.Ready(allSignInMethods) }),
+		}),
 		ClickedProvider: ({ provider }) =>
 			start(model, provider, StartOAuthSignIn({ provider, returnTo: model.redirectUrl })),
 		ClickedPasskey: () => start(model, "passkey", StartPasskeySignIn({ returnTo: model.redirectUrl })),

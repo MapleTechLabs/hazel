@@ -22,12 +22,22 @@ export const Submission = defineTaggedUnion({
 })
 export type Submission = typeof Submission.Type
 
+/** The sign-in methods the install offers (`GET /auth/providers`). */
+export const Methods = defineTaggedUnion({
+	/** Not answered yet: no provider is shown, so none flashes in only to disappear. */
+	Loading: {},
+	/** The install's answer, or every method when it couldn't answer. */
+	Ready: { providers: Schema.Array(Schema.Literals(Provider)), passkeys: Schema.Boolean },
+})
+export type Methods = typeof Methods.Type
+
 export const Model = Schema.Struct({
 	/** `/sign-up` shows the same choices: the first OAuth sign-in creates the account. */
 	mode: Schema.Literals(["SignIn", "SignUp"]),
 	/** `?redirect_url=`: where to go once signed in. */
 	redirectUrl: Schema.NullOr(Schema.String),
 	submission: Submission,
+	methods: Methods,
 })
 export type Model = typeof Model.Type
 

@@ -19,6 +19,7 @@ import {
 	envFileName,
 	GENERATED_KEYS,
 	type GeneratedSecrets,
+	hasSignInProvider,
 	NAME_RE,
 	normalizeZone,
 	oauthCallbackUrls,
@@ -228,12 +229,12 @@ const installFlags = {
 	zone: flag("zone", "Cloudflare zone the install lives under (app.<zone>, api.<zone>, ...)"),
 	accountId: flag("account-id", "Cloudflare account id (default: $CLOUDFLARE_ACCOUNT_ID)"),
 	apiToken: flag("api-token", "Cloudflare API token (default: $CLOUDFLARE_API_TOKEN)"),
-	githubClientId: flag("github-client-id", "GitHub OAuth app client id (sign-in)"),
+	githubClientId: flag("github-client-id", "GitHub OAuth app client id (sign-in; GitHub, Google or both)"),
 	githubClientSecret: flag(
 		"github-client-secret",
 		"GitHub OAuth app client secret (default: $AUTH_GITHUB_CLIENT_SECRET)",
 	),
-	googleClientId: flag("google-client-id", "Google OAuth client id (optional second sign-in provider)"),
+	googleClientId: flag("google-client-id", "Google OAuth client id (sign-in; GitHub, Google or both)"),
 	googleClientSecret: flag(
 		"google-client-secret",
 		"Google OAuth client secret (default: $AUTH_GOOGLE_CLIENT_SECRET)",
@@ -388,33 +389,65 @@ export const customerCommand = Command.make("customer", installFlags, (flags) =>
 		yield* section("Sign-in")
 		yield* Console.log(
 			pc.dim(
-				`GitHub is required (sign-in is off without it). Create an OAuth app at https://github.com/settings/developers`,
+				"Users sign in with GitHub, Google or both (and passkeys once signed in): set up at least one.",
 			),
 		)
-		yield* Console.log(pc.dim(`  Homepage URL:      https://${customerHosts(zone).web}`))
-		yield* Console.log(pc.dim(`  Callback URL:      ${callbacks.github}`))
-		const githubClientId = yield* value({
-			flag: flags.githubClientId,
-			flagName: "github-client-id",
-			message: "GitHub client id",
-			fallback: prior.AUTH_GITHUB_CLIENT_ID,
-		})
-		const githubClientSecret = yield* value({
-			flag: flags.githubClientSecret,
-			flagName: "github-client-secret",
-			message: "GitHub client secret",
-			fallback: env("AUTH_GITHUB_CLIENT_SECRET"),
-			secret: true,
-		})
+		// A provider given by flag, or already in the env file, is kept without asking.
+		const offer = (options: {
+			readonly flag: Option.Option<string>
+			readonly prior: string | undefined
+			readonly message: string
+			readonly initial: boolean
+		}) =>
+			Option.isSome(options.flag) || (options.prior ?? "") !== ""
+				? Effect.succeed(true)
+				: interactive
+					? Prompt.Confirm({ message: options.message, initial: options.initial })
+					: Effect.succeed(false)
+
+		let github: CustomerInput["github"]
+		const githubIdFallback = prior.AUTH_GITHUB_CLIENT_ID
+		if (
+			yield* offer({
+				flag: flags.githubClientId,
+				prior: githubIdFallback,
+				message: "Offer GitHub sign-in?",
+				initial: true,
+			})
+		) {
+			yield* Console.log(
+				pc.dim("GitHub: create an OAuth app at https://github.com/settings/developers"),
+			)
+			yield* Console.log(pc.dim(`  Homepage URL:      https://${customerHosts(zone).web}`))
+			yield* Console.log(pc.dim(`  Callback URL:      ${callbacks.github}`))
+			github = {
+				clientId: yield* value({
+					flag: flags.githubClientId,
+					flagName: "github-client-id",
+					message: "GitHub client id",
+					fallback: githubIdFallback,
+				}),
+				clientSecret: yield* value({
+					flag: flags.githubClientSecret,
+					flagName: "github-client-secret",
+					message: "GitHub client secret",
+					fallback: env("AUTH_GITHUB_CLIENT_SECRET"),
+					secret: true,
+				}),
+			}
+		}
 
 		let google: CustomerInput["google"]
 		const googleIdFallback = prior.AUTH_GOOGLE_CLIENT_ID
-		const wantsGoogle =
-			Option.isSome(flags.googleClientId) ||
-			googleIdFallback !== undefined ||
-			(interactive &&
-				(yield* Prompt.Confirm({ message: "Also offer Google sign-in?", initial: false })))
-		if (wantsGoogle) {
+		if (
+			yield* offer({
+				flag: flags.googleClientId,
+				prior: googleIdFallback,
+				message: github === undefined ? "Offer Google sign-in?" : "Also offer Google sign-in?",
+				// Without GitHub, Google is the only way in.
+				initial: github === undefined,
+			})
+		) {
 			yield* Console.log(
 				pc.dim(`Google: an OAuth client (Web application) with redirect URI ${callbacks.google}`),
 			)
@@ -433,6 +466,13 @@ export const customerCommand = Command.make("customer", installFlags, (flags) =>
 					secret: true,
 				}),
 			}
+		}
+
+		if (!hasSignInProvider({ github, google })) {
+			return yield* failWith(
+				"Sign-in needs a GitHub or a Google OAuth app: pass --github-client-id and --github-client-secret, " +
+					"or --google-client-id and --google-client-secret (or both).",
+			)
 		}
 
 		// ── Access ──
@@ -507,7 +547,7 @@ export const customerCommand = Command.make("customer", installFlags, (flags) =>
 			zone,
 			cloudflareAccountId,
 			cloudflareApiToken,
-			github: { clientId: githubClientId, clientSecret: githubClientSecret },
+			github,
 			google,
 			allowedEmailDomains: allowedEmailDomains || undefined,
 			instanceAdminEmails: instanceAdminEmails || undefined,
@@ -534,8 +574,10 @@ export const customerCommand = Command.make("customer", installFlags, (flags) =>
 				`${hosts.linkPreview}, ${hosts.botGateway}, ${hosts.cdn}).`,
 			`Email sending: onboard ${hosts.mail} to Cloudflare Email Sending (invitations and support replies come from it).`,
 			`Inbound support mail: enable Email Routing for ${hosts.inbound} (the deploy routes it to the api Worker).`,
-			`GitHub OAuth app callback: ${callbacks.github}` +
-				(google ? `\n     Google OAuth client redirect URI: ${callbacks.google}` : ""),
+			[
+				...(github ? [`GitHub OAuth app callback: ${callbacks.github}`] : []),
+				...(google ? [`Google OAuth client redirect URI: ${callbacks.google}`] : []),
+			].join("\n     "),
 			`Optional Slack sync: bun run slack:manifest --api-url https://${hosts.api}, then add SLACK_* to the env file.`,
 			`Back up ${envFileName(name)} (password manager or secret store): losing it means losing the install's keys.`,
 		]
