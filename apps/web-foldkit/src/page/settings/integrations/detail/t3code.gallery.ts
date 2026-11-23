@@ -73,10 +73,9 @@ for (const [name, width] of Object.entries(WIDTHS)) {
 			await expect.poll(() => document.getElementById("gallery")).toBeTruthy()
 			await new Promise((resolve) => setTimeout(resolve, 300))
 			await document.fonts.ready
-			await page.screenshot({
-				path: `t3code-${name}-${theme}.png`,
-				element: document.getElementById("gallery")!,
-			})
+			const gallery = document.getElementById("gallery")
+			if (gallery === null) throw new Error("The gallery frame did not render")
+			await page.screenshot({ path: `t3code-${name}-${theme}.png`, element: gallery })
 		})
 	}
 }
