@@ -68,16 +68,27 @@ export const card = (
 		],
 	)
 
-/** An icon button that copies an identifier; `label` names it in the tooltip and the toast. */
-export const copyButton = (h: HtmlBuilder<Message>, text: string, label: string): Html =>
+/**
+ * An icon button that copies an identifier; `label` names it in the toast, and in the tooltip
+ * unless `target` says which of many it copies.
+ */
+export const copyButton = (
+	h: HtmlBuilder<Message>,
+	text: string,
+	label: string,
+	options: Readonly<{ target?: string; className?: string }> = {},
+): Html =>
 	button(
 		h,
 		{
 			intent: "plain",
 			size: "sq-xs",
-			className: "shrink-0",
+			className: twMerge("shrink-0", options.className),
 			onPress: Message.PressedCopy({ text, label }),
-			attributes: [h.AriaLabel(`Copy ${label}`), h.Title(`Copy ${label}`)],
+			attributes: [
+				h.AriaLabel(`Copy ${options.target ?? label}`),
+				h.Title(`Copy ${options.target ?? label}`),
+			],
 		},
 		[IconCopy(h, icon)],
 	)

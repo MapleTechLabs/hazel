@@ -352,13 +352,15 @@ describe("customer page: a user's other customers", () => {
 		as,
 	).model
 
-	test("a user's email copies from its row", () => {
+	test("a user's email copies from its row, at either table width", () => {
 		const email = row.contact.email ?? ""
 		Scene.scene(
 			pageScene(update, view, as),
 			Scene.given(withUsers),
 			menusMounted(3),
-			Scene.click(Scene.role("button", { name: "Copy Email" })),
+			// One beside the Email column, one in the subtitle that replaces it on a narrow table.
+			Scene.expectAll(Scene.all.role("button", { name: `Copy ${email}` })).toHaveCount(2),
+			Scene.click(Scene.selector(`span[title="${email}"] + button`)),
 			Scene.Command.expectExact(CopyCustomerText({ text: email, label: "Email", isPath: false })),
 			Scene.Command.resolve(
 				CopyCustomerText,
