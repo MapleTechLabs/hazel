@@ -44,6 +44,18 @@ describe("eventDetail", () => {
 		expect(eventDetail(added, { ...context, notes: null })).toEqual({ summary: null, quote: null })
 	})
 
+	it("follows a handling note's edits and deletion", () => {
+		const done = (noteId: string) => event("signal.done", { outcome: "fixed", noteId })
+		expect(eventDetail(done(NOTE.id), context)).toEqual({
+			summary: "Root cause resolved",
+			quote: "Spoke with finance",
+		})
+		expect(eventDetail(done("gone"), context)).toEqual({
+			summary: "Root cause resolved · Note deleted",
+			quote: null,
+		})
+	})
+
 	it("names the assignee", () => {
 		expect(eventDetail(event("signal.assigned", { assigneeUserId: USER }), context).summary).toBe(
 			"Assigned to Sam",

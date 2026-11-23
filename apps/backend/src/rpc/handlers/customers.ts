@@ -647,28 +647,32 @@ const actOnSignal = (
 						})
 						.where(($) => [$.id.eq(signalId)]),
 				)
+				// The note joins the account's notes. The event points at it, so the timeline follows
+				// an edit or a delete instead of keeping its own copy of the text.
+				const { note: written, ...details } = data
+				const noteBody = written?.trim()
+				const notes = noteBody
+					? yield* db.run(
+							SQLite.insertInto(schema.customerNotesTable)
+								.values({
+									organizationId: signal.organizationId,
+									accountId: signal.accountId,
+									authorUserId: actor.userId,
+									body: noteBody,
+									signalId,
+								})
+								.returning("id"),
+						)
+					: []
 				const [type, verb] = ACTION_EVENT[action]
 				yield* hazelEvent(
 					signal.accountId,
 					actor.userId,
 					type,
 					`${verb}: ${signal.title}`,
-					{ signalId, template: signal.template, ...data },
+					{ signalId, template: signal.template, ...details, noteId: notes[0]?.id ?? null },
 					now,
 				)
-				// The note joins the account's notes; this action's event already shows it in the timeline.
-				const noteBody = data.note?.trim()
-				if (noteBody) {
-					yield* db.run(
-						SQLite.insertInto(schema.customerNotesTable).values({
-							organizationId: signal.organizationId,
-							accountId: signal.accountId,
-							authorUserId: actor.userId,
-							body: noteBody,
-							signalId,
-						}),
-					)
-				}
 				yield* refreshCounters(signal.accountId, now)
 				const next = typeof changes.status === "string" ? changes.status : signal.status
 				// A linked channel shows the customer's open signals: only a status change moves them.

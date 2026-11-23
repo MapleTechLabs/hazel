@@ -107,9 +107,14 @@ const summaryOf = (event: Customers.Event, context: DetailContext): string | nul
 }
 
 export const eventDetail = (event: Customers.Event, context: DetailContext): EventDetail => {
-	if (event.type === "note.added") return noteQuote(event.data, context.notes)
+	const summary = summaryOf(event, context) || null
+	// Events from before handling notes were linked keep their text in `note`.
+	if (text(event.data.noteId) === null) {
+		return { summary, quote: text(event.data.note) ?? text(event.data.body) }
+	}
+	const note = noteQuote(event.data, context.notes)
 	return {
-		summary: summaryOf(event, context) || null,
-		quote: text(event.data.note) ?? text(event.data.body),
+		summary: [summary, note.summary].filter((part) => part !== null).join(" · ") || null,
+		quote: note.quote,
 	}
 }
