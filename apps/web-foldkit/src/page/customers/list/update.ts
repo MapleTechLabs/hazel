@@ -8,7 +8,7 @@ import { modifyFields } from "foldkit/struct"
 import { commonMessage, failureMessage } from "~/lib/error-messages"
 import type { AccountRow } from "../../../customers/queries"
 import type { ViewLook } from "../../../customers/ui/view-look"
-import { layoutOf, moveKey, stepKey, withSidebar, isInSidebar } from "../../../customers/view-layout"
+import { layoutOf, moveKey, stepKey, withSidebar } from "../../../customers/view-layout"
 import { errorToastOf, reasonToast, successToast } from "../../../data/actions"
 import { AppRoute, customerRoute, customersListRoute, type RouteOf } from "../../../route"
 import * as Menu from "../../../ui/menu"
@@ -57,6 +57,7 @@ import {
 	ROW_PAGE,
 	SAVE_MODAL_ID,
 	sameDraft,
+	sidebarStateOf,
 	SORT_MENU_ID,
 	shownColumns,
 	TAB_LIST_ID,
@@ -256,9 +257,10 @@ const onViewMenu = (model: Model, shared: Shared, key: string): Return => {
 		case "edit":
 			return openSaveModal(model, "edit")
 		case "sidebar": {
-			const layout = layoutOf(model.layout)
 			const key = layoutKeyOf(tab)
-			return withLayout(model, shared, withSidebar(layout, key, !isInSidebar(layout, key)))
+			const { isShown, canHide } = sidebarStateOf(model, key)
+			if (isShown && !canHide) return { model }
+			return withLayout(model, shared, withSidebar(layoutOf(model.layout), key, !isShown))
 		}
 		case "reset":
 			return withDraft(model, shared, () => tab.draft)

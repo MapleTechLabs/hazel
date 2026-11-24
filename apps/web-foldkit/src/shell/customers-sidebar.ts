@@ -19,12 +19,13 @@ import { lookOf, type ViewLook, viewGlyph } from "../customers/ui/view-look"
 import {
 	ALL_KEY,
 	arrange,
+	canHideFromSidebar,
 	CURRENT_KEY,
-	isInSidebar,
 	layoutOf,
 	moveKey,
 	reorderShown,
 	saveLayoutAction,
+	sidebarKeysOf,
 	stepKey,
 	withSidebar,
 } from "../customers/view-layout"
@@ -55,9 +56,9 @@ import { userMenuFooter } from "./menus"
 /**
  * The Customers area's sidebar next to the nav rail (`docs/customers/spec.md` "UI surfaces"):
  * Overview, Needs attention with the count of open signals on my accounts, the Support inbox with
- * the issues waiting on a reply that are mine or nobody's, Customers and the views
- * (in the person's own order, without the ones they hid: `customers/view-layout.ts`; dragging one
- * reorders the list's tabs too), and the settings pages. Shell state: it survives navigation
+ * the issues waiting on a reply that are mine or nobody's, the Customers section of views
+ * (in the person's own order, without the ones they hid but never empty: `customers/view-layout.ts`;
+ * dragging one reorders the list's tabs too), and the settings pages. Shell state: it survives navigation
  * inside the area.
  */
 
@@ -146,10 +147,16 @@ const allViewsOf = (model: Model): ReadonlyArray<SidebarView> =>
 		layoutOf(model.layout).order,
 	)
 
-/** The views the sidebar shows, in my order. */
+/** The views the sidebar shows, in my order: at least one. */
 export const sidebarViewsOf = (model: Model): ReadonlyArray<SidebarView> => {
-	const layout = layoutOf(model.layout)
-	return allViewsOf(model).filter((view) => isInSidebar(layout, view.key))
+	const all = allViewsOf(model)
+	const shown = new Set(
+		sidebarKeysOf(
+			layoutOf(model.layout),
+			all.map((view) => view.key),
+		),
+	)
+	return all.filter((view) => shown.has(view.key))
 }
 
 // UPDATE
@@ -255,8 +262,16 @@ export const update = (model: Model, message: Message, userId: UserId | null): R
 					Message.GotDragMessage({ message: child }),
 				),
 			),
-		PressedHideView: ({ key }) =>
-			withLayout(model, userId, withSidebar(layoutOf(model.layout), key, false)),
+		PressedHideView: ({ key }) => {
+			const layout = layoutOf(model.layout)
+			return canHideFromSidebar(
+				layout,
+				allViewsOf(model).map((view) => view.key),
+				key,
+			)
+				? withLayout(model, userId, withSidebar(layout, key, false))
+				: { model }
+		},
 		CompletedSaveLayout: () => ({ model }),
 		FailedSaveLayout: ({ reason }) => ({
 			model,
@@ -346,7 +361,7 @@ const badge = <M>(h: HtmlBuilder<M>, count: number): Html =>
 const listViewOf = (route: AppRoute): string | undefined =>
 	route._tag === "CustomersList" ? Option.getOrElse(route.view, () => CURRENT_KEY) : undefined
 
-/** The sidebar's views: drag to reorder (the list's tabs follow), the eye hides one. */
+/** The sidebar's views: drag to reorder (the list's tabs follow), the eye hides one (not the last). */
 const viewsSection = <ParentMessage>(
 	h: HtmlBuilder<ParentMessage>,
 	model: Model,
@@ -358,7 +373,7 @@ const viewsSection = <ParentMessage>(
 	const dragged = views.find(
 		(view) => view.key === Option.getOrNull(DragAndDrop.maybeDraggedItemId(model.drag)),
 	)
-	return sidebarSection(h, { label: "Views", listAttributes: [sortableList(h, VIEWS_LIST_ID)] }, [
+	return sidebarSection(h, { label: "Customers", listAttributes: [sortableList(h, VIEWS_LIST_ID)] }, [
 		...views.map((view, index) => {
 			const isCurrent = listView === view.key
 			const row = sortableRow(h, {
@@ -383,20 +398,22 @@ const viewsSection = <ParentMessage>(
 					},
 					[viewGlyph(h, view.look), sidebarLabel(h, [view.name])],
 				),
-				button(
-					h,
-					{
-						intent: "plain",
-						size: "xs",
-						onPress: toParentMessage(Message.PressedHideView({ key: view.key })),
-						attributes: [
-							h.Attribute("data-slot", "menu-trigger"),
-							h.AriaLabel(`Hide ${view.name} from the sidebar`),
-							h.Title("Hide from sidebar"),
-						],
-					},
-					[IconEyeSlash(h, { className: "size-4" })],
-				),
+				views.length === 1
+					? h.empty
+					: button(
+							h,
+							{
+								intent: "plain",
+								size: "xs",
+								onPress: toParentMessage(Message.PressedHideView({ key: view.key })),
+								attributes: [
+									h.Attribute("data-slot", "menu-trigger"),
+									h.AriaLabel(`Hide ${view.name} from the sidebar`),
+									h.Title("Hide from sidebar"),
+								],
+							},
+							[IconEyeSlash(h, { className: "size-4" })],
+						),
 			])
 		}),
 		dragged === undefined
@@ -454,12 +471,6 @@ export const view = <ParentMessage>(
 						inboxCount > 0 ? [badge(h, inboxCount)] : [],
 					),
 					item("customersSupportReport", on("CustomersSupportReport")),
-					item(
-						"customersList",
-						// The list's view lights its own row; a hidden one lights this.
-						on("CustomerDetail") ||
-							(listView !== undefined && !views.some((view) => view.key === listView)),
-					),
 				]),
 				viewsSection(h, model, views, orgSlug, listView, toParentMessage),
 				sidebarSection(h, { label: "Settings" }, [

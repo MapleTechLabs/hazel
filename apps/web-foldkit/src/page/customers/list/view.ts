@@ -23,7 +23,6 @@ import { companyLogo, menuAvatar, personLabel } from "../../../customers/ui/iden
 import { kbd } from "../../../customers/ui/shortcuts"
 import { dragGhost, sortableList, sortableRow } from "../../../customers/ui/sortable"
 import { lookPicker, viewGlyph } from "../../../customers/ui/view-look"
-import { isInSidebar, layoutOf } from "../../../customers/view-layout"
 import * as Customers from "@hazel/domain/customers"
 import { DragAndDrop } from "@foldkit/ui"
 import { freshness, pageHeader } from "../../../ui/page-header"
@@ -69,6 +68,7 @@ import {
 	SEARCH_ID,
 	TAB_LIST_ID,
 	shownColumns,
+	sidebarStateOf,
 	sortEntries,
 	sortLabel,
 	userIdOfOwnerKey,
@@ -174,7 +174,7 @@ const VIEW_MENU_LABEL = {
 
 const viewMenuLabel = (model: Model, key: string): string =>
 	key === "sidebar"
-		? isInSidebar(layoutOf(model.layout), layoutKeyOf(currentTab(model)))
+		? sidebarStateOf(model, layoutKeyOf(currentTab(model))).isShown
 			? "Hide from sidebar"
 			: "Show in sidebar"
 		: (VIEW_MENU_LABEL[key as keyof typeof VIEW_MENU_LABEL] ?? key)
