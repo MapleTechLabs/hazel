@@ -260,7 +260,9 @@ export const lookOf = (
 		else if (icon instanceof HTMLImageElement) {
 			// A customer's logo. Loaded or not: the shell loads pictures itself (`ImageLoader.swift`).
 			const src = icon.currentSrc || icon.src
-			look.icon.avatar = { bg: hex(style.backgroundColor), ...(src === "" ? {} : { src }) }
+			const avatar: AvatarLook = { bg: hex(style.backgroundColor) }
+			if (src !== "") avatar.src = src
+			look.icon.avatar = avatar
 		} else if (
 			channelIcon !== null &&
 			!(icon instanceof SVGElement) &&
@@ -268,10 +270,9 @@ export const lookOf = (
 		) {
 			// A customer without a logo: its initial on its tint (`companyLogo`).
 			const char = icon.textContent?.trim() ?? ""
-			look.icon.avatar = {
-				bg: hex(style.backgroundColor),
-				...(char === "" ? {} : { initial: { ...textOf(icon), char } }),
-			}
+			const avatar: AvatarLook = { bg: hex(style.backgroundColor) }
+			if (char !== "") avatar.initial = { ...textOf(icon), char }
+			look.icon.avatar = avatar
 		} else {
 			const key = iconKey(icon)
 			if (key !== undefined) look.icon.image = key
