@@ -235,7 +235,7 @@ export const probeChecks = (results: ReadonlyArray<ProbeResult>): Array<Check> =
 		checks.push({
 			name: "Token permissions",
 			status: "warn",
-			message: `could not check ${unclear.map((r) => `${r.permission.group} (HTTP ${r.status})`).join(", ")}`,
+			message: `could not check ${unclear.map((r) => `${r.permission.group} (${r.status === 0 ? "no answer" : `HTTP ${r.status}`})`).join(", ")}`,
 		})
 	}
 	return checks

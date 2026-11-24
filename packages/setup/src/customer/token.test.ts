@@ -143,6 +143,23 @@ describe("checks", () => {
 		expect(checks[0]?.message).toContain("D1 Write")
 	})
 
+	test("probes: a denied permission still fails when a later probe got no answer", () => {
+		const results = TOKEN_PERMISSIONS.map((permission) => ({
+			permission,
+			status:
+				permission.group === "D1 Write"
+					? 403
+					: permission.group === "Workers R2 Storage Write"
+						? 0
+						: 200,
+		}))
+		const checks = probeChecks(results)
+		expect(checks[0]).toMatchObject({ status: "fail" })
+		expect(checks[0]?.message).toContain("D1 Write")
+		expect(checks.at(-1)).toMatchObject({ status: "warn" })
+		expect(checks.at(-1)?.message).toContain("Workers R2 Storage Write (no answer)")
+	})
+
 	test("probe paths fill the account and zone, and skip zone probes without a zone", () => {
 		const dns = TOKEN_PERMISSIONS.find((p) => p.group === "DNS Write")!
 		const d1 = TOKEN_PERMISSIONS.find((p) => p.group === "D1 Write")!

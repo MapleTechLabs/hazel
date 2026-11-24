@@ -71,7 +71,13 @@ const permissionChecks = (
 		for (const permission of TOKEN_PERMISSIONS) {
 			const path = probePath(permission, ids)
 			if (path === undefined) continue
-			results.push({ permission, status: (yield* cloudflareGet(path, token)).status })
+			// A probe that cannot reach Cloudflare counts as unchecked (status 0), so the 401/403s
+			// already collected still fail the check.
+			const status = yield* cloudflareGet(path, token).pipe(
+				Effect.map((response) => response.status),
+				Effect.orElseSucceed(() => 0),
+			)
+			results.push({ permission, status })
 		}
 		return probeChecks(results)
 	})

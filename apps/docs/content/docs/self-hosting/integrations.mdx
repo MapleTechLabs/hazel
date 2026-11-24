@@ -70,7 +70,8 @@ Under **Permissions & events**, give the app read-only **Repository permissions*
 | Deployments   | Read-only | Deployment statuses                     |
 
 and subscribe to the events **Push**, **Pull request**, **Issues**, **Release**, **Workflow run**,
-**Deployment status** and **Star**. Hazel posts these to channels; others are ignored.
+**Deployment status**, **Star** and **Milestone**. Hazel posts these to channels and ignores any
+other event.
 
 Then generate a private key. Hazel reads it **base64-encoded**, on one line:
 
