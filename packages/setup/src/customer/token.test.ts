@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
 	missingPermissions,
+	policiesAreNamed,
 	policyChecks,
 	policyCovers,
 	probeChecks,
@@ -122,6 +123,15 @@ describe("missingPermissions", () => {
 			},
 		]
 		expect(names(missingPermissions(denied, ids))).toEqual(["D1 Write"])
+	})
+})
+
+describe("policiesAreNamed", () => {
+	test("a policy with a group that has only an id cannot be matched by name", () => {
+		expect(policiesAreNamed(fullToken)).toBe(true)
+		expect(policiesAreNamed([{ permission_groups: [{ id: "c8fed203ed3043cba015a93ad1616f1f" }] }])).toBe(
+			false,
+		)
 	})
 })
 

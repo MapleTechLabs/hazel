@@ -14,6 +14,7 @@ import {
 	probePath,
 	TOKEN_PERMISSIONS,
 	type TokenPolicy,
+	policiesAreNamed,
 } from "./token.ts"
 
 interface CloudflareBody {
@@ -49,7 +50,9 @@ const readOwnPolicies = (token: string, tokenId: string, accountId: string, owne
 			owner === "account" ? `/accounts/${accountId}/tokens/${tokenId}` : `/user/tokens/${tokenId}`
 		const response = yield* cloudflareGet(path, token)
 		const policies = resultObject(response.body)?.policies
-		return response.body.success === true && Array.isArray(policies)
+		if (response.body.success !== true || !Array.isArray(policies)) return undefined
+		// Groups are matched by name, which Cloudflare may leave out: then probe instead.
+		return policiesAreNamed(policies as ReadonlyArray<TokenPolicy>)
 			? (policies as ReadonlyArray<TokenPolicy>)
 			: undefined
 	})
@@ -64,11 +67,28 @@ const permissionChecks = (
 	},
 ) =>
 	Effect.gen(function* () {
+		// Without the zone's id (its lookup failed, and that is reported on its own) a policy on that
+		// one zone cannot be matched, so the zone permissions stay unchecked rather than missing.
+		const permissions = TOKEN_PERMISSIONS.filter(
+			(permission) => ids.zoneId !== undefined || permission.scope === "account",
+		)
+		const zoneUnchecked: Array<Check> =
+			ids.zoneId === undefined
+				? [
+						{
+							name: "Token permissions",
+							status: "warn",
+							message: "zone permissions not checked: the zone could not be looked up",
+						},
+					]
+				: []
 		const policies =
 			tokenId === undefined ? undefined : yield* readOwnPolicies(token, tokenId, ids.accountId, owner)
-		if (policies !== undefined) return policyChecks(missingPermissions(policies, ids))
+		if (policies !== undefined) {
+			return [...policyChecks(missingPermissions(policies, ids, permissions)), ...zoneUnchecked]
+		}
 		const results: Array<ProbeResult> = []
-		for (const permission of TOKEN_PERMISSIONS) {
+		for (const permission of permissions) {
 			const path = probePath(permission, ids)
 			if (path === undefined) continue
 			// A probe that cannot reach Cloudflare counts as unchecked (status 0), so the 401/403s
@@ -79,7 +99,7 @@ const permissionChecks = (
 			)
 			results.push({ permission, status })
 		}
-		return probeChecks(results)
+		return [...probeChecks(results), ...zoneUnchecked]
 	})
 
 /** No workers.dev subdomain: Cloudflare answers 404 / error 10007 until one is claimed. */
@@ -95,6 +115,15 @@ const subdomainCheck = (token: string, accountId: string) =>
 			} as Check
 		}
 		if (response.status === 401 || response.status === 403) return undefined
+		const absent =
+			response.status === 404 || (response.body.errors ?? []).some((error) => error.code === 10007)
+		if (!absent) {
+			return {
+				name: "workers.dev subdomain",
+				status: "warn",
+				message: `could not check (HTTP ${response.status}); Cloudflare may be having trouble`,
+			} as Check
+		}
 		return {
 			name: "workers.dev subdomain",
 			status: "fail",

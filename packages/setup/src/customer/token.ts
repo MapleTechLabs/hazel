@@ -120,6 +120,14 @@ const isAccountKey = (key: string, accountId: string) =>
 const isZoneKey = (key: string, zoneId: string | undefined) =>
 	key === ZONE_ANY || (zoneId !== undefined && key === `com.cloudflare.api.account.zone.${zoneId}`)
 
+/** Every permission group has its name: Cloudflare's API makes it optional, and groups match by name. */
+export const policiesAreNamed = (policies: ReadonlyArray<TokenPolicy>): boolean =>
+	policies.every((policy) =>
+		(policy.permission_groups ?? []).every(
+			(group) => typeof group.name === "string" && group.name !== "",
+		),
+	)
+
 /**
  * Whether a policy's resources reach the account (account permissions) or the zone (zone
  * permissions). Zones are named directly (`…zone.<id>`, `…zone.*`) or nested under an account
