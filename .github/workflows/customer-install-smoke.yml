@@ -62,7 +62,10 @@ jobs:
                   else
                     echo "No release yet: installing $GITHUB_SHA directly"
                   fi
-                  bun run customer:install --non-interactive --name "$INSTANCE" --zone "$HAZEL_ZONE" \
+                  # COMMIT_SHA beats GITHUB_SHA (this run's commit), so /version reports the release:
+                  # a release older than the deploy's own stamping would otherwise skip the upgrade.
+                  COMMIT_SHA="$(git rev-parse HEAD)" bun run customer:install --non-interactive \
+                    --name "$INSTANCE" --zone "$HAZEL_ZONE" \
                     --github-client-id "$AUTH_GITHUB_CLIENT_ID" --deploy
 
             - name: Upgrade to this commit

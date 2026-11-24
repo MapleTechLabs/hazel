@@ -191,7 +191,9 @@ const deploy = (name: string, path: string, env: Record<string, string>) =>
 		yield* Console.log(pc.dim(`\n$ ${command.join(" ")}\n`))
 		// alchemy reads `--env-file` through its config; the process env covers what the stack
 		// reads from `process.env` directly (and the web build's VITE_* keys).
-		const code = yield* run(command, env)
+		// `COMMIT_SHA` wins over `GITHUB_SHA` (`telemetryEnv`): in CI the latter is the workflow's
+		// commit, not necessarily the one checked out, and `/version` must report what runs.
+		const code = yield* run(command, { ...env, COMMIT_SHA: sha })
 		if (code !== 0) {
 			return yield* failWith(
 				`Deploy of ${stageOf(name)} failed (exit ${code}). Deploys are idempotent: fix the cause and run it again.`,
@@ -697,7 +699,7 @@ export const customerUpgradeCommand = Command.make(
 	},
 	({ name, dir, to, allowDowngrade, yes }) =>
 		Effect.gen(function* () {
-			const { env } = yield* loadForName(name, dir)
+			const { env, root } = yield* loadForName(name, dir)
 			const zone = normalizeZone(env.HAZEL_ZONE ?? "")
 			yield* Console.log(
 				`\n${pc.bold(`Upgrading ${stageOf(name)}`)} ${pc.dim(`https://${customerHosts(zone).web}`)}\n`,
@@ -772,8 +774,8 @@ export const customerUpgradeCommand = Command.make(
 					"bun install failed; the checkout is on the new release, nothing was deployed",
 				)
 			}
-			const dirArgs = Option.match(dir, { onNone: () => [], onSome: (d) => ["--dir", d] })
-			const code = yield* run(["bun", "run", "customer:deploy", name, ...dirArgs])
+			// The child runs in the repo root: hand it the directory already resolved.
+			const code = yield* run(["bun", "run", "customer:deploy", name, "--dir", root])
 			if (code !== 0) return yield* Effect.sync(() => process.exit(code))
 		}).pipe(Effect.catchTag("CustomerSetupError", reportAndExit)),
 )
