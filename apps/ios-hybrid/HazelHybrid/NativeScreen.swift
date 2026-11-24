@@ -196,7 +196,10 @@ private struct ItemView: View {
                     .strokeBorder(Color(css: border.color), lineWidth: border.width)
             }
             if let icon = look.icon {
-                iconView(icon).offset(x: icon.x)
+                iconView(icon)
+                    .frame(width: icon.size, height: icon.size)
+                    .overlay(alignment: .topLeading) { IconMarks(marks: icon.marks ?? [], bridge: bridge) }
+                    .offset(x: icon.x)
             }
             if let label = look.label {
                 VStack(alignment: .leading, spacing: 0) {
@@ -359,6 +362,42 @@ private struct WebIcon: View {
             }
         }
         .frame(width: size, height: size)
+    }
+}
+
+/// A channel icon's corner marks as the web draws them, each piece where it sits on the icon.
+private struct IconMarks: View {
+    let marks: [Look.Mark]
+    let bridge: WebBridge
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(Array(marks.enumerated()), id: \.offset) { _, mark in
+                piece(mark)
+                    .frame(width: mark.w, height: mark.h)
+                    .clipShape(.rect(cornerRadius: mark.radius, style: .continuous))
+                    .offset(x: mark.x, y: mark.y)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private func piece(_ mark: Look.Mark) -> some View {
+        if let key = mark.image {
+            if let image = bridge.icons[key] { Image(uiImage: image).resizable() }
+        } else if mark.src != nil {
+            Picture(src: mark.src, size: max(mark.w, mark.h), bridge: bridge) { Color(css: mark.bg) }
+        } else {
+            ZStack {
+                Color(css: mark.bg)
+                if let initial = mark.initial {
+                    Text(initial.char)
+                        .font(WebFont.font(size: initial.size, weight: initial.weight))
+                        .foregroundStyle(Color(css: initial.color))
+                }
+            }
+        }
     }
 }
 

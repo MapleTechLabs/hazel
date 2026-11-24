@@ -4,7 +4,10 @@
  */
 import type {
 	Channel,
+	ChannelCustomer,
 	ChannelMember,
+	ChatSyncChannelLink,
+	ChatSyncConnection,
 	ChannelSection,
 	Message,
 	MessageReaction,
@@ -231,6 +234,83 @@ export const channelRows: ReadonlyArray<Wire<typeof Channel.Schema>> = CHANNELS.
 	updatedAt: null,
 	deletedAt: null,
 }))
+
+/**
+ * Channels linked to customers (`channel_customers`): #support to Linear, with its logo, and the
+ * private #leadership to Northwind, which has none (its initial on its tint, and a lock).
+ */
+const customerRow = (
+	channelId: string,
+	n: number,
+	accountName: string,
+	accountLogoUrl: string | null,
+): Wire<typeof ChannelCustomer.Schema> => ({
+	channelId,
+	organizationId: orgId,
+	accountId: uuid(12, n),
+	accountName,
+	accountLogoUrl,
+	healthStatus: "healthy",
+	healthScore: null,
+	healthWhy: null,
+	lifecycleStage: null,
+	planName: null,
+	mrrMinor: null,
+	currency: null,
+	ownerUserId: null,
+	seatsUsed: null,
+	seatsLimit: null,
+	lastActiveDay: null,
+	openSignalCount: 0,
+	topSignals: [],
+	sourceLinks: [],
+	updatedAt: iso(-DAY),
+})
+
+export const channelCustomerRows: ReadonlyArray<Wire<typeof ChannelCustomer.Schema>> = [
+	customerRow(support.id, 1, "Linear", "https://cdn.brandfetch.io/linear.app/w/64/h/64/theme/light/icon"),
+	customerRow(leadership.id, 2, "Northwind", null),
+]
+
+/** A Slack workspace #support is synced with: its channel icon carries the Slack mark. */
+const slackConnectionId = uuid(13, 1)
+
+export const chatSyncConnectionRows: ReadonlyArray<Wire<typeof ChatSyncConnection.Schema>> = [
+	{
+		id: slackConnectionId,
+		organizationId: orgId,
+		integrationConnectionId: null,
+		provider: "slack",
+		externalWorkspaceId: "T0FIXTURE",
+		externalWorkspaceName: "Linear",
+		status: "active",
+		settings: null,
+		metadata: null,
+		errorMessage: null,
+		lastSyncedAt: null,
+		createdBy: ada.id,
+		createdAt: iso(-10 * DAY),
+		updatedAt: null,
+		deletedAt: null,
+	},
+]
+
+export const chatSyncChannelLinkRows: ReadonlyArray<Wire<typeof ChatSyncChannelLink.Schema>> = [
+	{
+		id: uuid(13, 2),
+		syncConnectionId: slackConnectionId,
+		hazelChannelId: support.id,
+		externalChannelId: "C0FIXTURE",
+		externalChannelName: "linear-support",
+		direction: "both",
+		isActive: true,
+		settings: null,
+		lastSyncedAt: null,
+		createdAt: iso(-10 * DAY),
+		updatedAt: null,
+		deletedAt: null,
+	},
+]
 
 export const channelMemberRows: ReadonlyArray<Wire<typeof ChannelMember.Schema>> = CHANNELS.flatMap((c) =>
 	c.members.map((p) => ({
@@ -488,6 +568,7 @@ export const SOURCE_TABLES = {
 		"integration_connections",
 		"chat_sync_connections",
 		"chat_sync_channel_links",
+		"channel_customers",
 		"connect_conversations",
 		"connect_conversation_channels",
 		"connect_participants",
@@ -532,6 +613,9 @@ export const snapshotFor = (kind: SyncSourceKind, sourceId: string): FixtureTabl
 						channels: channelRows,
 						channel_members: channelMemberRows,
 						channel_sections: channelSectionRows,
+						channel_customers: channelCustomerRows,
+						chat_sync_connections: chatSyncConnectionRows,
+						chat_sync_channel_links: chatSyncChannelLinkRows,
 					})
 				: undefined
 		case "channel":

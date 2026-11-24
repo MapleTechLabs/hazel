@@ -18,7 +18,16 @@ export type Look = {
 	pressedBg?: string
 	label?: Text & { x: number; y: number }
 	subtitle?: Text
-	icon?: { x: number; size: number; color: string; radius: number; image?: string; avatar?: AvatarLook }
+	icon?: {
+		x: number
+		size: number
+		color: string
+		radius: number
+		image?: string
+		avatar?: AvatarLook
+		/** What a channel icon marks in its corners (`ui/channel-icon.ts`), drawn over the glyph. */
+		marks?: Array<Mark>
+	}
 	/** A section header's glyph: how far down its box it sits. */
 	iconY?: number
 	trailing?: { right: number; size: number; color: string; image?: string }
@@ -27,6 +36,19 @@ export type Look = {
 	badge?: Text & { bg: string; right: number; h: number; minW: number; radius: number; padX: number }
 	/** A pinned node's band (the header or footer it sits in). */
 	band?: { box: Box; bg: string; borderTop?: string; borderBottom?: string }
+}
+
+/**
+ * One piece of a channel icon's corner mark, relative to the icon's box: a fill (the cut-out disc
+ * behind the Slack logo or the lock), a picture (a Connect partner's logo), a rasterized SVG (the
+ * Slack, Discord or lock glyph), or an initial on its tint (a partner without a logo).
+ */
+export type Mark = Box & {
+	radius: number
+	bg?: string
+	image?: string
+	src?: string
+	initial?: Text & { char: string }
 }
 
 const colors = new Map<string, string>()
@@ -216,23 +238,47 @@ export const lookOf = (
 	const subtitle = typeof props.subtitle === "string" ? elementWithText(row, props.subtitle) : null
 	if (subtitle !== null) look.subtitle = textOf(subtitle)
 
-	const icon =
+	const found =
 		row.querySelector('[data-slot="avatar"]') ??
 		row.querySelector('[data-slot="icon"]') ??
 		// Not a thread's line to its channel, nor the SVG nested in it (`branch`, below).
 		row.querySelector('svg:not([data-slot="thread-branch"], [data-slot="thread-branch"] svg)')
+	// A channel icon (`ui/channel-icon.ts`) wraps its glyph (emoji, `#`, or the customer's logo) and
+	// the marks in its corners: the glyph is what the row shows, the marks are drawn over it.
+	const channelIcon = found?.hasAttribute("data-channel-icon") === true ? found : null
+	const icon = channelIcon?.firstElementChild ?? found
 	if (icon !== null) {
 		const style = getComputedStyle(icon)
+		const rect = icon.getBoundingClientRect()
 		look.icon = {
-			x: icon.getBoundingClientRect().left - rowRect.left,
-			size: icon.getBoundingClientRect().width,
+			x: rect.left - rowRect.left,
+			size: rect.width,
 			color: hex(style.color),
 			radius: px(style.borderTopLeftRadius),
 		}
 		if (icon.getAttribute("data-slot") === "avatar") look.icon.avatar = avatarLookOf(icon)
-		else {
+		else if (icon instanceof HTMLImageElement) {
+			// A customer's logo. Loaded or not: the shell loads pictures itself (`ImageLoader.swift`).
+			const src = icon.currentSrc || icon.src
+			look.icon.avatar = { bg: hex(style.backgroundColor), ...(src === "" ? {} : { src }) }
+		} else if (
+			channelIcon !== null &&
+			!(icon instanceof SVGElement) &&
+			isVisibleColor(style.backgroundColor)
+		) {
+			// A customer without a logo: its initial on its tint (`companyLogo`).
+			const char = icon.textContent?.trim() ?? ""
+			look.icon.avatar = {
+				bg: hex(style.backgroundColor),
+				...(char === "" ? {} : { initial: { ...textOf(icon), char } }),
+			}
+		} else {
 			const key = iconKey(icon)
 			if (key !== undefined) look.icon.image = key
+		}
+		if (channelIcon !== null) {
+			const marks = marksOf(channelIcon, icon, rect)
+			if (marks.length > 0) look.icon.marks = marks
 		}
 	}
 	const branch = row.querySelector('svg[data-slot="thread-branch"]')
@@ -283,6 +329,44 @@ export const lookOf = (
 		}
 	}
 	return look
+}
+
+/**
+ * A channel icon's corner marks, in paint order, relative to the glyph's box `origin`: every piece
+ * after the glyph that draws something (a fill, a picture, an SVG, a partner's initial).
+ */
+const marksOf = (channelIcon: Element, glyph: Element, origin: DOMRect): Array<Mark> => {
+	const marks: Array<Mark> = []
+	const boxOf = (element: Element): Box => {
+		const rect = element.getBoundingClientRect()
+		return { x: rect.left - origin.left, y: rect.top - origin.top, w: rect.width, h: rect.height }
+	}
+	const walk = (element: Element) => {
+		const style = getComputedStyle(element)
+		if (style.display === "none") return
+		const box = boxOf(element)
+		if (box.w === 0 || box.h === 0) return
+		const radius = Math.min(px(style.borderTopLeftRadius), box.w / 2, box.h / 2)
+		if (element instanceof SVGSVGElement) {
+			const key = iconKey(element)
+			if (key !== undefined) marks.push({ ...box, radius: 0, image: key })
+			return
+		}
+		if (element instanceof HTMLImageElement) {
+			const src = element.currentSrc || element.src
+			if (src !== "") marks.push({ ...box, radius, src, bg: hex(style.backgroundColor) })
+			return
+		}
+		const mark: Mark = { ...box, radius }
+		if (isVisibleColor(style.backgroundColor)) mark.bg = hex(style.backgroundColor)
+		const children = Array.from(element.children)
+		const char = children.length === 0 ? (element.textContent?.trim() ?? "") : ""
+		if (char !== "") mark.initial = { ...textOf(element), char }
+		if (mark.bg !== undefined || mark.initial !== undefined) marks.push(mark)
+		for (const child of children) walk(child)
+	}
+	for (const child of Array.from(channelIcon.children)) if (child !== glyph) walk(child)
+	return marks
 }
 
 /** `{ image }` for an SVG the page has rasterized, else nothing (not yet, or not an SVG). */
