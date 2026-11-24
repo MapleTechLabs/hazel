@@ -1399,8 +1399,8 @@ describe("Customers compute and sync loop", () => {
 				yield* world.object.run(runCompute(new Date(NOW.getTime() - 10 * DAY))).pipe(Effect.orDie)
 				for (const offset of [-6, -5, -2]) {
 					world.rows(
-						`INSERT OR REPLACE INTO customer_org_daily (day, mrrMinor, payingAccounts, trialingAccounts, activeAccounts, dau, wau, mau, healthy, atRisk, critical, atRiskMrrMinor)
-						 VALUES ('${day(offset)}', 19900, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0)`,
+						`INSERT OR REPLACE INTO customer_org_daily (day, mrrMinor, payingAccounts, trialingAccounts, activeAccounts, dau, wau, mau, atRiskMrrMinor)
+						 VALUES ('${day(offset)}', 19900, 1, 0, 0, 0, 0, 0, 0)`,
 					)
 				}
 				const invoice = (status: "open" | "void"): IngestOp => ({
@@ -1636,8 +1636,8 @@ describe("Customers compute and sync loop", () => {
 				yield* world.ingest("stripe", [subscription(20)])
 				yield* world.object.run(runCompute(new Date(NOW.getTime() - 10 * DAY))).pipe(Effect.orDie)
 				world.rows(
-					`INSERT OR REPLACE INTO customer_org_daily (day, mrrMinor, payingAccounts, trialingAccounts, activeAccounts, dau, wau, mau, healthy, atRisk, critical, atRiskMrrMinor)
-					 VALUES ('${day(-3)}', 19900, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0)`,
+					`INSERT OR REPLACE INTO customer_org_daily (day, mrrMinor, payingAccounts, trialingAccounts, activeAccounts, dau, wau, mau, atRiskMrrMinor)
+					 VALUES ('${day(-3)}', 19900, 1, 0, 0, 0, 0, 0, 0)`,
 				)
 				yield* endedOnFailedInvoice(world)
 				recordChurn(world, 9_900)
