@@ -181,7 +181,11 @@ const describe = (permissions: ReadonlyArray<Permission>) =>
 	permissions.map((p) => `${p.group} (${p.scope}: ${p.why})`).join("; ")
 
 /** The checks for a token whose own policies could be read. */
-export const policyChecks = (missing: ReadonlyArray<Permission>): Array<Check> => {
+export const policyChecks = (
+	missing: ReadonlyArray<Permission>,
+	/** False when only the account's permissions could be checked (the zone was not found). */
+	zoneChecked = true,
+): Array<Check> => {
 	const required = missing.filter((p) => p.required)
 	const recommended = missing.filter((p) => !p.required)
 	const checks: Array<Check> = [
@@ -189,7 +193,9 @@ export const policyChecks = (missing: ReadonlyArray<Permission>): Array<Check> =
 			? {
 					name: "Token permissions",
 					status: "ok",
-					message: "everything the deploy needs, on this account and zone",
+					message: zoneChecked
+						? "everything the deploy needs, on this account and zone"
+						: "everything the deploy needs on this account (the zone's are unchecked)",
 				}
 			: { name: "Token permissions", status: "fail", message: `missing ${describe(required)}` },
 	]

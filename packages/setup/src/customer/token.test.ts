@@ -142,6 +142,7 @@ describe("checks", () => {
 		expect(policyChecks([]).map((c) => c.status)).toEqual(["ok"])
 		expect(policyChecks(d1).map((c) => c.status)).toEqual(["fail"])
 		expect(policyChecks(ssl).map((c) => c.status)).toEqual(["ok", "warn"])
+		expect(policyChecks([], false)[0]?.message).toContain("the zone's are unchecked")
 	})
 
 	test("probes: a 403 fails, all 2xx only warns that writes are unverified", () => {

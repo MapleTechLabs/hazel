@@ -85,7 +85,10 @@ const permissionChecks = (
 		const policies =
 			tokenId === undefined ? undefined : yield* readOwnPolicies(token, tokenId, ids.accountId, owner)
 		if (policies !== undefined) {
-			return [...policyChecks(missingPermissions(policies, ids, permissions)), ...zoneUnchecked]
+			return [
+				...policyChecks(missingPermissions(policies, ids, permissions), ids.zoneId !== undefined),
+				...zoneUnchecked,
+			]
 		}
 		const results: Array<ProbeResult> = []
 		for (const permission of permissions) {
