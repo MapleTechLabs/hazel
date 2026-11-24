@@ -21,6 +21,8 @@ type Tab = {
 	/** The tab's own icon as the web draws it (`look.ts` `iconKey`), and its text colour. */
 	image: string | null
 	color: string | null
+	/** `search`: drawn apart from the tabs, as its own glass circle. */
+	role: string | null
 }
 
 /** A screen's primary action (`data-native="screen-action"`): the shell's floating button. */
@@ -100,6 +102,7 @@ const readTabs = (): Array<Tab> => {
 		badge: item.dataset.nativeBadge === undefined ? null : Number(item.dataset.nativeBadge),
 		image: tabIcon(item),
 		color: hex(getComputedStyle(item).color),
+		role: item.dataset.nativeRole ?? null,
 	}))
 }
 

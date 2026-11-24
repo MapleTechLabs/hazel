@@ -134,11 +134,11 @@ describe("mobile", () => {
 			// The desktop dock (and its two menus) leaves the tree.
 			Mount.expectEnded(FocusTriggerOnPress, FocusTriggerOnPress),
 			sceneExpect(within(tabs, navItem("DMs"))).toHaveAttr("aria-current", "page"),
-			sceneExpect(within(tabs, navItem("Chats"))).not.toHaveAttr("aria-current", "page"),
+			sceneExpect(within(tabs, navItem("Home"))).not.toHaveAttr("aria-current", "page"),
 		)
 	})
 
-	test("the Chats tab is the chat list, and Members opens from it with a way back", () => {
+	test("the Home tab is the chat list, and Members opens from it with a way back", () => {
 		scene(
 			rootScene,
 			given(signedIn("/hazel/chat")),
@@ -146,7 +146,7 @@ describe("mobile", () => {
 			// The channels sidebar moves from the dock into the page, its org switcher and user menu
 			// still mounted.
 			Subscription.emit(mobile),
-			sceneExpect(within(tabs, navItem("Chats"))).toHaveAttr("aria-current", "page"),
+			sceneExpect(within(tabs, navItem("Home"))).toHaveAttr("aria-current", "page"),
 			sceneExpect(navItem("Members")).toExist(),
 			sceneExpect(role("dialog", { name: "Sidebar" })).toBeAbsent(),
 		)
@@ -159,7 +159,22 @@ describe("mobile", () => {
 			Subscription.emit(mobile),
 			Mount.expectEnded(FocusTriggerOnPress, FocusTriggerOnPress, AutoFocusSearch),
 			sceneExpect(role("link", { name: "Back to Chats" })).toHaveAttr("href", "/hazel/chat"),
-			sceneExpect(within(tabs, navItem("Chats"))).toHaveAttr("aria-current", "page"),
+			sceneExpect(within(tabs, navItem("Home"))).toHaveAttr("aria-current", "page"),
+		)
+	})
+
+	test("the bar is Slack's: Home, DMs, Activity, More, and a search button; Customers is under More", () => {
+		scene(
+			rootScene,
+			given(signedIn("/hazel/more")),
+			...menusMounted,
+			Subscription.emit(mobile),
+			Mount.expectEnded(FocusTriggerOnPress, FocusTriggerOnPress),
+			sceneExpect(within(tabs, navItem("Customers"))).toBeAbsent(),
+			sceneExpect(role("link", { name: /Customers/ })).toHaveAttr("href", "/hazel/customers"),
+			sceneExpect(within(tabs, navItem("More"))).toHaveAttr("aria-current", "page"),
+			sceneExpect(within(tabs, navItem("More"))).toHaveAttr("href", "/hazel/more"),
+			sceneExpect(within(tabs, role("button", { name: "Search" }))).toExist(),
 		)
 	})
 })

@@ -34,8 +34,16 @@ export const nativeIsland = <Message>(
  */
 export const nativeItem = <Message>(
 	h: HtmlBuilder<Message>,
-	item: Readonly<{ id: string; symbol?: string; isSelected?: boolean; badge?: number | undefined }>,
+	item: Readonly<{
+		id: string
+		symbol?: string
+		isSelected?: boolean
+		badge?: number | undefined
+		/** `search`: drawn apart from the tabs, as the system's own search tab is (its glass circle). */
+		role?: "search"
+	}>,
 ): ReadonlyArray<Attribute<Message>> => [
+	...(item.role === undefined ? [] : [h.Attribute("data-native-role", item.role)]),
 	h.Attribute("data-native-item", item.id),
 	...(item.symbol === undefined ? [] : [h.Attribute("data-native-symbol", item.symbol)]),
 	...(item.isSelected ? [h.Attribute("data-native-selected", "true")] : []),

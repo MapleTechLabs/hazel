@@ -1,4 +1,4 @@
-import type { Html, HtmlBuilder } from "foldkit/html"
+import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { heading } from "./heading"
 
@@ -18,10 +18,13 @@ export const mobileTopBar = <Message>(
 		/** Stays at the top while the page under it scrolls (a page that scrolls in the shell's column). */
 		isSticky?: boolean
 		className?: string
+		/** Extra attributes on the bar (a native screen's pinned header: `semantic`). */
+		attributes?: ReadonlyArray<Attribute<Message>>
 	}>,
 ): Html =>
 	h.header(
 		[
+			...(options.attributes ?? []),
 			h.Class(
 				twMerge(
 					"flex h-14 shrink-0 items-center gap-1 border-border border-b bg-bg px-2",

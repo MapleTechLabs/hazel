@@ -236,61 +236,91 @@ struct GlassScreenAction: View {
     }
 }
 
-/// The page's tab bar island drawn as a floating Liquid Glass bar, with the page's own icons.
+/// The page's tab bar island drawn as Slack's: a floating Liquid Glass capsule of tabs (the app's own
+/// icons, brand-tinted when selected, on a tinted pill), and the tab marked `search` as its own
+/// glass circle beside it. One `GlassEffectContainer`, so the two read as one piece of glass.
 struct GlassTabBar: View {
     let tabs: [WebTab]
     let icons: [String: UIImage]
     let onSelect: (String) -> Void
     @Namespace private var glass
 
+    private var barTabs: [WebTab] { tabs.filter { $0.role != "search" } }
+    private var search: WebTab? { tabs.first { $0.role == "search" } }
+
     var body: some View {
-        GlassEffectContainer(spacing: 0) {
-            HStack(spacing: 0) {
-                ForEach(tabs) { tab in
-                    Button { onSelect(tab.id) } label: { label(tab) }
-                        .buttonStyle(.plain)
+        GlassEffectContainer(spacing: 10) {
+            HStack(spacing: 10) {
+                HStack(spacing: 0) {
+                    ForEach(barTabs) { tab in
+                        Button { onSelect(tab.id) } label: { label(tab) }
+                            .buttonStyle(.plain)
+                            // The badge is drawn in the label; a custom label must say it too.
+                            .accessibilityLabel(tab.badge.flatMap { $0 > 0 ? "\(tab.title), \($0) unread" : nil } ?? tab.title)
+                            .accessibilityAddTraits(tab.selected ? .isSelected : [])
+                    }
+                }
+                .padding(4)
+                .glassEffect(.regular.interactive(), in: .capsule)
+
+                if let search {
+                    Button { onSelect(search.id) } label: {
+                        Group {
+                            if let key = search.image, let image = icons[key] {
+                                Image(uiImage: image).resizable().scaledToFit().frame(width: 22, height: 22)
+                            } else {
+                                Image(systemName: search.symbol ?? "magnifyingglass")
+                                    .font(.system(size: 20, weight: .semibold))
+                            }
+                        }
+                        .foregroundStyle(.primary)
+                        .frame(width: 58, height: 58)
+                        .contentShape(.circle)
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: .circle)
+                    .accessibilityLabel(search.title)
                 }
             }
-            .padding(4)
-            .glassEffect(.regular.interactive(), in: .capsule)
         }
-        .animation(.smooth(duration: 0.3), value: tabs.first(where: \.selected)?.id)
+        .animation(.smooth(duration: 0.3), value: barTabs.first(where: \.selected)?.id)
     }
 
     private func label(_ tab: WebTab) -> some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 3) {
             Group {
+                // The app's own icon, as the web draws it (in the tab's colour); the SF Symbol
+                // only until that icon has arrived.
                 if let key = tab.image, let image = icons[key] {
-                    Image(uiImage: image).resizable().scaledToFit().frame(width: 24, height: 24)
+                    Image(uiImage: image).resizable().scaledToFit().frame(width: 22, height: 22)
                 } else {
                     Image(systemName: tab.symbol ?? "circle")
-                        .font(.system(size: 19, weight: .medium))
-                        .symbolVariant(tab.selected ? .fill : .none)
+                        .font(.system(size: 18, weight: .medium))
                 }
             }
-            .frame(height: 24)
-                .overlay(alignment: .topTrailing) {
-                    if let badge = tab.badge, badge > 0 {
-                        Text(badge > 99 ? "99+" : "\(badge)")
-                            .font(.system(size: 11, weight: .semibold))
-                            .monospacedDigit()
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 5)
-                            .frame(minWidth: 17, minHeight: 17)
-                            .background(.red, in: .capsule)
-                            .offset(x: 10, y: -5)
-                    }
+            .frame(height: 22)
+            .overlay(alignment: .topTrailing) {
+                if let badge = tab.badge, badge > 0 {
+                    Text(badge > 99 ? "99+" : "\(badge)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 17, minHeight: 17)
+                        .background(.red, in: .capsule)
+                        .offset(x: 11, y: -5)
                 }
+            }
             Text(tab.title)
                 .font(WebFont.font(size: 10, weight: 600))
         }
-        .foregroundStyle(tab.color.map { AnyShapeStyle(Color(css: $0)) } ?? (tab.selected ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary)))
+        .foregroundStyle(tab.selected ? AnyShapeStyle(ShellView.brand) : AnyShapeStyle(.primary))
         .frame(maxWidth: .infinity, minHeight: 50)
         .contentShape(.capsule)
         .background {
             if tab.selected {
                 Capsule()
-                    .fill(Color.primary.opacity(0.08))
+                    .fill(ShellView.brand.opacity(0.18))
                     .matchedGeometryEffect(id: "selection", in: glass)
             }
         }

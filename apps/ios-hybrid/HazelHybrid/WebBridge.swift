@@ -13,6 +13,8 @@ struct WebTab: Decodable, Identifiable, Equatable {
     /// The tab's own icon, rasterized by the page (`icons`), and its text colour there.
     let image: String?
     let color: String?
+    /// `search`: drawn apart from the tabs, as its own glass circle (absent in a kept screen's older tabs).
+    let role: String?
 }
 
 /// A screen's primary action (`data-native="screen-action"`, the DMs tab's compose): drawn as the
