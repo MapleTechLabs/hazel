@@ -220,8 +220,11 @@ export const probeChecks = (results: ReadonlyArray<ProbeResult>): Array<Check> =
 					name: "Token permissions",
 					status: "warn",
 					message:
-						"the token can read everything the deploy touches, but cannot read its own policies, so its " +
-						"Write permissions are unverified. An account-owned token (or one with API Tokens Read) is checked in full.",
+						(unclear.length > 0
+							? "every probe that answered allowed the deploy"
+							: "the token can read everything the deploy touches") +
+						", but it cannot read its own policies, so its Write permissions are unverified. " +
+						"An account-owned token (or one with API Tokens Read) is checked in full.",
 				},
 	]
 	if (recommended.length > 0) {

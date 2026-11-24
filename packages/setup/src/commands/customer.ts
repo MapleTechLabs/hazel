@@ -9,7 +9,7 @@
 import { Argument, Command, Flag, Prompt } from "effect/cli"
 import { Console, Effect, Option, Redacted, Schema } from "effect"
 import { chmod } from "node:fs/promises"
-import { isAbsolute, resolve } from "node:path"
+import { dirname, isAbsolute, resolve } from "node:path"
 import { pc } from "../colors"
 import {
 	type Check,
@@ -176,7 +176,7 @@ const deploy = (name: string, path: string, env: Record<string, string>) =>
 		} else {
 			yield* Console.log(
 				pc.yellow(
-					`⚠ ${sha.slice(0, 12)} is not a release: installs should run releases (bun run customer:upgrade ${name}).`,
+					`⚠ ${sha.slice(0, 12)} is not a release: installs should run releases (${upgradeCommandText(name, dirname(path))}).`,
 				),
 			)
 		}
@@ -203,8 +203,9 @@ const deploy = (name: string, path: string, env: Record<string, string>) =>
 		yield* Console.log(pc.green(`\n✅ Deployed ${stageOf(name)}: https://${hosts.web}`))
 	})
 
-const deployCommandText = (name: string, dir: string) =>
-	`bun run customer:deploy ${name}${dir === REPO_ROOT ? "" : ` --dir ${dir}`}`
+const dirSuffix = (dir: string) => (dir === REPO_ROOT ? "" : ` --dir ${dir}`)
+const deployCommandText = (name: string, dir: string) => `bun run customer:deploy ${name}${dirSuffix(dir)}`
+const upgradeCommandText = (name: string, dir: string) => `bun run customer:upgrade ${name}${dirSuffix(dir)}`
 
 // ─── customer ───────────────────────────────────────────────────────────────
 
