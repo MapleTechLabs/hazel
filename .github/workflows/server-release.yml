@@ -1,0 +1,90 @@
+name: Server release
+
+# Cuts a server release (`server-vYYYY.MM.DD`): the commit customer installs deploy with
+# `bun run customer:upgrade` (docs/self-hosting.md#releases). By default it releases the commit
+# api.hazel.sh runs, so every release has already served Hazel's own production.
+#
+# Never marked "latest": the desktop app's updater reads the latest GitHub release
+# (apps/desktop/src-tauri/tauri.conf.json), and its tags are `v*` (tauri-release.yml).
+on:
+    workflow_dispatch:
+        inputs:
+            ref:
+                description: "Commit to release (default: the commit api.hazel.sh runs)"
+                required: false
+                type: string
+
+concurrency:
+    group: server-release
+    cancel-in-progress: false
+
+permissions:
+    contents: write
+
+jobs:
+    release:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v1
+              with:
+                  bun-version: 1.4.3
+
+            - name: Pick the commit and the tag
+              id: pick
+              env:
+                  REF: ${{ inputs.ref }}
+              run: |
+                  set -euo pipefail
+                  if [ -z "$REF" ]; then
+                    REF=$(curl -fsS https://api.hazel.sh/version | jq -r .version)
+                    echo "api.hazel.sh runs $REF"
+                  fi
+                  sha=$(git rev-parse --verify "$REF^{commit}")
+                  if ! git merge-base --is-ancestor "$sha" origin/main; then
+                    echo "::error::$sha is not on main"
+                    exit 1
+                  fi
+                  existing=$(git tag --points-at "$sha" -l 'server-v*' | head -1)
+                  if [ -n "$existing" ]; then
+                    echo "::error::$sha is already released as $existing"
+                    exit 1
+                  fi
+                  previous=$(git tag -l 'server-v*' | bun packages/setup/src/customer/releases.ts latest)
+                  tag=$(git tag -l 'server-v*' | bun packages/setup/src/customer/releases.ts next)
+                  if [ -n "$previous" ] && ! git merge-base --is-ancestor "$previous" "$sha"; then
+                    echo "::error::$sha does not contain the previous release $previous: installs only move forward"
+                    exit 1
+                  fi
+                  {
+                    echo "sha=$sha"
+                    echo "tag=$tag"
+                    echo "previous=$previous"
+                  } >> "$GITHUB_OUTPUT"
+
+            - name: Create the release
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  SHA: ${{ steps.pick.outputs.sha }}
+                  TAG: ${{ steps.pick.outputs.tag }}
+                  PREVIOUS: ${{ steps.pick.outputs.previous }}
+              run: |
+                  set -euo pipefail
+                  notes_from=()
+                  if [ -n "$PREVIOUS" ]; then notes_from=(--notes-start-tag "$PREVIOUS"); fi
+                  gh release create "$TAG" \
+                    --target "$SHA" \
+                    --title "Hazel server $TAG" \
+                    --latest=false \
+                    --generate-notes "${notes_from[@]}"
+                  {
+                    echo "Released **$TAG** at \`${SHA:0:12}\`."
+                    echo
+                    echo "Installs upgrade with \`bun run customer:upgrade <name>\`."
+                  } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,92 @@
+name: Customer install smoke test
+
+# Installs Hazel the way a customer does, into a spare Cloudflare account, and tears it down:
+# the newest server release first (when there is one), then an upgrade to the commit under test,
+# so both a fresh install and the upgrade path (migrations on live data) run every week.
+#
+# Off until the `customer-smoke` setup exists (docs/self-hosting.md#smoke-test): the repo variable
+# CUSTOMER_SMOKE_ENABLED=true, a GitHub environment `customer-smoke`, and an Infisical environment
+# `customer-smoke` holding CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, HAZEL_ZONE,
+# AUTH_GITHUB_CLIENT_ID and AUTH_GITHUB_CLIENT_SECRET for the spare account.
+on:
+    schedule:
+        - cron: "0 6 * * 1"
+    workflow_dispatch:
+
+concurrency:
+    group: customer-install-smoke
+    cancel-in-progress: false
+
+permissions:
+    contents: read
+    # The Infisical step signs in with this job's GitHub OIDC token.
+    id-token: write
+
+env:
+    INSTANCE: smoke
+
+jobs:
+    smoke:
+        if: ${{ vars.CUSTOMER_SMOKE_ENABLED == 'true' }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 90
+        environment:
+            name: customer-smoke
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Load secrets from Infisical
+              uses: Infisical/secrets-action@v1.0.18
+              with:
+                  method: oidc
+                  identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+                  project-id: 9e94bb4d-0348-440c-b0f3-073b6f1977f3
+                  env-slug: customer-smoke
+
+            - name: Deploy setup
+              uses: ./.github/actions/deploy-env
+
+            - name: Install the newest release
+              id: base
+              run: |
+                  set -euo pipefail
+                  previous=$(git tag -l 'server-v*' | bun packages/setup/src/customer/releases.ts latest)
+                  echo "previous=$previous" >> "$GITHUB_OUTPUT"
+                  if [ -n "$previous" ]; then
+                    echo "Installing $previous, then upgrading to $GITHUB_SHA"
+                    git checkout --detach "$previous"
+                    bun install --frozen-lockfile
+                  else
+                    echo "No release yet: installing $GITHUB_SHA directly"
+                  fi
+                  # COMMIT_SHA beats GITHUB_SHA (this run's commit), so /version reports the release:
+                  # a release older than the deploy's own stamping would otherwise skip the upgrade.
+                  COMMIT_SHA="$(git rev-parse HEAD)" bun run customer:install --non-interactive \
+                    --name "$INSTANCE" --zone "$HAZEL_ZONE" \
+                    --github-client-id "$AUTH_GITHUB_CLIENT_ID" --deploy
+
+            - name: Upgrade to this commit
+              if: ${{ steps.base.outputs.previous != '' }}
+              run: |
+                  set -euo pipefail
+                  if grep -q '"customer:upgrade"' package.json; then
+                    bun run customer:upgrade "$INSTANCE" --to "$GITHUB_SHA" --yes
+                  else
+                    # A release older than the upgrade command: upgrade by hand.
+                    git checkout --detach "$GITHUB_SHA"
+                    bun install --frozen-lockfile
+                    bun run customer:deploy "$INSTANCE"
+                  fi
+
+            - name: Verify the install
+              run: bun scripts/customer-smoke-verify.ts "$HAZEL_ZONE" "$GITHUB_SHA"
+
+            - name: Destroy the install
+              if: ${{ always() && steps.base.conclusion != 'skipped' }}
+              run: |
+                  git checkout --detach "$GITHUB_SHA"
+                  bun install --frozen-lockfile
+                  bun run customer:destroy "$INSTANCE" --yes

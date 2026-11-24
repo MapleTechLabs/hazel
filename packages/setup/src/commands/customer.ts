@@ -9,7 +9,7 @@
 import { Argument, Command, Flag, Prompt } from "effect/cli"
 import { Console, Effect, Option, Redacted, Schema } from "effect"
 import { chmod } from "node:fs/promises"
-import { isAbsolute, resolve } from "node:path"
+import { dirname, isAbsolute, resolve } from "node:path"
 import { pc } from "../colors"
 import {
 	type Check,
@@ -32,6 +32,9 @@ import {
 	stageOf,
 	ZONE_RE,
 } from "../customer/install.ts"
+import { onlineChecks } from "../customer/cloudflare.ts"
+import { isReleaseTag, latestRelease, RELEASE_TAG_GLOB } from "../customer/releases.ts"
+import { TOKEN_PERMISSIONS } from "../customer/token.ts"
 import { SecretGenerator } from "../services/secrets.ts"
 
 /** The repo root: `packages/setup/src/commands` → four levels up. */
@@ -96,86 +99,57 @@ const generateAuthKeys = Effect.tryPromise({
 		}),
 })
 
-// ─── Shared checks ──────────────────────────────────────────────────────────
+// ─── Git ────────────────────────────────────────────────────────────────────
 
-const cloudflareGet = (path: string, token: string) =>
-	Effect.tryPromise(async () => {
-		const response = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
-			headers: { authorization: `Bearer ${token}` },
-		})
-		return {
-			status: response.status,
-			body: (await response.json().catch(() => ({}))) as {
-				success?: boolean
-				result?: unknown
-				errors?: ReadonlyArray<{ message?: string }>
-			},
-		}
+/** Runs git in the repo; never fails, the exit code says how it went. */
+const git = (args: ReadonlyArray<string>) =>
+	Effect.promise(async () => {
+		const proc = Bun.spawn(["git", ...args], { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" })
+		const [stdout, stderr, code] = await Promise.all([
+			new Response(proc.stdout).text(),
+			new Response(proc.stderr).text(),
+			proc.exited,
+		])
+		return { code, stdout: stdout.trim(), stderr: stderr.trim() }
 	})
 
-/** The token is live, and the zone is in the account (needs Zone:Read, which the deploy needs anyway). */
-const onlineChecks = (env: Record<string, string>): Effect.Effect<Array<Check>> =>
-	Effect.gen(function* () {
-		const token = env.CLOUDFLARE_API_TOKEN ?? ""
-		const accountId = env.CLOUDFLARE_ACCOUNT_ID ?? ""
-		const zone = normalizeZone(env.HAZEL_ZONE ?? "")
-		if (!token || !accountId) return []
-		const checks: Array<Check> = []
-
-		// User tokens verify on /user/tokens, account-owned ones on the account.
-		const user = yield* cloudflareGet("/user/tokens/verify", token)
-		const verified =
-			user.body.success === true ||
-			(yield* cloudflareGet(`/accounts/${accountId}/tokens/verify`, token)).body.success === true
-		checks.push(
-			verified
-				? { name: "Cloudflare token", status: "ok", message: "active" }
-				: {
-						name: "Cloudflare token",
-						status: "fail",
-						message: "Cloudflare rejects it (expired, revoked or mistyped)",
-					},
-		)
-		if (!verified || !zone) return checks
-
-		const zones = yield* cloudflareGet(
-			`/zones?${new URLSearchParams({ name: zone, "account.id": accountId })}`,
-			token,
-		)
-		const result = Array.isArray(zones.body.result)
-			? (zones.body.result as Array<{ status?: string }>)
-			: []
-		checks.push(
-			!zones.body.success
-				? {
-						name: "Zone",
-						status: "warn",
-						message: `could not list zones (${zones.body.errors?.[0]?.message ?? zones.status}); the token needs Zone:Read`,
-					}
-				: result.length === 0
-					? {
-							name: "Zone",
-							status: "fail",
-							message: `${zone} is not a zone in account ${accountId}`,
-						}
-					: result[0]?.status === "active"
-						? { name: "Zone", status: "ok", message: `${zone} is active` }
-						: {
-								name: "Zone",
-								status: "warn",
-								message: `${zone} is ${result[0]?.status ?? "not active"}: point its nameservers at Cloudflare first`,
-							},
-		)
-		return checks
-	}).pipe(
-		Effect.orElseSucceed((): Array<Check> => [
-			{
-				name: "Cloudflare",
-				status: "warn",
-				message: "could not reach api.cloudflare.com; skipped the online checks",
-			},
-		]),
+/** Runs a command in the repo with the terminal attached; succeeds with its exit code. */
+const run = (command: ReadonlyArray<string>, env?: Record<string, string>) =>
+	Effect.promise(
+		() =>
+			Bun.spawn([...command], {
+				cwd: REPO_ROOT,
+				env: { ...process.env, ...env },
+				stdin: "inherit",
+				stdout: "inherit",
+				stderr: "inherit",
+			}).exited,
 	)
+
+/** Tracked files with changes: a deploy of them would report a commit it does not run. */
+const dirtyFiles = git(["status", "--porcelain", "--untracked-files=no"]).pipe(
+	Effect.map((result) => (result.code === 0 ? result.stdout : "")),
+)
+
+/** What the checkout is: its commit, and the release tag on it if any. */
+const revision = Effect.gen(function* () {
+	const sha = (yield* git(["rev-parse", "HEAD"])).stdout
+	const tag = yield* git(["describe", "--tags", "--exact-match", "--match", RELEASE_TAG_GLOB, "HEAD"])
+	return { sha, release: tag.code === 0 && isReleaseTag(tag.stdout) ? tag.stdout : undefined }
+})
+
+/** The commit and stage `GET https://api.<zone>/version` reports; undefined before the first deploy. */
+const deployedVersion = (zone: string) =>
+	Effect.tryPromise(async () => {
+		const response = await fetch(`https://${customerHosts(zone).api}/version`, {
+			signal: AbortSignal.timeout(10_000),
+		})
+		if (!response.ok) return undefined
+		const body = (await response.json()) as { version?: unknown; stage?: unknown }
+		return typeof body.version === "string" && body.version !== "unknown" ? body.version : undefined
+	}).pipe(Effect.orElseSucceed(() => undefined))
+
+// ─── Shared checks ──────────────────────────────────────────────────────────
 
 /** Prints the checks; succeeds with whether none failed. */
 const runChecks = (name: string, env: Record<string, string>, online: boolean) =>
@@ -196,26 +170,42 @@ const deploy = (name: string, path: string, env: Record<string, string>) =>
 			"--env-file",
 			path,
 		]
+		const { sha, release } = yield* revision
+		if (release !== undefined) {
+			yield* Console.log(pc.green("✓") + ` Release ${release} (${sha.slice(0, 12)})`)
+		} else {
+			yield* Console.log(
+				pc.yellow(
+					`⚠ ${sha.slice(0, 12)} is not a release: installs should run releases (${upgradeCommandText(name, dirname(path))}).`,
+				),
+			)
+		}
+		const dirty = yield* dirtyFiles
+		if (dirty !== "") {
+			yield* Console.log(
+				pc.yellow(
+					`⚠ Uncommitted changes: /version will report ${sha.slice(0, 12)}, which is not what runs.`,
+				),
+			)
+		}
 		yield* Console.log(pc.dim(`\n$ ${command.join(" ")}\n`))
-		const code = yield* Effect.promise(async () => {
-			// alchemy reads `--env-file` through its config; the process env covers what the stack
-			// reads from `process.env` directly (and the web build's VITE_* keys).
-			const proc = Bun.spawn(command, {
-				cwd: REPO_ROOT,
-				env: { ...process.env, ...env },
-				stdin: "inherit",
-				stdout: "inherit",
-				stderr: "inherit",
-			})
-			return proc.exited
-		})
-		if (code !== 0) return yield* failWith(`Deploy of ${stageOf(name)} failed (exit ${code})`)
+		// alchemy reads `--env-file` through its config; the process env covers what the stack
+		// reads from `process.env` directly (and the web build's VITE_* keys).
+		// `COMMIT_SHA` wins over `GITHUB_SHA` (`telemetryEnv`): in CI the latter is the workflow's
+		// commit, not necessarily the one checked out, and `/version` must report what runs.
+		const code = yield* run(command, { ...env, COMMIT_SHA: sha })
+		if (code !== 0) {
+			return yield* failWith(
+				`Deploy of ${stageOf(name)} failed (exit ${code}). Deploys are idempotent: fix the cause and run it again.`,
+			)
+		}
 		const hosts = customerHosts(normalizeZone(env.HAZEL_ZONE ?? ""))
 		yield* Console.log(pc.green(`\n✅ Deployed ${stageOf(name)}: https://${hosts.web}`))
 	})
 
-const deployCommandText = (name: string, dir: string) =>
-	`bun run customer:deploy ${name}${dir === REPO_ROOT ? "" : ` --dir ${dir}`}`
+const dirSuffix = (dir: string) => (dir === REPO_ROOT ? "" : ` --dir ${dir}`)
+const deployCommandText = (name: string, dir: string) => `bun run customer:deploy ${name}${dirSuffix(dir)}`
+const upgradeCommandText = (name: string, dir: string) => `bun run customer:upgrade ${name}${dirSuffix(dir)}`
 
 // ─── customer ───────────────────────────────────────────────────────────────
 
@@ -588,10 +578,10 @@ export const customerCommand = Command.make("customer", installFlags, (flags) =>
 		yield* section("Before the first deploy")
 		const steps = [
 			`${zone} is an active zone in Cloudflare account ${cloudflareAccountId} (its DNS on Cloudflare).`,
-			`The API token can edit, in that account: Workers Scripts, Workers KV, D1, R2, Durable Objects, ` +
-				`Email Sending and Email Routing, and create API tokens (alchemy mints the uploads bucket's S3 credentials); ` +
-				`in the zone: DNS, Workers Routes and Zone Settings (custom domains for ${hosts.web}, ${hosts.api}, ` +
-				`${hosts.linkPreview}, ${hosts.botGateway}, ${hosts.cdn}).`,
+			`The API token has, on that account and zone: ` +
+				TOKEN_PERMISSIONS.map((p) => `${p.group}${p.required ? "" : " (recommended)"}`).join(", ") +
+				`. The checks above verify it; an account-owned token is checked in full.`,
+			`The account has a workers.dev subdomain (open Workers & Pages in the dashboard once).`,
 			`Email sending: onboard ${hosts.mail} to Cloudflare Email Sending (invitations and support replies come from it).`,
 			`Inbound support mail: enable Email Routing for ${hosts.inbound} (the deploy routes it to the api Worker).`,
 			[
@@ -671,5 +661,166 @@ export const customerDeployCommand = Command.make(
 			const healthy = yield* runChecks(name, env, true)
 			if (!healthy) return yield* failWith("Not deploying: fix the failed checks above first")
 			yield* deploy(name, path, env)
+		}).pipe(Effect.catchTag("CustomerSetupError", reportAndExit)),
+)
+
+// ─── customer-upgrade ───────────────────────────────────────────────────────
+
+const yesFlag = Flag.Boolean("yes").pipe(
+	Flag.withAlias("y"),
+	Flag.withDescription("Do not ask for confirmation"),
+	Flag.withDefault(false),
+)
+
+/** A yes/no question, or `--yes`; without a terminal and without `--yes` the answer is no. */
+const confirm = (message: string, yes: boolean) =>
+	yes
+		? Effect.succeed(true)
+		: process.stdin.isTTY === true
+			? Prompt.Confirm({ message, initial: false })
+			: Effect.succeed(false)
+
+/**
+ * Moves the checkout to a release (the newest by default) and deploys it with the new code: the
+ * deploy runs in a fresh process, so the release's own installer and stack do it.
+ */
+export const customerUpgradeCommand = Command.make(
+	"customer-upgrade",
+	{
+		name: nameArgument,
+		dir: dirFlag,
+		to: flag("to", "Release tag (or any git ref) to deploy (default: the newest server-v* release)"),
+		allowDowngrade: Flag.Boolean("allow-downgrade").pipe(
+			Flag.withDescription(
+				"Deploy without proving the target is newer than what runs (older, or the running commit unknown). Migrations only go forward",
+			),
+			Flag.withDefault(false),
+		),
+		yes: yesFlag,
+	},
+	({ name, dir, to, allowDowngrade, yes }) =>
+		Effect.gen(function* () {
+			const { env, root } = yield* loadForName(name, dir)
+			const zone = normalizeZone(env.HAZEL_ZONE ?? "")
+			yield* Console.log(
+				`\n${pc.bold(`Upgrading ${stageOf(name)}`)} ${pc.dim(`https://${customerHosts(zone).web}`)}\n`,
+			)
+
+			const dirty = yield* dirtyFiles
+			if (dirty !== "") {
+				return yield* failWith(
+					`The checkout has uncommitted changes; an upgrade switches commits. Commit or discard them first:\n${dirty}`,
+				)
+			}
+
+			const fetched = yield* git(["fetch", "--tags", "--force", "origin"])
+			if (fetched.code !== 0) {
+				yield* Console.log(
+					pc.yellow(`⚠ git fetch failed (${fetched.stderr}); using the tags already here`),
+				)
+			}
+			const ref = Option.isSome(to)
+				? to.value
+				: latestRelease((yield* git(["tag", "-l", RELEASE_TAG_GLOB])).stdout.split("\n"))
+			if (ref === undefined)
+				return yield* failWith("No server release (server-v*) found. Pass --to <ref>.")
+			const target = yield* git(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`])
+			if (target.code !== 0) return yield* failWith(`${ref} is not a commit in this checkout`)
+			const targetSha = target.stdout
+			if (!isReleaseTag(ref)) {
+				yield* Console.log(
+					pc.yellow(`⚠ ${ref} is not a release tag: releases are the commits Hazel runs itself.`),
+				)
+			}
+
+			const deployed = yield* deployedVersion(zone)
+			yield* Console.log(
+				`  Running:  ${deployed === undefined ? pc.dim("unknown (not deployed, or unreachable)") : deployed.slice(0, 12)}`,
+			)
+			yield* Console.log(`  Target:   ${ref} (${targetSha.slice(0, 12)})`)
+			// `/version` is the api Worker's alone, deployed before the web app and link previews: a
+			// match can be an earlier upgrade that failed after it, so deploy again (it is idempotent).
+			// Anything that is not a proven step forward needs --allow-downgrade.
+			if (deployed === targetSha) {
+				yield* Console.log(
+					pc.dim(`  The api already runs ${ref}; deploying again finishes a partial upgrade.`),
+				)
+			} else if (!allowDowngrade) {
+				if (deployed === undefined) {
+					return yield* failWith(
+						`Cannot tell what ${stageOf(name)} runs (https://${customerHosts(zone).api}/version did not answer), ` +
+							`so cannot check ${ref} is newer. Pass --allow-downgrade to deploy it anyway.`,
+					)
+				}
+				const ancestry = yield* git(["merge-base", "--is-ancestor", deployed, targetSha])
+				if (ancestry.code === 1) {
+					return yield* failWith(
+						`${ref} is older than what ${stageOf(name)} runs (${deployed.slice(0, 12)}). Migrations only go forward, ` +
+							`so a downgrade can break the install; pass --allow-downgrade only if you know it adds none.`,
+					)
+				}
+				if (ancestry.code !== 0) {
+					return yield* failWith(
+						`${stageOf(name)} runs ${deployed.slice(0, 12)}, which this checkout does not have, so cannot check ` +
+							`${ref} is newer. Fetch it, or pass --allow-downgrade to deploy anyway.`,
+					)
+				}
+			}
+
+			if (!(yield* confirm(`Deploy ${ref} to ${stageOf(name)}?`, yes))) {
+				return yield* failWith("Not upgrading (pass --yes to skip this question)")
+			}
+
+			const checkout = yield* git(["checkout", "--detach", targetSha])
+			if (checkout.code !== 0) return yield* failWith(`git checkout ${ref} failed: ${checkout.stderr}`)
+			yield* Console.log(pc.green("✓") + ` Checked out ${ref} (detached; git switch - goes back)`)
+			if ((yield* run(["bun", "install", "--frozen-lockfile"])) !== 0) {
+				return yield* failWith(
+					"bun install failed; the checkout is on the new release, nothing was deployed",
+				)
+			}
+			// The child runs in the repo root: hand it the directory already resolved.
+			const code = yield* run(["bun", "run", "customer:deploy", name, "--dir", root])
+			if (code !== 0) return yield* Effect.sync(() => process.exit(code))
+		}).pipe(Effect.catchTag("CustomerSetupError", reportAndExit)),
+)
+
+// ─── customer-destroy ───────────────────────────────────────────────────────
+
+/** Deletes the whole install: every Worker, the directory D1, every Durable Object, the buckets. */
+export const customerDestroyCommand = Command.make(
+	"customer-destroy",
+	{ name: nameArgument, dir: dirFlag, yes: yesFlag },
+	({ name, dir, yes }) =>
+		Effect.gen(function* () {
+			const { path, env } = yield* loadForName(name, dir)
+			const zone = normalizeZone(env.HAZEL_ZONE ?? "")
+			yield* Console.log(
+				pc.red(
+					`\nThis deletes ${stageOf(name)} (https://${customerHosts(zone).web}) for good: its Workers, ` +
+						`its directory database, every organization, channel and message, and its buckets. ` +
+						`Point-in-time recovery cannot bring a deleted database or object back.\n`,
+				),
+			)
+			if (!yes) {
+				if (process.stdin.isTTY !== true)
+					return yield* failWith("Pass --yes to destroy without a terminal")
+				const typed = yield* Prompt.String({ message: `Type ${name} to confirm` })
+				if (typed.trim() !== name) return yield* failWith("Not destroying: the name did not match")
+			}
+			const code = yield* run(
+				["alchemy", "destroy", "--yes", "--stage", stageOf(name), "--env-file", path],
+				env,
+			)
+			if (code !== 0) {
+				return yield* failWith(
+					`Destroy of ${stageOf(name)} failed (exit ${code}); run it again (a non-empty bucket may need emptying first)`,
+				)
+			}
+			yield* Console.log(
+				pc.green(
+					`\n✓ Destroyed ${stageOf(name)}. ${envFileName(name)} is kept; delete it yourself.\n`,
+				),
+			)
 		}).pipe(Effect.catchTag("CustomerSetupError", reportAndExit)),
 )

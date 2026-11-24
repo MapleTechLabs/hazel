@@ -1,0 +1,72 @@
+---
+title: Self-hosting Hazel
+description: Run the whole Hazel stack in your own Cloudflare account, on your own domain
+icon: Cloud
+---
+
+A self-hosted install is the same software that runs `app.hazel.sh`, deployed into **your**
+Cloudflare account. Your messages, files and users live in your account's databases and buckets;
+Hazel (the company) has no access to them.
+
+## What you get
+
+Every part of Hazel runs on Cloudflare's developer platform, under one zone you choose
+(`chat.acme.com` in the examples):
+
+| Host                  | What runs there                                              |
+| --------------------- | ------------------------------------------------------------ |
+| `app.<zone>`          | The web app (also the desktop and iOS apps' backend address) |
+| `api.<zone>`          | The API: sign-in, real-time sync, integrations, webhooks     |
+| `cdn.<zone>`          | Uploaded files (an R2 bucket)                                |
+| `link-preview.<zone>` | Link unfurls                                                 |
+| `bot-gateway.<zone>`  | Real-time connections for bots                               |
+| `mail.<zone>`         | The sender address of invitations and support replies        |
+| `inbound.<zone>`      | Support mailboxes (optional)                                 |
+
+Behind them: Workers, one Durable Object per organization, channel and user (each with its own
+SQLite database), a D1 database for accounts and routing, R2 buckets and KV namespaces. The
+installer creates all of it; you never create a resource by hand.
+
+## What you need
+
+- A Cloudflare account on the **Workers Paid** plan.
+- A domain on Cloudflare for the install.
+- A **GitHub OAuth app** or a **Google OAuth client** (or both), for sign-in.
+- A machine with `git` and [Bun](https://bun.sh) to run the installer. Nothing runs on it
+  afterwards: any machine with the install's env file can run the next upgrade.
+
+<Callout type="info">
+	Hazel runs only on Cloudflare. It depends on Durable Objects, D1 and Cloudflare Email, which have no
+	drop-in equivalent elsewhere, so there is no Docker or VPS version.
+</Callout>
+
+## The steps
+
+<Cards>
+	<Card title="1. Prepare Cloudflare" href="/self-hosting/prepare-cloudflare">
+		The account, the zone, and an API token with the right permissions
+	</Card>
+	<Card title="2. Set up sign-in" href="/self-hosting/sign-in">
+		Register a GitHub OAuth app or a Google OAuth client
+	</Card>
+	<Card title="3. Install" href="/self-hosting/install">
+		Run the installer, check, deploy, sign in
+	</Card>
+	<Card title="4. Configure" href="/self-hosting/configuration">
+		Who may sign in, admins, optional features, bots
+	</Card>
+</Cards>
+
+After that: [connect integrations](/self-hosting/integrations), [upgrade](/self-hosting/upgrades)
+when a release comes out, and know how to [restore from a backup](/self-hosting/backups).
+
+## What Hazel can see
+
+Nothing, by default. Two things are optional and off until you turn them on:
+
+- **Brokered integrations**: connecting Slack, Linear or the GitHub App through Hazel's own apps
+  instead of registering yours. Tokens pass through Hazel at the moment you connect (never stored)
+  and Slack and GitHub events are relayed through it. See
+  [the trust model](/self-hosting/integrations#through-hazels-broker).
+- **Telemetry**: with a `MAPLE_API_KEY`, the Workers export traces, logs and metrics to that
+  Maple organization (yours, or one Hazel gives you for support).

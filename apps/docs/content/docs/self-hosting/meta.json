@@ -1,0 +1,16 @@
+{
+	"title": "Self-hosting",
+	"description": "Run Hazel in your own Cloudflare account",
+	"root": true,
+	"pages": [
+		"index",
+		"prepare-cloudflare",
+		"sign-in",
+		"install",
+		"configuration",
+		"integrations",
+		"upgrades",
+		"backups",
+		"troubleshooting"
+	]
+}
