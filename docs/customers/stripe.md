@@ -183,7 +183,7 @@ currency like JPY is right by construction.
 - Items are summed, then the subscription's coupons are applied: a `percent_off` always, an
   `amount_off` only in the subscription's own currency, spread over the primary item's cadence
   (1 200.00 off a yearly subscription is 100.00 a month). The sum before discounts stays as
-  `listMrrMinor`, which is what a trial is ranked by (`trialListMrrMinor`, `tech-design.md` §4.6).
+  `listMrrMinor`, which is what a trial is ranked by (`trialListMrrMinor`, `tech-design.md` §4.5).
   Discounts are expanded wherever a subscription is read (`expand[]=discounts`), webhooks included,
   so their coupons always apply.
 - The amount is rounded once, at the end, and never goes below zero.

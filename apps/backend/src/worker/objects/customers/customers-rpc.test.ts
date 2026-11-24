@@ -1,7 +1,7 @@
 /**
  * The Customers RPCs in a `CustomersObject`: authorization (member vs admin), the members
  * bootstrap from the `OrgObject`, the demo seed through ingest and compute, the queue actions,
- * dry runs, and baseline mode after a backfill.
+ * rule dry run, and baseline mode after a backfill.
  */
 import { DEFAULT_CONNECTION_CONFIG } from "@hazel/customer-integrations"
 import {

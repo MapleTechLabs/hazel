@@ -380,7 +380,8 @@
 /*
  * Customers: chart and severity colors (Wonder "Maple Design System" › Foundations › Color Token
  * Reference). Chart hues fill marks only; text never takes a chart color, and every color is paired
- * with a label or legend. Severity marks use the semantic `*-subtle` foregrounds, as badges do.
+ * with a label or legend. Severity marks reuse the semantic tokens badges use (`*-subtle-fg`,
+ * `muted-fg`, `secondary`).
  */
 @theme inline {
 	--color-chart-new: var(--chart-new);

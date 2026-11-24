@@ -1,5 +1,5 @@
 /**
- * A signal's lifecycle (`docs/customers/tech-design.md` §4.5–§4.7), pure: what one evaluation does
+ * A signal's lifecycle (`docs/customers/tech-design.md` §4.4–§4.6), pure: what one evaluation does
  * to the `(rule, account)` episode, and its priority.
  *
  * - open: refreshed while true; auto-resolved (closed) once false.

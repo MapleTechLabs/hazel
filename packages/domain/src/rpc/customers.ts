@@ -2,7 +2,7 @@
  * The Customers RPCs (`docs/customers/tech-design.md` §2, §6). Every payload names its
  * `organizationId`: the api Worker routes the call to that org's `CustomersObject`.
  *
- * - `CustomerReadRpcs`: aggregates, time series, per-account detail, history pages, dry runs.
+ * - `CustomerReadRpcs`: aggregates, time series, per-account detail, history pages, the rule dry run.
  * - `CustomerQueueRpcs`: the work any member does (signals, notes, owners, tags).
  * - `CustomerAdminRpcs`: settings, rules, views, data sources (admins and owners; personal views
  *   for anyone).

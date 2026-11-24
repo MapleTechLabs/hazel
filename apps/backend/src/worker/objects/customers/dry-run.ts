@@ -1,5 +1,5 @@
 /**
- * The rule dry run (`docs/customers/tech-design.md` §4.8): a draft rule evaluated over the current
+ * The rule dry run (`docs/customers/tech-design.md` §4.7): a draft rule evaluated over the current
  * data with the same pure functions compute uses, without writing. Admins only (they read the
  * accounts); accounts load in chunks, with only the activity the rule's window needs, and a group
  * of linked accounts evaluates over its combined facts. One RPC evaluates at most `MAX_CHUNKS`

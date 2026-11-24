@@ -1,5 +1,5 @@
 /**
- * The pure scoring: the signal lifecycle and priority (`./lifecycle.ts`).
+ * The signal lifecycle and priority (`./lifecycle.ts`).
  */
 import type { SignalEvidence } from "@hazel/domain/customers"
 import { describe, expect, it } from "vitest"

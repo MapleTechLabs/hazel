@@ -1,5 +1,5 @@
 /**
- * What the read RPCs answer: aggregates, time series, per-account detail and dry runs
+ * What the read RPCs answer: aggregates, time series, per-account detail and the rule dry run
  * (`docs/customers/tech-design.md` §2 "RPC-only"). Live lists come from the synced collections.
  */
 import { CustomerAccountId } from "@hazel/schema"
@@ -194,7 +194,7 @@ export const Sparkline = Schema.Struct({
 export type Sparkline = typeof Sparkline.Type
 
 // ---------------------------------------------------------------------------
-// Dry runs
+// Rule dry run
 // ---------------------------------------------------------------------------
 
 export const RuleMatch = Schema.Struct({

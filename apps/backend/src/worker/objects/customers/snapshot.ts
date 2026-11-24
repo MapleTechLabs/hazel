@@ -1,5 +1,5 @@
 /**
- * Loads what compute and the dry runs evaluate (`./facts.ts`): the org-wide part once
+ * Loads what compute and the rule dry run evaluate (`./facts.ts`): the org-wide part once
  * (`loadBase`), then the live accounts in chunks (`loadAccounts`), each with its contacts,
  * activity over the window the rules need, billing, metrics and MRR movements, plus the account
  * fields compute derives from them (`rollupAccount`, §4.2). A chunk holds whole groups of linked
@@ -507,7 +507,7 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 	} satisfies SnapshotBase
 })
 
-/** `ids`' accounts (the live ones) with everything compute and the dry runs evaluate. */
+/** `ids`' accounts (the live ones) with everything compute and the rule dry run evaluate. */
 export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 	base: SnapshotBase,
 	ids: ReadonlyArray<CustomerAccountId>,

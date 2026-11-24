@@ -215,7 +215,7 @@ Rules:
   billing together, metrics summed per day, the most advanced stage), so
   "logins stopped" does not fire for one environment while another still has logins. Signals are
   only written on the primary: linking closes the joining accounts' unclosed signals, `setPrimary`
-  moves the group's to the new primary. Compute and the dry runs load whole groups per chunk.
+  moves the group's to the new primary. Compute and the rule dry run load whole groups per chunk.
 - **Field precedence:** `FIELD_PRECEDENCE` (`hazel` manual edit > clerk > stripe > autumn > maple for
   name; per field), recorded in `fieldSources`; domains merge (never removed); fixed in v1.
 - **Deletes:** `account.deleted` / `contact.removed` → ref `staleAt` (+ the op's `observedAt` as
@@ -341,7 +341,7 @@ Rules:
 - Autumn counts for MRR once its first backfill finished and, after a reconnect, once a run started
   since (`lastSuccessAt` ≥ `connectedAt`) succeeded: what it imported before the disconnect is stale.
 
-### 4.4 Signal evaluation (`packages/domain/src/customers/rules.ts`, `evidence.ts`)
+### 4.3 Signal evaluation (`packages/domain/src/customers/rules.ts`, `evidence.ts`)
 
 Every enabled rule × every in-scope, non-churned account (silent accounts included) that Needs
 attention covers (`customer_settings.attention`: its stage is one of `stages`, and it has an account
@@ -375,10 +375,10 @@ Needs attention coverage: they evaluate every non-churned account in the rule's 
 - Title = template name (or the rule's name if renamed); reason = one plain sentence from evidence
   ("No activity for 18 days; 12 weekly active users before").
 
-### 4.5 Signal lifecycle (per `(rule, account)`, one unclosed row)
+### 4.4 Signal lifecycle (per `(rule, account)`, one unclosed row)
 
 - Condition true, no unclosed row → **open** (new row, `signal.opened` event), unless the rule is
-  in baseline mode (§4.7).
+  in baseline mode (§4.6).
 - **open**: update evidence/severity/priority each run. Condition false → `auto_resolved`, `closedAt`.
 - **snoozed**: wakes to open at `snoozedUntil`; wakes **early** when `evidence.step >
   actionEvidence.step` or severity rose ("got worse", event `signal.woke`). Condition false →
@@ -392,7 +392,7 @@ Needs attention coverage: they evaluate every non-churned account in the rule's 
 - Account counters (`openRisk*`, `openOpportunities`) and rule `matchingCount`/`lastTriggeredAt`
   updated at the end of evaluation.
 
-### 4.6 Priority
+### 4.5 Priority
 
 `priorityScore = severityWeight × valueWeight × freshness`
 
@@ -403,7 +403,7 @@ Needs attention coverage: they evaluate every non-churned account in the rule's 
 - `freshness = max(0.5, 1 − ageDays/28)`, age from `openedAt`.
 - Queue order = `priorityScore desc`, rank shown 1..n.
 
-### 4.7 Backfill must not flood
+### 4.6 Backfill must not flood
 
 - `finishRun` of a successful `backfill` adds its connection to meta `baselineFor`; the next compute
   (and every compute while a backfill younger than 24 h is running; retryable failures keep it
@@ -414,14 +414,14 @@ Needs attention coverage: they evaluate every non-churned account in the rule's 
 - Time-bounded templates (`payment_failed`, `cancel_scheduled`, `trial_ending_low_activation`) open
   normally: they are actionable now.
 
-### 4.8 Dry runs (read RPCs; pure functions shared with compute)
+### 4.7 Rule dry run (a read RPC; pure functions shared with compute)
 
 - `customers.rule.dryRun`: match count, MRR, top 10 matches with evidence, non-match reasons
   histogram (out of scope / below threshold / no data / missing source), queue delta vs the rule's
   current signals.
 - It evaluates at most 8 chunks of accounts (2,000) and stops after 5 s: the result carries
   `evaluatedAccounts` of `totalAccounts`, and the editor says "Preview based on X of Y customers".
-- Evaluation is pure (`(snapshot, config) → result`) so compute, dry runs and unit tests share it.
+- Evaluation is pure (`(snapshot, config) → result`) so compute, the dry run and unit tests share it.
 
 ## 5. Webhooks, secrets and pulls (framework only)
 
@@ -578,7 +578,7 @@ request changes.
   fine), and `packages/domain/src/customers/**` + `rpc/customers.ts` contract changes (announce
   them to b/c/d).
 - Order: access + members → ingest → rollups → evaluation/lifecycle/priority → read RPCs →
-  mutations → dry runs → seed → webhook/pull framework.
+  mutations → rule dry run → seed → webhook/pull framework.
 
 ### (b) Design system, charts, lab — frontend kit
 

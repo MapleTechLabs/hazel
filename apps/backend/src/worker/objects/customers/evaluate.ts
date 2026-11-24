@@ -1,5 +1,5 @@
 /**
- * Signal evaluation (`docs/customers/tech-design.md` §4.4), pure: one rule against one account's
+ * Signal evaluation (`docs/customers/tech-design.md` §4.3), pure: one rule against one account's
  * facts. Compute, the rule dry run and the tests share it.
  *
  * A match carries its evidence (drawn by the UI per `_tag`) and `step`, how far past the threshold

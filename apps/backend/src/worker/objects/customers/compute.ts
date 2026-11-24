@@ -250,7 +250,7 @@ type Live = Map<string, Pick<schema.CustomerSignal, "status" | "severity" | "kin
 
 /** One compute's signal evaluation, across the account chunks (and alarm turns). */
 interface SignalRun {
-	/** Providers whose import is news to no one (§4.7): their templates run in baseline mode. */
+	/** Providers whose import is news to no one (§4.6): their templates run in baseline mode. */
 	readonly baseline: ReadonlySet<CustomerProvider>
 	/** The connections whose finished backfill armed the baseline when the compute started. */
 	readonly armed: ReadonlyArray<string>
