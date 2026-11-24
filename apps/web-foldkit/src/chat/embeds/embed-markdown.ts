@@ -1,14 +1,12 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import type { VariantProps } from "tailwind-variants"
 import { type ParsedSegment, parseInlineMarkdown } from "~/components/embeds/embed-markdown.parser"
 import { colorMap } from "~/components/embeds/embed-markdown.styles"
-import type { badgeStyles } from "~/components/ui/badge.styles"
 import { cn } from "~/lib/utils"
 import { badge } from "../../ui/badge"
 
 /** Port of `components/embeds/embed-markdown.tsx`: the shared parser, the same DOM per segment. */
 
-type BadgeIntent = VariantProps<typeof badgeStyles>["intent"]
+type BadgeIntent = Parameters<typeof badge>[1]["intent"]
 
 type Segment = ParsedSegment
 
@@ -31,8 +29,7 @@ const segmentViews = <M>(
 		bold: (segment) => h.strong([h.Class("font-semibold")], inner(segment)),
 		italic: (segment) => h.em([h.Class("italic")], inner(segment)),
 		strikethrough: (segment) => h.s([h.Class("line-through")], inner(segment)),
-		code: (segment) =>
-			h.code([h.Class("rounded bg-muted/50 px-1 font-mono text-[0.85em]")], [segment.content]),
+		code: (segment) => h.code([h.Class("rounded bg-muted/50 px-1 font-mono text-xs")], [segment.content]),
 		colored: (segment) =>
 			h.span([h.Class(colorMap[segment.color ?? ""] ?? "text-fg")], [segment.content]),
 		badge: (segment) =>

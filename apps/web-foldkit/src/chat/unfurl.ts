@@ -3,13 +3,17 @@ import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/http"
 import { AsyncData, Command } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import { defineTaggedUnion } from "foldkit/schema"
+import { currentServer } from "~/config/server"
 
 /**
- * URL unfurls fetched from the link-preview worker (legacy `LinkPreviewClient`, base URL
- * `https://link-preview.hazel.sh`): `LinkPreview`'s Open Graph data and `TweetEmbed`'s tweet.
+ * URL unfurls fetched from the install's link-preview worker (`VITE_LINK_PREVIEW_URL`, set by the
+ * stack; Hazel's own when unset): `LinkPreview`'s Open Graph data and `TweetEmbed`'s tweet.
  */
 
-export const LINK_PREVIEW_URL = "https://link-preview.hazel.sh"
+export const LINK_PREVIEW_URL = (currentServer().linkPreview ?? "https://link-preview.hazel.sh").replace(
+	/\/+$/,
+	"",
+)
 
 // MODEL
 

@@ -2,10 +2,13 @@ import { Effect } from "effect"
 import { Mount, Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { type CommonReason, commonMessage } from "~/lib/error-messages"
+import { IconWarning } from "../../icons"
 import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
 import { button, buttonClassName } from "../../ui/button"
-import { loader } from "../../ui/loader"
+import { iconTile } from "../../ui/icon-tile"
+import { link } from "../../ui/link"
+import { loader, loadingState } from "../../ui/loader"
 import { authShell } from "../auth/layout"
 import { isSessionLoading, type PageViewInputs, type Shared } from "../contract"
 import { animateEnter, endStyleOf } from "../onboarding/motion"
@@ -37,32 +40,8 @@ const loadingView = (h: HtmlBuilder<Message>, nowMs: number): Html =>
 	authShell(
 		h,
 		nowMs,
-		h.div(
-			[h.Class("m-auto flex flex-col items-center gap-4")],
-			[loader(h, { className: "size-8" }), h.p([h.Class("text-muted-fg")], ["Loading workspace..."])],
-		),
+		loadingState(h, { label: "Loading workspace...", className: "m-auto flex-col gap-4 py-0" }),
 		{ tagline: null },
-	)
-
-const warningIcon = (h: HtmlBuilder<Message>): Html =>
-	h.svg(
-		[
-			h.Class("size-10 text-danger"),
-			h.Attribute("fill", "none"),
-			h.Attribute("viewBox", "0 0 24 24"),
-			h.Attribute("stroke", "currentColor"),
-		],
-		[
-			h.path([
-				h.Attribute("stroke-linecap", "round"),
-				h.Attribute("stroke-linejoin", "round"),
-				h.Attribute("stroke-width", "1.5"),
-				h.Attribute(
-					"d",
-					"M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z",
-				),
-			]),
-		],
 	)
 
 const problemCard = (
@@ -70,10 +49,7 @@ const problemCard = (
 	options: { readonly title: string; readonly description: string; readonly action: Html },
 ): Html =>
 	animatedCard(h, [
-		h.div(
-			[h.Class("mb-6 flex size-20 items-center justify-center rounded-2xl bg-danger/10")],
-			[warningIcon(h)],
-		),
+		iconTile(h, { intent: "danger", className: "mb-6 size-20 rounded-2xl *:size-10" }, IconWarning(h)),
 		heading(h, { variant: "display", className: "mb-2" }, [options.title]),
 		h.p([h.Class("mb-8 text-muted-fg")], [options.description]),
 		options.action,
@@ -133,11 +109,12 @@ const actions = (h: HtmlBuilder<Message>, model: Model, isSignedIn: boolean): Ht
 						[h.Class("text-muted-fg text-sm")],
 						[
 							"Wrong workspace? ",
-							h.a(
-								[
-									h.Class("text-fg underline underline-offset-2"),
-									h.Href(hrefOf(AppRoute.Root())),
-								],
+							link(
+								h,
+								{
+									href: hrefOf(AppRoute.Root()),
+									className: "text-fg underline underline-offset-2",
+								},
 								["Go home"],
 							),
 						],
@@ -151,11 +128,12 @@ const actions = (h: HtmlBuilder<Message>, model: Model, isSignedIn: boolean): Ht
 						[h.Class("text-muted-fg text-sm")],
 						[
 							"Already have an account? ",
-							h.a(
-								[
-									h.Class("text-fg underline underline-offset-2"),
-									h.Href(hrefOf(AppRoute.Root())),
-								],
+							link(
+								h,
+								{
+									href: hrefOf(AppRoute.Root()),
+									className: "text-fg underline underline-offset-2",
+								},
 								["Go home"],
 							),
 						],
@@ -174,7 +152,7 @@ const inviteView = (h: HtmlBuilder<Message>, model: Model, org: PublicOrganizati
 				size: "4xl",
 				className: "mb-6 shadow-lg",
 			}),
-			h.h1([h.Class("mb-2 font-semibold text-3xl text-fg")], [org.name]),
+			heading(h, { variant: "display", className: "mb-2" }, [org.name]),
 			h.p(
 				[h.Class("mb-8 text-muted-fg")],
 				[String(org.memberCount), " ", org.memberCount === 1 ? "member" : "members"],

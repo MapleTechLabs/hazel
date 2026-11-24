@@ -2,7 +2,9 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconCheck, IconConnect, IconMagnifier3, IconPlus } from "../../icons"
 import { button } from "../../ui/button"
+import { cardClassName } from "../../ui/card"
 import { emptyState } from "../../ui/empty-state"
+import { startingSource, suggestedBillingSource } from "../providers"
 
 /**
  * The Customers empty states (Foundations › Empty State Variants) over the app's `emptyState`:
@@ -12,14 +14,7 @@ import { emptyState } from "../../ui/empty-state"
 const frame = <M>(h: HtmlBuilder<M>, framed: boolean, className: string | undefined, child: Html): Html =>
 	framed
 		? h.div(
-				[
-					h.Class(
-						twMerge(
-							"flex items-center justify-center rounded-xl border border-border px-6",
-							className,
-						),
-					),
-				],
+				[h.Class(cardClassName(twMerge("flex items-center justify-center px-6", className)))],
 				[child],
 			)
 		: child
@@ -49,7 +44,7 @@ export const allClearState = <M>(
 		}),
 	)
 
-/** No source connected: start with Clerk. `action` overrides the default `+ Connect Clerk` button. */
+/** No source connected: start with the suggested one. `action` overrides its default Connect button. */
 export const noSourcesState = <M>(
 	h: HtmlBuilder<M>,
 	options: Readonly<{ onConnect?: M; action?: Html; framed?: boolean; className?: string }>,
@@ -61,14 +56,14 @@ export const noSourcesState = <M>(
 		emptyState(h, {
 			title: "Connect a data source",
 			icon: (className) => IconConnect(h, { className }),
-			description: "Start with Clerk to import your organizations, then add Stripe for revenue.",
+			description: `Start with ${startingSource.name} to import your ${startingSource.accountNoun}s, then add ${suggestedBillingSource.name} for revenue.`,
 			action:
 				options.action ??
 				(options.onConnect === undefined
 					? undefined
 					: button(h, { intent: "primary", size: "sm", onPress: options.onConnect }, [
 							IconPlus(h),
-							"Connect Clerk",
+							`Connect ${startingSource.name}`,
 						])),
 		}),
 	)

@@ -3,6 +3,7 @@
  * `IntegrationEncryption` on connect, decrypted only to call the provider. Never synced, never
  * returned by an RPC.
  */
+import { billingProviders } from "@hazel/customer-integrations"
 import { Database, SQLite, schema } from "@hazel/db"
 import type { CustomerConnectionId } from "@hazel/schema"
 import { Clock, Effect, Option, Redacted } from "effect"
@@ -11,7 +12,7 @@ import { HISTORY_DAYS } from "./compute"
 import { CustomerIngest } from "./ingest"
 import type { ProviderCredentials } from "./providers"
 import { requestHistoryRebuild } from "./schedule"
-import { addDays, dayOf } from "./time"
+import { addDays, dayOf } from "@hazel/customer-integrations/kit/time"
 
 /** Encrypt the API key and the webhook secret for storing, both under the current key version. */
 export const encryptSecrets = Effect.fn("Customers.encryptSecrets")(function* (
@@ -199,7 +200,7 @@ export const switchProviderAccount = Effect.fn("Customers.switchProviderAccount"
 				.distinct(),
 		)).map((row) => row.mrrSource),
 	)
-	if ((provider === "stripe" || provider === "autumn") && (sources.size === 0 || sources.has(provider))) {
+	if (billingProviders.includes(provider) && (sources.size === 0 || sources.has(provider))) {
 		const first = addDays(dayOf(now), -HISTORY_DAYS)
 		yield* db.run(SQLite.deleteFrom(schema.customerMrrMovementsTable).where(($) => [$.day.gte(first)]))
 		yield* db.run(

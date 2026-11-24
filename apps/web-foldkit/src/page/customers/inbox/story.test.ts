@@ -83,8 +83,6 @@ const acme: AccountRow = {
 	currency: "USD",
 	trialListMrrMinor: null,
 	trialEndsAtMs: null,
-	healthScore: 54,
-	healthStatus: "at_risk",
 	seatsUsed: null,
 	seatsLimit: null,
 	contactCount: 10,

@@ -3,13 +3,9 @@
  * stop on bad credentials or a disconnect, compute that backs off and leases its run, signals of deleted accounts, baseline mode during a backfill, the one-time history rebuild,
  * and usage data that stops counting once its source is gone.
  */
+import { DEFAULT_ATTENTION_SETTINGS } from "@hazel/customer-integrations"
 import { Database, SQLite, schema } from "@hazel/db"
-import {
-	DEFAULT_ATTENTION_SETTINGS,
-	type IngestOp,
-	type ProviderRef,
-	type UpsertSubscription,
-} from "@hazel/domain/customers"
+import { type IngestOp, type ProviderRef, type UpsertSubscription } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerSignalRuleId, OrganizationId } from "@hazel/schema"
 import { ConfigProvider, Effect, Exit, Layer, Option, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
@@ -34,7 +30,7 @@ import {
 } from "./schedule"
 import { loadBase } from "./snapshot"
 import { type CustomersWorld, makeCustomersWorld, NOW, ok, uuid } from "./test-kit"
-import { addDays, dayOf } from "./time"
+import { addDays, dayOf } from "@hazel/customer-integrations/kit/time"
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
@@ -989,7 +985,12 @@ describe("Customers compute and sync loop", () => {
 				const world = yield* makeCustomersWorld
 				yield* quietOrg(world)
 				const snapshot = () => world.object.run(loadBase(NOW)).pipe(Effect.orDie)
-				expect((yield* snapshot()).hasActivityData).toBe(true)
+				expect([...(yield* snapshot()).org.connected].sort()).toEqual([
+					"autumn",
+					"clerk",
+					"maple",
+					"stripe",
+				])
 				world.object.storage.db
 					.prepare(
 						`UPDATE customer_connections SET status = 'disconnected' WHERE provider = 'maple'`,
@@ -998,9 +999,7 @@ describe("Customers compute and sync loop", () => {
 				world.object.storage.db
 					.prepare(`UPDATE customer_connections SET status = 'error' WHERE provider = 'clerk'`)
 					.run()
-				const stale = yield* snapshot()
-				expect(stale.hasActivityData).toBe(false)
-				expect([...stale.org.connected].sort()).toEqual(["autumn", "stripe"])
+				expect([...(yield* snapshot()).org.connected].sort()).toEqual(["autumn", "stripe"])
 			}),
 		))
 
@@ -1041,7 +1040,6 @@ describe("Customers compute and sync loop", () => {
 				pulled("clerk", NOW.getTime() - 2 * DAY)
 				pulled("maple", null)
 				const silent = yield* snapshot()
-				expect(silent.hasActivityData).toBe(false)
 				expect([...silent.org.connected].sort()).toEqual(["autumn", "stripe"])
 				expect([...silent.org.staleMetrics]).toEqual(["maple.requests"])
 				yield* world.object.run(runCompute(new Date(NOW.getTime() + DAY))).pipe(Effect.orDie)
@@ -1306,20 +1304,17 @@ describe("Customers compute and sync loop", () => {
 						mrrMinor: number
 						lifecycleStage: string
 						customerSince: string | null
-						healthStatus: string
 					}>(
-						`SELECT name, mrrMinor, lifecycleStage, customerSince, healthStatus FROM customer_accounts ORDER BY name`,
+						`SELECT name, mrrMinor, lifecycleStage, customerSince FROM customer_accounts ORDER BY name`,
 					)
 				const [usageBilled, free] = accounts()
 				expect(usageBilled).toMatchObject({ mrrMinor: 0, lifecycleStage: "active" })
-				expect(usageBilled!.healthStatus).not.toBe("unknown")
 				expect(epoch(usageBilled!.customerSince!)).toBe(NOW.getTime() - 30 * DAY)
-				// A lead (a free plan) is not a customer yet: no health score, so never "at risk".
+				// A lead (a free plan) is not a customer yet.
 				expect(free).toMatchObject({
 					mrrMinor: 0,
 					lifecycleStage: "lead",
 					customerSince: null,
-					healthStatus: "unknown",
 				})
 				expect(world.rows(`SELECT * FROM customer_mrr_movements`)).toEqual([])
 
@@ -2179,7 +2174,9 @@ describe("Customers compute and sync loop", () => {
 						autumnId,
 					)
 				const autumnReady = () =>
-					world.object.run(Effect.map(loadBase(NOW), (base) => base.autumnReady)).pipe(Effect.orDie)
+					world.object
+						.run(Effect.map(loadBase(NOW), (base) => base.billingReady.includes("autumn")))
+						.pipe(Effect.orDie)
 				expect(yield* autumnReady()).toBe(false)
 				yield* compute(1)
 				expect(state()).toEqual({
@@ -2473,8 +2470,6 @@ describe("Customers compute and sync loop", () => {
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
 				yield* world.ingest("clerk", manyAccounts(260))
-				const scored = () =>
-					world.rows<{ n: number }>(`SELECT count(*) AS n FROM customer_health_daily`)[0]!.n
 				const lastComputed = () =>
 					world.rows<{ lastComputedAt: string | null }>(
 						`SELECT lastComputedAt FROM customer_settings`,
@@ -2483,9 +2478,11 @@ describe("Customers compute and sync loop", () => {
 				// No time budget: one chunk per turn; the next turn is due right away.
 				const before = Date.now()
 				yield* world.object.run(runCompute(NOW, 0)).pipe(Effect.orDie)
-				expect(scored()).toBe(250)
+				const [lastOfChunk] = world.rows<{ id: string }>(
+					`SELECT id FROM customer_accounts ORDER BY id LIMIT 1 OFFSET 249`,
+				)
+				expect(JSON.parse(meta(world, "computeProgress")!).after).toBe(lastOfChunk!.id)
 				expect(lastComputed()).toBeNull()
-				expect(meta(world, "computeProgress")).toBeDefined()
 				expect(world.rows(`SELECT day FROM customer_org_daily`)).toEqual([])
 				const due = Number(meta(world, "computeDueAt"))
 				expect(due).toBeGreaterThanOrEqual(before)
@@ -2496,7 +2493,6 @@ describe("Customers compute and sync loop", () => {
 				expect(Number(meta(world, "computeDueAt"))).toBe(due)
 
 				yield* world.object.run(runCompute(NOW, 0)).pipe(Effect.orDie)
-				expect(scored()).toBe(260)
 				expect(lastComputed()).not.toBeNull()
 				expect(meta(world, "computeProgress")).toBeUndefined()
 				expect(world.rows(`SELECT day FROM customer_org_daily`)).toEqual([{ day: day(0) }])
@@ -2522,7 +2518,10 @@ describe("Customers compute and sync loop", () => {
 				expect(first).toMatchObject({ day: day(0), startedAt: NOW.getTime() })
 				// Each starts over: the first chunk again, and the same progress after it.
 				for (const saved of [
-					JSON.stringify({ ...first, autumnReady: !first.autumnReady }),
+					JSON.stringify({
+						...first,
+						billingReady: ["changed"],
+					}),
 					JSON.stringify({ ...first, day: day(-1) }),
 					JSON.stringify({ ...first, startedAt: NOW.getTime() - 2 * 60 * 60_000 }),
 					JSON.stringify({ ...first, after: 42 }),
@@ -2556,7 +2555,7 @@ describe("Customers compute and sync loop", () => {
 
 				world.object.storage.db
 					.prepare(
-						`CREATE TRIGGER fail_health BEFORE INSERT ON customer_health_daily BEGIN SELECT RAISE(ABORT, 'boom'); END`,
+						`CREATE TRIGGER fail_org_day BEFORE INSERT ON customer_org_daily BEGIN SELECT RAISE(ABORT, 'boom'); END`,
 					)
 					.run()
 				world.object.storage.db

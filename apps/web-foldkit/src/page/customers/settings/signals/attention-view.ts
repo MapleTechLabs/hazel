@@ -1,10 +1,12 @@
 import * as Customers from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { PROVIDER_ORDER, PROVIDERS } from "../../../../customers/providers"
+import { PROVIDER_ORDER, providerOf } from "../../../../customers/providers"
 import { STAGE_LABEL } from "../../../../customers/ui/badges"
+import { panel, panelHeader } from "../../../../ui/card"
+import { toggleChip } from "../../../../ui/toggle-chip"
 import { Message } from "./message"
+
 import type { AttentionRow } from "./model"
-import { card, toggleChip } from "./parts"
 
 /** Who Needs attention covers (`AttentionSettings`): every rule looks only at these customers. */
 
@@ -27,7 +29,8 @@ const field = (h: H, label: string, hint: string, chips: ReadonlyArray<Html>): H
 
 export const attentionCard = (h: H, row: AttentionRow, isDisabled: boolean): Html => {
 	const { stages, requiredSources } = row.attention
-	return card(h, { title: "Who needs attention" }, [
+	return panel(h, {}, [
+		panelHeader(h, { title: "Who needs attention" }),
 		h.p(
 			[h.Class("-mt-2 text-muted-fg text-sm")],
 			[
@@ -53,7 +56,7 @@ export const attentionCard = (h: H, row: AttentionRow, isDisabled: boolean): Htm
 			"Any of these; none picked: any customer",
 			PROVIDER_ORDER.map((provider) =>
 				toggleChip(h, {
-					label: PROVIDERS[provider].name,
+					label: providerOf(provider).name,
 					isPressed: requiredSources.includes(provider),
 					isDisabled,
 					onPress: Message.ToggledAttentionSource({ provider }),

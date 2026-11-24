@@ -13,6 +13,7 @@ import * as Option from "effect/Option"
 import { merge, optionalPlain, requiredSecret, telemetryEnv, type WorkerEnv } from "../env.ts"
 import { optionalString } from "../config-helpers.ts"
 import { type HazelStackContext, hazelWorkerProps } from "./stack.ts"
+import { isProductionStage } from "./stage.ts"
 
 /** The gateway origin bots connect to: its custom domain, else the `alchemy dev` port. */
 const gatewayUrl = ({ domains }: HazelStackContext) =>
@@ -21,7 +22,9 @@ const gatewayUrl = ({ domains }: HazelStackContext) =>
 /** Whether the stack deploys the bot whose token is `tokenKey`. Plan-time only. */
 export const isBotDeployed = (tokenKey: string, stack: HazelStackContext) =>
 	Effect.gen(function* () {
-		if (stack.stage.kind !== "prd" && !stack.isDevServer) return false
+		// Production stages (prd, a customer install) and `alchemy dev`: a bot token is a row in the
+		// stage's directory, so a fresh install deploys its bots once their tokens are set.
+		if (!isProductionStage(stack.stage) && !stack.isDevServer) return false
 		const token = yield* optionalString(tokenKey)
 		return Option.isSome(token) && token.value.trim() !== ""
 	})
@@ -45,7 +48,7 @@ export const botWorkerProps = (app: string, stack: HazelStackContext, options: B
 		return {
 			...hazelWorkerProps(app, stack),
 			// Health only: the bot talks to Hazel outbound, so there is nothing to route to it.
-			workersDev: stack.stage.kind !== "prd",
+			workersDev: !isProductionStage(stack.stage),
 			env,
 			observability: {
 				enabled: true,

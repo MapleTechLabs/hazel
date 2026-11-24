@@ -10,6 +10,7 @@ import { kpiTile } from "../../../../customers/ui/kpi-tile"
 import { defineStaticLab } from "../../../define"
 import { labPage, labSection } from "../../../frame"
 import { overviewFixture } from "../../../fixtures/customers"
+import { INVOICES } from "../../../fixtures/customers-demo-sources"
 
 // `/lab/customers/kit/kpi-tiles`: Foundations › KPI Tile Variants. Hover or focus a label for its definition.
 
@@ -86,7 +87,7 @@ export const lab = defineStaticLab("KPI tiles", (h) =>
 					state: "empty",
 					emptyAction: h.a(
 						[h.Href("#"), h.Class("text-primary-subtle-fg hover:underline")],
-						["Connect Stripe to track revenue"],
+						[`Connect ${INVOICES.name} to track revenue`],
 					),
 				}),
 			],

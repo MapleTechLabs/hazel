@@ -114,10 +114,10 @@ export const LimitEvidence = Schema.TaggedStruct("limit", {
 	accountId: Schema.optionalKey(CustomerAccountId),
 })
 
-/** `cancel_scheduled`, `health_drop`, `seat_growth`: a value that moved from `from` to `to`. */
+/** `cancel_scheduled`, `seat_growth`: a value that moved from `from` to `to`. */
 export const DeltaEvidence = Schema.TaggedStruct("delta", {
 	step: EvidenceStep,
-	unit: Schema.Literals(["minor", "points", "users"]),
+	unit: Schema.Literals(["minor", "users"]),
 	from: Schema.Finite,
 	to: Schema.Finite,
 	changePct: Schema.NullOr(Schema.Finite),
@@ -125,7 +125,7 @@ export const DeltaEvidence = Schema.TaggedStruct("delta", {
 	currency: Schema.NullOr(Schema.String),
 	/** When it takes effect (a scheduled cancellation's period end). */
 	effectiveAt: Schema.NullOr(IsoTimestamp),
-	/** E.g. plan names, health statuses. */
+	/** E.g. plan names. */
 	fromLabel: Schema.NullOr(Schema.String),
 	toLabel: Schema.NullOr(Schema.String),
 	reason: Schema.NullOr(Schema.String),

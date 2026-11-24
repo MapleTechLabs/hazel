@@ -1,4 +1,5 @@
-import { CustomerProvider, SignalTemplate } from "@hazel/domain/customers"
+import { RegisteredProvider } from "@hazel/customer-integrations"
+import { SignalTemplate } from "@hazel/domain/customers"
 import {
 	ChannelId,
 	CustomerAccountId,
@@ -59,6 +60,8 @@ export const AppRoute = defineRouteUnion({
 	ChatIndex: { orgSlug: Schema.String },
 	/** The direct messages list (a phone's DMs tab). */
 	ChatDms: { orgSlug: Schema.String },
+	/** A phone's More tab: the account, the workspace and the sections the tab bar has no room for. */
+	OrgMore: { orgSlug: Schema.String },
 	ChatChannel: { orgSlug: Schema.String, channelId: ChannelId },
 	ChatFiles: { orgSlug: Schema.String, channelId: ChannelId },
 	ChatFilesMedia: { orgSlug: Schema.String, channelId: ChannelId },
@@ -104,7 +107,7 @@ export const AppRoute = defineRouteUnion({
 		connectionStatus: Schema.Option(Schema.String),
 		errorCode: Schema.Option(Schema.String),
 	},
-	/** `/$orgSlug/customers`: revenue, usage and health across the org's customers. */
+	/** `/$orgSlug/customers`: revenue and usage across the org's customers. */
 	CustomersOverview: { orgSlug: Schema.String },
 	/** The ranked signal queue. */
 	CustomersAttention: { orgSlug: Schema.String },
@@ -112,7 +115,7 @@ export const AppRoute = defineRouteUnion({
 	CustomersInbox: { orgSlug: Schema.String },
 	/** Response times, % within SLA and breaches over a range (`docs/customers/sla.md`). */
 	CustomersSupportReport: { orgSlug: Schema.String },
-	/** `?view=`: a saved view's id, or a built-in view's key (`BuiltInViewKey`, e.g. `at_risk`). */
+	/** `?view=`: a saved view's id, or a built-in view's key (`BuiltInViewKey`, e.g. `paying`). */
 	CustomersList: { orgSlug: Schema.String, view: Schema.Option(Schema.String) },
 	/** One customer; `?tab=` picks the tab (none: overview). */
 	CustomerDetail: {
@@ -124,12 +127,11 @@ export const AppRoute = defineRouteUnion({
 	/** The rule editor for a new rule; `?template=` preselects the template picked in the modal. */
 	CustomersSettingsSignalNew: { orgSlug: Schema.String, template: Schema.Option(SignalTemplate) },
 	CustomersSettingsSignalRule: { orgSlug: Schema.String, ruleId: CustomerSignalRuleId },
-	CustomersSettingsHealth: { orgSlug: Schema.String },
 	CustomersSettingsPlans: { orgSlug: Schema.String },
 	CustomersSettingsSla: { orgSlug: Schema.String },
 	CustomersSettingsFeatureFlags: { orgSlug: Schema.String },
 	CustomersSettingsSources: { orgSlug: Schema.String },
-	CustomersSourceDetail: { orgSlug: Schema.String, provider: CustomerProvider },
+	CustomersSourceDetail: { orgSlug: Schema.String, provider: RegisteredProvider },
 	CustomersUnmatched: { orgSlug: Schema.String },
 	NotFound: { path: Schema.String },
 })
@@ -256,6 +258,7 @@ const routers = {
 	OrgHome: pipe(org, Route.mapTo(AppRoute.OrgHome)),
 	ChatIndex: pipe(orgPath("chat"), Route.mapTo(AppRoute.ChatIndex)),
 	ChatDms: pipe(orgPath("chat"), slash(literal("dms")), Route.mapTo(AppRoute.ChatDms)),
+	OrgMore: pipe(orgPath("more"), Route.mapTo(AppRoute.OrgMore)),
 	ChatChannel: pipe(channel("chat"), Route.mapTo(AppRoute.ChatChannel)),
 	ChatFiles: pipe(channel("chat"), slash(literal("files")), Route.mapTo(AppRoute.ChatFiles)),
 	ChatFilesMedia: pipe(
@@ -368,10 +371,6 @@ const routers = {
 		slash(schemaSegment("ruleId", CustomerSignalRuleId)),
 		Route.mapTo(AppRoute.CustomersSettingsSignalRule),
 	),
-	CustomersSettingsHealth: pipe(
-		orgPath("customers", "settings", "health"),
-		Route.mapTo(AppRoute.CustomersSettingsHealth),
-	),
 	CustomersSettingsPlans: pipe(
 		orgPath("customers", "settings", "plans"),
 		Route.mapTo(AppRoute.CustomersSettingsPlans),
@@ -390,7 +389,7 @@ const routers = {
 	),
 	CustomersSourceDetail: pipe(
 		orgPath("customers", "settings", "sources"),
-		slash(schemaSegment("provider", CustomerProvider)),
+		slash(schemaSegment("provider", RegisteredProvider)),
 		Route.mapTo(AppRoute.CustomersSourceDetail),
 	),
 	CustomersUnmatched: pipe(
@@ -418,6 +417,7 @@ export const urlToAppRoute = Route.parseUrlWithFallback(
 		routers.OrgHome,
 		routers.ChatIndex,
 		routers.ChatDms,
+		routers.OrgMore,
 		routers.ChatChannel,
 		routers.ChatFiles,
 		routers.ChatFilesMedia,
@@ -460,7 +460,6 @@ export const urlToAppRoute = Route.parseUrlWithFallback(
 		routers.CustomersSettingsSignals,
 		routers.CustomersSettingsSignalNew,
 		routers.CustomersSettingsSignalRule,
-		routers.CustomersSettingsHealth,
 		routers.CustomersSettingsPlans,
 		routers.CustomersSettingsSla,
 		routers.CustomersSettingsFeatureFlags,
@@ -555,7 +554,6 @@ export const isCustomersRoute = AppRoute.isAnyOf([
 	"CustomersSettingsSignals",
 	"CustomersSettingsSignalNew",
 	"CustomersSettingsSignalRule",
-	"CustomersSettingsHealth",
 	"CustomersSettingsPlans",
 	"CustomersSettingsSla",
 	"CustomersSettingsFeatureFlags",
@@ -630,6 +628,7 @@ export const titleOf = (route: AppRoute): string => {
 			OnboardingSetupOrganization: () => "Welcome",
 			SelectOrganization: () => "Select a workspace",
 			OrgHome: () => "Home",
+			OrgMore: () => "More",
 			NotFound: () => "Not found",
 		},
 		() =>

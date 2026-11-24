@@ -1,6 +1,7 @@
 import type { Attachment } from "@hazel/domain/models"
+import { currentServer } from "../config/server"
 
-const FALLBACK_PUBLIC_URL = import.meta.env.VITE_R2_PUBLIC_URL || "https://cdn.hazel.sh"
+const publicUrl = () => currentServer().cdn ?? "https://cdn.hazel.sh"
 
 export const getAttachmentUrl = (attachment: Pick<Attachment.Type, "id" | "externalUrl">): string =>
-	attachment.externalUrl?.trim() || `${FALLBACK_PUBLIC_URL}/${attachment.id}`
+	attachment.externalUrl?.trim() || `${publicUrl()}/${attachment.id}`

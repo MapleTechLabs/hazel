@@ -96,8 +96,6 @@ const account = (n: number, name: string): AccountRow => ({
 	currency: "USD",
 	trialListMrrMinor: null,
 	trialEndsAtMs: null,
-	healthScore: 80,
-	healthStatus: "healthy",
 	seatsUsed: null,
 	seatsLimit: null,
 	contactCount: 10,
@@ -1032,6 +1030,7 @@ describe("customer page: impersonation", () => {
 		},
 		status: "active",
 		activity: [],
+		otherAccounts: [],
 	})
 	const linus = contactRow(1, "Linus")
 	const margaret = contactRow(2, "Margaret")

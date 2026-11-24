@@ -14,10 +14,12 @@ import { afterEach, test } from "vitest"
 import { page } from "vitest/browser"
 import * as CustomerCard from "./customer-card"
 import { chatHeaderView } from "./header"
+import { NO_CHANNEL_LINKS } from "../../ui/channel-icon"
+import { ACTIVITY, DIRECTORY, INVOICES } from "../../lab/fixtures/customers-demo-sources"
 
 /**
  * The linked channel's customer at a glance (`customer-card.ts`): the header chip and the card in
- * each state the PR shows (populated, many signals, unknown health, a new customer, no customer),
+ * each state the PR shows (populated, many signals, a new customer, no customer),
  * desktop and phone width, light and dark (`bun run gallery`). Writes `customer-card-<theme>.png`.
  */
 
@@ -100,9 +102,6 @@ const base: ChannelCustomer.Type = {
 		colors: ["#6938ef"],
 		logoUrl: null,
 	},
-	healthStatus: "at_risk",
-	healthScore: 48,
-	healthWhy: "No sign-ins for 18 days; 12 weekly active users before",
 	lifecycleStage: "active",
 	planName: "Pro",
 	mrrMinor: 240_000,
@@ -117,12 +116,9 @@ const base: ChannelCustomer.Type = {
 		signal(2, "Usage dropped", "Daily active users down 42% vs the previous 4 weeks", "medium"),
 	],
 	sourceLinks: [
-		{
-			provider: "clerk",
-			url: "https://dashboard.clerk.com/apps/app_1/instances/ins_1/organizations/org_1",
-		},
-		{ provider: "stripe", url: "https://dashboard.stripe.com/customers/cus_1" },
-		{ provider: "maple", url: "https://app.maple.dev/groups/org_1" },
+		{ provider: DIRECTORY.id, url: DIRECTORY.demo.accountUrl("org_1", "gallery") },
+		{ provider: INVOICES.id, url: INVOICES.demo.customerUrl("cus_1") },
+		{ provider: ACTIVITY.id, url: ACTIVITY.demo.accountUrl("org_1") },
 	],
 	updatedAt: new Date(NOW),
 }
@@ -130,9 +126,6 @@ const base: ChannelCustomer.Type = {
 const manySignals: ChannelCustomer.Type = {
 	...base,
 	accountName: "Globex International Holdings",
-	healthStatus: "critical",
-	healthScore: 22,
-	healthWhy: "Subscription past due; 3 high-severity risk signals open",
 	lifecycleStage: "past_due",
 	openSignalCount: 9,
 	topSignals: [
@@ -142,14 +135,11 @@ const manySignals: ChannelCustomer.Type = {
 	],
 }
 
-const unknownHealth: ChannelCustomer.Type = {
+const newCustomer: ChannelCustomer.Type = {
 	...base,
 	accountName: "Initech",
 	// No enriched company: no company block.
 	company: null,
-	healthStatus: "unknown",
-	healthScore: null,
-	healthWhy: null,
 	lifecycleStage: "trialing",
 	planName: "Team trial",
 	mrrMinor: 0,
@@ -159,12 +149,7 @@ const unknownHealth: ChannelCustomer.Type = {
 	lastActiveDay: null,
 	openSignalCount: 0,
 	topSignals: [],
-	sourceLinks: [
-		{
-			provider: "clerk",
-			url: "https://dashboard.clerk.com/apps/app_1/instances/ins_1/organizations/org_2",
-		},
-	],
+	sourceLinks: [{ provider: DIRECTORY.id, url: DIRECTORY.demo.accountUrl("org_2", "gallery") }],
 }
 
 const context = (customer: ChannelCustomer.Type): CustomerCard.CardContext => ({
@@ -190,7 +175,14 @@ const header = (
 			organizationId: ORG,
 			parentChannelId: null,
 		},
-		syncProvider: customer === null ? null : "slack",
+		links:
+			customer === null
+				? NO_CHANNEL_LINKS
+				: {
+						customer: { name: customer.accountName, logoUrl: customer.accountLogoUrl ?? null },
+						partners: [],
+						syncProvider: "slack",
+					},
 		parentChannel: null,
 		orgSlug: "hazel",
 		isMember: true,
@@ -274,9 +266,9 @@ const screen = (h: HtmlBuilder<M>) =>
 			h.Class("flex w-[1720px] flex-wrap items-start gap-6 bg-bg p-8 font-sans text-fg antialiased"),
 		],
 		[
-			frame(h, "Desktop · at risk", base, { width: 520 }),
+			frame(h, "Desktop · open signals", base, { width: 520 }),
 			frame(h, "Desktop · many signals", manySignals, { width: 520 }),
-			frame(h, "Desktop · unknown health, new customer", unknownHealth, { width: 520 }),
+			frame(h, "Desktop · new customer", newCustomer, { width: 520 }),
 			frame(h, "Desktop · no customer", null, { width: 520 }),
 			frame(h, "Phone · sheet", base, { width: 400, isMobile: true }),
 			frame(h, "Phone · many signals", manySignals, { width: 400, isMobile: true }),

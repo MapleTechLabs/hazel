@@ -11,8 +11,12 @@ import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
  * on the island's element (`h.OnChange`).
  */
 
-/** The components a native shell may have. */
-export type NativeComponent = "tab-bar" | "menu" | "date-picker" | "context-menu"
+/**
+ * The components a native shell may have. `screen-action` is a screen's one primary action (the DMs
+ * tab's compose), which a shell draws as its own floating button over its tab bar; `props` give its
+ * `label` and SF Symbol (`symbol`), and a press on it is the element's `click`.
+ */
+export type NativeComponent = "tab-bar" | "menu" | "date-picker" | "context-menu" | "screen-action"
 
 /** The island's element: its component, and what the component cannot read from the children. */
 export const nativeIsland = <Message>(
@@ -30,8 +34,16 @@ export const nativeIsland = <Message>(
  */
 export const nativeItem = <Message>(
 	h: HtmlBuilder<Message>,
-	item: Readonly<{ id: string; symbol?: string; isSelected?: boolean; badge?: number | undefined }>,
+	item: Readonly<{
+		id: string
+		symbol?: string
+		isSelected?: boolean
+		badge?: number | undefined
+		/** `search`: drawn apart from the tabs, as the system's own search tab is (its glass circle). */
+		role?: "search"
+	}>,
 ): ReadonlyArray<Attribute<Message>> => [
+	...(item.role === undefined ? [] : [h.Attribute("data-native-role", item.role)]),
 	h.Attribute("data-native-item", item.id),
 	...(item.symbol === undefined ? [] : [h.Attribute("data-native-symbol", item.symbol)]),
 	...(item.isSelected ? [h.Attribute("data-native-selected", "true")] : []),

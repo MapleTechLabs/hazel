@@ -86,7 +86,7 @@ export const channelContext = (
 	})
 
 const CUSTOMER_SUGGESTIONS = [
-	"Summarize this customer's health",
+	"Summarize this customer",
 	"What should we follow up on?",
 	"Draft talking points for a call",
 ]

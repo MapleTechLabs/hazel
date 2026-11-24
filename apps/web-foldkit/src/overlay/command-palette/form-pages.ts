@@ -1,6 +1,9 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
+import { emptyState } from "../../ui/empty-state"
 import { IconHashtag, IconLock } from "../../icons"
+import { channelLinksOf, type Shared } from "../../page/contract"
 import { button } from "../../ui/button"
+import { channelIcon } from "../../ui/channel-icon"
 import {
 	commandMenuFormBody,
 	commandMenuFormContainer,
@@ -18,12 +21,6 @@ import { CREATE_CHANNEL_INPUT_ID, JOIN_CHANNEL_INPUT_ID } from "./update"
 
 type CreateChannelPage = Extract<PageState, { _tag: "CreateChannel" }>
 type JoinChannelPage = Extract<PageState, { _tag: "JoinChannel" }>
-
-/** Legacy `channelIcon` with a class (`ChannelIcon`). */
-const channelIcon = (h: HtmlBuilder<Message>, icon: string | null, className: string): Html =>
-	icon
-		? h.span([h.Attribute("data-slot", "icon"), h.Class(className)], [icon])
-		: IconHashtag(h, { className })
 
 const header = (h: HtmlBuilder<Message>, title: string, subtitle: string) =>
 	commandMenuFormHeader(h, {
@@ -98,7 +95,12 @@ export const createChannelPage = (h: HtmlBuilder<Message>, page: CreateChannelPa
 		),
 	])
 
-export const joinChannelPage = (h: HtmlBuilder<Message>, model: Model, page: JoinChannelPage): Html => {
+export const joinChannelPage = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	page: JoinChannelPage,
+	shared: Shared,
+): Html => {
 	const unjoined = model.unjoinedChannels ?? []
 	const query = page.searchQuery.trim().toLowerCase()
 	const filtered =
@@ -126,16 +128,11 @@ export const joinChannelPage = (h: HtmlBuilder<Message>, model: Model, page: Joi
 					[h.Class("max-h-64 overflow-y-auto p-2")],
 					[
 						unjoined.length === 0
-							? h.div(
-									[h.Class("flex flex-col items-center justify-center py-8 text-center")],
-									[
-										IconHashtag(h, { className: "mb-3 size-8 text-muted-fg" }),
-										h.p(
-											[h.Class("text-muted-fg text-sm")],
-											["You've joined all available channels"],
-										),
-									],
-								)
+							? emptyState(h, {
+									title: "You've joined all available channels",
+									icon: (className) => IconHashtag(h, { className }),
+									className: "py-8",
+								})
 							: filtered.length === 0
 								? h.div(
 										[h.Class("py-4 text-center text-muted-fg text-sm")],
@@ -156,7 +153,13 @@ export const joinChannelPage = (h: HtmlBuilder<Message>, model: Model, page: Joi
 													),
 												],
 												[
-													channelIcon(h, channel.icon, "size-4 text-muted-fg"),
+													channelIcon(h, {
+														icon: channel.icon,
+														isPrivate: channel.type === "private",
+														links: channelLinksOf(shared, channel.id),
+														surface: "overlay",
+														className: "text-muted-fg",
+													}),
 													h.span([h.Class("flex-1 truncate")], [channel.name]),
 													h.span(
 														[

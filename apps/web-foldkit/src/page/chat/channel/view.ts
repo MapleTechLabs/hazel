@@ -2,6 +2,7 @@ import { TrackMessageKeys } from "./message-keys"
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { contentStyles, rootStyles } from "~/components/ui/split-panel/split-panel.styles"
 import { cn } from "~/lib/utils"
+import { skeleton } from "../../../ui/skeleton"
 import { getEffectivePresenceStatus } from "~/utils/presence"
 import { htmlRenderFullscreenView } from "../../../chat/embeds/html-render"
 import type * as HtmlRender from "../../../chat/html-render"
@@ -17,6 +18,13 @@ import { authorIdentity, toDeriveContext } from "../derive"
 import * as FilesPage from "../files/page"
 import * as FilesView from "../files/view"
 import { chatHeaderView } from "../header"
+import {
+	type ChannelLinks,
+	type ChannelLinksMap,
+	linksFor,
+	NO_CHANNEL_LINKS,
+	NO_CHANNEL_LINKS_MAP,
+} from "../../../ui/channel-icon"
 import { messageToolbarOverlay, reactionModalView, trackHoverAttribute } from "../overlay-views"
 import * as Overlays from "../overlays"
 import { pinnedPopoverView } from "../pinned"
@@ -75,7 +83,7 @@ const memoRow = (
 	context: RowContext<Message>,
 ): Html => {
 	let slot = rowSlots.get(row)
-	// createKeyedLazy never evicts and message rows are unbounded, so slots live with their row.
+	// Slots live with their row (a WeakMap), so a row's memo goes when the row does.
 	// oxlint-disable-next-line foldkit/lazy-view-stable-references
 	if (slot === undefined) rowSlots.set(row, (slot = createLazy()))
 	return slot(rowView, [row, isStuck, isHovered, context, h]) ?? h.div([])
@@ -107,12 +115,12 @@ const skeletonMessage = (h: H, lines: ReadonlyArray<string>): Html =>
 	h.div(
 		[h.Class("flex gap-3 px-4 py-2")],
 		[
-			h.div([h.Class("size-9 shrink-0 rounded-lg bg-wash")], []),
+			skeleton(h, "size-9 shrink-0 rounded-lg bg-wash"),
 			h.div(
 				[h.Class("flex min-w-0 flex-1 flex-col gap-2 pt-1")],
 				[
-					h.div([h.Class("h-3 w-28 rounded bg-wash-strong")], []),
-					...lines.map((width) => h.div([h.Class(`h-3 rounded bg-wash ${width}`)], [])),
+					skeleton(h, "h-3 w-28 rounded bg-wash-strong"),
+					...lines.map((width) => skeleton(h, `h-3 rounded bg-wash ${width}`)),
 				],
 			),
 		],
@@ -122,9 +130,7 @@ const skeletonMessage = (h: H, lines: ReadonlyArray<string>): Html =>
 const loadingView = (h: H): Html =>
 	h.div(
 		[
-			h.Class(
-				"flex size-full animate-skeleton-in flex-col justify-end pb-4 motion-safe:*:animate-pulse",
-			),
+			h.Class("flex size-full animate-skeleton-in flex-col justify-end pb-4"),
 			h.Attribute("aria-busy", "true"),
 			// The last screen's paint stays up while this shows (`app/paint.ts`).
 			h.Attribute("data-paint", "loading"),
@@ -240,12 +246,17 @@ const imageViewerOverlay = (h: H, model: Model): Html => {
 }
 
 /** `$id/index.tsx`: the join banner for non-members, else the list and the composer. */
-const messagesOutlet = (h: H, model: Model, nowMs: number) => {
+const messagesOutlet = (h: H, model: Model, nowMs: number, channelLinks: ChannelLinksMap) => {
 	if (isMemberOf(model) === false)
 		return [
 			joinBannerView(h, model.channel, {
 				isJoining: model.isJoining,
 				onJoin: Message.ClickedJoinChannel(),
+				links: headerLinks(
+					linksFor(channelLinks, model.channelId),
+					model.customer,
+					model.lookups.syncProvider,
+				),
 			}),
 		]
 	// Passed to the lazy composer as strings, so an unchanged reply keeps its memo.
@@ -283,6 +294,23 @@ const composerView = (
 		attachmentInfo: attachmentInfoFrom(attachments),
 	})
 
+/**
+ * The page's own customer and sync rows know about this channel before the org-wide lists do (and
+ * for a channel the sidebar does not list), so they win; Connect partners come from the org's.
+ */
+const headerLinks = (
+	shared: ChannelLinks,
+	customer: Model["customer"],
+	syncProvider: Model["lookups"]["syncProvider"],
+): ChannelLinks => ({
+	customer:
+		customer === null
+			? shared.customer
+			: { name: customer.accountName, logoUrl: customer.accountLogoUrl ?? null },
+	partners: shared.partners,
+	syncProvider: syncProvider ?? shared.syncProvider,
+})
+
 const headerView = (
 	channel: Model["channel"],
 	parentChannel: Model["parentChannel"],
@@ -295,6 +323,7 @@ const headerView = (
 	customer: Model["customer"],
 	isCustomerCardOpen: boolean,
 	isMobile: boolean,
+	channelLinks: ChannelLinksMap,
 	h: H,
 ): Html => {
 	const users = new Map(lookups.users.map((user) => [user.id, user]))
@@ -310,7 +339,8 @@ const headerView = (
 				)
 	return chatHeaderView(h, {
 		channel,
-		syncProvider: lookups.syncProvider,
+		links: headerLinks(linksFor(channelLinks, channel?.id ?? ""), customer, lookups.syncProvider),
+		parentLinks: parentChannel === null ? NO_CHANNEL_LINKS : linksFor(channelLinks, parentChannel.id),
 		parentChannel,
 		orgSlug,
 		isMember: currentMember !== undefined,
@@ -371,6 +401,8 @@ export interface ViewOptions {
 	readonly isMobile?: boolean
 	/** `Shared.nowMs`, the presence clock the profile popover and the Files dates read. */
 	readonly nowMs?: number
+	/** `Shared.channelLinks`: what the header's channel icon marks. */
+	readonly channelLinks?: ChannelLinksMap
 }
 
 /** `SplitPanelRoot` > `SplitPanelContent` with the channel's current tab inside. */
@@ -409,6 +441,7 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 						model.customer,
 						CustomerCard.isOpenOf(model.customerCard, options.isMobile ?? false),
 						options.isMobile ?? false,
+						options.channelLinks ?? NO_CHANNEL_LINKS_MAP,
 						h,
 					]) ?? h.empty,
 					customerCardView(h, model, options.isMobile ?? false, nowMs),
@@ -418,7 +451,7 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 								FilesView.view(h, model.tab.files, toFilesMessage, nowMs),
 								FilesView.imageViewerOverlay(h, model.tab.files, toFilesMessage),
 							]
-						: messagesOutlet(h, model, nowMs)),
+						: messagesOutlet(h, model, nowMs, options.channelLinks ?? NO_CHANNEL_LINKS_MAP)),
 				],
 			),
 			model.threadPanel === null

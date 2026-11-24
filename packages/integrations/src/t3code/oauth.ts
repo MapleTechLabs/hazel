@@ -11,6 +11,7 @@ import {
 	type HttpClientResponse,
 } from "effect/http"
 import { Context, Duration, Effect, Layer, Schema } from "effect"
+import { Base64Url } from "effect/encoding"
 
 const TIMEOUT = Duration.seconds(15)
 
@@ -95,19 +96,13 @@ export interface T3CodeTokens {
 	readonly scope: string | null
 }
 
-const base64Url = (bytes: Uint8Array) =>
-	btoa(String.fromCharCode(...bytes))
-		.replaceAll("+", "-")
-		.replaceAll("/", "_")
-		.replace(/=+$/, "")
-
 /** A random URL-safe string of `bytes` bytes (PKCE verifier, state). */
-export const randomToken = (bytes = 32) => base64Url(crypto.getRandomValues(new Uint8Array(bytes)))
+export const randomToken = (bytes = 32) => Base64Url.encode(crypto.getRandomValues(new Uint8Array(bytes)))
 
 /** The S256 challenge of a PKCE verifier. */
 export const pkceChallenge = (verifier: string) =>
 	Effect.promise(() => crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))).pipe(
-		Effect.map((digest) => base64Url(new Uint8Array(digest))),
+		Effect.map((digest) => Base64Url.encode(new Uint8Array(digest))),
 	)
 
 export class T3CodeOAuthClient extends Context.Service<T3CodeOAuthClient>()("T3CodeOAuthClient", {

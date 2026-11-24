@@ -5,7 +5,7 @@ lands on the account an identity source already created, the **plans** it holds 
 plan name, the trial and the payment state, and its **feature balances** become the daily usage
 metrics and plan limits the `near_limit` signal reads. Stripe keeps the invoices either way, and the
 MRR of an account Autumn bills nothing (no plan, or only a free one; `tech-design.md` §4.2).
-Adapter: `apps/backend/src/worker/objects/customers/autumn/`, registered in `customers/providers.ts`.
+Adapter: `packages/customer-integrations/src/autumn/`, registered in its `registry.ts`.
 It produces `IngestOp`s only — `CustomerIngest` does every write (`tech-design.md` §3).
 
 Autumn never creates a customer record on its own (`onNoMatch: "unmatched"`). It lands on one of
@@ -95,8 +95,8 @@ cannot see.
 
 **Metric keys are namespaced** `autumn.<feature_id>`. Ingest refuses a metric key another provider
 already owns (`otherOwner`), so the prefix is what keeps an Autumn feature called `events` from
-colliding with a Maple event metric of the same name. The built-in keys (`active_users`, `mrr`,
-`health_score`) are Hazel's and are refused outright.
+colliding with a Maple event metric of the same name. The built-in keys (`active_users`, `mrr`)
+are Hazel's and are refused outright.
 
 **Statuses.** Autumn reports a plan as `active` (with `past_due` beside it), `scheduled`, or
 `expired`, and clears `trial_ends_at` when a trial converts. So:

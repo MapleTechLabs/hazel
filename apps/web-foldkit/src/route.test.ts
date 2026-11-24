@@ -163,13 +163,12 @@ describe("customers routes", () => {
 		["/hazel/customers/inbox", "CustomersInbox"],
 		["/hazel/customers/support", "CustomersSupportReport"],
 		["/hazel/customers/list", "CustomersList"],
-		["/hazel/customers/list?view=at_risk", "CustomersList"],
+		["/hazel/customers/list?view=paying", "CustomersList"],
 		[`/hazel/customers/${accountId}`, "CustomerDetail"],
 		[`/hazel/customers/${accountId}?tab=billing`, "CustomerDetail"],
 		["/hazel/customers/settings/signals", "CustomersSettingsSignals"],
 		["/hazel/customers/settings/signals/new", "CustomersSettingsSignalNew"],
 		[`/hazel/customers/settings/signals/${ruleId}`, "CustomersSettingsSignalRule"],
-		["/hazel/customers/settings/health", "CustomersSettingsHealth"],
 		["/hazel/customers/settings/plans", "CustomersSettingsPlans"],
 		["/hazel/customers/settings/sla", "CustomersSettingsSla"],
 		["/hazel/customers/settings/feature-flags", "CustomersSettingsFeatureFlags"],
@@ -363,6 +362,7 @@ describe("hrefOf", () => {
 		OrgHome: [[AppRoute.OrgHome({ orgSlug }), "/hazel"]],
 		ChatIndex: [[AppRoute.ChatIndex({ orgSlug }), "/hazel/chat"]],
 		ChatDms: [[AppRoute.ChatDms({ orgSlug }), "/hazel/chat/dms"]],
+		OrgMore: [[AppRoute.OrgMore({ orgSlug }), "/hazel/more"]],
 		ChatChannel: [[AppRoute.ChatChannel({ orgSlug, channelId: channel }), `/hazel/chat/${channelId}`]],
 		ChatFiles: [[AppRoute.ChatFiles({ orgSlug, channelId: channel }), `/hazel/chat/${channelId}/files`]],
 		ChatFilesMedia: [
@@ -483,8 +483,8 @@ describe("hrefOf", () => {
 		CustomersList: [
 			[AppRoute.CustomersList({ orgSlug, view: none }), "/hazel/customers/list"],
 			[
-				AppRoute.CustomersList({ orgSlug, view: Option.some("at_risk") }),
-				"/hazel/customers/list?view=at_risk",
+				AppRoute.CustomersList({ orgSlug, view: Option.some("paying") }),
+				"/hazel/customers/list?view=paying",
 			],
 		],
 		CustomerDetail: [
@@ -515,9 +515,6 @@ describe("hrefOf", () => {
 				AppRoute.CustomersSettingsSignalRule({ orgSlug, ruleId: rule }),
 				`/hazel/customers/settings/signals/${ruleId}`,
 			],
-		],
-		CustomersSettingsHealth: [
-			[AppRoute.CustomersSettingsHealth({ orgSlug }), "/hazel/customers/settings/health"],
 		],
 		CustomersSettingsPlans: [
 			[AppRoute.CustomersSettingsPlans({ orgSlug }), "/hazel/customers/settings/plans"],

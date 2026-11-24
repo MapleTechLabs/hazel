@@ -1,32 +1,44 @@
-# Customers kit
+# Customers domain views
 
-Stateless Foldkit views for the Customers pages (Wonder "Maple Design System" › Foundations). Every
-view is `(h, options) → Html`; selection, hover and open state live in the page's Model and come in
-as options, Messages go out through `on*` callbacks. Try them all at `/lab/customers/kit/*`.
+Stateless Foldkit views for the Customers pages. Every view is `(h, options) → Html`; selection,
+hover and open state live in the page's Model and come in as options, Messages go out through `on*`
+callbacks. Try them all at `/lab/customers/kit/*`.
+
+**Only domain views live here** (a lifecycle stage badge, a company logo, a severity chip, a queue
+row, a KPI tile, a connect card…), and each is built from the app kit in `src/ui`. Generic
+primitives are never redrawn here; take them from the kit (`DESIGN-RULES.md` › Patterns with one
+owner):
+
+| Need                                       | Kit piece (`src/ui/…`)                                                      |
+| ------------------------------------------ | --------------------------------------------------------------------------- |
+| A page's title row, breadcrumb, freshness  | `pageHeader`, `breadcrumb`, `freshness`, `pageLayout` (page-header)         |
+| A bordered box, a panel and its title row  | `card`, `panel`, `panelHeader`, `cardClassName` (card)                      |
+| A table of records                         | `dataTable`, `primaryCell` (data-table)                                     |
+| Joined toggle buttons (`7d 30d 90d`)       | `segmented` (segmented-control)                                             |
+| A pill, tag or count                       | `badge`, `toggleChip` (badge, toggle-chip)                                  |
+| A state dot, `● Synced 1h ago`             | `statusDot`, `statusLine` (status-dot)                                      |
+| Nothing here / failed; a placeholder block | `emptyState` (empty-state), `skeleton` (skeleton), `loader`                 |
+| Buttons, links, search, key caps, headings | `button`/`ariaButton`/`iconButton`, `link`, `searchField`, `kbd`, `heading` |
+| An avatar                                  | `avatar` (avatar)                                                           |
+
+If a domain view needs something the kit lacks, add it to the kit, not here.
 
 Colors are theme tokens (`src/core/styles/theme.css` › Customers): `chart-{new,expansion,contraction,
-churn,neutral,series-1..3,grid,net}`, `health-{healthy,at-risk,critical,unknown}`,
-`severity-{high,medium,low,off}` — use them as `bg-chart-new`, `stroke-chart-series-1`, …
+churn,neutral,series-1..3,grid,net}`, `severity-{high,medium,low,off}` — use them as `bg-chart-new`,
+`stroke-chart-series-1`, …
 
 ## Surface — `ui/surface.ts`
 
-The one visual grammar every Customers page builds from. Reach for these before writing a class
-string, so a title, a table head or a link reads the same on every page.
+The little text grammar the kit has no component for. Headings are the kit's `heading`
+(`display` for a page's title, `section` for a panel's, `subsection` for a group); `pageHeader` and
+`panelHeader` render them for you.
 
-- Headings are the app's `heading` kit (`src/ui/heading`, `DESIGN-RULES.md`): `display` for a page's
-  title, `section` for a panel's, `subsection` for a group inside a panel or the sidebar. `pageHeader`
-  and `panelHeader` render them for you.
-- Type for everything that is not a heading: `titleClass` (an emphasised line, 14px semibold),
-  `descriptionClass` (14px muted), `tableHeadClass` (12px medium muted). Labels are sentence case; nothing is uppercase.
-- `pageHeader(h, { title, subtitle?, crumbs?, leading?, badges?, actions? })` — every page's title row
-  (`settingsHeader` is this); `breadcrumb(h, crumbs)`; `freshness(h, "Synced 1h ago")` beside the actions.
-- `panel(h, className, children)`, `panelHeader(h, { title, count?, description?, aside? })`,
-  `panelClass` / `panelPadClass` for a panel built by hand.
-- Links: `linkClass` (inline text link), `moreLink(h, href, "View queue")` (a panel's way out, with `›`).
+- `titleClass` (an emphasised line, 14px semibold), `descriptionClass` (14px muted). Labels are
+  sentence case; nothing is uppercase. A table head is `dataTable`'s.
+- Links: `moreLink(h, href, "View queue")` (a panel's way out, with `›`, on the kit `link`);
+  `linkClass` (the kit link's classes in primary, for an element `link` can't render).
   A link that leaves Hazel is a plain text link (`Open`, `View`) or a chip; never an external-link arrow.
 - Text takes the `*-subtle-fg` semantic colors (`text-danger-subtle-fg`), not the raw `text-danger`.
-- A segmented control's selected segment is a raised neutral chip (`segmentedTrackClass`,
-  `segmentClass(isSelected)` in `ui/filter-bar.ts`); the brand fill is for primary buttons only.
 
 ## Formatting — `src/customers/format.ts`
 
@@ -35,7 +47,7 @@ string, so a title, a table head or a link reads the same on every page.
 | `formatMoney(minor, currency?, { cents?, signed? })`                                                      | `$48,210`, `$1,240.00`, `+$9,400`, `−$1,000` |
 | `formatMoneyCompact(minor, currency?, { signed? })`                                                       | `$48.2K`, `−$4K`                             |
 | `formatCount(n)` / `formatCompact(n)`                                                                     | `1,611` / `461K`                             |
-| `formatPct(pct)` / `formatDeltaPct(pct)` / `formatDeltaPoints(pts, unit?)` / `formatDeltaCount(n)`        | `61%` / `+6.2%` / `+0.9 pt` / `+12`          |
+| `formatPct(pct)` / `formatDeltaPct(pct)` / `formatDeltaPoints(pts)` / `formatDeltaCount(n)`               | `61%` / `+6.2%` / `+0.9 pt` / `+12`          |
 | `deltaTone(delta, goodWhen?)`                                                                             | `"positive" \| "negative" \| "neutral"`      |
 | `formatRelative(at, now)` / `daysBetween(at, now)`                                                        | `18d ago`, `in 4d`                           |
 | `formatDays(n)` / `formatDaysLeft(n)`                                                                     | `4 days` / `4 days left`                     |
@@ -46,22 +58,20 @@ string, so a title, a table head or a link reads the same on every page.
 
 ## Badges — `ui/badges.ts`
 
-- `healthBadge(h, { status, score? })` — pill; `score: null` shows `—`, omit to hide the number.
-- `healthDot(h, { status, score })` — compact, for dense cells.
 - `severityChip(h, severity)` / `severityGlyph(h, severity)` — bars; the glyph alone has a title.
 - `kindChip(h, kind)` — `! Risk` / `↗ Opportunity`.
 - `stageBadge(h, stage, { trialDaysLeft? })` — square, no dot.
 - `environmentBadge(h, environment)` — an account's environment (`EU`) beside its name; `environmentsHint(h, count)` — `+2 environments`, muted.
 - `signalCounts(h, { high, medium, low, opportunities })` — the list's open-signals cell.
-- Labels/fills: `HEALTH_LABEL`, `HEALTH_FILL`, `SEVERITY_LABEL`, `KIND_LABEL`, `STAGE_LABEL`.
+- Labels: `SEVERITY_LABEL`, `KIND_LABEL`, `STAGE_LABEL`.
 
 ## Identity — `ui/identity.ts`
 
-- `companyLogo(h, { name, logoUrl?, size?: "xs"|"sm"|"md"|"lg" })` — 20/28/40/48px, initials tint by name hash.
-- `personAvatar(h, person | null, { size? })` — `null` = dashed "Unassigned"; `personLabel(h, person | null)`; `avatarStack(h, people, { max? })`.
+- `companyLogo(h, { name, logoUrl?, size?: "2xs"|"xs"|"sm"|"md"|"lg" })` — 16/20/28/40/48px, initials tint by name hash (the theme's `*-subtle` pairs).
+- `personAvatar(h, person | null, { size? })` (on the kit `avatar`) — `null` = dashed "Unassigned"; `personLabel(h, person | null)`; `avatarStack(h, people, { max? })`.
 - `sourceLogo(h, source)`, `sourceMark(h, source, { size? })` (tile), `sourceChip(h, source)`, `sourceLinkChip(h, { source, label, href })`
   (the chip itself is the link out; no arrow glyph, the accessible name and title say where it goes).
-- `SOURCE_LABEL`, `sourceLogoSrc(source)` (Brandfetch; Hazel uses `/icon.svg`), `initialsOf`, `tintIndex`.
+- `sourceLabel(source)` (`../providers`), `sourceLogoSrc(source)` (Brandfetch; Hazel uses `/icon.svg`), `initialsOf`, `tintIndex`.
 
 ## KPI and evidence — `ui/kpi-tile.ts`, `ui/evidence.ts`
 
@@ -70,7 +80,7 @@ string, so a title, a table head or a link reads the same on every page.
 - `deltaPill(h, delta)`, `definedLabel(h, { id, label, definition })` (hover/focus definition card, CSS only).
 - `evidenceViz(h, evidence)` — the queue's mini-viz per `_tag` (amount, last_active, series, limit, delta, ratio).
 - `evidenceDetail(h, evidence, { now })` — side panel: facts + chart (series → `evidenceBars`, limit → meter).
-- `deltaSummary(deltaEvidence)` — `$1,240 → $0`, `62 → 48 pts`.
+- `deltaSummary(deltaEvidence)` — `$1,240 → $0`, `8 → 20 users`.
 
 ## Charts — `src/customers/charts/`
 
@@ -79,20 +89,18 @@ string, so a title, a table head or a link reads the same on every page.
   `activeUsersChart(h, { points, bucket, hoveredIndex, onHover })` over `OverviewResult.activeUsers`; `ACTIVE_USERS_LEGEND`.
 - `stacked-bar-chart.ts`: `stackedBarChart(h, { ariaLabel, stacks, bars, netLabel?, formatValue, hoveredIndex, onHover })`;
   `mrrMovementChart(h, { buckets, bucket, currency, hoveredIndex, onHover })` over `OverviewResult.mrrMovements`; `mrrLegend(buckets)`.
-- `distribution.ts`: `distributionBar(h, { segments, ariaLabel })`, `healthDistribution(h, { rows, bands, currency, metric, onMetric })` (the whole card).
+- `distribution.ts`: `distributionBar(h, { segments, ariaLabel })`.
 - `frame.ts`: `chartCard(h, { title, description?, aside? }, children)`, `chartLegend(h, items)`, `chartTooltip`, `CHART_COLOR`.
 - `scale.ts`: the math (`niceTicks`, `scaleLinear`, `linePath`, `stackSegments`, …).
 
 Hover: the page keeps `hoveredIndex: number | null` per chart and passes `onHover: (index) => Message.HoveredChart({ chart: "mrr", index })`.
 Charts fill their container's width (no measuring); set the height with `heightClass`.
 
-## Tables and queue — `ui/data-table.ts`, `ui/queue-row.ts`
+## Queue — `ui/queue-row.ts`
 
-- `dataTable(h, { ariaLabel, id, columns, rows, rowKey, sort?, onSort?, selection?, onRowPress?, focusedKey?, rowActions?, loadingRows?, stickyHeader? })`
-  — `Column = { key, label, align?, sortable?, widthClass?, hideClass?, cell, footer? }`; a footer row renders when any column has `footer`.
-  `selection = { selected: ReadonlySet<string>, onToggle(key, isSelected), onToggleAll(isSelected) }`.
-- `primaryCell(h, { leading?, title, subtitle?, href?, badge?, isNested? })` — logo + name + domain; `isNested` indents an environment under its primary.
-- `queueRow(h, { id, rank, account, signal, evidence, age, assignee, health, isFocused?, isSelected?, run?, onPress?, actions? })`,
+Tables are the kit's `dataTable` and `primaryCell` (`src/ui/data-table.ts`).
+
+- `queueRow(h, { id, rank, account, signal, evidence, age, assignee, isFocused?, isSelected?, run?, onPress?, actions? })`,
   `queueList(h, { ariaLabel }, rows)`, `queueAction(h, { label, icon?, onPress?, iconOnly?, shortcut?, attributes?, overlay? })`, `planLine(account)`,
   `accountMark(h, account, run?)` (the logo, joined by a line to the same account's rows).
   Inline actions replace evidence…assignee on hover / focus. A press on an action also reaches the row's `onPress` (selects it).
@@ -100,7 +108,7 @@ Charts fill their container's width (no measuring); set the height with `heightC
 ## Controls — `ui/filter-bar.ts`, `ui/shortcuts.ts`
 
 - `viewTabs(h, { ariaLabel, tabs: [{ key, label, count? }], selected, onSelect, trailing? })` — `Open 12 · Snoozed 4 · Done`, saved views.
-- `segmented(h, { ariaLabel, segments, selected, onSelect })`, `rangePicker(h, { selected, onSelect, caption? })`, `RANGE_COMPARISON[range]`.
+- `rangePicker(h, { selected, onSelect, caption? })` (on the kit `segmented`).
 - `searchBox(h, { id, value, placeholder, onInput, onClear })` (app search field + `/` hint).
 - `filterChip(h, { field, operator, value, onRemove, attributes?, overlay? })`, `addFilterButton(h, { attributes?, overlay?, onPress? })`, `sortTrigger(h, { label, attributes?, overlay? })`, `filterBar(h, { start, end? })`.
 - `kbd(h, key)`, `shortcutBar(h, shortcuts)`, `QUEUE_SHORTCUTS`.

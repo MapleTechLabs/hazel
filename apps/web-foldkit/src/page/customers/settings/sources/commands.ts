@@ -1,3 +1,4 @@
+import { IntegrationConfig } from "@hazel/customer-integrations"
 import * as Customers from "@hazel/domain/customers"
 import type {
 	CustomerConnectionCredentialsError,
@@ -37,7 +38,7 @@ const Secret = Schema.Redacted(Schema.String)
 interface UpdatePayload {
 	organizationId: OrganizationId
 	connectionId: CustomerConnectionId
-	config?: Customers.ConnectionConfig
+	config?: IntegrationConfig
 	apiKey?: string
 	webhookSecret?: string
 }
@@ -97,7 +98,7 @@ export const ConnectCustomerSource = Command.define("ConnectCustomerSource", {
 		provider: Customers.CustomerProvider,
 		reconnectId: Schema.NullOr(CustomerConnectionId),
 		apiKey: Secret,
-		config: Customers.ConnectionConfig,
+		config: IntegrationConfig,
 	},
 	messages: [Message.SucceededConnect, Message.FailedConnect],
 	execute: ({ organizationId, provider, reconnectId, apiKey: secret, config }) => {
@@ -170,7 +171,7 @@ export const UpdateCustomerSourceKeys = Command.define("UpdateCustomerSourceKeys
 })
 
 export const SaveCustomerSourceSettings = Command.define("SaveCustomerSourceSettings", {
-	args: { ...org, connectionId: CustomerConnectionId, config: Customers.ConnectionConfig },
+	args: { ...org, connectionId: CustomerConnectionId, config: IntegrationConfig },
 	messages: [Message.SucceededSaveSettings, Message.FailedSaveSettings],
 	execute: (payload) =>
 		updateConnection(payload).pipe(
@@ -284,7 +285,7 @@ export const SaveMetricUnit = Command.define("SaveMetricUnit", {
 		),
 })
 
-const impersonatorMessages = [Message.SucceededImpersonatorAction, Message.FailedImpersonatorAction]
+const impersonatorMessages = [Message.SucceededImpersonatorAction, Message.FailedImpersonatorAction] as const
 
 export const GrantCustomerImpersonator = Command.define("GrantCustomerImpersonator", {
 	args: { ...org, userId: UserId, grantedBy: UserId },

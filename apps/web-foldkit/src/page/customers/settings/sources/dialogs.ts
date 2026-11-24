@@ -5,6 +5,7 @@ import { providerOf, webhookUrlOf } from "../../../../customers/providers"
 import { sourceMark } from "../../../../customers/ui/identity"
 import { IconCheck } from "../../../../icons"
 import { button } from "../../../../ui/button"
+import { card } from "../../../../ui/card"
 import {
 	dialogBody,
 	dialogClose,
@@ -16,7 +17,7 @@ import {
 import * as Modal from "../../../../ui/modal"
 import { Message } from "./message"
 import { connectFailureMessage, type ConnectForm, connectionOf, isLive, type Model } from "./model"
-import { BACKEND_URL, callout, codeChips, formField, type H, webhookUrlField } from "./parts"
+import { BACKEND_URL, codeChips, formField, type H, messageCallout, webhookUrlField } from "./parts"
 import { configFieldView } from "./settings-view"
 import { heading } from "../../../../ui/heading"
 
@@ -167,8 +168,9 @@ const matchingStep = (h: H, form: ConnectForm, index: number): Html | null => {
 	return configFields.length === 0
 		? null
 		: step(h, index, form.connected !== null, `Match ${name} records to accounts`, [
-				h.div(
-					[h.Class("flex flex-col gap-3 rounded-lg border border-border p-3")],
+				card(
+					h,
+					{ className: "flex flex-col gap-3 p-3" },
 					configFields.map((field) =>
 						configFieldView(h, {
 							field,
@@ -200,9 +202,9 @@ const connectContent = (
 		form.failure === null
 			? []
 			: [
-					callout(h, {
+					messageCallout(h, {
 						message: connectFailureMessage(form.failure, form.provider),
-						tone: form.failure === "ComingSoon" ? "info" : "danger",
+						intent: form.failure === "ComingSoon" ? "info" : "danger",
 					}),
 				]
 	const connected = form.connected
@@ -234,8 +236,8 @@ const connectContent = (
 					...(connected === null
 						? []
 						: [
-								callout(h, {
-									tone: "success",
+								messageCallout(h, {
+									intent: "success",
 									message: {
 										title: "Connection works",
 										description: `${connected.accountName === null ? "Connected" : `Connected to ${connected.accountName}`}. The backfill started; records appear as they sync.`,
@@ -354,7 +356,7 @@ export const keysDialog = (h: H, model: Model): Html =>
 							...(form.failure === null
 								? []
 								: [
-										callout(h, {
+										messageCallout(h, {
 											message: connectFailureMessage(form.failure, connection.provider),
 										}),
 									]),

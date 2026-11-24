@@ -84,24 +84,26 @@ export const makeEmailClient = Effect.gen(function* () {
 						url: file.publicUrl,
 					})),
 				})
-				const sent = yield* sender
-					.send({
-						from: {
-							email: sending,
-							name: senderNameOf(message.author.name, settings.displayName),
-						},
-						to,
-						replyTo: settings.replyTo ?? inbound,
-						subject: Email.replySubject(thread.value.subject),
-						text,
-						html,
-						headers: {
-							"In-Reply-To": Email.formatMessageId(thread.value.lastMessageId),
-							References: references.map(Email.formatMessageId).join(" "),
-						},
-					})
-					// A send that failed may be retried: the provider took nothing.
-					.pipe(Effect.mapError((error) => apiError(error.message)))
+				const sent = yield* (
+					sender
+						.send({
+							from: {
+								email: sending,
+								name: senderNameOf(message.author.name, settings.displayName),
+							},
+							to,
+							replyTo: settings.replyTo ?? inbound,
+							subject: Email.replySubject(thread.value.subject),
+							text,
+							html,
+							headers: {
+								"In-Reply-To": Email.formatMessageId(thread.value.lastMessageId),
+								References: references.map(Email.formatMessageId).join(" "),
+							},
+						})
+						// A send that failed may be retried: the provider took nothing.
+						.pipe(Effect.mapError((error) => apiError(error.message)))
+				)
 				const messageId =
 					(sent.messageId === null ? null : Email.normalizeMessageId(sent.messageId)) ??
 					localMessageId(domains.sending)

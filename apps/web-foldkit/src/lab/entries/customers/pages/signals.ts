@@ -79,7 +79,6 @@ const live = (model: Model, shared: Shared): Model =>
 			settings: {
 				lastComputedAtMs:
 					SETTINGS.lastComputedAt === null ? null : msOf(SETTINGS.lastComputedAt) - 13 * 60_000,
-				bands: SETTINGS.health.bands,
 				reportingCurrency: SETTINGS.reportingCurrency,
 			},
 		}),

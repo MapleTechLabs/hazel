@@ -1,11 +1,12 @@
 /**
- * Signal evaluation (`docs/customers/tech-design.md` §4.4), pure: one rule against one account's
+ * Signal evaluation (`docs/customers/tech-design.md` §4.3), pure: one rule against one account's
  * facts. Compute, the rule dry run and the tests share it.
  *
  * A match carries its evidence (drawn by the UI per `_tag`) and `step`, how far past the threshold
  * it is: the signal's severity is the rule's raised by `step` (the rule's is the floor), and "worse
  * by a full step" compares steps. A non-match says why, for the dry run's histogram.
  */
+import { requiredSourcesOf } from "@hazel/customer-integrations"
 import {
 	type CustomerProvider,
 	escalate,
@@ -22,7 +23,6 @@ import {
 	SLA_TEMPLATES,
 	type SlaState,
 	type SlaTarget,
-	TEMPLATES,
 } from "@hazel/domain/customers"
 import {
 	type AccountFacts,
@@ -40,7 +40,7 @@ import {
 	seriesOf,
 	wasCustomer,
 } from "./facts"
-import { addDays, DAY_MS, dayOf, daysBetween, daysSince } from "./time"
+import { addDays, DAY_MS, dayOf, daysBetween, daysSince } from "@hazel/customer-integrations/kit/time"
 
 /** The parts of a rule evaluation reads. */
 export interface RuleInput {
@@ -378,57 +378,6 @@ const onboardingStalled =
 		}
 	}
 
-const healthDrop =
-	(config: Extract<RuleConfig, { _tag: "health_drop" }>): Check =>
-	(facts, org) => {
-		const today = facts.health.find((point) => point.day === org.today)
-		if (today === undefined || today.score === null) return "No data"
-		const since = addDays(org.today, -config.windowDays)
-		const before = facts.health.flatMap((point) =>
-			point.day >= since && point.day < org.today && point.score !== null ? [point.score] : [],
-		)
-		const peak = before.reduce((max, score) => Math.max(max, score), today.score)
-		const drop = peak - today.score
-		// Entered critical: a scored, non-critical day in the window before (a new account first
-		// scored critical has not "entered" it).
-		const critical =
-			config.onCritical &&
-			today.status === "critical" &&
-			facts.health.some(
-				(point) =>
-					point.day >= since &&
-					point.day < org.today &&
-					point.status !== "critical" &&
-					point.status !== "unknown",
-			)
-		if (drop < config.dropPoints && !critical) return "Below threshold"
-		const step = stepOf(drop >= 50, drop >= 35)
-		const series = facts.health
-			.filter((point) => point.day >= addDays(org.today, -29))
-			.map((point) => ({ day: point.day, value: point.score ?? 0 }))
-		return {
-			step,
-			reason:
-				drop > 0
-					? `Health fell ${drop} points in ${plural(config.windowDays, "day")} (${peak} → ${today.score})${critical ? ", now critical" : ""}`
-					: `Health is critical (${today.score})`,
-			evidence: {
-				_tag: "delta",
-				step,
-				unit: "points",
-				from: peak,
-				to: today.score,
-				changePct: peak === 0 ? null : round1(((today.score - peak) / peak) * 100),
-				currency: null,
-				effectiveAt: null,
-				fromLabel: null,
-				toLabel: today.status,
-				reason: null,
-				series,
-			},
-		}
-	}
-
 const championInactive =
 	(config: Extract<RuleConfig, { _tag: "champion_inactive" }>): Check =>
 	(facts, org) => {
@@ -671,8 +620,6 @@ const checkOf = (config: RuleConfig): Check => {
 			return trialEnding(config)
 		case "onboarding_stalled":
 			return onboardingStalled(config)
-		case "health_drop":
-			return healthDrop(config)
 		case "champion_inactive":
 			return championInactive(config)
 		case "near_limit":
@@ -774,7 +721,7 @@ const churned =
 
 /** The template needs one of its sources connected. */
 export const missingSources = (template: SignalTemplate, org: OrgFacts): ReadonlyArray<CustomerProvider> => {
-	const required = TEMPLATES[template].requiredSources
+	const required = requiredSourcesOf(template)
 	return required.length === 0 || required.some((provider) => org.connected.has(provider)) ? [] : required
 }
 

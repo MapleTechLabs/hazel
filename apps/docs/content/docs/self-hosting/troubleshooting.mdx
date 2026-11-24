@@ -1,0 +1,76 @@
+---
+title: Troubleshooting
+description: What a failed check or deploy means, and how to fix it
+icon: AlertTriangle
+---
+
+Start with `bun run customer:check <name>`: most problems show up there before a deploy.
+
+## Checks
+
+**Cloudflare token: Cloudflare rejects it.** The token was revoked, expired or mistyped. Create
+a new one ([permissions](/self-hosting/prepare-cloudflare#create-the-api-token)) and put it in
+`CLOUDFLARE_API_TOKEN`.
+
+**Zone: not a zone in account ...** The zone is in another account, or `CLOUDFLARE_ACCOUNT_ID`
+is wrong. Both must name the account the zone lives in.
+
+**Zone: pending.** Cloudflare has not seen the nameserver change yet. Wait for the zone to turn
+**Active** in the dashboard.
+
+**Token permissions: missing ...** Edit the token in the dashboard, add each permission named,
+on the account or the zone as stated, and check again. The token's value does not change.
+
+**Token permissions: ... cannot read its own policies.** A user token: the check could confirm
+read access but not edit access. Either create an account-owned token (it is checked in full) or
+make sure each permission is set to **Edit**.
+
+**R2: not enabled on the account.** Open **R2** in the dashboard and activate it once
+([Prepare Cloudflare](/self-hosting/prepare-cloudflare#activate-r2)).
+
+**workers.dev subdomain: the account has none.** Open **Workers & Pages** in the dashboard
+once and accept the subdomain.
+
+**Sign-in: no OAuth app.** Set the client ID and secret of a GitHub or Google app
+([sign-in](/self-hosting/sign-in)).
+
+## Deploys
+
+**A deploy stopped halfway.** Run the same command again. Deploys are idempotent and pick up
+where the last one stopped.
+
+**`Authentication error` (code `10000`) from the Cloudflare API.** A permission is missing. The
+error names the API path it called: `secrets_store` needs Secrets Store, `tokens` needs Account
+API Tokens, `d1` needs D1, `dns_records` needs DNS. Run `customer:check` to see which are missing.
+
+**`Script startup exceeded CPU time limit` (10021).** Cloudflare sometimes rejects an upload
+while many Workers deploy at once. The deploy retries it on its own; if it still fails, run it
+again.
+
+**`HAZEL_ZONE` missing.** The env file has no zone: rerun `bun run customer:install --name <name>`.
+
+## After deploying
+
+**The hostnames do not answer, or fail TLS.** New custom domains need a few minutes to get
+certificates. If it lasts longer than about 15 minutes, check **SSL/TLS → Edge Certificates** for
+the zone.
+
+**Sign-in returns to the provider with an error.** The callback URL registered with GitHub or
+Google does not match exactly: it must be `https://api.<zone>/auth/github/callback` (or
+`/google/callback`), with `api.` and no trailing slash.
+
+**Sign-in is refused for some people.** `ALLOWED_EMAIL_DOMAINS` is set and their address is
+outside it.
+
+**Invitation emails do not arrive.** `mail.<zone>` is not onboarded to Email Sending yet
+([email](/self-hosting/prepare-cloudflare#set-up-email-sending)). Until it is, only addresses
+verified in the account receive them.
+
+**Uploads fail in the browser.** The uploads bucket only accepts uploads from `app.<zone>` and
+the desktop app. Use the app from that address, not a workers.dev URL.
+
+## Getting help
+
+`GET https://api.<zone>/version` tells Hazel which release you run. With a `MAPLE_API_KEY`
+(see [configuration](/self-hosting/configuration#optional-features)), the install's traces and
+logs can be shared with Hazel for support.

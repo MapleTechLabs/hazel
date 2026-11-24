@@ -1,3 +1,4 @@
+import { suggestedBillingIntegration } from "@hazel/customer-integrations"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import {
 	IconArrowPath,
@@ -11,7 +12,6 @@ import {
 	IconGear,
 	IconGridCirclePlus,
 	IconHashtag,
-	IconHeart,
 	IconIntegratio,
 	IconKeyboard,
 	IconLightbulb,
@@ -145,11 +145,6 @@ const DESTINATIONS = define({
 		to: (orgSlug) => AppRoute.CustomersSettingsSignals({ orgSlug }),
 		keywords: "rules",
 	},
-	customersHealth: {
-		label: "Health score",
-		icon: IconHeart,
-		to: (orgSlug) => AppRoute.CustomersSettingsHealth({ orgSlug }),
-	},
 	customersSla: {
 		label: "Support SLAs",
 		icon: IconClock,
@@ -171,7 +166,7 @@ const DESTINATIONS = define({
 		label: "Data sources",
 		icon: IconServers,
 		to: (orgSlug) => AppRoute.CustomersSettingsSources({ orgSlug }),
-		keywords: "stripe providers sync",
+		keywords: `${suggestedBillingIntegration.id} providers sync`,
 	},
 
 	// Organization settings
@@ -310,7 +305,6 @@ export const DESTINATION_GROUPS: ReadonlyArray<{
 			"customersSupportReport",
 			"customersList",
 			"customersSignals",
-			"customersHealth",
 			"customersSla",
 			"customersPlans",
 			"customersFeatureFlags",

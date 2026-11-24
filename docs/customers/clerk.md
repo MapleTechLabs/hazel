@@ -1,9 +1,8 @@
 # Clerk data source
 
 Hazel's identity source for Customers: a Clerk **organization** is a customer account, its
-**members** are that account's contacts, and **sign-ins** are the activity every usage signal and
-health score reads. Adapter: `apps/backend/src/worker/objects/customers/clerk/`, registered in
-`customers/providers.ts`. It produces `IngestOp`s only — `CustomerIngest` does every write
+**members** are that account's contacts, and **sign-ins** are the activity every usage signal
+reads. Adapter: `packages/customer-integrations/src/clerk/`, registered in its `registry.ts`. It produces `IngestOp`s only — `CustomerIngest` does every write
 (`tech-design.md` §3).
 
 The Clerk organization id is the account's primary external ref, which is what lets the other
@@ -101,7 +100,7 @@ moves the contacts' `lastSignInAt` / `lastSeenAt` and credits the `last_active_a
 **every** account the user is a member of, with `signedIn` when it is also the `last_sign_in_at`
 day. A user in several organizations therefore over-credits recency to the ones they were not
 active in; without it a Clerk-only account would have no activity day at all, read as never
-active, score near critical on health and raise `onboarding_stalled` / `inactive` /
+active, and raise `onboarding_stalled` / `inactive` /
 `champion_inactive` for customers using the product. The activity op follows its contact op, since
 ingest parks activity for a contact it does not know. A `last_active_at` day already past core's
 400-day activity retention when the user was observed is not written (the next prune would delete

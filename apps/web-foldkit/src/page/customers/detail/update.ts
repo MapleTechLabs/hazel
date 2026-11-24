@@ -101,6 +101,7 @@ import {
 	TAG_POPOVER_ID,
 	CHANNEL_POPOVER_ID,
 	CHAT_PERSON_MENU_ID,
+	OTHER_ACCOUNTS_POPOVER_ID,
 	FLAG_POPOVER_ID,
 	UNASSIGN,
 	userIdOfOwnerKey,
@@ -256,7 +257,6 @@ const initialModel = (route: Route): Model => ({
 	members: [],
 	metrics: [],
 	connectedProviders: [],
-	bands: Customers.DEFAULT_HEALTH_SETTINGS.bands,
 	detail: AsyncData.Idle(),
 	usageMetric: "active_users",
 	usageRange: "30d",
@@ -297,6 +297,8 @@ const initialModel = (route: Route): Model => ({
 	chatAuthors: [],
 	activeChatPersonId: null,
 	chatPersonMenu: Menu.init({ id: CHAT_PERSON_MENU_ID, placement: "bottom end" }),
+	otherAccountsContactId: null,
+	otherAccountsPopover: Popover.init(OTHER_ACCOUNTS_POPOVER_ID),
 	suggestions: EMPTY_SUGGESTIONS,
 	suggestionsFor: null,
 	createdFeatureFlags: [],
@@ -490,6 +492,7 @@ const onAction = (model: Model, shared: Shared, key: string): Return => {
 					CopyCustomerText({
 						text: hrefOf(customerRoute(shared.orgSlug ?? "", model.accountId)),
 						label: "Link",
+						isPath: true,
 					}),
 				],
 			}
@@ -754,8 +757,6 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		UpdatedConnectedProviders: ({ providers }) => ({
 			model: modifyFields(model, { connectedProviders: () => providers }),
 		}),
-
-		UpdatedBands: ({ bands }) => ({ model: modifyFields(model, { bands: () => bands }) }),
 
 		ClickedTab: ({ tab }) => (tab === model.tab ? { model } : navigateToTab(model, shared, tab)),
 		PressedNeighbour: ({ step }) => {
@@ -1246,6 +1247,37 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 					outMessage: toast(suggestionFailureToast(failed, reason)),
 				}),
 			}),
+		PressedOtherAccounts: ({ contactId }) => {
+			const opened = PopoverControl.open(model.otherAccountsPopover)
+			return {
+				model: modifyFields(model, {
+					otherAccountsContactId: () => contactId,
+					otherAccountsPopover: () => opened.model,
+				}),
+				commands: Command.mapMessages(opened.commands ?? [], (child) =>
+					Message.GotOtherAccountsPopoverMessage({ message: child }),
+				),
+			}
+		},
+		GotOtherAccountsPopoverMessage: ({ message: popoverMessage }) => {
+			const result = Popover.update(model.otherAccountsPopover, popoverMessage)
+			return {
+				model: modifyFields(model, { otherAccountsPopover: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (child) =>
+					Message.GotOtherAccountsPopoverMessage({ message: child }),
+				),
+			}
+		},
+		// The link itself navigates: this only closes the panel behind it.
+		PressedOtherAccount: () => {
+			const closed = PopoverControl.close(model.otherAccountsPopover)
+			return {
+				model: modifyFields(model, { otherAccountsPopover: () => closed.model }),
+				commands: Command.mapMessages(closed.commands ?? [], (child) =>
+					Message.GotOtherAccountsPopoverMessage({ message: child }),
+				),
+			}
+		},
 		UpdatedCreatedFeatureFlags: ({ keys }) => ({
 			model: modifyFields(model, { createdFeatureFlags: () => keys }),
 		}),
@@ -1571,13 +1603,16 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 			}),
 		}),
 
-		PressedCopy: ({ text, label }) => ({ model, commands: [CopyCustomerText({ text, label })] }),
+		PressedCopy: ({ text, label }) => ({
+			model,
+			commands: [CopyCustomerText({ text, label, isPath: false })],
+		}),
 		CompletedCopy: ({ label, isCopied }) => ({
 			model,
 			outMessage: toast(
 				isCopied
 					? successToast(`${label} copied`)
-					: errorToastOf({ title: `Couldn't copy the ${label.toLowerCase()}` }),
+					: errorToastOf({ title: `${label} wasn't copied` }),
 			),
 		}),
 		CompletedFocusComposer: () => ({ model }),

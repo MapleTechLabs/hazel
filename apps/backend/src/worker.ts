@@ -5,7 +5,14 @@
  * class tags of the previous deploy.
  */
 import { bindBotGateways } from "@hazel/bot-gateway/object"
-import { HazelStack, hazelWorkerProps, stageProps } from "@hazel/infra/cloudflare"
+import {
+	HazelStack,
+	type HazelStackContext,
+	hazelWorkerProps,
+	isProductionStage,
+	resolveWorkerName,
+	stageProps,
+} from "@hazel/infra/cloudflare"
 import { cachedRecoverable } from "@hazel/infra/cached-recoverable"
 import { hazelTelemetry } from "@hazel/infra/maple"
 import { isolateContext } from "@hazel/infra/worker-http"
@@ -17,7 +24,9 @@ import {
 	DiscordGatewayObjectLive,
 } from "./worker/discord-gateway-object"
 import { HTML_RENDER_PENDING_MAX_AGE_SECONDS, HTML_RENDER_PENDING_PREFIX } from "./services/html-renders"
+import { ORG_EXPORT_PREFIX, ORG_EXPORT_RETENTION_DAYS } from "./services/org-exports"
 import { takeIsolateCold } from "./worker/cold-start"
+import { UPLOADS_S3_BINDING } from "./services/object-storage"
 import { apiEnv } from "./worker/env"
 import { makeFetch } from "./worker/fetch"
 import { MessageLiveObject, MessageLiveObjectLive } from "./worker/live/message-live-object"
@@ -25,7 +34,13 @@ import { ChannelObject, ChannelObjectLive } from "./worker/objects/channel-objec
 import { CustomersObject, CustomersObjectLive } from "./worker/objects/customers-object"
 import { OrgObject, OrgObjectLive } from "./worker/objects/org-object"
 import { UserObject, UserObjectLive } from "./worker/objects/user-object"
-import { CACHE_BINDING, DIRECTORY_DB_BINDING, EMAIL_BINDING, HTML_RENDERS_BINDING } from "./worker/platform"
+import {
+	CACHE_BINDING,
+	DIRECTORY_DB_BINDING,
+	EMAIL_BINDING,
+	HTML_RENDERS_BINDING,
+	ORG_EXPORTS_BINDING,
+} from "./worker/platform"
 import { RateLimiterObject, RateLimiterObjectLive } from "./worker/rate-limiter-object"
 import { MESSAGE_RATE_LIMIT } from "./services/rate-limit-helpers"
 
@@ -63,17 +78,73 @@ export const HtmlRendersBucket = Cloudflare.R2.Bucket(
 	})),
 )
 
+/**
+ * Organization data exports (`services/org-exports.ts`). Private, with no public domain: a file is
+ * only served by the api's signed `GET /exports/...`. Files go a day after their download window.
+ */
+export const OrgExportsBucket = Cloudflare.R2.Bucket(
+	"org-exports",
+	stageProps("org-exports", (name) => ({
+		name,
+		lifecycleRules: [
+			{
+				id: "expire-exports",
+				prefix: ORG_EXPORT_PREFIX,
+				deleteObjectsTransition: {
+					condition: {
+						type: "Age" as const,
+						maxAge: (ORG_EXPORT_RETENTION_DAYS + 1) * 24 * 60 * 60,
+					},
+				},
+			},
+		],
+	})),
+)
+
+/**
+ * A customer install's uploads bucket (`docs/self-hosting.md`): served from `cdn.<zone>`, written
+ * by browsers through URLs the api presigns with S3 credentials alchemy mints for it (a token scoped
+ * to this bucket, bound as `UPLOADS_S3`, read by `services/object-storage.ts`). Hazel's own stages
+ * bring their bucket through the `S3_*` keys instead.
+ */
+const customerUploads = (stack: HazelStackContext) =>
+	Cloudflare.R2.Bucket("uploads", {
+		name: resolveWorkerName("uploads", stack.stage),
+		domains: stack.domains.cdn ? [{ name: stack.domains.cdn }] : [],
+		cors: [
+			{
+				id: "browser-uploads",
+				allowedMethods: ["GET", "HEAD", "PUT"],
+				allowedOrigins: [stack.urls.web, "tauri://localhost", "http://tauri.localhost"],
+				allowedHeaders: ["content-type", "if-none-match"],
+				exposeHeaders: ["etag"],
+				maxAgeSeconds: 3600,
+			},
+		],
+	})
+
+/** The api's uploads credentials binding: present on a customer install only. */
+interface UploadsBinding {
+	[UPLOADS_S3_BINDING]?: Cloudflare.R2.S3Credentials
+}
+
 /** `__ALCHEMY_RUNTIME__` folds to `true` in the bundle, so the stack-side branch is tree-shaken. */
 const props = Effect.gen(function* () {
 	if (globalThis.__ALCHEMY_RUNTIME__) return { main: import.meta.url }
 	const stack = yield* HazelStack
 	const cache = yield* ApiCache
 	const htmlRenders = yield* HtmlRendersBucket
+	const orgExports = yield* OrgExportsBucket
 	const email = yield* Cloudflare.Email.SendEmail(EMAIL_BINDING)
+	const uploadsBinding: UploadsBinding = {}
+	if (stack.stage.kind === "customer") {
+		const uploads = yield* customerUploads(stack)
+		uploadsBinding[UPLOADS_S3_BINDING] = Cloudflare.R2.S3Credentials(uploads, { access: "read-write" })
+	}
 	return {
 		main: import.meta.url,
 		...hazelWorkerProps("api", stack),
-		workersDev: stack.stage.kind !== "prd",
+		workersDev: !isProductionStage(stack.stage),
 		domain: stack.domains.api,
 		observability: {
 			enabled: true,
@@ -85,7 +156,9 @@ const props = Effect.gen(function* () {
 			[DIRECTORY_DB_BINDING]: stack.directoryDb,
 			[CACHE_BINDING]: cache,
 			[HTML_RENDERS_BINDING]: htmlRenders,
+			[ORG_EXPORTS_BINDING]: orgExports,
 			[EMAIL_BINDING]: email,
+			...uploadsBinding,
 			...(yield* apiEnv(stack)),
 		},
 	}

@@ -1,11 +1,8 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { twMerge } from "tailwind-merge"
-import { dropdownLabelBase } from "~/components/ui/dropdown.styles"
 import { cn } from "~/lib/utils"
 import {
 	IconCircleDottedUser,
-	IconHashtag,
 	IconMagnifier3,
 	IconMsgs,
 	IconPaintbrush,
@@ -17,11 +14,12 @@ import { destination, isDestinationId } from "../../shell/destinations"
 import { hotkeyLabel } from "../../shell/channels-sidebar/hotkey-label"
 import { environmentBadge } from "../../customers/ui/badges"
 import { companyLogo } from "../../customers/ui/identity"
-import type { Shared } from "../../page/contract"
+import { channelLinksOf, type Shared } from "../../page/contract"
 import { avatar } from "../../ui/avatar"
+import { channelIcon } from "../../ui/channel-icon"
 import type * as CommandMenu from "../../ui/command-menu"
 import { commandMenuShortcut, view as commandMenuView } from "../../ui/command-menu-view"
-import { labelId } from "../../ui/menu"
+import { menuLabel } from "../../ui/menu-view"
 import { createChannelPage, joinChannelPage } from "./form-pages"
 import { accountNameOf, dmDisplayName, HOTKEYS, parseKey, recentChannelsOf, STATUS_OPTIONS } from "./menu"
 import { Message } from "./message"
@@ -34,15 +32,9 @@ import { MENU_ID } from "./update"
 const toMenuMessage = (message: CommandMenu.Message): Message => Message.GotMenuMessage({ message })
 
 const label = (h: HtmlBuilder<Message>, key: string, children: Array<Html | string>): Html =>
-	h.span(
-		[h.Class(twMerge(dropdownLabelBase)), h.Id(labelId(MENU_ID, key)), h.Attribute("slot", "label")],
-		children,
-	)
+	menuLabel(h, MENU_ID, key, children)
 
 const current = (h: HtmlBuilder<Message>) => h.span([h.Class("ml-2 text-muted-fg text-xs")], ["(current)"])
-
-const channelIcon = (h: HtmlBuilder<Message>, icon: string | null): Html =>
-	icon ? h.span([h.Attribute("data-slot", "icon")], [icon]) : IconHashtag(h)
 
 /** A DM's icon: the partner's avatar, or up to two stacked avatars and a "+N" for groups. */
 const dmIcon = (h: HtmlBuilder<Message>, dm: DmChannel): Html => {
@@ -85,8 +77,23 @@ const dmIcon = (h: HtmlBuilder<Message>, dm: DmChannel): Html => {
 	)
 }
 
-const channelContent = (h: HtmlBuilder<Message>, key: string, channel: ChannelSummary | undefined) =>
-	channel ? [channelIcon(h, channel.icon), label(h, key, [channel.name])] : []
+const channelContent = (
+	h: HtmlBuilder<Message>,
+	shared: Shared,
+	key: string,
+	channel: ChannelSummary | undefined,
+) =>
+	channel
+		? [
+				channelIcon(h, {
+					icon: channel.icon,
+					isPrivate: channel.type === "private",
+					links: channelLinksOf(shared, channel.id),
+					surface: "overlay",
+				}),
+				label(h, key, [channel.name]),
+			]
+		: []
 
 const QUICK_ACTIONS: Readonly<
 	Record<
@@ -124,19 +131,16 @@ const THEME_ICONS: Readonly<Record<string, (h: HtmlBuilder<Message>) => Html>> =
 	system: (h) =>
 		h.div(
 			[h.Class("flex size-4 overflow-hidden rounded-sm"), h.Attribute("data-slot", "icon")],
-			[h.div([h.Class("w-1/2 bg-white")], []), h.div([h.Class("w-1/2 bg-zinc-900")], [])],
+			[h.div([h.Class("w-1/2 bg-white")], []), h.div([h.Class("w-1/2 bg-black")], [])],
 		),
 	light: (h) =>
 		h.div(
-			[h.Class("size-4 rounded-sm border border-zinc-200 bg-white"), h.Attribute("data-slot", "icon")],
+			[h.Class("size-4 rounded-sm border border-black/10 bg-white"), h.Attribute("data-slot", "icon")],
 			[],
 		),
 	dark: (h) =>
 		h.div(
-			[
-				h.Class("size-4 rounded-sm border border-zinc-700 bg-zinc-900"),
-				h.Attribute("data-slot", "icon"),
-			],
+			[h.Class("size-4 rounded-sm border border-white/20 bg-black"), h.Attribute("data-slot", "icon")],
 			[],
 		),
 }
@@ -167,6 +171,7 @@ const itemContent = (
 	if (kind === "channel")
 		return channelContent(
 			h,
+			shared,
 			key,
 			model.channels.find((channel) => channel.id === value),
 		)
@@ -228,7 +233,7 @@ const itemContent = (
 		const channel = recentChannelsOf(model).find((candidate) => candidate.id === value)
 		return dm && channel && channel.type !== "public" && channel.type !== "private"
 			? [dmIcon(h, dm), label(h, key, [dmDisplayName(dm)])]
-			: channelContent(h, key, channel)
+			: channelContent(h, shared, key, channel)
 	}
 	const status = STATUS_OPTIONS.find((option) => option.value === value)
 	if (kind === "status" && status)
@@ -275,7 +280,7 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, { sh
 							page._tag === "CreateChannel"
 								? createChannelPage(h, page)
 								: page._tag === "JoinChannel"
-									? joinChannelPage(h, model, page)
+									? joinChannelPage(h, model, page, shared)
 									: page._tag === "Search"
 										? searchPage(h, model, page, shared.nowMs)
 										: h.empty,

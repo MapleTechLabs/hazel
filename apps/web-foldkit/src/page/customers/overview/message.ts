@@ -6,12 +6,11 @@ import { CommonReason } from "~/lib/error-messages"
 import { ChannelOption } from "../../../customers/channels"
 import { AccountRow, SettingsSummary, SignalRow } from "../../../customers/queries"
 import { SuggestionMessage, SuggestionRow } from "../../../customers/suggestions"
-import { Chart, HealthMetric } from "./model"
+import { Chart } from "./model"
 
 export const Message = defineMessageUnion({
 	ClickedRange: { range: Customers.CustomersRange },
 	ToggledCompare: { isComparing: Schema.Boolean },
-	ClickedHealthMetric: { metric: HealthMetric },
 	HoveredChart: { chart: Chart, index: Schema.NullOr(Schema.Int) },
 	PressedRetry: {},
 	/** A setup card's Connect: the data source's page, where connecting happens. */

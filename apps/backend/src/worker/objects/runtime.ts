@@ -62,6 +62,8 @@ import { makeUserSource } from "./sources/user-source"
 import { makeCustomersSource } from "./sources/customers-source"
 import { pollDueRssFeeds, rssDeadlines } from "./org/rss"
 import { assistantDeadlines, AssistantTickCall } from "./org/assistant"
+import { exportDeadlines, OrgExportTickCall } from "./org/exports"
+import { fillDmLastMessages } from "./org/dm-last-message"
 import { prepareMessageSearch, SEARCH_MIGRATION_ID } from "./org/message-search"
 import { channelDeadlines, runChannelTimers } from "./channel/timers"
 import { makePresenceHooks } from "./user/presence"
@@ -180,11 +182,20 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 					}),
 				),
 			)
+			// DMs that predate their last-message columns, filled once from the index.
+			yield* run(
+				fillDmLastMessages().pipe(
+					Effect.catchTag("DatabaseError", (error) =>
+						Effect.logError("DM last messages not filled", error),
+					),
+				),
+			)
 		}
 
-		// OrgObject: RSS polls, the presence copies' leases and the AI panel's followers share the alarm.
+		// OrgObject: RSS polls, the presence copies' leases, the AI panel's followers and data exports
+		// share the alarm.
 		const orgDeadlines = Effect.map(
-			Effect.all([rssDeadlines, presenceLeaseDeadlines, assistantDeadlines]),
+			Effect.all([rssDeadlines, presenceLeaseDeadlines, assistantDeadlines, exportDeadlines]),
 			(lists) => lists.flat(),
 		)
 
@@ -457,6 +468,15 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 					Option.isSome(stepped) &&
 					Exit.isSuccess(stepped.value) &&
 					stepped.value.value.stepped > 0
+				) {
+					yield* afterCommit
+				}
+				// A data export's next step (`./org/exports.ts`); its commit rearms the alarm for the next.
+				const exported = yield* ownCall(OrgExportTickCall, {})
+				if (
+					Option.isSome(exported) &&
+					Exit.isSuccess(exported.value) &&
+					exported.value.value.stepped
 				) {
 					yield* afterCommit
 				}

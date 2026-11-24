@@ -93,7 +93,7 @@ const settle =
 			}),
 		)
 
-const recordMessages = [Message.SucceededRecordAction, Message.FailedRecordAction]
+const recordMessages = [Message.SucceededRecordAction, Message.FailedRecordAction] as const
 const target = { organizationId: OrganizationId, recordId: CustomerUnmatchedRecordId }
 
 const link = (

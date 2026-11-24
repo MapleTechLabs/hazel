@@ -1,11 +1,10 @@
 /**
  * The Customers RPCs in a `CustomersObject`: authorization (member vs admin), the members
  * bootstrap from the `OrgObject`, the demo seed through ingest and compute, the queue actions,
- * dry runs, and baseline mode after a backfill.
+ * rule dry run, and baseline mode after a backfill.
  */
+import { DEFAULT_CONNECTION_CONFIG } from "@hazel/customer-integrations"
 import {
-	DEFAULT_CONNECTION_CONFIG,
-	DEFAULT_HEALTH_SETTINGS,
 	type IngestOp,
 	type RuleDraft,
 	SignalTemplate,
@@ -18,7 +17,7 @@ import { describe, expect, it } from "vitest"
 import { customersTarget, orgTarget } from "../kinds"
 import { makeTestObjects } from "../testing"
 import { runCompute } from "./compute"
-import { healthDryRun, ruleDryRun } from "./dry-run"
+import { ruleDryRun } from "./dry-run"
 import { CustomerIngest } from "./ingest"
 import { makeCustomersWorld, NOW, ok, tagOf, uuid } from "./test-kit"
 
@@ -36,8 +35,8 @@ describe("Customers RPCs", () => {
 				expect(tagOf(yield* world.call("customers.overview", { range: "30d" }, world.stranger))).toBe(
 					"UnauthorizedError",
 				)
-				const health = ok(yield* world.call("customers.overview", { range: "30d" }, world.owner))
-				expect(health.hasData).toEqual({ activity: false, billing: false })
+				const overview = ok(yield* world.call("customers.overview", { range: "30d" }, world.owner))
+				expect(overview.hasData).toEqual({ activity: false, billing: false })
 
 				const settings = { reportingCurrency: "eur" }
 				expect(tagOf(yield* world.call("customers.settings.update", settings, world.member))).toBe(
@@ -92,13 +91,13 @@ describe("Customers RPCs", () => {
 				expect(
 					tagOf(yield* world.call("customers.view.delete", { viewId: builtIn.id }, world.owner)),
 				).toBe("CustomersInvalidRequestError")
-				// Defaults: a rule per template, five built-in views, the built-in metrics.
+				// Defaults: a rule per template, four built-in views, the built-in metrics.
 				expect(world.rows(`SELECT count(*) AS n FROM customer_signal_rules`)).toEqual([
 					{ n: SignalTemplate.literals.length + 1 },
 				])
 				expect(
 					world.rows(`SELECT count(*) AS n FROM customer_saved_views WHERE builtInKey IS NOT NULL`),
-				).toEqual([{ n: 5 }])
+				).toEqual([{ n: 4 }])
 				// Every provider has an adapter now, so connecting goes to it: this key is not one
 				// Maple issues, which its `validate` says before it calls anything.
 				expect(
@@ -319,13 +318,11 @@ describe("Customers RPCs", () => {
 							`SELECT template, count(*) AS n FROM customer_signals WHERE status = 'open' GROUP BY template ORDER BY template`,
 						)
 						.map((row) => row.template)
-					// health_drop needs history, and the demo seeds no support issues (the SLA templates);
-					// every other template fires on day one.
+					// The demo seeds no support issues (the SLA templates); every other template fires on
+					// day one.
 					expect(templates).toEqual(
 						expect.arrayContaining(
-							SignalTemplate.literals.filter(
-								(template) => template !== "health_drop" && !SLA_TEMPLATES.includes(template),
-							),
+							SignalTemplate.literals.filter((template) => !SLA_TEMPLATES.includes(template)),
 						),
 					)
 					const stages = world.rows<{ lifecycleStage: string }>(
@@ -337,9 +334,6 @@ describe("Customers RPCs", () => {
 						"lead",
 						"past_due",
 						"trialing",
-					])
-					expect(world.rows(`SELECT count(*) AS n FROM customer_health_daily`)).toEqual([
-						{ n: accounts },
 					])
 					expect(
 						world.rows<{ n: number }>(`SELECT count(*) AS n FROM customer_org_daily`)[0]!.n,
@@ -356,12 +350,6 @@ describe("Customers RPCs", () => {
 					expect(overview.kpis.mau.value).toBeGreaterThan(0)
 					expect(overview.bucket).toBe("week")
 					expect(overview.mrrMovements.length).toBeGreaterThanOrEqual(13)
-					expect(
-						overview.healthDistribution.reduce(
-							(sum: number, row: { count: number }) => sum + row.count,
-							0,
-						),
-					).toBe(accounts)
 					expect(overview.hasData).toEqual({ activity: true, billing: true })
 
 					const top = world.rows<{ id: string; accountId: string; ruleId: string }>(
@@ -374,7 +362,6 @@ describe("Customers RPCs", () => {
 							world.member,
 						),
 					)
-					expect(detail.health.components).toHaveLength(4)
 					expect(detail.activeUsersSeries).toHaveLength(30)
 					expect(detail.subscriptions.length).toBeGreaterThan(0)
 					const series = ok(
@@ -459,24 +446,6 @@ describe("Customers RPCs", () => {
 					expect(dry.evaluatedAccounts).toBe(dry.totalAccounts)
 					expect(dry.queueDelta).toEqual({ opens: 0, resolves: 0, stays: open })
 					expect(dry.topMatches[0].evidence._tag).toBe("amount")
-					const healthDry = ok(
-						yield* world.call(
-							"customers.health.dryRun",
-							{
-								draft: {
-									...JSON.parse(
-										world.rows<{ health: string }>(
-											`SELECT health FROM customer_settings`,
-										)[0]!.health,
-									),
-									bands: { healthyMin: 95, atRiskMin: 60 },
-								},
-							},
-							world.owner,
-						),
-					)
-					expect(healthDry.transitions.length).toBeGreaterThan(0)
-					expect(healthDry.samples.length).toBeGreaterThan(0)
 
 					// The queue: snooze, reopen, done, notes.
 					const snoozed = ok(
@@ -505,6 +474,13 @@ describe("Customers RPCs", () => {
 							world.member,
 						),
 					)
+					// A note written while handling the signal is an account note too.
+					expect(
+						world.rows(
+							`SELECT body FROM customer_notes WHERE signalId = ? AND deletedAt IS NULL ORDER BY body`,
+							top.id,
+						),
+					).toEqual([{ body: "Card updated" }, { body: "Talking to them Friday" }])
 					expect(
 						tagOf(
 							yield* world.call("customers.signal.dismiss", { signalId: top.id }, world.member),
@@ -645,9 +621,9 @@ describe("Customers RPCs", () => {
 					{ template: "payment_failed", status: "open", dismissReason: null },
 					{ template: "usage_drop", status: "dismissed", dismissReason: "baseline" },
 				])
-				expect(
-					world.rows(`SELECT openRiskHigh, openRiskMedium, healthStatus FROM customer_accounts`),
-				).toEqual([{ openRiskHigh: 1, openRiskMedium: 0, healthStatus: "at_risk" }])
+				expect(world.rows(`SELECT openRiskHigh, openRiskMedium FROM customer_accounts`)).toEqual([
+					{ openRiskHigh: 1, openRiskMedium: 0 },
+				])
 				// Baseline mode is one evaluation: the next compute leaves them, until worse by a step.
 				yield* world.object.run(runCompute(new Date(Date.now() + 3_600_000))).pipe(Effect.orDie)
 				expect(
@@ -723,11 +699,6 @@ describe("Customers RPCs", () => {
 				expect(rule.matchCount + rule.nonMatches.reduce((sum, entry) => sum + entry.count, 0)).toBe(
 					250,
 				)
-				const health = yield* world.object
-					.run(healthDryRun(DEFAULT_HEALTH_SETTINGS, NOW, 0))
-					.pipe(Effect.orDie)
-				expect([health.evaluatedAccounts, health.totalAccounts]).toEqual([250, 260])
-				expect(health.current.reduce((sum, row) => sum + row.count, 0)).toBe(250)
 			}),
 		))
 })

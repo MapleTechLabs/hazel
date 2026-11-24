@@ -1,8 +1,15 @@
 import { Option } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { dialogDescriptionBase } from "~/components/ui/dialog.styles"
 import { button } from "../../../ui/button"
-import { dialog, dialogClose, dialogFooter, dialogHeader, dialogTitle } from "../../../ui/dialog"
+import {
+	dialog,
+	dialogClose,
+	dialogDescription,
+	dialogFooter,
+	dialogHeader,
+	dialogTitle,
+} from "../../../ui/dialog"
+import { iconTile } from "../../../ui/icon-tile"
 import * as Modal from "../../../ui/modal"
 import * as ConfirmAction from "../../shared/confirm-action"
 
@@ -40,19 +47,14 @@ export const confirmDialog = <Target, Message>(
 			toContent: (closeAttributes) => [
 				dialog(h, { id: `${options.slotId}-inner`, role: "dialog", labelledBy: titleId }, [
 					dialogHeader(h, {}, [
-						h.div(
-							[
-								h.Class(
-									"flex size-12 items-center justify-center rounded-lg border border-danger/10 bg-danger/5",
-								),
-							],
-							[options.icon],
-						),
+						iconTile(h, { intent: "danger" }, options.icon),
 						dialogTitle(h, { id: titleId }, options.title),
-						h.p(
-							[h.Attribute("data-slot", "description"), h.Class(dialogDescriptionBase)],
-							[before, " ", h.span([h.Class("font-medium text-fg")], [name]), after],
-						),
+						dialogDescription(h, [
+							before,
+							" ",
+							h.span([h.Class("font-medium text-fg")], [name]),
+							after,
+						]),
 					]),
 					dialogFooter(h, [
 						dialogClose(h, closeAttributes, ["Cancel"], "secondary"),

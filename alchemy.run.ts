@@ -15,6 +15,7 @@ import {
 	formatHazelStage,
 	HazelStack,
 	type HazelStackContext,
+	type HazelStage,
 	parseHazelStageEffect,
 	resolveHazelDomains,
 } from "@hazel/infra/cloudflare"
@@ -52,6 +53,26 @@ const resolveUrl = (domain: string | undefined, envKey: string, fallback: string
 const asConfigError = (error: { readonly message: string }) =>
 	Effect.fail(new ConfigError(new SourceError({ message: error.message, cause: error })))
 
+const ZONE_RE = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/
+
+/**
+ * A customer install's zone (`HAZEL_ZONE`, `docs/self-hosting.md`): every hostname of the install
+ * hangs off it, so a customer stage without one fails the plan instead of deploying to workers.dev.
+ */
+const customerZone = (stage: HazelStage) =>
+	stage.kind !== "customer"
+		? Effect.succeed(undefined)
+		: plainWithDefault("HAZEL_ZONE", "").pipe(
+				Effect.map((record) => (record.HAZEL_ZONE ?? "").trim().toLowerCase().replace(/\.$/, "")),
+				Effect.flatMap((zone) =>
+					ZONE_RE.test(zone)
+						? Effect.succeed(zone)
+						: asConfigError({
+								message: `Stage customer-${stage.name} needs HAZEL_ZONE, a zone in this Cloudflare account (e.g. chat.acme.com); got "${zone}".`,
+							}),
+				),
+			)
+
 /** Append `key=value` lines to the GitHub Actions step-output file, if any. */
 const appendStepOutputs = (lines: string[]): void => {
 	const file = process.env.GITHUB_OUTPUT
@@ -62,7 +83,7 @@ const HazelStackLive = Layer.effect(
 	HazelStack,
 	Effect.gen(function* () {
 		const stage = yield* parseHazelStageEffect(yield* Alchemy.Stage)
-		const domains = resolveHazelDomains(stage)
+		const domains = resolveHazelDomains(stage, yield* customerZone(stage))
 		const context: HazelStackContext = {
 			stage,
 			domains,

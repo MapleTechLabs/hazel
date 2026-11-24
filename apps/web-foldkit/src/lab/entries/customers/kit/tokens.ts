@@ -21,27 +21,16 @@ export const lab = defineStaticLab("Customers tokens", (h) =>
 			h.div(
 				[h.Class("flex flex-wrap gap-3")],
 				[
-					swatch(h, "bg-chart-new", "chart-new", "new / healthy"),
+					swatch(h, "bg-chart-new", "chart-new"),
 					swatch(h, "bg-chart-expansion", "chart-expansion"),
-					swatch(h, "bg-chart-contraction", "chart-contraction", "contraction / at risk"),
-					swatch(h, "bg-chart-churn", "chart-churn", "churn / critical"),
-					swatch(h, "bg-chart-neutral", "chart-neutral", "neutral / unknown"),
+					swatch(h, "bg-chart-contraction", "chart-contraction"),
+					swatch(h, "bg-chart-churn", "chart-churn"),
+					swatch(h, "bg-chart-neutral", "chart-neutral"),
 					swatch(h, "bg-chart-series-1", "chart-series-1", "DAU"),
 					swatch(h, "bg-chart-series-2", "chart-series-2", "WAU"),
 					swatch(h, "bg-chart-series-3", "chart-series-3", "MAU"),
 					swatch(h, "bg-chart-grid", "chart-grid"),
 					swatch(h, "bg-chart-net", "chart-net", "net line"),
-				],
-			),
-		]),
-		labSection(h, "Health", [
-			h.div(
-				[h.Class("flex flex-wrap gap-3")],
-				[
-					swatch(h, "bg-health-healthy", "health-healthy"),
-					swatch(h, "bg-health-at-risk", "health-at-risk"),
-					swatch(h, "bg-health-critical", "health-critical"),
-					swatch(h, "bg-health-unknown", "health-unknown"),
 				],
 			),
 		]),

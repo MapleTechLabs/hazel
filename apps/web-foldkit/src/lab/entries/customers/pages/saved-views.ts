@@ -193,7 +193,7 @@ const init = (state: typeof State.Type): Result => {
 	// Renewals first, Churned out of the sidebar, All customers in it.
 	const layout = {
 		id: LAYOUT_ID,
-		order: [RENEWALS_ID, CURRENT_KEY, "my_customers", "at_risk", "paying", "trialing", "churned", "all"],
+		order: [RENEWALS_ID, CURRENT_KEY, "my_customers", "paying", "trialing", "churned", "all"],
 		sidebarHidden: ["churned"],
 	}
 	return {

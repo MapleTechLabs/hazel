@@ -28,6 +28,6 @@
 		"@cloudflare/workers-types": "catalog:alchemy",
 		"@types/node": "^24.19.2",
 		"typescript": "catalog:tooling",
-		"vitest": "^5.0.5"
+		"vitest": "^5.1.1"
 	}
 }

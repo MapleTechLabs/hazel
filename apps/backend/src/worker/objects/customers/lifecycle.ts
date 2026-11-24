@@ -1,5 +1,5 @@
 /**
- * A signal's lifecycle (`docs/customers/tech-design.md` §4.5–§4.7), pure: what one evaluation does
+ * A signal's lifecycle (`docs/customers/tech-design.md` §4.4–§4.6), pure: what one evaluation does
  * to the `(rule, account)` episode, and its priority.
  *
  * - open: refreshed while true; auto-resolved (closed) once false.
@@ -13,7 +13,7 @@
 import type { schema } from "@hazel/db"
 import { type SignalEvidence, SignalSeverity } from "@hazel/domain/customers"
 import type { Match } from "./evaluate"
-import { DAY_MS } from "./time"
+import { DAY_MS } from "@hazel/customer-integrations/kit/time"
 
 const SEVERITY_WEIGHT = { low: 1, medium: 2, high: 4 } as const
 

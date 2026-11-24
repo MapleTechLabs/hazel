@@ -15,6 +15,7 @@ import type { ChatSyncAttributionReconciler } from "../../services/chat-sync/cha
 import type { Directory } from "../../services/directory"
 import type { IntegrationTokenService } from "../../services/integration-token-service"
 import type { IntegrationBotService } from "../../services/integrations/integration-bot-service"
+import type { OrgExports } from "../../services/org-exports"
 import type { WebhookBotService } from "../../services/webhook-bot-service"
 import { type AnyObjectCall, type CallRequest, type CallResponse, exitCodec, payloadCodec } from "./calls"
 import {
@@ -28,7 +29,9 @@ import {
 import { agentChannels, AgentChannelsCall } from "./org/agent"
 import { assistantTick, AssistantTickCall } from "./org/assistant"
 import { agentNotifications, AgentNotificationsCall } from "./user/agent"
+import { exportPage, ChannelExportPageCall } from "./channel/export-page"
 import { liveAccess, LiveAccessCall } from "./channel/live-access"
+import { exportTick, OrgExportTickCall } from "./org/exports"
 import { supportMessage, SupportMessageCall } from "./channel/support-message"
 import {
 	bootstrap,
@@ -113,6 +116,7 @@ export type CallServices =
 	| ChatSyncAttributionReconciler
 	| ChannelAccessSyncService
 	| GitHub.GitHubAppJWTService
+	| OrgExports
 
 interface Receiver {
 	readonly call: AnyObjectCall
@@ -158,6 +162,8 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(VisibleChannelsCall, visibleChannels),
 		// The AI panel's followers, on the alarm.
 		receiver(AssistantTickCall, () => assistantTick()),
+		// Organization data exports, one step per alarm.
+		receiver(OrgExportTickCall, () => exportTick()),
 	]),
 	channel: byName([
 		receiver(ListMessagesCall, listMessages),
@@ -165,6 +171,7 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(LiveAccessCall, liveAccess),
 		receiver(SupportMessageCall, supportMessage),
 		receiver(MessagesByIdsCall, messagesByIds),
+		receiver(ChannelExportPageCall, exportPage),
 	]),
 	user: byName([receiver(AgentNotificationsCall, agentNotifications)]),
 	// Its own bootstrap and alarm work, and webhook deliveries (`docs/customers/tech-design.md` §5).

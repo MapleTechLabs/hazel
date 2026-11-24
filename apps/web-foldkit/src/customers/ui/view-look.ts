@@ -115,7 +115,6 @@ const SHIPPED = {
 	my_customers: { icon: "user", color: null },
 	paying: { icon: null, color: "green" },
 	trialing: { icon: null, color: "blue" },
-	at_risk: { icon: null, color: "orange" },
 	churned: { icon: null, color: "gray" },
 } as const satisfies Record<Customers.BuiltInViewKey | "current" | "all", ViewLook>
 

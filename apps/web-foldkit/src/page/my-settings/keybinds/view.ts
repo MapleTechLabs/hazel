@@ -12,16 +12,17 @@ import {
 } from "~/lib/keybindings/key-combo"
 import { IconArrowPath, IconClose, IconLock, IconWarning } from "../../../icons"
 import { badge } from "../../../ui/badge"
-import { ariaButton, button } from "../../../ui/button"
+import { ariaButton, button, iconButton } from "../../../ui/button"
+import { cardClassName } from "../../../ui/card"
+import { emptyState } from "../../../ui/empty-state"
+import { heading } from "../../../ui/heading"
 import { kbd } from "../../../ui/kbd"
+import { pageHeader, pageLayout } from "../../../ui/page-header"
 import { searchField } from "../../../ui/search-field"
 import type { PageViewInputs, Shared } from "../../contract"
-import { pageHeader } from "../shared"
 import { Message } from "./message"
 import type { Model } from "./model"
 import { RECORDER_ATTRIBUTE } from "./subscription"
-import { heading } from "../../../ui/heading"
-
 type H = HtmlBuilder<Message>
 type AppAction = (typeof appKeymap.actions)[number]
 
@@ -120,19 +121,6 @@ const recorder = (h: H, model: Model, action: AppAction, shared: Shared): Html =
 	)
 }
 
-const iconButton = (h: H, label: string, onPress: Message, icon: Html, className?: string): Html =>
-	button(
-		h,
-		{
-			intent: "plain",
-			size: "sq-sm",
-			className,
-			onPress,
-			attributes: [h.AriaLabel(label), h.Attribute("title", label)],
-		},
-		[icon],
-	)
-
 /** Reset and unbind, in fixed slots so the key buttons line up whichever show. */
 const rowActions = (h: H, action: AppAction, shared: Shared): Html => {
 	// Changed: overridden, or its default lost to another action's override (Reset takes it back).
@@ -148,19 +136,24 @@ const rowActions = (h: H, action: AppAction, shared: Shared): Html => {
 			isChanged
 				? iconButton(
 						h,
-						`Reset to default (${defaultLabel})`,
-						Message.ClickedReset({ actionId: action.id }),
+						{
+							label: `Reset to default (${defaultLabel})`,
+							onPress: Message.ClickedReset({ actionId: action.id }),
+						},
 						IconArrowPath(h),
 					)
 				: h.span([h.Class("size-7")]),
 			isBound
 				? iconButton(
 						h,
-						"Remove keybind",
-						Message.ClickedUnbind({ actionId: action.id }),
+						{
+							label: "Remove keybind",
+							onPress: Message.ClickedUnbind({ actionId: action.id }),
+							// Quiet until the row is hovered or focused; always there on touch screens.
+							className:
+								"opacity-0 transition-opacity duration-150 group-hover/row:opacity-100 group-focus-within/row:opacity-100 pointer-coarse:opacity-100",
+						},
 						IconClose(h),
-						// Quiet until the row is hovered or focused; always there on touch screens.
-						"opacity-0 transition-opacity duration-150 group-hover/row:opacity-100 group-focus-within/row:opacity-100 pointer-coarse:opacity-100",
 					)
 				: h.span([h.Class("size-7")]),
 		],
@@ -265,7 +258,7 @@ const section = (
 				],
 			),
 			h.ul(
-				[h.Class("divide-y divide-border overflow-hidden rounded-xl border border-border bg-bg")],
+				[h.Class(cardClassName("divide-y divide-border"))],
 				actions.map((action) =>
 					action.rebindable ? editableRow(h, model, action, shared) : fixedRow(h, action, shared),
 				),
@@ -320,27 +313,20 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		)
 		return actions.length === 0 ? [] : [section(h, model, category, actions, shared)]
 	})
-	return h.div(
-		[h.Class("flex flex-col gap-6 px-4 pb-8 lg:px-8")],
-		[
-			pageHeader(
-				h,
-				"Keybinds",
-				"Press a shortcut to record a new one. Changes apply right away, on this device.",
-			),
-			toolbar(h, model, shared),
-			...(sections.length === 0
-				? [
-						h.p(
-							[
-								h.Class(
-									"rounded-xl border border-dashed border-border px-4 py-10 text-center text-muted-fg text-sm",
-								),
-							],
-							[`No shortcuts match “${model.query.trim()}”.`],
-						),
-					]
-				: sections),
-		],
-	)
+	return pageLayout(h, { className: "pb-8" }, [
+		pageHeader(h, {
+			title: "Keybinds",
+			subtitle: "Press a shortcut to record a new one. Changes apply right away, on this device.",
+			size: "title",
+		}),
+		toolbar(h, model, shared),
+		...(sections.length === 0
+			? [
+					emptyState(h, {
+						title: `No shortcuts match “${model.query.trim()}”.`,
+						className: "rounded-xl border border-dashed border-border px-4 py-10",
+					}),
+				]
+			: sections),
+	])
 })

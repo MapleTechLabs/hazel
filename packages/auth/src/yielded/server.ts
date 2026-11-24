@@ -5,20 +5,37 @@ import * as GitHub from "@yielded/auth/GitHub"
 import * as Google from "@yielded/auth/Google"
 import * as SimpleWebAuthn from "@yielded/auth-simplewebauthn/Server"
 import * as WebCrypto from "@yielded/auth/WebCrypto"
-import { Effect, Layer, Option, type Redacted, Schema } from "effect"
+import { Effect, Layer, Option, Redacted, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 
+import { makeAccessHooks } from "./access-gate.ts"
 import { HazelAuth } from "./auth.ts"
 import { HazelAuthApi } from "./contract.ts"
 import { ormOf, QUERY_ERROR_TAGS } from "./identities.ts"
+import { type InstanceAccess, parseInstanceAccess } from "./instance-access.ts"
 import { ActionPoliciesLive } from "./policy.ts"
-import { OAuthStorageLive, Persistence, storage } from "./storage.ts"
+import { makeOAuthStorageLive, Persistence, storage } from "./storage.ts"
 
 /**
  * `effect/crypto` on WebCrypto (randomness, digests, HMAC, encryption, signatures), the same on
  * Bun and Workers. There are no passwords, so there is no KDF.
  */
 export const CryptoLive = WebCrypto.layer
+
+export interface OAuthClient {
+	readonly clientId: string
+	readonly clientSecret: Redacted.Redacted<string>
+}
+
+/**
+ * The GitHub app of a stage signed into only through the dev sign-in (`dev-sign-in.ts`): the
+ * routes need at least one provider, and only the simulated GitHub ever sees this one (GitHub
+ * itself rejects it). `enabledProviders` never offers it.
+ */
+export const devSignInGitHubClient: OAuthClient = {
+	clientId: "hazel-dev-sign-in-only",
+	clientSecret: Redacted.make("hazel-dev-sign-in-only"),
+}
 
 export interface Keyring {
 	readonly activeKeyId: string
@@ -32,8 +49,13 @@ export interface HazelAuthConfig {
 	readonly appOrigin: string
 	/** Origins allowed to call the auth routes with credentials, besides `origin`. */
 	readonly trustedOrigins?: ReadonlyArray<string>
-	readonly github: { readonly clientId: string; readonly clientSecret: Redacted.Redacted<string> }
-	readonly google?: { readonly clientId: string; readonly clientSecret: Redacted.Redacted<string> }
+	/**
+	 * The OAuth apps sign-in offers; at least one is required (a stage with only the dev sign-in
+	 * passes `devSignInGitHubClient`). An unconfigured provider has no routes: starting its
+	 * sign-in is refused (`OAuthRejected`).
+	 */
+	readonly github?: OAuthClient
+	readonly google?: OAuthClient
 	readonly passkey: { readonly rpId: string; readonly origins: ReadonlyArray<string> }
 	readonly keys: {
 		readonly binding: Keyring
@@ -49,6 +71,8 @@ export interface HazelAuthConfig {
 	 * by verified email, so the next sign-in lands in that account.
 	 */
 	readonly continuePath: string
+	/** Who may sign in (`instance-access.ts`); omitted: anyone. */
+	readonly access?: InstanceAccess
 }
 
 /** The provider of a registration intent whose identity now has an owner, if any. */
@@ -95,20 +119,22 @@ export const makeHazelAuthHttp = (
 ) => {
 	const secure = new URL(config.origin).protocol === "https:"
 
-	const github = GitHub.provider({
-		clientId: config.github.clientId,
-		clientSecret: config.github.clientSecret,
-		// Requests user:email and reads the verified primary address from /user/emails,
-		// so users with a private GitHub email still register with a real address.
-		verifiedPrimaryEmail: true,
-	})
-	const google = (google: NonNullable<HazelAuthConfig["google"]>) =>
+	const github = (github: OAuthClient) =>
+		GitHub.provider({
+			clientId: github.clientId,
+			clientSecret: github.clientSecret,
+			// Requests user:email and reads the verified primary address from /user/emails,
+			// so users with a private GitHub email still register with a real address.
+			verifiedPrimaryEmail: true,
+		})
+	const google = (google: OAuthClient) =>
 		Google.provider({
 			clientId: google.clientId,
 			clientSecret: google.clientSecret,
 			scopes: ["openid", "email", "profile"],
 		})
-	const providers: Record<string, typeof github | ReturnType<typeof google>> = { github }
+	const providers: Record<string, ReturnType<typeof github> | ReturnType<typeof google>> = {}
+	if (config.github !== undefined) providers.github = github(config.github)
 	if (config.google !== undefined) providers.google = google(config.google)
 
 	const http = Http.make(HazelAuth, {
@@ -224,7 +250,8 @@ export const makeHazelAuthLive = (config: HazelAuthConfig) => {
 	})
 
 	// Tables come from packages/db (effect-orm); nothing is created at runtime.
-	const Storage = Layer.mergeAll(Persistence.layer, OAuthStorageLive).pipe(
+	const access = config.access ?? parseInstanceAccess({})
+	const Storage = Layer.mergeAll(Persistence.layer, makeOAuthStorageLive(access)).pipe(
 		Layer.provideMerge(Persistence.Config.layer(storage)),
 		Layer.provideMerge(passkeyConfig),
 	)
@@ -253,5 +280,14 @@ export const makeHazelAuthLive = (config: HazelAuthConfig) => {
 		Layer.provideMerge(CryptoLive),
 	)
 
-	return { http, Services, sessionCookieName: sessionCookieName(config.origin) }
+	return {
+		http,
+		Services,
+		/**
+		 * The lifecycle hooks the auth routes run under (`Hooks.LifecycleHooks`): the allowed-domain
+		 * check on sign-in. Needs the ambient `SqlClient`.
+		 */
+		hooks: makeAccessHooks(access),
+		sessionCookieName: sessionCookieName(config.origin),
+	}
 }

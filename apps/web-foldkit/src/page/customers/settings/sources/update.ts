@@ -1,10 +1,17 @@
+import {
+	DEFAULT_CONNECTION_CONFIG,
+	type IntegrationConfig,
+	type KeyValueListField,
+	isIntegrationId,
+	type SettingsField,
+} from "@hazel/customer-integrations"
 import type * as Customers from "@hazel/domain/customers"
 import type { CustomerConnectionId, UserId } from "@hazel/schema"
 import { Record, Redacted, Result } from "effect"
 import { Command } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
 import { failureMessage } from "~/lib/error-messages"
-import { defaultConfigOf, providerOf } from "../../../../customers/providers"
+import { providerOf } from "../../../../customers/providers"
 import { errorToastOf, successToast } from "../../../../data/actions"
 import type { AppRoute } from "../../../../route"
 import * as Menu from "../../../../ui/menu"
@@ -36,7 +43,11 @@ import type {
 } from "./message"
 import { Message } from "./message"
 import {
+	cellOf,
+	configList,
+	configRows,
 	CONNECT_MODAL_ID,
+	type ConfigRows,
 	type ConnectForm,
 	connectFailureMessage,
 	connectionOf,
@@ -48,8 +59,10 @@ import {
 	isSettingsValid,
 	KEYS_MODAL_ID,
 	type Model,
+	settingsFieldsOf,
 	settingsOf,
 	withConfigField,
+	withConfigValue,
 } from "./model"
 import type { ConnectionRow } from "./queries"
 
@@ -125,7 +138,7 @@ export const init = (route: Route, shared: Shared): Return =>
 			disconnectModal: Modal.init(DISCONNECT_MODAL_ID),
 			isDisconnecting: false,
 			settingsDraft: null,
-			activityEventInput: "",
+			settingsListInputs: {},
 			isSavingSettings: false,
 			unitMetrics: null,
 			unitDrafts: {},
@@ -156,7 +169,7 @@ const openConnect = (model: Model, form: ConnectForm): Return => ({
 const newConnectForm = (
 	provider: Customers.CustomerProvider,
 	reconnectId: CustomerConnectionId | null,
-	config: Customers.ConnectionConfig,
+	config: IntegrationConfig,
 ): ConnectForm => ({
 	provider,
 	reconnectId,
@@ -211,7 +224,7 @@ const updateModal = (
 const editConfig = (
 	model: Model,
 	target: ConfigTarget,
-	edit: (config: Customers.ConnectionConfig) => Customers.ConnectionConfig,
+	edit: (config: IntegrationConfig) => IntegrationConfig,
 ): Model => {
 	if (target === "connect")
 		return withConnectForm(model, (form) => ({ ...form, config: edit(form.config), failure: null }))
@@ -219,25 +232,57 @@ const editConfig = (
 	return connection === undefined ? model : { ...model, settingsDraft: edit(settingsOf(model, connection)) }
 }
 
-type MapleConfig = Extract<Customers.ConnectionConfig, { _tag: "maple" }>
+/** Edits a declared settings field of the draft; a key its integration does not declare changes nothing. */
+const editSettingsField = (
+	model: Model,
+	key: string,
+	edit: (config: IntegrationConfig, field: SettingsField) => IntegrationConfig,
+): Model =>
+	editConfig(model, "settings", (config) => {
+		const field = settingsFieldsOf(config).find((candidate) => candidate.key === key)
+		return field === undefined ? config : edit(config, field)
+	})
 
-const editMaple = (model: Model, edit: (config: MapleConfig) => MapleConfig): Model =>
-	editConfig(model, "settings", (config) => (config._tag === "maple" ? edit(config) : config))
+const editStringList = (
+	model: Model,
+	key: string,
+	edit: (values: ReadonlyArray<string>) => ReadonlyArray<string>,
+): Model =>
+	editSettingsField(model, key, (config, field) =>
+		"columns" in field || "options" in field
+			? config
+			: withConfigValue(config, key, edit(configList(config, key))),
+	)
 
-/** What a save sends: Maple's lists trimmed, blank activity events dropped. */
-const cleaned = (config: Customers.ConnectionConfig): Customers.ConnectionConfig =>
-	config._tag === "maple"
-		? {
-				...config,
-				activityEvents: config.activityEvents
-					.map((event) => event.trim())
-					.filter((event) => event !== ""),
-				metricMappings: config.metricMappings.map((mapping) => ({
-					event: mapping.event.trim(),
-					metricKey: mapping.metricKey.trim(),
-				})),
-			}
-		: config
+const editRows = (
+	model: Model,
+	key: string,
+	edit: (rows: ConfigRows, field: KeyValueListField) => ConfigRows,
+): Model =>
+	editSettingsField(model, key, (config, field) =>
+		"columns" in field ? withConfigValue(config, key, edit(configRows(config, key), field)) : config,
+	)
+
+/** What a save sends: the settings lists trimmed, blank strings dropped. */
+const cleaned = (config: IntegrationConfig): IntegrationConfig =>
+	settingsFieldsOf(config).reduce((current, field) => {
+		if ("options" in field) return current
+		if ("columns" in field)
+			return withConfigValue(
+				current,
+				field.key,
+				configRows(current, field.key).map((row) =>
+					Object.fromEntries(field.columns.map(({ key }) => [key, cellOf(row, key).trim()])),
+				),
+			)
+		return withConfigValue(
+			current,
+			field.key,
+			configList(current, field.key)
+				.map((value) => value.trim())
+				.filter((value) => value !== ""),
+		)
+	}, config)
 
 /** The grant (or revoke) for `userId` was answered. */
 const settled = (model: Model, userId: UserId): Model => ({
@@ -344,14 +389,16 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		// CONNECT
 
 		PressedConnect: ({ provider }) =>
-			openConnect(
-				model,
-				newConnectForm(
-					provider,
-					null,
-					connectionOf(model, provider)?.config ?? defaultConfigOf(provider),
-				),
-			),
+			isIntegrationId(provider)
+				? openConnect(
+						model,
+						newConnectForm(
+							provider,
+							null,
+							connectionOf(model, provider)?.config ?? DEFAULT_CONNECTION_CONFIG[provider],
+						),
+					)
+				: { model },
 		PressedReconnect: ({ connectionId }) => {
 			const connection = model.connections?.find((row) => row.id === connectionId)
 			return connection === undefined
@@ -557,51 +604,44 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 
 		// PROVIDER SETTINGS
 
-		ChangedActivityEventInput: ({ value }) => ({ model: { ...model, activityEventInput: value } }),
-		AddedActivityEvent: () => {
-			const event = model.activityEventInput.trim()
-			if (event === "") return { model }
+		ChangedSettingsListInput: ({ key, value }) => ({
+			model: { ...model, settingsListInputs: { ...model.settingsListInputs, [key]: value } },
+		}),
+		AddedSettingsListItem: ({ key }) => {
+			const item = (model.settingsListInputs[key] ?? "").trim()
+			if (item === "") return { model }
 			return {
 				model: {
-					...editMaple(model, (config) =>
-						config.activityEvents.includes(event)
-							? config
-							: { ...config, activityEvents: [...config.activityEvents, event] },
+					...editStringList(model, key, (values) =>
+						values.includes(item) ? values : [...values, item],
 					),
-					activityEventInput: "",
+					settingsListInputs: { ...model.settingsListInputs, [key]: "" },
 				},
 			}
 		},
-		RemovedActivityEvent: ({ event }) => ({
-			model: editMaple(model, (config) => ({
-				...config,
-				activityEvents: config.activityEvents.filter((current) => current !== event),
-			})),
+		RemovedSettingsListItem: ({ key, item }) => ({
+			model: editStringList(model, key, (values) => values.filter((current) => current !== item)),
 		}),
-		AddedMetricMapping: () => ({
-			model: editMaple(model, (config) => ({
-				...config,
-				metricMappings: [...config.metricMappings, { event: "", metricKey: "" }],
-			})),
+		AddedSettingsRow: ({ key }) => ({
+			model: editRows(model, key, (rows, { columns }) => [
+				...rows,
+				Object.fromEntries(columns.map((column) => [column.key, ""])),
+			]),
 		}),
-		RemovedMetricMapping: ({ index }) => ({
-			model: editMaple(model, (config) => ({
-				...config,
-				metricMappings: config.metricMappings.filter((_, current) => current !== index),
-			})),
+		RemovedSettingsRow: ({ key, index }) => ({
+			model: editRows(model, key, (rows) => rows.filter((_, current) => current !== index)),
 		}),
-		ChangedMetricMapping: ({ index, field, value }) => ({
-			model: editMaple(model, (config) => ({
-				...config,
-				metricMappings: config.metricMappings.map((mapping, current) =>
-					current === index ? { ...mapping, [field]: value } : mapping,
-				),
-			})),
+		ChangedSettingsCell: ({ key, index, column, value }) => ({
+			model: editRows(model, key, (rows) =>
+				rows.map((row, current) => (current === index ? { ...row, [column]: value } : row)),
+			),
 		}),
-		ClickedLookback: ({ days }) => ({
-			model: editMaple(model, (config) => ({ ...config, lookbackDays: days })),
+		ClickedSettingsNumber: ({ key, value }) => ({
+			model: editSettingsField(model, key, (config, field) =>
+				"options" in field ? withConfigValue(config, key, value) : config,
+			),
 		}),
-		PressedDiscardSettings: () => ({ model: { ...model, settingsDraft: null, activityEventInput: "" } }),
+		PressedDiscardSettings: () => ({ model: { ...model, settingsDraft: null, settingsListInputs: {} } }),
 		PressedSaveSettings: () => {
 			const connection = detailConnection(model)
 			const organizationId = shared.organization?.id

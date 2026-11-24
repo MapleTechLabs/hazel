@@ -3,11 +3,11 @@ import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { commonMessage, failureMessage, type UserErrorMessage } from "~/lib/error-messages"
 import { IconCheck } from "../../icons"
-import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
 import { button } from "../../ui/button"
+import { cardClassName } from "../../ui/card"
 import { loader } from "../../ui/loader"
-import { authError, authFrame, authHeading } from "../auth/layout"
+import { authError, authFrame, authHeading, homeLink } from "../auth/layout"
 import { isSessionLoading, type PageViewInputs, type Shared } from "../contract"
 import { Message } from "./message"
 import { type ApproveFailure, type ClientSummary, Lookup, type Model } from "./model"
@@ -23,16 +23,10 @@ const SCOPE_ABILITIES = {
 		"Set your status",
 	],
 	"customers:read": [
-		"See your organizations' customers: health, revenue, billing and signals",
+		"See your organizations' customers: revenue, billing and signals",
 		"See which channels each customer is linked to",
 	],
 } satisfies Readonly<Record<AgentScope, ReadonlyArray<string>>>
-
-const homeLink = (h: HtmlBuilder<Message>): Html =>
-	h.a(
-		[h.Class("text-fg text-sm underline underline-offset-2"), h.Href(hrefOf(AppRoute.Root()))],
-		["Go to Hazel"],
-	)
 
 const approveFailureMessage = (reason: ApproveFailure): UserErrorMessage =>
 	failureMessage(reason, {
@@ -41,7 +35,7 @@ const approveFailureMessage = (reason: ApproveFailure): UserErrorMessage =>
 
 const abilities = (h: HtmlBuilder<Message>, scopes: ReadonlyArray<AgentScope>): Html =>
 	h.ul(
-		[h.Class("mb-4 flex flex-col gap-2 rounded-lg border border-border p-3")],
+		[h.Class(cardClassName("mb-4 flex flex-col gap-2 p-3"))],
 		scopes
 			.flatMap((scope) => SCOPE_ABILITIES[scope])
 			.map((ability) =>

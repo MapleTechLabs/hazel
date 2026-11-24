@@ -91,6 +91,7 @@ const ProbeRoutes = Layer.unwrap(
 						{
 							client: {} as never,
 							requestId: 1n as never,
+							remoteParentSpan: undefined,
 							rpc: {} as never,
 							payload: undefined,
 							headers: request.headers,
@@ -194,6 +195,19 @@ describe("Hazel sign-in in the backend", () => {
 			headers: { "content-type": "application/json", "x-effect-auth-csrf": "1" },
 			body: JSON.stringify({ payload }),
 		})
+
+	it("lists the configured providers for the sign-in page", async () => {
+		const response = await send("/auth/providers", { origin: null })
+		expect(response.status).toBe(200)
+		expect(await response.json()).toEqual({ providers: ["github"], passkeys: true })
+	})
+
+	it("refuses a sign-in through a provider this install has no app for", async () => {
+		const begin = await post("/auth/signIn", { provider: "google", returnTarget: "/" })
+		expect(begin.status).toBe(400)
+		// The library refuses a provider it has no adapter for as a rejected sign-in.
+		expect(await begin.json()).toEqual({ _tag: "Failure", error: { _tag: "OAuthRejected" } })
+	})
 
 	it("signs up with GitHub and is recognised by the RPC and HttpApi middleware", async () => {
 		const begin = await post("/auth/signIn", { provider: "github", returnTarget: "/" })

@@ -34,8 +34,6 @@ const ACCOUNT_KEYS = [
 	"mrrMinor",
 	"currency",
 	"trialEndsAt",
-	"healthScore",
-	"healthStatus",
 	"seatsUsed",
 	"seatsLimit",
 	"contactCount",

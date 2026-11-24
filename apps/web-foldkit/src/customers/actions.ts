@@ -630,7 +630,7 @@ const grantImpersonator = optimisticAction({
 		}),
 })
 
-/** Let a member sign in as customers' users (Clerk impersonation). */
+/** Let a member sign in as customers' users. */
 export const grantImpersonatorAction = (props: ImpersonatorGrant) =>
 	Effect.flatMap(
 		Effect.sync(() => CustomerImpersonatorId.make(crypto.randomUUID())),
@@ -670,8 +670,8 @@ interface FeatureFlagsChange {
 }
 
 /**
- * Turn `keys` on or off for every account, in Clerk then in the store (`customers.featureFlags.set`).
- * On `CustomerFeatureFlagsError` the server kept what Clerk accepted; the stream brings it back.
+ * Turn `keys` on or off for every account, in the source then in the store (`customers.featureFlags.set`).
+ * On `CustomerFeatureFlagsError` the server kept what the source accepted; the stream brings it back.
  */
 export const setFeatureFlagsAction = optimisticAction({
 	collections: [customerAccountCollection],
@@ -743,7 +743,7 @@ export const createFeatureFlagAction = (props: {
 		(id) => stamped(createFeatureFlag)({ ...props, id }),
 	)
 
-/** Remove the flag from every customer in Clerk, then forget it (`customers.featureFlag.delete`). */
+/** Remove the flag from every customer in the source, then forget it (`customers.featureFlag.delete`). */
 export const deleteFeatureFlagAction = optimisticAction({
 	collections: [customerAccountCollection, customerFeatureFlagCollection],
 	onMutate: (props: { readonly organizationId: OrganizationId; readonly key: string }) => {

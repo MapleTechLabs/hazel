@@ -6,6 +6,7 @@ import { formatCustomEmojiKey } from "~/lib/custom-emoji-utils"
 import { CommonReason } from "~/lib/error-messages"
 import { catchCommon } from "../data/actions"
 import { EmojiData, loadEmojiData, type PickerData, type PickerEmoji, pickerDataOf } from "./data"
+import { loadRecentEmojis, RecentEmoji, saveRecentEmojis, withRecentEmoji } from "./recent"
 
 /**
  * A Foldkit port of frimousse's `EmojiPicker` (Root, Search, Viewport, List, ActiveEmoji): the
@@ -30,6 +31,8 @@ export const EmojiDataAsync = AsyncData.Schema(EmojiData, LoadEmojiDataFailure)
 export const Model = Schema.Struct({
 	id: Schema.String,
 	data: EmojiDataAsync.schema,
+	/** This device's recently picked emojis, newest first (the list's first category). */
+	recent: Schema.Array(RecentEmoji),
 	search: Schema.String,
 	interaction: Interaction,
 	activeColumnIndex: Schema.Finite,
@@ -47,6 +50,7 @@ export type Model = typeof Model.Type
 export const init = (id: string): Model => ({
 	id,
 	data: AsyncData.Idle(),
+	recent: [],
 	search: "",
 	interaction: "None",
 	activeColumnIndex: 0,
@@ -65,6 +69,8 @@ export const Message = defineMessageUnion({
 	SucceededLoadEmojiData: { data: EmojiData },
 	FailedLoadEmojiData: { reason: LoadEmojiDataFailure },
 	ClickedRetryLoadEmojiData: {},
+	LoadedRecentEmojis: { recent: Schema.Array(RecentEmoji) },
+	CompletedSaveRecentEmojis: {},
 	UpdatedSearch: { search: Schema.String },
 	MeasuredPicker: {
 		rowHeight: Schema.Finite,
@@ -100,12 +106,23 @@ export const LoadEmojiData = Command.define("LoadEmojiData", {
 	),
 })
 
+export const LoadRecentEmojis = Command.define("LoadRecentEmojis", {
+	messages: [Message.LoadedRecentEmojis],
+	execute: loadRecentEmojis.pipe(Effect.map((recent) => Message.LoadedRecentEmojis({ recent }))),
+})
+
+export const SaveRecentEmojis = Command.define("SaveRecentEmojis", {
+	args: { recent: Schema.Array(RecentEmoji) },
+	messages: [Message.CompletedSaveRecentEmojis],
+	execute: ({ recent }) => saveRecentEmojis(recent).pipe(Effect.as(Message.CompletedSaveRecentEmojis())),
+})
+
 // DERIVED
 
 export const pickerData = (model: Model): PickerData | null =>
 	Option.match(AsyncData.getData(model.data), {
 		onNone: () => null,
-		onSome: (data) => pickerDataOf(data, COLUMNS, model.search),
+		onSome: (data) => pickerDataOf(data, COLUMNS, model.search, model.recent),
 	})
 
 /** `$isLoading`: no dataset yet (and no failure to show), or the sizers are not measured. */
@@ -158,10 +175,10 @@ export const isNavigationKey = (key: string) => key.startsWith("Arrow") || key =
 
 export type Return = Update.ReturnWithOutMessage<Model, Message, OutMessage>
 
-/** Start (or restart) loading the dataset. */
+/** Start (or restart) loading the dataset, and read the recently used emojis. */
 export const loadData = (model: Model): Update.Return<Model, Message> => ({
 	model: modifyFields(model, { data: () => AsyncData.Loading() }),
-	commands: [LoadEmojiData()],
+	commands: [LoadEmojiData(), LoadRecentEmojis()],
 })
 
 const withActive = (
@@ -226,17 +243,17 @@ const moveActive = (model: Model, key: string): Model => {
 	return withActive(model, "Keyboard", row, column)
 }
 
-const select = (model: Model, emoji: PickerEmoji | null): Return =>
-	emoji === null
-		? { model }
-		: {
-				model,
-				outMessage: OutMessage.SelectedEmoji({
-					emoji: emoji.emoji,
-					label: emoji.label,
-					imageUrl: null,
-				}),
-			}
+/** Report the pick and remember it at the front of the recently used emojis. */
+const select = (model: Model, emoji: PickerEmoji | null): Return => {
+	if (emoji === null) return { model }
+	const picked = { emoji: emoji.emoji, label: emoji.label, imageUrl: emoji.imageUrl ?? null }
+	const recent = withRecentEmoji(model.recent, picked)
+	return {
+		model: modifyFields(model, { recent: () => recent }),
+		commands: [SaveRecentEmojis({ recent })],
+		outMessage: OutMessage.SelectedEmoji(picked),
+	}
+}
 
 export const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
@@ -251,7 +268,13 @@ export const update = (model: Model, message: Message): Return =>
 				data: (previous) => AsyncData.settle(previous, Result.fail(reason)),
 			}),
 		}),
-		ClickedRetryLoadEmojiData: () => loadData(model),
+		ClickedRetryLoadEmojiData: () => ({
+			model: modifyFields(model, { data: () => AsyncData.Loading() }),
+			commands: [LoadEmojiData()],
+		}),
+		// The list keeps its active position: the recent row arrives before any key or pointer.
+		LoadedRecentEmojis: ({ recent }) => ({ model: modifyFields(model, { recent: () => recent }) }),
+		CompletedSaveRecentEmojis: () => ({ model }),
 		UpdatedSearch: ({ search }) => ({
 			model: modifyFields(withActive(model, search ? "Keyboard" : "None", 0, 0), {
 				search: () => search,
@@ -284,14 +307,8 @@ export const update = (model: Model, message: Message): Return =>
 		UnhoveredEmoji: () => ({ model: resetActive(model) }),
 		ClickedEmoji: ({ rowIndex, columnIndex }) =>
 			select(model, pickerData(model)?.rows[rowIndex]?.emojis[columnIndex] ?? null),
-		ClickedCustomEmoji: ({ name, imageUrl }) => ({
-			model,
-			outMessage: OutMessage.SelectedEmoji({
-				emoji: formatCustomEmojiKey(name),
-				label: name,
-				imageUrl,
-			}),
-		}),
+		ClickedCustomEmoji: ({ name, imageUrl }) =>
+			select(model, { emoji: formatCustomEmojiKey(name), label: name, imageUrl }),
 	})
 
 // MOUNT

@@ -1,4 +1,6 @@
 import { Submodel } from "foldkit"
+import { emptyState } from "../../ui/empty-state"
+import { iconTile } from "../../ui/icon-tile"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconCheck, IconEnvelope, IconMsgs } from "../../icons"
 import { avatar } from "../../ui/avatar"
@@ -115,14 +117,7 @@ export const view = Submodel.defineView<Model, Message, ModalViewInputs>((model,
 				h.div(
 					[h.Class("flex items-center gap-3")],
 					[
-						h.div(
-							[
-								h.Class(
-									"flex size-10 items-center justify-center rounded-lg bg-primary-subtle",
-								),
-							],
-							[IconMsgs(h, { className: "size-5 text-primary" })],
-						),
+						iconTile(h, { intent: "primary", size: "md" }, IconMsgs(h)),
 						h.div(
 							[h.Class("flex flex-col")],
 							[
@@ -173,10 +168,12 @@ export const view = Submodel.defineView<Model, Message, ModalViewInputs>((model,
 						[h.Class("max-h-96 overflow-y-auto")],
 						[
 							users.length === 0
-								? h.p(
-										[h.Class("py-8 text-center text-muted-fg text-sm")],
-										[model.searchQuery ? "No users found" : "No team members available"],
-									)
+								? emptyState(h, {
+										title: model.searchQuery
+											? "No users found"
+											: "No team members available",
+										className: "py-8",
+									})
 								: h.div(
 										[h.Class("flex flex-col gap-1")],
 										users.map((user) =>

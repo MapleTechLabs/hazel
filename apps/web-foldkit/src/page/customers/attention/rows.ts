@@ -4,13 +4,7 @@ import { queueNameOf } from "../../../customers/groups"
 import type { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
 import { resolvedAtMsOf } from "../../../customers/queries"
 import { formatDate, formatMoney, formatWeekdayTime } from "../../../customers/format"
-import {
-	environmentsHint,
-	healthBadge,
-	healthDot,
-	kindChip,
-	severityGlyph,
-} from "../../../customers/ui/badges"
+import { environmentsHint, kindChip, severityGlyph } from "../../../customers/ui/badges"
 import { evidenceViz } from "../../../customers/ui/evidence"
 import { companyLogo, personAvatar, personLabel } from "../../../customers/ui/identity"
 import {
@@ -23,6 +17,8 @@ import {
 import { IconClock } from "../../../icons"
 import { Message } from "./message"
 import type { AccountGroup } from "./model"
+import { ariaButton } from "../../../ui/button"
+import { badge } from "../../../ui/badge"
 
 /** The queue's rows per tab: open signals (the kit's `queueRow`), account groups, snoozed and done. */
 
@@ -150,7 +146,6 @@ export const signalRow = (
 		evidence: evidenceViz(h, signal.evidence),
 		age: ageText(signal.openedAtMs, context.nowMs),
 		assignee: personOf(context, signal.assigneeUserId),
-		health: { status: account.healthStatus, score: account.healthScore },
 		environmentCount: context.environmentCounts.get(account.id) ?? 0,
 		isFocused: isSelected,
 		isSelected,
@@ -159,7 +154,7 @@ export const signalRow = (
 	})
 }
 
-/** Open tab beside the preview (Wonder: Queue Selected With Preview): account, signal, age, health. */
+/** Open tab beside the preview (Wonder: Queue Selected With Preview): account, signal, age. */
 export const compactRow = (
 	h: HtmlBuilder<Message>,
 	signal: SignalRow,
@@ -213,10 +208,6 @@ export const compactRow = (
 		h.span(
 			[h.Role("cell"), h.Class("w-8 text-right text-muted-fg text-sm tabular-nums")],
 			[ageText(signal.openedAtMs, context.nowMs)],
-		),
-		h.span(
-			[h.Role("cell"), h.Class("w-12 shrink-0 text-right")],
-			[healthDot(h, { status: account.healthStatus, score: account.healthScore })],
 		),
 	])
 }
@@ -309,10 +300,6 @@ export const accountGroupRow = (
 			[h.Role("cell"), h.Class("flex w-10 justify-center -space-x-1.5 max-md:hidden")],
 			assignees.map((userId) => personAvatar(h, personOf(context, userId), { ring: true })),
 		),
-		h.div(
-			[h.Role("cell"), h.Class("flex w-28 shrink-0 justify-end max-md:w-auto")],
-			[healthBadge(h, { status: account.healthStatus, score: account.healthScore })],
-		),
 	])
 }
 
@@ -401,10 +388,6 @@ export const snoozedRow = (
 			],
 		),
 		...(signal.id === context.selectedId ? context.actions : []),
-		h.div(
-			[h.Role("cell"), h.Class("flex w-28 shrink-0 justify-end max-md:w-auto")],
-			[healthBadge(h, { status: account.healthStatus, score: account.healthScore })],
-		),
 	])
 }
 
@@ -416,18 +399,15 @@ const OUTCOME_LABEL = {
 } as const
 
 const outcomeChip = (h: HtmlBuilder<Message>, signal: SignalRow): Html => {
-	const [label, className] =
+	const [label, intent] =
 		signal.status === "auto_resolved"
-			? ["Auto-resolved", "bg-info-subtle text-info-subtle-fg"]
+			? (["Auto-resolved", "info"] as const)
 			: signal.status === "dismissed"
-				? ["Dismissed", "border border-dashed border-border text-muted-fg"]
+				? (["Dismissed", "quiet"] as const)
 				: signal.outcome === "fixed"
-					? ["Fixed", "bg-success-subtle text-success-subtle-fg"]
-					: [OUTCOME_LABEL[signal.outcome ?? "other"], "bg-secondary text-fg"]
-	return h.span(
-		[h.Class(twMerge("inline-flex rounded-md px-1.5 py-0.5 font-medium text-xs", className))],
-		[label],
-	)
+					? (["Fixed", "success"] as const)
+					: ([OUTCOME_LABEL[signal.outcome ?? "other"], "secondary"] as const)
+	return badge(h, { intent }, [label])
 }
 
 /** The reasons the server writes as codes; anything else is a person's own words. */
@@ -501,14 +481,13 @@ export const doneRow = (
 
 /** The preview's "Other open signals" entry. */
 export const otherSignalRow = (h: HtmlBuilder<Message>, signal: SignalRow, context: RowContext): Html =>
-	h.button(
-		[
-			h.Type("button"),
-			h.OnClick(Message.ClickedRow({ signalId: signal.id })),
-			h.Class(
+	ariaButton(
+		h,
+		{
+			onPress: Message.ClickedRow({ signalId: signal.id }),
+			className:
 				"flex w-full cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 text-left outline-hidden hover:bg-wash focus-visible:ring-2 focus-visible:ring-ring/70",
-			),
-		],
+		},
 		[
 			severityGlyph(h, signal.severity),
 			h.div(

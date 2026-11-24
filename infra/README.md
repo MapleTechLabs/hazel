@@ -23,11 +23,12 @@ their own `alchemy.run.ts`.
 
 ## Stages
 
-| Stage        | Command                                   | Data                                           | Domains                                      |
-| ------------ | ----------------------------------------- | ---------------------------------------------- | -------------------------------------------- |
-| `prd`        | `bun run alchemy:deploy:prd`              | the stage's D1 + Durable Objects               | `*.hazel.sh`                                 |
-| `pr-<n>`     | `PR_NUMBER=<n> bun run alchemy:deploy:pr` | its own D1 + Durable Objects (empty on create) | `app-pr-<n>.hazel.sh`, `api-pr-<n>.hazel.sh` |
-| `dev_<user>` | `bun run alchemy:dev`                     | local, in `.alchemy/`; reads `.env.local` only | workers.dev / localhost                      |
+| Stage             | Command                                                            | Data                                                                     | Domains                                                                              |
+| ----------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `prd`             | `bun run alchemy:deploy:prd`                                       | the stage's D1 + Durable Objects                                         | `*.hazel.sh`                                                                         |
+| `pr-<n>`          | `PR_NUMBER=<n> bun run alchemy:deploy:pr`                          | its own D1 + Durable Objects (empty on create)                           | `app-pr-<n>.hazel.sh`, `api-pr-<n>.hazel.sh`                                         |
+| `dev_<user>`      | `bun run alchemy:dev`                                              | local, in `.alchemy/`; reads `.env.local` only                           | workers.dev / localhost                                                              |
+| `customer-<name>` | `bun run customer:deploy <name>` (`customer:upgrade` for releases) | its own D1 + Durable Objects + uploads bucket, in the customer's account | `*.<HAZEL_ZONE>` (guide: docs site Self-hosting; Hazel side: `docs/self-hosting.md`) |
 
 Local dev needs `.env.local` (`.env.local.example`, or `bun run setup`) and MinIO for uploads
 (`docker compose up -d`).

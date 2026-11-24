@@ -1,3 +1,4 @@
+import { integrations } from "@hazel/customer-integrations"
 import * as Customers from "@hazel/domain/customers"
 import { Option } from "effect"
 import * as AsyncData from "foldkit/asyncData"
@@ -6,16 +7,23 @@ import { twMerge } from "tailwind-merge"
 import { calendarHeatmap, heatLegend } from "../../../customers/charts/calendar-heatmap"
 import { formatDayLong } from "../../../customers/format"
 import { msOf } from "../../../customers/queries"
-import { segmentClass, segmentedTrackClass } from "../../../customers/ui/filter-bar"
-import { SOURCE_LABEL, sourceLogo, sourceMark } from "../../../customers/ui/identity"
+import { segmentClass, segmentedTrackClass } from "../../../ui/segmented-control"
+import { sourceLabel } from "../../../customers/providers"
+import { sourceLogo, sourceMark } from "../../../customers/ui/identity"
 import { IconChevronDown } from "../../../icons"
-import { button } from "../../../ui/button"
+import { ariaButton, button } from "../../../ui/button"
 import { heading } from "../../../ui/heading"
 import { menuLabel } from "../../../ui/menu-view"
 import { RevealCalendarDay } from "./commands"
+import { eventDetail } from "./event-detail"
 import { Message } from "./message"
 import { type EventType, eventTypeEntries, type Model } from "./model"
-import { type Context, memberOf, menu, pageFooter, skeletonRows } from "./parts"
+import { noteBody } from "./overview-tab"
+import { type Context, memberOf, pageFooter, skeletonRows } from "./parts"
+import { menu } from "../shared-view"
+import { emptyState } from "../../../ui/empty-state"
+import { skeleton } from "../../../ui/skeleton"
+import { cardClassName } from "../../../ui/card"
 
 /** The activity tab: the account's timeline by day, filtered by source and type, paged. */
 
@@ -24,7 +32,6 @@ const TYPE_LABEL = {
 	billing: "Billing",
 	signals: "Signals",
 	contacts: "Contacts",
-	health: "Health",
 	notes: "Notes",
 } as const satisfies Record<EventType, string>
 
@@ -42,20 +49,20 @@ const dayHeading = (ms: number, nowMs: number): readonly [string, string] => {
 	return [weekday, date]
 }
 
-/** The event's data worth showing: a note's body, or its plain values (a grouping event's title says it all). */
-const detailOf = (event: Customers.Event): string | null => {
-	if (event.type.startsWith("account.")) return null
-	const body = event.data.body
-	if (typeof body === "string") return `“${body}”`
-	const parts = Object.entries(event.data)
-		.filter(([, value]) => typeof value === "string" || typeof value === "number")
-		.map(([key, value]) => `${key.replace(/([A-Z])/g, " $1").toLowerCase()} ${value}`)
-	return parts.length === 0 ? null : parts.join(" · ")
-}
-
-const eventRow = (h: HtmlBuilder<Message>, event: Customers.Event, context: Context): Html => {
+const eventRow = (
+	h: HtmlBuilder<Message>,
+	event: Customers.Event,
+	notes: Model["notes"],
+	context: Context,
+): Html => {
 	const actor = memberOf(context, event.actorUserId)?.name ?? null
-	const detail = detailOf(event)
+	const { summary, quote } = eventDetail(event, {
+		notes,
+		nameOf: (userId) => memberOf(context, userId)?.name ?? null,
+		nowMs: context.nowMs,
+		currency: context.account.currency,
+	})
+	const byline = [actor ?? sourceLabel(event.provider), ...(summary === null ? [] : [summary])]
 	return h.li(
 		[h.Key(event.id), h.Class("flex gap-3 py-3")],
 		[
@@ -70,10 +77,7 @@ const eventRow = (h: HtmlBuilder<Message>, event: Customers.Event, context: Cont
 								[h.Class("flex min-w-0 flex-col")],
 								[
 									h.span([h.Class("font-medium text-fg text-sm")], [event.title]),
-									h.span(
-										[h.Class("text-muted-fg text-xs")],
-										[[actor ?? SOURCE_LABEL[event.provider], event.type].join(" · ")],
-									),
+									h.span([h.Class("text-muted-fg text-xs")], [byline.join(" · ")]),
 								],
 							),
 							h.span(
@@ -82,18 +86,9 @@ const eventRow = (h: HtmlBuilder<Message>, event: Customers.Event, context: Cont
 							),
 						],
 					),
-					...(detail === null
+					...(quote === null
 						? []
-						: [
-								h.p(
-									[
-										h.Class(
-											"rounded-lg border border-border bg-wash px-3 py-2 text-fg-2 text-sm",
-										),
-									],
-									[detail],
-								),
-							]),
+						: [noteBody(h, quote, "rounded-lg border border-border bg-wash px-3 py-2")]),
 				],
 			),
 		],
@@ -136,22 +131,20 @@ const yearCalendar = (h: HtmlBuilder<Message>, model: Model): Html => {
 			),
 			points === undefined
 				? failed
-					? h.div(
-							[h.Class("flex flex-col items-center gap-3 py-8 text-muted-fg text-sm")],
-							[
-								h.p([], ["Couldn't load activity."]),
-								button(
-									h,
-									{
-										intent: "outline",
-										size: "sm",
-										onPress: Message.PressedRetryYearActivity(),
-									},
-									["Try again"],
-								),
-							],
-						)
-					: h.div([h.Class("aspect-[7/1] w-full animate-pulse rounded-lg bg-secondary/40")])
+					? emptyState(h, {
+							title: "Couldn't load activity.",
+							action: button(
+								h,
+								{
+									intent: "outline",
+									size: "sm",
+									onPress: Message.PressedRetryYearActivity(),
+								},
+								["Try again"],
+							),
+							className: "py-8",
+						})
+					: skeleton(h, "aspect-[7/1] w-full rounded-lg")
 				: calendarHeatmap(h, {
 						points,
 						ariaLabel: `Daily active users over the last year: ${description}`,
@@ -177,7 +170,11 @@ const yearCalendar = (h: HtmlBuilder<Message>, model: Model): Html => {
 	)
 }
 
-const SOURCES: ReadonlyArray<Customers.CustomerSource | null> = [null, ...Customers.CustomerSource.literals]
+const SOURCES: ReadonlyArray<Customers.CustomerSource | null> = [
+	null,
+	...integrations.map((integration) => integration.id),
+	"hazel",
+]
 
 const filters = (h: HtmlBuilder<Message>, model: Model): Html =>
 	h.div(
@@ -191,15 +188,14 @@ const filters = (h: HtmlBuilder<Message>, model: Model): Html =>
 				],
 				SOURCES.map((source) => {
 					const isSelected = source === model.eventProvider
-					return h.button(
-						[
-							h.Type("button"),
-							h.Role("radio"),
-							h.AriaChecked(isSelected),
-							h.OnClick(Message.ClickedEventProvider({ provider: source })),
-							h.Class(segmentClass(isSelected)),
-						],
-						source === null ? ["All"] : [sourceLogo(h, source, "size-3.5"), SOURCE_LABEL[source]],
+					return ariaButton(
+						h,
+						{
+							onPress: Message.ClickedEventProvider({ provider: source }),
+							className: segmentClass(isSelected),
+							attributes: [h.Role("radio"), h.AriaChecked(isSelected)],
+						},
+						source === null ? ["All"] : [sourceLogo(h, source, "size-3.5"), sourceLabel(source)],
 					)
 				}),
 			),
@@ -241,36 +237,24 @@ export const activityTab = (h: HtmlBuilder<Message>, model: Model, context: Cont
 			[
 				...(status === "Loading" && items.length === 0 ? skeletonRows(h, 6) : []),
 				...(status === "Loaded" && items.length === 0
-					? [
-							h.p(
-								[
-									h.Class(
-										"rounded-xl border border-border py-12 text-center text-muted-fg text-sm",
-									),
-								],
-								["No events match."],
-							),
-						]
+					? [emptyState(h, { title: "No events match.", className: cardClassName("py-12") })]
 					: []),
 				...[...groups.values()].map((events) => {
-					const [heading, date] = dayHeading(msOf(events[0].occurredAt), context.nowMs)
+					const [day, date] = dayHeading(msOf(events[0].occurredAt), context.nowMs)
 					return h.section(
 						[h.Class("flex flex-col")],
 						[
-							h.h3(
-								[
-									h.Class(
-										"flex items-baseline gap-2 border-border border-b pt-4 pb-2 text-sm",
-									),
-								],
-								[
-									h.span([h.Class("font-semibold text-fg")], [heading]),
-									h.span([h.Class("text-muted-fg")], [date]),
-								],
+							heading(
+								h,
+								{
+									variant: "subsection",
+									className: "flex items-baseline gap-2 border-border border-b pt-4 pb-2",
+								},
+								[day, h.span([h.Class("font-normal text-muted-fg")], [date])],
 							),
 							h.ul(
 								[h.Class("flex flex-col")],
-								events.map((event) => eventRow(h, event, context)),
+								events.map((event) => eventRow(h, event, model.notes, context)),
 							),
 						],
 					)

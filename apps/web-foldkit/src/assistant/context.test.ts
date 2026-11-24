@@ -64,7 +64,7 @@ describe("routeContextOf", () => {
 describe("suggestionsFor", () => {
 	test("adapts the chips to the page", () => {
 		const customer = customerContext("hazel", { id: accountId, name: "Acme" }, "overview")
-		expect(suggestionsFor(customer)).toContain("Summarize this customer's health")
+		expect(suggestionsFor(customer)).toContain("Summarize this customer")
 		expect(suggestionsFor(channelContext("hazel", { id: channelId, name: "general" }))).toContain(
 			"Summarize this channel",
 		)

@@ -4,8 +4,8 @@
  * Identity, in order:
  *
  * - Account op: its own ref → a `sameAs` ref → a shared domain (only when the op opts in with
- *   `matchByDomain`, free-mail excluded; Stripe's `matchByDomain` config can turn it off) → create
- *   (`onNoMatch: "create"`, Clerk's `createAccounts`) or park. Several candidates at a step park it
+ *   `matchByDomain`, free-mail excluded; the integration's ingest policy can turn it off) → create
+ *   (`onNoMatch: "create"`, unless its policy says otherwise) or park. Several candidates at a step park it
  *   as ambiguous, suggesting the first. Ignore rules run before creating or parking.
  * - Contact op: the account through its ref, then the contact's ref in that account → the same email
  *   in that account → create.
@@ -30,6 +30,7 @@
  * plan changed, cancellation, invoice paid or failed, contact joined, left, first active), keyed so
  * a replay adds none.
  */
+import { FIELD_PRECEDENCE, ingestPolicyOf, integrationOf } from "@hazel/customer-integrations"
 import { Database, SQLite, schema } from "@hazel/db"
 import {
 	CHECKOUT_ABANDONED,
@@ -37,7 +38,6 @@ import {
 	type CustomerProvider,
 	type CustomerSource,
 	EMPTY_SYNC_STATS,
-	FIELD_PRECEDENCE,
 	normalizeDomain,
 	IngestOp,
 	type IngestOutcome,
@@ -120,21 +120,15 @@ export const ignoreRuleMatches = (
 /** Shared with the web app, which cleans a domain the same way before the store answers. */
 export { normalizeDomain }
 
-/** The hosts a provider's links (dashboard pages, hosted invoices) live on, subdomains included. */
-const LINK_HOSTS = {
-	clerk: ["clerk.com"],
-	stripe: ["stripe.com"],
-	autumn: ["useautumn.com"],
-	maple: ["maple.dev"],
-} satisfies Record<CustomerProvider, ReadonlyArray<string>>
-
 /** A provider's link as given when it is `https:` on one of its hosts, else null (`undefined` stays). */
 const providerLink = (provider: CustomerProvider, url: string | null | undefined) => {
 	if (url == null) return url
 	try {
 		const { protocol, hostname } = new URL(url)
 		return protocol === "https:" &&
-			LINK_HOSTS[provider].some((host) => hostname === host || hostname.endsWith(`.${host}`))
+			(integrationOf(provider)?.ingest.linkHosts ?? []).some(
+				(host) => hostname === host || hostname.endsWith(`.${host}`),
+			)
 			? url
 			: null
 	} catch {
@@ -839,11 +833,9 @@ const make = Effect.gen(function* () {
 					reason: `Its shared ids name ${shared.size} different customers`,
 				} satisfies Match as Match
 			}
-			// Only an op that opts in merges by domain (billing sources): two Clerk organizations sharing
-			// one are two customers. Stripe's config can still turn it off.
-			const byDomain =
-				op.matchByDomain === true &&
-				!(session.config?._tag === "stripe" && !session.config.matchByDomain)
+			// Only an op that opts in merges by domain (billing sources): two identity records sharing
+			// one are two customers. The connection's current policy can still turn it off.
+			const byDomain = op.matchByDomain === true && ingestPolicyOf(session.config).matchByDomain
 			if (!byDomain || domains.length === 0) return { _tag: "None" } satisfies Match as Match
 			const rows = yield* db.run(
 				SQLite.from(schema.customerAccountsTable, "a")
@@ -1040,7 +1032,7 @@ const make = Effect.gen(function* () {
 			const create =
 				match._tag === "None" &&
 				op.onNoMatch === "create" &&
-				!(session.config?._tag === "clerk" && !session.config.createAccounts)
+				ingestPolicyOf(session.config).createAccounts
 			if (!create) {
 				return yield* park(session, {
 					provider,
@@ -2338,7 +2330,7 @@ const make = Effect.gen(function* () {
 			trigger: "schedule",
 		})
 		// The provider's live refs not seen (touched or created) since the sweep started. By provider,
-		// not connection: a ref placed through another connection (usage of a Clerk user) is still
+		// not connection: a ref placed through another connection (another source's usage) is still
 		// this provider's record.
 		const unseen = (entityType: RefEntityType) =>
 			db.run(

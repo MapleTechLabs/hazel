@@ -3,7 +3,9 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { getBrandfetchIcon } from "~/lib/integrations/__data"
 import { IconUser } from "../../icons"
-import { safeSourceUrl } from "../providers"
+import { avatar } from "../../ui/avatar"
+import { initialsOf as wordInitials } from "../../ui/semantic"
+import { providerOf, safeSourceUrl, sourceLabel } from "../providers"
 
 /**
  * Who and where (Foundations › Source Chips, Avatars And Company Logos): data source marks and
@@ -12,33 +14,18 @@ import { safeSourceUrl } from "../providers"
 
 // SOURCES
 
-export const SOURCE_LABEL = {
-	clerk: "Clerk",
-	stripe: "Stripe",
-	autumn: "Autumn",
-	maple: "Maple",
-	hazel: "Hazel",
-} as const satisfies Record<CustomerSource, string>
-
-const SOURCE_DOMAIN = {
-	clerk: "clerk.com",
-	stripe: "stripe.com",
-	autumn: "useautumn.com",
-	maple: "maple.dev",
-} as const satisfies Record<Exclude<CustomerSource, "hazel">, string>
-
 /** The brand mark's image: Brandfetch for providers, Hazel's own icon for Hazel. */
 export const sourceLogoSrc = (source: CustomerSource): string =>
 	source === "hazel"
 		? "/icon.svg"
-		: getBrandfetchIcon(SOURCE_DOMAIN[source], { theme: "light", type: "icon", size: 64 })
+		: getBrandfetchIcon(providerOf(source).domain, { theme: "light", type: "icon", size: 64 })
 
 const logoImage = <M>(h: HtmlBuilder<M>, source: CustomerSource, className: string): Html =>
 	h.img([
 		h.Src(sourceLogoSrc(source)),
 		h.Alt(""),
 		h.Attribute("loading", "lazy"),
-		h.Class(twMerge("shrink-0 rounded-[4px] object-contain", className)),
+		h.Class(twMerge("shrink-0 rounded-sm object-contain", className)),
 	])
 
 /** The bare mark, sized by `className` (default 16px). */
@@ -64,7 +51,7 @@ export const sourceMark = <M>(
 					options.className,
 				),
 			),
-			h.Title(SOURCE_LABEL[source]),
+			h.Title(sourceLabel(source)),
 		],
 		[
 			logoImage(
@@ -78,7 +65,7 @@ export const sourceMark = <M>(
 const chipClassName =
 	"inline-flex h-7 items-center gap-1.5 rounded-md border border-border pr-2 pl-1.5 font-medium text-fg text-xs"
 
-/** `[mark] Stripe`. */
+/** `[mark] Name`. */
 export const sourceChip = <M>(
 	h: HtmlBuilder<M>,
 	source: CustomerSource,
@@ -86,11 +73,11 @@ export const sourceChip = <M>(
 ): Html =>
 	h.span(
 		[h.Class(twMerge(chipClassName, options.className))],
-		[logoImage(h, source, "size-4"), options.label ?? SOURCE_LABEL[source]],
+		[logoImage(h, source, "size-4"), options.label ?? sourceLabel(source)],
 	)
 
 /**
- * `[mark] Stripe` as a link: opens the provider's record in a new tab (the accessible name says
+ * `[mark] Name` as a link: opens the provider's record in a new tab (the accessible name says
  * so); a plain chip when `href` is not on the provider's hosts (`safeSourceUrl`).
  */
 export const sourceLinkChip = <M>(
@@ -105,8 +92,8 @@ export const sourceLinkChip = <M>(
 			h.Href(href),
 			h.Target("_blank"),
 			h.Rel("noreferrer"),
-			h.AriaLabel(`${options.label} in ${SOURCE_LABEL[options.source]}`),
-			h.Title(`Open in ${SOURCE_LABEL[options.source]}`),
+			h.AriaLabel(`${options.label} in ${sourceLabel(options.source)}`),
+			h.Title(`Open in ${sourceLabel(options.source)}`),
 			h.Class(
 				twMerge(
 					chipClassName,
@@ -121,13 +108,16 @@ export const sourceLinkChip = <M>(
 
 // TINTS
 
-/** Initials tints, picked by a hash of the name so a company keeps its color everywhere. */
+/**
+ * Initials tints, picked by a hash of the name so a company keeps its color everywhere: the theme's
+ * subtle pairs (brand, sky, emerald, amber, rose), so they follow dark mode and the brand colour.
+ */
 const TINTS = [
-	"bg-purple-500/15 text-purple-700 dark:text-purple-300",
-	"bg-sky-500/15 text-sky-700 dark:text-sky-300",
-	"bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-	"bg-amber-500/15 text-amber-700 dark:text-amber-300",
-	"bg-rose-500/15 text-rose-700 dark:text-rose-300",
+	"bg-primary-subtle text-primary-subtle-fg",
+	"bg-info-subtle text-info-subtle-fg",
+	"bg-success-subtle text-success-subtle-fg",
+	"bg-warning-subtle text-warning-subtle-fg",
+	"bg-danger-subtle text-danger-subtle-fg",
 	"bg-secondary text-secondary-fg",
 ] as const
 
@@ -141,7 +131,11 @@ export const tintIndex = (name: string): number => {
 	return (hash >>> 0) % TINTS.length
 }
 
-/** `Northwind Labs` → `NL`, `kestrel` → `KE`, `` → `?`. */
+/**
+ * `Northwind Labs` → `NL`, `kestrel` → `KE`, `` → `?`. Several words take the kit's initials
+ * (`ui/semantic`); a company is often one word or `north-wind`, so one word gives two letters, `-_.`
+ * split words too, and nothing gives `?` rather than the kit's empty string.
+ */
 export const initialsOf = (name: string): string => {
 	const words = name
 		.trim()
@@ -149,7 +143,7 @@ export const initialsOf = (name: string): string => {
 		.filter((word) => word.length > 0)
 	const [first, second] = words
 	if (first === undefined) return "?"
-	return (second === undefined ? first.slice(0, 2) : `${first.charAt(0)}${second.charAt(0)}`).toUpperCase()
+	return second === undefined ? first.slice(0, 2).toUpperCase() : wordInitials(words.join(" "))
 }
 
 // COMPANY LOGOS
@@ -159,7 +153,7 @@ export type LogoSize = "2xs" | "xs" | "sm" | "md" | "lg"
 /** 16 · 20 · 28 · 40 · 48px. */
 const LOGO_SIZE = {
 	"2xs": "size-4 rounded-sm text-3xs",
-	xs: "size-5 rounded-[5px] text-[9px]",
+	xs: "size-5 rounded-sm text-3xs",
 	sm: "size-7 rounded-md text-2xs",
 	md: "size-10 rounded-lg text-sm",
 	lg: "size-12 rounded-xl text-base",
@@ -211,10 +205,50 @@ export const companyLogo = <M>(
 
 export type AvatarSize = "sm" | "md"
 
+/** 24 · 32px. */
 const AVATAR_SIZE = {
 	sm: "size-6 text-3xs",
 	md: "size-8 text-xs",
 } as const satisfies Record<AvatarSize, string>
+
+/**
+ * The kit `avatar` (its shape, picture and fill), round, inside a box that carries the size, the
+ * hover name and the stack's ring; the kit has no title or ring of its own.
+ */
+const avatarBox = <M>(
+	h: HtmlBuilder<M>,
+	options: Readonly<{
+		title: string
+		size: AvatarSize
+		className?: string
+		ring?: boolean
+		/** The picture, or what stands in for it (initials, a glyph). */
+		placeholder: Html
+		/** The kit avatar's own fill and text, e.g. an initials tint. */
+		avatarClassName?: string
+	}>,
+): Html =>
+	h.span(
+		[
+			h.Title(options.title),
+			h.Class(
+				twMerge(
+					"inline-flex shrink-0 rounded-full",
+					AVATAR_SIZE[options.size],
+					options.ring === true && "ring-2 ring-bg",
+					options.className,
+				),
+			),
+		],
+		[
+			avatar(h, {
+				size: options.size === "md" ? "sm" : "xs",
+				isSquare: false,
+				placeholder: options.placeholder,
+				className: twMerge("size-full select-none font-semibold", options.avatarClassName),
+			}),
+		],
+	)
 
 /** An owner or assignee: their picture, else initials on a tint; `null` is the dashed "Unassigned". */
 export const personAvatar = <M>(
@@ -222,49 +256,39 @@ export const personAvatar = <M>(
 	person: Readonly<{ name: string; avatarUrl?: string | null }> | null,
 	options: Readonly<{ size?: AvatarSize; className?: string; ring?: boolean }> = {},
 ): Html => {
-	const size = AVATAR_SIZE[options.size ?? "sm"]
-	const ring = options.ring ? "ring-2 ring-bg" : ""
+	const size = options.size ?? "sm"
 	if (person === null)
-		return h.span(
-			[
-				h.Title("Unassigned"),
-				h.Class(
-					twMerge(
-						"inline-flex shrink-0 items-center justify-center rounded-full border border-muted-fg/60 border-dashed text-muted-fg",
-						size,
-						options.className,
-					),
-				),
-			],
-			[IconUser(h, { className: "size-3" })],
-		)
+		return avatarBox(h, {
+			title: "Unassigned",
+			size,
+			className: options.className,
+			placeholder: IconUser(h, { className: "size-3" }),
+			avatarClassName: "border border-muted-fg/60 border-dashed bg-transparent text-muted-fg",
+		})
 	const avatarUrl = safeLogoUrl(person.avatarUrl)
-	return avatarUrl !== null
-		? h.img([
-				h.Src(avatarUrl),
-				h.Alt(""),
-				h.Attribute("referrerpolicy", "no-referrer"),
-				h.Title(person.name),
-				h.Class(twMerge("shrink-0 rounded-full object-cover", size, ring, options.className)),
-			])
-		: h.span(
-				[
-					h.Title(person.name),
-					h.Class(
-						twMerge(
-							"inline-flex shrink-0 select-none items-center justify-center rounded-full font-semibold",
-							size,
-							TINTS[tintIndex(person.name)],
-							ring,
-							options.className,
-						),
+	return avatarBox(h, {
+		title: person.name,
+		size,
+		className: options.className,
+		ring: options.ring,
+		// The kit's `src` sends the referrer; a third-party picture must not learn which page showed it.
+		placeholder:
+			avatarUrl !== null
+				? h.img([
+						h.Src(avatarUrl),
+						h.Alt(""),
+						h.Attribute("referrerpolicy", "no-referrer"),
+						h.Class("size-full rounded-full object-cover"),
+					])
+				: h.span(
+						[],
+						[
+							h.span([h.AriaHidden(true)], [initialsOf(person.name)]),
+							h.span([h.Class("sr-only")], [person.name]),
+						],
 					),
-				],
-				[
-					h.span([h.AriaHidden(true)], [initialsOf(person.name)]),
-					h.span([h.Class("sr-only")], [person.name]),
-				],
-			)
+		avatarClassName: avatarUrl !== null ? undefined : TINTS[tintIndex(person.name)],
+	})
 }
 
 /** `personAvatar` leading a menu item: the dropdown's `avatar` slot sizes it (an `icon` slot is too small). */
@@ -309,20 +333,16 @@ export const avatarStack = <M>(
 			...shown.map((person) => personAvatar(h, person, { ring: true })),
 			...(rest > 0
 				? [
-						h.span(
-							[
-								h.Class(
-									"inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-secondary text-3xs text-secondary-fg ring-2 ring-bg",
-								),
-								h.Title(
-									people
-										.slice(shown.length)
-										.map((person) => person.name)
-										.join(", "),
-								),
-							],
-							[`+${rest}`],
-						),
+						avatarBox(h, {
+							title: people
+								.slice(shown.length)
+								.map((person) => person.name)
+								.join(", "),
+							size: "sm",
+							ring: true,
+							placeholder: h.span([], [`+${rest}`]),
+							avatarClassName: "bg-secondary font-normal text-secondary-fg",
+						}),
 					]
 				: []),
 		],

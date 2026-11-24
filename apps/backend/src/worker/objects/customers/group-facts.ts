@@ -1,8 +1,7 @@
 /**
  * A customer with several environments (`./groups.ts`) is alerted on as one: signals evaluate its
  * primary over the group's combined facts (pure), so "logins stopped" does not fire for one
- * environment while another still has logins. Each account's own facts keep feeding its rollups and
- * health.
+ * environment while another still has logins. Each account's own facts keep feeding its rollups.
  *
  * - Contacts and activity: unioned, a person in several environments counted once (the same email,
  *   case-insensitive, else the same contact); the last active day, ever-active contacts and the
@@ -12,7 +11,6 @@
  *   on each day one of them moved.
  * - Metrics: values (and limits) summed per day. `ENVIRONMENT_TEMPLATES` read an environment's own
  *   (`evaluatedFor` in `./snapshot.ts`), and their signals are stored on it.
- * - Health: the primary's.
  * - The account: the primary's row with MRR, trial list price and seats summed, the earliest first
  *   seen, customer since and trial end, the latest activity, the tags of all, and the most advanced
  *   stage (churned only when every environment is).
@@ -21,7 +19,7 @@ import type { schema } from "@hazel/db"
 import type { Day, LifecycleStage } from "@hazel/domain/customers"
 import type { CustomerContactId } from "@hazel/schema"
 import type { AccountFacts, ContactFacts, MetricPoint } from "./facts"
-import { addDays } from "./time"
+import { addDays } from "@hazel/customer-integrations/kit/time"
 
 const STAGE_RANK = { churned: 0, lead: 1, trialing: 2, past_due: 3, active: 4 } satisfies Record<
 	LifecycleStage,
@@ -224,7 +222,6 @@ export const groupFacts = (
 			]),
 		),
 		movements: groupMovements(group),
-		health: primary.health,
 		openIssueSlas: group.flatMap((facts) => facts.openIssueSlas),
 	}
 }

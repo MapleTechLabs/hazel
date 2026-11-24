@@ -1,3 +1,4 @@
+import { integrations, startingIntegration } from "@hazel/customer-integrations"
 import { CustomerAccountId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { Submodel } from "foldkit"
@@ -6,9 +7,9 @@ import { twMerge } from "tailwind-merge"
 import { formatCount, formatDeltaPct, formatMoney, formatRelative } from "../../../customers/format"
 import { accountLabelOf, nestedIdsOf } from "../../../customers/groups"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
-import { environmentBadge, healthBadge, severityGlyph } from "../../../customers/ui/badges"
+import { environmentBadge, severityGlyph } from "../../../customers/ui/badges"
 import { connectCard } from "../../../customers/ui/connect-card"
-import { dataTable } from "../../../customers/ui/data-table"
+import { dataTable } from "../../../ui/data-table"
 import {
 	addFilterButton,
 	filterBar,
@@ -17,14 +18,14 @@ import {
 	sortTrigger,
 	viewTabs,
 } from "../../../customers/ui/filter-bar"
+import { namesLabel, PROVIDER_ORDER, sourceLabel, startingSource } from "../../../customers/providers"
 import { companyLogo, menuAvatar, personLabel } from "../../../customers/ui/identity"
 import { kbd } from "../../../customers/ui/shortcuts"
 import { dragGhost, sortableList, sortableRow } from "../../../customers/ui/sortable"
 import { lookPicker, viewGlyph } from "../../../customers/ui/view-look"
-import { isInSidebar, layoutOf } from "../../../customers/view-layout"
 import * as Customers from "@hazel/domain/customers"
 import { DragAndDrop } from "@foldkit/ui"
-import { freshness, pageHeader } from "../../../customers/ui/surface"
+import { freshness, pageHeader } from "../../../ui/page-header"
 import {
 	IconClose,
 	IconDots,
@@ -35,13 +36,12 @@ import {
 	IconUser,
 } from "../../../icons"
 import { AppRoute, hrefOf } from "../../../route"
-import { button, buttonClassName } from "../../../ui/button"
+import { ariaButton, button, buttonClassName, iconButton } from "../../../ui/button"
 import { checkbox } from "../../../ui/checkbox"
 import { dialogBody, dialogClose, dialogFooter, dialogHeader } from "../../../ui/dialog"
 import { emptyState } from "../../../ui/empty-state"
 import { input } from "../../../ui/input"
-import * as Menu from "../../../ui/menu"
-import { menuLabel, view as menuView } from "../../../ui/menu-view"
+import { menuLabel } from "../../../ui/menu-view"
 import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
 import type { PageViewInputs } from "../../contract"
@@ -53,12 +53,8 @@ import {
 	accountsPerOwner,
 	activeFields,
 	bestFilterToRemove,
-	canDeleteView,
-	canUpdateView,
-	COLUMN_NAME,
 	ALL_VIEW_KEY,
 	currentTab,
-	effectiveFilters,
 	HOVER_CARD_ID,
 	isEdited,
 	layoutKeyOf,
@@ -72,6 +68,7 @@ import {
 	SEARCH_ID,
 	TAB_LIST_ID,
 	shownColumns,
+	sidebarStateOf,
 	sortEntries,
 	sortLabel,
 	userIdOfOwnerKey,
@@ -80,42 +77,26 @@ import {
 	viewTabCounts,
 	visibleAccounts,
 } from "./model"
-import { shortName, type TableContext, tableColumns } from "./table"
+import { type TableContext, tableColumns } from "./table"
 import { viewerOf } from "./update"
+import { menu } from "../shared-view"
+import { separator } from "../../../ui/separator"
+import { badge } from "../../../ui/badge"
 
-/** The customers list (Wonder: List — all, at risk, filter builder, columns, bulk, hover, no results, first run). */
+/** The customers list (Wonder: List — all, filter builder, columns, bulk, hover, no results, first run). */
 
 const TABLE_ID = "customers-list-table"
 const icon = { attributes: { "data-slot": "icon" } }
-const PROVIDERS = ["clerk", "stripe", "autumn", "maple"] as const
+
+const SHARED_IDS = integrations
+	.flatMap(({ presentation: { name, sharedIdLabel } }) =>
+		sharedIdLabel === undefined ? [] : [`${name} ${sharedIdLabel}`],
+	)
+	.join(", ")
 
 const nameAnchorId = (accountId: string) => `customers-list-name-${accountId}`
 
 // MENUS AND POPOVERS
-
-const menu = (
-	h: HtmlBuilder<Message>,
-	model: Menu.Model,
-	options: Readonly<{
-		entries: ReadonlyArray<Menu.Entry>
-		trigger: (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) => Html
-		content: (key: string) => ReadonlyArray<Html | string>
-		toMessage: (message: Menu.Message) => Message
-		className?: string
-	}>,
-): Html =>
-	h.submodel({
-		slotId: model.id,
-		model,
-		view: menuView,
-		viewInputs: {
-			entries: options.entries,
-			toTrigger: options.trigger,
-			content: options.content,
-			className: options.className,
-		},
-		toParentMessage: options.toMessage,
-	})
 
 const popover = (
 	h: HtmlBuilder<Message>,
@@ -155,7 +136,7 @@ const header = (
 		model.accounts === null
 			? "Loading…"
 			: tab.key === ALL_VIEW_KEY
-				? "Every account from Clerk, Stripe, Autumn and Maple, in one list."
+				? `Every account from ${namesLabel(PROVIDER_ORDER.map(sourceLabel))}, in one list.`
 				: `${formatCount(rows.length)} account${rows.length === 1 ? "" : "s"} in ${tab.name}, worth ${formatMoney(mrr, model.reportingCurrency)} MRR.`
 	return pageHeader(h, {
 		title: "Customers",
@@ -193,7 +174,7 @@ const VIEW_MENU_LABEL = {
 
 const viewMenuLabel = (model: Model, key: string): string =>
 	key === "sidebar"
-		? isInSidebar(layoutOf(model.layout), layoutKeyOf(currentTab(model)))
+		? sidebarStateOf(model, layoutKeyOf(currentTab(model))).isShown
 			? "Hide from sidebar"
 			: "Show in sidebar"
 		: (VIEW_MENU_LABEL[key as keyof typeof VIEW_MENU_LABEL] ?? key)
@@ -432,7 +413,6 @@ const hoverCard = (h: HtmlBuilder<Message>, model: Model, account: AccountRow, v
 							),
 						],
 					),
-					healthBadge(h, { status: account.healthStatus, score: account.healthScore }),
 				],
 			),
 			...companyBlock(h, account),
@@ -527,14 +507,9 @@ const bulkBar = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, total: n
 			),
 		],
 		[
-			h.span(
-				[
-					h.Class(
-						"whitespace-nowrap rounded-md bg-primary-subtle px-2 py-1 font-medium text-primary-subtle-fg tabular-nums",
-					),
-				],
-				[`${formatCount(model.selected.length)} selected`],
-			),
+			badge(h, { intent: "primary", isPill: true, className: "py-1" }, [
+				`${formatCount(model.selected.length)} selected`,
+			]),
 			...(model.selected.length < total
 				? [
 						button(h, { intent: "plain", size: "xs", onPress: Message.PressedSelectAll() }, [
@@ -542,7 +517,7 @@ const bulkBar = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, total: n
 						]),
 					]
 				: []),
-			h.span([h.Class("mx-1 h-5 w-px bg-border max-md:hidden")]),
+			separator(h, { orientation: "vertical", className: "mx-1 h-5 max-md:hidden" }),
 			menu(h, model.ownerMenu, {
 				entries: ownerEntries(model.members, viewer),
 				trigger: (attributes, overlay) =>
@@ -609,14 +584,13 @@ const bulkBar = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, total: n
 									.sort()
 									.slice(0, 12)
 									.map((tag) =>
-										h.button(
-											[
-												h.Type("button"),
-												h.OnClick(Message.SubmittedTag({ tag })),
-												h.Class(
+										ariaButton(
+											h,
+											{
+												onPress: Message.SubmittedTag({ tag }),
+												className:
 													"cursor-pointer rounded bg-secondary px-1.5 py-0.5 text-secondary-fg text-xs hover:bg-secondary/70",
-												),
-											],
+											},
 											[tag],
 										),
 									),
@@ -641,17 +615,16 @@ const bulkBar = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, total: n
 				{ intent: "plain", size: "xs", onPress: Message.PressedExport({ scope: "selected" }) },
 				["Export CSV"],
 			),
-			h.button(
-				[
-					h.Type("button"),
-					h.AriaLabel("Clear selection"),
-					h.OnClick(Message.ClearedSelection()),
+			iconButton(
+				h,
+				{
+					label: "Clear selection",
+					size: "sq-xs",
+					onPress: Message.ClearedSelection(),
 					// A phone: first, beside the count, so the wrapped bar takes two rows, not three.
-					h.Class(
-						"inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-fg hover:bg-secondary hover:text-fg max-md:order-first max-md:size-9",
-					),
-				],
-				[IconClose(h, { className: "size-3.5" })],
+					className: "max-md:order-first",
+				},
+				IconClose(h, { className: "size-3.5" }),
 			),
 		],
 	)
@@ -782,17 +755,16 @@ const firstRun = (h: HtmlBuilder<Message>, orgSlug: string, nowMs: number): Html
 			emptyState(h, {
 				title: "No customers yet",
 				icon: (className) => IconOffice(h, { className }),
-				description:
-					"Connect Clerk first: each organization becomes a customer account and its users become contacts. Stripe, Autumn and Maple then add revenue, limits and usage to the same accounts.",
+				description: `Connect ${startingSource.name} first: each ${startingSource.accountNoun} becomes a customer account and its users become contacts. ${namesLabel(PROVIDER_ORDER.filter((provider) => provider !== startingIntegration.id).map(sourceLabel))} then add revenue, limits and usage to the same accounts.`,
 			}),
 			h.div(
 				[h.Class("mx-auto grid w-full max-w-3xl gap-4 md:grid-cols-2")],
-				PROVIDERS.map((provider) =>
+				PROVIDER_ORDER.map((provider) =>
 					connectCard(h, {
 						provider,
 						now: new Date(nowMs),
 						status: { _tag: "NotConnected", onConnect: Message.PressedConnect({ provider }) },
-						className: provider === "clerk" ? "border-primary" : undefined,
+						className: provider === startingIntegration.id ? "border-primary" : undefined,
 					}),
 				),
 			),
@@ -804,7 +776,7 @@ const firstRun = (h: HtmlBuilder<Message>, orgSlug: string, nowMs: number): Html
 				],
 				[
 					h.span([h.Class("mr-2 font-medium text-fg")], ["How sources merge"]),
-					"Records join an account by shared ID first (Stripe metadata.clerk_org_id, Autumn customer ID, Maple GroupId), then by domain. Anything left over waits in Data sources for you to link by hand.",
+					`Records join an account by shared ID first (${SHARED_IDS}), then by domain. Anything left over waits in Data sources for you to link by hand.`,
 				],
 			),
 		],
@@ -972,7 +944,8 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 				],
 			),
 			h.div(
-				[h.Class("mt-3 pb-24")],
+				// Room under the last row for the bulk bar, which floats over the bottom.
+				[h.Class(model.selected.length > 0 ? "mt-3 pb-24" : "mt-3 pb-6")],
 				[
 					hasNoResults
 						? h.div([], [table(h, model, viewer, [], orgSlug), noResults(h, model, viewer)])

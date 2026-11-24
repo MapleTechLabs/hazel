@@ -1,3 +1,4 @@
+import { DEFAULT_ATTENTION_SETTINGS, defaultConfigOf } from "@hazel/customer-integrations"
 import {
 	type Account,
 	type AccountDetail,
@@ -7,13 +8,8 @@ import {
 	type Connection,
 	type ContactRow,
 	type CustomersRange,
-	DEFAULT_CONNECTION_CONFIG,
-	DEFAULT_ATTENTION_SETTINGS,
 	DEFAULT_BUSINESS_HOURS,
-	DEFAULT_HEALTH_SETTINGS,
 	EMPTY_SYNC_STATS,
-	type HealthDistributionRow,
-	type HealthStatus,
 	type LifecycleStage,
 	type MrrMovementBucket,
 	type OverviewResult,
@@ -45,14 +41,14 @@ import {
 	UserId,
 } from "@hazel/schema"
 import { Schema } from "effect"
+import { ACTIVITY, DIRECTORY, INVOICES } from "./customers-demo-sources"
 
 /**
  * Customers lab fixtures: one fictional org, internally consistent with the Wonder designs.
  *
  * - `NOW` is fixed (Tue 10 Nov 2026, 12:00 UTC); every age and date is relative to it.
- * - 214 accounts, $48,210 MRR: healthy 142 ($35,980) · at risk 41 ($8,140) · critical 18 ($3,310)
- *   · unknown 13 ($780). The ~20 named accounts carry the edge cases (huge MRR, trial with no MRR,
- *   churned, past due, long name, no logo); the rest are generated (seeded) to hit those totals.
+ * - 214 accounts, $48,210 MRR. The ~20 named accounts carry the edge cases (huge MRR, trial with no
+ *   MRR, churned, past due, long name, no logo); the rest are generated (seeded) to hit those totals.
  * - Signals cover every evidence viz and every status.
  * - Typed against `@hazel/domain/customers`, so a contract change breaks here first.
  */
@@ -117,8 +113,6 @@ type AccountSeed = Readonly<{
 	domain: string | null
 	plan: string | null
 	mrr: number
-	health: HealthStatus
-	score: number | null
 	stage?: LifecycleStage
 	owner?: TeamMember | null
 	contacts?: number
@@ -317,9 +311,6 @@ const makeAccount = (seed: AccountSeed, n: number): Account => {
 		trialListMrrMinor: seed.trialListMrr === undefined ? null : seed.trialListMrr * 100,
 		trialEndsAt:
 			seed.trialEndsInDays === undefined ? null : new Date(NOW.getTime() + seed.trialEndsInDays * DAY),
-		healthScore: seed.score,
-		healthStatus: seed.health,
-		healthUpdatedAt: ago(HOUR),
 		seatsUsed: seed.seats?.[0] ?? null,
 		seatsLimit: seed.seats?.[1] ?? null,
 		contactCount: seed.contacts ?? 8,
@@ -349,7 +340,7 @@ const makeAccount = (seed: AccountSeed, n: number): Account => {
 		attentionMutedAt: null,
 		attentionMutedUntil: null,
 		attentionMutedByUserId: null,
-		fieldSources: { name: "clerk", mrrMinor: "stripe", lastActiveAt: "maple" },
+		fieldSources: { name: DIRECTORY.id, mrrMinor: INVOICES.id, lastActiveAt: ACTIVITY.id },
 		primaryAccountId: null,
 		environment: null,
 		companyProfile: profile,
@@ -368,8 +359,6 @@ const NAMED_SEEDS = {
 		domain: "northwind.dev",
 		plan: "Scale",
 		mrr: 4_800,
-		health: "healthy",
-		score: 82,
 		owner: MAYA,
 		contacts: 51,
 		active30d: 42,
@@ -385,8 +374,6 @@ const NAMED_SEEDS = {
 		domain: "acmerobotics.io",
 		plan: "Growth",
 		mrr: 2_150,
-		health: "at_risk",
-		score: 54,
 		stage: "past_due",
 		owner: JONAS,
 		contacts: 24,
@@ -403,8 +390,6 @@ const NAMED_SEEDS = {
 		domain: "kestrel.so",
 		plan: "Scale",
 		mrr: 1_320,
-		health: "critical",
-		score: 27,
 		owner: MAYA,
 		contacts: 14,
 		active30d: 9,
@@ -420,8 +405,6 @@ const NAMED_SEEDS = {
 		domain: "brightfield.co",
 		plan: "Trial",
 		mrr: 0,
-		health: "unknown",
-		score: null,
 		stage: "trialing",
 		owner: null,
 		contacts: 7,
@@ -439,8 +422,6 @@ const NAMED_SEEDS = {
 		domain: "halcyonhealth.com",
 		plan: "Enterprise",
 		mrr: 8_900,
-		health: "healthy",
-		score: 91,
 		owner: DANA,
 		contacts: 212,
 		active30d: 168,
@@ -455,8 +436,6 @@ const NAMED_SEEDS = {
 		domain: "oakridge-logistics.com",
 		plan: null,
 		mrr: 0,
-		health: "unknown",
-		score: null,
 		stage: "churned",
 		owner: JONAS,
 		contacts: 9,
@@ -471,8 +450,6 @@ const NAMED_SEEDS = {
 		domain: "ciwmh.de",
 		plan: "Growth",
 		mrr: 640,
-		health: "at_risk",
-		score: 48,
 		owner: PRIYA,
 		contacts: 33,
 		active30d: 11,
@@ -485,8 +462,6 @@ const NAMED_SEEDS = {
 		domain: null,
 		plan: null,
 		mrr: 0,
-		health: "unknown",
-		score: null,
 		stage: "lead",
 		owner: null,
 		contacts: 2,
@@ -500,8 +475,6 @@ const NAMED_SEEDS = {
 		domain: "lumen.health",
 		plan: "Growth",
 		mrr: 890,
-		health: "at_risk",
-		score: 61,
 		owner: DANA,
 		contacts: 19,
 		active30d: 12,
@@ -514,8 +487,6 @@ const NAMED_SEEDS = {
 		domain: "fernway.app",
 		plan: "Starter",
 		mrr: 380,
-		health: "critical",
-		score: 36,
 		owner: PRIYA,
 		contacts: 6,
 		active30d: 2,
@@ -528,8 +499,6 @@ const NAMED_SEEDS = {
 		domain: "quarrylabs.io",
 		plan: "Growth",
 		mrr: 1_150,
-		health: "healthy",
-		score: 88,
 		owner: MAYA,
 		contacts: 26,
 		active30d: 20,
@@ -543,8 +512,6 @@ const NAMED_SEEDS = {
 		domain: "tidewater.co",
 		plan: "Starter",
 		mrr: 290,
-		health: "critical",
-		score: 31,
 		owner: JONAS,
 		contacts: 5,
 		active30d: 1,
@@ -559,8 +526,6 @@ const NAMED_SEEDS = {
 		domain: "marlowfinch.com",
 		plan: "Growth",
 		mrr: 760,
-		health: "at_risk",
-		score: 57,
 		owner: MAYA,
 		contacts: 17,
 		active30d: 10,
@@ -573,8 +538,6 @@ const NAMED_SEEDS = {
 		domain: "vantablack.studio",
 		plan: "Scale",
 		mrr: 990,
-		health: "critical",
-		score: 22,
 		stage: "past_due",
 		owner: DANA,
 		contacts: 11,
@@ -588,8 +551,6 @@ const NAMED_SEEDS = {
 		domain: "cobaltfreight.com",
 		plan: "Growth",
 		mrr: 520,
-		health: "at_risk",
-		score: 49,
 		owner: MAYA,
 		contacts: 15,
 		active30d: 6,
@@ -601,8 +562,6 @@ const NAMED_SEEDS = {
 		domain: "juniper.ai",
 		plan: "Growth",
 		mrr: 690,
-		health: "healthy",
-		score: 76,
 		owner: MAYA,
 		contacts: 12,
 		active30d: 10,
@@ -614,8 +573,6 @@ const NAMED_SEEDS = {
 		domain: "ridgeview.partners",
 		plan: "Starter",
 		mrr: 310,
-		health: "at_risk",
-		score: 52,
 		owner: PRIYA,
 		contacts: 4,
 		active30d: 2,
@@ -627,8 +584,6 @@ const NAMED_SEEDS = {
 		domain: "sable.dev",
 		plan: "Starter",
 		mrr: 480,
-		health: "healthy",
-		score: 79,
 		owner: JONAS,
 		contacts: 9,
 		active30d: 7,
@@ -641,8 +596,6 @@ const NAMED_SEEDS = {
 		domain: "acmerobotics.io",
 		plan: "Growth",
 		mrr: 640,
-		health: "healthy",
-		score: 78,
 		owner: JONAS,
 		contacts: 9,
 		active30d: 8,
@@ -656,8 +609,6 @@ const NAMED_SEEDS = {
 		domain: "halcyonhealth.com",
 		plan: "Enterprise",
 		mrr: 3_200,
-		health: "healthy",
-		score: 86,
 		owner: DANA,
 		contacts: 64,
 		active30d: 51,
@@ -672,8 +623,6 @@ const NAMED_SEEDS = {
 		domain: "halcyonhealth.com",
 		plan: null,
 		mrr: 0,
-		health: "unknown",
-		score: null,
 		stage: "lead",
 		owner: DANA,
 		contacts: 6,
@@ -766,17 +715,55 @@ const SUFFIXES = [
 const PLANS_BY_MRR = (mrr: number): string | null =>
 	mrr === 0 ? null : mrr < 150 ? "Starter" : mrr < 700 ? "Growth" : mrr < 3_000 ? "Scale" : "Enterprise"
 
-/** Status → [count, MRR] the whole book must reach (the overview's health distribution). */
-export const HEALTH_TOTALS = {
-	healthy: [142, 35_980],
-	at_risk: [41, 8_140],
-	critical: [18, 3_310],
-	unknown: [13, 780],
-} as const satisfies Record<HealthStatus, readonly [count: number, mrr: number]>
+/**
+ * The generated book by engagement: accounts, their MRR ($), the share of contacts active (null:
+ * never active), how far the trend leans down, the longest idle time, and the open risk they carry.
+ */
+const COHORTS: ReadonlyArray<
+	Readonly<{
+		count: number
+		mrr: number
+		activeShare: number | null
+		trendDown: number
+		idleHours: number
+		risk: readonly [high: number, medium: number, low: number]
+		hasFreeAccounts?: boolean
+		hasPastDue?: boolean
+	}>
+> = [
+	{ count: 135, mrr: 16_120, activeShare: 0.7, trendDown: 15, idleHours: 48, risk: [0, 0, 0] },
+	{
+		count: 35,
+		mrr: 2_870,
+		activeShare: 0.4,
+		trendDown: 40,
+		idleHours: 240,
+		risk: [0, 1, 0],
+		hasFreeAccounts: true,
+	},
+	{
+		count: 14,
+		mrr: 330,
+		activeShare: 0.15,
+		trendDown: 40,
+		idleHours: 600,
+		risk: [1, 0, 0],
+		hasFreeAccounts: true,
+		hasPastDue: true,
+	},
+	{
+		count: 9,
+		mrr: 780,
+		activeShare: null,
+		trendDown: 0,
+		idleHours: 0,
+		risk: [0, 0, 0],
+		hasFreeAccounts: true,
+	},
+]
 
 const generated = (() => {
 	const random = prng(214)
-	const named = Object.values(NAMED_SEEDS) as ReadonlyArray<AccountSeed>
 	const seeds: Array<AccountSeed> = []
 	let nameIndex = 0
 	const nextName = () => {
@@ -784,43 +771,25 @@ const generated = (() => {
 		nameIndex += 1
 		return name
 	}
-	for (const status of ["healthy", "at_risk", "critical", "unknown"] as const) {
-		const [count, mrr] = HEALTH_TOTALS[status]
-		const own = named.filter((seed) => seed.health === status)
-		const remainingCount = count - own.length
-		const remainingMrr = mrr - own.reduce((sum, seed) => sum + seed.mrr, 0)
-		// Weights skewed small (most accounts are small), some at $0 for critical/unknown leads.
-		const weights = Array.from({ length: remainingCount }, () => {
+	for (const cohort of COHORTS) {
+		const { activeShare } = cohort
+		// Weights skewed small (most accounts are small), some at $0 for leads.
+		const weights = Array.from({ length: cohort.count }, () => {
 			const roll = random()
-			return status !== "healthy" && roll < 0.3 ? 0 : roll ** 2.2 + 0.05
+			return cohort.hasFreeAccounts === true && roll < 0.3 ? 0 : roll ** 2.2 + 0.05
 		})
 		const total = weights.reduce((sum, weight) => sum + weight, 0)
 		// Whole $10 steps rounded down; the biggest account takes the remainder, so the total is exact.
-		const mrrs = weights.map((weight) => Math.floor(((weight / total) * remainingMrr) / 10) * 10)
+		const mrrs = weights.map((weight) => Math.floor(((weight / total) * cohort.mrr) / 10) * 10)
 		const biggest = weights.indexOf(Math.max(...weights))
-		const remainder = remainingMrr - mrrs.reduce((sum, value) => sum + value, 0)
+		const remainder = cohort.mrr - mrrs.reduce((sum, value) => sum + value, 0)
 		const exact = mrrs.map((value, index) => (index === biggest ? value + remainder : value))
 		exact.forEach((accountMrr, index) => {
 			const name = nextName()
-			const scoreBase = status === "healthy" ? 70 : status === "at_risk" ? 40 : 5
-			const score =
-				status === "unknown"
-					? null
-					: scoreBase +
-						Math.floor(random() * (status === "healthy" ? 30 : status === "at_risk" ? 30 : 35))
 			const contacts = 2 + Math.floor(random() * (accountMrr / 40 + 6))
-			const active =
-				status === "unknown"
-					? 0
-					: Math.max(
-							1,
-							Math.round(
-								contacts * (status === "healthy" ? 0.7 : status === "at_risk" ? 0.4 : 0.15),
-							),
-						)
 			const stage: LifecycleStage =
 				accountMrr > 0
-					? status === "critical" && index % 5 === 0
+					? cohort.hasPastDue === true && index % 5 === 0
 						? "past_due"
 						: "active"
 					: index % 3 === 0
@@ -831,22 +800,13 @@ const generated = (() => {
 				domain: `${name.toLowerCase().replace(/[^a-z0-9]+/g, "")}.com`,
 				plan: stage === "trialing" ? "Trial" : PLANS_BY_MRR(accountMrr),
 				mrr: accountMrr,
-				health: status,
-				score,
 				stage,
 				contacts,
-				active30d: active,
+				active30d: activeShare === null ? 0 : Math.max(1, Math.round(contacts * activeShare)),
 				trendPct:
-					status === "unknown"
-						? null
-						: Math.round((random() * 60 - (status === "healthy" ? 15 : 40)) * 10) / 10,
-				lastActiveHours:
-					status === "unknown"
-						? null
-						: Math.round(
-								random() * (status === "healthy" ? 48 : status === "at_risk" ? 240 : 600),
-							),
-				risk: status === "critical" ? [1, 0, 0] : status === "at_risk" ? [0, 1, 0] : [0, 0, 0],
+					activeShare === null ? null : Math.round((random() * 60 - cohort.trendDown) * 10) / 10,
+				lastActiveHours: activeShare === null ? null : Math.round(random() * cohort.idleHours),
+				risk: cohort.risk,
 				trialEndsInDays: stage === "trialing" ? 1 + Math.floor(random() * 13) : undefined,
 				trialListMrr: stage === "trialing" ? 290 : undefined,
 			})
@@ -1106,25 +1066,21 @@ const SIGNAL_SEEDS: ReadonlyArray<SignalSeed> = [
 	},
 	{
 		account: "fernway",
-		template: "health_drop",
+		template: "usage_drop",
 		severity: "medium",
-		title: "Health dropped",
-		reason: "Health fell 36 points in 7 days, from 72 to 36",
+		reason: "Daily active users down 55% (7-day avg 2 vs 4.4 before)",
 		priority: 5.8,
 		openedDaysAgo: 2,
 		evidence: {
-			_tag: "delta",
+			_tag: "series",
 			step: 1,
-			unit: "points",
-			from: 72,
-			to: 36,
-			changePct: -50,
-			currency: null,
-			effectiveAt: null,
-			fromLabel: null,
-			toLabel: null,
-			reason: null,
-			series: series([72, 70, 66, 58, 51, 44, 40, 36]),
+			metricKey: "active_users",
+			recentAvg: 2,
+			baselineAvg: 4.4,
+			changePct: -54.5,
+			recentDays: 7,
+			baselineDays: 28,
+			series: dropSeries(4.4, 2, 17),
 		},
 	},
 	{
@@ -1252,27 +1208,23 @@ const SIGNAL_SEEDS: ReadonlyArray<SignalSeed> = [
 	},
 	{
 		account: "ridgeview",
-		template: "health_drop",
+		template: "usage_drop",
 		severity: "low",
 		status: "dismissed",
-		title: "Health dropped",
-		reason: "Health fell 21 points in 7 days, from 73 to 52",
+		reason: "Daily active users down 29% (7-day avg 1.7 vs 2.4 before)",
 		priority: 2.2,
 		openedDaysAgo: 9,
 		resolvedDaysAgo: 6,
 		evidence: {
-			_tag: "delta",
+			_tag: "series",
 			step: 0,
-			unit: "points",
-			from: 73,
-			to: 52,
-			changePct: -28.8,
-			currency: null,
-			effectiveAt: null,
-			fromLabel: null,
-			toLabel: null,
-			reason: null,
-			series: [],
+			metricKey: "active_users",
+			recentAvg: 1.7,
+			baselineAvg: 2.4,
+			changePct: -29.2,
+			recentDays: 7,
+			baselineDays: 28,
+			series: dropSeries(2.4, 1.7, 19),
 		},
 	},
 	{
@@ -1347,7 +1299,7 @@ export const RULES: ReadonlyArray<SignalRule> = (Object.keys(TEMPLATES) as Reado
 			config: meta.defaultConfig,
 			scope: {},
 			// One rule off, so the rules list shows a disabled row.
-			enabled: template !== "health_drop",
+			enabled: template !== "churned",
 			createdBy: null,
 			updatedBy: null,
 			lastTriggeredAt: matching > 0 ? daysAgo(1) : null,
@@ -1362,7 +1314,6 @@ export const RULES: ReadonlyArray<SignalRule> = (Object.keys(TEMPLATES) as Reado
 export const SETTINGS: Settings = {
 	id: Schema.decodeSync(CustomerSettingsId)(uuid(22, 1)),
 	organizationId: ORGANIZATION_ID,
-	health: DEFAULT_HEALTH_SETTINGS,
 	attention: DEFAULT_ATTENTION_SETTINGS,
 	reportingCurrency: CURRENCY,
 	addOnPlans: [],
@@ -1389,7 +1340,7 @@ const connection = (
 	status: "active",
 	externalAccountId: null,
 	externalAccountName: null,
-	config: DEFAULT_CONNECTION_CONFIG[provider],
+	config: defaultConfigOf(provider),
 	connectedBy: MAYA.id,
 	connectedAt: daysAgo(120),
 	hasWebhookSecret: true,
@@ -1407,43 +1358,46 @@ const connection = (
 	...overrides,
 })
 
-/** Clerk connected, Stripe syncing, Maple failing; Autumn is not connected (no row). */
-export const CLERK_CONNECTION = connection(1, "clerk", {
+/** The directory connected, invoices syncing, activity failing; plans not connected (no row). */
+export const DIRECTORY_CONNECTION = connection(1, DIRECTORY.id, {
 	externalAccountName: "Hazel production",
 	stats: { ...EMPTY_SYNC_STATS, accounts: 214, contacts: 1_862, events: 48_210 },
 })
-export const STRIPE_CONNECTION = connection(2, "stripe", {
+export const INVOICES_CONNECTION = connection(2, INVOICES.id, {
 	externalAccountName: "Hazel Inc.",
 	lastSyncAt: ago(2 * 60_000),
 	stats: { ...EMPTY_SYNC_STATS, accounts: 198, subscriptions: 203, invoices: 1_204 },
 })
-/** When Maple's sync last failed. */
-export const MAPLE_ERROR_AT = ago(2 * HOUR)
-export const MAPLE_CONNECTION = connection(4, "maple", {
+/** When the activity source's sync last failed. */
+export const ACTIVITY_ERROR_AT = ago(2 * HOUR)
+export const ACTIVITY_CONNECTION = connection(4, ACTIVITY.id, {
 	status: "error",
 	lastSyncAt: ago(2 * HOUR),
 	lastSuccessAt: new Date("2026-11-09T18:42:00Z"),
-	lastErrorAt: MAPLE_ERROR_AT,
+	lastErrorAt: ACTIVITY_ERROR_AT,
 	lastError: { code: "auth", message: "API key was revoked.", httpStatus: 401 },
 	consecutiveFailures: 3,
-	config: DEFAULT_CONNECTION_CONFIG.maple,
 })
-export const CONNECTIONS: ReadonlyArray<Connection> = [CLERK_CONNECTION, STRIPE_CONNECTION, MAPLE_CONNECTION]
+export const CONNECTIONS: ReadonlyArray<Connection> = [
+	DIRECTORY_CONNECTION,
+	INVOICES_CONNECTION,
+	ACTIVITY_CONNECTION,
+]
 
-/** The Stripe backfill in flight. */
-export const STRIPE_PROGRESS: SyncProgress = { step: "invoices", done: 1_204, total: 3_310 }
+/** The invoice source's backfill in flight. */
+export const INVOICES_PROGRESS: SyncProgress = { step: "invoices", done: 1_204, total: 3_310 }
 
 export const SYNC_RUNS: ReadonlyArray<SyncRun> = [
 	{
 		id: Schema.decodeSync(CustomerSyncRunId)(uuid(24, 1)),
 		organizationId: ORGANIZATION_ID,
-		connectionId: STRIPE_CONNECTION.id,
-		provider: "stripe",
+		connectionId: INVOICES_CONNECTION.id,
+		provider: INVOICES.id,
 		trigger: "backfill",
 		status: "running",
 		startedAt: ago(6 * 60_000),
 		finishedAt: null,
-		progress: STRIPE_PROGRESS,
+		progress: INVOICES_PROGRESS,
 		stats: { ...EMPTY_SYNC_STATS, invoices: 1_204 },
 		error: null,
 		cursor: "in_1Q8f2Lk",
@@ -1520,10 +1474,6 @@ const activeUsersDaily = (days: number): ReadonlyArray<ActiveUsersPoint> => {
 
 const bucketed = (points: ReadonlyArray<ActiveUsersPoint>, every: number): ReadonlyArray<ActiveUsersPoint> =>
 	points.filter((_, index) => (points.length - 1 - index) % every === 0)
-
-export const HEALTH_DISTRIBUTION: ReadonlyArray<HealthDistributionRow> = (
-	["healthy", "at_risk", "critical", "unknown"] as const
-).map((status) => ({ status, count: HEALTH_TOTALS[status][0], mrrMinor: HEALTH_TOTALS[status][1] * 100 }))
 
 const brief = (key: NamedAccount, at: Date) => {
 	const account = ACCOUNTS_BY_KEY[key]
@@ -1608,7 +1558,6 @@ export const overviewFixture = (
 		},
 		mrrMovements: billing ? mrrMovements : [],
 		activeUsers,
-		healthDistribution: HEALTH_DISTRIBUTION,
 		topMovers: {
 			gainers: [
 				mover("quarry", 5.6, 14, [8, 9, 9, 11, 12, 14, 15, 17, 18, 20]),
@@ -1660,7 +1609,7 @@ const contactRow = (
 		signInCount30d: signIns,
 		eventCount30d: signIns * 41,
 		attributes: {},
-		fieldSources: { email: "clerk" },
+		fieldSources: { email: DIRECTORY.id },
 		createdAt: daysAgo(400),
 		updatedAt: daysAgo(1),
 		deletedAt: null,
@@ -1671,6 +1620,7 @@ const contactRow = (
 			lastSeenDays !== null && 29 - index >= lastSeenDays ? (index * 7 + n * 3) % 9 : 0,
 		),
 	),
+	otherAccounts: [],
 })
 
 export const ACME_DETAIL: AccountDetail = {
@@ -1678,15 +1628,14 @@ export const ACME_DETAIL: AccountDetail = {
 	refs: [
 		{
 			id: Schema.decodeSync(CustomerExternalRefId)(uuid(31, 1)),
-			connectionId: CLERK_CONNECTION.id,
-			provider: "clerk",
+			connectionId: DIRECTORY_CONNECTION.id,
+			provider: DIRECTORY.id,
 			entityType: "account",
 			entityId: ACCOUNTS_BY_KEY.acme.id,
 			accountId: ACCOUNTS_BY_KEY.acme.id,
 			externalId: "org_2acmeRobotics",
 			name: "Acme Robotics",
-			externalUrl:
-				"https://dashboard.clerk.com/apps/app_hazel/instances/ins_prod/organizations/org_2acmeRobotics",
+			externalUrl: DIRECTORY.demo.accountUrl("org_2acmeRobotics", "lab"),
 			matchMethod: "created",
 			matchedByUserId: null,
 			matchedAt: daysAgo(410),
@@ -1697,14 +1646,14 @@ export const ACME_DETAIL: AccountDetail = {
 		},
 		{
 			id: Schema.decodeSync(CustomerExternalRefId)(uuid(31, 2)),
-			connectionId: STRIPE_CONNECTION.id,
-			provider: "stripe",
+			connectionId: INVOICES_CONNECTION.id,
+			provider: INVOICES.id,
 			entityType: "account",
 			entityId: ACCOUNTS_BY_KEY.acme.id,
 			accountId: ACCOUNTS_BY_KEY.acme.id,
 			externalId: "cus_Q8f2Lk",
 			name: "Acme Robotics Inc.",
-			externalUrl: "https://dashboard.stripe.com/customers/cus_Q8f2Lk",
+			externalUrl: INVOICES.demo.customerUrl("cus_Q8f2Lk"),
 			matchMethod: "shared_id",
 			matchedByUserId: null,
 			matchedAt: daysAgo(400),
@@ -1718,7 +1667,7 @@ export const ACME_DETAIL: AccountDetail = {
 		{
 			id: Schema.decodeSync(CustomerSubscriptionId)(uuid(32, 1)),
 			accountId: ACCOUNTS_BY_KEY.acme.id,
-			provider: "stripe",
+			provider: INVOICES.id,
 			externalId: "sub_1Q8f2LkAcme",
 			planName: "Growth",
 			status: "past_due",
@@ -1744,7 +1693,7 @@ export const ACME_DETAIL: AccountDetail = {
 			id: Schema.decodeSync(CustomerInvoiceId)(uuid(33, 1)),
 			accountId: ACCOUNTS_BY_KEY.acme.id,
 			subscriptionId: Schema.decodeSync(CustomerSubscriptionId)(uuid(32, 1)),
-			provider: "stripe",
+			provider: INVOICES.id,
 			externalId: "in_1Q8f2LkAcme",
 			number: "INV-2041",
 			status: "open",
@@ -1757,54 +1706,11 @@ export const ACME_DETAIL: AccountDetail = {
 			attemptCount: 3,
 			nextRetryAt: new Date(NOW.getTime() + 2 * DAY),
 			declineReason: "Card declined: insufficient funds",
-			hostedUrl: "https://invoice.stripe.com/i/acct_hazel/in_1Q8f2LkAcme",
+			hostedUrl: INVOICES.demo.invoiceUrl("in_1Q8f2LkAcme", "lab"),
 			createdAt: daysAgo(39),
 			updatedAt: daysAgo(1),
 		},
 	],
-	health: {
-		score: 54,
-		status: "at_risk",
-		components: [
-			{
-				key: "usage",
-				score: 55,
-				weight: 35,
-				effectiveWeight: 35,
-				excluded: false,
-				why: "18 of 24 contacts active in 30 days; trend −22%",
-			},
-			{
-				key: "engagement",
-				score: 90,
-				weight: 25,
-				effectiveWeight: 25,
-				excluded: false,
-				why: "Last active 3 days ago",
-			},
-			{
-				key: "billing",
-				score: 20,
-				weight: 25,
-				effectiveWeight: 25,
-				excluded: false,
-				why: "Subscription past due; INV-2041 9 days overdue",
-			},
-			{
-				key: "signals",
-				score: 70,
-				weight: 15,
-				effectiveWeight: 15,
-				excluded: false,
-				why: "1 open high-severity risk signal",
-			},
-		],
-	},
-	healthSeries: series(
-		Array.from({ length: 90 }, (_, index) =>
-			index < 75 ? 72 + ((index * 5) % 7) : 72 - (index - 74) * 1.2,
-		).map(Math.round),
-	),
 	activeUsersSeries: series(
 		Array.from({ length: 30 }, (_, index) =>
 			Math.max(3, Math.round(14 - index * 0.25 + ((index * 7) % 5))),
@@ -1820,7 +1726,7 @@ export const ACME_DETAIL: AccountDetail = {
 			id: Schema.decodeSync(CustomerEventId)(uuid(34, 1)),
 			accountId: ACCOUNTS_BY_KEY.acme.id,
 			contactId: null,
-			provider: "stripe",
+			provider: INVOICES.id,
 			type: "invoice.payment_failed",
 			title: "Payment failed for INV-2041 ($2,150.00)",
 			data: { attempt: 3 },
@@ -1846,12 +1752,12 @@ export const ACME_DETAIL: AccountDetail = {
 			id: Schema.decodeSync(CustomerEventId)(uuid(34, 3)),
 			accountId: ACCOUNTS_BY_KEY.acme.id,
 			contactId: null,
-			provider: "clerk",
+			provider: DIRECTORY.id,
 			type: "contact.joined",
 			title: "Omar Haddad joined",
 			data: {},
 			occurredAt: daysAgo(15),
-			externalId: "evt_clerk_1",
+			externalId: `evt_${DIRECTORY.id}_1`,
 			actorUserId: null,
 			createdAt: daysAgo(15),
 		},

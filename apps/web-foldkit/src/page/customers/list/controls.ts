@@ -1,13 +1,13 @@
 import * as Customers from "@hazel/domain/customers"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { distributionBar } from "../../../customers/charts/distribution"
 import { currencySymbol, formatCount, formatMoney, toMajor, toMinor } from "../../../customers/format"
+import { namesLabel, providerOf, usageSources } from "../../../customers/providers"
 import type { AccountRow, MemberRow } from "../../../customers/queries"
 import { countryFlag, countryNameOf, fundingStageLabel } from "../../../customers/company"
-import { HEALTH_FILL, HEALTH_LABEL, STAGE_LABEL } from "../../../customers/ui/badges"
+import { STAGE_LABEL } from "../../../customers/ui/badges"
 import { IconChevronDown, IconChevronRight } from "../../../icons"
-import { button } from "../../../ui/button"
+import { ariaButton, button, iconButton } from "../../../ui/button"
 import { checkbox } from "../../../ui/checkbox"
 import { input } from "../../../ui/input"
 import { switchControl } from "../../../ui/switch"
@@ -28,6 +28,7 @@ import {
 	type Viewer,
 	withFilter,
 } from "./model"
+import { label as fieldLabel } from "../../../ui/field"
 
 /** The filter builder's panes, the chips' wording and the column picker. */
 
@@ -36,7 +37,6 @@ const FIELD_LABEL = {
 	plan: "Plan",
 	owner: "Owner",
 	tag: "Tag",
-	health: "Health",
 	mrr: "MRR",
 	last_active: "Last active",
 	signals: "Open risk signals",
@@ -44,14 +44,13 @@ const FIELD_LABEL = {
 	company_size: "Company size",
 	country: "HQ country",
 	funding: "Funding stage",
-} as const satisfies Record<FilterField, string>
+} satisfies Record<FilterField, string>
 
 const FIELD_KIND = {
 	stage: "Select",
 	plan: "Select",
 	owner: "Person",
 	tag: "Select",
-	health: "Status",
 	mrr: "Amount",
 	last_active: "Date",
 	signals: "Yes / no",
@@ -59,11 +58,11 @@ const FIELD_KIND = {
 	company_size: "Select",
 	country: "Select",
 	funding: "Select",
-} as const satisfies Record<FilterField, string>
+} satisfies Record<FilterField, string>
 
 const FIELD_GROUPS: ReadonlyArray<readonly [string, ReadonlyArray<FilterField>]> = [
 	["Account", ["stage", "plan", "owner", "tag"]],
-	["Health and usage", ["health", "last_active"]],
+	["Usage", ["last_active"]],
 	["Revenue", ["mrr"]],
 	["Signals", ["signals"]],
 	["Company", ["industry", "company_size", "country", "funding"]],
@@ -74,15 +73,14 @@ const FIELD_DESCRIPTION = {
 	plan: "The plan of its largest subscription.",
 	owner: "Who in your team looks after the account.",
 	tag: "Tags your team added.",
-	health: "The account's health band from its latest score.",
 	mrr: "Monthly recurring revenue, in your reporting currency.",
-	last_active: "Most recent activity from any contact, from Maple events and Clerk sign-ins.",
+	last_active: `Most recent activity from any contact, from ${namesLabel(usageSources.map((source) => [providerOf(source).name, providerOf(source).activityLabel?.noun].filter(Boolean).join(" ")))}.`,
 	signals: "Whether the account has an open risk signal now.",
 	industry: "The company's industry, from its enriched profile.",
 	company_size: "The company's headcount, from its enriched profile.",
 	country: "Where the company has its headquarters, from its enriched profile.",
 	funding: "The company's latest funding stage, from its enriched profile.",
-} as const satisfies Record<FilterField, string>
+} satisfies Record<FilterField, string>
 
 // CHIPS
 
@@ -106,8 +104,6 @@ export const chipOf = (
 	switch (field) {
 		case "stage":
 			return anyOf(filters.lifecycleStages?.map((stage) => STAGE_LABEL[stage]))
-		case "health":
-			return anyOf(filters.healthStatuses?.map((status) => HEALTH_LABEL[status]))
 		case "plan":
 			return anyOf(filters.planNames)
 		case "tag":
@@ -200,19 +196,16 @@ const radio = (
 	isSelected: boolean,
 	next: Customers.ViewFilters,
 ): Html =>
-	h.button(
-		[
-			h.Type("button"),
-			h.Role("radio"),
-			h.AriaChecked(isSelected),
-			h.OnClick(Message.ChangedPendingFilters({ filters: next })),
-			h.Class(
-				twMerge(
-					"flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border px-2.5 text-left text-sm outline-hidden hover:bg-wash focus-visible:ring-2 focus-visible:ring-ring/70",
-					isSelected && "border-primary bg-primary-subtle/40",
-				),
+	ariaButton(
+		h,
+		{
+			onPress: Message.ChangedPendingFilters({ filters: next }),
+			className: twMerge(
+				"flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border px-2.5 text-left text-sm outline-hidden hover:bg-wash focus-visible:ring-2 focus-visible:ring-ring/70",
+				isSelected && "border-primary bg-primary-subtle/40",
 			),
-		],
+			attributes: [h.Role("radio"), h.AriaChecked(isSelected)],
+		},
 		[
 			h.span(
 				[
@@ -235,25 +228,22 @@ const numberField = (
 	value: number | undefined,
 	onInput: (value: number | undefined) => Customers.ViewFilters,
 ): Html =>
-	h.label(
-		[h.Class("flex flex-col gap-1 text-muted-fg text-xs")],
-		[
-			label,
-			input(h, {
-				attributes: [
-					h.Type("number"),
-					h.Attribute("min", "0"),
-					h.Value(value === undefined ? "" : String(value)),
-					h.OnInput((raw) => {
-						const parsed = Number.parseFloat(raw)
-						return Message.ChangedPendingFilters({
-							filters: onInput(raw.trim() === "" || Number.isNaN(parsed) ? undefined : parsed),
-						})
-					}),
-				],
-			}),
-		],
-	)
+	fieldLabel(h, { className: "flex flex-col gap-1 text-muted-fg text-xs sm:text-xs" }, [
+		label,
+		input(h, {
+			attributes: [
+				h.Type("number"),
+				h.Attribute("min", "0"),
+				h.Value(value === undefined ? "" : String(value)),
+				h.OnInput((raw) => {
+					const parsed = Number.parseFloat(raw)
+					return Message.ChangedPendingFilters({
+						filters: onInput(raw.trim() === "" || Number.isNaN(parsed) ? undefined : parsed),
+					})
+				}),
+			],
+		}),
+	])
 
 const DAY_PRESETS = [7, 14, 30, 60, 90] as const
 
@@ -281,22 +271,6 @@ const editor = (
 					STAGE_LABEL[stage],
 					pending.lifecycleStages?.includes(stage) ?? false,
 					withFilter(pending, "lifecycleStages", toggleIn(pending.lifecycleStages, stage)),
-				),
-			)
-		case "health":
-			return Customers.HealthStatus.literals.map((status) =>
-				option(
-					h,
-					optionId(status),
-					h.span(
-						[h.Class("inline-flex items-center gap-2")],
-						[
-							h.span([h.Class(twMerge("size-2 rounded-full", HEALTH_FILL[status]))]),
-							HEALTH_LABEL[status],
-						],
-					),
-					pending.healthStatuses?.includes(status) ?? false,
-					withFilter(pending, "healthStatuses", toggleIn(pending.healthStatuses, status)),
 				),
 			)
 		case "plan":
@@ -528,7 +502,7 @@ const editor = (
 	}
 }
 
-/** The preview under the editor: how many accounts the pending filters keep, their MRR and health. */
+/** The preview under the editor: how many accounts the pending filters keep, and their MRR. */
 const matchPreview = (
 	h: HtmlBuilder<Message>,
 	builder: Builder,
@@ -543,39 +517,13 @@ const matchPreview = (
 	const filters = search.trim() === "" ? builder.pending : { ...builder.pending, search }
 	const matches = accounts.filter((account) => matchesFilters(filters, account, viewer))
 	const mrr = matches.reduce((sum, account) => sum + account.mrrMinor, 0)
-	const counts = Customers.HealthStatus.literals.map((status) => ({
-		status,
-		count: matches.filter((account) => account.healthStatus === status).length,
-	}))
-	return h.div(
-		[h.Class("flex flex-col gap-2 rounded-lg border border-border p-3")],
+	return h.p(
+		[h.Class("rounded-lg border border-border p-3 text-sm"), h.AriaLive("polite")],
 		[
-			h.p(
-				[h.Class("text-sm"), h.AriaLive("polite")],
-				[
-					h.span([h.Class("font-semibold text-fg")], [`${formatCount(matches.length)} customers`]),
-					h.span(
-						[h.Class("text-muted-fg")],
-						[` of ${formatCount(accounts.length)} · ${formatMoney(mrr, options.currency)} MRR`],
-					),
-				],
-			),
-			distributionBar(h, {
-				ariaLabel: "Health of the matching customers",
-				segments: counts.map(({ status, count }) => ({
-					key: status,
-					label: HEALTH_LABEL[status],
-					value: count,
-					fillClass: HEALTH_FILL[status],
-				})),
-			}),
-			h.p(
-				[h.Class("text-muted-fg text-xs")],
-				[
-					counts
-						.map(({ status, count }) => `${count} ${HEALTH_LABEL[status].toLowerCase()}`)
-						.join(" · "),
-				],
+			h.span([h.Class("font-semibold text-fg")], [`${formatCount(matches.length)} customers`]),
+			h.span(
+				[h.Class("text-muted-fg")],
+				[` of ${formatCount(accounts.length)} · ${formatMoney(mrr, options.currency)} MRR`],
 			),
 		],
 	)
@@ -612,18 +560,18 @@ export const filterBuilder = (
 							[
 								h.span([h.Class("px-2 py-1 text-muted-fg text-xs max-sm:hidden")], [group]),
 								...fields.map((field) =>
-									h.button(
-										[
-											h.Type("button"),
-											h.AriaCurrent(field === builder.field ? "true" : "false"),
-											h.OnClick(Message.ClickedBuilderField({ field })),
-											h.Class(
-												twMerge(
-													"flex h-8 cursor-pointer items-center justify-between gap-2 rounded-md px-2 text-left text-fg text-sm outline-hidden hover:bg-wash focus-visible:ring-2 focus-visible:ring-ring/70",
-													field === builder.field && "bg-secondary",
-												),
+									ariaButton(
+										h,
+										{
+											onPress: Message.ClickedBuilderField({ field }),
+											className: twMerge(
+												"flex h-8 cursor-pointer items-center justify-between gap-2 rounded-md px-2 text-left text-fg text-sm outline-hidden hover:bg-wash focus-visible:ring-2 focus-visible:ring-ring/70",
+												field === builder.field && "bg-secondary",
 											),
-										],
+											attributes: [
+												h.AriaCurrent(field === builder.field ? "true" : "false"),
+											],
+										},
 										[
 											FIELD_LABEL[field],
 											h.span(
@@ -711,17 +659,15 @@ export const columnPicker = (
 			[h.span([h.Class("sr-only")], [`Show ${COLUMN_NAME[column]}`])],
 		)
 	const moveButton = (column: Customers.ListColumn, step: -1 | 1, isDisabled: boolean) =>
-		h.button(
-			[
-				h.Type("button"),
-				h.AriaLabel(`Move ${COLUMN_NAME[column]} ${step === -1 ? "up" : "down"}`),
-				h.Disabled(isDisabled),
-				h.OnClick(Message.MovedColumn({ column, step })),
-				h.Class(
-					"inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-fg hover:bg-secondary hover:text-fg disabled:cursor-default disabled:opacity-30",
-				),
-			],
-			[IconChevronDown(h, { className: twMerge("size-3", step === -1 && "rotate-180") })],
+		iconButton(
+			h,
+			{
+				label: `Move ${COLUMN_NAME[column]} ${step === -1 ? "up" : "down"}`,
+				size: "sq-xs",
+				isDisabled,
+				onPress: Message.MovedColumn({ column, step }),
+			},
+			IconChevronDown(h, { className: twMerge("size-3", step === -1 && "rotate-180") }),
 		)
 	return [
 		h.div(

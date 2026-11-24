@@ -4,15 +4,11 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconPlus, IconRobot } from "../../../../icons"
 import { button } from "../../../../ui/button"
 import { emptyState } from "../../../../ui/empty-state"
-import {
-	sectionHeaderGroup,
-	sectionHeaderHeading,
-	sectionHeaderRoot,
-	sectionHeaderSubheading,
-} from "../../../../ui/section-header"
+import { loadingState } from "../../../../ui/loader"
+import { pageHeader } from "../../../../ui/page-header"
 import type { PageViewInputs } from "../../../contract"
 import { botCard, botMenuId } from "../shared/bot-card"
-import { fragment, listSpinner } from "../shared/view"
+import { fragment } from "../shared/view"
 import { Message } from "./message"
 import type { Model } from "./model"
 
@@ -29,22 +25,15 @@ const createButton = (h: HtmlBuilder<Message>, size?: "md"): Html =>
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) =>
 	fragment(h, [
-		sectionHeaderRoot(h, { className: "border-none pb-0" }, [
-			sectionHeaderGroup(h, {}, [
-				h.div(
-					[h.Class("flex flex-1 flex-col justify-center gap-1")],
-					[
-						sectionHeaderHeading(h, {}, ["Your Apps"]),
-						sectionHeaderSubheading(h, {}, [
-							"Create and manage your own applications to automate tasks and integrate with external services.",
-						]),
-					],
-				),
-				createButton(h, "md"),
-			]),
-		]),
+		pageHeader(h, {
+			title: "Your Apps",
+			subtitle:
+				"Create and manage your own applications to automate tasks and integrate with external services.",
+			size: "title",
+			actions: [createButton(h, "md")],
+		}),
 		model.bots === null
-			? listSpinner(h)
+			? loadingState(h)
 			: model.bots.length === 0
 				? emptyState(h, {
 						icon: (className) => IconRobot(h, { className }),

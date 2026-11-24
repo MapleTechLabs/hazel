@@ -1,39 +1,54 @@
-import type * as Customers from "@hazel/domain/customers"
+import {
+	type ConfigField,
+	defaultConfigOf,
+	type IntegrationConfig,
+	type KeyValueListField,
+	type NumberField,
+	type SettingsField,
+	type StringListField,
+} from "@hazel/customer-integrations"
 import { Option } from "effect"
 import type { Html } from "foldkit/html"
-import { type ConfigField, providerOf } from "../../../../customers/providers"
-import { segmented } from "../../../../customers/ui/filter-bar"
+import { providerOf } from "../../../../customers/providers"
+import { segmented } from "../../../../ui/segmented-control"
 import { IconClose, IconPlus, IconTrash } from "../../../../icons"
-import { button } from "../../../../ui/button"
+import { badge } from "../../../../ui/badge"
+import { button, iconButton } from "../../../../ui/button"
+import { label } from "../../../../ui/field"
 import { input } from "../../../../ui/input"
 import { switchControl } from "../../../../ui/switch"
 import { type ConfigTarget, Message } from "./message"
 import {
+	cellOf,
 	configFlag,
+	configList,
+	configNumber,
+	configRows,
 	configText,
 	isSettingsDirty,
 	isSettingsValid,
 	type Model,
+	settingsFieldsOf,
 	settingsOf,
 	settingsProblemOf,
 } from "./model"
-import { card, cardHeader, eyebrow, formField, type H } from "./parts"
+import { eyebrow, formField, type H } from "./parts"
+import { panel, panelHeader } from "../../../../ui/card"
 import type { ConnectionRow, UnitMetricRow } from "./queries"
 import { heading } from "../../../../ui/heading"
 
 /**
- * A source's provider settings (Wonder `one` for Maple): the descriptor's config fields for any
- * provider, plus Maple's activity events, metric mappings and lookback. Saved with
- * `customers.connection.update({ config })`. Autumn's metric units are saved one by one
- * (`customers.metric.setUnit`).
+ * A source's provider settings: the config fields of its presentation, then its `settings` fields
+ * (string lists, key-value lists, numbers), in the order declared. Saved with `customers.connection.update({ config })`.
+ * A metered source's units are saved one by one (`customers.metric.setUnit`).
  */
 
 /** One descriptor field: a switch for a boolean, an input for text. Shared with the connect modal. */
 export const configFieldView = (
 	h: H,
 	options: Readonly<{
-		field: ConfigField<Customers.CustomerProvider>
-		config: Customers.ConnectionConfig
+		field: ConfigField
+		config: IntegrationConfig
 		target: ConfigTarget
 		isDisabled: boolean
 	}>,
@@ -47,7 +62,7 @@ export const configFieldView = (
 				h.div(
 					[h.Class("flex min-w-0 flex-col gap-0.5")],
 					[
-						h.label([h.For(id), h.Class("font-medium text-fg text-sm")], [field.label]),
+						label(h, { htmlFor: id, className: "font-medium sm:text-sm" }, [field.label]),
 						h.p([h.Class("text-muted-fg text-xs")], [field.description]),
 					],
 				),
@@ -96,19 +111,6 @@ export const configFieldView = (
 	})
 }
 
-const LOOKBACK = [
-	{ key: "30", label: "30d" },
-	{ key: "90", label: "90d" },
-	{ key: "180", label: "180d" },
-	{ key: "365", label: "1y" },
-] as const
-type LookbackKey = (typeof LOOKBACK)[number]["key"]
-const toLookback = (key: LookbackKey) => Message.ClickedLookback({ days: Number(key) })
-const lookbackKeyOf = (days: number): LookbackKey =>
-	LOOKBACK.find((option) => option.key === String(days))?.key ?? "90"
-
-type MapleConfig = Extract<Customers.ConnectionConfig, { _tag: "maple" }>
-
 const block = (h: H, title: string, description: string, children: ReadonlyArray<Html>): Html =>
 	h.div(
 		[h.Class("flex flex-col gap-3 border-border border-t pt-4")],
@@ -124,181 +126,209 @@ const block = (h: H, title: string, description: string, children: ReadonlyArray
 		],
 	)
 
-const activityEvents = (h: H, model: Model, config: MapleConfig, isDisabled: boolean): Html =>
-	block(
-		h,
-		"Activity events",
-		"A contact is active on a day they send one of these events. None: every event counts.",
-		[
-			config.activityEvents.length === 0
-				? h.p([h.Class("text-muted-fg text-sm")], ["Every event counts as activity."])
-				: h.ul(
-						[h.AriaLabel("Activity events"), h.Class("flex flex-wrap gap-1.5")],
-						config.activityEvents.map((event) =>
-							h.li(
-								[
-									h.Class(
-										"inline-flex items-center gap-1 rounded-md bg-secondary py-0.5 pr-0.5 pl-2 font-mono text-fg text-xs",
-									),
-								],
-								[
-									event,
-									...(isDisabled
-										? []
-										: [
-												h.button(
-													[
-														h.Type("button"),
-														h.AriaLabel(`Remove ${event}`),
-														h.Class(
-															"rounded p-0.5 text-muted-fg hover:bg-bg hover:text-fg",
-														),
-														h.OnClick(Message.RemovedActivityEvent({ event })),
-													],
-													[IconClose(h, { className: "size-3" })],
-												),
-											]),
-								],
-							),
-						),
-					),
-			...(isDisabled
-				? []
-				: [
-						h.form(
-							[h.Class("flex items-center gap-2"), h.OnSubmit(Message.AddedActivityEvent())],
+const stringList = (
+	h: H,
+	model: Model,
+	config: IntegrationConfig,
+	field: StringListField,
+	isDisabled: boolean,
+): Html => {
+	const values = configList(config, field.key)
+	const typed = (model.settingsListInputs[field.key] ?? "").trim()
+	return block(h, field.title, field.description, [
+		values.length === 0
+			? h.p([h.Class("text-muted-fg text-sm")], [field.emptyText])
+			: h.ul(
+					[h.AriaLabel(field.title), h.Class("flex flex-wrap gap-1.5")],
+					values.map((item) =>
+						h.li(
+							[],
 							[
-								input(h, {
-									placeholder: "Event name, e.g. query_run",
-									className: "font-mono text-sm",
-									attributes: [
-										h.AriaLabel("Add an activity event"),
-										h.Value(model.activityEventInput),
-										h.OnInput((value) => Message.ChangedActivityEventInput({ value })),
-									],
-								}),
-								button(
+								badge(
 									h,
 									{
-										intent: "outline",
-										size: "sm",
-										isDisabled: model.activityEventInput.trim() === "",
-										attributes: [h.Type("submit")],
+										intent: "secondary",
+										className: "max-w-full gap-1 pe-1 font-mono font-normal",
 									},
-									["Add"],
+									[
+										h.span([h.Class("truncate")], [item]),
+										...(isDisabled
+											? []
+											: [
+													iconButton(
+														h,
+														{
+															size: "sq-xs",
+															className: "size-5 sm:size-5",
+															label: `Remove ${item}`,
+															onPress: Message.RemovedSettingsListItem({
+																key: field.key,
+																item,
+															}),
+														},
+														IconClose(h, { attributes: { "data-slot": "icon" } }),
+													),
+												]),
+									],
 								),
 							],
 						),
-						...(model.activityEventInput.trim() === ""
-							? []
-							: [
-									h.p(
-										[h.Class("text-warning-subtle-fg text-xs")],
-										[
-											`Press Add to include “${model.activityEventInput.trim()}”: saving leaves it out.`,
-										],
+					),
+				),
+		...(isDisabled
+			? []
+			: [
+					h.form(
+						[
+							h.Class("flex items-center gap-2"),
+							h.OnSubmit(Message.AddedSettingsListItem({ key: field.key })),
+						],
+						[
+							input(h, {
+								placeholder: field.placeholder,
+								className: "font-mono text-sm",
+								attributes: [
+									h.AriaLabel(field.addLabel),
+									h.Value(model.settingsListInputs[field.key] ?? ""),
+									h.OnInput((value) =>
+										Message.ChangedSettingsListInput({ key: field.key, value }),
 									),
-								]),
-					]),
-		],
-	)
+								],
+							}),
+							button(
+								h,
+								{
+									intent: "outline",
+									size: "sm",
+									isDisabled: typed === "",
+									attributes: [h.Type("submit")],
+								},
+								["Add"],
+							),
+						],
+					),
+					...(typed === ""
+						? []
+						: [
+								h.p(
+									[h.Class("text-warning-subtle-fg text-xs")],
+									[`Press Add to include “${typed}”: saving leaves it out.`],
+								),
+							]),
+				]),
+	])
+}
 
-const metricMappings = (h: H, config: MapleConfig, isDisabled: boolean): Html =>
-	block(
-		h,
-		"Per-account metrics",
-		"A daily count per account of each mapped event, under its metric key. Usable in charts, signals and health.",
-		[
-			...(config.metricMappings.length === 0
-				? [h.p([h.Class("text-muted-fg text-sm")], ["No event is mapped to a metric yet."])]
-				: [
-						h.div(
-							[h.Class("grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2")],
-							[
-								eyebrow(h, "Event"),
-								eyebrow(h, "Metric key"),
-								h.span([]),
-								...config.metricMappings.flatMap((mapping, index) => [
+const keyValueList = (
+	h: H,
+	config: IntegrationConfig,
+	field: KeyValueListField,
+	isDisabled: boolean,
+): Html => {
+	const rows = configRows(config, field.key)
+	return block(h, field.title, field.description, [
+		...(rows.length === 0
+			? [h.p([h.Class("text-muted-fg text-sm")], [field.emptyText])]
+			: [
+					h.div(
+						[h.Class("grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2")],
+						[
+							...field.columns.map((column) => eyebrow(h, column.label)),
+							h.span([]),
+							...rows.flatMap((row, index) => [
+								...field.columns.map((column) =>
 									input(h, {
-										placeholder: "dashboard_created",
+										placeholder: column.placeholder,
 										className: "font-mono text-sm",
 										isDisabled,
-										isInvalid: mapping.event.trim() === "",
+										isInvalid: cellOf(row, column.key).trim() === "",
 										attributes: [
-											h.AriaLabel(`Event of metric ${index + 1}`),
-											h.Value(mapping.event),
+											h.AriaLabel(`${column.label} of ${field.itemNoun} ${index + 1}`),
+											h.Value(cellOf(row, column.key)),
 											h.OnInput((value) =>
-												Message.ChangedMetricMapping({
+												Message.ChangedSettingsCell({
+													key: field.key,
 													index,
-													field: "event",
+													column: column.key,
 													value,
 												}),
 											),
 										],
 									}),
-									input(h, {
-										placeholder: "dashboards_created",
-										className: "font-mono text-sm",
-										isDisabled,
-										isInvalid: mapping.metricKey.trim() === "",
-										attributes: [
-											h.AriaLabel(`Metric key of metric ${index + 1}`),
-											h.Value(mapping.metricKey),
-											h.OnInput((value) =>
-												Message.ChangedMetricMapping({
+								),
+								isDisabled
+									? h.span([])
+									: button(
+											h,
+											{
+												intent: "plain",
+												size: "sq-sm",
+												onPress: Message.RemovedSettingsRow({
+													key: field.key,
 													index,
-													field: "metricKey",
-													value,
 												}),
-											),
-										],
-									}),
-									isDisabled
-										? h.span([])
-										: button(
-												h,
-												{
-													intent: "plain",
-													size: "sq-sm",
-													onPress: Message.RemovedMetricMapping({ index }),
-													attributes: [h.AriaLabel(`Remove metric ${index + 1}`)],
-												},
-												[IconTrash(h, { attributes: { "data-slot": "icon" } })],
-											),
-								]),
-							],
-						),
-					]),
-			...(isDisabled
-				? []
-				: [
-						button(
-							h,
-							{
-								intent: "outline",
-								size: "sm",
-								className: "self-start",
-								onPress: Message.AddedMetricMapping(),
-							},
-							[IconPlus(h, { attributes: { "data-slot": "icon" } }), "Add metric"],
-						),
-					]),
-			h.p([h.Class("text-muted-fg text-xs")], ["Changing a key keeps history under the old key."]),
-		],
-	)
+												attributes: [
+													h.AriaLabel(`Remove ${field.itemNoun} ${index + 1}`),
+												],
+											},
+											[IconTrash(h, { attributes: { "data-slot": "icon" } })],
+										),
+							]),
+						],
+					),
+				]),
+		...(isDisabled
+			? []
+			: [
+					button(
+						h,
+						{
+							intent: "outline",
+							size: "sm",
+							className: "self-start",
+							onPress: Message.AddedSettingsRow({ key: field.key }),
+						},
+						[IconPlus(h, { attributes: { "data-slot": "icon" } }), `Add ${field.itemNoun}`],
+					),
+				]),
+		h.p([h.Class("text-muted-fg text-xs")], [field.note]),
+	])
+}
 
-const lookback = (h: H, config: MapleConfig, isDisabled: boolean): Html =>
-	block(h, "Lookback", "How much history a backfill imports.", [
+const numberChoice = (h: H, config: IntegrationConfig, field: NumberField, isDisabled: boolean): Html => {
+	const value = configNumber(config, field.key)
+	const shown = field.options.some((option) => option.value === value)
+		? value
+		: configNumber(defaultConfigOf(config._tag), field.key)
+	return block(h, field.title, field.description, [
 		isDisabled
-			? h.p([h.Class("text-fg text-sm")], [`${config.lookbackDays} days`])
+			? h.p([h.Class("text-fg text-sm")], [`${value} ${field.unit}`])
 			: segmented(h, {
-					ariaLabel: "Lookback window",
-					segments: LOOKBACK,
-					selected: lookbackKeyOf(config.lookbackDays),
-					onSelect: toLookback,
+					ariaLabel: field.ariaLabel,
+					segments: field.options.map((option) => ({
+						key: String(option.value),
+						label: option.label,
+					})),
+					selected: String(shown),
+					onSelect: (key: string) =>
+						Message.ClickedSettingsNumber({ key: field.key, value: Number(key) }),
 					className: "self-start",
 				}),
 	])
+}
+
+const settingsFieldView = (
+	h: H,
+	model: Model,
+	config: IntegrationConfig,
+	field: SettingsField,
+	isDisabled: boolean,
+): Html =>
+	"columns" in field
+		? keyValueList(h, config, field, isDisabled)
+		: "options" in field
+			? numberChoice(h, config, field, isDisabled)
+			: stringList(h, model, config, field, isDisabled)
 
 const unitRow = (h: H, model: Model, metric: UnitMetricRow, isDisabled: boolean): ReadonlyArray<Html> => {
 	const toSubmit = Message.SubmittedUnit({ metricKey: metric.key })
@@ -328,16 +358,15 @@ const unitRow = (h: H, model: Model, metric: UnitMetricRow, isDisabled: boolean)
 	]
 }
 
-/** What one unit of each metered feature is: Autumn rarely says, and "8 traces" means nothing. */
+/** What one unit of each metered feature is: sources rarely say, and "8 traces" means nothing. */
 export const unitsCard = (h: H, model: Model, connection: ConnectionRow, isAdmin: boolean): Html => {
 	const name = providerOf(connection.provider).name
 	const metrics = (model.unitMetrics ?? []).filter((metric) => metric.provider === connection.provider)
-	return card(h, [
-		cardHeader(
-			h,
-			"Usage units",
-			`What one unit of each metered feature is, e.g. GB or requests. Charts show values in it. Blank uses ${name}'s own, when it has one.`,
-		),
+	return panel(h, {}, [
+		panelHeader(h, {
+			title: "Usage units",
+			description: `What one unit of each metered feature is, e.g. GB or requests. Charts show values in it. Blank uses ${name}'s own, when it has one.`,
+		}),
 		metrics.length === 0
 			? h.p(
 					[h.Class("text-muted-fg text-sm")],
@@ -363,8 +392,11 @@ export const settingsCard = (h: H, model: Model, connection: ConnectionRow, isAd
 	const config = settingsOf(model, connection)
 	const isDirty = isSettingsDirty(model, connection)
 	const isDisabled = !isAdmin || model.isSavingSettings
-	return card(h, [
-		cardHeader(h, "Provider settings", `How Hazel matches and reads ${descriptor.name} records.`),
+	return panel(h, {}, [
+		panelHeader(h, {
+			title: "Provider settings",
+			description: `How Hazel matches and reads ${descriptor.name} records.`,
+		}),
 		...(descriptor.configFields.length === 0
 			? []
 			: [
@@ -375,13 +407,7 @@ export const settingsCard = (h: H, model: Model, connection: ConnectionRow, isAd
 						),
 					),
 				]),
-		...(config._tag === "maple"
-			? [
-					activityEvents(h, model, config, isDisabled),
-					metricMappings(h, config, isDisabled),
-					lookback(h, config, isDisabled),
-				]
-			: []),
+		...settingsFieldsOf(config).map((field) => settingsFieldView(h, model, config, field, isDisabled)),
 		...(isAdmin && isDirty
 			? [
 					h.div(

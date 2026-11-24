@@ -1,4 +1,5 @@
-import { DEFAULT_CONNECTION_CONFIG, EMPTY_SYNC_STATS } from "@hazel/domain/customers"
+import { DEFAULT_CONNECTION_CONFIG } from "@hazel/customer-integrations"
+import { EMPTY_SYNC_STATS } from "@hazel/domain/customers"
 import {
 	CustomerConnectionId,
 	CustomerImpersonatorId,
@@ -328,19 +329,31 @@ describe("data sources: Maple settings", () => {
 		story(
 			pageUpdate,
 			given(detail()),
-			message(Message.ChangedActivityEventInput({ value: " trace_explored " })),
-			message(Message.AddedActivityEvent()),
-			message(Message.RemovedActivityEvent({ event: "query_run" })),
-			message(Message.AddedMetricMapping()),
-			message(Message.ChangedMetricMapping({ index: 0, field: "event", value: "dashboard_created " })),
+			message(Message.ChangedSettingsListInput({ key: "activityEvents", value: " trace_explored " })),
+			message(Message.AddedSettingsListItem({ key: "activityEvents" })),
+			message(Message.RemovedSettingsListItem({ key: "activityEvents", item: "query_run" })),
+			message(Message.AddedSettingsRow({ key: "metricMappings" })),
 			message(
-				Message.ChangedMetricMapping({ index: 0, field: "metricKey", value: "dashboards_created" }),
+				Message.ChangedSettingsCell({
+					key: "metricMappings",
+					index: 0,
+					column: "event",
+					value: "dashboard_created ",
+				}),
+			),
+			message(
+				Message.ChangedSettingsCell({
+					key: "metricMappings",
+					index: 0,
+					column: "metricKey",
+					value: "dashboards_created",
+				}),
 			),
 			message(Message.ChangedConfigText({ target: "settings", key: "region", value: "eu" })),
 			// The config's schema refuses a region of its own: the field keeps what it had.
 			message(Message.ChangedConfigText({ target: "settings", key: "region", value: "apac" })),
-			message(Message.ClickedLookback({ days: 180 })),
-			model((current) => expect(current.activityEventInput).toBe("")),
+			message(Message.ClickedSettingsNumber({ key: "lookbackDays", value: 180 })),
+			model((current) => expect(current.settingsListInputs.activityEvents).toBe("")),
 			message(Message.PressedSaveSettings()),
 			Command.expectHas(
 				SaveCustomerSourceSettings({
@@ -362,7 +375,10 @@ describe("data sources: Maple settings", () => {
 				expect(current.settingsDraft).not.toBeNull()
 			}),
 		)
-		const saved = pageUpdate(detail(), Message.ClickedLookback({ days: 30 })).model
+		const saved = pageUpdate(
+			detail(),
+			Message.ClickedSettingsNumber({ key: "lookbackDays", value: 30 }),
+		).model
 		const synced = pageUpdate(
 			saved,
 			Message.UpdatedConnections({
@@ -373,7 +389,7 @@ describe("data sources: Maple settings", () => {
 	})
 
 	test("an empty metric row blocks the save; Discard drops the draft", () => {
-		const draft = pageUpdate(detail(), Message.AddedMetricMapping()).model
+		const draft = pageUpdate(detail(), Message.AddedSettingsRow({ key: "metricMappings" })).model
 		expect(isSettingsDirty(draft, maple)).toBe(true)
 		expect(pageUpdate(draft, Message.PressedSaveSettings()).commands ?? []).toHaveLength(0)
 		const discarded = pageUpdate(draft, Message.PressedDiscardSettings()).model

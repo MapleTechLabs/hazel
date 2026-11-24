@@ -11,6 +11,7 @@ import type { AppKeys } from "~/lib/keybindings/app-keymap"
 import type { Platform } from "~/lib/keybindings/key-combo"
 import type { Overrides } from "~/lib/keybindings/keymap"
 import type { ThemeState } from "../theme"
+import { type ChannelLinks, type ChannelLinksMap, linksFor } from "../ui/channel-icon"
 import type * as Updates from "../platform/updates"
 import type { PageOutMessage } from "./out-message"
 
@@ -42,7 +43,13 @@ export interface Shared {
 	readonly desktopUpdate: Updates.Model
 	/** A root modal or the command palette is open (it holds the keyboard; the composer's global typing waits). */
 	readonly isOverlayOpen: boolean
+	/** What each channel is linked or connected to (customer, Connect, chat sync), for `channelIcon`. */
+	readonly channelLinks?: ChannelLinksMap
 }
+
+/** The channel's customer, Connect partners and chat sync platform, as every channel icon marks them. */
+export const channelLinksOf = (shared: Shared, channelId: string): ChannelLinks =>
+	linksFor(shared.channelLinks, channelId)
 
 /** `usePermission().can(action)` */
 export const can = (shared: Shared, action: RpcActionName): boolean =>

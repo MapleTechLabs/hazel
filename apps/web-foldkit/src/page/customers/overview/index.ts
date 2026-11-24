@@ -5,7 +5,7 @@ import { subscriptions } from "./subscription"
 import { init, sharedChanged, update } from "./update"
 import { view } from "./view"
 
-/** `/$orgSlug/customers`: revenue, usage and health across the org's customers. */
+/** `/$orgSlug/customers`: revenue and usage across the org's customers. */
 export const page = definePage(
 	"CustomersOverview",
 	{ Model, Message },

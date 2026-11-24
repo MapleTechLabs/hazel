@@ -1,23 +1,24 @@
+import { integrationOf } from "@hazel/customer-integrations"
 import type { CustomerProvider } from "@hazel/domain/customers"
 import type { OrganizationId } from "@hazel/schema"
 import type { Html } from "foldkit/html"
 import { formatCount, formatDate, formatDateTime, formatRelative } from "../../../../customers/format"
 import { providerOf, webhookUrlOf } from "../../../../customers/providers"
-import { dataTable } from "../../../../customers/ui/data-table"
-import { segmented } from "../../../../customers/ui/filter-bar"
+import { dataTable } from "../../../../ui/data-table"
+import { emptyState } from "../../../../ui/empty-state"
+import { segmented } from "../../../../ui/segmented-control"
 import { sourceMark } from "../../../../customers/ui/identity"
 import { IconArrowPath, IconChevronRight } from "../../../../icons"
 import { AppRoute, hrefOf } from "../../../../route"
 import { button, buttonClassName } from "../../../../ui/button"
-import { readOnlyNotice, settingsHeader, settingsPage } from "../shared"
+import { readOnlyNotice, settingsPage } from "../shared"
+import { pageHeader } from "../../../../ui/page-header"
 import { Message } from "./message"
 import { impersonationCard } from "./impersonation-view"
 import { connectionOf, type HistoryFilter, isLive, type Model, runsOf, statusOf, visibleRuns } from "./model"
 import { addsList, type Context, connectButton, errorBanner, syncModeLines } from "./overview-view"
 import {
 	BACKEND_URL,
-	card,
-	cardHeader,
 	chips,
 	codeChips,
 	eyebrow,
@@ -30,9 +31,11 @@ import {
 	TRIGGER_LABEL,
 	webhookUrlField,
 } from "./parts"
+import { badge } from "../../../../ui/badge"
+import { panel, panelHeader } from "../../../../ui/card"
+import { statusDot } from "../../../../ui/status-dot"
 import type { ConnectionRow, SyncRunRow } from "./queries"
 import { settingsCard, unitsCard } from "./settings-view"
-import { heading } from "../../../../ui/heading"
 
 /** One source (Wonder `loy`, `one`): its runs, connection, mapping, settings and the way out. */
 
@@ -45,15 +48,15 @@ const toHistoryFilter = (filter: HistoryFilter) => Message.ClickedHistoryFilter(
 // HISTORY
 
 const runStatus = (h: H, run: SyncRunRow): Html => {
-	const [dot, label, text] =
+	const [tone, label, text] =
 		run.status === "running"
-			? ["bg-primary", "Running", "text-fg"]
+			? (["primary", "Running", "text-fg"] as const)
 			: run.status === "failed"
-				? ["bg-danger-subtle-fg", "Failed", "text-danger-subtle-fg"]
-				: ["bg-success-subtle-fg", "Succeeded", "text-fg"]
+				? (["danger", "Failed", "text-danger-subtle-fg"] as const)
+				: (["success", "Succeeded", "text-fg"] as const)
 	return h.span(
 		[h.Class(`inline-flex items-center gap-1.5 text-sm ${text}`)],
-		[h.span([h.AriaHidden(true), h.Class(`size-1.5 rounded-full ${dot}`)]), label],
+		[statusDot(h, { tone }), label],
 	)
 }
 
@@ -100,12 +103,11 @@ const historyCard = (h: H, model: Model, connection: ConnectionRow): Html => {
 	const all = runsOf(model, connection.id)
 	const failed = all.filter((run) => run.status === "failed").length
 	const rows = visibleRuns(model, connection.id)
-	return card(h, [
-		cardHeader(
-			h,
-			"Sync history",
-			"Scheduled, manual and backfill runs of the last 7 days.",
-			segmented(h, {
+	return panel(h, {}, [
+		panelHeader(h, {
+			title: "Sync history",
+			description: "Scheduled, manual and backfill runs of the last 7 days.",
+			aside: segmented(h, {
 				ariaLabel: "Show runs",
 				segments: [
 					{ key: "all", label: "All" },
@@ -114,16 +116,15 @@ const historyCard = (h: H, model: Model, connection: ConnectionRow): Html => {
 				selected: model.historyFilter,
 				onSelect: toHistoryFilter,
 			}),
-		),
+		}),
 		rows.length === 0
-			? h.p(
-					[h.Class("py-6 text-center text-muted-fg text-sm")],
-					[
+			? emptyState(h, {
+					title:
 						model.historyFilter === "failed"
 							? "No failed runs in the last 7 days."
 							: "No runs in the last 7 days.",
-					],
-				)
+					className: "py-6",
+				})
 			: dataTable(h, {
 					ariaLabel: "Sync history",
 					id: "customers-sync-history",
@@ -134,15 +135,7 @@ const historyCard = (h: H, model: Model, connection: ConnectionRow): Html => {
 							key: "trigger",
 							label: "Trigger",
 							widthClass: "w-24",
-							cell: (run) =>
-								h.span(
-									[
-										h.Class(
-											"rounded-md bg-secondary px-1.5 py-0.5 font-medium text-fg text-xs",
-										),
-									],
-									[TRIGGER_LABEL[run.trigger]],
-								),
+							cell: (run) => badge(h, { intent: "secondary" }, [TRIGGER_LABEL[run.trigger]]),
 						},
 						{
 							key: "status",
@@ -208,8 +201,8 @@ const connectionCard = (h: H, model: Model, connection: ConnectionRow, context: 
 	const connectedBy =
 		model.members.find((member) => member.id === connection.connectedBy)?.name ?? "A former member"
 	const now = new Date(context.nowMs)
-	return card(h, [
-		cardHeader(h, "Connection"),
+	return panel(h, {}, [
+		panelHeader(h, { title: "Connection" }),
 		h.dl(
 			[h.Class("flex flex-col gap-2")],
 			[
@@ -268,19 +261,11 @@ const connectionCard = (h: H, model: Model, connection: ConnectionRow, context: 
 
 const dangerZone = (h: H, provider: CustomerProvider): Html => {
 	const name = providerOf(provider).name
-	return card(h, [
-		h.div(
-			[h.Class("flex flex-col gap-1")],
-			[
-				heading(h, { variant: "section" }, [`Disconnect ${name}`]),
-				h.p(
-					[h.Class("text-muted-fg text-sm")],
-					[
-						`Stops syncs and drops the stored keys. Accounts and contacts stay but stop updating and are marked stale; signals that need ${name} go quiet.`,
-					],
-				),
-			],
-		),
+	return panel(h, {}, [
+		panelHeader(h, {
+			title: `Disconnect ${name}`,
+			description: `Stops syncs and drops the stored keys. Accounts and contacts stay but stop updating and are marked stale; signals that need ${name} go quiet.`,
+		}),
 		button(
 			h,
 			{
@@ -298,8 +283,11 @@ const dangerZone = (h: H, provider: CustomerProvider): Html => {
 
 const mappingCard = (h: H, provider: CustomerProvider): Html => {
 	const descriptor = providerOf(provider)
-	return card(h, [
-		cardHeader(h, "Field mapping", `How ${descriptor.name} records become Hazel fields.`),
+	return panel(h, {}, [
+		panelHeader(h, {
+			title: "Field mapping",
+			description: `How ${descriptor.name} records become Hazel fields.`,
+		}),
 		h.table(
 			[h.Class("w-full text-sm")],
 			[
@@ -371,14 +359,14 @@ const notConnectedCard = (
 	context: Context,
 ): Html => {
 	const descriptor = providerOf(provider)
-	return card(h, [
-		cardHeader(
-			h,
-			connection === undefined ? "Not connected" : "Disconnected",
-			connection?.disconnectedAtMs == null
-				? descriptor.blurb
-				: `Disconnected ${formatDate(new Date(connection.disconnectedAtMs), { now: new Date(context.nowMs) })}. Its data is kept, marked stale, until you reconnect.`,
-		),
+	return panel(h, {}, [
+		panelHeader(h, {
+			title: connection === undefined ? "Not connected" : "Disconnected",
+			description:
+				connection?.disconnectedAtMs == null
+					? descriptor.blurb
+					: `Disconnected ${formatDate(new Date(connection.disconnectedAtMs), { now: new Date(context.nowMs) })}. Its data is kept, marked stale, until you reconnect.`,
+		}),
 		h.div(
 			[h.Class("grid gap-5 sm:grid-cols-2")],
 			[
@@ -459,7 +447,7 @@ export const detailView = (h: H, model: Model, provider: CustomerProvider, conte
 	const connection = connectionOf(model, provider)
 	const live = connection !== undefined && isLive(connection) ? connection : undefined
 	return settingsPage(h, [
-		settingsHeader(h, {
+		pageHeader(h, {
 			crumbs: [
 				{
 					label: "Data sources",
@@ -514,10 +502,11 @@ export const detailView = (h: H, model: Model, provider: CustomerProvider, conte
 											: []),
 										historyCard(h, model, live),
 										settingsCard(h, model, live, context.isAdmin),
-										...(provider === "autumn"
+										...(integrationOf(provider)?.capabilities.meteredLimits === true
 											? [unitsCard(h, model, live, context.isAdmin)]
 											: []),
-										...(provider === "clerk" && context.isAdmin
+										...(integrationOf(provider)?.capabilities.impersonation === true &&
+										context.isAdmin
 											? [impersonationCard(h, model, context.nowMs)]
 											: []),
 										mappingCard(h, provider),

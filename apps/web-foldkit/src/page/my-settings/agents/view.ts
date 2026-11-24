@@ -2,23 +2,24 @@ import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { formatDistanceStrict } from "~/lib/format-distance"
 import { commonMessage } from "~/lib/error-messages"
-import { IconCopy } from "../../../icons"
 import { badge } from "../../../ui/badge"
-import { button } from "../../../ui/button"
+import { ariaButton, button } from "../../../ui/button"
+import { callout } from "../../../ui/callout"
+import { cardClassName } from "../../../ui/card"
+import { copyButton } from "../../../ui/copy-button"
 import { loader } from "../../../ui/loader"
+import { pageHeader, pageLayout } from "../../../ui/page-header"
+import { separator } from "../../../ui/separator"
 import { textField } from "../../../ui/text-field"
 import type { PageViewInputs } from "../../contract"
-import { divider, pageHeader, settingsRow } from "../shared"
+import { settingsRow } from "../shared"
 import { Message } from "./message"
 import { canCreateToken, type CreatedToken, type Grant, Grants, type Model, type TokenAccess } from "./model"
 
 const ago = (ms: number, nowMs: number) => formatDistanceStrict(ms, Math.max(ms, nowMs))
 
-const copyButton = (h: HtmlBuilder<Message>, target: "McpUrl" | "Token", text: string, label: string): Html =>
-	button(h, { intent: "outline", size: "sm", onPress: Message.ClickedCopy({ target, text }) }, [
-		IconCopy(h, { className: "size-4" }),
-		label,
-	])
+const copy = (h: HtmlBuilder<Message>, target: "McpUrl" | "Token", text: string): Html =>
+	copyButton(h, { label: "Copy", showLabel: true, onPress: Message.ClickedCopy({ target, text }) })
 
 const codeBox = (h: HtmlBuilder<Message>, text: string): Html =>
 	h.code(
@@ -40,10 +41,7 @@ const connectSection = (h: HtmlBuilder<Message>, mcpUrl: string): Html =>
 		h.div(
 			[h.Class("flex max-w-xl flex-col gap-3")],
 			[
-				h.div(
-					[h.Class("flex items-center gap-2")],
-					[codeBox(h, mcpUrl), copyButton(h, "McpUrl", mcpUrl, "Copy")],
-				),
+				h.div([h.Class("flex items-center gap-2")], [codeBox(h, mcpUrl), copy(h, "McpUrl", mcpUrl)]),
 				h.p(
 					[h.Class("text-muted-fg text-xs")],
 					[
@@ -63,22 +61,21 @@ const connectSection = (h: HtmlBuilder<Message>, mcpUrl: string): Html =>
 	)
 
 const createdTokenBanner = (h: HtmlBuilder<Message>, created: CreatedToken): Html =>
-	h.div(
-		[h.Class("flex max-w-xl flex-col gap-3 rounded-xl border border-border bg-bg p-4"), h.Role("status")],
+	callout(
+		h,
+		{
+			intent: "success",
+			title: `Token "${created.name}" created`,
+			className: "max-w-xl",
+			actions: [
+				button(h, { intent: "plain", size: "sm", onPress: Message.ClickedDismissToken() }, ["Done"]),
+			],
+		},
 		[
-			h.p([h.Class("font-medium text-fg text-sm")], [`Token "${created.name}" created`]),
-			h.p([h.Class("text-muted-fg text-xs")], ["Copy it now. You won't be able to see it again."]),
+			h.p([h.Class("text-xs")], ["Copy it now. You won't be able to see it again."]),
 			h.div(
-				[h.Class("flex items-center gap-2")],
-				[codeBox(h, created.token), copyButton(h, "Token", created.token, "Copy")],
-			),
-			h.div(
-				[],
-				[
-					button(h, { intent: "plain", size: "sm", onPress: Message.ClickedDismissToken() }, [
-						"Done",
-					]),
-				],
+				[h.Class("mt-2 flex items-center gap-2")],
+				[codeBox(h, created.token), copy(h, "Token", created.token)],
 			),
 		],
 	)
@@ -103,19 +100,15 @@ const accessOption = (
 	option: (typeof ACCESS_OPTIONS)[number],
 ): Html => {
 	const isSelected = model.tokenAccess === option.access
-	return h.keyed("button")(
-		option.access,
-		[
-			h.Type("button"),
-			h.Role("radio"),
-			h.AriaChecked(isSelected),
-			h.OnClick(Message.SelectedTokenAccess({ access: option.access })),
-			h.Class(
-				`flex flex-1 flex-col items-start rounded-lg border px-3 py-2 text-left transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-					isSelected ? "border-primary bg-primary/5" : "border-border hover:bg-secondary/50"
-				}`,
-			),
-		],
+	return ariaButton(
+		h,
+		{
+			onPress: Message.SelectedTokenAccess({ access: option.access }),
+			attributes: [h.Role("radio"), h.AriaChecked(isSelected)],
+			className: `flex flex-1 flex-col items-start rounded-lg border px-3 py-2 text-left transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+				isSelected ? "border-primary bg-primary/5" : "border-border hover:bg-secondary/50"
+			}`,
+		},
 		[
 			h.span([h.Class("font-medium text-fg text-sm")], [option.label]),
 			h.span([h.Class("text-muted-fg text-xs")], [option.hint]),
@@ -249,41 +242,38 @@ const grantsSection = (
 		grants.length === 0
 			? h.p([h.Class("text-muted-fg text-sm")], ["No agents yet."])
 			: h.ul(
-					[
-						h.Class(
-							"flex max-w-xl flex-col divide-y divide-border rounded-xl border border-border bg-bg",
-						),
-					],
+					[h.Class(cardClassName("flex max-w-xl flex-col divide-y divide-border"))],
 					grants.map((grant) => grantRow(h, model, grant, nowMs)),
 				),
 	)
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) =>
-	h.div(
-		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
-		[
-			pageHeader(h, "Agents", "AI agents and apps you let act for you, like Raycast."),
-			...Grants.match<ReadonlyArray<Html>>(model.grants, {
-				Loading: () => [loader(h, { className: "size-5" })],
-				Failed: ({ reason }) => [
-					h.p([h.Class("text-danger text-sm"), h.Role("alert")], [commonMessage(reason).title]),
-					h.div(
-						[],
-						[
-							button(h, { intent: "outline", size: "sm", onPress: Message.ClickedRetry() }, [
-								"Try again",
-							]),
-						],
-					),
-				],
-				Loaded: ({ grants, mcpUrl }) => [
-					connectSection(h, mcpUrl),
-					divider(h),
-					createSection(h, model),
-					divider(h),
-					grantsSection(h, model, grants, shared.nowMs),
-				],
-			}),
-		],
-	),
+	pageLayout(h, {}, [
+		pageHeader(h, {
+			title: "Agents",
+			subtitle: "AI agents and apps you let act for you, like Raycast.",
+			size: "title",
+		}),
+		...Grants.match<ReadonlyArray<Html>>(model.grants, {
+			Loading: () => [loader(h, { className: "size-5" })],
+			Failed: ({ reason }) => [
+				h.p([h.Class("text-danger text-sm"), h.Role("alert")], [commonMessage(reason).title]),
+				h.div(
+					[],
+					[
+						button(h, { intent: "outline", size: "sm", onPress: Message.ClickedRetry() }, [
+							"Try again",
+						]),
+					],
+				),
+			],
+			Loaded: ({ grants, mcpUrl }) => [
+				connectSection(h, mcpUrl),
+				separator(h),
+				createSection(h, model),
+				separator(h),
+				grantsSection(h, model, grants, shared.nowMs),
+			],
+		}),
+	]),
 )

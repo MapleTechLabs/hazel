@@ -2,11 +2,14 @@ import { anyInvalid, type Field as ValidatedField } from "foldkit/fieldValidatio
 import type { Html, HtmlBuilder } from "foldkit/html"
 import type { ConfigOption, Integration } from "~/lib/integrations/__data"
 import { button } from "../../../../ui/button"
+import { card, cardBody, cardHeader } from "../../../../ui/card"
 import * as Field from "../../../../ui/field"
+import { iconTile } from "../../../../ui/icon-tile"
 import { input, inputGroup } from "../../../../ui/input"
+import { loader } from "../../../../ui/loader"
 import { sectionLabelRoot } from "../../../../ui/section-label"
 import { switchControl } from "../../../../ui/switch"
-import { CHECK, spinner, strokeIcon } from "../shared/view"
+import { CHECK, strokeIcon } from "../shared/view"
 import { Message } from "./message"
 import type { Model } from "./model"
 import { heading } from "../../../../ui/heading"
@@ -20,21 +23,42 @@ export const LINK_ICON =
 const SLIDERS_ICON =
 	"M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75"
 
-export const panel = <Message>(
+/** A card titled by a header bar: `Connection`, `Configuration`, `Features`. */
+export const sectionCard = <Message>(
 	h: HtmlBuilder<Message>,
 	title: string,
 	body: ReadonlyArray<Html>,
-	bodyClass = "p-5",
+	bodyClass?: string,
 ): Html =>
-	h.div(
-		[h.Class("overflow-hidden rounded-xl border border-border bg-bg")],
-		[
-			h.div(
-				[h.Class("border-border border-b bg-bg-muted/30 px-5 py-3")],
-				[heading(h, { variant: "subsection" }, [title])],
+	card(h, {}, [
+		cardHeader(h, [heading(h, { variant: "subsection" }, [title])], "py-3"),
+		bodyClass === undefined ? cardBody(h, [...body]) : h.div([h.Class(bodyClass)], [...body]),
+	])
+
+/** A numbered list of setup steps; each item is text, or text with emphasised parts. */
+export const steps = <M>(
+	h: HtmlBuilder<M>,
+	items: ReadonlyArray<string | ReadonlyArray<Html | string>>,
+): Html =>
+	h.ol(
+		[h.Class("flex flex-col gap-2.5 text-muted-fg text-sm")],
+		items.map((item, index) =>
+			h.li(
+				[h.Class("flex gap-2.5")],
+				[
+					h.span(
+						[
+							h.AriaHidden(true),
+							h.Class(
+								"flex size-5 shrink-0 items-center justify-center rounded-full bg-muted font-medium text-fg text-xs",
+							),
+						],
+						[String(index + 1)],
+					),
+					h.span([h.Class("leading-5")], typeof item === "string" ? [item] : [...item]),
+				],
 			),
-			h.div([h.Class(bodyClass)], [...body]),
-		],
+		),
 	)
 
 export const centered = (
@@ -47,7 +71,7 @@ export const centered = (
 	h.div(
 		[h.Class("flex flex-col items-center gap-4 py-4 text-center")],
 		[
-			h.div([h.Class("flex size-14 items-center justify-center rounded-xl bg-bg-muted")], [icon]),
+			iconTile(h, { size: "lg" }, icon),
 			h.div(
 				[h.Class("flex flex-col gap-1")],
 				[
@@ -65,7 +89,7 @@ export const centered = (
 export const disconnectedState = (h: H, integration: Integration, isConnecting: boolean): Html =>
 	centered(
 		h,
-		strokeIcon(h, { className: "size-6 text-muted-fg", strokeWidth: "1.5", d: LINK_ICON }),
+		strokeIcon(h, { className: "", strokeWidth: "1.5", d: LINK_ICON }),
 		["Connect your ", integration.name, " account"],
 		["You'll be redirected to ", integration.name, " to authorize the connection."],
 		[
@@ -78,9 +102,7 @@ export const disconnectedState = (h: H, integration: Integration, isConnecting: 
 					onPress: Message.ClickedConnect(),
 					isDisabled: isConnecting,
 				},
-				isConnecting
-					? [spinner(h, "size-4 animate-spin"), "Connecting..."]
-					: ["Connect with ", integration.name],
+				isConnecting ? [loader(h), "Connecting..."] : ["Connect with ", integration.name],
 			),
 		],
 	)
@@ -88,7 +110,7 @@ export const disconnectedState = (h: H, integration: Integration, isConnecting: 
 export const verifyingState = (h: H, integration: Integration): Html =>
 	centered(
 		h,
-		spinner(h, "size-6 animate-spin text-muted-fg"),
+		loader(h, { className: "size-6" }),
 		"Verifying connection...",
 		["Please wait while we verify your ", integration.name, " connection."],
 		[],
@@ -111,15 +133,10 @@ export const connectedState = (
 			h.div(
 				[h.Class("flex items-center gap-3")],
 				[
-					h.div(
-						[h.Class("flex size-10 items-center justify-center rounded-xl bg-success-subtle")],
-						[
-							strokeIcon(h, {
-								className: "size-5 text-success-subtle-fg",
-								strokeWidth: "2",
-								d: CHECK,
-							}),
-						],
+					iconTile(
+						h,
+						{ intent: "success", size: "md" },
+						strokeIcon(h, { className: "", strokeWidth: "2", d: CHECK }),
 					),
 					h.div(
 						[h.Class("flex flex-col gap-0.5")],
@@ -145,7 +162,7 @@ export const connectedState = (
 							isDisabled: isConnecting,
 						},
 						isConnecting
-							? [spinner(h, "size-4 animate-spin"), "Redirecting..."]
+							? [loader(h), "Redirecting..."]
 							: [
 									strokeIcon(h, { className: "size-4", strokeWidth: "2", d: SLIDERS_ICON }),
 									"Configure on GitHub",
@@ -182,7 +199,7 @@ export const apiField = (
 	return h.div(
 		[h.Class("flex flex-col gap-1.5")],
 		[
-			h.label([h.For(options.id), h.Class("font-medium text-fg text-sm")], [options.label]),
+			Field.label(h, { htmlFor: options.id }, [options.label]),
 			inputGroup(h, {}, [
 				input(h, {
 					placeholder: options.placeholder,
@@ -237,7 +254,7 @@ export const apiKeyConnectionForm = (h: H, integration: Integration, model: Mode
 					isDisabled: isConnecting || anyInvalid([model.apiToken, model.apiBaseUrl]),
 					attributes: [h.Type("submit")],
 				},
-				isConnecting ? [spinner(h, "size-4 animate-spin"), "Connecting..."] : ["Connect"],
+				isConnecting ? [loader(h), "Connecting..."] : ["Connect"],
 			),
 		],
 	)

@@ -1,10 +1,12 @@
-import { Hooks } from "@yielded/auth"
 import {
 	AccessToken,
+	devSignInGitHubClient,
 	HazelAuth,
 	type HazelAuthConfig,
+	InstanceAccessConfig,
 	makeDesktopLoginRoutes,
 	makeHazelAuthLive,
+	makeProvidersRoute,
 } from "@hazel/auth/server"
 import { Config, Context, Effect, Layer, Option, Redacted, Schema, Stream } from "effect"
 import { Base64Url } from "effect/encoding"
@@ -12,11 +14,13 @@ import { Headers, HttpRouter, HttpServerRequest, HttpServerResponse } from "effe
 import { NonProductionStage } from "../lib/stage"
 
 /**
- * Hazel's own sign-in (`@hazel/auth/server`). Enabled when `AUTH_GITHUB_CLIENT_ID` is set, or
- * `DEV_SIGNIN_SECRET` (dev and preview stages, `routes/dev-sign-in.http.ts`); until then nobody
- * can sign in (only bot tokens authenticate) and these routes are not mounted.
+ * Hazel's own sign-in (`@hazel/auth/server`). Enabled when an OAuth app is configured
+ * (`AUTH_GITHUB_CLIENT_ID`, `AUTH_GOOGLE_CLIENT_ID`, or both), or `DEV_SIGNIN_SECRET` (dev and
+ * preview stages, `routes/dev-sign-in.http.ts`); until then nobody can sign in (only bot tokens
+ * authenticate) and these routes are not mounted.
  *
  * - `/auth/*`: sign-in, registration, passkeys and sessions (cookie on the API host).
+ * - `GET /auth/providers`: the providers configured here, for the sign-in page.
  * - `POST /auth/token`: exchanges the session for a short-lived JWT for the hosts that
  *   cannot see the API's cookie (the actors), when a signing key is set.
  * - `GET /.well-known/jwks.json`: the public key those hosts verify it with.
@@ -65,10 +69,9 @@ const AuthConfig = Config.all({
 	accessTokenKid: Config.String("AUTH_ACCESS_TOKEN_KID").pipe(Config.withDefault("v1")),
 	accessTokenJwk: Config.option(Config.Redacted("AUTH_ACCESS_TOKEN_PRIVATE_JWK")),
 	devSignInSecret: Config.option(Config.Redacted("DEV_SIGNIN_SECRET")),
+	// `ALLOWED_EMAIL_DOMAINS` and the rest (`@hazel/auth/server` `instance-access.ts`).
+	access: InstanceAccessConfig,
 })
-
-/** The GitHub client of a stage signed into only through the dev sign-in; GitHub rejects it. */
-const DEV_ONLY_GITHUB_CLIENT_ID = "hazel-dev-sign-in-only"
 
 const PrivateJwk = Schema.fromJsonString(Schema.Unknown)
 
@@ -81,22 +84,31 @@ const make = Effect.gen(function* () {
 		yield* Effect.logError("[auth] DEV_SIGNIN_SECRET is set on prd; ignoring it (remove the secret)")
 	}
 	const devSignInSecret = nonProduction ? configuredDevSecret : Option.none<Redacted.Redacted<string>>()
-	if (Option.isNone(env.githubClientId) && Option.isNone(devSignInSecret)) {
-		yield* Effect.logInfo("[auth] AUTH_GITHUB_CLIENT_ID is not set; Hazel sign-in is disabled")
+	if (env.access.allowedEmailDomains.length > 0) {
+		yield* Effect.logInfo("[auth] sign-in is limited to the allowed email domains", {
+			domains: env.access.allowedEmailDomains,
+		})
+	}
+	if (
+		Option.isNone(env.githubClientId) &&
+		Option.isNone(env.googleClientId) &&
+		Option.isNone(devSignInSecret)
+	) {
+		yield* Effect.logInfo(
+			"[auth] neither AUTH_GITHUB_CLIENT_ID nor AUTH_GOOGLE_CLIENT_ID is set; Hazel sign-in is disabled",
+		)
 		return Option.none()
 	}
-	// Without a GitHub app, only the dev sign-in signs anyone in.
 	const github = Option.isSome(env.githubClientId)
 		? {
 				clientId: env.githubClientId.value,
 				clientSecret: yield* Config.Redacted("AUTH_GITHUB_CLIENT_SECRET"),
 			}
-		: { clientId: DEV_ONLY_GITHUB_CLIENT_ID, clientSecret: Redacted.make(DEV_ONLY_GITHUB_CLIENT_ID) }
-
-	const origin = new URL(env.apiBaseUrl).origin
-	const appOrigin = new URL(env.frontendUrl).origin
-	const trustedOrigins = [...new Set([appOrigin, ...env.extraOrigins])]
-
+		: // Without an OAuth app only the dev sign-in signs anyone in; the routes still need a
+			// provider, and the sign-in page is never offered this one.
+			Option.isNone(env.googleClientId)
+			? devSignInGitHubClient
+			: undefined
 	const google = Option.isSome(env.googleClientId)
 		? {
 				clientId: env.googleClientId.value,
@@ -104,11 +116,15 @@ const make = Effect.gen(function* () {
 			}
 		: undefined
 
+	const origin = new URL(env.apiBaseUrl).origin
+	const appOrigin = new URL(env.frontendUrl).origin
+	const trustedOrigins = [...new Set([appOrigin, ...env.extraOrigins])]
+
 	const config: HazelAuthConfig = {
 		origin,
 		appOrigin,
 		trustedOrigins,
-		github,
+		...(github === undefined ? {} : { github }),
 		...(google === undefined ? {} : { google }),
 		passkey: {
 			rpId: Option.getOrElse(env.passkeyRpId, () => new URL(appOrigin).hostname),
@@ -121,6 +137,7 @@ const make = Effect.gen(function* () {
 		returnTargets: ["/"],
 		registrationPath: "/auth/register",
 		continuePath: "/auth/continue",
+		access: env.access,
 	}
 
 	const accessTokens = Option.isNone(env.accessTokenJwk)
@@ -165,8 +182,9 @@ export const HazelAuthServicesLive = Layer.unwrap(
 	Effect.map(Effect.service(HazelAuthInstance), (instance) =>
 		Option.match(instance, {
 			onNone: () => Layer.empty,
-			onSome: ({ http, Services }) =>
-				http.layer.pipe(Layer.provideMerge(Services), Layer.provide(Hooks.LifecycleHooks.empty)),
+			// The hooks refuse sign-ins outside `ALLOWED_EMAIL_DOMAINS` (empty when unset).
+			onSome: ({ http, Services, hooks }) =>
+				http.layer.pipe(Layer.provideMerge(Services), Layer.provide(hooks)),
 		}),
 	),
 )
@@ -303,6 +321,7 @@ export const HazelAuthRoutes = Layer.unwrap(
 				Layer.mergeAll(
 					http.routes().pipe(Layer.provide(callbackFailureRedirect(config.appOrigin))),
 					makeDesktopLoginRoutes(config),
+					makeProvidersRoute(config),
 					Option.match(accessTokens, {
 						onNone: () => Layer.empty,
 						onSome: (key) => accessTokenRoutes(config.origin, key).pipe(http.middleware),

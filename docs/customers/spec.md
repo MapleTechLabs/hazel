@@ -4,8 +4,8 @@ Scope: analytics, action queue and per-customer pages. Channels linked to a cust
 
 ## Principles
 
-- **Integrations write, the product reads.** Clerk, Stripe, Autumn and Maple each write into one neutral data model through syncs (cron) or webhooks. UI, signals and health only read that model, never a provider API.
-- **Explainable over magic.** Health score and signals are rule-based and show their inputs ("No sign-ins for 18 days, was 12 weekly active users").
+- **Integrations write, the product reads.** Clerk, Stripe, Autumn and Maple each write into one neutral data model through syncs (cron) or webhooks. UI and signals only read that model, never a provider API.
+- **Explainable over magic.** Signals are rule-based and show their inputs ("No sign-ins for 18 days, was 12 weekly active users").
 - **Silent accounts count.** Signals evaluate every account, including ones with no recent activity, which are often the ones about to churn.
 - **A ranked queue, not a dashboard.** "Needs attention" is a worklist with assign, snooze, done and dismiss.
 - **Customer = company.** An account is a B2B customer (Clerk organization). Contacts are its end users (Clerk users).
@@ -22,7 +22,6 @@ All tables: `id uuid` (branded ID), `organizationId`, `createdAt`, `updatedAt`; 
 - `ownerUserId` → Hazel user (the CSM), nullable
 - `lifecycleStage`: `lead | trialing | active | past_due | churned` (derived from subscriptions, overridable)
 - `planName`, `mrrMinor`, `currency` (denormalized from active subscriptions)
-- `healthScore` 0–100, `healthStatus`: `healthy | at_risk | critical | unknown`, `healthUpdatedAt`
 - `seatsUsed`, `seatsLimit` (nullable)
 - `firstSeenAt`, `lastActiveAt` (max contact activity), `customerSince` (first paid)
 - `tags text[]`, `attributes jsonb` (free-form fields from sources)
@@ -67,7 +66,7 @@ All tables: `id uuid` (branded ID), `organizationId`, `createdAt`, `updatedAt`; 
 **`customer_metric_definitions`**
 
 - `key` (e.g. `events`, `api_requests`, `seats`, `dashboards_created`), `name`, `unit`, `aggregation`: `sum | max | last`, `provider`, `description`
-- Built-in keys computed by Hazel, not sources: `active_users`, `mrr`, `health_score`
+- Built-in keys computed by Hazel, not sources: `active_users`, `mrr`
 
 **`customer_metric_daily`**: per-account daily time series for any metric
 
@@ -100,7 +99,6 @@ Built-in templates (seeded per org, editable):
 | `cancel_scheduled`            | `cancelAtPeriodEnd` set, or plan downgraded                                | risk        |
 | `trial_ending_low_activation` | Trial ends in ≤5 days and < 2 active users in last 7 days                  | risk        |
 | `onboarding_stalled`          | Account created 7–30 days ago, < 2 contacts ever active                    | risk        |
-| `health_drop`                 | Health score fell ≥20 points in 7 days, or entered `critical`              | risk        |
 | `champion_inactive`           | Most active contact of last 30 days inactive 14 days                       | risk        |
 | `near_limit`                  | A metered feature ≥ 90% of plan limit (Autumn)                             | opportunity |
 | `seat_growth`                 | Active users up ≥50% in 30 days                                            | opportunity |
@@ -121,18 +119,6 @@ the lifecycle stages (default all but churned) and the sources a customer must h
 - Unique open signal per `(ruleId, accountId)`. If the condition clears → `auto_resolved`. A dismissed signal re-opens only if evidence worsens by a full step.
 - **Priority** (queue order) = severity weight × log(MRR+1) weight × freshness. Shown as a rank, sortable by other fields.
 
-### Health
-
-**`customer_health_settings`**: one row per org
-
-- `components jsonb`: weighted parts summing to 100%
-    - `usage`: active users / contacts ratio and 30-day trend
-    - `engagement`: days since last activity
-    - `billing`: payment status, overdue invoices
-    - `signals`: open risk signals by severity
-- `bands`: healthy ≥ 70, at risk 40–69, critical < 40 (editable)
-- A component with no data drops out and its weight is shared across the rest (Vitally pattern), so a Clerk-only org still gets a score.
-
 ### Notes
 
 **`customer_notes`**: `accountId`, `authorUserId`, `body` (markdown), `pinned`, soft delete.
@@ -146,14 +132,14 @@ the lifecycle stages (default all but churned) and the sources a customer must h
 ### Compute pipeline (cluster)
 
 - Webhook or cron sync → `CustomerIngest` service upserts (accounts, contacts, refs, subs, invoices, activity, metrics, events). Idempotent on `(provider, externalId)`.
-- Hourly per org (`ClusterCron`): denormalize account fields (MRR, stage, lastActiveAt) → write today's built-in metrics → compute health → evaluate rules → open/update/auto-resolve signals → wake snoozed signals.
+- Hourly per org (`ClusterCron`): denormalize account fields (MRR, stage, lastActiveAt) → write today's built-in metrics → evaluate rules → open/update/auto-resolve signals → wake snoozed signals.
 - Reads:
     - Live lists (accounts, signals, notes) via Electric + TanStack DB.
     - Aggregates and time series (overview charts, usage charts) via RPC.
 
 ### PR plan
 
-1. **Core**: schema, domain models, RPC, ingest service, rollup/health/signal cron, all UI surfaces, data-source settings shell, dev seed script with realistic fake data. No live providers.
+1. **Core**: schema, domain models, RPC, ingest service, rollup/signal cron, all UI surfaces, data-source settings shell, dev seed script with realistic fake data. No live providers.
 2. **Clerk**: orgs → accounts, users → contacts, memberships, sessions → sign-ins/activity. Webhooks + backfill.
 3. **Stripe**: customers → refs, subscriptions, invoices, events. Webhooks + backfill.
 4. **Autumn**: customers, products → subscriptions, feature usage + limits → metrics (`near_limit`). Webhooks + backfill.
@@ -165,10 +151,10 @@ New top-level **Customers** item in the icon dock (`nav-sidebar.tsx`), with its 
 
 - Overview
 - Needs attention (count badge)
-- Customers, plus saved views (My customers, Paying, Trialing, At risk, Churned)
-- Settings: Signals, Health score, Data sources
+- Customers, plus saved views (My customers, Paying, Trialing, Churned)
+- Settings: Signals, Data sources
 
-Routes: `/$orgSlug/customers` (overview), `/customers/attention`, `/customers/list`, `/customers/$accountId`, `/customers/settings/{signals,health,sources}`.
+Routes: `/$orgSlug/customers` (overview), `/customers/attention`, `/customers/list`, `/customers/$accountId`, `/customers/settings/{signals,sources}`.
 
 ### 1. Overview
 
@@ -176,7 +162,6 @@ Routes: `/$orgSlug/customers` (overview), `/customers/attention`, `/customers/li
 - KPI row: MRR (+Δ), paying customers, active customers (≥1 active user in 30d), WAU / MAU with stickiness (WAU÷MAU), logo churn (period), at-risk MRR (sum MRR of accounts with open high-severity risk signals).
 - MRR movement chart: new, expansion, contraction, churned (stacked bars) + net line.
 - Active users chart: DAU / WAU / MAU lines.
-- Health distribution (healthy / at risk / critical counts and MRR).
 - Needs-attention preview: top 5 queue items, link to the queue.
 - Top movers: biggest usage gains and drops (account, Δ%, sparkline).
 - Recent churn and new customers lists.
@@ -185,7 +170,7 @@ Routes: `/$orgSlug/customers` (overview), `/customers/attention`, `/customers/li
 ### 2. Needs attention (queue)
 
 - Tabs: Open · Snoozed · Done. Filters: kind (risk / opportunity), signal type, severity, owner (default "Mine or unowned", so a new account shows to everyone), plan.
-- Rows: rank, account (logo, name, plan, MRR), signal title + plain reason, evidence mini-viz (sparkline or invoice amount), severity, age, assignee, health badge.
+- Rows: rank, account (logo, name, plan, MRR), signal title + plain reason, evidence mini-viz (sparkline or invoice amount), severity, age, assignee.
 - Grouping toggle: one row per signal, or one row per account with its stacked signals.
 - Row actions: assign, snooze (tomorrow / 3 days / next week / date), mark done (outcome + note), dismiss (not useful), open customer.
 - Keyboard: k down / j up, a assign, i assign to me, h snooze (Linear's keys), d done, enter open. An account's signals sit together in the queue, joined by a line.
@@ -194,15 +179,15 @@ Routes: `/$orgSlug/customers` (overview), `/customers/attention`, `/customers/li
 
 ### 3. Customers list
 
-- Table: name + logo, owner, stage, plan, MRR, health (badge + score), active users 30d + sparkline, usage trend %, last active, open signals, customer since.
+- Table: name + logo, owner, stage, plan, MRR, active users 30d + sparkline, usage trend %, last active, open signals, customer since.
 - Saved views (tabs), search, filter builder, sort, column picker, bulk assign owner / add tag.
-- Health and stage colors consistent with other surfaces.
+- Stage colors consistent with other surfaces.
 
 ### 4. Customer page
 
-- Header: logo, name, domain, stage, plan, MRR, health badge, owner (editable), customer since, source chips linking out to Clerk / Stripe / Autumn / Maple.
+- Header: logo, name, domain, stage, plan, MRR, owner (editable), customer since, source chips linking out to Clerk / Stripe / Autumn / Maple.
 - Tabs:
-    - **Overview**: KPI tiles (active users 30d, usage trend, MRR, seats used/limit, last active); usage chart with metric picker; health breakdown (each component, its score, weight, why); open signals with actions; subscription summary; pinned notes; recent activity.
+    - **Overview**: KPI tiles (active users 30d, usage trend, MRR, seats used/limit, last active); usage chart with metric picker; open signals with actions; subscription summary; pinned notes; recent activity.
     - **Users**: contacts table (name, email, role, last seen, sign-ins 30d, activity sparkline, status: active / dormant / never active).
     - **Billing**: current subscriptions, invoice table (status, amount, due, paid), payment issue banner.
     - **Activity**: timeline, filter by source and type.
@@ -212,12 +197,11 @@ Routes: `/$orgSlug/customers` (overview), `/customers/attention`, `/customers/li
 ### 5. Settings
 
 - **Signals**: list of rules (enabled toggle, template, kind, severity, plain description, number of accounts matching now). Rule editor: template, thresholds, scope filter, severity, live preview of matching accounts.
-- **Health score**: component weights (sliders summing to 100%), band thresholds, distribution preview.
 - **Data sources**: cards for Clerk, Stripe, Autumn, Maple: status, last sync, records synced, errors, sync now, connect (API key flow), webhook URL to copy. Unmatched records count with a link to resolve.
 
 ## Additions from design pass (proposed, pending approval)
 
-Wonder file "Maple Design System", pages `Hazel Customers · *` (Foundations, Overview, Needs Attention, List, Customer Page, Signals & Health Settings, Data Sources).
+Wonder file "Maple Design System", pages `Hazel Customers · *` (Foundations, Overview, Needs Attention, List, Customer Page, Signals Settings, Data Sources).
 
 ### Data model additions
 
@@ -233,10 +217,6 @@ Wonder file "Maple Design System", pages `Hazel Customers · *` (Foundations, Ov
     - `connectionId`, `provider`, `entityType`, `externalId`, `label`, `valueMinor` / `eventCount30d`
     - `suggestedAccountId`, `confidence`, `reason`, `status` (`open | linked | ignored`)
     - Plus `customer_ignore_rules` (pattern)
-- **New `customer_health_daily`**
-    - `accountId`, `day`, `score`, `status`
-    - `components jsonb`: per component `score`, `effectiveWeight`, `why`, `excluded`
-    - Powers the breakdown, "62 → 48" changes and band-change counts.
 - **New `customer_mrr_movements`**
     - `accountId`, `day`, `type` (`new | expansion | contraction | churn | reactivation`), `deltaMinor`
     - Powers the MRR movement chart, its tooltip and NRR/GRR.
@@ -251,16 +231,14 @@ Wonder file "Maple Design System", pages `Hazel Customers · *` (Foundations, Ov
     - `snoozedByUserId`, `snoozedAt`, `snoozeNote`, `snoozeEvidence`
     - `dismissReason`
 - **Signal rules**: `updatedBy`, `lastTriggeredAt`, `matchingCount`. Template metadata: required sources and friendly names.
-- **Health settings**: scoring steps per input, signal deductions per severity, excluded rules (`health_drop`), `updatedBy`.
 - **Notes**: `editedAt`, optional `signalId`.
 - **New `customer_saved_views`**: `name`, `filters jsonb`, `sort`, `columns`, `ownerUserId` (null = shared), `position`.
 - **Integration connections**
     - Status fields: `lastSuccessAt`, `lastErrorAt`, `consecutiveFailures`
     - Provider `config jsonb`: Maple activity events, metric mappings, identity keys, lookback; Stripe metadata key, domain match toggle
 - **Sync runs**: `progress {step, done, total}`, structured `error {code, httpStatus}`.
-- **Events**: `actorUserId`, plus types `health.status_changed`, `contact.first_active`, `signal.assigned`.
+- **Events**: `actorUserId`, plus types `contact.first_active`, `signal.assigned`.
 
 ### Endpoints implied
 
 - Dry-run a draft rule: match count, MRR, top accounts with evidence, why others don't match, queue delta.
-- Dry-run health settings: distribution, how many accounts change band, sample breakdown.

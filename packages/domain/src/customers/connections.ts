@@ -1,90 +1,19 @@
 /**
- * Data source connections: per-provider config, and the sync run documents
+ * Data source connections: the opaque config, and the sync run documents
  * (`docs/customers/tech-design.md` §5). Credentials never appear here: they live encrypted in
  * `customer_connection_secrets`, which is not synced.
  */
-import { Effect, Schema } from "effect"
-import { type CustomerProvider, SweepEntityType } from "./enums"
-
-/** Clerk: users' sign-ins and sessions drive activity. */
-export const ClerkConnectionConfig = Schema.TaggedStruct("clerk", {
-	/** Create accounts for Clerk organizations with no match (Clerk is the identity source). */
-	createAccounts: Schema.Boolean,
-})
+import { Schema } from "effect"
+import { SweepEntityType } from "./enums"
 
 /**
- * Stripe: billing. Invoices always come from Stripe; subscriptions count for the accounts Autumn
- * does not bill (no Autumn subscription, or Autumn not imported yet).
+ * A connection's config, opaque here: each integration's schema decodes it where it is read
+ * (`@hazel/customer-integrations`). Stored configs rely on that decoding, so this keeps every key.
  */
-export const StripeConnectionConfig = Schema.TaggedStruct("stripe", {
-	/** The customer metadata key holding the Clerk organization id (shared-id matching). */
-	clerkOrgMetadataKey: Schema.String,
-	/** Match unknown customers to accounts by their email domain. */
-	matchByDomain: Schema.Boolean,
-	/**
-	 * The Stripe account id (`acct_…`), `""` when not given. Required with a restricted key, which may
-	 * not read its own account; checked against the account a secret key opens.
-	 */
-	accountId: Schema.String.pipe(Schema.withDecodingDefaultKey(Effect.succeed(""))),
-})
-
-/**
- * Autumn: products → subscriptions (the MRR source of the accounts it bills, once imported), feature
- * usage and limits → metrics.
- */
-export const AutumnConnectionConfig = Schema.TaggedStruct("autumn", {
-	/** Autumn customer id = Clerk organization id. */
-	customerIdIsClerkOrgId: Schema.Boolean,
-})
-
-/**
- * Which Maple region the key belongs to: its API lives on another host per region, and a key of one
- * region is refused by the other.
- */
-export const MapleRegion = Schema.Literals(["us", "eu"])
-export type MapleRegion = typeof MapleRegion.Type
-
-/**
- * Maple: product events by GroupId/UserId → activity and per-event metrics, pulled on a schedule.
- * The organization is the one the key opens (read at connect). Configs stored before carry
- * `mapleOrgId`, `accountKey` and `userKey` too; decoding drops them.
- */
-export const MapleConnectionConfig = Schema.TaggedStruct("maple", {
-	/** Added after the first connections were stored, so an older config decodes as `us`. */
-	region: MapleRegion.pipe(Schema.withDecodingDefaultKey(Effect.succeed("us" as const))),
-	/** Event names that count as activity; empty = every event. Spelled out in each pull's query. */
-	activityEvents: Schema.Array(Schema.String).check(Schema.isMaxLength(100)),
-	/** Event name → metric key written per account per day. Spelled out in each pull's query. */
-	metricMappings: Schema.Array(Schema.Struct({ event: Schema.String, metricKey: Schema.String })).check(
-		Schema.isMaxLength(50),
-	),
-	/** 1–365. */
-	lookbackDays: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 })),
-})
-
-export const ConnectionConfig = Schema.Union([
-	ClerkConnectionConfig,
-	StripeConnectionConfig,
-	AutumnConnectionConfig,
-	MapleConnectionConfig,
+export const ConnectionConfig = Schema.StructWithRest(Schema.Struct({ _tag: Schema.String }), [
+	Schema.Record(Schema.String, Schema.Unknown),
 ])
 export type ConnectionConfig = typeof ConnectionConfig.Type
-
-/** A connection config per provider, keyed by its own provider. */
-type ConnectionConfigTable = { readonly [P in CustomerProvider]: ConnectionConfig & { _tag: P } }
-
-export const DEFAULT_CONNECTION_CONFIG: ConnectionConfigTable = {
-	clerk: { _tag: "clerk", createAccounts: true },
-	stripe: { _tag: "stripe", clerkOrgMetadataKey: "clerk_org_id", matchByDomain: true, accountId: "" },
-	autumn: { _tag: "autumn", customerIdIsClerkOrgId: true },
-	maple: {
-		_tag: "maple",
-		region: "us",
-		activityEvents: [],
-		metricMappings: [],
-		lookbackDays: 90,
-	},
-}
 
 /** Records written by a run (or, on a connection, in total). */
 export const SyncStats = Schema.Struct({

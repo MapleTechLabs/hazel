@@ -4,6 +4,13 @@ import { BunServices, BunRuntime } from "@effect/platform-bun"
 import { Effect, Layer } from "effect"
 import { setupCommand } from "./commands/setup.ts"
 import { doctorCommand } from "./commands/doctor.ts"
+import {
+	customerCheckCommand,
+	customerCommand,
+	customerDeployCommand,
+	customerDestroyCommand,
+	customerUpgradeCommand,
+} from "./commands/customer.ts"
 import { SecretGenerator } from "./services/secrets.ts"
 import { EnvWriter } from "./services/env-writer.ts"
 import { Doctor } from "./services/doctor.ts"
@@ -12,7 +19,14 @@ const ServicesLive = Layer.mergeAll(SecretGenerator.layer, EnvWriter.layer, Doct
 
 // Root command with subcommands, run via v4 CLI pattern
 const cli = setupCommand.pipe(
-	Command.withSubcommands([doctorCommand]),
+	Command.withSubcommands([
+		doctorCommand,
+		customerCommand,
+		customerCheckCommand,
+		customerDeployCommand,
+		customerUpgradeCommand,
+		customerDestroyCommand,
+	]),
 	Command.run({
 		version: "0.0.1",
 	}),

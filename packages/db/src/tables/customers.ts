@@ -18,8 +18,6 @@ import type {
 	SlaState,
 	SlaTargets,
 	ConnectionConfig,
-	HealthBreakdown,
-	HealthSettings,
 	RuleConfig,
 	RuleScope,
 	SignalEvidence,
@@ -33,17 +31,14 @@ import type {
 	ViewLayoutKey,
 	SuggestionReason,
 } from "@hazel/domain/customers"
+import { DEFAULT_ATTENTION_SETTINGS } from "@hazel/customer-integrations"
 import {
-	DEFAULT_ATTENTION_SETTINGS,
 	DEFAULT_BUSINESS_HOURS,
 	SlaHours,
 	EMPTY_SYNC_STATS,
 	BillingInterval,
 	BuiltInViewKey,
 	ConnectionStatus,
-	CustomerProvider,
-	CustomerSource as CustomerSourceSchema,
-	HealthStatus,
 	IgnoreRuleField,
 	InvoiceStatus,
 	IssuePriority,
@@ -115,7 +110,7 @@ const count = () => SQLite.column(SQLite.integer, { default: 0 })
 // Identity
 // ---------------------------------------------------------------------------
 
-/** A B2B customer (a Clerk organization). Billing, usage and health fields are denormalized by compute. */
+/** A B2B customer. Billing and usage fields are denormalized by compute. */
 export const customerAccountsTable = SQLite.table("customer_accounts", {
 	columns: {
 		id: id(CustomerAccountId),
@@ -136,13 +131,10 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 		 * first compute, or without subscriptions. A change from one to the other is a switch of
 		 * source, not revenue: no MRR movement.
 		 */
-		mrrSource: SQLite.nullable(textEnum(CustomerProvider.literals)),
+		mrrSource: SQLite.nullable(SQLite.text),
 		/** List price of the trial's plan per month: ranks trials in the queue (they have no MRR yet). */
 		trialListMrrMinor: SQLite.nullable(SQLite.integer),
 		trialEndsAt: SQLite.nullable(timestamptz),
-		healthScore: SQLite.nullable(SQLite.integer),
-		healthStatus: SQLite.column(textEnum(HealthStatus.literals), { default: "unknown" }),
-		healthUpdatedAt: SQLite.nullable(timestamptz),
 		seatsUsed: SQLite.nullable(SQLite.integer),
 		seatsLimit: SQLite.nullable(SQLite.integer),
 		contactCount: count(),
@@ -164,9 +156,9 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 		tags: SQLite.column(jsonb<ReadonlyArray<string>>(), { default: [] }),
 		attributes: SQLite.column(jsonb<Record<string, unknown>>(), { default: {} }),
 		/**
-		 * The boolean keys of the Clerk organization's `public_metadata` (`docs/customers/clerk.md`,
-		 * "Feature flags"), as last seen or written through `customers.featureFlags.set`. An account
-		 * holding several organizations shows the last one synced; Hazel writes to all of them.
+		 * The account record's boolean flags at the source holding them, as last seen or written
+		 * through `customers.featureFlags.set`. An account holding several records there shows the last
+		 * one synced; Hazel writes to all of them.
 		 */
 		featureFlags: SQLite.column(jsonb<Readonly<Record<string, boolean>>>(), { default: {} }),
 		/**
@@ -181,7 +173,7 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 		fieldSources: SQLite.column(jsonb<Readonly<Record<string, CustomerSource>>>(), { default: {} }),
 		/**
 		 * The primary of the customer it is an environment of (`customers.account.link`): accounts are
-		 * never merged, each Clerk organization stays its own account, and a group of them is one
+		 * never merged, each source record stays its own account, and a group of them is one
 		 * customer whose signals are evaluated over the group and land on the primary. Null on a
 		 * standalone account and on a primary; never a non-primary one (no chains).
 		 */
@@ -204,7 +196,6 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 		SQLite.index("customer_accounts_primary_idx", ["primaryAccountId"]),
 		SQLite.index("customer_accounts_owner_idx", ["ownerUserId"]),
 		SQLite.index("customer_accounts_stage_idx", ["lifecycleStage"]),
-		SQLite.index("customer_accounts_health_idx", ["healthStatus"]),
 		SQLite.index("customer_accounts_deleted_at_idx", ["deletedAt"]),
 	],
 })
@@ -245,7 +236,7 @@ export const customerEnrichmentsTable = SQLite.table("customer_enrichments", {
 export type CustomerEnrichment = SQLite.SelectRowOf<typeof customerEnrichmentsTable>
 export type NewCustomerEnrichment = SQLite.InsertRowOf<typeof customerEnrichmentsTable>
 
-/** An end user of an account (a Clerk user in that organization). RPC-only (per account, paged). */
+/** An end user of an account. RPC-only (per account, paged). */
 export const customerContactsTable = SQLite.table("customer_contacts", {
 	columns: {
 		id: id(CustomerContactId),
@@ -254,7 +245,7 @@ export const customerContactsTable = SQLite.table("customer_contacts", {
 		name: SQLite.nullable(SQLite.text),
 		avatarUrl: SQLite.nullable(SQLite.text),
 		title: SQLite.nullable(SQLite.text),
-		/** The provider's role, e.g. Clerk's `org:admin`. */
+		/** The provider's role, as it names it. */
 		role: SQLite.nullable(SQLite.text),
 		isBillingContact: SQLite.column(SQLite.boolean, { default: false }),
 		joinedAt: SQLite.nullable(timestamptz),
@@ -281,10 +272,10 @@ export type CustomerContact = SQLite.SelectRowOf<typeof customerContactsTable>
 export type NewCustomerContact = SQLite.InsertRowOf<typeof customerContactsTable>
 
 /**
- * A provider record linked to an account or contact: how four sources merge into one customer.
- * An account may hold several refs of one provider (two Stripe customers). Unique per
+ * A provider record linked to an account or contact: how the sources merge into one customer.
+ * An account may hold several refs of one provider (two customers there). Unique per
  * `(provider, externalId)` for accounts, and per `(provider, externalId, accountId)` for contacts
- * (one Clerk user is a contact of each org it belongs to): partial indexes, `extra-indexes.ts`.
+ * (one user is a contact of each org it belongs to): partial indexes, `extra-indexes.ts`.
  */
 /**
  * One membership of a contact ref: when it was last seen (ISO), and when it was left (the removal's
@@ -299,7 +290,7 @@ export const customerExternalRefsTable = SQLite.table("customer_external_refs", 
 	columns: {
 		id: id(CustomerExternalRefId),
 		connectionId: uuid(CustomerConnectionId),
-		provider: textEnum(CustomerProvider.literals),
+		provider: SQLite.text,
 		entityType: textEnum(RefEntityType.literals),
 		/** The account or contact id. */
 		entityId: SQLite.text,
@@ -309,7 +300,7 @@ export const customerExternalRefsTable = SQLite.table("customer_external_refs", 
 		/** The provider record's own name (an account ref's organization or customer name), as last seen. */
 		name: SQLite.nullable(SQLite.text),
 		/**
-		 * A contact ref's memberships: each account record (Clerk organization) it is a member through
+		 * A contact ref's memberships: each account record it is a member through
 		 * (`ContactMembership`). After a merge one ref may stand for several; leaving one keeps it live,
 		 * and a full sweep drops the ones it did not see. Null before it was known, and once the ref is
 		 * stale.
@@ -359,7 +350,7 @@ export const customerSubscriptionsTable = SQLite.table("customer_subscriptions",
 	columns: {
 		id: id(CustomerSubscriptionId),
 		accountId: uuid(CustomerAccountId),
-		provider: textEnum(CustomerProvider.literals),
+		provider: SQLite.text,
 		externalId: SQLite.text,
 		planName: SQLite.nullable(SQLite.text),
 		status: textEnum(SubscriptionStatus.literals),
@@ -398,7 +389,7 @@ export const customerInvoicesTable = SQLite.table("customer_invoices", {
 		id: id(CustomerInvoiceId),
 		accountId: uuid(CustomerAccountId),
 		subscriptionId: SQLite.nullable(uuid(CustomerSubscriptionId)),
-		provider: textEnum(CustomerProvider.literals),
+		provider: SQLite.text,
 		/** The upcoming invoice's is `upcoming:<subscription external id>`. */
 		externalId: SQLite.text,
 		number: SQLite.nullable(SQLite.text),
@@ -434,7 +425,7 @@ export type NewCustomerInvoice = SQLite.InsertRowOf<typeof customerInvoicesTable
 
 /**
  * One row per contact per active day: DAU/WAU/MAU need distinct users across days. Each provider
- * writes only its own fields (Clerk `signedIn`/`sessionCount`, Maple `eventCount`).
+ * writes only its own fields (`signedIn`/`sessionCount`, or `eventCount`).
  */
 export const customerActivityDailyTable = SQLite.table("customer_activity_daily", {
 	columns: {
@@ -466,7 +457,7 @@ export const customerMetricDefinitionsTable = SQLite.table("customer_metric_defi
 		customUnit: SQLite.nullable(SQLite.text),
 		aggregation: textEnum(MetricAggregation.literals),
 		/** Null for a built-in. */
-		provider: SQLite.nullable(textEnum(CustomerProvider.literals)),
+		provider: SQLite.nullable(SQLite.text),
 		description: SQLite.nullable(SQLite.text),
 		builtIn: SQLite.column(SQLite.boolean, { default: false }),
 		createdAt: createdAt(),
@@ -477,7 +468,7 @@ export const customerMetricDefinitionsTable = SQLite.table("customer_metric_defi
 })
 export type CustomerMetricDefinition = SQLite.SelectRowOf<typeof customerMetricDefinitionsTable>
 
-/** Per-account daily series of any metric; `limitValue` is the plan limit of a metered one (Autumn). */
+/** Per-account daily series of any metric; `limitValue` is the plan limit of a metered one. */
 export const customerMetricDailyTable = SQLite.table("customer_metric_daily", {
 	columns: {
 		accountId: uuid(CustomerAccountId),
@@ -506,9 +497,6 @@ export const customerOrgDailyTable = SQLite.table("customer_org_daily", {
 		dau: count(),
 		wau: count(),
 		mau: count(),
-		healthy: count(),
-		atRisk: count(),
-		critical: count(),
 		atRiskMrrMinor: money(),
 	},
 	primaryKey: ["day"],
@@ -524,8 +512,8 @@ export const customerEventsTable = SQLite.table("customer_events", {
 		id: id(CustomerEventId),
 		accountId: uuid(CustomerAccountId),
 		contactId: SQLite.nullable(uuid(CustomerContactId)),
-		provider: textEnum(CustomerSourceSchema.literals),
-		/** Dotted, e.g. `subscription.canceled`, `signal.opened`, `health.status_changed`. */
+		provider: SQLite.text,
+		/** Dotted, e.g. `subscription.canceled`, `signal.opened`. */
 		type: SQLite.text,
 		title: SQLite.text,
 		data: SQLite.column(jsonb<Record<string, unknown>>(), { default: {} }),
@@ -656,22 +644,21 @@ export type CustomerSignal = SQLite.SelectRowOf<typeof customerSignalsTable>
 export type NewCustomerSignal = SQLite.InsertRowOf<typeof customerSignalsTable>
 
 // ---------------------------------------------------------------------------
-// Health
+// Settings and SLA policies
 // ---------------------------------------------------------------------------
 
-/** One row: the org's health configuration, reporting currency and compute bookkeeping. */
+/** One row: the org's reporting currency, attention scope and compute bookkeeping. */
 export const customerSettingsTable = SQLite.table("customer_settings", {
 	columns: {
 		id: id(CustomerSettingsId),
 		organizationId: uuid(OrganizationId),
-		health: jsonb<HealthSettings>(),
 		/** Which customers Needs attention covers (`AttentionSettings`). */
 		attention: SQLite.column(jsonb<AttentionSettings>(), { default: DEFAULT_ATTENTION_SETTINGS }),
 		/** MRR in other currencies is left out of org totals (no FX in v1). */
 		reportingCurrency: SQLite.column(SQLite.text, { default: "usd" }),
 		/** Plan names billed on top of a base plan: not an account's `planName` while it has one. */
 		addOnPlans: SQLite.column(jsonb<ReadonlyArray<string>>(), { default: [] }),
-		/** MRR from each Stripe subscription's last paid invoice (usage overage, discounts) once one exists. */
+		/** MRR from each subscription's last paid invoice (usage overage, discounts) once one exists. */
 		overageInMrr: SQLite.column(SQLite.boolean, { default: false }),
 		/** The working week SLA policies on business hours count (`docs/customers/sla.md`). */
 		businessHours: SQLite.column(jsonb<BusinessHours>(), { default: DEFAULT_BUSINESS_HOURS }),
@@ -709,19 +696,6 @@ export const customerSlaPoliciesTable = SQLite.table("customer_sla_policies", {
 	primaryKey: ["id"],
 })
 export type CustomerSlaPolicy = SQLite.SelectRowOf<typeof customerSlaPoliciesTable>
-
-export const customerHealthDailyTable = SQLite.table("customer_health_daily", {
-	columns: {
-		accountId: uuid(CustomerAccountId),
-		day,
-		score: SQLite.nullable(SQLite.integer),
-		status: textEnum(HealthStatus.literals),
-		breakdown: jsonb<HealthBreakdown>(),
-	},
-	primaryKey: ["accountId", "day"],
-	indexes: [SQLite.index("customer_health_daily_day_idx", ["day"])],
-})
-export type CustomerHealthDay = SQLite.SelectRowOf<typeof customerHealthDailyTable>
 
 // ---------------------------------------------------------------------------
 // Notes and views
@@ -801,9 +775,9 @@ export const customerConnectionsTable = SQLite.table("customer_connections", {
 	columns: {
 		id: id(CustomerConnectionId),
 		organizationId: uuid(OrganizationId),
-		provider: textEnum(CustomerProvider.literals),
+		provider: SQLite.text,
 		status: SQLite.column(textEnum(ConnectionStatus.literals), { default: "active" }),
-		/** The provider account it reads, e.g. the Stripe account name. */
+		/** The provider account it reads, by its name there. */
 		externalAccountId: SQLite.nullable(SQLite.text),
 		externalAccountName: SQLite.nullable(SQLite.text),
 		config: jsonb<ConnectionConfig>(),
@@ -852,7 +826,7 @@ export const customerSyncRunsTable = SQLite.table("customer_sync_runs", {
 		id: id(CustomerSyncRunId),
 		organizationId: uuid(OrganizationId),
 		connectionId: uuid(CustomerConnectionId),
-		provider: textEnum(CustomerProvider.literals),
+		provider: SQLite.text,
 		trigger: textEnum(SyncTrigger.literals),
 		status: SQLite.column(textEnum(SyncRunStatus.literals), { default: "running" }),
 		startedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
@@ -875,7 +849,7 @@ export const customerUnmatchedRecordsTable = SQLite.table("customer_unmatched_re
 	columns: {
 		id: id(CustomerUnmatchedRecordId),
 		connectionId: uuid(CustomerConnectionId),
-		provider: textEnum(CustomerProvider.literals),
+		provider: SQLite.text,
 		entityType: textEnum(UnmatchedEntityType.literals),
 		externalId: SQLite.text,
 		/** Name or email, for the list. */
@@ -917,7 +891,7 @@ export const customerIgnoreRulesTable = SQLite.table("customer_ignore_rules", {
 	columns: {
 		id: id(CustomerIgnoreRuleId),
 		/** Null = every provider. */
-		provider: SQLite.nullable(textEnum(CustomerProvider.literals)),
+		provider: SQLite.nullable(SQLite.text),
 		entityType: textEnum(UnmatchedEntityType.literals),
 		field: textEnum(IgnoreRuleField.literals),
 		/** Glob, `*` wildcard, case-insensitive. */
@@ -1095,7 +1069,7 @@ export type CustomerIssueSla = SQLite.SelectRowOf<typeof customerIssueSlasTable>
 
 /**
  * A feature flag created in Hazel. The flags the Feature flags page lists are these plus every key
- * in an account's `featureFlags` (what Clerk already holds), so a flag created here shows before any
+ * in an account's `featureFlags` (what the source already holds), so a flag created here shows before any
  * customer has it. Deleting a flag removes it from every customer and deletes this row.
  */
 export const customerFeatureFlagsTable = SQLite.table("customer_feature_flags", {
@@ -1112,7 +1086,7 @@ export const customerFeatureFlagsTable = SQLite.table("customer_feature_flags", 
 export type CustomerFeatureFlag = SQLite.SelectRowOf<typeof customerFeatureFlagsTable>
 
 /**
- * The members an admin let sign in as their customers' users (Clerk impersonation): none by default,
+ * The members an admin let sign in as their customers' users (a source's impersonation): none by default,
  * and being an admin grants nothing. Revoking deletes the row.
  */
 export const customerImpersonatorsTable = SQLite.table("customer_impersonators", {
@@ -1135,14 +1109,14 @@ export const customerImpersonationsTable = SQLite.table("customer_impersonations
 		id: id(CustomerImpersonationId),
 		organizationId: uuid(OrganizationId),
 		userId: uuid(UserId),
-		provider: textEnum(CustomerProvider.literals),
+		provider: SQLite.text,
 		accountId: uuid(CustomerAccountId),
 		contactId: uuid(CustomerContactId),
 		/** The contact's name (else email) then, so the log reads after it is gone. */
 		contactLabel: SQLite.nullable(SQLite.text),
-		/** The provider's user, e.g. the Clerk user id. */
+		/** The provider's user id. */
 		externalUserId: SQLite.text,
-		/** The provider's token for it, e.g. the Clerk actor token id (to revoke it in Clerk). */
+		/** The provider's token for it (to revoke it there). */
 		externalTokenId: SQLite.text,
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),

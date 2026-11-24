@@ -7,6 +7,7 @@ import { card, cardBody, cardDescription, cardHeader, cardTitle } from "../../ui
 import { presenceDot } from "../../ui/presence-dot"
 import { sectionLabelRoot } from "../../ui/section-label"
 import { separator } from "../../ui/separator"
+import { dataTable } from "../../ui/data-table"
 import { resizeEdge, splitPanelClassName } from "../../ui/split-panel"
 import { group, kitSection, pair, specimen } from "./chrome"
 import { Message, type Model } from "./model"
@@ -228,9 +229,72 @@ const splitPanels = (h: H): Html =>
 		],
 	)
 
+const MEMBERS = [
+	{ name: "Ada Lovelace", role: "Owner", joined: "Mar 2, 2026" },
+	{ name: "Grace Hopper", role: "Admin", joined: "Apr 18, 2026" },
+] as const
+
+const tables = (h: H): Html =>
+	specimen(
+		h,
+		{
+			name: "Data table",
+			file: "ui/data-table.ts",
+			note: "The one table. Describe the columns once; it sorts, selects, drops low-priority columns on a phone, and keeps its shape with skeleton rows while loading. `isFramed: false` inside a card.",
+			className: "flex-col items-stretch gap-4",
+		},
+		[
+			dataTable(h, {
+				ariaLabel: "Members",
+				id: "kit-members",
+				columns: [
+					{
+						key: "name",
+						label: "Name",
+						cell: (member) =>
+							h.div(
+								[h.Class("flex items-center gap-3")],
+								[
+									avatar(h, { size: "sm", seed: member.name }),
+									h.span([h.Class("font-medium")], [member.name]),
+								],
+							),
+					},
+					{
+						key: "role",
+						label: "Role",
+						widthClass: "w-28",
+						cell: (member) => badge(h, { intent: "secondary", size: "sm" }, [member.role]),
+					},
+					{
+						key: "joined",
+						label: "Joined",
+						widthClass: "w-36",
+						hideClass: "max-md:hidden",
+						cell: (member) => h.span([h.Class("text-muted-fg")], [member.joined]),
+					},
+				],
+				rows: MEMBERS,
+				rowKey: (member) => member.name,
+			}),
+			dataTable(h, {
+				ariaLabel: "Members loading",
+				id: "kit-members-loading",
+				columns: [
+					{ key: "name", label: "Name", cell: () => "" },
+					{ key: "role", label: "Role", widthClass: "w-28", cell: () => "" },
+				],
+				rows: [],
+				rowKey: () => "",
+				loadingRows: 2,
+			}),
+		],
+	)
+
 export const display = (h: H, _model: Model): Html =>
 	kitSection(h, "display", [
 		pair(h, [avatars(h), cards(h)]),
 		pair(h, [labels(h), separators(h)]),
+		tables(h),
 		splitPanels(h),
 	])

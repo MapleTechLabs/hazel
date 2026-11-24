@@ -23,13 +23,13 @@
 		"@hazel/auth": "workspace:*",
 		"@hazel/backend-core": "workspace:*",
 		"@hazel/bot-gateway": "workspace:*",
+		"@hazel/customer-integrations": "workspace:*",
 		"@hazel/db": "workspace:*",
 		"@hazel/domain": "workspace:*",
 		"@hazel/infra": "workspace:*",
 		"@hazel/integrations": "workspace:*",
 		"@hazel/schema": "workspace:*",
 		"@hazel/sync-do": "workspace:*",
-		"@yielded/auth": "0.1.0-beta.47",
 		"alchemy": "catalog:alchemy",
 		"dfx": "^1.1.1",
 		"effect": "catalog:effect"
@@ -37,7 +37,7 @@
 	"devDependencies": {
 		"@cloudflare/workers-types": "catalog:alchemy",
 		"@effect/platform-node": "catalog:effect",
-		"@types/bun": "1.4.3",
+		"@types/bun": "1.4.5",
 		"typescript": "catalog:tooling"
 	}
 }

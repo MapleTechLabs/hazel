@@ -39,6 +39,7 @@ export const directoryTables = [
 	schema.agentGrantsTable,
 	schema.agentTokensTable,
 	schema.agentAuthCodesTable,
+	schema.oauthBrokerRoutesTable,
 ] as const
 
 /** `OrgObject`, one per organization. */
@@ -79,6 +80,8 @@ export const orgTables = [
 	schema.assistantThreadsTable,
 	schema.assistantItemsTable,
 	schema.assistantFollowersTable,
+	// Data exports and where each build stands (`worker/objects/org/exports.ts`).
+	schema.organizationExportsTable,
 ] as const
 
 /** `ChannelObject`, one per channel (threads too). */
@@ -109,7 +112,7 @@ export const userTables = [
 
 /**
  * `CustomersObject`, one per organization (`docs/customers/tech-design.md`): customer accounts,
- * their billing and usage, signals, health and data sources.
+ * their billing and usage, signals and data sources.
  */
 export const customersTables = [
 	schema.customerAccountsTable,
@@ -127,7 +130,6 @@ export const customersTables = [
 	schema.customerSignalsTable,
 	schema.customerSettingsTable,
 	schema.customerSlaPoliciesTable,
-	schema.customerHealthDailyTable,
 	schema.customerNotesTable,
 	schema.customerSavedViewsTable,
 	schema.customerViewLayoutsTable,

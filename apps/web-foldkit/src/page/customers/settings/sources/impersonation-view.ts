@@ -1,6 +1,7 @@
 import type { UserId } from "@hazel/schema"
 import type { Html } from "foldkit/html"
 import { formatDate, formatRelative } from "../../../../customers/format"
+import { impersonationSource } from "../../../../customers/providers"
 import type { MemberRow } from "../../../../customers/queries"
 import { menuAvatar, personAvatar } from "../../../../customers/ui/identity"
 import { IconPlus } from "../../../../icons"
@@ -10,12 +11,15 @@ import * as Menu from "../../../../ui/menu"
 import { menuLabel, view as menuView } from "../../../../ui/menu-view"
 import { Message } from "./message"
 import { grantableMembers, type Model } from "./model"
-import { card, cardHeader, type H } from "./parts"
+import type { H } from "./parts"
+import { panel, panelHeader } from "../../../../ui/card"
 
-/** Clerk's impersonation section (admins): who may sign in as customers' users, and who did. */
+/** The impersonation section (admins): who may sign in as customers' users, and who did. */
 
-const EXPLANATION =
-	"Members added here can sign in as a customer's users from its Users tab; each sign-in is logged. Turn it on in the Clerk dashboard (Settings → User impersonation). Clerk allows 5 impersonations a month without the Administration add-on."
+const EXPLANATION = [
+	"Members added here can sign in as a customer's users from its Users tab; each sign-in is logged.",
+	...(impersonationSource.impersonationNote === undefined ? [] : [impersonationSource.impersonationNote]),
+].join(" ")
 
 const toMenuMessage = (message: Menu.Message) => Message.GotImpersonatorMenuMessage({ message })
 
@@ -50,13 +54,12 @@ const nameOf = (model: Model, userId: UserId): string =>
 export const impersonationCard = (h: H, model: Model, nowMs: number): Html => {
 	const now = new Date(nowMs)
 	const grantable = grantableMembers(model)
-	return card(h, [
-		cardHeader(
-			h,
-			"Impersonation",
-			EXPLANATION,
-			grantable.length === 0 ? undefined : addMemberMenu(h, model, grantable),
-		),
+	return panel(h, {}, [
+		panelHeader(h, {
+			title: "Impersonation",
+			description: EXPLANATION,
+			aside: grantable.length === 0 ? undefined : addMemberMenu(h, model, grantable),
+		}),
 		model.impersonators.length === 0
 			? h.p([h.Class("text-muted-fg text-sm")], ["No one can impersonate yet."])
 			: h.ul(

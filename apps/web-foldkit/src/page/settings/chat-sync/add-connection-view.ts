@@ -5,7 +5,7 @@ import { dialogBody, dialogClose, dialogFooter, dialogHeader, dialogTitle } from
 import { description, label } from "../../../ui/field"
 import * as Modal from "../../../ui/modal"
 import { WORKSPACE_SEARCH_ID } from "./add-connection"
-import { filterByName, scrollList, searchInput, selectedName, selectedRow, spinnerLine } from "./modal-parts"
+import { filterByName, scrollList, searchInput, selectedName, selectedRow } from "./modal-parts"
 import { chosenWorkspace, Message, type Model } from "./model"
 import {
 	type ChatSyncProvider,
@@ -16,6 +16,8 @@ import {
 	type Workspace,
 } from "./providers"
 import { CONNECT_TARGET, interaction, WORKSPACE_SEARCH_TARGET } from "./update"
+import { callout } from "../../../ui/callout"
+import { loadingState } from "../../../ui/loader"
 
 /** Port of `components/chat-sync/add-connection-modal.tsx`, for each provider. */
 
@@ -114,21 +116,15 @@ const workspaceSection = (
 
 const notice = (
 	h: HtmlBuilder<Message>,
+	intent: "info" | "warning",
 	title: string,
 	text: string | undefined,
 	action: Html | null,
 ): Html =>
-	h.div(
-		[h.Class("rounded-lg border border-border bg-bg-muted/20 p-4")],
-		[
-			h.p([h.Class("font-medium text-fg text-sm")], [title]),
-			...(text === undefined ? [] : [h.p([h.Class("mt-1 text-muted-fg text-sm")], [text])]),
-			...(action === null ? [] : [action]),
-		],
-	)
+	callout(h, { intent, title, actions: action === null ? [] : [action] }, text === undefined ? [] : [text])
 
 const noticeButton = (h: HtmlBuilder<Message>, onPress: Message, text: string): Html =>
-	button(h, { intent: "secondary", size: "sm", className: "mt-3", onPress }, [text])
+	button(h, { intent: "secondary", size: "sm", onPress }, [text])
 
 /** The provider is not connected to the organization: link to its integration page. */
 const connectFirst = (h: HtmlBuilder<Message>, provider: ChatSyncProvider): Html => {
@@ -136,6 +132,7 @@ const connectFirst = (h: HtmlBuilder<Message>, provider: ChatSyncProvider): Html
 	const message = resourceFailureMessage(provider, "NotConnected", workspacesResource)
 	return notice(
 		h,
+		"info",
 		message.title,
 		message.description,
 		noticeButton(h, Message.ClickedOpenIntegration(), `Open ${name} Integration`),
@@ -147,6 +144,7 @@ const loadFailed = (h: HtmlBuilder<Message>, provider: ChatSyncProvider, reason:
 	const message = resourceFailureMessage(provider, reason, PROVIDERS[provider].workspacesResource)
 	return notice(
 		h,
+		"warning",
 		message.title,
 		message.description,
 		isRetryable(reason) ? noticeButton(h, Message.ClickedRetryListWorkspaces(), "Try again") : null,
@@ -155,10 +153,11 @@ const loadFailed = (h: HtmlBuilder<Message>, provider: ChatSyncProvider, reason:
 
 const loadingWorkspaces = (h: HtmlBuilder<Message>, provider: ChatSyncProvider): Html => {
 	const { name, workspacesResource } = PROVIDERS[provider]
-	return h.div(
-		[h.Class("flex items-center justify-center py-8")],
-		[spinnerLine(h, `Loading ${name} ${workspacesResource}...`)],
-	)
+	return loadingState(h, {
+		label: `Loading ${name} ${workspacesResource}...`,
+		size: "sm",
+		className: "py-8",
+	})
 }
 
 const body = (h: HtmlBuilder<Message>, model: Model): Html =>

@@ -8,7 +8,7 @@ import type { PresenceInfo, SyncProvider, UserInfo } from "../page/chat/lookups"
 import { syncBadge } from "./message/parts"
 import { avatar } from "../ui/avatar"
 import { badge } from "../ui/badge"
-import { button, buttonClassName } from "../ui/button"
+import { ariaButton, button, buttonClassName } from "../ui/button"
 import { menuTriggerClassName } from "../ui/menu-view"
 
 /** `UserProfilePopover`'s `PopoverBody` (the trigger is the message avatar). */
@@ -66,16 +66,16 @@ const actionBar = <M>(h: HtmlBuilder<M>, inputs: ProfileInputs): ReadonlyArray<H
 							),
 						]),
 				// MenuTrigger renders its own button around the Button child.
-				h.button(
-					[
-						h.Attribute("aria-expanded", "false"),
-						h.Attribute("aria-haspopup", "true"),
-						h.Class(menuTriggerClassName()),
-						h.Attribute("data-react-aria-pressable", "true"),
-						h.Attribute("data-slot", "menu-trigger"),
-						h.Attribute("tabindex", "0"),
-						h.Attribute("type", "button"),
-					],
+				ariaButton(
+					h,
+					{
+						className: menuTriggerClassName(),
+						attributes: [
+							h.Attribute("aria-expanded", "false"),
+							h.Attribute("aria-haspopup", "true"),
+							h.Attribute("data-slot", "menu-trigger"),
+						],
+					},
 					[
 						button(
 							h,

@@ -146,9 +146,9 @@ export const formatPct = (value: number, options: Readonly<{ digits?: number }> 
 export const formatDeltaPct = (value: number, options: Readonly<{ digits?: number }> = {}): string =>
 	withSign(value, `${percentNumber(value, options.digits)}%`, true)
 
-/** A change in percentage points (or score points): `+0.9 pt`, `−20 pts`. */
-export const formatDeltaPoints = (value: number, unit: "pt" | "pts" = "pt"): string =>
-	withSign(value, `${percentNumber(value)} ${unit}`, true)
+/** A change in percentage points: `+0.9 pt`. */
+export const formatDeltaPoints = (value: number): string =>
+	withSign(value, `${percentNumber(value)} pt`, true)
 
 /** Signed count: `+12`, `−3`. */
 export const formatDeltaCount = (value: number): string => withSign(value, formatCount(Math.abs(value)), true)

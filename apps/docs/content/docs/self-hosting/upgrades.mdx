@@ -1,0 +1,67 @@
+---
+title: Upgrades
+description: Move an install to a newer release
+icon: RefreshCw
+---
+
+## Releases
+
+A server release is a git tag `server-vYYYY.MM.DD` (`.2`, `.3` for a second one on the same day).
+Every release is a commit that has already run Hazel's own production. The
+[releases page](https://github.com/MapleTechLabs/hazel/releases) lists them with their changes;
+the `v1.x` entries there are the desktop app's.
+
+Releases can be skipped: going from any release to any later one works.
+
+## Upgrading
+
+```bash
+bun run customer:upgrade acme
+```
+
+From the clone you installed with, it:
+
+1. Refuses if the checkout has uncommitted changes.
+2. Fetches the tags and picks the newest release (or the one you pass with `--to server-v...`).
+3. Asks the install which commit it runs (`GET https://api.<zone>/version`) and stops unless the
+   release is newer: an **older** release, or a running commit it cannot check (the install
+   does not answer, or runs a commit the clone lacks), needs `--allow-downgrade`. If the install
+   already runs that release, it deploys it again, which finishes an upgrade that failed midway.
+4. Asks you to confirm, checks the release out, runs `bun install`, and deploys with
+   `customer:deploy`, so the release's own installer and checks do the deploy.
+
+For scripts, `--yes` skips the question.
+
+<Callout type="info">
+	The checkout ends on a detached commit (the release). That is expected: `git switch -` goes back to the
+	branch you were on.
+</Callout>
+
+## During and after an upgrade
+
+- **No maintenance window.** Cloudflare switches each Worker to the new version when its upload
+  finishes. Live connections (real-time sync, bots) drop as the objects restart on the new code,
+  and the apps reconnect on their own within seconds.
+- **Migrations run on their own.** The directory database migrates during the deploy. Each
+  organization's, channel's and user's database migrates the next time it is used, so an
+  organization nobody opened since the upgrade keeps its old schema until then. That is
+  expected and safe.
+- **Open apps keep working.** Browsers and desktop apps keep the version they loaded until they
+  reload; the new version still accepts their requests.
+
+Check the result:
+
+```bash
+curl https://api.chat.acme.com/version
+```
+
+## Downgrades
+
+Migrations only go forward, so `customer:upgrade` refuses a release older than the one running.
+`--allow-downgrade` overrides that; use it only for a release with no new migrations in
+between, and when in doubt, fix forward with a newer release instead.
+
+## Deploying something other than a release
+
+`customer:deploy` deploys whatever the checkout is on, and warns when that is not a release.
+It is meant for redeploying the same release after changing the env file.

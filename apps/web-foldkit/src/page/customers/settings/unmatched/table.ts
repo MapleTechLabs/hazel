@@ -16,11 +16,13 @@ import {
 	IconPlus,
 } from "../../../../icons"
 import { badge } from "../../../../ui/badge"
-import { button } from "../../../../ui/button"
+import { ariaButton, button } from "../../../../ui/button"
 import { checkbox } from "../../../../ui/checkbox"
+import { inputElement } from "../../../../ui/input"
 import * as Menu from "../../../../ui/menu"
 import { menuLabel, view as menuView } from "../../../../ui/menu-view"
 import * as Popover from "../../../../ui/popover"
+import { skeleton } from "../../../../ui/skeleton"
 import { Message } from "./message"
 import {
 	type Confidence,
@@ -41,16 +43,13 @@ import {
 
 // COPY
 
-const ACCOUNT_NOUN = {
-	clerk: "organizations",
-	stripe: "customers",
-	autumn: "customers",
-	maple: "groups",
-} as const satisfies Record<CustomerProvider, string>
-
-/** What a source calls its records of a kind: Stripe "customers", Maple "groups". */
+/** What a source calls its records of a kind: "customers", "groups". */
 export const nounOf = (provider: CustomerProvider, entityType: UnmatchedEntityType): string =>
-	entityType === "account" ? ACCOUNT_NOUN[provider] : entityType === "contact" ? "users" : `${entityType}s`
+	entityType === "account"
+		? `${providerOf(provider).accountNoun}s`
+		: entityType === "contact"
+			? "users"
+			: `${entityType}s`
 
 const VALUE_SUFFIX = {
 	account: "MRR",
@@ -189,22 +188,23 @@ const linkResults = (
 			[h.Class("flex items-center gap-2 border-border border-b px-3 py-2")],
 			[
 				IconMagnifier3(h, { className: "size-4 shrink-0 text-muted-fg" }),
-				h.input([
-					h.Type("text"),
-					h.Value(query),
-					h.Placeholder("Search accounts…"),
-					h.AriaLabel("Search accounts"),
-					h.Autofocus(true),
-					h.Class(
-						"min-w-0 flex-1 bg-transparent text-fg text-sm outline-hidden placeholder:text-muted-fg",
-					),
-					h.OnInput((value) => Message.ChangedLinkQuery({ value })),
-					h.OnKeyDownPreventDefault((key) =>
-						key === "Enter"
-							? Option.some(Message.SubmittedLinkQuery({ recordId: record.id }))
-							: Option.none(),
-					),
-				]),
+				inputElement(h, {
+					placeholder: "Search accounts…",
+					className:
+						"min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-sm enabled:hover:bg-transparent focus:ring-0 sm:p-0 sm:text-sm",
+					attributes: [
+						h.Type("text"),
+						h.Value(query),
+						h.AriaLabel("Search accounts"),
+						h.Autofocus(true),
+						h.OnInput((value) => Message.ChangedLinkQuery({ value })),
+						h.OnKeyDownPreventDefault((key) =>
+							key === "Enter"
+								? Option.some(Message.SubmittedLinkQuery({ recordId: record.id }))
+								: Option.none(),
+						),
+					],
+				}),
 				h.span(
 					[h.Class("shrink-0 text-muted-fg text-xs tabular-nums")],
 					[
@@ -221,19 +221,16 @@ const linkResults = (
 						h.li(
 							[h.Key(account.id)],
 							[
-								h.button(
-									[
-										h.Type("button"),
-										h.Class(
+								ariaButton(
+									h,
+									{
+										className:
 											"flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-left outline-hidden hover:bg-secondary focus-visible:bg-secondary",
-										),
-										h.OnClick(
-											Message.PickedLinkAccount({
-												recordId: record.id,
-												accountId: account.id,
-											}),
-										),
-									],
+										onPress: Message.PickedLinkAccount({
+											recordId: record.id,
+											accountId: account.id,
+										}),
+									},
 									[
 										companyLogo(h, {
 											name: account.name,
@@ -266,14 +263,13 @@ const linkResults = (
 					h.div(
 						[h.Class("border-border border-t p-1")],
 						[
-							h.button(
-								[
-									h.Type("button"),
-									h.Class(
+							ariaButton(
+								h,
+								{
+									className:
 										"flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-fg text-sm outline-hidden hover:bg-secondary focus-visible:bg-secondary",
-									),
-									h.OnClick(Message.PressedCreateAccount({ recordId: record.id })),
-								],
+									onPress: Message.PressedCreateAccount({ recordId: record.id }),
+								},
 								[
 									IconPlus(h, { className: "size-4 text-muted-fg" }),
 									`Create account “${record.label}”`,
@@ -420,7 +416,7 @@ const moneyTotal = (records: RecordGroup["records"]): string | null => {
 		: [...totals].map(([currency, minor]) => formatMoney(minor, currency ?? undefined)).join(" + ")
 }
 
-/** `Stripe customers · 5 · $1,840 MRR`, `Maple groups · 9 · 6,951 events · 30d`. */
+/** `<Source> customers · 5 · $1,840 MRR`, `<Source> groups · 9 · 6,951 events · 30d`. */
 const groupSummary = (group: RecordGroup): string => {
 	const money = moneyTotal(group.records)
 	const events = group.records.reduce((sum, record) => sum + (record.eventCount30d ?? 0), 0)
@@ -589,9 +585,9 @@ export const loadingTable = (h: HtmlBuilder<Message>): Html =>
 					h.Class("flex h-16 items-center gap-4 border-border border-b px-4 last:border-b-0"),
 				],
 				[
-					h.span([h.Class("size-8 shrink-0 animate-pulse rounded-lg bg-secondary")]),
-					h.span([h.Class("h-3 w-1/3 animate-pulse rounded bg-secondary")]),
-					h.span([h.Class("ml-auto h-3 w-1/4 animate-pulse rounded bg-secondary")]),
+					skeleton(h, "size-8 shrink-0 rounded-lg"),
+					skeleton(h, "h-3 w-1/3"),
+					skeleton(h, "ml-auto h-3 w-1/4"),
 				],
 			),
 		),

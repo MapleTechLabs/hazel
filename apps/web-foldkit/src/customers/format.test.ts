@@ -92,7 +92,6 @@ describe("numbers", () => {
 		expect(formatDeltaPct(-38)).toBe("−38%")
 		expect(formatDeltaPct(0, { digits: 1 })).toBe("0%")
 		expect(formatDeltaPoints(0.9)).toBe("+0.9 pt")
-		expect(formatDeltaPoints(-20, "pts")).toBe("−20 pts")
 	})
 
 	it("reads a delta's tone from the metric's good direction", () => {

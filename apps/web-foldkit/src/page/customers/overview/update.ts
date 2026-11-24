@@ -82,7 +82,6 @@ export const init = (_route: unknown, shared: Shared): Return =>
 			isComparing: true,
 			overview: AsyncData.Idle(),
 			support: AsyncData.Idle(),
-			healthMetric: "customers",
 			hoveredMrr: null,
 			hoveredActiveUsers: null,
 			signals: null,
@@ -115,7 +114,6 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		ToggledCompare: ({ isComparing }) => ({
 			model: modifyFields(model, { isComparing: () => isComparing }),
 		}),
-		ClickedHealthMetric: ({ metric }) => ({ model: modifyFields(model, { healthMetric: () => metric }) }),
 		HoveredChart: ({ chart, index }) => ({
 			model:
 				chart === "mrr"

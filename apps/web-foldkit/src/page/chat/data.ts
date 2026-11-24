@@ -222,7 +222,9 @@ export const parentChannelStream = <Message>(
 				.findOne(),
 		(rows) => {
 			const row = rows[0]
-			return toMessage(row ? { id: row.id, name: row.name, icon: row.icon ?? null } : null)
+			return toMessage(
+				row ? { id: row.id, name: row.name, type: row.type, icon: row.icon ?? null } : null,
+			)
 		},
 	)
 

@@ -2,7 +2,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconEmojiAdd, IconMsgs, IconPin, IconPlus } from "../../icons"
 import { button } from "../../ui/button"
 import { emptyState } from "../../ui/empty-state"
-import { loader } from "../../ui/loader"
+import { loader, loadingState } from "../../ui/loader"
 import { progressBar, progressBarTrack, valueText } from "../../ui/progress-bar"
 import * as Tooltip from "../../ui/tooltip"
 import { group, kitSection, pair, specimen } from "./chrome"
@@ -114,6 +114,9 @@ const loaders = (h: H): Html =>
 				],
 				"gap-4 text-fg-3",
 			),
+			group(h, "A region loading (loadingState)", [
+				loadingState(h, { label: "Loading invitations...", className: "py-4" }),
+			]),
 		],
 	)
 

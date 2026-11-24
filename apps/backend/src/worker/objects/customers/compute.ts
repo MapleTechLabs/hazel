@@ -3,43 +3,35 @@
  * alarm hourly and soon after changes (`./schedule.ts`):
  *
  * 1. rollups: each account's denormalized fields, and today's MRR movement;
- * 2. health: today's score and breakdown (`customer_health_daily`), band-change events;
- * 3. signals: every enabled rule × every account, through the lifecycle (open, refresh, wake,
+ * 2. signals: every enabled rule × every account, through the lifecycle (open, refresh, wake,
  *    reopen, resolve; baseline mode after a backfill);
- * 4. counters: open signals per account, matches per rule;
- * 5. the org's day (`customer_org_daily`, and yesterday's user counts again);
- * 6. once a day, retention: old daily rows, events, closed signals and sync runs are deleted.
+ * 3. counters: open signals per account, matches per rule;
+ * 4. the org's day (`customer_org_daily`, and yesterday's user counts again);
+ * 5. once a day, retention: old daily rows, events, closed signals and sync runs are deleted.
  *
  * After a connection's first backfill, an alarm turn of its own (`runComputeStep`) rebuilds the last
  * year of history where none is recorded, once no billing backfill is importing (given up after
  * `MAX_REBUILD_ATTEMPTS` failed attempts).
  *
- * Accounts are processed in chunks (`ACCOUNT_CHUNK`, `./snapshot.ts`): steps 1–4 run per chunk, so
+ * Accounts are processed in chunks (`ACCOUNT_CHUNK`, `./snapshot.ts`): steps 1–3 run per chunk, so
  * memory holds one chunk's activity and signals; the org's distinct user counts come from SQL. A
  * compute past `COMPUTE_TURN_BUDGET_MS` or `MAX_CHUNKS_PER_TURN` stops after a chunk and continues
  * in the next alarm turn from where it stopped (`computeProgress`; started over when it is stale, or
- * the day or Autumn's readiness changed); step 4's rule counts, 5 and 6 run after the last chunk.
+ * the day or the billing sources' readiness changed); step 3's rule counts, 4 and 5 run after the last chunk.
  *
  * Per-account built-in series are not stored daily: they derive from their sources at read time
- * (active users from activity, MRR from movements, health from `customer_health_daily`).
+ * (active users from activity, MRR from movements).
  */
+import { billingProviders, requiredSourcesOf } from "@hazel/customer-integrations"
 import { Database, SQLite, schema } from "@hazel/db"
-import {
-	type CustomerProvider,
-	Day,
-	type HealthBreakdown,
-	type HealthSettings,
-	type SignalTemplate,
-	TEMPLATES,
-} from "@hazel/domain/customers"
+import { type CustomerProvider, Day, type SignalTemplate, TEMPLATES } from "@hazel/domain/customers"
 import { CustomerAccountId, type CustomerSignalId } from "@hazel/schema"
 import { Clock, Effect, Option, Schema } from "effect"
 import { readObjectMeta, writeObjectMeta } from "../meta"
 import { refreshSuggestionsAfterCompute } from "./channel-suggestions"
 import { publishChannelCustomersAfterCompute } from "./channels"
 import { evaluate, type Match } from "./evaluate"
-import { type AccountFacts, unpaidEndOf } from "./facts"
-import { type HealthInputs, scoreHealth } from "./health"
+import { unpaidEndOf } from "./facts"
 import { type LifecycleEvent, limitSignalTarget, transition, valueOf, wakeDue } from "./lifecycle"
 import {
 	baselineConnections,
@@ -71,7 +63,7 @@ import {
 	type SnapshotBase,
 } from "./snapshot"
 import { inList, isActive, rowsPerInsert } from "./sql"
-import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "./time"
+import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "@hazel/customer-integrations/kit/time"
 
 /** Days of history a rebuild covers. */
 export const HISTORY_DAYS = 365
@@ -338,176 +330,7 @@ const writeRollups = Effect.fn("Customers.writeRollups")(function* (
 })
 
 // ---------------------------------------------------------------------------
-// 2. Health
-// ---------------------------------------------------------------------------
-
-type RiskCounts = { high: number; medium: number; low: number }
-
-const openRiskOf = (snapshot: Snapshot, settings: HealthSettings) => {
-	const excluded = new Set(settings.excludedTemplates)
-	const counts = new Map<CustomerAccountId, RiskCounts>()
-	for (const signal of snapshot.signals) {
-		if (signal.kind !== "risk" || excluded.has(signal.template)) continue
-		if (signal.status !== "open" && signal.status !== "snoozed") continue
-		const current = counts.get(signal.accountId) ?? { high: 0, medium: 0, low: 0 }
-		current[signal.severity]++
-		counts.set(signal.accountId, current)
-	}
-	return counts
-}
-
-export const healthInputsOf = (
-	snapshot: Snapshot,
-	account: AccountSnapshot,
-	openRisk: RiskCounts | undefined,
-): HealthInputs => {
-	const { facts, rollup } = account
-	const { now, today } = snapshot.org
-	const live = facts.subscriptions.filter((sub) => sub.status !== "canceled")
-	/** The due dates of the overdue invoices. */
-	const overdue = facts.openInvoices.flatMap((invoice) =>
-		invoice.dueAt !== null && invoice.dueAt < now ? [invoice.dueAt] : [],
-	)
-	const weekAgo = now.getTime() - 7 * 86_400_000
-	return {
-		customer: rollup.lifecycleStage !== "lead" && rollup.lifecycleStage !== "churned",
-		hasActivityData: snapshot.hasActivityData,
-		contactCount: rollup.contactCount,
-		activeUsers30d: rollup.activeUsers30d,
-		trendPct: rollup.activeUsersTrendPct,
-		daysSinceActive: facts.lastActiveDay === null ? null : daysBetween(facts.lastActiveDay, today),
-		billing:
-			snapshot.hasBillingData && (live.length > 0 || facts.unpaidInvoices.length > 0)
-				? {
-						pastDue:
-							facts.unpaidInvoices.length > 0 ||
-							live.some((sub) => sub.status === "past_due" || sub.status === "unpaid"),
-						overdueOverWeek: overdue.some((dueAt) => dueAt.getTime() < weekAgo),
-						overdue: overdue.length > 0,
-						cancelScheduled: live.some((sub) => sub.cancelAtPeriodEnd),
-					}
-				: null,
-		openRisk: openRisk ?? { high: 0, medium: 0, low: 0 },
-	}
-}
-
-/** Score the snapshot's accounts (pure): what compute writes and the health dry run compares. */
-export const scoreAll = (snapshot: Snapshot, settings = snapshot.health) => {
-	const openRisk = openRiskOf(snapshot, settings)
-	return new Map(
-		snapshot.accounts.map((account) => [
-			account.stored.id,
-			scoreHealth(healthInputsOf(snapshot, account, openRisk.get(account.stored.id)), { ...settings }),
-		]),
-	)
-}
-
-const STATUS_LABEL = { healthy: "Healthy", at_risk: "At risk", critical: "Critical", unknown: "Unknown" }
-
-const writeHealth = Effect.fn("Customers.writeHealth")(function* (
-	snapshot: Snapshot,
-	scores: ReadonlyMap<CustomerAccountId, HealthBreakdown>,
-) {
-	const db = yield* Database.Database
-	const { now, today } = snapshot.org
-	yield* db.transaction(
-		Effect.forEach(
-			snapshot.accounts,
-			({ stored }) =>
-				Effect.gen(function* () {
-					const breakdown = scores.get(stored.id)
-					// `scoreAll` scores every account of the snapshot.
-					if (breakdown === undefined) return
-					// Unchanged since the last run today: no write (and no change row to sync).
-					if (!same(snapshot.todayHealth.get(stored.id) ?? null, breakdown))
-						yield* db.run(
-							SQLite.insertInto(schema.customerHealthDailyTable)
-								.values({
-									accountId: stored.id,
-									day: today,
-									score: breakdown.score,
-									status: breakdown.status,
-									breakdown,
-								})
-								.onConflictDoUpdate({
-									target: ["accountId", "day"],
-									set: {
-										score: breakdown.score,
-										status: breakdown.status,
-										breakdown,
-									},
-								}),
-						)
-					if (stored.healthScore === breakdown.score && stored.healthStatus === breakdown.status)
-						return
-					yield* db.run(
-						SQLite.update(schema.customerAccountsTable)
-							.set({
-								healthScore: breakdown.score,
-								healthStatus: breakdown.status,
-								healthUpdatedAt: now,
-								updatedAt: now,
-							})
-							.where(($) => [$.id.eq(stored.id)]),
-					)
-					if (
-						stored.healthStatus !== "unknown" &&
-						breakdown.status !== "unknown" &&
-						stored.healthStatus !== breakdown.status
-					) {
-						yield* hazelEvent(
-							stored.id,
-							"health.status_changed",
-							`Health ${STATUS_LABEL[stored.healthStatus]} → ${STATUS_LABEL[breakdown.status]}`,
-							now,
-							{
-								from: stored.healthStatus,
-								to: breakdown.status,
-								fromScore: stored.healthScore,
-								toScore: breakdown.score,
-							},
-						)
-					}
-				}),
-			{ discard: true },
-		),
-	)
-})
-
-/** The facts with today's health in place, for `health_drop` (a group's are its primary's). */
-const withTodayHealth = (
-	snapshot: Snapshot,
-	scores: ReadonlyMap<CustomerAccountId, HealthBreakdown>,
-): Snapshot => ({
-	...snapshot,
-	accounts: snapshot.accounts.map((account) => {
-		const breakdown = scores.get(account.stored.id)
-		// `scoreAll` scores every account of the snapshot.
-		if (breakdown === undefined) return account
-		const scored = (facts: AccountFacts): AccountFacts => ({
-			...facts,
-			account: { ...facts.account, healthScore: breakdown.score, healthStatus: breakdown.status },
-			health: [
-				...facts.health.filter((point) => point.day !== snapshot.org.today),
-				{ day: snapshot.org.today, score: breakdown.score, status: breakdown.status },
-			],
-		})
-		const facts = scored(account.facts)
-		return {
-			...account,
-			facts,
-			evaluated:
-				account.evaluated === null
-					? null
-					: account.evaluated === account.facts
-						? facts
-						: scored(account.evaluated),
-		}
-	}),
-})
-
-// ---------------------------------------------------------------------------
-// 3–4. Signals and counters
+// 2–3. Signals and counters
 // ---------------------------------------------------------------------------
 
 const EVENT_TITLE = {
@@ -522,7 +345,7 @@ type Live = Map<string, Pick<schema.CustomerSignal, "status" | "severity" | "kin
 
 /** One compute's signal evaluation, across the account chunks (and alarm turns). */
 interface SignalRun {
-	/** Providers whose import is news to no one (§4.7): their templates run in baseline mode. */
+	/** Providers whose import is news to no one (§4.6): their templates run in baseline mode. */
 	readonly baseline: ReadonlySet<CustomerProvider>
 	/** The connections whose finished backfill armed the baseline when the compute started. */
 	readonly armed: ReadonlyArray<string>
@@ -557,7 +380,7 @@ const importingProviders = (now: Date) =>
 
 /** A billing source is still importing: MRR is partial, its history not rebuilt yet. */
 const billingImporting = (importing: ReadonlySet<CustomerProvider>) =>
-	importing.has("stripe") || importing.has("autumn")
+	billingProviders.some((provider) => importing.has(provider))
 
 /**
  * The providers in baseline mode: those whose backfill finished since the last compute
@@ -580,7 +403,8 @@ const baselineProviders = (importing: ReadonlySet<CustomerProvider>, armed: Read
 
 /** A template is in baseline mode when one of its sources (any, for a source-less one) is. */
 const inBaseline = (template: SignalTemplate, providers: ReadonlySet<CustomerProvider>) => {
-	const { baselineOnBackfill, requiredSources } = TEMPLATES[template]
+	const { baselineOnBackfill } = TEMPLATES[template]
+	const requiredSources = requiredSourcesOf(template)
 	if (!baselineOnBackfill || providers.size === 0) return false
 	return requiredSources.length === 0 || requiredSources.some((provider) => providers.has(provider))
 }
@@ -677,7 +501,7 @@ const writeSignals = Effect.fn("Customers.writeSignals")(function* (snapshot: Sn
 
 	for (const rule of snapshot.rules) {
 		const ruleBaseline = inBaseline(rule.template, run.baseline)
-		const sourceGone = TEMPLATES[rule.template].requiredSources.some((provider) => run.gone.has(provider))
+		const sourceGone = requiredSourcesOf(rule.template).some((provider) => run.gone.has(provider))
 		yield* db.transaction(
 			Effect.forEach(
 				snapshot.accounts,
@@ -899,7 +723,7 @@ const finishSignals = Effect.fn("Customers.finishSignals")(function* (
 })
 
 // ---------------------------------------------------------------------------
-// 5. The org's day, and history
+// 4. The org's day, and history
 // ---------------------------------------------------------------------------
 
 /** Rows of `activeCounts`' gap queries: `n` keys active on `day`, next active `gap` days later (≤ 30). */
@@ -999,19 +823,11 @@ interface OrgTotals {
 	mrrMinor: number
 	payingAccounts: number
 	trialingAccounts: number
-	healthy: number
-	atRisk: number
-	critical: number
 	/** Σ MRR of the accounts with an open (or snoozed) high risk signal. */
 	atRiskMrrMinor: number
 }
 
-const addTotals = (
-	totals: OrgTotals,
-	snapshot: Snapshot,
-	scores: ReadonlyMap<CustomerAccountId, HealthBreakdown>,
-	live: Live,
-) => {
+const addTotals = (totals: OrgTotals, snapshot: Snapshot, live: Live) => {
 	const highRisk = new Set(
 		[...live.values()]
 			.filter(
@@ -1027,10 +843,6 @@ const addTotals = (
 		if (rollup.mrrMinor > 0) totals.payingAccounts++
 		if (rollup.lifecycleStage === "trialing") totals.trialingAccounts++
 		if (highRisk.has(stored.id)) totals.atRiskMrrMinor += rollup.mrrMinor
-		const status = scores.get(stored.id)?.status
-		if (status === "healthy") totals.healthy++
-		else if (status === "at_risk") totals.atRisk++
-		else if (status === "critical") totals.critical++
 	}
 }
 
@@ -1153,7 +965,7 @@ export const mrrHistory = (
  * MRR movements of the accounts without any in that year before today (today's replaced; their MRR set to where
  * the movements end, in the same transaction, so a crash before the rollups cannot count them
  * twice), and the org's daily
- * rows (MRR, paying, trialing, active, DAU/WAU/MAU, health counts) for the days without one; a day
+ * rows (MRR, paying, trialing, active, DAU/WAU/MAU) for the days without one; a day
  * recorded before billing data existed (no MRR, no paying account) gets its billing columns.
  */
 export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (base: SnapshotBase) {
@@ -1169,7 +981,7 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 			.where(($) => [$.deletedAt.isNull()]),
 	)).filter((account) => live.has(account.id))
 	const billingBy = billingByAccount(
-		base.autumnReady,
+		new Set(base.billingReady),
 		yield* db.run(SQLite.from(schema.customerSubscriptionsTable).select()),
 		new Map(accounts.map((account) => [account.id, account.mrrSource])),
 	)
@@ -1246,15 +1058,6 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 		}
 	}
 	const users = yield* activeCounts(first, today)
-	const health = new Map(
-		(yield* db.run(
-			SQLite.from(schema.customerHealthDailyTable)
-				.select(($) => ({ day: $.day, status: $.status, count: SQLite.count() }))
-				.where(($) => [$.day.gte(first)])
-				.groupBy("day", "status"),
-		)).map((row) => [`${row.day}:${row.status}`, row.count]),
-	)
-	const healthOf = (day: Day, status: string) => health.get(`${day}:${status}`) ?? 0
 	// Today's row is written by the compute that follows, with its at-risk MRR.
 	const orgDays = days.flatMap((day, index) =>
 		day < today
@@ -1265,9 +1068,6 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 						payingAccounts: paying[index],
 						trialingAccounts: trialing[index],
 						...users(day),
-						healthy: healthOf(day, "healthy"),
-						atRisk: healthOf(day, "at_risk"),
-						critical: healthOf(day, "critical"),
 						atRiskMrrMinor: 0,
 					},
 				]
@@ -1312,9 +1112,6 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 							dau: SQLite.integer,
 							wau: SQLite.integer,
 							mau: SQLite.integer,
-							healthy: SQLite.integer,
-							atRisk: SQLite.integer,
-							critical: SQLite.integer,
 							atRiskMrrMinor: SQLite.integer,
 						}),
 					)
@@ -1351,7 +1148,7 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 })
 
 // ---------------------------------------------------------------------------
-// 6. Retention
+// 5. Retention
 // ---------------------------------------------------------------------------
 
 /** Once a day: daily rows past 400 days, events past 2 years, closed signals and sync runs. */
@@ -1361,7 +1158,6 @@ const prune = Effect.fn("Customers.prune")(function* (now: Date) {
 	if (Option.getOrUndefined(yield* readObjectMeta(PRUNED_KEY)) === today) return
 	const oldest = addDays(today, -DAILY_RETENTION_DAYS)
 	const ago = (ms: number) => new Date(now.getTime() - ms)
-	yield* db.run(SQLite.deleteFrom(schema.customerHealthDailyTable).where(($) => [$.day.lt(oldest)]))
 	yield* db.run(SQLite.deleteFrom(schema.customerActivityDailyTable).where(($) => [$.day.lt(oldest)]))
 	yield* db.run(SQLite.deleteFrom(schema.customerMetricDailyTable).where(($) => [$.day.lt(oldest)]))
 	yield* db.run(
@@ -1414,10 +1210,10 @@ export const runComputeStep = Effect.fn("Customers.computeStep")(function* (now:
 
 /** Where a compute spread over several alarm turns stopped, and what it has gathered so far. */
 const ComputeProgress = Schema.Struct({
-	/** When its first turn ran, its day and Autumn's readiness: another one starts over. */
+	/** When its first turn ran, its day and the billing sources' readiness: another one starts over. */
 	startedAt: Schema.Finite,
 	day: Day,
-	autumnReady: Schema.Boolean,
+	billingReady: Schema.Array(Schema.String),
 	/** The primary of the last group of accounts done (groups go in their primary's id order). */
 	after: CustomerAccountId,
 	armed: Schema.Array(Schema.String),
@@ -1425,9 +1221,6 @@ const ComputeProgress = Schema.Struct({
 		mrrMinor: Schema.Finite,
 		payingAccounts: Schema.Finite,
 		trialingAccounts: Schema.Finite,
-		healthy: Schema.Finite,
-		atRisk: Schema.Finite,
-		critical: Schema.Finite,
 		atRiskMrrMinor: Schema.Finite,
 	}),
 	matches: Schema.Record(Schema.String, Schema.Finite),
@@ -1450,13 +1243,13 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	const base = yield* loadBase(now)
 	const importing = yield* importingProviders(now)
 	const rebuildPending = yield* historyRebuildPending
-	// The previous turn's, unless unreadable, stale, or from another day or Autumn readiness.
+	// The previous turn's, unless unreadable, stale, or from another day or billing readiness.
 	const progress = Option.getOrUndefined(
 		Option.filter(
 			Option.flatMap(yield* computeProgress, decodeComputeProgress),
 			(saved) =>
 				saved.day === base.org.today &&
-				saved.autumnReady === base.autumnReady &&
+				saved.billingReady.join() === base.billingReady.join() &&
 				now.getTime() - saved.startedAt < COMPUTE_PROGRESS_MAX_AGE_MS,
 		),
 	)
@@ -1471,9 +1264,6 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 					mrrMinor: 0,
 					payingAccounts: 0,
 					trialingAccounts: 0,
-					healthy: 0,
-					atRisk: 0,
-					critical: 0,
 					atRiskMrrMinor: 0,
 				}
 			: { ...progress.totals }
@@ -1485,10 +1275,8 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	for (const groups of chunks) {
 		const snapshot = yield* loadAccounts(base, groups.flat())
 		switched += yield* writeRollups(snapshot, importing, rebuildPending)
-		const scores = scoreAll(snapshot)
-		yield* writeHealth(snapshot, scores)
-		const live = yield* writeSignals(withTodayHealth(snapshot, scores), signals)
-		addTotals(totals, snapshot, scores, live)
+		const live = yield* writeSignals(snapshot, signals)
+		addTotals(totals, snapshot, live)
 		done++
 		if (
 			done < chunks.length &&
@@ -1500,7 +1288,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	yield* Effect.annotateCurrentSpan({
 		"customers.accounts": base.accountIds.length,
 		"customers.rules": base.rules.length,
-		"customers.autumn_ready": base.autumnReady,
+		"customers.billing_ready": base.billingReady.join(","),
 		"customers.mrr_source_switches": switched,
 		"customers.billing_importing": billingImporting(importing),
 		"customers.history_rebuild_pending": rebuildPending,
@@ -1515,7 +1303,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 			encodeComputeProgress({
 				startedAt: progress?.startedAt ?? now.getTime(),
 				day: base.org.today,
-				autumnReady: base.autumnReady,
+				billingReady: base.billingReady,
 				after: last[last.length - 1][0],
 				armed: signals.armed,
 				totals,

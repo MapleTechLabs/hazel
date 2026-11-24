@@ -1,15 +1,13 @@
 import { Submodel } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { twMerge } from "tailwind-merge"
-import { dialogTitleBase } from "~/components/ui/dialog.styles"
 import { type CommonReason, commonMessage, isRetryableReason } from "~/lib/error-messages"
 import { IconClose } from "../../../icons"
 import { avatar } from "../../../ui/avatar"
-import { button } from "../../../ui/button"
-import { dialogBody, dialogFooter, dialogHeader } from "../../../ui/dialog"
+import { ariaButton, button, iconButton } from "../../../ui/button"
+import { dialogBody, dialogFooter, dialogHeader, dialogTitle } from "../../../ui/dialog"
 import * as Field from "../../../ui/field"
-import { loader } from "../../../ui/loader"
+import { loadingState } from "../../../ui/loader"
 import * as Modal from "../../../ui/modal"
 import { switchControl } from "../../../ui/switch"
 import { textField } from "../../../ui/text-field"
@@ -21,15 +19,15 @@ const toToggledGuests = (isSelected: boolean) => Message.ToggledAllowGuestMember
 
 const resultRow = (h: HtmlBuilder<Message>, workspace: Workspace): Html => {
 	const isShareable = !!workspace.slug
-	return h.keyed("button")(
-		workspace.id,
-		[
-			h.Type("button"),
-			...(isShareable ? [h.OnClick(Message.ClickedWorkspace({ workspace }))] : [h.Disabled(true)]),
-			h.Class(
+	return ariaButton(
+		h,
+		{
+			className:
 				"flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-secondary/50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent",
-			),
-		],
+			isDisabled: !isShareable,
+			onPress: Message.ClickedWorkspace({ workspace }),
+			attributes: [h.Key(workspace.id)],
+		},
 		[
 			avatar(h, { size: "sm", isSquare: true, src: workspace.logoUrl, seed: workspace.name }),
 			h.div(
@@ -48,8 +46,7 @@ const resultRow = (h: HtmlBuilder<Message>, workspace: Workspace): Html => {
 const searchMessage = (h: HtmlBuilder<Message>, text: string): Html =>
 	h.div([h.Class("px-4 py-6 text-center text-muted-fg text-sm")], [text])
 
-const searchLoading = (h: HtmlBuilder<Message>): Html =>
-	h.div([h.Class("flex items-center justify-center py-6")], [loader(h)])
+const searchLoading = (h: HtmlBuilder<Message>): Html => loadingState(h, { size: "sm", className: "py-6" })
 
 const workspaceList = (h: HtmlBuilder<Message>, workspaces: ReadonlyArray<Workspace>): Html =>
 	workspaces.length === 0
@@ -100,14 +97,15 @@ const selectedChip = (h: HtmlBuilder<Message>, workspace: Workspace): Html =>
 		[
 			avatar(h, { size: "xxs", isSquare: true, src: workspace.logoUrl, seed: workspace.name }),
 			h.span([h.Class("font-medium text-fg text-sm")], [workspace.name]),
-			h.button(
-				[
-					h.Type("button"),
-					h.OnClick(Message.ClickedClearWorkspace()),
-					h.AriaLabel("Clear workspace"),
-					h.Class("ml-auto text-muted-fg hover:text-fg"),
-				],
-				[IconClose(h, { className: "size-4" })],
+			iconButton(
+				h,
+				{
+					label: "Clear workspace",
+					size: "sq-xs",
+					className: "ml-auto text-muted-fg hover:text-fg",
+					onPress: Message.ClickedClearWorkspace(),
+				},
+				IconClose(h, { attributes: { "data-slot": "icon" } }),
 			),
 		],
 	)
@@ -122,15 +120,7 @@ const body = (h: HtmlBuilder<Message>, model: Model, channelName: string): Html 
 			size: "lg",
 			toContent: () => [
 				dialogHeader(h, {}, [
-					// `<ModalTitle>Share #{channelName}</ModalTitle>`: two text nodes.
-					h.h2(
-						[
-							h.Class(twMerge(dialogTitleBase)),
-							h.Id(Modal.titleId(model.modal.id)),
-							h.Attribute("slot", "title"),
-						],
-						["Share #", channelName],
-					),
+					dialogTitle(h, { id: Modal.titleId(model.modal.id) }, `Share #${channelName}`),
 					Field.description(h, {}, ["Invite another workspace to collaborate in this channel."]),
 				]),
 				dialogBody(

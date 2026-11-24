@@ -14,6 +14,7 @@
  * Local workerd has no HTTP/2 to APNs: there the request fails as `ApnsRequestError`.
  */
 import { Clock, Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Base64Url } from "effect/encoding"
 import { HttpClient, HttpClientRequest } from "effect/http"
 
 export type ApnsEnvironment = "development" | "production"
@@ -99,13 +100,7 @@ export interface ApnsSender {
 
 const encoder = new TextEncoder()
 
-const base64Url = (bytes: Uint8Array | ArrayBuffer) =>
-	btoa(String.fromCharCode(...new Uint8Array(bytes)))
-		.replace(/\+/g, "-")
-		.replace(/\//g, "_")
-		.replace(/=+$/, "")
-
-const base64UrlJson = (value: unknown) => base64Url(encoder.encode(JSON.stringify(value)))
+const base64UrlJson = (value: unknown) => Base64Url.encode(JSON.stringify(value))
 
 /** The `.p8` key's PKCS#8 bytes, from PEM (escaped newlines too) or the bare base64 body. */
 export const pkcs8Of = (key: string): Uint8Array<ArrayBuffer> => {
@@ -138,7 +133,7 @@ export const signProviderToken = async (input: {
 		input.key,
 		encoder.encode(signingInput),
 	)
-	return `${signingInput}.${base64Url(signature)}`
+	return `${signingInput}.${Base64Url.encode(new Uint8Array(signature))}`
 }
 
 /** Signed tokens by `teamId.keyId`, shared by every object in the isolate. */

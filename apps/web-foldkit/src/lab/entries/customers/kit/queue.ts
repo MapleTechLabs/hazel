@@ -83,7 +83,6 @@ const view = (model: Model, h: HtmlBuilder<Message>): Html =>
 						evidence: evidenceViz(h, signal.evidence),
 						age: age(signal.openedAt),
 						assignee: memberOf(signal.assigneeUserId),
-						health: { status: account.healthStatus, score: account.healthScore },
 						isFocused: index === model.focused,
 						isSelected: signal.id === model.selected,
 						onPress: Message.PressedRow({ id: signal.id }),

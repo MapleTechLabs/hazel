@@ -4,6 +4,9 @@ import { getFilterTypeLabel } from "~/lib/search-filter-parser"
 import { cn } from "~/lib/utils"
 import { IconClose, IconHashtag, IconMagnifier3 } from "../../icons"
 import { avatar } from "../../ui/avatar"
+import { badge } from "../../ui/badge"
+import { ariaButton, iconButton } from "../../ui/button"
+import { emptyState } from "../../ui/empty-state"
 import { Message } from "./message"
 import type { Model, PageState } from "./model"
 import { searchResultItem } from "./search-result"
@@ -16,14 +19,12 @@ type SearchPage = Extract<PageState, { _tag: "Search" }>
 
 const KBD = "inline-grid h-4 min-w-4 place-content-center rounded-xs bg-secondary px-1"
 
-const emptyState = (h: HtmlBuilder<Message>, message: string): Html =>
-	h.div(
-		[h.Class("flex flex-col items-center justify-center py-8 text-center")],
-		[
-			IconMagnifier3(h, { className: "mb-3 size-8 text-muted-fg/50" }),
-			h.p([h.Class("text-muted-fg text-sm")], [message]),
-		],
-	)
+const searchEmptyState = (h: HtmlBuilder<Message>, message: string): Html =>
+	emptyState(h, {
+		title: message,
+		icon: (className) => IconMagnifier3(h, { className }),
+		className: "py-8",
+	})
 
 const footer = (h: HtmlBuilder<Message>): Html =>
 	h.div(
@@ -51,31 +52,20 @@ const filterChips = (h: HtmlBuilder<Message>, page: SearchPage): Html[] =>
 					[h.Class("flex flex-wrap items-center gap-1")],
 					page.filters.map((filter, index) => {
 						const label = getFilterTypeLabel(filter.type)
-						return h.span(
-							[
-								h.Class(
-									cn(
-										"inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-xs",
-										"ring-1 ring-inset ring-border",
-									),
-								),
-							],
-							[
-								h.span([h.Class("text-muted-fg")], [`${label}:`]),
-								h.span([h.Class("font-medium text-fg")], [filter.displayValue]),
-								h.button(
-									[
-										h.Type("button"),
-										h.Attribute("aria-label", `Remove ${label} filter`),
-										h.Class(
-											"ml-0.5 rounded p-0.5 text-muted-fg transition-colors hover:bg-muted hover:text-fg focus:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-										),
-										h.OnClick(Message.ClickedRemoveFilter({ index })),
-									],
-									[IconClose(h, { className: "size-3" })],
-								),
-							],
-						)
+						return badge(h, { intent: "outline", className: "gap-1 bg-secondary text-fg" }, [
+							h.span([h.Class("text-muted-fg")], [`${label}:`]),
+							h.span([h.Class("font-medium text-fg")], [filter.displayValue]),
+							ariaButton(
+								h,
+								{
+									className:
+										"ml-0.5 rounded p-0.5 text-muted-fg transition-colors hover:bg-muted hover:text-fg focus:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+									onPress: Message.ClickedRemoveFilter({ index }),
+									attributes: [h.Attribute("aria-label", `Remove ${label} filter`)],
+								},
+								[IconClose(h, { className: "size-3" })],
+							),
+						])
 					}),
 				),
 			]
@@ -152,39 +142,34 @@ const recentSearches = (h: HtmlBuilder<Message>, model: Model, page: SearchPage,
 				[h.Class("flex items-center justify-between px-2 py-1")],
 				[
 					h.span([h.Class("text-muted-fg text-xs")], ["Recent searches"]),
-					h.button(
-						[
-							h.Type("button"),
-							h.Class("text-muted-fg text-xs transition-colors hover:text-fg"),
-							h.OnClick(Message.ClickedClearRecentSearches()),
-						],
+					ariaButton(
+						h,
+						{
+							className: "text-muted-fg text-xs transition-colors hover:text-fg",
+							onPress: Message.ClickedClearRecentSearches(),
+						},
 						["Clear all"],
 					),
 				],
 			),
 			...model.recentSearches.map((search, index) =>
-				h.button(
-					[
-						h.Type("button"),
-						h.Class(
-							cn(
-								"flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary",
-								index === page.selectedIndex && "bg-secondary",
-							),
+				ariaButton(
+					h,
+					{
+						className: cn(
+							"flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary",
+							index === page.selectedIndex && "bg-secondary",
 						),
-						h.OnClick(Message.ClickedRecentSearch({ index })),
-					],
+						onPress: Message.ClickedRecentSearch({ index }),
+					},
 					[
 						h.span(
 							[h.Class("flex min-w-0 flex-1 flex-wrap items-center gap-1")],
 							[
 								...search.filters.map((filter) =>
-									h.span(
-										[
-											h.Class(
-												"inline-flex items-center gap-0.5 rounded-md bg-secondary px-1.5 py-0.5 text-xs ring-1 ring-inset ring-border",
-											),
-										],
+									badge(
+										h,
+										{ intent: "outline", className: "gap-0.5 bg-secondary text-fg" },
 										[
 											h.span([h.Class("text-muted-fg")], [`${filter.type}:`]),
 											h.span([h.Class("font-medium text-fg")], [filter.displayValue]),
@@ -225,10 +210,10 @@ const content = (h: HtmlBuilder<Message>, model: Model, page: SearchPage, nowMs:
 						),
 					),
 				]
-			: [emptyState(h, "No messages found")]
+			: [searchEmptyState(h, "No messages found")]
 	return model.recentSearches.length > 0
 		? [recentSearches(h, model, page, nowMs)]
-		: [emptyState(h, "Start typing to search messages")]
+		: [searchEmptyState(h, "Start typing to search messages")]
 }
 
 /** `nowMs` is the root's clock: relative times never read `Date.now()` in the view. */
@@ -252,16 +237,14 @@ export const searchPage = (h: HtmlBuilder<Message>, model: Model, page: SearchPa
 					),
 					...(page.rawInput || page.filters.length > 0
 						? [
-								h.button(
-									[
-										h.Type("button"),
-										h.Attribute("aria-label", "Clear search"),
-										h.Class(
-											"rounded p-1 text-muted-fg transition-colors hover:bg-secondary hover:text-fg",
-										),
-										h.OnClick(Message.ClickedClearSearch()),
-									],
-									[IconClose(h, { className: "size-4" })],
+								iconButton(
+									h,
+									{
+										label: "Clear search",
+										size: "sq-xs",
+										onPress: Message.ClickedClearSearch(),
+									},
+									IconClose(h, { attributes: { "data-slot": "icon" } }),
 								),
 							]
 						: []),

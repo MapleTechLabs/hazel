@@ -1,3 +1,4 @@
+import { integrationOf } from "@hazel/customer-integrations"
 import * as Customers from "@hazel/domain/customers"
 import { ChannelLinkRow, ChannelOption } from "../../../customers/channels"
 import { CustomerAuthorInfo, ChatParticipantRow } from "../../../customers/chat-authors"
@@ -71,7 +72,7 @@ export const EMPTY_PAGE = { items: [], nextCursor: null, status: "Idle" } as con
 export const ContactFilter = Schema.Literals(["all", "active", "dormant", "never_active"])
 export type ContactFilter = typeof ContactFilter.Type
 
-export const EventType = Schema.Literals(["all", "billing", "signals", "contacts", "health", "notes"])
+export const EventType = Schema.Literals(["all", "billing", "signals", "contacts", "notes"])
 export type EventType = typeof EventType.Type
 
 /** `customers.events.list` type prefixes per filter. */
@@ -80,7 +81,6 @@ export const EVENT_TYPE_PREFIXES = {
 	billing: ["invoice.", "subscription."],
 	signals: ["signal."],
 	contacts: ["contact."],
-	health: ["health."],
 	notes: ["note."],
 } as const satisfies Record<EventType, ReadonlyArray<string>>
 
@@ -130,8 +130,6 @@ export const Model = Schema.Struct({
 	members: Schema.Array(MemberRow),
 	metrics: Schema.Array(MetricRow),
 	connectedProviders: Schema.Array(Customers.CustomerProvider),
-	/** The org's health bands (the breakdown's colors and "At risk is 40–69"). */
-	bands: Customers.HealthBands,
 	detail: Detail.schema,
 	usageMetric: Schema.String,
 	usageRange: Customers.CustomersRange,
@@ -181,6 +179,9 @@ export const Model = Schema.Struct({
 	/** The person in "People in chat" whose menu shows (each row has its own button). */
 	activeChatPersonId: Schema.NullOr(UserId),
 	chatPersonMenu: Menu.Model,
+	/** The user whose other customers show (each row has its own trigger). */
+	otherAccountsContactId: Schema.NullOr(CustomerContactId),
+	otherAccountsPopover: Popover.Model,
 	/** The customer's open suggested channel links (`customers.channel.suggestions`, not synced). */
 	suggestions: SuggestionList,
 	/** The customer they were asked for; asked again when it changes. */
@@ -240,6 +241,7 @@ export const SIGNAL_MORE_MENU_ID = "customer-signal-more"
 export const TAG_POPOVER_ID = "customer-tag"
 export const CHANNEL_POPOVER_ID = "customer-channel"
 export const CHAT_PERSON_MENU_ID = "customer-chat-person"
+export const OTHER_ACCOUNTS_POPOVER_ID = "customer-user-other-accounts"
 export const FLAG_POPOVER_ID = "customer-feature-flags"
 export const RAW_MODAL_ID = "customer-raw"
 export const ENVIRONMENT_MENU_ID = "customer-environments"
@@ -369,9 +371,10 @@ export const visibleContacts = (model: Model): ReadonlyArray<Customers.ContactRo
 	)
 }
 
-/** Impersonate shows for a granted user while Clerk (the provider that can) is connected. */
+/** Impersonate shows for a granted user while a source that can impersonate is connected. */
 export const canImpersonate = (model: Model): boolean =>
-	model.isImpersonator && model.connectedProviders.includes("clerk")
+	model.isImpersonator &&
+	model.connectedProviders.some((provider) => integrationOf(provider)?.capabilities.impersonation === true)
 
 /** The loaded contacts per status. */
 export const contactCounts = (model: Model): Readonly<Record<ContactFilter, number>> => {

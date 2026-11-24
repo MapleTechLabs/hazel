@@ -115,6 +115,13 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "email_threads_organization_idx" ON "email_threads" ("organizationId")',
 			],
 		},
+		{
+			id: "0007_oauth_broker_routes",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "oauth_broker_routes" (\n\t"provider" text NOT NULL,\n\t"externalId" text NOT NULL,\n\t"instanceId" text NOT NULL,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\tPRIMARY KEY ("provider", "externalId")\n)',
+				'CREATE INDEX IF NOT EXISTS "oauth_broker_routes_instance_id_idx" ON "oauth_broker_routes" ("instanceId")',
+			],
+		},
 	],
 	org: [
 		{
@@ -352,6 +359,30 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 		{
 			id: "0013_channel_customers_company",
 			statements: ['ALTER TABLE "channel_customers" ADD COLUMN "company" text'],
+		},
+		{
+			id: "0014_organization_exports",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "organization_exports" (\n\t"id" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || \'-\' || lower(hex(randomblob(2))) || \'-4\' || substr(lower(hex(randomblob(2))), 2) || \'-\' || substr(\'89ab\', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || \'-\' || lower(hex(randomblob(6)))),\n\t"organizationId" text NOT NULL,\n\t"requestedBy" text NOT NULL,\n\t"status" text NOT NULL DEFAULT \'pending\',\n\t"cursor" text,\n\t"channelCount" integer NOT NULL DEFAULT 0,\n\t"channelsDone" integer NOT NULL DEFAULT 0,\n\t"partCount" integer NOT NULL DEFAULT 0,\n\t"rowCount" integer NOT NULL DEFAULT 0,\n\t"byteSize" integer NOT NULL DEFAULT 0,\n\t"error" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"completedAt" text,\n\t"expiresAt" text\n)',
+				'CREATE INDEX IF NOT EXISTS "organization_exports_organization_id_idx" ON "organization_exports" ("organizationId")',
+				'CREATE INDEX IF NOT EXISTS "organization_exports_status_idx" ON "organization_exports" ("status")',
+			],
+		},
+		{
+			id: "0015_dm_last_message",
+			statements: [
+				'ALTER TABLE "channels" ADD COLUMN "lastMessageAt" text',
+				'ALTER TABLE "channels" ADD COLUMN "lastMessageAuthorId" text',
+				'ALTER TABLE "channels" ADD COLUMN "lastMessagePreview" text',
+			],
+		},
+		{
+			id: "0016_remove_customer_health_score",
+			statements: [
+				'ALTER TABLE "channel_customers" DROP COLUMN "healthStatus"',
+				'ALTER TABLE "channel_customers" DROP COLUMN "healthScore"',
+				'ALTER TABLE "channel_customers" DROP COLUMN "healthWhy"',
+			],
 		},
 	],
 	channel: [
@@ -719,6 +750,33 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'ALTER TABLE "customer_accounts" ADD COLUMN "companyCheckedAt" text',
 				'CREATE TABLE IF NOT EXISTS "customer_enrichments" (\n\t"domain" text PRIMARY KEY NOT NULL,\n\t"status" text NOT NULL DEFAULT \'pending\',\n\t"profile" text,\n\t"fetchedAt" text,\n\t"nextAttemptAt" text,\n\t"forceRefresh" integer NOT NULL DEFAULT false,\n\t"failures" integer NOT NULL DEFAULT 0,\n\t"error" text,\n\t"creditsUsed" integer NOT NULL DEFAULT 0,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
 				'CREATE INDEX IF NOT EXISTS "customer_enrichments_next_attempt_idx" ON "customer_enrichments" ("nextAttemptAt")',
+			],
+		},
+		{
+			id: "0026_customer_contacts_email_lower",
+			statements: [
+				'CREATE INDEX IF NOT EXISTS "customer_contacts_email_lower_idx" ON "customer_contacts" (lower("email"))',
+			],
+		},
+		{
+			id: "0027_remove_customer_health_score",
+			statements: [
+				'DELETE FROM "customer_events" WHERE "type" = \'health.status_changed\' OR json_extract("data", \'$.signalId\') IN (SELECT "id" FROM "customer_signals" WHERE "template" = \'health_drop\' OR "ruleId" IN (SELECT "id" FROM "customer_signal_rules" WHERE "template" = \'health_drop\' OR ("template" = \'usage_drop\' AND json_extract("config", \'$.metricKey\') = \'health_score\')))',
+				'DELETE FROM "customer_signals" WHERE "template" = \'health_drop\' OR "ruleId" IN (SELECT "id" FROM "customer_signal_rules" WHERE "template" = \'health_drop\' OR ("template" = \'usage_drop\' AND json_extract("config", \'$.metricKey\') = \'health_score\'))',
+				"DELETE FROM \"customer_signal_rules\" WHERE \"template\" = 'health_drop' OR (\"template\" = 'usage_drop' AND json_extract(\"config\", '$.metricKey') = 'health_score')",
+				'DELETE FROM "customer_metric_definitions" WHERE "key" = \'health_score\' AND "builtIn" = 1',
+				'DELETE FROM "customer_saved_views" WHERE "builtInKey" = \'at_risk\'',
+				'UPDATE "customer_saved_views" SET "columns" = (SELECT json_group_array("value") FROM (SELECT "value" FROM json_each("customer_saved_views"."columns") WHERE "value" <> \'health\' ORDER BY "key")) WHERE EXISTS (SELECT 1 FROM json_each("customer_saved_views"."columns") WHERE "value" = \'health\')',
+				'UPDATE "customer_saved_views" SET "sort" = \'{"column":"mrr","direction":"desc"}\' WHERE json_extract("sort", \'$.column\') = \'health\'',
+				'DROP INDEX IF EXISTS "customer_accounts_health_idx"',
+				'ALTER TABLE "customer_accounts" DROP COLUMN "healthScore"',
+				'ALTER TABLE "customer_accounts" DROP COLUMN "healthStatus"',
+				'ALTER TABLE "customer_accounts" DROP COLUMN "healthUpdatedAt"',
+				'ALTER TABLE "customer_org_daily" DROP COLUMN "healthy"',
+				'ALTER TABLE "customer_org_daily" DROP COLUMN "atRisk"',
+				'ALTER TABLE "customer_org_daily" DROP COLUMN "critical"',
+				'ALTER TABLE "customer_settings" DROP COLUMN "health"',
+				'DROP TABLE IF EXISTS "customer_health_daily"',
 			],
 		},
 	],

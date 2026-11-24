@@ -1,20 +1,25 @@
 /**
- * Loads what compute and the dry runs evaluate (`./facts.ts`): the org-wide part once
+ * Loads what compute and the rule dry run evaluate (`./facts.ts`): the org-wide part once
  * (`loadBase`), then the live accounts in chunks (`loadAccounts`), each with its contacts,
- * activity over the window the rules need, billing, metrics, MRR movements and a month of health
- * history, plus the account fields compute derives from them (`rollupAccount`, §4.2). A chunk holds
- * whole groups of linked accounts (`./groups.ts`): a primary's signals evaluate its group's
- * combined facts (`./group-facts.ts`).
+ * activity over the window the rules need, billing, metrics and MRR movements, plus the account
+ * fields compute derives from them (`rollupAccount`, §4.2). A chunk holds whole groups of linked
+ * accounts (`./groups.ts`): a primary's signals evaluate its group's combined facts
+ * (`./group-facts.ts`).
  */
+import {
+	activityProviders,
+	billingPreferenceOrder,
+	billingProviders,
+	firstImportProviders,
+	invoiceProviders,
+	usageInvoiceProviders,
+} from "@hazel/customer-integrations"
 import { Database, SQLite, schema } from "@hazel/db"
 import {
 	type CustomerProvider,
 	type Day,
 	ENVIRONMENT_TEMPLATES,
-	type HealthBreakdown,
-	type HealthSettings,
 	type LifecycleStage,
-	MAX_WINDOW_DAYS,
 	type SignalTemplate,
 } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerContactId, CustomerSubscriptionId } from "@hazel/schema"
@@ -28,7 +33,6 @@ import {
 	type ContactFacts,
 	type EndedPlanInvoice,
 	endedPaying,
-	type HealthPoint,
 	type IssueSlaFacts,
 	type MetricPoint,
 	type OrgFacts,
@@ -38,7 +42,7 @@ import {
 	wasCustomer,
 } from "./facts"
 import { inList, isActive } from "./sql"
-import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "./time"
+import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "@hazel/customer-integrations/kit/time"
 
 /** A JSON key or value holding an account id. */
 const accountIdText = schema.typed<CustomerAccountId>()(SQLite.text)
@@ -105,20 +109,13 @@ export const evaluatedFor = (accounts: ReadonlyArray<AccountSnapshot>) => {
 export interface SnapshotBase {
 	readonly org: OrgFacts
 	readonly settings: schema.CustomerSettings
-	readonly health: HealthSettings
 	readonly rules: ReadonlyArray<schema.CustomerSignalRule>
 	/**
-	 * Usage data is live: an activity source is connected (not in error or disconnected) and
-	 * delivering, or, with no activity connection at all, some contact was ever active.
+	 * The billing sources needing a first import that can count for MRR (it is done, and a run
+	 * succeeded since they were last connected), in registry order; each account's source is
+	 * `billingProviderOf`'s.
 	 */
-	readonly hasActivityData: boolean
-	/** Billing data exists (a billing source, or subscriptions). */
-	readonly hasBillingData: boolean
-	/**
-	 * Autumn's subscriptions can count for MRR (its first import done, and a run succeeded since it
-	 * was last connected); each account's source is `billingProviderOf`'s.
-	 */
-	readonly autumnReady: boolean
+	readonly billingReady: ReadonlyArray<CustomerProvider>
 	/** The live accounts, loaded in chunks (`loadAccounts`). */
 	readonly accountIds: ReadonlyArray<CustomerAccountId>
 	/**
@@ -137,8 +134,6 @@ export interface Snapshot extends SnapshotBase {
 	readonly accounts: ReadonlyArray<AccountSnapshot>
 	/** The accounts' unclosed signals. */
 	readonly signals: ReadonlyArray<schema.CustomerSignal>
-	/** Today's stored health breakdowns, so an unchanged one is not written again. */
-	readonly todayHealth: ReadonlyMap<CustomerAccountId, HealthBreakdown>
 }
 
 const sum = (values: ReadonlyArray<number>) => values.reduce((total, value) => total + value, 0)
@@ -162,21 +157,23 @@ export interface UsageMrr {
 }
 
 /**
- * Usage billing on top of the plans' MRR, best effort: for each billed (`billed`) monthly Stripe
- * subscription, the average of what its paid invoices of the last 3 months (`USAGE_WINDOW_DAYS`)
- * charged above its plan price (metered and tiered prices, which the plan's MRR leaves out), over the
- * invoices there are when fewer than 3. A discount (paid below the plan) adds nothing. Any provider's
- * account: Autumn bills through Stripe subscriptions.
+ * Usage billing on top of the plans' MRR, best effort: for each billed (`billed`) monthly
+ * subscription of a source whose invoices carry usage (`usageFromInvoices`), the average of what its
+ * paid invoices of the last 3 months (`USAGE_WINDOW_DAYS`) charged above its plan price (metered and
+ * tiered prices, which the plan's MRR leaves out), over the invoices there are when fewer than 3. A
+ * discount (paid below the plan) adds nothing. Any provider's account: another billing source may
+ * bill through that one's subscriptions.
  */
 export const usageMrrOf = (
 	/** The account's, any provider. */
 	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
-	/** The account's paid Stripe invoices. */
+	/** The account's paid invoices (`invoiceProviders`). */
 	paidInvoices: ReadonlyArray<schema.CustomerInvoice>,
 	now: Date,
 ): ReadonlyArray<UsageMrr> =>
 	subscriptions.flatMap((sub) => {
-		if (sub.provider !== "stripe" || sub.interval !== "month" || !billed(sub)) return []
+		if (!usageInvoiceProviders.includes(sub.provider) || sub.interval !== "month" || !billed(sub))
+			return []
 		const recent = paidInvoices
 			.filter(
 				(invoice) =>
@@ -335,7 +332,7 @@ const groupBy = <A, K>(items: ReadonlyArray<A>, key: (item: A) => K) => {
 	return groups
 }
 
-const ACTIVITY_PROVIDERS: ReadonlySet<CustomerProvider> = new Set(["clerk", "maple"])
+const ACTIVITY_PROVIDERS: ReadonlySet<CustomerProvider> = new Set(activityProviders)
 
 /** A day plus the longest pull interval (6 hours): a source silent for longer has stopped delivering. */
 const STALE_AFTER_MS = 30 * 60 * 60_000
@@ -349,33 +346,37 @@ const stoppedDelivering = (connection: schema.CustomerConnection, now: Date) =>
 	connection.nextSyncAt !== null &&
 	(connection.lastSuccessAt === null || connection.lastSuccessAt.getTime() < now.getTime() - STALE_AFTER_MS)
 
-const BILLING_PROVIDERS: ReadonlyArray<CustomerProvider> = ["stripe", "autumn"]
-
 /** Bills the account now: a live billed subscription that pays (not a trial, not a free plan). */
 export const billsNow = (sub: schema.CustomerSubscription) => billed(sub) && pays(sub)
 
 /**
- * Whose subscriptions count for one account's MRR, from its subscriptions (any status): Autumn once
- * its connection finished its first import (until then its data is partial) and it bills the
- * account now (`billsNow`), else Stripe when it does (a customer Autumn does not know, or billed in
- * Stripe outside it). With neither billing now, Autumn when only it knows the customer held a plan
- * (`wasCustomer`), else the source stored last run (`stored`), so a payer ending in one provider
- * churns there rather than switching, else Stripe's. An account with only one provider's
- * subscriptions keeps that one either way, so an Autumn disconnect does not zero its MRR.
+ * Whose subscriptions count for one account's MRR, from its subscriptions (any status). Over the
+ * billing sources holding some, best preference first: the first that bills the account now
+ * (`billsNow`), one needing a first import only once that is done (until then its data is partial).
+ * With none billing now, the one source that knows the customer held a plan (`wasCustomer`), once
+ * it counts; else the source stored last run (`stored`), so a payer ending in one provider churns
+ * there rather than switching; else the last preference. An account held by one source keeps it
+ * either way, so a disconnect does not zero its MRR.
  */
 export const billingProviderOf = (
-	autumnReady: boolean,
+	ready: ReadonlySet<CustomerProvider>,
 	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
 	stored: CustomerProvider | null,
 ): CustomerProvider => {
-	const autumn = subscriptions.filter((sub) => sub.provider === "autumn")
-	if (autumn.length === 0) return "stripe"
-	const stripe = subscriptions.filter((sub) => sub.provider === "stripe")
-	if (stripe.length === 0) return "autumn"
-	if (autumnReady && autumn.some(billsNow)) return "autumn"
-	if (stripe.some(billsNow)) return "stripe"
-	if (autumnReady && autumn.some(wasCustomer) && !stripe.some(wasCustomer)) return "autumn"
-	return stored ?? "stripe"
+	const holding = billingPreferenceOrder.flatMap(({ provider, requiresFirstImport }) => {
+		const subs = subscriptions.filter((sub) => sub.provider === provider)
+		return subs.length === 0
+			? []
+			: [{ provider, subs, counts: !requiresFirstImport || ready.has(provider) }]
+	})
+	const last = holding[holding.length - 1]
+	if (last === undefined) return billingPreferenceOrder[billingPreferenceOrder.length - 1].provider
+	if (holding.length === 1) return last.provider
+	const billing = holding.find(({ subs, counts }) => counts && subs.some(billsNow))
+	if (billing !== undefined) return billing.provider
+	const customers = holding.filter(({ subs }) => subs.some(wasCustomer))
+	if (customers.length === 1 && customers[0].counts) return customers[0].provider
+	return stored ?? last.provider
 }
 
 /**
@@ -383,13 +384,13 @@ export const billingProviderOf = (
  * `mrrSource`) and its subscriptions.
  */
 export const billingByAccount = (
-	autumnReady: boolean,
+	ready: ReadonlySet<CustomerProvider>,
 	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
 	storedSources: ReadonlyMap<CustomerAccountId, CustomerProvider | null>,
 ) =>
 	new Map(
 		[...groupBy(subscriptions, (sub) => sub.accountId)].map(([accountId, subs]) => {
-			const source = billingProviderOf(autumnReady, subs, storedSources.get(accountId) ?? null)
+			const source = billingProviderOf(ready, subs, storedSources.get(accountId) ?? null)
 			return [accountId, { source, subscriptions: subs.filter((sub) => sub.provider === source) }]
 		}),
 	)
@@ -426,9 +427,6 @@ export const endedPlanInvoices = Effect.fnUntraced(function* (
 
 /** Accounts loaded (and their activity held in memory) at a time. */
 const ACCOUNT_CHUNK = 250
-
-/** Days of health history the rules read (`health_drop`'s window, its 30-day series). */
-const HEALTH_DAYS = MAX_WINDOW_DAYS + 1
 
 export const accountChunks = <A>(items: ReadonlyArray<A>, size = ACCOUNT_CHUNK) =>
 	Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
@@ -486,12 +484,6 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 			.map((connection) => connection.provider)
 			.filter((provider) => !(ACTIVITY_PROVIDERS.has(provider) && stale.has(provider))),
 	)
-	const anySubscription = yield* db.first(
-		SQLite.from(schema.customerSubscriptionsTable)
-			.select("id")
-			.where(($) => [inList($.provider, BILLING_PROVIDERS)])
-			.limit(1),
-	)
 	const rules = yield* db.run(
 		SQLite.from(schema.customerSignalRulesTable)
 			.select()
@@ -514,15 +506,6 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 	const definitions = yield* db.run(
 		SQLite.from(schema.customerMetricDefinitionsTable).select("key", "name", "aggregation", "provider"),
 	)
-	const activityConnections = connections.filter((connection) =>
-		ACTIVITY_PROVIDERS.has(connection.provider),
-	)
-	const anyActivity = yield* db.first(
-		SQLite.from(schema.customerContactsTable)
-			.select("id")
-			.where(($) => [$.lastActiveDay.isNotNull()])
-			.limit(1),
-	)
 	return {
 		org: {
 			now,
@@ -541,22 +524,17 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 			attention: settings.attention,
 		},
 		settings,
-		health: settings.health,
 		rules,
-		// Stale rows of a disconnected (or silent) source must not keep decaying everyone's usage score.
-		hasActivityData:
-			activityConnections.length > 0
-				? activityConnections.some((connection) => connected.has(connection.provider))
-				: Option.isSome(anyActivity),
-		hasBillingData: connected.has("stripe") || connected.has("autumn") || Option.isSome(anySubscription),
-		// A reconnect keeps what Autumn imported before, stale meanwhile: it counts again once the run
-		// the reconnect started succeeds (`lastSuccessAt`, that run's start, not before `connectedAt`).
-		autumnReady: connections.some(
-			(connection) =>
-				connection.provider === "autumn" &&
-				connection.status !== "disconnected" &&
-				connection.backfilledAt !== null &&
-				(connection.lastSuccessAt === null || connection.lastSuccessAt >= connection.connectedAt),
+		// A reconnect keeps what it imported before, stale meanwhile: it counts again once the run the
+		// reconnect started succeeds (`lastSuccessAt`, that run's start, not before `connectedAt`).
+		billingReady: firstImportProviders.filter((provider) =>
+			connections.some(
+				(connection) =>
+					connection.provider === provider &&
+					connection.status !== "disconnected" &&
+					connection.backfilledAt !== null &&
+					(connection.lastSuccessAt === null || connection.lastSuccessAt >= connection.connectedAt),
+			),
 		),
 		accountIds,
 		groups: [...groups]
@@ -573,7 +551,7 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 	} satisfies SnapshotBase
 })
 
-/** `ids`' accounts (the live ones) with everything compute and the dry runs evaluate. */
+/** `ids`' accounts (the live ones) with everything compute and the rule dry run evaluate. */
 export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 	base: SnapshotBase,
 	ids: ReadonlyArray<CustomerAccountId>,
@@ -600,7 +578,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 	const contactsBy = groupBy(contacts, (contact) => contact.accountId)
 	const activityBy = groupBy(activity, (row) => row.accountId)
 	// The last active day over the live contacts and the activity the rollups count (a removed
-	// contact's recent days included), so engagement and active users agree.
+	// contact's recent days included), so it agrees with active users.
 	const lastActiveDayBy = new Map<CustomerAccountId, Day>()
 	const seen = (accountId: CustomerAccountId, last: Day | null) => {
 		const current = lastActiveDayBy.get(accountId)
@@ -646,13 +624,17 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 	const subscriptions = yield* db.run(
 		SQLite.from(schema.customerSubscriptionsTable)
 			.select()
-			.where(($) => [inList($.accountId, ids), inList($.provider, BILLING_PROVIDERS)]),
+			.where(($) => [inList($.accountId, ids), inList($.provider, billingProviders)]),
 	)
-	// Invoices come from Stripe only (Autumn bills through it).
+	// Invoices come only from the sources that hold them (`invoices`); others bill through those.
 	const openInvoices = yield* db.run(
 		SQLite.from(schema.customerInvoicesTable)
 			.select()
-			.where(($) => [inList($.accountId, ids), $.status.eq("open"), $.provider.eq("stripe")]),
+			.where(($) => [
+				inList($.accountId, ids),
+				$.status.eq("open"),
+				inList($.provider, invoiceProviders),
+			]),
 	)
 	const paidInvoices = yield* db.run(
 		SQLite.from(schema.customerInvoicesTable)
@@ -660,7 +642,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			.where(($) => [
 				inList($.accountId, ids),
 				$.status.eq("paid"),
-				$.provider.eq("stripe"),
+				inList($.provider, invoiceProviders),
 				$.subscriptionId.isNotNull(),
 				$.paidAt.gte(new Date(now.getTime() - USAGE_WINDOW_DAYS * DAY_MS)),
 			]),
@@ -676,17 +658,6 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			.select()
 			.where(($) => [inList($.accountId, ids)])
 			.orderBy(($) => [[$.day, "asc"]]),
-	)
-	const health = yield* db.run(
-		SQLite.from(schema.customerHealthDailyTable)
-			.select("accountId", "day", "score", "status")
-			.where(($) => [inList($.accountId, ids), $.day.gte(addDays(today, -HEALTH_DAYS))])
-			.orderBy(($) => [[$.day, "asc"]]),
-	)
-	const todayHealth = yield* db.run(
-		SQLite.from(schema.customerHealthDailyTable)
-			.select("accountId", "breakdown")
-			.where(($) => [inList($.accountId, ids), $.day.eq(today)]),
 	)
 	const signals = yield* db.run(
 		SQLite.from(schema.customerSignalsTable)
@@ -713,8 +684,8 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			.select("accountId", "provider")
 			.where(($) => [inList($.accountId, ids), $.entityType.eq("account")]),
 	)
-	// The sources holding a record of each account: its refs, and its subscriptions (Autumn's are
-	// keyed to the Clerk organization, with no ref of their own).
+	// The sources holding a record of each account: its refs, and its subscriptions (a source keyed
+	// to another's id has no ref of its own).
 	const providersBy = new Map<CustomerAccountId, Set<CustomerProvider>>()
 	for (const { accountId, provider } of [...refs, ...subscriptions]) {
 		const providers = providersBy.get(accountId) ?? new Set<CustomerProvider>()
@@ -723,7 +694,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 	}
 
 	const billingBy = billingByAccount(
-		base.autumnReady,
+		new Set(base.billingReady),
 		subscriptions,
 		new Map(accounts.map((account) => [account.id, account.mrrSource])),
 	)
@@ -771,7 +742,6 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 	const paidInvoicesBy = groupBy(paidInvoices, (invoice) => invoice.accountId)
 	const metricsBy = groupBy(metrics, (row) => row.accountId)
 	const movementsBy = groupBy(movements, (row) => row.accountId)
-	const healthBy = groupBy(health, (row) => row.accountId)
 	const issueSlasBy = groupBy(issueSlas, (row) => row.accountId)
 
 	const snapshots = accounts.map((stored): Omit<AccountSnapshot, "evaluated"> => {
@@ -846,11 +816,6 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 				),
 				metrics: metricMap,
 				movements: movementsBy.get(stored.id) ?? [],
-				health: (healthBy.get(stored.id) ?? []).map((row): HealthPoint => ({
-					day: row.day,
-					score: row.score,
-					status: row.status,
-				})),
 				openIssueSlas: (issueSlasBy.get(stored.id) ?? []).map(
 					({ accountId: _accountId, ...issue }): IssueSlaFacts => issue,
 				),
@@ -950,6 +915,5 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 		...base,
 		accounts: withEvaluated,
 		signals,
-		todayHealth: new Map(todayHealth.map((row) => [row.accountId, row.breakdown])),
 	} satisfies Snapshot
 })

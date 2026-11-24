@@ -1,22 +1,23 @@
 /**
  * Deterministic demo data for the Customers area (`docs/customers/tech-design.md` §6.5): the
- * `IngestOp`s four fake provider connections would send, applied through ingest to fill a dev org.
+ * `IngestOp`s fake provider connections would send, applied through ingest to fill a dev org. Each
+ * part of the book is written for the integration playing that role (`demoSource`), which supplies
+ * its own id shapes and links (`<id>/demo.ts`).
  *
  * Data model, all relative to `now`'s UTC day:
- * - Clerk: one organization per account (`org_NNNN`, the shared id) and its members (`user_NNNNN`).
- * - Autumn: the billing truth. Customer id = Clerk org id; subscriptions carry the MRR, a plan
+ * - directory: one record per account (its id is the shared id) and its members.
+ * - plans: the billing truth. Customer id = the shared id; subscriptions carry the MRR, a plan
  *   change is the old subscription canceled plus a new one started the same day; metered usage
  *   (`api_calls`, `projects`, `storage_gb`) is a daily metric with the plan's limit.
- * - Stripe: a customer per billed account (`metadata.clerk_org_id` → `sameAs`) and its invoices,
- *   plus a few customers that resolve by domain, match nothing, or match two accounts.
- * - Maple: one activity row per contact per active day, weekday-heavy, with a clear champion.
+ * - invoices: a customer per billed account (linked by the shared id through `sameAs`) and its
+ *   invoices, plus a few customers that resolve by domain, match nothing, or match two accounts.
+ * - activity: one row per contact per active day, weekday-heavy, with a clear champion.
  *
  * Each account gets an archetype that shapes its history so every signal template has matches:
  * `went_quiet` (inactive), `usage_drop`, `payment_failed`, `cancel_scheduled` and `downgraded`
  * (cancel_scheduled), `trial_ending_low` (trial_ending_low_activation), `onboarding_stalled`,
- * `champion_left` (champion_inactive), `near_limit`, `seat_growth`; `healthy_*`, `trial_healthy`,
- * `churned` (a recent few: churned) and `lead` fill out the book (and `health_drop` follows from the
- * risky ones).
+ * `champion_left` (champion_inactive), `near_limit`, `seat_growth`; `steady`, `growing`,
+ * `trial_engaged`, `churned` (a recent few: churned) and `lead` fill out the book.
  */
 import type {
 	CustomerProvider,
@@ -25,7 +26,17 @@ import type {
 	UpsertAccount,
 	UpsertContact,
 } from "@hazel/domain/customers"
-import { DAY_MS, dayOf } from "./time"
+import { demoSource } from "@hazel/customer-integrations"
+import { DAY_MS, dayOf } from "@hazel/customer-integrations/kit/time"
+
+/** Who plays each part. Read per generation: this module loads with the Worker, the seed runs rarely. */
+const demoBook = () => ({
+	directory: demoSource("directory"),
+	plans: demoSource("plans"),
+	invoices: demoSource("invoices"),
+	activity: demoSource("activity"),
+})
+type DemoBook = ReturnType<typeof demoBook>
 
 export interface DemoSeedOptions {
 	/** Number of customer accounts (default 200). */
@@ -39,15 +50,15 @@ export interface DemoSeedOptions {
 }
 
 export type DemoArchetype =
-	| "healthy_growing"
-	| "healthy_stable"
+	| "growing"
+	| "steady"
 	| "went_quiet"
 	| "usage_drop"
 	| "payment_failed"
 	| "cancel_scheduled"
 	| "downgraded"
 	| "trial_ending_low"
-	| "trial_healthy"
+	| "trial_engaged"
 	| "onboarding_stalled"
 	| "champion_left"
 	| "near_limit"
@@ -56,13 +67,13 @@ export type DemoArchetype =
 	| "lead"
 
 export interface DemoAccount {
-	readonly clerkOrgId: string
+	readonly sharedId: string
 	readonly name: string
 	readonly archetype: DemoArchetype
 }
 
 export interface DemoSeed {
-	/** Apply in this order: clerk, autumn, stripe, maple. One batch per provider. */
+	/** Apply in this order: directory, plans, invoices, activity. One batch per provider. */
 	readonly batches: ReadonlyArray<{
 		readonly provider: CustomerProvider
 		readonly ops: ReadonlyArray<IngestOp>
@@ -177,10 +188,10 @@ const tierAbove = (plan: Plan) => TIERS[Math.min(3, TIERS.indexOf(plan as (typeo
 
 /** Accounts per archetype in a 200-account book. */
 const MIX: ReadonlyArray<readonly [DemoArchetype, number]> = [
-	["healthy_stable", 50],
-	["healthy_growing", 25],
+	["steady", 50],
+	["growing", 25],
 	["lead", 15],
-	["trial_healthy", 10],
+	["trial_engaged", 10],
 	["trial_ending_low", 6],
 	["went_quiet", 10],
 	["usage_drop", 10],
@@ -344,7 +355,7 @@ interface ContactSpec {
 	readonly externalId: string
 	readonly name: string
 	readonly email: string
-	readonly role: "org:admin" | "org:member"
+	readonly isAdmin: boolean
 	readonly isBillingContact: boolean
 	readonly joinAgo: number
 	/** The most recent day it can be active (0 = today). */
@@ -374,7 +385,7 @@ interface SubSpec {
 
 interface AccountSpec {
 	readonly index: number
-	readonly clerkOrgId: string
+	readonly sharedId: string
 	readonly name: string
 	readonly domain: string
 	readonly archetype: DemoArchetype
@@ -385,8 +396,8 @@ interface AccountSpec {
 	readonly intensity: (ago: number) => number
 	/** Share of the api_calls limit used on a normal day. */
 	readonly usageShare: number
-	/** Stripe customer carries `metadata.clerk_org_id`; false → matched by domain only. */
-	stripeSameAs: boolean
+	/** The billing customer carries the shared id; false → matched by domain only. */
+	linksBySharedId: boolean
 }
 
 const archetypeCounts = (total: number): Array<DemoArchetype> => {
@@ -405,7 +416,7 @@ const archetypeCounts = (total: number): Array<DemoArchetype> => {
 		for (const [index, count] of counts.entries()) {
 			if (count === 0) {
 				counts[index] = 1
-				counts[0]-- // from healthy_stable
+				counts[0]-- // from steady
 			}
 		}
 	}
@@ -445,14 +456,14 @@ const weighted = <A>(rng: Rng, options: ReadonlyArray<readonly [A, number]>): A 
 
 const pickPlan = (rng: Rng, archetype: DemoArchetype): Plan => {
 	switch (archetype) {
-		case "healthy_stable":
+		case "steady":
 			return weighted(rng, [
 				[STARTER, 30],
 				[TEAM, 40],
 				[BUSINESS, 22],
 				[ENTERPRISE, 8],
 			])
-		case "healthy_growing":
+		case "growing":
 			return weighted(rng, [
 				[TEAM, 40],
 				[BUSINESS, 40],
@@ -466,7 +477,7 @@ const pickPlan = (rng: Rng, archetype: DemoArchetype): Plan => {
 			])
 		case "seat_growth":
 			return BUSINESS
-		case "trial_healthy":
+		case "trial_engaged":
 		case "trial_ending_low":
 			return weighted(rng, [
 				[TEAM, 60],
@@ -509,6 +520,7 @@ const contactCount = (rng: Rng, plan: Plan | null) => {
 
 /** Builds every account's history; the op writers below only read it. */
 const planAccounts = (
+	book: DemoBook,
 	rng: Rng,
 	clock: Clock,
 	archetypes: ReadonlyArray<DemoArchetype>,
@@ -521,7 +533,7 @@ const planAccounts = (
 
 	return archetypes.map((archetype, index) => {
 		const { name, domain } = names[index]
-		const clerkOrgId = `org_${pad(index + 1, 4)}`
+		const sharedId = book.directory.demo.accountId(pad(index + 1, 4))
 		const subs: Array<SubSpec> = []
 		const sub = (fields: Partial<SubSpec> & Pick<SubSpec, "plan" | "start">) => {
 			const annual = fields.interval === "year"
@@ -563,9 +575,9 @@ const planAccounts = (
 				list.forEach((contact, i) => (contact.weekdayP = silent ? 0 : i === 0 ? 0.55 : 0.15))
 		} else {
 			switch (archetype) {
-				case "trial_healthy":
+				case "trial_engaged":
 				case "trial_ending_low": {
-					const endsIn = archetype === "trial_healthy" ? rng.int(7, 13) : rng.int(1, 4)
+					const endsIn = archetype === "trial_engaged" ? rng.int(7, 13) : rng.int(1, 4)
 					const trialEnd = dayAt(clock, -endsIn) + rng.int(8, 18) * 3_600_000
 					const trialStartAgo = 14 - endsIn
 					createdAgo = trialStartAgo
@@ -576,7 +588,7 @@ const planAccounts = (
 						trialEndsAt: trialEnd,
 						mrrMinor: 0,
 					})
-					if (archetype === "trial_healthy") {
+					if (archetype === "trial_engaged") {
 						contacts = rng.int(3, 6)
 						tweakContacts = (list) =>
 							list.forEach((contact, i) => {
@@ -652,7 +664,7 @@ const planAccounts = (
 					break
 				}
 				case "downgraded":
-				case "healthy_growing": {
+				case "growing": {
 					// downgraded: from the tier above, 2–12 days ago; growing: up from the tier below.
 					const changeAgo = archetype === "downgraded" ? rng.int(2, 12) : rng.int(20, 200)
 					const startAgo = Math.min(364, changeAgo + rng.int(45, 300))
@@ -673,17 +685,15 @@ const planAccounts = (
 						start: change,
 						interval: annual ? "year" : "month",
 					})
-					if (archetype === "healthy_growing")
-						intensity = (ago) => 0.7 + 0.3 * Math.max(0, 1 - ago / 120)
+					if (archetype === "growing") intensity = (ago) => 0.7 + 0.3 * Math.max(0, 1 - ago / 120)
 					break
 				}
 				default: {
-					// healthy_stable, went_quiet, usage_drop, champion_left, near_limit, seat_growth
-					const startAgo = rng.int(archetype === "healthy_stable" ? 30 : 75, 364)
+					// steady, went_quiet, usage_drop, champion_left, near_limit, seat_growth
+					const startAgo = rng.int(archetype === "steady" ? 30 : 75, 364)
 					createdAgo = startAgo + rng.int(0, 21)
 					const annual =
-						archetype === "healthy_stable" &&
-						(plan === ENTERPRISE ? rng.chance(0.8) : rng.chance(0.2))
+						archetype === "steady" && (plan === ENTERPRISE ? rng.chance(0.8) : rng.chance(0.2))
 					sub({
 						plan,
 						mrrMinor: mrrFor(plan),
@@ -747,10 +757,10 @@ const planAccounts = (
 			for (let n = 2; emails.has(email); n++) email = `${first}.${last}${n}@${domain}`.toLowerCase()
 			emails.add(email)
 			return {
-				externalId: `user_${pad(++contactSeq, 5)}`,
+				externalId: book.directory.demo.contactId(pad(++contactSeq, 5)),
 				name: `${first} ${last}`,
 				email,
-				role: "org:member",
+				isAdmin: false,
 				isBillingContact: false,
 				joinAgo,
 				stopAgo: 0,
@@ -761,21 +771,18 @@ const planAccounts = (
 		}
 
 		const contactList = Array.from({ length: contacts }, (_, i) => {
-			if (i === 0)
-				return { ...newContact(createdAgo, 0.9), role: "org:admin" as const, isBillingContact: true }
-			const spread = archetype === "healthy_growing" ? rng.next() * 0.9 : rng.next() * 0.4
+			if (i === 0) return { ...newContact(createdAgo, 0.9), isAdmin: true, isBillingContact: true }
+			const spread = archetype === "growing" ? rng.next() * 0.9 : rng.next() * 0.4
 			const joinAgo = Math.max(0, createdAgo - Math.floor(createdAgo * spread))
 			const weekdayP = i <= 2 ? rng.between(0.4, 0.55) : rng.chance(0.1) ? 0 : rng.between(0.08, 0.25)
 			const contact = newContact(joinAgo, weekdayP)
-			return i === 1 && contacts >= 4 && rng.chance(0.5)
-				? { ...contact, role: "org:admin" as const }
-				: contact
+			return i === 1 && contacts >= 4 && rng.chance(0.5) ? { ...contact, isAdmin: true } : contact
 		})
 		tweakContacts(contactList)
 
 		return {
 			index,
-			clerkOrgId,
+			sharedId,
 			name,
 			domain,
 			archetype,
@@ -784,14 +791,14 @@ const planAccounts = (
 			subs,
 			intensity,
 			usageShare: archetype === "near_limit" ? rng.between(0.55, 0.7) : rng.between(0.2, 0.45),
-			stripeSameAs: true,
+			linksBySharedId: true,
 		}
 	})
 }
 
-/** The few deliberate data-quality cases: removed members, domain-only Stripe links, a shared domain. */
+/** The few deliberate data-quality cases: removed members, domain-only billing links, a shared domain. */
 const addEdgeCases = (rng: Rng, accounts: Array<AccountSpec>) => {
-	const stable = accounts.filter((account) => account.archetype === "healthy_stable")
+	const stable = accounts.filter((account) => account.archetype === "steady")
 	const leavers = stable
 		.flatMap((account) =>
 			account.contacts.filter((contact, i) => i > 0 && contact.joinAgo > 90).slice(0, 1),
@@ -801,7 +808,7 @@ const addEdgeCases = (rng: Rng, accounts: Array<AccountSpec>) => {
 		leaver.removedAgo = rng.int(20, 60)
 		leaver.stopAgo = leaver.removedAgo + 1
 	}
-	for (const account of stable.slice(-2)) account.stripeSameAs = false
+	for (const account of stable.slice(-2)) account.linksBySharedId = false
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -833,10 +840,13 @@ const simulateActivity = (rng: Rng, clock: Clock, account: AccountSpec, contact:
 // ---------------------------------------------------------------------------------------------
 // Ops
 
-const clerkRef = (externalId: string): ProviderRef => ({ provider: "clerk", externalId })
-const CLERK_DASHBOARD = "https://dashboard.clerk.com/apps/app_demo/instances/ins_demo"
+const directoryRef = (book: DemoBook, externalId: string): ProviderRef => ({
+	provider: book.directory.id,
+	externalId,
+})
 
-const clerkOps = (
+const directoryOps = (
+	book: DemoBook,
 	rng: Rng,
 	clock: Clock,
 	account: AccountSpec,
@@ -844,11 +854,11 @@ const clerkOps = (
 ): Array<IngestOp> => [
 	{
 		_tag: "account",
-		externalId: account.clerkOrgId,
-		externalUrl: `${CLERK_DASHBOARD}/organizations/${account.clerkOrgId}`,
+		externalId: account.sharedId,
+		externalUrl: book.directory.demo.accountUrl(account.sharedId, "seed"),
 		name: account.name,
 		domains: [account.domain],
-		logoUrl: rng.chance(0.15) ? `https://img.clerk.com/demo/${account.clerkOrgId}.png` : null,
+		logoUrl: rng.chance(0.15) ? book.directory.demo.logoUrl(account.sharedId) : null,
 		createdAt: stamp(clock, rng, dayAt(clock, account.createdAgo)),
 		sameAs: [],
 		onNoMatch: "create",
@@ -864,11 +874,11 @@ const clerkOps = (
 		const op: UpsertContact = {
 			_tag: "contact",
 			externalId: contact.externalId,
-			account: clerkRef(account.clerkOrgId),
-			externalUrl: `${CLERK_DASHBOARD}/users/${contact.externalId}`,
+			account: directoryRef(book, account.sharedId),
+			externalUrl: book.directory.demo.contactUrl(contact.externalId),
 			email: contact.email,
 			name: contact.name,
-			role: contact.role,
+			role: contact.isAdmin ? book.directory.demo.adminRole : book.directory.demo.memberRole,
 			isBillingContact: contact.isBillingContact,
 			joinedAt: stamp(clock, rng, dayAt(clock, contact.joinAgo)),
 			lastSignInAt,
@@ -927,21 +937,22 @@ const periodEnd = (clock: Clock, sub: SubSpec) => {
 	return addMonths(sub.start, k * step)
 }
 
-const autumnOps = (
+const planOps = (
+	book: DemoBook,
 	rng: Rng,
 	clock: Clock,
 	activityDays: number,
 	account: AccountSpec,
 	activeByAgo: ReadonlyArray<number>,
 ): Array<IngestOp> => {
-	const ref: ProviderRef = { provider: "autumn", externalId: account.clerkOrgId }
+	const ref: ProviderRef = { provider: book.plans.id, externalId: account.sharedId }
 	const live = account.subs.find((sub) => sub.end === null)
 	const seatsUsed = account.contacts.filter((contact) => contact.removedAgo === null).length
 	const accountOp: UpsertAccount = {
 		_tag: "account",
-		externalId: account.clerkOrgId,
+		externalId: account.sharedId,
 		name: account.name,
-		sameAs: [clerkRef(account.clerkOrgId)],
+		sameAs: [directoryRef(book, account.sharedId)],
 		onNoMatch: "unmatched",
 	}
 	const ops: Array<IngestOp> = [
@@ -1067,7 +1078,7 @@ const autumnOps = (
 		const pct = Math.round(peak.ratio * 100)
 		ops.push({
 			_tag: "event",
-			externalId: `evt_${account.clerkOrgId}_api_calls_${dayKey(dayAt(clock, peak.ago))}`,
+			externalId: `evt_${account.sharedId}_api_calls_${dayKey(dayAt(clock, peak.ago))}`,
 			account: ref,
 			type: peak.ratio >= 1 ? "usage.limit_reached" : "usage.limit_approaching",
 			title: `API calls at ${pct}% of the ${peak.plan.name} plan limit`,
@@ -1083,6 +1094,7 @@ interface InvoiceCounter {
 }
 
 const invoiceOp = (
+	book: DemoBook,
 	counter: InvoiceCounter,
 	customer: ProviderRef,
 	fields: Omit<
@@ -1091,19 +1103,20 @@ const invoiceOp = (
 	> & { readonly externalId?: string },
 ): IngestOp => {
 	const n = counter.next++
-	const externalId = fields.externalId ?? `in_${pad(n, 5)}`
+	const externalId = fields.externalId ?? book.invoices.demo.invoiceId(pad(n, 5))
 	return {
 		_tag: "invoice",
 		externalId,
 		account: customer,
 		number: `INV-${pad(n, 4)}`,
 		currency: "usd",
-		hostedUrl: `https://invoice.stripe.com/i/acct_demo/${externalId}`,
+		hostedUrl: book.invoices.demo.invoiceUrl(externalId, "seed"),
 		...fields,
 	}
 }
 
-const stripeCustomerOp = (
+const billingCustomerOp = (
+	book: DemoBook,
 	clock: Clock,
 	rng: Rng,
 	externalId: string,
@@ -1114,7 +1127,7 @@ const stripeCustomerOp = (
 ): IngestOp => ({
 	_tag: "account",
 	externalId,
-	externalUrl: `https://dashboard.stripe.com/customers/${externalId}`,
+	externalUrl: book.invoices.demo.customerUrl(externalId),
 	name,
 	domains: [domain],
 	createdAt: stamp(clock, rng, dayAt(clock, createdAgo)),
@@ -1123,18 +1136,28 @@ const stripeCustomerOp = (
 	onNoMatch: "unmatched",
 })
 
-const stripeOps = (
+const billingOps = (
+	book: DemoBook,
 	rng: Rng,
 	clock: Clock,
 	account: AccountSpec,
 	counter: InvoiceCounter,
 	upcomingFor: ReadonlySet<string>,
 ): Array<IngestOp> => {
-	const customerId = `cus_${pad(account.index + 1, 4)}`
-	const customer: ProviderRef = { provider: "stripe", externalId: customerId }
-	const sameAs = account.stripeSameAs ? [clerkRef(account.clerkOrgId)] : []
+	const customerId = book.invoices.demo.customerId(pad(account.index + 1, 4))
+	const customer: ProviderRef = { provider: book.invoices.id, externalId: customerId }
+	const sameAs = account.linksBySharedId ? [directoryRef(book, account.sharedId)] : []
 	const ops: Array<IngestOp> = [
-		stripeCustomerOp(clock, rng, customerId, account.name, account.domain, sameAs, account.createdAgo),
+		billingCustomerOp(
+			book,
+			clock,
+			rng,
+			customerId,
+			account.name,
+			account.domain,
+			sameAs,
+			account.createdAgo,
+		),
 	]
 	for (const sub of account.subs) {
 		const dates = issueDates(clock, sub)
@@ -1144,7 +1167,7 @@ const stripeOps = (
 			const issuedAt = issued + rng.int(1, 6) * 3_600_000
 			if (sub.failure !== null && i === dates.length - 1) {
 				ops.push(
-					invoiceOp(counter, customer, {
+					invoiceOp(book, counter, customer, {
 						subscriptionExternalId: sub.externalId,
 						status: "open",
 						amountDueMinor: amount,
@@ -1163,7 +1186,7 @@ const stripeOps = (
 				continue
 			}
 			ops.push(
-				invoiceOp(counter, customer, {
+				invoiceOp(book, counter, customer, {
 					subscriptionExternalId: sub.externalId,
 					status: "paid",
 					amountDueMinor: amount,
@@ -1180,7 +1203,7 @@ const stripeOps = (
 		if (upcomingFor.has(sub.externalId)) {
 			const issued = periodEnd(clock, sub)
 			ops.push(
-				invoiceOp(counter, customer, {
+				invoiceOp(book, counter, customer, {
 					externalId: `upcoming:${sub.externalId}`,
 					subscriptionExternalId: sub.externalId,
 					status: "upcoming",
@@ -1197,23 +1220,27 @@ const stripeOps = (
 	return ops
 }
 
-/** Stripe customers with no `metadata.clerk_org_id`: no domain match, or a domain two accounts share. */
-const unmatchedStripeOps = (
+/** Billing customers with no shared id: no domain match, or a domain two accounts share. */
+const unmatchedBillingOps = (
+	book: DemoBook,
 	rng: Rng,
 	clock: Clock,
 	counter: InvoiceCounter,
 	strangers: ReadonlyArray<{ readonly name: string; readonly domain: string }>,
 ): Array<IngestOp> =>
 	strangers.flatMap(({ name, domain }, i) => {
-		const customer: ProviderRef = { provider: "stripe", externalId: `cus_x${pad(i + 1, 3)}` }
+		const customer: ProviderRef = {
+			provider: book.invoices.id,
+			externalId: book.invoices.demo.customerId(`x${pad(i + 1, 3)}`),
+		}
 		const months = rng.int(1, 4)
 		const amount = rng.pick([STARTER, TEAM]).priceMinor
 		const firstAgo = months * 30 + rng.int(0, 20)
 		return [
-			stripeCustomerOp(clock, rng, customer.externalId, name, domain, [], firstAgo),
+			billingCustomerOp(book, clock, rng, customer.externalId, name, domain, [], firstAgo),
 			...Array.from({ length: months }, (_, k) => {
 				const issued = addMonths(dayAt(clock, firstAgo), k) + rng.int(1, 6) * 3_600_000
-				return invoiceOp(counter, customer, {
+				return invoiceOp(book, counter, customer, {
 					subscriptionExternalId: null,
 					status: "paid",
 					amountDueMinor: amount,
@@ -1227,7 +1254,8 @@ const unmatchedStripeOps = (
 		]
 	})
 
-const mapleOps = (
+const activityOps = (
+	book: DemoBook,
 	clock: Clock,
 	account: AccountSpec,
 	activity: ReadonlyMap<ContactSpec, ReadonlyArray<ActiveDay>>,
@@ -1238,8 +1266,8 @@ const mapleOps = (
 			.filter((day) => day.ago < activityDays)
 			.map((day): IngestOp => ({
 				_tag: "activity",
-				contact: clerkRef(contact.externalId),
-				account: clerkRef(account.clerkOrgId),
+				contact: directoryRef(book, contact.externalId),
+				account: directoryRef(book, account.sharedId),
 				day: dayKey(dayAt(clock, day.ago)),
 				eventCount: day.eventCount,
 				sessionCount: day.sessionCount,
@@ -1250,6 +1278,7 @@ const mapleOps = (
 // ---------------------------------------------------------------------------------------------
 
 export const generateDemoSeed = (options: DemoSeedOptions): DemoSeed => {
+	const book = demoBook()
 	const total = options.accounts ?? 200
 	const activityDays = options.activityDays ?? 120
 	const rng = makeRng(options.seed ?? 1)
@@ -1258,13 +1287,13 @@ export const generateDemoSeed = (options: DemoSeedOptions): DemoSeed => {
 
 	const archetypes = shuffle(rng, archetypeCounts(total))
 	const names = companyNames(rng, total + 3)
-	// Two lead organizations of one company share a domain (a Stripe customer on it is ambiguous).
+	// Two lead organizations of one company share a domain (a billing customer on it is ambiguous).
 	const [firstLead, secondLead] = archetypes.flatMap((archetype, i) => (archetype === "lead" ? [i] : []))
 	const shared = firstLead === undefined || secondLead === undefined ? null : names[firstLead]
 	if (shared !== null && secondLead !== undefined)
 		names[secondLead] = { name: `${shared.name} EU`, domain: shared.domain }
 
-	const accounts = planAccounts(rng, clock, archetypes, names)
+	const accounts = planAccounts(book, rng, clock, archetypes, names)
 	addEdgeCases(rng, accounts)
 
 	const activity = new Map<ContactSpec, ReadonlyArray<ActiveDay>>()
@@ -1283,10 +1312,7 @@ export const generateDemoSeed = (options: DemoSeedOptions): DemoSeed => {
 	const billed = accounts.filter((account) => account.subs.length > 0)
 	const upcomingFor = new Set(
 		billed
-			.filter(
-				(account) =>
-					account.archetype === "healthy_stable" || account.archetype === "healthy_growing",
-			)
+			.filter((account) => account.archetype === "steady" || account.archetype === "growing")
 			.flatMap((account) => account.subs.filter((sub) => sub.end === null))
 			.sort((a, b) => b.mrrMinor - a.mrrMinor || a.externalId.localeCompare(b.externalId))
 			.slice(0, 2)
@@ -1301,30 +1327,36 @@ export const generateDemoSeed = (options: DemoSeedOptions): DemoSeed => {
 	return {
 		batches: [
 			{
-				provider: "clerk",
-				ops: accounts.flatMap((account) => clerkOps(rng, clock, account, activity)),
+				provider: book.directory.id,
+				ops: accounts.flatMap((account) => directoryOps(book, rng, clock, account, activity)),
 			},
 			{
-				provider: "autumn",
+				provider: book.plans.id,
 				ops: [
 					...METRIC_DEFINITIONS,
 					...billed.flatMap((account) =>
-						autumnOps(rng, clock, activityDays, account, activeByAgo(account)),
+						planOps(book, rng, clock, activityDays, account, activeByAgo(account)),
 					),
 				],
 			},
 			{
-				provider: "stripe",
+				provider: book.invoices.id,
 				ops: [
-					...billed.flatMap((account) => stripeOps(rng, clock, account, counter, upcomingFor)),
-					...unmatchedStripeOps(rng, clock, counter, strangers),
+					...billed.flatMap((account) =>
+						billingOps(book, rng, clock, account, counter, upcomingFor),
+					),
+					...unmatchedBillingOps(book, rng, clock, counter, strangers),
 				],
 			},
 			{
-				provider: "maple",
-				ops: accounts.flatMap((account) => mapleOps(clock, account, activity, activityDays)),
+				provider: book.activity.id,
+				ops: accounts.flatMap((account) => activityOps(book, clock, account, activity, activityDays)),
 			},
 		],
-		accounts: accounts.map(({ clerkOrgId, name, archetype }) => ({ clerkOrgId, name, archetype })),
+		accounts: accounts.map(({ sharedId, name, archetype }) => ({
+			sharedId,
+			name,
+			archetype,
+		})),
 	}
 }

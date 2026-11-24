@@ -1,6 +1,6 @@
 import type * as Customers from "@hazel/domain/customers"
 import { Submodel } from "foldkit"
-import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
+import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { type ChannelOption, channelMark } from "../../../customers/channels"
 import { formatRelative } from "../../../customers/format"
@@ -12,7 +12,7 @@ import { companyLogo, personAvatar } from "../../../customers/ui/identity"
 import { queueAction, queueColumnHeader, queueList } from "../../../customers/ui/queue-row"
 import { kbd, shortcutBar, type Shortcut } from "../../../customers/ui/shortcuts"
 import { slaChip } from "../../../customers/ui/sla-chip"
-import { pageHeader } from "../../../customers/ui/surface"
+import { pageHeader } from "../../../ui/page-header"
 import {
 	IconChartBar,
 	IconCheck,
@@ -25,9 +25,7 @@ import {
 import { customersListRoute, hrefOf } from "../../../route"
 import { badge } from "../../../ui/badge"
 import { buttonClassName } from "../../../ui/button"
-import { heading } from "../../../ui/heading"
-import type * as Menu from "../../../ui/menu"
-import { menuLabel, view as menuView } from "../../../ui/menu-view"
+import { menuLabel } from "../../../ui/menu-view"
 import type { PageViewInputs } from "../../contract"
 import { ScrollInboxRow } from "./commands"
 import { Message } from "./message"
@@ -53,6 +51,10 @@ import {
 	waitingSinceMs,
 } from "./model"
 import { viewerOf } from "./update"
+import { menu } from "../shared-view"
+import { cardClassName } from "../../../ui/card"
+import { emptyState } from "../../../ui/empty-state"
+import { skeleton } from "../../../ui/skeleton"
 
 /** The Support inbox page: Needs attention's sibling, one row per support issue. */
 
@@ -104,30 +106,6 @@ const ageText = (fromMs: number, nowMs: number): string => {
 }
 
 // MENUS
-
-const menu = (
-	h: HtmlBuilder<Message>,
-	model: Menu.Model,
-	options: Readonly<{
-		entries: ReadonlyArray<Menu.Entry>
-		trigger: (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) => Html
-		content: (key: string) => ReadonlyArray<Html | string>
-		toMessage: (message: Menu.Message) => Message
-		className?: string
-	}>,
-): Html =>
-	h.submodel({
-		slotId: model.id,
-		model,
-		view: menuView,
-		viewInputs: {
-			entries: options.entries,
-			toTrigger: options.trigger,
-			content: options.content,
-			className: options.className,
-		},
-		toParentMessage: options.toMessage,
-	})
 
 /** The selected issue's actions: Assign, Status, Priority, Open in chat. */
 const issueActions = (
@@ -561,29 +539,26 @@ const SHORTCUTS: ReadonlyArray<Shortcut> = [
 	{ keys: ["O"], label: "Open customer" },
 ]
 
-const emptyState = (
+/** The queue's empty states: the kit's, in a card, with the queue's actions under the text. */
+const queueEmpty = (
 	h: HtmlBuilder<Message>,
-	options: Readonly<{ glyph: Html; title: string; body: string; actions?: ReadonlyArray<Html> }>,
+	options: Readonly<{
+		icon: (className: string) => Html
+		title: string
+		body: string
+		actions?: ReadonlyArray<Html>
+	}>,
 ): Html =>
-	h.div(
-		[h.Class("flex flex-col items-center gap-4 rounded-xl border border-border px-6 py-14 text-center")],
-		[
-			h.div(
-				[h.Class("flex size-11 items-center justify-center rounded-xl bg-secondary text-muted-fg")],
-				[options.glyph],
-			),
-			h.div(
-				[h.Class("flex flex-col gap-1")],
-				[
-					heading(h, { variant: "subsection", level: 2 }, [options.title]),
-					h.p([h.Class("max-w-sm text-muted-fg text-sm")], [options.body]),
-				],
-			),
-			...(options.actions === undefined || options.actions.length === 0
-				? []
-				: [h.div([h.Class("flex items-center gap-2")], [...options.actions])]),
-		],
-	)
+	emptyState(h, {
+		title: options.title,
+		icon: options.icon,
+		description: options.body,
+		action:
+			options.actions === undefined || options.actions.length === 0
+				? undefined
+				: h.div([h.Class("flex items-center gap-2")], [...options.actions]),
+		className: cardClassName("px-6 py-14"),
+	})
 
 const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: string | null): Html => {
 	if (model.issues === null || model.accounts === null)
@@ -596,14 +571,14 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: st
 						h.Class("flex h-16 items-center gap-4 border-border border-t px-4 first:border-t-0"),
 						h.Key(`skeleton-${index}`),
 					],
-					[h.div([h.Class("h-3 w-full animate-pulse rounded bg-secondary")])],
+					[skeleton(h, "h-3 w-full rounded")],
 				),
 			),
 		)
 	const issues = visibleIssues(model, viewer)
 	if (model.issues.length === 0)
-		return emptyState(h, {
-			glyph: IconSupport(h, { className: "size-5" }),
+		return queueEmpty(h, {
+			icon: (className) => IconSupport(h, { className }),
 			title: "No support issues yet",
 			body: "An issue opens when a customer starts a conversation in a channel linked to them. Link a customer's channels from their page, or open an issue on any message in chat.",
 			actions:
@@ -620,8 +595,8 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: st
 						],
 		})
 	if (issues.length === 0 && isNarrowed(model))
-		return emptyState(h, {
-			glyph: IconMagnifier3(h, { className: "size-5" }),
+		return queueEmpty(h, {
+			icon: (className) => IconMagnifier3(h, { className }),
 			title: "No matches",
 			body: "No issues in this tab match your search and filters.",
 			actions: [
@@ -636,8 +611,8 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: st
 			model.tab
 		]
 		return model.tab === "open"
-			? emptyState(h, {
-					glyph: IconCheck(h, { className: "size-5" }),
+			? queueEmpty(h, {
+					icon: (className) => IconCheck(h, { className }),
 					title: "Inbox zero",
 					body: "No open issues are waiting on you or unassigned.",
 					actions:
@@ -651,10 +626,13 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: st
 								]
 							: [],
 				})
-			: h.div(
-					[h.Class("rounded-xl border border-border px-6 py-14 text-center text-muted-fg text-sm")],
-					[model.tab === "on_hold" ? "Nothing is on hold." : "Nothing closed in the last 30 days."],
-				)
+			: emptyState(h, {
+					title:
+						model.tab === "on_hold"
+							? "Nothing is on hold."
+							: "Nothing closed in the last 30 days.",
+					className: cardClassName("px-6 py-14"),
+				})
 	}
 	const selected = selectedIssue(model)
 	const context: RowContext = {

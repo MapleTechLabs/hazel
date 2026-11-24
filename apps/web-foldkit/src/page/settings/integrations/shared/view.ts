@@ -30,37 +30,6 @@ export const strokeIcon = <Message>(
 		],
 	)
 
-/** The spinning circle the buttons show while a request is in flight. */
-export const spinner = <Message>(h: HtmlBuilder<Message>, className: string): Html =>
-	h.svg(
-		[h.Class(className), h.Attribute("fill", "none"), h.Attribute("viewBox", "0 0 24 24")],
-		[
-			h.circle([
-				h.Class("opacity-25"),
-				h.Attribute("cx", "12"),
-				h.Attribute("cy", "12"),
-				h.Attribute("r", "10"),
-				h.Attribute("stroke", "currentColor"),
-				h.Attribute("stroke-width", "4"),
-			]),
-			h.path([
-				h.Class("opacity-75"),
-				h.Attribute("fill", "currentColor"),
-				h.Attribute(
-					"d",
-					"M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z",
-				),
-			]),
-		],
-	)
-
-/** The loading state of the bot lists (`size-8 animate-spin` ring). */
-export const listSpinner = <Message>(h: HtmlBuilder<Message>): Html =>
-	h.div(
-		[h.Class("flex items-center justify-center py-12")],
-		[h.div([h.Class("size-8 animate-spin rounded-full border-4 border-border border-t-primary")])],
-	)
-
 export const CHEVRON_RIGHT = "M9 5l7 7-7 7"
 export const CHECK = "M5 13l4 4L19 7"
 

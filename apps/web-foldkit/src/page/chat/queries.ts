@@ -21,6 +21,7 @@ export type ChannelInfo = typeof ChannelInfo.Type
 export const ParentChannelInfo = Schema.Struct({
 	id: ChannelId,
 	name: Schema.String,
+	type: Schema.String,
 	icon: Schema.NullOr(Schema.String),
 })
 export type ParentChannelInfo = typeof ParentChannelInfo.Type

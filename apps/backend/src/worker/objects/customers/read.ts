@@ -7,10 +7,10 @@ import { Database, SQLite, schema } from "@hazel/db"
 import type {
 	AccountBrief,
 	ActiveUsersPoint,
+	ContactOtherAccount,
 	ContactRow,
 	CustomersRange,
 	Day,
-	HealthDistributionRow,
 	Kpi,
 	MetricSeries,
 	Mover,
@@ -19,12 +19,12 @@ import type {
 	NewTrial,
 	OverviewResult,
 } from "@hazel/domain/customers"
-import { HealthStatus, logoOf } from "@hazel/domain/customers"
+import { logoOf } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerContactId } from "@hazel/schema"
 import { Effect, Option } from "effect"
-import { type AccountFacts, type HealthPoint, type MetricPoint, mrrSeries, seriesOf } from "./facts"
+import { type AccountFacts, type MetricPoint, mrrSeries, seriesOf } from "./facts"
 import { inList, isActive } from "./sql"
-import { addDays, dayOf, dayRange } from "./time"
+import { addDays, dayOf, dayRange } from "@hazel/customer-integrations/kit/time"
 
 /** A mover needs a baseline: this many average daily active users in the previous window. Below
  * it a percentage is noise (1 user-day to 9 reads +800%). */
@@ -266,16 +266,11 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 		})
 	}
 
-	// Health now, from the accounts.
 	const accounts = yield* db.run(
 		SQLite.from(schema.customerAccountsTable)
-			.select("id", "name", "logoUrl", "companyProfile", "planName", "mrrMinor", "healthStatus")
+			.select("id", "name", "logoUrl", "companyProfile", "planName", "mrrMinor")
 			.where(($) => [$.deletedAt.isNull()]),
 	)
-	const healthDistribution: Array<HealthDistributionRow> = HealthStatus.literals.map((status) => {
-		const rows = accounts.filter((account) => account.healthStatus === status)
-		return { status, count: rows.length, mrrMinor: rows.reduce((sum, row) => sum + row.mrrMinor, 0) }
-	})
 	const accountById = new Map(accounts.map((account) => [account.id, account]))
 
 	// Movers: average daily active users in the range vs the one before. SQL sums each account's
@@ -401,7 +396,6 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 		},
 		mrrMovements,
 		activeUsers,
-		healthDistribution,
 		topMovers: { gainers, decliners },
 		recentChurn,
 		recentNew,
@@ -461,12 +455,6 @@ const accountFacts = (account: schema.CustomerAccount, days: number, now: Date) 
 				.where(($) => [$.accountId.eq(account.id)])
 				.orderBy(($) => [[$.day, "asc"]]),
 		)
-		const health = yield* db.run(
-			SQLite.from(schema.customerHealthDailyTable)
-				.select("day", "score", "status")
-				.where(($) => [$.accountId.eq(account.id), $.day.gte(from)])
-				.orderBy(($) => [[$.day, "asc"]]),
-		)
 		return {
 			account,
 			stage: account.lifecycleStage,
@@ -484,7 +472,6 @@ const accountFacts = (account: schema.CustomerAccount, days: number, now: Date) 
 			paymentsSinceChurn: [],
 			metrics: metricMap,
 			movements,
-			health: health as ReadonlyArray<HealthPoint>,
 			openIssueSlas: [],
 		} satisfies AccountFacts
 	})
@@ -514,11 +501,120 @@ export const accountSeries = Effect.fn("Customers.accountSeries")(function* (
 	})
 })
 
-/** Contacts with their activity status and 30 days of events + sessions. */
+/**
+ * Each contact's other live customers. A person has one contact per customer: the same one is a
+ * live ref to the same provider user, or the same email in any case.
+ */
+const otherAccountsOf = (contacts: ReadonlyArray<schema.CustomerContact>) =>
+	Effect.gen(function* () {
+		const db = yield* Database.Database
+		const refIdentity = (ref: { readonly provider: string; readonly externalId: string }) =>
+			`${ref.provider}:${ref.externalId}`
+		const emailIdentity = (email: string) => `email:${email.toLowerCase()}`
+		const ownRefs = yield* db.run(
+			SQLite.from(schema.customerExternalRefsTable)
+				.select("entityId", "provider", "externalId")
+				.where(($) => [
+					$.entityType.eq("contact"),
+					$.staleAt.isNull(),
+					inList(
+						$.entityId,
+						contacts.map((contact) => contact.id),
+					),
+				]),
+		)
+		const sharedRefs =
+			ownRefs.length === 0
+				? []
+				: yield* db.run(
+						SQLite.from(schema.customerExternalRefsTable)
+							.select("entityId", "provider", "externalId")
+							.where(($) => [
+								$.entityType.eq("contact"),
+								$.staleAt.isNull(),
+								inList($.provider, [...new Set(ownRefs.map((ref) => ref.provider))]),
+								inList($.externalId, [...new Set(ownRefs.map((ref) => ref.externalId))]),
+							]),
+					)
+		const emails = [
+			...new Set(
+				contacts.flatMap((contact) => (contact.email === null ? [] : [contact.email.toLowerCase()])),
+			),
+		]
+		const sameEmail =
+			emails.length === 0
+				? []
+				: yield* db.run(
+						SQLite.from(schema.customerContactsTable)
+							.select("id", "email")
+							.where(($) => [$.deletedAt.isNull(), inList(SQLite.lower($.email), emails)]),
+					)
+		const idsByIdentity = new Map<string, Array<CustomerContactId>>()
+		const addIdentity = (identity: string, id: CustomerContactId) =>
+			idsByIdentity.set(identity, [...(idsByIdentity.get(identity) ?? []), id])
+		for (const ref of sharedRefs) addIdentity(refIdentity(ref), ref.entityId as CustomerContactId)
+		for (const row of sameEmail) if (row.email !== null) addIdentity(emailIdentity(row.email), row.id)
+		const candidateIds = [...new Set([...idsByIdentity.values()].flat())]
+		if (candidateIds.length === 0) return new Map<CustomerContactId, ReadonlyArray<ContactOtherAccount>>()
+		// Most recently seen first (SQLite sorts nulls last here), so the first per customer is kept.
+		const candidates = yield* db.run(
+			SQLite.from(schema.customerContactsTable)
+				.select("id", "accountId", "role", "lastSeenAt")
+				.where(($) => [$.deletedAt.isNull(), inList($.id, candidateIds)])
+				.orderBy(($) => [
+					[$.lastSeenAt, "desc"],
+					[$.id, "asc"],
+				]),
+		)
+		const accounts = yield* db.run(
+			SQLite.from(schema.customerAccountsTable)
+				.select("id", "name", "logoUrl", "companyProfile", "environment", "lifecycleStage")
+				.where(($) => [
+					$.deletedAt.isNull(),
+					inList($.id, [...new Set(candidates.map((candidate) => candidate.accountId))]),
+				]),
+		)
+		const accountById = new Map(accounts.map((account) => [account.id, account]))
+		return new Map<CustomerContactId, ReadonlyArray<ContactOtherAccount>>(
+			contacts.map((contact) => {
+				const identities = [
+					...ownRefs.filter((ref) => ref.entityId === contact.id).map(refIdentity),
+					...(contact.email === null ? [] : [emailIdentity(contact.email)]),
+				]
+				const samePerson = new Set(
+					identities.flatMap((identity) => idsByIdentity.get(identity) ?? []),
+				)
+				const others = new Map<CustomerAccountId, ContactOtherAccount>()
+				for (const candidate of candidates) {
+					const account = accountById.get(candidate.accountId)
+					if (
+						account === undefined ||
+						candidate.accountId === contact.accountId ||
+						others.has(account.id) ||
+						!samePerson.has(candidate.id)
+					)
+						continue
+					others.set(account.id, {
+						accountId: account.id,
+						name: account.name,
+						logoUrl: logoOf(account),
+						environment: account.environment,
+						lifecycleStage: account.lifecycleStage,
+						role: candidate.role,
+						lastSeenAt: candidate.lastSeenAt,
+					})
+				}
+				return [contact.id, [...others.values()]]
+			}),
+		)
+	})
+
+/** Contacts with their activity status, 30 days of events + sessions, and their other customers. */
 const contactRows = (contacts: ReadonlyArray<schema.CustomerContact>, now: Date) =>
 	Effect.gen(function* () {
 		if (contacts.length === 0) return []
 		const db = yield* Database.Database
+		const otherAccounts = yield* otherAccountsOf(contacts)
 		const today = dayOf(now)
 		const from = addDays(today, -29)
 		const rows = yield* db.run(
@@ -540,6 +636,7 @@ const contactRows = (contacts: ReadonlyArray<schema.CustomerContact>, now: Date)
 				contact,
 				status: active ? "active" : contact.firstActiveAt !== null ? "dormant" : "never_active",
 				activity: dayRange(today, 30).map((day) => ({ day, value: values.get(day) ?? 0 })),
+				otherAccounts: otherAccounts.get(contact.id) ?? [],
 			}
 		})
 	})
@@ -591,13 +688,6 @@ export const accountDetail = Effect.fn("Customers.accountDetail")(function* (
 			.where(($) => [$.accountId.eq(account.id), $.status.in_("open", "upcoming")])
 			.orderBy(($) => [[$.dueAt, "asc"]]),
 	)
-	const health = yield* db.first(
-		SQLite.from(schema.customerHealthDailyTable)
-			.select()
-			.where(($) => [$.accountId.eq(account.id)])
-			.orderBy(($) => [[$.day, "desc"]])
-			.limit(1),
-	)
 	const facts = yield* accountFacts(account, 90, now)
 	const contacts = yield* db.run(
 		SQLite.from(schema.customerContactsTable)
@@ -636,11 +726,6 @@ export const accountDetail = Effect.fn("Customers.accountDetail")(function* (
 		subscriptions: [...live, ...subscriptions.filter((sub) => sub.status === "canceled")],
 		upcomingInvoice: invoices.find((invoice) => invoice.status === "upcoming") ?? null,
 		openInvoices: invoices.filter((invoice) => invoice.status === "open"),
-		health: Option.match(health, { onNone: () => null, onSome: (row) => row.breakdown }),
-		healthSeries: seriesOf(facts, "health_score", today, 90),
-		healthScores: facts.health
-			.filter((point) => point.day > addDays(today, -90))
-			.map((point) => ({ day: point.day, score: point.score })),
 		activeUsersSeries: seriesOf(facts, "active_users", today, 30),
 		contactsToReach: yield* contactRows(reach, now),
 		recentEvents: events,
@@ -729,15 +814,6 @@ export const sparklines = Effect.fn("Customers.sparklines")(function* (
 				for (const point of mrrSeries(own, account.mrrMinor, today, count))
 					set(account.id, point.day, point.value)
 			}
-			break
-		}
-		case "health_score": {
-			const rows = yield* db.run(
-				SQLite.from(schema.customerHealthDailyTable)
-					.select("accountId", "day", "score")
-					.where(($) => [inList($.accountId, ids), $.day.gte(from)]),
-			)
-			for (const row of rows) set(row.accountId, row.day, row.score ?? 0)
 			break
 		}
 		default: {

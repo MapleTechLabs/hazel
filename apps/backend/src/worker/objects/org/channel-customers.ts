@@ -6,12 +6,12 @@
  *   exists here, can be linked (a public or private channel, not a thread or a DM) and is visible
  *   to the person linking it (`channel_access`).
  * - `org.setChannelCustomers` (effect): the customers object's full, versioned snapshot of its
- *   links (channel → the account's id, name and its glance: health, MRR, signals…), replacing
+ *   links (channel → the account's id, name and its glance: MRR, signals…), replacing
  *   `channel_customers`. Chat reads it to show a
  *   channel's customer to the org's members who see the channel (never to Connect guests).
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import { CompanyProfile, HealthStatus, LifecycleStage } from "@hazel/domain/customers"
+import { CompanyProfile, LifecycleStage } from "@hazel/domain/customers"
 import { ChannelCustomer } from "@hazel/domain/models"
 import { ChannelId, CustomerAccountId, OrganizationId, UserId } from "@hazel/schema"
 import { Clock, Effect, Option, Schema } from "effect"
@@ -80,9 +80,6 @@ export const customerChannel = Effect.fn("OrgObject.customerChannel")(function* 
  * these fields existed still applies (and the next one, whose fingerprint differs, fills them).
  */
 const glance = {
-	healthStatus: Schema.optionalKey(HealthStatus),
-	healthScore: Schema.optionalKey(Schema.NullOr(Schema.Int)),
-	healthWhy: Schema.optionalKey(Schema.NullOr(Schema.String)),
 	lifecycleStage: Schema.optionalKey(Schema.NullOr(LifecycleStage)),
 	planName: Schema.optionalKey(Schema.NullOr(Schema.String)),
 	mrrMinor: Schema.optionalKey(Schema.NullOr(Schema.Int)),
@@ -114,9 +111,6 @@ const rowValuesOf = (link: ChannelCustomerEntry) => ({
 	accountName: link.accountName,
 	accountLogoUrl: link.accountLogoUrl ?? null,
 	company: link.company ?? null,
-	healthStatus: link.healthStatus ?? "unknown",
-	healthScore: link.healthScore ?? null,
-	healthWhy: link.healthWhy ?? null,
 	lifecycleStage: link.lifecycleStage ?? null,
 	planName: link.planName ?? null,
 	mrrMinor: link.mrrMinor ?? null,

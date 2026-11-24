@@ -1,6 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { IconHashtag } from "../../icons"
+import { heading } from "../../ui/heading"
 import { button } from "../../ui/button"
+import { type ChannelLinks, channelIcon } from "../../ui/channel-icon"
 import type { ChannelMemberInfo, TypingInfo, UserInfo } from "./lookups"
 import type { ChannelInfo } from "./queries"
 
@@ -9,6 +10,8 @@ import type { ChannelInfo } from "./queries"
 export interface JoinBannerInputs<M> {
 	readonly isJoining: boolean
 	readonly onJoin: M
+	/** What the channel is linked or connected to, marked on its icon. */
+	readonly links: ChannelLinks
 }
 
 export const joinBannerView = <M>(
@@ -31,15 +34,19 @@ export const joinBannerView = <M>(
 									),
 								],
 								[
-									channel.icon
-										? h.span([], [channel.icon])
-										: IconHashtag(h, { className: "size-8" }),
+									channelIcon(h, {
+										icon: channel.icon,
+										isPrivate: channel.type === "private",
+										links: inputs.links,
+										size: "lg",
+										surface: "secondary",
+									}),
 								],
 							),
 							h.div(
 								[h.Class("flex flex-col items-center gap-1")],
 								[
-									h.h2([h.Class("font-semibold text-fg text-xl")], [channel.name]),
+									heading(h, { variant: "title" }, [channel.name]),
 									h.p(
 										[h.Class("max-w-sm text-center text-muted-fg text-sm")],
 										["You're previewing this channel. Join to start chatting."],

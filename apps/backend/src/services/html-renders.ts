@@ -26,6 +26,7 @@ import { HtmlRenderRejectedError } from "@hazel/domain/http"
 import { type ChannelId, HtmlRenderId, type UserId } from "@hazel/schema"
 import type { R2Bucket } from "@cloudflare/workers-types"
 import { Clock, Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Base64Url } from "effect/encoding"
 
 /** How long a signed URL serves the page. */
 export const HTML_RENDER_URL_TTL_MS = 60 * 60 * 1000
@@ -54,12 +55,6 @@ export const pendingHtmlRenderKey = (location: HtmlRenderLocation) =>
 export const htmlRenderKey = (location: HtmlRenderLocation) => `pages/${locationPath(location)}.html`
 
 const encoder = new TextEncoder()
-
-const base64Url = (bytes: ArrayBuffer) =>
-	btoa(String.fromCharCode(...new Uint8Array(bytes)))
-		.replace(/\+/g, "-")
-		.replace(/\//g, "_")
-		.replace(/=+$/, "")
 
 const fromBase64Url = (value: string): Uint8Array<ArrayBuffer> | undefined => {
 	try {
@@ -188,7 +183,7 @@ export class HtmlRenders extends Context.Service<HtmlRenders>()("@hazel/backend/
 			const signature = yield* Effect.promise(() =>
 				crypto.subtle.sign("HMAC", signingKey, signedContent(location, expiresAt)),
 			)
-			const url = `${apiBaseUrl}/html-renders/${locationPath(location)}?exp=${expiresAt}&sig=${base64Url(signature)}`
+			const url = `${apiBaseUrl}/html-renders/${locationPath(location)}?exp=${expiresAt}&sig=${Base64Url.encode(new Uint8Array(signature))}`
 			return { url, expiresAt }
 		})
 

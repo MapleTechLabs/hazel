@@ -2,16 +2,12 @@ import { Submodel } from "foldkit"
 import { IconMagnifier3, IconRobot } from "../../../../icons"
 import { emptyState } from "../../../../ui/empty-state"
 import { input, inputGroup } from "../../../../ui/input"
-import {
-	sectionHeaderGroup,
-	sectionHeaderHeading,
-	sectionHeaderRoot,
-	sectionHeaderSubheading,
-} from "../../../../ui/section-header"
+import { loadingState } from "../../../../ui/loader"
+import { pageHeader } from "../../../../ui/page-header"
 import type { PageViewInputs } from "../../../contract"
 import { marketplaceBotCard } from "../shared/bot-card"
 import type { PublicBot } from "../shared/bots"
-import { fragment, listSpinner } from "../shared/view"
+import { fragment } from "../shared/view"
 import { Message } from "./message"
 import { installTarget, interaction } from "./update"
 import type { Model } from "./model"
@@ -33,19 +29,11 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	const bots = model.bots === null ? null : matching(model.bots, model.search)
 	const wiring = interaction.wiring(model)
 	return fragment(h, [
-		sectionHeaderRoot(h, { className: "border-none pb-0" }, [
-			sectionHeaderGroup(h, {}, [
-				h.div(
-					[h.Class("flex flex-1 flex-col justify-center gap-1")],
-					[
-						sectionHeaderHeading(h, {}, ["Marketplace"]),
-						sectionHeaderSubheading(h, {}, [
-							"Discover and install community applications for your workspace.",
-						]),
-					],
-				),
-			]),
-		]),
+		pageHeader(h, {
+			title: "Marketplace",
+			subtitle: "Discover and install community applications for your workspace.",
+			size: "title",
+		}),
 		h.div(
 			[h.Class("flex flex-col gap-6")],
 			[
@@ -61,7 +49,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 					}),
 				]),
 				bots === null
-					? listSpinner(h)
+					? loadingState(h)
 					: bots.length === 0
 						? emptyState(h, {
 								icon: (className) => IconRobot(h, { className }),

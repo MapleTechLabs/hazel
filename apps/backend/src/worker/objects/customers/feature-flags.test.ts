@@ -2,7 +2,8 @@
  * Feature flags through the RPCs, against a fake Clerk that holds each organization's
  * `public_metadata` and merges writes the way Clerk does (a `null` removes the key).
  */
-import { DEFAULT_CONNECTION_CONFIG, type UpsertAccount } from "@hazel/domain/customers"
+import { DEFAULT_CONNECTION_CONFIG } from "@hazel/customer-integrations"
+import { type UpsertAccount } from "@hazel/domain/customers"
 import { Cause, Effect, Exit, type Scope } from "effect"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCustomersWorld, ok, tagOf, type CustomersWorld } from "./test-kit"
@@ -17,7 +18,7 @@ const clerk = vi.hoisted(() => ({
 vi.mock("./providers", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("./providers")>()
 	const { Effect, Layer, Option } = await import("effect")
-	const { CustomerProviderError } = await import("./provider-errors")
+	const { CustomerProviderError } = await import("@hazel/customer-integrations/kit/errors")
 	const adapter: import("./providers").CustomerProviderAdapter = {
 		provider: "clerk",
 		validate: () => Effect.succeed({ externalAccountId: "ins_1", externalAccountName: null }),

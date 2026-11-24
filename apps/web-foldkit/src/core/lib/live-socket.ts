@@ -1,10 +1,11 @@
 /**
- * A message's live state socket: `<VITE_BACKEND_URL>/live/<messageId>?channelId=<id>`, the access
+ * A message's live state socket: `<api>/live/<messageId>?channelId=<id>`, the access
  * token offered as the second `Sec-WebSocket-Protocol` entry, as for the sync sockets. Tests
  * replace this module with a fake.
  */
 import { SYNC_SUBPROTOCOL } from "@hazel/domain/sync"
 import type { ChannelId, MessageId } from "@hazel/schema"
+import { apiUrl } from "../config/server"
 
 export { invalidateAccessToken, readAccessToken } from "~/lib/access-token"
 
@@ -17,7 +18,7 @@ export interface LiveSocket {
 	close(code?: number, reason?: string): void
 }
 
-const backendUrl = () => (import.meta.env.VITE_BACKEND_URL || "http://localhost:3003").replace(/\/+$/, "")
+const backendUrl = apiUrl
 
 export const openLiveSocket = (messageId: MessageId, channelId: ChannelId, token: string): LiveSocket =>
 	new WebSocket(

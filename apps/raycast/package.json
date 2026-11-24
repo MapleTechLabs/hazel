@@ -2,7 +2,7 @@
 	"$schema": "https://www.raycast.com/schemas/extension.json",
 	"name": "hazel",
 	"private": true,
-	"description": "Search your Hazel customers, see their health and billing, and jump to their channel, Clerk, Stripe or Autumn.",
+	"description": "Search your Hazel customers, see their billing and open risks, and jump to their channel, Clerk, Stripe or Autumn.",
 	"categories": [
 		"Communication",
 		"Productivity"
@@ -25,7 +25,7 @@
 		"@types/react": "^19.1.0",
 		"@types/ws": "^8.18.2",
 		"typescript": "^5.9.3",
-		"vitest": "^5.0.5"
+		"vitest": "^5.1.1"
 	},
 	"icon": "extension-icon.png",
 	"commands": [

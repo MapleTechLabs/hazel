@@ -1,3 +1,4 @@
+import { requiredSourcesOf } from "@hazel/customer-integrations"
 import * as Customers from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
@@ -7,10 +8,14 @@ import { KIND_LABEL, kindChip, severityChip } from "../../../../customers/ui/bad
 import { sourceLogo } from "../../../../customers/ui/identity"
 import { IconPlus } from "../../../../icons"
 import { AppRoute, hrefOf } from "../../../../route"
+import { badge } from "../../../../ui/badge"
 import { button } from "../../../../ui/button"
+import { card } from "../../../../ui/card"
+import { loadingState } from "../../../../ui/loader"
 import { switchControl } from "../../../../ui/switch"
 import type { Shared } from "../../../contract"
-import { isCustomersAdmin, readOnlyNotice, settingsHeader, settingsPage } from "../shared"
+import { isCustomersAdmin, readOnlyNotice, settingsPage } from "../shared"
+import { pageHeader } from "../../../../ui/page-header"
 import { attentionCard } from "./attention-view"
 import { conditionParts, plainText, scopeSummary } from "./describe"
 import { configFormOf } from "./draft"
@@ -52,29 +57,22 @@ const summary = (h: H, model: Model, rules: ReadonlyArray<RuleRow>, nowMs: numbe
 	const item = (children: ReadonlyArray<Html | string>) =>
 		h.span([h.Class("inline-flex items-center gap-1 text-muted-fg text-sm")], [...children])
 	const lastComputed = model.settings?.lastComputedAtMs ?? null
-	return h.div(
-		[
-			h.Class(
-				"flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-border bg-bg px-4 py-3 sm:px-5",
-			),
-		],
-		[
-			item([strong(`${enabled.length} of ${rules.length}`), "rules on"]),
-			item([strong(formatCount(matches)), `matches across ${formatCount(accounts)} accounts`]),
-			item([
-				strong(`${formatCount(countOf("open"))} open`),
-				`· ${formatCount(countOf("snoozed"))} snoozed · ${formatCount(countOf("dismissed"))} dismissed`,
-			]),
-			h.span(
-				[h.Class("ml-auto text-muted-fg text-sm")],
-				[
-					lastComputed === null
-						? "Not checked yet"
-						: `Last checked ${formatRelative(new Date(lastComputed), new Date(nowMs))}`,
-				],
-			),
-		],
-	)
+	return card(h, { className: "flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 sm:px-5" }, [
+		item([strong(`${enabled.length} of ${rules.length}`), "rules on"]),
+		item([strong(formatCount(matches)), `matches across ${formatCount(accounts)} accounts`]),
+		item([
+			strong(`${formatCount(countOf("open"))} open`),
+			`· ${formatCount(countOf("snoozed"))} snoozed · ${formatCount(countOf("dismissed"))} dismissed`,
+		]),
+		h.span(
+			[h.Class("ml-auto text-muted-fg text-sm")],
+			[
+				lastComputed === null
+					? "Not checked yet"
+					: `Last checked ${formatRelative(new Date(lastComputed), new Date(nowMs))}`,
+			],
+		),
+	])
 }
 
 // ROWS
@@ -99,20 +97,16 @@ const headerRow = (h: H): Html =>
 	)
 
 const requires = (h: H, rule: RuleRow, orgSlug: string): Html => {
-	const required = Customers.TEMPLATES[rule.template].requiredSources
+	const required = requiredSourcesOf(rule.template)
 	const first = required[0]
 	return h.span(
 		[h.Class("col-span-2 hidden items-center justify-end gap-2 text-muted-fg text-sm @4xl:flex")],
 		[
 			"Requires",
-			h.span(
-				[
-					h.Class(
-						"inline-flex items-center gap-1.5 rounded-md border border-border px-1.5 py-0.5 text-fg",
-					),
-				],
-				[...required.map((source) => sourceLogo(h, source, "size-3.5")), sourcesLabel(required)],
-			),
+			badge(h, { intent: "outline" }, [
+				...required.map((source) => sourceLogo(h, source, "size-3.5")),
+				sourcesLabel(required),
+			]),
 			...(first === undefined
 				? []
 				: [
@@ -249,16 +243,13 @@ const group = (
 								`${rules.length} ${rules.length === 1 ? "rule" : "rules"} · ${GROUP_BLURB[kind]}`,
 							],
 						),
-						h.div(
-							[h.Class("@container overflow-hidden rounded-xl border border-border bg-bg")],
-							[
-								headerRow(h),
-								h.ul(
-									[h.Class("divide-y divide-border")],
-									rules.map((rule) => ruleRow(h, model, rule, shared)),
-								),
-							],
-						),
+						card(h, { className: "@container" }, [
+							headerRow(h),
+							h.ul(
+								[h.Class("divide-y divide-border")],
+								rules.map((rule) => ruleRow(h, model, rule, shared)),
+							),
+						]),
 					],
 				),
 			]
@@ -274,7 +265,7 @@ export const listView = (h: H, model: Model, shared: Shared): Html => {
 		[h.Class("h-full")],
 		[
 			settingsPage(h, [
-				settingsHeader(h, {
+				pageHeader(h, {
 					title: "Signals",
 					subtitle: `Rules that put customers in Needs attention. Checked every hour against all ${formatCount(accounts)} accounts, including silent ones.`,
 					actions: isAdmin
@@ -288,16 +279,7 @@ export const listView = (h: H, model: Model, shared: Shared): Html => {
 				}),
 				...(isAdmin ? [] : [readOnlyNotice(h, "signal rules")]),
 				...(model.rules === null
-					? [
-							h.div(
-								[
-									h.Class(
-										"rounded-xl border border-border bg-bg px-5 py-10 text-center text-muted-fg text-sm",
-									),
-								],
-								["Loading rules…"],
-							),
-						]
+					? [card(h, {}, [loadingState(h, { label: "Loading rules…", className: "py-10" })])]
 					: [
 							summary(h, model, rules, shared.nowMs),
 							...(model.attention === null

@@ -58,6 +58,7 @@ const invokeMiddleware = (headers: Headers.Headers, rpc: unknown = {}) =>
 			{
 				client: {} as never,
 				requestId: 1n as never,
+				remoteParentSpan: undefined,
 				rpc: rpc as never,
 				payload: undefined,
 				headers,
@@ -368,6 +369,7 @@ describe("AuthMiddlewareLive", () => {
 							{
 								client: {} as never,
 								requestId: 1n as never,
+								remoteParentSpan: undefined,
 								rpc: detailRpc as never,
 								payload: undefined,
 								headers: Headers.fromInput({ authorization: `Bearer ${AGENT_TOKEN}` }),

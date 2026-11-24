@@ -5,11 +5,11 @@ import { IconEnvelope } from "../../../icons"
 import { button } from "../../../ui/button"
 import * as Field from "../../../ui/field"
 import { inputGroup } from "../../../ui/input"
+import { pageHeader, pageLayout } from "../../../ui/page-header"
 import { sectionLabelRoot } from "../../../ui/section-label"
 import { textField } from "../../../ui/text-field"
 import * as TimezoneSelect from "../../../ui/timezone-select"
 import type { PageViewInputs, Shared } from "../../contract"
-import { pageHeader } from "../shared"
 import { profilePictureUpload } from "./avatar-view"
 import { isSaveDisabled } from "./form"
 import { Message } from "./message"
@@ -60,86 +60,93 @@ const section = (h: HtmlBuilder<Message>, title: string, children: ReadonlyArray
 export const profileView = (model: Model, shared: Shared, h: HtmlBuilder<Message>): Html => {
 	const user = shared.currentUser
 	return h.form(
-		[h.Class("flex flex-col gap-6 px-4 lg:px-8"), h.OnSubmit(Message.SubmittedProfile())],
+		[h.OnSubmit(Message.SubmittedProfile())],
 		[
-			pageHeader(h, "Profile", "Manage your profile information and preferences."),
-			h.div(
-				[h.Class("max-w-xl space-y-6")],
-				[
-					section(h, "Profile picture", [
-						profilePictureUpload(h, model, {
-							avatarUrl: user?.avatarUrl ?? null,
-							name: `${user?.firstName ?? ""} ${user?.lastName ?? ""}`.trim(),
-						}),
-					]),
-					section(
-						h,
-						"Name",
-						[
-							h.div(
-								[h.Class("grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-4")],
-								[
-									nameField(h, model, {
-										id: "profile-first-name",
-										label: "First name",
-										state: model.firstName,
-										onInput: toFirstName,
-									}),
-									nameField(h, model, {
-										id: "profile-last-name",
-										label: "Last name",
-										state: model.lastName,
-										onInput: toLastName,
-									}),
+			pageLayout(h, {}, [
+				pageHeader(h, {
+					title: "Profile",
+					subtitle: "Manage your profile information and preferences.",
+					size: "title",
+				}),
+				h.div(
+					[h.Class("max-w-xl space-y-6")],
+					[
+						section(h, "Profile picture", [
+							profilePictureUpload(h, model, {
+								avatarUrl: user?.avatarUrl ?? null,
+								name: `${user?.firstName ?? ""} ${user?.lastName ?? ""}`.trim(),
+							}),
+						]),
+						section(
+							h,
+							"Name",
+							[
+								h.div(
+									[h.Class("grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-4")],
+									[
+										nameField(h, model, {
+											id: "profile-first-name",
+											label: "First name",
+											state: model.firstName,
+											onInput: toFirstName,
+										}),
+										nameField(h, model, {
+											id: "profile-last-name",
+											label: "Last name",
+											state: model.lastName,
+											onInput: toLastName,
+										}),
+									],
+								),
+							],
+							true,
+						),
+						section(h, "Email address", [
+							textField(
+								h,
+								{ id: "profile-email", value: user?.email ?? "", isDisabled: true },
+								(parts) => [
+									parts.label(["Email address"], { className: "lg:hidden" }),
+									// React Aria's Group in a disabled TextField: data-disabled, role="presentation".
+									inputGroup(
+										h,
+										{ isDisabled: true, attributes: [h.Role("presentation")] },
+										[IconEnvelope(h), parts.input({ attributes: [h.Type("email")] })],
+									),
 								],
 							),
-						],
-						true,
-					),
-					section(h, "Email address", [
-						textField(
-							h,
-							{ id: "profile-email", value: user?.email ?? "", isDisabled: true },
-							(parts) => [
-								parts.label(["Email address"], { className: "lg:hidden" }),
-								// React Aria's Group in a disabled TextField: data-disabled, role="presentation".
-								inputGroup(h, { isDisabled: true, attributes: [h.Role("presentation")] }, [
-									IconEnvelope(h),
-									parts.input({ attributes: [h.Type("email")] }),
-								]),
+						]),
+						section(h, "Timezone", [
+							Field.label(h, { className: "lg:hidden" }, ["Timezone"]),
+							h.submodel({
+								slotId: "profile-timezone",
+								model: model.timezone,
+								view: TimezoneSelect.view,
+								viewInputs: TimezoneSelect.viewInputs(),
+								toParentMessage: toTimezoneMessage,
+							}),
+						]),
+						h.div(
+							[h.Class("flex justify-end")],
+							[
+								button(
+									h,
+									{
+										intent: "primary",
+										isDisabled: isSaveDisabled(model),
+										interaction: {
+											wiring: interaction.wiring(model),
+											target: "profile-save",
+										},
+										attributes: [h.Type("submit")],
+									},
+									[model.save._tag === "Saving" ? "Saving..." : "Save"],
+								),
 							],
 						),
-					]),
-					section(h, "Timezone", [
-						Field.label(h, { className: "lg:hidden" }, ["Timezone"]),
-						h.submodel({
-							slotId: "profile-timezone",
-							model: model.timezone,
-							view: TimezoneSelect.view,
-							viewInputs: TimezoneSelect.viewInputs(),
-							toParentMessage: toTimezoneMessage,
-						}),
-					]),
-					h.div(
-						[h.Class("flex justify-end")],
-						[
-							button(
-								h,
-								{
-									intent: "primary",
-									isDisabled: isSaveDisabled(model),
-									interaction: {
-										wiring: interaction.wiring(model),
-										target: "profile-save",
-									},
-									attributes: [h.Type("submit")],
-								},
-								[model.save._tag === "Saving" ? "Saving..." : "Save"],
-							),
-						],
-					),
-				],
-			),
+					],
+				),
+			]),
 		],
 	)
 }

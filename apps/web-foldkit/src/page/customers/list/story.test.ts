@@ -81,8 +81,6 @@ const account = (n: number, name: string, fields: Partial<AccountRow> = {}): Acc
 	currency: "USD",
 	trialListMrrMinor: null,
 	trialEndsAtMs: null,
-	healthScore: 80,
-	healthStatus: "healthy",
 	seatsUsed: null,
 	seatsLimit: null,
 	contactCount: 10,
@@ -108,8 +106,6 @@ const account = (n: number, name: string, fields: Partial<AccountRow> = {}): Acc
 
 const acme = account(1, "Acme Robotics", {
 	mrrMinor: 215_000,
-	healthStatus: "at_risk",
-	healthScore: 54,
 	openRiskHigh: 1,
 	planName: "Scale",
 })
@@ -121,28 +117,26 @@ const brightfield = account(2, "Brightfield", {
 })
 const kestrel = account(3, "Kestrel Systems", {
 	mrrMinor: 132_000,
-	healthStatus: "critical",
-	healthScore: 27,
 	lastActiveAtMs: NOW - 20 * DAY,
 	tags: ["enterprise"],
 })
 const northwind = account(4, "Northwind Labs", { ownerUserId: null, mrrMinor: 480_000, planName: "Scale" })
 const accounts = [acme, brightfield, kestrel, northwind]
 
-const atRisk: ViewRow = {
+const myCustomers: ViewRow = {
 	id: Schema.decodeSync(CustomerSavedViewId)(uuid(40)),
-	name: "At risk",
-	builtInKey: "at_risk",
+	name: "My customers",
+	builtInKey: "my_customers",
 	ownerUserId: null,
 	position: 3,
-	filters: { healthStatuses: ["at_risk", "critical"] },
+	filters: { ownedByMe: true },
 	sort: { column: "mrr", direction: "desc" },
-	columns: ["name", "owner", "mrr", "health"],
+	columns: ["name", "owner", "mrr"],
 	icon: null,
 	color: null,
 }
 const mine: ViewRow = {
-	...atRisk,
+	...myCustomers,
 	id: Schema.decodeSync(CustomerSavedViewId)(uuid(41)),
 	name: "Scale accounts",
 	builtInKey: null,
@@ -158,7 +152,7 @@ const run = (model: Model, messages: ReadonlyArray<Message>) =>
 	messages.reduce((current, message) => update(current, message, shared).model, model)
 const loaded = (view: string | null = ALL_VIEW_KEY): Model =>
 	run(init(route(view)).model, [
-		Message.UpdatedViews({ views: [atRisk, mine] }),
+		Message.UpdatedViews({ views: [myCustomers, mine] }),
 		Message.UpdatedAccounts({ accounts }),
 	])
 const names = (model: Model) => visibleAccounts(model, viewer).map((row) => row.name)
@@ -186,24 +180,23 @@ describe("customers list: filters and views", () => {
 		const churned = account(5, "Zephyr", { lifecycleStage: "churned", mrrMinor: 0 })
 		const lead = account(6, "Yonder", { lifecycleStage: "lead", mrrMinor: 0 })
 		const model = run(init(route(null)).model, [
-			Message.UpdatedViews({ views: [atRisk, mine] }),
+			Message.UpdatedViews({ views: [myCustomers, mine] }),
 			Message.UpdatedAccounts({ accounts: [...accounts, churned, lead] }),
 		])
 		expect(names(model)).toEqual(["Northwind Labs", "Acme Robotics", "Kestrel Systems", "Brightfield"])
 		expect(viewTabsOf(model.views).map((tab) => tab.name)).toEqual([
 			"Current customers",
-			"At risk",
+			"My customers",
 			"Scale accounts",
 			"All customers",
 		])
 	})
 
 	test("a built-in view applies its filters and sort, before and after the views sync", () => {
-		expect(names(run(init(route("at_risk")).model, [Message.UpdatedAccounts({ accounts })]))).toEqual([
-			"Acme Robotics",
-			"Kestrel Systems",
-		])
-		expect(names(loaded("at_risk"))).toEqual(["Acme Robotics", "Kestrel Systems"])
+		expect(
+			names(run(init(route("my_customers")).model, [Message.UpdatedAccounts({ accounts })])),
+		).toEqual(["Acme Robotics", "Kestrel Systems"])
+		expect(names(loaded("my_customers"))).toEqual(["Acme Robotics", "Kestrel Systems"])
 	})
 
 	test("each filter narrows", () => {
@@ -264,11 +257,11 @@ describe("customers list: filters and views", () => {
 
 	test("an unedited draft follows its view when it changes; an edited one stays", () => {
 		const changed = { ...mine, filters: { planNames: ["Growth"] } }
-		const following = run(loaded(mine.id), [Message.UpdatedViews({ views: [atRisk, changed] })])
+		const following = run(loaded(mine.id), [Message.UpdatedViews({ views: [myCustomers, changed] })])
 		expect(following.draft.filters).toEqual({ planNames: ["Growth"] })
 		const edited = run(loaded(mine.id), [
 			Message.ClickedSortHeader({ column: "mrr" }),
-			Message.UpdatedViews({ views: [atRisk, changed] }),
+			Message.UpdatedViews({ views: [myCustomers, changed] }),
 		])
 		expect(edited.draft.filters).toEqual({ planNames: ["Scale"] })
 	})
@@ -291,7 +284,6 @@ describe("customers list: sort and columns", () => {
 			primaryAccountId: acme.id,
 			environment: "EU",
 			mrrMinor: 5_000,
-			healthStatus: "healthy",
 		})
 		const model = run(loaded(), [Message.UpdatedAccounts({ accounts: [...accounts, acmeEu] })])
 		const ids = (current: Model) => visibleAccounts(current, viewer).map((row) => row.id)
@@ -310,21 +302,23 @@ describe("customers list: sort and columns", () => {
 		expect(ids(ascending).slice(0, 3)).toEqual([brightfield.id, acme.id, acmeEu.id])
 		// A search that drops the primary keeps the environment, on its own.
 		expect(ids(run(model, [Message.ChangedSearch({ value: "eu" })]))).toEqual([acmeEu.id])
-		const atRiskOnly = run(init(route("at_risk")).model, [
-			Message.UpdatedAccounts({ accounts: [...accounts, acmeEu] }),
-		])
-		expect(ids(atRiskOnly)).toEqual([acme.id, kestrel.id])
+		// A filter the environment fails drops it and keeps its primary.
+		const largeOnly = {
+			...model,
+			draft: { ...model.draft, filters: { ownedByMe: true, minMrrMinor: 100_000 } },
+		}
+		expect(ids(largeOnly)).toEqual([acme.id, kestrel.id])
 	})
 
-	test("health sorts unscored accounts last either way", () => {
-		const unknown = account(5, "Zeta", { healthStatus: "unknown", healthScore: null })
+	test("usage trend sorts accounts without one last either way", () => {
+		const unknown = account(5, "Zeta", { activeUsersTrendPct: null })
 		const model = run(loaded(), [Message.UpdatedAccounts({ accounts: [...accounts, unknown] })])
 		const ascending = run(model, [
-			Message.ClickedSortHeader({ column: "health" }),
-			Message.ClickedSortHeader({ column: "health" }),
+			Message.ClickedSortHeader({ column: "usage_trend" }),
+			Message.ClickedSortHeader({ column: "usage_trend" }),
 		])
 		expect(names(ascending).at(-1)).toBe("Zeta")
-		expect(names(run(model, [Message.ClickedSortHeader({ column: "health" })])).at(-1)).toBe("Zeta")
+		expect(names(run(model, [Message.ClickedSortHeader({ column: "usage_trend" })])).at(-1)).toBe("Zeta")
 	})
 
 	test("columns toggle and reorder; the name column stays first", () => {
@@ -382,7 +376,7 @@ describe("customers list: saving views", () => {
 
 	test("a built-in view offers no delete", () => {
 		const asked = pick(
-			loaded("at_risk"),
+			loaded("my_customers"),
 			(message) => Message.GotViewMenuMessage({ message }),
 			"delete",
 			[Menu.item("delete")],
@@ -421,13 +415,13 @@ describe("customers list: arranging the views", () => {
 		expect(tabNames(dropped.model)).toEqual([
 			"All customers",
 			"Current customers",
-			"At risk",
+			"My customers",
 			"Scale accounts",
 		])
 		expect(commandNames(dropped)).toContain("SaveListLayout")
 		expect(dropped.commands?.[0]?.args).toMatchObject({
 			layoutId: null,
-			layout: { order: ["all", "current", "at_risk", mine.id], sidebarHidden: ["all"] },
+			layout: { order: ["all", "current", "my_customers", mine.id], sidebarHidden: ["all"] },
 		})
 
 		const stepped = update(dropped.model, Message.SteppedViewTab({ key: mine.id, step: -1 }), shared)
@@ -435,7 +429,7 @@ describe("customers list: arranging the views", () => {
 			"All customers",
 			"Current customers",
 			"Scale accounts",
-			"At risk",
+			"My customers",
 		])
 		expect(commandNames(stepped)).toContain("SaveListLayout")
 	})
@@ -450,12 +444,12 @@ describe("customers list: arranging the views", () => {
 		)
 		expect(shown.model.layout?.sidebarHidden).toEqual([])
 		const hidden = pick(
-			loaded("at_risk"),
+			loaded("my_customers"),
 			(message) => Message.GotViewMenuMessage({ message }),
 			"sidebar",
-			viewMenuEntries(loaded("at_risk"), viewer),
+			viewMenuEntries(loaded("my_customers"), viewer),
 		)
-		expect(hidden.model.layout?.sidebarHidden).toEqual(["all", "at_risk"])
+		expect(hidden.model.layout?.sidebarHidden).toEqual(["all", "my_customers"])
 	})
 
 	test("editing a view sends its name and its new icon and colour", () => {
@@ -487,7 +481,7 @@ describe("customers list: arranging the views", () => {
 
 describe("customers list: built-in view defaults", () => {
 	test("an admin resets an edited built-in view to its shipped name and draft", () => {
-		const model = loaded("at_risk")
+		const model = loaded("my_customers")
 		const admin = { ...viewer, isAdmin: true }
 		const items = (entries: ReadonlyArray<Menu.Entry>) =>
 			entries.flatMap((entry) => (entry._tag === "Item" ? [entry.item] : []))
@@ -505,15 +499,15 @@ describe("customers list: built-in view defaults", () => {
 		)
 		expect(commandNames(restored)).toContain("UpdateSavedView")
 		expect(restored.commands?.find((command) => command.name === "UpdateSavedView")?.args).toMatchObject({
-			viewId: atRisk.id,
-			view: { name: "At risk", filters: { healthStatuses: ["at_risk", "critical"] } },
+			viewId: myCustomers.id,
+			view: { name: "My customers", filters: { ownedByMe: true } },
 		})
 	})
 })
 
 describe("customers list: selection and bulk actions", () => {
 	test("select all takes the visible rows only", () => {
-		const selected = run(loaded("at_risk"), [Message.ToggledAllRows({ isSelected: true })])
+		const selected = run(loaded("my_customers"), [Message.ToggledAllRows({ isSelected: true })])
 		expect(selected.selected).toEqual([acme.id, kestrel.id])
 		expect(run(selected, [Message.ClearedSelection()]).selected).toEqual([])
 	})

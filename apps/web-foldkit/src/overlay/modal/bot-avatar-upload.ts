@@ -70,14 +70,7 @@ export const botAvatarUpload = <Message>(
 				[
 					h.div(
 						[h.Attribute("style", visuallyHiddenStyle)],
-						[
-							h.button([
-								h.AriaLabel("DropZone"),
-								h.DataAttribute("react-aria-pressable", "true"),
-								h.Tabindex(0),
-								h.Type("button"),
-							]),
-						],
+						[ariaButton(h, { attributes: [h.AriaLabel("DropZone")] }, [])],
 					),
 					ariaButton(
 						h,

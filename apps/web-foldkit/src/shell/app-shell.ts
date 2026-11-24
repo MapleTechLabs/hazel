@@ -135,6 +135,8 @@ export interface MobileShell<Message> {
 	readonly isSidebarOpen: boolean
 	/** Opens the sidebar sheet (a section's top bar menu button, a header's). */
 	readonly onMenu: Attribute<Message>
+	/** The tab bar's search button: the command palette in message search. */
+	readonly onSearch: Attribute<Message>
 	readonly toSheetMessage: (message: Modal.Message) => Message
 }
 
@@ -239,7 +241,7 @@ const phoneShell = <Message>(
 								[parts.page],
 							),
 							...(chrome.hasTabBar
-								? [mobileNav(h, context, parts.unreadNotificationCount)]
+								? [mobileNav(h, context, parts.unreadNotificationCount, mobile.onSearch)]
 								: []),
 						],
 					),

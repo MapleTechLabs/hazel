@@ -1,14 +1,13 @@
 /**
  * What compute knows about the org and each account at one instant: the input of signal
- * evaluation (`./evaluate.ts`), the health score and the dry runs, loaded by `./snapshot.ts`. Plain
- * data, so the pure parts are tested with hand-built facts.
+ * evaluation (`./evaluate.ts`) and the rule dry run, loaded by `./snapshot.ts`. Plain data, so the
+ * pure parts are tested with hand-built facts.
  */
 import type { schema } from "@hazel/db"
 import type {
 	AttentionSettings,
 	CustomerProvider,
 	Day,
-	HealthStatus,
 	LifecycleStage,
 	MetricAggregation,
 	SeriesPoint,
@@ -16,7 +15,7 @@ import type {
 	SlaTargets,
 } from "@hazel/domain/customers"
 import type { CustomerContactId, CustomerIssueId } from "@hazel/schema"
-import { addDays, dayRange } from "./time"
+import { addDays, dayRange } from "@hazel/customer-integrations/kit/time"
 
 export interface ContactFacts {
 	readonly id: CustomerContactId
@@ -32,12 +31,6 @@ export interface MetricPoint {
 	readonly day: Day
 	readonly value: number
 	readonly limitValue: number | null
-}
-
-export interface HealthPoint {
-	readonly day: Day
-	readonly score: number | null
-	readonly status: HealthStatus
 }
 
 /** An open support issue's SLA clocks (`customer_issue_slas`), for the overdue templates. */
@@ -64,7 +57,7 @@ export interface AccountFacts {
 	readonly everActiveContacts: number
 	/** Window (days) → distinct users active in the window ending on `lastActiveDay`. */
 	readonly priorActive: ReadonlyMap<number, number>
-	/** The billing source's subscriptions (Autumn when connected, else Stripe). */
+	/** The billing source's subscriptions (`billingProviderOf`). */
 	readonly subscriptions: ReadonlyArray<schema.CustomerSubscription>
 	readonly openInvoices: ReadonlyArray<schema.CustomerInvoice>
 	/** The open invoices its ended plans went unpaid on (`unpaidEndOf`): a payment still owed. */
@@ -79,8 +72,6 @@ export interface AccountFacts {
 	readonly metrics: ReadonlyMap<string, ReadonlyArray<MetricPoint>>
 	/** MRR movements, oldest first. */
 	readonly movements: ReadonlyArray<schema.CustomerMrrMovement>
-	/** Daily health over the loaded window, oldest first (today's once scored). */
-	readonly health: ReadonlyArray<HealthPoint>
 	/** Open (not closed, not deleted) support issues with SLA clocks. */
 	readonly openIssueSlas: ReadonlyArray<IssueSlaFacts>
 	/** On an environment template's facts: its own subscriptions, whose period the forecast ends at. */
@@ -164,13 +155,8 @@ export const metricSeries = (
 	})
 }
 
-/** Hazel's own series, derived from activity, movements and health (never stored as metrics). */
-export const DERIVED_METRICS: ReadonlySet<string> = new Set([
-	"active_users",
-	"active_users_30d",
-	"mrr",
-	"health_score",
-])
+/** Hazel's own series, derived from activity and movements (never stored as metrics). */
+export const DERIVED_METRICS: ReadonlySet<string> = new Set(["active_users", "active_users_30d", "mrr"])
 
 /** Any built-in or source metric's series. */
 export const seriesOf = (
@@ -187,10 +173,6 @@ export const seriesOf = (
 			return rollingActiveSeries(facts, last, count)
 		case "mrr":
 			return mrrSeries(facts.movements, facts.account.mrrMinor, last, count)
-		case "health_score": {
-			const scores = new Map(facts.health.map((point) => [point.day, point.score ?? 0]))
-			return dayRange(last, count).map((day) => ({ day, value: scores.get(day) ?? 0 }))
-		}
 		default:
 			return metricSeries(facts, key, last, count, aggregation)
 	}
@@ -213,7 +195,7 @@ export const billed = (sub: schema.CustomerSubscription) =>
 /**
  * Canceled before its trial ended and never billed past it: it never converted, so never paid. A
  * billing period ending after the trial (`currentPeriodEnd`) is one it was billed for, even when
- * the cancellation was asked for during the trial (Stripe's `cancel_at` a later date).
+ * the cancellation was asked for during the trial (a `cancel_at` of a later date).
  */
 const unconverted = (sub: schema.CustomerSubscription) =>
 	sub.status === "canceled" &&

@@ -1,3 +1,9 @@
+import {
+	billingPreferenceOrder,
+	startingIntegration,
+	suggestedBillingIntegration,
+} from "@hazel/customer-integrations"
+import { connectBillingTitle, PROVIDER_ORDER, providerOf, startingSource } from "../../../customers/providers"
 import * as Customers from "@hazel/domain/customers"
 import { Option } from "effect"
 import { Submodel } from "foldkit"
@@ -7,7 +13,6 @@ import { twMerge } from "tailwind-merge"
 import { commonMessage } from "~/lib/error-messages"
 import { activeUsersChart } from "../../../customers/charts/line-chart"
 import { chartLegend } from "../../../customers/charts/frame"
-import { distributionBar, healthDistribution } from "../../../customers/charts/distribution"
 import { sparkline } from "../../../customers/charts/sparkline"
 import { mrrLegend, mrrMovementChart } from "../../../customers/charts/stacked-bar-chart"
 import {
@@ -22,13 +27,7 @@ import {
 } from "../../../customers/format"
 import { type AccountRow, msOf, type SignalRow } from "../../../customers/queries"
 import { shownSuggestions, suggestionRow } from "../../../customers/suggestions"
-import {
-	environmentsHint,
-	HEALTH_FILL,
-	HEALTH_LABEL,
-	healthDot,
-	severityGlyph,
-} from "../../../customers/ui/badges"
+import { environmentsHint, severityGlyph } from "../../../customers/ui/badges"
 import { customerAccountOf, environmentCounts, queueNameOf } from "../../../customers/groups"
 import { connectCard } from "../../../customers/ui/connect-card"
 import { companyLogo } from "../../../customers/ui/identity"
@@ -36,14 +35,9 @@ import { definedLabel, deltaPill, type Delta } from "../../../customers/ui/kpi-t
 import { disclosure } from "../../../customers/ui/disclosure"
 import { formatResponse, formatWithin } from "../../../customers/support-report"
 import { rangePicker } from "../../../customers/ui/filter-bar"
-import {
-	moreLink,
-	pageHeader,
-	panel,
-	panelClass,
-	panelHeader,
-	titleClass,
-} from "../../../customers/ui/surface"
+import { moreLink } from "../../../customers/ui/surface"
+import { cardClassName, panel, panelHeader } from "../../../ui/card"
+import { pageHeader } from "../../../ui/page-header"
 import { IconArrowPath } from "../../../icons"
 import { AppRoute, customerRoute, customersListRoute, hrefOf } from "../../../route"
 import { button } from "../../../ui/button"
@@ -61,6 +55,9 @@ import {
 	SUGGESTIONS_SHOWN,
 } from "./model"
 import { heading } from "../../../ui/heading"
+import { loadFailure } from "../shared-view"
+import { skeleton } from "../../../ui/skeleton"
+import { emptyState } from "../../../ui/empty-state"
 
 /** The Customers overview (Wonder: Overview › default, hover, empty, partial, 12 months). */
 
@@ -69,7 +66,6 @@ type Result = Customers.OverviewResult
 const toHoverMrr = (index: number | null) => Message.HoveredChart({ chart: "mrr", index })
 const toHoverActiveUsers = (index: number | null) => Message.HoveredChart({ chart: "activeUsers", index })
 const toRange = (range: Customers.CustomersRange) => Message.ClickedRange({ range })
-const toHealthMetric = (metric: "customers" | "mrr") => Message.ClickedHealthMetric({ metric })
 const toCompare = (isComparing: boolean) => Message.ToggledCompare({ isComparing })
 
 interface Context {
@@ -81,10 +77,6 @@ interface Context {
 }
 
 const link = moreLink
-const card = panel
-
-const cardHeader = (h: HtmlBuilder<Message>, title: Html | string, description: string, aside?: Html): Html =>
-	panelHeader(h, { title, description, aside })
 
 // HEADER
 
@@ -97,7 +89,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, result: Result | undefine
 	const subtitle = isUnconnected(model)
 		? "No data sources connected yet"
 		: [
-				`${result?.hasData.billing === false ? "Usage and health" : "Revenue, usage and health"} across ${formatCount(customers)} customers`,
+				`${result?.hasData.billing === false ? "Usage" : "Revenue and usage"} across ${formatCount(customers)} customers`,
 				...(synced === null ? [] : [synced]),
 			].join(" · ")
 	const previous = previousPeriodOf(model.range, nowMs)
@@ -153,7 +145,6 @@ const headlineCell = (
 		suffix?: string
 		delta?: Delta | null
 		detail?: string
-		footer?: Html
 	}>,
 ): Html =>
 	h.div(
@@ -193,7 +184,6 @@ const headlineCell = (
 						: [h.span([h.Class("truncate")], [options.detail])]),
 				],
 			),
-			...(options.footer === undefined ? [] : [options.footer]),
 		],
 	)
 
@@ -212,9 +202,7 @@ const headline = (
 			[
 				h.AriaLabel("Key numbers"),
 				h.Role("group"),
-				h.Class(
-					"grid divide-border rounded-xl border border-border bg-bg max-md:divide-y md:grid-cols-3",
-				),
+				h.Class(cardClassName("grid divide-border overflow-visible max-md:divide-y md:grid-cols-3")),
 			],
 			[...cells],
 		)
@@ -225,7 +213,7 @@ const headline = (
 					[h.Key(label), h.Class(CELL)],
 					[
 						h.span([h.Class("text-muted-fg text-sm")], [label]),
-						h.span([h.Class("mt-1 block h-7 w-28 animate-pulse rounded bg-secondary")]),
+						skeleton(h, "mt-1 h-7 w-28 rounded"),
 					],
 				),
 			),
@@ -248,7 +236,7 @@ const headline = (
 				[h.Class(twMerge(CELL, "md:col-span-2"))],
 				[
 					h.span([h.Class("text-muted-fg text-sm")], ["MRR · MRR at risk"]),
-					h.span([h.Class("font-medium text-fg")], ["Connect Stripe or Autumn to see revenue"]),
+					h.span([h.Class("font-medium text-fg")], [connectBillingTitle()]),
 					h.span(
 						[h.Class("flex flex-wrap items-center gap-x-3 text-muted-fg text-xs")],
 						[
@@ -265,15 +253,6 @@ const headline = (
 			active,
 		])
 	const atRiskPct = kpis.mrrMinor.value === 0 ? 0 : (kpis.atRiskMrrMinor.value / kpis.mrrMinor.value) * 100
-	const mrrByHealth = HEALTH_ORDER.map((status) => ({
-		key: status,
-		label: HEALTH_LABEL[status],
-		value: result.healthDistribution.find((row) => row.status === status)?.mrrMinor ?? 0,
-		fillClass: HEALTH_FILL[status],
-	}))
-	const risky = result.healthDistribution
-		.filter((row) => row.status === "at_risk" || row.status === "critical")
-		.reduce((sum, row) => sum + row.count, 0)
 	return strip([
 		headlineCell(h, {
 			id: "kpi-mrr",
@@ -290,19 +269,11 @@ const headline = (
 			definition: "MRR of customers with an open high-severity risk signal.",
 			value: formatMoney(kpis.atRiskMrrMinor.value, currency),
 			valueClass: kpis.atRiskMrrMinor.value > 0 ? "text-warning-subtle-fg" : undefined,
-			detail: `${formatPct(atRiskPct, { digits: 0 })} of MRR · ${formatCount(risky)} ${risky === 1 ? "customer" : "customers"} at risk or critical`,
-			footer: distributionBar(h, {
-				// The bar is an image: its name says what each segment holds.
-				ariaLabel: `MRR by health: ${mrrByHealth.map((segment) => `${segment.label} ${formatMoney(segment.value, currency)}`).join(", ")}`,
-				className: "mt-1.5 h-1.5",
-				segments: mrrByHealth,
-			}),
+			detail: `${formatPct(atRiskPct, { digits: 0 })} of MRR`,
 		}),
 		active,
 	])
 }
-
-const HEALTH_ORDER: ReadonlyArray<Customers.HealthStatus> = ["healthy", "at_risk", "critical", "unknown"]
 
 /** Revenue, paying customers and logo churn: worth a glance, not a tile each. */
 const secondaryLine = (
@@ -439,7 +410,7 @@ const attentionSection = (
 		)
 	}
 	return h.section(
-		[h.AriaLabel("Needs attention"), h.Class(twMerge(panelClass, "flex min-w-0 flex-col lg:col-span-2"))],
+		[h.AriaLabel("Needs attention"), h.Class(cardClassName("flex min-w-0 flex-col lg:col-span-2"))],
 		[
 			h.header(
 				[h.Class("flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 pt-4 pb-2")],
@@ -462,12 +433,9 @@ const attentionSection = (
 				],
 			),
 			model.signals === null
-				? h.div([h.Class("m-4 h-48 animate-pulse rounded-lg bg-secondary/40")])
+				? skeleton(h, "m-4 h-48 rounded-lg")
 				: top.length === 0
-					? h.p(
-							[h.Class("px-4 py-10 text-center text-muted-fg text-sm")],
-							["All clear: no open signals."],
-						)
+					? emptyState(h, { title: "All clear: no open signals.", className: "px-4 py-10" })
 					: h.ul(
 							[h.Class("flex flex-col divide-y divide-border border-border border-t")],
 							top.map(row),
@@ -484,7 +452,7 @@ const ATTENTION_SHOWN = 6
 const dropsCard = (h: HtmlBuilder<Message>, result: Result, context: Context): Html => {
 	const drops = result.topMovers.decliners.slice(0, 4)
 	return h.section(
-		[h.AriaLabel("Biggest usage drops"), h.Class(twMerge(panelClass, "flex min-w-0 flex-col"))],
+		[h.AriaLabel("Biggest usage drops"), h.Class(cardClassName("flex min-w-0 flex-col"))],
 		[
 			h.header(
 				[h.Class("flex flex-col gap-0.5 px-4 pt-4 pb-2")],
@@ -567,7 +535,7 @@ const supportCard = (h: HtmlBuilder<Message>, model: Model, context: Context): H
 			],
 		)
 	return h.section(
-		[h.AriaLabel("Support"), h.Class(twMerge(panelClass, "flex min-w-0 flex-col gap-1 px-4 py-4"))],
+		[h.AriaLabel("Support"), h.Class(cardClassName("flex min-w-0 flex-col gap-1 px-4 py-4"))],
 		[
 			h.div(
 				[h.Class("flex items-center justify-between gap-4 pb-1")],
@@ -585,7 +553,7 @@ const supportCard = (h: HtmlBuilder<Message>, model: Model, context: Context): H
 								],
 							),
 						]
-					: [h.div([h.Class("h-20 animate-pulse rounded-lg bg-secondary/40")])]
+					: [skeleton(h, "h-20 w-full rounded-lg")]
 				: [
 						stat(
 							"kpi-support-median",
@@ -614,52 +582,39 @@ const supportCard = (h: HtmlBuilder<Message>, model: Model, context: Context): H
 
 const mrrCard = (h: HtmlBuilder<Message>, model: Model, result: Result): Html => {
 	if (!result.hasData.billing)
-		return card(h, "lg:col-span-2", [
-			cardHeader(h, "MRR movement", `New, expansion, contraction and churn by ${result.bucket}`),
-			h.div(
-				[
-					h.Class(
-						"flex min-h-56 flex-1 flex-col items-center justify-center gap-3 rounded-lg border border-border border-dashed px-6 text-center",
+		return panel(h, { className: "lg:col-span-2" }, [
+			panelHeader(h, {
+				title: "MRR movement",
+				description: `New, expansion, contraction and churn by ${result.bucket}`,
+			}),
+			emptyState(h, {
+				title: connectBillingTitle(),
+				description:
+					"MRR movement needs subscription history. Hazel backfills 12 months once a billing source connects.",
+				action: h.div(
+					[h.Class("flex gap-2")],
+					billingPreferenceOrder.map(({ provider }) =>
+						button(
+							h,
+							{
+								intent: provider === suggestedBillingIntegration.id ? "primary" : "outline",
+								size: "sm",
+								onPress: Message.PressedConnect({ provider }),
+							},
+							[`Connect ${providerOf(provider).name}`],
+						),
 					),
-				],
-				[
-					h.span([h.Class(titleClass)], ["Connect Stripe or Autumn to see revenue"]),
-					h.span(
-						[h.Class("max-w-sm text-muted-fg text-sm")],
-						[
-							"MRR movement needs subscription history. Hazel backfills 12 months once a billing source connects.",
-						],
-					),
-					h.div(
-						[h.Class("flex gap-2")],
-						[
-							button(
-								h,
-								{
-									intent: "outline",
-									size: "sm",
-									onPress: Message.PressedConnect({ provider: "autumn" }),
-								},
-								["Connect Autumn"],
-							),
-							button(
-								h,
-								{ size: "sm", onPress: Message.PressedConnect({ provider: "stripe" }) },
-								["Connect Stripe"],
-							),
-						],
-					),
-				],
-			),
+				),
+				className: "min-h-56 flex-1 rounded-lg border border-border border-dashed px-6 py-0",
+			}),
 		])
 	const net = result.mrrMovements.reduce((sum, entry) => sum + entry.net, 0)
 	const first = result.mrrMovements[0]
-	return card(h, "lg:col-span-2", [
-		cardHeader(
-			h,
-			"MRR movement",
-			`${result.bucket === "day" ? "Daily" : result.bucket === "week" ? "Weekly" : "Monthly"} change by type`,
-			h.div(
+	return panel(h, { className: "lg:col-span-2" }, [
+		panelHeader(h, {
+			title: "MRR movement",
+			description: `${result.bucket === "day" ? "Daily" : result.bucket === "week" ? "Weekly" : "Monthly"} change by type`,
+			aside: h.div(
 				[h.Class("flex flex-col items-end max-sm:items-start")],
 				[
 					h.span(
@@ -685,7 +640,7 @@ const mrrCard = (h: HtmlBuilder<Message>, model: Model, result: Result): Html =>
 							]),
 				],
 			),
-		),
+		}),
 		chartLegend(h, mrrLegend(result.mrrMovements)),
 		mrrMovementChart(h, {
 			buckets: result.mrrMovements,
@@ -714,8 +669,11 @@ const activeUsersCard = (h: HtmlBuilder<Message>, model: Model, result: Result):
 				),
 			],
 		)
-	return card(h, "", [
-		cardHeader(h, "Active users", "Distinct contacts with a sign-in or product event"),
+	return panel(h, { className: "" }, [
+		panelHeader(h, {
+			title: "Active users",
+			description: "Distinct contacts with a sign-in or product event",
+		}),
 		h.div(
 			[h.Class("grid grid-cols-3 gap-3 max-md:gap-2")],
 			[
@@ -740,17 +698,15 @@ const suggestionsCard = (h: HtmlBuilder<Message>, model: Model, context: Context
 	const shown = shownSuggestions(model.suggestions, model.channelOptions)
 	if (shown.length === 0) return h.empty
 	const more = shown.length - SUGGESTIONS_SHOWN
-	return card(h, "", [
-		cardHeader(
-			h,
-			heading(h, { variant: "section", className: "flex items-baseline gap-2 whitespace-nowrap" }, [
-				"Suggested channel links",
-				h.span([h.Class("font-normal text-muted-fg text-sm tabular-nums")], [String(shown.length)]),
-			]),
-			more > 0
-				? `Channels that look like a customer's. ${formatCount(more)} more after these.`
-				: "Channels that look like a customer's. Linking shows the customer in the channel.",
-		),
+	return panel(h, { className: "" }, [
+		panelHeader(h, {
+			title: "Suggested channel links",
+			count: shown.length,
+			description:
+				more > 0
+					? `Channels that look like a customer's. ${formatCount(more)} more after these.`
+					: "Channels that look like a customer's. Linking shows the customer in the channel.",
+		}),
 		h.ul(
 			[h.Class("flex flex-col divide-y divide-border"), h.AriaLabel("Suggested channel links")],
 			shown.slice(0, SUGGESTIONS_SHOWN).map((entry) =>
@@ -841,23 +797,6 @@ const moversCard = (h: HtmlBuilder<Message>, result: Result, context: Context): 
 													},
 													"w-16 shrink-0 justify-end text-sm",
 												),
-												...(account === undefined
-													? []
-													: [
-															h.span(
-																[
-																	h.Class(
-																		"w-12 shrink-0 text-right max-sm:w-9",
-																	),
-																],
-																[
-																	healthDot(h, {
-																		status: account.healthStatus,
-																		score: account.healthScore,
-																	}),
-																],
-															),
-														]),
 											],
 										),
 									],
@@ -866,14 +805,14 @@ const moversCard = (h: HtmlBuilder<Message>, result: Result, context: Context): 
 						),
 			],
 		)
-	return card(h, "", [
-		cardHeader(
-			h,
-			"Top movers",
-			result.range === "12m"
-				? "Average daily active users, last 90 days vs the 90 before"
-				: "Average daily active users, this period vs the previous one",
-		),
+	return panel(h, { className: "" }, [
+		panelHeader(h, {
+			title: "Top movers",
+			description:
+				result.range === "12m"
+					? "Average daily active users, last 90 days vs the 90 before"
+					: "Average daily active users, this period vs the previous one",
+		}),
 		h.div(
 			[h.Class("grid gap-6 lg:grid-cols-2")],
 			[
@@ -970,10 +909,11 @@ const lifecycleSection = (h: HtmlBuilder<Message>, model: Model, result: Result,
 				h.div(
 					[
 						h.Class(
-							twMerge(
-								panelClass,
-								"grid divide-border max-lg:divide-y lg:divide-x",
-								columns.length === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2",
+							cardClassName(
+								twMerge(
+									"grid divide-border max-lg:divide-y lg:divide-x",
+									columns.length === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2",
+								),
 							),
 						),
 					],
@@ -1087,9 +1027,8 @@ const lifecycleSection = (h: HtmlBuilder<Message>, model: Model, result: Result,
 // TRENDS
 
 /** The charts, folded: worth opening on a review, not on every visit. */
-const trendsSection = (h: HtmlBuilder<Message>, model: Model, result: Result, context: Context): Html => {
-	const bands = model.settings?.bands ?? Customers.DEFAULT_HEALTH_SETTINGS.bands
-	return h.section(
+const trendsSection = (h: HtmlBuilder<Message>, model: Model, result: Result, context: Context): Html =>
+	h.section(
 		[h.AriaLabel("Charts and trends")],
 		[
 			disclosure(
@@ -1100,7 +1039,7 @@ const trendsSection = (h: HtmlBuilder<Message>, model: Model, result: Result, co
 						h.span([h.Class("font-medium text-fg")], ["Charts and trends"]),
 						h.span(
 							[h.Class("text-muted-fg text-xs max-sm:hidden")],
-							["MRR movement, active users, health distribution, top movers"],
+							["MRR movement, active users, top movers"],
 						),
 					],
 				},
@@ -1109,19 +1048,7 @@ const trendsSection = (h: HtmlBuilder<Message>, model: Model, result: Result, co
 						[h.Class("flex flex-col gap-4 pt-3")],
 						[
 							mrrCard(h, model, result),
-							h.div(
-								[h.Class("grid gap-4 lg:grid-cols-2")],
-								[
-									activeUsersCard(h, model, result),
-									healthDistribution(h, {
-										rows: result.healthDistribution,
-										bands,
-										currency: result.currency,
-										metric: model.healthMetric,
-										onMetric: toHealthMetric,
-									}),
-								],
-							),
+							activeUsersCard(h, model, result),
 							moversCard(h, result, context),
 						],
 					),
@@ -1129,19 +1056,8 @@ const trendsSection = (h: HtmlBuilder<Message>, model: Model, result: Result, co
 			),
 		],
 	)
-}
 
 // STATES
-
-const PROVIDERS: ReadonlyArray<Customers.CustomerProvider> = ["clerk", "stripe", "autumn", "maple"]
-
-/** What each source brings, in a line: how it matches records is the Sources settings' to explain. */
-const SETUP_SUMMARY = {
-	clerk: "Your customer list: accounts and their contacts.",
-	stripe: "Subscriptions, invoices and MRR.",
-	autumn: "Plans, metered features and limits.",
-	maple: "Product usage and active users.",
-} as const satisfies Record<Customers.CustomerProvider, string>
 
 const setup = (h: HtmlBuilder<Message>, nowMs: number): Html =>
 	h.div(
@@ -1153,19 +1069,21 @@ const setup = (h: HtmlBuilder<Message>, nowMs: number): Html =>
 					heading(h, { variant: "title" }, ["Connect a data source"]),
 					h.p(
 						[h.Class("max-w-2xl text-muted-fg text-sm")],
-						["Start with Clerk for your customer list, then add billing and usage."],
+						[
+							`Start with ${startingSource.name} for your customer list, then add billing and usage.`,
+						],
 					),
 				],
 			),
 			h.div(
 				[h.Class("grid gap-4 md:grid-cols-2")],
-				PROVIDERS.map((provider) =>
+				PROVIDER_ORDER.map((provider) =>
 					connectCard(h, {
 						provider,
-						description: SETUP_SUMMARY[provider],
+						description: providerOf(provider).setupSummary,
 						now: new Date(nowMs),
 						status: { _tag: "NotConnected", onConnect: Message.PressedConnect({ provider }) },
-						className: provider === "clerk" ? "border-primary" : undefined,
+						className: provider === startingIntegration.id ? "border-primary" : undefined,
 					}),
 				),
 			),
@@ -1174,19 +1092,11 @@ const setup = (h: HtmlBuilder<Message>, nowMs: number): Html =>
 
 const failure = (h: HtmlBuilder<Message>, reason: Parameters<typeof commonMessage>[0]): Html => {
 	const message = commonMessage(reason)
-	return h.div(
-		[h.Class(twMerge("flex flex-col items-center gap-3 px-6 py-14 text-center", panelClass))],
-		[
-			h.span([h.Class(titleClass)], [message.title]),
-			...(message.description
-				? [h.span([h.Class("text-muted-fg text-sm")], [message.description])]
-				: []),
-			button(h, { intent: "outline", size: "sm", onPress: Message.PressedRetry() }, [
-				IconArrowPath(h, { attributes: { "data-slot": "icon" } }),
-				"Try again",
-			]),
-		],
-	)
+	return loadFailure(h, {
+		title: message.title,
+		description: message.description,
+		onRetry: Message.PressedRetry(),
+	})
 }
 
 const dashboard = (
@@ -1218,7 +1128,7 @@ const dashboard = (
 		),
 		suggestionsCard(h, model, context),
 		...(result === undefined
-			? [h.div([h.Class("h-64 animate-pulse rounded-xl border border-border bg-secondary/30")])]
+			? [skeleton(h, "h-64 w-full rounded-xl")]
 			: [lifecycleSection(h, model, result, context), trendsSection(h, model, result, context)]),
 	]
 }

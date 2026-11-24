@@ -23,6 +23,7 @@ export type SwitcherOrg = typeof SwitcherOrg.Type
 export const ChannelSummary = Schema.Struct({
 	id: ChannelId,
 	name: Schema.String,
+	type: Schema.String,
 	icon: Schema.NullOr(Schema.String),
 })
 export type ChannelSummary = typeof ChannelSummary.Type

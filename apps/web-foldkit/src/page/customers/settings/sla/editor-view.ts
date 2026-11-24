@@ -2,7 +2,7 @@ import type * as Customers from "@hazel/domain/customers"
 import { Option } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { segmented } from "../../../../customers/ui/filter-bar"
+import { segmented } from "../../../../ui/segmented-control"
 import { IconClock, IconPlus } from "../../../../icons"
 import { badge } from "../../../../ui/badge"
 import { button } from "../../../../ui/button"
@@ -14,7 +14,8 @@ import { textField } from "../../../../ui/text-field"
 import { toggleChip } from "../../../../ui/toggle-chip"
 import { AppRoute, hrefOf } from "../../../../route"
 import type { Shared } from "../../../contract"
-import { type Crumb, readOnlyNotice, settingsHeader, settingsPage } from "../shared"
+import { type Crumb, readOnlyNotice, settingsPage } from "../shared"
+import { pageHeader } from "../../../../ui/page-header"
 import { exampleLine, HOURS_LABEL, type PolicyErrors, policyErrors } from "./draft"
 import { Message } from "./message"
 import {
@@ -502,7 +503,7 @@ export const editorView = (h: H, model: Model, editor: Editor, shared: Shared, c
 		{ label: isNew ? "New policy" : canEdit ? "Edit policy" : "Policy" },
 	]
 	return settingsPage(h, [
-		settingsHeader(h, {
+		pageHeader(h, {
 			title: isNew ? "New policy" : editor.form.name || "Policy",
 			crumbs,
 			actions: canEdit

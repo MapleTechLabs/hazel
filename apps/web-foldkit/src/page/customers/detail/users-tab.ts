@@ -4,24 +4,33 @@ import { twMerge } from "tailwind-merge"
 import { distributionBar } from "../../../customers/charts/distribution"
 import { formatCount, formatDate, formatRelative } from "../../../customers/format"
 import { msOf } from "../../../customers/queries"
-import { dataTable } from "../../../customers/ui/data-table"
-import { searchBox, segmented } from "../../../customers/ui/filter-bar"
+import { dataTable } from "../../../ui/data-table"
+import { searchBox } from "../../../customers/ui/filter-bar"
+import { segmented } from "../../../ui/segmented-control"
 import { personAvatar } from "../../../customers/ui/identity"
-import { IconCircleDottedUser, IconCopy, IconStar, IconWarning } from "../../../icons"
+import { IconCircleDottedUser, IconStar } from "../../../icons"
 import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
 import { Message } from "./message"
 import { type ContactFilter, canImpersonate, contactCounts, type Model, visibleContacts } from "./model"
-import { type Context, icon, pageFooter } from "./parts"
+import { otherAccounts } from "./other-accounts"
+import { type Context, copyButton, pageFooter } from "./parts"
+import { cardClassName } from "../../../ui/card"
+import { copyButton as kitCopyButton } from "../../../ui/copy-button"
+import { callout } from "../../../ui/callout"
+import { statusDot } from "../../../ui/status-dot"
+import { emptyState } from "../../../ui/empty-state"
 
 /** The users tab: who uses the product, who went quiet, who never started. */
 
 const DAY_MS = 86_400_000
 
+const nonNull = (html: Html | null): ReadonlyArray<Html> => (html === null ? [] : [html])
+
 const STATUS = {
-	active: ["Active", "success", "seen in the last 30 days", "bg-health-healthy"],
-	dormant: ["Dormant", "warning", "not seen for 30+ days", "bg-health-at-risk"],
-	never_active: ["Never active", "secondary", "joined, no product activity", "bg-health-unknown"],
+	active: ["Active", "success", "seen in the last 30 days", "bg-chart-new"],
+	dormant: ["Dormant", "warning", "not seen for 30+ days", "bg-chart-contraction"],
+	never_active: ["Never active", "secondary", "joined, no product activity", "bg-chart-neutral"],
 } as const satisfies Record<Customers.ContactActivityStatus, readonly [string, string, string, string]>
 
 /** 30 days of activity as cells: brighter is more events that day. */
@@ -36,9 +45,7 @@ const heatStrip = (h: HtmlBuilder<Message>, row: Customers.ContactRow): Html => 
 		],
 		values.map((value) =>
 			h.span([
-				h.Class(
-					twMerge("block w-1 rounded-[1px]", value === 0 ? "bg-secondary" : "bg-chart-series-1"),
-				),
+				h.Class(twMerge("block w-1 rounded-xs", value === 0 ? "bg-secondary" : "bg-chart-series-1")),
 				...(value === 0 ? [] : [h.Style({ opacity: String(0.35 + (0.65 * value) / max) })]),
 			]),
 		),
@@ -49,7 +56,7 @@ const summary = (h: HtmlBuilder<Message>, model: Model, context: Context): Html 
 	const counts = contactCounts(model)
 	const { account } = context
 	return h.div(
-		[h.Class("flex flex-wrap items-center gap-6 rounded-xl border border-border bg-bg p-4 sm:px-5")],
+		[h.Class(cardClassName("flex flex-wrap items-center gap-6 p-4 sm:px-5"))],
 		[
 			h.div(
 				[h.Class("flex flex-col")],
@@ -79,7 +86,7 @@ const summary = (h: HtmlBuilder<Message>, model: Model, context: Context): Html 
 							h.span(
 								[h.Class("inline-flex items-center gap-1.5")],
 								[
-									h.span([h.Class(twMerge("size-1.5 rounded-full", STATUS[status][3]))]),
+									statusDot(h, { tone: "neutral", className: STATUS[status][3] }),
 									h.span(
 										[h.Class("font-medium text-fg")],
 										[`${counts[status]} ${STATUS[status][0].toLowerCase()}`],
@@ -126,40 +133,24 @@ const championCallout = (h: HtmlBuilder<Message>, model: Model, context: Context
 	const since = msOf(account.championInactiveSince)
 	const days = Math.floor((context.nowMs - since) / DAY_MS)
 	const name = champion?.name ?? champion?.email ?? "Your champion"
-	return h.div(
-		[
-			h.Role("status"),
-			h.Class(
-				"flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning-subtle px-4 py-3 sm:px-5",
-			),
-		],
-		[
-			h.p(
-				[h.Class("flex min-w-0 flex-1 basis-64 items-start gap-2 text-sm text-warning-subtle-fg")],
-				[
-					IconWarning(h, { className: "mt-0.5 size-4 shrink-0" }),
-					h.span(
-						[],
-						[
-							h.span([h.Class("font-semibold")], ["Your champion went quiet. "]),
-							`${name} was the most active user before ${formatDate(new Date(since), { now: new Date(context.nowMs) })} and has not been seen for ${days} day${days === 1 ? "" : "s"}.`,
-						],
-					),
-				],
-			),
-			...(champion?.email
+	return callout(
+		h,
+		{
+			intent: "warning",
+			actions: champion?.email
 				? [
-						button(
-							h,
-							{
-								intent: "outline",
-								size: "xs",
-								onPress: Message.PressedCopy({ text: champion.email, label: "Email" }),
-							},
-							[IconCopy(h, icon), "Copy email"],
-						),
+						kitCopyButton(h, {
+							label: "Copy email",
+							showLabel: true,
+							size: "xs",
+							onPress: Message.PressedCopy({ text: champion.email, label: "Email" }),
+						}),
 					]
-				: []),
+				: [],
+		},
+		[
+			h.span([h.Class("font-semibold")], ["Your champion went quiet. "]),
+			`${name} was the most active user before ${formatDate(new Date(since), { now: new Date(context.nowMs) })} and has not been seen for ${days} day${days === 1 ? "" : "s"}.`,
 		],
 	)
 }
@@ -189,10 +180,36 @@ const lastSeen = (h: HtmlBuilder<Message>, contact: Customers.Contact, nowMs: nu
 			],
 		)
 	return h.div(
-		[h.Class("flex flex-col")],
+		[h.Class("flex flex-col whitespace-nowrap")],
 		[
 			h.span([h.Class("text-fg")], [formatRelative(contact.lastSeenAt, now)]),
 			h.span([h.Class("text-muted-fg text-xs")], [formatDate(contact.lastSeenAt, { now })]),
+		],
+	)
+}
+
+/** The title, plus the email while a narrow table hides its column. A phone keeps the email only. */
+const subtitle = (h: HtmlBuilder<Message>, contact: Customers.Contact): Html | null => {
+	const { title, email } = contact
+	if (title === null && email === null) return null
+	return h.div(
+		[h.Class(twMerge("flex min-w-0 items-center gap-1", title === null && "@6xl:hidden"))],
+		[
+			h.span(
+				[h.Class("min-w-0 truncate text-muted-fg text-xs")],
+				[
+					...(title === null
+						? []
+						: [h.span([h.Class(email === null ? "" : "max-sm:hidden")], [title])]),
+					...(title === null || email === null
+						? []
+						: [h.span([h.Class("@6xl:hidden max-sm:hidden")], [" · "])]),
+					...(email === null ? [] : [h.span([h.Class("@6xl:hidden")], [email])]),
+				],
+			),
+			...(email === null
+				? []
+				: [copyButton(h, email, "Email", { target: email, className: "-my-1 @6xl:hidden" })]),
 		],
 	)
 }
@@ -201,7 +218,7 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 	const counts = contactCounts(model)
 	const rows = visibleContacts(model)
 	const championId = context.detail?.account.championContactId ?? null
-	const callout = championCallout(h, model, context)
+	const champion = championCallout(h, model, context)
 	const footer = pageFooter(h, {
 		status: model.contacts.status,
 		hasMore: model.contacts.nextCursor !== null,
@@ -211,7 +228,7 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 	})
 	return [
 		summary(h, model, context),
-		...(callout === null ? [] : [callout]),
+		...(champion === null ? [] : [champion]),
 		h.div(
 			[h.Class("flex flex-wrap items-center gap-2")],
 			[
@@ -236,12 +253,13 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 			],
 		),
 		h.div(
-			[h.Class("flex flex-col overflow-hidden rounded-xl border border-border")],
+			// `@container`: the email column depends on the table's width, not the window's.
+			[h.Class(cardClassName("@container flex flex-col"))],
 			[
 				dataTable(h, {
 					ariaLabel: "Users",
 					id: "customer-users",
-					className: "rounded-none border-0",
+					isFramed: false,
 					rows,
 					rowKey: (row) => row.contact.id,
 					loadingRows:
@@ -270,10 +288,10 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 										h.div(
 											[h.Class("flex min-w-0 flex-col")],
 											[
-												h.span(
+												h.div(
 													[
 														h.Class(
-															"flex min-w-0 items-center gap-2 font-medium text-fg",
+															"flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-medium text-fg",
 														),
 													],
 													[
@@ -306,33 +324,10 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 																	),
 																]
 															: []),
+														...nonNull(otherAccounts(h, model, context, row)),
 													],
 												),
-												...(row.contact.title === null
-													? []
-													: [
-															h.span(
-																[
-																	h.Class(
-																		"truncate text-muted-fg text-xs max-lg:hidden",
-																	),
-																],
-																[row.contact.title],
-															),
-														]),
-												// Below lg the email column is hidden: the email takes the title's line.
-												...(row.contact.email === null
-													? []
-													: [
-															h.span(
-																[
-																	h.Class(
-																		"truncate text-muted-fg text-xs lg:hidden",
-																	),
-																],
-																[row.contact.email],
-															),
-														]),
+												...nonNull(subtitle(h, row.contact)),
 											],
 										),
 									],
@@ -342,13 +337,21 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 							key: "email",
 							label: "Email",
 							widthClass: "w-60",
-							hideClass: "max-lg:hidden",
+							hideClass: "@max-6xl:hidden",
 							cell: (row) =>
 								row.contact.email === null
 									? "—"
-									: h.span(
-											[h.Class("block max-w-56 truncate"), h.Title(row.contact.email)],
-											[row.contact.email],
+									: h.div(
+											[h.Class("flex max-w-56 items-center gap-1")],
+											[
+												h.span(
+													[h.Class("min-w-0 truncate"), h.Title(row.contact.email)],
+													[row.contact.email],
+												),
+												copyButton(h, row.contact.email, "Email", {
+													target: row.contact.email,
+												}),
+											],
 										),
 						},
 						{
@@ -372,7 +375,7 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 						{
 							key: "seen",
 							label: "Last seen",
-							widthClass: "w-24",
+							widthClass: "w-28",
 							cell: (row) => lastSeen(h, row.contact, context.nowMs),
 						},
 						{
@@ -427,7 +430,7 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 					],
 				}),
 				...(model.contacts.status === "Loaded" && rows.length === 0
-					? [h.p([h.Class("py-10 text-center text-muted-fg text-sm")], ["No user matches."])]
+					? [emptyState(h, { title: "No user matches.", className: "py-10" })]
 					: []),
 				...(footer === null ? [] : [footer]),
 			],

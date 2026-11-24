@@ -210,7 +210,7 @@ export interface RecordGroup {
 	readonly records: ReadonlyArray<RecordRow>
 }
 
-/** Records by source and kind ("Stripe customers", "Maple groups"), each group keeping their order. */
+/** Records by source and kind (a source's "customers", another's "groups"), each group keeping their order. */
 export const groupsOf = (records: ReadonlyArray<RecordRow>): ReadonlyArray<RecordGroup> =>
 	PROVIDER_ORDER.flatMap((provider) =>
 		ENTITY_ORDER.flatMap((entityType) => {

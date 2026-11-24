@@ -1,8 +1,7 @@
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
-import { twMerge } from "tailwind-merge"
-import { keyboardStyles } from "~/components/ui/keyboard.styles"
 import { IconClose, IconLightbulb } from "../../icons"
 import { button } from "../../ui/button"
+import { kbd } from "../../ui/kbd"
 import { semantic } from "../../ui/semantic"
 import { hotkeyLabel } from "./hotkey-label"
 
@@ -31,13 +30,10 @@ export const createChannelHint = <M>(
 					? ["Create your first channel with the + next to Channels."]
 					: [
 							"Create your first channel with ",
-							h.kbd(
-								[
-									h.Attribute("data-slot", "keyboard"),
-									h.Attribute("dir", "ltr"),
-									h.Class(twMerge(keyboardStyles, "text-3xs")),
-								],
-								[hotkeyLabel(createChannelKey)],
+							kbd(
+								h,
+								{ size: "sm", className: "hidden lg:inline-flex" },
+								hotkeyLabel(createChannelKey),
 							),
 						],
 			),

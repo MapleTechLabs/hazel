@@ -1,7 +1,6 @@
 import { Submodel } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
-import { buttonStyles } from "~/components/ui/button.styles"
 import { type CommonReason, commonMessage, isRetryableReason } from "~/lib/error-messages"
 import {
 	IconArrowPath,
@@ -11,18 +10,15 @@ import {
 	IconTrash,
 	IconWarning,
 } from "../../../icons"
-import { button } from "../../../ui/button"
+import { ariaButton, button, buttonClassName, iconButton } from "../../../ui/button"
+import { cardClassName } from "../../../ui/card"
 import { emptyState } from "../../../ui/empty-state"
-import { loader } from "../../../ui/loader"
+import { loadingState as kitLoadingState } from "../../../ui/loader"
 import type * as Menu from "../../../ui/menu"
 import { menuTriggerClassName, view as menuView } from "../../../ui/menu-view"
 import type * as ConfirmAction from "../../shared/confirm-action"
-import {
-	sectionHeaderGroup,
-	sectionHeaderHeading,
-	sectionHeaderRoot,
-	sectionHeaderSubheading,
-} from "../../../ui/section-header"
+import { pageHeader } from "../../../ui/page-header"
+import { statusDot } from "../../../ui/status-dot"
 import type { PageViewInputs } from "../../contract"
 import { addConnectionModal } from "./add-connection-view"
 import { confirmDialog } from "./confirm-dialog"
@@ -43,18 +39,12 @@ const toDeleteConfirmMessage = (message: ConfirmAction.Message) =>
 	Message.GotDeleteConfirmMessage({ message })
 
 const header = (h: HtmlBuilder<Message>, actions: ReadonlyArray<Html>): Html =>
-	sectionHeaderRoot(h, { className: "border-none pb-0" }, [
-		sectionHeaderGroup(h, {}, [
-			h.div(
-				[h.Class("flex flex-1 flex-col justify-center gap-1")],
-				[
-					sectionHeaderHeading(h, {}, ["Chat Sync"]),
-					sectionHeaderSubheading(h, {}, ["Sync messages between Hazel and external platforms."]),
-				],
-			),
-			...actions,
-		]),
-	])
+	pageHeader(h, {
+		title: "Chat Sync",
+		subtitle: "Sync messages between Hazel and external platforms.",
+		size: "title",
+		actions,
+	})
 
 const addMenuContent =
 	(h: HtmlBuilder<Message>) =>
@@ -75,15 +65,12 @@ const addConnectionDropdown = (
 		viewInputs: {
 			entries: addMenuEntries,
 			toTrigger: (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) =>
-				h.button(
-					[
-						...attributes,
-						h.Class(menuTriggerClassName(buttonStyles({ intent: "primary", size: "md" }))),
-						h.Attribute("data-react-aria-pressable", "true"),
-						h.Attribute("data-slot", "menu-trigger"),
-						h.Attribute("tabindex", "0"),
-						h.Attribute("type", "button"),
-					],
+				ariaButton(
+					h,
+					{
+						className: menuTriggerClassName(buttonClassName({ intent: "primary", size: "md" })),
+						attributes: [...attributes, h.Attribute("data-slot", "menu-trigger")],
+					},
 					[
 						IconPlus(h, { className: "size-4" }),
 						"Add Third Party Connection",
@@ -105,16 +92,18 @@ const connectionCard = (h: HtmlBuilder<Message>, connection: Connection): Html =
 		connection.id,
 		[
 			h.Class(
-				"group relative flex flex-col overflow-hidden rounded-xl border border-border bg-bg transition-[border-color,box-shadow] duration-200 hover:border-border-hover hover:shadow-md",
+				cardClassName(
+					"group relative flex flex-col transition-[border-color,box-shadow] duration-200 hover:border-border-hover hover:shadow-md",
+				),
 			),
 		],
 		[
-			h.button(
-				[
-					h.Class("flex flex-1 flex-col gap-4 p-5 text-left"),
-					h.Type("button"),
-					h.OnClick(Message.ClickedConnection({ connectionId: connection.id })),
-				],
+			ariaButton(
+				h,
+				{
+					className: "flex flex-1 flex-col gap-4 p-5 text-left",
+					onPress: Message.ClickedConnection({ connectionId: connection.id }),
+				},
 				[
 					h.div(
 						[h.Class("flex items-start justify-between gap-3")],
@@ -137,11 +126,7 @@ const connectionCard = (h: HtmlBuilder<Message>, connection: Connection): Html =
 											h.div(
 												[h.Class("flex items-center gap-1.5")],
 												[
-													h.div([
-														h.Class(
-															`size-1.5 rounded-full ${statusConfig.dotClass}`,
-														),
-													]),
+													statusDot(h, { tone: statusConfig.tone }),
 													h.span(
 														[h.Class(`text-xs ${statusConfig.textClass}`)],
 														[statusConfig.label],
@@ -197,21 +182,17 @@ const connectionCard = (h: HtmlBuilder<Message>, connection: Connection): Html =
 					h.div(
 						[h.Class("flex items-center gap-2")],
 						[
-							h.button(
-								[
-									h.Class(
-										"rounded-sm p-1 text-muted-fg opacity-0 transition-[opacity,color,background-color] hover:bg-danger/10 hover:text-danger group-hover:opacity-100 max-md:-my-2.5 max-md:p-3.5 max-md:opacity-100",
-									),
-									h.Title("Delete connection"),
-									h.AriaLabel("Delete connection"),
-									h.Type("button"),
-									h.OnClick(
-										Message.ClickedDeleteConnection({
-											target: { id: connection.id, name: connection.displayName },
-										}),
-									),
-								],
-								[IconTrash(h, { className: "size-4" })],
+							iconButton(
+								h,
+								{
+									label: "Delete connection",
+									className:
+										"text-muted-fg opacity-0 transition-[opacity,color,background-color] hover:bg-danger/10 hover:text-danger group-hover:opacity-100 max-md:-my-2.5 max-md:opacity-100",
+									onPress: Message.ClickedDeleteConnection({
+										target: { id: connection.id, name: connection.displayName },
+									}),
+								},
+								IconTrash(h, { attributes: { "data-slot": "icon" } }),
 							),
 							h.svg(
 								[
@@ -243,7 +224,7 @@ const deleteModal = (h: HtmlBuilder<Message>, model: Model): Html =>
 	confirmDialog(h, {
 		slotId: "delete-connection",
 		confirm: model.deleteConfirm,
-		icon: IconWarning(h, { className: "size-6 text-danger" }),
+		icon: IconWarning(h),
 		title: "Delete Connection",
 		description: (target) => [
 			"Are you sure you want to delete the connection to",
@@ -261,18 +242,7 @@ const fragment = (h: HtmlBuilder<Message>, children: ReadonlyArray<Html>): Html 
 	h.div([h.Attribute("style", "display: contents;")], [...children])
 
 const loadingState = (h: HtmlBuilder<Message>): Html =>
-	h.div(
-		[h.Class("flex items-center justify-center py-16")],
-		[
-			h.div(
-				[h.Class("flex items-center gap-3 text-muted-fg")],
-				[
-					loader(h, { className: "size-6" }),
-					h.span([h.Class("text-sm")], ["Loading connections..."]),
-				],
-			),
-		],
-	)
+	kitLoadingState(h, { label: "Loading connections...", className: "py-16" })
 
 const loadedBody = (h: HtmlBuilder<Message>, model: Model, connections: ReadonlyArray<Connection>): Html =>
 	connections.length === 0
@@ -298,15 +268,11 @@ const failureState = (h: HtmlBuilder<Message>, reason: CommonReason): Html => {
 	return emptyState(h, {
 		title: "Failed to load connections",
 		description: message.description ?? message.title,
-		...(isRetryableReason(reason)
-			? {
-					action: button(
-						h,
-						{ intent: "secondary", onPress: Message.ClickedRetryListConnections() },
-						["Try again"],
-					),
-				}
-			: {}),
+		action: isRetryableReason(reason)
+			? button(h, { intent: "secondary", onPress: Message.ClickedRetryListConnections() }, [
+					"Try again",
+				])
+			: undefined,
 	})
 }
 
@@ -321,7 +287,7 @@ const importButton = (h: HtmlBuilder<Message>): Html =>
 			onPress: Message.ClickedImport(),
 			attributes: [h.DataAttribute("testid", "chat-sync-import")],
 		},
-		[IconDownload(h, { className: "size-4" }), "Import from Slack or Discord"],
+		[IconDownload(h, { attributes: { "data-slot": "icon" } }), "Import from Slack or Discord"],
 	)
 
 /** The migration wizard: its step's title, body and actions in a dialog. */

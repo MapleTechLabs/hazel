@@ -1,12 +1,14 @@
 import type { ChannelId } from "@hazel/schema"
+import { heading } from "../ui/heading"
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
-import { IconHashtag } from "../icons"
 import { AppRoute, hrefOf } from "../route"
 import { button, buttonClassName } from "../ui/button"
+import { type ChannelLinks, channelIcon } from "../ui/channel-icon"
 import { emptyState } from "../ui/empty-state"
 import { progressBar, progressBarTrack } from "../ui/progress-bar"
 import { tabStrip, tabView } from "../ui/tab-strip"
 import type { ChannelSummary } from "./model"
+import { pageLayout } from "../ui/page-header"
 
 /** Route layouts as view helpers: each wraps the page body the way the legacy `layout.tsx` does. */
 
@@ -19,7 +21,7 @@ export const sectionLayout = <Message>(h: HtmlBuilder<Message>, page: Html): Htm
 
 /** `settings/integrations/layout.tsx` and `settings/chat-sync/layout.tsx` (inside `sectionLayout`). */
 export const contentColumnLayout = <Message>(h: HtmlBuilder<Message>, page: Html): Html =>
-	h.div([h.Class("flex flex-col gap-6 px-4 lg:px-8")], [page])
+	pageLayout(h, {}, [page])
 
 export const ChannelSettingsTab = ["overview", "integrations", "connect"] as const
 export type ChannelSettingsTab = (typeof ChannelSettingsTab)[number]
@@ -33,12 +35,6 @@ const tabLabels: Readonly<Record<ChannelSettingsTab, string>> = {
 	connect: "Connect",
 }
 
-/** `ChannelIcon` */
-const channelIcon = <Message>(h: HtmlBuilder<Message>, icon: string | null | undefined, className: string) =>
-	icon
-		? h.span([h.Attribute("data-slot", "icon"), h.Class(className)], [icon])
-		: IconHashtag(h, { className })
-
 /** `channels/$channelId/settings/layout.tsx`: back link, channel header and the tab bar. */
 export const channelSettingsLayout = <Message>(
 	h: HtmlBuilder<Message>,
@@ -46,6 +42,8 @@ export const channelSettingsLayout = <Message>(
 		orgSlug: string
 		channelId: ChannelId
 		channel: ChannelSummary | null
+		/** What the channel is linked or connected to, marked on its icon. */
+		links: ChannelLinks
 		selectedTab: ChannelSettingsTab
 		/** Tabs navigate on selection, as `onSelectionChange` does. */
 		onSelectTab: (route: AppRoute) => Attribute<Message>
@@ -113,20 +111,22 @@ export const channelSettingsLayout = <Message>(
 													),
 												],
 												[
-													channelIcon(
-														h,
-														options.channel?.icon,
-														"size-5 text-muted-fg",
-													),
+													channelIcon(h, {
+														icon: options.channel?.icon ?? null,
+														isPrivate: options.channel?.type === "private",
+														links: options.links,
+														size: "md",
+														surface: "secondary",
+														className: "text-muted-fg",
+													}),
 												],
 											),
 											h.div(
 												[h.Class("flex flex-col")],
 												[
-													h.h1(
-														[h.Class("font-semibold text-fg text-xl")],
-														[options.channel?.name ?? "Channel"],
-													),
+													heading(h, { variant: "title", level: 1 }, [
+														options.channel?.name ?? "Channel",
+													]),
 													h.span(
 														[h.Class("text-muted-fg text-sm")],
 														["Channel settings"],

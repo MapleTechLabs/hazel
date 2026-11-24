@@ -84,6 +84,26 @@ jobs:
             - name: Unused files, dependencies and exports
               run: bun run knip
 
+    # Committed migrations are append-only (CLAUDE.md, "Schema changes"): fail a PR that edits,
+    # removes or reorders one. Compares against the merge base with the PR's base branch.
+    migrations:
+        if: github.event_name == 'pull_request'
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v1
+              with:
+                  bun-version: latest
+
+            - name: Committed migrations are unchanged
+              run: bun scripts/check-migrations-append-only.ts origin/${{ github.base_ref }}
+
     test:
         runs-on: ubuntu-latest
         permissions:

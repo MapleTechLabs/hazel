@@ -26,7 +26,6 @@ import {
 	type ContactRow,
 	CustomersRange,
 	type Event as CustomerEvent,
-	HealthStatus,
 	type Invoice,
 	type Kpi,
 	LifecycleStage,
@@ -43,7 +42,8 @@ import {
 } from "@hazel/schema"
 import { isActiveContentType, MAX_ATTACHMENT_SIZE } from "@hazel/domain/http"
 import { uuidv7 as randomUUIDv7 } from "@hazel/domain/uuid"
-import { Context, DateTime, Effect, Option, Schema, Stream } from "effect"
+import { Context, DateTime, Effect, Option, Result, Schema, Stream } from "effect"
+import { Base64 } from "effect/encoding"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import type { HazelRpcTag } from "../rpc/dispatch"
 import { resolveTarget } from "../rpc/routing"
@@ -473,13 +473,8 @@ const startUpload = (ctx: ToolContext, channelId: ChannelId, fileName: string, f
 		return id
 	})
 
-const decodeBase64 = (value: string) => {
-	try {
-		return Option.some(Uint8Array.from(atob(value.replace(/\s+/g, "")), (char) => char.charCodeAt(0)))
-	} catch {
-		return Option.none<Uint8Array<ArrayBuffer>>()
-	}
-}
+/** Either Base64 alphabet, padded or not, and wrapped across lines: what MCP clients send varies. */
+const decodeBase64 = (value: string) => Result.getSuccess(Base64.decodeLenient(value.replace(/\s+/g, "")))
 
 const PRESENCE = ["online", "idle", "dnd", "invisible"] as const
 /** Names agents may still use for the statuses: `away` is Idle, `busy` is Do Not Disturb. */
@@ -519,7 +514,6 @@ interface PageRequestPayload {
 /** `customers.accounts.list`'s payload, as far as `list_customers` fills it. */
 interface AccountsListPayload extends PageRequestPayload {
 	query?: string
-	healthStatuses?: ReadonlyArray<HealthStatus>
 	lifecycleStages?: ReadonlyArray<LifecycleStage>
 }
 
@@ -630,8 +624,6 @@ const customerRow = (account: Account) =>
 		plan: account.planName,
 		mrr: money(account.mrrMinor, account.currency),
 		lifecycle_stage: account.lifecycleStage,
-		health: account.healthStatus,
-		health_score: account.healthScore,
 		last_active_at: isoOf(account.lastActiveAt),
 		active_users_30d: account.activeUsers30d,
 		open_risks: account.openRiskHigh + account.openRiskMedium + account.openRiskLow,
@@ -710,12 +702,6 @@ const pageOut = <A, R>(key: string, page: PageOf<A>, row: (a: A) => R) =>
 
 const customerDetail = (detail: AccountDetail, signals: PageOf<Signal>) => {
 	const { account } = detail
-	// Only recorded scores: the chart series holds 0 for a day never scored, which is unknown.
-	const recorded = new Map((detail.healthScores ?? []).map((point) => [point.day, point.score]))
-	const healthAt = (daysAgo: number) => {
-		const day = detail.healthSeries[detail.healthSeries.length - 1 - daysAgo]?.day
-		return day === undefined ? null : (recorded.get(day) ?? null)
-	}
 	return {
 		customer: compact({
 			...customerRow(account),
@@ -732,23 +718,6 @@ const customerDetail = (detail: AccountDetail, signals: PageOf<Signal>) => {
 			churned_at: isoOf(account.churnedAt),
 			champion_inactive_since: isoOf(account.championInactiveSince),
 			left_out_of_needs_attention: account.attentionMutedAt === null ? null : true,
-		}),
-		health: compact({
-			status: account.healthStatus,
-			score: account.healthScore,
-			updated_at: isoOf(account.healthUpdatedAt),
-			score_7d_ago: healthAt(7),
-			score_30d_ago: healthAt(30),
-			score_90d_ago: healthAt(89),
-			components: detail.health?.components.map((component) =>
-				compact({
-					key: component.key,
-					score: component.score,
-					weight_pct: Math.round(component.effectiveWeight),
-					excluded: component.excluded || null,
-					why: component.why,
-				}),
-			),
 		}),
 		/** Daily active users, oldest first, the last 30 days. */
 		active_users_30d_daily: detail.activeUsersSeries.map((point) => point.value),
@@ -847,11 +816,6 @@ const overviewOut = (overview: OverviewResult) => {
 					net: movement("net"),
 				}
 			: null,
-		health: overview.healthDistribution.map((row) => ({
-			status: row.status,
-			customers: row.count,
-			mrr: money(row.mrrMinor, currency),
-		})),
 		usage_gainers: overview.topMovers.gainers.map(mover),
 		usage_decliners: overview.topMovers.decliners.map(mover),
 		recent_churn: overview.recentChurn.map(brief),
@@ -871,7 +835,7 @@ const customerTools: ReadonlyArray<Tool> = [
 		name: "customers_overview",
 		title: "Customers overview",
 		description:
-			"An organization's customer KPIs over a range: MRR, paying and active customers, churn, revenue, net retention, MRR movements, health distribution, biggest usage gainers and decliners, recent churn, new customers and trials. Amounts are in the organization's reporting currency; has_billing_data and has_activity_data say which data exists.",
+			"An organization's customer KPIs over a range: MRR, paying and active customers, churn, revenue, net retention, MRR movements, biggest usage gainers and decliners, recent churn, new customers and trials. Amounts are in the organization's reporting currency; has_billing_data and has_activity_data say which data exists.",
 		scopes: ["customers:read"],
 		readOnly: true,
 		inputSchema: obj(
@@ -896,18 +860,13 @@ const customerTools: ReadonlyArray<Tool> = [
 		name: "list_customers",
 		title: "List customers",
 		description:
-			"An organization's customer accounts, highest MRR first: plan, MRR, lifecycle stage, health, last activity and open risk count. Filter by name or domain, health or lifecycle stage.",
+			"An organization's customer accounts, highest MRR first: plan, MRR, lifecycle stage, last activity and open risk count. Filter by name or domain, or lifecycle stage.",
 		scopes: ["customers:read"],
 		readOnly: true,
 		inputSchema: obj(
 			{
 				organization_id: orgArg,
 				query: str("Name or domain contains this"),
-				health: {
-					type: "array",
-					items: { type: "string", enum: [...HealthStatus.literals] },
-					description: "Only these health statuses",
-				},
 				lifecycle_stage: {
 					type: "array",
 					items: { type: "string", enum: [...LifecycleStage.literals] },
@@ -920,12 +879,10 @@ const customerTools: ReadonlyArray<Tool> = [
 		run: (args, ctx) =>
 			Effect.gen(function* () {
 				const organizationId = yield* argOrg(args)
-				const healthStatuses = yield* optLiterals(args, "health", HealthStatus.literals)
 				const lifecycleStages = yield* optLiterals(args, "lifecycle_stage", LifecycleStage.literals)
 				const query = typeof args.query === "string" ? args.query.trim().slice(0, 200) : ""
 				const payload: AccountsListPayload = pageArgs(args, 25)
 				if (query !== "") payload.query = query
-				if (healthStatuses !== undefined) payload.healthStatuses = healthStatuses
 				if (lifecycleStages !== undefined) payload.lifecycleStages = lifecycleStages
 				const page = yield* customersRead<PageOf<Account>>(
 					ctx,
@@ -940,7 +897,7 @@ const customerTools: ReadonlyArray<Tool> = [
 		name: "get_customer",
 		title: "Get customer",
 		description:
-			"One customer in full: health score and why, usage trend, open risks and opportunities, subscriptions, upcoming and unpaid invoices, company profile, who to reach, recent activity and links to the billing and auth providers.",
+			"One customer in full: usage trend, open risks and opportunities, subscriptions, upcoming and unpaid invoices, company profile, who to reach, recent activity and links to the billing and auth providers.",
 		scopes: ["customers:read"],
 		readOnly: true,
 		inputSchema: obj({ organization_id: orgArg, customer_id: str("The customer, from list_customers") }, [

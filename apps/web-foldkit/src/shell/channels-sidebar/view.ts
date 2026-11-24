@@ -4,7 +4,10 @@ import { type Attribute, createKeyedLazy, type Html, type HtmlBuilder } from "fo
 import { twMerge } from "tailwind-merge"
 import { IconMagnifier3, IconUsers } from "../../icons"
 import { AppRoute, hrefOf } from "../../route"
+import { type ChannelLinks, type ChannelLinksMap, linksFor } from "../../ui/channel-icon"
 import { semantic } from "../../ui/semantic"
+import { ariaButton } from "../../ui/button"
+import { channelLinksOf } from "./channel-links"
 import { sidebarItem, sidebarLink } from "../../ui/sidebar"
 import type * as Menu from "../../ui/menu"
 import { canOn, openRowMenu } from "./menu-update"
@@ -24,17 +27,7 @@ import {
 	label,
 	threadItems,
 } from "./items"
-import {
-	type ChannelEntry,
-	type DmChannel,
-	type PartnerOrg,
-	partnerOrgsByChannel,
-	type Presence,
-	type RowCustomer,
-	type SidebarThread,
-	type SyncProvider,
-	syncProviderByChannel,
-} from "./rows"
+import { type ChannelEntry, type DmChannel, type Presence, type SidebarThread } from "./rows"
 import { sectionGroupHeader, strong, treeRow, treeSection } from "./tree"
 
 /** `ChannelsSidebar`'s content: goto links, favorites, channel sections, discover, customers, DMs. */
@@ -54,8 +47,8 @@ interface SectionsContext<M> extends ItemContext {
 	readonly toParentMessage: (message: Message) => M
 	readonly sectionAction: (sectionKey: string) => Html
 	readonly unreadByChannel: ReadonlyMap<string, number>
-	readonly partnersByChannel: ReturnType<typeof partnerOrgsByChannel>
-	readonly syncProviderByChannel: ReadonlyMap<string, SyncProvider>
+	/** What each channel is linked or connected to, marked on its icon. */
+	readonly channelLinks: ChannelLinksMap
 	/** Joined threads listed under each channel row, by parent channel id. */
 	readonly threadsByParent: ReadonlyMap<string, ReadonlyArray<SidebarThread>>
 }
@@ -74,7 +67,6 @@ interface RowPlace {
  */
 const rowSlots = createKeyedLazy()
 
-const NO_PARTNERS: ReadonlyArray<PartnerOrg> = []
 const NO_THREADS: ReadonlyArray<SidebarThread> = []
 /** A Customers row has no "Move to section": the customer link, not the section, places it. */
 const NO_SECTIONS: Model["sections"] = []
@@ -118,9 +110,7 @@ const channelRowView = <M>(
 	h: HtmlBuilder<M>,
 	entry: ChannelEntry,
 	notificationCount: number,
-	partners: ReadonlyArray<PartnerOrg>,
-	syncProvider: SyncProvider | null,
-	customer: RowCustomer | null,
+	links: ChannelLinks,
 	isLinkActive: boolean,
 	orgSlug: string,
 	treeId: string,
@@ -155,8 +145,7 @@ const channelRowView = <M>(
 			h,
 			entry,
 			notificationCount,
-			partners,
-			{ orgSlug, isActive: isLinkActive, syncProvider, customer },
+			{ orgSlug, isActive: isLinkActive, links },
 			rowMenuView(h, menu),
 			rowLongPress(h, menu),
 		),
@@ -164,14 +153,14 @@ const channelRowView = <M>(
 	})
 }
 
-/** Favorites render `ChannelItem` without `partnerOrgs`, so they never show the shared-org badge. */
+/** Every row marks its channel's links the same way, wherever it is listed. */
 const channelRow = <M>(
 	h: HtmlBuilder<M>,
 	entry: ChannelEntry,
 	context: SectionsContext<M>,
 	place: RowPlace,
-	showsPartners: boolean,
-	customer: RowCustomer | null = null,
+	/** A Customers row: the customer link, not a section, places it. */
+	isCustomerRow = false,
 ): Html => {
 	const id = entry.channel.id
 	const threads = context.threadsByParent.get(id) ?? NO_THREADS
@@ -183,9 +172,7 @@ const channelRow = <M>(
 			h,
 			entry,
 			context.unreadByChannel.get(id) ?? entry.member.notificationCount,
-			showsPartners ? (context.partnersByChannel.get(id) ?? NO_PARTNERS) : NO_PARTNERS,
-			context.syncProviderByChannel.get(id) ?? null,
-			customer,
+			linksFor(context.channelLinks, id),
 			id === context.activeChannelId,
 			context.orgSlug,
 			place.treeId,
@@ -195,7 +182,7 @@ const channelRow = <M>(
 			// An open thread scrolls its channel's row into view.
 			id === context.activeChannelId || activeThreadId !== null ? context.onActiveMount : null,
 			openRowMenu(context.openMenu, id),
-			customer === null ? context.sections : NO_SECTIONS,
+			isCustomerRow ? NO_SECTIONS : context.sections,
 			context.canDeleteChannels,
 			context.toParentMessage,
 			threads,
@@ -285,10 +272,10 @@ const rowsOf = (treeId: string, allowsDragging: boolean, rows: ReadonlyArray<Row
 	rows.map((row, index) => row({ treeId, position: index + 1, setSize: rows.length, allowsDragging }))
 
 const channelRowOf =
-	<M>(h: HtmlBuilder<M>, context: SectionsContext<M>, showsPartners: boolean) =>
+	<M>(h: HtmlBuilder<M>, context: SectionsContext<M>) =>
 	(entry: ChannelEntry): RowOf =>
 	(place) =>
-		channelRow(h, entry, context, place, showsPartners)
+		channelRow(h, entry, context, place)
 
 const dmRowOf =
 	<M>(h: HtmlBuilder<M>, context: SectionsContext<M>) =>
@@ -341,7 +328,7 @@ const gotoSection = <M>(h: HtmlBuilder<M>, context: SectionsContext<M>): Html =>
 												h.Attribute("dir", "ltr"),
 												h.Class(
 													twMerge(
-														"hidden font-mono text-[0.80rem]/6 text-current/60 group-hover:text-fg group-focus:text-fg group-focus:opacity-90 group-disabled:opacity-50 lg:inline forced-colors:group-focus:text-[HighlightText]",
+														"hidden font-mono text-current/60 group-hover:text-fg group-focus:text-fg group-focus:opacity-90 group-disabled:opacity-50 lg:inline forced-colors:group-focus:text-[HighlightText]",
 														"absolute top-1/2 right-2 -translate-y-1/2 font-mono text-muted-fg text-xs",
 													),
 												),
@@ -385,7 +372,7 @@ const favoritesSection = <M>(h: HtmlBuilder<M>, model: Model, context: SectionsC
 		entry.channel.type === "public" || entry.channel.type === "private"
 	const isDm = (entry: ChannelEntry) => entry.channel.type === "direct" || entry.channel.type === "single"
 	const rows = [
-		...model.favorites.filter(isPublicOrPrivate).map(channelRowOf(h, context, false)),
+		...model.favorites.filter(isPublicOrPrivate).map(channelRowOf(h, context)),
 		...model.favorites
 			.filter(isDm)
 			.flatMap((entry) => dmRowOf(h, context)(model.dmChannels[entry.channel.id])),
@@ -429,7 +416,7 @@ const channelSection = <M>(
 			action: context.sectionAction(options.key),
 		}),
 		allowsDragging: true,
-		rows: rowsOf(treeId, true, options.entries.map(channelRowOf(h, context, true))),
+		rows: rowsOf(treeId, true, options.entries.map(channelRowOf(h, context))),
 	})
 }
 
@@ -452,9 +439,9 @@ const customersSection = <M>(
 				treeId,
 				false,
 				entries.map(
-					({ entry, customer }): RowOf =>
+					({ entry }): RowOf =>
 						(place) =>
-							channelRow(h, entry, context, place, true, customer),
+							channelRow(h, entry, context, place, true),
 				),
 			),
 		}),
@@ -462,7 +449,7 @@ const customersSection = <M>(
 }
 
 /** `DiscoverableChannels`: shown while the user is in fewer than three channels. */
-const discoverSection = <M>(h: HtmlBuilder<M>, model: Model, context: ItemContext): Html[] => {
+const discoverSection = <M>(h: HtmlBuilder<M>, model: Model, context: SectionsContext<M>): Html[] => {
 	const memberCount = model.memberChannelIds?.length ?? 0
 	if (model.discoverableChannels.length === 0 || memberCount >= 3) return []
 	return [
@@ -475,16 +462,17 @@ const discoverSection = <M>(h: HtmlBuilder<M>, model: Model, context: ItemContex
 				),
 				...model.discoverableChannels
 					.slice(0, MAX_DISCOVERABLE)
-					.map((channel) => discoverableItem(h, channel, context)),
+					.map((channel) =>
+						discoverableItem(h, channel, context, linksFor(context.channelLinks, channel.id)),
+					),
 				...(model.discoverableChannels.length > MAX_DISCOVERABLE
 					? [
-							h.button(
-								[
-									h.Attribute("type", "button"),
-									h.Class(
+							ariaButton(
+								h,
+								{
+									className:
 										"col-span-full w-full rounded-lg py-1 pl-2.5 text-left text-muted-fg/60 text-sm transition-colors hover:bg-sidebar-accent hover:text-fg",
-									),
-								],
+								},
 								["Browse all channels..."],
 							),
 						]
@@ -492,42 +480,6 @@ const discoverSection = <M>(h: HtmlBuilder<M>, model: Model, context: ItemContex
 			],
 		),
 	]
-}
-
-// Pure memo on the frozen inputs, so the partner arrays (row memo args) keep their identity.
-const partnersMemo = new WeakMap<
-	Model["connectMounts"],
-	{
-		readonly organizations: Model["organizations"]
-		readonly organizationId: Model["organizationId"]
-		readonly result: ReturnType<typeof partnerOrgsByChannel>
-	}
->()
-const partnersOf = (model: Model) => {
-	const cached = partnersMemo.get(model.connectMounts)
-	if (
-		cached &&
-		cached.organizations === model.organizations &&
-		cached.organizationId === model.organizationId
-	)
-		return cached.result
-	const result = partnerOrgsByChannel(model.connectMounts, model.organizations, model.organizationId)
-	partnersMemo.set(model.connectMounts, {
-		organizations: model.organizations,
-		organizationId: model.organizationId,
-		result,
-	})
-	return result
-}
-
-// Pure memo on the frozen rows, so a re-render does not rebuild the map.
-const syncMemo = new WeakMap<Model["syncedChannels"], ReadonlyMap<string, SyncProvider>>()
-const syncProvidersOf = (model: Model) => {
-	const cached = syncMemo.get(model.syncedChannels)
-	if (cached) return cached
-	const result = syncProviderByChannel(model.syncedChannels)
-	syncMemo.set(model.syncedChannels, result)
-	return result
 }
 
 export const sectionGroupContent = <M>(
@@ -550,8 +502,7 @@ export const sectionGroupContent = <M>(
 		currentUserId: model.currentUserId,
 		presenceByUser: new Map(model.presence.map((presence) => [presence.userId, presence])),
 		unreadByChannel: new Map(model.unreadCounts.map((unread) => [unread.channelId, unread.count])),
-		partnersByChannel: partnersOf(model),
-		syncProviderByChannel: syncProvidersOf(model),
+		channelLinks: channelLinksOf(model),
 		threadsByParent: threadsByParentOf(model.threads, itemContext.activeChannelId, itemContext.nowMs),
 		openMenu: model.openMenu,
 		sections: model.sections,

@@ -19,6 +19,30 @@ style export.
 |                          | `h.kbd`                                    | `kbd` / `shortcut` (ui/kbd) for key caps, `menuKeyboard` in a menu item        |
 | `no-kit-styles-in-pages` | `import … from "~/components/ui/*.styles"` | the kit wrapper in `src/ui`                                                    |
 
+### Patterns with one owner
+
+Lint can't see a control rebuilt from divs, so these are by review: each pattern has exactly one
+owner in `src/ui`, and a page never redraws it with its own class string or local helper.
+
+| Pattern                                                   | Owner                                                                                                                  |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| A page's title row (breadcrumb, title, subtitle, actions) | `pageHeader` (ui/page-header); `size: "title"` in settings                                                             |
+| A page's column (`gap-6`, side gutter)                    | `pageLayout` (ui/page-header)                                                                                          |
+| A bordered box, padded panel, panel title row             | `card` / `cardHeader` / `cardBody`, `panel` + `panelHeader` (ui/card); `cardClassName` when it must be another element |
+| A table of records                                        | `dataTable` (ui/data-table); `isFramed: false` inside a card                                                           |
+| Loading: a region, a placeholder block                    | `loadingState`, `loader` (ui/loader); `skeleton` (ui/skeleton)                                                         |
+| Nothing here yet / it failed to load                      | `emptyState` (ui/empty-state)                                                                                          |
+| A tinted glyph square (dialog head, card mark)            | `iconTile` (ui/icon-tile)                                                                                              |
+| An inline note, warning or stale notice                   | `callout` (ui/callout)                                                                                                 |
+| A state dot, `● Synced 1h ago`                            | `statusDot`, `statusLine` (ui/status-dot)                                                                              |
+| An icon-only button; a copy button                        | `iconButton` (ui/button); `copyButton` (ui/copy-button)                                                                |
+| Joined toggle buttons (`7d 30d 90d`)                      | `segmented` (ui/segmented-control)                                                                                     |
+| A pill, tag or count                                      | `badge` (ui/badge), `toggleChip` for a filter                                                                          |
+| An unread count on a row or tab                           | `countBadge` (ui/count-badge)                                                                                          |
+| A hairline between blocks                                 | `separator` (ui/separator)                                                                                             |
+
+Domain views (a lifecycle stage badge, a company logo) live with their feature, built from these.
+
 If the kit lacks what you need, add the variant or option to the kit component and use it. That is
 the whole point: the next page gets it for free, and a design change lands in one place.
 

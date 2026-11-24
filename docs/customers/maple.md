@@ -3,8 +3,7 @@
 Maple is Hazel's **usage source**: the product events Maple records about an app's own users become
 the daily activity behind active users, usage trends, `lastActiveAt`, the champion, and the
 `inactive`, `usage_drop`, `onboarding_stalled` and `champion_inactive` signals. On top of that, any
-event a person maps to a metric becomes a per-account daily count a chart, a signal or the health
-score can read.
+event a person maps to a metric becomes a per-account daily count a chart or a signal can read.
 
 It is a **custom integration**, not a product one. Maple is the product owner's own observability
 product, and what makes this work is that Maple stamps its product events with _Hazel's_ identity:
@@ -13,7 +12,7 @@ product, and what makes this work is that Maple stamps its product events with _
 the accounts and contacts Clerk already created. Generalizing it (other identity keys, other
 warehouses) is deliberately left for later.
 
-Implementation: `apps/backend/src/worker/objects/customers/maple/` — `adapter.ts` (connect, pull),
+Implementation: `packages/customer-integrations/src/maple/` — `adapter.ts` (connect, pull),
 `http.ts` (one `run_sql` call), `pull.ts` (the day-by-day walk), `map.ts` (rows → `IngestOp`s),
 `wire.ts` (the transport and the row shapes). Contracts: `docs/customers/tech-design.md` §3 and §5.
 

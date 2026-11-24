@@ -1,3 +1,5 @@
+import { IntegrationConfig, type SettingsField } from "@hazel/customer-integrations"
+import type { ConnectionConfig } from "@hazel/domain/customers"
 import * as Customers from "@hazel/domain/customers"
 import { CustomerConnectionId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
@@ -58,7 +60,7 @@ export const ConnectForm = Schema.Struct({
 	/** Rotating the key of this connection (`customers.connection.update`); null: a new connection. */
 	reconnectId: Schema.NullOr(CustomerConnectionId),
 	apiKey: Schema.String,
-	config: Customers.ConnectionConfig,
+	config: IntegrationConfig,
 	/** The connection the key opened: the webhook URL needs its id. */
 	connected: Schema.NullOr(
 		Schema.Struct({ connectionId: CustomerConnectionId, accountName: Schema.NullOr(Schema.String) }),
@@ -107,15 +109,15 @@ export const Model = Schema.Struct({
 	disconnectModal: Modal.Model,
 	isDisconnecting: Schema.Boolean,
 	/** The detail's provider settings while edited; null shows the connection's own. */
-	settingsDraft: Schema.NullOr(Customers.ConnectionConfig),
-	/** Maple's "add an activity event" field. */
-	activityEventInput: Schema.String,
+	settingsDraft: Schema.NullOr(IntegrationConfig),
+	/** What is typed in each settings string list's "add" field, by the field's config key. */
+	settingsListInputs: Schema.Record(Schema.String, Schema.String),
 	isSavingSettings: Schema.Boolean,
 	/** The sources' own metrics; null until the query answers. */
 	unitMetrics: Schema.NullOr(Schema.Array(UnitMetricRow)),
 	/** A metric's unit while typed, by key; saved on Enter or blur. */
 	unitDrafts: Schema.Record(Schema.String, Schema.String),
-	/** Clerk's impersonation section: who may, the recent sign-ins, the "Add member" picker. */
+	/** The impersonation section: who may, the recent sign-ins, the "Add member" picker. */
 	impersonators: Schema.Array(ImpersonatorRow),
 	impersonations: Schema.Array(ImpersonationRow),
 	impersonatorMenu: Menu.Model,
@@ -162,48 +164,83 @@ export const visibleRuns = (model: Model, connectionId: CustomerConnectionId): R
 export const grantableMembers = (model: Model): ReadonlyArray<MemberRow> =>
 	model.members.filter((member) => !model.impersonators.some((row) => row.userId === member.id))
 
-const isSameConfig = Schema.toEquivalence(Customers.ConnectionConfig)
+const isSameConfig = Schema.toEquivalence(IntegrationConfig)
 
 /** The provider settings the detail shows: the draft while edited, else the connection's. */
-export const settingsOf = (model: Model, connection: ConnectionRow): Customers.ConnectionConfig =>
+export const settingsOf = (model: Model, connection: ConnectionRow): IntegrationConfig =>
 	model.settingsDraft ?? connection.config
 
 export const isSettingsDirty = (model: Model, connection: ConnectionRow): boolean =>
 	model.settingsDraft !== null && !isSameConfig(model.settingsDraft, connection.config)
 
-/** Why the settings can't be saved yet: each Maple metric row needs both halves. */
-export const settingsProblemOf = (config: Customers.ConnectionConfig): string | null =>
-	config._tag !== "maple" ||
-	config.metricMappings.every((mapping) => mapping.event.trim() !== "" && mapping.metricKey.trim() !== "")
-		? null
-		: "Fill in or remove the empty metric rows"
+/** The `settings` fields the config's integration declares, in order. */
+export const settingsFieldsOf = (config: ConnectionConfig): ReadonlyArray<SettingsField> =>
+	Object.values(providerOf(config._tag).settings ?? {})
 
-export const isSettingsValid = (config: Customers.ConnectionConfig): boolean =>
-	settingsProblemOf(config) === null
+/** Why the settings can't be saved yet: a row of a key-value list has a blank cell. */
+export const settingsProblemOf = (config: IntegrationConfig): string | null =>
+	settingsFieldsOf(config).flatMap((field) =>
+		"columns" in field &&
+		configRows(config, field.key).some((row) =>
+			field.columns.some((column) => cellOf(row, column.key).trim() === ""),
+		)
+			? [field.incompleteProblem]
+			: [],
+	)[0] ?? null
+
+export const isSettingsValid = (config: IntegrationConfig): boolean => settingsProblemOf(config) === null
 
 /**
  * `config` with one of its fields set, when the value fits the field: a descriptor's `ConfigField`
  * names the key, and the config's schema checks it.
  */
 export const withConfigField = (
-	config: Customers.ConnectionConfig,
+	config: IntegrationConfig,
 	key: string,
 	value: string | boolean,
-): Customers.ConnectionConfig =>
-	Option.getOrElse(
-		Schema.decodeOption(Customers.ConnectionConfig)({ ...config, [key]: value }),
-		() => config,
-	)
+): IntegrationConfig =>
+	Option.getOrElse(Schema.decodeOption(IntegrationConfig)({ ...config, [key]: value }), () => config)
 
-const fieldOf = (config: Customers.ConnectionConfig, key: string) =>
-	Object.entries(config).find(([field]) => field === key)?.[1]
+/** `config` with a settings field replaced: a draft may hold what the schema refuses until saved. */
+export const withConfigValue = (
+	config: IntegrationConfig,
+	key: string,
+	value: ConfigRows | ReadonlyArray<string> | number,
+): IntegrationConfig => ({ ...config, [key]: value })
+
+const readField = <A>(
+	config: ConnectionConfig,
+	key: string,
+	schema: Schema.Codec<A, unknown>,
+	empty: A,
+): A => {
+	const value = Object.entries(config).find(([field]) => field === key)?.[1]
+	return Schema.is(schema)(value) ? value : empty
+}
+
+const StringList = Schema.Array(Schema.String)
+const Rows = Schema.Array(Schema.Record(Schema.String, Schema.String))
 
 /** A descriptor's Toggle field in `config`. */
-export const configFlag = (config: Customers.ConnectionConfig, key: string): boolean =>
-	fieldOf(config, key) === true
+export const configFlag = (config: IntegrationConfig, key: string): boolean =>
+	readField(config, key, Schema.Boolean, false)
 
 /** A descriptor's Text field in `config`. */
-export const configText = (config: Customers.ConnectionConfig, key: string): string => {
-	const value = fieldOf(config, key)
-	return typeof value === "string" ? value : ""
-}
+export const configText = (config: IntegrationConfig, key: string): string =>
+	readField(config, key, Schema.String, "")
+
+/** A settings string list in `config`. */
+export const configList = (config: ConnectionConfig, key: string): ReadonlyArray<string> =>
+	readField(config, key, StringList, [])
+
+export type ConfigRows = ReadonlyArray<Readonly<Record<string, string>>>
+
+/** A settings key-value list in `config`. */
+export const configRows = (config: ConnectionConfig, key: string): ConfigRows =>
+	readField(config, key, Rows, [])
+
+export const cellOf = (row: Readonly<Record<string, string>>, key: string): string => row[key] ?? ""
+
+/** A settings number in `config`. */
+export const configNumber = (config: ConnectionConfig, key: string): number =>
+	readField(config, key, Schema.Number, 0)

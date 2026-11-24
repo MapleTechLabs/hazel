@@ -1,5 +1,8 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
+import { ariaButton } from "../../ui/button"
+import { cardClassName } from "../../ui/card"
+import { skeleton } from "../../ui/skeleton"
 import { type DeltaTone, deltaTone } from "../format"
 import { IconArrowDown, IconArrowUp } from "./icons"
 
@@ -54,14 +57,13 @@ export const definedLabel = <M>(
 		: h.span(
 				[h.Class(twMerge("group/definition relative inline-flex min-w-0", options.className))],
 				[
-					h.button(
-						[
-							h.Type("button"),
-							h.AriaDescribedBy(`${options.id}-definition`),
-							h.Class(
+					ariaButton(
+						h,
+						{
+							className:
 								"cursor-help truncate text-left font-medium text-muted-fg text-xs/5 outline-hidden transition-colors hover:text-fg focus-visible:text-fg",
-							),
-						],
+							attributes: [h.AriaDescribedBy(`${options.id}-definition`)],
+						},
 						[options.label],
 					),
 					h.span(
@@ -96,7 +98,7 @@ export type KpiTileOptions = Readonly<{
 	/** Right of the value: a `sparkline(…, { size: "md", area: true })`. */
 	trend?: Html
 	state?: "ready" | "loading" | "empty"
-	/** Empty: the reason and the way out (`Connect Stripe to track revenue`, a link or button). */
+	/** Empty: the reason and the way out (`Connect billing to track revenue`, a link or button). */
 	emptyAction?: Html
 	/** The whole tile links here (the page behind the number); `linkLabel` names it for assistive tech. */
 	href?: string
@@ -111,12 +113,9 @@ export const kpiTile = <M>(h: HtmlBuilder<M>, options: KpiTileOptions): Html => 
 			? [
 					h.div(
 						[h.AriaHidden(true), h.Class("flex items-end justify-between gap-4")],
-						[
-							h.span([h.Class("h-8 w-24 animate-pulse rounded-md bg-secondary")]),
-							h.span([h.Class("h-4 w-20 animate-pulse rounded bg-secondary")]),
-						],
+						[skeleton(h, "h-8 w-24"), skeleton(h, "h-4 w-20 rounded-sm")],
 					),
-					h.span([h.AriaHidden(true), h.Class("h-4 w-36 animate-pulse rounded bg-secondary")]),
+					skeleton(h, "h-4 w-36 rounded-sm"),
 					h.span([h.Class("sr-only")], ["Loading"]),
 				]
 			: state === "empty"
@@ -196,11 +195,13 @@ export const kpiTile = <M>(h: HtmlBuilder<M>, options: KpiTileOptions): Html => 
 		[
 			...(state === "loading" ? [h.AriaBusy(true)] : []),
 			h.Class(
-				twMerge(
-					"flex min-w-0 flex-col gap-1.5 rounded-xl border bg-bg p-4 max-md:p-3",
-					state === "empty" ? "border-border border-dashed" : "border-border",
-					href !== undefined && "relative transition-colors hover:bg-wash",
-					options.className,
+				cardClassName(
+					twMerge(
+						"flex min-w-0 flex-col gap-1.5 overflow-visible p-4 max-md:p-3",
+						state === "empty" && "border-dashed shadow-none",
+						href !== undefined && "relative transition-colors hover:bg-wash",
+						options.className,
+					),
 				),
 			),
 		],

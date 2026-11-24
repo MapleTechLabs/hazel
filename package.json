@@ -10,15 +10,15 @@
 		],
 		"catalogs": {
 			"effect": {
-				"effect": "4.1.4",
-				"@effect/platform-bun": "4.1.4",
-				"@effect/platform-browser": "4.1.4",
-				"@effect/platform-node": "4.1.4",
-				"@effect/sql-sqlite-node": "4.1.4",
-				"@effect/sql-sqlite-do": "4.1.4",
-				"@effect/sql-d1": "4.1.4",
-				"@effect/ai-openrouter": "4.1.4",
-				"@effect/vitest": "4.1.4"
+				"effect": "4.1.5",
+				"@effect/platform-bun": "4.1.5",
+				"@effect/platform-browser": "4.1.5",
+				"@effect/platform-node": "4.1.5",
+				"@effect/sql-sqlite-node": "4.1.5",
+				"@effect/sql-sqlite-do": "4.1.5",
+				"@effect/sql-d1": "4.1.5",
+				"@effect/ai-openrouter": "4.1.5",
+				"@effect/vitest": "4.1.5"
 			},
 			"alchemy": {
 				"@alchemy.run/cloudflare": "2.0.0-beta.87",
@@ -36,6 +36,15 @@
 		"build": "turbo build typecheck",
 		"start": "turbo start",
 		"setup": "bun run packages/setup/src/index.ts",
+		"customer:install": "bun run packages/setup/src/index.ts customer",
+		"customer:check": "bun run packages/setup/src/index.ts customer-check",
+		"customer:deploy": "bun run packages/setup/src/index.ts customer-deploy",
+		"customer:upgrade": "bun run packages/setup/src/index.ts customer-upgrade",
+		"customer:destroy": "bun run packages/setup/src/index.ts customer-destroy",
+		"slack:manifest": "bun scripts/slack-manifest.ts",
+		"oauth-broker:keys": "bun scripts/oauth-broker-keys.ts",
+		"operator:restore": "bun scripts/operator-restore.ts",
+		"migrations:check": "bun scripts/check-migrations-append-only.ts",
 		"typecheck": "turbo build typecheck",
 		"format": "oxfmt",
 		"lint": "oxlint --disable-nested-config --quiet",
@@ -62,18 +71,18 @@
 		"@effect/vitest": "catalog:effect",
 		"@hazel/infra": "workspace:*",
 		"@maple-dev/alchemy": "catalog:alchemy",
-		"@oxlint/plugins": "1.89.0",
+		"@oxlint/plugins": "1.94.0",
 		"@types/node": "^24.19.2",
-		"@vitest/coverage-v8": "^5.0.5",
+		"@vitest/coverage-v8": "^5.1.1",
 		"alchemy": "catalog:alchemy",
 		"effect": "catalog:effect",
-		"knip": "^6.43.0",
-		"oxfmt": "^0.75.0",
-		"oxlint": "1.89.0",
+		"knip": "^6.48.0",
+		"oxfmt": "^0.79.0",
+		"oxlint": "1.94.0",
 		"tsrs": "7.1.0-beta.tsrs3",
-		"turbo": "^2.11.10",
+		"turbo": "^2.11.13",
 		"typescript": "catalog:tooling",
-		"vitest": "^5.0.5"
+		"vitest": "^5.1.1"
 	},
 	"engines": {
 		"bun": ">=1.2.14"
@@ -81,7 +90,7 @@
 	"packageManager": "bun@1.4.3",
 	"patchedDependencies": {
 		"@alchemy.run/cloudflare@2.0.0-beta.87": "patches/@alchemy.run%2Fcloudflare@2.0.0-beta.87.patch",
-		"foldkit@0.170.0": "patches/foldkit@0.170.0.patch"
+		"foldkit@0.171.0": "patches/foldkit@0.171.0.patch"
 	},
 	"trustedDependencies": []
 }

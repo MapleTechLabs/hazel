@@ -35,10 +35,14 @@ const channel = (n: number, name: string, type: string): ChannelSummary => ({
 	id: Schema.decodeSync(ChannelId)(`00000000-0000-4000-8000-${String(200 + n).padStart(12, "0")}`),
 	name,
 	type,
+	icon: null,
 	isMuted: false,
 	isFavorite: false,
 	notificationCount: 0,
 	memberCount: 3,
+	lastMessageAtMs: null,
+	lastMessageAuthorId: null,
+	lastMessagePreview: null,
 	members: [],
 })
 
@@ -118,7 +122,7 @@ describe("chat index scene", () => {
 		)
 	})
 
-	test("on a phone, ChatDms sits under the top bar, whose compose button starts a DM", () => {
+	test("on a phone, ChatDms is Slack's DMs tab: people strip, filter chips, compose button", () => {
 		const dm: ChannelSummary = {
 			...channel(3, "dm", "single"),
 			memberCount: 2,
@@ -142,14 +146,58 @@ describe("chat index scene", () => {
 			Scene.given(init(AppRoute.ChatDms({ orgSlug: "hazel" })).model),
 			Scene.Subscription.emit(Message.UpdatedChannels({ groups: { ...groups, dmChannels: [dm] } })),
 			Scene.expect(Scene.role("banner")).toExist(),
-			Scene.expect(Scene.role("heading", { name: "Direct messages", level: 1 })).toExist(),
-			// The compose icon, not the desktop header's labelled pill.
+			Scene.expect(Scene.role("heading", { name: "DMs", level: 1 })).toExist(),
+			Scene.expect(Scene.role("navigation", { name: "People" })).toExist(),
+			// The round compose button, not the desktop header's labelled pill.
 			Scene.expect(Scene.text("New message")).toBeAbsent(),
 			Scene.expect(Scene.text("Grace Hopper")).toExist(),
 			Scene.expect(Scene.text("general")).toBeAbsent(),
 			Scene.expect(Scene.role("tab", { name: /Public/ })).toBeAbsent(),
 			Scene.click(Scene.role("button", { name: "New message" })),
 			Scene.expectOutMessage(PageOutMessage.RequestedModal({ modal: { _tag: "CreateDm" } })),
+		)
+	})
+
+	test("on a phone, unread DMs come first under their own heading, and Unreads keeps only them", () => {
+		const person = (n: number, firstName: string) => ({
+			userId: Schema.decodeSync(UserId)(`00000000-0000-4000-8000-${String(300 + n).padStart(12, "0")}`),
+			firstName,
+			lastName: "Last",
+			avatarUrl: null,
+		})
+		const me = {
+			userId: memberShared.currentUser!.id,
+			firstName: "Me",
+			lastName: "Self",
+			avatarUrl: null,
+		}
+		const read: ChannelSummary = {
+			...channel(4, "dm-read", "single"),
+			members: [me, person(1, "Ada")],
+			lastMessageAtMs: memberShared.nowMs - 5 * 60_000,
+			lastMessageAuthorId: me.userId,
+			lastMessagePreview: "see you tomorrow",
+		}
+		const unread: ChannelSummary = {
+			...channel(5, "dm-unread", "single"),
+			notificationCount: 2,
+			members: [me, person(2, "Linus")],
+		}
+		Scene.scene(
+			sceneFor({ ...memberShared, isMobile: true }),
+			Scene.given(init(AppRoute.ChatDms({ orgSlug: "hazel" })).model),
+			Scene.Subscription.emit(
+				Message.UpdatedChannels({ groups: { ...groups, dmChannels: [read, unread] } }),
+			),
+			Scene.expect(Scene.role("heading", { name: "Unreads" })).toExist(),
+			Scene.expect(Scene.role("heading", { name: "Everything else" })).toExist(),
+			Scene.expect(Scene.text("Ada Last")).toExist(),
+			// Its last message, the user's own, and how long ago.
+			Scene.expect(Scene.text("You: see you tomorrow")).toExist(),
+			Scene.expect(Scene.text("5m")).toExist(),
+			Scene.click(Scene.role("button", { name: /^Unreads/ })),
+			Scene.expect(Scene.text("Linus Last")).toExist(),
+			Scene.expect(Scene.text("Ada Last")).toBeAbsent(),
 		)
 	})
 })

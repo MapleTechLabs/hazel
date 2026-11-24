@@ -106,3 +106,28 @@ export const button = <Message>(
 		},
 		children,
 	)
+
+export interface IconButtonOptions<Message> extends ButtonOptions<Message> {
+	/** Names the action for screen readers and shows as the hover tooltip. */
+	readonly label: string
+}
+
+/**
+ * An icon-only button: plain and `sq-sm` unless told otherwise, labelled for screen readers and on
+ * hover. Every "×", "⋯", copy or reset glyph button is one of these.
+ */
+export const iconButton = <Message>(
+	h: HtmlBuilder<Message>,
+	options: IconButtonOptions<Message>,
+	icon: Html,
+): Html =>
+	button(
+		h,
+		{
+			intent: "plain",
+			size: "sq-sm",
+			...options,
+			attributes: [h.AriaLabel(options.label), h.Title(options.label), ...(options.attributes ?? [])],
+		},
+		[icon],
+	)

@@ -315,6 +315,69 @@ describe("message search", () => {
 			}),
 		))
 
+	it("keeps a DM's newest message on its channel row, through edits and deletes", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { a, a1, a2 } = world
+				const dm = ok(
+					yield* call(
+						a.object,
+						a.id,
+						"channel.createDm",
+						new CreateDmChannelRequest({
+							participantIds: [a2],
+							type: "single",
+							organizationId: a.id,
+						}),
+						a1,
+					),
+				).data.id as ChannelId
+				const dmObject = yield* world.objects.get(channelTarget(dm))
+				const rowOf = (channelId: ChannelId) =>
+					a.object.storage.db
+						.prepare(
+							`SELECT lastMessageAt, lastMessageAuthorId, lastMessagePreview FROM channels WHERE id = ?`,
+						)
+						.get(channelId) as {
+						lastMessageAt: string | null
+						lastMessageAuthorId: string | null
+						lastMessagePreview: string | null
+					}
+
+				yield* send(world, dm, a1, "first")
+				const last = yield* send(world, dm, a2, `Thanks @[userId:${a1}], **shipping** it`)
+				yield* settle([a.object, dmObject])
+				expect(rowOf(dm)).toMatchObject({
+					lastMessageAuthorId: a2,
+					lastMessagePreview: "Thanks @Ada Last, shipping it",
+				})
+				expect(rowOf(dm).lastMessageAt).not.toBeNull()
+
+				ok(
+					yield* call(
+						dmObject,
+						dm,
+						"message.update",
+						{ channelId: dm, id: last, content: "edited" },
+						a2,
+					),
+				)
+				yield* settle([a.object, dmObject])
+				expect(rowOf(dm).lastMessagePreview).toBe("edited")
+
+				ok(yield* call(dmObject, dm, "message.delete", { channelId: dm, id: last }, a2))
+				yield* settle([a.object, dmObject])
+				expect(rowOf(dm)).toMatchObject({ lastMessageAuthorId: a1, lastMessagePreview: "first" })
+
+				// Public channels keep no last message: their row would reach the whole org each time.
+				const general = yield* makeChannel(a, a1, "public", "general")
+				yield* send(world, general, a1, "hello")
+				yield* settle([a.object, yield* world.objects.get(channelTarget(general))])
+				expect(rowOf(general).lastMessagePreview).toBeNull()
+			}),
+		))
+
 	it("refuses index changes from channels of another org", () =>
 		run(
 			Effect.gen(function* () {

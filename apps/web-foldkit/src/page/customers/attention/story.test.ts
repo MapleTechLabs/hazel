@@ -96,8 +96,6 @@ const account = (
 	currency: "USD",
 	trialListMrrMinor: null,
 	trialEndsAtMs: null,
-	healthScore: 54,
-	healthStatus: "at_risk",
 	seatsUsed: null,
 	seatsLimit: null,
 	contactCount: 10,
@@ -198,7 +196,7 @@ const snoozed = signal(5, acme, {
 	priorityScore: 4,
 })
 const done = signal(6, kestrel, {
-	title: "Health dropped",
+	title: "Usage dropped",
 	status: "done",
 	outcome: "fixed",
 	resolvedAtMs: NOW - DAY,
@@ -348,7 +346,7 @@ describe("needs attention: what shows", () => {
 		// Oldest first, then newest first; each account's signals stay together.
 		expect(ids(visibleSignals(byAge, viewer))).toEqual(ids([usageDown, paymentFailed, stoppedLogging]))
 		expect(ids(visibleSignals(reversed, viewer))).toEqual(ids([paymentFailed, usageDown, stoppedLogging]))
-		expect(pageUpdate(reversed, Message.ClickedColumnSort({ sort: "health" })).model.isSortReversed).toBe(
+		expect(pageUpdate(reversed, Message.ClickedColumnSort({ sort: "mrr" })).model.isSortReversed).toBe(
 			false,
 		)
 	})

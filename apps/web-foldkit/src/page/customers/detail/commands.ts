@@ -430,7 +430,7 @@ export const FetchCustomerSuggestions = Command.define("FetchCustomerSuggestions
 		),
 })
 
-/** Turn flags on (all of `keys`) or off for this customer, in Clerk. */
+/** Turn flags on (all of `keys`) or off for this customer, in its source. */
 export const SetCustomerFeatureFlags = Command.define("SetCustomerFeatureFlags", {
 	args: { ...target, keys: Schema.Array(Schema.String), enabled: Schema.Boolean },
 	messages: [Message.SucceededFeatureFlags, Message.FailedFeatureFlags],
@@ -488,7 +488,7 @@ const settleNote =
 			),
 		)
 
-const noteMessages = [Message.SucceededNoteAction, Message.FailedNoteAction]
+const noteMessages = [Message.SucceededNoteAction, Message.FailedNoteAction] as const
 
 export const CreateCustomerNote = Command.define("CreateCustomerNote", {
 	args: { ...target, authorUserId: UserId, body: Schema.String, pinned: Schema.Boolean },
@@ -532,7 +532,7 @@ export const LoadNoteDrafts = Command.define("LoadNoteDrafts", {
 // IMPERSONATION
 
 /**
- * A one-time sign-in link as the contact's user (Clerk, valid for a minute). `UnauthorizedError`
+ * A one-time sign-in link as the contact's user (valid for a minute). `UnauthorizedError`
  * is caught before `catchCommon`: here it means no grant, not a lost session.
  */
 export const StartCustomerImpersonation = Command.define("StartCustomerImpersonation", {
@@ -560,15 +560,13 @@ export const StartCustomerImpersonation = Command.define("StartCustomerImpersona
 
 // LOCAL
 
-/** Copies `text`; a path (`/…`) becomes a full link on this origin. */
+/** Copies `text` as is; with `isPath`, as a full link on this origin. */
 export const CopyCustomerText = Command.define("CopyCustomerText", {
-	args: { text: Schema.String, label: Schema.String },
+	args: { text: Schema.String, label: Schema.String, isPath: Schema.Boolean },
 	messages: [Message.CompletedCopy],
-	execute: ({ text, label }) =>
+	execute: ({ text, label, isPath }) =>
 		Effect.tryPromise(() =>
-			navigator.clipboard.writeText(
-				text.startsWith("/") ? new URL(text, window.location.origin).href : text,
-			),
+			navigator.clipboard.writeText(isPath ? new URL(text, window.location.origin).href : text),
 		).pipe(
 			Effect.match({
 				onSuccess: () => Message.CompletedCopy({ label, isCopied: true }),

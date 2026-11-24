@@ -4,12 +4,7 @@
  * projects (people, not bots; none for an unknown org); the org's deletion; and the data-source
  * handlers' edge cases (disconnect, ignore rules, bulk limits, credential rotation).
  */
-import {
-	DEFAULT_BUSINESS_HOURS,
-	DEFAULT_HEALTH_SETTINGS,
-	DEFAULT_SLA_POLICY,
-	TEMPLATES,
-} from "@hazel/domain/customers"
+import { DEFAULT_BUSINESS_HOURS, DEFAULT_SLA_POLICY, TEMPLATES } from "@hazel/domain/customers"
 import { CustomerRpcs } from "@hazel/domain/rpc"
 import type { OrganizationId, UserId } from "@hazel/schema"
 import { ConfigProvider, Effect, Exit, Layer, Option, Redacted, type Scope } from "effect"
@@ -64,7 +59,6 @@ const PAYLOADS = {
 	"customers.signals.open": {},
 	"customers.signals.history": {},
 	"customers.rule.dryRun": { draft: ruleDraft },
-	"customers.health.dryRun": { draft: DEFAULT_HEALTH_SETTINGS },
 	"customers.unmatched.list": {},
 	"customers.ignoreRules.list": {},
 	"customers.plans.list": {},
@@ -130,7 +124,6 @@ const PAYLOADS = {
 /** Settings, rules and their dry runs, shared views, data sources, unmatched records, the demo seed. */
 const ADMIN_ONLY = new Set([
 	"customers.rule.dryRun",
-	"customers.health.dryRun",
 	"customers.unmatched.list",
 	"customers.ignoreRules.list",
 	"customers.view.create", // `shared: true`

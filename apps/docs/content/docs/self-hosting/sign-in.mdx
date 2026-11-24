@@ -1,0 +1,62 @@
+---
+title: Set up sign-in
+description: Register the OAuth apps people sign in with
+icon: KeyRound
+---
+
+People sign in to Hazel with **GitHub**, **Google**, or both. Once signed in they can add a
+passkey and use it instead. Hazel has no passwords, so the install needs at least one of the two
+apps below. The sign-in page shows only the ones you set up.
+
+The callback URLs use your zone: replace `chat.acme.com` with yours. The installer prints them
+too.
+
+<Tabs items={["GitHub", "Google"]}>
+  <Tab value="GitHub">
+    <Steps>
+      <Step>
+        Open [GitHub → Settings → Developer settings → OAuth Apps](https://github.com/settings/developers)
+        (or the same page in your GitHub organization's settings) and click **New OAuth app**.
+      </Step>
+      <Step>
+        Fill in:
+
+        - **Application name**: what people see when they authorize, e.g. "Acme Chat"
+        - **Homepage URL**: `https://app.chat.acme.com`
+        - **Authorization callback URL**: `https://api.chat.acme.com/auth/github/callback`
+      </Step>
+      <Step>
+        Register it, then **Generate a new client secret**. Keep the **Client ID** and the
+        secret for the installer.
+      </Step>
+    </Steps>
+
+    This is an OAuth App, not a GitHub App. The GitHub integration (issues and pull requests in
+    channels) is separate: see [integrations](/self-hosting/integrations).
+
+  </Tab>
+  <Tab value="Google">
+    <Steps>
+      <Step>
+        In the [Google Cloud console](https://console.cloud.google.com/apis/credentials), pick or
+        create a project and configure the **OAuth consent screen** (app name, support email;
+        "Internal" limits sign-in to your Google Workspace).
+      </Step>
+      <Step>
+        **Create credentials → OAuth client ID**, type **Web application**, with the
+        **Authorized redirect URI** `https://api.chat.acme.com/auth/google/callback`.
+      </Step>
+      <Step>
+        Keep the **Client ID** and **Client secret** for the installer.
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+	Anyone who can sign in to the provider can sign in to the install, unless you limit it. To allow only your
+	company's addresses, set `ALLOWED_EMAIL_DOMAINS` (the installer asks; see
+	[configuration](/self-hosting/configuration#who-may-use-the-install)).
+</Callout>
+
+Next: [install](/self-hosting/install).

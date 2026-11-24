@@ -72,6 +72,19 @@ export const reorderShown = (
 export const isInSidebar = (layout: Customers.ViewLayoutDraft, key: string): boolean =>
 	!layout.sidebarHidden.includes(key)
 
+/** The keys the sidebar shows; never none: with every one hidden, the first still shows. */
+export const sidebarKeysOf = (layout: Customers.ViewLayoutDraft, keys: ReadonlyArray<string>) => {
+	const shown = keys.filter((key) => isInSidebar(layout, key))
+	return shown.length > 0 ? shown : keys.slice(0, 1)
+}
+
+/** The sidebar keeps at least one view: the last one shown can't be hidden. */
+export const canHideFromSidebar = (
+	layout: Customers.ViewLayoutDraft,
+	keys: ReadonlyArray<string>,
+	key: string,
+): boolean => sidebarKeysOf(layout, keys).some((other) => other !== key)
+
 export const withSidebar = (
 	layout: Customers.ViewLayoutDraft,
 	key: string,

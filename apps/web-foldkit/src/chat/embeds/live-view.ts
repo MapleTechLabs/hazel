@@ -2,9 +2,10 @@ import { ACTOR_SERVICE_ERROR_UI_MESSAGE, ACTOR_SERVICE_ERROR_UI_TITLE } from "@h
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { renderToHtml } from "@pierre/words/no-math"
 import { cn } from "~/lib/utils"
-import { IconBrainSparkle, IconSparkles, IconWarning } from "../../icons"
+import { IconBrainSparkle, IconSparkles } from "../../icons"
 import type { LiveActorState } from "../live-state"
 import { markdownView } from "../markdown/markdown-view"
+import { callout } from "../../ui/callout"
 
 /**
  * `MessageLive.*` (`components/chat/message-live-state.tsx`): the loading indicator until the actor
@@ -183,40 +184,14 @@ const errorCopy = (error: string) =>
 /** `ErrorCard`. */
 const errorView = <M>(h: HtmlBuilder<M>, error: string): Html => {
 	const copy = errorCopy(error)
-	return h.div(
-		[
-			h.Class(
-				"rounded-lg border border-danger/20 bg-danger/5 p-4 animate-[error-enter_0.3s_var(--ease-out-cubic)_forwards]",
-			),
-			h.Attribute("role", "alert"),
-		],
-		[
-			h.div(
-				[h.Class("flex items-start gap-3")],
-				[
-					h.div(
-						[
-							h.Class(
-								"rounded-full bg-danger/10 p-2 animate-[error-icon-bounce_0.4s_var(--ease-out-cubic)_0.3s]",
-							),
-						],
-						[
-							IconWarning(h, {
-								className: "size-5 text-danger",
-								attributes: { "aria-hidden": "true" },
-							}),
-						],
-					),
-					h.div(
-						[h.Class("flex-1 space-y-1")],
-						[
-							h.p([h.Class("font-medium text-danger text-sm")], [copy.title]),
-							h.p([h.Class("text-muted-fg text-sm")], [copy.body]),
-						],
-					),
-				],
-			),
-		],
+	return callout(
+		h,
+		{
+			intent: "danger",
+			title: copy.title,
+			className: "animate-[error-enter_0.3s_var(--ease-out-cubic)_forwards]",
+		},
+		[copy.body],
 	)
 }
 

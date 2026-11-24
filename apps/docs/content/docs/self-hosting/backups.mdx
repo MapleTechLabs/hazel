@@ -1,0 +1,72 @@
+---
+title: Backups and restore
+description: Point-in-time recovery, organization exports, and removing an install
+icon: ShieldAlert
+---
+
+Every database of an install keeps **30 days of point-in-time history**, kept by Cloudflare with
+nothing to schedule. Restores go through `bun run operator:restore`, run from the repository
+with the install's env file loaded.
+
+## The directory
+
+The directory (accounts, sign-in, which organization and channel lives where) is the D1 database
+`hazel-directory-<name>`. D1 Time Travel restores it to any minute of the last 30 days:
+
+```bash
+set -a; source .env.customer-acme; set +a   # CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+
+bun run operator:restore --kind directory --customer acme --at 2026-11-20T09:00:00Z --dry-run
+bun run operator:restore --kind directory --customer acme --at 2026-11-20T09:00:00Z
+```
+
+`--dry-run` only looks the point up. A restore asks you to type the database name (`--yes`
+skips that).
+
+## Organizations, channels and users
+
+Each organization, channel (threads too) and user has its own database in a Durable Object,
+restored one at a time through the API's operator endpoints. They need the `OPERATOR_TOKEN` the
+installer generated:
+
+```bash
+export OPERATOR_TOKEN=...   # from .env.customer-acme
+
+bun run operator:restore --api https://api.chat.acme.com --kind org --id <organizationId> \
+  --at 2026-11-20T09:00:00Z --dry-run
+bun run operator:restore --api https://api.chat.acme.com --kind org --id <organizationId> \
+  --at 2026-11-20T09:00:00Z
+```
+
+`--kind` is `org` (id: the organization's id), `channel` (a channel or thread id), `user` (a user
+id) or `customers` (the organization's id, for its Customers area). The answer includes the
+object's state before the restore; to undo, restore the same object to a time just before you
+ran it.
+
+A restore rolls back that one object. What it wrote elsewhere since then (member lists, channel
+indexes, notifications) keeps its newer values until the next change, and open apps resync the
+object from scratch. When an incident spans several objects, restore them together, for example
+an organization and its channels.
+
+## Uploads
+
+Uploaded files are in the R2 bucket `hazel-uploads-<name>`. R2 has no point-in-time history: if
+you need copies outside the account, replicate the bucket with R2's own tools.
+
+## Organization exports
+
+Owners and admins can download their organization's data from **Settings → General → Export
+data**: one NDJSON file with the organization, members, channels, threads, messages, reactions,
+pins and attachment links. Secrets (integration and webhook tokens, sign-in data) are never
+included. An export is a copy for its owners, not something to restore from.
+
+## Removing an install
+
+```bash
+bun run customer:destroy acme
+```
+
+It deletes every Worker, the directory database, every organization's, channel's and user's
+database, and the buckets, after you type the install's name. **Point-in-time recovery cannot
+bring any of it back.** Export what you want to keep first. The env file is left in place; delete
+it yourself, and revoke the Cloudflare token and OAuth apps.

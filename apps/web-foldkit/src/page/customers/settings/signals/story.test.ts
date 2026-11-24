@@ -1,4 +1,5 @@
-import { DEFAULT_ATTENTION_SETTINGS, type RuleDryRunResult } from "@hazel/domain/customers"
+import { DEFAULT_ATTENTION_SETTINGS } from "@hazel/customer-integrations"
+import { type RuleDryRunResult } from "@hazel/domain/customers"
 import { CustomerSettingsId, CustomerSignalRuleId, OrganizationId, OrganizationMemberId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
@@ -75,7 +76,7 @@ const ruleRoute = AppRoute.CustomersSettingsSignalRule({ orgSlug: "hazel", ruleI
 const newRoute = (template: RuleRow["template"]) =>
 	AppRoute.CustomersSettingsSignalNew({ orgSlug: "hazel", template: Option.some(template) }) as SignalsRoute
 
-const settings = { lastComputedAtMs: null, bands: { healthyMin: 70, atRiskMin: 40 } }
+const settings = { lastComputedAtMs: null }
 const usd = Message.UpdatedSettings({ settings: { ...settings, reportingCurrency: "USD" } })
 const yen = Message.UpdatedSettings({ settings: { ...settings, reportingCurrency: "JPY" } })
 
@@ -491,11 +492,11 @@ describe("signals: the list", () => {
 	test("Set up opens the editor for the picked template", () => {
 		const picking = edits(withRules(listRoute), [
 			Message.PressedNewSignal(),
-			Message.ClickedTemplate({ template: "health_drop" }),
+			Message.ClickedTemplate({ template: "seat_growth" }),
 		])
 		expect(picking.pickerModal.isOpen).toBe(true)
 		expect(pageUpdate(picking, Message.PressedSetUpTemplate()).outMessage).toEqual(
-			PageOutMessage.RequestedNavigation({ route: newRoute("health_drop"), replace: false }),
+			PageOutMessage.RequestedNavigation({ route: newRoute("seat_growth"), replace: false }),
 		)
 	})
 
