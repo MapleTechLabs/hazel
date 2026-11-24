@@ -52,15 +52,36 @@ LINEAR_CLIENT_SECRET=...
 The GitHub integration (issues, pull requests and CI in channels) is a GitHub App, separate from
 the OAuth app used for sign-in. Create one under **Settings → Developer settings → GitHub Apps**:
 
-- **Callback URL**: `https://api.chat.acme.com/integrations/github/callback`
-- **Webhook URL**: `https://api.chat.acme.com/webhooks/github`, with a webhook secret you generate
+- **Setup URL** (under "Post installation"): `https://api.chat.acme.com/integrations/github/callback`,
+  with **Redirect on update** checked. GitHub sends the installation back to Hazel there.
+- **Callback URL**: leave empty, and leave **Request user authorization (OAuth) during
+  installation** unchecked: Hazel works from the installation, not a user's authorization.
+- **Webhook URL**: `https://api.chat.acme.com/webhooks/github`, with a webhook secret you generate.
 
-Then generate a private key and set:
+Under **Permissions & events**, give the app read-only **Repository permissions**:
+
+| Permission    | Access    | For                                     |
+| ------------- | --------- | --------------------------------------- |
+| Metadata      | Read-only | Listing the installation's repositories |
+| Contents      | Read-only | Pushes and releases                     |
+| Issues        | Read-only | Issues                                  |
+| Pull requests | Read-only | Pull requests                           |
+| Actions       | Read-only | Workflow runs                           |
+| Deployments   | Read-only | Deployment statuses                     |
+
+and subscribe to the events **Push**, **Pull request**, **Issues**, **Release**, **Workflow run**,
+**Deployment status** and **Star**. Hazel posts these to channels; others are ignored.
+
+Then generate a private key. Hazel reads it **base64-encoded**, on one line:
+
+```bash
+base64 < your-app.private-key.pem | tr -d '\n'
+```
 
 ```bash
 GITHUB_APP_ID=...
-GITHUB_APP_SLUG=...           # the app's URL name
-GITHUB_APP_PRIVATE_KEY='-----BEGIN RSA PRIVATE KEY-----...'
+GITHUB_APP_SLUG=...                # the app's URL name (github.com/apps/<slug>)
+GITHUB_APP_PRIVATE_KEY=LS0tLS1C... # the base64 line from above
 GITHUB_WEBHOOK_SECRET=...
 ```
 

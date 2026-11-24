@@ -691,7 +691,7 @@ export const customerUpgradeCommand = Command.make(
 		to: flag("to", "Release tag (or any git ref) to deploy (default: the newest server-v* release)"),
 		allowDowngrade: Flag.Boolean("allow-downgrade").pipe(
 			Flag.withDescription(
-				"Deploy a commit older than the one the install runs. Migrations only go forward: never for a release with new migrations",
+				"Deploy without proving the target is newer than what runs (older, or the running commit unknown). Migrations only go forward",
 			),
 			Flag.withDefault(false),
 		),
@@ -737,27 +737,31 @@ export const customerUpgradeCommand = Command.make(
 				`  Running:  ${deployed === undefined ? pc.dim("unknown (not deployed, or unreachable)") : deployed.slice(0, 12)}`,
 			)
 			yield* Console.log(`  Target:   ${ref} (${targetSha.slice(0, 12)})`)
+			// `/version` is the api Worker's alone, deployed before the web app and link previews: a
+			// match can be an earlier upgrade that failed after it, so deploy again (it is idempotent).
+			// Anything that is not a proven step forward needs --allow-downgrade.
 			if (deployed === targetSha) {
 				yield* Console.log(
-					pc.green(
-						`\n✓ ${stageOf(name)} already runs ${ref}. To redeploy it as is: ${deployCommandText(name, REPO_ROOT)}\n`,
-					),
+					pc.dim(`  The api already runs ${ref}; deploying again finishes a partial upgrade.`),
 				)
-				return
-			}
-			if (deployed !== undefined) {
+			} else if (!allowDowngrade) {
+				if (deployed === undefined) {
+					return yield* failWith(
+						`Cannot tell what ${stageOf(name)} runs (https://${customerHosts(zone).api}/version did not answer), ` +
+							`so cannot check ${ref} is newer. Pass --allow-downgrade to deploy it anyway.`,
+					)
+				}
 				const ancestry = yield* git(["merge-base", "--is-ancestor", deployed, targetSha])
-				if (ancestry.code === 1 && !allowDowngrade) {
+				if (ancestry.code === 1) {
 					return yield* failWith(
 						`${ref} is older than what ${stageOf(name)} runs (${deployed.slice(0, 12)}). Migrations only go forward, ` +
 							`so a downgrade can break the install; pass --allow-downgrade only if you know it adds none.`,
 					)
 				}
-				if (ancestry.code !== 0 && ancestry.code !== 1) {
-					yield* Console.log(
-						pc.yellow(
-							`⚠ The running commit ${deployed.slice(0, 12)} is not in this checkout: cannot check it is older.`,
-						),
+				if (ancestry.code !== 0) {
+					return yield* failWith(
+						`${stageOf(name)} runs ${deployed.slice(0, 12)}, which this checkout does not have, so cannot check ` +
+							`${ref} is newer. Fetch it, or pass --allow-downgrade to deploy anyway.`,
 					)
 				}
 			}

@@ -98,14 +98,37 @@ const subdomainCheck = (token: string, accountId: string) =>
 		} as Check
 	})
 
-/** The token is live and allowed to deploy, the zone is active in the account, workers.dev is set up. */
-export const onlineChecks = (env: Record<string, string>): Effect.Effect<Array<Check>> =>
+/**
+ * R2 must be activated once per account (a separate subscription, even on Workers Paid); until
+ * then the bucket API answers "Please enable R2 through the Cloudflare Dashboard" (10042).
+ */
+const r2Check = (token: string, accountId: string) =>
 	Effect.gen(function* () {
+		const response = yield* cloudflareGet(`/accounts/${accountId}/r2/buckets`, token)
+		if (response.body.success === true) return { name: "R2", status: "ok", message: "enabled" } as Check
+		const notEnabled = (response.body.errors ?? []).some(
+			(error) => error.code === 10042 || /enable R2/i.test(error.message ?? ""),
+		)
+		if (!notEnabled) return undefined
+		return {
+			name: "R2",
+			status: "fail",
+			message: "not enabled on the account: activate it once under R2 in the Cloudflare dashboard",
+		} as Check
+	})
+
+/**
+ * The token is live and allowed to deploy, the zone is active in the account, R2 and workers.dev
+ * are set up. A request that fails midway keeps the checks already made (a failure among them
+ * still blocks the deploy) and adds a warning for the rest.
+ */
+export const onlineChecks = (env: Record<string, string>): Effect.Effect<Array<Check>> => {
+	const checks: Array<Check> = []
+	return Effect.gen(function* () {
 		const token = env.CLOUDFLARE_API_TOKEN ?? ""
 		const accountId = env.CLOUDFLARE_ACCOUNT_ID ?? ""
 		const zone = normalizeZone(env.HAZEL_ZONE ?? "")
-		if (!token || !accountId) return []
-		const checks: Array<Check> = []
+		if (!token || !accountId) return checks
 
 		// User tokens verify on /user/tokens, account-owned ones on the account.
 		const user = yield* cloudflareGet("/user/tokens/verify", token)
@@ -141,7 +164,9 @@ export const onlineChecks = (env: Record<string, string>): Effect.Effect<Array<C
 				!zones.body.success
 					? {
 							name: "Zone",
-							status: "warn",
+							// Refused: Zone Read is missing, and without the zone's id no zone permission
+							// below could be checked. Anything else is Cloudflare's own trouble.
+							status: zones.status === 401 || zones.status === 403 ? "fail" : "warn",
 							message: `could not list zones (${zones.body.errors?.[0]?.message ?? zones.status}); the token needs Zone Read`,
 						}
 					: result.length === 0
@@ -166,15 +191,19 @@ export const onlineChecks = (env: Record<string, string>): Effect.Effect<Array<C
 				zoneId,
 			})),
 		)
+		const r2 = yield* r2Check(token, accountId)
+		if (r2 !== undefined) checks.push(r2)
 		const subdomain = yield* subdomainCheck(token, accountId)
 		if (subdomain !== undefined) checks.push(subdomain)
 		return checks
 	}).pipe(
 		Effect.orElseSucceed((): Array<Check> => [
+			...checks,
 			{
 				name: "Cloudflare",
 				status: "warn",
-				message: "could not reach api.cloudflare.com; skipped the online checks",
+				message: "could not reach api.cloudflare.com; skipped the remaining online checks",
 			},
 		]),
 	)
+}

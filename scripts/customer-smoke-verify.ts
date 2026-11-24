@@ -63,11 +63,16 @@ const results = [
 		const type = response.headers.get("content-type") ?? ""
 		return response.ok && type.includes("text/html") ? undefined : `HTTP ${response.status} ${type}`
 	}),
-	await eventually("web app serves /.well-known/hazel.json", async () => {
+	await eventually("web app serves /.well-known/hazel.json for this install", async () => {
 		const response = await get(`${app}/.well-known/hazel.json`)
 		if (!response.ok) return `HTTP ${response.status}`
-		const body = await response.text()
-		return body.includes(`api.${zone}`) ? undefined : `does not name api.${zone}: ${body.slice(0, 120)}`
+		// The fields the native apps require (`DiscoveryDocument`, apps/web-foldkit/src/core/config/server.ts).
+		const body = (await response.json()) as { app?: unknown; api?: unknown }
+		const host = (value: unknown) =>
+			typeof value === "string" && URL.canParse(value) ? new URL(value).host : undefined
+		return host(body.app) === `app.${zone}` && host(body.api) === `api.${zone}`
+			? undefined
+			: `expected app.${zone} and api.${zone}, got ${JSON.stringify(body)}`
 	}),
 ]
 
