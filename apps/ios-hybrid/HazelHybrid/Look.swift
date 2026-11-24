@@ -22,6 +22,16 @@ struct Look: Decodable, Equatable {
         /// The page's own SVG, rasterized (`WebBridge.icons`).
         let image: String?
         let avatar: Avatar?
+        /// A channel icon's corner marks (Slack or Discord, Connect partners, a private lock).
+        let marks: [Mark]?
+    }
+    /// One piece of a channel icon's mark, relative to the icon's box (`web/look.ts` `marksOf`).
+    struct Mark: Decodable, Equatable {
+        let x, y, w, h, radius: CGFloat
+        let bg: String?
+        let image: String?
+        let src: String?
+        let initial: Avatar.Initial?
     }
     struct Trailing: Decodable, Equatable { let right, size: CGFloat; let color: String; let image: String? }
     /// A thread row's line to its channel: the page's SVG, rasterized, placed outside the row's box.

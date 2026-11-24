@@ -86,7 +86,8 @@ export const channelItem = <M>(
 	const ui = semantic(h, {
 		kind: "item",
 		title: entry.channel.name,
-		...(entry.channel.icon
+		// A customer's logo replaces the emoji (`channelIcon`); iOS reads the logo from the page.
+		...(entry.channel.icon && context.links.customer === null
 			? { emoji: entry.channel.icon }
 			: { symbol: channelSymbol(entry.channel.type) }),
 		badge: notificationCount > 0 ? notificationCount : undefined,
