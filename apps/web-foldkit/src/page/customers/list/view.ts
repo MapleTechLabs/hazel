@@ -944,7 +944,8 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 				],
 			),
 			h.div(
-				[h.Class("mt-3 pb-24")],
+				// Room under the last row for the bulk bar, which floats over the bottom.
+				[h.Class(model.selected.length > 0 ? "mt-3 pb-24" : "mt-3 pb-6")],
 				[
 					hasNoResults
 						? h.div([], [table(h, model, viewer, [], orgSlug), noResults(h, model, viewer)])
