@@ -195,6 +195,39 @@ describe("signal evaluation", () => {
 		expect(billingProviderOf(READY, [], null)).toBe("stripe")
 	})
 
+	it("payment_failed: an ended plan's unpaid auto-charged invoice counts from its issue date", () => {
+		const invoice = {
+			id: "inv_1" as never,
+			status: "open",
+			amountDueMinor: 3_900,
+			attemptCount: 9,
+			dueAt: null,
+			issuedAt: new Date(NOW.getTime() - 30 * 86_400_000),
+		} as const
+		const open = factsOf({ subscriptions: [{ status: "canceled" }], openInvoices: [invoice] })
+		expect(
+			match("payment_failed", {
+				subscriptions: [{ status: "canceled" }],
+				openInvoices: [invoice],
+				unpaidInvoices: open.openInvoices,
+			}).evidence,
+		).toMatchObject({ amountMinor: 3_900, daysOverdue: 30, attemptCount: 9, step: 2 })
+		const notDueYet = { ...invoice, dueAt: new Date(NOW.getTime() + 5 * 86_400_000) }
+		expect(
+			match("payment_failed", {
+				subscriptions: [{ status: "canceled" }],
+				openInvoices: [notDueYet],
+				unpaidInvoices: open.openInvoices,
+			}).evidence,
+		).toMatchObject({ amountMinor: 3_900, daysOverdue: 0, invoiceId: "inv_1" })
+		expect(
+			run("payment_failed", { subscriptions: [{ status: "canceled" }], openInvoices: [invoice] }),
+		).toEqual({
+			_tag: "NoMatch",
+			reason: "Below threshold",
+		})
+	})
+
 	it("payment_failed: past due, or an invoice open 7+ days past due; escalates by age and unpaid", () => {
 		const overdue = (days: number) => ({
 			dueAt: new Date(NOW.getTime() - days * 86_400_000),
@@ -543,6 +576,94 @@ describe("signal evaluation", () => {
 		).toEqual(notCovered)
 	})
 
+	it("a lead whose plans all ended unpaid gets no more signals", () => {
+		const left: FactsInput = {
+			account: { lifecycleStage: "lead", mrrMinor: 0 },
+			activity: { ann: [-30] },
+			priorActive: [[30, 1]],
+			subscriptions: [
+				{ status: "canceled", mrrMinor: 0, canceledAt: new Date(NOW.getTime() - 36 * 86_400_000) },
+			],
+		}
+		const ended = { _tag: "NoMatch", reason: "Plan ended" }
+		expect(run("inactive", left)).toEqual(ended)
+		expect(run("usage_drop", left)).toEqual(ended)
+		// A plan still live, one that paid (a group's churned environment beside a lead one), no plan
+		// at all, or a stage set by hand: still someone to watch.
+		expect(
+			run("inactive", {
+				...left,
+				subscriptions: [...left.subscriptions!, { status: "active", mrrMinor: 0 }],
+			})._tag,
+		).toBe("Match")
+		expect(
+			run("inactive", {
+				...left,
+				subscriptions: [...left.subscriptions!, { status: "canceled", mrrMinor: 3_900 }],
+			})._tag,
+		).toBe("Match")
+		expect(run("inactive", { ...left, subscriptions: [] })._tag).toBe("Match")
+		expect(run("inactive", { ...left, account: { lifecycleStage: "active", mrrMinor: 0 } })._tag).toBe(
+			"Match",
+		)
+	})
+
+	it("churned: announced once, until the customer pays or starts a paid plan again", () => {
+		const ago = (days: number) => new Date(NOW.getTime() - days * 86_400_000)
+		const churned: FactsInput = {
+			account: { lifecycleStage: "churned", mrrMinor: 0, churnedAt: ago(3) },
+			movements: [{ type: "churn", fromMrrMinor: 3_900, toMrrMinor: 0, day: addDays(TODAY, -3) }],
+			subscriptions: [{ status: "canceled", mrrMinor: 3_900, startedAt: ago(40), canceledAt: ago(3) }],
+			churnNotifiedAt: ago(10),
+		}
+		const noMatch = { _tag: "NoMatch", reason: "Below threshold" }
+		expect(run("churned", churned)).toEqual(noMatch)
+		// Its own episode keeps running.
+		expect(run("churned", { ...churned, churnSignalOpen: true })._tag).toBe("Match")
+		expect(run("churned", { ...churned, paymentsSinceChurn: [ago(5)] })._tag).toBe("Match")
+		expect(run("churned", { ...churned, paymentsSinceChurn: [ago(11)] })).toEqual(noMatch)
+		// Settling an old invoice after the plan ended is no new churn; one before the end still counts.
+		expect(run("churned", { ...churned, paymentsSinceChurn: [ago(1)] })).toEqual(noMatch)
+		expect(run("churned", { ...churned, paymentsSinceChurn: [ago(5), ago(1)] })._tag).toBe("Match")
+		const resubscribed = {
+			status: "canceled",
+			mrrMinor: 3_900,
+			startedAt: ago(6),
+			canceledAt: ago(3),
+		} as const
+		expect(run("churned", { ...churned, subscriptions: [resubscribed] })._tag).toBe("Match")
+		// A trial it canceled before converting paid nothing.
+		const trial = { ...resubscribed, trialEndsAt: ago(1) }
+		expect(run("churned", { ...churned, subscriptions: [trial] })).toEqual(noMatch)
+		// With a card on file it was a customer: a new trial canceled is a new churn.
+		const paymentMethod = { brand: "visa", last4: "4242", expMonth: 1, expYear: 2030 }
+		expect(run("churned", { ...churned, subscriptions: [{ ...trial, paymentMethod }] })._tag).toBe(
+			"Match",
+		)
+	})
+
+	it("churned: a churn dated back to its failed invoice is announced from the plan's end", () => {
+		const ago = (days: number) => new Date(NOW.getTime() - days * 86_400_000)
+		const backdated = (endedDaysAgo: number): FactsInput => ({
+			account: { lifecycleStage: "churned", mrrMinor: 0, churnedAt: ago(90) },
+			movements: [{ type: "churn", fromMrrMinor: 3_900, toMrrMinor: 0, day: addDays(TODAY, -90) }],
+			subscriptions: [{ status: "canceled", mrrMinor: 3_900, canceledAt: ago(endedDaysAgo) }],
+		})
+		expect(match("churned", backdated(3)).reason).toBe(`Lost ${formatMoney(3_900, "usd")}/mo 3 days ago`)
+		expect(run("churned", backdated(20))).toEqual({ _tag: "NoMatch", reason: "Below threshold" })
+		// A free plan ending later says nothing about when the paid one did.
+		const freeLater = backdated(20)
+		expect(
+			run("churned", {
+				...freeLater,
+				subscriptions: [
+					...freeLater.subscriptions!,
+					{ status: "canceled", mrrMinor: 0, canceledAt: ago(1) },
+				],
+			}),
+		).toEqual({ _tag: "NoMatch", reason: "Below threshold" })
+	})
+
 	it("churned: the customer's last entry, for the window after it churned", () => {
 		const churned = (days: number, input: FactsInput = {}): FactsInput => ({
 			account: {
@@ -832,6 +953,14 @@ describe("signal evaluation", () => {
 			const narrow = orgFacts({ attention: { stages: ["active"], requiredSources: ["stripe"] } })
 			expect(run("response_overdue", lead, narrow)._tag).toBe("Match")
 			expect(run("resolution_overdue", lead, narrow)._tag).toBe("Match")
+			// A plan that ended unpaid does not take back a reply it is owed.
+			expect(
+				run(
+					"response_overdue",
+					{ ...lead, subscriptions: [{ status: "canceled", mrrMinor: 0 }] },
+					narrow,
+				)._tag,
+			).toBe("Match")
 			// Other templates stay behind the coverage.
 			expect(run("inactive", lead, narrow)).toEqual({
 				_tag: "NoMatch",

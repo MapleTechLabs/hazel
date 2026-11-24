@@ -90,6 +90,10 @@ export interface FactsInput {
 	readonly idle?: ReadonlyArray<string>
 	readonly subscriptions?: ReadonlyArray<Partial<schema.CustomerSubscription>>
 	readonly openInvoices?: ReadonlyArray<Partial<schema.CustomerInvoice>>
+	readonly unpaidInvoices?: ReadonlyArray<schema.CustomerInvoice>
+	readonly churnNotifiedAt?: Date | null
+	readonly churnSignalOpen?: boolean
+	readonly paymentsSinceChurn?: ReadonlyArray<Date>
 	readonly metrics?: AccountFacts["metrics"]
 	readonly movements?: ReadonlyArray<Partial<schema.CustomerMrrMovement>>
 	readonly priorActive?: ReadonlyArray<readonly [number, number]>
@@ -200,6 +204,10 @@ export const factsOf = (input: FactsInput = {}): AccountFacts => {
 			updatedAt: NOW,
 			...invoice,
 		})),
+		unpaidInvoices: input.unpaidInvoices ?? [],
+		churnNotifiedAt: input.churnNotifiedAt ?? null,
+		churnSignalOpen: input.churnSignalOpen ?? false,
+		paymentsSinceChurn: input.paymentsSinceChurn ?? [],
 		metrics: input.metrics ?? new Map(),
 		movements: (input.movements ?? []).map((movement) => ({
 			id: uuid() as never,

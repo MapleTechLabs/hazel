@@ -33,6 +33,7 @@
 import { FIELD_PRECEDENCE, ingestPolicyOf, integrationOf } from "@hazel/customer-integrations"
 import { Database, SQLite, schema } from "@hazel/db"
 import {
+	CHECKOUT_ABANDONED,
 	type ConnectionConfig,
 	type CustomerProvider,
 	type CustomerSource,
@@ -1386,12 +1387,13 @@ const make = Effect.gen(function* () {
 					externalId: `ingest:${type}:${provider}:${op.externalId}${type === "subscription.plan_changed" ? `:${op.planName}:${mrrMinor}` : ""}`,
 				})
 			const observedAt = toDate(op.observedAt)
-			if (Option.isNone(existing)) {
-				const [row] = yield* db.run(
-					SQLite.insertInto(schema.customerSubscriptionsTable)
-						.values({ provider, externalId: op.externalId, ...values, observedAt })
-						.returning("id"),
-				)
+			const abandoned = op.cancellationReason === CHECKOUT_ABANDONED
+			const abandonedEvent = event(
+				"subscription.checkout_abandoned",
+				`Abandoned checkout for ${planLabel(op.planName)}`,
+				values.canceledAt,
+			)
+			const startEvents = Effect.gen(function* () {
 				yield* event("subscription.started", `Started ${planLabel(op.planName)}`, values.startedAt, {
 					mrrMinor,
 					status: op.status,
@@ -1409,6 +1411,26 @@ const make = Effect.gen(function* () {
 						null,
 					)
 				}
+			})
+			const dropEvents = (types: ReadonlyArray<string>) =>
+				Effect.forEach(
+					types,
+					(type) =>
+						db.run(
+							SQLite.deleteFrom(schema.customerEventsTable).where(($) => [
+								$.provider.eq(provider),
+								$.externalId.eq(`ingest:${type}:${provider}:${op.externalId}`),
+							]),
+						),
+					{ discard: true },
+				)
+			if (Option.isNone(existing)) {
+				const [row] = yield* db.run(
+					SQLite.insertInto(schema.customerSubscriptionsTable)
+						.values({ provider, externalId: op.externalId, ...values, observedAt })
+						.returning("id"),
+				)
+				yield* abandoned ? abandonedEvent : startEvents
 				return outcome.created(row.id)
 			}
 			const sub = existing.value
@@ -1435,6 +1457,20 @@ const make = Effect.gen(function* () {
 					} as never)
 					.where(($) => [$.id.eq(sub.id)]),
 			)
+			if (abandoned) {
+				// Recorded as started and canceled before Hazel could tell: it never started.
+				if (sub.cancellationReason !== CHECKOUT_ABANDONED) {
+					yield* dropEvents(["subscription.started", "subscription.canceled"])
+					yield* abandonedEvent
+				}
+				return outcome.updated(sub.id)
+			}
+			if (sub.cancellationReason === CHECKOUT_ABANDONED) {
+				// Its id now names a plan that did start.
+				yield* dropEvents(["subscription.checkout_abandoned"])
+				yield* startEvents
+				return outcome.updated(sub.id)
+			}
 			if (sub.planName !== op.planName || sub.mrrMinor !== mrrMinor) {
 				if (op.status !== "canceled" && sub.status !== "trialing") {
 					yield* event(

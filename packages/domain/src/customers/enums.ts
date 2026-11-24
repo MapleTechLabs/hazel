@@ -32,6 +32,9 @@ export const SubscriptionStatus = Schema.Literals([
 ])
 export type SubscriptionStatus = typeof SubscriptionStatus.Type
 
+/** A canceled subscription's `cancellationReason` when its checkout was never finished: it never started. */
+export const CHECKOUT_ABANDONED = "checkout_abandoned"
+
 export const BillingInterval = Schema.Literals(["month", "year", "other"])
 export type BillingInterval = typeof BillingInterval.Type
 

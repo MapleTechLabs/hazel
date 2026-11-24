@@ -25,16 +25,21 @@ import {
 import type { CustomerAccountId, CustomerContactId, CustomerSubscriptionId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { type RuleInput, activityWindowDays } from "./evaluate"
-import { groupFacts } from "./group-facts"
+import { groupFacts, latest } from "./group-facts"
 import {
 	type AccountFacts,
 	activeUsersIn,
 	billed,
 	type ContactFacts,
+	type EndedPlanInvoice,
+	endedPaying,
 	type IssueSlaFacts,
 	type MetricPoint,
 	type OrgFacts,
 	pays,
+	type UnpaidEnd,
+	unpaidEndOf,
+	wasCustomer,
 } from "./facts"
 import { inList, isActive } from "./sql"
 import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "@hazel/customer-integrations/kit/time"
@@ -70,6 +75,8 @@ export interface AccountSnapshot {
 	readonly rollup: Rollup
 	/** Facts over the rolled-up account. */
 	readonly facts: AccountFacts
+	/** When it stopped paying, if its plans ended on a failed payment (`unpaidEndOf`). */
+	readonly unpaidSince: Date | null
 	/**
 	 * What signals evaluate: its own facts, its group's on a primary with environments, null on an
 	 * environment of a primary (its primary's signals stand for it, but for `ENVIRONMENT_TEMPLATES`:
@@ -190,6 +197,8 @@ export const rollupAccount = (input: {
 	/** The billing provider's (`mrrSource`). */
 	readonly subscriptions: ReadonlyArray<schema.CustomerSubscription>
 	readonly mrrSource: CustomerProvider | null
+	/** Its plans ended on a failed payment: past due while the invoice is open, else churned from it. */
+	readonly unpaidEnd?: UnpaidEnd | null
 	/** Add-on plan names (settings' `addOnPlans`): `planName` is a base plan's while there is one. */
 	readonly addOnPlans: ReadonlyArray<string>
 	/** Its usage billing per month (`usageMrrOf`), added on top of the plans' MRR. */
@@ -216,6 +225,8 @@ export const rollupAccount = (input: {
 	const named = live.filter((sub) => sub.planName !== null)
 	const top = topOf(named.filter((sub) => !addOns.has(sub.planName ?? ""))) ?? topOf(named) ?? topOf(live)
 	const trialEnds = trialing.map((sub) => sub.trialEndsAt).filter((date) => date !== null)
+	const unpaidEnd = input.unpaidEnd ?? null
+	const owing = unpaidEnd !== null && unpaidEnd.open.length > 0
 	const derived: LifecycleStage = live.some((sub) => sub.status === "past_due" || sub.status === "unpaid")
 		? "past_due"
 		: paid
@@ -223,8 +234,10 @@ export const rollupAccount = (input: {
 			: trialing.length > 0
 				? "trialing"
 				: account.customerSince !== null ||
-					  subscriptions.some((sub) => pays(sub) && sub.status === "canceled")
-					? "churned"
+					  subscriptions.some((sub) => wasCustomer(sub) && sub.status === "canceled")
+					? owing
+						? "past_due"
+						: "churned"
 					: "lead"
 	const paidStarts = subscriptions
 		.filter((sub) => pays(sub) && sub.status !== "trialing")
@@ -237,8 +250,8 @@ export const rollupAccount = (input: {
 	const canceled = subscriptions.map((sub) => sub.canceledAt?.getTime() ?? 0)
 	const churnedAt =
 		derived === "churned"
-			? (account.churnedAt ?? new Date(Math.max(...canceled, 0) || now.getTime()))
-			: paid
+			? (unpaidEnd?.since ?? account.churnedAt ?? new Date(Math.max(...canceled, 0) || now.getTime()))
+			: paid || owing
 				? null
 				: account.churnedAt
 
@@ -340,10 +353,10 @@ export const billsNow = (sub: schema.CustomerSubscription) => billed(sub) && pay
  * Whose subscriptions count for one account's MRR, from its subscriptions (any status). Over the
  * billing sources holding some, best preference first: the first that bills the account now
  * (`billsNow`), one needing a first import only once that is done (until then its data is partial).
- * With none billing now, the source stored last run (`stored`), so a payer ending in one provider
- * churns there rather than switching; without one, the one that paid (last preference first), else
- * the last preference. An account held by one source keeps it either way, so a disconnect does not
- * zero its MRR.
+ * With none billing now, the one source that knows the customer held a plan (`wasCustomer`), once
+ * it counts; else the source stored last run (`stored`), so a payer ending in one provider churns
+ * there rather than switching; else the last preference. An account held by one source keeps it
+ * either way, so a disconnect does not zero its MRR.
  */
 export const billingProviderOf = (
 	ready: ReadonlySet<CustomerProvider>,
@@ -361,8 +374,9 @@ export const billingProviderOf = (
 	if (holding.length === 1) return last.provider
 	const billing = holding.find(({ subs, counts }) => counts && subs.some(billsNow))
 	if (billing !== undefined) return billing.provider
-	if (stored !== null) return stored
-	return ([...holding].reverse().find(({ subs, counts }) => counts && subs.some(pays)) ?? last).provider
+	const customers = holding.filter(({ subs }) => subs.some(wasCustomer))
+	if (customers.length === 1 && customers[0].counts) return customers[0].provider
+	return stored ?? last.provider
 }
 
 /**
@@ -380,6 +394,36 @@ export const billingByAccount = (
 			return [accountId, { source, subscriptions: subs.filter((sub) => sub.provider === source) }]
 		}),
 	)
+
+/** The Stripe plan invoices of the accounts whose paid plans all ended, for `unpaidEndOf`. */
+export const endedPlanInvoices = Effect.fnUntraced(function* (
+	billingBy: ReturnType<typeof billingByAccount>,
+	accountIds: ReadonlyArray<CustomerAccountId>,
+) {
+	const ids = accountIds.filter((id) => endedPaying(billingBy.get(id)?.subscriptions ?? []))
+	if (ids.length === 0) return new Map<CustomerAccountId, Array<EndedPlanInvoice>>()
+	const db = yield* Database.Database
+	const invoices = yield* db.run(
+		SQLite.from(schema.customerInvoicesTable)
+			.select(
+				"id",
+				"accountId",
+				"subscriptionId",
+				"status",
+				"issuedAt",
+				"amountDueMinor",
+				"amountPaidMinor",
+				"attemptCount",
+			)
+			.where(($) => [
+				inList($.accountId, ids),
+				$.provider.eq("stripe"),
+				$.status.neq("upcoming"),
+				$.subscriptionId.isNotNull(),
+			]),
+	)
+	return groupBy<EndedPlanInvoice, CustomerAccountId>(invoices, (invoice) => invoice.accountId)
+})
 
 /** Accounts loaded (and their activity held in memory) at a time. */
 const ACCOUNT_CHUNK = 250
@@ -654,6 +698,45 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 		subscriptions,
 		new Map(accounts.map((account) => [account.id, account.mrrSource])),
 	)
+	const endedInvoicesBy = yield* endedPlanInvoices(billingBy, ids)
+	const churnSignalsBy = groupBy(
+		yield* db.run(
+			SQLite.from(schema.customerSignalsTable)
+				.select("accountId", "firstDetectedAt", "closedAt")
+				.where(($) => [inList($.accountId, ids), $.template.eq("churned")]),
+		),
+		(signal) => signal.accountId,
+	)
+	const churnNotifiedAt = (id: CustomerAccountId) =>
+		latest(
+			(churnSignalsBy.get(id) ?? []).map((signal) =>
+				signal.closedAt === null ? null : signal.firstDetectedAt,
+			),
+		)
+	// Payments since each account's last churn signal: only those can make a later churn a new one.
+	const notified = ids.flatMap((id) => {
+		const at = churnNotifiedAt(id)
+		return at === null ? [] : [{ id, at }]
+	})
+	const paymentsBy = groupBy(
+		notified.length === 0
+			? []
+			: yield* db.run(
+					SQLite.from(schema.customerInvoicesTable)
+						.select("accountId", "paidAt")
+						.where(($) => [
+							inList(
+								$.accountId,
+								notified.map(({ id }) => id),
+							),
+							$.provider.eq("stripe"),
+							$.status.eq("paid"),
+							$.amountPaidMinor.gt(0),
+							$.paidAt.gt(new Date(Math.min(...notified.map(({ at }) => at.getTime())))),
+						]),
+				),
+		(invoice) => invoice.accountId,
+	)
 	const invoicesBy = groupBy(openInvoices, (invoice) => invoice.accountId)
 	const subscriptionsBy = groupBy(subscriptions, (sub) => sub.accountId)
 	const paidInvoicesBy = groupBy(paidInvoices, (invoice) => invoice.accountId)
@@ -680,10 +763,12 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 		const lastActiveDay = lastActiveDayBy.get(stored.id) ?? null
 		const billing = billingBy.get(stored.id)
 		const accountSubs = billing?.subscriptions ?? []
+		const unpaidEnd = unpaidEndOf(accountSubs, endedInvoicesBy.get(stored.id) ?? [])
 		const rollup = rollupAccount({
 			account: stored,
 			subscriptions: accountSubs,
 			mrrSource: billing?.source ?? null,
+			unpaidEnd,
 			addOnPlans: base.settings.addOnPlans,
 			usageMrr: usageMrrOf(
 				subscriptionsBy.get(stored.id) ?? [],
@@ -707,6 +792,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 		return {
 			stored,
 			rollup,
+			unpaidSince: unpaidEnd?.since ?? null,
 			facts: {
 				account,
 				stage: rollup.lifecycleStage,
@@ -720,6 +806,14 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 				),
 				subscriptions: accountSubs,
 				openInvoices: invoicesBy.get(stored.id) ?? [],
+				unpaidInvoices: unpaidEnd?.open ?? [],
+				churnNotifiedAt: churnNotifiedAt(stored.id),
+				churnSignalOpen: (churnSignalsBy.get(stored.id) ?? []).some(
+					(signal) => signal.closedAt === null,
+				),
+				paymentsSinceChurn: (paymentsBy.get(stored.id) ?? []).flatMap((invoice) =>
+					invoice.paidAt === null ? [] : [invoice.paidAt],
+				),
 				metrics: metricMap,
 				movements: movementsBy.get(stored.id) ?? [],
 				openIssueSlas: (issueSlasBy.get(stored.id) ?? []).map(

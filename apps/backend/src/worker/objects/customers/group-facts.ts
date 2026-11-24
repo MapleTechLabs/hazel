@@ -211,6 +211,10 @@ export const groupFacts = (
 		priorActive,
 		subscriptions: group.flatMap((facts) => facts.subscriptions),
 		openInvoices: group.flatMap((facts) => facts.openInvoices),
+		unpaidInvoices: group.flatMap((facts) => facts.unpaidInvoices),
+		churnNotifiedAt: latest(group.map((facts) => facts.churnNotifiedAt)),
+		churnSignalOpen: group.some((facts) => facts.churnSignalOpen),
+		paymentsSinceChurn: group.flatMap((facts) => facts.paymentsSinceChurn),
 		metrics: new Map(
 			[...metrics].map(([key, days]) => [
 				key,

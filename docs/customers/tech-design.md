@@ -319,7 +319,10 @@ Rules:
   `trialListMrrMinor` = Σ `listMrrMinor` of trialing subs.
 - Stage (unless overridden): any `past_due|unpaid` → `past_due`; any `active` with MRR > 0 or
   `billsByUsage` → `active`; any `trialing` → `trialing`; paid before (MRR or `billsByUsage`) and
-  not now → `churned` (`churnedAt` set); else `lead`. `customerSince` = the earliest paid
+  not now → `churned` (`churnedAt` set), unless the plans ended on a failed payment (`unpaidEndOf`:
+  a failed invoice since the last paid one, issued before the end). Then it is `past_due` while
+  that invoice is open and `churned` once it is voided or uncollectible, its MRR and `churnedAt`
+  dated from the first failed invoice; else `lead`. `customerSince` = the earliest paid
   subscription's start (after its trial), a usage-billed one at MRR 0 included. `billsByUsage`
   changes no MRR, so it writes no movement; the paying-accounts count and the MRR history still
   count MRR > 0 only. A `payingOnly` rule scope covers a usage-billed account.
@@ -346,7 +349,9 @@ Rules:
 Every enabled rule × every in-scope, non-churned account (silent accounts included) that Needs
 attention covers (`customer_settings.attention`: its stage is one of `stages`, and it has an account
 record (account ref or subscription) from one of `requiredSources`, empty = any; default every non-churned stage, Stripe). A churned
-account is evaluated by `churned` alone, so churn is its last entry. A template
+account is evaluated by `churned` alone, so churn is its last entry, and it is announced once: after
+a churn signal closes, a new one needs a payment or a new paid plan before the plans' latest end
+(closed churn signals are kept past retention for this). A template
 needs ≥ 1 of its `requiredSources` connected, else it matches nothing (dry-run reports it).
 Connected = `active`; an activity source (Clerk, Maple) also needs to be delivering: one that pulls
 (`nextSyncAt` set) and has not succeeded for 30 h (a day plus the longest pull interval), or not yet

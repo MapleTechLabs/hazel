@@ -28,14 +28,17 @@ import {
 	type AccountFacts,
 	activeUsersIn,
 	billed,
+	canceledCardTrial,
 	DERIVED_METRICS,
 	formatMoney,
 	type MetricPoint,
 	mrrSeries,
 	type OrgFacts,
 	pays,
+	renewedBetween,
 	rollingActiveSeries,
 	seriesOf,
+	wasCustomer,
 } from "./facts"
 import { addDays, DAY_MS, dayOf, daysBetween, daysSince } from "@hazel/customer-integrations/kit/time"
 
@@ -50,6 +53,7 @@ export interface RuleInput {
 
 export type NonMatchReason =
 	| "Churned"
+	| "Plan ended"
 	| "Not covered by Needs attention"
 	| "Out of scope"
 	| "Missing data source"
@@ -202,17 +206,22 @@ const paymentFailed =
 		const pastDue = facts.subscriptions.filter(
 			(sub) => sub.status === "past_due" || sub.status === "unpaid",
 		)
+		// One an ended plan went unpaid on counts before its due date too (0 days late), and an
+		// auto-charged one, with no due date, is late from its issue.
+		const unpaidIds = new Set(facts.unpaidInvoices.map((invoice) => invoice.id))
 		const overdue = facts.openInvoices
-			.flatMap((invoice) =>
-				invoice.dueAt !== null && invoice.dueAt.getTime() < org.now.getTime()
-					? [{ ...invoice, dueAt: invoice.dueAt }]
-					: [],
-			)
+			.flatMap((invoice) => {
+				const owed = unpaidIds.has(invoice.id)
+				const dueAt = invoice.dueAt ?? (owed ? invoice.issuedAt : null)
+				return dueAt !== null && (owed || dueAt.getTime() < org.now.getTime())
+					? [{ ...invoice, dueAt }]
+					: []
+			})
 			.sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime())
 		const oldest = overdue[0]
 		const daysOverdue = oldest === undefined ? 0 : daysSince(oldest.dueAt, org.now)
 		const invoiceLate = oldest !== undefined && daysOverdue > config.overdueDays
-		if (pastDue.length === 0 && !invoiceLate) {
+		if (pastDue.length === 0 && !invoiceLate && unpaidIds.size === 0) {
 			return facts.subscriptions.length === 0 && facts.openInvoices.length === 0
 				? "No data"
 				: "Below threshold"
@@ -640,21 +649,32 @@ const churned =
 		// Before this compute's movement is loaded, the day it ended: a scheduled cancellation's period
 		// end once passed (an immediate one keeps a later period end it never reached), else
 		// `canceledAt`.
-		const ended = facts.subscriptions
-			.flatMap((sub) =>
-				sub.canceledAt === null
-					? []
-					: [
-							sub.cancelAtPeriodEnd &&
-							sub.currentPeriodEnd !== null &&
-							sub.currentPeriodEnd > sub.canceledAt &&
-							sub.currentPeriodEnd <= org.now
-								? sub.currentPeriodEnd
-								: sub.canceledAt,
-						],
-			)
-			.reduce<Date>((latest, date) => (date > latest ? date : latest), churnedAt)
-		const churnDay = churn?.day ?? dayOf(ended)
+		const ends = facts.subscriptions.flatMap((sub) =>
+			sub.canceledAt === null
+				? []
+				: [
+						{
+							at:
+								sub.cancelAtPeriodEnd &&
+								sub.currentPeriodEnd !== null &&
+								sub.currentPeriodEnd > sub.canceledAt &&
+								sub.currentPeriodEnd <= org.now
+									? sub.currentPeriodEnd
+									: sub.canceledAt,
+							paid: wasCustomer(sub),
+						},
+					],
+		)
+		const ended = ends.reduce<Date>((latest, end) => (end.at > latest ? end.at : latest), churnedAt)
+		// Announced once: it takes a payment or a new paid plan before this end to be a new churn.
+		const notified = facts.churnNotifiedAt
+		if (!facts.churnSignalOpen && notified !== null && !renewedBetween(facts, notified, ended))
+			return "Below threshold"
+		// A churn dated back to its failed invoice is announced from when the paid plan actually ended.
+		const churnDay = ends
+			.filter((end) => end.paid)
+			.map((end) => dayOf(end.at))
+			.reduce((latest, day) => (day > latest ? day : latest), churn?.day ?? dayOf(ended))
 		const days = daysBetween(churnDay, org.today)
 		if (days >= config.windowDays) return "Below threshold"
 		const canceled = [...facts.subscriptions]
@@ -677,7 +697,7 @@ const churned =
 		const currency = churn?.currency ?? org.currency
 		return {
 			step: 0,
-			reason: `${lost > 0 ? `Lost ${formatMoney(lost, currency)}/mo ` : ""}${days === 0 ? "today" : `${plural(days, "day")} ago`}`,
+			reason: `${lost > 0 ? `Lost ${formatMoney(lost, currency)}/mo ` : last !== undefined && canceledCardTrial(last) ? "Canceled during the trial " : ""}${days === 0 ? "today" : `${plural(days, "day")} ago`}`,
 			evidence: {
 				_tag: "delta",
 				step: 0,
@@ -705,9 +725,17 @@ export const missingSources = (template: SignalTemplate, org: OrgFacts): Readonl
 	return required.length === 0 || required.some((provider) => org.connected.has(provider)) ? [] : required
 }
 
+/** Every plan it held ended with no payment or card: it left before becoming a customer. */
+const leftUnpaid = (facts: AccountFacts) =>
+	facts.stage === "lead" &&
+	facts.subscriptions.length > 0 &&
+	facts.subscriptions.every((sub) => sub.status === "canceled" && !wasCustomer(sub))
+
 export const evaluate = (rule: RuleInput, facts: AccountFacts, org: OrgFacts): Evaluation => {
 	// Churn is a customer's last entry: no other rule evaluates it after.
 	if (facts.stage === "churned" && rule.template !== "churned") return noMatch("Churned")
+	// Nor does one after an unpaid plan ended, but a support issue it opened is still owed a reply.
+	if (leftUnpaid(facts) && !SLA_TEMPLATES.includes(rule.template)) return noMatch("Plan ended")
 	// The SLA templates cover every customer: only the rule's own scope narrows them.
 	if (!SLA_TEMPLATES.includes(rule.template) && !covered(facts, org))
 		return noMatch("Not covered by Needs attention")

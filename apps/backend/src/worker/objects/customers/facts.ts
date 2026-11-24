@@ -60,6 +60,14 @@ export interface AccountFacts {
 	/** The billing source's subscriptions (`billingProviderOf`). */
 	readonly subscriptions: ReadonlyArray<schema.CustomerSubscription>
 	readonly openInvoices: ReadonlyArray<schema.CustomerInvoice>
+	/** The open invoices its ended plans went unpaid on (`unpaidEndOf`): a payment still owed. */
+	readonly unpaidInvoices: ReadonlyArray<EndedPlanInvoice>
+	/** When the latest closed churn signal first fired: a churn is announced once per time it paid. */
+	readonly churnNotifiedAt: Date | null
+	/** A churn signal's episode is still running (open, snoozed, done or dismissed). */
+	readonly churnSignalOpen: boolean
+	/** When invoices were paid since `churnNotifiedAt`. */
+	readonly paymentsSinceChurn: ReadonlyArray<Date>
 	/** Source metrics over the loaded window, oldest first. */
 	readonly metrics: ReadonlyMap<string, ReadonlyArray<MetricPoint>>
 	/** MRR movements, oldest first. */
@@ -202,3 +210,103 @@ const unconverted = (sub: schema.CustomerSubscription) =>
  */
 export const pays = (sub: schema.CustomerSubscription) =>
 	(sub.mrrMinor > 0 || sub.billsByUsage) && !unconverted(sub)
+
+/**
+ * A trial taken with a card and canceled before it converted: a customer who left, though it never
+ * paid. Autumn prices only a trial a processor held; a Stripe one needs a card on file.
+ */
+export const canceledCardTrial = (sub: schema.CustomerSubscription) =>
+	unconverted(sub) &&
+	(sub.mrrMinor > 0 || sub.billsByUsage) &&
+	(sub.provider !== "stripe" || sub.paymentMethod !== null)
+
+/** It was a customer on this plan: it paid for it, or gave a card for its trial. */
+export const wasCustomer = (sub: schema.CustomerSubscription) => pays(sub) || canceledCardTrial(sub)
+
+/** Every plan that paid has ended, and no trial is running: a churned customer, unless it still owes. */
+export const endedPaying = (subscriptions: ReadonlyArray<schema.CustomerSubscription>) =>
+	subscriptions.some((sub) => sub.status === "canceled" && pays(sub)) &&
+	!subscriptions.some((sub) => sub.status === "trialing" || (billed(sub) && pays(sub)))
+
+/**
+ * It paid an invoice, or started a paid plan or card trial, after the churn announced at `since`
+ * and before its plans ended at `endedAt`: this is a new churn. Settling an old invoice after the
+ * end is not one.
+ */
+export const renewedBetween = (facts: AccountFacts, since: Date, endedAt: Date) =>
+	facts.paymentsSinceChurn.some((paidAt) => paidAt > since && paidAt <= endedAt) ||
+	facts.subscriptions.some((sub) => {
+		const paidFrom = canceledCardTrial(sub) ? sub.startedAt : (sub.trialEndsAt ?? sub.startedAt)
+		return (
+			sub.status !== "trialing" &&
+			wasCustomer(sub) &&
+			paidFrom !== null &&
+			paidFrom > since &&
+			paidFrom <= endedAt
+		)
+	})
+
+/** What `unpaidEndOf` reads of an invoice. */
+export type EndedPlanInvoice = Pick<
+	schema.CustomerInvoice,
+	| "id"
+	| "accountId"
+	| "subscriptionId"
+	| "status"
+	| "issuedAt"
+	| "amountDueMinor"
+	| "amountPaidMinor"
+	| "attemptCount"
+>
+
+/** How a customer's paid plans ended when the payment before the end failed. */
+export interface UnpaidEnd {
+	/** The first failed invoice's issue date: when the customer stopped paying. */
+	readonly since: Date
+	/** Those still open. None left (voided, uncollectible) and the customer has churned, from `since`. */
+	readonly open: ReadonlyArray<EndedPlanInvoice>
+}
+
+/**
+ * The unpaid end of a customer's plans, if they ended on a failed payment: plan invoices collection
+ * failed on, issued after the last plan invoice paid and before the plans ended (a final invoice
+ * raised by the cancellation itself is not why they ended). One-off invoices say nothing about a
+ * plan, paid or not. Null for a customer that left with its bills paid.
+ */
+export const unpaidEndOf = (
+	subscriptions: ReadonlyArray<schema.CustomerSubscription>,
+	invoices: ReadonlyArray<EndedPlanInvoice>,
+): UnpaidEnd | null => {
+	if (!endedPaying(subscriptions)) return null
+	const planInvoices = invoices.filter((invoice) => invoice.subscriptionId !== null)
+	const endedAt = Math.max(
+		...subscriptions
+			.filter((sub) => sub.status === "canceled" && pays(sub))
+			.map((sub) => sub.canceledAt?.getTime() ?? Number.POSITIVE_INFINITY),
+	)
+	const lastPaid = Math.max(
+		0,
+		...planInvoices
+			.filter((invoice) => invoice.status === "paid" && invoice.amountPaidMinor > 0)
+			.map((invoice) => invoice.issuedAt?.getTime() ?? 0),
+	)
+	const failed = planInvoices
+		.flatMap((invoice) => {
+			const issued = invoice.issuedAt?.getTime() ?? null
+			return issued !== null &&
+				issued > lastPaid &&
+				issued <= endedAt &&
+				invoice.status !== "paid" &&
+				invoice.attemptCount > 0 &&
+				invoice.amountDueMinor > invoice.amountPaidMinor
+				? [{ invoice, issued }]
+				: []
+		})
+		.sort((a, b) => a.issued - b.issued)
+	const first = failed[0]
+	if (first === undefined) return null
+	return {
+		since: new Date(first.issued),
+		open: failed.flatMap(({ invoice }) => (invoice.status === "open" ? [invoice] : [])),
+	}
+}
