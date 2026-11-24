@@ -597,6 +597,38 @@ describe("signal evaluation", () => {
 		).toEqual(notCovered)
 	})
 
+	it("a lead whose plans all ended unpaid gets no more signals", () => {
+		const left: FactsInput = {
+			account: { lifecycleStage: "lead", mrrMinor: 0 },
+			activity: { ann: [-30] },
+			priorActive: [[30, 1]],
+			subscriptions: [
+				{ status: "canceled", mrrMinor: 0, canceledAt: new Date(NOW.getTime() - 36 * 86_400_000) },
+			],
+		}
+		const ended = { _tag: "NoMatch", reason: "Plan ended" }
+		expect(run("inactive", left)).toEqual(ended)
+		expect(run("usage_drop", left)).toEqual(ended)
+		// A plan still live, one that paid (a group's churned environment beside a lead one), no plan
+		// at all, or a stage set by hand: still someone to watch.
+		expect(
+			run("inactive", {
+				...left,
+				subscriptions: [...left.subscriptions!, { status: "active", mrrMinor: 0 }],
+			})._tag,
+		).toBe("Match")
+		expect(
+			run("inactive", {
+				...left,
+				subscriptions: [...left.subscriptions!, { status: "canceled", mrrMinor: 3_900 }],
+			})._tag,
+		).toBe("Match")
+		expect(run("inactive", { ...left, subscriptions: [] })._tag).toBe("Match")
+		expect(run("inactive", { ...left, account: { lifecycleStage: "active", mrrMinor: 0 } })._tag).toBe(
+			"Match",
+		)
+	})
+
 	it("churned: announced once, until the customer pays or starts a paid plan again", () => {
 		const ago = (days: number) => new Date(NOW.getTime() - days * 86_400_000)
 		const churned: FactsInput = {
@@ -624,6 +656,11 @@ describe("signal evaluation", () => {
 		// A trial it canceled before converting paid nothing.
 		const trial = { ...resubscribed, trialEndsAt: ago(1) }
 		expect(run("churned", { ...churned, subscriptions: [trial] })).toEqual(noMatch)
+		// With a card on file it was a customer: a new trial canceled is a new churn.
+		const paymentMethod = { brand: "visa", last4: "4242", expMonth: 1, expYear: 2030 }
+		expect(run("churned", { ...churned, subscriptions: [{ ...trial, paymentMethod }] })._tag).toBe(
+			"Match",
+		)
 	})
 
 	it("churned: a churn dated back to its failed invoice is announced from the plan's end", () => {
@@ -937,6 +974,14 @@ describe("signal evaluation", () => {
 			const narrow = orgFacts({ attention: { stages: ["active"], requiredSources: ["stripe"] } })
 			expect(run("response_overdue", lead, narrow)._tag).toBe("Match")
 			expect(run("resolution_overdue", lead, narrow)._tag).toBe("Match")
+			// A plan that ended unpaid does not take back a reply it is owed.
+			expect(
+				run(
+					"response_overdue",
+					{ ...lead, subscriptions: [{ status: "canceled", mrrMinor: 0 }] },
+					narrow,
+				)._tag,
+			).toBe("Match")
 			// Other templates stay behind the coverage.
 			expect(run("health_drop", lead, narrow)).toEqual({
 				_tag: "NoMatch",

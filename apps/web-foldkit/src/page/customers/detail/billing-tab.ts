@@ -1,4 +1,5 @@
 import type * as Customers from "@hazel/domain/customers"
+import { CHECKOUT_ABANDONED } from "@hazel/domain/customers"
 import { Option } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import type { Html, HtmlBuilder } from "foldkit/html"
@@ -142,7 +143,11 @@ const subscriptionCard = (
 	overdue: Customers.Invoice | null,
 ): Html => {
 	const now = new Date(context.nowMs)
-	const [statusLabel, statusIntent] = SUBSCRIPTION_STATUS[subscription.status]
+	const abandoned =
+		subscription.status === "canceled" && subscription.cancellationReason === CHECKOUT_ABANDONED
+	const [statusLabel, statusIntent] = abandoned
+		? (["Checkout abandoned", "outline"] as const)
+		: SUBSCRIPTION_STATUS[subscription.status]
 	const date = (value: Customers.Subscription["startedAt"]) =>
 		value === null ? "—" : formatDate(value, { now, withYear: true })
 	return h.section(
@@ -194,12 +199,14 @@ const subscriptionCard = (
 				[
 					fact(h, "Interval", INTERVAL_LABEL[subscription.interval]),
 					fact(h, "Seats", String(subscription.quantity)),
-					fact(h, "Current period ends", date(subscription.currentPeriodEnd)),
+					fact(h, "Current period ends", abandoned ? "—" : date(subscription.currentPeriodEnd)),
 					fact(
 						h,
 						overdue === null ? "Started" : "Amount overdue",
 						overdue === null
-							? date(subscription.startedAt)
+							? abandoned
+								? "—"
+								: date(subscription.startedAt)
 							: h.span(
 									[h.Class("text-danger-subtle-fg")],
 									[
@@ -222,10 +229,10 @@ const subscriptionCard = (
 					fact(h, "Trial ends", date(subscription.trialEndsAt)),
 					fact(
 						h,
-						"Canceled",
+						abandoned ? "Abandoned" : "Canceled",
 						subscription.canceledAt === null
 							? "—"
-							: `${date(subscription.canceledAt)}${subscription.cancellationReason ? ` · ${subscription.cancellationReason}` : ""}`,
+							: `${date(subscription.canceledAt)}${!abandoned && subscription.cancellationReason ? ` · ${subscription.cancellationReason}` : ""}`,
 					),
 				],
 			),

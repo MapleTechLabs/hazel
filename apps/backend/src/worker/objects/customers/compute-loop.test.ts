@@ -1519,6 +1519,65 @@ describe("Customers compute and sync loop", () => {
 		onNoMatch: "create",
 	})
 
+	it("announces a card trial canceled before converting as a churn, with no MRR lost", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [org("org_1")])
+				yield* world.ingest("stripe", [
+					{
+						...subscription(5),
+						status: "canceled",
+						trialEndsAt: new Date(NOW.getTime() + 9 * DAY).toISOString(),
+						canceledAt: new Date(NOW.getTime() - DAY).toISOString(),
+						paymentMethod: { brand: "visa", last4: "4242", expMonth: 1, expYear: 2030 },
+					},
+				])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(
+					world.rows<{ lifecycleStage: string; mrrMinor: number }>(
+						`SELECT lifecycleStage, mrrMinor FROM customer_accounts`,
+					),
+				).toEqual([{ lifecycleStage: "churned", mrrMinor: 0 }])
+				expect(
+					world.rows<{ reason: string }>(
+						`SELECT reason FROM customer_signals WHERE template = 'churned'`,
+					),
+				).toEqual([{ reason: "Canceled during the trial 1 day ago" }])
+				expect(world.rows(`SELECT id FROM customer_mrr_movements`)).toEqual([])
+			}),
+		))
+
+	it("replaces a plan's start and cancel with an abandoned checkout once Autumn shows it", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [org("org_1")])
+				const ended: UpsertSubscription = {
+					...subscription(1),
+					status: "canceled",
+					mrrMinor: 0,
+					canceledAt: new Date(NOW.getTime() - DAY).toISOString(),
+				}
+				const titles = () =>
+					world
+						.rows<{ title: string }>(
+							`SELECT title FROM customer_events WHERE type LIKE 'subscription.%' ORDER BY title`,
+						)
+						.map((row) => row.title)
+				yield* world.ingest("autumn", [ended])
+				expect(titles()).toEqual(["Canceled Team", "Started Team"])
+				const abandoned = { ...ended, cancellationReason: "checkout_abandoned" }
+				yield* world.ingest("autumn", [abandoned])
+				expect(titles()).toEqual(["Abandoned checkout for Team"])
+				yield* world.ingest("autumn", [abandoned])
+				expect(titles()).toEqual(["Abandoned checkout for Team"])
+				// A live plan reusing its id did start.
+				yield* world.ingest("autumn", [{ ...subscription(1), cancellationReason: null }])
+				expect(titles()).toEqual(["Started Team"])
+			}),
+		))
+
 	it("announces a churn once, and again only after a payment", () =>
 		run(
 			Effect.gen(function* () {
