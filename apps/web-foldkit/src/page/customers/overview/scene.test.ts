@@ -31,7 +31,6 @@ const answered = (options: Readonly<{ billing: boolean; signals: boolean }>): Mo
 	),
 	settings: {
 		lastComputedAtMs: SETTINGS.lastComputedAt === null ? null : msOf(SETTINGS.lastComputedAt),
-		bands: SETTINGS.health.bands,
 		reportingCurrency: SETTINGS.reportingCurrency,
 	},
 	overview: AsyncData.Success({ data: overviewFixture("30d", { partial: !options.billing }) }),
@@ -50,11 +49,6 @@ describe("Customers overview", () => {
 			Scene.expect(Scene.within(keyNumbers, Scene.role("button", { name: "MRR at risk" }))).toExist(),
 			Scene.expect(Scene.within(keyNumbers, Scene.text("$48,210"))).toExist(),
 			Scene.expect(Scene.role("button", { name: "Logo churn" })).toExist(),
-			Scene.expect(
-				Scene.role("img", {
-					name: "MRR by health: Healthy $35,980, At risk $8,140, Critical $3,310, Unknown $780",
-				}),
-			).toExist(),
 		)
 	})
 

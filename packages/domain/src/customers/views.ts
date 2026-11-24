@@ -5,7 +5,7 @@
 import { UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { EmployeeRange } from "./company"
-import { HealthStatus, LifecycleStage } from "./enums"
+import { LifecycleStage } from "./enums"
 
 export const ListColumn = Schema.Literals([
 	"name",
@@ -13,7 +13,6 @@ export const ListColumn = Schema.Literals([
 	"stage",
 	"plan",
 	"mrr",
-	"health",
 	"active_users_30d",
 	"usage_trend",
 	"last_active",
@@ -34,7 +33,6 @@ export const DEFAULT_LIST_COLUMNS: ReadonlyArray<ListColumn> = [
 	"stage",
 	"plan",
 	"mrr",
-	"health",
 	"active_users_30d",
 	"usage_trend",
 	"last_active",
@@ -51,7 +49,6 @@ export const ViewFilters = Schema.Struct({
 	/** Accounts with no owner. */
 	unowned: Schema.optionalKey(Schema.Boolean),
 	lifecycleStages: Schema.optionalKey(Schema.Array(LifecycleStage).check(Schema.isMaxLength(20))),
-	healthStatuses: Schema.optionalKey(Schema.Array(HealthStatus).check(Schema.isMaxLength(20))),
 	planNames: Schema.optionalKey(
 		Schema.Array(Schema.String.check(Schema.isMaxLength(100))).check(Schema.isMaxLength(50)),
 	),

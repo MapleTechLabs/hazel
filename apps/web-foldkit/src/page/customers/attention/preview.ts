@@ -6,7 +6,7 @@ import { customerAccountOf, queueNameOf } from "../../../customers/groups"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { formatCount, formatDate, formatMoney, formatRelative } from "../../../customers/format"
 import { environmentCounts, environmentsHintOf } from "../../../customers/groups"
-import { healthBadge, kindChip, severityChip, STAGE_LABEL } from "../../../customers/ui/badges"
+import { kindChip, severityChip, STAGE_LABEL } from "../../../customers/ui/badges"
 import { evidenceDetail } from "../../../customers/ui/evidence"
 import { companyLogo, personLabel, sourceMark } from "../../../customers/ui/identity"
 import { kbd } from "../../../customers/ui/shortcuts"
@@ -50,21 +50,12 @@ const section = (h: HtmlBuilder<Message>, title: string, children: ReadonlyArray
 
 const summary = (h: HtmlBuilder<Message>, account: AccountRow, owner: string | null): Html =>
 	h.div(
-		[h.Class("grid grid-cols-2 gap-3 px-5 py-4 md:grid-cols-4")],
+		[h.Class("grid grid-cols-3 gap-3 px-5 py-4")],
 		[
 			stat(h, {
 				label: "MRR",
 				value: formatMoney(account.mrrMinor, account.currency),
 				detail: account.planName,
-			}),
-			stat(h, {
-				label: "Health",
-				value: healthBadge(h, {
-					status: account.healthStatus,
-					score: account.healthScore,
-					className: "w-fit",
-				}),
-				detail: null,
 			}),
 			stat(h, {
 				label: "Active 30d",

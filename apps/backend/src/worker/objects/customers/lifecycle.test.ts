@@ -1,25 +1,11 @@
 /**
- * The pure scoring: health components, weight redistribution and bands (`./health.ts`); the signal
- * lifecycle and priority (`./lifecycle.ts`).
+ * The signal lifecycle and priority (`./lifecycle.ts`).
  */
-import { DEFAULT_HEALTH_SETTINGS, type SignalEvidence } from "@hazel/domain/customers"
+import type { SignalEvidence } from "@hazel/domain/customers"
 import { describe, expect, it } from "vitest"
 import type { Match } from "./evaluate"
-import { type HealthInputs, maxStep, minStep, scoreHealth } from "./health"
 import { priorityScore, transition, valueOf } from "./lifecycle"
 import { accountRow, NOW, signalRow } from "./test-kit"
-
-const inputs = (overrides: Partial<HealthInputs> = {}): HealthInputs => ({
-	customer: true,
-	hasActivityData: true,
-	contactCount: 10,
-	activeUsers30d: 7,
-	trendPct: 12,
-	daysSinceActive: 0,
-	billing: { pastDue: false, overdueOverWeek: false, overdue: false, cancelScheduled: false },
-	openRisk: { high: 0, medium: 0, low: 0 },
-	...overrides,
-})
 
 const evidence = (step: 0 | 1 | 2): SignalEvidence => ({
 	_tag: "last_active",
@@ -43,79 +29,6 @@ const matchOf = (step: 0 | 1 | 2, severity: Match["severity"] = "medium"): Match
 const days = (count: number) => count * 86_400_000
 const at = (offsetDays: number) => new Date(NOW.getTime() + days(offsetDays))
 const input = { now: NOW, baseline: false, valueMinor: 19_900 }
-
-describe("health score", () => {
-	it("steps pick the first threshold the value passes", () => {
-		const steps = DEFAULT_HEALTH_SETTINGS.steps
-		expect(minStep(steps.usage.activeRatio, 0.7)).toBe(100)
-		expect(minStep(steps.usage.activeRatio, 0.25)).toBe(50)
-		expect(minStep(steps.usage.activeRatio, 0)).toBe(0)
-		expect(maxStep(steps.engagement.daysSinceActive, 0)).toBe(100)
-		expect(maxStep(steps.engagement.daysSinceActive, 10)).toBe(50)
-		expect(maxStep(steps.engagement.daysSinceActive, 400)).toBe(0)
-	})
-
-	it("a healthy account scores 100 and explains each component", () => {
-		const result = scoreHealth(inputs(), DEFAULT_HEALTH_SETTINGS)
-		expect(result).toMatchObject({ score: 100, status: "healthy" })
-		expect(result.components.find((part) => part.key === "usage")?.why).toBe(
-			"7 of 10 contacts active in 30 days; trend +12%",
-		)
-		expect(result.components.every((part) => !part.excluded)).toBe(true)
-	})
-
-	it("bands the weighted score", () => {
-		const result = scoreHealth(
-			inputs({
-				activeUsers30d: 2,
-				trendPct: -40,
-				daysSinceActive: 10,
-				billing: { pastDue: true, overdueOverWeek: true, overdue: true, cancelScheduled: false },
-				openRisk: { high: 1, medium: 1, low: 0 },
-			}),
-			DEFAULT_HEALTH_SETTINGS,
-		)
-		// usage 0.6×50 + 0.4×10 = 34; engagement 50; billing 20; signals 55.
-		expect(result.components.map((part) => part.score)).toEqual([34, 50, 20, 55])
-		expect(result.score).toBe(Math.round(0.35 * 34 + 0.25 * 50 + 0.25 * 20 + 0.15 * 55))
-		expect(result.status).toBe("critical")
-		expect(result.components.find((part) => part.key === "billing")?.why).toBe(
-			"Payment past due; Invoice overdue for over a week",
-		)
-	})
-
-	it("shares an excluded component's weight across the rest", () => {
-		const result = scoreHealth(inputs({ billing: null, daysSinceActive: 10 }), DEFAULT_HEALTH_SETTINGS)
-		const billing = result.components.find((part) => part.key === "billing")!
-		expect(billing).toMatchObject({
-			excluded: true,
-			score: null,
-			effectiveWeight: 0,
-			why: "No subscription",
-		})
-		const weights = result.components.map((part) => part.effectiveWeight)
-		expect(weights.reduce((sum, weight) => sum + weight, 0)).toBeCloseTo(100)
-		expect(result.components.find((part) => part.key === "usage")?.effectiveWeight).toBeCloseTo(
-			(35 / 75) * 100,
-		)
-		expect(result.score).toBe(Math.round((35 / 75) * 100 + (25 / 75) * 50 + (15 / 75) * 100))
-	})
-
-	it("has no score for leads and churned accounts, or with only signals to go on", () => {
-		expect(scoreHealth(inputs({ customer: false }), DEFAULT_HEALTH_SETTINGS)).toMatchObject({
-			score: null,
-			status: "unknown",
-		})
-		expect(
-			scoreHealth(inputs({ hasActivityData: false, billing: null }), DEFAULT_HEALTH_SETTINGS),
-		).toMatchObject({
-			score: null,
-			status: "unknown",
-		})
-		// A billing-only org still gets a score.
-		expect(scoreHealth(inputs({ hasActivityData: false }), DEFAULT_HEALTH_SETTINGS).score).toBe(100)
-	})
-})
 
 describe("signal lifecycle", () => {
 	it("opens a new match, or records it dismissed in baseline mode", () => {

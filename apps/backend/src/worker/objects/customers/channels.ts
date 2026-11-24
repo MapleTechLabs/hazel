@@ -2,12 +2,12 @@
  * Channels linked to customer accounts (`docs/customers/channels.md`), on the `CustomersObject`
  * side: the live links (`customer_channel_links`) and their projection to the `OrgObject`
  * (`org.setChannelCustomers`, a full snapshot of channel → the account's id, name, logo, company
- * profile and glance: health and why, stage, plan, MRR, owner, seats, last active day, open signals,
- * provider links).
+ * profile and glance: stage, plan, MRR, owner, seats, last active day, open signals, provider
+ * links).
  *
  * The snapshot is sent when it changes (its fingerprint covers every field): after a link or
  * unlink, after a person changes an account's name or owner or a signal's status, and at the end
- * of every compute (names and numbers set by sources, health, signals, accounts a source deleted).
+ * of every compute (names and numbers set by sources, signals, accounts a source deleted).
  * Only live links of live accounts are projected; the org writes only the rows that changed.
  *
  * A link belongs to the customer, not to one environment: it is stored on the group's primary
@@ -15,7 +15,7 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { integrations } from "@hazel/customer-integrations"
-import { type CustomerProvider, type HealthBreakdown, logoOf } from "@hazel/domain/customers"
+import { type CustomerProvider, logoOf } from "@hazel/domain/customers"
 import { ChannelCustomer } from "@hazel/domain/models"
 import type {
 	ChannelId,
@@ -123,12 +123,9 @@ type Glance = Omit<
 	"channelId" | "accountId" | "accountName" | "accountLogoUrl" | "company"
 >
 
-/** Days of health history searched for a customer's latest breakdown. */
-const HEALTH_LOOKBACK_DAYS = 7
-
 /**
- * Each customer's glance, over its group (the customer and its environments): health, stage, plan
- * and owner are the customer's; MRR (in its currency), seats and last activity are the group's;
+ * Each customer's glance, over its group (the customer and its environments): stage, plan and
+ * owner are the customer's; MRR (in its currency), seats and last activity are the group's;
  * signals and provider links are any of the group's (signals land on the primary).
  */
 const glancesOf = (customers: ReadonlyArray<schema.CustomerAccount>) =>
@@ -180,17 +177,6 @@ const glancesOf = (customers: ReadonlyArray<schema.CustomerAccount>) =>
 					[$.id, "asc"],
 				]),
 		)
-		const today = new Date(yield* Clock.currentTimeMillis)
-		const since = new Date(today.getTime() - HEALTH_LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10)
-		const health = new Map<CustomerAccountId, HealthBreakdown>()
-		for (const row of yield* db.run(
-			SQLite.from(schema.customerHealthDailyTable)
-				.select("accountId", "breakdown")
-				.where(($) => [inList($.accountId, customerIds), $.day.gte(since)])
-				.orderBy(($) => [[$.day, "desc"]]),
-		)) {
-			if (!health.has(row.accountId)) health.set(row.accountId, row.breakdown)
-		}
 
 		return new Map<CustomerAccountId, Glance>(
 			customers.map((customer) => {
@@ -202,9 +188,6 @@ const glancesOf = (customers: ReadonlyArray<schema.CustomerAccount>) =>
 				return [
 					customer.id,
 					{
-						healthStatus: customer.healthStatus,
-						healthScore: customer.healthScore,
-						healthWhy: customer.healthScore === null ? null : weakestWhy(health.get(customer.id)),
 						// The group's rules, as signals see the customer (`group-facts.ts`).
 						lifecycleStage: groupStage([
 							customer.lifecycleStage,
@@ -240,19 +223,6 @@ type GroupAccount = Pick<
 	schema.CustomerAccount,
 	"id" | "lifecycleStage" | "planName" | "mrrMinor" | "seatsUsed" | "seatsLimit" | "lastActiveAt"
 >
-
-/** The scored component pulling the score down most: its plain reason. */
-const weakestWhy = (breakdown: HealthBreakdown | undefined): string | null => {
-	const scored = (breakdown?.components ?? []).flatMap((component) =>
-		component.excluded || component.score === null
-			? []
-			: [{ score: component.score, why: component.why }],
-	)
-	const [first, ...rest] = scored
-	if (first === undefined) return null
-	return rest.reduce((weakest, component) => (component.score < weakest.score ? component : weakest), first)
-		.why
-}
 
 /** One link per provider, in `PROVIDER_ORDER`: the customer's own record first, else an environment's. */
 const sourceLinksOf = (

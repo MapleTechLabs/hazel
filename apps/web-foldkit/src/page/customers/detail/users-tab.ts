@@ -28,9 +28,9 @@ const DAY_MS = 86_400_000
 const nonNull = (html: Html | null): ReadonlyArray<Html> => (html === null ? [] : [html])
 
 const STATUS = {
-	active: ["Active", "success", "seen in the last 30 days", "bg-health-healthy"],
-	dormant: ["Dormant", "warning", "not seen for 30+ days", "bg-health-at-risk"],
-	never_active: ["Never active", "secondary", "joined, no product activity", "bg-health-unknown"],
+	active: ["Active", "success", "seen in the last 30 days", "bg-chart-new"],
+	dormant: ["Dormant", "warning", "not seen for 30+ days", "bg-chart-contraction"],
+	never_active: ["Never active", "secondary", "joined, no product activity", "bg-chart-neutral"],
 } as const satisfies Record<Customers.ContactActivityStatus, readonly [string, string, string, string]>
 
 /** 30 days of activity as cells: brighter is more events that day. */

@@ -6,7 +6,7 @@ import { toEpochMs } from "~/lib/utils"
 import { IconDots } from "../../../../icons"
 import { sparkline } from "../../../../customers/charts/sparkline"
 import { formatCount, formatMoney, formatRelative } from "../../../../customers/format"
-import { healthBadge, stageBadge } from "../../../../customers/ui/badges"
+import { stageBadge } from "../../../../customers/ui/badges"
 import { type Column, dataTable, primaryCell } from "../../../../ui/data-table"
 import { noResultsState } from "../../../../customers/ui/empty-states"
 import { companyLogo, personLabel } from "../../../../customers/ui/identity"
@@ -87,7 +87,7 @@ const update = (model: Model, message: Message): { model: Model } => ({
 })
 
 const view = (model: Model, h: HtmlBuilder<Message>): Html => {
-	const tableColumns: ReadonlyArray<Column<Account, SortKey | "name" | "owner" | "stage" | "health">> = [
+	const tableColumns: ReadonlyArray<Column<Account, SortKey | "name" | "owner" | "stage">> = [
 		{
 			key: "name",
 			label: "Customer",
@@ -142,12 +142,6 @@ const view = (model: Model, h: HtmlBuilder<Message>): Html => {
 						h.span([h.Class("w-8")], [formatCount(account.activeUsers30d)]),
 					],
 				),
-		},
-		{
-			key: "health",
-			label: "Health",
-			widthClass: "w-32",
-			cell: (account) => healthBadge(h, { status: account.healthStatus, score: account.healthScore }),
 		},
 		{
 			key: "last_active",

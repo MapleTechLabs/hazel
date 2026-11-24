@@ -257,7 +257,6 @@ const initialModel = (route: Route): Model => ({
 	members: [],
 	metrics: [],
 	connectedProviders: [],
-	bands: Customers.DEFAULT_HEALTH_SETTINGS.bands,
 	detail: AsyncData.Idle(),
 	usageMetric: "active_users",
 	usageRange: "30d",
@@ -758,8 +757,6 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		UpdatedConnectedProviders: ({ providers }) => ({
 			model: modifyFields(model, { connectedProviders: () => providers }),
 		}),
-
-		UpdatedBands: ({ bands }) => ({ model: modifyFields(model, { bands: () => bands }) }),
 
 		ClickedTab: ({ tab }) => (tab === model.tab ? { model } : navigateToTab(model, shared, tab)),
 		PressedNeighbour: ({ step }) => {

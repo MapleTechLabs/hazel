@@ -1,5 +1,5 @@
 {
-	"migration": "0015_dm_last_message",
+	"migration": "0016_remove_customer_health_score",
 	"entities": [
 		{
 			"kind": "table",
@@ -1029,35 +1029,8 @@
 		{
 			"kind": "column",
 			"table": "channel_customers",
-			"name": "healthStatus",
-			"position": 6,
-			"type": "text",
-			"notNull": true,
-			"default": "'unknown'"
-		},
-		{
-			"kind": "column",
-			"table": "channel_customers",
-			"name": "healthScore",
-			"position": 7,
-			"type": "integer",
-			"notNull": false,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "channel_customers",
-			"name": "healthWhy",
-			"position": 8,
-			"type": "text",
-			"notNull": false,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "channel_customers",
 			"name": "lifecycleStage",
-			"position": 9,
+			"position": 6,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -1066,7 +1039,7 @@
 			"kind": "column",
 			"table": "channel_customers",
 			"name": "planName",
-			"position": 10,
+			"position": 7,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -1075,7 +1048,7 @@
 			"kind": "column",
 			"table": "channel_customers",
 			"name": "mrrMinor",
-			"position": 11,
+			"position": 8,
 			"type": "integer",
 			"notNull": false,
 			"default": null
@@ -1084,7 +1057,7 @@
 			"kind": "column",
 			"table": "channel_customers",
 			"name": "currency",
-			"position": 12,
+			"position": 9,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -1093,7 +1066,7 @@
 			"kind": "column",
 			"table": "channel_customers",
 			"name": "ownerUserId",
-			"position": 13,
+			"position": 10,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -1102,7 +1075,7 @@
 			"kind": "column",
 			"table": "channel_customers",
 			"name": "seatsUsed",
-			"position": 14,
+			"position": 11,
 			"type": "integer",
 			"notNull": false,
 			"default": null
@@ -1111,7 +1084,7 @@
 			"kind": "column",
 			"table": "channel_customers",
 			"name": "seatsLimit",
-			"position": 15,
+			"position": 12,
 			"type": "integer",
 			"notNull": false,
 			"default": null
@@ -1120,7 +1093,7 @@
 			"kind": "column",
 			"table": "channel_customers",
 			"name": "lastActiveDay",
-			"position": 16,
+			"position": 13,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -1129,7 +1102,7 @@
 			"kind": "column",
 			"table": "channel_customers",
 			"name": "openSignalCount",
-			"position": 17,
+			"position": 14,
 			"type": "integer",
 			"notNull": true,
 			"default": "0"
@@ -1138,7 +1111,7 @@
 			"kind": "column",
 			"table": "channel_customers",
 			"name": "topSignals",
-			"position": 18,
+			"position": 15,
 			"type": "text",
 			"notNull": true,
 			"default": "'[]'"
@@ -1147,7 +1120,7 @@
 			"kind": "column",
 			"table": "channel_customers",
 			"name": "sourceLinks",
-			"position": 19,
+			"position": 16,
 			"type": "text",
 			"notNull": true,
 			"default": "'[]'"
@@ -1156,7 +1129,7 @@
 			"kind": "column",
 			"table": "channel_customers",
 			"name": "company",
-			"position": 20,
+			"position": 17,
 			"type": "text",
 			"notNull": false,
 			"default": null

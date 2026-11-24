@@ -55,7 +55,6 @@ export const FilterField = Schema.Literals([
 	"plan",
 	"owner",
 	"tag",
-	"health",
 	"mrr",
 	"last_active",
 	"signals",
@@ -161,7 +160,6 @@ const BUILT_IN_FALLBACK: ReadonlyArray<{
 	{ key: "my_customers", name: "My customers", filters: { ownedByMe: true } },
 	{ key: "paying", name: "Paying", filters: { payingOnly: true } },
 	{ key: "trialing", name: "Trialing", filters: { lifecycleStages: ["trialing"] } },
-	{ key: "at_risk", name: "At risk", filters: { healthStatuses: ["at_risk", "critical"] } },
 	{ key: "churned", name: "Churned", filters: { lifecycleStages: ["churned"] } },
 ]
 
@@ -171,7 +169,7 @@ export const ALL_DRAFT: Draft = {
 	columns: Customers.DEFAULT_LIST_COLUMNS,
 }
 
-/** The default tab: paying and trialing accounts (the backend's "customer", `compute.ts` health inputs). */
+/** The default tab: paying and trialing accounts (the backend's "customer"). */
 export const CURRENT_DRAFT: Draft = {
 	filters: { lifecycleStages: ["trialing", "active", "past_due"] },
 	sort: { column: "mrr", direction: "desc" },
@@ -330,7 +328,6 @@ export const matchesFilters = (
 		inKnownList(filters.countryCodes, countryOf(account)) &&
 		inKnownList(filters.fundingStages, fundingOf(account)) &&
 		inList(filters.lifecycleStages, account.lifecycleStage) &&
-		inList(filters.healthStatuses, account.healthStatus) &&
 		inList(filters.planNames, account.planName ?? "") &&
 		(filters.tagsAny === undefined ||
 			filters.tagsAny.length === 0 ||
@@ -389,8 +386,6 @@ const sortKeyOf = (
 			return (account.planName ?? "￿").toLowerCase()
 		case "mrr":
 			return account.mrrMinor
-		case "health":
-			return nullsLast(account.healthStatus === "unknown" ? null : account.healthScore, direction)
 		case "active_users_30d":
 			return account.activeUsers30d
 		case "usage_trend":
@@ -553,7 +548,6 @@ export const COLUMN_LABEL = {
 	stage: "Stage",
 	plan: "Plan",
 	mrr: "MRR",
-	health: "Health",
 	active_users_30d: "Active 30d",
 	usage_trend: "Trend",
 	last_active: "Last active",
@@ -620,7 +614,6 @@ const FIELD_KEYS = {
 	stage: ["lifecycleStages"],
 	plan: ["planNames"],
 	tag: ["tagsAny"],
-	health: ["healthStatuses"],
 	mrr: ["minMrrMinor", "maxMrrMinor", "payingOnly"],
 	last_active: ["lastActiveWithinDays", "inactiveForDays"],
 	signals: ["hasOpenRiskSignals"],
@@ -732,7 +725,6 @@ export const missingSparklines = (model: Model, viewer: Viewer): ReadonlyArray<C
 export const SORT_COLUMNS: ReadonlyArray<Customers.ListColumn> = [
 	"name",
 	"mrr",
-	"health",
 	"active_users_30d",
 	"usage_trend",
 	"last_active",

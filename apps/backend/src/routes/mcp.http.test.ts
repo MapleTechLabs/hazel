@@ -699,7 +699,7 @@ describe("MCP server", () => {
 				const db = customers.storage.db
 				const insertAccount = db.prepare(
 					`INSERT INTO customer_accounts (id, organizationId, name, domains, planName, mrrMinor, currency,
-					healthStatus, healthScore, lifecycleStage, openRiskHigh) VALUES (?, ?, ?, ?, ?, ?, 'usd', ?, ?, ?, ?)`,
+					lifecycleStage, openRiskHigh) VALUES (?, ?, ?, ?, ?, ?, 'usd', ?, ?)`,
 				)
 				insertAccount.run(
 					globex,
@@ -708,8 +708,6 @@ describe("MCP server", () => {
 					'["globex.com"]',
 					"Scale",
 					129_900,
-					"at_risk",
-					41,
 					"active",
 					1,
 				)
@@ -720,9 +718,7 @@ describe("MCP server", () => {
 					'["initech.io"]',
 					"Team",
 					19_900,
-					"healthy",
-					88,
-					"active",
+					"trialing",
 					0,
 				)
 				const evidence = JSON.stringify({
@@ -749,12 +745,6 @@ describe("MCP server", () => {
 					evidence,
 					evidence,
 				)
-				// Globex was scored 7 days ago, and never before: earlier days are unknown, not 0.
-				const daysAgo = (days: number) =>
-					new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10)
-				db.prepare(
-					`INSERT INTO customer_health_daily (accountId, day, score, status, breakdown) VALUES (?, ?, 55, 'at_risk', ?)`,
-				).run(globex, daysAgo(7), JSON.stringify({ score: 55, status: "at_risk", components: [] }))
 
 				const all = yield* callTool(world, token, "list_customers", { organization_id: world.orgId })
 				expect(all.isError).toBeUndefined()
@@ -767,8 +757,6 @@ describe("MCP server", () => {
 					domains: ["globex.com"],
 					plan: "Scale",
 					mrr: "$1,299.00",
-					health: "at_risk",
-					health_score: 41,
 					lifecycle_stage: "active",
 					open_risks: 1,
 				})
@@ -779,16 +767,16 @@ describe("MCP server", () => {
 				expect(byDomain.structuredContent.customers.map((row: { id: string }) => row.id)).toEqual([
 					initech,
 				])
-				const atRisk = yield* callTool(world, token, "list_customers", {
+				const trialing = yield* callTool(world, token, "list_customers", {
 					organization_id: world.orgId,
-					health: ["at_risk", "critical"],
+					lifecycle_stage: ["trialing"],
 				})
-				expect(atRisk.structuredContent.customers.map((row: { id: string }) => row.id)).toEqual([
-					globex,
+				expect(trialing.structuredContent.customers.map((row: { id: string }) => row.id)).toEqual([
+					initech,
 				])
 				const badFilter = yield* callTool(world, token, "list_customers", {
 					organization_id: world.orgId,
-					health: ["sad"],
+					lifecycle_stage: ["sad"],
 				})
 				expect(badFilter.isError).toBe(true)
 
@@ -798,9 +786,6 @@ describe("MCP server", () => {
 				})
 				expect(detail.isError).toBeUndefined()
 				expect(detail.structuredContent.customer).toMatchObject({ name: "Globex", mrr: "$1,299.00" })
-				expect(detail.structuredContent.health.score_7d_ago).toBe(55)
-				expect(detail.structuredContent.health).not.toHaveProperty("score_30d_ago")
-				expect(detail.structuredContent.health).not.toHaveProperty("score_90d_ago")
 				expect(detail.structuredContent).not.toHaveProperty("more_open_signals")
 				expect(detail.structuredContent.open_signals).toEqual([
 					expect.objectContaining({

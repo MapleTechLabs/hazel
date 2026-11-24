@@ -54,7 +54,7 @@ export const presentation: PresentationOf<MapleConnectionConfig> = {
 			key: "metricMappings",
 			title: "Per-account metrics",
 			description:
-				"A daily count per account of each mapped event, under its metric key. Usable in charts, signals and health.",
+				"A daily count per account of each mapped event, under its metric key. Usable in charts and signals.",
 			emptyText: "No event is mapped to a metric yet.",
 			columns: [
 				{ key: "event", label: "Event", placeholder: "dashboard_created" },

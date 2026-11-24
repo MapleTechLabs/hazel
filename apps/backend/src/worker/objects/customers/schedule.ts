@@ -118,7 +118,7 @@ export const baselineConnections = Effect.map(readObjectMeta(BASELINE_KEY), (val
 	Option.match(value, { onNone: (): ReadonlyArray<string> => [], onSome: (ids) => ids.split(",") }),
 )
 
-/** The next compute evaluates this connection's templates in baseline mode (§4.7): its backfill finished. */
+/** The next compute evaluates this connection's templates in baseline mode (§4.6): its backfill finished. */
 export const setBaselineFor = (connectionId: string) =>
 	Effect.gen(function* () {
 		const ids = yield* baselineConnections

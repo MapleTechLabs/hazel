@@ -63,7 +63,7 @@ its own store `customers`.
 
 Why not the `OrgObject`:
 
-- **Change-log churn.** Hourly compute rewrites health/priority fields on thousands of accounts and
+- **Change-log churn.** Hourly compute rewrites rollup/priority fields on thousands of accounts and
   signals. In the org store every change goes through the `_changes` log every chat socket flushes
   (and the 50k/7d retention): customers compute would push chat clients into resets.
 - **Snapshot weight.** Every org member's org socket would snapshot all accounts and signals on
@@ -131,34 +131,33 @@ convention: SQLite text, read as `Date`); a `day` is `YYYY-MM-DD` UTC text; JSON
 `jsonb<T>()` with ISO strings inside (`IsoTimestamp`); synced tables carry `organizationId` (client
 filter), internal ones don't. Partial unique indexes in `tables/extra-indexes.ts`.
 
-| Table                         | Purpose / key points                                                                                                                                                                                                                                                                                                                                                                                                          | Transport                                                                    |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `customer_accounts`           | Customer company. `domains[]`, owner, `lifecycleStage` (+ `lifecycleStageOverride`), plan, `mrrMinor`, `trialListMrrMinor`, `trialEndsAt`, health (score/status/updatedAt), seats, `contactCount`, `activeUsers30d`, `activeUsersTrendPct`, `openRiskHigh/Medium/Low`, `openOpportunities`, champion/last-active contact, `firstSeenAt`, `lastActiveAt`, `customerSince`, `churnedAt`, `tags[]`, `attributes`, `fieldSources` | **synced**                                                                   |
-| `customer_contacts`           | End users. Spec fields + `joinedAt`, `firstActiveAt`, `eventCount30d`, `isBillingContact`, `fieldSources`                                                                                                                                                                                                                                                                                                                     | RPC (per account, paged)                                                     |
-| `customer_external_refs`      | Provider record ↔ account/contact. `accountId` on every ref; `matchMethod`, `matchedByUserId`, `matchedAt`, `lastSyncedAt`, `staleAt`. Unique `(provider, externalId)` for accounts, `(provider, externalId, accountId)` for contacts. Several refs per provider per account allowed                                                                                                                                          | RPC (in `account.detail`)                                                    |
-| `customer_subscriptions`      | Spec + `listMrrMinor`, `cancellationReason`, `paymentMethod{brand,last4,exp}`, `observedAt`. Unique `(provider, externalId)`                                                                                                                                                                                                                                                                                                  | RPC                                                                          |
-| `customer_invoices`           | Spec + `upcoming` status (`externalId = upcoming:<sub>`), `nextRetryAt`, `declineReason`, `observedAt`                                                                                                                                                                                                                                                                                                                        | RPC                                                                          |
-| `customer_activity_daily`     | PK `(contactId, day)`; each provider writes only its fields                                                                                                                                                                                                                                                                                                                                                                   | internal                                                                     |
-| `customer_metric_definitions` | Unique `key`; built-ins `active_users`, `active_users_30d`, `mrr`, `health_score`                                                                                                                                                                                                                                                                                                                                             | **synced** (metric picker)                                                   |
-| `customer_metric_daily`       | PK `(accountId, metricKey, day)`, `value`, `limitValue` (metered plan limit)                                                                                                                                                                                                                                                                                                                                                  | RPC                                                                          |
-| `customer_org_daily`          | PK `day`: MRR, paying/trialing/active accounts, DAU/WAU/MAU, health counts, at-risk MRR — the overview's source                                                                                                                                                                                                                                                                                                               | RPC                                                                          |
-| `customer_events`             | Timeline; unique `(provider, externalId)` when set; `actorUserId`                                                                                                                                                                                                                                                                                                                                                             | RPC (paged)                                                                  |
-| `customer_mrr_movements`      | One per account per day max; `type`, `deltaMinor`, from/to                                                                                                                                                                                                                                                                                                                                                                    | RPC                                                                          |
-| `customer_signal_rules`       | Spec + `updatedBy`, `lastTriggeredAt`, `matchingCount`; `config` = `RuleConfig` (tagged by template)                                                                                                                                                                                                                                                                                                                          | **synced**                                                                   |
-| `customer_signals`            | Queue items. Spec + `template`, `openingEvidence`, `actionEvidence`, `priorityScore`, `openedAt`, snooze fields, `dismissReason`, `reopenCount` , `closedAt`. One unclosed episode per `(ruleId, accountId)`                                                                                                                                                                                                                  | **synced** (unclosed + closed ≤ 30 d); older via `customers.signals.history` |
-| `customer_settings`           | One row: `health` (`HealthSettings`), `reportingCurrency`, `addOnPlans`, `overageInMrr`, `lastComputedAt`, `updatedBy` (spec's `customer_health_settings`)                                                                                                                                                                                                                                                                    | **synced**                                                                   |
-| `customer_health_daily`       | PK `(accountId, day)`: score, status, `breakdown` (`HealthBreakdown`)                                                                                                                                                                                                                                                                                                                                                         | RPC                                                                          |
-| `customer_notes`              | Spec + `editedAt`, `signalId`                                                                                                                                                                                                                                                                                                                                                                                                 | **synced**                                                                   |
-| `customer_saved_views`        | `ownerUserId` null = shared, `builtInKey`, `filters`/`sort`/`columns`, `position`                                                                                                                                                                                                                                                                                                                                             | **synced** (shared + own)                                                    |
-| `customer_connections`        | One per provider (reconnect reuses: stable webhook URL). Status, config, `hasWebhookSecret`, last sync/success/error, `consecutiveFailures`, `nextSyncAt`, `backfilledAt`, `stats`, `disconnectedAt`. **No secrets**                                                                                                                                                                                                          | **synced**                                                                   |
-| `customer_connection_secrets` | Encrypted API key + webhook secret (`IntegrationEncryption`)                                                                                                                                                                                                                                                                                                                                                                  | internal, never synced                                                       |
-| `customer_sync_runs`          | Spec + `progress`, structured `error`, `cursor`, `failedAttempts`                                                                                                                                                                                                                                                                                                                                                             | **synced** (last 7 d)                                                        |
-| `customer_unmatched_records`  | Spec + `email`, `domain`, `payload` (the op, replayed on link). Unique `(provider, entityType, externalId)`                                                                                                                                                                                                                                                                                                                   | RPC                                                                          |
-| `customer_ignore_rules`       | `provider?`, `entityType`, `field`, glob `pattern`                                                                                                                                                                                                                                                                                                                                                                            | RPC                                                                          |
-| `customer_members`            | Projection `(userId, role)`                                                                                                                                                                                                                                                                                                                                                                                                   | internal                                                                     |
+| Table                         | Purpose / key points                                                                                                                                                                                                                                                                                                                                                                         | Transport                                                                    |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `customer_accounts`           | Customer company. `domains[]`, owner, `lifecycleStage` (+ `lifecycleStageOverride`), plan, `mrrMinor`, `trialListMrrMinor`, `trialEndsAt`, seats, `contactCount`, `activeUsers30d`, `activeUsersTrendPct`, `openRiskHigh/Medium/Low`, `openOpportunities`, champion/last-active contact, `firstSeenAt`, `lastActiveAt`, `customerSince`, `churnedAt`, `tags[]`, `attributes`, `fieldSources` | **synced**                                                                   |
+| `customer_contacts`           | End users. Spec fields + `joinedAt`, `firstActiveAt`, `eventCount30d`, `isBillingContact`, `fieldSources`                                                                                                                                                                                                                                                                                    | RPC (per account, paged)                                                     |
+| `customer_external_refs`      | Provider record ↔ account/contact. `accountId` on every ref; `matchMethod`, `matchedByUserId`, `matchedAt`, `lastSyncedAt`, `staleAt`. Unique `(provider, externalId)` for accounts, `(provider, externalId, accountId)` for contacts. Several refs per provider per account allowed                                                                                                         | RPC (in `account.detail`)                                                    |
+| `customer_subscriptions`      | Spec + `listMrrMinor`, `cancellationReason`, `paymentMethod{brand,last4,exp}`, `observedAt`. Unique `(provider, externalId)`                                                                                                                                                                                                                                                                 | RPC                                                                          |
+| `customer_invoices`           | Spec + `upcoming` status (`externalId = upcoming:<sub>`), `nextRetryAt`, `declineReason`, `observedAt`                                                                                                                                                                                                                                                                                       | RPC                                                                          |
+| `customer_activity_daily`     | PK `(contactId, day)`; each provider writes only its fields                                                                                                                                                                                                                                                                                                                                  | internal                                                                     |
+| `customer_metric_definitions` | Unique `key`; built-ins `active_users`, `active_users_30d`, `mrr`                                                                                                                                                                                                                                                                                                                            | **synced** (metric picker)                                                   |
+| `customer_metric_daily`       | PK `(accountId, metricKey, day)`, `value`, `limitValue` (metered plan limit)                                                                                                                                                                                                                                                                                                                 | RPC                                                                          |
+| `customer_org_daily`          | PK `day`: MRR, paying/trialing/active accounts, DAU/WAU/MAU, at-risk MRR — the overview's source                                                                                                                                                                                                                                                                                             | RPC                                                                          |
+| `customer_events`             | Timeline; unique `(provider, externalId)` when set; `actorUserId`                                                                                                                                                                                                                                                                                                                            | RPC (paged)                                                                  |
+| `customer_mrr_movements`      | One per account per day max; `type`, `deltaMinor`, from/to                                                                                                                                                                                                                                                                                                                                   | RPC                                                                          |
+| `customer_signal_rules`       | Spec + `updatedBy`, `lastTriggeredAt`, `matchingCount`; `config` = `RuleConfig` (tagged by template)                                                                                                                                                                                                                                                                                         | **synced**                                                                   |
+| `customer_signals`            | Queue items. Spec + `template`, `openingEvidence`, `actionEvidence`, `priorityScore`, `openedAt`, snooze fields, `dismissReason`, `reopenCount` , `closedAt`. One unclosed episode per `(ruleId, accountId)`                                                                                                                                                                                 | **synced** (unclosed + closed ≤ 30 d); older via `customers.signals.history` |
+| `customer_settings`           | One row: `reportingCurrency`, `addOnPlans`, `overageInMrr`, `lastComputedAt`, `updatedBy`                                                                                                                                                                                                                                                                                                    | **synced**                                                                   |
+| `customer_notes`              | Spec + `editedAt`, `signalId`                                                                                                                                                                                                                                                                                                                                                                | **synced**                                                                   |
+| `customer_saved_views`        | `ownerUserId` null = shared, `builtInKey`, `filters`/`sort`/`columns`, `position`                                                                                                                                                                                                                                                                                                            | **synced** (shared + own)                                                    |
+| `customer_connections`        | One per provider (reconnect reuses: stable webhook URL). Status, config, `hasWebhookSecret`, last sync/success/error, `consecutiveFailures`, `nextSyncAt`, `backfilledAt`, `stats`, `disconnectedAt`. **No secrets**                                                                                                                                                                         | **synced**                                                                   |
+| `customer_connection_secrets` | Encrypted API key + webhook secret (`IntegrationEncryption`)                                                                                                                                                                                                                                                                                                                                 | internal, never synced                                                       |
+| `customer_sync_runs`          | Spec + `progress`, structured `error`, `cursor`, `failedAttempts`                                                                                                                                                                                                                                                                                                                            | **synced** (last 7 d)                                                        |
+| `customer_unmatched_records`  | Spec + `email`, `domain`, `payload` (the op, replayed on link). Unique `(provider, entityType, externalId)`                                                                                                                                                                                                                                                                                  | RPC                                                                          |
+| `customer_ignore_rules`       | `provider?`, `entityType`, `field`, glob `pattern`                                                                                                                                                                                                                                                                                                                                           | RPC                                                                          |
+| `customer_members`            | Projection `(userId, role)`                                                                                                                                                                                                                                                                                                                                                                  | internal                                                                     |
 
 Domain shapes: `packages/domain/src/customers/` (`enums`, `models` — row models for synced and RPC
-rows, `evidence`, `rules`, `health`, `views`, `connections`, `ingest`, `analytics`), exported as
+rows, `evidence`, `rules`, `views`, `connections`, `ingest`, `analytics`), exported as
 `@hazel/domain/customers`.
 
 ## 3. Ingest API (`apps/backend/src/worker/objects/customers/ingest.ts`)
@@ -210,13 +209,13 @@ Rules:
   Clerk organization stays its own account (an environment, e.g. a US and an EU region, named by
   `customer_accounts.environment`, set in Hazel only), and accounts link into a group with one
   primary (`primaryAccountId` on the others; no chains, a primary with environments cannot be
-  unlinked). Rollups and health stay per account. Signals are evaluated per group: an environment
+  unlinked). Rollups stay per account. Signals are evaluated per group: an environment
   is skipped, and its primary is evaluated over the group's combined facts (`group-facts.ts`:
   contacts and activity unioned with a person in several environments counted once by email,
-  billing together, metrics summed per day, the most advanced stage, the primary's health), so
+  billing together, metrics summed per day, the most advanced stage), so
   "logins stopped" does not fire for one environment while another still has logins. Signals are
   only written on the primary: linking closes the joining accounts' unclosed signals, `setPrimary`
-  moves the group's to the new primary. Compute and the dry runs load whole groups per chunk.
+  moves the group's to the new primary. Compute and the rule dry run load whole groups per chunk.
 - **Field precedence:** `FIELD_PRECEDENCE` (`hazel` manual edit > clerk > stripe > autumn > maple for
   name; per field), recorded in `fieldSources`; domains merge (never removed); fixed in v1.
 - **Deletes:** `account.deleted` / `contact.removed` → ref `staleAt` (+ the op's `observedAt` as
@@ -324,7 +323,7 @@ Rules:
   subscription's start (after its trial), a usage-billed one at MRR 0 included. `billsByUsage`
   changes no MRR, so it writes no movement; the paying-accounts count and the MRR history still
   count MRR > 0 only. A `payingOnly` rule scope covers a usage-billed account.
-- Built-in metrics for today: `active_users` (DAU), `active_users_30d`, `mrr`, later `health_score`.
+- Built-in metrics for today: `active_users` (DAU), `active_users_30d`, `mrr`.
 - MRR movements (yesterday's `mrr` vs today's): 0→>0 `new` (or `reactivation` if `churnedAt` set
   before), >0→0 `churn`, up `expansion`, down `contraction`. A source switch holds the movement (none is written
   that run: a migration, not revenue) only when `mrrSource` changed **and** the new source bills
@@ -342,25 +341,7 @@ Rules:
 - Autumn counts for MRR once its first backfill finished and, after a reconnect, once a run started
   since (`lastSuccessAt` ≥ `connectedAt`) succeeded: what it imported before the disconnect is stale.
 
-### 4.3 Health (`packages/domain/src/customers/health.ts`)
-
-- Components, each 0–100 or excluded (no data):
-    - `usage` = 60% ratio step(activeUsers30d ÷ max(contactCount, 1)) + 40% trend step
-      (`activeUsersTrendPct`). Excluded without any activity source data for the org (an activity
-      connection, none of them connected and delivering, §4.4).
-    - `engagement` = step(days since `lastActiveAt`). Excluded like usage.
-    - `billing` = min of applicable: past_due/unpaid 20, invoice > 7 d overdue 30, overdue 60,
-      cancel scheduled 40, else 100. Excluded without a billing source or with no subscription.
-    - `signals` = 100 − Σ deduction per open risk signal (high 30 / medium 15 / low 5), floor 0;
-      templates in `excludedTemplates` ignored (default `health_drop`, `near_limit`, `seat_growth`, `churned`).
-- Redistribution: `effectiveWeight_i = w_i / Σ w_available × 100`. Score = round(Σ eff × score).
-  No score (status `unknown`) when only `signals` is available, or the account is not a customer
-  (stage **lead** or **churned**: nothing to retain).
-- Bands: `healthy ≥ healthyMin (70)`, `at_risk ≥ atRiskMin (40)`, else `critical`.
-- Writes `customer_health_daily[today]` (breakdown with `why`), account health fields, and a
-  `health.status_changed` event on band change.
-
-### 4.4 Signal evaluation (`packages/domain/src/customers/rules.ts`, `evidence.ts`)
+### 4.3 Signal evaluation (`packages/domain/src/customers/rules.ts`, `evidence.ts`)
 
 Every enabled rule × every in-scope, non-churned account (silent accounts included) that Needs
 attention covers (`customer_settings.attention`: its stage is one of `stages`, and it has an account
@@ -383,7 +364,6 @@ Needs attention coverage: they evaluate every non-churned account in the rule's 
 | `cancel_scheduled`            | `cancelAtPeriodEnd`, or contraction in 14 d             | `delta` (minor)         | takes effect ≤ 7 d / —              |
 | `trial_ending_low_activation` | trial ends ≤ 5 d, < 2 active in 7 d                     | `ratio`                 | ≤ 2 d left / 0 active               |
 | `onboarding_stalled`          | first seen 7–30 d ago, < 2 contacts ever active         | `ratio`                 | age ≥ 21 d / 0 active               |
-| `health_drop`                 | −20 pts in 7 d, or entered critical                     | `delta` (points)        | −35 pts / −50 pts                   |
 | `champion_inactive`           | champion (30 d) inactive 14 d                           | `last_active`           | as `inactive`                       |
 | `near_limit`                  | metered metric ≥ 90% of limit                           | `limit`                 | ≥ 100% / ≥ 120%                     |
 | `seat_growth`                 | activeUsers30d +50% vs 30 d ago, from ≥ 3               | `delta` (users)         | +100% / +200%                       |
@@ -395,10 +375,10 @@ Needs attention coverage: they evaluate every non-churned account in the rule's 
 - Title = template name (or the rule's name if renamed); reason = one plain sentence from evidence
   ("No activity for 18 days; 12 weekly active users before").
 
-### 4.5 Signal lifecycle (per `(rule, account)`, one unclosed row)
+### 4.4 Signal lifecycle (per `(rule, account)`, one unclosed row)
 
 - Condition true, no unclosed row → **open** (new row, `signal.opened` event), unless the rule is
-  in baseline mode (§4.7).
+  in baseline mode (§4.6).
 - **open**: update evidence/severity/priority each run. Condition false → `auto_resolved`, `closedAt`.
 - **snoozed**: wakes to open at `snoozedUntil`; wakes **early** when `evidence.step >
   actionEvidence.step` or severity rose ("got worse", event `signal.woke`). Condition false →
@@ -412,7 +392,7 @@ Needs attention coverage: they evaluate every non-churned account in the rule's 
 - Account counters (`openRisk*`, `openOpportunities`) and rule `matchingCount`/`lastTriggeredAt`
   updated at the end of evaluation.
 
-### 4.6 Priority
+### 4.5 Priority
 
 `priorityScore = severityWeight × valueWeight × freshness`
 
@@ -423,7 +403,7 @@ Needs attention coverage: they evaluate every non-churned account in the rule's 
 - `freshness = max(0.5, 1 − ageDays/28)`, age from `openedAt`.
 - Queue order = `priorityScore desc`, rank shown 1..n.
 
-### 4.7 Backfill must not flood
+### 4.6 Backfill must not flood
 
 - `finishRun` of a successful `backfill` adds its connection to meta `baselineFor`; the next compute
   (and every compute while a backfill younger than 24 h is running; retryable failures keep it
@@ -434,16 +414,14 @@ Needs attention coverage: they evaluate every non-churned account in the rule's 
 - Time-bounded templates (`payment_failed`, `cancel_scheduled`, `trial_ending_low_activation`) open
   normally: they are actionable now.
 
-### 4.8 Dry runs (read RPCs; pure functions shared with compute)
+### 4.7 Rule dry run (a read RPC; pure functions shared with compute)
 
 - `customers.rule.dryRun`: match count, MRR, top 10 matches with evidence, non-match reasons
   histogram (out of scope / below threshold / no data / missing source), queue delta vs the rule's
   current signals.
-- `customers.health.dryRun`: current vs proposed distribution, transitions, sample breakdowns.
-- Both evaluate at most 8 chunks of accounts (2,000) and stop after 5 s: the result carries
-  `evaluatedAccounts` of `totalAccounts`, and the editors say "Preview based on X of Y customers".
-- Evaluation and scoring are pure (`(snapshot, config) → result`) so compute, dry runs and unit
-  tests share them.
+- It evaluates at most 8 chunks of accounts (2,000) and stops after 5 s: the result carries
+  `evaluatedAccounts` of `totalAccounts`, and the editor says "Preview based on X of Y customers".
+- Evaluation is pure (`(snapshot, config) → result`) so compute, the dry run and unit tests share it.
 
 ## 5. Webhooks, secrets and pulls (framework only)
 
@@ -491,14 +469,13 @@ Needs attention coverage: they evaluate every non-churned account in the rule's 
   `/$org/customers/attention`, `CustomersList` `/$org/customers/list?view=`, `CustomerDetail`
   `/$org/customers/$accountId?tab=` (`overview|users|billing|activity|notes`),
   `CustomersSettingsSignals` `/$org/customers/settings/signals` (+ `/new`, `/$ruleId`),
-  `CustomersSettingsHealth` `/$org/customers/settings/health`, `CustomersSettingsPlans`
-  `/$org/customers/settings/plans`, `CustomersSettingsSources`
+  `CustomersSettingsPlans` `/$org/customers/settings/plans`, `CustomersSettingsSources`
   `/$org/customers/settings/sources`, `CustomersSourceDetail` `…/sources/$provider`,
   `CustomersUnmatched` `…/sources/unmatched`. Literal segments before `$accountId` in `oneOf`.
   `OrgSection` gains `"Customers"`; `isCustomersRoute`; `titleOf`; `route.test.ts` examples.
 - **Shell:** "Customers" item in `navRail` (`src/shell/app-shell.ts:53`) and mobile nav; secondary
   sidebar `src/shell/customers-sidebar.ts` (Overview, Needs attention + count badge, Customers +
-  saved views, Settings: Signals, Health score, Data sources); `app/view.ts` `sectionBody` /
+  saved views, Settings: Signals, Data sources); `app/view.ts` `sectionBody` /
   `secondarySidebar` branches.
 - **Data:** entering any customers route calls `openCustomersSource(orgId)` (shell subscription);
   live lists via `liveQueryStream` over the customer collections filtered by `organizationId`;
@@ -522,20 +499,19 @@ variables directly (no canvas color resolution), and render in the gallery and s
   `hbar-chart.ts`), `meter` (limit), `deltaPill`.
 - Hover: charts emit `HoveredIndex(index | null)` through a caller-supplied message; the page keeps
   the index and renders the tooltip (`chartTooltip`). No chart owns state.
-- Colors: Wonder tokens `hazel/chart-new|expansion|contraction|churn|healthy|at-risk|critical|
-  series-1..3|grid` → CSS variables in `src/core/styles/theme.css`.
+- Colors: Wonder tokens `hazel/chart-new|expansion|contraction|churn|series-1..3|grid` → CSS
+  variables in `src/core/styles/theme.css`.
 
 ### 6.3 Components (Wonder "Maple Design System", pages `Hazel Customers · *`)
 
 From _Foundations_ (artboards in parentheses) → `src/customers/ui/`:
 
-- `healthBadge` (Health Badge States: label, score, compact dot), `severityChip` / `kindChip`
-  (Severity And Kind Chips), `stageBadge` (Lifecycle Stage Badges, trial detail), `sourceChip` /
+- `severityChip` / `kindChip` (Severity And Kind Chips), `stageBadge` (Lifecycle Stage Badges, trial detail), `sourceChip` /
   `sourceMark` (Source Chips: chip, link chip, mark tiles; Brandfetch-free brand marks per
   `hazel/logo-*` tokens), `companyLogo` (Avatars And Company Logos: sizes, tint fallback),
   `kpiTile` (KPI Tile Variants), sparklines (Sparkline Variants, Evidence Row), `lineChart` (Line
-  Chart Active Users), `stackedBarChart` (Stacked Bar Chart MRR Movement), `distributionBar`
-  (Distribution Bar Health), `dataTable` (Table Customers States: sortable header, selection,
+  Chart Active Users), `stackedBarChart` (Stacked Bar Chart MRR Movement), `distributionBar`,
+  `dataTable` (Table Customers States: sortable header, selection,
   skeleton), `queueRow` (Queue Row Signal States), `filterBar` / `rangePicker` / `viewTabs`
   (Filter Bar And Tabs), `snoozeMenu` / `rowActionsMenu` (Menus Snooze And Row Actions),
   `emptyState` variants (Empty State Variants), `connectCard` (Integration Connect Cards),
@@ -547,12 +523,12 @@ Pages (artboards):
   12-month range.
 - _Needs Attention_: open/mine, grouped by account, selected + side panel preview, snooze menu, mark
   done dialog (outcome + note), snoozed tab, done tab, all clear. Keys j/k/a/s/d/enter.
-- _List_: all, at-risk view, filter builder popover, column picker, bulk selection bar + assign
+- _List_: all, filter builder popover, column picker, bulk selection bar + assign
   owner menu, row hover card, no results, first run.
 - _Customer Page_: overview/users/billing/activity/notes tabs, billing payment failed banner, header
-  actions menu, health breakdown with excluded component.
-- _Signals & Health Settings_: rules list, template picker modal, rule editor (inactive, usage
-  drop) with live preview, health settings with unsaved-changes bar, weights validation error.
+  actions menu.
+- _Signals Settings_: rules list, template picker modal, rule editor (inactive, usage drop) with
+  live preview.
 - _Data Sources_: overview cards, connect (API key) modal, source detail (Clerk), unmatched records
   resolver, Maple source settings, test-connection failure.
 
@@ -589,7 +565,7 @@ request changes.
 
 ### (a) Backend — `apps/backend/**`, `packages/domain/src/customers/**` (fixes only)
 
-- Owns: `apps/backend/src/worker/objects/customers/**` (ingest impl, compute, evaluation, health,
+- Owns: `apps/backend/src/worker/objects/customers/**` (ingest impl, compute, evaluation,
   priority, lifecycle, pulls/alarm deadlines, access, seed generator), `rpc/handlers/customers.ts`
   (replace the stubs), `worker/objects/effects/customers-effects.ts`,
   `worker/objects/sources/customers-source.ts`, `routes/customers-webhooks.http.ts` (new) + its
@@ -601,13 +577,13 @@ request changes.
   migration; do not edit `0001_initial` once committed — before the first commit, regenerating is
   fine), and `packages/domain/src/customers/**` + `rpc/customers.ts` contract changes (announce
   them to b/c/d).
-- Order: access + members → ingest → rollups → health → evaluation/lifecycle/priority → read RPCs →
-  mutations → dry runs → seed → webhook/pull framework.
+- Order: access + members → ingest → rollups → evaluation/lifecycle/priority → read RPCs →
+  mutations → rule dry run → seed → webhook/pull framework.
 
 ### (b) Design system, charts, lab — frontend kit
 
 - Owns: `src/customers/ui/**`, `src/customers/charts/**`, `src/customers/format.ts` (money, %,
-  relative days), `src/lab/**`, the `/lab` switch in `src/entry.ts`, chart/health color tokens in
+  relative days), `src/lab/**`, the `/lab` switch in `src/entry.ts`, chart color tokens in
   `src/core/styles/theme.css`, `src/customers/customers.gallery.ts`.
 - Delivers first (others consume): badges/chips, kpiTile, sparklines, charts, dataTable, queueRow,
   evidenceViz, menus, empty states, connectCard; then lab fixtures (`src/lab/fixtures/customers.ts`)
@@ -627,7 +603,7 @@ request changes.
 ### (d) Pages B — list, customer page, settings
 
 - Owns: `src/page/customers/list/**`, `src/page/customers/detail/**`,
-  `src/page/customers/settings/{signals,health,sources,unmatched}/**`, and their lab entries.
+  `src/page/customers/settings/{signals,sources,unmatched}/**`, and their lab entries.
 - Uses c's routes/queries/actions and b's kit; asks c for route/registry changes.
 
 **Integration order:** contracts (done) → b kit primitives + c routes/shell skeleton (parallel) →
@@ -642,12 +618,11 @@ mutations/compute → end-to-end pass on `alchemy:dev` with the demo seed.
 - **Ingest:** matching order table-driven (ref, shared id, domain, ambiguous, ignore rule, create),
   idempotent replays (apply twice → `Unchanged`, no `_changes` rows), precedence, unmatched → link
   replay, reconnect keeps removed refs removed, another provider account sweeps the old one.
-- **Compute (pure, fixtures):** rollup formulas, MRR movements, health components +
-  redistribution + bands + churned → unknown, each template's match/evidence/step, lifecycle state
-  machine (open → snooze → wake worse, done stays muted while true, dismissed reopen on step, auto
+- **Compute (pure, fixtures):** rollup formulas, MRR movements, each template's
+  match/evidence/step, lifecycle state machine (open → snooze → wake worse, done stays muted while true, dismissed reopen on step, auto
   resolve, baseline after backfill), priority ordering incl. no-MRR and trials.
 - **Frontend:** story tests for page updates, scene tests for key flows (snooze from queue, mark done
-  dialog, rule editor dry-run, health weights validation, connect modal errors), route examples,
+  dialog, rule editor dry-run, connect modal errors), route examples,
   lab registry test, gallery screenshots of the kit.
 - **DB:** `schema-ddl.test.ts` (store in sync with its snapshot).
 

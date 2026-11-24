@@ -1,10 +1,10 @@
 /**
- * Loads what compute and the dry runs evaluate (`./facts.ts`): the org-wide part once
+ * Loads what compute and the rule dry run evaluate (`./facts.ts`): the org-wide part once
  * (`loadBase`), then the live accounts in chunks (`loadAccounts`), each with its contacts,
- * activity over the window the rules need, billing, metrics, MRR movements and a month of health
- * history, plus the account fields compute derives from them (`rollupAccount`, §4.2). A chunk holds
- * whole groups of linked accounts (`./groups.ts`): a primary's signals evaluate its group's
- * combined facts (`./group-facts.ts`).
+ * activity over the window the rules need, billing, metrics and MRR movements, plus the account
+ * fields compute derives from them (`rollupAccount`, §4.2). A chunk holds whole groups of linked
+ * accounts (`./groups.ts`): a primary's signals evaluate its group's combined facts
+ * (`./group-facts.ts`).
  */
 import {
 	activityProviders,
@@ -19,10 +19,7 @@ import {
 	type CustomerProvider,
 	type Day,
 	ENVIRONMENT_TEMPLATES,
-	type HealthBreakdown,
-	type HealthSettings,
 	type LifecycleStage,
-	MAX_WINDOW_DAYS,
 	type SignalTemplate,
 } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerContactId, CustomerSubscriptionId } from "@hazel/schema"
@@ -34,7 +31,6 @@ import {
 	activeUsersIn,
 	billed,
 	type ContactFacts,
-	type HealthPoint,
 	type IssueSlaFacts,
 	type MetricPoint,
 	type OrgFacts,
@@ -106,15 +102,7 @@ export const evaluatedFor = (accounts: ReadonlyArray<AccountSnapshot>) => {
 export interface SnapshotBase {
 	readonly org: OrgFacts
 	readonly settings: schema.CustomerSettings
-	readonly health: HealthSettings
 	readonly rules: ReadonlyArray<schema.CustomerSignalRule>
-	/**
-	 * Usage data is live: an activity source is connected (not in error or disconnected) and
-	 * delivering, or, with no activity connection at all, some contact was ever active.
-	 */
-	readonly hasActivityData: boolean
-	/** Billing data exists (a billing source, or subscriptions). */
-	readonly hasBillingData: boolean
 	/**
 	 * The billing sources needing a first import that can count for MRR (it is done, and a run
 	 * succeeded since they were last connected), in registry order; each account's source is
@@ -139,8 +127,6 @@ export interface Snapshot extends SnapshotBase {
 	readonly accounts: ReadonlyArray<AccountSnapshot>
 	/** The accounts' unclosed signals. */
 	readonly signals: ReadonlyArray<schema.CustomerSignal>
-	/** Today's stored health breakdowns, so an unchanged one is not written again. */
-	readonly todayHealth: ReadonlyMap<CustomerAccountId, HealthBreakdown>
 }
 
 const sum = (values: ReadonlyArray<number>) => values.reduce((total, value) => total + value, 0)
@@ -398,9 +384,6 @@ export const billingByAccount = (
 /** Accounts loaded (and their activity held in memory) at a time. */
 const ACCOUNT_CHUNK = 250
 
-/** Days of health history the rules read (`health_drop`'s window, its 30-day series). */
-const HEALTH_DAYS = MAX_WINDOW_DAYS + 1
-
 export const accountChunks = <A>(items: ReadonlyArray<A>, size = ACCOUNT_CHUNK) =>
 	Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
 		items.slice(index * size, (index + 1) * size),
@@ -457,12 +440,6 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 			.map((connection) => connection.provider)
 			.filter((provider) => !(ACTIVITY_PROVIDERS.has(provider) && stale.has(provider))),
 	)
-	const anySubscription = yield* db.first(
-		SQLite.from(schema.customerSubscriptionsTable)
-			.select("id")
-			.where(($) => [inList($.provider, billingProviders)])
-			.limit(1),
-	)
 	const rules = yield* db.run(
 		SQLite.from(schema.customerSignalRulesTable)
 			.select()
@@ -485,15 +462,6 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 	const definitions = yield* db.run(
 		SQLite.from(schema.customerMetricDefinitionsTable).select("key", "name", "aggregation", "provider"),
 	)
-	const activityConnections = connections.filter((connection) =>
-		ACTIVITY_PROVIDERS.has(connection.provider),
-	)
-	const anyActivity = yield* db.first(
-		SQLite.from(schema.customerContactsTable)
-			.select("id")
-			.where(($) => [$.lastActiveDay.isNotNull()])
-			.limit(1),
-	)
 	return {
 		org: {
 			now,
@@ -512,15 +480,7 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 			attention: settings.attention,
 		},
 		settings,
-		health: settings.health,
 		rules,
-		// Stale rows of a disconnected (or silent) source must not keep decaying everyone's usage score.
-		hasActivityData:
-			activityConnections.length > 0
-				? activityConnections.some((connection) => connected.has(connection.provider))
-				: Option.isSome(anyActivity),
-		hasBillingData:
-			billingProviders.some((provider) => connected.has(provider)) || Option.isSome(anySubscription),
 		// A reconnect keeps what it imported before, stale meanwhile: it counts again once the run the
 		// reconnect started succeeds (`lastSuccessAt`, that run's start, not before `connectedAt`).
 		billingReady: firstImportProviders.filter((provider) =>
@@ -547,7 +507,7 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 	} satisfies SnapshotBase
 })
 
-/** `ids`' accounts (the live ones) with everything compute and the dry runs evaluate. */
+/** `ids`' accounts (the live ones) with everything compute and the rule dry run evaluate. */
 export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 	base: SnapshotBase,
 	ids: ReadonlyArray<CustomerAccountId>,
@@ -574,7 +534,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 	const contactsBy = groupBy(contacts, (contact) => contact.accountId)
 	const activityBy = groupBy(activity, (row) => row.accountId)
 	// The last active day over the live contacts and the activity the rollups count (a removed
-	// contact's recent days included), so engagement and active users agree.
+	// contact's recent days included), so it agrees with active users.
 	const lastActiveDayBy = new Map<CustomerAccountId, Day>()
 	const seen = (accountId: CustomerAccountId, last: Day | null) => {
 		const current = lastActiveDayBy.get(accountId)
@@ -655,17 +615,6 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 			.where(($) => [inList($.accountId, ids)])
 			.orderBy(($) => [[$.day, "asc"]]),
 	)
-	const health = yield* db.run(
-		SQLite.from(schema.customerHealthDailyTable)
-			.select("accountId", "day", "score", "status")
-			.where(($) => [inList($.accountId, ids), $.day.gte(addDays(today, -HEALTH_DAYS))])
-			.orderBy(($) => [[$.day, "asc"]]),
-	)
-	const todayHealth = yield* db.run(
-		SQLite.from(schema.customerHealthDailyTable)
-			.select("accountId", "breakdown")
-			.where(($) => [inList($.accountId, ids), $.day.eq(today)]),
-	)
 	const signals = yield* db.run(
 		SQLite.from(schema.customerSignalsTable)
 			.select()
@@ -710,7 +659,6 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 	const paidInvoicesBy = groupBy(paidInvoices, (invoice) => invoice.accountId)
 	const metricsBy = groupBy(metrics, (row) => row.accountId)
 	const movementsBy = groupBy(movements, (row) => row.accountId)
-	const healthBy = groupBy(health, (row) => row.accountId)
 	const issueSlasBy = groupBy(issueSlas, (row) => row.accountId)
 
 	const snapshots = accounts.map((stored): Omit<AccountSnapshot, "evaluated"> => {
@@ -774,11 +722,6 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 				openInvoices: invoicesBy.get(stored.id) ?? [],
 				metrics: metricMap,
 				movements: movementsBy.get(stored.id) ?? [],
-				health: (healthBy.get(stored.id) ?? []).map((row): HealthPoint => ({
-					day: row.day,
-					score: row.score,
-					status: row.status,
-				})),
 				openIssueSlas: (issueSlasBy.get(stored.id) ?? []).map(
 					({ accountId: _accountId, ...issue }): IssueSlaFacts => issue,
 				),
@@ -878,6 +821,5 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 		...base,
 		accounts: withEvaluated,
 		signals,
-		todayHealth: new Map(todayHealth.map((row) => [row.accountId, row.breakdown])),
 	} satisfies Snapshot
 })

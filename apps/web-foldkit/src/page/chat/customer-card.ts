@@ -1,6 +1,6 @@
 /**
  * A linked channel's customer at a glance (`docs/customers/channels.md`, "In the channel"): the
- * header chip, and the card it opens: health and why, stage, plan, MRR, owner, seats, last active,
+ * header chip, and the card it opens: stage, plan, MRR, owner, seats, last active,
  * the enriched company (description, facts, links), open signals and the ways out (the customer page, the queue, the providers). From the org source
  * (`channel_customers`), so nothing opens the Customers source.
  *
@@ -9,7 +9,7 @@
  * same card in a bottom sheet.
  */
 import type { ChannelCustomer } from "@hazel/domain/models"
-import type { CompanyProfile, HealthStatus } from "@hazel/domain/customers"
+import type { CompanyProfile } from "@hazel/domain/customers"
 import { Duration, Effect, Option, Schema } from "effect"
 import { Command, Mount } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
@@ -17,7 +17,7 @@ import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 import { twMerge } from "tailwind-merge"
 import { dayToMs, formatMoney, formatRelative } from "../../customers/format"
-import { HEALTH_FILL, healthBadge, severityGlyph, stageBadge } from "../../customers/ui/badges"
+import { severityGlyph, stageBadge } from "../../customers/ui/badges"
 import { companyFacts, companyLinks } from "../../customers/ui/company"
 import { safeSourceUrl, sourceLabel } from "../../customers/providers"
 import { companyLogo, sourceLogo } from "../../customers/ui/identity"
@@ -26,7 +26,6 @@ import { IconOffice } from "../../icons"
 import { ariaButton } from "../../ui/button"
 import * as Modal from "../../ui/modal"
 import * as Sheet from "../../ui/sheet"
-import { statusDot } from "../../ui/status-dot"
 
 // MODEL
 
@@ -237,13 +236,6 @@ export type CardContext = Readonly<{
 	support?: ReadonlyArray<Html>
 }>
 
-const HEALTH_CHIP_LABEL = {
-	healthy: "healthy",
-	at_risk: "at risk",
-	critical: "critical",
-	unknown: "health unknown",
-} as const satisfies Record<HealthStatus, string>
-
 /** Whether the chip's card (or a phone's sheet) is showing: all the header needs of the Model. */
 export const isOpenOf = (model: Model, isMobile: boolean): boolean =>
 	isMobile ? model.sheet.isOpen : model.phase === "hover" || model.phase === "pinned"
@@ -258,7 +250,7 @@ const escapeKey = <M>(h: HtmlBuilder<M>, toMessage: (message: Message) => M) =>
 	)
 
 /**
- * The header chip: the health dot and the customer's name; it opens the card. Above a pinned card's
+ * The header chip: an office mark and the customer's name; it opens the card. Above a pinned card's
  * backdrop (`z-50`), so a second press on it closes the card instead of landing on the backdrop.
  * Its hit area reaches 12px past its edges, a ~46px touch target in a 56px header.
  */
@@ -282,7 +274,7 @@ export const chip = <M>(
 			onPress: toMessage(Message.PressedChip({ isMobile: options.isMobile })),
 			attributes: [
 				h.Id(CHIP_ID),
-				h.AriaLabel(`Customer: ${customer.accountName}, ${HEALTH_CHIP_LABEL[customer.healthStatus]}`),
+				h.AriaLabel(`Customer: ${customer.accountName}`),
 				h.AriaExpanded(isOpen),
 				h.AriaHasPopup("dialog"),
 				...(isOpen
@@ -298,9 +290,7 @@ export const chip = <M>(
 			],
 		},
 		[
-			customer.healthStatus === "unknown"
-				? IconOffice(h, { className: "size-3 shrink-0" })
-				: statusDot(h, { tone: "neutral", className: HEALTH_FILL[customer.healthStatus] }),
+			IconOffice(h, { className: "size-3 shrink-0" }),
 			h.span([h.Class("truncate")], [customer.accountName]),
 		],
 	)
@@ -461,7 +451,7 @@ const pendingBody = <M>(h: HtmlBuilder<M>, context: CardContext): Html =>
 			),
 			h.p(
 				[h.Class(twMerge(descriptionClass, "px-4 pb-3 text-xs"))],
-				["Health, revenue and signals show here after the next customer sync."],
+				["Revenue and signals show here after the next customer sync."],
 			),
 			h.div(
 				[h.Class("border-border border-t bg-secondary/40 px-4 py-2.5")],
@@ -479,7 +469,7 @@ export const cardBody = <M>(h: HtmlBuilder<M>, context: CardContext): Html => {
 	return h.div(
 		[h.Class("flex flex-col")],
 		[
-			// Who, and how they are doing.
+			// Who, and where they are in their lifecycle.
 			h.div(
 				[h.Class("flex items-start gap-3 px-4 pt-4 pb-3")],
 				[
@@ -498,35 +488,14 @@ export const cardBody = <M>(h: HtmlBuilder<M>, context: CardContext): Html => {
 								],
 								[customer.accountName],
 							),
-							h.div(
-								[h.Class("flex flex-wrap items-center gap-1.5")],
-								[
-									customer.healthStatus === "unknown"
-										? healthBadge(h, { status: customer.healthStatus })
-										: healthBadge(h, {
-												status: customer.healthStatus,
-												score: customer.healthScore,
-											}),
-									...(customer.lifecycleStage === null
-										? []
-										: [stageBadge(h, customer.lifecycleStage)]),
-								],
-							),
+							...(customer.lifecycleStage === null
+								? []
+								: [stageBadge(h, customer.lifecycleStage, { className: "w-fit" })]),
 						],
 					),
 				],
 			),
-			...(customer.healthStatus === "unknown"
-				? [
-						h.p(
-							[h.Class(twMerge(descriptionClass, "px-4 pb-3 text-xs"))],
-							["No health score yet: it needs a connected source with usage or billing."],
-						),
-					]
-				: customer.healthWhy === null
-					? []
-					: [h.p([h.Class(twMerge(descriptionClass, "px-4 pb-3 text-xs"))], [customer.healthWhy])]),
-			// What the company is (enriched), under the health it explains.
+			// What the company is (enriched).
 			...(customer.company === undefined || customer.company === null
 				? []
 				: companyBlock(h, customer.company)),

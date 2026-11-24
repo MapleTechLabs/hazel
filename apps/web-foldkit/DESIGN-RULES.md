@@ -41,7 +41,7 @@ owner in `src/ui`, and a page never redraws it with its own class string or loca
 | An unread count on a row or tab                           | `countBadge` (ui/count-badge)                                                                                          |
 | A hairline between blocks                                 | `separator` (ui/separator)                                                                                             |
 
-Domain views (a customer's health badge, a company logo) live with their feature, built from these.
+Domain views (a lifecycle stage badge, a company logo) live with their feature, built from these.
 
 If the kit lacks what you need, add the variant or option to the kit component and use it. That is
 the whole point: the next page gets it for free, and a design change lands in one place.

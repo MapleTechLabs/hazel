@@ -19,7 +19,7 @@ import { ACTIVITY, DIRECTORY, INVOICES } from "../../lab/fixtures/customers-demo
 
 /**
  * The linked channel's customer at a glance (`customer-card.ts`): the header chip and the card in
- * each state the PR shows (populated, many signals, unknown health, a new customer, no customer),
+ * each state the PR shows (populated, many signals, a new customer, no customer),
  * desktop and phone width, light and dark (`bun run gallery`). Writes `customer-card-<theme>.png`.
  */
 
@@ -102,9 +102,6 @@ const base: ChannelCustomer.Type = {
 		colors: ["#6938ef"],
 		logoUrl: null,
 	},
-	healthStatus: "at_risk",
-	healthScore: 48,
-	healthWhy: "No sign-ins for 18 days; 12 weekly active users before",
 	lifecycleStage: "active",
 	planName: "Pro",
 	mrrMinor: 240_000,
@@ -129,9 +126,6 @@ const base: ChannelCustomer.Type = {
 const manySignals: ChannelCustomer.Type = {
 	...base,
 	accountName: "Globex International Holdings",
-	healthStatus: "critical",
-	healthScore: 22,
-	healthWhy: "Subscription past due; 3 high-severity risk signals open",
 	lifecycleStage: "past_due",
 	openSignalCount: 9,
 	topSignals: [
@@ -141,14 +135,11 @@ const manySignals: ChannelCustomer.Type = {
 	],
 }
 
-const unknownHealth: ChannelCustomer.Type = {
+const newCustomer: ChannelCustomer.Type = {
 	...base,
 	accountName: "Initech",
 	// No enriched company: no company block.
 	company: null,
-	healthStatus: "unknown",
-	healthScore: null,
-	healthWhy: null,
 	lifecycleStage: "trialing",
 	planName: "Team trial",
 	mrrMinor: 0,
@@ -275,9 +266,9 @@ const screen = (h: HtmlBuilder<M>) =>
 			h.Class("flex w-[1720px] flex-wrap items-start gap-6 bg-bg p-8 font-sans text-fg antialiased"),
 		],
 		[
-			frame(h, "Desktop · at risk", base, { width: 520 }),
+			frame(h, "Desktop · open signals", base, { width: 520 }),
 			frame(h, "Desktop · many signals", manySignals, { width: 520 }),
-			frame(h, "Desktop · unknown health, new customer", unknownHealth, { width: 520 }),
+			frame(h, "Desktop · new customer", newCustomer, { width: 520 }),
 			frame(h, "Desktop · no customer", null, { width: 520 }),
 			frame(h, "Phone · sheet", base, { width: 400, isMobile: true }),
 			frame(h, "Phone · many signals", manySignals, { width: 400, isMobile: true }),

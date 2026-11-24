@@ -7,7 +7,7 @@ import { twMerge } from "tailwind-merge"
 import { formatCount, formatDeltaPct, formatMoney, formatRelative } from "../../../customers/format"
 import { accountLabelOf, nestedIdsOf } from "../../../customers/groups"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
-import { environmentBadge, healthBadge, severityGlyph } from "../../../customers/ui/badges"
+import { environmentBadge, severityGlyph } from "../../../customers/ui/badges"
 import { connectCard } from "../../../customers/ui/connect-card"
 import { dataTable } from "../../../ui/data-table"
 import {
@@ -83,7 +83,7 @@ import { menu } from "../shared-view"
 import { separator } from "../../../ui/separator"
 import { badge } from "../../../ui/badge"
 
-/** The customers list (Wonder: List — all, at risk, filter builder, columns, bulk, hover, no results, first run). */
+/** The customers list (Wonder: List — all, filter builder, columns, bulk, hover, no results, first run). */
 
 const TABLE_ID = "customers-list-table"
 const icon = { attributes: { "data-slot": "icon" } }
@@ -413,7 +413,6 @@ const hoverCard = (h: HtmlBuilder<Message>, model: Model, account: AccountRow, v
 							),
 						],
 					),
-					healthBadge(h, { status: account.healthStatus, score: account.healthScore }),
 				],
 			),
 			...companyBlock(h, account),

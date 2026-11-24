@@ -90,7 +90,7 @@ describe("generateDemoSeed", { timeout: 30_000 }, () => {
 			}
 		})
 		expect(new Set(keys).size).toBe(keys.length)
-		const builtIn = ["active_users", "active_users_30d", "mrr", "health_score"]
+		const builtIn = ["active_users", "active_users_30d", "mrr"]
 		expect(opsOf("metric").some(({ op }) => builtIn.includes(op.metricKey))).toBe(false)
 	})
 

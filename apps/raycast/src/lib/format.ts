@@ -1,5 +1,5 @@
 import { Color, Icon } from "@raycast/api"
-import type { CustomerSource, HealthStatus, LifecycleStage } from "./models"
+import type { CustomerSource, LifecycleStage } from "./models"
 
 /** An amount in minor units (cents; whole yen) as currency. */
 export const money = (minor: number, currency: string) => {
@@ -55,13 +55,6 @@ export const httpsUrl = (url: string | null) => {
 }
 
 export const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: "medium" })
-
-export const HEALTH = {
-	healthy: { label: "Healthy", color: Color.Green },
-	at_risk: { label: "At risk", color: Color.Orange },
-	critical: { label: "Critical", color: Color.Red },
-	unknown: { label: "No score", color: Color.SecondaryText },
-} satisfies Record<HealthStatus, { readonly label: string; readonly color: Color }>
 
 export const STAGE = {
 	lead: "Lead",

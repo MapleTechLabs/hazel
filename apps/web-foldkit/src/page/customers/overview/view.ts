@@ -13,7 +13,6 @@ import { twMerge } from "tailwind-merge"
 import { commonMessage } from "~/lib/error-messages"
 import { activeUsersChart } from "../../../customers/charts/line-chart"
 import { chartLegend } from "../../../customers/charts/frame"
-import { distributionBar, healthDistribution } from "../../../customers/charts/distribution"
 import { sparkline } from "../../../customers/charts/sparkline"
 import { mrrLegend, mrrMovementChart } from "../../../customers/charts/stacked-bar-chart"
 import {
@@ -28,13 +27,7 @@ import {
 } from "../../../customers/format"
 import { type AccountRow, msOf, type SignalRow } from "../../../customers/queries"
 import { shownSuggestions, suggestionRow } from "../../../customers/suggestions"
-import {
-	environmentsHint,
-	HEALTH_FILL,
-	HEALTH_LABEL,
-	healthDot,
-	severityGlyph,
-} from "../../../customers/ui/badges"
+import { environmentsHint, severityGlyph } from "../../../customers/ui/badges"
 import { customerAccountOf, environmentCounts, queueNameOf } from "../../../customers/groups"
 import { connectCard } from "../../../customers/ui/connect-card"
 import { companyLogo } from "../../../customers/ui/identity"
@@ -73,7 +66,6 @@ type Result = Customers.OverviewResult
 const toHoverMrr = (index: number | null) => Message.HoveredChart({ chart: "mrr", index })
 const toHoverActiveUsers = (index: number | null) => Message.HoveredChart({ chart: "activeUsers", index })
 const toRange = (range: Customers.CustomersRange) => Message.ClickedRange({ range })
-const toHealthMetric = (metric: "customers" | "mrr") => Message.ClickedHealthMetric({ metric })
 const toCompare = (isComparing: boolean) => Message.ToggledCompare({ isComparing })
 
 interface Context {
@@ -97,7 +89,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, result: Result | undefine
 	const subtitle = isUnconnected(model)
 		? "No data sources connected yet"
 		: [
-				`${result?.hasData.billing === false ? "Usage and health" : "Revenue, usage and health"} across ${formatCount(customers)} customers`,
+				`${result?.hasData.billing === false ? "Usage" : "Revenue and usage"} across ${formatCount(customers)} customers`,
 				...(synced === null ? [] : [synced]),
 			].join(" · ")
 	const previous = previousPeriodOf(model.range, nowMs)
@@ -153,7 +145,6 @@ const headlineCell = (
 		suffix?: string
 		delta?: Delta | null
 		detail?: string
-		footer?: Html
 	}>,
 ): Html =>
 	h.div(
@@ -193,7 +184,6 @@ const headlineCell = (
 						: [h.span([h.Class("truncate")], [options.detail])]),
 				],
 			),
-			...(options.footer === undefined ? [] : [options.footer]),
 		],
 	)
 
@@ -263,15 +253,6 @@ const headline = (
 			active,
 		])
 	const atRiskPct = kpis.mrrMinor.value === 0 ? 0 : (kpis.atRiskMrrMinor.value / kpis.mrrMinor.value) * 100
-	const mrrByHealth = HEALTH_ORDER.map((status) => ({
-		key: status,
-		label: HEALTH_LABEL[status],
-		value: result.healthDistribution.find((row) => row.status === status)?.mrrMinor ?? 0,
-		fillClass: HEALTH_FILL[status],
-	}))
-	const risky = result.healthDistribution
-		.filter((row) => row.status === "at_risk" || row.status === "critical")
-		.reduce((sum, row) => sum + row.count, 0)
 	return strip([
 		headlineCell(h, {
 			id: "kpi-mrr",
@@ -288,19 +269,11 @@ const headline = (
 			definition: "MRR of customers with an open high-severity risk signal.",
 			value: formatMoney(kpis.atRiskMrrMinor.value, currency),
 			valueClass: kpis.atRiskMrrMinor.value > 0 ? "text-warning-subtle-fg" : undefined,
-			detail: `${formatPct(atRiskPct, { digits: 0 })} of MRR · ${formatCount(risky)} ${risky === 1 ? "customer" : "customers"} at risk or critical`,
-			footer: distributionBar(h, {
-				// The bar is an image: its name says what each segment holds.
-				ariaLabel: `MRR by health: ${mrrByHealth.map((segment) => `${segment.label} ${formatMoney(segment.value, currency)}`).join(", ")}`,
-				className: "mt-1.5 h-1.5",
-				segments: mrrByHealth,
-			}),
+			detail: `${formatPct(atRiskPct, { digits: 0 })} of MRR`,
 		}),
 		active,
 	])
 }
-
-const HEALTH_ORDER: ReadonlyArray<Customers.HealthStatus> = ["healthy", "at_risk", "critical", "unknown"]
 
 /** Revenue, paying customers and logo churn: worth a glance, not a tile each. */
 const secondaryLine = (
@@ -824,23 +797,6 @@ const moversCard = (h: HtmlBuilder<Message>, result: Result, context: Context): 
 													},
 													"w-16 shrink-0 justify-end text-sm",
 												),
-												...(account === undefined
-													? []
-													: [
-															h.span(
-																[
-																	h.Class(
-																		"w-12 shrink-0 text-right max-sm:w-9",
-																	),
-																],
-																[
-																	healthDot(h, {
-																		status: account.healthStatus,
-																		score: account.healthScore,
-																	}),
-																],
-															),
-														]),
 											],
 										),
 									],
@@ -1071,9 +1027,8 @@ const lifecycleSection = (h: HtmlBuilder<Message>, model: Model, result: Result,
 // TRENDS
 
 /** The charts, folded: worth opening on a review, not on every visit. */
-const trendsSection = (h: HtmlBuilder<Message>, model: Model, result: Result, context: Context): Html => {
-	const bands = model.settings?.bands ?? Customers.DEFAULT_HEALTH_SETTINGS.bands
-	return h.section(
+const trendsSection = (h: HtmlBuilder<Message>, model: Model, result: Result, context: Context): Html =>
+	h.section(
 		[h.AriaLabel("Charts and trends")],
 		[
 			disclosure(
@@ -1084,7 +1039,7 @@ const trendsSection = (h: HtmlBuilder<Message>, model: Model, result: Result, co
 						h.span([h.Class("font-medium text-fg")], ["Charts and trends"]),
 						h.span(
 							[h.Class("text-muted-fg text-xs max-sm:hidden")],
-							["MRR movement, active users, health distribution, top movers"],
+							["MRR movement, active users, top movers"],
 						),
 					],
 				},
@@ -1093,19 +1048,7 @@ const trendsSection = (h: HtmlBuilder<Message>, model: Model, result: Result, co
 						[h.Class("flex flex-col gap-4 pt-3")],
 						[
 							mrrCard(h, model, result),
-							h.div(
-								[h.Class("grid gap-4 lg:grid-cols-2")],
-								[
-									activeUsersCard(h, model, result),
-									healthDistribution(h, {
-										rows: result.healthDistribution,
-										bands,
-										currency: result.currency,
-										metric: model.healthMetric,
-										onMetric: toHealthMetric,
-									}),
-								],
-							),
+							activeUsersCard(h, model, result),
 							moversCard(h, result, context),
 						],
 					),
@@ -1113,7 +1056,6 @@ const trendsSection = (h: HtmlBuilder<Message>, model: Model, result: Result, co
 			),
 		],
 	)
-}
 
 // STATES
 

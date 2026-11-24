@@ -51,7 +51,7 @@ const thread = (overrides: Partial<ThreadRow> = {}): ThreadRow => ({
 	id: threadId,
 	ownerId: ada,
 	ownerName: "Ada Lovelace",
-	title: "Acme's health",
+	title: "Acme summary",
 	visibility: "private",
 	status: "idle",
 	errorMessage: null,
@@ -178,9 +178,9 @@ describe("a new chat", () => {
 
 	test("a suggestion sends at once and keeps what the member typed", () => {
 		const typed = run(opened, Message.ChangedDraft({ value: "half a thought" })).model
-		const result = run(typed, Message.ClickedSuggestion({ text: "Summarize this customer's health" }))
+		const result = run(typed, Message.ClickedSuggestion({ text: "Summarize this customer" }))
 		expect(result.model.draft).toBe("half a thought")
-		expect(pendingOf(result.model)?.text).toBe("Summarize this customer's health")
+		expect(pendingOf(result.model)?.text).toBe("Summarize this customer")
 	})
 
 	test("the context chip turned off sends without context, for that message only", () => {

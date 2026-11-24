@@ -33,16 +33,15 @@ import * as Modal from "../../../ui/modal"
 export const Tab = Schema.Literals(["open", "snoozed", "done"])
 export const Grouping = Schema.Literals(["signals", "accounts"])
 export type Grouping = typeof Grouping.Type
-export const Sort = Schema.Literals(["priority", "account", "signal", "severity", "age", "health", "mrr"])
+export const Sort = Schema.Literals(["priority", "account", "signal", "severity", "age", "mrr"])
 export type Sort = typeof Sort.Type
-/** Each sort's own direction (the header's `aria-sort`): # runs 1 down, Age oldest first, Health worst first. */
+/** Each sort's own direction (the header's `aria-sort`): # runs 1 down, Age oldest first. */
 export const SORT_ASCENDING = {
 	priority: true,
 	account: true,
 	signal: true,
 	severity: false,
 	age: false,
-	health: true,
 	mrr: false,
 } as const satisfies Record<Sort, boolean>
 /** Whose accounts: the default, "Mine or unowned", is accounts I own plus ones nobody owns yet. */
@@ -218,11 +217,6 @@ const sortedForTab = (
 		signal: Order.mapInput(Order.String, (signal: SignalRowType) => signal.title.toLowerCase()),
 		severity: bySeverity,
 		age: byOpened,
-		// No score yet sorts last.
-		health: Order.mapInput(
-			Order.Number,
-			(signal: SignalRowType) => accountOf(signal)?.healthScore ?? Infinity,
-		),
 		mrr: Order.mapInput(
 			Order.flip(Order.Number),
 			(signal: SignalRowType) => accountOf(signal)?.mrrMinor ?? 0,

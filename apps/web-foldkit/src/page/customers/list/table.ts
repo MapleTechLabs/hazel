@@ -13,15 +13,7 @@ import {
 } from "../../../customers/format"
 import { accountLabelOf } from "../../../customers/groups"
 import type { AccountRow, MemberRow } from "../../../customers/queries"
-import {
-	environmentBadge,
-	HEALTH_LABEL,
-	healthBadge,
-	healthDot,
-	STAGE_LABEL,
-	signalCounts,
-	stageBadge,
-} from "../../../customers/ui/badges"
+import { environmentBadge, STAGE_LABEL, signalCounts, stageBadge } from "../../../customers/ui/badges"
 import type { Column } from "../../../ui/data-table"
 import { primaryCell } from "../../../ui/data-table"
 import { companyLogo, personAvatar } from "../../../customers/ui/identity"
@@ -84,10 +76,6 @@ export const csvValue = (
 			return account.planName ?? ""
 		case "mrr":
 			return formatMajor(account.mrrMinor, account.currency)
-		case "health":
-			return account.healthStatus === "unknown"
-				? HEALTH_LABEL.unknown
-				: `${HEALTH_LABEL[account.healthStatus]} ${account.healthScore ?? ""}`.trim()
 		case "active_users_30d":
 			return String(account.activeUsers30d)
 		case "usage_trend":
@@ -187,25 +175,6 @@ const footerOf = <M>(
 				accounts.reduce((sum, account) => sum + account.mrrMinor, 0),
 				currency,
 			)
-		case "health": {
-			const scored = accounts.filter(
-				(account) => account.healthStatus !== "unknown" && account.healthScore !== null,
-			)
-			return scored.length === 0
-				? undefined
-				: h.span(
-						[],
-						[
-							muted(h, "Avg "),
-							String(
-								Math.round(
-									scored.reduce((sum, account) => sum + (account.healthScore ?? 0), 0) /
-										scored.length,
-								),
-							),
-						],
-					)
-		}
 		case "active_users_30d":
 			return formatCount(accounts.reduce((sum, account) => sum + account.activeUsers30d, 0))
 		default:
@@ -263,25 +232,6 @@ const cellOf = <M>(
 				: h.span(
 						[h.Class(account.mrrMinor === 0 ? "text-muted-fg" : "font-medium")],
 						[formatMoney(account.mrrMinor, account.currency)],
-					)
-		case "health":
-			return account.lifecycleStage === "churned"
-				? muted(h, "—")
-				: // A phone's table: the dot and score, so the name keeps the width.
-					h.span(
-						[],
-						[
-							healthBadge(h, {
-								status: account.healthStatus,
-								score: account.healthScore,
-								className: "@max-xl:hidden",
-							}),
-							healthDot(h, {
-								status: account.healthStatus,
-								score: account.healthScore,
-								className: "@xl:hidden",
-							}),
-						],
 					)
 		case "active_users_30d": {
 			const values = context.sparklines[account.id]
@@ -355,8 +305,8 @@ const cellOf = <M>(
  * Columns drop by the table's own width (a container query on the table's frame), not the
  * viewport's: the app's sidebars take a different share at every window size. Each one shows once
  * the columns before it fit, so a table never runs off its frame until every picked column is in;
- * a phone keeps name, MRR and health. The name takes whatever width is left and truncates (a
- * `max-w-0` cell is the one that gives), rather than widening the table to its longest domain.
+ * a phone keeps name and MRR. The name takes whatever width is left and truncates (a `max-w-0`
+ * cell is the one that gives), rather than widening the table to its longest domain.
  */
 const COLUMN_LAYOUT = {
 	name: { widthClass: "w-full max-w-0 min-w-44 @max-xl:min-w-0" },
@@ -364,7 +314,6 @@ const COLUMN_LAYOUT = {
 	stage: { widthClass: "w-24", hideClass: "@max-2xl:hidden" },
 	plan: { widthClass: "w-18", hideClass: "@max-3xl:hidden" },
 	mrr: { align: "right", widthClass: "w-20" },
-	health: { widthClass: "w-28 @max-xl:w-14" },
 	active_users_30d: { align: "right", widthClass: "w-28", hideClass: "@max-7xl:hidden" },
 	usage_trend: { align: "right", widthClass: "w-16", hideClass: "@max-5xl:hidden" },
 	last_active: { align: "right", widthClass: "w-22", hideClass: "@max-4xl:hidden" },

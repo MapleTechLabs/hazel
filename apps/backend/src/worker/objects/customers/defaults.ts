@@ -6,7 +6,6 @@
 import { Database, SQLite, schema } from "@hazel/db"
 import {
 	type BuiltInViewKey,
-	DEFAULT_HEALTH_SETTINGS,
 	DEFAULT_LIST_COLUMNS,
 	DEFAULT_SLA_POLICY,
 	SignalTemplate,
@@ -21,7 +20,6 @@ export const BUILT_IN_METRICS = [
 	{ key: "active_users", name: "Daily active users", unit: "users", aggregation: "max" },
 	{ key: "active_users_30d", name: "Active users (30 days)", unit: "users", aggregation: "last" },
 	{ key: "mrr", name: "MRR", unit: "minor", aggregation: "last" },
-	{ key: "health_score", name: "Health score", unit: "points", aggregation: "last" },
 ] as const
 
 export const isBuiltInMetric = (key: string) => BUILT_IN_METRICS.some((metric) => metric.key === key)
@@ -34,7 +32,6 @@ export const BUILT_IN_VIEWS: ReadonlyArray<{
 	{ key: "my_customers", name: "My customers", filters: { ownedByMe: true } },
 	{ key: "paying", name: "Paying", filters: { payingOnly: true } },
 	{ key: "trialing", name: "Trialing", filters: { lifecycleStages: ["trialing"] } },
-	{ key: "at_risk", name: "At risk", filters: { healthStatuses: ["at_risk", "critical"] } },
 	{ key: "churned", name: "Churned", filters: { lifecycleStages: ["churned"] } },
 ]
 
@@ -47,7 +44,6 @@ export const installDefaults = Effect.fn("Customers.installDefaults")(function* 
 	yield* db.run(
 		SQLite.insertInto(schema.customerSettingsTable).values({
 			organizationId,
-			health: DEFAULT_HEALTH_SETTINGS,
 			reportingCurrency: "usd",
 		}),
 	)

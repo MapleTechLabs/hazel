@@ -429,58 +429,19 @@ describe("Customer channel links", () => {
 				const acme = t.accountId("Acme")
 				// The first compute (nothing to compute from): seeded values below stay.
 				yield* t.publish
-				// No health, no signals yet.
+				// No signals yet.
 				expect(t.glance(general)).toMatchObject({
-					healthStatus: "unknown",
-					healthScore: null,
-					healthWhy: null,
 					openSignalCount: 0,
 					topSignals: [],
 				})
 
 				t.world.rows(
-					`UPDATE customer_accounts SET healthStatus = 'at_risk', healthScore = 48, lifecycleStage = 'active',
+					`UPDATE customer_accounts SET lifecycleStage = 'active',
 						planName = 'Pro', mrrMinor = 240000, currency = 'usd', ownerUserId = ?, seatsUsed = 18,
 						seatsLimit = 25, lastActiveAt = '2026-11-17 09:30:00.000', logoUrl = 'https://acme.test/logo.png'
 					 WHERE id = ?`,
 					t.world.owner,
 					acme,
-				)
-				const day = new Date().toISOString().slice(0, 10)
-				t.world.rows(
-					`INSERT OR REPLACE INTO customer_health_daily (accountId, day, score, status, breakdown) VALUES (?, ?, 48, 'at_risk', ?)`,
-					acme,
-					day,
-					JSON.stringify({
-						score: 48,
-						status: "at_risk",
-						components: [
-							{
-								key: "usage",
-								score: 70,
-								weight: 40,
-								effectiveWeight: 40,
-								excluded: false,
-								why: "usage ok",
-							},
-							{
-								key: "engagement",
-								score: 25,
-								weight: 30,
-								effectiveWeight: 30,
-								excluded: false,
-								why: "No activity for 18 days",
-							},
-							{
-								key: "billing",
-								score: null,
-								weight: 30,
-								effectiveWeight: 0,
-								excluded: true,
-								why: "no billing",
-							},
-						],
-					}),
 				)
 				const top = t.signal("Acme", "Payment failed", 9)
 				t.signal("Acme", "Usage dropped", 5)
@@ -496,9 +457,6 @@ describe("Customer channel links", () => {
 				expect(row).toMatchObject({
 					accountName: "Acme",
 					accountLogoUrl: "https://acme.test/logo.png",
-					healthStatus: "at_risk",
-					healthScore: 48,
-					healthWhy: "No activity for 18 days",
 					lifecycleStage: "active",
 					planName: "Pro",
 					mrrMinor: 240000,
@@ -522,17 +480,10 @@ describe("Customer channel links", () => {
 				yield* t.publish
 				expect(t.world.objects.deliveries.length).toBe(before)
 
-				// A compute that moves MRR and health resends.
-				t.world.rows(
-					`UPDATE customer_accounts SET mrrMinor = 120000, healthStatus = 'critical', healthScore = 30 WHERE id = ?`,
-					acme,
-				)
+				// A compute that moves MRR resends.
+				t.world.rows(`UPDATE customer_accounts SET mrrMinor = 120000 WHERE id = ?`, acme)
 				yield* t.publish
-				expect(t.glance(general)).toMatchObject({
-					mrrMinor: 120000,
-					healthStatus: "critical",
-					healthScore: 30,
-				})
+				expect(t.glance(general)).toMatchObject({ mrrMinor: 120000 })
 
 				// A person closing a signal updates the channel without waiting for a compute.
 				const done = yield* t.world.call(
@@ -620,7 +571,6 @@ describe("Customer channel links", () => {
 				expect(t.glance(general)).toMatchObject({
 					accountName: "Acme",
 					company: null,
-					healthStatus: "unknown",
 					mrrMinor: null,
 					openSignalCount: 0,
 					topSignals: [],

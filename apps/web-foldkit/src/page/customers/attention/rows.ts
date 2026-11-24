@@ -4,13 +4,7 @@ import { queueNameOf } from "../../../customers/groups"
 import type { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
 import { resolvedAtMsOf } from "../../../customers/queries"
 import { formatDate, formatMoney, formatWeekdayTime } from "../../../customers/format"
-import {
-	environmentsHint,
-	healthBadge,
-	healthDot,
-	kindChip,
-	severityGlyph,
-} from "../../../customers/ui/badges"
+import { environmentsHint, kindChip, severityGlyph } from "../../../customers/ui/badges"
 import { evidenceViz } from "../../../customers/ui/evidence"
 import { companyLogo, personAvatar, personLabel } from "../../../customers/ui/identity"
 import {
@@ -152,7 +146,6 @@ export const signalRow = (
 		evidence: evidenceViz(h, signal.evidence),
 		age: ageText(signal.openedAtMs, context.nowMs),
 		assignee: personOf(context, signal.assigneeUserId),
-		health: { status: account.healthStatus, score: account.healthScore },
 		environmentCount: context.environmentCounts.get(account.id) ?? 0,
 		isFocused: isSelected,
 		isSelected,
@@ -161,7 +154,7 @@ export const signalRow = (
 	})
 }
 
-/** Open tab beside the preview (Wonder: Queue Selected With Preview): account, signal, age, health. */
+/** Open tab beside the preview (Wonder: Queue Selected With Preview): account, signal, age. */
 export const compactRow = (
 	h: HtmlBuilder<Message>,
 	signal: SignalRow,
@@ -215,10 +208,6 @@ export const compactRow = (
 		h.span(
 			[h.Role("cell"), h.Class("w-8 text-right text-muted-fg text-sm tabular-nums")],
 			[ageText(signal.openedAtMs, context.nowMs)],
-		),
-		h.span(
-			[h.Role("cell"), h.Class("w-12 shrink-0 text-right")],
-			[healthDot(h, { status: account.healthStatus, score: account.healthScore })],
 		),
 	])
 }
@@ -311,10 +300,6 @@ export const accountGroupRow = (
 			[h.Role("cell"), h.Class("flex w-10 justify-center -space-x-1.5 max-md:hidden")],
 			assignees.map((userId) => personAvatar(h, personOf(context, userId), { ring: true })),
 		),
-		h.div(
-			[h.Role("cell"), h.Class("flex w-28 shrink-0 justify-end max-md:w-auto")],
-			[healthBadge(h, { status: account.healthStatus, score: account.healthScore })],
-		),
 	])
 }
 
@@ -403,10 +388,6 @@ export const snoozedRow = (
 			],
 		),
 		...(signal.id === context.selectedId ? context.actions : []),
-		h.div(
-			[h.Role("cell"), h.Class("flex w-28 shrink-0 justify-end max-md:w-auto")],
-			[healthBadge(h, { status: account.healthStatus, score: account.healthScore })],
-		),
 	])
 }
 

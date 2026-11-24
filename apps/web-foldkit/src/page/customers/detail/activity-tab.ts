@@ -32,7 +32,6 @@ const TYPE_LABEL = {
 	billing: "Billing",
 	signals: "Signals",
 	contacts: "Contacts",
-	health: "Health",
 	notes: "Notes",
 } as const satisfies Record<EventType, string>
 

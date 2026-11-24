@@ -42,7 +42,7 @@ import { ACTIVITY, DIRECTORY, INVOICES, PLANS } from "../../../fixtures/customer
 // (feature flags, the grouping actions), `?account=eu` shows Acme's EU environment instead of its US
 // primary, `?dialog=` opens the link or environment dialog.
 
-const STATES = ["default", "payment-failed", "excluded-health", "loading", "not-found"] as const
+const STATES = ["default", "payment-failed", "no-billing", "loading", "not-found"] as const
 const State = Schema.Literals(STATES)
 const ROLES = ["member", "admin"] as const
 const VIEWED = ["us", "eu"] as const
@@ -254,7 +254,6 @@ const EVENTS: ReadonlyArray<Customers.Event> = [
 	),
 	event(2, 2, "hazel", "signal.opened", "Signal opened: Champion inactive", { severity: "medium" }),
 	event(3, 4, "hazel", "signal.opened", "Signal opened: Usage dropped", { severity: "high" }),
-	event(4, 4, "hazel", "health.status_changed", "Health changed: Healthy → At risk", { from: 71, to: 66 }),
 	event(5, 9, INVOICES.id, "invoice.paid", "Invoice paid", { number: "INV-2039", amount: "$1,240.00" }),
 	event(6, 11, DIRECTORY.id, "contact.joined", "2 contacts joined", { invitedBy: "Lucas Ferreira" }),
 	event(7, 16, ACTIVITY.id, "activity.last", "Last activity from Priya Shah", { events: 46 }),
@@ -342,7 +341,7 @@ const withCompany = (account: Customers.Account): Customers.Account => {
 }
 
 const detailFor = (state: typeof State.Type): Customers.AccountDetail => {
-	const healthy: Customers.AccountDetail = {
+	const base: Customers.AccountDetail = {
 		...ACME_DETAIL,
 		account: withCompany(ACCOUNT),
 		subscriptions: [{ ...SUBSCRIPTION, status: "active", planName: "Pro", mrrMinor: 124_000 }],
@@ -353,57 +352,13 @@ const detailFor = (state: typeof State.Type): Customers.AccountDetail => {
 	}
 	if (state === "payment-failed")
 		return {
-			...healthy,
-			account: { ...ACCOUNT, lifecycleStage: "past_due", healthStatus: "critical", healthScore: 34 },
+			...base,
+			account: { ...ACCOUNT, lifecycleStage: "past_due" },
 			subscriptions: ACME_DETAIL.subscriptions,
 			openInvoices: ACME_DETAIL.openInvoices,
 		}
-	if (state === "excluded-health")
-		return {
-			...healthy,
-			subscriptions: [],
-			upcomingInvoice: null,
-			account: { ...ACCOUNT, healthStatus: "healthy", healthScore: 82 },
-			health: {
-				score: 82,
-				status: "healthy",
-				components: [
-					{
-						key: "usage",
-						score: 68,
-						weight: 40,
-						effectiveWeight: 50,
-						excluded: false,
-						why: "11 of 16 contacts active in the last 30 days (69%). Daily actives flat vs the prior 28 days.",
-					},
-					{
-						key: "engagement",
-						score: 92,
-						weight: 25,
-						effectiveWeight: 31.25,
-						excluded: false,
-						why: "Last activity 20 minutes ago. Active every weekday this month.",
-					},
-					{
-						key: "signals",
-						score: 100,
-						weight: 15,
-						effectiveWeight: 18.75,
-						excluded: false,
-						why: "No open risk signals.",
-					},
-					{
-						key: "billing",
-						score: null,
-						weight: 20,
-						effectiveWeight: 0,
-						excluded: true,
-						why: `Left out: no ${INVOICES.name} or ${PLANS.name} record is linked to this account, so its 20% is shared across the other three in proportion.`,
-					},
-				],
-			},
-		}
-	return healthy
+	if (state === "no-billing") return { ...base, subscriptions: [], upcomingInvoice: null }
+	return base
 }
 
 // PROGRAM
@@ -472,7 +427,7 @@ const answer = (command: AnyCommand, current: typeof State.Type): Message | null
 		case "FetchCustomerMrrHistory":
 			return Message.SucceededFetchMrrHistory({
 				accountId: accountId(),
-				series: current === "excluded-health" ? [] : [MRR_HISTORY],
+				series: current === "no-billing" ? [] : [MRR_HISTORY],
 			})
 		case "FetchCustomerContacts":
 			return Message.SucceededFetchContacts({

@@ -3,7 +3,7 @@ import { useCachedState, usePromise } from "@raycast/utils"
 import { useEffect, useMemo, useState } from "react"
 import { CustomerActions, SignOutAction } from "./customer-actions"
 import { CustomerDetail, accountIcon, fetchDetail } from "./customer-detail"
-import { HEALTH, STAGE, money, relative, risk } from "./lib/format"
+import { STAGE, money, relative, risk } from "./lib/format"
 import type { Account, ChannelLink, Signal } from "./lib/models"
 import { useCustomers } from "./lib/use-customers"
 
@@ -42,7 +42,6 @@ const groupEnvironments = (accounts: ReadonlyArray<Account>): ReadonlyArray<Acco
 
 const accessories = (account: Account): Array<List.Item.Accessory> => {
 	const open = risk(account)
-	const health = HEALTH[account.healthStatus]
 	return [
 		...(account.environment ? [{ tag: account.environment, tooltip: "Environment" }] : []),
 		...(open.count > 0
@@ -58,13 +57,6 @@ const accessories = (account: Account): Array<List.Item.Accessory> => {
 		...(account.mrrMinor > 0
 			? [{ text: money(account.mrrMinor, account.currency), tooltip: "MRR" }]
 			: []),
-		{
-			tag: {
-				value: account.healthScore === null ? health.label : `${account.healthScore}`,
-				color: health.color,
-			},
-			tooltip: `Health: ${health.label}`,
-		},
 	]
 }
 

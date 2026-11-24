@@ -1,18 +1,18 @@
-import type { HealthStatus, SignalKind, SignalSeverity } from "@hazel/domain/customers"
+import type { SignalKind, SignalSeverity } from "@hazel/domain/customers"
 import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconChevronDown } from "../../icons"
 import { ariaButton, button } from "../../ui/button"
 import { formatMoney } from "../format"
 import { environmentsHintOf } from "../groups"
-import { healthBadge, kindChip, severityChip } from "./badges"
+import { kindChip, severityChip } from "./badges"
 import { companyLogo, personAvatar } from "./identity"
 import { kbd } from "./shortcuts"
 
 /**
  * A row of the Needs-attention queue (Foundations › Queue Row Signal States): rank, account,
- * signal and its plain reason, evidence, severity, age, assignee, health. Hovering or focusing the
- * row swaps evidence…assignee for the inline actions. `focused` is the keyboard cursor (j/k).
+ * signal and its plain reason, evidence, severity, age, assignee. Hovering or focusing the row
+ * swaps evidence…assignee for the inline actions. `focused` is the keyboard cursor (j/k).
  */
 
 export type QueueRowOptions<M> = Readonly<{
@@ -32,7 +32,6 @@ export type QueueRowOptions<M> = Readonly<{
 	/** `2d`, `6h`: since the signal opened. */
 	age: string
 	assignee: Readonly<{ name: string; avatarUrl?: string | null }> | null
-	health: Readonly<{ status: HealthStatus; score: number | null }>
 	isFocused?: boolean
 	isSelected?: boolean
 	/** The account's other signals in the rows next to this one (`accountMark`). */
@@ -101,7 +100,7 @@ export const queueRow = <M>(h: HtmlBuilder<M>, options: QueueRowOptions<M>): Htm
 			h.Class(
 				twMerge(
 					"group/queue relative flex min-h-16 items-center gap-4 border-border border-t px-4 py-3 first:border-t-0",
-					// A phone: account and health on the first line, the signal under them.
+					// A phone: the account on the first line, the signal under it.
 					"max-md:flex-wrap max-md:gap-x-3 max-md:gap-y-1.5",
 					"transition-colors hover:bg-wash data-focused:bg-wash",
 					"before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-primary before:opacity-0 data-focused:before:opacity-100",
@@ -206,10 +205,6 @@ export const queueRow = <M>(h: HtmlBuilder<M>, options: QueueRowOptions<M>): Htm
 						),
 					]
 				: []),
-			h.div(
-				[h.Role("cell"), h.Class("flex w-28 shrink-0 justify-end max-md:w-auto")],
-				[healthBadge(h, { status: options.health.status, score: options.health.score })],
-			),
 		],
 	)
 

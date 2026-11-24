@@ -4,7 +4,6 @@
  * the extension builds on its own.
  */
 
-export type HealthStatus = "healthy" | "at_risk" | "critical" | "unknown"
 export type LifecycleStage = "lead" | "trialing" | "active" | "past_due" | "churned"
 export type CustomerSource = "clerk" | "stripe" | "autumn" | "maple" | "hazel"
 
@@ -25,8 +24,6 @@ export interface Account {
 	readonly mrrMinor: number
 	readonly currency: string
 	readonly trialEndsAt: string | null
-	readonly healthScore: number | null
-	readonly healthStatus: HealthStatus
 	readonly seatsUsed: number | null
 	readonly seatsLimit: number | null
 	readonly contactCount: number
@@ -110,13 +107,6 @@ export interface ContactRow {
 	readonly status: "active" | "dormant" | "never_active"
 }
 
-export interface HealthComponent {
-	readonly key: "usage" | "engagement" | "billing" | "signals"
-	readonly score: number | null
-	readonly excluded: boolean
-	readonly why: string
-}
-
 export interface TimelineEvent {
 	readonly id: string
 	readonly provider: CustomerSource
@@ -131,11 +121,6 @@ export interface AccountDetail {
 	readonly subscriptions: ReadonlyArray<Subscription>
 	readonly upcomingInvoice: Invoice | null
 	readonly openInvoices: ReadonlyArray<Invoice>
-	readonly health: {
-		readonly score: number | null
-		readonly status: HealthStatus
-		readonly components: ReadonlyArray<HealthComponent>
-	} | null
 	readonly contactsToReach: ReadonlyArray<ContactRow>
 	readonly recentEvents: ReadonlyArray<TimelineEvent>
 }

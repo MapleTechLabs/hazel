@@ -59,7 +59,6 @@ export const Message = defineMessageUnion({
 	UpdatedMembers: { members: Schema.Array(MemberRow) },
 	UpdatedMetrics: { metrics: Schema.Array(MetricRow) },
 	UpdatedConnectedProviders: { providers: Schema.Array(Customers.CustomerProvider) },
-	UpdatedBands: { bands: Customers.HealthBands },
 
 	ClickedTab: { tab: CustomerTab },
 	PressedNeighbour: { step: Schema.Literals([-1, 1]) },

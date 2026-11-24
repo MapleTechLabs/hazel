@@ -16,9 +16,8 @@
  * Each account gets an archetype that shapes its history so every signal template has matches:
  * `went_quiet` (inactive), `usage_drop`, `payment_failed`, `cancel_scheduled` and `downgraded`
  * (cancel_scheduled), `trial_ending_low` (trial_ending_low_activation), `onboarding_stalled`,
- * `champion_left` (champion_inactive), `near_limit`, `seat_growth`; `healthy_*`, `trial_healthy`,
- * `churned` (a recent few: churned) and `lead` fill out the book (and `health_drop` follows from the
- * risky ones).
+ * `champion_left` (champion_inactive), `near_limit`, `seat_growth`; `steady`, `growing`,
+ * `trial_engaged`, `churned` (a recent few: churned) and `lead` fill out the book.
  */
 import type {
 	CustomerProvider,
@@ -51,15 +50,15 @@ export interface DemoSeedOptions {
 }
 
 export type DemoArchetype =
-	| "healthy_growing"
-	| "healthy_stable"
+	| "growing"
+	| "steady"
 	| "went_quiet"
 	| "usage_drop"
 	| "payment_failed"
 	| "cancel_scheduled"
 	| "downgraded"
 	| "trial_ending_low"
-	| "trial_healthy"
+	| "trial_engaged"
 	| "onboarding_stalled"
 	| "champion_left"
 	| "near_limit"
@@ -189,10 +188,10 @@ const tierAbove = (plan: Plan) => TIERS[Math.min(3, TIERS.indexOf(plan as (typeo
 
 /** Accounts per archetype in a 200-account book. */
 const MIX: ReadonlyArray<readonly [DemoArchetype, number]> = [
-	["healthy_stable", 50],
-	["healthy_growing", 25],
+	["steady", 50],
+	["growing", 25],
 	["lead", 15],
-	["trial_healthy", 10],
+	["trial_engaged", 10],
 	["trial_ending_low", 6],
 	["went_quiet", 10],
 	["usage_drop", 10],
@@ -417,7 +416,7 @@ const archetypeCounts = (total: number): Array<DemoArchetype> => {
 		for (const [index, count] of counts.entries()) {
 			if (count === 0) {
 				counts[index] = 1
-				counts[0]-- // from healthy_stable
+				counts[0]-- // from steady
 			}
 		}
 	}
@@ -457,14 +456,14 @@ const weighted = <A>(rng: Rng, options: ReadonlyArray<readonly [A, number]>): A 
 
 const pickPlan = (rng: Rng, archetype: DemoArchetype): Plan => {
 	switch (archetype) {
-		case "healthy_stable":
+		case "steady":
 			return weighted(rng, [
 				[STARTER, 30],
 				[TEAM, 40],
 				[BUSINESS, 22],
 				[ENTERPRISE, 8],
 			])
-		case "healthy_growing":
+		case "growing":
 			return weighted(rng, [
 				[TEAM, 40],
 				[BUSINESS, 40],
@@ -478,7 +477,7 @@ const pickPlan = (rng: Rng, archetype: DemoArchetype): Plan => {
 			])
 		case "seat_growth":
 			return BUSINESS
-		case "trial_healthy":
+		case "trial_engaged":
 		case "trial_ending_low":
 			return weighted(rng, [
 				[TEAM, 60],
@@ -576,9 +575,9 @@ const planAccounts = (
 				list.forEach((contact, i) => (contact.weekdayP = silent ? 0 : i === 0 ? 0.55 : 0.15))
 		} else {
 			switch (archetype) {
-				case "trial_healthy":
+				case "trial_engaged":
 				case "trial_ending_low": {
-					const endsIn = archetype === "trial_healthy" ? rng.int(7, 13) : rng.int(1, 4)
+					const endsIn = archetype === "trial_engaged" ? rng.int(7, 13) : rng.int(1, 4)
 					const trialEnd = dayAt(clock, -endsIn) + rng.int(8, 18) * 3_600_000
 					const trialStartAgo = 14 - endsIn
 					createdAgo = trialStartAgo
@@ -589,7 +588,7 @@ const planAccounts = (
 						trialEndsAt: trialEnd,
 						mrrMinor: 0,
 					})
-					if (archetype === "trial_healthy") {
+					if (archetype === "trial_engaged") {
 						contacts = rng.int(3, 6)
 						tweakContacts = (list) =>
 							list.forEach((contact, i) => {
@@ -665,7 +664,7 @@ const planAccounts = (
 					break
 				}
 				case "downgraded":
-				case "healthy_growing": {
+				case "growing": {
 					// downgraded: from the tier above, 2–12 days ago; growing: up from the tier below.
 					const changeAgo = archetype === "downgraded" ? rng.int(2, 12) : rng.int(20, 200)
 					const startAgo = Math.min(364, changeAgo + rng.int(45, 300))
@@ -686,17 +685,15 @@ const planAccounts = (
 						start: change,
 						interval: annual ? "year" : "month",
 					})
-					if (archetype === "healthy_growing")
-						intensity = (ago) => 0.7 + 0.3 * Math.max(0, 1 - ago / 120)
+					if (archetype === "growing") intensity = (ago) => 0.7 + 0.3 * Math.max(0, 1 - ago / 120)
 					break
 				}
 				default: {
-					// healthy_stable, went_quiet, usage_drop, champion_left, near_limit, seat_growth
-					const startAgo = rng.int(archetype === "healthy_stable" ? 30 : 75, 364)
+					// steady, went_quiet, usage_drop, champion_left, near_limit, seat_growth
+					const startAgo = rng.int(archetype === "steady" ? 30 : 75, 364)
 					createdAgo = startAgo + rng.int(0, 21)
 					const annual =
-						archetype === "healthy_stable" &&
-						(plan === ENTERPRISE ? rng.chance(0.8) : rng.chance(0.2))
+						archetype === "steady" && (plan === ENTERPRISE ? rng.chance(0.8) : rng.chance(0.2))
 					sub({
 						plan,
 						mrrMinor: mrrFor(plan),
@@ -775,7 +772,7 @@ const planAccounts = (
 
 		const contactList = Array.from({ length: contacts }, (_, i) => {
 			if (i === 0) return { ...newContact(createdAgo, 0.9), isAdmin: true, isBillingContact: true }
-			const spread = archetype === "healthy_growing" ? rng.next() * 0.9 : rng.next() * 0.4
+			const spread = archetype === "growing" ? rng.next() * 0.9 : rng.next() * 0.4
 			const joinAgo = Math.max(0, createdAgo - Math.floor(createdAgo * spread))
 			const weekdayP = i <= 2 ? rng.between(0.4, 0.55) : rng.chance(0.1) ? 0 : rng.between(0.08, 0.25)
 			const contact = newContact(joinAgo, weekdayP)
@@ -801,7 +798,7 @@ const planAccounts = (
 
 /** The few deliberate data-quality cases: removed members, domain-only billing links, a shared domain. */
 const addEdgeCases = (rng: Rng, accounts: Array<AccountSpec>) => {
-	const stable = accounts.filter((account) => account.archetype === "healthy_stable")
+	const stable = accounts.filter((account) => account.archetype === "steady")
 	const leavers = stable
 		.flatMap((account) =>
 			account.contacts.filter((contact, i) => i > 0 && contact.joinAgo > 90).slice(0, 1),
@@ -1315,10 +1312,7 @@ export const generateDemoSeed = (options: DemoSeedOptions): DemoSeed => {
 	const billed = accounts.filter((account) => account.subs.length > 0)
 	const upcomingFor = new Set(
 		billed
-			.filter(
-				(account) =>
-					account.archetype === "healthy_stable" || account.archetype === "healthy_growing",
-			)
+			.filter((account) => account.archetype === "steady" || account.archetype === "growing")
 			.flatMap((account) => account.subs.filter((sub) => sub.end === null))
 			.sort((a, b) => b.mrrMinor - a.mrrMinor || a.externalId.localeCompare(b.externalId))
 			.slice(0, 2)

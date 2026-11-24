@@ -95,8 +95,8 @@ cannot see.
 
 **Metric keys are namespaced** `autumn.<feature_id>`. Ingest refuses a metric key another provider
 already owns (`otherOwner`), so the prefix is what keeps an Autumn feature called `events` from
-colliding with a Maple event metric of the same name. The built-in keys (`active_users`, `mrr`,
-`health_score`) are Hazel's and are refused outright.
+colliding with a Maple event metric of the same name. The built-in keys (`active_users`, `mrr`)
+are Hazel's and are refused outright.
 
 **Statuses.** Autumn reports a plan as `active` (with `past_due` beside it), `scheduled`, or
 `expired`, and clears `trial_ends_at` when a trial converts. So:

@@ -11,7 +11,6 @@ import type {
 	ContactRow,
 	CustomersRange,
 	Day,
-	HealthDistributionRow,
 	Kpi,
 	MetricSeries,
 	Mover,
@@ -20,10 +19,10 @@ import type {
 	NewTrial,
 	OverviewResult,
 } from "@hazel/domain/customers"
-import { HealthStatus, logoOf } from "@hazel/domain/customers"
+import { logoOf } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerContactId } from "@hazel/schema"
 import { Effect, Option } from "effect"
-import { type AccountFacts, type HealthPoint, type MetricPoint, mrrSeries, seriesOf } from "./facts"
+import { type AccountFacts, type MetricPoint, mrrSeries, seriesOf } from "./facts"
 import { inList, isActive } from "./sql"
 import { addDays, dayOf, dayRange } from "@hazel/customer-integrations/kit/time"
 
@@ -267,16 +266,11 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 		})
 	}
 
-	// Health now, from the accounts.
 	const accounts = yield* db.run(
 		SQLite.from(schema.customerAccountsTable)
-			.select("id", "name", "logoUrl", "companyProfile", "planName", "mrrMinor", "healthStatus")
+			.select("id", "name", "logoUrl", "companyProfile", "planName", "mrrMinor")
 			.where(($) => [$.deletedAt.isNull()]),
 	)
-	const healthDistribution: Array<HealthDistributionRow> = HealthStatus.literals.map((status) => {
-		const rows = accounts.filter((account) => account.healthStatus === status)
-		return { status, count: rows.length, mrrMinor: rows.reduce((sum, row) => sum + row.mrrMinor, 0) }
-	})
 	const accountById = new Map(accounts.map((account) => [account.id, account]))
 
 	// Movers: average daily active users in the range vs the one before. SQL sums each account's
@@ -402,7 +396,6 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 		},
 		mrrMovements,
 		activeUsers,
-		healthDistribution,
 		topMovers: { gainers, decliners },
 		recentChurn,
 		recentNew,
@@ -462,12 +455,6 @@ const accountFacts = (account: schema.CustomerAccount, days: number, now: Date) 
 				.where(($) => [$.accountId.eq(account.id)])
 				.orderBy(($) => [[$.day, "asc"]]),
 		)
-		const health = yield* db.run(
-			SQLite.from(schema.customerHealthDailyTable)
-				.select("day", "score", "status")
-				.where(($) => [$.accountId.eq(account.id), $.day.gte(from)])
-				.orderBy(($) => [[$.day, "asc"]]),
-		)
 		return {
 			account,
 			stage: account.lifecycleStage,
@@ -481,7 +468,6 @@ const accountFacts = (account: schema.CustomerAccount, days: number, now: Date) 
 			openInvoices: [],
 			metrics: metricMap,
 			movements,
-			health: health as ReadonlyArray<HealthPoint>,
 			openIssueSlas: [],
 		} satisfies AccountFacts
 	})
@@ -698,13 +684,6 @@ export const accountDetail = Effect.fn("Customers.accountDetail")(function* (
 			.where(($) => [$.accountId.eq(account.id), $.status.in_("open", "upcoming")])
 			.orderBy(($) => [[$.dueAt, "asc"]]),
 	)
-	const health = yield* db.first(
-		SQLite.from(schema.customerHealthDailyTable)
-			.select()
-			.where(($) => [$.accountId.eq(account.id)])
-			.orderBy(($) => [[$.day, "desc"]])
-			.limit(1),
-	)
 	const facts = yield* accountFacts(account, 90, now)
 	const contacts = yield* db.run(
 		SQLite.from(schema.customerContactsTable)
@@ -743,11 +722,6 @@ export const accountDetail = Effect.fn("Customers.accountDetail")(function* (
 		subscriptions: [...live, ...subscriptions.filter((sub) => sub.status === "canceled")],
 		upcomingInvoice: invoices.find((invoice) => invoice.status === "upcoming") ?? null,
 		openInvoices: invoices.filter((invoice) => invoice.status === "open"),
-		health: Option.match(health, { onNone: () => null, onSome: (row) => row.breakdown }),
-		healthSeries: seriesOf(facts, "health_score", today, 90),
-		healthScores: facts.health
-			.filter((point) => point.day > addDays(today, -90))
-			.map((point) => ({ day: point.day, score: point.score })),
 		activeUsersSeries: seriesOf(facts, "active_users", today, 30),
 		contactsToReach: yield* contactRows(reach, now),
 		recentEvents: events,
@@ -836,15 +810,6 @@ export const sparklines = Effect.fn("Customers.sparklines")(function* (
 				for (const point of mrrSeries(own, account.mrrMinor, today, count))
 					set(account.id, point.day, point.value)
 			}
-			break
-		}
-		case "health_score": {
-			const rows = yield* db.run(
-				SQLite.from(schema.customerHealthDailyTable)
-					.select("accountId", "day", "score")
-					.where(($) => [inList($.accountId, ids), $.day.gte(from)]),
-			)
-			for (const row of rows) set(row.accountId, row.day, row.score ?? 0)
 			break
 		}
 		default: {

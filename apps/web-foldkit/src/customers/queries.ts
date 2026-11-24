@@ -54,8 +54,6 @@ export const AccountRow = Schema.Struct({
 	currency: Schema.String,
 	trialListMrrMinor: Schema.NullOr(Schema.Int),
 	trialEndsAtMs: Schema.NullOr(Schema.Finite),
-	healthScore: Schema.NullOr(Schema.Int),
-	healthStatus: Customers.HealthStatus,
 	seatsUsed: Schema.NullOr(Schema.Int),
 	seatsLimit: Schema.NullOr(Schema.Int),
 	contactCount: Schema.Int,
@@ -168,8 +166,6 @@ export const toAccountRow = (account: Customers.Account): AccountRow => ({
 	currency: account.currency,
 	trialListMrrMinor: account.trialListMrrMinor,
 	trialEndsAtMs: msOrNull(account.trialEndsAt),
-	healthScore: account.healthScore,
-	healthStatus: account.healthStatus,
 	seatsUsed: account.seatsUsed,
 	seatsLimit: account.seatsLimit,
 	contactCount: account.contactCount,
@@ -382,10 +378,9 @@ export const connectedProvidersStream = <Message>(
 		),
 	)
 
-/** The org's customer settings the pages show: when compute last ran ("Evaluated 14 min ago"), the bands. */
+/** The org's customer settings the pages show: when compute last ran ("Evaluated 14 min ago"). */
 export const SettingsSummary = Schema.Struct({
 	lastComputedAtMs: Schema.NullOr(Schema.Finite),
-	bands: Customers.HealthBands,
 	reportingCurrency: Schema.String,
 })
 export type SettingsSummary = typeof SettingsSummary.Type
@@ -410,7 +405,6 @@ export const settingsSummaryStream = <Message>(
 						? null
 						: {
 								lastComputedAtMs: msOrNull(row.lastComputedAt),
-								bands: row.health.bands,
 								reportingCurrency: row.reportingCurrency,
 							},
 				)

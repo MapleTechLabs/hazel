@@ -18,8 +18,6 @@ import type {
 	SlaState,
 	SlaTargets,
 	ConnectionConfig,
-	HealthBreakdown,
-	HealthSettings,
 	RuleConfig,
 	RuleScope,
 	SignalEvidence,
@@ -41,7 +39,6 @@ import {
 	BillingInterval,
 	BuiltInViewKey,
 	ConnectionStatus,
-	HealthStatus,
 	IgnoreRuleField,
 	InvoiceStatus,
 	IssuePriority,
@@ -113,7 +110,7 @@ const count = () => SQLite.column(SQLite.integer, { default: 0 })
 // Identity
 // ---------------------------------------------------------------------------
 
-/** A B2B customer. Billing, usage and health fields are denormalized by compute. */
+/** A B2B customer. Billing and usage fields are denormalized by compute. */
 export const customerAccountsTable = SQLite.table("customer_accounts", {
 	columns: {
 		id: id(CustomerAccountId),
@@ -138,9 +135,6 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 		/** List price of the trial's plan per month: ranks trials in the queue (they have no MRR yet). */
 		trialListMrrMinor: SQLite.nullable(SQLite.integer),
 		trialEndsAt: SQLite.nullable(timestamptz),
-		healthScore: SQLite.nullable(SQLite.integer),
-		healthStatus: SQLite.column(textEnum(HealthStatus.literals), { default: "unknown" }),
-		healthUpdatedAt: SQLite.nullable(timestamptz),
 		seatsUsed: SQLite.nullable(SQLite.integer),
 		seatsLimit: SQLite.nullable(SQLite.integer),
 		contactCount: count(),
@@ -202,7 +196,6 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 		SQLite.index("customer_accounts_primary_idx", ["primaryAccountId"]),
 		SQLite.index("customer_accounts_owner_idx", ["ownerUserId"]),
 		SQLite.index("customer_accounts_stage_idx", ["lifecycleStage"]),
-		SQLite.index("customer_accounts_health_idx", ["healthStatus"]),
 		SQLite.index("customer_accounts_deleted_at_idx", ["deletedAt"]),
 	],
 })
@@ -504,9 +497,6 @@ export const customerOrgDailyTable = SQLite.table("customer_org_daily", {
 		dau: count(),
 		wau: count(),
 		mau: count(),
-		healthy: count(),
-		atRisk: count(),
-		critical: count(),
 		atRiskMrrMinor: money(),
 	},
 	primaryKey: ["day"],
@@ -523,7 +513,7 @@ export const customerEventsTable = SQLite.table("customer_events", {
 		accountId: uuid(CustomerAccountId),
 		contactId: SQLite.nullable(uuid(CustomerContactId)),
 		provider: SQLite.text,
-		/** Dotted, e.g. `subscription.canceled`, `signal.opened`, `health.status_changed`. */
+		/** Dotted, e.g. `subscription.canceled`, `signal.opened`. */
 		type: SQLite.text,
 		title: SQLite.text,
 		data: SQLite.column(jsonb<Record<string, unknown>>(), { default: {} }),
@@ -654,15 +644,14 @@ export type CustomerSignal = SQLite.SelectRowOf<typeof customerSignalsTable>
 export type NewCustomerSignal = SQLite.InsertRowOf<typeof customerSignalsTable>
 
 // ---------------------------------------------------------------------------
-// Health
+// Settings and SLA policies
 // ---------------------------------------------------------------------------
 
-/** One row: the org's health configuration, reporting currency and compute bookkeeping. */
+/** One row: the org's reporting currency, attention scope and compute bookkeeping. */
 export const customerSettingsTable = SQLite.table("customer_settings", {
 	columns: {
 		id: id(CustomerSettingsId),
 		organizationId: uuid(OrganizationId),
-		health: jsonb<HealthSettings>(),
 		/** Which customers Needs attention covers (`AttentionSettings`). */
 		attention: SQLite.column(jsonb<AttentionSettings>(), { default: DEFAULT_ATTENTION_SETTINGS }),
 		/** MRR in other currencies is left out of org totals (no FX in v1). */
@@ -707,19 +696,6 @@ export const customerSlaPoliciesTable = SQLite.table("customer_sla_policies", {
 	primaryKey: ["id"],
 })
 export type CustomerSlaPolicy = SQLite.SelectRowOf<typeof customerSlaPoliciesTable>
-
-export const customerHealthDailyTable = SQLite.table("customer_health_daily", {
-	columns: {
-		accountId: uuid(CustomerAccountId),
-		day,
-		score: SQLite.nullable(SQLite.integer),
-		status: textEnum(HealthStatus.literals),
-		breakdown: jsonb<HealthBreakdown>(),
-	},
-	primaryKey: ["accountId", "day"],
-	indexes: [SQLite.index("customer_health_daily_day_idx", ["day"])],
-})
-export type CustomerHealthDay = SQLite.SelectRowOf<typeof customerHealthDailyTable>
 
 // ---------------------------------------------------------------------------
 // Notes and views

@@ -54,8 +54,6 @@ const account = (n: number, featureFlags: Record<string, boolean>): AccountRow =
 	currency: "usd",
 	trialListMrrMinor: null,
 	trialEndsAtMs: null,
-	healthScore: null,
-	healthStatus: "unknown",
 	seatsUsed: null,
 	seatsLimit: null,
 	contactCount: 0,

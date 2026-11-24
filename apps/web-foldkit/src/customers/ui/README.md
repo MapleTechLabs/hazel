@@ -4,7 +4,7 @@ Stateless Foldkit views for the Customers pages. Every view is `(h, options) →
 hover and open state live in the page's Model and come in as options, Messages go out through `on*`
 callbacks. Try them all at `/lab/customers/kit/*`.
 
-**Only domain views live here** (a customer's health badge, a company logo, a severity chip, a queue
+**Only domain views live here** (a lifecycle stage badge, a company logo, a severity chip, a queue
 row, a KPI tile, a connect card…), and each is built from the app kit in `src/ui`. Generic
 primitives are never redrawn here; take them from the kit (`DESIGN-RULES.md` › Patterns with one
 owner):
@@ -24,8 +24,8 @@ owner):
 If a domain view needs something the kit lacks, add it to the kit, not here.
 
 Colors are theme tokens (`src/core/styles/theme.css` › Customers): `chart-{new,expansion,contraction,
-churn,neutral,series-1..3,grid,net}`, `health-{healthy,at-risk,critical,unknown}`,
-`severity-{high,medium,low,off}` — use them as `bg-chart-new`, `stroke-chart-series-1`, …
+churn,neutral,series-1..3,grid,net}`, `severity-{high,medium,low,off}` — use them as `bg-chart-new`,
+`stroke-chart-series-1`, …
 
 ## Surface — `ui/surface.ts`
 
@@ -47,7 +47,7 @@ The little text grammar the kit has no component for. Headings are the kit's `he
 | `formatMoney(minor, currency?, { cents?, signed? })`                                                      | `$48,210`, `$1,240.00`, `+$9,400`, `−$1,000` |
 | `formatMoneyCompact(minor, currency?, { signed? })`                                                       | `$48.2K`, `−$4K`                             |
 | `formatCount(n)` / `formatCompact(n)`                                                                     | `1,611` / `461K`                             |
-| `formatPct(pct)` / `formatDeltaPct(pct)` / `formatDeltaPoints(pts, unit?)` / `formatDeltaCount(n)`        | `61%` / `+6.2%` / `+0.9 pt` / `+12`          |
+| `formatPct(pct)` / `formatDeltaPct(pct)` / `formatDeltaPoints(pts)` / `formatDeltaCount(n)`               | `61%` / `+6.2%` / `+0.9 pt` / `+12`          |
 | `deltaTone(delta, goodWhen?)`                                                                             | `"positive" \| "negative" \| "neutral"`      |
 | `formatRelative(at, now)` / `daysBetween(at, now)`                                                        | `18d ago`, `in 4d`                           |
 | `formatDays(n)` / `formatDaysLeft(n)`                                                                     | `4 days` / `4 days left`                     |
@@ -58,14 +58,12 @@ The little text grammar the kit has no component for. Headings are the kit's `he
 
 ## Badges — `ui/badges.ts`
 
-- `healthBadge(h, { status, score? })` — pill; `score: null` shows `—`, omit to hide the number.
-- `healthDot(h, { status, score })` — compact, for dense cells.
 - `severityChip(h, severity)` / `severityGlyph(h, severity)` — bars; the glyph alone has a title.
 - `kindChip(h, kind)` — `! Risk` / `↗ Opportunity`.
 - `stageBadge(h, stage, { trialDaysLeft? })` — square, no dot.
 - `environmentBadge(h, environment)` — an account's environment (`EU`) beside its name; `environmentsHint(h, count)` — `+2 environments`, muted.
 - `signalCounts(h, { high, medium, low, opportunities })` — the list's open-signals cell.
-- Labels/fills: `HEALTH_LABEL`, `HEALTH_FILL`, `SEVERITY_LABEL`, `KIND_LABEL`, `STAGE_LABEL`.
+- Labels: `SEVERITY_LABEL`, `KIND_LABEL`, `STAGE_LABEL`.
 
 ## Identity — `ui/identity.ts`
 
@@ -82,7 +80,7 @@ The little text grammar the kit has no component for. Headings are the kit's `he
 - `deltaPill(h, delta)`, `definedLabel(h, { id, label, definition })` (hover/focus definition card, CSS only).
 - `evidenceViz(h, evidence)` — the queue's mini-viz per `_tag` (amount, last_active, series, limit, delta, ratio).
 - `evidenceDetail(h, evidence, { now })` — side panel: facts + chart (series → `evidenceBars`, limit → meter).
-- `deltaSummary(deltaEvidence)` — `$1,240 → $0`, `62 → 48 pts`.
+- `deltaSummary(deltaEvidence)` — `$1,240 → $0`, `8 → 20 users`.
 
 ## Charts — `src/customers/charts/`
 
@@ -91,7 +89,7 @@ The little text grammar the kit has no component for. Headings are the kit's `he
   `activeUsersChart(h, { points, bucket, hoveredIndex, onHover })` over `OverviewResult.activeUsers`; `ACTIVE_USERS_LEGEND`.
 - `stacked-bar-chart.ts`: `stackedBarChart(h, { ariaLabel, stacks, bars, netLabel?, formatValue, hoveredIndex, onHover })`;
   `mrrMovementChart(h, { buckets, bucket, currency, hoveredIndex, onHover })` over `OverviewResult.mrrMovements`; `mrrLegend(buckets)`.
-- `distribution.ts`: `distributionBar(h, { segments, ariaLabel })`, `healthDistribution(h, { rows, bands, currency, metric, onMetric })` (the whole card).
+- `distribution.ts`: `distributionBar(h, { segments, ariaLabel })`.
 - `frame.ts`: `chartCard(h, { title, description?, aside? }, children)`, `chartLegend(h, items)`, `chartTooltip`, `CHART_COLOR`.
 - `scale.ts`: the math (`niceTicks`, `scaleLinear`, `linePath`, `stackSegments`, …).
 
@@ -102,7 +100,7 @@ Charts fill their container's width (no measuring); set the height with `heightC
 
 Tables are the kit's `dataTable` and `primaryCell` (`src/ui/data-table.ts`).
 
-- `queueRow(h, { id, rank, account, signal, evidence, age, assignee, health, isFocused?, isSelected?, run?, onPress?, actions? })`,
+- `queueRow(h, { id, rank, account, signal, evidence, age, assignee, isFocused?, isSelected?, run?, onPress?, actions? })`,
   `queueList(h, { ariaLabel }, rows)`, `queueAction(h, { label, icon?, onPress?, iconOnly?, shortcut?, attributes?, overlay? })`, `planLine(account)`,
   `accountMark(h, account, run?)` (the logo, joined by a line to the same account's rows).
   Inline actions replace evidence…assignee on hover / focus. A press on an action also reaches the row's `onPress` (selects it).

@@ -376,6 +376,14 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'ALTER TABLE "channels" ADD COLUMN "lastMessagePreview" text',
 			],
 		},
+		{
+			id: "0016_remove_customer_health_score",
+			statements: [
+				'ALTER TABLE "channel_customers" DROP COLUMN "healthStatus"',
+				'ALTER TABLE "channel_customers" DROP COLUMN "healthScore"',
+				'ALTER TABLE "channel_customers" DROP COLUMN "healthWhy"',
+			],
+		},
 	],
 	channel: [
 		{
@@ -748,6 +756,27 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			id: "0026_customer_contacts_email_lower",
 			statements: [
 				'CREATE INDEX IF NOT EXISTS "customer_contacts_email_lower_idx" ON "customer_contacts" (lower("email"))',
+			],
+		},
+		{
+			id: "0027_remove_customer_health_score",
+			statements: [
+				'DELETE FROM "customer_events" WHERE "type" = \'health.status_changed\' OR json_extract("data", \'$.signalId\') IN (SELECT "id" FROM "customer_signals" WHERE "template" = \'health_drop\' OR "ruleId" IN (SELECT "id" FROM "customer_signal_rules" WHERE "template" = \'health_drop\' OR ("template" = \'usage_drop\' AND json_extract("config", \'$.metricKey\') = \'health_score\')))',
+				'DELETE FROM "customer_signals" WHERE "template" = \'health_drop\' OR "ruleId" IN (SELECT "id" FROM "customer_signal_rules" WHERE "template" = \'health_drop\' OR ("template" = \'usage_drop\' AND json_extract("config", \'$.metricKey\') = \'health_score\'))',
+				"DELETE FROM \"customer_signal_rules\" WHERE \"template\" = 'health_drop' OR (\"template\" = 'usage_drop' AND json_extract(\"config\", '$.metricKey') = 'health_score')",
+				'DELETE FROM "customer_metric_definitions" WHERE "key" = \'health_score\' AND "builtIn" = 1',
+				'DELETE FROM "customer_saved_views" WHERE "builtInKey" = \'at_risk\'',
+				'UPDATE "customer_saved_views" SET "columns" = (SELECT json_group_array("value") FROM (SELECT "value" FROM json_each("customer_saved_views"."columns") WHERE "value" <> \'health\' ORDER BY "key")) WHERE EXISTS (SELECT 1 FROM json_each("customer_saved_views"."columns") WHERE "value" = \'health\')',
+				'UPDATE "customer_saved_views" SET "sort" = \'{"column":"mrr","direction":"desc"}\' WHERE json_extract("sort", \'$.column\') = \'health\'',
+				'DROP INDEX IF EXISTS "customer_accounts_health_idx"',
+				'ALTER TABLE "customer_accounts" DROP COLUMN "healthScore"',
+				'ALTER TABLE "customer_accounts" DROP COLUMN "healthStatus"',
+				'ALTER TABLE "customer_accounts" DROP COLUMN "healthUpdatedAt"',
+				'ALTER TABLE "customer_org_daily" DROP COLUMN "healthy"',
+				'ALTER TABLE "customer_org_daily" DROP COLUMN "atRisk"',
+				'ALTER TABLE "customer_org_daily" DROP COLUMN "critical"',
+				'ALTER TABLE "customer_settings" DROP COLUMN "health"',
+				'DROP TABLE IF EXISTS "customer_health_daily"',
 			],
 		},
 	],

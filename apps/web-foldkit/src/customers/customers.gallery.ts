@@ -18,12 +18,10 @@ import {
 	ACTIVITY_ERROR_AT,
 	NOW,
 	OPEN_ENTRIES,
-	SETTINGS,
 	INVOICES_PROGRESS,
 	memberOf,
 	overviewFixture,
 } from "../lab/fixtures/customers"
-import { healthDistribution } from "./charts/distribution"
 import { chartCard, chartLegend } from "./charts/frame"
 import { ACTIVE_USERS_LEGEND, activeUsersChart } from "./charts/line-chart"
 import { sparkline } from "./charts/sparkline"
@@ -36,7 +34,7 @@ import {
 	formatPct,
 	formatRelative,
 } from "./format"
-import { healthBadge, healthDot, kindChip, severityChip, stageBadge } from "./ui/badges"
+import { kindChip, severityChip, stageBadge } from "./ui/badges"
 import { connectCard } from "./ui/connect-card"
 import { dataTable, primaryCell } from "../ui/data-table"
 import { allClearState } from "./ui/empty-states"
@@ -148,11 +146,6 @@ const badges = (h: HtmlBuilder<M>) =>
 	h.div(
 		[h.Class("flex flex-wrap items-center gap-2")],
 		[
-			healthBadge(h, { status: "healthy", score: 82 }),
-			healthBadge(h, { status: "at_risk", score: 54 }),
-			healthBadge(h, { status: "critical", score: 27 }),
-			healthBadge(h, { status: "unknown", score: null }),
-			healthDot(h, { status: "healthy", score: 82 }),
 			severityChip(h, "high"),
 			severityChip(h, "medium"),
 			severityChip(h, "low"),
@@ -169,7 +162,7 @@ const badges = (h: HtmlBuilder<M>) =>
 
 const charts = (h: HtmlBuilder<M>) =>
 	h.div(
-		[h.Class("grid grid-cols-[1fr_1fr_24rem] gap-4")],
+		[h.Class("grid grid-cols-2 gap-4")],
 		[
 			chartCard(
 				h,
@@ -204,13 +197,6 @@ const charts = (h: HtmlBuilder<M>) =>
 					}),
 				],
 			),
-			healthDistribution(h, {
-				rows: overview.healthDistribution,
-				bands: SETTINGS.health.bands,
-				currency: "USD",
-				metric: "customers",
-				onMetric: () => ignored,
-			}),
 		],
 	)
 
@@ -249,13 +235,6 @@ const table = (h: HtmlBuilder<M>) =>
 				sortable: true,
 				widthClass: "w-28",
 				cell: (account) => formatMoney(account.mrrMinor),
-			},
-			{
-				key: "health",
-				label: "Health",
-				widthClass: "w-32",
-				cell: (account) =>
-					healthBadge(h, { status: account.healthStatus, score: account.healthScore }),
 			},
 			{
 				key: "last",
@@ -298,7 +277,6 @@ const queue = (h: HtmlBuilder<M>) =>
 				evidence: evidenceViz(h, signal.evidence),
 				age: formatRelative(signal.openedAt, NOW).replace(" ago", ""),
 				assignee: memberOf(signal.assigneeUserId),
-				health: { status: account.healthStatus, score: account.healthScore },
 				isFocused: index === 1,
 				actions: [
 					queueAction(h, { label: "Assign", icon: IconUser(h), onPress: ignored }),

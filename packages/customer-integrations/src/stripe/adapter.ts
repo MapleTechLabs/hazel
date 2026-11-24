@@ -2,7 +2,7 @@
  * The Stripe data source (`docs/customers/tech-design.md` §5), Hazel's billing source for
  * Customers: Stripe customers land on the accounts the identity source created, and their
  * subscriptions and invoices become the MRR, the plan, the trial and the payment state every
- * billing signal and the health score's billing component read.
+ * billing signal reads.
  *
  * Connecting needs a Stripe **restricted key** (`rk_live_…` / `rk_test_…`, with the account id
  * entered next to it, or a secret key) with read access to customers, products, prices,

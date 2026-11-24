@@ -96,11 +96,6 @@ const summaryOf = (event: Customers.Event, context: DetailContext): string | nul
 				? null
 				: `${formatMoney(from, context.currency)}/mo → ${formatMoney(to, context.currency)}/mo`
 		}
-		case "health.status_changed": {
-			const from = count(data.fromScore)
-			const to = count(data.toScore)
-			return from === null || to === null ? null : `Score ${from} → ${to}`
-		}
 		default:
 			return null
 	}

@@ -1,7 +1,7 @@
 import { Color, Detail, Icon } from "@raycast/api"
 import { usePromise } from "@raycast/utils"
 import { CustomerActions, channelUrl, providerLinks } from "./customer-actions"
-import { HEALTH, STAGE, SOURCE, date, httpsUrl, md, money, relative } from "./lib/format"
+import { STAGE, SOURCE, date, httpsUrl, md, money, relative } from "./lib/format"
 import type { Account, AccountDetail, ChannelLink, Organization, Signal } from "./lib/models"
 import { call } from "./lib/rpc"
 
@@ -10,25 +10,17 @@ export const fetchDetail = (organizationId: string, accountId: string) =>
 	call<AccountDetail>("customers.account.detail", { organizationId, accountId })
 
 const SEVERITY_ICON = { high: "🔴", medium: "🟠", low: "🟡" } as const
-const HEALTH_LABEL = {
-	usage: "Usage",
-	engagement: "Engagement",
-	billing: "Billing",
-	signals: "Signals",
-} as const
 
-/** The page: what needs attention first, then health, billing, who to reach and what happened. */
+/** The page: what needs attention first, then billing, who to reach and what happened. */
 export const detailMarkdown = (
 	account: Account,
 	signals: ReadonlyArray<Signal>,
 	detail: AccountDetail | undefined,
 ) => {
-	const health = HEALTH[account.healthStatus]
 	const lines: Array<string> = [
 		`# ${md(account.name)}`,
 		[
-			`**${health.label}${account.healthScore === null ? "" : ` · ${account.healthScore}`}**`,
-			STAGE[account.lifecycleStage],
+			`**${STAGE[account.lifecycleStage]}**`,
 			account.planName === null ? null : md(account.planName),
 			account.mrrMinor > 0 ? `${money(account.mrrMinor, account.currency)}/mo` : null,
 		]
@@ -78,21 +70,6 @@ export const detailMarkdown = (
 		}
 	}
 
-	const components = detail.health?.components ?? []
-	if (components.length > 0) {
-		lines.push(
-			"## Health",
-			[
-				"| | Score | Why |",
-				"| --- | --- | --- |",
-				...components.map(
-					(component) =>
-						`| ${HEALTH_LABEL[component.key]} | ${component.excluded || component.score === null ? "—" : component.score} | ${md(component.why)} |`,
-				),
-			].join("\n"),
-		)
-	}
-
 	if (detail.contactsToReach.length > 0) {
 		lines.push("## Who to reach")
 		for (const { contact, status } of detail.contactsToReach) {
@@ -138,7 +115,6 @@ export function CustomerDetail(props: {
 		failureToastOptions: { title: "Could not load the customer" },
 	})
 	const account = detail.data?.account ?? props.account
-	const health = HEALTH[account.healthStatus]
 	const trend = account.activeUsersTrendPct
 	return (
 		<Detail
@@ -147,16 +123,6 @@ export function CustomerDetail(props: {
 			markdown={detailMarkdown(account, signals, detail.data)}
 			metadata={
 				<Detail.Metadata>
-					<Detail.Metadata.TagList title="Health">
-						<Detail.Metadata.TagList.Item
-							text={
-								account.healthScore === null
-									? health.label
-									: `${health.label} · ${account.healthScore}`
-							}
-							color={health.color}
-						/>
-					</Detail.Metadata.TagList>
 					{account.environment && (
 						<Detail.Metadata.Label title="Environment" text={account.environment} />
 					)}
