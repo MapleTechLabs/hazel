@@ -12,7 +12,14 @@ import {
 import { groupRows } from "../../../customers/groups"
 import { AccountRow, MemberRow, SignalRow } from "../../../customers/queries"
 import { lookOf, type ViewLook } from "../../../customers/ui/view-look"
-import { ALL_KEY, arrange, CURRENT_KEY } from "../../../customers/view-layout"
+import {
+	ALL_KEY,
+	arrange,
+	canHideFromSidebar,
+	CURRENT_KEY,
+	layoutOf,
+	sidebarKeysOf,
+} from "../../../customers/view-layout"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
@@ -227,6 +234,16 @@ export const viewTabsOf = (views: ReadonlyArray<ViewRow> | null): ReadonlyArray<
 /** The tabs in my order (the layout's), as the tab bar shows them. */
 export const orderedTabsOf = (model: Pick<Model, "views" | "layout">): ReadonlyArray<ViewTab> =>
 	arrange(viewTabsOf(model.views), layoutKeyOf, (model.layout ?? Customers.DEFAULT_VIEW_LAYOUT).order)
+
+/** Whether the sidebar shows the tab, and whether it may hide it (one view always stays). */
+export const sidebarStateOf = (model: Pick<Model, "views" | "layout">, key: string) => {
+	const layout = layoutOf(model.layout)
+	const keys = orderedTabsOf(model).map(layoutKeyOf)
+	return {
+		isShown: sidebarKeysOf(layout, keys).includes(key),
+		canHide: canHideFromSidebar(layout, keys, key),
+	}
+}
 
 /** The tab `?view=` names; an unknown id is "Current". */
 export const currentTab = (model: Pick<Model, "view" | "views">): ViewTab => {
@@ -789,11 +806,12 @@ export type ViewMenuKey = typeof ViewMenuKey.Type
 export const viewMenuEntries = (model: Model, viewer: Viewer): ReadonlyArray<Menu.Entry> => {
 	const tab = currentTab(model)
 	const edited = isEdited(model)
+	const sidebar = sidebarStateOf(model, layoutKeyOf(tab))
 	return [
 		Menu.item("save", { isDisabled: !edited || !canUpdateView(tab, viewer) }),
 		Menu.item("save_as"),
 		Menu.item("edit", { isDisabled: !canUpdateView(tab, viewer) }),
-		Menu.item("sidebar"),
+		Menu.item("sidebar", { isDisabled: sidebar.isShown && !sidebar.canHide }),
 		Menu.item("reset", { isDisabled: !edited }),
 		...(builtInDefaultOf(tab) === undefined
 			? []

@@ -81,6 +81,31 @@ describe("customers sidebar", () => {
 		expect(hidden.commands?.[0]?.args).toMatchObject({ layoutId, sidebarHidden: ["paying"] })
 	})
 
+	test("the last view in the sidebar can't be hidden, and a layout hiding them all still shows one", () => {
+		const one = update(
+			loaded(),
+			Message.UpdatedViewLayout({
+				organizationId: org(1),
+				layout: { id: layoutId, order: [], sidebarHidden: ["current", "paying", "all"] },
+			}),
+			me,
+		).model
+		expect(keysOf(one)).toEqual([viewId])
+		const refused = update(one, Message.PressedHideView({ key: viewId }), me)
+		expect(refused.model).toBe(one)
+		expect(refused.commands ?? []).toEqual([])
+
+		const none = update(
+			one,
+			Message.UpdatedViewLayout({
+				organizationId: org(1),
+				layout: { id: layoutId, order: [], sidebarHidden: ["current", "paying", viewId, "all"] },
+			}),
+			me,
+		).model
+		expect(keysOf(none)).toEqual(["current"])
+	})
+
 	test("dropping a dragged view saves the new order, the hidden views keeping their places", () => {
 		const base = update(
 			loaded(),
