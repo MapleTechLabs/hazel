@@ -255,7 +255,8 @@ struct GlassTabBar: View {
                     ForEach(barTabs) { tab in
                         Button { onSelect(tab.id) } label: { label(tab) }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(tab.title)
+                            // The badge is drawn in the label; a custom label must say it too.
+                            .accessibilityLabel(tab.badge.flatMap { $0 > 0 ? "\(tab.title), \($0) unread" : nil } ?? tab.title)
                             .accessibilityAddTraits(tab.selected ? .isSelected : [])
                     }
                 }

@@ -1,12 +1,12 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import {
+	IconArrowPath,
 	IconBell,
 	IconChevronRight,
 	IconGear,
 	IconOffice,
 	IconPaintbrush,
-	IconUser,
 	IconUsers,
 	IconUsersPlus,
 } from "../../icons"
@@ -174,7 +174,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((_model,
 							title: "Switch workspace",
 							href: hrefOf(AppRoute.SelectOrganization()),
 							symbol: "arrow.left.arrow.right",
-							icon: (className) => IconUser(h, { className }),
+							icon: (className) => IconArrowPath(h, { className }),
 						},
 					]),
 				],
