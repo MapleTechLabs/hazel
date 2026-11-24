@@ -1,0 +1,111 @@
+---
+title: Prepare Cloudflare
+description: The account, the zone, the API token, and email
+icon: Settings
+---
+
+Everything on this page happens in the Cloudflare dashboard, once per install.
+
+<Steps>
+  <Step>
+    ### Use an account on Workers Paid
+
+    Open **Workers & Pages → Plans** and choose **Workers Paid**. The install needs it for
+    Durable Objects with SQLite storage, a cron that runs every minute, and Workers' CPU time.
+    D1, R2 and KV come with it; usage beyond the plan's allowance is billed by Cloudflare.
+
+    Copy the **account ID** from the account's overview page (a 32-character hex string). The
+    installer asks for it.
+
+  </Step>
+
+  <Step>
+    ### Claim the account's workers.dev subdomain
+
+    Open **Workers & Pages** once. A new account is offered a `<name>.workers.dev` subdomain;
+    accept it. The deploy keeps its own state in a small Worker served from it, and fails
+    without one.
+
+  </Step>
+
+  <Step>
+    ### Add the zone
+
+    The install puts every hostname under one zone: `app.<zone>`, `api.<zone>`, `cdn.<zone>`,
+    `link-preview.<zone>`, `bot-gateway.<zone>`, `mail.<zone>` and `inbound.<zone>`.
+
+    - **A domain for the install** (`acme-chat.com`): add it to the account
+      (**Add a domain**) and point its nameservers at Cloudflare.
+    - **Your company domain** (`acme.com`), already on Cloudflare: use it as is, after checking
+      that none of the hostnames above is in use.
+    - **A subdomain as its own zone** (`chat.acme.com`): Cloudflare calls this a subdomain setup;
+      check your plan includes it.
+
+    Wait until the zone's status is **Active**. The installer checks it.
+
+  </Step>
+
+  <Step>
+    ### Create the API token
+
+    The deploy uses one API token. Create it as an **account-owned token** (**Manage Account →
+    Account API Tokens → Create Token → Custom token**): the installer can then read the token's
+    permissions and tell you exactly what is missing. A user token
+    (**My Profile → API Tokens**) works too, but only its read access can be checked.
+
+    Give it two policies:
+
+    **Account** (your account):
+
+    | Permission               | Access | Why                                                                     |
+    | ------------------------ | ------ | ----------------------------------------------------------------------- |
+    | Workers Scripts          | Edit   | The Workers, their Durable Objects, crons and custom domains            |
+    | Workers KV Storage       | Edit   | KV namespaces (API cache, link previews)                                 |
+    | D1                       | Edit   | The directory database                                                  |
+    | Workers R2 Storage       | Edit   | Uploads, export and HTML render buckets                                 |
+    | Secrets Store            | Edit   | The deploy's state store keeps its keys in the account's Secrets Store |
+    | Account API Tokens       | Edit   | The deploy mints a token scoped to the uploads bucket, for uploads      |
+    | Account Settings         | Read   | Recommended                                                             |
+
+    **Zone** (the install's zone):
+
+    | Permission               | Access | Why                                        |
+    | ------------------------ | ------ | ------------------------------------------ |
+    | Zone                     | Read   | Finding the zone                           |
+    | DNS                      | Edit   | DNS records of the custom domains          |
+    | Workers Routes           | Edit   | The custom domains (`app.`, `api.`, ...)   |
+    | SSL and Certificates     | Edit   | Recommended: the custom domains' certificates |
+
+    Copy the token when Cloudflare shows it; it is shown once.
+
+    <Callout type="warn">
+      The token can change everything in the account. Keep it in the install's env file (the
+      installer writes it there) and in your secret manager, nowhere else.
+    </Callout>
+
+  </Step>
+
+  <Step>
+    ### Set up email sending
+
+    Hazel sends invitations and support replies from `mail.<zone>` through Cloudflare Email.
+    Open **Email → Email Sending**, add `mail.<zone>` and follow the DNS steps (Cloudflare adds
+    the records for you on a Cloudflare zone).
+
+    Without it Hazel still runs, but invitation emails only reach addresses verified in the
+    account.
+
+  </Step>
+
+  <Step>
+    ### Support mailboxes (optional)
+
+    Only if you use the Customers area's support inboxes: open **Email → Email Routing** for
+    the zone, enable it for `inbound.<zone>`, and add a **catch-all** rule that sends to the
+    Worker `hazel-api-<name>` (`<name>` is the install name you pick in the installer). Do this
+    after the first deploy, when the Worker exists.
+
+  </Step>
+</Steps>
+
+Next: [set up sign-in](/self-hosting/sign-in).

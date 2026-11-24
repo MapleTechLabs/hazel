@@ -1,0 +1,134 @@
+---
+title: Integrations
+description: Connect Slack, Linear, GitHub and Discord with your own apps or through Hazel's
+icon: Webhook
+---
+
+Every integration is off until its keys are in the env file. For Slack, Linear and the GitHub App
+there are two ways to get them:
+
+- **Your own apps** (below): you register the app with the provider, pointed at your
+  `api.<zone>`. Nothing passes through Hazel.
+- **Through Hazel's broker** ([below](#through-hazels-broker)): you skip registering apps and use
+  Hazel's, at the cost of tokens and events transiting Hazel.
+
+A provider whose keys are in the env file always uses them; the broker serves only the others.
+Discord can only use your own app.
+
+All URLs below use `chat.acme.com`; use your zone. After adding keys, run
+`bun run customer:deploy <name>`.
+
+## Your own apps
+
+### Slack
+
+Generate the app manifest with your install's URLs, then create the app from it at
+[api.slack.com/apps](https://api.slack.com/apps) (**Create New App → From a manifest**):
+
+```bash
+bun run slack:manifest --api-url https://api.chat.acme.com --name "Acme Chat"
+```
+
+From the app's **Basic Information** page, copy into the env file:
+
+```bash
+SLACK_CLIENT_ID=...
+SLACK_CLIENT_SECRET=...
+SLACK_SIGNING_SECRET=...
+```
+
+### Linear
+
+Create an OAuth application in Linear (**Settings → API → OAuth applications**) with the callback
+URL `https://api.chat.acme.com/integrations/linear/callback`, then:
+
+```bash
+LINEAR_CLIENT_ID=...
+LINEAR_CLIENT_SECRET=...
+```
+
+### GitHub App
+
+The GitHub integration (issues, pull requests and CI in channels) is a GitHub App, separate from
+the OAuth app used for sign-in. Create one under **Settings → Developer settings → GitHub Apps**:
+
+- **Callback URL**: `https://api.chat.acme.com/integrations/github/callback`
+- **Webhook URL**: `https://api.chat.acme.com/webhooks/github`, with a webhook secret you generate
+
+Then generate a private key and set:
+
+```bash
+GITHUB_APP_ID=...
+GITHUB_APP_SLUG=...           # the app's URL name
+GITHUB_APP_PRIVATE_KEY='-----BEGIN RSA PRIVATE KEY-----...'
+GITHUB_WEBHOOK_SECRET=...
+```
+
+### Discord
+
+Create an application in the [Discord developer portal](https://discord.com/developers/applications)
+with the redirect `https://api.chat.acme.com/integrations/discord/callback`. Under **Bot**, enable
+the **Message Content** intent. Then:
+
+```bash
+DISCORD_CLIENT_ID=...
+DISCORD_CLIENT_SECRET=...
+DISCORD_BOT_TOKEN=...
+DISCORD_GATEWAY_ENABLED=true
+```
+
+<Callout type="warn">
+	Discord allows one gateway connection per bot token. Never share a Discord bot between two installs (or
+	with a test install): they would disconnect each other.
+</Callout>
+
+## Through Hazel's broker
+
+Hazel runs an OAuth broker on `api.hazel.sh` that lets a registered install connect Slack, Linear
+and the GitHub App through Hazel's own apps.
+
+### What Hazel sees
+
+The broker handles the moment of connection, and does not store your tokens:
+
+- The provider redirects to Hazel's broker, which exchanges the code with Hazel's client
+  credentials, encrypts the tokens to **your install's public key** and has your browser post them
+  to your install. They exist on Hazel's side only in that request's memory, and only your
+  install can open them, within 5 minutes.
+- Hazel stores which install a Slack team or GitHub App installation belongs to, to route events.
+- Slack events and GitHub webhooks for brokered connections arrive at Hazel, which verifies them
+  and relays them to your install, signed. **Their content transits Hazel.**
+- GitHub App installation tokens last an hour and only the app's private key can mint them, so
+  your install asks the broker for each new one (a signed request, answered encrypted to it).
+
+Each side pins the other's key: the broker serves only registered installs, and your install
+accepts only payloads signed by the broker's key.
+
+If tokens and events must not transit Hazel, register your own apps instead.
+
+### Setting it up
+
+<Steps>
+  <Step>
+    The installer generated your install's broker identity (`OAUTH_BROKER_INSTANCE_ID`,
+    `OAUTH_BROKER_PRIVATE_KEY`) and printed its registry entry, a line like
+    `{"id":"acme","apiUrl":"https://api.chat.acme.com","publicKey":{...}}`. It holds public keys
+    only. Rerun `bun run customer:install` to print it again.
+  </Step>
+  <Step>
+    Send that line to Hazel. Once your install is registered, Hazel sends you two values.
+  </Step>
+  <Step>
+    Add them to the env file, leave the provider's own keys (`SLACK_*`, `LINEAR_*`,
+    `GITHUB_APP_*`) unset, and deploy:
+
+    ```bash
+    OAUTH_BROKER_URL=https://api.hazel.sh
+    OAUTH_BROKER_PUBLIC_KEY='{"kty":"EC","crv":"P-256",...}'
+    ```
+
+  </Step>
+</Steps>
+
+A connection made through the broker stays brokered. To move a provider to your own app later,
+add its keys, deploy, and reconnect it in Hazel.

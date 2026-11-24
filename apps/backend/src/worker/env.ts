@@ -60,9 +60,9 @@ export const apiEnv = (stack: HazelStackContext) => {
 		domainDefault("INBOUND_EMAIL_DOMAIN", domains.inboundMail),
 		domainDefault("SUPPORT_EMAIL_DOMAIN", domains.mail),
 
-		// Who may use this install (`docs/self-hosting.md#access`): sign-in limited to these email
-		// domains (comma separated; unset: anyone), the instance admins (comma-separated emails),
-		// and who may create an organization (`anyone` | `admins`).
+		// Who may use this install (`apps/docs/content/docs/self-hosting/configuration.mdx`): sign-in
+		// limited to these email domains (comma separated; unset: anyone), the instance admins
+		// (comma-separated emails), and who may create an organization (`anyone` | `admins`).
 		optionalPlain("ALLOWED_EMAIL_DOMAINS"),
 		optionalPlain("INSTANCE_ADMIN_EMAILS"),
 		optionalPlain("ORG_CREATION"),

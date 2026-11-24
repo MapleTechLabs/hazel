@@ -1,0 +1,69 @@
+---
+title: Configuration
+description: Who may sign in, admins, optional features, bots and the native apps
+icon: Settings
+---
+
+All configuration lives in the install's env file, `.env.customer-<name>`. To change a setting,
+edit the file and deploy again:
+
+```bash
+bun run customer:check acme && bun run customer:deploy acme
+```
+
+Keys you add by hand are kept when you rerun the installer.
+
+## Who may use the install
+
+By default anyone who can sign in with your GitHub or Google app can use the install and create
+organizations.
+
+| Key                     | Effect                                                                                 |
+| ----------------------- | -------------------------------------------------------------------------------------- |
+| `ALLOWED_EMAIL_DOMAINS` | Comma-separated domains (`acme.com,acme.io`): sign-in is refused for any other address |
+| `INSTANCE_ADMIN_EMAILS` | Comma-separated emails of the install's admins                                         |
+| `ORG_CREATION`          | `anyone` (default) or `admins`: only instance admins may create organizations          |
+
+Invited users can still join existing organizations, and bots are unaffected. The rules apply to
+existing users too: once `ALLOWED_EMAIL_DOMAINS` is set, nobody outside it can sign in again.
+
+## Optional features
+
+Each is off until its key is set.
+
+| Feature                           | Keys                                                                                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------- |
+| Thread naming                     | `OPENROUTER_API_KEY`                                                                        |
+| GIF picker                        | `KLIPY_API_KEY`                                                                             |
+| Company enrichment (Customers)    | `CONTEXT_DEV_API_KEY`                                                                       |
+| iOS push notifications            | `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_PRIVATE_KEY` (only with your own build of the iOS app) |
+| Telemetry (traces, logs, metrics) | `MAPLE_API_KEY`                                                                             |
+| Operator restores                 | `OPERATOR_TOKEN` (the installer generates one; see [backups](/self-hosting/backups))        |
+
+Integrations (Slack, Linear, GitHub, Discord) have [their own page](/self-hosting/integrations).
+
+## First-party bots
+
+The bots in the repository (`bots/*`) deploy once their token is set:
+
+1. Create the bot in your install (**Settings → Integrations → Your apps**) and copy its token.
+2. Add it to the env file under the bot's key (`HAZEL_BOT_TOKEN`, `LINEAR_BOT_TOKEN`, ...).
+3. Deploy again.
+
+## Desktop and iOS apps
+
+The desktop and iOS apps work with your install. On the sign-in screen, choose **Change** next
+to "Signing in to hazel.sh" and enter your install's address (`chat.acme.com` or
+`https://app.chat.acme.com`). The app reads `/.well-known/hazel.json`, which every install
+serves, and connects to it. **Use Hazel cloud** switches back.
+
+## Rotating secrets
+
+- `OPERATOR_TOKEN` and the integration and sign-in apps' secrets can be changed any time:
+  edit the file and deploy.
+- `INTEGRATION_ENCRYPTION_KEY`: move the current key and version to
+  `INTEGRATION_ENCRYPTION_KEY_PREV` / `INTEGRATION_ENCRYPTION_KEY_VERSION_PREV`, set a new key
+  and a higher `INTEGRATION_ENCRYPTION_KEY_VERSION`, and deploy. Stored tokens stay readable.
+- The `AUTH_*` keys sign sessions: replacing them signs everyone out. Do it only if they leaked.
+- The Cloudflare token: create the new one with the same permissions, put it in the file,
+  run `customer:check`, then revoke the old one.

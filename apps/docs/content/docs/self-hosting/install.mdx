@@ -1,0 +1,133 @@
+---
+title: Install
+description: Run the installer, check the install, deploy it, sign in
+icon: Rocket
+---
+
+You need the account ID, the API token and at least one OAuth app from the previous pages, and a
+machine with `git` and [Bun](https://bun.sh) 1.4 or later.
+
+<Steps>
+  <Step>
+    ### Get the newest release
+
+    ```bash
+    git clone https://github.com/MapleTechLabs/hazel.git
+    cd hazel
+    git checkout "$(git tag -l 'server-v*' --sort=-v:refname | head -1)"
+    bun install
+    ```
+
+    Server releases are tagged `server-vYYYY.MM.DD`. Each one has already run Hazel's own
+    production. (The `v1.x` tags are the desktop app's.)
+
+  </Step>
+
+  <Step>
+    ### Run the installer
+
+    ```bash
+    bun run customer:install
+    ```
+
+    It asks for:
+
+    | Question           | Example              | Notes                                                                  |
+    | ------------------ | -------------------- | ---------------------------------------------------------------------- |
+    | Instance name      | `acme`               | Lower case, digits and dashes. Names every resource (`hazel-api-acme`) |
+    | Zone               | `chat.acme.com`      | The zone from [Prepare Cloudflare](/self-hosting/prepare-cloudflare)  |
+    | Account ID, token  |                      | Also read from `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_API_TOKEN`        |
+    | GitHub / Google    |                      | Client ID and secret of each app you set up                           |
+    | Allowed domains    | `acme.com`           | Only these email domains may sign in; empty lets anyone in            |
+    | Instance admins    | `ops@acme.com`       | Who may manage the install                                             |
+    | Org creation       | anyone / admins      | Who may create organizations                                           |
+
+    It then generates the install's secrets and writes everything to `.env.customer-acme`
+    (mode 600, ignored by git), runs the checks below, and prints the remaining manual steps
+    and the deploy command. Nothing is deployed yet.
+
+    Every question has a flag, for scripts and CI: `bun run customer:install --help`.
+
+  </Step>
+
+  <Step>
+    ### Back up the env file
+
+    <Callout type="error" title="Losing this file loses the install">
+      `.env.customer-acme` holds the keys that sign every session and encrypt every connected
+      integration's tokens. If they change, everyone is signed out and every integration has to
+      be reconnected. Store the file in your password manager or secret store now. The installer
+      never overwrites these keys without `--force`.
+    </Callout>
+
+  </Step>
+
+  <Step>
+    ### Check
+
+    ```bash
+    bun run customer:check acme
+    ```
+
+    It validates the env file and asks Cloudflare whether the token is active, whether it has
+    every permission the deploy needs, whether the zone is active, and whether the account has
+    a workers.dev subdomain:
+
+    ```
+      ✓ Cloudflare token: active (account token)
+      ✓ Zone: chat.acme.com is active
+      ✗ Token permissions: missing Secrets Store Write (account: the deploy's state store
+        keeps its keys in the account's Secrets Store)
+      ✓ workers.dev subdomain: acme.workers.dev
+    ```
+
+    Fix anything marked ✗ (edit the token in the dashboard; no need to create a new one) and
+    run it again. [Troubleshooting](/self-hosting/troubleshooting) covers each check.
+
+  </Step>
+
+  <Step>
+    ### Deploy
+
+    ```bash
+    bun run customer:deploy acme
+    ```
+
+    It runs the checks again, then creates and deploys everything: the Workers, their custom
+    domains, the databases, buckets and namespaces. The first deploy builds every app and takes
+    several minutes; later ones only redo what changed.
+
+    A deploy can be run again at any time. If one fails halfway (a missing permission, a network
+    error), fix the cause and run the same command: it carries on from where it stopped.
+
+  </Step>
+
+  <Step>
+    ### Verify
+
+    ```bash
+    curl https://api.chat.acme.com/health     # OK
+    curl https://api.chat.acme.com/version    # {"version":"<commit>","stage":"customer"}
+    ```
+
+    New custom domains can take a few minutes to get their certificates; until then the
+    hostnames may not answer over HTTPS.
+
+  </Step>
+
+  <Step>
+    ### Sign in
+
+    Open `https://app.chat.acme.com`, sign in with GitHub or Google, and create your first
+    organization. Invite your team from **Settings → Team**.
+
+  </Step>
+</Steps>
+
+## Where the state lives
+
+The deploy records what it created in a state store **in your Cloudflare account** (a small
+Worker and the Secrets Store), not on the machine that ran it. Any machine with a clone of the
+repository and `.env.customer-acme` can run the next deploy or upgrade.
+
+Next: [configure the install](/self-hosting/configuration).
