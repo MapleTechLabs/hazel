@@ -13,6 +13,15 @@ struct WebTab: Decodable, Identifiable, Equatable {
     /// The tab's own icon, rasterized by the page (`icons`), and its text colour there.
     let image: String?
     let color: String?
+    /// `search`: drawn apart from the tabs, as its own glass circle (absent in a kept screen's older tabs).
+    let role: String?
+}
+
+/// A screen's primary action (`data-native="screen-action"`, the DMs tab's compose): drawn as the
+/// shell's own floating Liquid Glass button over the tab bar; a press clicks the page's.
+struct WebScreenAction: Decodable, Equatable {
+    let label: String
+    let symbol: String
 }
 
 /// The shell's side of `web/bridge.ts`: the one web view, what the page reports, and what the
@@ -24,6 +33,8 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
 
     /// The page's tabs; empty while the page shows none (inside a conversation).
     private(set) var tabs: [WebTab] = []
+    /// The page's screen action; `nil` on a screen without one.
+    private(set) var screenAction: WebScreenAction?
     /// The page has somewhere for the left-edge swipe to go.
     private(set) var canSwipeBack = false
     /// A web overlay is open (the command palette, a dialog): the page shows, not the native screen.
@@ -182,6 +193,11 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
 
     func swipeBack() { evaluate("__hazelHybrid.swipeBack()") }
 
+    func pressScreenAction() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        evaluate("__hazelHybrid.screenAction()")
+    }
+
     func steerList(to index: Int) { evaluate("__hazelHybrid.listSteer(\(index))") }
 
     func composerDraft(_ text: String) { evaluate("__hazelHybrid.composerDraft(\(jsString(text)))") }
@@ -305,9 +321,15 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
 
     /// The bundled page at `url` on the web app's origin: its own origin is the web app's, so the
     /// API's CORS and the sign-in flow take it, while every file comes from the bundle (`hazel://`).
+    /// A chosen install (`ChosenServer`) is handed to the page before its scripts run.
     private static func loadPage(_ webView: WKWebView, at url: URL) {
         let index = Bundle.main.resourceURL!.appendingPathComponent("web/index.html")
-        guard let html = try? String(contentsOf: index, encoding: .utf8) else { return }
+        guard var html = try? String(contentsOf: index, encoding: .utf8) else { return }
+        if let server = ChosenServer.document, let head = html.range(of: "<head>") {
+            // JSON is a script literal; `<` escaped so nothing in it can close the tag.
+            let literal = server.replacingOccurrences(of: "<", with: "\\u003c")
+            html.insert(contentsOf: "<script>window.__hazelServer=\(literal)</script>", at: head.upperBound)
+        }
         PageNavigation.isLoadingPage = true
         webView.loadHTMLString(html, baseURL: url)
     }
@@ -319,6 +341,7 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
         let listJSON = body["json"] as? String
         let composerData = (body["composer"] as? [String: Any]).flatMap { try? JSONSerialization.data(withJSONObject: $0) }
         let hasComposer = body["composer"] is [String: Any]
+        let actionData = (body["action"] as? [String: Any]).flatMap { try? JSONSerialization.data(withJSONObject: $0) }
         let screenData = (body["screen"] as? [String: Any]).flatMap { try? JSONSerialization.data(withJSONObject: $0) }
         let kind = body["kind"] as? String
         let enabled = body["enabled"] as? Bool
@@ -335,6 +358,9 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
                 self.tabsData = tabsData ?? Data("[]".utf8)
                 writeSoon(keptNow())
                 withAnimation(.smooth(duration: 0.25)) { tabs = decoded }
+            case "action":
+                let decoded = actionData.flatMap { try? JSONDecoder().decode(WebScreenAction.self, from: $0) }
+                if decoded != screenAction { withAnimation(.smooth(duration: 0.25)) { screenAction = decoded } }
             case "list":
                 receiveList(listJSON)
             case "composer":

@@ -1,5 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconHeart } from "../../icons"
+import { ariaButton } from "../../ui/button"
+import { skeleton } from "../../ui/skeleton"
 import { linkPreviewOf, type TweetView, tweetOf, type Unfurl } from "../unfurl"
 
 /**
@@ -37,10 +39,7 @@ export const linkPreviewView = <M>(h: HtmlBuilder<M>, url: string, unfurl: Unfur
 						[
 							h.div([h.Class("truncate font-semibold text-sm")], [og?.title || host || url]),
 							og?.description
-								? h.div(
-										[h.Class("mt-0.5 line-clamp-2 text-[12px] text-fg/70")],
-										[og.description],
-									)
+								? h.div([h.Class("mt-0.5 line-clamp-2 text-fg/70 text-xs")], [og.description])
 								: h.empty,
 							h.div([h.Class("mt-1 text-2xs text-primary-subtle-fg")], [host]),
 						],
@@ -102,24 +101,17 @@ export const gifView = <M>(h: HtmlBuilder<M>, mediaUrl: string, isKlipy: boolean
 	h.div(
 		[h.Class("mt-1")],
 		[
-			h.button(
-				[
-					h.Attribute("type", "button"),
-					h.Class("cursor-pointer max-md:max-w-full"),
-					...(onOpen === null ? [] : [h.OnClick(onOpen)]),
-				],
-				[
-					h.img([
-						h.Attribute("src", mediaUrl),
-						h.Attribute("alt", "GIF"),
-						h.Class(
-							"max-h-[300px] max-w-sm rounded-md transition-opacity hover:opacity-90 max-md:max-w-full",
-						),
-						h.Attribute("loading", "lazy"),
-						h.Attribute("draggable", "false"),
-					]),
-				],
-			),
+			ariaButton(h, { className: "cursor-pointer max-md:max-w-full", onPress: onOpen ?? undefined }, [
+				h.img([
+					h.Attribute("src", mediaUrl),
+					h.Attribute("alt", "GIF"),
+					h.Class(
+						"max-h-[300px] max-w-sm rounded-md transition-opacity hover:opacity-90 max-md:max-w-full",
+					),
+					h.Attribute("loading", "lazy"),
+					h.Attribute("draggable", "false"),
+				]),
+			]),
 			h.a(
 				[
 					h.Href(isKlipy ? "https://klipy.com" : "https://giphy.com"),
@@ -142,12 +134,9 @@ const tweetSkeleton = <M>(h: HtmlBuilder<M>): Html =>
 		[
 			h.div(
 				[h.Class("flex flex-row gap-2")],
-				[
-					h.div([h.Class("size-10 shrink-0 animate-pulse rounded-full bg-muted")]),
-					h.div([h.Class("h-10 w-full animate-pulse rounded bg-muted")]),
-				],
+				[skeleton(h, "size-10 shrink-0 rounded-full"), skeleton(h, "h-10 w-full")],
 			),
-			h.div([h.Class("h-20 w-full animate-pulse rounded bg-muted")]),
+			skeleton(h, "h-20 w-full"),
 		],
 	)
 
@@ -329,12 +318,12 @@ const tweetMedia = <M>(
 						[
 							h.div([h.Class("shrink-0 snap-center sm:w-2")]),
 							...tweet.photos.map((photo, index) =>
-								h.button(
-									[
-										h.Attribute("type", "button"),
-										h.Class("h-64 w-5/6 shrink-0 snap-center snap-always"),
-										...(toOpenPhoto === null ? [] : [h.OnClick(toOpenPhoto(index))]),
-									],
+								ariaButton(
+									h,
+									{
+										className: "h-64 w-5/6 shrink-0 snap-center snap-always",
+										onPress: toOpenPhoto === null ? undefined : toOpenPhoto(index),
+									},
 									[
 										h.img([
 											h.Attribute("src", photo.url),

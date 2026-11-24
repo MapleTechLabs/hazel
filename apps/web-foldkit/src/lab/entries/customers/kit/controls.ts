@@ -10,10 +10,10 @@ import {
 	filterChip,
 	rangePicker,
 	searchBox,
-	segmented,
 	sortTrigger,
 	viewTabs,
 } from "../../../../customers/ui/filter-bar"
+import { segmented } from "../../../../ui/segmented-control"
 import { QUEUE_SHORTCUTS, shortcutBar } from "../../../../customers/ui/shortcuts"
 import { defineLab } from "../../../define"
 import { labPage, labSection } from "../../../frame"

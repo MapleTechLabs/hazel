@@ -1,10 +1,13 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconArrowLeft, IconCheck, IconHashtag, IconLock } from "../../../icons"
+import { badge } from "../../../ui/badge"
 import { ariaButton, button } from "../../../ui/button"
+import { cardClassName } from "../../../ui/card"
 import { checkbox } from "../../../ui/checkbox"
 import { description, label } from "../../../ui/field"
 import { heading } from "../../../ui/heading"
-import { loader } from "../../../ui/loader"
+import { iconTile } from "../../../ui/icon-tile"
+import { loadingState } from "../../../ui/loader"
 import { radioGroup } from "../../../ui/radio"
 import { filterByName, scrollList, searchInput } from "../../settings/chat-sync/modal-parts"
 import {
@@ -60,10 +63,7 @@ const centered = <P>(h: Builder<P>, children: ReadonlyArray<Html>): Html =>
 	h.div([h.Class("flex flex-col items-center gap-3 py-10 text-center")], [...children])
 
 const spinner = <P>(h: Builder<P>, text: string): Html =>
-	centered(h, [
-		loader(h, { className: "size-6 text-muted-fg" }),
-		h.p([h.Class("text-muted-fg text-sm")], [text]),
-	])
+	loadingState(h, { label: text, className: "flex-col py-10 text-center" })
 
 const PROVIDER_BLURB = {
 	slack: "Bring over your workspace's public channels.",
@@ -75,8 +75,9 @@ const providerCard = <P>(h: Builder<P>, provider: ChatSyncProvider, wrap: (m: Me
 		h,
 		{
 			onPress: wrap(Message.ClickedProvider({ provider })),
-			className:
-				"group flex w-full items-center gap-4 rounded-xl border border-border bg-bg p-4 text-left transition-[border-color,box-shadow] duration-150 hover:border-border-hover hover:shadow-sm focus-visible:outline-2 focus-visible:outline-ring",
+			className: cardClassName(
+				"group flex w-full items-center gap-4 p-4 text-left transition-[border-color,box-shadow] duration-150 hover:border-border-hover hover:shadow-sm focus-visible:outline-2 focus-visible:outline-ring",
+			),
 			attributes: [h.DataAttribute("testid", `chat-migration-provider-${provider}`)],
 		},
 		[
@@ -138,14 +139,7 @@ const workspaceRow = <P>(h: Builder<P>, workspace: Workspace, wrap: (m: Message)
 				},
 				[
 					h.span([h.Class("truncate text-fg")], [workspace.name]),
-					...(workspace.owner
-						? [
-								h.span(
-									[h.Class("rounded-sm bg-secondary px-1.5 py-0.5 text-3xs text-muted-fg")],
-									["Owner"],
-								),
-							]
-						: []),
+					...(workspace.owner ? [badge(h, { intent: "muted", size: "sm" }, ["Owner"])] : []),
 				],
 			),
 		],
@@ -455,11 +449,9 @@ export const parts = <P>(h: Builder<P>, model: Model, options: ViewOptions<P>): 
 			description: "That didn't work.",
 			body: problemBody(h, provider, problem),
 			leading: [backButton(h, model, wrap)],
-			actions: [
-				...(problem.canRetry
-					? [button(h, { intent: "primary", onPress: wrap(Message.ClickedRetry()) }, ["Try again"])]
-					: []),
-			],
+			actions: problem.canRetry
+				? [button(h, { intent: "primary", onPress: wrap(Message.ClickedRetry()) }, ["Try again"])]
+				: [],
 		}),
 		Done: ({ provider, workspaceName, linked, created, skipped, takenElsewhere, history }) => ({
 			title: linked === 0 && takenElsewhere > 0 ? "Nothing was migrated" : "You're all set",
@@ -470,14 +462,7 @@ export const parts = <P>(h: Builder<P>, model: Model, options: ViewOptions<P>): 
 						? `Those channels belong to another Hazel workspace.`
 						: `${workspaceName} already syncs with Hazel.`,
 			body: centered(h, [
-				h.div(
-					[
-						h.Class(
-							"flex size-12 items-center justify-center rounded-full bg-success/10 text-success",
-						),
-					],
-					[IconCheck(h, { className: "size-6" })],
-				),
+				iconTile(h, { intent: "success" }, IconCheck(h)),
 				h.p(
 					[h.Class("max-w-sm text-fg text-sm")],
 					[

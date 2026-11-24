@@ -94,3 +94,17 @@ describe("chat index update", () => {
 		)
 	})
 })
+
+describe("DM row times", () => {
+	const now = new Date(2026, 10, 24, 15, 0).getTime()
+	test("are short, as Slack's", async () => {
+		const { dmTimeOf } = await import("./mobile-dms")
+		expect(dmTimeOf(now - 20_000, now)).toBe("now")
+		expect(dmTimeOf(now - 12 * 60_000, now)).toBe("12m")
+		expect(dmTimeOf(now - 3 * 3_600_000, now)).toBe("3h")
+		expect(dmTimeOf(new Date(2026, 10, 23, 9, 0).getTime(), now)).toBe("Yesterday")
+		expect(dmTimeOf(new Date(2026, 10, 20, 9, 0).getTime(), now)).toBe("Fri")
+		expect(dmTimeOf(new Date(2026, 2, 3, 9, 0).getTime(), now)).toBe("Mar 3")
+		expect(dmTimeOf(new Date(2025, 2, 3, 9, 0).getTime(), now)).toBe("Mar 3, 2025")
+	})
+})

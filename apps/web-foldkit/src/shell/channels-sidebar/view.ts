@@ -6,6 +6,7 @@ import { IconMagnifier3, IconUsers } from "../../icons"
 import { AppRoute, hrefOf } from "../../route"
 import { type ChannelLinks, type ChannelLinksMap, linksFor } from "../../ui/channel-icon"
 import { semantic } from "../../ui/semantic"
+import { ariaButton } from "../../ui/button"
 import { channelLinksOf } from "./channel-links"
 import { sidebarItem, sidebarLink } from "../../ui/sidebar"
 import type * as Menu from "../../ui/menu"
@@ -327,7 +328,7 @@ const gotoSection = <M>(h: HtmlBuilder<M>, context: SectionsContext<M>): Html =>
 												h.Attribute("dir", "ltr"),
 												h.Class(
 													twMerge(
-														"hidden font-mono text-[0.80rem]/6 text-current/60 group-hover:text-fg group-focus:text-fg group-focus:opacity-90 group-disabled:opacity-50 lg:inline forced-colors:group-focus:text-[HighlightText]",
+														"hidden font-mono text-current/60 group-hover:text-fg group-focus:text-fg group-focus:opacity-90 group-disabled:opacity-50 lg:inline forced-colors:group-focus:text-[HighlightText]",
 														"absolute top-1/2 right-2 -translate-y-1/2 font-mono text-muted-fg text-xs",
 													),
 												),
@@ -466,13 +467,12 @@ const discoverSection = <M>(h: HtmlBuilder<M>, model: Model, context: SectionsCo
 					),
 				...(model.discoverableChannels.length > MAX_DISCOVERABLE
 					? [
-							h.button(
-								[
-									h.Attribute("type", "button"),
-									h.Class(
+							ariaButton(
+								h,
+								{
+									className:
 										"col-span-full w-full rounded-lg py-1 pl-2.5 text-left text-muted-fg/60 text-sm transition-colors hover:bg-sidebar-accent hover:text-fg",
-									),
-								],
+								},
 								["Browse all channels..."],
 							),
 						]

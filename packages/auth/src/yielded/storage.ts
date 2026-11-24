@@ -11,10 +11,12 @@ import * as Digest from "effect/crypto/Digest"
 import * as SecureRandom from "effect/crypto/SecureRandom"
 import { SqlClient } from "effect/sql"
 
+import { admitRegistration, registrationEmailAllowed } from "./access-gate.ts"
 import { HazelAuth, requirement } from "./auth.ts"
 import { batchCommit } from "./batch.ts"
 import { findUserByEmail, isProvider, linkIdentity, providerIssuers, STORE_ERROR_TAGS } from "./identities.ts"
 import { Registration } from "./contract.ts"
+import type { InstanceAccess } from "./instance-access.ts"
 import * as T from "./tables.ts"
 
 const { sql, eq } = Mapping
@@ -241,6 +243,7 @@ const intentMapping: Mapping.OAuthRegistrationIntentMapping<Table, Table, string
 
 const makeRegistrationMapping = (
 	uuid: Effect.Effect<string, PersistenceMappingError>,
+	access: InstanceAccess,
 ): Mapping.OAuthRegistrationMapping<typeof Registration.Type, Table, Table, Table, Table, Table, string> => ({
 	registration: Registration,
 	ownership,
@@ -251,10 +254,12 @@ const makeRegistrationMapping = (
 	subjectId,
 	clock: Mapping.clock,
 	constraints: Mapping.requiredOAuthRegistrationConstraints,
-	inspect: ({ registration }) =>
+	inspect: ({ intent, registration }) =>
 		Effect.succeed({
 			fingerprint: `hazel-v1:${Schema.encodeSync(registrationJson)(registration)}`,
-			eligible: true,
+			// Refused before the intent is issued (`OAuthRegistrationIntents` below); this catches an
+			// intent issued before `ALLOWED_EMAIL_DOMAINS` changed.
+			eligible: registrationEmailAllowed(access, intent),
 		}),
 	eligibility: { admission: () => sql`true`, postcondition: () => sql`true` },
 	allocateSubjectId: uuid,
@@ -334,52 +339,53 @@ const validateMappings = Effect.fn("HazelAuth.validateOAuthStorage")(function* (
 	])
 })
 
-export const OAuthStorageLive = Layer.effectContext(
-	Effect.gen(function* () {
-		const digest = yield* Digest.Digest
-		const random = yield* SecureRandom.SecureRandom
-		const sqlClient = yield* SqlClient.SqlClient
-		const tables = Adapter.makeNativeSqlTables(sqlClient)
-		const batch = batchCommit(sqlClient)
+/** The OAuth storage, refusing sign-ups outside `access`'s email domains (`access-gate.ts`). */
+export const makeOAuthStorageLive = (access: InstanceAccess) =>
+	Layer.effectContext(
+		Effect.gen(function* () {
+			const digest = yield* Digest.Digest
+			const random = yield* SecureRandom.SecureRandom
+			const sqlClient = yield* SqlClient.SqlClient
+			const tables = Adapter.makeNativeSqlTables(sqlClient)
+			const batch = batchCommit(sqlClient)
 
-		const uuid = random.uuidV4()
-		const registrationMapping = makeRegistrationMapping(uuid)
-		const accountsMapping = makeAccountsMapping(uuid)
+			const uuid = random.uuidV4()
+			const registrationMapping = makeRegistrationMapping(uuid, access)
+			const accountsMapping = makeAccountsMapping(uuid)
 
-		yield* validateMappings([signInMapping, intentMapping, registrationMapping, accountsMapping])
+			yield* validateMappings([signInMapping, intentMapping, registrationMapping, accountsMapping])
 
-		const signIn = yield* Adapter.makeNativeOAuthSignInServices(
-			tables,
-			Adapter.captureOAuthMapping(signInMapping) as unknown as Adapter.OAuthNativeReadMapping,
-			batch,
-		)
-		const intents = yield* Adapter.makeNativeOAuthRegistrationIntentServices(
-			tables,
-			Adapter.captureOAuthMapping(
-				intentMapping,
-			) as unknown as Adapter.OAuthNativeRegistrationIntentMapping,
-			batch,
-		)
-		const registration = yield* Adapter.makeNativeOAuthRegistrationServices(
-			tables,
-			Adapter.captureOAuthMapping(
-				registrationMapping,
-			) as unknown as Adapter.OAuthNativeRegistrationMapping<typeof Registration.Type>,
-			batch,
-		)
-		const accounts = yield* Adapter.makeNativeOAuthAccountsServices(
-			tables,
-			Adapter.captureOAuthMapping(accountsMapping) as unknown as Adapter.OAuthNativeAccountsMapping,
-			batch,
-		)
+			const signIn = yield* Adapter.makeNativeOAuthSignInServices(
+				tables,
+				Adapter.captureOAuthMapping(signInMapping) as unknown as Adapter.OAuthNativeReadMapping,
+				batch,
+			)
+			const intents = yield* Adapter.makeNativeOAuthRegistrationIntentServices(
+				tables,
+				Adapter.captureOAuthMapping(
+					intentMapping,
+				) as unknown as Adapter.OAuthNativeRegistrationIntentMapping,
+				batch,
+			)
+			const registration = yield* Adapter.makeNativeOAuthRegistrationServices(
+				tables,
+				Adapter.captureOAuthMapping(
+					registrationMapping,
+				) as unknown as Adapter.OAuthNativeRegistrationMapping<typeof Registration.Type>,
+				batch,
+			)
+			const accounts = yield* Adapter.makeNativeOAuthAccountsServices(
+				tables,
+				Adapter.captureOAuthMapping(accountsMapping) as unknown as Adapter.OAuthNativeAccountsMapping,
+				batch,
+			)
 
-		return Context.make(OAuth.OAuthSignInPersistence, signIn.oauthSignInPersistence).pipe(
-			Context.add(OAuth.OAuthRegistrationIntents, {
-				...intents.oauthRegistrationIntents,
-				issue: (input, prepare) =>
-					intents.oauthRegistrationIntents
-						.issue(input, prepare)
-						.pipe(
+			return Context.make(OAuth.OAuthSignInPersistence, signIn.oauthSignInPersistence).pipe(
+				Context.add(OAuth.OAuthRegistrationIntents, {
+					...intents.oauthRegistrationIntents,
+					issue: (input, prepare) =>
+						admitRegistration(access, input.intent).pipe(
+							Effect.andThen(intents.oauthRegistrationIntents.issue(input, prepare)),
 							Effect.tap(() =>
 								linkByVerifiedEmail(input.intent).pipe(
 									Effect.provideService(SqlClient.SqlClient, sqlClient),
@@ -388,17 +394,17 @@ export const OAuthStorageLive = Layer.effectContext(
 								),
 							),
 						),
-			}),
-			Context.add(OAuth.OAuthAccountsPersistence, accounts.oauthAccountsPersistence),
-			Context.add(
-				HazelAuth.strategies.social.registration.RegistrationAuthority,
-				registration.registrationAuthority,
-			),
-		)
-	}).pipe(
-		// One metadata snapshot for the whole build: each service below validates its tables
-		// again, which without it is a D1 round trip apiece on an isolate's first request.
-		Adapter.withStorageValidation,
-		Effect.withSpan("HazelAuth.oauthStorage"),
-	),
-)
+				}),
+				Context.add(OAuth.OAuthAccountsPersistence, accounts.oauthAccountsPersistence),
+				Context.add(
+					HazelAuth.strategies.social.registration.RegistrationAuthority,
+					registration.registrationAuthority,
+				),
+			)
+		}).pipe(
+			// One metadata snapshot for the whole build: each service below validates its tables
+			// again, which without it is a D1 round trip apiece on an isolate's first request.
+			Adapter.withStorageValidation,
+			Effect.withSpan("HazelAuth.oauthStorage"),
+		),
+	)

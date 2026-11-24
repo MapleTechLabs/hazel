@@ -16,7 +16,6 @@ import {
 	IconArrowPath,
 	IconChevronDown,
 	IconCheck,
-	IconChevronRight,
 	IconClose,
 	IconDots,
 	IconEdit,
@@ -37,7 +36,12 @@ import { attentionMuteLabel, isAttentionMuted } from "../../../customers/queries
 import { isMuteKey, MUTE_LABEL } from "../../../customers/ui/menus"
 import { AppRoute, hrefOf } from "../../../route"
 import { badge } from "../../../ui/badge"
-import { button } from "../../../ui/button"
+import { ariaButton, button, iconButton } from "../../../ui/button"
+import { callout } from "../../../ui/callout"
+import { cardClassName } from "../../../ui/card"
+import { emptyState } from "../../../ui/empty-state"
+import { separator } from "../../../ui/separator"
+import { skeleton } from "../../../ui/skeleton"
 import { checkbox } from "../../../ui/checkbox"
 import { dialogBody, dialogClose, dialogFooter, dialogHeader } from "../../../ui/dialog"
 import { input } from "../../../ui/input"
@@ -78,9 +82,11 @@ import { peopleInChat } from "./people-in-chat"
 import { overviewTab } from "./overview-tab"
 import { companyFacts, companySocials } from "../../../customers/ui/company"
 import { companySection } from "./company-section"
-import { type Context, copyButton, icon, memberOf, menu, property, sidebarSection } from "./parts"
+import { type Context, copyButton, icon, memberOf, property, sidebarSection } from "./parts"
+import { menu } from "../shared-view"
 import { usersTab } from "./users-tab"
 import { heading } from "../../../ui/heading"
+import { breadcrumb } from "../../../ui/page-header"
 
 /** The customer page (Wonder: Customer Page — overview, users, billing, activity, notes, header menu). */
 
@@ -281,17 +287,10 @@ const ownerMenu = (h: HtmlBuilder<Message>, model: Model, context: Context): Htm
 const topBar = (h: HtmlBuilder<Message>, model: Model, context: Context | null, orgSlug: string): Html => {
 	const position = positionOf(model)
 	const navButton = (step: -1 | 1, label: string, isDisabled: boolean) =>
-		h.button(
-			[
-				h.Type("button"),
-				h.AriaLabel(label),
-				h.Disabled(isDisabled),
-				h.OnClick(Message.PressedNeighbour({ step })),
-				h.Class(
-					"inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-fg outline-hidden transition-colors hover:bg-secondary hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent max-md:size-10",
-				),
-			],
-			[IconChevronDown(h, { className: twMerge("size-3.5", step === -1 && "rotate-180") })],
+		iconButton(
+			h,
+			{ label, size: "sq-xs", isDisabled, onPress: Message.PressedNeighbour({ step }) },
+			IconChevronDown(h, { className: twMerge("size-3.5", step === -1 && "rotate-180") }),
 		)
 	return h.div(
 		[
@@ -300,23 +299,13 @@ const topBar = (h: HtmlBuilder<Message>, model: Model, context: Context | null, 
 			),
 		],
 		[
-			h.nav(
-				[h.AriaLabel("Breadcrumb"), h.Class("flex min-w-0 items-center gap-1.5 text-sm")],
-				[
-					h.a(
-						[
-							h.Href(hrefOf(AppRoute.CustomersList({ orgSlug, view: Option.none() }))),
-							h.Class("text-muted-fg hover:text-fg"),
-						],
-						["Customers"],
-					),
-					IconChevronRight(h, { className: "size-3 text-muted-fg" }),
-					h.span(
-						[h.AriaCurrent("page"), h.Class("truncate font-medium text-fg")],
-						[context?.account.name ?? "…"],
-					),
-				],
-			),
+			breadcrumb(h, [
+				{
+					label: "Customers",
+					href: hrefOf(AppRoute.CustomersList({ orgSlug, view: Option.none() })),
+				},
+				{ label: context?.account.name ?? "…" },
+			]),
 			h.div(
 				[h.Class("flex shrink-0 items-center gap-1")],
 				[
@@ -334,21 +323,20 @@ const topBar = (h: HtmlBuilder<Message>, model: Model, context: Context | null, 
 								navButton(-1, "Previous customer", position.previous === null),
 								navButton(1, "Next customer", position.next === null),
 							]),
-					h.button(
-						[
-							h.Type("button"),
-							h.AriaLabel(model.isSidebarOpen ? "Hide details" : "Show details"),
-							h.AriaPressed(model.isSidebarOpen ? "true" : "false"),
-							h.OnClick(Message.ToggledSidebar()),
-							h.Class(
-								twMerge(
-									// A phone has no side panel to toggle: its details sit under the overview.
-									"ml-1 inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-fg outline-hidden transition-colors hover:bg-secondary hover:text-fg focus-visible:ring-2 focus-visible:ring-ring/70 max-md:hidden",
-									model.isSidebarOpen && "bg-secondary text-fg",
-								),
+					iconButton(
+						h,
+						{
+							label: model.isSidebarOpen ? "Hide details" : "Show details",
+							size: "sq-xs",
+							onPress: Message.ToggledSidebar(),
+							// A phone has no side panel to toggle: its details sit under the overview.
+							className: twMerge(
+								"ml-1 max-md:hidden",
+								model.isSidebarOpen && "bg-secondary text-fg",
 							),
-						],
-						[IconSidebarRight(h, { className: "size-4" })],
+							attributes: [h.AriaPressed(model.isSidebarOpen ? "true" : "false")],
+						},
+						IconSidebarRight(h, { className: "size-4" }),
 					),
 				],
 			),
@@ -378,7 +366,7 @@ const companySocialsGroup = (
 		: [
 				h.div(
 					[h.AriaLabel("Company profiles"), h.Role("group"), h.Class("flex items-center")],
-					[h.span([h.AriaHidden(true), h.Class("mr-1.5 h-3.5 w-px bg-border")]), ...socials],
+					[separator(h, { orientation: "vertical", className: "mr-1.5 h-3.5" }), ...socials],
 				),
 			]
 }
@@ -555,15 +543,14 @@ const tags = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =>
 					],
 					[
 						tag,
-						h.button(
-							[
-								h.Type("button"),
-								h.AriaLabel(`Remove tag ${tag}`),
-								h.OnClick(Message.RemovedTag({ tag })),
-								h.Class(
+						ariaButton(
+							h,
+							{
+								onPress: Message.RemovedTag({ tag }),
+								className:
 									"inline-flex cursor-pointer rounded text-muted-fg hover:text-fg max-md:p-1.5",
-								),
-							],
+								attributes: [h.AriaLabel(`Remove tag ${tag}`)],
+							},
 							[IconClose(h, { className: "size-2.5" })],
 						),
 					],
@@ -575,14 +562,13 @@ const tags = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =>
 				view: Popover.view,
 				viewInputs: {
 					toTrigger: (attributes) =>
-						h.button(
-							[
-								...attributes,
-								h.AriaLabel("Add tag"),
-								h.Class(
+						ariaButton(
+							h,
+							{
+								className:
 									"inline-flex size-5 cursor-pointer items-center justify-center rounded border border-border text-muted-fg hover:text-fg max-md:size-8",
-								),
-							],
+								attributes: [...attributes, h.AriaLabel("Add tag")],
+							},
 							[IconPlus(h, { className: "size-3" })],
 						),
 					toContent: () => [
@@ -1087,7 +1073,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 			h.AriaLabel("Customer details"),
 			h.Class(
 				isStacked
-					? "flex flex-col rounded-xl border border-border"
+					? cardClassName("flex flex-col")
 					: "flex shrink-0 flex-col border-border max-lg:border-t lg:w-80 lg:overflow-y-auto lg:border-l",
 			),
 		],
@@ -1148,14 +1134,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context, isStac
 // STATES
 
 const centered = (h: HtmlBuilder<Message>, title: string, description: string, action?: Html): Html =>
-	h.div(
-		[h.Class("flex h-full flex-col items-center justify-center gap-2 px-6 text-center")],
-		[
-			heading(h, { variant: "title", level: 1 }, [title]),
-			h.p([h.Class("max-w-sm text-muted-fg text-sm")], [description]),
-			...(action === undefined ? [] : [h.div([h.Class("pt-2")], [action])]),
-		],
-	)
+	emptyState(h, { title, description, action, className: "h-full px-6" })
 
 const loading = (h: HtmlBuilder<Message>): Html =>
 	h.div(
@@ -1163,13 +1142,10 @@ const loading = (h: HtmlBuilder<Message>): Html =>
 		[
 			h.div(
 				[h.Class("flex items-center gap-4")],
-				[
-					h.span([h.Class("size-12 animate-pulse rounded-xl bg-secondary")]),
-					h.span([h.Class("h-6 w-64 animate-pulse rounded bg-secondary")]),
-				],
+				[skeleton(h, "size-12 rounded-xl"), skeleton(h, "h-6 w-64 rounded")],
 			),
-			h.div([h.Class("h-24 animate-pulse rounded-xl bg-secondary/50")]),
-			h.div([h.Class("h-64 animate-pulse rounded-xl bg-secondary/40")]),
+			skeleton(h, "h-24 rounded-xl"),
+			skeleton(h, "h-64 rounded-xl"),
 		],
 	)
 
@@ -1506,27 +1482,24 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 							h.div([h.Class("pt-4")], [tabsRow(h, model, context)]),
 							...(failure._tag === "Some" && detail === null
 								? [
-										h.div(
-											[
-												h.Class(
-													"mx-4 mt-4 flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3 text-sm lg:mx-6",
-												),
-											],
-											[
-												h.span(
-													[h.Class("text-muted-fg")],
-													["Couldn't load this customer's details."],
-												),
-												button(
-													h,
-													{
-														intent: "outline",
-														size: "xs",
-														onPress: Message.PressedRetryDetail(),
-													},
-													["Try again"],
-												),
-											],
+										callout(
+											h,
+											{
+												intent: "warning",
+												className: "mx-4 mt-4 lg:mx-6",
+												actions: [
+													button(
+														h,
+														{
+															intent: "outline",
+															size: "xs",
+															onPress: Message.PressedRetryDetail(),
+														},
+														["Try again"],
+													),
+												],
+											},
+											["Couldn't load this customer's details."],
 										),
 									]
 								: []),

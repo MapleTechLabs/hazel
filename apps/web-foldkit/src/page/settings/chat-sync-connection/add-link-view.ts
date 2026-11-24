@@ -1,7 +1,8 @@
 import * as AsyncData from "foldkit/asyncData"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { IconHashtag, IconMagnifier3, IconPlus } from "../../../icons"
-import { button } from "../../../ui/button"
+import { twMerge } from "tailwind-merge"
+import { ariaButton, button } from "../../../ui/button"
 import {
 	dialogBody,
 	dialogClose,
@@ -11,7 +12,8 @@ import {
 	dialogTitle,
 } from "../../../ui/dialog"
 import { description, label } from "../../../ui/field"
-import { input, inputGroup } from "../../../ui/input"
+import { input, inputElement, inputGroup } from "../../../ui/input"
+import { segmentClass, segmentedTrackClass } from "../../../ui/segmented-control"
 import * as Modal from "../../../ui/modal"
 import {
 	type ChatSyncProvider,
@@ -21,7 +23,7 @@ import {
 	type ResourceFailure,
 	resourceFailureMessage,
 } from "../chat-sync/providers"
-import { filterByName, spinnerLine } from "../chat-sync/modal-parts"
+import { filterByName } from "../chat-sync/modal-parts"
 import {
 	CHANNEL_SEARCH_ID,
 	directionLabel,
@@ -39,6 +41,8 @@ import {
 	type SyncDirection,
 } from "./model"
 import { CREATE_LINK_TARGET, interaction } from "./update"
+import { callout } from "../../../ui/callout"
+import { loadingState } from "../../../ui/loader"
 
 /**
  * The Link Channel modal: pick the external channel, then the Hazel channel it mirrors (an existing
@@ -64,7 +68,7 @@ interface Segment<K extends string> {
 	readonly icon?: Html
 }
 
-/** A radio group drawn as a segmented control. */
+/** A radio group drawn as the kit's segmented control; its segments may carry an icon. */
 const segmented = <K extends string>(
 	h: HtmlBuilder<Message>,
 	options: Readonly<{
@@ -80,27 +84,21 @@ const segmented = <K extends string>(
 		[
 			h.Role("radiogroup"),
 			h.AriaLabel(options.ariaLabel),
-			h.Class(`flex gap-0.5 rounded-lg bg-secondary/70 p-0.5 ${options.className ?? ""}`),
+			h.Class(twMerge(segmentedTrackClass, "flex", options.className)),
 		],
 		options.segments.map((segment) => {
 			const isSelected = segment.value === options.selected
-			return h.keyed("button")(
-				segment.value,
-				[
-					h.Type("button"),
-					h.Role("radio"),
-					h.Attribute("aria-checked", isSelected ? "true" : "false"),
-					...(options.isDisabled
-						? [h.Disabled(true)]
-						: [h.OnClick(options.onSelect(segment.value))]),
-					h.Class(
-						`flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-xs transition-colors duration-150 outline-hidden focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-60 ${
-							isSelected
-								? "bg-bg text-fg shadow-xs ring-1 ring-border"
-								: "text-muted-fg enabled:hover:text-fg"
-						}`,
+			return ariaButton(
+				h,
+				{
+					className: twMerge(
+						segmentClass(isSelected),
+						"min-w-0 flex-1 justify-center disabled:cursor-not-allowed disabled:opacity-60",
 					),
-				],
+					isDisabled: options.isDisabled,
+					onPress: options.onSelect(segment.value),
+					attributes: [h.Key(segment.value), h.Role("radio"), h.AriaChecked(isSelected)],
+				},
 				[...(segment.icon ? [segment.icon] : []), h.span([h.Class("truncate")], [segment.label])],
 			)
 		}),
@@ -158,26 +156,25 @@ const picker = (
 			),
 		],
 		[
-			h.label(
-				[h.Class("flex items-center gap-2 border-border border-b px-3")],
-				[
-					IconMagnifier3(h, { className: "size-4 shrink-0 text-muted-fg" }),
-					h.input([
+			label(h, { className: "flex items-center gap-2 border-border border-b px-3" }, [
+				IconMagnifier3(h, { className: "size-4 shrink-0 text-muted-fg" }),
+				// Borderless: the box around the search and its results draws the focus ring.
+				inputElement(h, {
+					placeholder: options.placeholder,
+					className:
+						"h-10 min-w-0 rounded-none border-0 bg-transparent px-0 py-0 text-sm enabled:hover:bg-transparent focus:ring-0 sm:px-0 sm:py-0",
+					attributes: [
 						h.Id(options.id),
 						h.Type("text"),
 						h.Attribute("autocomplete", "off"),
 						h.Attribute("spellcheck", "false"),
-						h.Placeholder(options.placeholder),
 						h.Value(options.search),
 						h.OnInput(options.onInput),
 						h.OnFocus(options.onFocus),
 						h.OnBlur(Message.BlurredSearch()),
-						h.Class(
-							"h-10 w-full min-w-0 bg-transparent text-fg text-sm outline-hidden placeholder:text-muted-fg",
-						),
-					]),
-				],
-			),
+					],
+				}),
+			]),
 			h.div(
 				[h.Class("max-h-44 overflow-y-auto overscroll-contain p-1")],
 				options.rows.length === 0 && options.footer === null
@@ -208,36 +205,35 @@ const pickedRow = (h: HtmlBuilder<Message>, name: string, onChange: Message, isD
 
 /** The list's loading state, the same height as the list so the dialog doesn't jump. */
 const loadingChannels = (h: HtmlBuilder<Message>, provider: ChatSyncProvider): Html =>
-	h.div(
-		[h.Class("flex h-[13.5rem] items-center justify-center rounded-lg border border-border")],
-		[spinnerLine(h, `Loading ${PROVIDERS[provider].name} channels...`)],
-	)
+	loadingState(h, {
+		label: `Loading ${PROVIDERS[provider].name} channels...`,
+		size: "sm",
+		className: "h-[13.5rem] rounded-lg border border-border py-0",
+	})
 
 /** Why the channels didn't load, with "Try again" when the reason is transient. */
 const loadFailed = (h: HtmlBuilder<Message>, provider: ChatSyncProvider, reason: ResourceFailure): Html => {
 	const message = resourceFailureMessage(provider, reason, "channels")
-	return h.div(
-		[h.Class("rounded-lg border border-border bg-bg-muted/20 p-4")],
-		[
-			h.p([h.Class("font-medium text-fg text-sm")], [message.title]),
-			...(message.description === undefined
-				? []
-				: [h.p([h.Class("mt-1 text-muted-fg text-sm")], [message.description])]),
-			...(isRetryable(reason)
+	return callout(
+		h,
+		{
+			intent: "warning",
+			title: message.title,
+			actions: isRetryable(reason)
 				? [
 						button(
 							h,
 							{
 								intent: "secondary",
 								size: "sm",
-								className: "mt-3",
 								onPress: Message.ClickedRetryListExternalChannels(),
 							},
 							["Try again"],
 						),
 					]
-				: []),
-		],
+				: [],
+		},
+		message.description === undefined ? [] : [message.description],
 	)
 }
 

@@ -44,7 +44,7 @@ export const severityGlyph = <M>(
 					]),
 		],
 		SEVERITY_BARS[severity].map((fill, index) =>
-			h.span([h.Class(twMerge("block w-[3px] rounded-[1px]", BAR_HEIGHTS[index], fill))]),
+			h.span([h.Class(twMerge("block w-[3px] rounded-xs", BAR_HEIGHTS[index], fill))]),
 		),
 	)
 

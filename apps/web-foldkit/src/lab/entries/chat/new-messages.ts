@@ -6,6 +6,7 @@ import { avatarButton, dateDividerView, messageRowView, type RowContext } from "
 import { toDisplayRows, toDeriveContext } from "../../../page/chat/derive"
 import { emptyLookups, type UserInfo } from "../../../page/chat/lookups"
 import { type ChatMessage, ChatMessage as ChatMessageSchema, DisplayRow } from "../../../page/chat/rows"
+import { button as kitButton } from "../../../ui/button"
 import { defineLab } from "../../define"
 import { labPage } from "../../frame"
 
@@ -116,17 +117,7 @@ const rowContext = (h: HtmlBuilder<Message>): RowContext<Message> => ({
 })
 
 const button = (h: HtmlBuilder<Message>, label: string, message: Message, primary = false): Html =>
-	h.button(
-		[
-			h.OnClick(message),
-			h.Class(
-				primary
-					? "rounded-lg bg-primary px-3 py-1.5 font-medium text-primary-fg text-sm hover:bg-primary/90"
-					: "rounded-lg border border-border px-3 py-1.5 font-medium text-sm hover:bg-secondary",
-			),
-		],
-		[label],
-	)
+	kitButton(h, { intent: primary ? "primary" : "outline", size: "sm", onPress: message }, [label])
 
 export const lab = defineLab("New messages", {
 	Model,

@@ -1,14 +1,8 @@
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
-import {
-	IconCopy,
-	IconEdit,
-	IconEnvelope,
-	IconHashtag,
-	IconPlus,
-	IconTrash,
-	IconWarning,
-} from "../../../icons"
-import { ariaButton, button } from "../../../ui/button"
+import { IconEdit, IconEnvelope, IconHashtag, IconPlus, IconTrash, IconWarning } from "../../../icons"
+import { ariaButton, button, iconButton } from "../../../ui/button"
+import { cardClassName } from "../../../ui/card"
+import { copyButton } from "../../../ui/copy-button"
 import {
 	dialogBody,
 	dialogClose,
@@ -19,6 +13,8 @@ import {
 } from "../../../ui/dialog"
 import { description, fieldError, label } from "../../../ui/field"
 import { heading } from "../../../ui/heading"
+import { iconTile } from "../../../ui/icon-tile"
+import { statusDot } from "../../../ui/status-dot"
 import * as Modal from "../../../ui/modal"
 import { textField } from "../../../ui/text-field"
 import type * as ConfirmAction from "../../shared/confirm-action"
@@ -56,15 +52,7 @@ const channelNameOf = (model: Model, inbox: EmailInbox): string | null =>
 		? null
 		: (model.hazelChannels.find((channel) => channel.id === inbox.hazelChannelId)?.name ?? null)
 
-const envelopeTile = (h: HtmlBuilder<Message>, sizeClass: string, iconClass: string): Html =>
-	h.div(
-		[
-			h.Class(
-				`flex shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-fg ring-1 ring-border ${sizeClass}`,
-			),
-		],
-		[IconEnvelope(h, { className: iconClass })],
-	)
+const envelopeTile = (h: HtmlBuilder<Message>): Html => iconTile(h, { size: "md" }, IconEnvelope(h))
 
 const channelTag = (h: HtmlBuilder<Message>, name: string | null): Html =>
 	h.span(
@@ -73,18 +61,6 @@ const channelTag = (h: HtmlBuilder<Message>, name: string | null): Html =>
 			IconHashtag(h, { className: "size-3.5 shrink-0 text-muted-fg" }),
 			h.span([h.Class("truncate")], [name ?? "private channel"]),
 		],
-	)
-
-const copyButton = (h: HtmlBuilder<Message>, address: string): Html =>
-	button(
-		h,
-		{
-			intent: "outline",
-			size: "sq-sm",
-			onPress: Message.ClickedCopyInboundAddress({ address }),
-			attributes: [h.AriaLabel("Copy forwarding address"), h.Title("Copy forwarding address")],
-		},
-		[IconCopy(h, { className: "size-4" })],
 	)
 
 /** The address to forward to, in a mono box with its copy button. */
@@ -106,7 +82,10 @@ const forwardingAddress = (h: HtmlBuilder<Message>, inbox: EmailInbox, id?: stri
 						],
 						[inbox.inboundAddress],
 					),
-					copyButton(h, inbox.inboundAddress),
+					copyButton(h, {
+						label: "Copy forwarding address",
+						onPress: Message.ClickedCopyInboundAddress({ address: inbox.inboundAddress }),
+					}),
 				],
 			)
 
@@ -133,7 +112,7 @@ const inboxRow = (h: HtmlBuilder<Message>, model: Model, inbox: EmailInbox): Htm
 									h.span(
 										[h.Class("flex items-center gap-1.5")],
 										[
-											h.span([h.Class(`size-1.5 rounded-full ${status.dotClass}`)]),
+											statusDot(h, { tone: status.tone }),
 											h.span([h.Class(`text-xs ${status.textClass}`)], [status.label]),
 										],
 									),
@@ -175,27 +154,20 @@ const inboxRow = (h: HtmlBuilder<Message>, model: Model, inbox: EmailInbox): Htm
 								},
 								["Setup guide"],
 							),
-							button(
+							iconButton(
 								h,
-								{
-									intent: "plain",
-									size: "sq-sm",
-									onPress: Message.ClickedEditEmailInbox({ inbox }),
-									attributes: [h.AriaLabel("Edit inbox"), h.Title("Edit inbox")],
-								},
-								[IconEdit(h, { className: "size-4" })],
+								{ label: "Edit inbox", onPress: Message.ClickedEditEmailInbox({ inbox }) },
+								IconEdit(h, { attributes: { "data-slot": "icon" } }),
 							),
-							button(
+							iconButton(
 								h,
 								{
-									intent: "plain",
-									size: "sq-sm",
+									label: "Remove inbox",
 									onPress: Message.ClickedRemoveEmailInbox({
 										target: { id: inbox.id, name: inbox.displayName },
 									}),
-									attributes: [h.AriaLabel("Remove inbox"), h.Title("Remove inbox")],
 								},
-								[IconTrash(h, { className: "size-4" })],
+								IconTrash(h, { attributes: { "data-slot": "icon" } }),
 							),
 						],
 					),
@@ -214,17 +186,14 @@ const inboxRow = (h: HtmlBuilder<Message>, model: Model, inbox: EmailInbox): Htm
 
 const addInboxButton = (h: HtmlBuilder<Message>): Html =>
 	button(h, { intent: "outline", size: "sm", onPress: Message.ClickedAddEmailInbox() }, [
-		IconPlus(h, { className: "size-4" }),
+		IconPlus(h, { attributes: { "data-slot": "icon" } }),
 		"Add inbox",
 	])
 
 /** The Email card: what it does, Add inbox, and each inbox. */
 export const emailSection = (h: HtmlBuilder<Message>, model: Model): Html =>
 	h.section(
-		[
-			h.AriaLabelledBy("chat-sync-email-heading"),
-			h.Class("mt-6 flex flex-col overflow-hidden rounded-xl border border-border bg-bg"),
-		],
+		[h.AriaLabelledBy("chat-sync-email-heading"), h.Class(cardClassName("mt-6 flex flex-col"))],
 		[
 			h.div(
 				[h.Class("flex items-start justify-between gap-4 p-5")],
@@ -232,7 +201,7 @@ export const emailSection = (h: HtmlBuilder<Message>, model: Model): Html =>
 					h.div(
 						[h.Class("flex items-start gap-3")],
 						[
-							envelopeTile(h, "size-10", "size-5"),
+							envelopeTile(h),
 							h.div(
 								[h.Class("flex flex-col gap-1")],
 								[
@@ -418,7 +387,7 @@ const formContent = (
 			h.div(
 				[h.Class("flex items-center gap-3")],
 				[
-					envelopeTile(h, "size-10", "size-5"),
+					envelopeTile(h),
 					dialogTitle(
 						h,
 						{ id: Modal.titleId(model.emailModal.id) },
@@ -495,7 +464,7 @@ const setupContent = (
 			h.div(
 				[h.Class("flex items-center gap-3")],
 				[
-					envelopeTile(h, "size-10", "size-5"),
+					envelopeTile(h),
 					dialogTitle(
 						h,
 						{ id: Modal.titleId(model.emailModal.id) },
@@ -569,7 +538,7 @@ const removeInboxModal = (h: HtmlBuilder<Message>, model: Model): Html =>
 	confirmDialog(h, {
 		slotId: "remove-email-inbox",
 		confirm: model.removeInboxConfirm,
-		icon: IconWarning(h, { className: "size-6 text-danger" }),
+		icon: IconWarning(h),
 		title: "Remove inbox",
 		description: (target) => [
 			"Remove",

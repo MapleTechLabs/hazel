@@ -8,6 +8,7 @@ import type { ChannelId, UserId } from "@hazel/schema"
 import { Effect } from "effect"
 import { sessionAuthorizationEffect } from "~/lib/session-bearer"
 import { rememberedOrganizationIds } from "./sync-manager"
+import { apiUrl } from "~/config/server"
 
 /** As many of each as the route takes (`apps/backend/src/worker/sync-route.ts`). */
 const MAX_OF_EACH = 8
@@ -17,7 +18,7 @@ declare global {
 	var __hazelEarlyWarm: boolean | undefined
 }
 
-const backendUrl = () => import.meta.env.VITE_BACKEND_URL || "http://localhost:3003"
+const backendUrl = apiUrl
 
 export const warmUrl = (
 	organizationIds: ReadonlyArray<string>,

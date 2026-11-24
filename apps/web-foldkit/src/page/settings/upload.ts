@@ -4,6 +4,7 @@ import { defineTaggedUnion } from "foldkit/schema"
 import { type UploadErrorType, uploadErrorMessages, uploadToStorage } from "~/lib/upload-to-storage"
 import type { CommonError, UserErrorMessage } from "~/lib/error-messages"
 import { HazelApiClient } from "../../rpc"
+import { currentServer } from "~/config/server"
 
 /** Port of `hooks/use-upload.ts` for the settings uploads (avatars, bot avatars, organization logo, custom emoji). */
 
@@ -90,7 +91,7 @@ export const uploadFile = (
 	Effect.gen(function* () {
 		const invalid = validateUploadFile(kindOf(target), file)
 		if (invalid !== null) return yield* fail(invalid)
-		const base = import.meta.env.VITE_R2_PUBLIC_URL
+		const base = currentServer().cdn
 		if (!base) return yield* fail("NotConfigured")
 		const presigned = yield* HazelApiClient.use((client) =>
 			client.uploads.presign({

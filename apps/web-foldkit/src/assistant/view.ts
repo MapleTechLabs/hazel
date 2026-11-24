@@ -1,7 +1,7 @@
 import type { Assistant } from "@hazel/domain/models"
 import { Match, Option } from "effect"
 import { Submodel } from "foldkit"
-import { type ChildAttribute, createKeyedLazy, createLazy, type Html, type HtmlBuilder } from "foldkit/html"
+import { createKeyedLazy, createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { markdownView } from "../chat/markdown/markdown-view"
 import {
@@ -19,9 +19,12 @@ import {
 } from "../icons"
 import type { Shared } from "../page/contract"
 import { integrationRoute, hrefOf } from "../route"
-import { button, buttonClassName } from "../ui/button"
+import { button, buttonClassName, iconButton } from "../ui/button"
+import { callout } from "../ui/callout"
+import { cardClassName } from "../ui/card"
 import { emptyState } from "../ui/empty-state"
 import { heading } from "../ui/heading"
+import { link } from "../ui/link"
 import { loader } from "../ui/loader"
 import * as Menu from "../ui/menu"
 import { menuDescription, menuLabel, view as menuView } from "../ui/menu-view"
@@ -83,24 +86,6 @@ const ICON = "size-4"
 const closesOnEscape = (h: H) =>
 	h.OnKeyDownSelfPreventDefault((key) =>
 		key === "Escape" ? Option.some(Message.ClickedClose()) : Option.none(),
-	)
-
-const iconButton = (
-	h: H,
-	label: string,
-	icon: Html,
-	onPress: Message,
-	extra: ReadonlyArray<ChildAttribute> = [],
-) =>
-	button(
-		h,
-		{
-			intent: "plain",
-			size: "sq-sm",
-			onPress,
-			attributes: [h.AriaLabel(label), h.Attribute("title", label), closesOnEscape(h), ...extra],
-		},
-		[icon],
 	)
 
 /** An external link drawn as a quiet button (opens T3 Code in a new tab). */
@@ -203,21 +188,15 @@ const shareButton = (h: H, model: Model, thread: ThreadRow): Html => {
 	const label = isShared
 		? "Shared with your organization. Make private"
 		: "Private. Share with your organization"
-	return button(
+	return iconButton(
 		h,
 		{
-			intent: "plain",
-			size: "sq-sm",
+			label,
 			onPress: Message.ClickedShare(),
 			isPending: model.isUpdatingVisibility,
-			attributes: [
-				h.AriaLabel(label),
-				h.Attribute("title", label),
-				h.AriaPressed(isShared ? "true" : "false"),
-				closesOnEscape(h),
-			],
+			attributes: [h.AriaPressed(isShared ? "true" : "false"), closesOnEscape(h)],
 		},
-		[isShared ? IconUsers(h, { className: ICON }) : IconLock(h, { className: ICON })],
+		isShared ? IconUsers(h, { className: ICON }) : IconLock(h, { className: ICON }),
 	)
 }
 
@@ -240,7 +219,15 @@ const header = (h: H, model: Model, inputs: ViewInputs): Html => {
 				[h.Class("flex shrink-0 items-center gap-0.5")],
 				[
 					historyMenu(h, model, inputs.shared),
-					iconButton(h, "New chat", IconPlus(h, { className: ICON }), Message.ClickedNewChat()),
+					iconButton(
+						h,
+						{
+							label: "New chat",
+							onPress: Message.ClickedNewChat(),
+							attributes: [closesOnEscape(h)],
+						},
+						IconPlus(h, { className: ICON }),
+					),
 					isOwner ? shareButton(h, model, thread) : h.empty,
 					thread?.externalLink
 						? externalLink(h, thread.externalLink, "Open in T3 Code", [
@@ -249,9 +236,12 @@ const header = (h: H, model: Model, inputs: ViewInputs): Html => {
 						: h.empty,
 					iconButton(
 						h,
-						"Close assistant",
+						{
+							label: "Close assistant",
+							onPress: Message.ClickedClose(),
+							attributes: [closesOnEscape(h)],
+						},
 						IconClose(h, { className: ICON }),
-						Message.ClickedClose(),
 					),
 				],
 			),
@@ -288,7 +278,7 @@ const userBubble = (h: H, text: string, isSending = false): Html =>
 const assistantReply = (h: H, text: string, title: string | null): Html =>
 	title === "Plan"
 		? h.div(
-				[h.Class("flex flex-col gap-2 rounded-lg border border-border bg-bg p-3 shadow-xs")],
+				[h.Class(cardClassName("flex flex-col gap-2 p-3"))],
 				[heading(h, { variant: "label", level: 3 }, ["Plan"]), markdownView(h, text)],
 			)
 		: h.div([h.Class("text-fg")], [markdownView(h, text)])
@@ -527,7 +517,7 @@ const questionCard = (h: H, item: ItemRow, state: QuestionState): Html => {
 	const error = state.answerError?.itemId === item.id ? state.answerError.message : null
 	return h.form(
 		[
-			h.Class("flex flex-col gap-3 rounded-lg border border-border bg-bg p-3 shadow-xs"),
+			h.Class(cardClassName("flex flex-col gap-3 p-3")),
 			h.AriaLabel("The assistant asks"),
 			h.OnSubmit(Message.SubmittedAnswers({ itemId: item.id })),
 		],
@@ -562,35 +552,30 @@ const questionCard = (h: H, item: ItemRow, state: QuestionState): Html => {
 }
 
 const approvalNotice = (h: H, item: ItemRow, externalLink: string | null): Html =>
-	h.div(
-		[
-			h.Class(
-				"flex items-start gap-2 rounded-lg border border-warning/20 bg-warning-subtle p-3 text-warning-subtle-fg text-sm",
-			),
-		],
-		[
-			IconWarning(h, { className: "mt-0.5 size-4 shrink-0" }),
-			h.div(
-				[h.Class("flex min-w-0 flex-col gap-1")],
-				[
-					h.p([h.Class("font-medium")], ["Waiting for approval in T3 Code"]),
-					item.title === null && item.text === ""
-						? h.empty
-						: h.p([h.Class("opacity-90")], [item.title ?? item.text]),
-					externalLink === null
-						? h.empty
-						: h.a(
-								[
-									h.Href(externalLink),
-									h.Attribute("target", "_blank"),
-									h.Attribute("rel", "noopener noreferrer"),
-									h.Class("w-fit font-medium underline underline-offset-2"),
-								],
+	callout(
+		h,
+		{
+			intent: "warning",
+			title: "Waiting for approval in T3 Code",
+			actions:
+				externalLink === null
+					? undefined
+					: [
+							link(
+								h,
+								{
+									href: externalLink,
+									className: "w-fit underline underline-offset-2",
+									attributes: [
+										h.Attribute("target", "_blank"),
+										h.Attribute("rel", "noopener noreferrer"),
+									],
+								},
 								["Open in T3 Code"],
 							),
-				],
-			),
-		],
+						],
+		},
+		item.title === null && item.text === "" ? [] : [item.title ?? item.text],
 	)
 
 const workingIndicator = (h: H): Html =>
@@ -602,16 +587,7 @@ const workingIndicator = (h: H): Html =>
 		],
 	)
 
-const threadError = (h: H, message: string): Html =>
-	h.div(
-		[
-			h.Role("alert"),
-			h.Class(
-				"flex items-start gap-2 rounded-lg border border-danger/15 bg-danger/5 p-3 text-danger text-sm",
-			),
-		],
-		[IconWarning(h, { className: "mt-0.5 size-4 shrink-0" }), h.p([], [message])],
-	)
+const threadError = (h: H, message: string): Html => callout(h, { intent: "danger" }, [message])
 
 const newChat = (h: H, suggestions: ReadonlyArray<string>, isSending: boolean): Html =>
 	h.div(
@@ -792,7 +768,9 @@ const composer = (h: H, model: Model, inputs: ViewInputs): Html => {
 			h.form(
 				[
 					h.Class(
-						"flex flex-col rounded-xl border border-border bg-bg shadow-sm transition-colors focus-within:border-ring/70",
+						cardClassName(
+							"flex flex-col shadow-sm transition-colors focus-within:border-ring/70",
+						),
 					),
 					h.OnSubmit(Message.SubmittedComposer()),
 				],
@@ -818,30 +796,26 @@ const composer = (h: H, model: Model, inputs: ViewInputs): Html => {
 								[engineLabel === null ? "T3 Code" : `T3 Code · ${engineLabel}`],
 							),
 							canStop
-								? button(
+								? iconButton(
 										h,
 										{
+											label: "Stop",
 											intent: "secondary",
-											size: "sq-sm",
 											onPress: Message.ClickedStop(),
 											isPending: model.isStopping,
-											attributes: [h.AriaLabel("Stop"), h.Attribute("title", "Stop")],
 										},
-										[h.span([h.Class("size-2.5 rounded-xs bg-current")], [])],
+										h.span([h.Class("size-2.5 rounded-xs bg-current")], []),
 									)
-								: button(
+								: iconButton(
 										h,
 										{
-											size: "sq-sm",
+											label: "Send",
+											intent: "primary",
 											isDisabled: model.draft.trim() === "",
 											isPending: isSending,
-											attributes: [
-												h.Type("submit"),
-												h.AriaLabel("Send"),
-												h.Attribute("title", "Send"),
-											],
+											attributes: [h.Type("submit")],
 										},
-										[IconArrowUp(h, { className: ICON })],
+										IconArrowUp(h, { className: ICON }),
 									),
 						],
 					),
@@ -859,23 +833,32 @@ const sharedFooter = (h: H, thread: ThreadRow): Html =>
 
 // NOT CONNECTED
 
-const connectState = (h: H, model: Model, shared: Shared): Html => {
+const connectState = (h: H, model: Model, inputs: ViewInputs): Html => {
+	const { shared } = inputs
 	const isExpired = model.connection === "Expired"
+	const setupHref = shared.orgSlug === null ? null : hrefOf(integrationRoute(shared.orgSlug, "t3code"))
+	// Already on the setup page: point at its form instead of a link back to the same page.
+	const isOnSetupPage = setupHref !== null && inputs.context?.path === setupHref
 	return h.div(
 		[h.Class("flex flex-1 items-center justify-center p-6")],
 		[
 			emptyState(h, {
 				icon: (className) => IconSparkles(h, { className }),
 				title: isExpired ? "Your T3 Code sign-in expired" : "Connect T3 Code",
-				description:
-					"The assistant runs on your own T3 Code environment, so it sees what you can see. Link it in Settings to start a chat.",
+				description: isOnSetupPage
+					? isExpired
+						? "Reconnect your environment on this page to keep chatting."
+						: "Link your environment on this page, then chat with an agent that sees what you can see."
+					: isExpired
+						? "Sign in to T3 Code again to keep chatting with your environment."
+						: "The assistant runs on your own T3 Code environment, so it sees what you can see.",
 				action:
-					shared.orgSlug === null
+					setupHref === null || isOnSetupPage
 						? undefined
 						: h.a(
 								[
 									h.Id(SETUP_ID),
-									h.Href(hrefOf(integrationRoute(shared.orgSlug, "t3code"))),
+									h.Href(setupHref),
 									h.Class(buttonClassName({ size: "sm" })),
 									// On a phone the sheet covers the page it opens: close it on the way.
 									...(shared.isMobile ? [h.OnClick(Message.ClickedClose())] : []),
@@ -913,7 +896,7 @@ const content = (h: H, model: Model, inputs: ViewInputs): ReadonlyArray<Html> =>
 			model.connection === "Checking" && model.threadId === null
 				? [checkingState(h)]
 				: !isConnected && model.threadId === null
-					? [connectState(h, model, inputs.shared)]
+					? [connectState(h, model, inputs)]
 					: [
 							timeline(h, model, inputs),
 							thread !== null && isReadOnly(model, inputs.shared)

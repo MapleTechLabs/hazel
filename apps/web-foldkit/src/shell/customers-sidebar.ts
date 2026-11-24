@@ -48,6 +48,7 @@ import {
 } from "../ui/sidebar"
 import type { SidebarChrome } from "./channels-sidebar"
 import type { ShellContext } from "./context"
+import { countBadge } from "../ui/count-badge"
 import { type DestinationId, destination, destinationHref, isAvailable } from "./destinations"
 import { userMenuFooter } from "./menus"
 
@@ -334,16 +335,12 @@ export const subscriptions = Subscription.aggregate(rows, dragSubscriptions)
 const SECTION_ACTIVE = "bg-sidebar-accent font-medium text-sidebar-accent-fg"
 
 const badge = <M>(h: HtmlBuilder<M>, count: number): Html =>
-	h.span(
-		[
-			h.Attribute("data-slot", "sidebar-badge"),
-			h.AriaLabel(`${count} open`),
-			h.Class(
-				"ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 font-medium text-2xs text-primary-fg tabular-nums",
-			),
-		],
-		[count > 99 ? "99+" : String(count)],
-	)
+	countBadge(h, {
+		count,
+		isCapped: true,
+		className: "ml-auto",
+		attributes: [h.Attribute("data-slot", "sidebar-badge"), h.AriaLabel(`${count} open`)],
+	})
 
 /** The list route's view key (`current` for none) when the list shows, else undefined. */
 const listViewOf = (route: AppRoute): string | undefined =>

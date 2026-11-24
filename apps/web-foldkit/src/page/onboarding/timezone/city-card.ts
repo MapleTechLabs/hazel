@@ -1,6 +1,8 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import type { TimezoneCity } from "~/utils/timezone"
 import { IconCheck, IconMapPin, IconSparkles } from "../../../icons"
+import { ariaButton } from "../../../ui/button"
+import { heading } from "../../../ui/heading"
 import { Message } from "../message"
 import { enterAnimation } from "../enter-animation"
 
@@ -25,21 +27,21 @@ export const cityCard = (
 ): Html => {
 	const { city, isSelected } = options
 	const muted = isSelected ? "text-primary-fg/70" : "text-muted-fg"
-	return h.button(
-		[
-			h.Key(city.timezone),
-			h.Type("button"),
-			h.OnClick(Message.ClickedCity({ timezone: city.timezone })),
-			h.OnMouseEnter(Message.HoveredOffset({ offset: city.offset })),
-			h.OnMouseLeave(Message.HoveredOffset({ offset: null })),
-			h.Class(
-				`relative p-4 rounded-xl text-left transition-[border-color,background-color,box-shadow,scale] active:scale-[0.98] ${
-					isSelected
-						? "bg-primary text-primary-fg ring-2 ring-inset ring-primary/30"
-						: "bg-bg hover:bg-secondary border border-border hover:border-primary/50"
-				}`,
-			),
-		],
+	return ariaButton(
+		h,
+		{
+			onPress: Message.ClickedCity({ timezone: city.timezone }),
+			attributes: [
+				h.Key(city.timezone),
+				h.OnMouseEnter(Message.HoveredOffset({ offset: city.offset })),
+				h.OnMouseLeave(Message.HoveredOffset({ offset: null })),
+			],
+			className: `relative p-4 rounded-xl text-left transition-[border-color,background-color,box-shadow,scale] active:scale-[0.98] ${
+				isSelected
+					? "bg-primary text-primary-fg ring-2 ring-inset ring-primary/30"
+					: "bg-bg hover:bg-secondary border border-border hover:border-primary/50"
+			}`,
+		},
 		[
 			...(options.isDetected && !isSelected
 				? [
@@ -79,8 +81,13 @@ export const cityCard = (
 					),
 				],
 			),
-			h.h3(
-				[h.Class(`font-semibold mb-1 truncate ${isSelected ? "text-primary-fg" : "text-fg"}`)],
+			heading(
+				h,
+				{
+					variant: "section",
+					level: 3,
+					className: `mb-1 truncate ${isSelected ? "text-primary-fg" : "text-fg"}`,
+				},
 				[city.name],
 			),
 			h.div(

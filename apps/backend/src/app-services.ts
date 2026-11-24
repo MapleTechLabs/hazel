@@ -62,6 +62,7 @@ import { ChannelViewers } from "./services/channel-viewers"
 import { ChatSyncAttributionReconciler } from "./services/chat-sync/chat-sync-attribution-reconciler"
 import { ChatSyncInstallations } from "./services/chat-sync/chat-sync-installations"
 import { HtmlRenders } from "./services/html-renders"
+import { OrgExports } from "./services/org-exports"
 import { IntegrationTokenService } from "./services/integration-token-service"
 import { IntegrationBotService } from "./services/integrations/integration-bot-service"
 import { Invitations } from "./services/invitations"
@@ -130,6 +131,7 @@ export const AppServicesLive = Layer.mergeAll(
 	PolicyLive,
 	ObjectStorage.layer,
 	HtmlRenders.layer,
+	OrgExports.layer,
 	GitHub.GitHubAppJWTService.layer,
 	GitHub.GitHubApiClient.layer,
 	Discord.DiscordApiClient.layer,

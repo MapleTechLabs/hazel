@@ -6,6 +6,7 @@ import { cn } from "~/lib/utils"
 import type { ViewerUrlImage } from "../../page/chat/overlays"
 import { type MessageRow, type ReplyPreview, UrlEmbed } from "../../page/chat/rows"
 import { avatar } from "../../ui/avatar"
+import { ariaButton } from "../../ui/button"
 import { attachmentsView } from "../attachments"
 import { messageEmbedsView } from "../embeds"
 import { liveView } from "../embeds/live-view"
@@ -74,17 +75,14 @@ export const avatarButton = <M>(
 	row: MessageRow,
 	attributes: ReadonlyArray<ChildAttribute>,
 ) =>
-	h.button(
-		[...attributes, h.Class("size-fit outline-hidden")],
-		[
-			avatar(h, {
-				size: "md",
-				alt: row.author.displayName || undefined,
-				src: row.author.avatarUrl,
-				seed: row.author.displayName || undefined,
-			}),
-		],
-	)
+	ariaButton(h, { className: "size-fit outline-hidden", attributes }, [
+		avatar(h, {
+			size: "md",
+			alt: row.author.displayName || undefined,
+			src: row.author.avatarUrl,
+			seed: row.author.displayName || undefined,
+		}),
+	])
 
 /** One URL embed; tweet photos and GIFs open the image viewer. */
 const urlEmbedView = <M>(
@@ -152,7 +150,7 @@ const contentView = <M>(h: HtmlBuilder<M>, row: MessageRow, context: RowContext<
 const threadSpineView = <M>(h: HtmlBuilder<M>): Html =>
 	h.div([
 		h.Class(
-			"pointer-events-none absolute top-12 bottom-[28px] left-[19px] w-[31px] rounded-bl-[10px] border-border border-b-2 border-l-2",
+			"pointer-events-none absolute top-12 bottom-[28px] left-[19px] w-[31px] rounded-bl-xl border-border border-b-2 border-l-2",
 		),
 		h.Attribute("aria-hidden", "true"),
 	])

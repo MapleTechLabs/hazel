@@ -7,7 +7,9 @@ import { ariaRadioGroup } from "../../../ui/aria-radio"
 import { button } from "../../../ui/button"
 import { view as selectView } from "../../../ui/select-view"
 import type { PageViewInputs } from "../../contract"
-import { divider, pageHeader, settingsRow } from "../shared"
+import { pageHeader, pageLayout } from "../../../ui/page-header"
+import { separator } from "../../../ui/separator"
+import { settingsRow } from "../shared"
 import { generateIcon, grayPalettePreview, radiusOption, remixOptionCard, themePresetCard } from "./cards"
 import { Message } from "./message"
 import type { Model, ThemeMode } from "./model"
@@ -216,7 +218,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 									[
 										h.Class(
 											twMerge(
-												"relative h-33 w-50 rounded-[10px] bg-secondary max-md:aspect-[200/132] max-md:h-auto max-md:w-full",
+												"relative h-33 w-50 rounded-xl bg-secondary max-md:aspect-[200/132] max-md:h-auto max-md:w-full",
 												isSelected && "outline-2 outline-ring outline-offset-2",
 											),
 										),
@@ -258,50 +260,56 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	)
 
 	return h.form(
-		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
+		[],
 		[
-			pageHeader(h, "Appearance", "Change how your dashboard looks and feels."),
-			h.div(
-				[h.Class("flex flex-col gap-5")],
-				[
-					settingsRow(
-						h,
-						{
-							title: "Theme presets",
-							description: "Choose a pre-designed theme or customize your own.",
-						},
-						presets,
-					),
-					divider(h),
-					settingsRow(
-						h,
-						{ title: "Remix", description: "Generate random theme combinations." },
-						remix,
-					),
-					divider(h),
-					settingsRow(
-						h,
-						{ title: "Brand color", description: "Select or customize your brand color." },
-						brandColor,
-					),
-					settingsRow(
-						h,
-						{ title: "Gray palette", description: "Choose the undertone for gray colors." },
-						grayPalette,
-					),
-					settingsRow(
-						h,
-						{ title: "Border radius", description: "Adjust the roundness of UI elements." },
-						radius,
-					),
-					divider(h),
-					settingsRow(
-						h,
-						{ title: "Display mode", description: "Switch between light and dark modes." },
-						displayMode,
-					),
-				],
-			),
+			pageLayout(h, {}, [
+				pageHeader(h, {
+					title: "Appearance",
+					subtitle: "Change how your dashboard looks and feels.",
+					size: "title",
+				}),
+				h.div(
+					[h.Class("flex flex-col gap-5")],
+					[
+						settingsRow(
+							h,
+							{
+								title: "Theme presets",
+								description: "Choose a pre-designed theme or customize your own.",
+							},
+							presets,
+						),
+						separator(h),
+						settingsRow(
+							h,
+							{ title: "Remix", description: "Generate random theme combinations." },
+							remix,
+						),
+						separator(h),
+						settingsRow(
+							h,
+							{ title: "Brand color", description: "Select or customize your brand color." },
+							brandColor,
+						),
+						settingsRow(
+							h,
+							{ title: "Gray palette", description: "Choose the undertone for gray colors." },
+							grayPalette,
+						),
+						settingsRow(
+							h,
+							{ title: "Border radius", description: "Adjust the roundness of UI elements." },
+							radius,
+						),
+						separator(h),
+						settingsRow(
+							h,
+							{ title: "Display mode", description: "Switch between light and dark modes." },
+							displayMode,
+						),
+					],
+				),
+			]),
 		],
 	)
 })

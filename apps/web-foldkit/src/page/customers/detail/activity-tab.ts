@@ -7,11 +7,11 @@ import { twMerge } from "tailwind-merge"
 import { calendarHeatmap, heatLegend } from "../../../customers/charts/calendar-heatmap"
 import { formatDayLong } from "../../../customers/format"
 import { msOf } from "../../../customers/queries"
-import { segmentClass, segmentedTrackClass } from "../../../customers/ui/filter-bar"
+import { segmentClass, segmentedTrackClass } from "../../../ui/segmented-control"
 import { sourceLabel } from "../../../customers/providers"
 import { sourceLogo, sourceMark } from "../../../customers/ui/identity"
 import { IconChevronDown } from "../../../icons"
-import { button } from "../../../ui/button"
+import { ariaButton, button } from "../../../ui/button"
 import { heading } from "../../../ui/heading"
 import { menuLabel } from "../../../ui/menu-view"
 import { RevealCalendarDay } from "./commands"
@@ -19,7 +19,11 @@ import { eventDetail } from "./event-detail"
 import { Message } from "./message"
 import { type EventType, eventTypeEntries, type Model } from "./model"
 import { noteBody } from "./overview-tab"
-import { type Context, memberOf, menu, pageFooter, skeletonRows } from "./parts"
+import { type Context, memberOf, pageFooter, skeletonRows } from "./parts"
+import { menu } from "../shared-view"
+import { emptyState } from "../../../ui/empty-state"
+import { skeleton } from "../../../ui/skeleton"
+import { cardClassName } from "../../../ui/card"
 
 /** The activity tab: the account's timeline by day, filtered by source and type, paged. */
 
@@ -127,22 +131,20 @@ const yearCalendar = (h: HtmlBuilder<Message>, model: Model): Html => {
 			),
 			points === undefined
 				? failed
-					? h.div(
-							[h.Class("flex flex-col items-center gap-3 py-8 text-muted-fg text-sm")],
-							[
-								h.p([], ["Couldn't load activity."]),
-								button(
-									h,
-									{
-										intent: "outline",
-										size: "sm",
-										onPress: Message.PressedRetryYearActivity(),
-									},
-									["Try again"],
-								),
-							],
-						)
-					: h.div([h.Class("aspect-[7/1] w-full animate-pulse rounded-lg bg-secondary/40")])
+					? emptyState(h, {
+							title: "Couldn't load activity.",
+							action: button(
+								h,
+								{
+									intent: "outline",
+									size: "sm",
+									onPress: Message.PressedRetryYearActivity(),
+								},
+								["Try again"],
+							),
+							className: "py-8",
+						})
+					: skeleton(h, "aspect-[7/1] w-full rounded-lg")
 				: calendarHeatmap(h, {
 						points,
 						ariaLabel: `Daily active users over the last year: ${description}`,
@@ -186,14 +188,13 @@ const filters = (h: HtmlBuilder<Message>, model: Model): Html =>
 				],
 				SOURCES.map((source) => {
 					const isSelected = source === model.eventProvider
-					return h.button(
-						[
-							h.Type("button"),
-							h.Role("radio"),
-							h.AriaChecked(isSelected),
-							h.OnClick(Message.ClickedEventProvider({ provider: source })),
-							h.Class(segmentClass(isSelected)),
-						],
+					return ariaButton(
+						h,
+						{
+							onPress: Message.ClickedEventProvider({ provider: source }),
+							className: segmentClass(isSelected),
+							attributes: [h.Role("radio"), h.AriaChecked(isSelected)],
+						},
 						source === null ? ["All"] : [sourceLogo(h, source, "size-3.5"), sourceLabel(source)],
 					)
 				}),
@@ -236,32 +237,20 @@ export const activityTab = (h: HtmlBuilder<Message>, model: Model, context: Cont
 			[
 				...(status === "Loading" && items.length === 0 ? skeletonRows(h, 6) : []),
 				...(status === "Loaded" && items.length === 0
-					? [
-							h.p(
-								[
-									h.Class(
-										"rounded-xl border border-border py-12 text-center text-muted-fg text-sm",
-									),
-								],
-								["No events match."],
-							),
-						]
+					? [emptyState(h, { title: "No events match.", className: cardClassName("py-12") })]
 					: []),
 				...[...groups.values()].map((events) => {
-					const [heading, date] = dayHeading(msOf(events[0].occurredAt), context.nowMs)
+					const [day, date] = dayHeading(msOf(events[0].occurredAt), context.nowMs)
 					return h.section(
 						[h.Class("flex flex-col")],
 						[
-							h.h3(
-								[
-									h.Class(
-										"flex items-baseline gap-2 border-border border-b pt-4 pb-2 text-sm",
-									),
-								],
-								[
-									h.span([h.Class("font-semibold text-fg")], [heading]),
-									h.span([h.Class("text-muted-fg")], [date]),
-								],
+							heading(
+								h,
+								{
+									variant: "subsection",
+									className: "flex items-baseline gap-2 border-border border-b pt-4 pb-2",
+								},
+								[day, h.span([h.Class("font-normal text-muted-fg")], [date])],
 							),
 							h.ul(
 								[h.Class("flex flex-col")],

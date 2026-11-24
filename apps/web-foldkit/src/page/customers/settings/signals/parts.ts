@@ -2,59 +2,24 @@ import type * as Customers from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { SEVERITY_LABEL, severityGlyph } from "../../../../customers/ui/badges"
-import { segmentClass, segmentedTrackClass } from "../../../../customers/ui/filter-bar"
+import { ariaButton } from "../../../../ui/button"
+import { fieldError as kitFieldError } from "../../../../ui/field"
+import { iconTile } from "../../../../ui/icon-tile"
 import { inputElement } from "../../../../ui/input"
+import { segmentClass, segmentedTrackClass } from "../../../../ui/segmented-control"
 import { TEMPLATE_ICON } from "./describe"
 import type { Message } from "./message"
-import { heading } from "../../../../ui/heading"
 
 /** View pieces the list, the picker and the editor share. */
 
 type H = HtmlBuilder<Message>
 
-export const card = (
-	h: H,
-	options: Readonly<{ title?: string; aside?: Html | null; className?: string }>,
-	children: ReadonlyArray<Html>,
-): Html =>
-	h.section(
-		[
-			h.Class(
-				twMerge(
-					"flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-bg p-4 sm:p-5",
-					options.className,
-				),
-			),
-		],
-		[
-			...(options.title === undefined
-				? []
-				: [
-						h.header(
-							[h.Class("flex flex-wrap items-center justify-between gap-2")],
-							[
-								heading(h, { variant: "section" }, [options.title]),
-								...(options.aside == null ? [] : [options.aside]),
-							],
-						),
-					]),
-			...children,
-		],
-	)
-
 /** The template's glyph on a tile. */
 export const templateTile = (h: H, template: Customers.SignalTemplate, className?: string): Html =>
-	h.span(
-		[
-			h.AriaHidden(true),
-			h.Class(
-				twMerge(
-					"inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-fg-2",
-					className,
-				),
-			),
-		],
-		[TEMPLATE_ICON[template](h, { className: "size-4" })],
+	iconTile(
+		h,
+		{ size: "sm", className: twMerge("border-0 text-fg-2", className) },
+		TEMPLATE_ICON[template](h),
 	)
 
 export const errorIdOf = (id: string) => `${id}-error`
@@ -87,7 +52,7 @@ export const numberInput = (
 	})
 
 export const fieldError = (h: H, id: string, error: string | undefined): ReadonlyArray<Html> =>
-	error === undefined ? [] : [h.p([h.Id(errorIdOf(id)), h.Class("text-danger-subtle-fg text-xs")], [error])]
+	error === undefined ? [] : [kitFieldError(h, { id: errorIdOf(id), className: "text-xs" }, [error])]
 
 /** `▂ Low  ▂▄ Medium  ▂▄▆ High` as a radio group. */
 export const severityPicker = (
@@ -102,38 +67,15 @@ export const severityPicker = (
 		[h.Role("radiogroup"), h.AriaLabel("Severity"), h.Class(segmentedTrackClass)],
 		(["low", "medium", "high"] as const).map((severity) => {
 			const isSelected = severity === options.selected
-			return h.button(
-				[
-					h.Type("button"),
-					h.Role("radio"),
-					h.AriaChecked(isSelected),
-					...(options.isDisabled ? [h.Disabled(true)] : [h.OnClick(options.onSelect(severity))]),
-					h.Class(segmentClass(isSelected)),
-				],
+			return ariaButton(
+				h,
+				{
+					isDisabled: options.isDisabled,
+					onPress: options.onSelect(severity),
+					attributes: [h.Role("radio"), h.AriaChecked(isSelected)],
+					className: segmentClass(isSelected),
+				},
 				[severityGlyph(h, severity, { labelled: false }), SEVERITY_LABEL[severity]],
 			)
 		}),
-	)
-
-/** A pressable chip that toggles (stage and plan choices, metered metrics). */
-export const toggleChip = (
-	h: H,
-	options: Readonly<{ label: string; isPressed: boolean; isDisabled: boolean; onPress: Message }>,
-): Html =>
-	h.button(
-		[
-			h.Type("button"),
-			h.AriaPressed(options.isPressed ? "true" : "false"),
-			h.Title(options.label),
-			...(options.isDisabled ? [h.Disabled(true)] : [h.OnClick(options.onPress)]),
-			h.Class(
-				twMerge(
-					"inline-flex h-7 max-w-full cursor-pointer items-center rounded-md border border-border px-2 font-medium text-sm outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-default",
-					options.isPressed
-						? "border-primary/50 bg-primary-subtle/50 text-fg"
-						: "text-muted-fg hover:bg-secondary hover:text-fg",
-				),
-			),
-		],
-		[h.span([h.Class("truncate")], [options.label])],
 	)

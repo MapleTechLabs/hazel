@@ -522,4 +522,4 @@ export const makePresenceSim = Effect.gen(function* () {
 	return { user, channel, advance, evict, elapsed, objects, orgIds }
 }) satisfies Effect.Effect<unknown, never, Scope.Scope>
 
-export type PresenceSim = Effect.Success<typeof makePresenceSim>
+type PresenceSim = Effect.Success<typeof makePresenceSim>

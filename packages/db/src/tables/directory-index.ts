@@ -93,3 +93,23 @@ export const chatSyncIndexTable = SQLite.table("chat_sync_index", {
 	],
 })
 export type ChatSyncIndex = SQLite.SelectRowOf<typeof chatSyncIndexTable>
+
+/**
+ * The OAuth broker's routes (Hazel's own install only, `docs/self-hosting.md#brokered-integrations`):
+ * which customer instance a provider installation brokered through Hazel's apps belongs to (a Slack
+ * team id, a GitHub App installation id), so the broker relays that installation's webhooks to the
+ * instance and mints its GitHub installation tokens. Holds no tokens.
+ */
+export const oauthBrokerRoutesTable = SQLite.table("oauth_broker_routes", {
+	columns: {
+		provider: SQLite.text,
+		/** The provider's id for the installation: a Slack team id, a GitHub installation id. */
+		externalId: SQLite.text,
+		/** The instance's id in `OAUTH_BROKER_INSTANCES`. */
+		instanceId: SQLite.text,
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+	},
+	primaryKey: ["provider", "externalId"],
+	indexes: [SQLite.index("oauth_broker_routes_instance_id_idx", ["instanceId"])],
+})
+export type OAuthBrokerRoute = SQLite.SelectRowOf<typeof oauthBrokerRoutesTable>

@@ -10,6 +10,7 @@ import * as Modal from "../../../ui/modal"
 import * as ChatMigration from "../../shared/chat-migration"
 import * as ConfirmAction from "../../shared/confirm-action"
 import { ChatSyncProvider, PROVIDERS, ResourceFailure, Workspace, Workspaces } from "./providers"
+import type { StatusTone } from "../../../ui/status-dot"
 
 export const ConnectionStatus = Schema.Literals(["active", "paused", "error", "disabled"])
 export type ConnectionStatus = typeof ConnectionStatus.Type
@@ -219,13 +220,13 @@ export type Message = typeof Message.Type
 export const STATUS_CONFIG: Readonly<
 	Record<
 		ConnectionStatus,
-		{ readonly label: string; readonly dotClass: string; readonly textClass: string }
+		{ readonly label: string; readonly tone: StatusTone; readonly textClass: string }
 	>
 > = {
-	active: { label: "Active", dotClass: "bg-success", textClass: "text-success" },
-	paused: { label: "Paused", dotClass: "bg-warning", textClass: "text-warning" },
-	error: { label: "Error", dotClass: "bg-danger", textClass: "text-danger" },
-	disabled: { label: "Disabled", dotClass: "bg-secondary", textClass: "text-muted-fg" },
+	active: { label: "Active", tone: "success", textClass: "text-success" },
+	paused: { label: "Paused", tone: "warning", textClass: "text-warning" },
+	error: { label: "Error", tone: "danger", textClass: "text-danger" },
+	disabled: { label: "Disabled", tone: "neutral", textClass: "text-muted-fg" },
 }
 
 /** The add menu: one item per provider, keyed by its id. */

@@ -1,25 +1,26 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { IconCheck, IconCopy, IconPlus, IconWebhook } from "../../../icons"
+import { IconPlus, IconWebhook } from "../../../icons"
 import { avatar } from "../../../ui/avatar"
 import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
-import { loader } from "../../../ui/loader"
+import { card, cardBody, cardHeader, panel } from "../../../ui/card"
+import { copyButton } from "../../../ui/copy-button"
+import { emptyState } from "../../../ui/empty-state"
+import { iconTile } from "../../../ui/icon-tile"
 import { textField } from "../../../ui/text-field"
 import type { Shared } from "../../contract"
-import { listBody } from "./cards"
+import { CARD_HEADER_ROW, cardTitle, listBody, spinner } from "./cards"
 import { Message } from "./message"
 import { type CreateForm, type Model, rowMenuId, type Webhook } from "./model"
 import { formatDistanceToNow } from "~/lib/format-distance"
 import { rowMenu } from "./row-menu"
 import { tokenDisplay } from "./token-display"
 import { canCreate } from "./update-cards"
+import { apiUrl } from "~/config/server"
 
 /** The Custom Webhooks card: `CompactWebhookItem` and `CreateWebhookForm`. */
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
-
-const copyIcon = <M>(h: HtmlBuilder<M>, isCopied: boolean): Html =>
-	isCopied ? IconCheck(h, { className: "size-4 text-success" }) : IconCopy(h, { className: "size-4" })
+const BACKEND_URL = apiUrl()
 
 const compactWebhookItem = (
 	h: HtmlBuilder<Message>,
@@ -76,22 +77,19 @@ const compactWebhookItem = (
 			h.div(
 				[h.Class("flex shrink-0 items-center gap-1")],
 				[
-					button(
-						h,
-						{
-							intent: "plain",
-							size: "sq-xs",
-							className: "text-muted-fg max-md:size-10",
-							onPress: Message.ClickedCopy({
-								id: webhook.id,
-								value: url,
-								successMessage: "URL copied",
-								failureMessage: "Failed to copy",
-							}),
-							attributes: [h.AriaLabel("Copy webhook URL")],
-						},
-						[copyIcon(h, model.copiedIds.includes(webhook.id))],
-					),
+					copyButton(h, {
+						label: "Copy webhook URL",
+						isCopied: model.copiedIds.includes(webhook.id),
+						intent: "plain",
+						size: "sq-xs",
+						className: "text-muted-fg max-md:size-10",
+						onPress: Message.ClickedCopy({
+							id: webhook.id,
+							value: url,
+							successMessage: "URL copied",
+							failureMessage: "Failed to copy",
+						}),
+					}),
 					rowMenu(h, {
 						kind: "webhook",
 						id: webhook.id,
@@ -119,73 +117,70 @@ const createWebhookForm = (h: HtmlBuilder<Message>, model: Model, form: CreateFo
 			"Create webhook",
 		])
 	const nameError = form.name._tag === "Invalid" ? form.name.errors[0] : null
-	return h.div(
-		[h.Class("rounded-xl border border-border bg-bg p-4")],
-		[
-			h.form(
-				[h.Class("space-y-4"), h.OnSubmit(Message.SubmittedCreateForm())],
-				[
-					textField(
-						h,
-						{
-							id: "webhook-name",
-							value: form.name.value,
-							onInput: toField("name"),
-							isInvalid: nameError !== null,
-						},
-						(field) => [
-							field.label(["Name"]),
-							field.description(["A display name for this webhook"]),
-							field.input({ placeholder: "My Webhook" }),
-							field.fieldError([nameError ?? ""]),
-						],
-					),
-					textField(
-						h,
-						{
-							id: "webhook-description",
-							value: form.description,
-							onInput: toField("description"),
-						},
-						(field) => [
-							field.label(["Description"]),
-							field.description(["Optional description for this webhook"]),
-							field.textarea({
-								placeholder: "Describe what this webhook is used for...",
-								attributes: [h.Attribute("rows", "2")],
-							}),
-						],
-					),
-					textField(
-						h,
-						{ id: "webhook-avatar", value: form.avatarUrl, onInput: toField("avatarUrl") },
-						(field) => [
-							field.label(["Avatar URL"]),
-							field.description(["Optional avatar image URL for the webhook bot"]),
-							field.input({ placeholder: "https://example.com/avatar.png" }),
-						],
-					),
-					h.div(
-						[h.Class("flex items-center gap-2 pt-2")],
-						[
-							button(h, { intent: "outline", onPress: Message.ClickedCancelCreateForm() }, [
-								"Cancel",
-							]),
-							button(
-								h,
-								{
-									intent: "primary",
-									isDisabled: !canCreate(form),
-									attributes: [h.Type("submit")],
-								},
-								[form.isSubmitting ? "Creating..." : "Create webhook"],
-							),
-						],
-					),
-				],
-			),
-		],
-	)
+	return panel(h, {}, [
+		h.form(
+			[h.Class("space-y-4"), h.OnSubmit(Message.SubmittedCreateForm())],
+			[
+				textField(
+					h,
+					{
+						id: "webhook-name",
+						value: form.name.value,
+						onInput: toField("name"),
+						isInvalid: nameError !== null,
+					},
+					(field) => [
+						field.label(["Name"]),
+						field.description(["A display name for this webhook"]),
+						field.input({ placeholder: "My Webhook" }),
+						field.fieldError([nameError ?? ""]),
+					],
+				),
+				textField(
+					h,
+					{
+						id: "webhook-description",
+						value: form.description,
+						onInput: toField("description"),
+					},
+					(field) => [
+						field.label(["Description"]),
+						field.description(["Optional description for this webhook"]),
+						field.textarea({
+							placeholder: "Describe what this webhook is used for...",
+							attributes: [h.Attribute("rows", "2")],
+						}),
+					],
+				),
+				textField(
+					h,
+					{ id: "webhook-avatar", value: form.avatarUrl, onInput: toField("avatarUrl") },
+					(field) => [
+						field.label(["Avatar URL"]),
+						field.description(["Optional avatar image URL for the webhook bot"]),
+						field.input({ placeholder: "https://example.com/avatar.png" }),
+					],
+				),
+				h.div(
+					[h.Class("flex items-center gap-2 pt-2")],
+					[
+						button(h, { intent: "outline", onPress: Message.ClickedCancelCreateForm() }, [
+							"Cancel",
+						]),
+						button(
+							h,
+							{
+								intent: "primary",
+								isDisabled: !canCreate(form),
+								attributes: [h.Type("submit")],
+							},
+							[form.isSubmitting ? "Creating..." : "Create webhook"],
+						),
+					],
+				),
+			],
+		),
+	])
 }
 
 export const customWebhooksCard = (
@@ -194,67 +189,41 @@ export const customWebhooksCard = (
 	regular: ReadonlyArray<Webhook>,
 	shared: Shared,
 ): Html =>
-	h.div(
-		[h.Class("rounded-xl border border-border bg-bg")],
-		[
-			h.div(
-				[h.Class("flex items-center justify-between border-border border-b p-4 max-md:gap-3")],
-				[
-					h.div(
-						[h.Class("flex items-center gap-3")],
-						[
-							h.div(
-								[h.Class("flex size-10 items-center justify-center rounded-lg bg-secondary")],
-								[IconWebhook(h, { className: "size-5 text-muted-fg" })],
-							),
-							h.div(
-								[],
-								[
-									h.div(
-										[h.Class("flex items-center gap-2")],
-										[
-											h.span([h.Class("font-medium text-fg")], ["Custom Webhooks"]),
-											...(regular.length > 0
-												? [badge(h, { intent: "secondary" }, [`${regular.length}`])]
-												: []),
-										],
-									),
-									h.p(
-										[h.Class("text-muted-fg text-sm")],
-										["Allow external services to post messages"],
-									),
-								],
-							),
-						],
-					),
-				],
-			),
-			h.div(
-				[h.Class("p-4")],
-				[
-					listBody(h, "webhook", model.webhooks.data, {
-						loading: () =>
-							h.div(
-								[h.Class("flex items-center justify-center py-6")],
-								[loader(h, { className: "size-5" })],
-							),
-						empty: () =>
-							h.div(
-								[
-									h.Class(
-										"mb-4 rounded-lg border border-border border-dashed py-6 text-center",
-									),
-								],
-								[h.p([h.Class("text-muted-fg text-sm")], ["No webhooks yet"])],
-							),
-						rows: () =>
-							h.div(
-								[h.Class("mb-4 flex flex-col gap-2")],
-								regular.map((webhook) => compactWebhookItem(h, model, webhook, shared)),
-							),
+	card(h, {}, [
+		cardHeader(
+			h,
+			[
+				h.div(
+					[h.Class("flex items-center gap-3")],
+					[
+						iconTile(h, { size: "md" }, IconWebhook(h)),
+						cardTitle(
+							h,
+							"Custom Webhooks",
+							regular.length > 0
+								? [badge(h, { intent: "secondary" }, [`${regular.length}`])]
+								: [],
+							"Allow external services to post messages",
+						),
+					],
+				),
+			],
+			CARD_HEADER_ROW,
+		),
+		cardBody(h, [
+			listBody(h, "webhook", model.webhooks.data, {
+				loading: () => spinner(h),
+				empty: () =>
+					emptyState(h, {
+						title: "No webhooks yet",
+						className: "mb-4 rounded-lg border border-border border-dashed py-6",
 					}),
-					createWebhookForm(h, model, model.createForm),
-				],
-			),
-		],
-	)
+				rows: () =>
+					h.div(
+						[h.Class("mb-4 flex flex-col gap-2")],
+						regular.map((webhook) => compactWebhookItem(h, model, webhook, shared)),
+					),
+			}),
+			createWebhookForm(h, model, model.createForm),
+		]),
+	])

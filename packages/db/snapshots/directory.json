@@ -1,5 +1,5 @@
 {
-	"migration": "0006_email_inboxes",
+	"migration": "0007_oauth_broker_routes",
 	"entities": [
 		{
 			"kind": "table",
@@ -151,6 +151,13 @@
 			"name": "membership_index",
 			"primaryKey": {
 				"columns": ["userId", "organizationId"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "oauth_broker_routes",
+			"primaryKey": {
+				"columns": ["provider", "externalId"]
 			}
 		},
 		{
@@ -2024,6 +2031,42 @@
 		},
 		{
 			"kind": "column",
+			"table": "oauth_broker_routes",
+			"name": "provider",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "oauth_broker_routes",
+			"name": "externalId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "oauth_broker_routes",
+			"name": "instanceId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "oauth_broker_routes",
+			"name": "createdAt",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
 			"table": "org_index",
 			"name": "id",
 			"position": 0,
@@ -2697,6 +2740,13 @@
 			"name": "membership_index_organization_id_idx",
 			"unique": false,
 			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "oauth_broker_routes",
+			"name": "oauth_broker_routes_instance_id_idx",
+			"unique": false,
+			"columns": ["\"instanceId\""]
 		},
 		{
 			"kind": "index",

@@ -6,21 +6,27 @@ import { IconLock, IconTrash } from "../../../../icons"
 import { AppRoute, hrefOf } from "../../../../route"
 import { badge } from "../../../../ui/badge"
 import { button } from "../../../../ui/button"
+import { callout } from "../../../../ui/callout"
+import { card, panel, panelHeader } from "../../../../ui/card"
 import { dialogClose, dialogFooter, dialogHeader } from "../../../../ui/dialog"
+import { emptyState } from "../../../../ui/empty-state"
+import { label as fieldLabel } from "../../../../ui/field"
 import { input } from "../../../../ui/input"
+import { link } from "../../../../ui/link"
+import { loadingState } from "../../../../ui/loader"
 import * as Modal from "../../../../ui/modal"
 import type { Shared } from "../../../contract"
-import { type Crumb, isCustomersAdmin, readOnlyNotice, settingsHeader, settingsPage } from "../shared"
+import { type Crumb, isCustomersAdmin, readOnlyNotice, settingsPage } from "../shared"
+import { pageHeader } from "../../../../ui/page-header"
 import { conditionCards } from "./condition-view"
 import { plainWords, renderParts } from "./describe"
 import { editorStatus, type EditorStatus, scopeOf } from "./draft"
 import { metricNameOf } from "./list-view"
 import { Message } from "./message"
 import { currencyOf, type Editor, type Model, type RuleForm, ruleById } from "./model"
-import { card, errorIdOf, fieldError, severityPicker, templateTile } from "./parts"
+import { errorIdOf, fieldError, severityPicker, templateTile } from "./parts"
 import { previewCard } from "./preview-view"
 import { scopeCard } from "./scope-view"
-import { heading } from "../../../../ui/heading"
 
 /** The rule editor (Wonder `ati`, `mia`): the rule, its condition and scope, and the live preview. */
 
@@ -51,9 +57,11 @@ const crumbs = (shared: Shared, isNew: boolean, hasChanges = false): ReadonlyArr
 }
 
 const label = (h: H, text: string, forId?: string): Html =>
-	forId === undefined
-		? h.span([h.Class("font-medium text-fg text-sm")], [text])
-		: h.label([h.For(forId), h.Class("font-medium text-fg text-sm")], [text])
+	fieldLabel(
+		h,
+		{ htmlFor: forId, elementType: forId === undefined ? "span" : "label", className: "font-medium" },
+		[text],
+	)
 
 const help = (h: H, text: string): Html => h.p([h.Class("text-muted-fg text-xs")], [text])
 
@@ -112,33 +120,30 @@ const actions = (
 // CARDS
 
 const plainWordsCard = (h: H, model: Model, form: RuleForm): Html =>
-	h.section(
-		[h.Class("flex flex-col gap-2 rounded-xl border border-primary/20 bg-primary-subtle/40 p-4 sm:p-5")],
-		[
-			h.h2([h.Class("font-semibold text-primary-subtle-fg text-xs")], ["In plain words"]),
-			h.p(
-				[h.Class("text-fg-2 text-sm/6")],
-				[
-					...renderParts(
-						h,
-						plainWords({
-							template: form.template,
-							config: form.config,
-							scope: scopeOf(form.scope, currencyOf(model)),
-							severity: form.severity,
-							currency: currencyOf(model),
-							metricName: metricNameOf(model),
-						}),
-					),
-				],
-			),
-		],
-	)
+	callout(h, { intent: "info", title: "In plain words", className: "p-4 sm:p-5" }, [
+		h.p(
+			[h.Class("text-fg-2 text-sm/6")],
+			[
+				...renderParts(
+					h,
+					plainWords({
+						template: form.template,
+						config: form.config,
+						scope: scopeOf(form.scope, currencyOf(model)),
+						severity: form.severity,
+						currency: currencyOf(model),
+						metricName: metricNameOf(model),
+					}),
+				),
+			],
+		),
+	])
 
 const ruleCard = (h: H, form: RuleForm, status: EditorStatus, isAdmin: boolean): Html => {
 	const meta = Customers.TEMPLATES[form.template]
 	const nameError = status.errors.name
-	return card(h, { title: "Rule", className: "@container" }, [
+	return panel(h, { className: "@container" }, [
+		panelHeader(h, { title: "Rule" }),
 		h.div(
 			[h.Class("grid grid-cols-1 gap-5 @lg:grid-cols-2")],
 			[
@@ -202,24 +207,12 @@ const ruleCard = (h: H, form: RuleForm, status: EditorStatus, isAdmin: boolean):
 }
 
 const deleteCard = (h: H, editor: Editor): Html =>
-	h.section(
-		[
-			h.Class(
-				"flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-bg p-4 sm:p-5",
-			),
-		],
-		[
-			h.div(
-				[h.Class("flex flex-col gap-0.5")],
-				[
-					heading(h, { variant: "subsection", level: 2 }, ["Delete this rule"]),
-					h.p(
-						[h.Class("text-muted-fg text-xs")],
-						["Its open items in Needs attention resolve on their own."],
-					),
-				],
-			),
-			button(
+	panel(h, {}, [
+		panelHeader(h, {
+			title: "Delete this rule",
+			description: "Its open items in Needs attention resolve on their own.",
+			className: "items-center",
+			aside: button(
 				h,
 				{
 					intent: "outline",
@@ -229,8 +222,8 @@ const deleteCard = (h: H, editor: Editor): Html =>
 				},
 				[IconTrash(h, { attributes: { "data-slot": "icon" } }), "Delete rule"],
 			),
-		],
-	)
+		}),
+	])
 
 // MODALS
 
@@ -279,28 +272,18 @@ const deleteModal = (h: H, model: Model, editor: Editor, form: RuleForm): Html =
 
 const placeholder = (h: H, shared: Shared, title: string, text: string, withLink: boolean): Html =>
 	settingsPage(h, [
-		settingsHeader(h, { title, crumbs: crumbs(shared, false) }),
-		h.div(
-			[
-				h.Class(
-					"flex flex-col items-center gap-2 rounded-xl border border-border bg-bg px-5 py-12 text-center",
-				),
-			],
-			[
-				h.p([h.Class("text-muted-fg text-sm")], [text]),
-				...(withLink
-					? [
-							h.a(
-								[
-									h.Href(listHref(shared)),
-									h.Class("font-medium text-primary text-sm hover:underline"),
-								],
-								["Back to signals"],
-							),
-						]
-					: []),
-			],
-		),
+		pageHeader(h, { title, crumbs: crumbs(shared, false) }),
+		card(h, {}, [
+			withLink
+				? emptyState(h, {
+						title: text,
+						className: "py-12",
+						action: link(h, { href: listHref(shared), className: "font-medium text-sm" }, [
+							"Back to signals",
+						]),
+					})
+				: loadingState(h, { label: text }),
+		]),
 	])
 
 export const editorView = (h: H, model: Model, editor: Editor, shared: Shared): Html => {
@@ -330,7 +313,7 @@ export const editorView = (h: H, model: Model, editor: Editor, shared: Shared): 
 		[h.Class("h-full")],
 		[
 			settingsPage(h, [
-				settingsHeader(h, {
+				pageHeader(h, {
 					title: form.name.trim() === "" ? Customers.TEMPLATES[form.template].name : form.name,
 					crumbs: crumbs(shared, editor.ruleId === null, status.changes > 0),
 					leading: templateTile(h, form.template, "size-9"),

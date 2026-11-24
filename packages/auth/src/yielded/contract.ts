@@ -117,3 +117,20 @@ export const nativeHeaders = {
 	clientHeader: "x-auth-client",
 	clientValue: "hazel-desktop",
 } as const
+
+/** The sign-in providers an install can offer, in the order the sign-in page lists them. */
+export const SignInProvider = Schema.Literals(["github", "google"])
+export type SignInProvider = typeof SignInProvider.Type
+
+/**
+ * `GET /auth/providers` (public): the sign-in methods this install offers, so the sign-in page
+ * shows only the providers it has OAuth apps for.
+ */
+export const authProviders = {
+	path: "/auth/providers",
+	schema: Schema.Struct({
+		providers: Schema.Array(SignInProvider),
+		passkeys: Schema.Boolean,
+	}),
+} as const
+export type AuthProviders = typeof authProviders.schema.Type

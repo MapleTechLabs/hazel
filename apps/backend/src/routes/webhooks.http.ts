@@ -14,6 +14,7 @@ import { Cause, Config, Effect, Option, pipe, Redacted, Schema } from "effect"
 import { HazelApi } from "../api"
 import { dispatchSlackEvent } from "../services/chat-sync/providers/slack/events"
 import { Directory } from "../services/directory"
+import { relayToInstance } from "../services/oauth-broker/broker"
 import { callObject } from "../worker/objects/calls"
 import { orgTarget } from "../worker/objects/kinds"
 import { GitHubEventCall, GitHubInstallationCall } from "../worker/objects/org/github-webhooks"
@@ -129,10 +130,46 @@ export const dispatchGitHubEvent = Effect.fn("GitHubWebhook.dispatch")(
 	}),
 )
 
+const slackEventFailed = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+	effect.pipe(
+		Effect.catchCause((cause) =>
+			Cause.hasInterruptsOnly(cause)
+				? Effect.interrupt
+				: Effect.logError("Slack event failed", cause).pipe(
+						Effect.andThen(
+							Effect.fail(new InternalServerError({ message: "Slack event failed" })),
+						),
+					),
+		),
+	)
+
+/**
+ * A verified Slack delivery's body, applied here: the URL check answered, an event dispatched to
+ * chat sync. Also what a delivery relayed by the OAuth broker runs (`routes/oauth-broker.http.ts`).
+ */
+export const applySlackDelivery = Effect.fn("SlackWebhook.apply")(function* (rawBody: string) {
+	const invalid = (message: string) => new InvalidSlackWebhookSignature({ message })
+	const body = yield* decodeJson(rawBody).pipe(Effect.mapError(() => invalid("Body is not JSON")))
+	const envelope = Slack.decodeSlackEnvelope(body)
+	if (Option.isNone(envelope)) return new SlackWebhookResponse({ ok: true })
+	switch (envelope.value._tag) {
+		case "UrlVerification":
+			return new SlackWebhookResponse({ ok: true, challenge: envelope.value.challenge })
+		case "Other":
+			yield* Effect.logInfo("Slack delivery skipped", { type: envelope.value.type })
+			return new SlackWebhookResponse({ ok: true })
+		case "EventCallback":
+			yield* dispatchSlackEvent(envelope.value).pipe(slackEventFailed)
+			return new SlackWebhookResponse({ ok: true })
+	}
+})
+
 /**
  * Slack's Events API: verify the delivery against `SLACK_SIGNING_SECRET` (on the raw body),
  * answer the URL check, then apply the event (`providers/slack/events.ts`). A failure answers 500,
- * and Slack redelivers the same `event_id`, which chat sync applies once.
+ * and Slack redelivers the same `event_id`, which chat sync applies once. On Hazel's own install
+ * with the OAuth broker on, a workspace brokered to a customer instance has its events relayed
+ * there instead (`services/oauth-broker/broker.ts`).
  */
 export const handleSlackDelivery = Effect.gen(function* () {
 	const request = yield* HttpServerRequest.HttpServerRequest
@@ -157,28 +194,55 @@ export const handleSlackDelivery = Effect.gen(function* () {
 	}
 	const body = yield* decodeJson(rawBody).pipe(Effect.mapError(() => invalid("Body is not JSON")))
 	const envelope = Slack.decodeSlackEnvelope(body)
-	if (Option.isNone(envelope)) return new SlackWebhookResponse({ ok: true })
-	switch (envelope.value._tag) {
-		case "UrlVerification":
-			return new SlackWebhookResponse({ ok: true, challenge: envelope.value.challenge })
-		case "Other":
-			yield* Effect.logInfo("Slack delivery skipped", { type: envelope.value.type })
+	if (Option.isSome(envelope) && envelope.value._tag === "EventCallback") {
+		const relayed = yield* relayToInstance({
+			provider: "slack",
+			externalId: envelope.value.team_id,
+			rawBody,
+		}).pipe(
+			Effect.catchTag("DatabaseError", (cause) =>
+				Effect.fail(InternalServerError.withCause({ message: "Broker route lookup failed", cause })),
+			),
+		)
+		if (Option.isSome(relayed)) {
+			if (!relayed.value)
+				return yield* new InternalServerError({ message: "Relay to the instance failed" })
 			return new SlackWebhookResponse({ ok: true })
-		case "EventCallback":
-			yield* dispatchSlackEvent(envelope.value).pipe(
-				Effect.catchCause((cause) =>
-					Cause.hasInterruptsOnly(cause)
-						? Effect.interrupt
-						: Effect.logError("Slack event failed", cause).pipe(
-								Effect.andThen(
-									Effect.fail(new InternalServerError({ message: "Slack event failed" })),
-								),
-							),
-				),
-			)
-			return new SlackWebhookResponse({ ok: true })
+		}
 	}
+	return yield* applySlackDelivery(rawBody)
 }).pipe(Effect.withSpan("SlackWebhook.delivery"))
+
+const InstallationRef = Schema.Struct({
+	action: Schema.optional(Schema.String),
+	installation: Schema.Struct({ id: Schema.Finite }),
+})
+const decodeInstallationRef = Schema.decodeUnknownOption(InstallationRef)
+
+/**
+ * A verified GitHub delivery for an installation brokered to a customer instance, relayed there
+ * (`services/oauth-broker/broker.ts`); `none` when the install handles it itself.
+ */
+const relayGitHubDelivery = Effect.fn("GitHubWebhook.relay")(function* (input: {
+	readonly eventType: string
+	readonly deliveryId: string
+	readonly payload: unknown
+	readonly rawBody: string
+}) {
+	const ref = decodeInstallationRef(input.payload)
+	if (Option.isNone(ref)) return Option.none<GitHubWebhookResponse>()
+	const installationId = String(ref.value.installation.id)
+	const relayed = yield* relayToInstance({
+		provider: "github",
+		externalId: installationId,
+		rawBody: input.rawBody,
+		event: input.eventType,
+		delivery: input.deliveryId,
+	})
+	if (Option.isNone(relayed)) return Option.none<GitHubWebhookResponse>()
+	if (!relayed.value) return yield* new InternalServerError({ message: "Relay to the instance failed" })
+	return Option.some(new GitHubWebhookResponse({ processed: true, messagesCreated: 0 }))
+})
 
 export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handlers) =>
 	handlers
@@ -267,6 +331,15 @@ export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handl
 					repository: Option.getOrUndefined(logged)?.repository?.full_name,
 					action: Option.getOrUndefined(logged)?.action,
 				})
+
+				const relayed = yield* relayGitHubDelivery({ eventType, deliveryId, payload, rawBody }).pipe(
+					Effect.catchTag("DatabaseError", (cause) =>
+						Effect.fail(
+							InternalServerError.withCause({ message: "Broker route lookup failed", cause }),
+						),
+					),
+				)
+				if (Option.isSome(relayed)) return relayed.value
 
 				return yield* dispatchGitHubEvent({ eventType, deliveryId, payload })
 			}).pipe(

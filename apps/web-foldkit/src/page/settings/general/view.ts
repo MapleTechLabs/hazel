@@ -3,45 +3,28 @@ import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconCopy, IconEdit, IconOffice, IconShare, IconWarning } from "../../../icons"
 import { avatar } from "../../../ui/avatar"
-import { button } from "../../../ui/button"
+import { ariaButton, button } from "../../../ui/button"
 import { card, cardBody, cardHeader } from "../../../ui/card"
 import * as Field from "../../../ui/field"
+import { pageHeader, pageLayout } from "../../../ui/page-header"
 import { switchControl } from "../../../ui/switch"
 import { textField } from "../../../ui/text-field"
 import type { Organization } from "../../../session"
 import type { PageViewInputs, Shared } from "../../contract"
 import { deleteWorkspaceModal } from "./delete-workspace"
+import { exportDataCard } from "./export-data"
 import { Message } from "./message"
 import { type CopyTarget, LogoUpload, type Model, NameSave, PublicModeSave } from "./model"
 import { isAdminOf, LOGO_INPUT_ID } from "./update"
 
 /** Port of `routes/_app/$orgSlug/settings/index.tsx`. */
 
+/** A card's title row: its glyph, the title and what the card is for. */
 const sectionHeader = (
 	h: HtmlBuilder<Message>,
-	options: {
-		readonly icon: Html
-		readonly title: string
-		readonly titleClass?: string
-		readonly text: string
-	},
+	options: { readonly icon: Html; readonly title: string; readonly text: string },
 ): Html =>
-	h.div(
-		[h.Class("flex flex-col gap-0.5")],
-		[
-			h.div(
-				[h.Class("flex items-center gap-2")],
-				[
-					options.icon,
-					h.h2(
-						[h.Class(`font-semibold ${options.titleClass ?? "text-fg"} text-lg`)],
-						[options.title],
-					),
-				],
-			),
-			h.p([h.Class("text-muted-fg text-sm")], [options.text]),
-		],
-	)
+	pageHeader(h, { title: options.title, subtitle: options.text, size: "title", leading: options.icon })
 
 /** The read-only URL box with its Copy button. */
 const copyRow = (h: HtmlBuilder<Message>, url: string, target: CopyTarget): Html =>
@@ -75,7 +58,7 @@ const profileCard = (h: HtmlBuilder<Message>, model: Model, shared: Shared, orga
 	return card(h, {}, [
 		cardHeader(h, [
 			sectionHeader(h, {
-				icon: IconOffice(h, { className: "size-5 text-muted-fg" }),
+				icon: IconOffice(h, { className: "mt-0.5 size-5 text-muted-fg" }),
 				title: "Organization Profile",
 				text: "Manage your organization's name and appearance.",
 			}),
@@ -91,16 +74,14 @@ const profileCard = (h: HtmlBuilder<Message>, model: Model, shared: Shared, orga
 							h.div(
 								[h.Class("flex items-center gap-4")],
 								[
-									h.button(
-										[
-											h.Class(
+									ariaButton(
+										h,
+										{
+											className:
 												"group relative cursor-pointer disabled:cursor-not-allowed disabled:opacity-50",
-											),
-											h.Type("button"),
-											...(isLogoDisabled
-												? [h.Disabled(true)]
-												: [h.OnClick(Message.ClickedLogo())]),
-										],
+											isDisabled: isLogoDisabled,
+											onPress: Message.ClickedLogo(),
+										},
 										[
 											avatar(h, {
 												src: organization.logoUrl,
@@ -225,7 +206,7 @@ const publicInviteCard = (h: HtmlBuilder<Message>, model: Model, shared: Shared)
 	return card(h, {}, [
 		cardHeader(h, [
 			sectionHeader(h, {
-				icon: IconShare(h, { className: "size-5 text-muted-fg" }),
+				icon: IconShare(h, { className: "mt-0.5 size-5 text-muted-fg" }),
 				title: "Public Invite Link",
 				text: "Allow anyone with the link to join your workspace.",
 			}),
@@ -273,9 +254,8 @@ const dangerZoneCard = (h: HtmlBuilder<Message>, shared: Shared) =>
 			h,
 			[
 				sectionHeader(h, {
-					icon: IconWarning(h, { className: "size-5 text-danger" }),
+					icon: IconWarning(h, { className: "mt-0.5 size-5 text-danger" }),
 					title: "Danger Zone",
-					titleClass: "text-danger",
 					text: "Irreversible and destructive actions for this workspace.",
 				}),
 			],
@@ -316,13 +296,11 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	const organization = shared.organization
 	if (organization === null) return h.empty
 	const isPermissionsLoading = shared.member === null
-	return h.div(
-		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
-		[
-			profileCard(h, model, shared, organization),
-			...(isAdminOf(shared) || isPermissionsLoading ? [publicInviteCard(h, model, shared)] : []),
-			...(shared.member?.role === "owner" || isPermissionsLoading ? [dangerZoneCard(h, shared)] : []),
-			deleteWorkspaceModal(h, model, organization),
-		],
-	)
+	return pageLayout(h, {}, [
+		profileCard(h, model, shared, organization),
+		...(isAdminOf(shared) || isPermissionsLoading ? [publicInviteCard(h, model, shared)] : []),
+		...(isAdminOf(shared) ? [exportDataCard(h, model, shared.nowMs)] : []),
+		...(shared.member?.role === "owner" || isPermissionsLoading ? [dangerZoneCard(h, shared)] : []),
+		deleteWorkspaceModal(h, model, organization),
+	])
 })

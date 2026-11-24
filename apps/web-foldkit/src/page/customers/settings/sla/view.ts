@@ -1,6 +1,7 @@
 import { Submodel } from "foldkit"
 import type { PageViewInputs } from "../../../contract"
-import { isCustomersAdmin, readOnlyNotice, settingsHeader, settingsPage } from "../shared"
+import { isCustomersAdmin, readOnlyNotice, settingsPage } from "../shared"
+import { pageHeader } from "../../../../ui/page-header"
 import { editorView } from "./editor-view"
 import { hoursCard } from "./hours-view"
 import { deleteModal, policiesCard } from "./list-view"
@@ -18,7 +19,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		[h.Class("h-full")],
 		[
 			settingsPage(h, [
-				settingsHeader(h, { title: "Support SLAs", subtitle: SUBTITLE }),
+				pageHeader(h, { title: "Support SLAs", subtitle: SUBTITLE }),
 				...(canEdit ? [] : [readOnlyNotice(h, "SLAs")]),
 				hoursCard(h, model, canEdit),
 				policiesCard(h, model, canEdit),

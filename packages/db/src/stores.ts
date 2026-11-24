@@ -39,6 +39,7 @@ export const directoryTables = [
 	schema.agentGrantsTable,
 	schema.agentTokensTable,
 	schema.agentAuthCodesTable,
+	schema.oauthBrokerRoutesTable,
 ] as const
 
 /** `OrgObject`, one per organization. */
@@ -79,6 +80,8 @@ export const orgTables = [
 	schema.assistantThreadsTable,
 	schema.assistantItemsTable,
 	schema.assistantFollowersTable,
+	// Data exports and where each build stands (`worker/objects/org/exports.ts`).
+	schema.organizationExportsTable,
 ] as const
 
 /** `ChannelObject`, one per channel (threads too). */

@@ -42,7 +42,6 @@
         "@hazel/integrations": "workspace:*",
         "@hazel/schema": "workspace:*",
         "@hazel/sync-do": "workspace:*",
-        "@yielded/auth": "0.1.0-beta.47",
         "alchemy": "catalog:alchemy",
         "dfx": "^1.1.1",
         "effect": "catalog:effect",

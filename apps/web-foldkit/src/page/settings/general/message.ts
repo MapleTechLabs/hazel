@@ -1,3 +1,5 @@
+import { OrganizationExport } from "@hazel/domain/models"
+import { OrganizationExportId } from "@hazel/schema"
 import { Schema } from "effect"
 import { File } from "foldkit/file"
 import { defineMessageUnion } from "foldkit/message"
@@ -5,8 +7,10 @@ import * as ConfirmAction from "../../shared/confirm-action"
 import {
 	CopyTarget,
 	DeleteWorkspaceFailure,
+	DownloadExportFailure,
 	RenameFailure,
 	SetPublicModeFailure,
+	StartExportFailure,
 	UploadLogoFailure,
 } from "./model"
 
@@ -36,5 +40,12 @@ export const Message = defineMessageUnion({
 	ClickedConfirmDelete: {},
 	SucceededDeleteWorkspace: {},
 	FailedDeleteWorkspace: { reason: DeleteWorkspaceFailure },
+	UpdatedExports: { exports: Schema.Array(OrganizationExport.Schema) },
+	ClickedStartExport: {},
+	SucceededStartExport: {},
+	FailedStartExport: { reason: StartExportFailure },
+	ClickedDownloadExport: { exportId: OrganizationExportId },
+	SucceededDownloadExport: {},
+	FailedDownloadExport: { reason: DownloadExportFailure },
 })
 export type Message = typeof Message.Type

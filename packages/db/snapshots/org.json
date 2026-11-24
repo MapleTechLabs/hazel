@@ -1,5 +1,5 @@
 {
-	"migration": "0014_remove_customer_health_score",
+	"migration": "0016_remove_customer_health_score",
 	"entities": [
 		{
 			"kind": "table",
@@ -172,6 +172,13 @@
 		{
 			"kind": "table",
 			"name": "integration_tokens",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "organization_exports",
 			"primaryKey": {
 				"columns": ["id"]
 			}
@@ -1508,8 +1515,35 @@
 		{
 			"kind": "column",
 			"table": "channels",
-			"name": "createdAt",
+			"name": "lastMessageAt",
 			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channels",
+			"name": "lastMessageAuthorId",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channels",
+			"name": "lastMessagePreview",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channels",
+			"name": "createdAt",
+			"position": 10,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -1518,7 +1552,7 @@
 			"kind": "column",
 			"table": "channels",
 			"name": "updatedAt",
-			"position": 8,
+			"position": 11,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -1527,7 +1561,7 @@
 			"kind": "column",
 			"table": "channels",
 			"name": "deletedAt",
-			"position": 9,
+			"position": 12,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -2740,6 +2774,141 @@
 		},
 		{
 			"kind": "column",
+			"table": "organization_exports",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "organization_exports",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_exports",
+			"name": "requestedBy",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_exports",
+			"name": "status",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": "'pending'"
+		},
+		{
+			"kind": "column",
+			"table": "organization_exports",
+			"name": "cursor",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_exports",
+			"name": "channelCount",
+			"position": 5,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "organization_exports",
+			"name": "channelsDone",
+			"position": 6,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "organization_exports",
+			"name": "partCount",
+			"position": 7,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "organization_exports",
+			"name": "rowCount",
+			"position": 8,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "organization_exports",
+			"name": "byteSize",
+			"position": 9,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "organization_exports",
+			"name": "error",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_exports",
+			"name": "createdAt",
+			"position": 11,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "organization_exports",
+			"name": "updatedAt",
+			"position": 12,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "organization_exports",
+			"name": "completedAt",
+			"position": 13,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_exports",
+			"name": "expiresAt",
+			"position": 14,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
 			"table": "organization_members",
 			"name": "id",
 			"position": 0,
@@ -3924,6 +4093,20 @@
 			"name": "integration_tokens_connectionId_unique",
 			"unique": true,
 			"columns": ["\"connectionId\""]
+		},
+		{
+			"kind": "index",
+			"table": "organization_exports",
+			"name": "organization_exports_organization_id_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "organization_exports",
+			"name": "organization_exports_status_idx",
+			"unique": false,
+			"columns": ["\"status\""]
 		},
 		{
 			"kind": "index",

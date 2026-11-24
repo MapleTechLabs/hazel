@@ -10,6 +10,7 @@ import {
 	dialogHeader,
 	dialogTitle,
 } from "../../../ui/dialog"
+import { iconTile } from "../../../ui/icon-tile"
 import * as Modal from "../../../ui/modal"
 import * as ConfirmAction from "../../shared/confirm-action"
 import { Message } from "./message"
@@ -30,14 +31,6 @@ const innerTitleId = (modalId: string) => `${modalId}-inner-title`
 const innerDialog = (h: HtmlBuilder<Message>, modalId: string, children: ReadonlyArray<Html>): Html =>
 	dialog(h, { id: Modal.dialogId(modalId), role: "dialog", labelledBy: innerTitleId(modalId) }, children)
 
-const iconBoxClass = {
-	danger: "flex size-12 items-center justify-center rounded-lg border border-danger/10 bg-danger/5",
-	primary: "flex size-12 items-center justify-center rounded-lg border border-primary/10 bg-primary/5",
-}
-
-const iconBox = (h: HtmlBuilder<Message>, tone: "danger" | "primary", icon: Html): Html =>
-	h.div([h.Class(iconBoxClass[tone])], [icon])
-
 const footer = (
 	h: HtmlBuilder<Message>,
 	closeAttributes: ReadonlyArray<ChildAttribute>,
@@ -56,7 +49,7 @@ export const deleteEmojiModal = (h: HtmlBuilder<Message>, model: Model): Html =>
 			toContent: (closeAttributes) => [
 				innerDialog(h, id, [
 					dialogHeader(h, {}, [
-						iconBox(h, "danger", IconWarning(h, { className: "size-6 text-danger" })),
+						iconTile(h, { intent: "danger" }, IconWarning(h)),
 						dialogTitle(h, { id: innerTitleId(id) }, "Delete custom emoji"),
 						dialogDescription(h, [
 							"Are you sure you want to delete ",
@@ -110,7 +103,7 @@ export const restoreEmojiModal = (h: HtmlBuilder<Message>, model: Model): Html =
 			toContent: (closeAttributes) => [
 				innerDialog(h, id, [
 					dialogHeader(h, {}, [
-						iconBox(h, "primary", IconArrowPath(h, { className: "size-6 text-primary" })),
+						iconTile(h, { intent: "primary" }, IconArrowPath(h)),
 						dialogTitle(h, { id: innerTitleId(id) }, "Restore deleted emoji"),
 						dialogDescription(h, [
 							"An emoji named ",

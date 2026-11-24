@@ -60,6 +60,8 @@ export const AppRoute = defineRouteUnion({
 	ChatIndex: { orgSlug: Schema.String },
 	/** The direct messages list (a phone's DMs tab). */
 	ChatDms: { orgSlug: Schema.String },
+	/** A phone's More tab: the account, the workspace and the sections the tab bar has no room for. */
+	OrgMore: { orgSlug: Schema.String },
 	ChatChannel: { orgSlug: Schema.String, channelId: ChannelId },
 	ChatFiles: { orgSlug: Schema.String, channelId: ChannelId },
 	ChatFilesMedia: { orgSlug: Schema.String, channelId: ChannelId },
@@ -256,6 +258,7 @@ const routers = {
 	OrgHome: pipe(org, Route.mapTo(AppRoute.OrgHome)),
 	ChatIndex: pipe(orgPath("chat"), Route.mapTo(AppRoute.ChatIndex)),
 	ChatDms: pipe(orgPath("chat"), slash(literal("dms")), Route.mapTo(AppRoute.ChatDms)),
+	OrgMore: pipe(orgPath("more"), Route.mapTo(AppRoute.OrgMore)),
 	ChatChannel: pipe(channel("chat"), Route.mapTo(AppRoute.ChatChannel)),
 	ChatFiles: pipe(channel("chat"), slash(literal("files")), Route.mapTo(AppRoute.ChatFiles)),
 	ChatFilesMedia: pipe(
@@ -414,6 +417,7 @@ export const urlToAppRoute = Route.parseUrlWithFallback(
 		routers.OrgHome,
 		routers.ChatIndex,
 		routers.ChatDms,
+		routers.OrgMore,
 		routers.ChatChannel,
 		routers.ChatFiles,
 		routers.ChatFilesMedia,
@@ -624,6 +628,7 @@ export const titleOf = (route: AppRoute): string => {
 			OnboardingSetupOrganization: () => "Welcome",
 			SelectOrganization: () => "Select a workspace",
 			OrgHome: () => "Home",
+			OrgMore: () => "More",
 			NotFound: () => "Not found",
 		},
 		() =>

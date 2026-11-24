@@ -9,6 +9,9 @@ export interface ChannelRow {
 		readonly name: string
 		readonly type: string
 		readonly icon?: string | null
+		readonly lastMessageAt?: Date | string | null
+		readonly lastMessageAuthorId?: UserId | null
+		readonly lastMessagePreview?: string | null
 	}
 	readonly member: {
 		readonly userId: UserId
@@ -60,6 +63,9 @@ export const groupChannels = (
 			isFavorite: mine.isFavorite,
 			notificationCount: mine.notificationCount || 0,
 			memberCount: members.length,
+			lastMessageAtMs: channel.lastMessageAt ? new Date(channel.lastMessageAt).getTime() : null,
+			lastMessageAuthorId: channel.lastMessageAuthorId ?? null,
+			lastMessagePreview: channel.lastMessagePreview ?? null,
 			members,
 		}
 		if (channel.type === "public") publicChannels.push(summary)

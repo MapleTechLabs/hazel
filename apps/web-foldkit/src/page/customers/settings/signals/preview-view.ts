@@ -2,7 +2,6 @@ import * as Customers from "@hazel/domain/customers"
 import { Option, Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { twMerge } from "tailwind-merge"
 import { commonMessage } from "~/lib/error-messages"
 import { evidenceBars } from "../../../../customers/charts/sparkline"
 import {
@@ -15,16 +14,21 @@ import {
 import { providerOf, sourcesLabel } from "../../../../customers/providers"
 import { evidenceViz } from "../../../../customers/ui/evidence"
 import { companyLogo } from "../../../../customers/ui/identity"
-import { IconWarning } from "../../../../icons"
+
 import { AppRoute, customerRoute, hrefOf } from "../../../../route"
 import { badge } from "../../../../ui/badge"
 import { button } from "../../../../ui/button"
-import { loader } from "../../../../ui/loader"
+import { callout } from "../../../../ui/callout"
+import { card, panel, panelHeader } from "../../../../ui/card"
+import { emptyState } from "../../../../ui/empty-state"
+import { label } from "../../../../ui/field"
+import { link } from "../../../../ui/link"
+import { loadingState } from "../../../../ui/loader"
+import { statusLine as kitStatusLine } from "../../../../ui/status-dot"
 import type { EditorStatus } from "./draft"
 import { metricNameOf } from "./list-view"
 import { Message } from "./message"
 import type { Editor, Model, RuleForm } from "./model"
-import { card } from "./parts"
 
 /**
  * The live preview (Wonder `ati`, `mia`): the draft dry-run over today's data, what saving would do
@@ -48,17 +52,13 @@ export interface PreviewContext {
 
 const statusLine = (h: H, context: PreviewContext): Html => {
 	const { editor, status } = context
-	const [text, dot] = Option.isNone(status.draft)
-		? ["Waiting for valid values", "bg-warning"]
+	return Option.isNone(status.draft)
+		? kitStatusLine(h, { tone: "warning" }, "Waiting for valid values")
 		: AsyncData.isPending(editor.preview)
-			? ["Updating…", "bg-info-subtle-fg animate-pulse"]
+			? kitStatusLine(h, { tone: "info", isPulsing: true }, "Updating…")
 			: editor.ruleId !== null && status.changes === 0
-				? ["Same as saved", "bg-success"]
-				: ["Updates as you edit", "bg-success"]
-	return h.span(
-		[h.AriaLive("polite"), h.Class("inline-flex items-center gap-1.5 text-muted-fg text-xs")],
-		[h.span([h.AriaHidden(true), h.Class(twMerge("size-1.5 rounded-full", dot))]), text],
-	)
+				? kitStatusLine(h, { tone: "success" }, "Same as saved")
+				: kitStatusLine(h, { tone: "success" }, "Updates as you edit")
 }
 
 const missingSources = (h: H, result: Result, orgSlug: string): ReadonlyArray<Html> => {
@@ -67,29 +67,24 @@ const missingSources = (h: H, result: Result, orgSlug: string): ReadonlyArray<Ht
 	return first === undefined
 		? []
 		: [
-				h.div(
-					[
-						h.Role("note"),
-						h.Class(
-							"flex items-start gap-2 rounded-lg bg-warning-subtle px-3 py-2.5 text-sm text-warning-subtle-fg",
-						),
-					],
-					[
-						IconWarning(h, { className: "mt-0.5 size-4 shrink-0" }),
-						h.span(
-							[h.Class("flex-1")],
-							[
-								`This rule needs ${sourcesLabel(providers)} connected before anything can match. `,
-							],
-						),
-						h.a(
-							[
-								h.Href(hrefOf(AppRoute.CustomersSourceDetail({ orgSlug, provider: first }))),
-								h.Class("shrink-0 font-medium underline underline-offset-2"),
-							],
-							[`Connect ${providerOf(first).name}`],
-						),
-					],
+				callout(
+					h,
+					{
+						intent: "warning",
+						actions: [
+							link(
+								h,
+								{
+									href: hrefOf(
+										AppRoute.CustomersSourceDetail({ orgSlug, provider: first }),
+									),
+									className: "font-medium text-inherit underline underline-offset-2",
+								},
+								[`Connect ${providerOf(first).name}`],
+							),
+						],
+					},
+					[`This rule needs ${sourcesLabel(providers)} connected before anything can match. `],
 				),
 			]
 }
@@ -186,92 +181,84 @@ const exampleChart = (h: H, context: PreviewContext, result: Result): ReadonlyAr
 	const last = days.at(-1)
 	const metric = metricNameOf(context.model)(evidence.metricKey)
 	return [
-		h.div(
-			[h.Class("flex flex-col gap-3 rounded-lg border border-border p-3")],
-			[
-				h.div(
-					[h.Class("flex items-center justify-between gap-2")],
-					[
-						h.label(
-							[h.Class("flex min-w-0 items-center gap-2 text-muted-fg text-xs")],
-							[
-								"Example",
-								h.select(
-									[
-										h.Class(
-											"min-w-0 rounded-md border border-border bg-bg px-1.5 py-0.5 font-medium text-fg text-xs outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70",
-										),
-										h.OnChange(toExample),
-									],
-									examples.map(({ match }) =>
-										h.option(
-											[
-												h.Value(match.accountId),
-												h.Selected(match.accountId === example.match.accountId),
-											],
-											[match.name],
-										),
+		card(h, { className: "flex flex-col gap-3 p-3" }, [
+			h.div(
+				[h.Class("flex items-center justify-between gap-2")],
+				[
+					label(
+						h,
+						{ className: "flex min-w-0 items-center gap-2 text-muted-fg text-xs sm:text-xs" },
+						[
+							"Example",
+							h.select(
+								[
+									h.Class(
+										"min-w-0 rounded-md border border-border bg-bg px-1.5 py-0.5 font-medium text-fg text-xs outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70",
+									),
+									h.OnChange(toExample),
+								],
+								examples.map(({ match }) =>
+									h.option(
+										[
+											h.Value(match.accountId),
+											h.Selected(match.accountId === example.match.accountId),
+										],
+										[match.name],
 									),
 								),
-							],
-						),
-						badge(h, { intent: "danger" }, [formatDeltaPct(evidence.changePct)]),
-					],
-				),
-				evidenceBars(h, {
-					values,
-					highlightFrom: split,
-					baseline: evidence.baselineAvg,
-					ariaLabel: `${metric} for ${example.match.name}: ${evidence.baselineDays}-day average ${evidence.baselineAvg}, last ${evidence.recentDays} days ${evidence.recentAvg}`,
-					className: "h-24",
-				}),
-				h.div(
-					[h.Class("relative h-4 text-muted-fg text-xs")],
-					[
-						h.span(
-							[h.Class("absolute left-0")],
-							[days[0] === undefined ? "" : formatDay(days[0])],
-						),
-						h.span(
-							[
-								h.Class("absolute -translate-x-1/2"),
-								h.Style({ left: `${(split / Math.max(1, values.length)) * 100}%` }),
-							],
-							[days[split] === undefined ? "" : formatDay(days[split])],
-						),
-						h.span([h.Class("absolute right-0")], [last === undefined ? "" : formatDay(last)]),
-					],
-				),
-				h.div(
-					[h.Class("flex flex-wrap items-center gap-x-4 gap-y-1 text-xs")],
-					[
-						h.span(
-							[h.Class("inline-flex items-center gap-1.5 text-muted-fg")],
-							[
-								h.span([
-									h.AriaHidden(true),
-									h.Class("w-4 border-fg-2 border-t border-dashed"),
-								]),
-								`${evidence.baselineDays}-day avg ${evidence.baselineAvg}`,
-							],
-						),
-						h.span(
-							[h.Class("inline-flex items-center gap-1.5 text-muted-fg")],
-							[
-								h.span([h.AriaHidden(true), h.Class("size-2 rounded-[2px] bg-chart-churn")]),
-								`${evidence.recentDays}-day avg ${evidence.recentAvg}`,
-							],
-						),
-					],
-				),
-				h.p(
-					[h.Class("text-muted-fg text-xs")],
-					[
-						`Daily ${metric.toLowerCase()}. The rule compares averages, so one quiet day doesn't trigger it.`,
-					],
-				),
-			],
-		),
+							),
+						],
+					),
+					badge(h, { intent: "danger" }, [formatDeltaPct(evidence.changePct)]),
+				],
+			),
+			evidenceBars(h, {
+				values,
+				highlightFrom: split,
+				baseline: evidence.baselineAvg,
+				ariaLabel: `${metric} for ${example.match.name}: ${evidence.baselineDays}-day average ${evidence.baselineAvg}, last ${evidence.recentDays} days ${evidence.recentAvg}`,
+				className: "h-24",
+			}),
+			h.div(
+				[h.Class("relative h-4 text-muted-fg text-xs")],
+				[
+					h.span([h.Class("absolute left-0")], [days[0] === undefined ? "" : formatDay(days[0])]),
+					h.span(
+						[
+							h.Class("absolute -translate-x-1/2"),
+							h.Style({ left: `${(split / Math.max(1, values.length)) * 100}%` }),
+						],
+						[days[split] === undefined ? "" : formatDay(days[split])],
+					),
+					h.span([h.Class("absolute right-0")], [last === undefined ? "" : formatDay(last)]),
+				],
+			),
+			h.div(
+				[h.Class("flex flex-wrap items-center gap-x-4 gap-y-1 text-xs")],
+				[
+					h.span(
+						[h.Class("inline-flex items-center gap-1.5 text-muted-fg")],
+						[
+							h.span([h.AriaHidden(true), h.Class("w-4 border-fg-2 border-t border-dashed")]),
+							`${evidence.baselineDays}-day avg ${evidence.baselineAvg}`,
+						],
+					),
+					h.span(
+						[h.Class("inline-flex items-center gap-1.5 text-muted-fg")],
+						[
+							h.span([h.AriaHidden(true), h.Class("size-2 rounded-xs bg-chart-churn")]),
+							`${evidence.recentDays}-day avg ${evidence.recentAvg}`,
+						],
+					),
+				],
+			),
+			h.p(
+				[h.Class("text-muted-fg text-xs")],
+				[
+					`Daily ${metric.toLowerCase()}. The rule compares averages, so one quiet day doesn't trigger it.`,
+				],
+			),
+		]),
 	]
 }
 
@@ -376,16 +363,15 @@ const resultView = (h: H, context: PreviewContext, result: Result): ReadonlyArra
 
 const failure = (h: H, reason: Parameters<typeof commonMessage>[0]): Html => {
 	const message = commonMessage(reason)
-	return h.div(
-		[h.Role("alert"), h.Class("flex flex-col items-start gap-2 py-4")],
-		[
-			h.span([h.Class("font-medium text-fg text-sm")], ["Couldn't preview this rule"]),
-			h.span([h.Class("text-muted-fg text-sm")], [message.description ?? message.title]),
-			button(h, { intent: "outline", size: "sm", onPress: Message.PressedRetryPreview() }, [
-				"Try again",
-			]),
-		],
-	)
+	return emptyState(h, {
+		title: "Couldn't preview this rule",
+		description: message.description ?? message.title,
+		role: "alert",
+		className: "py-6",
+		action: button(h, { intent: "outline", size: "sm", onPress: Message.PressedRetryPreview() }, [
+			"Try again",
+		]),
+	})
 }
 
 export const previewCard = (h: H, context: PreviewContext): Html => {
@@ -410,15 +396,11 @@ export const previewCard = (h: H, context: PreviewContext): Html => {
 				onStale: ({ data, error }) => [failure(h, error), ...resultView(h, context, data)],
 				onSuccess: (data) => resultView(h, context, data),
 			})
-	return card(
-		h,
-		{ title: "Live preview", aside: statusLine(h, context), className: "lg:sticky lg:top-6" },
-		[...body],
-	)
+	return panel(h, { className: "lg:sticky lg:top-6" }, [
+		panelHeader(h, { title: "Live preview", aside: statusLine(h, context) }),
+		...body,
+	])
 }
 
 const loading = (h: H): Html =>
-	h.div(
-		[h.Class("flex items-center gap-2 py-6 text-muted-fg text-sm")],
-		[loader(h, { className: "size-4", ariaLabel: "Checking every account" }), "Checking every account…"],
-	)
+	loadingState(h, { label: "Checking every account…", size: "sm", className: "justify-start py-6" })

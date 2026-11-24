@@ -1,7 +1,7 @@
-import { ChannelIcon, ChannelId, ChannelSectionId, OrganizationId } from "@hazel/schema"
+import { ChannelIcon, ChannelId, ChannelSectionId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema as S } from "effect"
 import * as M from "./utils"
-import { baseFields } from "./utils"
+import { baseFields, JsonDate } from "./utils"
 
 export const ChannelType = S.Literals(["public", "private", "thread", "direct", "single"])
 export type ChannelType = S.Schema.Type<typeof ChannelType>
@@ -14,6 +14,11 @@ class Model extends M.Class<Model>("Channel")({
 	organizationId: M.Immutable(OrganizationId),
 	parentChannelId: M.Immutable(S.NullOr(ChannelId)),
 	sectionId: S.NullOr(ChannelSectionId),
+	/** A DM's newest message (the org keeps it); null on other channels. */
+	lastMessageAt: M.Generated(S.NullOr(JsonDate)),
+	lastMessageAuthorId: M.Generated(S.NullOr(UserId)),
+	/** Plain text, shortened; null for a message with only attachments. */
+	lastMessagePreview: M.Generated(S.NullOr(S.String)),
 	...baseFields,
 }) {}
 

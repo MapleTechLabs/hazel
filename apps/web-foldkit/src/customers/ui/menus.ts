@@ -1,6 +1,4 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { twMerge } from "tailwind-merge"
-import { keyboardStyles } from "~/components/ui/keyboard.styles"
 import { IconCheck, IconClock, IconClose, IconCopy, IconOffice, IconUser } from "../../icons"
 import * as Menu from "../../ui/menu"
 import { menuKeyboard, menuLabel } from "../../ui/menu-view"
@@ -59,12 +57,11 @@ export const snoozeMenuContent =
 						[h.Class("col-start-2 flex items-baseline justify-between gap-4")],
 						[
 							menuLabel(h, menuId, key, SNOOZE_LABEL[key]),
-							h.span(
-								[
-									h.Attribute("data-slot", "keyboard"),
-									h.Class(twMerge(keyboardStyles, "font-sans text-xs")),
-								],
-								[formatWeekdayTime(snoozeUntil(key, now), options)],
+							// The kit's key hint, taken out of its absolute spot.
+							menuKeyboard(
+								h,
+								formatWeekdayTime(snoozeUntil(key, now), options),
+								"static pl-0 text-xs",
 							),
 						],
 					),

@@ -9,7 +9,7 @@ import { accountLabelOf, nestedIdsOf } from "../../../customers/groups"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { environmentBadge, severityGlyph } from "../../../customers/ui/badges"
 import { connectCard } from "../../../customers/ui/connect-card"
-import { dataTable } from "../../../customers/ui/data-table"
+import { dataTable } from "../../../ui/data-table"
 import {
 	addFilterButton,
 	filterBar,
@@ -26,7 +26,7 @@ import { lookPicker, viewGlyph } from "../../../customers/ui/view-look"
 import { isInSidebar, layoutOf } from "../../../customers/view-layout"
 import * as Customers from "@hazel/domain/customers"
 import { DragAndDrop } from "@foldkit/ui"
-import { freshness, pageHeader } from "../../../customers/ui/surface"
+import { freshness, pageHeader } from "../../../ui/page-header"
 import {
 	IconClose,
 	IconDots,
@@ -37,13 +37,12 @@ import {
 	IconUser,
 } from "../../../icons"
 import { AppRoute, hrefOf } from "../../../route"
-import { button, buttonClassName } from "../../../ui/button"
+import { ariaButton, button, buttonClassName, iconButton } from "../../../ui/button"
 import { checkbox } from "../../../ui/checkbox"
 import { dialogBody, dialogClose, dialogFooter, dialogHeader } from "../../../ui/dialog"
 import { emptyState } from "../../../ui/empty-state"
 import { input } from "../../../ui/input"
-import * as Menu from "../../../ui/menu"
-import { menuLabel, view as menuView } from "../../../ui/menu-view"
+import { menuLabel } from "../../../ui/menu-view"
 import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
 import type { PageViewInputs } from "../../contract"
@@ -55,12 +54,8 @@ import {
 	accountsPerOwner,
 	activeFields,
 	bestFilterToRemove,
-	canDeleteView,
-	canUpdateView,
-	COLUMN_NAME,
 	ALL_VIEW_KEY,
 	currentTab,
-	effectiveFilters,
 	HOVER_CARD_ID,
 	isEdited,
 	layoutKeyOf,
@@ -82,8 +77,11 @@ import {
 	viewTabCounts,
 	visibleAccounts,
 } from "./model"
-import { shortName, type TableContext, tableColumns } from "./table"
+import { type TableContext, tableColumns } from "./table"
 import { viewerOf } from "./update"
+import { menu } from "../shared-view"
+import { separator } from "../../../ui/separator"
+import { badge } from "../../../ui/badge"
 
 /** The customers list (Wonder: List — all, filter builder, columns, bulk, hover, no results, first run). */
 
@@ -99,30 +97,6 @@ const SHARED_IDS = integrations
 const nameAnchorId = (accountId: string) => `customers-list-name-${accountId}`
 
 // MENUS AND POPOVERS
-
-const menu = (
-	h: HtmlBuilder<Message>,
-	model: Menu.Model,
-	options: Readonly<{
-		entries: ReadonlyArray<Menu.Entry>
-		trigger: (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) => Html
-		content: (key: string) => ReadonlyArray<Html | string>
-		toMessage: (message: Menu.Message) => Message
-		className?: string
-	}>,
-): Html =>
-	h.submodel({
-		slotId: model.id,
-		model,
-		view: menuView,
-		viewInputs: {
-			entries: options.entries,
-			toTrigger: options.trigger,
-			content: options.content,
-			className: options.className,
-		},
-		toParentMessage: options.toMessage,
-	})
 
 const popover = (
 	h: HtmlBuilder<Message>,
@@ -533,14 +507,9 @@ const bulkBar = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, total: n
 			),
 		],
 		[
-			h.span(
-				[
-					h.Class(
-						"whitespace-nowrap rounded-md bg-primary-subtle px-2 py-1 font-medium text-primary-subtle-fg tabular-nums",
-					),
-				],
-				[`${formatCount(model.selected.length)} selected`],
-			),
+			badge(h, { intent: "primary", isPill: true, className: "py-1" }, [
+				`${formatCount(model.selected.length)} selected`,
+			]),
 			...(model.selected.length < total
 				? [
 						button(h, { intent: "plain", size: "xs", onPress: Message.PressedSelectAll() }, [
@@ -548,7 +517,7 @@ const bulkBar = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, total: n
 						]),
 					]
 				: []),
-			h.span([h.Class("mx-1 h-5 w-px bg-border max-md:hidden")]),
+			separator(h, { orientation: "vertical", className: "mx-1 h-5 max-md:hidden" }),
 			menu(h, model.ownerMenu, {
 				entries: ownerEntries(model.members, viewer),
 				trigger: (attributes, overlay) =>
@@ -615,14 +584,13 @@ const bulkBar = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, total: n
 									.sort()
 									.slice(0, 12)
 									.map((tag) =>
-										h.button(
-											[
-												h.Type("button"),
-												h.OnClick(Message.SubmittedTag({ tag })),
-												h.Class(
+										ariaButton(
+											h,
+											{
+												onPress: Message.SubmittedTag({ tag }),
+												className:
 													"cursor-pointer rounded bg-secondary px-1.5 py-0.5 text-secondary-fg text-xs hover:bg-secondary/70",
-												),
-											],
+											},
 											[tag],
 										),
 									),
@@ -647,17 +615,16 @@ const bulkBar = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, total: n
 				{ intent: "plain", size: "xs", onPress: Message.PressedExport({ scope: "selected" }) },
 				["Export CSV"],
 			),
-			h.button(
-				[
-					h.Type("button"),
-					h.AriaLabel("Clear selection"),
-					h.OnClick(Message.ClearedSelection()),
+			iconButton(
+				h,
+				{
+					label: "Clear selection",
+					size: "sq-xs",
+					onPress: Message.ClearedSelection(),
 					// A phone: first, beside the count, so the wrapped bar takes two rows, not three.
-					h.Class(
-						"inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-fg hover:bg-secondary hover:text-fg max-md:order-first max-md:size-9",
-					),
-				],
-				[IconClose(h, { className: "size-3.5" })],
+					className: "max-md:order-first",
+				},
+				IconClose(h, { className: "size-3.5" }),
 			),
 		],
 	)

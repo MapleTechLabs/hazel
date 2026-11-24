@@ -2,7 +2,15 @@ import { Effect, Schema, Stream } from "effect"
 import { Mount } from "foldkit"
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { IconBell, IconChevronLeft, IconGear, IconMenu, IconMsgs, IconMsgUser, IconOffice } from "../icons"
+import {
+	IconBell,
+	IconChevronLeft,
+	IconDots,
+	IconMagnifier3,
+	IconMenu,
+	IconMsgs,
+	IconMsgUser,
+} from "../icons"
 import {
 	AppRoute,
 	channelSettingsTabOf,
@@ -10,7 +18,9 @@ import {
 	isChannelChatRoute,
 	isChatRoute,
 	isCustomersRoute,
+	isMySettingsRoute,
 	isNotificationsRoute,
+	isSettingsRoute,
 	type OrgSection,
 	orgSectionOf,
 	orgSlugOf,
@@ -21,6 +31,7 @@ import { button } from "../ui/button"
 import * as Modal from "../ui/modal"
 import * as Sheet from "../ui/sheet"
 import type { ShellContext } from "./context"
+import { countBadge } from "../ui/count-badge"
 import { mobileTopBar as topBar } from "../ui/mobile-top-bar"
 
 /** The phone shell (`useSidebar().isMobile`): tab bar, top bars, the sidebar sheet and its buttons. */
@@ -32,21 +43,25 @@ export const MOBILE_SIDEBAR_ID = "mobile-sidebar"
  * (`active:`), as a native tab does under the finger; there is no hover on a phone.
  */
 const NAV_ITEM =
-	"flex min-h-12 flex-1 flex-col items-center justify-center gap-1 pt-1.5 pb-1 transition-opacity duration-100 active:opacity-60"
+	"flex flex-1 flex-col items-center justify-center gap-1 rounded-full transition-[opacity,background-color] duration-100 active:opacity-60"
 
 /**
- * The tab bar: Chats, DMs, Activity and Customers, as a phone app's tabs. Chats is the channel
- * list (`ChatIndex` on a phone) and the pages it opens, DMs the direct messages (`ChatDms`);
- * Settings is the gear in the chat list's header. The bar is not shown inside a conversation,
- * whose header leads back. Its own background runs under the home indicator.
+ * The tab bar, as Slack's: Home, DMs, Activity and More, and a round Search button beside them.
+ * Home is the channel list (`ChatIndex` on a phone) and the pages it opens, DMs the direct messages
+ * (`ChatDms`), More the account and the sections the bar has no room for (`OrgMore`: Customers,
+ * settings). Search opens the command palette in message search. The bar is not shown inside a
+ * conversation, whose header leads back. Its own background runs under the home indicator.
+ *
+ * On iOS the shell draws the island natively: the tabs as a Liquid Glass capsule with SF Symbols
+ * (`data-native-symbol`), and the item marked `role: "search"` as its own glass circle.
  */
 export const mobileNav = <Message>(
 	h: HtmlBuilder<Message>,
 	context: ShellContext,
 	unreadNotificationCount: number,
+	onSearch: Attribute<Message>,
 ): Html => {
 	const { orgSlug, route } = context
-	/** `isActive` colours the item; `isLinkActive` is TanStack `Link`'s own (fuzzy) match. */
 	const link = (
 		label: string,
 		href: string,
@@ -58,7 +73,13 @@ export const mobileNav = <Message>(
 		h.a(
 			[
 				...nativeItem(h, { id: label, symbol, isSelected: isActive, badge: badge?.count }),
-				h.Class(twMerge(NAV_ITEM, isActive ? "text-primary" : "text-muted-fg", isActive && "active")),
+				h.Class(
+					twMerge(
+						NAV_ITEM,
+						isActive ? "bg-primary-subtle/60 text-primary" : "text-muted-fg",
+						isActive && "active",
+					),
+				),
 				h.Href(href),
 				...(isActive
 					? [h.Attribute("aria-current", "page"), h.Attribute("data-status", "active")]
@@ -73,59 +94,85 @@ export const mobileNav = <Message>(
 		unreadNotificationCount > 0
 			? {
 					count: unreadNotificationCount,
-					html: h.span(
-						[
-							// The native tab shows the count as its badge, not in its title.
-							h.Attribute("data-native-skip", ""),
-							h.Class(
-								"absolute -top-1 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 font-semibold text-3xs text-white tabular-nums leading-none",
-							),
-						],
-						[unreadNotificationCount > 99 ? "99+" : String(unreadNotificationCount)],
-					),
+					html: countBadge(h, {
+						count: unreadNotificationCount,
+						isCapped: true,
+						className:
+							"absolute -top-1 -right-2 h-4 min-w-4 bg-danger px-1 font-semibold text-3xs text-white leading-none",
+						// The native tab shows the count as its badge, not in its title.
+						attributes: [h.Attribute("data-native-skip", "")],
+					}),
 				}
 			: undefined
+	const isMore =
+		route._tag === "OrgMore" ||
+		isCustomersRoute(route) ||
+		isSettingsRoute(route) ||
+		isMySettingsRoute(route)
 	return h.nav(
 		[
 			h.AriaLabel("Tabs"),
-			// A `UITabBar` on iOS; this markup everywhere else, and what its presses replay on.
+			// A Liquid Glass bar on iOS; this markup everywhere else, and what its presses replay on.
 			...nativeIsland(h, "tab-bar"),
-			h.Class(
-				"shrink-0 border-sidebar-border border-t bg-sidebar pb-[env(safe-area-inset-bottom)] md:hidden",
-			),
+			h.Class("shrink-0 bg-bg pb-[env(safe-area-inset-bottom)] md:hidden"),
 		],
 		[
 			h.div(
-				[h.Class("flex h-14 items-stretch px-2")],
+				[h.Class("flex items-center gap-2 px-3 pt-1.5 pb-2")],
 				[
-					link(
-						"Chats",
-						hrefOf(AppRoute.ChatIndex({ orgSlug })),
-						(isChatRoute(route) && route._tag !== "ChatDms") || route._tag === "OrgHome",
-						IconMsgs(h, { className: "size-6" }),
-						"bubble.left.and.bubble.right",
+					h.div(
+						[
+							h.Class(
+								"flex h-14 flex-1 items-stretch gap-0.5 rounded-full border border-border bg-overlay p-1 shadow-md",
+							),
+						],
+						[
+							link(
+								"Home",
+								hrefOf(AppRoute.ChatIndex({ orgSlug })),
+								// Members (`OrgHome`) opens from the channel list, so it stays under Home.
+								(isChatRoute(route) && route._tag !== "ChatDms") || route._tag === "OrgHome",
+								IconMsgs(h, { className: "size-5" }),
+								"house",
+							),
+							link(
+								"DMs",
+								hrefOf(AppRoute.ChatDms({ orgSlug })),
+								route._tag === "ChatDms",
+								IconMsgUser(h, { className: "size-5" }),
+								"bubble.left.and.bubble.right",
+							),
+							link(
+								"Activity",
+								hrefOf(AppRoute.NotificationsAll({ orgSlug })),
+								isNotificationsRoute(route),
+								IconBell(h, { className: "size-5" }),
+								"bell",
+								unread,
+							),
+							link(
+								"More",
+								hrefOf(AppRoute.OrgMore({ orgSlug })),
+								isMore,
+								IconDots(h, { className: "size-5" }),
+								"ellipsis",
+							),
+						],
 					),
-					link(
-						"DMs",
-						hrefOf(AppRoute.ChatDms({ orgSlug })),
-						route._tag === "ChatDms",
-						IconMsgUser(h, { className: "size-6" }),
-						"bubble.left",
-					),
-					link(
-						"Activity",
-						hrefOf(AppRoute.NotificationsAll({ orgSlug })),
-						isNotificationsRoute(route),
-						IconBell(h, { className: "size-6" }),
-						"bell",
-						unread,
-					),
-					link(
-						"Customers",
-						hrefOf(AppRoute.CustomersOverview({ orgSlug })),
-						isCustomersRoute(route),
-						IconOffice(h, { className: "size-6" }),
-						"building.2",
+					button(
+						h,
+						{
+							intent: "plain",
+							size: "sq-lg",
+							className:
+								"size-14 shrink-0 rounded-full border border-border bg-overlay text-fg shadow-md",
+							attributes: [
+								h.AriaLabel("Search"),
+								onSearch,
+								...nativeItem(h, { id: "Search", symbol: "magnifyingglass", role: "search" }),
+							],
+						},
+						[IconMagnifier3(h, { className: "size-5" })],
 					),
 				],
 			),

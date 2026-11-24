@@ -98,8 +98,8 @@ export const stackedBarChart = <M>(h: HtmlBuilder<M>, options: StackedBarChartOp
 						twMerge(
 							"absolute inset-x-0",
 							CHART_COLOR[colorOf.get(segment.key) ?? "neutral"].bg,
-							segment === lastUp && "rounded-t-[3px]",
-							segment === lastDown && "rounded-b-[3px]",
+							segment === lastUp && "rounded-t-sm",
+							segment === lastDown && "rounded-b-sm",
 						),
 					),
 					h.Style({ top: `${top}%`, bottom: `${bottom}%` }),

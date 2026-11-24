@@ -3,8 +3,9 @@ import { AsyncData, Mount } from "foldkit"
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { failureMessage } from "~/lib/error-messages"
 import { cn } from "~/lib/utils"
-import { IconLoader, IconMagnifier3 } from "../icons"
-import { button } from "../ui/button"
+import { IconMagnifier3 } from "../icons"
+import { ariaButton, button } from "../ui/button"
+import { loader } from "../ui/loader"
 import { EMOJI_FONT_FAMILY, type PickerCategory, type PickerData, type PickerEmoji } from "./data"
 import {
 	activeEmoji,
@@ -29,11 +30,15 @@ const VISUALLY_HIDDEN =
 	"border: 0px; clip: rect(0px, 0px, 0px, 0px); height: 1px; margin: -1px; overflow: hidden; padding: 0px; position: absolute; white-space: nowrap; width: 1px; overflow-wrap: normal;"
 
 /** 9 columns of 40px overflow a 375px phone; 36px cells fit with the sheet's gutters. */
-const EMOJI_CLASS =
-	"flex size-10 items-center justify-center rounded-md text-2xl data-[active]:bg-accent max-md:size-9"
-const ROW_CLASS = "scroll-my-1.5 px-2"
+export const EMOJI_CELL_CLASS =
+	"flex size-10 items-center justify-center rounded-lg text-2xl leading-none max-md:size-9"
+const EMOJI_CLASS = `${EMOJI_CELL_CLASS} data-[active]:bg-wash-strong`
+/** A custom emoji's image inside a cell. */
+export const EMOJI_IMAGE_CLASS = "size-6 object-contain max-md:size-5.5"
+const ROW_CLASS = "scroll-my-1.5 px-1.5"
+/** Sticky over the list, so it carries the picker's surface colour. */
 export const CATEGORY_HEADER_CLASS =
-	"bg-bg px-3 pt-4 pb-2.5 font-medium text-secondary-fg text-sm leading-none"
+	"bg-overlay px-3 pt-3 pb-1.5 font-medium text-muted-fg text-xs leading-none"
 
 const px = (value: number | null) => (value === null ? "" : `${value}px`)
 
@@ -45,20 +50,32 @@ const emojiButton = <M>(
 	isActive: boolean,
 	events: ReadonlyArray<Attribute<M>>,
 ): Html =>
-	h.button(
+	ariaButton(
+		h,
+		{
+			className: EMOJI_CLASS,
+			excludeFromTabOrder: true,
+			attributes: [
+				...events,
+				h.Attribute("aria-colindex", String(columnIndex)),
+				...(isActive ? [h.Attribute("aria-selected", "true"), h.Attribute("data-active", "")] : []),
+				h.Attribute("aria-label", emoji.label),
+				h.Attribute("data-slot", "emoji-picker-emoji"),
+				h.Attribute("frimousse-emoji", ""),
+				h.Role("gridcell"),
+				h.Attribute("style", "font-family: var(--frimousse-emoji-font);"),
+			],
+		},
 		[
-			...events,
-			h.Attribute("aria-colindex", String(columnIndex)),
-			...(isActive ? [h.Attribute("aria-selected", "true"), h.Attribute("data-active", "")] : []),
-			h.Attribute("aria-label", emoji.label),
-			h.Class(EMOJI_CLASS),
-			h.Attribute("data-slot", "emoji-picker-emoji"),
-			h.Attribute("frimousse-emoji", ""),
-			h.Role("gridcell"),
-			h.Attribute("style", "font-family: var(--frimousse-emoji-font);"),
-			h.Attribute("tabindex", "-1"),
+			emoji.imageUrl
+				? h.img([
+						h.Attribute("src", emoji.imageUrl),
+						h.Attribute("alt", ""),
+						h.Attribute("draggable", "false"),
+						h.Class(EMOJI_IMAGE_CLASS),
+					])
+				: emoji.emoji,
 		],
-		[emoji.emoji],
 	)
 
 /** `EmojiPickerListSizers`: a hidden row and header that frimousse measures. */
@@ -149,7 +166,10 @@ const listView = <M>(
 	const previousHeaders = (data?.categoriesStartRowIndices ?? []).filter(
 		(index) => index < range.startRowIndex,
 	).length
-	const active = activeEmoji(model)
+	const isActiveAt = (rowIndex: number, columnIndex: number) =>
+		model.interaction !== "None" &&
+		model.activeRowIndex === rowIndex &&
+		model.activeColumnIndex === columnIndex
 	const rows =
 		data === null || rowsCount === 0
 			? []
@@ -182,7 +202,7 @@ const listView = <M>(
 								),
 							],
 							row.emojis.map((emoji, columnIndex) =>
-								emojiButton(h, emoji, columnIndex, active?.emoji === emoji.emoji, [
+								emojiButton(h, emoji, columnIndex, isActiveAt(rowIndex, columnIndex), [
 									h.OnClick(toMessage(Message.ClickedEmoji({ rowIndex, columnIndex }))),
 									h.OnMouseEnter(
 										toMessage(Message.HoveredEmoji({ rowIndex, columnIndex })),
@@ -197,7 +217,7 @@ const listView = <M>(
 		[
 			h.Attribute("aria-colcount", String(COLUMNS)),
 			h.Attribute("aria-rowcount", String(rowsCount)),
-			h.Class("select-none pb-1"),
+			h.Class("select-none pb-1.5"),
 			h.Attribute("data-slot", "emoji-picker-list"),
 			h.Attribute("frimousse-list", ""),
 			h.Role("grid"),
@@ -292,19 +312,19 @@ const viewportView = <M>(h: HtmlBuilder<M>, model: Model, toMessage: (message: M
 							h.Attribute("data-slot", "emoji-picker-loading"),
 							h.Attribute("frimousse-loading", ""),
 						],
-						[IconLoader(h, { className: "size-4 animate-spin" })],
+						[loader(h, { className: "size-4" })],
 					)
 				: h.empty,
 			data !== null && data.count === 0
 				? h.span(
 						[
 							h.Class(
-								"absolute inset-0 flex items-center justify-center text-secondary-fg text-sm",
+								"absolute inset-0 flex items-center justify-center text-muted-fg text-sm",
 							),
 							h.Attribute("data-slot", "emoji-picker-empty"),
 							h.Attribute("frimousse-empty", ""),
 						],
-						["No emoji found."],
+						["No emoji found"],
 					)
 				: h.empty,
 			listView(h, model, data, toMessage),
@@ -318,23 +338,31 @@ const footerView = <M>(h: HtmlBuilder<M>, model: Model): Html => {
 	return h.div(
 		[
 			h.Class(
-				"flex w-full min-w-0 max-w-(--frimousse-viewport-width) items-center gap-2 border-border border-t p-3",
+				"flex h-12 w-full min-w-0 max-w-(--frimousse-viewport-width) flex-none items-center gap-2.5 border-border border-t px-3",
 			),
 			h.Attribute("data-slot", "emoji-picker-footer"),
 		],
 		active === null
-			? [
-					h.span(
-						[h.Class("ml-1.5 flex h-10 items-center truncate text-secondary-fg text-sm")],
-						["Select an emoji…"],
-					),
-				]
+			? [h.span([h.Class("truncate px-0.5 text-muted-fg text-sm")], ["Pick an emoji"])]
 			: [
 					h.div(
-						[h.Class("flex size-10 flex-none items-center justify-center text-2xl")],
-						[active.emoji],
+						[
+							h.Class(
+								"flex size-8 flex-none items-center justify-center text-2xl leading-none",
+							),
+							h.Attribute("style", "font-family: var(--frimousse-emoji-font);"),
+						],
+						[
+							active.imageUrl
+								? h.img([
+										h.Attribute("src", active.imageUrl),
+										h.Attribute("alt", ""),
+										h.Class("size-6 object-contain"),
+									])
+								: active.emoji,
+						],
 					),
-					h.span([h.Class("truncate text-secondary-fg text-sm")], [active.label]),
+					h.span([h.Class("min-w-0 truncate font-medium text-fg text-sm")], [active.label]),
 				],
 	)
 }
@@ -357,7 +385,7 @@ export const pickerView = <M>(h: HtmlBuilder<M>, model: Model, inputs: PickerVie
 		[
 			h.Class(
 				cn(
-					"isolate flex h-full w-fit flex-col overflow-hidden rounded-md border-border bg-secondary text-fg",
+					"isolate flex h-full w-fit flex-col overflow-hidden bg-overlay text-overlay-fg",
 					inputs.className,
 				),
 			),
@@ -376,29 +404,35 @@ export const pickerView = <M>(h: HtmlBuilder<M>, model: Model, inputs: PickerVie
 		],
 		[
 			h.div(
+				[h.Class("flex-none p-2 pb-1"), h.Attribute("data-slot", "emoji-picker-search-wrapper")],
 				[
-					h.Class("flex h-11 items-center gap-2.5 border-border border-b px-3.5"),
-					h.Attribute("data-slot", "emoji-picker-search-wrapper"),
-				],
-				[
-					IconMagnifier3(h, { className: "size-5 shrink-0 opacity-50" }),
-					h.input([
-						h.AriaLabel("Search emoji"),
-						h.Attribute("autocapitalize", "off"),
-						h.Attribute("autocomplete", "off"),
-						h.Attribute("autocorrect", "off"),
-						h.Class(
-							"flex h-11 w-full rounded-md bg-transparent py-3 text-base outline-hidden placeholder:text-muted-fg disabled:cursor-not-allowed disabled:opacity-50",
-						),
-						h.Attribute("data-slot", "emoji-picker-search"),
-						h.Attribute("enterkeyhint", "done"),
-						h.Attribute("frimousse-search", ""),
-						h.Attribute("placeholder", "Search…"),
-						h.Attribute("spellcheck", "false"),
-						h.Attribute("type", "search"),
-						h.OnInput((search) => toMessage(Message.UpdatedSearch({ search }))),
-						h.OnFocus(toMessage(Message.FocusedSearch())),
-					]),
+					h.div(
+						[
+							h.Class(
+								"flex h-9 items-center gap-2 rounded-lg bg-field px-2.5 text-muted-fg transition-colors hover:bg-field-hover focus-within:bg-field-hover focus-within:text-fg",
+							),
+						],
+						[
+							IconMagnifier3(h, { className: "size-4 shrink-0" }),
+							h.input([
+								h.AriaLabel("Search emoji"),
+								h.Attribute("autocapitalize", "off"),
+								h.Attribute("autocomplete", "off"),
+								h.Attribute("autocorrect", "off"),
+								h.Class(
+									"h-full w-full min-w-0 bg-transparent text-base text-fg outline-hidden placeholder:text-muted-fg sm:text-sm [&::-webkit-search-cancel-button]:hidden",
+								),
+								h.Attribute("data-slot", "emoji-picker-search"),
+								h.Attribute("enterkeyhint", "done"),
+								h.Attribute("frimousse-search", ""),
+								h.Attribute("placeholder", "Search emoji…"),
+								h.Attribute("spellcheck", "false"),
+								h.Attribute("type", "search"),
+								h.OnInput((search) => toMessage(Message.UpdatedSearch({ search }))),
+								h.OnFocus(toMessage(Message.FocusedSearch())),
+							]),
+						],
+					),
 				],
 			),
 			viewportView(h, model, toMessage),

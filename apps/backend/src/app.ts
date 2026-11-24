@@ -68,7 +68,7 @@ export const makeRoutes = <E, R, EX = never, RX = never>(
 
 /**
  * Hazel's own sign-in: the configured instance, its auth services, and the session lookup
- * the RPC and HttpApi middleware use. Inert until `AUTH_GITHUB_CLIENT_ID` is set. Needs the
+ * the RPC and HttpApi middleware use. Inert until an OAuth app (GitHub or Google) is set. Needs the
  * directory's `SqlClient` from the entry point.
  */
 export const HazelAuthLive = HazelSession.layer.pipe(

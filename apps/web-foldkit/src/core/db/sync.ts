@@ -1,6 +1,6 @@
 /**
  * The app's one sync hub (`infra/durable-object-sync-plan.md` §3) and the source sets the
- * collections follow. Every source streams over one socket, `<VITE_BACKEND_URL>/sync/mux`, each
+ * collections follow. Every source streams over one socket, `<api>/sync/mux`, each
  * opened with the access token; a token a source refuses (4001) is invalidated so the next read
  * exchanges again, and a refused exchange dispatches `SESSION_REJECTED_EVENT` as before.
  */
@@ -8,8 +8,9 @@ import type { SourceKey, SourceSet } from "@hazel/effect-db-collection"
 import { SyncHub, type SyncHubConfig, sourceSet } from "@hazel/effect-db-collection"
 import { invalidateAccessToken, readAccessToken } from "~/lib/access-token"
 import { channelSnapshots } from "./local-cache"
+import { apiUrl } from "~/config/server"
 
-const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:3003"
+const backendUrl = apiUrl()
 
 const hubConfig: SyncHubConfig = {
 	baseUrl: backendUrl,

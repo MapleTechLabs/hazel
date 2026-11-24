@@ -2,12 +2,10 @@ import { BotId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Command, Submodel } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
-import { twMerge } from "tailwind-merge"
-import { dialogDescriptionBase } from "~/components/ui/dialog.styles"
 import { modifyFields } from "foldkit/struct"
 import { HazelRpc } from "../../rpc"
 import { button } from "../../ui/button"
-import { dialogFooter, dialogHeader } from "../../ui/dialog"
+import { dialogDescription, dialogFooter, dialogHeader } from "../../ui/dialog"
 import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
 import * as Requests from "./requests"
@@ -95,10 +93,11 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 			dialogHeader(h, {}, [
 				modalTitle(h, model.frame, "Delete Application"),
 				// Three text nodes, as React renders the interpolated JSX.
-				h.p(
-					[h.Attribute("data-slot", "description"), h.Class(twMerge(dialogDescriptionBase))],
-					['Are you sure you want to delete "', model.botName, '"? This action cannot be undone.'],
-				),
+				dialogDescription(h, [
+					'Are you sure you want to delete "',
+					model.botName,
+					'"? This action cannot be undone.',
+				]),
 			]),
 			dialogFooter(h, [
 				button(h, { intent: "outline", onPress: Message.ClickedCancel() }, ["Cancel"]),

@@ -10,12 +10,16 @@ import { searchBox, sortTrigger, viewTabs } from "../../../../customers/ui/filte
 import { noResultsState } from "../../../../customers/ui/empty-states"
 import { IconArrowPath, IconCheck, IconLock, IconTrash } from "../../../../icons"
 import { AppRoute, hrefOf } from "../../../../route"
-import { button } from "../../../../ui/button"
+import { button, iconButton } from "../../../../ui/button"
+import { card, cardClassName, cardHeader } from "../../../../ui/card"
 import { emptyState } from "../../../../ui/empty-state"
+import { heading } from "../../../../ui/heading"
+import { loadingState } from "../../../../ui/loader"
 import type * as Menu from "../../../../ui/menu"
 import { menuLabel, view as menuView } from "../../../../ui/menu-view"
 import type { PageViewInputs, Shared } from "../../../contract"
-import { isCustomersAdmin, readOnlyNotice, settingsHeader, settingsPage } from "../shared"
+import { isCustomersAdmin, readOnlyNotice, settingsPage } from "../shared"
+import { pageHeader } from "../../../../ui/page-header"
 import { Message } from "./message"
 import {
 	groupsOf,
@@ -54,7 +58,7 @@ const FIELD_LABEL = {
 } as const satisfies Record<IgnoreRuleField, string>
 
 const icon = { attributes: { "data-slot": "icon" } }
-const card = "rounded-xl border border-border bg-bg"
+
 const plural = (count: number, noun: string) => `${formatCount(count)} ${noun}${count === 1 ? "" : "s"}`
 
 // HEADER
@@ -68,7 +72,7 @@ const subtitle = (model: Model): string =>
 
 const header = (h: HtmlBuilder<Message>, model: Model, shared: Shared): Html => {
 	const high = highConfidenceRecords(model).length
-	return settingsHeader(h, {
+	return pageHeader(h, {
 		title: "Unmatched records",
 		subtitle: subtitle(model),
 		crumbs: [
@@ -184,23 +188,21 @@ const bulkBar = (h: HtmlBuilder<Message>, model: Model): Html => {
 
 const failure = (h: HtmlBuilder<Message>, reason: CommonReason): Html => {
 	const message = commonMessage(reason)
-	return h.div(
-		[h.Class(`flex flex-col items-center gap-3 px-6 py-14 text-center ${card}`)],
-		[
-			h.span([h.Class("font-medium text-fg")], [message.title]),
-			...(message.description
-				? [h.span([h.Class("text-muted-fg text-sm")], [message.description])]
-				: []),
-			button(h, { intent: "outline", size: "sm", onPress: Message.PressedRetry() }, [
+	return card(h, {}, [
+		emptyState(h, {
+			title: message.title,
+			description: message.description,
+			className: "px-6 py-14",
+			action: button(h, { intent: "outline", size: "sm", onPress: Message.PressedRetry() }, [
 				IconArrowPath(h, icon),
 				"Try again",
 			]),
-		],
-	)
+		}),
+	])
 }
 
 const framed = (h: HtmlBuilder<Message>, child: Html): Html =>
-	h.div([h.Class(`flex items-center justify-center px-6 ${card}`)], [child])
+	card(h, { className: "flex items-center justify-center px-6" }, [child])
 
 const allLinked = (h: HtmlBuilder<Message>): Html =>
 	framed(
@@ -234,7 +236,7 @@ const withList = (
 		onNone: () =>
 			Option.match(AsyncData.getError(records), {
 				onSome: (reason) => [failure(h, reason)],
-				onNone: () => [h.div([h.Class(card)], [loadingTable(h)])],
+				onNone: () => [card(h, {}, [loadingTable(h)])],
 			}),
 	})
 
@@ -290,47 +292,44 @@ const openTab = (h: HtmlBuilder<Message>, model: Model, shared: Shared): Readonl
 			]
 		const ignored = itemsOf(model.ignored).length
 		return [
-			h.div(
-				// The table's columns follow the card's width.
-				[h.Class(`${card} @container`)],
-				[
-					recordsTable(h, model, groupsOf(records), {
-						id: "unmatched-open",
-						ariaLabel: "Unmatched records",
-						accountsById: new Map((model.accounts ?? []).map((account) => [account.id, account])),
-						isAdmin: isCustomersAdmin(shared),
-					}),
-					...loadMore(h, model, "open", list),
-					...(ignored === 0
-						? []
-						: [
-								h.div(
-									[
-										h.Class(
-											"flex flex-wrap items-center gap-3 px-4 py-2.5 text-muted-fg text-xs",
-										),
-									],
-									[
-										h.span(
-											[h.Class("flex-1")],
-											[
-												`${plural(ignored, "ignored record")} ${ignored === 1 ? "is" : "are"} hidden. Ignored records never create accounts and don't count toward coverage.`,
-											],
-										),
-										button(
-											h,
-											{
-												intent: "plain",
-												size: "xs",
-												onPress: Message.ClickedTab({ tab: "ignored" }),
-											},
-											["Show ignored"],
-										),
-									],
-								),
-							]),
-				],
-			),
+			// The table's columns follow the card's width.
+			card(h, { className: "@container" }, [
+				recordsTable(h, model, groupsOf(records), {
+					id: "unmatched-open",
+					ariaLabel: "Unmatched records",
+					accountsById: new Map((model.accounts ?? []).map((account) => [account.id, account])),
+					isAdmin: isCustomersAdmin(shared),
+				}),
+				...loadMore(h, model, "open", list),
+				...(ignored === 0
+					? []
+					: [
+							h.div(
+								[
+									h.Class(
+										"flex flex-wrap items-center gap-3 px-4 py-2.5 text-muted-fg text-xs",
+									),
+								],
+								[
+									h.span(
+										[h.Class("flex-1")],
+										[
+											`${plural(ignored, "ignored record")} ${ignored === 1 ? "is" : "are"} hidden. Ignored records never create accounts and don't count toward coverage.`,
+										],
+									),
+									button(
+										h,
+										{
+											intent: "plain",
+											size: "xs",
+											onPress: Message.ClickedTab({ tab: "ignored" }),
+										},
+										["Show ignored"],
+									),
+								],
+							),
+						]),
+			]),
 		]
 	})
 
@@ -350,20 +349,15 @@ const ruleRow = (h: HtmlBuilder<Message>, rule: IgnoreRuleRow, isAdmin: boolean)
 			),
 			...(isAdmin
 				? [
-						button(
+						iconButton(
 							h,
 							{
-								intent: "plain",
 								size: "sq-xs",
 								className: "ml-auto",
-								attributes: [
-									h.AriaLabel(
-										`Delete the rule ${FIELD_LABEL[rule.field]} matches ${rule.pattern}`,
-									),
-								],
+								label: `Delete the rule ${FIELD_LABEL[rule.field]} matches ${rule.pattern}`,
 								onPress: Message.PressedDeleteRule({ ruleId: rule.id }),
 							},
-							[IconTrash(h, { className: "size-4" })],
+							IconTrash(h, { className: "size-4" }),
 						),
 					]
 				: []),
@@ -372,13 +366,14 @@ const ruleRow = (h: HtmlBuilder<Message>, rule: IgnoreRuleRow, isAdmin: boolean)
 
 const rulesSection = (h: HtmlBuilder<Message>, model: Model, isAdmin: boolean): Html =>
 	h.section(
-		[h.AriaLabelledBy("unmatched-rules-title"), h.Class(`flex flex-col ${card}`)],
+		[h.AriaLabelledBy("unmatched-rules-title"), h.Class(cardClassName("flex flex-col"))],
 		[
-			h.div(
-				[h.Class("flex flex-col gap-0.5 border-border border-b px-4 py-3")],
+			cardHeader(
+				h,
 				[
-					h.h2(
-						[h.Id("unmatched-rules-title"), h.Class("font-medium text-fg text-sm")],
+					heading(
+						h,
+						{ variant: "subsection", level: 2, attributes: [h.Id("unmatched-rules-title")] },
 						["Ignore rules"],
 					),
 					h.p(
@@ -388,6 +383,7 @@ const rulesSection = (h: HtmlBuilder<Message>, model: Model, isAdmin: boolean): 
 						],
 					),
 				],
+				"px-4 py-3 md:px-4",
 			),
 			Option.match(AsyncData.getData(model.rules), {
 				onSome: (rules) =>
@@ -401,10 +397,9 @@ const rulesSection = (h: HtmlBuilder<Message>, model: Model, isAdmin: boolean): 
 								rules.map((rule) => ruleRow(h, rule, isAdmin)),
 							),
 				onNone: () =>
-					h.p(
-						[h.Class("px-4 py-4 text-muted-fg text-sm")],
-						[AsyncData.hasError(model.rules) ? "Couldn't load the rules." : "Loading…"],
-					),
+					AsyncData.hasError(model.rules)
+						? h.p([h.Class("px-4 py-4 text-muted-fg text-sm")], ["Couldn't load the rules."])
+						: loadingState(h, { label: "Loading…", size: "sm", className: "py-4" }),
 			}),
 		],
 	)
@@ -430,19 +425,16 @@ const ignoredTab = (h: HtmlBuilder<Message>, model: Model, shared: Shared): Read
 						}),
 			]
 		return [
-			h.div(
-				// The table's columns follow the card's width.
-				[h.Class(`${card} @container`)],
-				[
-					recordsTable(h, model, groupsOf(records), {
-						id: "unmatched-ignored",
-						ariaLabel: "Ignored records",
-						accountsById: new Map((model.accounts ?? []).map((account) => [account.id, account])),
-						isAdmin: false,
-					}),
-					...loadMore(h, model, "ignored", list),
-				],
-			),
+			// The table's columns follow the card's width.
+			card(h, { className: "@container" }, [
+				recordsTable(h, model, groupsOf(records), {
+					id: "unmatched-ignored",
+					ariaLabel: "Ignored records",
+					accountsById: new Map((model.accounts ?? []).map((account) => [account.id, account])),
+					isAdmin: false,
+				}),
+				...loadMore(h, model, "ignored", list),
+			]),
 		]
 	}),
 	rulesSection(h, model, isCustomersAdmin(shared)),

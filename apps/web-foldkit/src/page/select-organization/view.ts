@@ -1,8 +1,11 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { appLoader } from "../../shell/layouts"
+import { IconChevronRight } from "../../icons"
 import { avatar } from "../../ui/avatar"
-import { button } from "../../ui/button"
+import { badge } from "../../ui/badge"
+import { ariaButton, button } from "../../ui/button"
+import { cardClassName } from "../../ui/card"
 import type { PageViewInputs } from "../contract"
 import * as CreateWorkspace from "../create-workspace"
 import { Message } from "./message"
@@ -39,60 +42,46 @@ const createWorkspace = (h: HtmlBuilder<Message>, model: Model): Html =>
 	)
 
 const organizationButton = (h: HtmlBuilder<Message>, organization: UserOrganization): Html =>
-	h.keyed("button")(
+	h.keyed("div")(
 		organization.id,
+		[],
 		[
-			h.Type("button"),
-			h.OnClick(Message.ClickedOrganization({ organization })),
-			h.Class(
-				"flex w-full items-center gap-4 rounded-xl border border-border bg-bg p-4 text-left transition-[border-color,background-color] hover:border-primary hover:bg-secondary/50 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
-			),
-		],
-		[
-			avatar(h, {
-				src: organization.logoUrl,
-				seed: organization.name,
-				className: "size-12",
-			}),
-			h.div(
-				[h.Class("flex flex-1 flex-col max-md:min-w-0")],
-				[
-					h.span([h.Class("font-medium text-fg text-sm max-md:truncate")], [organization.name]),
-					...(organization.slug
-						? [
-								h.span(
-									[h.Class("text-muted-fg text-xs max-md:truncate")],
-									["@", organization.slug],
-								),
-							]
-						: []),
-				],
-			),
-			h.div(
-				[h.Class("flex items-center gap-2 max-md:shrink-0")],
-				[
-					h.span(
-						[
-							h.Class(
-								"rounded-full bg-primary/10 px-2.5 py-0.5 font-medium text-primary text-xs",
-							),
-						],
-						[capitalize(organization.role)],
+			ariaButton(
+				h,
+				{
+					onPress: Message.ClickedOrganization({ organization }),
+					className: cardClassName(
+						"flex w-full items-center gap-4 p-4 text-left transition-[border-color,background-color] hover:border-primary hover:bg-secondary/50 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
 					),
-					h.svg(
+				},
+				[
+					avatar(h, {
+						src: organization.logoUrl,
+						seed: organization.name,
+						className: "size-12",
+					}),
+					h.div(
+						[h.Class("flex flex-1 flex-col max-md:min-w-0")],
 						[
-							h.Class("size-5 text-muted-fg"),
-							h.Attribute("fill", "none"),
-							h.Attribute("stroke", "currentColor"),
-							h.Attribute("stroke-width", "2"),
-							h.Attribute("viewBox", "0 0 24 24"),
+							h.span(
+								[h.Class("font-medium text-fg text-sm max-md:truncate")],
+								[organization.name],
+							),
+							...(organization.slug
+								? [
+										h.span(
+											[h.Class("text-muted-fg text-xs max-md:truncate")],
+											["@", organization.slug],
+										),
+									]
+								: []),
 						],
+					),
+					h.div(
+						[h.Class("flex items-center gap-2 max-md:shrink-0")],
 						[
-							h.path([
-								h.Attribute("d", "M9 5l7 7-7 7"),
-								h.Attribute("stroke-linecap", "round"),
-								h.Attribute("stroke-linejoin", "round"),
-							]),
+							badge(h, { intent: "primary", isPill: true }, [capitalize(organization.role)]),
+							IconChevronRight(h, { className: "size-5 text-muted-fg" }),
 						],
 					),
 				],

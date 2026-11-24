@@ -4,8 +4,10 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconArrowPath, IconPlus } from "../../icons"
 import { button } from "../../ui/button"
+import { cardClassName } from "../../ui/card"
 import { loader } from "../../ui/loader"
 import { progressBar, progressBarTrack } from "../../ui/progress-bar"
+import { type StatusTone, statusLine } from "../../ui/status-dot"
 import { formatCount, formatRelative, type Instant } from "../format"
 import { providerOf, sourceLabel } from "../providers"
 import { sourceMark } from "./identity"
@@ -41,9 +43,10 @@ export type ConnectCardStatus<M> =
 			action: Readonly<{ label: string; onPress: M }>
 	  }>
 
-const statusLine = <M>(
+/** The kit's `● label` in the state's colour, then `· rest` muted. */
+const stateLine = <M>(
 	h: HtmlBuilder<M>,
-	dotClass: string,
+	tone: StatusTone,
 	label: string,
 	labelClass: string,
 	rest: string | null,
@@ -52,8 +55,7 @@ const statusLine = <M>(
 		// Wraps between its parts, never inside one ("Sync failed", "· 2h ago").
 		[h.Class("flex flex-wrap items-center gap-x-1.5 text-sm")],
 		[
-			h.span([h.AriaHidden(true), h.Class(twMerge("size-1.5 shrink-0 rounded-full", dotClass))]),
-			h.span([h.Class(twMerge("whitespace-nowrap", labelClass))], [label]),
+			statusLine(h, { tone, className: twMerge("text-sm", labelClass) }, label),
 			...(rest === null ? [] : [h.span([h.Class("whitespace-nowrap text-muted-fg")], [`· ${rest}`])]),
 		],
 	)
@@ -71,7 +73,7 @@ export const connectCard = <M>(
 	const { status } = options
 	const footer: ReadonlyArray<Html> = Match.valueTags(status, {
 		NotConnected: (status) => [
-			statusLine(h, "bg-muted-fg", "Not connected", "text-muted-fg", null),
+			stateLine(h, "neutral", "Not connected", "text-muted-fg", null),
 			button(h, { intent: "primary", size: "sm", onPress: status.onConnect }, [IconPlus(h), "Connect"]),
 		],
 		Syncing: (status) => {
@@ -115,9 +117,9 @@ export const connectCard = <M>(
 			h.div(
 				[h.Class("flex min-w-0 flex-col gap-0.5")],
 				[
-					statusLine(
+					stateLine(
 						h,
-						"bg-success-subtle-fg",
+						"success",
 						"Connected",
 						"font-medium text-success-subtle-fg",
 						status.syncedAt === null
@@ -140,9 +142,9 @@ export const connectCard = <M>(
 			h.div(
 				[h.Class("flex min-w-0 flex-col gap-0.5")],
 				[
-					statusLine(
+					stateLine(
 						h,
-						"bg-danger-subtle-fg",
+						"danger",
 						"Sync failed",
 						"font-medium text-danger-subtle-fg",
 						formatRelative(status.at, options.now),
@@ -158,12 +160,7 @@ export const connectCard = <M>(
 	return h.article(
 		[
 			h.AriaLabel(sourceLabel(options.provider)),
-			h.Class(
-				twMerge(
-					"flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-bg p-4 sm:p-5",
-					options.className,
-				),
-			),
+			h.Class(cardClassName(twMerge("flex min-w-0 flex-col gap-4 p-4 sm:p-5", options.className))),
 		],
 		[
 			h.div(

@@ -10,12 +10,20 @@ import WebKit
 final class HostBridge: NSObject, WKScriptMessageHandlerWithReply {
     /// The app the hosted sign-in page hands back to (`nativeClient.returnUrl`).
     static let callbackScheme = "com.hazel.native"
-    /// The web app: its sign-in pages open in the sign-in sheet, the rest in the page itself.
-    nonisolated static let appOrigin = URL(string: "https://app.hazel.sh")!
-    /// The origin the page runs on: the web app's, or for an offline build (`OFFLINE=1 build.sh`)
-    /// an http one, so the fixture's local HTML renders frame in it as real ones do.
-    nonisolated static let pageOrigin: URL = (Bundle.main.object(forInfoDictionaryKey: "HazelPageOrigin") as? String)
-        .flatMap { $0.isEmpty ? nil : URL(string: $0) } ?? appOrigin
+    /// Hazel's own web app, the default install.
+    nonisolated static let hazelOrigin = URL(string: "https://app.hazel.sh")!
+    /// The web app of the install the app talks to (`ChosenServer`, else Hazel's): its sign-in
+    /// pages open in the sign-in sheet, the rest in the page itself.
+    nonisolated static var appOrigin: URL { ChosenServer.appOrigin ?? hazelOrigin }
+    /// The origin the page runs on: the chosen install's web app, so its API's CORS (`FRONTEND_URL`)
+    /// takes the page; else the build's (`HazelPageOrigin`): Hazel's, or for an offline build
+    /// (`OFFLINE=1 build.sh`) an http one, so the fixture's local HTML renders frame in it as real
+    /// ones do.
+    nonisolated static var pageOrigin: URL {
+        ChosenServer.appOrigin
+            ?? (Bundle.main.object(forInfoDictionaryKey: "HazelPageOrigin") as? String)
+            .flatMap { $0.isEmpty ? nil : URL(string: $0) } ?? hazelOrigin
+    }
 
     weak var webView: WKWebView?
     private var signIn: ASWebAuthenticationSession?
@@ -79,6 +87,12 @@ final class HostBridge: NSObject, WKScriptMessageHandlerWithReply {
                 } catch {
                     replyHandler(["error": error.localizedDescription], nil)
                 }
+            case "server_set":
+                // Another install (or Hazel's again, `null`): kept, then the page starts over on its
+                // origin. The page has already signed out and emptied the vault (`server-switch.ts`).
+                ChosenServer.set(args["server"] as? String)
+                replyHandler(["value": NSNull()], nil)
+                (webView?.navigationDelegate as? PageNavigation)?.load?(Self.pageOrigin)
             case "open_url":
                 guard let url, let target = URL(string: url) else { return replyHandler(["error": "bad url"], nil) }
                 open(target)
@@ -135,6 +149,44 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate {
         newRequest request: URLRequest
     ) async -> URLRequest? {
         nil
+    }
+}
+
+/// The install the user chose on the sign-in page (`server_set`): its discovery document
+/// (`/.well-known/hazel.json`) as the page handed it, kept across launches and handed back to every
+/// page load (`window.__hazelServer`, `WebBridge.loadPage`). None: Hazel's own.
+enum ChosenServer {
+    private static let key = "sh.hazel.server"
+
+    /// The document, when it names an https web app.
+    static var document: String? {
+        guard let document = UserDefaults.standard.string(forKey: key), origin(of: document) != nil else { return nil }
+        return document
+    }
+
+    /// The chosen install's web app origin.
+    static var appOrigin: URL? {
+        UserDefaults.standard.string(forKey: key).flatMap(origin(of:))
+    }
+
+    static func set(_ document: String?) {
+        if let document, origin(of: document) != nil {
+            UserDefaults.standard.set(document, forKey: key)
+        } else {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+    }
+
+    private static func origin(of document: String) -> URL? {
+        guard let object = try? JSONSerialization.jsonObject(with: Data(document.utf8)) as? [String: Any],
+              let app = (object["app"] as? String).flatMap(URLComponents.init(string:)),
+              app.scheme == "https", let host = app.host, !host.isEmpty, app.user == nil, app.password == nil
+        else { return nil }
+        var origin = URLComponents()
+        origin.scheme = "https"
+        origin.host = host
+        origin.port = app.port
+        return origin.url
     }
 }
 

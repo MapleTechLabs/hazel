@@ -128,4 +128,23 @@ describe("the panel", () => {
 			sceneExpect(role("textbox", { name: "Message the assistant" })).toBeAbsent(),
 		)
 	})
+	test("on the T3 Code settings page it points at the form rather than linking to it", () => {
+		scene(
+			rootScene,
+			given(signedIn("/hazel/settings/integrations/t3code")),
+			...shellMenusMounted,
+			...openedPanel,
+			menuMounted,
+			Command.resolve(
+				FetchAssistantStatus,
+				Message.SucceededFetchStatus({
+					organizationId: hazelOrg.id,
+					connection: "NotConnected",
+					environmentLabel: null,
+				}),
+			),
+			sceneExpect(text(/Link your environment on this page/)).toExist(),
+			sceneExpect(role("link", { name: "Open T3 Code settings" })).toBeAbsent(),
+		)
+	})
 })

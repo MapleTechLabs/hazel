@@ -1,6 +1,12 @@
+import {
+	InstanceAccessConfig,
+	isInstanceAdmin,
+	ORG_CREATION_REFUSED_MESSAGE,
+	type InstanceAccess,
+} from "@hazel/auth/instance-access"
 import { ChannelMemberRepo, ChannelRepo, OrganizationMemberRepo, OrganizationRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
-import { CurrentUser, InternalServerError, withRemapDbErrors } from "@hazel/domain"
+import { CurrentUser, InternalServerError, UnauthorizedError, withRemapDbErrors } from "@hazel/domain"
 import {
 	AlreadyMemberError,
 	OrganizationNotFoundError,
@@ -11,7 +17,7 @@ import {
 	PublicOrganizationInfo,
 } from "@hazel/domain/rpc"
 import { OrganizationId } from "@hazel/schema"
-import { Effect, Option } from "effect"
+import { Effect, Match, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { currentObject } from "../../lib/current-object"
 import { OrganizationPolicy } from "../../policies/organization-policy"
@@ -41,6 +47,40 @@ const toResponse = (
 		},
 		transactionId,
 	})
+
+/** Whether `email` may create an organization under the install's `ORG_CREATION`. */
+export const mayCreateOrganization = (access: InstanceAccess, email: string): boolean =>
+	Match.value(access.orgCreation).pipe(
+		Match.when("anyone", () => true),
+		Match.when("admins", () => isInstanceAdmin(access.instanceAdminEmails, email)),
+		Match.exhaustive,
+	)
+
+/**
+ * `ORG_CREATION=admins` limits creating organizations to `INSTANCE_ADMIN_EMAILS`
+ * (`@hazel/auth/instance-access`); joining an existing one (invitation, public invite) is not.
+ */
+export const requireOrgCreationAllowed = Effect.gen(function* () {
+	const access = yield* InstanceAccessConfig.pipe(
+		Effect.catchTag("ConfigError", (cause) =>
+			Effect.fail(
+				InternalServerError.withCause({
+					message: "Could not read the instance access settings",
+					cause,
+				}),
+			),
+		),
+	)
+	const currentUser = yield* CurrentUser.Context
+	if (mayCreateOrganization(access, currentUser.email)) return
+	yield* Effect.logInfo("[organization] refused organization.create: not an instance admin", {
+		userId: currentUser.id,
+	})
+	return yield* new UnauthorizedError({
+		message: ORG_CREATION_REFUSED_MESSAGE,
+		detail: "Organization creation on this instance is limited to its admins (ORG_CREATION=admins)",
+	})
+})
 
 /** The object's own organization id; `None` on the directory path. */
 const objectOrganizationId = Effect.map(currentObject, (object) =>
@@ -129,6 +169,7 @@ export const OrganizationRpcLive = OrganizationRpcs.toLayer(
 					const self = yield* objectOrganizationId
 					if (Option.isNone(self)) {
 						// Directory path: claim an id, then let the new OrgObject create itself.
+						yield* requireOrgCreationAllowed
 						yield* requireFreeSlug(payload.slug)
 						yield* organizationPolicy.canCreate
 						const id = OrganizationId.make(crypto.randomUUID())
@@ -148,6 +189,8 @@ export const OrganizationRpcLive = OrganizationRpcs.toLayer(
 								})
 							}
 							yield* organizationPolicy.canCreate
+							// Checked again here: the object is the authority for its own rows.
+							yield* requireOrgCreationAllowed
 							const [created] = yield* db.run(
 								SQLite.insertInto(schema.organizationsTable)
 									.values({

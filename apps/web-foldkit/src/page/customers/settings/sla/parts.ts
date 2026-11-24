@@ -2,9 +2,10 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconClose } from "../../../../icons"
 import { badge } from "../../../../ui/badge"
-import { button } from "../../../../ui/button"
+import { iconButton } from "../../../../ui/button"
+import { cardClassName, panelHeader } from "../../../../ui/card"
 import * as Field from "../../../../ui/field"
-import { heading } from "../../../../ui/heading"
+
 import * as Select from "../../../../ui/select"
 import { view as selectView } from "../../../../ui/select-view"
 import { Message } from "./message"
@@ -29,34 +30,18 @@ export const card = (
 		[
 			h.AriaLabel(options.title),
 			h.Class(
-				options.isFlush
-					? "flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-bg"
-					: "flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-bg p-4 sm:p-5",
+				cardClassName(
+					options.isFlush ? "flex min-w-0 flex-col" : "flex min-w-0 flex-col gap-4 p-4 sm:p-5",
+				),
 			),
 		],
 		[
-			h.header(
-				[
-					h.Class(
-						twMerge(
-							"flex flex-wrap items-start justify-between gap-x-4 gap-y-2",
-							options.isFlush && "p-4 sm:p-5",
-						),
-					),
-				],
-				[
-					h.div(
-						[h.Class("flex min-w-0 flex-col gap-0.5")],
-						[
-							heading(h, { variant: "section" }, [options.title]),
-							...(options.description === undefined
-								? []
-								: [h.p([h.Class("text-muted-fg text-sm")], [options.description])]),
-						],
-					),
-					...(options.aside == null ? [] : [options.aside]),
-				],
-			),
+			panelHeader(h, {
+				title: options.title,
+				description: options.description,
+				aside: options.aside ?? undefined,
+				className: options.isFlush ? "p-4 sm:p-5" : undefined,
+			}),
 			...children,
 		],
 	)
@@ -112,16 +97,15 @@ export const removableChip = (h: H, options: Readonly<{ label: string; onRemove:
 		...(options.onRemove === null
 			? []
 			: [
-					button(
+					iconButton(
 						h,
 						{
-							intent: "plain",
 							size: "sq-xs",
 							className: "size-5 sm:size-5",
+							label: `Remove ${options.label}`,
 							onPress: options.onRemove,
-							attributes: [h.AriaLabel(`Remove ${options.label}`)],
 						},
-						[IconClose(h, { attributes: { "data-slot": "icon" } })],
+						IconClose(h, { attributes: { "data-slot": "icon" } }),
 					),
 				]),
 	])

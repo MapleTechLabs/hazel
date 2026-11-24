@@ -1,5 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { cx } from "~/utils/cx"
+import { ariaButton } from "../ui/button"
 
 /**
  * Discord's image mosaic, shared by a message's image attachments and its image-only embeds. One
@@ -95,13 +96,13 @@ const singleView = <M>(h: HtmlBuilder<M>, image: MosaicImage<M>): Html => {
 	const frame = "block w-fit max-w-full overflow-hidden rounded-md border border-border"
 	return image.onOpen === undefined
 		? h.div([h.Class(frame)], [img])
-		: h.button(
-				[
-					h.Type("button"),
-					h.Class(cx(frame, pressable)),
-					h.AriaLabel(`Open ${image.alt}`),
-					h.OnClick(image.onOpen),
-				],
+		: ariaButton(
+				h,
+				{
+					className: cx(frame, pressable),
+					onPress: image.onOpen,
+					attributes: [h.AriaLabel(`Open ${image.alt}`)],
+				},
 				[img],
 			)
 }

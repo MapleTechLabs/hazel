@@ -7,13 +7,15 @@ import { sourceMark } from "../../../../customers/ui/identity"
 import { IconArrowPath, IconCheck, IconChevronRight, IconGear, IconPlus } from "../../../../icons"
 import { AppRoute, hrefOf } from "../../../../route"
 import { button, buttonClassName } from "../../../../ui/button"
+import { cardClassName, panel } from "../../../../ui/card"
 import { progressBar, progressBarTrack } from "../../../../ui/progress-bar"
-import { readOnlyNotice, settingsHeader, settingsPage } from "../shared"
+import { statusDot } from "../../../../ui/status-dot"
+import { readOnlyNotice, settingsPage } from "../shared"
+import { pageHeader } from "../../../../ui/page-header"
 import { Message } from "./message"
 import { connectionOf, isLive, type Model, runningRunOf, statusOf } from "./model"
 import {
-	callout,
-	card,
+	messageCallout,
 	chips,
 	comingSoonBadge,
 	eyebrow,
@@ -68,7 +70,7 @@ const unmatchedCount = (h: H, count: number, context: Context): Html =>
 					h.p(
 						[h.Class("flex items-center gap-1.5 font-medium text-fg text-sm")],
 						[
-							h.span([h.AriaHidden(true), h.Class("size-1.5 rounded-full bg-warning")]),
+							statusDot(h, { tone: "warning" }),
 							`${formatCount(count)} unmatched ${count === 1 ? "record" : "records"}`,
 						],
 					),
@@ -86,70 +88,66 @@ const unmatchedCount = (h: H, count: number, context: Context): Html =>
 	)
 
 const coverageCard = (h: H, model: Model, context: Context, live: ReadonlyArray<ConnectionRow>): Html =>
-	card(
-		h,
-		[
-			h.div(
-				[h.Class("flex flex-col gap-1")],
-				[
-					eyebrow(h, "Identity coverage"),
-					h.p(
-						[h.Class("flex items-baseline gap-1.5")],
-						[
-							h.span(
-								[h.Class("font-semibold text-3xl text-fg tabular-nums")],
-								[model.accountCount === null ? "—" : formatCount(model.accountCount)],
-							),
-							h.span([h.Class("text-muted-fg text-sm")], ["accounts"]),
-						],
-					),
-					h.p(
-						[h.Class("text-muted-fg text-sm")],
-						["One customer model, whichever sources each account came from."],
-					),
-				],
-			),
-			h.div(
-				[h.Class("flex min-w-0 flex-col gap-2 lg:border-border lg:border-x lg:px-5")],
-				[
-					eyebrow(h, "Records per source"),
-					live.length === 0
-						? h.p([h.Class("text-muted-fg text-sm")], ["Nothing synced yet."])
-						: h.ul(
-								[h.Class("flex flex-col gap-1.5")],
-								live.map((connection) =>
-									h.li(
-										[h.Class("flex items-center gap-2 text-sm")],
-										[
-											sourceMark(h, connection.provider, {
-												size: "sm",
-												className: "size-6",
-											}),
-											h.span(
-												[h.Class("font-medium text-fg")],
-												[providerOf(connection.provider).name],
-											),
-											h.span(
-												[h.Class("truncate text-muted-fg tabular-nums")],
-												[
-													statParts(connection.stats).slice(0, 2).join(" · ") ||
-														"No records yet",
-												],
-											),
-										],
-									),
+	panel(h, { className: "grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)_minmax(0,1fr)]" }, [
+		h.div(
+			[h.Class("flex flex-col gap-1")],
+			[
+				eyebrow(h, "Identity coverage"),
+				h.p(
+					[h.Class("flex items-baseline gap-1.5")],
+					[
+						h.span(
+							[h.Class("font-semibold text-3xl text-fg tabular-nums")],
+							[model.accountCount === null ? "—" : formatCount(model.accountCount)],
+						),
+						h.span([h.Class("text-muted-fg text-sm")], ["accounts"]),
+					],
+				),
+				h.p(
+					[h.Class("text-muted-fg text-sm")],
+					["One customer model, whichever sources each account came from."],
+				),
+			],
+		),
+		h.div(
+			[h.Class("flex min-w-0 flex-col gap-2 lg:border-border lg:border-x lg:px-5")],
+			[
+				eyebrow(h, "Records per source"),
+				live.length === 0
+					? h.p([h.Class("text-muted-fg text-sm")], ["Nothing synced yet."])
+					: h.ul(
+							[h.Class("flex flex-col gap-1.5")],
+							live.map((connection) =>
+								h.li(
+									[h.Class("flex items-center gap-2 text-sm")],
+									[
+										sourceMark(h, connection.provider, {
+											size: "sm",
+											className: "size-6",
+										}),
+										h.span(
+											[h.Class("font-medium text-fg")],
+											[providerOf(connection.provider).name],
+										),
+										h.span(
+											[h.Class("truncate text-muted-fg tabular-nums")],
+											[
+												statParts(connection.stats).slice(0, 2).join(" · ") ||
+													"No records yet",
+											],
+										),
+									],
 								),
 							),
-					h.p(
-						[h.Class("text-muted-fg text-xs")],
-						["Match order: existing link → shared ID → email domain → new account"],
-					),
-				],
-			),
-			...(context.isAdmin ? [unmatchedPanel(h, model, context)] : []),
-		],
-		"grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)_minmax(0,1fr)]",
-	)
+						),
+				h.p(
+					[h.Class("text-muted-fg text-xs")],
+					["Match order: existing link → shared ID → email domain → new account"],
+				),
+			],
+		),
+		...(context.isAdmin ? [unmatchedPanel(h, model, context)] : []),
+	])
 
 // CONNECTED
 
@@ -220,7 +218,7 @@ export const errorBanner = (
 		connection.lastSuccessAtMs === null
 			? "No sync has succeeded yet."
 			: `Last successful sync ${formatDate(new Date(connection.lastSuccessAtMs), { now: new Date(context.nowMs) })}, ${formatClock(connection.lastSuccessAtMs)} (${formatRelative(new Date(connection.lastSuccessAtMs), new Date(context.nowMs))}).`
-	return callout(h, {
+	return messageCallout(h, {
 		message: { title: message.title, description: `${message.description} ${lastGood}` },
 		actions: [
 			...(showRunLink
@@ -313,12 +311,7 @@ export const syncModeLines = (h: H, connection: ConnectionRow): ReadonlyArray<Ht
 			: h.p(
 					[h.Class("flex items-center gap-1.5 text-muted-fg text-xs")],
 					[
-						h.span([
-							h.AriaHidden(true),
-							h.Class(
-								`size-1.5 shrink-0 rounded-full ${connection.hasWebhookSecret ? "bg-success-subtle-fg" : "bg-warning"}`,
-							),
-						]),
+						statusDot(h, { tone: connection.hasWebhookSecret ? "success" : "warning" }),
 						connection.hasWebhookSecret ? "Signing secret set" : "Signing secret missing",
 					],
 				),
@@ -331,7 +324,7 @@ const connectedCard = (h: H, model: Model, connection: ConnectionRow, context: C
 	const running = runningRunOf(model, connection.id)
 	const records = statParts(connection.stats)
 	return h.article(
-		[h.AriaLabel(descriptor.name), h.Class("flex flex-col rounded-xl border border-border bg-bg")],
+		[h.AriaLabel(descriptor.name), h.Class(cardClassName("flex flex-col"))],
 		[
 			h.div(
 				[h.Class("flex flex-col gap-3 p-4 sm:p-5")],
@@ -480,7 +473,9 @@ const notConnectedCard = (
 		[
 			h.AriaLabel(descriptor.name),
 			h.Class(
-				"grid gap-4 rounded-xl border border-border bg-bg p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-center",
+				cardClassName(
+					"grid gap-4 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-center",
+				),
 			),
 		],
 		[
@@ -558,7 +553,7 @@ export const overviewView = (h: H, model: Model, context: Context): Html => {
 	)
 	const isEmpty = model.connections !== null && model.connections.length === 0
 	return settingsPage(h, [
-		settingsHeader(h, {
+		pageHeader(h, {
 			title: "Data sources",
 			subtitle:
 				"Integrations that write accounts, contacts, billing and usage into one customer model.",

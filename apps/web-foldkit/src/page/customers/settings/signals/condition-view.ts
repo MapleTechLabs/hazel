@@ -8,7 +8,10 @@ import { AppRoute, hrefOf } from "../../../../route"
 import { switchControl } from "../../../../ui/switch"
 import { Message } from "./message"
 import type { MetricRow, Model, RuleForm } from "./model"
-import { card, fieldError, numberInput, toggleChip } from "./parts"
+import { fieldError, numberInput } from "./parts"
+import { ariaButton } from "../../../../ui/button"
+import { toggleChip } from "../../../../ui/toggle-chip"
+import { panel, panelHeader } from "../../../../ui/card"
 
 /**
  * The editor's condition, generated from the template's config: each threshold typed inline in its
@@ -417,21 +420,17 @@ const metricRow = (h: H, context: ConditionContext, metric: MetricRow, selected:
 			],
 		)
 	}
-	return h.button(
-		[
-			h.Type("button"),
-			h.Role("radio"),
-			h.AriaChecked(isSelected),
-			...(context.isAdmin
-				? [h.OnClick(Message.ClickedMetric({ metricKey: metric.key }))]
-				: [h.Disabled(true)]),
-			h.Class(
-				twMerge(
-					"flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left outline-hidden transition-colors hover:bg-secondary/40 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset disabled:cursor-default",
-					isSelected && "bg-primary-subtle/30 hover:bg-primary-subtle/30",
-				),
+	return ariaButton(
+		h,
+		{
+			isDisabled: !context.isAdmin,
+			onPress: Message.ClickedMetric({ metricKey: metric.key }),
+			attributes: [h.Role("radio"), h.AriaChecked(isSelected)],
+			className: twMerge(
+				"flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left outline-hidden transition-colors hover:bg-secondary/40 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset disabled:cursor-default",
+				isSelected && "bg-primary-subtle/30 hover:bg-primary-subtle/30",
 			),
-		],
+		},
 		[...body, sourceLogo(h, source, "size-4")],
 	)
 }
@@ -444,23 +443,20 @@ const metricCard = (h: H, context: ConditionContext): Html => {
 				{ key: selected, name: selected, unit: null, provider: null, description: null },
 				...context.model.metrics,
 			]
-	return card(
-		h,
-		{
+	return panel(h, {}, [
+		panelHeader(h, {
 			title: "Metric to watch",
 			aside: h.span([h.Class("text-muted-fg text-xs")], ["Any daily metric synced from your sources"]),
-		},
-		[
-			h.div(
-				[
-					h.Role("radiogroup"),
-					h.AriaLabel("Metric to watch"),
-					h.Class("divide-y divide-border overflow-hidden rounded-lg border border-border"),
-				],
-				metrics.map((metric) => metricRow(h, context, metric, selected)),
-			),
-		],
-	)
+		}),
+		h.div(
+			[
+				h.Role("radiogroup"),
+				h.AriaLabel("Metric to watch"),
+				h.Class("divide-y divide-border overflow-hidden rounded-lg border border-border"),
+			],
+			metrics.map((metric) => metricRow(h, context, metric, selected)),
+		),
+	])
 }
 
 /** `Baseline · previous 28 days | Last 7 days` to scale, with the days it spans (windows end yesterday). */
@@ -522,7 +518,8 @@ const windowsBar = (h: H, context: ConditionContext): ReadonlyArray<Html> => {
 
 const usageDropCards = (h: H, context: ConditionContext): ReadonlyArray<Html> => [
 	metricCard(h, context),
-	card(h, { title: "Comparison" }, [
+	panel(h, {}, [
+		panelHeader(h, { title: "Comparison" }),
 		...windowsBar(h, context),
 		rows(h, [
 			row(
@@ -573,4 +570,9 @@ const activityFrom = (h: H, context: ConditionContext): Html | null => {
 export const conditionCards = (h: H, context: ConditionContext): ReadonlyArray<Html> =>
 	context.form.template === "usage_drop"
 		? usageDropCards(h, context)
-		: [card(h, { title: "Condition", aside: activityFrom(h, context) }, [...sentenceRows(h, context)])]
+		: [
+				panel(h, {}, [
+					panelHeader(h, { title: "Condition", aside: activityFrom(h, context) ?? undefined }),
+					...sentenceRows(h, context),
+				]),
+			]

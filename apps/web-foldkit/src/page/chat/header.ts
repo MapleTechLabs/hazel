@@ -4,6 +4,7 @@ import { AppRoute, hrefOf } from "../../route"
 import { avatar, type AvatarProps } from "../../ui/avatar"
 import { button } from "../../ui/button"
 import { presenceDot } from "../../ui/presence-dot"
+import { skeleton } from "../../ui/skeleton"
 import type { PresenceStatus } from "~/utils/presence"
 import { type AuthorIdentity } from "./rows"
 import type { ChannelInfo, ParentChannelInfo } from "./queries"
@@ -161,7 +162,7 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html
 								),
 							],
 						)
-					: h.div([h.Class("h-4 w-32 animate-pulse rounded-sm bg-secondary")]),
+					: skeleton(h, "h-4 w-32 rounded-sm"),
 			],
 		)
 	const isDirectMessage = channel.type === "direct" || channel.type === "single"

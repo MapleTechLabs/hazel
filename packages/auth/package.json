@@ -7,6 +7,7 @@
 		"./access-token": "./src/yielded/access-token.ts",
 		"./desktop": "./src/yielded/desktop-client.ts",
 		"./contract": "./src/yielded/contract.ts",
+		"./instance-access": "./src/yielded/instance-access.ts",
 		"./server": "./src/yielded/index.ts"
 	},
 	"scripts": {

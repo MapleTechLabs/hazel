@@ -14,11 +14,13 @@ import { IconClose, IconCopy } from "../../../icons"
 import { button } from "../../../ui/button"
 import { link } from "../../../ui/link"
 import { customerRoute, hrefOf } from "../../../route"
-import { loader } from "../../../ui/loader"
+import { loadingState } from "../../../ui/loader"
 import { Message } from "./message"
 import { type Model, rowIds, type Viewer } from "./model"
 import { otherSignalRow, type RowContext } from "./rows"
 import { heading } from "../../../ui/heading"
+import { stat } from "../shared-view"
+import { emptyState } from "../../../ui/empty-state"
 
 /** The side panel for the selected signal (Wonder: Queue Selected With Preview). */
 
@@ -40,19 +42,9 @@ const section = (h: HtmlBuilder<Message>, title: string, children: ReadonlyArray
 		[
 			h.div(
 				[h.Class("flex items-center justify-between")],
-				[h.h3([h.Class("text-muted-fg text-sm")], [title]), ...(aside ? [aside] : [])],
+				[heading(h, { variant: "subsection" }, [title]), ...(aside ? [aside] : [])],
 			),
 			...children,
-		],
-	)
-
-const stat = (h: HtmlBuilder<Message>, label: string, value: string, detail: string | null): Html =>
-	h.div(
-		[h.Class("flex min-w-0 flex-col gap-0.5")],
-		[
-			h.span([h.Class("text-muted-fg text-xs")], [label]),
-			h.span([h.Class("truncate font-medium text-fg text-sm tabular-nums")], [value]),
-			...(detail === null ? [] : [h.span([h.Class("truncate text-muted-fg text-xs")], [detail])]),
 		],
 	)
 
@@ -60,18 +52,26 @@ const summary = (h: HtmlBuilder<Message>, account: AccountRow, owner: string | n
 	h.div(
 		[h.Class("grid grid-cols-3 gap-3 px-5 py-4")],
 		[
-			stat(h, "MRR", formatMoney(account.mrrMinor, account.currency), account.planName),
-			stat(
-				h,
-				"Active 30d",
-				`${formatCount(account.activeUsers30d)} of ${formatCount(account.contactCount)}`,
-				account.seatsLimit === null
-					? null
-					: account.seatsUsed === null
-						? `${account.seatsLimit} seats`
-						: `${account.seatsUsed} / ${account.seatsLimit} seats`,
-			),
-			stat(h, "Owner", owner ?? "Unowned", `${STAGE_LABEL[account.lifecycleStage]} stage`),
+			stat(h, {
+				label: "MRR",
+				value: formatMoney(account.mrrMinor, account.currency),
+				detail: account.planName,
+			}),
+			stat(h, {
+				label: "Active 30d",
+				value: `${formatCount(account.activeUsers30d)} of ${formatCount(account.contactCount)}`,
+				detail:
+					account.seatsLimit === null
+						? null
+						: account.seatsUsed === null
+							? `${account.seatsLimit} seats`
+							: `${account.seatsUsed} / ${account.seatsLimit} seats`,
+			}),
+			stat(h, {
+				label: "Owner",
+				value: owner ?? "Unowned",
+				detail: `${STAGE_LABEL[account.lifecycleStage]} stage`,
+			}),
 		],
 	)
 
@@ -158,19 +158,16 @@ const eventRow = (h: HtmlBuilder<Message>, event: Customers.Event, nowMs: number
 const detailSections = (h: HtmlBuilder<Message>, model: Model, nowMs: number): ReadonlyArray<Html> => {
 	const data = model.detail?.data
 	if (data === undefined) return []
-	if (data._tag === "Loading" || data._tag === "Idle")
-		return [h.div([h.Class("flex justify-center py-8")], [loader(h, { className: "size-6" })])]
+	if (data._tag === "Loading" || data._tag === "Idle") return [loadingState(h, { className: "py-8" })]
 	if (data._tag === "Failure")
 		return [
-			h.div(
-				[h.Class("flex flex-col items-center gap-2 px-5 py-8 text-center text-muted-fg text-sm")],
-				[
-					"Couldn't load this account's contacts and activity.",
-					button(h, { intent: "outline", size: "sm", onPress: Message.PressedRetryDetail() }, [
-						"Try again",
-					]),
-				],
-			),
+			emptyState(h, {
+				title: "Couldn't load this account's contacts and activity.",
+				action: button(h, { intent: "outline", size: "sm", onPress: Message.PressedRetryDetail() }, [
+					"Try again",
+				]),
+				className: "px-5 py-8",
+			}),
 		]
 	const detail = data.data
 	return [
@@ -307,7 +304,9 @@ export const previewPanel = (
 						[h.Class("flex items-start gap-2")],
 						[
 							kindChip(h, signal.kind),
-							h.h3([h.Class("min-w-0 flex-1 font-semibold text-fg")], [signal.title]),
+							heading(h, { variant: "section", level: 3, className: "min-w-0 flex-1" }, [
+								signal.title,
+							]),
 							severityChip(h, signal.severity),
 						],
 					),

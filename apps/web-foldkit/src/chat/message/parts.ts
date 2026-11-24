@@ -5,6 +5,7 @@ import { cx } from "~/utils/cx"
 import { IconChevronRight, IconDiscord, IconPin, IconSlack, IconSparkles } from "../../icons"
 import { avatar } from "../../ui/avatar"
 import { badge } from "../../ui/badge"
+import { ariaButton } from "../../ui/button"
 import type { SyncProvider } from "../../page/chat/lookups"
 import type { MessageRow, ReplyPreview, ThreadPreview } from "../../page/chat/rows"
 
@@ -23,13 +24,15 @@ export const formatTime = (ms: number) => {
  * only to the author's own organization (the mark never syncs elsewhere).
  */
 const agentBadge = <M>(h: HtmlBuilder<M>, agentName: string, authorName: string): Html =>
-	h.span(
-		[
-			h.Class(
-				"inline-flex items-center gap-1 rounded-sm bg-secondary px-1.5 py-0.5 text-xs/4 font-medium text-muted-fg",
-			),
-			h.Attribute("title", `Written by ${agentName}, an AI agent acting for ${authorName}`),
-		],
+	badge(
+		h,
+		{
+			intent: "muted",
+			className: "gap-1",
+			attributes: [
+				h.Attribute("title", `Written by ${agentName}, an AI agent acting for ${authorName}`),
+			],
+		},
 		[IconSparkles(h, { className: "size-3" }), `via ${agentName}`],
 	)
 
@@ -155,18 +158,16 @@ export const replySectionView = <M>(h: HtmlBuilder<M>, reply: ReplyPreview, acti
 					? [h.span([h.Class("text-muted-fg text-sm")], ["Message not found"])]
 					: [
 							replyAuthorView(h, reply.author, actions),
-							h.button(
-								[
-									h.Type("button"),
-									h.Attribute("aria-label", "Jump to message"),
-									h.OnClick(actions.onJump),
-									h.Class(
-										cx(
-											REPLY_CONTROL,
-											"min-w-0 max-w-xs truncate text-left text-muted-fg text-sm hover:text-fg",
-										),
+							ariaButton(
+								h,
+								{
+									className: cx(
+										REPLY_CONTROL,
+										"min-w-0 max-w-xs truncate text-left text-muted-fg text-sm hover:text-fg",
 									),
-								],
+									onPress: actions.onJump,
+									attributes: [h.Attribute("aria-label", "Jump to message")],
+								},
 								[reply.firstLine === "" ? "Click to see attachment" : reply.firstLine],
 							),
 						],
@@ -183,14 +184,14 @@ const replyAuthorView = <M>(
 	author === null
 		? h.empty
 		: actions.toAuthor((attributes) =>
-				h.button(
-					[
-						// The trigger's attributes carry its own `aria-expanded` and `type`.
-						...(attributes.length === 0
-							? [h.Attribute("aria-expanded", "false"), h.Type("button")]
-							: attributes),
-						h.Class(cx(REPLY_CONTROL, "group/author flex shrink-0 items-center gap-1")),
-					],
+				ariaButton(
+					h,
+					{
+						className: cx(REPLY_CONTROL, "group/author flex shrink-0 items-center gap-1"),
+						// The trigger's attributes carry its own `aria-expanded`.
+						attributes:
+							attributes.length === 0 ? [h.Attribute("aria-expanded", "false")] : attributes,
+					},
 					[
 						avatar(h, {
 							size: "xs",
@@ -209,19 +210,17 @@ const replyAuthorView = <M>(
 /** Discord's thread card under its starter message: the name, the message count and the last message. */
 export const threadPreviewView = <M>(h: HtmlBuilder<M>, thread: ThreadPreview, onClick: M | null): Html => {
 	const last = thread.lastMessage
-	return h.button(
-		[
-			h.Attribute("type", "button"),
-			h.Attribute("aria-label", `Open thread ${thread.name}`),
-			...(onClick === null ? [] : [h.OnClick(onClick)]),
-			h.Class(
-				cx(
-					"group/thread mt-2 flex h-[58px] w-full max-w-lg cursor-pointer select-none flex-col justify-center gap-0.5",
-					"rounded-lg border border-border bg-secondary/40 px-3 text-left text-sm",
-					"transition-colors hover:border-fg/15 hover:bg-secondary active:bg-secondary/80",
-				),
+	return ariaButton(
+		h,
+		{
+			className: cx(
+				"group/thread mt-2 flex h-[58px] w-full max-w-lg cursor-pointer select-none flex-col justify-center gap-0.5",
+				"rounded-lg border border-border bg-secondary/40 px-3 text-left text-sm",
+				"transition-colors hover:border-fg/15 hover:bg-secondary active:bg-secondary/80",
 			),
-		],
+			onPress: onClick ?? undefined,
+			attributes: [h.Attribute("aria-label", `Open thread ${thread.name}`)],
+		},
 		[
 			h.div(
 				[h.Class("flex min-w-0 items-center gap-2")],

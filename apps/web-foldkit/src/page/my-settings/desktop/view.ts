@@ -4,23 +4,21 @@ import { IconCheck, IconCube, IconDownload } from "../../../icons"
 import * as Updates from "../../../platform/updates"
 import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
+import { callout } from "../../../ui/callout"
+import { panel } from "../../../ui/card"
+import { iconTile } from "../../../ui/icon-tile"
+import { loadingState } from "../../../ui/loader"
+import { pageHeader, pageLayout } from "../../../ui/page-header"
 import { progressBar, progressBarTrack } from "../../../ui/progress-bar"
+import { separator } from "../../../ui/separator"
 import { switchControl } from "../../../ui/switch"
 import type { PageViewInputs } from "../../contract"
-import { divider, pageHeader, settingsRow } from "../shared"
+import { settingsRow } from "../shared"
 import { Message } from "./message"
 import type { Model } from "./model"
 
 const spinner = (h: HtmlBuilder<Message>, label: string): Html =>
-	h.div(
-		[h.Class("flex items-center gap-2 text-sm text-muted-fg")],
-		[
-			h.span([
-				h.Class("size-4 animate-spin rounded-full border-2 border-current border-t-transparent"),
-			]),
-			h.span([], [label]),
-		],
-	)
+	loadingState(h, { label, size: "sm", className: "justify-start gap-2 py-0" })
 
 const retry = (h: HtmlBuilder<Message>, message: string, label: string): Html =>
 	h.div(
@@ -51,51 +49,28 @@ const updateStatus = (h: HtmlBuilder<Message>, state: Updates.Model): Html =>
 			h.div(
 				[h.Class("flex flex-col gap-3")],
 				[
-					h.div(
-						[h.Class("rounded-lg border border-primary/20 bg-primary/5 p-4")],
+					callout(
+						h,
+						{
+							intent: "info",
+							icon: iconTile(h, { intent: "primary", size: "sm" }, IconDownload(h)),
+						},
 						[
 							h.div(
-								[h.Class("flex items-center gap-3")],
+								[h.Class("flex items-center gap-2")],
 								[
-									h.div(
-										[
-											h.Class(
-												"flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10",
-											),
-										],
-										[IconDownload(h, { className: "size-4 text-primary" })],
-									),
-									h.div(
-										[h.Class("flex flex-col gap-0.5")],
-										[
-											h.div(
-												[h.Class("flex items-center gap-2")],
-												[
-													h.span(
-														[h.Class("text-sm font-medium text-fg")],
-														["Update available"],
-													),
-													badge(h, { intent: "primary", size: "sm" }, [
-														`v${state.version}`,
-													]),
-												],
-											),
-											...(state.body
-												? [
-														h.p(
-															[
-																h.Class(
-																	"mt-1 whitespace-pre-wrap text-sm text-muted-fg",
-																),
-															],
-															[state.body],
-														),
-													]
-												: []),
-										],
-									),
+									h.span([h.Class("text-sm font-medium text-fg")], ["Update available"]),
+									badge(h, { intent: "primary", size: "sm" }, [`v${state.version}`]),
 								],
 							),
+							...(state.body
+								? [
+										h.p(
+											[h.Class("mt-1 whitespace-pre-wrap text-sm text-muted-fg")],
+											[state.body],
+										),
+									]
+								: []),
 						],
 					),
 					button(h, { intent: "primary", size: "sm", onPress: Message.ClickedInstallUpdate() }, [
@@ -110,14 +85,7 @@ const updateStatus = (h: HtmlBuilder<Message>, state: Updates.Model): Html =>
 					h.div(
 						[h.Class("flex items-center gap-3")],
 						[
-							h.div(
-								[
-									h.Class(
-										"flex size-8 shrink-0 items-center justify-center rounded-full bg-success/10",
-									),
-								],
-								[IconCheck(h, { className: "size-4 text-success" })],
-							),
+							iconTile(h, { intent: "success", size: "sm" }, IconCheck(h)),
 							h.div(
 								[h.Class("flex flex-col gap-0.5")],
 								[
@@ -168,7 +136,7 @@ const updateStatus = (h: HtmlBuilder<Message>, state: Updates.Model): Html =>
 	})
 
 const appUpdates = (h: HtmlBuilder<Message>, model: Model, state: Updates.Model): ReadonlyArray<Html> => [
-	divider(h),
+	separator(h),
 	h.div(
 		[h.Class("flex flex-col gap-5")],
 		[
@@ -178,58 +146,44 @@ const appUpdates = (h: HtmlBuilder<Message>, model: Model, state: Updates.Model)
 				h.div(
 					[h.Class("flex flex-col gap-4")],
 					[
-						h.div(
-							[h.Class("rounded-lg border border-border bg-secondary/50 p-4")],
-							[
-								h.div(
-									[h.Class("flex flex-col gap-4")],
-									[
-										h.div(
-											[h.Class("flex items-center gap-3")],
-											[
-												h.div(
-													[
-														h.Class(
-															"flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary",
-														),
-													],
-													[IconCube(h, { className: "size-5 text-muted-fg" })],
-												),
-												h.div(
-													[h.Class("flex flex-1 flex-col gap-0.5")],
-													[
-														h.span(
-															[h.Class("text-sm text-muted-fg")],
-															["Current version"],
-														),
-														badge(
-															h,
-															{
-																intent: "secondary",
-																size: "md",
-																className: "self-start",
-															},
-															[
-																h.span(
-																	[h.Class("font-mono")],
-																	[
-																		model.version
-																			? `v${model.version}`
-																			: "...",
-																	],
-																),
-															],
-														),
-													],
-												),
-											],
-										),
-										divider(h),
-										updateStatus(h, state),
-									],
-								),
-							],
-						),
+						panel(h, {}, [
+							h.div(
+								[h.Class("flex flex-col gap-4")],
+								[
+									h.div(
+										[h.Class("flex items-center gap-3")],
+										[
+											iconTile(h, { size: "md" }, IconCube(h)),
+											h.div(
+												[h.Class("flex flex-1 flex-col gap-0.5")],
+												[
+													h.span(
+														[h.Class("text-sm text-muted-fg")],
+														["Current version"],
+													),
+													badge(
+														h,
+														{
+															intent: "secondary",
+															size: "md",
+															className: "self-start",
+														},
+														[
+															h.span(
+																[h.Class("font-mono")],
+																[model.version ? `v${model.version}` : "..."],
+															),
+														],
+													),
+												],
+											),
+										],
+									),
+									separator(h),
+									updateStatus(h, state),
+								],
+							),
+						]),
 					],
 				),
 			),
@@ -240,32 +194,31 @@ const appUpdates = (h: HtmlBuilder<Message>, model: Model, state: Updates.Model)
 /** Port of `routes/_app/$orgSlug/my-settings/desktop.tsx`; the App Updates block is desktop-only. */
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) =>
 	h.form(
-		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
+		[],
 		[
-			pageHeader(h, "Desktop", "Settings for the desktop application."),
-			// Autostart is a Tauri plugin: the native app (an updater without Tauri) has none yet,
-			// and a browser that opens this page directly has neither.
-			...(model.hasAutostart
-				? [
-						h.div(
-							[h.Class("flex flex-col gap-5")],
-							[
-								settingsRow(
-									h,
-									{
-										title: "Launch at Startup",
-										description: "Automatically start the app when you log in.",
-									},
-									h.div(
-										[h.Class("flex flex-col gap-4")],
-										[
-											h.div(
-												[
-													h.Class(
-														"rounded-lg border border-border bg-secondary/50 p-4",
-													),
-												],
-												[
+			pageLayout(h, {}, [
+				pageHeader(h, {
+					title: "Desktop",
+					subtitle: "Settings for the desktop application.",
+					size: "title",
+				}),
+				// Autostart is a Tauri plugin: the native app (an updater without Tauri) has none yet,
+				// and a browser that opens this page directly has neither.
+				...(model.hasAutostart
+					? [
+							h.div(
+								[h.Class("flex flex-col gap-5")],
+								[
+									settingsRow(
+										h,
+										{
+											title: "Launch at Startup",
+											description: "Automatically start the app when you log in.",
+										},
+										h.div(
+											[h.Class("flex flex-col gap-4")],
+											[
+												panel(h, { className: "gap-0" }, [
 													switchControl(
 														h,
 														{
@@ -283,16 +236,16 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 															"When enabled, the app will automatically launch when you log in to your computer.",
 														],
 													),
-												],
-											),
-										],
+												]),
+											],
+										),
 									),
-								),
-							],
-						),
-					]
-				: []),
-			...(model.hasUpdates ? appUpdates(h, model, shared.desktopUpdate) : []),
+								],
+							),
+						]
+					: []),
+				...(model.hasUpdates ? appUpdates(h, model, shared.desktopUpdate) : []),
+			]),
 		],
 	),
 )

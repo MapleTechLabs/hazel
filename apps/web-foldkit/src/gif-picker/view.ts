@@ -3,7 +3,8 @@ import { AsyncData, Mount } from "foldkit"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { failureMessage } from "~/lib/error-messages"
 import { pickerPopover } from "../picker-popover/popover"
-import { button } from "../ui/button"
+import { ariaButton, button } from "../ui/button"
+import { emptyState } from "../ui/empty-state"
 import { loader } from "../ui/loader"
 import { searchField } from "../ui/search-field"
 import { type Gif, type GifFailure, type GifPage, Message, type Model } from "./picker"
@@ -57,14 +58,13 @@ const categoryChips = <M>(h: HtmlBuilder<M>, model: Model, toMessage: (message: 
 				],
 				[
 					"Couldn't load categories.",
-					h.button(
-						[
-							h.Attribute("type", "button"),
-							h.Class(
+					ariaButton(
+						h,
+						{
+							className:
 								"rounded-sm font-medium text-fg underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary",
-							),
-							h.OnClick(toMessage(Message.ClickedRetryFetchCategories())),
-						],
+							onPress: toMessage(Message.ClickedRetryFetchCategories()),
+						},
 						["Try again"],
 					),
 				],
@@ -116,16 +116,12 @@ const failureState = <M>(h: HtmlBuilder<M>, reason: GifFailure, toMessage: (mess
 		[h.Role("alert"), h.Attribute("data-slot", "gif-picker-error")],
 		[
 			centered(h, [
-				h.div(
-					[h.Class("flex flex-col gap-1")],
-					[
-						h.span([h.Class("font-medium text-fg text-sm")], [copy.title]),
-						copy.description === undefined
-							? h.empty
-							: h.span([h.Class("text-muted-fg text-xs")], [copy.description]),
-					],
-				),
-				retryButton(h, toMessage(Message.ClickedRetryFetchGifs())),
+				emptyState(h, {
+					title: copy.title,
+					description: copy.description,
+					action: retryButton(h, toMessage(Message.ClickedRetryFetchGifs())),
+					className: "py-0",
+				}),
 			]),
 		],
 	)
@@ -137,20 +133,21 @@ const gifButton = <M>(h: HtmlBuilder<M>, model: Model, gif: Gif, toMessage: (mes
 		gif.slug,
 		[h.Class("mb-2 break-inside-avoid")],
 		[
-			h.button(
-				[
-					h.Attribute("type", "button"),
-					h.AriaLabel(gif.title || "GIF"),
-					h.Class(
+			ariaButton(
+				h,
+				{
+					className:
 						"relative block w-full cursor-pointer overflow-hidden rounded-md bg-muted/60 outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary",
-					),
-					h.Attribute("style", `aspect-ratio: ${gif.width} / ${gif.height};`),
-					h.OnClick(toMessage(Message.ClickedGif({ slug: gif.slug }))),
-					h.OnMouseEnter(toMessage(Message.HoveredGif({ slug: gif.slug }))),
-					h.OnMouseLeave(toMessage(Message.HoveredGif({ slug: null }))),
-					h.OnFocus(toMessage(Message.HoveredGif({ slug: gif.slug }))),
-					h.OnBlur(toMessage(Message.HoveredGif({ slug: null }))),
-				],
+					onPress: toMessage(Message.ClickedGif({ slug: gif.slug })),
+					attributes: [
+						h.AriaLabel(gif.title || "GIF"),
+						h.Attribute("style", `aspect-ratio: ${gif.width} / ${gif.height};`),
+						h.OnMouseEnter(toMessage(Message.HoveredGif({ slug: gif.slug }))),
+						h.OnMouseLeave(toMessage(Message.HoveredGif({ slug: null }))),
+						h.OnFocus(toMessage(Message.HoveredGif({ slug: gif.slug }))),
+						h.OnBlur(toMessage(Message.HoveredGif({ slug: null }))),
+					],
+				},
 				[
 					h.img([
 						h.Attribute("src", model.hoveredSlug === gif.slug ? gif.webpUrl : gif.jpgUrl),
@@ -170,10 +167,7 @@ const moreFooter = <M>(h: HtmlBuilder<M>, model: Model, toMessage: (message: Mes
 		Idle: () => h.empty,
 		Exhausted: () => h.empty,
 		Loading: () =>
-			h.div(
-				[h.Class("flex justify-center py-4")],
-				[h.div([h.Class("size-5 animate-spin rounded-full border-2 border-fg/20 border-t-fg/60")])],
-			),
+			h.div([h.Class("flex justify-center py-4")], [loader(h, { className: "size-5 text-muted-fg" })]),
 		Failed: ({ reason }) =>
 			h.div(
 				[h.Class("flex flex-col items-center gap-2 py-4 text-muted-fg text-xs"), h.Role("alert")],
@@ -188,7 +182,7 @@ const gifList = <M>(
 	toMessage: (message: Message) => M,
 ): ReadonlyArray<Html> =>
 	page.gifs.length === 0
-		? [centered(h, ["No GIFs found"])]
+		? [centered(h, [emptyState(h, { title: "No GIFs found", className: "py-0" })])]
 		: [
 				h.ul(
 					[h.Class("columns-2 gap-2"), h.AriaLabel("GIF results")],

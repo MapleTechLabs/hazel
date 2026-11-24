@@ -1,5 +1,5 @@
 /**
- * The api Worker's fetch handler: `/health` and CORS preflights answer before the route graph
+ * The api Worker's fetch handler: `/health`, `/version` and CORS preflights answer before the route graph
  * exists; the rest waits for the graph (`./http.ts`), which `worker.ts` imports on demand so a
  * cold isolate (a Durable Object's included) never evaluates it before it is needed.
  */
@@ -33,6 +33,16 @@ const makePreflight = (env: Record<string, unknown>) => {
 }
 
 /**
+ * `GET /version`: the build and stage this install runs (`COMMIT_SHA`, `HAZEL_STAGE`, set by the
+ * stack), for an operator checking an upgrade landed (`docs/self-hosting.md`). Public: it says
+ * nothing about the install's data.
+ */
+export const versionOf = (env: Record<string, unknown>) => ({
+	version: typeof env.COMMIT_SHA === "string" && env.COMMIT_SHA !== "" ? env.COMMIT_SHA : "unknown",
+	stage: typeof env.HAZEL_STAGE === "string" && env.HAZEL_STAGE !== "" ? env.HAZEL_STAGE : "unknown",
+})
+
+/**
  * The fetch handler. `/health` and CORS preflights answer before the route graph exists; the
  * rest runs the router.
  *
@@ -42,6 +52,7 @@ const makePreflight = (env: Record<string, unknown>) => {
  */
 export const makeFetch = (app: Effect.Effect<HttpEffect, unknown>, env: Record<string, unknown>) => {
 	const preflight = makePreflight(env)
+	const version = versionOf(env)
 	// One macrotask later: the build starts with a stretch of CPU, which would otherwise run
 	// before the preflight's answer leaves.
 	const afterAnswer = Effect.promise(() => new Promise<void>((resolve) => setTimeout(resolve, 0)))
@@ -59,6 +70,9 @@ export const makeFetch = (app: Effect.Effect<HttpEffect, unknown>, env: Record<s
 		yield* Effect.annotateCurrentSpan("isolate.cold", takeIsolateCold())
 		if (request.method === "GET" && pathOf(request.url) === "/health") {
 			return HttpServerResponse.text("OK")
+		}
+		if (request.method === "GET" && pathOf(request.url) === "/version") {
+			return HttpServerResponse.jsonUnsafe(version, { headers: { "cache-control": "no-store" } })
 		}
 		if (request.method === "OPTIONS" && request.headers["access-control-request-method"] !== undefined) {
 			// A failed build is retried by the request that needs it (`cachedRecoverable`).
