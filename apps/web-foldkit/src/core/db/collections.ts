@@ -22,6 +22,7 @@ import {
 	MessageAgentMark,
 	MessageReaction,
 	Notification,
+	NotificationOverride,
 	Organization,
 	OrganizationExport,
 	OrganizationMember,
@@ -212,6 +213,22 @@ export const channelReadStateCollection = createEffectCollection(
 		sources: orgSources,
 	},
 	persist(ChannelActivity.ReadState),
+)
+/**
+ * The user's own organization and section notification settings (`notification_overrides`).
+ * Keyed by `userId:scope:scopeId`.
+ */
+export const notificationOverrideCollection = createEffectCollection(
+	{
+		id: "notification_overrides",
+		table: "notification_overrides",
+		schema: NotificationOverride.Schema,
+		parseRow: parseTimestamps,
+		getKey: (row) => `${row.userId}:${row.scope}:${row.scopeId}`,
+		hub: syncHub,
+		sources: orgSources,
+	},
+	persist(NotificationOverride.Schema),
 )
 /**
  * Each linked channel's customer (`channel_customers`, the `CustomersObject`'s projection into the

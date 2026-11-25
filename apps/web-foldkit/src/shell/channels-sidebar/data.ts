@@ -1,5 +1,7 @@
 import type { ChannelId, ChannelMemberId, ChannelSectionId, OrganizationId, UserId } from "@hazel/schema"
+import { ChannelSectionId as ChannelSectionIdSchema } from "@hazel/schema"
 import { and, eq, inArray, isNull, not, or } from "@tanstack/db"
+import { Schema } from "effect"
 import type { NotificationLevel } from "~/lib/notification-settings"
 import { hasUnreadMessages } from "~/lib/unread"
 import {
@@ -9,6 +11,7 @@ import {
 	channelMemberCollection,
 	channelReadStateCollection,
 	channelSectionCollection,
+	notificationOverrideCollection,
 	organizationCollection,
 } from "~/db/collections"
 import { liveQueryStream } from "../../data/live-query"
@@ -19,6 +22,8 @@ import type {
 	Section,
 	SidebarChannel,
 	SidebarMember,
+	OrganizationSetting,
+	SectionSetting,
 	SidebarThread,
 	UnreadChannel,
 } from "./rows"
@@ -197,9 +202,10 @@ export const threadsStream = <M>(
 	)
 
 /**
- * The user's channels with messages they have not read (`~/lib/unread`), sorted, with their timed
- * mute: the view, which has the clock, leaves out the ones muted until later. Muted for good never
- * shows unread.
+ * The user's channels with messages they have not read (`~/lib/unread`), sorted, with when their
+ * mute ends: the channel's own, its section's or the organization's (as the server's rules count
+ * them). Muted for good never shows unread; the view, which has the clock, leaves out the ones
+ * muted until later.
  */
 export const unreadChannelsStream = <M>(
 	organizationId: OrganizationId,
@@ -209,12 +215,18 @@ export const unreadChannelsStream = <M>(
 	liveQueryStream<
 		{
 			channelId: ChannelId
+			isMuted: boolean
 			mutedUntil: Date | null
 			joinedAt: Date
 			lastReadAt: Date | null | undefined
 			readStateSince: Date | null
 			lastMessageAt: Date
 			lastMessageAuthorId: UserId
+			type: string
+			sectionMuted: boolean | undefined
+			sectionMutedUntil: Date | null | undefined
+			orgMuted: boolean | undefined
+			orgMutedUntil: Date | null | undefined
 		},
 		M
 	>(
@@ -224,35 +236,62 @@ export const unreadChannelsStream = <M>(
 				.innerJoin({ activity: channelActivityCollection }, ({ member, activity }) =>
 					eq(activity.channelId, member.channelId),
 				)
+				.innerJoin({ channel: channelCollection }, ({ member, channel }) =>
+					eq(channel.id, member.channelId),
+				)
 				.innerJoin({ organization: organizationCollection }, ({ activity, organization }) =>
 					eq(organization.id, activity.organizationId),
 				)
-				// Only the user's own read positions are synced.
+				// Only the user's own read positions and settings are synced.
 				.leftJoin({ read: channelReadStateCollection }, ({ member, read }) =>
 					eq(read.channelId, member.channelId),
+				)
+				.leftJoin({ section: notificationOverrideCollection }, ({ channel, section }) =>
+					eq(section.scopeId, channel.sectionId),
+				)
+				.leftJoin({ org: notificationOverrideCollection }, ({ activity, org }) =>
+					eq(org.scopeId, activity.organizationId),
 				)
 				.where((q) =>
 					and(
 						eq(q.activity.organizationId, organizationId),
 						eq(q.member.userId, userId),
-						eq(q.member.isMuted, false),
 						isNull(q.member.deletedAt),
 					),
 				)
-				.select(({ member, activity, organization, read }) => ({
+				.select(({ member, activity, channel, organization, read, section, org }) => ({
 					channelId: member.channelId,
+					isMuted: member.isMuted,
 					mutedUntil: member.mutedUntil,
 					joinedAt: member.joinedAt,
 					lastReadAt: read?.lastReadAt,
 					readStateSince: organization.readStateSince,
 					lastMessageAt: activity.lastMessageAt,
 					lastMessageAuthorId: activity.lastMessageAuthorId,
+					type: channel.type,
+					sectionMuted: section?.isMuted,
+					sectionMutedUntil: section?.mutedUntil,
+					orgMuted: org?.isMuted,
+					orgMutedUntil: org?.mutedUntil,
 				})),
 		(rows) =>
 			toMessage(
 				rows
-					.filter((row) =>
-						hasUnreadMessages(
+					.flatMap((row): Array<UnreadChannel> => {
+						const isDm = row.type === "direct" || row.type === "single"
+						// DMs take no section or organization setting.
+						const mutes = isDm
+							? [{ isMuted: row.isMuted, until: row.mutedUntil }]
+							: [
+									{ isMuted: row.isMuted, until: row.mutedUntil },
+									{
+										isMuted: row.sectionMuted === true,
+										until: row.sectionMutedUntil ?? null,
+									},
+									{ isMuted: row.orgMuted === true, until: row.orgMutedUntil ?? null },
+								]
+						if (mutes.some((mute) => mute.isMuted)) return []
+						const isUnread = hasUnreadMessages(
 							{
 								lastReadAt: row.lastReadAt ? new Date(row.lastReadAt) : null,
 								joinedAt: new Date(row.joinedAt),
@@ -263,13 +302,96 @@ export const unreadChannelsStream = <M>(
 								lastMessageAuthorId: row.lastMessageAuthorId,
 							},
 							userId,
-						),
-					)
-					.map((row) => ({
-						channelId: row.channelId,
-						mutedUntilMs: row.mutedUntil === null ? null : new Date(row.mutedUntil).getTime(),
-					}))
+						)
+						if (!isUnread) return []
+						const untils = mutes.flatMap((mute) =>
+							mute.until ? [new Date(mute.until).getTime()] : [],
+						)
+						return [
+							{
+								channelId: row.channelId,
+								mutedUntilMs: untils.length === 0 ? null : Math.max(...untils),
+							},
+						]
+					})
 					.sort((a, b) => a.channelId.localeCompare(b.channelId)),
+			),
+	)
+
+const decodeSectionId = Schema.decodeSync(ChannelSectionIdSchema)
+
+/** The user's notification settings for the org's sections (only their own are synced). */
+export const sectionSettingsStream = <M>(
+	organizationId: OrganizationId,
+	toMessage: (settings: Array<SectionSetting>) => M,
+) =>
+	liveQueryStream<
+		{
+			scopeId: string
+			isMuted: boolean
+			mutedUntil: Date | null
+			level: NotificationLevel | null
+		},
+		M
+	>(
+		(q) =>
+			q
+				.from({ override: notificationOverrideCollection })
+				.where(({ override }) =>
+					and(eq(override.organizationId, organizationId), eq(override.scope, "section")),
+				)
+				.select(({ override }) => ({
+					scopeId: override.scopeId,
+					isMuted: override.isMuted,
+					mutedUntil: override.mutedUntil,
+					level: override.level,
+				})),
+		(rows) =>
+			toMessage(
+				rows
+					.map((row) => ({
+						sectionId: decodeSectionId(row.scopeId),
+						isMuted: row.isMuted,
+						mutedUntilMs: row.mutedUntil === null ? null : new Date(row.mutedUntil).getTime(),
+						notificationLevel: row.level,
+					}))
+					.sort((a, b) => a.sectionId.localeCompare(b.sectionId)),
+			),
+	)
+
+/** The user's notification settings for the organization; null while it has none. */
+export const organizationSettingStream = <M>(
+	organizationId: OrganizationId,
+	toMessage: (setting: OrganizationSetting | null) => M,
+) =>
+	liveQueryStream<
+		{
+			isMuted: boolean
+			mutedUntil: Date | null
+			level: NotificationLevel | null
+		},
+		M
+	>(
+		(q) =>
+			q
+				.from({ override: notificationOverrideCollection })
+				.where(({ override }) =>
+					and(eq(override.organizationId, organizationId), eq(override.scope, "organization")),
+				)
+				.select(({ override }) => ({
+					isMuted: override.isMuted,
+					mutedUntil: override.mutedUntil,
+					level: override.level,
+				})),
+		([row]) =>
+			toMessage(
+				row === undefined
+					? null
+					: {
+							isMuted: row.isMuted,
+							mutedUntilMs: row.mutedUntil === null ? null : new Date(row.mutedUntil).getTime(),
+							notificationLevel: row.level,
+						},
 			),
 	)
 

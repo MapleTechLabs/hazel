@@ -563,6 +563,15 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 							replace: false,
 						}),
 					},
+		UpdatedInheritedNotificationLevel: ({ channelId, level }) =>
+			channelId !== model.channelId
+				? { model }
+				: {
+						model: modifyFields(model, {
+							notificationControl: (control) =>
+								modifyFields(control, { inheritedLevel: () => level }),
+						}),
+					},
 		UpdatedParentChannel: ({ channel }) => ({
 			model: modifyFields(model, { parentChannel: () => channel }),
 		}),

@@ -12,6 +12,7 @@ import * as Menu from "../../ui/menu"
 import { choiceOfKey } from "../../chat/notification-menu"
 import {
 	ApplyNotificationChoice,
+	ApplySectionNotificationChoice,
 	DeleteChannelSection,
 	LeaveChannel,
 	MoveChannelToSection,
@@ -224,11 +225,27 @@ const deletedSection = (model: Model, sectionKey: string): SidebarReturn =>
 		},
 	)
 
+/** A section's Mute or Notifications choice; none for any other key, or a section that is gone. */
+const selectedSectionNotification = (model: Model, sectionKey: string, key: string): SidebarReturn => {
+	const section = model.sections.find((candidate) => candidate.id === sectionKey)
+	if (section === undefined || model.organizationId === null) return { model }
+	const organizationId = model.organizationId
+	const setting = model.sectionSettings.find((candidate) => candidate.sectionId === section.id)
+	const wasMuted = setting !== undefined && (setting.isMuted || setting.mutedUntilMs !== null)
+	return Option.match(choiceOfKey(key, wasMuted), {
+		onNone: () => ({ model }),
+		onSome: (choice) => ({
+			model,
+			commands: [ApplySectionNotificationChoice({ organizationId, sectionId: section.id, choice })],
+		}),
+	})
+}
+
 const selectedSectionItem =
 	(sectionKey: string) =>
 	(model: Model, key: string): SidebarReturn =>
 		Option.match(decodeSectionMenuKey(key), {
-			onNone: () => ({ model }),
+			onNone: () => selectedSectionNotification(model, sectionKey, key),
 			onSome: (sectionMenuKey) =>
 				Match.value(sectionMenuKey).pipe(
 					Match.when("delete-section", () => deletedSection(model, sectionKey)),

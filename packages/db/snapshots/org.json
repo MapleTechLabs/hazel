@@ -1,5 +1,5 @@
 {
-	"migration": "0017_channel_read_state",
+	"migration": "0018_notification_overrides",
 	"entities": [
 		{
 			"kind": "table",
@@ -188,6 +188,13 @@
 			"name": "integration_tokens",
 			"primaryKey": {
 				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "notification_overrides",
+			"primaryKey": {
+				"columns": ["userId", "scope", "scopeId"]
 			}
 		},
 		{
@@ -2869,6 +2876,87 @@
 		},
 		{
 			"kind": "column",
+			"table": "notification_overrides",
+			"name": "userId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "notification_overrides",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "notification_overrides",
+			"name": "scope",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "notification_overrides",
+			"name": "scopeId",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "notification_overrides",
+			"name": "level",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "notification_overrides",
+			"name": "isMuted",
+			"position": 5,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "notification_overrides",
+			"name": "mutedUntil",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "notification_overrides",
+			"name": "suppressEveryone",
+			"position": 7,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "notification_overrides",
+			"name": "updatedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
 			"table": "organization_exports",
 			"name": "id",
 			"position": 0,
@@ -4204,6 +4292,13 @@
 			"name": "integration_tokens_connectionId_unique",
 			"unique": true,
 			"columns": ["\"connectionId\""]
+		},
+		{
+			"kind": "index",
+			"table": "notification_overrides",
+			"name": "notification_overrides_scope_idx",
+			"unique": false,
+			"columns": ["\"scope\"", "\"scopeId\""]
 		},
 		{
 			"kind": "index",

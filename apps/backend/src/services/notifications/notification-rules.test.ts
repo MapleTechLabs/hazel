@@ -1,6 +1,12 @@
 import { ChannelId, UserId } from "@hazel/schema"
 import { describe, expect, it } from "vitest"
-import { decide, isInQuietHours, type MessageActivity, type Recipient } from "./notification-rules"
+import {
+	decide,
+	isInQuietHours,
+	type MessageActivity,
+	type Recipient,
+	type ScopeSettings,
+} from "./notification-rules"
 
 const channelId = ChannelId.make("00000000-0000-4000-8000-000000000001")
 const author = UserId.make("00000000-0000-4000-8000-0000000000a1")
@@ -28,6 +34,8 @@ const bobAs = (overrides: Partial<Recipient> = {}): Recipient => ({
 	isMuted: false,
 	mutedUntil: null,
 	parent: null,
+	section: null,
+	organization: null,
 	presence: null,
 	settings: null,
 	timezone: null,
@@ -86,6 +94,67 @@ describe("decide", () => {
 		expect(decide(here, bobAs(), NOON_UTC)).toEqual({ _tag: "Skip", why: "level" })
 		// On "all messages" an offline member still hears it, as the message it is.
 		expect(decide(here, { ...at("offline"), level: "all" }, NOON_UTC)).toMatchObject({
+			reason: "message",
+		})
+	})
+
+	it("the section's level, then the organization's, fill in for a channel with none", () => {
+		const scope = (overrides: Partial<ScopeSettings>): ScopeSettings => ({
+			level: null,
+			isMuted: false,
+			mutedUntil: null,
+			suppressEveryone: false,
+			...overrides,
+		})
+		expect(decide(activity(), bobAs({ organization: scope({ level: "all" }) }), NOON_UTC)).toMatchObject({
+			reason: "message",
+		})
+		expect(
+			decide(
+				activity(),
+				bobAs({ section: scope({ level: "mentions" }), organization: scope({ level: "all" }) }),
+				NOON_UTC,
+			),
+		).toEqual({ _tag: "Skip", why: "level" })
+		// The channel's own level wins.
+		expect(
+			decide(activity(), bobAs({ level: "all", section: scope({ level: "nothing" }) }), NOON_UTC),
+		).toMatchObject({ reason: "message" })
+		// A muted section or organization lets only personal mentions through.
+		const mutedOrg = bobAs({ level: "all", organization: scope({ isMuted: true }) })
+		expect(decide(activity(), mutedOrg, NOON_UTC)).toEqual({ _tag: "Skip", why: "muted" })
+		expect(decide(activity({ mentionedUserIds: [bob] }), mutedOrg, NOON_UTC)).toMatchObject({
+			reason: "mention",
+		})
+		// DMs take none of it.
+		expect(
+			decide(
+				activity({ channelType: "single" }),
+				bobAs({ organization: scope({ isMuted: true, level: "nothing" }) }),
+				NOON_UTC,
+			),
+		).toMatchObject({ reason: "direct" })
+		// Threads take mutes and "nothing" from above as a mute, not levels.
+		expect(
+			decide(
+				activity({ channelType: "thread" }),
+				bobAs({ section: scope({ level: "nothing" }) }),
+				NOON_UTC,
+			),
+		).toEqual({ _tag: "Skip", why: "muted" })
+	})
+
+	it("suppressing @channel and @here makes them a plain message", () => {
+		const suppressed = bobAs({
+			organization: { level: null, isMuted: false, mutedUntil: null, suppressEveryone: true },
+		})
+		expect(decide(activity({ notifyAll: true }), suppressed, NOON_UTC)).toEqual({
+			_tag: "Skip",
+			why: "level",
+		})
+		expect(
+			decide(activity({ notifyAll: true }), { ...suppressed, level: "all" }, NOON_UTC),
+		).toMatchObject({
 			reason: "message",
 		})
 	})

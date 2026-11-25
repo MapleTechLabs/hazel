@@ -4,6 +4,7 @@ import { Mount } from "foldkit"
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
+import { inheritedLevelOf, isMutedNow } from "~/lib/notification-settings"
 import { errorToastOf, successToast } from "../data/actions"
 import type { AppRoute } from "../route"
 import type * as Menu from "../ui/menu"
@@ -22,7 +23,12 @@ import {
 	updateRowMenu,
 	updateSectionMenu,
 } from "./channels-sidebar/menu-update"
-import { sectionActionLabel, sectionMenuEntries, sectionMenuView } from "./channels-sidebar/menus"
+import {
+	sectionActionLabel,
+	sectionMenuEntries,
+	sectionMenuView,
+	type SectionNotifications,
+} from "./channels-sidebar/menus"
 import { dragDescription, sectionPlusButton } from "./channels-sidebar/tree"
 import { semantic } from "../ui/semantic"
 import { sectionGroupContent } from "./channels-sidebar/view"
@@ -57,6 +63,8 @@ const outcomeTitles: { readonly [O in SidebarOutcome]: string | null } = {
 	Muted: "Channel muted",
 	Unmuted: "Channel unmuted",
 	NotificationLevelChanged: "Notification settings updated",
+	SectionMuted: "Section muted",
+	SectionUnmuted: "Section unmuted",
 	Favorited: "Added to favorites",
 	Unfavorited: "Removed from favorites",
 	Hidden: null,
@@ -110,6 +118,12 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 		UpdatedUnreadCounts: ({ counts }) => ({ model: modifyFields(model, { unreadCounts: () => counts }) }),
 		UpdatedUnreadChannels: ({ channels }) => ({
 			model: modifyFields(model, { unreadChannels: () => channels }),
+		}),
+		UpdatedSectionSettings: ({ settings }) => ({
+			model: modifyFields(model, { sectionSettings: () => settings }),
+		}),
+		UpdatedOrganizationSetting: ({ setting }) => ({
+			model: modifyFields(model, { organizationSetting: () => setting }),
 		}),
 		UpdatedConnectMounts: ({ mounts }) => ({
 			model: modifyFields(model, { connectMounts: () => mounts }),
@@ -314,7 +328,7 @@ const sidebarBody = <ParentMessage>(
 						),
 						toParentMessage,
 						sectionAction: (sectionKey) =>
-							sectionActionView(h, model, sectionKey, toParentMessage),
+							sectionActionView(h, model, sectionKey, nowMs, toParentMessage),
 					}),
 				),
 			]),
@@ -333,14 +347,36 @@ const sidebarBody = <ParentMessage>(
 	)
 }
 
+/** A real section's notification items' inputs; null for the default section and DMs. */
+const sectionNotificationsOf = (
+	model: Model,
+	sectionKey: string,
+	nowMs: number,
+): SectionNotifications | null => {
+	const section = model.sections.find((candidate) => candidate.id === sectionKey)
+	if (section === undefined) return null
+	const setting = model.sectionSettings.find((candidate) => candidate.sectionId === section.id)
+	return {
+		// Muted now, as the channel rows: a timed mute that ended offers "Mute" (for how long) again.
+		isMuted: setting !== undefined && isMutedNow(setting, nowMs),
+		notificationLevel: setting?.notificationLevel ?? null,
+		// A section's "Default" is the organization's level, else the channel type's default.
+		inheritedLevel: inheritedLevelOf("public", {
+			organizationLevel: model.organizationSetting?.notificationLevel,
+		}),
+	}
+}
+
 /** A single action is a plain "+" button; several actions or a deletable section open a menu. */
 const sectionActionView = <ParentMessage>(
 	h: HtmlBuilder<ParentMessage>,
 	model: Model,
 	sectionKey: string,
+	nowMs: number,
 	toParentMessage: (message: Message) => ParentMessage,
 ): Html => {
 	const { actions, isEditable } = sectionActionsOf(model, sectionKey)
+	const notifications = sectionNotificationsOf(model, sectionKey, nowMs)
 	const [only] = actions
 	return only !== undefined && actions.length === 1 && !isEditable
 		? sectionPlusButton(h, sectionActionLabel(only), [
@@ -348,7 +384,8 @@ const sectionActionView = <ParentMessage>(
 			])
 		: sectionMenuView(h, {
 				menu: sectionMenuOf(model, sectionKey),
-				entries: sectionMenuEntries(actions, isEditable),
+				entries: sectionMenuEntries(actions, isEditable, notifications),
+				notifications,
 				toMessage: (message) =>
 					toParentMessage(Message.GotSectionMenuMessage({ sectionId: sectionKey, message })),
 			})

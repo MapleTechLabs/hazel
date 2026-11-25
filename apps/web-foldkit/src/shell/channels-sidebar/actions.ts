@@ -1,5 +1,5 @@
-import { ChannelId, ChannelMemberId, ChannelSectionId } from "@hazel/schema"
-import { Effect, Schema } from "effect"
+import { ChannelId, ChannelMemberId, ChannelSectionId, OrganizationId } from "@hazel/schema"
+import { Clock, Effect, Match, Schema } from "effect"
 import { Command } from "foldkit"
 import {
 	deleteChannelSectionAction,
@@ -103,6 +103,41 @@ export const DeleteChannelSection = Command.define("DeleteChannelSection", {
 			Effect.as(Message.SucceededSidebarAction({ outcome: "SectionDeleted" })),
 			Effect.catchTags({
 				ChannelSectionNotFoundError: () => Effect.succeed(failed("SectionAlreadyDeleted")),
+			}),
+			catchCommon(failed),
+		),
+})
+
+/** A section's Mute or Notifications choice, written as the user's section-scoped settings. */
+export const ApplySectionNotificationChoice = Command.define("ApplySectionNotificationChoice", {
+	args: { organizationId: OrganizationId, sectionId: ChannelSectionId, choice: NotificationChoice },
+	messages: [Message.SucceededSidebarAction, Message.FailedSidebarAction],
+	execute: ({ organizationId, sectionId, choice }) =>
+		Effect.gen(function* () {
+			const nowMs = yield* Clock.currentTimeMillis
+			const scope = { organizationId, scope: "section" as const, scopeId: sectionId }
+			const fields = Match.valueTags(choice, {
+				Mute: ({ minutes }) =>
+					minutes === null
+						? { isMuted: true, mutedUntil: null }
+						: { isMuted: false, mutedUntil: new Date(nowMs + minutes * 60_000) },
+				Unmute: () => ({ isMuted: false, mutedUntil: null }),
+				SetLevel: ({ level }) => ({ level }),
+			})
+			yield* HazelRpc.use((rpc) => rpc("channelMember.setScopeNotifications", { ...scope, ...fields }))
+			return Message.SucceededSidebarAction({
+				outcome:
+					choice._tag === "Mute"
+						? "SectionMuted"
+						: choice._tag === "Unmute"
+							? "SectionUnmuted"
+							: "NotificationLevelChanged",
+			})
+		}).pipe(
+			Effect.catchTags({
+				ChannelSectionNotFoundError: () => Effect.succeed(failed("SectionNotFound")),
+				// Not a member of the organization any more: nothing a retry fixes.
+				UnauthorizedError: () => Effect.succeed(failed("Unexpected")),
 			}),
 			catchCommon(failed),
 		),

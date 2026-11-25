@@ -1,11 +1,14 @@
 import { User } from "@hazel/domain/models"
-import { UserId } from "@hazel/schema"
+import { OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import { testNativeNotification } from "~/lib/native-notifications"
 import { notificationSoundManager } from "~/lib/notification-sound-manager"
 import { settleUpdateUser, updateUser } from "../user"
 import { Message } from "./message"
+import { OrganizationSettings, payloadOf } from "./organization"
+import { catchCommon } from "../../../data/actions"
+import { HazelRpc } from "../../../rpc"
 
 /** A sound or notification preview threw (audio playback, the notification plugin). */
 class TestPreviewError extends Schema.TaggedError<TestPreviewError, { readonly brand: unique symbol }>()(
@@ -58,5 +61,23 @@ export const UpdateUserSettings = Command.define("UpdateUserSettings", {
 			updateUser({ id: userId, settings }),
 			Message.SucceededUpdateUserSettings(),
 			(reason) => Message.FailedUpdateUserSettings({ reason }),
+		),
+})
+
+/** "This organization": the whole chosen snapshot, written as the user's organization-scoped settings. */
+export const SaveOrganizationSettings = Command.define("SaveOrganizationSettings", {
+	args: { organizationId: OrganizationId, settings: OrganizationSettings },
+	messages: [Message.SucceededSaveOrganizationSettings, Message.FailedSaveOrganizationSettings],
+	execute: ({ organizationId, settings }) =>
+		Effect.gen(function* () {
+			const rpc = yield* HazelRpc
+			yield* rpc("channelMember.setScopeNotifications", payloadOf(organizationId, settings))
+			return Message.SucceededSaveOrganizationSettings()
+		}).pipe(
+			Effect.catchTags({
+				UnauthorizedError: () => Effect.succeed(Message.FailedSaveOrganizationSettings()),
+				ChannelSectionNotFoundError: () => Effect.succeed(Message.FailedSaveOrganizationSettings()),
+			}),
+			catchCommon(() => Message.FailedSaveOrganizationSettings()),
 		),
 })

@@ -5,6 +5,7 @@ import * as Segments from "../../../ui/date-segments"
 import * as Slider from "../../../ui/slider"
 import { UpdateUserFailure, UserRow } from "../user"
 import { QuietHoursField, SoundFile } from "./model"
+import { Change, OrganizationSettings } from "./organization"
 
 /** Why the test notification did not show: no native API or permission, or the plugin threw. */
 export const TestNotificationFailure = Schema.Literals(["Unavailable", "SendFailed"])
@@ -27,5 +28,9 @@ export const Message = defineMessageUnion({
 	SucceededUpdateUserSettings: {},
 	FailedUpdateUserSettings: { reason: UpdateUserFailure },
 	GotInteractionMessage: { message: Interaction.Message },
+	UpdatedOrganizationSettings: { settings: OrganizationSettings },
+	ChangedOrganizationSettings: { change: Change },
+	SucceededSaveOrganizationSettings: {},
+	FailedSaveOrganizationSettings: {},
 })
 export type Message = typeof Message.Type

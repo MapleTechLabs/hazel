@@ -48,9 +48,25 @@ export const levelOfKey = (key: string): Option.Option<NotificationLevel | null>
 	return found === undefined ? Option.none() : Option.some(found)
 }
 
-/** The level's label; the default names what it is for this kind of channel. */
-export const levelLabelOf = (level: NotificationLevel | null, channelType: string) =>
-	level === null ? `Default (${levelLabels[defaultLevelOf(channelType)]})` : levelLabels[level]
+/**
+ * What a channel with no level of its own is notified of (`notification-rules.ts`): its section's
+ * level, else the organization's, else the type's default. DMs and threads take the type's default.
+ * A section with no level of its own passes no `sectionLevel`.
+ */
+export const inheritedLevelOf = (
+	channelType: string,
+	scopes: {
+		readonly sectionLevel?: NotificationLevel | null | undefined
+		readonly organizationLevel?: NotificationLevel | null | undefined
+	} = {},
+): NotificationLevel =>
+	channelType === "direct" || channelType === "single" || channelType === "thread"
+		? defaultLevelOf(channelType)
+		: (scopes.sectionLevel ?? scopes.organizationLevel ?? defaultLevelOf(channelType))
+
+/** The level's label; the default names the level it inherits (`inheritedLevelOf`). */
+export const levelLabelOf = (level: NotificationLevel | null, inheritedLevel: NotificationLevel) =>
+	level === null ? `Default (${levelLabels[inheritedLevel]})` : levelLabels[level]
 
 /** Muted now: for good, or until a time still ahead. */
 export const isMutedNow = (

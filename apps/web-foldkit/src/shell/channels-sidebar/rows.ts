@@ -174,3 +174,20 @@ export const partnerOrgsByChannel = (
 	}
 	return result
 }
+
+/** The user's own notification settings for a section (`notification_overrides`). */
+export const SectionSetting = Schema.Struct({
+	sectionId: ChannelSectionId,
+	isMuted: Schema.Boolean,
+	mutedUntilMs: Schema.NullOr(Schema.Finite),
+	notificationLevel: Schema.NullOr(ChannelMember.NotificationLevel),
+})
+export type SectionSetting = typeof SectionSetting.Type
+
+/** The user's own notification settings for the organization (`notification_overrides`). */
+export const OrganizationSetting = Schema.Struct({
+	isMuted: Schema.Boolean,
+	mutedUntilMs: Schema.NullOr(Schema.Finite),
+	notificationLevel: Schema.NullOr(ChannelMember.NotificationLevel),
+})
+export type OrganizationSetting = typeof OrganizationSetting.Type

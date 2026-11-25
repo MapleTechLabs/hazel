@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { ChannelId, ChannelMemberId, ChannelSectionId } from "@hazel/schema"
+import { ChannelId, ChannelMemberId, ChannelSectionId, OrganizationId } from "@hazel/schema"
 import { Effect } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
@@ -16,7 +16,7 @@ import {
 	update,
 } from "../channels-sidebar"
 import { NotificationChoice } from "../../chat/notification-menu"
-import { ApplyNotificationChoice, UpdateChannelMember } from "./actions"
+import { ApplyNotificationChoice, ApplySectionNotificationChoice, UpdateChannelMember } from "./actions"
 import { PersistDismissedHint } from "./hints"
 import { dmMenuEntries, rowMenuEntries, sectionMenuEntries } from "./menus"
 
@@ -121,6 +121,31 @@ describe("open menu", () => {
 		expect(outMessage).toEqual(PageOutMessage.RequestedModal({ modal: { _tag: "JoinChannel" } }))
 	})
 
+	test("a section's Mute and Notifications write the user's settings for that section", () => {
+		const organizationId = OrganizationId.make("00000000-0000-4000-8000-000000000009")
+		const withOrg: Model = { ...loaded, organizationId }
+		const open = sectionMenu(withOrg, pressed).model
+		const entries = sectionMenuEntries(["create-channel", "join-channel"], true, {
+			isMuted: false,
+			notificationLevel: null,
+			inheritedLevel: "mentions",
+		})
+		const chose = (key: string) =>
+			sectionMenu(open, Menu.Message.ChoseFromNativeMenu({ key, entries })).commands?.find(
+				(command) => command.name === ApplySectionNotificationChoice.name,
+			)?.args
+		expect(chose("mute:15")).toEqual({
+			organizationId,
+			sectionId,
+			choice: NotificationChoice.Mute({ minutes: 15 }),
+		})
+		expect(chose("level:nothing")).toEqual({
+			organizationId,
+			sectionId,
+			choice: NotificationChoice.SetLevel({ level: "nothing" }),
+		})
+	})
+
 	test("OpenMenu is a tagged union", () => {
 		const menu = Menu.init({ id: "x" })
 		expect(OpenMenu.Section({ sectionKey: "dms", menu })._tag).toBe("Section")
@@ -198,7 +223,12 @@ describe("DM row menu", () => {
 			reopened,
 			Menu.Message.ClickedItem({
 				key: "mute",
-				entries: dmMenuEntries({ isMuted: true, isFavorite: true, notificationLevel: null }),
+				entries: dmMenuEntries({
+					isMuted: true,
+					isFavorite: true,
+					notificationLevel: null,
+					inheritedLevel: "all",
+				}),
 			}),
 		).commands
 		expect(unmuted?.find((command) => command.name === ApplyNotificationChoice.name)?.args).toEqual({

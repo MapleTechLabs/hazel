@@ -52,6 +52,8 @@ export const orgTables = [
 	// (`worker/objects/org/channel-activity.ts`).
 	schema.channelActivityTable,
 	schema.channelReadStateTable,
+	// A member's organization and section notification settings.
+	schema.notificationOverridesTable,
 	schema.channelSectionsTable,
 	schema.channelAccessTable,
 	schema.customEmojisTable,

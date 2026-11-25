@@ -218,6 +218,17 @@ const toMembers =
 		affectedPrincipals: affected,
 	})
 
+/** The principal's own rows (`userId`), never anyone else's; never a guest's. */
+const ownRows =
+	(table: Spec["table"], key: ReadonlyArray<string>) =>
+	(affected: Affected): Spec => ({
+		table,
+		key,
+		visible: (p, $) => [$.userId!.eq(p.userId), isMember(p.userId)],
+		dependsOn: MEMBERSHIP,
+		affectedPrincipals: affected,
+	})
+
 const orgSyncTables: ReadonlyArray<(affected: Affected) => Spec> = [
 	byMembership(schema.organizationsTable, "id"),
 	byMembership(schema.organizationMembersTable, "organizationId"),
@@ -229,14 +240,9 @@ const orgSyncTables: ReadonlyArray<(affected: Affected) => Spec> = [
 	byChannel(schema.channelsTable, "id"),
 	byChannel(schema.channelMembersTable, "channelId"),
 	byChannel(schema.channelActivityTable, "channelId", false, ["channelId"]),
-	// A member's read positions: theirs alone, never anyone else's (no read receipts).
-	(affected) => ({
-		table: schema.channelReadStateTable,
-		key: ["channelId", "userId"],
-		visible: (p, $) => [$.userId!.eq(p.userId), isMember(p.userId)],
-		dependsOn: MEMBERSHIP,
-		affectedPrincipals: affected,
-	}),
+	// A member's read positions and organization and section notification settings: theirs alone.
+	ownRows(schema.channelReadStateTable, ["channelId", "userId"]),
+	ownRows(schema.notificationOverridesTable, ["userId", "scope", "scopeId"]),
 	byMembership(schema.channelSectionsTable, "organizationId"),
 	byMembership(schema.customEmojisTable, "organizationId"),
 	byMembership(schema.botInstallationsTable, "organizationId", false),

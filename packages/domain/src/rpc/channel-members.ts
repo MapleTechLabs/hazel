@@ -2,9 +2,10 @@ import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { ChannelId, ChannelMemberId, OrganizationId } from "@hazel/schema"
-import { ChannelMember } from "../models"
+import { ChannelMember, JsonDate, NotificationOverride } from "../models"
 import { TransactionId } from "@hazel/schema"
 import { ChannelNotFoundError } from "./channels"
+import { ChannelSectionNotFoundError } from "./channel-sections"
 import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
 import { RouteOrganizationId } from "./routing-fields"
@@ -152,6 +153,44 @@ export class ChannelMemberRpcs extends RpcGroup.make(
 		payload: Schema.Struct({ channelId: ChannelId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
 		error: Schema.Union([ChannelNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["channel-members:write"])
+		.middleware(AuthMiddleware),
+
+	/**
+	 * ChannelMemberSetScopeNotifications
+	 *
+	 * The current user's notification settings for the organization or one of its sections
+	 * (Discord's server and category settings). Fields left out keep their value; a scope with no
+	 * row yet starts at the defaults. `suppressEveryone` is the organization's only (a section's is
+	 * ignored).
+	 */
+	Rpc.make("channelMember.setScopeNotifications", {
+		payload: Schema.Struct({
+			organizationId: OrganizationId,
+			scope: NotificationOverride.Scope,
+			/** The organization's id, or the section's. */
+			scopeId: Schema.String,
+			level: Schema.optional(Schema.NullOr(ChannelMember.NotificationLevel)),
+			isMuted: Schema.optional(Schema.Boolean),
+			mutedUntil: Schema.optional(Schema.NullOr(JsonDate)),
+			suppressEveryone: Schema.optional(Schema.Boolean),
+		}),
+		success: Schema.Struct({ transactionId: TransactionId }),
+		error: Schema.Union([ChannelSectionNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["channel-members:write"])
+		.middleware(AuthMiddleware),
+
+	/** The current user's settings for the scope back to the defaults (the row goes). */
+	Rpc.make("channelMember.resetScopeNotifications", {
+		payload: Schema.Struct({
+			organizationId: OrganizationId,
+			scope: NotificationOverride.Scope,
+			scopeId: Schema.String,
+		}),
+		success: Schema.Struct({ transactionId: TransactionId }),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
 	})
 		.annotate(RequiredScopes, ["channel-members:write"])
 		.middleware(AuthMiddleware),

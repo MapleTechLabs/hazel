@@ -68,6 +68,30 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 			),
 		),
 	}),
+	sidebarSectionSettings: entry(
+		{ organizationId: Schema.NullOr(OrganizationId) },
+		{
+			modelToDependencies: (model) => ({ organizationId: model.organizationId }),
+			dependenciesToStream: ({ organizationId }) =>
+				organizationId === null
+					? Stream.empty
+					: Data.sectionSettingsStream(organizationId, (settings) =>
+							Message.UpdatedSectionSettings({ settings }),
+						),
+		},
+	),
+	sidebarOrganizationSetting: entry(
+		{ organizationId: Schema.NullOr(OrganizationId) },
+		{
+			modelToDependencies: (model) => ({ organizationId: model.organizationId }),
+			dependenciesToStream: ({ organizationId }) =>
+				organizationId === null
+					? Stream.empty
+					: Data.organizationSettingStream(organizationId, (setting) =>
+							Message.UpdatedOrganizationSetting({ setting }),
+						),
+		},
+	),
 	sidebarSections: entry(
 		{ organizationId: Schema.NullOr(OrganizationId) },
 		{

@@ -1,6 +1,7 @@
 import type { ChannelSectionId } from "@hazel/schema"
 import { Array, Option, Schema } from "effect"
 import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
+import type { NotificationLevel } from "~/lib/notification-settings"
 import { itemContent, levelEntry, muteEntry, type NotificationMember } from "../../chat/notification-menu"
 import {
 	IconCirclePlus,
@@ -63,7 +64,12 @@ const rowItem = (key: RowMenuKey, options?: Parameters<typeof Menu.item>[1]) => 
 export interface MenuMember extends NotificationMember {
 	readonly isFavorite: boolean
 }
-const NOT_TOGGLED: MenuMember = { isMuted: false, isFavorite: false, notificationLevel: null }
+const NOT_TOGGLED: MenuMember = {
+	isMuted: false,
+	isFavorite: false,
+	notificationLevel: null,
+	inheritedLevel: "mentions",
+}
 const favoriteTitle = (member: MenuMember) => (member.isFavorite ? "Unfavorite" : "Favorite")
 
 /** A row's items as SF Symbols, for the system's own menu; the toggles show what they turn to. */
@@ -83,6 +89,8 @@ const ROW_SYMBOLS = {
 } as const satisfies Readonly<Record<string, string>>
 
 const SECTION_SYMBOLS = {
+	mute: "bell.slash",
+	notifications: "bell.badge",
 	"create-channel": "plus.circle",
 	"join-channel": "number",
 	"create-dm": "square.and.pencil",
@@ -95,10 +103,9 @@ export const rowMenuEntries = (
 	sections: ReadonlyArray<Section>,
 	canDelete: boolean,
 	member: MenuMember = NOT_TOGGLED,
-	channelType = "public",
 ): ReadonlyArray<Menu.Entry> => [
 	muteEntry(member),
-	levelEntry(channelType),
+	levelEntry(member),
 	rowItem("favorite", { textValue: favoriteTitle(member) }),
 	...(sections.length > 0
 		? [
@@ -139,14 +146,19 @@ export const sectionIdOfKey = (
 				(section) => section.id,
 			)
 
-/** `menuActions` plus "Delete section" for editable sections. */
+/** A section's notification items' inputs (Discord's category mute and level). */
+export type SectionNotifications = NotificationMember
+
+/** `menuActions`, the section's Mute and Notifications, and "Delete section" for editable sections. */
 export const sectionMenuEntries = (
 	actions: ReadonlyArray<SectionAction>,
 	isEditable: boolean,
+	notifications: SectionNotifications | null = null,
 ): ReadonlyArray<Menu.Entry> => [
 	...actions.map((action) =>
 		Menu.item(action satisfies SectionMenuKey, { textValue: sectionActionLabel(action) }),
 	),
+	...(notifications === null ? [] : [Menu.separator, muteEntry(notifications), levelEntry(notifications)]),
 	...(isEditable
 		? [
 				Menu.separator,
@@ -172,9 +184,8 @@ const memberItemContent = <M>(
 	member: MenuMember,
 	key: string,
 	text: (value: string) => Html,
-	channelType: string,
 ): ReadonlyArray<Html | string> | null => {
-	const notificationItem = itemContent(h, member, channelType, key, text)
+	const notificationItem = itemContent(h, member, key, text)
 	if (notificationItem !== null) return notificationItem
 	if (key === "favorite")
 		return [
@@ -204,7 +215,7 @@ const rowMenuContent =
 	(key: string): ReadonlyArray<Html | string> => {
 		const id = rowMenuId(entry.channel.id)
 		const text = (value: string, className?: string) => menuLabel(h, id, key, value, className)
-		const memberItem = memberItemContent(h, member, key, text, entry.channel.type)
+		const memberItem = memberItemContent(h, member, key, text)
 		if (memberItem !== null) return memberItem
 		if (key === "move") return [IconFolderPlus(h, { className: "size-4" }), text("Move to section")]
 		if (key === "settings") return [IconGear(h), text("Settings")]
@@ -220,22 +231,29 @@ type RowMenuOptions<M> = Readonly<{
 	entry: ChannelEntry
 	/** Muted now (`isMutedNow`), which the row computes from the clock. */
 	isMuted: boolean
+	/** What "Default" is for this channel (`inheritedLevelOf`). */
+	inheritedLevel: NotificationLevel
 	sections: ReadonlyArray<Section>
 	canDelete: boolean
 	toMessage: (message: Menu.Message) => M
 }>
 
-const menuMemberOf = (member: SidebarMember, isMuted: boolean): MenuMember => ({
+const menuMemberOf = (
+	member: SidebarMember,
+	isMuted: boolean,
+	inheritedLevel: NotificationLevel = "all",
+): MenuMember => ({
 	isMuted,
 	isFavorite: member.isFavorite,
 	notificationLevel: member.notificationLevel,
+	inheritedLevel,
 })
 
 /** A channel row's menu, which its dots trigger and a long press on the row both open. */
 const rowMenu = <M>(options: RowMenuOptions<M>) => {
-	const member = menuMemberOf(options.entry.member, options.isMuted)
+	const member = menuMemberOf(options.entry.member, options.isMuted, options.inheritedLevel)
 	return {
-		entries: rowMenuEntries(options.sections, options.canDelete, member, options.entry.channel.type),
+		entries: rowMenuEntries(options.sections, options.canDelete, member),
 		native: { symbols: rowSymbols(member) },
 	}
 }
@@ -248,7 +266,7 @@ export const rowLongPress = <M>(h: HtmlBuilder<M>, options: RowMenuOptions<M>): 
 		content: rowMenuContent(
 			h,
 			options.entry,
-			menuMemberOf(options.entry.member, options.isMuted),
+			menuMemberOf(options.entry.member, options.isMuted, options.inheritedLevel),
 			options.sections,
 		),
 		toParentMessage: options.toMessage,
@@ -271,7 +289,7 @@ export const rowMenuView = <M>(h: HtmlBuilder<M>, options: RowMenuOptions<M>): H
 			content: rowMenuContent(
 				h,
 				options.entry,
-				menuMemberOf(options.entry.member, options.isMuted),
+				menuMemberOf(options.entry.member, options.isMuted, options.inheritedLevel),
 				options.sections,
 			),
 			className: "w-42",
@@ -302,13 +320,7 @@ const dmMenuContent =
 	(key: string): ReadonlyArray<Html | string> => {
 		const text = (value: string, className?: string) =>
 			menuLabel(h, rowMenuId(options.channelId), key, value, className)
-		const memberItem = memberItemContent(
-			h,
-			menuMemberOf(options.member, options.isMuted),
-			key,
-			text,
-			"single",
-		)
+		const memberItem = memberItemContent(h, menuMemberOf(options.member, options.isMuted), key, text)
 		if (memberItem !== null) return memberItem
 		if (key === "hide")
 			return [IconClose(h, { className: "size-4" }), text("Hide conversation", "text-danger-subtle-fg")]
@@ -348,9 +360,11 @@ export const sectionActionLabel = (action: SectionAction): string =>
 			: "Start a conversation"
 
 const sectionMenuContent =
-	<M>(h: HtmlBuilder<M>, id: string) =>
+	<M>(h: HtmlBuilder<M>, id: string, notifications: SectionNotifications | null) =>
 	(key: string): ReadonlyArray<Html | string> => {
 		const text = (value: string) => menuLabel(h, id, key, value)
+		const notificationItem = notifications === null ? null : itemContent(h, notifications, key, text)
+		if (notificationItem !== null) return notificationItem
 		if (key === "create-channel") return [IconCirclePlus(h), text("Create new channel")]
 		if (key === "join-channel") return [IconHashtag(h), text("Join existing channel")]
 		if (key === "create-dm") return [IconPlus(h), text("Start a conversation")]
@@ -364,6 +378,8 @@ export const sectionMenuView = <M>(
 	options: Readonly<{
 		menu: Menu.Model
 		entries: ReadonlyArray<Menu.Entry>
+		/** A real section's notification items; null for the default section and DMs. */
+		notifications?: SectionNotifications | null
 		toMessage: (message: Menu.Message) => M
 	}>,
 ): Html =>
@@ -389,7 +405,7 @@ export const sectionMenuView = <M>(
 					},
 					[IconPlus(h), overlay],
 				),
-			content: sectionMenuContent(h, options.menu.id),
+			content: sectionMenuContent(h, options.menu.id, options.notifications ?? null),
 		},
 		toParentMessage: options.toMessage,
 	})
