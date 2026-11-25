@@ -543,10 +543,6 @@ describe("message search", () => {
 		))
 
 	it("writing in a thread follows it, and a mention brings in a member of the parent channel", () =>
-			}),
-		))
-
-	it("@here through the channel skips an offline member; @channel reaches them", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeWorld
@@ -621,6 +617,12 @@ describe("message search", () => {
 			}),
 		))
 
+	it("@here through the channel skips an offline member; @channel reaches them", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { a, a1, a2 } = world
+				const general = yield* makeChannel(a, a1, "public", "general")
 				const object = yield* world.objects.get(channelTarget(general))
 				// a2 joins and has no presence: offline.
 				ok(yield* call(a.object, a.id, "channelMember.create", { channelId: general }, a2))
