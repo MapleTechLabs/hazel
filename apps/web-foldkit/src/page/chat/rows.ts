@@ -112,6 +112,12 @@ export type ThreadPreview = typeof ThreadPreview.Type
 export const MarkdownRefs = Schema.Struct({
 	mentions: Schema.Array(Schema.Struct({ userId: Schema.String, name: Schema.String })),
 	emojis: Schema.Array(Schema.Struct({ name: Schema.String, imageUrl: Schema.String })),
+	/** The mentioned user groups: their handles, and whether the viewer is in each. */
+	groups: Schema.optionalKey(
+		Schema.Array(
+			Schema.Struct({ groupId: Schema.String, handle: Schema.String, isMine: Schema.Boolean }),
+		),
+	),
 })
 export type MarkdownRefs = typeof MarkdownRefs.Type
 

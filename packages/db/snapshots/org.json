@@ -1,5 +1,5 @@
 {
-	"migration": "0018_notification_overrides",
+	"migration": "0019_user_groups",
 	"entities": [
 		{
 			"kind": "table",
@@ -228,6 +228,20 @@
 		{
 			"kind": "table",
 			"name": "rss_subscriptions",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "user_group_members",
+			"primaryKey": {
+				"columns": ["groupId", "userId"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "user_groups",
 			"primaryKey": {
 				"columns": ["id"]
 			}
@@ -3488,6 +3502,114 @@
 		},
 		{
 			"kind": "column",
+			"table": "user_group_members",
+			"name": "groupId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_group_members",
+			"name": "userId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_group_members",
+			"name": "addedAt",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "user_groups",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "user_groups",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_groups",
+			"name": "handle",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_groups",
+			"name": "name",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_groups",
+			"name": "description",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_groups",
+			"name": "createdBy",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_groups",
+			"name": "createdAt",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "user_groups",
+			"name": "updatedAt",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "user_groups",
+			"name": "deletedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
 			"table": "user_presence_status",
 			"name": "id",
 			"position": 0,
@@ -4400,6 +4522,20 @@
 		},
 		{
 			"kind": "index",
+			"table": "user_group_members",
+			"name": "user_group_members_user_id_idx",
+			"unique": false,
+			"columns": ["\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "user_groups",
+			"name": "user_groups_organization_id_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
 			"table": "user_presence_status",
 			"name": "user_presence_status_active_channel_idx",
 			"unique": false,
@@ -4558,6 +4694,13 @@
 			"table": "rss_subscriptions",
 			"unique": true,
 			"on": ["channelId", "feedUrl"],
+			"where": "\"deletedAt\" IS NULL"
+		},
+		{
+			"name": "user_groups_org_handle_unique",
+			"table": "user_groups",
+			"unique": true,
+			"on": ["organizationId", "handle"],
 			"where": "\"deletedAt\" IS NULL"
 		}
 	]

@@ -55,6 +55,9 @@ export const orgTables = [
 	// A member's organization and section notification settings.
 	schema.notificationOverridesTable,
 	schema.channelSectionsTable,
+	// Mentionable groups of members (`@[group:…]`), and who is in each.
+	schema.userGroupsTable,
+	schema.userGroupMembersTable,
 	schema.channelAccessTable,
 	schema.customEmojisTable,
 	schema.botInstallationsTable,

@@ -21,6 +21,7 @@ import type {
 	PushDeviceRpcs,
 	RssSubscriptionRpcs,
 	TypingIndicatorRpcs,
+	UserGroupRpcs,
 	UserPresenceStatusRpcs,
 	UserRpcs,
 } from "../rpc"
@@ -57,6 +58,7 @@ export type RpcActionName =
 	| ActionOf<PushDeviceRpcs>
 	| ActionOf<RssSubscriptionRpcs>
 	| ActionOf<TypingIndicatorRpcs>
+	| ActionOf<UserGroupRpcs>
 	| ActionOf<UserPresenceStatusRpcs>
 	| ActionOf<UserRpcs>
 

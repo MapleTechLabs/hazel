@@ -159,6 +159,28 @@ describe("decide", () => {
 		})
 	})
 
+	it("a group mention is a mention: through mutes, and not suppressed with @channel and @here", () => {
+		const grouped = activity({ mentionedGroupMemberIds: [bob] })
+		expect(decide(grouped, bobAs(), NOON_UTC)).toEqual({
+			_tag: "Notify",
+			reason: "mention",
+			silent: false,
+		})
+		// Not in the group: a plain message, skipped on the default level.
+		expect(decide(activity({ mentionedGroupMemberIds: [other] }), bobAs(), NOON_UTC)).toEqual({
+			_tag: "Skip",
+			why: "level",
+		})
+		const organization = { level: null, isMuted: true, mutedUntil: null, suppressEveryone: true }
+		expect(decide(grouped, bobAs({ isMuted: true, organization }), NOON_UTC)).toMatchObject({
+			_tag: "Notify",
+			reason: "mention",
+		})
+		// The author in their own group is still never notified; `nothing` still skips.
+		expect(decide(grouped, bobAs({ userId: author }), NOON_UTC)).toEqual({ _tag: "Skip", why: "author" })
+		expect(decide(grouped, bobAs({ level: "nothing" }), NOON_UTC)).toEqual({ _tag: "Skip", why: "level" })
+	})
+
 	it("@channel and replies notify on the mentions level", () => {
 		expect(decide(activity({ notifyAll: true }), bobAs(), NOON_UTC)).toMatchObject({ reason: "everyone" })
 		expect(decide(activity({ replyToAuthorId: bob }), bobAs(), NOON_UTC)).toMatchObject({

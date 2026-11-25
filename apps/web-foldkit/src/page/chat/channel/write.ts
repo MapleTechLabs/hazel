@@ -158,6 +158,7 @@ const SHARED_COMPOSER_DATA: ReadonlyArray<string> = [
 	"UpdatedMentionMembers",
 	"UpdatedPresence",
 	"UpdatedMentionableBots",
+	"UpdatedUserGroups",
 	"UpdatedBotCommands",
 	"UpdatedCustomEmojis",
 ]
@@ -330,10 +331,18 @@ const threadEditorId = (threadChannelId: ChannelId) => `thread-composer-${thread
 
 export const newThreadDraft = (model: Model, threadChannelId: ChannelId): Draft.Model => {
 	const draft = Draft.init(threadChannelId, threadEditorId(threadChannelId), "Reply in thread...")
-	const { members, presence, mentionableBots, botCommands, customEmojis } = model.draft.composer
+	const { members, presence, mentionableBots, userGroups, botCommands, customEmojis } = model.draft.composer
 	return {
 		...draft,
-		composer: { ...draft.composer, members, presence, mentionableBots, botCommands, customEmojis },
+		composer: {
+			...draft.composer,
+			members,
+			presence,
+			mentionableBots,
+			userGroups,
+			botCommands,
+			customEmojis,
+		},
 	}
 }
 

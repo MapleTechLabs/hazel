@@ -4,10 +4,11 @@
  *
  * For each member but the author, the first rule that applies wins:
  *
- * 1. The reason: `direct` in a DM or group DM, else `mention`, `reply`, `everyone` (`@channel`;
+ * 1. The reason: `direct` in a DM or group DM, else `mention` (the member, or a user group they are
+ *    in: Discord's role mentions), `reply`, `everyone` (`@channel`;
  *    `@here` only for members who are online, away or busy, as Discord's) or plain `message`.
  *    The organization's "Suppress @channel and @here" (`notification_overrides`) makes `everyone` a
- *    plain `message`.
+ *    plain `message`; a group mention stays a mention.
  * 2. The member's level for the channel (`channel_members.notificationLevel`), else their level for
  *    its section, else for the organization (`notification_overrides`), else the channel type's
  *    default: `all` in DMs, group DMs and threads, `mentions` elsewhere. `nothing` skips. A thread
@@ -42,6 +43,8 @@ export interface MessageActivity {
 	readonly parentChannelId: ChannelId | null
 	readonly authorId: UserId
 	readonly mentionedUserIds: ReadonlyArray<UserId>
+	/** The members of the user groups mentioned (`@[group:…]`): each is mentioned. */
+	readonly mentionedGroupMemberIds?: ReadonlyArray<UserId> | undefined
 	/** `@channel` or `@here`. */
 	readonly notifyAll: boolean
 	/** `@here` without `@channel`: only the members online hear it as everyone. */
@@ -110,6 +113,7 @@ export const reasonFor = (
 ): NotificationReason => {
 	if (activity.channelType === "direct" || activity.channelType === "single") return "direct"
 	if (activity.mentionedUserIds.includes(userId)) return "mention"
+	if (activity.mentionedGroupMemberIds?.includes(userId) === true) return "mention"
 	if (activity.replyToAuthorId === userId) return "reply"
 	if (activity.notifyAll && (!activity.isHereOnly || isHereFor(presence))) return "everyone"
 	return "message"

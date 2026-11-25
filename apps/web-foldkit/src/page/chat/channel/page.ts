@@ -610,6 +610,20 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 					Composer.Message.UpdatedCustomEmojis({ emojis: customEmojis }),
 				),
 			),
+		UpdatedUserGroups: ({ groups }) =>
+			Write.andThen(withLookup(model, "userGroups", groups), (next) =>
+				Write.forwardComposerData(
+					next,
+					Composer.Message.UpdatedUserGroups({
+						groups: groups.map((group) => ({
+							id: group.id,
+							handle: group.handle,
+							name: group.name,
+							memberCount: group.memberIds.length,
+						})),
+					}),
+				),
+			),
 		// A late result from the channel just left must not replace the new channel's lookups.
 		UpdatedAttachments: ({ channelId, attachments }) =>
 			channelId === model.channelId ? withLookup(model, "attachments", attachments) : { model },

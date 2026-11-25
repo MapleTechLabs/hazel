@@ -49,6 +49,7 @@ import * as Draft from "../../../composer/draft"
 import * as Typing from "../../../composer/typing"
 import { uploadStream } from "../../../composer/upload"
 import { MessageWindows } from "../../../data/message-windows"
+import { userGroupsStream } from "../../../data/user-groups"
 import type { HazelApiClient, HazelRpc } from "../../../rpc"
 import { globalPasteStream, globalTypingStream, leftWindowStream } from "../../../composer/window-events"
 import { ChannelKeys, channelHotkeysStream, channelKeysOf } from "./hotkeys"
@@ -226,6 +227,16 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 					: customEmojisStream(organizationId, (customEmojis) =>
 							Message.UpdatedCustomEmojis({ customEmojis }),
 						),
+		},
+	),
+	chatUserGroups: entry(
+		{ organizationId: Schema.NullOr(OrganizationId) },
+		{
+			modelToDependencies: ({ model }) => ({ organizationId: model.channel?.organizationId ?? null }),
+			dependenciesToStream: ({ organizationId }) =>
+				organizationId === null
+					? Stream.empty
+					: userGroupsStream(organizationId, (groups) => Message.UpdatedUserGroups({ groups })),
 		},
 	),
 	chatAttachments: entry(byShownChannels, {

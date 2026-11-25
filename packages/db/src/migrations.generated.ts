@@ -400,6 +400,16 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "notification_overrides_scope_idx" ON "notification_overrides" ("scope", "scopeId")',
 			],
 		},
+		{
+			id: "0019_user_groups",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "user_group_members" (\n\t"groupId" text NOT NULL,\n\t"userId" text NOT NULL,\n\t"addedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\tPRIMARY KEY ("groupId", "userId")\n)',
+				'CREATE TABLE IF NOT EXISTS "user_groups" (\n\t"id" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || \'-\' || lower(hex(randomblob(2))) || \'-4\' || substr(lower(hex(randomblob(2))), 2) || \'-\' || substr(\'89ab\', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || \'-\' || lower(hex(randomblob(6)))),\n\t"organizationId" text NOT NULL,\n\t"handle" text NOT NULL,\n\t"name" text NOT NULL,\n\t"description" text,\n\t"createdBy" text NOT NULL,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"deletedAt" text\n)',
+				'CREATE INDEX IF NOT EXISTS "user_group_members_user_id_idx" ON "user_group_members" ("userId")',
+				'CREATE INDEX IF NOT EXISTS "user_groups_organization_id_idx" ON "user_groups" ("organizationId")',
+				'CREATE UNIQUE INDEX IF NOT EXISTS "user_groups_org_handle_unique" ON "user_groups" ("organizationId", "handle") WHERE "deletedAt" IS NULL',
+			],
+		},
 	],
 	channel: [
 		{

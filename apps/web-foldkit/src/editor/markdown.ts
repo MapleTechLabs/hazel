@@ -64,9 +64,11 @@ export function serializeToMarkdown(nodes: ReadonlyArray<ProseMirrorNode>): stri
 					() => `![custom-emoji:${node.attrs.name}](${node.attrs.imageUrl})`,
 				),
 				Match.when("mention", () =>
-					isSpecialMention(node.attrs.userId)
-						? `@[directive:${node.attrs.userId}]`
-						: `@[userId:${node.attrs.userId}]`,
+					node.attrs.kind === "group"
+						? `@[group:${node.attrs.userId}]`
+						: isSpecialMention(node.attrs.userId)
+							? `@[directive:${node.attrs.userId}]`
+							: `@[userId:${node.attrs.userId}]`,
 				),
 				Match.when("paragraph", () => serializeInline(node)),
 				Match.when("blockquote", () =>
@@ -103,12 +105,18 @@ function parseInlineContent(text: string): Array<InlineNode> {
 		// ProseMirror has no empty text nodes; an empty block simply has no content.
 		if (value.length > 0) nodes.push(schema.text(value))
 	}
-	const inlinePattern = /@\[(userId|directive):([^\]]+)\]|!\[custom-emoji:([^\]]+)\]\(([^)]+)\)/g
+	const inlinePattern = /@\[(userId|directive|group):([^\]]+)\]|!\[custom-emoji:([^\]]+)\]\(([^)]+)\)/g
 	let lastIndex = 0
 	for (const match of text.matchAll(inlinePattern)) {
 		if (match.index > lastIndex) pushText(text.slice(lastIndex, match.index))
 		if (match[1] && match[2]) {
-			nodes.push(schema.nodes.mention.create({ userId: match[2], displayName: match[2] }))
+			nodes.push(
+				schema.nodes.mention.create({
+					userId: match[2],
+					displayName: match[2],
+					kind: match[1] === "group" ? "group" : "user",
+				}),
+			)
 		} else if (match[3] && match[4]) {
 			if (isTrustedCustomEmojiUrl(match[4])) {
 				nodes.push(schema.nodes["custom-emoji"].create({ name: match[3], imageUrl: match[4] }))

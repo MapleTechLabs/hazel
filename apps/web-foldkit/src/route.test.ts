@@ -442,6 +442,7 @@ describe("hrefOf", () => {
 		Profile: [[AppRoute.Profile({ orgSlug, userId: user }), `/hazel/profile/${userId}`]],
 		SettingsGeneral: [[AppRoute.SettingsGeneral({ orgSlug }), "/hazel/settings"]],
 		TeamSettings: [[AppRoute.TeamSettings({ orgSlug }), "/hazel/settings/team"]],
+		SettingsGroups: [[AppRoute.SettingsGroups({ orgSlug }), "/hazel/settings/groups"]],
 		SettingsInvitations: [[AppRoute.SettingsInvitations({ orgSlug }), "/hazel/settings/invitations"]],
 		SettingsCustomEmojis: [[AppRoute.SettingsCustomEmojis({ orgSlug }), "/hazel/settings/custom-emojis"]],
 		SettingsDebug: [[AppRoute.SettingsDebug({ orgSlug }), "/hazel/settings/debug"]],

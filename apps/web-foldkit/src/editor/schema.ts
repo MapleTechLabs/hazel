@@ -99,7 +99,8 @@ export const schema = new Schema({
 			group: "inline",
 			inline: true,
 			atom: true,
-			attrs: { userId: {}, displayName: {} },
+			// `kind: "group"`: a user group, its id in `userId` and its handle in `displayName`.
+			attrs: { userId: {}, displayName: {}, kind: { default: "user" } },
 			toDOM: (node) => [
 				"span",
 				{ contenteditable: "false", class: mentionClassName(node.attrs.userId) },

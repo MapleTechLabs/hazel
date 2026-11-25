@@ -30,6 +30,7 @@ import {
 	ThreadChannelInfo,
 	ThreadMessageInfo,
 	TypingInfo,
+	UserGroupInfo,
 	UserInfo,
 } from "../lookups"
 import * as FilesPage from "../files/page"
@@ -233,6 +234,7 @@ export const Message = defineMessageUnion({
 	UpdatedPresence: { presence: Schema.Array(PresenceInfo) },
 	UpdatedBots: { bots: Schema.Array(BotInfo) },
 	UpdatedCustomEmojis: { customEmojis: Schema.Array(CustomEmojiInfo) },
+	UpdatedUserGroups: { groups: Schema.Array(UserGroupInfo) },
 	UpdatedAttachments: { channelId: ChannelId, attachments: Schema.Array(AttachmentInfo) },
 	UpdatedSyncedMessages: { channelId: ChannelId, messages: Schema.Array(SyncedMessageInfo) },
 	UpdatedSyncProvider: { provider: Schema.NullOr(SyncProvider) },

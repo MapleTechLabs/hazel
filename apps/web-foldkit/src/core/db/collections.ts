@@ -29,6 +29,7 @@ import {
 	PinnedMessage,
 	TypingIndicator,
 	User,
+	UserGroup,
 	UserPresenceStatus,
 } from "@hazel/domain/models"
 import { OrganizationId } from "@hazel/schema"
@@ -162,6 +163,21 @@ export const connectConversationChannelCollection = orgCollection(
 )
 export const channelMemberCollection = orgCollection("channel_members", ChannelMember.Schema)
 export const channelSectionCollection = orgCollection("channel_sections", ChannelSection.Schema)
+/** The organization's user groups (Discord's mentionable roles), for `@handle` mentions. */
+export const userGroupCollection = orgCollection("user_groups", UserGroup.Schema)
+/** Who is in each user group. Keyed by `groupId:userId`. */
+export const userGroupMemberCollection = createEffectCollection(
+	{
+		id: "user_group_members",
+		table: "user_group_members",
+		schema: UserGroup.MemberSchema,
+		parseRow: parseTimestamps,
+		getKey: (row) => `${row.groupId}:${row.userId}`,
+		hub: syncHub,
+		sources: orgSources,
+	},
+	persist(UserGroup.MemberSchema),
+)
 export const attachmentCollection = channelCollectionOf("attachments", Attachment.Schema)
 export const typingIndicatorCollection = channelCollectionOf("typing_indicators", TypingIndicator.Schema)
 export const userPresenceStatusCollection = syncedCollection(

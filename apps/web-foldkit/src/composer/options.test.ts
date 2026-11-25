@@ -35,4 +35,27 @@ describe("mentionOptions", () => {
 			{ label: "Dana", provider: "discord", status: null },
 		])
 	})
+
+	test("groups come after @channel and @here, before people, as @handle with their size", () => {
+		const model: Composer.Model = {
+			...Composer.init("composer-test"),
+			autocomplete: { trigger: "mention", search: "de" },
+			members: [
+				{ userId: userId(1), firstName: "Dede", lastName: "", avatarUrl: null, provider: null },
+			],
+			userGroups: [
+				{ id: "g-1", handle: "design", name: "Design team", memberCount: 3 },
+				{ id: "g-2", handle: "ops", name: "Operations", memberCount: 1 },
+				{ id: "g-3", handle: "eng", name: "Developers", memberCount: 1 },
+			],
+		}
+		expect(
+			mentionOptions(model).map(({ type, label, description }) => ({ type, label, description })),
+		).toEqual([
+			{ type: "group", label: "@design", description: "Design team, 3 members" },
+			// Found by name too.
+			{ type: "group", label: "@eng", description: "Developers, 1 member" },
+			{ type: "user", label: "Dede", description: null },
+		])
+	})
 })

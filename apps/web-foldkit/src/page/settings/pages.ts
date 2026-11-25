@@ -10,11 +10,13 @@ import * as InstalledAppsSettings from "./integrations/installed"
 import * as MarketplaceSettings from "./integrations/marketplace"
 import * as YourAppsSettings from "./integrations/your-apps"
 import * as SettingsInvitations from "./invitations"
+import * as SettingsGroups from "./groups"
 import * as TeamSettings from "./team"
 
 /** The organization settings pages: their own chunk, loaded with the first settings route (`../registry.ts`). */
 export const pages = [
 	TeamSettings.page,
+	SettingsGroups.page,
 	IntegrationsSettings.page,
 	InstalledAppsSettings.page,
 	MarketplaceSettings.page,

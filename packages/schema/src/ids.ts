@@ -264,6 +264,14 @@ export const ChannelSectionId = Schema.String.check(Schema.isUUID())
 	})
 export type ChannelSectionId = Schema.Schema.Type<typeof ChannelSectionId>
 
+export const UserGroupId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/UserGroupId"))
+	.annotate({
+		description: "The ID of a user group (a mentionable group of an organization's members)",
+		title: "User Group ID",
+	})
+export type UserGroupId = Schema.Schema.Type<typeof UserGroupId>
+
 export const RssSubscriptionId = Schema.String.check(Schema.isUUID())
 	.pipe(Schema.brand("@HazelChat/RssSubscriptionId"))
 	.annotate({

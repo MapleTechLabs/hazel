@@ -157,8 +157,13 @@ export const createComposerEditor = (element: HTMLElement, options: EditorOption
 }
 
 /** Legacy `handleSelectByIndex` for a mention option. */
-export const insertMention = (view: EditorView, userId: string, displayName: string) => {
-	insertAutocompleteResult(view, schema.nodes.mention.create({ userId, displayName }))
+export const insertMention = (
+	view: EditorView,
+	userId: string,
+	displayName: string,
+	kind: "user" | "group" = "user",
+) => {
+	insertAutocompleteResult(view, schema.nodes.mention.create({ userId, displayName, kind }))
 	view.focus()
 }
 

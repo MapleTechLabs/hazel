@@ -24,6 +24,7 @@ import {
 	PushDeviceRpcs,
 	RssSubscriptionRpcs,
 	TypingIndicatorRpcs,
+	UserGroupRpcs,
 	UserPresenceStatusRpcs,
 	UserRpcs,
 } from "../rpc"
@@ -40,6 +41,7 @@ export const RPC_SCOPE_MAP: ScopeMap = mergeScopeMaps(
 	scopeMapFromRpcGroup(ChannelRpcs.requests),
 	scopeMapFromRpcGroup(ChannelMemberRpcs.requests),
 	scopeMapFromRpcGroup(ChannelSectionRpcs.requests),
+	scopeMapFromRpcGroup(UserGroupRpcs.requests),
 	scopeMapFromRpcGroup(ChannelWebhookRpcs.requests),
 	scopeMapFromRpcGroup(ConnectShareRpcs.requests),
 	scopeMapFromRpcGroup(OrganizationRpcs.requests),

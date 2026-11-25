@@ -12,7 +12,14 @@
  * (`./push-content.ts`) when the channel sent the content.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import { ChannelId, type ConnectConversationId, MessageId, type OrganizationId, UserId } from "@hazel/schema"
+import {
+	ChannelId,
+	type ConnectConversationId,
+	MessageId,
+	type OrganizationId,
+	UserGroupId,
+	UserId,
+} from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import { NotificationService } from "../../../services/notifications/notification-service"
 import { enqueueEffect, defineEffect } from "../effects/registry"
@@ -28,6 +35,8 @@ export const MessageCreatedPayload = Schema.Struct({
 	authorId: UserId,
 	/** `@[userId:…]` mentions in the content. */
 	mentionedUserIds: Schema.Array(UserId),
+	/** `@[group:…]` mentions. Optional: deliveries enqueued before groups have none. */
+	mentionedGroupIds: Schema.optional(Schema.Array(UserGroupId)),
 	/** `@channel` or `@here`. */
 	notifyAll: Schema.Boolean,
 	/** `@here` without `@channel`: only members online. Optional: deliveries before it have none. */
@@ -121,6 +130,40 @@ const notifiedChannel = Effect.fn("OrgEffects.notifiedChannel")(function* <E, R>
 	return yield* localChannel(conversation.value.hostChannelId)
 })
 
+/** Group mentions resolved here; at most this many groups per message are expanded. */
+const MAX_MENTIONED_GROUPS = 20
+
+/**
+ * The org's groups a message mentions (deleted ones and other orgs' ids drop out): their handles,
+ * for the push, and their members, each mentioned (Discord's role mentions). Only the channel's
+ * members are ever notified, so the members are not narrowed here.
+ */
+export const mentionedGroups = Effect.fn("OrgEffects.mentionedGroups")(function* (
+	organizationId: OrganizationId,
+	groupIds: ReadonlyArray<UserGroupId>,
+) {
+	const ids = [...new Set(groupIds)].slice(0, MAX_MENTIONED_GROUPS)
+	if (ids.length === 0) return { handles: new Map<string, string>(), memberIds: [] as Array<UserId> }
+	const db = yield* Database.Database
+	const groups = yield* db.run(
+		SQLite.from(schema.userGroupsTable)
+			.select("id", "handle")
+			.where(($) => [$.organizationId.eq(organizationId), $.id.in_(...ids), $.deletedAt.isNull()]),
+	)
+	const members =
+		groups.length === 0
+			? []
+			: yield* db.run(
+					SQLite.from(schema.userGroupMembersTable)
+						.select("userId")
+						.where(($) => [$.groupId.in_(...groups.map((group) => group.id))]),
+				)
+	return {
+		handles: new Map(groups.map((group) => [group.id as string, group.handle])),
+		memberIds: [...new Set(members.map((row) => row.userId))],
+	}
+})
+
 export const messageCreated = Effect.fn("OrgEffects.messageCreated")(function* (
 	input: MessageCreatedPayload,
 ) {
@@ -147,6 +190,8 @@ export const messageCreated = Effect.fn("OrgEffects.messageCreated")(function* (
 		})
 	}
 
+	const groups = yield* mentionedGroups(channel.value.organizationId, payload.mentionedGroupIds ?? [])
+
 	yield* NotificationService.use((service) =>
 		service.notify(channel.value.organizationId, {
 			channelId: payload.channelId,
@@ -155,6 +200,7 @@ export const messageCreated = Effect.fn("OrgEffects.messageCreated")(function* (
 			messageId: payload.messageId,
 			authorId: payload.authorId,
 			mentionedUserIds: payload.mentionedUserIds,
+			mentionedGroupMemberIds: groups.memberIds,
 			notifyAll: payload.notifyAll,
 			isHereOnly: payload.isHereOnly ?? false,
 			replyToAuthorId: payload.replyToAuthorId,
@@ -167,6 +213,7 @@ export const messageCreated = Effect.fn("OrgEffects.messageCreated")(function* (
 							channelId: payload.channelId,
 							authorId: payload.authorId,
 							mentionedUserIds: payload.mentionedUserIds,
+							groupHandles: groups.handles,
 							content,
 							attachmentCount: payload.attachmentCount ?? 0,
 						}),

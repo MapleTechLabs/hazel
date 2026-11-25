@@ -123,6 +123,7 @@ const notificationsHook: MessageEventHook = (event) =>
 				messageId: message.id,
 				authorId: message.authorId,
 				mentionedUserIds: mentions.userMentions,
+				mentionedGroupIds: mentions.groupMentions,
 				notifyAll: mentions.hasChannelMention || mentions.hasHereMention,
 				isHereOnly: mentions.hasHereMention && !mentions.hasChannelMention,
 				replyToAuthorId: Option.getOrNull(Option.map(replyTo, (row) => row.authorId)),
