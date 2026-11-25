@@ -6,6 +6,7 @@ import * as Slider from "../../../ui/slider"
 import { UpdateUserFailure, UserRow } from "../user"
 import { QuietHoursField, SoundFile } from "./model"
 import { Change, OrganizationSettings } from "./organization"
+import { Override } from "./overrides"
 
 /** Why the test notification did not show: no native API or permission, or the plugin threw. */
 export const TestNotificationFailure = Schema.Literals(["Unavailable", "SendFailed"])
@@ -32,5 +33,9 @@ export const Message = defineMessageUnion({
 	ChangedOrganizationSettings: { change: Change },
 	SucceededSaveOrganizationSettings: {},
 	FailedSaveOrganizationSettings: {},
+	UpdatedChannelOverrides: { overrides: Schema.Array(Override) },
+	UpdatedSectionOverrides: { overrides: Schema.Array(Override) },
+	ClickedResetOverride: { override: Override },
+	CompletedResetOverride: { isSuccess: Schema.Boolean },
 })
 export type Message = typeof Message.Type

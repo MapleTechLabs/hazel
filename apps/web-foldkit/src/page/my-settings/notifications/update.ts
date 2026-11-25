@@ -12,6 +12,7 @@ import { PageOutMessage } from "../../out-message"
 import {
 	ExpireNotificationStatus,
 	PlayTestSound,
+	ResetOverride,
 	SaveOrganizationSettings,
 	SendTestNotification,
 	UpdateUserSettings,
@@ -157,6 +158,8 @@ export const init = (): Return => ({
 		notificationStatusVersion: 0,
 		interaction: Interaction.init(),
 		organizationSettings: DEFAULTS,
+		channelOverrides: [],
+		sectionOverrides: [],
 	},
 })
 
@@ -233,6 +236,25 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			}
 		},
 		SucceededSaveOrganizationSettings: () => ({ model }),
+		UpdatedChannelOverrides: ({ overrides }) => ({
+			model: modifyFields(model, { channelOverrides: () => overrides }),
+		}),
+		UpdatedSectionOverrides: ({ overrides }) => ({
+			model: modifyFields(model, { sectionOverrides: () => overrides }),
+		}),
+		ClickedResetOverride: ({ override }) =>
+			shared.organization === null
+				? { model }
+				: { model, commands: [ResetOverride({ organizationId: shared.organization.id, override })] },
+		CompletedResetOverride: ({ isSuccess }) =>
+			isSuccess
+				? { model }
+				: {
+						model,
+						outMessage: PageOutMessage.RequestedToast({
+							toast: errorToast("Couldn't reset the setting", "Try again in a moment."),
+						}),
+					},
 		FailedSaveOrganizationSettings: () => ({
 			model,
 			outMessage: PageOutMessage.RequestedToast({

@@ -4,6 +4,7 @@ import * as Interaction from "../../../ui/aria/interaction"
 import * as Segments from "../../../ui/date-segments"
 import * as Slider from "../../../ui/slider"
 import { OrganizationSettings } from "./organization"
+import { Override } from "./overrides"
 
 /** The sound settings are `Shared.soundSettings` (root-owned, like the legacy provider's atom). */
 export { SoundFile, SoundSettings } from "../../../notification-sound"
@@ -36,6 +37,9 @@ export const Model = Schema.Struct({
 	interaction: Interaction.Model,
 	/** "This organization" (`organization.ts`): the synced row, or a change not yet echoed. */
 	organizationSettings: OrganizationSettings,
+	/** "Notification overrides" (`overrides.ts`): channels, then sections, each by name. */
+	channelOverrides: Schema.Array(Override),
+	sectionOverrides: Schema.Array(Override),
 })
 export type Model = typeof Model.Type
 

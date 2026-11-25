@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { User } from "@hazel/domain/models"
-import { OrganizationId, UserId } from "@hazel/schema"
+import { ChannelSectionId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
@@ -9,6 +9,7 @@ import { PageOutMessage } from "../../out-message"
 import { UserRow } from "../user"
 import {
 	ExpireNotificationStatus,
+	ResetOverride,
 	SaveOrganizationSettings,
 	SendTestNotification,
 	UpdateUserSettings,
@@ -289,6 +290,21 @@ describe("this organization", () => {
 			Message.ChangedOrganizationSettings({ change: { level: "all" } }),
 		)
 		expect(changed.commands ?? []).toEqual([])
+	})
+
+	test("Reset on an override clears it for the organization", () => {
+		const override = {
+			_tag: "Section" as const,
+			sectionId: ChannelSectionId.make("00000000-0000-4000-8000-000000000003"),
+			name: "Projects",
+			level: "all" as const,
+			isMuted: false,
+			mutedUntilMs: null,
+		}
+		const reset = orgUpdate(init().model, Message.ClickedResetOverride({ override }))
+		expect(reset.commands?.map((command) => [command.name, command.args])).toEqual([
+			[ResetOverride.name, { organizationId, override }],
+		])
 	})
 
 	test("a failed write says so", () => {
