@@ -92,6 +92,8 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
     /// What was done on the kept screen, carried out once the page settles (`doWaiting`): a press or
     /// a menu choice on a node, by its place (`SemanticNode.path`), or a tab.
     @ObservationIgnored private var waiting: Waiting?
+    /// A tapped push's path, opened once the page has settled (a launch from the push).
+    @ObservationIgnored private var pendingPath: String?
 
     private enum Waiting {
         case press(path: [String])
@@ -274,6 +276,18 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
         }
     }
 
+    /// Opens one of the app's own paths (`/<org>/chat/<channel>`, a tapped push's) in the page, as
+    /// a link inside it would (`web/push.ts`'s `__hazelOpenPath`); before the page has settled, once
+    /// it has.
+    func openPath(_ path: String) {
+        guard path.hasPrefix("/"), !path.hasPrefix("//"), !path.hasPrefix("/\\") else { return }
+        guard hasSettled else {
+            pendingPath = path
+            return
+        }
+        evaluate("window.__hazelOpenPath?.(\(jsString(path)))")
+    }
+
     private func evaluate(_ script: String) {
         webView.evaluateJavaScript(script, completionHandler: nil)
     }
@@ -388,6 +402,10 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
                     Self.log.error("[shell] screen decode: \(String(describing: error), privacy: .public)")
                 }
                 doWaiting()
+                if let path = pendingPath {
+                    pendingPath = nil
+                    openPath(path)
+                }
             case "swipeBack":
                 canSwipeBack = enabled ?? false
             case "overlay":

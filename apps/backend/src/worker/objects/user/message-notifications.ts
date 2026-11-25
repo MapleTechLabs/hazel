@@ -87,6 +87,10 @@ export const createNotification = Effect.fn("UserEffects.createNotification")(fu
 	yield* schedulePush({
 		notificationId: created.id,
 		channelId: payload.channelId,
+		message:
+			payload.organizationId === undefined
+				? undefined
+				: { messageId: payload.messageId, organizationId: payload.organizationId },
 		silent,
 		content: payload.push,
 		presence: own,

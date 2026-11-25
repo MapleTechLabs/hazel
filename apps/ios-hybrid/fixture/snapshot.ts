@@ -156,6 +156,7 @@ export const organizationRows: ReadonlyArray<Wire<typeof Organization.Schema>> =
 		logoUrl: null,
 		settings: null,
 		isPublic: false,
+		readStateSince: null,
 		createdAt: orgCreatedAt,
 		updatedAt: null,
 		deletedAt: null,

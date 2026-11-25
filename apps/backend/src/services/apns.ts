@@ -30,6 +30,13 @@ export const APNS_REQUEST_TIMEOUT_MS = 8_000
 /** How long a signed provider token is reused. */
 export const PROVIDER_TOKEN_TTL_MS = 50 * 60 * 1000
 
+/**
+ * The notification category of a push about a message: the app registers its actions (Reply, Mark
+ * as read) under this identifier (`apps/ios-hybrid/HazelHybrid/PushNotifications.swift`).
+ */
+export const APNS_MESSAGE_CATEGORY = "MESSAGE"
+export type ApnsCategory = typeof APNS_MESSAGE_CATEGORY
+
 /** The JSON body APNs delivers to the app. */
 export interface ApnsPayload {
 	readonly aps: {
@@ -39,11 +46,16 @@ export interface ApnsPayload {
 		readonly "thread-id": string
 		/** Set when the app's notification service changes the push before it shows (the sender). */
 		readonly "mutable-content"?: 1
+		/** The actions the push offers (a message's Reply and Mark as read). */
+		readonly category?: ApnsCategory
 	}
 	readonly hazel: {
 		readonly path?: string
 		readonly channelId: string
 		readonly notificationId: string
+		/** The message the push is about, and its organization: what the push's actions act on. */
+		readonly messageId?: string
+		readonly organizationId?: string
 		/** Who sent the message (`worker/objects/user/push.ts`). */
 		readonly sender?: { readonly id: string; readonly name: string; readonly avatarUrl?: string }
 		/** The group conversation's name; absent for a 1:1 DM. */

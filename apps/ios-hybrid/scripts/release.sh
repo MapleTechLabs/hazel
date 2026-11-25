@@ -32,6 +32,10 @@ security cms -D -i "$PROFILE" > "$OUT/profile.plist"
 TEAM=$(plutil -extract TeamIdentifier.0 raw -o - "$OUT/profile.plist")
 GRANTED=$(plutil -extract Entitlements.application-identifier raw -o - "$OUT/profile.plist")
 [ "$GRANTED" = "$TEAM.$BUNDLE_ID" ] || { echo "profile is for $GRANTED, not $TEAM.$BUNDLE_ID" >&2; exit 1; }
+# Push (APNs): granted when the App ID has the Push Notifications capability; without it the app
+# ships without push, as before (`PushNotifications.swift` then gets no token).
+APS=$(plutil -extract Entitlements.aps-environment raw -o - "$OUT/profile.plist" 2>/dev/null || true)
+[ -n "$APS" ] || echo "warning: the profile grants no aps-environment: push is off in this build" >&2
 cat > "$OUT/entitlements.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -40,6 +44,7 @@ cat > "$OUT/entitlements.plist" <<PLIST
 	<key>com.apple.developer.team-identifier</key><string>$TEAM</string>
 	<key>get-task-allow</key><false/>
 	<key>beta-reports-active</key><true/>
+${APS:+<key>aps-environment</key><string>$APS</string>}
 </dict></plist>
 PLIST
 codesign --sign "$IDENTITY" --entitlements "$OUT/entitlements.plist" --generate-entitlement-der --force "$APP"

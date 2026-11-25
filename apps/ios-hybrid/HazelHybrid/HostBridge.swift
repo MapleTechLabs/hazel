@@ -55,6 +55,8 @@ final class HostBridge: NSObject, WKScriptMessageHandlerWithReply {
         let requestURL = request?["url"] as? String
         let headers = request?["headers"] as? [[String]] ?? []
         let requestBody = request?["body"] as? String
+        let api = args["api"] as? String
+        let userId = args["userId"] as? String
         Task { @MainActor in
             switch command {
             case "auth_vault_read":
@@ -93,6 +95,17 @@ final class HostBridge: NSObject, WKScriptMessageHandlerWithReply {
                 ChosenServer.set(args["server"] as? String)
                 replyHandler(["value": NSNull()], nil)
                 (webView?.navigationDelegate as? PageNavigation)?.load?(Self.pageOrigin)
+            case "push_register":
+                // Permission and this device's token, for the page to register (`web/push.ts`).
+                guard let api, let userId else { return replyHandler(["error": "no api or user"], nil) }
+                do {
+                    replyHandler(["value": try await PushCenter.shared.register(api: api, userId: userId)], nil)
+                } catch {
+                    replyHandler(["error": error.localizedDescription], nil)
+                }
+            case "push_forget":
+                PushCenter.shared.forget()
+                replyHandler(["value": NSNull()], nil)
             case "open_url":
                 guard let url, let target = URL(string: url) else { return replyHandler(["error": "bad url"], nil) }
                 open(target)
@@ -190,7 +203,8 @@ enum ChosenServer {
     }
 }
 
-/// The session's one keychain record (`@hazel/auth/desktop`'s vault): JSON the shell never reads.
+/// The session's one keychain record (`@hazel/auth/desktop`'s vault): JSON the shell only reads for
+/// a push's actions, which call the API as the signed-in user (`Vault.sessionCredential`).
 enum Vault {
     private static var query: [CFString: Any] { [
         kSecClass: kSecClassGenericPassword,

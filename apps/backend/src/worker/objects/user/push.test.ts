@@ -1,5 +1,14 @@
+import { Schema } from "effect"
 import { describe, expect, it } from "vitest"
-import { apnsOutcome, decidePush, PUSH_IDLE_DELAY_MS, type PushInput } from "./push"
+import { ChannelId, MessageId, NotificationId, OrganizationId, UserId } from "@hazel/schema"
+import {
+	apnsOutcome,
+	apnsPayloadOf,
+	decidePush,
+	PUSH_IDLE_DELAY_MS,
+	type PushInput,
+	PushSendPayload,
+} from "./push"
 
 const input = (overrides: Partial<PushInput> = {}): PushInput => ({
 	enabled: true,
@@ -44,5 +53,63 @@ describe("apnsOutcome", () => {
 		expect(apnsOutcome({ status: 503, reason: "ServiceUnavailable" })).toBe("Retry")
 		expect(apnsOutcome({ status: 400, reason: "PayloadTooLarge" })).toBe("Rejected")
 		expect(apnsOutcome({ status: 403, reason: "BadCertificate" })).toBe("Rejected")
+	})
+})
+
+describe("apnsPayloadOf", () => {
+	const send: PushSendPayload = {
+		notificationId: NotificationId.make("00000000-0000-4000-8000-000000000001"),
+		channelId: ChannelId.make("00000000-0000-4000-8000-000000000002"),
+		token: "abcdef0123456789",
+		title: "Ada Lovelace · #general",
+		body: "lunch?",
+		path: "/acme/chat/00000000-0000-4000-8000-000000000002",
+	}
+	const message = {
+		messageId: MessageId.make("00000000-0000-4000-8000-000000000003"),
+		organizationId: OrganizationId.make("00000000-0000-4000-8000-000000000004"),
+	}
+
+	it("a message's push names the MESSAGE category and the ids its actions need", () => {
+		const payload = apnsPayloadOf({ ...send, message }, 3)
+		expect(payload.aps).toEqual({
+			alert: { title: send.title, body: send.body },
+			sound: "default",
+			badge: 3,
+			"thread-id": send.channelId,
+			category: "MESSAGE",
+		})
+		expect(payload.hazel).toEqual({
+			path: send.path,
+			channelId: send.channelId,
+			notificationId: send.notificationId,
+			messageId: message.messageId,
+			organizationId: message.organizationId,
+			sender: undefined,
+			conversation: undefined,
+		})
+	})
+
+	it("a push with no message (a customer issue, an older row) offers no actions", () => {
+		const payload = apnsPayloadOf(send, 0)
+		// Left out of the JSON body APNs gets.
+		const body = JSON.parse(JSON.stringify(payload))
+		expect(body.aps).not.toHaveProperty("category")
+		expect(body.aps).not.toHaveProperty("mutable-content")
+		expect(body.hazel).not.toHaveProperty("messageId")
+		expect(body.hazel).not.toHaveProperty("organizationId")
+	})
+
+	it("a push from a person is mutable, so the app can draw the sender", () => {
+		const sender = { id: UserId.make("00000000-0000-4000-8000-000000000005"), name: "Ada Lovelace" }
+		const payload = apnsPayloadOf({ ...send, sender, message }, 1)
+		expect(payload.aps["mutable-content"]).toBe(1)
+		expect(payload.hazel.sender).toEqual(sender)
+	})
+
+	it("an outbox row enqueued before actions (no message) still decodes", () => {
+		const older = Schema.decodeSync(PushSendPayload)(structuredClone(send))
+		expect(older.message).toBeUndefined()
+		expect(apnsPayloadOf(older, 0).aps.category).toBeUndefined()
 	})
 })

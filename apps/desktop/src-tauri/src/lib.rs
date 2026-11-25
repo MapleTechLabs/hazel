@@ -215,6 +215,24 @@ pub fn run() {
                 app.deep_link().register_all()?;
             }
 
+            // A click on one of the app's notifications brings the window to the front; the page
+            // opens the message itself (`web-foldkit/src/core/lib/native-notifications.ts`).
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_notification::NotificationExt;
+                let app_handle = app.handle().clone();
+                app.notification().on_action(move |performed| {
+                    if performed.action_id() != "tap" {
+                        return;
+                    }
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.unminimize();
+                        let _ = window.set_focus();
+                    }
+                })?;
+            }
+
             // Windows and Linux keep the system's own titlebar; on macOS the window draws its
             // content under the traffic lights (`titleBarStyle`, `trafficLightPosition`).
 
