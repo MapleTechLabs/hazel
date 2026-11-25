@@ -5,10 +5,30 @@ import {
 	formatNotificationTitle,
 	MARK_READ_ACTION,
 	notificationActionOf,
+	registerActions,
 	sendNativeNotification,
 } from "./native-notifications"
 
 describe("native-notifications", () => {
+	it("listens for clicks even when the platform refuses the action type", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {})
+		const onAction = vi.fn(async () => ({}))
+		const registerActionTypes = vi.fn(async () => {
+			throw new Error("unsupported")
+		})
+		expect(await registerActions({ onAction, registerActionTypes } as any)).toBe(true)
+		expect(onAction).toHaveBeenCalledOnce()
+		expect(registerActionTypes).toHaveBeenCalledOnce()
+	})
+
+	it("reports a listener that failed to attach", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {})
+		const onAction = vi.fn(async () => {
+			throw new Error("no plugin")
+		})
+		expect(await registerActions({ onAction, registerActionTypes: vi.fn() } as any)).toBe(false)
+	})
+
 	it("suppresses when window is focused", async () => {
 		vi.spyOn(document, "hasFocus").mockReturnValue(true)
 		const result = await sendNativeNotification({ title: "T", body: "B" })

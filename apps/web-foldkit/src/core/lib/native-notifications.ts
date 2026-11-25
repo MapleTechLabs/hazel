@@ -119,16 +119,15 @@ const markChannelRead = async (channelId: ChannelId) => {
 	)
 }
 
-let listening = false
-
-/** Registers the message action type and listens for clicks and actions, once. */
-const listenForActions = async (notification: TauriNotificationApi) => {
-	if (listening) return
-	listening = true
+/**
+ * Listens for clicks and actions, then registers the message action type. Each on its own: a
+ * platform that refuses the action type still opens a clicked notification. True when the
+ * listener is in place.
+ */
+export const registerActions = async (
+	notification: Pick<TauriNotificationApi, "onAction" | "registerActionTypes">,
+): Promise<boolean> => {
 	try {
-		await notification.registerActionTypes([
-			{ id: MESSAGE_ACTION_TYPE, actions: [{ id: MARK_READ_ACTION, title: "Mark as read" }] },
-		])
 		await notification.onAction((event) => {
 			const action = notificationActionOf(event)
 			if (action === null) return
@@ -136,8 +135,26 @@ const listenForActions = async (notification: TauriNotificationApi) => {
 			else void markChannelRead(action.channelId)
 		})
 	} catch (error) {
-		console.error("[native-notifications] actions unavailable:", error)
+		console.error("[native-notifications] notification clicks unavailable:", error)
+		return false
 	}
+	try {
+		await notification.registerActionTypes([
+			{ id: MESSAGE_ACTION_TYPE, actions: [{ id: MARK_READ_ACTION, title: "Mark as read" }] },
+		])
+	} catch (error) {
+		console.error("[native-notifications] Mark as read action unavailable:", error)
+	}
+	return true
+}
+
+let listening = false
+
+/** `registerActions`, once; a listener that failed to attach is tried again on the next call. */
+const listenForActions = async (notification: TauriNotificationApi) => {
+	if (listening) return
+	listening = true
+	listening = await registerActions(notification)
 }
 
 export async function initNativeNotifications(): Promise<boolean> {
