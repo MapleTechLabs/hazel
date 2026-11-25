@@ -18,6 +18,12 @@ export const routeRedirect = (
 		Match.tag("SettingsDebug", ({ orgSlug }) =>
 			options.isProd ? Option.some(AppRoute.SettingsGeneral({ orgSlug })) : Option.none<AppRoute>(),
 		),
+		// The inbox's former per-source tabs: their rows are all under All now.
+		Match.tags({
+			NotificationsGeneral: ({ orgSlug }) => Option.some(AppRoute.NotificationsAll({ orgSlug })),
+			NotificationsThreads: ({ orgSlug }) => Option.some(AppRoute.NotificationsAll({ orgSlug })),
+			NotificationsDms: ({ orgSlug }) => Option.some(AppRoute.NotificationsAll({ orgSlug })),
+		}),
 		Match.orElse(() => Option.none<AppRoute>()),
 	)
 

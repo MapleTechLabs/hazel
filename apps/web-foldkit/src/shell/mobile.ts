@@ -144,7 +144,7 @@ export const mobileNav = <Message>(
 							),
 							link(
 								"Activity",
-								hrefOf(AppRoute.NotificationsAll({ orgSlug })),
+								hrefOf(AppRoute.NotificationsMentions({ orgSlug })),
 								isNotificationsRoute(route),
 								IconBell(h, { className: "size-5" }),
 								"bell",
@@ -204,9 +204,9 @@ const sectionTitleOf = (route: AppRoute, section: Exclude<OrgSection, "Chat">): 
 	AppRoute.matchOrElse(
 		route,
 		{
-			NotificationsGeneral: () => "Channels",
-			NotificationsThreads: () => "Threads",
-			NotificationsDms: () => "Direct messages",
+			NotificationsMentions: () => "Mentions",
+			NotificationsUnreads: () => "Unreads",
+			NotificationsAll: () => "All activity",
 		},
 		() => SECTION_TITLES[section],
 	)

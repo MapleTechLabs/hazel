@@ -1,18 +1,23 @@
-import type { NotificationId } from "@hazel/schema"
-import { OrganizationMemberId } from "@hazel/schema"
-import { eq } from "@tanstack/db"
+import type { ChannelId, NotificationId } from "@hazel/schema"
+import { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
+import { and, eq, isNull } from "@tanstack/db"
 import { Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
+import { hasUnreadMessages } from "~/lib/unread"
 import {
+	channelActivityCollection,
 	channelCollection,
+	channelMemberCollection,
+	channelReadStateCollection,
 	messageCollection,
 	notificationCollection,
+	organizationCollection,
 	userCollection,
 } from "~/db/collections"
 import { liveQueryStream, retainChannels } from "../../../data/live-query"
 import type { PageSubscriptionInput } from "../../contract"
 import { Message } from "./message"
-import type { Model, NotificationItem } from "./model"
+import type { Model, NotificationItem, UnreadChannelItem } from "./model"
 
 /** A row of the legacy join; the collections decode with the domain schemas, so ids are branded. */
 interface NotificationRow {
@@ -79,6 +84,92 @@ const notificationChannelIds = (memberId: OrganizationMemberId) =>
 		Stream.switchMap(retainChannels),
 	)
 
+export interface UnreadChannelRow {
+	readonly channelId: ChannelId
+	readonly name: string
+	readonly type: string
+	readonly notificationCount: number
+	readonly mutedUntil: Date | null
+	readonly joinedAt: Date
+	readonly lastReadAt: Date | null | undefined
+	readonly readStateSince: Date | null
+	readonly lastMessageAt: Date
+	readonly lastMessageAuthorId: UserId
+}
+
+/**
+ * The Unreads tab: the user's channels with someone else's message after their read position
+ * (`~/lib/unread`), the join of the sidebar's `unreadChannelsStream` with each channel's name and
+ * the member's mention count. Muted for good never shows; a timed mute is left to the view's clock.
+ */
+export const unreadChannelsStream = (organizationId: OrganizationId, userId: UserId) =>
+	liveQueryStream<UnreadChannelRow, Message>(
+		(q) =>
+			q
+				.from({ member: channelMemberCollection })
+				.innerJoin({ activity: channelActivityCollection }, ({ member, activity }) =>
+					eq(activity.channelId, member.channelId),
+				)
+				.innerJoin({ channel: channelCollection }, ({ member, channel }) =>
+					eq(channel.id, member.channelId),
+				)
+				.innerJoin({ organization: organizationCollection }, ({ activity, organization }) =>
+					eq(organization.id, activity.organizationId),
+				)
+				// Only the user's own read positions are synced.
+				.leftJoin({ read: channelReadStateCollection }, ({ member, read }) =>
+					eq(read.channelId, member.channelId),
+				)
+				.where((q) =>
+					and(
+						eq(q.activity.organizationId, organizationId),
+						eq(q.member.userId, userId),
+						eq(q.member.isMuted, false),
+						isNull(q.member.deletedAt),
+						isNull(q.channel.deletedAt),
+					),
+				)
+				.select(({ member, activity, channel, organization, read }) => ({
+					channelId: member.channelId,
+					name: channel.name,
+					type: channel.type,
+					notificationCount: member.notificationCount,
+					mutedUntil: member.mutedUntil,
+					joinedAt: member.joinedAt,
+					lastReadAt: read?.lastReadAt,
+					readStateSince: organization.readStateSince,
+					lastMessageAt: activity.lastMessageAt,
+					lastMessageAuthorId: activity.lastMessageAuthorId,
+				})),
+		(rows) => Message.UpdatedUnreadChannels({ channels: toUnreadChannels(rows, userId) }),
+	)
+
+/** The rows the user has not read, as Unreads items (the view sorts them). */
+export const toUnreadChannels = (
+	rows: ReadonlyArray<UnreadChannelRow>,
+	userId: UserId,
+): Array<UnreadChannelItem> =>
+	rows
+		.filter((row) =>
+			hasUnreadMessages(
+				{
+					lastReadAt: row.lastReadAt ? new Date(row.lastReadAt) : null,
+					joinedAt: new Date(row.joinedAt),
+					readStateSince: row.readStateSince ? new Date(row.readStateSince) : null,
+				},
+				{ lastMessageAt: new Date(row.lastMessageAt), lastMessageAuthorId: row.lastMessageAuthorId },
+				userId,
+			),
+		)
+		.map((row) => ({
+			channelId: row.channelId,
+			name: row.name,
+			type: row.type,
+			mentionCount: row.notificationCount,
+			lastMessageAtMs: new Date(row.lastMessageAt).getTime(),
+			mutedUntilMs: row.mutedUntil === null ? null : new Date(row.mutedUntil).getTime(),
+		}))
+
 export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) => ({
 	notifications: entry(
 		{ memberId: Schema.NullOr(OrganizationMemberId) },
@@ -112,6 +203,19 @@ export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Mes
 								(rows) => Message.UpdatedNotifications({ notifications: rows.map(toItem) }),
 							),
 						),
+		},
+	),
+	unreadChannels: entry(
+		{ organizationId: Schema.NullOr(OrganizationId), userId: Schema.NullOr(UserId) },
+		{
+			modelToDependencies: ({ shared }) => ({
+				organizationId: shared.organization?.id ?? null,
+				userId: shared.currentUser?.id ?? null,
+			}),
+			dependenciesToStream: ({ organizationId, userId }) =>
+				organizationId === null || userId === null
+					? Stream.empty
+					: unreadChannelsStream(organizationId, userId),
 		},
 	),
 }))

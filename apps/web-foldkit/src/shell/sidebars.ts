@@ -1,5 +1,5 @@
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
-import { type AppRoute, isNotificationsRoute, type RouteTag } from "../route"
+import type { AppRoute, RouteTag } from "../route"
 import { button } from "../ui/button"
 import { heading } from "../ui/heading"
 import {
@@ -144,14 +144,9 @@ export const notificationsSidebar = <Message>(
 		sidebarContent(h, { state: "expanded" }, [
 			sidebarSectionGroup(h, [
 				sidebarSection(h, {}, [
-					// Legacy also matches `/notifications/` fuzzily, so All Activity stays current on sub-pages.
-					item("notifications", {
-						isCurrent: isNotificationsRoute(route),
-						isLinkActive: route._tag === "NotificationsAll",
-					}),
-					item("notificationsChannels", onRoutes(route, "NotificationsGeneral")),
-					item("notificationsThreads", onRoutes(route, "NotificationsThreads")),
-					item("notificationsDms", onRoutes(route, "NotificationsDms")),
+					item("notifications", onRoutes(route, "NotificationsMentions")),
+					item("notificationsUnreads", onRoutes(route, "NotificationsUnreads")),
+					item("notificationsAll", onRoutes(route, "NotificationsAll")),
 				]),
 				...(markAllRead.unreadCount > 0
 					? [

@@ -1,26 +1,38 @@
-import { NotificationId } from "@hazel/schema"
-import { Array, Clock, Effect, Match, Option } from "effect"
+import { ChannelId, NotificationId, OrganizationId } from "@hazel/schema"
+import { Array, Clock, Effect, Match, Option, Schema } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { catchCommon, errorToastOf } from "../../../data/actions"
 import { HazelRpc } from "../../../rpc"
 import type { RouteOf } from "../../../route"
-import { commonMessage } from "~/lib/error-messages"
-import type { PageReturn } from "../../contract"
+import { type CommonReason, commonMessage } from "~/lib/error-messages"
+import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
+import { visibleUnreadChannels } from "./format"
 import { Message } from "./message"
-import { type Category, type Model, Notifications } from "./model"
+import { type MarkedRead, type Model, Notifications, type Tab, UnreadChannels } from "./model"
 
 export type InboxRoute = RouteOf<
-	"NotificationsAll" | "NotificationsGeneral" | "NotificationsThreads" | "NotificationsDms"
+	| "NotificationsMentions"
+	| "NotificationsUnreads"
+	| "NotificationsAll"
+	| "NotificationsGeneral"
+	| "NotificationsThreads"
+	| "NotificationsDms"
 >
 
-export const categoryOf = (route: InboxRoute): Category =>
+/** The former per-source tabs show All until `routeRedirect` replaces their URL. */
+export const tabOf = (route: InboxRoute): Tab =>
 	Match.value(route._tag).pipe(
-		Match.when("NotificationsAll", (): Category => "all"),
-		Match.when("NotificationsGeneral", (): Category => "general"),
-		Match.when("NotificationsThreads", (): Category => "threads"),
-		Match.when("NotificationsDms", (): Category => "dms"),
+		Match.when("NotificationsMentions", (): Tab => "mentions"),
+		Match.when("NotificationsUnreads", (): Tab => "unreads"),
+		Match.whenOr(
+			"NotificationsAll",
+			"NotificationsGeneral",
+			"NotificationsThreads",
+			"NotificationsDms",
+			(): Tab => "all",
+		),
 		Match.exhaustive,
 	)
 
@@ -43,13 +55,45 @@ export const MarkNotificationRead = Command.define("MarkNotificationRead", {
 		),
 })
 
-export const init = (route: InboxRoute): PageReturn<Model, Message> => ({
-	model: { category: categoryOf(route), notifications: Notifications.Loading() },
+/** One channel read: its read position moves to now and its notifications go (as opening it does). */
+export const MarkChannelRead = Command.define("MarkChannelRead", {
+	args: { channelId: ChannelId },
+	messages: [Message.SucceededMarkChannelRead, Message.FailedMarkChannelRead],
+	execute: ({ channelId }) =>
+		HazelRpc.use((rpc) => rpc("channelMember.clearNotifications", { channelId })).pipe(
+			Effect.as(Message.SucceededMarkChannelRead({ channelId })),
+			Effect.catchTags({
+				ChannelNotFoundError: () =>
+					Effect.succeed(Message.FailedMarkChannelRead({ channelId, reason: "ChannelNotFound" })),
+			}),
+			catchCommon((reason) => Message.FailedMarkChannelRead({ channelId, reason })),
+		),
 })
 
-/** The category tabs share one instance, so switching tabs keeps the loaded rows. */
+/** Every channel of the organization read (Shift+Escape's `channelMember.markAllRead`). */
+export const MarkAllChannelsRead = Command.define("MarkAllChannelsRead", {
+	args: { organizationId: OrganizationId, channelIds: Schema.Array(ChannelId) },
+	messages: [Message.SucceededMarkAllChannelsRead, Message.FailedMarkAllChannelsRead],
+	execute: ({ organizationId, channelIds }) =>
+		HazelRpc.use((rpc) => rpc("channelMember.markAllRead", { organizationId })).pipe(
+			Effect.as(Message.SucceededMarkAllChannelsRead()),
+			catchCommon((reason) => Message.FailedMarkAllChannelsRead({ channelIds, reason })),
+		),
+})
+
+export const init = (route: InboxRoute): PageReturn<Model, Message> => ({
+	model: {
+		tab: tabOf(route),
+		notifications: Notifications.Loading(),
+		unreadChannels: UnreadChannels.Loading(),
+		markedRead: [],
+		isMarkingAllRead: false,
+	},
+})
+
+/** The tabs share one instance, so switching tabs keeps the loaded rows. */
 export const routeChanged = (model: Model, route: InboxRoute): PageReturn<Model, Message> => ({
-	model: modifyFields(model, { category: () => categoryOf(route) }),
+	model: modifyFields(model, { tab: () => tabOf(route) }),
 })
 
 const isUnread = (model: Model, id: NotificationId) =>
@@ -61,17 +105,62 @@ const isUnread = (model: Model, id: NotificationId) =>
 		(item) => item.isUnread,
 	)
 
-export const update = (model: Model, message: Message): PageReturn<Model, Message> =>
+/** Only unread notifications are marked; a link still navigates. */
+const markNotificationRead = (model: Model, id: NotificationId): PageReturn<Model, Message> =>
+	isUnread(model, id) ? { model, commands: [MarkNotificationRead({ id })] } : { model }
+
+const loadedChannels = (model: Model) =>
+	model.unreadChannels._tag === "Loaded" ? model.unreadChannels.channels : []
+
+/** Hides the channels as read up to their newest message, until the read position syncs back. */
+const markChannelsRead = (model: Model, channelIds: ReadonlyArray<ChannelId>): Model => {
+	const marked: ReadonlyArray<MarkedRead> = loadedChannels(model).flatMap((channel) =>
+		channelIds.includes(channel.channelId)
+			? [{ channelId: channel.channelId, upToMs: channel.lastMessageAtMs }]
+			: [],
+	)
+	return modifyFields(model, {
+		markedRead: (current) => [
+			...current.filter((entry) => !channelIds.includes(entry.channelId)),
+			...marked,
+		],
+	})
+}
+
+const unmarkChannels = (model: Model, channelIds: ReadonlyArray<ChannelId>): Model =>
+	modifyFields(model, {
+		markedRead: (current) => current.filter((entry) => !channelIds.includes(entry.channelId)),
+	})
+
+const errorToast = (title: string, reason: CommonReason) =>
+	PageOutMessage.RequestedToast({
+		toast: errorToastOf({ title, description: commonMessage(reason).description }),
+	})
+
+export const update = (model: Model, message: Message, shared: Shared): PageReturn<Model, Message> =>
 	Message.match<PageReturn<Model, Message>>(message, {
 		UpdatedNotifications: ({ notifications }) => ({
 			model: modifyFields(model, {
 				notifications: () => Notifications.Loaded({ items: notifications }),
 			}),
 		}),
-		// Legacy `handleClick`: only unread notifications are marked; a link still navigates.
-		ClickedNotification: ({ id }) =>
-			isUnread(model, id) ? { model, commands: [MarkNotificationRead({ id })] } : { model },
-		// Legacy rows read `readAt` straight from the collection, so the write changes nothing here.
+		// A mark that left the unread rows, or that a newer message outdated, is no longer needed.
+		UpdatedUnreadChannels: ({ channels }) => ({
+			model: modifyFields(model, {
+				unreadChannels: () => UnreadChannels.Loaded({ channels }),
+				markedRead: (current) =>
+					current.filter((entry) =>
+						channels.some(
+							(channel) =>
+								channel.channelId === entry.channelId &&
+								channel.lastMessageAtMs <= entry.upToMs,
+						),
+					),
+			}),
+		}),
+		ClickedNotification: ({ id }) => markNotificationRead(model, id),
+		ClickedMarkNotificationRead: ({ id }) => markNotificationRead(model, id),
+		// Rows read `readAt` straight from the collection, so the write changes nothing here.
 		SucceededMarkNotificationRead: () => ({ model }),
 		// A notification that is gone has nothing left to mark; anything else stays unread and says so.
 		FailedMarkNotificationRead: ({ reason }) =>
@@ -79,11 +168,39 @@ export const update = (model: Model, message: Message): PageReturn<Model, Messag
 				? { model }
 				: {
 						model,
-						outMessage: PageOutMessage.RequestedToast({
-							toast: errorToastOf({
-								title: "Couldn't mark the notification as read",
-								description: commonMessage(reason).description,
-							}),
-						}),
+						outMessage: errorToast("Couldn't mark the notification as read", reason),
 					},
+		ClickedMarkChannelRead: ({ channelId }) => ({
+			model: markChannelsRead(model, [channelId]),
+			commands: [MarkChannelRead({ channelId })],
+		}),
+		SucceededMarkChannelRead: () => ({ model }),
+		// A channel that is gone leaves the list on its own; anything else shows it unread again.
+		FailedMarkChannelRead: ({ channelId, reason }) =>
+			reason === "ChannelNotFound"
+				? { model }
+				: {
+						model: unmarkChannels(model, [channelId]),
+						outMessage: errorToast("Couldn't mark the channel as read", reason),
+					},
+		ClickedMarkAllChannelsRead: () => {
+			const organizationId = shared.organization?.id
+			if (organizationId === undefined || model.isMarkingAllRead) return { model }
+			const channelIds = visibleUnreadChannels(
+				loadedChannels(model),
+				model.markedRead,
+				shared.nowMs,
+			).map((channel) => channel.channelId)
+			return {
+				model: modifyFields(markChannelsRead(model, channelIds), { isMarkingAllRead: () => true }),
+				commands: [MarkAllChannelsRead({ organizationId, channelIds })],
+			}
+		},
+		SucceededMarkAllChannelsRead: () => ({
+			model: modifyFields(model, { isMarkingAllRead: () => false }),
+		}),
+		FailedMarkAllChannelsRead: ({ channelIds, reason }) => ({
+			model: modifyFields(unmarkChannels(model, channelIds), { isMarkingAllRead: () => false }),
+			outMessage: errorToast("Couldn't mark the channels as read", reason),
+		}),
 	})

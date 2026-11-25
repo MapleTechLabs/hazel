@@ -1,4 +1,4 @@
-import type { Category, NotificationItem } from "./model"
+import type { MarkedRead, NotificationItem, Tab, UnreadChannelItem } from "./model"
 
 /** Framework-free ports of the legacy notification helpers (date-fns 4, en-US) against a given `nowMs`. */
 
@@ -54,19 +54,47 @@ export const groupByTime = (
 		.filter((group) => group.notifications.length > 0)
 }
 
-/** `filterNotificationsByCategory`. */
-export const filterByCategory = (
+/** The reasons that name the user (Discord's Mentions); rows from before reasons count too. */
+const MENTION_REASONS: ReadonlyArray<string> = ["mention", "reply", "everyone", "direct"]
+
+export const isMention = (item: NotificationItem): boolean =>
+	item.reason === null || MENTION_REASONS.includes(item.reason)
+
+/** The notifications a tab lists; Unreads lists channels, not notifications. */
+export const notificationsOfTab = (
 	notifications: ReadonlyArray<NotificationItem>,
-	category: Category,
-): ReadonlyArray<NotificationItem> => {
-	const types: Record<Exclude<Category, "all">, ReadonlyArray<string>> = {
-		general: ["public", "private"],
-		threads: ["thread"],
-		dms: ["direct", "single"],
-	}
-	return category === "all"
-		? notifications
-		: notifications.filter((item) => item.channel !== null && types[category].includes(item.channel.type))
+	tab: Exclude<Tab, "unreads">,
+): ReadonlyArray<NotificationItem> => (tab === "all" ? notifications : notifications.filter(isMention))
+
+/**
+ * The Unreads rows: the unread channels not muted at `nowMs` and not marked read here since their
+ * newest message, newest first.
+ */
+export const visibleUnreadChannels = (
+	channels: ReadonlyArray<UnreadChannelItem>,
+	markedRead: ReadonlyArray<MarkedRead>,
+	nowMs: number,
+): ReadonlyArray<UnreadChannelItem> =>
+	channels
+		.filter((channel) => channel.mutedUntilMs === null || channel.mutedUntilMs <= nowMs)
+		.filter(
+			(channel) =>
+				!markedRead.some(
+					(marked) =>
+						marked.channelId === channel.channelId && channel.lastMessageAtMs <= marked.upToMs,
+				),
+		)
+		.toSorted((a, b) => b.lastMessageAtMs - a.lastMessageAtMs)
+
+/** An Unreads row's title: a direct message's channel may have no name of its own. */
+export const unreadChannelTitle = (channel: UnreadChannelItem): string => {
+	if (channel.name === "") return channel.type === "thread" ? "Thread" : "Direct message"
+	return channel.type === "public" || channel.type === "private" ? `#${channel.name}` : channel.name
+}
+
+export const unreadChannelDetail = (channel: UnreadChannelItem): string => {
+	if (channel.mentionCount === 0) return "New messages"
+	return channel.mentionCount === 1 ? "1 mention" : `${channel.mentionCount} mentions`
 }
 
 /** A support SLA alert (`user.createCustomerNotification`): about an issue, not a message. */

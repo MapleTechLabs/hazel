@@ -83,7 +83,11 @@ export const AppRoute = defineRouteUnion({
 	MySettingsNotifications: { orgSlug: Schema.String },
 	MySettingsDesktop: { orgSlug: Schema.String },
 	MySettingsKeybinds: { orgSlug: Schema.String },
+	/** The inbox's tabs (Discord's): Mentions, the default, Unreads and All. */
+	NotificationsMentions: { orgSlug: Schema.String },
+	NotificationsUnreads: { orgSlug: Schema.String },
 	NotificationsAll: { orgSlug: Schema.String },
+	/** The former per-source tabs; `routeRedirect` sends them to All. */
 	NotificationsGeneral: { orgSlug: Schema.String },
 	NotificationsThreads: { orgSlug: Schema.String },
 	NotificationsDms: { orgSlug: Schema.String },
@@ -288,7 +292,12 @@ const routers = {
 	),
 	MySettingsDesktop: pipe(orgPath("my-settings", "desktop"), Route.mapTo(AppRoute.MySettingsDesktop)),
 	MySettingsKeybinds: pipe(orgPath("my-settings", "keybinds"), Route.mapTo(AppRoute.MySettingsKeybinds)),
-	NotificationsAll: pipe(orgPath("notifications"), Route.mapTo(AppRoute.NotificationsAll)),
+	NotificationsMentions: pipe(orgPath("notifications"), Route.mapTo(AppRoute.NotificationsMentions)),
+	NotificationsUnreads: pipe(
+		orgPath("notifications", "unreads"),
+		Route.mapTo(AppRoute.NotificationsUnreads),
+	),
+	NotificationsAll: pipe(orgPath("notifications", "all"), Route.mapTo(AppRoute.NotificationsAll)),
 	NotificationsGeneral: pipe(
 		orgPath("notifications", "general"),
 		Route.mapTo(AppRoute.NotificationsGeneral),
@@ -432,6 +441,8 @@ export const urlToAppRoute = Route.parseUrlWithFallback(
 		routers.MySettingsNotifications,
 		routers.MySettingsDesktop,
 		routers.MySettingsKeybinds,
+		routers.NotificationsMentions,
+		routers.NotificationsUnreads,
 		routers.NotificationsAll,
 		routers.NotificationsGeneral,
 		routers.NotificationsThreads,
@@ -537,6 +548,8 @@ export const isMySettingsRoute = AppRoute.isAnyOf([
 
 /** `/$orgSlug/notifications/*`. */
 export const isNotificationsRoute = AppRoute.isAnyOf([
+	"NotificationsMentions",
+	"NotificationsUnreads",
 	"NotificationsAll",
 	"NotificationsGeneral",
 	"NotificationsThreads",

@@ -10,7 +10,7 @@ import { afterEach, expect, test } from "vitest"
 import { page } from "vitest/browser"
 import { makeShared, uuid } from "../../../test/pages-fixtures"
 import type { Message } from "./message"
-import { Model, type NotificationItem, Notifications } from "./model"
+import { Model, type NotificationItem, Notifications, UnreadChannels } from "./model"
 import { update } from "./update"
 import { inboxView } from "./view"
 
@@ -50,7 +50,13 @@ const ITEMS: ReadonlyArray<NotificationItem> = [
 	}),
 ]
 
-const MODEL: Model = { category: "all", notifications: Notifications.Loaded({ items: ITEMS }) }
+const MODEL: Model = {
+	tab: "all",
+	notifications: Notifications.Loaded({ items: ITEMS }),
+	unreadChannels: UnreadChannels.Loading(),
+	markedRead: [],
+	isMarkingAllRead: false,
+}
 
 const render = () => {
 	const container = document.createElement("div")
@@ -60,7 +66,7 @@ const render = () => {
 		Runtime.makeElement({
 			Model,
 			init: () => ({ model: MODEL }),
-			update: (model: Model, message: Message) => ({ model: update(model, message).model }),
+			update: (model: Model, message: Message) => ({ model: update(model, message, shared).model }),
 			view: (model: Model, h: HtmlBuilder<Message>) =>
 				h.div(
 					[h.Id("gallery"), h.Class("w-[720px] bg-bg py-6 font-sans text-fg antialiased")],
