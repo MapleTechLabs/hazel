@@ -53,6 +53,8 @@ export const mountedChannel = (hovered: MessageId | null = null): Step =>
 			),
 		],
 		[{ name: "TrackMessageKeys" }, Message.StartedMessageKeys()],
+		// The header's notification bell (`notification-control.ts`).
+		[{ name: "FocusTriggerOnPress" }, Menu.Message.CompletedFocusTriggerOnPress()],
 		[
 			{ name: "TrackMessageHover" },
 			hovered === null

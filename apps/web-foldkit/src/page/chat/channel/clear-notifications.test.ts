@@ -20,6 +20,7 @@ import {
 	loadedModel,
 	openingModel,
 	shared,
+	UNMUTED,
 	updateWithShared,
 } from "./fixtures.test-support"
 import { type Model, Message, type PageReturn } from "./model"
@@ -48,7 +49,7 @@ const CLEAR = [ClearChannelNotifications.name, { channelId }]
 const otherChannelId = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-000000000099")
 
 const members = (notificationCount: number) => [
-	{ id: adaMemberId, userId: ada, isHidden: false, createdAtMs: 0, notificationCount },
+	{ id: adaMemberId, userId: ada, isHidden: false, createdAtMs: 0, notificationCount, ...UNMUTED },
 ]
 
 /** Entered with the org loaded, and the entry clear landed. */

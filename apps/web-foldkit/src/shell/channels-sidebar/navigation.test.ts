@@ -29,6 +29,8 @@ const entry = (
 	member: {
 		id: Schema.decodeSync(ChannelMemberId)(uuid(200 + Number(channelId.slice(-3)))),
 		isMuted: false,
+		mutedUntilMs: null,
+		notificationLevel: null,
 		isFavorite: false,
 		notificationCount: 0,
 	},

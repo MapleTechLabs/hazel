@@ -5,6 +5,7 @@ import { twMerge } from "tailwind-merge"
 import { IconMagnifier3, IconUsers } from "../../icons"
 import { AppRoute, hrefOf } from "../../route"
 import { type ChannelLinks, type ChannelLinksMap, linksFor } from "../../ui/channel-icon"
+import { isMutedNow } from "~/lib/notification-settings"
 import { semantic } from "../../ui/semantic"
 import { ariaButton } from "../../ui/button"
 import { channelLinksOf } from "./channel-links"
@@ -144,6 +145,7 @@ const channelRowView = <M>(
 	entry: ChannelEntry,
 	notificationCount: number,
 	isUnread: boolean,
+	isMuted: boolean,
 	links: ChannelLinks,
 	isLinkActive: boolean,
 	orgSlug: string,
@@ -164,6 +166,7 @@ const channelRowView = <M>(
 		menu: openMenu ?? closedRowMenu(entry.channel.id),
 		canDelete,
 		entry,
+		isMuted,
 		sections,
 		toMessage: (message: Menu.Message) =>
 			toParentMessage(Message.GotRowMenuMessage({ channelId: entry.channel.id, orgSlug, message })),
@@ -180,7 +183,7 @@ const channelRowView = <M>(
 			h,
 			entry,
 			notificationCount,
-			{ orgSlug, isActive: isLinkActive, links, isUnread },
+			{ orgSlug, isActive: isLinkActive, links, isUnread, isMuted },
 			rowMenuView(h, menu),
 			rowLongPress(h, menu),
 		),
@@ -215,6 +218,7 @@ const channelRow = <M>(
 			entry,
 			context.unreadByChannel.get(id) ?? entry.member.notificationCount,
 			context.unreadChannelIds.has(id),
+			isMutedNow(entry.member, context.nowMs),
 			linksFor(context.channelLinks, id),
 			id === context.activeChannelId,
 			context.orgSlug,
@@ -241,6 +245,7 @@ const dmRowView = <M>(
 	channel: DmChannel,
 	notificationCount: number,
 	isUnread: boolean,
+	isMuted: boolean,
 	presence: Presence | undefined,
 	nowMs: number,
 	currentUserId: string | null,
@@ -258,6 +263,7 @@ const dmRowView = <M>(
 		menu: openMenu ?? closedRowMenu(channel.id),
 		channelId: channel.id,
 		member: channel.currentUser,
+		isMuted,
 		toMessage: (message: Menu.Message) =>
 			toParentMessage(Message.GotRowMenuMessage({ channelId: channel.id, orgSlug, message })),
 	}
@@ -273,7 +279,7 @@ const dmRowView = <M>(
 			h,
 			channel,
 			notificationCount,
-			{ orgSlug, isActive: isLinkActive, isUnread, currentUserId, nowMs, presence },
+			{ orgSlug, isActive: isLinkActive, isUnread, isMuted, currentUserId, nowMs, presence },
 			dmMenuView(h, menu),
 			dmLongPress(h, menu),
 		),
@@ -295,6 +301,7 @@ const dmRow = <M>(
 			channel,
 			context.unreadByChannel.get(channel.id) ?? 0,
 			context.unreadChannelIds.has(channel.id),
+			isMutedNow(channel.currentUser, context.nowMs),
 			only === undefined ? undefined : context.presenceByUser.get(only.userId),
 			// Only a single DM's status dot reads the clock.
 			only === undefined ? 0 : context.nowMs,

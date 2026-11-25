@@ -42,6 +42,8 @@ export interface ChannelRowContext extends RowLinkContext {
 	readonly links: ChannelLinks
 	/** Has messages the user has not read (`~/lib/unread`). */
 	readonly isUnread: boolean
+	/** Muted now: the row steps back, as Discord's do. */
+	readonly isMuted: boolean
 }
 
 /** The unread state in words for a screen reader (the pill is drawn only). */
@@ -115,7 +117,11 @@ export const channelItem = <M>(
 				surface: "sidebar",
 			}),
 			// Unread: the name steps up to full ink and medium, the count says how many mentions.
-			label(h, [entry.channel.name], isEmphasized ? "font-medium text-fg" : undefined),
+			label(
+				h,
+				[entry.channel.name],
+				cx(isEmphasized && "font-medium text-fg", context.isMuted && !isEmphasized && "opacity-60"),
+			),
 			...unreadLabelIf(h, context.isUnread),
 		]),
 		menu,
@@ -296,7 +302,6 @@ const statusEmoji = <M>(h: HtmlBuilder<M>, presence: Presence | undefined): Html
 
 const singleDmContent = <M>(
 	h: HtmlBuilder<M>,
-	channel: DmChannel,
 	partner: DmMember,
 	context: DmRowContext,
 	isEmphasized: boolean,
@@ -317,7 +322,7 @@ const singleDmContent = <M>(
 			[h.span([h.Class("truncate")], [fullName]), ...statusEmoji(h, presence)],
 			cx(
 				"flex items-center max-w-40",
-				channel.currentUser.isMuted && "opacity-60",
+				context.isMuted && "opacity-60",
 				isEmphasized && "font-medium text-fg",
 			),
 		),
@@ -350,8 +355,8 @@ const overflowAvatar = <M>(h: HtmlBuilder<M>, count: number): Html =>
 
 const groupDmContent = <M>(
 	h: HtmlBuilder<M>,
-	channel: DmChannel,
 	partners: ReadonlyArray<DmMember>,
+	isMuted: boolean,
 	isEmphasized: boolean,
 ) => [
 	h.div(
@@ -372,11 +377,7 @@ const groupDmContent = <M>(
 	label(
 		h,
 		[partners.map((member) => member.firstName).join(", ")],
-		cx(
-			"max-w-40 truncate",
-			channel.currentUser.isMuted && "opacity-60",
-			isEmphasized && "font-medium text-fg",
-		),
+		cx("max-w-40 truncate", isMuted && "opacity-60", isEmphasized && "font-medium text-fg"),
 	),
 ]
 
@@ -384,6 +385,8 @@ const groupDmContent = <M>(
 export interface DmRowContext extends RowLinkContext {
 	/** Has messages the user has not read (`~/lib/unread`). */
 	readonly isUnread: boolean
+	/** Muted now: the row steps back. */
+	readonly isMuted: boolean
 	readonly currentUserId: string | null
 	readonly nowMs: number
 	readonly presence: Presence | undefined
@@ -418,8 +421,8 @@ export const dmItem = <M>(
 		...pipIf(h, context.isUnread, context.isActive),
 		sidebarLink(h, { href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE }, [
 			...(channel.type === "single" && partners.length === 1 && only
-				? singleDmContent(h, channel, only, context, isEmphasized)
-				: groupDmContent(h, channel, partners, isEmphasized)),
+				? singleDmContent(h, only, context, isEmphasized)
+				: groupDmContent(h, partners, context.isMuted, isEmphasized)),
 			...unreadLabelIf(h, context.isUnread),
 		]),
 		menu,

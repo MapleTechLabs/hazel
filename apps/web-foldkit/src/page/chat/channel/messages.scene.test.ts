@@ -157,6 +157,8 @@ describe("reading", () => {
 			channelScene,
 			Scene.given({ ...loadedModel(), hasLoadedMessages: false, messages: [], rows: [] }),
 			Scene.Mount.resolveAll(
+				// The header's notification bell.
+				[{ name: "FocusTriggerOnPress" }, Menu.Message.CompletedFocusTriggerOnPress()],
 				[
 					{ name: "MountEditor" },
 					composer(Composer.Message.UpdatedDraft({ markdown: "", isEmpty: true })),

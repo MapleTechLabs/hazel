@@ -112,7 +112,14 @@ const entryOf = (sample: Sample, n: number): ChannelEntry => ({
 		icon: sample.icon,
 		sectionId: null,
 	},
-	member: { id: idOf(50 + n) as ChannelMemberId, isMuted: false, isFavorite: false, notificationCount: 0 },
+	member: {
+		id: idOf(50 + n) as ChannelMemberId,
+		isMuted: false,
+		mutedUntilMs: null,
+		notificationLevel: null,
+		isFavorite: false,
+		notificationCount: 0,
+	},
 })
 
 // The surfaces, as the app calls them.
@@ -122,7 +129,7 @@ const sidebarRow = (h: HtmlBuilder<M>, sample: Sample, n: number, _isFavorite: b
 		h,
 		entryOf(sample, n),
 		0,
-		{ orgSlug: "acme", isActive: false, links: sample.links, isUnread: false },
+		{ orgSlug: "acme", isActive: false, links: sample.links, isUnread: false, isMuted: false },
 		h.empty,
 	)
 

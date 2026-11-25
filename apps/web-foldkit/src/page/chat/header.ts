@@ -33,6 +33,8 @@ export interface HeaderInputs<M = never> {
 	readonly dmPresence: PresenceStatus | null
 	/** The pinned messages trigger (a popover trigger with its overlay). */
 	readonly pinnedTrigger: Html
+	/** The notification settings bell (`notification-control.ts`); empty where there is none. */
+	readonly notificationsTrigger?: Html
 	/** A phone's back button (`md:hidden`) to the chat list, or a thread's channel; empty elsewhere. */
 	readonly mobileBack: Html
 	/** The chip of the customer the channel is linked to (`customer-card.ts`), beside its name. */
@@ -211,6 +213,7 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs<M>): H
 								IconEye(h, { attributes: { "data-slot": "icon" } }),
 							)
 						: h.empty,
+					inputs.notificationsTrigger ?? h.empty,
 					inputs.pinnedTrigger,
 				],
 			),

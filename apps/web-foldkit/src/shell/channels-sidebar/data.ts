@@ -1,5 +1,6 @@
 import type { ChannelId, ChannelMemberId, ChannelSectionId, OrganizationId, UserId } from "@hazel/schema"
 import { and, eq, inArray, isNull, not, or } from "@tanstack/db"
+import type { NotificationLevel } from "~/lib/notification-settings"
 import { hasUnreadMessages } from "~/lib/unread"
 import {
 	channelActivityCollection,
@@ -38,6 +39,8 @@ export interface MemberRow {
 	readonly id: ChannelMemberId
 	readonly userId: UserId
 	readonly isMuted: boolean
+	readonly mutedUntil?: Date | null
+	readonly notificationLevel?: NotificationLevel | null
 	readonly isFavorite: boolean
 	readonly notificationCount: number
 }
@@ -56,6 +59,8 @@ const toChannel = (row: ChannelRow): SidebarChannel => ({
 export const toMember = (row: MemberRow): SidebarMember => ({
 	id: row.id,
 	isMuted: row.isMuted,
+	mutedUntilMs: row.mutedUntil ? new Date(row.mutedUntil).getTime() : null,
+	notificationLevel: row.notificationLevel ?? null,
 	isFavorite: row.isFavorite,
 	notificationCount: row.notificationCount,
 })

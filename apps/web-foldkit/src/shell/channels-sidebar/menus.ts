@@ -1,6 +1,7 @@
 import type { ChannelSectionId } from "@hazel/schema"
 import { Array, Option, Schema } from "effect"
 import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
+import { itemContent, levelEntry, muteEntry, type NotificationMember } from "../../chat/notification-menu"
 import {
 	IconCirclePlus,
 	IconClose,
@@ -12,8 +13,6 @@ import {
 	IconPlus,
 	IconStar,
 	IconTrash,
-	IconVolume,
-	IconVolumeMute,
 } from "../../icons"
 import { button } from "../../ui/button"
 import * as Menu from "../../ui/menu"
@@ -34,7 +33,14 @@ const sectionKeyOf = (sectionId: string | null) =>
 // KEYS
 
 /** The row menu's fixed items; "Move to section" leaves are keyed per section (`sectionIdOfKey`). */
-export const RowMenuKey = Schema.Literals(["mute", "favorite", "settings", "delete", "leave"])
+export const RowMenuKey = Schema.Literals([
+	"mute",
+	"notifications",
+	"favorite",
+	"settings",
+	"delete",
+	"leave",
+])
 export type RowMenuKey = typeof RowMenuKey.Type
 export const decodeRowMenuKey = Schema.decodeUnknownOption(RowMenuKey)
 
@@ -50,20 +56,25 @@ export const decodeDmMenuKey = Schema.decodeUnknownOption(DmMenuKey)
 
 const rowItem = (key: RowMenuKey, options?: Parameters<typeof Menu.item>[1]) => Menu.item(key, options)
 
-/** The mute and favorite toggles' words, which rows and the system's menu (`textValue`) share. */
-type MemberToggles = Pick<SidebarMember, "isMuted" | "isFavorite">
-const NOT_TOGGLED: MemberToggles = { isMuted: false, isFavorite: false }
-const muteTitle = (member: MemberToggles) => (member.isMuted ? "Unmute" : "Mute")
-const favoriteTitle = (member: MemberToggles) => (member.isFavorite ? "Unfavorite" : "Favorite")
+/**
+ * The mute and favorite items' inputs. `isMuted` is muted now (for good, or until a time still
+ * ahead): the row computes it from the clock, so the menu offers "Unmute" only while it is.
+ */
+export interface MenuMember extends NotificationMember {
+	readonly isFavorite: boolean
+}
+const NOT_TOGGLED: MenuMember = { isMuted: false, isFavorite: false, notificationLevel: null }
+const favoriteTitle = (member: MenuMember) => (member.isFavorite ? "Unfavorite" : "Favorite")
 
 /** A row's items as SF Symbols, for the system's own menu; the toggles show what they turn to. */
-const rowSymbols = (member: MemberToggles): Readonly<Record<string, string>> => ({
+const rowSymbols = (member: MenuMember): Readonly<Record<string, string>> => ({
 	...ROW_SYMBOLS,
 	mute: member.isMuted ? "bell" : "bell.slash",
 	favorite: member.isFavorite ? "star.slash" : "star",
 })
 
 const ROW_SYMBOLS = {
+	notifications: "bell.badge",
 	move: "folder",
 	settings: "gearshape",
 	delete: "trash",
@@ -83,9 +94,11 @@ const SECTION_SYMBOLS = {
 export const rowMenuEntries = (
 	sections: ReadonlyArray<Section>,
 	canDelete: boolean,
-	member: MemberToggles = NOT_TOGGLED,
+	member: MenuMember = NOT_TOGGLED,
+	channelType = "public",
 ): ReadonlyArray<Menu.Entry> => [
-	rowItem("mute", { textValue: muteTitle(member) }),
+	muteEntry(member),
+	levelEntry(channelType),
 	rowItem("favorite", { textValue: favoriteTitle(member) }),
 	...(sections.length > 0
 		? [
@@ -107,8 +120,8 @@ export const rowMenuEntries = (
 	rowItem("leave", { intent: "Danger", textValue: "Leave" }),
 ]
 
-export const dmMenuEntries = (member: MemberToggles = NOT_TOGGLED): ReadonlyArray<Menu.Entry> => [
-	Menu.item("mute" satisfies DmMenuKey, { textValue: muteTitle(member) }),
+export const dmMenuEntries = (member: MenuMember = NOT_TOGGLED): ReadonlyArray<Menu.Entry> => [
+	muteEntry(member),
 	Menu.item("favorite" satisfies DmMenuKey, { textValue: favoriteTitle(member) }),
 	Menu.separator,
 	Menu.item("hide" satisfies DmMenuKey, { intent: "Danger", textValue: "Hide conversation" }),
@@ -156,17 +169,13 @@ export const closedRowMenu = (channelId: string) => closedMenu(rowMenuId(channel
 /** The mute and favorite items, which channel and DM rows share. */
 const memberItemContent = <M>(
 	h: HtmlBuilder<M>,
-	member: SidebarMember,
+	member: MenuMember,
 	key: string,
 	text: (value: string) => Html,
+	channelType: string,
 ): ReadonlyArray<Html | string> | null => {
-	if (key === "mute")
-		return [
-			member.isMuted
-				? IconVolume(h, { className: "size-4" })
-				: IconVolumeMute(h, { className: "size-4" }),
-			text(muteTitle(member)),
-		]
+	const notificationItem = itemContent(h, member, channelType, key, text)
+	if (notificationItem !== null) return notificationItem
 	if (key === "favorite")
 		return [
 			IconStar(h, { className: member.isFavorite ? "size-4 text-favorite" : "size-4 text-muted-fg" }),
@@ -191,11 +200,11 @@ const rowMenuTrigger =
 		)
 
 const rowMenuContent =
-	<M>(h: HtmlBuilder<M>, entry: ChannelEntry, sections: ReadonlyArray<Section>) =>
+	<M>(h: HtmlBuilder<M>, entry: ChannelEntry, member: MenuMember, sections: ReadonlyArray<Section>) =>
 	(key: string): ReadonlyArray<Html | string> => {
 		const id = rowMenuId(entry.channel.id)
 		const text = (value: string, className?: string) => menuLabel(h, id, key, value, className)
-		const memberItem = memberItemContent(h, entry.member, key, text)
+		const memberItem = memberItemContent(h, member, key, text, entry.channel.type)
 		if (memberItem !== null) return memberItem
 		if (key === "move") return [IconFolderPlus(h, { className: "size-4" }), text("Move to section")]
 		if (key === "settings") return [IconGear(h), text("Settings")]
@@ -209,23 +218,39 @@ const rowMenuContent =
 type RowMenuOptions<M> = Readonly<{
 	menu: Menu.Model
 	entry: ChannelEntry
+	/** Muted now (`isMutedNow`), which the row computes from the clock. */
+	isMuted: boolean
 	sections: ReadonlyArray<Section>
 	canDelete: boolean
 	toMessage: (message: Menu.Message) => M
 }>
 
-/** A channel row's menu, which its dots trigger and a long press on the row both open. */
-const rowMenu = <M>(options: RowMenuOptions<M>) => ({
-	entries: rowMenuEntries(options.sections, options.canDelete, options.entry.member),
-	native: { symbols: rowSymbols(options.entry.member) },
+const menuMemberOf = (member: SidebarMember, isMuted: boolean): MenuMember => ({
+	isMuted,
+	isFavorite: member.isFavorite,
+	notificationLevel: member.notificationLevel,
 })
+
+/** A channel row's menu, which its dots trigger and a long press on the row both open. */
+const rowMenu = <M>(options: RowMenuOptions<M>) => {
+	const member = menuMemberOf(options.entry.member, options.isMuted)
+	return {
+		entries: rowMenuEntries(options.sections, options.canDelete, member, options.entry.channel.type),
+		native: { symbols: rowSymbols(member) },
+	}
+}
 
 /** A long press on a channel row opens its menu as the system's (iOS). */
 export const rowLongPress = <M>(h: HtmlBuilder<M>, options: RowMenuOptions<M>): ReadonlyArray<Attribute<M>> =>
 	longPressMenu(h, {
 		menu: options.menu,
 		...rowMenu(options),
-		content: rowMenuContent(h, options.entry, options.sections),
+		content: rowMenuContent(
+			h,
+			options.entry,
+			menuMemberOf(options.entry.member, options.isMuted),
+			options.sections,
+		),
 		toParentMessage: options.toMessage,
 	})
 
@@ -243,7 +268,12 @@ export const rowMenuView = <M>(h: HtmlBuilder<M>, options: RowMenuOptions<M>): H
 					? "Conversation options"
 					: "Channel options",
 			),
-			content: rowMenuContent(h, options.entry, options.sections),
+			content: rowMenuContent(
+				h,
+				options.entry,
+				menuMemberOf(options.entry.member, options.isMuted),
+				options.sections,
+			),
 			className: "w-42",
 			itemClassName: (key) =>
 				key === sectionKeyOf(options.entry.channel.sectionId) ? "bg-accent" : undefined,
@@ -255,14 +285,16 @@ type DmMenuOptions<M> = Readonly<{
 	menu: Menu.Model
 	channelId: string
 	member: SidebarMember
+	/** Muted now (`isMutedNow`), which the row computes from the clock. */
+	isMuted: boolean
 	toMessage: (message: Menu.Message) => M
 }>
 
 /** A DM row's menu, which its dots trigger and a long press on the row both open. */
-const dmMenu = <M>(options: DmMenuOptions<M>) => ({
-	entries: dmMenuEntries(options.member),
-	native: { symbols: rowSymbols(options.member) },
-})
+const dmMenu = <M>(options: DmMenuOptions<M>) => {
+	const member = menuMemberOf(options.member, options.isMuted)
+	return { entries: dmMenuEntries(member), native: { symbols: rowSymbols(member) } }
+}
 
 /** A DM row menu's items: what the dots' menu draws, and the icons the system's menu takes. */
 const dmMenuContent =
@@ -270,7 +302,13 @@ const dmMenuContent =
 	(key: string): ReadonlyArray<Html | string> => {
 		const text = (value: string, className?: string) =>
 			menuLabel(h, rowMenuId(options.channelId), key, value, className)
-		const memberItem = memberItemContent(h, options.member, key, text)
+		const memberItem = memberItemContent(
+			h,
+			menuMemberOf(options.member, options.isMuted),
+			key,
+			text,
+			"single",
+		)
 		if (memberItem !== null) return memberItem
 		if (key === "hide")
 			return [IconClose(h, { className: "size-4" }), text("Hide conversation", "text-danger-subtle-fg")]

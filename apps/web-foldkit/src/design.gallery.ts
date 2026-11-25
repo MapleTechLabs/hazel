@@ -60,7 +60,14 @@ afterEach(() => {
 const entry = (id: string, name: string, notificationCount = 0): ChannelEntry =>
 	({
 		channel: { id: id as ChannelId, name, type: "public", icon: null, sectionId: null },
-		member: { id, isMuted: false, isFavorite: false, notificationCount },
+		member: {
+			id,
+			isMuted: false,
+			mutedUntilMs: null,
+			notificationLevel: null,
+			isFavorite: false,
+			notificationCount,
+		},
 	}) as unknown as ChannelEntry
 
 const channels: ReadonlyArray<readonly [ChannelEntry, boolean]> = [
@@ -92,6 +99,7 @@ const sidebar = (h: HtmlBuilder<M>) =>
 							orgSlug: "acme",
 							isActive,
 							links: NO_CHANNEL_LINKS,
+							isMuted: false,
 							// "engineering" has unread messages and no mention: the pill and the name, no count.
 							isUnread:
 								channel.channel.name === "engineering" ||

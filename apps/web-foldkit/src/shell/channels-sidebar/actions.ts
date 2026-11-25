@@ -7,6 +7,7 @@ import {
 	updateChannelMemberAction,
 } from "~/db/actions"
 import { orgOfChannelMember } from "~/db/routing-hints"
+import { NotificationChoice, writeChoice } from "../../chat/notification-menu"
 import { catchCommon } from "../../data/actions"
 import { HazelRpc } from "../../rpc"
 import { Message, type SidebarFailure, type SidebarOutcome } from "./model"
@@ -15,17 +16,36 @@ import { Message, type SidebarFailure, type SidebarOutcome } from "./model"
 
 const failed = (reason: SidebarFailure) => Message.FailedSidebarAction({ reason })
 
-const MemberField = Schema.Literals(["isMuted", "isFavorite", "isHidden"])
+const MemberField = Schema.Literals(["isFavorite", "isHidden"])
 
 const memberOutcomes: {
 	readonly [F in typeof MemberField.Type]: { readonly on: SidebarOutcome; readonly off: SidebarOutcome }
 } = {
-	isMuted: { on: "Muted", off: "Unmuted" },
 	isFavorite: { on: "Favorited", off: "Unfavorited" },
 	isHidden: { on: "Hidden", off: "Unhidden" },
 }
 
-/** `useChannelMemberActions` mute and favorite toggles, and a DM's "Hide conversation". */
+const choiceOutcomes: { readonly [T in NotificationChoice["_tag"]]: SidebarOutcome } = {
+	Mute: "Muted",
+	Unmute: "Unmuted",
+	SetLevel: "NotificationLevelChanged",
+}
+
+/** A choice from the row's notification items (`chat/notification-menu.ts`): mute, unmute, a level. */
+export const ApplyNotificationChoice = Command.define("ApplyNotificationChoice", {
+	args: { memberId: ChannelMemberId, choice: NotificationChoice },
+	messages: [Message.SucceededSidebarAction, Message.FailedSidebarAction],
+	execute: ({ memberId, choice }) =>
+		writeChoice(memberId, choice).pipe(
+			Effect.as(Message.SucceededSidebarAction({ outcome: choiceOutcomes[choice._tag] })),
+			Effect.catchTags({
+				ChannelMemberNotFoundError: () => Effect.succeed(failed("MemberNotFound")),
+			}),
+			catchCommon(failed),
+		),
+})
+
+/** `useChannelMemberActions` favorite toggle, and a DM's "Hide conversation". */
 export const UpdateChannelMember = Command.define("UpdateChannelMember", {
 	args: { memberId: ChannelMemberId, field: MemberField, value: Schema.Boolean },
 	messages: [Message.SucceededSidebarAction, Message.FailedSidebarAction],

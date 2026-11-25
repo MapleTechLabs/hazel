@@ -37,6 +37,7 @@ import * as CustomerCard from "../customer-card"
 import { chatTabBarView } from "../tab-bar"
 import { threadPanelView } from "../thread-panel"
 import * as IssueControl from "../issue-control"
+import * as NotificationControl from "../notification-control"
 import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { isMemberOf, Message, type Model, routeTabOf, type ThreadPanel } from "./page"
 import * as NewMessages from "./new-messages"
@@ -61,6 +62,8 @@ const toPressEdge = (clientX: number, startWidth: number, maxWidth: number) =>
 const toNudgeEdge = (delta: number) => Message.PressedThreadPanelEdgeKey({ delta })
 const toIssueControlMessage = (message: IssueControl.Message) => Message.GotIssueControlMessage({ message })
 const toCustomerCard = (message: CustomerCard.Message) => Message.GotCustomerCardMessage({ message })
+const toNotificationControl = (message: NotificationControl.Message) =>
+	Message.GotNotificationControlMessage({ message })
 const toPinnedMessage = (message: Parameters<typeof Overlays.Message.GotPinnedMessage>[0]["message"]) =>
 	toOverlay(Overlays.Message.GotPinnedMessage({ message }))
 const pinnedActions = {
@@ -372,6 +375,17 @@ const headerLinks = (
 	syncProvider: syncProvider ?? shared.syncProvider,
 })
 
+/**
+ * The header's clock: to the minute, so the 30 s ticks keep its memo, or the bell's mute end once it
+ * has passed within the minute, so the bell unmutes when the sidebar row does.
+ */
+const headerClockOf = (model: Model, nowMs: number): number => {
+	const minuteMs = Math.floor(nowMs / 60_000) * 60_000
+	const mutedUntilMs =
+		(model.members ?? []).find((member) => member.userId === model.currentUserId)?.mutedUntilMs ?? null
+	return mutedUntilMs !== null && mutedUntilMs > minuteMs && mutedUntilMs <= nowMs ? mutedUntilMs : minuteMs
+}
+
 const headerView = (
 	channel: Model["channel"],
 	parentChannel: Model["parentChannel"],
@@ -385,6 +399,9 @@ const headerView = (
 	isCustomerCardOpen: boolean,
 	isMobile: boolean,
 	channelLinks: ChannelLinksMap,
+	notificationControl: Model["notificationControl"],
+	/** The clock to the minute, or the bell's mute end (`headerClockOf`). */
+	minuteMs: number,
 	h: H,
 ): Html => {
 	const users = new Map(lookups.users.map((user) => [user.id, user]))
@@ -428,6 +445,17 @@ const headerView = (
 						: mobileBackLink(h, hrefOf(AppRoute.ChatIndex({ orgSlug })), "Chats", "-ml-3 -mr-1")
 				: h.empty,
 		pinnedTrigger: pinnedPopoverView(h, pinnedPopover, pins, toPinnedMessage, pinnedActions),
+		notificationsTrigger:
+			currentMember === undefined || channel === null
+				? h.empty
+				: NotificationControl.view(
+						h,
+						notificationControl,
+						currentMember,
+						channel.type,
+						minuteMs,
+						toNotificationControl,
+					),
 		customerChip:
 			customer === null
 				? null
@@ -504,6 +532,8 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 						CustomerCard.isOpenOf(model.customerCard, options.isMobile ?? false),
 						options.isMobile ?? false,
 						options.channelLinks ?? NO_CHANNEL_LINKS_MAP,
+						model.notificationControl,
+						headerClockOf(model, nowMs),
 						h,
 					]) ?? h.empty,
 					customerCardView(h, model, options.isMobile ?? false, nowMs),

@@ -162,8 +162,9 @@ export const messageCreated = Effect.fn("OrgEffects.messageCreated")(function* (
 
 /**
  * Drop the message's notifications in the `UserObject`s that may hold one: the channel's members
- * with unread notifications there (`notificationCount`, reset when they read it). Each that held
- * one tells the org back (`org.notificationsRemoved`), so the unread count comes down too.
+ * with unread mentions there (`notificationCount`, reset when they read it), and those a plain
+ * message notifies (All messages, which the count leaves out). Each that held a counted one tells
+ * the org back (`org.notificationsRemoved`), so the unread count comes down too.
  */
 export const messageDeleted = Effect.fn("OrgEffects.messageDeleted")(function* (
 	input: MessageDeletedPayload,
@@ -186,11 +187,10 @@ export const messageDeleted = Effect.fn("OrgEffects.messageDeleted")(function* (
 	const members = yield* db.run(
 		SQLite.from(schema.channelMembersTable)
 			.select("userId")
-			.where(($) => [
-				$.channelId.eq(channel.value.id),
-				// Members who left since keep their notifications: theirs go too.
-				$.notificationCount.gt(0),
-			]),
+			// Every member, those who left since too: a plain-message notification leaves no count, and
+			// the level (the channel's, section's or organization's) that made it may have changed since.
+			// A member holding none makes the user's object a no-op.
+			.where(($) => [$.channelId.eq(channel.value.id)]),
 	)
 	yield* Effect.forEach(
 		members,
