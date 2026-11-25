@@ -1216,12 +1216,15 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 						return yield* invalid("Issues open on messages in channels linked to a customer")
 					}
 					const now = yield* currentTime
-					/** Filed as chatter, a member asking for an issue on it says it is support. */
+					/**
+					 * A member asking for an issue on a message says it is support: one filed as chatter
+					 * comes back, and one the model has not judged yet is theirs, not its to file.
+					 */
 					const asSupport = Effect.fnUntraced(function* (found: schema.CustomerIssue) {
-						if (found.triage !== "chatter") return found
 						const patch = issuePatch(found, { triage: "support" }, actor.userId, now)
 						if (Object.keys(patch).length === 0) return found
 						const issue = yield* updateIssueRow(found, patch)
+						if (found.triage !== "chatter") return issue
 						yield* hazelEvent(
 							issue.accountId,
 							actor.userId,
@@ -1234,7 +1237,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					})
 					const existing = yield* issueAt(channelId, messageId)
 					if (Option.isSome(existing)) {
-						if (existing.value.triage !== "chatter")
+						if (existing.value.triage === "support")
 							return yield* withTx(Effect.succeed(existing.value))
 						return yield* withTx(
 							Effect.gen(function* () {

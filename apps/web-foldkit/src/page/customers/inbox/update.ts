@@ -43,6 +43,13 @@ export const viewerOf = (shared: Shared): Viewer => ({
 	nowMs: shared.nowMs,
 })
 
+/** The selected row's menus, closed. */
+const closedRowMenus = () => ({
+	assignMenu: Menu.init({ id: ASSIGN_MENU_ID, placement: "bottom end" }),
+	statusMenu: Menu.init({ id: STATUS_MENU_ID, placement: "bottom end" }),
+	priorityMenu: Menu.init({ id: PRIORITY_MENU_ID, placement: "bottom end" }),
+})
+
 // INIT
 
 export const init = (): Return => ({
@@ -56,17 +63,19 @@ export const init = (): Return => ({
 		channels: [],
 		members: [],
 		selectedId: null,
-		assignMenu: Menu.init({ id: ASSIGN_MENU_ID, placement: "bottom end" }),
-		statusMenu: Menu.init({ id: STATUS_MENU_ID, placement: "bottom end" }),
-		priorityMenu: Menu.init({ id: PRIORITY_MENU_ID, placement: "bottom end" }),
+		...closedRowMenus(),
 		filterMenu: Menu.init({ id: FILTER_MENU_ID }),
 	},
 })
 
 // SELECTION
 
+/**
+ * The menus are the selected row's: one still open (left so as its issue was filed) does not follow
+ * the selection onto another row.
+ */
 const select = (model: Model, issueId: CustomerIssueId | null): Model =>
-	modifyFields(model, { selectedId: () => issueId })
+	issueId === model.selectedId ? model : { ...model, ...closedRowMenus(), selectedId: issueId }
 
 /** j / k: the next or previous row; from no selection, the first row. */
 const move = (model: Model, shared: Shared, step: 1 | -1): Return => {
@@ -414,7 +423,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		UpdatedChannels: ({ channels }) => ({ model: modifyFields(model, { channels: () => channels }) }),
 		UpdatedMembers: ({ members }) => ({ model: modifyFields(model, { members: () => members }) }),
 
-		ClickedTab: ({ tab }) => ({ model: modifyFields(model, { tab: () => tab, selectedId: () => null }) }),
+		ClickedTab: ({ tab }) => ({ model: modifyFields(select(model, null), { tab: () => tab }) }),
 		ChangedSearch: ({ value }) => ({ model: modifyFields(model, { search: () => value }) }),
 		ClearedSearch: () => ({ model: modifyFields(model, { search: () => "" }) }),
 		ClearedFilter: ({ field }) => ({

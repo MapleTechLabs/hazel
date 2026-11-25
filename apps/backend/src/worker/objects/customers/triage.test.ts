@@ -692,6 +692,36 @@ describe("support triage", () => {
 			}),
 		))
 
+	it("never files an issue a member asked for with Create issue before the model answered", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, linked, customer, say, issues, triage, answer } = yield* setup
+				answer(CHATTER)
+				const messageId = yield* say({
+					channelId: linked,
+					authorId: customer,
+					minutesAgo: 1,
+					content: "hm",
+				})
+				// The relay opened it already; the member's click still says it is support.
+				ok(
+					yield* world.call(
+						"customers.issue.createFromMessage",
+						{ channelId: linked, messageId },
+						world.member,
+					),
+				)
+				expect(issues()).toMatchObject([
+					{ status: "new", triage: "support", triagedByUserId: world.member },
+				])
+				yield* triage
+				expect(issues()).toMatchObject([{ status: "new", triage: "support" }])
+				expect(world.objects.decisionRequests).toEqual([])
+				// No "Marked as support" on the timeline: it was never filed.
+				expect(world.rows(`SELECT id FROM customer_events WHERE type = 'issue.reopened'`)).toEqual([])
+			}),
+		))
+
 	it("never files an issue someone already works on", () =>
 		run(
 			Effect.gen(function* () {

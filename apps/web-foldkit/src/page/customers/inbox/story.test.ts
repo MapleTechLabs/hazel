@@ -331,6 +331,12 @@ describe("support inbox: keyboard", () => {
 		).model
 		expect(filed.statusMenu.popup._tag).toBe("Open")
 		expect(isMenuOpen(filed)).toBe(false)
+		// Moving on closes it: it does not open on the next row, and the keys keep working there.
+		const moved = pageUpdate(filed, key("next")).model
+		expect(moved.selectedId).not.toBe(sso.id)
+		expect(moved.selectedId).not.toBeNull()
+		expect(moved.statusMenu.popup._tag).toBe("Closed")
+		expect(isMenuOpen(moved)).toBe(false)
 	})
 
 	test("Enter opens the issue's channel; one the person cannot see toasts instead", () => {
