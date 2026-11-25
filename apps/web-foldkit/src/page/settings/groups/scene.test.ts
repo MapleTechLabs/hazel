@@ -70,6 +70,18 @@ describe("list", () => {
 			Scene.expect(Scene.within(row, Scene.text("1 member"))).toExist(),
 		)
 	})
+
+	test("someone who left the organization is not counted", () => {
+		const departed = Schema.decodeSync(UserId)(uuid(299))
+		Scene.scene(
+			pageScene(update, view, owner),
+			Scene.given(withGroups([{ ...design, memberIds: [ada.userId, departed] }])),
+			Scene.expect(Scene.within(row, Scene.text("1 member"))).toExist(),
+			Scene.click(Scene.role("button", { name: "Manage @design" })),
+			Scene.expect(Scene.text("2 members")).toBeAbsent(),
+			Scene.expect(Scene.text("Ada Lovelace")).toExist(),
+		)
+	})
 })
 
 describe("create", () => {

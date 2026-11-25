@@ -35,6 +35,15 @@ const MAX_SUGGESTIONS = 8
 
 const membersLabel = (count: number) => `${count} ${count === 1 ? "member" : "members"}`
 
+/**
+ * The group's members still in the organization: one who left keeps their group row but is never
+ * notified, and the list (from the org's members) does not show them, so they are not counted.
+ */
+const groupMemberCount = (group: Group, members: Model["members"]) => {
+	const current = new Set<string>(members.map((member) => member.userId))
+	return group.memberIds.filter((userId) => current.has(userId)).length
+}
+
 type FormMessages = Readonly<{
 	onName: (value: string) => Message
 	onHandle: (value: string) => Message
@@ -138,7 +147,8 @@ const columns = (h: HtmlBuilder<Message>, model: Model, isAdmin: boolean): Reado
 		key: "members",
 		label: "Members",
 		widthClass: "w-32",
-		cell: (group) => badge(h, { intent: "secondary" }, [membersLabel(group.memberIds.length)]),
+		cell: (group) =>
+			badge(h, { intent: "secondary" }, [membersLabel(groupMemberCount(group, model.members))]),
 	},
 	{
 		key: "actions",
@@ -219,7 +229,7 @@ const groupPanel = (h: HtmlBuilder<Message>, model: Model, group: Group, isAdmin
 		cardHeader(h, [
 			pageHeader(h, {
 				title: `@${group.handle}`,
-				badges: [badge(h, { intent: "secondary" }, [membersLabel(group.memberIds.length)])],
+				badges: [badge(h, { intent: "secondary" }, [membersLabel(members.length)])],
 				subtitle: group.name,
 				actions: [
 					button(h, { intent: "secondary", size: "sm", onPress: Message.ClickedCloseGroup() }, [
