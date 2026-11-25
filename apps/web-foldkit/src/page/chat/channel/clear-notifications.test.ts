@@ -217,6 +217,14 @@ describe("the open thread", () => {
 		expect(result.model.threadPanel?.readUpToMs).toBe(reply.createdAtMs)
 	})
 
+	test("a followed thread whose membership lands after its messages is read then", () => {
+		const result = updateWithShared(
+			withPanel(null),
+			Message.UpdatedThreadMember({ threadChannelId, memberId: threadMemberId }),
+		)
+		expect(readCommands(result)).toEqual([{ channelId: threadChannelId }])
+	})
+
 	test("a thread the user does not follow has no read state to clear", () => {
 		const model = withPanel(null)
 		const result = readOpenThread(model)
