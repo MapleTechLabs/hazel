@@ -12,6 +12,7 @@ import { PageOutMessage } from "../../out-message"
 import {
 	ExpireNotificationStatus,
 	PlayTestSound,
+	ResetOverride,
 	SaveOrganizationSettings,
 	SendTestNotification,
 	UpdateUserSettings,
@@ -199,6 +200,8 @@ export const init = (): Return => ({
 		notificationStatusVersion: 0,
 		interaction: Interaction.init(),
 		organizationSettings: DEFAULTS,
+		channelOverrides: [],
+		sectionOverrides: [],
 		optimisticOrganizationSettings: null,
 		organizationWrite: "Idle",
 	},
@@ -284,6 +287,25 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				shared,
 				(current) => current.optimisticOrganizationSettings ?? current.organizationSettings,
 			),
+		UpdatedChannelOverrides: ({ overrides }) => ({
+			model: modifyFields(model, { channelOverrides: () => overrides }),
+		}),
+		UpdatedSectionOverrides: ({ overrides }) => ({
+			model: modifyFields(model, { sectionOverrides: () => overrides }),
+		}),
+		ClickedResetOverride: ({ override }) =>
+			shared.organization === null
+				? { model }
+				: { model, commands: [ResetOverride({ organizationId: shared.organization.id, override })] },
+		CompletedResetOverride: ({ isSuccess }) =>
+			isSuccess
+				? { model }
+				: {
+						model,
+						outMessage: PageOutMessage.RequestedToast({
+							toast: errorToast("Couldn't reset the setting", "Try again in a moment."),
+						}),
+					},
 		// The last synced settings come back; a newer queued choice is still sent.
 		FailedSaveOrganizationSettings: () => ({
 			...settleOrganizationWrite(model, shared, (current) => current.organizationSettings),

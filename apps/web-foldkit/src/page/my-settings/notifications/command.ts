@@ -7,6 +7,8 @@ import { notificationSoundManager } from "~/lib/notification-sound-manager"
 import { settleUpdateUser, updateUser } from "../user"
 import { Message } from "./message"
 import { OrganizationSettings, payloadOf } from "./organization"
+import { channelResetOf, Override } from "./overrides"
+import { updateChannelMemberAction } from "~/db/actions"
 import { catchCommon } from "../../../data/actions"
 import { HazelRpc } from "../../../rpc"
 
@@ -79,5 +81,32 @@ export const SaveOrganizationSettings = Command.define("SaveOrganizationSettings
 				ChannelSectionNotFoundError: () => Effect.succeed(Message.FailedSaveOrganizationSettings()),
 			}),
 			catchCommon(() => Message.FailedSaveOrganizationSettings()),
+		),
+})
+
+/** "Reset": the channel's or section's own level and mute go, so what is above applies again. */
+export const ResetOverride = Command.define("ResetOverride", {
+	args: { organizationId: OrganizationId, override: Override },
+	messages: [Message.CompletedResetOverride],
+	execute: ({ organizationId, override }) =>
+		Effect.gen(function* () {
+			if (override._tag === "Channel") {
+				yield* updateChannelMemberAction(channelResetOf(override.memberId))
+			} else {
+				const rpc = yield* HazelRpc
+				yield* rpc("channelMember.resetScopeNotifications", {
+					organizationId,
+					scope: "section",
+					scopeId: override.sectionId,
+				})
+			}
+			return Message.CompletedResetOverride({ isSuccess: true })
+		}).pipe(
+			Effect.catchTags({
+				ChannelMemberNotFoundError: () =>
+					Effect.succeed(Message.CompletedResetOverride({ isSuccess: false })),
+				UnauthorizedError: () => Effect.succeed(Message.CompletedResetOverride({ isSuccess: false })),
+			}),
+			catchCommon(() => Message.CompletedResetOverride({ isSuccess: false })),
 		),
 })

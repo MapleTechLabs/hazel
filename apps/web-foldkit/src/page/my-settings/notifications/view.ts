@@ -13,6 +13,7 @@ import type { PageViewInputs } from "../../contract"
 import { settingsRow } from "../shared"
 import { Message } from "./message"
 import * as Organization from "./organization"
+import * as Overrides from "./overrides"
 import { type Model, organizationSettingsOf, settingsOf, type SoundFile, type SoundSettings } from "./model"
 import { interaction, toQuietHoursMessage, toVolumeMessage } from "./update"
 
@@ -284,6 +285,20 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 											organizationSettingsOf(model),
 											shared.nowMs,
 											(change) => Message.ChangedOrganizationSettings({ change }),
+										),
+									),
+									separator(h),
+									settingsRow(
+										h,
+										{
+											title: "Notification overrides",
+											description: "Channels and sections with a setting of their own",
+										},
+										Overrides.view(
+											h,
+											[...model.channelOverrides, ...model.sectionOverrides],
+											shared.nowMs,
+											(override) => Message.ClickedResetOverride({ override }),
 										),
 									),
 								]),
