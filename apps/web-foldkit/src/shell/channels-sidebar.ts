@@ -207,7 +207,7 @@ export const setContext = (
 
 // SUBSCRIPTION
 
-export { subscriptions } from "./channels-sidebar/subscriptions"
+export { badgeSubscriptions, subscriptions } from "./channels-sidebar/subscriptions"
 
 // VIEW
 

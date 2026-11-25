@@ -60,14 +60,6 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 						),
 		},
 	),
-	sidebarUnreadChannels: entry(Scope, {
-		modelToDependencies: scopeOf,
-		dependenciesToStream: scoped((organizationId, userId) =>
-			Data.unreadChannelsStream(organizationId, userId, (channels) =>
-				Message.UpdatedUnreadChannels({ channels }),
-			),
-		),
-	}),
 	sidebarSectionSettings: entry(
 		{ organizationId: Schema.NullOr(OrganizationId) },
 		{
@@ -238,4 +230,19 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 						),
 		},
 	),
+}))
+
+/**
+ * The organization's unread channels, on every page of it: the tab title's dot (`platform/badge.ts`)
+ * reads them, so they do not wait for the chat sidebar to be shown.
+ */
+export const badgeSubscriptions = Subscription.make<Model, Message>()((entry) => ({
+	sidebarUnreadChannels: entry(Scope, {
+		modelToDependencies: scopeOf,
+		dependenciesToStream: scoped((organizationId, userId) =>
+			Data.unreadChannelsStream(organizationId, userId, (channels) =>
+				Message.UpdatedUnreadChannels({ channels }),
+			),
+		),
+	}),
 }))

@@ -12,6 +12,7 @@ import {
 import { liveQueryStream } from "../data/live-query"
 import type { Shared } from "../page/contract"
 import { AppRoute, orgSectionOf } from "../route"
+import { isMentionReason } from "../platform/badge"
 import * as ChannelsSidebar from "./channels-sidebar"
 import * as CustomersSidebar from "./customers-sidebar"
 import * as Notifications from "./notifications"
@@ -117,7 +118,10 @@ const own = Subscription.make<Input, Message>()((entry) => ({
 			dependenciesToStream: ({ memberId }) =>
 				memberId === null
 					? Stream.empty
-					: liveQueryStream<{ readonly id: NotificationId }, Message>(
+					: liveQueryStream<
+							{ readonly id: NotificationId; readonly reason: string | null },
+							Message
+						>(
 							(q) =>
 								q
 									.from({ notification: notificationCollection })
@@ -128,6 +132,9 @@ const own = Subscription.make<Input, Message>()((entry) => ({
 								_tag: "GotNotificationsMessage",
 								message: Notifications.Message.UpdatedUnreadNotifications({
 									ids: rows.map((row) => row.id),
+									mentionIds: rows
+										.filter((row) => isMentionReason(row.reason))
+										.map((row) => row.id),
 								}),
 							}),
 						),
@@ -170,6 +177,12 @@ const channelsSidebar = Subscription.lift(ChannelsSidebar.subscriptions)<Input, 
 	toParentMessage: (message) => Message.GotChannelsSidebarMessage({ message }),
 })
 
+/** On every page: the tab title's unread dot reads the sidebar's unread channels. */
+const channelsSidebarBadge = Subscription.lift(ChannelsSidebar.badgeSubscriptions)<Input, Message>({
+	read: ({ model }) => Option.some(model.channelsSidebar),
+	toParentMessage: (message) => Message.GotChannelsSidebarMessage({ message }),
+})
+
 /** Only on customers routes: entering the area opens the org's customers source (and keeps it). */
 const customersSidebar = Subscription.lift(CustomersSidebar.subscriptions)<Input, Message>({
 	read: ({ model, route, shared }) =>
@@ -183,4 +196,9 @@ const customersSidebar = Subscription.lift(CustomersSidebar.subscriptions)<Input
 	toParentMessage: (message) => Message.GotCustomersSidebarMessage({ message }),
 })
 
-export const subscriptions = Subscription.aggregate(own, channelsSidebar, customersSidebar)
+export const subscriptions = Subscription.aggregate(
+	own,
+	channelsSidebar,
+	channelsSidebarBadge,
+	customersSidebar,
+)
