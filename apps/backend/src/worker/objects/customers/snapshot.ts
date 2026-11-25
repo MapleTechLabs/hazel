@@ -395,7 +395,7 @@ export const billingByAccount = (
 		}),
 	)
 
-/** The Stripe plan invoices of the accounts whose paid plans all ended, for `unpaidEndOf`. */
+/** The plan invoices (`invoiceProviders`) of the accounts whose paid plans all ended, for `unpaidEndOf`. */
 export const endedPlanInvoices = Effect.fnUntraced(function* (
 	billingBy: ReturnType<typeof billingByAccount>,
 	accountIds: ReadonlyArray<CustomerAccountId>,
@@ -417,7 +417,7 @@ export const endedPlanInvoices = Effect.fnUntraced(function* (
 			)
 			.where(($) => [
 				inList($.accountId, ids),
-				$.provider.eq("stripe"),
+				inList($.provider, invoiceProviders),
 				$.status.neq("upcoming"),
 				$.subscriptionId.isNotNull(),
 			]),
@@ -729,7 +729,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 								$.accountId,
 								notified.map(({ id }) => id),
 							),
-							$.provider.eq("stripe"),
+							inList($.provider, invoiceProviders),
 							$.status.eq("paid"),
 							$.amountPaidMinor.gt(0),
 							$.paidAt.gt(new Date(Math.min(...notified.map(({ at }) => at.getTime())))),
