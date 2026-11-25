@@ -162,23 +162,19 @@ final class PushCenter: NSObject {
         }
     }
 
-    /// Takes the channel's notifications off the screen and the badge down by as many: from the badge
-    /// shown now (the newest push's count, less reads already taken off here), else the newest push's.
+    /// Takes the channel's notifications off the screen and the badge down by as many, from the badge
+    /// shown now: each push set it, and so did the app and any earlier action here, so a 0 stays 0.
     private static func clearDelivered(_ push: PushRef) async {
         let center = UNUserNotificationCenter.current()
-        let delivered = await center.deliveredNotifications().map {
-            (id: $0.request.identifier, thread: $0.request.content.threadIdentifier,
-             badge: $0.request.content.badge?.intValue, date: $0.date)
-        }
-        let candidates = delivered + [(id: push.requestId, thread: push.channelId, badge: push.badge, date: push.date)]
-        let read = Set(candidates.filter { $0.thread == push.channelId }.map(\.id))
+        let delivered = await center.deliveredNotifications()
+            .filter { $0.request.content.threadIdentifier == push.channelId }
+            .map(\.request.identifier)
+        let read = Set(delivered + [push.requestId])
         center.removeDeliveredNotifications(withIdentifiers: Array(read))
-        let newest = candidates.filter({ $0.badge != nil }).max(by: { $0.date < $1.date })?.badge
-        // An earlier action here lowered the shown badge below the newest push's: start from that.
         // Deprecated, but iOS has no other way to read the badge shown (only to set it).
         let shown = UIApplication.shared.applicationIconBadgeNumber
-        guard let base = shown > 0 ? min(shown, newest ?? shown) : newest else { return }
-        try? await center.setBadgeCount(max(0, base - read.count))
+        guard shown > 0 else { return }
+        try? await center.setBadgeCount(max(0, shown - read.count))
     }
 
     /// A reply that did not go out says so, so the text is not silently lost.
@@ -218,8 +214,6 @@ extension PushCenter: UNUserNotificationCenterDelegate {
 /// What a push names (`ApnsPayload.hazel`, `apps/backend/src/services/apns.ts`).
 struct PushRef: Sendable {
     let requestId: String
-    let date: Date
-    let badge: Int?
     let channelId: String
     let path: String?
     let messageId: String?
@@ -231,8 +225,6 @@ struct PushRef: Sendable {
             return nil
         }
         requestId = notification.request.identifier
-        date = notification.date
-        badge = content.badge?.intValue
         self.channelId = channelId
         path = hazel["path"] as? String
         messageId = hazel["messageId"] as? String
