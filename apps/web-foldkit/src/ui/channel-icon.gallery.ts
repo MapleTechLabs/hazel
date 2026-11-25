@@ -118,7 +118,13 @@ const entryOf = (sample: Sample, n: number): ChannelEntry => ({
 // The surfaces, as the app calls them.
 
 const sidebarRow = (h: HtmlBuilder<M>, sample: Sample, n: number, _isFavorite: boolean) =>
-	channelItem(h, entryOf(sample, n), 0, { orgSlug: "acme", isActive: false, links: sample.links }, h.empty)
+	channelItem(
+		h,
+		entryOf(sample, n),
+		0,
+		{ orgSlug: "acme", isActive: false, links: sample.links, isUnread: false },
+		h.empty,
+	)
 
 const header = (h: HtmlBuilder<M>, sample: Sample, n: number) =>
 	chatHeaderView(h, {

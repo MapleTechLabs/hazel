@@ -9,6 +9,7 @@ import {
 	channelId,
 	grace,
 	loadedModel,
+	openingModel,
 	shared,
 	updateWithShared,
 } from "./fixtures.test-support"
@@ -81,6 +82,50 @@ describe("the badge, from the member rows", () => {
 		const others = [{ ...members(3)[0]!, userId: grace }]
 		const result = updateWithShared(cleared(), Message.UpdatedMembers({ members: others }))
 		expect(clearCommands(result)).toEqual([])
+	})
+
+	test("someone else's message past the read position is read too, without a mention", () => {
+		const read = cleared()
+		const mine = updateWithShared(
+			read,
+			Message.UpdatedActivity({
+				channelId,
+				activity: { lastMessageAtMs: Date.UTC(2026, 2, 12, 9), lastMessageAuthorId: ada },
+			}),
+		)
+		expect(clearCommands(mine)).toEqual([])
+		const theirs = updateWithShared(
+			read,
+			Message.UpdatedActivity({
+				channelId,
+				activity: { lastMessageAtMs: Date.UTC(2026, 2, 12, 9), lastMessageAuthorId: grace },
+			}),
+		)
+		expect(clearCommands(theirs)).toEqual([CLEAR])
+	})
+
+	test("the first clear waits until the read position is captured", () => {
+		const opening = syncReady(openingModel(), shared)
+		expect(clearCommands(opening)).toEqual([])
+		const activity = updateWithShared(
+			opening.model,
+			Message.UpdatedActivity({ channelId, activity: null }),
+		)
+		expect(clearCommands(activity)).toEqual([])
+		const position = updateWithShared(
+			activity.model,
+			Message.UpdatedReadPosition({ channelId, readUpToMs: 0 }),
+		)
+		expect(clearCommands(position)).toEqual([CLEAR])
+	})
+
+	test("a late answer for the previous channel is dropped", () => {
+		const opening = syncReady(openingModel(), shared).model
+		const stale = updateWithShared(
+			opening,
+			Message.UpdatedReadPosition({ channelId: otherChannelId, readUpToMs: 0 }),
+		)
+		expect(stale.model.newMessages.hasReadPosition).toBe(false)
 	})
 
 	test("waits for focus, then clears", () => {

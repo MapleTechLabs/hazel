@@ -350,3 +350,14 @@ export const sidebarInset = <Message>(h: HtmlBuilder<Message>, className: string
 		],
 		children,
 	)
+
+/**
+ * Discord's unread pill: a short bar on a row's left edge while its channel has messages the user
+ * has not read. The row's rounded, clipped edge cuts its left side, so it reads as a tab.
+ */
+export const sidebarUnreadPip = <Message>(h: HtmlBuilder<Message>): Html =>
+	h.span([
+		h.AriaHidden(true),
+		h.Attribute("data-slot", "sidebar-unread"),
+		h.Class("pointer-events-none absolute top-1/2 left-0 h-2 w-1 -translate-y-1/2 rounded-r-full bg-fg"),
+	])

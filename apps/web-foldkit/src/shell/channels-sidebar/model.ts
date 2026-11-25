@@ -16,6 +16,7 @@ import {
 	Presence,
 	Section,
 	SidebarThread,
+	UnreadChannel,
 	UnreadCount,
 } from "./rows"
 
@@ -45,6 +46,8 @@ export const Model = Schema.Struct({
 	dmChannels: Schema.Record(Schema.String, Schema.NullOr(DmChannel)),
 	presence: Schema.Array(Presence),
 	unreadCounts: Schema.Array(UnreadCount),
+	/** Channels with messages the user has not read (not muted for good), sorted. */
+	unreadChannels: Schema.Array(UnreadChannel),
 	connectMounts: Schema.Array(ConnectMount),
 	organizations: Schema.Array(PartnerOrg),
 	syncedChannels: Schema.Array(SyncedChannel),
@@ -102,6 +105,7 @@ export const Message = defineMessageUnion({
 	UpdatedDmChannel: { channelId: ChannelId, channel: Schema.NullOr(DmChannel) },
 	UpdatedPresence: { presence: Schema.Array(Presence) },
 	UpdatedUnreadCounts: { counts: Schema.Array(UnreadCount) },
+	UpdatedUnreadChannels: { channels: Schema.Array(UnreadChannel) },
 	UpdatedConnectMounts: { mounts: Schema.Array(ConnectMount) },
 	UpdatedOrganizations: { organizations: Schema.Array(PartnerOrg) },
 	UpdatedSyncedChannels: { synced: Schema.Array(SyncedChannel) },
@@ -133,6 +137,7 @@ export const emptyData = {
 	dmChannels: {},
 	presence: [],
 	unreadCounts: [],
+	unreadChannels: [],
 	connectMounts: [],
 	organizations: [],
 	syncedChannels: [],

@@ -20,6 +20,8 @@ import {
 	syncedMessagesStream,
 	channelSyncProviderStream,
 	membersStream,
+	activityStream,
+	readPositionStream,
 	pinnedStream,
 	presenceStream,
 	replyTargetsStream,
@@ -440,6 +442,23 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 		dependenciesToStream: ({ channelId }) =>
 			membersStream(channelId, (members) => Message.UpdatedMembers({ members })),
 	}),
+	chatActivity: entry(byChannel, {
+		modelToDependencies: channelOf,
+		dependenciesToStream: ({ channelId }) =>
+			activityStream(channelId, (activity) => Message.UpdatedActivity({ channelId, activity })),
+	}),
+	chatReadPosition: entry(
+		{ channelId: ChannelId, userId: Schema.NullOr(UserId) },
+		{
+			modelToDependencies: ({ model }) => ({ channelId: model.channelId, userId: model.currentUserId }),
+			dependenciesToStream: ({ channelId, userId }) =>
+				userId === null
+					? Stream.empty
+					: readPositionStream(channelId, userId, (readUpToMs) =>
+							Message.UpdatedReadPosition({ channelId, readUpToMs }),
+						),
+		},
+	),
 	chatTyping: entry(byChannel, {
 		modelToDependencies: channelOf,
 		dependenciesToStream: ({ channelId }) =>

@@ -43,6 +43,7 @@ const sidebar: Model = {
 	dmChannels: { [dmGrace]: { id: dmGrace, type: "single", members: [], currentUser: member(2) } },
 	presence: [],
 	unreadCounts: [],
+	unreadChannels: [],
 	connectMounts: [],
 	organizations: [],
 	syncedChannels: [],

@@ -1,4 +1,4 @@
-import { NotificationId } from "@hazel/schema"
+import { NotificationId, OrganizationId } from "@hazel/schema"
 import { Clock, Effect, Schema } from "effect"
 import { Command, type Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
@@ -28,6 +28,9 @@ export const init = (): Model => ({ unreadIds: [], optimisticReadIds: [], pendin
 export const Message = defineMessageUnion({
 	UpdatedUnreadNotifications: { ids: Schema.Array(NotificationId) },
 	ClickedMarkAllRead: {},
+	/** Shift+Escape: every channel of the organization read (`channelMember.markAllRead`), and its notifications. */
+	PressedMarkOrganizationRead: { organizationId: OrganizationId },
+	CompletedMarkOrganizationRead: {},
 	SucceededMarkNotificationRead: { id: NotificationId },
 	FailedMarkNotificationRead: {
 		id: NotificationId,
@@ -56,6 +59,17 @@ export const MarkNotificationRead = Command.define("MarkNotificationRead", {
 		),
 })
 
+/** Every channel the user is in, in the organization, marked read; a failure leaves them unread. */
+export const MarkOrganizationRead = Command.define("MarkOrganizationRead", {
+	args: { organizationId: OrganizationId },
+	messages: [Message.CompletedMarkOrganizationRead],
+	execute: ({ organizationId }) =>
+		HazelRpc.use((rpc) => rpc("channelMember.markAllRead", { organizationId })).pipe(
+			Effect.as(Message.CompletedMarkOrganizationRead()),
+			catchCommon(() => Message.CompletedMarkOrganizationRead()),
+		),
+})
+
 // DERIVED
 
 /** `selectUnreadCount`: unread rows the client has not optimistically marked read. */
@@ -65,6 +79,18 @@ export const unreadIdsOf = (model: Model): ReadonlyArray<NotificationId> =>
 export const isMarkingAllRead = (model: Model): boolean => model.pendingIds.length > 0
 
 // UPDATE
+
+/** Every unread id is marked read optimistically, one call each, in parallel. */
+const markAllRead = (model: Model) => {
+	const ids = unreadIdsOf(model)
+	return {
+		model: modifyFields(model, {
+			optimisticReadIds: (current) => [...current, ...ids],
+			pendingIds: (current) => [...current, ...ids],
+		}),
+		commands: ids.map((id) => MarkNotificationRead({ id })),
+	}
+}
 
 const without = (ids: ReadonlyArray<NotificationId>, id: NotificationId) =>
 	ids.filter((candidate) => candidate !== id)
@@ -78,17 +104,16 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
 				optimisticReadIds: (optimistic) => optimistic.filter((id) => ids.includes(id)),
 			}),
 		}),
-		// Every unread id is marked read at once and the calls go out in parallel, across all tabs.
-		ClickedMarkAllRead: () => {
-			const ids = unreadIdsOf(model)
+		PressedMarkOrganizationRead: ({ organizationId }) => {
+			const marked = markAllRead(model)
 			return {
-				model: modifyFields(model, {
-					optimisticReadIds: (current) => [...current, ...ids],
-					pendingIds: (current) => [...current, ...ids],
-				}),
-				commands: ids.map((id) => MarkNotificationRead({ id })),
+				model: marked.model,
+				commands: [MarkOrganizationRead({ organizationId }), ...marked.commands],
 			}
 		},
+		CompletedMarkOrganizationRead: () => ({ model }),
+		// Every unread id is marked read at once and the calls go out in parallel, across all tabs.
+		ClickedMarkAllRead: () => markAllRead(model),
 		// Legacy keeps the optimistic id after success; the synced `readAt` agrees with it.
 		SucceededMarkNotificationRead: ({ id }) => ({
 			model: modifyFields(model, { pendingIds: (ids) => without(ids, id) }),

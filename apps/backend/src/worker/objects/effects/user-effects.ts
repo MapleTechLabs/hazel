@@ -1,6 +1,6 @@
 /** Effects a `UserObject` receives from the user's `OrgObject`s. */
 import { Database, SQLite, schema } from "@hazel/db"
-import { ChannelId, OrganizationId } from "@hazel/schema"
+import { ChannelId, OrganizationId, OrganizationMemberId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
 import type { ApnsClient } from "../../../services/apns"
@@ -20,12 +20,20 @@ export const SetOrganizationPayload = Schema.Struct({
 /** The user read the channel (`channelMember.clearNotifications`): drop its channel notifications. */
 export const ClearChannelNotificationsPayload = Schema.Struct({ channelId: ChannelId })
 
+/** The user marked every channel read (`channelMember.markAllRead`): drop the org's channel notifications. */
+export const ClearOrganizationNotificationsPayload = Schema.Struct({ memberId: OrganizationMemberId })
+
 export const UserEffects = {
 	setOrganization: defineEffect("user.setOrganization", "user", SetOrganizationPayload),
 	clearChannelNotifications: defineEffect(
 		"user.clearChannelNotifications",
 		"user",
 		ClearChannelNotificationsPayload,
+	),
+	clearOrganizationNotifications: defineEffect(
+		"user.clearOrganizationNotifications",
+		"user",
+		ClearOrganizationNotificationsPayload,
 	),
 	...PresenceEffects,
 	...MessageNotificationEffects,
@@ -58,6 +66,15 @@ export const userReceivers = {
 			db.run(
 				SQLite.deleteFrom(schema.notificationsTable).where(($) => [
 					$.targetedResourceId.eq(payload.channelId),
+					$.targetedResourceType.eq("channel"),
+				]),
+			),
+		),
+	"user.clearOrganizationNotifications": (payload) =>
+		Effect.flatMap(Database.Database, (db) =>
+			db.run(
+				SQLite.deleteFrom(schema.notificationsTable).where(($) => [
+					$.memberId.eq(payload.memberId),
 					$.targetedResourceType.eq("channel"),
 				]),
 			),

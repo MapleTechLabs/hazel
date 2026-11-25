@@ -1,5 +1,5 @@
 {
-	"migration": "0016_remove_customer_health_score",
+	"migration": "0017_channel_read_state",
 	"entities": [
 		{
 			"kind": "table",
@@ -59,6 +59,13 @@
 		},
 		{
 			"kind": "table",
+			"name": "channel_activity",
+			"primaryKey": {
+				"columns": ["channelId"]
+			}
+		},
+		{
+			"kind": "table",
 			"name": "channel_customers",
 			"primaryKey": {
 				"columns": ["channelId"]
@@ -69,6 +76,13 @@
 			"name": "channel_members",
 			"primaryKey": {
 				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "channel_read_state",
+			"primaryKey": {
+				"columns": ["channelId", "userId"]
 			}
 		},
 		{
@@ -974,6 +988,51 @@
 		},
 		{
 			"kind": "column",
+			"table": "channel_activity",
+			"name": "channelId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_activity",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_activity",
+			"name": "lastMessageId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_activity",
+			"name": "lastMessageAt",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_activity",
+			"name": "lastMessageAuthorId",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
 			"table": "channel_customers",
 			"name": "channelId",
 			"position": 0,
@@ -1249,6 +1308,42 @@
 			"position": 12,
 			"type": "text",
 			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_read_state",
+			"name": "channelId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_read_state",
+			"name": "userId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_read_state",
+			"name": "organizationId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_read_state",
+			"name": "lastReadAt",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
 			"default": null
 		},
 		{
@@ -3054,16 +3149,16 @@
 		{
 			"kind": "column",
 			"table": "organizations",
-			"name": "createdAt",
+			"name": "readStateSince",
 			"position": 6,
 			"type": "text",
-			"notNull": true,
-			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+			"notNull": false,
+			"default": null
 		},
 		{
 			"kind": "column",
 			"table": "organizations",
-			"name": "updatedAt",
+			"name": "createdAt",
 			"position": 7,
 			"type": "text",
 			"notNull": true,
@@ -3072,8 +3167,17 @@
 		{
 			"kind": "column",
 			"table": "organizations",
-			"name": "deletedAt",
+			"name": "updatedAt",
 			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "organizations",
+			"name": "deletedAt",
+			"position": 9,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -3713,6 +3817,13 @@
 			"kind": "index",
 			"table": "channel_members",
 			"name": "channel_members_user_id_idx",
+			"unique": false,
+			"columns": ["\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_read_state",
+			"name": "channel_read_state_user_idx",
 			"unique": false,
 			"columns": ["\"userId\""]
 		},

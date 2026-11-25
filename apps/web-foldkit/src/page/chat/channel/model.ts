@@ -39,6 +39,7 @@ import * as CustomerCard from "../customer-card"
 import * as Overlays from "../overlays"
 import { ChannelInfo, ParentChannelInfo } from "../queries"
 import { ChatMessage, ChatReaction, DisplayRow } from "../rows"
+import * as NewMessages from "./new-messages"
 import * as NotificationClear from "./notification-clear"
 
 /** The channel page's Model and Message (`page.ts` holds init and update, `write.ts` the write path). */
@@ -97,6 +98,8 @@ export const ThreadPanel = Schema.Struct({
 	pins: Schema.Array(PinnedInfo),
 	/** The support issue at the starter message, when the channel is linked to a customer. */
 	issue: IssueControl.Model,
+	/** The newest message the panel has marked read (`ReadThread`); 0 before the first. */
+	readUpToMs: Schema.Finite,
 })
 export type ThreadPanel = typeof ThreadPanel.Type
 
@@ -171,6 +174,8 @@ export const Model = Schema.Struct({
 	threadPanelDrag: Schema.NullOr(ThreadPanelDrag),
 	/** When the channel's notifications are cleared (`notification-clear.ts`). */
 	notifications: NotificationClear.Model,
+	/** What was new when the user opened the channel: the "New" line and the bar (`new-messages.ts`). */
+	newMessages: NewMessages.Model,
 	/** The non-member's "Join #channel" is running. */
 	isJoining: Schema.Boolean,
 	/**
@@ -238,6 +243,13 @@ export const Message = defineMessageUnion({
 	UpdatedThreadMessages: { messages: Schema.Array(ThreadMessageInfo) },
 	UpdatedReplyTargets: { targets: Schema.Array(ReplyTarget) },
 	UpdatedMembers: { members: Schema.Array(ChannelMemberInfo) },
+	/** Tagged with the channel queried: a late answer for the previous channel is dropped. */
+	UpdatedActivity: { channelId: ChannelId, activity: Schema.NullOr(NewMessages.Activity) },
+	/** The user's read position; null while they are not a member. Tagged like the activity. */
+	UpdatedReadPosition: { channelId: ChannelId, readUpToMs: Schema.NullOr(Schema.Finite) },
+	/** The new-messages bar: jump to the first new message, or mark the channel read. */
+	ClickedJumpToNew: {},
+	ClickedMarkNewRead: {},
 	UpdatedPinned: { pins: Schema.Array(PinnedInfo) },
 	/** Tagged with the channel queried: a late answer for the previous channel is dropped. */
 	UpdatedCustomer: { channelId: ChannelId, customer: Schema.NullOr(ChannelCustomerRow) },
@@ -308,6 +320,8 @@ export const Message = defineMessageUnion({
 	LeftWindow: {},
 	ChangedWindowFocus: { isFocused: Schema.Boolean },
 	SucceededClearNotifications: { channelId: ChannelId },
+	/** The open thread was marked read (the panel reads it as it shows it); a failure is left be. */
+	CompletedReadThread: {},
 	FailedClearNotifications: { channelId: ChannelId, reason: ClearNotificationsFailure },
 	ElapsedClearNotificationsRetry: { channelId: ChannelId },
 })

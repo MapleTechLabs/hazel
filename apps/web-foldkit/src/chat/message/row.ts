@@ -156,11 +156,42 @@ const threadSpineView = <M>(h: HtmlBuilder<M>): Html =>
 	])
 
 /** `isHovered` is the list's injected `#message-<id> { background-color: ... !important }` hover rule. */
+/** Discord's "New" line: above the first message the user had not read when they opened the channel. */
+export const newMessagesDividerView = <M>(h: HtmlBuilder<M>): Html =>
+	h.div(
+		[
+			h.Class("relative my-2 flex items-center"),
+			h.Attribute("role", "separator"),
+			h.Attribute("aria-label", "New messages"),
+		],
+		[
+			h.div([h.Class("flex-1 border-t border-danger")]),
+			h.span(
+				[
+					h.Class(
+						"rounded-sm bg-danger px-1 font-semibold text-3xs text-danger-fg uppercase leading-4",
+					),
+				],
+				["New"],
+			),
+		],
+	)
+
 export const messageRowView = <M>(
 	h: HtmlBuilder<M>,
 	row: MessageRow,
 	context: RowContext<M>,
 	isHovered = false,
+): Html =>
+	row.isFirstNew
+		? h.div([], [newMessagesDividerView(h), messageBodyView(h, row, context, isHovered)])
+		: messageBodyView(h, row, context, isHovered)
+
+const messageBodyView = <M>(
+	h: HtmlBuilder<M>,
+	row: MessageRow,
+	context: RowContext<M>,
+	isHovered: boolean,
 ): Html => {
 	const { message } = row
 	const isGroupStart = isGroupStartOf(row)

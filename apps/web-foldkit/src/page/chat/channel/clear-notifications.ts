@@ -7,6 +7,7 @@ import { catchCommon } from "../../../data/actions"
 import { HazelRpc } from "../../../rpc"
 import type { Shared } from "../../contract"
 import { Message, type Model, type PageReturn } from "./model"
+import * as NewMessages from "./new-messages"
 import * as NotificationClear from "./notification-clear"
 
 /** The channel page's side of `NotificationClear`: its inputs from the page, its effects as commands. */
@@ -41,6 +42,38 @@ export const ClearChannelNotifications = Command.define("ClearChannelNotificatio
 		),
 })
 
+/**
+ * The thread the panel shows, marked read as new replies show in it (Discord reads a thread you
+ * have open). Best effort: a failure leaves it unread until the next reply or visit.
+ */
+export const ReadThread = Command.define("ReadThread", {
+	args: { channelId: ChannelId },
+	messages: [Message.CompletedReadThread],
+	execute: ({ channelId }) =>
+		HazelRpc.use((rpc) => rpc("channelMember.clearNotifications", { channelId })).pipe(
+			Effect.as(Message.CompletedReadThread()),
+			Effect.catchTags({ ChannelNotFoundError: () => Effect.succeed(Message.CompletedReadThread()) }),
+			catchCommon(() => Message.CompletedReadThread()),
+		),
+})
+
+/**
+ * After the panel's messages change: while the window is focused and someone else wrote after what
+ * the panel last marked read, the thread is read now.
+ */
+export const readOpenThread = (model: Model): PageReturn => {
+	const panel = model.threadPanel
+	if (panel === null || panel.creation !== "Created" || !model.notifications.isFocused) return { model }
+	const newest = panel.messages.at(-1)
+	if (newest === undefined || newest.createdAtMs <= panel.readUpToMs) return { model }
+	const read = modifyFields(model, {
+		threadPanel: () => modifyFields(panel, { readUpToMs: () => newest.createdAtMs }),
+	})
+	return newest.authorId === model.currentUserId
+		? { model: read }
+		: { model: read, commands: [ReadThread({ channelId: panel.threadChannelId })] }
+}
+
 export const WaitClearNotificationsRetry = Command.define("WaitClearNotificationsRetry", {
 	args: { channelId: ChannelId, delayMs: Schema.Finite },
 	messages: [Message.ElapsedClearNotificationsRetry],
@@ -57,9 +90,15 @@ export const isReady = (shared: Shared | null) =>
 	shared.currentUser !== null &&
 	shared.organization !== null
 
-/** The signed-in user's unread notifications in this channel, as the sidebar badge shows them. */
-export const ownUnread = (model: Model) =>
-	model.members?.find((member) => member.userId === model.currentUserId)?.notificationCount ?? 0
+/**
+ * What there is to read here: the user's unread notifications (the sidebar badge), and one more
+ * while someone else's message is newer than their read position (the unread name).
+ */
+export const ownUnread = (model: Model) => {
+	const own = model.members?.find((member) => member.userId === model.currentUserId)
+	const hasNew = NewMessages.hasUnread(model.newMessages, model.currentUserId)
+	return (own?.notificationCount ?? 0) + (hasNew ? 1 : 0)
+}
 
 const commandOf = (channelId: ChannelId, effect: NotificationClear.Effect) =>
 	effect._tag === "Send"

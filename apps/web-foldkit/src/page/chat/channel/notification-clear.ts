@@ -10,7 +10,8 @@ import { Match, Schema } from "effect"
  * or a channel switch has not reached the server yet, so messages can still count on the open
  * channel. The machine guarantees:
  *
- * 1. The channel is cleared once per visit, as soon as the page is ready.
+ * 1. The channel is cleared once per visit, as soon as the page is ready and the read position the
+ *    visit starts from is captured (`new-messages.ts`), so clearing does not move it first.
  * 2. Once cleared, a badge that comes back while the window is focused is cleared again; while
  *    the window is in the background it stays, and clears when focus returns.
  * 3. At most one clear is in flight. A badge seen while one is in flight is checked again when it
@@ -43,6 +44,8 @@ export const Model = Schema.Struct({
 	failures: Schema.Finite,
 	/** Signed in with the org loaded: the RPC can be sent. */
 	isReady: Schema.Boolean,
+	/** The visit's read position is captured: clearing may move it now. */
+	isCaptured: Schema.Boolean,
 	/** The window is focused and the document visible. */
 	isFocused: Schema.Boolean,
 	/** The signed-in user's unread notifications in this channel, as the sidebar shows them. */
@@ -54,12 +57,14 @@ export const init = (options: { readonly isFocused: boolean }): Model => ({
 	phase: { _tag: "Owed" },
 	failures: 0,
 	isReady: false,
+	isCaptured: false,
 	isFocused: options.isFocused,
 	unread: 0,
 })
 
 export type Event =
 	| { readonly _tag: "ChangedReady"; readonly isReady: boolean }
+	| { readonly _tag: "Captured" }
 	| { readonly _tag: "ChangedFocus"; readonly isFocused: boolean }
 	| { readonly _tag: "ChangedUnread"; readonly unread: number }
 	| { readonly _tag: "Succeeded" }
@@ -78,6 +83,7 @@ export interface Transition {
 /** Whether a clear should go out now, given no clear is in flight or waiting out a backoff. */
 const isClearDue = (model: Model) =>
 	model.isReady &&
+	model.isCaptured &&
 	(model.phase._tag === "Owed" || (model.phase._tag === "Settled" && model.isFocused && model.unread > 0))
 
 /** Sends a clear when one is due; every transition ends here. */
@@ -91,6 +97,7 @@ const unchanged = (model: Model): Transition => ({ model, effect: null })
 export const transition = (model: Model, event: Event): Transition =>
 	Match.valueTags(event, {
 		ChangedReady: ({ isReady }) => settle({ ...model, isReady }),
+		Captured: () => settle({ ...model, isCaptured: true }),
 		ChangedFocus: ({ isFocused }) => settle({ ...model, isFocused }),
 		ChangedUnread: ({ unread }) => settle({ ...model, unread: Math.max(0, unread) }),
 		// A result with nothing in flight (a late one from before a retry) changes nothing.

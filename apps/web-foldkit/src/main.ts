@@ -353,15 +353,21 @@ const goToAdjacentOrganization =
 			: navigateTo(organizationRoute(next, { isMobile: model.isMobile }))(model)
 	}
 
-/** Discord's Shift+Escape: every unread notification of this organization's member marked read. */
-const markOrganizationRead: Step = (model) =>
-	foldShell(model, (shell) =>
-		Shell.update(
-			shell,
-			ShellMessage.GotNotificationsMessage({ message: Notifications.Message.ClickedMarkAllRead() }),
-			shellContextOf(model),
-		),
-	)
+/** Discord's Shift+Escape: every channel of this organization read, and the member's notifications. */
+const markOrganizationRead: Step = (model) => {
+	const organizationId = sharedOf(model).organization?.id
+	return organizationId === undefined
+		? { model }
+		: foldShell(model, (shell) =>
+				Shell.update(
+					shell,
+					ShellMessage.GotNotificationsMessage({
+						message: Notifications.Message.PressedMarkOrganizationRead({ organizationId }),
+					}),
+					shellContextOf(model),
+				),
+			)
+}
 
 /** Mod+I: the notifications inbox. */
 const openInbox: Step = (model) => {

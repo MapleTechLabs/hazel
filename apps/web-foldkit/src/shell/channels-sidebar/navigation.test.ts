@@ -57,6 +57,7 @@ const sidebar = (overrides: Partial<Model> = {}): Model => ({
 	},
 	presence: [],
 	unreadCounts: [],
+	unreadChannels: [],
 	connectMounts: [],
 	organizations: [],
 	syncedChannels: [],
@@ -131,6 +132,11 @@ describe("adjacentChannel", () => {
 		})
 		expect(adjacentChannel(model, general, "Next", true)).toBe(launch)
 		expect(adjacentChannel(model, dmGrace, "Previous", true)).toBe(launch)
+	})
+
+	test("unread messages without a mention count as unread too", () => {
+		const model = sidebar({ unreadChannels: [{ channelId: design, mutedUntilMs: null }] })
+		expect(adjacentChannel(model, general, "Next", true)).toBe(design)
 	})
 
 	test("with nothing unread (or nowhere else to go) it stays put", () => {

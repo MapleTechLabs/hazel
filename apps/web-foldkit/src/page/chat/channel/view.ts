@@ -2,6 +2,7 @@ import type { MessageId } from "@hazel/schema"
 import { TrackMessageKeys } from "./message-keys"
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { cn } from "~/lib/utils"
+import { ariaButton } from "../../../ui/button"
 import { skeleton } from "../../../ui/skeleton"
 import { splitContentClassName, splitRootClassName } from "../../../ui/split-panel"
 import { getEffectivePresenceStatus } from "~/utils/presence"
@@ -37,6 +38,7 @@ import { threadPanelView } from "../thread-panel"
 import * as IssueControl from "../issue-control"
 import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { isMemberOf, Message, type Model, routeTabOf, type ThreadPanel } from "./page"
+import * as NewMessages from "./new-messages"
 import { threadPanelWidthOf } from "./thread-width"
 import { openViewerOf } from "./viewer-images"
 
@@ -92,6 +94,53 @@ const memoRow = (
 	// oxlint-disable-next-line foldkit/lazy-view-stable-references
 	if (slot === undefined) rowSlots.set(row, (slot = createLazy()))
 	return slot(rowView, [row, isStuck, isHovered, context, h]) ?? h.div([])
+}
+
+/** "14:02", or "Mon 14:02" before today. */
+const sinceLabel = (sinceMs: number, nowMs: number) => {
+	const since = new Date(sinceMs)
+	const time = since.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+	return since.toDateString() === new Date(nowMs).toDateString()
+		? time
+		: `${since.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} ${time}`
+}
+
+/** Discord's bar over the list: how many messages are new since the user last read; jump, or mark read. */
+const newMessagesBarView = (h: H, model: Model, nowMs: number): Html => {
+	// A full page means older history may hold more new messages.
+	const hasOlder = model.messages.length >= model.limit
+	const bar = NewMessages.barOf(model.newMessages, model.messages, model.currentUserId, hasOlder)
+	if (bar === null) return h.empty
+	const count = `${bar.count}${bar.isAtLeast ? "+" : ""}`
+	const noun = bar.count === 1 && !bar.isAtLeast ? "new message" : "new messages"
+	return h.div(
+		[
+			h.Class(
+				"absolute inset-x-3 top-0 z-10 flex h-7 items-center rounded-b-lg bg-primary text-primary-fg text-xs shadow-sm",
+			),
+			h.Attribute("role", "status"),
+		],
+		[
+			ariaButton(
+				h,
+				{
+					className:
+						"flex h-full min-w-0 flex-1 items-center gap-1 truncate rounded-bl-lg px-3 text-left font-medium outline-hidden hover:bg-fg/10 focus-visible:bg-fg/10",
+					onPress: Message.ClickedJumpToNew(),
+				},
+				[`${count} ${noun} since ${sinceLabel(bar.sinceMs, nowMs)}`],
+			),
+			ariaButton(
+				h,
+				{
+					className:
+						"flex h-full shrink-0 items-center rounded-br-lg px-3 font-semibold outline-hidden hover:bg-fg/10 focus-visible:bg-fg/10",
+					onPress: Message.ClickedMarkNewRead(),
+				},
+				["Mark as read"],
+			),
+		],
+	)
 }
 
 /** `MessageList`'s empty state. */
@@ -267,7 +316,10 @@ const messagesOutlet = (h: H, model: Model, nowMs: number, channelLinks: Channel
 	// Passed to the lazy composer as strings, so an unchanged reply keeps its memo.
 	const reply = replyPreviewOf(model, model.draft)
 	return [
-		h.div([h.Class("flex min-h-0 flex-1 flex-col overflow-hidden")], [messageListView(h, model, nowMs)]),
+		h.div(
+			[h.Class("relative flex min-h-0 flex-1 flex-col overflow-hidden")],
+			[newMessagesBarView(h, model, nowMs), messageListView(h, model, nowMs)],
+		),
 		lazyComposer(composerView, [
 			model.typingNames,
 			model.draft,

@@ -81,7 +81,27 @@ export const loadedModel = (): Model => {
 		],
 		messages,
 		hasLoadedMessages: true,
+		// Read up to the latest message: nothing new, and the read position is captured.
+		newMessages: {
+			...base.newMessages,
+			activity: { lastMessageAtMs: Date.UTC(2026, 2, 12, 8, 2), lastMessageAuthorId: ada },
+			hasActivity: true,
+			readUpToMs: Date.UTC(2026, 2, 12, 8, 2),
+			hasReadPosition: true,
+			isCaptured: true,
+		},
+		notifications: { ...base.notifications, isCaptured: true },
 	}
+}
+
+/**
+ * The page as a visit starts: messages loaded, nothing yet known of the read position, so the
+ * clear waits (`notification-clear.ts`).
+ */
+export const openingModel = (): Model => {
+	const loaded = loadedModel()
+	const base = init(channelId, "hazel", ada)
+	return { ...loaded, newMessages: base.newMessages, notifications: base.notifications }
 }
 
 /** The messages query's first result: every message upserted, newest first. */

@@ -24,6 +24,7 @@ import { currentObject } from "../../../lib/current-object"
 import { CurrentEffectSender, enqueueEffect, type EffectSender } from "../effects/registry"
 import { channelTarget, orgTarget } from "../kinds"
 import { readObjectMeta, writeObjectMeta } from "../meta"
+import { refreshChannelActivity } from "./channel-activity"
 import { refreshDmLastMessage } from "./dm-last-message"
 import {
 	type IndexConnectMessagesPayload,
@@ -150,8 +151,10 @@ const applyIndex = Effect.fn("OrgObject.applySearchIndex")(function* (
 				.onConflictDoUpdate({ target: ["messageId"], set: SQLite.excludedAll() }),
 		)
 	}
-	// A DM's row shows its newest message: an edit or delete may have changed which that is.
+	// A DM's row and every channel's activity show its newest message: an edit or delete may have
+	// changed which that is.
 	yield* refreshDmLastMessage(channelId)
+	yield* refreshChannelActivity(channelId)
 	yield* Effect.annotateCurrentSpan({
 		"search.upserted": change.upsert.length,
 		"search.removed": change.remove.length,

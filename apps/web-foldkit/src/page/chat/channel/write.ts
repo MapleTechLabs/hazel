@@ -46,6 +46,7 @@ import {
 import * as Jump from "./jump"
 import { loadWidthCommands } from "./thread-width"
 import { ClearChannelNotifications } from "./clear-notifications"
+import * as NewMessages from "./new-messages"
 import { resetWindow } from "./window"
 import { openViewerOf } from "./viewer-images"
 
@@ -133,8 +134,11 @@ export const liftDraft = (model: Model, which: Which, result: DraftUpdate.Return
 		// `onMessageSent`: the channel's list scrolls to the bottom.
 		SentMessage: () => {
 			if (which === "thread") return { model: next, commands }
-			// A jump still on its way would pull the list back off the message just sent.
-			const present = resetWindow(modifyFields(next, { pendingJump: () => null }))
+			// A jump still on its way would pull the list back off the message just sent. Writing reads
+			// the channel, as in Discord: the "New" line goes (the rows re-derive with the message).
+			const present = resetWindow(
+				modifyFields(next, { pendingJump: () => null, newMessages: NewMessages.dismiss }),
+			)
 			const scrolled = MessageList.scrollToEnd(present.list)
 			return {
 				model: modifyFields(present, { list: () => scrolled.model }),
@@ -364,6 +368,7 @@ export const openThread = (
 						rows: [],
 						pins: [],
 						issue: IssueControl.init(messageId),
+						readUpToMs: 0,
 					}),
 				}),
 				commands: [

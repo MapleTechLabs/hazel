@@ -10,6 +10,8 @@ class Model extends M.Class<Model>("Organization")({
 	logoUrl: S.NullOr(S.String),
 	settings: S.NullOr(S.Record(S.String, S.Unknown)),
 	isPublic: S.Boolean,
+	/** When unread state began here: a member with no read position is read up to then. */
+	readStateSince: M.Generated(S.NullOr(M.JsonDate)),
 	...baseFields,
 }) {}
 

@@ -47,6 +47,8 @@ interface SectionsContext<M> extends ItemContext {
 	readonly toParentMessage: (message: Message) => M
 	readonly sectionAction: (sectionKey: string) => Html
 	readonly unreadByChannel: ReadonlyMap<string, number>
+	/** Channels with messages the user has not read. */
+	readonly unreadChannelIds: ReadonlySet<string>
 	/** What each channel is linked or connected to, marked on its icon. */
 	readonly channelLinks: ChannelLinksMap
 	/** Joined threads listed under each channel row, by parent channel id. */
@@ -68,6 +70,7 @@ interface RowPlace {
 const rowSlots = createKeyedLazy()
 
 const NO_THREADS: ReadonlyArray<SidebarThread> = []
+const NO_UNREAD: ReadonlySet<string> = new Set()
 /** A Customers row has no "Move to section": the customer link, not the section, places it. */
 const NO_SECTIONS: Model["sections"] = []
 
@@ -81,22 +84,47 @@ const threadsMemo = new WeakMap<
 	{ readonly key: string; readonly result: ReadonlyMap<string, ReadonlyArray<SidebarThread>> }
 >()
 
+// Pure memo on the frozen list and the minute, so rows with threads keep their memo while nothing changed.
+const unreadMemo = new WeakMap<
+	Model["unreadChannels"],
+	{ readonly minute: number; readonly result: ReadonlySet<string> }
+>()
+const MINUTE_MS = 60 * 1000
+
+/** The unread channels, less the ones muted until later. */
+const unreadSetOf = (channels: Model["unreadChannels"], nowMs: number): ReadonlySet<string> => {
+	const minute = Math.floor(nowMs / MINUTE_MS)
+	const cached = unreadMemo.get(channels)
+	if (cached !== undefined && cached.minute === minute) return cached.result
+	const result: ReadonlySet<string> = new Set(
+		channels.flatMap(({ channelId, mutedUntilMs }) =>
+			mutedUntilMs !== null && mutedUntilMs > nowMs ? [] : [channelId],
+		),
+	)
+	unreadMemo.set(channels, { minute, result })
+	return result
+}
+
 /** The listed threads by parent channel: recent, unread, or the one the route shows. */
 const threadsByParentOf = (
 	threads: Model["threads"],
 	activeChannelId: ChannelId | null,
 	nowMs: number,
+	unreadChannelIds: ReadonlySet<string>,
 ): ReadonlyMap<string, ReadonlyArray<SidebarThread>> => {
 	// The cutoff moves by the hour, so the clock's 30 s ticks keep the memo.
 	const hour = Math.floor(nowMs / HOUR_MS)
-	const key = `${activeChannelId ?? ""}:${hour}`
+	const key = `${activeChannelId ?? ""}:${hour}:${[...unreadChannelIds].join(",")}`
 	const cached = threadsMemo.get(threads)
 	if (cached !== undefined && cached.key === key) return cached.result
 	const cutoffMs = hour * HOUR_MS - RECENT_THREAD_MS
 	const result = new Map<string, Array<SidebarThread>>()
 	for (const thread of threads) {
 		const isListed =
-			thread.id === activeChannelId || thread.notificationCount > 0 || thread.createdAtMs >= cutoffMs
+			thread.id === activeChannelId ||
+			thread.notificationCount > 0 ||
+			unreadChannelIds.has(thread.id) ||
+			thread.createdAtMs >= cutoffMs
 		if (!isListed) continue
 		const siblings = result.get(thread.parentChannelId)
 		if (siblings === undefined) result.set(thread.parentChannelId, [thread])
@@ -110,6 +138,7 @@ const channelRowView = <M>(
 	h: HtmlBuilder<M>,
 	entry: ChannelEntry,
 	notificationCount: number,
+	isUnread: boolean,
 	links: ChannelLinks,
 	isLinkActive: boolean,
 	orgSlug: string,
@@ -124,6 +153,7 @@ const channelRowView = <M>(
 	toParentMessage: (message: Message) => M,
 	threads: ReadonlyArray<SidebarThread>,
 	activeThreadId: ChannelId | null,
+	unreadChannelIds: ReadonlySet<string>,
 ): Html => {
 	const menu = {
 		menu: openMenu ?? closedRowMenu(entry.channel.id),
@@ -145,11 +175,18 @@ const channelRowView = <M>(
 			h,
 			entry,
 			notificationCount,
-			{ orgSlug, isActive: isLinkActive, links },
+			{ orgSlug, isActive: isLinkActive, links, isUnread },
 			rowMenuView(h, menu),
 			rowLongPress(h, menu),
 		),
-		children: threadItems(h, threads, activeThreadId, orgSlug, Boolean(entry.channel.icon)),
+		children: threadItems(
+			h,
+			threads,
+			activeThreadId,
+			orgSlug,
+			Boolean(entry.channel.icon),
+			unreadChannelIds,
+		),
 	})
 }
 
@@ -172,6 +209,7 @@ const channelRow = <M>(
 			h,
 			entry,
 			context.unreadByChannel.get(id) ?? entry.member.notificationCount,
+			context.unreadChannelIds.has(id),
 			linksFor(context.channelLinks, id),
 			id === context.activeChannelId,
 			context.orgSlug,
@@ -187,6 +225,8 @@ const channelRow = <M>(
 			context.toParentMessage,
 			threads,
 			activeThreadId,
+			// Only a row with threads reads the set; the shared empty one keeps the others' memo.
+			threads.length === 0 ? NO_UNREAD : context.unreadChannelIds,
 		]) ?? h.empty
 	)
 }
@@ -195,6 +235,7 @@ const dmRowView = <M>(
 	h: HtmlBuilder<M>,
 	channel: DmChannel,
 	notificationCount: number,
+	isUnread: boolean,
 	presence: Presence | undefined,
 	nowMs: number,
 	currentUserId: string | null,
@@ -227,7 +268,7 @@ const dmRowView = <M>(
 			h,
 			channel,
 			notificationCount,
-			{ orgSlug, isActive: isLinkActive, currentUserId, nowMs, presence },
+			{ orgSlug, isActive: isLinkActive, isUnread, currentUserId, nowMs, presence },
 			dmMenuView(h, menu),
 			dmLongPress(h, menu),
 		),
@@ -248,6 +289,7 @@ const dmRow = <M>(
 			h,
 			channel,
 			context.unreadByChannel.get(channel.id) ?? 0,
+			context.unreadChannelIds.has(channel.id),
 			only === undefined ? undefined : context.presenceByUser.get(only.userId),
 			// Only a single DM's status dot reads the clock.
 			only === undefined ? 0 : context.nowMs,
@@ -502,8 +544,14 @@ export const sectionGroupContent = <M>(
 		currentUserId: model.currentUserId,
 		presenceByUser: new Map(model.presence.map((presence) => [presence.userId, presence])),
 		unreadByChannel: new Map(model.unreadCounts.map((unread) => [unread.channelId, unread.count])),
+		unreadChannelIds: unreadSetOf(model.unreadChannels, itemContext.nowMs),
 		channelLinks: channelLinksOf(model),
-		threadsByParent: threadsByParentOf(model.threads, itemContext.activeChannelId, itemContext.nowMs),
+		threadsByParent: threadsByParentOf(
+			model.threads,
+			itemContext.activeChannelId,
+			itemContext.nowMs,
+			unreadSetOf(model.unreadChannels, itemContext.nowMs),
+		),
 		openMenu: model.openMenu,
 		sections: model.sections,
 		canDeleteChannels: canOn(model, "channel.delete"),

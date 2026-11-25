@@ -117,6 +117,7 @@ const row = (options: {
 		status: null,
 		syncedFrom: options.syncedFrom ?? null,
 		isEntering: false,
+		isFirstNew: false,
 		agentName: null,
 		authorSide: options.authorSide ?? null,
 		reply: null,
