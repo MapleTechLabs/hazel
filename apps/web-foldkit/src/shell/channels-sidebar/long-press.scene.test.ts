@@ -4,7 +4,8 @@ import { Schema } from "effect"
 import type { HtmlBuilder } from "foldkit/html"
 import * as Scene from "foldkit/scene"
 import { inertHtml } from "foldkit/html"
-import { IconClose, IconGear, IconLeave, IconStar, IconVolumeMute } from "../../icons"
+import { IconBell, IconCheck, IconClose, IconGear, IconLeave, IconStar } from "../../icons"
+import { muteDurations, muteKeyOf } from "~/lib/notification-settings"
 import { iconOf } from "../../platform/native-island"
 import { describe, test } from "vitest"
 import { AppRoute } from "../../route"
@@ -22,6 +23,8 @@ const dmGrace = Schema.decodeSync(ChannelId)(uuid(2))
 const member = (n: number) => ({
 	id: Schema.decodeSync(ChannelMemberId)(uuid(200 + n)),
 	isMuted: false,
+	mutedUntilMs: null,
+	notificationLevel: null,
 	isFavorite: false,
 	notificationCount: 0,
 })
@@ -78,14 +81,28 @@ const triggerMounted = Scene.Mount.resolve(FocusTriggerOnPress, Menu.Message.Com
 // What the host's `context_menu.rs` reads: the row's own entries as words, symbols, the icons the
 // web's items draw, and danger.
 const icon = (render: typeof IconGear) => iconOf([render(inertHtml)])
-const toggles = [
-	{ key: "mute", label: "Mute", symbol: "bell.slash", icon: icon(IconVolumeMute) },
-	{ key: "favorite", label: "Favorite", symbol: "star", icon: icon(IconStar) },
-	{ separator: true },
-]
+// "Mute" opens how long for; the system's menu takes it as a submenu.
+const mute = {
+	label: "Mute",
+	items: muteDurations.map((duration) => ({ key: muteKeyOf(duration.minutes), label: duration.label })),
+}
+const favorite = { key: "favorite", label: "Favorite", symbol: "star", icon: icon(IconStar) }
+const notifications = {
+	label: "Notifications",
+	items: [
+		// The level in force (the default here) carries the check.
+		{ key: "level:default", label: "Default (Only @mentions)", icon: icon(IconCheck) },
+		{ key: "level:all", label: "All messages" },
+		{ key: "level:mentions", label: "Only @mentions" },
+		{ key: "level:nothing", label: "Nothing" },
+	],
+}
 const channelMenu = JSON.stringify({
 	items: [
-		...toggles,
+		mute,
+		notifications,
+		favorite,
+		{ separator: true },
 		{ key: "settings", label: "Settings", symbol: "gearshape", icon: icon(IconGear) },
 		{ separator: true },
 		{
@@ -99,7 +116,9 @@ const channelMenu = JSON.stringify({
 })
 const dmMenu = JSON.stringify({
 	items: [
-		...toggles,
+		mute,
+		favorite,
+		{ separator: true },
 		{
 			key: "hide",
 			label: "Hide conversation",

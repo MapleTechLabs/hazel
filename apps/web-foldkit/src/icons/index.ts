@@ -171,6 +171,51 @@ export const IconBell = <Message>(h: HtmlBuilder<Message>, options: IconOptions 
 		],
 	)
 
+/** The bell crossed out: a muted channel (the header's notification settings). */
+export const IconBellSlash = <Message>(h: HtmlBuilder<Message>, options: IconOptions = {}): Html =>
+	icon(
+		h,
+		{
+			height: "18",
+			width: "18",
+			"data-slot": "icon",
+			viewBox: "0 0 18 18",
+			xmlns: "http://www.w3.org/2000/svg",
+		},
+		options,
+		[
+			h.g(
+				[h.Attribute("fill", "currentColor")],
+				[
+					h.path([
+						h.Attribute(
+							"d",
+							"m10.2,15h-2.399c-.151,0-.293.068-.388.185-.095.117-.132.271-.101.418.173.822.868,1.397,1.689,1.397s1.516-.575,1.689-1.397c.031-.147-.006-.301-.101-.418-.095-.117-.238-.185-.389-.185Z",
+						),
+						h.Attribute("fill", "currentColor"),
+						h.Attribute("stroke-width", "0"),
+					]),
+					h.path([
+						h.Attribute(
+							"d",
+							"m15.75,12c-.6908,0-1.25-.5591-1.25-1.25v-4.25c0-3.0371-2.4628-5.5-5.5-5.5s-5.5,2.4629-5.5,5.5v4.25c0,.6909-.5592,1.25-1.25,1.25-.4142,0-.75.3359-.75.75s.3358.75.75.75h13.5c.4142,0,.75-.3359.75-.75s-.3358-.75-.75-.75Z",
+						),
+						h.Attribute("fill", "currentColor"),
+						h.Attribute("opacity", ".4"),
+						h.Attribute("stroke-width", "0"),
+					]),
+					h.path([
+						h.Attribute("d", "M2.25 2.25 15.75 15.75"),
+						h.Attribute("fill", "none"),
+						h.Attribute("stroke", "currentColor"),
+						h.Attribute("stroke-linecap", "round"),
+						h.Attribute("stroke-width", "1.5"),
+					]),
+				],
+			),
+		],
+	)
+
 export const IconBrainSparkle = <Message>(h: HtmlBuilder<Message>, options: IconOptions = {}): Html =>
 	icon(
 		h,

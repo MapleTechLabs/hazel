@@ -12,6 +12,7 @@ import {
 	PinnedMessageId,
 	type UserId,
 } from "@hazel/schema"
+import type { ChannelMember } from "@hazel/domain/models"
 import { Effect, Schedule, Duration } from "effect"
 import { isRetryableError } from "~/lib/error-messages"
 import { getSharedConversationIdForChannel } from "~/lib/connect-shared-channels"
@@ -456,12 +457,16 @@ export const updateChannelMemberAction = optimisticAction({
 	onMutate: (props: {
 		memberId: ChannelMemberId
 		isMuted?: boolean
+		mutedUntil?: Date | null
+		notificationLevel?: ChannelMember.NotificationLevel | null
 		isFavorite?: boolean
 		isHidden?: boolean
 	}) => {
 		const organizationId = orgOfChannelMember(props.memberId)
 		channelMemberCollection.update(props.memberId, (member) => {
 			if (props.isMuted !== undefined) member.isMuted = props.isMuted
+			if (props.mutedUntil !== undefined) member.mutedUntil = props.mutedUntil
+			if (props.notificationLevel !== undefined) member.notificationLevel = props.notificationLevel
 			if (props.isFavorite !== undefined) member.isFavorite = props.isFavorite
 			if (props.isHidden !== undefined) member.isHidden = props.isHidden
 		})
@@ -475,6 +480,8 @@ export const updateChannelMemberAction = optimisticAction({
 				id: props.memberId,
 				organizationId: ctx.mutateResult.organizationId,
 				...(props.isMuted !== undefined && { isMuted: props.isMuted }),
+				...(props.mutedUntil !== undefined && { mutedUntil: props.mutedUntil }),
+				...(props.notificationLevel !== undefined && { notificationLevel: props.notificationLevel }),
 				...(props.isFavorite !== undefined && { isFavorite: props.isFavorite }),
 				...(props.isHidden !== undefined && { isHidden: props.isHidden }),
 			})

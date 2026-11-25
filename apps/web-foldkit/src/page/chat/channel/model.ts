@@ -34,6 +34,7 @@ import {
 } from "../lookups"
 import * as FilesPage from "../files/page"
 import * as IssueControl from "../issue-control"
+import * as NotificationControl from "../notification-control"
 import { Message as ActionMessage } from "../message-actions"
 import * as CustomerCard from "../customer-card"
 import * as Overlays from "../overlays"
@@ -176,6 +177,8 @@ export const Model = Schema.Struct({
 	notifications: NotificationClear.Model,
 	/** What was new when the user opened the channel: the "New" line and the bar (`new-messages.ts`). */
 	newMessages: NewMessages.Model,
+	/** The header's notification settings bell (`../notification-control.ts`). */
+	notificationControl: NotificationControl.Model,
 	/** The non-member's "Join #channel" is running. */
 	isJoining: Schema.Boolean,
 	/**
@@ -249,6 +252,7 @@ export const Message = defineMessageUnion({
 	UpdatedReadPosition: { channelId: ChannelId, readUpToMs: Schema.NullOr(Schema.Finite) },
 	/** The new-messages bar: jump to the first new message, or mark the channel read. */
 	ClickedJumpToNew: {},
+	GotNotificationControlMessage: { message: NotificationControl.Message },
 	ClickedMarkNewRead: {},
 	UpdatedPinned: { pins: Schema.Array(PinnedInfo) },
 	/** Tagged with the channel queried: a late answer for the previous channel is dropped. */

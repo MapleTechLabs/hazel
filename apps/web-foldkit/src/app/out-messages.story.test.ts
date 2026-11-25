@@ -363,6 +363,8 @@ describe("hotkeys", () => {
 			member: {
 				id: Schema.decodeSync(ChannelMemberId)(uuid(9100 + n)),
 				isMuted: false,
+				mutedUntilMs: null,
+				notificationLevel: null,
 				isFavorite: false,
 				notificationCount: 0,
 			},

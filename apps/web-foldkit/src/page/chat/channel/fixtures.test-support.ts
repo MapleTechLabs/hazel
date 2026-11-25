@@ -56,6 +56,9 @@ export const messages: ReadonlyArray<ChatMessage> = [
 	chatMessage(graceMessageId, grace, "Launch window confirmed", 1),
 ]
 
+/** A member's notification settings left at the channel's defaults. */
+export const UNMUTED = { isMuted: false, mutedUntilMs: null, notificationLevel: null } as const
+
 /** The page with the channel, its members and messages loaded. */
 export const loadedModel = (): Model => {
 	const base = init(channelId, "hazel", ada)
@@ -70,13 +73,21 @@ export const loadedModel = (): Model => {
 			parentChannelId: null,
 		},
 		members: [
-			{ id: adaMemberId, userId: ada, isHidden: false, createdAtMs: 0, notificationCount: 0 },
+			{
+				id: adaMemberId,
+				userId: ada,
+				isHidden: false,
+				createdAtMs: 0,
+				notificationCount: 0,
+				...UNMUTED,
+			},
 			{
 				id: Schema.decodeSync(ChannelMemberId)(uuid(6)),
 				userId: grace,
 				isHidden: false,
 				createdAtMs: 0,
 				notificationCount: 0,
+				...UNMUTED,
 			},
 		],
 		messages,

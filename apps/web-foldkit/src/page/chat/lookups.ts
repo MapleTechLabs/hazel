@@ -1,4 +1,5 @@
 import { AttachmentId, ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
+import { ChannelMember } from "@hazel/domain/models"
 import { Schema } from "effect"
 import { CustomerAuthorInfo } from "../../customers/chat-authors"
 
@@ -35,6 +36,11 @@ export const ChannelMemberInfo = Schema.Struct({
 	createdAtMs: Schema.Finite,
 	/** The member's unread notifications in this channel (the sidebar's badge). */
 	notificationCount: Schema.Finite,
+	/** Muted for good; `mutedUntilMs` mutes until then (the header's bell). */
+	isMuted: Schema.Boolean,
+	mutedUntilMs: Schema.NullOr(Schema.Finite),
+	/** What the member is notified of here; null is the channel type's default. */
+	notificationLevel: Schema.NullOr(ChannelMember.NotificationLevel),
 })
 export type ChannelMemberInfo = typeof ChannelMemberInfo.Type
 
@@ -183,6 +189,9 @@ export interface ChannelMemberRow {
 	readonly isHidden: boolean
 	readonly createdAt: Date
 	readonly notificationCount?: number | null
+	readonly isMuted?: boolean
+	readonly mutedUntil?: Date | null
+	readonly notificationLevel?: ChannelMember.NotificationLevel | null
 }
 
 export const toChannelMemberInfo = (row: ChannelMemberRow): ChannelMemberInfo => ({
@@ -191,6 +200,9 @@ export const toChannelMemberInfo = (row: ChannelMemberRow): ChannelMemberInfo =>
 	isHidden: row.isHidden,
 	createdAtMs: new Date(row.createdAt).getTime(),
 	notificationCount: row.notificationCount ?? 0,
+	isMuted: row.isMuted ?? false,
+	mutedUntilMs: row.mutedUntil ? new Date(row.mutedUntil).getTime() : null,
+	notificationLevel: row.notificationLevel ?? null,
 })
 
 /** Index helpers for derivation (built once per data change, not per row). */

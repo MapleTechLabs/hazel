@@ -56,6 +56,7 @@ export type { SidebarReturn } from "./channels-sidebar/menu-update"
 const outcomeTitles: { readonly [O in SidebarOutcome]: string | null } = {
 	Muted: "Channel muted",
 	Unmuted: "Channel unmuted",
+	NotificationLevelChanged: "Notification settings updated",
 	Favorited: "Added to favorites",
 	Unfavorited: "Removed from favorites",
 	Hidden: null,

@@ -15,7 +15,8 @@ import {
 	OpenMenu,
 	update,
 } from "../channels-sidebar"
-import { UpdateChannelMember } from "./actions"
+import { NotificationChoice } from "../../chat/notification-menu"
+import { ApplyNotificationChoice, UpdateChannelMember } from "./actions"
 import { PersistDismissedHint } from "./hints"
 import { dmMenuEntries, rowMenuEntries, sectionMenuEntries } from "./menus"
 
@@ -27,7 +28,14 @@ const sectionId = ChannelSectionId.make("00000000-0000-4000-8000-000000000003")
 
 const entry = {
 	channel: { id: channelId, name: "general", type: "public", icon: null, sectionId: null },
-	member: { id: memberId, isMuted: false, isFavorite: false, notificationCount: 0 },
+	member: {
+		id: memberId,
+		isMuted: false,
+		mutedUntilMs: null,
+		notificationLevel: null,
+		isFavorite: false,
+		notificationCount: 0,
+	},
 }
 
 const loaded: Model = {
@@ -45,6 +53,9 @@ const sectionMenu = (state: Model, menuMessage: Menu.Message) =>
 const pressed = Menu.Message.PressedTrigger({ pointerType: "mouse" })
 const rowClicked = (key: string) =>
 	Menu.Message.ClickedItem({ key, entries: rowMenuEntries(loaded.sections, false) })
+/** A submenu's leaf, as the system's menu chooses it (the web's needs the submenu open first). */
+const rowChose = (key: string) =>
+	Menu.Message.ChoseFromNativeMenu({ key, entries: rowMenuEntries(loaded.sections, false) })
 const sectionClicked = (key: string) =>
 	Menu.Message.ClickedItem({ key, entries: sectionMenuEntries(["create-channel", "join-channel"], true) })
 
@@ -67,14 +78,29 @@ describe("open menu", () => {
 		expect(next.openMenu).toBe(withRow.openMenu)
 	})
 
-	test("selecting mute closes the menu and mutes the member", () => {
+	test("a mute duration closes the menu and mutes the member for that long", () => {
 		const open = rowMenu(loaded, pressed).model
-		const { model: next, commands } = rowMenu(open, rowClicked("mute"))
+		const { model: next, commands } = rowMenu(open, rowChose("mute:60"))
 		expect(next.openMenu).toBeNull()
-		expect(commands?.find((command) => command.name === UpdateChannelMember.name)?.args).toEqual({
+		expect(commands?.find((command) => command.name === ApplyNotificationChoice.name)?.args).toEqual({
 			memberId,
-			field: "isMuted",
-			value: true,
+			choice: NotificationChoice.Mute({ minutes: 60 }),
+		})
+	})
+
+	test("a notification level sets the member's level; the default clears it", () => {
+		const open = rowMenu(loaded, pressed).model
+		const level = (key: string) =>
+			rowMenu(open, rowChose(key)).commands?.find(
+				(command) => command.name === ApplyNotificationChoice.name,
+			)?.args
+		expect(level("level:all")).toEqual({
+			memberId,
+			choice: NotificationChoice.SetLevel({ level: "all" }),
+		})
+		expect(level("level:default")).toEqual({
+			memberId,
+			choice: NotificationChoice.SetLevel({ level: null }),
 		})
 	})
 
@@ -112,7 +138,14 @@ describe("DM row menu", () => {
 				id: dmId,
 				type: "single",
 				members: [],
-				currentUser: { id: dmMemberId, isMuted: false, isFavorite: true, notificationCount: 0 },
+				currentUser: {
+					id: dmMemberId,
+					isMuted: false,
+					mutedUntilMs: null,
+					notificationLevel: null,
+					isFavorite: true,
+					notificationCount: 0,
+				},
 			},
 		},
 	}
@@ -128,9 +161,50 @@ describe("DM row menu", () => {
 	}
 
 	test("the dots open a menu whose items write the DM's own membership", () => {
-		expect(memberWrite("mute")).toEqual({ memberId: dmMemberId, field: "isMuted", value: true })
 		expect(memberWrite("favorite")).toEqual({ memberId: dmMemberId, field: "isFavorite", value: false })
 		expect(memberWrite("hide")).toEqual({ memberId: dmMemberId, field: "isHidden", value: true })
+	})
+
+	test("a mute duration mutes the DM; Unmute on a muted one clears it", () => {
+		const open = dmMenu(withDm, pressed).model
+		const muted = dmMenu(
+			open,
+			Menu.Message.ChoseFromNativeMenu({ key: "mute:forever", entries: dmMenuEntries() }),
+		).commands
+		expect(muted?.find((command) => command.name === ApplyNotificationChoice.name)?.args).toEqual({
+			memberId: dmMemberId,
+			choice: NotificationChoice.Mute({ minutes: null }),
+		})
+		const mutedDm: Model = {
+			...withDm,
+			dmChannels: {
+				[dmId]: {
+					id: dmId,
+					type: "single",
+					members: [],
+					currentUser: {
+						id: dmMemberId,
+						isMuted: false,
+						mutedUntilMs: Date.UTC(2030, 0, 1),
+						notificationLevel: null,
+						isFavorite: true,
+						notificationCount: 0,
+					},
+				},
+			},
+		}
+		const reopened = dmMenu(mutedDm, pressed).model
+		const unmuted = dmMenu(
+			reopened,
+			Menu.Message.ClickedItem({
+				key: "mute",
+				entries: dmMenuEntries({ isMuted: true, isFavorite: true, notificationLevel: null }),
+			}),
+		).commands
+		expect(unmuted?.find((command) => command.name === ApplyNotificationChoice.name)?.args).toEqual({
+			memberId: dmMemberId,
+			choice: NotificationChoice.Unmute(),
+		})
 	})
 
 	test("hiding a conversation succeeds silently", () => {

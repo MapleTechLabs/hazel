@@ -75,6 +75,7 @@ export type SectionAction = typeof SectionAction.Type
 export const SidebarOutcome = Schema.Literals([
 	"Muted",
 	"Unmuted",
+	"NotificationLevelChanged",
 	"Favorited",
 	"Unfavorited",
 	"Hidden",

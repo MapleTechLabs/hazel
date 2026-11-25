@@ -9,7 +9,14 @@ import { PageOutMessage } from "../../page/out-message"
 import { AppRoute } from "../../route"
 import type { HazelRpc } from "../../rpc"
 import * as Menu from "../../ui/menu"
-import { DeleteChannelSection, LeaveChannel, MoveChannelToSection, UpdateChannelMember } from "./actions"
+import { choiceOfKey } from "../../chat/notification-menu"
+import {
+	ApplyNotificationChoice,
+	DeleteChannelSection,
+	LeaveChannel,
+	MoveChannelToSection,
+	UpdateChannelMember,
+} from "./actions"
 import {
 	closedMenu,
 	closedRowMenu,
@@ -22,7 +29,7 @@ import {
 	sectionMenuId,
 } from "./menus"
 import { Message, type Model, OpenMenu, type SectionAction } from "./model"
-import type { ChannelEntry, DmChannel } from "./rows"
+import type { ChannelEntry, DmChannel, SidebarMember } from "./rows"
 
 /** Opening, folding and acting on the row and section menus. */
 
@@ -103,6 +110,23 @@ const foldMenu = (
 	return { ...selected, commands: [...commands, ...(selected.commands ?? [])] }
 }
 
+/**
+ * A choice from the notification items (a mute duration, a level, or "mute" itself), or none for
+ * any other key. "Mute" with no duration left to pick is muted (an expired mute too): it unmutes.
+ */
+const selectedNotificationKey = (
+	model: Model,
+	member: SidebarMember,
+	key: string,
+): Option.Option<SidebarReturn> =>
+	Option.map(choiceOfKey(key, member.isMuted || member.mutedUntilMs !== null), (choice) => ({
+		model,
+		commands: [ApplyNotificationChoice({ memberId: member.id, choice })],
+	}))
+
+const notificationChoice = (model: Model, member: SidebarMember, key: string): SidebarReturn =>
+	Option.getOrElse(selectedNotificationKey(model, member, key), () => ({ model }))
+
 const selectedRowKey = (
 	model: Model,
 	{ channel, member }: ChannelEntry,
@@ -110,12 +134,9 @@ const selectedRowKey = (
 	key: RowMenuKey,
 ): SidebarReturn =>
 	Match.value(key).pipe(
-		Match.when("mute", () => ({
-			model,
-			commands: [
-				UpdateChannelMember({ memberId: member.id, field: "isMuted", value: !member.isMuted }),
-			],
-		})),
+		Match.when("mute", () => notificationChoice(model, member, "mute")),
+		// The submenu's parent: its levels are leaves (`selectedMemberLeaf`).
+		Match.when("notifications", () => ({ model })),
 		Match.when("favorite", () => ({
 			model,
 			commands: [
@@ -152,12 +173,7 @@ const selectedMoveTarget = (model: Model, { channel }: ChannelEntry, key: string
 /** A DM row's item: the same member toggles, plus hiding the conversation. */
 const selectedDmKey = (model: Model, { currentUser: member }: DmChannel, key: DmMenuKey): SidebarReturn =>
 	Match.value(key).pipe(
-		Match.when("mute", () => ({
-			model,
-			commands: [
-				UpdateChannelMember({ memberId: member.id, field: "isMuted", value: !member.isMuted }),
-			],
-		})),
+		Match.when("mute", () => notificationChoice(model, member, "mute")),
 		Match.when("favorite", () => ({
 			model,
 			commands: [
@@ -178,7 +194,7 @@ const selectedRowItem =
 		const dm = model.dmChannels[channelId]
 		return dm
 			? Option.match(decodeDmMenuKey(key), {
-					onNone: () => ({ model }),
+					onNone: () => notificationChoice(model, dm.currentUser, key),
 					onSome: (dmKey) => selectedDmKey(model, dm, dmKey),
 				})
 			: selectedChannelItem(channelId, orgSlug)(model, key)
@@ -191,7 +207,10 @@ const selectedChannelItem =
 			onNone: () => ({ model }),
 			onSome: (entry) =>
 				Option.match(decodeRowMenuKey(key), {
-					onNone: () => selectedMoveTarget(model, entry, key),
+					onNone: () =>
+						Option.getOrElse(selectedNotificationKey(model, entry.member, key), () =>
+							selectedMoveTarget(model, entry, key),
+						),
 					onSome: (rowKey) => selectedRowKey(model, entry, orgSlug, rowKey),
 				}),
 		})

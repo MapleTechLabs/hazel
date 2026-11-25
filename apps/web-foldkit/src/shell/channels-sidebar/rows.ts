@@ -7,7 +7,7 @@ import {
 	OrganizationMemberId,
 	UserId,
 } from "@hazel/schema"
-import { OrganizationMember } from "@hazel/domain/models"
+import { ChannelMember, OrganizationMember } from "@hazel/domain/models"
 import { Schema } from "effect"
 import { getSharedChannelIds } from "~/lib/connect-shared-channels"
 
@@ -24,7 +24,11 @@ export type SidebarChannel = typeof SidebarChannel.Type
 
 export const SidebarMember = Schema.Struct({
 	id: ChannelMemberId,
+	/** Muted for good; `mutedUntilMs` mutes until then. */
 	isMuted: Schema.Boolean,
+	mutedUntilMs: Schema.NullOr(Schema.Finite),
+	/** What the member is notified of here; null is the channel type's default. */
+	notificationLevel: Schema.NullOr(ChannelMember.NotificationLevel),
 	isFavorite: Schema.Boolean,
 	notificationCount: Schema.Finite,
 })

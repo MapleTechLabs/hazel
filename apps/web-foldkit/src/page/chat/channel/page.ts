@@ -30,6 +30,7 @@ import { typingNamesOf, typingUsersOf } from "../banners"
 import { emptyLookups, type Lookups } from "../lookups"
 import * as FilesPage from "../files/page"
 import * as IssueControl from "../issue-control"
+import * as NotificationControl from "../notification-control"
 import { JoinChannel, UnhideConversation } from "../message-actions"
 import * as CustomerCard from "../customer-card"
 import * as Overlays from "../overlays"
@@ -122,6 +123,7 @@ export const init = (
 	threadPanelDrag: null,
 	notifications: NotificationClear.init({ isFocused: options.carry?.isWindowFocused ?? true }),
 	newMessages: NewMessages.init(),
+	notificationControl: NotificationControl.init(channelId),
 	isJoining: false,
 	heightsByChannel: Record.remove(options.carry?.heightsByChannel ?? {}, channelId),
 })
@@ -648,6 +650,19 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 						}),
 					),
 		ClickedJumpToNew: () => jumpToNew(model),
+		GotNotificationControlMessage: ({ message }) => {
+			const own = model.members?.find((member) => member.userId === model.currentUserId) ?? null
+			const result = NotificationControl.update(model.notificationControl, message, own)
+			const lifted: PageReturn = {
+				model: modifyFields(model, { notificationControl: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (inner) =>
+					Message.GotNotificationControlMessage({ message: inner }),
+				),
+			}
+			return result.toast === undefined
+				? lifted
+				: Write.andThen(lifted, (current) => Write.withToast(current, result.toast ?? null))
+		},
 		ClickedMarkNewRead: () => markRead(model),
 		ChangedWindowFocus: ({ isFocused }) => stepNotifications(model, { _tag: "ChangedFocus", isFocused }),
 		UpdatedPinned: ({ pins }) => ({ model: modifyFields(model, { pinned: () => pins }) }),
