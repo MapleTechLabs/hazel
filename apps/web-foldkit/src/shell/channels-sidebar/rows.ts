@@ -183,3 +183,11 @@ export const SectionSetting = Schema.Struct({
 	notificationLevel: Schema.NullOr(ChannelMember.NotificationLevel),
 })
 export type SectionSetting = typeof SectionSetting.Type
+
+/** The user's own notification settings for the organization (`notification_overrides`). */
+export const OrganizationSetting = Schema.Struct({
+	isMuted: Schema.Boolean,
+	mutedUntilMs: Schema.NullOr(Schema.Finite),
+	notificationLevel: Schema.NullOr(ChannelMember.NotificationLevel),
+})
+export type OrganizationSetting = typeof OrganizationSetting.Type

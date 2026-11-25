@@ -4,7 +4,7 @@ import { Mount } from "foldkit"
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
-import { isMutedNow } from "~/lib/notification-settings"
+import { inheritedLevelOf, isMutedNow } from "~/lib/notification-settings"
 import { errorToastOf, successToast } from "../data/actions"
 import type { AppRoute } from "../route"
 import type * as Menu from "../ui/menu"
@@ -121,6 +121,9 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 		}),
 		UpdatedSectionSettings: ({ settings }) => ({
 			model: modifyFields(model, { sectionSettings: () => settings }),
+		}),
+		UpdatedOrganizationSetting: ({ setting }) => ({
+			model: modifyFields(model, { organizationSetting: () => setting }),
 		}),
 		UpdatedConnectMounts: ({ mounts }) => ({
 			model: modifyFields(model, { connectMounts: () => mounts }),
@@ -357,6 +360,10 @@ const sectionNotificationsOf = (
 		// Muted now, as the channel rows: a timed mute that ended offers "Mute" (for how long) again.
 		isMuted: setting !== undefined && isMutedNow(setting, nowMs),
 		notificationLevel: setting?.notificationLevel ?? null,
+		// A section's "Default" is the organization's level, else the channel type's default.
+		inheritedLevel: inheritedLevelOf("public", {
+			organizationLevel: model.organizationSetting?.notificationLevel,
+		}),
 	}
 }
 

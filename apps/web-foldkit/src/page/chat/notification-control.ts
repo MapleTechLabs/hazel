@@ -5,7 +5,14 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 import { CommonReason, commonMessage } from "~/lib/error-messages"
-import { isMutedNow, levelLabelOf, muteStatusOf, type NotificationLevel } from "~/lib/notification-settings"
+import { ChannelMember } from "@hazel/domain/models"
+import {
+	inheritedLevelOf,
+	isMutedNow,
+	levelLabels,
+	muteStatusOf,
+	type NotificationLevel,
+} from "~/lib/notification-settings"
 import {
 	choiceOfKey,
 	itemContent,
@@ -27,11 +34,19 @@ import { menuLabel, view as menuView } from "../../ui/menu-view"
  * of. The same items as the sidebar row's menu (`chat/notification-menu.ts`).
  */
 
-export const Model = Schema.Struct({ menu: Menu.Model })
+export const Model = Schema.Struct({
+	menu: Menu.Model,
+	/**
+	 * What "Default" is here: the user's section level, else the organization's, else the type's
+	 * default (`inheritedLevelOf`). Null until it is read; the type's default stands in.
+	 */
+	inheritedLevel: Schema.NullOr(ChannelMember.NotificationLevel),
+})
 export type Model = typeof Model.Type
 
 export const init = (channelId: string): Model => ({
 	menu: Menu.init({ id: `channel-notifications-${channelId}`, placement: "bottom end" }),
+	inheritedLevel: null,
 })
 
 export const Failure = Schema.Union([Schema.Literal("MemberNotFound"), CommonReason])
@@ -117,7 +132,7 @@ export const labelOf = (member: Member, channelType: string, nowMs: number): str
 	const level =
 		member.notificationLevel === null || isDmType(channelType)
 			? "Notification settings"
-			: `Notification settings: ${levelLabelOf(member.notificationLevel, channelType)}`
+			: `Notification settings: ${levelLabels[member.notificationLevel]}`
 	const mute = muteStatusOf(member, nowMs)
 	return mute === null ? level : `${level}, ${mute}`
 }
@@ -132,7 +147,11 @@ export const view = <M>(
 	toMessage: (message: Message) => M,
 ): Html => {
 	const isMuted = isMutedNow(member, nowMs)
-	const notificationMember = { isMuted, notificationLevel: member.notificationLevel }
+	const notificationMember = {
+		isMuted,
+		notificationLevel: member.notificationLevel,
+		inheritedLevel: model.inheritedLevel ?? inheritedLevelOf(channelType),
+	}
 	const isDm = isDmType(channelType)
 	const label = labelOf(member, channelType, nowMs)
 	return h.submodel({
@@ -143,7 +162,7 @@ export const view = <M>(
 			// A DM notifies of every message: only muting changes anything there.
 			entries: isDm
 				? [muteEntry(notificationMember)]
-				: [muteEntry(notificationMember), levelEntry(channelType)],
+				: [muteEntry(notificationMember), levelEntry(notificationMember)],
 			toTrigger: (attributes, overlay) =>
 				h.span(
 					[h.Class("relative inline-flex")],
@@ -159,7 +178,7 @@ export const view = <M>(
 					],
 				),
 			content: (key) =>
-				itemContent(h, notificationMember, channelType, key, (value) =>
+				itemContent(h, notificationMember, key, (value) =>
 					menuLabel(h, model.menu.id, key, value),
 				) ?? [key],
 			className: "w-52",
