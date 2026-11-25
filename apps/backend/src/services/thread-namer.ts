@@ -91,6 +91,11 @@ export class ThreadNamer extends Context.Service<
 					yield* Effect.logWarning("OPENROUTER_API_KEY is not set; threads are not named")
 					return Option.none<string>()
 				}
+				// The peer by name, so the provider is an edge on the service map.
+				yield* Effect.annotateCurrentSpan({
+					"peer.service": "openrouter",
+					"server.address": new URL(OPENROUTER_URL).host,
+				})
 				const request = HttpClientRequest.post(OPENROUTER_URL).pipe(
 					HttpClientRequest.bearerToken(Redacted.value(apiKey.value)),
 					HttpClientRequest.setHeaders({ "HTTP-Referer": referrer, "X-Title": "Hazel" }),

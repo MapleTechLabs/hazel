@@ -239,6 +239,45 @@ describe("the thread panel's issue control", () => {
 	})
 })
 
+describe("a thread filed as not support", () => {
+	const filed: IssueRow = { ...issue, status: "closed", triage: "chatter", closedAtMs: 0 }
+	const updated = (row: IssueRow) =>
+		issueControl(IssueControl.Message.UpdatedIssue({ rootMessageId: graceMessageId, issue: row }))
+
+	test("Create issue runs on its root message, as for a thread with no issue", () => {
+		story(
+			updateWithShared,
+			given(linkedModel()),
+			message(openThread),
+			...openedThread,
+			message(updated(filed)),
+			message(issueControl(IssueControl.Message.ClickedCreateIssue())),
+			model((current) => expect(current.threadPanel?.issue.isCreating).toBe(true)),
+			Command.expectHas(
+				CreateIssueFromMessage({ organizationId, channelId, messageId: graceMessageId }),
+			),
+			Command.resolve(
+				CreateIssueFromMessage,
+				ActionMessage.SucceededCreateIssue({ messageId: graceMessageId }),
+			),
+			model((current) => expect(current.threadPanel?.issue.isCreating).toBe(false)),
+		)
+	})
+
+	test("an issue in the inbox does not start a second one", () => {
+		story(
+			updateWithShared,
+			given(linkedModel()),
+			message(openThread),
+			...openedThread,
+			message(updated(issue)),
+			message(issueControl(IssueControl.Message.ClickedCreateIssue())),
+			model((current) => expect(current.threadPanel?.issue.isCreating).toBe(false)),
+			Command.expectNone(),
+		)
+	})
+})
+
 describe("issue root ids", () => {
 	test("a late answer for another channel is dropped", () => {
 		const other = Schema.decodeSync(ChannelId)(uuid(10))

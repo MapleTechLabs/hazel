@@ -93,9 +93,12 @@ export class Decisions extends Context.Service<
 			const ask = Effect.fn("Decisions.ask")(
 				function* (request: DecisionsRequest) {
 					if (Option.isNone(apiKey)) return Option.none<NoulAnswers>()
+					// The peer by name, so the provider is an edge on the service map.
 					yield* Effect.annotateCurrentSpan({
 						"decisions.model": DECISION_MODEL,
 						"decisions.questions": Object.keys(request.questions).length,
+						"peer.service": "openrouter",
+						"server.address": new URL(DECISIONS_URL).host,
 					})
 					const response = yield* client
 						.execute(
