@@ -152,7 +152,9 @@ const liveApi: PushApi = {
 		return user === null ? null : { api: apiUrl(), userId: user.id }
 	},
 	register: async (token) => {
-		await withRpc((client) => client("pushDevice.register", token))
+		// No session (signed out meanwhile): nothing was registered, so it is tried again later.
+		const sent = await withRpc((client) => client("pushDevice.register", token))
+		if (sent === null) throw new Error("signed out")
 	},
 	unregister: async (token) => {
 		await withRpc((client) => client("pushDevice.unregister", { token }))
