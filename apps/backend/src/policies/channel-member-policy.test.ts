@@ -30,7 +30,8 @@ interface ChannelMemberEntry {
 
 interface ChannelEntry {
 	organizationId: OrganizationId
-	type: "public" | "private"
+	type: "public" | "private" | "thread"
+	parentChannelId?: ChannelId | null
 }
 
 const makeChannelMemberRepoLayer = (
@@ -68,6 +69,10 @@ const makeChannelRepoLayer = (channels: Record<string, ChannelEntry>) =>
 					return Effect.fail(makeEntityNotFound("Channel"))
 				}
 				return f(channel)
+			},
+			findById: (id: ChannelId) => {
+				const channel = channels[id]
+				return Effect.succeed(channel ? Option.some({ id, ...channel }) : Option.none())
 			},
 		}),
 	)
@@ -134,6 +139,43 @@ describe("ChannelMemberPolicy", () => {
 			actor,
 		)
 		expect(Result.isSuccess(result)).toBe(true)
+	})
+
+	describe("canCreate on a thread (Follow)", () => {
+		const THREAD_ID = "00000000-0000-4000-8000-000000000821" as ChannelId
+		const PARENT_ID = "00000000-0000-4000-8000-000000000822" as ChannelId
+		const follow = (parentType: "public" | "private", inParent: boolean) => {
+			const actor = makeActor()
+			const layer = makePolicyLayer({
+				members: { [`${TEST_ORG_ID}:${actor.id}`]: "member" },
+				channels: {
+					[THREAD_ID]: { organizationId: TEST_ORG_ID, type: "thread", parentChannelId: PARENT_ID },
+					[PARENT_ID]: { organizationId: TEST_ORG_ID, type: parentType },
+				},
+				membershipsByChannelAndUser: inParent
+					? { [`${PARENT_ID}:${actor.id}`]: { userId: actor.id, channelId: PARENT_ID } }
+					: {},
+			})
+			return runWithActorEither(
+				ChannelMemberPolicy.use((policy) => policy.canCreate(THREAD_ID)),
+				layer,
+				actor,
+			)
+		}
+
+		it("allows any member when the parent is public", async () => {
+			expect(Result.isSuccess(await follow("public", false))).toBe(true)
+		})
+
+		it("allows a member of a private parent", async () => {
+			expect(Result.isSuccess(await follow("private", true))).toBe(true)
+		})
+
+		it("denies someone outside a private parent", async () => {
+			const result = await follow("private", false)
+			expect(Result.isFailure(result)).toBe(true)
+			if (Result.isFailure(result)) expect(UnauthorizedError.is(result.failure)).toBe(true)
+		})
 	})
 
 	it("canCreate denies member for private channel", async () => {
