@@ -10,7 +10,7 @@ import { afterEach, expect, test } from "vitest"
 import { page } from "vitest/browser"
 import { makeShared, uuid } from "../../../test/pages-fixtures"
 import type { Message } from "./message"
-import { Model, type NotificationItem, Notifications } from "./model"
+import { Model, type NotificationItem, Notifications, UnreadChannels } from "./model"
 import { update } from "./update"
 import { inboxView } from "./view"
 
@@ -32,6 +32,7 @@ const item = (n: number, fields: Partial<NotificationItem>): NotificationItem =>
 	targetedResourceId: uuid(900 + n),
 	targetedResourceType: "channel",
 	messageContent: null,
+	mentionNames: {},
 	channel: { name: "SSO login loops back to the sign-in page", type: "thread" },
 	author: null,
 	...fields,
@@ -44,13 +45,20 @@ const ITEMS: ReadonlyArray<NotificationItem> = [
 		isUnread: false,
 		resourceType: "message",
 		reason: null,
-		messageContent: "Pushed the fix for the EU dashboards, can you confirm?",
+		messageContent: `@[userId:${uuid(70)}] pushed the fix for the **EU dashboards**, @[directive:here] can you confirm on a phone too, where the preview has to wrap?`,
+		mentionNames: { [uuid(70)]: "Ada Lovelace" },
 		channel: { name: "ext-acme", type: "public" },
 		author: { firstName: "Maya", lastName: "Reinhardt", avatarUrl: null },
 	}),
 ]
 
-const MODEL: Model = { category: "all", notifications: Notifications.Loaded({ items: ITEMS }) }
+const MODEL: Model = {
+	tab: "all",
+	notifications: Notifications.Loaded({ items: ITEMS }),
+	unreadChannels: UnreadChannels.Loading(),
+	markedRead: [],
+	isMarkingAllRead: false,
+}
 
 const render = () => {
 	const container = document.createElement("div")
@@ -60,7 +68,7 @@ const render = () => {
 		Runtime.makeElement({
 			Model,
 			init: () => ({ model: MODEL }),
-			update: (model: Model, message: Message) => ({ model: update(model, message).model }),
+			update: (model: Model, message: Message) => ({ model: update(model, message, shared).model }),
 			view: (model: Model, h: HtmlBuilder<Message>) =>
 				h.div(
 					[h.Id("gallery"), h.Class("w-[720px] bg-bg py-6 font-sans text-fg antialiased")],

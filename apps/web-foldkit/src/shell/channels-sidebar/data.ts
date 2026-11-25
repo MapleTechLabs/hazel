@@ -3,7 +3,7 @@ import { ChannelSectionId as ChannelSectionIdSchema } from "@hazel/schema"
 import { and, eq, inArray, isNull, not, or } from "@tanstack/db"
 import { Schema } from "effect"
 import type { NotificationLevel } from "~/lib/notification-settings"
-import { hasUnreadMessages } from "~/lib/unread"
+import { unreadMuteEnd } from "~/lib/unread"
 import {
 	channelActivityCollection,
 	channelCollection,
@@ -278,41 +278,8 @@ export const unreadChannelsStream = <M>(
 			toMessage(
 				rows
 					.flatMap((row): Array<UnreadChannel> => {
-						const isDm = row.type === "direct" || row.type === "single"
-						// DMs take no section or organization setting.
-						const mutes = isDm
-							? [{ isMuted: row.isMuted, until: row.mutedUntil }]
-							: [
-									{ isMuted: row.isMuted, until: row.mutedUntil },
-									{
-										isMuted: row.sectionMuted === true,
-										until: row.sectionMutedUntil ?? null,
-									},
-									{ isMuted: row.orgMuted === true, until: row.orgMutedUntil ?? null },
-								]
-						if (mutes.some((mute) => mute.isMuted)) return []
-						const isUnread = hasUnreadMessages(
-							{
-								lastReadAt: row.lastReadAt ? new Date(row.lastReadAt) : null,
-								joinedAt: new Date(row.joinedAt),
-								readStateSince: row.readStateSince ? new Date(row.readStateSince) : null,
-							},
-							{
-								lastMessageAt: new Date(row.lastMessageAt),
-								lastMessageAuthorId: row.lastMessageAuthorId,
-							},
-							userId,
-						)
-						if (!isUnread) return []
-						const untils = mutes.flatMap((mute) =>
-							mute.until ? [new Date(mute.until).getTime()] : [],
-						)
-						return [
-							{
-								channelId: row.channelId,
-								mutedUntilMs: untils.length === 0 ? null : Math.max(...untils),
-							},
-						]
+						const unread = unreadMuteEnd(row, userId)
+						return unread === undefined ? [] : [{ channelId: row.channelId, ...unread }]
 					})
 					.sort((a, b) => a.channelId.localeCompare(b.channelId)),
 			),

@@ -360,8 +360,8 @@ describe("page instances", () => {
 
 	test("tabs of one page keep its instance (the page key ignores the tab)", () => {
 		const inbox = signedIn("/hazel/notifications")
-		const general = after(inbox, [Message.ChangedUrl({ url: urlOf("/hazel/notifications/general") })])
-		expect(general.route._tag).toBe("NotificationsGeneral")
+		const general = after(inbox, [Message.ChangedUrl({ url: urlOf("/hazel/notifications/all") })])
+		expect(general.route._tag).toBe("NotificationsAll")
 		expect(general.page?._tag).toBe(inbox.page?._tag)
 		expect(general.page?.key).toBe(inbox.page?.key)
 	})

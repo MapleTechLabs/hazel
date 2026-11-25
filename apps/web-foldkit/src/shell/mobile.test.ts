@@ -24,7 +24,8 @@ describe("mobileChromeOf", () => {
 
 	test("a section with a secondary sidebar gets a top bar whose menu opens it", () => {
 		expect(chromeAt("/hazel/settings/team").topBar).toEqual({ _tag: "Section", title: "Settings" })
-		expect(chromeAt("/hazel/notifications").topBar).toEqual({ _tag: "Section", title: "Activity" })
+		expect(chromeAt("/hazel/notifications").topBar).toEqual({ _tag: "Section", title: "Mentions" })
+		expect(chromeAt("/hazel/notifications/unreads").topBar).toEqual({ _tag: "Section", title: "Unreads" })
 		expect(chromeAt("/hazel/customers").topBar).toEqual({ _tag: "Section", title: "Customers" })
 	})
 

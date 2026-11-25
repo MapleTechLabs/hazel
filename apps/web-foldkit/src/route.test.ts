@@ -47,7 +47,7 @@ const legacyRoutes: ReadonlyArray<readonly [string, AppRoute["_tag"]]> = [
 	["/sign-in", "SignIn"],
 	["/sign-up", "SignUp"],
 	["/hazel/my-settings", "MySettingsAppearance"],
-	["/hazel/notifications", "NotificationsAll"],
+	["/hazel/notifications", "NotificationsMentions"],
 	["/hazel/settings", "SettingsGeneral"],
 	["/onboarding/setup-organization", "OnboardingSetupOrganization"],
 	["/onboarding", "Onboarding"],
@@ -93,6 +93,8 @@ describe("urlToAppRoute", () => {
 
 	it("resolves the routes added since the port", () => {
 		expect(parse("/hazel/my-settings/keybinds")._tag).toBe("MySettingsKeybinds")
+		expect(parse("/hazel/notifications/unreads")._tag).toBe("NotificationsUnreads")
+		expect(parse("/hazel/notifications/all")._tag).toBe("NotificationsAll")
 	})
 
 	it("decodes branded and query segments", () => {
@@ -227,6 +229,14 @@ describe("redirects", () => {
 			Option.some("/hazel/settings"),
 		)
 		expect(routeRedirect(parse("/hazel/settings/debug"), { isProd: false })).toEqual(Option.none())
+	})
+
+	it("sends the inbox's former source tabs to All", () => {
+		for (const tab of ["general", "threads", "dms"])
+			expect(
+				Option.map(routeRedirect(parse(`/hazel/notifications/${tab}`), { isProd: true }), hrefOf),
+			).toEqual(Option.some("/hazel/notifications/all"))
+		expect(routeRedirect(parse("/hazel/notifications"), { isProd: true })).toEqual(Option.none())
 	})
 
 	it("sends signed-out visitors on app routes to sign-in", () => {
@@ -423,7 +433,9 @@ describe("hrefOf", () => {
 		],
 		MySettingsDesktop: [[AppRoute.MySettingsDesktop({ orgSlug }), "/hazel/my-settings/desktop"]],
 		MySettingsKeybinds: [[AppRoute.MySettingsKeybinds({ orgSlug }), "/hazel/my-settings/keybinds"]],
-		NotificationsAll: [[AppRoute.NotificationsAll({ orgSlug }), "/hazel/notifications"]],
+		NotificationsMentions: [[AppRoute.NotificationsMentions({ orgSlug }), "/hazel/notifications"]],
+		NotificationsUnreads: [[AppRoute.NotificationsUnreads({ orgSlug }), "/hazel/notifications/unreads"]],
+		NotificationsAll: [[AppRoute.NotificationsAll({ orgSlug }), "/hazel/notifications/all"]],
 		NotificationsGeneral: [[AppRoute.NotificationsGeneral({ orgSlug }), "/hazel/notifications/general"]],
 		NotificationsThreads: [[AppRoute.NotificationsThreads({ orgSlug }), "/hazel/notifications/threads"]],
 		NotificationsDms: [[AppRoute.NotificationsDms({ orgSlug }), "/hazel/notifications/dms"]],

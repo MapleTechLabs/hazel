@@ -4,14 +4,15 @@ import {
 	IconArrowPath,
 	IconBell,
 	IconChartBar,
+	IconChatBubble,
 	IconClock,
 	IconCode,
 	IconCube,
 	IconDashboard,
 	IconEmojiAdd,
+	IconEnvelope,
 	IconGear,
 	IconGridCirclePlus,
-	IconHashtag,
 	IconIntegratio,
 	IconKeyboard,
 	IconLightbulb,
@@ -24,7 +25,6 @@ import {
 	IconShop,
 	IconSparkles,
 	IconSupport,
-	IconThread,
 	IconUser,
 	IconUsers,
 	IconUsersPlus,
@@ -78,33 +78,27 @@ const DESTINATIONS = define({
 	},
 	notifications: {
 		label: "Notifications",
-		sidebarLabel: "All activity",
+		sidebarLabel: "Mentions",
 		icon: IconBell,
-		to: (orgSlug) => AppRoute.NotificationsAll({ orgSlug }),
-		keywords: "activity inbox mentions",
+		to: (orgSlug) => AppRoute.NotificationsMentions({ orgSlug }),
+		keywords: "activity inbox mentions replies",
 	},
 	settings: { label: "Settings", icon: IconGear, to: (orgSlug) => AppRoute.SettingsGeneral({ orgSlug }) },
 
 	// Notifications
-	notificationsChannels: {
-		label: "Channel notifications",
-		sidebarLabel: "Channels",
-		icon: IconHashtag,
-		to: (orgSlug) => AppRoute.NotificationsGeneral({ orgSlug }),
+	notificationsUnreads: {
+		label: "Unread channels",
+		sidebarLabel: "Unreads",
+		icon: IconChatBubble,
+		to: (orgSlug) => AppRoute.NotificationsUnreads({ orgSlug }),
+		keywords: "inbox unread new messages",
 	},
-	notificationsThreads: {
-		label: "Thread notifications",
-		sidebarLabel: "Threads",
-		icon: IconThread,
-		to: (orgSlug) => AppRoute.NotificationsThreads({ orgSlug }),
-		keywords: "replies",
-	},
-	notificationsDms: {
-		label: "Direct message notifications",
-		sidebarLabel: "Direct messages",
-		icon: IconMsgs,
-		to: (orgSlug) => AppRoute.NotificationsDms({ orgSlug }),
-		keywords: "dms",
+	notificationsAll: {
+		label: "All notifications",
+		sidebarLabel: "All activity",
+		icon: IconEnvelope,
+		to: (orgSlug) => AppRoute.NotificationsAll({ orgSlug }),
+		keywords: "inbox activity",
 	},
 
 	// Customers
@@ -338,7 +332,7 @@ export const DESTINATION_GROUPS: ReadonlyArray<{
 			"myDesktop",
 		],
 	},
-	{ title: "Notifications", ids: ["notificationsChannels", "notificationsThreads", "notificationsDms"] },
+	{ title: "Notifications", ids: ["notificationsUnreads", "notificationsAll"] },
 ]
 
 /** Whether the page exists in this build. */

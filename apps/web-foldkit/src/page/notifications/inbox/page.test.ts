@@ -3,14 +3,14 @@ import { Schema } from "effect"
 import { Scene } from "foldkit"
 import { describe, expect, test } from "vitest"
 import type { Shared } from "../../contract"
-import { groupByTime } from "./format"
+import { groupByTime, notificationsOfTab } from "./format"
 import { Message } from "./message"
-import { type Model, type NotificationItem, Notifications } from "./model"
-import { MarkNotificationRead, routeChanged, update } from "./update"
+import { type Model, type NotificationItem, Notifications, UnreadChannels } from "./model"
+import { MarkNotificationRead, routeChanged, update as pageUpdate } from "./update"
 import { inboxView } from "./view"
 import { sharedDefaults } from "../../test-shared"
 
-/** Inbox update and view: grouping, category tabs, and marking unread notifications read. */
+/** Inbox update and view: grouping, the Mentions and All tabs, and marking unread notifications read. */
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
 const notificationId = (n: number) => Schema.decodeSync(NotificationId)(uuid(n))
@@ -37,6 +37,7 @@ const item = (n: number, overrides: Partial<NotificationItem>): NotificationItem
 	targetedResourceId: uuid(900),
 	targetedResourceType: "channel",
 	messageContent: `message ${n}`,
+	mentionNames: {},
 	channel: { name: "general", type: "public" },
 	author: { firstName: "Grace", lastName: "Hopper", avatarUrl: null },
 	...overrides,
@@ -64,7 +65,16 @@ const olderThread = item(4, {
 })
 
 const items = [unreadChannel, readDm, unreadOrphan, olderThread]
-const inbox: Model = { category: "all", notifications: Notifications.Loaded({ items }) }
+const modelOf = (fields: Partial<Model>): Model => ({
+	tab: "all",
+	notifications: Notifications.Loading(),
+	unreadChannels: UnreadChannels.Loading(),
+	markedRead: [],
+	isMarkingAllRead: false,
+	...fields,
+})
+const inbox = modelOf({ notifications: Notifications.Loaded({ items }) })
+const update = (model: Model, message: Message) => pageUpdate(model, message, shared)
 const view = Scene.withViewInputs(inboxView, { shared })
 
 describe("notifications inbox", () => {
@@ -103,7 +113,7 @@ describe("notifications inbox", () => {
 		Scene.scene(
 			{ update, view: view() },
 			Scene.given(inbox),
-			Scene.keydown(Scene.role("button"), "Enter"),
+			Scene.keydown(Scene.role("button", { name: /View notification/ }), "Enter"),
 			Scene.Command.expectExact(MarkNotificationRead),
 			Scene.Command.resolve(
 				MarkNotificationRead,
@@ -117,26 +127,41 @@ describe("notifications inbox", () => {
 		expect(next.commands ?? []).toEqual([])
 	})
 
-	test("a category tab keeps the rows and filters them", () => {
-		const dms = routeChanged(inbox, { _tag: "NotificationsDms", orgSlug: "hazel" }).model
+	test("Mentions lists what names the user (and rows from before reasons); All lists everything", () => {
+		const mention = item(7, { reason: "mention", messageContent: "@Ada can you look?" })
+		const reply = item(8, { reason: "reply", messageContent: "Replying to you" })
+		const everyone = item(9, { reason: "everyone", messageContent: "Heads up, all" })
+		const direct = item(10, { reason: "direct", messageContent: "Hey Ada" })
+		const message = item(11, { reason: "message", messageContent: "Just chatting" })
+		const sla = item(12, { reason: "sla_reply_breach", resourceType: "customer_issue" })
+		const legacy = item(13, { reason: null, messageContent: "From before reasons" })
+		const all = [mention, reply, everyone, direct, message, sla, legacy]
+		expect(notificationsOfTab(all, "mentions")).toEqual([mention, reply, everyone, direct, legacy])
+		expect(notificationsOfTab(all, "all")).toEqual(all)
+		const mentions = routeChanged(modelOf({ notifications: Notifications.Loaded({ items: all }) }), {
+			_tag: "NotificationsMentions",
+			orgSlug: "hazel",
+		}).model
 		Scene.scene(
 			{ update, view: view() },
-			Scene.given(dms),
-			Scene.expect(Scene.role("heading", { name: "Direct messages" })).toExist(),
-			Scene.expect(Scene.text("Sent you the rubric")).toExist(),
-			Scene.expect(Scene.text("Have a good one!")).toBeAbsent(),
+			Scene.given(mentions),
+			Scene.expect(Scene.role("heading", { name: "Mentions" })).toExist(),
+			Scene.expect(Scene.text("@Ada can you look?")).toExist(),
+			Scene.expect(Scene.text("Hey Ada")).toExist(),
+			Scene.expect(Scene.text("Just chatting")).toBeAbsent(),
+			Scene.expect(Scene.text("A support issue is past its reply deadline")).toBeAbsent(),
 		)
 		Scene.scene(
 			{ update, view: view() },
-			Scene.given({ ...dms, notifications: Notifications.Loaded({ items: [unreadChannel] }) }),
-			Scene.expect(Scene.text("No DM notifications")).toExist(),
+			Scene.given({ ...mentions, notifications: Notifications.Loaded({ items: [message] }) }),
+			Scene.expect(Scene.text("No mentions")).toExist(),
 		)
 	})
 
 	test("shows the loader until the first rows arrive", () => {
 		Scene.scene(
 			{ update, view: view() },
-			Scene.given<Model>({ category: "all", notifications: Notifications.Loading() }),
+			Scene.given(modelOf({})),
 			Scene.expect(Scene.role("progressbar")).toExist(),
 			Scene.expect(Scene.text("No notifications")).toBeAbsent(),
 		)
@@ -162,10 +187,9 @@ describe("support SLA alerts", () => {
 	test("read as the issue's state in its channel, not as a message", () => {
 		Scene.scene(
 			{ update, view: view() },
-			Scene.given<Model>({
-				category: "all",
-				notifications: Notifications.Loaded({ items: [breach, warning, unreadChannel] }),
-			}),
+			Scene.given(
+				modelOf({ notifications: Notifications.Loaded({ items: [breach, warning, unreadChannel] }) }),
+			),
 			Scene.expect(Scene.text("Reply overdue in #SSO login loops")).toExist(),
 			Scene.expect(Scene.text("A support issue is past its reply deadline")).toExist(),
 			Scene.expect(Scene.text("Resolution due soon in #ext-acme")).toExist(),

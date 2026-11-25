@@ -374,7 +374,7 @@ const markOrganizationRead: Step = (model) => {
 /** Mod+I: the notifications inbox. */
 const openInbox: Step = (model) => {
 	const orgSlug = orgSlugOf(model.route)
-	return orgSlug === undefined ? { model } : navigateTo(AppRoute.NotificationsAll({ orgSlug }))(model)
+	return orgSlug === undefined ? { model } : navigateTo(AppRoute.NotificationsMentions({ orgSlug }))(model)
 }
 
 /** Mod+Shift+D: docks the desktop sidebar to its nav rail and back; on mobile, opens or closes the sheet. */
