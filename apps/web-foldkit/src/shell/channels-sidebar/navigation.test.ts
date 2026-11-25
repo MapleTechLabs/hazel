@@ -104,23 +104,25 @@ describe("navigationOrder", () => {
 	})
 })
 
+const NOW = Date.UTC(2026, 2, 12, 8)
+
 describe("adjacentChannel", () => {
 	test("Alt+ArrowDown goes to the channel below, across sections", () => {
-		expect(adjacentChannel(sidebar(), random, "Next", false)).toBe(design)
+		expect(adjacentChannel(sidebar(), random, "Next", false, NOW)).toBe(design)
 	})
 
 	test("Alt+ArrowUp goes to the channel above", () => {
-		expect(adjacentChannel(sidebar(), design, "Previous", false)).toBe(random)
+		expect(adjacentChannel(sidebar(), design, "Previous", false, NOW)).toBe(random)
 	})
 
 	test("it wraps at both ends, as in Discord", () => {
-		expect(adjacentChannel(sidebar(), dmGrace, "Next", false)).toBe(favorite)
-		expect(adjacentChannel(sidebar(), favorite, "Previous", false)).toBe(dmGrace)
+		expect(adjacentChannel(sidebar(), dmGrace, "Next", false, NOW)).toBe(favorite)
+		expect(adjacentChannel(sidebar(), favorite, "Previous", false, NOW)).toBe(dmGrace)
 	})
 
 	test("from a page that is not a channel, Down starts at the top and Up at the bottom", () => {
-		expect(adjacentChannel(sidebar(), null, "Next", false)).toBe(favorite)
-		expect(adjacentChannel(sidebar(), null, "Previous", false)).toBe(dmGrace)
+		expect(adjacentChannel(sidebar(), null, "Next", false, NOW)).toBe(favorite)
+		expect(adjacentChannel(sidebar(), null, "Previous", false, NOW)).toBe(dmGrace)
 	})
 
 	test("Alt+Shift+ArrowDown skips to the next channel with unread messages", () => {
@@ -130,23 +132,30 @@ describe("adjacentChannel", () => {
 				{ channelId: general, count: 0 },
 			],
 		})
-		expect(adjacentChannel(model, general, "Next", true)).toBe(launch)
-		expect(adjacentChannel(model, dmGrace, "Previous", true)).toBe(launch)
+		expect(adjacentChannel(model, general, "Next", true, NOW)).toBe(launch)
+		expect(adjacentChannel(model, dmGrace, "Previous", true, NOW)).toBe(launch)
 	})
 
 	test("unread messages without a mention count as unread too", () => {
 		const model = sidebar({ unreadChannels: [{ channelId: design, mutedUntilMs: null }] })
-		expect(adjacentChannel(model, general, "Next", true)).toBe(design)
+		expect(adjacentChannel(model, general, "Next", true, NOW)).toBe(design)
+	})
+
+	test("a channel muted until later is skipped; once the mute ends it counts again", () => {
+		const model = sidebar({ unreadChannels: [{ channelId: design, mutedUntilMs: NOW + 60_000 }] })
+		expect(adjacentChannel(model, general, "Next", true, NOW)).toBeNull()
+		expect(adjacentChannel(model, general, "Next", true, NOW + 120_000)).toBe(design)
 	})
 
 	test("with nothing unread (or nowhere else to go) it stays put", () => {
-		expect(adjacentChannel(sidebar(), general, "Next", true)).toBeNull()
+		expect(adjacentChannel(sidebar(), general, "Next", true, NOW)).toBeNull()
 		expect(
 			adjacentChannel(
 				sidebar({ unreadCounts: [{ channelId: general, count: 2 }] }),
 				general,
 				"Next",
 				true,
+				NOW,
 			),
 		).toBeNull()
 		expect(
@@ -155,6 +164,7 @@ describe("adjacentChannel", () => {
 				null,
 				"Next",
 				false,
+				NOW,
 			),
 		).toBeNull()
 	})

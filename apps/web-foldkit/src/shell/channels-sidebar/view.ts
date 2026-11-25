@@ -84,10 +84,11 @@ const threadsMemo = new WeakMap<
 	{ readonly key: string; readonly result: ReadonlyMap<string, ReadonlyArray<SidebarThread>> }
 >()
 
-// Pure memo on the frozen list and the minute, so rows with threads keep their memo while nothing changed.
+// Pure memo on the frozen list, the minute and the next mute to end, so rows with threads keep their
+// memo while nothing changed.
 const unreadMemo = new WeakMap<
 	Model["unreadChannels"],
-	{ readonly minute: number; readonly result: ReadonlySet<string> }
+	{ readonly minute: number; readonly nextExpiryMs: number; readonly result: ReadonlySet<string> }
 >()
 const MINUTE_MS = 60 * 1000
 
@@ -95,13 +96,17 @@ const MINUTE_MS = 60 * 1000
 const unreadSetOf = (channels: Model["unreadChannels"], nowMs: number): ReadonlySet<string> => {
 	const minute = Math.floor(nowMs / MINUTE_MS)
 	const cached = unreadMemo.get(channels)
-	if (cached !== undefined && cached.minute === minute) return cached.result
+	if (cached !== undefined && cached.minute === minute && nowMs < cached.nextExpiryMs) return cached.result
+	const isMuted = (mutedUntilMs: number | null): mutedUntilMs is number =>
+		mutedUntilMs !== null && mutedUntilMs > nowMs
 	const result: ReadonlySet<string> = new Set(
-		channels.flatMap(({ channelId, mutedUntilMs }) =>
-			mutedUntilMs !== null && mutedUntilMs > nowMs ? [] : [channelId],
-		),
+		channels.flatMap(({ channelId, mutedUntilMs }) => (isMuted(mutedUntilMs) ? [] : [channelId])),
 	)
-	unreadMemo.set(channels, { minute, result })
+	const nextExpiryMs = Math.min(
+		Infinity,
+		...channels.flatMap(({ mutedUntilMs }) => (isMuted(mutedUntilMs) ? [mutedUntilMs] : [])),
+	)
+	unreadMemo.set(channels, { minute, nextExpiryMs, result })
 	return result
 }
 
