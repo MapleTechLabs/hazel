@@ -100,6 +100,7 @@ describe("applyBadge", () => {
 			}
 		}
 		vi.stubGlobal("Image", FakeImage)
+		// SAFETY: `drawDotted` calls only these members of the 2d context; the rest are never read.
 		vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
 			drawImage,
 			beginPath: vi.fn(),
