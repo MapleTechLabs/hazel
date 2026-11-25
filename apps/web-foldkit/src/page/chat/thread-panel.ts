@@ -106,7 +106,11 @@ const measureEdge = (target: EventTarget | null, fallbackWidth: number) => {
 	const root = panel?.parentElement ?? null
 	return {
 		startWidth: panel?.getBoundingClientRect().width ?? fallbackWidth,
-		maxWidth: root === null ? fallbackWidth : root.getBoundingClientRect().width - MIN_CHANNEL_WIDTH,
+		// The room beside the channel, never past the widest width kept (`aria-valuemax` names it too).
+		maxWidth: Math.min(
+			MAX_KEYBOARD_WIDTH,
+			root === null ? fallbackWidth : root.getBoundingClientRect().width - MIN_CHANNEL_WIDTH,
+		),
 	}
 }
 

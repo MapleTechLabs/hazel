@@ -120,7 +120,8 @@ const actions = (h: HtmlBuilder<Message>, model: Model, isSignedIn: boolean): Ht
 				: button(h, { intent: "primary", className: "w-full", onPress: Message.ClickedSignIn() }, [
 						"Sign in to join",
 					]),
-			wrongWorkspace(h),
+			// Only someone signed in has a workspace to be in instead.
+			...(isSignedIn ? [wrongWorkspace(h)] : []),
 		],
 	)
 
