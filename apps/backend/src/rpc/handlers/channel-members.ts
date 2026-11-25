@@ -215,7 +215,8 @@ export const ChannelMemberRpcLive = ChannelMemberRpcs.toLayer(
 							const set = {
 								...(fields.level === undefined ? {} : { level: fields.level }),
 								...(fields.isMuted === undefined ? {} : { isMuted: fields.isMuted }),
-								...(fields.suppressEveryone === undefined
+								// Only the organization's scope suppresses @channel and @here.
+								...(fields.suppressEveryone === undefined || scope !== "organization"
 									? {}
 									: { suppressEveryone: fields.suppressEveryone }),
 								...(mutedUntil === undefined

@@ -158,17 +158,12 @@ export class ChannelMemberRpcs extends RpcGroup.make(
 		.middleware(AuthMiddleware),
 
 	/**
-	 * ChannelMemberMarkAllRead
-	 *
-	 * Marks every channel the current user is in, in the organization, read (Shift+Escape): what
-	 * `channelMember.clearNotifications` does for one channel, for all of them.
-	 */
-	/**
 	 * ChannelMemberSetScopeNotifications
 	 *
 	 * The current user's notification settings for the organization or one of its sections
 	 * (Discord's server and category settings). Fields left out keep their value; a scope with no
-	 * row yet starts at the defaults.
+	 * row yet starts at the defaults. `suppressEveryone` is the organization's only (a section's is
+	 * ignored).
 	 */
 	Rpc.make("channelMember.setScopeNotifications", {
 		payload: Schema.Struct({
@@ -200,6 +195,12 @@ export class ChannelMemberRpcs extends RpcGroup.make(
 		.annotate(RequiredScopes, ["channel-members:write"])
 		.middleware(AuthMiddleware),
 
+	/**
+	 * ChannelMemberMarkAllRead
+	 *
+	 * Marks every channel the current user is in, in the organization, read (Shift+Escape): what
+	 * `channelMember.clearNotifications` does for one channel, for all of them.
+	 */
 	Rpc.make("channelMember.markAllRead", {
 		payload: Schema.Struct({ organizationId: OrganizationId }),
 		success: Schema.Struct({ transactionId: TransactionId }),

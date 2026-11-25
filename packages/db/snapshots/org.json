@@ -4295,6 +4295,13 @@
 		},
 		{
 			"kind": "index",
+			"table": "notification_overrides",
+			"name": "notification_overrides_scope_idx",
+			"unique": false,
+			"columns": ["\"scope\"", "\"scopeId\""]
+		},
+		{
+			"kind": "index",
 			"table": "organization_exports",
 			"name": "organization_exports_organization_id_idx",
 			"unique": false,

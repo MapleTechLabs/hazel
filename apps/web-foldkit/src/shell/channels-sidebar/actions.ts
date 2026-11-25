@@ -136,7 +136,8 @@ export const ApplySectionNotificationChoice = Command.define("ApplySectionNotifi
 		}).pipe(
 			Effect.catchTags({
 				ChannelSectionNotFoundError: () => Effect.succeed(failed("SectionNotFound")),
-				UnauthorizedError: () => Effect.succeed(failed("SectionNotFound")),
+				// Not a member of the organization any more: nothing a retry fixes.
+				UnauthorizedError: () => Effect.succeed(failed("Unexpected")),
 			}),
 			catchCommon(failed),
 		),

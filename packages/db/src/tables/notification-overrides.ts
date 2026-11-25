@@ -27,5 +27,7 @@ export const notificationOverridesTable = SQLite.table("notification_overrides",
 		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 	},
 	primaryKey: ["userId", "scope", "scopeId"],
+	// Each message reads its channel's section and organization rows (`notification-service.ts`).
+	indexes: [SQLite.index("notification_overrides_scope_idx", ["scope", "scopeId"])],
 })
 export type NotificationOverride = SQLite.SelectRowOf<typeof notificationOverridesTable>
