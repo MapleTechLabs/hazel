@@ -439,6 +439,54 @@ describe("ChannelObject messages", () => {
 			}),
 		))
 
+	it("the organization's and the section's settings reach delivery: a level opts in, a mute holds back", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const channel = yield* world.channel("public")
+				const db = world.org.storage.db
+				const delivered = () =>
+					Effect.map(world.objects.get(userTarget(world.alice)), (user) =>
+						(
+							user.storage.db.prepare(`SELECT resourceId FROM notifications`).all() as Array<{
+								resourceId: string
+							}>
+						).map((row) => row.resourceId),
+					)
+
+				// On the channel type's default (mentions), a plain message does not notify her.
+				const quiet = yield* send(world, channel, world.author, "quiet")
+				expect(yield* delivered()).not.toContain(quiet.id)
+
+				// Her organization setting, All messages, opts her in.
+				db.prepare(
+					`INSERT INTO notification_overrides (userId, organizationId, scope, scopeId, level) VALUES (?, ?, 'organization', ?, 'all')`,
+				).run(world.alice, world.orgId, world.orgId)
+				const everyone = yield* send(world, channel, world.author, "for all")
+				expect(yield* delivered()).toContain(everyone.id)
+
+				// The channel's section, muted, holds plain messages back but lets a mention through.
+				const sectionId = uuid()
+				db.prepare(
+					`INSERT INTO channel_sections (id, organizationId, name) VALUES (?, ?, 'Projects')`,
+				).run(sectionId, world.orgId)
+				db.prepare(`UPDATE channels SET sectionId = ? WHERE id = ?`).run(sectionId, channel.id)
+				db.prepare(
+					`INSERT INTO notification_overrides (userId, organizationId, scope, scopeId, isMuted) VALUES (?, ?, 'section', ?, 1)`,
+				).run(world.alice, world.orgId, sectionId)
+				const held = yield* send(world, channel, world.author, "held back")
+				const mention = yield* send(
+					world,
+					channel,
+					world.author,
+					`@[userId:${world.alice}] still you`,
+				)
+				const ids = yield* delivered()
+				expect(ids).not.toContain(held.id)
+				expect(ids).toContain(mention.id)
+			}),
+		))
+
 	it("a thread under a muted channel stays quiet but for mentions", () =>
 		run(
 			Effect.gen(function* () {
