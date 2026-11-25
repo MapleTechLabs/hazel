@@ -7,7 +7,7 @@ import type { MessageId, UserId } from "@hazel/schema"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { orgTarget } from "../kinds"
-import { makeCustomersWorld, uuid } from "./test-kit"
+import { makeCustomersWorld, ok, uuid } from "./test-kit"
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
@@ -196,6 +196,35 @@ describe("email support inboxes", () => {
 					"Exports are failing",
 					"Second question",
 				])
+			}),
+		))
+
+	it("brings a conversation a member filed back on the customer's reply, without asking the model", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, channel, inbox, sender, say, issues } = yield* setup
+				// A model that would call anything chatter, were it asked.
+				world.objects.setDecisions(() => Effect.succeed({ support: 0.02, chatter: 0.98 }))
+				const ana = sender("ana@acme.com")
+				const root = yield* say({ channelId: inbox, authorId: ana, minutes: 0 })
+				const issueId = world.rows<{ id: string }>(`SELECT id FROM customer_issues`)[0]!.id
+				ok(yield* world.call("customers.issue.update", { issueId, triage: "chatter" }, world.member))
+				expect(issues()).toMatchObject([{ status: "closed" }])
+				yield* say({
+					channelId: channel("thread", inbox),
+					authorId: ana,
+					minutes: 30,
+					content: "Still failing",
+					threadRootMessageId: root,
+				})
+				expect(
+					world.rows<{ status: string; triage: string | null; reopenCount: number }>(
+						`SELECT status, triage, reopenCount FROM customer_issues`,
+					),
+				).toEqual([{ status: "waiting_on_us", triage: "support", reopenCount: 0 }])
+				// No email is sent to the model: not at opening, not for the reply.
+				expect(world.rows(`SELECT id FROM _outbox WHERE target = 'ai'`)).toEqual([])
+				expect(world.objects.decisionRequests).toEqual([])
 			}),
 		))
 

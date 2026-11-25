@@ -143,6 +143,9 @@ const setup = Effect.gen(function* () {
 		world.objects.setDecisions((request) =>
 			Effect.succeed(typeof answers === "function" ? answers(request) : answers),
 		)
+	/** The model answers `answers`, and `meanwhile` happens while it is asked. */
+	const answerWhile = <E>(meanwhile: Effect.Effect<unknown, E>, answers: NoulAnswers) =>
+		world.objects.setDecisions(() => Effect.as(Effect.orDie(meanwhile), answers))
 	const openedEvents = () =>
 		world.rows<{ title: string }>(`SELECT title FROM customer_events WHERE type = 'issue.opened'`)
 	const clocks = () => world.rows<{ n: number }>(`SELECT count(*) AS n FROM customer_issue_slas`)[0]!.n
@@ -157,6 +160,7 @@ const setup = Effect.gen(function* () {
 		pending,
 		triage,
 		answer,
+		answerWhile,
 		openedEvents,
 		clocks,
 	}
@@ -431,6 +435,7 @@ describe("support triage", () => {
 	it("asks again when the customer replies in a filed conversation", () =>
 		run(
 			Effect.gen(function* () {
+				const startedAt = Date.now()
 				const {
 					world,
 					linked,
@@ -497,6 +502,110 @@ describe("support triage", () => {
 				])
 				expect(clocks()).toBe(1)
 				expect(openedEvents()).toHaveLength(1)
+				// Its clocks start when it came back, not 20 minutes ago when the chatter began.
+				const [sla] = world.rows<{ runningSince: number }>(
+					`SELECT json_extract(state, '$.resolution.runningSince') AS runningSince FROM customer_issue_slas`,
+				)
+				expect(sla?.runningSince).toBeGreaterThanOrEqual(startedAt)
+			}),
+		))
+
+	it("lets a member's filing stand when it was made while the model answered", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, linked, channel, customer, say, issues, triage, answer, answerWhile } =
+					yield* setup
+				answer(CHATTER)
+				const root = yield* say({
+					channelId: linked,
+					authorId: customer,
+					minutesAgo: 20,
+					content: "hey",
+				})
+				yield* triage
+				const issueId = issues()[0]!.id
+				const update = (change: Record<string, unknown>) =>
+					world.call("customers.issue.update", { issueId, ...change }, world.member)
+				// While the reply is judged, a member brings the conversation back and files it again.
+				answerWhile(
+					Effect.andThen(update({ triage: "support" }), update({ triage: "chatter" })),
+					SUPPORT,
+				)
+				yield* say({
+					channelId: channel("thread", linked),
+					authorId: customer,
+					minutesAgo: 1,
+					content: "anyone around?",
+					threadRootMessageId: root,
+				})
+				yield* triage
+				expect(issues()).toMatchObject([
+					{ status: "closed", triage: "chatter", triagedByUserId: world.member },
+				])
+			}),
+		))
+
+	it("never folds a request into a conversation filed while the model answered", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, linked, customer, customerUser, say, issues, triage, answer, answerWhile } =
+					yield* setup
+				answer(SUPPORT)
+				yield* say({
+					channelId: linked,
+					authorId: customer,
+					minutesAgo: 25,
+					content: "Traces stopped arriving since the deploy",
+				})
+				yield* triage
+				const first = issues()[0]!.id
+				// The model says the next message continues it; a member files it meanwhile.
+				answerWhile(
+					world.call("customers.issue.update", { issueId: first, triage: "chatter" }, world.member),
+					{ ...SUPPORT, same_1: 0.91 },
+				)
+				yield* say({
+					channelId: linked,
+					authorId: customerUser(),
+					minutesAgo: 2,
+					content: "same here, eu-west only",
+				})
+				yield* triage
+				expect(issues()).toMatchObject([
+					{ id: first, status: "closed", triage: "chatter" },
+					{ status: "new", triage: "support", title: "same here, eu-west only" },
+				])
+			}),
+		))
+
+	it("never files an issue a member prioritised or tagged", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, linked, customer, customerUser, say, issues, triage, answer } = yield* setup
+				answer(CHATTER)
+				yield* say({ channelId: linked, authorId: customer, minutesAgo: 2, content: "hm" })
+				yield* say({ channelId: linked, authorId: customerUser(), minutesAgo: 1, content: "ok" })
+				const [first, second] = issues()
+				ok(
+					yield* world.call(
+						"customers.issue.update",
+						{ issueId: first!.id, priority: "high" },
+						world.member,
+					),
+				)
+				ok(
+					yield* world.call(
+						"customers.issue.update",
+						{ issueId: second!.id, tags: ["billing"] },
+						world.member,
+					),
+				)
+				yield* triage
+				expect(issues()).toMatchObject([
+					{ status: "new", triage: null },
+					{ status: "new", triage: null },
+				])
+				expect(world.objects.decisionRequests).toEqual([])
 			}),
 		))
 
@@ -652,6 +761,9 @@ describe("support triage", () => {
 				// Filing one that is already closed moves no status, so the timeline records no close.
 				ok(yield* update({ status: "closed" }))
 				ok(yield* update({ triage: "chatter" }))
+				expect(issues()).toMatchObject([{ status: "closed", triage: "chatter" }])
+				// Filing wins over a status sent with it: a filed issue never sits in a queue.
+				ok(yield* update({ triage: "chatter", status: "on_hold" }))
 				expect(issues()).toMatchObject([{ status: "closed", triage: "chatter" }])
 				expect(
 					world

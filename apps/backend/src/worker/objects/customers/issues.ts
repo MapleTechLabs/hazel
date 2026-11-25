@@ -355,12 +355,17 @@ export const receiveSupportMessage = Effect.fn("CustomersObject.receiveSupportMe
 			// A reply under a message nobody raised as an issue (an announcement, a team note) is chat.
 			if (Option.isNone(issue)) return "ignored" as const
 			const filed = issue.value.triage === "chatter"
-			yield* updateIssueRow(issue.value, {
+			const fromCustomer = input.message.side === "customer"
+			const changes: Partial<schema.NewCustomerIssue> = {
 				...(filed ? foldActivity : foldMessage)(issue.value, input.message),
 				threadChannelId,
-			})
+			}
+			// An email is a request by where it was sent, and none of it goes to the model: a
+			// customer's reply to a conversation a member filed brings it back unasked.
+			if (filed && fromCustomer && input.inbox !== undefined) Object.assign(changes, BACK_TO_SUPPORT)
+			yield* updateIssueRow(issue.value, changes)
 			// Chatter stays filed while it is chatter: the model says whether this reply changes that.
-			if (filed && input.message.side === "customer") {
+			if (filed && fromCustomer && input.inbox === undefined) {
 				yield* requestTriage(
 					{
 						organizationId: issue.value.organizationId,
@@ -499,6 +504,19 @@ export type IssuePatch = {
 }
 
 /**
+ * What brings a filed conversation back with nobody deciding it (a customer's reply): support
+ * again and waiting on us. Not a reopen: it was never closed as resolved.
+ */
+export const BACK_TO_SUPPORT = {
+	triage: "support",
+	triageScore: null,
+	triagedByUserId: null,
+	status: "waiting_on_us",
+	closedAt: null,
+	closedByUserId: null,
+} as const satisfies IssuePatch
+
+/**
  * The changes a member's `customers.issue.update` makes; only fields that differ.
  *
  * Triage by hand: `triage: "chatter"` files the issue (closed, whatever `status` says). A filed
@@ -541,7 +559,12 @@ export const issuePatch = (
 		patch.status = opens && input.status !== undefined ? input.status : "waiting_on_us"
 		patch.closedAt = null
 		patch.closedByUserId = null
-	} else if (input.status !== undefined && input.status !== issue.status) {
+	} else if (
+		// Filing wins over a status sent with it: a filed issue stays closed.
+		input.triage !== "chatter" &&
+		input.status !== undefined &&
+		input.status !== issue.status
+	) {
 		patch.status = input.status
 		if (input.status === "closed") {
 			patch.closedAt = now

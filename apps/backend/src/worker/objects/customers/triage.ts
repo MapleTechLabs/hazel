@@ -35,7 +35,14 @@ import { Directory } from "../../../services/directory"
 import { callObject } from "../calls"
 import { SupportContextCall } from "../channel/support-message"
 import { channelTarget } from "../kinds"
-import { foldActivity, foldMessage, type IssuePatch, type SupportMessage, updateIssueRow } from "./issues"
+import {
+	BACK_TO_SUPPORT,
+	foldActivity,
+	foldMessage,
+	type IssuePatch,
+	type SupportMessage,
+	updateIssueRow,
+} from "./issues"
 import { inList } from "./sql"
 import type { TriageIssuePayload } from "./triage-wire"
 
@@ -197,14 +204,16 @@ const triageSettings = Effect.gen(function* () {
 
 /**
  * Nobody has worked it: the model may still file or fold it. An issue a member opened, answered,
- * assigned or moved is theirs.
+ * assigned, moved, prioritised or tagged is theirs.
  */
 export const isUntouched = (issue: Issue): boolean =>
 	issue.triage === null &&
 	issue.status === "new" &&
 	issue.createdByUserId === null &&
 	issue.assigneeUserId === null &&
-	issue.firstTeamReplyAt === null
+	issue.firstTeamReplyAt === null &&
+	issue.priority === "none" &&
+	issue.tags.length === 0
 
 /** A conversation a new message can be folded into: open, or filed as chatter. */
 const takesMessages = (issue: Issue): boolean => issue.status !== "closed" || issue.triage === "chatter"
@@ -404,14 +413,7 @@ export const bringBack = Effect.fn("Customers.bringBackIssue")(function* (
 	input: { readonly score: number | null; readonly now: Date },
 ) {
 	const db = yield* Database.Database
-	const back = yield* updateIssueRow(issue, {
-		triage: "support",
-		triageScore: input.score,
-		triagedByUserId: null,
-		status: "waiting_on_us",
-		closedAt: null,
-		closedByUserId: null,
-	})
+	const back = yield* updateIssueRow(issue, { ...BACK_TO_SUPPORT, triageScore: input.score })
 	// Filed by the model, it has no "opened" on the timeline yet.
 	if (Option.isNone(yield* openedEventOf(issue))) {
 		yield* db.run(
@@ -504,8 +506,13 @@ const applyOpening = (
 						Merge: ({ into, score, chatter }) =>
 							Effect.gen(function* () {
 								const target = yield* liveIssue(into)
-								// Closed or deleted since it was read: the message stands on its own.
-								if (Option.isNone(target) || !takesMessages(target.value)) {
+								// Closed, deleted or (for a request) filed since it was read: the message
+								// stands on its own.
+								if (
+									Option.isNone(target) ||
+									!takesMessages(target.value) ||
+									(!chatter && target.value.triage === "chatter")
+								) {
 									return yield* chatter ? file(score) : keep(score)
 								}
 								yield* mergeIssue(issue, target.value, now)
@@ -517,11 +524,17 @@ const applyOpening = (
 		)
 	})
 
+/** The same decision to file: who made it, and when it closed the conversation. */
+const sameFiling = (a: Issue, b: Issue): boolean =>
+	a.triagedByUserId === b.triagedByUserId && a.closedAt?.getTime() === b.closedAt?.getTime()
+
 /** A customer replied in a filed conversation: it comes back unless the model calls the reply chatter. */
 const applyReply = (
 	issueId: CustomerIssueId,
 	answers: Option.Option<TriageAnswers>,
 	now: Date,
+	/** The filing the model was asked about; absent when it was never asked. */
+	asked?: Issue,
 ): Effect.Effect<TriageOutcome, DatabaseError, Store> =>
 	Effect.gen(function* () {
 		const db = yield* Database.Database
@@ -530,6 +543,8 @@ const applyReply = (
 				const current = yield* liveIssue(issueId)
 				if (Option.isNone(current)) return "gone" as const
 				if (current.value.triage !== "chatter") return "touched" as const
+				// Brought back and filed again while the model answered: the member's filing stands.
+				if (asked !== undefined && !sameFiling(asked, current.value)) return "touched" as const
 				if (Option.isSome(answers) && isChatter(answers.value)) return "chatter" as const
 				yield* bringBack(current.value, {
 					score: Option.match(answers, { onNone: () => null, onSome: (value) => value.support }),
@@ -585,7 +600,7 @@ export const triageIssue = Effect.fn("Customers.triageIssue")(function* (payload
 		})
 		return reply === undefined
 			? yield* applyOpening(issue.id, decideTriage(answers), now)
-			: yield* applyReply(issue.id, Option.some(answers), now)
+			: yield* applyReply(issue.id, Option.some(answers), now, issue)
 	})
 	yield* Effect.annotateCurrentSpan({ "triage.outcome": outcome, "triage.is_reply": reply !== undefined })
 	return outcome

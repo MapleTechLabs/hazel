@@ -2,13 +2,13 @@ import { OrganizationId } from "@hazel/schema"
 import { Effect, Queue, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import { channelOptionsStream } from "../../../customers/channels"
-import { issuesStream } from "../../../customers/issues"
+import { isFiltered, issuesStream } from "../../../customers/issues"
 import { accountsStream, orgMembersStream } from "../../../customers/queries"
 import { issueSlasStream } from "../../../customers/sla"
 import { queueKeyFilter } from "../../../customers/ui/queue-keys"
 import type { PageSubscriptionInput } from "../../contract"
 import { Message } from "./message"
-import type { InboxKey, Model } from "./model"
+import { type InboxKey, type Model, selectedIssue } from "./model"
 
 /** The inbox's live rows, and its keyboard while nothing else holds it. */
 
@@ -38,10 +38,18 @@ const PRESSABLE: ReadonlySet<InboxKey> = new Set(["open"])
 /** The inbox key a keydown means, or none (typing, a modifier, a menu or dialog holding the keyboard). */
 export const inboxKeyOf = queueKeyFilter(KEYS, REPEATABLE, PRESSABLE)
 
-const isMenuOpen = (model: Model) =>
-	[model.assignMenu, model.statusMenu, model.priorityMenu, model.filterMenu].some(
-		(menu) => menu.popup._tag === "Open",
-	)
+/**
+ * A menu on screen holds the keyboard. The assign, status and priority menus belong to the selected
+ * row; one left open as its issue was filed (a filed row has none of them) holds nothing.
+ */
+export const isMenuOpen = (model: Model): boolean => {
+	const selected = selectedIssue(model)
+	const rowMenus =
+		selected === undefined || isFiltered(selected)
+			? []
+			: [model.assignMenu, model.statusMenu, model.priorityMenu]
+	return [...rowMenus, model.filterMenu].some((menu) => menu.popup._tag === "Open")
+}
 
 const organization = { organizationId: Schema.NullOr(OrganizationId) }
 const organizationOf = ({ shared }: Input) => ({ organizationId: shared.organization?.id ?? null })

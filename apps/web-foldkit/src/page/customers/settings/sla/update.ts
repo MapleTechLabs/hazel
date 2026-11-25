@@ -173,8 +173,10 @@ const savedHours = (model: Model, shared: Shared): Return => {
 
 // TRIAGE
 
+// Not before the saved settings are here: a draft made from the defaults would turn triage on, or
+// clear the description, by saving a field nobody changed.
 const editedTriage = (model: Model, shared: Shared, change: (form: TriageForm) => TriageForm): Return =>
-	!isCustomersAdmin(shared) || model.isSavingTriage
+	!isCustomersAdmin(shared) || model.isSavingTriage || model.settings === null
 		? { model }
 		: { model: { ...model, triageForm: change(triageFormOf(model)) } }
 

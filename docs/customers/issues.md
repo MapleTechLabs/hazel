@@ -46,8 +46,9 @@ Replies still happen in the channel or thread; the inbox links into chat.
 A linked channel is a conversation, and most of what a customer writes there is not a request
 ("yup", "thanks", talk about other tools). Left alone, each of those opens an issue, and the inbox
 fills with rows nobody can answer. So every issue a customer's message opens in a linked channel is
-put to a **decision model** right after it opens. Email inboxes are not triaged: a mail to a
-support address is a request by where it was sent.
+put to a **decision model** right after it opens. Email inboxes are not triaged, and no email is
+sent to the model: a mail to a support address is a request by where it was sent. An email
+conversation a member filed by hand comes back on the customer's next reply, unasked.
 
 - **The model.** TypeSafe's Jev (`typesafe/jev-1.14`) through OpenRouter's Decisions API
   (`POST /api/alpha/decisions`, `services/decisions.ts`). It is not a chat model: it answers yes/no
@@ -74,10 +75,13 @@ support address is a request by where it was sent.
 - **It fails open.** Off, no key, a refused or unanswered question, a message older than 30 minutes
   by the time the model is reached: the issue stays in the inbox as it opened. A provider error is
   retried from the outbox until that half hour passed. Only an issue nobody touched (still `new`,
-  unassigned, unanswered, not opened by hand) is ever filed or folded.
+  unassigned, unanswered, no priority or tags, not opened by hand) is ever filed or folded. What a
+  member decides while the model is answering stands: a request is not folded into a conversation
+  filed meanwhile, and a filing made meanwhile is not undone by the reply's answer.
 - **A filed conversation is still followed.** Messages in its thread count on it and it stays
   filed; each customer reply there asks the model again about that reply, and the conversation
   comes back as waiting on us unless the reply is chatter too (or the model cannot be asked).
+  Brought back, its SLA clocks start then: the time it sat filed was nobody's to answer in.
 - **By hand.** `customers.issue.update` with `triage: "chatter"` files an issue ("Not support",
   `x` in the inbox); `triage: "support"`, or any status but closed, brings a filed one back as
   waiting on us (`x` again, "Mark as support"). Neither counts as a close or a reopen in

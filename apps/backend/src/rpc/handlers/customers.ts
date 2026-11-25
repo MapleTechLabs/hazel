@@ -1215,38 +1215,32 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					if (Option.isNone(link)) {
 						return yield* invalid("Issues open on messages in channels linked to a customer")
 					}
+					const now = yield* currentTime
+					/** Filed as chatter, a member asking for an issue on it says it is support. */
+					const asSupport = Effect.fnUntraced(function* (found: schema.CustomerIssue) {
+						if (found.triage !== "chatter") return found
+						const patch = issuePatch(found, { triage: "support" }, actor.userId, now)
+						if (Object.keys(patch).length === 0) return found
+						const issue = yield* updateIssueRow(found, patch)
+						yield* hazelEvent(
+							issue.accountId,
+							actor.userId,
+							"issue.reopened",
+							`Marked as support: ${issue.title}`,
+							{ issueId: issue.id, from: found.status, to: issue.status, triage: "support" },
+							now,
+						)
+						return issue
+					})
 					const existing = yield* issueAt(channelId, messageId)
 					if (Option.isSome(existing)) {
-						// Filed as chatter, a member asking for an issue on it says it is support.
 						if (existing.value.triage !== "chatter")
 							return yield* withTx(Effect.succeed(existing.value))
-						const now = yield* currentTime
 						return yield* withTx(
 							Effect.gen(function* () {
 								const filed = yield* issueAt(channelId, messageId)
 								if (Option.isNone(filed)) return yield* notFound("message", messageId)
-								const patch = issuePatch(
-									filed.value,
-									{ triage: "support" },
-									actor.userId,
-									now,
-								)
-								if (Object.keys(patch).length === 0) return filed.value
-								const issue = yield* updateIssueRow(filed.value, patch)
-								yield* hazelEvent(
-									issue.accountId,
-									actor.userId,
-									"issue.reopened",
-									`Marked as support: ${issue.title}`,
-									{
-										issueId: issue.id,
-										from: "closed",
-										to: issue.status,
-										triage: "support",
-									},
-									now,
-								)
-								return issue
+								return yield* asSupport(filed.value)
 							}),
 						)
 					}
@@ -1275,9 +1269,9 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					const side = yield* recordedSideOf(message.authorId)
 					return yield* withTx(
 						Effect.gen(function* () {
-							// A relay may have opened it meanwhile.
+							// A relay may have opened it meanwhile, and triage filed it.
 							const raced = yield* issueAt(channelId, messageId)
-							if (Option.isSome(raced)) return raced.value
+							if (Option.isSome(raced)) return yield* asSupport(raced.value)
 							return yield* insertIssue({
 								organizationId: link.value.organizationId,
 								accountId: link.value.accountId,

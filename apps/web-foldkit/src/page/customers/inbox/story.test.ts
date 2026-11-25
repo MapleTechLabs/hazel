@@ -30,7 +30,7 @@ import {
 	toggleFilter,
 	visibleIssues,
 } from "./model"
-import { inboxKeyOf } from "./subscription"
+import { inboxKeyOf, isMenuOpen } from "./subscription"
 import { init, update, viewerOf } from "./update"
 
 // `ui/aria/*` names `document` when its modules load; the update loop never touches it.
@@ -313,6 +313,24 @@ describe("support inbox: keyboard", () => {
 		expect(pageUpdate(selected, key("assign")).model.assignMenu.popup._tag).toBe("Open")
 		expect(pageUpdate(selected, key("status")).model.statusMenu.popup._tag).toBe("Open")
 		expect(pageUpdate(selected, key("priority")).model.priorityMenu.popup._tag).toBe("Open")
+	})
+
+	test("a menu left open on a row that triage then filed does not hold the keyboard", () => {
+		const open = pageUpdate({ ...loaded(), selectedId: sso.id }, key("status")).model
+		expect(isMenuOpen(open)).toBe(true)
+		// The model files the selected issue: its row loses the menu's trigger.
+		const filed = pageUpdate(
+			open,
+			Message.UpdatedIssues({
+				issues: (open.issues ?? []).map((row) =>
+					row.id === sso.id
+						? { ...row, triage: "chatter" as const, status: "closed" as const }
+						: row,
+				),
+			}),
+		).model
+		expect(filed.statusMenu.popup._tag).toBe("Open")
+		expect(isMenuOpen(filed)).toBe(false)
 	})
 
 	test("Enter opens the issue's channel; one the person cannot see toasts instead", () => {

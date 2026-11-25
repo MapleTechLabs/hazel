@@ -288,6 +288,15 @@ describe("SLA settings: triage", () => {
 		expect(saved.outMessage?._tag).toBe("RequestedToast")
 	})
 
+	test("nothing is edited before the saved settings arrive", () => {
+		const early = init(null, admin).model
+		expect(early.settings).toBeNull()
+		expect(
+			update(early, Message.ChangedTriageAbout({ value: "Maple" }), admin).model.triageForm,
+		).toBeNull()
+		expect(update(early, Message.ToggledTriage({ enabled: false }), admin).model.triageForm).toBeNull()
+	})
+
 	test("a description past the limit is not sent, and a member changes nothing", () => {
 		const long = step(admin)(loaded(), Message.ChangedTriageAbout({ value: "a".repeat(2_001) }))
 		expect(update(long, Message.PressedSaveTriage(), admin).commands ?? []).toEqual([])
