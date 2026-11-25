@@ -131,6 +131,23 @@ describe("sidebar long-press menus", () => {
 		)
 	})
 
+	test("an unread channel says so to a screen reader; a read one does not", () => {
+		Scene.scene(
+			{ update, view },
+			Scene.given({ ...sidebar, unreadChannels: [{ channelId: general, mutedUntilMs: null }] }),
+			triggerMounted,
+			triggerMounted,
+			Scene.expect(Scene.role("link", { name: "general, unread" })).toExist(),
+		)
+		Scene.scene(
+			{ update, view },
+			Scene.given(sidebar),
+			triggerMounted,
+			triggerMounted,
+			Scene.expect(Scene.role("link", { name: "general" })).toExist(),
+		)
+	})
+
 	test("a customer channel is listed under Customers with its logo and lock, and cannot be moved", () => {
 		const acme = Schema.decodeSync(ChannelId)(uuid(3))
 		const logo = "https://img.clerk.com/acme.png"
