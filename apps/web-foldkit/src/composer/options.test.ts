@@ -39,23 +39,24 @@ describe("mentionOptions", () => {
 	test("groups come after @channel and @here, before people, as @handle with their size", () => {
 		const model: Composer.Model = {
 			...Composer.init("composer-test"),
-			autocomplete: { trigger: "mention", search: "de" },
+			autocomplete: { trigger: "mention", search: "he" },
 			members: [
-				{ userId: userId(1), firstName: "Dede", lastName: "", avatarUrl: null, provider: null },
+				{ userId: userId(1), firstName: "Heidi", lastName: "", avatarUrl: null, provider: null },
 			],
 			userGroups: [
-				{ id: "g-1", handle: "design", name: "Design team", memberCount: 3 },
-				{ id: "g-2", handle: "ops", name: "Operations", memberCount: 1 },
-				{ id: "g-3", handle: "eng", name: "Developers", memberCount: 1 },
+				{ id: "g-1", handle: "helpdesk", name: "Support", memberCount: 3 },
+				{ id: "g-2", handle: "design", name: "Design team", memberCount: 2 },
+				{ id: "g-3", handle: "ops", name: "The ops", memberCount: 1 },
 			],
 		}
 		expect(
 			mentionOptions(model).map(({ type, label, description }) => ({ type, label, description })),
 		).toEqual([
-			{ type: "group", label: "@design", description: "Design team, 3 members" },
+			{ type: "here", label: "@here", description: "Notify all online members" },
+			{ type: "group", label: "@helpdesk", description: "Support, 3 members" },
 			// Found by name too.
-			{ type: "group", label: "@eng", description: "Developers, 1 member" },
-			{ type: "user", label: "Dede", description: null },
+			{ type: "group", label: "@ops", description: "The ops, 1 member" },
+			{ type: "user", label: "Heidi", description: null },
 		])
 	})
 })

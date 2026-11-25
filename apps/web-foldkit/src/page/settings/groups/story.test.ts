@@ -96,7 +96,9 @@ describe("rename", () => {
 	test("a group deleted elsewhere closes", () => {
 		story(
 			owner,
-			given({ ...init().model, groups: [design], selectedId: design.id }),
+			given({ ...init().model, groups: [design] }),
+			message(Message.ClickedGroup({ id: design.id })),
+			model((current) => expect(current.edit).not.toBeNull()),
 			message(Message.UpdatedGroups({ groups: [] })),
 			model((current) => {
 				expect(current.selectedId).toBeNull()

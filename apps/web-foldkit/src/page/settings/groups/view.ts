@@ -35,15 +35,6 @@ const MAX_SUGGESTIONS = 8
 
 const membersLabel = (count: number) => `${count} ${count === 1 ? "member" : "members"}`
 
-/**
- * The group's members still in the organization: one who left keeps their group row but is never
- * notified, and the list (from the org's members) does not show them, so they are not counted.
- */
-const groupMemberCount = (group: Group, members: Model["members"]) => {
-	const current = new Set<string>(members.map((member) => member.userId))
-	return group.memberIds.filter((userId) => current.has(userId)).length
-}
-
 type FormMessages = Readonly<{
 	onName: (value: string) => Message
 	onHandle: (value: string) => Message
@@ -82,7 +73,9 @@ const formFields = (
 							attributes: [h.Attribute("maxlength", String(UserGroup.HANDLE_MAX))],
 						}),
 					]),
-					parts.description(["Lowercase letters, numbers, hyphens, and underscores"]),
+					parts.description([
+						"Lowercase letters, numbers, hyphens, and underscores; not channel, here or everyone",
+					]),
 				],
 			),
 		],
@@ -147,8 +140,7 @@ const columns = (h: HtmlBuilder<Message>, model: Model, isAdmin: boolean): Reado
 		key: "members",
 		label: "Members",
 		widthClass: "w-32",
-		cell: (group) =>
-			badge(h, { intent: "secondary" }, [membersLabel(groupMemberCount(group, model.members))]),
+		cell: (group) => badge(h, { intent: "secondary" }, [membersLabel(group.memberIds.length)]),
 	},
 	{
 		key: "actions",

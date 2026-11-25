@@ -2,11 +2,15 @@
  * The organization's user groups (Discord's mentionable roles) with who is in each, live: what the
  * composer's `@` lists, what chat highlights, and what the Groups settings page manages.
  */
-import { eq, isNull } from "@tanstack/db"
+import { and, eq, isNull } from "@tanstack/db"
 import type { UserGroup } from "@hazel/domain/models"
 import type { OrganizationId, UserGroupId, UserId } from "@hazel/schema"
 import { Stream } from "effect"
-import { userGroupCollection, userGroupMemberCollection } from "~/db/collections"
+import {
+	organizationMemberCollection,
+	userGroupCollection,
+	userGroupMemberCollection,
+} from "~/db/collections"
 import { liveQueryStream } from "./live-query"
 
 export interface UserGroupWithMembers {
@@ -33,13 +37,28 @@ const memberRows = () =>
 		(rows) => rows,
 	)
 
-/** The groups combined with their members, sorted by handle. */
+/** Who is in the organization now: one who left keeps their group rows but is never notified. */
+const currentMemberIds = (organizationId: OrganizationId) =>
+	liveQueryStream<{ userId: UserId }, ReadonlySet<UserId>>(
+		(q) =>
+			q
+				.from({ member: organizationMemberCollection })
+				.where(({ member }) =>
+					and(eq(member.organizationId, organizationId), isNull(member.deletedAt)),
+				)
+				.select(({ member }) => ({ userId: member.userId })),
+		(rows) => new Set(rows.map((row) => row.userId)),
+	)
+
+/** The groups combined with their members still in the organization, sorted by handle. */
 export const joinGroups = (
 	groups: ReadonlyArray<UserGroup.Type>,
 	members: ReadonlyArray<UserGroup.Member>,
+	current: ReadonlySet<UserId>,
 ): ReadonlyArray<UserGroupWithMembers> => {
 	const byGroup = new Map<string, Array<UserId>>()
 	for (const member of members) {
+		if (!current.has(member.userId)) continue
 		const list = byGroup.get(member.groupId) ?? []
 		list.push(member.userId)
 		byGroup.set(member.groupId, list)
@@ -59,6 +78,6 @@ export const userGroupsStream = <Message>(
 	organizationId: OrganizationId,
 	toMessage: (groups: ReadonlyArray<UserGroupWithMembers>) => Message,
 ) =>
-	Stream.zipLatestAll(groupRows(organizationId), memberRows()).pipe(
-		Stream.map(([groups, members]) => toMessage(joinGroups(groups, members))),
+	Stream.zipLatestAll(groupRows(organizationId), memberRows(), currentMemberIds(organizationId)).pipe(
+		Stream.map(([groups, members, current]) => toMessage(joinGroups(groups, members, current))),
 	)
