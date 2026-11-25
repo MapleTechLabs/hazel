@@ -1,4 +1,7 @@
-import type { UserGroupId, UserId } from "@hazel/schema"
+import { UserGroupId, type UserId } from "@hazel/schema"
+import { Schema } from "effect"
+
+const isUserGroupId = Schema.is(UserGroupId)
 
 export interface MentionAnalysis {
 	userMentions: UserId[]
@@ -13,7 +16,7 @@ export interface MentionAnalysis {
  *
  * Mention patterns:
  * - User mentions: @[userId:UUID]
- * - Group mentions: @[group:UUID]
+ * - Group mentions: @[group:UUID] (anything else typed as one is ignored)
  * - Channel broadcast: @[directive:channel]
  * - Here broadcast: @[directive:here]
  */
@@ -32,8 +35,8 @@ export function parseMentions(content: string): MentionAnalysis {
 
 		if (prefix === "userId" && value) {
 			userMentions.push(value as UserId)
-		} else if (prefix === "group" && value) {
-			if (!groupMentions.includes(value as UserGroupId)) groupMentions.push(value as UserGroupId)
+		} else if (prefix === "group") {
+			if (isUserGroupId(value) && !groupMentions.includes(value)) groupMentions.push(value)
 		} else if (prefix === "directive") {
 			if (value === "channel") hasChannelMention = true
 			if (value === "here") hasHereMention = true

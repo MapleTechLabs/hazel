@@ -15,7 +15,11 @@ export const CreateGroup = Command.define("CreateGroup", {
 		return Effect.gen(function* () {
 			const rpc = yield* HazelRpc
 			const result = yield* rpc("userGroup.create", { organizationId, handle, name })
-			return Message.SucceededCreateGroup({ id: result.data.id, handle: result.data.handle })
+			return Message.SucceededCreateGroup({
+				id: result.data.id,
+				handle: result.data.handle,
+				name: result.data.name,
+			})
 		}).pipe(
 			Effect.catchTags({
 				UserGroupHandleTakenError: () => Effect.succeed(failed("HandleTaken", null)),

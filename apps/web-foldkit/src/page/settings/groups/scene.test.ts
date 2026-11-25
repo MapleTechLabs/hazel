@@ -86,11 +86,15 @@ describe("create", () => {
 			Scene.Command.expectExact(CreateGroup({ organizationId, handle: "design", name: "Design Team" })),
 			Scene.Command.resolve(
 				CreateGroup,
-				Message.SucceededCreateGroup({ id: design.id, handle: "design" }),
+				Message.SucceededCreateGroup({ id: design.id, handle: "design", name: "Design Team" }),
 			),
 			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("@design created") })),
 			Scene.Subscription.emit(Message.UpdatedGroups({ groups: [{ ...design, memberIds: [] }] })),
 			Scene.expect(Scene.text("No one is in this group yet.")).toExist(),
+			// The new group opens ready to rename, without closing it first.
+			Scene.expect(Scene.label("Name")).toHaveValue("Design Team"),
+			Scene.type(Scene.label("Handle"), "designers"),
+			Scene.expect(Scene.label("Handle")).toHaveValue("designers"),
 		)
 	})
 })

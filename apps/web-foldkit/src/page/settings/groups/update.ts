@@ -141,14 +141,14 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				],
 			}
 		},
-		SucceededCreateGroup: ({ id, handle }) =>
+		SucceededCreateGroup: ({ id, handle, name }) =>
 			toast(
 				modifyFields(model, {
 					isPending: () => false,
 					create: () => null,
-					// Open the new group to add its members.
+					// Open the new group to add its members, its rename form with it (as `select` does).
 					selectedId: () => id,
-					edit: () => null,
+					edit: () => ({ name, handle, isHandleEdited: true }),
 					memberSearch: () => "",
 				}),
 				successToast(`@${handle} created`),

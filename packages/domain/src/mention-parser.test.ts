@@ -23,4 +23,8 @@ describe("parseMentions", () => {
 			hasHereMention: false,
 		})
 	})
+
+	it("ignores a group mention typed with anything but a group id", () => {
+		expect(parseMentions("@[group:design] @[group:not-a-uuid]").groupMentions).toEqual([])
+	})
 })

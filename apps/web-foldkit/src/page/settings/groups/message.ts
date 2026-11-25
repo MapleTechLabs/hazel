@@ -14,7 +14,7 @@ export const Message = defineMessageUnion({
 	ChangedCreateHandle: { value: Schema.String },
 	ClickedCancelCreate: {},
 	ClickedCreateGroup: {},
-	SucceededCreateGroup: { id: UserGroupId, handle: Schema.String },
+	SucceededCreateGroup: { id: UserGroupId, handle: Schema.String, name: Schema.String },
 	FailedCreateGroup: failed,
 	ClickedGroup: { id: UserGroupId },
 	ClickedCloseGroup: {},
