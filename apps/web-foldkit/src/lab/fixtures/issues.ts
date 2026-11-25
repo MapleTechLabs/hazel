@@ -48,6 +48,8 @@ const issue = (
 		createdByUserId: null,
 		title,
 		status: "new",
+		triage: null,
+		triagedByUserId: null,
 		priority: "none",
 		assigneeUserId: null,
 		tags: [],
@@ -129,6 +131,29 @@ export const ISSUES: ReadonlyArray<IssueRow> = [
 		firstTeamReplyAtMs: NOW.getTime() - 3 * 24 * HOUR + 5 * HOUR,
 		lastTeamReplyAtMs: NOW.getTime() - 2 * 24 * HOUR,
 		messageCount: 7,
+	}),
+	// Filed as not support: by triage, and one by hand.
+	issue(9, "acme", 1, "yup", {
+		ageMinutes: 40,
+		status: "closed",
+		triage: "chatter",
+		closedAtMs: NOW.getTime() - 40 * MINUTE,
+	}),
+	issue(10, "kestrel", 2, "Out of curiosity, what tool do you use for ISO certification?", {
+		ageMinutes: 2 * 60,
+		status: "closed",
+		triage: "chatter",
+		closedAtMs: NOW.getTime() - 2 * HOUR,
+		messageCount: 8,
+		threadChannelId: channelId(12),
+	}),
+	issue(11, "northwind", 3, "Thanks, that fixed it!", {
+		ageMinutes: 26 * 60,
+		status: "closed",
+		triage: "chatter",
+		triagedByUserId: MAYA.id,
+		closedAtMs: NOW.getTime() - 25 * HOUR,
+		messageCount: 2,
 	}),
 ]
 

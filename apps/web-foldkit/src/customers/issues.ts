@@ -34,6 +34,10 @@ export const IssueRow = Schema.Struct({
 	createdByUserId: Schema.NullOr(UserId),
 	title: Schema.String,
 	status: Customers.IssueStatus,
+	/** `chatter`: filed as not support (closed, under the inbox's Filtered tab). */
+	triage: Schema.NullOr(Customers.IssueTriage),
+	/** Who filed or restored it by hand; null: triage did, or nobody. */
+	triagedByUserId: Schema.NullOr(UserId),
 	priority: Customers.IssuePriority,
 	assigneeUserId: Schema.NullOr(UserId),
 	tags: Schema.Array(Schema.String),
@@ -63,6 +67,8 @@ export const toIssueRow = (issue: Customers.Issue): IssueRow => ({
 	createdByUserId: issue.createdByUserId,
 	title: issue.title,
 	status: issue.status,
+	triage: issue.triage,
+	triagedByUserId: issue.triagedByUserId,
 	priority: issue.priority,
 	assigneeUserId: issue.assigneeUserId,
 	tags: issue.tags,
@@ -97,6 +103,12 @@ export const PRIORITY_LABEL = {
 	high: "High",
 	urgent: "Urgent",
 } as const satisfies Record<Customers.IssuePriority, string>
+
+/**
+ * Filed as not support (`docs/customers/issues.md` § Triage): by the model or a member. It is
+ * closed, so no queue or badge counts it; the inbox lists it under Filtered.
+ */
+export const isFiltered = (issue: Pick<IssueRow, "triage">): boolean => issue.triage === "chatter"
 
 /** Needs a reply from us: new or waiting on us. */
 export const needsReply = (issue: Pick<IssueRow, "status">): boolean =>
@@ -214,6 +226,8 @@ export const issueAtMessageStream = <Message>(
 /** The fields a member changes; each optional key stays absent when not given. */
 export interface IssueChange {
 	status?: Customers.IssueStatus
+	/** `chatter` files it as not support; `support` brings a filed one back (waiting on us). */
+	triage?: Customers.IssueTriage
 	priority?: Customers.IssuePriority
 	assigneeUserId?: UserId | null
 	tags?: ReadonlyArray<string>
@@ -236,7 +250,29 @@ const updateIssue = optimisticAction({
 	) => {
 		const { change, at } = props
 		customerIssueCollection.update(props.issueId, (issue) => {
-			if (change.status !== undefined && change.status !== issue.status) {
+			// As the server's `issuePatch`: filing closes, and a filed one comes back open.
+			const opens = change.status !== undefined && change.status !== "closed"
+			if (change.triage === "chatter" && issue.triage !== "chatter") {
+				issue.triage = "chatter"
+				issue.triageScore = null
+				issue.triagedByUserId = props.actor
+				if (issue.status !== "closed") {
+					issue.status = "closed"
+					issue.closedAt = at
+					issue.closedByUserId = props.actor
+				}
+			} else if (
+				issue.triage === "chatter" &&
+				change.triage !== "chatter" &&
+				(change.triage === "support" || opens)
+			) {
+				issue.triage = "support"
+				issue.triageScore = null
+				issue.triagedByUserId = props.actor
+				issue.status = opens && change.status !== undefined ? change.status : "waiting_on_us"
+				issue.closedAt = null
+				issue.closedByUserId = null
+			} else if (change.status !== undefined && change.status !== issue.status) {
 				if (change.status === "closed") {
 					issue.closedAt = at
 					issue.closedByUserId = props.actor
@@ -262,6 +298,7 @@ const updateIssue = optimisticAction({
 				issueId: props.issueId,
 			}
 			if (props.change.status !== undefined) payload.status = props.change.status
+			if (props.change.triage !== undefined) payload.triage = props.change.triage
 			if (props.change.priority !== undefined) payload.priority = props.change.priority
 			if (props.change.assigneeUserId !== undefined)
 				payload.assigneeUserId = props.change.assigneeUserId

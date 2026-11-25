@@ -25,6 +25,7 @@ const KEYS = new Map<string, InboxKey>([
 	["s", "status"],
 	["p", "priority"],
 	["c", "close"],
+	["x", "notSupport"],
 	["Enter", "open"],
 	["o", "openCustomer"],
 	["Escape", "deselect"],

@@ -3,7 +3,8 @@
  *
  * - `slaIssueWritten`: every issue write (`./issues.ts` `issueWritten`) folds its change into the
  *   issue's `customer_issue_slas` row, in the same transaction. A new issue takes its account's
- *   policy (none: no row).
+ *   policy (none: no row). An issue filed as chatter (`./triage.ts`) has no clocks: its row goes,
+ *   and one brought back starts new ones.
  * - `runSlaAlerts`: the alarm turn for the rows whose `nextAlertAt` passed: records the warning or
  *   breach, notifies the assignee (else the account's owner) and, on a breach, asks for a compute so
  *   the overdue signals open.
@@ -169,7 +170,8 @@ export const slaIssueWritten = Effect.fn("Customers.slaIssueWritten")(function* 
 ) {
 	const db = yield* Database.Database
 	const now = yield* Clock.currentTimeMillis
-	if (after.deletedAt !== null) {
+	// Deleted, folded into another conversation, or not support: nothing to answer in time.
+	if (after.deletedAt !== null || after.triage === "chatter") {
 		yield* db.run(SQLite.deleteFrom(schema.customerIssueSlasTable).where(($) => [$.id.eq(after.id)]))
 		return
 	}
@@ -181,7 +183,8 @@ export const slaIssueWritten = Effect.fn("Customers.slaIssueWritten")(function* 
 	)
 	if (Option.isNone(row)) {
 		// Only new issues get clocks: one opened before SLAs (or under no policy) stays without.
-		if (before === null) yield* openIssueSla(after, now)
+		// Brought back from chatter, it is new to its clocks.
+		if (before === null || before.triage === "chatter") yield* openIssueSla(after, now)
 		return
 	}
 	if (before === null) return

@@ -51,6 +51,7 @@ import {
 	CustomersRange,
 	IssuePriority,
 	IssueStatus,
+	IssueTriage,
 	LifecycleStage,
 	SignalOutcome,
 	SignalStatus,
@@ -76,6 +77,7 @@ import {
 import { AuthorSideOverride } from "../customers/author-side"
 import { AttentionSettings, RuleDraft } from "../customers/rules"
 import { BusinessHours, SlaPolicyDraft, SupportReport } from "../customers/sla"
+import { SupportTriageSettings } from "../customers/triage"
 import { ViewDraft, ViewLayoutDraft } from "../customers/views"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { RateLimitExceededError } from "../rate-limit-errors"
@@ -491,12 +493,15 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 	/**
 	 * Change a support issue (`docs/customers/issues.md`): any field given. Closing records who and
 	 * when; a closed issue set to any other status reopens. The assignee must be a member.
+	 * `triage: "chatter"` files it under Filtered (closed, not support); `triage: "support"`, or any
+	 * status but closed, brings a filtered one back as waiting on us (`status` is then ignored).
 	 */
 	write(
 		"customers.issue.update",
 		{
 			issueId: CustomerIssueId,
 			status: Schema.optionalKey(IssueStatus),
+			triage: Schema.optionalKey(IssueTriage),
 			priority: Schema.optionalKey(IssuePriority),
 			assigneeUserId: Schema.optionalKey(Schema.NullOr(UserId)),
 			tags: Schema.optionalKey(Tags),
@@ -644,6 +649,8 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 			reportingCurrency: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^[A-Za-z]{3}$/))),
 			/** The whole list of add-on plan names. */
 			addOnPlans: Schema.optionalKey(Schema.Array(Schema.String)),
+			/** Support triage (`docs/customers/issues.md` § Triage): on or off, and what the team supports. */
+			supportTriage: Schema.optionalKey(SupportTriageSettings),
 		},
 		Tx,
 	),

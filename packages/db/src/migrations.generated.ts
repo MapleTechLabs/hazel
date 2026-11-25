@@ -779,5 +779,14 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'DROP TABLE IF EXISTS "customer_health_daily"',
 			],
 		},
+		{
+			id: "0028_support_triage",
+			statements: [
+				'ALTER TABLE "customer_issues" ADD COLUMN "triage" text',
+				'ALTER TABLE "customer_issues" ADD COLUMN "triageScore" real',
+				'ALTER TABLE "customer_issues" ADD COLUMN "triagedByUserId" text',
+				'ALTER TABLE "customer_settings" ADD COLUMN "supportTriage" text NOT NULL DEFAULT \'{"enabled":true,"about":""}\'',
+			],
+		},
 	],
 }

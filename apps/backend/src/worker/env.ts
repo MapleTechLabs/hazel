@@ -127,7 +127,8 @@ export const apiEnv = (stack: HazelStackContext) => {
 		optionalSecret("KLIPY_API_KEY"),
 		// Customers: company enrichment (`docs/customers/enrichment.md`); unset: off.
 		optionalSecret("CONTEXT_DEV_API_KEY"),
-		// Thread naming (services/thread-namer.ts); unset disables it.
+		// Thread naming (services/thread-namer.ts) and support triage (services/decisions.ts); unset
+		// disables both.
 		optionalSecret("OPENROUTER_API_KEY"),
 		// iOS push (services/apns.ts): an APNs auth key (.p8); any one unset disables push.
 		optionalSecret("APNS_KEY_ID"),

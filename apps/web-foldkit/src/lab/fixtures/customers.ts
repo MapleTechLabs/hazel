@@ -1319,6 +1319,7 @@ export const SETTINGS: Settings = {
 	addOnPlans: [],
 	overageInMrr: false,
 	businessHours: { ...DEFAULT_BUSINESS_HOURS, timeZone: "Europe/Berlin" },
+	supportTriage: { enabled: true, about: "Hazel: team chat with a shared support inbox." },
 	lastComputedAt: ago(HOUR),
 	updatedBy: null,
 	createdAt: daysAgo(120),

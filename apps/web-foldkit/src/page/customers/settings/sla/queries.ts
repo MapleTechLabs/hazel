@@ -55,7 +55,13 @@ export const hoursStream = <Message>(
 			(rows) => {
 				const row = rows[0]
 				return toMessage(
-					row === undefined ? null : { settingsId: row.id, businessHours: row.businessHours },
+					row === undefined
+						? null
+						: {
+								settingsId: row.id,
+								businessHours: row.businessHours,
+								supportTriage: row.supportTriage,
+							},
 				)
 			},
 		),

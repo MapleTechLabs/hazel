@@ -1,5 +1,5 @@
 {
-	"migration": "0027_remove_customer_health_score",
+	"migration": "0028_support_triage",
 	"entities": [
 		{
 			"kind": "table",
@@ -2474,8 +2474,35 @@
 		{
 			"kind": "column",
 			"table": "customer_issues",
-			"name": "priority",
+			"name": "triage",
 			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "triageScore",
+			"position": 12,
+			"type": "real",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "triagedByUserId",
+			"position": 13,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "priority",
+			"position": 14,
 			"type": "text",
 			"notNull": true,
 			"default": "'none'"
@@ -2484,33 +2511,6 @@
 			"kind": "column",
 			"table": "customer_issues",
 			"name": "assigneeUserId",
-			"position": 12,
-			"type": "text",
-			"notNull": false,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_issues",
-			"name": "tags",
-			"position": 13,
-			"type": "text",
-			"notNull": true,
-			"default": "'[]'"
-		},
-		{
-			"kind": "column",
-			"table": "customer_issues",
-			"name": "openedAt",
-			"position": 14,
-			"type": "text",
-			"notNull": true,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_issues",
-			"name": "firstCustomerMessageAt",
 			"position": 15,
 			"type": "text",
 			"notNull": false,
@@ -2519,25 +2519,25 @@
 		{
 			"kind": "column",
 			"table": "customer_issues",
-			"name": "lastCustomerMessageAt",
+			"name": "tags",
 			"position": 16,
 			"type": "text",
-			"notNull": false,
-			"default": null
+			"notNull": true,
+			"default": "'[]'"
 		},
 		{
 			"kind": "column",
 			"table": "customer_issues",
-			"name": "firstTeamReplyAt",
+			"name": "openedAt",
 			"position": 17,
 			"type": "text",
-			"notNull": false,
+			"notNull": true,
 			"default": null
 		},
 		{
 			"kind": "column",
 			"table": "customer_issues",
-			"name": "lastTeamReplyAt",
+			"name": "firstCustomerMessageAt",
 			"position": 18,
 			"type": "text",
 			"notNull": false,
@@ -2546,16 +2546,16 @@
 		{
 			"kind": "column",
 			"table": "customer_issues",
-			"name": "lastMessageAt",
+			"name": "lastCustomerMessageAt",
 			"position": 19,
 			"type": "text",
-			"notNull": true,
+			"notNull": false,
 			"default": null
 		},
 		{
 			"kind": "column",
 			"table": "customer_issues",
-			"name": "closedAt",
+			"name": "firstTeamReplyAt",
 			"position": 20,
 			"type": "text",
 			"notNull": false,
@@ -2564,7 +2564,7 @@
 		{
 			"kind": "column",
 			"table": "customer_issues",
-			"name": "closedByUserId",
+			"name": "lastTeamReplyAt",
 			"position": 21,
 			"type": "text",
 			"notNull": false,
@@ -2573,16 +2573,16 @@
 		{
 			"kind": "column",
 			"table": "customer_issues",
-			"name": "reopenCount",
+			"name": "lastMessageAt",
 			"position": 22,
-			"type": "integer",
+			"type": "text",
 			"notNull": true,
-			"default": "0"
+			"default": null
 		},
 		{
 			"kind": "column",
 			"table": "customer_issues",
-			"name": "reopenedAt",
+			"name": "closedAt",
 			"position": 23,
 			"type": "text",
 			"notNull": false,
@@ -2591,8 +2591,35 @@
 		{
 			"kind": "column",
 			"table": "customer_issues",
-			"name": "messageCount",
+			"name": "closedByUserId",
 			"position": 24,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "reopenCount",
+			"position": 25,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "reopenedAt",
+			"position": 26,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_issues",
+			"name": "messageCount",
+			"position": 27,
 			"type": "integer",
 			"notNull": true,
 			"default": "0"
@@ -2601,7 +2628,7 @@
 			"kind": "column",
 			"table": "customer_issues",
 			"name": "createdAt",
-			"position": 25,
+			"position": 28,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -2610,7 +2637,7 @@
 			"kind": "column",
 			"table": "customer_issues",
 			"name": "updatedAt",
-			"position": 26,
+			"position": 29,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -2619,7 +2646,7 @@
 			"kind": "column",
 			"table": "customer_issues",
 			"name": "deletedAt",
-			"position": 27,
+			"position": 30,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -3266,16 +3293,16 @@
 		{
 			"kind": "column",
 			"table": "customer_settings",
-			"name": "lastComputedAt",
+			"name": "supportTriage",
 			"position": 7,
 			"type": "text",
-			"notNull": false,
-			"default": null
+			"notNull": true,
+			"default": "'{\"enabled\":true,\"about\":\"\"}'"
 		},
 		{
 			"kind": "column",
 			"table": "customer_settings",
-			"name": "updatedBy",
+			"name": "lastComputedAt",
 			"position": 8,
 			"type": "text",
 			"notNull": false,
@@ -3284,8 +3311,17 @@
 		{
 			"kind": "column",
 			"table": "customer_settings",
-			"name": "createdAt",
+			"name": "updatedBy",
 			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_settings",
+			"name": "createdAt",
+			"position": 10,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -3294,7 +3330,7 @@
 			"kind": "column",
 			"table": "customer_settings",
 			"name": "updatedAt",
-			"position": 10,
+			"position": 11,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"

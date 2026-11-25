@@ -1,17 +1,24 @@
 /**
- * Model calls a `ChannelObject` makes from its own outbox (`ai` target): run in the sender after
- * the commit, never inside a transaction. Enqueued with a delay, so the alarm makes the call and
- * the RPC that asked for it does not wait on it.
+ * Model calls an object makes from its own outbox (`ai` target): run in the sender after the
+ * commit, never inside a transaction. Enqueued with a delay, so the alarm makes the call and the
+ * RPC that asked for it does not wait on it.
  *
- * `ai.nameThread`: name a thread from its original message and first replies (`ThreadNamer`),
- * then rename it in its `OrgObject` (`org.renameChannel`, inbox key from `requestId`).
+ * - `ai.nameThread` (a `ChannelObject`): name a thread from its original message and first
+ *   replies (`ThreadNamer`), then rename it in its `OrgObject` (`org.renameChannel`, inbox key
+ *   from `requestId`).
+ * - `ai.triageIssue` (the `CustomersObject`): triage a support issue a customer's message opened
+ *   (`../customers/triage.ts`).
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { ChannelId, OrganizationId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
+import type { Decisions } from "../../../services/decisions"
+import type { Directory } from "../../../services/directory"
 import { ThreadNamer, type ThreadLine } from "../../../services/thread-namer"
 import { readThreadOrigin } from "../channel/thread"
+import { triageIssue } from "../customers/triage"
+import { TriageEffects } from "../customers/triage-wire"
 import { ChannelRenameEffects } from "../org/channel-rename"
 import { ObjectStubs } from "../protocol"
 import { CurrentEffectSender, defineEffect, type EffectReceivers } from "./registry"
@@ -28,6 +35,7 @@ export type NameThreadPayload = typeof NameThreadPayload.Type
 
 export const AiEffects = {
 	nameThread: defineEffect("ai.nameThread", "ai", NameThreadPayload),
+	...TriageEffects,
 }
 
 /** Wait before the alarm names the thread (the write's own drain skips it). */
@@ -97,7 +105,8 @@ const nameThread = Effect.fn("AiEffects.nameThread")(function* (payload: NameThr
 
 export const aiReceivers = {
 	"ai.nameThread": nameThread,
+	"ai.triageIssue": (payload) => Effect.asVoid(triageIssue(payload)),
 } satisfies EffectReceivers<
 	typeof AiEffects,
-	Database.Database | SqlClient | ThreadNamer | ObjectStubs | CurrentEffectSender
+	Database.Database | SqlClient | ThreadNamer | Decisions | Directory | ObjectStubs | CurrentEffectSender
 >

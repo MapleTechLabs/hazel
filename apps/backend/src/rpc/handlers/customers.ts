@@ -1138,7 +1138,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.issue.update": ({ issueId, status, priority, assigneeUserId, tags }) =>
+			"customers.issue.update": ({ issueId, status, triage, priority, assigneeUserId, tags }) =>
 				Effect.gen(function* () {
 					const actor = yield* requireMember
 					yield* requirePerson(assigneeUserId)
@@ -1155,13 +1155,31 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 							const issue = found.value
 							const patch = issuePatch(
 								issue,
-								{ status, priority, assigneeUserId, tags },
+								{ status, triage, priority, assigneeUserId, tags },
 								actor.userId,
 								now,
 							)
 							if (Object.keys(patch).length === 0) return
 							yield* updateIssueRow(issue, patch)
-							if (patch.status !== undefined) {
+							if (patch.triage === "chatter") {
+								yield* hazelEvent(
+									issue.accountId,
+									actor.userId,
+									"issue.closed",
+									`Not support: ${issue.title}`,
+									{ issueId, from: issue.status, to: "closed", triage: "chatter" },
+									now,
+								)
+							} else if (patch.triage === "support" && issue.triage === "chatter") {
+								yield* hazelEvent(
+									issue.accountId,
+									actor.userId,
+									"issue.reopened",
+									`Marked as support: ${issue.title}`,
+									{ issueId, from: issue.status, to: patch.status, triage: "support" },
+									now,
+								)
+							} else if (patch.status !== undefined) {
 								yield* hazelEvent(
 									issue.accountId,
 									actor.userId,
@@ -1197,7 +1215,40 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 						return yield* invalid("Issues open on messages in channels linked to a customer")
 					}
 					const existing = yield* issueAt(channelId, messageId)
-					if (Option.isSome(existing)) return yield* withTx(Effect.succeed(existing.value))
+					if (Option.isSome(existing)) {
+						// Filed as chatter, a member asking for an issue on it says it is support.
+						if (existing.value.triage !== "chatter")
+							return yield* withTx(Effect.succeed(existing.value))
+						const now = yield* currentTime
+						return yield* withTx(
+							Effect.gen(function* () {
+								const filed = yield* issueAt(channelId, messageId)
+								if (Option.isNone(filed)) return yield* notFound("message", messageId)
+								const patch = issuePatch(
+									filed.value,
+									{ triage: "support" },
+									actor.userId,
+									now,
+								)
+								if (Object.keys(patch).length === 0) return filed.value
+								const issue = yield* updateIssueRow(filed.value, patch)
+								yield* hazelEvent(
+									issue.accountId,
+									actor.userId,
+									"issue.reopened",
+									`Marked as support: ${issue.title}`,
+									{
+										issueId: issue.id,
+										from: "closed",
+										to: issue.status,
+										triage: "support",
+									},
+									now,
+								)
+								return issue
+							}),
+						)
+					}
 					// The message, if the caller reads the channel, asked of the `ChannelObject` holding it:
 					// the host channel's for a Connect guest org's mount.
 					const holder = Option.match(yield* directory.channel(channelId), {
@@ -1709,7 +1760,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.settings.update": ({ attention, reportingCurrency, addOnPlans }) =>
+			"customers.settings.update": ({ attention, reportingCurrency, addOnPlans, supportTriage }) =>
 				Effect.gen(function* () {
 					const actor = yield* requireAdmin
 					// The open payload schema no longer refuses an unknown source, and this RPC declares no
@@ -1727,6 +1778,10 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 										attention,
 										reportingCurrency: reportingCurrency?.toLowerCase(),
 										addOnPlans,
+										supportTriage:
+											supportTriage === undefined
+												? undefined
+												: { ...supportTriage, about: supportTriage.about.trim() },
 										updatedBy: actor.userId,
 										updatedAt: now,
 									})

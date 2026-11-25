@@ -72,6 +72,8 @@ const issue: IssueRow = {
 	createdByUserId: null,
 	title: "Launch window confirmed",
 	status: "new",
+	triage: null,
+	triagedByUserId: null,
 	priority: "none",
 	assigneeUserId: null,
 	tags: [],

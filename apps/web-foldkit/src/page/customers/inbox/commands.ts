@@ -37,6 +37,7 @@ export const UpdateInboxIssue = Command.define("UpdateInboxIssue", {
 		actor: UserId,
 		action: IssueAction,
 		status: Schema.optionalKey(Customers.IssueStatus),
+		triage: Schema.optionalKey(Customers.IssueTriage),
 		priority: Schema.optionalKey(Customers.IssuePriority),
 		assigneeUserId: Schema.optionalKey(Schema.NullOr(UserId)),
 	},
@@ -44,6 +45,7 @@ export const UpdateInboxIssue = Command.define("UpdateInboxIssue", {
 	execute: ({ organizationId, issueId, actor, action, ...fields }) => {
 		const change: IssueChange = {}
 		if (fields.status !== undefined) change.status = fields.status
+		if (fields.triage !== undefined) change.triage = fields.triage
 		if (fields.priority !== undefined) change.priority = fields.priority
 		if (fields.assigneeUserId !== undefined) change.assigneeUserId = fields.assigneeUserId
 		return updateIssueAction({ organizationId, issueId, change, actor }).pipe(settle(issueId, action))

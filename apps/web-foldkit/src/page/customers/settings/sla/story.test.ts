@@ -108,7 +108,11 @@ const loaded = (shared: Shared = admin): Model =>
 	[
 		Message.UpdatedPolicies({ policies: POLICIES }),
 		Message.UpdatedSettings({
-			settings: { settingsId, businessHours: Customers.DEFAULT_BUSINESS_HOURS },
+			settings: {
+				settingsId,
+				businessHours: Customers.DEFAULT_BUSINESS_HOURS,
+				supportTriage: Customers.DEFAULT_SUPPORT_TRIAGE,
+			},
 		}),
 		Message.UpdatedAccounts({ accounts: ACCOUNTS }),
 		Message.SucceededFetchPlans({ plans: ["Enterprise", "Pro", "Legacy"] }),
@@ -262,6 +266,33 @@ describe("SLA settings: saving hours", () => {
 		const saving = update(edited, Message.PressedSaveHours(), admin).model
 		expect(saving.isSavingHours).toBe(true)
 		expect(update(saving, Message.PressedResetHours(), admin).model.hoursForm).toEqual(saving.hoursForm)
+	})
+})
+
+describe("SLA settings: triage", () => {
+	test("edits stay on the page until saved, the text trimmed; reset drops them", () => {
+		const edited = [
+			Message.ToggledTriage({ enabled: false }),
+			Message.ChangedTriageAbout({ value: "  Maple: observability  " }),
+		].reduce(step(admin), loaded())
+		expect(edited.triageForm).toEqual({ enabled: false, about: "  Maple: observability  " })
+		expect(update(edited, Message.PressedResetTriage(), admin).model.triageForm).toBeNull()
+		const saving = update(edited, Message.PressedSaveTriage(), admin)
+		expect(saving.model.isSavingTriage).toBe(true)
+		expect(saving.commands).toHaveLength(1)
+		expect(JSON.stringify(saving.commands)).toContain('"about":"Maple: observability"')
+		// One save at a time.
+		expect(update(saving.model, Message.PressedSaveTriage(), admin).commands ?? []).toEqual([])
+		const saved = update(saving.model, Message.SucceededSaveTriage(), admin)
+		expect(saved.model).toMatchObject({ triageForm: null, isSavingTriage: false })
+		expect(saved.outMessage?._tag).toBe("RequestedToast")
+	})
+
+	test("a description past the limit is not sent, and a member changes nothing", () => {
+		const long = step(admin)(loaded(), Message.ChangedTriageAbout({ value: "a".repeat(2_001) }))
+		expect(update(long, Message.PressedSaveTriage(), admin).commands ?? []).toEqual([])
+		const asMember = update(loaded(member), Message.ToggledTriage({ enabled: false }), member)
+		expect(asMember.model.triageForm).toBeNull()
 	})
 })
 

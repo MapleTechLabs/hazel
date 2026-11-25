@@ -106,3 +106,26 @@ export const saveBusinessHoursAction = optimisticAction({
 			return { data: result, transactionId: result.transactionId }
 		}),
 })
+
+export const saveSupportTriageAction = optimisticAction({
+	collections: [customerSettingsCollection],
+	onMutate: (props: {
+		readonly organizationId: OrganizationId
+		readonly settingsId: CustomerSettingsId
+		readonly supportTriage: Customers.SupportTriageSettings
+	}) => {
+		customerSettingsCollection.update(props.settingsId, (row) => {
+			Object.assign(row, { supportTriage: props.supportTriage })
+		})
+		return { settingsId: props.settingsId }
+	},
+	mutate: (props) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const result = yield* client("customers.settings.update", {
+				organizationId: props.organizationId,
+				supportTriage: props.supportTriage,
+			})
+			return { data: result, transactionId: result.transactionId }
+		}),
+})

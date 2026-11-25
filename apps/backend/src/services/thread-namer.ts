@@ -6,7 +6,8 @@ import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-const MODEL = "anthropic/claude-3.5-haiku"
+// One OpenRouter serves: `anthropic/claude-3.5-haiku` was retired, and every naming answered 404.
+const MODEL = "anthropic/claude-haiku-5.5"
 const MAX_NAME_LENGTH = 50
 
 export class ThreadNamingError extends Schema.TaggedError<
@@ -66,7 +67,7 @@ const Completion = Schema.Struct({
 export class ThreadNamer extends Context.Service<
 	ThreadNamer,
 	{
-		/** The thread's name, or none when naming is not configured. */
+		/** The thread's name, or none when naming is not configured or OpenRouter refuses the request. */
 		readonly name: (
 			context: ThreadNamingContext,
 		) => Effect.Effect<Option.Option<string>, ThreadNamingError>
@@ -100,9 +101,34 @@ export class ThreadNamer extends Context.Service<
 						messages: [{ role: "user", content: threadNamingPrompt(context) }],
 					}),
 				)
-				const completion = yield* client.execute(request).pipe(
-					Effect.flatMap(HttpClientResponse.filterStatusOk),
-					Effect.flatMap(HttpClientResponse.schemaBodyJson(Completion)),
+				const response = yield* client
+					.execute(request)
+					.pipe(
+						Effect.catchTag("HttpClientError", (cause) =>
+							Effect.fail(
+								new ThreadNamingError({ message: "OpenRouter request failed", cause }),
+							),
+						),
+					)
+				if (response.status === 429 || response.status >= 500) {
+					return yield* new ThreadNamingError({
+						message: `OpenRouter request failed (${response.status})`,
+					})
+				}
+				if (response.status < 200 || response.status >= 300) {
+					// A refused key, request or model (one OpenRouter retired) answers the same next time,
+					// and the outbox retries a failure for good: the thread keeps its name.
+					const body = yield* response.text.pipe(
+						Effect.catchTag("HttpClientError", () => Effect.succeed("")),
+					)
+					yield* Effect.logWarning("Thread naming was refused", {
+						status: response.status,
+						model: MODEL,
+						body: body.slice(0, 300),
+					})
+					return Option.none<string>()
+				}
+				const completion = yield* HttpClientResponse.schemaBodyJson(Completion)(response).pipe(
 					Effect.catchTags({
 						HttpClientError: (cause) =>
 							Effect.fail(

@@ -13,7 +13,16 @@ import { InboxKey, Tab } from "./model"
 export const IssueActionFailure = Schema.Union([Schema.Literals(["NotFound", "Stale"]), CommonReason])
 export type IssueActionFailure = typeof IssueActionFailure.Type
 
-export const IssueAction = Schema.Literals(["assign", "status", "priority", "close", "reopen"])
+/** `file`: as not support; `restore`: a filed one back into the queue. */
+export const IssueAction = Schema.Literals([
+	"assign",
+	"status",
+	"priority",
+	"close",
+	"reopen",
+	"file",
+	"restore",
+])
 export type IssueAction = typeof IssueAction.Type
 
 export const Message = defineMessageUnion({

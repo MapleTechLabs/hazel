@@ -32,7 +32,12 @@ import { agentNotifications, AgentNotificationsCall } from "./user/agent"
 import { exportPage, ChannelExportPageCall } from "./channel/export-page"
 import { liveAccess, LiveAccessCall } from "./channel/live-access"
 import { exportTick, OrgExportTickCall } from "./org/exports"
-import { supportMessage, SupportMessageCall } from "./channel/support-message"
+import {
+	supportContext,
+	SupportContextCall,
+	supportMessage,
+	SupportMessageCall,
+} from "./channel/support-message"
 import {
 	bootstrap,
 	CustomersBootstrapCall,
@@ -170,6 +175,7 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(MessageThreadCall, messageThread),
 		receiver(LiveAccessCall, liveAccess),
 		receiver(SupportMessageCall, supportMessage),
+		receiver(SupportContextCall, supportContext),
 		receiver(MessagesByIdsCall, messagesByIds),
 		receiver(ChannelExportPageCall, exportPage),
 	]),

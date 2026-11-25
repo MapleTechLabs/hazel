@@ -4,7 +4,13 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { type ChannelOption, channelMark } from "../../../customers/channels"
 import { formatRelative } from "../../../customers/format"
-import { type IssueRow, needsReply, PRIORITY_LABEL, STATUS_LABEL } from "../../../customers/issues"
+import {
+	type IssueRow,
+	isFiltered,
+	needsReply,
+	PRIORITY_LABEL,
+	STATUS_LABEL,
+} from "../../../customers/issues"
 import type { AccountRow, MemberRow } from "../../../customers/queries"
 import { type IssueSlaRow, overdueByMs, slaDisplayOf } from "../../../customers/sla"
 import { addFilterButton, filterBar, filterChip, searchBox, viewTabs } from "../../../customers/ui/filter-bar"
@@ -18,6 +24,7 @@ import {
 	IconCheck,
 	IconChatBubble,
 	IconExternalLink,
+	IconEyeSlash,
 	IconMagnifier3,
 	IconSupport,
 	IconUser,
@@ -75,6 +82,16 @@ const STATUS_INTENT = {
 export const statusChip = <M>(h: HtmlBuilder<M>, status: Customers.IssueStatus): Html =>
 	badge(h, { intent: STATUS_INTENT[status], size: "sm" }, [STATUS_LABEL[status]])
 
+/** A filed row's chip, where the others show a status: it has none to act on. */
+const filteredChip = <M>(h: HtmlBuilder<M>): Html =>
+	badge(h, { intent: "outline", size: "sm" }, ["Not support"])
+
+/** Who filed it: triage, or the member who pressed the key. */
+const filedBy = (issue: IssueRow, membersById: ReadonlyMap<string, MemberRow>): string =>
+	issue.triagedByUserId === null
+		? "filtered automatically"
+		: `filed by ${membersById.get(issue.triagedByUserId)?.name ?? "a teammate"}`
+
 const PRIORITY_CLASS = {
 	none: "text-muted-fg",
 	low: "text-muted-fg",
@@ -107,7 +124,26 @@ const ageText = (fromMs: number, nowMs: number): string => {
 
 // MENUS
 
-/** The selected issue's actions: Assign, Status, Priority, Open in chat. */
+const openInChat = (h: HtmlBuilder<Message>): Html =>
+	queueAction(h, {
+		label: "Open in chat",
+		icon: IconExternalLink(h, icon),
+		shortcut: "↵",
+		onPress: Message.PressedInboxKey({ key: "open" }),
+	})
+
+/** A filed issue's actions: back to the queue, or read it in chat. */
+const filteredActions = (h: HtmlBuilder<Message>): ReadonlyArray<Html> => [
+	queueAction(h, {
+		label: "Mark as support",
+		icon: IconSupport(h, icon),
+		shortcut: "X",
+		onPress: Message.PressedInboxKey({ key: "notSupport" }),
+	}),
+	openInChat(h),
+]
+
+/** The selected issue's actions: Assign, Status, Priority, Not support, Open in chat. */
 const issueActions = (
 	h: HtmlBuilder<Message>,
 	model: Model,
@@ -167,11 +203,12 @@ const issueActions = (
 		toMessage: (message) => Message.GotPriorityMenuMessage({ message }),
 	}),
 	queueAction(h, {
-		label: "Open in chat",
-		icon: IconExternalLink(h, icon),
-		shortcut: "↵",
-		onPress: Message.PressedInboxKey({ key: "open" }),
+		label: "Not support",
+		icon: IconEyeSlash(h, icon),
+		shortcut: "X",
+		onPress: Message.PressedInboxKey({ key: "notSupport" }),
 	}),
+	openInChat(h),
 ]
 
 // ROWS
@@ -277,6 +314,8 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 										`${issue.messageCount} message${issue.messageCount === 1 ? "" : "s"}`,
 										`opened ${formatRelative(new Date(issue.openedAtMs), new Date(context.nowMs))}`,
 										...(issue.reopenCount > 0 ? [`reopened ${issue.reopenCount}×`] : []),
+										// Who decided it is not support: trust in the filter starts here.
+										...(isFiltered(issue) ? [filedBy(issue, context.membersById)] : []),
 									].join(" · "),
 								],
 							),
@@ -307,7 +346,7 @@ const issueRow = (h: HtmlBuilder<Message>, issue: IssueRow, context: RowContext)
 					h.Role("cell"),
 					h.Class(twMerge("w-40 shrink-0 @max-2xl:w-auto", hasActions && "@5xl:hidden")),
 				],
-				[statusChip(h, issue.status)],
+				[isFiltered(issue) ? filteredChip(h) : statusChip(h, issue.status)],
 			),
 			h.div(
 				[
@@ -394,7 +433,9 @@ const header = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: 
 							].join(" · ")
 					: model.tab === "on_hold"
 						? `${issues.length} on hold`
-						: `${issues.length} closed in the last 30 days`
+						: model.tab === "filtered"
+							? `${issues.length} filed as not support in the last 30 days`
+							: `${issues.length} closed in the last 30 days`
 	return pageHeader(h, {
 		title: "Support inbox",
 		subtitle,
@@ -535,6 +576,7 @@ const SHORTCUTS: ReadonlyArray<Shortcut> = [
 	{ keys: ["S"], label: "Status" },
 	{ keys: ["P"], label: "Priority" },
 	{ keys: ["C"], label: "Close / reopen" },
+	{ keys: ["X"], label: "Not support" },
 	{ keys: ["Enter"], label: "Open in chat" },
 	{ keys: ["O"], label: "Open customer" },
 ]
@@ -626,13 +668,19 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: st
 								]
 							: [],
 				})
-			: emptyState(h, {
-					title:
-						model.tab === "on_hold"
-							? "Nothing is on hold."
-							: "Nothing closed in the last 30 days.",
-					className: cardClassName("px-6 py-14"),
-				})
+			: model.tab === "filtered"
+				? queueEmpty(h, {
+						icon: (className) => IconEyeSlash(h, { className }),
+						title: "Nothing filtered",
+						body: "Conversations in linked channels that are not support requests (thanks, small talk, anything off-topic) are filed here instead of the queue, for 30 days. Press X on an issue to file it yourself.",
+					})
+				: emptyState(h, {
+						title:
+							model.tab === "on_hold"
+								? "Nothing is on hold."
+								: "Nothing closed in the last 30 days.",
+						className: cardClassName("px-6 py-14"),
+					})
 	}
 	const selected = selectedIssue(model)
 	const context: RowContext = {
@@ -642,7 +690,12 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: st
 		membersById: new Map(model.members.map((member) => [member.id, member])),
 		slasById: slasByIdOfModel(model),
 		selectedId: model.selectedId,
-		actions: selected === undefined ? [] : issueActions(h, model, viewer, selected),
+		actions:
+			selected === undefined
+				? []
+				: isFiltered(selected)
+					? filteredActions(h)
+					: issueActions(h, model, viewer, selected),
 	}
 	// Laid out by the list's own width (the dock and the Customers sidebar take a share of a laptop's
 	// screen): cards below 42rem, no priority column below 56rem, a selected row's actions inline from
@@ -656,7 +709,10 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, orgSlug: st
 				{ label: "Status", className: "w-40" },
 				{ label: "Priority", className: "w-24 @max-4xl:hidden" },
 				{ label: "SLA", className: "hidden w-52 @6xl:block" },
-				{ label: model.tab === "closed" ? "Closed" : "Waiting", className: "w-10 text-right" },
+				{
+					label: model.tab === "closed" ? "Closed" : model.tab === "filtered" ? "Filed" : "Waiting",
+					className: "w-10 text-right",
+				},
 				{ label: "", className: "w-7" },
 			],
 			"@max-2xl:hidden",
@@ -686,6 +742,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 									{ key: "open", label: "Open", count: counts.open },
 									{ key: "on_hold", label: "On hold", count: counts.on_hold },
 									{ key: "closed", label: "Closed", count: counts.closed },
+									{ key: "filtered", label: "Filtered", count: counts.filtered },
 								],
 								selected: model.tab,
 								onSelect: (tab) => Message.ClickedTab({ tab }),

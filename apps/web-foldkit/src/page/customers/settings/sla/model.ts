@@ -26,10 +26,11 @@ export const PolicyRow = Schema.Struct({
 })
 export type PolicyRow = typeof PolicyRow.Type
 
-/** The settings row's business hours, with the row they are saved to. */
+/** The settings row's business hours and triage, with the row they are saved to. */
 export const SavedHours = Schema.Struct({
 	settingsId: CustomerSettingsId,
 	businessHours: Customers.BusinessHours,
+	supportTriage: Customers.SupportTriageSettings,
 })
 export type SavedHours = typeof SavedHours.Type
 
@@ -98,6 +99,13 @@ export const Editor = Schema.Struct({
 })
 export type Editor = typeof Editor.Type
 
+/** The longest `SupportTriageSettings.about` the server takes. */
+export const ABOUT_MAX = 2_000
+
+/** The triage card's form: `about` as typed (its length is checked when saving). */
+export const TriageForm = Schema.Struct({ enabled: Schema.Boolean, about: Schema.String })
+export type TriageForm = typeof TriageForm.Type
+
 export const Plans = AsyncData.Schema(Schema.Array(Schema.String), CommonReason)
 export type Plans = typeof Plans.schema.Type
 
@@ -114,6 +122,9 @@ export const Model = Schema.Struct({
 	/** Null: the saved hours, unedited. */
 	hoursForm: Schema.NullOr(HoursForm),
 	isSavingHours: Schema.Boolean,
+	/** Null: the saved triage settings, unedited. The text is checked on save, not while typing. */
+	triageForm: Schema.NullOr(TriageForm),
+	isSavingTriage: Schema.Boolean,
 	/** A reorder or toggle is in flight: the row controls wait, so writes cannot land out of order. */
 	isWritingList: Schema.Boolean,
 	/** Null: the list. */
@@ -168,6 +179,10 @@ export const COMMON_TIME_ZONES: ReadonlyArray<string> = [
 /** The hours the card shows: the edit in progress, else the saved ones, else the default. */
 export const hoursFormOf = (model: Model): HoursForm =>
 	model.hoursForm ?? model.settings?.businessHours ?? Customers.DEFAULT_BUSINESS_HOURS
+
+/** The triage settings the card shows: the edit in progress, else the saved ones, else the default. */
+export const triageFormOf = (model: Model): TriageForm =>
+	model.triageForm ?? model.settings?.supportTriage ?? Customers.DEFAULT_SUPPORT_TRIAGE
 
 /** The org's saved working week (the editor's example uses it). */
 export const businessHoursOf = (model: Model): Customers.BusinessHours =>
