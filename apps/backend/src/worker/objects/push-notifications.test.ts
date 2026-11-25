@@ -203,12 +203,12 @@ describe("push devices", () => {
 })
 
 describe("push notifications", () => {
-	it("pushes a mention to an idle user's device: title, body, badge, path, topic, sender", () =>
+	it("pushes a mention to an idle user's device: title, body, badge, path, topic, sender, actions", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeWorld(yield* makeTestObjects)
 				yield* register(world)
-				yield* mentionAlice(world)
+				const message = yield* mentionAlice(world)
 
 				const [notification] = notificationsOf(world.aliceObject)
 				expect(world.objects.pushes).toEqual([
@@ -225,11 +225,15 @@ describe("push notifications", () => {
 								badge: 1,
 								"thread-id": world.channelId,
 								"mutable-content": 1,
+								// Reply and Mark as read, on the message in its org.
+								category: "MESSAGE",
 							},
 							hazel: {
 								path: `/acme/chat/${world.channelId}`,
 								channelId: world.channelId,
 								notificationId: notification!.id,
+								messageId: message.id,
+								organizationId: world.orgId,
 								sender: {
 									id: world.ada,
 									name: "Ada Lovelace",

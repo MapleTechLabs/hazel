@@ -1,3 +1,4 @@
+import { organizationCollection } from "~/db/collections"
 import {
 	buildNotificationContent,
 	type NativeNotificationResult,
@@ -27,7 +28,11 @@ export class NativeNotificationSink implements NotificationSink {
 			}
 		}
 
-		const content = buildNotificationContent(event.message, event.author, event.channel)
+		const orgSlug =
+			event.channel === undefined
+				? undefined
+				: organizationCollection.state.get(event.channel.organizationId)?.slug
+		const content = buildNotificationContent(event.message, event.author, event.channel, orgSlug)
 		const result = await sendNativeNotification(content)
 		return toSinkStatus(result)
 	}

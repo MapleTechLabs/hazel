@@ -14,9 +14,15 @@
  * another device or a later notification behind the outbox's per-target order.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import { ChannelId, NotificationId, UserId } from "@hazel/schema"
+import { ChannelId, MessageId, NotificationId, OrganizationId, UserId } from "@hazel/schema"
 import { Clock, Effect, Match, Option, Schema } from "effect"
-import { ApnsClient, ApnsRetryableError, type ApnsResult } from "../../../services/apns"
+import {
+	APNS_MESSAGE_CATEGORY,
+	ApnsClient,
+	type ApnsPayload,
+	ApnsRetryableError,
+	type ApnsResult,
+} from "../../../services/apns"
 import { Directory } from "../../../services/directory"
 import { CurrentEffectSender, defineEffect, enqueueEffect, type EffectReceivers } from "../effects/registry"
 import { type OwnPresence, ownPresence } from "./presence-own"
@@ -49,10 +55,21 @@ export const PushContent = Schema.Struct({
 })
 export type PushContent = typeof PushContent.Type
 
+/**
+ * What a push about a message carries for its actions (Reply, Mark as read): the message and its
+ * organization. Absent for other notifications (a customer issue), and on rows enqueued before.
+ */
+export const PushMessageRef = Schema.Struct({
+	messageId: MessageId,
+	organizationId: OrganizationId,
+})
+export type PushMessageRef = typeof PushMessageRef.Type
+
 export const PushSendPayload = Schema.Struct({
 	notificationId: NotificationId,
 	channelId: ChannelId,
 	token: Schema.String,
+	message: Schema.optional(PushMessageRef),
 	...PushContent.fields,
 })
 export type PushSendPayload = typeof PushSendPayload.Type
@@ -181,6 +198,8 @@ export const unregisterDevice = (token: string, registeredBy?: Date) =>
 export const schedulePush = Effect.fn("UserObject.pushDecision")(function* (input: {
 	readonly notificationId: NotificationId
 	readonly channelId: ChannelId
+	/** The message the notification is about: its push offers Reply and Mark as read. */
+	readonly message?: PushMessageRef
 	readonly silent: boolean
 	readonly content: PushContent | undefined
 	/** The owner's state, when the caller already read it (`ownPresence`). */
@@ -217,6 +236,7 @@ export const schedulePush = Effect.fn("UserObject.pushDecision")(function* (inpu
 					notificationId: input.notificationId,
 					channelId: input.channelId,
 					token: device.token,
+					message: input.message,
 					...content,
 				},
 				decision._tag === "Defer" ? { delayMs: decision.delayMs } : undefined,
@@ -227,6 +247,32 @@ export const schedulePush = Effect.fn("UserObject.pushDecision")(function* (inpu
 })
 
 // SENDING
+
+/**
+ * The body APNs delivers for `payload`, with `badge` unread. A push from a person sets
+ * `mutable-content`: the app's notification service draws them before it shows. A push about a
+ * message names its category (Reply, Mark as read) and the ids those actions need. Unset fields
+ * are `undefined`, which the JSON body leaves out. Pure.
+ */
+export const apnsPayloadOf = (payload: PushSendPayload, badge: number): ApnsPayload => ({
+	aps: {
+		alert: { title: payload.title, body: payload.body },
+		sound: "default",
+		badge,
+		"thread-id": payload.channelId,
+		"mutable-content": payload.sender === undefined ? undefined : 1,
+		category: payload.message === undefined ? undefined : APNS_MESSAGE_CATEGORY,
+	},
+	hazel: {
+		path: payload.path,
+		channelId: payload.channelId,
+		notificationId: payload.notificationId,
+		messageId: payload.message?.messageId,
+		organizationId: payload.message?.organizationId,
+		sender: payload.sender,
+		conversation: payload.conversation,
+	},
+})
 
 /**
  * `push.send`: one device, if the notification is still unread, the user is not on do not
@@ -293,12 +339,7 @@ const sendPush = Effect.fn("UserObject.sendPush")(function* (payload: PushSendPa
 			.where(($) => [$.readAt.isNull(), $.silent.eq(false)]),
 	)
 	const sentAt = new Date(nowMs)
-	const aps = {
-		alert: { title: payload.title, body: payload.body },
-		sound: "default" as const,
-		badge: Option.match(unread, { onNone: () => 0, onSome: (row) => Number(row.count) }),
-		"thread-id": payload.channelId,
-	}
+	const badge = Option.match(unread, { onNone: () => 0, onSome: (row) => Number(row.count) })
 	const result = yield* apns.send({
 		environment: device.value.environment,
 		token: payload.token,
@@ -306,17 +347,7 @@ const sendPush = Effect.fn("UserObject.sendPush")(function* (payload: PushSendPa
 		expiration: Math.floor((notification.value.createdAt.getTime() + PUSH_EXPIRATION_MS) / 1000),
 		// A retry after a lost answer replaces the first copy on the phone.
 		collapseId: payload.notificationId,
-		payload: {
-			// A push from a person: the app's notification service draws them before it shows.
-			aps: payload.sender === undefined ? aps : { ...aps, "mutable-content": 1 },
-			hazel: {
-				path: payload.path,
-				channelId: payload.channelId,
-				notificationId: payload.notificationId,
-				sender: payload.sender,
-				conversation: payload.conversation,
-			},
-		},
+		payload: apnsPayloadOf(payload, badge),
 	})
 	const outcome = apnsOutcome(result)
 	yield* Effect.annotateCurrentSpan({

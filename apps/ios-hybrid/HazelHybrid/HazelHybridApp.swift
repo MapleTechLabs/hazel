@@ -3,6 +3,8 @@ import UIKit
 
 @main
 struct HazelHybridApp: App {
+    /// Push notifications: the delegate that hears the APNs token, taps and actions.
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     /// Made here, before the window and scene exist: the page starts loading while the system is
     /// still setting them up, a quarter of a second earlier than from the first view.
     @State private var bridge: WebBridge
@@ -14,6 +16,7 @@ struct HazelHybridApp: App {
             FrameMonitor.shared.start()
             let bridge = WebBridge()
             _ = bridge.webView
+            PushCenter.shared.bridge = bridge
             return bridge
         }
         _bridge = State(initialValue: bridge)
