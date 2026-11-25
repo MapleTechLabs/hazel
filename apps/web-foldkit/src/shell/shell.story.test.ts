@@ -45,7 +45,7 @@ describe("user menu", () => {
 		const hrefs = ready.userMenuEntries.flatMap((entry) =>
 			entry._tag === "Item" && entry.item.href._tag === "Some" ? [entry.item.href.value] : [],
 		)
-		expect(hrefs).toEqual([`/hazel/profile/${ada.id}`, "/hazel/my-settings"])
+		expect(hrefs).toEqual([`/hazel/profile/${ada.id}`, "/hazel/my-settings/profile"])
 	})
 
 	test.each([
@@ -183,12 +183,12 @@ describe("context", () => {
 				? [entry.item.href.value]
 				: [],
 		)
-		expect(mySettings).toEqual(["/acme/my-settings"])
+		expect(mySettings).toEqual(["/acme/my-settings/profile"])
 	})
 
 	test("a link item's href and its keyboard navigation come from one route", () => {
 		expect(userMenuLinkRoute("my-settings", "hazel", ada.id)).toEqual(
-			Option.some(AppRoute.MySettingsAppearance({ orgSlug: "hazel" })),
+			Option.some(AppRoute.MySettingsProfile({ orgSlug: "hazel" })),
 		)
 		expect(switcherLinkRoute("server-settings", "hazel")).toEqual(
 			Option.some(AppRoute.SettingsGeneral({ orgSlug: "hazel" })),

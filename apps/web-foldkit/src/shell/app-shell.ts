@@ -6,6 +6,7 @@ import {
 	isChatRoute,
 	isCustomersRoute,
 	isNotificationsRoute,
+	isMySettingsRoute,
 	isSettingsRoute,
 } from "../route"
 import { countBadge } from "../ui/count-badge"
@@ -128,7 +129,7 @@ const navRail = <Message>(
 									? `${destination("notifications").label}, ${unreadCount} unread`
 									: undefined,
 							),
-							navItem("settings", isSettingsRoute(route)),
+							navItem("settings", isSettingsRoute(route) || isMySettingsRoute(route)),
 						]),
 					]),
 				],

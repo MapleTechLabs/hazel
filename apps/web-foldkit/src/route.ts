@@ -635,7 +635,7 @@ export const titleOf = (route: AppRoute): string => {
 			Match.value(orgSectionOf(route)).pipe(
 				Match.when("Chat", () => (isChatRoute(route) ? "Chat" : "Channel settings")),
 				Match.when("Settings", () => "Settings"),
-				Match.when("MySettings", () => "My settings"),
+				Match.when("MySettings", () => "Settings"),
 				Match.when("Notifications", () => "Activity"),
 				Match.when("Customers", () => "Customers"),
 				Match.orElse(() => undefined),

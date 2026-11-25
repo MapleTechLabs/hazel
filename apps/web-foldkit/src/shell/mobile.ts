@@ -194,7 +194,7 @@ export type MobileTopBar =
 
 const SECTION_TITLES = {
 	Settings: "Settings",
-	MySettings: "Account",
+	MySettings: "Settings",
 	Notifications: "Activity",
 	Customers: "Customers",
 } as const satisfies Record<Exclude<OrgSection, "Chat">, string>
