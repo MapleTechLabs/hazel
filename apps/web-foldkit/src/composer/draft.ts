@@ -9,7 +9,7 @@ import {
 } from "@hazel/schema"
 import { ExecuteBotCommandRequest } from "@hazel/domain/http"
 import { Effect, Schema } from "effect"
-import { Command, File } from "foldkit"
+import { Command, File, Mount } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { defineMessageUnion } from "foldkit/message"
 import { defineTaggedUnion } from "foldkit/schema"
@@ -127,6 +127,7 @@ export const Message = defineMessageUnion({
 	ReceivedUploadEvent: { event: UploadEvent },
 	ReceivedDropEvent: { event: DropEvent },
 	CompletedOpenFilePicker: {},
+	CompletedShowLocalImage: {},
 	SucceededSendMessage: {},
 	FailedSendMessage: {
 		/** The channel the send was for: the draft may show another channel by the time it fails. */
@@ -252,6 +253,24 @@ export const OpenFilePicker = Command.define("OpenFilePicker", {
 			Effect.ignore,
 			Effect.as(Message.CompletedOpenFilePicker()),
 		),
+})
+
+/**
+ * The preview of a file still uploading: the `<img>` shows the file itself through an object URL,
+ * revoked when the image leaves the DOM.
+ */
+export const ShowLocalImage = Mount.define("ShowLocalImage", {
+	args: { file: File.File },
+	messages: [Message.CompletedShowLocalImage],
+	execute: ({ element, file }) =>
+		Effect.acquireRelease(
+			Effect.sync(() => {
+				const url = URL.createObjectURL(file)
+				if (element instanceof HTMLImageElement) element.src = url
+				return url
+			}),
+			(url) => Effect.sync(() => URL.revokeObjectURL(url)),
+		).pipe(Effect.as(Message.CompletedShowLocalImage())),
 })
 
 /** The slash command panel's Execute (`bot-commands.executeBotCommand`). */
