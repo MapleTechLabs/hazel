@@ -36,7 +36,8 @@ import { notificationsSidebar, settingsSidebar } from "../shell/sidebars"
 import type * as Menu from "../ui/menu"
 import type * as ModalKit from "../ui/modal"
 import { Message } from "./message"
-import { aiPanelInputsOf, type Model, OrgState, Session, sharedOf } from "./model"
+import { aiPanelInputsOf, badgeOfModel, type Model, OrgState, Session, sharedOf } from "./model"
+import { badgedTitle } from "../platform/badge"
 import { channelLinksOf } from "../page/contract"
 
 // Module-level and built as literals: memoized shell views compare them by reference, and
@@ -193,8 +194,8 @@ const orgShellView = (model: Model, h: HtmlBuilder<Message>, data: ShellData): H
 				? phoneChatList(h, sidebar)
 				: sectionBody(model, h),
 		secondarySidebar: sidebar,
-		// The bell reads `useUnreadNotificationCount`, which has no optimistic layer.
-		unreadNotificationCount: model.shell.notifications.unreadIds.length,
+		// The bell counts unread mentions, as the tab title does (`isMentionReason`); no optimistic layer.
+		unreadNotificationCount: model.shell.notifications.unreadMentionIds.length,
 		toaster: toaster(h, model),
 		overlays: [
 			Modal.view(h, model.modal, sharedOf(model), toModalMessage),
@@ -286,7 +287,11 @@ const body = (model: Model, h: HtmlBuilder<Message>): Html => {
 	})
 }
 
+/** The route's title with Discord's unread prefix: `(3) Chat · Hazel`, or `• Chat · Hazel`. */
+export const documentTitleOf = (model: Model): string =>
+	badgedTitle(titleOf(model.route), badgeOfModel(model))
+
 export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
-	title: titleOf(model.route),
+	title: documentTitleOf(model),
 	body: body(model, h),
 })

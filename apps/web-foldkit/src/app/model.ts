@@ -1,5 +1,5 @@
 import { Option, Schema } from "effect"
-import type { OrganizationId, UserId } from "@hazel/schema"
+import { NotificationId, type OrganizationId, type UserId } from "@hazel/schema"
 import { AsyncData } from "foldkit"
 import * as AiPanel from "../assistant"
 import { defineTaggedUnion } from "foldkit/schema"
@@ -17,6 +17,7 @@ import { appKeymap } from "~/lib/keybindings/app-keymap"
 import { Platform as KeyboardPlatform } from "~/lib/keybindings/key-combo"
 import { Overrides } from "~/lib/keybindings/keymap"
 import * as Platform from "../platform"
+import { type Badge, badgeOf } from "../platform/badge"
 import * as Updates from "../platform/updates"
 import * as Shell from "../shell/model"
 import { channelLinksOf } from "../shell/channels-sidebar/channel-links"
@@ -112,8 +113,19 @@ export const Model = Schema.Struct({
 	desktopUpdate: Updates.Model,
 	/** The `channel.createDm` requests in flight, by `dmRequestKey`; a repeat of one is ignored. */
 	creatingDms: Schema.Array(Schema.String),
+	/** The user's unread notifications in every organization: the badges' mention count. */
+	unreadMentionIds: Schema.Array(NotificationId),
 })
 export type Model = typeof Model.Type
+
+/** The tab title's, favicon's and desktop icon's badge (`platform/badge.ts`). */
+export const badgeOfModel = (model: Model): Badge =>
+	badgeOf({
+		unreadMentionIds: model.unreadMentionIds,
+		optimisticReadIds: model.shell.notifications.optimisticReadIds,
+		unreadChannels: model.shell.channelsSidebar.unreadChannels,
+		nowMs: model.nowMs,
+	})
 
 // DERIVED
 

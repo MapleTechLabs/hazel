@@ -14,6 +14,7 @@ import { clearNoteDrafts } from "../page/customers/detail/note-drafts"
 import { HazelRpc } from "../rpc"
 import type { CurrentUser } from "../session"
 import { applyTheme, ResolvedTheme, saveThemePreference, ThemeCustomization, ThemePreference } from "../theme"
+import { applyBadge, Badge } from "../platform/badge"
 import { readSession, signOut } from "./auth"
 import { Message } from "./message"
 import { deliverNotifications } from "./notification-sinks"
@@ -58,6 +59,13 @@ export const ApplyTheme = Command.define("ApplyTheme", {
 	messages: [Message.CompletedApplyTheme],
 	execute: ({ resolved, customization }) =>
 		applyTheme(resolved, customization).pipe(Effect.as(Message.CompletedApplyTheme())),
+})
+
+/** The favicon's red dot, or the desktop icon's mention count (`platform/badge.ts`). */
+export const ApplyBadge = Command.define("ApplyBadge", {
+	args: { badge: Badge },
+	messages: [Message.CompletedApplyBadge],
+	execute: ({ badge }) => applyBadge(badge).pipe(Effect.as(Message.CompletedApplyBadge())),
 })
 
 export const SaveThemePreference = Command.define("SaveThemePreference", {

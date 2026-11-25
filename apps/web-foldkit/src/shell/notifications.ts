@@ -14,6 +14,8 @@ import { HazelRpc } from "../rpc"
 export const Model = Schema.Struct({
 	/** The member's notifications with no `readAt` (`useUnreadNotificationCount`'s query). */
 	unreadIds: Schema.Array(NotificationId),
+	/** Of those, the mentions (`isMentionReason`): the bell's count, as the tab title's. */
+	unreadMentionIds: Schema.Array(NotificationId),
 	/** `optimisticReadIds` in `useNotifications`: marked read here, not yet synced back. */
 	optimisticReadIds: Schema.Array(NotificationId),
 	/** Calls in flight; the button shows `isPending` while any remain. */
@@ -21,12 +23,20 @@ export const Model = Schema.Struct({
 })
 export type Model = typeof Model.Type
 
-export const init = (): Model => ({ unreadIds: [], optimisticReadIds: [], pendingIds: [] })
+export const init = (): Model => ({
+	unreadIds: [],
+	unreadMentionIds: [],
+	optimisticReadIds: [],
+	pendingIds: [],
+})
 
 // MESSAGE
 
 export const Message = defineMessageUnion({
-	UpdatedUnreadNotifications: { ids: Schema.Array(NotificationId) },
+	UpdatedUnreadNotifications: {
+		ids: Schema.Array(NotificationId),
+		mentionIds: Schema.Array(NotificationId),
+	},
 	ClickedMarkAllRead: {},
 	/** Shift+Escape: every channel of the organization read (`channelMember.markAllRead`), and its notifications. */
 	PressedMarkOrganizationRead: { organizationId: OrganizationId },
@@ -98,9 +108,10 @@ const without = (ids: ReadonlyArray<NotificationId>, id: NotificationId) =>
 export const update = (model: Model, message: Message): Update.Return<Model, Message, HazelRpc> =>
 	Message.match<Update.Return<Model, Message, HazelRpc>>(message, {
 		// An optimistic id that left the unread rows has synced as read: it is no longer needed.
-		UpdatedUnreadNotifications: ({ ids }) => ({
+		UpdatedUnreadNotifications: ({ ids, mentionIds }) => ({
 			model: modifyFields(model, {
 				unreadIds: () => ids,
+				unreadMentionIds: () => mentionIds,
 				optimisticReadIds: (optimistic) => optimistic.filter((id) => ids.includes(id)),
 			}),
 		}),

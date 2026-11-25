@@ -1,5 +1,5 @@
 import { ChannelId, type NotificationId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
-import { eq } from "@tanstack/db"
+import { eq, isNull } from "@tanstack/db"
 import { Clock, Duration, Option, Schema, Stream } from "effect"
 import { Dom, Subscription } from "foldkit"
 import {
@@ -28,7 +28,17 @@ import * as Toasts from "../overlay/toaster"
 import { MOBILE_QUERY } from "../ui/viewport"
 import { Message } from "./message"
 import { REMEMBERED_USER_KEY } from "./remembered-user"
-import { authOf, currentUserOf, loadedOrgOf, memberOf, type Model, pageHostOf, sharedOf } from "./model"
+import { Badge, isMentionReason } from "../platform/badge"
+import {
+	authOf,
+	badgeOfModel,
+	currentUserOf,
+	loadedOrgOf,
+	memberOf,
+	type Model,
+	pageHostOf,
+	sharedOf,
+} from "./model"
 
 export { MOBILE_QUERY } from "../ui/viewport"
 
@@ -210,6 +220,39 @@ const notificationSubscriptions = Subscription.make<Model, Message, Notification
 				userId === null
 					? Stream.empty
 					: wireNotificationSinks({ userId, settings, currentChannelId, sessionStartMs }),
+		},
+	),
+	// Every unread notification of the user, in any organization: the badges' mention count.
+	unreadMentions: entry(
+		{ userId: Schema.NullOr(UserId) },
+		{
+			modelToDependencies: (model) => ({ userId: currentUserOf(model)?.id ?? null }),
+			dependenciesToStream: ({ userId }) =>
+				userId === null
+					? Stream.empty
+					: liveQueryStream<
+							{ readonly id: NotificationId; readonly reason: string | null },
+							Message
+						>(
+							(q) =>
+								q
+									.from({ notification: notificationCollection })
+									.where(({ notification }) => isNull(notification.readAt)),
+							(rows) =>
+								Message.UpdatedUnreadMentions({
+									ids: rows
+										.filter((row) => isMentionReason(row.reason))
+										.map((row) => row.id),
+								}),
+						),
+		},
+	),
+	// The favicon and desktop icon follow the badge: one ApplyBadge per change.
+	badge: entry(
+		{ badge: Badge },
+		{
+			modelToDependencies: (model) => ({ badge: badgeOfModel(model) }),
+			dependenciesToStream: ({ badge }) => Stream.succeed(Message.ChangedBadge({ badge })),
 		},
 	),
 	// The provider's `recentNotifications` query, for the membership in the route's organization.
