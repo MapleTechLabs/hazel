@@ -664,7 +664,9 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				: Write.andThen(lifted, (current) => Write.withToast(current, result.toast ?? null))
 		},
 		ClickedMarkNewRead: () => markRead(model),
-		ChangedWindowFocus: ({ isFocused }) => stepNotifications(model, { _tag: "ChangedFocus", isFocused }),
+		// Focus back: the open thread's replies that came while away are read too.
+		ChangedWindowFocus: ({ isFocused }) =>
+			Write.andThen(stepNotifications(model, { _tag: "ChangedFocus", isFocused }), readOpenThread),
 		UpdatedPinned: ({ pins }) => ({ model: modifyFields(model, { pinned: () => pins }) }),
 		UpdatedCustomer: ({ channelId, customer }) => ({
 			model:
@@ -747,7 +749,12 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		GotDraftMessage: ({ message: draftMessage }) =>
 			isShiftTab(draftMessage)
 				? focusMessages(model)
-				: Write.updateDraft(model, "channel", draftMessage, shared),
+				: // A send dismisses the "New" line: the rows re-derive without it.
+					Write.andThen(Write.updateDraft(model, "channel", draftMessage, shared), (next) =>
+						next.newMessages.sinceMs === model.newMessages.sinceMs
+							? { model: next }
+							: deriveRows(next),
+					),
 		GotThreadDraftMessage: ({ message: draftMessage }) =>
 			Write.updateDraft(model, "thread", draftMessage, shared),
 		GotActionMessage: ({ message: actionMessage }) =>

@@ -20,6 +20,7 @@ import {
 	userCollection,
 	userPresenceStatusCollection,
 } from "~/db/collections"
+import { appOrgSourcesSettled } from "~/db/sync-manager"
 import { readUpToMs } from "~/lib/unread"
 import { getAttachmentUrl } from "~/utils/attachment-url"
 import { liveQueryStream } from "../../data/live-query"
@@ -320,6 +321,8 @@ export const activityStream = <M>(
 						},
 			)
 		},
+		// Before the org's sources settle, no row is not yet "no message".
+		{ holdEmptyUntil: appOrgSourcesSettled },
 	)
 
 /**
@@ -364,6 +367,8 @@ export const readPositionStream = <M>(
 						}),
 			)
 		},
+		// Before the org's sources settle, no row is not yet "not a member".
+		{ holdEmptyUntil: appOrgSourcesSettled },
 	)
 
 /** `useTypingIndicators`' indicator query. */

@@ -71,6 +71,14 @@ describe("new messages", () => {
 		expect(viaBar.model.newMessages.sinceMs).toBeNull()
 	})
 
+	test("marked read before the read position answers: the capture shows no line or bar", () => {
+		const early = updateWithShared(openingModel(), Message.ClickedMarkNewRead()).model
+		const model = withActivity(readAt(early, minute(0)))
+		expect(model.newMessages).toMatchObject({ sinceMs: null, isCaptured: true })
+		expect(firstNewRows(model)).toEqual([])
+		expect(NewMessages.barOf(model.newMessages, model.messages, ada, false)).toBeNull()
+	})
+
 	test("Jump hides the bar and keeps the line", () => {
 		const jumped = updateWithShared(opened(minute(0)), Message.ClickedJumpToNew()).model
 		expect(NewMessages.barOf(jumped.newMessages, jumped.messages, ada, false)).toBeNull()
