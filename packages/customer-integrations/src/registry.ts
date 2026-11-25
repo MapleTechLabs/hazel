@@ -95,12 +95,17 @@ export const firstImportProviders = billingPreferenceOrder
 	.filter((entry) => entry.requiresFirstImport)
 	.map((entry) => entry.provider)
 
-/** The sources whose invoices core reads. */
+/** The sources whose invoices core reads: payments, and the plan invoices behind past-due and unpaid ends. */
 export const invoiceProviders = idsWhere((integration) => billingOf(integration)?.invoices === true)
 
 /** The sources whose paid invoices carry usage billing on top of the plan. */
 export const usageInvoiceProviders = idsWhere(
 	(integration) => billingOf(integration)?.usageFromInvoices === true,
+)
+
+/** The sources whose priced trials are card-backed only with a payment method on file. */
+export const paymentMethodTrialProviders = idsWhere(
+	(integration) => billingOf(integration)?.trialsNeedPaymentMethod === true,
 )
 
 export const featureFlagsIntegration: IntegrationDefinition | undefined = integrations.find(
