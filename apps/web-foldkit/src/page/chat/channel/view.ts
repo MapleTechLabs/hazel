@@ -2,7 +2,7 @@ import type { MessageId } from "@hazel/schema"
 import { TrackMessageKeys } from "./message-keys"
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { cn } from "~/lib/utils"
-import { ariaButton } from "../../../ui/button"
+import { ariaButton, button } from "../../../ui/button"
 import { skeleton } from "../../../ui/skeleton"
 import { splitContentClassName, splitRootClassName } from "../../../ui/split-panel"
 import { getEffectivePresenceStatus } from "~/utils/presence"
@@ -431,16 +431,25 @@ const headerView = (
 				: h.empty,
 		pinnedTrigger: pinnedPopoverView(h, pinnedPopover, pins, toPinnedMessage, pinnedActions),
 		notificationsTrigger:
-			currentMember === undefined || channel === null
+			channel === null
 				? h.empty
-				: NotificationControl.view(
-						h,
-						notificationControl,
-						currentMember,
-						channel.type,
-						minuteMs,
-						toNotificationControl,
-					),
+				: currentMember === undefined
+					? // A thread you do not follow (its access is its parent's): follow it here.
+						channel.type === "thread"
+						? button(
+								h,
+								{ intent: "outline", size: "sm", onPress: Message.ClickedFollowThread() },
+								["Follow thread"],
+							)
+						: h.empty
+					: NotificationControl.view(
+							h,
+							notificationControl,
+							currentMember,
+							channel.type,
+							minuteMs,
+							toNotificationControl,
+						),
 		customerChip:
 			customer === null
 				? null
