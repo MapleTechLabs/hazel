@@ -94,6 +94,8 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
     @ObservationIgnored private var waiting: Waiting?
     /// A tapped push's path, opened once the page has settled (a launch from the push).
     @ObservationIgnored private var pendingPath: String?
+    /// The current page has sent its first screen: a path opens now. Every page load starts over.
+    @ObservationIgnored private var acceptsPaths = false
 
     private enum Waiting {
         case press(path: [String])
@@ -277,11 +279,11 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
     }
 
     /// Opens one of the app's own paths (`/<org>/chat/<channel>`, a tapped push's) in the page, as
-    /// a link inside it would (`web/push.ts`'s `__hazelOpenPath`); before the page has settled, once
-    /// it has.
+    /// a link inside it would (`web/push.ts`'s `__hazelOpenPath`); before the current page has sent
+    /// its first screen (at launch, or after a reload), once it has.
     func openPath(_ path: String) {
         guard path.hasPrefix("/"), !path.hasPrefix("//"), !path.hasPrefix("/\\") else { return }
-        guard hasSettled else {
+        guard acceptsPaths else {
             pendingPath = path
             return
         }
@@ -323,6 +325,8 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
             // goes now, not when the new page settles, so a launch in between never shows it; the new
             // page keeps its own start screen again.
             self?.keepSoon?.cancel()
+            // A path from a push waits for the new page, which has no router yet.
+            self?.acceptsPaths = false
             self?.startLocation = nil
             self?.startScreenData = nil
             self?.lastKept = nil
@@ -393,6 +397,7 @@ final class WebBridge: NSObject, WKScriptMessageHandler {
                 }
             case "screen":
                 hasSettled = true
+                acceptsPaths = true
                 kept = nil
                 // Shown still loading (`web/bridge.ts`, `MAX_LOADING_MS`): not where the app starts.
                 if !isLoading { keep(screenData) }

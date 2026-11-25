@@ -162,8 +162,8 @@ final class PushCenter: NSObject {
         }
     }
 
-    /// Takes the channel's notifications off the screen and the badge down by as many: the newest
-    /// push's badge (the unread count when it was sent) less those read here.
+    /// Takes the channel's notifications off the screen and the badge down by as many: from the badge
+    /// shown now (the newest push's count, less reads already taken off here), else the newest push's.
     private static func clearDelivered(_ push: PushRef) async {
         let center = UNUserNotificationCenter.current()
         let delivered = await center.deliveredNotifications().map {
@@ -173,8 +173,12 @@ final class PushCenter: NSObject {
         let candidates = delivered + [(id: push.requestId, thread: push.channelId, badge: push.badge, date: push.date)]
         let read = Set(candidates.filter { $0.thread == push.channelId }.map(\.id))
         center.removeDeliveredNotifications(withIdentifiers: Array(read))
-        guard let newest = candidates.filter({ $0.badge != nil }).max(by: { $0.date < $1.date })?.badge else { return }
-        try? await center.setBadgeCount(max(0, newest - read.count))
+        let newest = candidates.filter({ $0.badge != nil }).max(by: { $0.date < $1.date })?.badge
+        // An earlier action here lowered the shown badge below the newest push's: start from that.
+        // Deprecated, but iOS has no other way to read the badge shown (only to set it).
+        let shown = UIApplication.shared.applicationIconBadgeNumber
+        guard let base = shown > 0 ? min(shown, newest ?? shown) : newest else { return }
+        try? await center.setBadgeCount(max(0, base - read.count))
     }
 
     /// A reply that did not go out says so, so the text is not silently lost.
