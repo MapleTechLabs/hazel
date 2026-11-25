@@ -795,6 +795,13 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				],
 			}
 		},
+		ClickedFollowThread: () =>
+			model.channel?.type === "thread"
+				? {
+						model,
+						commands: [ToggleFollowThread({ threadChannelId: model.channelId, memberId: null })],
+					}
+				: { model },
 		CompletedToggleFollowThread: ({ isFollowing, isSuccess }) =>
 			Write.withToast(
 				model,
