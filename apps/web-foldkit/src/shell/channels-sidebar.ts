@@ -4,6 +4,7 @@ import { Mount } from "foldkit"
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
+import { isMutedNow } from "~/lib/notification-settings"
 import { errorToastOf, successToast } from "../data/actions"
 import type { AppRoute } from "../route"
 import type * as Menu from "../ui/menu"
@@ -324,7 +325,7 @@ const sidebarBody = <ParentMessage>(
 						),
 						toParentMessage,
 						sectionAction: (sectionKey) =>
-							sectionActionView(h, model, sectionKey, toParentMessage),
+							sectionActionView(h, model, sectionKey, nowMs, toParentMessage),
 					}),
 				),
 			]),
@@ -344,13 +345,17 @@ const sidebarBody = <ParentMessage>(
 }
 
 /** A real section's notification items' inputs; null for the default section and DMs. */
-const sectionNotificationsOf = (model: Model, sectionKey: string): SectionNotifications | null => {
+const sectionNotificationsOf = (
+	model: Model,
+	sectionKey: string,
+	nowMs: number,
+): SectionNotifications | null => {
 	const section = model.sections.find((candidate) => candidate.id === sectionKey)
 	if (section === undefined) return null
 	const setting = model.sectionSettings.find((candidate) => candidate.sectionId === section.id)
 	return {
-		// A timed mute that ended still reads as muted here: choosing "Unmute" clears it.
-		isMuted: setting !== undefined && (setting.isMuted || setting.mutedUntilMs !== null),
+		// Muted now, as the channel rows: a timed mute that ended offers "Mute" (for how long) again.
+		isMuted: setting !== undefined && isMutedNow(setting, nowMs),
 		notificationLevel: setting?.notificationLevel ?? null,
 	}
 }
@@ -360,9 +365,11 @@ const sectionActionView = <ParentMessage>(
 	h: HtmlBuilder<ParentMessage>,
 	model: Model,
 	sectionKey: string,
+	nowMs: number,
 	toParentMessage: (message: Message) => ParentMessage,
 ): Html => {
 	const { actions, isEditable } = sectionActionsOf(model, sectionKey)
+	const notifications = sectionNotificationsOf(model, sectionKey, nowMs)
 	const [only] = actions
 	return only !== undefined && actions.length === 1 && !isEditable
 		? sectionPlusButton(h, sectionActionLabel(only), [
@@ -370,8 +377,8 @@ const sectionActionView = <ParentMessage>(
 			])
 		: sectionMenuView(h, {
 				menu: sectionMenuOf(model, sectionKey),
-				entries: sectionMenuEntries(actions, isEditable, sectionNotificationsOf(model, sectionKey)),
-				notifications: sectionNotificationsOf(model, sectionKey),
+				entries: sectionMenuEntries(actions, isEditable, notifications),
+				notifications,
 				toMessage: (message) =>
 					toParentMessage(Message.GotSectionMenuMessage({ sectionId: sectionKey, message })),
 			})

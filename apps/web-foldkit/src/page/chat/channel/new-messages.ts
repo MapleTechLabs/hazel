@@ -31,6 +31,8 @@ export const Model = Schema.Struct({
 	isCaptured: Schema.Boolean,
 	/** The bar was dismissed (jumped to the line); the line stays. */
 	isBarDismissed: Schema.Boolean,
+	/** The channel was marked read before the capture: the visit shows no line or bar. */
+	isDismissed: Schema.Boolean,
 })
 export type Model = typeof Model.Type
 
@@ -42,6 +44,7 @@ export const init = (): Model => ({
 	sinceMs: null,
 	isCaptured: false,
 	isBarDismissed: false,
+	isDismissed: false,
 })
 
 /** Someone else wrote after `readUpToMs`. Muting does not matter: opening the channel still reads it. */
@@ -59,7 +62,9 @@ export const capture = (model: Model, userId: UserId | null): Model =>
 				...model,
 				isCaptured: true,
 				sinceMs:
-					model.readUpToMs !== null && hasNewSince(model.activity, model.readUpToMs, userId)
+					!model.isDismissed &&
+					model.readUpToMs !== null &&
+					hasNewSince(model.activity, model.readUpToMs, userId)
 						? model.readUpToMs
 						: null,
 			}
@@ -68,9 +73,18 @@ export const capture = (model: Model, userId: UserId | null): Model =>
 export const hasUnread = (model: Model, userId: UserId | null) =>
 	model.readUpToMs !== null && hasNewSince(model.activity, model.readUpToMs, userId)
 
-/** The channel was marked read (Escape, "Mark as read") or the user wrote: the line and bar go. */
+/**
+ * The channel was marked read (Escape, "Mark as read") or the user wrote: the line and bar go. Before
+ * the capture it is remembered, so the capture shows neither.
+ */
 export const dismiss = (model: Model): Model =>
-	model.sinceMs === null ? model : { ...model, sinceMs: null, isBarDismissed: false }
+	!model.isCaptured
+		? model.isDismissed
+			? model
+			: { ...model, isDismissed: true }
+		: model.sinceMs === null
+			? model
+			: { ...model, sinceMs: null, isBarDismissed: false }
 
 export const dismissBar = (model: Model): Model =>
 	model.isBarDismissed ? model : { ...model, isBarDismissed: true }

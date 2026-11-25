@@ -13,9 +13,9 @@ import {
 	SendTestNotification,
 	UpdateUserSettings,
 } from "./command"
-import { payloadOf } from "./organization"
+import { DEFAULTS, muteSegmentsOf, payloadOf } from "./organization"
 import { Message } from "./message"
-import { settingsOf } from "./model"
+import { organizationSettingsOf, settingsOf } from "./model"
 import * as Slider from "../../../ui/slider"
 import { init, update } from "./update"
 import { sharedDefaults } from "../../test-shared"
@@ -264,23 +264,48 @@ describe("this organization", () => {
 	}
 	const orgUpdate = (current: Parameters<typeof update>[0], next: Message) => update(current, next, withOrg)
 
-	test("a change shows at once and is written for the organization", () => {
+	test("a change shows at once and is written for the organization as the whole snapshot", () => {
 		const changed = orgUpdate(init().model, Message.ChangedOrganizationSettings({ change: { mute: 60 } }))
-		expect(changed.model.organizationSettings).toMatchObject({
-			isMuted: false,
-			mutedUntilMs: withOrg.nowMs + 60 * 60_000,
-		})
+		const muted = { ...DEFAULTS, mutedUntilMs: withOrg.nowMs + 60 * 60_000 }
+		expect(organizationSettingsOf(changed.model)).toEqual(muted)
 		expect(changed.commands?.map((command) => [command.name, command.args])).toEqual([
-			[SaveOrganizationSettings.name, { organizationId, change: { mute: 60 } }],
+			[SaveOrganizationSettings.name, { organizationId, settings: muted }],
 		])
-		expect(payloadOf(organizationId, { mute: null, level: "all" }, 0)).toEqual({
+		expect(payloadOf(organizationId, { ...DEFAULTS, level: "all", isMuted: true })).toEqual({
 			organizationId,
 			scope: "organization",
 			scopeId: organizationId,
 			level: "all",
+			suppressEveryone: false,
 			isMuted: true,
 			mutedUntil: null,
 		})
+	})
+
+	test("one write at a time: a change made meanwhile goes out after it, as the latest snapshot", () => {
+		const first = orgUpdate(init().model, Message.ChangedOrganizationSettings({ change: { mute: null } }))
+		const second = orgUpdate(
+			first.model,
+			Message.ChangedOrganizationSettings({ change: { mute: "off" } }),
+		)
+		expect(second.commands ?? []).toEqual([])
+		expect(organizationSettingsOf(second.model).isMuted).toBe(false)
+		const settled = orgUpdate(second.model, Message.SucceededSaveOrganizationSettings())
+		expect(settled.commands?.map((command) => [command.name, command.args])).toEqual([
+			[SaveOrganizationSettings.name, { organizationId, settings: DEFAULTS }],
+		])
+		const done = orgUpdate(settled.model, Message.SucceededSaveOrganizationSettings())
+		expect(done.model.organizationWrite).toBe("Idle")
+		expect(done.model.organizationSettings).toEqual(DEFAULTS)
+	})
+
+	test("a synced row during a write leaves the choice showing", () => {
+		const changed = orgUpdate(
+			init().model,
+			Message.ChangedOrganizationSettings({ change: { level: "all" } }),
+		)
+		const synced = orgUpdate(changed.model, Message.UpdatedOrganizationSettings({ settings: DEFAULTS }))
+		expect(organizationSettingsOf(synced.model).level).toBe("all")
 	})
 
 	test("without an organization nothing is written", () => {
@@ -291,8 +316,27 @@ describe("this organization", () => {
 		expect(changed.commands ?? []).toEqual([])
 	})
 
-	test("a failed write says so", () => {
-		const failed = orgUpdate(init().model, Message.FailedSaveOrganizationSettings())
+	test("a failed write says so and the last synced settings come back", () => {
+		const changed = orgUpdate(
+			init().model,
+			Message.ChangedOrganizationSettings({ change: { mute: null } }),
+		)
+		const failed = orgUpdate(changed.model, Message.FailedSaveOrganizationSettings())
 		expect(failed.outMessage?._tag).toBe("RequestedToast")
+		expect(organizationSettingsOf(failed.model)).toEqual(DEFAULTS)
+		expect(failed.model.organizationWrite).toBe("Idle")
+	})
+
+	test("a running timed mute selects its own segment, and picking it again writes nothing", () => {
+		const changed = orgUpdate(init().model, Message.ChangedOrganizationSettings({ change: { mute: 15 } }))
+		const done = orgUpdate(changed.model, Message.SucceededSaveOrganizationSettings())
+		const mutes = muteSegmentsOf(done.model.organizationSettings, withOrg.nowMs)
+		expect(mutes.selected).toBe("timed")
+		expect(mutes.segments.map((segment) => segment.key)).toContain("timed")
+		expect(muteSegmentsOf(done.model.organizationSettings, withOrg.nowMs + 16 * 60_000).selected).toBe(
+			"off",
+		)
+		const again = orgUpdate(done.model, Message.ChangedOrganizationSettings({ change: {} }))
+		expect(again.commands ?? []).toEqual([])
 	})
 })
