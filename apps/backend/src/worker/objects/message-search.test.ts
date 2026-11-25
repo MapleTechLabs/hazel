@@ -617,6 +617,32 @@ describe("message search", () => {
 			}),
 		))
 
+	it("@here through the channel skips an offline member; @channel reaches them", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { a, a1, a2 } = world
+				const general = yield* makeChannel(a, a1, "public", "general")
+				const object = yield* world.objects.get(channelTarget(general))
+				// a2 joins and has no presence: offline.
+				ok(yield* call(a.object, a.id, "channelMember.create", { channelId: general }, a2))
+				const countOf = () =>
+					(
+						a.object.storage.db
+							.prepare(
+								`SELECT notificationCount AS n FROM channel_members WHERE channelId = ? AND userId = ?`,
+							)
+							.get(general, a2) as { n: number }
+					).n
+				yield* send(world, general, a1, "@[directive:here] standup")
+				yield* settle([a.object, object])
+				expect(countOf()).toBe(0)
+				yield* send(world, general, a1, "@[directive:channel] @[directive:here] everyone")
+				yield* settle([a.object, object])
+				expect(countOf()).toBe(1)
+			}),
+		))
+
 	it("user groups: owners and admins manage them; a group mention notifies its members as a mention", () =>
 		run(
 			Effect.gen(function* () {
