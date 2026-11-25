@@ -9,7 +9,7 @@ import { modifyFields } from "foldkit/struct"
 import { customerIssueCollection } from "~/db/collections"
 import { CommonReason, failureMessage } from "~/lib/error-messages"
 import { cn } from "~/lib/utils"
-import { ISSUE_STATUSES, IssueRow, STATUS_LABEL, updateIssueAction } from "../../customers/issues"
+import { isFiltered, ISSUE_STATUSES, IssueRow, STATUS_LABEL, updateIssueAction } from "../../customers/issues"
 import { MemberRow, withCustomersSource } from "../../customers/queries"
 import { IssueSlaRow, slaChipCopy, slaDisplayOf } from "../../customers/sla"
 import { slaChip } from "../../customers/ui/sla-chip"
@@ -28,7 +28,9 @@ import { menuLabel, view as menuView } from "../../ui/menu-view"
  * The support issue of an open thread (`docs/customers/issues.md`): in a channel linked to a
  * customer, a customer's top-level message and its thread are an issue. The thread panel's header
  * shows its status and assignee as two quiet chips with menus, its SLA chip, and "Open in inbox"; a
- * thread with no issue yet offers "Create issue" (`CreateIssueFromMessage`, run by the page).
+ * thread with no issue yet offers "Create issue" (`CreateIssueFromMessage`, run by the page). So
+ * does one filed as not support (§ Triage): in chat it is a conversation, and "Create issue" is how
+ * a member says it is support after all.
  *
  * The channel header (`header.ts`) can host the same chips later, from this Submodel.
  */
@@ -206,7 +208,8 @@ export const update = (model: Model, message: Message, context: Context): Return
 				issue: () => issue,
 				sla: (sla) => (sla !== null && sla.id === issue?.id ? sla : null),
 				hasLoaded: () => true,
-				isCreating: (isCreating) => isCreating && issue === null,
+				// Still creating until the issue is there (a filed one is not: it is being brought back).
+				isCreating: (isCreating) => isCreating && (issue === null || isFiltered(issue)),
 			}),
 		}),
 		UpdatedMembers: ({ members }) => ({ model: modifyFields(model, { members: () => members }) }),
@@ -226,7 +229,7 @@ export const update = (model: Model, message: Message, context: Context): Return
 					: change(next, context, { assigneeUserId })
 			}),
 		ClickedCreateIssue: () =>
-			model.isCreating || model.issue !== null
+			model.isCreating || (model.issue !== null && !isFiltered(model.issue))
 				? { model }
 				: {
 						model: modifyFields(model, { isCreating: () => true }),
@@ -262,8 +265,14 @@ export const issueRootIdsStream = <M>(
 				q
 					.from({ issue: customerIssueCollection })
 					.where(({ issue }) => and(eq(issue.sourceChannelId, channelId), isNull(issue.deletedAt))),
-			// Each issue's root and the follow-ups that joined it.
-			(rows) => toMessage(rows.flatMap((issue) => [issue.rootMessageId, ...issue.joinedMessageIds])),
+			// Each issue's root and the follow-ups that joined it; not one filed as not support,
+			// which "Create issue" brings back.
+			(rows) =>
+				toMessage(
+					rows
+						.filter((issue) => !isFiltered(issue))
+						.flatMap((issue) => [issue.rootMessageId, ...issue.joinedMessageIds]),
+				),
 		),
 	)
 
@@ -438,7 +447,7 @@ const hasSlaChip = (model: Model, issue: IssueRow, nowMs: number): boolean =>
 export const view = <M>(h: HtmlBuilder<M>, inputs: ViewInputs<M>): Html => {
 	const { model } = inputs
 	if (!model.hasLoaded) return h.empty
-	const issue = model.issue
+	const issue = model.issue !== null && isFiltered(model.issue) ? null : model.issue
 	return h.div(
 		[
 			// Wraps on a narrow panel: the SLA chip takes a line of its own instead of collapsing.

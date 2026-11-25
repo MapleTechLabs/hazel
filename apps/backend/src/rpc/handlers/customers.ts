@@ -104,6 +104,7 @@ import { CustomerChannelCall } from "../../worker/objects/org/channel-customers"
 import {
 	insertIssue,
 	issueAt,
+	ensureOpenedEvent,
 	issuePatch,
 	ISSUE_STATUS_VERB,
 	linkedAccountOf,
@@ -1138,7 +1139,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.issue.update": ({ issueId, status, priority, assigneeUserId, tags }) =>
+			"customers.issue.update": ({ issueId, status, triage, priority, assigneeUserId, tags }) =>
 				Effect.gen(function* () {
 					const actor = yield* requireMember
 					yield* requirePerson(assigneeUserId)
@@ -1155,13 +1156,34 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 							const issue = found.value
 							const patch = issuePatch(
 								issue,
-								{ status, priority, assigneeUserId, tags },
+								{ status, triage, priority, assigneeUserId, tags },
 								actor.userId,
 								now,
 							)
 							if (Object.keys(patch).length === 0) return
 							yield* updateIssueRow(issue, patch)
-							if (patch.status !== undefined) {
+							// Filing an issue that was already closed moves no status: nothing to record.
+							if (patch.triage === "chatter" && patch.status !== undefined) {
+								yield* hazelEvent(
+									issue.accountId,
+									actor.userId,
+									"issue.closed",
+									`Not support: ${issue.title}`,
+									{ issueId, from: issue.status, to: patch.status, triage: "chatter" },
+									now,
+								)
+							} else if (patch.triage === "support" && issue.triage === "chatter") {
+								// Filed by the model, it left the timeline: it opens there again first.
+								yield* ensureOpenedEvent(issue, now)
+								yield* hazelEvent(
+									issue.accountId,
+									actor.userId,
+									"issue.reopened",
+									`Marked as support: ${issue.title}`,
+									{ issueId, from: issue.status, to: patch.status, triage: "support" },
+									now,
+								)
+							} else if (patch.status !== undefined) {
 								yield* hazelEvent(
 									issue.accountId,
 									actor.userId,
@@ -1196,8 +1218,39 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					if (Option.isNone(link)) {
 						return yield* invalid("Issues open on messages in channels linked to a customer")
 					}
+					const now = yield* currentTime
+					/**
+					 * A member asking for an issue on a message says it is support: one filed as chatter
+					 * comes back, and one the model has not judged yet is theirs, not its to file.
+					 */
+					const asSupport = Effect.fnUntraced(function* (found: schema.CustomerIssue) {
+						const patch = issuePatch(found, { triage: "support" }, actor.userId, now)
+						if (Object.keys(patch).length === 0) return found
+						const issue = yield* updateIssueRow(found, patch)
+						if (found.triage !== "chatter") return issue
+						yield* ensureOpenedEvent(found, now)
+						yield* hazelEvent(
+							issue.accountId,
+							actor.userId,
+							"issue.reopened",
+							`Marked as support: ${issue.title}`,
+							{ issueId: issue.id, from: found.status, to: issue.status, triage: "support" },
+							now,
+						)
+						return issue
+					})
 					const existing = yield* issueAt(channelId, messageId)
-					if (Option.isSome(existing)) return yield* withTx(Effect.succeed(existing.value))
+					if (Option.isSome(existing)) {
+						if (existing.value.triage === "support")
+							return yield* withTx(Effect.succeed(existing.value))
+						return yield* withTx(
+							Effect.gen(function* () {
+								const filed = yield* issueAt(channelId, messageId)
+								if (Option.isNone(filed)) return yield* notFound("message", messageId)
+								return yield* asSupport(filed.value)
+							}),
+						)
+					}
 					// The message, if the caller reads the channel, asked of the `ChannelObject` holding it:
 					// the host channel's for a Connect guest org's mount.
 					const holder = Option.match(yield* directory.channel(channelId), {
@@ -1223,9 +1276,9 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					const side = yield* recordedSideOf(message.authorId)
 					return yield* withTx(
 						Effect.gen(function* () {
-							// A relay may have opened it meanwhile.
+							// A relay may have opened it meanwhile, and triage filed it.
 							const raced = yield* issueAt(channelId, messageId)
-							if (Option.isSome(raced)) return raced.value
+							if (Option.isSome(raced)) return yield* asSupport(raced.value)
 							return yield* insertIssue({
 								organizationId: link.value.organizationId,
 								accountId: link.value.accountId,
@@ -1709,7 +1762,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.settings.update": ({ attention, reportingCurrency, addOnPlans }) =>
+			"customers.settings.update": ({ attention, reportingCurrency, addOnPlans, supportTriage }) =>
 				Effect.gen(function* () {
 					const actor = yield* requireAdmin
 					// The open payload schema no longer refuses an unknown source, and this RPC declares no
@@ -1727,6 +1780,10 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 										attention,
 										reportingCurrency: reportingCurrency?.toLowerCase(),
 										addOnPlans,
+										supportTriage:
+											supportTriage === undefined
+												? undefined
+												: { ...supportTriage, about: supportTriage.about.trim() },
 										updatedBy: actor.userId,
 										updatedAt: now,
 									})

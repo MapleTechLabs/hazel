@@ -29,6 +29,14 @@ export const Message = defineMessageUnion({
 	SucceededSaveHours: {},
 	FailedSaveHours: { reason: CommonReason },
 
+	// Triage
+	ToggledTriage: { enabled: Schema.Boolean },
+	ChangedTriageAbout: { value: Schema.String },
+	PressedSaveTriage: {},
+	PressedResetTriage: {},
+	SucceededSaveTriage: {},
+	FailedSaveTriage: { reason: CommonReason },
+
 	// The list
 	ToggledPolicy: { policyId: CustomerSlaPolicyId, enabled: Schema.Boolean },
 	SucceededTogglePolicy: {},

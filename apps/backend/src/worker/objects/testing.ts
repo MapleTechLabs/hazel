@@ -19,6 +19,12 @@ import { HtmlRenderStore, HtmlRenders } from "../../services/html-renders"
 import { InviteMailer } from "../../services/invite-mailer"
 import { OrgExportStore } from "../../services/org-exports"
 import { ThreadNamer, type ThreadNamingContext } from "../../services/thread-namer"
+import {
+	Decisions,
+	type DecisionsError,
+	type DecisionsRequest,
+	type NoulAnswers,
+} from "../../services/decisions"
 import type { ChatSyncInbound } from "../../services/chat-sync/chat-sync-inbound"
 import { type ChatSyncCall, makeRecordingChatSyncProviders } from "../../services/chat-sync/testing"
 import { makeRpcDispatcher, type RpcDispatcherShape } from "../../rpc/dispatch"
@@ -100,6 +106,12 @@ export interface TestObjects {
 	readonly namingRequests: Array<ThreadNamingContext>
 	/** The name `ThreadNamer` answers (default `"Generated name"`). */
 	readonly setThreadName: (name: string) => void
+	/** What the decision model (`Decisions`) was asked, in order. */
+	readonly decisionRequests: Array<DecisionsRequest>
+	/** The decision model's answers; unset (the default), it is not configured and answers nothing. */
+	readonly setDecisions: (
+		answer: ((request: DecisionsRequest) => Effect.Effect<NoulAnswers, DecisionsError>) | undefined,
+	) => void
 	/** The HTML render pages (`HtmlRenderStore`), by key. */
 	readonly bucket: Map<string, string>
 	/** The organization export files (`OrgExportStore`), by key. */
@@ -138,6 +150,8 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 		const objects = new Map<string, TestObject>()
 		const namingRequests: Array<ThreadNamingContext> = []
 		let threadName = "Generated name"
+		const decisionRequests: Array<DecisionsRequest> = []
+		let decide: ((request: DecisionsRequest) => Effect.Effect<NoulAnswers, DecisionsError>) | undefined
 
 		const transport = Layer.succeed(
 			BotGatewayTransport,
@@ -226,6 +240,18 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			}),
 		)
 
+		const decisions = Layer.succeed(
+			Decisions,
+			Decisions.of({
+				ask: (request) =>
+					Effect.suspend(() => {
+						if (decide === undefined) return Effect.succeed(Option.none<NoulAnswers>())
+						decisionRequests.push(request)
+						return Effect.asSome(decide(request))
+					}),
+			}),
+		)
+
 		const chatSync = makeRecordingChatSyncProviders({ attachmentPublicUrlBase: "https://files.test" })
 		// The real service over an in-memory bucket.
 		const bucket = new Map<string, string>()
@@ -256,6 +282,7 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			Layer.succeed(ObjectStubs, stubs),
 			transport,
 			threadNamer,
+			decisions,
 			chatSync.layer,
 			htmlRenders,
 		)
@@ -394,6 +421,10 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			namingRequests,
 			setThreadName: (name) => {
 				threadName = name
+			},
+			decisionRequests,
+			setDecisions: (answer) => {
+				decide = answer
 			},
 		} satisfies TestObjects
 	})

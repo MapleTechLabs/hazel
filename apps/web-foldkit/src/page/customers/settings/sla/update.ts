@@ -16,6 +16,7 @@ import {
 	FetchSlaPlans,
 	ReorderSlaPolicies,
 	SaveBusinessHours,
+	SaveSupportTriage,
 	ToggleSlaPolicy,
 	UpdateSlaPolicy,
 } from "./commands"
@@ -29,6 +30,7 @@ import {
 } from "./draft"
 import { Message, type PolicyWriteFailure } from "./message"
 import {
+	ABOUT_MAX,
 	CLOCKS,
 	DELETE_MODAL_ID,
 	type DurationUnit,
@@ -42,6 +44,8 @@ import {
 	policyById,
 	type SlaClock,
 	TIME_ZONE_SELECT_ID,
+	type TriageForm,
+	triageFormOf,
 	unitSelectId,
 	WARN_SELECT_ID,
 } from "./model"
@@ -123,6 +127,8 @@ export const init = (_route: unknown, shared: Shared): Return => {
 		plans: AsyncData.Idle(),
 		hoursForm: null,
 		isSavingHours: false,
+		triageForm: null,
+		isSavingTriage: false,
 		isWritingList: false,
 		editor: null,
 		editorsOpened: 0,
@@ -161,6 +167,39 @@ const savedHours = (model: Model, shared: Shared): Return => {
 		model: withTimeZoneSelect({ ...model, isSavingHours: true }, shared),
 		commands: [
 			SaveBusinessHours({ organizationId, settingsId: model.settings.settingsId, businessHours }),
+		],
+	}
+}
+
+// TRIAGE
+
+// Not before the saved settings are here: a draft made from the defaults would turn triage on, or
+// clear the description, by saving a field nobody changed.
+const editedTriage = (model: Model, shared: Shared, change: (form: TriageForm) => TriageForm): Return =>
+	!isCustomersAdmin(shared) || model.isSavingTriage || model.settings === null
+		? { model }
+		: { model: { ...model, triageForm: change(triageFormOf(model)) } }
+
+const savedTriage = (model: Model, shared: Shared): Return => {
+	const organizationId = shared.organization?.id
+	const form = model.triageForm
+	if (
+		organizationId === undefined ||
+		model.settings === null ||
+		form === null ||
+		form.about.trim().length > ABOUT_MAX ||
+		model.isSavingTriage ||
+		!isCustomersAdmin(shared)
+	)
+		return { model }
+	return {
+		model: { ...model, isSavingTriage: true },
+		commands: [
+			SaveSupportTriage({
+				organizationId,
+				settingsId: model.settings.settingsId,
+				supportTriage: { enabled: form.enabled, about: form.about.trim() },
+			}),
 		],
 	}
 }
@@ -370,6 +409,22 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		}),
 		FailedSaveHours: ({ reason }) => ({
 			model: withTimeZoneSelect({ ...model, isSavingHours: false }, shared),
+			outMessage: toast(reasonToast(reason)),
+		}),
+
+		ToggledTriage: ({ enabled }) => editedTriage(model, shared, (form) => ({ ...form, enabled })),
+		ChangedTriageAbout: ({ value }) => editedTriage(model, shared, (form) => ({ ...form, about: value })),
+		PressedSaveTriage: () => savedTriage(model, shared),
+		PressedResetTriage: () =>
+			model.isSavingTriage ? { model } : { model: { ...model, triageForm: null } },
+		SucceededSaveTriage: () => ({
+			model: { ...model, triageForm: null, isSavingTriage: false },
+			outMessage: toast(
+				successToast("Triage saved", "It applies to conversations that start from now on."),
+			),
+		}),
+		FailedSaveTriage: ({ reason }) => ({
+			model: { ...model, isSavingTriage: false },
 			outMessage: toast(reasonToast(reason)),
 		}),
 

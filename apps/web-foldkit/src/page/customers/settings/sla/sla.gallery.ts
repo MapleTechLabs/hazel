@@ -81,6 +81,7 @@ const loaded = (shared: Shared, extra: ReadonlyArray<Message> = []): Model =>
 			settings: {
 				settingsId: Schema.decodeSync(CustomerSettingsId)(uuid(9)),
 				businessHours: { ...Customers.DEFAULT_BUSINESS_HOURS, timeZone: "Europe/Berlin" },
+				supportTriage: { enabled: true, about: "Hazel: team chat with a shared support inbox." },
 			},
 		}),
 		Message.UpdatedAccounts({ accounts: ACCOUNTS }),

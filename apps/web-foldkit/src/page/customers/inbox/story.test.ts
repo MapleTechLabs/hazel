@@ -30,7 +30,7 @@ import {
 	toggleFilter,
 	visibleIssues,
 } from "./model"
-import { inboxKeyOf } from "./subscription"
+import { inboxKeyOf, isMenuOpen } from "./subscription"
 import { init, update, viewerOf } from "./update"
 
 // `ui/aria/*` names `document` when its modules load; the update loop never touches it.
@@ -116,6 +116,8 @@ const issue = (n: number, overrides: Partial<IssueRow>): IssueRow => ({
 	createdByUserId: null,
 	title: `Issue ${n}`,
 	status: "new",
+	triage: null,
+	triagedByUserId: null,
 	priority: "none",
 	assigneeUserId: null,
 	tags: [],
@@ -155,12 +157,19 @@ const billing = issue(3, {
 const graces = issue(4, { title: "Export is slow", status: "waiting_on_us", assigneeUserId: grace })
 const held = issue(5, { title: "Feature request", status: "on_hold" })
 const done = issue(6, { title: "Fixed already", status: "closed", closedAtMs: NOW - 2 * HOUR })
+/** Filed as not support by triage: under Filtered, in no other tab. */
+const chatter = issue(7, {
+	title: "yup",
+	status: "closed",
+	triage: "chatter",
+	closedAtMs: NOW - HOUR,
+})
 
 const pageUpdate = (current: Model, next: Message) => update(current, next, shared)
 const loaded = (): Model =>
 	[
 		Message.UpdatedAccounts({ accounts: [acme] }),
-		Message.UpdatedIssues({ issues: [sso, outage, billing, graces, held, done] }),
+		Message.UpdatedIssues({ issues: [sso, outage, billing, graces, held, done, chatter] }),
 		Message.UpdatedMembers({
 			members: [
 				{ id: ada, name: "Ada Lovelace", email: "ada@hazel.test", avatarUrl: null },
@@ -175,7 +184,7 @@ const titles = (current: Model) => visibleIssues(current, viewer).map((row) => r
 describe("support inbox: what shows", () => {
 	test("Open lists mine and unassigned: waiting on us first, by priority, then longest waiting", () => {
 		expect(titles(loaded())).toEqual(["Dashboard down", "SSO login fails", "Invoice question"])
-		expect(tabCounts(loaded(), viewer)).toEqual({ open: 3, on_hold: 1, closed: 1 })
+		expect(tabCounts(loaded(), viewer)).toEqual({ open: 3, on_hold: 1, closed: 1, filtered: 1 })
 	})
 
 	test("the filters narrow: anyone, waiting on us, priority", () => {
@@ -207,6 +216,87 @@ describe("support inbox: what shows", () => {
 			"Fixed already",
 		])
 	})
+
+	test("Filtered holds what was filed as not support, and nothing else does", () => {
+		expect(titles(pageUpdate(loaded(), Message.ClickedTab({ tab: "filtered" })).model)).toEqual(["yup"])
+		for (const tab of ["open", "on_hold", "closed"] as const) {
+			expect(titles(pageUpdate(loaded(), Message.ClickedTab({ tab })).model)).not.toContain("yup")
+		}
+	})
+})
+
+describe("support inbox: not support", () => {
+	const filtered = (): Model => pageUpdate(loaded(), Message.ClickedTab({ tab: "filtered" })).model
+
+	test("x files the selected issue: it leaves Open for Filtered, and says so once the server agrees", () => {
+		story(
+			pageUpdate,
+			given({ ...loaded(), selectedId: sso.id }),
+			message(key("notSupport")),
+			model((next) => {
+				expect(next.issues?.find((row) => row.id === sso.id)).toMatchObject({
+					triage: "chatter",
+					status: "closed",
+					triagedByUserId: ada,
+				})
+				expect(rowIds(next, viewer)).not.toContain(sso.id)
+				expect(next.selectedId).toBe(billing.id)
+				expect(tabCounts(next, viewer)).toMatchObject({ open: 2, closed: 1, filtered: 2 })
+			}),
+			expectNoOutMessage(),
+			Command.resolve(
+				UpdateInboxIssue,
+				Message.SucceededIssueAction({ issueId: sso.id, action: "file" }),
+			),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: successToast("Filed as not support", "SSO login fails"),
+				}),
+			),
+		)
+	})
+
+	test("x on a filed issue brings it back as waiting on us, not as a reopen", () => {
+		story(
+			pageUpdate,
+			given({ ...filtered(), selectedId: chatter.id }),
+			message(key("notSupport")),
+			model((next) => {
+				expect(next.issues?.find((row) => row.id === chatter.id)).toMatchObject({
+					triage: "support",
+					status: "waiting_on_us",
+					closedAtMs: null,
+					reopenCount: 0,
+				})
+				expect(rowIds(next, viewer)).toEqual([])
+				expect(tabCounts(next, viewer)).toMatchObject({ open: 4, filtered: 0 })
+			}),
+			Command.resolve(
+				UpdateInboxIssue,
+				Message.SucceededIssueAction({ issueId: chatter.id, action: "restore" }),
+			),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: successToast("Back in the inbox", "yup") }),
+			),
+		)
+	})
+
+	test("c on a filed issue brings it back too; a, s, p and i have nothing to act on", () => {
+		const selected = { ...filtered(), selectedId: chatter.id }
+		const reopened = pageUpdate(selected, key("close"))
+		expect(reopened.model.issues?.find((row) => row.id === chatter.id)).toMatchObject({
+			triage: "support",
+			status: "waiting_on_us",
+			reopenCount: 0,
+		})
+		expect(reopened.commands).toHaveLength(1)
+		for (const inboxKey of ["assign", "status", "priority", "assignToMe"] as const) {
+			const pressed = pageUpdate(selected, key(inboxKey))
+			// No menu opens off screen (an open menu would hold the keyboard), and nothing is sent.
+			expect(pressed.model).toEqual(selected)
+			expect(pressed.commands ?? []).toEqual([])
+		}
+	})
 })
 
 describe("support inbox: keyboard", () => {
@@ -223,6 +313,30 @@ describe("support inbox: keyboard", () => {
 		expect(pageUpdate(selected, key("assign")).model.assignMenu.popup._tag).toBe("Open")
 		expect(pageUpdate(selected, key("status")).model.statusMenu.popup._tag).toBe("Open")
 		expect(pageUpdate(selected, key("priority")).model.priorityMenu.popup._tag).toBe("Open")
+	})
+
+	test("a menu left open on a row that triage then filed does not hold the keyboard", () => {
+		const open = pageUpdate({ ...loaded(), selectedId: sso.id }, key("status")).model
+		expect(isMenuOpen(open)).toBe(true)
+		// The model files the selected issue: its row loses the menu's trigger.
+		const filed = pageUpdate(
+			open,
+			Message.UpdatedIssues({
+				issues: (open.issues ?? []).map((row) =>
+					row.id === sso.id
+						? { ...row, triage: "chatter" as const, status: "closed" as const }
+						: row,
+				),
+			}),
+		).model
+		expect(filed.statusMenu.popup._tag).toBe("Open")
+		expect(isMenuOpen(filed)).toBe(false)
+		// Moving on closes it: it does not open on the next row, and the keys keep working there.
+		const moved = pageUpdate(filed, key("next")).model
+		expect(moved.selectedId).not.toBe(sso.id)
+		expect(moved.selectedId).not.toBeNull()
+		expect(moved.statusMenu.popup._tag).toBe("Closed")
+		expect(isMenuOpen(moved)).toBe(false)
 	})
 
 	test("Enter opens the issue's channel; one the person cannot see toasts instead", () => {
@@ -340,6 +454,7 @@ describe("support inbox: keyboard", () => {
 		})
 		expect(inboxKeyOf(event("s"))).toBe("status")
 		expect(inboxKeyOf(event("P"))).toBe("priority")
+		expect(inboxKeyOf(event("x"))).toBe("notSupport")
 		expect(inboxKeyOf(event("Enter"))).toBe("open")
 		expect(inboxKeyOf({ ...event("a"), metaKey: true })).toBeNull()
 		expect(inboxKeyOf({ ...event("c"), repeat: true })).toBeNull()

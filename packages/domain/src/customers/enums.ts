@@ -65,6 +65,13 @@ export const IssueStatus = Schema.Literals([
 export type IssueStatus = typeof IssueStatus.Type
 export const IssuePriority = Schema.Literals(["none", "low", "medium", "high", "urgent"])
 export type IssuePriority = typeof IssuePriority.Type
+/**
+ * What triage made of a conversation (`docs/customers/issues.md` § Triage). `support` is work for
+ * the team. `chatter` is not (thanks, small talk, a question that is not about the product): the
+ * conversation is kept closed, out of the inbox's queues, under Filtered. Null: never triaged.
+ */
+export const IssueTriage = Schema.Literals(["support", "chatter"])
+export type IssueTriage = typeof IssueTriage.Type
 
 export const SignalOutcome = Schema.Literals(["contacted", "fixed", "not_an_issue", "other"])
 export type SignalOutcome = typeof SignalOutcome.Type

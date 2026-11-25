@@ -9,6 +9,7 @@ import {
 	deletePolicyAction,
 	reorderPoliciesAction,
 	saveBusinessHoursAction,
+	saveSupportTriageAction,
 	updatePolicyAction,
 } from "./actions"
 import { Message } from "./message"
@@ -105,5 +106,19 @@ export const SaveBusinessHours = Command.define("SaveBusinessHours", {
 		saveBusinessHoursAction(args).pipe(
 			Effect.as(Message.SucceededSaveHours()),
 			catchCommon((reason) => Message.FailedSaveHours({ reason })),
+		),
+})
+
+export const SaveSupportTriage = Command.define("SaveSupportTriage", {
+	args: {
+		organizationId: OrganizationId,
+		settingsId: CustomerSettingsId,
+		supportTriage: Customers.SupportTriageSettings,
+	},
+	messages: [Message.SucceededSaveTriage, Message.FailedSaveTriage],
+	execute: (args) =>
+		saveSupportTriageAction(args).pipe(
+			Effect.as(Message.SucceededSaveTriage()),
+			catchCommon((reason) => Message.FailedSaveTriage({ reason })),
 		),
 })

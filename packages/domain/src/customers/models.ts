@@ -50,6 +50,7 @@ import {
 	InvoiceStatus,
 	IssuePriority,
 	IssueStatus,
+	IssueTriage,
 	LifecycleStage,
 	MatchMethod,
 	MetricAggregation,
@@ -68,6 +69,7 @@ import {
 import { SignalEvidence } from "./evidence"
 import { AttentionSettings, RuleConfig, RuleScope } from "./rules"
 import { BusinessHours, SlaAppliesTo, SlaHours, SlaState, SlaTargets } from "./sla"
+import { SupportTriageSettings } from "./triage"
 import { CompanyProfile } from "./company"
 import { ListColumn, ViewColor, ViewFilters, ViewIcon, ViewLayoutKey, ViewSort } from "./views"
 
@@ -256,6 +258,12 @@ class IssueModel extends M.Class<IssueModel>("CustomerIssue")({
 	createdByUserId: S.NullOr(UserId),
 	title: S.String,
 	status: IssueStatus,
+	/** `chatter`: triage filtered it out of the inbox's queues (it is closed). */
+	triage: S.NullOr(IssueTriage),
+	/** How likely the model thought it support (0 to 1); null when a member decided, or nobody did. */
+	triageScore: S.NullOr(S.Finite),
+	/** The member who set `triage` by hand; null: the model did. */
+	triagedByUserId: S.NullOr(UserId),
 	priority: IssuePriority,
 	assigneeUserId: S.NullOr(UserId),
 	tags: S.Array(S.String),
@@ -373,6 +381,8 @@ class SettingsModel extends M.Class<SettingsModel>("CustomerSettings")({
 	overageInMrr: S.Boolean,
 	/** The working week of SLA policies on business hours. */
 	businessHours: BusinessHours,
+	/** Whether new conversations are triaged by a model, and what the team supports. */
+	supportTriage: SupportTriageSettings,
 	lastComputedAt: NullDate,
 	updatedBy: S.NullOr(UserId),
 	...timestamps,

@@ -3,7 +3,7 @@ import type { CustomerIssueId, UserId } from "@hazel/schema"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
-import { type IssueRow, PRIORITY_LABEL, STATUS_LABEL } from "../../../customers/issues"
+import { type IssueRow, isFiltered, PRIORITY_LABEL, STATUS_LABEL } from "../../../customers/issues"
 import { errorToastOf, successToast } from "../../../data/actions"
 import { AppRoute, customerRoute } from "../../../route"
 import * as Menu from "../../../ui/menu"
@@ -43,6 +43,13 @@ export const viewerOf = (shared: Shared): Viewer => ({
 	nowMs: shared.nowMs,
 })
 
+/** The selected row's menus, closed. */
+const closedRowMenus = () => ({
+	assignMenu: Menu.init({ id: ASSIGN_MENU_ID, placement: "bottom end" }),
+	statusMenu: Menu.init({ id: STATUS_MENU_ID, placement: "bottom end" }),
+	priorityMenu: Menu.init({ id: PRIORITY_MENU_ID, placement: "bottom end" }),
+})
+
 // INIT
 
 export const init = (): Return => ({
@@ -56,17 +63,19 @@ export const init = (): Return => ({
 		channels: [],
 		members: [],
 		selectedId: null,
-		assignMenu: Menu.init({ id: ASSIGN_MENU_ID, placement: "bottom end" }),
-		statusMenu: Menu.init({ id: STATUS_MENU_ID, placement: "bottom end" }),
-		priorityMenu: Menu.init({ id: PRIORITY_MENU_ID, placement: "bottom end" }),
+		...closedRowMenus(),
 		filterMenu: Menu.init({ id: FILTER_MENU_ID }),
 	},
 })
 
 // SELECTION
 
+/**
+ * The menus are the selected row's: one still open (left so as its issue was filed) does not follow
+ * the selection onto another row.
+ */
 const select = (model: Model, issueId: CustomerIssueId | null): Model =>
-	modifyFields(model, { selectedId: () => issueId })
+	issueId === model.selectedId ? model : { ...model, ...closedRowMenus(), selectedId: issueId }
 
 /** j / k: the next or previous row; from no selection, the first row. */
 const move = (model: Model, shared: Shared, step: 1 | -1): Return => {
@@ -161,9 +170,60 @@ const assign = (model: Model, shared: Shared, issue: IssueRow, key: string): Ret
 	)
 }
 
+/** Files an issue as not support: closed, under Filtered. */
+const file = (model: Model, shared: Shared, issue: IssueRow): Return => {
+	const actor = actorOf(shared)
+	if (actor === undefined || isFiltered(issue)) return { model }
+	return act(
+		model,
+		shared,
+		issue,
+		{
+			triage: "chatter",
+			triagedByUserId: actor.userId,
+			status: "closed",
+			closedAtMs: issue.closedAtMs ?? shared.nowMs,
+		},
+		UpdateInboxIssue({
+			organizationId: actor.organizationId,
+			issueId: issue.id,
+			actor: actor.userId,
+			action: "file",
+			triage: "chatter",
+		}),
+	)
+}
+
+/** Brings a filed issue back as support: waiting on us unless a status is given. Not a reopen. */
+const restore = (
+	model: Model,
+	shared: Shared,
+	issue: IssueRow,
+	status: Exclude<Customers.IssueStatus, "closed"> = "waiting_on_us",
+): Return => {
+	const actor = actorOf(shared)
+	if (actor === undefined || !isFiltered(issue)) return { model }
+	return act(
+		model,
+		shared,
+		issue,
+		{ triage: "support", triagedByUserId: actor.userId, status, closedAtMs: null },
+		UpdateInboxIssue({
+			organizationId: actor.organizationId,
+			issueId: issue.id,
+			actor: actor.userId,
+			action: "restore",
+			triage: "support",
+			status,
+		}),
+	)
+}
+
 const setStatus = (model: Model, shared: Shared, issue: IssueRow, status: Customers.IssueStatus): Return => {
 	const actor = actorOf(shared)
 	if (actor === undefined || status === issue.status) return { model }
+	// A filed issue has one way out: back to the queue.
+	if (isFiltered(issue)) return status === "closed" ? { model } : restore(model, shared, issue, status)
 	const closing = status === "closed"
 	return act(
 		model,
@@ -251,7 +311,20 @@ const ACTION_VERB = {
 	priority: "change the priority of",
 	close: "close",
 	reopen: "reopen",
+	file: "file",
+	restore: "restore",
 } as const satisfies Record<IssueAction, string>
+
+/** What a settled action says; the quiet ones show in the row itself. */
+const SUCCESS_TITLE = {
+	assign: null,
+	status: null,
+	priority: null,
+	close: "Issue closed",
+	reopen: "Issue reopened",
+	file: "Filed as not support",
+	restore: "Back in the inbox",
+} as const satisfies Record<IssueAction, string | null>
 
 // MENUS
 
@@ -306,19 +379,33 @@ const onKey = (model: Model, shared: Shared, key: InboxKey): Return => {
 			return withSelected(model, shared, (next, issue) => openThread(next, shared, issue))
 		case "openCustomer":
 			return withSelected(model, shared, (next, issue) => openCustomer(next, shared, issue))
+		// A filed row has no assignee, status or priority to set (its menus are not on screen).
 		case "assign":
-			return withSelected(model, shared, (next) =>
-				openMenu(next, "assignMenu", assignEntries(next.members, viewerOf(shared))),
+			return withSelected(model, shared, (next, issue) =>
+				isFiltered(issue)
+					? { model: next }
+					: openMenu(next, "assignMenu", assignEntries(next.members, viewerOf(shared))),
 			)
 		case "assignToMe":
-			return withSelected(model, shared, (next, issue) => assign(next, shared, issue, ASSIGN_ME))
+			return withSelected(model, shared, (next, issue) =>
+				isFiltered(issue) ? { model: next } : assign(next, shared, issue, ASSIGN_ME),
+			)
 		case "status":
-			return withSelected(model, shared, (next) => openMenu(next, "statusMenu", statusEntries))
+			return withSelected(model, shared, (next, issue) =>
+				isFiltered(issue) ? { model: next } : openMenu(next, "statusMenu", statusEntries),
+			)
 		case "priority":
-			return withSelected(model, shared, (next) => openMenu(next, "priorityMenu", priorityEntries))
+			return withSelected(model, shared, (next, issue) =>
+				isFiltered(issue) ? { model: next } : openMenu(next, "priorityMenu", priorityEntries),
+			)
 		case "close":
 			return withSelected(model, shared, (next, issue) =>
 				setStatus(next, shared, issue, issue.status === "closed" ? "waiting_on_us" : "closed"),
+			)
+		// One key both ways: file an issue as not support, or bring a filed one back.
+		case "notSupport":
+			return withSelected(model, shared, (next, issue) =>
+				isFiltered(issue) ? restore(next, shared, issue) : file(next, shared, issue),
 			)
 	}
 }
@@ -336,7 +423,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		UpdatedChannels: ({ channels }) => ({ model: modifyFields(model, { channels: () => channels }) }),
 		UpdatedMembers: ({ members }) => ({ model: modifyFields(model, { members: () => members }) }),
 
-		ClickedTab: ({ tab }) => ({ model: modifyFields(model, { tab: () => tab, selectedId: () => null }) }),
+		ClickedTab: ({ tab }) => ({ model: modifyFields(select(model, null), { tab: () => tab }) }),
 		ChangedSearch: ({ value }) => ({ model: modifyFields(model, { search: () => value }) }),
 		ClearedSearch: () => ({ model: modifyFields(model, { search: () => "" }) }),
 		ClearedFilter: ({ field }) => ({
@@ -380,18 +467,15 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				model: modifyFields(next, { filters: (filters) => toggleFilter(filters, key) }),
 			})),
 
-		SucceededIssueAction: ({ issueId, action }) =>
-			action === "close" || action === "reopen"
-				? {
+		SucceededIssueAction: ({ issueId, action }) => {
+			const said = SUCCESS_TITLE[action]
+			return said === null
+				? { model }
+				: {
 						model,
-						outMessage: toast(
-							successToast(
-								action === "close" ? "Issue closed" : "Issue reopened",
-								issueById(model, issueId)?.title ?? null,
-							),
-						),
+						outMessage: toast(successToast(said, issueById(model, issueId)?.title ?? null)),
 					}
-				: { model },
+		},
 		FailedIssueAction: ({ action, reason }) => ({
 			model,
 			outMessage: toast(

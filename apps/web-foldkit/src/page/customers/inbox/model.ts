@@ -6,6 +6,7 @@ import {
 	type IssueRow as IssueRowType,
 	IssueRow,
 	ISSUE_PRIORITIES,
+	isFiltered,
 	needsReply,
 	PRIORITY_LABEL,
 	PRIORITY_RANK,
@@ -18,12 +19,13 @@ import * as Menu from "../../../ui/menu"
 /**
  * The Support inbox (`docs/customers/issues.md`): every support issue across the linked channels,
  * the sibling of Needs attention. Replies happen in chat; the inbox triages (assign, status,
- * priority) and opens the thread.
+ * priority) and opens the thread. Conversations filed as not support (§ Triage) sit under
+ * Filtered, out of every other tab, where a mistake is one key from the queue again.
  */
 
 // MODEL
 
-export const Tab = Schema.Literals(["open", "on_hold", "closed"])
+export const Tab = Schema.Literals(["open", "on_hold", "closed", "filtered"])
 export type Tab = typeof Tab.Type
 
 /** Whose issues: the default, "Mine or unassigned", is what I own plus what nobody picked up. */
@@ -84,7 +86,13 @@ export interface Viewer {
 }
 
 export const tabOf = (issue: IssueRowType): Tab =>
-	issue.status === "closed" ? "closed" : issue.status === "on_hold" ? "on_hold" : "open"
+	isFiltered(issue)
+		? "filtered"
+		: issue.status === "closed"
+			? "closed"
+			: issue.status === "on_hold"
+				? "on_hold"
+				: "open"
 
 export const accountsByIdOfModel = (model: Model): ReadonlyMap<string, AccountRowType> =>
 	new Map((model.accounts ?? []).map((account) => [account.id, account]))
@@ -181,16 +189,16 @@ export const visibleIssues = (model: Model, viewer: Viewer): ReadonlyArray<Issue
 		rows,
 		model.tab === "open"
 			? byOpenOrder(slasById, viewer.nowMs)
-			: model.tab === "closed"
-				? byClosed
-				: byActivity,
+			: model.tab === "on_hold"
+				? byActivity
+				: byClosed,
 	)
 }
 
 export const tabCounts = (model: Model, viewer: Viewer): Readonly<Record<Tab, number>> => {
 	const accountsById = accountsByIdOfModel(model)
 	const slasById = slasByIdOfModel(model)
-	const counts = { open: 0, on_hold: 0, closed: 0 }
+	const counts = { open: 0, on_hold: 0, closed: 0, filtered: 0 }
 	for (const issue of model.issues ?? []) {
 		if (isShown(issue, viewer) && matchesFilters(model, viewer, accountsById, slasById, issue))
 			counts[tabOf(issue)] += 1
@@ -369,6 +377,7 @@ export const InboxKey = Schema.Literals([
 	"status",
 	"priority",
 	"close",
+	"notSupport",
 	"open",
 	"openCustomer",
 	"deselect",

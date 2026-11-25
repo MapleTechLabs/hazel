@@ -3,7 +3,8 @@
  *
  * - `slaIssueWritten`: every issue write (`./issues.ts` `issueWritten`) folds its change into the
  *   issue's `customer_issue_slas` row, in the same transaction. A new issue takes its account's
- *   policy (none: no row).
+ *   policy (none: no row). An issue filed as chatter (`./triage.ts`) has no clocks: its row goes,
+ *   and one brought back starts new ones.
  * - `runSlaAlerts`: the alarm turn for the rows whose `nextAlertAt` passed: records the warning or
  *   breach, notifies the assignee (else the account's owner) and, on a breach, asks for a compute so
  *   the overdue signals open.
@@ -108,8 +109,15 @@ const writeRow = (id: Issue["id"], state: SlaState, now: Date) =>
 		),
 	)
 
-/** A new issue: its account's policy, then the clocks from what the issue already holds. */
-const openIssueSla = Effect.fn("Customers.openIssueSla")(function* (issue: Issue, now: number) {
+/**
+ * A new issue: its account's policy, then the clocks from what the issue already holds. One
+ * `restored` from chatter starts them now: the time it sat filed was nobody's to answer in.
+ */
+const openIssueSla = Effect.fn("Customers.openIssueSla")(function* (
+	issue: Issue,
+	now: number,
+	restored: boolean,
+) {
 	const db = yield* Database.Database
 	const account = yield* db.first(
 		SQLite.from(schema.customerAccountsTable)
@@ -129,17 +137,20 @@ const openIssueSla = Effect.fn("Customers.openIssueSla")(function* (issue: Issue
 	const opened = openSla(
 		ctx,
 		slaPriorityOf(issue.priority),
-		issue.openedAt.getTime(),
+		restored ? now : issue.openedAt.getTime(),
 		issue.firstCustomerMessageAt !== null,
 	)
 	// What the issue already holds when inserted (a reply, a status), as changes from a bare issue.
-	const bare: Issue = {
-		...issue,
-		status: "new",
-		lastCustomerMessageAt: issue.firstCustomerMessageAt,
-		firstTeamReplyAt: null,
-		lastTeamReplyAt: null,
-	}
+	// A restored one's messages are all before its clocks: only its status counts.
+	const bare: Issue = restored
+		? { ...issue, status: "new" }
+		: {
+				...issue,
+				status: "new",
+				lastCustomerMessageAt: issue.firstCustomerMessageAt,
+				firstTeamReplyAt: null,
+				lastTeamReplyAt: null,
+			}
 	const state = silenceStale(
 		eventsOf(bare, issue, now).reduce((current, event) => stepSla(ctx, current, event), opened),
 		now,
@@ -169,19 +180,25 @@ export const slaIssueWritten = Effect.fn("Customers.slaIssueWritten")(function* 
 ) {
 	const db = yield* Database.Database
 	const now = yield* Clock.currentTimeMillis
-	if (after.deletedAt !== null) {
-		yield* db.run(SQLite.deleteFrom(schema.customerIssueSlasTable).where(($) => [$.id.eq(after.id)]))
-		return
-	}
 	const row = yield* db.first(
 		SQLite.from(schema.customerIssueSlasTable)
 			.select()
 			.where(($) => [$.id.eq(after.id)])
 			.limit(1),
 	)
+	// Deleted, folded into another conversation, or not support: nothing to answer in time.
+	if (after.deletedAt !== null || after.triage === "chatter") {
+		if (Option.isNone(row)) return
+		yield* db.run(SQLite.deleteFrom(schema.customerIssueSlasTable).where(($) => [$.id.eq(after.id)]))
+		// Its overdue signal closes with the next compute, as for one answered or closed.
+		if (isOverdue(row.value.state, now)) yield* requestCompute
+		return
+	}
 	if (Option.isNone(row)) {
 		// Only new issues get clocks: one opened before SLAs (or under no policy) stays without.
-		if (before === null) yield* openIssueSla(after, now)
+		// Brought back from chatter, it is new to its clocks.
+		if (before === null) yield* openIssueSla(after, now, false)
+		else if (before.triage === "chatter") yield* openIssueSla(after, now, true)
 		return
 	}
 	if (before === null) return

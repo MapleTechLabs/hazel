@@ -30,10 +30,12 @@ import type {
 	CustomerSource,
 	ViewLayoutKey,
 	SuggestionReason,
+	SupportTriageSettings,
 } from "@hazel/domain/customers"
 import { DEFAULT_ATTENTION_SETTINGS } from "@hazel/customer-integrations"
 import {
 	DEFAULT_BUSINESS_HOURS,
+	DEFAULT_SUPPORT_TRIAGE,
 	SlaHours,
 	EMPTY_SYNC_STATS,
 	BillingInterval,
@@ -43,6 +45,7 @@ import {
 	InvoiceStatus,
 	IssuePriority,
 	IssueStatus,
+	IssueTriage,
 	LifecycleStage,
 	MatchMethod,
 	MetricAggregation,
@@ -662,6 +665,8 @@ export const customerSettingsTable = SQLite.table("customer_settings", {
 		overageInMrr: SQLite.column(SQLite.boolean, { default: false }),
 		/** The working week SLA policies on business hours count (`docs/customers/sla.md`). */
 		businessHours: SQLite.column(jsonb<BusinessHours>(), { default: DEFAULT_BUSINESS_HOURS }),
+		/** Support triage: on or off, and what the team supports (`docs/customers/issues.md` § Triage). */
+		supportTriage: SQLite.column(jsonb<SupportTriageSettings>(), { default: DEFAULT_SUPPORT_TRIAGE }),
 		lastComputedAt: SQLite.nullable(timestamptz),
 		updatedBy: SQLite.nullable(uuid(UserId)),
 		createdAt: createdAt(),
@@ -986,6 +991,12 @@ export const customerIssuesTable = SQLite.table("customer_issues", {
 		/** The root message's first line, shortened. */
 		title: SQLite.text,
 		status: SQLite.column(textEnum(IssueStatus.literals), { default: "new" }),
+		/** What triage made of it; `chatter` is closed and out of the queues. Null: never triaged. */
+		triage: SQLite.nullable(textEnum(IssueTriage.literals)),
+		/** How likely the model thought it support (0 to 1); null when a member decided, or nobody did. */
+		triageScore: SQLite.nullable(SQLite.real),
+		/** The member who set `triage` by hand; null: the model did. */
+		triagedByUserId: SQLite.nullable(uuid(UserId)),
 		priority: SQLite.column(textEnum(IssuePriority.literals), { default: "none" }),
 		assigneeUserId: SQLite.nullable(uuid(UserId)),
 		tags: SQLite.column(jsonb<ReadonlyArray<string>>(), { default: [] }),

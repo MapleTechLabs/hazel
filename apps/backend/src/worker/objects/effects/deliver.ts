@@ -15,6 +15,7 @@ import type { ObjectKind } from "../kinds"
 import { ObjectStubs } from "../protocol"
 import type { HtmlRenders } from "../../../services/html-renders"
 import type { ThreadNamer } from "../../../services/thread-namer"
+import type { Decisions } from "../../../services/decisions"
 import { chatSyncDeliveryReceivers } from "../../../services/chat-sync/chat-sync-outbound"
 import {
 	ChatSyncDeliveryEffects,
@@ -74,10 +75,9 @@ const botGatewaySide = side<Database.Database | BotGatewayTransport | Directory>
 	BotGatewayEffects,
 	botGatewayReceivers,
 )
-const aiSide = side<Database.Database | SqlClient | ThreadNamer | ObjectStubs | CurrentEffectSender>(
-	AiEffects,
-	aiReceivers,
-)
+const aiSide = side<
+	Database.Database | SqlClient | ThreadNamer | Decisions | Directory | ObjectStubs | CurrentEffectSender
+>(AiEffects, aiReceivers)
 const chatSyncSide = side<Database.Database | SqlClient | ChatSyncProviders | Directory>(
 	{ ...ChatSyncDeliveryEffects, ...ChatSyncHistoryEffects },
 	{ ...chatSyncDeliveryReceivers, ...chatSyncHistoryReceivers },
@@ -177,6 +177,7 @@ export const deliverOutboxRow = (
 	| Database.Database
 	| SqlClient
 	| ThreadNamer
+	| Decisions
 	| ChatSyncProviders
 	| HtmlRenders
 	| ApnsClient

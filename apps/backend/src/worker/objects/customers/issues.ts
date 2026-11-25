@@ -14,9 +14,14 @@
  *
  * The transitions are pure (`foldMessage`), so tests and SLAs read the same rules. A message older
  * than the issue's last one (an out-of-order delivery) moves timestamps only, never the status.
+ *
+ * An issue a customer's message opened is then triaged by a model (`./triage.ts`, § Triage): it
+ * stays, is filed as chatter (`triage: "chatter"`, closed, out of the queues) or is folded into the
+ * conversation it continues. A message in a chatter conversation moves its activity only; a
+ * customer's reply there asks the model again.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import type { AuthorSide, IssueStatus } from "@hazel/domain/customers"
+import type { AuthorSide, IssueStatus, IssueTriage } from "@hazel/domain/customers"
 import {
 	ChannelId,
 	type CustomerAccountId,
@@ -27,6 +32,7 @@ import {
 } from "@hazel/schema"
 import { Clock, Effect, Option } from "effect"
 import { slaIssueWritten } from "./sla"
+import { requestTriage } from "./triage-wire"
 import type { ChatMessagePayload } from "../customer-chat-wire"
 
 /** A customer's next top-level message joins their unanswered issue this soon after its last message. */
@@ -75,13 +81,9 @@ export const nextStatus = (status: IssueStatus, side: AuthorSide): IssueStatus =
 	}
 }
 
-/**
- * Fold one message into an issue. `inOrder` is false for a message older than the issue's last
- * one: it fills timestamps but does not move the status (a later message already decided it).
- */
-export const foldMessage = (issue: IssueActivity, message: SupportMessage): IssueActivity => {
+const fold = (issue: IssueActivity, message: SupportMessage, movesStatus: boolean): IssueActivity => {
 	const at = message.sentAt
-	const inOrder = at >= issue.lastMessageAt
+	const inOrder = movesStatus && at >= issue.lastMessageAt
 	const base: IssueActivity = {
 		...issue,
 		lastMessageAt: max(issue.lastMessageAt, at),
@@ -119,6 +121,20 @@ export const foldMessage = (issue: IssueActivity, message: SupportMessage): Issu
 			return base
 	}
 }
+
+/**
+ * Fold one message into an issue. `inOrder` is false for a message older than the issue's last
+ * one: it fills timestamps but does not move the status (a later message already decided it).
+ */
+export const foldMessage = (issue: IssueActivity, message: SupportMessage): IssueActivity =>
+	fold(issue, message, true)
+
+/**
+ * Count one message on an issue without moving its status: a conversation filed as chatter keeps
+ * its timestamps and stays filed.
+ */
+export const foldActivity = (issue: IssueActivity, message: SupportMessage): IssueActivity =>
+	fold(issue, message, false)
 
 /** A new issue's activity, opened by its root message. */
 export const openedBy = (message: SupportMessage, manual: boolean): IssueActivity => {
@@ -304,6 +320,43 @@ export const insertIssue = (input: {
 		return issue
 	})
 
+/** The account timeline's "Issue opened" of `issue`. */
+export const openedEventOf = (issue: schema.CustomerIssue) =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.first(
+			SQLite.from(schema.customerEventsTable)
+				.select("id")
+				.where(($) => [
+					$.accountId.eq(issue.accountId),
+					$.type.eq("issue.opened"),
+					SQLite.sql.cond`json_extract(${$.data}, '$.issueId') = ${issue.id}`,
+				])
+				.limit(1),
+		),
+	)
+
+/**
+ * An issue the model filed left the account's timeline (§ Triage); brought back, by the model, a
+ * reply or a member, it is on it again from `now`. One that never left keeps its own.
+ */
+export const ensureOpenedEvent = Effect.fn("Customers.ensureOpenedEvent")(function* (
+	issue: schema.CustomerIssue,
+	now: Date,
+) {
+	if (Option.isSome(yield* openedEventOf(issue))) return
+	const db = yield* Database.Database
+	yield* db.run(
+		SQLite.insertInto(schema.customerEventsTable).values({
+			accountId: issue.accountId,
+			provider: "hazel",
+			type: "issue.opened",
+			title: `Issue opened: ${issue.title}`,
+			data: { issueId: issue.id, channelId: issue.sourceChannelId, messageId: issue.rootMessageId },
+			occurredAt: now,
+		}),
+	)
+})
+
 /**
  * Where a relayed message lands. `channelId` is the linked channel; `thread` names the thread and
  * its root message when the message is a reply there.
@@ -338,10 +391,33 @@ export const receiveSupportMessage = Effect.fn("CustomersObject.receiveSupportMe
 			const issue = yield* issueAt(input.channelId, rootMessageId)
 			// A reply under a message nobody raised as an issue (an announcement, a team note) is chat.
 			if (Option.isNone(issue)) return "ignored" as const
-			yield* updateIssueRow(issue.value, {
-				...foldMessage(issue.value, input.message),
+			const filed = issue.value.triage === "chatter"
+			const fromCustomer = input.message.side === "customer"
+			const changes: Partial<schema.NewCustomerIssue> = {
+				...(filed ? foldActivity : foldMessage)(issue.value, input.message),
 				threadChannelId,
-			})
+			}
+			// An email is a request by where it was sent, and none of it goes to the model: a
+			// customer's reply to a conversation a member filed brings it back unasked.
+			const returns = filed && fromCustomer && input.inbox !== undefined
+			if (returns) Object.assign(changes, BACK_TO_SUPPORT)
+			yield* updateIssueRow(issue.value, changes)
+			if (returns) yield* ensureOpenedEvent(issue.value, input.message.sentAt)
+			// Chatter stays filed while it is chatter: the model says whether this reply changes that.
+			if (filed && fromCustomer && input.inbox === undefined) {
+				yield* requestTriage(
+					{
+						organizationId: issue.value.organizationId,
+						issueId: issue.value.id,
+						reply: {
+							messageId: input.message.messageId,
+							sentAt: input.message.sentAt.toISOString(),
+							text: input.message.content,
+						},
+					},
+					input.message.messageId,
+				)
+			}
 			return "updated" as const
 		}
 
@@ -369,7 +445,7 @@ export const receiveSupportMessage = Effect.fn("CustomersObject.receiveSupportMe
 			yield* recordIssueMessage(input.channelId, input.message.messageId, latest.value.id)
 			return "joined" as const
 		}
-		yield* insertIssue({
+		const opened = yield* insertIssue({
 			organizationId: link.value.organizationId,
 			accountId: link.value.accountId,
 			channelId: input.channelId,
@@ -377,6 +453,14 @@ export const receiveSupportMessage = Effect.fn("CustomersObject.receiveSupportMe
 			message: input.message,
 			createdByUserId: null,
 		})
+		// A linked channel is a conversation, not a mailbox: most of it is not a request. An email
+		// to a support inbox is one by where it was sent.
+		if (input.inbox === undefined) {
+			yield* requestTriage(
+				{ organizationId: opened.organizationId, issueId: opened.id },
+				input.message.messageId,
+			)
+		}
 		return "opened" as const
 	})
 	yield* Effect.annotateCurrentSpan({
@@ -445,6 +529,9 @@ export type IssuePatch = {
 	-readonly [
 		K in
 			| "status"
+			| "triage"
+			| "triageScore"
+			| "triagedByUserId"
 			| "priority"
 			| "assigneeUserId"
 			| "tags"
@@ -455,11 +542,31 @@ export type IssuePatch = {
 	]?: schema.CustomerIssue[K]
 }
 
-/** The changes a member's `customers.issue.update` makes; only fields that differ. */
+/**
+ * What brings a filed conversation back with nobody deciding it (a customer's reply): support
+ * again and waiting on us. Not a reopen: it was never closed as resolved.
+ */
+export const BACK_TO_SUPPORT = {
+	triage: "support",
+	triageScore: null,
+	triagedByUserId: null,
+	status: "waiting_on_us",
+	closedAt: null,
+	closedByUserId: null,
+} as const satisfies IssuePatch
+
+/**
+ * The changes a member's `customers.issue.update` makes; only fields that differ.
+ *
+ * Triage by hand: `triage: "chatter"` files the issue (closed, whatever `status` says). A filed
+ * one comes back as support with `triage: "support"` or any status but closed: waiting on us
+ * unless a status is given, and not counted as a reopen (it was never closed as resolved).
+ */
 export const issuePatch = (
 	issue: schema.CustomerIssue,
 	input: {
 		readonly status?: IssueStatus | undefined
+		readonly triage?: IssueTriage | undefined
 		readonly priority?: schema.CustomerIssue["priority"] | undefined
 		readonly assigneeUserId?: UserId | null | undefined
 		readonly tags?: ReadonlyArray<string> | undefined
@@ -468,7 +575,35 @@ export const issuePatch = (
 	now: Date,
 ): IssuePatch => {
 	const patch: IssuePatch = {}
-	if (input.status !== undefined && input.status !== issue.status) {
+	const decided = () => {
+		patch.triageScore = null
+		patch.triagedByUserId = actor
+	}
+	const opens = input.status !== undefined && input.status !== "closed"
+	if (input.triage === "chatter" && issue.triage !== "chatter") {
+		patch.triage = "chatter"
+		decided()
+		if (issue.status !== "closed") {
+			patch.status = "closed"
+			patch.closedAt = now
+			patch.closedByUserId = actor
+		}
+	} else if (
+		issue.triage === "chatter" &&
+		input.triage !== "chatter" &&
+		(input.triage === "support" || opens)
+	) {
+		patch.triage = "support"
+		decided()
+		patch.status = opens && input.status !== undefined ? input.status : "waiting_on_us"
+		patch.closedAt = null
+		patch.closedByUserId = null
+	} else if (
+		// Filing wins over a status sent with it: a filed issue stays closed.
+		input.triage !== "chatter" &&
+		input.status !== undefined &&
+		input.status !== issue.status
+	) {
 		patch.status = input.status
 		if (input.status === "closed") {
 			patch.closedAt = now
@@ -479,6 +614,11 @@ export const issuePatch = (
 			patch.reopenCount = issue.reopenCount + 1
 			patch.reopenedAt = now
 		}
+	}
+	// A member confirming an issue the model never decided.
+	if (input.triage === "support" && issue.triage === null) {
+		patch.triage = "support"
+		decided()
 	}
 	if (input.priority !== undefined && input.priority !== issue.priority) patch.priority = input.priority
 	if (input.assigneeUserId !== undefined && input.assigneeUserId !== issue.assigneeUserId) {
