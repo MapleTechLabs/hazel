@@ -15,6 +15,7 @@ const row = (n: number, fields: Partial<UnreadChannelRow> = {}): UnreadChannelRo
 	name: `channel-${n}`,
 	type: "public",
 	notificationCount: 0,
+	isMuted: false,
 	mutedUntil: null,
 	joinedAt: at(1_000),
 	lastReadAt: at(5_000),
