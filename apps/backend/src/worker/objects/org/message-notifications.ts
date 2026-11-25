@@ -29,6 +29,8 @@ export const MessageCreatedPayload = Schema.Struct({
 	mentionedUserIds: Schema.Array(UserId),
 	/** `@channel` or `@here`. */
 	notifyAll: Schema.Boolean,
+	/** `@here` without `@channel`: only members online. Optional: deliveries before it have none. */
+	isHereOnly: Schema.optional(Schema.Boolean),
 	/** The author of the message this one replies to. */
 	replyToAuthorId: Schema.NullOr(UserId),
 	/** For the push (shortened). Optional: deliveries enqueued before push have none. */
@@ -143,6 +145,7 @@ export const messageCreated = Effect.fn("OrgEffects.messageCreated")(function* (
 			authorId: payload.authorId,
 			mentionedUserIds: payload.mentionedUserIds,
 			notifyAll: payload.notifyAll,
+			isHereOnly: payload.isHereOnly ?? false,
 			replyToAuthorId: payload.replyToAuthorId,
 			// Worked out only when some recipient's notification is not silent.
 			push:

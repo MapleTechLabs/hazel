@@ -124,6 +124,7 @@ const notificationsHook: MessageEventHook = (event) =>
 				authorId: message.authorId,
 				mentionedUserIds: mentions.userMentions,
 				notifyAll: mentions.hasChannelMention || mentions.hasHereMention,
+				isHereOnly: mentions.hasHereMention && !mentions.hasChannelMention,
 				replyToAuthorId: Option.getOrNull(Option.map(replyTo, (row) => row.authorId)),
 				content: Array.from(message.content).slice(0, NOTIFICATION_CONTENT_MAX).join(""),
 				attachmentCount: Option.match(attachments, {
