@@ -10,11 +10,12 @@
  * - The read position moves when the member reads the channel (`markChannelRead`); only they see it.
  * - Objects older than the tables are filled once when they activate: `readStateSince` is set
  *   (every member is read up to then, one write, safe to repeat), then each channel's newest
- *   message from the index.
+ *   message from the index, in one grouped read.
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
-import { Clock, Effect, Option } from "effect"
+import { Array as Arr, Clock, Effect, Option } from "effect"
+import { inList, rowsPerInsert } from "../customers/sql"
 import { readObjectMeta, writeObjectMeta } from "../meta"
 
 const FILL_KEY = "channelActivityVersion"
@@ -68,23 +69,21 @@ export const refreshChannelActivity = Effect.fn("OrgObject.refreshChannelActivit
 	)
 })
 
-/** Now, or the newest of the channels' messages if that is later (a clock behind the message's). */
+/** The read position for each channel: now, or its newest message if that is later (a clock behind the message's). */
 const readUpTo = (channelIds: ReadonlyArray<ChannelId>) =>
 	Effect.gen(function* () {
 		const db = yield* Database.Database
 		const now = new Date(yield* Clock.currentTimeMillis)
-		if (channelIds.length === 0) return now
-		const newest = yield* db.first(
+		const rows = yield* db.run(
 			SQLite.from(schema.channelActivityTable)
-				.select("lastMessageAt")
-				.where(($) => [$.channelId.in_(...channelIds)])
-				.orderBy(($) => [[$.lastMessageAt, "desc"]])
-				.limit(1),
+				.select("channelId", "lastMessageAt")
+				.where(($) => [inList($.channelId, channelIds)]),
 		)
-		return Option.match(newest, {
-			onNone: () => now,
-			onSome: (row) => (row.lastMessageAt > now ? row.lastMessageAt : now),
-		})
+		const newest = new Map(rows.map((row) => [row.channelId, row.lastMessageAt]))
+		return (channelId: ChannelId): Date => {
+			const at = newest.get(channelId)
+			return at !== undefined && at > now ? at : now
+		}
 	})
 
 /**
@@ -99,11 +98,17 @@ export const markChannelsRead = Effect.fn("OrgObject.markChannelsRead")(function
 ) {
 	if (channelIds.length === 0) return
 	const db = yield* Database.Database
-	const lastReadAt = yield* readUpTo(channelIds)
-	for (const channelId of channelIds) {
+	const lastReadAtOf = yield* readUpTo(channelIds)
+	const rows = channelIds.map((channelId) => ({
+		channelId,
+		userId,
+		organizationId,
+		lastReadAt: lastReadAtOf(channelId),
+	}))
+	for (const chunk of Arr.chunksOf(rows, rowsPerInsert(4))) {
 		yield* db.run(
 			SQLite.insertInto(schema.channelReadStateTable)
-				.values({ channelId, userId, organizationId, lastReadAt })
+				.values(chunk)
 				.onConflictDoUpdate({
 					target: ["channelId", "userId"],
 					set: SQLite.excluded(["lastReadAt"]),
@@ -113,12 +118,17 @@ export const markChannelsRead = Effect.fn("OrgObject.markChannelsRead")(function
 	yield* db.run(
 		SQLite.update(schema.channelMembersTable)
 			.set({ notificationCount: 0 })
-			.where(($) => [$.userId.eq(userId), $.channelId.in_(...channelIds), $.notificationCount.gt(0)]),
+			.where(($) => [$.userId.eq(userId), inList($.channelId, channelIds), $.notificationCount.gt(0)]),
 	)
 	yield* Effect.annotateCurrentSpan({ "read.channels": channelIds.length })
 })
 
-/** Once per object: start unread state now, then fill each channel's newest message from the index. */
+/**
+ * Once per object: start unread state now, then fill the newest message of each channel that has
+ * no `channel_activity` row yet. One grouped read over the index (`message_search_channel_created_idx`
+ * answers it per channel), then chunked inserts; a row already there is kept (it is live). Safe to
+ * run again: a fill cut short repeats only what it did not write.
+ */
 export const fillChannelActivity: Effect.Effect<void, Database.DatabaseError, Database.Database> = Effect.gen(
 	function* () {
 		if (Option.getOrUndefined(yield* readObjectMeta(FILL_KEY)) === FILL_VERSION) return
@@ -130,12 +140,46 @@ export const fillChannelActivity: Effect.Effect<void, Database.DatabaseError, Da
 				.set({ readStateSince: now })
 				.where(($) => [$.readStateSince.isNull()]),
 		)
-		const channels = yield* db.run(
-			SQLite.from(schema.channelsTable)
-				.select("id")
-				.where(($) => [$.deletedAt.isNull()]),
+		const heads = SQLite.from(schema.messageSearchTable)
+			.select(($) => ({ channelId: $.channelId, newest: SQLite.max($.createdAt) }))
+			.groupBy("channelId")
+		const newest = yield* db.run(
+			SQLite.from(schema.messageSearchTable, "s")
+				.innerJoinQuery(heads, "h", (s, h) =>
+					SQLite.and(s.channelId.eq(h.channelId), s.createdAt.eq(h.newest)),
+				)
+				.innerJoin(schema.channelsTable, "c", (s, c) =>
+					SQLite.and(c.id.eq(s.channelId), c.deletedAt.isNull()),
+				)
+				.select(($) => ({
+					channelId: $.channelId,
+					organizationId: $.c.organizationId,
+					messageId: $.messageId,
+					authorId: $.authorId,
+					createdAt: $.createdAt,
+				}))
+				.where(($) => [
+					SQLite.not(
+						SQLite.exists(
+							SQLite.from(schema.channelActivityTable)
+								.select(() => ({ one: SQLite.lit(1) }))
+								.where((a) => [a.channelId.eq($.channelId)]),
+						),
+					),
+				]),
 		)
-		yield* Effect.forEach(channels, (channel) => refreshChannelActivity(channel.id), { discard: true })
+		// Two messages at the same millisecond: either is the newest.
+		const rows = [...new Map(newest.map((row) => [row.channelId, row])).values()].map((row) => ({
+			channelId: row.channelId,
+			organizationId: row.organizationId,
+			lastMessageId: row.messageId,
+			lastMessageAt: new Date(row.createdAt),
+			lastMessageAuthorId: row.authorId,
+		}))
+		for (const chunk of Arr.chunksOf(rows, rowsPerInsert(5))) {
+			yield* db.run(SQLite.insertInto(schema.channelActivityTable).values(chunk).onConflictDoNothing())
+		}
+		yield* Effect.annotateCurrentSpan({ "fill.channels": rows.length })
 		yield* writeObjectMeta(FILL_KEY, FILL_VERSION)
 	},
 ).pipe(Effect.withSpan("OrgObject.fillChannelActivity"))
