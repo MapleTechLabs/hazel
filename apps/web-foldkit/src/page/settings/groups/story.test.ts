@@ -43,6 +43,20 @@ describe("create", () => {
 		)
 	})
 
+	test("a second New group keeps what was typed", () => {
+		story(
+			owner,
+			given(init().model),
+			message(Message.ClickedNewGroup()),
+			message(Message.ChangedCreateName({ value: "Design" })),
+			message(Message.ClickedNewGroup()),
+			model((current) => {
+				expect(current.create?.name).toBe("Design")
+				expect(current.create?.handle).toBe("design")
+			}),
+		)
+	})
+
 	test("nothing is sent without a name and handle", () => {
 		story(
 			owner,

@@ -113,7 +113,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			}
 		},
 		UpdatedMembers: ({ members }) => ({ model: modifyFields(model, { members: () => members }) }),
-		ClickedNewGroup: () => ({ model: modifyFields(model, { create: () => emptyForm }) }),
+		// An open form stays as typed: the header's and the empty state's buttons both open it.
+		ClickedNewGroup: () => ({
+			model: modifyFields(model, { create: (form) => form ?? emptyForm }),
+		}),
 		ChangedCreateName: ({ value }) => ({
 			model: modifyFields(model, { create: (form) => (form === null ? null : withName(form, value)) }),
 		}),
