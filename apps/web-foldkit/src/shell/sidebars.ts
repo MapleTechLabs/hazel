@@ -94,6 +94,7 @@ export const settingsSidebar = <Message>(
 				sidebarSection(h, {}, [
 					item("settingsGeneral", onRoutes(route, "SettingsGeneral")),
 					item("settingsTeam", onRoutes(route, "TeamSettings")),
+					item("settingsGroups", onRoutes(route, "SettingsGroups")),
 					item("settingsInvitations", onRoutes(route, "SettingsInvitations")),
 					item("settingsCustomEmojis", onRoutes(route, "SettingsCustomEmojis")),
 				]),

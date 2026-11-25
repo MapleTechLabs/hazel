@@ -32,3 +32,37 @@ describe("markdown mention", () => {
 		)
 	})
 })
+
+const groupView = (isMine: boolean) =>
+	Scene.withViewInputs(view, {
+		toTrigger: () =>
+			markdownView(ih, "Hi @[group:g-1] and @[group:g-gone]", {
+				mentions: [],
+				emojis: [],
+				groups: [{ groupId: "g-1", handle: "design", isMine }],
+			}),
+		toContent: () => [],
+	})
+
+const chip = (groupId: string) => Scene.selector(`[data-group-mention="${groupId}"]`)
+
+describe("markdown group mention", () => {
+	test("renders the group's handle; a deleted group reads as @group", () => {
+		Scene.scene(
+			{ update, view: groupView(false)() },
+			Scene.given(init("group")),
+			Scene.expect(chip("g-1")).toContainText("@design"),
+			Scene.expect(chip("g-gone")).toContainText("@group"),
+			Scene.expect(chip("g-1")).toHaveClass("text-primary"),
+		)
+	})
+
+	test("is highlighted when the viewer is in the group", () => {
+		Scene.scene(
+			{ update, view: groupView(true)() },
+			Scene.given(init("group")),
+			Scene.expect(chip("g-1")).toHaveClass("bg-primary"),
+			Scene.expect(chip("g-1")).toHaveClass("text-primary-fg"),
+		)
+	})
+})

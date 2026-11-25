@@ -48,6 +48,19 @@ export const MentionableBot = Schema.Struct({
 })
 export type MentionableBot = typeof MentionableBot.Type
 
+/** A user group of the organization (Discord's mentionable role), for `@handle`. */
+export const MentionGroup = Schema.Struct({
+	id: Schema.String,
+	handle: Schema.String,
+	name: Schema.String,
+	memberCount: Schema.Finite,
+})
+export type MentionGroup = typeof MentionGroup.Type
+
+/** What a mention node is of: a person (or bot, `@channel`, `@here`), or a user group. */
+export const MentionKind = Schema.Literals(["user", "group"])
+export type MentionKind = typeof MentionKind.Type
+
 export const Presence = Schema.Struct({ userId: UserId, status: PresenceStatus })
 export type Presence = typeof Presence.Type
 
@@ -99,6 +112,7 @@ export const Model = Schema.Struct({
 	members: Schema.Array(MentionMember),
 	presence: Schema.Array(Presence),
 	mentionableBots: Schema.Array(MentionableBot),
+	userGroups: Schema.Array(MentionGroup),
 	botCommands: Schema.Array(BotCommand),
 	customEmojis: Schema.Array(ComposerEmoji),
 	commandInput: Schema.NullOr(CommandInput),
@@ -114,6 +128,7 @@ export const init = (editorId: string, placeholder = "Type a message..."): Model
 	members: [],
 	presence: [],
 	mentionableBots: [],
+	userGroups: [],
 	botCommands: [],
 	customEmojis: [],
 	commandInput: null,
@@ -150,6 +165,7 @@ export const Message = defineMessageUnion({
 	UpdatedMentionMembers: { members: Schema.Array(MentionMember) },
 	UpdatedPresence: { presence: Schema.Array(Presence) },
 	UpdatedMentionableBots: { bots: Schema.Array(MentionableBot) },
+	UpdatedUserGroups: { groups: Schema.Array(MentionGroup) },
 	UpdatedBotCommands: { commands: Schema.Array(BotCommand) },
 	UpdatedCustomEmojis: { emojis: Schema.Array(ComposerEmoji) },
 	UpdatedCommandValue: { argName: Schema.String, value: Schema.String },
@@ -332,13 +348,18 @@ export const onEditor = <C, F>(
 	)
 
 export const InsertMention = Command.define("InsertMention", {
-	// A user id, or "channel" / "here".
-	args: { editorId: Schema.String, userId: Schema.String, displayName: Schema.String },
+	// A user id, or "channel" / "here"; for a group (`kind`), its id.
+	args: {
+		editorId: Schema.String,
+		userId: Schema.String,
+		displayName: Schema.String,
+		kind: Schema.optional(MentionKind),
+	},
 	messages: [Message.CompletedInsertMention, Message.FailedInsertMention],
-	execute: ({ editorId, userId, displayName }) =>
+	execute: ({ editorId, userId, displayName, kind }) =>
 		onEditor(
 			editorId,
-			(view) => insertMention(view, userId, displayName),
+			(view) => insertMention(view, userId, displayName, kind ?? "user"),
 			Message.CompletedInsertMention(),
 			Message.FailedInsertMention,
 		),

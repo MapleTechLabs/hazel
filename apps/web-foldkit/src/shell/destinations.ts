@@ -20,6 +20,7 @@ import {
 	IconOffice,
 	IconPaintbrush,
 	IconPresentationChart,
+	IconProfiles2,
 	IconRocket,
 	IconServers,
 	IconShop,
@@ -175,6 +176,12 @@ const DESTINATIONS = define({
 		to: (orgSlug) => AppRoute.TeamSettings({ orgSlug }),
 		keywords: "members people",
 	},
+	settingsGroups: {
+		label: "Groups",
+		icon: IconProfiles2,
+		to: (orgSlug) => AppRoute.SettingsGroups({ orgSlug }),
+		keywords: "user groups roles mentions",
+	},
 	settingsInvitations: {
 		label: "Invitations",
 		icon: IconUsersPlus,
@@ -309,6 +316,7 @@ export const DESTINATION_GROUPS: ReadonlyArray<{
 		ids: [
 			"settingsGeneral",
 			"settingsTeam",
+			"settingsGroups",
 			"settingsInvitations",
 			"settingsIntegrations",
 			"settingsMarketplace",

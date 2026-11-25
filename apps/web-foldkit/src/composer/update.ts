@@ -70,7 +70,12 @@ const select = (model: Model, index: number): Return => {
 				? {
 						model: reset,
 						commands: [
-							InsertMention({ editorId, userId: option.id, displayName: option.displayName }),
+							InsertMention({
+								editorId,
+								userId: option.id,
+								displayName: option.displayName,
+								kind: option.type === "group" ? "group" : "user",
+							}),
 						],
 					}
 				: { model }
@@ -168,6 +173,8 @@ export const update = (model: Model, message: Message): Return =>
 		UpdatedPresence: ({ presence }) => ({ model: modifyFields(model, { presence: () => presence }) }),
 		UpdatedMentionableBots: ({ bots }) =>
 			withOptionSync(model, modifyFields(model, { mentionableBots: () => bots })),
+		UpdatedUserGroups: ({ groups }) =>
+			withOptionSync(model, modifyFields(model, { userGroups: () => groups })),
 		UpdatedBotCommands: ({ commands }) =>
 			withOptionSync(model, modifyFields(model, { botCommands: () => commands })),
 		UpdatedCustomEmojis: ({ emojis }) =>

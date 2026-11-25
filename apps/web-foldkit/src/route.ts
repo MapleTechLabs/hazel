@@ -94,6 +94,7 @@ export const AppRoute = defineRouteUnion({
 	Profile: { orgSlug: Schema.String, userId: UserId },
 	SettingsGeneral: { orgSlug: Schema.String },
 	TeamSettings: { orgSlug: Schema.String },
+	SettingsGroups: { orgSlug: Schema.String },
 	SettingsInvitations: { orgSlug: Schema.String },
 	SettingsCustomEmojis: { orgSlug: Schema.String },
 	SettingsDebug: { orgSlug: Schema.String },
@@ -310,6 +311,7 @@ const routers = {
 	Profile: pipe(orgPath("profile"), slash(schemaSegment("userId", UserId)), Route.mapTo(AppRoute.Profile)),
 	SettingsGeneral: pipe(orgPath("settings"), Route.mapTo(AppRoute.SettingsGeneral)),
 	TeamSettings: pipe(orgPath("settings", "team"), Route.mapTo(AppRoute.TeamSettings)),
+	SettingsGroups: pipe(orgPath("settings", "groups"), Route.mapTo(AppRoute.SettingsGroups)),
 	SettingsInvitations: pipe(orgPath("settings", "invitations"), Route.mapTo(AppRoute.SettingsInvitations)),
 	SettingsCustomEmojis: pipe(
 		orgPath("settings", "custom-emojis"),
@@ -450,6 +452,7 @@ export const urlToAppRoute = Route.parseUrlWithFallback(
 		routers.Profile,
 		routers.SettingsGeneral,
 		routers.TeamSettings,
+		routers.SettingsGroups,
 		routers.SettingsInvitations,
 		routers.SettingsCustomEmojis,
 		routers.SettingsDebug,
@@ -522,6 +525,7 @@ export const isPublicRoute = AppRoute.isAnyOf([
 export const isSettingsRoute = AppRoute.isAnyOf([
 	"SettingsGeneral",
 	"TeamSettings",
+	"SettingsGroups",
 	"SettingsInvitations",
 	"SettingsCustomEmojis",
 	"SettingsDebug",

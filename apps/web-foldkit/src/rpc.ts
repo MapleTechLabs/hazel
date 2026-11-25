@@ -29,6 +29,7 @@ import {
 	PushDeviceRpcs,
 	RssSubscriptionRpcs,
 	TypingIndicatorRpcs,
+	UserGroupRpcs,
 	UserPresenceStatusRpcs,
 	UserRpcs,
 } from "@hazel/domain/rpc"
@@ -63,7 +64,7 @@ const AllRpcs = MessageRpcs.merge(
 	ConnectShareRpcs,
 	InvitationRpcs,
 	OrganizationExportRpcs,
-).merge(ChatSyncRpcs, CustomerRpcs, CustomerChatRpcs, PushDeviceRpcs, AssistantRpcs)
+).merge(ChatSyncRpcs, CustomerRpcs, CustomerChatRpcs, PushDeviceRpcs, AssistantRpcs, UserGroupRpcs)
 
 const makeClient = RpcClient.make(AllRpcs, { flatten: true })
 

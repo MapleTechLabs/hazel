@@ -67,6 +67,7 @@ export interface DeriveContext {
 	readonly users: ReadonlyMap<string, UserInfo>
 	readonly presence: ReadonlyMap<string, PresenceInfo>
 	readonly botNames: ReadonlyMap<string, string>
+	readonly userGroups: ReadonlyMap<string, Lookups["userGroups"][number]>
 	readonly emojiUrls: ReadonlyMap<string, string>
 	readonly attachmentsByMessage: ReadonlyMap<string, ReadonlyArray<AttachmentInfo>>
 	readonly syncedFrom: ReadonlyMap<string, SyncProvider>
@@ -123,6 +124,7 @@ export const toDeriveContext = (
 	users: byKey(lookups.users, (user) => user.id),
 	presence: byKey(lookups.presence, (presence) => presence.userId),
 	botNames: new Map(lookups.bots.map((bot) => [bot.userId, bot.name])),
+	userGroups: byKey(lookups.userGroups, (group) => group.id),
 	emojiUrls: new Map(lookups.customEmojis.map((emoji) => [emoji.name, emoji.imageUrl])),
 	attachmentsByMessage: groupBy(lookups.attachments, (attachment) => attachment.messageId),
 	syncedFrom: new Map(lookups.syncedMessages.map((synced) => [synced.messageId, synced.provider])),
@@ -281,6 +283,7 @@ const threadOf = (context: DeriveContext, threadChannelId: ChannelId | null): Th
 
 const MENTION_PATTERN = /@\[userId:([^\]]+)\]/g
 const EMOJI_PATTERN = /!\[custom-emoji:([^\]]+)\]/g
+const GROUP_PATTERN = /@\[group:([^\]]+)\]/g
 
 const MARKDOWN_MARKS = /[*_`~#>|]/g
 const EMOJI_MARKUP = /!\[custom-emoji:([^\]]+)\]\([^)]*\)/g
@@ -292,6 +295,10 @@ const plainLineOf = (context: DeriveContext, content: string): string =>
 			const user = context.users.get(userId)
 			return `@${context.botNames.get(userId) ?? (user ? `${user.firstName} ${user.lastName}` : "unknown")}`
 		})
+		.replace(
+			GROUP_PATTERN,
+			(_, groupId: string) => `@${context.userGroups.get(groupId)?.handle ?? "group"}`,
+		)
 		.replace(EMOJI_MARKUP, ":$1:")
 		.replace(MARKDOWN_MARKS, "")
 		.split("\n")
@@ -309,6 +316,20 @@ const refsOf = (context: DeriveContext, content: string): MarkdownRefs => ({
 	emojis: [...content.matchAll(EMOJI_PATTERN)].flatMap(([, name]) => {
 		const imageUrl = name ? context.emojiUrls.get(name) : undefined
 		return name && imageUrl ? [{ name, imageUrl }] : []
+	}),
+	groups: [...content.matchAll(GROUP_PATTERN)].flatMap(([, groupId]) => {
+		const group = groupId ? context.userGroups.get(groupId) : undefined
+		return groupId && group
+			? [
+					{
+						groupId,
+						handle: group.handle,
+						isMine:
+							context.currentUserId !== undefined &&
+							group.memberIds.some((userId) => userId === context.currentUserId),
+					},
+				]
+			: []
 	}),
 })
 

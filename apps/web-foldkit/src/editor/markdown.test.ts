@@ -337,6 +337,16 @@ describe("markdown serializer (ProseMirror model)", () => {
 			expect(children[children.length - 1]).toMatchObject({ type: "mention", userId: "123" })
 		})
 
+		it("should parse group mentions", () => {
+			const result = shape(deserializeFromMarkdown("@[group:g-1] review"))
+
+			const children = (result[0] as any).children
+			expect(children[0]).toMatchObject({ type: "mention", userId: "g-1", kind: "group" })
+			expect(serializeToMarkdown(deserializeFromMarkdown("@[group:g-1] review"))).toBe(
+				"@[group:g-1] review",
+			)
+		})
+
 		it("should parse directive mentions", () => {
 			const markdown = "@[directive:channel] everyone!"
 			const result = shape(deserializeFromMarkdown(markdown))

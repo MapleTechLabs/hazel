@@ -94,7 +94,28 @@ describe("mention autocomplete", () => {
 			given({ ...withMembers(), autocomplete: { trigger: "mention", search: "gra" } }),
 			message(Message.PressedAutocompleteKey({ key: "Enter" })),
 			Command.expectExact(
-				Composer.InsertMention({ editorId, userId: uuid(1), displayName: "Grace Hopper" }),
+				Composer.InsertMention({
+					editorId,
+					userId: uuid(1),
+					displayName: "Grace Hopper",
+					kind: "user",
+				}),
+			),
+			Command.resolve(Composer.InsertMention, Message.CompletedInsertMention()),
+		)
+	})
+
+	test("Enter on a group inserts a group mention, named by its handle", () => {
+		story(
+			update,
+			given({
+				...withMembers(),
+				userGroups: [{ id: "g-1", handle: "design", name: "Design team", memberCount: 2 }],
+				autocomplete: { trigger: "mention", search: "des" },
+			}),
+			message(Message.PressedAutocompleteKey({ key: "Enter" })),
+			Command.expectExact(
+				Composer.InsertMention({ editorId, userId: "g-1", displayName: "design", kind: "group" }),
 			),
 			Command.resolve(Composer.InsertMention, Message.CompletedInsertMention()),
 		)

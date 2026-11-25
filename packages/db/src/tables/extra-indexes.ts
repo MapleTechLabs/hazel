@@ -16,6 +16,13 @@ const notDeleted = `"deletedAt" IS NULL`
 
 export const extraIndexes: ReadonlyArray<ExtraIndex> = [
 	{
+		name: "user_groups_org_handle_unique",
+		table: "user_groups",
+		unique: true,
+		on: ["organizationId", "handle"],
+		where: notDeleted,
+	},
+	{
 		name: "chat_sync_link_connection_hazel_unique",
 		table: "chat_sync_channel_links",
 		unique: true,

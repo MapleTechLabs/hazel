@@ -1,4 +1,4 @@
-import { AttachmentId, ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
+import { AttachmentId, ChannelId, ChannelMemberId, MessageId, UserGroupId, UserId } from "@hazel/schema"
 import { ChannelMember } from "@hazel/domain/models"
 import { Schema } from "effect"
 import { CustomerAuthorInfo } from "../../customers/chat-authors"
@@ -76,6 +76,16 @@ export type TypingInfo = typeof TypingInfo.Type
 export const CustomEmojiInfo = Schema.Struct({ name: Schema.String, imageUrl: Schema.String })
 export type CustomEmojiInfo = typeof CustomEmojiInfo.Type
 
+/** A user group of the organization (`@[group:…]`), with who is in it. */
+export const UserGroupInfo = Schema.Struct({
+	id: UserGroupId,
+	handle: Schema.String,
+	name: Schema.String,
+	description: Schema.NullOr(Schema.String),
+	memberIds: Schema.Array(UserId),
+})
+export type UserGroupInfo = typeof UserGroupInfo.Type
+
 export const BotInfo = Schema.Struct({ userId: UserId, name: Schema.String })
 export type BotInfo = typeof BotInfo.Type
 
@@ -105,6 +115,7 @@ export const Lookups = Schema.Struct({
 	presence: Schema.Array(PresenceInfo),
 	bots: Schema.Array(BotInfo),
 	customEmojis: Schema.Array(CustomEmojiInfo),
+	userGroups: Schema.Array(UserGroupInfo),
 	attachments: Schema.Array(AttachmentInfo),
 	syncedMessages: Schema.Array(SyncedMessageInfo),
 	/** The platform the channel is bridged to by an active chat sync link, marked on its header icon. */
@@ -123,6 +134,7 @@ export const emptyLookups: Lookups = {
 	presence: [],
 	bots: [],
 	customEmojis: [],
+	userGroups: [],
 	attachments: [],
 	syncedMessages: [],
 	syncProvider: null,

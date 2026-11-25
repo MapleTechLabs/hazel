@@ -64,6 +64,9 @@ describe("push content", () => {
 			"hey @Grace Hopper and @someone",
 		)
 		expect(pushBody("@[directive:channel] **standup**\n\n> in 5", 0, names)).toBe("@channel standup in 5")
+		expect(
+			pushBody("@[group:g-1] and @[group:g-gone] review", 0, names, new Map([["g-1", "design"]])),
+		).toBe("@design and @group review")
 		expect(pushBody("see [the doc](https://x.test) and `code`", 0, names)).toBe("see the doc and code")
 		expect(pushBody("```ts\nconst a = 1\n```", 0, names)).toBe("const a = 1")
 	})

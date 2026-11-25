@@ -9,7 +9,7 @@ export interface MentionOption {
 	readonly id: string
 	readonly label: string
 	readonly description: string | null
-	readonly type: "user" | "channel" | "here" | "bot"
+	readonly type: "user" | "channel" | "here" | "group" | "bot"
 	readonly displayName: string
 	readonly avatarUrl: string | null
 	readonly status: PresenceStatus | null
@@ -18,7 +18,8 @@ export interface MentionOption {
 }
 
 /**
- * @channel and @here, then mentionable bots, then channel members (and, in a synced channel,
+ * @channel and @here, then the organization's user groups (`@handle — name, N members`), then
+ * mentionable bots, then channel members (and, in a synced channel,
  * the Slack or Discord people there), filtered by search.
  */
 export const mentionOptions = (model: Model): ReadonlyArray<MentionOption> => {
@@ -35,6 +36,18 @@ export const mentionOptions = (model: Model): ReadonlyArray<MentionOption> => {
 			description,
 			type: id === "channel" ? "channel" : "here",
 			displayName: id,
+			avatarUrl: null,
+			status: null,
+			provider: null,
+		}))
+	const groups = model.userGroups
+		.filter((group) => group.handle.includes(search) || group.name.toLowerCase().includes(search))
+		.map((group): MentionOption => ({
+			id: group.id,
+			label: `@${group.handle}`,
+			description: `${group.name}, ${group.memberCount} ${group.memberCount === 1 ? "member" : "members"}`,
+			type: "group",
+			displayName: group.handle,
 			avatarUrl: null,
 			status: null,
 			provider: null,
@@ -69,7 +82,7 @@ export const mentionOptions = (model: Model): ReadonlyArray<MentionOption> => {
 			},
 		]
 	})
-	return [...special, ...bots, ...members]
+	return [...special, ...groups, ...bots, ...members]
 }
 
 export interface CommandOption {

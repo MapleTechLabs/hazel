@@ -119,6 +119,7 @@ export class NotificationService extends Context.Service<NotificationService>()(
 				// on the channel, or for its section or the organization.
 				const targets = Array.dedupe([
 					...activity.mentionedUserIds,
+					...(activity.mentionedGroupMemberIds ?? []),
 					...(activity.replyToAuthorId === null ? [] : [activity.replyToAuthorId]),
 					...overrides.optedIn,
 				])

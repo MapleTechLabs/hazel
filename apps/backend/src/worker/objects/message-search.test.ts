@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest"
 import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/dispatch"
 import { resolveTarget } from "../../rpc/routing"
 import { Directory } from "../../services/directory"
-import { channelTarget, formatTarget, orgTarget } from "./kinds"
+import { channelTarget, formatTarget, orgTarget, userTarget } from "./kinds"
 import { fillChannelActivity } from "./org/channel-activity"
 import {
 	BACKFILL_TIMEOUT_MS,
@@ -673,6 +673,171 @@ describe("message search", () => {
 				yield* send(world, general, a1, "@[directive:channel] @[directive:here] everyone")
 				yield* settle([a.object, object])
 				expect(countOf()).toBe(1)
+			}),
+		))
+
+	it("a group mention in a thread brings in its members from the parent channel and notifies them", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { a, a1, a2 } = world
+				const general = yield* makeChannel(a, a1, "public", "general")
+				ok(yield* call(a.object, a.id, "channelMember.create", { channelId: general }, a2))
+				const group = ok(
+					yield* call(
+						a.object,
+						a.id,
+						"userGroup.create",
+						{ organizationId: a.id, handle: "design", name: "Design", memberIds: [a2] },
+						a1,
+					),
+				).data
+				const root = yield* send(world, general, a1, "kickoff")
+				const threadId = uuid() as ChannelId
+				ok(
+					yield* call(
+						a.object,
+						a.id,
+						"channel.createThread",
+						new CreateThreadRequest({
+							id: threadId,
+							messageId: root,
+							organizationId: a.id,
+							channelId: general,
+						}),
+						a1,
+					),
+				)
+				const threadObject = yield* world.objects.get(channelTarget(threadId))
+				const a2Object = yield* world.objects.get(userTarget(a2))
+				yield* send(world, threadId, a1, `@[group:${group.id}] review please`)
+				yield* settle([threadObject, a.object, a2Object])
+				expect(
+					a.object.storage.db
+						.prepare(
+							`SELECT notificationCount AS n FROM channel_members WHERE channelId = ? AND userId = ? AND deletedAt IS NULL`,
+						)
+						.get(threadId, a2),
+				).toEqual({ n: 1 })
+				expect(a2Object.storage.db.prepare(`SELECT reason FROM notifications`).all()).toEqual([
+					{ reason: "mention" },
+				])
+			}),
+		))
+
+	it("user groups: owners and admins manage them; a group mention notifies its members as a mention", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { a, a1, a2 } = world
+				const failureTag = (exit: Exit.Exit<unknown, unknown>) =>
+					Exit.isFailure(exit)
+						? Option.getOrUndefined(
+								Option.map(Cause.findErrorOption(exit.cause), (error) => (error as any)._tag),
+							)
+						: undefined
+				const create = (as: UserId, handle: string, memberIds: ReadonlyArray<string> = []) =>
+					call(
+						a.object,
+						a.id,
+						"userGroup.create",
+						{ organizationId: a.id, handle, name: "Design", memberIds },
+						as,
+					)
+
+				// A member cannot create one; handles are validated and unique; only org members join.
+				expect(Exit.isFailure(yield* create(a2, "design"))).toBe(true)
+				expect(failureTag(yield* create(a1, "here"))).toBe("UserGroupInvalidError")
+				expect(failureTag(yield* create(a1, "Not A Handle!"))).toBe("UserGroupInvalidError")
+				expect(failureTag(yield* create(a1, "design", [world.b1]))).toBe("UserGroupInvalidError")
+				const group = ok(yield* create(a1, "design", [a2])).data
+				expect(failureTag(yield* create(a1, "design"))).toBe("UserGroupHandleTakenError")
+				expect(
+					a.object.storage.db
+						.prepare(`SELECT userId FROM user_group_members WHERE groupId = ?`)
+						.all(group.id),
+				).toEqual([{ userId: a2 }])
+
+				// a2 mutes the organization and suppresses @channel and @here: a group mention still
+				// reaches them, as a mention.
+				const general = yield* makeChannel(a, a1, "public", "general")
+				ok(yield* call(a.object, a.id, "channelMember.create", { channelId: general }, a2))
+				ok(
+					yield* call(
+						a.object,
+						a.id,
+						"channelMember.setScopeNotifications",
+						{
+							organizationId: a.id,
+							scope: "organization",
+							scopeId: a.id,
+							isMuted: true,
+							suppressEveryone: true,
+						},
+						a2,
+					),
+				)
+				const channelObject = yield* world.objects.get(channelTarget(general))
+				const a2Object = yield* world.objects.get(userTarget(a2))
+				const countOf = () =>
+					(
+						a.object.storage.db
+							.prepare(
+								`SELECT notificationCount AS n FROM channel_members WHERE channelId = ? AND userId = ?`,
+							)
+							.get(general, a2) as { n: number }
+					).n
+				yield* send(world, general, a1, `@[directive:channel] everyone`)
+				yield* settle([channelObject, a.object, a2Object])
+				expect(countOf()).toBe(0)
+				yield* send(world, general, a1, `@[group:${group.id}] review please`)
+				yield* settle([channelObject, a.object, a2Object])
+				expect(countOf()).toBe(1)
+				expect(a2Object.storage.db.prepare(`SELECT reason FROM notifications`).all()).toEqual([
+					{ reason: "mention" },
+				])
+
+				// Out of the group, then a deleted group: no more notifications.
+				ok(
+					yield* call(
+						a.object,
+						a.id,
+						"userGroup.removeMember",
+						{ organizationId: a.id, groupId: group.id, userId: a2 },
+						a1,
+					),
+				)
+				yield* send(world, general, a1, `@[group:${group.id}] again`)
+				yield* settle([channelObject, a.object, a2Object])
+				expect(countOf()).toBe(1)
+				ok(
+					yield* call(
+						a.object,
+						a.id,
+						"userGroup.addMembers",
+						{ organizationId: a.id, groupId: group.id, userIds: [a2, a2] },
+						a1,
+					),
+				)
+				ok(
+					yield* call(
+						a.object,
+						a.id,
+						"userGroup.delete",
+						{ organizationId: a.id, id: group.id },
+						a1,
+					),
+				)
+				yield* send(world, general, a1, `@[group:${group.id}] gone`)
+				yield* settle([channelObject, a.object, a2Object])
+				expect(countOf()).toBe(1)
+				expect(
+					a.object.storage.db
+						.prepare(`SELECT count(*) AS n FROM user_group_members WHERE groupId = ?`)
+						.get(group.id),
+				).toEqual({ n: 0 })
+				// The handle is free again once the group is deleted.
+				ok(yield* create(a1, "design"))
 			}),
 		))
 

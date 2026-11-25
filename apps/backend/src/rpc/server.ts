@@ -5,6 +5,7 @@ import {
 	ChannelMemberRpcs,
 	ChannelRpcs,
 	ChannelSectionRpcs,
+	UserGroupRpcs,
 	ChatSyncRpcs,
 	ChannelWebhookRpcs,
 	ConnectShareRpcs,
@@ -38,6 +39,7 @@ import { AttachmentRpcLive } from "./handlers/attachments"
 import { BotRpcLive } from "./handlers/bots"
 import { ChannelMemberRpcLive } from "./handlers/channel-members"
 import { ChannelSectionRpcLive } from "./handlers/channel-sections"
+import { UserGroupRpcLive } from "./handlers/user-groups"
 import { ChatSyncRpcLive } from "./handlers/chat-sync"
 import { ChannelWebhookRpcLive } from "./handlers/channel-webhooks"
 import { ChannelRpcLive } from "./handlers/channels"
@@ -92,6 +94,7 @@ const BaseRpcs = MessageRpcs.merge(
 	ChannelRpcs,
 	ChannelMemberRpcs,
 	ChannelSectionRpcs,
+	UserGroupRpcs,
 	ChannelWebhookRpcs,
 	ConnectShareRpcs,
 	GitHubSubscriptionRpcs,
@@ -130,6 +133,7 @@ const rpcGroups = [
 	["ChannelRpcs", ChannelRpcs],
 	["ChannelMemberRpcs", ChannelMemberRpcs],
 	["ChannelSectionRpcs", ChannelSectionRpcs],
+	["UserGroupRpcs", UserGroupRpcs],
 	["ChannelWebhookRpcs", ChannelWebhookRpcs],
 	["ConnectShareRpcs", ConnectShareRpcs],
 	["GitHubSubscriptionRpcs", GitHubSubscriptionRpcs],
@@ -200,3 +204,4 @@ export const RpcHandlersLive = Layer.empty
 		Layer.provideMerge(CustomerChatRpcLive),
 		Layer.provideMerge(AssistantRpcLive),
 	)
+	.pipe(Layer.provideMerge(UserGroupRpcLive))

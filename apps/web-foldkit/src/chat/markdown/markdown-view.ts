@@ -19,6 +19,12 @@ import { codeBlockLeaves, textLeaves, textNodeView, voidChildView } from "./leav
 export interface MarkdownRefs {
 	readonly mentions: ReadonlyArray<{ readonly userId: string; readonly name: string }>
 	readonly emojis: ReadonlyArray<{ readonly name: string; readonly imageUrl: string }>
+	/** Mentioned user groups: the handle, and whether the viewer is in the group (highlighted). */
+	readonly groups?: ReadonlyArray<{
+		readonly groupId: string
+		readonly handle: string
+		readonly isMine: boolean
+	}>
 }
 
 export const NO_REFS: MarkdownRefs = { mentions: [], emojis: [] }
@@ -116,11 +122,34 @@ const codeBlockView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode): Html => 
 const MENTION_CLASS =
 	"inline-block cursor-pointer rounded bg-primary/10 px-1 py-0.5 align-baseline font-medium text-primary transition-colors"
 
+/** A user group's chip: `@handle`, solid when the viewer is in the group (they were mentioned). */
+const GROUP_MENTION_CLASS = "inline-block rounded px-1 py-0.5 align-baseline font-medium transition-colors"
+
+const groupMentionView = <M>(h: HtmlBuilder<M>, groupId: string, env: Env): Html => {
+	const group = env.refs.groups?.find((ref) => ref.groupId === groupId)
+	return h.span(
+		[
+			h.Attribute("data-slate-node", "element"),
+			h.Attribute("data-group-mention", groupId),
+			h.Attribute("contenteditable", "false"),
+			h.Class(
+				cn(
+					GROUP_MENTION_CLASS,
+					group?.isMine === true ? "bg-primary text-primary-fg" : "bg-primary/10 text-primary",
+				),
+			),
+		],
+		// A deleted (or unknown) group still reads as a mention.
+		["@", group?.handle ?? "group", voidChildView(h)],
+	)
+}
+
 /** `MentionElement`, interactive (a popover trigger). */
 const mentionView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode, env: Env): Html => {
 	const userId: string = element.attrs.userId
 	const displayName: string = element.attrs.displayName
 	const node = h.Attribute("data-slate-node", "element")
+	if (element.attrs.kind === "group") return groupMentionView(h, userId, env)
 	if (userId === "channel" || userId === "here")
 		return h.span(
 			[node, h.Attribute("contenteditable", "false"), h.Class(cn(MENTION_CLASS))],

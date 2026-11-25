@@ -58,10 +58,18 @@ export const pushTitle = (author: string, channel: ChannelInfo, parent: ChannelI
 	}
 }
 
-/** Message markup as plain text: mentions named, markdown markers and line breaks dropped. */
-export const plainTextOf = (content: string, names: ReadonlyMap<string, string>): string =>
+/**
+ * Message markup as plain text: mentions named (a group by its handle), markdown markers and line
+ * breaks dropped.
+ */
+export const plainTextOf = (
+	content: string,
+	names: ReadonlyMap<string, string>,
+	groupHandles: ReadonlyMap<string, string> = new Map(),
+): string =>
 	content
 		.replace(/@\[userId:([^\]]+)\]/g, (_, id: string) => `@${names.get(id) ?? "someone"}`)
+		.replace(/@\[group:([^\]]+)\]/g, (_, id: string) => `@${groupHandles.get(id) ?? "group"}`)
 		.replace(/@\[directive:([^\]]+)\]/g, "@$1")
 		.replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
 		.replace(/```[a-z0-9-]*/gi, "")
@@ -105,8 +113,13 @@ export const pushConversation = (
 	}
 }
 
-export const pushBody = (content: string, attachmentCount: number, names: ReadonlyMap<string, string>) => {
-	const text = plainTextOf(content, names)
+export const pushBody = (
+	content: string,
+	attachmentCount: number,
+	names: ReadonlyMap<string, string>,
+	groupHandles: ReadonlyMap<string, string> = new Map(),
+) => {
+	const text = plainTextOf(content, names, groupHandles)
 	if (text !== "") return truncate(text, PUSH_BODY_MAX)
 	return attachmentCount > 0 ? "Sent an attachment" : "Sent a message"
 }
@@ -120,6 +133,8 @@ export const loadPushContent = Effect.fn("OrgObject.pushContent")(function* (inp
 	readonly channelId: ChannelId
 	readonly authorId: UserId
 	readonly mentionedUserIds: ReadonlyArray<UserId>
+	/** The mentioned groups' handles, by id. */
+	readonly groupHandles?: ReadonlyMap<string, string> | undefined
 	readonly content: string
 	readonly attachmentCount: number
 }) {
@@ -159,7 +174,7 @@ export const loadPushContent = Effect.fn("OrgObject.pushContent")(function* (inp
 	const authorName = displayNameOf(author)
 	return {
 		title: pushTitle(authorName, channel.value, Option.getOrUndefined(parent)),
-		body: pushBody(input.content, input.attachmentCount, names),
+		body: pushBody(input.content, input.attachmentCount, names, input.groupHandles),
 		sender: { id: input.authorId, name: authorName, avatarUrl: pushAvatarUrl(author?.avatarUrl) },
 		conversation: pushConversation(channel.value, Option.getOrUndefined(parent)),
 		...Option.match(

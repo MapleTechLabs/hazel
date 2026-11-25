@@ -244,6 +244,13 @@ const orgSyncTables: ReadonlyArray<(affected: Affected) => Spec> = [
 	ownRows(schema.channelReadStateTable, ["channelId", "userId"]),
 	ownRows(schema.notificationOverridesTable, ["userId", "scope", "scopeId"]),
 	byMembership(schema.channelSectionsTable, "organizationId"),
+	// Mentionable groups and who is in each: the org's members, never a Connect guest. A deleted
+	// group's members are removed with it.
+	toMembers(schema.userGroupsTable, true),
+	(affected) => ({
+		...toMembers(schema.userGroupMembersTable, false)(affected),
+		key: ["groupId", "userId"],
+	}),
 	byMembership(schema.customEmojisTable, "organizationId"),
 	byMembership(schema.botInstallationsTable, "organizationId", false),
 	(affected) => ({
