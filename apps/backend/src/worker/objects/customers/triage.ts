@@ -560,9 +560,10 @@ export const triageIssue = Effect.fn("Customers.triageIssue")(function* (payload
 	const nowMs = yield* Clock.currentTimeMillis
 	const now = new Date(nowMs)
 	const reply = payload.reply
-	// Whatever keeps the model from answering a reply, the conversation comes back.
-	const unanswered = (outcome: TriageOutcome) =>
-		reply === undefined ? Effect.succeed(outcome) : applyReply(payload.issueId, Option.none(), now)
+	// Whatever keeps the model from answering a reply, the conversation comes back: as `asked`
+	// had it filed, once the issue was read.
+	const unanswered = (outcome: TriageOutcome, asked?: Issue) =>
+		reply === undefined ? Effect.succeed(outcome) : applyReply(payload.issueId, Option.none(), now, asked)
 
 	const outcome: TriageOutcome = yield* Effect.gen(function* () {
 		const settings = yield* triageSettings
@@ -572,13 +573,13 @@ export const triageIssue = Effect.fn("Customers.triageIssue")(function* (payload
 		const issue = found.value
 		if (reply === undefined ? !isUntouched(issue) : issue.triage !== "chatter") return "touched" as const
 		const at = reply === undefined ? issue.openedAt.getTime() : new Date(reply.sentAt).getTime()
-		if (nowMs - at > TRIAGE_FRESH_MS) return yield* unanswered("stale")
+		if (nowMs - at > TRIAGE_FRESH_MS) return yield* unanswered("stale", issue)
 
 		// Up to the judged message (its joined ones included), never what the channel said after it:
 		// a retried or late delivery reads the same conversation.
 		const until = reply === undefined ? Math.max(at, issue.lastMessageAt.getTime()) : at
 		const context = yield* readContext(issue, at - TRIAGE_CONTEXT_MS, until)
-		if (Option.isNone(context)) return yield* unanswered("gone")
+		if (Option.isNone(context)) return yield* unanswered("gone", issue)
 		const input = yield* inputOf(issue, context.value, settings.about, reply)
 		const asked = yield* (yield* Decisions).ask(triageRequest(input)).pipe(
 			// A refused key or request will be refused again: leave the issue to a person.
@@ -591,7 +592,7 @@ export const triageIssue = Effect.fn("Customers.triageIssue")(function* (payload
 						),
 			),
 		)
-		if (Option.isNone(asked)) return yield* unanswered("not_configured")
+		if (Option.isNone(asked)) return yield* unanswered("not_configured", issue)
 		const answers = triageAnswersOf(input, asked.value)
 		yield* Effect.annotateCurrentSpan({
 			"triage.support": answers.support ?? -1,

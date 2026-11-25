@@ -542,6 +542,30 @@ describe("support triage", () => {
 				expect(issues()).toMatchObject([
 					{ status: "closed", triage: "chatter", triagedByUserId: world.member },
 				])
+
+				// The same when the model refuses instead of answering: no answer brings a reply's
+				// conversation back, but not over a filing made meanwhile.
+				// (Filed by the model again, as before the member's.)
+				world.object.storage.db.exec(`UPDATE customer_issues SET triagedByUserId = NULL`)
+				world.objects.setDecisions(() =>
+					Effect.andThen(
+						Effect.orDie(
+							Effect.andThen(update({ triage: "support" }), update({ triage: "chatter" })),
+						),
+						Effect.fail(new DecisionsError({ message: "refused", retryable: false })),
+					),
+				)
+				yield* say({
+					channelId: channel("thread", linked),
+					authorId: customer,
+					minutesAgo: 0,
+					content: "hello?",
+					threadRootMessageId: root,
+				})
+				yield* triage
+				expect(issues()).toMatchObject([
+					{ status: "closed", triage: "chatter", triagedByUserId: world.member },
+				])
 			}),
 		))
 
