@@ -629,6 +629,8 @@ const threadPanelOverlay = (
 		onClose: Message.ClickedCloseThread(),
 		onGenerateName: Message.ClickedGenerateThreadName(),
 		onRename: Message.ClickedRenameThread(),
+		isFollowing: panel.creation === "Created" ? panel.memberId !== null : null,
+		onToggleFollow: Message.ClickedToggleFollowThread(),
 		isGeneratingName: panel.isNaming,
 		isCreating: panel.creation === "Creating",
 		trackHover: trackHoverAttribute(h),

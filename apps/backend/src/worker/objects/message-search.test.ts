@@ -542,6 +542,76 @@ describe("message search", () => {
 			}),
 		))
 
+	it("writing in a thread follows it, and a mention brings in a member of the parent channel", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { a, a1, a2 } = world
+				const general = yield* makeChannel(a, a1, "public", "general")
+				// a2 joins the parent channel.
+				ok(yield* call(a.object, a.id, "channelMember.create", { channelId: general }, a2))
+				const root = yield* send(world, general, a1, "kickoff")
+				const threadId = uuid() as ChannelId
+				ok(
+					yield* call(
+						a.object,
+						a.id,
+						"channel.createThread",
+						new CreateThreadRequest({
+							id: threadId,
+							messageId: root,
+							organizationId: a.id,
+							channelId: general,
+						}),
+						a1,
+					),
+				)
+				const threadObject = yield* world.objects.get(channelTarget(threadId))
+				const isFollowing = (userId: UserId) =>
+					(
+						a.object.storage.db
+							.prepare(
+								`SELECT count(*) AS n FROM channel_members WHERE channelId = ? AND userId = ? AND deletedAt IS NULL`,
+							)
+							.get(threadId, userId) as { n: number }
+					).n === 1
+				expect(isFollowing(a2)).toBe(false)
+
+				// A mention brings a2 in: they are in the parent channel.
+				yield* send(world, threadId, a1, `@[userId:${a2}] look`)
+				yield* settle([a.object, threadObject])
+				expect(isFollowing(a2)).toBe(true)
+
+				// Unfollowing leaves; a later mention brings them back, as in Discord, and so does writing.
+				const unfollow = () =>
+					Effect.gen(function* () {
+						const member = a.object.storage.db
+							.prepare(
+								`SELECT id FROM channel_members WHERE channelId = ? AND userId = ? AND deletedAt IS NULL`,
+							)
+							.get(threadId, a2) as { id: string }
+						ok(
+							yield* call(
+								a.object,
+								a.id,
+								"channelMember.delete",
+								{ id: member.id, organizationId: a.id },
+								a2,
+							),
+						)
+					})
+				yield* unfollow()
+				expect(isFollowing(a2)).toBe(false)
+				yield* send(world, threadId, a1, `@[userId:${a2}] again`)
+				yield* settle([a.object, threadObject])
+				expect(isFollowing(a2)).toBe(true)
+				yield* unfollow()
+				yield* send(world, threadId, a2, "back")
+				yield* settle([a.object, threadObject])
+				expect(isFollowing(a2)).toBe(true)
+			}),
+		))
+
 	it("refuses index changes from channels of another org", () =>
 		run(
 			Effect.gen(function* () {

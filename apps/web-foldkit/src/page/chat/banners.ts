@@ -49,7 +49,11 @@ export const joinBannerView = <M>(
 									heading(h, { variant: "title" }, [channel.name]),
 									h.p(
 										[h.Class("max-w-sm text-center text-muted-fg text-sm")],
-										["You're previewing this channel. Join to start chatting."],
+										[
+											channel.type === "thread"
+												? "You're not following this thread. Follow it to be notified of replies."
+												: "You're previewing this channel. Join to start chatting.",
+										],
 									),
 								],
 							),
@@ -63,7 +67,7 @@ export const joinBannerView = <M>(
 							onPress: inputs.onJoin,
 							isPending: inputs.isJoining,
 						},
-						["Join #", channel.name],
+						channel.type === "thread" ? ["Follow thread"] : ["Join #", channel.name],
 					),
 				],
 			)

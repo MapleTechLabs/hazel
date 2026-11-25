@@ -44,7 +44,7 @@ import {
 	shareStickyKeys,
 } from "../rows"
 import type { ChannelHotkey } from "./hotkeys"
-import { readOpenThread, stepNotifications, syncUnread } from "./clear-notifications"
+import { readOpenThread, stepNotifications, syncUnread, ToggleFollowThread } from "./clear-notifications"
 import * as NewMessages from "./new-messages"
 import * as NotificationClear from "./notification-clear"
 import { DeleteMessageNow, FocusMessage } from "./message-keys"
@@ -53,6 +53,7 @@ import * as Jump from "./jump"
 import { liftList, loadWhenNearEdge } from "./window"
 import * as ThreadWidth from "./thread-width"
 import * as Write from "./write"
+import { errorToast, successToast } from "../../../data/actions"
 
 /** Channel page (`routes/_app/$orgSlug/chat/$id.tsx` + `$id/index.tsx`), read path. */
 
@@ -781,6 +782,26 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			Write.pressEmbedAction(model, { channelId, messageId, actionId }),
 		ClickedCloseThread: () => Write.closeThread(model),
 		ClickedGenerateThreadName: () => Write.generateThreadName(model),
+		ClickedToggleFollowThread: () => {
+			const panel = model.threadPanel
+			if (panel === null || panel.creation !== "Created") return { model }
+			return {
+				model,
+				commands: [
+					ToggleFollowThread({
+						threadChannelId: panel.threadChannelId,
+						memberId: panel.memberId,
+					}),
+				],
+			}
+		},
+		CompletedToggleFollowThread: ({ isFollowing, isSuccess }) =>
+			Write.withToast(
+				model,
+				isSuccess
+					? successToast(isFollowing ? "Following thread" : "Unfollowed thread")
+					: errorToast(isFollowing ? "Couldn't follow the thread" : "Couldn't unfollow the thread"),
+			),
 		ClickedRenameThread: () =>
 			model.threadPanel === null
 				? { model }
