@@ -2,7 +2,7 @@
 import { NotificationId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { applyBadge, badgedTitle, badgeOf, NO_BADGE } from "./badge"
+import { applyBadge, badgedTitle, badgeOf, isMentionReason, NO_BADGE } from "./badge"
 
 const id = (n: number) =>
 	Schema.decodeSync(NotificationId)(`00000000-0000-4000-8000-${String(n).padStart(12, "0")}`)
@@ -92,5 +92,14 @@ describe("applyBadge", () => {
 		expect(document.querySelector<HTMLLinkElement>('link[rel~="icon"]')?.getAttribute("href")).toBe(
 			"/icon.svg",
 		)
+	})
+})
+
+describe("what counts as a mention", () => {
+	test("personal mentions, replies, @channel, DMs and older rows; not a plain message", () => {
+		expect(
+			["mention", "reply", "everyone", "direct", null].every((reason) => isMentionReason(reason)),
+		).toBe(true)
+		expect(isMentionReason("message")).toBe(false)
 	})
 })

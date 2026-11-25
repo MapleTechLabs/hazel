@@ -19,6 +19,18 @@ export type Badge = typeof Badge.Type
 
 export const NO_BADGE: Badge = { mentionCount: 0, hasUnread: false }
 
+/**
+ * A notification that counts as a mention (the inbox's Mentions tab): a personal mention, a reply,
+ * @channel or @here, a DM, or an older row with no reason. A plain message on All messages does not.
+ */
+export const isMentionReason = (reason: string | null | undefined) =>
+	reason === null ||
+	reason === undefined ||
+	reason === "mention" ||
+	reason === "reply" ||
+	reason === "everyone" ||
+	reason === "direct"
+
 export interface BadgeInputs {
 	/** Every unread notification of the user, across organizations. */
 	readonly unreadMentionIds: ReadonlyArray<NotificationId>

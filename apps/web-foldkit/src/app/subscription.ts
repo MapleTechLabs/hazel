@@ -28,7 +28,7 @@ import * as Toasts from "../overlay/toaster"
 import { MOBILE_QUERY } from "../ui/viewport"
 import { Message } from "./message"
 import { REMEMBERED_USER_KEY } from "./remembered-user"
-import { Badge } from "../platform/badge"
+import { Badge, isMentionReason } from "../platform/badge"
 import {
 	authOf,
 	badgeOfModel,
@@ -230,12 +230,20 @@ const notificationSubscriptions = Subscription.make<Model, Message, Notification
 			dependenciesToStream: ({ userId }) =>
 				userId === null
 					? Stream.empty
-					: liveQueryStream<{ readonly id: NotificationId }, Message>(
+					: liveQueryStream<
+							{ readonly id: NotificationId; readonly reason: string | null },
+							Message
+						>(
 							(q) =>
 								q
 									.from({ notification: notificationCollection })
 									.where(({ notification }) => isNull(notification.readAt)),
-							(rows) => Message.UpdatedUnreadMentions({ ids: rows.map((row) => row.id) }),
+							(rows) =>
+								Message.UpdatedUnreadMentions({
+									ids: rows
+										.filter((row) => isMentionReason(row.reason))
+										.map((row) => row.id),
+								}),
 						),
 		},
 	),
