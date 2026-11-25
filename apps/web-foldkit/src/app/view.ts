@@ -194,8 +194,8 @@ const orgShellView = (model: Model, h: HtmlBuilder<Message>, data: ShellData): H
 				? phoneChatList(h, sidebar)
 				: sectionBody(model, h),
 		secondarySidebar: sidebar,
-		// The bell reads `useUnreadNotificationCount`, which has no optimistic layer.
-		unreadNotificationCount: model.shell.notifications.unreadIds.length,
+		// The bell counts unread mentions, as the tab title does (`isMentionReason`); no optimistic layer.
+		unreadNotificationCount: model.shell.notifications.unreadMentionIds.length,
 		toaster: toaster(h, model),
 		overlays: [
 			Modal.view(h, model.modal, sharedOf(model), toModalMessage),

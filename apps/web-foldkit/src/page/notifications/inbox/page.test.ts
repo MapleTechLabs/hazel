@@ -37,6 +37,7 @@ const item = (n: number, overrides: Partial<NotificationItem>): NotificationItem
 	targetedResourceId: uuid(900),
 	targetedResourceType: "channel",
 	messageContent: `message ${n}`,
+	mentionNames: {},
 	channel: { name: "general", type: "public" },
 	author: { firstName: "Grace", lastName: "Hopper", avatarUrl: null },
 	...overrides,

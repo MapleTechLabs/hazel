@@ -1,6 +1,7 @@
 import { ChannelHotkey } from "./hotkeys"
 import { ChannelCustomerRow } from "../../../customers/channels"
 import { CustomerAuthorInfo } from "../../../customers/chat-authors"
+import { ChannelMember } from "@hazel/domain/models"
 import { ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { File, type Update } from "foldkit"
@@ -250,6 +251,8 @@ export const Message = defineMessageUnion({
 	UpdatedMembers: { members: Schema.Array(ChannelMemberInfo) },
 	/** Tagged with the channel queried: a late answer for the previous channel is dropped. */
 	UpdatedActivity: { channelId: ChannelId, activity: Schema.NullOr(NewMessages.Activity) },
+	/** Tagged with the channel queried: a late answer for the previous channel is dropped. */
+	UpdatedInheritedNotificationLevel: { channelId: ChannelId, level: ChannelMember.NotificationLevel },
 	/** The user's read position; null while they are not a member. Tagged like the activity. */
 	UpdatedReadPosition: { channelId: ChannelId, readUpToMs: Schema.NullOr(Schema.Finite) },
 	/** The new-messages bar: jump to the first new message, or mark the channel read. */

@@ -159,6 +159,10 @@ export const sectionOverridesStream = <M>(
 			),
 	)
 
+/** A level of its own, or a mute still running: a timed mute that has ended is no override. */
+export const isInEffect = (override: Override, nowMs: number): boolean =>
+	override.level !== null || muteStatusOf(override, nowMs) !== null
+
 /** "All messages · Muted until 14:30", or "Default" for a timed mute that has ended. */
 export const summaryOf = (override: Override, nowMs: number): string => {
 	const parts = [
@@ -169,6 +173,19 @@ export const summaryOf = (override: Override, nowMs: number): string => {
 }
 
 export const view = <M>(
+	h: HtmlBuilder<M>,
+	overrides: ReadonlyArray<Override>,
+	nowMs: number,
+	toReset: (override: Override) => M,
+): Html =>
+	listView(
+		h,
+		overrides.filter((override) => isInEffect(override, nowMs)),
+		nowMs,
+		toReset,
+	)
+
+const listView = <M>(
 	h: HtmlBuilder<M>,
 	overrides: ReadonlyArray<Override>,
 	nowMs: number,

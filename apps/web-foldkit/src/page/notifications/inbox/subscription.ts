@@ -18,6 +18,7 @@ import {
 import { liveQueryStream, retainChannels } from "../../../data/live-query"
 import type { PageSubscriptionInput } from "../../contract"
 import { Message } from "./message"
+import { mentionedUserIds } from "./format"
 import type { Model, NotificationItem, UnreadChannelItem } from "./model"
 
 /** A row of the legacy join; the collections decode with the domain schemas, so ids are branded. */
@@ -40,6 +41,26 @@ interface NotificationRow {
 	} | null
 }
 
+interface NamedUser {
+	readonly firstName: string
+	readonly lastName: string
+}
+
+/** The names of the users a message mentions, from the org's `users` projection. */
+export const mentionNamesOf = (
+	content: string | null,
+	userOf: (id: string) => NamedUser | undefined,
+): Record<string, string> =>
+	Object.fromEntries(
+		(content === null ? [] : mentionedUserIds(content)).flatMap((id) => {
+			const user = userOf(id)
+			const name = user === undefined ? "" : `${user.firstName} ${user.lastName}`.trim()
+			return name === "" ? [] : [[id, name]]
+		}),
+	)
+
+const userOfId = (id: string): NamedUser | undefined => userCollection.get(id as UserId)
+
 const toItem = (row: NotificationRow): NotificationItem => ({
 	id: row.notification.id,
 	isUnread: row.notification.readAt === null,
@@ -49,6 +70,7 @@ const toItem = (row: NotificationRow): NotificationItem => ({
 	targetedResourceId: row.notification.targetedResourceId,
 	targetedResourceType: row.notification.targetedResourceType,
 	messageContent: row.message?.content ?? null,
+	mentionNames: mentionNamesOf(row.message?.content ?? null, userOfId),
 	channel: row.channel ? { name: row.channel.name, type: row.channel.type } : null,
 	author: row.author
 		? {

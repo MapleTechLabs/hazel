@@ -33,6 +33,14 @@ export type ChannelType = "public" | "private" | "thread" | "direct" | "single"
 export const NotificationReasons = ["direct", "mention", "reply", "everyone", "message"] as const
 export type NotificationReason = (typeof NotificationReasons)[number]
 
+/**
+ * Discord's badge: the channel's count (`channel_members.notificationCount`) holds mentions only
+ * (`direct`, `mention`, `reply`, `everyone`). A plain message from a channel on All messages still
+ * notifies (row, push), but only marks the channel unread. Rows without a reason predate levels,
+ * when every notification counted.
+ */
+export const isCountedReason = (reason: string | null | undefined): boolean => reason !== "message"
+
 export type SkipReason = "author" | "level" | "muted" | "viewing"
 
 /** A new message, as the rules see it. */

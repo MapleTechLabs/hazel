@@ -21,6 +21,7 @@ import {
 	channelSyncProviderStream,
 	membersStream,
 	activityStream,
+	inheritedLevelStream,
 	readPositionStream,
 	pinnedStream,
 	presenceStream,
@@ -457,6 +458,13 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 		modelToDependencies: channelOf,
 		dependenciesToStream: ({ channelId }) =>
 			activityStream(channelId, (activity) => Message.UpdatedActivity({ channelId, activity })),
+	}),
+	chatInheritedNotificationLevel: entry(byChannel, {
+		modelToDependencies: channelOf,
+		dependenciesToStream: ({ channelId }) =>
+			inheritedLevelStream(channelId, (level) =>
+				Message.UpdatedInheritedNotificationLevel({ channelId, level }),
+			),
 	}),
 	chatReadPosition: entry(
 		{ channelId: ChannelId, userId: Schema.NullOr(UserId) },

@@ -1,7 +1,8 @@
 /**
  * Message notifications, inside the channel's `OrgObject`: loads what decides each member's
  * notification (their level and mute, presence and settings), runs the rules
- * (`./notification-rules.ts`), bumps each recipient's `notificationCount` and sends the
+ * (`./notification-rules.ts`), bumps the `notificationCount` of each recipient it mentions
+ * (`isCountedReason`: a plain message only marks the channel unread) and sends the
  * notification row to their `UserObject` (`user.createNotification`) through the outbox.
  */
 import { Database, type DatabaseError, SQLite, schema } from "@hazel/db"
@@ -13,6 +14,7 @@ import type { PushContent } from "../../worker/objects/user/push"
 import {
 	decide,
 	defaultLevel,
+	isCountedReason,
 	type MessageActivity,
 	type NotificationReason,
 	type Recipient,
@@ -232,7 +234,10 @@ export class NotificationService extends Context.Service<NotificationService>()(
 				return result
 			})
 
-			/** Notify the recipients of `activity`: badge counts here, rows in their `UserObject`s. */
+			/**
+			 * Notify the recipients of `activity`: badge counts here (mentions only), rows in their
+			 * `UserObject`s (every recipient).
+			 */
 			const notify = Effect.fn("NotificationService.notify")(function* (
 				organizationId: OrganizationId,
 				activity: MessageActivity & {
@@ -254,7 +259,9 @@ export class NotificationService extends Context.Service<NotificationService>()(
 						: undefined
 				yield* Effect.forEach(
 					Array.chunksOf(
-						notified.map((recipient) => recipient.channelMemberId),
+						notified
+							.filter((recipient) => isCountedReason(recipient.reason))
+							.map((recipient) => recipient.channelMemberId),
 						UPDATE_BATCH,
 					),
 					(ids) =>

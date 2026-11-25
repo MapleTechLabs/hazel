@@ -60,12 +60,15 @@ const COPY: Record<
 const ROW_CLASS =
 	"group flex items-center transition-colors hover:bg-secondary/50 focus-within:bg-secondary/50"
 
-/** Shown on hover or focus (always on a phone, which has no hover). */
-const rowAction = (h: HtmlBuilder<Message>, onPress: Message): Html =>
+/**
+ * Shown on hover or focus (always on a phone, which has no hover). Named after its row, so a
+ * screen reader tells the rows' buttons apart.
+ */
+const rowAction = (h: HtmlBuilder<Message>, onPress: Message, what: string): Html =>
 	iconButton(
 		h,
 		{
-			label: "Mark as read",
+			label: `Mark as read: ${what}`,
 			size: "sq-xs",
 			className:
 				"mr-3 shrink-0 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100",
@@ -127,7 +130,7 @@ const notificationItem = (
 							[
 								h.Class(
 									twMerge(
-										"line-clamp-2 text-sm",
+										"line-clamp-2 min-w-0 text-sm wrap-anywhere",
 										item.isUnread ? "font-medium text-fg" : "text-fg",
 									),
 								),
@@ -140,7 +143,7 @@ const notificationItem = (
 						),
 					],
 				),
-				h.p([h.Class("mt-0.5 text-muted-fg text-xs")], [contextOf(item)]),
+				h.p([h.Class("mt-0.5 truncate text-muted-fg text-xs")], [contextOf(item)]),
 			],
 		),
 	]
@@ -176,7 +179,9 @@ const notificationItem = (
 		[h.Class(ROW_CLASS)],
 		[
 			content,
-			...(item.isUnread ? [rowAction(h, Message.ClickedMarkNotificationRead({ id: item.id }))] : []),
+			...(item.isUnread
+				? [rowAction(h, Message.ClickedMarkNotificationRead({ id: item.id }), contextOf(item))]
+				: []),
 		],
 	)
 }
@@ -291,7 +296,11 @@ const unreadChannelRow = (
 						],
 						children,
 					),
-			rowAction(h, Message.ClickedMarkChannelRead({ channelId: channel.channelId })),
+			rowAction(
+				h,
+				Message.ClickedMarkChannelRead({ channelId: channel.channelId }),
+				unreadChannelTitle(channel),
+			),
 		],
 	)
 }
