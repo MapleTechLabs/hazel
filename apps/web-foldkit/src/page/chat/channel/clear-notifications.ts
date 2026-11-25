@@ -60,11 +60,18 @@ export const ReadThread = Command.define("ReadThread", {
 
 /**
  * After the panel's messages change: while the window is focused and someone else wrote after what
- * the panel last marked read, the thread is read now.
+ * the panel last marked read, the thread is read now. Only a thread the user follows (has a member
+ * row in) has a read state: the server refuses the clear for anyone else.
  */
 export const readOpenThread = (model: Model): PageReturn => {
 	const panel = model.threadPanel
-	if (panel === null || panel.creation !== "Created" || !model.notifications.isFocused) return { model }
+	if (
+		panel === null ||
+		panel.creation !== "Created" ||
+		panel.memberId === null ||
+		!model.notifications.isFocused
+	)
+		return { model }
 	const newest = panel.messages.at(-1)
 	if (newest === undefined || newest.createdAtMs <= panel.readUpToMs) return { model }
 	const read = modifyFields(model, {

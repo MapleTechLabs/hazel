@@ -61,6 +61,7 @@ const sidebar = (overrides: Partial<Model> = {}): Model => ({
 	unreadCounts: [],
 	unreadChannels: [],
 	sectionSettings: [],
+	organizationSetting: null,
 	connectMounts: [],
 	organizations: [],
 	syncedChannels: [],

@@ -14,6 +14,7 @@ import {
 	customEmojiCollection,
 	messageAgentMarkCollection,
 	messageCollection,
+	notificationOverrideCollection,
 	organizationCollection,
 	pinnedMessageCollection,
 	typingIndicatorCollection,
@@ -21,6 +22,7 @@ import {
 	userPresenceStatusCollection,
 } from "~/db/collections"
 import { appOrgSourcesSettled } from "~/db/sync-manager"
+import { inheritedLevelOf, type NotificationLevel } from "~/lib/notification-settings"
 import { readUpToMs } from "~/lib/unread"
 import { getAttachmentUrl } from "~/utils/attachment-url"
 import { liveQueryStream } from "../../data/live-query"
@@ -294,6 +296,48 @@ export const membersStream = <M>(
 				.where(({ member }) => eq(member.channelId, channelId))
 				.orderBy(({ member }) => member.createdAt, "desc"),
 		(rows) => toMessage(rows.map(toChannelMemberInfo)),
+	)
+
+/**
+ * What the channel's "Default" level is for the user (`inheritedLevelOf`): their section's level,
+ * else the organization's, else the type's default. Only their own overrides are synced.
+ */
+export const inheritedLevelStream = <M>(channelId: ChannelId, toMessage: (level: NotificationLevel) => M) =>
+	liveQueryStream<
+		{
+			type: string
+			sectionLevel: NotificationLevel | null | undefined
+			organizationLevel: NotificationLevel | null | undefined
+		},
+		M
+	>(
+		(q) =>
+			q
+				.from({ channel: channelCollection })
+				.leftJoin({ section: notificationOverrideCollection }, ({ channel, section }) =>
+					eq(section.scopeId, channel.sectionId),
+				)
+				.leftJoin({ org: notificationOverrideCollection }, ({ channel, org }) =>
+					eq(org.scopeId, channel.organizationId),
+				)
+				.where(({ channel }) => eq(channel.id, channelId))
+				.select(({ channel, section, org }) => ({
+					type: channel.type,
+					sectionLevel: section?.level,
+					organizationLevel: org?.level,
+				})),
+		(rows) => {
+			const row = rows[0]
+			return toMessage(
+				row === undefined
+					? inheritedLevelOf("public")
+					: inheritedLevelOf(row.type, {
+							sectionLevel: row.sectionLevel,
+							organizationLevel: row.organizationLevel,
+						}),
+			)
+		},
+		{ holdEmptyUntil: appOrgSourcesSettled },
 	)
 
 /** The channel's newest message (`channel_activity`), for its new-messages line. */

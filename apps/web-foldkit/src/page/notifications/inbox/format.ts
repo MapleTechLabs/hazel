@@ -126,13 +126,41 @@ export const contextOf = (item: NotificationItem): string => {
 	return isMessage ? `New message in #${item.channel.name}` : `Activity in #${item.channel.name}`
 }
 
-/** `getMessagePreview`. */
+/** The ids of the users a message mentions (`@[userId:<id>]`), for the inbox to name them. */
+export const mentionedUserIds = (content: string): ReadonlyArray<string> => [
+	...new Set(Array.from(content.matchAll(/@\[userId:([^\]]+)\]/g), (match) => match[1] ?? "")),
+]
+
+/**
+ * Message markup as one line of plain text: mentions as `@Name` (`@unknown` for a user not in
+ * `names`, `@group` for a user group, `@channel`/`@here` for a directive), markdown markers, links
+ * and line breaks dropped. The web's port of the push body's `plainTextOf` (`push-content.ts`).
+ */
+export const plainTextOf = (content: string, names: Readonly<Record<string, string>>): string =>
+	content
+		.replace(/@\[([A-Za-z]+):([^\]]+)\]/g, (_, kind: string, value: string) =>
+			kind === "userId"
+				? `@${names[value] ?? "unknown"}`
+				: kind === "directive"
+					? `@${value}`
+					: `@${names[value] ?? kind}`,
+		)
+		.replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+		.replace(/```[a-z0-9-]*/gi, "")
+		.replace(/[`*~]|__|\|\|/g, "")
+		.replace(/^\s*(>|#{1,6})\s?/gm, "")
+		.replace(/\s+/g, " ")
+		.trim()
+
+/** `getMessagePreview`: at most `maxLength` code points, so an emoji is never cut in half. */
 export const previewOf = (item: NotificationItem, maxLength = 80): string => {
 	if (isSupportAlert(item)) {
 		const { isWarning, clock } = supportAlertOf(item)
 		return `A support issue is ${isWarning ? "close to" : "past"} its ${clock} deadline`
 	}
 	if (!item.messageContent) return "View notification"
-	const plainText = item.messageContent.replace(/[*_`~#]/g, "").trim()
-	return plainText.length <= maxLength ? plainText : `${plainText.slice(0, maxLength)}...`
+	const plainText = plainTextOf(item.messageContent, item.mentionNames)
+	if (plainText === "") return "View notification"
+	const points = Array.from(plainText)
+	return points.length <= maxLength ? plainText : `${points.slice(0, maxLength).join("").trimEnd()}…`
 }

@@ -40,6 +40,7 @@ const notification = (n: number, isUnread: boolean): NotificationItem => ({
 	targetedResourceId: uuid(900),
 	targetedResourceType: "channel",
 	messageContent: `message ${n}`,
+	mentionNames: {},
 	channel: { name: "general", type: "public" },
 	author: null,
 })
