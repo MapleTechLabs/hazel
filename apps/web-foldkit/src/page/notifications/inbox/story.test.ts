@@ -261,6 +261,13 @@ describe("unreads", () => {
 				Message.FailedMarkChannelRead({ channelId: design.channelId, reason: "ChannelNotFound" }),
 			),
 			expectNoOutMessage(),
+			// The deleted channel stays hidden, and its mark goes once it leaves the live rows.
+			model((current) => expect(visibleIds(current)).toEqual([random.channelId])),
+			message(Message.UpdatedUnreadChannels({ channels: [random] })),
+			model((current) => {
+				expect(current.markedRead).toEqual([])
+				expect(visibleIds(current)).toEqual([random.channelId])
+			}),
 		)
 	})
 
@@ -306,12 +313,22 @@ describe("unreads", () => {
 		)
 	})
 
-	test("Mark all as read waits for the organization", () => {
+	test("Mark all as read before the organization loads does nothing; a later press marks them", () => {
 		story(
 			storyUpdate(pageUpdate, makeShared({ nowMs: NOW, organization: null })),
 			given(unreads),
 			message(Message.ClickedMarkAllChannelsRead()),
 			Command.expectNone(),
+			model((current) => expect(current).toEqual(unreads)),
+		)
+		story(
+			update,
+			given(unreads),
+			message(Message.ClickedMarkAllChannelsRead()),
+			Command.expectExact(
+				MarkAllChannelsRead({ organizationId, channelIds: [design.channelId, random.channelId] }),
+			),
+			Command.resolve(MarkAllChannelsRead, Message.SucceededMarkAllChannelsRead()),
 		)
 	})
 })

@@ -46,3 +46,56 @@ export const isChannelUnread = (
 	userId: UserId,
 	nowMs: number,
 ) => hasUnreadMessages(member, activity, userId) && !isMutedAt(member, nowMs)
+
+/**
+ * A joined unread row: the member, the channel's newest message and the user's own section and
+ * organization settings (absent when they have none).
+ */
+export interface UnreadChannelMutes {
+	readonly type: string
+	readonly isMuted: boolean
+	readonly mutedUntil: Date | null
+	readonly joinedAt: Date
+	readonly lastReadAt: Date | null | undefined
+	readonly readStateSince: Date | null
+	readonly lastMessageAt: Date
+	readonly lastMessageAuthorId: UserId
+	readonly sectionMuted?: boolean | undefined
+	readonly sectionMutedUntil?: Date | null | undefined
+	readonly orgMuted?: boolean | undefined
+	readonly orgMutedUntil?: Date | null | undefined
+}
+
+export const isDirectMessageType = (type: string) => type === "direct" || type === "single"
+
+/**
+ * Whether a joined row is unread, and when its mute ends: the channel's own, its section's or the
+ * organization's (DMs take only their own), as the server's rules count them. `undefined` when it
+ * is read or muted for good; otherwise the latest timed mute's end (null when none), which the
+ * caller, holding the clock, compares with now.
+ */
+export const unreadMuteEnd = (
+	row: UnreadChannelMutes,
+	userId: UserId,
+): { readonly mutedUntilMs: number | null } | undefined => {
+	const mutes = isDirectMessageType(row.type)
+		? [{ isMuted: row.isMuted, until: row.mutedUntil }]
+		: [
+				{ isMuted: row.isMuted, until: row.mutedUntil },
+				{ isMuted: row.sectionMuted === true, until: row.sectionMutedUntil ?? null },
+				{ isMuted: row.orgMuted === true, until: row.orgMutedUntil ?? null },
+			]
+	if (mutes.some((mute) => mute.isMuted)) return undefined
+	const isUnread = hasUnreadMessages(
+		{
+			lastReadAt: row.lastReadAt ? new Date(row.lastReadAt) : null,
+			joinedAt: new Date(row.joinedAt),
+			readStateSince: row.readStateSince ? new Date(row.readStateSince) : null,
+		},
+		{ lastMessageAt: new Date(row.lastMessageAt), lastMessageAuthorId: row.lastMessageAuthorId },
+		userId,
+	)
+	if (!isUnread) return undefined
+	const untils = mutes.flatMap((mute) => (mute.until ? [new Date(mute.until).getTime()] : []))
+	return { mutedUntilMs: untils.length === 0 ? null : Math.max(...untils) }
+}
