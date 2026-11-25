@@ -614,6 +614,9 @@ describe("message search", () => {
 				yield* unfollow()
 				ok(yield* call(a.object, a.id, "channelMember.create", { channelId: threadId }, a2))
 				expect(isFollowing(a2)).toBe(true)
+				// A second press (another tab) keeps the one membership.
+				ok(yield* call(a.object, a.id, "channelMember.create", { channelId: threadId }, a2))
+				expect(isFollowing(a2)).toBe(true)
 			}),
 		))
 
