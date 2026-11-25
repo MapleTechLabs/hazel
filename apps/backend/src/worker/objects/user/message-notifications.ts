@@ -7,7 +7,7 @@
 import { Database, SQLite, schema } from "@hazel/db"
 import { ChannelId, MessageId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
-import { NotificationReasons } from "../../../services/notifications/notification-rules"
+import { isCountedReason, NotificationReasons } from "../../../services/notifications/notification-rules"
 import { defineEffect, enqueueEffect } from "../effects/registry"
 import { NotificationCountOrgEffects } from "../org/notification-count"
 import { isReading } from "./presence-model"
@@ -59,7 +59,12 @@ export const createNotification = Effect.fn("UserEffects.createNotification")(fu
 	// Reading the channel right now (a focused window in use, even while invisible): nothing to tell.
 	if (isReading(own.sessions, payload.channelId)) {
 		yield* Effect.annotateCurrentSpan({ "notification.skipped": "reading" })
-		if (payload.organizationId !== undefined && payload.userId !== undefined) {
+		// Only a counted (mention) notification was added to the org's count.
+		if (
+			payload.organizationId !== undefined &&
+			payload.userId !== undefined &&
+			isCountedReason(payload.reason)
+		) {
 			yield* enqueueEffect(
 				NotificationCountOrgEffects.notificationsRemoved,
 				{ kind: "org", id: payload.organizationId },
@@ -105,13 +110,15 @@ export const deleteMessageNotifications = Effect.fn("UserEffects.deleteMessageNo
 	const removed = yield* db.run(
 		SQLite.deleteFrom(schema.notificationsTable)
 			.where(($) => [$.resourceId.in_(...payload.messageIds), $.resourceType.eq("message")])
-			.returning("id"),
+			.returning("id", "reason"),
 	)
-	if (removed.length === 0) return
+	// Only the counted (mention) ones were on the org's count; plain-message ones never were.
+	const counted = removed.filter((row) => isCountedReason(row.reason)).length
+	if (counted === 0) return
 	yield* enqueueEffect(
 		NotificationCountOrgEffects.notificationsRemoved,
 		{ kind: "org", id: payload.organizationId },
-		{ channelId: payload.channelId, userId: payload.userId, count: removed.length },
+		{ channelId: payload.channelId, userId: payload.userId, count: counted },
 	)
 })
 

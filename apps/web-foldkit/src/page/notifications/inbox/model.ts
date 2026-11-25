@@ -21,6 +21,8 @@ export const NotificationItem = Schema.Struct({
 	targetedResourceId: Schema.NullOr(Schema.String),
 	targetedResourceType: Schema.NullOr(Schema.String),
 	messageContent: Schema.NullOr(Schema.String),
+	/** The display names of the users `messageContent` mentions, by id (`plainTextOf`). */
+	mentionNames: Schema.Record(Schema.String, Schema.String),
 	channel: Schema.NullOr(Schema.Struct({ name: Schema.String, type: Schema.String })),
 	author: Schema.NullOr(
 		Schema.Struct({

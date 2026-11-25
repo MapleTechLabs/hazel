@@ -16,6 +16,7 @@ import {
 	Presence,
 	Section,
 	SidebarThread,
+	OrganizationSetting,
 	SectionSetting,
 	UnreadChannel,
 	UnreadCount,
@@ -49,6 +50,8 @@ export const Model = Schema.Struct({
 	unreadCounts: Schema.Array(UnreadCount),
 	/** The user's section notification settings: a muted section's channels step back. */
 	sectionSettings: Schema.Array(SectionSetting),
+	/** The user's organization notification settings: a muted organization's channels step back. */
+	organizationSetting: Schema.NullOr(OrganizationSetting),
 	/** Channels with messages the user has not read (not muted for good), sorted. */
 	unreadChannels: Schema.Array(UnreadChannel),
 	connectMounts: Schema.Array(ConnectMount),
@@ -113,6 +116,7 @@ export const Message = defineMessageUnion({
 	UpdatedUnreadCounts: { counts: Schema.Array(UnreadCount) },
 	UpdatedUnreadChannels: { channels: Schema.Array(UnreadChannel) },
 	UpdatedSectionSettings: { settings: Schema.Array(SectionSetting) },
+	UpdatedOrganizationSetting: { setting: Schema.NullOr(OrganizationSetting) },
 	UpdatedConnectMounts: { mounts: Schema.Array(ConnectMount) },
 	UpdatedOrganizations: { organizations: Schema.Array(PartnerOrg) },
 	UpdatedSyncedChannels: { synced: Schema.Array(SyncedChannel) },
@@ -146,6 +150,7 @@ export const emptyData = {
 	unreadCounts: [],
 	unreadChannels: [],
 	sectionSettings: [],
+	organizationSetting: null,
 	connectMounts: [],
 	organizations: [],
 	syncedChannels: [],
