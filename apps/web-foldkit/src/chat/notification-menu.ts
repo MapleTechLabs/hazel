@@ -22,10 +22,14 @@ import { ChannelMember } from "@hazel/domain/models"
 import { IconBell, IconCheck, IconVolume, IconVolumeMute } from "../icons"
 import * as Menu from "../ui/menu"
 
-/** What the items read. `isMuted` is muted now, from the clock, so the menu offers "Unmute" only then. */
+/**
+ * What the items read. `isMuted` is muted now, from the clock, so the menu offers "Unmute" only
+ * then. `inheritedLevel` is what "Default" means here (`inheritedLevelOf`).
+ */
 export interface NotificationMember {
 	readonly isMuted: boolean
 	readonly notificationLevel: NotificationLevel | null
+	readonly inheritedLevel: NotificationLevel
 }
 
 export const NotificationChoice = defineTaggedUnion({
@@ -48,12 +52,12 @@ export const muteEntry = (member: NotificationMember): Menu.Entry =>
 				),
 			})
 
-/** "Notifications": the channel type's default, all messages, only @mentions, or nothing. */
-export const levelEntry = (channelType: string): Menu.Entry =>
+/** "Notifications": the inherited default, all messages, only @mentions, or nothing. */
+export const levelEntry = (member: NotificationMember): Menu.Entry =>
 	Menu.item("notifications", {
 		textValue: "Notifications",
 		submenu: LEVEL_CHOICES.map((level) =>
-			Menu.leaf(levelKeyOf(level), { textValue: levelLabelOf(level, channelType) }),
+			Menu.leaf(levelKeyOf(level), { textValue: levelLabelOf(level, member.inheritedLevel) }),
 		),
 	})
 
@@ -77,7 +81,6 @@ export const choiceOfKey = (key: string, wasMuted: boolean): Option.Option<Notif
 export const itemContent = <M>(
 	h: HtmlBuilder<M>,
 	member: NotificationMember,
-	channelType: string,
 	key: string,
 	text: (value: string) => Html,
 ): ReadonlyArray<Html | string> | null => {
@@ -94,7 +97,7 @@ export const itemContent = <M>(
 	const level = LEVEL_CHOICES.find((candidate) => levelKeyOf(candidate) === key)
 	if (level !== undefined)
 		return [
-			text(levelLabelOf(level, channelType)),
+			text(levelLabelOf(level, member.inheritedLevel)),
 			// The level in force: the member's own, or the default when they have none.
 			level === member.notificationLevel ? IconCheck(h, { className: "ml-auto size-4" }) : h.empty,
 		]

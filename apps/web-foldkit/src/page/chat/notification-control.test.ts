@@ -1,7 +1,8 @@
 import { ChannelMemberId } from "@hazel/schema"
+import { Option } from "effect"
 import { describe, expect, test } from "vitest"
 import { levelEntry, muteEntry, NotificationChoice } from "../../chat/notification-menu"
-import { levelLabelOf, muteStatusOf } from "~/lib/notification-settings"
+import { inheritedLevelOf, levelLabelOf, muteStatusOf } from "~/lib/notification-settings"
 import * as Menu from "../../ui/menu"
 import * as NotificationControl from "./notification-control"
 
@@ -14,6 +15,7 @@ const member: NotificationControl.Member = {
 	mutedUntilMs: null,
 	notificationLevel: null,
 }
+const notificationMember = { isMuted: false, notificationLevel: null, inheritedLevel: "mentions" } as const
 const opened = NotificationControl.update(
 	NotificationControl.init("c"),
 	NotificationControl.Message.GotMenuMessage({
@@ -27,7 +29,7 @@ const chose = (key: string, who: NotificationControl.Member | null = member) =>
 		NotificationControl.Message.GotMenuMessage({
 			message: Menu.Message.ChoseFromNativeMenu({
 				key,
-				entries: [muteEntry({ isMuted: false, notificationLevel: null }), levelEntry("public")],
+				entries: [muteEntry(notificationMember), levelEntry(notificationMember)],
 			}),
 		}),
 		who,
@@ -75,8 +77,31 @@ describe("the header bell", () => {
 
 describe("labels", () => {
 	test("the default level names what it is for the channel type", () => {
-		expect(levelLabelOf(null, "public")).toBe("Default (Only @mentions)")
-		expect(levelLabelOf(null, "thread")).toBe("Default (All messages)")
+		expect(levelLabelOf(null, inheritedLevelOf("public"))).toBe("Default (Only @mentions)")
+		expect(levelLabelOf(null, inheritedLevelOf("thread"))).toBe("Default (All messages)")
+		expect(levelLabelOf("nothing", "all")).toBe("Nothing")
+	})
+
+	test("a channel's default is its section's level, else the organization's, else the type's", () => {
+		expect(inheritedLevelOf("public", { sectionLevel: "nothing", organizationLevel: "all" })).toBe(
+			"nothing",
+		)
+		expect(inheritedLevelOf("private", { sectionLevel: null, organizationLevel: "all" })).toBe("all")
+		expect(inheritedLevelOf("public", { sectionLevel: undefined, organizationLevel: null })).toBe(
+			"mentions",
+		)
+		// DMs and threads take no section or organization setting.
+		expect(inheritedLevelOf("single", { organizationLevel: "nothing" })).toBe("all")
+		expect(inheritedLevelOf("thread", { sectionLevel: "nothing", organizationLevel: "nothing" })).toBe(
+			"all",
+		)
+	})
+
+	test("the Notifications submenu's Default names the inherited level", () => {
+		const entry = levelEntry({ ...notificationMember, inheritedLevel: "all" })
+		const [first] = entry._tag === "Item" ? entry.item.submenu : []
+		expect(first?.key).toBe("level:default")
+		expect(first === undefined ? null : Option.getOrNull(first.textValue)).toBe("Default (All messages)")
 	})
 
 	test("a timed mute says until when; an expired one says nothing", () => {

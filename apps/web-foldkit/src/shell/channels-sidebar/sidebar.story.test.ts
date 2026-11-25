@@ -128,6 +128,7 @@ describe("open menu", () => {
 		const entries = sectionMenuEntries(["create-channel", "join-channel"], true, {
 			isMuted: false,
 			notificationLevel: null,
+			inheritedLevel: "mentions",
 		})
 		const chose = (key: string) =>
 			sectionMenu(open, Menu.Message.ChoseFromNativeMenu({ key, entries })).commands?.find(
@@ -222,7 +223,12 @@ describe("DM row menu", () => {
 			reopened,
 			Menu.Message.ClickedItem({
 				key: "mute",
-				entries: dmMenuEntries({ isMuted: true, isFavorite: true, notificationLevel: null }),
+				entries: dmMenuEntries({
+					isMuted: true,
+					isFavorite: true,
+					notificationLevel: null,
+					inheritedLevel: "all",
+				}),
 			}),
 		).commands
 		expect(unmuted?.find((command) => command.name === ApplyNotificationChoice.name)?.args).toEqual({

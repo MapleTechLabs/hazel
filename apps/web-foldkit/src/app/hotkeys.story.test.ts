@@ -84,7 +84,10 @@ describe("Shift+Escape marks the organization read", () => {
 			signedIn("/hazel/chat"),
 			shell(
 				ShellModel.Message.GotNotificationsMessage({
-					message: Notifications.Message.UpdatedUnreadNotifications({ ids: [first, second] }),
+					message: Notifications.Message.UpdatedUnreadNotifications({
+						ids: [first, second],
+						mentionIds: [first, second],
+					}),
 				}),
 			),
 		).model

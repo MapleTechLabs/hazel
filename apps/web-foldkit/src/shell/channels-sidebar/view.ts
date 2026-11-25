@@ -5,7 +5,7 @@ import { twMerge } from "tailwind-merge"
 import { IconMagnifier3, IconUsers } from "../../icons"
 import { AppRoute, hrefOf } from "../../route"
 import { type ChannelLinks, type ChannelLinksMap, linksFor } from "../../ui/channel-icon"
-import { isMutedNow } from "~/lib/notification-settings"
+import { inheritedLevelOf, isMutedNow, type NotificationLevel } from "~/lib/notification-settings"
 import { semantic } from "../../ui/semantic"
 import { ariaButton } from "../../ui/button"
 import { channelLinksOf } from "./channel-links"
@@ -52,6 +52,12 @@ interface SectionsContext<M> extends ItemContext {
 	readonly unreadChannelIds: ReadonlySet<string>
 	/** Sections the user muted (now): their channels step back and show no unread. */
 	readonly mutedSectionIds: ReadonlySet<string>
+	/** The user muted the organization (now): its channels step back like a muted section's. */
+	readonly isOrganizationMuted: boolean
+	/** The user's level for each section that has one, for its channels' "Default". */
+	readonly sectionLevels: ReadonlyMap<string, NotificationLevel>
+	/** The user's level for the organization, null when it has none. */
+	readonly organizationLevel: NotificationLevel | null
 	/** What each channel is linked or connected to, marked on its icon. */
 	readonly channelLinks: ChannelLinksMap
 	/** Joined threads listed under each channel row, by parent channel id. */
@@ -149,8 +155,13 @@ const channelRowView = <M>(
 	isUnread: boolean,
 	/** The channel's own mute now: the row menu's Mute/Unmute reads and writes it. */
 	isMuted: boolean,
-	/** Muted through its section: the row dims like a muted one, the menu still names its own mute. */
-	isInMutedSection: boolean,
+	/**
+	 * Muted through its section or the organization: the row dims like a muted one, the menu still
+	 * names its own mute.
+	 */
+	isInMutedScope: boolean,
+	/** What the row menu's "Default" is for this channel (`inheritedLevelOf`). */
+	inheritedLevel: NotificationLevel,
 	links: ChannelLinks,
 	isLinkActive: boolean,
 	orgSlug: string,
@@ -172,6 +183,7 @@ const channelRowView = <M>(
 		canDelete,
 		entry,
 		isMuted,
+		inheritedLevel,
 		sections,
 		toMessage: (message: Menu.Message) =>
 			toParentMessage(Message.GotRowMenuMessage({ channelId: entry.channel.id, orgSlug, message })),
@@ -188,7 +200,7 @@ const channelRowView = <M>(
 			h,
 			entry,
 			notificationCount,
-			{ orgSlug, isActive: isLinkActive, links, isUnread, isMuted: isMuted || isInMutedSection },
+			{ orgSlug, isActive: isLinkActive, links, isUnread, isMuted: isMuted || isInMutedScope },
 			rowMenuView(h, menu),
 			rowLongPress(h, menu),
 		),
@@ -203,8 +215,19 @@ const channelRowView = <M>(
 	})
 }
 
-const isInMutedSection = (entry: ChannelEntry, context: SectionsContext<unknown>) =>
-	entry.channel.sectionId !== null && context.mutedSectionIds.has(entry.channel.sectionId)
+const isDmType = (type: string) => type === "direct" || type === "single"
+
+/** Muted through its section, or the organization (which DMs do not take). */
+const isInMutedScope = (entry: ChannelEntry, context: SectionsContext<unknown>) =>
+	(context.isOrganizationMuted && !isDmType(entry.channel.type)) ||
+	(entry.channel.sectionId !== null && context.mutedSectionIds.has(entry.channel.sectionId))
+
+const inheritedLevelOfEntry = (entry: ChannelEntry, context: SectionsContext<unknown>) =>
+	inheritedLevelOf(entry.channel.type, {
+		sectionLevel:
+			entry.channel.sectionId === null ? null : context.sectionLevels.get(entry.channel.sectionId),
+		organizationLevel: context.organizationLevel,
+	})
 
 /** Every row marks its channel's links the same way, wherever it is listed. */
 const channelRow = <M>(
@@ -217,7 +240,7 @@ const channelRow = <M>(
 ): Html => {
 	const id = entry.channel.id
 	const threads = context.threadsByParent.get(id) ?? NO_THREADS
-	const isSectionMuted = isInMutedSection(entry, context)
+	const isScopeMuted = isInMutedScope(entry, context)
 	const activeThreadId = threads.some((thread) => thread.id === context.activeChannelId)
 		? context.activeChannelId
 		: null
@@ -226,9 +249,10 @@ const channelRow = <M>(
 			h,
 			entry,
 			context.unreadByChannel.get(id) ?? entry.member.notificationCount,
-			context.unreadChannelIds.has(id) && !isSectionMuted,
+			context.unreadChannelIds.has(id) && !isScopeMuted,
 			isMutedNow(entry.member, context.nowMs),
-			isSectionMuted,
+			isScopeMuted,
+			inheritedLevelOfEntry(entry, context),
 			linksFor(context.channelLinks, id),
 			id === context.activeChannelId,
 			context.orgSlug,
@@ -245,8 +269,8 @@ const channelRow = <M>(
 			threads,
 			activeThreadId,
 			// Only a row with threads reads the set; the shared empty one keeps the others' memo. A muted
-			// section's threads are muted with it, so they show no unread either.
-			threads.length === 0 || isSectionMuted ? NO_UNREAD : context.unreadChannelIds,
+			// section's (or organization's) threads are muted with it, so they show no unread either.
+			threads.length === 0 || isScopeMuted ? NO_UNREAD : context.unreadChannelIds,
 		]) ?? h.empty
 	)
 }
@@ -573,6 +597,16 @@ export const sectionGroupContent = <M>(
 				isMutedNow(setting, itemContext.nowMs) ? [setting.sectionId] : [],
 			),
 		),
+		isOrganizationMuted:
+			model.organizationSetting !== null && isMutedNow(model.organizationSetting, itemContext.nowMs),
+		sectionLevels: new Map(
+			model.sectionSettings.flatMap((setting) =>
+				setting.notificationLevel === null
+					? []
+					: [[setting.sectionId, setting.notificationLevel] as const],
+			),
+		),
+		organizationLevel: model.organizationSetting?.notificationLevel ?? null,
 		channelLinks: channelLinksOf(model),
 		threadsByParent: threadsByParentOf(
 			model.threads,
