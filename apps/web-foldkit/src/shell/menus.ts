@@ -69,7 +69,7 @@ export const userMenuLinkRoute = (
 ): Option.Option<AppRoute> =>
 	Match.value(key).pipe(
 		Match.when("profile", () => Option.some(AppRoute.Profile({ orgSlug, userId }))),
-		Match.when("my-settings", () => Option.some(AppRoute.MySettingsAppearance({ orgSlug }))),
+		Match.when("my-settings", () => Option.some(AppRoute.MySettingsProfile({ orgSlug }))),
 		Match.orElse(() => Option.none()),
 	)
 
@@ -91,7 +91,7 @@ const USER_TITLES = {
 	header: "Account",
 	profile: "Profile",
 	status: "Set status",
-	"my-settings": "My settings",
+	"my-settings": "Account settings",
 	feedback: "Feedback",
 	logout: "Log out",
 } as const satisfies Record<UserMenuKey, string>
@@ -102,7 +102,7 @@ const SWITCHER_TITLES = {
 	"manage-members": "Manage members",
 	"create-channel": "Create channel",
 	"create-category": "Create section",
-	"server-settings": "Server settings",
+	"server-settings": "Workspace settings",
 	"custom-emojis": "Custom emojis",
 	integrations: "Integrations",
 } as const satisfies Record<SwitcherKey, string>

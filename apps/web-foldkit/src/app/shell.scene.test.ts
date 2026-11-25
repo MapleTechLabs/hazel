@@ -59,6 +59,16 @@ describe("nav rail", () => {
 			sceneExpect(within(navItem("Home"), currentLink)).toBeAbsent(),
 		)
 	})
+
+	test("an account settings page is in Settings too", () => {
+		scene(
+			rootScene,
+			given(signedIn("/hazel/my-settings/keybinds")),
+			...menusMounted,
+			sceneExpect(within(navItem("Settings"), currentLink)).toExist(),
+			sceneExpect(within(navItem("Chat"), currentLink)).toBeAbsent(),
+		)
+	})
 })
 
 describe("the last screen's paint", () => {

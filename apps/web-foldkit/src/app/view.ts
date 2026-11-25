@@ -32,7 +32,7 @@ import {
 import { formatStatusExpirationAt } from "../shell/menus"
 import * as Shell from "../shell/model"
 import * as Notifications from "../shell/notifications"
-import { mySettingsSidebar, notificationsSidebar, settingsSidebar } from "../shell/sidebars"
+import { notificationsSidebar, settingsSidebar } from "../shell/sidebars"
 import type * as Menu from "../ui/menu"
 import type * as ModalKit from "../ui/modal"
 import { Message } from "./message"
@@ -146,8 +146,7 @@ const secondarySidebar = (model: Model, h: HtmlBuilder<Message>, context: ShellC
 		toOrgSwitcherMessage,
 	}
 	const section = orgSectionOf(model.route)
-	if (section === "Settings") return settingsSidebar(h, context, chrome)
-	if (section === "MySettings") return mySettingsSidebar(h, context, chrome)
+	if (section === "Settings" || section === "MySettings") return settingsSidebar(h, context, chrome)
 	if (section === "Customers")
 		return CustomersSidebar.view(h, shell.customersSidebar, context, chrome, toCustomersSidebarMessage)
 	if (section === "Notifications")

@@ -169,7 +169,7 @@ const DESTINATIONS = define({
 		keywords: `${suggestedBillingIntegration.id} providers sync`,
 	},
 
-	// Organization settings
+	// Workspace settings
 	settingsGeneral: {
 		label: "General",
 		icon: IconGear,
@@ -224,7 +224,6 @@ const DESTINATIONS = define({
 	},
 	settingsChatSync: {
 		label: "Chat sync",
-		sidebarLabel: "Connections",
 		icon: IconArrowPath,
 		to: (orgSlug) => AppRoute.SettingsChatSync({ orgSlug }),
 		keywords: "slack discord connections bridge",
@@ -235,7 +234,7 @@ const DESTINATIONS = define({
 		to: (orgSlug) => AppRoute.SettingsDebug({ orgSlug }),
 	},
 
-	// My settings
+	// Account settings
 	myAppearance: {
 		label: "Appearance",
 		icon: IconPaintbrush,
@@ -246,7 +245,7 @@ const DESTINATIONS = define({
 		label: "Profile",
 		icon: IconUser,
 		to: (orgSlug) => AppRoute.MySettingsProfile({ orgSlug }),
-		keywords: "name avatar me",
+		keywords: "my account name avatar me",
 	},
 	myLinkedAccounts: {
 		label: "Linked accounts",
@@ -312,7 +311,7 @@ export const DESTINATION_GROUPS: ReadonlyArray<{
 		],
 	},
 	{
-		title: "Organization settings",
+		title: "Workspace settings",
 		ids: [
 			"settingsGeneral",
 			"settingsTeam",
@@ -322,13 +321,13 @@ export const DESTINATION_GROUPS: ReadonlyArray<{
 			"settingsInstalledApps",
 			"settingsYourApps",
 			"settingsCustomEmojis",
-			"settingsConnectInvites",
 			"settingsChatSync",
+			"settingsConnectInvites",
 			"settingsDebug",
 		],
 	},
 	{
-		title: "My settings",
+		title: "Account settings",
 		ids: [
 			"myProfile",
 			"myAppearance",

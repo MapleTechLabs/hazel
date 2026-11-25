@@ -18,7 +18,7 @@ import { orgSwitcherHeader, userMenuFooter } from "./menus"
 import { sidebarHeaderHeightClass } from "../platform/desktop"
 import { type DestinationId, destination, destinationHref, isAvailable } from "./destinations"
 
-/** The settings, my-settings and notifications sidebars next to the nav rail. */
+/** The settings and notifications sidebars next to the nav rail. */
 
 const SECTION_ACTIVE = "bg-sidebar-accent font-medium text-sidebar-accent-fg"
 
@@ -54,7 +54,10 @@ const onRoutes = (route: AppRoute, ...tags: ReadonlyArray<RouteTag>) => {
 const sectionTitle = <Message>(h: HtmlBuilder<Message>, title: string) =>
 	h.div([h.Class("px-3 pt-3 pb-1")], [heading(h, { variant: "label", level: 2 }, [title])])
 
-/** `SettingsSidebar` */
+/**
+ * `SettingsSidebar`: one place for every setting, your own (Account) above the workspace's, so
+ * `/settings/*` and `/my-settings/*` share it and you never have to know which of the two a page is in.
+ */
 export const settingsSidebar = <Message>(
 	h: HtmlBuilder<Message>,
 	context: ShellContext,
@@ -74,14 +77,27 @@ export const settingsSidebar = <Message>(
 		),
 		sidebarContent(h, { state: "expanded" }, [
 			sidebarSectionGroup(h, [
-				sectionTitle(h, "Settings"),
+				sectionTitle(h, "Account"),
+				sidebarSection(h, {}, [
+					item("myProfile", onRoutes(route, "MySettingsProfile")),
+					item("myAppearance", onRoutes(route, "MySettingsAppearance")),
+					item("myNotifications", onRoutes(route, "MySettingsNotifications")),
+					item("myKeybinds", onRoutes(route, "MySettingsKeybinds")),
+					item("myLinkedAccounts", onRoutes(route, "MySettingsLinkedAccounts")),
+					item("myAgents", onRoutes(route, "MySettingsAgents")),
+					// Desktop settings: the Tauri app's, and the native app's update section.
+					item("myDesktop", onRoutes(route, "MySettingsDesktop")),
+				]),
+			]),
+			sidebarSectionGroup(h, [
+				sectionTitle(h, "Workspace"),
 				sidebarSection(h, {}, [
 					item("settingsGeneral", onRoutes(route, "SettingsGeneral")),
 					item("settingsTeam", onRoutes(route, "TeamSettings")),
 					item("settingsInvitations", onRoutes(route, "SettingsInvitations")),
 					item("settingsCustomEmojis", onRoutes(route, "SettingsCustomEmojis")),
 				]),
-				sidebarSection(h, { label: "Apps & Integrations" }, [
+				sidebarSection(h, { label: "Apps & integrations" }, [
 					// An integration's own page (`integrations/$id`) keeps "Integrations" current.
 					item("settingsIntegrations", {
 						isCurrent: onRoutes(route, "SettingsIntegrations", "SettingsIntegration").isCurrent,
@@ -91,58 +107,12 @@ export const settingsSidebar = <Message>(
 					item("settingsInstalledApps", onRoutes(route, "SettingsIntegrationsInstalled")),
 					item("settingsYourApps", onRoutes(route, "SettingsIntegrationsYourApps")),
 				]),
-				sidebarSection(h, { label: "Hazel Connect" }, [
-					item("settingsConnectInvites", onRoutes(route, "SettingsConnectInvites")),
-				]),
-				sidebarSection(h, { label: "Chat sync" }, [
+				sidebarSection(h, { label: "Shared channels" }, [
 					item(
 						"settingsChatSync",
 						onRoutes(route, "SettingsChatSync", "SettingsChatSyncConnection"),
 					),
-				]),
-			]),
-		]),
-		userMenuFooter(
-			h,
-			chrome.userMenu,
-			chrome.userMenuEntries,
-			context,
-			chrome.toUserMenuMessage,
-			chrome.userStatus,
-			chrome.statusExpiration,
-		),
-	])
-}
-
-/** `MySettingsSidebar` (web build: no Desktop item, which is Tauri-only). */
-export const mySettingsSidebar = <Message>(
-	h: HtmlBuilder<Message>,
-	context: ShellContext,
-	chrome: SidebarChrome<Message>,
-): Html => {
-	const { orgSlug, route } = context
-	const item = pageList(h, orgSlug)
-	return sidebarStatic(h, "flex flex-1", [
-		orgSwitcherHeader(
-			h,
-			chrome.orgSwitcher,
-			chrome.orgSwitcherEntries,
-			context,
-			chrome.organizations,
-			chrome.toOrgSwitcherMessage,
-		),
-		sidebarContent(h, { state: "expanded" }, [
-			sidebarSectionGroup(h, [
-				sectionTitle(h, "My settings"),
-				sidebarSection(h, {}, [
-					item("myAppearance", onRoutes(route, "MySettingsAppearance")),
-					item("myProfile", onRoutes(route, "MySettingsProfile")),
-					item("myLinkedAccounts", onRoutes(route, "MySettingsLinkedAccounts")),
-					item("myAgents", onRoutes(route, "MySettingsAgents")),
-					item("myNotifications", onRoutes(route, "MySettingsNotifications")),
-					item("myKeybinds", onRoutes(route, "MySettingsKeybinds")),
-					// Desktop settings: the Tauri app's, and the native app's update section.
-					item("myDesktop", onRoutes(route, "MySettingsDesktop")),
+					item("settingsConnectInvites", onRoutes(route, "SettingsConnectInvites")),
 				]),
 			]),
 		]),

@@ -17,7 +17,7 @@ page, `⌘⌥C` / `⌘⌥S` / `⌘⌥A` / `⌘⌥M` their Clerk / Stripe / Autum
 The first command opens Hazel's consent page (OAuth with PKCE, the server Hazel's MCP clients use).
 The extension registers itself with `POST /oauth/register` and asks for `customers:read` only:
 the Customers read RPCs and the customers sync stream. It cannot read messages or change anything.
-The grant shows under **My settings → Agents** in Hazel, where it can be revoked.
+The grant shows under **Settings → Account → Agents** in Hazel, where it can be revoked.
 
 ## Develop
 
