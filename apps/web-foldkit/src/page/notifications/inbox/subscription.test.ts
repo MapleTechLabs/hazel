@@ -3,7 +3,7 @@ import { ChannelId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { describe, expect, test } from "vitest"
 import { userId, uuid } from "../../../test/pages-fixtures"
-import { toUnreadChannels, type UnreadChannelRow } from "./subscription"
+import { mentionNamesOf, toUnreadChannels, type UnreadChannelRow } from "./subscription"
 
 /** The Unreads derivation: the joined rows the user has not read, as the tab's items. */
 
@@ -64,5 +64,17 @@ describe("toUnreadChannels", () => {
 		expect(toUnreadChannels([joinedBefore, sinceAfter], userId).map((c) => c.channelId)).toEqual([
 			joinedBefore.channelId,
 		])
+	})
+})
+
+describe("mentionNamesOf", () => {
+	test("names the mentioned users the org knows, skipping unknown or nameless ones", () => {
+		const users = new Map([
+			[uuid(70), { firstName: "Ada", lastName: "Lovelace" }],
+			[uuid(72), { firstName: " ", lastName: "" }],
+		])
+		const content = `@[userId:${uuid(70)}] @[userId:${uuid(71)}] @[userId:${uuid(72)}] @[directive:here]`
+		expect(mentionNamesOf(content, (id) => users.get(id))).toEqual({ [uuid(70)]: "Ada Lovelace" })
+		expect(mentionNamesOf(null, (id) => users.get(id))).toEqual({})
 	})
 })

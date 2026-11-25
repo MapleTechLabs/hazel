@@ -127,7 +127,7 @@ const notificationItem = (
 							[
 								h.Class(
 									twMerge(
-										"line-clamp-2 text-sm",
+										"line-clamp-2 min-w-0 text-sm wrap-anywhere",
 										item.isUnread ? "font-medium text-fg" : "text-fg",
 									),
 								),
@@ -140,7 +140,7 @@ const notificationItem = (
 						),
 					],
 				),
-				h.p([h.Class("mt-0.5 text-muted-fg text-xs")], [contextOf(item)]),
+				h.p([h.Class("mt-0.5 truncate text-muted-fg text-xs")], [contextOf(item)]),
 			],
 		),
 	]

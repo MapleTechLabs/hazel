@@ -22,6 +22,7 @@ const unread = {
 	targetedResourceId: uuid(900),
 	targetedResourceType: "channel",
 	messageContent: "Ship it",
+	mentionNames: {},
 	channel: { name: "general", type: "public" },
 	author: { firstName: "Grace", lastName: "Hopper", avatarUrl: null },
 }
