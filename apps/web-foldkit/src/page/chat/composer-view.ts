@@ -30,7 +30,9 @@ export const replyPreviewOf = (
 /** `useLiveQuery(attachmentCollection, inArray(id, attachmentIds))`, from the channel's attachments. */
 export const attachmentInfoFrom =
 	(attachments: ReadonlyArray<AttachmentInfo>) =>
-	(id: AttachmentId): { readonly fileName: string; readonly fileSize: number } | null =>
+	(
+		id: AttachmentId,
+	): { readonly fileName: string; readonly fileSize: number; readonly url: string } | null =>
 		attachments.find((attachment) => attachment.id === id) ?? null
 
 /** The padded composer area: the typing indicator above the draft's composer. */

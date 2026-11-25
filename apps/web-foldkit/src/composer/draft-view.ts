@@ -3,11 +3,12 @@ import { Mount } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { cn } from "~/lib/utils"
 import { formatFileSize, getFileTypeFromName } from "~/utils/file-utils"
+import { isImageFileName } from "../chat/attachments"
 import { fileIcon } from "../chat/file-icons"
 import { IconClose, IconEdit } from "../icons"
 import { button } from "../ui/button"
 import { loader } from "../ui/loader"
-import { fileInputId, hasTopContent, isUploading, Message, type Model } from "./draft"
+import { fileInputId, hasTopContent, isUploading, Message, type Model, ShowLocalImage } from "./draft"
 import * as EmojiDialog from "../emoji-picker/dialog"
 import * as GifPickerView from "../gif-picker/view"
 import { DragState, TrackFileDrop } from "./drop"
@@ -26,7 +27,7 @@ export interface DraftViewInputs<M> {
 	readonly replyPreview: ReplyPreview | null
 	readonly attachmentInfo: (
 		id: AttachmentId,
-	) => { readonly fileName: string; readonly fileSize: number } | null
+	) => { readonly fileName: string; readonly fileSize: number; readonly url: string } | null
 }
 
 const removeButton = <M>(h: HtmlBuilder<M>, onPress: M, label: string, isCompact = false) =>
@@ -47,7 +48,27 @@ const removeButton = <M>(h: HtmlBuilder<M>, onPress: M, label: string, isCompact
 		],
 	)
 
-/** `ComposerAttachmentPreviews`. */
+/** The image's source: the uploaded attachment's URL, or the local file while it uploads. */
+type ImageSource =
+	| { readonly _tag: "Url"; readonly url: string }
+	| { readonly _tag: "File"; readonly file: File }
+
+const thumbnail = <M>(
+	h: HtmlBuilder<M>,
+	toMessage: (message: Message) => M,
+	source: ImageSource,
+	fileName: string,
+): Html =>
+	h.img([
+		...(source._tag === "Url"
+			? [h.Src(source.url)]
+			: [h.OnMount(Mount.mapMessage(ShowLocalImage({ file: source.file }), toMessage))]),
+		h.Attribute("alt", fileName),
+		h.Attribute("draggable", "false"),
+		h.Class("size-full object-cover"),
+	])
+
+/** `ComposerAttachmentPreviews`: image files as thumbnails, other files as cards. */
 const attachmentPreviews = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftViewInputs<M>): Html => {
 	const uploading = model.currentUpload === null ? [] : [model.currentUpload]
 	if (model.attachmentIds.length === 0 && uploading.length === 0) return h.empty
@@ -61,6 +82,21 @@ const attachmentPreviews = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftVie
 				h.div([h.Class("text-muted-fg text-xs")], [detail]),
 			],
 		)
+	const progressBar = (progress: number) =>
+		h.div(
+			[h.Class("absolute inset-x-0 -bottom-px h-1 bg-muted")],
+			[
+				h.div([
+					h.Class("h-full bg-primary transition-[width] duration-200"),
+					h.Attribute("style", `width: ${progress}%;`),
+				]),
+			],
+		)
+	const imageTile = (key: string, image: Html, overlay: ReadonlyArray<Html>) =>
+		card(key, "group relative aspect-video overflow-hidden rounded-lg border border-border bg-bg", [
+			image,
+			...overlay,
+		])
 	return h.keyed("div")(
 		"attachment-previews",
 		[
@@ -79,6 +115,26 @@ const attachmentPreviews = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftVie
 					...model.attachmentIds.map((attachmentId) => {
 						const info = inputs.attachmentInfo(attachmentId)
 						const fileName = info?.fileName || "File"
+						const remove = removeButton(
+							h,
+							inputs.toMessage(Message.ClickedRemoveAttachment({ attachmentId })),
+							`Remove ${fileName}`,
+						)
+						if (info !== null && isImageFileName(fileName))
+							return imageTile(
+								attachmentId,
+								thumbnail(h, inputs.toMessage, { _tag: "Url", url: info.url }, fileName),
+								[
+									h.div(
+										[
+											h.Class(
+												"absolute top-1 right-1 rounded-md bg-bg/80 shadow-xs backdrop-blur-sm",
+											),
+										],
+										[remove],
+									),
+								],
+							)
 						return card(
 							attachmentId,
 							"group flex items-center gap-2 rounded-lg bg-bg p-2 transition-colors hover:bg-secondary",
@@ -87,40 +143,49 @@ const attachmentPreviews = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftVie
 									className: "size-8 shrink-0 text-muted-fg",
 								}),
 								fileText(fileName, formatFileSize(info?.fileSize || 0)),
-								removeButton(
-									h,
-									inputs.toMessage(Message.ClickedRemoveAttachment({ attachmentId })),
-									`Remove ${fileName}`,
-								),
+								remove,
 							],
 						)
 					}),
 					...uploading.map((upload) =>
-						card(
-							upload.fileId,
-							"group relative flex items-center gap-2 overflow-hidden rounded-lg bg-bg p-2 transition-colors hover:bg-secondary",
-							[
-								fileIcon(h, getFileTypeFromName(upload.file.name), {
-									className: "size-8 shrink-0 text-muted-fg",
-								}),
-								fileText(
-									upload.file.name,
-									upload.progress < 100
-										? `${upload.progress}% of ${formatFileSize(upload.file.size)}`
-										: formatFileSize(upload.file.size),
-								),
-								loader(h, { className: "size-4" }),
-								h.div(
-									[h.Class("absolute inset-x-0 -bottom-px h-1 bg-muted")],
+						isImageFileName(upload.file.name)
+							? imageTile(
+									upload.fileId,
+									thumbnail(
+										h,
+										inputs.toMessage,
+										{ _tag: "File", file: upload.file },
+										upload.file.name,
+									),
 									[
-										h.div([
-											h.Class("h-full bg-primary transition-[width] duration-200"),
-											h.Attribute("style", `width: ${upload.progress}%;`),
-										]),
+										h.div(
+											[
+												h.Class(
+													"absolute inset-0 flex items-center justify-center bg-bg/40",
+												),
+											],
+											[loader(h, { className: "size-4" })],
+										),
+										progressBar(upload.progress),
+									],
+								)
+							: card(
+									upload.fileId,
+									"group relative flex items-center gap-2 overflow-hidden rounded-lg bg-bg p-2 transition-colors hover:bg-secondary",
+									[
+										fileIcon(h, getFileTypeFromName(upload.file.name), {
+											className: "size-8 shrink-0 text-muted-fg",
+										}),
+										fileText(
+											upload.file.name,
+											upload.progress < 100
+												? `${upload.progress}% of ${formatFileSize(upload.file.size)}`
+												: formatFileSize(upload.file.size),
+										),
+										loader(h, { className: "size-4" }),
+										progressBar(upload.progress),
 									],
 								),
-							],
-						),
 					),
 				],
 			),
