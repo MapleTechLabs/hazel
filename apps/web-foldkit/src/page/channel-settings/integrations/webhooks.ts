@@ -132,7 +132,7 @@ const createWebhookForm = (h: HtmlBuilder<Message>, model: Model, form: CreateFo
 					(field) => [
 						field.label(["Name"]),
 						field.description(["A display name for this webhook"]),
-						field.input({ placeholder: "My Webhook" }),
+						field.input({ placeholder: "My webhook" }),
 						field.fieldError([nameError ?? ""]),
 					],
 				),
@@ -199,7 +199,7 @@ export const customWebhooksCard = (
 						iconTile(h, { size: "md" }, IconWebhook(h)),
 						cardTitle(
 							h,
-							"Custom Webhooks",
+							"Custom webhooks",
 							regular.length > 0
 								? [badge(h, { intent: "secondary" }, [`${regular.length}`])]
 								: [],

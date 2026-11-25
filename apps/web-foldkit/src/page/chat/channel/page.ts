@@ -30,7 +30,7 @@ import { typingNamesOf, typingUsersOf } from "../banners"
 import { emptyLookups, type Lookups } from "../lookups"
 import * as FilesPage from "../files/page"
 import * as IssueControl from "../issue-control"
-import { JoinChannel } from "../message-actions"
+import { JoinChannel, UnhideConversation } from "../message-actions"
 import * as CustomerCard from "../customer-card"
 import * as Overlays from "../overlays"
 import { PAGE_SIZE } from "../queries"
@@ -379,6 +379,14 @@ const joinChannel = (model: Model): PageReturn =>
 				]),
 			}
 
+/** The header's "Unhide conversation": the signed-in user's hidden membership comes back. */
+const unhideConversation = (model: Model): PageReturn => {
+	const member = model.members?.find((candidate) => candidate.userId === model.currentUserId)
+	return member === undefined || !member.isHidden
+		? { model }
+		: { model, commands: Write.actionCommands([UnhideConversation({ memberId: member.id })]) }
+}
+
 /**
  * What a channel shortcut does. The pickers, the file picker and the pins are what their buttons send
  * (the emoji and GIF pickers and files go to the composer the keyboard is in: the thread's while one
@@ -703,6 +711,7 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		LoadedThreadPanelWidth: ({ width }) => ThreadWidth.loadedWidth(model, width),
 		CompletedSaveThreadPanelWidth: () => ({ model }),
 		ClickedJoinChannel: () => joinChannel(model),
+		ClickedUnhideConversation: () => unhideConversation(model),
 		PressedGlobalKey: ({ key }) => Write.insertGlobalKey(model, key),
 		PastedGlobalFiles: ({ files }) => Write.pasteGlobalFiles(model, files, shared),
 		PastedGlobalText: ({ text }) => Write.pasteGlobalText(model, text),

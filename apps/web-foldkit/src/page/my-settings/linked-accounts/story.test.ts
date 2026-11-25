@@ -89,6 +89,9 @@ describe("unlink discord", () => {
 			storyUpdate(update, shared),
 			given(linked()),
 			message(Message.ClickedUnlink({ provider: "discord" })),
+			model((current) => expect(current.link).toEqual(Link.ConfirmingUnlink({ provider: "discord" }))),
+			Command.expectNone(),
+			message(Message.ClickedConfirmUnlink()),
 			Command.expectExact(Disconnect({ orgId: organizationId, provider: "discord" })),
 			model((current) => expect(current.link).toEqual(Link.Unlinking({ provider: "discord" }))),
 			Command.resolve(Disconnect, Message.SucceededDisconnect({ provider: "discord" })),
@@ -102,6 +105,9 @@ describe("unlink discord", () => {
 			storyUpdate(update, shared),
 			given(linked()),
 			message(Message.ClickedUnlink({ provider: "discord" })),
+			model((current) => expect(current.link).toEqual(Link.ConfirmingUnlink({ provider: "discord" }))),
+			Command.expectNone(),
+			message(Message.ClickedConfirmUnlink()),
 			Command.resolve(Disconnect, Message.FailedDisconnect({ provider: "discord", reason: "Timeout" })),
 			expectOutMessage(
 				toast(
@@ -158,5 +164,18 @@ describe("link callback", () => {
 				description: "Please try again.",
 			},
 		})
+	})
+})
+
+describe("unlink confirmation", () => {
+	test("Cancel backs out of the unlink without disconnecting", () => {
+		story<Model, Message, PageOutMessage>(
+			storyUpdate(update, shared),
+			given(linked()),
+			message(Message.ClickedUnlink({ provider: "discord" })),
+			message(Message.ClickedCancelUnlink()),
+			Command.expectNone(),
+			model((current) => expect(current.link).toEqual(Link.Idle())),
+		)
 	})
 })

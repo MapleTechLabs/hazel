@@ -99,11 +99,8 @@ const picker = (h: HtmlBuilder<Message>, organizations: ReadonlyArray<UserOrgani
 					h.div(
 						[h.Class("mb-8 text-center")],
 						[
-							heading(h, { variant: "display", className: "mb-2" }, ["Select an organization"]),
-							h.p(
-								[h.Class("text-muted-fg text-sm")],
-								["Choose which organization you'd like to access"],
-							),
+							heading(h, { variant: "display", className: "mb-2" }, ["Choose a workspace"]),
+							h.p([h.Class("text-muted-fg text-sm")], ["Pick the workspace you want to open."]),
 						],
 					),
 					h.div(
@@ -116,7 +113,7 @@ const picker = (h: HtmlBuilder<Message>, organizations: ReadonlyArray<UserOrgani
 							h.p(
 								[h.Class("text-muted-fg text-xs")],
 								[
-									"Don't see your organization? ",
+									"Don't see your workspace? ",
 									button(
 										h,
 										{
@@ -125,7 +122,7 @@ const picker = (h: HtmlBuilder<Message>, organizations: ReadonlyArray<UserOrgani
 											className: "text-xs",
 											onPress: Message.ClickedCreateNew(),
 										},
-										["Create a new one"],
+										["Create a workspace"],
 									),
 								],
 							),

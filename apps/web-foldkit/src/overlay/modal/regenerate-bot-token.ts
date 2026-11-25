@@ -121,7 +121,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 		{ size: "lg" },
 		() => [
 			dialogHeader(h, {}, [
-				modalTitle(h, model.frame, model.token !== null ? "New Token Generated" : "Regenerate Token"),
+				modalTitle(h, model.frame, model.token !== null ? "New token generated" : "Regenerate token"),
 				dialogDescription(
 					h,
 					model.token !== null
@@ -155,7 +155,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 									onPress: Message.ClickedRegenerate(),
 									isDisabled: model.isRegenerating,
 								},
-								[model.isRegenerating ? "Regenerating..." : "Regenerate Token"],
+								[model.isRegenerating ? "Regenerating..." : "Regenerate token"],
 							),
 						],
 			),

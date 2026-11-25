@@ -6,20 +6,17 @@ import { onboardingNavigation, stepHeader } from "../navigation"
 
 /** `welcome-step.tsx` */
 
+/** One line per step of the flow (`flow.ts`), in its order. */
 const CREATOR_ITEMS = [
 	"Set up your profile",
+	"Pick your time zone",
 	"Choose your theme",
-	"Set up your organization workspace",
-	"Tell us about your use case",
+	"Tell us your team size",
 	"Share your role",
+	"Bring channels from Slack or Discord (optional)",
 	"Invite your team (optional)",
 ]
-const INVITED_ITEMS = [
-	"Set up your profile",
-	"Choose your theme",
-	"Tell us about your use case",
-	"Share your role",
-]
+const INVITED_ITEMS = ["Set up your profile", "Pick your time zone", "Choose your theme", "Share your role"]
 
 export const welcomeStep = (
 	h: HtmlBuilder<Message>,
@@ -50,7 +47,10 @@ export const welcomeStep = (
 						(options.isCreatingOrg ? CREATOR_ITEMS : INVITED_ITEMS).map((item) =>
 							h.li(
 								[h.Class("flex items-start gap-2")],
-								[h.span([h.Class("text-primary")], ["✓"]), h.span([], [item])],
+								[
+									h.span([h.Class("text-primary"), h.AriaHidden(true)], ["✓"]),
+									h.span([], [item]),
+								],
 							),
 						),
 					),
@@ -59,7 +59,7 @@ export const welcomeStep = (
 			onboardingNavigation(h, {
 				onContinue: Message.ClickedGetStarted(),
 				showBack: false,
-				continueLabel: "Get Started",
+				continueLabel: "Get started",
 			}),
 		],
 	)

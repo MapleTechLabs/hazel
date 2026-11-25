@@ -96,7 +96,7 @@ describe("connection states", () => {
 			config,
 			Scene.given(initial),
 			Scene.expect(Scene.text("Loading connection...")).toExist(),
-			Scene.expect(Scene.text("Channel Links")).toBeAbsent(),
+			Scene.expect(Scene.text("Channel links")).toBeAbsent(),
 		)
 	})
 
@@ -136,7 +136,7 @@ describe("connection states", () => {
 					channels: [],
 				}),
 			),
-			Scene.expect(Scene.text("Channel Links")).toExist(),
+			Scene.expect(Scene.text("Channel links")).toExist(),
 		)
 	})
 
@@ -230,7 +230,7 @@ describe("remove a channel link", () => {
 			Scene.given(confirming),
 			linkMenuMounted,
 			portalModalMounted,
-			Scene.click(inDialog("Remove Link")),
+			Scene.click(inDialog("Remove link")),
 			Scene.Command.expectExact(RemoveChannelLink({ syncChannelLinkId: linkId })),
 			Scene.expect(inDialog("Removing...")).toBeDisabled(),
 			Scene.Command.resolve(RemoveChannelLink, Message.SucceededRemoveLink()),
@@ -256,7 +256,7 @@ describe("remove a channel link", () => {
 			Scene.given(confirming),
 			linkMenuMounted,
 			portalModalMounted,
-			Scene.click(inDialog("Remove Link")),
+			Scene.click(inDialog("Remove link")),
 			Scene.Command.resolve(RemoveChannelLink, Message.FailedRemoveLink({ reason: "Offline" })),
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedToast({
@@ -267,12 +267,12 @@ describe("remove a channel link", () => {
 					},
 				}),
 			),
-			Scene.expect(inDialog("Remove Link")).toBeEnabled(),
+			Scene.expect(inDialog("Remove link")).toBeEnabled(),
 		)
 	})
 })
 
-const linkButtonOf = () => inDialog("Link Channel")
+const linkButtonOf = () => inDialog("Link channel")
 
 describe("link a channel", () => {
 	const linkButton = linkButtonOf()
@@ -281,7 +281,7 @@ describe("link a channel", () => {
 		Scene.scene(
 			config,
 			Scene.given(withoutLinks),
-			Scene.click(Scene.role("button", { name: /Link Channel$/ })),
+			Scene.click(Scene.role("button", { name: /Link channel$/ })),
 			addLinkModalMounted,
 			Scene.expect(linkButton).toBeDisabled(),
 			Scene.type(Scene.placeholder("Search channels..."), "eng"),
@@ -341,7 +341,7 @@ describe("link a channel", () => {
 		Scene.scene(
 			config,
 			Scene.given(withoutLinks),
-			Scene.click(Scene.role("button", { name: /Link Channel$/ })),
+			Scene.click(Scene.role("button", { name: /Link channel$/ })),
 			addLinkModalMounted,
 			Scene.click(Scene.within(dialog, Scene.role("button", { name: /dev-chat$/ }))),
 			Scene.click(Scene.within(dialog, Scene.role("radio", { name: "New channel" }))),
@@ -380,7 +380,7 @@ describe("link a channel", () => {
 				}),
 			),
 			Scene.expect(Scene.within(dialog, Scene.text("dev-chat"))).toExist(),
-			Scene.expect(inDialog("Link Channel")).toBeEnabled(),
+			Scene.expect(inDialog("Link channel")).toBeEnabled(),
 		)
 	})
 
@@ -410,7 +410,7 @@ describe("link a channel", () => {
 		Scene.scene(
 			config,
 			Scene.given(withoutLinks),
-			Scene.click(Scene.role("button", { name: /Link Channel$/ })),
+			Scene.click(Scene.role("button", { name: /Link channel$/ })),
 			addLinkModalMounted,
 			Scene.type(Scene.placeholder("Search channels..."), "releases"),
 			Scene.click(Scene.within(dialog, Scene.role("button", { name: /Create\s*#releases/ }))),
@@ -427,7 +427,7 @@ describe("link a channel", () => {
 				selectedChannel: hazelChannel,
 				selectedExternalChannel: discordChannel,
 			}),
-			Scene.click(Scene.role("button", { name: /Link Channel$/ })),
+			Scene.click(Scene.role("button", { name: /Link channel$/ })),
 			addLinkModalMounted,
 			Scene.click(linkButton),
 			Scene.Command.resolve(CreateChannelLink, Message.FailedCreateLink({ reason: "AlreadyLinked" })),
@@ -453,7 +453,7 @@ describe("link a channel", () => {
 				externalChannels: ExternalChannels.Failure({ error: "ProviderError" }),
 				selectedChannel: hazelChannel,
 			}),
-			Scene.click(Scene.role("button", { name: /Link Channel$/ })),
+			Scene.click(Scene.role("button", { name: /Link channel$/ })),
 			addLinkModalMounted,
 			Scene.expect(Scene.text("Could not load Discord channels")).toExist(),
 			Scene.expect(Scene.within(dialog, tryAgain)).toBeAbsent(),
@@ -491,7 +491,7 @@ describe("a Slack connection", () => {
 		Scene.scene(
 			config,
 			Scene.given(withoutSlackLinks),
-			Scene.click(Scene.role("button", { name: /Link Channel$/ })),
+			Scene.click(Scene.role("button", { name: /Link channel$/ })),
 			addLinkModalMounted,
 			Scene.expect(Scene.within(dialog, Scene.text("Slack Channel"))).toExist(),
 			Scene.expect(
@@ -534,7 +534,7 @@ describe("a Slack connection", () => {
 				...withoutSlackLinks,
 				externalChannels: ExternalChannels.Failure({ error: "NotConnected" }),
 			}),
-			Scene.click(Scene.role("button", { name: /Link Channel$/ })),
+			Scene.click(Scene.role("button", { name: /Link channel$/ })),
 			addLinkModalMounted,
 			Scene.expect(Scene.within(dialog, Scene.text("Connect Slack first"))).toExist(),
 			Scene.expect(linkButtonOf()).toBeDisabled(),

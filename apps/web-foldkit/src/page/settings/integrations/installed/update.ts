@@ -33,7 +33,7 @@ export const UninstallBot = Command.define("UninstallBot", {
 type Return = PageReturn<Model, Message>
 
 export const init = (route: RouteOf<"SettingsIntegrationsInstalled">): Return => ({
-	model: { orgSlug: route.orgSlug, bots: null, uninstallingBotIds: [] },
+	model: { orgSlug: route.orgSlug, bots: null, confirmingUninstallId: null, uninstallingBotIds: [] },
 })
 
 const settled = (model: Model, botId: BotId): Model =>
@@ -45,8 +45,16 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		ClickedUninstall: ({ botId }) =>
 			model.uninstallingBotIds.includes(botId)
 				? { model }
+				: { model: modifyFields(model, { confirmingUninstallId: () => botId }) },
+		ClickedCancelUninstall: () => ({ model: modifyFields(model, { confirmingUninstallId: () => null }) }),
+		ClickedConfirmUninstall: ({ botId }) =>
+			model.confirmingUninstallId !== botId || model.uninstallingBotIds.includes(botId)
+				? { model }
 				: {
-						model: modifyFields(model, { uninstallingBotIds: (ids) => [...ids, botId] }),
+						model: modifyFields(model, {
+							confirmingUninstallId: () => null,
+							uninstallingBotIds: (ids) => [...ids, botId],
+						}),
 						commands: [UninstallBot({ botId, organizationId: shared.organization?.id ?? null })],
 					},
 		SucceededUninstallBot: ({ botId }) => ({

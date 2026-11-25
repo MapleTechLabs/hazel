@@ -22,7 +22,7 @@ const yesterdayOf = (nowMs: number): number => {
 	return date.getTime()
 }
 
-export type GroupLabel = "Today" | "Yesterday" | "This Week" | "Older"
+export type GroupLabel = "Today" | "Yesterday" | "This week" | "Older"
 
 export interface NotificationGroup {
 	readonly label: GroupLabel
@@ -43,9 +43,9 @@ export const groupByTime = (
 			: startOfDay(createdAtMs) === yesterday
 				? "Yesterday"
 				: startOfWeek(createdAtMs) === week
-					? "This Week"
+					? "This week"
 					: "Older"
-	const labels: ReadonlyArray<GroupLabel> = ["Today", "Yesterday", "This Week", "Older"]
+	const labels: ReadonlyArray<GroupLabel> = ["Today", "Yesterday", "This week", "Older"]
 	return labels
 		.map((label) => ({
 			label,

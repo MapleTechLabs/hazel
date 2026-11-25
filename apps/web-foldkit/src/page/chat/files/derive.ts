@@ -9,7 +9,7 @@ export type FileFilterType = typeof FileFilterType.Type
 
 /** `filterOptions` of `channel-files-header.tsx`. */
 export const filterOptions: ReadonlyArray<{ readonly id: FileFilterType; readonly label: string }> = [
-	{ id: "all", label: "All Files" },
+	{ id: "all", label: "All files" },
 	{ id: "image", label: "Images" },
 	{ id: "video", label: "Videos" },
 	{ id: "document", label: "Documents" },

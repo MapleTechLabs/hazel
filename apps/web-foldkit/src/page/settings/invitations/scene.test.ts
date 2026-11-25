@@ -27,7 +27,7 @@ const loaded = update(
 
 // The row trigger is an icon-only button with no accessible name, so it is located by id.
 const trigger = Scene.selector(`#invitation-${inv1}-trigger`)
-const revokeItem = Scene.role("menuitem", { name: "Revoke Invitation" })
+const revokeItem = Scene.role("menuitem", { name: "Revoke invitation" })
 const triggerMounted = Scene.Mount.resolve(FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress())
 const portalMenu = { name: "PortalMenu" }
 const openRowMenu = [

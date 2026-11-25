@@ -20,6 +20,7 @@ const nameField = (
 		readonly placeholder: string
 		readonly description: string
 		readonly testId: string
+		readonly autocomplete: string
 		readonly isAutoFocused: boolean
 		readonly onInput: (value: string) => Message
 		readonly interaction: Interaction.Wiring<Message>
@@ -40,6 +41,7 @@ const nameField = (
 				placeholder: options.placeholder,
 				attributes: [
 					h.DataAttribute("testid", options.testId),
+					h.Attribute("autocomplete", options.autocomplete),
 					// `aria-invalid` on the Input only: the TextField itself stays valid.
 					h.Attribute("aria-invalid", String(options.isInvalid)),
 					...(options.isInvalid ? [h.DataAttribute("invalid", "true")] : []),
@@ -82,6 +84,7 @@ export const profileStep = (
 								placeholder: "John",
 								description: "Your first name as you'd like it to appear",
 								testId: "input-first-name",
+								autocomplete: "given-name",
 								isAutoFocused: true,
 								onInput: toFirstName,
 								interaction,
@@ -94,6 +97,7 @@ export const profileStep = (
 								placeholder: "Doe",
 								description: "Your last name as you'd like it to appear",
 								testId: "input-last-name",
+								autocomplete: "family-name",
 								isAutoFocused: false,
 								onInput: toLastName,
 								interaction,

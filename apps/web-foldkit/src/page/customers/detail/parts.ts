@@ -53,7 +53,17 @@ export const headerLink = (h: HtmlBuilder<Message>, label: string, onPress: Mess
 /** A load-more / retry footer for a paged list. */
 export const pageFooter = (
 	h: HtmlBuilder<Message>,
-	options: Readonly<{ status: string; hasMore: boolean; label: string; onMore: Message; summary?: string }>,
+	options: Readonly<{
+		status: string
+		hasMore: boolean
+		label: string
+		onMore: Message
+		summary?: string
+		/** Nothing loaded yet: a failure is the first page's, not "more". */
+		isEmpty: boolean
+		/** The first page's failure, e.g. `Couldn't load invoices.` */
+		failure: string
+	}>,
 ): Html | null =>
 	options.status === "Idle" ||
 	(!options.hasMore && options.status !== "Failed" && options.summary === undefined)
@@ -63,7 +73,13 @@ export const pageFooter = (
 				[
 					h.span(
 						[],
-						[options.status === "Failed" ? "Couldn't load more." : (options.summary ?? "")],
+						[
+							options.status === "Failed"
+								? options.isEmpty
+									? options.failure
+									: "Couldn't load more."
+								: (options.summary ?? ""),
+						],
 					),
 					...(options.hasMore || options.status === "Failed"
 						? [

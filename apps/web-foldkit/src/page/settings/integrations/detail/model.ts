@@ -103,6 +103,8 @@ export const Model = Schema.Struct({
 	/** Maple's bot's install in this workspace, `null` when it is not installed (`view-maple.ts`). */
 	mapleInstall: Schema.NullOr(MapleInstall),
 	mapleUninstalling: Schema.Boolean,
+	/** Disconnect (OAuth, API key) or Remove from workspace (Maple) was pressed once and asks to confirm. */
+	confirmingRemoval: Schema.Boolean,
 	/** Disconnect asks first; the target is the environment label. */
 	disconnectConfirm: ConfirmAction.Model(Schema.String),
 })

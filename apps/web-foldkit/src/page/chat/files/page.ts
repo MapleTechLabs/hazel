@@ -26,6 +26,8 @@ export const Model = Schema.Struct({
 	view: FilesView,
 	/** Newest first, as the query returns them. */
 	attachments: Schema.Array(FileAttachment),
+	/** The attachments query has answered once: until then the tab shows a loader, not "No files". */
+	isLoaded: Schema.Boolean,
 	searchQuery: Schema.String,
 	filterType: FileFilterType,
 	filter: Select.Model,
@@ -82,6 +84,7 @@ export const init = (channelId: ChannelId, orgSlug: string, view: FilesView): Mo
 	orgSlug,
 	view,
 	attachments: [],
+	isLoaded: false,
 	searchQuery: "",
 	filterType: "all",
 	filter: Select.init({ id: FILTER_SELECT_ID, selectedKey: "all" }),
@@ -99,6 +102,7 @@ export const setView = (model: Model, view: FilesView): Model =>
 		: {
 				...init(model.channelId, model.orgSlug, view),
 				attachments: model.attachments,
+				isLoaded: model.isLoaded,
 				breakpoint: model.breakpoint,
 			}
 
@@ -181,6 +185,7 @@ export const update = (model: Model, message: Message): FilesReturn =>
 		UpdatedAttachments: ({ attachments }) => ({
 			model: modifyFields(model, {
 				attachments: () => attachments,
+				isLoaded: () => true,
 				// A deleted image closes the viewer.
 				viewerImageId: (id) =>
 					id !== null && attachments.some((attachment) => attachment.id === id) ? id : null,

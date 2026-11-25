@@ -19,7 +19,7 @@ import { KEEPS_EDITOR_FOCUS, Message, type Model, MountEditor } from "./composer
 /** Port of `SlateMessageComposer`: DropZone > (previews, indicators) > Frame > (Editor, Actions). */
 
 const PICKER_BUTTON_CLASS =
-	"inline-flex items-center gap-1.5 rounded-xs p-0 font-semibold text-muted-fg text-xs outline-none transition-colors hover:text-fg max-md:-my-2 max-md:min-h-10"
+	"inline-flex items-center gap-1.5 rounded-xs p-0 font-semibold text-muted-fg text-xs outline-hidden transition-colors hover:text-fg focus-visible:text-fg focus-visible:ring-2 focus-visible:ring-ring/70 max-md:-my-2 max-md:min-h-10"
 
 /** What a draft adds around the bare editor. */
 export interface BoxExtras<M> {
@@ -99,7 +99,7 @@ const actions = <M>(h: HtmlBuilder<M>, model: Model, extras: BoxExtras<M>): Arra
 						h,
 						{
 							className:
-								"inline-flex items-center gap-1.5 rounded-xs p-0 font-semibold text-muted-fg text-xs transition-colors hover:text-fg disabled:opacity-50 max-md:-my-2 max-md:min-h-10",
+								"inline-flex items-center gap-1.5 rounded-xs p-0 font-semibold text-muted-fg text-xs outline-hidden transition-colors hover:text-fg focus-visible:text-fg focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-50 max-md:-my-2 max-md:min-h-10",
 							attributes: extras.attachAttributes,
 						},
 						[IconPaperclip2(h, { className: "size-4 text-muted-fg" }), "Attach"],

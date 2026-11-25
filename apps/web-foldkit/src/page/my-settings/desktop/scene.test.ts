@@ -26,7 +26,7 @@ describe("launch at startup", () => {
 			pageScene(update, view, shared),
 			Scene.given(initOn({ hasAutostart: false, hasUpdates: true }).model),
 			Scene.expect(openAtLogin).toBeAbsent(),
-			Scene.expect(Scene.text("App Updates")).toExist(),
+			Scene.expect(Scene.text("App updates")).toExist(),
 		)
 	})
 

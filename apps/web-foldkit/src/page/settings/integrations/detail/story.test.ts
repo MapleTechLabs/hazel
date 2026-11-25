@@ -120,11 +120,16 @@ describe("integration detail update", () => {
 			run,
 			given(linear),
 			message(Message.ClickedDisconnect()),
+			Command.expectNone(),
+			message(Message.ClickedConfirmDisconnect()),
 			Command.resolve(Disconnect, Message.SucceededDisconnect()),
 		)
 		expect(
-			update({ ...linear, activity: Activity.Disconnecting() }, Message.ClickedDisconnect(), shared)
-				.commands ?? [],
+			update(
+				{ ...linear, activity: Activity.Disconnecting(), confirmingRemoval: true },
+				Message.ClickedConfirmDisconnect(),
+				shared,
+			).commands ?? [],
 		).toHaveLength(0)
 	})
 

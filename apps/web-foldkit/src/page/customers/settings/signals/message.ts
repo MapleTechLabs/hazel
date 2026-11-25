@@ -5,6 +5,7 @@ import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
 import { AccountRow, SettingsSummary, SignalRow } from "../../../../customers/queries"
 import * as Modal from "../../../../ui/modal"
+import * as Select from "../../../../ui/select"
 import { AttentionRow, MetricRow, PickerKind, RuleRow, ScopeCondition } from "./model"
 
 /** A rule write's failure: the rule is gone, or the store refused the draft. */
@@ -76,7 +77,7 @@ export const Message = defineMessageUnion({
 	SucceededFetchDryRun: { version: Schema.Int, result: Customers.RuleDryRunResult },
 	FailedFetchDryRun: { version: Schema.Int, reason: CommonReason },
 	PressedRetryPreview: {},
-	/** The example picker's `<select>` value: a top match's account id. */
-	ChangedExampleAccount: { accountId: Schema.String },
+	/** The example picker (its selection is a top match's account id). */
+	GotExampleSelectMessage: { message: Select.Message },
 })
 export type Message = typeof Message.Type

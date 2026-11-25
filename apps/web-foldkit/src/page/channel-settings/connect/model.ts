@@ -51,6 +51,8 @@ export const Model = Schema.Struct({
 	invites: Invites.schema,
 	revokingInviteIds: Schema.Array(ConnectInviteId),
 	disconnectingMountIds: Schema.Array(Schema.String),
+	/** The connection row asking to confirm its Disconnect / Leave (the first press arms it). */
+	confirmingDisconnectMountId: Schema.NullOr(Schema.String),
 	share: ShareModal.Model,
 	interaction: Interaction.Model,
 })
@@ -69,6 +71,8 @@ export const Message = defineMessageUnion({
 	SucceededRevokeInvite: { inviteId: ConnectInviteId },
 	FailedRevokeInvite: { inviteId: ConnectInviteId, reason: RevokeInviteFailure },
 	ClickedDisconnect: { mountId: Schema.String },
+	ClickedCancelDisconnect: {},
+	ClickedConfirmDisconnect: { mountId: Schema.String },
 	SucceededDisconnect: { mountId: Schema.String, successMessage: Schema.String },
 	FailedDisconnect: { mountId: Schema.String, reason: DisconnectFailure },
 	GotShareModalMessage: { message: ShareModal.Message },

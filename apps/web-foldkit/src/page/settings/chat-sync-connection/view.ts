@@ -48,13 +48,13 @@ const backLink = (h: HtmlBuilder<Message>): Html =>
 			className: "-ml-2 w-fit text-muted-fg",
 			onPress: Message.ClickedBack(),
 		},
-		[outlineIcon(h, { className: "size-4", d: "M15 19l-7-7 7-7" }), "Back to Chat Sync"],
+		[outlineIcon(h, { className: "size-4", d: "M15 19l-7-7 7-7" }), "Back to chat sync"],
 	)
 
 const linkChannelButton = (h: HtmlBuilder<Message>, intent: "primary" | "secondary"): Html =>
 	button(h, { intent, size: "sm", onPress: Message.ClickedLinkChannel() }, [
 		IconPlus(h, { attributes: { "data-slot": "icon" } }),
-		"Link Channel",
+		"Link channel",
 	])
 
 const linksBody = (
@@ -111,7 +111,7 @@ const linksCard = (h: HtmlBuilder<Message>, model: Model, connection: Connection
 				h.div(
 					[h.Class("flex items-center gap-2")],
 					[
-						heading(h, { variant: "subsection" }, ["Channel Links"]),
+						heading(h, { variant: "subsection" }, ["Channel links"]),
 						...(links.length > 0 ? [badge(h, { intent: "secondary" }, [`${links.length}`])] : []),
 					],
 				),
@@ -166,13 +166,13 @@ const detail = (h: HtmlBuilder<Message>, model: Model, connection: Connection): 
 				slotId: "remove-link",
 				confirm: model.removeLinkConfirm,
 				icon: warningIcon(h),
-				title: "Remove Channel Link",
+				title: "Remove channel link",
 				description: (target) => [
 					"Are you sure you want to remove the link to",
 					target.name,
 					"? Messages will stop syncing between these channels.",
 				],
-				confirmLabel: "Remove Link",
+				confirmLabel: "Remove link",
 				pendingLabel: "Removing...",
 				onConfirm: Message.ClickedConfirmRemoveLink(),
 				toParentMessage: toRemoveLinkConfirmMessage,

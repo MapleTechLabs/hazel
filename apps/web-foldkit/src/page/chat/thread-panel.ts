@@ -1,9 +1,7 @@
-import { Effect, Option, Queue, Stream } from "effect"
+import { Effect, Queue, Stream } from "effect"
 import { Mount } from "foldkit"
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
-import { handleStyles, indicatorStyles, panelStyles } from "~/components/ui/split-panel/split-panel.styles"
-import { cn } from "~/lib/utils"
 import { attachmentsView } from "../../chat/attachments"
 import { htmlRenderView } from "../../chat/embeds/html-render"
 import type * as HtmlRender from "../../chat/html-render"
@@ -16,8 +14,9 @@ import { button, buttonClassName } from "../../ui/button"
 import { iconTile } from "../../ui/icon-tile"
 import { loader } from "../../ui/loader"
 import { separator } from "../../ui/separator"
+import { resizeEdge, splitPanelClassName } from "../../ui/split-panel"
 import { systemUi } from "../../platform/system-ui"
-import { MIN_CHANNEL_WIDTH, MIN_THREAD_PANEL_WIDTH } from "./channel/thread-width"
+import { MAX_KEYBOARD_WIDTH, MIN_CHANNEL_WIDTH, MIN_THREAD_PANEL_WIDTH } from "./channel/thread-width"
 import { type DeriveContext, authorIdentity, authorOf, htmlRendersOf } from "./derive"
 import type { ChatMessage, MessageRow } from "./rows"
 import { heading } from "../../ui/heading"
@@ -26,9 +25,6 @@ import { heading } from "../../ui/heading"
  * Discord's thread sidebar: a resizable panel beside the channel with the thread's header, its
  * starter message and replies in one scroll, and its composer.
  */
-
-/** The px an arrow key moves the focused edge. */
-const KEYBOARD_STEP = 24
 
 export interface ThreadPanelInputs<M> {
 	readonly threadName: string
@@ -115,38 +111,20 @@ const measureEdge = (target: EventTarget | null, fallbackWidth: number) => {
 }
 
 const edgeView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<M>): Html =>
-	h.div(
-		[
-			h.Role("separator"),
-			h.Attribute("aria-label", "Resize thread panel"),
-			h.Attribute("aria-orientation", "vertical"),
-			h.Attribute("aria-valuemin", String(MIN_THREAD_PANEL_WIDTH)),
-			h.Attribute("aria-valuenow", String(inputs.width)),
-			h.Attribute("tabindex", "0"),
-			h.Attribute("data-dragging", String(inputs.isResizing)),
-			h.Class(
-				cn(
-					handleStyles({ position: "right", isDragging: inputs.isResizing }),
-					"group w-1.5 touch-none max-md:hidden",
-				),
-			),
-			h.OnPointerDown(
-				(_pointerType, button, _screenX, _screenY, _timeStamp, clientX, _y, _id, target) => {
-					if (button !== 0) return Option.none()
-					const { startWidth, maxWidth } = measureEdge(target, inputs.width)
-					return Option.some(inputs.toPressEdge(clientX, startWidth, maxWidth))
-				},
-			),
-			h.OnKeyDownPreventDefault((key) =>
-				key === "ArrowLeft"
-					? Option.some(inputs.toNudgeEdge(KEYBOARD_STEP))
-					: key === "ArrowRight"
-						? Option.some(inputs.toNudgeEdge(-KEYBOARD_STEP))
-						: Option.none(),
-			),
-		],
-		[h.div([h.Class(indicatorStyles({ position: "right", isDragging: inputs.isResizing }))])],
-	)
+	resizeEdge(h, {
+		label: "Resize thread panel",
+		position: "right",
+		width: inputs.width,
+		minWidth: MIN_THREAD_PANEL_WIDTH,
+		maxWidth: MAX_KEYBOARD_WIDTH,
+		isDragging: inputs.isResizing,
+		onPress: (clientX, target) => {
+			const { startWidth, maxWidth } = measureEdge(target, inputs.width)
+			return inputs.toPressEdge(clientX, startWidth, maxWidth)
+		},
+		onNudge: inputs.toNudgeEdge,
+		className: "max-md:hidden",
+	})
 
 const headerView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<M>): Html =>
 	h.div(
@@ -347,8 +325,8 @@ export const threadPanelView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<
 				: [h.OnMount(Mount.mapMessage(SwipeCloses(), () => inputs.onClose))]),
 			// Below `md` there is no room beside the channel: the panel covers it, full width.
 			h.Class(
-				cn(
-					panelStyles({ position: "right" }),
+				splitPanelClassName(
+					"right",
 					"max-md:absolute max-md:inset-0 max-md:z-20 max-md:w-full! max-md:max-w-none! max-md:border-l-0",
 				),
 			),

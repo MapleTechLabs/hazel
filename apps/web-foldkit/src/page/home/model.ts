@@ -63,7 +63,6 @@ export const menuIdOf = (userId: string) => `member-actions-${userId}`
 export const menuEntries: ReadonlyArray<Menu.Entry> = [
 	Menu.item("message", { textValue: "Message" }),
 	Menu.item("view-profile", { textValue: "View profile" }),
-	Menu.item("start-call", { textValue: "Start call" }),
 	Menu.item("copy-email", { textValue: "Copy email" }),
 ]
 

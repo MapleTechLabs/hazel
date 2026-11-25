@@ -6,7 +6,7 @@ import { IconCheck } from "../../icons"
 import { avatar } from "../../ui/avatar"
 import { button } from "../../ui/button"
 import { cardClassName } from "../../ui/card"
-import { loader } from "../../ui/loader"
+import { loader, loadingState } from "../../ui/loader"
 import { authError, authFrame, authHeading, homeLink } from "../auth/layout"
 import { isSessionLoading, type PageViewInputs, type Shared } from "../contract"
 import { Message } from "./message"
@@ -122,9 +122,9 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		h,
 		shared.nowMs,
 		isSessionLoading(shared)
-			? [loader(h, { className: "size-6" })]
+			? [loadingState(h, { label: "Loading request..." })]
 			: Lookup.match(model.lookup, {
-					Loading: () => [loader(h, { className: "size-6" })],
+					Loading: () => [loadingState(h, { label: "Loading request..." })],
 					Loaded: ({ client }) => request(h, model, client, shared),
 					Invalid: () => [
 						authHeading(

@@ -45,6 +45,7 @@ export const init = (route: RouteOf<"ChannelSettingsConnect">, shared: Shared): 
 			invites: Invites.Idle(),
 			revokingInviteIds: [],
 			disconnectingMountIds: [],
+			confirmingDisconnectMountId: null,
 			share: ShareModal.init(),
 			interaction: Interaction.init(),
 		},
@@ -70,6 +71,22 @@ const reloadInvites = (model: Model): Return => {
 
 const without = <Id extends string>(ids: ReadonlyArray<Id>, id: Id): ReadonlyArray<Id> =>
 	ids.filter((candidate) => candidate !== id)
+
+/** The row a Disconnect acts on, or `null` when it is gone, already running, or not the viewer's to cut. */
+const disconnectTarget = (model: Model, mountId: string, shared: Shared) => {
+	const mount = model.mounts.find((candidate) => candidate.id === mountId)
+	const currentOrgId = shared.organization?.id ?? null
+	if (mount === undefined || model.disconnectingMountIds.includes(mountId)) return null
+	const viewerRole = model.mounts.find((candidate) => candidate.organizationId === currentOrgId)?.role
+	const roles = rowRoles(mount, viewerRole, currentOrgId)
+	// The view hides the button for a viewer who may not disconnect this row; update checks too.
+	if (!roles.canDisconnect || roles.targetOrganizationId === null) return null
+	return {
+		mount,
+		organizationId: roles.targetOrganizationId,
+		isLeaving: roles.isGuestLeavingConversation,
+	}
+}
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
@@ -133,24 +150,28 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			}),
 		}),
 		GotInteractionMessage: ({ message }) => interaction.fold(model, message),
-		ClickedDisconnect: ({ mountId }) => {
-			const mount = model.mounts.find((candidate) => candidate.id === mountId)
-			const currentOrgId = shared.organization?.id ?? null
-			if (mount === undefined || model.disconnectingMountIds.includes(mountId)) return { model }
-			const viewerRole = model.mounts.find(
-				(candidate) => candidate.organizationId === currentOrgId,
-			)?.role
-			const roles = rowRoles(mount, viewerRole, currentOrgId)
-			// The view hides the button for a viewer who may not disconnect this row; update checks too.
-			if (!roles.canDisconnect || roles.targetOrganizationId === null) return { model }
+		// Disconnecting another workspace (or leaving) ends the shared channel for it: the first press asks.
+		ClickedDisconnect: ({ mountId }) =>
+			disconnectTarget(model, mountId, shared) === null
+				? { model }
+				: { model: modifyFields(model, { confirmingDisconnectMountId: () => mountId }) },
+		ClickedCancelDisconnect: () => ({
+			model: modifyFields(model, { confirmingDisconnectMountId: () => null }),
+		}),
+		ClickedConfirmDisconnect: ({ mountId }) => {
+			const target = disconnectTarget(model, mountId, shared)
+			if (target === null || model.confirmingDisconnectMountId !== mountId) return { model }
 			return {
-				model: modifyFields(model, { disconnectingMountIds: (ids) => [...ids, mountId] }),
+				model: modifyFields(model, {
+					confirmingDisconnectMountId: () => null,
+					disconnectingMountIds: (ids) => [...ids, mountId],
+				}),
 				commands: [
 					DisconnectOrganization({
 						mountId,
-						conversationId: mount.conversationId,
-						organizationId: roles.targetOrganizationId,
-						isLeaving: roles.isGuestLeavingConversation,
+						conversationId: target.mount.conversationId,
+						organizationId: target.organizationId,
+						isLeaving: target.isLeaving,
 					}),
 				],
 			}

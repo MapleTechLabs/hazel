@@ -7,6 +7,7 @@ import { ariaButton, button } from "../ui/button"
 import { emptyState } from "../ui/empty-state"
 import { loader } from "../ui/loader"
 import { searchField } from "../ui/search-field"
+import { toggleChip } from "../ui/toggle-chip"
 import { type Gif, type GifFailure, type GifPage, Message, type Model } from "./picker"
 
 /** `GifPickerContent`: search, category chips, the GIF grid and the KLIPY attribution. */
@@ -74,33 +75,14 @@ const categoryChips = <M>(h: HtmlBuilder<M>, model: Model, toMessage: (message: 
 				? h.empty
 				: h.div(
 						[h.Class("flex gap-1.5 overflow-x-auto px-3 pb-2 scrollbar-none")],
-						categories
-							.slice(0, 12)
-							.map((category) =>
-								h.keyed("button")(
-									category.query,
-									[
-										h.Attribute("type", "button"),
-										h.Attribute(
-											"aria-pressed",
-											model.selectedCategory === category.category ? "true" : "false",
-										),
-										h.OnClick(
-											toMessage(
-												Message.ClickedCategory({ category: category.category }),
-											),
-										),
-										h.Class(
-											`shrink-0 outline-none rounded-full border px-2.5 py-0.5 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
-												model.selectedCategory === category.category
-													? "border-primary bg-primary text-primary-fg"
-													: "border-fg/10 bg-muted/40 text-muted-fg hover:border-fg/20 hover:bg-muted hover:text-fg"
-											}`,
-										),
-									],
-									[category.category],
-								),
-							),
+						categories.slice(0, 12).map((category) =>
+							toggleChip(h, {
+								label: category.category,
+								isPressed: model.selectedCategory === category.category,
+								onPress: toMessage(Message.ClickedCategory({ category: category.category })),
+								className: "h-7 shrink-0 text-xs sm:h-7",
+							}),
+						),
 					),
 	})
 
@@ -182,7 +164,15 @@ const gifList = <M>(
 	toMessage: (message: Message) => M,
 ): ReadonlyArray<Html> =>
 	page.gifs.length === 0
-		? [centered(h, [emptyState(h, { title: "No GIFs found", className: "py-0" })])]
+		? [
+				centered(h, [
+					emptyState(h, {
+						title: "No GIFs found",
+						description: "Try another search.",
+						className: "py-0",
+					}),
+				]),
+			]
 		: [
 				h.ul(
 					[h.Class("columns-2 gap-2"), h.AriaLabel("GIF results")],

@@ -285,6 +285,8 @@ export const Message = defineMessageUnion({
 	LoadedThreadPanelWidth: { width: Schema.NullOr(Schema.Finite) },
 	CompletedSaveThreadPanelWidth: {},
 	ClickedJoinChannel: {},
+	/** The header's "Unhide conversation" on a DM the signed-in user hid. */
+	ClickedUnhideConversation: {},
 	/** A printable key typed outside any input (`useGlobalKeyboardFocus`). */
 	PressedGlobalKey: { key: Schema.String },
 	/** Files pasted outside any input: they attach to the focused composer. */

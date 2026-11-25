@@ -74,6 +74,8 @@ const dropZone = (h: HtmlBuilder<Message>, model: Model, isDisabled: boolean): H
 							: "border-border bg-secondary/20 hover:border-muted-fg/40 hover:bg-secondary/40",
 						isDisabled && "pointer-events-none opacity-50",
 					),
+					// Keyboard users can't press it either while it is dimmed.
+					isDisabled,
 					onPress: Message.ClickedBrowse({ inputId: DROP_ZONE_INPUT_ID }),
 				},
 				[
@@ -183,7 +185,7 @@ const draftForm = (h: HtmlBuilder<Message>, model: Model, draft: Draft): Html =>
 											isDisabled: busy || isInvalid || !draft.name.value,
 											onPress: Message.ClickedSaveEmoji(),
 										},
-										[busy ? "Saving..." : "Save Emoji"],
+										[busy ? "Saving..." : "Save emoji"],
 									),
 								],
 							),
@@ -299,7 +301,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		card(h, {}, [
 			cardHeader(h, [
 				pageHeader(h, {
-					title: "Custom Emojis",
+					title: "Custom emojis",
 					size: "title",
 					leading: IconEmoji1(h, { className: "mt-0.5 size-5 text-muted-fg" }),
 					badges: [

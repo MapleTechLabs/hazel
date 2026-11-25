@@ -8,6 +8,12 @@ import { pressFeedback } from "../platform/feedback"
  * tabs). Hover and focus rings are native CSS; `ui/tabs.ts` is the stateful kit.
  */
 
+/** A horizontal tab's classes, for a tab drawn as a button (`ariaButton`) rather than by `tabView`. */
+export const tabClassName = (className?: string) => twMerge(...tabsStyles.tab("horizontal", false), className)
+
+/** The selected tab's underline, for a tab drawn by its caller. */
+export const tabIndicatorClassName = () => twMerge(...tabsStyles.selectionIndicator("horizontal"))
+
 export const tabView = <M>(
 	h: HtmlBuilder<M>,
 	options: {

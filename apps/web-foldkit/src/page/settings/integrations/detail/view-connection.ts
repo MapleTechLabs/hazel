@@ -116,6 +116,25 @@ export const verifyingState = (h: H, integration: Integration): Html =>
 		[],
 	)
 
+/** The second step of a workspace-wide removal: what it does, Cancel and the danger button. */
+export const removalConfirm = <M>(
+	h: HtmlBuilder<M>,
+	options: {
+		readonly question: string
+		readonly confirmLabel: string
+		readonly onConfirm: M
+		readonly onCancel: M
+	},
+): Html =>
+	h.div(
+		[h.Class("flex flex-wrap items-center gap-2")],
+		[
+			h.p([h.Class("w-full text-fg text-sm")], [options.question]),
+			button(h, { intent: "outline", size: "sm", onPress: options.onCancel }, ["Cancel"]),
+			button(h, { intent: "danger", size: "sm", onPress: options.onConfirm }, [options.confirmLabel]),
+		],
+	)
+
 export const connectedState = (
 	h: H,
 	integration: Integration,
@@ -168,16 +187,24 @@ export const connectedState = (
 									"Configure on GitHub",
 								],
 					)
-				: button(
-						h,
-						{
-							intent: "danger",
-							size: "sm",
-							onPress: Message.ClickedDisconnect(),
-							isDisabled: isDisconnecting,
-						},
-						[isDisconnecting ? "Disconnecting..." : "Disconnect"],
-					),
+				: model.confirmingRemoval
+					? removalConfirm(h, {
+							question: `Disconnect ${integration.name} from this workspace?`,
+							confirmLabel: `Disconnect ${integration.name}`,
+							onConfirm: Message.ClickedConfirmDisconnect(),
+							onCancel: Message.ClickedCancelRemoval(),
+						})
+					: button(
+							h,
+							{
+								intent: "outline",
+								size: "sm",
+								onPress: Message.ClickedDisconnect(),
+								isDisabled: isDisconnecting,
+								isPending: isDisconnecting,
+							},
+							[isDisconnecting ? "Disconnecting..." : "Disconnect"],
+						),
 		],
 	)
 }
@@ -229,7 +256,7 @@ export const apiKeyConnectionForm = (h: H, integration: Integration, model: Mode
 		[
 			apiField(h, {
 				id: "api-token",
-				label: "Bearer Token",
+				label: "Bearer token",
 				type: "password",
 				placeholder: "Enter your API token",
 				field: model.apiToken,

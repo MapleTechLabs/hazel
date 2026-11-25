@@ -1,9 +1,11 @@
 import { Option } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { IconDownload, IconPlay } from "../../../icons"
+import { IconDownload, IconImage, IconPlay } from "../../../icons"
 import { AppRoute, hrefOf } from "../../../route"
 import type * as Interaction from "../../../ui/aria/interaction"
 import { button } from "../../../ui/button"
+import { emptyState } from "../../../ui/empty-state"
+import { loadingState } from "../../../ui/loader"
 import { isVideo, isViewerImage, mediaOf, visibleCountFor } from "./derive"
 import { imageViewerView } from "../../../chat/image-viewer"
 import { Message, type Model, viewerImagesOf } from "./page"
@@ -25,7 +27,7 @@ const mediaHref = (model: Model) =>
 	hrefOf(AppRoute.ChatFilesMedia({ orgSlug: model.orgSlug, channelId: model.channelId }))
 
 const OVERLAY =
-	"pointer-events-none absolute inset-0 flex items-end justify-end bg-gradient-to-t from-black/40 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100"
+	"pointer-events-none absolute inset-0 flex items-end justify-end bg-gradient-to-t from-black/40 to-transparent p-2 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
 
 /** The hover overlay's secondary download button; the click must not reach the tile. */
 export const downloadOverlay = <M>(context: FilesContext<M>, attachment: FileAttachment): Html => {
@@ -114,6 +116,7 @@ const gridItem = <M>(context: FilesContext<M>, attachment: FileAttachment): Html
 		[
 			h.Role("button"),
 			h.Tabindex(0),
+			h.AriaLabel(`Open ${attachment.fileName}`),
 			h.Class(
 				"group relative aspect-square cursor-pointer overflow-hidden rounded-lg border border-border bg-secondary/30 transition-colors hover:border-muted-fg/50",
 			),
@@ -199,10 +202,17 @@ const masonryItem = <M>(context: FilesContext<M>, attachment: FileAttachment): H
 export const mediaGalleryView = <M>(context: FilesContext<M>): Html => {
 	const { h, model } = context
 	const media = mediaOf(model.attachments)
+	if (!model.isLoaded) return loadingState(h, { label: "Loading media…", className: "flex-1" })
 	if (media.length === 0) {
 		return h.div(
-			[h.Class("flex flex-1 items-center justify-center p-8 text-muted-fg")],
-			["No media found in this channel"],
+			[h.Class("flex flex-1 items-center justify-center p-8")],
+			[
+				emptyState(h, {
+					title: "No media yet",
+					icon: (className) => IconImage(h, { className }),
+					description: "Images and videos shared in this channel will appear here.",
+				}),
+			],
 		)
 	}
 	const imageCount = media.filter(isViewerImage).length

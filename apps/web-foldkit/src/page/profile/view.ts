@@ -56,7 +56,7 @@ const profile = (
 									h.Class(buttonClassName({ intent: "secondary" })),
 									h.Href(hrefOf(AppRoute.MySettingsProfile({ orgSlug: options.orgSlug }))),
 								],
-								[IconEdit(h), "Edit Profile"],
+								[IconEdit(h), "Edit profile"],
 							),
 						]
 					: undefined,

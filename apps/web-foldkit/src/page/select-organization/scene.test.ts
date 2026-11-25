@@ -39,7 +39,7 @@ describe("select organization view", () => {
 		Scene.scene(
 			pageScene(update, view, shared),
 			Scene.given(withOrganizations([hazel, acme])),
-			Scene.expect(Scene.role("heading", { name: "Select an organization" })).toExist(),
+			Scene.expect(Scene.role("heading", { name: "Choose a workspace" })).toExist(),
 			Scene.expect(Scene.role("button", { name: /Hazel Labs/ })).toContainText("Owner"),
 			Scene.expect(Scene.text("@hazel")).toExist(),
 			Scene.click(Scene.role("button", { name: /Acme Corp/ })),
@@ -49,7 +49,7 @@ describe("select organization view", () => {
 					replace: false,
 				}),
 			),
-			Scene.click(Scene.role("button", { name: "Create a new one" })),
+			Scene.click(Scene.role("button", { name: "Create a workspace" })),
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedNavigation({
 					route: routeOfPath("/onboarding/setup-organization"),
@@ -63,7 +63,7 @@ describe("select organization view", () => {
 		Scene.scene(
 			pageScene(update, view, shared),
 			Scene.given(init().model),
-			Scene.expect(Scene.role("heading", { name: "Select an organization" })).toBeAbsent(),
+			Scene.expect(Scene.role("heading", { name: "Choose a workspace" })).toBeAbsent(),
 			Scene.Subscription.emit(Message.UpdatedOrganizations({ organizations: [hazel] })),
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedNavigation({ route: routeOfPath("/hazel"), replace: false }),

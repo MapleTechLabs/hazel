@@ -78,7 +78,7 @@ const DESTINATIONS = define({
 	},
 	notifications: {
 		label: "Notifications",
-		sidebarLabel: "All Activity",
+		sidebarLabel: "All activity",
 		icon: IconBell,
 		to: (orgSlug) => AppRoute.NotificationsAll({ orgSlug }),
 		keywords: "activity inbox mentions",
@@ -101,7 +101,7 @@ const DESTINATIONS = define({
 	},
 	notificationsDms: {
 		label: "Direct message notifications",
-		sidebarLabel: "Direct Messages",
+		sidebarLabel: "Direct messages",
 		icon: IconMsgs,
 		to: (orgSlug) => AppRoute.NotificationsDms({ orgSlug }),
 		keywords: "dms",
@@ -188,7 +188,7 @@ const DESTINATIONS = define({
 		keywords: "invite",
 	},
 	settingsCustomEmojis: {
-		label: "Custom Emoji",
+		label: "Custom emoji",
 		icon: IconEmojiAdd,
 		to: (orgSlug) => AppRoute.SettingsCustomEmojis({ orgSlug }),
 		keywords: "emojis",
@@ -205,25 +205,25 @@ const DESTINATIONS = define({
 		keywords: "apps bots",
 	},
 	settingsInstalledApps: {
-		label: "Installed Apps",
+		label: "Installed apps",
 		icon: IconGridCirclePlus,
 		to: (orgSlug) => AppRoute.SettingsIntegrationsInstalled({ orgSlug }),
 		keywords: "bots",
 	},
 	settingsYourApps: {
-		label: "Your Apps",
+		label: "Your apps",
 		icon: IconCode,
 		to: (orgSlug) => AppRoute.SettingsIntegrationsYourApps({ orgSlug }),
 		keywords: "bots developer api",
 	},
 	settingsConnectInvites: {
-		label: "Connect Invites",
+		label: "Connect invites",
 		icon: IconArrowPath,
 		to: (orgSlug) => AppRoute.SettingsConnectInvites({ orgSlug }),
 		keywords: "hazel connect shared channels",
 	},
 	settingsChatSync: {
-		label: "Chat Sync",
+		label: "Chat sync",
 		sidebarLabel: "Connections",
 		icon: IconArrowPath,
 		to: (orgSlug) => AppRoute.SettingsChatSync({ orgSlug }),
@@ -249,7 +249,7 @@ const DESTINATIONS = define({
 		keywords: "name avatar me",
 	},
 	myLinkedAccounts: {
-		label: "Linked Accounts",
+		label: "Linked accounts",
 		icon: IconArrowPath,
 		to: (orgSlug) => linkedAccountsRoute(orgSlug),
 		keywords: "github google slack discord",
@@ -328,7 +328,7 @@ export const DESTINATION_GROUPS: ReadonlyArray<{
 		],
 	},
 	{
-		title: "My Settings",
+		title: "My settings",
 		ids: [
 			"myProfile",
 			"myAppearance",

@@ -27,10 +27,14 @@ export const AccountConnections = Schema.Struct({
 })
 export type AccountConnections = typeof AccountConnections.Type
 
-/** The action in flight: redirecting to a provider's OAuth page, or disconnecting it. One at a time. */
+/**
+ * The action in flight: redirecting to a provider's OAuth page, asking before an unlink, or disconnecting
+ * it. One at a time.
+ */
 export const Link = defineTaggedUnion({
 	Idle: {},
 	Linking: { provider: LinkedProvider },
+	ConfirmingUnlink: { provider: LinkedProvider },
 	Unlinking: { provider: LinkedProvider },
 })
 export type Link = typeof Link.Type

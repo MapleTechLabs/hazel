@@ -2,7 +2,6 @@ import { OrganizationId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Command, Submodel } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
-import type { HtmlBuilder } from "foldkit/html"
 import { modifyFields } from "foldkit/struct"
 import type { Shared } from "../../page/contract"
 import { HazelRpc } from "../../rpc"
@@ -65,8 +64,8 @@ const CreateIntegrationRequest = Command.define("CreateIntegrationRequest", {
 		}).pipe(Effect.catchCause(() => Effect.succeed(Message.FailedCreateRequest()))),
 })
 
-/** arktype `integrationName: "string >= 1"`, worded as arktype reports it. */
-const validateName = (value: string) => (value.length >= 1 ? null : "integrationName must be non-empty")
+/** arktype `integrationName: "string >= 1"` (the API's rule), worded for the user. */
+const validateName = (value: string) => (value.length >= 1 ? null : "Enter the integration's name")
 
 /** arktype `"string.url | ''"`; the field shows its own wording for this one. */
 const validateUrl = (value: string) =>
@@ -134,11 +133,6 @@ const update = (model: Model, message: Message, shared: Shared): Return =>
 const ID = "request-integration-modal"
 
 /** Legacy passes `aria-invalid` to the Input itself; the TextField is never invalid. */
-const invalidAttributes = <M>(h: HtmlBuilder<M>, isInvalid: boolean) => [
-	h.Attribute("aria-invalid", isInvalid ? "true" : "false"),
-	...(isInvalid ? [h.DataAttribute("invalid", "true")] : []),
-]
-
 const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _inputs, h) =>
 	frameView(
 		h,
@@ -164,14 +158,11 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 									id: `${ID}-name`,
 									value: model.integrationName,
 									onInput: (value) => Message.ChangedIntegrationName({ value }),
+									isInvalid: model.nameError !== null,
 								},
 								(field) => [
-									field.label(["Integration name *"]),
-									field.input({
-										placeholder: "e.g., Slack, Jira, Notion",
-										attributes: invalidAttributes(h, model.nameError !== null),
-									}),
-									// React Aria's FieldError renders nothing while the TextField is valid.
+									field.label(["Integration name"]),
+									field.input({ placeholder: "e.g., Slack, Jira, Notion" }),
 									field.fieldError([model.nameError ?? ""]),
 								],
 							),
@@ -181,15 +172,13 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 									id: `${ID}-url`,
 									value: model.integrationUrl,
 									onInput: (value) => Message.ChangedIntegrationUrl({ value }),
+									isInvalid: model.urlError !== null,
 								},
 								(field) => [
 									field.label(["Website URL (optional)"]),
 									field.input({
 										placeholder: "e.g., https://slack.com",
-										attributes: [
-											h.Type("url"),
-											...invalidAttributes(h, model.urlError !== null),
-										],
+										attributes: [h.Type("url")],
 									}),
 									field.fieldError(["Please enter a valid URL"]),
 								],
@@ -220,7 +209,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 								isDisabled: hasErrors(model) || model.isSubmitting,
 								attributes: [h.Type("submit")],
 							},
-							[model.isSubmitting ? "Submitting..." : "Submit Request"],
+							[model.isSubmitting ? "Submitting..." : "Submit request"],
 						),
 					]),
 				],

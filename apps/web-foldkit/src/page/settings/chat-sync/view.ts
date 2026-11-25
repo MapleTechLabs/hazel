@@ -40,7 +40,7 @@ const toDeleteConfirmMessage = (message: ConfirmAction.Message) =>
 
 const header = (h: HtmlBuilder<Message>, actions: ReadonlyArray<Html>): Html =>
 	pageHeader(h, {
-		title: "Chat Sync",
+		title: "Chat sync",
 		subtitle: "Sync messages between Hazel and external platforms.",
 		size: "title",
 		actions,
@@ -73,7 +73,7 @@ const addConnectionDropdown = (
 					},
 					[
 						IconPlus(h, { className: "size-4" }),
-						"Add Third Party Connection",
+						"Add third-party connection",
 						IconChevronDown(h, { className: "size-3.5 opacity-70" }),
 						overlay,
 					],
@@ -225,13 +225,13 @@ const deleteModal = (h: HtmlBuilder<Message>, model: Model): Html =>
 		slotId: "delete-connection",
 		confirm: model.deleteConfirm,
 		icon: IconWarning(h),
-		title: "Delete Connection",
+		title: "Delete connection",
 		description: (target) => [
 			"Are you sure you want to delete the connection to",
 			target.name,
 			"? This will also remove all linked channels. This action cannot be undone.",
 		],
-		confirmLabel: "Delete Connection",
+		confirmLabel: "Delete connection",
 		pendingLabel: "Deleting...",
 		onConfirm: Message.ClickedConfirmDelete(),
 		toParentMessage: toDeleteConfirmMessage,

@@ -143,7 +143,7 @@ describe("the pending slot", () => {
 		Scene.scene(
 			scene,
 			Scene.given({ ...entered.slot, hasFailed: true }),
-			Scene.expect(Scene.role("heading", { name: "This page did not load" })).toExist(),
+			Scene.expect(Scene.role("heading", { name: "This page didn't load" })).toExist(),
 			Scene.expect(Scene.role("button", { name: "Try again" })).toExist(),
 		)
 	})

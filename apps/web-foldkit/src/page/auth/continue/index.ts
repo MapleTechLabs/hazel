@@ -43,13 +43,20 @@ const update = (model: Model, message: Message): Return =>
 		FailedSignIn: ({ reason }) => ({ model: Model.Failed({ reason }) }),
 	})
 
-const failed = (h: HtmlBuilder<Message>, reason: AuthFailure | null): ReadonlyArray<Html> => [
-	authHeading(h, "Couldn't finish signing in", "Start again and pick the same account."),
-	...[reason === null ? null : authError(h, authFailureMessage(reason))].filter(
-		(html): html is Html => html !== null,
-	),
-	h.p([h.Class("mt-4")], [signInLink(h, "Back to sign in")]),
-]
+const failed = (h: HtmlBuilder<Message>, reason: AuthFailure | null): ReadonlyArray<Html> =>
+	reason === "AccountCreated"
+		? [
+				// Not a failure: the account exists and only needs a sign-in.
+				authHeading(h, "Your account is ready", "Sign in to continue."),
+				h.p([h.Class("mt-4")], [signInLink(h, "Sign in")]),
+			]
+		: [
+				authHeading(h, "Couldn't finish signing in", "Start again and pick the same account."),
+				...[reason === null ? null : authError(h, authFailureMessage(reason))].filter(
+					(html): html is Html => html !== null,
+				),
+				h.p([h.Class("mt-4")], [signInLink(h, "Back to sign in")]),
+			]
 
 const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) =>
 	authFrame(

@@ -52,7 +52,10 @@ const mainColumn = (h: H, integration: Integration, model: Model, shared: Shared
 		return mapleColumn(h, {
 			install: model.mapleInstall,
 			isUninstalling: model.mapleUninstalling,
+			isConfirming: model.confirmingRemoval,
 			onUninstall: Message.ClickedUninstallMaple(),
+			onConfirmUninstall: Message.ClickedConfirmUninstallMaple(),
+			onCancel: Message.ClickedCancelRemoval(),
 		})
 	if (WEBHOOK_INTEGRATIONS.includes(integration.id))
 		return hasOrganization ? [unported(h, `IntegrationContent:${integration.id}`)] : []

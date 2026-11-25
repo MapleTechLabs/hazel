@@ -40,18 +40,18 @@ export const VIEWER_MENU_ID = "image-viewer-menu"
 export const initViewerMenu = (): Menu.Model => Menu.init({ id: VIEWER_MENU_ID, anchor: "Pointer" })
 
 const VIEWER_MENU_ITEMS: ReadonlyArray<readonly [ImageViewerAction, string]> = [
-	["copyImage", "Copy Image"],
-	["download", "Save Image"],
-	["copyUrl", "Copy Media Link"],
-	["openInBrowser", "Open Media Link"],
+	["copyImage", "Copy image"],
+	["download", "Save image"],
+	["copyUrl", "Copy media link"],
+	["openInBrowser", "Open media link"],
 ]
 
 const viewerMenuEntries: ReadonlyArray<Menu.Entry> = [
-	Menu.item("copyImage", { textValue: "Copy Image" }),
-	Menu.item("download", { textValue: "Save Image" }),
+	Menu.item("copyImage", { textValue: "Copy image" }),
+	Menu.item("download", { textValue: "Save image" }),
 	Menu.separator,
-	Menu.item("copyUrl", { textValue: "Copy Media Link" }),
-	Menu.item("openInBrowser", { textValue: "Open Media Link" }),
+	Menu.item("copyUrl", { textValue: "Copy media link" }),
+	Menu.item("openInBrowser", { textValue: "Open media link" }),
 ]
 
 /** The viewer action a choice from the image's menu names, if the menu reported one. */

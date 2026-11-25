@@ -234,9 +234,9 @@ export const renameModalSpec = (copy: RenameCopy) => ({
 
 const spec = renameModalSpec({
 	id: "rename-channel-modal",
-	title: "Rename Channel",
+	title: "Rename channel",
 	description: "Enter a new name for this channel",
-	label: "Channel Name",
+	label: "Channel name",
 	placeholder: "general",
 	successMessage: "Channel renamed successfully",
 	notFound: {

@@ -6,6 +6,7 @@ import { CommonReason } from "~/lib/error-messages"
 import { isTemplateAvailable } from "../../../../customers/providers"
 import { AccountRow, SettingsSummary, SignalRow } from "../../../../customers/queries"
 import * as Modal from "../../../../ui/modal"
+import * as Select from "../../../../ui/select"
 
 /**
  * Signals settings (`docs/customers/spec.md` §5): the rules list with its template picker, and the
@@ -95,6 +96,8 @@ export const Editor = Schema.Struct({
 	preview: DryRun.schema,
 	/** The usage chart's example account, among the preview's top matches. */
 	exampleAccountId: Schema.NullOr(CustomerAccountId),
+	/** The example picker's popup; its selection is `exampleAccountId`, set by the view. */
+	exampleSelect: Select.Model,
 	isSaving: Schema.Boolean,
 	isDeleting: Schema.Boolean,
 })
@@ -142,6 +145,7 @@ export type Model = typeof Model.Type
 export const PICKER_MODAL_ID = "signals-template-picker"
 export const DISCARD_MODAL_ID = "signals-discard-changes"
 export const DELETE_MODAL_ID = "signals-delete-rule"
+export const EXAMPLE_SELECT_ID = "signals-preview-example"
 
 /** The dry run waits this long after the last edit. */
 export const DRY_RUN_DEBOUNCE_MS = 400

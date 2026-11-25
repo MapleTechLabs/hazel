@@ -91,7 +91,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 		{},
 		() => [
 			dialogHeader(h, {}, [
-				modalTitle(h, model.frame, "Delete Application"),
+				modalTitle(h, model.frame, "Delete application"),
 				// Three text nodes, as React renders the interpolated JSX.
 				dialogDescription(h, [
 					'Are you sure you want to delete "',
@@ -104,7 +104,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 				button(
 					h,
 					{ intent: "danger", onPress: Message.ClickedDelete(), isDisabled: model.isDeleting },
-					[model.isDeleting ? "Deleting..." : "Delete Application"],
+					[model.isDeleting ? "Deleting..." : "Delete application"],
 				),
 			]),
 		],

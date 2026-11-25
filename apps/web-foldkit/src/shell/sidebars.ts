@@ -1,6 +1,7 @@
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { type AppRoute, isNotificationsRoute, type RouteTag } from "../route"
 import { button } from "../ui/button"
+import { heading } from "../ui/heading"
 import {
 	sidebarContent,
 	sidebarHeader,
@@ -49,11 +50,9 @@ const onRoutes = (route: AppRoute, ...tags: ReadonlyArray<RouteTag>) => {
 	return { isCurrent: isOn, isLinkActive: isOn }
 }
 
+/** The sidebar's eyebrow, a heading so the section is reachable by heading navigation. */
 const sectionTitle = <Message>(h: HtmlBuilder<Message>, title: string) =>
-	h.div(
-		[h.Class("px-3 pt-3 pb-1")],
-		[h.span([h.Class("text-muted-fg text-xs font-medium uppercase tracking-wider")], [title])],
-	)
+	h.div([h.Class("px-3 pt-3 pb-1")], [heading(h, { variant: "label", level: 2 }, [title])])
 
 /** `SettingsSidebar` */
 export const settingsSidebar = <Message>(
@@ -95,7 +94,7 @@ export const settingsSidebar = <Message>(
 				sidebarSection(h, { label: "Hazel Connect" }, [
 					item("settingsConnectInvites", onRoutes(route, "SettingsConnectInvites")),
 				]),
-				sidebarSection(h, { label: "Chat Sync" }, [
+				sidebarSection(h, { label: "Chat sync" }, [
 					item(
 						"settingsChatSync",
 						onRoutes(route, "SettingsChatSync", "SettingsChatSyncConnection"),
@@ -134,7 +133,7 @@ export const mySettingsSidebar = <Message>(
 		),
 		sidebarContent(h, { state: "expanded" }, [
 			sidebarSectionGroup(h, [
-				sectionTitle(h, "My Settings"),
+				sectionTitle(h, "My settings"),
 				sidebarSection(h, {}, [
 					item("myAppearance", onRoutes(route, "MySettingsAppearance")),
 					item("myProfile", onRoutes(route, "MySettingsProfile")),

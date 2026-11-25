@@ -1,6 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconMagnifier3, IconMapPin } from "../../../icons"
 import { button } from "../../../ui/button"
+import { emptyState } from "../../../ui/empty-state"
 import { input, inputGroup } from "../../../ui/input"
 import { Message } from "../message"
 import type { StepOf } from "../model"
@@ -24,6 +25,7 @@ export const timezoneStep = (
 	const detected = options.browserTimezone
 	const selectedCity = form.selected === null ? null : cityFor(form.selected, options.nowMs)
 	const isDetectedSelected = form.detectionAttempted && detected === form.selected
+	const cities = filterCities(form.debouncedQuery, detected, options.nowMs)
 	return h.div(
 		[
 			h.Class("space-y-4 sm:space-y-6 pb-16 sm:pb-0"),
@@ -58,8 +60,13 @@ export const timezoneStep = (
 							inputGroup(h, { className: "w-full" }, [
 								IconMagnifier3(h),
 								input(h, {
-									placeholder: "Search all timezones...",
-									attributes: [h.Value(form.query), h.OnInput(toQuery)],
+									placeholder: "Search time zones...",
+									attributes: [
+										h.Type("search"),
+										h.AriaLabel("Search time zones"),
+										h.Value(form.query),
+										h.OnInput(toQuery),
+									],
 								}),
 							]),
 							button(
@@ -73,30 +80,39 @@ export const timezoneStep = (
 									IconMapPin(h, { className: "size-4" }),
 									isDetectedSelected
 										? `Detected: ${cityFor(detected, options.nowMs).name}`
-										: "Detect My Timezone",
+										: "Detect my time zone",
 								],
 							),
 						],
 					),
 					h.div(
 						[h.Class("py-4 sm:py-6 @container")],
-						[
-							h.div(
-								[
-									h.Class(
-										"grid grid-cols-1 @xs:grid-cols-2 @md:grid-cols-3 @lg:grid-cols-4 gap-3 max-h-[250px] sm:max-h-[400px] overflow-y-auto p-3 -m-3 pr-4",
+						cities.length === 0
+							? [
+									emptyState(h, {
+										title: "No time zones match",
+										description: "Try a city, country or a name like Europe/Berlin.",
+										role: "status",
+										className: "py-8",
+									}),
+								]
+							: [
+									h.div(
+										[
+											h.Class(
+												"grid grid-cols-1 @xs:grid-cols-2 @md:grid-cols-3 @lg:grid-cols-4 gap-3 max-h-[250px] sm:max-h-[400px] overflow-y-auto p-3 -m-3 pr-4",
+											),
+										],
+										cities.map((city) =>
+											cityCard(h, {
+												city,
+												isSelected: form.selected === city.timezone,
+												isDetected: city.timezone === detected,
+												nowMs: options.nowMs,
+											}),
+										),
 									),
 								],
-								filterCities(form.debouncedQuery, detected, options.nowMs).map((city) =>
-									cityCard(h, {
-										city,
-										isSelected: form.selected === city.timezone,
-										isDetected: city.timezone === detected,
-										nowMs: options.nowMs,
-									}),
-								),
-							),
-						],
 					),
 				],
 			),

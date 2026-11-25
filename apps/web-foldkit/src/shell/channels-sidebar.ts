@@ -60,7 +60,7 @@ const outcomeTitles: { readonly [O in SidebarOutcome]: string | null } = {
 	Unfavorited: "Removed from favorites",
 	Hidden: null,
 	Unhidden: "Conversation shown",
-	Left: "Left channel successfully",
+	Left: "Left channel",
 	MovedToSection: "Channel moved to section",
 	MovedToDefault: "Channel moved to default",
 	SectionDeleted: "Section deleted",

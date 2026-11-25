@@ -101,6 +101,9 @@ describe("disconnect", () => {
 			run,
 			given(connected),
 			message(Message.ClickedDisconnect({ mountId: globexGuestMount.id })),
+			Command.expectNone(),
+			model((current) => expect(current.confirmingDisconnectMountId).toBe(globexGuestMount.id)),
+			message(Message.ClickedConfirmDisconnect({ mountId: globexGuestMount.id })),
 			Command.expectExact(
 				DisconnectOrganization({
 					mountId: globexGuestMount.id,
@@ -140,6 +143,7 @@ describe("disconnect", () => {
 			run,
 			given(asGuest),
 			message(Message.ClickedDisconnect({ mountId: hostMount.id })),
+			message(Message.ClickedConfirmDisconnect({ mountId: hostMount.id })),
 			Command.expectExact(
 				DisconnectOrganization({
 					mountId: hostMount.id,
@@ -175,21 +179,38 @@ describe("disconnect", () => {
 			run,
 			given(asGuest),
 			message(Message.ClickedDisconnect({ mountId: otherGuest.id })),
+			message(Message.ClickedConfirmDisconnect({ mountId: otherGuest.id })),
 			Command.expectNone(),
 		)
 	})
 
 	test("a second click while disconnecting, or an unknown mount, sends nothing", () => {
 		const disconnecting = run(
-			connected,
-			Message.ClickedDisconnect({ mountId: globexGuestMount.id }),
+			run(connected, Message.ClickedDisconnect({ mountId: globexGuestMount.id })).model,
+			Message.ClickedConfirmDisconnect({ mountId: globexGuestMount.id }),
 		).model
 		story(
 			run,
 			given(disconnecting),
 			message(Message.ClickedDisconnect({ mountId: globexGuestMount.id })),
+			message(Message.ClickedConfirmDisconnect({ mountId: globexGuestMount.id })),
 			Command.expectNone(),
 			message(Message.ClickedDisconnect({ mountId: "missing" })),
+			message(Message.ClickedConfirmDisconnect({ mountId: "missing" })),
+			Command.expectNone(),
+		)
+	})
+
+	test("Cancel backs out, and a confirm without an ask sends nothing", () => {
+		story(
+			run,
+			given(connected),
+			message(Message.ClickedConfirmDisconnect({ mountId: globexGuestMount.id })),
+			Command.expectNone(),
+			message(Message.ClickedDisconnect({ mountId: globexGuestMount.id })),
+			message(Message.ClickedCancelDisconnect()),
+			model((current) => expect(current.confirmingDisconnectMountId).toBeNull()),
+			message(Message.ClickedConfirmDisconnect({ mountId: globexGuestMount.id })),
 			Command.expectNone(),
 		)
 	})

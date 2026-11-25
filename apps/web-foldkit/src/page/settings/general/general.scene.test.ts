@@ -32,7 +32,7 @@ const route = { _tag: "SettingsGeneral", orgSlug: "hazel" } as const
 const owner = makeShared()
 /** The init model after `ReadOrigin` resolved. */
 const initialModel = (shared = owner) => ({ ...init(route, shared).model, origin: "http://localhost:3000" })
-const nameInput = Scene.label("Organization Name")
+const nameInput = Scene.label("Organization name")
 const dialog = Scene.role("dialog")
 const confirmInput = Scene.placeholder("Hazel Labs")
 const confirmDelete = Scene.within(dialog, Scene.role("button", { name: "Delete workspace" }))
@@ -42,9 +42,9 @@ describe("organization name", () => {
 		Scene.scene(
 			pageScene(update, view, owner),
 			Scene.given(initialModel()),
-			Scene.expect(Scene.role("button", { name: "Save Changes" })).toBeAbsent(),
+			Scene.expect(Scene.role("button", { name: "Save changes" })).toBeAbsent(),
 			Scene.type(nameInput, " Hazel HQ "),
-			Scene.click(Scene.role("button", { name: "Save Changes" })),
+			Scene.click(Scene.role("button", { name: "Save changes" })),
 			Scene.Command.expectExact(UpdateOrganizationName({ organizationId, name: "Hazel HQ" })),
 			Scene.expect(Scene.role("button", { name: "Saving..." })).toBeDisabled(),
 			Scene.Command.resolve(UpdateOrganizationName, Message.SucceededUpdateName()),
@@ -63,7 +63,7 @@ describe("organization name", () => {
 			Scene.expectHandled(),
 			Scene.Command.resolve(UpdateOrganizationName, Message.FailedUpdateName({ reason: "Offline" })),
 			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: reasonToast("Offline") })),
-			Scene.expect(Scene.role("button", { name: "Save Changes" })).toBeEnabled(),
+			Scene.expect(Scene.role("button", { name: "Save changes" })).toBeEnabled(),
 		)
 	})
 
@@ -74,7 +74,7 @@ describe("organization name", () => {
 			Scene.type(nameInput, "Draft"),
 			Scene.click(Scene.role("button", { name: "Cancel" })),
 			Scene.expect(nameInput).toHaveValue("Hazel Labs"),
-			Scene.expect(Scene.role("button", { name: "Save Changes" })).toBeAbsent(),
+			Scene.expect(Scene.role("button", { name: "Save changes" })).toBeAbsent(),
 		)
 	})
 
@@ -84,8 +84,8 @@ describe("organization name", () => {
 			pageScene(update, view, member),
 			Scene.given(initialModel(member)),
 			Scene.expect(nameInput).toBeDisabled(),
-			Scene.expect(Scene.text("Public Invite Link")).toBeAbsent(),
-			Scene.expect(Scene.text("Danger Zone")).toBeAbsent(),
+			Scene.expect(Scene.text("Public invite link")).toBeAbsent(),
+			Scene.expect(Scene.text("Danger zone")).toBeAbsent(),
 		)
 	})
 })
@@ -180,7 +180,7 @@ describe("delete workspace", () => {
 		Scene.scene(
 			pageScene(update, view, admin),
 			Scene.given(initialModel(admin)),
-			Scene.expect(Scene.text("Danger Zone")).toBeAbsent(),
+			Scene.expect(Scene.text("Danger zone")).toBeAbsent(),
 		)
 	})
 })

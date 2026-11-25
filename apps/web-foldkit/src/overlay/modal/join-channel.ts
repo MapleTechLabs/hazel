@@ -193,7 +193,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 		{ size: "lg" },
 		() => [
 			dialogHeader(h, {}, [
-				modalTitle(h, model.frame, "Browse Channels"),
+				modalTitle(h, model.frame, "Browse channels"),
 				modalDescription(h, "Join a public channel in your organization"),
 			]),
 			dialogBody(

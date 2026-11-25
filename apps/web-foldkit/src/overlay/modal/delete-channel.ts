@@ -2,6 +2,7 @@ import { ChannelId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Command, Submodel } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
+import { modifyFields } from "foldkit/struct"
 import { deleteChannelAction } from "~/db/actions"
 import { CommonReason, failureMessage } from "~/lib/error-messages"
 import { catchCommon, errorToastOf, successToast } from "../../data/actions"
@@ -16,7 +17,13 @@ import { Frame, Message as FrameMessage, frameView, initFrame, isCloseRequest, m
 
 /** `components/modals/delete-channel-modal.tsx`; confirming runs `deleteChannelAction`. */
 
-const Model = Schema.Struct({ channelId: ChannelId, channelName: Schema.String, frame: Frame })
+const Model = Schema.Struct({
+	channelId: ChannelId,
+	channelName: Schema.String,
+	frame: Frame,
+	/** The delete is in flight: the button shows it and a second press is ignored. */
+	isDeleting: Schema.Boolean,
+})
 type Model = typeof Model.Type
 
 /** What can go wrong deleting a channel, beyond the shared reasons. */
@@ -67,7 +74,13 @@ const update = (model: Model, message: Message, context: ModalContext): Return =
 		GotFrameMessage: ({ message }) =>
 			isCloseRequest(message) ? { model, outMessage: closed } : { model },
 		ClickedCancel: () => ({ model, outMessage: closed }),
-		ClickedDelete: () => ({ model, commands: [DeleteChannel({ channelId: model.channelId })] }),
+		ClickedDelete: () =>
+			model.isDeleting
+				? { model }
+				: {
+						model: modifyFields(model, { isDeleting: () => true }),
+						commands: [DeleteChannel({ channelId: model.channelId })],
+					},
 		// Leave the deleted channel's pages for the chat index (the route is read when the result lands).
 		SucceededDeleteChannel: () => ({
 			model,
@@ -79,7 +92,7 @@ const update = (model: Model, message: Message, context: ModalContext): Return =
 			}),
 		}),
 		FailedDeleteChannel: ({ reason }) => ({
-			model,
+			model: modifyFields(model, { isDeleting: () => false }),
 			outMessage: ModalOutMessage.RequestedToast({
 				toast: errorToastOf(
 					failureMessage(reason, {
@@ -109,7 +122,11 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 			]),
 			dialogFooter(h, [
 				button(h, { intent: "outline", onPress: Message.ClickedCancel() }, ["Cancel"]),
-				button(h, { intent: "danger", onPress: Message.ClickedDelete() }, ["Delete"]),
+				button(
+					h,
+					{ intent: "danger", isPending: model.isDeleting, onPress: Message.ClickedDelete() },
+					[model.isDeleting ? "Deleting..." : "Delete channel"],
+				),
 			]),
 		],
 		(message) => Message.GotFrameMessage({ message }),
@@ -121,7 +138,7 @@ export const modal = defineModal(
 	{ request: Requests.DeleteChannel, Model, Message },
 	{
 		init: ({ channelId, channelName }) => ({
-			model: { channelId, channelName, frame: initFrame("delete-channel-modal") },
+			model: { channelId, channelName, frame: initFrame("delete-channel-modal"), isDeleting: false },
 		}),
 		update,
 		view,

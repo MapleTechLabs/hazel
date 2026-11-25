@@ -36,7 +36,7 @@ export const onboardingNavigation = (h: HtmlBuilder<Message>, options: Navigatio
 							onPress: Message.ClickedBack(),
 							attributes: [h.DataAttribute("testid", "onboarding-back-btn")],
 						},
-						["← Back"],
+						[h.span([h.AriaHidden(true)], ["← "]), "Back"],
 					),
 			button(
 				h,
@@ -49,7 +49,7 @@ export const onboardingNavigation = (h: HtmlBuilder<Message>, options: Navigatio
 				},
 				[
 					`${options.continueLabel ?? "Continue"} `,
-					h.span([h.Class("duration-300 group-hover:translate-x-1")], ["→"]),
+					h.span([h.Class("duration-300 group-hover:translate-x-1"), h.AriaHidden(true)], ["→"]),
 				],
 			),
 		],

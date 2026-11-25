@@ -99,13 +99,23 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				),
 			}),
 		}),
+		// Unlinking stops attributing synced messages to the user, so the first press asks.
 		ClickedUnlink: ({ provider }) =>
 			orgId === null || !isIdle
 				? { model }
+				: { model: modifyFields(model, { link: () => Link.ConfirmingUnlink({ provider }) }) },
+		ClickedCancelUnlink: () => (model.link._tag === "ConfirmingUnlink" ? { model: toIdle() } : { model }),
+		ClickedConfirmUnlink: () => {
+			const link = model.link
+			return orgId === null || link._tag !== "ConfirmingUnlink"
+				? { model }
 				: {
-						model: modifyFields(model, { link: () => Link.Unlinking({ provider }) }),
-						commands: [Disconnect({ orgId, provider })],
-					},
+						model: modifyFields(model, {
+							link: () => Link.Unlinking({ provider: link.provider }),
+						}),
+						commands: [Disconnect({ orgId, provider: link.provider })],
+					}
+		},
 		SucceededDisconnect: ({ provider }) => ({
 			model: toIdle(),
 			outMessage: PageOutMessage.RequestedToast({

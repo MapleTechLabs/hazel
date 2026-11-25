@@ -34,12 +34,13 @@ const connectionRow = (h: HtmlBuilder<Message>, model: Model, mount: Mount, shar
 	const isDisconnecting = model.disconnectingMountIds.includes(mount.id)
 	const idleLabel = roles.isGuestLeavingConversation ? "Leave shared channel" : "Disconnect"
 	const busyLabel = roles.isGuestLeavingConversation ? "Leaving..." : "Disconnecting..."
+	const orgName = org?.name ?? mount.organizationId
 	return h.keyed("div")(
 		mount.id,
-		[h.Class("flex items-center justify-between px-4 py-3 max-md:gap-3 md:px-6")],
+		[h.Class("flex items-center justify-between gap-3 px-4 py-3 md:px-6")],
 		[
 			h.div(
-				[h.Class("flex items-center gap-3 max-md:min-w-0")],
+				[h.Class("flex min-w-0 items-center gap-3")],
 				[
 					avatar(h, {
 						size: "sm",
@@ -49,29 +50,72 @@ const connectionRow = (h: HtmlBuilder<Message>, model: Model, mount: Mount, shar
 						fallbackIcon: true,
 					}),
 					h.div(
-						[h.Class("flex flex-col max-md:min-w-0")],
+						[h.Class("flex min-w-0 flex-col")],
 						[
-							h.span(
-								[h.Class("font-medium text-fg text-sm max-md:truncate")],
-								[org?.name ?? mount.organizationId],
-							),
-							...(org?.slug ? [h.span([h.Class("text-muted-fg text-xs")], [org.slug])] : []),
+							h.span([h.Class("truncate font-medium text-fg text-sm")], [orgName]),
+							...(model.confirmingDisconnectMountId === mount.id
+								? [
+										h.span(
+											[h.Class("text-fg text-xs")],
+											[
+												roles.isGuestLeavingConversation
+													? "Leave this shared channel? Your workspace stops seeing its messages."
+													: `Disconnect ${orgName}? They stop seeing this channel.`,
+											],
+										),
+									]
+								: org?.slug
+									? [h.span([h.Class("text-muted-fg text-xs")], [org.slug])]
+									: []),
 						],
 					),
 				],
 			),
-			roles.canDisconnect
-				? button(
-						h,
-						{
-							intent: "outline",
-							size: "sm",
-							isDisabled: isDisconnecting,
-							onPress: Message.ClickedDisconnect({ mountId: mount.id }),
-						},
-						[isDisconnecting ? busyLabel : idleLabel],
-					)
-				: h.span([h.Class("text-muted-fg text-xs")], ["Managed by host workspace"]),
+			!roles.canDisconnect
+				? h.span([h.Class("shrink-0 text-muted-fg text-xs")], ["Managed by host workspace"])
+				: model.confirmingDisconnectMountId === mount.id
+					? h.div(
+							[h.Class("flex shrink-0 items-center gap-2")],
+							[
+								button(
+									h,
+									{
+										intent: "outline",
+										size: "sm",
+										onPress: Message.ClickedCancelDisconnect(),
+									},
+									["Cancel"],
+								),
+								button(
+									h,
+									{
+										intent: "danger",
+										size: "sm",
+										onPress: Message.ClickedConfirmDisconnect({ mountId: mount.id }),
+										attributes: [
+											h.AriaLabel(
+												roles.isGuestLeavingConversation
+													? "Confirm leave shared channel"
+													: `Confirm disconnect ${orgName}`,
+											),
+										],
+									},
+									[roles.isGuestLeavingConversation ? "Leave" : "Disconnect"],
+								),
+							],
+						)
+					: button(
+							h,
+							{
+								intent: "outline",
+								size: "sm",
+								className: "shrink-0",
+								isDisabled: isDisconnecting,
+								isPending: isDisconnecting,
+								onPress: Message.ClickedDisconnect({ mountId: mount.id }),
+							},
+							[isDisconnecting ? busyLabel : idleLabel],
+						),
 		],
 	)
 }

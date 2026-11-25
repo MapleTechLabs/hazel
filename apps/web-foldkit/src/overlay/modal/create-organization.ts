@@ -1,6 +1,5 @@
 import { Effect, Schema } from "effect"
 import { Command, Submodel } from "foldkit"
-import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 import { IconServers } from "../../icons"
@@ -9,7 +8,7 @@ import { HazelRpc } from "../../rpc"
 import { button } from "../../ui/button"
 import { dialogBody, dialogFooter, dialogHeader } from "../../ui/dialog"
 import { inputGroup } from "../../ui/input"
-import { textField, type TextFieldParts } from "../../ui/text-field"
+import { textField } from "../../ui/text-field"
 import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
 import * as Requests from "./requests"
@@ -83,13 +82,13 @@ const CreateOrganization = Command.define("CreateOrganization", {
 		),
 })
 
-/** arktype `"string > 2"`, worded as arktype reports it. */
-const validateLength = (key: string, value: string) =>
-	value.length > 2 ? null : `${key} must be more than length 2 (was ${value.length})`
+/** arktype `"string > 2"` (the API's rule), worded for the user. */
+const validateLength = (field: string, value: string) =>
+	value.length > 2 ? null : `${field} must be at least 3 characters`
 
 const validate = (name: string, slug: string): Errors => ({
-	name: validateLength("name", name),
-	slug: validateLength("slug", slug),
+	name: validateLength("Server name", name),
+	slug: validateLength("Server slug", slug),
 })
 
 const hasErrors = (errors: Errors) => errors.name !== null || errors.slug !== null
@@ -130,24 +129,6 @@ const update = (model: Model, message: Message): Return =>
 		}),
 	})
 
-/**
- * Legacy passes no `isInvalid` to the TextField, so React Aria's FieldError never renders: only the
- * Input's `aria-invalid` (and the `data-invalid` React Aria derives from it) reflects the error.
- */
-const fieldInput = <Message>(
-	h: HtmlBuilder<Message>,
-	field: TextFieldParts<Message>,
-	placeholder: string,
-	error: string | null,
-): Html =>
-	field.input({
-		placeholder,
-		attributes: [
-			h.Attribute("aria-invalid", error !== null ? "true" : "false"),
-			...(error !== null ? [h.DataAttribute("invalid", "true")] : []),
-		],
-	})
-
 const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _inputs, h) =>
 	frameView(
 		h,
@@ -155,11 +136,8 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 		{ size: "lg" },
 		() => [
 			dialogHeader(h, {}, [
-				modalTitle(h, model.frame, "Create a new Server"),
-				modalDescription(
-					h,
-					"Give your server a name and optional slug to create a new organization.",
-				),
+				modalTitle(h, model.frame, "Create a server"),
+				modalDescription(h, "Give your server a name and a URL slug."),
 			]),
 			h.form(
 				[h.OnSubmit(Message.SubmittedForm())],
@@ -173,13 +151,15 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 									id: `${ID}-name`,
 									value: model.name,
 									onInput: (value) => Message.ChangedName({ value }),
+									isInvalid: model.errors.name !== null,
 								},
 								(field) => [
-									field.label(["Server Name"]),
+									field.label(["Server name"]),
 									inputGroup(h, { attributes: [h.Role("presentation")] }, [
 										IconServers(h, { className: "text-muted-fg" }),
-										fieldInput(h, field, "Acme Corp", model.errors.name),
+										field.input({ placeholder: "Acme Corp" }),
 									]),
+									field.fieldError([model.errors.name ?? ""]),
 								],
 							),
 							textField(
@@ -188,15 +168,17 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 									id: `${ID}-slug`,
 									value: model.slug,
 									onInput: (value) => Message.ChangedSlug({ value }),
+									isInvalid: model.errors.slug !== null,
 								},
 								(field) => [
-									field.label(["Server Slug"]),
+									field.label(["Server slug"]),
 									inputGroup(h, { attributes: [h.Role("presentation")] }, [
-										fieldInput(h, field, "acme-corp", model.errors.slug),
+										field.input({ placeholder: "acme-corp" }),
 									]),
 									field.description([
 										"A unique identifier for your server URL (e.g., yourapp.com/acme-corp)",
 									]),
+									field.fieldError([model.errors.slug ?? ""]),
 								],
 							),
 						],

@@ -228,6 +228,8 @@ export const activityTab = (h: HtmlBuilder<Message>, model: Model, context: Cont
 		hasMore: model.events.nextCursor !== null,
 		label: "Show older events",
 		onMore: Message.PressedMoreEvents(),
+		isEmpty: items.length === 0,
+		failure: "Couldn't load events.",
 	})
 	return [
 		yearCalendar(h, model),

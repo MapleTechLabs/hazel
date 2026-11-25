@@ -229,7 +229,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 		{ size: "lg" },
 		() => [
 			dialogHeader(h, {}, [
-				modalTitle(h, model.frame, "Edit Application"),
+				modalTitle(h, model.frame, "Edit application"),
 				dialogDescription(h, "Update your application settings and permissions"),
 			]),
 			h.form(
@@ -273,7 +273,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 								isDisabled: isBotSubmitDisabled(model),
 								attributes: [h.Type("submit")],
 							},
-							[model.isSubmitting ? "Saving..." : "Save Changes"],
+							[model.isSubmitting ? "Saving..." : "Save changes"],
 						),
 					]),
 				],

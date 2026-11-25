@@ -75,9 +75,8 @@ const CreateChannel = Command.define("CreateChannel", {
 		),
 })
 
-/** arktype `name: "string > 2"`, worded as arktype reports it. */
-const validateName = (name: string) =>
-	name.length > 2 ? null : `name must be more than length 2 (was ${name.length})`
+/** arktype `name: "string > 2"` (the API's rule), worded for the user. */
+const validateName = (name: string) => (name.length > 2 ? null : "Channel name must be at least 3 characters")
 
 const ID = "create-channel-modal"
 
@@ -170,28 +169,18 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 									id: `${ID}-name`,
 									value: model.name,
 									onInput: (value) => Message.ChangedName({ value }),
+									isInvalid: model.nameError !== null,
 								},
 								(field) => [
-									field.label(["Channel Name"]),
+									field.label(["Channel name"]),
 									inputGroup(h, { attributes: [h.Role("presentation")] }, [
 										IconHashtag(h),
-										// Only the input is invalid: React Aria never renders the FieldError here.
-										field.input({
-											placeholder: "general",
-											attributes: [
-												h.Attribute(
-													"aria-invalid",
-													model.nameError === null ? "false" : "true",
-												),
-												...(model.nameError === null
-													? []
-													: [h.Attribute("data-invalid", "true")]),
-											],
-										}),
+										field.input({ placeholder: "general" }),
 									]),
+									field.fieldError([model.nameError ?? ""]),
 								],
 							),
-							label(h, {}, ["Channel Type"]),
+							label(h, {}, ["Channel type"]),
 							h.submodel({
 								slotId: `${ID}-type`,
 								model: model.channelType,

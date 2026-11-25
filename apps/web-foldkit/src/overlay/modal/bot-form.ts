@@ -29,14 +29,12 @@ export const initBotForm = (
 	isSubmitting: false,
 })
 
-/** arktype `name: "1<string<101"`, worded as arktype reports it. */
+/** arktype `name: "1<string<101"` (the API's rule), worded for the user. */
 export const validateBotName = (name: string) =>
 	name.length < 2
-		? name.length === 0
-			? "name must be at least length 2"
-			: `name must be at least length 2 (was ${name.length})`
+		? "Name must be at least 2 characters"
 		: name.length > 100
-			? `name must be at most length 100 (was ${name.length})`
+			? "Name must be 100 characters or less"
 			: null
 
 // Spread, not modifyFields: it cannot evolve a generic model. Every change revalidates the schema.
@@ -100,18 +98,15 @@ export const botFormFields = <Message>(
 	const { form } = options
 	const isNameInvalid = form.nameError !== null
 	return [
-		textField(h, { id: `${options.id}-name`, value: form.name, onInput: options.onName }, (field) => [
-			field.label(["Name"]),
-			field.input({
-				placeholder: "My Bot",
-				// Legacy passes aria-invalid to the Input itself; the TextField is never invalid.
-				attributes: [
-					h.Attribute("aria-invalid", isNameInvalid ? "true" : "false"),
-					...(isNameInvalid ? [h.DataAttribute("invalid", "true")] : []),
-				],
-			}),
-			field.fieldError([form.nameError ?? ""]),
-		]),
+		textField(
+			h,
+			{ id: `${options.id}-name`, value: form.name, onInput: options.onName, isInvalid: isNameInvalid },
+			(field) => [
+				field.label(["Name"]),
+				field.input({ placeholder: "My bot" }),
+				field.fieldError([form.nameError ?? ""]),
+			],
+		),
 		textField(
 			h,
 			{ id: `${options.id}-description`, value: form.description, onInput: options.onDescription },

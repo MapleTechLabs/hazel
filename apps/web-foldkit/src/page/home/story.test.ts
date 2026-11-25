@@ -123,6 +123,22 @@ describe("org home directory", () => {
 		)
 	})
 
+	test("View profile opens the member's profile", () => {
+		story(
+			pageUpdate,
+			given(withOpenMenu(grace)),
+			message(
+				menuMessage(grace, Menu.Message.ClickedItem({ key: "view-profile", entries: menuEntries })),
+			),
+			expectOutMessage(
+				PageOutMessage.RequestedNavigation({
+					route: routeOfPath(`/hazel/profile/${grace}`),
+					replace: false,
+				}),
+			),
+		)
+	})
+
 	test("Message opens an existing DM", () => {
 		story(
 			pageUpdate,

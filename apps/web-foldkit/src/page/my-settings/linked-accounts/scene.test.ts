@@ -21,6 +21,7 @@ const route = {
 }
 const link = Scene.role("button", { name: "Link Discord" })
 const unlink = Scene.role("button", { name: "Unlink" })
+const confirmUnlink = Scene.role("button", { name: /^Unlink (Discord|Slack)$/ })
 const active = Message.UpdatedConnections({
 	connections: { discord: { status: "active", externalAccountName: "ada#1815" }, slack: null },
 })
@@ -68,6 +69,7 @@ describe("discord card", () => {
 			Scene.given(init(route).model),
 			Scene.Subscription.emit(active),
 			Scene.click(unlink),
+			Scene.click(confirmUnlink),
 			Scene.Command.expectExact(Disconnect({ orgId: organizationId, provider: "discord" })),
 			Scene.expect(Scene.role("button", { name: "Unlinking..." })).toBeDisabled(),
 			Scene.Command.resolve(Disconnect, Message.SucceededDisconnect({ provider: "discord" })),
@@ -89,6 +91,7 @@ describe("discord card", () => {
 			Scene.given(init(route).model),
 			Scene.Subscription.emit(active),
 			Scene.click(unlink),
+			Scene.click(confirmUnlink),
 			Scene.Command.resolve(
 				Disconnect,
 				Message.FailedDisconnect({ provider: "discord", reason: "NotConnected" }),
@@ -151,6 +154,7 @@ describe("slack card", () => {
 			Scene.expect(Scene.text(/Linked as ada\. Synced Slack messages/)).toExist(),
 			Scene.expect(link).toBeEnabled(),
 			Scene.click(unlink),
+			Scene.click(confirmUnlink),
 			Scene.Command.expectExact(Disconnect({ orgId: organizationId, provider: "slack" })),
 			Scene.Command.resolve(Disconnect, Message.SucceededDisconnect({ provider: "slack" })),
 			Scene.expectOutMessage(

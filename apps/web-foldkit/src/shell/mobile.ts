@@ -98,7 +98,7 @@ export const mobileNav = <Message>(
 						count: unreadNotificationCount,
 						isCapped: true,
 						className:
-							"absolute -top-1 -right-2 h-4 min-w-4 bg-danger px-1 font-semibold text-3xs text-white leading-none",
+							"absolute -top-1 -right-2 h-4 min-w-4 bg-danger px-1 font-semibold text-3xs text-danger-fg leading-none",
 						// The native tab shows the count as its badge, not in its title.
 						attributes: [h.Attribute("data-native-skip", "")],
 					}),

@@ -1,5 +1,5 @@
 import type { ChannelId } from "@hazel/schema"
-import { Option } from "effect"
+import { Match, Option } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { errorToast, successToast } from "../../data/actions"
@@ -104,12 +104,21 @@ const updateMenu = (model: Model, shared: Shared, member: DirectoryMember, messa
 	)
 	const action: Return = Option.match(selected, {
 		onNone: () => ({ model: next }),
-		onSome: (key) =>
-			key === "message"
-				? requestDm(next, shared, member)
-				: key === "copy-email"
-					? { model: next, commands: [CopyEmail({ email: member.email })] }
-					: { model: next },
+		onSome: (key): Return =>
+			Match.value(key).pipe(
+				Match.when("message", () => requestDm(next, shared, member)),
+				Match.when("view-profile", () => ({
+					model: next,
+					outMessage: requestedOrgNavigation(shared.orgSlug, (orgSlug) =>
+						AppRoute.Profile({ orgSlug, userId: member.id }),
+					),
+				})),
+				Match.when("copy-email", () => ({
+					model: next,
+					commands: [CopyEmail({ email: member.email })],
+				})),
+				Match.orElse(() => ({ model: next })),
+			),
 	})
 	return { ...action, commands: [...menuCommands, ...(action.commands ?? [])] }
 }

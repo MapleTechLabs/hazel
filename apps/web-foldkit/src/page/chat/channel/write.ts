@@ -43,6 +43,7 @@ import {
 	type ThreadCreation,
 	type ThreadPanel,
 } from "./model"
+import * as Jump from "./jump"
 import { loadWidthCommands } from "./thread-width"
 import { ClearChannelNotifications } from "./clear-notifications"
 import { resetWindow } from "./window"
@@ -425,6 +426,14 @@ const draftForMessage = (model: Model, messageId: MessageId): Which =>
 		? "thread"
 		: "channel"
 
+/** The pinned messages popover's unpin: never pins, so a second press on a leaving row does nothing. */
+const unpin = (model: Model, messageId: MessageId): PageReturn => {
+	const pinnedId = pinnedIdOf(model, messageId)
+	return Option.isSome(pinnedId)
+		? { model, commands: actionCommands([UnpinMessage({ pinnedMessageId: pinnedId.value })]) }
+		: { model }
+}
+
 /** `handlePin`: unpin by the pin's id, else pin. */
 const togglePin = (model: Model, messageId: MessageId): PageReturn => {
 	const pinnedId = pinnedIdOf(model, messageId)
@@ -480,7 +489,7 @@ export const viewerAction = (
 		Match.exhaustive,
 	)
 
-/** The context menu's "Add Reaction": the emoji picker modal. */
+/** The context menu's "Add reaction": the emoji picker modal. */
 const openReactionModal = (model: Model, messageId: MessageId): PageReturn => {
 	const opened = Overlays.openReactionModal(model.overlays, messageId)
 	return {
@@ -566,6 +575,8 @@ export const handleOverlaysOut = (model: Model, out: Overlays.OutMessage): PageR
 			return image === undefined ? { model } : viewerAction(model, action, image.url, image.fileName)
 		},
 		RequestedMessageAction: ({ messageId, action }) => messageAction(model, messageId, action),
+		RequestedJump: ({ messageId }) => Jump.toMessage(model, messageId, messageId),
+		RequestedUnpin: ({ messageId }) => unpin(model, messageId),
 	})
 
 /** A reaction or pin on a message that is gone. */
@@ -744,6 +755,19 @@ export const handleActionMessage = (model: Model, message: ActionMessage): PageR
 						SaveFailed: {
 							title: "Update failed",
 							description: "Failed to save the thread name. Please try again.",
+						},
+					}),
+				),
+			),
+		SucceededUnhideConversation: () => withToast(model, successToast("Conversation unhidden")),
+		FailedUnhideConversation: ({ reason }) =>
+			withToast(
+				model,
+				errorToastOf(
+					failureMessage(reason, {
+						MemberNotFound: {
+							title: "Couldn't unhide the conversation",
+							description: "You may no longer be in this conversation.",
 						},
 					}),
 				),

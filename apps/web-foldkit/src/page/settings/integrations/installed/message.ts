@@ -14,6 +14,8 @@ export type UninstallFailure = typeof UninstallFailure.Type
 export const Message = defineMessageUnion({
 	UpdatedBots: { bots: Schema.Array(Bot) },
 	ClickedUninstall: { botId: BotId },
+	ClickedCancelUninstall: {},
+	ClickedConfirmUninstall: { botId: BotId },
 	SucceededUninstallBot: { botId: BotId },
 	FailedUninstallBot: { botId: BotId, reason: UninstallFailure },
 	ClickedBrowseMarketplace: {},

@@ -52,7 +52,7 @@ const rowActions = (h: HtmlBuilder<Message>, row: RowMenu, isRevoking: boolean):
 				),
 			content: (key) => [
 				IconClose(h, { attributes: { "data-slot": "icon" } }),
-				menuLabel(h, row.menu.id, key, isRevoking ? "Revoking..." : "Revoke Invitation"),
+				menuLabel(h, row.menu.id, key, isRevoking ? "Revoking..." : "Revoke invitation"),
 			],
 		},
 		toParentMessage: (message: Menu.Message) =>

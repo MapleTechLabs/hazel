@@ -30,7 +30,7 @@ describe("your apps", () => {
 			Scene.given(init().model),
 			Scene.Subscription.emit(Message.UpdatedBots({ bots: [] })),
 			Scene.expect(Scene.text("No applications yet")).toExist(),
-			Scene.click(Scene.role("button", { name: /Create Application$/ })),
+			Scene.click(Scene.role("button", { name: /Create application$/ })),
 			Scene.expectOutMessage(PageOutMessage.RequestedModal({ modal: { _tag: "CreateBot" } })),
 		)
 	})

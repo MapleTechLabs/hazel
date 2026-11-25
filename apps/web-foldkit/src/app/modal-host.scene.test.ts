@@ -47,7 +47,7 @@ const withCreateSection = after(signedIn("/hazel/chat"), [
 	),
 ])
 
-const dialog = role("dialog", { name: "Create a new Section" })
+const dialog = role("dialog", { name: "Create section" })
 const mounted = [
 	Mount.resolve(FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress()),
 	Mount.resolve(FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress()),
@@ -64,10 +64,10 @@ describe("modal host", () => {
 			rootScene,
 			given(withCreateSection),
 			...mounted,
-			type(label("Section Name"), "D"),
-			sceneExpect(label("Section Name")).toHaveAttr("aria-invalid", "true"),
+			type(label("Section name"), "D"),
+			sceneExpect(label("Section name")).toHaveAttr("aria-invalid", "true"),
 			sceneExpect(role("button", { name: "Create section" })).toBeDisabled(),
-			type(label("Section Name"), "Design"),
+			type(label("Section name"), "Design"),
 			submit(within(dialog, selector("form"))),
 			Command.expectExact(CreateSection.CreateSection({ name: "Design", organizationId: hazelOrg.id })),
 			sceneExpect(role("button", { name: "Creating..." })).toBeDisabled(),
@@ -86,7 +86,7 @@ describe("modal host", () => {
 			rootScene,
 			given(withCreateSection),
 			...mounted,
-			type(label("Section Name"), "Design"),
+			type(label("Section name"), "Design"),
 			submit(within(dialog, selector("form"))),
 			Command.resolve(
 				CreateSection.CreateSection,
@@ -121,7 +121,7 @@ describe("modal host", () => {
 				Menu.Message.ClickedItem({ key: "feedback", entries: userMenuEntries("hazel", ada.id) }),
 			),
 		])
-		const feedback = role("dialog", { name: "Send Feedback" })
+		const feedback = role("dialog", { name: "Send feedback" })
 		scene(
 			rootScene,
 			given(withFeedback),

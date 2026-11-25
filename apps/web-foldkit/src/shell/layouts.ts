@@ -145,6 +145,7 @@ export const channelSettingsLayout = <Message>(
 											h.Class(
 												"w-full appearance-none rounded-lg border border-input bg-bg px-[calc(--spacing(3.5)-1px)] py-[calc(--spacing(2.5)-1px)] text-base/6 text-fg outline-hidden focus:border-ring/70 focus:ring-3 focus:ring-ring/20 sm:px-[calc(--spacing(3)-1px)] sm:py-[calc(--spacing(1.5)-1px)] sm:text-sm/6",
 											),
+											h.AriaLabel("Channel settings section"),
 											h.Value(options.selectedTab),
 											options.onChangeTab((tab) =>
 												tabRoute(

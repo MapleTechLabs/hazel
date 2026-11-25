@@ -385,7 +385,7 @@ const hazelSection = (h: HtmlBuilder<Message>, model: Model, provider: ChatSyncP
 	h.div(
 		[h.Class("flex flex-col gap-2")],
 		[
-			sectionLabel(h, "Hazel Channel", [
+			sectionLabel(h, "Hazel channel", [
 				segmented(h, {
 					ariaLabel: "Hazel channel",
 					segments: hazelModes,
@@ -441,7 +441,7 @@ const directionSection = (h: HtmlBuilder<Message>, model: Model, provider: ChatS
 	h.div(
 		[h.Class("flex flex-col gap-2")],
 		[
-			sectionLabel(h, "Sync Direction"),
+			sectionLabel(h, "Sync direction"),
 			segmented(h, {
 				ariaLabel: "Sync direction",
 				segments: (["both", "hazel_to_external", "external_to_hazel"] as const).map((value) => ({
@@ -475,7 +475,7 @@ const historySection = (h: HtmlBuilder<Message>, model: Model, provider: ChatSyn
 	h.div(
 		[h.Class("flex flex-col gap-2")],
 		[
-			sectionLabel(h, "Message History"),
+			sectionLabel(h, "Message history"),
 			segmented(h, {
 				ariaLabel: "Message history to import",
 				segments: HistoryImport.literals.map((value) => ({ value, label: HISTORY_LABELS[value] })),
@@ -492,7 +492,7 @@ const historySection = (h: HtmlBuilder<Message>, model: Model, provider: ChatSyn
 const submitLabel = (model: Model): string => {
 	if (model.submission._tag === "CreatingChannel") return "Creating channel..."
 	if (model.submission._tag === "Submitting") return "Linking..."
-	return model.hazelChannelMode === "new" ? "Create and link" : "Link Channel"
+	return model.hazelChannelMode === "new" ? "Create and link" : "Link channel"
 }
 
 const content = (
@@ -504,7 +504,7 @@ const content = (
 	const submitting = isSubmitting(model)
 	return [
 		dialogHeader(h, {}, [
-			dialogTitle(h, { id: Modal.titleId(model.addLinkModal.id) }, "Link Channel"),
+			dialogTitle(h, { id: Modal.titleId(model.addLinkModal.id) }, "Link channel"),
 			dialogDescription(
 				h,
 				`Mirror messages between a ${PROVIDERS[provider].name} channel and a Hazel channel.`,

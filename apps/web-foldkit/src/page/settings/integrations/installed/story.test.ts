@@ -24,6 +24,8 @@ describe("installed apps", () => {
 			update,
 			given(initial),
 			message(Message.ClickedUninstall({ botId })),
+			Command.expectNone(),
+			message(Message.ClickedConfirmUninstall({ botId })),
 			Command.expectExact(UninstallBot({ botId, organizationId })),
 			Command.resolve(UninstallBot, Message.FailedUninstallBot({ botId, reason: "NotFound" })),
 			expectOutMessage(PageOutMessage.RequestedToast({ toast })),
@@ -37,6 +39,7 @@ describe("installed apps outcomes", () => {
 			update,
 			given(initial),
 			message(Message.ClickedUninstall({ botId })),
+			message(Message.ClickedConfirmUninstall({ botId })),
 			Command.resolve(UninstallBot, Message.SucceededUninstallBot({ botId })),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({
@@ -66,11 +69,20 @@ describe("installed apps outcomes", () => {
 		)
 	})
 
-	test("a second Uninstall while uninstalling sends nothing; a settled one can run again", () => {
-		const uninstalling = update(initial, Message.ClickedUninstall({ botId })).model
-		expect(update(uninstalling, Message.ClickedUninstall({ botId })).commands ?? []).toHaveLength(0)
+	test("a second confirm while uninstalling sends nothing; a settled one can run again", () => {
+		const uninstall = (model: typeof initial) =>
+			update(
+				update(model, Message.ClickedUninstall({ botId })).model,
+				Message.ClickedConfirmUninstall({ botId }),
+			)
+		const uninstalling = uninstall(initial).model
+		expect(uninstall(uninstalling).commands ?? []).toHaveLength(0)
 		const failed = update(uninstalling, Message.FailedUninstallBot({ botId, reason: "NotFound" })).model
 		expect(failed.uninstallingBotIds).toEqual([])
-		expect(update(failed, Message.ClickedUninstall({ botId })).commands ?? []).toHaveLength(1)
+		expect(uninstall(failed).commands ?? []).toHaveLength(1)
+	})
+
+	test("a confirm without a pending ask does nothing", () => {
+		expect(update(initial, Message.ClickedConfirmUninstall({ botId })).commands ?? []).toHaveLength(0)
 	})
 })

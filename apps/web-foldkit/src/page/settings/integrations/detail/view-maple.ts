@@ -2,7 +2,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { button, buttonClassName } from "../../../../ui/button"
 import { callout } from "../../../../ui/callout"
 import type { MapleInstall } from "./model"
-import { sectionCard, steps } from "./view-connection"
+import { removalConfirm, sectionCard, steps } from "./view-connection"
 
 /**
  * Maple is two things in Hazel, both through one bot: an AI agent you ask in a channel (installed
@@ -72,7 +72,10 @@ const installedNote = <M>(h: HtmlBuilder<M>): Html =>
 export interface MapleColumnOptions<M> {
 	readonly install: MapleInstall | null
 	readonly isUninstalling: boolean
+	readonly isConfirming: boolean
 	readonly onUninstall: M
+	readonly onConfirmUninstall: M
+	readonly onCancel: M
 }
 
 const installedActions = <M>(h: HtmlBuilder<M>, options: MapleColumnOptions<M>, install: MapleInstall) => {
@@ -82,18 +85,33 @@ const installedActions = <M>(h: HtmlBuilder<M>, options: MapleColumnOptions<M>, 
 			[h.Class("flex flex-wrap items-center gap-3")],
 			[
 				linkButton(h, mapleIntegrationUrl(region ?? "us"), "Manage in Maple", "outline"),
-				button(
-					h,
-					{
-						intent: "danger",
-						size: "sm",
-						onPress: options.onUninstall,
-						isDisabled: options.isUninstalling,
-					},
-					[options.isUninstalling ? "Removing..." : "Remove from workspace"],
-				),
+				...(options.isConfirming
+					? []
+					: [
+							button(
+								h,
+								{
+									intent: "outline",
+									size: "sm",
+									onPress: options.onUninstall,
+									isDisabled: options.isUninstalling,
+									isPending: options.isUninstalling,
+								},
+								[options.isUninstalling ? "Removing..." : "Remove from workspace"],
+							),
+						]),
 			],
 		),
+		...(options.isConfirming
+			? [
+					removalConfirm(h, {
+						question: "Remove Maple from this workspace? @Maple stops answering in its channels.",
+						confirmLabel: "Remove Maple",
+						onConfirm: options.onConfirmUninstall,
+						onCancel: options.onCancel,
+					}),
+				]
+			: []),
 		// An install that names its region links straight there; an older one offers both.
 		...(region === null ? [euLink(h, mapleIntegrationUrl("eu"), "Manage in Maple EU")] : []),
 	]
