@@ -11,6 +11,7 @@ import { after, signedIn } from "../test/root-fixtures"
 import { ApplyBadge } from "./command"
 import { Message } from "./message"
 import { badgeOfModel } from "./model"
+import { subscriptions } from "./subscription"
 import { documentTitleOf } from "./view"
 
 const notificationId = (n: number) =>
@@ -61,7 +62,7 @@ describe("the badge", () => {
 			Message.UpdatedUnreadMentions({ ids }),
 			Message.GotShellMessage({
 				message: Shell.Message.GotNotificationsMessage({
-					message: Notifications.Message.UpdatedUnreadNotifications({ ids }),
+					message: Notifications.Message.UpdatedUnreadNotifications({ ids, mentionIds: ids }),
 				}),
 			}),
 			Message.GotShellMessage({
@@ -80,5 +81,33 @@ describe("the badge", () => {
 		expect(documentTitleOf(m)).toBe("(3) Chat · Hazel")
 		expect(documentTitleOf(after(signedIn("/hazel/chat"), [unreadChannel(null)]))).toBe("• Chat · Hazel")
 		expect(documentTitleOf(signedIn("/hazel/chat"))).toBe("Chat · Hazel")
+	})
+
+	test("the unread dot stays on every page of the organization, Settings included", () => {
+		const onChat = after(signedIn("/hazel/chat"), [unreadChannel(null)])
+		const settings = after(signedIn("/hazel/settings/team"), [unreadChannel(null)])
+		expect(documentTitleOf(onChat)).toBe("• Chat · Hazel")
+		expect(documentTitleOf(settings)).toMatch(/^• /)
+		// The unread channels' query runs there too, not only beside the chat sidebar.
+		const dependencies = (path: string) =>
+			JSON.stringify(subscriptions.sidebarUnreadChannels.modelToDependencies(signedIn(path)))
+		expect(dependencies("/hazel/settings/team")).toBe(dependencies("/hazel/chat"))
+		expect(dependencies("/hazel/settings/team")).toContain("organizationId")
+	})
+
+	test("the bell counts unread mentions only, as the title does", () => {
+		const m = after(signedIn("/hazel/chat"), [
+			Message.GotShellMessage({
+				message: Shell.Message.GotNotificationsMessage({
+					message: Notifications.Message.UpdatedUnreadNotifications({
+						ids: [notificationId(1), notificationId(2), notificationId(3)],
+						mentionIds: [notificationId(1)],
+					}),
+				}),
+			}),
+		])
+		expect(m.shell.notifications.unreadMentionIds).toEqual([notificationId(1)])
+		// "Mark all as read" still reads every unread row.
+		expect(Notifications.unreadIdsOf(m.shell.notifications)).toHaveLength(3)
 	})
 })
