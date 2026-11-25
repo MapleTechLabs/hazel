@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest"
-import { makePushRegistration, type PushApi, type PushHost, type PushToken } from "./push"
+import {
+	makeLiveApi,
+	makePushRegistration,
+	type PushApi,
+	type PushHost,
+	type PushToken,
+	type WithRpc,
+} from "./push"
 
 const TOKEN: PushToken = { token: "abcdef0123456789", bundleId: "hazel.app", environment: "production" }
 const ACCOUNT = { api: "https://api.hazel.sh", userId: "00000000-0000-4000-8000-000000000001" }
 
-const make = (options: { signedIn?: boolean; host?: Partial<PushHost> } = {}) => {
+const make = (options: { signedIn?: boolean; host?: Partial<PushHost>; api?: Partial<PushApi> } = {}) => {
 	const calls: Array<string> = []
 	let signedIn = options.signedIn ?? true
 	const host: PushHost = {
@@ -25,6 +32,7 @@ const make = (options: { signedIn?: boolean; host?: Partial<PushHost> } = {}) =>
 		unregister: async (token) => {
 			calls.push(`api.unregister ${token}`)
 		},
+		...options.api,
 	}
 	const registration = makePushRegistration({ host, api, log: () => undefined })
 	return { calls, registration, signIn: () => (signedIn = true) }
@@ -165,5 +173,31 @@ describe("push registration", () => {
 			"host.forget",
 		])
 		expect(registration.isRegistered()).toBe(false)
+	})
+
+	it("a register the API skipped while signed out is not counted, so the retry sends it again", async () => {
+		const signedOut: WithRpc = async () => null
+		const liveRegister = makeLiveApi(signedOut, async () => ACCOUNT.api).register
+		await expect(liveRegister(TOKEN)).rejects.toThrow("signed out")
+
+		let sessionGone = true
+		const { calls, registration } = make({
+			api: {
+				register: async (token) => {
+					if (sessionGone) return liveRegister(token)
+					calls.push(`api.register ${token.token}`)
+				},
+			},
+		})
+		await registration.ensure()
+		expect(registration.isRegistered()).toBe(false)
+		sessionGone = false
+		await registration.retry()
+		expect(registration.isRegistered()).toBe(true)
+		expect(calls).toEqual([
+			`host.register ${ACCOUNT.api} ${ACCOUNT.userId}`,
+			`host.register ${ACCOUNT.api} ${ACCOUNT.userId}`,
+			`api.register ${TOKEN.token}`,
+		])
 	})
 })
