@@ -371,6 +371,17 @@ const headerLinks = (
 	syncProvider: syncProvider ?? shared.syncProvider,
 })
 
+/**
+ * The header's clock: to the minute, so the 30 s ticks keep its memo, or the bell's mute end once it
+ * has passed within the minute, so the bell unmutes when the sidebar row does.
+ */
+const headerClockOf = (model: Model, nowMs: number): number => {
+	const minuteMs = Math.floor(nowMs / 60_000) * 60_000
+	const mutedUntilMs =
+		(model.members ?? []).find((member) => member.userId === model.currentUserId)?.mutedUntilMs ?? null
+	return mutedUntilMs !== null && mutedUntilMs > minuteMs && mutedUntilMs <= nowMs ? mutedUntilMs : minuteMs
+}
+
 const headerView = (
 	channel: Model["channel"],
 	parentChannel: Model["parentChannel"],
@@ -385,7 +396,7 @@ const headerView = (
 	isMobile: boolean,
 	channelLinks: ChannelLinksMap,
 	notificationControl: Model["notificationControl"],
-	/** The clock to the minute: a timed mute's end shows on the bell. */
+	/** The clock to the minute, or the bell's mute end (`headerClockOf`). */
 	minuteMs: number,
 	h: H,
 ): Html => {
@@ -527,7 +538,7 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 						options.isMobile ?? false,
 						options.channelLinks ?? NO_CHANNEL_LINKS_MAP,
 						model.notificationControl,
-						Math.floor(nowMs / 60_000) * 60_000,
+						headerClockOf(model, nowMs),
 						h,
 					]) ?? h.empty,
 					customerCardView(h, model, options.isMobile ?? false, nowMs),

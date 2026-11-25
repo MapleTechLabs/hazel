@@ -14,7 +14,7 @@ import { settingsRow } from "../shared"
 import { Message } from "./message"
 import * as Organization from "./organization"
 import * as Overrides from "./overrides"
-import { type Model, settingsOf, type SoundFile, type SoundSettings } from "./model"
+import { type Model, organizationSettingsOf, settingsOf, type SoundFile, type SoundSettings } from "./model"
 import { interaction, toQuietHoursMessage, toVolumeMessage } from "./update"
 
 /** Port of `routes/_app/$orgSlug/my-settings/notifications.tsx`. */
@@ -282,7 +282,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 										},
 										Organization.view(
 											h,
-											model.organizationSettings,
+											organizationSettingsOf(model),
 											shared.nowMs,
 											(change) => Message.ChangedOrganizationSettings({ change }),
 										),

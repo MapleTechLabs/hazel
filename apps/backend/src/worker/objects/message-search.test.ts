@@ -13,6 +13,7 @@ import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/d
 import { resolveTarget } from "../../rpc/routing"
 import { Directory } from "../../services/directory"
 import { channelTarget, formatTarget, orgTarget, userTarget } from "./kinds"
+import { fillChannelActivity } from "./org/channel-activity"
 import {
 	BACKFILL_TIMEOUT_MS,
 	parseSnippet,
@@ -447,8 +448,37 @@ describe("message search", () => {
 				)
 				expect(lastReadOf(general)).not.toBeNull()
 				expect(lastReadOf(random)).toBeNull()
+				// A channel whose newest message is ahead of the clock is read up to it; the others to now.
+				const ahead = "2099-01-01 00:00:00.000"
+				a.object.storage.db
+					.prepare(`UPDATE channel_activity SET lastMessageAt = ? WHERE channelId = ?`)
+					.run(ahead, random)
 				ok(yield* call(a.object, a.id, "channelMember.markAllRead", { organizationId: a.id }, a1))
-				expect(lastReadOf(random)).not.toBeNull()
+				expect(lastReadOf(random)).toBe(ahead)
+				expect(lastReadOf(general)! < ahead).toBe(true)
+
+				// An object older than the tables fills each channel's newest message once, in one
+				// grouped read; a row already there is kept.
+				const third = yield* send(world, general, a1, "third")
+				yield* settle([a.object, generalObject])
+				const db = a.object.storage.db
+				db.prepare(`DELETE FROM channel_activity WHERE channelId = ?`).run(general)
+				db.prepare(`DELETE FROM _object_meta WHERE key = 'channelActivityVersion'`).run()
+				yield* a.object.run(fillChannelActivity)
+				expect(activityOf(general)).toEqual({ lastMessageId: third, lastMessageAuthorId: a1 })
+				expect(
+					(
+						db
+							.prepare(`SELECT lastMessageAt FROM channel_activity WHERE channelId = ?`)
+							.get(random) as {
+							lastMessageAt: string
+						}
+					).lastMessageAt,
+				).toBe(ahead)
+				// Once versioned, activation does nothing more.
+				db.prepare(`DELETE FROM channel_activity WHERE channelId = ?`).run(general)
+				yield* a.object.run(fillChannelActivity)
+				expect(activityOf(general)).toBeUndefined()
 
 				// Marking all read is for the org's members only.
 				const outsider = world.b1

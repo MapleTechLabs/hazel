@@ -95,29 +95,19 @@ export const organizationSettingsStream = <M>(
 		},
 	)
 
-/** `channelMember.setScopeNotifications` for the organization: only the fields that change. */
-interface OrganizationPayload {
-	organizationId: OrganizationId
-	scope: "organization"
-	scopeId: string
-	level?: NotificationLevel | null
-	suppressEveryone?: boolean
-	isMuted?: boolean
-	mutedUntil?: Date | null
-}
-
-/** The RPC payload of one change (only its fields); a timed mute ends `minutes` after `nowMs`. */
-export const payloadOf = (organizationId: OrganizationId, change: Change, nowMs: number) => {
-	const payload: OrganizationPayload = { organizationId, scope: "organization", scopeId: organizationId }
-	if (change.level !== undefined) payload.level = change.level
-	if (change.suppressEveryone !== undefined) payload.suppressEveryone = change.suppressEveryone
-	if (change.mute !== undefined) {
-		payload.isMuted = change.mute === null
-		payload.mutedUntil =
-			change.mute === null || change.mute === "off" ? null : new Date(nowMs + change.mute * 60_000)
-	}
-	return payload
-}
+/**
+ * `channelMember.setScopeNotifications` for the organization: the whole snapshot the user chose,
+ * so writes sent one after another leave the latest choice standing.
+ */
+export const payloadOf = (organizationId: OrganizationId, settings: OrganizationSettings) => ({
+	organizationId,
+	scope: "organization" as const,
+	scopeId: organizationId,
+	level: settings.level,
+	suppressEveryone: settings.suppressEveryone,
+	isMuted: settings.isMuted,
+	mutedUntil: settings.mutedUntilMs === null ? null : new Date(settings.mutedUntilMs),
+})
 
 const LEVELS: ReadonlyArray<{ readonly key: NotificationLevel | "default"; readonly label: string }> = [
 	{ key: "default", label: "Default" },
@@ -126,7 +116,7 @@ const LEVELS: ReadonlyArray<{ readonly key: NotificationLevel | "default"; reado
 	{ key: "nothing", label: levelLabels.nothing },
 ]
 
-/** `timed`: muted until a time, which no segment names (the note says until when). */
+/** `timed`: a running timed mute, shown as its own segment ("Until 14:30") while it lasts. */
 type MuteKey = "off" | `${number}` | "forever" | "timed"
 
 const MUTES: ReadonlyArray<{ readonly key: MuteKey; readonly label: string }> = [
@@ -137,8 +127,17 @@ const MUTES: ReadonlyArray<{ readonly key: MuteKey; readonly label: string }> = 
 	})),
 ]
 
+/** The running timed mute's segment: picking it again keeps the deadline it has. */
 const muteOfKey = (key: MuteKey): Change["mute"] =>
-	key === "off" ? "off" : key === "forever" || key === "timed" ? null : Number(key)
+	key === "off" ? "off" : key === "forever" ? null : key === "timed" ? undefined : Number(key)
+
+/** The mute segments and the selected one; a running timed mute adds a segment saying until when. */
+export const muteSegmentsOf = (settings: OrganizationSettings, nowMs: number) => {
+	if (!isMutedNow(settings, nowMs)) return { segments: MUTES, selected: "off" as MuteKey }
+	if (settings.isMuted) return { segments: MUTES, selected: "forever" as MuteKey }
+	const until = (muteStatusOf(settings, nowMs) ?? "").replace("Muted until ", "Until ")
+	return { segments: [...MUTES, { key: "timed" as MuteKey, label: until }], selected: "timed" as MuteKey }
+}
 
 export const view = <M>(
 	h: HtmlBuilder<M>,
@@ -146,8 +145,8 @@ export const view = <M>(
 	nowMs: number,
 	toMessage: (change: Change) => M,
 ): Html => {
-	const isMuted = isMutedNow(settings, nowMs)
 	const status = muteStatusOf(settings, nowMs)
+	const mutes = muteSegmentsOf(settings, nowMs)
 	return h.div(
 		[h.Class("flex flex-col gap-6")],
 		[
@@ -177,8 +176,8 @@ export const view = <M>(
 					),
 					segmented(h, {
 						ariaLabel: "Mute this organization",
-						segments: MUTES,
-						selected: !isMuted ? "off" : settings.isMuted ? "forever" : "timed",
+						segments: mutes.segments,
+						selected: mutes.selected,
 						onSelect: (key) => toMessage({ mute: muteOfKey(key) }),
 						className: "flex-wrap",
 					}),
