@@ -154,7 +154,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 		{ size: "lg" },
 		() => [
 			dialogHeader(h, {}, [
-				modalTitle(h, model.frame, "Create a new Channel"),
+				modalTitle(h, model.frame, "Create channel"),
 				modalDescription(h, "Give your channel a name and type to create a new channel."),
 			]),
 			h.form(
