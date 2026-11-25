@@ -12,7 +12,7 @@ export const stripe = defineIntegration({
 	},
 	precedence: { name: 20, logoUrl: 20, email: 20 },
 	capabilities: {
-		billing: { preference: 20, invoices: true, usageFromInvoices: true },
+		billing: { preference: 20, invoices: true, usageFromInvoices: true, trialsNeedPaymentMethod: true },
 		attentionDefault: true,
 	},
 	presentation,
