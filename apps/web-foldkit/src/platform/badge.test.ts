@@ -86,6 +86,59 @@ describe("applyBadge", () => {
 		)
 	})
 
+	/** jsdom draws nothing: an image that loads (or fails) at once, and a canvas that records. */
+	const stubCanvas = (loads: boolean) => {
+		const drawImage = vi.fn()
+		const arc = vi.fn()
+		class FakeImage {
+			naturalWidth = 32
+			naturalHeight = 32
+			onload: (() => void) | null = null
+			onerror: ((cause: unknown) => void) | null = null
+			set src(_value: string) {
+				queueMicrotask(() => (loads ? this.onload?.() : this.onerror?.("broken")))
+			}
+		}
+		vi.stubGlobal("Image", FakeImage)
+		vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+			drawImage,
+			beginPath: vi.fn(),
+			arc,
+			fill: vi.fn(),
+			fillStyle: "",
+		} as unknown as CanvasRenderingContext2D)
+		vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/png;base64,dotted")
+		return { drawImage, arc }
+	}
+	const iconHref = () => document.querySelector<HTMLLinkElement>('link[rel~="icon"]')?.getAttribute("href")
+
+	test("in the browser, mentions draw the red dot once, and the page's favicon comes back at 0", async () => {
+		const { drawImage, arc } = stubCanvas(true)
+		document.head.innerHTML = '<link rel="icon" href="/dot-test.svg" />'
+		await Effect.runPromise(applyBadge({ mentionCount: 2, hasUnread: true }))
+		expect(iconHref()).toBe("data:image/png;base64,dotted")
+		expect(arc).toHaveBeenCalledTimes(1)
+		await Effect.runPromise(applyBadge({ mentionCount: 0, hasUnread: true }))
+		expect(iconHref()).toContain("/dot-test.svg")
+		// The dotted image is cached per original icon: a later mention draws nothing new.
+		await Effect.runPromise(applyBadge({ mentionCount: 1, hasUnread: false }))
+		expect(iconHref()).toBe("data:image/png;base64,dotted")
+		expect(drawImage).toHaveBeenCalledTimes(1)
+		vi.unstubAllGlobals()
+		vi.restoreAllMocks()
+	})
+
+	test("a favicon that fails to load is left as it is", async () => {
+		stubCanvas(false)
+		document.head.innerHTML = '<link rel="icon" href="/broken-test.svg" />'
+		await expect(Effect.runPromise(applyBadge({ mentionCount: 1, hasUnread: false }))).resolves.toBe(
+			undefined,
+		)
+		expect(iconHref()).toContain("/broken-test.svg")
+		vi.unstubAllGlobals()
+		vi.restoreAllMocks()
+	})
+
 	test("in the browser, no mentions keeps the page's own favicon", async () => {
 		document.head.innerHTML = '<link rel="icon" href="/icon.svg" />'
 		await Effect.runPromise(applyBadge({ mentionCount: 0, hasUnread: true }))
