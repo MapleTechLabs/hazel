@@ -23,6 +23,7 @@ export const INBOX_STATES = [
 	"overdue",
 	"on-hold",
 	"closed",
+	"not-support",
 	"inbox-zero",
 	"empty",
 	"loading",
@@ -55,6 +56,8 @@ export const inboxStateModel = (state: typeof State.Type): Model => {
 			)
 		case "closed":
 			return { ...loaded(), tab: "closed" }
+		case "not-support":
+			return { ...loaded(), tab: "filtered" }
 		case "on-hold":
 			return { ...loaded(), tab: "on_hold" }
 		case "overdue":
