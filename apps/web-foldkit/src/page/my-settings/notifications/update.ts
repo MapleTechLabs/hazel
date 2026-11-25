@@ -16,12 +16,13 @@ import {
 	SendTestNotification,
 	UpdateUserSettings,
 } from "./command"
-import { applied, DEFAULTS } from "./organization"
+import { applied, DEFAULTS, type OrganizationSettings } from "./organization"
 import { Message } from "./message"
 import { updateUserFailureCopy } from "../user"
 import {
 	type Model,
 	type NotificationStatus,
+	organizationSettingsOf,
 	type QuietHoursField,
 	settingsOf,
 	type SoundSettings,
@@ -110,6 +111,47 @@ const settleWrite = (
 	}
 }
 
+/** A change to "This organization", shown at once; one write runs at a time, the latest snapshot queued. */
+const withOrganizationSettings = (model: Model, shared: Shared, settings: OrganizationSettings): Return => {
+	const organizationId = shared.organization?.id
+	if (organizationId === undefined) return { model }
+	const next = modifyFields(model, { optimisticOrganizationSettings: () => settings })
+	return model.organizationWrite === "Idle"
+		? {
+				model: modifyFields(next, { organizationWrite: () => "Writing" }),
+				commands: [SaveOrganizationSettings({ organizationId, settings })],
+			}
+		: { model: modifyFields(next, { organizationWrite: () => "WritingWithQueued" }) }
+}
+
+/** An organization write settled: send the queued snapshot, or finish with `settled` as the settings. */
+const settleOrganizationWrite = (
+	model: Model,
+	shared: Shared,
+	settled: (model: Model) => OrganizationSettings,
+): Return => {
+	const organizationId = shared.organization?.id
+	const queued = model.optimisticOrganizationSettings
+	if (model.organizationWrite === "WritingWithQueued" && queued !== null && organizationId !== undefined)
+		return {
+			model: modifyFields(model, { organizationWrite: () => "Writing" }),
+			commands: [SaveOrganizationSettings({ organizationId, settings: queued })],
+		}
+	return {
+		model: modifyFields(model, {
+			organizationSettings: () => settled(model),
+			optimisticOrganizationSettings: () => null,
+			organizationWrite: () => "Idle",
+		}),
+	}
+}
+
+const sameSettings = (a: OrganizationSettings, b: OrganizationSettings) =>
+	a.level === b.level &&
+	a.isMuted === b.isMuted &&
+	a.mutedUntilMs === b.mutedUntilMs &&
+	a.suppressEveryone === b.suppressEveryone
+
 /** Shows the test notification's outcome; `ExpireNotificationStatus` clears it after 3 seconds. */
 const showNotificationStatus = (model: Model, status: NotificationStatus): Return => {
 	const version = model.notificationStatusVersion + 1
@@ -157,6 +199,8 @@ export const init = (): Return => ({
 		notificationStatusVersion: 0,
 		interaction: Interaction.init(),
 		organizationSettings: DEFAULTS,
+		optimisticOrganizationSettings: null,
+		organizationWrite: "Idle",
 	},
 })
 
@@ -218,23 +262,31 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			}),
 		}),
 		GotInteractionMessage: ({ message: child }) => interaction.fold(model, child),
+		// As `UpdatedUserRow`: the synced row replaces the optimistic settings once no write is in flight.
 		UpdatedOrganizationSettings: ({ settings }) => ({
-			model: modifyFields(model, { organizationSettings: () => settings }),
+			model: modifyFields(model, {
+				organizationSettings: () => settings,
+				optimisticOrganizationSettings: (optimistic) =>
+					model.organizationWrite === "Idle" ? null : optimistic,
+			}),
 		}),
-		// Shown at once; the synced row confirms it (or the failure toast says it did not stick).
+		// Shown at once; picking what is already shown (the running timed mute) writes nothing.
 		ChangedOrganizationSettings: ({ change }) => {
-			const organizationId = shared.organization?.id
-			if (organizationId === undefined) return { model }
-			return {
-				model: modifyFields(model, {
-					organizationSettings: (current) => applied(current, change, shared.nowMs),
-				}),
-				commands: [SaveOrganizationSettings({ organizationId, change })],
-			}
+			const current = organizationSettingsOf(model)
+			const settings = applied(current, change, shared.nowMs)
+			return sameSettings(settings, current)
+				? { model }
+				: withOrganizationSettings(model, shared, settings)
 		},
-		SucceededSaveOrganizationSettings: () => ({ model }),
+		SucceededSaveOrganizationSettings: () =>
+			settleOrganizationWrite(
+				model,
+				shared,
+				(current) => current.optimisticOrganizationSettings ?? current.organizationSettings,
+			),
+		// The last synced settings come back; a newer queued choice is still sent.
 		FailedSaveOrganizationSettings: () => ({
-			model,
+			...settleOrganizationWrite(model, shared, (current) => current.organizationSettings),
 			outMessage: PageOutMessage.RequestedToast({
 				toast: errorToast(
 					"Failed to update setting",
