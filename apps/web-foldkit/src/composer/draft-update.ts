@@ -401,6 +401,7 @@ export const update = (model: Model, message: Message, context: Context): Return
 			model: modifyFields(model, { attachmentIds: (ids) => ids.filter((id) => id !== attachmentId) }),
 		}),
 		CompletedOpenFilePicker: () => ({ model }),
+		CompletedShowLocalImage: () => ({ model }),
 		SucceededSendMessage: () => ({ model, outMessage: OutMessage.SentMessage() }),
 		// Restore what the optimistic send cleared, then toast. A delayed sync was delivered: nothing to
 		// restore. After a switch to another channel the draft is that channel's: toast only.

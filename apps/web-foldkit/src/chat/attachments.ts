@@ -28,7 +28,9 @@ const IMAGE_TYPES = ["jpg", "png", "gif", "webp"]
 const VIDEO_TYPES = ["mp4", "webm"]
 
 const typeOf = (attachment: ChatAttachmentView) => getFileTypeFromName(attachment.fileName)
-export const isImageAttachment = (attachment: ChatAttachmentView) => IMAGE_TYPES.includes(typeOf(attachment))
+/** Whether a file of this name renders as an image (the composer previews and the message mosaic). */
+export const isImageFileName = (fileName: string) => IMAGE_TYPES.includes(getFileTypeFromName(fileName))
+export const isImageAttachment = (attachment: ChatAttachmentView) => isImageFileName(attachment.fileName)
 const isVideoAttachment = (attachment: ChatAttachmentView) => VIDEO_TYPES.includes(typeOf(attachment))
 
 /** `AttachmentItem`: a video player or a compact file card. */

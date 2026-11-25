@@ -40,7 +40,7 @@ defineIntegration({
 	precedence: { name: 10, email: 20 }, // per field, lower wins
 	capabilities: {
 		activity?: true,
-		billing?: { preference, requiresFirstImport?, invoices?, usageFromInvoices? },
+		billing?: { preference, requiresFirstImport?, invoices?, usageFromInvoices?, trialsNeedPaymentMethod? },
 		meteredLimits?: true,
 		featureFlags?: true,
 		impersonation?: true,

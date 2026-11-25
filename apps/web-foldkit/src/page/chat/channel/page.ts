@@ -770,14 +770,15 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			Write.andThen(Write.handleActionMessage(model, actionMessage), (next) =>
 				Write.playHeldThreadMessages(next, shared),
 			),
+		// The membership can land after the thread's messages: a followed thread is read then.
 		UpdatedThreadMember: ({ threadChannelId, memberId }) =>
 			model.threadPanel?.threadChannelId === threadChannelId
-				? {
-						model: modifyFields(model, {
+				? readOpenThread(
+						modifyFields(model, {
 							threadPanel: (panel) =>
 								panel === null ? null : modifyFields(panel, { memberId: () => memberId }),
 						}),
-					}
+					)
 				: { model },
 		ClickedThreadPreview: ({ threadChannelId, messageId }) =>
 			Write.openThread(model, threadChannelId, messageId, "Created"),

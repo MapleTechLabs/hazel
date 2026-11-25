@@ -426,6 +426,16 @@ describe("ChannelObject messages", () => {
 				yield* settle
 				expect((yield* reasons()).map((row) => row.resourceId)).toEqual([reply.id])
 				expect(countsIn(world, channel.id)[world.alice]).toBe(0)
+
+				// Her level drops off All messages: a plain notification she still holds goes with its message.
+				world.org.storage.db
+					.prepare(
+						`UPDATE channel_members SET notificationLevel = 'mentions' WHERE channelId = ? AND userId = ?`,
+					)
+					.run(channel.id, world.alice)
+				yield* remove(reply.id)
+				yield* settle
+				expect(yield* reasons()).toEqual([])
 			}),
 		))
 
