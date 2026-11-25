@@ -6,6 +6,7 @@ import { modifyFields } from "foldkit/struct"
 import { toString as urlToString, type Url } from "foldkit/url"
 import { commonMessage, type CommonReason, failureMessage, isRetryableReason } from "~/lib/error-messages"
 import {
+	ApplyBadge,
 	ApplyTheme,
 	CheckSession,
 	ClearNoteDrafts,
@@ -760,6 +761,7 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 			platform: Platform.init(),
 			desktopUpdate: Updates.init(),
 			creatingDms: [],
+			unreadMentionIds: [],
 		},
 		url,
 	)
@@ -817,6 +819,9 @@ export const update = (model: Model, message: Message): Return =>
 			commands: ids.length === 0 ? [] : [DeliverNotifications({ ids })],
 		}),
 		CompletedDeliverNotifications: () => ({ model }),
+		UpdatedUnreadMentions: ({ ids }) => ({ model: modifyFields(model, { unreadMentionIds: () => ids }) }),
+		ChangedBadge: ({ badge }) => ({ model, commands: [ApplyBadge({ badge })] }),
+		CompletedApplyBadge: () => ({ model }),
 		ChangedAuth: ({ auth }) => changedAuth(auth)(model),
 		FailedCheckSession: ({ reason }) => failedCheckSession(reason)(model),
 		PressedRetrySession: () =>

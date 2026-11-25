@@ -13,6 +13,7 @@ import { Message as PageMessage } from "../page/registry"
 import { AppRoute } from "../route"
 import { CurrentUser, Member, Organization } from "../session"
 import * as Platform from "../platform"
+import { Badge } from "../platform/badge"
 import { DesktopMenuItem } from "../platform/desktop-menu"
 import * as Updates from "../platform/updates"
 import * as Shell from "../shell/model"
@@ -47,6 +48,11 @@ export const Message = defineMessageUnion({
 	/** The member's latest notifications (newest first), for the sound and native sinks. */
 	UpdatedRecentNotifications: { ids: Schema.Array(NotificationId) },
 	CompletedDeliverNotifications: {},
+	/** The user's unread notifications in every organization. */
+	UpdatedUnreadMentions: { ids: Schema.Array(NotificationId) },
+	/** What the tab, favicon and desktop icon should show changed. */
+	ChangedBadge: { badge: Badge },
+	CompletedApplyBadge: {},
 	ChangedAuth: { auth: SessionAnswer },
 	/** The API did not answer the session check: nothing is known about the session. */
 	FailedCheckSession: { reason: CommonReason },
