@@ -34,9 +34,16 @@ export const Model = Schema.Struct({
 	/** Bumped per test notification result, so an older expiry timer leaves a newer status alone. */
 	notificationStatusVersion: Schema.Finite,
 	interaction: Interaction.Model,
-	/** "This organization" (`organization.ts`): the synced row, or a change not yet echoed. */
+	/** "This organization" (`organization.ts`): the synced row (or the last write that succeeded). */
 	organizationSettings: OrganizationSettings,
+	/** The organization settings the user chose while a write is in flight. */
+	optimisticOrganizationSettings: Schema.NullOr(OrganizationSettings),
+	/** One organization write at a time, as `settingsWrite`. */
+	organizationWrite: SettingsWrite,
 })
 export type Model = typeof Model.Type
 
 export const settingsOf = (model: Model) => model.optimisticSettings ?? model.settings
+
+export const organizationSettingsOf = (model: Model) =>
+	model.optimisticOrganizationSettings ?? model.organizationSettings
