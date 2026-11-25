@@ -1,14 +1,24 @@
-import { ChannelId } from "@hazel/schema"
+import { ChannelId, ChannelMemberId } from "@hazel/schema"
 import { Schema } from "effect"
 import { describe, expect, test, vi } from "vitest"
 import { sharedDefaults } from "../../test-shared"
-import { ClearChannelNotifications, syncReady, WaitClearNotificationsRetry } from "./clear-notifications"
+import { chatMessageOf } from "../../../test/chat-messages"
+import {
+	ClearChannelNotifications,
+	readOpenThread,
+	ReadThread,
+	syncReady,
+	WaitClearNotificationsRetry,
+} from "./clear-notifications"
 import {
 	ada,
 	adaMemberId,
 	channelId,
 	grace,
+	graceMessageId,
+	loadedMessages,
 	loadedModel,
+	openingModel,
 	shared,
 	updateWithShared,
 } from "./fixtures.test-support"
@@ -83,6 +93,50 @@ describe("the badge, from the member rows", () => {
 		expect(clearCommands(result)).toEqual([])
 	})
 
+	test("someone else's message past the read position is read too, without a mention", () => {
+		const read = cleared()
+		const mine = updateWithShared(
+			read,
+			Message.UpdatedActivity({
+				channelId,
+				activity: { lastMessageAtMs: Date.UTC(2026, 2, 12, 9), lastMessageAuthorId: ada },
+			}),
+		)
+		expect(clearCommands(mine)).toEqual([])
+		const theirs = updateWithShared(
+			read,
+			Message.UpdatedActivity({
+				channelId,
+				activity: { lastMessageAtMs: Date.UTC(2026, 2, 12, 9), lastMessageAuthorId: grace },
+			}),
+		)
+		expect(clearCommands(theirs)).toEqual([CLEAR])
+	})
+
+	test("the first clear waits until the read position is captured", () => {
+		const opening = syncReady(openingModel(), shared)
+		expect(clearCommands(opening)).toEqual([])
+		const activity = updateWithShared(
+			opening.model,
+			Message.UpdatedActivity({ channelId, activity: null }),
+		)
+		expect(clearCommands(activity)).toEqual([])
+		const position = updateWithShared(
+			activity.model,
+			Message.UpdatedReadPosition({ channelId, readUpToMs: 0 }),
+		)
+		expect(clearCommands(position)).toEqual([CLEAR])
+	})
+
+	test("a late answer for the previous channel is dropped", () => {
+		const opening = syncReady(openingModel(), shared).model
+		const stale = updateWithShared(
+			opening,
+			Message.UpdatedReadPosition({ channelId: otherChannelId, readUpToMs: 0 }),
+		)
+		expect(stale.model.newMessages.hasReadPosition).toBe(false)
+	})
+
 	test("waits for focus, then clears", () => {
 		const blurred = updateWithShared(cleared(), Message.ChangedWindowFocus({ isFocused: false })).model
 		const counted = updateWithShared(blurred, Message.UpdatedMembers({ members: members(2) }))
@@ -132,5 +186,49 @@ describe("results", () => {
 			expect(result.model.notifications).toEqual(stale.notifications)
 			expect(clearCommands(result)).toEqual([])
 		}
+	})
+})
+
+describe("the open thread", () => {
+	const threadChannelId = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-000000004444")
+	const threadMemberId = Schema.decodeSync(ChannelMemberId)("00000000-0000-4000-8000-000000004445")
+	const reply = chatMessageOf(20, { channelId: threadChannelId, authorId: grace })
+
+	/** The thread panel open on Grace's message, holding one reply from her. */
+	const withPanel = (memberId: ChannelMemberId | null): Model => {
+		const base = loadedModel()
+		const loaded = updateWithShared(base, loadedMessages(base.messages)).model
+		const opened = updateWithShared(
+			loaded,
+			Message.ClickedThreadPreview({ threadChannelId, messageId: graceMessageId }),
+		).model
+		const panel = opened.threadPanel!
+		return { ...opened, threadPanel: { ...panel, memberId, messages: [reply] } }
+	}
+
+	const readCommands = (result: PageReturn) =>
+		(result.commands ?? [])
+			.filter((command) => command.name === ReadThread.name)
+			.map((command) => command.args)
+
+	test("a followed thread is read as new replies show", () => {
+		const result = readOpenThread(withPanel(threadMemberId))
+		expect(readCommands(result)).toEqual([{ channelId: threadChannelId }])
+		expect(result.model.threadPanel?.readUpToMs).toBe(reply.createdAtMs)
+	})
+
+	test("a followed thread whose membership lands after its messages is read then", () => {
+		const result = updateWithShared(
+			withPanel(null),
+			Message.UpdatedThreadMember({ threadChannelId, memberId: threadMemberId }),
+		)
+		expect(readCommands(result)).toEqual([{ channelId: threadChannelId }])
+	})
+
+	test("a thread the user does not follow has no read state to clear", () => {
+		const model = withPanel(null)
+		const result = readOpenThread(model)
+		expect(readCommands(result)).toEqual([])
+		expect(result.model).toBe(model)
 	})
 })

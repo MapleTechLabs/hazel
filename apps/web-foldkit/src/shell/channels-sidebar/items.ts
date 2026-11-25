@@ -10,7 +10,7 @@ import { type ChannelLinks, channelIcon } from "../../ui/channel-icon"
 import { presenceDot } from "../../ui/presence-dot"
 import { ariaButton } from "../../ui/button"
 import { countBadge } from "../../ui/count-badge"
-import { sidebarItem, sidebarLink } from "../../ui/sidebar"
+import { sidebarItem, sidebarLink, sidebarUnreadLabel, sidebarUnreadPip } from "../../ui/sidebar"
 import type { ChannelEntry, DiscoverableChannel, DmChannel, DmMember, Presence, SidebarThread } from "./rows"
 import { initialsOf, semantic } from "../../ui/semantic"
 import { dotsMenuTrigger } from "./tree"
@@ -40,7 +40,17 @@ export interface RowLinkContext {
 export interface ChannelRowContext extends RowLinkContext {
 	/** What the channel is linked or connected to (customer, Connect, chat sync), marked on its icon. */
 	readonly links: ChannelLinks
+	/** Has messages the user has not read (`~/lib/unread`). */
+	readonly isUnread: boolean
 }
+
+/** The unread state in words for a screen reader (the pill is drawn only). */
+const unreadLabelIf = <M>(h: HtmlBuilder<M>, isUnread: boolean): Html[] =>
+	isUnread ? [sidebarUnreadLabel(h)] : []
+
+/** The unread pill, except on the open row (it is being read). */
+const pipIf = <M>(h: HtmlBuilder<M>, isUnread: boolean, isActive: boolean): Html[] =>
+	isUnread && !isActive ? [sidebarUnreadPip(h)] : []
 
 /** `SidebarLabel` with a `className`. */
 export const label = <M>(h: HtmlBuilder<M>, children: Array<Html | string>, className?: string): Html =>
@@ -83,6 +93,7 @@ export const channelItem = <M>(
 	longPress: ReadonlyArray<Attribute<M>> = [],
 ): Html => {
 	const href = chatHref(context, entry.channel.id)
+	const isEmphasized = notificationCount > 0 || context.isUnread
 	const ui = semantic(h, {
 		kind: "item",
 		title: entry.channel.name,
@@ -92,9 +103,10 @@ export const channelItem = <M>(
 			: { symbol: channelSymbol(entry.channel.type) }),
 		badge: notificationCount > 0 ? notificationCount : undefined,
 		isSelected: context.isActive || undefined,
-		isEmphasized: notificationCount > 0 || undefined,
+		isEmphasized: isEmphasized || undefined,
 	})
 	return sidebarItem(h, { attributes: [...longPress, ...ui] }, [
+		...pipIf(h, context.isUnread, context.isActive),
 		sidebarLink(h, { href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE }, [
 			channelIcon(h, {
 				icon: entry.channel.icon,
@@ -102,8 +114,9 @@ export const channelItem = <M>(
 				links: context.links,
 				surface: "sidebar",
 			}),
-			// Unread: the name steps up to full ink and medium, the count says how many.
-			label(h, [entry.channel.name], notificationCount > 0 ? "font-medium text-fg" : undefined),
+			// Unread: the name steps up to full ink and medium, the count says how many mentions.
+			label(h, [entry.channel.name], isEmphasized ? "font-medium text-fg" : undefined),
+			...unreadLabelIf(h, context.isUnread),
 		]),
 		menu,
 		...badgeIf(h, notificationCount),
@@ -164,12 +177,14 @@ const threadItem = <M>(
 	h: HtmlBuilder<M>,
 	thread: SidebarThread,
 	isActive: boolean,
+	isUnread: boolean,
 	hasEmojiIcon: boolean,
 	isFirst: boolean,
 	isLast: boolean,
 	orgSlug: string,
 ): Html => {
 	const count = thread.notificationCount
+	const isEmphasized = count > 0 || isUnread
 	return h.a(
 		[
 			...semantic(h, {
@@ -179,7 +194,7 @@ const threadItem = <M>(
 				level: 1,
 				badge: count > 0 ? count : undefined,
 				isSelected: isActive || undefined,
-				isEmphasized: count > 0 || undefined,
+				isEmphasized: isEmphasized || undefined,
 			}),
 			h.Href(chatHref({ orgSlug }, thread.id)),
 			h.Attribute("data-react-aria-pressable", "true"),
@@ -189,13 +204,14 @@ const threadItem = <M>(
 					"relative ml-[26px] flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 text-fg-3 text-sm/5",
 					"outline-hidden hover:bg-wash hover:text-fg focus-visible:bg-wash",
 					isActive && CHANNEL_ACTIVE,
-					count > 0 && "font-medium text-fg",
+					isEmphasized && "font-medium text-fg",
 				),
 			),
 		],
 		[
 			threadBranch(h, hasEmojiIcon, isFirst, isLast),
 			h.span([h.Class("min-w-0 flex-1 truncate")], [thread.name]),
+			...unreadLabelIf(h, isUnread),
 			count > 0 ? countBadge(h, { count }) : h.empty,
 		],
 	)
@@ -209,6 +225,7 @@ export const threadItems = <M>(
 	orgSlug: string,
 	/** The channel shows an emoji instead of the hashtag, which changes where its branch meets it. */
 	hasEmojiIcon: boolean,
+	unreadChannelIds: ReadonlySet<string>,
 ): Html =>
 	threads.length === 0
 		? h.empty
@@ -219,6 +236,7 @@ export const threadItems = <M>(
 						h,
 						thread,
 						thread.id === activeThreadId,
+						unreadChannelIds.has(thread.id),
 						hasEmojiIcon,
 						index === 0,
 						index === threads.length - 1,
@@ -281,6 +299,7 @@ const singleDmContent = <M>(
 	channel: DmChannel,
 	partner: DmMember,
 	context: DmRowContext,
+	isEmphasized: boolean,
 ) => {
 	const fullName = `${partner.firstName} ${partner.lastName}`
 	const presence = context.presence
@@ -296,7 +315,11 @@ const singleDmContent = <M>(
 		label(
 			h,
 			[h.span([h.Class("truncate")], [fullName]), ...statusEmoji(h, presence)],
-			cx("flex items-center max-w-40", channel.currentUser.isMuted && "opacity-60"),
+			cx(
+				"flex items-center max-w-40",
+				channel.currentUser.isMuted && "opacity-60",
+				isEmphasized && "font-medium text-fg",
+			),
 		),
 	]
 }
@@ -325,7 +348,12 @@ const overflowAvatar = <M>(h: HtmlBuilder<M>, count: number): Html =>
 		],
 	)
 
-const groupDmContent = <M>(h: HtmlBuilder<M>, channel: DmChannel, partners: ReadonlyArray<DmMember>) => [
+const groupDmContent = <M>(
+	h: HtmlBuilder<M>,
+	channel: DmChannel,
+	partners: ReadonlyArray<DmMember>,
+	isEmphasized: boolean,
+) => [
 	h.div(
 		[h.Attribute("data-slot", "avatar"), h.Class("flex -space-x-2")],
 		[
@@ -344,12 +372,18 @@ const groupDmContent = <M>(h: HtmlBuilder<M>, channel: DmChannel, partners: Read
 	label(
 		h,
 		[partners.map((member) => member.firstName).join(", ")],
-		cx("max-w-40 truncate", channel.currentUser.isMuted && "opacity-60"),
+		cx(
+			"max-w-40 truncate",
+			channel.currentUser.isMuted && "opacity-60",
+			isEmphasized && "font-medium text-fg",
+		),
 	),
 ]
 
 /** A DM row's inputs: the single partner's presence is looked up before the row's memo. */
 export interface DmRowContext extends RowLinkContext {
+	/** Has messages the user has not read (`~/lib/unread`). */
+	readonly isUnread: boolean
 	readonly currentUserId: string | null
 	readonly nowMs: number
 	readonly presence: Presence | undefined
@@ -368,6 +402,7 @@ export const dmItem = <M>(
 	const partners = dmPartners(channel, context.currentUserId)
 	const only = partners[0]
 	const title = dmDisplayName(channel, partners)
+	const isEmphasized = notificationCount > 0 || context.isUnread
 	const ui = semantic(h, {
 		kind: "item",
 		title,
@@ -377,16 +412,16 @@ export const dmItem = <M>(
 		},
 		badge: notificationCount > 0 ? notificationCount : undefined,
 		isSelected: context.isActive || undefined,
-		isEmphasized: notificationCount > 0 || undefined,
+		isEmphasized: isEmphasized || undefined,
 	})
 	return sidebarItem(h, { attributes: [...longPress, ...ui] }, [
-		sidebarLink(
-			h,
-			{ href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE },
-			channel.type === "single" && partners.length === 1 && only
-				? singleDmContent(h, channel, only, context)
-				: groupDmContent(h, channel, partners),
-		),
+		...pipIf(h, context.isUnread, context.isActive),
+		sidebarLink(h, { href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE }, [
+			...(channel.type === "single" && partners.length === 1 && only
+				? singleDmContent(h, channel, only, context, isEmphasized)
+				: groupDmContent(h, channel, partners, isEmphasized)),
+			...unreadLabelIf(h, context.isUnread),
+		]),
 		menu,
 		...badgeIf(h, notificationCount),
 	])

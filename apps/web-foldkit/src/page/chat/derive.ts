@@ -443,6 +443,7 @@ export const messageRowData = (
 		live: liveOf(context, message),
 		htmlRenders: htmlRendersOf(context, message, "list"),
 		isEntering: false,
+		isFirstNew: false,
 	}
 }
 
@@ -493,6 +494,8 @@ export const toDisplayRows = (
 	previousRows: ReadonlyArray<DisplayRow>,
 	/** The reactions just changed live (`isLiveReactionChange`): their pills animate. */
 	isLiveReactions = false,
+	/** The message the "New" line sits above (`channel/new-messages.ts`); it starts a group. */
+	firstNewMessageId: MessageId | null = null,
 ): ReadonlyArray<DisplayRow> => {
 	const previousByKey = new Map(previousRows.map((row) => [row.key, row]))
 	const entering = enteringIdsOf(messagesNewestFirst, previousRows, previousByKey)
@@ -506,12 +509,14 @@ export const toDisplayRows = (
 		const next = index > 0 ? messagesNewestFirst[index - 1]! : null
 		const isGroupStart =
 			previous === null ||
+			message.id === firstNewMessageId ||
 			message.authorId !== previous.authorId ||
 			message.createdAtMs - previous.createdAtMs > GROUP_THRESHOLD_MS ||
 			previous.replyToMessageId !== null ||
 			!sameAttribution(context, message, previous)
 		const isGroupEnd =
 			next === null ||
+			next.id === firstNewMessageId ||
 			message.authorId !== next.authorId ||
 			next.createdAtMs - message.createdAtMs > GROUP_THRESHOLD_MS ||
 			!sameAttribution(context, message, next)
@@ -540,6 +545,7 @@ export const toDisplayRows = (
 				...data,
 				reactions: withReactionMotion(old, data.reactions, isLiveReactions),
 				isEntering: isEnteringRow(old, message.id, entering),
+				isFirstNew: message.id === firstNewMessageId,
 			}),
 		)
 	}
@@ -647,6 +653,8 @@ const plainKindOf = (row: MessageRow): string | null => {
 	const { message } = row
 	const content = message.content
 	const isPlain =
+		// The "New" line above it makes it taller than its kind.
+		!row.isFirstNew &&
 		row.reply === null &&
 		row.thread === null &&
 		row.live === null &&

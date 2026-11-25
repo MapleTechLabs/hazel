@@ -12,6 +12,11 @@ export const organizationsTable = SQLite.table("organizations", {
 		logoUrl: SQLite.nullable(SQLite.text),
 		settings: SQLite.nullable(jsonb<unknown>()),
 		isPublic: SQLite.column(SQLite.boolean, { default: false }),
+		/**
+		 * When unread state began here (the first activation with `channel_read_state`): a member
+		 * with no read position is read up to then, so the deploy does not show every channel unread.
+		 */
+		readStateSince: SQLite.nullable(timestamptz),
 		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 		deletedAt: SQLite.nullable(timestamptz),

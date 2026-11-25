@@ -48,6 +48,10 @@ export const orgTables = [
 	schema.organizationMembersTable,
 	schema.channelsTable,
 	schema.channelMembersTable,
+	// Unread state: each channel's newest message, each member's read position
+	// (`worker/objects/org/channel-activity.ts`).
+	schema.channelActivityTable,
+	schema.channelReadStateTable,
 	schema.channelSectionsTable,
 	schema.channelAccessTable,
 	schema.customEmojisTable,

@@ -4,19 +4,24 @@ import { Effect, Stream } from "effect"
 import {
 	attachmentCollection,
 	botCollection,
+	channelActivityCollection,
 	channelCollection,
 	channelMemberCollection,
+	channelReadStateCollection,
 	chatSyncChannelLinkCollection,
 	chatSyncConnectionCollection,
 	chatSyncMessageLinkCollection,
 	customEmojiCollection,
 	messageAgentMarkCollection,
 	messageCollection,
+	organizationCollection,
 	pinnedMessageCollection,
 	typingIndicatorCollection,
 	userCollection,
 	userPresenceStatusCollection,
 } from "~/db/collections"
+import { appOrgSourcesSettled } from "~/db/sync-manager"
+import { readUpToMs } from "~/lib/unread"
 import { getAttachmentUrl } from "~/utils/attachment-url"
 import { liveQueryStream } from "../../data/live-query"
 import {
@@ -289,6 +294,81 @@ export const membersStream = <M>(
 				.where(({ member }) => eq(member.channelId, channelId))
 				.orderBy(({ member }) => member.createdAt, "desc"),
 		(rows) => toMessage(rows.map(toChannelMemberInfo)),
+	)
+
+/** The channel's newest message (`channel_activity`), for its new-messages line. */
+export const activityStream = <M>(
+	channelId: ChannelId,
+	toMessage: (activity: { lastMessageAtMs: number; lastMessageAuthorId: UserId } | null) => M,
+) =>
+	liveQueryStream<{ lastMessageAt: Date; lastMessageAuthorId: UserId }, M>(
+		(q) =>
+			q
+				.from({ activity: channelActivityCollection })
+				.where(({ activity }) => eq(activity.channelId, channelId))
+				.select(({ activity }) => ({
+					lastMessageAt: activity.lastMessageAt,
+					lastMessageAuthorId: activity.lastMessageAuthorId,
+				})),
+		(rows) => {
+			const row = rows[0]
+			return toMessage(
+				row === undefined
+					? null
+					: {
+							lastMessageAtMs: new Date(row.lastMessageAt).getTime(),
+							lastMessageAuthorId: row.lastMessageAuthorId,
+						},
+			)
+		},
+		// Before the org's sources settle, no row is not yet "no message".
+		{ holdEmptyUntil: appOrgSourcesSettled },
+	)
+
+/**
+ * The user's read position in the channel (`~/lib/unread`): their read state, else when they joined
+ * or unread state began in the org. Null while they are not a member.
+ */
+export const readPositionStream = <M>(
+	channelId: ChannelId,
+	userId: UserId,
+	toMessage: (readUpToMs: number | null) => M,
+) =>
+	liveQueryStream<{ joinedAt: Date; lastReadAt: Date | null | undefined; readStateSince: Date | null }, M>(
+		(q) =>
+			q
+				.from({ member: channelMemberCollection })
+				.innerJoin({ channel: channelCollection }, ({ member, channel }) =>
+					eq(channel.id, member.channelId),
+				)
+				.innerJoin({ organization: organizationCollection }, ({ channel, organization }) =>
+					eq(organization.id, channel.organizationId),
+				)
+				.leftJoin({ read: channelReadStateCollection }, ({ member, read }) =>
+					eq(read.channelId, member.channelId),
+				)
+				.where(({ member }) =>
+					and(eq(member.channelId, channelId), eq(member.userId, userId), isNull(member.deletedAt)),
+				)
+				.select(({ member, organization, read }) => ({
+					joinedAt: member.joinedAt,
+					lastReadAt: read?.lastReadAt,
+					readStateSince: organization.readStateSince,
+				})),
+		(rows) => {
+			const row = rows[0]
+			return toMessage(
+				row === undefined
+					? null
+					: readUpToMs({
+							lastReadAt: row.lastReadAt ? new Date(row.lastReadAt) : null,
+							joinedAt: new Date(row.joinedAt),
+							readStateSince: row.readStateSince ? new Date(row.readStateSince) : null,
+						}),
+			)
+		},
+		// Before the org's sources settle, no row is not yet "not a member".
+		{ holdEmptyUntil: appOrgSourcesSettled },
 	)
 
 /** `useTypingIndicators`' indicator query. */

@@ -172,6 +172,8 @@ export const MessageRowData = Schema.Struct({
 	htmlRenders: Schema.Array(HtmlRenderRow),
 	/** The message arrived live, after the list had loaded: its row plays the entrance once it mounts. */
 	isEntering: Schema.Boolean,
+	/** The first message the user had not read when they opened the channel: the "New" line is above it. */
+	isFirstNew: Schema.Boolean,
 })
 export type MessageRowData = typeof MessageRowData.Type
 

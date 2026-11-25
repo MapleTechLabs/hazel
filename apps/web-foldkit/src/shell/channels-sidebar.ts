@@ -107,6 +107,9 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 		}),
 		UpdatedPresence: ({ presence }) => ({ model: modifyFields(model, { presence: () => presence }) }),
 		UpdatedUnreadCounts: ({ counts }) => ({ model: modifyFields(model, { unreadCounts: () => counts }) }),
+		UpdatedUnreadChannels: ({ channels }) => ({
+			model: modifyFields(model, { unreadChannels: () => channels }),
+		}),
 		UpdatedConnectMounts: ({ mounts }) => ({
 			model: modifyFields(model, { connectMounts: () => mounts }),
 		}),

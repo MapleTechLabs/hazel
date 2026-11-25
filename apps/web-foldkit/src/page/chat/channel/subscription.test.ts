@@ -146,6 +146,9 @@ const CHANNEL_ONLY = [
 	"chatIssueRoots",
 	"chatThreadIssue",
 	"chatMembers",
+	// The "New" line is the channel's; the thread panel has none (it reads its thread as it shows it).
+	"chatActivity",
+	"chatReadPosition",
 	"chatTyping",
 	"composerMembers",
 	"composerBots",

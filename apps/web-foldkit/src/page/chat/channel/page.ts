@@ -43,7 +43,8 @@ import {
 	shareStickyKeys,
 } from "../rows"
 import type { ChannelHotkey } from "./hotkeys"
-import { stepNotifications, syncUnread } from "./clear-notifications"
+import { readOpenThread, stepNotifications, syncUnread } from "./clear-notifications"
+import * as NewMessages from "./new-messages"
 import * as NotificationClear from "./notification-clear"
 import { DeleteMessageNow, FocusMessage } from "./message-keys"
 import { type ChatTab, Message, type MessageKey, type Model, type PageReturn, Tab } from "./model"
@@ -120,6 +121,7 @@ export const init = (
 	threadPanelWidth: options.carry?.threadPanelWidth ?? null,
 	threadPanelDrag: null,
 	notifications: NotificationClear.init({ isFocused: options.carry?.isWindowFocused ?? true }),
+	newMessages: NewMessages.init(),
 	isJoining: false,
 	heightsByChannel: Record.remove(options.carry?.heightsByChannel ?? {}, channelId),
 })
@@ -285,6 +287,7 @@ const deriveRows = (current: Model, isLiveReactions = false): PageReturn => {
 		deriveContextOf(model),
 		model.rows,
 		isLiveReactions,
+		NewMessages.firstNewMessageId(model.newMessages, model.messages, model.currentUserId),
 	)
 	const threadRows = model.threadPanel?.rows ?? []
 	const isShown = (messageId: MessageId) =>
@@ -429,8 +432,50 @@ const pressedChannelHotkey = (model: Model, action: ChannelHotkey, shared: Share
 		case "ScrollDown":
 			return loadWhenNearEdge(liftList(model, MessageList.scrollByPage(model.list, "Down")))
 		case "MarkRead":
-			return stepNotifications(model, { _tag: "MarkedRead" })
+			return markRead(model)
 	}
+}
+
+// NEW MESSAGES
+
+/** `newMessages` changed: the "New" line moves, so the rows re-derive when it did. */
+const withNewMessages = (model: Model, next: NewMessages.Model): PageReturn =>
+	next === model.newMessages
+		? { model }
+		: next.sinceMs === model.newMessages.sinceMs
+			? { model: modifyFields(model, { newMessages: () => next }) }
+			: deriveRows(modifyFields(model, { newMessages: () => next }))
+
+/**
+ * The read position is captured once both its queries have answered; the clear machine waits for
+ * that before its first clear, then sees what there is to read.
+ */
+const syncNewMessages = (model: Model): PageReturn => {
+	const wasCaptured = model.newMessages.isCaptured
+	const captured = withNewMessages(model, NewMessages.capture(model.newMessages, model.currentUserId))
+	const released =
+		!wasCaptured && captured.model.newMessages.isCaptured
+			? stepNotifications(captured.model, { _tag: "Captured" })
+			: { model: captured.model }
+	const synced = syncUnread(released.model)
+	return {
+		...synced,
+		commands: [...(captured.commands ?? []), ...(released.commands ?? []), ...(synced.commands ?? [])],
+	}
+}
+
+/** Escape, or the bar's "Mark as read": the channel is read now and the "New" line goes. */
+const markRead = (model: Model): PageReturn => {
+	const dismissed = withNewMessages(model, NewMessages.dismiss(model.newMessages))
+	const stepped = stepNotifications(dismissed.model, { _tag: "MarkedRead" })
+	return { ...stepped, commands: [...(dismissed.commands ?? []), ...(stepped.commands ?? [])] }
+}
+
+/** The bar's "Jump": to the oldest loaded new message; the bar goes, the line stays. */
+const jumpToNew = (model: Model): PageReturn => {
+	const messageId = NewMessages.firstNewMessageId(model.newMessages, model.messages, model.currentUserId)
+	const dismissed = modifyFields(model, { newMessages: NewMessages.dismissBar })
+	return messageId === null ? { model: dismissed } : Jump.toMessage(dismissed, messageId, messageId)
 }
 
 // MESSAGE KEYBOARD
@@ -578,7 +623,35 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		UpdatedReplyTargets: ({ targets }) => withLookup(model, "replyTargets", targets),
 		UpdatedMembers: ({ members }) =>
 			syncUnread(withTypingNames(modifyFields(model, { members: () => members }))),
-		ChangedWindowFocus: ({ isFocused }) => stepNotifications(model, { _tag: "ChangedFocus", isFocused }),
+		UpdatedActivity: ({ channelId, activity }) =>
+			channelId !== model.channelId
+				? { model }
+				: syncNewMessages(
+						modifyFields(model, {
+							newMessages: (newMessages) =>
+								modifyFields(newMessages, {
+									activity: () => activity,
+									hasActivity: () => true,
+								}),
+						}),
+					),
+		UpdatedReadPosition: ({ channelId, readUpToMs }) =>
+			channelId !== model.channelId
+				? { model }
+				: syncNewMessages(
+						modifyFields(model, {
+							newMessages: (newMessages) =>
+								modifyFields(newMessages, {
+									readUpToMs: () => readUpToMs,
+									hasReadPosition: () => true,
+								}),
+						}),
+					),
+		ClickedJumpToNew: () => jumpToNew(model),
+		ClickedMarkNewRead: () => markRead(model),
+		// Focus back: the open thread's replies that came while away are read too.
+		ChangedWindowFocus: ({ isFocused }) =>
+			Write.andThen(stepNotifications(model, { _tag: "ChangedFocus", isFocused }), readOpenThread),
 		UpdatedPinned: ({ pins }) => ({ model: modifyFields(model, { pinned: () => pins }) }),
 		UpdatedCustomer: ({ channelId, customer }) => ({
 			model:
@@ -617,7 +690,8 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				}),
 			)
 			const requested = requestUnfurls(withMessages, messages)
-			return { ...requested, model: withThreadRows(requested.model, false) }
+			const read = readOpenThread(withThreadRows(requested.model, false))
+			return { model: read.model, commands: [...(requested.commands ?? []), ...(read.commands ?? [])] }
 		},
 		UpdatedThreadPanelPins: ({ threadChannelId, pins }) =>
 			model.threadPanel?.threadChannelId === threadChannelId
@@ -660,21 +734,27 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		GotDraftMessage: ({ message: draftMessage }) =>
 			isShiftTab(draftMessage)
 				? focusMessages(model)
-				: Write.updateDraft(model, "channel", draftMessage, shared),
+				: // A send dismisses the "New" line: the rows re-derive without it.
+					Write.andThen(Write.updateDraft(model, "channel", draftMessage, shared), (next) =>
+						next.newMessages.sinceMs === model.newMessages.sinceMs
+							? { model: next }
+							: deriveRows(next),
+					),
 		GotThreadDraftMessage: ({ message: draftMessage }) =>
 			Write.updateDraft(model, "thread", draftMessage, shared),
 		GotActionMessage: ({ message: actionMessage }) =>
 			Write.andThen(Write.handleActionMessage(model, actionMessage), (next) =>
 				Write.playHeldThreadMessages(next, shared),
 			),
+		// The membership can land after the thread's messages: a followed thread is read then.
 		UpdatedThreadMember: ({ threadChannelId, memberId }) =>
 			model.threadPanel?.threadChannelId === threadChannelId
-				? {
-						model: modifyFields(model, {
+				? readOpenThread(
+						modifyFields(model, {
 							threadPanel: (panel) =>
 								panel === null ? null : modifyFields(panel, { memberId: () => memberId }),
 						}),
-					}
+					)
 				: { model },
 		ClickedThreadPreview: ({ threadChannelId, messageId }) =>
 			Write.openThread(model, threadChannelId, messageId, "Created"),
@@ -730,6 +810,7 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				Write.updateDraft(next, "thread", Draft.Message.LeftWindow(), shared),
 			),
 		// A result for the channel the page has since switched away from is dropped.
+		CompletedReadThread: () => ({ model }),
 		SucceededClearNotifications: ({ channelId }) =>
 			channelId === model.channelId ? stepNotifications(model, { _tag: "Succeeded" }) : { model },
 		// Best effort, like legacy: no toast; the machine retries after a backoff.

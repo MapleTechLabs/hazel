@@ -44,6 +44,7 @@ const row = (key: string, groupPosition: GroupPosition, content = "short line"):
 	live: null,
 	htmlRenders: [],
 	isEntering: false,
+	isFirstNew: false,
 })
 
 const header = (key: string): DisplayRow => ({ _tag: "DateHeader", key, label: key })

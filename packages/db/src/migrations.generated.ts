@@ -384,6 +384,15 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'ALTER TABLE "channel_customers" DROP COLUMN "healthWhy"',
 			],
 		},
+		{
+			id: "0017_channel_read_state",
+			statements: [
+				'ALTER TABLE "organizations" ADD COLUMN "readStateSince" text',
+				'CREATE TABLE IF NOT EXISTS "channel_activity" (\n\t"channelId" text PRIMARY KEY NOT NULL,\n\t"organizationId" text NOT NULL,\n\t"lastMessageId" text NOT NULL,\n\t"lastMessageAt" text NOT NULL,\n\t"lastMessageAuthorId" text NOT NULL\n)',
+				'CREATE TABLE IF NOT EXISTS "channel_read_state" (\n\t"channelId" text NOT NULL,\n\t"userId" text NOT NULL,\n\t"organizationId" text NOT NULL,\n\t"lastReadAt" text NOT NULL,\n\tPRIMARY KEY ("channelId", "userId")\n)',
+				'CREATE INDEX IF NOT EXISTS "channel_read_state_user_idx" ON "channel_read_state" ("userId")',
+			],
+		},
 	],
 	channel: [
 		{

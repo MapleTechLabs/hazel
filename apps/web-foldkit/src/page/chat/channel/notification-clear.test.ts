@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
 	type Effect,
 	type Event,
-	init,
+	init as initUncaptured,
 	type Model,
 	RETRY_MAX_MS,
 	retryDelayMs,
@@ -22,11 +22,25 @@ const elapsed: Event = { _tag: "ElapsedRetry" }
 const markedRead: Event = { _tag: "MarkedRead" }
 const SEND: Effect = { _tag: "Send" }
 
+/** A visit whose read position is captured (`new-messages.ts`): the machine as it was before capture. */
+const init = (options: { readonly isFocused: boolean }): Model => ({
+	...initUncaptured(options),
+	isCaptured: true,
+})
+
 const run = (events: ReadonlyArray<Event>, from: Model = init({ isFocused: true })) =>
 	transitionAll(from, events)
 
 /** Entered, cleared once, and back to watching the badge. */
 const settled = (isFocused = true) => run([ready, succeeded], init({ isFocused })).model
+
+describe("capturing the read position", () => {
+	test("the first clear waits for it, then goes out", () => {
+		const waiting = transitionAll(initUncaptured({ isFocused: true }), [ready])
+		expect(waiting.effects).toEqual([])
+		expect(transition(waiting.model, { _tag: "Captured" }).effect).toEqual(SEND)
+	})
+})
 
 describe("entering the channel", () => {
 	test("clears once the page is ready, and only once", () => {

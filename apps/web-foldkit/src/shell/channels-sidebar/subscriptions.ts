@@ -60,6 +60,14 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 						),
 		},
 	),
+	sidebarUnreadChannels: entry(Scope, {
+		modelToDependencies: scopeOf,
+		dependenciesToStream: scoped((organizationId, userId) =>
+			Data.unreadChannelsStream(organizationId, userId, (channels) =>
+				Message.UpdatedUnreadChannels({ channels }),
+			),
+		),
+	}),
 	sidebarSections: entry(
 		{ organizationId: Schema.NullOr(OrganizationId) },
 		{

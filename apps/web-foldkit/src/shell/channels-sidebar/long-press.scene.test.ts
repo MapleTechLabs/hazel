@@ -43,6 +43,7 @@ const sidebar: Model = {
 	dmChannels: { [dmGrace]: { id: dmGrace, type: "single", members: [], currentUser: member(2) } },
 	presence: [],
 	unreadCounts: [],
+	unreadChannels: [],
 	connectMounts: [],
 	organizations: [],
 	syncedChannels: [],
@@ -127,6 +128,23 @@ describe("sidebar long-press menus", () => {
 			// One menu, two triggers: the dots carry exactly the same items.
 			Scene.expectAll(dotsWith(channelMenu)).toHaveCount(1),
 			Scene.expectAll(dotsWith(dmMenu)).toHaveCount(1),
+		)
+	})
+
+	test("an unread channel says so to a screen reader; a read one does not", () => {
+		Scene.scene(
+			{ update, view },
+			Scene.given({ ...sidebar, unreadChannels: [{ channelId: general, mutedUntilMs: null }] }),
+			triggerMounted,
+			triggerMounted,
+			Scene.expect(Scene.role("link", { name: "general, unread" })).toExist(),
+		)
+		Scene.scene(
+			{ update, view },
+			Scene.given(sidebar),
+			triggerMounted,
+			triggerMounted,
+			Scene.expect(Scene.role("link", { name: "general" })).toExist(),
 		)
 	})
 

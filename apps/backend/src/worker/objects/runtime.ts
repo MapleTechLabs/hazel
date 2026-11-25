@@ -63,6 +63,7 @@ import { makeCustomersSource } from "./sources/customers-source"
 import { pollDueRssFeeds, rssDeadlines } from "./org/rss"
 import { assistantDeadlines, AssistantTickCall } from "./org/assistant"
 import { exportDeadlines, OrgExportTickCall } from "./org/exports"
+import { fillChannelActivity } from "./org/channel-activity"
 import { fillDmLastMessages } from "./org/dm-last-message"
 import { prepareMessageSearch, SEARCH_MIGRATION_ID } from "./org/message-search"
 import { channelDeadlines, runChannelTimers } from "./channel/timers"
@@ -187,6 +188,14 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 				fillDmLastMessages().pipe(
 					Effect.catchTag("DatabaseError", (error) =>
 						Effect.logError("DM last messages not filled", error),
+					),
+				),
+			)
+			// Unread state for objects older than `channel_activity`, filled once.
+			yield* run(
+				fillChannelActivity.pipe(
+					Effect.catchTag("DatabaseError", (error) =>
+						Effect.logError("Channel activity not filled", error),
 					),
 				),
 			)

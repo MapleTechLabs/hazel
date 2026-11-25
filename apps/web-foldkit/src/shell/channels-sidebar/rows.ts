@@ -134,6 +134,13 @@ export type DiscoverableChannel = typeof DiscoverableChannel.Type
 export const UnreadCount = Schema.Struct({ channelId: ChannelId, count: Schema.Finite })
 export type UnreadCount = typeof UnreadCount.Type
 
+/** A channel with messages the user has not read; `mutedUntilMs` hides it until then. */
+export const UnreadChannel = Schema.Struct({
+	channelId: ChannelId,
+	mutedUntilMs: Schema.NullOr(Schema.Finite),
+})
+export type UnreadChannel = typeof UnreadChannel.Type
+
 /** `useSharedChannels`: partner orgs per channel that is mounted in an active Connect conversation. */
 export const partnerOrgsByChannel = (
 	mounts: ReadonlyArray<ConnectMount>,

@@ -1,10 +1,14 @@
 import type { ChannelId, ChannelMemberId, ChannelSectionId, OrganizationId, UserId } from "@hazel/schema"
 import { and, eq, inArray, isNull, not, or } from "@tanstack/db"
+import { hasUnreadMessages } from "~/lib/unread"
 import {
+	channelActivityCollection,
 	channelCollection,
 	channelCustomerCollection,
 	channelMemberCollection,
+	channelReadStateCollection,
 	channelSectionCollection,
+	organizationCollection,
 } from "~/db/collections"
 import { liveQueryStream } from "../../data/live-query"
 import type {
@@ -15,6 +19,7 @@ import type {
 	SidebarChannel,
 	SidebarMember,
 	SidebarThread,
+	UnreadChannel,
 } from "./rows"
 
 /**
@@ -183,6 +188,83 @@ export const threadsStream = <M>(
 								},
 							],
 				),
+			),
+	)
+
+/**
+ * The user's channels with messages they have not read (`~/lib/unread`), sorted, with their timed
+ * mute: the view, which has the clock, leaves out the ones muted until later. Muted for good never
+ * shows unread.
+ */
+export const unreadChannelsStream = <M>(
+	organizationId: OrganizationId,
+	userId: UserId,
+	toMessage: (channels: Array<UnreadChannel>) => M,
+) =>
+	liveQueryStream<
+		{
+			channelId: ChannelId
+			mutedUntil: Date | null
+			joinedAt: Date
+			lastReadAt: Date | null | undefined
+			readStateSince: Date | null
+			lastMessageAt: Date
+			lastMessageAuthorId: UserId
+		},
+		M
+	>(
+		(q) =>
+			q
+				.from({ member: channelMemberCollection })
+				.innerJoin({ activity: channelActivityCollection }, ({ member, activity }) =>
+					eq(activity.channelId, member.channelId),
+				)
+				.innerJoin({ organization: organizationCollection }, ({ activity, organization }) =>
+					eq(organization.id, activity.organizationId),
+				)
+				// Only the user's own read positions are synced.
+				.leftJoin({ read: channelReadStateCollection }, ({ member, read }) =>
+					eq(read.channelId, member.channelId),
+				)
+				.where((q) =>
+					and(
+						eq(q.activity.organizationId, organizationId),
+						eq(q.member.userId, userId),
+						eq(q.member.isMuted, false),
+						isNull(q.member.deletedAt),
+					),
+				)
+				.select(({ member, activity, organization, read }) => ({
+					channelId: member.channelId,
+					mutedUntil: member.mutedUntil,
+					joinedAt: member.joinedAt,
+					lastReadAt: read?.lastReadAt,
+					readStateSince: organization.readStateSince,
+					lastMessageAt: activity.lastMessageAt,
+					lastMessageAuthorId: activity.lastMessageAuthorId,
+				})),
+		(rows) =>
+			toMessage(
+				rows
+					.filter((row) =>
+						hasUnreadMessages(
+							{
+								lastReadAt: row.lastReadAt ? new Date(row.lastReadAt) : null,
+								joinedAt: new Date(row.joinedAt),
+								readStateSince: row.readStateSince ? new Date(row.readStateSince) : null,
+							},
+							{
+								lastMessageAt: new Date(row.lastMessageAt),
+								lastMessageAuthorId: row.lastMessageAuthorId,
+							},
+							userId,
+						),
+					)
+					.map((row) => ({
+						channelId: row.channelId,
+						mutedUntilMs: row.mutedUntil === null ? null : new Date(row.mutedUntil).getTime(),
+					}))
+					.sort((a, b) => a.channelId.localeCompare(b.channelId)),
 			),
 	)
 

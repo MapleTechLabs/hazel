@@ -76,7 +76,7 @@ describe("organizations (Mod+Alt+ArrowUp/Down)", () => {
 })
 
 describe("Shift+Escape marks the organization read", () => {
-	test("every unread notification is marked read at once", () => {
+	test("every channel and every unread notification is marked read at once", () => {
 		const [first, second] = [uuid(8001), uuid(8002)].map((raw) =>
 			Schema.decodeSync(NotificationId)(raw),
 		) as [NotificationId, NotificationId]
@@ -93,10 +93,15 @@ describe("Shift+Escape marks the organization read", () => {
 			given(unread),
 			message(hotkey("organization.markRead")),
 			Command.expectExact(
+				Notifications.MarkOrganizationRead({ organizationId: hazelOrg.id }),
 				Notifications.MarkNotificationRead({ id: first }),
 				Notifications.MarkNotificationRead({ id: second }),
 			),
 			Command.resolveAll(
+				[
+					Notifications.MarkOrganizationRead({ organizationId: hazelOrg.id }),
+					Notifications.Message.CompletedMarkOrganizationRead(),
+				],
 				[
 					Notifications.MarkNotificationRead({ id: first }),
 					Notifications.Message.SucceededMarkNotificationRead({ id: first }),

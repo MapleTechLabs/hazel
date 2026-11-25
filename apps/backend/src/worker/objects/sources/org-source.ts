@@ -228,6 +228,15 @@ const orgSyncTables: ReadonlyArray<(affected: Affected) => Spec> = [
 	toMembers(schema.botCommandsTable, false),
 	byChannel(schema.channelsTable, "id"),
 	byChannel(schema.channelMembersTable, "channelId"),
+	byChannel(schema.channelActivityTable, "channelId", false, ["channelId"]),
+	// A member's read positions: theirs alone, never anyone else's (no read receipts).
+	(affected) => ({
+		table: schema.channelReadStateTable,
+		key: ["channelId", "userId"],
+		visible: (p, $) => [$.userId!.eq(p.userId), isMember(p.userId)],
+		dependsOn: MEMBERSHIP,
+		affectedPrincipals: affected,
+	}),
 	byMembership(schema.channelSectionsTable, "organizationId"),
 	byMembership(schema.customEmojisTable, "organizationId"),
 	byMembership(schema.botInstallationsTable, "organizationId", false),

@@ -1,7 +1,7 @@
 import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
-import { ChannelId, ChannelMemberId } from "@hazel/schema"
+import { ChannelId, ChannelMemberId, OrganizationId } from "@hazel/schema"
 import { ChannelMember } from "../models"
 import { TransactionId } from "@hazel/schema"
 import { ChannelNotFoundError } from "./channels"
@@ -138,8 +138,9 @@ export class ChannelMemberRpcs extends RpcGroup.make(
 	/**
 	 * ChannelMemberClearNotifications
 	 *
-	 * Clears the notification count for the current user in a specific channel.
-	 * Called when a user views/enters a channel to reset their unread notification count.
+	 * Marks the channel read for the current user: moves their read position (`channel_read_state`)
+	 * to now, resets their notification count and drops their notifications in it. Called when a user views a channel and on
+	 * Escape.
 	 *
 	 * @param payload - Channel ID to clear notifications for
 	 * @returns Transaction ID
@@ -151,6 +152,20 @@ export class ChannelMemberRpcs extends RpcGroup.make(
 		payload: Schema.Struct({ channelId: ChannelId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
 		error: Schema.Union([ChannelNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["channel-members:write"])
+		.middleware(AuthMiddleware),
+
+	/**
+	 * ChannelMemberMarkAllRead
+	 *
+	 * Marks every channel the current user is in, in the organization, read (Shift+Escape): what
+	 * `channelMember.clearNotifications` does for one channel, for all of them.
+	 */
+	Rpc.make("channelMember.markAllRead", {
+		payload: Schema.Struct({ organizationId: OrganizationId }),
+		success: Schema.Struct({ transactionId: TransactionId }),
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
 	})
 		.annotate(RequiredScopes, ["channel-members:write"])
 		.middleware(AuthMiddleware),

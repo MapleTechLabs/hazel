@@ -13,6 +13,7 @@ import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/d
 import { resolveTarget } from "../../rpc/routing"
 import { Directory } from "../../services/directory"
 import { channelTarget, formatTarget, orgTarget } from "./kinds"
+import { fillChannelActivity } from "./org/channel-activity"
 import {
 	BACKFILL_TIMEOUT_MS,
 	parseSnippet,
@@ -375,6 +376,120 @@ describe("message search", () => {
 				yield* send(world, general, a1, "hello")
 				yield* settle([a.object, yield* world.objects.get(channelTarget(general))])
 				expect(rowOf(general).lastMessagePreview).toBeNull()
+			}),
+		))
+
+	it("keeps each channel's newest message for unread state, and marks channels read", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { a, a1 } = world
+				const activityOf = (channelId: ChannelId) =>
+					a.object.storage.db
+						.prepare(
+							`SELECT lastMessageId, lastMessageAuthorId FROM channel_activity WHERE channelId = ?`,
+						)
+						.get(channelId) as { lastMessageId: string; lastMessageAuthorId: string } | undefined
+				const lastReadOf = (channelId: ChannelId) =>
+					(
+						a.object.storage.db
+							.prepare(
+								`SELECT lastReadAt FROM channel_read_state WHERE channelId = ? AND userId = ?`,
+							)
+							.get(channelId, a1) as { lastReadAt: string } | undefined
+					)?.lastReadAt ?? null
+
+				const general = yield* makeChannel(a, a1, "public", "general")
+				const random = yield* makeChannel(a, a1, "public", "random")
+				const generalObject = yield* world.objects.get(channelTarget(general))
+				const randomObject = yield* world.objects.get(channelTarget(random))
+				const first = yield* send(world, general, a1, "first")
+				const last = yield* send(world, general, a1, "second")
+				yield* settle([a.object, generalObject])
+				expect(activityOf(general)).toEqual({ lastMessageId: last, lastMessageAuthorId: a1 })
+
+				// Deleting the newest message moves it back; deleting the last one drops the row.
+				ok(
+					yield* call(
+						generalObject,
+						general,
+						"message.delete",
+						{ channelId: general, id: last },
+						a1,
+					),
+				)
+				yield* settle([a.object, generalObject])
+				expect(activityOf(general)?.lastMessageId).toBe(first)
+				ok(
+					yield* call(
+						generalObject,
+						general,
+						"message.delete",
+						{ channelId: general, id: first },
+						a1,
+					),
+				)
+				yield* settle([a.object, generalObject])
+				expect(activityOf(general)).toBeUndefined()
+
+				// Reading one channel moves its read position only; marking all read moves every one.
+				yield* send(world, random, a1, "hi")
+				yield* settle([a.object, randomObject])
+				const before = lastReadOf(random)
+				expect(before).toBeNull()
+				ok(
+					yield* call(
+						a.object,
+						a.id,
+						"channelMember.clearNotifications",
+						{ channelId: general },
+						a1,
+					),
+				)
+				expect(lastReadOf(general)).not.toBeNull()
+				expect(lastReadOf(random)).toBeNull()
+				// A channel whose newest message is ahead of the clock is read up to it; the others to now.
+				const ahead = "2099-01-01 00:00:00.000"
+				a.object.storage.db
+					.prepare(`UPDATE channel_activity SET lastMessageAt = ? WHERE channelId = ?`)
+					.run(ahead, random)
+				ok(yield* call(a.object, a.id, "channelMember.markAllRead", { organizationId: a.id }, a1))
+				expect(lastReadOf(random)).toBe(ahead)
+				expect(lastReadOf(general)! < ahead).toBe(true)
+
+				// An object older than the tables fills each channel's newest message once, in one
+				// grouped read; a row already there is kept.
+				const third = yield* send(world, general, a1, "third")
+				yield* settle([a.object, generalObject])
+				const db = a.object.storage.db
+				db.prepare(`DELETE FROM channel_activity WHERE channelId = ?`).run(general)
+				db.prepare(`DELETE FROM _object_meta WHERE key = 'channelActivityVersion'`).run()
+				yield* a.object.run(fillChannelActivity)
+				expect(activityOf(general)).toEqual({ lastMessageId: third, lastMessageAuthorId: a1 })
+				expect(
+					(
+						db
+							.prepare(`SELECT lastMessageAt FROM channel_activity WHERE channelId = ?`)
+							.get(random) as {
+							lastMessageAt: string
+						}
+					).lastMessageAt,
+				).toBe(ahead)
+				// Once versioned, activation does nothing more.
+				db.prepare(`DELETE FROM channel_activity WHERE channelId = ?`).run(general)
+				yield* a.object.run(fillChannelActivity)
+				expect(activityOf(general)).toBeUndefined()
+
+				// Marking all read is for the org's members only.
+				const outsider = world.b1
+				const refused = yield* call(
+					a.object,
+					a.id,
+					"channelMember.markAllRead",
+					{ organizationId: a.id },
+					outsider,
+				)
+				expect(Exit.isFailure(refused)).toBe(true)
 			}),
 		))
 

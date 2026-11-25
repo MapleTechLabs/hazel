@@ -92,6 +92,10 @@ const sidebar = (h: HtmlBuilder<M>) =>
 							orgSlug: "acme",
 							isActive,
 							links: NO_CHANNEL_LINKS,
+							// "engineering" has unread messages and no mention: the pill and the name, no count.
+							isUnread:
+								channel.channel.name === "engineering" ||
+								channel.member.notificationCount > 0,
 						}),
 					),
 				],

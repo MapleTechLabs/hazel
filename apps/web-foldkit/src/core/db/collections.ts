@@ -5,6 +5,7 @@ import {
 	BotCommand,
 	BotInstallation,
 	Channel,
+	ChannelActivity,
 	ChannelMember,
 	ChannelSection,
 	ChannelCustomer,
@@ -179,6 +180,38 @@ export const chatSyncChannelLinkCollection = orgCollection(
 export const chatSyncMessageLinkCollection = channelCollectionOf(
 	"chat_sync_message_links",
 	ChatSyncMessageLink.Schema,
+)
+/**
+ * Each channel's newest message (`channel_activity`): with the user's read position, whether the
+ * channel is unread (`core/lib/unread.ts`). Keyed by `channelId`; members who see the channel only.
+ */
+export const channelActivityCollection = createEffectCollection(
+	{
+		id: "channel_activity",
+		table: "channel_activity",
+		schema: ChannelActivity.Schema,
+		parseRow: parseTimestamps,
+		getKey: (row) => row.channelId,
+		hub: syncHub,
+		sources: orgSources,
+	},
+	persist(ChannelActivity.Schema),
+)
+/**
+ * The user's own read position in each channel (`channel_read_state`; nobody else's is sent).
+ * Keyed by `channelId:userId`.
+ */
+export const channelReadStateCollection = createEffectCollection(
+	{
+		id: "channel_read_state",
+		table: "channel_read_state",
+		schema: ChannelActivity.ReadState,
+		parseRow: parseTimestamps,
+		getKey: (row) => `${row.channelId}:${row.userId}`,
+		hub: syncHub,
+		sources: orgSources,
+	},
+	persist(ChannelActivity.ReadState),
 )
 /**
  * Each linked channel's customer (`channel_customers`, the `CustomersObject`'s projection into the

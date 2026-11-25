@@ -33,12 +33,17 @@ export const adjacentChannel = (
 	current: ChannelId | null,
 	direction: Direction,
 	unreadOnly: boolean,
+	nowMs: number,
 ): ChannelId | null => {
 	const order = navigationOrder(model)
 	if (order.length === 0) return null
-	const unread = new Set(
-		model.unreadCounts.filter(({ count }) => count > 0).map(({ channelId }) => channelId),
-	)
+	const unread = new Set([
+		...model.unreadCounts.filter(({ count }) => count > 0).map(({ channelId }) => channelId),
+		// A channel muted until later is not unread, as the sidebar shows it.
+		...model.unreadChannels.flatMap(({ channelId, mutedUntilMs }) =>
+			mutedUntilMs !== null && mutedUntilMs > nowMs ? [] : [channelId],
+		),
+	])
 	const step = direction === "Next" ? 1 : -1
 	const index = current === null ? -1 : order.indexOf(current)
 	const start = index === -1 ? (direction === "Next" ? -1 : order.length) : index

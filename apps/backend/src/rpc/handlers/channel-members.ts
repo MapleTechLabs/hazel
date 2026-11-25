@@ -1,6 +1,6 @@
 import { ChannelMemberRepo, ChannelRepo } from "@hazel/backend-core"
-import { Database } from "@hazel/db"
-import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
+import { Database, SQLite, schema } from "@hazel/db"
+import { CurrentUser, UnauthorizedError, withRemapDbErrors } from "@hazel/domain"
 import { ChannelMemberResponse, ChannelMemberRpcs } from "@hazel/domain/rpc"
 import { DateTime, Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
@@ -10,11 +10,13 @@ import { enqueueEffect } from "../../worker/objects/effects/registry"
 import { UserEffects } from "../../worker/objects/effects/user-effects"
 import { userTarget } from "../../worker/objects/kinds"
 import { syncMemberAccess } from "../../worker/objects/org/channel-access"
+import { markChannelsRead } from "../../worker/objects/org/channel-activity"
 
 /**
  * Channel member RPC handlers. Run in the channel's `OrgObject` (`rpc/routing.ts`): membership
  * changes recompute the member's access and project it (`syncMemberAccess`); bots get
- * `channel_member.*` events from the outbox; clearing notifications resets the org-local unread
+ * `channel_member.*` events from the outbox; marking a channel read (`clearNotifications`, or
+ * `markAllRead` for all of them) moves the member's read position, resets the org-local unread
  * count and tells the user's `UserObject`, which holds the notifications.
  */
 export const ChannelMemberRpcLive = ChannelMemberRpcs.toLayer(
@@ -130,10 +132,12 @@ export const ChannelMemberRpcLive = ChannelMemberRpcs.toLayer(
 							const member = yield* channelMemberRepo.findByChannelAndUser(channelId, user.id)
 							if (Option.isSome(member)) {
 								yield* channelMemberPolicy.canUpdate(member.value.id)
-								yield* channelMemberRepo.update({
-									id: member.value.id,
-									notificationCount: 0,
-								})
+								const channel = yield* channelRepo.findById(channelId)
+								if (Option.isSome(channel)) {
+									yield* markChannelsRead(channel.value.organizationId, user.id, [
+										channelId,
+									])
+								}
 							}
 
 							// The notifications themselves live in the user's UserObject.
@@ -144,6 +148,45 @@ export const ChannelMemberRpcLive = ChannelMemberRpcs.toLayer(
 							const txid = yield* generateTransactionId()
 
 							return { transactionId: txid }
+						}),
+					)
+					.pipe(withRemapDbErrors("ChannelMember", "update")),
+
+			"channelMember.markAllRead": ({ organizationId }) =>
+				db
+					.transaction(
+						Effect.gen(function* () {
+							const user = yield* CurrentUser.Context
+							const member = yield* db.first(
+								SQLite.from(schema.organizationMembersTable)
+									.select("id")
+									.where(($) => [$.userId.eq(user.id), $.deletedAt.isNull()])
+									.limit(1),
+							)
+							if (Option.isNone(member)) {
+								return yield* new UnauthorizedError({
+									message: "Not a member of this organization",
+									detail: "channelMember.markAllRead",
+								})
+							}
+							const memberships = yield* db.run(
+								SQLite.from(schema.channelMembersTable)
+									.select("channelId")
+									.where(($) => [$.userId.eq(user.id), $.deletedAt.isNull()]),
+							)
+							yield* markChannelsRead(
+								organizationId,
+								user.id,
+								memberships.map((row) => row.channelId),
+							)
+							yield* enqueueEffect(
+								UserEffects.clearOrganizationNotifications,
+								userTarget(user.id),
+								{
+									memberId: member.value.id,
+								},
+							)
+							return { transactionId: yield* generateTransactionId() }
 						}),
 					)
 					.pipe(withRemapDbErrors("ChannelMember", "update")),
