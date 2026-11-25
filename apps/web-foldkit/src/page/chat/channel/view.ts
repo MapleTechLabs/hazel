@@ -9,6 +9,7 @@ import { getEffectivePresenceStatus } from "~/utils/presence"
 import { htmlRenderFullscreenView } from "../../../chat/embeds/html-render"
 import type * as HtmlRender from "../../../chat/html-render"
 import { imageViewerView } from "../../../chat/image-viewer"
+import { formatTime } from "../../../chat/message/parts"
 import { dateDividerView, messageRowView, type RowContext } from "../../../chat/message/row"
 import type * as Draft from "../../../composer/draft"
 import { draftView } from "../../../composer/draft-view"
@@ -96,16 +97,19 @@ const memoRow = (
 	return slot(rowView, [row, isStuck, isHovered, context, h]) ?? h.div([])
 }
 
-/** "14:02", or "Mon 14:02" before today. */
+/** "14:02", or "Mon, Mar 9 14:02" before today: the message rows' clock (`formatTime`). */
 const sinceLabel = (sinceMs: number, nowMs: number) => {
 	const since = new Date(sinceMs)
-	const time = since.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+	const time = formatTime(sinceMs)
 	return since.toDateString() === new Date(nowMs).toDateString()
 		? time
 		: `${since.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} ${time}`
 }
 
-/** Discord's bar over the list: how many messages are new since the user last read; jump, or mark read. */
+/**
+ * Discord's bar above the list: how many messages are new since the user last read; jump, or mark
+ * read. It sits in the flow, not over the list, so the list's pinned date stays in view under it.
+ */
 const newMessagesBarView = (h: H, model: Model, nowMs: number): Html => {
 	// A full page means older history may hold more new messages.
 	const hasOlder = model.messages.length >= model.limit
@@ -116,7 +120,7 @@ const newMessagesBarView = (h: H, model: Model, nowMs: number): Html => {
 	return h.div(
 		[
 			h.Class(
-				"absolute inset-x-3 top-0 z-10 flex h-7 items-center rounded-b-lg bg-primary text-primary-fg text-xs shadow-sm",
+				"mx-3 flex h-7 shrink-0 items-center rounded-b-lg bg-primary text-primary-fg text-xs shadow-sm",
 			),
 			h.Attribute("role", "status"),
 		],
