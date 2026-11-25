@@ -7,7 +7,7 @@ import { notificationSoundManager } from "~/lib/notification-sound-manager"
 import { settleUpdateUser, updateUser } from "../user"
 import { Message } from "./message"
 import { OrganizationSettings, payloadOf } from "./organization"
-import { Override } from "./overrides"
+import { channelResetOf, Override } from "./overrides"
 import { updateChannelMemberAction } from "~/db/actions"
 import { catchCommon } from "../../../data/actions"
 import { HazelRpc } from "../../../rpc"
@@ -91,12 +91,7 @@ export const ResetOverride = Command.define("ResetOverride", {
 	execute: ({ organizationId, override }) =>
 		Effect.gen(function* () {
 			if (override._tag === "Channel") {
-				yield* updateChannelMemberAction({
-					memberId: override.memberId,
-					isMuted: false,
-					mutedUntil: null,
-					notificationLevel: null,
-				})
+				yield* updateChannelMemberAction(channelResetOf(override.memberId))
 			} else {
 				const rpc = yield* HazelRpc
 				yield* rpc("channelMember.resetScopeNotifications", {

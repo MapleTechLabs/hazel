@@ -1,6 +1,6 @@
 import { ChannelId, ChannelMemberId, ChannelSectionId } from "@hazel/schema"
 import { describe, expect, test } from "vitest"
-import { isInEffect, summaryOf, type Override } from "./overrides"
+import { channelResetOf, isChannelOverride, isInEffect, summaryOf, type Override } from "./overrides"
 
 const now = Date.UTC(2026, 10, 25, 12)
 const channel = (overrides: Partial<Extract<Override, { _tag: "Channel" }>> = {}): Override => ({
@@ -40,5 +40,29 @@ describe("notification overrides", () => {
 			mutedUntilMs: null,
 		}
 		expect(summaryOf(section, now)).toBe("Only @mentions")
+	})
+
+	test("a channel's Reset clears everything that lists it, and DMs are never listed", () => {
+		const memberId = ChannelMemberId.make("00000000-0000-4000-8000-000000000001")
+		const settings = { type: "public", level: null, isMuted: false, mutedUntil: null }
+		const set = [
+			{ ...settings, level: "nothing" as const },
+			{ ...settings, isMuted: true },
+			{ ...settings, mutedUntil: new Date(now + 60_000) },
+		]
+		for (const row of set) {
+			expect(isChannelOverride(row)).toBe(true)
+			const reset = channelResetOf(memberId)
+			expect(
+				isChannelOverride({
+					type: row.type,
+					level: reset.notificationLevel,
+					isMuted: reset.isMuted,
+					mutedUntil: reset.mutedUntil,
+				}),
+			).toBe(false)
+		}
+		expect(isChannelOverride({ ...settings, type: "direct", isMuted: true })).toBe(false)
+		expect(isChannelOverride({ ...settings, type: "single", level: "all" })).toBe(false)
 	})
 })
