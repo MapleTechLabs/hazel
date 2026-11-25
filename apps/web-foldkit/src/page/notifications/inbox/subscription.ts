@@ -11,6 +11,7 @@ import {
 	channelReadStateCollection,
 	messageCollection,
 	notificationCollection,
+	notificationOverrideCollection,
 	organizationCollection,
 	userCollection,
 } from "~/db/collections"
@@ -95,12 +96,18 @@ export interface UnreadChannelRow {
 	readonly readStateSince: Date | null
 	readonly lastMessageAt: Date
 	readonly lastMessageAuthorId: UserId
+	/** The channel's section's and the organization's mutes (the user's own settings). */
+	readonly sectionMuted?: boolean | undefined
+	readonly sectionMutedUntil?: Date | null | undefined
+	readonly orgMuted?: boolean | undefined
+	readonly orgMutedUntil?: Date | null | undefined
 }
 
 /**
  * The Unreads tab: the user's channels with someone else's message after their read position
  * (`~/lib/unread`), the join of the sidebar's `unreadChannelsStream` with each channel's name and
- * the member's mention count. Muted for good never shows; a timed mute is left to the view's clock.
+ * the member's mention count. Muted for good (the channel, its section or the organization; DMs
+ * take only their own) never shows; a timed mute is left to the view's clock.
  */
 export const unreadChannelsStream = (organizationId: OrganizationId, userId: UserId) =>
 	liveQueryStream<UnreadChannelRow, Message>(
@@ -116,9 +123,15 @@ export const unreadChannelsStream = (organizationId: OrganizationId, userId: Use
 				.innerJoin({ organization: organizationCollection }, ({ activity, organization }) =>
 					eq(organization.id, activity.organizationId),
 				)
-				// Only the user's own read positions are synced.
+				// Only the user's own read positions and settings are synced.
 				.leftJoin({ read: channelReadStateCollection }, ({ member, read }) =>
 					eq(read.channelId, member.channelId),
+				)
+				.leftJoin({ section: notificationOverrideCollection }, ({ channel, section }) =>
+					eq(section.scopeId, channel.sectionId),
+				)
+				.leftJoin({ org: notificationOverrideCollection }, ({ activity, org }) =>
+					eq(org.scopeId, activity.organizationId),
 				)
 				.where((q) =>
 					and(
@@ -129,7 +142,7 @@ export const unreadChannelsStream = (organizationId: OrganizationId, userId: Use
 						isNull(q.channel.deletedAt),
 					),
 				)
-				.select(({ member, activity, channel, organization, read }) => ({
+				.select(({ member, activity, channel, organization, read, section, org }) => ({
 					channelId: member.channelId,
 					name: channel.name,
 					type: channel.type,
@@ -140,6 +153,10 @@ export const unreadChannelsStream = (organizationId: OrganizationId, userId: Use
 					readStateSince: organization.readStateSince,
 					lastMessageAt: activity.lastMessageAt,
 					lastMessageAuthorId: activity.lastMessageAuthorId,
+					sectionMuted: section?.isMuted,
+					sectionMutedUntil: section?.mutedUntil,
+					orgMuted: org?.isMuted,
+					orgMutedUntil: org?.mutedUntil,
 				})),
 		(rows) => Message.UpdatedUnreadChannels({ channels: toUnreadChannels(rows, userId) }),
 	)
@@ -150,6 +167,7 @@ export const toUnreadChannels = (
 	userId: UserId,
 ): Array<UnreadChannelItem> =>
 	rows
+		.filter((row) => isDmType(row.type) || (row.sectionMuted !== true && row.orgMuted !== true))
 		.filter((row) =>
 			hasUnreadMessages(
 				{
@@ -167,8 +185,19 @@ export const toUnreadChannels = (
 			type: row.type,
 			mentionCount: row.notificationCount,
 			lastMessageAtMs: new Date(row.lastMessageAt).getTime(),
-			mutedUntilMs: row.mutedUntil === null ? null : new Date(row.mutedUntil).getTime(),
+			mutedUntilMs: latestOf([
+				row.mutedUntil,
+				...(isDmType(row.type) ? [] : [row.sectionMutedUntil ?? null, row.orgMutedUntil ?? null]),
+			]),
 		}))
+
+const isDmType = (type: string) => type === "direct" || type === "single"
+
+/** The latest of the mutes' ends, or null when none is timed. */
+const latestOf = (untils: ReadonlyArray<Date | null>): number | null => {
+	const times = untils.flatMap((until) => (until === null ? [] : [new Date(until).getTime()]))
+	return times.length === 0 ? null : Math.max(...times)
+}
 
 export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) => ({
 	notifications: entry(

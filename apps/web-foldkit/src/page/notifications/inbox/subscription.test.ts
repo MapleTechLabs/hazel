@@ -25,6 +25,18 @@ const row = (n: number, fields: Partial<UnreadChannelRow> = {}): UnreadChannelRo
 })
 
 describe("toUnreadChannels", () => {
+	test("a muted section or organization hides the channel; a timed one ends with the latest mute", () => {
+		expect(toUnreadChannels([row(1, { sectionMuted: true })], userId)).toEqual([])
+		expect(toUnreadChannels([row(2, { orgMuted: true })], userId)).toEqual([])
+		// A DM takes no section or organization setting.
+		expect(toUnreadChannels([row(3, { type: "single", orgMuted: true })], userId)).toHaveLength(1)
+		const [timed] = toUnreadChannels(
+			[row(4, { mutedUntil: at(7_000), sectionMutedUntil: at(9_000), orgMutedUntil: null })],
+			userId,
+		)
+		expect(timed?.mutedUntilMs).toBe(9_000)
+	})
+
 	test("keeps channels where someone else wrote after the read position, with their mentions", () => {
 		const unread = row(1, { notificationCount: 2, mutedUntil: at(9_000) })
 		expect(toUnreadChannels([unread], userId)).toEqual([
