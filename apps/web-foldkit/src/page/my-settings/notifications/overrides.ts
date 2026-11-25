@@ -2,7 +2,7 @@
  * Discord's "Notification overrides": every channel and section of the organization where the user
  * set something of their own (a level or a mute), with what it is and a Reset back to the default.
  */
-import { ChannelId, ChannelMemberId, ChannelSectionId, type OrganizationId } from "@hazel/schema"
+import { ChannelId, ChannelMemberId, ChannelSectionId, type OrganizationId, type UserId } from "@hazel/schema"
 import { and, eq, isNull } from "@tanstack/db"
 import { DateTime, Schema } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
@@ -47,7 +47,7 @@ const msOf = (value: Date | DateTime.Utc | null | undefined) =>
 /** The user's channels (not DMs) with a level or mute of their own, by name. */
 export const channelOverridesStream = <M>(
 	organizationId: OrganizationId,
-	userId: string,
+	userId: UserId,
 	toMessage: (overrides: Array<Override>) => M,
 ) =>
 	liveQueryStream<
@@ -208,7 +208,13 @@ export const view = <M>(
 									intent: "outline",
 									size: "xs",
 									onPress: toReset(override),
-									attributes: [h.AriaLabel(`Reset ${override.name}`)],
+									attributes: [
+										h.AriaLabel(
+											override._tag === "Channel"
+												? `Reset #${override.name}`
+												: `Reset section ${override.name}`,
+										),
+									],
 								},
 								["Reset"],
 							),
