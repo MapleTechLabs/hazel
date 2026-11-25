@@ -609,6 +609,11 @@ describe("message search", () => {
 				yield* send(world, threadId, a2, "back")
 				yield* settle([a.object, threadObject])
 				expect(isFollowing(a2)).toBe(true)
+
+				// Follow from the thread's controls: a regular member of the parent channel may.
+				yield* unfollow()
+				ok(yield* call(a.object, a.id, "channelMember.create", { channelId: threadId }, a2))
+				expect(isFollowing(a2)).toBe(true)
 			}),
 		))
 

@@ -139,6 +139,7 @@ export const messageCreated = Effect.fn("OrgEffects.messageCreated")(function* (
 	// Writing in a thread follows it; a mention brings the mentioned in (Discord's threads).
 	if (channel.value.type === "thread" && channel.value.parentChannelId !== null) {
 		yield* followThread({
+			organizationId: channel.value.organizationId,
 			threadId: channel.value.id,
 			parentChannelId: channel.value.parentChannelId,
 			authorId: payload.authorId,
