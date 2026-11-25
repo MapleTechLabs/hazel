@@ -14,7 +14,6 @@
 import { Database, SQLite, schema } from "@hazel/db"
 import { ChannelId, type ConnectConversationId, MessageId, type OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
-import { defaultLevel } from "../../../services/notifications/notification-rules"
 import { NotificationService } from "../../../services/notifications/notification-service"
 import { enqueueEffect, defineEffect } from "../effects/registry"
 import { MessageNotificationEffects } from "../user/message-notifications"
@@ -202,14 +201,10 @@ export const messageDeleted = Effect.fn("OrgEffects.messageDeleted")(function* (
 	const members = yield* db.run(
 		SQLite.from(schema.channelMembersTable)
 			.select("userId")
-			.where(($) => [
-				$.channelId.eq(channel.value.id),
-				// Members who left since keep their notifications: theirs go too. Where every message
-				// notifies by default (DMs, threads), any member may hold one.
-				...(defaultLevel(channel.value.type) === "all"
-					? []
-					: [SQLite.or($.notificationCount.gt(0), $.notificationLevel.eq("all"))]),
-			]),
+			// Every member, those who left since too: a plain-message notification leaves no count, and
+			// the level (the channel's, section's or organization's) that made it may have changed since.
+			// A member holding none makes the user's object a no-op.
+			.where(($) => [$.channelId.eq(channel.value.id)]),
 	)
 	yield* Effect.forEach(
 		members,

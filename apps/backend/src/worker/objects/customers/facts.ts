@@ -15,6 +15,7 @@ import type {
 	SlaTargets,
 } from "@hazel/domain/customers"
 import type { CustomerContactId, CustomerIssueId } from "@hazel/schema"
+import { paymentMethodTrialProviders } from "@hazel/customer-integrations"
 import { addDays, dayRange } from "@hazel/customer-integrations/kit/time"
 
 export interface ContactFacts {
@@ -213,12 +214,13 @@ export const pays = (sub: schema.CustomerSubscription) =>
 
 /**
  * A trial taken with a card and canceled before it converted: a customer who left, though it never
- * paid. Autumn prices only a trial a processor held; a Stripe one needs a card on file.
+ * paid. A source prices a trial only when a processor held it, unless its trials need a payment
+ * method on file to count (`paymentMethodTrialProviders`).
  */
 export const canceledCardTrial = (sub: schema.CustomerSubscription) =>
 	unconverted(sub) &&
 	(sub.mrrMinor > 0 || sub.billsByUsage) &&
-	(sub.provider !== "stripe" || sub.paymentMethod !== null)
+	(!paymentMethodTrialProviders.includes(sub.provider) || sub.paymentMethod !== null)
 
 /** It was a customer on this plan: it paid for it, or gave a card for its trial. */
 export const wasCustomer = (sub: schema.CustomerSubscription) => pays(sub) || canceledCardTrial(sub)
