@@ -65,7 +65,7 @@ describe("notifications inbox view", () => {
 			pageScene(update, view, shared),
 			Scene.given(mentions()),
 			Scene.Subscription.emit(Message.UpdatedNotifications({ notifications: [unread] })),
-			Scene.click(Scene.role("button", { name: "Mark as read" })),
+			Scene.click(Scene.role("button", { name: /^Mark as read: / })),
 			Scene.Command.expectExact(MarkNotificationRead({ id: unread.id })),
 			Scene.Command.resolve(
 				MarkNotificationRead,
@@ -97,7 +97,7 @@ describe("unreads tab", () => {
 				`/hazel/chat/${uuid(801)}`,
 			),
 			Scene.expect(Scene.text("3 mentions")).toExist(),
-			Scene.click(Scene.role("button", { name: "Mark as read" })),
+			Scene.click(Scene.role("button", { name: "Mark as read: #design" })),
 			Scene.Command.expectExact(MarkChannelRead({ channelId: design.channelId })),
 			// Hidden at once, before the read position syncs back.
 			Scene.expect(Scene.text("#design")).toBeAbsent(),
