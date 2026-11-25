@@ -18,6 +18,9 @@ const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 
 const MIN = 60_000
 
+/** A timestamp as the store holds it (`packages/db` `timestamptz`), so rows compare by time. */
+const stored = (date: Date) => date.toISOString().replace("T", " ").slice(0, 23)
+
 interface IssueRow {
 	id: CustomerIssueId
 	status: string
@@ -100,13 +103,14 @@ const setup = Effect.gen(function* () {
 	}) =>
 		Effect.gen(function* () {
 			const messageId = uuid() as MessageId
-			const createdAt = new Date(now - input.minutesAgo * MIN).toISOString()
+			const sentAt = new Date(now - input.minutesAgo * MIN)
+			const createdAt = sentAt.toISOString()
 			const holder = yield* world.objects.get(channelTarget(input.channelId))
 			holder.storage.db
 				.prepare(
 					`INSERT INTO messages (id, channelId, authorId, content, createdAt) VALUES (?, ?, ?, ?, ?)`,
 				)
-				.run(messageId, input.channelId, input.authorId, input.content, createdAt)
+				.run(messageId, input.channelId, input.authorId, input.content, stored(sentAt))
 			yield* toOrg.applyEffect({
 				objectId: world.orgId,
 				kind: "org.messageCreated",
@@ -263,6 +267,44 @@ describe("support triage", () => {
 					message: { from: "customer", text: "yup" },
 				})
 				expect(JSON.stringify(world.objects.decisionRequests[0])).not.toContain("Customer")
+			}),
+		))
+
+	it("reads the conversation up to the message, however busy the channel got since", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, linked, customer, say, triage, answer } = yield* setup
+				yield* say({
+					channelId: linked,
+					authorId: world.member,
+					minutesAgo: 6,
+					content: "Did the fix work for you?",
+				})
+				yield* say({ channelId: linked, authorId: customer, minutesAgo: 5, content: "yup" })
+				// More than a window of messages land in the channel before the model is asked.
+				const holder = yield* world.objects.get(channelTarget(linked))
+				const later = holder.storage.db.prepare(
+					`INSERT INTO messages (id, channelId, authorId, content, createdAt) VALUES (?, ?, ?, ?, ?)`,
+				)
+				for (let n = 0; n < 60; n += 1) {
+					later.run(
+						uuid(),
+						linked,
+						world.member,
+						`later ${n}`,
+						stored(new Date(Date.now() - 4 * MIN + n * 1_000)),
+					)
+				}
+
+				answer(CHATTER)
+				yield* triage
+				expect(world.objects.decisionRequests).toHaveLength(1)
+				const state = world.objects.decisionRequests[0]!.state
+				expect(state).toMatchObject({
+					message: { text: "yup" },
+					earlier_messages: [{ from: "team", text: "Did the fix work for you?" }],
+				})
+				expect(JSON.stringify(state)).not.toContain("later")
 			}),
 		))
 
@@ -606,6 +648,18 @@ describe("support triage", () => {
 					"Marked as support: yup",
 					"Not support: yup",
 				])
+
+				// Filing one that is already closed moves no status, so the timeline records no close.
+				ok(yield* update({ status: "closed" }))
+				ok(yield* update({ triage: "chatter" }))
+				expect(issues()).toMatchObject([{ status: "closed", triage: "chatter" }])
+				expect(
+					world
+						.rows<{ title: string }>(
+							`SELECT title FROM customer_events WHERE title LIKE 'Not support:%'`,
+						)
+						.map((row) => row.title),
+				).toHaveLength(3)
 			}),
 		))
 })

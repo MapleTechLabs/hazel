@@ -232,8 +232,12 @@ const sidesOf = Effect.fn("Customers.triageSides")(function* (userIds: ReadonlyA
 
 type ContextMessage = (typeof SupportContextCall.success.Type)["messages"][number]
 
-/** The channel around the issue's root, or `None` when the root is gone. */
-const readContext = Effect.fn("Customers.triageContext")(function* (issue: Issue, since: number) {
+/** The channel from `since` to `until` with the issue's root, or `None` when the root is gone. */
+const readContext = Effect.fn("Customers.triageContext")(function* (
+	issue: Issue,
+	since: number,
+	until: number,
+) {
 	// The `ChannelObject` holding the messages: the host channel's for a Connect guest org's mount.
 	const holder = Option.match(yield* (yield* Directory).channel(issue.sourceChannelId), {
 		onNone: () => issue.sourceChannelId,
@@ -242,6 +246,7 @@ const readContext = Effect.fn("Customers.triageContext")(function* (issue: Issue
 	return yield* callObject(SupportContextCall, channelTarget(holder), {
 		messageId: issue.rootMessageId,
 		since,
+		until,
 		limit: CONTEXT_MESSAGES,
 	}).pipe(
 		Effect.map((context) => Option.some(context.messages)),
@@ -554,7 +559,10 @@ export const triageIssue = Effect.fn("Customers.triageIssue")(function* (payload
 		const at = reply === undefined ? issue.openedAt.getTime() : new Date(reply.sentAt).getTime()
 		if (nowMs - at > TRIAGE_FRESH_MS) return yield* unanswered("stale")
 
-		const context = yield* readContext(issue, at - TRIAGE_CONTEXT_MS)
+		// Up to the judged message (its joined ones included), never what the channel said after it:
+		// a retried or late delivery reads the same conversation.
+		const until = reply === undefined ? Math.max(at, issue.lastMessageAt.getTime()) : at
+		const context = yield* readContext(issue, at - TRIAGE_CONTEXT_MS, until)
 		if (Option.isNone(context)) return yield* unanswered("gone")
 		const input = yield* inputOf(issue, context.value, settings.about, reply)
 		const asked = yield* (yield* Decisions).ask(triageRequest(input)).pipe(

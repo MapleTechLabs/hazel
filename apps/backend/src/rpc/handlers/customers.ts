@@ -1161,13 +1161,14 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 							)
 							if (Object.keys(patch).length === 0) return
 							yield* updateIssueRow(issue, patch)
-							if (patch.triage === "chatter") {
+							// Filing an issue that was already closed moves no status: nothing to record.
+							if (patch.triage === "chatter" && patch.status !== undefined) {
 								yield* hazelEvent(
 									issue.accountId,
 									actor.userId,
 									"issue.closed",
 									`Not support: ${issue.title}`,
-									{ issueId, from: issue.status, to: "closed", triage: "chatter" },
+									{ issueId, from: issue.status, to: patch.status, triage: "chatter" },
 									now,
 								)
 							} else if (patch.triage === "support" && issue.triage === "chatter") {

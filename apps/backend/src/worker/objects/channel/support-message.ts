@@ -4,9 +4,10 @@
  * - `channel.supportMessage`: before it opens a support issue on one of them by hand
  *   (`customers.issue.createFromMessage`): the message, if the user reads the channel. `not_found`
  *   for a missing, deleted or unreadable one alike.
- * - `channel.supportContext`: before it triages a conversation (`../customers/triage.ts`): the
- *   channel's recent messages around one of them. Read by the object for the model only; it
- *   reaches no user, so nobody's access is checked.
+ * - `channel.supportContext`: before it triages a conversation (`../customers/triage.ts`): this
+ *   channel's messages leading up to one of them. Read by the object for the model only; it
+ *   reaches no user, so there is nobody whose access could be checked. Calls arrive over the
+ *   Worker's own Durable Object bindings (`../calls.ts`), never from a client.
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { MessageNotFoundError } from "@hazel/domain"
@@ -64,10 +65,15 @@ export const SupportContextCall = defineCall("channel.supportContext", "channel"
 		messageId: MessageId,
 		/** Epoch ms: nothing older is returned. */
 		since: Schema.Finite,
+		/** Epoch ms: nothing newer is returned, so a late read sees what an early one did. */
+		until: Schema.Finite,
 		limit: Schema.Int,
 	}),
 	success: Schema.Struct({
-		/** The channel's live messages from `since` on, oldest first: the newest `limit` of them. */
+		/**
+		 * The channel's live messages from `since` to `until`, oldest first: the newest `limit` of
+		 * them, and the message itself whenever it is no older than `since`.
+		 */
 		messages: Schema.Array(
 			Schema.Struct({
 				id: MessageId,
@@ -86,20 +92,24 @@ export const supportContext = Effect.fn("ChannelObject.supportContext")(
 		const db = yield* Database.Database
 		const anchor = yield* db.first(
 			SQLite.from(schema.messagesTable)
-				.select("id")
+				.select("id", "authorId", "createdAt", "content")
 				.where(($) => [$.id.eq(payload.messageId), $.deletedAt.isNull()])
 				.limit(1),
 		)
 		if (Option.isNone(anchor)) return yield* new MessageNotFoundError({ messageId: payload.messageId })
-		const rows = yield* db.run(
+		const window = yield* db.run(
 			SQLite.from(schema.messagesTable)
 				.select("id", "authorId", "createdAt", "content")
-				.where(($) => [$.deletedAt.isNull(), $.createdAt.gte(new Date(payload.since))])
+				.where(($) => [
+					$.deletedAt.isNull(),
+					$.createdAt.gte(new Date(payload.since)),
+					$.createdAt.lte(new Date(payload.until)),
+				])
 				.orderBy(($) => [[$.createdAt, "desc"]])
 				.limit(Math.max(1, Math.min(payload.limit, 50))),
 		)
-		return {
-			messages: [...rows].reverse().map((row) => ({
+		const messages = [...window, anchor.value]
+			.map((row) => ({
 				id: row.id,
 				authorId: row.authorId,
 				sentAt:
@@ -107,8 +117,15 @@ export const supportContext = Effect.fn("ChannelObject.supportContext")(
 						? row.createdAt.getTime()
 						: DateTime.toEpochMillis(row.createdAt),
 				content: Array.from(row.content).slice(0, SUPPORT_CONTEXT_TEXT_MAX).join(""),
-			})),
-		}
+			}))
+			// The message is in the window, or was crowded out of it: once either way.
+			.filter(
+				(message, index, all) =>
+					message.sentAt >= payload.since &&
+					all.findIndex((other) => other.id === message.id) === index,
+			)
+			.sort((a, b) => a.sentAt - b.sentAt)
+		return { messages }
 	},
 	Effect.catchTag("DatabaseError", (error) => Effect.die(error)),
 )

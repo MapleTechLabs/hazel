@@ -116,15 +116,15 @@ them), else team for a member, else unknown. An override changing someone's side
 
 ## Data and flow
 
-| Where                               | Table / effect                    | What                                                                                                                          |
-| ----------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `CustomersObject` (`customers`)     | `customer_issues`                 | The issue. Partial unique `(sourceChannelId, rootMessageId)` while live. Synced to members: unclosed, and closed for 30 days. |
-| `ChannelObject` → `OrgObject`       | `org.messageCreated`              | Carries `threadRootMessageId` in a thread (optional: older deliveries have none).                                             |
-| `OrgObject` → `CustomersObject`     | `customers.chatMessage`           | The author-side relay; it now also carries `threadRootMessageId` and the text (≤ 500 characters, the issue's title).          |
-| `OrgObject` → `CustomersObject`     | `customers.supportMessageDeleted` | A root message deleted in a linked channel.                                                                                   |
-| `CustomersObject` → `ChannelObject` | call `channel.supportMessage`     | For an issue opened by hand: the message (author, time, text, thread) if the caller reads the channel.                        |
-| `CustomersObject` → `ChannelObject` | call `channel.supportContext`     | For triage: the channel's recent messages around the issue's root (≤ 500 characters each). Read for the model only.           |
-| `CustomersObject` (its own outbox)  | `ai.triageIssue`                  | The model call, 2 s after the commit that opened the issue (or a customer's reply in a filed conversation).                   |
+| Where                               | Table / effect                    | What                                                                                                                                |
+| ----------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `CustomersObject` (`customers`)     | `customer_issues`                 | The issue. Partial unique `(sourceChannelId, rootMessageId)` while live. Synced to members: unclosed, and closed for 30 days.       |
+| `ChannelObject` → `OrgObject`       | `org.messageCreated`              | Carries `threadRootMessageId` in a thread (optional: older deliveries have none).                                                   |
+| `OrgObject` → `CustomersObject`     | `customers.chatMessage`           | The author-side relay; it now also carries `threadRootMessageId` and the text (≤ 500 characters, the issue's title).                |
+| `OrgObject` → `CustomersObject`     | `customers.supportMessageDeleted` | A root message deleted in a linked channel.                                                                                         |
+| `CustomersObject` → `ChannelObject` | call `channel.supportMessage`     | For an issue opened by hand: the message (author, time, text, thread) if the caller reads the channel.                              |
+| `CustomersObject` → `ChannelObject` | call `channel.supportContext`     | For triage: the channel's messages up to the judged one, its root always included (≤ 500 characters each). Read for the model only. |
+| `CustomersObject` (its own outbox)  | `ai.triageIssue`                  | The model call, 2 s after the commit that opened the issue (or a customer's reply in a filed conversation).                         |
 
 1. `customers.chatMessage` (`author-side.md`) runs `customerChatMessageHooks` in the customers
    object; `supportIssueHook` (`customers/issues.ts`) is the one after participants. It finds the
