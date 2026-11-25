@@ -50,9 +50,11 @@ export const makePushRegistration = (options: {
 	let inFlight: Promise<void> | undefined
 	/** The shell gave no token (permission denied, no APNs): only a return to the front tries again. */
 	let refused = false
+	/** Sign-out is forgetting the device: nothing registers it again until that is done. */
+	let signingOut = false
 
 	const attempt = async () => {
-		if (registered !== undefined) return
+		if (registered !== undefined || signingOut) return
 		const account = await api.account()
 		if (account === null) return
 		let token: PushToken
@@ -71,6 +73,7 @@ export const makePushRegistration = (options: {
 
 	/** Registers if signed in and not yet registered; one attempt at a time, never rejects. */
 	const ensure = (): Promise<void> => {
+		if (signingOut) return Promise.resolve()
 		refused = false
 		inFlight ??= attempt()
 			.catch((error: unknown) => log(`[push] register failed: ${describe(error)}`))
@@ -82,19 +85,27 @@ export const makePushRegistration = (options: {
 
 	/** Sign-out: the API forgets the token (while the session can still say whose), then the shell. */
 	const unregister = async (): Promise<void> => {
-		const token = latest
-		registered = undefined
-		latest = undefined
+		signingOut = true
 		try {
-			if (token !== undefined) await api.unregister(token)
-		} catch (error) {
-			log(`[push] unregister failed: ${describe(error)}`)
+			// An attempt already running may still register: let it land, so its token is forgotten too.
+			await inFlight
+			const token = latest
+			registered = undefined
+			latest = undefined
+			try {
+				if (token !== undefined) await api.unregister(token)
+			} catch (error) {
+				log(`[push] unregister failed: ${describe(error)}`)
+			}
+			await host.forget().catch(() => undefined)
+		} finally {
+			signingOut = false
 		}
-		await host.forget().catch(() => undefined)
 	}
 
-	/** The periodic retry: not once registered, nor after the shell refused. */
-	const retry = (): Promise<void> => (registered !== undefined || refused ? Promise.resolve() : ensure())
+	/** The periodic retry: not once registered, nor after the shell refused, nor during sign-out. */
+	const retry = (): Promise<void> =>
+		registered !== undefined || refused || signingOut ? Promise.resolve() : ensure()
 
 	return { ensure, retry, unregister, isRegistered: () => registered !== undefined }
 }
