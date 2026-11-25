@@ -3,7 +3,7 @@ import { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { and, eq, isNull } from "@tanstack/db"
 import { Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
-import { hasUnreadMessages } from "~/lib/unread"
+import { type UnreadChannelMutes, unreadMuteEnd } from "~/lib/unread"
 import {
 	channelActivityCollection,
 	channelCollection,
@@ -85,29 +85,17 @@ const notificationChannelIds = (memberId: OrganizationMemberId) =>
 		Stream.switchMap(retainChannels),
 	)
 
-export interface UnreadChannelRow {
+export interface UnreadChannelRow extends UnreadChannelMutes {
 	readonly channelId: ChannelId
 	readonly name: string
-	readonly type: string
 	readonly notificationCount: number
-	readonly mutedUntil: Date | null
-	readonly joinedAt: Date
-	readonly lastReadAt: Date | null | undefined
-	readonly readStateSince: Date | null
-	readonly lastMessageAt: Date
-	readonly lastMessageAuthorId: UserId
-	/** The channel's section's and the organization's mutes (the user's own settings). */
-	readonly sectionMuted?: boolean | undefined
-	readonly sectionMutedUntil?: Date | null | undefined
-	readonly orgMuted?: boolean | undefined
-	readonly orgMutedUntil?: Date | null | undefined
 }
 
 /**
  * The Unreads tab: the user's channels with someone else's message after their read position
  * (`~/lib/unread`), the join of the sidebar's `unreadChannelsStream` with each channel's name and
- * the member's mention count. Muted for good (the channel, its section or the organization; DMs
- * take only their own) never shows; a timed mute is left to the view's clock.
+ * the member's mention count, with the same mute rules (`unreadMuteEnd`); a timed mute is left to
+ * the view's clock.
  */
 export const unreadChannelsStream = (organizationId: OrganizationId, userId: UserId) =>
 	liveQueryStream<UnreadChannelRow, Message>(
@@ -147,6 +135,7 @@ export const unreadChannelsStream = (organizationId: OrganizationId, userId: Use
 					name: channel.name,
 					type: channel.type,
 					notificationCount: member.notificationCount,
+					isMuted: member.isMuted,
 					mutedUntil: member.mutedUntil,
 					joinedAt: member.joinedAt,
 					lastReadAt: read?.lastReadAt,
@@ -166,38 +155,21 @@ export const toUnreadChannels = (
 	rows: ReadonlyArray<UnreadChannelRow>,
 	userId: UserId,
 ): Array<UnreadChannelItem> =>
-	rows
-		.filter((row) => isDmType(row.type) || (row.sectionMuted !== true && row.orgMuted !== true))
-		.filter((row) =>
-			hasUnreadMessages(
-				{
-					lastReadAt: row.lastReadAt ? new Date(row.lastReadAt) : null,
-					joinedAt: new Date(row.joinedAt),
-					readStateSince: row.readStateSince ? new Date(row.readStateSince) : null,
-				},
-				{ lastMessageAt: new Date(row.lastMessageAt), lastMessageAuthorId: row.lastMessageAuthorId },
-				userId,
-			),
-		)
-		.map((row) => ({
-			channelId: row.channelId,
-			name: row.name,
-			type: row.type,
-			mentionCount: row.notificationCount,
-			lastMessageAtMs: new Date(row.lastMessageAt).getTime(),
-			mutedUntilMs: latestOf([
-				row.mutedUntil,
-				...(isDmType(row.type) ? [] : [row.sectionMutedUntil ?? null, row.orgMutedUntil ?? null]),
-			]),
-		}))
-
-const isDmType = (type: string) => type === "direct" || type === "single"
-
-/** The latest of the mutes' ends, or null when none is timed. */
-const latestOf = (untils: ReadonlyArray<Date | null>): number | null => {
-	const times = untils.flatMap((until) => (until === null ? [] : [new Date(until).getTime()]))
-	return times.length === 0 ? null : Math.max(...times)
-}
+	rows.flatMap((row) => {
+		const unread = unreadMuteEnd(row, userId)
+		return unread === undefined
+			? []
+			: [
+					{
+						channelId: row.channelId,
+						name: row.name,
+						type: row.type,
+						mentionCount: row.notificationCount,
+						lastMessageAtMs: new Date(row.lastMessageAt).getTime(),
+						mutedUntilMs: unread.mutedUntilMs,
+					},
+				]
+	})
 
 export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) => ({
 	notifications: entry(

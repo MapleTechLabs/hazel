@@ -133,22 +133,32 @@ final class PushCenter: NSObject {
     }
 
     fileprivate func perform(_ action: String, on push: PushRef, text: String?) async {
-        do {
-            switch action {
-            case Self.replyAction:
-                guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return }
+        switch action {
+        case Self.replyAction:
+            guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return }
+            do {
                 try await PushActions.reply(text, to: push)
-                // Replying reads the channel, as sending from it does.
-                try await PushActions.markRead(push)
-            case Self.markReadAction:
-                try await PushActions.markRead(push)
-            default:
+            } catch {
+                WebBridge.log.error("[push] reply failed: \(error.localizedDescription, privacy: .public)")
+                await Self.tellReplyFailed(push)
                 return
             }
+            // Replying reads the channel, as sending from it does. The reply is out either way, so
+            // a failure here is only logged: reporting it as unsent would have it sent twice.
+            await markRead(push)
+        case Self.markReadAction:
+            await markRead(push)
+        default:
+            return
+        }
+    }
+
+    private func markRead(_ push: PushRef) async {
+        do {
+            try await PushActions.markRead(push)
             await Self.clearDelivered(push)
         } catch {
-            WebBridge.log.error("[push] \(action, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
-            if action == Self.replyAction { await Self.tellReplyFailed(push) }
+            WebBridge.log.error("[push] markRead failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
