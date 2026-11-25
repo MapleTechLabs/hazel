@@ -83,4 +83,87 @@ describe("push registration", () => {
 		await registration.ensure()
 		expect(registration.isRegistered()).toBe(true)
 	})
+
+	it("sign-out holds off the retry until the device is forgotten", async () => {
+		const calls: Array<string> = []
+		let release: () => void = () => undefined
+		const registration = makePushRegistration({
+			host: {
+				register: async () => {
+					calls.push("host.register")
+					return TOKEN
+				},
+				forget: async () => {
+					calls.push("host.forget")
+				},
+			},
+			api: {
+				account: async () => ACCOUNT,
+				register: async () => {
+					calls.push("api.register")
+				},
+				unregister: (token) =>
+					new Promise<void>((resolve) => {
+						calls.push(`api.unregister ${token}`)
+						release = resolve
+					}),
+			},
+			log: () => undefined,
+		})
+		await registration.ensure()
+		const signingOut = registration.unregister()
+		await Promise.resolve()
+		// The session still answers while the API forgets the token: the timer must not register again.
+		await registration.retry()
+		await registration.ensure()
+		release()
+		await signingOut
+		expect(calls).toEqual([
+			"host.register",
+			"api.register",
+			`api.unregister ${TOKEN.token}`,
+			"host.forget",
+		])
+		expect(registration.isRegistered()).toBe(false)
+	})
+
+	it("an attempt running when sign-out starts lands first, so its token is forgotten too", async () => {
+		const calls: Array<string> = []
+		let answer: (token: PushToken) => void = () => undefined
+		const registration = makePushRegistration({
+			host: {
+				register: () =>
+					new Promise<PushToken>((resolve) => {
+						calls.push("host.register")
+						answer = resolve
+					}),
+				forget: async () => {
+					calls.push("host.forget")
+				},
+			},
+			api: {
+				account: async () => ACCOUNT,
+				register: async () => {
+					calls.push("api.register")
+				},
+				unregister: async (token) => {
+					calls.push(`api.unregister ${token}`)
+				},
+			},
+			log: () => undefined,
+		})
+		const registering = registration.ensure()
+		await Promise.resolve()
+		await Promise.resolve()
+		const signingOut = registration.unregister()
+		answer(TOKEN)
+		await Promise.all([registering, signingOut])
+		expect(calls).toEqual([
+			"host.register",
+			"api.register",
+			`api.unregister ${TOKEN.token}`,
+			"host.forget",
+		])
+		expect(registration.isRegistered()).toBe(false)
+	})
 })
