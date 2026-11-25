@@ -28,7 +28,8 @@ export const triageCard = (h: H, model: Model, canEdit: boolean): Html => {
 	const isDirty = model.triageForm !== null && !sameTriage(model.triageForm, saved)
 	// Not before the saved settings are here: an edit would start from the defaults, not from them.
 	const isDisabled = !canEdit || model.isSavingTriage || model.settings === null
-	const isTooLong = form.about.length > ABOUT_MAX
+	// As it is saved: trimmed.
+	const isTooLong = form.about.trim().length > ABOUT_MAX
 	return card(
 		h,
 		{

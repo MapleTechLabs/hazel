@@ -187,7 +187,7 @@ const savedTriage = (model: Model, shared: Shared): Return => {
 		organizationId === undefined ||
 		model.settings === null ||
 		form === null ||
-		form.about.length > ABOUT_MAX ||
+		form.about.trim().length > ABOUT_MAX ||
 		model.isSavingTriage ||
 		!isCustomersAdmin(shared)
 	)

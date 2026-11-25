@@ -300,6 +300,9 @@ describe("SLA settings: triage", () => {
 	test("a description past the limit is not sent, and a member changes nothing", () => {
 		const long = step(admin)(loaded(), Message.ChangedTriageAbout({ value: "a".repeat(2_001) }))
 		expect(update(long, Message.PressedSaveTriage(), admin).commands ?? []).toEqual([])
+		// The limit is on what is saved: a full-length description pasted with a trailing newline fits.
+		const padded = step(admin)(loaded(), Message.ChangedTriageAbout({ value: `${"a".repeat(2_000)}\n` }))
+		expect(update(padded, Message.PressedSaveTriage(), admin).model.isSavingTriage).toBe(true)
 		const asMember = update(loaded(member), Message.ToggledTriage({ enabled: false }), member)
 		expect(asMember.model.triageForm).toBeNull()
 	})
