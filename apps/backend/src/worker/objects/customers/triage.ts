@@ -37,9 +37,11 @@ import { SupportContextCall } from "../channel/support-message"
 import { channelTarget } from "../kinds"
 import {
 	BACK_TO_SUPPORT,
+	ensureOpenedEvent,
 	foldActivity,
 	foldMessage,
 	type IssuePatch,
+	openedEventOf,
 	type SupportMessage,
 	updateIssueRow,
 } from "./issues"
@@ -359,21 +361,6 @@ const inputOf = Effect.fn("Customers.triageInput")(function* (
 
 type Store = Database.Database | SqlClient
 
-/** The account timeline's "Issue opened" of `issue`. */
-const openedEventOf = (issue: Issue) =>
-	Effect.flatMap(Database.Database, (db) =>
-		db.first(
-			SQLite.from(schema.customerEventsTable)
-				.select("id")
-				.where(($) => [
-					$.accountId.eq(issue.accountId),
-					$.type.eq("issue.opened"),
-					SQLite.sql.cond`json_extract(${$.data}, '$.issueId') = ${issue.id}`,
-				])
-				.limit(1),
-		),
-	)
-
 const dropOpenedEvent = (issue: Issue) =>
 	Effect.gen(function* () {
 		const db = yield* Database.Database
@@ -412,21 +399,9 @@ export const bringBack = Effect.fn("Customers.bringBackIssue")(function* (
 	issue: Issue,
 	input: { readonly score: number | null; readonly now: Date },
 ) {
-	const db = yield* Database.Database
 	const back = yield* updateIssueRow(issue, { ...BACK_TO_SUPPORT, triageScore: input.score })
 	// Filed by the model, it has no "opened" on the timeline yet.
-	if (Option.isNone(yield* openedEventOf(issue))) {
-		yield* db.run(
-			SQLite.insertInto(schema.customerEventsTable).values({
-				accountId: issue.accountId,
-				provider: "hazel",
-				type: "issue.opened",
-				title: `Issue opened: ${issue.title}`,
-				data: { issueId: issue.id, channelId: issue.sourceChannelId, messageId: issue.rootMessageId },
-				occurredAt: input.now,
-			}),
-		)
-	}
+	yield* ensureOpenedEvent(issue, input.now)
 	return back
 })
 

@@ -320,6 +320,43 @@ export const insertIssue = (input: {
 		return issue
 	})
 
+/** The account timeline's "Issue opened" of `issue`. */
+export const openedEventOf = (issue: schema.CustomerIssue) =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.first(
+			SQLite.from(schema.customerEventsTable)
+				.select("id")
+				.where(($) => [
+					$.accountId.eq(issue.accountId),
+					$.type.eq("issue.opened"),
+					SQLite.sql.cond`json_extract(${$.data}, '$.issueId') = ${issue.id}`,
+				])
+				.limit(1),
+		),
+	)
+
+/**
+ * An issue the model filed left the account's timeline (§ Triage); brought back, by the model, a
+ * reply or a member, it is on it again from `now`. One that never left keeps its own.
+ */
+export const ensureOpenedEvent = Effect.fn("Customers.ensureOpenedEvent")(function* (
+	issue: schema.CustomerIssue,
+	now: Date,
+) {
+	if (Option.isSome(yield* openedEventOf(issue))) return
+	const db = yield* Database.Database
+	yield* db.run(
+		SQLite.insertInto(schema.customerEventsTable).values({
+			accountId: issue.accountId,
+			provider: "hazel",
+			type: "issue.opened",
+			title: `Issue opened: ${issue.title}`,
+			data: { issueId: issue.id, channelId: issue.sourceChannelId, messageId: issue.rootMessageId },
+			occurredAt: now,
+		}),
+	)
+})
+
 /**
  * Where a relayed message lands. `channelId` is the linked channel; `thread` names the thread and
  * its root message when the message is a reply there.
@@ -362,8 +399,10 @@ export const receiveSupportMessage = Effect.fn("CustomersObject.receiveSupportMe
 			}
 			// An email is a request by where it was sent, and none of it goes to the model: a
 			// customer's reply to a conversation a member filed brings it back unasked.
-			if (filed && fromCustomer && input.inbox !== undefined) Object.assign(changes, BACK_TO_SUPPORT)
+			const returns = filed && fromCustomer && input.inbox !== undefined
+			if (returns) Object.assign(changes, BACK_TO_SUPPORT)
 			yield* updateIssueRow(issue.value, changes)
+			if (returns) yield* ensureOpenedEvent(issue.value, input.message.sentAt)
 			// Chatter stays filed while it is chatter: the model says whether this reply changes that.
 			if (filed && fromCustomer && input.inbox === undefined) {
 				yield* requestTriage(

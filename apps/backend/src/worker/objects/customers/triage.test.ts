@@ -744,6 +744,53 @@ describe("support triage", () => {
 			}),
 		))
 
+	it("puts an issue the model filed back on the timeline when a member restores it", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, linked, customer, customerUser, say, issues, triage, answer, openedEvents } =
+					yield* setup
+				answer(CHATTER)
+				yield* say({ channelId: linked, authorId: customer, minutesAgo: 3, content: "yup" })
+				const second = yield* say({
+					channelId: linked,
+					authorId: customerUser(),
+					minutesAgo: 2,
+					content: "hey",
+				})
+				yield* triage
+				expect(issues()).toMatchObject([{ triage: "chatter" }, { triage: "chatter" }])
+				expect(openedEvents()).toEqual([])
+				// From the inbox ("Mark as support"), and from chat ("Create issue").
+				ok(
+					yield* world.call(
+						"customers.issue.update",
+						{ issueId: issues()[0]!.id, triage: "support" },
+						world.member,
+					),
+				)
+				ok(
+					yield* world.call(
+						"customers.issue.createFromMessage",
+						{ channelId: linked, messageId: second },
+						world.member,
+					),
+				)
+				expect(issues()).toMatchObject([{ triage: "support" }, { triage: "support" }])
+				expect(
+					world
+						.rows<{ title: string }>(
+							`SELECT title FROM customer_events WHERE type IN ('issue.opened', 'issue.reopened') ORDER BY rowid`,
+						)
+						.map((row) => row.title),
+				).toEqual([
+					"Issue opened: yup",
+					"Marked as support: yup",
+					"Issue opened: hey",
+					"Marked as support: hey",
+				])
+			}),
+		))
+
 	it("lets a member file an issue as not support, and bring one back", () =>
 		run(
 			Effect.gen(function* () {

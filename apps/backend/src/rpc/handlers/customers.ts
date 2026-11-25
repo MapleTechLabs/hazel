@@ -104,6 +104,7 @@ import { CustomerChannelCall } from "../../worker/objects/org/channel-customers"
 import {
 	insertIssue,
 	issueAt,
+	ensureOpenedEvent,
 	issuePatch,
 	ISSUE_STATUS_VERB,
 	linkedAccountOf,
@@ -1172,6 +1173,8 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 									now,
 								)
 							} else if (patch.triage === "support" && issue.triage === "chatter") {
+								// Filed by the model, it left the timeline: it opens there again first.
+								yield* ensureOpenedEvent(issue, now)
 								yield* hazelEvent(
 									issue.accountId,
 									actor.userId,
@@ -1225,6 +1228,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 						if (Object.keys(patch).length === 0) return found
 						const issue = yield* updateIssueRow(found, patch)
 						if (found.triage !== "chatter") return issue
+						yield* ensureOpenedEvent(found, now)
 						yield* hazelEvent(
 							issue.accountId,
 							actor.userId,
