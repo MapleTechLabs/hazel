@@ -134,6 +134,12 @@ const notifiedChannel = Effect.fn("OrgEffects.notifiedChannel")(function* <E, R>
 const MAX_MENTIONED_GROUPS = 20
 
 /**
+ * At most this many of the mentioned groups' members follow a thread on one message: each new
+ * follower is its own `channel_members` write.
+ */
+const MAX_GROUP_FOLLOWERS = 250
+
+/**
  * The org's groups a message mentions (deleted ones and other orgs' ids drop out): their handles,
  * for the push, and their members, each mentioned (Discord's role mentions). Only the channel's
  * members are ever notified, so the members are not narrowed here.
@@ -179,18 +185,22 @@ export const messageCreated = Effect.fn("OrgEffects.messageCreated")(function* (
 	const payload = { ...input, channelId: channel.value.id }
 	const content = payload.content
 	yield* recordCustomerChatMessage(channel.value, payload)
-	// Writing in a thread follows it; a mention brings the mentioned in (Discord's threads).
+	const groups = yield* mentionedGroups(channel.value.organizationId, payload.mentionedGroupIds ?? [])
+
+	// Writing in a thread follows it; a mention brings the mentioned in (Discord's threads), a group
+	// mention its members (those of the parent channel), so they are among the thread's recipients.
 	if (channel.value.type === "thread" && channel.value.parentChannelId !== null) {
 		yield* followThread({
 			organizationId: channel.value.organizationId,
 			threadId: channel.value.id,
 			parentChannelId: channel.value.parentChannelId,
 			authorId: payload.authorId,
-			mentionedUserIds: payload.mentionedUserIds,
+			mentionedUserIds: [
+				...payload.mentionedUserIds,
+				...groups.memberIds.slice(0, MAX_GROUP_FOLLOWERS),
+			],
 		})
 	}
-
-	const groups = yield* mentionedGroups(channel.value.organizationId, payload.mentionedGroupIds ?? [])
 
 	yield* NotificationService.use((service) =>
 		service.notify(channel.value.organizationId, {

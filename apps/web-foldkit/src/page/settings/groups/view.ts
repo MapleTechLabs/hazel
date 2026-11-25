@@ -208,15 +208,13 @@ const groupPanel = (h: HtmlBuilder<Message>, model: Model, group: Group, isAdmin
 	const inGroup = new Set<string>(group.memberIds)
 	const members = model.members.filter((member) => inGroup.has(member.userId))
 	const search = model.memberSearch.trim().toLowerCase()
-	const suggestions = model.members
-		.filter(
-			(member) =>
-				!inGroup.has(member.userId) &&
-				(search === "" ||
-					member.name.toLowerCase().includes(search) ||
-					member.email.toLowerCase().includes(search)),
-		)
-		.slice(0, MAX_SUGGESTIONS)
+	const matching = model.members.filter(
+		(member) =>
+			search === "" ||
+			member.name.toLowerCase().includes(search) ||
+			member.email.toLowerCase().includes(search),
+	)
+	const suggestions = matching.filter((member) => !inGroup.has(member.userId)).slice(0, MAX_SUGGESTIONS)
 	return card(h, {}, [
 		cardHeader(h, [
 			pageHeader(h, {
@@ -319,7 +317,11 @@ const groupPanel = (h: HtmlBuilder<Message>, model: Model, group: Group, isAdmin
 									suggestions.length === 0
 										? h.p(
 												[h.Class("py-2 text-muted-fg text-sm")],
-												["Everyone who matches is in the group."],
+												[
+													matching.length === 0
+														? "No people match."
+														: "Everyone who matches is in the group.",
+												],
 											)
 										: h.ul(
 												[h.Class("divide-y divide-border")],

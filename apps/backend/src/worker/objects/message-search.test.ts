@@ -646,6 +646,55 @@ describe("message search", () => {
 			}),
 		))
 
+	it("a group mention in a thread brings in its members from the parent channel and notifies them", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { a, a1, a2 } = world
+				const general = yield* makeChannel(a, a1, "public", "general")
+				ok(yield* call(a.object, a.id, "channelMember.create", { channelId: general }, a2))
+				const group = ok(
+					yield* call(
+						a.object,
+						a.id,
+						"userGroup.create",
+						{ organizationId: a.id, handle: "design", name: "Design", memberIds: [a2] },
+						a1,
+					),
+				).data
+				const root = yield* send(world, general, a1, "kickoff")
+				const threadId = uuid() as ChannelId
+				ok(
+					yield* call(
+						a.object,
+						a.id,
+						"channel.createThread",
+						new CreateThreadRequest({
+							id: threadId,
+							messageId: root,
+							organizationId: a.id,
+							channelId: general,
+						}),
+						a1,
+					),
+				)
+				const threadObject = yield* world.objects.get(channelTarget(threadId))
+				const a2Object = yield* world.objects.get(userTarget(a2))
+				yield* send(world, threadId, a1, `@[group:${group.id}] review please`)
+				yield* settle([threadObject, a.object, a2Object])
+				expect(
+					a.object.storage.db
+						.prepare(
+							`SELECT notificationCount AS n FROM channel_members WHERE channelId = ? AND userId = ? AND deletedAt IS NULL`,
+						)
+						.get(threadId, a2),
+				).toEqual({ n: 1 })
+				expect(a2Object.storage.db.prepare(`SELECT reason FROM notifications`).all()).toEqual([
+					{ reason: "mention" },
+				])
+			}),
+		))
+
 	it("user groups: owners and admins manage them; a group mention notifies its members as a mention", () =>
 		run(
 			Effect.gen(function* () {

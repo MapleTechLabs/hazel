@@ -114,6 +114,19 @@ describe("members", () => {
 		)
 	})
 
+	test("Add members tells a search that matches nobody from one whose matches are all in", () => {
+		const search = Scene.role("textbox", { name: "Add members" })
+		Scene.scene(
+			pageScene(update, view, owner),
+			Scene.given(withGroups([design])),
+			Scene.click(Scene.role("button", { name: "Manage @design" })),
+			Scene.type(search, "zzz"),
+			Scene.expect(Scene.text("No people match.")).toExist(),
+			Scene.type(search, "ada"),
+			Scene.expect(Scene.text("Everyone who matches is in the group.")).toExist(),
+		)
+	})
+
 	test("a member sees who is in a group, read-only", () => {
 		Scene.scene(
 			pageScene(update, view, member),
