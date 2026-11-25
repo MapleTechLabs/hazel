@@ -276,7 +276,7 @@ enum PushActions {
         try await call("channelMember.clearNotifications", ["channelId": push.channelId])
     }
 
-    /// `message.create` in the push's channel. The nonce makes a retried send the same message.
+    /// `message.create` in the push's channel, sent once (nothing retries it; a failure tells the user).
     nonisolated static func reply(_ text: String, to push: PushRef) async throws {
         guard let account = PushAccount.current else { throw PushError.signedOut }
         try await call("message.create", [
