@@ -6,9 +6,9 @@ import { Message, Model, renameModalSpec } from "./rename-channel"
 
 const spec = renameModalSpec({
 	id: "rename-thread-modal",
-	title: "Rename Thread",
+	title: "Rename thread",
 	description: "Enter a new name for this thread",
-	label: "Thread Name",
+	label: "Thread name",
 	placeholder: "Thread name",
 	successMessage: "Thread renamed successfully",
 	notFound: {

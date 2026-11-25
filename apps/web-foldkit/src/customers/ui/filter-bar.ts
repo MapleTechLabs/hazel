@@ -1,10 +1,10 @@
 import type { CustomersRange } from "@hazel/domain/customers"
 import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { tabsStyles } from "~/components/ui/tabs.styles"
 import { IconChevronDown, IconClose, IconPlus } from "../../icons"
 import { ariaButton, button } from "../../ui/button"
 import { searchField } from "../../ui/search-field"
+import { tabClassName, tabIndicatorClassName } from "../../ui/tab-strip"
 import { formatCount } from "../format"
 import { type Segment, segmented } from "../../ui/segmented-control"
 import { kbd } from "./shortcuts"
@@ -73,11 +73,7 @@ export const viewTabs = <M, K extends string>(
 					return ariaButton(
 						h,
 						{
-							className: twMerge(
-								...tabsStyles.tab("horizontal", false),
-								"cursor-pointer gap-1.5",
-								extra?.className,
-							),
+							className: tabClassName(twMerge("cursor-pointer gap-1.5", extra?.className)),
 							onPress: options.onSelect(tab.key),
 							attributes: [
 								...(extra?.attributes ?? []),
@@ -99,12 +95,7 @@ export const viewTabs = <M, K extends string>(
 										),
 									]),
 							...(isSelected
-								? [
-										h.span([
-											h.AriaHidden(true),
-											h.Class(twMerge(...tabsStyles.selectionIndicator("horizontal"))),
-										]),
-									]
+								? [h.span([h.AriaHidden(true), h.Class(tabIndicatorClassName())])]
 								: []),
 						],
 					)

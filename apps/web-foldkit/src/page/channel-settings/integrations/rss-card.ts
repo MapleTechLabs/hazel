@@ -130,7 +130,7 @@ export const rssCard = (h: HtmlBuilder<Message>, model: Model): Html => {
 				),
 				button(h, { intent: "primary", size: "sm", onPress: Message.ClickedAddFeed() }, [
 					IconPlus(h, { attributes: { "data-slot": "icon" } }),
-					"Add Feed",
+					"Add feed",
 				]),
 			],
 			CARD_HEADER_ROW,

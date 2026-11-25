@@ -4,7 +4,7 @@ import { getEffectivePresenceStatus } from "~/utils/presence"
 import { IconUsers, IconVolumeMute } from "../../icons"
 import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
-import { badge } from "../../ui/badge"
+import { countBadge } from "../../ui/count-badge"
 import { type ChannelLinks, channelIcon } from "../../ui/channel-icon"
 import { heading } from "../../ui/heading"
 import { iconTile } from "../../ui/icon-tile"
@@ -23,12 +23,15 @@ const title = <M>(h: HtmlBuilder<M>, channel: ChannelSummary, children: Readonly
 		children,
 	)
 
+/** The unread count, as the sidebar's rows show it; named for screen readers. */
 const notificationBadge = <M>(h: HtmlBuilder<M>, count: number): Html =>
 	count <= 0
 		? h.empty
-		: badge(h, { intent: "danger", className: "min-w-5 justify-center" }, [
-				count > 99 ? "99+" : `${count}`,
-			])
+		: countBadge(h, {
+				count,
+				isCapped: true,
+				attributes: [h.AriaLabel(`${count} unread`), h.Role("img")],
+			})
 
 const cardLink = <M>(h: HtmlBuilder<M>, orgSlug: string, channel: ChannelSummary, left: Array<Html>): Html =>
 	h.keyed("a")(
@@ -67,7 +70,16 @@ export const channelCard = <M>(
 					[h.Class("flex items-center gap-2")],
 					[
 						title(h, channel, [channel.name]),
-						channel.isFavorite ? h.span([h.Class("shrink-0 text-favorite")], ["★"]) : h.empty,
+						channel.isFavorite
+							? h.span(
+									[
+										h.Class("shrink-0 text-favorite"),
+										h.Role("img"),
+										h.AriaLabel("Favorite"),
+									],
+									["★"],
+								)
+							: h.empty,
 					],
 				),
 				h.div(

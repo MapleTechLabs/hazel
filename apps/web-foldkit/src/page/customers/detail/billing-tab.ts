@@ -340,6 +340,8 @@ const invoicesCard = (
 		hasMore: model.invoices.nextCursor !== null,
 		label: "Show more",
 		onMore: Message.PressedMoreInvoices(),
+		isEmpty: model.invoices.items.length === 0,
+		failure: "Couldn't load invoices.",
 	})
 	return h.section(
 		[h.Class(cardClassName("flex min-w-0 flex-col"))],

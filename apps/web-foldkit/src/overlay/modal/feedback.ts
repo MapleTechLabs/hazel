@@ -44,15 +44,15 @@ const Message = defineMessageUnion({
 })
 type Message = typeof Message.Type
 
-/** arktype `message: "string >= 6"`, worded as arktype reports it. */
+/** arktype `message: "string >= 6"` (the API's rule), worded for the user. */
 const validateMessage = (message: string) =>
-	message.length >= 6 ? null : `message must be at least length 6 (was ${message.length})`
+	message.length >= 6 ? null : "Feedback must be at least 6 characters"
 
 const ID = "feedback-modal"
 
 const CATEGORY_ITEMS = [
 	Select.item("bug", "Bug"),
-	Select.item("feature_request", "Feature Request"),
+	Select.item("feature_request", "Feature request"),
 	Select.item("question", "Question"),
 ]
 
@@ -107,7 +107,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 		{ size: "lg" },
 		() => [
 			dialogHeader(h, {}, [
-				modalTitle(h, model.frame, "Send Feedback"),
+				modalTitle(h, model.frame, "Send feedback"),
 				modalDescription(
 					h,
 					"Help us improve by sharing your thoughts, reporting bugs, or requesting features.",
@@ -129,19 +129,12 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 									id: `${ID}-message`,
 									value: model.message,
 									onInput: (value) => Message.ChangedMessage({ value }),
+									isInvalid: model.messageError !== null,
 								},
 								(field) => [
 									field.label(["Message"]),
-									field.textarea({
-										placeholder: "Describe your feedback in detail...",
-										attributes: [
-											h.Attribute(
-												"aria-invalid",
-												model.messageError !== null ? "true" : "false",
-											),
-										],
-									}),
-									// Only the textarea is invalid: React Aria never renders the FieldError here.
+									field.textarea({ placeholder: "Describe your feedback in detail..." }),
+									field.fieldError([model.messageError ?? ""]),
 								],
 							),
 						],
@@ -156,7 +149,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 								isDisabled: model.messageError !== null,
 								attributes: [h.Type("submit")],
 							},
-							["Submit Feedback"],
+							["Submit feedback"],
 						),
 					]),
 				],

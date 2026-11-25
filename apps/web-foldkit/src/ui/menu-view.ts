@@ -254,6 +254,9 @@ export const menuKeyboard = <M>(h: HtmlBuilder<M>, text: string, className?: str
 		[text],
 	)
 
+/** A menu header's classes, for a header with its own content (a row of quick reactions). */
+export const menuHeaderClassName = (className?: string) => twMerge(menuHeaderBase, className)
+
 /** `MenuTrigger`'s classes, for an icon trigger that is not a `Button`. */
 export const menuTriggerClassName = (className?: string) => twMerge(twMerge(...menuTriggerBase), className)
 

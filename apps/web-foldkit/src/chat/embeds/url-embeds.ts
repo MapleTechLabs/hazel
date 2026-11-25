@@ -172,7 +172,7 @@ const externalLink = <M>(
 const verifiedIcon = <M>(h: HtmlBuilder<M>): Html =>
 	h.svg(
 		[
-			h.Attribute("aria-label", "Verified Account"),
+			h.Attribute("aria-label", "Verified account"),
 			h.Attribute("viewBox", "0 0 24 24"),
 			h.Class("ml-1 inline size-4 text-verified"),
 		],

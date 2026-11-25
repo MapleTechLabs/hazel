@@ -40,7 +40,7 @@ const dropZone = Scene.role("button", { name: /Drop an image or click to browse/
 // The hidden FileTrigger input has no label; it is located by id.
 const fileInput = Scene.selector("#custom-emoji-drop-zone-input")
 const nameInput = Scene.label("Name")
-const saveButton = Scene.role("button", { name: "Save Emoji" })
+const saveButton = Scene.role("button", { name: "Save emoji" })
 const row = Scene.first(Scene.filter(Scene.all.role("row"), { hasText: ":shipit:" }))
 // The trash button is icon-only with no accessible name, so it is located as the row's only button.
 const trash = Scene.within(row, Scene.role("button"))

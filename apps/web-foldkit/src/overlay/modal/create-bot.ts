@@ -169,7 +169,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 			model.createdBotToken !== null
 				? [
 						dialogHeader(h, {}, [
-							modalTitle(h, model.frame, "Application Created Successfully"),
+							modalTitle(h, model.frame, "Application created"),
 							dialogDescription(
 								h,
 								`Your application "${model.createdBotName}" has been created. Save the token below - you won't be able to see it again.`,
@@ -189,7 +189,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 					]
 				: [
 						dialogHeader(h, {}, [
-							modalTitle(h, model.frame, "Create Application"),
+							modalTitle(h, model.frame, "Create application"),
 							dialogDescription(
 								h,
 								"Create an application to interact with your workspace programmatically using the SDK",
@@ -221,7 +221,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 											isDisabled: isBotSubmitDisabled(model),
 											attributes: [h.Type("submit")],
 										},
-										[model.isSubmitting ? "Creating..." : "Create Application"],
+										[model.isSubmitting ? "Creating..." : "Create application"],
 									),
 								]),
 							],

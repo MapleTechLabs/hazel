@@ -2,7 +2,7 @@ import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { avatar } from "../../ui/avatar"
 import { button } from "../../ui/button"
-import { loader } from "../../ui/loader"
+import { loader, loadingState } from "../../ui/loader"
 import { commonMessage, failureMessage, type UserErrorMessage } from "~/lib/error-messages"
 import { authError, authFrame, authHeading, homeLink } from "../auth/layout"
 import { isSessionLoading, type PageViewInputs, type Shared } from "../contract"
@@ -99,9 +99,9 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		h,
 		shared.nowMs,
 		isSessionLoading(shared)
-			? [loader(h, { className: "size-6" })]
+			? [loadingState(h, { label: "Loading invitation..." })]
 			: Lookup.match(model.lookup, {
-					Loading: () => [loader(h, { className: "size-6" })],
+					Loading: () => [loadingState(h, { label: "Loading invitation..." })],
 					Loaded: ({ preview }) => invitation(h, model, preview, shared),
 					NotFound: () =>
 						unavailable(

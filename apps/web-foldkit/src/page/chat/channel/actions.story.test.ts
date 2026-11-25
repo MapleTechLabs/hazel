@@ -21,6 +21,7 @@ import {
 	UnpinMessage,
 } from "../message-actions"
 import * as Overlays from "../overlays"
+import * as Popover from "../../../ui/popover"
 import {
 	ada,
 	adaMessageId,
@@ -183,6 +184,47 @@ describe("message actions", () => {
 		])
 		expect(PinMessage.name).toBe("PinMessage")
 		expect(UnpinMessage.name).toBe("UnpinMessage")
+	})
+
+	test("the pinned popover's unpin only unpins: a pin already gone is not pinned again", () => {
+		const pinnedId = Schema.decodeSync(PinnedMessageId)("00000000-0000-4000-8000-000000005555")
+		const pinned: Model = {
+			...loadedModel(),
+			pinned: [
+				{
+					pinnedId,
+					messageId: graceMessageId,
+					authorId: ada,
+					author: null,
+					content: "",
+					createdAtMs: 0,
+					updatedAtMs: null,
+					pinnedAtMs: 0,
+				},
+			],
+		}
+		const unpinOut = Overlays.OutMessage.RequestedUnpin({ messageId: graceMessageId })
+		expect(
+			Write.handleOverlaysOut(pinned, unpinOut).commands?.map((command) => [
+				command.name,
+				command.args,
+			]),
+		).toEqual([["UnpinMessage", { pinnedMessageId: pinnedId }]])
+		expect(Write.handleOverlaysOut(loadedModel(), unpinOut).commands ?? []).toEqual([])
+	})
+
+	test("pressing a pin closes the pinned popover and jumps to its message", () => {
+		const open = Overlays.update(
+			loadedModel().overlays,
+			Overlays.Message.GotPinnedMessage({ message: Popover.Message.ClickedButton() }),
+		).model
+		const result = Overlays.update(
+			open,
+			Overlays.Message.ClickedPinnedMessage({ messageId: graceMessageId }),
+		)
+		expect(open.pinned.isOpen).toBe(true)
+		expect(result.model.pinned.isOpen).toBe(false)
+		expect(result.outMessage).toEqual(Overlays.OutMessage.RequestedJump({ messageId: graceMessageId }))
 	})
 
 	test("Reply in thread opens the panel on a fresh id, then `channel.createThread`", () => {

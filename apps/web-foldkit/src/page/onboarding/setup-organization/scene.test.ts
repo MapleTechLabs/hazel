@@ -27,7 +27,11 @@ describe("setup organization", () => {
 				CreateWorkspace.Message.FailedCreateWorkspace({ reason: "SlugTaken" }),
 			),
 			Scene.expect(Scene.role("alert")).toHaveText("That workspace URL is taken. Pick another."),
+			Scene.expect(Scene.label("Workspace URL")).toHaveAttr("aria-invalid", "true"),
 			Scene.expect(create).toBeEnabled(),
+			// Another URL may be free: the verdict goes until the next try.
+			Scene.type(Scene.label("Workspace URL"), "acme-corp-2"),
+			Scene.expect(Scene.role("alert")).toBeAbsent(),
 		)
 	})
 

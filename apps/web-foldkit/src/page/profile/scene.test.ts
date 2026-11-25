@@ -31,8 +31,8 @@ describe("profile page", () => {
 			Scene.Subscription.emit(Message.UpdatedProfileUser({ user: grace })),
 			Scene.expect(Scene.text("Grace Hopper")).toExist(),
 			Scene.expect(Scene.text("View Grace's profile information.")).toExist(),
-			Scene.expect(Scene.text("Do Not Disturb")).toExist(),
-			Scene.expect(Scene.role("link", { name: /Edit Profile/ })).toBeAbsent(),
+			Scene.expect(Scene.text("Do not disturb")).toExist(),
+			Scene.expect(Scene.role("link", { name: /Edit profile/ })).toBeAbsent(),
 			// The email input has no label (the "Email address" heading is not associated), so it is found by value.
 			Scene.expect(Scene.displayValue("grace@hazel.test")).toBeDisabled(),
 		)
@@ -46,7 +46,7 @@ describe("profile page", () => {
 				Message.UpdatedProfileUser({ user: { ...grace, presenceStatus: "offline" } }),
 			),
 			Scene.expect(Scene.text("Offline")).toExist(),
-			Scene.expect(Scene.text("Do Not Disturb")).toBeAbsent(),
+			Scene.expect(Scene.text("Do not disturb")).toBeAbsent(),
 		)
 	})
 
@@ -58,7 +58,7 @@ describe("profile page", () => {
 				Message.UpdatedProfileUser({ user: { ...grace, firstName: "Ada", lastName: "Lovelace" } }),
 			),
 			Scene.expect(Scene.text("View your profile information.")).toExist(),
-			Scene.expect(Scene.role("link", { name: /Edit Profile/ })).toHaveAttr(
+			Scene.expect(Scene.role("link", { name: /Edit profile/ })).toHaveAttr(
 				"href",
 				"/hazel/my-settings/profile",
 			),

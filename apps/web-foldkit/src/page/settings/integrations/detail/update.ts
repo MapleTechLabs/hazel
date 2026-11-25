@@ -73,6 +73,7 @@ export const init = (route: Route): Return =>
 			sharingRequestId: 0,
 			mapleInstall: null,
 			mapleUninstalling: false,
+			confirmingRemoval: false,
 			disconnectConfirm: ConfirmAction.init("t3code-disconnect"),
 		},
 		route,
@@ -170,12 +171,24 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		UpdatedMapleInstall: ({ install }) => ({
 			model: modifyFields(model, { mapleInstall: () => install }),
 		}),
-		ClickedUninstallMaple: () => {
+		// Removing Maple or disconnecting an integration affects the whole workspace: the first press asks.
+		ClickedUninstallMaple: () =>
+			model.mapleInstall === null || shared.organization === null || model.mapleUninstalling
+				? { model }
+				: { model: modifyFields(model, { confirmingRemoval: () => true }) },
+		ClickedCancelRemoval: () => ({ model: modifyFields(model, { confirmingRemoval: () => false }) }),
+		ClickedConfirmUninstallMaple: () => {
 			const organization = shared.organization
-			return model.mapleInstall === null || organization === null || model.mapleUninstalling
+			return !model.confirmingRemoval ||
+				model.mapleInstall === null ||
+				organization === null ||
+				model.mapleUninstalling
 				? { model }
 				: {
-						model: modifyFields(model, { mapleUninstalling: () => true }),
+						model: modifyFields(model, {
+							mapleUninstalling: () => true,
+							confirmingRemoval: () => false,
+						}),
 						commands: [
 							UninstallMaple({
 								botIds: model.mapleInstall.botIds,
@@ -252,11 +265,18 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			}),
 		}),
 		CompletedRedirectToProvider: () => ({ model }),
-		ClickedDisconnect: () => {
-			const target = targetOf(model, shared)
-			return target === null || model.activity._tag !== "Idle"
+		ClickedDisconnect: () =>
+			targetOf(model, shared) === null || model.activity._tag !== "Idle"
 				? { model }
-				: { model: { ...model, activity: Activity.Disconnecting() }, commands: [Disconnect(target)] }
+				: { model: modifyFields(model, { confirmingRemoval: () => true }) },
+		ClickedConfirmDisconnect: () => {
+			const target = targetOf(model, shared)
+			return !model.confirmingRemoval || target === null || model.activity._tag !== "Idle"
+				? { model }
+				: {
+						model: { ...model, activity: Activity.Disconnecting(), confirmingRemoval: false },
+						commands: [Disconnect(target)],
+					}
 		},
 		SucceededDisconnect: () => ({ model: { ...model, activity: Activity.Idle() } }),
 		FailedDisconnect: ({ reason }) => ({

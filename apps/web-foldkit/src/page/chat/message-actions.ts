@@ -1,4 +1,4 @@
-import { ChannelId, MessageId, OrganizationId, PinnedMessageId, UserId } from "@hazel/schema"
+import { ChannelId, ChannelMemberId, MessageId, OrganizationId, PinnedMessageId, UserId } from "@hazel/schema"
 import { derivedThreadChannelId } from "@hazel/domain/thread-id"
 import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
@@ -9,6 +9,7 @@ import {
 	pinMessageAction,
 	toggleReactionAction,
 	unpinMessageAction,
+	updateChannelMemberAction,
 } from "~/db/actions"
 import { CommonReason } from "~/lib/error-messages"
 import { createIssueFromMessageAction } from "../../customers/issues"
@@ -80,6 +81,10 @@ export const CreateIssueFailure = Schema.Union([
 ])
 export type CreateIssueFailure = typeof CreateIssueFailure.Type
 
+/** What can go wrong bringing a hidden conversation back, beyond the shared reasons. */
+export const UnhideConversationFailure = Schema.Union([Schema.Literals(["MemberNotFound"]), CommonReason])
+export type UnhideConversationFailure = typeof UnhideConversationFailure.Type
+
 // MESSAGE
 
 export const ActionMessage = defineMessageUnion({
@@ -106,6 +111,8 @@ export const ActionMessage = defineMessageUnion({
 	FailedPressEmbedAction: { reason: PressEmbedActionFailure },
 	SucceededCreateIssue: { messageId: MessageId },
 	FailedCreateIssue: { messageId: MessageId, reason: CreateIssueFailure },
+	SucceededUnhideConversation: {},
+	FailedUnhideConversation: { reason: UnhideConversationFailure },
 })
 export type ActionMessage = typeof ActionMessage.Type
 /** `ActionMessage` under the Submodel name, so a parent's Got wrapper imports it as `Message`. */
@@ -156,6 +163,21 @@ export const PinMessage = Command.define("PinMessage", {
 					Effect.succeed(ActionMessage.FailedPinMessage({ reason: "MessageNotFound" })),
 			}),
 			catchCommon((reason) => ActionMessage.FailedPinMessage({ reason })),
+		),
+})
+
+/** The header's "Unhide conversation": the hidden DM comes back to the sidebar. */
+export const UnhideConversation = Command.define("UnhideConversation", {
+	args: { memberId: ChannelMemberId },
+	messages: [ActionMessage.SucceededUnhideConversation, ActionMessage.FailedUnhideConversation],
+	execute: ({ memberId }) =>
+		updateChannelMemberAction({ memberId, isHidden: false }).pipe(
+			Effect.as(ActionMessage.SucceededUnhideConversation()),
+			Effect.catchTags({
+				ChannelMemberNotFoundError: () =>
+					Effect.succeed(ActionMessage.FailedUnhideConversation({ reason: "MemberNotFound" })),
+			}),
+			catchCommon((reason) => ActionMessage.FailedUnhideConversation({ reason })),
 		),
 })
 

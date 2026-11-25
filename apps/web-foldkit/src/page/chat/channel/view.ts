@@ -1,8 +1,9 @@
+import type { MessageId } from "@hazel/schema"
 import { TrackMessageKeys } from "./message-keys"
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
-import { contentStyles, rootStyles } from "~/components/ui/split-panel/split-panel.styles"
 import { cn } from "~/lib/utils"
 import { skeleton } from "../../../ui/skeleton"
+import { splitContentClassName, splitRootClassName } from "../../../ui/split-panel"
 import { getEffectivePresenceStatus } from "~/utils/presence"
 import { htmlRenderFullscreenView } from "../../../chat/embeds/html-render"
 import type * as HtmlRender from "../../../chat/html-render"
@@ -59,6 +60,10 @@ const toIssueControlMessage = (message: IssueControl.Message) => Message.GotIssu
 const toCustomerCard = (message: CustomerCard.Message) => Message.GotCustomerCardMessage({ message })
 const toPinnedMessage = (message: Parameters<typeof Overlays.Message.GotPinnedMessage>[0]["message"]) =>
 	toOverlay(Overlays.Message.GotPinnedMessage({ message }))
+const pinnedActions = {
+	toJump: (messageId: MessageId) => toOverlay(Overlays.Message.ClickedPinnedMessage({ messageId })),
+	toUnpin: (messageId: MessageId) => toOverlay(Overlays.Message.ClickedUnpin({ messageId })),
+}
 
 const rowView = (
 	row: DisplayRow,
@@ -349,6 +354,7 @@ const headerView = (
 			return user ? [authorIdentity(user, botNames.get(member.userId))] : []
 		}),
 		isHiddenDm: currentMember?.isHidden ?? false,
+		onUnhide: Message.ClickedUnhideConversation(),
 		dmPresence,
 		// A phone opens a conversation from the chat list, a DM from the DMs tab; a thread from its channel.
 		mobileBack:
@@ -365,7 +371,7 @@ const headerView = (
 							mobileBackLink(h, hrefOf(AppRoute.ChatDms({ orgSlug })), "DMs", "-ml-3 -mr-1")
 						: mobileBackLink(h, hrefOf(AppRoute.ChatIndex({ orgSlug })), "Chats", "-ml-3 -mr-1")
 				: h.empty,
-		pinnedTrigger: pinnedPopoverView(h, pinnedPopover, pins, toPinnedMessage),
+		pinnedTrigger: pinnedPopoverView(h, pinnedPopover, pins, toPinnedMessage, pinnedActions),
 		customerChip:
 			customer === null
 				? null
@@ -414,20 +420,20 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 		model.channelId,
 		[
 			h.Class(
-				rootStyles({
-					className: cn(
+				splitRootClassName(
+					cn(
 						// A phone's shell sizes the page; the desktop's is the window.
 						"relative h-full md:h-dvh",
 						// While the thread panel's edge is dragged: no text selection, and frames never take the pointer.
 						model.threadPanelDrag !== null &&
 							"cursor-col-resize select-none [&_iframe]:pointer-events-none",
 					),
-				}),
+				),
 			),
 		],
 		[
 			h.div(
-				[h.Class(contentStyles())],
+				[h.Class(splitContentClassName())],
 				[
 					lazyHeader(headerView, [
 						model.channel,

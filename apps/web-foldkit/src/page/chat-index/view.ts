@@ -83,7 +83,7 @@ const panels = (
 			content: [
 				listOrEmpty(
 					groups.publicChannels,
-					"Public Channels",
+					"Public channels",
 					(channel) => channelCard(h, orgSlug, channel, false, channelLinksOf(shared, channel.id)),
 					() =>
 						emptyState(h, {
@@ -102,7 +102,7 @@ const panels = (
 			content: [
 				listOrEmpty(
 					groups.privateChannels,
-					"Private Channels",
+					"Private channels",
 					(channel) => channelCard(h, orgSlug, channel, true, channelLinksOf(shared, channel.id)),
 					() =>
 						emptyState(h, {
@@ -121,7 +121,7 @@ const panels = (
 			content: [
 				listOrEmpty(
 					groups.dmChannels,
-					"Direct Messages",
+					"Direct messages",
 					(channel) =>
 						dmCard(h, orgSlug, channel, {
 							currentUserId: shared.currentUser?.id,

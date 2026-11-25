@@ -32,7 +32,7 @@ const header = (h: HtmlBuilder<Message>, title: string, subtitle: string) =>
 
 export const createChannelPage = (h: HtmlBuilder<Message>, page: CreateChannelPage): Html =>
 	commandMenuFormContainer(h, [
-		header(h, "Create Channel", "Create a new channel for your team"),
+		header(h, "Create channel", "Create a new channel for your team"),
 		h.form(
 			[h.OnSubmit(Message.SubmittedCreateChannel())],
 			[
@@ -106,7 +106,7 @@ export const joinChannelPage = (
 	const filtered =
 		query === "" ? unjoined : unjoined.filter((channel) => channel.name.toLowerCase().includes(query))
 	return commandMenuFormContainer(h, [
-		header(h, "Join Channel", "Browse and join available channels"),
+		header(h, "Join channel", "Browse and join available channels"),
 		commandMenuFormBody(
 			h,
 			[

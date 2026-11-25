@@ -26,7 +26,7 @@ const COPY: Record<
 	{ heading: string; subheading: string; emptyTitle: string; emptyDescription: string }
 > = {
 	all: {
-		heading: "All Activity",
+		heading: "All activity",
 		subheading: "Stay updated on messages and activity in your channels.",
 		emptyTitle: "No notifications",
 		emptyDescription: "You're all caught up! Notifications about messages and activity will appear here.",
@@ -44,7 +44,7 @@ const COPY: Record<
 		emptyDescription: "Notifications from thread conversations will appear here.",
 	},
 	dms: {
-		heading: "Direct Messages",
+		heading: "Direct messages",
 		subheading: "Notifications from your direct message conversations.",
 		emptyTitle: "No DM notifications",
 		emptyDescription: "Notifications from direct messages will appear here.",
@@ -101,7 +101,12 @@ const notificationItem = (
 	const children = [
 		h.div(
 			[h.Class("flex h-10 w-2 shrink-0 items-center justify-center")],
-			item.isUnread ? [statusDot(h, { tone: "primary", className: "size-2" })] : [],
+			item.isUnread
+				? [
+						statusDot(h, { tone: "primary", className: "size-2" }),
+						h.span([h.Class("sr-only")], ["Unread:"]),
+					]
+				: [],
 		),
 		h.div([h.Class("shrink-0")], [leadingVisual(h, item)]),
 		h.div(

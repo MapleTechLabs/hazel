@@ -142,7 +142,7 @@ const appUpdates = (h: HtmlBuilder<Message>, model: Model, state: Updates.Model)
 		[
 			settingsRow(
 				h,
-				{ title: "App Updates", description: "Check for and install app updates." },
+				{ title: "App updates", description: "Check for and install app updates." },
 				h.div(
 					[h.Class("flex flex-col gap-4")],
 					[

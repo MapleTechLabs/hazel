@@ -42,7 +42,7 @@ export function getStatusBadgeIntent(
  */
 export function getStatusLabel(status?: PresenceStatus | string): string {
 	if (!status) return "Offline"
-	if (status === "dnd") return "Do Not Disturb"
+	if (status === "dnd") return "Do not disturb"
 	return status.charAt(0).toUpperCase() + status.slice(1)
 }
 

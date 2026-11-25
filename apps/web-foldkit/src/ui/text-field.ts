@@ -73,7 +73,7 @@ export const textField = <Message>(
 				return Field.description(h, { ...part, id: ids.description }, children)
 			},
 			fieldError: (children, part = {}) =>
-				isInvalid ? Field.fieldError(h, { ...part, id: ids.error }, children) : null,
+				isInvalid ? Field.fieldError(h, { ...part, id: ids.error }, children) : h.empty,
 			input: (part = {}) => input(h, { interaction: target, ...part }, context),
 			textarea: (part = {}) => textarea(h, { interaction: target, ...part }, context),
 		}

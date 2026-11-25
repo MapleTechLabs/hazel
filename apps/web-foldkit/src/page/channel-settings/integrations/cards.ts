@@ -113,7 +113,7 @@ const gitHubLogo = (resolved: ResolvedTheme) =>
 
 const EVENT_LABELS: Readonly<Record<string, string>> = {
 	push: "Push",
-	pull_request: "Pull Requests",
+	pull_request: "Pull requests",
 	issues: "Issues",
 	release: "Releases",
 	deployment_status: "Deployments",
@@ -229,7 +229,7 @@ export const gitHubCard = (h: HtmlBuilder<Message>, model: Model, resolved: Reso
 				),
 				button(h, { intent: "primary", size: "sm", onPress: Message.ClickedAddRepo() }, [
 					IconPlus(h, { attributes: { "data-slot": "icon" } }),
-					"Add Repo",
+					"Add repo",
 				]),
 			],
 			CARD_HEADER_ROW,

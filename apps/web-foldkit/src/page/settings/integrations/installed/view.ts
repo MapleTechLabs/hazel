@@ -14,7 +14,7 @@ import type { Model } from "./model"
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) =>
 	fragment(h, [
 		pageHeader(h, {
-			title: "Installed Apps",
+			title: "Installed apps",
 			subtitle: "Manage applications installed in your workspace.",
 			size: "title",
 			actions: [
@@ -36,7 +36,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 						action: button(
 							h,
 							{ intent: "primary", onPress: Message.ClickedBrowseMarketplace() },
-							["Browse Marketplace"],
+							["Browse marketplace"],
 						),
 					})
 				: h.div(
@@ -44,7 +44,14 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 						model.bots.map((bot) =>
 							botCard(h, bot, {
 								_tag: "Uninstall",
+								state: model.uninstallingBotIds.includes(bot.id)
+									? "Uninstalling"
+									: model.confirmingUninstallId === bot.id
+										? "Confirming"
+										: "Idle",
 								onUninstall: Message.ClickedUninstall({ botId: bot.id }),
+								onConfirm: Message.ClickedConfirmUninstall({ botId: bot.id }),
+								onCancel: Message.ClickedCancelUninstall(),
 							}),
 						),
 					),

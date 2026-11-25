@@ -175,6 +175,9 @@ describe("active connections", () => {
 			Scene.expect(Scene.text("Not shared yet")).toBeAbsent(),
 			Scene.expect(Scene.text("Globex")).toExist(),
 			Scene.click(Scene.role("button", { name: "Disconnect" })),
+			Scene.Command.expectNone(),
+			Scene.expect(Scene.text("Disconnect Globex? They stop seeing this channel.")).toExist(),
+			Scene.click(Scene.role("button", { name: "Confirm disconnect Globex" })),
 			Scene.Command.expectExact(
 				DisconnectOrganization({
 					mountId: globexGuestMount.id,
@@ -212,6 +215,7 @@ describe("active connections", () => {
 			Scene.expect(Scene.role("button", { name: "Disconnect" })).toBeAbsent(),
 			Scene.expect(Scene.text("Managed by host workspace")).toExist(),
 			Scene.click(Scene.role("button", { name: "Leave shared channel" })),
+			Scene.click(Scene.role("button", { name: "Confirm leave shared channel" })),
 			Scene.Command.expectExact(
 				DisconnectOrganization({
 					mountId: "mount-1",

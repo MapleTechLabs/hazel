@@ -7,11 +7,7 @@
 		"apps/web-foldkit/src/page/my-settings/appearance/cards.ts": 2
 	},
 	"no-kit-styles-in-pages": {
-		"apps/web-foldkit/src/customers/ui/filter-bar.ts": 1,
-		"apps/web-foldkit/src/overlay/toaster.ts": 1,
-		"apps/web-foldkit/src/page/chat/channel/view.ts": 1,
-		"apps/web-foldkit/src/page/chat/row-context.ts": 1,
-		"apps/web-foldkit/src/page/chat/thread-panel.ts": 1
+		"apps/web-foldkit/src/overlay/toaster.ts": 1
 	},
 	"no-palette-color": {
 		"apps/web-foldkit/src/core/components/embeds/embed-markdown.styles.ts": 7,
@@ -26,7 +22,6 @@
 		"apps/web-foldkit/src/composer/view.ts": 1,
 		"apps/web-foldkit/src/emoji-picker/view.ts": 1,
 		"apps/web-foldkit/src/overlay/modal/bot-avatar-upload.ts": 1,
-		"apps/web-foldkit/src/page/customers/settings/signals/preview-view.ts": 1,
 		"apps/web-foldkit/src/page/my-settings/profile/avatar-view.ts": 1,
 		"apps/web-foldkit/src/page/settings/custom-emojis/view.ts": 1,
 		"apps/web-foldkit/src/page/settings/general/view.ts": 1,

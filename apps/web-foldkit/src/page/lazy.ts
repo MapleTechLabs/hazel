@@ -142,8 +142,8 @@ export const update = <Transition>(
 export const view = Submodel.defineView<Slot, Wrapped, PageViewInputs>((slot, _inputs, h) =>
 	slot.hasFailed
 		? appError(h, {
-				title: "This page did not load",
-				description: "Hazel may have been updated since you opened it. Reload to continue.",
+				title: "This page didn't load",
+				description: "Hazel may have been updated since you opened it. Try again to reload the page.",
 				onRetry: wrapFor(slot)(Message.PressedReload()),
 			})
 		: h.div([h.Class("fade-in fill-mode-backwards animate-in delay-300 duration-200")], [appLoader(h)]),

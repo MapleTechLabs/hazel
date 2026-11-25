@@ -112,13 +112,13 @@ const timezoneMounts = [
 ]
 
 describe("onboarding flow", () => {
-	test("a new user starts at welcome and Get Started moves to the profile step", () => {
+	test("a new user starts at welcome and Get started moves to the profile step", () => {
 		scene(
 			config,
 			given(ready(null)),
 			expect(role("heading", { name: "Welcome to Hazel!" })).toExist(),
 			Mount.resolve(EnterAnimation, settled),
-			click(role("button", { name: /Get Started/ })),
+			click(role("button", { name: /Get started/ })),
 			Command.expectExact(ReplaceOnboardingStepUrl),
 			Command.resolve(ReplaceOnboardingStepUrl, Message.CompletedReplaceStepUrl()),
 			expect(role("heading", { name: "Set up your profile" })).toExist(),
@@ -141,7 +141,7 @@ describe("onboarding flow", () => {
 			Command.resolve(UpdateProfile, Message.SucceededUpdateProfile()),
 			Command.resolve(ReplaceOnboardingStepUrl, Message.CompletedReplaceStepUrl()),
 			expect(role("heading", { name: "Where are you located?" })).toExist(),
-			expect(role("button", { name: /Detect My Timezone/ })).toExist(),
+			expect(role("button", { name: /Detect my time zone/ })).toExist(),
 			Mount.expectEnded(AutoFocus),
 			Mount.resolveAll(...timezoneMounts),
 		)

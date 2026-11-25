@@ -1,8 +1,6 @@
 import type { ChannelId, MessageId } from "@hazel/schema"
 import { Option } from "effect"
 import { type ChildAttribute, childAttributes, type Html, type HtmlBuilder } from "foldkit/html"
-import { twMerge } from "tailwind-merge"
-import { menuHeaderBase } from "~/components/ui/menu.styles"
 import {
 	IconCopy,
 	IconEdit,
@@ -27,7 +25,7 @@ import { nativeContextMenu } from "../../platform/native-island"
 import { AppRoute, hrefOf } from "../../route"
 import { button } from "../../ui/button"
 import * as Menu from "../../ui/menu"
-import { contextMenuView, menuLabel } from "../../ui/menu-view"
+import { contextMenuView, menuHeaderClassName, menuLabel } from "../../ui/menu-view"
 import type * as Popover from "../../ui/popover"
 import * as Overlays from "./overlays"
 import { canStartThreadIn, factsOf, Message, type Model } from "./channel/page"
@@ -100,7 +98,7 @@ const toContextMenuMessage = (message: Menu.Message) =>
 /** `ContextMenuHeader` with the quick reactions row. */
 const contextMenuHeader = (h: H, messageId: MessageId): Html =>
 	h.header(
-		[h.Class(twMerge(menuHeaderBase, false, "flex items-center gap-1 px-1 py-1"))],
+		[h.Class(menuHeaderClassName("flex items-center gap-1 px-1 py-1"))],
 		TOP_EMOJIS.map((emoji) =>
 			button(
 				h,
@@ -126,23 +124,23 @@ const contextMenuContent =
 	(key: string): ReadonlyArray<Html> => {
 		const icon = (render: typeof IconCopy, className = "ml-auto size-4") =>
 			render(h, { className, attributes: { "data-slot": "icon" } })
-		if (key === "add-reaction") return contextItem(h, key, "Add Reaction", icon(IconEmojiAdd))
+		if (key === "add-reaction") return contextItem(h, key, "Add reaction", icon(IconEmojiAdd))
 		if (key === "reply") return contextItem(h, key, "Reply", icon(IconReply))
-		if (key === "edit") return contextItem(h, key, "Edit Message", icon(IconEdit))
-		if (key === "thread") return contextItem(h, key, "Reply in Thread", icon(IconThread))
-		if (key === "create-issue") return contextItem(h, key, "Create Issue", icon(IconSupport))
-		if (key === "copy") return contextItem(h, key, "Copy Text", icon(IconCopy))
-		if (key === Overlays.COPY_IMAGE) return contextItem(h, key, "Copy Image", icon(IconImage))
-		if (key === Overlays.COPY_IMAGE_URL) return contextItem(h, key, "Copy Image Address", icon(IconLink))
+		if (key === "edit") return contextItem(h, key, "Edit message", icon(IconEdit))
+		if (key === "thread") return contextItem(h, key, "Reply in thread", icon(IconThread))
+		if (key === "create-issue") return contextItem(h, key, "Create issue", icon(IconSupport))
+		if (key === "copy") return contextItem(h, key, "Copy text", icon(IconCopy))
+		if (key === Overlays.COPY_IMAGE) return contextItem(h, key, "Copy image", icon(IconImage))
+		if (key === Overlays.COPY_IMAGE_URL) return contextItem(h, key, "Copy image address", icon(IconLink))
 		if (key === "pin")
 			return contextItem(
 				h,
 				key,
-				isPinned ? "Unpin Message" : "Pin Message",
+				isPinned ? "Unpin message" : "Pin message",
 				icon(isPinned ? IconUnpin : IconStar),
 			)
-		if (key === "delete") return contextItem(h, key, "Delete Message", icon(IconTrash))
-		return contextItem(h, key, "Copy Message ID", icon(IconHashtag))
+		if (key === "delete") return contextItem(h, key, "Delete message", icon(IconTrash))
+		return contextItem(h, key, "Copy message ID", icon(IconHashtag))
 	}
 
 /** Each action's SF Symbol in the system menu a native shell opens for the row. */

@@ -2,7 +2,7 @@ import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { IconChevronRight, IconEye, IconPin, IconThread } from "../../icons"
 import { AppRoute, hrefOf } from "../../route"
 import { avatar, type AvatarProps } from "../../ui/avatar"
-import { button } from "../../ui/button"
+import { button, iconButton } from "../../ui/button"
 import { presenceDot } from "../../ui/presence-dot"
 import { skeleton } from "../../ui/skeleton"
 import type { PresenceStatus } from "~/utils/presence"
@@ -13,7 +13,7 @@ import { type ChannelLinks, channelIcon, NO_CHANNEL_LINKS } from "../../ui/chann
 
 /** Port of `ChatHeader` (desktop): channel, thread breadcrumb, DM and the not-a-member fallback. */
 
-export interface HeaderInputs {
+export interface HeaderInputs<M = never> {
 	readonly channel: ChannelInfo | null
 	/** What the channel is linked or connected to (customer, Connect, chat sync), marked on its icon. */
 	readonly links: ChannelLinks
@@ -27,6 +27,8 @@ export interface HeaderInputs {
 	/** DM participants other than the signed-in user, in member order. */
 	readonly otherMembers: ReadonlyArray<AuthorIdentity>
 	readonly isHiddenDm: boolean
+	/** The "Unhide conversation" button's press, shown on a DM the signed-in user hid. */
+	readonly onUnhide?: M
 	/** The partner's presence in a one-on-one DM with a person; null otherwise (group DMs, bots). */
 	readonly dmPresence: PresenceStatus | null
 	/** The pinned messages trigger (a popover trigger with its overlay). */
@@ -54,7 +56,7 @@ export const pinnedButton = <M>(
 	)
 
 /** On a phone the back button leads to the parent channel, so the breadcrumb shows the thread alone. */
-const threadTitle = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs, channel: ChannelInfo): Html =>
+const threadTitle = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs<M>, channel: ChannelInfo): Html =>
 	h.div(
 		[h.Class("flex min-w-0 items-center gap-2")],
 		[
@@ -122,7 +124,7 @@ const dmTitle = <M>(
 							.map((member, index) =>
 								h.span([], [...(index > 0 ? [", "] : []), member.displayName]),
 							)
-					: ["Direct Message"]),
+					: ["Direct message"]),
 				" ",
 				...(members.length > 3
 					? [
@@ -137,7 +139,7 @@ const dmTitle = <M>(
 	),
 ]
 
-export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html => {
+export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs<M>): Html => {
 	const { channel } = inputs
 	if (channel === null || !inputs.isMember)
 		return h.div(
@@ -202,14 +204,11 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html
 			h.div(
 				[h.Class("flex items-center gap-2 max-md:shrink-0")],
 				[
-					isDirectMessage && inputs.isHiddenDm
-						? button(
+					isDirectMessage && inputs.isHiddenDm && inputs.onUnhide !== undefined
+						? iconButton(
 								h,
-								{
-									intent: "plain",
-									attributes: [h.Attribute("aria-label", "Unhide conversation")],
-								},
-								[IconEye(h, {})],
+								{ label: "Unhide conversation", intent: "plain", onPress: inputs.onUnhide },
+								IconEye(h, { attributes: { "data-slot": "icon" } }),
 							)
 						: h.empty,
 					inputs.pinnedTrigger,

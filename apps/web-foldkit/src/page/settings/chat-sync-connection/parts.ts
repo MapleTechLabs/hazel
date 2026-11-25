@@ -187,18 +187,18 @@ export const FEATURES = [
 	"Edit and delete sync",
 ]
 
-/** The "About Chat Sync" card in the right column. */
+/** The "About chat sync" card in the right column. */
 export const aboutCard = <M>(h: HtmlBuilder<M>, provider: ChatSyncProvider): Html =>
 	h.div(
 		[h.Class("lg:sticky lg:top-6 lg:self-start")],
 		[
 			card(h, {}, [
-				cardHeader(h, [heading(h, { variant: "subsection" }, ["About Chat Sync"])], "py-3"),
+				cardHeader(h, [heading(h, { variant: "subsection" }, ["About chat sync"])], "py-3"),
 				cardBody(h, [
 					h.p(
 						[h.Class("mb-4 text-muted-fg text-sm leading-relaxed")],
 						[
-							`Chat Sync keeps messages in sync between Hazel and ${PROVIDERS[provider].name}. Messages sent in either platform are automatically mirrored to the linked channel, including edits and deletions.`,
+							`Chat sync keeps messages in sync between Hazel and ${PROVIDERS[provider].name}. Messages sent in either platform are automatically mirrored to the linked channel, including edits and deletions.`,
 						],
 					),
 					h.ul(

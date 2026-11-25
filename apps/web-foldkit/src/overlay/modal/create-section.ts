@@ -48,9 +48,8 @@ export const CreateSection = Command.define("CreateSection", {
 		),
 })
 
-/** arktype `name: "string > 1"`, worded as arktype reports it. */
-const validateName = (name: string) =>
-	name.length > 1 ? null : `name must be more than length 1 (was ${name.length})`
+/** arktype `name: "string > 1"` (the API's rule), worded for the user. */
+const validateName = (name: string) => (name.length > 1 ? null : "Section name must be at least 2 characters")
 
 const ID = "create-section-modal"
 
@@ -92,31 +91,25 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 		model.frame,
 		{ size: "md" },
 		() => [
-			dialogHeader(h, {}, [modalTitle(h, model.frame, "Create a new Section")]),
+			dialogHeader(h, {}, [modalTitle(h, model.frame, "Create section")]),
 			h.form(
 				[h.OnSubmit(Message.SubmittedForm())],
 				[
 					dialogBody(
 						h,
 						[
-							// Legacy passes no `isInvalid` to the TextField: only the Input's aria-invalid
-							// reflects the error and React Aria's FieldError never renders.
 							textField(
 								h,
 								{
 									id: `${ID}-name`,
 									value: model.name,
 									onInput: (value) => Message.ChangedName({ value }),
+									isInvalid,
 								},
 								(field) => [
-									field.label(["Section Name"]),
-									field.input({
-										placeholder: "Design",
-										attributes: [
-											h.Attribute("aria-invalid", isInvalid ? "true" : "false"),
-											...(isInvalid ? [h.DataAttribute("invalid", "true")] : []),
-										],
-									}),
+									field.label(["Section name"]),
+									field.input({ placeholder: "Design" }),
+									field.fieldError([model.nameError ?? ""]),
 								],
 							),
 						],

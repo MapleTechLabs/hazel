@@ -2,7 +2,7 @@ import { Submodel } from "foldkit"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { cn } from "~/lib/utils"
 import { getStatusDotColor } from "~/utils/status"
-import { IconCircleDottedUser, IconCopy, IconDots, IconMsgs, IconPhone } from "../../icons"
+import { IconCircleDottedUser, IconCopy, IconDots, IconMsgs } from "../../icons"
 import type * as Interaction from "../../ui/aria/interaction"
 import { avatar } from "../../ui/avatar"
 import { ariaButton, button } from "../../ui/button"
@@ -25,7 +25,6 @@ const toInteractionMessage = (message: Interaction.Message) => Message.GotIntera
 const MEMBER_SYMBOLS = {
 	message: "message",
 	"view-profile": "person.crop.circle",
-	"start-call": "phone",
 	"copy-email": "doc.on.doc",
 } as const satisfies Readonly<Record<string, string>>
 
@@ -40,7 +39,6 @@ const menuContent = (h: HtmlBuilder<Message>, id: string): ((key: string) => Rea
 			IconCircleDottedUser(h, icon),
 			menuLabel(h, id, "view-profile", "View profile"),
 		],
-		"start-call": () => [IconPhone(h, icon), menuLabel(h, id, "start-call", "Start call")],
 		"copy-email": () => [IconCopy(h, icon), menuLabel(h, id, "copy-email", "Copy email")],
 	}
 	return (key) => byKey[key]?.() ?? []
@@ -130,7 +128,7 @@ const memberRow = (
 							h.div(
 								[h.Class("flex items-center font-semibold text-sm/6")],
 								[
-									fullName || "Unknown User",
+									fullName || "Unknown user",
 									h.span([h.Class("mx-2 text-muted-fg")], ["·"]),
 									h.span(
 										[h.Class("text-muted-fg text-xs capitalize")],

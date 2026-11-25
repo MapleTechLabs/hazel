@@ -787,13 +787,24 @@ const noResults = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html 
 	const chip =
 		best === null ? null : chipOf(best.field, model.draft.filters, model.members, model.reportingCurrency)
 	const label = chip === null ? null : `${chip.field} ${chip.operator} ${chip.value}`.replace(/\s+/g, " ")
+	const search = model.search.trim()
+	const hasFilters = activeFields(model.draft.filters).length > 0
+	// Sources are connected but nothing has synced yet: there is nothing to filter.
+	if ((model.accounts ?? []).length === 0)
+		return emptyState(h, {
+			title: "No customers yet",
+			icon: (className) => IconOffice(h, { className }),
+			description: "Accounts appear here as your connected sources sync.",
+		})
 	return emptyState(h, {
 		title: "No customers match",
 		icon: (className) => IconMagnifier3(h, { className }),
 		description:
-			model.search.trim() === ""
+			search === ""
 				? "No account matches every filter. Remove one to widen the list."
-				: `Nothing matches “${model.search.trim()}” with these filters. Try a domain instead of a name.`,
+				: hasFilters
+					? `Nothing matches “${search}” with these filters. Try a domain instead of a name.`
+					: `Nothing matches “${search}”. Try a domain instead of a name.`,
 		action: h.div(
 			[h.Class("flex flex-wrap items-center justify-center gap-2")],
 			[
@@ -817,7 +828,7 @@ const noResults = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html 
 							),
 						]),
 				button(h, { intent: "plain", size: "sm", onPress: Message.ClearedFilters() }, [
-					"Clear filters",
+					hasFilters ? "Clear filters" : "Clear search",
 				]),
 			],
 		),

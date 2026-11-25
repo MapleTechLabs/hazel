@@ -38,7 +38,7 @@ const others = [
 ]
 const team = (role: TeamMember["role"]) => [asMe(role), ...others]
 const shared = makeShared({ nowMs })
-const actions = Scene.all.role("button", { name: "Actions" })
+const actions = Scene.all.role("button", { name: /^Change role for/ })
 const rowOf = (name: string) => Scene.first(Scene.filter(Scene.all.role("row"), { hasText: name }))
 
 describe("live members", () => {
@@ -46,12 +46,12 @@ describe("live members", () => {
 		Scene.scene(
 			pageScene(update, view, shared),
 			Scene.given(init().model),
-			Scene.expect(Scene.text("0 users", { exact: false })).toExist(),
+			Scene.expect(Scene.text("0 members", { exact: false })).toBeAbsent(),
 			Scene.Subscription.emit(Message.UpdatedTeamMembers({ members: team("owner") })),
-			Scene.expect(Scene.text("4 users", { exact: false })).toExist(),
+			Scene.expect(Scene.text("4 members", { exact: false })).toExist(),
 			Scene.expect(Scene.text("Grace Test")).toExist(),
 			Scene.expect(
-				Scene.within(rowOf("Grace Test"), Scene.text("Do Not Disturb", { exact: false })),
+				Scene.within(rowOf("Grace Test"), Scene.text("Do not disturb", { exact: false })),
 			).toExist(),
 			// The stored status decides, however recently they were seen.
 			Scene.expect(
@@ -66,10 +66,10 @@ describe("row actions", () => {
 	test("an owner can act on every other member but not on their own row", () => {
 		Scene.scene(
 			pageScene(update, view, shared),
-			Scene.given({ members: team("owner") }),
+			Scene.given({ members: team("owner"), isLoaded: true }),
 			Scene.expectAll(actions).toHaveCount(3),
 			Scene.expect(
-				Scene.within(rowOf("Ada Test"), Scene.role("button", { name: "Actions" })),
+				Scene.within(rowOf("Ada Test"), Scene.role("button", { name: /^Change role for/ })),
 			).toBeAbsent(),
 		)
 	})
@@ -77,10 +77,10 @@ describe("row actions", () => {
 	test("an admin can act only on plain members", () => {
 		Scene.scene(
 			pageScene(update, view, shared),
-			Scene.given({ members: team("admin") }),
+			Scene.given({ members: team("admin"), isLoaded: true }),
 			Scene.expectAll(actions).toHaveCount(1),
 			Scene.expect(
-				Scene.within(rowOf("Linus Test"), Scene.role("button", { name: "Actions" })),
+				Scene.within(rowOf("Linus Test"), Scene.role("button", { name: /^Change role for/ })),
 			).toExist(),
 		)
 	})
@@ -88,7 +88,7 @@ describe("row actions", () => {
 	test("a member sees no row actions", () => {
 		Scene.scene(
 			pageScene(update, view, shared),
-			Scene.given({ members: team("member") }),
+			Scene.given({ members: team("member"), isLoaded: true }),
 			Scene.expectAll(actions).toBeEmpty(),
 		)
 	})
@@ -98,9 +98,32 @@ describe("invite", () => {
 	test("Invite user requests the email invite modal", () => {
 		Scene.scene(
 			pageScene(update, view, shared),
-			Scene.given({ members: team("owner") }),
+			Scene.given({ members: team("owner"), isLoaded: true }),
 			Scene.click(Scene.role("button", { name: /Invite user/ })),
 			Scene.expectOutMessage(PageOutMessage.RequestedModal({ modal: { _tag: "EmailInvite" } })),
+		)
+	})
+})
+
+describe("change role", () => {
+	test("Change role requests the change role modal with the viewer's role", () => {
+		const [me, olivia, grace, linus] = team("owner")
+		Scene.scene(
+			pageScene(update, view, shared),
+			Scene.given({ members: [me!, olivia!, grace!, linus!], isLoaded: true }),
+			Scene.click(Scene.role("button", { name: "Change role for Linus Test" })),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedModal({
+					modal: {
+						_tag: "ChangeRole",
+						userId: linus!.userId,
+						memberId: linus!.id,
+						name: "Linus Test",
+						role: "member",
+						currentUserRole: "owner",
+					},
+				}),
+			),
 		)
 	})
 })

@@ -57,7 +57,7 @@ describe("select organization", () => {
 		)
 	})
 
-	test("several organizations wait for a pick; Create a new one opens the workspace form", () => {
+	test("several organizations wait for a pick; Create a workspace opens the workspace form", () => {
 		story(
 			step,
 			given(init().model),
@@ -88,7 +88,7 @@ describe("select organization", () => {
 
 	// Anyone on the picker is onboarded. `/onboarding` sent them straight back to `/` and into an
 	// organization, so "Create a new one" never reached a form.
-	test("Create a new one lands on a page that keeps an onboarded user", () => {
+	test("Create a workspace lands on a page that keeps an onboarded user", () => {
 		const onboarded = makeShared()
 		const picked = step(
 			step(init().model, Message.UpdatedOrganizations({ organizations: [hazel, unfinished] })).model,

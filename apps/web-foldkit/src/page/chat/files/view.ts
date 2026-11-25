@@ -3,8 +3,9 @@ import { formatFileSize, getFileTypeFromName } from "~/utils/file-utils"
 import { fileIcon } from "../../../chat/file-icons"
 import { IconArrowLeft, IconDownload, IconFolders } from "../../../icons"
 import { avatar } from "../../../ui/avatar"
-import { button } from "../../../ui/button"
+import { button, buttonClassName } from "../../../ui/button"
 import { emptyState } from "../../../ui/empty-state"
+import { loadingState } from "../../../ui/loader"
 import { searchField } from "../../../ui/search-field"
 import { view as selectView } from "../../../ui/select-view"
 import { documentsOf, filterAttachments, formatRelativeTime, mediaOf, uploaderIdentity } from "./derive"
@@ -32,7 +33,7 @@ const headerView = <M>(context: FilesContext<M>, fileCount: number): Html => {
 					onClearPressStart: toParentMessage(Message.PressedSearchClear()),
 					interaction: context.wiring,
 				},
-				(parts) => [parts.searchInput({ placeholder: "Search files..." })],
+				(parts) => [parts.searchInput({ placeholder: "Search files…" })],
 			),
 			h.submodel({
 				slotId: "channel-files-filter",
@@ -97,7 +98,7 @@ const documentItem = <M>(context: FilesContext<M>, attachment: FileAttachment): 
 					intent: "plain",
 					size: "sq-sm",
 					className:
-						"shrink-0 opacity-0 transition-opacity group-hover:opacity-100 max-md:opacity-100",
+						"shrink-0 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100",
 					onPress: toParentMessage(Message.ClickedDownload({ attachmentId: attachment.id })),
 					interaction: {
 						wiring: context.wiring,
@@ -131,14 +132,15 @@ const filesView = <M>(context: FilesContext<M>): Html => {
 					h.div(
 						[h.Class("flex flex-col gap-6 p-4")],
 						[
-							...(media.length === 0 && documents.length === 0
+							...(!model.isLoaded ? [loadingState(h, { label: "Loading files…" })] : []),
+							...(model.isLoaded && media.length === 0 && documents.length === 0
 								? [
 										emptyState(h, {
 											title: "No files found",
 											icon: (className) => IconFolders(h, { className }),
 											description: isFiltered
-												? "Try adjusting your search or filter"
-												: "Files shared in this channel will appear here",
+												? "Try another search or filter."
+												: "Files shared in this channel will appear here.",
 										}),
 									]
 								: []),
@@ -176,27 +178,17 @@ const mediaPageView = <M>(context: FilesContext<M>): Html => {
 			h.header(
 				[h.Class("flex shrink-0 items-center gap-3 border-border border-b px-4 py-3")],
 				[
+					// A link styled as an icon button: a button inside the link would nest two controls.
 					h.a(
 						[
-							h.AriaCurrent("page"),
-							h.Class("active"),
-							h.DataAttribute("status", "active"),
 							h.Href(filesHref(context.model)),
+							h.AriaLabel("Back to files"),
+							h.Title("Back to files"),
+							h.Class(buttonClassName({ intent: "plain", size: "sq-sm" })),
 						],
-						[
-							button(
-								h,
-								{
-									intent: "plain",
-									size: "sq-sm",
-									interaction: { wiring: context.wiring, target: "files-media-back" },
-									attributes: [h.AriaLabel("Go back")],
-								},
-								[IconArrowLeft(h, { className: "size-5" })],
-							),
-						],
+						[IconArrowLeft(h, { className: "size-5" })],
 					),
-					heading(h, { variant: "title", level: 1 }, ["All Media"]),
+					heading(h, { variant: "title", level: 1 }, ["All media"]),
 				],
 			),
 			mediaGalleryView(context),

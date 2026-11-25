@@ -40,7 +40,7 @@ export const STATUS_OPTIONS = [
 	{ value: "online", label: "Online", color: "bg-success", description: "Available and active" },
 	{ value: "away", label: "Away", color: "bg-warning", description: "Stepped away temporarily" },
 	{ value: "busy", label: "Busy", color: "bg-warning", description: "Focused, limit interruptions" },
-	{ value: "dnd", label: "Do Not Disturb", color: "bg-danger", description: "No notifications" },
+	{ value: "dnd", label: "Do not disturb", color: "bg-danger", description: "No notifications" },
 ] as const
 
 export const THEME_OPTIONS: ReadonlyArray<{ readonly value: Theme; readonly label: string }> = [
@@ -88,7 +88,7 @@ const homeSections = (model: Model): ReadonlyArray<CommandMenu.Section> => {
 					),
 				]
 			: []),
-		CommandMenu.section("Quick Actions", [
+		CommandMenu.section("Quick actions", [
 			CommandMenu.item("action:search", "search messages find", true),
 			CommandMenu.item("action:create-channel", "create channel", true),
 			CommandMenu.item("action:start-dm", "start conversation new dm", true),
@@ -109,7 +109,7 @@ const homeSections = (model: Model): ReadonlyArray<CommandMenu.Section> => {
 		...(model.dmChannels.length > 0
 			? [
 					CommandMenu.section(
-						"Direct Messages",
+						"Direct messages",
 						model.dmChannels.map((dm) =>
 							CommandMenu.item(
 								`dm:${dm.id}`,
@@ -168,7 +168,7 @@ export const menuSectionsOf = (model: Model, _shared: Shared): ReadonlyArray<Com
 	if (page._tag === "Status")
 		return [
 			CommandMenu.section(
-				"Set Status",
+				"Set status",
 				STATUS_OPTIONS.map((option) =>
 					CommandMenu.item(`status:${option.value}`, `${option.label} ${option.description}`),
 				),

@@ -8,6 +8,7 @@ import { errorToastOf, reasonToast, successToast } from "../../../../data/action
 import type { ToastRequest } from "../../../../overlay/toasts"
 import { AppRoute, type RouteOf } from "../../../../route"
 import * as Modal from "../../../../ui/modal"
+import * as Select from "../../../../ui/select"
 import type { PageReturn, Shared } from "../../../contract"
 import { PageOutMessage, requestedOrgNavigation } from "../../../out-message"
 import { isCustomersAdmin } from "../shared"
@@ -27,6 +28,7 @@ import {
 	DELETE_MODAL_ID,
 	DISCARD_MODAL_ID,
 	type Editor,
+	EXAMPLE_SELECT_ID,
 	isAvailable,
 	type Model,
 	PICKER_MODAL_ID,
@@ -57,6 +59,7 @@ const editorOf = (version: number, ruleId: CustomerSignalRuleId | null, form: Ru
 	version,
 	preview: AsyncData.Idle(),
 	exampleAccountId: null,
+	exampleSelect: Select.init({ id: EXAMPLE_SELECT_ID }),
 	isSaving: false,
 	isDeleting: false,
 })
@@ -163,6 +166,20 @@ const exampleOf = (editor: Editor, result: Customers.RuleDryRunResult): Editor["
 	result.topMatches.some((match) => match.accountId === editor.exampleAccountId)
 		? editor.exampleAccountId
 		: (result.topMatches.find((match) => match.evidence._tag === "series")?.accountId ?? null)
+
+/** Picks the example account, when it is one of the preview's top matches. */
+const withExample = (model: Model, accountId: string): Model =>
+	withEditor(model, (editor) => ({
+		...editor,
+		exampleAccountId: Option.match(AsyncData.getData(editor.preview), {
+			onNone: () => editor.exampleAccountId,
+			onSome: (result) =>
+				result.topMatches.find((match) => match.accountId === accountId)?.accountId ??
+				editor.exampleAccountId,
+		}),
+	}))
+
+const toExampleSelect = (message: Select.Message) => Message.GotExampleSelectMessage({ message })
 
 // EDITING
 
@@ -502,15 +519,18 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					}
 				: { model },
 		PressedRetryPreview: () => fetchPreview(model, shared),
-		ChangedExampleAccount: ({ accountId }) => ({
-			model: withEditor(model, (editor) => ({
-				...editor,
-				exampleAccountId: Option.match(AsyncData.getData(editor.preview), {
-					onNone: () => editor.exampleAccountId,
-					onSome: (result) =>
-						result.topMatches.find((match) => match.accountId === accountId)?.accountId ??
-						editor.exampleAccountId,
-				}),
-			})),
-		}),
+		GotExampleSelectMessage: ({ message: selectMessage }) => {
+			const editor = model.editor
+			if (editor === null) return { model }
+			const select = {
+				...editor.exampleSelect,
+				selectedKey: Option.fromNullishOr(editor.exampleAccountId),
+			}
+			const result = Select.update(select, selectMessage)
+			const next = withEditor(model, (current) => ({ ...current, exampleSelect: result.model }))
+			return {
+				model: result.outMessage === undefined ? next : withExample(next, result.outMessage.key),
+				commands: Command.mapMessages(result.commands ?? [], toExampleSelect),
+			}
+		},
 	})

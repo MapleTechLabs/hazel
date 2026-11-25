@@ -279,17 +279,17 @@ describe("hover toolbar", () => {
 		const props = (own: boolean) =>
 			JSON.stringify({
 				items: [
-					item("add-reaction", "Add Reaction", "face.smiling"),
+					item("add-reaction", "Add reaction", "face.smiling"),
 					separator,
 					item("reply", "Reply", "arrowshape.turn.up.left"),
-					...(own ? [item("edit", "Edit Message", "pencil")] : []),
-					item("thread", "Reply in Thread", "bubble.left.and.bubble.right"),
+					...(own ? [item("edit", "Edit message", "pencil")] : []),
+					item("thread", "Reply in thread", "bubble.left.and.bubble.right"),
 					separator,
-					item("copy", "Copy Text", "doc.on.doc"),
-					item("pin", "Pin Message", "pin"),
+					item("copy", "Copy text", "doc.on.doc"),
+					item("pin", "Pin message", "pin"),
 					separator,
-					...(own ? [{ ...item("delete", "Delete Message", "trash"), destructive: true }] : []),
-					item("copy-id", "Copy Message ID", "number"),
+					...(own ? [{ ...item("delete", "Delete message", "trash"), destructive: true }] : []),
+					item("copy-id", "Copy message ID", "number"),
 				],
 				quick: { choices: TOP_EMOJIS, prefix: Overlays.NATIVE_REACTION },
 			})

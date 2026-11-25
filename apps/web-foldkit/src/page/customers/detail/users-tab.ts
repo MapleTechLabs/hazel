@@ -224,6 +224,8 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 		hasMore: model.contacts.nextCursor !== null,
 		label: "Load more users",
 		onMore: Message.PressedMoreContacts(),
+		isEmpty: model.contacts.items.length === 0,
+		failure: "Couldn't load users.",
 		summary: `${formatCount(model.contacts.items.length)} of ${formatCount(context.account.contactCount)} users`,
 	})
 	return [

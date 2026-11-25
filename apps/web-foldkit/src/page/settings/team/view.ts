@@ -2,7 +2,7 @@ import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { getEffectivePresenceStatus } from "~/utils/presence"
 import { getStatusBadgeIntent, getStatusLabel } from "~/utils/status"
-import { IconDotsVertical, IconPlus } from "../../../icons"
+import { IconPlus } from "../../../icons"
 import { avatar } from "../../../ui/avatar"
 import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
@@ -14,7 +14,7 @@ import type { Model, TeamMember } from "./model"
 import { pageHeader, pageLayout } from "../../../ui/page-header"
 import { statusDot } from "../../../ui/status-dot"
 
-/** Port of `routes/_app/$orgSlug/settings/team.tsx` (read path; menus and modals follow in Phase 5). */
+/** Port of `routes/_app/$orgSlug/settings/team.tsx`. */
 
 const canManageUser = (
 	members: ReadonlyArray<TeamMember>,
@@ -31,7 +31,9 @@ type TeamContext<Message> = Readonly<{
 	members: ReadonlyArray<TeamMember>
 	currentUserId: string | undefined
 	nowMs: number
+	isLoaded: boolean
 	onInvite: Message
+	onChangeRole: (member: TeamMember) => Message
 }>
 
 const columns = <Message>(
@@ -96,7 +98,7 @@ const columns = <Message>(
 		key: "actions",
 		label: "Actions",
 		align: "right",
-		widthClass: "w-24",
+		widthClass: "w-32",
 		cell: (member) =>
 			context.currentUserId !== undefined &&
 			member.userId !== context.currentUserId &&
@@ -105,15 +107,14 @@ const columns = <Message>(
 						h,
 						{
 							intent: "plain",
-							size: "sq-xs",
-							className: "max-md:size-10",
+							size: "xs",
+							className: "max-md:min-h-10",
+							onPress: context.onChangeRole(member),
 							attributes: [
-								h.Attribute("aria-haspopup", "true"),
-								h.Attribute("aria-expanded", "false"),
-								h.Attribute("aria-label", "Actions"),
+								h.AriaLabel(`Change role for ${member.firstName} ${member.lastName}`.trim()),
 							],
 						},
-						[IconDotsVertical(h, { className: "size-5 text-muted-fg" })],
+						["Change role"],
 					)
 				: "",
 	},
@@ -126,7 +127,14 @@ export const teamPage = <Message>(h: HtmlBuilder<Message>, props: TeamContext<Me
 				pageHeader(h, {
 					title: "Team members",
 					size: "title",
-					badges: [badge(h, { intent: "secondary" }, [`${props.members.length || 0}`, " users"])],
+					badges: props.isLoaded
+						? [
+								badge(h, { intent: "secondary" }, [
+									`${props.members.length}`,
+									props.members.length === 1 ? " member" : " members",
+								]),
+							]
+						: [],
 					subtitle: "Manage your team members and their account permissions here.",
 					actions: [
 						button(h, { intent: "secondary", size: "md", onPress: props.onInvite }, [
@@ -143,15 +151,21 @@ export const teamPage = <Message>(h: HtmlBuilder<Message>, props: TeamContext<Me
 				rows: props.members,
 				rowKey: (member) => member.id,
 				isFramed: false,
+				// Skeleton rows until the live query answers, so the table never flashes empty.
+				loadingRows: props.isLoaded ? undefined : 4,
 			}),
 		]),
 	])
+
+const changeRoleOf = (member: TeamMember) => Message.ClickedChangeRole({ memberId: member.id })
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) =>
 	teamPage(h, {
 		members: model.members,
 		currentUserId: shared.currentUser?.id,
 		nowMs: shared.nowMs,
+		isLoaded: model.isLoaded,
 		onInvite: Message.ClickedInviteUser(),
+		onChangeRole: changeRoleOf,
 	}),
 )

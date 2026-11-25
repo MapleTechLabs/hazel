@@ -27,7 +27,7 @@ const iconField = (h: HtmlBuilder<Message>, form: Form): Html =>
 	h.div(
 		[h.Class("flex flex-col gap-2")],
 		[
-			Field.label(h, {}, ["Channel Icon"]),
+			Field.label(h, {}, ["Channel icon"]),
 			h.div(
 				[h.Class("flex items-center gap-2")],
 				[

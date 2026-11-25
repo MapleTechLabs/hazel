@@ -60,11 +60,11 @@ const notFoundView = (h: HtmlBuilder<Message>, nowMs: number): Html =>
 		h,
 		nowMs,
 		problemCard(h, {
-			title: "Workspace Not Found",
+			title: "Workspace not found",
 			description: "This invite link is invalid or the workspace doesn't have public invites enabled.",
 			action: h.a(
 				[h.Class(buttonClassName({ intent: "secondary" })), h.Href(hrefOf(AppRoute.Root()))],
-				["Go to Home"],
+				["Go to Hazel"],
 			),
 		}),
 		{ tagline: null },
@@ -88,12 +88,24 @@ const failedView = (h: HtmlBuilder<Message>, nowMs: number, reason: CommonReason
 	)
 }
 
+/** Not the workspace they meant: a way out, signed in or not. */
+const wrongWorkspace = (h: HtmlBuilder<Message>): Html =>
+	h.p(
+		[h.Class("text-muted-fg text-sm")],
+		[
+			"Wrong workspace? ",
+			link(h, { href: hrefOf(AppRoute.Root()), className: "text-fg underline underline-offset-2" }, [
+				"Go to Hazel",
+			]),
+		],
+	)
+
 const actions = (h: HtmlBuilder<Message>, model: Model, isSignedIn: boolean): Html =>
 	h.div(
 		[h.Class("w-full space-y-3")],
-		isSignedIn
-			? [
-					button(
+		[
+			isSignedIn
+				? button(
 						h,
 						{
 							intent: "primary",
@@ -103,42 +115,14 @@ const actions = (h: HtmlBuilder<Message>, model: Model, isSignedIn: boolean): Ht
 						},
 						model.isJoining
 							? [loader(h, { className: "size-4" }), "Joining..."]
-							: ["Join Workspace"],
-					),
-					h.p(
-						[h.Class("text-muted-fg text-sm")],
-						[
-							"Wrong workspace? ",
-							link(
-								h,
-								{
-									href: hrefOf(AppRoute.Root()),
-									className: "text-fg underline underline-offset-2",
-								},
-								["Go home"],
-							),
-						],
-					),
-				]
-			: [
-					button(h, { intent: "primary", className: "w-full", onPress: Message.ClickedSignIn() }, [
-						"Sign in to Join",
+							: ["Join workspace"],
+					)
+				: button(h, { intent: "primary", className: "w-full", onPress: Message.ClickedSignIn() }, [
+						"Sign in to join",
 					]),
-					h.p(
-						[h.Class("text-muted-fg text-sm")],
-						[
-							"Already have an account? ",
-							link(
-								h,
-								{
-									href: hrefOf(AppRoute.Root()),
-									className: "text-fg underline underline-offset-2",
-								},
-								["Go home"],
-							),
-						],
-					),
-				],
+			// Only someone signed in has a workspace to be in instead.
+			...(isSignedIn ? [wrongWorkspace(h)] : []),
+		],
 	)
 
 const inviteView = (h: HtmlBuilder<Message>, model: Model, org: PublicOrganization, shared: Shared): Html =>

@@ -62,7 +62,7 @@ export const connectionCard = (h: HtmlBuilder<Message>, connection: Connection):
 							h.div(
 								[h.Class("flex flex-1 flex-col gap-1")],
 								[
-									h.p([h.Class("font-medium text-fg text-sm")], ["Connection Error"]),
+									h.p([h.Class("font-medium text-fg text-sm")], ["Connection error"]),
 									h.p(
 										[h.Class("text-muted-fg text-sm")],
 										[

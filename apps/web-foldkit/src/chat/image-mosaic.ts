@@ -38,7 +38,7 @@ export const mosaicLayout = (count: number): "single" | "feature" | ReadonlyArra
 
 const GRID_COLUMNS: Record<number, string> = { 1: "grid-cols-1", 2: "grid-cols-2", 3: "grid-cols-3" }
 
-/** Marks an attachment image, so a right-click on it offers "Copy Image". */
+/** Marks an attachment image, so a right-click on it offers "Copy image". */
 export const MESSAGE_IMAGE_ATTRIBUTE = "message-image"
 
 /** A row's cell shape: a lone image is a wide band, two are 4:3, three are squares. */

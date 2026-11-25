@@ -11,7 +11,7 @@ export const MIN_THREAD_PANEL_WIDTH = 360
 /** The channel always keeps this much room beside the panel. */
 export const MIN_CHANNEL_WIDTH = 400
 /** Arrow keys have no layout to read, so they stop here; the panel's CSS max-width still applies. */
-const MAX_KEYBOARD_WIDTH = 1200
+export const MAX_KEYBOARD_WIDTH = 1200
 
 const STORAGE_KEY = "hazel-thread-panel-width"
 const StoredWidth = Schema.toCodecJson(Schema.Finite)

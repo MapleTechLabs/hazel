@@ -72,13 +72,13 @@ describe("notifications inbox", () => {
 		expect(groupByTime(items, NOW).map((group) => group.label)).toEqual([
 			"Today",
 			"Yesterday",
-			"This Week",
+			"This week",
 			"Older",
 		])
 		Scene.scene(
 			{ update, view: view() },
 			Scene.given(inbox),
-			Scene.expect(Scene.role("heading", { name: "All Activity" })).toExist(),
+			Scene.expect(Scene.role("heading", { name: "All activity" })).toExist(),
 			Scene.expect(Scene.text("Have a good one!")).toExist(),
 			Scene.expect(Scene.text("3 minutes ago")).toExist(),
 			Scene.expect(Scene.text("New message in #general")).toExist(),
@@ -122,7 +122,7 @@ describe("notifications inbox", () => {
 		Scene.scene(
 			{ update, view: view() },
 			Scene.given(dms),
-			Scene.expect(Scene.role("heading", { name: "Direct Messages" })).toExist(),
+			Scene.expect(Scene.role("heading", { name: "Direct messages" })).toExist(),
 			Scene.expect(Scene.text("Sent you the rubric")).toExist(),
 			Scene.expect(Scene.text("Have a good one!")).toBeAbsent(),
 		)

@@ -1,6 +1,7 @@
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import { errorToast } from "../../data/actions"
+import { errorToastOf, infoToast } from "../../data/actions"
+import { commonMessage } from "~/lib/error-messages"
 import { AppRoute, routeOfPath } from "../../route"
 import { PageOutMessage } from "../out-message"
 import { FetchPublicOrganization, JoinWorkspace, RedirectToSignIn } from "./command"
@@ -63,7 +64,7 @@ describe("join workspace", () => {
 				PageOutMessage.RequestedNavigation({
 					route: routeOfPath("/hazel"),
 					replace: false,
-					toast: { intent: "success", title: "Successfully joined workspace!", description: null },
+					toast: { intent: "success", title: "You joined Hazel Labs", description: null },
 				}),
 			),
 			Command.expectNone(),
@@ -71,13 +72,44 @@ describe("join workspace", () => {
 		)
 	})
 
-	test("a rejected join says why and unlocks the button", () => {
-		const failure = errorToast("Already a member", "You're already a member of this workspace.")
+	test("joining a workspace they are already in takes them there", () => {
 		story(
 			update,
 			given(loaded),
 			message(Message.ClickedJoin()),
 			Command.resolve(JoinWorkspace, Message.FailedJoinWorkspace({ reason: "AlreadyMember" })),
+			expectOutMessage(
+				PageOutMessage.RequestedNavigation({
+					route: routeOfPath("/hazel"),
+					replace: false,
+					toast: infoToast("You're already a member of this workspace"),
+				}),
+			),
+			model((current) => expect(current.isJoining).toBe(false)),
+		)
+	})
+
+	test("a link that stopped working shows the not-found page instead of the join button", () => {
+		story(
+			update,
+			given(loaded),
+			message(Message.ClickedJoin()),
+			Command.resolve(JoinWorkspace, Message.FailedJoinWorkspace({ reason: "PublicInvitesDisabled" })),
+			expectNoOutMessage(),
+			model((current) => {
+				expect(current.lookup).toEqual(Lookup.NotFound())
+				expect(current.isJoining).toBe(false)
+			}),
+		)
+	})
+
+	test("a failed join says why and unlocks the button", () => {
+		const failure = errorToastOf(commonMessage("Offline"))
+		story(
+			update,
+			given(loaded),
+			message(Message.ClickedJoin()),
+			Command.resolve(JoinWorkspace, Message.FailedJoinWorkspace({ reason: "Offline" })),
 			expectOutMessage(PageOutMessage.RequestedToast({ toast: failure })),
 			model((current) => expect(current.isJoining).toBe(false)),
 		)

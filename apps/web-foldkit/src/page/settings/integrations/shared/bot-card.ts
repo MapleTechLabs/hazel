@@ -1,4 +1,5 @@
 import type { IntegrationConnection } from "@hazel/domain/models"
+import { Match } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { getIntegrationIconUrl, groupScopesByResource, INTEGRATION_PROVIDERS } from "~/lib/bot-scopes"
 import {
@@ -99,7 +100,14 @@ export type BotCardActions<Message> =
 			readonly menu: Menu.Model
 			readonly toMenuMessage: (message: Menu.Message) => Message
 	  }
-	| { readonly _tag: "Uninstall"; readonly onUninstall: Message }
+	| {
+			readonly _tag: "Uninstall"
+			/** Idle; asking to confirm; or the uninstall is running. */
+			readonly state: "Idle" | "Confirming" | "Uninstalling"
+			readonly onUninstall: Message
+			readonly onConfirm: Message
+			readonly onCancel: Message
+	  }
 
 const actionsMenu = <Message>(
 	h: HtmlBuilder<Message>,
@@ -112,7 +120,7 @@ const actionsMenu = <Message>(
 		edit: () => [IconEdit(h, { className: "size-4" }), label("edit", "Edit")],
 		regenerate: () => [
 			IconArrowPath(h, { className: "size-4" }),
-			label("regenerate", "Regenerate Token"),
+			label("regenerate", "Regenerate token"),
 		],
 		delete: () => [IconTrash(h, { className: "size-4" }), label("delete", "Delete")],
 	}
@@ -164,6 +172,41 @@ const actionsMenu = <Message>(
 	})
 }
 
+const uninstallFooter = <Message>(
+	h: HtmlBuilder<Message>,
+	bot: Bot,
+	actions: Extract<BotCardActions<Message>, { readonly _tag: "Uninstall" }>,
+): ReadonlyArray<Html> =>
+	Match.value(actions.state).pipe(
+		Match.when("Confirming", () => [
+			h.p([h.Class("mr-auto min-w-0 truncate text-fg text-xs")], [`Uninstall ${bot.name}?`]),
+			button(h, { size: "sm", intent: "outline", onPress: actions.onCancel }, ["Cancel"]),
+			button(
+				h,
+				{
+					size: "sm",
+					intent: "danger",
+					onPress: actions.onConfirm,
+					attributes: [h.AriaLabel(`Confirm uninstall ${bot.name}`)],
+				},
+				["Uninstall"],
+			),
+		]),
+		Match.orElse((state) => [
+			button(
+				h,
+				{
+					size: "sm",
+					intent: "outline",
+					isDisabled: state === "Uninstalling",
+					isPending: state === "Uninstalling",
+					onPress: actions.onUninstall,
+				},
+				[state === "Uninstalling" ? "Uninstalling..." : "Uninstall"],
+			),
+		]),
+	)
+
 export const botCard = <Message>(h: HtmlBuilder<Message>, bot: Bot, actions: BotCardActions<Message>): Html =>
 	h.keyed("div")(
 		bot.id,
@@ -200,14 +243,10 @@ export const botCard = <Message>(h: HtmlBuilder<Message>, bot: Bot, actions: Bot
 						h.div(
 							[
 								h.Class(
-									"flex items-center justify-end border-border border-t bg-muted/20 px-4 py-2.5 mt-auto",
+									"flex items-center justify-end gap-2 border-border border-t bg-muted/20 px-4 py-2.5 mt-auto",
 								),
 							],
-							[
-								button(h, { size: "sm", intent: "outline", onPress: actions.onUninstall }, [
-									"Uninstall",
-								]),
-							],
+							uninstallFooter(h, bot, actions),
 						),
 					]
 				: []),

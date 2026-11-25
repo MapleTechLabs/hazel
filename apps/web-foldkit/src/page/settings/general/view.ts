@@ -59,7 +59,7 @@ const profileCard = (h: HtmlBuilder<Message>, model: Model, shared: Shared, orga
 		cardHeader(h, [
 			sectionHeader(h, {
 				icon: IconOffice(h, { className: "mt-0.5 size-5 text-muted-fg" }),
-				title: "Organization Profile",
+				title: "Organization profile",
 				text: "Manage your organization's name and appearance.",
 			}),
 		]),
@@ -70,7 +70,7 @@ const profileCard = (h: HtmlBuilder<Message>, model: Model, shared: Shared, orga
 					h.div(
 						[h.Class("flex flex-col gap-2")],
 						[
-							Field.label(h, {}, ["Organization Logo"]),
+							Field.label(h, {}, ["Organization logo"]),
 							h.div(
 								[h.Class("flex items-center gap-4")],
 								[
@@ -81,6 +81,7 @@ const profileCard = (h: HtmlBuilder<Message>, model: Model, shared: Shared, orga
 												"group relative cursor-pointer disabled:cursor-not-allowed disabled:opacity-50",
 											isDisabled: isLogoDisabled,
 											onPress: Message.ClickedLogo(),
+											attributes: [h.AriaLabel("Upload organization logo")],
 										},
 										[
 											avatar(h, {
@@ -137,7 +138,7 @@ const profileCard = (h: HtmlBuilder<Message>, model: Model, shared: Shared, orga
 							className: "max-w-md",
 						},
 						(parts) => [
-							parts.label(["Organization Name"]),
+							parts.label(["Organization name"]),
 							parts.input({
 								placeholder: "Enter organization name",
 								attributes: [
@@ -168,7 +169,7 @@ const profileCard = (h: HtmlBuilder<Message>, model: Model, shared: Shared, orga
 												isDisabled: isSavingName,
 												onPress: Message.SubmittedName(),
 											},
-											[isSavingName ? "Saving..." : "Save Changes"],
+											[isSavingName ? "Saving..." : "Save changes"],
 										),
 										button(
 											h,
@@ -207,7 +208,7 @@ const publicInviteCard = (h: HtmlBuilder<Message>, model: Model, shared: Shared)
 		cardHeader(h, [
 			sectionHeader(h, {
 				icon: IconShare(h, { className: "mt-0.5 size-5 text-muted-fg" }),
-				title: "Public Invite Link",
+				title: "Public invite link",
 				text: "Allow anyone with the link to join your workspace.",
 			}),
 		]),
@@ -255,7 +256,7 @@ const dangerZoneCard = (h: HtmlBuilder<Message>, shared: Shared) =>
 			[
 				sectionHeader(h, {
 					icon: IconWarning(h, { className: "mt-0.5 size-5 text-danger" }),
-					title: "Danger Zone",
+					title: "Danger zone",
 					text: "Irreversible and destructive actions for this workspace.",
 				}),
 			],

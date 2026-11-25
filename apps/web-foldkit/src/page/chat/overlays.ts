@@ -54,7 +54,7 @@ export type Trigger = typeof Trigger.Type
 export const OpenOverlay = defineTaggedUnion({
 	None: {},
 	MoreMenu: { messageId: MessageId, menu: Menu.Model },
-	/** `imageUrl`: the attachment image it opened on, which "Copy Image" copies. */
+	/** `imageUrl`: the attachment image it opened on, which "Copy image" copies. */
 	ContextMenu: { messageId: MessageId, menu: Menu.Model, imageUrl: Schema.NullOr(Schema.String) },
 	/** The profile popover open from a message's avatar or one of its mentions (`key`). */
 	Popover: { messageId: MessageId, key: Schema.String, popover: Popover.Model },
@@ -66,7 +66,7 @@ export const OpenOverlay = defineTaggedUnion({
 	},
 	/** The toolbar's "Add reaction" picker. */
 	ReactionPicker: { messageId: MessageId, dialog: EmojiDialog.Model },
-	/** The context menu's "Add Reaction": a modal holding the picker. */
+	/** The context menu's "Add reaction": a modal holding the picker. */
 	ReactionModal: { messageId: MessageId, modal: Modal.Model, picker: Picker.Model },
 })
 export type OpenOverlay = typeof OpenOverlay.Type
@@ -189,6 +189,10 @@ export const Message = defineMessageUnion({
 	ChoseNativeAction: { messageId: MessageId, value: Schema.String },
 	GotPopoverMessage: { messageId: MessageId, key: Schema.String, message: Popover.Message },
 	GotPinnedMessage: { message: Popover.Message },
+	/** A pin in the header's pinned messages popover: the popover closes and the list jumps to it. */
+	ClickedPinnedMessage: { messageId: MessageId },
+	/** The unpin button on a pin in the pinned messages popover. */
+	ClickedUnpin: { messageId: MessageId },
 	ClickedReply: { messageId: MessageId },
 	ClickedDelete: { messageId: MessageId },
 	ClickedCopy: { messageId: MessageId },
@@ -227,6 +231,9 @@ export const OutMessage = defineMessageUnion({
 	RequestedViewerAction: { action: ViewerAction, url: Schema.String, fileName: Schema.String },
 	/** The viewer's menu chose an action for the open image, which the page knows. */
 	RequestedOpenImageAction: { action: ViewerAction },
+	/** A pin was chosen in the pinned messages popover: the page scrolls to its message. */
+	RequestedJump: { messageId: MessageId },
+	RequestedUnpin: { messageId: MessageId },
 })
 export type OutMessage = typeof OutMessage.Type
 
@@ -320,26 +327,26 @@ export const contextMenuEntries = (
 	imageUrl: string | null,
 ): ReadonlyArray<Menu.Entry> => [
 	Menu.separator,
-	Menu.item("add-reaction", { textValue: "Add Reaction" }),
+	Menu.item("add-reaction", { textValue: "Add reaction" }),
 	Menu.separator,
 	Menu.item("reply", { textValue: "Reply" }),
-	...(facts.isOwnMessage(messageId) ? [Menu.item("edit", { textValue: "Edit Message" })] : []),
-	...(facts.canStartThread(messageId) ? [Menu.item("thread", { textValue: "Reply in Thread" })] : []),
-	...(facts.canCreateIssue(messageId) ? [Menu.item("create-issue", { textValue: "Create Issue" })] : []),
+	...(facts.isOwnMessage(messageId) ? [Menu.item("edit", { textValue: "Edit message" })] : []),
+	...(facts.canStartThread(messageId) ? [Menu.item("thread", { textValue: "Reply in thread" })] : []),
+	...(facts.canCreateIssue(messageId) ? [Menu.item("create-issue", { textValue: "Create issue" })] : []),
 	Menu.separator,
-	Menu.item("copy", { textValue: "Copy Text" }),
+	Menu.item("copy", { textValue: "Copy text" }),
 	...(imageUrl === null
 		? []
 		: [
-				Menu.item(COPY_IMAGE, { textValue: "Copy Image" }),
-				Menu.item(COPY_IMAGE_URL, { textValue: "Copy Image Address" }),
+				Menu.item(COPY_IMAGE, { textValue: "Copy image" }),
+				Menu.item(COPY_IMAGE_URL, { textValue: "Copy image address" }),
 			]),
-	Menu.item("pin", { textValue: facts.isPinned(messageId) ? "Unpin Message" : "Pin Message" }),
+	Menu.item("pin", { textValue: facts.isPinned(messageId) ? "Unpin message" : "Pin message" }),
 	Menu.separator,
 	...(facts.isOwnMessage(messageId)
-		? [Menu.item("delete", { intent: "Danger", textValue: "Delete Message" })]
+		? [Menu.item("delete", { intent: "Danger", textValue: "Delete message" })]
 		: []),
-	Menu.item("copy-id", { textValue: "Copy Message ID" }),
+	Menu.item("copy-id", { textValue: "Copy message ID" }),
 ]
 
 /** The "More actions" menu of a message: the open one, or a closed one. */
@@ -583,6 +590,17 @@ const updateOverlays = (model: Model, message: Message): OverlaysReturn =>
 				),
 			}
 		},
+		ClickedPinnedMessage: ({ messageId }) => {
+			const result = Popover.update(model.pinned, Popover.Message.RequestedClose())
+			return {
+				model: modifyFields(model, { pinned: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (inner) =>
+					Message.GotPinnedMessage({ message: inner }),
+				),
+				outMessage: OutMessage.RequestedJump({ messageId }),
+			}
+		},
+		ClickedUnpin: ({ messageId }) => ({ model, outMessage: OutMessage.RequestedUnpin({ messageId }) }),
 		ClickedReply: ({ messageId }) => action(model, messageId, "reply"),
 		ClickedDelete: ({ messageId }) => action(model, messageId, "delete"),
 		ClickedCopy: ({ messageId }) => action(model, messageId, "copy"),
@@ -736,7 +754,7 @@ export const forgetMissingMessages = (model: Model, isShown: (messageId: Message
 	})
 }
 
-/** The context menu's "Add Reaction" opens the picker modal, which loads its data. */
+/** The context menu's "Add reaction" opens the picker modal, which loads its data. */
 export const openReactionModal = (model: Model, messageId: MessageId): OverlaysReturn => {
 	const opened = Modal.open(Modal.init("reaction-picker-modal"))
 	const picker = Picker.loadData(Picker.init("reaction-picker-modal-picker"))

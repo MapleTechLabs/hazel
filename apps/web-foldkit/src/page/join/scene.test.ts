@@ -20,7 +20,7 @@ const withOrganization = (memberCount: number): Model => ({
 	isJoining: false,
 })
 const cardShown = Scene.Mount.resolve(CardEnterAnimation, Message.CompletedEnterAnimation())
-const joinButton = Scene.role("button", { name: "Join Workspace" })
+const joinButton = Scene.role("button", { name: "Join workspace" })
 
 describe("join page", () => {
 	test("shows the loader while the lookup runs, and while user.me is still pending", () => {
@@ -43,12 +43,12 @@ describe("join page", () => {
 			pageScene(update, view, signedIn),
 			Scene.given<Model>({ slug: "nope", lookup: Lookup.NotFound(), isJoining: false }),
 			cardShown,
-			Scene.expect(Scene.role("heading", { name: "Workspace Not Found" })).toExist(),
-			Scene.expect(Scene.role("link", { name: "Go to Home" })).toHaveAttr("href", "/"),
+			Scene.expect(Scene.role("heading", { name: "Workspace not found" })).toExist(),
+			Scene.expect(Scene.role("link", { name: "Go to Hazel" })).toHaveAttr("href", "/"),
 		)
 	})
 
-	// A network error used to render "Workspace Not Found", which reads as a bad link.
+	// A network error used to render "Workspace not found", which reads as a bad link.
 	test("a failed lookup is not a missing workspace: it says so and retries", () => {
 		Scene.scene(
 			pageScene(update, view, signedIn),
@@ -58,7 +58,7 @@ describe("join page", () => {
 				isJoining: false,
 			}),
 			cardShown,
-			Scene.expect(Scene.role("heading", { name: "Workspace Not Found" })).toBeAbsent(),
+			Scene.expect(Scene.role("heading", { name: "Workspace not found" })).toBeAbsent(),
 			Scene.expect(Scene.role("heading", { name: "Couldn't load this workspace" })).toExist(),
 			Scene.click(Scene.role("button", { name: "Try again" })),
 			Scene.Command.expectExact(FetchPublicOrganization({ slug: "hazel" })),
@@ -68,7 +68,7 @@ describe("join page", () => {
 				FetchPublicOrganization,
 				Message.SucceededFetchOrganization({ organization: null }),
 			),
-			Scene.expect(Scene.role("heading", { name: "Workspace Not Found" })).toExist(),
+			Scene.expect(Scene.role("heading", { name: "Workspace not found" })).toExist(),
 			cardShown,
 		)
 	})
@@ -81,7 +81,7 @@ describe("join page", () => {
 			Scene.expect(Scene.role("heading", { name: "Hazel Labs" })).toExist(),
 			Scene.expect(Scene.text("1 member")).toExist(),
 			Scene.expect(joinButton).toBeAbsent(),
-			Scene.click(Scene.role("button", { name: "Sign in to Join" })),
+			Scene.click(Scene.role("button", { name: "Sign in to join" })),
 			Scene.Command.expectExact(RedirectToSignIn({ returnTo: "/join/hazel" })),
 			Scene.Command.resolve(RedirectToSignIn, Message.CompletedRedirectToSignIn()),
 		)

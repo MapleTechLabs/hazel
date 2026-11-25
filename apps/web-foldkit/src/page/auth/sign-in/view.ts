@@ -10,7 +10,14 @@ import { separator } from "../../../ui/separator"
 import { textField } from "../../../ui/text-field"
 import type { PageViewInputs } from "../../contract"
 import type { UserErrorMessage } from "~/lib/error-messages"
-import { authError, authFailureMessage, authFrame, authHeading } from "../layout"
+import {
+	type AuthMessageTone,
+	authError,
+	authFailureMessage,
+	authFailureTone,
+	authFrame,
+	authHeading,
+} from "../layout"
 import { Message } from "./message"
 import {
 	type Attempt,
@@ -150,6 +157,9 @@ const signInFailureMessage = (reason: SignInFailure, methods: Methods): UserErro
 const failureOf = (model: Model): UserErrorMessage | null =>
 	model.submission._tag === "Failed" ? signInFailureMessage(model.submission.reason, model.methods) : null
 
+const failureToneOf = (model: Model): AuthMessageTone =>
+	model.submission._tag === "Failed" ? authFailureTone(model.submission.reason) : "danger"
+
 /** `/sign-up`'s subtitle names the providers once the install has said which it has. */
 const signUpDescription = (methods: Methods): string => {
 	const providers = Methods.match(methods, { Loading: () => [], Ready: ({ providers }) => providers })
@@ -184,7 +194,7 @@ const desktopChoices = (h: HtmlBuilder<Message>, model: Model): ReadonlyArray<Ht
 				IconExternalLink(h, { className: "size-4", attributes: { "aria-hidden": "true" } }),
 				"Sign in with your browser",
 			]),
-	...[authError(h, failureOf(model))].filter((html): html is Html => html !== null),
+	...[authError(h, failureOf(model), failureToneOf(model))].filter((html): html is Html => html !== null),
 ]
 
 const serverProblemText = (problem: ServerProblem): string =>
@@ -316,7 +326,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 					? authHeading(h, "Sign in to Hazel", "Welcome back. Pick how you'd like to sign in.")
 					: authHeading(h, "Create your Hazel account", signUpDescription(model.methods)),
 				choices(h, model.methods, pendingAttempt(model)),
-				authError(h, failureOf(model)),
+				authError(h, failureOf(model), failureToneOf(model)),
 				switchLink(h, model),
 			]),
 )

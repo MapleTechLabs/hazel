@@ -18,30 +18,65 @@ const accountCard = (h: HtmlBuilder<Message>, model: Model, provider: LinkedProv
 	const isActing = model.link._tag !== "Idle"
 	const isLinking = model.link._tag === "Linking" && model.link.provider === provider
 	const isUnlinking = model.link._tag === "Unlinking" && model.link.provider === provider
+	const isConfirming = model.link._tag === "ConfirmingUnlink" && model.link.provider === provider
 	// One action at a time: every card waits while one runs.
-	const action = isConnected
-		? button(
-				h,
-				{
-					intent: "danger",
-					size: "sm",
-					isDisabled: isActing,
-					onPress: Message.ClickedUnlink({ provider }),
-					interaction: { wiring, target: `unlink-${provider}` },
-				},
-				[isUnlinking ? "Unlinking..." : "Unlink"],
+	const action = isConfirming
+		? h.div(
+				[h.Class("flex flex-wrap items-center gap-2")],
+				[
+					h.p(
+						[h.Class("w-full text-fg text-xs")],
+						[
+							`Unlink ${name}? Messages you send from ${name} will no longer be attributed to you.`,
+						],
+					),
+					button(
+						h,
+						{
+							intent: "outline",
+							size: "sm",
+							onPress: Message.ClickedCancelUnlink(),
+							interaction: { wiring, target: `cancel-unlink-${provider}` },
+						},
+						["Cancel"],
+					),
+					button(
+						h,
+						{
+							intent: "danger",
+							size: "sm",
+							onPress: Message.ClickedConfirmUnlink(),
+							interaction: { wiring, target: `confirm-unlink-${provider}` },
+						},
+						[`Unlink ${name}`],
+					),
+				],
 			)
-		: button(
-				h,
-				{
-					intent: "primary",
-					size: "sm",
-					isDisabled: isActing,
-					onPress: Message.ClickedLink({ provider }),
-					interaction: { wiring, target: `link-${provider}` },
-				},
-				[isLinking ? "Redirecting..." : `Link ${name}`],
-			)
+		: isConnected
+			? button(
+					h,
+					{
+						intent: "outline",
+						size: "sm",
+						isDisabled: isActing,
+						isPending: isUnlinking,
+						onPress: Message.ClickedUnlink({ provider }),
+						interaction: { wiring, target: `unlink-${provider}` },
+					},
+					[isUnlinking ? "Unlinking..." : "Unlink"],
+				)
+			: button(
+					h,
+					{
+						intent: "primary",
+						size: "sm",
+						isDisabled: isActing,
+						isPending: isLinking,
+						onPress: Message.ClickedLink({ provider }),
+						interaction: { wiring, target: `link-${provider}` },
+					},
+					[isLinking ? "Redirecting..." : `Link ${name}`],
+				)
 	return h.keyed("div")(
 		provider,
 		[h.Class(cardClassName("p-4"))],
@@ -56,7 +91,7 @@ const accountCard = (h: HtmlBuilder<Message>, model: Model, provider: LinkedProv
 						h.Class("size-10 rounded-lg"),
 					]),
 					h.div(
-						[h.Class("flex-1")],
+						[h.Class("min-w-0 flex-1")],
 						[
 							h.p([h.Class("font-medium text-sm text-fg")], [name]),
 							h.p(
@@ -79,8 +114,8 @@ const accountCard = (h: HtmlBuilder<Message>, model: Model, provider: LinkedProv
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) =>
 	pageLayout(h, {}, [
 		pageHeader(h, {
-			title: "Linked Accounts",
-			subtitle: "Connect external accounts to enhance your experience.",
+			title: "Linked accounts",
+			subtitle: "Link your chat accounts so messages synced from them are attributed to you.",
 			size: "title",
 		}),
 		h.div(

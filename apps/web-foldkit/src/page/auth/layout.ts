@@ -84,12 +84,26 @@ export const authHeading = <M>(h: HtmlBuilder<M>, title: string, description: st
 		[heading(h, { variant: "display" }, [title]), h.p([h.Class("text-muted-fg text-sm")], [description])],
 	)
 
-/** A failure under the form, announced to screen readers. */
-export const authError = <M>(h: HtmlBuilder<M>, message: UserErrorMessage | null): Html | null =>
+/** How a message under the form reads: a failure, or a notice that the flow moved on (`AccountCreated`). */
+export type AuthMessageTone = "danger" | "success"
+
+/** `AccountCreated` is not a failure: the account exists, it only needs a sign-in. */
+export const authFailureTone = (reason: string): AuthMessageTone =>
+	reason === "AccountCreated" ? "success" : "danger"
+
+/** A failure (or notice) under the form, announced to screen readers. */
+export const authError = <M>(
+	h: HtmlBuilder<M>,
+	message: UserErrorMessage | null,
+	tone: AuthMessageTone = "danger",
+): Html | null =>
 	message === null
 		? null
 		: h.p(
-				[h.Class("mt-4 text-danger text-sm"), h.Role("alert")],
+				[
+					h.Class(tone === "danger" ? "mt-4 text-danger text-sm" : "mt-4 text-success text-sm"),
+					h.Role(tone === "danger" ? "alert" : "status"),
+				],
 				[
 					message.description === undefined
 						? message.title

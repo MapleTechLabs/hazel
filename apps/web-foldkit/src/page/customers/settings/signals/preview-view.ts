@@ -21,14 +21,15 @@ import { button } from "../../../../ui/button"
 import { callout } from "../../../../ui/callout"
 import { card, panel, panelHeader } from "../../../../ui/card"
 import { emptyState } from "../../../../ui/empty-state"
-import { label } from "../../../../ui/field"
 import { link } from "../../../../ui/link"
 import { loadingState } from "../../../../ui/loader"
+import * as Select from "../../../../ui/select"
+import { view as selectView } from "../../../../ui/select-view"
 import { statusLine as kitStatusLine } from "../../../../ui/status-dot"
 import type { EditorStatus } from "./draft"
 import { metricNameOf } from "./list-view"
 import { Message } from "./message"
-import type { Editor, Model, RuleForm } from "./model"
+import { type Editor, EXAMPLE_SELECT_ID, type Model, type RuleForm } from "./model"
 
 /**
  * The live preview (Wonder `ati`, `mia`): the draft dry-run over today's data, what saving would do
@@ -40,7 +41,7 @@ type H = HtmlBuilder<Message>
 type Result = Customers.RuleDryRunResult
 type SeriesEvidence = Extract<Customers.SignalEvidence, { _tag: "series" }>
 
-const toExample = (accountId: string) => Message.ChangedExampleAccount({ accountId })
+const toExampleSelect = (message: Select.Message) => Message.GotExampleSelectMessage({ message })
 
 export interface PreviewContext {
 	readonly model: Model
@@ -185,28 +186,28 @@ const exampleChart = (h: H, context: PreviewContext, result: Result): ReadonlyAr
 			h.div(
 				[h.Class("flex items-center justify-between gap-2")],
 				[
-					label(
-						h,
-						{ className: "flex min-w-0 items-center gap-2 text-muted-fg text-xs sm:text-xs" },
+					h.div(
+						[h.Class("flex min-w-0 items-center gap-2 text-muted-fg text-xs")],
 						[
-							"Example",
-							h.select(
-								[
-									h.Class(
-										"min-w-0 rounded-md border border-border bg-bg px-1.5 py-0.5 font-medium text-fg text-xs outline-hidden focus-visible:ring-2 focus-visible:ring-ring/70",
+							h.span([h.AriaHidden(true)], ["Example"]),
+							h.submodel({
+								slotId: EXAMPLE_SELECT_ID,
+								// The selection is the editor's example account; the Select keeps only its popup.
+								model: {
+									...context.editor.exampleSelect,
+									selectedKey: Option.some(example.match.accountId),
+								},
+								view: selectView,
+								viewInputs: {
+									items: examples.map(({ match }) =>
+										Select.item(match.accountId, match.name),
 									),
-									h.OnChange(toExample),
-								],
-								examples.map(({ match }) =>
-									h.option(
-										[
-											h.Value(match.accountId),
-											h.Selected(match.accountId === example.match.accountId),
-										],
-										[match.name],
-									),
-								),
-							),
+									ariaLabel: "Example account",
+									className: "min-w-0",
+									triggerClassName: "h-7 min-w-0 max-w-56 text-xs",
+								},
+								toParentMessage: toExampleSelect,
+							}),
 						],
 					),
 					badge(h, { intent: "danger" }, [formatDeltaPct(evidence.changePct)]),

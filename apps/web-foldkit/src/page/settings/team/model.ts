@@ -14,5 +14,9 @@ export const TeamMember = Schema.Struct({
 })
 export type TeamMember = typeof TeamMember.Type
 
-export const Model = Schema.Struct({ members: Schema.Array(TeamMember) })
+export const Model = Schema.Struct({
+	members: Schema.Array(TeamMember),
+	/** The live query has answered once; until then the table draws skeleton rows, not "0 users". */
+	isLoaded: Schema.Boolean,
+})
 export type Model = typeof Model.Type

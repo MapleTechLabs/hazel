@@ -107,19 +107,38 @@ const failureText = (reason: CreateWorkspaceFailure): string => {
 	return message.description === undefined ? message.title : `${message.title}. ${message.description}`
 }
 
+/** A taken URL is the slug field's problem, so it shows there; until the slug changes. */
+const isSlugTaken = (submission: Submission) =>
+	submission._tag === "Failed" && submission.reason === "SlugTaken"
+
+/** A new slug may be free: drop the taken verdict, keeping the field errors on. */
+const afterSlugChange = (model: Model, slug: string): Submission =>
+	isSlugTaken(model.submission) && slug !== model.slug ? Submission.Invalid() : model.submission
+
 type Return = PageReturn<Model, Message>
 
 export const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
-		ChangedName: ({ value }) => ({
-			model: modifyFields(model, {
-				name: () => value,
-				slug: () => (model.isSlugEdited ? model.slug : slugify(value)),
-			}),
-		}),
-		ChangedSlug: ({ value }) => ({
-			model: modifyFields(model, { slug: () => value.toLowerCase(), isSlugEdited: () => true }),
-		}),
+		ChangedName: ({ value }) => {
+			const slug = model.isSlugEdited ? model.slug : slugify(value)
+			return {
+				model: modifyFields(model, {
+					name: () => value,
+					slug: () => slug,
+					submission: () => afterSlugChange(model, slug),
+				}),
+			}
+		},
+		ChangedSlug: ({ value }) => {
+			const slug = value.toLowerCase()
+			return {
+				model: modifyFields(model, {
+					slug: () => slug,
+					isSlugEdited: () => true,
+					submission: () => afterSlugChange(model, slug),
+				}),
+			}
+		},
 		SubmittedWorkspace: () => {
 			if (model.submission._tag === "Submitting") return { model }
 			if (nameError(model) !== null || slugError(model) !== null)
@@ -143,7 +162,9 @@ export const view = <ParentMessage>(
 	const showsErrors = model.submission._tag !== "NotSubmitted"
 	const isSubmitting = model.submission._tag === "Submitting"
 	const nameInvalid = showsErrors ? nameError(model) : null
-	const slugInvalid = showsErrors ? slugError(model) : null
+	const slugInvalid = showsErrors
+		? (slugError(model) ?? (isSlugTaken(model.submission) ? failureText("SlugTaken") : null))
+		: null
 	return h.form(
 		[h.Class("flex w-full flex-col gap-4"), h.OnSubmit(toParent(Message.SubmittedWorkspace()))],
 		[
@@ -158,7 +179,10 @@ export const view = <ParentMessage>(
 				},
 				(field) => [
 					field.label(["Workspace name"]),
-					field.input({ placeholder: "Acme Corp", attributes: [h.Autofocus(true)] }),
+					field.input({
+						placeholder: "Acme Corp",
+						attributes: [h.Attribute("autocomplete", "organization"), h.Autofocus(true)],
+					}),
 					field.fieldError([nameInvalid ?? ""]),
 				],
 			),
@@ -173,12 +197,26 @@ export const view = <ParentMessage>(
 				},
 				(field) => [
 					field.label(["Workspace URL"]),
-					field.input({ placeholder: "acme-corp" }),
+					field.input({
+						placeholder: "acme-corp",
+						attributes: [
+							h.Attribute("autocomplete", "off"),
+							h.Attribute("autocapitalize", "none"),
+							h.Attribute("autocorrect", "off"),
+							h.Attribute("spellcheck", "false"),
+						],
+					}),
 					field.description([`${shareHost()}/${model.slug || "acme-corp"}`]),
-					field.fieldError([slugInvalid ?? ""]),
+					// The server's verdict arrives after the press, so it is announced; the field's own rules aren't.
+					field.fieldError(
+						[slugInvalid ?? ""],
+						isSlugTaken(model.submission) && slugError(model) === null
+							? { attributes: [h.Role("alert")] }
+							: {},
+					),
 				],
 			),
-			...(model.submission._tag === "Failed"
+			...(model.submission._tag === "Failed" && !isSlugTaken(model.submission)
 				? [
 						h.p(
 							[h.Class("text-danger text-sm"), h.Role("alert")],

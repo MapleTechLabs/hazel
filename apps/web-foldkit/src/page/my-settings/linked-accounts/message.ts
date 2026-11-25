@@ -21,6 +21,8 @@ export const Message = defineMessageUnion({
 	SucceededGetOAuthUrl: {},
 	FailedGetOAuthUrl: { provider: LinkedProvider, reason: LinkFailure },
 	ClickedUnlink: { provider: LinkedProvider },
+	ClickedCancelUnlink: {},
+	ClickedConfirmUnlink: {},
 	SucceededDisconnect: { provider: LinkedProvider },
 	FailedDisconnect: { provider: LinkedProvider, reason: UnlinkFailure },
 	GotInteractionMessage: { message: Interaction.Message },

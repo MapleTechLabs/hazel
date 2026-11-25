@@ -1,11 +1,23 @@
 import { Option } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { handleStyles, indicatorStyles, panelStyles } from "~/components/ui/split-panel/split-panel.styles"
+import {
+	contentStyles,
+	handleStyles,
+	indicatorStyles,
+	panelStyles,
+	rootStyles,
+} from "~/components/ui/split-panel/split-panel.styles"
 
 /** A side panel beside the page, and the edge that resizes it (drag, or arrow keys when focused). */
 
 export type Position = "left" | "right"
+
+/** The row that holds the page and its side panel. */
+export const splitRootClassName = (className?: string) => twMerge(rootStyles(), className)
+
+/** The page beside the side panel: the column that scrolls. */
+export const splitContentClassName = (className?: string) => twMerge(contentStyles(), className)
 
 export const splitPanelClassName = (position: Position, className?: string) =>
 	twMerge(panelStyles({ position }), className)

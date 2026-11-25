@@ -38,9 +38,9 @@ const withAddModalOpen = { ...loaded, addModal: Modal.open(loaded.addModal).mode
 
 // The icon-only delete button is named by its icon's <title> ("badge 13"), so it is found by `title`.
 const deleteTrigger = Scene.title("Delete connection")
-const addTrigger = Scene.role("button", { name: /Add Third Party Connection/ })
+const addTrigger = Scene.role("button", { name: /Add third-party connection/ })
 const dialog = Scene.role("dialog")
-const confirmDelete = Scene.within(dialog, Scene.role("button", { name: "Delete Connection" }))
+const confirmDelete = Scene.within(dialog, Scene.role("button", { name: "Delete connection" }))
 const connect = Scene.within(dialog, Scene.role("button", { name: "Connect" }))
 const search = Scene.placeholder("Search servers...")
 const tryAgain = Scene.role("button", { name: "Try again" })

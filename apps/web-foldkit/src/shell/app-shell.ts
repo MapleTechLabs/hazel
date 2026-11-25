@@ -8,6 +8,7 @@ import {
 	isNotificationsRoute,
 	isSettingsRoute,
 } from "../route"
+import { countBadge } from "../ui/count-badge"
 import { linkClassName } from "../ui/link"
 import {
 	sidebarContent,
@@ -36,7 +37,7 @@ import { hasDesktopTitlebar } from "../platform/desktop"
 
 const NAV_ACTIVE = "bg-sidebar-accent font-medium text-sidebar-accent-fg"
 
-/** `useUnreadNotificationCount` badge on the bell. */
+/** `useUnreadNotificationCount` badge on the bell; the item's label carries the count for screen readers. */
 const bellIcon = <Message>(h: HtmlBuilder<Message>, unreadCount: number): Html =>
 	h.div(
 		[h.Class("relative")],
@@ -44,14 +45,13 @@ const bellIcon = <Message>(h: HtmlBuilder<Message>, unreadCount: number): Html =
 			IconBell(h, { className: "size-5" }),
 			...(unreadCount > 0
 				? [
-						h.span(
-							[
-								h.Class(
-									"absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-danger font-medium text-3xs text-danger-fg",
-								),
-							],
-							[unreadCount > 9 ? "9+" : `${unreadCount}`],
-						),
+						countBadge(h, {
+							count: unreadCount,
+							isCapped: true,
+							className:
+								"absolute -top-1.5 -right-2 h-4 min-w-4 bg-danger px-1 text-3xs text-danger-fg leading-none",
+							attributes: [h.AriaHidden(true)],
+						}),
 					]
 				: []),
 		],
@@ -65,14 +65,20 @@ const navRail = <Message>(
 	assistantToggle: Html,
 ): Html => {
 	const { orgSlug, route } = context
-	const navItem = (id: DestinationId, isActive: boolean, icon?: Html) => {
+	const navItem = (id: DestinationId, isActive: boolean, icon?: Html, ariaLabel?: string) => {
 		if (!isAvailable(id)) return h.empty
 		const page = destination(id)
-		return sidebarItem(h, { ariaLabel: page.label, className: "size-9 justify-items-center" }, [
-			sidebarLink(h, { href: destinationHref(id, orgSlug), isActive, activeClassName: NAV_ACTIVE }, [
-				icon ?? page.icon(h, { className: "size-5" }),
-			]),
-		])
+		return sidebarItem(
+			h,
+			{ ariaLabel: ariaLabel ?? page.label, className: "size-9 justify-items-center" },
+			[
+				sidebarLink(
+					h,
+					{ href: destinationHref(id, orgSlug), isActive, activeClassName: NAV_ACTIVE },
+					[icon ?? page.icon(h, { className: "size-5" })],
+				),
+			],
+		)
 	}
 	// Under the macOS window controls the dock draws its own borders, below the titlebar strip.
 	return sidebarStatic(
@@ -114,7 +120,14 @@ const navRail = <Message>(
 							navItem("home", route._tag === "OrgHome"),
 							navItem("chat", isChatRoute(route)),
 							navItem("customers", isCustomersRoute(route)),
-							navItem("notifications", isNotificationsRoute(route), bellIcon(h, unreadCount)),
+							navItem(
+								"notifications",
+								isNotificationsRoute(route),
+								bellIcon(h, unreadCount),
+								unreadCount > 0
+									? `${destination("notifications").label}, ${unreadCount} unread`
+									: undefined,
+							),
 							navItem("settings", isSettingsRoute(route)),
 						]),
 					]),
