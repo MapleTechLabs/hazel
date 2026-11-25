@@ -14,6 +14,7 @@
 import { Database, SQLite, schema } from "@hazel/db"
 import { ChannelId, type ConnectConversationId, MessageId, type OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
+import { defaultLevel } from "../../../services/notifications/notification-rules"
 import { NotificationService } from "../../../services/notifications/notification-service"
 import { enqueueEffect, defineEffect } from "../effects/registry"
 import { MessageNotificationEffects } from "../user/message-notifications"
@@ -162,8 +163,9 @@ export const messageCreated = Effect.fn("OrgEffects.messageCreated")(function* (
 
 /**
  * Drop the message's notifications in the `UserObject`s that may hold one: the channel's members
- * with unread notifications there (`notificationCount`, reset when they read it). Each that held
- * one tells the org back (`org.notificationsRemoved`), so the unread count comes down too.
+ * with unread mentions there (`notificationCount`, reset when they read it), and those a plain
+ * message notifies (All messages, which the count leaves out). Each that held a counted one tells
+ * the org back (`org.notificationsRemoved`), so the unread count comes down too.
  */
 export const messageDeleted = Effect.fn("OrgEffects.messageDeleted")(function* (
 	input: MessageDeletedPayload,
@@ -188,8 +190,11 @@ export const messageDeleted = Effect.fn("OrgEffects.messageDeleted")(function* (
 			.select("userId")
 			.where(($) => [
 				$.channelId.eq(channel.value.id),
-				// Members who left since keep their notifications: theirs go too.
-				$.notificationCount.gt(0),
+				// Members who left since keep their notifications: theirs go too. Where every message
+				// notifies by default (DMs, threads), any member may hold one.
+				...(defaultLevel(channel.value.type) === "all"
+					? []
+					: [SQLite.or($.notificationCount.gt(0), $.notificationLevel.eq("all"))]),
 			]),
 	)
 	yield* Effect.forEach(
