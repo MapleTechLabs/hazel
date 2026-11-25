@@ -24,7 +24,8 @@ import {
 import { catchCommon, errorToast, errorToastOf, successToast } from "../../data/actions"
 import type { ToastRequest } from "../../overlay/toasts"
 import { IconBell, IconBellSlash } from "../../icons"
-import type { HazelRpc } from "../../rpc"
+import { HazelRpc } from "../../rpc"
+import { orgOfChannelMember } from "~/db/routing-hints"
 import { iconButton } from "../../ui/button"
 import * as Menu from "../../ui/menu"
 import { menuLabel, view as menuView } from "../../ui/menu-view"
@@ -54,6 +55,7 @@ export type Failure = typeof Failure.Type
 
 export const Message = defineMessageUnion({
 	GotMenuMessage: { message: Menu.Message },
+	SucceededUnfollow: {},
 	SucceededChoice: { choice: NotificationChoice },
 	FailedChoice: { reason: Failure },
 })
@@ -73,6 +75,23 @@ const ApplyChannelNotificationChoice = Command.define("ApplyChannelNotificationC
 	execute: ({ memberId, choice }) =>
 		writeChoice(memberId, choice).pipe(
 			Effect.as(Message.SucceededChoice({ choice })),
+			Effect.catchTags({
+				ChannelMemberNotFoundError: () =>
+					Effect.succeed(Message.FailedChoice({ reason: "MemberNotFound" })),
+			}),
+			catchCommon((reason) => Message.FailedChoice({ reason })),
+		),
+})
+
+/** "Unfollow thread": leave it; its replies stop notifying until the user writes or is mentioned. */
+const UnfollowThread = Command.define("UnfollowThread", {
+	args: { memberId: ChannelMemberId },
+	messages: [Message.SucceededUnfollow, Message.FailedChoice],
+	execute: ({ memberId }) =>
+		HazelRpc.use((rpc) =>
+			rpc("channelMember.delete", { id: memberId, organizationId: orgOfChannelMember(memberId) }),
+		).pipe(
+			Effect.as(Message.SucceededUnfollow()),
 			Effect.catchTags({
 				ChannelMemberNotFoundError: () =>
 					Effect.succeed(Message.FailedChoice({ reason: "MemberNotFound" })),
@@ -104,6 +123,8 @@ export const update = (model: Model, message: Message, member: Member | null): R
 			)
 			const key = result.outMessage?._tag === "SelectedItem" ? result.outMessage.key : null
 			if (key === null || member === null) return { model: next, commands }
+			if (key === "unfollow")
+				return { model: next, commands: [...commands, UnfollowThread({ memberId: member.id })] }
 			return Option.match(choiceOfKey(key, member.isMuted || member.mutedUntilMs !== null), {
 				onNone: () => ({ model: next, commands }),
 				onSome: (choice) => ({
@@ -113,6 +134,7 @@ export const update = (model: Model, message: Message, member: Member | null): R
 			})
 		},
 		SucceededChoice: ({ choice }) => ({ model, toast: successToast(choiceToast(choice)) }),
+		SucceededUnfollow: () => ({ model, toast: successToast("Unfollowed thread") }),
 		FailedChoice: ({ reason }) => ({
 			model,
 			toast:
@@ -162,7 +184,13 @@ export const view = <M>(
 			// A DM notifies of every message: only muting changes anything there.
 			entries: isDm
 				? [muteEntry(notificationMember)]
-				: [muteEntry(notificationMember), levelEntry(notificationMember)],
+				: [
+						muteEntry(notificationMember),
+						levelEntry(notificationMember),
+						...(channelType === "thread"
+							? [Menu.separator, Menu.item("unfollow", { textValue: "Unfollow thread" })]
+							: []),
+					],
 			toTrigger: (attributes, overlay) =>
 				h.span(
 					[h.Class("relative inline-flex")],
@@ -178,9 +206,14 @@ export const view = <M>(
 					],
 				),
 			content: (key) =>
-				itemContent(h, notificationMember, key, (value) =>
-					menuLabel(h, model.menu.id, key, value),
-				) ?? [key],
+				key === "unfollow"
+					? [
+							IconBellSlash(h, { className: "size-4" }),
+							menuLabel(h, model.menu.id, key, "Unfollow thread"),
+						]
+					: (itemContent(h, notificationMember, key, (value) =>
+							menuLabel(h, model.menu.id, key, value),
+						) ?? [key]),
 			className: "w-52",
 		},
 		toParentMessage: (message) => toMessage(Message.GotMenuMessage({ message })),

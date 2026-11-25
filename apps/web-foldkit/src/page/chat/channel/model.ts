@@ -295,6 +295,11 @@ export const Message = defineMessageUnion({
 	ClickedCloseThread: {},
 	ClickedGenerateThreadName: {},
 	ClickedRenameThread: {},
+	/** Follow the open thread (join it) or unfollow it (leave it): Discord's thread following. */
+	ClickedToggleFollowThread: {},
+	/** The thread page's Follow, for a thread the user does not follow. */
+	ClickedFollowThread: {},
+	CompletedToggleFollowThread: { isFollowing: Schema.Boolean, isSuccess: Schema.Boolean },
 	/** The panel's edge was grabbed: its rendered width and the widest it may grow. */
 	PressedThreadPanelEdge: { clientX: Schema.Finite, startWidth: Schema.Finite, maxWidth: Schema.Finite },
 	MovedThreadPanelEdge: { clientX: Schema.Finite },

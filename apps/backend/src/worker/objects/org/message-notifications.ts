@@ -20,6 +20,7 @@ import { MessageNotificationEffects } from "../user/message-notifications"
 import { recordCustomerChatMessage } from "./customer-chat"
 import { loadPushContent } from "./push-content"
 import { relaySupportMessageDeleted } from "./support-relay"
+import { followThread } from "./thread-follow"
 
 export const MessageCreatedPayload = Schema.Struct({
 	channelId: ChannelId,
@@ -135,6 +136,16 @@ export const messageCreated = Effect.fn("OrgEffects.messageCreated")(function* (
 	const payload = { ...input, channelId: channel.value.id }
 	const content = payload.content
 	yield* recordCustomerChatMessage(channel.value, payload)
+	// Writing in a thread follows it; a mention brings the mentioned in (Discord's threads).
+	if (channel.value.type === "thread" && channel.value.parentChannelId !== null) {
+		yield* followThread({
+			organizationId: channel.value.organizationId,
+			threadId: channel.value.id,
+			parentChannelId: channel.value.parentChannelId,
+			authorId: payload.authorId,
+			mentionedUserIds: payload.mentionedUserIds,
+		})
+	}
 
 	yield* NotificationService.use((service) =>
 		service.notify(channel.value.organizationId, {

@@ -1,8 +1,9 @@
-import { ChannelId } from "@hazel/schema"
+import { ChannelId, ChannelMemberId } from "@hazel/schema"
 import { Duration, Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { channelMemberCollection } from "~/db/collections"
+import { orgOfChannelMember } from "~/db/routing-hints"
 import { catchCommon } from "../../../data/actions"
 import { HazelRpc } from "../../../rpc"
 import type { Shared } from "../../contract"
@@ -131,3 +132,44 @@ export const syncReady = (model: Model, shared: Shared | null): PageReturn =>
 /** The badge, read from the member rows the page holds (after every `UpdatedMembers`). */
 export const syncUnread = (model: Model): PageReturn =>
 	stepNotifications(model, { _tag: "ChangedUnread", unread: ownUnread(model) })
+
+/** Follow (join) or unfollow (leave) a thread; the membership stream shows the result. */
+export const ToggleFollowThread = Command.define("ToggleFollowThread", {
+	args: {
+		threadChannelId: ChannelId,
+		/** The membership to leave; null joins. */
+		memberId: Schema.NullOr(ChannelMemberId),
+	},
+	messages: [Message.CompletedToggleFollowThread],
+	execute: ({ threadChannelId, memberId }) =>
+		Effect.gen(function* () {
+			const rpc = yield* HazelRpc
+			if (memberId === null) yield* rpc("channelMember.create", { channelId: threadChannelId })
+			else
+				yield* rpc("channelMember.delete", {
+					id: memberId,
+					organizationId: orgOfChannelMember(memberId),
+				})
+			return Message.CompletedToggleFollowThread({ isFollowing: memberId === null, isSuccess: true })
+		}).pipe(
+			Effect.catchTags({
+				ChannelMemberNotFoundError: () =>
+					Effect.succeed(
+						Message.CompletedToggleFollowThread({
+							isFollowing: memberId === null,
+							isSuccess: false,
+						}),
+					),
+				ChannelNotFoundError: () =>
+					Effect.succeed(
+						Message.CompletedToggleFollowThread({
+							isFollowing: memberId === null,
+							isSuccess: false,
+						}),
+					),
+			}),
+			catchCommon(() =>
+				Message.CompletedToggleFollowThread({ isFollowing: memberId === null, isSuccess: false }),
+			),
+		),
+})

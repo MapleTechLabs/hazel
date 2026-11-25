@@ -96,6 +96,17 @@ export const ChannelMemberRpcLive = ChannelMemberRpcs.toLayer(
 							const user = yield* CurrentUser.Context
 
 							yield* channelMemberPolicy.canCreate(payload.channelId)
+							// Joining twice (a second press, another tab) keeps the one membership.
+							const existing = yield* channelMemberRepo.findByChannelAndUser(
+								payload.channelId,
+								user.id,
+							)
+							if (Option.isSome(existing)) {
+								return new ChannelMemberResponse({
+									data: existing.value,
+									transactionId: yield* generateTransactionId(),
+								})
+							}
 							const createdChannelMember = yield* channelMemberRepo
 								.insert({
 									channelId: payload.channelId,

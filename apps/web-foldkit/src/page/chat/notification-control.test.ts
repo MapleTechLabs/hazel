@@ -47,6 +47,20 @@ describe("the header bell", () => {
 		})
 	})
 
+	test("a thread's Unfollow leaves it", () => {
+		const unfollow = NotificationControl.update(
+			opened,
+			NotificationControl.Message.GotMenuMessage({
+				message: Menu.Message.ChoseFromNativeMenu({
+					key: "unfollow",
+					entries: [Menu.item("unfollow", { textValue: "Unfollow thread" })],
+				}),
+			}),
+			member,
+		)
+		expect(unfollow.commands?.at(-1)).toMatchObject({ name: "UnfollowThread", args: { memberId } })
+	})
+
 	test("without the member row nothing is written", () => {
 		expect(chose("mute:60", null).commands ?? []).toEqual([])
 	})

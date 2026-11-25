@@ -8,7 +8,15 @@ import type * as HtmlRender from "../../chat/html-render"
 import { formatTime } from "../../chat/message/parts"
 import { messageRowView, type RowContext } from "../../chat/message/row"
 import { markdownView } from "../../chat/markdown/markdown-view"
-import { IconClose, IconEdit, IconMaximize, IconPenSparkle, IconThread } from "../../icons"
+import {
+	IconBell,
+	IconBellSlash,
+	IconClose,
+	IconEdit,
+	IconMaximize,
+	IconPenSparkle,
+	IconThread,
+} from "../../icons"
 import { avatar } from "../../ui/avatar"
 import { button, buttonClassName } from "../../ui/button"
 import { iconTile } from "../../ui/icon-tile"
@@ -48,6 +56,9 @@ export interface ThreadPanelInputs<M> {
 	readonly onClose: M
 	readonly onGenerateName: M
 	readonly onRename: M
+	/** Following the thread (a member of it): its replies notify. Null before it exists. */
+	readonly isFollowing: boolean | null
+	readonly onToggleFollow: M
 	readonly isGeneratingName: boolean
 	/** `isThreadCreating`: the composer waits for `channel.createThread`. */
 	readonly isCreating: boolean
@@ -161,6 +172,16 @@ const headerView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<M>): Html =>
 						IconEdit(h, { className: "size-4", attributes: iconAttributes }),
 						inputs.onRename,
 					),
+					inputs.isFollowing === null
+						? h.empty
+						: headerButton(
+								h,
+								inputs.isFollowing ? "Unfollow thread" : "Follow thread",
+								inputs.isFollowing
+									? IconBell(h, { className: "size-4", attributes: iconAttributes })
+									: IconBellSlash(h, { className: "size-4", attributes: iconAttributes }),
+								inputs.onToggleFollow,
+							),
 					fullViewLink(h, inputs.fullViewHref),
 					headerButton(
 						h,

@@ -42,6 +42,23 @@ export class ChannelMemberPolicy extends Context.Service<ChannelMemberPolicy>()(
 									return yield* Effect.succeed(true)
 								}
 
+								// A thread (Follow) is open to whoever is in its parent channel, or to any
+								// org member when the parent is public.
+								if (
+									channel.type === "thread" &&
+									channel.parentChannelId !== null &&
+									Option.isSome(orgMember)
+								) {
+									const parentId = channel.parentChannelId
+									const parent = yield* channelRepo.findById(parentId)
+									if (Option.isSome(parent) && parent.value.type === "public") return true
+									const inParent = yield* channelMemberRepo.findByChannelAndUser(
+										parentId,
+										actor.id,
+									)
+									return Option.isSome(inParent)
+								}
+
 								return yield* Effect.succeed(false)
 							}),
 						),

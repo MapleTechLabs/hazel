@@ -167,6 +167,8 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs<M>): H
 							],
 						)
 					: skeleton(h, "h-4 w-32 rounded-sm"),
+				// A thread the user does not follow offers Follow here (its access is its parent's).
+				h.div([h.Class("ml-auto flex items-center")], [inputs.notificationsTrigger ?? h.empty]),
 			],
 		)
 	const isDirectMessage = channel.type === "direct" || channel.type === "single"
