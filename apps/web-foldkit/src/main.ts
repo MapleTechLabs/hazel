@@ -332,6 +332,7 @@ const goToAdjacentChannel =
 			chatChannelIdOf(model.route),
 			direction,
 			unreadOnly,
+			model.nowMs,
 		)
 		return orgSlug === undefined || channelId === null
 			? { model }

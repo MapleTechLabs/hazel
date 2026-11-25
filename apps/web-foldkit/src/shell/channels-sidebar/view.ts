@@ -87,10 +87,11 @@ const threadsMemo = new WeakMap<
 	{ readonly key: string; readonly result: ReadonlyMap<string, ReadonlyArray<SidebarThread>> }
 >()
 
-// Pure memo on the frozen list and the minute, so rows with threads keep their memo while nothing changed.
+// Pure memo on the frozen list, the minute and the next mute to end, so rows with threads keep their
+// memo while nothing changed.
 const unreadMemo = new WeakMap<
 	Model["unreadChannels"],
-	{ readonly minute: number; readonly result: ReadonlySet<string> }
+	{ readonly minute: number; readonly nextExpiryMs: number; readonly result: ReadonlySet<string> }
 >()
 const MINUTE_MS = 60 * 1000
 
@@ -98,13 +99,17 @@ const MINUTE_MS = 60 * 1000
 const unreadSetOf = (channels: Model["unreadChannels"], nowMs: number): ReadonlySet<string> => {
 	const minute = Math.floor(nowMs / MINUTE_MS)
 	const cached = unreadMemo.get(channels)
-	if (cached !== undefined && cached.minute === minute) return cached.result
+	if (cached !== undefined && cached.minute === minute && nowMs < cached.nextExpiryMs) return cached.result
+	const isMuted = (mutedUntilMs: number | null): mutedUntilMs is number =>
+		mutedUntilMs !== null && mutedUntilMs > nowMs
 	const result: ReadonlySet<string> = new Set(
-		channels.flatMap(({ channelId, mutedUntilMs }) =>
-			mutedUntilMs !== null && mutedUntilMs > nowMs ? [] : [channelId],
-		),
+		channels.flatMap(({ channelId, mutedUntilMs }) => (isMuted(mutedUntilMs) ? [] : [channelId])),
 	)
-	unreadMemo.set(channels, { minute, result })
+	const nextExpiryMs = Math.min(
+		Infinity,
+		...channels.flatMap(({ mutedUntilMs }) => (isMuted(mutedUntilMs) ? [mutedUntilMs] : [])),
+	)
+	unreadMemo.set(channels, { minute, nextExpiryMs, result })
 	return result
 }
 
@@ -142,7 +147,10 @@ const channelRowView = <M>(
 	entry: ChannelEntry,
 	notificationCount: number,
 	isUnread: boolean,
+	/** The channel's own mute now: the row menu's Mute/Unmute reads and writes it. */
 	isMuted: boolean,
+	/** Muted through its section: the row dims like a muted one, the menu still names its own mute. */
+	isInMutedSection: boolean,
 	links: ChannelLinks,
 	isLinkActive: boolean,
 	orgSlug: string,
@@ -180,7 +188,7 @@ const channelRowView = <M>(
 			h,
 			entry,
 			notificationCount,
-			{ orgSlug, isActive: isLinkActive, links, isUnread, isMuted },
+			{ orgSlug, isActive: isLinkActive, links, isUnread, isMuted: isMuted || isInMutedSection },
 			rowMenuView(h, menu),
 			rowLongPress(h, menu),
 		),
@@ -209,6 +217,7 @@ const channelRow = <M>(
 ): Html => {
 	const id = entry.channel.id
 	const threads = context.threadsByParent.get(id) ?? NO_THREADS
+	const isSectionMuted = isInMutedSection(entry, context)
 	const activeThreadId = threads.some((thread) => thread.id === context.activeChannelId)
 		? context.activeChannelId
 		: null
@@ -217,8 +226,9 @@ const channelRow = <M>(
 			h,
 			entry,
 			context.unreadByChannel.get(id) ?? entry.member.notificationCount,
-			context.unreadChannelIds.has(id) && !isInMutedSection(entry, context),
-			isMutedNow(entry.member, context.nowMs) || isInMutedSection(entry, context),
+			context.unreadChannelIds.has(id) && !isSectionMuted,
+			isMutedNow(entry.member, context.nowMs),
+			isSectionMuted,
 			linksFor(context.channelLinks, id),
 			id === context.activeChannelId,
 			context.orgSlug,
@@ -234,8 +244,9 @@ const channelRow = <M>(
 			context.toParentMessage,
 			threads,
 			activeThreadId,
-			// Only a row with threads reads the set; the shared empty one keeps the others' memo.
-			threads.length === 0 ? NO_UNREAD : context.unreadChannelIds,
+			// Only a row with threads reads the set; the shared empty one keeps the others' memo. A muted
+			// section's threads are muted with it, so they show no unread either.
+			threads.length === 0 || isSectionMuted ? NO_UNREAD : context.unreadChannelIds,
 		]) ?? h.empty
 	)
 }
