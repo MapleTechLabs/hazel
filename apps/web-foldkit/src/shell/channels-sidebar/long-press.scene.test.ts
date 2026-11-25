@@ -188,4 +188,59 @@ describe("sidebar long-press menus", () => {
 			),
 		)
 	})
+
+	test("a channel muted only through its section dims and hides its threads' unread, its menu still offers Mute", () => {
+		const design = Schema.decodeSync(ChannelSectionId)(uuid(10))
+		const thread = Schema.decodeSync(ChannelId)(uuid(4))
+		const designEntry: ChannelEntry = {
+			channel: { ...generalEntry.channel, sectionId: design },
+			member: member(1),
+		}
+		const inMutedSection: Model = {
+			...sidebar,
+			sections: [{ id: design, name: "Design" }],
+			sectionChannels: { [design]: [designEntry] },
+			threads: [
+				{
+					id: thread,
+					name: "a thread",
+					parentChannelId: general,
+					createdAtMs: 0,
+					notificationCount: 0,
+				},
+			],
+			unreadChannels: [
+				{ channelId: general, mutedUntilMs: null },
+				{ channelId: thread, mutedUntilMs: null },
+			],
+			sectionSettings: [
+				{ sectionId: design, isMuted: true, mutedUntilMs: null, notificationLevel: null },
+			],
+		}
+		const row = `[data-key="${general}"]`
+		const [own, ...rest] = JSON.parse(channelMenu).items
+		const [levels, favoriteItem, ...after] = rest
+		const moveTo = {
+			label: "Move to section",
+			items: [
+				{ key: "section:default", label: "Channels (Default)" },
+				{ key: `section:${design}`, label: "Design" },
+			],
+		}
+		const withMoveToSection = JSON.stringify({ items: [own, levels, favoriteItem, moveTo, ...after] })
+		Scene.scene(
+			{ update, view },
+			Scene.given(inMutedSection),
+			triggerMounted,
+			triggerMounted,
+			// The channel's own mute is off, so "Unmute" would write a mute it does not have.
+			Scene.expect(Scene.selector(`${row} [data-native="context-menu"]`)).toHaveAttr(
+				"data-native-props",
+				withMoveToSection,
+			),
+			Scene.expectAll(Scene.all.selector(`${row} .opacity-60`)).toHaveCount(1),
+			Scene.expect(Scene.selector('[aria-label="Threads"] a')).toExist(),
+			Scene.expectAll(Scene.all.selector('[aria-label="Threads"] a.font-medium')).toHaveCount(0),
+		)
+	})
 })

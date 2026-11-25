@@ -1,12 +1,12 @@
 import { User } from "@hazel/domain/models"
 import { OrganizationId, UserId } from "@hazel/schema"
-import { Clock, Effect, Schema } from "effect"
+import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import { testNativeNotification } from "~/lib/native-notifications"
 import { notificationSoundManager } from "~/lib/notification-sound-manager"
 import { settleUpdateUser, updateUser } from "../user"
 import { Message } from "./message"
-import { Change, payloadOf } from "./organization"
+import { OrganizationSettings, payloadOf } from "./organization"
 import { catchCommon } from "../../../data/actions"
 import { HazelRpc } from "../../../rpc"
 
@@ -64,15 +64,14 @@ export const UpdateUserSettings = Command.define("UpdateUserSettings", {
 		),
 })
 
-/** "This organization": one change, written as the user's organization-scoped settings. */
+/** "This organization": the whole chosen snapshot, written as the user's organization-scoped settings. */
 export const SaveOrganizationSettings = Command.define("SaveOrganizationSettings", {
-	args: { organizationId: OrganizationId, change: Change },
+	args: { organizationId: OrganizationId, settings: OrganizationSettings },
 	messages: [Message.SucceededSaveOrganizationSettings, Message.FailedSaveOrganizationSettings],
-	execute: ({ organizationId, change }) =>
+	execute: ({ organizationId, settings }) =>
 		Effect.gen(function* () {
-			const nowMs = yield* Clock.currentTimeMillis
 			const rpc = yield* HazelRpc
-			yield* rpc("channelMember.setScopeNotifications", payloadOf(organizationId, change, nowMs))
+			yield* rpc("channelMember.setScopeNotifications", payloadOf(organizationId, settings))
 			return Message.SucceededSaveOrganizationSettings()
 		}).pipe(
 			Effect.catchTags({
