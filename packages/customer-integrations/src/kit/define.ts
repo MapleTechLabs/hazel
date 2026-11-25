@@ -24,6 +24,11 @@ export interface BillingCapability {
 	readonly invoices?: true
 	/** Usage billing is read from what its paid invoices charged above the plan. */
 	readonly usageFromInvoices?: true
+	/**
+	 * A priced trial of it is card-backed only with a payment method on file. Without this, every
+	 * trial it prices is one a payment processor held.
+	 */
+	readonly trialsNeedPaymentMethod?: true
 }
 
 export interface IntegrationCapabilities {
