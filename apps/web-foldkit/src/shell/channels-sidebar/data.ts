@@ -22,6 +22,7 @@ import type {
 	Section,
 	SidebarChannel,
 	SidebarMember,
+	OrganizationSetting,
 	SectionSetting,
 	SidebarThread,
 	UnreadChannel,
@@ -355,6 +356,42 @@ export const sectionSettingsStream = <M>(
 						notificationLevel: row.level,
 					}))
 					.sort((a, b) => a.sectionId.localeCompare(b.sectionId)),
+			),
+	)
+
+/** The user's notification settings for the organization; null while it has none. */
+export const organizationSettingStream = <M>(
+	organizationId: OrganizationId,
+	toMessage: (setting: OrganizationSetting | null) => M,
+) =>
+	liveQueryStream<
+		{
+			isMuted: boolean
+			mutedUntil: Date | null
+			level: NotificationLevel | null
+		},
+		M
+	>(
+		(q) =>
+			q
+				.from({ override: notificationOverrideCollection })
+				.where(({ override }) =>
+					and(eq(override.organizationId, organizationId), eq(override.scope, "organization")),
+				)
+				.select(({ override }) => ({
+					isMuted: override.isMuted,
+					mutedUntil: override.mutedUntil,
+					level: override.level,
+				})),
+		([row]) =>
+			toMessage(
+				row === undefined
+					? null
+					: {
+							isMuted: row.isMuted,
+							mutedUntilMs: row.mutedUntil === null ? null : new Date(row.mutedUntil).getTime(),
+							notificationLevel: row.level,
+						},
 			),
 	)
 
