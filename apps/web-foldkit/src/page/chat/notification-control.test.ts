@@ -71,4 +71,27 @@ describe("labels", () => {
 		expect(muteStatusOf({ isMuted: false, mutedUntilMs: now - 1 }, now)).toBeNull()
 		expect(muteStatusOf({ isMuted: false, mutedUntilMs: now + 60_000 }, now)).toMatch(/^Muted until /)
 	})
+
+	test("the bell names the chosen level and the mute in force", () => {
+		const now = Date.UTC(2026, 10, 25, 12)
+		expect(NotificationControl.labelOf(member, "public", now)).toBe("Notification settings")
+		expect(NotificationControl.labelOf({ ...member, notificationLevel: "nothing" }, "public", now)).toBe(
+			"Notification settings: Nothing",
+		)
+		expect(
+			NotificationControl.labelOf(
+				{ ...member, isMuted: true, notificationLevel: "all" },
+				"public",
+				now,
+			),
+		).toBe("Notification settings: All messages, Muted")
+		// A DM has no level: only the mute shows.
+		expect(
+			NotificationControl.labelOf(
+				{ ...member, isMuted: true, notificationLevel: "all" },
+				"single",
+				now,
+			),
+		).toBe("Notification settings, Muted")
+	})
 })

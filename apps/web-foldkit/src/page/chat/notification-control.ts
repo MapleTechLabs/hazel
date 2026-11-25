@@ -5,7 +5,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 import { CommonReason, commonMessage } from "~/lib/error-messages"
-import { isMutedNow, muteStatusOf, type NotificationLevel } from "~/lib/notification-settings"
+import { isMutedNow, levelLabelOf, muteStatusOf, type NotificationLevel } from "~/lib/notification-settings"
 import {
 	choiceOfKey,
 	itemContent,
@@ -107,6 +107,21 @@ export const update = (model: Model, message: Message, member: Member | null): R
 		}),
 	})
 
+const isDmType = (channelType: string) => channelType === "single" || channelType === "direct"
+
+/**
+ * The bell's name: "Notification settings", then the level when the member chose one (a DM has
+ * none), then the mute while it is in force: "Notification settings: Nothing, Muted until 14:30".
+ */
+export const labelOf = (member: Member, channelType: string, nowMs: number): string => {
+	const level =
+		member.notificationLevel === null || isDmType(channelType)
+			? "Notification settings"
+			: `Notification settings: ${levelLabelOf(member.notificationLevel, channelType)}`
+	const mute = muteStatusOf(member, nowMs)
+	return mute === null ? level : `${level}, ${mute}`
+}
+
 /** The bell, crossed out while muted; its menu has the mute and level items. */
 export const view = <M>(
 	h: HtmlBuilder<M>,
@@ -118,8 +133,8 @@ export const view = <M>(
 ): Html => {
 	const isMuted = isMutedNow(member, nowMs)
 	const notificationMember = { isMuted, notificationLevel: member.notificationLevel }
-	const isDm = channelType === "single" || channelType === "direct"
-	const label = muteStatusOf(member, nowMs) ?? "Notification settings"
+	const isDm = isDmType(channelType)
+	const label = labelOf(member, channelType, nowMs)
 	return h.submodel({
 		slotId: model.menu.id,
 		model: model.menu,
