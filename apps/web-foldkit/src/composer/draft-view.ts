@@ -65,44 +65,59 @@ const thumbnail = <M>(
 			: [h.OnMount(Mount.mapMessage(ShowLocalImage({ file: source.file }), toMessage))]),
 		h.Attribute("alt", fileName),
 		h.Attribute("draggable", "false"),
-		h.Class("size-full object-cover"),
+		h.Class("max-h-full max-w-full rounded-sm object-contain"),
 	])
 
-/** `ComposerAttachmentPreviews`: image files as thumbnails, other files as cards. */
+/**
+ * `ComposerAttachmentPreviews`, as Discord lays them out: one row of tiles of one size, scrolling
+ * sideways. A tile shows the image whole (fitted, never cropped) or the file's icon, its name under
+ * it, and the remove button on its corner. A file still uploading shows a spinner and its progress.
+ */
 const attachmentPreviews = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftViewInputs<M>): Html => {
 	const uploading = model.currentUpload === null ? [] : [model.currentUpload]
 	if (model.attachmentIds.length === 0 && uploading.length === 0) return h.empty
-	const card = (key: string, className: string, children: ReadonlyArray<Html>) =>
-		h.keyed("div")(key, [h.Class(className)], children)
-	const fileText = (name: string, detail: string) =>
-		h.div(
-			[h.Class("min-w-0 flex-1")],
+	const preview = (fileName: string, source: ImageSource | null) =>
+		source !== null && isImageFileName(fileName)
+			? thumbnail(h, inputs.toMessage, source, fileName)
+			: fileIcon(h, getFileTypeFromName(fileName), { className: "size-14 text-muted-fg" })
+	const tile = (options: {
+		readonly key: string
+		readonly fileName: string
+		readonly detail: string
+		readonly preview: Html
+		readonly overlay: ReadonlyArray<Html>
+		readonly corner: Html
+	}) =>
+		h.keyed("div")(
+			options.key,
+			[h.Class("relative flex w-44 shrink-0 flex-col gap-2 rounded-lg border border-border bg-bg p-2")],
 			[
-				h.div([h.Class("truncate font-medium text-fg text-sm")], [name]),
-				h.div([h.Class("text-muted-fg text-xs")], [detail]),
+				h.div(
+					[
+						h.Class(
+							"relative flex h-32 items-center justify-center overflow-hidden rounded-md bg-secondary",
+						),
+					],
+					[options.preview, ...options.overlay],
+				),
+				h.div(
+					[h.Class("min-w-0 px-0.5")],
+					[
+						h.div([h.Class("truncate font-medium text-fg text-sm")], [options.fileName]),
+						h.div([h.Class("truncate text-muted-fg text-xs")], [options.detail]),
+					],
+				),
+				options.corner,
 			],
 		)
-	const progressBar = (progress: number) =>
-		h.div(
-			[h.Class("absolute inset-x-0 -bottom-px h-1 bg-muted")],
-			[
-				h.div([
-					h.Class("h-full bg-primary transition-[width] duration-200"),
-					h.Attribute("style", `width: ${progress}%;`),
-				]),
-			],
-		)
-	const imageTile = (key: string, image: Html, overlay: ReadonlyArray<Html>) =>
-		card(key, "group relative aspect-video overflow-hidden rounded-lg border border-border bg-bg", [
-			image,
-			...overlay,
-		])
+	const corner = (children: ReadonlyArray<Html>) =>
+		h.div([h.Class("absolute top-1 right-1 rounded-md border border-border bg-bg shadow-xs")], children)
 	return h.keyed("div")(
 		"attachment-previews",
 		[
 			h.Class(
 				cn(
-					"border border-border border-b-0 bg-secondary px-2 py-1",
+					"border border-border border-b-0 bg-secondary",
 					uploading.length > 0 ? "rounded-t-none border-t-0" : "rounded-t-lg",
 					model.composeMode._tag === "Replying" && "border-b-0",
 				),
@@ -110,82 +125,52 @@ const attachmentPreviews = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftVie
 		],
 		[
 			h.div(
-				[h.Class("grid grid-cols-2 gap-1 md:grid-cols-3 lg:grid-cols-4")],
+				[h.Class("flex gap-2 overflow-x-auto p-2")],
 				[
 					...model.attachmentIds.map((attachmentId) => {
 						const info = inputs.attachmentInfo(attachmentId)
 						const fileName = info?.fileName || "File"
-						const remove = removeButton(
-							h,
-							inputs.toMessage(Message.ClickedRemoveAttachment({ attachmentId })),
-							`Remove ${fileName}`,
-						)
-						if (info !== null && isImageFileName(fileName))
-							return imageTile(
-								attachmentId,
-								thumbnail(h, inputs.toMessage, { _tag: "Url", url: info.url }, fileName),
-								[
-									h.div(
-										[
-											h.Class(
-												"absolute top-1 right-1 rounded-md bg-bg/80 shadow-xs backdrop-blur-sm",
-											),
-										],
-										[remove],
-									),
-								],
-							)
-						return card(
-							attachmentId,
-							"group flex items-center gap-2 rounded-lg bg-bg p-2 transition-colors hover:bg-secondary",
-							[
-								fileIcon(h, getFileTypeFromName(fileName), {
-									className: "size-8 shrink-0 text-muted-fg",
-								}),
-								fileText(fileName, formatFileSize(info?.fileSize || 0)),
-								remove,
-							],
-						)
+						return tile({
+							key: attachmentId,
+							fileName,
+							detail: formatFileSize(info?.fileSize || 0),
+							preview: preview(fileName, info === null ? null : { _tag: "Url", url: info.url }),
+							overlay: [],
+							corner: corner([
+								removeButton(
+									h,
+									inputs.toMessage(Message.ClickedRemoveAttachment({ attachmentId })),
+									`Remove ${fileName}`,
+								),
+							]),
+						})
 					}),
 					...uploading.map((upload) =>
-						isImageFileName(upload.file.name)
-							? imageTile(
-									upload.fileId,
-									thumbnail(
-										h,
-										inputs.toMessage,
-										{ _tag: "File", file: upload.file },
-										upload.file.name,
-									),
+						tile({
+							key: upload.fileId,
+							fileName: upload.file.name,
+							detail:
+								upload.progress < 100
+									? `${upload.progress}% of ${formatFileSize(upload.file.size)}`
+									: formatFileSize(upload.file.size),
+							preview: preview(upload.file.name, { _tag: "File", file: upload.file }),
+							overlay: [
+								h.div(
+									[h.Class("absolute inset-0 flex items-center justify-center bg-bg/40")],
+									[loader(h, { className: "size-5" })],
+								),
+								h.div(
+									[h.Class("absolute inset-x-0 bottom-0 h-1 bg-muted")],
 									[
-										h.div(
-											[
-												h.Class(
-													"absolute inset-0 flex items-center justify-center bg-bg/40",
-												),
-											],
-											[loader(h, { className: "size-4" })],
-										),
-										progressBar(upload.progress),
-									],
-								)
-							: card(
-									upload.fileId,
-									"group relative flex items-center gap-2 overflow-hidden rounded-lg bg-bg p-2 transition-colors hover:bg-secondary",
-									[
-										fileIcon(h, getFileTypeFromName(upload.file.name), {
-											className: "size-8 shrink-0 text-muted-fg",
-										}),
-										fileText(
-											upload.file.name,
-											upload.progress < 100
-												? `${upload.progress}% of ${formatFileSize(upload.file.size)}`
-												: formatFileSize(upload.file.size),
-										),
-										loader(h, { className: "size-4" }),
-										progressBar(upload.progress),
+										h.div([
+											h.Class("h-full bg-primary transition-[width] duration-200"),
+											h.Attribute("style", `width: ${upload.progress}%;`),
+										]),
 									],
 								),
+							],
+							corner: h.empty,
+						}),
 					),
 				],
 			),
