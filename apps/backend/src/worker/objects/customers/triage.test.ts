@@ -633,6 +633,43 @@ describe("support triage", () => {
 			}),
 		))
 
+	it("asks nothing about a message more than half an hour old", () =>
+		run(
+			Effect.gen(function* () {
+				const { world, linked, channel, customer, say, issues, pending, triage, answer } =
+					yield* setup
+				answer(CHATTER)
+				// Reached late (a backlog, retries): the opening stays in the inbox as it opened.
+				const root = yield* say({
+					channelId: linked,
+					authorId: customer,
+					minutesAgo: 50,
+					content: "yup",
+				})
+				yield* triage
+				expect(pending()).toBe(0)
+				expect(issues()).toMatchObject([{ status: "new", triage: null }])
+				// A late reply in a filed conversation brings it back, unasked.
+				ok(
+					yield* world.call(
+						"customers.issue.update",
+						{ issueId: issues()[0]!.id, triage: "chatter" },
+						world.member,
+					),
+				)
+				yield* say({
+					channelId: channel("thread", linked),
+					authorId: customer,
+					minutesAgo: 45,
+					content: "thanks!",
+					threadRootMessageId: root,
+				})
+				yield* triage
+				expect(issues()).toMatchObject([{ status: "waiting_on_us", triage: "support" }])
+				expect(world.objects.decisionRequests).toEqual([])
+			}),
+		))
+
 	it("leaves the inbox as it was when the model is not configured, off, or refuses", () =>
 		run(
 			Effect.gen(function* () {
