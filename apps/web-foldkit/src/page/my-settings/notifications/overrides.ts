@@ -13,6 +13,7 @@ import {
 	notificationOverrideCollection,
 } from "~/db/collections"
 import { levelLabels, muteStatusOf, type NotificationLevel } from "~/lib/notification-settings"
+import { isDirectMessageType } from "~/lib/unread"
 import { ChannelMember } from "@hazel/domain/models"
 import { liveQueryStream } from "../../../data/live-query"
 import { button } from "../../../ui/button"
@@ -43,6 +44,26 @@ const msOf = (value: Date | DateTime.Utc | null | undefined) =>
 		: value instanceof Date
 			? value.getTime()
 			: DateTime.toEpochMillis(value)
+
+/** A channel's own settings, as the member row holds them. */
+export interface ChannelSettings {
+	readonly type: string
+	readonly level: NotificationLevel | null
+	readonly isMuted: boolean
+	readonly mutedUntil: Date | null
+}
+
+/** A channel the list shows: not a DM, with a level or a mute of its own. */
+export const isChannelOverride = (row: ChannelSettings) =>
+	!isDirectMessageType(row.type) && (row.level !== null || row.isMuted || row.mutedUntil !== null)
+
+/** What "Reset" writes for a channel: no level and no mute, so the inherited setting applies. */
+export const channelResetOf = (memberId: ChannelMemberId) => ({
+	memberId,
+	isMuted: false,
+	mutedUntil: null,
+	notificationLevel: null,
+})
 
 /** The user's channels (not DMs) with a level or mute of their own, by name. */
 export const channelOverridesStream = <M>(
@@ -88,12 +109,7 @@ export const channelOverridesStream = <M>(
 		(rows) =>
 			toMessage(
 				rows
-					.filter(
-						(row) =>
-							row.type !== "direct" &&
-							row.type !== "single" &&
-							(row.level !== null || row.isMuted || row.mutedUntil !== null),
-					)
+					.filter(isChannelOverride)
 					.map((row): Override => ({
 						_tag: "Channel",
 						memberId: row.memberId,
