@@ -351,7 +351,8 @@ describe("ChannelObject messages", () => {
 				expect(
 					user.storage.db.prepare(`SELECT resourceId, reason, silent FROM notifications`).all(),
 				).toEqual([{ resourceId: sent.id, reason: "message", silent: 1 }])
-				expect(countsIn(world, channel.id)[world.alice]).toBe(1)
+				// A plain message only marks the channel unread: the badge counts mentions.
+				expect(countsIn(world, channel.id)[world.alice]).toBe(0)
 
 				// `nothing` silences even a mention.
 				world.org.storage.db
@@ -360,7 +361,71 @@ describe("ChannelObject messages", () => {
 					)
 					.run(channel.id, world.alice)
 				yield* send(world, channel, world.author, `@[userId:${world.alice}] hi`)
+				expect(countsIn(world, channel.id)[world.alice]).toBe(0)
+			}),
+		))
+
+	it("All messages: every message notifies, the badge counts only mentions, deletes keep it in step", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const channel = yield* world.channel("public")
+				world.org.storage.db
+					.prepare(
+						`UPDATE channel_members SET notificationLevel = 'all' WHERE channelId = ? AND userId = ?`,
+					)
+					.run(channel.id, world.alice)
+				const reasons = () =>
+					Effect.map(
+						world.objects.get(userTarget(world.alice)),
+						(user) =>
+							user.storage.db
+								.prepare(`SELECT resourceId, reason FROM notifications ORDER BY reason`)
+								.all() as Array<{ resourceId: string; reason: string }>,
+					)
+				const remove = (id: MessageId) =>
+					call(
+						channel.object,
+						channel.id,
+						"message.delete",
+						{ id, channelId: channel.id },
+						world.author,
+					).pipe(Effect.map(ok))
+
+				const settle = Effect.gen(function* () {
+					yield* runAlarm(channel.object)
+					yield* runAlarm(world.org)
+					yield* runAlarm(yield* world.objects.get(userTarget(world.alice)))
+				})
+
+				// With nothing on her count, a deleted plain message still reaches her notifications.
+				const early = yield* send(world, channel, world.author, "early")
+				expect(countsIn(world, channel.id)[world.alice]).toBe(0)
+				yield* remove(early.id)
+				yield* settle
+				expect(yield* reasons()).toEqual([])
+
+				const plain = yield* send(world, channel, world.author, "plain")
+				const mention = yield* send(world, channel, world.author, `@[userId:${world.alice}] hi`)
+				const reply = yield* send(world, channel, world.author, "answer", mention.id)
+				expect(yield* reasons()).toEqual([
+					{ resourceId: mention.id, reason: "mention" },
+					{ resourceId: plain.id, reason: "message" },
+					{ resourceId: reply.id, reason: "message" },
+				])
 				expect(countsIn(world, channel.id)[world.alice]).toBe(1)
+
+				// Deleting a plain message drops its notification and leaves the count alone.
+				yield* remove(plain.id)
+				yield* settle
+				expect((yield* reasons()).map((row) => row.resourceId)).not.toContain(plain.id)
+				expect(countsIn(world, channel.id)[world.alice]).toBe(1)
+
+				// Deleting the mention takes it off the count.
+				yield* remove(mention.id)
+				yield* settle
+				expect((yield* reasons()).map((row) => row.resourceId)).toEqual([reply.id])
+				expect(countsIn(world, channel.id)[world.alice]).toBe(0)
 			}),
 		))
 
