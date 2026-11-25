@@ -142,7 +142,10 @@ const channelRowView = <M>(
 	entry: ChannelEntry,
 	notificationCount: number,
 	isUnread: boolean,
+	/** The channel's own mute now: the row menu's Mute/Unmute reads and writes it. */
 	isMuted: boolean,
+	/** Muted through its section: the row dims like a muted one, the menu still names its own mute. */
+	isInMutedSection: boolean,
 	links: ChannelLinks,
 	isLinkActive: boolean,
 	orgSlug: string,
@@ -180,7 +183,7 @@ const channelRowView = <M>(
 			h,
 			entry,
 			notificationCount,
-			{ orgSlug, isActive: isLinkActive, links, isUnread, isMuted },
+			{ orgSlug, isActive: isLinkActive, links, isUnread, isMuted: isMuted || isInMutedSection },
 			rowMenuView(h, menu),
 			rowLongPress(h, menu),
 		),
@@ -209,6 +212,7 @@ const channelRow = <M>(
 ): Html => {
 	const id = entry.channel.id
 	const threads = context.threadsByParent.get(id) ?? NO_THREADS
+	const isSectionMuted = isInMutedSection(entry, context)
 	const activeThreadId = threads.some((thread) => thread.id === context.activeChannelId)
 		? context.activeChannelId
 		: null
@@ -217,8 +221,9 @@ const channelRow = <M>(
 			h,
 			entry,
 			context.unreadByChannel.get(id) ?? entry.member.notificationCount,
-			context.unreadChannelIds.has(id) && !isInMutedSection(entry, context),
-			isMutedNow(entry.member, context.nowMs) || isInMutedSection(entry, context),
+			context.unreadChannelIds.has(id) && !isSectionMuted,
+			isMutedNow(entry.member, context.nowMs),
+			isSectionMuted,
 			linksFor(context.channelLinks, id),
 			id === context.activeChannelId,
 			context.orgSlug,
@@ -234,8 +239,9 @@ const channelRow = <M>(
 			context.toParentMessage,
 			threads,
 			activeThreadId,
-			// Only a row with threads reads the set; the shared empty one keeps the others' memo.
-			threads.length === 0 ? NO_UNREAD : context.unreadChannelIds,
+			// Only a row with threads reads the set; the shared empty one keeps the others' memo. A muted
+			// section's threads are muted with it, so they show no unread either.
+			threads.length === 0 || isSectionMuted ? NO_UNREAD : context.unreadChannelIds,
 		]) ?? h.empty
 	)
 }
