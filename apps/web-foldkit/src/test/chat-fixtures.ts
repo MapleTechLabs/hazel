@@ -37,7 +37,11 @@ export const derivedModel = (base: Model = loadedModel()): Model =>
 	updateWithShared(base, loadedMessages(base.messages.length === 0 ? messages : base.messages)).model
 
 /** The channel's first render: the list measures its viewport, the editor, drop zone and hover tracker start. */
-export const mountedChannel = (hovered: MessageId | null = null): Step =>
+export const mountedChannel = (
+	hovered: MessageId | null = null,
+	/** The header shows the notification bell (false: the user is not a member, e.g. an unfollowed thread). */
+	hasBell = true,
+): Step =>
 	Scene.Mount.resolveAll(
 		[
 			{ name: "ObserveMessageList" },
@@ -54,7 +58,9 @@ export const mountedChannel = (hovered: MessageId | null = null): Step =>
 		],
 		[{ name: "TrackMessageKeys" }, Message.StartedMessageKeys()],
 		// The header's notification bell (`notification-control.ts`).
-		[{ name: "FocusTriggerOnPress" }, Menu.Message.CompletedFocusTriggerOnPress()],
+		...(hasBell
+			? [[{ name: "FocusTriggerOnPress" }, Menu.Message.CompletedFocusTriggerOnPress()] as const]
+			: []),
 		[
 			{ name: "TrackMessageHover" },
 			hovered === null
