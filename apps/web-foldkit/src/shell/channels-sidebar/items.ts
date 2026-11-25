@@ -10,7 +10,7 @@ import { type ChannelLinks, channelIcon } from "../../ui/channel-icon"
 import { presenceDot } from "../../ui/presence-dot"
 import { ariaButton } from "../../ui/button"
 import { countBadge } from "../../ui/count-badge"
-import { sidebarItem, sidebarLink, sidebarUnreadPip } from "../../ui/sidebar"
+import { sidebarItem, sidebarLink, sidebarUnreadLabel, sidebarUnreadPip } from "../../ui/sidebar"
 import type { ChannelEntry, DiscoverableChannel, DmChannel, DmMember, Presence, SidebarThread } from "./rows"
 import { initialsOf, semantic } from "../../ui/semantic"
 import { dotsMenuTrigger } from "./tree"
@@ -45,6 +45,10 @@ export interface ChannelRowContext extends RowLinkContext {
 	/** Muted now: the row steps back, as Discord's do. */
 	readonly isMuted: boolean
 }
+
+/** The unread state in words for a screen reader (the pill is drawn only). */
+const unreadLabelIf = <M>(h: HtmlBuilder<M>, isUnread: boolean): Html[] =>
+	isUnread ? [sidebarUnreadLabel(h)] : []
 
 /** The unread pill, except on the open row (it is being read). */
 const pipIf = <M>(h: HtmlBuilder<M>, isUnread: boolean, isActive: boolean): Html[] =>
@@ -118,6 +122,7 @@ export const channelItem = <M>(
 				[entry.channel.name],
 				cx(isEmphasized && "font-medium text-fg", context.isMuted && !isEmphasized && "opacity-60"),
 			),
+			...unreadLabelIf(h, context.isUnread),
 		]),
 		menu,
 		...badgeIf(h, notificationCount),
@@ -212,6 +217,7 @@ const threadItem = <M>(
 		[
 			threadBranch(h, hasEmojiIcon, isFirst, isLast),
 			h.span([h.Class("min-w-0 flex-1 truncate")], [thread.name]),
+			...unreadLabelIf(h, isUnread),
 			count > 0 ? countBadge(h, { count }) : h.empty,
 		],
 	)
@@ -413,13 +419,12 @@ export const dmItem = <M>(
 	})
 	return sidebarItem(h, { attributes: [...longPress, ...ui] }, [
 		...pipIf(h, context.isUnread, context.isActive),
-		sidebarLink(
-			h,
-			{ href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE },
-			channel.type === "single" && partners.length === 1 && only
+		sidebarLink(h, { href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE }, [
+			...(channel.type === "single" && partners.length === 1 && only
 				? singleDmContent(h, only, context, isEmphasized)
-				: groupDmContent(h, partners, context.isMuted, isEmphasized),
-		),
+				: groupDmContent(h, partners, context.isMuted, isEmphasized)),
+			...unreadLabelIf(h, context.isUnread),
+		]),
 		menu,
 		...badgeIf(h, notificationCount),
 	])

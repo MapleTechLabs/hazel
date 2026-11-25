@@ -361,3 +361,7 @@ export const sidebarUnreadPip = <Message>(h: HtmlBuilder<Message>): Html =>
 		h.Attribute("data-slot", "sidebar-unread"),
 		h.Class("pointer-events-none absolute top-1/2 left-0 h-2 w-1 -translate-y-1/2 rounded-r-full bg-fg"),
 	])
+
+/** The unread pill's words for a screen reader, inside the row's link after its name. */
+export const sidebarUnreadLabel = <Message>(h: HtmlBuilder<Message>): Html =>
+	h.span([h.Class("sr-only")], [", unread"])
