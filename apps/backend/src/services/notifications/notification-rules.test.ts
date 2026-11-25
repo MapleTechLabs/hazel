@@ -17,6 +17,7 @@ const activity = (overrides: Partial<MessageActivity> = {}): MessageActivity => 
 	authorId: author,
 	mentionedUserIds: [],
 	notifyAll: false,
+	isHereOnly: false,
 	replyToAuthorId: null,
 	...overrides,
 })
@@ -71,6 +72,22 @@ describe("decide", () => {
 		expect(
 			decide(activity({ channelType: "direct" }), bobAs({ level: "mentions" }), NOON_UTC),
 		).toMatchObject({ reason: "direct" })
+	})
+
+	it("@here notifies only the members online, away or busy; offline ones hear a plain message", () => {
+		const here = activity({ notifyAll: true, isHereOnly: true })
+		const at = (status: "online" | "away" | "busy" | "dnd" | "offline") =>
+			bobAs({ presence: { status, activeChannelId: null, suppressNotifications: false } })
+		expect(decide(here, at("online"), NOON_UTC)).toMatchObject({ reason: "everyone" })
+		expect(decide(here, at("away"), NOON_UTC)).toMatchObject({ reason: "everyone" })
+		// Do not disturb hears it, silently.
+		expect(decide(here, at("dnd"), NOON_UTC)).toMatchObject({ reason: "everyone", silent: true })
+		expect(decide(here, at("offline"), NOON_UTC)).toEqual({ _tag: "Skip", why: "level" })
+		expect(decide(here, bobAs(), NOON_UTC)).toEqual({ _tag: "Skip", why: "level" })
+		// On "all messages" an offline member still hears it, as the message it is.
+		expect(decide(here, { ...at("offline"), level: "all" }, NOON_UTC)).toMatchObject({
+			reason: "message",
+		})
 	})
 
 	it("@channel and replies notify on the mentions level", () => {

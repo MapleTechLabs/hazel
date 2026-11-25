@@ -4,8 +4,8 @@
  *
  * For each member but the author, the first rule that applies wins:
  *
- * 1. The reason: `direct` in a DM or group DM, else `mention`, `reply`, `everyone` (`@channel`,
- *    `@here`) or plain `message`.
+ * 1. The reason: `direct` in a DM or group DM, else `mention`, `reply`, `everyone` (`@channel`;
+ *    `@here` only for members who are online, away or busy, as Discord's) or plain `message`.
  * 2. The member's level for the channel (`channel_members.notificationLevel`), or the channel
  *    type's default: `all` in DMs, group DMs and threads, `mentions` elsewhere. `nothing` skips.
  * 3. Muted (`isMuted`, or `mutedUntil` still ahead), or a thread whose parent channel is muted or
@@ -47,6 +47,8 @@ export interface MessageActivity {
 	readonly mentionedUserIds: ReadonlyArray<UserId>
 	/** `@channel` or `@here`. */
 	readonly notifyAll: boolean
+	/** `@here` without `@channel`: only the members online hear it as everyone. */
+	readonly isHereOnly: boolean
 	readonly replyToAuthorId: UserId | null
 }
 
@@ -92,11 +94,19 @@ export type NotificationDecision =
 export const defaultLevel = (channelType: ChannelType): NotificationLevel =>
 	channelType === "direct" || channelType === "single" || channelType === "thread" ? "all" : "mentions"
 
-export const reasonFor = (activity: MessageActivity, userId: UserId): NotificationReason => {
+/** Online for `@here`: any status but offline (or no presence at all). */
+export const isHereFor = (presence: RecipientPresence | null) =>
+	presence !== null && presence.status !== "offline"
+
+export const reasonFor = (
+	activity: MessageActivity,
+	userId: UserId,
+	presence: RecipientPresence | null,
+): NotificationReason => {
 	if (activity.channelType === "direct" || activity.channelType === "single") return "direct"
 	if (activity.mentionedUserIds.includes(userId)) return "mention"
 	if (activity.replyToAuthorId === userId) return "reply"
-	if (activity.notifyAll) return "everyone"
+	if (activity.notifyAll && (!activity.isHereOnly || isHereFor(presence))) return "everyone"
 	return "message"
 }
 
@@ -151,7 +161,7 @@ export const decide = (
 ): NotificationDecision => {
 	if (recipient.userId === activity.authorId) return { _tag: "Skip", why: "author" }
 
-	const reason = reasonFor(activity, recipient.userId)
+	const reason = reasonFor(activity, recipient.userId, recipient.presence)
 	const level = recipient.level ?? defaultLevel(activity.channelType)
 	if (level === "nothing") return { _tag: "Skip", why: "level" }
 
