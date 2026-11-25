@@ -50,6 +50,8 @@ interface SectionsContext<M> extends ItemContext {
 	readonly unreadByChannel: ReadonlyMap<string, number>
 	/** Channels with messages the user has not read. */
 	readonly unreadChannelIds: ReadonlySet<string>
+	/** Sections the user muted (now): their channels step back and show no unread. */
+	readonly mutedSectionIds: ReadonlySet<string>
 	/** What each channel is linked or connected to, marked on its icon. */
 	readonly channelLinks: ChannelLinksMap
 	/** Joined threads listed under each channel row, by parent channel id. */
@@ -193,6 +195,9 @@ const channelRowView = <M>(
 	})
 }
 
+const isInMutedSection = (entry: ChannelEntry, context: SectionsContext<unknown>) =>
+	entry.channel.sectionId !== null && context.mutedSectionIds.has(entry.channel.sectionId)
+
 /** Every row marks its channel's links the same way, wherever it is listed. */
 const channelRow = <M>(
 	h: HtmlBuilder<M>,
@@ -212,8 +217,8 @@ const channelRow = <M>(
 			h,
 			entry,
 			context.unreadByChannel.get(id) ?? entry.member.notificationCount,
-			context.unreadChannelIds.has(id),
-			isMutedNow(entry.member, context.nowMs),
+			context.unreadChannelIds.has(id) && !isInMutedSection(entry, context),
+			isMutedNow(entry.member, context.nowMs) || isInMutedSection(entry, context),
 			linksFor(context.channelLinks, id),
 			id === context.activeChannelId,
 			context.orgSlug,
@@ -552,6 +557,11 @@ export const sectionGroupContent = <M>(
 		presenceByUser: new Map(model.presence.map((presence) => [presence.userId, presence])),
 		unreadByChannel: new Map(model.unreadCounts.map((unread) => [unread.channelId, unread.count])),
 		unreadChannelIds: unreadSetOf(model.unreadChannels, itemContext.nowMs),
+		mutedSectionIds: new Set(
+			model.sectionSettings.flatMap((setting) =>
+				isMutedNow(setting, itemContext.nowMs) ? [setting.sectionId] : [],
+			),
+		),
 		channelLinks: channelLinksOf(model),
 		threadsByParent: threadsByParentOf(
 			model.threads,

@@ -47,6 +47,7 @@ const sidebar: Model = {
 	presence: [],
 	unreadCounts: [],
 	unreadChannels: [],
+	sectionSettings: [],
 	connectMounts: [],
 	organizations: [],
 	syncedChannels: [],

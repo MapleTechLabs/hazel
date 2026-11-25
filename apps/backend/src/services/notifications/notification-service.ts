@@ -17,6 +17,7 @@ import {
 	type NotificationReason,
 	type Recipient,
 	type RecipientSettings,
+	type ScopeSettings,
 } from "./notification-rules"
 
 export interface NotificationRecipient {
@@ -48,15 +49,76 @@ export class NotificationService extends Context.Service<NotificationService>()(
 		make: Effect.gen(function* () {
 			const db = yield* Database.Database
 
+			/**
+			 * The members' settings for the channel's section (a thread's: its parent's) and the whole
+			 * organization, and who among them asked for every message there. DMs take none.
+			 */
+			const scopeOverrides = Effect.fn("NotificationService.scopeOverrides")(function* (
+				organizationId: OrganizationId,
+				activity: MessageActivity,
+			) {
+				const none = {
+					section: new Map<UserId, ScopeSettings>(),
+					organization: new Map<UserId, ScopeSettings>(),
+					optedIn: [] as ReadonlyArray<UserId>,
+				}
+				if (activity.channelType === "direct" || activity.channelType === "single") return none
+				const placed = yield* db.first(
+					SQLite.from(schema.channelsTable)
+						.select("sectionId")
+						.where(($) => [$.id.eq(activity.parentChannelId ?? activity.channelId)])
+						.limit(1),
+				)
+				const sectionId = placed._tag === "Some" ? placed.value.sectionId : null
+				const rows = yield* db.run(
+					SQLite.from(schema.notificationOverridesTable)
+						.select()
+						.where(($) => [
+							SQLite.or(
+								SQLite.and($.scope.eq("organization"), $.scopeId.eq(organizationId)),
+								...(sectionId === null
+									? []
+									: [SQLite.and($.scope.eq("section"), $.scopeId.eq(sectionId))]),
+							),
+						]),
+				)
+				const toSettings = (row: (typeof rows)[number]): ScopeSettings => ({
+					level: row.level,
+					isMuted: row.isMuted,
+					mutedUntil: row.mutedUntil,
+					suppressEveryone: row.suppressEveryone,
+				})
+				return {
+					section: new Map(
+						rows
+							.filter((row) => row.scope === "section")
+							.map((row) => [row.userId, toSettings(row)]),
+					),
+					organization: new Map(
+						rows
+							.filter((row) => row.scope === "organization")
+							.map((row) => [row.userId, toSettings(row)]),
+					),
+					// A thread takes no level from above (`notification-rules.ts`).
+					optedIn:
+						activity.channelType === "thread"
+							? []
+							: rows.filter((row) => row.level === "all").map((row) => row.userId),
+				}
+			})
+
 			/** The members `activity` notifies in `organizationId`, with why and whether silently. */
 			const recipients = Effect.fn("NotificationService.recipients")(function* (
 				organizationId: OrganizationId,
 				activity: MessageActivity,
 			) {
-				// Members on the default `mentions` level only hear about a plain message by opting in.
+				const overrides = yield* scopeOverrides(organizationId, activity)
+				// Members on the default `mentions` level only hear about a plain message by opting in:
+				// on the channel, or for its section or the organization.
 				const targets = Array.dedupe([
 					...activity.mentionedUserIds,
 					...(activity.replyToAuthorId === null ? [] : [activity.replyToAuthorId]),
+					...overrides.optedIn,
 				])
 				// Past `TARGET_FILTER_MAX` targets, load every member (the rules sort them out) rather than
 				// bind more parameters than Durable Object SQLite allows.
@@ -144,6 +206,8 @@ export class NotificationService extends Context.Service<NotificationService>()(
 										activeChannelId: member.activeChannelId,
 										suppressNotifications: member.suppressNotifications === true,
 									},
+						section: overrides.section.get(member.userId) ?? null,
+						organization: overrides.organization.get(member.userId) ?? null,
 						settings: settingsOf(member.settings),
 						timezone: member.timezone,
 					}

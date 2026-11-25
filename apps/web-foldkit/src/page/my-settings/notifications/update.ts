@@ -9,7 +9,14 @@ import * as Segments from "../../../ui/date-segments"
 import * as Slider from "../../../ui/slider"
 import type { PageReturn, PageSubscriptionInput, Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
-import { ExpireNotificationStatus, PlayTestSound, SendTestNotification, UpdateUserSettings } from "./command"
+import {
+	ExpireNotificationStatus,
+	PlayTestSound,
+	SaveOrganizationSettings,
+	SendTestNotification,
+	UpdateUserSettings,
+} from "./command"
+import { applied, DEFAULTS } from "./organization"
 import { Message } from "./message"
 import { updateUserFailureCopy } from "../user"
 import {
@@ -149,6 +156,7 @@ export const init = (): Return => ({
 		notificationStatus: "idle",
 		notificationStatusVersion: 0,
 		interaction: Interaction.init(),
+		organizationSettings: DEFAULTS,
 	},
 })
 
@@ -210,4 +218,28 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			}),
 		}),
 		GotInteractionMessage: ({ message: child }) => interaction.fold(model, child),
+		UpdatedOrganizationSettings: ({ settings }) => ({
+			model: modifyFields(model, { organizationSettings: () => settings }),
+		}),
+		// Shown at once; the synced row confirms it (or the failure toast says it did not stick).
+		ChangedOrganizationSettings: ({ change }) => {
+			const organizationId = shared.organization?.id
+			if (organizationId === undefined) return { model }
+			return {
+				model: modifyFields(model, {
+					organizationSettings: (current) => applied(current, change, shared.nowMs),
+				}),
+				commands: [SaveOrganizationSettings({ organizationId, change })],
+			}
+		},
+		SucceededSaveOrganizationSettings: () => ({ model }),
+		FailedSaveOrganizationSettings: () => ({
+			model,
+			outMessage: PageOutMessage.RequestedToast({
+				toast: errorToast(
+					"Failed to update setting",
+					"Your organization notification settings did not save.",
+				),
+			}),
+		}),
 	})

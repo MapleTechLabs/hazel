@@ -1,13 +1,19 @@
 // @vitest-environment jsdom
 import { User } from "@hazel/domain/models"
-import { UserId } from "@hazel/schema"
+import { OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { UserRow } from "../user"
-import { ExpireNotificationStatus, SendTestNotification, UpdateUserSettings } from "./command"
+import {
+	ExpireNotificationStatus,
+	SaveOrganizationSettings,
+	SendTestNotification,
+	UpdateUserSettings,
+} from "./command"
+import { payloadOf } from "./organization"
 import { Message } from "./message"
 import { settingsOf } from "./model"
 import * as Slider from "../../../ui/slider"
@@ -246,5 +252,47 @@ describe("test notification", () => {
 			pageUpdate(expiredFirst, Message.ExpiredNotificationStatus({ version: 2 })).model
 				.notificationStatus,
 		).toBe("idle")
+	})
+})
+
+describe("this organization", () => {
+	const organizationId = Schema.decodeSync(OrganizationId)("00000000-0000-4000-8000-000000000009")
+	const withOrg: Shared = {
+		...shared,
+		nowMs: Date.UTC(2026, 10, 25, 12),
+		organization: { id: organizationId, name: "Hazel", slug: "hazel", logoUrl: null },
+	}
+	const orgUpdate = (current: Parameters<typeof update>[0], next: Message) => update(current, next, withOrg)
+
+	test("a change shows at once and is written for the organization", () => {
+		const changed = orgUpdate(init().model, Message.ChangedOrganizationSettings({ change: { mute: 60 } }))
+		expect(changed.model.organizationSettings).toMatchObject({
+			isMuted: false,
+			mutedUntilMs: withOrg.nowMs + 60 * 60_000,
+		})
+		expect(changed.commands?.map((command) => [command.name, command.args])).toEqual([
+			[SaveOrganizationSettings.name, { organizationId, change: { mute: 60 } }],
+		])
+		expect(payloadOf(organizationId, { mute: null, level: "all" }, 0)).toEqual({
+			organizationId,
+			scope: "organization",
+			scopeId: organizationId,
+			level: "all",
+			isMuted: true,
+			mutedUntil: null,
+		})
+	})
+
+	test("without an organization nothing is written", () => {
+		const changed = pageUpdate(
+			init().model,
+			Message.ChangedOrganizationSettings({ change: { level: "all" } }),
+		)
+		expect(changed.commands ?? []).toEqual([])
+	})
+
+	test("a failed write says so", () => {
+		const failed = orgUpdate(init().model, Message.FailedSaveOrganizationSettings())
+		expect(failed.outMessage?._tag).toBe("RequestedToast")
 	})
 })

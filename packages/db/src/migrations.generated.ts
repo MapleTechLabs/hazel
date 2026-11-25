@@ -393,6 +393,12 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE INDEX IF NOT EXISTS "channel_read_state_user_idx" ON "channel_read_state" ("userId")',
 			],
 		},
+		{
+			id: "0018_notification_overrides",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "notification_overrides" (\n\t"userId" text NOT NULL,\n\t"organizationId" text NOT NULL,\n\t"scope" text NOT NULL,\n\t"scopeId" text NOT NULL,\n\t"level" text,\n\t"isMuted" integer NOT NULL DEFAULT false,\n\t"mutedUntil" text,\n\t"suppressEveryone" integer NOT NULL DEFAULT false,\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\tPRIMARY KEY ("userId", "scope", "scopeId")\n)',
+			],
+		},
 	],
 	channel: [
 		{

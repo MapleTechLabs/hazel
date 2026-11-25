@@ -6,10 +6,15 @@
  *
  * 1. The reason: `direct` in a DM or group DM, else `mention`, `reply`, `everyone` (`@channel`;
  *    `@here` only for members who are online, away or busy, as Discord's) or plain `message`.
- * 2. The member's level for the channel (`channel_members.notificationLevel`), or the channel
- *    type's default: `all` in DMs, group DMs and threads, `mentions` elsewhere. `nothing` skips.
- * 3. Muted (`isMuted`, or `mutedUntil` still ahead), or a thread whose parent channel is muted or
- *    on `nothing`: only a personal mention or reply gets through.
+ *    The organization's "Suppress @channel and @here" (`notification_overrides`) makes `everyone` a
+ *    plain `message`.
+ * 2. The member's level for the channel (`channel_members.notificationLevel`), else their level for
+ *    its section, else for the organization (`notification_overrides`), else the channel type's
+ *    default: `all` in DMs, group DMs and threads, `mentions` elsewhere. `nothing` skips. A thread
+ *    takes only its own level; its parent's, section's and organization's `nothing` act as a mute.
+ * 3. Muted (`isMuted`, or `mutedUntil` still ahead) in the channel, its section or the organization,
+ *    or a thread whose parent channel is muted or on `nothing`: only a personal mention or reply
+ *    gets through. DMs take no section or organization setting.
  * 4. Level `mentions`: a plain message skips. (A DM message is always `direct`, so in a DM only
  *    `nothing` and a mute change anything.)
  * 5. Online and active in this channel: skip, they are reading it.
@@ -65,6 +70,11 @@ export interface ChannelSettings {
 	readonly mutedUntil: Date | null
 }
 
+/** A member's settings for the channel's section or the whole organization. */
+export interface ScopeSettings extends ChannelSettings {
+	readonly suppressEveryone: boolean
+}
+
 /** A channel member, with what decides their notification. */
 export interface Recipient {
 	readonly userId: UserId
@@ -73,6 +83,9 @@ export interface Recipient {
 	readonly mutedUntil: Date | null
 	/** In a thread, the member's settings in its parent channel, if they are in it. */
 	readonly parent: ChannelSettings | null
+	/** Their settings for the channel's section (a thread's: its parent's) and the organization. */
+	readonly section: ScopeSettings | null
+	readonly organization: ScopeSettings | null
 	readonly presence: RecipientPresence | null
 	readonly settings: RecipientSettings | null
 	/** IANA timezone for quiet hours; none, or an invalid one, leaves them to the client. */
@@ -153,15 +166,32 @@ export const decide = (
 ): NotificationDecision => {
 	if (recipient.userId === activity.authorId) return { _tag: "Skip", why: "author" }
 
-	const reason = reasonFor(activity, recipient.userId, recipient.presence)
-	const level = recipient.level ?? defaultLevel(activity.channelType)
+	const isDm = activity.channelType === "direct" || activity.channelType === "single"
+	const isThread = activity.channelType === "thread"
+	const scopes = isDm
+		? []
+		: [recipient.section, recipient.organization].filter(
+				(scope): scope is ScopeSettings => scope !== null,
+			)
+	const rawReason = reasonFor(activity, recipient.userId, recipient.presence)
+	const reason =
+		rawReason === "everyone" && recipient.organization?.suppressEveryone === true && !isDm
+			? "message"
+			: rawReason
+	const level =
+		recipient.level ??
+		(isThread ? null : (scopes.find((scope) => scope.level !== null)?.level ?? null)) ??
+		defaultLevel(activity.channelType)
 	if (level === "nothing") return { _tag: "Skip", why: "level" }
 
 	const personal = reason === "mention" || reason === "reply"
 	const isMuted = (settings: ChannelSettings) =>
 		settings.isMuted || (settings.mutedUntil !== null && settings.mutedUntil.getTime() > nowMs)
-	const parent = activity.channelType === "thread" ? recipient.parent : null
-	const muted = isMuted(recipient) || (parent !== null && (isMuted(parent) || parent.level === "nothing"))
+	const parent = isThread ? recipient.parent : null
+	const muted =
+		isMuted(recipient) ||
+		(parent !== null && (isMuted(parent) || parent.level === "nothing")) ||
+		scopes.some((scope) => isMuted(scope) || (isThread && scope.level === "nothing"))
 	if (muted && !personal) return { _tag: "Skip", why: "muted" }
 
 	if (level === "mentions" && reason === "message") return { _tag: "Skip", why: "level" }

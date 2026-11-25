@@ -463,6 +463,85 @@ describe("message search", () => {
 			}),
 		))
 
+	it("keeps a member's organization and section notification settings, theirs alone", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { a, a1 } = world
+				const rowsOf = () =>
+					a.object.storage.db
+						.prepare(
+							`SELECT scope, scopeId, level, isMuted, suppressEveryone FROM notification_overrides WHERE userId = ?`,
+						)
+						.all(a1) as ReadonlyArray<Record<string, unknown>>
+				ok(
+					yield* call(
+						a.object,
+						a.id,
+						"channelMember.setScopeNotifications",
+						{ organizationId: a.id, scope: "organization", scopeId: a.id, isMuted: true },
+						a1,
+					),
+				)
+				ok(
+					yield* call(
+						a.object,
+						a.id,
+						"channelMember.setScopeNotifications",
+						{
+							organizationId: a.id,
+							scope: "organization",
+							scopeId: a.id,
+							suppressEveryone: true,
+						},
+						a1,
+					),
+				)
+				// Fields left out keep their value.
+				expect(rowsOf()).toEqual([
+					{ scope: "organization", scopeId: a.id, level: null, isMuted: 1, suppressEveryone: 1 },
+				])
+
+				// A section that is not this org's is refused; so is another org's id as the scope.
+				const missing = yield* call(
+					a.object,
+					a.id,
+					"channelMember.setScopeNotifications",
+					{ organizationId: a.id, scope: "section", scopeId: uuid(), level: "all" },
+					a1,
+				)
+				expect(Exit.isFailure(missing)).toBe(true)
+				const foreign = yield* call(
+					a.object,
+					a.id,
+					"channelMember.setScopeNotifications",
+					{ organizationId: a.id, scope: "organization", scopeId: world.b.id, isMuted: true },
+					a1,
+				)
+				expect(Exit.isFailure(foreign)).toBe(true)
+				// Only the org's members keep settings here.
+				const outsider = yield* call(
+					a.object,
+					a.id,
+					"channelMember.setScopeNotifications",
+					{ organizationId: a.id, scope: "organization", scopeId: a.id, isMuted: true },
+					world.b1,
+				)
+				expect(Exit.isFailure(outsider)).toBe(true)
+
+				ok(
+					yield* call(
+						a.object,
+						a.id,
+						"channelMember.resetScopeNotifications",
+						{ organizationId: a.id, scope: "organization", scopeId: a.id },
+						a1,
+					),
+				)
+				expect(rowsOf()).toEqual([])
+			}),
+		))
+
 	it("refuses index changes from channels of another org", () =>
 		run(
 			Effect.gen(function* () {

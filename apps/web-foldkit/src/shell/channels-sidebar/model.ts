@@ -16,6 +16,7 @@ import {
 	Presence,
 	Section,
 	SidebarThread,
+	SectionSetting,
 	UnreadChannel,
 	UnreadCount,
 } from "./rows"
@@ -46,6 +47,8 @@ export const Model = Schema.Struct({
 	dmChannels: Schema.Record(Schema.String, Schema.NullOr(DmChannel)),
 	presence: Schema.Array(Presence),
 	unreadCounts: Schema.Array(UnreadCount),
+	/** The user's section notification settings: a muted section's channels step back. */
+	sectionSettings: Schema.Array(SectionSetting),
 	/** Channels with messages the user has not read (not muted for good), sorted. */
 	unreadChannels: Schema.Array(UnreadChannel),
 	connectMounts: Schema.Array(ConnectMount),
@@ -76,6 +79,8 @@ export const SidebarOutcome = Schema.Literals([
 	"Muted",
 	"Unmuted",
 	"NotificationLevelChanged",
+	"SectionMuted",
+	"SectionUnmuted",
 	"Favorited",
 	"Unfavorited",
 	"Hidden",
@@ -107,6 +112,7 @@ export const Message = defineMessageUnion({
 	UpdatedPresence: { presence: Schema.Array(Presence) },
 	UpdatedUnreadCounts: { counts: Schema.Array(UnreadCount) },
 	UpdatedUnreadChannels: { channels: Schema.Array(UnreadChannel) },
+	UpdatedSectionSettings: { settings: Schema.Array(SectionSetting) },
 	UpdatedConnectMounts: { mounts: Schema.Array(ConnectMount) },
 	UpdatedOrganizations: { organizations: Schema.Array(PartnerOrg) },
 	UpdatedSyncedChannels: { synced: Schema.Array(SyncedChannel) },
@@ -139,6 +145,7 @@ export const emptyData = {
 	presence: [],
 	unreadCounts: [],
 	unreadChannels: [],
+	sectionSettings: [],
 	connectMounts: [],
 	organizations: [],
 	syncedChannels: [],

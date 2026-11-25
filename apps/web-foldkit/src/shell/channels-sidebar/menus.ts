@@ -83,6 +83,8 @@ const ROW_SYMBOLS = {
 } as const satisfies Readonly<Record<string, string>>
 
 const SECTION_SYMBOLS = {
+	mute: "bell.slash",
+	notifications: "bell.badge",
 	"create-channel": "plus.circle",
 	"join-channel": "number",
 	"create-dm": "square.and.pencil",
@@ -139,14 +141,19 @@ export const sectionIdOfKey = (
 				(section) => section.id,
 			)
 
-/** `menuActions` plus "Delete section" for editable sections. */
+/** A section's notification items' inputs (Discord's category mute and level). */
+export type SectionNotifications = NotificationMember
+
+/** `menuActions`, the section's Mute and Notifications, and "Delete section" for editable sections. */
 export const sectionMenuEntries = (
 	actions: ReadonlyArray<SectionAction>,
 	isEditable: boolean,
+	notifications: SectionNotifications | null = null,
 ): ReadonlyArray<Menu.Entry> => [
 	...actions.map((action) =>
 		Menu.item(action satisfies SectionMenuKey, { textValue: sectionActionLabel(action) }),
 	),
+	...(notifications === null ? [] : [Menu.separator, muteEntry(notifications), levelEntry("public")]),
 	...(isEditable
 		? [
 				Menu.separator,
@@ -348,9 +355,12 @@ export const sectionActionLabel = (action: SectionAction): string =>
 			: "Start a conversation"
 
 const sectionMenuContent =
-	<M>(h: HtmlBuilder<M>, id: string) =>
+	<M>(h: HtmlBuilder<M>, id: string, notifications: SectionNotifications | null) =>
 	(key: string): ReadonlyArray<Html | string> => {
 		const text = (value: string) => menuLabel(h, id, key, value)
+		const notificationItem =
+			notifications === null ? null : itemContent(h, notifications, "public", key, text)
+		if (notificationItem !== null) return notificationItem
 		if (key === "create-channel") return [IconCirclePlus(h), text("Create new channel")]
 		if (key === "join-channel") return [IconHashtag(h), text("Join existing channel")]
 		if (key === "create-dm") return [IconPlus(h), text("Start a conversation")]
@@ -364,6 +374,8 @@ export const sectionMenuView = <M>(
 	options: Readonly<{
 		menu: Menu.Model
 		entries: ReadonlyArray<Menu.Entry>
+		/** A real section's notification items; null for the default section and DMs. */
+		notifications?: SectionNotifications | null
 		toMessage: (message: Menu.Message) => M
 	}>,
 ): Html =>
@@ -389,7 +401,7 @@ export const sectionMenuView = <M>(
 					},
 					[IconPlus(h), overlay],
 				),
-			content: sectionMenuContent(h, options.menu.id),
+			content: sectionMenuContent(h, options.menu.id, options.notifications ?? null),
 		},
 		toParentMessage: options.toMessage,
 	})

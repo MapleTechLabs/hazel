@@ -3,6 +3,7 @@ import { Schema } from "effect"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as Segments from "../../../ui/date-segments"
 import * as Slider from "../../../ui/slider"
+import { OrganizationSettings } from "./organization"
 
 /** The sound settings are `Shared.soundSettings` (root-owned, like the legacy provider's atom). */
 export { SoundFile, SoundSettings } from "../../../notification-sound"
@@ -33,6 +34,8 @@ export const Model = Schema.Struct({
 	/** Bumped per test notification result, so an older expiry timer leaves a newer status alone. */
 	notificationStatusVersion: Schema.Finite,
 	interaction: Interaction.Model,
+	/** "This organization" (`organization.ts`): the synced row, or a change not yet echoed. */
+	organizationSettings: OrganizationSettings,
 })
 export type Model = typeof Model.Type
 

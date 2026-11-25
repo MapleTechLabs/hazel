@@ -12,6 +12,7 @@ import { switchControl } from "../../../ui/switch"
 import type { PageViewInputs } from "../../contract"
 import { settingsRow } from "../shared"
 import { Message } from "./message"
+import * as Organization from "./organization"
 import { type Model, settingsOf, type SoundFile, type SoundSettings } from "./model"
 import { interaction, toQuietHoursMessage, toVolumeMessage } from "./update"
 
@@ -268,6 +269,24 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 							{ title: "Do not disturb", description: "Quiet hours and DND mode" },
 							doNotDisturb(h, model, wiring),
 						),
+						...(shared.organization === null
+							? []
+							: [
+									separator(h),
+									settingsRow(
+										h,
+										{
+											title: shared.organization.name,
+											description: "This organization's channels",
+										},
+										Organization.view(
+											h,
+											model.organizationSettings,
+											shared.nowMs,
+											(change) => Message.ChangedOrganizationSettings({ change }),
+										),
+									),
+								]),
 					],
 				),
 			]),

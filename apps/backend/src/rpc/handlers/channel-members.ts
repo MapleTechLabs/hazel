@@ -1,8 +1,9 @@
 import { ChannelMemberRepo, ChannelRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
 import { CurrentUser, UnauthorizedError, withRemapDbErrors } from "@hazel/domain"
-import { ChannelMemberResponse, ChannelMemberRpcs } from "@hazel/domain/rpc"
-import { DateTime, Effect, Option } from "effect"
+import { ChannelMemberResponse, ChannelMemberRpcs, ChannelSectionNotFoundError } from "@hazel/domain/rpc"
+import { ChannelSectionId, type OrganizationId, type UserId } from "@hazel/schema"
+import { Clock, DateTime, Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { ChannelMemberPolicy } from "../../policies/channel-member-policy"
 import { BotGatewayEffects } from "../../worker/objects/effects/bot-gateway-effects"
@@ -25,6 +26,52 @@ export const ChannelMemberRpcLive = ChannelMemberRpcs.toLayer(
 		const channelMemberPolicy = yield* ChannelMemberPolicy
 		const channelMemberRepo = yield* ChannelMemberRepo
 		const channelRepo = yield* ChannelRepo
+
+		/** The caller is a member of the organization this object holds (never a Connect guest). */
+		const requireMember = (userId: UserId, detail: string) =>
+			Effect.gen(function* () {
+				const member = yield* db.first(
+					SQLite.from(schema.organizationMembersTable)
+						.select("id")
+						.where(($) => [$.userId.eq(userId), $.deletedAt.isNull()])
+						.limit(1),
+				)
+				if (Option.isNone(member)) {
+					return yield* new UnauthorizedError({
+						message: "Not a member of this organization",
+						detail,
+					})
+				}
+				return member.value
+			})
+
+		/** The scope names this organization, or one of its sections. */
+		const requireScope = (
+			organizationId: OrganizationId,
+			scope: "organization" | "section",
+			scopeId: string,
+		) =>
+			Effect.gen(function* () {
+				if (scope === "organization") {
+					if (scopeId === organizationId) return
+					return yield* new UnauthorizedError({
+						message: "Not this organization",
+						detail: "channelMember.setScopeNotifications",
+					})
+				}
+				const sectionId = ChannelSectionId.make(scopeId)
+				const section = yield* db.first(
+					SQLite.from(schema.channelSectionsTable)
+						.select("id")
+						.where(($) => [
+							$.id.eq(sectionId),
+							$.organizationId.eq(organizationId),
+							$.deletedAt.isNull(),
+						])
+						.limit(1),
+				)
+				if (Option.isNone(section)) return yield* new ChannelSectionNotFoundError({ sectionId })
+			})
 
 		const memberEvent = (
 			eventType: "channel_member.add" | "channel_member.remove",
@@ -152,23 +199,78 @@ export const ChannelMemberRpcLive = ChannelMemberRpcs.toLayer(
 					)
 					.pipe(withRemapDbErrors("ChannelMember", "update")),
 
+			"channelMember.setScopeNotifications": ({
+				organizationId,
+				scope,
+				scopeId,
+				mutedUntil,
+				...fields
+			}) =>
+				db
+					.transaction(
+						Effect.gen(function* () {
+							const user = yield* CurrentUser.Context
+							yield* requireMember(user.id, "channelMember.setScopeNotifications")
+							yield* requireScope(organizationId, scope, scopeId)
+							const set = {
+								...(fields.level === undefined ? {} : { level: fields.level }),
+								...(fields.isMuted === undefined ? {} : { isMuted: fields.isMuted }),
+								...(fields.suppressEveryone === undefined
+									? {}
+									: { suppressEveryone: fields.suppressEveryone }),
+								...(mutedUntil === undefined
+									? {}
+									: {
+											mutedUntil:
+												mutedUntil === null || mutedUntil instanceof Date
+													? mutedUntil
+													: DateTime.toDateUtc(mutedUntil),
+										}),
+								updatedAt: new Date(yield* Clock.currentTimeMillis),
+							}
+							yield* db.run(
+								SQLite.insertInto(schema.notificationOverridesTable)
+									.values({ userId: user.id, organizationId, scope, scopeId, ...set })
+									.onConflictDoUpdate({
+										target: ["userId", "scope", "scopeId"],
+										// `updatedAt` is always set, so the list is never empty.
+										set: SQLite.excluded([
+											"updatedAt",
+											...(Object.keys(set) as Array<keyof typeof set>).filter(
+												(key) => key !== "updatedAt",
+											),
+										]),
+									}),
+							)
+							return { transactionId: yield* generateTransactionId() }
+						}),
+					)
+					.pipe(withRemapDbErrors("ChannelMember", "update")),
+
+			"channelMember.resetScopeNotifications": ({ scope, scopeId }) =>
+				db
+					.transaction(
+						Effect.gen(function* () {
+							const user = yield* CurrentUser.Context
+							yield* requireMember(user.id, "channelMember.resetScopeNotifications")
+							yield* db.run(
+								SQLite.deleteFrom(schema.notificationOverridesTable).where(($) => [
+									$.userId.eq(user.id),
+									$.scope.eq(scope),
+									$.scopeId.eq(scopeId),
+								]),
+							)
+							return { transactionId: yield* generateTransactionId() }
+						}),
+					)
+					.pipe(withRemapDbErrors("ChannelMember", "update")),
+
 			"channelMember.markAllRead": ({ organizationId }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {
 							const user = yield* CurrentUser.Context
-							const member = yield* db.first(
-								SQLite.from(schema.organizationMembersTable)
-									.select("id")
-									.where(($) => [$.userId.eq(user.id), $.deletedAt.isNull()])
-									.limit(1),
-							)
-							if (Option.isNone(member)) {
-								return yield* new UnauthorizedError({
-									message: "Not a member of this organization",
-									detail: "channelMember.markAllRead",
-								})
-							}
+							const member = yield* requireMember(user.id, "channelMember.markAllRead")
 							const memberships = yield* db.run(
 								SQLite.from(schema.channelMembersTable)
 									.select("channelId")
@@ -183,7 +285,7 @@ export const ChannelMemberRpcLive = ChannelMemberRpcs.toLayer(
 								UserEffects.clearOrganizationNotifications,
 								userTarget(user.id),
 								{
-									memberId: member.value.id,
+									memberId: member.id,
 								},
 							)
 							return { transactionId: yield* generateTransactionId() }

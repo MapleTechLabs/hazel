@@ -22,7 +22,12 @@ import {
 	updateRowMenu,
 	updateSectionMenu,
 } from "./channels-sidebar/menu-update"
-import { sectionActionLabel, sectionMenuEntries, sectionMenuView } from "./channels-sidebar/menus"
+import {
+	sectionActionLabel,
+	sectionMenuEntries,
+	sectionMenuView,
+	type SectionNotifications,
+} from "./channels-sidebar/menus"
 import { dragDescription, sectionPlusButton } from "./channels-sidebar/tree"
 import { semantic } from "../ui/semantic"
 import { sectionGroupContent } from "./channels-sidebar/view"
@@ -57,6 +62,8 @@ const outcomeTitles: { readonly [O in SidebarOutcome]: string | null } = {
 	Muted: "Channel muted",
 	Unmuted: "Channel unmuted",
 	NotificationLevelChanged: "Notification settings updated",
+	SectionMuted: "Section muted",
+	SectionUnmuted: "Section unmuted",
 	Favorited: "Added to favorites",
 	Unfavorited: "Removed from favorites",
 	Hidden: null,
@@ -110,6 +117,9 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 		UpdatedUnreadCounts: ({ counts }) => ({ model: modifyFields(model, { unreadCounts: () => counts }) }),
 		UpdatedUnreadChannels: ({ channels }) => ({
 			model: modifyFields(model, { unreadChannels: () => channels }),
+		}),
+		UpdatedSectionSettings: ({ settings }) => ({
+			model: modifyFields(model, { sectionSettings: () => settings }),
 		}),
 		UpdatedConnectMounts: ({ mounts }) => ({
 			model: modifyFields(model, { connectMounts: () => mounts }),
@@ -333,6 +343,18 @@ const sidebarBody = <ParentMessage>(
 	)
 }
 
+/** A real section's notification items' inputs; null for the default section and DMs. */
+const sectionNotificationsOf = (model: Model, sectionKey: string): SectionNotifications | null => {
+	const section = model.sections.find((candidate) => candidate.id === sectionKey)
+	if (section === undefined) return null
+	const setting = model.sectionSettings.find((candidate) => candidate.sectionId === section.id)
+	return {
+		// A timed mute that ended still reads as muted here: choosing "Unmute" clears it.
+		isMuted: setting !== undefined && (setting.isMuted || setting.mutedUntilMs !== null),
+		notificationLevel: setting?.notificationLevel ?? null,
+	}
+}
+
 /** A single action is a plain "+" button; several actions or a deletable section open a menu. */
 const sectionActionView = <ParentMessage>(
 	h: HtmlBuilder<ParentMessage>,
@@ -348,7 +370,8 @@ const sectionActionView = <ParentMessage>(
 			])
 		: sectionMenuView(h, {
 				menu: sectionMenuOf(model, sectionKey),
-				entries: sectionMenuEntries(actions, isEditable),
+				entries: sectionMenuEntries(actions, isEditable, sectionNotificationsOf(model, sectionKey)),
+				notifications: sectionNotificationsOf(model, sectionKey),
 				toMessage: (message) =>
 					toParentMessage(Message.GotSectionMenuMessage({ sectionId: sectionKey, message })),
 			})
