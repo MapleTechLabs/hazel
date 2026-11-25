@@ -145,21 +145,32 @@ const withRpc = async <A>(
 	return Effect.runPromise(program as import("effect").Effect.Effect<A | null>)
 }
 
-const liveApi: PushApi = {
+/** One RPC with the session: the call's result, or `null` when signed out. */
+export type WithRpc = <A>(
+	use: (
+		client: import("../../web-foldkit/src/rpc").HazelRpc["Service"],
+	) => import("effect").Effect.Effect<A, unknown>,
+) => Promise<A | null>
+
+export const makeLiveApi = (rpc: WithRpc, apiUrl: () => Promise<string>): PushApi => ({
 	account: async () => {
-		const { apiUrl } = await import("../../web-foldkit/src/core/config/server")
-		const user = await withRpc((client) => client("user.me", undefined))
-		return user === null ? null : { api: apiUrl(), userId: user.id }
+		const user = await rpc((client) => client("user.me", undefined))
+		return user === null ? null : { api: await apiUrl(), userId: user.id }
 	},
 	register: async (token) => {
 		// No session (signed out meanwhile): nothing was registered, so it is tried again later.
-		const sent = await withRpc((client) => client("pushDevice.register", token))
+		const sent = await rpc((client) => client("pushDevice.register", token))
 		if (sent === null) throw new Error("signed out")
 	},
 	unregister: async (token) => {
-		await withRpc((client) => client("pushDevice.unregister", { token }))
+		await rpc((client) => client("pushDevice.unregister", { token }))
 	},
-}
+})
+
+const liveApi = makeLiveApi(withRpc, async () => {
+	const { apiUrl } = await import("../../web-foldkit/src/core/config/server")
+	return apiUrl()
+})
 
 const liveHost: PushHost = {
 	register: async (account) => (await askHost("push_register", account)) as PushToken,
