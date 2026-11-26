@@ -1,4 +1,7 @@
-import { mkdirSync, writeFileSync } from "node:fs"
+import { spawnSync } from "node:child_process"
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import { createServer, type Server } from "node:http"
+import type { AddressInfo } from "node:net"
 import { resolve } from "node:path"
 import { type Browser, chromium, type Page } from "playwright"
 import { CHANNEL_TOLERANCE, diffInPage } from "./shoot.ts"
@@ -71,16 +74,42 @@ const argument = (name: string) => {
 	return index === -1 ? undefined : process.argv[index + 1]
 }
 
-const serve = () =>
-	Bun.serve({
-		port: 0,
-		async fetch(request) {
-			const path = new URL(request.url).pathname
-			const file = Bun.file(resolve(webRoot, `.${path}`))
-			// App routes fall back to the page, as the shell's server does.
-			if (path !== "/" && (await file.exists())) return new Response(file)
-			return new Response(Bun.file(resolve(webRoot, "index.html")))
-		},
+const types = {
+	html: "text/html",
+	js: "text/javascript",
+	css: "text/css",
+	json: "application/json",
+	svg: "image/svg+xml",
+	png: "image/png",
+	webp: "image/webp",
+	woff2: "font/woff2",
+} as const satisfies Record<string, string>
+
+const isFile = (path: string) => {
+	try {
+		return statSync(path).isFile()
+	} catch {
+		return false
+	}
+}
+
+/** The build on a free port; app routes fall back to the page, as the shell's server does. */
+const serve = (): Promise<Server> =>
+	new Promise((ready) => {
+		const server = createServer((request, response) => {
+			const path = new URL(request.url ?? "/", "http://localhost").pathname
+			const file =
+				path !== "/" && isFile(resolve(webRoot, `.${path}`))
+					? resolve(webRoot, `.${path}`)
+					: resolve(webRoot, "index.html")
+			response.writeHead(200, {
+				"content-type":
+					Object.entries(types).find(([extension]) => file.endsWith(`.${extension}`))?.[1] ??
+					"application/octet-stream",
+			})
+			response.end(readFileSync(file))
+		})
+		server.listen(0, () => ready(server))
 	})
 
 /** Opens the screen at one width and theme with the flag on or off; returns the viewport's shot. */
@@ -126,7 +155,8 @@ const shoot = async (
 						return { x: box.x, y: box.y, width: box.width, height: box.height }
 					})) ?? undefined)
 				: undefined
-		await page.mouse.move(0, 0)
+		// Off the page: a pointer inside the sidebar would hover it (today's palette hint inks on that).
+		await page.mouse.move(-10, -10)
 		const png = await page.screenshot({ animations: "disabled", caret: "hide", clip: clip ?? region })
 		const runs = await page.evaluate(textRuns, clip ?? region ?? { x: 0, y: 0, width, height: 844 })
 		return { png, mounted, region, runs }
@@ -217,45 +247,49 @@ const settle = async (page: Page) => {
 /** Today | island | diff, side by side, in the page's canvas. */
 const strip = (page: Page, images: ReadonlyArray<Buffer>): Promise<Buffer> =>
 	page
-		.evaluate(async (images) => {
-			const bitmaps = await Promise.all(
-				images.map(async (base64) =>
-					createImageBitmap(await (await fetch(`data:image/png;base64,${base64}`)).blob()),
-				),
-			)
-			const gap = 16
-			const width = bitmaps.reduce((sum, b) => sum + b.width, 0) + gap * (bitmaps.length - 1)
-			const height = Math.max(...bitmaps.map((b) => b.height))
-			const canvas = new OffscreenCanvas(width, height)
-			const context = canvas.getContext("2d")
-			if (context === null) throw new Error("no 2d context")
-			context.fillStyle = "#808080"
-			context.fillRect(0, 0, width, height)
-			let x = 0
-			for (const bitmap of bitmaps) {
-				context.drawImage(bitmap, x, 0)
-				x += bitmap.width + gap
-			}
-			const bytes = new Uint8Array(await (await canvas.convertToBlob({ type: "image/png" })).arrayBuffer())
-			let binary = ""
-			for (const byte of bytes) binary += String.fromCharCode(byte)
-			return btoa(binary)
-		}, images.map((image) => image.toString("base64")))
+		.evaluate(
+			async (images) => {
+				const bitmaps = await Promise.all(
+					images.map(async (base64) =>
+						createImageBitmap(await (await fetch(`data:image/png;base64,${base64}`)).blob()),
+					),
+				)
+				const gap = 16
+				const width = bitmaps.reduce((sum, b) => sum + b.width, 0) + gap * (bitmaps.length - 1)
+				const height = Math.max(...bitmaps.map((b) => b.height))
+				const canvas = new OffscreenCanvas(width, height)
+				const context = canvas.getContext("2d")
+				if (context === null) throw new Error("no 2d context")
+				context.fillStyle = "#808080"
+				context.fillRect(0, 0, width, height)
+				let x = 0
+				for (const bitmap of bitmaps) {
+					context.drawImage(bitmap, x, 0)
+					x += bitmap.width + gap
+				}
+				const bytes = new Uint8Array(
+					await (await canvas.convertToBlob({ type: "image/png" })).arrayBuffer(),
+				)
+				let binary = ""
+				for (const byte of bytes) binary += String.fromCharCode(byte)
+				return btoa(binary)
+			},
+			images.map((image) => image.toString("base64")),
+		)
 		.then((base64) => Buffer.from(base64, "base64"))
 
 const main = async () => {
 	if (process.argv.includes("--build")) {
-		const build = Bun.spawnSync(["bun", "run", "--cwd", "apps/ios-hybrid", "build:web:offline"], {
+		const build = spawnSync("bun", ["run", "--cwd", "apps/ios-hybrid", "build:web:offline"], {
 			cwd: repo,
-			stdout: "inherit",
-			stderr: "inherit",
+			stdio: "inherit",
 		})
-		if (build.exitCode !== 0) process.exit(build.exitCode ?? 1)
+		if (build.status !== 0) process.exit(build.status ?? 1)
 	}
 	const only = argument("--only")
 	const out = resolve(repo, argument("--out") ?? "docs/hazel-ui-screens/phase3")
-	const server = serve()
-	const base = `http://localhost:${server.port}/`
+	const server = await serve()
+	const base = `http://localhost:${(server.address() as AddressInfo).port}/`
 	const browser = await chromium.launch()
 	const scratch = await browser.newPage()
 	const rows: Array<string> = []
@@ -279,7 +313,11 @@ const main = async () => {
 					rows.push(
 						`${screen.id.padEnd(16)} ${theme.padEnd(5)} ${String(width).padEnd(4)} ` +
 							`${percent.toFixed(3).padStart(7)}% differ (${diff.differing} px, max delta ${diff.maxDelta})` +
-							(island.mounted ? "" : expected ? "  ISLAND DID NOT MOUNT" : "  (no island at this width)"),
+							(island.mounted
+								? ""
+								: expected
+									? "  ISLAND DID NOT MOUNT"
+									: "  (no island at this width)"),
 					)
 					console.log(rows.at(-1))
 					if (process.argv.includes("--probe")) probe(today.runs, island.runs)
@@ -287,7 +325,7 @@ const main = async () => {
 		}
 	} finally {
 		await browser.close()
-		server.stop()
+		server.close()
 	}
 	process.exit(failed ? 1 : 0)
 }
