@@ -1,0 +1,24 @@
+/* The gallery's own frames, shared by both sides; never measured, only the specimens inside are. */
+body {
+	margin: 0;
+	padding: 24px;
+	background: var(--frame-page);
+}
+
+.frames {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 24px;
+	align-items: flex-start;
+	margin-bottom: 24px;
+}
+
+.frame-sidebar {
+	width: 240px;
+	background: var(--frame-sidebar);
+}
+
+.frame-button {
+	display: flex;
+	padding: 8px;
+}
