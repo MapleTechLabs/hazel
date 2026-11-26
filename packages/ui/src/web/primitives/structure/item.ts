@@ -14,6 +14,110 @@ const BRANCH = "C1.75 -20 4 -16 11 -16"
 const SPINE_THROUGH = `M1.75 0V-100M1.75 -27${BRANCH}`
 const SPINE_TO_BRANCH = `M1.75 -100V-27${BRANCH}`
 
+const I = '[data-hz="item"]'
+const CONTROL = '> [data-hz-part="control"]'
+const SLOT = (name: string) =>
+	`> [data-hz-part="control"] > [data-hz-part="content"] > [data-hz-slot="${name}"]`
+
+// Unread marks (`item-unread-pip`, `item-unread-dot`): the sidebar's edge pip (`sidebarUnreadPip`) and
+// activity's brand dot in its own 8px column. Large rows beside a dotted row keep that column empty.
+const unreadCss = `
+${I} ${CONTROL} > [data-hz-part="unread"] { display: none; }
+${I}[data-unread="pip"] ${CONTROL}::before {
+	content: ""; position: absolute; top: 50%; inset-inline-start: 0; translate: 0 -50%; pointer-events: none;
+	width: var(--hz-space-1); height: var(--hz-space-2); background: var(--hz-color-fg);
+	border-start-end-radius: var(--hz-radius-full); border-end-end-radius: var(--hz-radius-full);
+}
+${I}[data-unread="dot"] ${CONTROL} > [data-hz-part="unread"],
+:has(> ${I}[data-unread="dot"]) > ${I}[data-leading-size="large"] ${CONTROL} > [data-hz-part="unread"] {
+	display: flex; order: -1; align-items: center; justify-content: center; flex-shrink: 0;
+	width: var(--hz-space-2); align-self: stretch;
+}
+${I}[data-unread="dot"] ${CONTROL} > [data-hz-part="unread"]::before {
+	content: ""; width: var(--hz-space-2); height: var(--hz-space-2); border-radius: var(--hz-radius-full);
+	background: var(--hz-color-primary);
+}
+/* Inline and zero-sized: an out-of-flow label would part the name ("design , unread"). */
+${I} [data-hz-part="unreadLabel"] { font-size: 0; line-height: 0; clip-path: inset(50%); }
+`
+
+// The `actions` slot (`item-hover-trailing`, `item-hover-action`): hidden until the row is hovered or
+// holds focus, always shown without hover. A regular row lays it over its end, as today's dots trigger;
+// a large row keeps its column and shows it below today's `md`, as activity's "Mark as read".
+const actionsCss = `
+${I} ${SLOT("actions")} {
+	display: flex; align-items: center; justify-content: flex-end; opacity: 0;
+	transition: opacity var(--hz-duration-fast) var(--hz-ease-out);
+}
+${I}:is(:hover, :focus-within) ${SLOT("actions")} { opacity: 1; }
+@media (hover: none) { ${I} ${SLOT("actions")} { opacity: 1; } }
+@media (width < 48rem) { ${I}[data-leading-size="large"] ${SLOT("actions")} { opacity: 1; } }
+${I}:not([data-leading-size="large"]) ${SLOT("actions")} {
+	position: absolute; inset-block: 0; inset-inline-end: 0; padding-inline-end: var(--hz-space-1_5);
+}
+${I}:is(:hover, :focus-within):not([data-leading-size="large"]):has(${SLOT("actions")} > *) ${CONTROL} > [data-hz-part="badge"] {
+	margin-inline-end: var(--hz-space-6);
+}
+${I}:has(${SLOT("actions")} :focus-visible) ${CONTROL} { background-color: var(--hz-color-wash); }
+`
+
+// `titleLines` and `subtitleLines` `2`: the text wraps and clamps at two lines.
+const clamp =
+	"white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;"
+const linesCss = `
+${I}[data-title-lines="2"] ${CONTROL} > [data-hz-part="title"] { ${clamp} }
+${I}[data-subtitle-lines="2"] ${CONTROL} > [data-hz-part="subtitle"] { ${clamp} }
+`
+
+// `leadingSize` `large` (`item-leading-size`): today's activity row. A 40px leading column, top
+// aligned; the trailing slot on the title's line, the subtitle under both; the dot column first.
+// HAZEL-GAP(item-conversation-row): today's DM row differs (semibold title, 14px preview, py-2.5).
+const largeCss = `
+${I}[data-leading-size="large"] ${CONTROL} {
+	display: grid; align-items: start; column-gap: 0; row-gap: 0; border-radius: 0;
+	grid-template-columns: auto minmax(0, 1fr) auto auto;
+	grid-template-rows: auto minmax(0, 1fr);
+	grid-template-areas: "leading title trailing actions" "leading subtitle subtitle actions";
+	padding: var(--hz-space-3) var(--hz-space-4); color: var(--hz-color-fg);
+	min-height: calc(var(--hz-space-10) + var(--hz-space-1_5) + 2 * var(--hz-space-3));
+	font-size: var(--hz-text-label-size); line-height: var(--hz-text-label-leading);
+}
+${I}[data-leading-size="large"][data-badged] ${CONTROL} {
+	grid-template-areas: "leading title trailing actions" "leading subtitle badge actions";
+}
+${I}[data-leading-size="large"][data-unread="dot"] ${CONTROL},
+:has(> ${I}[data-unread="dot"]) > ${I}[data-leading-size="large"] ${CONTROL} {
+	grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+	grid-template-areas: "unread leading title trailing actions" "unread leading subtitle subtitle actions";
+}
+${I}[data-leading-size="large"][data-unread="dot"][data-badged] ${CONTROL},
+:has(> ${I}[data-unread="dot"]) > ${I}[data-leading-size="large"][data-badged] ${CONTROL} {
+	grid-template-areas: "unread leading title trailing actions" "unread leading subtitle badge actions";
+}
+${I}[data-leading-size="large"] ${CONTROL} > [data-hz-part="unread"] {
+	grid-area: unread; height: var(--hz-space-10); margin-inline-end: var(--hz-space-3);
+}
+/* The leading column adds no height of its own (a spanning item skews the rows); the row's min-height
+   holds it, 6px taller than the avatar as today's 16/24 line box is. */
+${I}[data-leading-size="large"] ${SLOT("leading")} {
+	grid-area: leading; display: flex; width: auto; height: 0; margin-inline-end: var(--hz-space-3);
+}
+${I}[data-leading-size="large"] ${CONTROL} > [data-hz-part="title"] { grid-area: title; color: var(--hz-color-fg); }
+${I}[data-leading-size="large"] ${SLOT("trailing")} { grid-area: trailing; margin-inline-start: var(--hz-space-2); }
+${I}[data-leading-size="large"] ${CONTROL} > [data-hz-part="subtitle"] {
+	grid-area: subtitle; margin-top: var(--hz-space-0_5); color: var(--hz-color-muted-fg);
+}
+${I}[data-leading-size="large"] ${CONTROL} > [data-hz-part="badge"] {
+	grid-area: badge; align-self: start; justify-self: end; margin: var(--hz-space-0_5) 0 0 var(--hz-space-2);
+}
+${I}[data-leading-size="large"] ${SLOT("actions")} {
+	grid-area: actions; align-self: center; margin-inline-start: var(--hz-space-4);
+}
+${I}[data-leading-size="large"]:has(${SLOT("actions")} > *) ${CONTROL} { padding-inline-end: var(--hz-space-3); }
+/* A web-only hint for sidebar rows; a large row has no place for it. */
+${I}[data-leading-size="large"] ${CONTROL} > [data-hz-part="shortcut"] { display: none; }
+`
+
 // What the recipe cannot say: slot order inside the row, the subtitle's second line, the elbow's
 // position, and a disabled link taking no clicks.
 const css = `
@@ -47,6 +151,10 @@ const css = `
 @media (forced-colors: active) {
 	[data-hz="item"][data-selected] > [data-hz-part="control"] { outline: 1px solid Highlight; }
 }
+${unreadCss}
+${actionsCss}
+${linesCss}
+${largeCss}
 `
 
 const elbowOf = (document: Document) => {
@@ -79,10 +187,22 @@ export const primitive = definePrimitive("item", ({ document, tag, outer }) => {
 	const shortcut = part(document, "kbd", "shortcut")
 	shortcut.hidden = true
 	const elbow = elbowOf(document)
+	// The dot's column, and the unread state in words for a screen reader (the marks are drawn only).
+	const unread = part(document, "span", "unread")
+	unread.setAttribute("aria-hidden", "true")
+	const unreadLabel = part(document, "span", "unreadLabel")
+	// The label lives inside the title, so the name reads as one phrase ("design, unread").
+	const titleText = document.createTextNode("")
+	title.append(titleText)
 	let control: HTMLElement = part(document, "button", "control")
 	control.setAttribute("type", "button")
-	control.append(content, title, subtitle, badge, shortcut)
+	control.append(unread, content, title, subtitle, badge, shortcut)
 	node.append(control)
+	// A control in `actions` sits inside the row's link: its click must not follow the link.
+	node.addEventListener("click", (event) => {
+		if (event.target instanceof Element && event.target.closest('[data-hz-slot="actions"]') !== null)
+			event.preventDefault()
+	})
 
 	let href: string | undefined
 	let selected = false
@@ -158,7 +278,7 @@ export const primitive = definePrimitive("item", ({ document, tag, outer }) => {
 		content,
 		set: (name, value) => {
 			if (name === "title") {
-				title.textContent = textOf(value)
+				titleText.data = textOf(value)
 			} else if (name === "subtitle") {
 				subtitle.textContent = textOf(value)
 				subtitle.hidden = textOf(value) === ""
@@ -167,6 +287,7 @@ export const primitive = definePrimitive("item", ({ document, tag, outer }) => {
 				badgeCount = typeof value === "number" ? value : 0
 				badge.hidden = badgeCount <= 0
 				badge.textContent = badgeCount > 0 ? String(badgeCount) : ""
+				flag(node, "badged", badgeCount > 0)
 			} else if (name === "shortcut") {
 				shortcut.textContent = textOf(value)
 				shortcut.hidden = textOf(value) === ""
@@ -186,6 +307,19 @@ export const primitive = definePrimitive("item", ({ document, tag, outer }) => {
 				swap()
 			} else if (name === "emphasized") flag(node, "emphasized", value)
 			else if (name === "muted") flag(node, "muted", value)
+			else if (name === "unread") {
+				option(node, "unread", value)
+				// Today's words: "Unread:" before an activity row, ", unread" after a channel's name.
+				if (value === "dot") {
+					unreadLabel.textContent = "Unread: "
+					title.prepend(unreadLabel)
+				} else if (value === "pip") {
+					unreadLabel.textContent = ", unread"
+					title.append(unreadLabel)
+				} else unreadLabel.remove()
+			} else if (name === "titleLines") option(node, "title-lines", value)
+			else if (name === "subtitleLines") option(node, "subtitle-lines", value)
+			else if (name === "leadingSize") option(node, "leading-size", value)
 			else if (name === "nested") {
 				option(node, "nested", value)
 				if (value === "middle" || value === "last") {
