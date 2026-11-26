@@ -1,7 +1,21 @@
 # Hazel UI contracts (phase 1)
 
 The frozen interfaces the phase 2 lanes build against (`docs/hazel-ui.md`, "Phase 1: contracts").
-For review by the user before any lane starts. Changing anything here is a contract proposal.
+Reviewed by the user on 2026-11-26 and updated in phase 1.5 with their decisions (below). Changing
+anything here is a contract proposal. A lane starts from `LANES.md`.
+
+## Decisions (2026-11-26)
+
+1. `frame.surface` keeps the default `card`.
+2. `section.action` stays a single action and also accepts menu entries (`Hazel.actionMenu`).
+3. The governed composite cap stays at 1.
+4. `message.row` uses readable keys only; G7's short keys are gone from the schema, goldens, bench
+   and Swift decoder. Grouping is only the message's `grouped` flag.
+5. `composer` stays a leaf with `above` and `actions` slots; the rich editor is phase 3.
+6. Every proposed gap resolution is accepted, except `empty-illustration`, which is the new
+   `emptyState` primitive. New tags `progress`, `emojiPicker`, `emptyState`; services `Files` and
+   `Clipboard` (interfaces); the GIF picker is a web-only extension; `list.loading`'s skeleton is
+   renderer-owned. `GAPS.md` is the resolved ledger.
 
 | Contract | Source of truth |
 | --- | --- |
@@ -13,9 +27,11 @@ For review by the user before any lane starts. Changing anything here is a contr
 ## C0: where each lane writes
 
 - **Web renderers:** one file per tag, `src/web/primitives/<group>/<tag>.ts`, exporting
-  `primitive = definePrimitive("<tag>", ...)`. `src/web/primitives.ts` finds them by `import.meta.glob`;
-  a `hazel` tag with no file throws `NotImplemented` naming its lane. Eleven G1/G5 renderers are already
-  moved in (stack, slot, ext, text, icon, avatar, screen, section, item, action, textField).
+  `primitive = definePrimitive("<tag>", ...)`. `src/web/primitives.ts` finds them by `import.meta.glob`.
+  Since phase 1.5 every tag has a file: the eleven G1/G5 renderers (stack, slot, ext, text, icon,
+  avatar, screen, section, item, action, textField) and a `stubPrimitive("<tag>")` for the rest, which
+  draws a box naming its lane (`data-hz-stub`); the lane replaces the stub. A tag with no file at all
+  still throws `NotImplemented`.
 - **Swift views:** one file per tag, `Primitives/<Group>/Hz<Tag>.swift`, pre-created as stubs that draw
   `NotImplementedView(tag, lane)`; the lane replaces the body. The tag-to-view switch
   (`Primitives/Registry.generated.swift`) and HazelUI's theme (`Theme/HazelTheme.generated.swift`) are
@@ -24,7 +40,10 @@ For review by the user before any lane starts. Changing anything here is a contr
   from the spike app), G7's list and row code, and every primitive. The `EffectUiSpike` app now depends on
   it (`project.yml`) and uses its runtime and wire; the spike's own snapshot tree and views stay until
   **S0**, which moves the app onto `Tree`/`TreeView` and deletes them.
-- **Recipes:** one file per primitive, `src/style/recipes/<tag>.ts`, written by the primitive's lanes.
+- **Recipes:** one file per primitive, `src/style/recipes/<tag>.ts`, written by the primitive's lanes
+  (empty stubs for `progress`, `emptyState`, `emojiPicker`).
+- **New tags:** `bun scripts/stubs.ts` (integrator) writes each missing web stub, Swift stub and
+  default fixture once.
 - **Composites:** one file per composite, `src/custom/<Name>.ts` (`Hazel.composite`), capped by
   `hazel/custom-cap` at **1** (`SettingsHeader`).
 - No new dependencies were added. After C0 no lane needs `bun.lock`, the root `package.json`,
@@ -47,16 +66,18 @@ implements `focus`/`blur`, the rest die with `NotImplemented` until lanes A2, A3
 | `scroll` | A1 / S1 | elements | axis (default `vertical`) | - | - | scrollTo |
 | `frame` | A1 / S1 | elements | surface (default `card`) | - | - | - |
 | `divider` | A1 / S1 | none | - | - | - | - |
-| `list` | A4 / S5 | elements | anchor (default `start`), stickToBottom?, loadingStart?, loadingEnd? | - | reachStart, reachEnd | scrollTo |
+| `list` | A4 / S5 | elements | anchor (default `start`), stickToBottom?, loading? (skeleton, renderer-owned), loadingStart?, loadingEnd?, reorderable? | overlay | reachStart, reachEnd, move | scrollTo |
 | `listDivider` | A4 / S5 | none | kind (default `date`), label | - | - | - |
 | `text` | A1 / S1 | text | role (default `body`), tone (default `default`), strong?, numeric?, truncate? | - | - | - |
 | `heading` | A1 / S1 | text | level (default `2`) | - | - | - |
 | `icon` | A1 / S1 | none | name (data) | - | - | - |
 | `image` | A1 / S1 | none | src, alt, width, height | - | press | - |
-| `avatar` | A1 / S1 | none | name, initials, src, presence (default `none`) | - | - | - |
+| `avatar` | A1 / S1 | none | name, initials, src, presence (default `none`), size (default `regular`), mark (default `none`) | - | press | - |
 | `avatarStack` | A1 / S1 | elements | overflow | - | - | - |
 | `badge` | A1 / S1 | none | label, tone (default `neutral`), style (default `solid`), size (default `regular`), pill? | - | - | - |
-| `richText` | A1 / S1 | none | blocks (data) | - | pressMention, pressLink | - |
+| `progress` | A1 / S1 | none | value (0 to 1), indeterminate?, label | - | - | - |
+| `emptyState` | A1 / S1 | none | title, description, icon (data), illustration (default `none`) | action | - | - |
+| `richText` | A1 / S1 | none | blocks (data) | - | pressMention (with `run`), pressLink | - |
 | `message` | A5 / S5 | none | row (data), grouped?, pinned?, highlighted?, entering?, pending?, failed? | - | press, longPress, action, pressAuthor, pressReaction, addReaction, pressMention, pressLink, pressAttachment, pressReply, pressThread, retry | - |
 | `reactionBar` | A5 / S5 | none | reactions (data), addable? | - | pressReaction, add | - |
 | `attachmentGrid` | A5 / S5 | none | attachments (data), removable? | - | press, remove | - |
@@ -64,33 +85,40 @@ implements `focus`/`blur`, the rest die with `NotImplemented` until lanes A2, A3
 | `typingIndicator` | A5 / S5 | none | names (data) | - | - | - |
 | `button` | A2 / S2 | none | label, icon (data), variant (default `primary`), size (default `regular`), iconOnly?, circle?, disabled?, loading? | - | press | focus |
 | `link` | A2 / S2 | none | label, href | - | press | - |
-| `textField` | A2 / S2 | none | label, placeholder, description, value (revisioned), error, disabled?, readOnly? | - | change, submit, focus, blur | focus, blur, select |
+| `textField` | A2 / S2 | none | label, placeholder, description, value (revisioned), error, disabled?, readOnly?, required?, monospace? | - | change, submit, focus, blur | focus, blur, select |
 | `textArea` | A2 / S2 | none | label, placeholder, description, value (revisioned), error, disabled? | - | change, submit, focus, blur | focus, blur, select |
 | `toggle` | A2 / S2 | none | label, description, checked?, disabled? | - | change | - |
 | `select` | A2 / S2 | none | label, placeholder, options (data), value, disabled? | - | change | - |
 | `searchField` | A2 / S2 | none | placeholder, value (revisioned) | - | change, submit | focus, blur |
-| `composer` | A2 / S2 | none | placeholder, value (revisioned), disabled?, canSend? | above, actions | change, submit, focus, blur, trigger | focus, blur, select |
+| `composer` | A2 / S2 | none | placeholder, value (revisioned), disabled?, canSend? | above, actions | change, submit, focus, blur, trigger, key, files | focus, blur, select |
 | `menu` | A3 / S3 | none | label, entries (data) | trigger | select | - |
 | `contextMenu` | A3 / S3 | elements | entries (data) | - | select | - |
 | `sheet` | A3 / S3 | elements | open?, title | - | dismiss | - |
 | `dialog` | A3 / S3 | elements | open?, title, description, destructive? | actions | dismiss | - |
-| `popover` | A3 / S3 | elements | open? | anchor | dismiss | - |
+| `popover` | A3 / S3 | elements | open?, anchorTo (data: `{key, run}`) | anchor | dismiss | - |
 | `toast` | A3 / S3 | none | open?, tone (default `neutral`), title, description | action | dismiss | - |
 | `tooltip` | A3 / S3 | elements | label | - | - | - |
+| `emojiPicker` | A3 / S3 | none | open? | - | select, dismiss | - |
 | `screen` | A4 / S4 | elements | title, back? | toolbar | back | - |
 | `navigation` | A4 / S4 | elements | - | - | pop | - |
 | `tabBar` | A4 / S4 | elements | tabs (data), selected | - | change | - |
 | `splitView` | A4 / S4 | elements | - | sidebar | - | - |
-| `section` | A4 / S4 | elements | title, collapsible?, collapsed? | - | toggle | - |
-| `item` | A4 / S4 | elements | title, subtitle, badge, emphasized?, selected?, disabled?, href | leading, trailing | press, longPress | scrollTo |
+| `section` | A4 / S4 | elements | title, collapsible?, collapsed?, reorderable? | - | toggle, move | - |
+| `item` | A4 / S4 | elements | title, subtitle, badge, emphasized?, selected?, disabled?, muted?, nested (default `none`), shortcut (web only), href | leading, trailing | press, longPress | scrollTo |
 | `slot` | A1 / S1 | elements | name | - | - | - |
-| `action` | A4 / S4 | elements | label | - | press | - |
+| `action` | A4 / S4 | elements | label, entries (data) | - | press, select | - |
 | `ext` | A1 / S0 | elements | ext, args (data) | fallback | - | - |
 
-`slot`, `ext` and `action` are internal: what slots, `h.extension` and `section.action(icon, msg, label)`
-compile to. Structured props (`row`, `blocks`, `entries`, `reactions`, `attachments`, `tabs`, `options`)
-are Schemas in `content.ts`; a `message.row` keeps G7's short keys `a i t b r` and adds readable optional
-fields (`avatar`, `edited`, `status`, `badges`, `reply`, `files`, `embeds`, `thread`, `actions`).
+`slot`, `ext` and `action` are internal: what slots, `h.extension` and `section.action(icon, msg | actionMenu, label)`
+compile to. Structured props (`row`, `blocks`, `entries`, `reactions`, `attachments`, `tabs`, `options`,
+`anchorTo`) are Schemas in `content.ts`. A `message.row` has readable keys only: `author`, `initials`,
+`avatar`, `provider`, `time`, `body`, `reactions` (`{emoji, count, mine, who?}`), `quick`, `edited`,
+`status`, `badges`, `reply`, `files`, `embeds`, `thread`, `actions`. Rich text runs and blocks stay
+compact tuples. `MenuEntry.entries` is a one-level submenu.
+
+Extensions: `GifPicker` (`src/extensions/GifPicker.ts`, web only, lane A3). Services (interfaces in
+`packages/client-data/src/platform/ui-services.ts`, lane F implements web and Swift): `Files.pick`,
+`Files.dropped`, `Clipboard.write`; screens reach them through a `Command.Service`.
 
 ### Closed sets, and what changed
 
@@ -104,17 +132,22 @@ Values fixed in C1 for props the doc names without values (each needs your sign-
 | `stack.axis` | `vertical`, `horizontal` | doc names `axis` |
 | `stack.density` | `regular`, `compact`, `relaxed` | doc's values |
 | `stack.align` | `stretch`, `start`, `center`, `end` | doc names `align`; the screens use `start`, `center`, `end` |
-| `frame.surface` | `card`, `none`, `inset`, `muted`, `overlay` | doc's values; default `card` because every settings frame is one |
+| `frame.surface` | `card`, `none`, `inset`, `muted`, `overlay`, `danger` | doc's values; default `card` because every settings frame is one; `danger` from `frame-danger` |
 | `heading.level` | `2`, `1`, `3` | screen, section, group titles |
 | `avatar.presence` | `none`, `online`, `away`, `busy`, `offline` | the app's presence states |
+| `avatar.size` | `regular`, `large` | `avatar-large` |
+| `avatar.mark` | `none`, `slack`, `discord` | `avatar-provider-mark` (`row.provider` takes the same without `none`) |
+| `item.nested` | `none`, `middle`, `last` | `thread-elbow` |
+| `emptyState.illustration` | `none`, `squirrel` | today's message-list empty state; an asset per platform |
+| `composer` key | `up down enter tab escape` | `autocomplete-keys` |
 | `listDivider.kind` | `date`, `unread` | doc's values |
 | `list.anchor` | `start`, `end` | `end` is a chat (anchors on prepend, G7) |
 | `toast.tone` | the badge tones | no new set |
-| `MessageAction` | `react reply thread copy edit pin unpin delete` | the hover toolbar and More menu |
+| `MessageAction` | `react reply thread copy edit pin unpin issue delete` | the hover toolbar and More menu; `issue` from phase 1.5 |
 | `composer` trigger | `@ # / :` | mentions, channels, commands, emoji |
-| `IconName` | 32 names, each mapped to a web icon (`iconSources`) | was 5; grew to exactly what the four screens draw |
+| `IconName` | 34 names, each mapped to a web icon (`iconSources`) | what the four screens draw, plus `slack` and `discord` |
 
-Removed: nothing. Not added (gaps instead): `avatar.size`, `frame.surface: danger`, `item.muted`.
+Removed: G7's short row keys. Added in phase 1.5: everything in `GAPS.md`.
 
 ## C2: the wire (v2)
 
@@ -149,21 +182,9 @@ compounds, inert })`; a message's own states are `flags`. Codegen: `generateCss(
 
 ## Gaps
 
-25 gaps from the four screens (`GAPS.md`): 16 props, 3 options, 2 primitives (`progress`,
-`emojiPicker`), 2 platform services (file picker, clipboard), 1 renderer decision, 1 open
-(`empty-illustration`). The largest clusters: chat row details (provider mark, who reacted, quick
-reactions), file handling, and sidebar row states (muted, nested thread, shortcut hint, submenus).
+All 25 resolved (`GAPS.md`); new ones go under its "Open".
 
 ## Verification per lane
 
-| Lane | Command (from the repo root) |
-| --- | --- |
-| A1 to A5 (web) | `bun run --cwd packages/ui typecheck && (cd packages/ui && bunx vitest run src/web)` |
-| B (native host) | `(cd packages/ui && bunx vitest run src/native)` |
-| S0 to S5 (Swift) | `bash apps/ios-hybrid/HazelUI/Bench/build-js.sh && (cd apps/ios-hybrid/HazelUI && xcodebuild test -scheme HazelUI -destination 'platform=iOS Simulator,id=<pinned>' -derivedDataPath .build/xcode)` |
-| D (tokens, recipes) | `bun run --cwd packages/ui ui:check && (cd packages/ui && bunx vitest run src/style scripts/generate.test.ts)` |
-| F (platform services) | `bun run --cwd packages/client-data typecheck && bun run --cwd packages/client-data test && bash apps/ios-hybrid/scripts/build-effect-ui.sh` |
-| Screens | `bun run --cwd apps/shared-screens typecheck && bunx oxlint --disable-nested-config --quiet apps/shared-screens` |
-| Contract checks | `(cd packages/ui && bunx vitest run src/native/wire.test.ts scripts/hazel-lint.test.ts)` |
-
-Phase 1.5 replaces the web rows with the browser runner and adds fixtures and snapshots.
+Each lane's one command, owned paths, tags and done-when are in `LANES.md` (phase 1.5). Contract
+checks: `bun run --cwd packages/ui test:contracts`.
