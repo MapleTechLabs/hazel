@@ -41,6 +41,7 @@ struct HzView: View {
         case "hz:avatar": HzAvatar(initials: node.props["initials"]?.string ?? "")
         case "hz:slot": ForEach(node.children) { HzView(node: $0, runtime: runtime) }
         case "hz:ext": HzExtension(node: node, runtime: runtime)
+        case "hz:textField": HzTextField(node: node, runtime: runtime)
         default: EmptyView()
         }
     }
