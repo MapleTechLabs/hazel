@@ -1,0 +1,47 @@
+{
+	"about": "An unread channel with 1 unread against today's `channelItem` and `sidebarBadge`: the brand pill, round at one digit, 6px from the row's end.",
+	"root": {
+		"tag": "section",
+		"props": {
+			"title": "Channels"
+		},
+		"children": [
+			{
+				"tag": "item",
+				"key": "design",
+				"props": {
+					"title": "design",
+					"href": "#",
+					"unread": "pip",
+					"emphasized": true,
+					"badge": 1
+				},
+				"events": ["press"],
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "icon",
+								"props": {
+									"name": "hashtag"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"aria": [
+		{
+			"role": "link",
+			"name": "design, unread 1"
+		}
+	],
+	"kit": {
+		"specimen": "item-badge-1",
+		"target": "item"
+	}
+}

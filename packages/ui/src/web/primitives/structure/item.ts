@@ -130,6 +130,8 @@ const css = `
 [data-hz="item"] > [data-hz-part="control"] > [data-hz-part="badge"] { order: 2; overflow: hidden; }
 /* The count rolls inside the pill (today's reaction count: \`inline-flex overflow-hidden\`). */
 [data-hz="item"] [data-hz-part="badge"] > [data-hz-part="count"] { display: inline-block; }
+/* An empty trailing slot (a DM row's) takes no gap, or the badge sits 8px off today's place. */
+[data-hz="item"] > [data-hz-part="control"] > [data-hz-part="content"] > [data-hz-slot="trailing"]:empty { display: none; }
 /* Today's sidebar badge sits 6px from the row's end (\`right-1.5\`), inside the row's 8px padding. */
 [data-hz="item"]:not([data-leading-size="large"]) > [data-hz-part="control"] > [data-hz-part="badge"] {
 	margin-inline-end: calc(var(--hz-space-0_5) * -1);
