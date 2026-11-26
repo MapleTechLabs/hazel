@@ -108,4 +108,7 @@ per-tag id. Fixtures for each addition carry `pending` until their lanes draw th
 
 ## Open
 
-None.
+| Id                     | Screen or lane   | Need                                                                                                                        | Proposed resolution                                                                         | Kind  |
+| ---------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ----- |
+| `icon-tile-tints`      | A1 `iconTile`    | the kit's tone tints: `bg-primary/5`, `bg-danger/5`, `border-warning/20`, `border-success/20`; the recipe uses `/10` tokens | tokens `primary-wash`, `danger-wash` (`/5`), `warning-edge`, `success-edge` (`/20`); D adds | token |
+| `channel-icon-surface` | A1 `channelIcon` | the marks' cut-out disc and ring are the page (`bg`); today a sidebar row cuts them from `sidebar`                          | the marks take the surface they sit on; a `surface` option, or the renderer reads its slot  | prop  |
