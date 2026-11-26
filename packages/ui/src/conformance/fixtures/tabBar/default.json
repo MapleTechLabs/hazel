@@ -1,6 +1,80 @@
 {
-	"about": "hz:tabBar with no props: lane A4 and lane S4 replace this with real cases.",
+	"about": "Three tabs with icons, a badge on one, the first selected, over the selected tab's content.",
 	"root": {
-		"tag": "tabBar"
-	}
+		"tag": "tabBar",
+		"props": {
+			"tabs": [
+				{
+					"id": "home",
+					"label": "Home",
+					"icon": "hashtag"
+				},
+				{
+					"id": "activity",
+					"label": "Activity",
+					"icon": "bell",
+					"badge": 3
+				},
+				{
+					"id": "people",
+					"label": "People",
+					"icon": "users"
+				}
+			],
+			"selected": "home"
+		},
+		"events": ["change"],
+		"children": [
+			{
+				"tag": "section",
+				"props": {
+					"title": "Channels"
+				},
+				"children": [
+					{
+						"tag": "item",
+						"key": "general",
+						"props": {
+							"title": "general",
+							"href": "#"
+						},
+						"events": ["press"],
+						"slots": [
+							{
+								"name": "leading",
+								"children": [
+									{
+										"tag": "icon",
+										"props": {
+											"name": "hashtag"
+										}
+									}
+								]
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"aria": [
+		{
+			"role": "tablist"
+		},
+		{
+			"role": "tab",
+			"name": "Home"
+		},
+		{
+			"role": "tabpanel"
+		}
+	],
+	"cases": [
+		{
+			"name": "activity",
+			"props": {
+				"selected": "activity"
+			}
+		}
+	]
 }

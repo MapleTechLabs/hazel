@@ -4,12 +4,13 @@ import { defineRecipe } from "../recipe.ts"
  * A sidebar row: `sidebarItem` + `sidebarLabel` (`apps/web-foldkit/src/ui/sidebar.ts`), the channel
  * row's emphasized label and its active link (`CHANNEL_ACTIVE`, `shell/channels-sidebar/items.ts`).
  * The host builds `control` (the link or button that is the row's box) with `content` (the renderer's
- * children, so its slots), `title` and `badge` inside it.
+ * children, so its slots), `title`, `subtitle`, `badge` and `shortcut` inside it. Slot order, the
+ * subtitle's second line and the thread elbow are the web renderer's (`structure/item.ts`).
  */
 export const item = defineRecipe<
-	{},
-	never,
-	"control" | "content" | "leading" | "title" | "trailing" | "badge"
+	{ nested: "none" | "middle" | "last" },
+	"muted",
+	"control" | "content" | "leading" | "title" | "subtitle" | "trailing" | "badge" | "shortcut"
 >({
 	primitive: "item",
 	parts: {
@@ -18,7 +19,9 @@ export const item = defineRecipe<
 		leading: { kind: "slot", in: "content" },
 		trailing: { kind: "slot", in: "content" },
 		title: { kind: "part", in: "control" },
+		subtitle: { kind: "part", in: "control" },
 		badge: { kind: "part", in: "control" },
+		shortcut: { kind: "part", in: "control" },
 	},
 	base: {
 		root: { fill: true },
@@ -39,7 +42,18 @@ export const item = defineRecipe<
 			content: { layout: "contents" },
 			leading: { size: "5", color: "fg-2", shrink: false },
 			title: { grow: true, truncate: true },
-			trailing: { shrink: false },
+			trailing: { layout: "row", align: "center", gap: "1", shrink: false },
+			subtitle: { text: "caption", color: "fg-2", truncate: true },
+			// `kbd` (`ui/kbd.styles.ts`): a hairline key cap in muted ink.
+			shortcut: {
+				text: "caption",
+				color: "muted-fg",
+				paddingX: "1",
+				radius: "sm",
+				ring: "border",
+				numeric: true,
+				shrink: false,
+			},
 			// `countBadge` (`ui/count-badge.ts`): the solid brand pill with the unread count.
 			badge: {
 				layout: "row",
@@ -66,7 +80,19 @@ export const item = defineRecipe<
 			},
 		},
 	},
-	options: {},
+	options: {
+		// A thread under its channel (`threadItem`): a 32px row, `text-sm/5` at every size class.
+		nested: {
+			default: "none",
+			values: {
+				none: {},
+				middle: { parts: { control: { paddingY: "1.5", text: "label" } } },
+				last: { parts: { control: { paddingY: "1.5", text: "label" } } },
+			},
+		},
+	},
+	// A muted channel steps back (`opacity-60` on the label), still pressable.
+	flags: { muted: { parts: { title: { opacity: 0.6 }, leading: { opacity: 0.6 } } } },
 	states: {
 		// The active channel row (a `sidebarLink`, medium, with `CHANNEL_ACTIVE`): the stronger wash,
 		// faux-medium's stroke, full ink.
@@ -81,6 +107,7 @@ export const item = defineRecipe<
 			},
 		},
 		emphasized: { parts: { title: { color: "fg", strong: true } } },
+		disabled: { parts: { control: { opacity: 0.5 } } },
 	},
 	inert: ["disabled"],
 })

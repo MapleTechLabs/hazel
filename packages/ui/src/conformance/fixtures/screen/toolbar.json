@@ -1,0 +1,67 @@
+{
+	"about": "A screen whose toolbar slot sits at the title bar's end.",
+	"root": {
+		"tag": "screen",
+		"props": {
+			"title": "Settings"
+		},
+		"events": ["back"],
+		"slots": [
+			{
+				"name": "toolbar",
+				"children": [
+					{
+						"tag": "icon",
+						"props": {
+							"name": "sparkles"
+						}
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "section",
+				"props": {
+					"title": "General"
+				},
+				"children": [
+					{
+						"tag": "item",
+						"key": "profile",
+						"props": {
+							"title": "Profile",
+							"href": "#"
+						},
+						"events": ["press"],
+						"slots": [
+							{
+								"name": "leading",
+								"children": [
+									{
+										"tag": "icon",
+										"props": {
+											"name": "hashtag"
+										}
+									}
+								]
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"aria": [
+		{
+			"role": "heading",
+			"name": "Settings"
+		}
+	],
+	"axes": [
+		{
+			"prop": "back",
+			"values": [true]
+		}
+	]
+}
