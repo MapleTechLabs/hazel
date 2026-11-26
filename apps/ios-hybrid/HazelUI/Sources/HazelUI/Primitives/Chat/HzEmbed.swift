@@ -1,10 +1,13 @@
 import SwiftUI
 
-// Owned by lane S5 (`docs/hazel-ui.md`, "Phase 2: lanes"). C0 stub: the lane draws `hz:embed` here
-// from `HazelTheme` and its recipe; until then it is a `NotImplementedView`.
+/// `hz:embed` (lane S5): a link preview card; a press raises `press`.
 struct HzEmbed: View {
     let tree: Tree
     let node: Node
 
-    var body: some View { NotImplementedView(tag: node.tag, lane: "S5") }
+    var body: some View {
+        if let embed = node[prop: "embed"].flatMap(RowData.embed) {
+            LeafView(tree: tree, node: node, fills: false) { RowRenderer.embed(embed, $0) }
+        }
+    }
 }

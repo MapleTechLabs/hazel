@@ -1,10 +1,13 @@
 import SwiftUI
 
-// Owned by lane S5 (`docs/hazel-ui.md`, "Phase 2: lanes"). C0 stub: the lane draws `hz:attachmentGrid` here
-// from `HazelTheme` and its recipe; until then it is a `NotImplementedView`.
+/// `hz:attachmentGrid` (lane S5): media in a mosaic, then file cards; `removable` adds remove buttons.
 struct HzAttachmentGrid: View {
     let tree: Tree
     let node: Node
 
-    var body: some View { NotImplementedView(tag: node.tag, lane: "S5") }
+    var body: some View {
+        let list = (node[prop: "attachments"]?.array ?? []).compactMap(RowData.attachment)
+        let removable = node[prop: "removable"]?.bool ?? false
+        LeafView(tree: tree, node: node, fills: false) { RowRenderer.attachmentGrid(list, removable: removable, $0) }
+    }
 }
