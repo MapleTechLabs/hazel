@@ -39,7 +39,10 @@ export const list = defineRecipe<
 			overlay: { gap: "2" },
 		},
 	},
-	options: { anchor: { default: "start", values: { start: {}, end: {} } } },
+	// A chat (`end`) insets its rows as today's list does (`px-4 py-2`).
+	options: {
+		anchor: { default: "start", values: { start: {}, end: { parts: { content: { paddingX: "4" } } } } },
+	},
 	flags: { stickToBottom: {}, loading: {}, loadingStart: {}, loadingEnd: {}, reorderable: {} },
 	motion: {
 		enter: [{ motion: "skeletonIn", part: "skeleton" }],

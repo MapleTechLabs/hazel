@@ -70,6 +70,15 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 		`width: ${space("4")}; height: ${space("4")}; border-radius: ${radius("sm")}; ${type("micro")}`,
 	],
 	[`${M} ${p("avatarImage")} > img`, "width: 100%; height: 100%; object-fit: cover;"],
+	// A seeded avatar: today's dither under one white initial, sized to the box (`avatar-seed-tint`).
+	[
+		`${M} [data-seeded]:is(${p("avatarImage")}, ${p("replyAvatar")}, ${p("threadAvatar")})`,
+		"position: relative; container-type: size;",
+	],
+	[
+		`${M} [data-seeded] > ${p("initials")}`,
+		`position: relative; color: white; font-weight: var(--hz-weight-semibold); font-size: 46cqw; line-height: 1; text-box: trim-both cap alphabetic;`,
+	],
 	[
 		`${M} ${p("gutterTime")}`,
 		`display: flex; flex-shrink: 0; align-items: center; justify-content: flex-end; width: ${space("10")};
@@ -105,6 +114,7 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 
 	// Rich text (`markdownView`).
 	[`${M} ${p("text")}`, "white-space: pre-wrap; overflow-wrap: break-word;"],
+	[`${M} ${p("text")}[data-emoji-only]`, type("display")],
 	[
 		`${M} ${p("mention")}`,
 		`display: inline-block; padding: ${space("0.5")} ${space("1")}; border-radius: ${radius("sm")};

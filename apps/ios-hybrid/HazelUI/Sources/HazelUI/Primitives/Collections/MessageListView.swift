@@ -158,9 +158,12 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
     public func contentHeight(width: CGFloat) -> CGFloat {
         var c = context
         c.width = width
-        return zip(keys, entries).reduce(0) { sum, pair in
-            if width == bounds.width, let hit = layouts[pair.0] { return sum + hit.height }
-            return sum + Self.make(pair.0, pair.1, c).height
+        let entries = self.entries
+        return zip(keys, entries).enumerated().reduce(0) { sum, item in
+            let (i, pair) = item
+            let gap = Self.gapAbove(i, entries)
+            if width == bounds.width, let hit = layouts[pair.0] { return sum + hit.height + gap }
+            return sum + Self.make(pair.0, pair.1, c).height + gap
         }
     }
 
@@ -240,8 +243,8 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
         offsets = [0]
         offsets.reserveCapacity(heights.count + 1)
         var sum: CGFloat = 0
-        for h in heights {
-            sum += h
+        for (i, h) in heights.enumerated() {
+            sum += h + gapAbove(i)
             offsets.append(sum)
         }
         applyContentSize()
@@ -250,10 +253,22 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
     private func shiftOffsets(from first: Int) {
         var sum = offsets[first]
         for i in first..<heights.count {
-            sum += heights[i]
+            sum += heights[i] + gapAbove(i)
             offsets[i + 1] = sum
         }
         applyContentSize()
+    }
+
+    /// Chat rhythm, as the web list's: 8pt above an author group's first row (a message that is not
+    /// grouped), none when a divider or the list's top is above it. Entries run newest first.
+    private func gapAbove(_ i: Int) -> CGFloat {
+        Self.gapAbove(i, entries)
+    }
+
+    nonisolated static func gapAbove(_ i: Int, _ entries: [ListEntry]) -> CGFloat {
+        guard i + 1 < entries.count, case let .message(row) = entries[i], !row.grouped,
+              case .message = entries[i + 1] else { return 0 }
+        return Token.space("2")
     }
 
     private func applyContentSize() {

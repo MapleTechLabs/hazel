@@ -5,7 +5,10 @@
  */
 import type { MessageRow } from "../../../vocabulary/content.ts"
 import type { IconName, MessageAction } from "../../../vocabulary/options.ts"
+import { ditherInitial } from "../../../../../../apps/web-foldkit/src/ui/dither-avatar.ts"
 import { mark } from "../../motion.ts"
+import { ditherLayer } from "../content/dither.ts"
+import { ensureStyles as ensureContentStyles } from "../content/styles.ts"
 import { definePrimitive, flag, part, type Primitive } from "../define.ts"
 import {
 	attachments,
@@ -43,11 +46,26 @@ const actionLook = {
 	delete: { label: "Delete message", icon: "trash" },
 } as const satisfies Record<MessageAction, { readonly label: string; readonly icon: IconName }>
 
+const EMOJI_ONLY =
+	/^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|[\u{1F3FB}-\u{1F3FF}\uFE0F\u200D\u20E3])+$/u
+
+/** One plain paragraph of emoji and spaces only. */
+const isEmojiOnly = (body: MessageRow["body"]) => {
+	const block = body[0]
+	if (body.length !== 1 || block === undefined || block[0] !== 0) return false
+	const runs = block[1]
+	if (!runs.every((run) => typeof run === "string")) return false
+	const text = runs.join("").replace(/\s/g, "")
+	return text !== "" && EMOJI_ONLY.test(text)
+}
+
 const isRow = (value: unknown): value is MessageRow =>
 	typeof value === "object" && value !== null && "time" in value && "body" in value
 
 export const primitive = definePrimitive("message", ({ document, tag, outer }) => {
 	ensureStyles(document)
+	// The seeded avatar's dither layer is styled with the avatar's (`content/styles.ts`).
+	ensureContentStyles(document)
 	const node = outer("div")
 	node.setAttribute("role", "article")
 	// Focusable for the keyboard (the list's arrow navigation); only keyboard focus draws the ring.
@@ -58,7 +76,13 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 	// Reaction counts at the last draw; undefined until then, so a row's first pills do not move.
 	let counts: ReactionCounts | undefined
 
-	const avatar = (name: string | undefined, initials: string | undefined, url: string | undefined) => {
+	/** A picture, else today's dither seeded by the name under its one initial (`avatar-seed-tint`). */
+	const avatar = (
+		name: string | undefined,
+		initials: string | undefined,
+		url: string | undefined,
+		options: { readonly decorative: boolean; readonly px: number },
+	) => {
 		const box = part(document, "span", "avatarImage")
 		if (url !== undefined) {
 			const image = document.createElement("img")
@@ -66,8 +90,15 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 			image.src = url
 			image.alt = ""
 			box.append(image)
+		} else if (name !== undefined && name.trim() !== "") {
+			const dither = ditherLayer(document)
+			dither.seed(name, options.px)
+			const initial = part(document, "span", "initials")
+			initial.textContent = ditherInitial(name)
+			box.dataset.seeded = ""
+			box.append(dither.layer, initial)
 		} else if (initials !== undefined) box.textContent = initials
-		if (name === undefined) box.setAttribute("aria-hidden", "true")
+		if (options.decorative) box.setAttribute("aria-hidden", "true")
 		return box
 	}
 
@@ -106,7 +137,7 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 		const line = button(document, "replyLine", `Jump to ${data.author}'s message`, () =>
 			fire(primitive, "pressReply"),
 		)
-		const face = avatar(undefined, data.initials, undefined)
+		const face = avatar(data.author, data.initials, undefined, { decorative: true, px: 16 })
 		face.dataset.hzPart = "replyAvatar"
 		line.append(
 			face,
@@ -136,7 +167,7 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 		count.append(icon(document, "chevron-right"))
 		top.append(count)
 		const last = part(document, "span", "threadLast")
-		const face = avatar(undefined, data.initials, undefined)
+		const face = avatar(data.author, data.initials, undefined, { decorative: true, px: 16 })
 		face.dataset.hzPart = "threadAvatar"
 		last.append(
 			face,
@@ -167,7 +198,10 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 		for (const action of actions) {
 			const look = actionLook[action]
 			const press = button(document, "tool", look.label, () =>
-				action === "react" ? fire(primitive, "addReaction") : fire(primitive, "action", { action }),
+				// `react` opens the screen's picker: through `addReaction` when handled, else as an action.
+				action === "react" && handles(primitive, "addReaction")
+					? fire(primitive, "addReaction")
+					: fire(primitive, "action", { action }),
 			)
 			press.title = look.label
 			press.dataset.action = action
@@ -196,12 +230,19 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 		}
 		if (showHeader) {
 			const face = button(document, "avatar", data.author, () => fire(primitive, "pressAuthor"))
-			face.append(avatar(data.author, data.initials, data.avatar))
+			face.append(
+				avatar(data.author, data.initials, data.avatar, {
+					decorative: data.author === undefined,
+					px: 40,
+				}),
+			)
 			main.append(face)
 		} else main.append(text(document, "span", "gutterTime", data.time))
 		const body = part(document, "div", "body")
 		if (showHeader && data.author !== undefined) body.append(header(data))
 		const content = part(document, "div", "text")
+		// A body of only emoji is drawn large, as today's `text-2xl` (`isEmojiOnly`).
+		if (isEmojiOnly(data.body)) content.dataset.emojiOnly = ""
 		content.append(
 			richText(document, data.body, {
 				mention: (userId, run) => fire(primitive, "pressMention", { userId, run }),
