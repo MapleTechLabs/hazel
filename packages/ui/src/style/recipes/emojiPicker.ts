@@ -32,7 +32,7 @@ export const emojiPicker = defineRecipe<
 				borderColor: "border",
 				background: "bg",
 				color: "fg",
-				shadow: "xs",
+				shadow: "overlay",
 			},
 			search: {
 				minHeight: "9",

@@ -95,7 +95,6 @@ export const makePopoverPanel = (panel: HTMLElement) => {
 // Renderer-owned CSS (C3 `rendererFeatures`): the top layer's reset, placement, the scrim, motion,
 // highlight and focus rings, and the in-place specimen layout. Looks (colour, type, radius, padding)
 // are the recipes'.
-// HAZEL-GAP(overlay-tokens): a scrim colour and an overlay shadow token; the scrim mixes from fg for now.
 const css = `
 :where([data-hz-layer]) {
 	position: fixed;
@@ -112,7 +111,7 @@ const css = `
 	z-index: ${OVERLAY_Z};
 }
 [data-hz-layer][data-hz-layer]:not([data-open]) { display: none; }
-dialog[data-hz-layer]::backdrop { background: color-mix(in oklab, var(--hz-color-fg) 32%, transparent); }
+dialog[data-hz-layer]::backdrop { background: var(--hz-color-scrim); }
 [data-hz-layer][data-scroll] { overflow: auto; overscroll-behavior: contain; }
 @media (prefers-reduced-motion: no-preference) {
 	[data-hz-layer][data-open] { animation: hz-layer-in var(--hz-duration-fast) var(--hz-ease-out); }
@@ -137,7 +136,7 @@ dialog[data-hz-layer]::backdrop { background: color-mix(in oklab, var(--hz-color
 	border-radius: var(--hz-radius-xl);
 	background: var(--hz-color-bg);
 	color: var(--hz-color-fg);
-	box-shadow: var(--hz-shadow-xs);
+	box-shadow: var(--hz-shadow-overlay);
 }
 [data-hz=ext] [data-hz-part="gifPanel"] > [data-hz-part="search"] {
 	padding: var(--hz-space-2);
@@ -216,7 +215,7 @@ dialog[data-hz-layer]::backdrop { background: color-mix(in oklab, var(--hz-color
 	display: grid;
 	place-items: center;
 	padding: var(--hz-space-6);
-	background: color-mix(in oklab, var(--hz-color-fg) 32%, transparent);
+	background: var(--hz-color-scrim);
 }
 [data-hz=sheet][data-specimen] { place-items: end stretch; padding-bottom: 0; }
 [data-hz=popover][data-specimen], [data-hz=menu][data-specimen], [data-hz=contextMenu][data-specimen],

@@ -30,7 +30,7 @@ export const menuListStyles = {
 		borderColor: "border",
 		background: "bg",
 		color: "fg",
-		shadow: "xs",
+		shadow: "overlay",
 	},
 	group: { layout: "column" },
 	groupTitle: { paddingX: "2", paddingY: "1.5", text: "caption", strong: true, color: "muted-fg" },

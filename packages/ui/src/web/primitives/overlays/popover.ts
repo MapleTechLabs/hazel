@@ -8,7 +8,7 @@
  * placeholder holds the anchor's space and the anchor is pinned over it inside the top layer.
  */
 import type { Rect } from "../../../vocabulary/Hazel.ts"
-import { isLeafAnchor, resolveLeafAnchor, watchRunPresses } from "../../focus/anchors.ts"
+import { isLeafAnchor, resolveLeafAnchor } from "../../focus/anchors.ts"
 import { tabbables } from "../../focus/focusable.ts"
 import { measureNode } from "../../focus/measure.ts"
 import { trackPlacement } from "../../focus/position.ts"
@@ -25,7 +25,6 @@ export const primitive = definePrimitive("popover", ({ document, tag, outer }) =
 	const panel = makePopoverPanel(part(document, "div", "panel"))
 	panel.setAttribute("role", "dialog")
 	node.append(placeholder, panel)
-	watchRunPresses(document)
 
 	let anchorTo: Plain | undefined
 	let opener: Element | null = null

@@ -29,7 +29,7 @@ export const toast = defineRecipe<
 				borderColor: "border",
 				background: "bg",
 				color: "fg",
-				shadow: "xs",
+				shadow: "overlay",
 			},
 			body: { layout: "column", rowGap: "0.5" },
 			title: { text: "label", strong: true },
