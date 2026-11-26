@@ -53,3 +53,31 @@ targets:
                 ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
                 TARGETED_DEVICE_FAMILY: "1"
                 GENERATE_INFOPLIST_FILE: YES
+    # Effect UI on a native host (spike, `effect-ui/`): the script in JavaScriptCore, SwiftUI draws.
+    EffectUiSpike:
+        type: application
+        platform: iOS
+        sources:
+            - path: EffectUiSpike
+            # The script (`bun run build:effect-ui`), copied as a folder.
+            - path: build/effect-ui
+              type: folder
+              buildPhase: resources
+        info:
+            path: EffectUiSpike/Info.plist
+            properties:
+                CFBundleDisplayName: Effect UI
+                CFBundleShortVersionString: $(MARKETING_VERSION)
+                CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+                UILaunchScreen: {}
+                UIApplicationSceneManifest:
+                    UIApplicationSupportsMultipleScenes: false
+                UISupportedInterfaceOrientations:
+                    - UIInterfaceOrientationPortrait
+        settings:
+            base:
+                PRODUCT_BUNDLE_IDENTIFIER: sh.hazel.effect-ui-spike
+                MARKETING_VERSION: "0.1.0"
+                CURRENT_PROJECT_VERSION: "1"
+                TARGETED_DEVICE_FAMILY: "1"
+                GENERATE_INFOPLIST_FILE: YES

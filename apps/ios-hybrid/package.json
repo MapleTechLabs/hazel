@@ -4,6 +4,7 @@
 	"type": "module",
 	"scripts": {
 		"build:web": "vite build --config web/vite.config.mts",
+		"build:effect-ui": "bun build effect-ui/entry.ts --target=browser --format=iife --minify --outfile=build/effect-ui/effect-ui.js",
 		"ios": "bun run build:web && bash scripts/run.sh",
 		"build:web:offline": "vite build --config web/vite.config.mts --mode offline",
 		"serve-fixture-html": "bun scripts/serve-fixture-html.ts",
@@ -11,6 +12,7 @@
 		"typecheck": "effect-tsgo tsrs --noEmit"
 	},
 	"dependencies": {
+		"@effect/ui": "https://pkg.pr.new/Effect-TS/ui/@effect/ui@4d6d7ec",
 		"@hazel/auth": "workspace:*",
 		"@hazel/domain": "workspace:*",
 		"@hazel/effect-db-collection": "workspace:*",

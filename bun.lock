@@ -107,6 +107,7 @@
     "apps/ios-hybrid": {
       "name": "@hazel/ios-hybrid",
       "dependencies": {
+        "@effect/ui": "https://pkg.pr.new/Effect-TS/ui/@effect/ui@4d6d7ec",
         "@hazel/auth": "workspace:*",
         "@hazel/domain": "workspace:*",
         "@hazel/effect-db-collection": "workspace:*",
@@ -727,6 +728,8 @@
     "@effect/tsgo-win32-arm64": ["@effect/tsgo-win32-arm64@0.73.2", "", { "os": "win32", "cpu": "arm64" }, "sha512-J4kyLNk0Fi6WwIWQV6omCu1OkHcNNY6KMcs5K2AqUV8l+QUMEetko5NkcmEi1Keedh6bNRqOGwvB9dg+Duvypw=="],
 
     "@effect/tsgo-win32-x64": ["@effect/tsgo-win32-x64@0.73.2", "", { "os": "win32", "cpu": "x64" }, "sha512-N5V9GaTZseqGN38+XhGypLpweX2XiM2DO1V9DUppp26deZIJe0j3QRiRCSUAQoJrR0Lji/k5wo3jki6P38sCPA=="],
+
+    "@effect/ui": ["@effect/ui@https://pkg.pr.new/Effect-TS/ui/@effect/ui@4d6d7ec", { "peerDependencies": { "effect": "^4.1.4" } }, "sha512-Bftx+Wlw0LGYRceKjAxZ4OlsgnjL65nVavKyp7fyfvf8P3UtHt3yGeBsCtiM8g/J+HOGmA/pZQYmTXrt7XUc7g=="],
 
     "@effect/vitest": ["@effect/vitest@4.1.5", "", { "peerDependencies": { "effect": "^4.1.5", "vitest": ">=5.0.0 <6.0.0" } }, "sha512-18u1013wkJtSelk1ZYLc/5aUnluTQyDfi2hAemkJW1GQ9qXw4mtPSiSf0AXZPhesmGCvG1Dk2C4JYD2sz+R72w=="],
 
