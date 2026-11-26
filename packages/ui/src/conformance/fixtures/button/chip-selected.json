@@ -20,8 +20,5 @@
 	"kit": {
 		"specimen": "button-chip-selected",
 		"target": "button"
-	},
-	"pending": {
-		"ios": "S2"
 	}
 }

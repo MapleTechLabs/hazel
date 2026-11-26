@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Owned by lane S2. `hz:button`: a SwiftUI `Button` drawn from the button recipe (variant, size,
-// iconOnly, circle; pressed and hover states). `loading` keeps it focusable but swallows presses.
+// iconOnly, circle; selected, pressed and hover states). `loading` keeps it focusable but swallows presses.
 struct HzButton: View {
     let tree: Tree
     let node: Node
@@ -21,6 +21,9 @@ struct HzButton: View {
         var states: Set<HazelTheme.State> = []
         if disabled { states.insert(.disabled) }
         if loading { states.insert(.loading) }
+        // `chip`'s on state (`filter-chip`), the web's `aria-pressed`.
+        let selected = node.flag("selected")
+        if selected { states.insert(.selected) }
 
         return Button {
             if !loading { tree.fire(node.id, "press") }
@@ -34,6 +37,7 @@ struct HzButton: View {
         .focused($focused)
         .accessibilityLabel(label)
         .accessibilityAddTraits(loading ? [.updatesFrequently] : [])
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
         .hazelCommands(tree, node) { name, _ in
             guard name == .focus else { throw CommandError("hz:button does not handle \(name.rawValue)") }
             focused = true
