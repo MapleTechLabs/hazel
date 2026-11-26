@@ -6,19 +6,42 @@
  * The anchor slot and the children share one content parent, the panel. While closed the panel is
  * `display: contents`, so the anchor draws in place and the children are hidden; while open, a
  * placeholder holds the anchor's space and the anchor is pinned over it inside the top layer.
+ *
+ * With `trigger: "hover"` it is a hover card (today's customers table, `list/view.ts`): while `open`, it
+ * shows 400ms after the pointer enters the anchor, takes no focus and no presses, and hides on leave
+ * (or Escape) with a `dismiss`.
  */
 import type { Rect } from "../../../vocabulary/Hazel.ts"
 import { isLeafAnchor, resolveLeafAnchor } from "../../focus/anchors.ts"
 import { tabbables } from "../../focus/focusable.ts"
 import { measureNode } from "../../focus/measure.ts"
 import { trackPlacement } from "../../focus/position.ts"
-import { makePopoverPanel } from "../../focus/surface.ts"
+import { isSpecimen, makePopoverPanel, whenConnected } from "../../focus/surface.ts"
 import { definePrimitive, flag, part, type Plain, type Primitive } from "../define.ts"
 import { controlledOverlay, fire } from "./overlay.ts"
 
 const hasBox = (rect: Rect) => rect.width > 0 || rect.height > 0
 
+/** Today's `HOVER_DELAY`: sweeping across rows does not flash cards. */
+const HOVER_DELAY = 400
+
+const css = `
+[data-hz=popover][data-hover] > [data-hz-part="panel"][data-open],
+[data-hz=popover][data-hover] > [data-hz-part="panel"][data-open] > :not([data-hz-slot="anchor"]) { pointer-events: none; }
+[data-hz=popover][data-hover] [data-hz-slot="anchor"] { pointer-events: auto; }
+`
+const installed = new WeakSet<Document>()
+const ensureStyles = (document: Document) => {
+	if (installed.has(document)) return
+	installed.add(document)
+	const style = document.createElement("style")
+	style.dataset.hzPopover = ""
+	style.textContent = css
+	;(document.head ?? document.documentElement).append(style)
+}
+
 export const primitive = definePrimitive("popover", ({ document, tag, outer }) => {
+	ensureStyles(document)
 	const node = outer("div")
 	const placeholder = part(document, "span", "placeholder")
 	placeholder.hidden = true
@@ -28,6 +51,10 @@ export const primitive = definePrimitive("popover", ({ document, tag, outer }) =
 
 	let anchorTo: Plain | undefined
 	let opener: Element | null = null
+	let wanted = false
+	let hover = false
+	let hovered = false
+	let timer: ReturnType<typeof setTimeout> | undefined
 
 	const anchorSlot = () => panel.querySelector<HTMLElement>(":scope > [data-hz-slot=anchor]")
 	/** The rect the panel opens next to, in the order the doc gives. */
@@ -71,13 +98,16 @@ export const primitive = definePrimitive("popover", ({ document, tag, outer }) =
 		outer: node,
 		panel,
 		modal: false,
-		layer: () => ({
-			dismissOnOutside: true,
-			returnFocus: opener,
-			// The first stop among the children, not the pinned anchor.
-			initialFocus: () =>
-				tabbables(panel).find((stop) => anchorSlot()?.contains(stop) !== true) ?? null,
-		}),
+		layer: () =>
+			hover
+				? { initialFocus: "none" }
+				: {
+						dismissOnOutside: true,
+						returnFocus: opener,
+						// The first stop among the children, not the pinned anchor.
+						initialFocus: () =>
+							tabbables(panel).find((stop) => anchorSlot()?.contains(stop) !== true) ?? null,
+					},
 		place: () => {
 			const stop = trackPlacement(panel, anchorRect, { side: "bottom", align: "start", gap: 6 })
 			// The pinned anchor follows the page too.
@@ -95,11 +125,38 @@ export const primitive = definePrimitive("popover", ({ document, tag, outer }) =
 				window?.removeEventListener("scroll", follow, true)
 			}
 		},
-		onDismiss: () => fire(primitive, "dismiss"),
+		onDismiss: () => {
+			// A hover card's visibility is its own: Escape hides it as a leave does.
+			if (hover) leave(false)
+			fire(primitive, "dismiss")
+		},
 		beforeShow: (inPlace) => {
 			if (!inPlace) pin()
 		},
 		onHide: unpin,
+	})
+
+	// A hover card shows while open and hovered; a gallery specimen shows it in place.
+	const schedule = whenConnected(node)
+	const sync = () => schedule(() => overlay.setOpen(wanted && (!hover || hovered || isSpecimen(node))))
+	const leave = (notify: boolean) => {
+		if (timer !== undefined) clearTimeout(timer)
+		timer = undefined
+		const was = hovered
+		hovered = false
+		sync()
+		if (was && notify) fire(primitive, "dismiss")
+	}
+	node.addEventListener("pointerenter", (event) => {
+		if (!hover || !wanted || event.pointerType === "touch" || timer !== undefined || hovered) return
+		timer = setTimeout(() => {
+			timer = undefined
+			hovered = true
+			sync()
+		}, HOVER_DELAY)
+	})
+	node.addEventListener("pointerleave", () => {
+		if (hover) leave(true)
 	})
 
 	const primitive: Primitive = {
@@ -108,9 +165,17 @@ export const primitive = definePrimitive("popover", ({ document, tag, outer }) =
 		content: panel,
 		set: (name, value) => {
 			if (name === "open") {
+				wanted = value === true
 				// Captured now: by the time the panel shows, focus has moved into it.
-				if (value === true && !overlay.isShown()) opener = document.activeElement
-				overlay.setOpen(value === true)
+				if (wanted && !hover && !overlay.isShown()) opener = document.activeElement
+				if (!wanted) leave(false)
+				else sync()
+			} else if (name === "trigger") {
+				hover = value === "hover"
+				flag(node, "hover", hover)
+				panel.setAttribute("role", hover ? "tooltip" : "dialog")
+				if (!hover) leave(false)
+				sync()
 			} else if (name === "anchorTo") {
 				anchorTo = value
 				flag(node, "leaf-anchor", isLeafAnchor(value))

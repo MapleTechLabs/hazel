@@ -30,7 +30,11 @@
 	},
 	"frame": "inline",
 	"pending": {
-		"web": "A3",
 		"ios": "S3"
-	}
+	},
+	"aria": [
+		{
+			"role": "tooltip"
+		}
+	]
 }
