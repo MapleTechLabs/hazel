@@ -20,9 +20,9 @@ struct HzComposer: View {
         var states: Set<HazelTheme.State> = disabled ? [.disabled] : []
         if hovering { states.insert(.hover) }
         let s = HazelTheme.Recipes.composer.styles(
-            ["input", "send", "above", "actions"], flags: canSend ? ["canSend"] : [], states: states,
+            ["input", "send", "sendIcon", "above", "actions"], flags: canSend ? ["canSend"] : [], states: states,
             sizeClass: sizeClass)
-        let root = s[""]!, field = s["input"]!, send = s["send"]!
+        let root = s[""]!, field = s["input"]!, send = s["send"]!, sendIcon = s["sendIcon"]!
         let placeholder = node.string("placeholder") ?? ""
 
         // Three rows always, as the web's grid keeps its row gaps when a slot is empty.
@@ -49,8 +49,9 @@ struct HzComposer: View {
                 Button {
                     if canSend, !disabled { input.submit() }
                 } label: {
-                    // HAZEL-GAP(composer-send-icon): no recipe size for the send arrow.
-                    ControlIcon(name: "arrow-up", size: 16, color: send.color?.color ?? .secondary)
+                    // The round send button: muted while empty, primary once it can send.
+                    ControlIcon(name: "arrow-up", size: sendIcon.size ?? 14,
+                                color: (sendIcon.color ?? send.color)?.color ?? .secondary)
                         .hzSize(send)
                         .hzControlBox(send, scheme)
                 }

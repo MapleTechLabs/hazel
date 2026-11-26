@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 // Owned by lane S2. What the controls share beyond `Tree/Styling.swift`: the recipe's border and
-// shadows (which `hzBox` leaves out), the monospaced step, the icon stand-in, and recipe lookups.
+// shadows (which `hzBox` leaves out), the monospaced step, the catalog icon, and recipe lookups.
 
 extension HazelTheme.Recipe {
     /// The root and one part in one call, for a control's current options, flags and states.
@@ -89,39 +89,15 @@ extension View {
     }
 }
 
-/// An icon by vocabulary name (`IconName`). Stand-in until lane S1's icon catalog lands: the asset
-/// `hazel.<name>` when the app bundles it, else the nearest SF Symbol.
+/// An icon by vocabulary name (`IconName`) from the shared catalog (`HazelIcon`), in a part's ink.
 struct ControlIcon: View {
     let name: String
     let size: CGFloat
     let color: Color
 
     var body: some View {
-        Group {
-            if let image = UIImage(named: "hazel.\(name)") {
-                Image(uiImage: image).renderingMode(.template).resizable().scaledToFit()
-            } else {
-                Image(systemName: Self.symbols[name] ?? "questionmark.square.dashed")
-                    .resizable().scaledToFit().fontWeight(.medium)
-                    .padding(size * 0.1)
-            }
-        }
-        .frame(width: size, height: size)
-        .foregroundStyle(color)
-        .accessibilityHidden(true)
+        HazelIcon(name: name, size: size).foregroundStyle(color)
     }
-
-    static let symbols: [String: String] = [
-        "arrow-up": "arrow.up", "bell": "bell", "check": "checkmark", "chevron-down": "chevron.down",
-        "chevron-right": "chevron.right", "close": "xmark", "copy": "doc.on.doc", "discord": "gamecontroller",
-        "dots": "ellipsis", "download": "arrow.down.to.line", "edit": "pencil", "emoji": "face.smiling",
-        "emoji-add": "face.smiling", "gear": "gearshape", "gif": "photo", "hashtag": "number",
-        "leave": "rectangle.portrait.and.arrow.right", "lightbulb": "lightbulb", "lock": "lock",
-        "office": "building.2", "paperclip": "paperclip", "pin": "pin", "plus": "plus",
-        "reply": "arrowshape.turn.up.left", "search": "magnifyingglass", "share": "square.and.arrow.up",
-        "slack": "number.square", "sparkles": "sparkles", "star": "star", "thread": "bubble.left.and.bubble.right",
-        "trash": "trash", "users": "person.2", "volume-mute": "speaker.slash", "warning": "exclamationmark.triangle",
-    ]
 }
 
 extension Node {

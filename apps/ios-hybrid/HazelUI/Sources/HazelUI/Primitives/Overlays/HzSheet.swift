@@ -8,6 +8,9 @@ struct HzSheet: View {
     let node: Node
     @Environment(\.horizontalSizeClass) private var horizontal
 
+    /// The web's renderer-owned 34rem (`focus/surface.ts`): a wide screen centres the sheet.
+    private static let regularWidth: CGFloat = 544
+
     var body: some View {
         let sizeClass = HazelTheme.SizeClass(horizontal)
         if node.overlayInPlace {
@@ -16,6 +19,7 @@ struct HzSheet: View {
                     Spacer(minLength: HazelTheme.space["6"] ?? 0)
                     SheetBody(tree: tree, node: node, sizeClass: sizeClass)
                         .hzOverlayPanel(HazelTheme.Recipes.sheet.style(part: "panel", sizeClass: sizeClass))
+                        .frame(maxWidth: sizeClass == .regular ? Self.regularWidth : nil)
                 }
                 .frame(maxWidth: .infinity)
                 .hzOverlayScrim()

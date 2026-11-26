@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 // What the overlay primitives share (lane S3): menu entries as data, the system menu built from
-// them, icon images, the panel box, and the rule for drawing an overlay in place.
+// them, catalog icons, the panel box, and the rule for drawing an overlay in place.
 
 // MARK: in place
 
@@ -104,40 +104,18 @@ private struct OverlayMenuLabel: View {
 
 // MARK: icons
 
-/// An icon by its vocabulary name (`options.ts` `iconNames`): the app's own asset when the bundle
-/// has one (`scripts/export-icons.ts`), else the nearest SF Symbol, which system menus draw anyway.
+/// An icon by its vocabulary name (`options.ts` `iconNames`), from the shared catalog (`HazelIcon`).
 enum OverlayIcon {
-    static let symbols: [String: String] = [
-        "arrow-up": "arrow.up", "bell": "bell", "check": "checkmark", "chevron-down": "chevron.down",
-        "chevron-right": "chevron.right", "close": "xmark", "copy": "doc.on.doc", "discord": "bubble.left.and.bubble.right",
-        "dots": "ellipsis", "download": "arrow.down.circle", "edit": "pencil", "emoji": "face.smiling",
-        "emoji-add": "face.smiling.inverse", "gear": "gearshape", "gif": "photo.on.rectangle", "hashtag": "number",
-        "leave": "rectangle.portrait.and.arrow.right", "lightbulb": "lightbulb", "lock": "lock",
-        "office": "building.2", "paperclip": "paperclip", "pin": "pin", "plus": "plus",
-        "reply": "arrowshape.turn.up.left", "search": "magnifyingglass", "share": "square.and.arrow.up",
-        "slack": "number.square", "sparkles": "sparkles", "star": "star", "thread": "bubble.left.and.text.bubble.right",
-        "trash": "trash", "users": "person.2", "volume-mute": "speaker.slash", "warning": "exclamationmark.triangle",
-    ]
-
-    static func image(_ name: String) -> Image {
-        if UIImage(named: "hazel.\(name)") != nil { return Image("hazel.\(name)").renderingMode(.template) }
-        return Image(systemName: symbols[name] ?? "questionmark")
-    }
+    static func image(_ name: String) -> Image { Image(hazelIcon: name) }
 }
 
-/// An icon part (`itemIcon`, `close`, `buttonIcon`): the image in the part's square and ink.
+/// An icon part (`itemIcon`, `close`, `buttonIcon`): the catalog icon at the part's size and ink.
 struct OverlayPartIcon: View {
     let name: String
     let style: HazelTheme.Style
 
     var body: some View {
-        OverlayIcon.image(name)
-            .resizable()
-            .scaledToFit()
-            .fontWeight(.medium)
-            .padding((style.size ?? 0) / 4)
-            .hzSize(style)
-            .foregroundStyle(style.color?.color ?? Color.primary)
+        HazelIcon(name: name, size: style.size).foregroundStyle(style.color?.color ?? Color.primary)
     }
 }
 
@@ -156,9 +134,9 @@ extension View {
             .foregroundStyle(style.color?.color ?? Color.primary)
     }
 
-    /// The scrim a modal specimen sits on (`overlay-backdrop`).
+    /// The scrim a modal specimen sits on (token `scrim`, `overlay-tokens`).
     func hzOverlayScrim() -> some View {
-        background(HazelTheme.Colors.overlayBackdrop.color)
+        background(HazelTheme.Colors.scrim.color)
     }
 }
 
