@@ -1,6 +1,6 @@
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
-import type { RouteOf } from "../../route"
+import { AppRoute, type RouteOf } from "../../route"
 import * as Tabs from "../../ui/tabs"
 import type { PageReturn } from "../contract"
 import { PageOutMessage } from "../out-message"
@@ -42,6 +42,13 @@ export const update = (model: Model, message: Message): PageReturn<Model, Messag
 			outMessage: PageOutMessage.RequestedModal({ modal: { _tag: "NewChannel" } }),
 		}),
 		PressedDmFilter: ({ filter }) => ({ model: modifyFields(model, { dmFilter: () => filter }) }),
+		RequestedIslandNavigation: ({ orgSlug, channelId }) => ({
+			model,
+			outMessage: PageOutMessage.RequestedNavigation({
+				route: AppRoute.ChatChannel({ orgSlug, channelId }),
+				replace: false,
+			}),
+		}),
 		PressedStartConversation: () => ({
 			model,
 			outMessage: PageOutMessage.RequestedModal({ modal: { _tag: "CreateDm" } }),

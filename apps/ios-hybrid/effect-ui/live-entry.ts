@@ -7,12 +7,14 @@
  */
 import { shimmed } from "./live-globals"
 import { Renderer } from "@effect/ui"
-import { Effect, Layer, Stream } from "effect"
+import type { OrganizationId } from "@hazel/schema"
+import { Effect, Layer, Option, Stream } from "effect"
 import { ClientData } from "../../../packages/client-data/src/client.ts"
 import { PlatformJsc } from "../../../packages/client-data/src/platform/jsc/index.ts"
 import { HazelRpc, HazelRpcLayer } from "../../../packages/client-data/src/rpc.ts"
 import { makeNativeHost } from "../../../packages/ui/src/native/host.ts"
 import { type Json, WIRE_VERSION } from "../../../packages/ui/src/native/wire.ts"
+import { Dms, dmsLayer } from "../../shared-screens/src/dms/Dms.ts"
 import { makeLiveChannelList } from "./live-channel-list"
 import { type SidebarRows, sidebarSections } from "./live-sections"
 import { mountChannelSidebarNative } from "../../shared-screens/src/channel-sidebar/native.ts"
@@ -69,7 +71,32 @@ const program = Effect.gen(function* () {
 		),
 	)
 
-	yield* Renderer.mount(makeLiveChannelList(sections), {}, native.container)
+	// `-HazelScreen <name>`: a shared screen on live data instead of the channel list.
+	if (__native.screen === "dms") {
+		const org = yield* client
+			.liveQueryStream(
+				(q) => q.from({ row: c.organizationCollection }),
+				(rows: ReadonlyArray<{ id: OrganizationId; slug: string | null }>) => rows[0],
+			)
+			.pipe(
+				Stream.filter((row) => row !== undefined),
+				Stream.runHead,
+				Effect.map(Option.getOrThrow),
+			)
+		yield* Renderer.mount(
+			Dms,
+			{ organizationId: org.id, userId: me.id, orgSlug: org.slug ?? "", nowMs: Date.now() },
+			native.container,
+		).pipe(
+			Effect.provide(
+				dmsLayer(
+					client,
+					(id) => console.log(`[live] open DM ${id}`),
+					() => console.log("[live] compose"),
+				),
+			),
+		)
+	} else yield* Renderer.mount(makeLiveChannelList(sections), {}, native.container)
 	return yield* Effect.never
 })
 
