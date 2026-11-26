@@ -25,6 +25,27 @@
  *   property lists. Swift has its own press and focus feedback.
  */
 
+/** What a recipe expresses (C3, frozen): each maps to CSS and to Swift. Anything else is renderer code. */
+export const recipeFeatures = [
+	"token declarations (Declarations)",
+	"colour literals, aliases, color-mix in oklab, alpha",
+	"named parts and slots of the primitive's own structure, and its direct children",
+	"closed options, boolean flags and compounds of them",
+	"view states (selected, emphasized, disabled, loading, destructive)",
+	"interaction states (hover, pressed, focusVisible), suppressed by inert states",
+	"the size class (compact, regular)",
+] as const
+
+/** What the web renderer of a primitive owns instead (C3, frozen). */
+export const rendererFeatures = [
+	"pseudo-element hit areas (44pt targets on a coarse pointer)",
+	"forced-colors rules",
+	"selectors into children it does not own, subgrid, group and ancestor variants",
+	"breakpoints other than the size class, pointer-fine, container queries",
+	"focus rings, scale on press, transition property lists",
+	"animations (message enter, typing dots, count rolls)",
+] as const
+
 // Closed sets (docs/hazel-ui.md, "Design language")
 
 export const textRoles = ["body", "label", "caption", "title", "display", "code"] as const
