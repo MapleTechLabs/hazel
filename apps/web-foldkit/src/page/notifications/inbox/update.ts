@@ -8,6 +8,7 @@ import type { RouteOf } from "../../../route"
 import { type CommonReason, commonMessage } from "~/lib/error-messages"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
+import { AppRoute } from "../../../route"
 import { visibleUnreadChannels } from "./format"
 import { Message } from "./message"
 import { type MarkedRead, type Model, Notifications, type Tab, UnreadChannels } from "./model"
@@ -198,6 +199,13 @@ export const update = (model: Model, message: Message, shared: Shared): PageRetu
 		},
 		SucceededMarkAllChannelsRead: () => ({
 			model: modifyFields(model, { isMarkingAllRead: () => false }),
+		}),
+		RequestedIslandNavigation: ({ orgSlug, channelId }) => ({
+			model,
+			outMessage: PageOutMessage.RequestedNavigation({
+				route: AppRoute.ChatChannel({ orgSlug, channelId }),
+				replace: false,
+			}),
 		}),
 		FailedMarkAllChannelsRead: ({ channelIds, reason }) => ({
 			model: modifyFields(unmarkChannels(model, channelIds), { isMarkingAllRead: () => false }),

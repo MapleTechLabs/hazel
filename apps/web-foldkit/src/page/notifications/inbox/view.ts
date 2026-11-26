@@ -1,6 +1,6 @@
 import { ChannelId } from "@hazel/schema"
-import { Match, Option, Schema } from "effect"
-import { Submodel } from "foldkit"
+import { Match, Option, Schema, Stream } from "effect"
+import { Mount, Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconBell, IconCheck, IconHashtag, IconMsgs, IconSupport, IconThread } from "../../../icons"
@@ -16,6 +16,8 @@ import { loadingState } from "../../../ui/loader"
 import { pageHeader, pageLayout } from "../../../ui/page-header"
 import { statusDot } from "../../../ui/status-dot"
 import type { PageViewInputs } from "../../contract"
+import { activityIsland, activityIslandView, isActivityIslandEnabled } from "../../../islands/activity"
+import { OrganizationMemberId } from "@hazel/schema"
 import { formatDistanceToNow } from "~/lib/format-distance"
 import {
 	contextOf,
@@ -229,6 +231,16 @@ const notificationList = (
 	)
 }
 
+/** `hazel:island:activity`: the shared Activity list (`islands/activity.ts`) in place of the one above. */
+const MountActivityIsland = Mount.defineStream("MountActivityIsland", {
+	args: { memberId: OrganizationMemberId, orgSlug: Schema.String },
+	messages: [Message.RequestedIslandNavigation],
+	execute: ({ element, memberId, orgSlug }) =>
+		activityIsland(element, { memberId, orgSlug }).pipe(
+			Stream.map((channelId) => Message.RequestedIslandNavigation({ orgSlug, channelId })),
+		),
+})
+
 const channelVisual = (h: HtmlBuilder<Message>, channel: UnreadChannelItem): Html =>
 	iconTile(
 		h,
@@ -356,7 +368,15 @@ export const inboxView = (model: Model, { shared }: PageViewInputs, h: HtmlBuild
 		Match.value(model.tab).pipe(
 			Match.when("unreads", () => unreadList(h, model, shared.orgSlug, shared.nowMs)),
 			Match.whenOr("mentions", "all", (tab) =>
-				notificationList(h, model, tab, shared.orgSlug, shared.nowMs),
+				isActivityIslandEnabled && shared.member !== null && shared.orgSlug !== null
+					? activityIslandView(h, {
+							memberId: shared.member.id,
+							tab,
+							onMount: h.OnMount(
+								MountActivityIsland({ memberId: shared.member.id, orgSlug: shared.orgSlug }),
+							),
+						})
+					: notificationList(h, model, tab, shared.orgSlug, shared.nowMs),
 			),
 			Match.exhaustive,
 		),
