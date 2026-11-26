@@ -184,9 +184,9 @@ export const channelMenu = (
 			...(options.sections.length > 0 && !options.isCustomerRow
 				? [
 						{
-							// HAZEL-GAP(icon-folder): today's "Move to section" shows a folder icon; IconName has none.
 							id: "move",
 							label: "Move to section",
+							icon: "folder-plus" as const,
 							entries: [
 								{
 									id: DEFAULT_SECTION_KEY,

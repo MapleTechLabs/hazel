@@ -18,6 +18,7 @@ import {
 	initialsOf,
 	isDirect,
 	isSupportAlert,
+	supportAlertOf,
 	itemsOfTab,
 	mentionedUserIds,
 	previewOf,
@@ -301,52 +302,56 @@ export const Activity = Hazel.component({
 	view: (h, model) => {
 		const leading = (item: ActivityItem) => {
 			if (isSupportAlert(item))
-				// HAZEL-GAP(activity-icon-tile): a toned icon tile (`iconTile` intent warning or danger).
-				return h.icon.name("warning")
+				return h.iconTile.name("support").tone(supportAlertOf(item).isWarning ? "warning" : "danger")
 			if (item.author !== null) {
 				const name = `${item.author.firstName} ${item.author.lastName}`.trim()
 				return h.avatar
 					.name(name)
 					.initials(initialsOf(name))
 					.src(item.author.avatarUrl ?? undefined)
+					.size("medium")
 			}
-			return isDirect(item.channel?.type)
-				? // HAZEL-GAP(icon-messages): the web's `IconMsgs` for a direct message has no `IconName`.
-					h.icon.name("users")
-				: h.icon.name("hashtag")
+			return h.iconTile.name(isDirect(item.channel?.type) ? "messages" : "hashtag")
 		}
 
 		const row = (item: ActivityItem) => {
 			const target = targetOf(item)
 			const context = contextOf(item)
-			// HAZEL-GAP(item-unread-dot): today's row leads with a brand dot when unread; `emphasized` stands in.
-			// HAZEL-GAP(item-title-lines): the preview wraps to two lines (`line-clamp-2`); `title` truncates to one.
-			// HAZEL-GAP(item-leading-size): a 40px avatar or tile leads the row; the item's leading slot is icon-sized.
-			return h.item
-				.key(item.id)
-				.title(previewOf(item))
-				.subtitle(context)
-				.emphasized(item.isUnread)
-				.leading(leading(item))
-				.href(target === null ? undefined : `/${h.props.orgSlug}/chat/${target}`)
-				.trailing(
-					h.text
-						.role("caption")
-						.tone("muted")
-						.numeric()
-						// A row newer than the Model's clock (it ticks once a minute) is "less than a minute ago".
-						.children(formatDistanceToNow(Math.min(item.createdAtMs, model.nowMs), model.nowMs)),
-					item.isUnread
-						? h.button
-								.icon("check")
-								.iconOnly()
-								.variant("ghost")
-								.size("xsmall")
-								.label(`Mark as read: ${context}`)
-								.on("press", ActivityMessage.PressedMarkRead({ id: item.id }))
-						: null,
-				)
-				.on("press", ActivityMessage.PressedNotification({ id: item.id }))
+			return (
+				h.item
+					.key(item.id)
+					.title(previewOf(item))
+					.titleLines("2")
+					.subtitle(context)
+					.unread(item.isUnread ? "dot" : "none")
+					.emphasized(item.isUnread)
+					.leadingSize("large")
+					.leading(leading(item))
+					.href(target === null ? undefined : `/${h.props.orgSlug}/chat/${target}`)
+					.trailing(
+						h.text
+							.role("caption")
+							.tone("muted")
+							.numeric()
+							// A row newer than the Model's clock (it ticks once a minute) is "less than a minute ago".
+							.children(
+								formatDistanceToNow(Math.min(item.createdAtMs, model.nowMs), model.nowMs),
+							),
+					)
+					// "Mark as read" shows on hover or focus on the web, always on a phone.
+					.actions(
+						item.isUnread
+							? h.button
+									.icon("check")
+									.iconOnly()
+									.variant("ghost")
+									.size("xsmall")
+									.label(`Mark as read: ${context}`)
+									.on("press", ActivityMessage.PressedMarkRead({ id: item.id }))
+							: null,
+					)
+					.on("press", ActivityMessage.PressedNotification({ id: item.id }))
+			)
 		}
 
 		const list = (items: ReadonlyArray<ActivityItem>) =>
@@ -356,14 +361,16 @@ export const Activity = Hazel.component({
 					.key(group.label)
 					.density("compact")
 					.children(
-						// HAZEL-GAP(text-overline): the group label is the kit's uppercase `label` heading.
-						h.text.role("caption").tone("muted").strong().children(group.label),
-						// HAZEL-GAP(frame-flush): today's card is a bordered box with no padding, rows split by hairlines.
-						h.frame.children(
-							...group.items.flatMap((item, index) =>
-								index === 0 ? [row(item)] : [h.divider.key(`divider:${item.id}`), row(item)],
+						h.text.role("overline").tone("subtle").children(group.label),
+						h.frame
+							.surface("flush")
+							.children(
+								...group.items.flatMap((item, index) =>
+									index === 0
+										? [row(item)]
+										: [h.divider.key(`divider:${item.id}`), row(item)],
+								),
 							),
-						),
 					),
 			)
 

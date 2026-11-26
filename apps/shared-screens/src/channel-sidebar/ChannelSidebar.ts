@@ -347,23 +347,27 @@ export const ChannelSidebar = Hazel.component({
 		const canDelete = canManageChannels(model.role)
 		const hrefOf = (id: ChannelId) => `/${orgSlug}/chat/${id}`
 
-		/** The channel's icon: a customer's logo or initial, its emoji, else a lock or a hashtag. */
+		/** The channel's icon (`channelIcon`): a customer's logo, its emoji, else a lock or a hashtag, with its sync mark. */
 		const channelLeading = (entry: {
 			readonly id: ChannelId
 			readonly type: string
 			readonly icon: string | null
 		}) => {
 			const customer = customerOf.get(entry.id)
-			// HAZEL-GAP(icon-mark): today's icon carries the Slack, Discord or Connect mark; `icon` has no mark.
-			void syncedOf.get(entry.id)
-			if (customer !== undefined)
-				// HAZEL-GAP(channel-customer-icon): today's customer logo is a 16px rounded square on the row's icon.
-				return h.avatar
-					.name(customer.accountName)
-					.initials(initialsOf(customer.accountName))
-					.src(customer.accountLogoUrl ?? undefined)
-			if (entry.icon) return h.text.children(entry.icon)
-			return h.icon.name(entry.type === "private" ? "lock" : "hashtag")
+			// Connect partners (`partners`) wait on a query this screen does not run yet.
+			return h.channelIcon
+				.private(entry.type === "private")
+				.emoji(entry.icon ?? undefined)
+				.customer(
+					customer === undefined
+						? undefined
+						: {
+								name: customer.accountName,
+								initials: initialsOf(customer.accountName),
+								...(customer.accountLogoUrl ? { src: customer.accountLogoUrl } : {}),
+							},
+				)
+				.sync(syncedOf.get(entry.id) ?? "none")
 		}
 
 		const countOf = (entry: Entry) =>
@@ -387,8 +391,14 @@ export const ChannelSidebar = Hazel.component({
 			})
 		}
 
-		// HAZEL-GAP(item-hover-trailing): today's dots trigger shows on hover; a `trailing` menu always shows and
-		// makes the row taller, so the row's menu is its context menu (right click, long press) only.
+		/** The row's menu: a dots trigger in `actions` (shown on hover or focus), and its context menu. */
+		const dotsMenu = (id: ChannelId, label: string, entries: Content.MenuGroups) =>
+			h.menu
+				.label(label)
+				.entries(entries)
+				.on("select", ({ id: entry }) => SidebarMessage.SelectedRowMenu({ id, entry }))
+				.trigger(h.button.icon("dots").iconOnly().variant("ghost").size("xsmall").label(label))
+
 		const withMenu = (
 			key: string,
 			id: ChannelId,
@@ -426,8 +436,9 @@ export const ChannelSidebar = Hazel.component({
 				.title(entry.name)
 				.leading(channelLeading(entry))
 				.badge(count)
-				// HAZEL-GAP(item-unread-pip): today an unread row also shows a pip at its start; `emphasized` only.
+				.unread(isUnread && !selected ? "pip" : "none")
 				.emphasized(emphasized)
+				.actions(dotsMenu(entry.id, "Channel options", menu))
 				.selected(selected)
 				.muted((ownMuted || scopeMuted) && !emphasized)
 				.href(selected ? undefined : hrefOf(entry.id))
@@ -603,18 +614,26 @@ export const ChannelSidebar = Hazel.component({
 					)
 			: null
 
-		// HAZEL-GAP(icon-standalone-size): an `icon` outside an item slot draws at its viewBox's full width, so
-		// today's one-line hint is an item in a muted frame; its text wraps today and truncates here.
+		// Today's hint: a lightbulb, one wrapped caption with the create shortcut as a key cap, a dismiss.
 		const hint = showHint
 			? h.frame
 					.key("hint")
 					.surface("muted")
 					.children(
-						h.item
-							.title("Create your first channel")
-							.subtitle("with the + next to Channels.")
-							.leading(h.icon.name("lightbulb"))
-							.trailing(
+						h.stack
+							.axis("horizontal")
+							.align("start")
+							.density("compact")
+							.children(
+								h.icon.name("lightbulb"),
+								h.text
+									.role("caption")
+									.tone("muted")
+									.children(
+										"Create your first channel with ",
+										h.text.role("kbd").children("⌥⌘N"),
+									),
+								h.spacer,
 								h.button
 									.icon("close")
 									.iconOnly()

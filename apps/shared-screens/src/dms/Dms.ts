@@ -307,15 +307,14 @@ export const Dms = Hazel.component({
 		const press = (dm: Dm) => DmsMessage.PressedDm({ id: dm.id })
 		const hrefOf = (dm: Dm) => `/${h.props.orgSlug}/chat/${dm.id}`
 
-		// HAZEL-GAP(avatar-row-size): today's DM row avatar is 40pt (kit `md`); `regular` is the sidebar's small one
-		// HAZEL-GAP(avatar-seed-tint): today's avatar tints by a seed (the name); `avatar` has one brand tint
-		const avatarOf = (person: PersonType, size: "regular" | "large") =>
+		// The kit's `md` avatar; its fallback tint is seeded by `name`, as today's `seed: fullName`.
+		const avatarOf = (person: PersonType) =>
 			h.avatar
 				.name(fullName(person))
 				.initials(initialsOf(fullName(person)))
 				.src(person.avatarUrl ?? undefined)
 				.presence(model.presence[person.userId] ?? "offline")
-				.size(size)
+				.size("medium")
 
 		const row = (dm: Dm) => {
 			const members = model.members[dm.id] ?? []
@@ -323,9 +322,8 @@ export const Dms = Hazel.component({
 			const partner = partnerOf(dm, others)
 			const leading =
 				partner !== undefined
-					? avatarOf(partner, "regular")
-					: // HAZEL-GAP(dm-group-avatar): today's group DM draws two small avatars offset diagonally in one avatar's box
-						h.avatarStack.children(
+					? avatarOf(partner)
+					: h.avatarStack.layout("pair").children(
 							...others.slice(0, 2).map((person) =>
 								h.avatar
 									.key(person.userId)
@@ -334,69 +332,60 @@ export const Dms = Hazel.component({
 									.src(person.avatarUrl ?? undefined),
 							),
 						)
-			return (
-				h.item
-					.key(dm.id)
-					.title(titleOf(dm, others))
-					// HAZEL-GAP(item-subtitle-lines): today's preview wraps to two lines; `subtitle` is one
-					.subtitle(previewOf(dm, members, others, userId))
-					.leading(leading)
-					.trailing(
-						dm.lastMessageAtMs === null
-							? undefined
-							: h.text
-									.role("caption")
-									.tone(dm.unread > 0 ? "default" : "muted")
-									.strong(dm.unread > 0)
-									.numeric()
-									.children(dmTimeOf(dm.lastMessageAtMs, model.nowMs)),
-					)
-					.badge(dm.unread)
-					.emphasized(dm.unread > 0)
-					.muted(dm.isMuted)
-					.href(hrefOf(dm))
-					.on("press", press(dm))
-			)
+			return h.item
+				.key(dm.id)
+				.title(titleOf(dm, others))
+				.subtitle(previewOf(dm, members, others, userId))
+				.subtitleLines("2")
+				.leadingSize("large")
+				.leading(leading)
+				.trailing(
+					dm.lastMessageAtMs === null
+						? undefined
+						: h.text
+								.role("caption")
+								.tone(dm.unread > 0 ? "default" : "muted")
+								.strong(dm.unread > 0)
+								.numeric()
+								.children(dmTimeOf(dm.lastMessageAtMs, model.nowMs)),
+				)
+				.badge(dm.unread)
+				.emphasized(dm.unread > 0)
+				.muted(dm.isMuted)
+				.href(hrefOf(dm))
+				.on("press", press(dm))
 		}
 
 		const people = dms.flatMap((dm) => {
 			const partner = partnerOf(dm, othersOf(model, dm, userId))
 			return partner === undefined ? [] : [{ dm, partner }]
 		})
-		// HAZEL-GAP(people-strip): a snapping, edge-to-edge row of tappable avatar-over-name tiles (`a` links today)
 		const strip =
 			people.length === 0
 				? undefined
-				: // An untitled section, for the screen's inset.
-					h.section.key("people").children(
-						h.scroll.axis("horizontal").children(
-							h.stack.axis("horizontal").children(
-								...people.slice(0, STRIP_LIMIT).map(({ dm, partner }) =>
-									h.stack
-										.key(dm.id)
-										.align("center")
-										.density("compact")
-										.children(
-											avatarOf(partner, "large").on("press", press(dm)),
-											h.text
-												.role("caption")
-												.tone(dm.unread > 0 ? "default" : "muted")
-												.strong(dm.unread > 0)
-												.truncate()
-												.children(partner.firstName),
-										),
-								),
-							),
-						),
-					)
+				: h.peopleStrip
+						.key("people")
+						.people(
+							people.slice(0, STRIP_LIMIT).map(({ dm, partner }) => ({
+								id: dm.id,
+								label: partner.firstName,
+								name: fullName(partner),
+								initials: initialsOf(fullName(partner)),
+								...(partner.avatarUrl ? { src: partner.avatarUrl } : {}),
+								presence: model.presence[partner.userId] ?? "offline",
+								emphasized: dm.unread > 0,
+								href: hrefOf(dm),
+							})),
+						)
+						.on("press", ({ id }) => DmsMessage.PressedDm({ id: ChannelId.make(id) }))
 
-		// HAZEL-GAP(filter-chip): today's `All` / `Unreads` are pressed-state toggle chips, fully round
 		const chip = (filter: DmFilter, label: string) =>
 			h.button
 				.key(filter)
 				.label(label)
 				.size("small")
-				.variant(model.filter === filter ? "secondary" : "ghost")
+				.variant("chip")
+				.selected(model.filter === filter)
 				.on("press", DmsMessage.PressedFilter({ filter }))
 		const filters =
 			dms.length === 0
@@ -419,9 +408,8 @@ export const Dms = Hazel.component({
 						.title(title)
 						.children(...list.map(row))
 
-		// HAZEL-GAP(icon-messages): today's empty states draw `IconMsgs`; the nearest name is `users`
 		const empty = (title: string, description: string) =>
-			h.emptyState.key("empty").icon("users").title(title).description(description)
+			h.emptyState.key("empty").icon("messages").title(title).description(description)
 
 		const body = !model.loaded
 			? h.list.key("loading").loading()
@@ -435,7 +423,7 @@ export const Dms = Hazel.component({
 						? section("all", undefined, rest)
 						: [section("unreads", "Unreads", unread), section("rest", "Everything else", rest)]
 
-		// HAZEL-GAP(floating-action): today's compose is a 56pt round button floating over the list's end
+		// Today's compose: a 56pt round button floating over the list's end (Liquid Glass on iOS).
 		const compose = h.button
 			.label("New message")
 			.icon("plus")
@@ -444,7 +432,7 @@ export const Dms = Hazel.component({
 			.size("large")
 			.on("press", DmsMessage.PressedCompose())
 
-		return h.screen.title("DMs").toolbar(compose).children(strip, filters, body)
+		return h.screen.title("DMs").floatingAction(compose).children(strip, filters, body)
 	},
 })
 
