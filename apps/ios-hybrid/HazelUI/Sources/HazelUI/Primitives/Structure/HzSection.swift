@@ -49,6 +49,7 @@ private struct SectionHeader: View {
                 if !title.isEmpty { titleView }
                 ForEach(actions, id: \.id) { NodeView(tree: tree, node: $0) }
                     .environment(\.hzRoundAction, collapsible)
+                    .environment(\.hzSectionAction, true)
             }
         }
     }

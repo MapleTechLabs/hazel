@@ -18,6 +18,8 @@ extension EnvironmentValues {
     @Entry var hzNavigationBar: Bool = false
     /// Set on a collapsible section's header actions: today's round, muted "+" (`sectionPlusButton`).
     @Entry var hzRoundAction: Bool = false
+    /// Set on every section header action: its icon takes the action recipe's size.
+    @Entry var hzSectionAction: Bool = false
 }
 
 extension View {

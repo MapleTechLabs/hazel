@@ -8,6 +8,7 @@ struct HzAction: View {
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.hzRoundAction) private var round
+    @Environment(\.hzSectionAction) private var inSection
     @State private var hovering = false
 
     var body: some View {
@@ -57,7 +58,8 @@ struct HzAction: View {
         }
         let shape = RoundedRectangle(cornerRadius: min(root.radius ?? 0, 1000), style: .continuous)
         return ChildrenView(tree: tree, node: node)
-            .environment(\.hzIconSize, icon.size)
+            // In a section's header the icon takes the recipe's size, as the web's 14pt (12pt round, regular).
+            .environment(\.hzIconSize, inSection ? icon.size : nil)
             .hzSize(icon)
             .hzSize(root)
             .foregroundStyle(root.color?.color ?? Color.primary)
