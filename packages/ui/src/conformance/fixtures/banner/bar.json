@@ -1,0 +1,39 @@
+{
+	"about": "The chat's new-messages band (`list-new-messages-bar`, `channel/view.ts`): `bar` in `accent`, its title filling the row and Mark as read in `actions`.",
+	"root": {
+		"tag": "banner",
+		"props": {
+			"style": "bar",
+			"tone": "accent",
+			"title": "12 new messages since 14:05"
+		},
+		"slots": [
+			{
+				"name": "actions",
+				"children": [
+					{
+						"tag": "button",
+						"props": {
+							"label": "Mark as read",
+							"variant": "ghost",
+							"size": "xsmall"
+						}
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen",
+	"aria": [
+		{
+			"role": "status"
+		},
+		{
+			"role": "button",
+			"name": "Mark as read"
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	}
+}

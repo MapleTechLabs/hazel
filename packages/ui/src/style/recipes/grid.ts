@@ -2,8 +2,9 @@ import { defineRecipe } from "../recipe.ts"
 import type { GridColumns, StackDensity } from "../schema.ts"
 
 /**
- * `hz:grid` (phase 4): children in equal columns (`grid-cols-*`, the kit's card grids). Declared by the contract wave: parts and option values
- * are named, every layer is empty until lane A1 fills it from today's kit (lane D reviews).
+ * `hz:grid` (phase 4): children in equal columns, the kit's card grids (`grid gap-4 md:grid-cols-2`,
+ * KPI rows `grid-cols-3 gap-3`). Its gap is its `density`, as a stack's. The column tracks (one column
+ * on compact, `columns` from regular, `auto` as many 16rem tracks as fit) are the web renderer's.
  */
 export const grid = defineRecipe<
 	{ readonly columns: GridColumns; readonly density: StackDensity },
@@ -12,7 +13,7 @@ export const grid = defineRecipe<
 >({
 	primitive: "grid",
 	parts: {},
-	base: { root: {} },
+	base: { root: { fill: true } },
 	options: {
 		columns: {
 			default: "auto",
@@ -20,7 +21,12 @@ export const grid = defineRecipe<
 		},
 		density: {
 			default: "regular",
-			values: { tight: {}, compact: {}, regular: {}, relaxed: {} },
+			values: {
+				tight: { root: { gap: "0.5", rowGap: "0.5" } },
+				compact: { root: { gap: "2", rowGap: "2" } },
+				regular: { root: { gap: "4", rowGap: "4" } },
+				relaxed: { root: { gap: "6", rowGap: "6" } },
+			},
 		},
 	},
 })

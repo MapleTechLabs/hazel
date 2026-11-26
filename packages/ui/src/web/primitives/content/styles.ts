@@ -1,8 +1,9 @@
 /**
  * What the layout and content renderers own and a recipe cannot say (C3 `rendererFeatures`): the
  * standalone icon size, the seeded dither under an initial, the kit's squircle corners, absolute
- * marks and the pair layout, outer cut-out rings, and per-tile states of the people strip. Tokens
- * only, except the dither's white initial, which is today's literal.
+ * marks and the pair layout, outer cut-out rings and the surface they cut from, per-tile states of
+ * the people strip, the grid's tracks, slot order and hover in banners and code blocks, and the
+ * syntax inks. Tokens only, except the dither's white initial, which is today's literal.
  */
 const css = `
 /* A root primitive takes the page's ink, as the app's body gives every island. */
@@ -90,8 +91,101 @@ const css = `
 }
 [data-hz=avatarStack][data-layout=pair] > [data-hz-part=overflow] { display: none; }
 
+/* A banner's \`actions\` slot mounts before its children; it reads after them, as the kit's. */
+[data-hz=banner] > [data-hz-part=content] > [data-hz-slot=actions] { order: 1; }
+[data-hz=banner] > [data-hz-part=content] > [data-hz-slot=actions]:empty { display: none; }
+/* The bar hangs from the edge above it (\`rounded-b-lg\`): square top corners. */
+[data-hz=banner][data-style=bar] { border-top-left-radius: 0; border-top-right-radius: 0; }
+[data-hz=banner] > [data-hz-part=dismiss] { cursor: pointer; }
+[data-hz=banner] > [data-hz-part=dismiss]:hover { opacity: 1; }
+[data-hz=banner] > [data-hz-part=dismiss]:focus-visible {
+	opacity: 1;
+	outline: 2px solid var(--hz-color-ring);
+	outline-offset: 1px;
+}
+
+/* \`hz:codeBlock\`: the code keeps the part's mono step, not the browser's; \`wrap\` breaks long lines. */
+[data-hz=codeBlock] > [data-hz-part=code] > code { font: inherit; }
+[data-hz=codeBlock] > [data-hz-part=code] { white-space: pre; }
+[data-hz=codeBlock][data-wrap] > [data-hz-part=code] { white-space: pre-wrap; overflow-wrap: anywhere; }
+[data-hz=codeBlock] > [data-hz-part=header] > [data-hz-part=copy] { cursor: pointer; }
+[data-hz=codeBlock] > [data-hz-part=header] > [data-hz-part=copy]:hover {
+	background-color: var(--hz-color-fg-tint-hover);
+}
+[data-hz=codeBlock] > [data-hz-part=header] > [data-hz-part=copy]:focus-visible {
+	outline: 2px solid var(--hz-color-ring);
+	outline-offset: 1px;
+}
+[data-hz=codeBlock] [data-hz-part=copy][data-copied] > [data-hz-part=copyIcon] { color: var(--hz-color-success); }
+
+/* A richText code block (\`markdown-view.ts\`): the tools over the well's corner, the copy chip shown
+   while the block is hovered or focused; a right gutter for them from regular, the code under the
+   language on compact (where no pointer hovers). */
+[data-hz=richText] > [data-hz-part=codeFrame] { position: relative; }
+[data-hz=richText] > [data-hz-part=codeFrame] > [data-hz-part=codeTools] {
+	position: absolute;
+	top: var(--hz-space-2);
+	right: var(--hz-space-2);
+	z-index: 1;
+}
+[data-hz=richText] [data-hz-part=codeBlock] { overflow-x: auto; white-space: pre-wrap; }
+[data-hz=richText] [data-hz-part=codeBlock] > code { font: inherit; }
+[data-hz=richText] [data-hz-part=codeBlock][data-named] { padding-top: var(--hz-space-10); }
+[data-hz=richText] [data-hz-part=codeBlock][data-collapsed] { max-height: calc(4 * var(--hz-space-20)); overflow: hidden; }
+@media (width >= 40rem) {
+	[data-hz=richText] [data-hz-part=codeBlock],
+	[data-hz=richText] [data-hz-part=codeBlock][data-named] {
+		padding-top: var(--hz-space-4);
+		padding-inline-end: var(--hz-space-24);
+	}
+}
+[data-hz=richText] [data-hz-part=codeCopy] { cursor: pointer; transition-property: opacity, background-color; }
+[data-hz=richText] [data-hz-part=codeFrame]:hover [data-hz-part=codeCopy],
+[data-hz=richText] [data-hz-part=codeCopy]:focus-visible { opacity: 1; }
+[data-hz=richText] [data-hz-part=codeCopy]:hover { background-color: var(--hz-color-fg-tint-hover); }
+[data-hz=richText] [data-hz-part=codeCopy]:focus-visible {
+	outline: 2px solid var(--hz-color-ring);
+	outline-offset: 1px;
+}
+
+/* Prism's ink groups (\`code.ts\`), from today's \`code-syntax.css\`. */
+:is([data-hz=codeBlock], [data-hz=richText]) [data-syntax=comment] { color: var(--hz-color-syntax-comment); }
+:is([data-hz=codeBlock], [data-hz=richText]) [data-syntax=punctuation] { color: var(--hz-color-syntax-punctuation); }
+:is([data-hz=codeBlock], [data-hz=richText]) [data-syntax=constant] { color: var(--hz-color-syntax-constant); }
+:is([data-hz=codeBlock], [data-hz=richText]) [data-syntax=string] { color: var(--hz-color-syntax-string); }
+:is([data-hz=codeBlock], [data-hz=richText]) [data-syntax=operator] { color: var(--hz-color-syntax-operator); }
+:is([data-hz=codeBlock], [data-hz=richText]) [data-syntax=keyword] { color: var(--hz-color-syntax-keyword); }
+:is([data-hz=codeBlock], [data-hz=richText]) [data-syntax=function] { color: var(--hz-color-syntax-function); }
+:is([data-hz=codeBlock], [data-hz=richText]) [data-syntax=variable] { color: var(--hz-color-syntax-variable); }
+:is([data-hz=codeBlock], [data-hz=richText]) [data-syntax=comment] { font-style: italic; }
+:is([data-hz=codeBlock], [data-hz=richText]) [data-syntax=namespace] { opacity: 0.7; }
+:is([data-hz=codeBlock], [data-hz=richText]) [data-bold] { font-weight: var(--hz-weight-bold); }
+:is([data-hz=codeBlock], [data-hz=richText]) [data-italic] { font-style: italic; }
+
+/* \`hz:grid\`: one column on compact; \`columns\` equal tracks from regular, \`auto\` as many 16rem as fit. */
+[data-hz=grid] { display: grid; grid-template-columns: minmax(0, 1fr); }
+@media (width >= 40rem) {
+	[data-hz=grid] {
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(4 * var(--hz-space-16))), 1fr));
+	}
+	[data-hz=grid][data-columns="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	[data-hz=grid][data-columns="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	[data-hz=grid][data-columns="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
 [data-hz=channelIcon] > :is([data-hz-part=lock], [data-hz-part=partners], [data-hz-part=sync]) {
 	position: absolute;
+}
+/* The marks are cut from the surface they sit on (\`channel-icon-surface\`): each painted surface
+   sets \`--hz-cutout\`, so the nearest one wins; the page (\`bg\`) when none does. */
+:where([data-hz=screen]) { --hz-cutout: var(--hz-color-sidebar); }
+:where([data-hz=screen]:is([data-surface=page], [data-surface=centered]),
+	[data-hz=frame]:is(:not([data-surface]), [data-surface=card], [data-surface=flush], [data-surface=overlay]),
+	[data-hz=dialog], [data-hz=sheet], [data-hz=popover], [data-hz=menu], [data-hz=contextMenu],
+	[data-hz=commandPalette]) { --hz-cutout: var(--hz-color-bg); }
+:where([data-hz=frame][data-surface=muted]) { --hz-cutout: var(--hz-color-muted); }
+[data-hz=channelIcon] > :is([data-hz-part=lock], [data-hz-part=sync]) {
+	background-color: var(--hz-cutout, var(--hz-color-bg));
 }
 [data-hz=channelIcon] > [data-hz-part=lock] {
 	top: calc(-1 * var(--hz-space-1));
@@ -102,7 +196,9 @@ const css = `
 	bottom: calc(-1 * var(--hz-space-0_5));
 }
 [data-hz=channelIcon] > [data-hz-part=partners] > * + * { margin-inline-start: calc(-1 * var(--hz-space-1)); }
-[data-hz=channelIcon] > [data-hz-part=partners] > * { box-shadow: 0 0 0 1.5px var(--hz-color-bg); }
+[data-hz=channelIcon] > [data-hz-part=partners] > * {
+	box-shadow: 0 0 0 1.5px var(--hz-cutout, var(--hz-color-bg));
+}
 [data-hz=channelIcon][data-partnered] > [data-hz-part=sync] { top: calc(-1 * var(--hz-space-1)); bottom: auto; }
 [data-hz=channelIcon] > [data-hz-part=sync][data-provider=discord] > [data-hz-part=syncLogo] {
 	width: var(--hz-space-2_5);

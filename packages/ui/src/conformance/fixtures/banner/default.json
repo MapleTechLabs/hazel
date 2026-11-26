@@ -1,5 +1,5 @@
 {
-	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): a callout in each tone, the token shown once with its copy field, and the chat's new-messages bar.",
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): a callout in each tone with the token shown once in its copy field.",
 	"root": {
 		"tag": "banner",
 		"props": {
@@ -50,20 +50,17 @@
 			"values": ["neutral", "accent", "warning", "danger"]
 		}
 	],
-	"cases": [
-		{
-			"name": "bar",
-			"props": {
-				"style": "bar",
-				"tone": "accent",
-				"title": "12 new messages since 14:05",
-				"description": null,
-				"dismissible": null
-			}
-		}
-	],
 	"pending": {
-		"web": "A1",
 		"ios": "S1"
-	}
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Dismiss"
+		},
+		{
+			"role": "button",
+			"name": "Done"
+		}
+	]
 }

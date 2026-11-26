@@ -10,7 +10,12 @@
 	},
 	"frame": "inline",
 	"pending": {
-		"web": "A1",
 		"ios": "S1"
-	}
+	},
+	"aria": [
+		{
+			"role": "progressbar",
+			"name": "Loading"
+		}
+	]
 }

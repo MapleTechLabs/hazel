@@ -1,8 +1,8 @@
 {
-	"about": "Every run and block kind: mention, link, code, strong, emphasis, strike; a list, a quote and a code block.",
+	"about": "Every run and block kind: mention, link, code, strong, emphasis, strike; a list, a quote and code blocks, highlighted by Prism, each with its copy button.",
 	"root": {
 		"tag": "richText",
-		"events": ["pressMention", "pressLink"],
+		"events": ["pressMention", "pressLink", "copyCode"],
 		"props": {
 			"blocks": [
 				[
@@ -32,7 +32,12 @@
 				[2, ["typecheck"], "1."],
 				[2, ["fixtures and the browser runner"], "2."],
 				[3, ["Ship it when it is green."]],
-				[1, "bun run --cwd packages/ui verify:A1\nbun run --cwd packages/ui test:web", "sh"]
+				[1, "bun run --cwd packages/ui verify:A1\nbun run --cwd packages/ui test:web", "sh"],
+				[
+					1,
+					"const answer: number = 42 // the answer\nexport function ask(q: string) {\n  return `${q}? ${answer}`\n}",
+					"ts"
+				]
 			]
 		}
 	},
@@ -44,6 +49,10 @@
 		{
 			"role": "link",
 			"name": "the run"
+		},
+		{
+			"role": "button",
+			"name": "Copy code"
 		}
 	]
 }

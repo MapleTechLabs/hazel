@@ -21,7 +21,12 @@
 		}
 	],
 	"pending": {
-		"web": "A1",
 		"ios": "S1"
-	}
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Copy"
+		}
+	]
 }
