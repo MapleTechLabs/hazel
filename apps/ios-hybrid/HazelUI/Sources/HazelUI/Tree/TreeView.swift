@@ -46,8 +46,19 @@ public struct NodeView: View {
 
     public var body: some View {
         // The generated registry (`Primitives/Registry.generated.swift`, from vocabulary/spec.ts).
-        Primitives.view(tree: tree, node: node)
+        // A keyed node (`row-key`) carries its key as its identity, so `scrollTo({key})` finds it.
+        if let key = node[prop: "key"]?.string {
+            Primitives.view(tree: tree, node: node).id(RowKey(key))
+        } else {
+            Primitives.view(tree: tree, node: node)
+        }
     }
+}
+
+/// A node's wire key (`Hazel.KEY_PROP`) as a SwiftUI identity, for `ScrollViewProxy.scrollTo`.
+public struct RowKey: Hashable, Sendable {
+    public let key: String
+    public init(_ key: String) { self.key = key }
 }
 
 /// A node's children in order. Reads only `children` (and a slot child's name), so a child's prop
