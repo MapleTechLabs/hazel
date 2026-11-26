@@ -6,10 +6,6 @@ import type { CaseOutcome } from "../src/gallery/primitives.ts"
 import { galleryConfig } from "../src/gallery/vite.config.ts"
 import { CHANNEL_TOLERANCE, diffInPage, openGallery, PIXEL_TOLERANCE, runs } from "./shoot.ts"
 
-// Glyphs drawn the same at any fractional x: Linux Chromium positions text by subpixel, so the kit
-// and hazel specimens (side by side, at different offsets) would otherwise rasterize differently.
-const TEXT_RENDERING_ARGS = ["--disable-font-subpixel-positioning", "--font-render-hinting=none"]
-
 /**
  * `bun run --cwd packages/ui test:web [--lane A4] [--tags item,section]`: the browser runner (phase 1.5).
  * Mounts every conformance case on the real web host in Chromium, in light and dark and both size
@@ -71,7 +67,7 @@ const main = async () => {
 	await server.listen()
 	const base = server.resolvedUrls?.local[0]
 	if (base === undefined) throw new Error("the gallery server has no URL")
-	const browser = await chromium.launch({ args: TEXT_RENDERING_ARGS })
+	const browser = await chromium.launch()
 	rmSync(shotsDir, { recursive: true, force: true })
 	const results: Array<Result> = []
 	const notImplemented = new Map<string, Set<string>>()
