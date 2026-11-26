@@ -15,6 +15,13 @@ enum Dither {
 
     static func hue(_ seed: String) -> Double { hues[hash(seed) % hues.count] }
 
+    /// The web's `ditherInitial`: the first grapheme, upper-cased when that keeps it one grapheme.
+    static func initial(_ seed: String) -> String {
+        guard let first = seed.trimmingCharacters(in: .whitespaces).first else { return "?" }
+        let upper = String(first).uppercased()
+        return upper.count == 1 ? upper : String(first)
+    }
+
     /// The grid: 1pt cells up to 24pt, 2pt above, at least 8 (the web's `cells`).
     static func cells(_ size: CGFloat) -> Int {
         max(8, Int((size <= 24 ? size : size / 2).rounded()))
@@ -71,5 +78,19 @@ struct DitherFill: View {
             context.fill(lit, with: .color(light))
         }
         .accessibilityHidden(true)
+    }
+}
+
+/// The letter over the dither: semibold white at 46% of the side, as the web's seeded face.
+struct DitherInitial: View {
+    let seed: String
+    let side: CGFloat
+
+    var body: some View {
+        Text(verbatim: Dither.initial(seed))
+            .font(Inter.font(size: side * 0.46, weight: HazelTheme.Font.weightSemibold))
+            .lineLimit(1)
+            .fixedSize()
+            .foregroundStyle(.white)
     }
 }
