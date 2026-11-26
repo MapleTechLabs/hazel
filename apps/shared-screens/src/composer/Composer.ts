@@ -5,9 +5,11 @@
  * `autocomplete-view.ts`, the typing banner) in `hazel`. Type-checks against C1; not rendered yet.
  * The text is a controlled `composer` (G5's revision pair); what sits above it fills its `above` slot.
  */
-import { UiSchema } from "@effect/ui"
-import { Content, Hazel, TextField } from "@hazel/ui/vocabulary/index"
-import { Match, Schema } from "effect"
+import { Command, UiSchema } from "@effect/ui"
+import { Files, type PickedFile } from "@hazel/client-data/platform"
+import { GifPicker } from "@hazel/ui/extensions/GifPicker"
+import { ComposerKey, Content, Hazel, ProviderMark, TextField } from "@hazel/ui/vocabulary/index"
+import { Effect, Match, Schema } from "effect"
 
 export const Suggestion = Schema.Struct({
 	id: Schema.String,
@@ -15,6 +17,8 @@ export const Suggestion = Schema.Struct({
 	description: Schema.optional(Schema.String),
 	initials: Schema.optional(Schema.String),
 	emoji: Schema.optional(Schema.String),
+	/** A synced member's provider mark on their avatar. */
+	mark: Schema.optional(ProviderMark),
 })
 export type Suggestion = typeof Suggestion.Type
 
@@ -27,19 +31,73 @@ export const Context = Schema.Union([
 ])
 export type Context = typeof Context.Type
 
+/** A bot command's argument field (the command panel above the text). */
+export const CommandField = Schema.Struct({
+	name: Schema.String,
+	label: Schema.String,
+	required: Schema.Boolean,
+	value: TextField.State,
+})
+export type CommandField = typeof CommandField.Type
+
+export const Picker = Schema.Literals(["none", "emoji", "gif"])
+
 export const ComposerMessage = UiSchema.TaggedEnum({
 	ChangedText: { payload: TextField.ChangePayload },
 	Submitted: { payload: TextField.ChangePayload },
 	ChangedTrigger: { kind: Schema.Literals(["@", "#", "/", ":"]), query: Schema.NullOr(Schema.String) },
 	PickedSuggestion: { id: Schema.String },
 	DismissedSuggestions: {},
+	PressedSuggestionKey: { key: ComposerKey },
 	RemovedAttachment: { id: Schema.String },
 	PressedAttach: {},
+	DroppedFiles: {},
+	AddedFiles: { files: Schema.Array(Schema.Struct({ id: Schema.String, name: Schema.String })) },
+	FailedFiles: {},
 	PressedGif: {},
 	PressedEmoji: {},
+	PickedEmoji: { emoji: Schema.String },
+	PickedGif: { url: Schema.String },
+	DismissedPicker: {},
+	ChangedCommandField: { name: Schema.String, payload: TextField.ChangePayload },
 	CancelledContext: {},
 })
 export type ComposerMessage = typeof ComposerMessage.Type
+
+const added = (files: ReadonlyArray<PickedFile>) =>
+	ComposerMessage.AddedFiles({ files: files.map((file) => ({ id: file.attachmentId, name: file.name })) })
+
+/** Attach: the platform's picker, files uploaded natively (lane F implements `Files`). */
+export class PickFiles extends Command.Service<PickFiles>()("composer/PickFiles", {
+	args: {},
+	success: ComposerMessage,
+}) {
+	static readonly layer = this.toLayer(
+		Effect.gen(function* () {
+			const files = yield* Files
+			return () =>
+				files.pick({ accept: "any", multiple: true }).pipe(
+					Effect.match({ onSuccess: added, onFailure: () => ComposerMessage.FailedFiles() }),
+				)
+		}),
+	)
+}
+
+/** Files dropped or pasted onto the composer: the host holds them until taken. */
+export class TakeDroppedFiles extends Command.Service<TakeDroppedFiles>()("composer/TakeDroppedFiles", {
+	args: {},
+	success: ComposerMessage,
+}) {
+	static readonly layer = this.toLayer(
+		Effect.gen(function* () {
+			const files = yield* Files
+			return () =>
+				files.dropped.pipe(
+					Effect.match({ onSuccess: added, onFailure: () => ComposerMessage.FailedFiles() }),
+				)
+		}),
+	)
+}
 
 export const ComposerProps = Schema.Struct({ placeholder: Schema.String })
 
@@ -54,6 +112,8 @@ export const Composer = Hazel.component({
 		suggestions: Schema.Array(Suggestion),
 		typing: Schema.Array(Schema.String),
 		sending: Schema.Boolean,
+		picker: Picker,
+		commandFields: Schema.Array(CommandField),
 	}),
 	message: ComposerMessage,
 }).make({
@@ -65,6 +125,8 @@ export const Composer = Hazel.component({
 		suggestions: [],
 		typing: [],
 		sending: false,
+		picker: "none",
+		commandFields: [],
 	}),
 	update: {
 		ChangedText: ($, { payload }) => $.evolve({ draft: (draft) => TextField.changed(draft, payload) }),
@@ -78,11 +140,31 @@ export const Composer = Hazel.component({
 			$.evolve({ trigger: () => (query === null ? null : { kind, query }) }),
 		PickedSuggestion: ($) => $.evolve({ trigger: () => null }),
 		DismissedSuggestions: ($) => $.evolve({ trigger: () => null }),
+		PressedSuggestionKey: ($, { key }) => (key === "escape" ? $.evolve({ trigger: () => null }) : $.model),
 		RemovedAttachment: ($, { id }) =>
 			$.evolve({ attachments: (all) => all.filter((file) => file.id !== id) }),
-		PressedAttach: ($) => $.model,
-		PressedGif: ($) => $.model,
-		PressedEmoji: ($) => $.model,
+		PressedAttach: ($) => $.run(PickFiles.make({})),
+		DroppedFiles: ($) => $.run(TakeDroppedFiles.make({})),
+		AddedFiles: ($, { files }) =>
+			$.evolve({
+				attachments: (all) => [
+					...all,
+					...files.map((file) => ({ id: file.id, kind: "file" as const, name: file.name })),
+				],
+			}),
+		FailedFiles: ($) => $.model,
+		PressedGif: ($) => $.evolve({ picker: () => "gif" as const }),
+		PressedEmoji: ($) => $.evolve({ picker: () => "emoji" as const }),
+		PickedEmoji: ($) => $.evolve({ picker: () => "none" as const }),
+		PickedGif: ($) => $.evolve({ picker: () => "none" as const }),
+		DismissedPicker: ($) => $.evolve({ picker: () => "none" as const }),
+		ChangedCommandField: ($, { name, payload }) =>
+			$.evolve({
+				commandFields: (all) =>
+					all.map((field) =>
+						field.name === name ? { ...field, value: TextField.changed(field.value, payload) } : field,
+					),
+			}),
 		CancelledContext: ($) => $.evolve({ context: () => ({ _tag: "None" as const }) }),
 	},
 	view: (h, model) => {
@@ -128,8 +210,8 @@ export const Composer = Hazel.component({
 			.value(model.draft)
 			.canSend(model.draft.text.trim() !== "" || model.attachments.length > 0)
 			.disabled(model.sending)
-			// HAZEL-GAP(autocomplete-keys): while a trigger is open, arrows, Enter, Tab and Escape drive the
-			// suggestion list instead of the text; the composer needs a `key` event for them.
+			.on("key", ({ key }) => ComposerMessage.PressedSuggestionKey({ key }))
+			.on("files", () => ComposerMessage.DroppedFiles())
 			.on("change", (payload) => ComposerMessage.ChangedText({ payload }))
 			.on("submit", (payload) => ComposerMessage.Submitted({ payload }))
 			.on("trigger", ({ kind, query }) => ComposerMessage.ChangedTrigger({ kind, query }))
@@ -141,17 +223,24 @@ export const Composer = Hazel.component({
 							.removable()
 							.on("remove", ({ id }) => ComposerMessage.RemovedAttachment({ id })),
 				context,
+				...model.commandFields.map((field) =>
+					h.textField
+						.key(field.name)
+						.label(field.label)
+						.required(field.required)
+						.value(field.value)
+						.on("change", (payload) =>
+							ComposerMessage.ChangedCommandField({ name: field.name, payload }),
+						),
+				),
 			)
 			.actions(
-				// HAZEL-GAP(file-picker): Attach opens the platform's file picker; files cannot cross the wire
-				// as data, so it needs a platform service (pick, then upload natively) rather than a prop.
 				h.button
 					.icon("paperclip")
 					.label("Attach")
 					.variant("ghost")
 					.size("xsmall")
 					.on("press", ComposerMessage.PressedAttach()),
-				// HAZEL-GAP(emoji-gif-picker): the GIF and emoji pickers are dialogs no primitive draws yet.
 				h.button
 					.icon("gif")
 					.label("GIF")
@@ -171,17 +260,26 @@ export const Composer = Hazel.component({
 				.key(item.id)
 				.title(item.label)
 				.subtitle(item.description)
-				// HAZEL-GAP(avatar-provider-mark): a mention's avatar carries a presence dot or a provider mark.
 				.leading(
 					item.emoji === undefined
-						? h.avatar.name(item.label).initials(item.initials)
+						? h.avatar
+								.name(item.label)
+								.initials(item.initials)
+								.mark(item.mark ?? "none")
 						: h.text.children(item.emoji),
 				)
 				.on("press", ComposerMessage.PickedSuggestion({ id: item.id }))
 
-		// HAZEL-GAP(field-required): the bot command panel's fields mark required arguments.
 		return h.stack.density("compact").children(
-			// HAZEL-GAP(file-drop): dropping or pasting files onto the composer (the drop overlay).
+			h.emojiPicker
+				.open(model.picker === "emoji")
+				.on("select", ({ emoji }) => ComposerMessage.PickedEmoji({ emoji }))
+				.on("dismiss", ComposerMessage.DismissedPicker()),
+			// Web only: iOS draws nothing in its place.
+			h
+				.extension(GifPicker, { open: model.picker === "gif" })
+				.on("select", ({ url }) => ComposerMessage.PickedGif({ url }))
+				.on("dismiss", ComposerMessage.DismissedPicker()),
 			h.popover
 				.open(model.trigger !== null && model.suggestions.length > 0)
 				.on("dismiss", ComposerMessage.DismissedSuggestions())

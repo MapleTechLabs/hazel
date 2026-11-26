@@ -7,13 +7,15 @@
  */
 import { UiSchema } from "@effect/ui"
 import { ChannelId, ChannelSectionId } from "@hazel/schema"
-import { type Content, Hazel, IconName } from "@hazel/ui/vocabulary/index"
+import { type Content, Hazel, IconName, ItemNesting } from "@hazel/ui/vocabulary/index"
 import { Match, Schema } from "effect"
 
 export const Row = Schema.Struct({
 	id: ChannelId,
 	name: Schema.String,
 	kind: Schema.Literals(["public", "private", "dm", "group", "thread"]),
+	/** A thread row's place under its channel: the elbow's shape. */
+	nested: ItemNesting,
 	icon: Schema.optional(IconName),
 	emoji: Schema.optional(Schema.String),
 	/** DM avatars: initials of the other members, and how many more there are. */
@@ -42,6 +44,8 @@ export const SidebarMessage = UiSchema.TaggedEnum({
 	ToggledGroup: { key: Schema.String, collapsed: Schema.Boolean },
 	PressedCreate: { key: Schema.String },
 	SelectedRowMenu: { id: ChannelId, entry: Schema.String },
+	SelectedSectionMenu: { key: Schema.String, entry: Schema.String },
+	MovedRow: { key: Schema.String, id: Schema.String, before: Schema.NullOr(Schema.String) },
 	DismissedHint: {},
 })
 export type SidebarMessage = typeof SidebarMessage.Type
@@ -61,13 +65,26 @@ const rowMenu = (row: Row): Content.MenuGroups =>
 				{
 					entries: [
 						{ id: "mute", label: row.muted ? "Unmute" : "Mute", icon: "volume-mute" },
-						// HAZEL-GAP(menu-submenu): "Notifications" and "Move to section" are submenus.
-						{ id: "notifications", label: "Notifications", icon: "bell" },
+						{
+							id: "notifications",
+							label: "Notifications",
+							icon: "bell",
+							entries: [
+								{ id: "notify-all", label: "All messages" },
+								{ id: "notify-mentions", label: "Mentions only" },
+								{ id: "notify-none", label: "Nothing" },
+							],
+						},
 						{ id: "favorite", label: row.favorite ? "Unfavorite" : "Favorite", icon: "star" },
 					],
 				},
 				{
 					entries: [
+						{
+							id: "move",
+							label: "Move to section",
+							entries: [{ id: "move-new", label: "New section" }],
+						},
 						{ id: "settings", label: "Settings", icon: "gear" },
 						{ id: "delete", label: "Delete", icon: "trash", destructive: true },
 					],
@@ -98,6 +115,8 @@ export const ChannelSidebar = Hazel.component({
 			}),
 		PressedCreate: ($) => $.model,
 		SelectedRowMenu: ($) => $.model,
+		SelectedSectionMenu: ($) => $.model,
+		MovedRow: ($) => $.model,
 		DismissedHint: ($) => $.evolve({ showHint: () => false }),
 	},
 	view: (h, model) => {
@@ -113,7 +132,6 @@ export const ChannelSidebar = Hazel.component({
 								.map((initials) => h.avatar.key(initials).initials(initials)),
 						),
 				),
-				// HAZEL-GAP(thread-elbow): a thread row hangs off its channel with an elbow; `item` has no nesting.
 				Match.when("thread", () => h.icon.name("thread")),
 				Match.when("private", () => h.icon.name("lock")),
 				Match.when("public", () =>
@@ -135,7 +153,8 @@ export const ChannelSidebar = Hazel.component({
 						.badge(item.unread)
 						.emphasized(item.unread > 0)
 						.selected(selected)
-						// HAZEL-GAP(item-muted): a muted channel's row is dimmed; `disabled` is not the same state.
+						.muted(item.muted)
+						.nested(item.nested)
 						.href(selected ? undefined : `/${h.props.orgSlug}/chat/${item.id}`)
 						.trailing(
 							item.status === undefined ? null : h.text.children(item.status),
@@ -166,13 +185,26 @@ export const ChannelSidebar = Hazel.component({
 				.collapsible()
 				.collapsed(entry.collapsed)
 				.on("toggle", ({ collapsed }) => SidebarMessage.ToggledGroup({ key: entry.key, collapsed }))
-				// HAZEL-GAP(section-action-menu): a user section's "+" opens a menu (create, join, delete section).
 				.action(
 					h.icon.name("plus"),
-					SidebarMessage.PressedCreate({ key: entry.key }),
+					entry.sectionId === null
+						? SidebarMessage.PressedCreate({ key: entry.key })
+						: Hazel.actionMenu(
+								[
+									{
+										entries: [
+											{ id: "create", label: "Create channel", icon: "plus" },
+											{ id: "join", label: "Join channel", icon: "hashtag" },
+										],
+									},
+									{ entries: [{ id: "delete", label: "Delete section", icon: "trash", destructive: true }] },
+								],
+								({ id }) => SidebarMessage.SelectedSectionMenu({ key: entry.key, entry: id }),
+							),
 					`New in ${entry.title}`,
 				)
-				// HAZEL-GAP(drag-reorder): channels and sections reorder by drag.
+				.reorderable()
+				.on("move", ({ id, before }) => SidebarMessage.MovedRow({ key: entry.key, id, before }))
 				.children(...(entry.collapsed ? [] : entry.rows.map(row)))
 
 		return h.stack.density("compact").children(
@@ -180,7 +212,7 @@ export const ChannelSidebar = Hazel.component({
 				h.item
 					.title("Browse channels")
 					.leading(h.icon.name("search"))
-					// HAZEL-GAP(kbd-hint): the row shows its keyboard shortcut (`⌘K`) at its end.
+					.shortcut("⌘K")
 					.on("press", SidebarMessage.PressedBrowse()),
 				h.item
 					.title("Members")
@@ -200,11 +232,11 @@ export const ChannelSidebar = Hazel.component({
 						.key("discover")
 						.title("Discover")
 						.children(
-							// HAZEL-GAP(item-muted): discover rows are dimmed until joined.
 							...model.discover.map((item) =>
 								h.item
 									.key(item.id)
 									.title(item.name)
+									.muted()
 									.leading(h.icon.name("hashtag"))
 									.on("press", SidebarMessage.PressedRow({ id: item.id })),
 							),

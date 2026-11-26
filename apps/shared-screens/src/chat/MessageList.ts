@@ -37,7 +37,8 @@ export const MessageListMessage = UiSchema.TaggedEnum({
 	PressedReaction: { id: MessageId, emoji: Schema.String },
 	PressedAddReaction: { id: MessageId },
 	PressedAuthor: { id: MessageId },
-	PressedMention: { userId: Schema.String },
+	PressedMention: { id: MessageId, userId: Schema.String, run: Schema.Finite },
+	DismissedProfile: {},
 	PressedLink: { url: Schema.String },
 	PressedAttachment: { id: MessageId, attachmentId: Schema.String },
 	PressedReply: { id: MessageId },
@@ -61,16 +62,15 @@ const messageRow = (h: Hazel.H<MessageListMessage>, message: Message) =>
 		.highlighted(message.highlighted)
 		.pending(message.pending)
 		.failed(message.failed)
-		// HAZEL-GAP(message-provider): the Slack or Discord mark after a synced author's name.
-		// HAZEL-GAP(reaction-who): a reaction's tooltip names who reacted; `Reaction` carries a count only.
-		// HAZEL-GAP(quick-reactions): the hover toolbar's three quick emoji before "Add reaction".
-		// HAZEL-GAP(message-action-issue): "Create issue" in the More menu has no `MessageAction`.
+		// The provider mark, who reacted, quick emoji and "Create issue" are row data (`row.provider`...).
 		.on("action", ({ action }) => MessageListMessage.PressedAction({ id: message.id, action }))
 		.on("pressReaction", ({ emoji }) => MessageListMessage.PressedReaction({ id: message.id, emoji }))
 		.on("addReaction", () => MessageListMessage.PressedAddReaction({ id: message.id }))
 		.on("pressAuthor", () => MessageListMessage.PressedAuthor({ id: message.id }))
-		// HAZEL-GAP(anchor-in-leaf): a mention opens a profile popover anchored at the mention inside the row.
-		.on("pressMention", ({ userId }) => MessageListMessage.PressedMention({ userId }))
+		// The profile popover anchors at the pressed mention's run inside this row (`popover.anchorTo`).
+		.on("pressMention", ({ userId, run }) =>
+			MessageListMessage.PressedMention({ id: message.id, userId, run }),
+		)
 		.on("pressLink", ({ url }) => MessageListMessage.PressedLink({ url }))
 		.on("pressAttachment", ({ id }) =>
 			MessageListMessage.PressedAttachment({ id: message.id, attachmentId: id }),
@@ -95,10 +95,18 @@ export const MessageList = Hazel.component({
 		loadingOlder: Schema.Boolean,
 		isMember: Schema.Boolean,
 		unreadSince: Schema.NullOr(Schema.Struct({ count: Schema.Finite, label: Schema.String })),
+		profile: Schema.NullOr(Schema.Struct({ id: MessageId, userId: Schema.String, run: Schema.Finite })),
 	}),
 	message: MessageListMessage,
 }).make({
-	init: () => ({ entries: [], loading: true, loadingOlder: false, isMember: true, unreadSince: null }),
+	init: () => ({
+		entries: [],
+		loading: true,
+		loadingOlder: false,
+		isMember: true,
+		unreadSince: null,
+		profile: null,
+	}),
 	update: {
 		ReachedStart: ($) => $.evolve({ loadingOlder: () => true }),
 		ReachedEnd: ($) => $.model,
@@ -106,7 +114,8 @@ export const MessageList = Hazel.component({
 		PressedReaction: ($) => $.model,
 		PressedAddReaction: ($) => $.model,
 		PressedAuthor: ($) => $.model,
-		PressedMention: ($) => $.model,
+		PressedMention: ($, { id, userId, run }) => $.evolve({ profile: () => ({ id, userId, run }) }),
+		DismissedProfile: ($) => $.evolve({ profile: () => null }),
 		PressedLink: ($) => $.model,
 		PressedAttachment: ($) => $.model,
 		PressedReply: ($) => $.model,
@@ -116,12 +125,11 @@ export const MessageList = Hazel.component({
 		PressedMarkRead: ($) => $.evolve({ unreadSince: () => null }),
 		PressedJoin: ($) => $.evolve({ isMember: () => true }),
 	},
-	view: (h, model) =>
-		h.stack.density("compact").children(
+	view: (h, model) => {
+		const unreadBar =
 			model.unreadSince === null
 				? null
-				: // HAZEL-GAP(list-overlay-bar): the "N new messages since" bar floats over the list's top edge.
-					h.frame.surface("muted").children(
+				: h.frame.surface("muted").children(
 						h.stack
 							.axis("horizontal")
 							.align("center")
@@ -143,22 +151,25 @@ export const MessageList = Hazel.component({
 									.size("xsmall")
 									.on("press", MessageListMessage.PressedMarkRead()),
 							),
-					),
+					)
+		return h.stack.density("compact").children(
 			model.loading
-				? // HAZEL-GAP(skeleton): the list's loading state is skeleton rows, not a spinner.
-					h.list.loadingEnd()
+				? h.list.loading()
 				: model.entries.length === 0
-					? h.stack.align("center").children(
-							// HAZEL-GAP(empty-illustration): the empty state's illustration is an asset, not a url.
-							h.text.tone("muted").children("Quiet as an ocean gazing squirrel..."),
-						)
+					? h.emptyState.illustration("squirrel").title("Quiet as an ocean gazing squirrel...")
 					: h.list
 							.anchor("end")
 							.stickToBottom()
 							.loadingStart(model.loadingOlder)
 							.on("reachStart", MessageListMessage.ReachedStart())
 							.on("reachEnd", MessageListMessage.ReachedEnd())
+							.overlay(unreadBar)
 							.children(...model.entries.map((item) => entry(h, item))),
+			h.popover
+				.open(model.profile !== null)
+				.anchorTo(model.profile === null ? undefined : { key: model.profile.id, run: model.profile.run })
+				.on("dismiss", MessageListMessage.DismissedProfile())
+				.children(h.text.children(model.profile?.userId ?? "")),
 			model.isMember
 				? null
 				: h.frame.children(
@@ -173,5 +184,6 @@ export const MessageList = Hazel.component({
 									.on("press", MessageListMessage.PressedJoin()),
 							),
 					),
-		),
+		)
+	},
 })

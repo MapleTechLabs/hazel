@@ -5,10 +5,11 @@
  * in `hazel`: framed cards with a governed header (`SettingsHeader`), a controlled name field that
  * saves when dirty, a toggle, export status and the danger zone's confirm dialog. Not rendered yet.
  */
-import { UiSchema } from "@effect/ui"
+import { Command, UiSchema } from "@effect/ui"
+import { Clipboard } from "@hazel/client-data/platform"
 import { SettingsHeader } from "@hazel/ui/custom/SettingsHeader"
 import { type BadgeTone, Hazel, TextField } from "@hazel/ui/vocabulary/index"
-import { Match, Schema } from "effect"
+import { Effect, Match, Schema } from "effect"
 
 export const ExportStatus = Schema.Literals(["none", "queued", "exporting", "ready", "failed", "expired"])
 export type ExportStatus = typeof ExportStatus.Type
@@ -18,7 +19,9 @@ export const SettingsMessage = UiSchema.TaggedEnum({
 	PressedSave: {},
 	PressedCancel: {},
 	PressedUploadLogo: {},
-	PressedCopyUrl: {},
+	PressedCopyUrl: { url: Schema.String },
+	CopiedUrl: {},
+	FailedCopyUrl: {},
 	ToggledPublicInvite: { checked: Schema.Boolean },
 	PressedExport: {},
 	PressedDownload: {},
@@ -28,6 +31,25 @@ export const SettingsMessage = UiSchema.TaggedEnum({
 	ConfirmedDelete: {},
 })
 export type SettingsMessage = typeof SettingsMessage.Type
+
+/** Copies the workspace URL through the platform's clipboard (lane F implements `Clipboard`). */
+export class CopyWorkspaceUrl extends Command.Service<CopyWorkspaceUrl>()("settings/CopyWorkspaceUrl", {
+	args: { url: Schema.String },
+	success: SettingsMessage,
+}) {
+	static readonly layer = this.toLayer(
+		Effect.gen(function* () {
+			const clipboard = yield* Clipboard
+			return ({ url }) =>
+				clipboard.write(url).pipe(
+					Effect.match({
+						onSuccess: () => SettingsMessage.CopiedUrl(),
+						onFailure: () => SettingsMessage.FailedCopyUrl(),
+					}),
+				)
+		}),
+	)
+}
 
 const exportBadge = (status: ExportStatus): { readonly label: string; readonly tone: BadgeTone } | null =>
 	Match.value(status).pipe(
@@ -70,7 +92,9 @@ export const GeneralSettings = Hazel.component({
 		PressedSave: ($) => $.evolve({ saving: () => true }),
 		PressedCancel: ($) => $.evolve({ name: (name) => TextField.set(name, $.model.savedName) }),
 		PressedUploadLogo: ($) => $.model,
-		PressedCopyUrl: ($) => $.model,
+		PressedCopyUrl: ($, { url }) => $.run(CopyWorkspaceUrl.make({ url })),
+		CopiedUrl: ($) => $.model,
+		FailedCopyUrl: ($) => $.model,
 		ToggledPublicInvite: ($, { checked }) => $.evolve({ publicInvite: () => checked }),
 		PressedExport: ($) => $.evolve({ exportStatus: () => "queued" as const }),
 		PressedDownload: ($) => $.model,
@@ -94,8 +118,10 @@ export const GeneralSettings = Hazel.component({
 					.axis("horizontal")
 					.align("center")
 					.children(
-						// HAZEL-GAP(avatar-large): the logo is a large avatar that is itself the upload button.
-						h.avatar.name(model.logoName),
+						h.avatar
+							.name(model.logoName)
+							.size("large")
+							.on("press", SettingsMessage.PressedUploadLogo()),
 						h.stack
 							.density("compact")
 							.children(
@@ -131,17 +157,16 @@ export const GeneralSettings = Hazel.component({
 					.axis("horizontal")
 					.align("end")
 					.children(
-						// HAZEL-GAP(field-monospace): the URL reads as code (`code` text role inside a field).
 						h.textField
 							.label("Workspace URL")
 							.readOnly()
+							.monospace()
 							.value({ text: h.props.workspaceUrl, rev: 0, edit: 0 }),
-						// HAZEL-GAP(clipboard): copying is a platform service (lane F), not a view concern.
 						h.button
 							.label("Copy")
 							.icon("copy")
 							.variant("secondary")
-							.on("press", SettingsMessage.PressedCopyUrl()),
+							.on("press", SettingsMessage.PressedCopyUrl({ url: h.props.workspaceUrl })),
 					),
 			),
 			h.frame.children(
@@ -166,8 +191,9 @@ export const GeneralSettings = Hazel.component({
 					.align("center")
 					.children(
 						badge === null ? null : h.badge.label(badge.label).tone(badge.tone).style("quiet"),
-						// HAZEL-GAP(progress): an export in progress shows a progress bar; no primitive draws one.
-						h.spacer,
+						model.exportStatus === "exporting"
+							? h.progress.indeterminate().label("Exporting your workspace")
+							: h.spacer,
 						model.exportStatus === "ready"
 							? h.button
 									.label("Download")
@@ -184,8 +210,7 @@ export const GeneralSettings = Hazel.component({
 					),
 			),
 			h.props.isOwner
-				? // HAZEL-GAP(frame-danger): the danger zone's card has a tinted header; `frame` has no danger surface.
-					h.frame.children(
+				? h.frame.surface("danger").children(
 						h.custom(SettingsHeader, {
 							icon: "warning",
 							title: "Danger zone",
