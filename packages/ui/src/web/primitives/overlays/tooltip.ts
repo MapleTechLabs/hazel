@@ -24,6 +24,8 @@ const showing = new WeakMap<Document, () => void>()
 export const primitive = definePrimitive("tooltip", ({ document, tag, outer }) => {
 	const node = outer("span")
 	const content = part(document, "span", "content")
+	// At create, not first open: a closed panel's hiding rule must be there before it draws.
+	installOverlayStyles(document)
 	const bubble = makePopoverPanel(part(document, "span", "bubble"))
 	bubble.setAttribute("role", "tooltip")
 	bubble.id = nextId("tooltip")
@@ -50,7 +52,6 @@ export const primitive = definePrimitive("tooltip", ({ document, tag, outer }) =
 		timer = undefined
 		if (label === "") return
 		showing.get(document)?.()
-		installOverlayStyles(document)
 		showPanel(bubble, { modal: false, inPlace })
 		showing.set(document, hide)
 		if (!inPlace) applyPlacement(bubble, measureNode(content), { side: "top", align: "center", gap: 6 })

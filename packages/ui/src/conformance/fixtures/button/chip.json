@@ -1,5 +1,5 @@
 {
-	"about": "A filter chip (`chip`), at rest and `selected` (on, `aria-pressed`).",
+	"about": "A filter chip (`chip`) at rest, against today's DMs filter chip (`toggleChip`).",
 	"root": {
 		"tag": "button",
 		"props": {
@@ -10,20 +10,17 @@
 		"events": ["press"]
 	},
 	"frame": "inline",
-	"axes": [
-		{
-			"prop": "selected",
-			"values": [true]
-		}
-	],
 	"aria": [
 		{
 			"role": "button",
 			"name": "Unreads"
 		}
 	],
+	"kit": {
+		"specimen": "button-chip",
+		"target": "button"
+	},
 	"pending": {
-		"web": "A2",
 		"ios": "S2"
 	}
 }

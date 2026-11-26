@@ -141,6 +141,9 @@ const color = {
 	"primary-tint": same(alpha(ref("primary"), 0.1)),
 	"primary-tint-hover": same(alpha(ref("primary"), 0.2)),
 	"primary-tint-ring": same(alpha(ref("primary"), 0.3)),
+	/** A selected filter chip (toggle-chip.ts `bg-primary-subtle/50`, `border-primary/50`). */
+	"chip-selected": same(alpha(ref("primary-subtle"), 0.5)),
+	"chip-selected-border": same(alpha(ref("primary"), 0.5)),
 	/** A focused message row's ring (`ring-primary/40`). */
 	"primary-focus": same(alpha(ref("primary"), 0.4)),
 	/** A band under a block (`bg-secondary/40`) and a quiet chip under the pointer (`bg-secondary/80`). */

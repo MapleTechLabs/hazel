@@ -31,6 +31,7 @@ export interface ButtonSpec {
 	readonly circle?: boolean
 	readonly disabled?: boolean
 	readonly loading?: boolean
+	readonly selected?: boolean
 }
 
 export const sections: ReadonlyArray<SectionSpec> = [
@@ -88,6 +89,9 @@ export const buttons: ReadonlyArray<ButtonSpec> = [
 	),
 	{ id: "button-primary-disabled", variant: "primary", size: "regular", label: "Invite", disabled: true },
 	{ id: "button-secondary-loading", variant: "secondary", size: "regular", label: "Invite", loading: true },
+	// The DMs filter chips (`toggleChip`), off and on.
+	{ id: "button-chip", variant: "chip", size: "small", label: "Unreads" },
+	{ id: "button-chip-selected", variant: "chip", size: "small", label: "All", selected: true },
 ]
 
 export interface BadgeSpec {

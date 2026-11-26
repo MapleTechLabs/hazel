@@ -14,7 +14,6 @@ import {
 	type SidebarAction,
 	SidebarMessage,
 } from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
-import { installOverlayStyles } from "@hazel/ui/web/focus/surface"
 import { withWebHost } from "@hazel/ui/web/mount"
 import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Layer, Queue, Stream } from "effect"
@@ -99,9 +98,6 @@ const mountIsland = (element: Element, args: IslandArgs, emit: (intent: IslandIn
 			}),
 			(disconnect) => Effect.sync(disconnect),
 		)
-		// HAZEL-GAP(overlay-styles-on-create): the menu renderers add the CSS that hides a closed panel
-		// only on first open, so until then every closed context menu draws; installed here first.
-		installOverlayStyles(element.ownerDocument)
 		// Built in the Mount's scope: the element's removal closes it, which unmounts the tree.
 		yield* Layer.build(withWebHost(mounting))
 	})

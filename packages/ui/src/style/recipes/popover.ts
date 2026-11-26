@@ -17,7 +17,7 @@ export const popover = defineRecipe<{}, never, "panel" | "placeholder">({
 				borderColor: "border",
 				background: "bg",
 				color: "fg",
-				shadow: "xs",
+				shadow: "overlay",
 			},
 		},
 	},

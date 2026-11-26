@@ -32,6 +32,8 @@ const stack = (document: Document) => {
 
 export const primitive = definePrimitive("toast", ({ document, tag, outer }) => {
 	const node = outer("div")
+	// At create, not first open: a closed panel's hiding rule must be there before it draws.
+	installOverlayStyles(document)
 	const panel = makePopoverPanel(part(document, "div", "panel"))
 	const body = part(document, "div", "body")
 	const title = part(document, "p", "title")
@@ -61,7 +63,6 @@ export const primitive = definePrimitive("toast", ({ document, tag, outer }) => 
 		if (wanted === shown) return
 		shown = wanted
 		if (shown) {
-			installOverlayStyles(document)
 			const inPlace = isSpecimen(node)
 			flag(node, "specimen", inPlace)
 			flag(node, "open", true)

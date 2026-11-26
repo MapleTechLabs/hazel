@@ -104,6 +104,8 @@ const button = (spec: ButtonSpec) =>
 			"data-circle": spec.circle,
 			"data-disabled": spec.disabled,
 			"data-loading": spec.loading,
+			"data-selected": spec.selected,
+			"aria-pressed": spec.variant === "chip" ? String(spec.selected ?? false) : undefined,
 			disabled: spec.disabled,
 		},
 		[

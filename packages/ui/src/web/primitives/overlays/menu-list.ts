@@ -78,6 +78,8 @@ export const createMenuList = (
 	outer: HTMLElement,
 	onSelect: (id: string) => void,
 ): MenuList => {
+	// At create, not first open: a closed panel's hiding rule must be there before it draws.
+	installOverlayStyles(document)
 	const panel = makePopoverPanel(part(document, "div", "panel"))
 	panel.setAttribute("role", "menu")
 	panel.id = nextId("menu")
@@ -283,7 +285,6 @@ export const createMenuList = (
 	const present = () => {
 		const opening = options
 		if (opening === undefined || layer !== undefined) return
-		installOverlayStyles(document)
 		const inPlace = isSpecimen(outer)
 		flag(outer, "specimen", inPlace)
 		flag(outer, "open", true)

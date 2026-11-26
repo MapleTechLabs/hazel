@@ -23,10 +23,10 @@ export const sheet = defineRecipe<{}, never, "panel" | "header" | "title" | "clo
 				borderColor: "border",
 				background: "bg",
 				color: "fg",
-				shadow: "xs",
+				shadow: "overlay",
 			},
 			header: { layout: "row", align: "center", gap: "2" },
-			title: { grow: true, truncate: true, text: "title", strong: true },
+			title: { grow: true, truncate: true, text: "title", weight: "semibold" },
 			close: {
 				layout: "row",
 				align: "center",

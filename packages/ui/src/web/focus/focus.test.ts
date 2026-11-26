@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest"
-import { resolveLeafAnchor, watchRunPresses } from "./anchors.ts"
+import { resolveLeafAnchor } from "./anchors.ts"
 import { openLayer, openPanels } from "./layers.ts"
 import { measureNode } from "./measure.ts"
 import { place } from "./position.ts"
@@ -202,14 +202,12 @@ describe("measure and anchors", () => {
 		expect(measureNode(document.createElement("div"))).toEqual({ x: 0, y: 0, width: 0, height: 0 })
 	})
 
-	it("resolves anchorTo by a keyed leaf, else by the run pressed last", () => {
+	it("resolves anchorTo at a keyed leaf's run, else the leaf, else nothing", () => {
 		const $ = html(`
-			<div data-hz="message" data-hz-key="m1"><span data-hz-run="0">hi </span><span data-hz-run="2">@maya</span></div>
-			<div data-hz="message"><span data-hz-run="1" id="pressed">@sam</span></div>`)
+			<div data-hz="message" data-hz-key="m1" id="m1"><span data-hz-run="0">hi </span><span data-hz-run="2">@maya</span></div>
+			<div data-hz="message"><span data-hz-run="1">@sam</span></div>`)
 		expect(resolveLeafAnchor(document, { key: "m1", run: 2 })?.textContent).toBe("@maya")
-		watchRunPresses(document)
-		press($("#pressed"))
-		expect(resolveLeafAnchor(document, { key: "unknown", run: 1 })).toBe($("#pressed"))
-		expect(resolveLeafAnchor(document, { key: "unknown", run: 3 })).toBeUndefined()
+		expect(resolveLeafAnchor(document, { key: "m1", run: 5 })).toBe($("#m1"))
+		expect(resolveLeafAnchor(document, { key: "unknown", run: 1 })).toBeUndefined()
 	})
 })
