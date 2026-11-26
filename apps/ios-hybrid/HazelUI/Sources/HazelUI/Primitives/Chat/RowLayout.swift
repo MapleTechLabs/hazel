@@ -1,3 +1,5 @@
+import CoreVideo
+import IOSurface
 import UIKit
 
 /// A row laid out for one `RowContext`: its size, what to draw, what can be pressed, and the text a
@@ -88,53 +90,84 @@ extension RowLayout {
         let format = UIGraphicsImageRendererFormat()
         format.scale = scale
         format.opaque = background != nil
+        // HAZEL-GAP(row-wide-gamut): 8-bit sRGB, as the list's surfaces are; the wide-gamut tokens would
+        // otherwise pick 16-bit extended range, doubling every row's bytes.
+        format.preferredRange = .standard
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format)
-        return renderer.image { context in
-            let cg = context.cgContext
-            if let background {
-                background.setFill()
-                cg.fill(CGRect(x: 0, y: 0, width: width, height: height))
-            }
-            for item in items {
-                switch item {
-                case let .text(text, rect):
-                    text.draw(with: rect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], context: nil)
-                case let .fill(rect, radius, color):
-                    color.setFill()
-                    UIBezierPath(roundedRect: rect, cornerRadius: min(radius, rect.height / 2, rect.width / 2)).fill()
-                case let .path(path, color):
-                    color.setFill()
-                    path.fill()
-                case let .stroke(rect, radius, color, width):
-                    color.setStroke()
-                    let inset = rect.insetBy(dx: width / 2, dy: width / 2)
-                    let path = UIBezierPath(roundedRect: inset, cornerRadius: max(0, min(radius, inset.height / 2, inset.width / 2)))
-                    path.lineWidth = width
-                    path.stroke()
-                case let .strokePath(path, color, width):
-                    color.setStroke()
-                    path.lineWidth = width
-                    path.stroke()
-                case let .shadow(rect, radius, shadow, fill):
-                    cg.saveGState()
-                    cg.setShadow(
-                        offset: CGSize(width: shadow.x, height: shadow.y), blur: shadow.blur,
-                        color: shadow.color.uiColor.cgColor
-                    )
-                    fill.setFill()
-                    UIBezierPath(roundedRect: rect, cornerRadius: min(radius, rect.height / 2)).fill()
-                    cg.restoreGState()
-                case let .image(image, rect):
-                    image.draw(in: rect)
-                case let .begin(alpha):
-                    cg.saveGState()
-                    cg.setAlpha(alpha)
-                    cg.beginTransparencyLayer(auxiliaryInfo: nil)
-                case .end:
-                    cg.endTransparencyLayer()
-                    cg.restoreGState()
-                }
-            }
-        }.cgImage
+        return renderer.image { context in paint(context.cgContext, background: background) }.cgImage
     }
+
+    /// Draws into an IOSurface a layer shows as is: setting it as `contents` copies nothing on the main
+    /// thread, where a CGImage is copied at commit. For the list's rows, drawn off the main thread.
+    public func surface(scale: CGFloat) -> RowSurface? {
+        guard height > 0, width > 0 else { return nil }
+        let w = Int(ceil(width * scale)), h = Int(ceil(height * scale))
+        let properties: [IOSurfacePropertyKey: Any] = [
+            .width: w, .height: h, .bytesPerElement: 4, .pixelFormat: kCVPixelFormatType_32BGRA,
+        ]
+        guard let surface = IOSurface(properties: properties) else { return nil }
+        surface.lock(options: [], seed: nil)
+        defer { surface.unlock(options: [], seed: nil) }
+        guard let cg = CGContext(
+            data: surface.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: surface.bytesPerRow,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        ) else { return nil }
+        cg.translateBy(x: 0, y: CGFloat(h))
+        cg.scaleBy(x: scale, y: -scale)
+        UIGraphicsPushContext(cg)
+        paint(cg, background: background)
+        UIGraphicsPopContext()
+        return RowSurface(surface: surface, bytes: surface.allocationSize)
+    }
+
+    private func paint(_ cg: CGContext, background: UIColor?) {
+        if let background {
+            background.setFill()
+            cg.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        }
+        for item in items {
+            switch item {
+            case let .text(text, rect):
+                text.draw(with: rect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], context: nil)
+            case let .fill(rect, radius, color):
+                color.setFill()
+                UIBezierPath(roundedRect: rect, cornerRadius: min(radius, rect.height / 2, rect.width / 2)).fill()
+            case let .path(path, color):
+                color.setFill()
+                path.fill()
+            case let .stroke(rect, radius, color, width):
+                color.setStroke()
+                let inset = rect.insetBy(dx: width / 2, dy: width / 2)
+                let path = UIBezierPath(roundedRect: inset, cornerRadius: max(0, min(radius, inset.height / 2, inset.width / 2)))
+                path.lineWidth = width
+                path.stroke()
+            case let .strokePath(path, color, width):
+                color.setStroke()
+                path.lineWidth = width
+                path.stroke()
+            case let .shadow(rect, radius, shadow, fill):
+                cg.saveGState()
+                cg.setShadow(offset: CGSize(width: shadow.x, height: shadow.y), blur: shadow.blur, color: shadow.color.uiColor.cgColor)
+                fill.setFill()
+                UIBezierPath(roundedRect: rect, cornerRadius: min(radius, rect.height / 2)).fill()
+                cg.restoreGState()
+            case let .image(image, rect):
+                image.draw(in: rect)
+            case let .begin(alpha):
+                cg.saveGState()
+                cg.setAlpha(alpha)
+                cg.beginTransparencyLayer(auxiliaryInfo: nil)
+            case .end:
+                cg.endTransparencyLayer()
+                cg.restoreGState()
+            }
+        }
+    }
+}
+
+/// A row's pixels for a layer's `contents`, and what they cost.
+public struct RowSurface: @unchecked Sendable {
+    public let surface: IOSurface
+    public let bytes: Int
 }

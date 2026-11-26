@@ -49,8 +49,8 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
     public var dark: Bool? { didSet { if dark != oldValue { remeasureAll() } } }
     public var sizeClass: HazelTheme.SizeClass? { didSet { if sizeClass != oldValue { remeasureAll() } } }
 
-    static let startSpinner = Int.min
-    static let endSpinner = Int.min + 1
+    nonisolated static let startSpinner = Int.min
+    nonisolated static let endSpinner = Int.min + 1
 
     /// What `set` was given, before the spinners.
     private var given: (keys: [Int], entries: [ListEntry]) = ([], [])
@@ -61,7 +61,8 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
     private var offsets: [CGFloat] = [0]
     /// Measured layouts by key. Placeholders measure by index (`-(index + 1)` keys).
     private var layouts: [Int: RowLayout] = [:]
-    private var images: [Int: CGImage] = [:]
+    /// Row pixels by key: an IOSurface (drawn off the main thread) or a CGImage (the first frame).
+    private var images: [Int: (contents: AnyObject, bytes: Int)] = [:]
     private var imageOrder: [Int] = []
     private var rendering: [Int: Operation] = [:]
     private var blankShown: Set<Int> = []
@@ -167,6 +168,7 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
     /// When the order is unchanged only the dirty rows are touched (no pass over every row).
     public func set(keys newKeys: [Int], entries newEntries: [ListEntry], dirty: Set<Int>) {
         given = (newKeys, newEntries)
+        accessibilityElementsCache = nil
         var nextKeys = newKeys, nextEntries = newEntries
         if loadingEnd { nextKeys.insert(Self.endSpinner, at: 0); nextEntries.insert(.placeholder, at: 0) }
         if loadingStart { nextKeys.append(Self.startSpinner); nextEntries.append(.placeholder) }
@@ -196,11 +198,14 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
             stats.touchedPerSet = dirty.count
             if first != .max { shiftOffsets(from: first) }
         } else {
+            let before = indexOf
             keys = nextKeys
             indexOf = Dictionary(uniqueKeysWithValues: nextKeys.enumerated().map { ($1, $0) })
             if width > 0 {
                 let c = context
-                for (i, key) in keys.enumerated() where layouts[key] == nil && (dirty.contains(key) || i < 40) {
+                // Now: the newest rows and rows changed in place. New rows further out (an older page)
+                // are measured off the main thread like any other.
+                for (i, key) in keys.enumerated() where layouts[key] == nil && (i < 40 || (dirty.contains(key) && before[key] != nil)) {
                     if isPlaceholder(i) { continue }
                     layouts[key] = Self.make(key, entries[i], c)
                     stats.measured += 1
@@ -218,7 +223,7 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
     }
 
     /// A spinner or a real entry, laid out for `c`.
-    static func make(_ key: Int, _ entry: ListEntry, _ c: RowContext) -> RowLayout {
+    nonisolated static func make(_ key: Int, _ entry: ListEntry, _ c: RowContext) -> RowLayout {
         key == startSpinner || key == endSpinner ? RowRenderer.spinner(c) : RowRenderer.layout(entry, c)
     }
 
@@ -318,6 +323,7 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
                         if self.heights[i] != layout.height { self.heights[i] = layout.height; first = min(first, i) }
                     }
                     self.stats.measured += made.count
+                    self.accessibilityElementsCache = nil
                     if first != .max { self.shiftOffsets(from: first) }
                     self.restore(anchor, atBottom: atBottom)
                     self.show()
@@ -367,7 +373,7 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
             layer.frame = CGRect(x: 0, y: offsets[i], width: bounds.width, height: heights[i])
             guard layer.contents == nil else { continue }
             if let image = images[key] {
-                present(key, image, on: layer)
+                present(key, image.contents, on: layer)
             } else if isPlaceholder(i) {
                 layer.backgroundColor = HazelTheme.Colors.muted.ui(c.dark).cgColor
             } else if firstPaint {
@@ -375,7 +381,7 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
                 let layout = layouts[key] ?? Self.make(key, entries[i], c)
                 layouts[key] = layout
                 if let image = layout.draw(scale: c.scale) {
-                    keep(key, image)
+                    keep(key, image, bytes: image.bytesPerRow * image.height)
                     stats.renders += 1
                     stats.rendersByKey[key, default: 0] += 1
                     present(key, image, on: layer)
@@ -417,11 +423,10 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
             self.onShown = nil
             onShown()
         }
-        accessibilityElementsCache = nil
     }
 
     /// Puts a bitmap on a row's layer; a row that asks to enter fades and rises in once.
-    private func present(_ key: Int, _ image: CGImage, on layer: CALayer) {
+    private func present(_ key: Int, _ image: AnyObject, on layer: CALayer) {
         layer.contents = image
         guard let layout = layouts[key], layout.entering, entered.insert(key).inserted,
               !UIAccessibility.isReduceMotionEnabled else { return }
@@ -453,7 +458,7 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
         work.addExecutionBlock { @Sendable [weak self, weak work] in
             if work?.isCancelled == true { return }
             let made = layout ?? MessageListView.make(key, entry, c)
-            let image = made.draw(scale: c.scale)
+            let image = made.surface(scale: c.scale)
             DispatchQueue.main.async {
                 guard let self else { return }
                 if self.rendering[key] === work { self.rendering[key] = nil }
@@ -461,11 +466,11 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
                 if self.layouts[key] == nil { self.layouts[key] = made }
                 self.stats.renders += 1
                 self.stats.rendersByKey[key, default: 0] += 1
-                self.keep(key, image)
+                self.keep(key, image.surface, bytes: image.bytes)
                 if let layer = self.layers[key] {
                     CATransaction.begin()
                     CATransaction.setDisableActions(true)
-                    self.present(key, image, on: layer)
+                    self.present(key, image.surface, on: layer)
                     CATransaction.commit()
                 }
                 if self.onShown != nil { self.show() }
@@ -475,11 +480,11 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
         renderQueue.addOperation(work)
     }
 
-    private func keep(_ key: Int, _ image: CGImage) {
+    private func keep(_ key: Int, _ image: AnyObject, bytes: Int) {
         dropImage(key)
-        images[key] = image
+        images[key] = (image, bytes)
         imageOrder.append(key)
-        stats.bitmapBytes += image.bytesPerRow * image.height
+        stats.bitmapBytes += bytes
         // Over budget: drop the least recent bitmaps outside what is shown or drawn ahead.
         while stats.bitmapBytes > bitmapBudget,
               let victim = imageOrder.first(where: { !protected.contains($0) && layers[$0] == nil }) {
@@ -489,7 +494,7 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
 
     private func dropImage(_ key: Int) {
         guard let image = images.removeValue(forKey: key) else { return }
-        stats.bitmapBytes -= image.bytesPerRow * image.height
+        stats.bitmapBytes -= image.bytes
         if let i = imageOrder.firstIndex(of: key) { imageOrder.remove(at: i) }
     }
 
@@ -571,6 +576,8 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
     @objc private func held(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began, let (i, local) = row(at: gesture.location(in: self)) else { return }
         if onLongPress?(keys[i]) == true { return }
+        // HAZEL-GAP(message-select-text): the action menu cannot start selection yet, so only a row
+        // without a `longPress` handler selects on a long press.
         beginSelection(i, at: local)
     }
 
@@ -612,7 +619,9 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
 
     // MARK: accessibility
 
-    private var accessibilityElementsCache: [Any]?
+    /// The elements for the visible range they were built for; scrolling within it reuses them
+    /// (their frames are read live), so an accessibility client polling during a fling costs nothing.
+    private var accessibilityElementsCache: (range: ClosedRange<Int>, elements: [Any])?
 
     public override var isAccessibilityElement: Bool { get { false } set {} }
 
@@ -620,35 +629,34 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
     /// reactions, attachments, the thread card), framed where they are drawn.
     public override var accessibilityElements: [Any]? {
         get {
-            if let cached = accessibilityElementsCache { return cached }
             guard !keys.isEmpty, heights.count == keys.count, bounds.height > 0 else { return [] }
             let top = scroll.contentOffset.y
             let lo = index(at: max(0, top)), hi = min(keys.count - 1, index(at: top + bounds.height))
             guard lo <= hi else { return [] }
+            if let cached = accessibilityElementsCache, cached.range == lo...hi { return cached.elements }
             var out: [Any] = []
             for i in stride(from: hi, through: lo, by: -1) {
                 let key = keys[i]
                 guard let layout = layouts[key] else { continue }
                 if accessibilityCache[key] == nil { accessibilityCache[key] = elements(key, layout) }
-                let rect = screenRect(i)
-                for (n, element) in (accessibilityCache[key] ?? []).enumerated() {
-                    let base = n == 0 ? CGRect(origin: .zero, size: rect.size) : spanRects(layout)[n - 1]
-                    element.accessibilityFrameInContainerSpace = base.offsetBy(dx: rect.minX, dy: rect.minY)
-                    out.append(element)
-                }
+                out.append(contentsOf: accessibilityCache[key] ?? [])
             }
-            accessibilityElementsCache = out
+            accessibilityElementsCache = (lo...hi, out)
             return out
         }
         set {}
     }
 
-    private func spanRects(_ layout: RowLayout) -> [CGRect] {
-        layout.targets.filter { $0.event != "press" }.map(\.rect)
+    /// Where `local` (row coordinates) of row `key` is on screen now.
+    fileprivate func screenFrame(_ key: Int, _ local: CGRect?) -> CGRect {
+        guard let i = indexOf[key], i < heights.count else { return .zero }
+        let rect = screenRect(i)
+        let frame = (local ?? CGRect(origin: .zero, size: rect.size)).offsetBy(dx: rect.minX, dy: rect.minY)
+        return UIAccessibility.convertToScreenCoordinates(frame, in: self)
     }
 
     private func elements(_ key: Int, _ layout: RowLayout) -> [UIAccessibilityElement] {
-        let row = UIAccessibilityElement(accessibilityContainer: self)
+        let row = RowElement(list: self, key: key, local: nil)
         row.accessibilityLabel = layout.label
         row.accessibilityTraits = key == Self.startSpinner || key == Self.endSpinner ? .updatesFrequently : .staticText
         var actions = layout.actions.map { action in
@@ -664,9 +672,9 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
             })
         }
         row.accessibilityCustomActions = actions
-        var out = [row]
+        var out: [UIAccessibilityElement] = [row]
         for target in layout.targets where target.event != "press" {
-            let span = RowSpanElement(accessibilityContainer: self)
+            let span = RowElement(list: self, key: key, local: target.rect)
             span.accessibilityLabel = target.label
             var traits: UIAccessibilityTraits = target.role == .link ? .link : target.role == .image ? [.image, .button] : .button
             if target.selected { traits.insert(.selected) }
@@ -683,7 +691,6 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
         guard dy != 0 else { return false }
         let maxY = scroll.contentSize.height + scroll.contentInset.bottom - bounds.height
         scroll.contentOffset.y = min(max(-scroll.contentInset.top, scroll.contentOffset.y + dy), max(-scroll.contentInset.top, maxY))
-        accessibilityElementsCache = nil
         UIAccessibility.post(notification: .pageScrolled, argument: nil)
         return true
     }
@@ -701,9 +708,25 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
     public func layout(of key: Int) -> RowLayout? { layouts[key] }
 }
 
-/// A pressable span of a bitmap row, activated by VoiceOver's double tap.
-private final class RowSpanElement: UIAccessibilityElement {
+/// A row of the bitmap list, or one pressable span of it, for VoiceOver; its frame is read live.
+private final class RowElement: UIAccessibilityElement {
+    weak var list: MessageListView?
+    let key: Int
+    let local: CGRect?
     var activate: (() -> Void)?
+
+    init(list: MessageListView, key: Int, local: CGRect?) {
+        self.list = list
+        self.key = key
+        self.local = local
+        super.init(accessibilityContainer: list)
+    }
+
+    override var accessibilityFrame: CGRect {
+        get { list?.screenFrame(key, local) ?? .zero }
+        set {}
+    }
+
     override func accessibilityActivate() -> Bool {
         activate?()
         return activate != nil

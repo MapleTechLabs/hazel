@@ -431,7 +431,10 @@ public enum RowRenderer {
             runIndex += 1
         }
         guard text.length > 0 else { return y + line }
-        let (size2, rects) = RowText.layout(text, width: width, ranges: chips.map(\.0) + hits.map(\.0))
+        // Ranges need a layout manager; plain text measures with the cheaper bounding rect.
+        let (size2, rects) = chips.isEmpty && hits.isEmpty
+            ? (RowText.measure(text, width: width), [])
+            : RowText.layout(text, width: width, ranges: chips.map(\.0) + hits.map(\.0))
         for (i, chip) in chips.enumerated() {
             for r in rects[i] {
                 // The trailing kern is already inside the glyph rect; the leading pad sits before it.
