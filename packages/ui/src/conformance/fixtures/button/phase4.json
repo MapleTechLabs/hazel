@@ -1,0 +1,18 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): a filter chip with its remove mark.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"label": "Plan: Pro",
+			"variant": "chip",
+			"selected": true,
+			"removable": true
+		},
+		"events": ["press", "remove"]
+	},
+	"frame": "inline",
+	"pending": {
+		"web": "A2",
+		"ios": "S2"
+	}
+}

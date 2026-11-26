@@ -10,8 +10,12 @@ public enum HazelVocabulary {
         "hz:scroll": "S1",
         "hz:frame": "S1",
         "hz:divider": "S1",
+        "hz:grid": "S1",
         "hz:list": "S5",
         "hz:listDivider": "S5",
+        "hz:table": "S5",
+        "hz:tableRow": "S5",
+        "hz:tableCell": "S5",
         "hz:text": "S1",
         "hz:heading": "S1",
         "hz:icon": "S1",
@@ -25,6 +29,11 @@ public enum HazelVocabulary {
         "hz:progress": "S1",
         "hz:emptyState": "S1",
         "hz:richText": "S1",
+        "hz:chart": "S1",
+        "hz:heatmap": "S1",
+        "hz:statTile": "S1",
+        "hz:codeBlock": "S1",
+        "hz:banner": "S1",
         "hz:message": "S5",
         "hz:reactionBar": "S5",
         "hz:attachmentGrid": "S5",
@@ -38,6 +47,10 @@ public enum HazelVocabulary {
         "hz:select": "S2",
         "hz:searchField": "S2",
         "hz:composer": "S2",
+        "hz:choiceGroup": "S2",
+        "hz:slider": "S2",
+        "hz:datePicker": "S2",
+        "hz:dropZone": "S2",
         "hz:menu": "S3",
         "hz:contextMenu": "S3",
         "hz:sheet": "S3",
@@ -46,12 +59,18 @@ public enum HazelVocabulary {
         "hz:toast": "S3",
         "hz:tooltip": "S3",
         "hz:emojiPicker": "S3",
+        "hz:commandPalette": "S3",
+        "hz:lightbox": "S3",
         "hz:screen": "S4",
         "hz:navigation": "S4",
         "hz:tabBar": "S4",
         "hz:splitView": "S4",
         "hz:section": "S4",
         "hz:item": "S4",
+        "hz:property": "S4",
+        "hz:disclosure": "S4",
+        "hz:stepper": "S4",
+        "hz:actionBar": "S4",
         "hz:slot": "S1",
         "hz:action": "S4",
         "hz:ext": "S0",
@@ -67,8 +86,12 @@ enum Primitives {
         case "hz:scroll": HzScroll(tree: tree, node: node)
         case "hz:frame": HzFrame(tree: tree, node: node)
         case "hz:divider": HzDivider(tree: tree, node: node)
+        case "hz:grid": HzGrid(tree: tree, node: node)
         case "hz:list": HzList(tree: tree, node: node)
         case "hz:listDivider": HzListDivider(tree: tree, node: node)
+        case "hz:table": HzTable(tree: tree, node: node)
+        case "hz:tableRow": HzTableRow(tree: tree, node: node)
+        case "hz:tableCell": HzTableCell(tree: tree, node: node)
         case "hz:text": HzText(tree: tree, node: node)
         case "hz:heading": HzHeading(tree: tree, node: node)
         case "hz:icon": HzIcon(tree: tree, node: node)
@@ -82,6 +105,11 @@ enum Primitives {
         case "hz:progress": HzProgress(tree: tree, node: node)
         case "hz:emptyState": HzEmptyState(tree: tree, node: node)
         case "hz:richText": HzRichText(tree: tree, node: node)
+        case "hz:chart": HzChart(tree: tree, node: node)
+        case "hz:heatmap": HzHeatmap(tree: tree, node: node)
+        case "hz:statTile": HzStatTile(tree: tree, node: node)
+        case "hz:codeBlock": HzCodeBlock(tree: tree, node: node)
+        case "hz:banner": HzBanner(tree: tree, node: node)
         case "hz:message": HzMessage(tree: tree, node: node)
         case "hz:reactionBar": HzReactionBar(tree: tree, node: node)
         case "hz:attachmentGrid": HzAttachmentGrid(tree: tree, node: node)
@@ -95,6 +123,10 @@ enum Primitives {
         case "hz:select": HzSelect(tree: tree, node: node)
         case "hz:searchField": HzSearchField(tree: tree, node: node)
         case "hz:composer": HzComposer(tree: tree, node: node)
+        case "hz:choiceGroup": HzChoiceGroup(tree: tree, node: node)
+        case "hz:slider": HzSlider(tree: tree, node: node)
+        case "hz:datePicker": HzDatePicker(tree: tree, node: node)
+        case "hz:dropZone": HzDropZone(tree: tree, node: node)
         case "hz:menu": HzMenu(tree: tree, node: node)
         case "hz:contextMenu": HzContextMenu(tree: tree, node: node)
         case "hz:sheet": HzSheet(tree: tree, node: node)
@@ -103,12 +135,18 @@ enum Primitives {
         case "hz:toast": HzToast(tree: tree, node: node)
         case "hz:tooltip": HzTooltip(tree: tree, node: node)
         case "hz:emojiPicker": HzEmojiPicker(tree: tree, node: node)
+        case "hz:commandPalette": HzCommandPalette(tree: tree, node: node)
+        case "hz:lightbox": HzLightbox(tree: tree, node: node)
         case "hz:screen": HzScreen(tree: tree, node: node)
         case "hz:navigation": HzNavigation(tree: tree, node: node)
         case "hz:tabBar": HzTabBar(tree: tree, node: node)
         case "hz:splitView": HzSplitView(tree: tree, node: node)
         case "hz:section": HzSection(tree: tree, node: node)
         case "hz:item": HzItem(tree: tree, node: node)
+        case "hz:property": HzProperty(tree: tree, node: node)
+        case "hz:disclosure": HzDisclosure(tree: tree, node: node)
+        case "hz:stepper": HzStepper(tree: tree, node: node)
+        case "hz:actionBar": HzActionBar(tree: tree, node: node)
         case "hz:slot": HzSlot(tree: tree, node: node)
         case "hz:action": HzAction(tree: tree, node: node)
         case "hz:ext": HzExt(tree: tree, node: node)

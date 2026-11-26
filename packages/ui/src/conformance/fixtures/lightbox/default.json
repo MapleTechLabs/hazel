@@ -1,0 +1,48 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): an image open in the viewer with its menu.",
+	"root": {
+		"tag": "lightbox",
+		"props": {
+			"open": true,
+			"index": 1,
+			"items": [
+				{
+					"id": "i1",
+					"kind": "image",
+					"name": "before.png",
+					"width": 1280,
+					"height": 720
+				},
+				{
+					"id": "i2",
+					"kind": "image",
+					"name": "after.png",
+					"width": 1280,
+					"height": 720
+				}
+			],
+			"entries": [
+				{
+					"entries": [
+						{
+							"id": "download",
+							"label": "Download",
+							"icon": "download"
+						},
+						{
+							"id": "copy",
+							"label": "Copy image",
+							"icon": "copy"
+						}
+					]
+				}
+			]
+		},
+		"events": ["change", "select", "dismiss"]
+	},
+	"frame": "screen",
+	"pending": {
+		"web": "A3",
+		"ios": "S3"
+	}
+}

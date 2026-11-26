@@ -44,6 +44,9 @@ const move = Schema.Struct({ id: Schema.String, before: Schema.NullOr(Schema.Str
 /** A mention pressed inside a leaf, with its run index so a popover can anchor at it (`popover.anchorTo`). */
 const mention = Schema.Struct({ userId: Schema.String, run: Schema.Finite })
 
+/** A code block's copy button, by the block's index in the body (`richText`, `message`). */
+const copyCode = Schema.Struct({ block: Schema.Finite })
+
 /** Imperative requests a Command sends through the vocabulary's `Host` (wire op `command`). */
 export const commandNames = ["focus", "blur", "scrollTo", "measure", "select"] as const
 export type CommandName = (typeof commandNames)[number]
@@ -129,6 +132,15 @@ export const tags = {
 		props: { surface: option(O.FrameSurface, "card") },
 	}),
 	divider: tag({ group: "layout", web: "A1", ios: "S1", content: "none" }),
+	// Phase 4: children in equal columns (KPI tiles, integration cards, settings cards); one column
+	// on the compact size class. `density` is its gap, as a stack's.
+	grid: tag({
+		group: "layout",
+		web: "A1",
+		ios: "S1",
+		content: "elements",
+		props: { columns: option(O.GridColumns, "auto"), density: option(O.StackDensity, "regular") },
+	}),
 
 	// Collections
 	list: tag({
@@ -156,6 +168,48 @@ export const tags = {
 		ios: "S5",
 		content: "none",
 		props: { kind: option(O.ListDividerKind, "date"), label: text },
+	}),
+
+	// Phase 4: the app's data table (`ui/data-table.ts`). The screen sorts and slices the rows; the
+	// table marks the sorted header, draws skeleton rows while `loading`, and with `selectable` a
+	// checkbox column whose header reports `selectAll`. On iOS a row is a list row of its cells.
+	table: tag({
+		group: "collections",
+		web: "A4",
+		ios: "S5",
+		content: "elements",
+		props: {
+			label: text,
+			columns: value(Schema.Array(Content.TableColumn)),
+			sort: value(Content.TableSort),
+			selectable: flag,
+			loading: flag,
+			stickyHeader: flag,
+		},
+		events: {
+			sort: Schema.Struct({ column: Schema.String }),
+			selectAll: Schema.Struct({ selected: Schema.Boolean }),
+		},
+		commands: ["scrollTo"],
+	}),
+	// One row: its cells in column order. `current` is the keyboard row (j/k); `group` a heading row
+	// spanning every column (`title`); `footer` the totals row; `actions` show on hover or focus.
+	tableRow: tag({
+		group: "collections",
+		web: "A4",
+		ios: "S5",
+		content: "elements",
+		props: { title: text, selected: flag, current: flag, group: flag, footer: flag, disabled: flag },
+		slots: ["actions"],
+		events: { press: none, select: Schema.Struct({ selected: Schema.Boolean }) },
+	}),
+	// A cell: any content, aligned and sized by its column; `column` names it for iOS's row labels.
+	tableCell: tag({
+		group: "collections",
+		web: "A4",
+		ios: "S5",
+		content: "elements",
+		props: { column: text },
 	}),
 
 	// Content
@@ -267,8 +321,8 @@ export const tags = {
 		web: "A1",
 		ios: "S1",
 		content: "none",
-		// `value` 0 to 1; `indeterminate` when the amount is unknown.
-		props: { value: count, indeterminate: flag, label: text },
+		// `value` 0 to 1; `indeterminate` when the amount is unknown; `spinner` an inline wait (phase 4).
+		props: { value: count, indeterminate: flag, label: text, style: option(O.ProgressStyle, "bar") },
 	}),
 	emptyState: tag({
 		group: "content",
@@ -292,7 +346,96 @@ export const tags = {
 		events: {
 			pressMention: mention,
 			pressLink: Schema.Struct({ url: Schema.String }),
+			// A code block's copy button (phase 4); the screen copies through `Clipboard`.
+			copyCode,
 		},
+	}),
+	// Phase 4: today's hand-drawn SVG charts (`customers/charts`) as one primitive. Values come per x
+	// label; the renderer draws axes, gridlines, the crosshair and the tooltip; `hover` reports the
+	// index under the pointer for a screen that shows it elsewhere. iOS draws it with Swift Charts.
+	chart: tag({
+		group: "content",
+		web: "A1",
+		ios: "S1",
+		content: "none",
+		props: {
+			kind: option(O.ChartKind, "line"),
+			label: text,
+			series: value(Schema.Array(Content.ChartSeries)),
+			labels: value(Schema.Array(Schema.String)),
+			format: option(O.ChartFormat, "number"),
+			currency: text,
+			size: option(O.ChartSize, "regular"),
+			legend: flag,
+			// A stacked bar's net line, and the evidence bars' highlighted tail (`highlightFrom`).
+			net: flag,
+			highlightFrom: count,
+			loading: flag,
+		},
+		events: {
+			hover: Schema.Struct({ index: Schema.NullOr(Schema.Finite) }),
+			press: Schema.Struct({ index: Schema.Finite }),
+		},
+	}),
+	// Phase 4: a year of days as levels (`charts/calendar-heatmap.ts`); arrow keys step the selection.
+	heatmap: tag({
+		group: "content",
+		web: "A1",
+		ios: "S1",
+		content: "none",
+		props: { label: text, days: value(Schema.Array(Content.HeatmapDay)), selected: text },
+		events: { select: Schema.Struct({ date: Schema.String }) },
+		commands: ["scrollTo"],
+	}),
+	// Phase 4: a KPI (`customers/ui/kpi-tile.ts`): its value, a delta pill whose tone the view
+	// decides from what is good, a comparison line, and a sparkline in `chart`.
+	statTile: tag({
+		group: "content",
+		web: "A1",
+		ios: "S1",
+		content: "none",
+		props: {
+			label: text,
+			value: text,
+			detail: text,
+			definition: text,
+			delta: text,
+			trend: option(O.StatTrend, "none"),
+			deltaTone: option(O.StatDeltaTone, "neutral"),
+			comparison: text,
+			loading: flag,
+			href: text,
+		},
+		slots: ["chart", "action"],
+		events: { press: none },
+	}),
+	// Phase 4: a code snippet outside a message (an MCP URL, a webhook payload), highlighted by
+	// `language`, with a copy button that raises `copy`.
+	codeBlock: tag({
+		group: "content",
+		web: "A1",
+		ios: "S1",
+		content: "none",
+		props: { code: text, language: text, title: text, copyable: flag, wrap: flag },
+		events: { copy: none },
+	}),
+	// Phase 4: the kit's callout and the chat's "N new messages" band (`list-new-messages-bar`); its
+	// children are extra content (a token shown once, a form), `actions` its buttons.
+	banner: tag({
+		group: "content",
+		web: "A1",
+		ios: "S1",
+		content: "elements",
+		props: {
+			tone: option(O.BadgeTone, "info"),
+			style: option(O.BannerStyle, "callout"),
+			title: text,
+			description: text,
+			icon: value(O.IconName),
+			dismissible: flag,
+		},
+		slots: ["actions"],
+		events: { dismiss: none },
 	}),
 
 	// Chat
@@ -323,6 +466,7 @@ export const tags = {
 			pressReply: none,
 			pressThread: none,
 			retry: none,
+			copyCode,
 		},
 	}),
 	reactionBar: tag({
@@ -338,8 +482,13 @@ export const tags = {
 		web: "A5",
 		ios: "S5",
 		content: "none",
-		props: { attachments: value(Schema.Array(Content.Attachment)), removable: flag },
-		events: { press: ids, remove: ids },
+		props: {
+			attachments: value(Schema.Array(Content.Attachment)),
+			removable: flag,
+			// Phase 4: the files page's grid, masonry and list; a message keeps the mosaic.
+			layout: option(O.AttachmentLayout, "mosaic"),
+		},
+		events: { press: ids, remove: ids, retry: ids },
 	}),
 	embed: tag({
 		group: "chat",
@@ -374,8 +523,10 @@ export const tags = {
 			selected: flag,
 			disabled: flag,
 			loading: flag,
+			// A filter chip's trailing remove mark (phase 4), raising `remove`.
+			removable: flag,
 		},
-		events: { press: none },
+		events: { press: none, remove: none },
 		commands: ["focus"],
 	}),
 	link: tag({
@@ -401,8 +552,15 @@ export const tags = {
 			readOnly: flag,
 			required: flag,
 			monospace: flag,
+			// Phase 4: the keyboard and hints; a masked value with a reveal button; a copy button
+			// (`copy`); fixed text before or after the value (`hazel.app/`, `minutes`).
+			inputKind: option(O.InputKind, "text"),
+			secret: flag,
+			copyable: flag,
+			prefix: text,
+			suffix: text,
 		},
-		events: textFieldEvents,
+		events: { ...textFieldEvents, copy: none },
 		commands: ["focus", "blur", "select"],
 	}),
 	textArea: tag({
@@ -426,7 +584,15 @@ export const tags = {
 		web: "A2",
 		ios: "S2",
 		content: "none",
-		props: { label: text, description: text, checked: flag, disabled: flag },
+		props: {
+			label: text,
+			description: text,
+			checked: flag,
+			disabled: flag,
+			// Phase 4: a checkbox look, and its mixed state (a header row's "select all").
+			style: option(O.ToggleStyle, "switch"),
+			indeterminate: flag,
+		},
 		events: { change: Schema.Struct({ checked: Schema.Boolean }) },
 	}),
 	select: tag({
@@ -440,8 +606,15 @@ export const tags = {
 			options: value(Schema.Array(Content.SelectOption)),
 			value: text,
 			disabled: flag,
+			// Phase 4, the combobox: typing filters the options (label and description); `query`
+			// reports the text for options the screen loads; `footer` holds a "Create ..." row.
+			searchable: flag,
 		},
-		events: { change: Schema.Struct({ value: Schema.String }) },
+		slots: ["footer"],
+		events: {
+			change: Schema.Struct({ value: Schema.String }),
+			query: Schema.Struct({ text: Schema.String }),
+		},
 	}),
 	searchField: tag({
 		group: "controls",
@@ -457,7 +630,17 @@ export const tags = {
 		web: "A2",
 		ios: "S2",
 		content: "none",
-		props: { placeholder: text, value: controlled(TextField.State), disabled: flag, canSend: flag },
+		props: {
+			placeholder: text,
+			value: controlled(TextField.State),
+			disabled: flag,
+			canSend: flag,
+			// Phase 4: the open trigger's suggestions, drawn above the field with `activeSuggestion`
+			// highlighted; the reply or edit bar.
+			suggestions: value(Schema.Array(Content.Suggestion)),
+			activeSuggestion: text,
+			context: value(Content.ComposerContext),
+		},
 		slots: ["above", "actions"],
 		events: {
 			...textFieldEvents,
@@ -470,8 +653,90 @@ export const tags = {
 			key: Schema.Struct({ key: O.ComposerKey }),
 			// Files dropped or pasted; the host hands them to `Files` and reports the count.
 			files: Schema.Struct({ count: Schema.Finite }),
+			// Phase 4: a suggestion pressed; Up in an empty composer (edit the last message); the
+			// context bar's close.
+			pressSuggestion: ids,
+			editLast: none,
+			cancelContext: none,
 		},
 		commands: ["focus", "blur", "select"],
+	}),
+
+	// Phase 4: one choice among options, or several (`multiple`), in one of the kit's looks: radio
+	// rows, choice cards (`columns`), a segmented control, filter chips, or colour swatches.
+	choiceGroup: tag({
+		group: "controls",
+		web: "A2",
+		ios: "S2",
+		content: "none",
+		props: {
+			label: text,
+			description: text,
+			error: text,
+			options: value(Schema.Array(Content.ChoiceOption)),
+			selected: value(Schema.Array(Schema.String)),
+			multiple: flag,
+			style: option(O.ChoiceStyle, "list"),
+			columns: option(O.ChoiceColumns, "1"),
+			disabled: flag,
+		},
+		events: { change: Schema.Struct({ selected: Schema.Array(Schema.String) }) },
+	}),
+	slider: tag({
+		group: "controls",
+		web: "A2",
+		ios: "S2",
+		content: "none",
+		props: {
+			label: text,
+			value: count,
+			min: count,
+			max: count,
+			step: count,
+			valueText: text,
+			disabled: flag,
+		},
+		events: { change: Schema.Struct({ value: Schema.Finite }) },
+	}),
+	// Phase 4: the kit's date stack (`ui/date-picker.ts`, `date-field.ts`). `value`, `min` and `max`
+	// are ISO text (`2026-11-26`, `09:30`, or both); the web draws segments and a calendar popover,
+	// iOS the system picker.
+	datePicker: tag({
+		group: "controls",
+		web: "A2",
+		ios: "S2",
+		content: "none",
+		props: {
+			label: text,
+			description: text,
+			error: text,
+			placeholder: text,
+			value: text,
+			min: text,
+			max: text,
+			granularity: option(O.DateGranularity, "date"),
+			clearable: flag,
+			disabled: flag,
+		},
+		events: { change: Schema.Struct({ value: Schema.NullOr(Schema.String) }) },
+		commands: ["focus"],
+	}),
+	// Phase 4: a dashed target for files (custom emojis, imports): a press opens the picker, a drop
+	// hands the files to `Files` and reports the count, as the composer's `files`.
+	dropZone: tag({
+		group: "controls",
+		web: "A2",
+		ios: "S2",
+		content: "none",
+		props: {
+			label: text,
+			description: text,
+			accept: text,
+			multiple: flag,
+			disabled: flag,
+			loading: flag,
+		},
+		events: { press: none, files: Schema.Struct({ count: Schema.Finite }) },
 	}),
 
 	// Overlays
@@ -515,7 +780,13 @@ export const tags = {
 		ios: "S3",
 		content: "elements",
 		// `anchorTo`: anchor at run `run` of the leaf keyed `key` (a mention in a message), not the slot.
-		props: { open: flag, anchorTo: value(Content.LeafAnchor) },
+		props: {
+			open: flag,
+			anchorTo: value(Content.LeafAnchor),
+			// Phase 4: `hover` opens after a delay over the anchor (a hover card) and asks to close on
+			// leave through `dismiss`; the renderer owns the delay.
+			trigger: option(O.PopoverTrigger, "press"),
+		},
 		slots: ["anchor"],
 		events: { dismiss: none },
 	}),
@@ -524,7 +795,14 @@ export const tags = {
 		web: "A3",
 		ios: "S3",
 		content: "none",
-		props: { open: flag, tone: option(O.BadgeTone, "neutral"), title: text, description: text },
+		props: {
+			open: flag,
+			tone: option(O.BadgeTone, "neutral"),
+			title: text,
+			description: text,
+			// Phase 4: today's `loading` toast (a spinner; it stays until replaced).
+			loading: flag,
+		},
 		slots: ["action"],
 		events: { dismiss: none },
 	}),
@@ -539,6 +817,47 @@ export const tags = {
 		events: { select: Schema.Struct({ emoji: Schema.String }), dismiss: none },
 	}),
 
+	// Phase 4: the command palette (`overlay/command-palette`): a query field over grouped results.
+	// The screen filters; the palette moves the highlight and reports the pick. `back` leaves a
+	// form page; the page's own content is the children.
+	commandPalette: tag({
+		group: "overlays",
+		web: "A3",
+		ios: "S3",
+		content: "elements",
+		props: {
+			open: flag,
+			placeholder: text,
+			query: controlled(TextField.State),
+			groups: value(Content.PaletteGroups),
+			loading: flag,
+			empty: text,
+			title: text,
+		},
+		events: {
+			change: TextField.ChangePayload,
+			select: ids,
+			back: none,
+			dismiss: none,
+		},
+		commands: ["focus"],
+	}),
+	// Phase 4: the full-screen image and video viewer (`chat/image-viewer.ts`): zoom, pan, swipe and
+	// the thumbnail strip are the renderer's; `entries` is its menu (download, copy, open).
+	lightbox: tag({
+		group: "overlays",
+		web: "A3",
+		ios: "S3",
+		content: "none",
+		props: {
+			open: flag,
+			items: value(Schema.Array(Content.Attachment)),
+			index: count,
+			entries: value(Content.MenuGroups),
+		},
+		events: { change: Schema.Struct({ index: Schema.Finite }), select: ids, dismiss: none },
+	}),
+
 	// Structure
 	screen: tag({
 		group: "structure",
@@ -546,10 +865,19 @@ export const tags = {
 		ios: "S4",
 		content: "elements",
 		// `surface`: the sidebar's column, or a phone tab's page (`screen-surface`).
-		props: { title: text, back: flag, surface: option(O.ScreenSurface, "sidebar") },
+		props: {
+			title: text,
+			back: flag,
+			surface: option(O.ScreenSurface, "sidebar"),
+			// Phase 4: a line under the title; breadcrumbs over it (`crumb` reports the one pressed).
+			subtitle: text,
+			crumbs: value(Schema.Array(Content.Crumb)),
+		},
 		// `floatingAction`: the screen's primary action, a round button over the content's end corner.
-		slots: ["toolbar", "floatingAction"],
-		events: { back: none },
+		// Phase 4: `aside` is `centered`'s brand panel beside the card (regular size class only);
+		// `meta` holds badges after the title.
+		slots: ["toolbar", "floatingAction", "aside", "meta"],
+		events: { back: none, crumb: Schema.Struct({ index: Schema.Finite }) },
 	}),
 	navigation: tag({
 		group: "structure",
@@ -563,10 +891,27 @@ export const tags = {
 		web: "A4",
 		ios: "S4",
 		content: "elements",
-		props: { tabs: value(Schema.Array(Content.Tab)), selected: text },
-		events: { change: ids },
+		props: {
+			tabs: value(Schema.Array(Content.Tab)),
+			selected: text,
+			// Phase 4: in-page tabs, and tabs the user drags to reorder (saved views).
+			style: option(O.TabBarStyle, "app"),
+			reorderable: flag,
+		},
+		events: { change: ids, move },
 	}),
-	splitView: tag({ group: "structure", web: "A4", ios: "S4", content: "elements", slots: ["sidebar"] }),
+	splitView: tag({
+		group: "structure",
+		web: "A4",
+		ios: "S4",
+		content: "elements",
+		// Phase 4: `rail` is an icon column before the sidebar; `detail` a side panel after the
+		// content (a thread, the assistant, a preview), `resizable` by its edge, which reports
+		// `resize`; a sheet on the compact size class.
+		props: { sidebarCollapsed: flag, detailWidth: count, resizable: flag },
+		slots: ["sidebar", "rail", "detail"],
+		events: { resize: Schema.Struct({ width: Schema.Finite }) },
+	}),
 	section: tag({
 		group: "structure",
 		web: "A4",
@@ -613,6 +958,46 @@ export const tags = {
 		slots: ["leading", "trailing", "actions"],
 		events: { press: none, longPress: none },
 		commands: ["scrollTo"],
+	}),
+
+	// Phase 4: a label and its value (`detail/parts.ts` `property`, a `dl` row); the value is the
+	// children (text, a badge, a link). Inside a `section` or `frame`, rows align their labels.
+	property: tag({
+		group: "structure",
+		web: "A4",
+		ios: "S4",
+		content: "elements",
+		props: { label: text, description: text },
+	}),
+	// Phase 4: a header that shows or hides its children (`ui/thought-line.ts`, customers'
+	// `disclosure`, a reasoning step); `running` marks work in progress.
+	disclosure: tag({
+		group: "structure",
+		web: "A4",
+		ios: "S4",
+		content: "elements",
+		props: { title: text, subtitle: text, open: flag, running: flag },
+		slots: ["trailing"],
+		events: { toggle: Schema.Struct({ open: Schema.Boolean }) },
+	}),
+	// Phase 4: where a wizard is (onboarding's "Step 2 of 6" and its segments).
+	stepper: tag({
+		group: "structure",
+		web: "A4",
+		ios: "S4",
+		content: "none",
+		props: { steps: count, current: count, label: text },
+	}),
+	// Phase 4: a bar over the page's bottom edge while `open`: the bulk actions for a selection,
+	// unsaved changes. `label` says what it acts on; `dismiss` is its close (clear the selection).
+	actionBar: tag({
+		group: "structure",
+		web: "A4",
+		ios: "S4",
+		content: "none",
+		props: { open: flag, label: text },
+		slots: ["actions"],
+		events: { dismiss: none },
 	}),
 
 	// Internal: what the builders compile slots and extensions to; never named in a screen.

@@ -1,0 +1,87 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): theme mode in each style: radio rows, cards in columns, segmented, chips (several), swatches.",
+	"root": {
+		"tag": "choiceGroup",
+		"props": {
+			"label": "Theme",
+			"options": [
+				{
+					"value": "light",
+					"label": "Light",
+					"icon": "sun"
+				},
+				{
+					"value": "dark",
+					"label": "Dark",
+					"icon": "moon"
+				},
+				{
+					"value": "system",
+					"label": "System",
+					"description": "Follow the device",
+					"disabled": false
+				}
+			],
+			"selected": ["dark"]
+		},
+		"events": ["change"]
+	},
+	"frame": "sidebar",
+	"axes": [
+		{
+			"prop": "style",
+			"values": ["cards", "segmented", "chips"]
+		},
+		{
+			"prop": "columns",
+			"values": ["2", "3"]
+		}
+	],
+	"cases": [
+		{
+			"name": "multiple",
+			"props": {
+				"style": "chips",
+				"multiple": true,
+				"selected": ["light", "dark"]
+			}
+		},
+		{
+			"name": "swatches",
+			"props": {
+				"style": "swatches",
+				"options": [
+					{
+						"value": "brand",
+						"label": "Purple",
+						"swatch": "#6938EF"
+					},
+					{
+						"value": "ocean",
+						"label": "Ocean",
+						"swatch": "#0E7490"
+					}
+				],
+				"selected": ["brand"]
+			}
+		},
+		{
+			"name": "error",
+			"props": {
+				"error": "Pick one",
+				"description": "Applies to every device",
+				"selected": []
+			}
+		},
+		{
+			"name": "disabled",
+			"props": {
+				"disabled": true
+			}
+		}
+	],
+	"pending": {
+		"web": "A2",
+		"ios": "S2"
+	}
+}

@@ -1,0 +1,49 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): a secret with reveal and copy, a URL with a prefix, a number with a suffix, an email.",
+	"root": {
+		"tag": "textField",
+		"props": {
+			"label": "API key",
+			"value": {
+				"text": "sk_live_123",
+				"rev": 0,
+				"edit": 0
+			},
+			"secret": true,
+			"copyable": true
+		},
+		"events": ["change", "copy"]
+	},
+	"frame": "sidebar",
+	"axes": [
+		{
+			"prop": "inputKind",
+			"values": ["email", "url", "number"]
+		}
+	],
+	"cases": [
+		{
+			"name": "prefix",
+			"props": {
+				"label": "Workspace URL",
+				"prefix": "hazel.app/",
+				"secret": null,
+				"copyable": null
+			}
+		},
+		{
+			"name": "suffix",
+			"props": {
+				"label": "First response",
+				"inputKind": "number",
+				"suffix": "minutes",
+				"secret": null,
+				"copyable": null
+			}
+		}
+	],
+	"pending": {
+		"web": "A2",
+		"ios": "S2"
+	}
+}

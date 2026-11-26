@@ -1,0 +1,33 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): in-page tabs with counts that the user can reorder.",
+	"root": {
+		"tag": "tabBar",
+		"props": {
+			"style": "page",
+			"reorderable": true,
+			"selected": "open",
+			"tabs": [
+				{
+					"id": "open",
+					"label": "Open",
+					"badge": 12
+				},
+				{
+					"id": "snoozed",
+					"label": "Snoozed",
+					"badge": 3
+				},
+				{
+					"id": "done",
+					"label": "Done"
+				}
+			]
+		},
+		"events": ["change", "move"]
+	},
+	"frame": "screen",
+	"pending": {
+		"web": "A4",
+		"ios": "S4"
+	}
+}

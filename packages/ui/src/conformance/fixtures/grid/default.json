@@ -1,0 +1,47 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): stat tiles in columns; one column on the compact size class.",
+	"root": {
+		"tag": "grid",
+		"props": {
+			"columns": "3"
+		},
+		"children": [
+			{
+				"tag": "statTile",
+				"props": {
+					"label": "MRR",
+					"value": "$48.2k"
+				}
+			},
+			{
+				"tag": "statTile",
+				"props": {
+					"label": "Accounts",
+					"value": "312"
+				}
+			},
+			{
+				"tag": "statTile",
+				"props": {
+					"label": "Churn",
+					"value": "1.8%"
+				}
+			}
+		]
+	},
+	"frame": "screen",
+	"axes": [
+		{
+			"prop": "columns",
+			"values": ["2", "4"]
+		},
+		{
+			"prop": "density",
+			"values": ["tight", "compact", "relaxed"]
+		}
+	],
+	"pending": {
+		"web": "A1",
+		"ios": "S1"
+	}
+}

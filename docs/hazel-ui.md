@@ -519,8 +519,9 @@ performance numbers.
 
 ### Phase 4: the rest
 
-Long-tail screens convert when touched. When Effect UI publishes its Foldkit upgrade guide, the web
-app moves to it and islands become ordinary children.
+Superseded by the user's decision (2026-11-26): the whole web app moves to Effect UI on the `hazel`
+vocabulary, with no Foldkit left and no screen twice. The plan, inventory, contract wave and lanes are
+in `docs/hazel-ui-phase4.md`.
 
 ## Rules for implementing agents
 

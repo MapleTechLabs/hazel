@@ -1,5 +1,10 @@
 # Hazel UI lanes (phase 2)
 
+Phase 4 lanes (the rest of the web app, `W*` primitive lanes, `X*` foundations, `P*` pages, `Z*` the
+swap) start from `docs/hazel-ui-phase4.md`, "Lane plan"; the rules below still hold. A `W*` lane
+verifies with the phase 2 command of its web lane id (`verify:A1` to `verify:A5`) and
+`test:web --lane <id> --tags <its tags>`.
+
 The one brief a lane agent starts from. Background: `docs/hazel-ui.md` (read "Rules for implementing
 agents" and "Testing"), the contracts in `CONTRACTS.md`, the resolved ledger in `GAPS.md`, and
 `CLAUDE.md`. Every tag, prop, option, slot, event and its owning lane is in `src/vocabulary/spec.ts`.

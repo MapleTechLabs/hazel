@@ -1,0 +1,68 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): a KPI with a delta that is good when up, its comparison and a sparkline.",
+	"root": {
+		"tag": "statTile",
+		"props": {
+			"label": "MRR",
+			"value": "$48.2k",
+			"delta": "+4.1%",
+			"trend": "up",
+			"deltaTone": "success",
+			"comparison": "vs $46.3k last month",
+			"definition": "Monthly recurring revenue",
+			"href": "#"
+		},
+		"events": ["press"],
+		"slots": [
+			{
+				"name": "chart",
+				"children": [
+					{
+						"tag": "chart",
+						"props": {
+							"kind": "sparkline",
+							"size": "small",
+							"series": [
+								{
+									"key": "mrr",
+									"label": "MRR",
+									"tone": "series1",
+									"values": [40, 42, 41, 45, 48]
+								}
+							]
+						}
+					}
+				]
+			}
+		]
+	},
+	"frame": "inline",
+	"axes": [
+		{
+			"prop": "trend",
+			"values": ["down"]
+		},
+		{
+			"prop": "deltaTone",
+			"values": ["danger"]
+		}
+	],
+	"cases": [
+		{
+			"name": "loading",
+			"props": {
+				"loading": true
+			}
+		},
+		{
+			"name": "detail",
+			"props": {
+				"detail": "312 accounts"
+			}
+		}
+	],
+	"pending": {
+		"web": "A1",
+		"ios": "S1"
+	}
+}

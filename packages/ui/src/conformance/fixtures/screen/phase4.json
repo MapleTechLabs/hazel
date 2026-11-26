@@ -1,0 +1,59 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): the centred auth card with its brand aside, then a page with breadcrumbs, a subtitle and badges.",
+	"root": {
+		"tag": "screen",
+		"props": {
+			"title": "Sign in",
+			"surface": "centered",
+			"subtitle": "Welcome back"
+		},
+		"slots": [
+			{
+				"name": "aside",
+				"children": [
+					{
+						"tag": "text",
+						"children": ["Hazel"],
+						"props": {
+							"role": "display"
+						}
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "button",
+				"props": {
+					"label": "Continue with GitHub",
+					"icon": "github",
+					"variant": "outline"
+				}
+			}
+		]
+	},
+	"frame": "screen",
+	"cases": [
+		{
+			"name": "crumbs",
+			"props": {
+				"surface": null,
+				"title": "Acme",
+				"crumbs": [
+					{
+						"label": "Customers",
+						"href": "#"
+					},
+					{
+						"label": "Acme"
+					}
+				],
+				"subtitle": "acme.com"
+			}
+		}
+	],
+	"pending": {
+		"web": "A4",
+		"ios": "S4"
+	}
+}

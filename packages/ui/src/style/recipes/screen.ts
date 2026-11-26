@@ -57,6 +57,9 @@ export const screen = defineRecipe<
 						content: { paddingY: "0", grow: true },
 					},
 				},
+				// Phase 4 (`auth/layout.ts`): one centred card on the page, the `aside` brand panel
+				// beside it from the regular size class. Declared; lane A4 fills it from today's frame.
+				centered: { root: { background: "bg" } },
 			},
 		},
 	},

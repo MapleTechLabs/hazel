@@ -1,0 +1,27 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): the notification volume.",
+	"root": {
+		"tag": "slider",
+		"props": {
+			"label": "Volume",
+			"value": 0.6,
+			"max": 1,
+			"step": 0.1,
+			"valueText": "60%"
+		},
+		"events": ["change"]
+	},
+	"frame": "sidebar",
+	"cases": [
+		{
+			"name": "disabled",
+			"props": {
+				"disabled": true
+			}
+		}
+	],
+	"pending": {
+		"web": "A2",
+		"ios": "S2"
+	}
+}

@@ -24,6 +24,11 @@ anything here is a contract proposal. A lane starts from `LANES.md`.
    `recipe.motion` uses per trigger (enter, exit, counts, pop, loop), transition curves, and Reduce
    Motion as today's instant rule. Codegen writes the web CSS and `HazelTheme.Motion`; renderers only
    mark when (`src/web/motion.ts`). Checked against today by `bun scripts/test-motion.ts`.
+9. Phase 4 contract wave (proposed 2026-11-27, awaiting the user): the patterns the remaining web
+   pages need (`docs/hazel-ui-phase4.md`, "Pattern gaps"), written into `spec.ts`, `options.ts`,
+   `content.ts` and `src/style/schema.ts` with declared recipes, stubs and `pending` fixtures. 19 new
+   tags (below), 13 existing tags extended, all 94 web icons in `IconName`. Ledger: `GAPS.md`,
+   "Phase 4 contract wave".
 
 | Contract      | Source of truth                                                                                                                                        |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -122,6 +127,41 @@ implements `focus`/`blur`, the rest die with `NotImplemented` until lanes A2, A3
 | `action`          | A4 / S4   | elements | label, entries (data)                                                                                                                                                                                                                  | -                          | press, select                                                                                                                               | -                   |
 | `ext`             | A1 / S0   | elements | ext, args (data)                                                                                                                                                                                                                       | fallback                   | -                                                                                                                                           | -                   |
 
+### Phase 4 tags (proposed)
+
+| Tag              | Web / iOS | Children | Props                                                                                                                                                             | Slots         | Events                        | Commands |
+| ---------------- | --------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ----------------------------- | -------- |
+| `grid`           | A1 / S1   | elements | columns (default `auto`), density (default `regular`)                                                                                                             | -             | -                             | -        |
+| `table`          | A4 / S5   | elements | label, columns (data), sort (data), selectable?, loading?, stickyHeader?                                                                                          | -             | sort, selectAll               | scrollTo |
+| `tableRow`       | A4 / S5   | elements | title, selected?, current?, group?, footer?, disabled?                                                                                                            | actions       | press, select                 | -        |
+| `tableCell`      | A4 / S5   | elements | column                                                                                                                                                            | -             | -                             | -        |
+| `chart`          | A1 / S1   | none     | kind (default `line`), label, series (data), labels (data), format (default `number`), currency, size (default `regular`), legend?, net?, highlightFrom, loading? | -             | hover, press                  | -        |
+| `heatmap`        | A1 / S1   | none     | label, days (data), selected                                                                                                                                      | -             | select                        | scrollTo |
+| `statTile`       | A1 / S1   | none     | label, value, detail, definition, delta, trend (default `none`), deltaTone (default `neutral`), comparison, loading?, href                                        | chart, action | press                         | -        |
+| `codeBlock`      | A1 / S1   | none     | code, language, title, copyable?, wrap?                                                                                                                           | -             | copy                          | -        |
+| `banner`         | A1 / S1   | elements | tone (default `info`), style (default `callout`), title, description, icon (data), dismissible?                                                                   | actions       | dismiss                       | -        |
+| `choiceGroup`    | A2 / S2   | none     | label, description, error, options (data), selected (data), multiple?, style (default `list`), columns (default `1`), disabled?                                   | -             | change                        | -        |
+| `slider`         | A2 / S2   | none     | label, value, min, max, step, valueText, disabled?                                                                                                                | -             | change                        | -        |
+| `datePicker`     | A2 / S2   | none     | label, description, error, placeholder, value, min, max, granularity (default `date`), clearable?, disabled?                                                      | -             | change                        | focus    |
+| `dropZone`       | A2 / S2   | none     | label, description, accept, multiple?, disabled?, loading?                                                                                                        | -             | press, files                  | -        |
+| `commandPalette` | A3 / S3   | elements | open?, placeholder, query (revisioned), groups (data), loading?, empty, title                                                                                     | -             | change, select, back, dismiss | focus    |
+| `lightbox`       | A3 / S3   | none     | open?, items (data), index, entries (data)                                                                                                                        | -             | change, select, dismiss       | -        |
+| `property`       | A4 / S4   | elements | label, description                                                                                                                                                | -             | -                             | -        |
+| `disclosure`     | A4 / S4   | elements | title, subtitle, open?, running?                                                                                                                                  | trailing      | toggle                        | -        |
+| `stepper`        | A4 / S4   | none     | steps, current, label                                                                                                                                             | -             | -                             | -        |
+| `actionBar`      | A4 / S4   | none     | open?, label                                                                                                                                                      | actions       | dismiss                       | -        |
+
+Extended in phase 4 (proposed): `toggle` (style, indeterminate), `progress` (style), `textField`
+(inputKind, secret, copyable, prefix, suffix; `copy`), `select` (searchable, slot footer; `query`),
+`button` (removable; `remove`), `popover` (trigger), `toast` (loading), `screen` (subtitle, crumbs,
+slots aside and meta, surface `centered`; `crumb`), `tabBar` (style, reorderable; `move`), `splitView`
+(sidebarCollapsed, detailWidth, resizable, slots rail and detail; `resize`), `attachmentGrid` (layout;
+`retry`), `richText` and `message` (`copyCode`), `composer` (suggestions, activeSuggestion, context;
+`pressSuggestion`, `editLast`, `cancelContext`). Data: `TableColumn`, `TableSort`, `ChartSeries`,
+`ChartTone`, `HeatmapDay`, `ChoiceOption`, `Face`, `PaletteItem`, `PaletteGroups`, `Crumb`,
+`Suggestion`, `ComposerContext`; `Tab.icon` became optional and gained `href`; `SelectOption`
+gained `description`, `group`, `disabled`; `Attachment` gained `failed`, `duration`.
+
 `slot`, `ext` and `action` are internal: what slots, `h.extension` and `section.action(icon, msg | actionMenu, label)`
 compile to. Structured props (`row`, `blocks`, `entries`, `reactions`, `attachments`, `tabs`, `options`,
 `anchorTo`, `customer`, `partners`, `people`) are Schemas in `content.ts`. A `message.row` has readable keys only: `author`, `initials`,
@@ -208,7 +248,7 @@ compounds, inert })`; a message's own states are `flags`. Codegen: `generateCss(
 ## Gaps
 
 All 25 phase 1 gaps and the 48 of the parity pass are resolved (`GAPS.md`); new ones go under its
-"Open".
+"Open". The phase 4 contract wave is its own table there, proposed and awaiting the user.
 
 ## Fixtures waiting on a lane
 

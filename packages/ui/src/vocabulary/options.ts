@@ -94,91 +94,261 @@ export type ListDividerKind = typeof ListDividerKind.Type
 export const ListAnchor = Schema.Literals(Sets.listAnchors)
 export type ListAnchor = typeof ListAnchor.Type
 
+// Phase 4 (`docs/hazel-ui-phase4.md`): the web pages' sets.
+
+export const GridColumns = Schema.Literals(Sets.gridColumns)
+export type GridColumns = typeof GridColumns.Type
+
+export const ChoiceStyle = Schema.Literals(Sets.choiceStyles)
+export type ChoiceStyle = typeof ChoiceStyle.Type
+
+/** How many option cards share a row in `choiceGroup` style `cards` (one on the compact size class). */
+export const ChoiceColumns = Schema.Literals(["1", "2", "3"])
+export type ChoiceColumns = typeof ChoiceColumns.Type
+
+export const ToggleStyle = Schema.Literals(Sets.toggleStyles)
+export type ToggleStyle = typeof ToggleStyle.Type
+
+export const ProgressStyle = Schema.Literals(Sets.progressStyles)
+export type ProgressStyle = typeof ProgressStyle.Type
+
+export const BannerStyle = Schema.Literals(Sets.bannerStyles)
+export type BannerStyle = typeof BannerStyle.Type
+
+export const TabBarStyle = Schema.Literals(Sets.tabBarStyles)
+export type TabBarStyle = typeof TabBarStyle.Type
+
+export const ChartKind = Schema.Literals(Sets.chartKinds)
+export type ChartKind = typeof ChartKind.Type
+
+export const ChartSize = Schema.Literals(Sets.chartSizes)
+export type ChartSize = typeof ChartSize.Type
+
+/** How a chart prints its values (axis, tooltip, end labels); `currency` uses the chart's `currency`. */
+export const ChartFormat = Schema.Literals(["number", "currency", "percent", "duration"])
+export type ChartFormat = typeof ChartFormat.Type
+
+export const StatTrend = Schema.Literals(Sets.statTrends)
+export type StatTrend = typeof StatTrend.Type
+
+export const StatDeltaTone = Schema.Literals(Sets.statDeltaTones)
+export type StatDeltaTone = typeof StatDeltaTone.Type
+
+export const AttachmentLayout = Schema.Literals(Sets.attachmentLayouts)
+export type AttachmentLayout = typeof AttachmentLayout.Type
+
+/** What a text field holds, for the keyboard and validation hints; a password is `secret`. */
+export const InputKind = Schema.Literals(["text", "email", "url", "number"])
+export type InputKind = typeof InputKind.Type
+
+/** What a date picker picks: a day, a time of day (`HH:mm`), or both. */
+export const DateGranularity = Schema.Literals(["date", "time", "dateTime"])
+export type DateGranularity = typeof DateGranularity.Type
+
+/** What opens a popover: a press on its anchor, or hovering it for a moment (a hover card). */
+export const PopoverTrigger = Schema.Literals(["press", "hover"])
+export type PopoverTrigger = typeof PopoverTrigger.Type
+
 /**
- * Icon names both hosts draw, each the web's own icon (`web-foldkit/src/icons`, `iconSources`). C1 adds
- * what the four phase 1 screens draw; the iOS asset catalog exports the same list.
+ * Icon names both hosts draw, each the web's own icon (`web-foldkit/src/icons`, `iconSources`). C1 added
+ * what the phase 1 screens draw; phase 4 adds every other web icon, so the web pages need no icon of
+ * their own. The iOS asset catalog exports the same list (lane S1 re-runs `export-icons.ts`).
  */
 export const iconNames = [
+	"apps",
+	"arrow-left",
 	"arrow-up",
 	"bell",
+	"bell-off",
+	"brain",
+	"chart",
+	"chat",
 	"check",
 	"chevron-down",
+	"chevron-left",
 	"chevron-right",
+	"chevron-up-down",
+	"clock",
 	"close",
+	"code",
+	"connect",
 	"copy",
+	"cube",
+	"dashboard",
 	"discord",
 	"dots",
+	"dots-vertical",
 	"download",
 	"edit",
 	"emoji",
 	"emoji-add",
+	"envelope",
+	"external-link",
+	"eye",
+	"eye-off",
 	"folder-plus",
+	"folders",
 	"gear",
 	"gif",
+	"github",
+	"google",
 	"hashtag",
+	"heart",
+	"image",
+	"integration",
+	"keyboard",
 	"leave",
 	"lightbulb",
+	"link",
+	"loader",
 	"lock",
+	"logout",
+	"map-pin",
+	"maximize",
+	"megaphone",
+	"menu",
+	"message-pen",
+	"message-user",
 	"messages",
+	"minus",
+	"moon",
 	"office",
+	"paintbrush",
 	"paperclip",
+	"pause",
+	"pen-sparkle",
+	"phone",
 	"pin",
+	"play",
 	"plus",
+	"plus-circle",
+	"presentation",
+	"profiles",
+	"refresh",
 	"reply",
+	"robot",
+	"rocket",
 	"search",
+	"servers",
 	"share",
+	"shop",
+	"sidebar-right",
 	"slack",
 	"sparkles",
 	"star",
+	"sun",
 	"support",
 	"thread",
 	"trash",
+	"unpin",
+	"user",
+	"user-pending",
+	"user-plus",
 	"users",
+	"volume",
 	"volume-mute",
 	"warning",
+	"webhook",
 ] as const
 export const IconName = Schema.Literals(iconNames)
 export type IconName = typeof IconName.Type
 
 /** Each name's web icon export (`apps/web-foldkit/src/icons`). */
 export const iconSources = {
+	apps: "IconGridCirclePlus",
+	"arrow-left": "IconArrowLeft",
 	"arrow-up": "IconArrowUp",
 	bell: "IconBell",
+	"bell-off": "IconBellSlash",
+	brain: "IconBrainSparkle",
+	chart: "IconChartBar",
+	chat: "IconChatBubble",
 	check: "IconCheck",
 	"chevron-down": "IconChevronDown",
+	"chevron-left": "IconChevronLeft",
 	"chevron-right": "IconChevronRight",
+	"chevron-up-down": "IconChevronUpDown",
+	clock: "IconClock",
 	close: "IconClose",
+	code: "IconCode",
+	connect: "IconConnect",
 	copy: "IconCopy",
+	cube: "IconCube",
+	dashboard: "IconDashboard",
 	discord: "IconDiscord",
 	dots: "IconDots",
+	"dots-vertical": "IconDotsVertical",
 	download: "IconDownload",
 	edit: "IconEdit",
 	emoji: "IconEmoji1",
 	"emoji-add": "IconEmojiAdd",
+	envelope: "IconEnvelope",
+	"external-link": "IconExternalLink",
+	eye: "IconEye",
+	"eye-off": "IconEyeSlash",
 	"folder-plus": "IconFolderPlus",
+	folders: "IconFolders",
 	gear: "IconGear",
 	gif: "IconGif",
+	github: "IconGitHub",
+	google: "IconGoogle",
 	hashtag: "IconHashtag",
+	heart: "IconHeart",
+	image: "IconImage",
+	integration: "IconIntegratio",
+	keyboard: "IconKeyboard",
 	leave: "IconLeave",
 	lightbulb: "IconLightbulb",
+	link: "IconLink",
+	loader: "IconLoader",
 	lock: "IconLock",
+	logout: "IconLogout",
+	"map-pin": "IconMapPin",
+	maximize: "IconMaximize",
+	megaphone: "IconMegaphone",
+	menu: "IconMenu",
+	"message-pen": "IconMsgPen",
+	"message-user": "IconMsgUser",
 	messages: "IconMsgs",
+	minus: "IconMinus",
+	moon: "IconMoon",
 	office: "IconOffice",
+	paintbrush: "IconPaintbrush",
 	paperclip: "IconPaperclip2",
+	pause: "IconCirclePause",
+	"pen-sparkle": "IconPenSparkle",
+	phone: "IconPhone",
 	pin: "IconPin",
+	play: "IconPlay",
 	plus: "IconPlus",
+	"plus-circle": "IconCirclePlus",
+	presentation: "IconPresentationChart",
+	profiles: "IconProfiles2",
+	refresh: "IconArrowPath",
 	reply: "IconReply",
+	robot: "IconRobot",
+	rocket: "IconRocket",
 	search: "IconMagnifier3",
+	servers: "IconServers",
 	share: "IconShare",
+	shop: "IconShop",
+	"sidebar-right": "IconSidebarRight",
 	slack: "IconSlack",
 	sparkles: "IconSparkles",
 	star: "IconStar",
+	sun: "IconSun",
 	support: "IconSupport",
 	thread: "IconThread",
 	trash: "IconTrash",
+	unpin: "IconUnpin",
+	user: "IconUser",
+	"user-pending": "IconCircleDottedUser",
+	"user-plus": "IconUsersPlus",
 	users: "IconUsers",
+	volume: "IconVolume",
 	"volume-mute": "IconVolumeMute",
 	warning: "IconWarning",
+	webhook: "IconWebhook",
 } as const satisfies { readonly [K in IconName]: string }
 
 /**

@@ -66,6 +66,10 @@ export const Attachment = Schema.Struct({
 	height: Schema.optional(Schema.Finite),
 	/** Upload progress 0 to 1 while it uploads (the composer's previews). */
 	progress: Schema.optional(Schema.Finite),
+	/** The upload or the load failed: the tile shows it, and a press raises `retry` (phase 4). */
+	failed: Schema.optional(Schema.Boolean),
+	/** A video's length, formatted by the screen (`1:24`), for the media grid (phase 4). */
+	duration: Schema.optional(Schema.String),
 })
 export type Attachment = typeof Attachment.Type
 
@@ -199,13 +203,160 @@ export const MenuGroups = Schema.Array(
 )
 export type MenuGroups = typeof MenuGroups.Type
 
-export const SelectOption = Schema.Struct({ value: Schema.String, label: Schema.String })
+export const SelectOption = Schema.Struct({
+	value: Schema.String,
+	label: Schema.String,
+	/** A second line, and what a `searchable` select also matches (phase 4). */
+	description: Schema.optional(Schema.String),
+	/** Options sharing a `group` are drawn under that heading, in first-seen order (phase 4). */
+	group: Schema.optional(Schema.String),
+	disabled: Schema.optional(Schema.Boolean),
+})
 export type SelectOption = typeof SelectOption.Type
 
 export const Tab = Schema.Struct({
 	id: Schema.String,
 	label: Schema.String,
-	icon: IconName,
+	/** Required by `tabBar` style `app` (a phone's tabs); `page` tabs are text (phase 4: optional). */
+	icon: Schema.optional(IconName),
 	badge: Schema.optional(Schema.Finite),
+	/** Where the tab links on the web (`?tab=`), for middle click and copy link. */
+	href: Schema.optional(Schema.String),
 })
 export type Tab = typeof Tab.Type
+
+// ---------------------------------------------------------------------------
+// phase 4: data the web pages draw (`docs/hazel-ui-phase4.md`, "Pattern gaps")
+// ---------------------------------------------------------------------------
+
+/** A table column's share of the row; `fill` takes the rest and truncates (one per table). */
+export const TableColumnWidth = Schema.Literals(["auto", "fill", "narrow", "regular", "wide"])
+export type TableColumnWidth = typeof TableColumnWidth.Type
+
+/**
+ * A `table` column: its header, alignment, whether a press sorts by it, its width, and `optional`,
+ * hidden on the compact size class (today's `max-lg:hidden`). Cells follow in `tableRow` order.
+ */
+export const TableColumn = Schema.Struct({
+	key: Schema.String,
+	label: Schema.String,
+	align: Schema.optional(Schema.Literals(["start", "end"])),
+	sortable: Schema.optional(Schema.Boolean),
+	width: Schema.optional(TableColumnWidth),
+	optional: Schema.optional(Schema.Boolean),
+})
+export type TableColumn = typeof TableColumn.Type
+
+export const SortDirection = Schema.Literals(["ascending", "descending"])
+export type SortDirection = typeof SortDirection.Type
+
+/** The column a table is sorted by; the screen sorts the rows, the table only marks the header. */
+export const TableSort = Schema.Struct({ column: Schema.String, direction: SortDirection })
+export type TableSort = typeof TableSort.Type
+
+/**
+ * A series' colour, from today's chart tokens (`--chart-*`): three neutral series, the MRR movement
+ * kinds, and the status tones. Never a raw colour.
+ */
+export const ChartTone = Schema.Literals([
+	"series1",
+	"series2",
+	"series3",
+	"neutral",
+	"new",
+	"expansion",
+	"contraction",
+	"churn",
+	"accent",
+	"success",
+	"warning",
+	"danger",
+])
+export type ChartTone = typeof ChartTone.Type
+
+/** One series: a value per x label (null: no data there). A stacked bar stacks series per label. */
+export const ChartSeries = Schema.Struct({
+	key: Schema.String,
+	label: Schema.String,
+	tone: ChartTone,
+	values: Schema.Array(Schema.NullOr(Schema.Finite)),
+})
+export type ChartSeries = typeof ChartSeries.Type
+
+/** One day of a calendar heatmap: ISO date, a level 0 (none) to 4 (most), and its tooltip. */
+export const HeatmapDay = Schema.Struct({
+	date: Schema.String,
+	level: Schema.Literals([0, 1, 2, 3, 4]),
+	label: Schema.String,
+})
+export type HeatmapDay = typeof HeatmapDay.Type
+
+/**
+ * One choice of a `choiceGroup`. `image` is a picture over the label (a theme preview, an
+ * illustration); `swatch` is a colour the user is choosing, as data (`#6938EF`), drawn as a sample.
+ */
+export const ChoiceOption = Schema.Struct({
+	value: Schema.String,
+	label: Schema.String,
+	description: Schema.optional(Schema.String),
+	icon: Schema.optional(IconName),
+	image: Schema.optional(Schema.String),
+	swatch: Schema.optional(Schema.String.check(Schema.isPattern(/^#[0-9a-fA-F]{6}$/))),
+	/** A count after the label (a queue tab, a filter). */
+	badge: Schema.optional(Schema.Finite),
+	disabled: Schema.optional(Schema.Boolean),
+})
+export type ChoiceOption = typeof ChoiceOption.Type
+
+/** A person or logo leading a palette item or a composer suggestion. */
+export const Face = Schema.Struct({
+	name: Schema.String,
+	initials: Schema.String,
+	src: Schema.optional(Schema.String),
+	presence: Schema.optional(AvatarPresence),
+})
+export type Face = typeof Face.Type
+
+/** One command palette result; `shortcut` is a key hint drawn as key caps (web only). */
+export const PaletteItem = Schema.Struct({
+	id: Schema.String,
+	label: Schema.String,
+	description: Schema.optional(Schema.String),
+	icon: Schema.optional(IconName),
+	face: Schema.optional(Face),
+	shortcut: Schema.optional(Schema.String),
+})
+export type PaletteItem = typeof PaletteItem.Type
+
+/** Results in groups, filtered by the screen; the palette only moves the highlight and reports picks. */
+export const PaletteGroups = Schema.Array(
+	Schema.Struct({ title: Schema.optional(Schema.String), items: Schema.Array(PaletteItem) }),
+)
+export type PaletteGroups = typeof PaletteGroups.Type
+
+/** A breadcrumb over a screen's title; the last one is the screen itself. */
+export const Crumb = Schema.Struct({ label: Schema.String, href: Schema.optional(Schema.String) })
+export type Crumb = typeof Crumb.Type
+
+/** One composer suggestion for an open trigger (`@`, `#`, `/`, `:`), drawn above the composer. */
+export const Suggestion = Schema.Struct({
+	id: Schema.String,
+	label: Schema.String,
+	description: Schema.optional(Schema.String),
+	/** A group heading (Members, Bots, Channels); suggestions are drawn in the order given. */
+	group: Schema.optional(Schema.String),
+	icon: Schema.optional(IconName),
+	face: Schema.optional(Face),
+	/** An emoji (or a custom emoji's image url) for `:` suggestions. */
+	emoji: Schema.optional(Schema.String),
+	mark: Schema.optional(Provider),
+})
+export type Suggestion = typeof Suggestion.Type
+
+/** What the composer is doing besides a new message: replying to one, or editing one. */
+export const ComposerContext = Schema.Struct({
+	kind: Schema.Literals(["reply", "edit"]),
+	author: Schema.optional(Schema.String),
+	text: Schema.String,
+})
+export type ComposerContext = typeof ComposerContext.Type

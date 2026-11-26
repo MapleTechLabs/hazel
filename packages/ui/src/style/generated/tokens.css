@@ -479,6 +479,9 @@
 	color: var(--hz-color-fg);
 }
 
+/* actionBar */
+
+
 /* attachmentGrid */
 [data-hz="attachmentGrid"] {
 	display: flex;
@@ -824,6 +827,9 @@
 [data-hz="badge"][data-pill][data-size="small"] {
 	padding-inline: var(--hz-space-1_5);
 }
+
+/* banner */
+
 
 /* button */
 [data-hz="button"] {
@@ -1400,6 +1406,18 @@
 	color: var(--hz-color-discord);
 }
 
+/* chart */
+
+
+/* choiceGroup */
+
+
+/* codeBlock */
+
+
+/* commandPalette */
+
+
 /* composer */
 [data-hz="composer"] {
 	width: 100%;
@@ -1593,6 +1611,9 @@
 	animation: hz-fade var(--hz-duration-fast) var(--hz-ease-out) 0s 1 both;
 }
 
+/* datePicker */
+
+
 /* dialog */
 [data-hz="dialog"] {
 	display: contents;
@@ -1667,6 +1688,9 @@
 	animation: hz-fade var(--hz-duration-normal) var(--hz-ease-out) 0s 1 both;
 }
 
+/* disclosure */
+
+
 /* divider */
 [data-hz="divider"] {
 	width: 100%;
@@ -1674,6 +1698,9 @@
 	min-height: var(--hz-space-px);
 	flex-shrink: 0;
 }
+
+/* dropZone */
+
 
 /* embed */
 [data-hz="embed"] > [data-hz-part="card"] {
@@ -1973,6 +2000,9 @@
 	box-shadow: var(--hz-shadow-xs);
 }
 
+/* grid */
+
+
 /* heading */
 [data-hz="heading"] {
 	color: var(--hz-color-fg);
@@ -1995,6 +2025,9 @@
 	font-size: var(--hz-text-label-size);
 	line-height: var(--hz-text-label-leading);
 }
+
+/* heatmap */
+
 
 /* iconTile */
 [data-hz="iconTile"] {
@@ -2292,6 +2325,9 @@
 [data-hz="item"] [data-hz-part="count"][data-motion~="countDown"] {
 	animation: hz-countDown var(--hz-duration-enter) var(--hz-ease-enter) 0s 1 both;
 }
+
+/* lightbox */
+
 
 /* link */
 [data-hz="link"] {
@@ -2801,6 +2837,9 @@
 	animation: hz-sweep var(--hz-duration-progressSweep) var(--hz-ease-cssInOut) 0s infinite both;
 }
 
+/* property */
+
+
 /* reactionBar */
 [data-hz="reactionBar"] {
 	display: flex;
@@ -2989,6 +3028,10 @@
 [data-hz="screen"][data-surface="page"] > [data-hz-part="content"] {
 	padding-block: var(--hz-space-0);
 	flex-grow: 1;
+}
+
+[data-hz="screen"][data-surface="centered"] {
+	background-color: var(--hz-color-bg);
 }
 
 /* scroll */
@@ -3325,6 +3368,9 @@
 	animation: hz-fade var(--hz-duration-normal) var(--hz-ease-out) 0s 1 both;
 }
 
+/* slider */
+
+
 /* spacer */
 [data-hz="spacer"] {
 	flex-grow: 1;
@@ -3388,6 +3434,12 @@
 [data-hz="stack"][data-align="end"] {
 	align-items: flex-end;
 }
+
+/* statTile */
+
+
+/* stepper */
+
 
 /* tabBar */
 [data-hz="tabBar"] {
@@ -3463,6 +3515,15 @@
 		line-height: var(--hz-text-tiny-leading);
 	}
 }
+
+/* table */
+
+
+/* tableCell */
+
+
+/* tableRow */
+
 
 /* text */
 [data-hz="text"] {

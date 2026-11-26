@@ -1,0 +1,70 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): MRR movement as stacked bars with the net line and a legend, then each kind on one series.",
+	"root": {
+		"tag": "chart",
+		"props": {
+			"kind": "stackedBar",
+			"label": "MRR movement",
+			"series": [
+				{
+					"key": "new",
+					"label": "New",
+					"tone": "new",
+					"values": [4, 6, 5, 8]
+				},
+				{
+					"key": "exp",
+					"label": "Expansion",
+					"tone": "expansion",
+					"values": [2, 3, 1, 4]
+				},
+				{
+					"key": "churn",
+					"label": "Churn",
+					"tone": "churn",
+					"values": [-1, -2, null, -1]
+				}
+			],
+			"labels": ["Aug", "Sep", "Oct", "Nov"],
+			"format": "currency",
+			"currency": "USD",
+			"legend": true,
+			"net": true
+		},
+		"events": ["hover"]
+	},
+	"frame": "screen",
+	"axes": [
+		{
+			"prop": "kind",
+			"values": ["area", "bar", "sparkline", "barSparkline", "distribution"]
+		},
+		{
+			"prop": "size",
+			"values": ["small", "large"]
+		},
+		{
+			"prop": "format",
+			"values": ["percent", "duration"]
+		}
+	],
+	"cases": [
+		{
+			"name": "evidence",
+			"props": {
+				"kind": "barSparkline",
+				"highlightFrom": 2
+			}
+		},
+		{
+			"name": "loading",
+			"props": {
+				"loading": true
+			}
+		}
+	],
+	"pending": {
+		"web": "A1",
+		"ios": "S1"
+	}
+}

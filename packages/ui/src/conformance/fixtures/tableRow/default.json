@@ -1,0 +1,100 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): a group heading row spanning the columns (unmatched records) over one row.",
+	"root": {
+		"tag": "table",
+		"props": {
+			"label": "Unmatched",
+			"columns": [
+				{
+					"key": "name",
+					"label": "Customer",
+					"width": "fill",
+					"sortable": true
+				},
+				{
+					"key": "plan",
+					"label": "Plan",
+					"width": "narrow",
+					"optional": true
+				},
+				{
+					"key": "mrr",
+					"label": "MRR",
+					"align": "end",
+					"sortable": true,
+					"width": "regular"
+				}
+			]
+		},
+		"children": [
+			{
+				"tag": "tableRow",
+				"key": "g",
+				"props": {
+					"title": "Stripe",
+					"group": true
+				}
+			},
+			{
+				"tag": "tableRow",
+				"key": "a",
+				"props": {
+					"disabled": true
+				},
+				"events": ["press", "select"],
+				"children": [
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "name"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Initech"],
+								"props": {
+									"strong": true
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "plan"
+						},
+						"children": [
+							{
+								"tag": "badge",
+								"props": {
+									"label": "Free",
+									"style": "quiet"
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "mrr"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["$0"],
+								"props": {
+									"numeric": true
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen",
+	"pending": {
+		"web": "A4",
+		"ios": "S5"
+	}
+}

@@ -1,0 +1,46 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): the time zone combobox: searchable, grouped, with a footer row.",
+	"root": {
+		"tag": "select",
+		"props": {
+			"label": "Time zone",
+			"searchable": true,
+			"value": "Europe/Berlin",
+			"options": [
+				{
+					"value": "Europe/Berlin",
+					"label": "Berlin",
+					"description": "UTC+1",
+					"group": "Europe"
+				},
+				{
+					"value": "America/New_York",
+					"label": "New York",
+					"description": "UTC-5",
+					"group": "Americas"
+				}
+			]
+		},
+		"events": ["change", "query"],
+		"slots": [
+			{
+				"name": "footer",
+				"children": [
+					{
+						"tag": "button",
+						"props": {
+							"label": "Create #berlin",
+							"variant": "ghost",
+							"size": "small"
+						}
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"pending": {
+		"web": "A2",
+		"ios": "S2"
+	}
+}

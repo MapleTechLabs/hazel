@@ -1,0 +1,80 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): the palette's home: recent channels and actions, one with a shortcut; then a form page.",
+	"root": {
+		"tag": "commandPalette",
+		"props": {
+			"open": true,
+			"placeholder": "Search or run a command",
+			"query": {
+				"text": "",
+				"rev": 0,
+				"edit": 0
+			},
+			"groups": [
+				{
+					"title": "Recent",
+					"items": [
+						{
+							"id": "c1",
+							"label": "general",
+							"icon": "hashtag"
+						},
+						{
+							"id": "u1",
+							"label": "Ada Lovelace",
+							"face": {
+								"name": "Ada Lovelace",
+								"initials": "AL",
+								"presence": "online"
+							}
+						}
+					]
+				},
+				{
+					"title": "Actions",
+					"items": [
+						{
+							"id": "new",
+							"label": "New channel",
+							"icon": "plus",
+							"shortcut": "mod+shift+n"
+						}
+					]
+				}
+			]
+		},
+		"events": ["change", "select", "dismiss"]
+	},
+	"frame": "screen",
+	"cases": [
+		{
+			"name": "loading",
+			"props": {
+				"loading": true
+			}
+		},
+		{
+			"name": "empty",
+			"props": {
+				"groups": [],
+				"empty": "No results",
+				"query": {
+					"text": "zzz",
+					"rev": 1,
+					"edit": 0
+				}
+			}
+		},
+		{
+			"name": "form",
+			"props": {
+				"title": "Create channel",
+				"groups": []
+			}
+		}
+	],
+	"pending": {
+		"web": "A3",
+		"ios": "S3"
+	}
+}

@@ -127,7 +127,7 @@ export type FrameSurface = (typeof frameSurfaces)[number]
  * A screen's surface (`screen-surface`): `sidebar` is the sidebar's column under its own title;
  * `page` a phone tab's page (`mobileTopBar`: a 56pt sticky bar, the section heading, the page ground).
  */
-export const screenSurfaces = ["sidebar", "page"] as const
+export const screenSurfaces = ["sidebar", "page", "centered"] as const
 export type ScreenSurface = (typeof screenSurfaces)[number]
 
 export const sectionStyles = ["sidebar", "tree", "list", "sticky"] as const
@@ -185,6 +185,58 @@ export type ListDividerKind = (typeof listDividerKinds)[number]
 /** Where a list rests and what it keeps still when rows arrive: `end` is a chat. */
 export const listAnchors = ["start", "end"] as const
 export type ListAnchor = (typeof listAnchors)[number]
+
+// Phase 4 (`docs/hazel-ui-phase4.md`, "Contract wave"): the sets the web pages need.
+
+/** A grid's columns: `auto` fills the row with as many as fit; the compact size class drops to one. */
+export const gridColumns = ["auto", "2", "3", "4"] as const
+export type GridColumns = (typeof gridColumns)[number]
+
+/** `cards` is the kit's choice box; `segmented` the segmented control; `swatches` a colour picker. */
+export const choiceStyles = ["list", "cards", "segmented", "chips", "swatches"] as const
+export type ChoiceStyle = (typeof choiceStyles)[number]
+
+/** A toggle's look: today's switch, or a checkbox (with `indeterminate`). */
+export const toggleStyles = ["switch", "checkbox"] as const
+export type ToggleStyle = (typeof toggleStyles)[number]
+
+/** `spinner` is the kit's loader ring, for an inline wait; `bar` the progress bar. */
+export const progressStyles = ["bar", "spinner"] as const
+export type ProgressStyle = (typeof progressStyles)[number]
+
+/** `callout` is the kit's bordered note; `bar` a full-width band (the "N new messages" bar). */
+export const bannerStyles = ["callout", "bar"] as const
+export type BannerStyle = (typeof bannerStyles)[number]
+
+/** `app` is the phone's bottom tabs; `page` in-page tabs under a header (customer detail, queues). */
+export const tabBarStyles = ["app", "page"] as const
+export type TabBarStyle = (typeof tabBarStyles)[number]
+
+/** A chart's form; the sparklines draw with no axes, sized for a table cell or a stat tile. */
+export const chartKinds = [
+	"line",
+	"area",
+	"bar",
+	"stackedBar",
+	"sparkline",
+	"barSparkline",
+	"distribution",
+] as const
+export type ChartKind = (typeof chartKinds)[number]
+
+export const chartSizes = ["regular", "small", "large"] as const
+export type ChartSize = (typeof chartSizes)[number]
+
+/** A stat tile's delta: its direction, and whether that direction is good (`goodWhen`, decided by the view). */
+export const statTrends = ["none", "up", "down"] as const
+export type StatTrend = (typeof statTrends)[number]
+
+export const statDeltaTones = ["neutral", "success", "danger"] as const
+export type StatDeltaTone = (typeof statDeltaTones)[number]
+
+/** An attachment grid's arrangement: a message's mosaic, the files page's grid, masonry or a list. */
+export const attachmentLayouts = ["mosaic", "grid", "masonry", "list"] as const
+export type AttachmentLayout = (typeof attachmentLayouts)[number]
 
 /**
  * Boolean states a view sets (`data-<state>` on the web). Chat states are the message's own. `linked`

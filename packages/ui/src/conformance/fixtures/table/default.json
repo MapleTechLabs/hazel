@@ -1,0 +1,214 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): the customers table: a sorted column, a checkbox column, a selected row, a keyboard row, the footer totals.",
+	"root": {
+		"tag": "table",
+		"props": {
+			"label": "Customers",
+			"columns": [
+				{
+					"key": "name",
+					"label": "Customer",
+					"width": "fill",
+					"sortable": true
+				},
+				{
+					"key": "plan",
+					"label": "Plan",
+					"width": "narrow",
+					"optional": true
+				},
+				{
+					"key": "mrr",
+					"label": "MRR",
+					"align": "end",
+					"sortable": true,
+					"width": "regular"
+				}
+			],
+			"sort": {
+				"column": "mrr",
+				"direction": "descending"
+			},
+			"selectable": true,
+			"stickyHeader": true
+		},
+		"events": ["sort", "selectAll"],
+		"children": [
+			{
+				"tag": "tableRow",
+				"key": "acme",
+				"props": {
+					"selected": true
+				},
+				"events": ["press", "select"],
+				"children": [
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "name"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Acme"],
+								"props": {
+									"strong": true
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "plan"
+						},
+						"children": [
+							{
+								"tag": "badge",
+								"props": {
+									"label": "Pro",
+									"style": "quiet"
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "mrr"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["$12,400"],
+								"props": {
+									"numeric": true
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"tag": "tableRow",
+				"key": "globex",
+				"props": {
+					"current": true
+				},
+				"events": ["press", "select"],
+				"children": [
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "name"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Globex"],
+								"props": {
+									"strong": true
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "plan"
+						},
+						"children": [
+							{
+								"tag": "badge",
+								"props": {
+									"label": "Team",
+									"style": "quiet"
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "mrr"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["$3,100"],
+								"props": {
+									"numeric": true
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"tag": "tableRow",
+				"key": "total",
+				"props": {
+					"footer": true
+				},
+				"children": [
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "name"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["2 customers"],
+								"props": {
+									"tone": "muted"
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "plan"
+						}
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "mrr"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["$15,500"],
+								"props": {
+									"numeric": true,
+									"strong": true
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen",
+	"cases": [
+		{
+			"name": "loading",
+			"props": {
+				"loading": true
+			}
+		}
+	],
+	"aria": [
+		{
+			"role": "table",
+			"name": "Customers"
+		}
+	],
+	"pending": {
+		"web": "A4",
+		"ios": "S5"
+	}
+}

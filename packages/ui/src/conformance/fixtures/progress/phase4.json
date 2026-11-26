@@ -1,0 +1,16 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): the inline spinner (`ui/loader.ts`).",
+	"root": {
+		"tag": "progress",
+		"props": {
+			"style": "spinner",
+			"indeterminate": true,
+			"label": "Loading"
+		}
+	},
+	"frame": "inline",
+	"pending": {
+		"web": "A1",
+		"ios": "S1"
+	}
+}

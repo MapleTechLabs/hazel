@@ -22,7 +22,7 @@ export const closed = (h: H<"m">) => [
 	// @ts-expect-error options come from closed sets
 	h.text.tone("purple"),
 	// @ts-expect-error icon names are a closed set
-	h.icon.name("rocket"),
+	h.icon.name("unicorn"),
 	// @ts-expect-error a prop belongs to its tag: `badge` is an item's
 	h.section.badge(3),
 	// @ts-expect-error text goes inside `text`, not in a container

@@ -1,0 +1,45 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): the files page's grid, masonry and list, with a failed upload.",
+	"root": {
+		"tag": "attachmentGrid",
+		"props": {
+			"layout": "grid",
+			"attachments": [
+				{
+					"id": "i1",
+					"kind": "image",
+					"name": "a.png",
+					"width": 800,
+					"height": 600
+				},
+				{
+					"id": "v1",
+					"kind": "video",
+					"name": "demo.mp4",
+					"width": 1920,
+					"height": 1080,
+					"duration": "1:24"
+				},
+				{
+					"id": "f1",
+					"kind": "file",
+					"name": "report.pdf",
+					"size": "2.4 MB",
+					"failed": true
+				}
+			]
+		},
+		"events": ["press", "retry"]
+	},
+	"frame": "screen",
+	"axes": [
+		{
+			"prop": "layout",
+			"values": ["masonry", "list"]
+		}
+	],
+	"pending": {
+		"web": "A5",
+		"ios": "S5"
+	}
+}

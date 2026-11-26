@@ -1,0 +1,36 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): a hover card over a table cell.",
+	"root": {
+		"tag": "popover",
+		"props": {
+			"open": true,
+			"trigger": "hover"
+		},
+		"events": ["dismiss"],
+		"slots": [
+			{
+				"name": "anchor",
+				"children": [
+					{
+						"tag": "text",
+						"children": ["Acme"],
+						"props": {
+							"strong": true
+						}
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "text",
+				"children": ["Acme: Pro, 42 seats"]
+			}
+		]
+	},
+	"frame": "inline",
+	"pending": {
+		"web": "A3",
+		"ios": "S3"
+	}
+}

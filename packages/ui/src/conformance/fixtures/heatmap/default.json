@@ -1,0 +1,148 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): a few weeks of activity by level, one day selected.",
+	"root": {
+		"tag": "heatmap",
+		"props": {
+			"label": "Activity",
+			"days": [
+				{
+					"date": "2026-11-01",
+					"level": 1,
+					"label": "3 events"
+				},
+				{
+					"date": "2026-11-02",
+					"level": 2,
+					"label": "6 events"
+				},
+				{
+					"date": "2026-11-03",
+					"level": 3,
+					"label": "9 events"
+				},
+				{
+					"date": "2026-11-04",
+					"level": 4,
+					"label": "12 events"
+				},
+				{
+					"date": "2026-11-05",
+					"level": 0,
+					"label": "0 events"
+				},
+				{
+					"date": "2026-11-06",
+					"level": 1,
+					"label": "3 events"
+				},
+				{
+					"date": "2026-11-07",
+					"level": 2,
+					"label": "6 events"
+				},
+				{
+					"date": "2026-11-08",
+					"level": 3,
+					"label": "9 events"
+				},
+				{
+					"date": "2026-11-09",
+					"level": 4,
+					"label": "12 events"
+				},
+				{
+					"date": "2026-11-10",
+					"level": 0,
+					"label": "0 events"
+				},
+				{
+					"date": "2026-11-11",
+					"level": 1,
+					"label": "3 events"
+				},
+				{
+					"date": "2026-11-12",
+					"level": 2,
+					"label": "6 events"
+				},
+				{
+					"date": "2026-11-13",
+					"level": 3,
+					"label": "9 events"
+				},
+				{
+					"date": "2026-11-14",
+					"level": 4,
+					"label": "12 events"
+				},
+				{
+					"date": "2026-11-15",
+					"level": 0,
+					"label": "0 events"
+				},
+				{
+					"date": "2026-11-16",
+					"level": 1,
+					"label": "3 events"
+				},
+				{
+					"date": "2026-11-17",
+					"level": 2,
+					"label": "6 events"
+				},
+				{
+					"date": "2026-11-18",
+					"level": 3,
+					"label": "9 events"
+				},
+				{
+					"date": "2026-11-19",
+					"level": 4,
+					"label": "12 events"
+				},
+				{
+					"date": "2026-11-20",
+					"level": 0,
+					"label": "0 events"
+				},
+				{
+					"date": "2026-11-21",
+					"level": 1,
+					"label": "3 events"
+				},
+				{
+					"date": "2026-11-22",
+					"level": 2,
+					"label": "6 events"
+				},
+				{
+					"date": "2026-11-23",
+					"level": 3,
+					"label": "9 events"
+				},
+				{
+					"date": "2026-11-24",
+					"level": 4,
+					"label": "12 events"
+				},
+				{
+					"date": "2026-11-25",
+					"level": 0,
+					"label": "0 events"
+				},
+				{
+					"date": "2026-11-26",
+					"level": 1,
+					"label": "3 events"
+				}
+			],
+			"selected": "2026-11-20"
+		},
+		"events": ["select"]
+	},
+	"frame": "screen",
+	"pending": {
+		"web": "A1",
+		"ios": "S1"
+	}
+}

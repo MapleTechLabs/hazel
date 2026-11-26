@@ -484,6 +484,15 @@ public enum HazelTheme {
             ]
         )
 
+        public static let actionBar = Recipe(
+            primitive: "actionBar",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+            ]
+        )
+
         public static let attachmentGrid = Recipe(
             primitive: "attachmentGrid",
             defaults: [:],
@@ -566,6 +575,15 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: ["pill"], states: [], sizeClass: nil), part: nil, style: Style(radius: 8)),
                 Layer(when: When(options: ["size": "regular"], flags: ["pill"], states: [], sizeClass: nil), part: nil, style: Style(paddingX: 8)),
                 Layer(when: When(options: ["size": "small"], flags: ["pill"], states: [], sizeClass: nil), part: nil, style: Style(paddingX: 6)),
+            ]
+        )
+
+        public static let banner = Recipe(
+            primitive: "banner",
+            defaults: ["tone": "info", "style": "callout"],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
             ]
         )
 
@@ -673,6 +691,42 @@ public enum HazelTheme {
             ]
         )
 
+        public static let chart = Recipe(
+            primitive: "chart",
+            defaults: ["kind": "line", "size": "regular"],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+            ]
+        )
+
+        public static let choiceGroup = Recipe(
+            primitive: "choiceGroup",
+            defaults: ["style": "list", "columns": "1"],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+            ]
+        )
+
+        public static let codeBlock = Recipe(
+            primitive: "codeBlock",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+            ]
+        )
+
+        public static let commandPalette = Recipe(
+            primitive: "commandPalette",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+            ]
+        )
+
         public static let composer = Recipe(
             primitive: "composer",
             defaults: [:],
@@ -713,6 +767,15 @@ public enum HazelTheme {
             ]
         )
 
+        public static let datePicker = Recipe(
+            primitive: "datePicker",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+            ]
+        )
+
         public static let dialog = Recipe(
             primitive: "dialog",
             defaults: [:],
@@ -730,12 +793,30 @@ public enum HazelTheme {
             ]
         )
 
+        public static let disclosure = Recipe(
+            primitive: "disclosure",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+            ]
+        )
+
         public static let divider = Recipe(
             primitive: "divider",
             defaults: [:],
             inert: [],
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.border, minHeight: 1, fill: true, shrink: false)),
+            ]
+        )
+
+        public static let dropZone = Recipe(
+            primitive: "dropZone",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
             ]
         )
 
@@ -815,6 +896,15 @@ public enum HazelTheme {
             ]
         )
 
+        public static let grid = Recipe(
+            primitive: "grid",
+            defaults: ["columns": "auto", "density": "regular"],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+            ]
+        )
+
         public static let heading = Recipe(
             primitive: "heading",
             defaults: ["level": "2"],
@@ -824,6 +914,15 @@ public enum HazelTheme {
                 Layer(when: When(options: ["level": "1"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(text: .display)),
                 Layer(when: When(options: ["level": "2"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(text: .title)),
                 Layer(when: When(options: ["level": "3"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(text: .label)),
+            ]
+        )
+
+        public static let heatmap = Recipe(
+            primitive: "heatmap",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
             ]
         )
 
@@ -893,6 +992,15 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [.selected, .pressed], sizeClass: nil), part: "control", style: Style(background: Colors.washStacked)),
                 Layer(when: When(options: [:], flags: [], states: [.emphasized], sizeClass: nil), part: "title", style: Style(color: Colors.fg, strong: true)),
                 Layer(when: When(options: [:], flags: [], states: [.disabled], sizeClass: nil), part: "control", style: Style(opacity: 0.5)),
+            ]
+        )
+
+        public static let lightbox = Recipe(
+            primitive: "lightbox",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
             ]
         )
 
@@ -1029,6 +1137,15 @@ public enum HazelTheme {
             ]
         )
 
+        public static let property = Recipe(
+            primitive: "property",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+            ]
+        )
+
         public static let reactionBar = Recipe(
             primitive: "reactionBar",
             defaults: [:],
@@ -1071,6 +1188,7 @@ public enum HazelTheme {
                 Layer(when: When(options: ["surface": "page"], flags: [], states: [], sizeClass: nil), part: "header", style: Style(divider: Colors.border, paddingX: 16, gap: 4)),
                 Layer(when: When(options: ["surface": "page"], flags: [], states: [], sizeClass: nil), part: "title", style: Style(text: .title, opacity: 1, weight: 600)),
                 Layer(when: When(options: ["surface": "page"], flags: [], states: [], sizeClass: nil), part: "content", style: Style(paddingY: 0, grow: true)),
+                Layer(when: When(options: ["surface": "centered"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.bg)),
             ]
         )
 
@@ -1153,6 +1271,15 @@ public enum HazelTheme {
             ]
         )
 
+        public static let slider = Recipe(
+            primitive: "slider",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+            ]
+        )
+
         public static let spacer = Recipe(
             primitive: "spacer",
             defaults: [:],
@@ -1190,6 +1317,24 @@ public enum HazelTheme {
             ]
         )
 
+        public static let statTile = Recipe(
+            primitive: "statTile",
+            defaults: ["trend": "none", "deltaTone": "neutral"],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+            ]
+        )
+
+        public static let stepper = Recipe(
+            primitive: "stepper",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+            ]
+        )
+
         public static let tabBar = Recipe(
             primitive: "tabBar",
             defaults: [:],
@@ -1203,6 +1348,33 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "tabLabel", style: Style(truncate: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "tabBadge", style: Style(layout: .row, align: .center, justify: .center, background: Colors.primary, color: Colors.primaryFg, radius: 9999, paddingX: 4, minHeight: 16, text: .micro, strong: true, numeric: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "tab", style: Style(text: .tiny)),
+            ]
+        )
+
+        public static let table = Recipe(
+            primitive: "table",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+            ]
+        )
+
+        public static let tableCell = Recipe(
+            primitive: "tableCell",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+            ]
+        )
+
+        public static let tableRow = Recipe(
+            primitive: "tableRow",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
             ]
         )
 
