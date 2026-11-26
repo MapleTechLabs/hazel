@@ -113,10 +113,11 @@ const structured: Stream = {
 				2,
 				{
 					row: {
-						a: "Ada Lovelace",
-						i: "AL",
-						t: "14:05",
-						b: [
+						author: "Ada Lovelace",
+						initials: "AL",
+						provider: "slack",
+						time: "14:05",
+						body: [
 							[
 								0,
 								[
@@ -128,10 +129,11 @@ const structured: Stream = {
 							],
 							[1, "bun run test", "sh"],
 						],
-						r: [
-							["👍", 3, 1],
-							["🎉", 1, 0],
+						reactions: [
+							{ emoji: "👍", count: 3, mine: true, who: { names: ["Grace", "Alan"], others: 1 } },
+							{ emoji: "🎉", count: 1, mine: false },
 						],
+						edited: true,
 						files: [{ id: "f1", kind: "image", name: "shot.png", width: 1280, height: 720 }],
 						actions: ["react", "reply", "thread"],
 					},
@@ -144,7 +146,7 @@ const structured: Stream = {
 			["insert", 1, 3, null],
 			["insert", 0, 1, null],
 		],
-		[["props", 2, { pinned: true }]],
+		[["props", 2, { pinned: true, grouped: true }]],
 		[["props", 3, { entries: null }]],
 	],
 }

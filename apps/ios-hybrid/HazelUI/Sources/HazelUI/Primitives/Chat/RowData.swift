@@ -52,29 +52,27 @@ public enum ListEntry: Sendable, Hashable {
     case placeholder
 }
 
-// MARK: - Option C: the compact `row` prop
+// MARK: - Option C: the `row` prop
 
 extension RowData {
-    /// Decodes `rows.ts`'s `Row`: `{a, i, t, g, b, r, m}` with blocks and runs as arrays.
-    public init?(compact value: JSONValue) {
-        guard case let .object(o) = value, let time = o["t"]?.string, case let .array(blocks)? = o["b"] else { return nil }
-        self.author = o["a"]?.string
-        self.initials = o["i"]?.string
+    /// Decodes `content.ts`'s `MessageRow` (readable keys: `author`, `initials`, `time`, `body`,
+    /// `reactions`, `files`); `grouped` is the message's own flag, not row data.
+    public init?(row value: JSONValue, grouped: Bool) {
+        guard case let .object(o) = value, let time = o["time"]?.string, case let .array(blocks)? = o["body"] else { return nil }
+        self.author = o["author"]?.string
+        self.initials = o["initials"]?.string
         self.time = time
-        self.grouped = o["g"]?.number == 1
+        self.grouped = grouped
         self.blocks = blocks.compactMap(RowData.block)
-        if case let .array(rs)? = o["r"] {
-            reactions = rs.compactMap { r in
-                guard case let .array(f) = r, f.count == 3, let e = f[0].string, let c = f[1].number else { return nil }
-                return Reaction(emoji: e, count: Int(c), mine: f[2].number == 1)
-            }
-        } else { reactions = [] }
-        if case let .array(ms)? = o["m"] {
-            images = ms.compactMap { m in
-                guard case let .array(f) = m, f.count == 2, let w = f[0].number, let h = f[1].number else { return nil }
-                return CGSize(width: w, height: h)
-            }
-        } else { images = [] }
+        reactions = (o["reactions"]?.array ?? []).compactMap { r in
+            guard let f = r.object, let e = f["emoji"]?.string, let c = f["count"]?.number else { return nil }
+            return Reaction(emoji: e, count: Int(c), mine: f["mine"]?.bool ?? false)
+        }
+        images = (o["files"]?.array ?? []).compactMap { file in
+            guard let f = file.object, f["kind"]?.string != "file",
+                  let w = f["width"]?.number, let h = f["height"]?.number else { return nil }
+            return CGSize(width: w, height: h)
+        }
     }
 
     private static func block(_ value: JSONValue) -> Block? {
@@ -106,14 +104,14 @@ extension Array {
 // MARK: - Option S: the row as one JSON string, decoded straight from Foundation values
 
 extension RowData {
-    /// The same `Row` as `init(compact:)`, parsed from its JSON without going through `JSONValue`.
-    public init?(json: String) {
+    /// The same `MessageRow` as `init(row:grouped:)`, parsed from its JSON without going through `JSONValue`.
+    public init?(json: String, grouped: Bool) {
         guard let any = try? JSONSerialization.jsonObject(with: Data(json.utf8)), let o = any as? [String: Any],
-              let time = o["t"] as? String, let blocks = o["b"] as? [Any] else { return nil }
-        author = o["a"] as? String
-        initials = o["i"] as? String
+              let time = o["time"] as? String, let blocks = o["body"] as? [Any] else { return nil }
+        author = o["author"] as? String
+        initials = o["initials"] as? String
         self.time = time
-        grouped = (o["g"] as? Int) == 1
+        self.grouped = grouped
         self.blocks = blocks.compactMap { raw -> Block? in
             guard let f = raw as? [Any], let kind = f.first as? Int else { return nil }
             if kind == 1 { return .code(f[safe: 1] as? String ?? "", language: f[safe: 2] as? String ?? "") }
@@ -124,11 +122,14 @@ extension RowData {
                 return Run(kind: RunKind(rawValue: k) ?? .plain, text: text, arg: f[safe: 2] as? String)
             }, marker: kind == 2 ? f[safe: 2] as? String : nil)
         }
-        reactions = (o["r"] as? [[Any]] ?? []).compactMap { f in
-            guard f.count == 3, let e = f[0] as? String, let c = f[1] as? Int else { return nil }
-            return Reaction(emoji: e, count: c, mine: (f[2] as? Int) == 1)
+        reactions = (o["reactions"] as? [[String: Any]] ?? []).compactMap { f in
+            guard let e = f["emoji"] as? String, let c = f["count"] as? Int else { return nil }
+            return Reaction(emoji: e, count: c, mine: (f["mine"] as? Bool) == true)
         }
-        images = (o["m"] as? [[Double]] ?? []).compactMap { f in f.count == 2 ? CGSize(width: f[0], height: f[1]) : nil }
+        images = (o["files"] as? [[String: Any]] ?? []).compactMap { f in
+            guard (f["kind"] as? String) != "file", let w = f["width"] as? Double, let h = f["height"] as? Double else { return nil }
+            return CGSize(width: w, height: h)
+        }
     }
 }
 

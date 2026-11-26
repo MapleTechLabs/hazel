@@ -6,26 +6,38 @@
 import { type Message, me, type Person, people } from "./fixture.ts"
 import { type Block, parse } from "./rich-text.ts"
 
-/** One message row as it crosses in option C. Short keys: this is per row, 3,000 times. */
+/**
+ * One message row as it crosses in option C: the vocabulary's `MessageRow` keys (readable, per the
+ * phase 1.5 decision); grouping is the message's own `grouped` flag, not row data.
+ */
 export interface Row {
 	/** Author name, initials; absent on a grouped row. */
-	readonly a?: string
-	readonly i?: string
+	readonly author?: string
+	readonly initials?: string
 	/** Time, `HH:MM`. */
-	readonly t: string
-	/** Grouped under the previous message. */
-	readonly g?: 1
-	readonly b: ReadonlyArray<Block>
-	/** Reactions: `[emoji, count, mine]`. */
-	readonly r?: ReadonlyArray<readonly [string, number, 0 | 1]>
-	/** Image attachments: `[width, height]`. */
-	readonly m?: ReadonlyArray<readonly [number, number]>
+	readonly time: string
+	readonly body: ReadonlyArray<Block>
+	readonly reactions?: ReadonlyArray<{ readonly emoji: string; readonly count: number; readonly mine: boolean }>
+	/** Image attachments by pixel size. */
+	readonly files?: ReadonlyArray<{
+		readonly id: string
+		readonly kind: "image"
+		readonly name: string
+		readonly width: number
+		readonly height: number
+	}>
 }
 
 export type Entry =
 	| { readonly kind: "date"; readonly key: string; readonly label: string }
 	| { readonly kind: "unread"; readonly key: string }
-	| { readonly kind: "message"; readonly key: string; readonly message: Message; readonly row: Row }
+	| {
+			readonly kind: "message"
+			readonly key: string
+			readonly message: Message
+			readonly grouped: boolean
+			readonly row: Row
+	  }
 
 export const names: ReadonlyMap<string, Person> = new Map(people.map((p) => [p.id, p]))
 
@@ -56,18 +68,22 @@ export const rowOf = (message: Message, grouped: boolean): Row => {
 	const hit = cache.get(message)
 	if (hit !== undefined && hit.grouped === grouped) return hit.row
 	const author = names.get(message.authorId)?.name ?? "Unknown"
-	const reactions = message.reactions.map(
-		(r) => [r.emoji, r.users.length, r.users.includes(me.id) ? 1 : 0] as const,
-	)
-	const row: Row = {
-		...(grouped ? { g: 1 as const } : { a: author, i: initials(author) }),
-		t: time(message.createdAt),
-		b: parse(message.content, names),
-		...(reactions.length > 0 ? { r: reactions } : {}),
-		...(message.attachments.length > 0
-			? { m: message.attachments.map((a) => [a.width, a.height] as const) }
-			: {}),
-	}
+	const reactions = message.reactions.map((r) => ({
+		emoji: r.emoji,
+		count: r.users.length,
+		mine: r.users.includes(me.id),
+	}))
+	const files = message.attachments.map((a, index) => ({
+		id: `${message.id}-${index}`,
+		kind: "image" as const,
+		name: "image",
+		width: a.width,
+		height: a.height,
+	}))
+	const base = { time: time(message.createdAt), body: parse(message.content, names) }
+	const withAuthor: Row = grouped ? base : { ...base, author, initials: initials(author) }
+	const withReactions: Row = reactions.length > 0 ? { ...withAuthor, reactions } : withAuthor
+	const row: Row = files.length > 0 ? { ...withReactions, files } : withReactions
 	cache.set(message, { grouped, row })
 	return row
 }
@@ -87,7 +103,7 @@ export const entries = (messages: ReadonlyArray<Message>, unreadAfter?: string):
 			previous !== undefined &&
 			previous.authorId === message.authorId &&
 			message.createdAt - previous.createdAt < GROUP_MS
-		out.push({ kind: "message", key: message.id, message, row: rowOf(message, grouped) })
+		out.push({ kind: "message", key: message.id, message, grouped, row: rowOf(message, grouped) })
 		previous = message
 	}
 	return out

@@ -43,14 +43,14 @@ const runNode = <Msg>(h: H<Msg>, run: Run) =>
 	typeof run === "string" ? h.run.children(run) : h.run.set({ kind: run[0], arg: run[2] }).children(run[1])
 
 /** A message's subtree for A and B: slots, rich text blocks and runs, reactions, attachments. */
-export const rowTree = <Msg>(h: H<Msg>, row: Row) =>
-	h.message.set({ grouped: row.g === 1 ? true : undefined }).children(
-		row.g === 1 ? null : h.slot.set({ name: "avatar" }).children(h.avatar.initials(row.i ?? "")),
-		row.g === 1 ? null : h.slot.set({ name: "author" }).children(h.text.strong().children(row.a ?? "")),
-		h.slot.set({ name: "time" }).children(h.text.role("caption").tone("muted").children(row.t)),
+export const rowTree = <Msg>(h: H<Msg>, row: Row, grouped: boolean) =>
+	h.message.set({ grouped: grouped ? true : undefined }).children(
+		grouped ? null : h.slot.set({ name: "avatar" }).children(h.avatar.initials(row.initials ?? "")),
+		grouped ? null : h.slot.set({ name: "author" }).children(h.text.strong().children(row.author ?? "")),
+		h.slot.set({ name: "time" }).children(h.text.role("caption").tone("muted").children(row.time)),
 		h.slot.set({ name: "body" }).children(
 			h.richText.children(
-				...row.b.map((block) =>
+				...row.body.map((block) =>
 					block[0] === BlockKind.code
 						? h.codeBlock.set({ language: block[2] }).children(block[1])
 						: h.paragraph
@@ -59,19 +59,21 @@ export const rowTree = <Msg>(h: H<Msg>, row: Row) =>
 				),
 			),
 		),
-		row.m === undefined
+		row.files === undefined
 			? null
 			: h.slot
 					.set({ name: "attachments" })
 					.children(
-						h.attachmentGrid.children(...row.m.map(([width, height]) => h.image.set({ width, height }))),
+						h.attachmentGrid.children(
+							...row.files.map(({ width, height }) => h.image.set({ width, height })),
+						),
 					),
-		row.r === undefined
+		row.reactions === undefined
 			? null
 			: h.slot.set({ name: "reactions" }).children(
 					h.reactionBar.children(
-						...row.r.map(([emoji, count, mine]) =>
-							h.reaction.key(emoji).set({ emoji, count, mine: mine === 1 ? true : undefined }),
+						...row.reactions.map(({ emoji, count, mine }) =>
+							h.reaction.key(emoji).set({ emoji, count, mine: mine ? true : undefined }),
 						),
 					),
 				),
@@ -79,21 +81,22 @@ export const rowTree = <Msg>(h: H<Msg>, row: Row) =>
 
 export const MessageRow = Chat.component({
 	name: "MessageRow",
-	props: Schema.Struct({ row: Schema.Any }),
+	props: Schema.Struct({ row: Schema.Any, grouped: Schema.Boolean }),
 	model: Schema.Struct({}),
 	message: UiSchema.TaggedEnum({ Noop: {} }),
 }).make({
 	init: () => ({}),
 	update: { Noop: ($) => $.model },
-	view: (h) => rowTree(h, h.props.row as Row),
+	view: (h) => rowTree(h, h.props.row as Row, h.props.grouped),
 })
 
 /** C and S: one builder per row object, so re-rendering the list allocates nothing for unchanged rows. */
 const leaves = new WeakMap<Row, unknown>()
-const leaf = <Msg>(h: H<Msg>, key: string, row: Row, json: boolean) => {
+const leaf = <Msg>(h: H<Msg>, key: string, row: Row, grouped: boolean, json: boolean) => {
 	const hit = leaves.get(row)
 	if (hit !== undefined) return hit as ReturnType<H<Msg>["message"]["key"]>
-	const made = h.message.key(key).set(json ? { rowJson: JSON.stringify(row) } : { row: row as never })
+	const content = json ? { rowJson: JSON.stringify(row) } : { row: row as never }
+	const made = h.message.key(key).set({ ...content, grouped: grouped ? true : undefined })
 	leaves.set(row, made)
 	return made
 }
@@ -195,8 +198,8 @@ export const MessageList = Chat.component({
 					entry.kind !== "message"
 						? divider(h, entry)
 						: option === "C" || option === "S"
-							? leaf(h, entry.key, entry.row, option === "S")
-							: MessageRow(h, { key: entry.key, props: { row: entry.row } }),
+							? leaf(h, entry.key, entry.row, entry.grouped, option === "S")
+							: MessageRow(h, { key: entry.key, props: { row: entry.row, grouped: entry.grouped } }),
 				),
 			)
 	},

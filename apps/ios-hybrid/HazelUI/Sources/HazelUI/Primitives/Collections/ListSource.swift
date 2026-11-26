@@ -70,10 +70,11 @@ public final class ListSource {
         case "hz:listDivider":
             made = node[prop: "kind"]?.string == "unread" ? .unread : .date(node[prop: "label"]?.string ?? "")
         case "hz:message":
+            let grouped = node[prop: "grouped"]?.bool ?? false
             if let json = node[prop: "rowJson"]?.string {
-                made = RowData(json: json).map(ListEntry.message) ?? .placeholder
+                made = RowData(json: json, grouped: grouped).map(ListEntry.message) ?? .placeholder
             } else if let row = node[prop: "row"] {
-                made = RowData(compact: row).map(ListEntry.message) ?? .placeholder
+                made = RowData(row: row, grouped: grouped).map(ListEntry.message) ?? .placeholder
             } else {
                 made = .message(RowData(subtree: node, in: tree))
             }

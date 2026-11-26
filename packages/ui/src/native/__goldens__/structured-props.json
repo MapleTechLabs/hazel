@@ -36,10 +36,11 @@
 						2,
 						{
 							"row": {
-								"a": "Ada Lovelace",
-								"i": "AL",
-								"t": "14:05",
-								"b": [
+								"author": "Ada Lovelace",
+								"initials": "AL",
+								"provider": "slack",
+								"time": "14:05",
+								"body": [
 									[
 										0,
 										[
@@ -63,18 +64,26 @@
 										"sh"
 									]
 								],
-								"r": [
-									[
-										"👍",
-										3,
-										1
-									],
-									[
-										"🎉",
-										1,
-										0
-									]
+								"reactions": [
+									{
+										"emoji": "👍",
+										"count": 3,
+										"mine": true,
+										"who": {
+											"names": [
+												"Grace",
+												"Alan"
+											],
+											"others": 1
+										}
+									},
+									{
+										"emoji": "🎉",
+										"count": 1,
+										"mine": false
+									}
 								],
+								"edited": true,
 								"files": [
 									{
 										"id": "f1",
@@ -147,7 +156,7 @@
 				"props 1 {anchor=\"end\",stickToBottom=true}",
 				"events 1 [reachStart]",
 				"create 2 hz:message",
-				"props 2 {row={a:\"Ada Lovelace\",actions:[\"react\",\"reply\",\"thread\"],b:[[0,[\"Ship it \",[1,\"@Grace\",\"u2\"],\", see \",[2,\"the doc\",\"https://hazel.sh/d\"]]],[1,\"bun run test\",\"sh\"]],files:[{height:720,id:\"f1\",kind:\"image\",name:\"shot.png\",width:1280}],i:\"AL\",r:[[\"👍\",3,1],[\"🎉\",1,0]],t:\"14:05\"}}",
+				"props 2 {row={actions:[\"react\",\"reply\",\"thread\"],author:\"Ada Lovelace\",body:[[0,[\"Ship it \",[1,\"@Grace\",\"u2\"],\", see \",[2,\"the doc\",\"https://hazel.sh/d\"]]],[1,\"bun run test\",\"sh\"]],edited:true,files:[{height:720,id:\"f1\",kind:\"image\",name:\"shot.png\",width:1280}],initials:\"AL\",provider:\"slack\",reactions:[{count:3,emoji:\"👍\",mine:true,who:{names:[\"Grace\",\"Alan\"],others:1}},{count:1,emoji:\"🎉\",mine:false}],time:\"14:05\"}}",
 				"events 2 [action,pressReaction]",
 				"insert 1 2 null",
 				"create 3 hz:menu",
@@ -158,7 +167,7 @@
 			"tree": [
 				"#root#0",
 				"  hz:list#1 {anchor=\"end\",stickToBottom=true} on[reachStart]",
-				"    hz:message#2 {row={a:\"Ada Lovelace\",actions:[\"react\",\"reply\",\"thread\"],b:[[0,[\"Ship it \",[1,\"@Grace\",\"u2\"],\", see \",[2,\"the doc\",\"https://hazel.sh/d\"]]],[1,\"bun run test\",\"sh\"]],files:[{height:720,id:\"f1\",kind:\"image\",name:\"shot.png\",width:1280}],i:\"AL\",r:[[\"👍\",3,1],[\"🎉\",1,0]],t:\"14:05\"}} on[action,pressReaction]",
+				"    hz:message#2 {row={actions:[\"react\",\"reply\",\"thread\"],author:\"Ada Lovelace\",body:[[0,[\"Ship it \",[1,\"@Grace\",\"u2\"],\", see \",[2,\"the doc\",\"https://hazel.sh/d\"]]],[1,\"bun run test\",\"sh\"]],edited:true,files:[{height:720,id:\"f1\",kind:\"image\",name:\"shot.png\",width:1280}],initials:\"AL\",provider:\"slack\",reactions:[{count:3,emoji:\"👍\",mine:true,who:{names:[\"Grace\",\"Alan\"],others:1}},{count:1,emoji:\"🎉\",mine:false}],time:\"14:05\"}} on[action,pressReaction]",
 				"    hz:menu#3 {entries=[{entries:[{icon:\"volume-mute\",id:\"mute\",label:\"Mute\"}]}]}"
 			],
 			"count": 4,
@@ -173,18 +182,19 @@
 						"props",
 						2,
 						{
-							"pinned": true
+							"pinned": true,
+							"grouped": true
 						}
 					]
 				]
 			},
 			"ops": [
-				"props 2 {pinned=true}"
+				"props 2 {grouped=true,pinned=true}"
 			],
 			"tree": [
 				"#root#0",
 				"  hz:list#1 {anchor=\"end\",stickToBottom=true} on[reachStart]",
-				"    hz:message#2 {pinned=true,row={a:\"Ada Lovelace\",actions:[\"react\",\"reply\",\"thread\"],b:[[0,[\"Ship it \",[1,\"@Grace\",\"u2\"],\", see \",[2,\"the doc\",\"https://hazel.sh/d\"]]],[1,\"bun run test\",\"sh\"]],files:[{height:720,id:\"f1\",kind:\"image\",name:\"shot.png\",width:1280}],i:\"AL\",r:[[\"👍\",3,1],[\"🎉\",1,0]],t:\"14:05\"}} on[action,pressReaction]",
+				"    hz:message#2 {grouped=true,pinned=true,row={actions:[\"react\",\"reply\",\"thread\"],author:\"Ada Lovelace\",body:[[0,[\"Ship it \",[1,\"@Grace\",\"u2\"],\", see \",[2,\"the doc\",\"https://hazel.sh/d\"]]],[1,\"bun run test\",\"sh\"]],edited:true,files:[{height:720,id:\"f1\",kind:\"image\",name:\"shot.png\",width:1280}],initials:\"AL\",provider:\"slack\",reactions:[{count:3,emoji:\"👍\",mine:true,who:{names:[\"Grace\",\"Alan\"],others:1}},{count:1,emoji:\"🎉\",mine:false}],time:\"14:05\"}} on[action,pressReaction]",
 				"    hz:menu#3 {entries=[{entries:[{icon:\"volume-mute\",id:\"mute\",label:\"Mute\"}]}]}"
 			],
 			"count": 4,
@@ -210,7 +220,7 @@
 			"tree": [
 				"#root#0",
 				"  hz:list#1 {anchor=\"end\",stickToBottom=true} on[reachStart]",
-				"    hz:message#2 {pinned=true,row={a:\"Ada Lovelace\",actions:[\"react\",\"reply\",\"thread\"],b:[[0,[\"Ship it \",[1,\"@Grace\",\"u2\"],\", see \",[2,\"the doc\",\"https://hazel.sh/d\"]]],[1,\"bun run test\",\"sh\"]],files:[{height:720,id:\"f1\",kind:\"image\",name:\"shot.png\",width:1280}],i:\"AL\",r:[[\"👍\",3,1],[\"🎉\",1,0]],t:\"14:05\"}} on[action,pressReaction]",
+				"    hz:message#2 {grouped=true,pinned=true,row={actions:[\"react\",\"reply\",\"thread\"],author:\"Ada Lovelace\",body:[[0,[\"Ship it \",[1,\"@Grace\",\"u2\"],\", see \",[2,\"the doc\",\"https://hazel.sh/d\"]]],[1,\"bun run test\",\"sh\"]],edited:true,files:[{height:720,id:\"f1\",kind:\"image\",name:\"shot.png\",width:1280}],initials:\"AL\",provider:\"slack\",reactions:[{count:3,emoji:\"👍\",mine:true,who:{names:[\"Grace\",\"Alan\"],others:1}},{count:1,emoji:\"🎉\",mine:false}],time:\"14:05\"}} on[action,pressReaction]",
 				"    hz:menu#3"
 			],
 			"count": 4,
