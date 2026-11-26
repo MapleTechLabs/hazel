@@ -9,15 +9,19 @@ export interface Reorder {
 
 /**
  * Wires `container`'s rows for reordering while `enabled()`. A drop, or Alt+ArrowUp/Down on a
- * focused row, calls `move` with the row's id and the id it now precedes (null: the end).
+ * focused row (Left/Right on a `horizontal` axis, a tab bar), calls `move` with the row's id and the
+ * id it now precedes (null: the end).
  */
 export const attachReorder = (options: {
 	readonly container: HTMLElement
 	readonly rows: () => ReadonlyArray<HTMLElement>
 	readonly enabled: () => boolean
 	readonly move: (id: string, before: string | null) => void
+	readonly axis?: "vertical" | "horizontal"
 }): Reorder => {
 	const { container } = options
+	const horizontal = options.axis === "horizontal"
+	const [previous, next] = horizontal ? ["ArrowLeft", "ArrowRight"] : ["ArrowUp", "ArrowDown"]
 	let dragging: HTMLElement | undefined
 
 	const sync = () => {
@@ -38,11 +42,13 @@ export const attachReorder = (options: {
 		return undefined
 	}
 
-	/** The row the pointer is above the middle of, or undefined for the end. */
-	const beforeAt = (y: number): HTMLElement | undefined =>
+	/** The row the pointer is before the middle of, or undefined for the end. */
+	const beforeAt = (event: MouseEvent): HTMLElement | undefined =>
 		options.rows().find((row) => {
 			const box = row.getBoundingClientRect()
-			return y < box.top + box.height / 2
+			return horizontal
+				? event.clientX < box.left + box.width / 2
+				: event.clientY < box.top + box.height / 2
 		})
 
 	const clearMarks = () => {
@@ -77,7 +83,7 @@ export const attachReorder = (options: {
 		event.preventDefault()
 		if (event.dataTransfer !== null) event.dataTransfer.dropEffect = "move"
 		clearMarks()
-		const before = beforeAt(event.clientY)
+		const before = beforeAt(event)
 		if (before === undefined) container.dataset.dropEnd = ""
 		else before.dataset.dropBefore = ""
 	})
@@ -89,7 +95,7 @@ export const attachReorder = (options: {
 		const row = dragging
 		if (row === undefined) return
 		event.preventDefault()
-		commit(row, beforeAt(event.clientY))
+		commit(row, beforeAt(event))
 		clearMarks()
 	})
 	container.addEventListener("dragend", () => {
@@ -99,13 +105,13 @@ export const attachReorder = (options: {
 	})
 	container.addEventListener("keydown", (event) => {
 		if (!options.enabled() || !event.altKey) return
-		if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return
+		if (event.key !== previous && event.key !== next) return
 		const row = rowFrom(event.target)
 		if (row === undefined) return
 		const rows = options.rows()
 		const at = rows.indexOf(row)
-		if (event.key === "ArrowUp" && at > 0) commit(row, rows[at - 1])
-		else if (event.key === "ArrowDown" && at < rows.length - 1) commit(row, rows[at + 2])
+		if (event.key === previous && at > 0) commit(row, rows[at - 1])
+		else if (event.key === next && at < rows.length - 1) commit(row, rows[at + 2])
 		else return
 		event.preventDefault()
 	})
@@ -114,9 +120,15 @@ export const attachReorder = (options: {
 }
 
 /** The drop line, drawn by the renderer over the row it lands before (or under the last). */
-export const reorderCss = (scope: string) => `
+export const reorderCss = (scope: string, axis: "vertical" | "horizontal" = "vertical") => {
+	const [before, after] =
+		axis === "horizontal"
+			? ["calc(-1 * var(--hz-space-0_5)) 0", "var(--hz-space-0_5) 0"]
+			: ["0 calc(-1 * var(--hz-space-0_5))", "0 var(--hz-space-0_5)"]
+	return `
 ${scope} > [draggable="true"] { cursor: grab; }
 ${scope} > [data-dragging] { opacity: 0.5; }
-${scope} > [data-drop-before] { box-shadow: 0 calc(-1 * var(--hz-space-0_5)) 0 0 var(--hz-color-ring); }
-${scope}[data-drop-end] > [draggable="true"]:last-of-type { box-shadow: 0 var(--hz-space-0_5) 0 0 var(--hz-color-ring); }
+${scope} > [data-drop-before] { box-shadow: ${before} 0 0 var(--hz-color-ring); }
+${scope}[data-drop-end] > [draggable="true"]:last-of-type { box-shadow: ${after} 0 0 var(--hz-color-ring); }
 `
+}

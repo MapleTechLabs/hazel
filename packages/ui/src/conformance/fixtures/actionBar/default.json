@@ -1,31 +1,69 @@
 {
-	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): three customers selected, with bulk actions.",
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): three customers selected, with bulk actions, over the bottom of their page.",
 	"root": {
-		"tag": "actionBar",
+		"tag": "screen",
 		"props": {
-			"open": true,
-			"label": "3 selected"
+			"title": "Customers",
+			"surface": "page"
 		},
-		"events": ["dismiss"],
-		"slots": [
+		"children": [
 			{
-				"name": "actions",
+				"tag": "stack",
 				"children": [
 					{
-						"tag": "button",
-						"props": {
-							"label": "Add tag",
-							"variant": "secondary",
-							"size": "small"
-						}
+						"tag": "text",
+						"children": ["Acme Corporation"]
 					},
 					{
-						"tag": "button",
-						"props": {
-							"label": "Export",
-							"variant": "secondary",
-							"size": "small"
-						}
+						"tag": "text",
+						"children": ["Globex"]
+					},
+					{
+						"tag": "text",
+						"children": ["Initech"]
+					},
+					{
+						"tag": "text",
+						"children": ["Umbrella"]
+					},
+					{
+						"tag": "text",
+						"children": ["Hooli"]
+					},
+					{
+						"tag": "text",
+						"children": ["Stark Industries"]
+					}
+				]
+			},
+			{
+				"tag": "actionBar",
+				"props": {
+					"open": true,
+					"label": "3 selected"
+				},
+				"events": ["dismiss"],
+				"slots": [
+					{
+						"name": "actions",
+						"children": [
+							{
+								"tag": "button",
+								"props": {
+									"label": "Add tag",
+									"variant": "secondary",
+									"size": "small"
+								}
+							},
+							{
+								"tag": "button",
+								"props": {
+									"label": "Export",
+									"variant": "secondary",
+									"size": "small"
+								}
+							}
+						]
 					}
 				]
 			}
@@ -33,7 +71,16 @@
 	},
 	"frame": "screen",
 	"pending": {
-		"web": "A4",
 		"ios": "S4"
-	}
+	},
+	"aria": [
+		{
+			"role": "toolbar",
+			"name": "3 selected"
+		},
+		{
+			"role": "button",
+			"name": "Clear selection"
+		}
+	]
 }
