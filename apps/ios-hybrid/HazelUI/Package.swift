@@ -8,7 +8,11 @@ let package = Package(
         .library(name: "HazelUI", targets: ["HazelUI"]),
     ],
     targets: [
-        .target(name: "HazelUI"),
+        .target(
+            name: "HazelUI",
+            // The icon catalog and illustrations (`scripts/export-icons.ts`), read through `Bundle.module`.
+            resources: [.process("Resources/Icons.xcassets"), .copy("Resources/Illustrations")]
+        ),
         .testTarget(
             name: "HazelUITests",
             dependencies: ["HazelUI"],

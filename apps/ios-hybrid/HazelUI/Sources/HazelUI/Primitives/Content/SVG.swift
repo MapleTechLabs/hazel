@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-// A small SVG reader for the web's icons and `data:image/svg+xml` pictures: `path`, `circle`, `rect`
+// A small SVG reader for `data:image/svg+xml` pictures (icons come from the catalog, `HazelIcon`): `path`, `circle`, `rect`
 // and `text` in groups, filled or stroked with `currentColor` (the view's foreground) or a hex colour.
 
 struct SVGImage: Sendable {
@@ -397,19 +397,6 @@ struct SVGView: View {
         switch paint {
         case .current: AnyShapeStyle(.foreground)
         case let .color(r, g, b): AnyShapeStyle(Color(.sRGB, red: r, green: g, blue: b))
-        }
-    }
-}
-
-/// An icon by `IconName`; an unknown name draws nothing in its box, as on the web.
-struct Glyph: View {
-    let name: String
-
-    var body: some View {
-        if let markup = IconSources.svg[name], let image = SVGImage.named(markup) {
-            SVGView(image: image)
-        } else {
-            Color.clear
         }
     }
 }
