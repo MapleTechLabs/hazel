@@ -1,0 +1,17 @@
+{
+	"about": "A press-only link with no href: a button, still named by its label.",
+	"root": {
+		"tag": "link",
+		"props": {
+			"label": "Resend invitation"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Resend invitation"
+		}
+	]
+}

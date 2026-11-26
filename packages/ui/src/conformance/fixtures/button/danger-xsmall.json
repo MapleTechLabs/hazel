@@ -1,0 +1,23 @@
+{
+	"about": "A danger xsmall button with a label, against the kit's button-danger-xsmall (G6).",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "danger",
+			"size": "xsmall",
+			"label": "Invite"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Invite"
+		}
+	],
+	"kit": {
+		"specimen": "button-danger-xsmall",
+		"target": "button"
+	}
+}

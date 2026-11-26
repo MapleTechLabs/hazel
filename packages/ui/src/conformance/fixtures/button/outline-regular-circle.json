@@ -1,0 +1,19 @@
+{
+	"about": "A round outline regular icon button, against button-outline-regular-circle.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "outline",
+			"label": "Add",
+			"icon": "plus",
+			"iconOnly": true,
+			"circle": true
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "button-outline-regular-circle",
+		"target": "button"
+	}
+}

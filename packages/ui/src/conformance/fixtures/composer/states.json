@@ -1,0 +1,75 @@
+{
+	"about": "The message composer: empty, with text it can send, disabled, and with its above and actions slots.",
+	"root": {
+		"tag": "composer",
+		"props": {
+			"placeholder": "Message #general"
+		},
+		"events": ["change", "submit", "focus", "blur", "trigger", "key", "files"],
+		"slots": [
+			{
+				"name": "actions",
+				"children": [
+					{
+						"tag": "button",
+						"props": {
+							"label": "Attach",
+							"icon": "paperclip",
+							"variant": "ghost",
+							"size": "small",
+							"iconOnly": true
+						},
+						"events": ["press"]
+					}
+				]
+			}
+		]
+	},
+	"aria": [
+		{
+			"role": "textbox",
+			"name": "Message #general"
+		},
+		{
+			"role": "button",
+			"name": "Send"
+		},
+		{
+			"role": "button",
+			"name": "Attach"
+		}
+	],
+	"axes": [
+		{
+			"prop": "canSend",
+			"values": [true]
+		},
+		{
+			"prop": "disabled",
+			"values": [true]
+		}
+	],
+	"cases": [
+		{
+			"name": "typed",
+			"props": {
+				"value": {
+					"text": "Shipping the new sidebar today",
+					"rev": 0,
+					"edit": 0
+				}
+			}
+		},
+		{
+			"name": "ready",
+			"props": {
+				"value": {
+					"text": "Shipping the new sidebar today",
+					"rev": 0,
+					"edit": 0
+				},
+				"canSend": true
+			}
+		}
+	]
+}

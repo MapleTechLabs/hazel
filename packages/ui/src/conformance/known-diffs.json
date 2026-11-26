@@ -23,5 +23,120 @@
 		"case": "section/channels",
 		"lane": "A1",
 		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the row matches otherwise"
+	},
+	{
+		"case": "button/danger-icon-label",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/ghost-icon-label",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/ghost-large-circle",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/ghost-large-icon-only",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/ghost-regular-circle",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/ghost-regular-icon-only",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/ghost-small-circle",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/ghost-small-icon-only",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/ghost-xsmall-icon-only",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/outline-icon-label",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/outline-large-circle",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/outline-large-icon-only",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/outline-regular-circle",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/outline-regular-icon-only",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/outline-small-circle",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/outline-small-icon-only",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/outline-xsmall-icon-only",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/primary-icon-label",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/primary-large-circle",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/primary-regular-circle",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/primary-small-circle",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/secondary-icon-label",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
+	},
+	{
+		"case": "button/warning-icon-label",
+		"lane": "A1",
+		"reason": "the web host draws G1 stand-in icons (src/web/icons.ts), not the web's own; the button matches otherwise"
 	}
 ]

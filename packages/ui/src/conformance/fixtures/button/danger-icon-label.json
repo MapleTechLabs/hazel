@@ -1,0 +1,17 @@
+{
+	"about": "A danger button with a leading icon and a label, against button-danger-icon-label.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "danger",
+			"label": "Invite",
+			"icon": "plus"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "button-danger-icon-label",
+		"target": "button"
+	}
+}

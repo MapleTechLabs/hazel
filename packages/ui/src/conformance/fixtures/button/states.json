@@ -1,0 +1,64 @@
+{
+	"about": "Every option and flag of a button, one at a time, from a labelled primary.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"label": "Invite",
+			"icon": "plus"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Invite"
+		}
+	],
+	"axes": [
+		{
+			"prop": "variant",
+			"values": ["secondary", "outline", "ghost", "warning", "danger"]
+		},
+		{
+			"prop": "size",
+			"values": ["large", "small", "xsmall"]
+		},
+		{
+			"prop": "icon",
+			"values": [null]
+		},
+		{
+			"prop": "iconOnly",
+			"values": [true]
+		},
+		{
+			"prop": "circle",
+			"values": [true]
+		},
+		{
+			"prop": "disabled",
+			"values": [true]
+		},
+		{
+			"prop": "loading",
+			"values": [true]
+		}
+	],
+	"cases": [
+		{
+			"name": "round-icon",
+			"props": {
+				"iconOnly": true,
+				"circle": true,
+				"variant": "ghost"
+			}
+		},
+		{
+			"name": "long-label",
+			"props": {
+				"label": "Invite everyone in the workspace to this channel"
+			}
+		}
+	]
+}

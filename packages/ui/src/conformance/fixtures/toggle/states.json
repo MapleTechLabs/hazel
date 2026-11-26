@@ -1,0 +1,40 @@
+{
+	"about": "A switch with a label and a description, off, on and disabled.",
+	"root": {
+		"tag": "toggle",
+		"props": {
+			"label": "Desktop notifications",
+			"description": "Get notified about mentions and direct messages."
+		},
+		"events": ["change"]
+	},
+	"aria": [
+		{
+			"role": "switch",
+			"name": "Desktop notifications"
+		}
+	],
+	"axes": [
+		{
+			"prop": "checked",
+			"values": [true]
+		},
+		{
+			"prop": "disabled",
+			"values": [true]
+		},
+		{
+			"prop": "description",
+			"values": [null]
+		}
+	],
+	"cases": [
+		{
+			"name": "checked-disabled",
+			"props": {
+				"checked": true,
+				"disabled": true
+			}
+		}
+	]
+}

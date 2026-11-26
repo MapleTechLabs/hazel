@@ -1,0 +1,16 @@
+{
+	"about": "A primary button with a leading icon and a label, against button-primary-icon-label.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"label": "Invite",
+			"icon": "plus"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "button-primary-icon-label",
+		"target": "button"
+	}
+}

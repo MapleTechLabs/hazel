@@ -1,0 +1,22 @@
+{
+	"about": "A danger regular button with a label, against the kit's button-danger-regular (G6).",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "danger",
+			"label": "Invite"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Invite"
+		}
+	],
+	"kit": {
+		"specimen": "button-danger-regular",
+		"target": "button"
+	}
+}

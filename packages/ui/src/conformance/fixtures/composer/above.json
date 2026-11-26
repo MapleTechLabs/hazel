@@ -1,0 +1,53 @@
+{
+	"about": "A composer whose above slot holds a reply bar, with text ready to send.",
+	"root": {
+		"tag": "composer",
+		"props": {
+			"placeholder": "Reply in thread",
+			"canSend": true,
+			"value": {
+				"text": "On it",
+				"rev": 0,
+				"edit": 0
+			}
+		},
+		"events": ["change", "submit"],
+		"slots": [
+			{
+				"name": "above",
+				"children": [
+					{
+						"tag": "text",
+						"props": {
+							"role": "caption",
+							"tone": "muted"
+						},
+						"children": ["Replying to Maya"]
+					}
+				]
+			},
+			{
+				"name": "actions",
+				"children": [
+					{
+						"tag": "button",
+						"props": {
+							"label": "Emoji",
+							"icon": "emoji",
+							"variant": "ghost",
+							"size": "small",
+							"iconOnly": true
+						},
+						"events": ["press"]
+					}
+				]
+			}
+		]
+	},
+	"aria": [
+		{
+			"role": "textbox",
+			"name": "Reply in thread"
+		}
+	]
+}
