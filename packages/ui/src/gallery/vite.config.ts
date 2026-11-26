@@ -38,6 +38,8 @@ export const galleryConfig = (): InlineConfig => ({
 				index: resolve(import.meta.dirname, "index.html"),
 				kit: resolve(import.meta.dirname, "kit.html"),
 				hazel: resolve(import.meta.dirname, "hazel.html"),
+				primitives: resolve(import.meta.dirname, "primitives.html"),
+				fixtures: resolve(import.meta.dirname, "fixtures.html"),
 			},
 		},
 	},

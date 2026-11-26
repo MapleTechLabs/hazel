@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Hazel UI gallery</title>
+		<style>
+			body { margin: 0; font: 13px system-ui, sans-serif; }
+			header { display: flex; gap: 16px; padding: 8px 16px; align-items: center; }
+			main { display: grid; grid-template-columns: 1fr 1fr 390px 390px; height: calc(100vh - 40px); }
+			iframe { width: 100%; height: 100%; border: 0; border-left: 1px solid #8884; }
+		</style>
+	</head>
+	<body>
+		<header>
+			<strong>Hazel UI gallery</strong>
+			<span>every fixture case: light and dark, regular and compact (generated from src/conformance/fixtures)</span>
+		</header>
+		<main>
+			<iframe data-theme="light"></iframe>
+			<iframe data-theme="dark"></iframe>
+			<iframe data-theme="light"></iframe>
+			<iframe data-theme="dark"></iframe>
+		</main>
+		<script>
+			const query = location.search.replace(/^\?/, "")
+			for (const frame of document.querySelectorAll("iframe"))
+				frame.src = `./primitives.html?theme=${frame.dataset.theme}${query ? `&${query}` : ""}`
+		</script>
+	</body>
+</html>

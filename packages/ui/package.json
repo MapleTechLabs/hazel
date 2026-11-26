@@ -15,7 +15,8 @@
 		"ui:generate": "bun scripts/generate.ts",
 		"ui:check": "bun scripts/generate.ts --check",
 		"gallery:shots": "bun scripts/shoot.ts",
-		"gallery:dev": "vite --config src/gallery/vite.config.ts"
+		"gallery:dev": "vite --config src/gallery/vite.config.ts",
+		"test:web": "bun scripts/test-web.ts"
 	},
 	"dependencies": {
 		"@effect/ui": "https://pkg.pr.new/Effect-TS/ui/@effect/ui@4d6d7ec",

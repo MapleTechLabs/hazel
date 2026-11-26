@@ -20,14 +20,14 @@ export const CHANNEL_TOLERANCE = 2
 export const PIXEL_TOLERANCE = 0.001
 
 const shotsDir = resolve(import.meta.dirname, "../src/gallery/__shots__")
-const runs = [
+export const runs = [
 	{ theme: "light", sizeClass: "regular", width: 1180 },
 	{ theme: "dark", sizeClass: "regular", width: 1180 },
 	{ theme: "light", sizeClass: "compact", width: 390 },
 	{ theme: "dark", sizeClass: "compact", width: 390 },
 ] as const
 
-interface Diff {
+export interface Diff {
 	readonly width: number
 	readonly height: number
 	readonly differing: number
@@ -36,7 +36,7 @@ interface Diff {
 }
 
 /** Diffs two PNGs in the page's canvas (no image library needed); returns the diff as a PNG. */
-const diffInPage = (page: Page, kit: Buffer, hazel: Buffer, channelTolerance: number): Promise<Diff> =>
+export const diffInPage = (page: Page, kit: Buffer, hazel: Buffer, channelTolerance: number): Promise<Diff> =>
 	page.evaluate(
 		async ({ kit, hazel, channelTolerance }) => {
 			const load = async (base64: string) =>
@@ -99,7 +99,7 @@ const hovered = new Set([
 	"button-primary-disabled",
 ])
 
-const open = async (page: Page, url: string) => {
+export const openGallery = async (page: Page, url: string) => {
 	await page.goto(url)
 	await page.waitForSelector(`[data-specimen="${specimenIds.at(-1)}"]`, { timeout: 30_000 })
 	await page.evaluate(() => document.fonts.ready.then(() => undefined))
@@ -127,8 +127,8 @@ const main = async () => {
 				context.newPage(),
 			])
 			await Promise.all([
-				open(kit, `${base}kit.html?theme=${run.theme}`),
-				open(hazel, `${base}hazel.html?theme=${run.theme}`),
+				openGallery(kit, `${base}kit.html?theme=${run.theme}`),
+				openGallery(hazel, `${base}hazel.html?theme=${run.theme}`),
 			])
 			const dir = resolve(shotsDir, `${run.theme}-${run.sizeClass}`)
 			mkdirSync(dir, { recursive: true })
@@ -185,4 +185,4 @@ const main = async () => {
 	process.exit(failed === 0 ? 0 : 1)
 }
 
-await main()
+if (import.meta.main) await main()

@@ -1,0 +1,34 @@
+/* The fixture gallery's own chrome; only what is inside [data-case] is ever measured. */
+.case {
+	margin-bottom: 20px;
+}
+
+.case-label {
+	margin: 0 0 6px;
+	font: 11px ui-monospace, monospace;
+	color: var(--hz-color-muted-fg, #888);
+}
+
+.case-label[data-status="stub"],
+.case-label[data-status="missing"] {
+	opacity: 0.6;
+}
+
+.case-label[data-status="error"] {
+	color: red;
+}
+
+.tag-title {
+	margin: 32px 0 12px;
+	font: 600 14px system-ui, sans-serif;
+	color: var(--hz-color-fg, inherit);
+}
+
+.frame-inline {
+	display: inline-flex;
+	padding: 8px;
+}
+
+.frame-screen {
+	max-width: 720px;
+}
