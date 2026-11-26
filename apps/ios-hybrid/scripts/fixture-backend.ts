@@ -8,12 +8,20 @@
  * Server-side changes, to prove liveness (each prints the transaction id):
  *   curl -X POST '127.0.0.1:4320/__fixture/unread?channel=<channel id>'        one more unread
  *   curl -X POST '127.0.0.1:4320/__fixture/rename?channel=<channel id>&name=x' rename a channel
+ *   curl -X POST '127.0.0.1:4320/__fixture/notify?channel=<channel id>&text=hi'  a new mention of Ada
  */
 import type { WebSocketLike } from "@hazel/effect-db-collection"
-import { makeOfflineFetch } from "../fixture/offline-backend"
+import { fixtureNotifications, makeOfflineFetch } from "../fixture/offline-backend"
 import { currentUser } from "../fixture/offline-session"
 import { makeFixtureServer, makeFixtureWebSocket } from "../fixture/fixture-socket"
-import { adaUserId, channelMemberRows, channelRows, orgId } from "../fixture/snapshot"
+import {
+	adaUserId,
+	channelMemberRows,
+	channelRows,
+	notificationRows,
+	orgId,
+	userRows,
+} from "../fixture/snapshot"
 
 /** The slice of Bun's server API used here (the app's tsconfig has no Bun types). */
 interface ServerWebSocket<T> {
@@ -27,7 +35,9 @@ declare const Bun: {
 		hostname: string
 		fetch: (
 			request: Request,
-			server: { upgrade(request: Request, options: { data: T; headers: Record<string, string> }): boolean },
+			server: {
+				upgrade(request: Request, options: { data: T; headers: Record<string, string> }): boolean
+			},
 		) => Response | Promise<Response> | undefined
 		websocket: {
 			open(ws: ServerWebSocket<T>): void
@@ -56,7 +66,9 @@ const channels = new Map(channelRows.map((row) => [row.id, row]))
 const change = (url: URL): Response => {
 	const channelId = url.searchParams.get("channel") ?? ""
 	if (url.pathname === "/__fixture/unread") {
-		const member = [...members.values()].find((row) => row.channelId === channelId && row.userId === adaUserId)
+		const member = [...members.values()].find(
+			(row) => row.channelId === channelId && row.userId === adaUserId,
+		)
 		if (member === undefined) return new Response("no such membership\n", { status: 404 })
 		const next = { ...member, notificationCount: member.notificationCount + 1 }
 		members.set(next.id, next)
@@ -70,6 +82,43 @@ const change = (url: URL): Response => {
 		channels.set(next.id, next)
 		const tx = server.write("org", orgId, "channels", [next])
 		return new Response(`${tx} name=${next.name}\n`)
+	}
+	if (url.pathname === "/__fixture/notify") {
+		// A message in the channel that mentions Ada, and her notification for it.
+		const channel = channels.get(channelId as never)
+		const [template] = notificationRows
+		const author = userRows.find((row) => row.id !== adaUserId)
+		if (channel === undefined || template === undefined || author === undefined)
+			return new Response("no such channel\n", { status: 404 })
+		const now = new Date().toISOString()
+		const messageId = crypto.randomUUID()
+		server.write("channel", channel.id, "messages", [
+			{
+				id: messageId,
+				channelId: channel.id,
+				conversationId: null,
+				authorId: author.id,
+				content: `@[userId:${adaUserId}] ${url.searchParams.get("text") ?? "are you around?"}`,
+				embeds: null,
+				replyToMessageId: null,
+				threadChannelId: null,
+				createdAt: now,
+				updatedAt: null,
+				deletedAt: null,
+			},
+		])
+		const notification = {
+			...template,
+			id: crypto.randomUUID(),
+			targetedResourceId: channel.id,
+			resourceId: messageId,
+			reason: "mention",
+			createdAt: now,
+			readAt: null,
+		}
+		fixtureNotifications.set(notification.id, notification)
+		const tx = server.write("user", adaUserId, "notifications", [notification])
+		return new Response(`${tx} notification=${notification.id}\n`)
 	}
 	return new Response("unknown change\n", { status: 404 })
 }

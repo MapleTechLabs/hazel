@@ -13,6 +13,11 @@ import { channelMemberRows, generalMessageRows, notificationRows, orgId, presenc
  * The few HTTP calls the app makes outside the sync socket, answered locally: the session check,
  * the sync access token and `/rpc`. Everything else in the app runs as it does against the API.
  */
+/** Ada's notifications as changed so far, by id; `fixture-backend.ts` adds the ones it creates. */
+export const fixtureNotifications = new Map<string, (typeof notificationRows)[number]>(
+	notificationRows.map((row) => [row.id, row]),
+)
+
 /** An idle RPC's encoded success value. */
 type Responder = (payload: Record<string, unknown>) => Schema.Json | object
 
@@ -84,6 +89,18 @@ export const makeOfflineFetch = (options: {
 								{ ...member, notificationCount: 0 },
 							])
 				return { transactionId: transactionId ?? `org:${orgId}:1` }
+			},
+		],
+		// The inbox's "Mark as read": the row streams back with its `readAt`.
+		[
+			"notification.update",
+			(payload) => {
+				const current = fixtureNotifications.get(String(payload.id))
+				if (current === undefined) return { data: null, transactionId: `user:${options.user.id}:1` }
+				const next = { ...current, readAt: String(payload.readAt ?? new Date().toISOString()) }
+				fixtureNotifications.set(next.id, next)
+				const transactionId = options.server?.write("user", options.user.id, "notifications", [next])
+				return { data: next, transactionId: transactionId ?? `user:${options.user.id}:1` }
 			},
 		],
 		["userPresenceStatus.heartbeat", () => ({ lastSeenAt: new Date().toISOString() })],
