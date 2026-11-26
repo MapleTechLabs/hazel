@@ -3,6 +3,7 @@ import SwiftUI
 // `hz:dialog` on iOS (lane S3). With no children it is the system's own: an alert, or a confirmation
 // dialog when `destructive`, whose buttons are the `actions` slot's buttons and actions (a press fires
 // theirs). With children it is a fitted form sheet drawing the panel. Dismissing raises `dismiss`.
+// Presented, the system's own transitions play; the recipe's `riseIn`/`scaleIn` play in place.
 struct HzDialog: View {
     let tree: Tree
     let node: Node
@@ -18,12 +19,14 @@ struct HzDialog: View {
         let panel = HazelTheme.Recipes.dialog.style(part: "panel", sizeClass: sizeClass)
         if node.overlayInPlace {
             if node[prop: "open"]?.bool == true {
+                // A phone's dialog rises in, a wide screen's scales in (`regular`); the scrim fades.
                 DialogBody(tree: tree, node: node, sizeClass: sizeClass)
                     .hzOverlayPanel(panel)
+                    .hzEnter("dialog", part: "panel", sizeClass: sizeClass)
                     .frame(maxWidth: Self.maxWidth)
                     .padding(HazelTheme.space["6"] ?? 0)
                     .frame(maxWidth: .infinity)
-                    .hzOverlayScrim()
+                    .hzOverlayScrim("dialog", sizeClass)
             }
         } else if tree.content(of: node).isEmpty {
             systemDialog

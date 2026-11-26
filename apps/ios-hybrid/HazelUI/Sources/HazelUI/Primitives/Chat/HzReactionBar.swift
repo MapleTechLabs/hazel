@@ -8,6 +8,6 @@ struct HzReactionBar: View {
     var body: some View {
         let reactions = (node[prop: "reactions"]?.array ?? []).compactMap(RowData.reaction)
         let addable = node[prop: "addable"]?.bool ?? false
-        LeafView(tree: tree, node: node, fills: false) { RowRenderer.reactionBar(reactions, addable: addable, $0) }
+        LeafView(tree: tree, node: node, fills: false, motionTag: "reactionBar") { RowRenderer.reactionBar(reactions, addable: addable, $0) }
     }
 }

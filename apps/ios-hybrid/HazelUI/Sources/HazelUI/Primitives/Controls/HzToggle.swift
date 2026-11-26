@@ -84,6 +84,6 @@ private struct ToggleFace: ToggleStyle {
             .padding(.horizontal, inset)
             .padding(.vertical, track.paddingY ?? 0)
             .background(track.shape.fill(track.background?.color ?? .clear))
-            .animation(controlAnimation(track.transition, reduceMotion: reduceMotion), value: on)
+            .animation(controlAnimation(track, reduceMotion: reduceMotion), value: on)
     }
 }

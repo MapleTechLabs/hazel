@@ -105,8 +105,13 @@ extension Node {
     func flag(_ key: String) -> Bool { props[key]?.bool == true }
 }
 
-/// The recipe's transition as an animation, or none under Reduce Motion.
-func controlAnimation(_ seconds: Double?, reduceMotion: Bool) -> Animation? {
-    guard let seconds, !reduceMotion, let (a, b, c, d) = HazelTheme.easing["out"] else { return nil }
+/// A style's press and hover transition (`transition`, eased by `transitionEase`, `out` when unset) as
+/// an animation; none under Reduce Motion, which finishes it at once.
+@MainActor func controlAnimation(_ style: HazelTheme.Style, reduceMotion: Bool) -> Animation? {
+    controlAnimation(style.transition, ease: style.transitionEase, reduceMotion: reduceMotion)
+}
+
+@MainActor func controlAnimation(_ seconds: Double?, ease: String? = nil, reduceMotion: Bool) -> Animation? {
+    guard let seconds, !HazelMotion.reduced(reduceMotion), let (a, b, c, d) = HazelTheme.easing[ease ?? "out"] else { return nil }
     return .timingCurve(a, b, c, d, duration: seconds)
 }

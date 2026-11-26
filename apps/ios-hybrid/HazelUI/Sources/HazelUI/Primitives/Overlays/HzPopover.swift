@@ -2,7 +2,8 @@ import SwiftUI
 
 // `hz:popover` on iOS (lane S3): a system popover (kept a popover on iPhone too) attached to the
 // run `anchorTo` names (a keyed leaf's run, from `RunAnchors`), else the `anchor` slot, else the
-// popover's own place. An outside tap raises `dismiss`.
+// popover's own place. An outside tap raises `dismiss`. Presented, the system popover's own
+// transition plays; in place the recipe's `fadeIn`.
 struct HzPopover: View {
     let tree: Tree
     let node: Node
@@ -22,6 +23,7 @@ struct HzPopover: View {
                     PopoverBody(tree: tree, node: node, style: panel)
                 }
                 .hzOverlayPanel(panel)
+                .hzEnter("popover", part: "panel", sizeClass: sizeClass)
             } else {
                 SlotView(tree: tree, node: node, name: "anchor")
             }

@@ -2,7 +2,8 @@ import SwiftUI
 
 // `hz:emojiPicker` on iOS (lane S3): iOS offers no emoji picker but the keyboard's, so it is a
 // system sheet (medium and large detents) holding a search field over the categories, as the emoji
-// keyboard lays them out. A pick raises `select`, a swipe down `dismiss`. In place it draws the panel.
+// keyboard lays them out. A pick raises `select`, a swipe down `dismiss`. In place it draws the panel,
+// fading in (`fadeIn`); the presented sheet keeps the system's slide.
 struct HzEmojiPicker: View {
     let tree: Tree
     let node: Node
@@ -20,6 +21,7 @@ struct HzEmojiPicker: View {
                 EmojiPanel(tree: tree, node: node, sizeClass: sizeClass, columns: .fixed)
                     .frame(height: Self.inPlaceHeight)
                     .hzOverlayPanel(panel)
+                    .hzEnter("emojiPicker", part: "panel", sizeClass: sizeClass)
             }
         } else {
             Color.clear.frame(width: 0, height: 0)

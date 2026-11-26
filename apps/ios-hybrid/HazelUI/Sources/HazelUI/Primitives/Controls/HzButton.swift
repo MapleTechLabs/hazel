@@ -86,7 +86,7 @@ struct ButtonFace: ButtonStyle {
             .hzSize(root)
             .hzControlBox(root, face.scheme)
             .onHover { hovering = $0 }
-            .animation(controlAnimation(root.transition, reduceMotion: reduceMotion), value: states)
+            .animation(controlAnimation(root, reduceMotion: reduceMotion), value: states)
         }
     }
 }

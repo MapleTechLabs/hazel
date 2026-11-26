@@ -3,29 +3,39 @@ import UIKit
 
 /// A chat leaf drawn outside the list (`message`, `listDivider`, `reactionBar`, `attachmentGrid`,
 /// `embed`): the same `RowLayout` the list draws, as one image, so a row looks the same in both. Presses
-/// go to the layout's targets; each target is also an accessibility element.
+/// go to the layout's targets; each target is also an accessibility element. When a draw changes its
+/// reactions, the moving pieces play over the rest (`motionTag`: the recipe whose motions they are).
 struct LeafView: View {
     let tree: Tree
     let node: Node
     /// Takes the offered width (rows) rather than its content's (pills, cards).
     let fills: Bool
+    var motionTag: String?
     let make: (RowContext) -> RowLayout
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.displayScale) private var scale
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var box = LeafBox()
 
     var body: some View {
         let _ = RenderCounter.record(node.id)
         let base = RowContext(width: 0, sizeClass: HazelTheme.SizeClass(sizeClass), dark: scheme == .dark, scale: scale)
-        let _ = box.update(base: base, props: node.props, events: node.events, make: make)
+        let motion = HazelMotion.enabled && !HazelMotion.reduced(reduceMotion) ? motionTag : nil
+        let _ = box.update(base: base, props: node.props, events: node.events, motionTag: motion, make: make)
         LeafLayout(box: box, fills: fills) {
             GeometryReader { geo in
                 if let (layout, image) = box.drawn(width: geo.size.width) {
-                    Image(decorative: image, scale: base.scale)
-                        .accessibilityHidden(true)
-                        .accessibilityChildren { LeafAccessibility(tree: tree, node: node, layout: layout) }
+                    Group {
+                        if let moving = box.motion, moving.layout === layout {
+                            LeafMotionView(motion: moving, scale: base.scale)
+                        } else {
+                            Image(decorative: image, scale: base.scale)
+                        }
+                    }
+                    .accessibilityHidden(true)
+                    .accessibilityChildren { LeafAccessibility(tree: tree, node: node, layout: layout) }
                 }
             }
         }
@@ -66,10 +76,22 @@ final class LeafBox: @unchecked Sendable {
     private var layouts: [CGFloat: RowLayout] = [:]
     private var images: [CGFloat: CGImage] = [:]
     private(set) var last: RowLayout?
+    /// The reaction counts last drawn, until the next draw compares with them; and its motion.
+    private var counts: [String: Int]?
+    private var motionTag: String?
+    private(set) var motion: LeafMotion?
+    private var motions = 0
 
-    func update(base: RowContext, props: [String: JSONValue], events: Set<String>, make: @escaping (RowContext) -> RowLayout) {
+    func update(
+        base: RowContext, props: [String: JSONValue], events: Set<String>, motionTag: String? = nil,
+        make: @escaping (RowContext) -> RowLayout
+    ) {
         self.make = make
+        self.motionTag = motionTag
         guard base != self.base || props != self.props || events != self.events else { return }
+        // Only the props changing moves pieces; a new appearance or width just draws again.
+        counts = props != self.props && self.base == base ? last?.reactionCounts : nil
+        motion = nil
         self.base = base
         self.props = props
         self.events = events
@@ -90,8 +112,15 @@ final class LeafBox: @unchecked Sendable {
         guard let layout = layout(width: width) else { return nil }
         last = layout
         if let image = images[width] { return (layout, image) }
-        guard let image = layout.draw(scale: base?.scale ?? 2, transparent: true) else { return nil }
+        let scale = base?.scale ?? 2
+        guard let image = layout.draw(scale: scale, transparent: true) else { return nil }
         images[width] = image
+        if let motionTag, let old = counts {
+            counts = nil
+            let plays = ReactionMotion.plan(motionTag, from: old, to: layout, reduceMotion: false)
+            motions += 1
+            motion = LeafMotion(id: motions, layout: layout, plays: plays, scale: scale)
+        }
         return (layout, image)
     }
 }

@@ -92,7 +92,12 @@ means a motion jumps to its end pose with no animation and a loop does not run.
   default) for hover and press.
 - **Web**: a renderer marks the element with `data-motion="<trigger>"` (`src/web/motion.ts`); the CSS
   plays it. An exit keeps the panel shown until its animation ends; a count change re-keys its number.
-- **iOS** (later): `HazelTheme.Motion` carries the same keyframes, durations, curves and uses.
+- **iOS**: `HazelTheme.Motion` carries the same keyframes, durations, curves and uses;
+  `HazelUI/Sources/HazelUI/Motion/` plays them (SwiftUI views on a paused-at-rest `TimelineView`, the
+  message list and typing dots on Core Animation). System presentations (menus, context menus,
+  presented popovers, sheets, dialogs and the emoji picker sheet) keep the system's own transitions;
+  the recipe's motions play where HazelUI draws the panel itself (in place, toasts). An exiting toast's
+  node is held (`Tree.hold`) until `toastOut` ends.
 
 | Primitive                  | enter                                                   | exit       | other                                          |
 | -------------------------- | ------------------------------------------------------- | ---------- | ---------------------------------------------- |

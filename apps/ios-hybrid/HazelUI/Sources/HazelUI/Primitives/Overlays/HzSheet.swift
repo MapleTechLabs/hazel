@@ -3,6 +3,7 @@ import SwiftUI
 // `hz:sheet` on iOS (lane S3): a system sheet, with medium and large detents in the compact size class
 // and a form sheet in the regular one. Its title row has a close button; it and a swipe down raise
 // `dismiss`, and the sheet closes when the view sets `open` false. In place it draws the panel.
+// Presented, the system sheet's own slide plays; in place the recipe's `slideUpIn`/`scaleIn`.
 struct HzSheet: View {
     let tree: Tree
     let node: Node
@@ -19,10 +20,11 @@ struct HzSheet: View {
                     Spacer(minLength: HazelTheme.space["6"] ?? 0)
                     SheetBody(tree: tree, node: node, sizeClass: sizeClass)
                         .hzOverlayPanel(HazelTheme.Recipes.sheet.style(part: "panel", sizeClass: sizeClass))
+                        .hzEnter("sheet", part: "panel", sizeClass: sizeClass)
                         .frame(maxWidth: sizeClass == .regular ? Self.regularWidth : nil)
                 }
                 .frame(maxWidth: .infinity)
-                .hzOverlayScrim()
+                .hzOverlayScrim("sheet", sizeClass)
             }
         } else {
             Color.clear.frame(width: 0, height: 0)

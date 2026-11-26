@@ -9,6 +9,7 @@ struct HzAction: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.hzRoundAction) private var round
     @Environment(\.hzSectionAction) private var inSection
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
 
     var body: some View {
@@ -65,7 +66,7 @@ struct HzAction: View {
             .foregroundStyle(root.color?.color ?? Color.primary)
             .background(shape.fill(root.background?.color ?? .clear))
             .contentShape(shape)
-            .animation(.easeOut(duration: root.transition ?? 0), value: states)
+            .animation(controlAnimation(root, reduceMotion: reduceMotion), value: states)
     }
 
     private func leaf(_ entry: MenuEntryData) -> some View {

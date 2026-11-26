@@ -195,7 +195,10 @@ private struct ItemRow: View {
         let count = Int(node[prop: "badge"]?.number ?? 0)
         if count > 0 {
             let badge = style("badge")
-            Text(String(count)).lineLimit(1).fixedSize().hzText(badge, sizeClass).hzBox(badge)
+            // The number rolls in its own clip when it rises or falls (`countUp`, `countDown`).
+            Text(String(count)).lineLimit(1).fixedSize().hzText(badge, sizeClass)
+                .hzCountRoll("item", value: count)
+                .hzBox(badge)
         }
     }
 
