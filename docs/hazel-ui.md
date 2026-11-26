@@ -429,6 +429,12 @@ keybindings, theme switching, and Tailwind's preflight against `data-hz` CSS are
   decodes the same files.
 - **Performance bar:** 120 fps with no dropped frames on the 3,000-message channel, on a device, typing
   included. Each screen PR logs `FrameMonitor` numbers and op counts per interaction.
+- **Island parity:** `bun packages/ui/scripts/compare-islands.ts [--build] [--only <screen>] [--probe]`
+  opens the offline web build with each island's flag off and on (390 and 1180 wide, light and dark,
+  a pinned clock) and pixel-diffs them; strips (today | island | diff) land in
+  `docs/hazel-ui-screens/phase3/<screen>/`. `--probe` pairs text runs and prints what moved. On
+  2026-11-26: channel sidebar 0.002 to 0.003%, DMs 0.000% (phone only; wide it has no island),
+  activity 0.000 to 0.001%, every residue a channel delta of 5 or less (antialiasing).
 - **Every screen PR** carries web and iOS screenshots from the gallery harness, light and dark.
 
 ## Phases and work packages
