@@ -1,0 +1,22 @@
+{
+	"about": "A warning regular button with a label, against the kit's button-warning-regular (G6).",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "warning",
+			"label": "Invite"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Invite"
+		}
+	],
+	"kit": {
+		"specimen": "button-warning-regular",
+		"target": "button"
+	}
+}

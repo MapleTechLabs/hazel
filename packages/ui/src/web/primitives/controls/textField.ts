@@ -1,77 +1,49 @@
 /**
- * `hz:textField` in the DOM (G5): a label, a real `input` and an error line. The input owns its text
- * while editing; Model `value`s go through the same revision rule as Swift (`native/revisions.ts`).
+ * `hz:textField` in the DOM (G5): a label, a real `input`, a description and an error line. The input
+ * owns its text while editing; Model `value`s go through the same revision rule as Swift (`revisions.ts`).
+ * Enter submits (not while composing); `focus`, `blur` and `select` commands reach the input.
  */
-// Owned by lane A2. The G5 renderer, moved here in C0.
-import * as Revisions from "../../../native/revisions.ts"
-import { definePrimitive, type Primitive } from "../define.ts"
+// Owned by lane A2.
+import { definePrimitive, flag, part, type Primitive } from "../define.ts"
+import { fire, focusEvents, labelledField, revisioned } from "./field.ts"
+import { ensureStyles } from "./styles.ts"
 
-const createTextField = (document: Document, outer: HTMLElement): Primitive => {
-	const part = (tagName: string, name: string) => {
-		const node = document.createElement(tagName)
-		node.dataset.hzPart = name
-		return node
-	}
-	const label = part("label", "label")
-	const caption = part("span", "caption")
-	const input = part("input", "input") as HTMLInputElement
+export const primitive = definePrimitive("textField", ({ document, tag, outer }) => {
+	ensureStyles(document)
+	const node = outer("div")
+	const input = part(document, "input", "input") as HTMLInputElement
 	input.type = "text"
-	const error = part("p", "error")
-	error.hidden = true
-	error.id = `hz-error-${Math.random().toString(36).slice(2)}`
-	label.append(caption, input)
-	outer.append(label, error)
-
-	let field = Revisions.initial
-	const send = (event: "change" | "submit", payload: Revisions.Change) => {
-		const events = primitive.events
-		const handler = events?.handlers[event]
-		return (
-			handler !== undefined && events !== undefined && events.dispatch(event, handler, { ...payload })
-		)
-	}
-	input.addEventListener("input", () => {
-		const next = Revisions.edit(field, input.value)
-		field = next.field
-		if (next.change !== undefined) send("change", next.change)
-	})
+	input.dataset.hzFocus = ""
+	const field = labelledField(document, node, input)
+	const events = () => primitive.events
+	const text = revisioned(input, (change) => fire(events(), "change", { ...change }))
+	focusEvents(input, events)
 	input.addEventListener("keydown", (event) => {
 		if (event.key !== "Enter" || event.isComposing) return
 		event.preventDefault()
-		send("submit", Revisions.current(field))
+		fire(events(), "submit", { ...text.current() })
 	})
 
 	const primitive: Primitive = {
-		tag: "hz:textField",
-		outer,
-		content: outer,
+		tag,
+		outer: node,
+		content: node,
 		set: (name, value) => {
-			if (name === "label") caption.textContent = typeof value === "string" ? value : ""
-			else if (name === "placeholder") input.placeholder = typeof value === "string" ? value : ""
-			else if (name === "error") {
-				error.hidden = typeof value !== "string"
-				error.textContent = typeof value === "string" ? value : ""
-				if (typeof value === "string") {
-					input.setAttribute("aria-invalid", "true")
-					input.setAttribute("aria-describedby", error.id)
-				} else {
-					input.removeAttribute("aria-invalid")
-					input.removeAttribute("aria-describedby")
-				}
-			} else if (name === "value") {
-				const incoming = Revisions.decode(value)
-				if (incoming === undefined) return
-				const next = Revisions.receive(field, incoming)
-				field = next.field
-				if (input.value !== field.text) input.value = field.text
-				if (next.change !== undefined) send("change", next.change)
+			if (field.set(name, value)) return
+			if (name === "value") text.receive(value)
+			else if (name === "readOnly") {
+				input.readOnly = value === true
+				flag(node, "read-only", value)
+			} else if (name === "required") {
+				input.required = value === true
+				field.marker.hidden = value !== true
+				flag(node, "required", value)
+			} else if (name === "monospace") {
+				flag(node, "monospace", value)
+				input.spellcheck = value !== true
 			}
 		},
 		events: undefined,
 	}
 	return primitive
-}
-
-export const primitive = definePrimitive("textField", ({ document, outer }) =>
-	createTextField(document, outer("div")),
-)
+})

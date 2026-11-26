@@ -1,0 +1,23 @@
+{
+	"about": "A loading secondary button (focusable, presses swallowed), against button-secondary-loading.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"label": "Invite",
+			"variant": "secondary",
+			"loading": true
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Invite"
+		}
+	],
+	"kit": {
+		"specimen": "button-secondary-loading",
+		"target": "button"
+	}
+}

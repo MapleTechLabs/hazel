@@ -1,0 +1,23 @@
+{
+	"about": "A outline xsmall button with a label, against the kit's button-outline-xsmall (G6).",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "outline",
+			"size": "xsmall",
+			"label": "Invite"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Invite"
+		}
+	],
+	"kit": {
+		"specimen": "button-outline-xsmall",
+		"target": "button"
+	}
+}

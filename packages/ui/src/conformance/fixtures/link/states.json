@@ -1,0 +1,32 @@
+{
+	"about": "A link with an href (role link) and without one (a button styled as a link).",
+	"root": {
+		"tag": "link",
+		"props": {
+			"label": "Learn more",
+			"href": "#docs"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "link",
+			"name": "Learn more"
+		}
+	],
+	"axes": [
+		{
+			"prop": "href",
+			"values": [null]
+		}
+	],
+	"cases": [
+		{
+			"name": "long",
+			"props": {
+				"label": "Read the full guide to workspace permissions"
+			}
+		}
+	]
+}

@@ -1,0 +1,25 @@
+{
+	"about": "A square outline small icon button named by its label, against button-outline-small-icon-only.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "outline",
+			"size": "small",
+			"label": "Add",
+			"icon": "plus",
+			"iconOnly": true
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Add"
+		}
+	],
+	"kit": {
+		"specimen": "button-outline-small-icon-only",
+		"target": "button"
+	}
+}

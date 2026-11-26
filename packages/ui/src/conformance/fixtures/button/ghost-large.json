@@ -1,0 +1,23 @@
+{
+	"about": "A ghost large button with a label, against the kit's button-ghost-large (G6).",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "ghost",
+			"size": "large",
+			"label": "Invite"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Invite"
+		}
+	],
+	"kit": {
+		"specimen": "button-ghost-large",
+		"target": "button"
+	}
+}

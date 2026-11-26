@@ -1,0 +1,20 @@
+{
+	"about": "A round ghost large icon button, against button-ghost-large-circle.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "ghost",
+			"size": "large",
+			"label": "Add",
+			"icon": "plus",
+			"iconOnly": true,
+			"circle": true
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "button-ghost-large-circle",
+		"target": "button"
+	}
+}

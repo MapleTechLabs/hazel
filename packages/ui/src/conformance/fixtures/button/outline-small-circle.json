@@ -1,0 +1,20 @@
+{
+	"about": "A round outline small icon button, against button-outline-small-circle.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "outline",
+			"size": "small",
+			"label": "Add",
+			"icon": "plus",
+			"iconOnly": true,
+			"circle": true
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "button-outline-small-circle",
+		"target": "button"
+	}
+}

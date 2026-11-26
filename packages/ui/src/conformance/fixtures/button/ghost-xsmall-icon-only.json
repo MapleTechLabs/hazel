@@ -1,0 +1,25 @@
+{
+	"about": "A square ghost xsmall icon button named by its label, against button-ghost-xsmall-icon-only.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "ghost",
+			"size": "xsmall",
+			"label": "Add",
+			"icon": "plus",
+			"iconOnly": true
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Add"
+		}
+	],
+	"kit": {
+		"specimen": "button-ghost-xsmall-icon-only",
+		"target": "button"
+	}
+}

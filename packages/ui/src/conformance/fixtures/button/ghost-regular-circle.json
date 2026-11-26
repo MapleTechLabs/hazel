@@ -1,0 +1,19 @@
+{
+	"about": "A round ghost regular icon button, against button-ghost-regular-circle.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "ghost",
+			"label": "Add",
+			"icon": "plus",
+			"iconOnly": true,
+			"circle": true
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "button-ghost-regular-circle",
+		"target": "button"
+	}
+}

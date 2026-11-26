@@ -1,0 +1,24 @@
+{
+	"about": "A square ghost regular icon button named by its label, against button-ghost-regular-icon-only.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "ghost",
+			"label": "Add",
+			"icon": "plus",
+			"iconOnly": true
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Add"
+		}
+	],
+	"kit": {
+		"specimen": "button-ghost-regular-icon-only",
+		"target": "button"
+	}
+}

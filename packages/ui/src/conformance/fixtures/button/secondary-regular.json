@@ -1,0 +1,22 @@
+{
+	"about": "A secondary regular button with a label, against the kit's button-secondary-regular (G6).",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "secondary",
+			"label": "Invite"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Invite"
+		}
+	],
+	"kit": {
+		"specimen": "button-secondary-regular",
+		"target": "button"
+	}
+}

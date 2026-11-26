@@ -1,0 +1,25 @@
+{
+	"about": "A square outline large icon button named by its label, against button-outline-large-icon-only.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "outline",
+			"size": "large",
+			"label": "Add",
+			"icon": "plus",
+			"iconOnly": true
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Add"
+		}
+	],
+	"kit": {
+		"specimen": "button-outline-large-icon-only",
+		"target": "button"
+	}
+}

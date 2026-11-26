@@ -1,0 +1,21 @@
+{
+	"about": "A primary regular button with a label, against the kit's button-primary-regular (G6).",
+	"root": {
+		"tag": "button",
+		"props": {
+			"label": "Invite"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Invite"
+		}
+	],
+	"kit": {
+		"specimen": "button-primary-regular",
+		"target": "button"
+	}
+}

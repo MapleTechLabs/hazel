@@ -1,0 +1,42 @@
+{
+	"about": "A labelled select with a chosen value, a placeholder with none, and disabled.",
+	"root": {
+		"tag": "select",
+		"props": {
+			"label": "Notify me about",
+			"placeholder": "Choose one",
+			"options": [
+				{
+					"value": "all",
+					"label": "All messages"
+				},
+				{
+					"value": "mentions",
+					"label": "Mentions only"
+				},
+				{
+					"value": "none",
+					"label": "Nothing"
+				}
+			],
+			"value": "mentions"
+		},
+		"events": ["change"]
+	},
+	"aria": [
+		{
+			"role": "combobox",
+			"name": "Notify me about"
+		}
+	],
+	"axes": [
+		{
+			"prop": "value",
+			"values": [null]
+		},
+		{
+			"prop": "disabled",
+			"values": [true]
+		}
+	]
+}

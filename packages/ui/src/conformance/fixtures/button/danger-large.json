@@ -1,0 +1,23 @@
+{
+	"about": "A danger large button with a label, against the kit's button-danger-large (G6).",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "danger",
+			"size": "large",
+			"label": "Invite"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Invite"
+		}
+	],
+	"kit": {
+		"specimen": "button-danger-large",
+		"target": "button"
+	}
+}

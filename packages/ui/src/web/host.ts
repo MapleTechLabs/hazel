@@ -72,12 +72,24 @@ export const wrapHost = (inner: Renderer.Host<Node>, document: Document): Render
 // C1: focus is real; the rest belong to the lanes that own scrolling (A4) and fields (A2).
 const notYet = (name: string, lane: string) =>
 	Effect.die(new NotImplemented({ what: `web command ${name}`, lane }))
+/** The element a command acts on: a control's `data-hz-focus` part (its input), else the node. */
+const target = (node: Hazel.HostNode): HTMLElement => {
+	const element = node as HTMLElement
+	return element.querySelector<HTMLElement>("[data-hz-focus]") ?? element
+}
 const commands: Hazel.Host["Service"] = {
-	focus: (node) => Effect.sync(() => (node as HTMLElement).focus()),
-	blur: (node) => Effect.sync(() => (node as HTMLElement).blur()),
+	focus: (node) => Effect.sync(() => target(node).focus()),
+	blur: (node) => Effect.sync(() => target(node).blur()),
 	scrollTo: () => notYet("scrollTo", "A4"),
 	measure: () => notYet("measure", "A3"),
-	select: () => notYet("select", "A2"),
+	// A2: focuses the field and selects `start..end` (clamped by the browser).
+	select: (node, range) =>
+		Effect.sync(() => {
+			const field = target(node)
+			if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return
+			field.focus()
+			field.setSelectionRange(range.start, range.end)
+		}),
 }
 
 /**

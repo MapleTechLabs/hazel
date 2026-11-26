@@ -1,0 +1,18 @@
+{
+	"about": "A round primary regular icon button, against button-primary-regular-circle.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"label": "Add",
+			"icon": "plus",
+			"iconOnly": true,
+			"circle": true
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "button-primary-regular-circle",
+		"target": "button"
+	}
+}

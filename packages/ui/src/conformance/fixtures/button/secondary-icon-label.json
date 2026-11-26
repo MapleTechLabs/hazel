@@ -1,0 +1,17 @@
+{
+	"about": "A secondary button with a leading icon and a label, against button-secondary-icon-label.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "secondary",
+			"label": "Invite",
+			"icon": "plus"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "button-secondary-icon-label",
+		"target": "button"
+	}
+}

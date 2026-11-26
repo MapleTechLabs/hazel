@@ -1,0 +1,22 @@
+{
+	"about": "A disabled primary button, against button-primary-disabled.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"label": "Invite",
+			"disabled": true
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Invite"
+		}
+	],
+	"kit": {
+		"specimen": "button-primary-disabled",
+		"target": "button"
+	}
+}
