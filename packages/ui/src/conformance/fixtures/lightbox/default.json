@@ -1,5 +1,6 @@
 {
-	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): an image open in the viewer with its menu.",
+	"about": "hz:lightbox, today's image viewer: the open slide over the dark stage, the counter, the step buttons, the toolbar (zoom, the entries as buttons, close) and the thumbnail strip. The single case has no counter, steps or strip.",
+	"frame": "screen",
 	"root": {
 		"tag": "lightbox",
 		"props": {
@@ -10,6 +11,7 @@
 					"id": "i1",
 					"kind": "image",
 					"name": "before.png",
+					"url": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3Crect width='16' height='9' fill='%237f56d9'/%3E%3Ccircle cx='8' cy='4.5' r='2.5' fill='%23ffffff'/%3E%3C/svg%3E",
 					"width": 1280,
 					"height": 720
 				},
@@ -17,6 +19,15 @@
 					"id": "i2",
 					"kind": "image",
 					"name": "after.png",
+					"url": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3Crect width='16' height='9' fill='%2312b76a'/%3E%3Ccircle cx='8' cy='4.5' r='2.5' fill='%23ffffff'/%3E%3C/svg%3E",
+					"width": 1280,
+					"height": 720
+				},
+				{
+					"id": "i3",
+					"kind": "image",
+					"name": "diagram.png",
+					"url": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3Crect width='16' height='9' fill='%23f79009'/%3E%3Ccircle cx='8' cy='4.5' r='2.5' fill='%23ffffff'/%3E%3C/svg%3E",
 					"width": 1280,
 					"height": 720
 				}
@@ -30,9 +41,19 @@
 							"icon": "download"
 						},
 						{
-							"id": "copy",
+							"id": "copyImage",
 							"label": "Copy image",
-							"icon": "copy"
+							"icon": "image"
+						},
+						{
+							"id": "copyUrl",
+							"label": "Copy image URL",
+							"icon": "link"
+						},
+						{
+							"id": "openInBrowser",
+							"label": "Open in browser",
+							"icon": "external-link"
 						}
 					]
 				}
@@ -40,9 +61,53 @@
 		},
 		"events": ["change", "select", "dismiss"]
 	},
-	"frame": "screen",
+	"cases": [
+		{
+			"name": "single",
+			"props": {
+				"index": 0,
+				"items": [
+					{
+						"id": "i1",
+						"kind": "image",
+						"name": "before.png",
+						"url": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3Crect width='16' height='9' fill='%237f56d9'/%3E%3Ccircle cx='8' cy='4.5' r='2.5' fill='%23ffffff'/%3E%3C/svg%3E",
+						"width": 1280,
+						"height": 720
+					}
+				]
+			}
+		},
+		{
+			"name": "first",
+			"props": {
+				"index": 0
+			}
+		}
+	],
+	"aria": [
+		{
+			"role": "dialog",
+			"name": "Image gallery"
+		},
+		{
+			"role": "button",
+			"name": "Close"
+		},
+		{
+			"role": "button",
+			"name": "Zoom in"
+		},
+		{
+			"role": "button",
+			"name": "Download"
+		},
+		{
+			"role": "button",
+			"name": "diagram.png"
+		}
+	],
 	"pending": {
-		"web": "A3",
 		"ios": "S3"
 	}
 }
