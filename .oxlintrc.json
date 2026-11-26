@@ -4,7 +4,8 @@
 	"jsPlugins": [
 		"./scripts/oxlint-plugins/anti-slop/index.ts",
 		"./scripts/oxlint-plugins/test-slop.mjs",
-		"./scripts/oxlint-plugins/hazel-ui.mjs"
+		"./scripts/oxlint-plugins/hazel-ui.mjs",
+		"./scripts/oxlint-plugins/hazel.mjs"
 	],
 	"options": {
 		"reportUnusedDisableDirectives": "deny"
@@ -54,6 +55,20 @@
 		]
 	},
 	"overrides": [
+		{
+			// Shared hazel screens (docs/hazel-ui.md, "Rules"): typed props only, no raw escape hatches.
+			"files": ["apps/shared-screens/src/**"],
+			"rules": {
+				"hazel/no-raw-escape": "error"
+			}
+		},
+		{
+			// Governed h.custom composites: only the user raises the cap.
+			"files": ["packages/ui/src/custom/*.ts"],
+			"rules": {
+				"hazel/custom-cap": ["error", { "cap": 2 }]
+			}
+		},
 		{
 			// The landing and docs sites are plain React (Astro islands, Fumadocs), outside the no-useEffect rule.
 			"files": ["apps/landing/**", "apps/docs/**"],
