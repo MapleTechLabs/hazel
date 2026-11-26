@@ -59,8 +59,8 @@ struct TextFieldProps {
     }
 }
 
-/// HAZEL-GAP: the spike `Theme` has no danger role yet; this is the `danger` token (red-600).
-private let danger = Color(hex: "#e7000b")
+/// HAZEL-GAP(textField-recipe): no `textField` recipe yet (controls lane); these are its tokens.
+private let danger = HazelTheme.Colors.danger.color
 
 /// `hz:textField`: a native `TextField` that owns its text; Model values apply by the rule above.
 struct HzTextField: View {
@@ -72,12 +72,12 @@ struct HzTextField: View {
     var body: some View {
         let props = TextFieldProps(node.props)
         VStack(alignment: .leading, spacing: 6) {
-            Text(props.label).font(Theme.Section.font).foregroundStyle(Theme.Section.label)
+            Text(props.label).font(Inter.font(size: 12, weight: 500)).foregroundStyle(HazelTheme.Colors.mutedFg.color)
             TextField(props.placeholder, text: Binding(get: { field.text }, set: { next in
                 if let change = field.edit(next) { send("change", change) }
             }))
-            .font(Theme.Row.font)
-            .foregroundStyle(Theme.Row.labelEmphasized)
+            .font(Inter.font(size: 16, weight: 400))
+            .foregroundStyle(HazelTheme.Colors.fg.color)
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .submitLabel(.send)
@@ -88,9 +88,9 @@ struct HzTextField: View {
                 focused = true
             }
             .padding(.horizontal, 12)
-            .frame(height: Theme.Row.height)
-            .background(RoundedRectangle(cornerRadius: Theme.Row.radius).strokeBorder(
-                props.error == nil ? Theme.bandBorder : danger, lineWidth: 1))
+            .frame(height: 40)
+            .background(RoundedRectangle(cornerRadius: 8).strokeBorder(
+                props.error == nil ? HazelTheme.Colors.border.color : danger, lineWidth: 1))
             .accessibilityLabel(props.label)
             .accessibilityIdentifier("hz-textField")
             if let error = props.error {

@@ -980,6 +980,12 @@
 	display: contents;
 }
 
+/* stack */
+[data-hz="stack"] {
+	display: flex;
+	flex-direction: column;
+}
+
 /* text */
 [data-hz="text"] {
 	font-weight: var(--hz-weight-regular);

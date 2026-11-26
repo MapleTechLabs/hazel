@@ -6,6 +6,7 @@
 	"main": "src/index.ts",
 	"exports": {
 		".": "./src/index.ts",
+		"./tokens.css": "./src/style/generated/tokens.css",
 		"./*": "./src/*.ts"
 	},
 	"scripts": {

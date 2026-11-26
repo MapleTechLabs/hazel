@@ -504,6 +504,15 @@ public enum HazelTheme {
             ]
         )
 
+        public static let stack = Recipe(
+            primitive: "stack",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column)),
+            ]
+        )
+
         public static let text = Recipe(
             primitive: "text",
             defaults: ["role": "body", "tone": "default"],

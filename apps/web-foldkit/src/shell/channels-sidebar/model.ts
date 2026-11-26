@@ -122,6 +122,8 @@ export const Message = defineMessageUnion({
 	UpdatedSyncedChannels: { synced: Schema.Array(SyncedChannel) },
 	UpdatedMemberChannelIds: { channelIds: Schema.Array(ChannelId) },
 	UpdatedDiscoverableChannels: { channels: Schema.Array(DiscoverableChannel) },
+	/** The hazel channel-list island (G2, behind its flag) asks to open a channel. */
+	RequestedIslandNavigation: { orgSlug: Schema.String, channelId: ChannelId },
 	/** "Browse channels"; the sidebar answers with `RequestedCommandPalette`. */
 	ClickedBrowseChannels: {},
 	ClickedDismissCreateChannelHint: {},

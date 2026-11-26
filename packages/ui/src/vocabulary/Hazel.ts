@@ -13,6 +13,7 @@ import * as TextField from "./TextField.ts"
 /** Runtime tag names. */
 export const tag = {
 	screen: "hz:screen",
+	stack: "hz:stack",
 	section: "hz:section",
 	item: "hz:item",
 	text: "hz:text",
@@ -233,6 +234,8 @@ export class Host extends Context.Service<
 export type Tags<Msg> = {
 	readonly screen: View.Shorthand<HzContainer<Msg, never, {}, "hz:screen">>
 	readonly section: View.Shorthand<HzContainer<Msg, never, {}, "hz:section">>
+	/** G2: a plain vertical container (no options yet), so a root can hold several sections. */
+	readonly stack: View.Shorthand<HzContainer<Msg, never, {}, "hz:stack">>
 	readonly item: View.Shorthand<HzContainer<Msg, never, EventsOf<"hz:item">, "hz:item">>
 	readonly text: View.Shorthand<HzText<Msg, never, {}, "hz:text">>
 	readonly icon: HzElement<Msg, never, {}, "hz:icon">
@@ -263,6 +266,7 @@ const makeExtension = (definition: AnyExtension, props: unknown) =>
 const tags: Readonly<Record<string, View.ElementBuilder<any, any, any, any>>> = {
 	screen: View.shorthand(new HzContainer(tag.screen)),
 	section: View.shorthand(new HzContainer(tag.section)),
+	stack: View.shorthand(new HzContainer(tag.stack)),
 	item: View.shorthand(new HzContainer(tag.item)),
 	text: View.shorthand(new HzText(tag.text)),
 	icon: new HzElement(tag.icon),
