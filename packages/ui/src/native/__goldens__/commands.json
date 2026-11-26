@@ -1,0 +1,145 @@
+{
+	"about": "Commands and their replies: focus, scrollTo a key, measure (a rect back), and a failed select.",
+	"steps": [
+		{
+			"batch": {
+				"v": 2,
+				"seq": 1,
+				"ops": [
+					[
+						"create",
+						1,
+						"hz:textField"
+					],
+					[
+						"insert",
+						0,
+						1,
+						null
+					],
+					[
+						"create",
+						2,
+						"hz:list"
+					],
+					[
+						"insert",
+						0,
+						2,
+						null
+					]
+				]
+			},
+			"ops": [
+				"create 1 hz:textField",
+				"insert 0 1 null",
+				"create 2 hz:list",
+				"insert 0 2 null"
+			],
+			"tree": [
+				"#root#0",
+				"  hz:textField#1",
+				"  hz:list#2"
+			],
+			"count": 3,
+			"detached": []
+		},
+		{
+			"batch": {
+				"v": 2,
+				"seq": 2,
+				"ops": [
+					[
+						"command",
+						1,
+						1,
+						"focus",
+						null
+					],
+					[
+						"command",
+						2,
+						2,
+						"scrollTo",
+						{
+							"key": "m42"
+						}
+					],
+					[
+						"command",
+						3,
+						1,
+						"measure",
+						null
+					],
+					[
+						"command",
+						4,
+						1,
+						"select",
+						{
+							"start": 0,
+							"end": 3
+						}
+					]
+				]
+			},
+			"ops": [
+				"command 1 1 focus null",
+				"command 2 2 scrollTo {key:\"m42\"}",
+				"command 3 1 measure null",
+				"command 4 1 select {end:3,start:0}"
+			],
+			"tree": [
+				"#root#0",
+				"  hz:textField#1",
+				"  hz:list#2"
+			],
+			"count": 3,
+			"detached": []
+		}
+	],
+	"inbound": [
+		{
+			"message": [
+				"reply",
+				1,
+				true,
+				null
+			],
+			"decoded": "reply 1 true null"
+		},
+		{
+			"message": [
+				"reply",
+				2,
+				true,
+				null
+			],
+			"decoded": "reply 2 true null"
+		},
+		{
+			"message": [
+				"reply",
+				3,
+				true,
+				{
+					"x": 16,
+					"y": 120.5,
+					"width": 370,
+					"height": 44
+				}
+			],
+			"decoded": "reply 3 true {height:44,width:370,x:16,y:120.5}"
+		},
+		{
+			"message": [
+				"reply",
+				4,
+				false,
+				"no text to select"
+			],
+			"decoded": "reply 4 false \"no text to select\""
+		}
+	]
+}

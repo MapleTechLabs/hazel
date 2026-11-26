@@ -1,0 +1,115 @@
+{
+	"about": "Text beyond ASCII crosses as UTF-8 bytes: emoji with modifiers and joiners, CJK, combining marks, RTL.",
+	"steps": [
+		{
+			"batch": {
+				"v": 2,
+				"seq": 1,
+				"ops": [
+					[
+						"create",
+						1,
+						"hz:text"
+					],
+					[
+						"create",
+						2,
+						"#text"
+					],
+					[
+						"text",
+						2,
+						"Café 👩🏽‍💻 你好 é שלום"
+					],
+					[
+						"insert",
+						1,
+						2,
+						null
+					],
+					[
+						"insert",
+						0,
+						1,
+						null
+					],
+					[
+						"create",
+						3,
+						"hz:item"
+					],
+					[
+						"props",
+						3,
+						{
+							"title": "🧪 ünïcødé",
+							"badge": 2
+						}
+					],
+					[
+						"insert",
+						0,
+						3,
+						null
+					]
+				]
+			},
+			"ops": [
+				"create 1 hz:text",
+				"create 2 #text",
+				"text 2 \"Café 👩🏽‍💻 你好 é שלום\"",
+				"insert 1 2 null",
+				"insert 0 1 null",
+				"create 3 hz:item",
+				"props 3 {badge=2,title=\"🧪 ünïcødé\"}",
+				"insert 0 3 null"
+			],
+			"tree": [
+				"#root#0",
+				"  hz:text#1",
+				"    #text#2 \"Café 👩🏽‍💻 你好 é שלום\"",
+				"  hz:item#3 {badge=2,title=\"🧪 ünïcødé\"}"
+			],
+			"count": 4,
+			"detached": []
+		},
+		{
+			"batch": {
+				"v": 2,
+				"seq": 2,
+				"ops": [
+					[
+						"text",
+						2,
+						"🇺🇦🏳️‍🌈"
+					]
+				]
+			},
+			"ops": [
+				"text 2 \"🇺🇦🏳️‍🌈\""
+			],
+			"tree": [
+				"#root#0",
+				"  hz:text#1",
+				"    #text#2 \"🇺🇦🏳️‍🌈\"",
+				"  hz:item#3 {badge=2,title=\"🧪 ünïcødé\"}"
+			],
+			"count": 4,
+			"detached": []
+		}
+	],
+	"inbound": [
+		{
+			"message": [
+				"fire",
+				3,
+				"press",
+				{
+					"note": "日本語 ✓"
+				},
+				2
+			],
+			"decoded": "fire 3 press {note:\"日本語 ✓\"} 2"
+		}
+	]
+}

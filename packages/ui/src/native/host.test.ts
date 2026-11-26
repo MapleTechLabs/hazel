@@ -2,6 +2,8 @@
 // @effect-diagnostics experimentalApiUsage:off
 import { Renderer } from "@effect/ui"
 import { Effect } from "effect"
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { ChannelList } from "../demo/ChannelList.ts"
 import { Rows, RowsMessage } from "../demo/Rows.ts"
@@ -11,7 +13,9 @@ import { type Batch, WIRE_VERSION } from "./wire.ts"
 const settle = () => new Promise((resolve) => setTimeout(resolve, 10))
 
 /** Mounts `Rows` on the native host, runs `act`, and returns the batches of each step. */
-const record = (act: (step: (message: typeof RowsMessage.Type) => Promise<ReadonlyArray<Batch>>) => Promise<void>) => {
+const record = (
+	act: (step: (message: typeof RowsMessage.Type) => Promise<ReadonlyArray<Batch>>) => Promise<void>,
+) => {
 	const batches: Array<Batch> = []
 	return Effect.gen(function* () {
 		const native = makeNativeHost((batch) => batches.push(batch))
@@ -32,20 +36,15 @@ const record = (act: (step: (message: typeof RowsMessage.Type) => Promise<Readon
 	}).pipe(Effect.scoped, Effect.runPromise)
 }
 
-/** One op per line, so a golden's diff reads as the op stream. */
-const format = (batches: ReadonlyArray<Batch>) =>
-	`[\n${batches
-		.map(
-			(batch) =>
-				`\t{ "v": ${batch.v}, "seq": ${batch.seq}, "ops": [\n${batch.ops.map((op) => `\t\t${JSON.stringify(op)}`).join(",\n")}\n\t] }`,
-		)
-		.join(",\n")}\n]\n`
-
-const golden = (name: string, batches: ReadonlyArray<Batch>) =>
-	expect(format(batches)).toMatchFileSnapshot(`./__goldens__/${name}.json`)
+/** The host must still send exactly the batches of the wire golden it was recorded from (C2). */
+const golden = JSON.parse(
+	readFileSync(resolve(import.meta.dirname, "__goldens__/host-session.json"), "utf8"),
+) as {
+	readonly steps: ReadonlyArray<{ readonly batch: Batch }>
+}
 
 describe("native host wire", () => {
-	it("goldens: mount, prop change, keyed reorder, removal", async () => {
+	it("sends the host-session golden: mount, prop change, keyed reorder, removal", async () => {
 		const { steps } = await record(async (step) => {
 			await step(RowsMessage.PressedRow({ id: "b" }))
 			await step(RowsMessage.Reversed())
@@ -58,10 +57,7 @@ describe("native host wire", () => {
 			expect(step[0]?.v).toBe(WIRE_VERSION)
 		}
 		expect(steps.flat().map((batch) => batch.seq)).toEqual([1, 2, 3, 4])
-		await golden("mount", mount)
-		await golden("prop-change", press)
-		await golden("keyed-reorder", reorder)
-		await golden("removal", removal)
+		expect(steps.map((step) => step[0])).toEqual(golden.steps.map((step) => step.batch))
 
 		// A press changes only props: `selected` on and `href` dropped (button) for b, nothing created.
 		expect(press[0]?.ops.every((op) => op[0] === "props")).toBe(true)
@@ -74,7 +70,9 @@ describe("native host wire", () => {
 		const sent: Array<Batch> = []
 		const batches = await Effect.gen(function* () {
 			const native = makeNativeHost((batch) => sent.push(batch))
-			const sections = [{ title: "Team", channels: [{ id: "c1", title: "general", symbol: "number", unread: 1 }] }]
+			const sections = [
+				{ title: "Team", channels: [{ id: "c1", title: "general", symbol: "number", unread: 1 }] },
+			]
 			yield* Renderer.mount(ChannelList, { sections, tickMs: 0 }, native.container).pipe(
 				Effect.provide(native.layer),
 			)
@@ -102,6 +100,8 @@ describe("native host wire", () => {
 		expect(batches).toHaveLength(2)
 		// The press batch touches only the row: the extensions' equal `args` are not sent again.
 		const row = batches[0]!.ops.find((op) => op[0] === "create" && op[2] === "hz:item")![1]
-		expect(batches[1]!.ops).toEqual([["props", row, { badge: null, emphasized: null, selected: true, href: null }]])
+		expect(batches[1]!.ops).toEqual([
+			["props", row, { badge: null, emphasized: null, selected: true, href: null }],
+		])
 	})
 })

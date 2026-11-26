@@ -1,0 +1,64 @@
+{
+	"about": "Batches both decoders refuse, by error kind.",
+	"rejects": [
+		{
+			"batch": {
+				"v": 3,
+				"seq": 1,
+				"ops": []
+			},
+			"error": "unsupportedVersion"
+		},
+		{
+			"batch": {
+				"v": 2,
+				"seq": 1,
+				"ops": [
+					[
+						"element",
+						1,
+						"div"
+					]
+				]
+			},
+			"error": "unknownOp"
+		},
+		{
+			"batch": {
+				"v": 2,
+				"ops": []
+			},
+			"error": "malformed"
+		},
+		{
+			"batch": {
+				"v": 2,
+				"seq": 1,
+				"ops": [
+					[
+						"create",
+						"1",
+						"hz:text"
+					]
+				]
+			},
+			"error": "malformed"
+		},
+		{
+			"batch": {
+				"v": 2,
+				"seq": 1,
+				"ops": [
+					[
+						"command",
+						1,
+						2,
+						"explode",
+						null
+					]
+				]
+			},
+			"error": "malformed"
+		}
+	]
+}

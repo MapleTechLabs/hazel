@@ -1,0 +1,156 @@
+{
+	"about": "A text field's revision pair (G5): Model echoes, a stale value, a Model edit (clear), the field's events.",
+	"steps": [
+		{
+			"batch": {
+				"v": 2,
+				"seq": 1,
+				"ops": [
+					[
+						"create",
+						1,
+						"hz:textField"
+					],
+					[
+						"props",
+						1,
+						{
+							"label": "Name",
+							"value": {
+								"text": "",
+								"rev": 0,
+								"edit": 0
+							}
+						}
+					],
+					[
+						"events",
+						1,
+						[
+							"change",
+							"submit"
+						]
+					],
+					[
+						"insert",
+						0,
+						1,
+						null
+					]
+				]
+			},
+			"ops": [
+				"create 1 hz:textField",
+				"props 1 {label=\"Name\",value={edit:0,rev:0,text:\"\"}}",
+				"events 1 [change,submit]",
+				"insert 0 1 null"
+			],
+			"tree": [
+				"#root#0",
+				"  hz:textField#1 {label=\"Name\",value={edit:0,rev:0,text:\"\"}} on[change,submit]"
+			],
+			"count": 2,
+			"detached": []
+		},
+		{
+			"batch": {
+				"v": 2,
+				"seq": 2,
+				"ops": [
+					[
+						"props",
+						1,
+						{
+							"value": {
+								"text": "hel",
+								"rev": 3,
+								"edit": 0
+							}
+						}
+					]
+				]
+			},
+			"ops": [
+				"props 1 {value={edit:0,rev:3,text:\"hel\"}}"
+			],
+			"tree": [
+				"#root#0",
+				"  hz:textField#1 {label=\"Name\",value={edit:0,rev:3,text:\"hel\"}} on[change,submit]"
+			],
+			"count": 2,
+			"detached": []
+		},
+		{
+			"batch": {
+				"v": 2,
+				"seq": 3,
+				"ops": [
+					[
+						"props",
+						1,
+						{
+							"value": {
+								"text": "",
+								"rev": 5,
+								"edit": 1
+							}
+						}
+					]
+				]
+			},
+			"ops": [
+				"props 1 {value={edit:1,rev:5,text:\"\"}}"
+			],
+			"tree": [
+				"#root#0",
+				"  hz:textField#1 {label=\"Name\",value={edit:1,rev:5,text:\"\"}} on[change,submit]"
+			],
+			"count": 2,
+			"detached": []
+		}
+	],
+	"inbound": [
+		{
+			"message": [
+				"fire",
+				1,
+				"change",
+				{
+					"value": "hel",
+					"rev": 3,
+					"edit": 0
+				},
+				1
+			],
+			"decoded": "fire 1 change {edit:0,rev:3,value:\"hel\"} 1"
+		},
+		{
+			"message": [
+				"fire",
+				1,
+				"change",
+				{
+					"value": "hello",
+					"rev": 5,
+					"edit": 0
+				},
+				2
+			],
+			"decoded": "fire 1 change {edit:0,rev:5,value:\"hello\"} 2"
+		},
+		{
+			"message": [
+				"fire",
+				1,
+				"submit",
+				{
+					"value": "hello",
+					"rev": 5,
+					"edit": 0
+				},
+				2
+			],
+			"decoded": "fire 1 submit {edit:0,rev:5,value:\"hello\"} 2"
+		}
+	]
+}

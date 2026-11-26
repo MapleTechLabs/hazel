@@ -1,0 +1,178 @@
+{
+	"about": "A kept-alive subtree: detached, changed while out of the tree, reinserted, then detached and freed.",
+	"steps": [
+		{
+			"batch": {
+				"v": 2,
+				"seq": 1,
+				"ops": [
+					[
+						"create",
+						1,
+						"hz:screen"
+					],
+					[
+						"create",
+						2,
+						"hz:section"
+					],
+					[
+						"props",
+						2,
+						{
+							"title": "kept"
+						}
+					],
+					[
+						"create",
+						3,
+						"hz:item"
+					],
+					[
+						"props",
+						3,
+						{
+							"title": "row"
+						}
+					],
+					[
+						"insert",
+						2,
+						3,
+						null
+					],
+					[
+						"insert",
+						1,
+						2,
+						null
+					],
+					[
+						"insert",
+						0,
+						1,
+						null
+					]
+				]
+			},
+			"ops": [
+				"create 1 hz:screen",
+				"create 2 hz:section",
+				"props 2 {title=\"kept\"}",
+				"create 3 hz:item",
+				"props 3 {title=\"row\"}",
+				"insert 2 3 null",
+				"insert 1 2 null",
+				"insert 0 1 null"
+			],
+			"tree": [
+				"#root#0",
+				"  hz:screen#1",
+				"    hz:section#2 {title=\"kept\"}",
+				"      hz:item#3 {title=\"row\"}"
+			],
+			"count": 4,
+			"detached": []
+		},
+		{
+			"batch": {
+				"v": 2,
+				"seq": 2,
+				"ops": [
+					[
+						"detach",
+						2
+					]
+				]
+			},
+			"ops": [
+				"detach 2"
+			],
+			"tree": [
+				"#root#0",
+				"  hz:screen#1"
+			],
+			"count": 4,
+			"detached": [
+				2
+			]
+		},
+		{
+			"batch": {
+				"v": 2,
+				"seq": 3,
+				"ops": [
+					[
+						"props",
+						3,
+						{
+							"title": "row while detached"
+						}
+					]
+				]
+			},
+			"ops": [
+				"props 3 {title=\"row while detached\"}"
+			],
+			"tree": [
+				"#root#0",
+				"  hz:screen#1"
+			],
+			"count": 4,
+			"detached": [
+				2
+			]
+		},
+		{
+			"batch": {
+				"v": 2,
+				"seq": 4,
+				"ops": [
+					[
+						"insert",
+						1,
+						2,
+						null
+					]
+				]
+			},
+			"ops": [
+				"insert 1 2 null"
+			],
+			"tree": [
+				"#root#0",
+				"  hz:screen#1",
+				"    hz:section#2 {title=\"kept\"}",
+				"      hz:item#3 {title=\"row while detached\"}"
+			],
+			"count": 4,
+			"detached": []
+		},
+		{
+			"batch": {
+				"v": 2,
+				"seq": 5,
+				"ops": [
+					[
+						"detach",
+						2
+					],
+					[
+						"remove",
+						2
+					]
+				]
+			},
+			"ops": [
+				"detach 2",
+				"remove 2"
+			],
+			"tree": [
+				"#root#0",
+				"  hz:screen#1"
+			],
+			"count": 2,
+			"detached": []
+		}
+	]
+}
