@@ -1,1 +1,12 @@
-[]
+[
+	{
+		"case": "item/activity",
+		"lane": "A1",
+		"reason": "only the avatar differs: hz:avatar with no name or image fills primary, the kit's is bg-muted (avatar medium and avatar-seed-tint wait on A1); the row's layout matches"
+	},
+	{
+		"case": "item/dm",
+		"lane": "A4",
+		"reason": "HAZEL-GAP(item-conversation-row): today's DM row is its own style (semibold title, 14px two-line preview, py-2.5, baseline time); item has no option for it"
+	}
+]

@@ -108,4 +108,6 @@ per-tag id. Fixtures for each addition carry `pending` until their lanes draw th
 
 ## Open
 
-None.
+| Id                      | Screen or lane | Need                                                                                                                                                                                                           | Proposal                                                                                                                 | Kind   |
+| ----------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------ |
+| `item-conversation-row` | A4, DMs        | today's DM row is not activity's: title medium (semibold when unread), a 14/19 two-line preview in fg when unread, `py-2.5` with the avatar 2px lower, the time on the title's baseline (`item/dm` known diff) | `item.leadingSize` gains `conversation` (or an `item.style` option), drawing those metrics; `large` stays activity's row | option |

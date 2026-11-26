@@ -1,0 +1,46 @@
+{
+	"about": "An unread channel row (`unread` `pip`, emphasized) against today's `channelItem` with its pip.",
+	"root": {
+		"tag": "section",
+		"props": {
+			"title": "Channels"
+		},
+		"children": [
+			{
+				"tag": "item",
+				"key": "design",
+				"props": {
+					"title": "design",
+					"href": "#",
+					"unread": "pip",
+					"emphasized": true
+				},
+				"events": ["press"],
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "icon",
+								"props": {
+									"name": "hashtag"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"aria": [
+		{
+			"role": "link",
+			"name": "design, unread"
+		}
+	],
+	"kit": {
+		"specimen": "item-unread-pip",
+		"target": "item"
+	}
+}
