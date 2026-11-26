@@ -67,6 +67,9 @@ declare global {
 
 const post = (message: ShellMessage) => window.webkit?.messageHandlers?.hazel?.postMessage(message)
 
+/** Whether the page runs in the iOS shell's web view; a browser (the offline build opened on a Mac) has no shell. */
+export const inShell = () => window.webkit?.messageHandlers?.hazel !== undefined
+
 const TAB_BAR = '[data-native="tab-bar"]'
 const SCREEN_ACTION = '[data-native="screen-action"]'
 

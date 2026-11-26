@@ -3,7 +3,7 @@
  * app, `host.ts`), or built `--mode offline` with the offline fixture (`../fixture`) as the page's `fetch` and
  * `WebSocket` (no backend); and the bridge to the SwiftUI shell.
  */
-import { forwardConsole, installBridge } from "./bridge"
+import { forwardConsole, inShell, installBridge } from "./bridge"
 import { installHost } from "./host"
 import { installPush } from "./push"
 import { installWorkerOrigin } from "./worker-origin"
@@ -141,5 +141,6 @@ else {
 	installHost()
 	installPush()
 }
-installBridge()
+// Only the shell draws the list, the tab bar and pictures natively; a browser keeps the web's own.
+if (inShell()) installBridge()
 await import("../../web-foldkit/src/entry")
