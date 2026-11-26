@@ -3,7 +3,7 @@ import type { StackAlign, StackAxis, StackDensity } from "../schema.ts"
 
 /**
  * `hz:stack`: a column or row whose gap is its `density` (the kit's `gap-2`, `gap-4`, `gap-6`).
- * `align` places children across the axis; `end` is drawn by the web renderer (no recipe value yet).
+ * `align` places children across the axis.
  */
 export const stack = defineRecipe<
 	{ readonly axis: StackAxis; readonly density: StackDensity; readonly align: StackAlign },
@@ -35,7 +35,7 @@ export const stack = defineRecipe<
 				stretch: {},
 				start: { root: { align: "start" } },
 				center: { root: { align: "center" } },
-				end: {},
+				end: { root: { align: "end" } },
 			},
 		},
 	},
