@@ -131,7 +131,7 @@ const removeIdbStores = async (keep?: UserId): Promise<void> => {
 // The host's SQLite
 
 /** At most 56 characters (`./local-cache.ts`). */
-const hostFileOf = (userId: UserId) => `hazel-chans-${userId}.sqlite`
+export const hostFileOf = (userId: UserId) => `hazel-chans-${userId}.sqlite`
 
 export const openHostBackend = async (host: LocalCacheHost, userId: UserId): Promise<SnapshotBackend> => {
 	const file = hostFileOf(userId)
