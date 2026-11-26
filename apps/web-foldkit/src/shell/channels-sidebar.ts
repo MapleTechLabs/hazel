@@ -1,12 +1,13 @@
 import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
-import { Effect } from "effect"
+import { OrganizationId as OrganizationIdSchema, UserId as UserIdSchema } from "@hazel/schema"
+import { Effect, Schema, Stream } from "effect"
 import { Mount } from "foldkit"
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
 import { inheritedLevelOf, isMutedNow } from "~/lib/notification-settings"
 import { errorToastOf, successToast } from "../data/actions"
-import type { AppRoute } from "../route"
+import { AppRoute } from "../route"
 import type * as Menu from "../ui/menu"
 import { sidebarContent, sidebarSectionGroup, sidebarStatic } from "../ui/sidebar"
 import type { ShellContext } from "./context"
@@ -32,6 +33,7 @@ import {
 import { dragDescription, sectionPlusButton } from "./channels-sidebar/tree"
 import { semantic } from "../ui/semantic"
 import { sectionGroupContent } from "./channels-sidebar/view"
+import { channelListIsland, channelListIslandView, isChannelListIslandEnabled } from "../islands/channel-list"
 
 /**
  * Chat sidebar next to the nav rail (`components/sidebar/channels-sidebar.tsx`): channel
@@ -152,6 +154,13 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 		GotSectionMenuMessage: ({ sectionId: sectionKey, message }) =>
 			updateSectionMenu(model, sectionKey, message),
 		// `openChannelsBrowser` passes `initialPage`, which the palette never reads: it opens home.
+		RequestedIslandNavigation: ({ orgSlug, channelId }) => ({
+			model,
+			outMessage: PageOutMessage.RequestedNavigation({
+				route: AppRoute.ChatChannel({ orgSlug, channelId }),
+				replace: false,
+			}),
+		}),
 		ClickedBrowseChannels: () => ({
 			model,
 			outMessage: PageOutMessage.RequestedCommandPalette({ page: "home" }),
@@ -212,6 +221,16 @@ export { badgeSubscriptions, subscriptions } from "./channels-sidebar/subscripti
 // VIEW
 
 /** `useScrollIntoViewOnActive`: the open channel's row scrolls into view when it becomes active. */
+/** G2: the hazel channel list, mounted in the island's container (`islands/channel-list.ts`). */
+const MountChannelListIsland = Mount.defineStream("MountChannelListIsland", {
+	args: { organizationId: OrganizationIdSchema, userId: UserIdSchema, orgSlug: Schema.String },
+	messages: [Message.RequestedIslandNavigation],
+	execute: ({ element, organizationId, userId, orgSlug }) =>
+		channelListIsland(element, { organizationId, userId, orgSlug }).pipe(
+			Stream.map((channelId) => Message.RequestedIslandNavigation({ orgSlug, channelId })),
+		),
+})
+
 const ScrollActiveIntoView = Mount.define("ScrollActiveIntoView", {
 	messages: [Message.CompletedScrollActiveIntoView],
 	execute: ({ element }) =>
@@ -312,25 +331,43 @@ const sidebarBody = <ParentMessage>(
 				: []),
 			orgSwitcherHeader(h, orgSwitcher, orgSwitcherEntries, shell, organizations, toOrgSwitcherMessage),
 			sidebarContent(h, { state: "expanded" }, [
-				sidebarSectionGroup(
-					h,
-					sectionGroupContent(h, model, {
-						orgSlug,
-						route,
-						activeChannelId,
-						nowMs,
-						paletteKey,
-						createChannelKey,
-						onActiveMount: h.OnMount(Mount.mapMessage(ScrollActiveIntoView(), toParentMessage)),
-						onBrowseChannels: h.OnClick(toParentMessage(Message.ClickedBrowseChannels())),
-						onDismissCreateChannelHint: h.OnClick(
-							toParentMessage(Message.ClickedDismissCreateChannelHint()),
+				isChannelListIslandEnabled && model.organizationId !== null && model.currentUserId !== null
+					? channelListIslandView(h, {
+							organizationId: model.organizationId,
+							userId: model.currentUserId,
+							activeChannelId,
+							onMount: h.OnMount(
+								Mount.mapMessage(
+									MountChannelListIsland({
+										organizationId: model.organizationId,
+										userId: model.currentUserId,
+										orgSlug,
+									}),
+									toParentMessage,
+								),
+							),
+						})
+					: sidebarSectionGroup(
+							h,
+							sectionGroupContent(h, model, {
+								orgSlug,
+								route,
+								activeChannelId,
+								nowMs,
+								paletteKey,
+								createChannelKey,
+								onActiveMount: h.OnMount(
+									Mount.mapMessage(ScrollActiveIntoView(), toParentMessage),
+								),
+								onBrowseChannels: h.OnClick(toParentMessage(Message.ClickedBrowseChannels())),
+								onDismissCreateChannelHint: h.OnClick(
+									toParentMessage(Message.ClickedDismissCreateChannelHint()),
+								),
+								toParentMessage,
+								sectionAction: (sectionKey) =>
+									sectionActionView(h, model, sectionKey, nowMs, toParentMessage),
+							}),
 						),
-						toParentMessage,
-						sectionAction: (sectionKey) =>
-							sectionActionView(h, model, sectionKey, nowMs, toParentMessage),
-					}),
-				),
 			]),
 			userMenuFooter(
 				h,
