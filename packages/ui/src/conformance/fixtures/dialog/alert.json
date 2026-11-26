@@ -1,0 +1,18 @@
+{
+	"about": "hz:dialog with no children (lane S3): iOS presents it as the system alert, or a confirmation dialog when destructive; in place it draws the panel's title and description.",
+	"frame": "screen",
+	"root": {
+		"tag": "dialog",
+		"props": {
+			"open": true,
+			"title": "Leave #design?",
+			"description": "You can join again at any time."
+		},
+		"events": ["dismiss"]
+	},
+	"axes": [
+		{ "prop": "destructive", "values": [true] },
+		{ "prop": "description", "values": [null] }
+	],
+	"aria": [{ "role": "dialog", "name": "Leave #design?" }]
+}

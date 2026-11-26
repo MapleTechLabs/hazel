@@ -1,0 +1,15 @@
+{
+	"about": "hz:sheet open over one line of text (lane S3): the title row with its close button, then the children.",
+	"frame": "screen",
+	"root": {
+		"tag": "sheet",
+		"props": { "open": true, "title": "Channel details" },
+		"events": ["dismiss"],
+		"children": [{ "tag": "text", "children": ["Mock-ups, reviews and the design system."] }]
+	},
+	"axes": [{ "prop": "title", "values": [null] }],
+	"aria": [
+		{ "role": "dialog", "name": "Channel details" },
+		{ "role": "button", "name": "Close" }
+	]
+}

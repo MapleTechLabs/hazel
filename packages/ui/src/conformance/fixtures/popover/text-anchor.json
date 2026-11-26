@@ -1,0 +1,12 @@
+{
+	"about": "hz:popover open next to a text anchor (lane S3), with a line of text as its children.",
+	"frame": "inline",
+	"root": {
+		"tag": "popover",
+		"props": { "open": true },
+		"events": ["dismiss"],
+		"slots": [{ "name": "anchor", "children": [{ "tag": "text", "children": ["@maya"] }] }],
+		"children": [{ "tag": "text", "children": ["Maya Chen, design lead"] }]
+	},
+	"aria": [{ "role": "dialog" }]
+}

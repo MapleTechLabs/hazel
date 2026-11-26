@@ -1,0 +1,19 @@
+{
+	"about": "hz:tooltip around a menu's own trigger button (lane S3); iOS draws no bubble, the label is the trigger's help and accessibility hint.",
+	"frame": "inline",
+	"root": {
+		"tag": "tooltip",
+		"props": { "label": "Channel options" },
+		"children": [
+			{
+				"tag": "menu",
+				"props": {
+					"label": "Options",
+					"entries": [{ "entries": [{ "id": "copy", "label": "Copy link", "icon": "copy" }] }]
+				},
+				"events": ["select"]
+			}
+		]
+	},
+	"aria": [{ "role": "button", "name": "Options" }]
+}

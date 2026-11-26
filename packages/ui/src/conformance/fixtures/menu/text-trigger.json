@@ -1,0 +1,22 @@
+{
+	"about": "hz:menu whose trigger slot is a line of text (lane S3), with checked choices in one titled group.",
+	"frame": "inline",
+	"root": {
+		"tag": "menu",
+		"props": {
+			"label": "Sort channels",
+			"entries": [
+				{
+					"title": "Sort by",
+					"entries": [
+						{ "id": "recent", "label": "Recent activity", "checked": true },
+						{ "id": "name", "label": "Name", "checked": false }
+					]
+				}
+			]
+		},
+		"events": ["select"],
+		"slots": [{ "name": "trigger", "children": [{ "tag": "text", "children": ["Sort: Recent"] }] }]
+	},
+	"aria": [{ "role": "button", "name": "Sort channels" }]
+}
