@@ -1,31 +1,50 @@
 import SwiftUI
 
 // `hz:popover` on iOS (lane S3): a system popover (kept a popover on iPhone too) attached to the
-// `anchor` slot, or to the popover's own place when there is none. An outside tap raises `dismiss`.
-// HAZEL-GAP(popover-anchor-run): `anchorTo` names a run inside a leaf; no leaf exposes run frames.
+// run `anchorTo` names (a keyed leaf's run, from `RunAnchors`), else the `anchor` slot, else the
+// popover's own place. An outside tap raises `dismiss`.
 struct HzPopover: View {
     let tree: Tree
     let node: Node
     @Environment(\.horizontalSizeClass) private var horizontal
+    /// The anchor view's frame on screen, so a run's global frame can be made local to it.
+    @State private var origin: CGRect = .zero
 
     var body: some View {
         let sizeClass = HazelTheme.SizeClass(horizontal)
         let panel = HazelTheme.Recipes.popover.style(part: "panel", sizeClass: sizeClass)
         let open = node[prop: "open"]?.bool == true
         if node.overlayInPlace {
-            VStack(alignment: .leading, spacing: HazelTheme.space["1"] ?? 0) {
+            // As the web's specimen: open, the anchor sits in the panel above the children.
+            if open {
+                VStack(alignment: .leading, spacing: panel.rowGap ?? 0) {
+                    SlotView(tree: tree, node: node, name: "anchor")
+                    PopoverBody(tree: tree, node: node, style: panel)
+                }
+                .hzOverlayPanel(panel)
+            } else {
                 SlotView(tree: tree, node: node, name: "anchor")
-                if open { PopoverBody(tree: tree, node: node, style: panel).hzOverlayPanel(panel) }
             }
         } else {
             anchor
-                .popover(isPresented: overlayDismissBinding(tree, node, node[prop: "open"]?.bool == true), attachmentAnchor: .rect(.bounds)) {
+                .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { origin = $0 }
+                .popover(isPresented: overlayDismissBinding(tree, node, open), attachmentAnchor: attachment) {
                     PopoverBody(tree: tree, node: node, style: panel)
                         .hzBox(panel.merged(HazelTheme.Style(background: HazelTheme.Colors.clear, radius: 0)))
                         .presentationCompactAdaptation(.popover)
                         .presentationBackground(HazelTheme.Colors.bg.color)
                 }
         }
+    }
+
+    /// The run `anchorTo` names (`{key, run}`) once its leaf has drawn, in the anchor view's space;
+    /// else the anchor's bounds.
+    private var attachment: PopoverAttachmentAnchor {
+        let to = node[prop: "anchorTo"]?.object
+        guard let key = to?["key"]?.string, let run = to?["run"]?.number,
+              let frame = RunAnchors.shared.frame(key: key, run: Int(run))
+        else { return .rect(.bounds) }
+        return .rect(.rect(frame.offsetBy(dx: -origin.minX, dy: -origin.minY)))
     }
 
     @ViewBuilder private var anchor: some View {

@@ -131,7 +131,7 @@ final class OverlayPresentationTests: XCTestCase {
         XCTAssertEqual(groups[1].title, "Danger")
         XCTAssertEqual(groups[1].entries[0].destructive, true)
         XCTAssertEqual(OverlayMenuEntry.groups(.string("bad")), [])
-        XCTAssertNotNil(UIImage(systemName: OverlayIcon.symbols["copy"]!))
-        for (name, symbol) in OverlayIcon.symbols { XCTAssertNotNil(UIImage(systemName: symbol), "\(name): \(symbol)") }
+        // Overlay icons come from the shared catalog, as the controls' do.
+        for name in ["copy", "close", "chevron-down"] { XCTAssertNotNil(HazelIcons.uiImage(name), name) }
     }
 }
