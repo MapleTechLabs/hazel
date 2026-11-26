@@ -899,6 +899,46 @@ export class ShimAbortController {
 	}
 }
 
+// crypto
+
+/** What the host's bridge gives for randomness (`__native`, `./bridge.ts`), read when first used. */
+interface RandomSource {
+	readonly uuid: () => string
+	readonly randomBytes?: (count: number) => Uint8Array
+}
+
+declare const __native: RandomSource | undefined
+
+const randomSource = (): RandomSource => {
+	if (typeof __native === "undefined")
+		throw new Error("No secure random source: the host installed no __native")
+	return __native
+}
+
+/**
+ * `crypto.randomUUID` and `crypto.getRandomValues` over the host's secure random
+ * (`SecRandomCopyBytes`, or its UUIDs on a host without `randomBytes`). TanStack DB's ids need them.
+ */
+export const ShimCrypto = {
+	randomUUID: (): string => randomSource().uuid(),
+	getRandomValues: <T extends ArrayBufferView | null>(array: T): T => {
+		if (array === null) return array
+		if (array.byteLength > 65536) throw new Error("QuotaExceededError: at most 65536 bytes")
+		const view = new Uint8Array(array.buffer, array.byteOffset, array.byteLength)
+		const source = randomSource()
+		if (source.randomBytes !== undefined) view.set(source.randomBytes(view.length))
+		else
+			for (let at = 0; at < view.length;) {
+				// 15 random bytes per UUID (the version and variant nibbles left out).
+				const hex = source.uuid().replace(/-/g, "")
+				const random = hex.slice(0, 12) + hex.slice(13, 16) + hex.slice(17)
+				for (let i = 0; i + 2 <= random.length && at < view.length; i += 2)
+					view[at++] = parseInt(random.slice(i, i + 2), 16)
+			}
+		return array
+	},
+}
+
 /** Each shim with the global it fills. */
 export const RUNTIME_SHIMS = {
 	URL: ShimURL,
@@ -907,6 +947,7 @@ export const RUNTIME_SHIMS = {
 	AbortSignal: ShimAbortSignal,
 	TextEncoder: ShimTextEncoder,
 	TextDecoder: ShimTextDecoder,
+	crypto: ShimCrypto,
 	queueMicrotask: (task: () => void) => {
 		Promise.resolve()
 			.then(task)

@@ -54,6 +54,8 @@ export type NativeSqlValue = string | number | boolean | null | Uint8Array
 
 export interface NativeBridge {
 	readonly uuid: () => string
+	/** `count` bytes from the system's secure random (`crypto.getRandomValues`, `./runtime-shims.ts`). */
+	readonly randomBytes?: (count: number) => Uint8Array
 	readonly kv: {
 		readonly get: (key: string) => string | null | undefined
 		readonly set: (key: string, value: string) => void

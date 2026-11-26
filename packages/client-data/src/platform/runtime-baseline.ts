@@ -18,4 +18,5 @@ export const RUNTIME_BASELINE = [
 	"URLSearchParams",
 	"AbortController",
 	"AbortSignal",
+	"crypto",
 ] as const

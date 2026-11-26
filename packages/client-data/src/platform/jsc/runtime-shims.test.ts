@@ -309,7 +309,7 @@ describe("AbortController and AbortSignal", () => {
 describe("installRuntimeShims", () => {
 	test("installs only what is missing", () => {
 		const g = globalThis as Record<string, unknown>
-		const saved = Object.fromEntries(Object.keys(RUNTIME_SHIMS).map((name) => [name, g[name]]))
+		const saved = { URL: g.URL, AbortSignal: g.AbortSignal, TextEncoder: g.TextEncoder }
 		try {
 			for (const name of ["URL", "AbortSignal"]) delete g[name]
 			expect(installRuntimeShims()).toEqual(["URL", "AbortSignal"])
@@ -317,6 +317,24 @@ describe("installRuntimeShims", () => {
 			expect(g.TextEncoder).toBe(saved.TextEncoder)
 		} finally {
 			Object.assign(g, saved)
+		}
+	})
+})
+
+describe("crypto", () => {
+	test("randomUUID and getRandomValues come from the host's random source", () => {
+		const g = globalThis as Record<string, unknown>
+		g.__native = { uuid: () => "0f1e2d3c-4b5a-4697-8877-665544332211" }
+		try {
+			expect(RUNTIME_SHIMS.crypto.randomUUID()).toBe("0f1e2d3c-4b5a-4697-8877-665544332211")
+			const bytes = RUNTIME_SHIMS.crypto.getRandomValues(new Uint8Array(20))
+			expect([...bytes.subarray(0, 3)]).toEqual([0x0f, 0x1e, 0x2d])
+			g.__native = { uuid: () => "", randomBytes: (n: number) => new Uint8Array(n).fill(7) }
+			const words = RUNTIME_SHIMS.crypto.getRandomValues(new Uint32Array(2))
+			expect([...words]).toEqual([0x07070707, 0x07070707])
+			expect(() => RUNTIME_SHIMS.crypto.getRandomValues(new Uint8Array(70000))).toThrow(/Quota/)
+		} finally {
+			delete g.__native
 		}
 	})
 })
