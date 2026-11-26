@@ -1,0 +1,50 @@
+{
+	"about": "Every icon name, at the icon primitive's one size.",
+	"root": {
+		"tag": "icon",
+		"props": {
+			"name": "hashtag"
+		}
+	},
+	"frame": "inline",
+	"axes": [
+		{
+			"prop": "name",
+			"values": [
+				"arrow-up",
+				"bell",
+				"check",
+				"chevron-down",
+				"chevron-right",
+				"close",
+				"copy",
+				"discord",
+				"dots",
+				"download",
+				"edit",
+				"emoji",
+				"emoji-add",
+				"gear",
+				"gif",
+				"leave",
+				"lightbulb",
+				"lock",
+				"office",
+				"paperclip",
+				"pin",
+				"plus",
+				"reply",
+				"search",
+				"share",
+				"slack",
+				"sparkles",
+				"star",
+				"thread",
+				"trash",
+				"users",
+				"volume-mute",
+				"warning"
+			]
+		}
+	]
+}

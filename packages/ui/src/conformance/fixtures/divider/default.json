@@ -1,0 +1,6 @@
+{
+	"about": "hz:divider with no props: lane A1 and lane S1 replace this with real cases.",
+	"root": {
+		"tag": "divider"
+	}
+}

@@ -1,0 +1,78 @@
+{
+	"about": "A row alone in every state, with a subtitle, a badge, a trailing slot and a shortcut.",
+	"root": {
+		"tag": "item",
+		"props": {
+			"title": "general",
+			"href": "#"
+		},
+		"events": [
+			"press"
+		],
+		"slots": [
+			{
+				"name": "leading",
+				"children": [
+					{
+						"tag": "icon",
+						"props": {
+							"name": "hashtag"
+						}
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"axes": [
+		{
+			"prop": "selected",
+			"values": [
+				true
+			]
+		},
+		{
+			"prop": "emphasized",
+			"values": [
+				true
+			]
+		},
+		{
+			"prop": "disabled",
+			"values": [
+				true
+			]
+		},
+		{
+			"prop": "muted",
+			"values": [
+				true
+			]
+		},
+		{
+			"prop": "nested",
+			"values": [
+				"middle",
+				"last"
+			]
+		},
+		{
+			"prop": "badge",
+			"values": [
+				3
+			]
+		},
+		{
+			"prop": "subtitle",
+			"values": [
+				"Last message preview"
+			]
+		},
+		{
+			"prop": "shortcut",
+			"values": [
+				"⌘K"
+			]
+		}
+	]
+}

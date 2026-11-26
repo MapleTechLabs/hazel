@@ -1,0 +1,80 @@
+{
+	"about": "A section that collapses, collapsed, and reorderable.",
+	"root": {
+		"tag": "section",
+		"props": {
+			"title": "Projects"
+		},
+		"children": [
+			{
+				"tag": "item",
+				"key": "roadmap",
+				"props": {
+					"title": "roadmap",
+					"href": "#"
+				},
+				"events": [
+					"press"
+				],
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "icon",
+								"props": {
+									"name": "hashtag"
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"tag": "item",
+				"key": "launch",
+				"props": {
+					"title": "launch",
+					"href": "#"
+				},
+				"events": [
+					"press"
+				],
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "icon",
+								"props": {
+									"name": "hashtag"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"axes": [
+		{
+			"prop": "collapsible",
+			"values": [
+				true
+			]
+		},
+		{
+			"prop": "collapsed",
+			"values": [
+				true
+			]
+		},
+		{
+			"prop": "reorderable",
+			"values": [
+				true
+			]
+		}
+	]
+}

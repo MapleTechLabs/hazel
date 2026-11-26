@@ -1,0 +1,38 @@
+{
+	"about": "An avatar by initials in each presence, the large size and both provider marks.",
+	"root": {
+		"tag": "avatar",
+		"props": {
+			"name": "Ada Lovelace",
+			"initials": "AL"
+		},
+		"events": [
+			"press"
+		]
+	},
+	"frame": "inline",
+	"axes": [
+		{
+			"prop": "presence",
+			"values": [
+				"online",
+				"away",
+				"busy",
+				"offline"
+			]
+		},
+		{
+			"prop": "size",
+			"values": [
+				"large"
+			]
+		},
+		{
+			"prop": "mark",
+			"values": [
+				"slack",
+				"discord"
+			]
+		}
+	]
+}

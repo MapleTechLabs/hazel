@@ -1,0 +1,25 @@
+{
+	"about": "An extension no platform here registers: both draw its fallback slot.",
+	"root": {
+		"tag": "ext",
+		"props": {
+			"ext": "Unregistered",
+			"args": {
+				"speed": 0.4
+			}
+		},
+		"slots": [
+			{
+				"name": "fallback",
+				"children": [
+					{
+						"tag": "text",
+						"children": [
+							"Fallback drawn"
+						]
+					}
+				]
+			}
+		]
+	}
+}

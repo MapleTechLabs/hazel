@@ -1,0 +1,40 @@
+{
+	"about": "A title long enough to truncate, against G6 item-long.",
+	"root": {
+		"tag": "section",
+		"props": {
+			"title": "Channels"
+		},
+		"children": [
+			{
+				"tag": "item",
+				"key": "a-channel-name-long-enough-to-truncate",
+				"props": {
+					"title": "a-channel-name-long-enough-to-truncate",
+					"href": "#"
+				},
+				"events": [
+					"press"
+				],
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "icon",
+								"props": {
+									"name": "hashtag"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"kit": {
+		"specimen": "item-long",
+		"target": "item"
+	}
+}
