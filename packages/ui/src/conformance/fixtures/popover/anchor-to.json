@@ -1,0 +1,11 @@
+{
+	"about": "hz:popover anchored at a run of a keyed leaf (popover.anchorTo, a pressed mention) instead of a slot.",
+	"frame": "inline",
+	"root": {
+		"tag": "popover",
+		"props": { "open": true, "anchorTo": { "key": "m1", "run": 2 } },
+		"events": ["dismiss"],
+		"children": [{ "tag": "text", "children": ["@maya"] }]
+	},
+	"aria": [{ "role": "dialog" }]
+}

@@ -10,6 +10,7 @@ import { Context, Effect, Layer, Scheduler } from "effect"
 import { Hazel } from "../vocabulary/index.ts"
 import { NotImplemented } from "../vocabulary/spec.ts"
 import type { Plain } from "./primitives/define.ts"
+import { measureNode } from "./focus/measure.ts"
 import { create, type Primitive, release } from "./primitives.ts"
 
 type Handlers = Readonly<Record<string, View.Handler<unknown, any>>>
@@ -69,7 +70,7 @@ export const wrapHost = (inner: Renderer.Host<Node>, document: Document): Render
 	}
 }
 
-// C1: focus is real; the rest belong to the lanes that own scrolling (A4) and fields (A2).
+// C1: focus is real, measure is A3's, select A2's; scrolling belongs to A4.
 const notYet = (name: string, lane: string) =>
 	Effect.die(new NotImplemented({ what: `web command ${name}`, lane }))
 /** The element a command acts on: a control's `data-hz-focus` part (its input), else the node. */
@@ -81,7 +82,7 @@ const commands: Hazel.Host["Service"] = {
 	focus: (node) => Effect.sync(() => target(node).focus()),
 	blur: (node) => Effect.sync(() => target(node).blur()),
 	scrollTo: () => notYet("scrollTo", "A4"),
-	measure: () => notYet("measure", "A3"),
+	measure: (node) => Effect.sync(() => measureNode(node as Node)),
 	// A2: focuses the field and selects `start..end` (clamped by the browser).
 	select: (node, range) =>
 		Effect.sync(() => {
