@@ -1,7 +1,8 @@
 import SwiftUI
 
-// Owned by lane S1 (`docs/hazel-ui.md`, "Phase 2: lanes"). Scrolls along its axis when its content
-// overflows; content that fits is drawn as is (the web's `overflow: auto`). Answers `scrollTo` edges.
+// Owned by lane S1 (`docs/hazel-ui.md`, "Phase 2: lanes"). Scrolls along its recipe's `overflow` axis
+// (else its `axis`) when its content overflows; content that fits is drawn as is (`overflow: auto`).
+// Answers `scrollTo` an edge or a keyed descendant (`row-key`, `NodeView`'s `RowKey`).
 struct HzScroll: View {
     let tree: Tree
     let node: Node
@@ -12,7 +13,7 @@ struct HzScroll: View {
         let _ = RenderCounter.record(node.id)
         let axis = node[prop: "axis"]?.string
         let style = HazelTheme.Recipes.scroll.style(options: axis.map { ["axis": $0] } ?? [:], sizeClass: HazelTheme.SizeClass(horizontal))
-        let row = style.layout == .row
+        let row = style.scrollAxes.map { $0 == .horizontal } ?? (style.layout == .row)
         let tree = tree, node = node
         ScrollViewReader { proxy in
             ViewThatFits(in: row ? .horizontal : .vertical) {
@@ -21,9 +22,13 @@ struct HzScroll: View {
             }
             .hazelCommands(tree, node) { name, args in
                 guard name == .scrollTo else { throw CommandError("scroll does not handle \(name.rawValue)") }
-                // HAZEL-GAP(row-key): keys never reach the host, so only edges can be targeted.
-                guard let to = args.object?["to"]?.string else { throw CommandError("scrollTo: only {to: start|end} reaches the host") }
-                withAnimation(.easeOut(duration: HazelTheme.duration["normal"] ?? 0.2)) {
+                let animation = Animation.easeOut(duration: HazelTheme.duration["normal"] ?? 0.2)
+                if let key = args.object?["key"]?.string {
+                    withAnimation(animation) { proxy.scrollTo(RowKey(key), anchor: row ? .leading : .top) }
+                    return .null
+                }
+                guard let to = args.object?["to"]?.string else { throw CommandError("scrollTo: needs {to: start|end} or {key}") }
+                withAnimation(animation) {
                     proxy.scrollTo(to == "end" ? Self.end : Self.start, anchor: to == "end" ? (row ? .trailing : .bottom) : (row ? .leading : .top))
                 }
                 return .null

@@ -13,8 +13,9 @@ struct HzStack: View {
         let sizeClass = HazelTheme.SizeClass(horizontal)
         let options = node.options(["axis", "density", "align"])
         let style = HazelTheme.Recipes.stack.style(options: options, sizeClass: sizeClass)
-        // HAZEL-GAP(recipe-align-end): the recipe's `align` has no `end`; drawn here, as the web does.
-        let align = options["align"] ?? "stretch"
+        // The recipe's `align` (`recipe-align-end`); `stretch` leaves it unset. The option stands in
+        // only until the generated recipe carries the `end` layer.
+        let align = style.align.map(Self.name) ?? (options["align"] == "end" ? "end" : "stretch")
         if style.layout == .row {
             HStack(alignment: Self.vertical(align), spacing: style.gap ?? 0) {
                 ChildrenView(tree: tree, node: node)
@@ -27,6 +28,14 @@ struct HzStack: View {
             }
             .environment(\.hzInRow, false)
             .hzFillWidth(!inRow, alignment: Self.frameAlignment(align))
+        }
+    }
+
+    static func name(_ align: HazelTheme.Align) -> String {
+        switch align {
+        case .start: "start"
+        case .center: "center"
+        case .end: "end"
         }
     }
 
