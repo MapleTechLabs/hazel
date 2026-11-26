@@ -9,12 +9,13 @@ import { BrowserHost, HtmlScheduler } from "@effect/ui/html"
 import { Context, Effect, Layer, Scheduler } from "effect"
 import { Hazel } from "../vocabulary/index.ts"
 import { NotImplemented } from "../vocabulary/spec.ts"
+import type { Plain } from "./primitives/define.ts"
 import { create, type Primitive, release } from "./primitives.ts"
 
 type Handlers = Readonly<Record<string, View.Handler<unknown, any>>>
 
 /** Semantic events to the DOM events that raise them. Extension events come through `send`. */
-const domEvent: Readonly<Record<string, string>> = { press: "click" }
+const domEvent = new Map([["press", "click"]])
 
 export const wrapHost = (inner: Renderer.Host<Node>, document: Document): Renderer.Host<Node> => {
 	const primitives = new WeakMap<Node, Primitive>()
@@ -41,7 +42,8 @@ export const wrapHost = (inner: Renderer.Host<Node>, document: Document): Render
 		setProp: (node, name, value) => {
 			const primitive = primitives.get(node)
 			if (primitive === undefined) inner.setProp(node, name, value)
-			else primitive.set(name, value)
+			// SAFETY: `hz:*` props are plain data: `spec.ts` types every prop with a JSON schema.
+			else primitive.set(name, value as Plain)
 		},
 		insertBefore: (parent, node, ref) => inner.insertBefore(contentOf(parent), node, ref),
 		remove: (node) => {
@@ -57,9 +59,9 @@ export const wrapHost = (inner: Renderer.Host<Node>, document: Document): Render
 			if (primitive === undefined) return inner.setEvents(node, handlers, dispatch, options)
 			primitive.events = { handlers, dispatch }
 			const mapped: Record<string, View.Handler<unknown, any>> = {}
-			for (const name in handlers) {
-				const dom = domEvent[name]
-				if (dom !== undefined) mapped[dom] = handlers[name]!
+			for (const [name, handler] of Object.entries(handlers)) {
+				const dom = domEvent.get(name)
+				if (dom !== undefined) mapped[dom] = handler
 			}
 			inner.setEvents(node, mapped, dispatch, {})
 		},

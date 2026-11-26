@@ -78,7 +78,10 @@ describe("web host", () => {
 		const root = container()
 		const sections = [
 			{ title: "Team", channels: [{ id: "c1", title: "general", symbol: "number", unread: 2 }] },
-			{ title: "Direct messages", channels: [{ id: "d1", title: "Grace Hopper", initials: "GH", unread: 0 }] },
+			{
+				title: "Direct messages",
+				channels: [{ id: "d1", title: "Grace Hopper", initials: "GH", unread: 0 }],
+			},
 		]
 		await Effect.gen(function* () {
 			yield* Renderer.mount(ChannelList, { sections, tickMs: 0 }, root)
@@ -94,8 +97,9 @@ describe("web host", () => {
 			expect(mesh.hasAttribute("data-drawn")).toBe(false)
 			expect(mesh.querySelector(":scope > [data-hz-part=surface]")?.childElementCount).toBe(0)
 			expect(
-				mesh.querySelector(":scope > [data-hz-part=content] > [data-hz=slot][data-name=fallback] > [data-hz=text]")
-					?.textContent,
+				mesh.querySelector(
+					":scope > [data-hz-part=content] > [data-hz=slot][data-name=fallback] > [data-hz=text]",
+				)?.textContent,
 			).toBe("Mesh background: drawn on iOS")
 
 			const general = screen.querySelector("[data-hz=item]")!

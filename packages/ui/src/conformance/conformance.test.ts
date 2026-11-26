@@ -16,7 +16,7 @@ import { FixtureView } from "./view.ts"
 const settle = () => new Promise((resolve) => setTimeout(resolve, 5))
 
 /** A tree's outline with node ids taken out: structure, props, text and events only. */
-const shape = (batches: ReadonlyArray<Batch>) => {
+const outlineOf = (batches: ReadonlyArray<Batch>) => {
 	const tree = new Tree()
 	for (const batch of batches) tree.apply(batch)
 	return tree.outline().map((line) => line.replace(/#\d+/, ""))
@@ -49,7 +49,9 @@ describe("conformance fixtures", () => {
 				? (fixture.axes ?? []).flatMap((axis) =>
 						axis.values
 							.filter((value) => value !== null)
-							.flatMap((value) => propProblems(root, axis.prop, value).map((p) => `${path}: axis ${p}`)),
+							.flatMap((value) =>
+								propProblems(root, axis.prop, value).map((p) => `${path}: axis ${p}`),
+							),
 					)
 				: []
 			const kit = fixture.kit
@@ -63,7 +65,9 @@ describe("conformance fixtures", () => {
 	})
 
 	it("draw their folder's tag in every case", () => {
-		const missing = cases.filter((c) => !nodesOf(c.root).some((node) => node.tag === c.tag)).map((c) => c.id)
+		const missing = cases
+			.filter((c) => !nodesOf(c.root).some((node) => node.tag === c.tag))
+			.map((c) => c.id)
 		expect(missing).toEqual([])
 	})
 
@@ -75,7 +79,7 @@ describe("conformance fixtures", () => {
 	it("compile to exactly what the native host sends (the rule Swift mirrors)", async () => {
 		for (const c of cases) {
 			const sent = await hosted(c.root)
-			expect(shape([compile(c.root)]), c.id).toEqual(shape(sent))
+			expect(outlineOf([compile(c.root)]), c.id).toEqual(outlineOf(sent))
 		}
 	})
 

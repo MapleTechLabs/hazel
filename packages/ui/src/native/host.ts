@@ -133,6 +133,7 @@ export const makeNativeHost = (send: (batch: Batch) => void): NativeHost => {
 			if (controlledText(target, name, value)) return
 			if (json === "null") target.sent.delete(name)
 			else target.sent.set(name, json)
+			// SAFETY: `json` is `JSON.stringify` output, so it parses back to JSON.
 			const parsed = JSON.parse(json) as Json
 			const last = pending[pending.length - 1]
 			// The renderer sets one element's props together: they share one `props` op.

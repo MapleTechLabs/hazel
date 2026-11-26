@@ -54,8 +54,13 @@ export const TextFieldDemo = Hazel.component({
 					.error(model.error ?? undefined)
 					.on("change", (edit) => TextFieldDemoMessage.Changed(edit))
 					.on("submit", (edit) => TextFieldDemoMessage.Submitted(edit)),
-				h.text.role("caption").tone("muted").children(`model rev ${model.field.rev}: ${model.field.text}`),
+				h.text
+					.role("caption")
+					.tone("muted")
+					.children(`model rev ${model.field.rev}: ${model.field.text}`),
 			),
-			h.section.title("Sent").children(model.sent.map((line, index) => h.item.key(String(index)).title(line))),
+			h.section
+				.title("Sent")
+				.children(model.sent.map((line, index) => h.item.key(String(index)).title(line))),
 		),
 })

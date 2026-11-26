@@ -2,50 +2,28 @@
 	"about": "Every text role and tone, and each flag, on one line of copy.",
 	"root": {
 		"tag": "text",
-		"children": [
-			"The quick brown fox jumps over the lazy dog"
-		]
+		"children": ["The quick brown fox jumps over the lazy dog"]
 	},
 	"axes": [
 		{
 			"prop": "role",
-			"values": [
-				"label",
-				"caption",
-				"title",
-				"display",
-				"code"
-			]
+			"values": ["label", "caption", "title", "display", "code"]
 		},
 		{
 			"prop": "tone",
-			"values": [
-				"muted",
-				"subtle",
-				"accent",
-				"success",
-				"warning",
-				"danger",
-				"info"
-			]
+			"values": ["muted", "subtle", "accent", "success", "warning", "danger", "info"]
 		},
 		{
 			"prop": "strong",
-			"values": [
-				true
-			]
+			"values": [true]
 		},
 		{
 			"prop": "numeric",
-			"values": [
-				true
-			]
+			"values": [true]
 		},
 		{
 			"prop": "truncate",
-			"values": [
-				true
-			]
+			"values": [true]
 		}
 	]
 }

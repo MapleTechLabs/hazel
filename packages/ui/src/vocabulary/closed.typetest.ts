@@ -54,12 +54,18 @@ export const contract = (h: H<"m">) => [
 	h.section.title("S").action(h.icon.name("plus"), "m", "Add").children(h.item.title("x")),
 	h.section
 		.title("S")
-		.action(h.icon.name("plus"), actionMenu([{ entries: [{ id: "a", label: "A" }] }], () => "m"))
+		.action(
+			h.icon.name("plus"),
+			actionMenu([{ entries: [{ id: "a", label: "A" }] }], () => "m"),
+		)
 		.reorderable()
 		.on("move", ({ before }) => (before === null ? "m" : "m")),
 	h.item.title("x").muted().nested("last").shortcut("⌘K"),
 	h.avatar.size("large").mark("slack").on("press", "m"),
-	h.list.loading().overlay(h.text.children("2 new")).on("move", () => "m"),
+	h.list
+		.loading()
+		.overlay(h.text.children("2 new"))
+		.on("move", () => "m"),
 	h.progress.value(0.4),
 	h.emptyState.title("Nothing here").illustration("squirrel").action(h.button.label("Join")),
 	h.emojiPicker.open().on("select", ({ emoji }) => (emoji === "" ? "m" : "m")),

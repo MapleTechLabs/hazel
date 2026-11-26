@@ -62,8 +62,10 @@ const run = (
 		let fieldId: number | undefined
 		const shown: Array<string> = []
 		const native = makeNativeHost((batch) => toNative.send(batch))
-		const toJs = channel<readonly [string, Revisions.Change]>(rand, options.latencyMs, ([event, payload]) =>
-			native.fire(fieldId!, event, payload as unknown as Json),
+		const toJs = channel<readonly [string, Revisions.Change]>(
+			rand,
+			options.latencyMs,
+			([event, payload]) => native.fire(fieldId ?? -1, event, { ...payload }),
 		)
 		const show = (next: Revisions.Field) => {
 			field = next
@@ -84,7 +86,9 @@ const run = (
 				if (next.change !== undefined) toJs.send(["change", next.change])
 			}
 		})
-		const app = yield* Renderer.mount(TextFieldDemo, {}, native.container).pipe(Effect.provide(native.layer))
+		const app = yield* Renderer.mount(TextFieldDemo, {}, native.container).pipe(
+			Effect.provide(native.layer),
+		)
 		yield* Effect.promise(() => sleep(20))
 		expect(fieldId).toBeDefined()
 
@@ -102,7 +106,7 @@ const run = (
 				if (next.change !== undefined) toJs.send(["change", next.change])
 			}
 			// Settled: both channels empty across a quiet period longer than a render.
-			for (let quiet = 0; quiet < 10; ) {
+			for (let quiet = 0; quiet < 10;) {
 				await sleep(10)
 				quiet = toJs.idle() && toNative.idle() ? quiet + 1 : 0
 			}
@@ -125,12 +129,20 @@ describe("hz:textField revisions over the native wire", () => {
 	})
 
 	it("control: a field that applies every echo loses keystrokes in the same harness", async () => {
-		const results = await Promise.all([1, 2, 3].map((seed) => run(chars(typed), { seed, latencyMs: 30, naive: true })))
+		const results = await Promise.all(
+			[1, 2, 3].map((seed) => run(chars(typed), { seed, latencyMs: 30, naive: true })),
+		)
 		expect(results.some((result) => result.native !== typed)).toBe(true)
 	})
 
 	it("keeps edits that delete, too", async () => {
-		const keys: Array<Key> = [...chars("hello wrld"), "Backspace", "Backspace", "Backspace", ...chars("orld!")]
+		const keys: Array<Key> = [
+			...chars("hello wrld"),
+			"Backspace",
+			"Backspace",
+			"Backspace",
+			...chars("orld!"),
+		]
 		const result = await run(keys, { seed: 7, latencyMs: 30 })
 		expect(result.native).toBe("hello world!")
 		expect(result.model.field.text).toBe("hello world!")

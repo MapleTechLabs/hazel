@@ -62,21 +62,34 @@ const el = (
 
 /** An item: its control (a link, or a button when selected) holds the content parent and the title. */
 const item = (spec: ItemSpec) =>
-	el("div", { "data-hz": "item", "data-specimen": spec.id, "data-selected": spec.selected, "data-emphasized": spec.emphasized }, [
-		el(spec.selected ? "button" : "a", {
-			"data-hz-part": "control",
-			type: spec.selected ? "button" : undefined,
-			href: spec.selected ? undefined : "#",
-			"aria-current": spec.selected ? "page" : undefined,
-		}, [
-			el("span", { "data-hz-part": "content" }, [
-				el("span", { "data-hz": "slot", "data-hz-slot": "leading", "data-name": "leading" }, [
-					icon(spec.icon, { "data-hz": "icon", "aria-hidden": "true" }),
-				]),
-			]),
-			el("span", { "data-hz-part": "title" }, [spec.title]),
-		]),
-	])
+	el(
+		"div",
+		{
+			"data-hz": "item",
+			"data-specimen": spec.id,
+			"data-selected": spec.selected,
+			"data-emphasized": spec.emphasized,
+		},
+		[
+			el(
+				spec.selected ? "button" : "a",
+				{
+					"data-hz-part": "control",
+					type: spec.selected ? "button" : undefined,
+					href: spec.selected ? undefined : "#",
+					"aria-current": spec.selected ? "page" : undefined,
+				},
+				[
+					el("span", { "data-hz-part": "content" }, [
+						el("span", { "data-hz": "slot", "data-hz-slot": "leading", "data-name": "leading" }, [
+							icon(spec.icon, { "data-hz": "icon", "aria-hidden": "true" }),
+						]),
+					]),
+					el("span", { "data-hz-part": "title" }, [spec.title]),
+				],
+			),
+		],
+	)
 
 const button = (spec: ButtonSpec) =>
 	el(

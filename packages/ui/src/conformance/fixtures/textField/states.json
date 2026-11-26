@@ -12,10 +12,7 @@
 				"edit": 0
 			}
 		},
-		"events": [
-			"change",
-			"submit"
-		]
+		"events": ["change", "submit"]
 	},
 	"aria": [
 		{
@@ -26,27 +23,19 @@
 	"axes": [
 		{
 			"prop": "disabled",
-			"values": [
-				true
-			]
+			"values": [true]
 		},
 		{
 			"prop": "readOnly",
-			"values": [
-				true
-			]
+			"values": [true]
 		},
 		{
 			"prop": "required",
-			"values": [
-				true
-			]
+			"values": [true]
 		},
 		{
 			"prop": "monospace",
-			"values": [
-				true
-			]
+			"values": [true]
 		}
 	],
 	"cases": [

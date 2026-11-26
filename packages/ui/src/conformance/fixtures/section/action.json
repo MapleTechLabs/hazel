@@ -11,9 +11,7 @@
 				"props": {
 					"label": "New in Projects"
 				},
-				"events": [
-					"press"
-				],
+				"events": ["press"],
 				"children": [
 					{
 						"tag": "icon",
@@ -30,9 +28,7 @@
 					"title": "roadmap",
 					"href": "#"
 				},
-				"events": [
-					"press"
-				],
+				"events": ["press"],
 				"slots": [
 					{
 						"name": "leading",

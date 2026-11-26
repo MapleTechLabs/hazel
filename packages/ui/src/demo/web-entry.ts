@@ -10,5 +10,7 @@ import { ChannelList } from "./ChannelList.ts"
 import { registerDemoWebExtensions } from "./web-extensions.ts"
 
 registerDemoWebExtensions()
-const app = Renderer.mount(ChannelList, { sections: sections(), tickMs: 0 }, document.getElementById("app")!)
+const container = document.getElementById("app")
+if (container === null) throw new Error("the demo page has no #app")
+const app = Renderer.mount(ChannelList, { sections: sections(), tickMs: 0 }, container)
 Effect.runFork(Layer.launch(withWebHost(app)))

@@ -3,12 +3,14 @@ import { registerWebExtension } from "../web/extensions.ts"
 import { ActivityChart } from "./extensions.ts"
 
 /** Token colours for G1; the generated `tokens.css` replaces this. */
-const tokenColor: Record<string, string> = {
-	"brand.500": "#6938ef",
-	"brand.300": "#bda5fa",
-	"accent.400": "#9e77ed",
-	"neutral.200": "#e4e4e7",
-}
+const tokenColor = new Map(
+	Object.entries({
+		"brand.500": "#6938ef",
+		"brand.300": "#bda5fa",
+		"accent.400": "#9e77ed",
+		"neutral.200": "#e4e4e7",
+	}),
+)
 
 export const registerDemoWebExtensions = () =>
 	registerWebExtension(ActivityChart, (container, props) => {
@@ -26,7 +28,7 @@ export const registerDemoWebExtensions = () =>
 			context.clearRect(0, 0, canvas.width, canvas.height)
 			const max = Math.max(1, ...values)
 			const width = canvas.width / Math.max(values.length, 1)
-			context.fillStyle = tokenColor[color] ?? "#888"
+			context.fillStyle = tokenColor.get(color) ?? "#888"
 			values.forEach((value, index) => {
 				const height = (value / max) * (canvas.height - 4)
 				context.beginPath()

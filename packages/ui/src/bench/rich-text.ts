@@ -30,7 +30,8 @@ export const runs = (text: string, names: ReadonlyMap<string, Person>): Readonly
 		const index = match.index
 		if (index > at) out.push(text.slice(at, index))
 		const [, mention, url, code, strong] = match
-		if (mention !== undefined) out.push([RunKind.mention, `@${names.get(mention)?.name ?? "unknown"}`, mention])
+		if (mention !== undefined)
+			out.push([RunKind.mention, `@${names.get(mention)?.name ?? "unknown"}`, mention])
 		else if (url !== undefined) out.push([RunKind.link, url, url])
 		else if (code !== undefined) out.push([RunKind.code, code])
 		else if (strong !== undefined) out.push([RunKind.strong, strong])
@@ -57,7 +58,11 @@ export const parse = (content: string, names: ReadonlyMap<string, Person>): Read
 				if (item === null) plain.push(line)
 				else {
 					flush()
-					blocks.push([BlockKind.item, runs(item[2] ?? "", names), item[1] === "-" ? "•" : (item[1] ?? "")])
+					blocks.push([
+						BlockKind.item,
+						runs(item[2] ?? "", names),
+						item[1] === "-" ? "•" : (item[1] ?? ""),
+					])
 				}
 			}
 			flush()

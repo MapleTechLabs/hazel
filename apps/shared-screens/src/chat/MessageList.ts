@@ -167,7 +167,9 @@ export const MessageList = Hazel.component({
 							.children(...model.entries.map((item) => entry(h, item))),
 			h.popover
 				.open(model.profile !== null)
-				.anchorTo(model.profile === null ? undefined : { key: model.profile.id, run: model.profile.run })
+				.anchorTo(
+					model.profile === null ? undefined : { key: model.profile.id, run: model.profile.run },
+				)
 				.on("dismiss", MessageListMessage.DismissedProfile())
 				.children(h.text.children(model.profile?.userId ?? "")),
 			model.isMember

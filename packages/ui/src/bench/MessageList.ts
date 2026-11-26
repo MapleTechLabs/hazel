@@ -44,40 +44,50 @@ const runNode = <Msg>(h: H<Msg>, run: Run) =>
 
 /** A message's subtree for A and B: slots, rich text blocks and runs, reactions, attachments. */
 export const rowTree = <Msg>(h: H<Msg>, row: Row, grouped: boolean) =>
-	h.message.set({ grouped: grouped ? true : undefined }).children(
-		grouped ? null : h.slot.set({ name: "avatar" }).children(h.avatar.initials(row.initials ?? "")),
-		grouped ? null : h.slot.set({ name: "author" }).children(h.text.strong().children(row.author ?? "")),
-		h.slot.set({ name: "time" }).children(h.text.role("caption").tone("muted").children(row.time)),
-		h.slot.set({ name: "body" }).children(
-			h.richText.children(
-				...row.body.map((block) =>
-					block[0] === BlockKind.code
-						? h.codeBlock.set({ language: block[2] }).children(block[1])
-						: h.paragraph
-								.set({ marker: block[0] === BlockKind.item ? block[2] : undefined })
-								.children(...block[1].map((run) => runNode(h, run))),
-				),
-			),
-		),
-		row.files === undefined
-			? null
-			: h.slot
-					.set({ name: "attachments" })
-					.children(
-						h.attachmentGrid.children(
-							...row.files.map(({ width, height }) => h.image.set({ width, height })),
-						),
-					),
-		row.reactions === undefined
-			? null
-			: h.slot.set({ name: "reactions" }).children(
-					h.reactionBar.children(
-						...row.reactions.map(({ emoji, count, mine }) =>
-							h.reaction.key(emoji).set({ emoji, count, mine: mine ? true : undefined }),
+	h.message
+		.set({ grouped: grouped ? true : undefined })
+		.children(
+			grouped ? null : h.slot.set({ name: "avatar" }).children(h.avatar.initials(row.initials ?? "")),
+			grouped
+				? null
+				: h.slot.set({ name: "author" }).children(h.text.strong().children(row.author ?? "")),
+			h.slot.set({ name: "time" }).children(h.text.role("caption").tone("muted").children(row.time)),
+			h.slot
+				.set({ name: "body" })
+				.children(
+					h.richText.children(
+						...row.body.map((block) =>
+							block[0] === BlockKind.code
+								? h.codeBlock.set({ language: block[2] }).children(block[1])
+								: h.paragraph
+										.set({ marker: block[0] === BlockKind.item ? block[2] : undefined })
+										.children(...block[1].map((run) => runNode(h, run))),
 						),
 					),
 				),
-	)
+			row.files === undefined
+				? null
+				: h.slot
+						.set({ name: "attachments" })
+						.children(
+							h.attachmentGrid.children(
+								...row.files.map(({ width, height }) => h.image.set({ width, height })),
+							),
+						),
+			row.reactions === undefined
+				? null
+				: h.slot
+						.set({ name: "reactions" })
+						.children(
+							h.reactionBar.children(
+								...row.reactions.map(({ emoji, count, mine }) =>
+									h.reaction
+										.key(emoji)
+										.set({ emoji, count, mine: mine ? true : undefined }),
+								),
+							),
+						),
+		)
 
 export const MessageRow = Chat.component({
 	name: "MessageRow",
@@ -109,7 +119,12 @@ const divider = <Msg>(h: H<Msg>, entry: Entry) =>
 const toggleThumb = (message: Message): Message => {
 	const thumb = message.reactions.find((r) => r.emoji === "👍")
 	const others = message.reactions.filter((r) => r !== thumb)
-	const users = thumb === undefined ? [me.id] : thumb.users.includes(me.id) ? thumb.users.filter((u) => u !== me.id) : [...thumb.users, me.id]
+	const users =
+		thumb === undefined
+			? [me.id]
+			: thumb.users.includes(me.id)
+				? thumb.users.filter((u) => u !== me.id)
+				: [...thumb.users, me.id]
 	return { ...message, reactions: users.length === 0 ? others : [...others, { emoji: "👍", users }] }
 }
 
@@ -160,7 +175,10 @@ export const MessageList = Chat.component({
 			if (cmd.kind === "new") {
 				return $.evolve({
 					next: (n) => n + 1,
-					messages: (loaded) => [...loaded, messages($.model.next, $.model.next + 1, $.props.total)[0]],
+					messages: (loaded) => [
+						...loaded,
+						messages($.model.next, $.model.next + 1, $.props.total)[0],
+					],
 				})
 			}
 			if (cmd.kind === "react") {
@@ -199,7 +217,10 @@ export const MessageList = Chat.component({
 						? divider(h, entry)
 						: option === "C" || option === "S"
 							? leaf(h, entry.key, entry.row, entry.grouped, option === "S")
-							: MessageRow(h, { key: entry.key, props: { row: entry.row, grouped: entry.grouped } }),
+							: MessageRow(h, {
+									key: entry.key,
+									props: { row: entry.row, grouped: entry.grouped },
+								}),
 				),
 			)
 	},

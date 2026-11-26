@@ -14,9 +14,7 @@
 				"children": [
 					{
 						"tag": "text",
-						"children": [
-							"Fallback drawn"
-						]
+						"children": ["Fallback drawn"]
 					}
 				]
 			}

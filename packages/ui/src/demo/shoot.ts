@@ -18,12 +18,19 @@ declare const require: { resolve: (id: string, options: { paths: Array<string> }
 const here = new URL(".", import.meta.url).pathname
 const built = await Bun.build({ entrypoints: [`${here}web-entry.ts`], target: "browser", format: "iife" })
 if (!built.success) throw new AggregateError(built.logs, "demo build failed")
-const script = await built.outputs.find((output) => output.path.endsWith(".js"))!.text()
+const output = (extension: string) => {
+	const found = built.outputs.find((each) => each.path.endsWith(extension))
+	if (found === undefined) throw new Error(`demo build has no ${extension} output`)
+	return found.text()
+}
+const script = await output(".js")
 // The generated tokens.css (imported by the entry), and Inter from the web app's files: a host asset.
-const css = await built.outputs.find((output) => output.path.endsWith(".css"))!.text()
-const fontDir = require.resolve("@fontsource/inter/package.json", {
-	paths: [`${here}../../../../apps/web-foldkit`],
-}).replace(/package\.json$/, "files/")
+const css = await output(".css")
+const fontDir = require
+	.resolve("@fontsource/inter/package.json", {
+		paths: [`${here}../../../../apps/web-foldkit`],
+	})
+	.replace(/package\.json$/, "files/")
 const fonts = [400, 500, 600]
 	.map((weight) => {
 		const data = readFileSync(`${fontDir}inter-latin-${weight}-normal.woff2`).toString("base64")
@@ -35,7 +42,9 @@ const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 402, height: 874 }, deviceScaleFactor: 2 })
 const errors: Array<string> = []
 page.on("pageerror", (error) => errors.push(String(error)))
-await page.setContent('<!doctype html><html><body style="margin:0; background: var(--hz-color-sidebar)"><div id="app"></div></body></html>')
+await page.setContent(
+	'<!doctype html><html><body style="margin:0; background: var(--hz-color-sidebar)"><div id="app"></div></body></html>',
+)
 await page.addStyleTag({ content: `${fonts}\n${css}` })
 await page.addScriptTag({ content: script })
 await page.evaluate(() => document.fonts.ready.then(() => undefined))
@@ -45,16 +54,18 @@ await page.waitForSelector("[data-hz=ext][data-ext=ActivityChart][data-drawn] ca
 await page.click("[data-hz=item] >> text=engineering")
 await page.waitForSelector("[data-hz=item][data-selected] > button[data-hz-part=control]")
 const report = await page.evaluate(() => ({
-	chartDrawn: document.querySelector("[data-ext=ActivityChart]")!.hasAttribute("data-drawn"),
+	chartDrawn: document.querySelector("[data-ext=ActivityChart]")?.hasAttribute("data-drawn") ?? false,
 	chartPixels: (() => {
-		const canvas = document.querySelector("[data-ext=ActivityChart] canvas") as HTMLCanvasElement
-		const data = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data
+		const canvas = document.querySelector("[data-ext=ActivityChart] canvas")
+		if (!(canvas instanceof HTMLCanvasElement)) return 0
+		const data = canvas.getContext("2d")?.getImageData(0, 0, canvas.width, canvas.height).data ?? []
 		let painted = 0
-		for (let i = 3; i < data.length; i += 4) if (data[i]! > 0) painted++
+		for (let i = 3; i < data.length; i += 4) if ((data[i] ?? 0) > 0) painted++
 		return painted
 	})(),
-	meshFallback: document.querySelector("[data-ext=MeshBackground] [data-hz=slot][data-name=fallback]")?.textContent,
-	meshDrawn: document.querySelector("[data-ext=MeshBackground]")!.hasAttribute("data-drawn"),
+	meshFallback: document.querySelector("[data-ext=MeshBackground] [data-hz=slot][data-name=fallback]")
+		?.textContent,
+	meshDrawn: document.querySelector("[data-ext=MeshBackground]")?.hasAttribute("data-drawn") ?? false,
 	links: document.querySelectorAll("[data-hz=item] > a").length,
 	buttons: [...document.querySelectorAll("[data-hz=item] > button")].map((node) => node.textContent),
 }))

@@ -103,12 +103,25 @@ const tones: ReadonlyArray<BadgeTone> = ["neutral", "accent", "success", "warnin
 const badgeSizes: ReadonlyArray<BadgeSize> = ["regular", "small"]
 
 export const badges: ReadonlyArray<BadgeSpec> = badgeSizes.flatMap((size) => [
-	...tones.map((tone) => ({ id: `badge-${tone}-${size}`, tone, style: "solid" as const, size, label: "Beta" })),
+	...tones.map((tone) => ({
+		id: `badge-${tone}-${size}`,
+		tone,
+		style: "solid" as const,
+		size,
+		label: "Beta",
+	})),
 	{ id: `badge-neutral-outline-${size}`, tone: "neutral", style: "outline", size, label: "Draft" },
 	{ id: `badge-success-outline-${size}`, tone: "success", style: "outline", size, label: "Met" },
 	{ id: `badge-neutral-quiet-${size}`, tone: "neutral", style: "quiet", size, label: "Paused" },
 	{ id: `badge-accent-${size}-pill`, tone: "accent", style: "solid", size, pill: true, label: "New" },
-	{ id: `badge-neutral-outline-${size}-pill`, tone: "neutral", style: "outline", size, pill: true, label: "12" },
+	{
+		id: `badge-neutral-outline-${size}-pill`,
+		tone: "neutral",
+		style: "outline",
+		size,
+		pill: true,
+		label: "12",
+	},
 ])
 
 /** Every specimen id, in page order: the shot script walks this list on both sides. */

@@ -14,9 +14,7 @@
 					"emphasized": true,
 					"href": "#"
 				},
-				"events": [
-					"press"
-				],
+				"events": ["press"],
 				"slots": [
 					{
 						"name": "leading",

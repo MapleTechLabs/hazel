@@ -1,6 +1,6 @@
 // Owned by lane A1 (`docs/hazel-ui.md`, "Phase 2: lanes"). The G1 renderer, moved here in C0.
 import { mountExtension } from "../../extensions.ts"
-import { definePrimitive, part, type Primitive } from "../define.ts"
+import { definePrimitive, part, type Plain, type Primitive } from "../define.ts"
 
 export const primitive = definePrimitive("ext", ({ document, tag, outer }) => {
 	const node = outer("div")
@@ -10,7 +10,7 @@ export const primitive = definePrimitive("ext", ({ document, tag, outer }) => {
 	surface.hidden = true
 	node.append(surface, content)
 	let ext: string | undefined
-	let args: unknown
+	let args: Plain | undefined
 	const primitive: Primitive = {
 		tag,
 		outer: node,
@@ -22,9 +22,12 @@ export const primitive = definePrimitive("ext", ({ document, tag, outer }) => {
 			if (ext !== undefined) node.dataset.ext = ext
 			// Props arrive one at a time after create: draw once both name and args are known.
 			if (ext === undefined || args === undefined) return
-			const send = (event: string, payload: unknown) => {
-				const handler = primitive.events?.handlers[event]
-				return handler !== undefined && primitive.events!.dispatch(event, handler, payload)
+			const send = (event: string, payload: Plain) => {
+				const events = primitive.events
+				const handler = events?.handlers[event]
+				return (
+					handler !== undefined && events !== undefined && events.dispatch(event, handler, payload)
+				)
 			}
 			// Drawn here if this platform registered it; else the fallback slot shows.
 			if (mountExtension(surface, ext, args, send)) {

@@ -99,6 +99,8 @@ describe("option B windowing", () => {
 		const ops = count(slid.batches.flatMap((b) => b.ops))
 		const after = bench.listChildren()
 		expect(after).not.toEqual(before)
-		console.log(`G7_NODE option B slide by ~60 entries: ${slid.ops} ops, ${slid.json.length} B ${JSON.stringify(ops)}`)
+		console.log(
+			`G7_NODE option B slide by ~60 entries: ${slid.ops} ops, ${slid.json.length} B ${JSON.stringify(ops)}`,
+		)
 	})
 })

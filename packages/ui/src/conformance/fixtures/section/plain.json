@@ -13,9 +13,7 @@
 					"title": "general",
 					"href": "#"
 				},
-				"events": [
-					"press"
-				]
+				"events": ["press"]
 			},
 			{
 				"tag": "item",
@@ -24,9 +22,7 @@
 					"title": "design",
 					"selected": true
 				},
-				"events": [
-					"press"
-				]
+				"events": ["press"]
 			},
 			{
 				"tag": "item",
@@ -36,9 +32,7 @@
 					"href": "#",
 					"badge": 3
 				},
-				"events": [
-					"press"
-				]
+				"events": ["press"]
 			}
 		]
 	},

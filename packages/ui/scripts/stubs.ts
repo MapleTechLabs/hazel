@@ -25,7 +25,9 @@ const webFolders = {
 export const webPath = (key: TagKey) =>
 	key === "action" ? "structure/action.ts" : `${webFolders[tags[key].group]}/${key}.ts`
 
-const webStub = (key: TagKey) => `// Owned by lane ${tags[key].web} (\`docs/hazel-ui.md\`, "Phase 2: lanes"). Phase 1.5 stub: draws a
+const webStub = (
+	key: TagKey,
+) => `// Owned by lane ${tags[key].web} (\`docs/hazel-ui.md\`, "Phase 2: lanes"). Phase 1.5 stub: draws a
 // placeholder naming the lane; the lane replaces it with the renderer (\`definePrimitive\`).
 import { stubPrimitive } from "../define.ts"
 

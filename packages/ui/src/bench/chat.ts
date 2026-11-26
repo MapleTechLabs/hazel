@@ -42,7 +42,7 @@ const set = <B extends View.ElementBuilder<any, any, any, any>>(
 	builder: B,
 	props: Readonly<Record<string, Json | undefined>>,
 ): B => {
-	const next: Record<string, unknown> = { ...builder.props }
+	const next = { ...builder.props }
 	for (const key in props) {
 		const value = props[key]
 		if (value === undefined) delete next[key]
@@ -115,7 +115,7 @@ export interface ChatElements extends View.Elements {
 
 export type H<Msg> = View.WithTags<Msg, unknown, ChatElements>
 
-const tags: Readonly<Record<string, View.ElementBuilder<any, any, any, any>>> = {
+const tags = {
 	...Hazel.vocabulary.tags,
 	list: View.shorthand(new ChatContainer(chatTag.list)),
 	listDivider: new ChatContainer(chatTag.listDivider),

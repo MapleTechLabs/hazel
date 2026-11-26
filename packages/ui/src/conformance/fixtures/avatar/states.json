@@ -6,33 +6,21 @@
 			"name": "Ada Lovelace",
 			"initials": "AL"
 		},
-		"events": [
-			"press"
-		]
+		"events": ["press"]
 	},
 	"frame": "inline",
 	"axes": [
 		{
 			"prop": "presence",
-			"values": [
-				"online",
-				"away",
-				"busy",
-				"offline"
-			]
+			"values": ["online", "away", "busy", "offline"]
 		},
 		{
 			"prop": "size",
-			"values": [
-				"large"
-			]
+			"values": ["large"]
 		},
 		{
 			"prop": "mark",
-			"values": [
-				"slack",
-				"discord"
-			]
+			"values": ["slack", "discord"]
 		}
 	]
 }

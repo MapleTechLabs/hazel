@@ -3,11 +3,15 @@
  * parent for the renderer's children; props later only change attributes, text and internal swaps.
  * Each renderer is a file `primitives/<group>/<tag>.ts` exporting `primitive` (the glob registry).
  */
+import type { Json } from "../../native/wire.ts"
 import { tags, type TagKey } from "../../vocabulary/spec.ts"
+
+/** A prop value or event payload: plain data, as the vocabulary's schemas define it. */
+export type Plain = Json
 
 export interface Events {
 	readonly handlers: Readonly<Record<string, unknown>>
-	readonly dispatch: (event: string, handler: any, payload: unknown) => boolean
+	readonly dispatch: (event: string, handler: any, payload: Plain) => boolean
 }
 
 /** One `hz:*` element: its outer node, the node its children go in, and how it applies a prop. */
@@ -15,7 +19,7 @@ export interface Primitive {
 	readonly tag: string
 	readonly outer: HTMLElement
 	readonly content: HTMLElement
-	readonly set: (name: string, value: unknown) => void
+	readonly set: (name: string, value: Plain) => void
 	events: Events | undefined
 }
 

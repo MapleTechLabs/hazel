@@ -24,8 +24,11 @@ const createTextField = (document: Document, outer: HTMLElement): Primitive => {
 
 	let field = Revisions.initial
 	const send = (event: "change" | "submit", payload: Revisions.Change) => {
-		const handler = primitive.events?.handlers[event]
-		return handler !== undefined && primitive.events!.dispatch(event, handler, payload)
+		const events = primitive.events
+		const handler = events?.handlers[event]
+		return (
+			handler !== undefined && events !== undefined && events.dispatch(event, handler, { ...payload })
+		)
 	}
 	input.addEventListener("input", () => {
 		const next = Revisions.edit(field, input.value)

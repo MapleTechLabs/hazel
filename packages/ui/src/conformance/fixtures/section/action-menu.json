@@ -27,9 +27,7 @@
 						}
 					]
 				},
-				"events": [
-					"select"
-				],
+				"events": ["select"],
 				"children": [
 					{
 						"tag": "icon",
@@ -46,9 +44,7 @@
 					"title": "roadmap",
 					"href": "#"
 				},
-				"events": [
-					"press"
-				],
+				"events": ["press"],
 				"slots": [
 					{
 						"name": "leading",

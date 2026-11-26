@@ -7,29 +7,21 @@
 			"title": "general",
 			"href": "#"
 		},
-		"events": [
-			"press"
-		]
+		"events": ["press"]
 	},
 	"frame": "sidebar",
 	"axes": [
 		{
 			"prop": "selected",
-			"values": [
-				true
-			]
+			"values": [true]
 		},
 		{
 			"prop": "badge",
-			"values": [
-				12
-			]
+			"values": [12]
 		},
 		{
 			"prop": "subtitle",
-			"values": [
-				"Last message preview"
-			]
+			"values": ["Last message preview"]
 		}
 	]
 }

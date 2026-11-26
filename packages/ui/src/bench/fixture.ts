@@ -22,7 +22,14 @@ export const people: ReadonlyArray<Person> = [
 	{ id: "u6", name: "Barbara Liskov" },
 	{ id: "u7", name: "Dennis Ritchie" },
 ]
-export const me = people[0]!
+/** `list[index]` cycled, for fixed non-empty fixture lists. */
+const pick = <A>(list: ReadonlyArray<A>, index: number): A => {
+	const found = list[index % list.length]
+	if (found === undefined) throw new Error("pick from an empty fixture list")
+	return found
+}
+
+export const me = pick(people, 0)
 
 export interface Reaction {
 	readonly emoji: string
@@ -80,35 +87,37 @@ const pad = (n: number) => n.toString().padStart(6, "0")
 /** Message `index` of the channel (0 is the oldest). Pure, so pages and the new-message path agree. */
 export const message = (index: number, count: number): Message => {
 	const kind = index % 11
-	const other = people[(index * 3 + 1) % people.length]!
+	const other = pick(people, index * 3 + 1)
 	const content =
 		kind === 3
-			? LONG[index % LONG.length]!
+			? pick(LONG, index)
 			: kind === 6
-				? CODE[index % CODE.length]!
+				? pick(CODE, index)
 				: kind === 8
-					? LISTS[index % LISTS.length]!
+					? pick(LISTS, index)
 					: kind === 9
 						? `@[userId:${other.id}] ${SHORT[index % SHORT.length]}`
 						: kind === 5
-							? LINKS[index % LINKS.length]!
+							? pick(LINKS, index)
 							: `${SHORT[index % SHORT.length]} (${index})`
 	const reactions: Array<Reaction> = []
 	if (index % 4 === 0) {
 		for (let r = 0; r < 1 + (index % 3); r++) {
 			reactions.push({
-				emoji: EMOJI[(index + r) % EMOJI.length]!,
-				users: [people[(index + r) % people.length]!.id],
+				emoji: pick(EMOJI, index + r),
+				users: [pick(people, index + r).id],
 			})
 		}
 	}
 	const attachments: Array<Attachment> =
-		index % 13 === 7 ? [{ id: `a${pad(index)}`, name: `screenshot-${index}.png`, width: 1170, height: 780 }] : []
+		index % 13 === 7
+			? [{ id: `a${pad(index)}`, name: `screenshot-${index}.png`, width: 1170, height: 780 }]
+			: []
 	// Runs of five from one author a few minutes apart, so grouping has something to group.
 	const shift = index % 5 === 0 ? 0 : 2 * MINUTE
 	return {
 		id: `m${pad(index)}`,
-		authorId: people[(Math.floor(index / 5) * 3) % people.length]!.id,
+		authorId: pick(people, Math.floor(index / 5) * 3).id,
 		content,
 		createdAt: BASE_TIME - (count - index) * 4 * MINUTE - shift,
 		reactions,

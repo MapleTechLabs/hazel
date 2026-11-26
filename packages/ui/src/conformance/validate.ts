@@ -16,7 +16,8 @@ export const propProblems = (key: TagKey, name: string, value: Json): ReadonlyAr
 	const props: Readonly<Record<string, PropSpec>> = tags[key].props
 	const spec = props[name]
 	if (spec === undefined) return [`hz:${key} has no prop ${name}`]
-	if (isDefault(spec, value)) return [`hz:${key}.${name} is its default (${JSON.stringify(value)}): leave it out`]
+	if (isDefault(spec, value))
+		return [`hz:${key}.${name} is its default (${JSON.stringify(value)}): leave it out`]
 	// SAFETY: spec schemas are plain data codecs with no decoding services (`spec.ts` builds them so).
 	const schema = spec.schema as Schema.Codec<unknown>
 	const decoded = Schema.decodeUnknownExit(schema)(value)
@@ -54,7 +55,8 @@ export const nodesOf = (root: FixtureNode): ReadonlyArray<FixtureNode> => {
 	const out: Array<FixtureNode> = []
 	const visit = (node: FixtureNode) => {
 		out.push(node)
-		for (const slot of node.slots ?? []) for (const c of slot.children) if (typeof c !== "string") visit(c)
+		for (const slot of node.slots ?? [])
+			for (const c of slot.children) if (typeof c !== "string") visit(c)
 		for (const c of node.children ?? []) if (typeof c !== "string") visit(c)
 	}
 	visit(root)
@@ -70,15 +72,16 @@ export const coverageGaps = (key: TagKey, own: ReadonlyArray<FixtureCase>): Read
 	for (const c of own)
 		for (const node of nodesOf(c.root))
 			if (node.tag === key)
-				for (const [name, value] of Object.entries(node.props ?? {})) seen.add(`${name}=${String(value)}`)
+				for (const [name, value] of Object.entries(node.props ?? {}))
+					seen.add(`${name}=${String(value)}`)
 	const wanted: Array<string> = []
 	const props: Readonly<Record<string, PropSpec>> = tags[key].props
 	for (const [name, spec] of Object.entries(props)) {
 		if (spec.kind === "flag") wanted.push(`${name}=true`)
 		if (spec.kind === "option") {
-			const literals: unknown = Reflect.get(spec.schema, "literals")
-			if (Array.isArray(literals))
-				for (const value of literals) if (value !== spec.default) wanted.push(`${name}=${String(value)}`)
+			const schema = spec.schema
+			const literals = "literals" in schema && Array.isArray(schema.literals) ? schema.literals : []
+			for (const value of literals) if (value !== spec.default) wanted.push(`${name}=${String(value)}`)
 		}
 	}
 	return wanted.filter((entry) => !seen.has(entry))

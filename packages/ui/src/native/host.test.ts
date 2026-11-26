@@ -37,6 +37,7 @@ const record = (
 }
 
 /** The host must still send exactly the batches of the wire golden it was recorded from (C2). */
+// SAFETY: the golden is written by `scripts/wire-goldens.ts` in this shape.
 const golden = JSON.parse(
 	readFileSync(resolve(import.meta.dirname, "__goldens__/host-session.json"), "utf8"),
 ) as {

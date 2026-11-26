@@ -42,7 +42,9 @@ export interface FixtureNode {
 	readonly children?: ReadonlyArray<FixtureChild>
 }
 
-const FixtureChild: Schema.Codec<FixtureChild> = Schema.suspend(() => Schema.Union([Schema.String, FixtureNode]))
+const FixtureChild: Schema.Codec<FixtureChild> = Schema.suspend(() =>
+	Schema.Union([Schema.String, FixtureNode]),
+)
 
 export const FixtureSlot: Schema.Codec<FixtureSlot> = Schema.Struct({
 	name: Schema.String,
@@ -109,7 +111,7 @@ const valueLabel = (value: Json): string =>
 	value === null ? "none" : typeof value === "string" ? value : JSON.stringify(value)
 
 const withProps = (root: FixtureNode, changes: { readonly [name: string]: Json }): FixtureNode => {
-	const props: Record<string, Json> = { ...root.props }
+	const props = { ...root.props }
 	for (const [name, value] of Object.entries(changes)) {
 		if (value === null) delete props[name]
 		else props[name] = value
@@ -133,7 +135,11 @@ export const expand = (tag: string, name: string, fixture: Fixture): ReadonlyArr
 		make(base, fixture.root, fixture.kit),
 		...(fixture.axes ?? []).flatMap((axis) =>
 			axis.values.map((value) =>
-				make(`${base}.${axis.prop}-${valueLabel(value)}`, withProps(fixture.root, { [axis.prop]: value }), undefined),
+				make(
+					`${base}.${axis.prop}-${valueLabel(value)}`,
+					withProps(fixture.root, { [axis.prop]: value }),
+					undefined,
+				),
 			),
 		),
 		...(fixture.cases ?? []).map((named) =>

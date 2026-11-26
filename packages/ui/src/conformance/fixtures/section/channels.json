@@ -13,9 +13,7 @@
 					"title": "general",
 					"href": "#"
 				},
-				"events": [
-					"press"
-				],
+				"events": ["press"],
 				"slots": [
 					{
 						"name": "leading",
@@ -37,9 +35,7 @@
 					"title": "design",
 					"selected": true
 				},
-				"events": [
-					"press"
-				],
+				"events": ["press"],
 				"slots": [
 					{
 						"name": "leading",
@@ -62,9 +58,7 @@
 					"emphasized": true,
 					"href": "#"
 				},
-				"events": [
-					"press"
-				],
+				"events": ["press"],
 				"slots": [
 					{
 						"name": "leading",
@@ -86,9 +80,7 @@
 					"title": "a-channel-name-long-enough-to-truncate",
 					"href": "#"
 				},
-				"events": [
-					"press"
-				],
+				"events": ["press"],
 				"slots": [
 					{
 						"name": "leading",

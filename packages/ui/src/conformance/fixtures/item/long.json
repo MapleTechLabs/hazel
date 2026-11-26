@@ -13,9 +13,7 @@
 					"title": "a-channel-name-long-enough-to-truncate",
 					"href": "#"
 				},
-				"events": [
-					"press"
-				],
+				"events": ["press"],
 				"slots": [
 					{
 						"name": "leading",

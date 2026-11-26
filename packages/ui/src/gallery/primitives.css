@@ -5,7 +5,9 @@
 
 .case-label {
 	margin: 0 0 6px;
-	font: 11px ui-monospace, monospace;
+	font:
+		11px ui-monospace,
+		monospace;
 	color: var(--hz-color-muted-fg, #888);
 }
 
@@ -20,7 +22,9 @@
 
 .tag-title {
 	margin: 32px 0 12px;
-	font: 600 14px system-ui, sans-serif;
+	font:
+		600 14px system-ui,
+		sans-serif;
 	color: var(--hz-color-fg, inherit);
 }
 

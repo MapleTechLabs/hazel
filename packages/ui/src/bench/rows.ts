@@ -17,7 +17,11 @@ export interface Row {
 	/** Time, `HH:MM`. */
 	readonly time: string
 	readonly body: ReadonlyArray<Block>
-	readonly reactions?: ReadonlyArray<{ readonly emoji: string; readonly count: number; readonly mine: boolean }>
+	readonly reactions?: ReadonlyArray<{
+		readonly emoji: string
+		readonly count: number
+		readonly mine: boolean
+	}>
 	/** Image attachments by pixel size. */
 	readonly files?: ReadonlyArray<{
 		readonly id: string
@@ -94,7 +98,8 @@ export const entries = (messages: ReadonlyArray<Message>, unreadAfter?: string):
 	let previous: Message | undefined
 	for (const message of messages) {
 		const newDay = previous === undefined || day(previous.createdAt) !== day(message.createdAt)
-		if (newDay) out.push({ kind: "date", key: `d${day(message.createdAt)}`, label: dayLabel(message.createdAt) })
+		if (newDay)
+			out.push({ kind: "date", key: `d${day(message.createdAt)}`, label: dayLabel(message.createdAt) })
 		const unread = previous !== undefined && previous.id === unreadAfter
 		if (unread) out.push({ kind: "unread", key: "unread" })
 		const grouped =

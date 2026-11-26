@@ -17,12 +17,12 @@ anything here is a contract proposal. A lane starts from `LANES.md`.
    `Clipboard` (interfaces); the GIF picker is a web-only extension; `list.loading`'s skeleton is
    renderer-owned. `GAPS.md` is the resolved ledger.
 
-| Contract | Source of truth |
-| --- | --- |
-| C0 scaffold | `src/web/primitives/<group>/`, `HazelUI/Sources/HazelUI/{Wire,Tree,Runtime,Theme,Extensions,Primitives/<Group>}/`, `src/style/recipes/`, `src/custom/` |
-| C1 vocabulary | `src/vocabulary/spec.ts` (tags), `options.ts` (closed sets), `content.ts` (structured props), `Hazel.ts` (builders) |
-| C2 wire | `src/native/wire.ts`, mirrored by `HazelUI/.../Wire/Wire.swift`; goldens in `src/native/__goldens__/` |
-| C3 style | `src/style/schema.ts`, `src/style/recipe.ts`, `scripts/generate.ts` |
+| Contract      | Source of truth                                                                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| C0 scaffold   | `src/web/primitives/<group>/`, `HazelUI/Sources/HazelUI/{Wire,Tree,Runtime,Theme,Extensions,Primitives/<Group>}/`, `src/style/recipes/`, `src/custom/` |
+| C1 vocabulary | `src/vocabulary/spec.ts` (tags), `options.ts` (closed sets), `content.ts` (structured props), `Hazel.ts` (builders)                                    |
+| C2 wire       | `src/native/wire.ts`, mirrored by `HazelUI/.../Wire/Wire.swift`; goldens in `src/native/__goldens__/`                                                  |
+| C3 style      | `src/style/schema.ts`, `src/style/recipe.ts`, `scripts/generate.ts`                                                                                    |
 
 ## C0: where each lane writes
 
@@ -59,55 +59,55 @@ throw; `h.el` is `never`; `hazel/no-raw-escape` closes the rest in `apps/shared-
 Commands (`Hazel.Host`: `focus`, `blur`, `scrollTo`, `measure`, `select`) return Effects; the web host
 implements `focus`/`blur`, the rest die with `NotImplemented` until lanes A2, A3, A4 and B.
 
-| Tag | Web / iOS | Children | Props | Slots | Events | Commands |
-| --- | --- | --- | --- | --- | --- | --- |
-| `stack` | A1 / S1 | elements | axis (default `vertical`), density (default `regular`), align (default `stretch`) | - | - | - |
-| `spacer` | A1 / S1 | none | - | - | - | - |
-| `scroll` | A1 / S1 | elements | axis (default `vertical`) | - | - | scrollTo |
-| `frame` | A1 / S1 | elements | surface (default `card`) | - | - | - |
-| `divider` | A1 / S1 | none | - | - | - | - |
-| `list` | A4 / S5 | elements | anchor (default `start`), stickToBottom?, loading? (skeleton, renderer-owned), loadingStart?, loadingEnd?, reorderable? | overlay | reachStart, reachEnd, move | scrollTo |
-| `listDivider` | A4 / S5 | none | kind (default `date`), label | - | - | - |
-| `text` | A1 / S1 | text | role (default `body`), tone (default `default`), strong?, numeric?, truncate? | - | - | - |
-| `heading` | A1 / S1 | text | level (default `2`) | - | - | - |
-| `icon` | A1 / S1 | none | name (data) | - | - | - |
-| `image` | A1 / S1 | none | src, alt, width, height | - | press | - |
-| `avatar` | A1 / S1 | none | name, initials, src, presence (default `none`), size (default `regular`), mark (default `none`) | - | press | - |
-| `avatarStack` | A1 / S1 | elements | overflow | - | - | - |
-| `badge` | A1 / S1 | none | label, tone (default `neutral`), style (default `solid`), size (default `regular`), pill? | - | - | - |
-| `progress` | A1 / S1 | none | value (0 to 1), indeterminate?, label | - | - | - |
-| `emptyState` | A1 / S1 | none | title, description, icon (data), illustration (default `none`) | action | - | - |
-| `richText` | A1 / S1 | none | blocks (data) | - | pressMention (with `run`), pressLink | - |
-| `message` | A5 / S5 | none | row (data), grouped?, pinned?, highlighted?, entering?, pending?, failed? | - | press, longPress, action, pressAuthor, pressReaction, addReaction, pressMention, pressLink, pressAttachment, pressReply, pressThread, retry | - |
-| `reactionBar` | A5 / S5 | none | reactions (data), addable? | - | pressReaction, add | - |
-| `attachmentGrid` | A5 / S5 | none | attachments (data), removable? | - | press, remove | - |
-| `embed` | A5 / S5 | none | embed (data) | - | press | - |
-| `typingIndicator` | A5 / S5 | none | names (data) | - | - | - |
-| `button` | A2 / S2 | none | label, icon (data), variant (default `primary`), size (default `regular`), iconOnly?, circle?, disabled?, loading? | - | press | focus |
-| `link` | A2 / S2 | none | label, href | - | press | - |
-| `textField` | A2 / S2 | none | label, placeholder, description, value (revisioned), error, disabled?, readOnly?, required?, monospace? | - | change, submit, focus, blur | focus, blur, select |
-| `textArea` | A2 / S2 | none | label, placeholder, description, value (revisioned), error, disabled? | - | change, submit, focus, blur | focus, blur, select |
-| `toggle` | A2 / S2 | none | label, description, checked?, disabled? | - | change | - |
-| `select` | A2 / S2 | none | label, placeholder, options (data), value, disabled? | - | change | - |
-| `searchField` | A2 / S2 | none | placeholder, value (revisioned) | - | change, submit | focus, blur |
-| `composer` | A2 / S2 | none | placeholder, value (revisioned), disabled?, canSend? | above, actions | change, submit, focus, blur, trigger, key, files | focus, blur, select |
-| `menu` | A3 / S3 | none | label, entries (data) | trigger | select | - |
-| `contextMenu` | A3 / S3 | elements | entries (data) | - | select | - |
-| `sheet` | A3 / S3 | elements | open?, title | - | dismiss | - |
-| `dialog` | A3 / S3 | elements | open?, title, description, destructive? | actions | dismiss | - |
-| `popover` | A3 / S3 | elements | open?, anchorTo (data: `{key, run}`) | anchor | dismiss | - |
-| `toast` | A3 / S3 | none | open?, tone (default `neutral`), title, description | action | dismiss | - |
-| `tooltip` | A3 / S3 | elements | label | - | - | - |
-| `emojiPicker` | A3 / S3 | none | open? | - | select, dismiss | - |
-| `screen` | A4 / S4 | elements | title, back? | toolbar | back | - |
-| `navigation` | A4 / S4 | elements | - | - | pop | - |
-| `tabBar` | A4 / S4 | elements | tabs (data), selected | - | change | - |
-| `splitView` | A4 / S4 | elements | - | sidebar | - | - |
-| `section` | A4 / S4 | elements | title, collapsible?, collapsed?, reorderable? | - | toggle, move | - |
-| `item` | A4 / S4 | elements | title, subtitle, badge, emphasized?, selected?, disabled?, muted?, nested (default `none`), shortcut (web only), href | leading, trailing | press, longPress | scrollTo |
-| `slot` | A1 / S1 | elements | name | - | - | - |
-| `action` | A4 / S4 | elements | label, entries (data) | - | press, select | - |
-| `ext` | A1 / S0 | elements | ext, args (data) | fallback | - | - |
+| Tag               | Web / iOS | Children | Props                                                                                                                   | Slots             | Events                                                                                                                                      | Commands            |
+| ----------------- | --------- | -------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `stack`           | A1 / S1   | elements | axis (default `vertical`), density (default `regular`), align (default `stretch`)                                       | -                 | -                                                                                                                                           | -                   |
+| `spacer`          | A1 / S1   | none     | -                                                                                                                       | -                 | -                                                                                                                                           | -                   |
+| `scroll`          | A1 / S1   | elements | axis (default `vertical`)                                                                                               | -                 | -                                                                                                                                           | scrollTo            |
+| `frame`           | A1 / S1   | elements | surface (default `card`)                                                                                                | -                 | -                                                                                                                                           | -                   |
+| `divider`         | A1 / S1   | none     | -                                                                                                                       | -                 | -                                                                                                                                           | -                   |
+| `list`            | A4 / S5   | elements | anchor (default `start`), stickToBottom?, loading? (skeleton, renderer-owned), loadingStart?, loadingEnd?, reorderable? | overlay           | reachStart, reachEnd, move                                                                                                                  | scrollTo            |
+| `listDivider`     | A4 / S5   | none     | kind (default `date`), label                                                                                            | -                 | -                                                                                                                                           | -                   |
+| `text`            | A1 / S1   | text     | role (default `body`), tone (default `default`), strong?, numeric?, truncate?                                           | -                 | -                                                                                                                                           | -                   |
+| `heading`         | A1 / S1   | text     | level (default `2`)                                                                                                     | -                 | -                                                                                                                                           | -                   |
+| `icon`            | A1 / S1   | none     | name (data)                                                                                                             | -                 | -                                                                                                                                           | -                   |
+| `image`           | A1 / S1   | none     | src, alt, width, height                                                                                                 | -                 | press                                                                                                                                       | -                   |
+| `avatar`          | A1 / S1   | none     | name, initials, src, presence (default `none`), size (default `regular`), mark (default `none`)                         | -                 | press                                                                                                                                       | -                   |
+| `avatarStack`     | A1 / S1   | elements | overflow                                                                                                                | -                 | -                                                                                                                                           | -                   |
+| `badge`           | A1 / S1   | none     | label, tone (default `neutral`), style (default `solid`), size (default `regular`), pill?                               | -                 | -                                                                                                                                           | -                   |
+| `progress`        | A1 / S1   | none     | value (0 to 1), indeterminate?, label                                                                                   | -                 | -                                                                                                                                           | -                   |
+| `emptyState`      | A1 / S1   | none     | title, description, icon (data), illustration (default `none`)                                                          | action            | -                                                                                                                                           | -                   |
+| `richText`        | A1 / S1   | none     | blocks (data)                                                                                                           | -                 | pressMention (with `run`), pressLink                                                                                                        | -                   |
+| `message`         | A5 / S5   | none     | row (data), grouped?, pinned?, highlighted?, entering?, pending?, failed?                                               | -                 | press, longPress, action, pressAuthor, pressReaction, addReaction, pressMention, pressLink, pressAttachment, pressReply, pressThread, retry | -                   |
+| `reactionBar`     | A5 / S5   | none     | reactions (data), addable?                                                                                              | -                 | pressReaction, add                                                                                                                          | -                   |
+| `attachmentGrid`  | A5 / S5   | none     | attachments (data), removable?                                                                                          | -                 | press, remove                                                                                                                               | -                   |
+| `embed`           | A5 / S5   | none     | embed (data)                                                                                                            | -                 | press                                                                                                                                       | -                   |
+| `typingIndicator` | A5 / S5   | none     | names (data)                                                                                                            | -                 | -                                                                                                                                           | -                   |
+| `button`          | A2 / S2   | none     | label, icon (data), variant (default `primary`), size (default `regular`), iconOnly?, circle?, disabled?, loading?      | -                 | press                                                                                                                                       | focus               |
+| `link`            | A2 / S2   | none     | label, href                                                                                                             | -                 | press                                                                                                                                       | -                   |
+| `textField`       | A2 / S2   | none     | label, placeholder, description, value (revisioned), error, disabled?, readOnly?, required?, monospace?                 | -                 | change, submit, focus, blur                                                                                                                 | focus, blur, select |
+| `textArea`        | A2 / S2   | none     | label, placeholder, description, value (revisioned), error, disabled?                                                   | -                 | change, submit, focus, blur                                                                                                                 | focus, blur, select |
+| `toggle`          | A2 / S2   | none     | label, description, checked?, disabled?                                                                                 | -                 | change                                                                                                                                      | -                   |
+| `select`          | A2 / S2   | none     | label, placeholder, options (data), value, disabled?                                                                    | -                 | change                                                                                                                                      | -                   |
+| `searchField`     | A2 / S2   | none     | placeholder, value (revisioned)                                                                                         | -                 | change, submit                                                                                                                              | focus, blur         |
+| `composer`        | A2 / S2   | none     | placeholder, value (revisioned), disabled?, canSend?                                                                    | above, actions    | change, submit, focus, blur, trigger, key, files                                                                                            | focus, blur, select |
+| `menu`            | A3 / S3   | none     | label, entries (data)                                                                                                   | trigger           | select                                                                                                                                      | -                   |
+| `contextMenu`     | A3 / S3   | elements | entries (data)                                                                                                          | -                 | select                                                                                                                                      | -                   |
+| `sheet`           | A3 / S3   | elements | open?, title                                                                                                            | -                 | dismiss                                                                                                                                     | -                   |
+| `dialog`          | A3 / S3   | elements | open?, title, description, destructive?                                                                                 | actions           | dismiss                                                                                                                                     | -                   |
+| `popover`         | A3 / S3   | elements | open?, anchorTo (data: `{key, run}`)                                                                                    | anchor            | dismiss                                                                                                                                     | -                   |
+| `toast`           | A3 / S3   | none     | open?, tone (default `neutral`), title, description                                                                     | action            | dismiss                                                                                                                                     | -                   |
+| `tooltip`         | A3 / S3   | elements | label                                                                                                                   | -                 | -                                                                                                                                           | -                   |
+| `emojiPicker`     | A3 / S3   | none     | open?                                                                                                                   | -                 | select, dismiss                                                                                                                             | -                   |
+| `screen`          | A4 / S4   | elements | title, back?                                                                                                            | toolbar           | back                                                                                                                                        | -                   |
+| `navigation`      | A4 / S4   | elements | -                                                                                                                       | -                 | pop                                                                                                                                         | -                   |
+| `tabBar`          | A4 / S4   | elements | tabs (data), selected                                                                                                   | -                 | change                                                                                                                                      | -                   |
+| `splitView`       | A4 / S4   | elements | -                                                                                                                       | sidebar           | -                                                                                                                                           | -                   |
+| `section`         | A4 / S4   | elements | title, collapsible?, collapsed?, reorderable?                                                                           | -                 | toggle, move                                                                                                                                | -                   |
+| `item`            | A4 / S4   | elements | title, subtitle, badge, emphasized?, selected?, disabled?, muted?, nested (default `none`), shortcut (web only), href   | leading, trailing | press, longPress                                                                                                                            | scrollTo            |
+| `slot`            | A1 / S1   | elements | name                                                                                                                    | -                 | -                                                                                                                                           | -                   |
+| `action`          | A4 / S4   | elements | label, entries (data)                                                                                                   | -                 | press, select                                                                                                                               | -                   |
+| `ext`             | A1 / S0   | elements | ext, args (data)                                                                                                        | fallback          | -                                                                                                                                           | -                   |
 
 `slot`, `ext` and `action` are internal: what slots, `h.extension` and `section.action(icon, msg | actionMenu, label)`
 compile to. Structured props (`row`, `blocks`, `entries`, `reactions`, `attachments`, `tabs`, `options`,
@@ -127,25 +127,25 @@ Unchanged from the doc and G6: `text.role`, `text.tone`, `text.strong`, `button.
 
 Values fixed in C1 for props the doc names without values (each needs your sign-off):
 
-| Set | Values (default first) | Reason |
-| --- | --- | --- |
-| `stack.axis` | `vertical`, `horizontal` | doc names `axis` |
-| `stack.density` | `regular`, `compact`, `relaxed` | doc's values |
-| `stack.align` | `stretch`, `start`, `center`, `end` | doc names `align`; the screens use `start`, `center`, `end` |
-| `frame.surface` | `card`, `none`, `inset`, `muted`, `overlay`, `danger` | doc's values; default `card` because every settings frame is one; `danger` from `frame-danger` |
-| `heading.level` | `2`, `1`, `3` | screen, section, group titles |
-| `avatar.presence` | `none`, `online`, `away`, `busy`, `offline` | the app's presence states |
-| `avatar.size` | `regular`, `large` | `avatar-large` |
-| `avatar.mark` | `none`, `slack`, `discord` | `avatar-provider-mark` (`row.provider` takes the same without `none`) |
-| `item.nested` | `none`, `middle`, `last` | `thread-elbow` |
-| `emptyState.illustration` | `none`, `squirrel` | today's message-list empty state; an asset per platform |
-| `composer` key | `up down enter tab escape` | `autocomplete-keys` |
-| `listDivider.kind` | `date`, `unread` | doc's values |
-| `list.anchor` | `start`, `end` | `end` is a chat (anchors on prepend, G7) |
-| `toast.tone` | the badge tones | no new set |
-| `MessageAction` | `react reply thread copy edit pin unpin issue delete` | the hover toolbar and More menu; `issue` from phase 1.5 |
-| `composer` trigger | `@ # / :` | mentions, channels, commands, emoji |
-| `IconName` | 34 names, each mapped to a web icon (`iconSources`) | what the four screens draw, plus `slack` and `discord` |
+| Set                       | Values (default first)                                | Reason                                                                                         |
+| ------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `stack.axis`              | `vertical`, `horizontal`                              | doc names `axis`                                                                               |
+| `stack.density`           | `regular`, `compact`, `relaxed`                       | doc's values                                                                                   |
+| `stack.align`             | `stretch`, `start`, `center`, `end`                   | doc names `align`; the screens use `start`, `center`, `end`                                    |
+| `frame.surface`           | `card`, `none`, `inset`, `muted`, `overlay`, `danger` | doc's values; default `card` because every settings frame is one; `danger` from `frame-danger` |
+| `heading.level`           | `2`, `1`, `3`                                         | screen, section, group titles                                                                  |
+| `avatar.presence`         | `none`, `online`, `away`, `busy`, `offline`           | the app's presence states                                                                      |
+| `avatar.size`             | `regular`, `large`                                    | `avatar-large`                                                                                 |
+| `avatar.mark`             | `none`, `slack`, `discord`                            | `avatar-provider-mark` (`row.provider` takes the same without `none`)                          |
+| `item.nested`             | `none`, `middle`, `last`                              | `thread-elbow`                                                                                 |
+| `emptyState.illustration` | `none`, `squirrel`                                    | today's message-list empty state; an asset per platform                                        |
+| `composer` key            | `up down enter tab escape`                            | `autocomplete-keys`                                                                            |
+| `listDivider.kind`        | `date`, `unread`                                      | doc's values                                                                                   |
+| `list.anchor`             | `start`, `end`                                        | `end` is a chat (anchors on prepend, G7)                                                       |
+| `toast.tone`              | the badge tones                                       | no new set                                                                                     |
+| `MessageAction`           | `react reply thread copy edit pin unpin issue delete` | the hover toolbar and More menu; `issue` from phase 1.5                                        |
+| `composer` trigger        | `@ # / :`                                             | mentions, channels, commands, emoji                                                            |
+| `IconName`                | 34 names, each mapped to a web icon (`iconSources`)   | what the four screens draw, plus `slack` and `discord`                                         |
 
 Removed: G7's short row keys. Added in phase 1.5: everything in `GAPS.md`.
 
@@ -153,16 +153,16 @@ Removed: G7's short row keys. Added in phase 1.5: everything in `GAPS.md`.
 
 `{"v": 2, "seq": n, "ops": [...]}`, one batch per flush, `seq` gapless, ids from the host (0 is the root).
 
-| Op | Fields |
-| --- | --- |
-| `create` | id, tag (`hz:*`, `#text`, `#container`) |
-| `props` | id, changed keys (null deletes); `controlled` values carry `{text, rev, edit}` and never go back |
-| `text` | id, text |
-| `insert` | parent, id, before or null (moves an existing or detached id) |
-| `remove` | id (frees the subtree) |
-| `events` | id, event names |
-| `detach` | id (kept alive outside the tree) |
-| `command` | request, id, name (`focus blur scrollTo measure select`), args |
+| Op        | Fields                                                                                           |
+| --------- | ------------------------------------------------------------------------------------------------ |
+| `create`  | id, tag (`hz:*`, `#text`, `#container`)                                                          |
+| `props`   | id, changed keys (null deletes); `controlled` values carry `{text, rev, edit}` and never go back |
+| `text`    | id, text                                                                                         |
+| `insert`  | parent, id, before or null (moves an existing or detached id)                                    |
+| `remove`  | id (frees the subtree)                                                                           |
+| `events`  | id, event names                                                                                  |
+| `detach`  | id (kept alive outside the tree)                                                                 |
+| `command` | request, id, name (`focus blur scrollTo measure select`), args                                   |
 
 Back to JS, one JSON array per message to `__hazel.receive(json)`: `["fire", id, event, payload, seq]`
 and `["reply", request, ok, result]`. Delivery: `JSON.stringify(batch)` to `__native.post`, read in Swift

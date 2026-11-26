@@ -130,7 +130,12 @@ const structured: Stream = {
 							[1, "bun run test", "sh"],
 						],
 						reactions: [
-							{ emoji: "👍", count: 3, mine: true, who: { names: ["Grace", "Alan"], others: 1 } },
+							{
+								emoji: "👍",
+								count: 3,
+								mine: true,
+								who: { names: ["Grace", "Alan"], others: 1 },
+							},
 							{ emoji: "🎉", count: 1, mine: false },
 						],
 						edited: true,

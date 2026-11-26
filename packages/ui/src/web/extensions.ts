@@ -2,6 +2,7 @@
  * The web's extension registry (`docs/hazel-ui.md`, "Platform extensions"): what the web host draws in
  * an `hz:ext` placeholder whose extension it implements.
  */
+import type { Plain } from "./primitives/define.ts"
 import type { Hazel } from "../vocabulary/index.ts"
 
 export interface WebExtensionInstance<P> {
@@ -13,7 +14,10 @@ export interface WebExtensionInstance<P> {
 export type WebExtension<D extends Hazel.AnyExtension> = (
 	container: HTMLElement,
 	props: Hazel.PropsOf<D>,
-	send: <K extends keyof Hazel.ExtensionEvents<D> & string>(event: K, payload: Hazel.ExtensionEvents<D>[K]) => boolean,
+	send: <K extends keyof Hazel.ExtensionEvents<D> & string>(
+		event: K,
+		payload: Hazel.ExtensionEvents<D>[K],
+	) => boolean,
 ) => WebExtensionInstance<Hazel.PropsOf<D>> | void
 
 const registry = new Map<string, WebExtension<any>>()
@@ -31,8 +35,8 @@ export const missingWebExtensions = (declared: ReadonlyArray<Hazel.AnyExtension>
 export const mountExtension = (
 	surface: HTMLElement,
 	name: string,
-	props: unknown,
-	send: (event: string, payload: unknown) => boolean,
+	props: Plain,
+	send: (event: string, payload: Plain) => boolean,
 ): boolean => {
 	const draw = registry.get(name)
 	if (draw === undefined) return false

@@ -109,7 +109,7 @@ const merge = <B extends View.ElementBuilder<any, any, any, any>>(
 	builder: B,
 	props: Readonly<Record<string, unknown>>,
 ): B => {
-	const next: Record<string, unknown> = { ...builder.props }
+	const next = { ...builder.props }
 	for (const key in props) {
 		const value = props[key]
 		if (value === undefined) delete next[key]

@@ -49,7 +49,8 @@ export const makeNativeScheduler = (options: NativeSchedulerOptions = {}): Nativ
 		posted = true
 		burstStart ??= now()
 		while (queue.length > 0) {
-			const bucket = queue[0]!
+			const bucket = queue[0]
+			if (bucket === undefined) break
 			const task = bucket.tasks.shift()
 			if (bucket.tasks.length === 0) queue.shift()
 			if (task === undefined) continue
@@ -73,7 +74,7 @@ export const makeNativeScheduler = (options: NativeSchedulerOptions = {}): Nativ
 	const dispatcher: Scheduler.SchedulerDispatcher = {
 		scheduleTask: (task, priority) => {
 			let index = queue.length
-			while (index > 0 && queue[index - 1]!.priority > priority) index--
+			while (index > 0 && (queue[index - 1]?.priority ?? priority) > priority) index--
 			const found = queue[index - 1]
 			if (found !== undefined && found.priority === priority) found.tasks.push(task)
 			else queue.splice(index, 0, { priority, tasks: [task] })

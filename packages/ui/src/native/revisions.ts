@@ -62,7 +62,8 @@ export const receive = (field: Field, incoming: Incoming): Step => {
 	// A Model edit against revision `r` while the user typed on.
 	const history = new Map([...field.history].filter(([rev]) => rev >= r))
 	const base = history.get(r)
-	const merged = base !== undefined && field.text.startsWith(base) ? text + field.text.slice(base.length) : field.text
+	const merged =
+		base !== undefined && field.text.startsWith(base) ? text + field.text.slice(base.length) : field.text
 	const next = field.rev + 1
 	history.set(next, merged)
 	return {

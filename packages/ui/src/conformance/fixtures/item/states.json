@@ -6,9 +6,7 @@
 			"title": "general",
 			"href": "#"
 		},
-		"events": [
-			"press"
-		],
+		"events": ["press"],
 		"slots": [
 			{
 				"name": "leading",
@@ -27,52 +25,35 @@
 	"axes": [
 		{
 			"prop": "selected",
-			"values": [
-				true
-			]
+			"values": [true]
 		},
 		{
 			"prop": "emphasized",
-			"values": [
-				true
-			]
+			"values": [true]
 		},
 		{
 			"prop": "disabled",
-			"values": [
-				true
-			]
+			"values": [true]
 		},
 		{
 			"prop": "muted",
-			"values": [
-				true
-			]
+			"values": [true]
 		},
 		{
 			"prop": "nested",
-			"values": [
-				"middle",
-				"last"
-			]
+			"values": ["middle", "last"]
 		},
 		{
 			"prop": "badge",
-			"values": [
-				3
-			]
+			"values": [3]
 		},
 		{
 			"prop": "subtitle",
-			"values": [
-				"Last message preview"
-			]
+			"values": ["Last message preview"]
 		},
 		{
 			"prop": "shortcut",
-			"values": [
-				"⌘K"
-			]
+			"values": ["⌘K"]
 		}
 	]
 }

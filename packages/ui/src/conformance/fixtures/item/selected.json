@@ -13,9 +13,7 @@
 					"title": "design",
 					"selected": true
 				},
-				"events": [
-					"press"
-				],
+				"events": ["press"],
 				"slots": [
 					{
 						"name": "leading",

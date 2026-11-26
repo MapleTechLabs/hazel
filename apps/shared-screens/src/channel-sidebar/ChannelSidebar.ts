@@ -197,7 +197,16 @@ export const ChannelSidebar = Hazel.component({
 											{ id: "join", label: "Join channel", icon: "hashtag" },
 										],
 									},
-									{ entries: [{ id: "delete", label: "Delete section", icon: "trash", destructive: true }] },
+									{
+										entries: [
+											{
+												id: "delete",
+												label: "Delete section",
+												icon: "trash",
+												destructive: true,
+											},
+										],
+									},
 								],
 								({ id }) => SidebarMessage.SelectedSectionMenu({ key: entry.key, entry: id }),
 							),
@@ -208,17 +217,19 @@ export const ChannelSidebar = Hazel.component({
 				.children(...(entry.collapsed ? [] : entry.rows.map(row)))
 
 		return h.stack.density("compact").children(
-			h.section.key("goto").children(
-				h.item
-					.title("Browse channels")
-					.leading(h.icon.name("search"))
-					.shortcut("⌘K")
-					.on("press", SidebarMessage.PressedBrowse()),
-				h.item
-					.title("Members")
-					.leading(h.icon.name("users"))
-					.on("press", SidebarMessage.PressedMembers()),
-			),
+			h.section
+				.key("goto")
+				.children(
+					h.item
+						.title("Browse channels")
+						.leading(h.icon.name("search"))
+						.shortcut("⌘K")
+						.on("press", SidebarMessage.PressedBrowse()),
+					h.item
+						.title("Members")
+						.leading(h.icon.name("users"))
+						.on("press", SidebarMessage.PressedMembers()),
+				),
 			model.favorites.length === 0
 				? null
 				: h.section

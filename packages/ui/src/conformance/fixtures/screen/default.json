@@ -5,9 +5,7 @@
 		"props": {
 			"title": "Channels"
 		},
-		"events": [
-			"back"
-		],
+		"events": ["back"],
 		"children": [
 			{
 				"tag": "section",
@@ -22,9 +20,7 @@
 							"title": "general",
 							"href": "#"
 						},
-						"events": [
-							"press"
-						],
+						"events": ["press"],
 						"slots": [
 							{
 								"name": "leading",
@@ -46,9 +42,7 @@
 							"title": "design",
 							"href": "#"
 						},
-						"events": [
-							"press"
-						],
+						"events": ["press"],
 						"slots": [
 							{
 								"name": "leading",
@@ -76,9 +70,7 @@
 	"axes": [
 		{
 			"prop": "back",
-			"values": [
-				true
-			]
+			"values": [true]
 		}
 	]
 }

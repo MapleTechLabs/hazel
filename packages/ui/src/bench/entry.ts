@@ -18,6 +18,7 @@ Object.assign(globalThis, {
 			bench.start()
 		},
 		tick,
+		// SAFETY: Swift sends `payload` as JSON text (`WireEncoder`), so it parses to JSON.
 		fire: (event: string, payload: string) => bench?.fire(event, JSON.parse(payload) as Json) ?? false,
 		/** Batches since the last take, one JSON per line, and their op count first: `"<ops>\n..."`. */
 		take: () => {

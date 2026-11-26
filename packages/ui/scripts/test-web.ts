@@ -74,7 +74,10 @@ const main = async () => {
 	try {
 		for (const run of runs) {
 			const name = `${run.theme}-${run.sizeClass}`
-			const context = await browser.newContext({ viewport: { width: run.width, height: 1600 }, deviceScaleFactor: 2 })
+			const context = await browser.newContext({
+				viewport: { width: run.width, height: 1600 },
+				deviceScaleFactor: 2,
+			})
 			const page = await context.newPage()
 			const errors: Array<string> = []
 			page.on("pageerror", (error) => errors.push(error.message))
@@ -90,23 +93,41 @@ const main = async () => {
 			mkdirSync(dir, { recursive: true })
 			for (const c of outcomes) {
 				if (c.status === "stub" || c.status === "missing") {
-					for (const owner of c.lanes) notImplemented.set(owner, (notImplemented.get(owner) ?? new Set()).add(`hz:${c.tag}`))
-					results.push({ run: name, id: c.id, outcome: "skip", detail: `not implemented: lane ${c.lanes.join(", ")}` })
+					for (const owner of c.lanes)
+						notImplemented.set(owner, (notImplemented.get(owner) ?? new Set()).add(`hz:${c.tag}`))
+					results.push({
+						run: name,
+						id: c.id,
+						outcome: "skip",
+						detail: `not implemented: lane ${c.lanes.join(", ")}`,
+					})
 					continue
 				}
 				if (c.status === "error") {
-					results.push({ run: name, id: c.id, outcome: "fail", detail: `mount failed: ${c.error ?? ""}` })
+					results.push({
+						run: name,
+						id: c.id,
+						outcome: "fail",
+						detail: `mount failed: ${c.error ?? ""}`,
+					})
 					continue
 				}
 				const problems: Array<string> = []
 				const frame = page.locator(`[data-case="${c.id}"]`)
 				for (const expected of c.aria) {
 					const found = await frame
-						.getByRole(expected.role as Parameters<Page["getByRole"]>[0], expected.name === undefined ? {} : { name: expected.name, exact: true })
+						.getByRole(
+							expected.role as Parameters<Page["getByRole"]>[0],
+							expected.name === undefined ? {} : { name: expected.name, exact: true },
+						)
 						.count()
-					if (found === 0) problems.push(`no ${expected.role}${expected.name ? ` named "${expected.name}"` : ""}`)
+					if (found === 0)
+						problems.push(
+							`no ${expected.role}${expected.name ? ` named "${expected.name}"` : ""}`,
+						)
 				}
-				for (const html of await unnamedControls(page, c.id)) problems.push(`control without a name: ${html}`)
+				for (const html of await unnamedControls(page, c.id))
+					problems.push(`control without a name: ${html}`)
 				await page.mouse.move(0, 0)
 				const shot = await caseTarget(page, c).screenshot({ animations: "disabled" })
 				const file = c.id.replaceAll("/", "__").replaceAll(/[^A-Za-z0-9._-]/g, "_")
@@ -116,7 +137,10 @@ const main = async () => {
 					const specimen = kit.locator(`[data-specimen="${c.kit.specimen}"]`)
 					const theirs = await specimen.screenshot({ animations: "disabled" })
 					const diff = await diffInPage(scratch, theirs, shot, CHANNEL_TOLERANCE)
-					const [kitBox, ourBox] = await Promise.all([specimen.boundingBox(), caseTarget(page, c).boundingBox()])
+					const [kitBox, ourBox] = await Promise.all([
+						specimen.boundingBox(),
+						caseTarget(page, c).boundingBox(),
+					])
 					const sameSize = kitBox?.width === ourBox?.width && kitBox?.height === ourBox?.height
 					const ratio = diff.differing / (diff.width * diff.height)
 					writeFileSync(resolve(dir, `${file}.kit.png`), theirs)
@@ -125,17 +149,29 @@ const main = async () => {
 					const over = !sameSize || ratio > PIXEL_TOLERANCE
 					const listed = known.get(c.id)
 					if (over && listed !== undefined) {
-						results.push({ run: name, id: c.id, outcome: problems.length === 0 ? "known" : "fail", detail: [...problems, `known diff, lane ${listed.lane}: ${listed.reason} (${detail})`].join("; ") })
+						results.push({
+							run: name,
+							id: c.id,
+							outcome: problems.length === 0 ? "known" : "fail",
+							detail: [
+								...problems,
+								`known diff, lane ${listed.lane}: ${listed.reason} (${detail})`,
+							].join("; "),
+						})
 						continue
 					}
 					if (over) problems.push(`pixel diff over tolerance (${detail})`)
-					if (!over && listed !== undefined) problems.push(`known diff now passes: remove ${c.id} from known-diffs.json`)
+					if (!over && listed !== undefined)
+						problems.push(`known diff now passes: remove ${c.id} from known-diffs.json`)
 				}
-				results.push(problems.length === 0
-					? { run: name, id: c.id, outcome: "pass", detail }
-					: { run: name, id: c.id, outcome: "fail", detail: problems.join("; ") })
+				results.push(
+					problems.length === 0
+						? { run: name, id: c.id, outcome: "pass", detail }
+						: { run: name, id: c.id, outcome: "fail", detail: problems.join("; ") },
+				)
 			}
-			for (const error of errors) results.push({ run: name, id: "(page)", outcome: "fail", detail: error })
+			for (const error of errors)
+				results.push({ run: name, id: "(page)", outcome: "fail", detail: error })
 			await context.close()
 		}
 	} finally {
@@ -144,11 +180,15 @@ const main = async () => {
 	}
 	mkdirSync(shotsDir, { recursive: true })
 	writeFileSync(resolve(shotsDir, "report.json"), `${JSON.stringify(results, null, "\t")}\n`)
-	for (const row of results) if (row.outcome !== "skip") console.log(`${row.outcome.toUpperCase()} ${row.run} ${row.id}: ${row.detail}`)
+	for (const row of results)
+		if (row.outcome !== "skip")
+			console.log(`${row.outcome.toUpperCase()} ${row.run} ${row.id}: ${row.detail}`)
 	for (const [owner, missing] of [...notImplemented].sort())
 		console.log(`not implemented: lane ${owner} (${[...missing].sort().join(", ")})`)
 	const count = (outcome: Result["outcome"]) => results.filter((row) => row.outcome === outcome).length
-	console.log(`${count("pass")} passed, ${count("fail")} failed, ${count("known")} known diffs, ${count("skip")} skipped (not implemented), over ${runs.length} runs; tolerance channel ${CHANNEL_TOLERANCE}, pixels ${PIXEL_TOLERANCE * 100}%`)
+	console.log(
+		`${count("pass")} passed, ${count("fail")} failed, ${count("known")} known diffs, ${count("skip")} skipped (not implemented), over ${runs.length} runs; tolerance channel ${CHANNEL_TOLERANCE}, pixels ${PIXEL_TOLERANCE * 100}%`,
+	)
 	if (results.length === 0) console.log(`no cases matched${query ? ` (${query})` : ""}`)
 	process.exit(count("fail") === 0 ? 0 : 1)
 }

@@ -76,9 +76,9 @@ export class PickFiles extends Command.Service<PickFiles>()("composer/PickFiles"
 		Effect.gen(function* () {
 			const files = yield* Files
 			return () =>
-				files.pick({ accept: "any", multiple: true }).pipe(
-					Effect.match({ onSuccess: added, onFailure: () => ComposerMessage.FailedFiles() }),
-				)
+				files
+					.pick({ accept: "any", multiple: true })
+					.pipe(Effect.match({ onSuccess: added, onFailure: () => ComposerMessage.FailedFiles() }))
 		}),
 	)
 }
@@ -140,7 +140,8 @@ export const Composer = Hazel.component({
 			$.evolve({ trigger: () => (query === null ? null : { kind, query }) }),
 		PickedSuggestion: ($) => $.evolve({ trigger: () => null }),
 		DismissedSuggestions: ($) => $.evolve({ trigger: () => null }),
-		PressedSuggestionKey: ($, { key }) => (key === "escape" ? $.evolve({ trigger: () => null }) : $.model),
+		PressedSuggestionKey: ($, { key }) =>
+			key === "escape" ? $.evolve({ trigger: () => null }) : $.model,
 		RemovedAttachment: ($, { id }) =>
 			$.evolve({ attachments: (all) => all.filter((file) => file.id !== id) }),
 		PressedAttach: ($) => $.run(PickFiles.make({})),
@@ -162,7 +163,9 @@ export const Composer = Hazel.component({
 			$.evolve({
 				commandFields: (all) =>
 					all.map((field) =>
-						field.name === name ? { ...field, value: TextField.changed(field.value, payload) } : field,
+						field.name === name
+							? { ...field, value: TextField.changed(field.value, payload) }
+							: field,
 					),
 			}),
 		CancelledContext: ($) => $.evolve({ context: () => ({ _tag: "None" as const }) }),

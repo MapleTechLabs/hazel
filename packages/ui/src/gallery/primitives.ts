@@ -46,7 +46,9 @@ const el = (tag: string, attributes: Readonly<Record<string, string>>, text?: st
 }
 
 const lanesIn = (root: Element) => [
-	...new Set([...root.querySelectorAll("[data-hz-stub]")].map((node) => node.getAttribute("data-hz-stub") ?? "")),
+	...new Set(
+		[...root.querySelectorAll("[data-hz-stub]")].map((node) => node.getAttribute("data-hz-stub") ?? ""),
+	),
 ]
 
 const mount = (c: FixtureCase, container: HTMLElement) =>
@@ -85,10 +87,14 @@ const run = async () => {
 					: { ...base, status: "missing", lanes: [missing[1] ?? "?"] }
 		} else {
 			const stubs = lanesIn(frame)
-			outcome = stubs.length > 0 ? { ...base, status: "stub", lanes: stubs } : { ...base, status: "ok", lanes: [] }
+			outcome =
+				stubs.length > 0
+					? { ...base, status: "stub", lanes: stubs }
+					: { ...base, status: "ok", lanes: [] }
 		}
 		label.dataset.status = outcome.status
-		if (outcome.status !== "ok") label.textContent = `${c.id} (${outcome.status}${outcome.lanes.length > 0 ? `: lane ${outcome.lanes.join(", ")}` : ""})`
+		if (outcome.status !== "ok")
+			label.textContent = `${c.id} (${outcome.status}${outcome.lanes.length > 0 ? `: lane ${outcome.lanes.join(", ")}` : ""})`
 		outcomes.push(outcome)
 	}
 	await document.fonts.ready

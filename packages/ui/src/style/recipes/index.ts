@@ -17,10 +17,14 @@ const isRecipe = (value: unknown): value is Recipe =>
 export const recipes: ReadonlyArray<Recipe> = (
 	await Promise.all(
 		files.map(async (file) => {
-			const module: Record<string, unknown> = await import(pathToFileURL(resolve(import.meta.dirname, file)).href)
+			const module: Record<string, unknown> = await import(
+				pathToFileURL(resolve(import.meta.dirname, file)).href
+			)
 			const found = Object.values(module).filter(isRecipe)
-			if (found.length !== 1) throw new Error(`recipes/${file} must export exactly one recipe`)
-			return found[0]!
+			const [recipe] = found
+			if (found.length !== 1 || recipe === undefined)
+				throw new Error(`recipes/${file} must export exactly one recipe`)
+			return recipe
 		}),
 	)
 ).filter((recipe, index, all) => all.findIndex((other) => other.primitive === recipe.primitive) === index)

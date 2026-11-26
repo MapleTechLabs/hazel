@@ -9,28 +9,8 @@
 				"provider": "slack",
 				"time": "14:05",
 				"body": [
-					[
-						0,
-						[
-							"Ship it ",
-							[
-								1,
-								"@Grace",
-								"u2"
-							],
-							", see ",
-							[
-								2,
-								"the doc",
-								"https://hazel.sh/d"
-							]
-						]
-					],
-					[
-						1,
-						"bun run test",
-						"sh"
-					]
+					[0, ["Ship it ", [1, "@Grace", "u2"], ", see ", [2, "the doc", "https://hazel.sh/d"]]],
+					[1, "bun run test", "sh"]
 				],
 				"reactions": [
 					{
@@ -38,10 +18,7 @@
 						"count": 3,
 						"mine": true,
 						"who": {
-							"names": [
-								"Grace",
-								"Alan"
-							],
+							"names": ["Grace", "Alan"],
 							"others": 1
 						}
 					},
@@ -51,11 +28,7 @@
 						"mine": false
 					}
 				],
-				"quick": [
-					"👍",
-					"❤️",
-					"😂"
-				],
+				"quick": ["👍", "❤️", "😂"],
 				"edited": true,
 				"files": [
 					{
@@ -73,62 +46,35 @@
 					"preview": "On it",
 					"time": "14:09"
 				},
-				"actions": [
-					"react",
-					"reply",
-					"thread",
-					"copy",
-					"edit",
-					"pin",
-					"issue",
-					"delete"
-				]
+				"actions": ["react", "reply", "thread", "copy", "edit", "pin", "issue", "delete"]
 			}
 		},
-		"events": [
-			"press",
-			"action",
-			"pressReaction",
-			"pressMention",
-			"pressLink"
-		]
+		"events": ["press", "action", "pressReaction", "pressMention", "pressLink"]
 	},
 	"axes": [
 		{
 			"prop": "grouped",
-			"values": [
-				true
-			]
+			"values": [true]
 		},
 		{
 			"prop": "pinned",
-			"values": [
-				true
-			]
+			"values": [true]
 		},
 		{
 			"prop": "highlighted",
-			"values": [
-				true
-			]
+			"values": [true]
 		},
 		{
 			"prop": "entering",
-			"values": [
-				true
-			]
+			"values": [true]
 		},
 		{
 			"prop": "pending",
-			"values": [
-				true
-			]
+			"values": [true]
 		},
 		{
 			"prop": "failed",
-			"values": [
-				true
-			]
+			"values": [true]
 		}
 	]
 }

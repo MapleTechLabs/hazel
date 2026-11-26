@@ -5,45 +5,30 @@
 		"children": [
 			{
 				"tag": "text",
-				"children": [
-					"One"
-				]
+				"children": ["One"]
 			},
 			{
 				"tag": "text",
-				"children": [
-					"Two"
-				]
+				"children": ["Two"]
 			},
 			{
 				"tag": "text",
-				"children": [
-					"Three"
-				]
+				"children": ["Three"]
 			}
 		]
 	},
 	"axes": [
 		{
 			"prop": "axis",
-			"values": [
-				"horizontal"
-			]
+			"values": ["horizontal"]
 		},
 		{
 			"prop": "density",
-			"values": [
-				"compact",
-				"relaxed"
-			]
+			"values": ["compact", "relaxed"]
 		},
 		{
 			"prop": "align",
-			"values": [
-				"start",
-				"center",
-				"end"
-			]
+			"values": ["start", "center", "end"]
 		}
 	]
 }

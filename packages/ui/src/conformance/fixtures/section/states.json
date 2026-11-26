@@ -13,9 +13,7 @@
 					"title": "roadmap",
 					"href": "#"
 				},
-				"events": [
-					"press"
-				],
+				"events": ["press"],
 				"slots": [
 					{
 						"name": "leading",
@@ -37,9 +35,7 @@
 					"title": "launch",
 					"href": "#"
 				},
-				"events": [
-					"press"
-				],
+				"events": ["press"],
 				"slots": [
 					{
 						"name": "leading",
@@ -60,21 +56,15 @@
 	"axes": [
 		{
 			"prop": "collapsible",
-			"values": [
-				true
-			]
+			"values": [true]
 		},
 		{
 			"prop": "collapsed",
-			"values": [
-				true
-			]
+			"values": [true]
 		},
 		{
 			"prop": "reorderable",
-			"values": [
-				true
-			]
+			"values": [true]
 		}
 	]
 }
