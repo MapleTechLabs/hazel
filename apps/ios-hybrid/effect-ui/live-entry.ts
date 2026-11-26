@@ -15,8 +15,9 @@ import { makeNativeHost } from "../../../packages/ui/src/native/host.ts"
 import { type Json, WIRE_VERSION } from "../../../packages/ui/src/native/wire.ts"
 import { makeLiveChannelList } from "./live-channel-list"
 import { type SidebarRows, sidebarSections } from "./live-sections"
+import { mountActivityLive } from "../../shared-screens/src/activity/live.ts"
 
-declare const __native: { post: (json: string) => void }
+declare const __native: { post: (json: string) => void; screen?: string }
 
 const native = makeNativeHost((batch) => __native.post(JSON.stringify(batch)))
 const started = Date.now()
@@ -29,6 +30,13 @@ const program = Effect.gen(function* () {
 	const me = yield* rpc("user.me", undefined)
 	console.log(`[live] user.me over HTTP: ${me.id} (${since()})`)
 	yield* Stream.runDrain(client.syncSession(me.id)).pipe(Effect.forkScoped)
+
+	// `-HazelScreen <name>`: which shared screen to mount (the channel list by default).
+	if (__native.screen === "activity") {
+		yield* mountActivityLive(me.id, native.container, (id) => console.log(`[live] open channel ${id}`))
+		console.log(`[live] activity mounted (${since()})`)
+		return yield* Effect.never
+	}
 
 	const { collections: c } = client
 	const sections = Stream.zipLatestAll(
