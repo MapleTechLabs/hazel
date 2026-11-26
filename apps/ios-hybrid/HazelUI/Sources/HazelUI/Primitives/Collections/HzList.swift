@@ -37,17 +37,24 @@ struct HzList: View {
         .accessibilityLabel(loading ? "Loading" : "")
     }
 
-    /// `scrollTo` targets: `{to: "start" | "end"}` or `{key}`, a row's position among the children
-    /// (GAPS `row-key`: keys never reach a host).
+    /// `scrollTo` targets: `{to: "start" | "end"}` or `{key}`, a row's wire key (`row-key`).
     enum Target {
         case edge(end: Bool)
-        case row(Int)
+        case row(key: String)
 
         init?(_ args: JSONValue) {
             if let to = args.object?["to"]?.string { self = .edge(end: to == "end") }
-            else if let key = args.object?["key"]?.string, let index = Int(key) { self = .row(index) }
+            else if let key = args.object?["key"]?.string { self = .row(key: key) }
             else { return nil }
         }
+    }
+
+    /// A row's name for `scrollTo` and `move`: its key, or its position when it has none.
+    static func key(_ row: Node, at index: Int) -> String { row[prop: "key"]?.string ?? String(index) }
+
+    /// The position of the row named `key` among `rows`.
+    static func index(of key: String, in rows: [Node]) -> Int? {
+        rows.indices.first { Self.key(rows[$0], at: $0) == key }
     }
 }
 
@@ -128,7 +135,11 @@ final class ListBridge {
             let animated = !UIAccessibility.isReduceMotionEnabled
             switch target {
             case let .edge(end): view.scroll(toEdge: end, animated: animated)
-            case let .row(index): view.scroll(toRow: index, animated: animated)
+            case let .row(key):
+                let rows = self.source.keys.map { self.tree.node($0) }
+                guard let index = rows.indices.first(where: { i in rows[i].map { HzList.key($0, at: i) == key } ?? false })
+                else { throw CommandError("hz:list has no row \(key)") }
+                view.scroll(toRow: index, animated: animated)
             }
             return .null
         }
@@ -220,14 +231,15 @@ private struct StackList: View {
                 if node[prop: "loadingStart"]?.bool == true { ListSpinner() }
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                     let view = NodeView(tree: tree, node: row).frame(maxWidth: .infinity, alignment: .leading).id(index)
+                    let key = HzList.key(row, at: index)
                     if reorderable {
                         view
                             .opacity(dragging == index ? 0.5 : 1)
-                            .draggable(String(index)) { NodeView(tree: tree, node: row).onAppear { dragging = index } }
+                            .draggable(key) { NodeView(tree: tree, node: row).onAppear { dragging = index } }
                             .dropDestination(for: String.self) { items, _ in
                                 dragging = nil
-                                guard let from = items.first, from != String(index) else { return false }
-                                tree.fire(node.id, "move", ["id": .string(from), "before": .string(String(index))])
+                                guard let from = items.first, from != key else { return false }
+                                tree.fire(node.id, "move", ["id": .string(from), "before": .string(key)])
                                 return true
                             }
                     } else {
@@ -258,7 +270,9 @@ private struct StackList: View {
                 withAnimation(motion) {
                     switch target {
                     case let .edge(end): position.scrollTo(edge: end ? .bottom : .top)
-                    case let .row(index): position.scrollTo(id: index)
+                    case let .row(key):
+                        guard let index = HzList.index(of: key, in: tree.content(of: node)) else { return }
+                        position.scrollTo(id: index)
                     }
                 }
                 return .null
