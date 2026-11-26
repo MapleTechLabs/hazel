@@ -96,7 +96,7 @@ private struct SectionHeader: View {
                 .scaledToFit()
                 .hzSize(chevron)
                 .rotationEffect(.degrees(collapsed ? -90 : 0))
-                .animation(reduceMotion ? nil : .easeOut(duration: style.transition ?? 0), value: collapsed)
+                .animation(controlAnimation(style, reduceMotion: reduceMotion), value: collapsed)
             Text(title).lineLimit(1)
         }
         .contentShape(Rectangle())

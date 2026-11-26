@@ -24,7 +24,7 @@ struct HzTextArea: View {
         let label = node.string("label") ?? ""
         let line = field.lineHeight(sizeClass)
 
-        return FieldLayout(styles: s, label: label, required: false,
+        return FieldLayout(tag: "textArea", styles: s, label: label, required: false,
                            description: node.string("description"), error: error, sizeClass: sizeClass) {
             TextField(text: input.binding, selection: $input.selection,
                       prompt: Text(node.string("placeholder") ?? "").foregroundStyle(HazelTheme.Colors.mutedFg.color),

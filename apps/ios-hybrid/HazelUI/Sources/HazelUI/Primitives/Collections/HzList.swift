@@ -301,9 +301,10 @@ private struct ListSpinner: View {
     }
 }
 
-/// Skeleton rows while `loading` (renderer-owned, GAPS `skeleton`): an avatar and two lines each.
+/// Skeleton rows while `loading` (renderer-owned, GAPS `skeleton`): an avatar and two lines each. The
+/// block fades in after the recipe's delay (`skeletonIn`, so a fast load never shows it) and its shapes
+/// pulse (`skeletonPulse`).
 private struct ListSkeleton: View {
-    @Environment(\.accessibilityReduceMotion) private var reduce
     var body: some View {
         let muted = HazelTheme.Colors.muted.color
         VStack(alignment: .leading, spacing: Token.space("5")) {
@@ -311,6 +312,7 @@ private struct ListSkeleton: View {
                 HStack(alignment: .top, spacing: Token.space("3")) {
                     RoundedRectangle(cornerRadius: Token.radius("xl"), style: .continuous).fill(muted)
                         .frame(width: Token.space("9"), height: Token.space("9"))
+                        .hzLoop("list", part: "skeletonAvatar")
                     GeometryReader { geo in
                         VStack(alignment: .leading, spacing: Token.space("2")) {
                             line(muted).frame(width: geo.size.width * 0.3)
@@ -321,19 +323,21 @@ private struct ListSkeleton: View {
                     }
                     .frame(height: Token.space("3") * 2 + Token.space("2") + Token.space("1") * 2)
                 }
-                .modifier(Pulse(delay: 0, on: !reduce))
             }
         }
         .padding(Token.space("4"))
         .frame(maxWidth: .infinity, alignment: .topLeading)
+        .hzEnter("list", part: "skeleton", sizeClass: .compact)
     }
 
     private func line(_ color: Color) -> some View {
         RoundedRectangle(cornerRadius: Token.radius("sm")).fill(color).frame(height: Token.space("3"))
+            .hzLoop("list", part: "skeletonLine")
     }
 }
 
 /// `hz-list-pulse`: half opacity at the middle of 1.4 s; it starts from rest, off under Reduce Motion.
+/// Renderer-owned on the web too (`list.ts`), not a contract motion (GAPS `motion-renderer-loops`).
 private struct Pulse: ViewModifier {
     let delay: Double
     let on: Bool

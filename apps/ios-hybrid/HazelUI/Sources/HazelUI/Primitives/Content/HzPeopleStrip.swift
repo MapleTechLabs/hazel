@@ -125,11 +125,20 @@ private struct PresenceDot: View {
     }
 }
 
-/// The web's `active:opacity-60` over 100ms.
+/// The web's `active:opacity-60` over 100ms (the `micro` duration, the default curve).
 private struct StripTileStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
+        StripTilePress(configuration: configuration)
+    }
+}
+
+private struct StripTilePress: View {
+    let configuration: ButtonStyleConfiguration
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
         configuration.label
             .opacity(configuration.isPressed ? 0.6 : 1)
-            .animation(.easeOut(duration: HazelTheme.duration["micro"] ?? 0.1), value: configuration.isPressed)
+            .animation(controlAnimation(HazelTheme.duration["micro"], ease: "standard", reduceMotion: reduceMotion), value: configuration.isPressed)
     }
 }

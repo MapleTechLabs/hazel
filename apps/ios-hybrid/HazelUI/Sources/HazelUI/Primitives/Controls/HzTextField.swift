@@ -11,6 +11,7 @@ struct HzTextField: View {
     @State private var hovering = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let sizeClass = HazelTheme.SizeClass(horizontalSizeClass)
@@ -28,7 +29,7 @@ struct HzTextField: View {
         let field = s["input"]!
         let label = node.string("label") ?? ""
 
-        return FieldLayout(styles: s, label: label, required: node.flag("required"),
+        return FieldLayout(tag: "textField", styles: s, label: label, required: node.flag("required"),
                            description: node.string("description"), error: error, sizeClass: sizeClass) {
             // Read-only keeps focus and selection; writes are dropped, so the text never changes.
             TextField(text: readOnly ? .constant(input.text) : input.binding, selection: $input.selection,
@@ -50,7 +51,7 @@ struct HzTextField: View {
             .hzControlBox(field, scheme)
             .hzFocusRing(focused, field.shape)
             .onHover { hovering = $0 }
-            .animation(controlAnimation(field.transition, reduceMotion: false), value: hovering)
+            .animation(controlAnimation(field, reduceMotion: reduceMotion), value: hovering)
             .accessibilityLabel(label)
             .accessibilityIdentifier("hz-textField")
         }
@@ -61,6 +62,8 @@ struct HzTextField: View {
 /// A labelled field's parts (textField, textArea): caption and required marker, the control, then the
 /// description and error lines, spaced by the recipe's gaps.
 struct FieldLayout<Control: View>: View {
+    /// The field's tag, whose recipe gives the error line's enter (`fieldErrorIn`).
+    let tag: String
     let styles: [String: HazelTheme.Style]
     let label: String
     let required: Bool
@@ -86,6 +89,7 @@ struct FieldLayout<Control: View>: View {
             }
             if let error {
                 Text(error).hzText(styles["error"]!, sizeClass).fixedSize(horizontal: false, vertical: true)
+                    .hzEnter(tag, part: "error", sizeClass: sizeClass)
             }
         }
         .frame(maxWidth: root.fill == true ? .infinity : nil, alignment: .leading)
