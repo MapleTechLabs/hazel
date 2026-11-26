@@ -6,7 +6,8 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
 lane="${1:-}"
-SIM_NAME="hazel-ui-ci"
+# Override per parallel lane (same device type and runtime, so snapshots match): HAZELUI_SIM=hazel-ui-s1
+SIM_NAME="${HAZELUI_SIM:-hazel-ui-ci}"
 SIM_TYPE="com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro"
 SIM_RUNTIME="com.apple.CoreSimulator.SimRuntime.iOS-26-4"
 
