@@ -19,7 +19,7 @@ export const fixtureNotifications = new Map<string, (typeof notificationRows)[nu
 )
 
 /** An idle RPC's encoded success value. */
-type Responder = (payload: Record<string, unknown>) => Schema.Json | object
+export type Responder = (payload: Record<string, unknown>) => Schema.Json | object
 
 export const makeOfflineFetch = (options: {
 	readonly backendUrl: string
@@ -37,6 +37,8 @@ export const makeOfflineFetch = (options: {
 	 * they do live. Without it they fail like any other URL outside the backend.
 	 */
 	readonly unfurls?: typeof fetch
+	/** RPC answers by tag over the ones below (a page's fixture, `page-fixture.ts`). */
+	readonly rpcs?: Readonly<Record<string, Responder>>
 }): typeof fetch => {
 	const now = Date.now()
 	const session: typeof HazelAuthApi.sessions.Session.Type = Schema.decodeSync(
@@ -141,6 +143,7 @@ export const makeOfflineFetch = (options: {
 	])
 	const { htmlRenderUrl } = options
 	if (htmlRenderUrl !== undefined) responders.set("message.htmlRenderUrl", htmlRenderUrl)
+	for (const [tag, respond] of Object.entries(options.rpcs ?? {})) responders.set(tag, respond)
 
 	/**
 	 * Any other RPC: the first plausible answer its success schema accepts (nothing, a transaction

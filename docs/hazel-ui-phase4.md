@@ -355,7 +355,7 @@ they never read as the phase 2 web (`A1` to `A5`) or iOS (`S0` to `S5`) lanes.
   `hazel:page:<id>` off (today) and on (hazel), 390 and 1180 wide, light and dark, a pinned clock and
   reduced motion, runs the entry's `steps` (open a menu, a dialog, a tab), and writes strips
   (today | hazel | diff) to `docs/hazel-ui-screens/phase4/<id>/`.
-- **Tolerance:** the islands' bar (`compare-islands.ts`): every residue a channel delta of 5 or less
+- **Tolerance:** the islands' bar (`compare-pages.ts` prints `OVER TOLERANCE` past it): every residue a channel delta of 5 or less
   (antialiasing); anything else is a bug or a listed known diff with a reason, reviewed by the user.
 - **Before deleting the Foldkit page:** the lane commits the "today" strips as the baseline; from then
   on `compare-pages.ts --baseline` diffs the hazel page against them (this is what `Z1` runs).

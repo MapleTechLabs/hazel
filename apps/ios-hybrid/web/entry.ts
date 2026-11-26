@@ -53,8 +53,12 @@ const installOffline = async () => {
 	// A thread on #general's last message, with a few replies (the offline fixture has none).
 	const { seedGeneralThread, snapshotWithThread } = await import("../fixture/thread-seed")
 	seedGeneralThread(server)
+	// The parity harness's page (`compare-pages.ts`): its own rows and RPC answers, if it has any.
+	const page = await (await import("../fixture/page-fixture")).loadPageFixture()
+	page?.seed?.(server)
 	const network = globalThis.fetch.bind(globalThis)
 	const offlineFetch = makeOfflineFetch({
+		rpcs: page?.rpcs,
 		htmlRenderUrl: renderUrl,
 		backendUrl: BACKEND_URL,
 		unfurls: network,
