@@ -3,8 +3,8 @@
  * `fixture/offline-backend.ts`, sync sockets (`/sync/mux`, `/sync/<kind>/<id>`) from
  * `fixture/fixture-socket.ts`, over Bun's HTTP and WebSocket server. For the G3 gate (iOS, JSC).
  *
- *   bun scripts/fixture-backend.ts [port] [--dms] [--big]   (default 4320; --dms seeds more DMs,
- *   --big gives #engineering 3,000 messages)
+ *   bun scripts/fixture-backend.ts [port] [--dms] [--big] [--thread]   (default 4320; --dms seeds
+ *   more DMs, --big gives #engineering 3,000 messages, --thread a thread on #general)
  *
  * Server-side changes, to prove liveness (each prints the transaction id):
  *   curl -X POST '127.0.0.1:4320/__fixture/unread?channel=<channel id>'        one more unread
@@ -16,6 +16,7 @@ import type { WebSocketLike } from "@hazel/effect-db-collection"
 import { fixtureNotifications, makeOfflineFetch } from "../fixture/offline-backend"
 import { currentUser } from "../fixture/offline-session"
 import { makeFixtureServer, makeFixtureWebSocket } from "../fixture/fixture-socket"
+import { seedGeneralThread, snapshotWithThread } from "../fixture/thread-seed"
 import { bigChannel } from "../web/big-channel"
 import {
 	adaUserId,
@@ -53,7 +54,14 @@ declare const Bun: {
 const port = Number(process.argv[2] ?? 4320)
 const backendUrl = `http://127.0.0.1:${port}`
 const server = makeFixtureServer()
-const FixtureWebSocket = makeFixtureWebSocket({ server })
+// With `--thread`, the thread's own source answers as an empty channel's (`thread-seed.ts`).
+const FixtureWebSocket = makeFixtureWebSocket({
+	server,
+	// History pages as the source objects page it: a 3,000-message snapshot would pass URLSession's
+	// 1 MiB WebSocket message limit (close 1009).
+	pageSize: 100,
+	...(process.argv.includes("--thread") ? { snapshot: snapshotWithThread } : {}),
+})
 const offlineFetch = makeOfflineFetch({
 	backendUrl,
 	user: currentUser,
@@ -137,6 +145,8 @@ const seedDms = () => {
 	}
 }
 if (process.argv.includes("--dms")) seedDms()
+// `--thread`: the Benchmarks thread on #general's last message, as the web offline build has it.
+if (process.argv.includes("--thread")) seedGeneralThread(server)
 // `--big`: #engineering with 3,000 messages (`web/big-channel.ts`), the performance bar's channel.
 if (process.argv.includes("--big")) {
 	const big = bigChannel(3000)
