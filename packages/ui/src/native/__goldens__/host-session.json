@@ -57,7 +57,8 @@
 						2,
 						{
 							"title": "A",
-							"href": "#/a"
+							"href": "#/a",
+							"key": "a"
 						}
 					],
 					[
@@ -119,7 +120,8 @@
 						5,
 						{
 							"title": "B",
-							"href": "#/b"
+							"href": "#/b",
+							"key": "b"
 						}
 					],
 					[
@@ -181,7 +183,8 @@
 						8,
 						{
 							"title": "C",
-							"href": "#/c"
+							"href": "#/c",
+							"key": "c"
 						}
 					],
 					[
@@ -221,7 +224,7 @@
 				"insert 3 4 null",
 				"props 3 {name=\"leading\"}",
 				"insert 2 3 null",
-				"props 2 {href=\"#/a\",title=\"A\"}",
+				"props 2 {href=\"#/a\",key=\"a\",title=\"A\"}",
 				"events 2 [press]",
 				"insert 1 2 null",
 				"create 5 hz:item",
@@ -231,7 +234,7 @@
 				"insert 6 7 null",
 				"props 6 {name=\"leading\"}",
 				"insert 5 6 null",
-				"props 5 {href=\"#/b\",title=\"B\"}",
+				"props 5 {href=\"#/b\",key=\"b\",title=\"B\"}",
 				"events 5 [press]",
 				"insert 1 5 null",
 				"create 8 hz:item",
@@ -241,7 +244,7 @@
 				"insert 9 10 null",
 				"props 9 {name=\"leading\"}",
 				"insert 8 9 null",
-				"props 8 {href=\"#/c\",title=\"C\"}",
+				"props 8 {href=\"#/c\",key=\"c\",title=\"C\"}",
 				"events 8 [press]",
 				"insert 1 8 null",
 				"props 1 {title=\"Rows\"}",
@@ -250,13 +253,13 @@
 			"tree": [
 				"#root#0",
 				"  hz:section#1 {title=\"Rows\"}",
-				"    hz:item#2 {href=\"#/a\",title=\"A\"} on[press]",
+				"    hz:item#2 {href=\"#/a\",key=\"a\",title=\"A\"} on[press]",
 				"      hz:slot#3 {name=\"leading\"}",
 				"        hz:icon#4 {name=\"hashtag\"}",
-				"    hz:item#5 {href=\"#/b\",title=\"B\"} on[press]",
+				"    hz:item#5 {href=\"#/b\",key=\"b\",title=\"B\"} on[press]",
 				"      hz:slot#6 {name=\"leading\"}",
 				"        hz:icon#7 {name=\"hashtag\"}",
-				"    hz:item#8 {href=\"#/c\",title=\"C\"} on[press]",
+				"    hz:item#8 {href=\"#/c\",key=\"c\",title=\"C\"} on[press]",
 				"      hz:slot#9 {name=\"leading\"}",
 				"        hz:icon#10 {name=\"hashtag\"}"
 			],
@@ -284,13 +287,13 @@
 			"tree": [
 				"#root#0",
 				"  hz:section#1 {title=\"Rows\"}",
-				"    hz:item#2 {href=\"#/a\",title=\"A\"} on[press]",
+				"    hz:item#2 {href=\"#/a\",key=\"a\",title=\"A\"} on[press]",
 				"      hz:slot#3 {name=\"leading\"}",
 				"        hz:icon#4 {name=\"hashtag\"}",
-				"    hz:item#5 {selected=true,title=\"B\"} on[press]",
+				"    hz:item#5 {key=\"b\",selected=true,title=\"B\"} on[press]",
 				"      hz:slot#6 {name=\"leading\"}",
 				"        hz:icon#7 {name=\"hashtag\"}",
-				"    hz:item#8 {href=\"#/c\",title=\"C\"} on[press]",
+				"    hz:item#8 {href=\"#/c\",key=\"c\",title=\"C\"} on[press]",
 				"      hz:slot#9 {name=\"leading\"}",
 				"        hz:icon#10 {name=\"hashtag\"}"
 			],
@@ -323,13 +326,13 @@
 			"tree": [
 				"#root#0",
 				"  hz:section#1 {title=\"Rows\"}",
-				"    hz:item#8 {href=\"#/c\",title=\"C\"} on[press]",
+				"    hz:item#8 {href=\"#/c\",key=\"c\",title=\"C\"} on[press]",
 				"      hz:slot#9 {name=\"leading\"}",
 				"        hz:icon#10 {name=\"hashtag\"}",
-				"    hz:item#5 {selected=true,title=\"B\"} on[press]",
+				"    hz:item#5 {key=\"b\",selected=true,title=\"B\"} on[press]",
 				"      hz:slot#6 {name=\"leading\"}",
 				"        hz:icon#7 {name=\"hashtag\"}",
-				"    hz:item#2 {href=\"#/a\",title=\"A\"} on[press]",
+				"    hz:item#2 {href=\"#/a\",key=\"a\",title=\"A\"} on[press]",
 				"      hz:slot#3 {name=\"leading\"}",
 				"        hz:icon#4 {name=\"hashtag\"}"
 			],
@@ -353,10 +356,10 @@
 			"tree": [
 				"#root#0",
 				"  hz:section#1 {title=\"Rows\"}",
-				"    hz:item#8 {href=\"#/c\",title=\"C\"} on[press]",
+				"    hz:item#8 {href=\"#/c\",key=\"c\",title=\"C\"} on[press]",
 				"      hz:slot#9 {name=\"leading\"}",
 				"        hz:icon#10 {name=\"hashtag\"}",
-				"    hz:item#5 {selected=true,title=\"B\"} on[press]",
+				"    hz:item#5 {key=\"b\",selected=true,title=\"B\"} on[press]",
 				"      hz:slot#6 {name=\"leading\"}",
 				"        hz:icon#7 {name=\"hashtag\"}"
 			],

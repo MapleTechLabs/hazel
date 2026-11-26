@@ -102,6 +102,12 @@ export type Hz<Msg, R, K extends TagKey> = HzBuilder<Msg, R, K> & Chain<Msg, R, 
 // builders
 // ---------------------------------------------------------------------------
 
+/**
+ * The wire prop every keyed `hz:*` element carries (`row-key`): hosts name rows by it (`move`,
+ * `scrollTo({key})`, `popover.anchorTo`); the web host writes it as `data-hz-key`.
+ */
+export const KEY_PROP = "key"
+
 const banned = (what: string) =>
 	new Error(`hazel elements take no raw ${what}: use the vocabulary's typed props (docs/hazel-ui.md)`)
 
@@ -152,6 +158,10 @@ export class HzBuilder<Msg, R, K extends TagKey> extends View.ElementBuilder<
 	}
 	override prop(_name: never, _value: never): this {
 		throw banned("props")
+	}
+	/** Keeps the node on moves (Effect UI) and sends the key as the wire prop `key` (`row-key`). */
+	override key(key: string): this {
+		return merge(super.key(key), { [KEY_PROP]: key })
 	}
 	children<const C extends ReadonlyArray<ChildInput<Msg, K>>>(
 		...inputs: C

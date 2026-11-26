@@ -18,7 +18,9 @@ export const compile = (root: FixtureNode): Batch => {
 	const node = (input: FixtureNode): number => {
 		const id = next++
 		ops.push(["create", id, `hz:${input.tag}`])
-		const props: { readonly [name: string]: Json } = input.props ?? {}
+		// A keyed node carries its key as the wire prop `key` (`row-key`), as `Hazel.key` sends it.
+		const props: { readonly [name: string]: Json } =
+			input.key === undefined ? (input.props ?? {}) : { ...input.props, key: input.key }
 		if (Object.keys(props).length > 0) ops.push(["props", id, props])
 		if ((input.events ?? []).length > 0) ops.push(["events", id, input.events ?? []])
 		for (const slot of input.slots ?? []) {

@@ -8,6 +8,8 @@ public struct ConformanceCase: Identifiable, Sendable {
     /// `sidebar` (240pt column), `inline` (its own size) or `screen` (the full width).
     public let frame: String
     public let batch: Data
+    /// The iOS lane this case waits on (`pending.ios`): skipped as not implemented until it draws it.
+    public var pending: String? = nil
 
     /// The iOS lane that owns this case's tag.
     public var lane: String { HazelVocabulary.lanes["hz:\(tag)"] ?? "?" }
@@ -44,17 +46,18 @@ public enum ConformanceFixtures {
         guard let root = fixture["root"] as? [String: Any] else { throw ConformanceError.malformed("\(tag)/\(name): root") }
         let frame = fixture["frame"] as? String ?? "screen"
         let base = "\(tag)/\(name)"
-        var out = [ConformanceCase(id: base, tag: tag, frame: frame, batch: try compile(root))]
+        let pending = (fixture["pending"] as? [String: Any])?["ios"] as? String
+        var out = [ConformanceCase(id: base, tag: tag, frame: frame, batch: try compile(root), pending: pending)]
         for axis in fixture["axes"] as? [[String: Any]] ?? [] {
             guard let prop = axis["prop"] as? String, let values = axis["values"] as? [Any] else { continue }
             for value in values {
                 let changed = withProps(root, [prop: value])
-                out.append(ConformanceCase(id: "\(base).\(prop)-\(label(value))", tag: tag, frame: frame, batch: try compile(changed)))
+                out.append(ConformanceCase(id: "\(base).\(prop)-\(label(value))", tag: tag, frame: frame, batch: try compile(changed), pending: pending))
             }
         }
         for named in fixture["cases"] as? [[String: Any]] ?? [] {
             guard let caseName = named["name"] as? String, let props = named["props"] as? [String: Any] else { continue }
-            out.append(ConformanceCase(id: "\(base).\(caseName)", tag: tag, frame: frame, batch: try compile(withProps(root, props))))
+            out.append(ConformanceCase(id: "\(base).\(caseName)", tag: tag, frame: frame, batch: try compile(withProps(root, props)), pending: pending))
         }
         return out
     }
@@ -97,7 +100,10 @@ public enum ConformanceFixtures {
             let id = next
             next += 1
             ops.append(["create", id, "hz:\(tag)"])
-            if let props = input["props"] as? [String: Any], !props.isEmpty { ops.append(["props", id, props]) }
+            // A keyed node carries its key as the wire prop `key` (`row-key`), as `Hazel.key` sends it.
+            var props = input["props"] as? [String: Any] ?? [:]
+            if let key = input["key"] as? String { props["key"] = key }
+            if !props.isEmpty { ops.append(["props", id, props]) }
             if let events = input["events"] as? [String], !events.isEmpty { ops.append(["events", id, events]) }
             for slot in input["slots"] as? [[String: Any]] ?? [] {
                 let slotId = next

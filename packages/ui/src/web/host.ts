@@ -74,6 +74,12 @@ export const wrapHost = (inner: Renderer.Host<Node>, document: Document): Render
 		setProp: (node, name, value) => {
 			const primitive = primitives.get(node)
 			if (primitive === undefined) inner.setProp(node, name, value)
+			// `row-key`: every keyed element's key, for rows, anchors and `scrollTo({key})`.
+			else if (name === Hazel.KEY_PROP) {
+				if (!(node instanceof Element)) return
+				if (typeof value === "string") node.setAttribute("data-hz-key", value)
+				else node.removeAttribute("data-hz-key")
+			}
 			// SAFETY: `hz:*` props are plain data: `spec.ts` types every prop with a JSON schema.
 			else primitive.set(name, value as Plain)
 		},

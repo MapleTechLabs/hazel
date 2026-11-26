@@ -125,8 +125,8 @@ describe("lane A4 on the web host", () => {
 					new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true }),
 				)
 				await settle()
-				// HAZEL-GAP(row-key): ids are positions until keys reach the host.
-				expect(fired()).toEqual(['toggle {"collapsed":true}', 'move {"id":"0","before":"2"}'])
+				// Rows are named by their keys (`row-key`).
+				expect(fired()).toEqual(['toggle {"collapsed":true}', 'move {"id":"a","before":"c"}'])
 			},
 		))
 
