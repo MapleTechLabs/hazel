@@ -38,6 +38,8 @@ public final class Tree {
     /// Kept-alive subtrees outside the tree (`detach`), until reinserted or removed.
     public private(set) var detached: Set<NodeId> = []
     public private(set) var lastSeq = 0
+    /// Nodes whose props, text or children the last batch changed (a removed node's parent counts).
+    public private(set) var touched: Set<NodeId> = []
 
     public init() {
         nodes = [Tree.rootId: Node(id: Tree.rootId, tag: "#root")]
@@ -50,6 +52,7 @@ public final class Tree {
     /// Applies one batch. Batches must arrive in sequence: a gap means the tree is wrong.
     public func apply(_ batch: Batch) throws {
         guard batch.seq == lastSeq + 1 else { throw TreeError.outOfOrder(expected: lastSeq + 1, got: batch.seq) }
+        touched.removeAll(keepingCapacity: true)
         for op in batch.ops { try apply(op) }
         lastSeq = batch.seq
     }
@@ -66,10 +69,16 @@ public final class Tree {
                 if value == .null { next.removeValue(forKey: key) } else { next[key] = value }
             }
             // One write per op, and none when nothing differs, so observers fire once or not at all.
-            if next != node.props { node.props = next }
+            if next != node.props {
+                node.props = next
+                touched.insert(id)
+            }
         case let .text(id, text):
             let node = try lookup(id)
-            if node.text != text { node.text = text }
+            if node.text != text {
+                node.text = text
+                touched.insert(id)
+            }
         case let .insert(parentId, id, before):
             let parent = try lookup(parentId)
             let child = try lookup(id)
@@ -77,6 +86,7 @@ public final class Tree {
             let index = before.flatMap { parent.children.firstIndex(of: $0) } ?? parent.children.count
             parent.children.insert(id, at: index)
             child.parent = parentId
+            touched.insert(parentId)
         case let .remove(id):
             let node = try lookup(id)
             unlink(node)
@@ -100,6 +110,7 @@ public final class Tree {
     private func unlink(_ node: Node) {
         detached.remove(node.id)
         guard let parentId = node.parent else { return }
+        touched.insert(parentId)
         if let parent = nodes[parentId], let index = parent.children.firstIndex(of: node.id) {
             parent.children.remove(at: index)
         }
