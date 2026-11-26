@@ -6,7 +6,8 @@
  */
 import { Renderer, type View } from "@effect/ui"
 import { Layer } from "effect"
-import { Hazel } from "../vocabulary/index.ts"
+import { Hazel, TextField } from "../vocabulary/index.ts"
+import * as Revisions from "./revisions.ts"
 import { type Batch, type Json, type Op, WIRE_VERSION } from "./wire.ts"
 
 type Handlers = Readonly<Record<string, View.Handler<unknown, any>>>
@@ -86,6 +87,18 @@ export const makeNativeHost = (send: (batch: Batch) => void): NativeHost => {
 
 	const container = node("#root")
 
+	// The last `value` counters sent per text field; an older one is dropped, not sent.
+	const textRevs = new WeakMap<NativeNode, Revisions.Incoming>()
+	const controlledText = (target: NativeNode, name: string, value: unknown): boolean => {
+		if (target.tag !== TextField.tag || name !== "value") return false
+		const incoming = Revisions.decode(value)
+		if (incoming === undefined) return false
+		const last = textRevs.get(target)
+		if (last !== undefined && (incoming.rev < last.rev || incoming.edit < last.edit)) return true
+		textRevs.set(target, incoming)
+		return false
+	}
+
 	const host: Renderer.Host<NativeNode> = {
 		createElement: (tag) => {
 			const made = node(tag)
@@ -115,6 +128,8 @@ export const makeNativeHost = (send: (batch: Batch) => void): NativeHost => {
 		setProp: (target, name, value) => {
 			const json = value === undefined ? "null" : JSON.stringify(value)
 			if (target.sent.get(name) === json) return
+			// G5: a controlled text value never goes back in revision (`revisions.ts`).
+			if (controlledText(target, name, value)) return
 			if (json === "null") target.sent.delete(name)
 			else target.sent.set(name, json)
 			const parsed = JSON.parse(json) as Json

@@ -8,6 +8,7 @@ import * as Component from "@effect/ui/Component"
 import * as View from "@effect/ui/View"
 import { Context, type Schema } from "effect"
 import type { IconName, Platform, TextRole, TextTone } from "./options.ts"
+import * as TextField from "./TextField.ts"
 
 /** Runtime tag names. */
 export const tag = {
@@ -20,6 +21,7 @@ export const tag = {
 	slot: "hz:slot",
 	action: "hz:action",
 	ext: "hz:ext",
+	textField: TextField.tag,
 } as const
 export type Tag = (typeof tag)[keyof typeof tag]
 
@@ -235,6 +237,7 @@ export type Tags<Msg> = {
 	readonly text: View.Shorthand<HzText<Msg, never, {}, "hz:text">>
 	readonly icon: HzElement<Msg, never, {}, "hz:icon">
 	readonly avatar: HzElement<Msg, never, {}, "hz:avatar">
+	readonly textField: TextField.HzTextField<Msg>
 	readonly extension: <D extends AnyExtension>(
 		definition: D,
 		props: PropsOf<D>,
@@ -264,6 +267,7 @@ const tags: Readonly<Record<string, View.ElementBuilder<any, any, any, any>>> = 
 	text: View.shorthand(new HzText(tag.text)),
 	icon: new HzElement(tag.icon),
 	avatar: new HzElement(tag.avatar),
+	textField: TextField.builder,
 	// Installed on the helper's prototype like the builders: `h.extension(def, props)`.
 	extension: makeExtension as unknown as View.ElementBuilder<any, any, any, any>,
 }

@@ -25,6 +25,9 @@ final class EffectUiRuntime {
         }
         let native = JSValue(newObjectIn: context)!
         native.setObject(post, forKeyedSubscript: "post" as NSString)
+        // G5: the demo screen and a debug JS latency, from launch args (`-HazelScreen textField`).
+        native.setObject(UserDefaults.standard.string(forKey: "HazelScreen") ?? "", forKeyedSubscript: "screen" as NSString)
+        native.setObject(UserDefaults.standard.double(forKey: "HazelLatencyMs"), forKeyedSubscript: "latencyMs" as NSString)
         context.setObject(native, forKeyedSubscript: "__native" as NSString)
         // G3: the data layer's platform services (`Platform/`), on the JS thread's queue.
         HazelPlatform.install(in: context)
