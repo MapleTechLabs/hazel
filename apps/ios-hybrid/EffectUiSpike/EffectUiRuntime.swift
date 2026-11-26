@@ -2,6 +2,7 @@ import Foundation
 import JavaScriptCore
 import QuartzCore
 import os
+import HazelUI
 
 /// Runs the `hazel` script (`effect-ui/entry.ts`) in a bare JavaScriptCore context on its own thread
 /// (`JSEngine`, G4): no WebKit, no DOM. Batches are decoded there and applied here; presses hop to the

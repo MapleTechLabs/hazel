@@ -4,10 +4,12 @@ import { recipes } from "../src/style/recipes/index.ts"
 import { tokens } from "../src/style/tokens.ts"
 import { generateCss } from "./css.ts"
 import { generateSwift } from "./swift.ts"
+import { generateSwiftRegistry, hazelUI } from "./swift-vocabulary.ts"
 
 /**
  * `bun run --cwd packages/ui ui:generate`: writes `src/style/generated/{tokens.css,Theme.swift}` from
- * the tokens and recipes. `--check` writes nothing and exits 1 when either file is stale.
+ * the tokens and recipes, and HazelUI's theme and primitive registry. `--check` writes nothing and
+ * exits 1 when any output is stale.
  */
 
 const generatedDir = resolve(import.meta.dirname, "../src/style/generated")
@@ -15,6 +17,9 @@ const generatedDir = resolve(import.meta.dirname, "../src/style/generated")
 export const outputs = (): ReadonlyArray<{ readonly path: string; readonly content: string }> => [
 	{ path: resolve(generatedDir, "tokens.css"), content: generateCss(tokens, recipes) },
 	{ path: resolve(generatedDir, "Theme.swift"), content: generateSwift(tokens, recipes) },
+	// HazelUI's own copies (C0): the theme its primitives read, and the tag-to-view registry.
+	{ path: resolve(hazelUI, "Theme/HazelTheme.generated.swift"), content: generateSwift(tokens, recipes) },
+	{ path: resolve(hazelUI, "Primitives/Registry.generated.swift"), content: generateSwiftRegistry() },
 ]
 
 const read = (path: string) => {

@@ -3,6 +3,10 @@ options:
     bundleIdPrefix: sh.hazel
     deploymentTarget:
         iOS: "26.0"
+# HazelUI (C0): the one Swift package for the tree, wire, runtime and primitives.
+packages:
+    HazelUI:
+        path: HazelUI
 settings:
     base:
         SWIFT_VERSION: "6.0"
@@ -57,6 +61,8 @@ targets:
     EffectUiSpike:
         type: application
         platform: iOS
+        dependencies:
+            - package: HazelUI
         sources:
             - path: EffectUiSpike
             # The script (`bun run build:effect-ui`), copied as a folder.

@@ -1,4 +1,5 @@
 import SwiftUI
+import HazelUI
 
 /// The iOS extension registry (`docs/hazel-ui.md`, "Platform extensions"): an extension name to the
 /// view drawn in its `hz:ext` placeholder. Unregistered names draw their fallback slot.

@@ -12,7 +12,8 @@ let package = Package(
         .testTarget(
             name: "HazelUITests",
             dependencies: ["HazelUI"],
-            resources: [.copy("Goldens"), .copy("JS")]
+            // The wire goldens are read from packages/ui (one source); see GoldenTests.
+            resources: [.copy("JS")]
         ),
     ],
     swiftLanguageModes: [.v6]

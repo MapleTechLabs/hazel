@@ -1,4 +1,5 @@
 import SwiftUI
+import HazelUI
 
 /// The controlled text rule (G5), line for line `packages/ui/src/native/revisions.ts`: `rev` counts
 /// this field's edits, `edit` the Model's; the field owns the text while editing.

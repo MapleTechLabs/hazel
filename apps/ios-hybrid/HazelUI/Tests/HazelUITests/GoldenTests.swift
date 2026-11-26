@@ -1,68 +1,82 @@
 import Foundation
+import JavaScriptCore
 import Testing
 @testable import HazelUI
 
-/// A golden: batches applied in order, each with the tree expected after it.
-private struct Golden: Decodable {
-    struct Step: Decodable {
-        let batch: AnyJSON
-        let expect: [String]?
-        let count: Int?
-        let detached: [Int]?
-        let freed: [Int]?
-    }
-    let steps: [Step]
+/// C2: the shared wire goldens (`packages/ui/src/native/__goldens__`, one source), decoded here to the
+/// same canonical text `wire.test.ts` checks, and applied to `Tree` with the same outline after each step.
+/// The simulator reads them from the checkout, by this file's path.
+private let goldens = URL(filePath: #filePath)
+    .deletingLastPathComponent()
+    .appending(path: "../../../../../packages/ui/src/native/__goldens__")
+    .standardized
+
+private func json(_ name: String) throws -> [String: Any] {
+    let data = try Data(contentsOf: goldens.appending(path: name))
+    return try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
 }
 
-/// Keeps a batch as its raw JSON, so the decoder under test reads the same bytes as the file.
-private struct AnyJSON: Decodable {
-    let data: Data
-    init(from decoder: Decoder) throws {
-        let value = try decoder.singleValueContainer().decode(Raw.self)
-        data = try JSONSerialization.data(withJSONObject: value.any)
-    }
+private func streams() -> [String] {
+    let files = (try? FileManager.default.contentsOfDirectory(atPath: goldens.path)) ?? []
+    return files.filter { $0.hasSuffix(".json") && $0 != "rejects.json" }.sorted()
 }
 
-private struct Raw: Decodable {
-    let any: Any
-    init(from decoder: Decoder) throws {
-        let c = try decoder.singleValueContainer()
-        if c.decodeNil() { any = NSNull() }
-        else if let b = try? c.decode(Bool.self) { any = b }
-        else if let i = try? c.decode(Int.self) { any = i }
-        else if let d = try? c.decode(Double.self) { any = d }
-        else if let s = try? c.decode(String.self) { any = s }
-        else if let a = try? c.decode([Raw].self) { any = a.map(\.any) }
-        else { any = try c.decode([String: Raw].self).mapValues(\.any) }
-    }
+/// A batch through JavaScriptCore the way the runtime gets one: `JSON.stringify` in JS, then the JS
+/// string read as UTF-8 bytes (`WireBytes`).
+private func throughJS(_ batch: Any) throws -> Data {
+    let source = try JSONSerialization.data(withJSONObject: batch)
+    let context = try #require(JSContext())
+    context.setObject(String(decoding: source, as: UTF8.self), forKeyedSubscript: "source" as NSString)
+    return WireBytes.utf8(context.evaluateScript("JSON.stringify(JSON.parse(source))"))
 }
 
 @MainActor
 struct GoldenTests {
-    @Test(arguments: ["mount", "prop-change", "keyed-reorder", "removal", "detach-reattach"])
+    @Test func goldensArePresent() {
+        #expect(streams().count >= 6, "no goldens at \(goldens.path)")
+    }
+
+    @Test(arguments: streams())
     func golden(_ name: String) throws {
-        let url = try #require(Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "Goldens"))
-        let golden = try JSONDecoder().decode(Golden.self, from: Data(contentsOf: url))
+        let golden = try json(name)
+        let steps = try #require(golden["steps"] as? [[String: Any]])
         let tree = Tree()
-        for (index, step) in golden.steps.enumerated() {
-            try tree.apply(WireDecoder.decode(step.batch.data))
-            if let expect = step.expect {
-                #expect(tree.outline() == expect.joined(separator: "\n"), "\(name) step \(index)")
-            }
-            if let count = step.count { #expect(tree.count == count, "\(name) step \(index) count") }
-            if let detached = step.detached { #expect(tree.detached == Set(detached), "\(name) step \(index)") }
-            for id in step.freed ?? [] { #expect(tree.node(id) == nil, "\(name) step \(index): \(id) not freed") }
+        for (index, step) in steps.enumerated() {
+            let raw = try #require(step["batch"])
+            let batch = try WireDecoder.decode(try throughJS(raw))
+            #expect(batch.ops.map(WireText.describe) == step["ops"] as? [String], "\(name) step \(index) ops")
+            try tree.apply(batch)
+            #expect(tree.outline() == (step["tree"] as? [String])?.joined(separator: "\n"), "\(name) step \(index) tree")
+            #expect(tree.count == step["count"] as? Int, "\(name) step \(index) count")
+            #expect(tree.detached == Set(step["detached"] as? [Int] ?? []), "\(name) step \(index) detached")
+        }
+        for entry in golden["inbound"] as? [[String: Any]] ?? [] {
+            let message = try #require(entry["message"])
+            let data = try JSONSerialization.data(withJSONObject: message)
+            let decoded = try WireDecoder.decodeInbound(data)
+            #expect(WireText.describe(decoded) == entry["decoded"] as? String, "\(name) inbound")
+            // What Swift encodes reads back the same.
+            #expect(try WireDecoder.decodeInbound(WireEncoder.encode(decoded)) == decoded, "\(name) inbound round trip")
         }
     }
 
-    @Test func rejectsUnknownVersion() {
-        let data = Data(#"{"v": 3, "seq": 1, "ops": []}"#.utf8)
-        #expect(throws: WireError.unsupportedVersion(3)) { try WireDecoder.decode(data) }
-    }
-
-    @Test func rejectsUnknownOp() {
-        let data = Data(#"{"v": 2, "seq": 1, "ops": [["element", 1, "div"]]}"#.utf8)
-        #expect(throws: WireError.unknownOp("element")) { try WireDecoder.decode(data) }
+    @Test func refusesWhatTypeScriptRefuses() throws {
+        let rejects = try #require(try json("rejects.json")["rejects"] as? [[String: Any]])
+        for reject in rejects {
+            let data = try JSONSerialization.data(withJSONObject: try #require(reject["batch"]))
+            let expected = reject["error"] as? String
+            do {
+                _ = try WireDecoder.decode(data)
+                Issue.record("accepted a batch the goldens reject (\(expected ?? "?"))")
+            } catch let error as WireError {
+                let kind = switch error {
+                case .malformed: "malformed"
+                case .unsupportedVersion: "unsupportedVersion"
+                case .unknownOp: "unknownOp"
+                }
+                #expect(kind == expected)
+            }
+        }
     }
 
     @Test func rejectsOutOfOrderBatch() throws {

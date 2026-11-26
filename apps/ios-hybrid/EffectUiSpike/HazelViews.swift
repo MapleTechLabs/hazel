@@ -1,4 +1,5 @@
 import SwiftUI
+import HazelUI
 
 /// Typed props per `hz:*` tag, read from what crossed the wire (codegen writes these in phase 1).
 struct ScreenProps { let title: String
@@ -240,7 +241,7 @@ struct HzExtension: View {
 struct HzStats: View {
     let tree: EffectUiTree
     var body: some View {
-        Text("wire v\(Wire.version) · \(tree.batches) batches · last \(tree.lastOps) ops, \(tree.lastBytes) B, \(String(format: "%.2f", tree.lastApplyMs)) ms")
+        Text("wire v\(WIRE_VERSION) · \(tree.batches) batches · last \(tree.lastOps) ops, \(tree.lastBytes) B, \(String(format: "%.2f", tree.lastApplyMs)) ms")
             .font(Inter.font(size: 12, weight: 400))
             .foregroundStyle(HazelTheme.Colors.mutedFg.color)
             .frame(maxWidth: .infinity, alignment: .leading)

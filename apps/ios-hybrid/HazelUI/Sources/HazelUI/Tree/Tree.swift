@@ -99,6 +99,9 @@ public final class Tree {
             let node = try lookup(id)
             unlink(node)
             detached.insert(id)
+        case let .command(_, id, _, _):
+            // Not a tree change: the runtime performs it and sends one `reply` (lane S0).
+            _ = try lookup(id)
         }
     }
 
@@ -130,7 +133,7 @@ public final class Tree {
         guard let node = nodes[id] else { return "" }
         var line = String(repeating: "  ", count: depth) + "\(node.tag)#\(node.id)"
         if !node.props.isEmpty {
-            let parts = node.props.keys.sorted().map { "\($0)=\(Tree.describe(node.props[$0]!))" }
+            let parts = node.props.keys.sorted().map { "\($0)=\(WireText.describe(node.props[$0]!))" }
             line += " {" + parts.joined(separator: ",") + "}"
         }
         if !node.text.isEmpty { line += " \"\(node.text)\"" }
@@ -138,14 +141,4 @@ public final class Tree {
         return ([line] + node.children.map { outline($0, depth: depth + 1) }).joined(separator: "\n")
     }
 
-    private static func describe(_ value: JSONValue) -> String {
-        switch value {
-        case .null: "null"
-        case let .bool(b): "\(b)"
-        case let .number(n): n == n.rounded() && abs(n) < 1e15 ? "\(Int(n))" : "\(n)"
-        case let .string(s): "\"\(s)\""
-        case let .array(a): "[" + a.map(describe).joined(separator: ",") + "]"
-        case let .object(o): "{" + o.keys.sorted().map { "\($0):\(describe(o[$0]!))" }.joined(separator: ",") + "}"
-        }
-    }
 }

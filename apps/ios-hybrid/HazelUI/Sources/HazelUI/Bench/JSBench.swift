@@ -93,18 +93,8 @@ public final class JSBench: @unchecked Sendable {
         }
     }
 
-    /// A JS string as UTF-8 bytes, straight from JavaScriptCore (no `NSString` / `String` bridging).
-    static func utf8(_ value: JSValue?) -> Data {
-        guard let value, let ref = JSValueToStringCopy(value.context.jsGlobalContextRef, value.jsValueRef, nil) else { return Data() }
-        defer { JSStringRelease(ref) }
-        let capacity = JSStringGetMaximumUTF8CStringSize(ref)
-        var data = Data(count: capacity)
-        let written = data.withUnsafeMutableBytes { buffer in
-            JSStringGetUTF8CString(ref, buffer.baseAddress!.assumingMemoryBound(to: CChar.self), capacity)
-        }
-        data.count = max(0, written - 1)
-        return data
-    }
+    /// A JS string as UTF-8 bytes (`WireBytes`, the wire's delivery path).
+    static func utf8(_ value: JSValue?) -> Data { WireBytes.utf8(value) }
 
     public static func ms(_ d: Duration) -> Double {
         Double(d.components.seconds) * 1000 + Double(d.components.attoseconds) / 1e15

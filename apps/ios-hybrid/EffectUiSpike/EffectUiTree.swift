@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import QuartzCore
 import os
+import HazelUI
 
 /// A `hazel` node as the views read it: its `hz:*` tag, its props as they crossed the wire, and its
 /// children. Typed views over the props are in `HazelViews.swift`.
