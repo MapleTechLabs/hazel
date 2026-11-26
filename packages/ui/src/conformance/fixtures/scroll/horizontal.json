@@ -1,0 +1,126 @@
+{
+	"about": "A horizontal scroll of badges wider than the frame.",
+	"root": {
+		"tag": "scroll",
+		"props": {
+			"axis": "horizontal"
+		},
+		"children": [
+			{
+				"tag": "stack",
+				"props": {
+					"axis": "horizontal",
+					"density": "compact"
+				},
+				"children": [
+					{
+						"tag": "badge",
+						"key": "1",
+						"props": {
+							"label": "Label 1"
+						}
+					},
+					{
+						"tag": "badge",
+						"key": "2",
+						"props": {
+							"label": "Label 2"
+						}
+					},
+					{
+						"tag": "badge",
+						"key": "3",
+						"props": {
+							"label": "Label 3"
+						}
+					},
+					{
+						"tag": "badge",
+						"key": "4",
+						"props": {
+							"label": "Label 4"
+						}
+					},
+					{
+						"tag": "badge",
+						"key": "5",
+						"props": {
+							"label": "Label 5"
+						}
+					},
+					{
+						"tag": "badge",
+						"key": "6",
+						"props": {
+							"label": "Label 6"
+						}
+					},
+					{
+						"tag": "badge",
+						"key": "7",
+						"props": {
+							"label": "Label 7"
+						}
+					},
+					{
+						"tag": "badge",
+						"key": "8",
+						"props": {
+							"label": "Label 8"
+						}
+					},
+					{
+						"tag": "badge",
+						"key": "9",
+						"props": {
+							"label": "Label 9"
+						}
+					},
+					{
+						"tag": "badge",
+						"key": "10",
+						"props": {
+							"label": "Label 10"
+						}
+					},
+					{
+						"tag": "badge",
+						"key": "11",
+						"props": {
+							"label": "Label 11"
+						}
+					},
+					{
+						"tag": "badge",
+						"key": "12",
+						"props": {
+							"label": "Label 12"
+						}
+					},
+					{
+						"tag": "badge",
+						"key": "13",
+						"props": {
+							"label": "Label 13"
+						}
+					},
+					{
+						"tag": "badge",
+						"key": "14",
+						"props": {
+							"label": "Label 14"
+						}
+					},
+					{
+						"tag": "badge",
+						"key": "15",
+						"props": {
+							"label": "Label 15"
+						}
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar"
+}

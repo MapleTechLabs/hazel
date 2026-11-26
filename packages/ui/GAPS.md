@@ -51,3 +51,8 @@ the message's `grouped` flag. This was a contract decision, not a gap.
 | Id | Screen | Need | Proposal | Kind |
 | --- | --- | --- | --- | --- |
 | `semibold-weight` | message, settings | kit headings, dialog titles and the message author are `font-semibold` (600); `font.weight` has `regular` and `strong` (500) only | a third weight in `Tokens.font.weight` and a recipe `weight` step (`schema.ts`); until then recipes use `strong` (lane D, `RECIPES-REVIEW.md`) | option |
+| Id                  | Screen or lane  | Need                                                     | Stand-in (where)                                                     | Kind     |
+| ------------------- | --------------- | -------------------------------------------------------- | -------------------------------------------------------------------- | -------- |
+| `recipe-align-end`  | A1 `stack`      | a recipe `align: "end"` (`stack.align` has the value)    | the web renderer sets `align-items: flex-end` (`layout/stack.ts`)    | renderer |
+| `recipe-overflow`   | A1 `scroll`     | a recipe declaration for overflow (scroll along an axis) | the web renderer sets `overflow-x`/`overflow-y` (`layout/scroll.ts`) | renderer |
+| `recipe-text-align` | A1 `emptyState` | a recipe declaration for centred text                    | the web renderer sets `text-align: center` (`content/emptyState.ts`) | renderer |

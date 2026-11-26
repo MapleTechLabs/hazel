@@ -1,8 +1,14 @@
 import { defineRecipe } from "../recipe.ts"
 import type { TextRole, TextTone } from "../schema.ts"
 
-/** `text`: a role's type, a tone's ink, and `strong`, the one weight choice a view has. */
-export const text = defineRecipe<{ readonly role: TextRole; readonly tone: TextTone }, "strong">({
+/**
+ * `text`: a role's type, a tone's ink, and `strong`, the one weight choice a view has. `numeric` sets
+ * tabular figures (counts, times), `truncate` ends one line with an ellipsis.
+ */
+export const text = defineRecipe<
+	{ readonly role: TextRole; readonly tone: TextTone },
+	"strong" | "numeric" | "truncate"
+>({
 	primitive: "text",
 	parts: {},
 	base: { root: { strong: false } },
@@ -32,5 +38,9 @@ export const text = defineRecipe<{ readonly role: TextRole; readonly tone: TextT
 			},
 		},
 	},
-	flags: { strong: { root: { strong: true } } },
+	flags: {
+		strong: { root: { strong: true } },
+		numeric: { root: { numeric: true } },
+		truncate: { root: { truncate: true } },
+	},
 })

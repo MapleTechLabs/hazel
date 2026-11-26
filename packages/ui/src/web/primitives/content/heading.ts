@@ -1,5 +1,14 @@
-// Owned by lane A1 (`docs/hazel-ui.md`, "Phase 2: lanes"). Phase 1.5 stub: draws a
-// placeholder naming the lane; the lane replaces it with the renderer (`definePrimitive`).
-import { stubPrimitive } from "../define.ts"
+// Owned by lane A1 (`docs/hazel-ui.md`, "Phase 2: lanes").
+import { definePrimitive, option } from "../define.ts"
 
-export const primitive = stubPrimitive("heading")
+// The element is fixed at create, so the level is ARIA's, not the tag name's (`h1`..`h3`).
+export const primitive = definePrimitive("heading", ({ outer, self }) => {
+	const node = outer("div")
+	node.setAttribute("role", "heading")
+	node.setAttribute("aria-level", "2")
+	return self(node, (name, value) => {
+		if (name !== "level") return
+		option(node, "level", value)
+		node.setAttribute("aria-level", typeof value === "string" ? value : "2")
+	})
+})

@@ -1,0 +1,14 @@
+{
+	"about": "Against today's kit badge (G6 badge-neutral-regular).",
+	"root": {
+		"tag": "badge",
+		"props": {
+			"label": "Beta"
+		}
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "badge-neutral-regular",
+		"target": "badge"
+	}
+}

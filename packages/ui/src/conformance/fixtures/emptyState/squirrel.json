@@ -1,0 +1,16 @@
+{
+	"about": "The message list's empty state: the squirrel over its line.",
+	"root": {
+		"tag": "emptyState",
+		"props": {
+			"title": "Quiet as an ocean gazing squirrel...",
+			"illustration": "squirrel"
+		}
+	},
+	"aria": [
+		{
+			"role": "img",
+			"name": "A squirrel gazing at the ocean"
+		}
+	]
+}

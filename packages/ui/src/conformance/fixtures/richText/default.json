@@ -1,6 +1,49 @@
 {
-	"about": "hz:richText with no props: lane A1 and lane S1 replace this with real cases.",
+	"about": "Every run and block kind: mention, link, code, strong, emphasis, strike; a list, a quote and a code block.",
 	"root": {
-		"tag": "richText"
-	}
+		"tag": "richText",
+		"events": ["pressMention", "pressLink"],
+		"props": {
+			"blocks": [
+				[
+					0,
+					[
+						"Hey ",
+						[1, "@Ada", "user-ada"],
+						", the build is ",
+						[4, "green"],
+						" again. See ",
+						[2, "the run", "https://example.com/run/42"],
+						"."
+					]
+				],
+				[
+					0,
+					[
+						"Use ",
+						[3, "bun run verify:A1"],
+						" before pushing; it is ",
+						[5, "much"],
+						" faster than the ",
+						[6, "old script"],
+						"."
+					]
+				],
+				[2, ["typecheck"], "1."],
+				[2, ["fixtures and the browser runner"], "2."],
+				[3, ["Ship it when it is green."]],
+				[1, "bun run --cwd packages/ui verify:A1\nbun run --cwd packages/ui test:web", "sh"]
+			]
+		}
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "@Ada"
+		},
+		{
+			"role": "link",
+			"name": "the run"
+		}
+	]
 }
