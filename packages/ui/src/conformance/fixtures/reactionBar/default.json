@@ -1,6 +1,60 @@
 {
-	"about": "hz:reactionBar with no props: lane A5 and lane S5 replace this with real cases.",
+	"about": "Reaction pills: one of mine with who reacted, others not; `addable` adds the Add reaction pill.",
+	"frame": "inline",
 	"root": {
-		"tag": "reactionBar"
-	}
+		"tag": "reactionBar",
+		"props": {
+			"reactions": [
+				{
+					"emoji": "👍",
+					"count": 3,
+					"mine": true,
+					"who": {
+						"names": ["You", "Grace", "Alan"],
+						"others": 0
+					}
+				},
+				{
+					"emoji": "🎉",
+					"count": 12,
+					"mine": false,
+					"who": {
+						"names": ["Grace", "Alan", "Ada"],
+						"others": 9
+					}
+				},
+				{
+					"emoji": "👀",
+					"count": 1,
+					"mine": false
+				}
+			]
+		},
+		"events": ["pressReaction", "add"]
+	},
+	"aria": [
+		{
+			"role": "group",
+			"name": "Reactions"
+		},
+		{
+			"role": "button",
+			"name": "👍 3 reactions, reacted by You, Grace and Alan"
+		}
+	],
+	"axes": [
+		{
+			"prop": "addable",
+			"values": [true]
+		}
+	],
+	"cases": [
+		{
+			"name": "empty",
+			"props": {
+				"reactions": [],
+				"addable": true
+			}
+		}
+	]
 }

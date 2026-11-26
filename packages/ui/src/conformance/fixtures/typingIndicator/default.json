@@ -1,6 +1,30 @@
 {
-	"about": "hz:typingIndicator with no props: lane A5 and lane S5 replace this with real cases.",
+	"about": "Who is typing: one name, two, and more than two.",
+	"frame": "inline",
 	"root": {
-		"tag": "typingIndicator"
-	}
+		"tag": "typingIndicator",
+		"props": {
+			"names": ["Ada"]
+		}
+	},
+	"cases": [
+		{
+			"name": "two",
+			"props": {
+				"names": ["Ada", "Grace"]
+			}
+		},
+		{
+			"name": "many",
+			"props": {
+				"names": ["Ada", "Grace", "Alan", "Linus"]
+			}
+		},
+		{
+			"name": "none",
+			"props": {
+				"names": []
+			}
+		}
+	]
 }

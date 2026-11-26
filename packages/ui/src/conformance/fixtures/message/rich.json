@@ -1,0 +1,92 @@
+{
+	"about": "Every run and block kind, and the header's extras: status, provider, badges, a reply, a link card.",
+	"root": {
+		"tag": "message",
+		"props": {
+			"row": {
+				"author": "Grace Hopper",
+				"initials": "GH",
+				"provider": "discord",
+				"status": "🚢",
+				"time": "09:41",
+				"badges": [
+					{
+						"label": "APP",
+						"tone": "accent"
+					},
+					{
+						"label": "Customer",
+						"tone": "info"
+					}
+				],
+				"reply": {
+					"author": "Ada Lovelace",
+					"initials": "AL",
+					"text": "Can someone check the build before lunch?"
+				},
+				"body": [
+					[
+						0,
+						[
+							"Plain, ",
+							[4, "strong"],
+							", ",
+							[5, "emphasis"],
+							", ",
+							[6, "struck"],
+							", ",
+							[3, "inline_code()"],
+							", ",
+							[2, "a link", "https://hazel.sh"],
+							" and ",
+							[1, "@Ada", "u1"],
+							"."
+						]
+					],
+					[2, ["first item"], "•"],
+					[2, ["second item with ", [3, "code"]], "•"],
+					[3, ["A quoted line."]],
+					[1, "const answer = 42\nconsole.log(answer)", "ts"],
+					[1, "plain block, no language", ""]
+				],
+				"embeds": [
+					{
+						"url": "https://hazel.sh/blog/launch",
+						"title": "Hazel: chat for focused teams",
+						"description": "Fast, calm team chat with threads, integrations and a native app.",
+						"site": "hazel.sh"
+					}
+				]
+			}
+		},
+		"events": ["pressMention", "pressLink", "pressReply", "pressAuthor"]
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Jump to Ada Lovelace's message"
+		},
+		{
+			"role": "img",
+			"name": "Synced from Discord"
+		},
+		{
+			"role": "link",
+			"name": "a link"
+		}
+	],
+	"cases": [
+		{
+			"name": "slack",
+			"props": {
+				"row": {
+					"author": "Grace Hopper",
+					"initials": "GH",
+					"provider": "slack",
+					"time": "09:41",
+					"body": [[0, ["Synced in from Slack."]]]
+				}
+			}
+		}
+	]
+}

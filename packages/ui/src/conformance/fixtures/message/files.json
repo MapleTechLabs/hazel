@@ -1,0 +1,106 @@
+{
+	"about": "A message with images, a video and files, and one still sending; one that failed to send.",
+	"root": {
+		"tag": "message",
+		"props": {
+			"row": {
+				"author": "Alan Turing",
+				"initials": "AT",
+				"time": "16:20",
+				"body": [[0, ["Screenshots and the report."]]],
+				"files": [
+					{
+						"id": "i1",
+						"kind": "image",
+						"name": "before.png",
+						"width": 1280,
+						"height": 720
+					},
+					{
+						"id": "i2",
+						"kind": "image",
+						"name": "after.png",
+						"width": 1280,
+						"height": 720
+					},
+					{
+						"id": "v1",
+						"kind": "video",
+						"name": "demo.mp4",
+						"width": 1920,
+						"height": 1080
+					},
+					{
+						"id": "f1",
+						"kind": "file",
+						"name": "quarterly-report-final-v3.pdf",
+						"size": "2.4 MB"
+					},
+					{
+						"id": "f2",
+						"kind": "file",
+						"name": "notes.txt",
+						"size": "12 KB",
+						"progress": 0.4
+					}
+				]
+			}
+		},
+		"events": ["pressAttachment"]
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Open before.png"
+		},
+		{
+			"role": "progressbar"
+		}
+	],
+	"cases": [
+		{
+			"name": "sending",
+			"props": {
+				"pending": true,
+				"row": {
+					"author": "Alan Turing",
+					"initials": "AT",
+					"time": "16:21",
+					"body": [[0, ["Sending this now."]]]
+				}
+			}
+		},
+		{
+			"name": "failed",
+			"props": {
+				"failed": true,
+				"row": {
+					"author": "Alan Turing",
+					"initials": "AT",
+					"time": "16:21",
+					"body": [[0, ["This one did not go through."]]]
+				}
+			}
+		},
+		{
+			"name": "one-image",
+			"props": {
+				"row": {
+					"author": "Alan Turing",
+					"initials": "AT",
+					"time": "16:22",
+					"body": [],
+					"files": [
+						{
+							"id": "i3",
+							"kind": "image",
+							"name": "wide.png",
+							"width": 1600,
+							"height": 600
+						}
+					]
+				}
+			}
+		}
+	]
+}
