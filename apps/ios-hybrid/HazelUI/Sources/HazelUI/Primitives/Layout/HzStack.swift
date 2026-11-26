@@ -13,9 +13,8 @@ struct HzStack: View {
         let sizeClass = HazelTheme.SizeClass(horizontal)
         let options = node.options(["axis", "density", "align"])
         let style = HazelTheme.Recipes.stack.style(options: options, sizeClass: sizeClass)
-        // The recipe's `align` (`recipe-align-end`); `stretch` leaves it unset. The option stands in
-        // only until the generated recipe carries the `end` layer.
-        let align = style.align.map(Self.name) ?? (options["align"] == "end" ? "end" : "stretch")
+        // The recipe's `align`; `stretch` leaves it unset.
+        let align = style.align.map(Self.name) ?? "stretch"
         if style.layout == .row {
             HStack(alignment: Self.vertical(align), spacing: style.gap ?? 0) {
                 ChildrenView(tree: tree, node: node)
