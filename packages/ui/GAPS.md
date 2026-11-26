@@ -48,4 +48,8 @@ the message's `grouped` flag. This was a contract decision, not a gap.
 
 ## Open
 
-None yet.
+| Id                  | Screen or lane  | Need                                                     | Stand-in (where)                                                     | Kind     |
+| ------------------- | --------------- | -------------------------------------------------------- | -------------------------------------------------------------------- | -------- |
+| `recipe-align-end`  | A1 `stack`      | a recipe `align: "end"` (`stack.align` has the value)    | the web renderer sets `align-items: flex-end` (`layout/stack.ts`)    | renderer |
+| `recipe-overflow`   | A1 `scroll`     | a recipe declaration for overflow (scroll along an axis) | the web renderer sets `overflow-x`/`overflow-y` (`layout/scroll.ts`) | renderer |
+| `recipe-text-align` | A1 `emptyState` | a recipe declaration for centred text                    | the web renderer sets `text-align: center` (`content/emptyState.ts`) | renderer |
