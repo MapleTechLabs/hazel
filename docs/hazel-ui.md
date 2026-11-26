@@ -248,9 +248,10 @@ use); Phase 1 re-derives them from the message row, composer and sidebar before 
 | `text.tone` | `default`, `muted`, `subtle`, `accent`, `success`, `warning`, `danger`, `info` |
 | `text.strong` | on or off (the one weight choice a view has; an author name, an unread row) |
 | `button.variant` | `primary`, `secondary`, `outline`, `ghost`, `warning`, `danger` |
-| `button.size` | `regular`, `small`, `xsmall`; `iconOnly` makes it square |
+| `button.size` | `large`, `regular`, `small`, `xsmall`; `iconOnly` makes it square, `circle` makes it round |
 | `badge.tone` | `neutral`, `accent`, `success`, `warning`, `danger`, `info` |
-| `badge.size` | `regular`, `small` |
+| `badge.style` | `solid`, `outline`, `quiet` (today's `muted` is `neutral` + `quiet`) |
+| `badge.size` | `regular`, `small`; `pill` rounds it fully |
 | `stack.density` | `compact`, `regular`, `relaxed` |
 | `frame.surface` | `none`, `card`, `inset`, `muted`, `overlay` |
 | states | `selected`, `emphasized`, `disabled`, `loading`, `destructive`, plus each primitive's own (`message.pinned`...) |
@@ -305,10 +306,20 @@ that produced it would prove nothing.
   accepted losses until upstream supports custom roots (raise it with Effect UI).
 - Islands mount with `head: false`; the Foldkit app owns the document head.
 - Hover, focus rings, keyboard and ARIA belong to each primitive's web renderer.
+- The host Layer must outlive the mount: providing it to `Renderer.mount` alone closes BrowserHost's
+  scope, which removes its listeners, and clicks stop silently. Mount through `withWebHost`
+  (`src/web/mount.ts`). The scheduler is `HtmlScheduler.make()` (`makeDefault` is not exported).
+- Slots are placed with CSS, not by moving nodes: `nextOf` needs every renderer child as a sibling inside
+  the one content parent, so the content parent is `display: contents` and grid or order rules place
+  the slots.
+- An extension draws only once it has both its name and its props: props arrive one at a time after
+  create.
 
 ### Native host (`@hazel/ui/native`) and the wire
 
-One batch per flush, with a sequence number; ids are numbers the host assigns, 0 is the root:
+One batch per flush: `{"v": 1, "seq": n, "ops": [[name, ...fields]]}`. `seq` is exactly the previous plus
+one, and Swift rejects a gap. Ids are numbers the host assigns; 0 is the root. A `props` value of `null`
+deletes that key. `remove` frees the whole subtree; `insert` of an existing or detached id moves it.
 
 | Op | Fields |
 | --- | --- |
@@ -335,21 +346,36 @@ them. The protocol is versioned (`WIRE_VERSION`), and Swift refuses an unknown v
 - `Runtime`: one JavaScriptCore context on its own thread; timers, `console`, `TextEncoder`/`Decoder`,
   `queueMicrotask`; an Effect `Scheduler` that runs in JS rather than hopping through `setTimeout(0)` into
   Swift. Batches hop to the main actor. Native never needs a synchronous answer from JS.
-- `Tree`: applies batches, keeps detached subtrees, and is observable per node, so a changed row redraws
-  alone.
+- `Tree` (proven in G8): one `@Observable` class per node holding props, text, child ids and events; the
+  node table itself is not observed, so creating or removing nodes never reaches unrelated views;
+  child lists are their own small views, so a parent's header does not redraw when its children change.
+  Decoding is safe off the main actor and should run on the JS thread; it is about 80% of mount cost.
 - `Primitives/`: one SwiftUI view per tag, reading `Theme`.
 - `Extensions/`: the registry and the manifest check.
 
 ### Platform services
 
-Each is an Effect service with a web implementation and a Swift-backed one. The list comes from what
-`apps/web-foldkit/src/core/db`, `src/data` and `libs/effect-db-collection` actually use:
+From D0 (`@hazel/client-data`, exports `.`, `./platform`, `./web`). Each is an Effect service with a web
+implementation; the Swift-backed ones come with G3.
 
-`fetch` with `Headers`, `Request`, `Response`, `URL`, `AbortController` and streams (URLSession);
-`WebSocket` (URLSessionWebSocketTask); `crypto.randomUUID`; `localStorage` (a key-value store);
-`setInterval`; the local cache's SQLite (`LocalCacheHost`, wa-sqlite on the web, SQLite on iOS); online
-and visibility signals; auth and session (keychain, and the cookie-session sign-in the web uses);
-haptics, clipboard, share. G3 confirms the list is complete.
+| Service | Web | iOS |
+| --- | --- | --- |
+| `Ids` | `crypto.randomUUID` | `UUID().uuidString` |
+| `KeyValue` | `localStorage` | `UserDefaults` |
+| `Sockets` | `WebSocket` | a `WebSocketLike` bridge over `URLSessionWebSocketTask` (subprotocols, close codes) |
+| `Connectivity` | window `online` | `NWPathMonitor` |
+| `Session` (token, invalidate, RPC authorization) | the app's access-token and session-bearer code | keychain session and token exchange, sends a bearer |
+| `LocalCache` | wa-sqlite on OPFS, Web Locks, IndexedDB channel states | native SQLite behind the existing `LocalCacheHost` |
+| `HttpClient` (Effect's) | `FetchHttpClient` with credentials | a URLSession `HttpClient` layer |
+| `ClientDataConfig` | `apiUrl()`, retry policy | the chosen server URL |
+
+**Runtime baseline, not services:** `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`,
+`queueMicrotask`, `console`, `TextEncoder`/`TextDecoder` (the sync heartbeat, Effect and TanStack DB call
+them directly). The iOS runtime installs them before loading anything.
+
+Still browser-bound: the lib's `events.ts` sends session-rejected events with `window.dispatchEvent`
+(guarded); iOS needs another path. Haptics, clipboard and share are UI platform services (extensions
+or Commands), not data-layer ones.
 
 ## Running inside the Foldkit app (islands)
 
@@ -479,6 +505,7 @@ app moves to it and islands become ordinary children.
 | Lanes collide on shared files | C0 scaffold, glob registries, per-primitive recipe files, an integrator for shared files |
 | Two frameworks in the web app during islands | islands share the data package, not state; Foldkit owns routing and the head |
 | Lost hot reload and devtools for `hazel` roots | accepted for now; raise custom-root support upstream |
+| JSON decode dominates native mount cost (G8: about 80% of a 3,000-row mount) | decode on the JS thread; if G7 needs it, a compact row encoding or a binary wire |
 
 ## Settled with the user (2026-11-26)
 
@@ -490,5 +517,21 @@ app moves to it and islands become ordinary children.
 - **Defaults until the user says otherwise:** shared screens live in `apps/shared-screens`; the iOS app
   keeps the web-view fallback for unconverted screens during the transition; names are `hazel`
   (runtime tags `hz:*`), `@hazel/ui` and `@hazel/client-data`.
+- **`selected` is the channel row's active look:** the stronger wash (`wash-strong`), medium weight,
+  default text colour. It is what the app shows on its most-used screen; the kit's purple `isCurrent`
+  does not render as designed today (twMerge drops its tint). One selected look across the system.
+- **Set additions from G6** (cases today's kit has): `button.size` `large`, `circle`; `badge.style`
+  (`solid`, `outline`, `quiet`) and `pill`. Button line height per size is a recipe field, not an option.
 - **Order:** the phase 0 gates run first, in parallel where they do not share files. Lanes start only
   after the gates pass and the contracts are reviewed.
+
+## Gate results
+
+| Gate | Result | Branch | Notes |
+| --- | --- | --- | --- |
+| G1 | pass | `t3/hazel-ui-g1` | one `hazel` channel list in Chromium and on iOS; extensions draw or fall back per platform; prop changes send only changed keys, reorders only moves; 11 type tests for the escape hatches (`h.el` is typed `never` but exists at runtime: the lint rule closes it) |
+| G6 | pass | `t3/hazel-ui-g6` | 178 of 178 kit-vs-hazel pairs within tolerance (both themes, size classes, hover); a one-step colour change fails it; generated Swift colours match the live page |
+| D0 | pass | `t3/hazel-ui-d0` | `@hazel/client-data` with 8 platform services; loads and live-queries in node with browser globals removed; web app unchanged (3,275 tests); old import paths are re-export shims for now |
+| G8 | pass | `t3/hazel-ui-g8` | one-row change redraws one row in 500; 3,000-row mount 21 ms decode + apply (Release, simulator) |
+
+All four are merged into `t3/effect-ui-native-spike`. Simulator only: no physical device so far.
