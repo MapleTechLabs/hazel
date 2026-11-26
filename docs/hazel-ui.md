@@ -583,3 +583,26 @@ app moves to it and islands become ordinary children.
 All are merged into `t3/effect-ui-native-spike`, and the integrated app was checked live: JavaScript on its
 own thread, Swift networking, a server change arriving as one op. Simulator only: no physical device so
 far, so G4 and G7 still need one device run each before the contracts freeze.
+
+## Phase 2 status (2026-11-26)
+
+All 14 lanes are merged into `t3/effect-ui-native-spike` (A1 to A5, B, D, F, S0 to S5). On the merged
+tree every lane's verify command passes: the web runner's conformance cases with zero known diffs
+against today's kit, 31 HazelUI test suites with every Swift snapshot in Inter, typecheck in all five
+packages, `ui:check`, the CI lint command, and both iOS builds (fixture demo and live data). Merge-time
+fixes worth knowing:
+
+- `GAPS.md` conflicts on every merge; the integrator uses a local `merge=union` attribute for it.
+  `known-diffs.json` merges as the intersection of both sides.
+- The web host's command table (`src/web/host.ts`) is shared by A2, A3 and A4; combine, never pick a side.
+- A recipe-only text step `reading` (16/24 at every width) keeps the message row equal to today's.
+- iOS fixtures added in a web lane's folder can expose web bugs (a text menu trigger was not a button).
+
+Still open before Phase 3 screens ship:
+
+- **No physical-device run yet:** G4 (no-JIT cost) and G7 (120 Hz) are simulator numbers.
+- **The CI workflow has never run on GitHub;** macOS snapshots may need re-recording on the runner.
+- **Untested by automation:** real keyboard typing and IME, opening touch-only menus, dismissing a sheet.
+- **21 open gaps in `GAPS.md`**, mostly renderer-internal (icon catalog and illustration assets in the
+  Swift package, a semibold weight, chat tints) plus one contract hook (`message-select-text`, so text
+  selection coexists with a row's long-press menu).
