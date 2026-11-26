@@ -19,6 +19,7 @@ import { makeLiveChannelList } from "./live-channel-list"
 import { type SidebarRows, sidebarSections } from "./live-sections"
 import { mountChannelSidebarNative } from "../../shared-screens/src/channel-sidebar/native.ts"
 import { mountActivityLive } from "../../shared-screens/src/activity/live.ts"
+import { mountMessageListNative } from "../../shared-screens/src/chat/native.ts"
 
 declare const __native: { post: (json: string) => void; screen?: string }
 
@@ -35,6 +36,13 @@ const program = Effect.gen(function* () {
 	yield* Stream.runDrain(client.syncSession(me.id)).pipe(Effect.forkScoped)
 
 	// The Phase 3 screens, by launch arg (`-HazelScreen <name>`); the G3 list otherwise.
+	// `channel` or `channel:<name>`: a channel's message list (#general unless named).
+	if (__native.screen?.startsWith("channel") === true) {
+		const name = __native.screen.slice("channel:".length) || "general"
+		yield* mountMessageListNative(native.container, me.id, name, "https://cdn.hazel.sh")
+		console.log(`[live] channel mounted (${since()})`)
+		return yield* Effect.never
+	}
 	switch (__native.screen) {
 		case "sidebar":
 			yield* mountChannelSidebarNative(native.container, me.id)

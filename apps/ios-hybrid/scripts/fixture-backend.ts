@@ -3,7 +3,8 @@
  * `fixture/offline-backend.ts`, sync sockets (`/sync/mux`, `/sync/<kind>/<id>`) from
  * `fixture/fixture-socket.ts`, over Bun's HTTP and WebSocket server. For the G3 gate (iOS, JSC).
  *
- *   bun scripts/fixture-backend.ts [port] [--dms]   (default 4320; --dms seeds more DMs, below)
+ *   bun scripts/fixture-backend.ts [port] [--dms] [--big]   (default 4320; --dms seeds more DMs,
+ *   --big gives #engineering 3,000 messages)
  *
  * Server-side changes, to prove liveness (each prints the transaction id):
  *   curl -X POST '127.0.0.1:4320/__fixture/unread?channel=<channel id>'        one more unread
@@ -15,6 +16,7 @@ import type { WebSocketLike } from "@hazel/effect-db-collection"
 import { fixtureNotifications, makeOfflineFetch } from "../fixture/offline-backend"
 import { currentUser } from "../fixture/offline-session"
 import { makeFixtureServer, makeFixtureWebSocket } from "../fixture/fixture-socket"
+import { bigChannel } from "../web/big-channel"
 import {
 	adaUserId,
 	channelMemberRows,
@@ -135,6 +137,12 @@ const seedDms = () => {
 	}
 }
 if (process.argv.includes("--dms")) seedDms()
+// `--big`: #engineering with 3,000 messages (`web/big-channel.ts`), the performance bar's channel.
+if (process.argv.includes("--big")) {
+	const big = bigChannel(3000)
+	server.write("channel", big.channelId, "messages", big.messages)
+	server.write("channel", big.channelId, "message_reactions", big.reactions)
+}
 
 const change = (url: URL): Response => {
 	const channelId = url.searchParams.get("channel") ?? ""
