@@ -25,8 +25,10 @@ export interface OverlayConfig {
 	readonly outer: HTMLElement
 	readonly panel: HTMLElement
 	readonly modal: boolean
+	/** Locks page scroll and makes the page outside `outer` inert while shown (today's modal overlays). */
+	readonly isolate?: boolean
 	/** Extra layer options: focus target, inside elements, outside dismissal. */
-	readonly layer?: () => Omit<LayerOptions, "panel" | "modal" | "onDismiss">
+	readonly layer?: () => Omit<LayerOptions, "panel" | "modal" | "onDismiss" | "isolate">
 	/** Starts placing the panel once shown; returns the stop. */
 	readonly place?: () => (() => void) | undefined
 	readonly onDismiss: (reason: DismissReason) => void
@@ -84,6 +86,7 @@ export const controlledOverlay = (config: OverlayConfig): Overlay => {
 				...config.layer?.(),
 				panel: config.panel,
 				modal: config.modal,
+				isolate: config.isolate === true ? config.outer : undefined,
 				onDismiss: (reason) => {
 					// A parent overlay closed: this one hides with it, then tells the view.
 					if (reason === "parent") {

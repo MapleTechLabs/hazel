@@ -6,6 +6,7 @@
  * hold the hazel layer belongs to the app, so the two never dismiss each other's overlays.
  */
 import { focusElement, focusFirst, tabbables } from "./focusable.ts"
+import { isolate } from "./isolate.ts"
 
 /** Why a layer asks to close. `parent`: an overlay holding it closed, so it hides at once. */
 export type DismissReason = "escape" | "outside" | "tab" | "parent"
@@ -25,6 +26,8 @@ export interface LayerOptions {
 	readonly dismissOnTab?: boolean
 	/** Where focus returns on close; the focused element at open by default. */
 	readonly returnFocus?: Element | null
+	/** Locks page scroll and makes everything outside this element inert while open (modal overlays). */
+	readonly isolate?: Element | undefined
 	readonly onDismiss: (reason: DismissReason) => void
 }
 
@@ -38,6 +41,7 @@ export interface Layer {
 interface Entry {
 	readonly options: LayerOptions
 	readonly returnTo: Element | null
+	readonly release: () => void
 	closed: boolean
 }
 
@@ -93,7 +97,10 @@ const drop = (state: State, entry: Entry, restoreFocus: boolean) => {
 	if (entry.closed) return
 	entry.closed = true
 	const at = state.stack.indexOf(entry)
-	if (at < 0) return
+	if (at < 0) {
+		entry.release()
+		return
+	}
 	// Layers opened inside this one (a popover in a dialog) go with it.
 	for (const above of state.stack.slice(at + 1).reverse())
 		if (entry.options.panel.contains(above.options.panel)) {
@@ -101,6 +108,8 @@ const drop = (state: State, entry: Entry, restoreFocus: boolean) => {
 			above.options.onDismiss("parent")
 		}
 	state.stack.splice(state.stack.indexOf(entry), 1)
+	// The page comes back before focus returns to it.
+	entry.release()
 	if (restoreFocus) restore(entry)
 	if (state.stack.length === 0) {
 		state.stop()
@@ -187,6 +196,7 @@ export const openLayer = (options: LayerOptions): Layer => {
 	const entry: Entry = {
 		options,
 		returnTo: options.returnFocus === undefined ? document.activeElement : options.returnFocus,
+		release: options.isolate === undefined ? () => {} : isolate(options.isolate),
 		closed: false,
 	}
 	state.stack.push(entry)
@@ -200,7 +210,10 @@ export const openLayer = (options: LayerOptions): Layer => {
 		close: (close) => {
 			const current = states.get(document)
 			if (current !== undefined) drop(current, entry, close?.restoreFocus ?? true)
-			else entry.closed = true
+			else if (!entry.closed) {
+				entry.closed = true
+				entry.release()
+			}
 		},
 		isOpen: () => !entry.closed,
 		isTop: () => states.get(document)?.stack.at(-1) === entry,
