@@ -1,0 +1,25 @@
+{
+	"about": "The `overline` group label (in the `subtle` tone, as screens use it) and a `kbd` key cap inside a line.",
+	"root": {
+		"tag": "text",
+		"props": {
+			"role": "overline",
+			"tone": "subtle"
+		},
+		"children": ["Today"]
+	},
+	"frame": "inline",
+	"cases": [
+		{
+			"name": "kbd",
+			"props": {
+				"role": "kbd",
+				"tone": null
+			}
+		}
+	],
+	"pending": {
+		"web": "A1",
+		"ios": "S1"
+	}
+}

@@ -1,0 +1,31 @@
+{
+	"about": "A flush frame: bordered, no padding or shadow; its dividers run edge to edge (`frame-flush`).",
+	"root": {
+		"tag": "frame",
+		"props": {
+			"surface": "flush"
+		},
+		"children": [
+			{
+				"tag": "item",
+				"props": {
+					"title": "First row"
+				}
+			},
+			{
+				"tag": "divider"
+			},
+			{
+				"tag": "item",
+				"props": {
+					"title": "Second row"
+				}
+			}
+		]
+	},
+	"frame": "screen",
+	"pending": {
+		"web": "A1",
+		"ios": "S1"
+	}
+}

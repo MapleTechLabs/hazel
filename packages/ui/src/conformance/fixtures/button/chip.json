@@ -1,0 +1,29 @@
+{
+	"about": "A filter chip (`chip`), at rest and `selected` (on, `aria-pressed`).",
+	"root": {
+		"tag": "button",
+		"props": {
+			"label": "Unreads",
+			"variant": "chip",
+			"size": "small"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"axes": [
+		{
+			"prop": "selected",
+			"values": [true]
+		}
+	],
+	"aria": [
+		{
+			"role": "button",
+			"name": "Unreads"
+		}
+	],
+	"pending": {
+		"web": "A2",
+		"ios": "S2"
+	}
+}

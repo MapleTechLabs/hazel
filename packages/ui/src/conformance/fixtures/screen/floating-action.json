@@ -1,0 +1,46 @@
+{
+	"about": "A screen's primary action floating over its content's end corner (`floatingAction`).",
+	"root": {
+		"tag": "screen",
+		"props": {
+			"title": "DMs"
+		},
+		"slots": [
+			{
+				"name": "floatingAction",
+				"children": [
+					{
+						"tag": "button",
+						"props": {
+							"label": "New message",
+							"icon": "plus",
+							"iconOnly": true,
+							"circle": true,
+							"size": "large"
+						},
+						"events": ["press"]
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "item",
+				"props": {
+					"title": "Grace Hopper"
+				}
+			}
+		]
+	},
+	"frame": "screen",
+	"aria": [
+		{
+			"role": "button",
+			"name": "New message"
+		}
+	],
+	"pending": {
+		"web": "A4",
+		"ios": "S4"
+	}
+}

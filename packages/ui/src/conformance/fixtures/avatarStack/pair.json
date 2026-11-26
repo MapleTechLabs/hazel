@@ -1,0 +1,30 @@
+{
+	"about": "A group DM's leading mark: two avatars offset diagonally in one avatar's box.",
+	"root": {
+		"tag": "avatarStack",
+		"props": {
+			"layout": "pair"
+		},
+		"children": [
+			{
+				"tag": "avatar",
+				"props": {
+					"name": "Ada Lovelace",
+					"initials": "AL"
+				}
+			},
+			{
+				"tag": "avatar",
+				"props": {
+					"name": "Grace Hopper",
+					"initials": "GH"
+				}
+			}
+		]
+	},
+	"frame": "inline",
+	"pending": {
+		"web": "A1",
+		"ios": "S1"
+	}
+}

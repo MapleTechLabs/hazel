@@ -86,7 +86,8 @@ const run = async () => {
 					? { ...base, status: "error", lanes: [], error: text }
 					: { ...base, status: "missing", lanes: [missing[1] ?? "?"] }
 		} else {
-			const stubs = lanesIn(frame)
+			const pending = c.pending?.web
+			const stubs = pending === undefined ? lanesIn(frame) : [...new Set([...lanesIn(frame), pending])]
 			outcome =
 				stubs.length > 0
 					? { ...base, status: "stub", lanes: stubs }

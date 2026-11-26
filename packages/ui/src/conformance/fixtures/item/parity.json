@@ -1,0 +1,66 @@
+{
+	"about": "Phase 3 row options: unread marks, two-line title and subtitle, a large leading avatar, a hover-only trailing slot.",
+	"root": {
+		"tag": "item",
+		"props": {
+			"title": "design",
+			"href": "#"
+		},
+		"events": ["press"],
+		"slots": [
+			{
+				"name": "leading",
+				"children": [
+					{
+						"tag": "icon",
+						"props": {
+							"name": "hashtag"
+						}
+					}
+				]
+			},
+			{
+				"name": "trailing",
+				"children": [
+					{
+						"tag": "button",
+						"props": {
+							"label": "Mark as read",
+							"icon": "check",
+							"variant": "ghost",
+							"size": "xsmall",
+							"iconOnly": true
+						},
+						"events": ["press"]
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"axes": [
+		{
+			"prop": "unread",
+			"values": ["pip", "dot"]
+		},
+		{
+			"prop": "trailingOnHover",
+			"values": [true]
+		}
+	],
+	"cases": [
+		{
+			"name": "two-lines",
+			"props": {
+				"title": "@Ada Lovelace can you look at the new sidebar spacing before Friday? It is close.",
+				"subtitle": "New message in #design, a long preview that wraps onto a second line",
+				"titleLines": "2",
+				"subtitleLines": "2"
+			}
+		}
+	],
+	"pending": {
+		"web": "A4",
+		"ios": "S4"
+	}
+}

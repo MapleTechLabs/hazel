@@ -1,0 +1,33 @@
+{
+	"about": "A row led by a 40pt avatar (`leadingSize` `large`), as DMs and activity draw them.",
+	"root": {
+		"tag": "item",
+		"props": {
+			"title": "Grace Hopper",
+			"subtitle": "Sure, send it over.",
+			"leadingSize": "large",
+			"unread": "dot"
+		},
+		"events": ["press"],
+		"slots": [
+			{
+				"name": "leading",
+				"children": [
+					{
+						"tag": "avatar",
+						"props": {
+							"name": "Grace Hopper",
+							"initials": "GH",
+							"size": "medium"
+						}
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen",
+	"pending": {
+		"web": "A4",
+		"ios": "S4"
+	}
+}

@@ -1,0 +1,16 @@
+{
+	"about": "The kit's `iconTile` (`md`) in each tone.",
+	"root": {
+		"tag": "iconTile",
+		"props": {
+			"name": "hashtag"
+		}
+	},
+	"frame": "inline",
+	"axes": [
+		{
+			"prop": "tone",
+			"values": ["accent", "success", "warning", "danger"]
+		}
+	]
+}

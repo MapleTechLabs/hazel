@@ -62,6 +62,11 @@ final class SnapshotTests: XCTestCase {
         var failed: [String] = []
 
         for c in cases {
+            if let lane = c.pending {
+                skipped[lane, default: []].insert(c.tag)
+                print("HAZELUI_SNAPSHOT skip \(c.id): not implemented: lane \(lane) (\(c.tag), pending)")
+                continue
+            }
             var missingLanes: [String: String] = [:]
             for theme in Theme.allCases {
                 for size in SizeClass.allCases {

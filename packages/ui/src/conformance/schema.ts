@@ -84,6 +84,16 @@ export type AriaExpectation = typeof AriaExpectation.Type
 export const KitCounterpart = Schema.Struct({ specimen: Schema.String, target: Schema.String })
 export type KitCounterpart = typeof KitCounterpart.Type
 
+/**
+ * Lanes a fixture waits on (contract additions a lane has not drawn yet): each runner skips its cases
+ * as "not implemented: lane X" until that lane draws them and deletes its entry.
+ */
+export const Pending = Schema.Struct({
+	web: Schema.optional(Schema.Literals(["A1", "A2", "A3", "A4", "A5"])),
+	ios: Schema.optional(Schema.Literals(["S0", "S1", "S2", "S3", "S4", "S5"])),
+})
+export type Pending = typeof Pending.Type
+
 export const Fixture = Schema.Struct({
 	about: Schema.String,
 	root: FixtureNode,
@@ -92,6 +102,7 @@ export const Fixture = Schema.Struct({
 	cases: Schema.optional(Schema.Array(NamedCase)),
 	aria: Schema.optional(Schema.Array(AriaExpectation)),
 	kit: Schema.optional(KitCounterpart),
+	pending: Schema.optional(Pending),
 })
 export type Fixture = typeof Fixture.Type
 
@@ -105,6 +116,7 @@ export interface FixtureCase {
 	readonly frame: Frame
 	readonly aria: ReadonlyArray<AriaExpectation>
 	readonly kit: KitCounterpart | undefined
+	readonly pending: Pending | undefined
 }
 
 const valueLabel = (value: Json): string =>
@@ -130,6 +142,7 @@ export const expand = (tag: string, name: string, fixture: Fixture): ReadonlyArr
 		frame: fixture.frame ?? "screen",
 		aria: id === base ? (fixture.aria ?? []) : [],
 		kit,
+		pending: fixture.pending,
 	})
 	return [
 		make(base, fixture.root, fixture.kit),

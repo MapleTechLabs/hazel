@@ -1,0 +1,36 @@
+{
+	"about": "The DMs people strip: avatar-over-name tiles, one unread.",
+	"root": {
+		"tag": "peopleStrip",
+		"props": {
+			"people": [
+				{
+					"id": "dm-1",
+					"label": "Grace",
+					"name": "Grace Hopper",
+					"initials": "GH",
+					"presence": "online",
+					"emphasized": true,
+					"href": "#"
+				},
+				{
+					"id": "dm-2",
+					"label": "Alan",
+					"name": "Alan Turing",
+					"initials": "AT",
+					"presence": "away",
+					"href": "#"
+				},
+				{
+					"id": "dm-3",
+					"label": "Katherine",
+					"name": "Katherine Johnson",
+					"initials": "KJ",
+					"href": "#"
+				}
+			]
+		},
+		"events": ["press"]
+	},
+	"frame": "screen"
+}

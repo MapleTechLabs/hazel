@@ -1,0 +1,19 @@
+{
+	"about": "Icons added for the phase 3 screens.",
+	"root": {
+		"tag": "icon",
+		"props": {
+			"name": "messages"
+		}
+	},
+	"frame": "inline",
+	"axes": [
+		{
+			"prop": "name",
+			"values": ["folder-plus", "support"]
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	}
+}
