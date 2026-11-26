@@ -210,14 +210,14 @@ const utf8: Stream = {
 	inbound: [["fire", 3, "press", { note: "日本語 ✓" }, 2]],
 }
 
-const streams: Readonly<Record<string, Stream>> = {
+const streams = {
 	"host-session": hostSession,
 	"detach-reattach": detach,
 	"structured-props": structured,
 	"text-revision": revisions,
 	commands,
 	utf8,
-}
+} as const satisfies Readonly<Record<string, Stream>>
 
 const steps = (stream: Stream) => {
 	const tree = new Tree()
@@ -235,6 +235,12 @@ const steps = (stream: Stream) => {
 	})
 }
 
+interface Golden {
+	readonly about: string
+	readonly steps: ReturnType<typeof steps>
+	inbound?: ReadonlyArray<{ readonly message: Inbound; readonly decoded: string }>
+}
+
 /** Messages both sides must refuse, by the error each reports. */
 const rejects = {
 	about: "Batches both decoders refuse, by error kind.",
@@ -248,18 +254,16 @@ const rejects = {
 }
 
 for (const [name, stream] of Object.entries(streams)) {
-	const golden = {
+	const golden: Golden = {
 		about: stream.about,
 		steps: steps(stream),
-		...(stream.inbound === undefined
-			? {}
-			: {
-					inbound: stream.inbound.map((message) => ({
-						message,
-						decoded: describeInbound(decodeInbound(JSON.parse(JSON.stringify(message)))),
-					})),
-				}),
 	}
+	const inbound: ReadonlyArray<Inbound> | undefined = "inbound" in stream ? stream.inbound : undefined
+	if (inbound !== undefined)
+		golden.inbound = inbound.map((message) => ({
+			message,
+			decoded: describeInbound(decodeInbound(JSON.parse(JSON.stringify(message)))),
+		}))
 	writeFileSync(resolve(dir, `${name}.json`), `${JSON.stringify(golden, null, "\t")}\n`)
 }
 writeFileSync(resolve(dir, "rejects.json"), `${JSON.stringify(rejects, null, "\t")}\n`)

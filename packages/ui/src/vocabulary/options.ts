@@ -95,7 +95,7 @@ export const IconName = Schema.Literals(iconNames)
 export type IconName = typeof IconName.Type
 
 /** Each name's web icon export (`apps/web-foldkit/src/icons`). */
-export const iconSources: { readonly [K in IconName]: string } = {
+export const iconSources = {
 	"arrow-up": "IconArrowUp",
 	bell: "IconBell",
 	check: "IconCheck",
@@ -128,7 +128,7 @@ export const iconSources: { readonly [K in IconName]: string } = {
 	users: "IconUsers",
 	"volume-mute": "IconVolumeMute",
 	warning: "IconWarning",
-}
+} as const satisfies { readonly [K in IconName]: string }
 
 /** What a message row offers on hover (web toolbar) or long press (iOS menu); `action` reports one. */
 export const MessageAction = Schema.Literals([

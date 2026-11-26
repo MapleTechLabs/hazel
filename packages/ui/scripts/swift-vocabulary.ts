@@ -10,7 +10,7 @@ import { type Group, type TagKey, tagKeys, tags } from "../src/vocabulary/spec.t
 
 export const hazelUI = resolve(import.meta.dirname, "../../../apps/ios-hybrid/HazelUI/Sources/HazelUI")
 
-const folders: { readonly [G in Group]: string } = {
+const folders = {
 	layout: "Layout",
 	collections: "Collections",
 	content: "Content",
@@ -19,10 +19,10 @@ const folders: { readonly [G in Group]: string } = {
 	overlays: "Overlays",
 	structure: "Structure",
 	internal: "Layout",
-}
+} as const satisfies { readonly [G in Group]: string }
 
 /** `listDivider` to `HzListDivider`. */
-export const viewName = (key: TagKey) => `Hz${key[0]!.toUpperCase()}${key.slice(1)}`
+export const viewName = (key: TagKey) => `Hz${key.charAt(0).toUpperCase()}${key.slice(1)}`
 
 /** Where a tag's view lives, relative to `Sources/HazelUI`. */
 export const viewPath = (key: TagKey) => {

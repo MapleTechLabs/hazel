@@ -114,9 +114,9 @@ export class Tree {
 		const node = this.nodes.get(id)
 		if (node === undefined) return []
 		let line = `${"  ".repeat(depth)}${node.tag}#${node.id}`
-		const keys = Object.keys(node.props).sort()
-		if (keys.length > 0)
-			line += ` {${keys.map((key) => `${key}=${describe(node.props[key]!)}`).join(",")}}`
+		const props = Object.entries(node.props).sort(([a], [b]) => (a < b ? -1 : 1))
+		if (props.length > 0)
+			line += ` {${props.map(([key, value]) => `${key}=${describe(value)}`).join(",")}}`
 		if (node.text !== "") line += ` "${node.text}"`
 		if (node.events.length > 0) line += ` on[${[...node.events].sort().join(",")}]`
 		return [line, ...node.children.flatMap((child) => this.outline(child, depth + 1))]

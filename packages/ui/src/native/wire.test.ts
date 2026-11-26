@@ -1,13 +1,14 @@
-import { readdirSync, readFileSync } from "node:fs"
-import { resolve } from "node:path"
+/// <reference types="vite/client" />
 import { describe, expect, it } from "vitest"
 import { Tree } from "./tree.ts"
 import { decodeBatch, decodeInbound, describeInbound, describeOp, WireError } from "./wire.ts"
 
 /** C2: every golden decodes to its canonical ops and applies to its tree. Swift checks the same files. */
-const dir = resolve(import.meta.dirname, "__goldens__")
-const read = (file: string) => JSON.parse(readFileSync(resolve(dir, file), "utf8"))
-const streams = readdirSync(dir).filter((file) => file.endsWith(".json") && file !== "rejects.json")
+const files = import.meta.glob<unknown>("./__goldens__/*.json", { eager: true, import: "default" })
+const read = (file: string) => files[`./__goldens__/${file}`]
+const streams = Object.keys(files)
+	.map((path) => path.slice("./__goldens__/".length))
+	.filter((file) => file !== "rejects.json")
 
 interface Step {
 	readonly batch: unknown

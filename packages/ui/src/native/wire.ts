@@ -63,6 +63,7 @@ const isInt = (value: unknown): value is number => typeof value === "number" && 
 const isRecord = (value: unknown): value is { readonly [key: string]: Json } =>
 	typeof value === "object" && value !== null && !Array.isArray(value)
 
+// BOUNDARY: decoding parsed JSON; each check narrows one field.
 const field = <T>(op: ReadonlyArray<unknown>, index: number, check: (value: unknown) => value is T): T => {
 	const value = op[index]
 	if (!check(value)) throw new WireError(`${String(op[0])}: field ${index}`)
@@ -150,17 +151,16 @@ export const describe = (value: Json): string => {
 	if (typeof value === "number") return String(value)
 	if (typeof value === "string") return `"${value}"`
 	if (Array.isArray(value)) return `[${value.map(describe).join(",")}]`
-	const record = value as { readonly [key: string]: Json }
-	return `{${Object.keys(record)
-		.sort()
-		.map((key) => `${key}:${describe(record[key]!)}`)
+	return `{${Object.entries(value)
+		.sort(([a], [b]) => (a < b ? -1 : 1))
+		.map(([key, item]) => `${key}:${describe(item)}`)
 		.join(",")}}`
 }
 
 const describeProps = (changed: { readonly [name: string]: Json }) =>
-	`{${Object.keys(changed)
-		.sort()
-		.map((key) => `${key}=${describe(changed[key]!)}`)
+	`{${Object.entries(changed)
+		.sort(([a], [b]) => (a < b ? -1 : 1))
+		.map(([key, item]) => `${key}=${describe(item)}`)
 		.join(",")}}`
 
 export const describeOp = (op: Op): string => {

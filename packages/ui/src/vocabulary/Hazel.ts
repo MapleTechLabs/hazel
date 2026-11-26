@@ -95,6 +95,7 @@ const merge = <B extends View.ElementBuilder<any, any, any, any>>(
 }
 
 /** What a setter stores for `value` (`undefined` drops the key: the default). */
+// BOUNDARY: a setter's argument, typed per prop by `Chain`; stored as the prop's plain data.
 const stored = (spec: PropSpec, value: unknown): unknown => {
 	switch (spec.kind) {
 		case "flag":
@@ -155,8 +156,7 @@ const slot = (name: string, content: ReadonlyArray<View.Input<any, any>>) =>
 const builderFor = (key: TagKey): HzBuilder<any, never, TagKey> => {
 	class Tag extends HzBuilder<any, never, TagKey> {}
 	const props: Readonly<Record<string, PropSpec>> = Spec.tags[key].props
-	for (const name of Object.keys(props)) {
-		const spec = props[name]!
+	for (const [name, spec] of Object.entries(props)) {
 		Object.defineProperty(Tag.prototype, name, {
 			value: function (this: HzBuilder<any, never, TagKey>, value?: unknown) {
 				return merge(this, {
@@ -314,6 +314,9 @@ export interface Rect {
 	readonly height: number
 }
 
+/** A node from `Renderer.Refs`: a DOM node on the web, a `NativeNode` on iOS. Each host knows which. */
+export interface HostNode {}
+
 /** Where `scrollTo` goes: an edge, or a keyed child. */
 export type ScrollTarget = { readonly to: "start" | "end" } | { readonly key: string }
 
@@ -324,12 +327,12 @@ export type ScrollTarget = { readonly to: "start" | "end" } | { readonly key: st
 export class Host extends Context.Service<
 	Host,
 	{
-		readonly focus: (node: unknown) => Effect.Effect<void>
-		readonly blur: (node: unknown) => Effect.Effect<void>
-		readonly scrollTo: (node: unknown, target: ScrollTarget) => Effect.Effect<void>
-		readonly measure: (node: unknown) => Effect.Effect<Rect>
+		readonly focus: (node: HostNode) => Effect.Effect<void>
+		readonly blur: (node: HostNode) => Effect.Effect<void>
+		readonly scrollTo: (node: HostNode, target: ScrollTarget) => Effect.Effect<void>
+		readonly measure: (node: HostNode) => Effect.Effect<Rect>
 		readonly select: (
-			node: unknown,
+			node: HostNode,
 			range: { readonly start: number; readonly end: number },
 		) => Effect.Effect<void>
 	}
