@@ -57,4 +57,7 @@ export const emojiPicker = defineRecipe<
 		regular: { parts: { search: { minHeight: "8", text: "label" }, emoji: { size: "8" } } },
 	},
 	options: {},
+	motion: {
+		enter: [{ motion: "fadeIn", part: "panel" }],
+	},
 })

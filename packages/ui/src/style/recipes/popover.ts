@@ -22,4 +22,7 @@ export const popover = defineRecipe<{}, never, "panel" | "placeholder">({
 		},
 	},
 	options: {},
+	motion: {
+		enter: [{ motion: "fadeIn", part: "panel" }],
+	},
 })

@@ -51,6 +51,8 @@ export const galleryConfig = (): InlineConfig => ({
 				hazel: resolve(import.meta.dirname, "hazel.html"),
 				primitives: resolve(import.meta.dirname, "primitives.html"),
 				fixtures: resolve(import.meta.dirname, "fixtures.html"),
+				motionKit: resolve(import.meta.dirname, "motion-kit.html"),
+				motionHazel: resolve(import.meta.dirname, "motion-hazel.html"),
 			},
 		},
 	},

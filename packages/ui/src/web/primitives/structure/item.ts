@@ -1,5 +1,6 @@
 // Owned by lane A4 (`docs/hazel-ui.md`, "Phase 2: lanes"). `hz:item`: a sidebar row. The control (a
 // link with `href`, else a button) is the row's box and holds the content parent, so slots never move.
+import { rollCount } from "../../motion.ts"
 import { definePrimitive, flag, option, part, type Primitive } from "../define.ts"
 import { ensureSheet, fire, listens, textOf } from "../list/runtime.ts"
 
@@ -47,7 +48,7 @@ ${I} [data-hz-part="unreadLabel"] { font-size: 0; line-height: 0; clip-path: ins
 const actionsCss = `
 ${I} ${SLOT("actions")} {
 	display: flex; align-items: center; justify-content: flex-end; opacity: 0;
-	transition: opacity var(--hz-duration-fast) var(--hz-ease-out);
+	transition: opacity var(--hz-duration-fast) var(--hz-ease-standard);
 }
 ${I}:is(:hover, :focus-within) ${SLOT("actions")} { opacity: 1; }
 @media (hover: none) { ${I} ${SLOT("actions")} { opacity: 1; } }
@@ -74,6 +75,8 @@ ${I}[data-subtitle-lines="2"] ${CONTROL} > [data-hz-part="subtitle"] { ${clamp} 
 // HAZEL-GAP(item-conversation-row): today's DM row differs (semibold title, 14px preview, py-2.5).
 const largeCss = `
 ${I}[data-leading-size="large"] ${CONTROL} {
+	transition: color var(--hz-duration-fast) var(--hz-ease-standard),
+		background-color var(--hz-duration-fast) var(--hz-ease-standard);
 	display: grid; align-items: start; column-gap: 0; row-gap: 0; border-radius: 0;
 	grid-template-columns: auto minmax(0, 1fr) auto auto;
 	grid-template-rows: auto minmax(0, 1fr);
@@ -124,7 +127,15 @@ const css = `
 [data-hz="item"] > [data-hz-part="control"] { position: relative; }
 [data-hz="item"] > [data-hz-part="control"] > [data-hz-part="title"],
 [data-hz="item"] > [data-hz-part="control"] > [data-hz-part="subtitle"] { order: 1; min-width: 0; }
-[data-hz="item"] > [data-hz-part="control"] > [data-hz-part="badge"] { order: 2; }
+[data-hz="item"] > [data-hz-part="control"] > [data-hz-part="badge"] { order: 2; overflow: hidden; }
+/* The count rolls inside the pill (today's reaction count: \`inline-flex overflow-hidden\`). */
+[data-hz="item"] [data-hz-part="badge"] > [data-hz-part="count"] { display: inline-block; }
+/* An empty trailing slot (a DM row's) takes no gap, or the badge sits 8px off today's place. */
+[data-hz="item"] > [data-hz-part="control"] > [data-hz-part="content"] > [data-hz-slot="trailing"]:empty { display: none; }
+/* Today's sidebar badge sits 6px from the row's end (\`right-1.5\`), inside the row's 8px padding. */
+[data-hz="item"]:not([data-leading-size="large"]) > [data-hz-part="control"] > [data-hz-part="badge"] {
+	margin-inline-end: calc(var(--hz-space-0_5) * -1);
+}
 [data-hz="item"] > [data-hz-part="control"] > [data-hz-part="shortcut"] { order: 3; }
 [data-hz="item"] > [data-hz-part="control"] > [data-hz-part="content"] > [data-hz-slot="trailing"] { order: 4; }
 [data-hz="item"][data-subtitled] > [data-hz-part="control"] {
@@ -184,6 +195,9 @@ export const primitive = definePrimitive("item", ({ document, tag, outer }) => {
 	subtitle.hidden = true
 	const badge = part(document, "span", "badge")
 	badge.hidden = true
+	// The number in its own box, which a change replaces so it rolls (`recipe.motion` countUp/Down).
+	let count = part(document, "span", "count")
+	badge.append(count)
 	const shortcut = part(document, "kbd", "shortcut")
 	shortcut.hidden = true
 	const elbow = elbowOf(document)
@@ -284,9 +298,10 @@ export const primitive = definePrimitive("item", ({ document, tag, outer }) => {
 				subtitle.hidden = textOf(value) === ""
 				flag(node, "subtitled", textOf(value) !== "")
 			} else if (name === "badge") {
+				const previous = badgeCount
 				badgeCount = typeof value === "number" ? value : 0
 				badge.hidden = badgeCount <= 0
-				badge.textContent = badgeCount > 0 ? String(badgeCount) : ""
+				count = rollCount(count, badgeCount > 0 ? String(badgeCount) : "", previous, badgeCount)
 				flag(node, "badged", badgeCount > 0)
 			} else if (name === "shortcut") {
 				shortcut.textContent = textOf(value)

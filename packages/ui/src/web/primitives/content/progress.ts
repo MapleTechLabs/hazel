@@ -1,8 +1,6 @@
 // Owned by lane A1 (`docs/hazel-ui.md`, "Phase 2: lanes").
+import { loop } from "../../motion.ts"
 import { definePrimitive, flag, part, type Primitive } from "../define.ts"
-
-const reducedMotion = (document: Document) =>
-	document.defaultView?.matchMedia("(prefers-reduced-motion: reduce)").matches === true
 
 export const primitive = definePrimitive("progress", ({ document, tag, outer }) => {
 	const node = outer("div")
@@ -24,27 +22,19 @@ export const primitive = definePrimitive("progress", ({ document, tag, outer }) 
 	node.append(label, track)
 	let value = 0
 	let indeterminate = false
-	let slide: Animation | undefined
 	const draw = () => {
-		slide?.cancel()
-		slide = undefined
+		// The kit's `w-2/5 animate-progress-slide` (`recipe.motion` loop), or the value's width easing
+		// over 200ms (`transition-[width] duration-200 ease-linear`).
+		loop(fill, indeterminate)
 		if (indeterminate) {
 			node.removeAttribute("aria-valuenow")
-			// The kit's `w-2/5 animate-progress-slide`.
+			fill.style.transition = "none"
 			fill.style.width = "40%"
-			if (!reducedMotion(document))
-				slide = fill.animate(
-					[{ transform: "translateX(-100%)" }, { transform: "translateX(250%)" }],
-					{
-						duration: 1500,
-						iterations: Infinity,
-						easing: "ease-in-out",
-					},
-				)
 			return
 		}
 		const percent = Math.round(Math.min(1, Math.max(0, value)) * 100)
 		node.setAttribute("aria-valuenow", String(percent))
+		fill.style.transition = "width var(--hz-duration-normal) var(--hz-ease-linear)"
 		fill.style.width = `${percent}%`
 	}
 	draw()

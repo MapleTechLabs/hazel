@@ -21,6 +21,9 @@ export const message = defineRecipe<
 	| "reactions"
 	| "thread"
 	| "failure"
+	| "reaction"
+	| "emoji"
+	| "count"
 	| "toolbar"
 >({
 	primitive: "message",
@@ -38,6 +41,9 @@ export const message = defineRecipe<
 		reactions: { kind: "part", in: "body" },
 		thread: { kind: "part", in: "body" },
 		failure: { kind: "part", in: "body" },
+		reaction: { kind: "part", in: "reactions" },
+		emoji: { kind: "part", in: "reaction" },
+		count: { kind: "part", in: "reaction" },
 		toolbar: "part",
 	},
 	base: {
@@ -96,5 +102,12 @@ export const message = defineRecipe<
 		entering: {},
 		pending: { parts: { main: { opacity: 0.6 } } },
 		failed: {},
+	},
+	// A live message rises in; its reaction pills enter, pop and roll as `reactionBar` (`MOTION.md`).
+	motion: {
+		enter: [{ motion: "messageIn" }, { motion: "reactionIn", part: "reaction" }],
+		pop: [{ motion: "reactionPop", part: "emoji" }],
+		countUp: [{ motion: "countUp", part: "count" }],
+		countDown: [{ motion: "countDown", part: "count" }],
 	},
 })

@@ -1,5 +1,11 @@
 import type {
 	ColorExpr,
+	Keyframe,
+	MotionTrigger,
+	MotionUse,
+	TokenNames,
+	Offset,
+	Pose,
 	InteractionState,
 	Declarations,
 	Layer,
@@ -29,13 +35,21 @@ export const colorCss = (expr: ColorExpr): string => {
 	return `color-mix(in oklab, ${colorCss(expr.alpha[0])} ${expr.alpha[1] * 100}%, transparent)`
 }
 
+/** A palette step the host may set at runtime (the app's brand preset) reads the host's variable first. */
+const paletteValue = (tokens: Tokens, name: string, value: string) => {
+	const host = tokens.hostPalette
+	return host !== undefined && name.startsWith(host.prefix)
+		? `var(${host.cssPrefix}${name.slice(host.prefix.length)}, ${value})`
+		: value
+}
+
 const sameExpr = (a: ColorExpr, b: ColorExpr) => JSON.stringify(a) === JSON.stringify(b)
 
 const tokenBlock = (tokens: Tokens): string => {
 	const light: string[] = []
 	const dark: string[] = []
 	for (const [name, value] of Object.entries(tokens.palette))
-		light.push(`--hz-palette-${safe(name)}: ${value};`)
+		light.push(`--hz-palette-${safe(name)}: ${paletteValue(tokens, name, value)};`)
 	for (const [name, value] of Object.entries(tokens.color)) {
 		light.push(`--hz-color-${safe(name)}: ${colorCss(value.light)};`)
 		if (!sameExpr(value.light, value.dark))
@@ -159,6 +173,7 @@ const declarations = (d: Declarations, tracked: ReadonlySet<string>): ReadonlyAr
 	if (d.marginX !== undefined) add("margin-inline", spaceVar(d.marginX))
 	if (d.bleedX !== undefined) add("margin-inline", `calc(${spaceVar(d.bleedX)} * -1)`)
 	if (d.minHeight !== undefined) add("min-height", spaceVar(d.minHeight))
+	if (d.minWidth !== undefined) add("min-width", spaceVar(d.minWidth))
 	if (d.size !== undefined) {
 		add("width", spaceVar(d.size))
 		add("height", spaceVar(d.size))
@@ -205,7 +220,7 @@ const declarations = (d: Declarations, tracked: ReadonlySet<string>): ReadonlyAr
 	if (d.transition !== undefined) {
 		add("transition-property", "color, background-color, border-color, box-shadow, opacity")
 		add("transition-duration", `var(--hz-duration-${d.transition})`)
-		add("transition-timing-function", "var(--hz-ease-out)")
+		add("transition-timing-function", `var(--hz-ease-${d.transitionEase ?? "out"})`)
 	}
 	return out
 }
@@ -243,6 +258,16 @@ const partPath = (recipe: Recipe, part: string, seen: ReadonlySet<string> = new 
 		kind === "children" ? "[data-hz]" : `[${kind === "slot" ? "data-hz-slot" : "data-hz-part"}="${part}"]`
 	const parent = typeof spec === "string" ? "" : partPath(recipe, spec.in, new Set([...seen, part]))
 	return `${parent} > ${self}`
+}
+
+/** A part's own selector (`[data-hz-part="count"]`), for a motion that plays on it. */
+const partSelector = (recipe: Recipe, part: string) => {
+	const spec = recipe.parts[part]
+	if (spec === undefined) throw new Error(`${recipe.primitive} has no part ${part}`)
+	const kind = typeof spec === "string" ? spec : spec.kind
+	return kind === "children"
+		? "[data-hz]"
+		: `[${kind === "slot" ? "data-hz-slot" : "data-hz-part"}="${part}"]`
 }
 
 interface Rule {
@@ -351,13 +376,115 @@ const printRule = (rule: Rule) => {
 	return `@media ${rule.media.join(" and ")} {\n${body("\t")}\n}`
 }
 
+// Motion (MOTION.md)
+
+const offset = (value: Offset | undefined) =>
+	value === undefined ? "0" : typeof value === "number" ? `${value}px` : value
+
+/** A pose as individual properties, so a motion never overrides a renderer's own `transform`. */
+const poseCss = (pose: Pose): string => {
+	const out: string[] = []
+	if (pose.opacity !== undefined) out.push(`opacity: ${pose.opacity};`)
+	if (pose.x !== undefined || pose.y !== undefined)
+		out.push(`translate: ${offset(pose.x)} ${offset(pose.y)};`)
+	if (pose.scale !== undefined) out.push(`scale: ${pose.scale};`)
+	return out.join(" ")
+}
+
+/** A pose being filled in with rest values. */
+type RestPose = { -readonly [K in keyof Pose]: Pose[K] }
+
+/** Rest values for the properties any keyframe sets: a frame that leaves one out is at rest there. */
+const restCss = (frames: ReadonlyArray<Keyframe>, pose: Pose): string => {
+	const uses = (key: keyof Pose) => frames.some((frame) => frame.pose[key] !== undefined)
+	const full: RestPose = {}
+	if (uses("opacity")) full.opacity = pose.opacity ?? 1
+	if (uses("x") || uses("y")) {
+		full.x = pose.x ?? 0
+		full.y = pose.y ?? 0
+	}
+	if (uses("scale")) full.scale = pose.scale ?? 1
+	return poseCss(full)
+}
+
+const keyframesCss = (name: string, frames: ReadonlyArray<Keyframe>) =>
+	`@keyframes hz-${name} {\n${frames
+		.map(
+			(frame) =>
+				`\t${Math.round(frame.at * 1000) / 10}% { ${restCss(frames, frame.pose)}${frame.easing === undefined ? "" : ` animation-timing-function: var(--hz-ease-${frame.easing});`} }`,
+		)
+		.join("\n")}\n}`
+
+/** `animation` for a named motion, every value a token. */
+export const motionAnimation = (tokens: Tokens, name: string): string => {
+	const motion = tokens.motion[name]
+	if (motion === undefined) throw new Error(`Unknown motion ${name}`)
+	for (const [kind, value, table] of [
+		["duration", motion.duration, tokens.duration],
+		["easing", motion.easing, tokens.easing],
+		["delay", motion.delay, tokens.duration],
+		["keyframes", motion.keyframes, tokens.keyframes],
+	] as const)
+		if (value !== undefined && !(value in table))
+			throw new Error(`Motion ${name}: unknown ${kind} ${value}`)
+	return [
+		`hz-${motion.keyframes}`,
+		`var(--hz-duration-${motion.duration})`,
+		`var(--hz-ease-${motion.easing})`,
+		motion.delay === undefined ? "0s" : `var(--hz-duration-${motion.delay})`,
+		motion.repeat === "forever" ? "infinite" : "1",
+		"both",
+	].join(" ")
+}
+
+/** Where a motion plays: the element a renderer marks with `data-motion~=<trigger>`. */
+const motionRules = (tokens: Tokens, recipe: Recipe): ReadonlyArray<Rule> => {
+	const root = `[data-hz="${recipe.primitive}"]`
+	const entries = Object.entries(recipe.motion ?? {}) as ReadonlyArray<
+		[MotionTrigger, ReadonlyArray<MotionUse<string, TokenNames>> | undefined]
+	>
+	return entries.flatMap(([trigger, uses]) =>
+		(uses ?? []).flatMap((use) => {
+			// A descendant, not the part's full path: the renderer marks the one element that moves.
+			const target = `${use.part === undefined ? root : `${root} ${partSelector(recipe, use.part)}`}[data-motion~="${trigger}"]${use.backdrop ? "::backdrop" : ""}`
+			const rule = (media: ReadonlyArray<string>, name: string): Rule => ({
+				media,
+				selector: target,
+				lines: [`animation: ${motionAnimation(tokens, name)};`],
+			})
+			return [
+				rule([], use.motion),
+				...(use.regular === undefined ? [] : [rule([REGULAR_MEDIA], use.regular)]),
+			]
+		}),
+	)
+}
+
+/** Today's `styles.css` rule: every motion and transition completes at once, a loop plays once. */
+const reducedMotionCss = (tokens: Tokens) => {
+	if (tokens.reducedMotion !== "instant") throw new Error(`Unknown reducedMotion ${tokens.reducedMotion}`)
+	return `@media (prefers-reduced-motion: reduce) {
+	[data-hz], [data-hz] *, [data-hz] *::before, [data-hz] *::after, [data-hz] *::backdrop {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}`
+}
+
 export const generateCss = (tokens: Tokens, recipes: ReadonlyArray<Recipe>): string =>
 	[
 		"/* Generated by packages/ui/scripts/generate.ts from src/style. Do not edit. */",
 		tokenBlock(tokens),
+		`/* motion */\n${Object.entries(tokens.keyframes)
+			.map(([name, frames]) => keyframesCss(name, frames))
+			.join("\n\n")}\n\n${reducedMotionCss(tokens)}`,
 		...recipes.map(
 			(recipe) =>
-				`/* ${recipe.primitive} */\n${recipeRules(recipe, trackedRoles(tokens))
+				`/* ${recipe.primitive} */\n${[
+					...recipeRules(recipe, trackedRoles(tokens)),
+					...motionRules(tokens, recipe),
+				]
 					.filter((rule) => rule.lines.length > 0)
 					.map(printRule)
 					.join("\n\n")}`,

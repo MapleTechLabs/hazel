@@ -52,11 +52,6 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 	],
 	[`${M}[data-pinned]:is(:hover, :focus-visible)`, `background-color: ${color("warning-tint-hover")};`],
 	[`${M}[data-pending] > ${p("main")}`, "opacity: 0.6;"],
-	[`${M}[data-entering]`, "animation: hz-message-enter var(--hz-duration-normal) var(--hz-ease-out) both;"],
-	[
-		"@keyframes hz-message-enter",
-		"from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; }",
-	],
 
 	// Avatar column and content (`relative flex gap-4`).
 	[`${M} > ${p("main")}`, `position: relative; display: flex; column-gap: ${space("4")};`],
@@ -170,7 +165,11 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 		box-shadow: inset 0 0 0 1px ${color("primary-tint-ring")};`,
 	],
 	[`${reactions("reaction")}[data-mine]:hover`, `background-color: ${color("primary-tint-hover")};`],
-	[`${reactions("count")}`, "font-variant-numeric: tabular-nums;"],
+	[
+		`${reactions("countBox")}`,
+		"display: inline-flex; overflow: hidden; font-variant-numeric: tabular-nums;",
+	],
+	[`${reactions("count")}`, "display: inline-block;"],
 	[`${reactions("emojiImage")}`, `width: ${space("5")}; height: ${space("5")}; object-fit: contain;`],
 	[`${reactions("addReaction")}`, `color: ${color("muted-fg")}; padding-inline: ${space("2")};`],
 	[`${reactions("addReaction")} > ${p("icon")}`, `width: ${space("4")}; height: ${space("4")};`],
@@ -373,24 +372,15 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 	[
 		`[data-hz="typingIndicator"] ${p("dot")}`,
 		`display: inline-block; width: ${space("1.5")}; height: ${space("1.5")}; border-radius: ${radius("full")};
-		background-color: ${color("muted-fg")}; animation: hz-typing-bounce 1s infinite;`,
+		background-color: ${color("muted-fg")};`,
 	],
 	[`[data-hz="typingIndicator"] ${p("dot")}:nth-child(1)`, "animation-delay: -0.3s;"],
 	[`[data-hz="typingIndicator"] ${p("dot")}:nth-child(2)`, "animation-delay: -0.15s;"],
-	[
-		"@keyframes hz-typing-bounce",
-		`0%, 100% { transform: translateY(-25%); animation-timing-function: cubic-bezier(0.8, 0, 1, 1); }
-		50% { transform: none; animation-timing-function: cubic-bezier(0, 0, 0.2, 1); }`,
-	],
 
 	// Focus rings on every control inside the leaves.
 	[
 		`:is(${M}, [data-hz="reactionBar"], [data-hz="attachmentGrid"], [data-hz="embed"]) :is(button, a):focus-visible`,
 		`outline: 2px solid ${color("ring")}; outline-offset: 1px;`,
-	],
-	[
-		"@media (prefers-reduced-motion: reduce)",
-		`${M}[data-entering], [data-hz="typingIndicator"] ${p("dot")} { animation: none; }`,
 	],
 ]
 

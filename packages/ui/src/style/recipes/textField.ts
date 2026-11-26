@@ -59,4 +59,7 @@ export const textField = defineRecipe<
 	},
 	states: { disabled: { parts: { input: { background: "muted", color: "muted-fg" } } } },
 	inert: ["disabled"],
+	motion: {
+		enter: [{ motion: "fieldErrorIn", part: "error" }],
+	},
 })

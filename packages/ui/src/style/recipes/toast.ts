@@ -59,4 +59,8 @@ export const toast = defineRecipe<
 			},
 		},
 	},
+	motion: {
+		enter: [{ motion: "toastIn", part: "panel" }],
+		exit: [{ motion: "toastOut", part: "panel" }],
+	},
 })

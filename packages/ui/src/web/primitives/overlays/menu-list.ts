@@ -19,6 +19,7 @@ import {
 	whenConnected,
 } from "../../focus/surface.ts"
 import { svg } from "../../icons.ts"
+import { play } from "../../motion.ts"
 import { flag, part } from "../define.ts"
 import { nextId } from "./overlay.ts"
 
@@ -128,6 +129,7 @@ export const createMenuList = (
 		submenu.replaceChildren(groupNode({ entries: entry.entries ?? [] }, true))
 		const inPlace = isSpecimen(outer)
 		showPanel(submenu, { modal: false, inPlace })
+		void play(submenu, "enter")
 		if (!inPlace) applyPlacement(submenu, measureNode(parent), { side: "right", align: "start", gap: 2 })
 		if (focus) highlight(submenu, itemsOf(submenu).find(enabled))
 	}
@@ -289,6 +291,7 @@ export const createMenuList = (
 		flag(outer, "specimen", inPlace)
 		flag(outer, "open", true)
 		showPanel(panel, { modal: false, inPlace })
+		void play(panel, "enter")
 		if (inPlace) return
 		stopPlacing = trackPlacement(panel, opening.anchor, opening.placement)
 		layer = openLayer({

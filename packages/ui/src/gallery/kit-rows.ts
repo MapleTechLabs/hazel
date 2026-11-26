@@ -20,7 +20,7 @@ import { statusDot } from "../../../../apps/web-foldkit/src/ui/status-dot.ts"
  * The kit side of lane A4's row specimens: today's collapsible section (`treeSection` with its
  * `sectionGroupHeader`), unread channel row (`channelItem`), activity row
  * (`notificationItem`, `page/notifications/inbox/view.ts`) and DM row (`page/chat-index/mobile-dms.ts`),
- * with the content of `fixtures/section/collapsible.json` and `fixtures/item/{unread-pip,activity,dm}.json`.
+ * with the content of `fixtures/section/collapsible.json` and `fixtures/item/{unread-pip,badge-*,activity,dm}.json`.
  * Avatars have no image or seed.
  */
 
@@ -64,6 +64,39 @@ const unreadChannel = (h: H): Html =>
 						],
 						["design"],
 					),
+				]),
+			]),
+		],
+	)
+
+/**
+ * An unread channel with its count (`channelItem` and `sidebarBadge`, `shell/channels-sidebar/items.ts`):
+ * the solid brand pill, round at one digit, 6px from the row's end.
+ */
+const badgedChannel = (h: H, count: number): Html =>
+	h.div(
+		[h.Class("frame-sidebar"), h.Attribute("data-specimen", `section-badge-${count}`)],
+		[
+			sidebarSection(h, { label: "Channels" }, [
+				sidebarItem(h, { attributes: [h.Attribute("data-specimen", `item-badge-${count}`)] }, [
+					sidebarUnreadPip(h),
+					IconHashtag(h),
+					h.span(
+						[
+							h.Class(
+								"col-start-2 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis outline-hidden font-medium text-fg",
+							),
+							h.Attribute("data-slot", "sidebar-label"),
+						],
+						["design"],
+					),
+					// `sidebarBadge`'s classes (not exported from `items.ts`).
+					countBadge(h, {
+						count,
+						className:
+							"absolute inset-y-1/2 right-1.5 -translate-y-1/2 group-hover/sidebar-item:right-8",
+						attributes: [h.Attribute("data-slot", "sidebar-badge")],
+					}),
 				]),
 			]),
 		],
@@ -176,6 +209,8 @@ export const rowSpecimens = (h: H): Html =>
 		[
 			collapsibleSection(h),
 			unreadChannel(h),
+			badgedChannel(h, 1),
+			badgedChannel(h, 12),
 			h.div([h.Attribute("style", "flex: 1 1 100%; max-width: 720px;")], [activityRow(h), dmRow(h)]),
 		],
 	)

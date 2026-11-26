@@ -10,6 +10,7 @@ import { Context, Effect, Layer, Scheduler } from "effect"
 import { Hazel } from "../vocabulary/index.ts"
 import type { Plain } from "./primitives/define.ts"
 import { measureNode } from "./focus/measure.ts"
+import { afterRemoved } from "./motion.ts"
 import { scrollTo } from "./primitives/list/scroll.ts"
 import { create, type Primitive, release } from "./primitives.ts"
 
@@ -87,6 +88,7 @@ export const wrapHost = (inner: Renderer.Host<Node>, document: Document): Render
 		remove: (node) => {
 			release(node)
 			inner.remove(node)
+			afterRemoved(node)
 		},
 		parentOf: (node) => {
 			const parent = inner.parentOf(node)

@@ -366,8 +366,8 @@ public enum HazelTheme {
     public static let space: [String: CGFloat] = ["0": 0, "1": 4, "2": 8, "3": 12, "4": 16, "5": 20, "6": 24, "7": 28, "8": 32, "9": 36, "10": 40, "11": 44, "12": 48, "14": 56, "16": 64, "20": 80, "24": 96, "px": 1, "0.5": 2, "1.5": 6, "2.5": 10, "3.5": 14, "4.5": 18, "5.5": 22]
     public static let radius: [String: CGFloat] = ["none": 0, "xs": 2, "sm": 4, "md": 6, "lg": 8, "xl": 12, "2xl": 16, "3xl": 24, "4xl": 32, "full": 9999]
     /// Seconds.
-    public static let duration: [String: Double] = ["micro": 0.1, "fast": 0.15, "normal": 0.2, "slow": 0.3, "enter": 0.18, "reactionEnter": 0.22, "reactionPop": 0.26, "progressSweep": 1.6]
-    public static let easing: [String: (Double, Double, Double, Double)] = ["out": (0.23, 1, 0.32, 1), "inOut": (0.77, 0, 0.175, 1), "outQuad": (0.25, 0.46, 0.45, 0.94), "outCubic": (0.215, 0.61, 0.355, 1), "outQuart": (0.165, 0.84, 0.44, 1), "inOutCubic": (0.645, 0.045, 0.355, 1), "enter": (0.2, 0, 0, 1), "overshoot": (0.34, 1.56, 0.64, 1), "cssOut": (0, 0, 0.58, 1), "cssIn": (0.42, 0, 1, 1), "cssInOut": (0.42, 0, 0.58, 1)]
+    public static let duration: [String: Double] = ["micro": 0.1, "fast": 0.15, "normal": 0.2, "slow": 0.3, "enter": 0.18, "reactionEnter": 0.22, "reactionPop": 0.26, "progressSweep": 1.6, "bounce": 1, "pulse": 2]
+    public static let easing: [String: (Double, Double, Double, Double)] = ["out": (0.23, 1, 0.32, 1), "inOut": (0.77, 0, 0.175, 1), "outQuad": (0.25, 0.46, 0.45, 0.94), "outCubic": (0.215, 0.61, 0.355, 1), "outQuart": (0.165, 0.84, 0.44, 1), "inOutCubic": (0.645, 0.045, 0.355, 1), "enter": (0.2, 0, 0, 1), "overshoot": (0.34, 1.56, 0.64, 1), "cssOut": (0, 0, 0.58, 1), "cssIn": (0.42, 0, 1, 1), "cssInOut": (0.42, 0, 0.58, 1), "css": (0.25, 0.1, 0.25, 1), "in": (0.4, 0, 1, 1), "standard": (0.4, 0, 0.2, 1), "pulse": (0.4, 0, 0.6, 1), "fall": (0.8, 0, 1, 1), "rise": (0, 0, 0.2, 1), "linear": (0, 0, 1, 1)]
     public static let shadows: [String: (light: [Shadow], dark: [Shadow])] = [
         "control": (light: [Shadow(inset: true, x: 0, y: 1, blur: 0, spread: 0, color: RGBA(1, 1, 1, 0.16)), Shadow(inset: true, x: 0, y: -1, blur: 0, spread: 0, color: RGBA(0, 0, 0, 0.12)), Shadow(inset: false, x: 0, y: 1, blur: 2, spread: 0, color: RGBA(0, 0, 0, 0.08))], dark: [Shadow(inset: true, x: 0, y: 1, blur: 0, spread: 0, color: RGBA(1, 1, 1, 0.14)), Shadow(inset: true, x: 0, y: -1, blur: 0, spread: 0, color: RGBA(0, 0, 0, 0.2)), Shadow(inset: false, x: 0, y: 1, blur: 2, spread: 0, color: RGBA(0, 0, 0, 0.3))]),
         "xs": (light: [Shadow(inset: false, x: 0, y: 1, blur: 2, spread: 0, color: RGBA(0, 0, 0, 0.04))], dark: [Shadow(inset: false, x: 0, y: 1, blur: 2, spread: 0, color: RGBA(0, 0, 0, 0.3))]),
@@ -402,6 +402,8 @@ public enum HazelTheme {
         /// A font weight above `strong` (600 or 700); wins over `strong`.
         public var weight: Int? = nil, uppercase: Bool? = nil, textAlign: TextAlign? = nil
         public var lineClamp: Int? = nil, overflow: Overflow? = nil
+        /// `minWidth` in points; `transitionEase` names a curve in `easing` (`out` when nil).
+        public var minWidth: CGFloat? = nil, transitionEase: String? = nil
 
         /// `other`'s fields over these.
         public func merged(_ other: Style) -> Style {
@@ -423,6 +425,7 @@ public enum HazelTheme {
             out.weight = other.weight ?? weight; out.uppercase = other.uppercase ?? uppercase
             out.textAlign = other.textAlign ?? textAlign; out.lineClamp = other.lineClamp ?? lineClamp
             out.overflow = other.overflow ?? overflow
+            out.minWidth = other.minWidth ?? minWidth; out.transitionEase = other.transitionEase ?? transitionEase
             return out
         }
     }
@@ -845,14 +848,14 @@ public enum HazelTheme {
             inert: [.disabled],
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(fill: true)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "control", style: Style(layout: .row, align: .center, color: Colors.fg3, radius: 8, paddingX: 8, paddingY: 8, gap: 8, text: .body, strong: false, fill: true, transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "control", style: Style(layout: .row, align: .center, color: Colors.fg3, radius: 8, paddingX: 8, paddingY: 8, gap: 8, text: .body, strong: false, fill: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(layout: .contents)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "leading", style: Style(color: Colors.fg2, size: 20, shrink: false)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "title", style: Style(truncate: true, grow: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "trailing", style: Style(layout: .row, align: .center, gap: 4, shrink: false)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "subtitle", style: Style(color: Colors.fg2, text: .caption, truncate: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "shortcut", style: Style(color: Colors.mutedFg, radius: 4, ring: Colors.border, paddingX: 4, text: .caption, numeric: true, shrink: false)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "badge", style: Style(layout: .row, align: .center, justify: .center, background: Colors.primary, color: Colors.primaryFg, radius: 9999, paddingX: 6, minHeight: 20, text: .tiny, strong: true, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "badge", style: Style(layout: .row, align: .center, justify: .center, background: Colors.primary, color: Colors.primaryFg, radius: 9999, paddingX: 6, minHeight: 20, text: .tiny, strong: true, numeric: true, shrink: false, minWidth: 20)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "leading", style: Style(size: 16)),
                 Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: "control", style: Style(background: Colors.wash, color: Colors.fg)),
                 Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: "leading", style: Style(color: Colors.fg3)),
@@ -1266,7 +1269,7 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "text", style: Style(layout: .column, gap: 4, grow: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "label", style: Style(color: Colors.fg, text: .body, strong: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "description", style: Style(color: Colors.mutedFg, text: .caption)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "control", style: Style(layout: .row, background: Colors.secondaryHover, radius: 9999, paddingX: 2, paddingY: 2, shrink: false, transition: 0.2)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "control", style: Style(layout: .row, background: Colors.secondaryHover, radius: 9999, paddingX: 2, paddingY: 2, shrink: false, transition: 0.2, transitionEase: "inOut")),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "thumb", style: Style(background: Colors.bg, radius: 9999, size: 18, shadow: "xs")),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "thumb", style: Style(size: 14)),
                 Layer(when: When(options: [:], flags: [], states: [.selected], sizeClass: nil), part: "control", style: Style(background: Colors.primary)),
@@ -1295,5 +1298,89 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "dot", style: Style(background: Colors.mutedFg, radius: 9999, size: 6)),
             ]
         )
+    }
+
+    /// Motion (`packages/ui/MOTION.md`): the closed set of named motions, from today's styles.css, and
+    /// which primitive plays which. Reduce Motion (`reduceMotion`): jump to the end pose, loops do not run.
+    public enum Motion {
+        public static let reduceMotion = "instant"
+
+        /// A translation in points, or a fraction of the view's own size.
+        public enum Offset: Sendable, Equatable { case points(CGFloat), fraction(CGFloat) }
+
+        public struct Curve: Sendable, Equatable {
+            public let x1: Double, y1: Double, x2: Double, y2: Double
+            public init(_ x1: Double, _ y1: Double, _ x2: Double, _ y2: Double) {
+                self.x1 = x1; self.y1 = y1; self.x2 = x2; self.y2 = y2
+            }
+        }
+
+        public struct Pose: Sendable, Equatable {
+            public let opacity: Double, x: Offset, y: Offset, scale: Double
+        }
+
+        /// `curve`: to the next keyframe, when it is not the motion's own.
+        public struct Keyframe: Sendable, Equatable {
+            public let at: Double, pose: Pose, curve: Curve?
+        }
+
+        /// Seconds; `repeats` loops until the view leaves.
+        public struct Spec: Sendable, Equatable {
+            public let name: String, keyframes: [Keyframe], duration: Double, curve: Curve, delay: Double
+            public let repeats: Bool
+        }
+
+        public enum Trigger: String, CaseIterable, Sendable {
+            case enter = "enter"
+            case exit = "exit"
+            case countUp = "countUp"
+            case countDown = "countDown"
+            case pop = "pop"
+            case loop = "loop"
+        }
+
+        /// `part` nil is the root; `backdrop` is a modal's scrim; `regular` replaces `motion` there.
+        public struct Use: Sendable, Equatable {
+            public let trigger: Trigger, motion: Spec, part: String?, backdrop: Bool, regular: Spec?
+        }
+
+        public static let fadeIn = Spec(name: "fadeIn", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .points(0), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.15, curve: Curve(0.23, 1, 0.32, 1), delay: 0, repeats: false)
+        public static let scrimIn = Spec(name: "scrimIn", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .points(0), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.2, curve: Curve(0.23, 1, 0.32, 1), delay: 0, repeats: false)
+        public static let tooltipIn = Spec(name: "tooltipIn", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .points(4), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.15, curve: Curve(0.23, 1, 0.32, 1), delay: 0, repeats: false)
+        public static let riseIn = Spec(name: "riseIn", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .points(16), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.2, curve: Curve(0.23, 1, 0.32, 1), delay: 0, repeats: false)
+        public static let scaleIn = Spec(name: "scaleIn", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .points(0), scale: 0.97), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.2, curve: Curve(0.23, 1, 0.32, 1), delay: 0, repeats: false)
+        public static let slideUpIn = Spec(name: "slideUpIn", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .fraction(1), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.2, curve: Curve(0.23, 1, 0.32, 1), delay: 0, repeats: false)
+        public static let toastIn = Spec(name: "toastIn", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .points(8), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.2, curve: Curve(0.23, 1, 0.32, 1), delay: 0, repeats: false)
+        public static let toastOut = Spec(name: "toastOut", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 0, x: .points(0), y: .points(8), scale: 1), curve: nil)], duration: 0.15, curve: Curve(0.4, 0, 1, 1), delay: 0, repeats: false)
+        public static let messageIn = Spec(name: "messageIn", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .points(6), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.18, curve: Curve(0.2, 0, 0, 1), delay: 0, repeats: false)
+        public static let reactionIn = Spec(name: "reactionIn", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .points(0), scale: 0.6), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.22, curve: Curve(0.34, 1.56, 0.64, 1), delay: 0, repeats: false)
+        public static let reactionPop = Spec(name: "reactionPop", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil), Keyframe(at: 0.45, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1.3), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.26, curve: Curve(0.34, 1.56, 0.64, 1), delay: 0, repeats: false)
+        public static let countUp = Spec(name: "countUp", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .fraction(0.7), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.18, curve: Curve(0.2, 0, 0, 1), delay: 0, repeats: false)
+        public static let countDown = Spec(name: "countDown", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .fraction(-0.7), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.18, curve: Curve(0.2, 0, 0, 1), delay: 0, repeats: false)
+        public static let skeletonIn = Spec(name: "skeletonIn", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .points(0), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.15, curve: Curve(0, 0, 0.58, 1), delay: 0.3, repeats: false)
+        public static let skeletonPulse = Spec(name: "skeletonPulse", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil), Keyframe(at: 0.5, pose: Pose(opacity: 0.5, x: .points(0), y: .points(0), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 2, curve: Curve(0.4, 0, 0.6, 1), delay: 0, repeats: true)
+        public static let fieldErrorIn = Spec(name: "fieldErrorIn", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .points(-4), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.2, curve: Curve(0, 0, 0.58, 1), delay: 0, repeats: false)
+        public static let progressSweep = Spec(name: "progressSweep", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 1, x: .fraction(-1), y: .points(0), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .fraction(2.5), y: .points(0), scale: 1), curve: nil)], duration: 1.6, curve: Curve(0.42, 0, 0.58, 1), delay: 0, repeats: true)
+        public static let bounce = Spec(name: "bounce", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 1, x: .points(0), y: .fraction(-0.25), scale: 1), curve: Curve(0.8, 0, 1, 1)), Keyframe(at: 0.5, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: Curve(0, 0, 0.2, 1)), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .fraction(-0.25), scale: 1), curve: nil)], duration: 1, curve: Curve(0.25, 0.1, 0.25, 1), delay: 0, repeats: true)
+
+        /// Each primitive's uses, by tag.
+        public static let uses: [String: [Use]] = [
+            "contextMenu": [Use(trigger: .enter, motion: fadeIn, part: "panel", backdrop: false, regular: nil)],
+            "dialog": [Use(trigger: .enter, motion: riseIn, part: "panel", backdrop: false, regular: scaleIn), Use(trigger: .enter, motion: scrimIn, part: "panel", backdrop: true, regular: nil)],
+            "emojiPicker": [Use(trigger: .enter, motion: fadeIn, part: "panel", backdrop: false, regular: nil)],
+            "item": [Use(trigger: .countUp, motion: countUp, part: "count", backdrop: false, regular: nil), Use(trigger: .countDown, motion: countDown, part: "count", backdrop: false, regular: nil)],
+            "list": [Use(trigger: .enter, motion: skeletonIn, part: "skeleton", backdrop: false, regular: nil), Use(trigger: .loop, motion: skeletonPulse, part: "skeletonAvatar", backdrop: false, regular: nil), Use(trigger: .loop, motion: skeletonPulse, part: "skeletonLine", backdrop: false, regular: nil)],
+            "menu": [Use(trigger: .enter, motion: fadeIn, part: "panel", backdrop: false, regular: nil)],
+            "message": [Use(trigger: .enter, motion: messageIn, part: nil, backdrop: false, regular: nil), Use(trigger: .enter, motion: reactionIn, part: "reaction", backdrop: false, regular: nil), Use(trigger: .pop, motion: reactionPop, part: "emoji", backdrop: false, regular: nil), Use(trigger: .countUp, motion: countUp, part: "count", backdrop: false, regular: nil), Use(trigger: .countDown, motion: countDown, part: "count", backdrop: false, regular: nil)],
+            "popover": [Use(trigger: .enter, motion: fadeIn, part: "panel", backdrop: false, regular: nil)],
+            "progress": [Use(trigger: .loop, motion: progressSweep, part: "fill", backdrop: false, regular: nil)],
+            "reactionBar": [Use(trigger: .enter, motion: reactionIn, part: "reaction", backdrop: false, regular: nil), Use(trigger: .pop, motion: reactionPop, part: "emoji", backdrop: false, regular: nil), Use(trigger: .countUp, motion: countUp, part: "count", backdrop: false, regular: nil), Use(trigger: .countDown, motion: countDown, part: "count", backdrop: false, regular: nil)],
+            "sheet": [Use(trigger: .enter, motion: slideUpIn, part: "panel", backdrop: false, regular: scaleIn), Use(trigger: .enter, motion: scrimIn, part: "panel", backdrop: true, regular: nil)],
+            "textArea": [Use(trigger: .enter, motion: fieldErrorIn, part: "error", backdrop: false, regular: nil)],
+            "textField": [Use(trigger: .enter, motion: fieldErrorIn, part: "error", backdrop: false, regular: nil)],
+            "toast": [Use(trigger: .enter, motion: toastIn, part: "panel", backdrop: false, regular: nil), Use(trigger: .exit, motion: toastOut, part: "panel", backdrop: false, regular: nil)],
+            "tooltip": [Use(trigger: .enter, motion: tooltipIn, part: "bubble", backdrop: false, regular: nil)],
+            "typingIndicator": [Use(trigger: .loop, motion: bounce, part: "dot", backdrop: false, regular: nil)],
+        ]
     }
 }

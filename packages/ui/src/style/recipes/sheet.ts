@@ -42,4 +42,10 @@ export const sheet = defineRecipe<{}, never, "panel" | "header" | "title" | "clo
 		regular: { parts: { panel: { paddingX: "6", paddingY: "6" }, close: { size: "7" } } },
 	},
 	options: {},
+	motion: {
+		enter: [
+			{ motion: "slideUpIn", part: "panel", regular: "scaleIn" },
+			{ motion: "scrimIn", part: "panel", backdrop: true },
+		],
+	},
 })

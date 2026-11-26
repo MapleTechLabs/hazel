@@ -1,0 +1,2414 @@
+[
+	{
+		"case": "menu",
+		"width": 1180,
+		"today": {
+			"timings": [
+				{
+					"kind": "CSSTransition",
+					"name": "opacity",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.602,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.877,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.993,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"hazel": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-fade",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.602,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.877,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.993,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"problems": []
+	},
+	{
+		"case": "popover",
+		"width": 1180,
+		"today": {
+			"timings": [
+				{
+					"kind": "CSSTransition",
+					"name": "opacity",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.602,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.877,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.993,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"hazel": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-fade",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.602,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.877,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.993,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"problems": []
+	},
+	{
+		"case": "dialog",
+		"width": 1180,
+		"today": {
+			"timings": [
+				{
+					"kind": "CSSTransition",
+					"name": "opacity",
+					"duration": 200,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				},
+				{
+					"kind": "CSSTransition",
+					"name": "scale",
+					"duration": 200,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				},
+				{
+					"kind": "CSSTransition",
+					"name": "translate",
+					"duration": 200,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 0,
+					"scale": 0.97
+				},
+				{
+					"at": 25,
+					"opacity": 0.482,
+					"dx": 0,
+					"dy": 0,
+					"scale": 0.9844
+				},
+				{
+					"at": 50,
+					"opacity": 0.775,
+					"dx": 0,
+					"dy": 0,
+					"scale": 0.9933
+				},
+				{
+					"at": 75,
+					"opacity": 0.91,
+					"dx": 0,
+					"dy": 0,
+					"scale": 0.9973
+				},
+				{
+					"at": 100,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0,
+					"scale": 0.999
+				},
+				{
+					"at": 150,
+					"opacity": 0.997,
+					"dx": 0,
+					"dy": 0,
+					"scale": 0.9999
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"hazel": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-scale",
+					"duration": 200,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				},
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-fade",
+					"duration": 200,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 0,
+					"scale": 0.97
+				},
+				{
+					"at": 25,
+					"opacity": 0.482,
+					"dx": 0,
+					"dy": 0,
+					"scale": 0.9844
+				},
+				{
+					"at": 50,
+					"opacity": 0.775,
+					"dx": 0,
+					"dy": 0,
+					"scale": 0.9933
+				},
+				{
+					"at": 75,
+					"opacity": 0.91,
+					"dx": 0,
+					"dy": 0,
+					"scale": 0.9973
+				},
+				{
+					"at": 100,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0,
+					"scale": 0.999
+				},
+				{
+					"at": 150,
+					"opacity": 0.997,
+					"dx": 0,
+					"dy": 0,
+					"scale": 0.9999
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"problems": []
+	},
+	{
+		"case": "tooltip",
+		"width": 1180,
+		"today": {
+			"timings": [
+				{
+					"kind": "CSSTransition",
+					"name": "opacity",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				},
+				{
+					"kind": "CSSTransition",
+					"name": "translate",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 4,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.602,
+					"dx": 0,
+					"dy": 1.591,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.877,
+					"dx": 0,
+					"dy": 0.492,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0.136,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.993,
+					"dx": 0,
+					"dy": 0.029,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"hazel": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-tooltip",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 4,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.602,
+					"dx": 0,
+					"dy": 1.591,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.877,
+					"dx": 0,
+					"dy": 0.492,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0.136,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.993,
+					"dx": 0,
+					"dy": 0.029,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"problems": []
+	},
+	{
+		"case": "toast",
+		"width": 1180,
+		"today": {
+			"timings": [
+				{
+					"kind": "CSSTransition",
+					"name": "opacity",
+					"duration": 200,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				},
+				{
+					"kind": "CSSTransition",
+					"name": "translate",
+					"duration": 200,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 8,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.482,
+					"dx": 0,
+					"dy": 4.148,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.775,
+					"dx": 0,
+					"dy": 1.797,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.91,
+					"dx": 0,
+					"dy": 0.723,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0.272,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0.997,
+					"dx": 0,
+					"dy": 0.021,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"hazel": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-toast",
+					"duration": 200,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 8,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.482,
+					"dx": 0,
+					"dy": 4.148,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.775,
+					"dx": 0,
+					"dy": 1.797,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.91,
+					"dx": 0,
+					"dy": 0.723,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0.272,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0.997,
+					"dx": 0,
+					"dy": 0.021,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"problems": []
+	},
+	{
+		"case": "toastExit",
+		"width": 1180,
+		"today": {
+			"timings": [
+				{
+					"kind": "CSSTransition",
+					"name": "opacity",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.4, 0, 1, 1)",
+					"iterations": 1
+				},
+				{
+					"kind": "CSSTransition",
+					"name": "translate",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.4, 0, 1, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.953,
+					"dx": 0,
+					"dy": 0.38,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.837,
+					"dx": 0,
+					"dy": 1.306,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.675,
+					"dx": 0,
+					"dy": 2.599,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.479,
+					"dx": 0,
+					"dy": 4.168,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 8,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 8,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 8,
+					"scale": 1
+				}
+			]
+		},
+		"hazel": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-toastOut",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.4, 0, 1, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.953,
+					"dx": 0,
+					"dy": 0.38,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.837,
+					"dx": 0,
+					"dy": 1.306,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.675,
+					"dx": 0,
+					"dy": 2.599,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.479,
+					"dx": 0,
+					"dy": 4.168,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 8,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 8,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 8,
+					"scale": 1
+				}
+			],
+			"shownMidway": true,
+			"goneAfter": true
+		},
+		"problems": []
+	},
+	{
+		"case": "countUp",
+		"width": 1180,
+		"today": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "count-up",
+					"duration": 180,
+					"delay": 0,
+					"easing": "cubic-bezier(0.2, 0, 0, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 0.7,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.31,
+					"dx": 0,
+					"dy": 0.483,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.655,
+					"dx": 0,
+					"dy": 0.242,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.817,
+					"dx": 0,
+					"dy": 0.128,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.909,
+					"dx": 0,
+					"dy": 0.064,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0.99,
+					"dx": 0,
+					"dy": 0.007,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"hazel": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-countUp",
+					"duration": 180,
+					"delay": 0,
+					"easing": "cubic-bezier(0.2, 0, 0, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 0.7,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.31,
+					"dx": 0,
+					"dy": 0.483,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.655,
+					"dx": 0,
+					"dy": 0.242,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.817,
+					"dx": 0,
+					"dy": 0.128,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.909,
+					"dx": 0,
+					"dy": 0.064,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0.99,
+					"dx": 0,
+					"dy": 0.007,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"problems": []
+	},
+	{
+		"case": "countDown",
+		"width": 1180,
+		"today": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "count-down",
+					"duration": 180,
+					"delay": 0,
+					"easing": "cubic-bezier(0.2, 0, 0, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": -0.7,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.31,
+					"dx": 0,
+					"dy": -0.483,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.655,
+					"dx": 0,
+					"dy": -0.242,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.817,
+					"dx": 0,
+					"dy": -0.128,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.909,
+					"dx": 0,
+					"dy": -0.064,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0.99,
+					"dx": 0,
+					"dy": -0.007,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"hazel": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-countDown",
+					"duration": 180,
+					"delay": 0,
+					"easing": "cubic-bezier(0.2, 0, 0, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": -0.7,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.31,
+					"dx": 0,
+					"dy": -0.483,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.655,
+					"dx": 0,
+					"dy": -0.242,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.817,
+					"dx": 0,
+					"dy": -0.128,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.909,
+					"dx": 0,
+					"dy": -0.064,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0.99,
+					"dx": 0,
+					"dy": -0.007,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"problems": []
+	},
+	{
+		"case": "menu",
+		"width": 390,
+		"today": {
+			"timings": [
+				{
+					"kind": "CSSTransition",
+					"name": "opacity",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.602,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.877,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.993,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"hazel": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-fade",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.602,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.877,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.993,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"problems": []
+	},
+	{
+		"case": "popover",
+		"width": 390,
+		"today": {
+			"timings": [
+				{
+					"kind": "CSSTransition",
+					"name": "opacity",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.602,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.877,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.993,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"hazel": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-fade",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.602,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.877,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.993,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"problems": []
+	},
+	{
+		"case": "dialog",
+		"width": 390,
+		"today": {
+			"timings": [
+				{
+					"kind": "CSSTransition",
+					"name": "opacity",
+					"duration": 200,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				},
+				{
+					"kind": "CSSTransition",
+					"name": "translate",
+					"duration": 200,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 16,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.482,
+					"dx": 0,
+					"dy": 8.295,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.775,
+					"dx": 0,
+					"dy": 3.594,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.91,
+					"dx": 0,
+					"dy": 1.446,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0.544,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0.997,
+					"dx": 0,
+					"dy": 0.042,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"hazel": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-rise",
+					"duration": 200,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				},
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-fade",
+					"duration": 200,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 16,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.482,
+					"dx": 0,
+					"dy": 8.295,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.775,
+					"dx": 0,
+					"dy": 3.594,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.91,
+					"dx": 0,
+					"dy": 1.446,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0.544,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0.997,
+					"dx": 0,
+					"dy": 0.042,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"problems": []
+	},
+	{
+		"case": "tooltip",
+		"width": 390,
+		"today": {
+			"timings": [
+				{
+					"kind": "CSSTransition",
+					"name": "opacity",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				},
+				{
+					"kind": "CSSTransition",
+					"name": "translate",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 4,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.602,
+					"dx": 0,
+					"dy": 1.591,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.877,
+					"dx": 0,
+					"dy": 0.492,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0.136,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.993,
+					"dx": 0,
+					"dy": 0.029,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"hazel": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-tooltip",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 4,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.602,
+					"dx": 0,
+					"dy": 1.591,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.877,
+					"dx": 0,
+					"dy": 0.492,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0.136,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.993,
+					"dx": 0,
+					"dy": 0.029,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"problems": []
+	},
+	{
+		"case": "toast",
+		"width": 390,
+		"today": {
+			"timings": [
+				{
+					"kind": "CSSTransition",
+					"name": "opacity",
+					"duration": 200,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				},
+				{
+					"kind": "CSSTransition",
+					"name": "translate",
+					"duration": 200,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 8,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.482,
+					"dx": 0,
+					"dy": 4.148,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.775,
+					"dx": 0,
+					"dy": 1.797,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.91,
+					"dx": 0,
+					"dy": 0.723,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0.272,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0.997,
+					"dx": 0,
+					"dy": 0.021,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"hazel": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-toast",
+					"duration": 200,
+					"delay": 0,
+					"easing": "cubic-bezier(0.23, 1, 0.32, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 8,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.482,
+					"dx": 0,
+					"dy": 4.148,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.775,
+					"dx": 0,
+					"dy": 1.797,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.91,
+					"dx": 0,
+					"dy": 0.723,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.966,
+					"dx": 0,
+					"dy": 0.272,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0.997,
+					"dx": 0,
+					"dy": 0.021,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"problems": []
+	},
+	{
+		"case": "toastExit",
+		"width": 390,
+		"today": {
+			"timings": [
+				{
+					"kind": "CSSTransition",
+					"name": "opacity",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.4, 0, 1, 1)",
+					"iterations": 1
+				},
+				{
+					"kind": "CSSTransition",
+					"name": "translate",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.4, 0, 1, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.953,
+					"dx": 0,
+					"dy": 0.38,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.837,
+					"dx": 0,
+					"dy": 1.306,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.675,
+					"dx": 0,
+					"dy": 2.599,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.479,
+					"dx": 0,
+					"dy": 4.168,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 8,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 8,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 8,
+					"scale": 1
+				}
+			]
+		},
+		"hazel": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-toastOut",
+					"duration": 150,
+					"delay": 0,
+					"easing": "cubic-bezier(0.4, 0, 1, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.953,
+					"dx": 0,
+					"dy": 0.38,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.837,
+					"dx": 0,
+					"dy": 1.306,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.675,
+					"dx": 0,
+					"dy": 2.599,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.479,
+					"dx": 0,
+					"dy": 4.168,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 8,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 8,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 8,
+					"scale": 1
+				}
+			],
+			"shownMidway": true,
+			"goneAfter": true
+		},
+		"problems": []
+	},
+	{
+		"case": "countUp",
+		"width": 390,
+		"today": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "count-up",
+					"duration": 180,
+					"delay": 0,
+					"easing": "cubic-bezier(0.2, 0, 0, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 0.7,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.31,
+					"dx": 0,
+					"dy": 0.483,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.655,
+					"dx": 0,
+					"dy": 0.242,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.817,
+					"dx": 0,
+					"dy": 0.128,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.909,
+					"dx": 0,
+					"dy": 0.064,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0.99,
+					"dx": 0,
+					"dy": 0.007,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"hazel": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-countUp",
+					"duration": 180,
+					"delay": 0,
+					"easing": "cubic-bezier(0.2, 0, 0, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": 0.7,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.31,
+					"dx": 0,
+					"dy": 0.483,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.655,
+					"dx": 0,
+					"dy": 0.242,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.817,
+					"dx": 0,
+					"dy": 0.128,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.909,
+					"dx": 0,
+					"dy": 0.064,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0.99,
+					"dx": 0,
+					"dy": 0.007,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"problems": []
+	},
+	{
+		"case": "countDown",
+		"width": 390,
+		"today": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "count-down",
+					"duration": 180,
+					"delay": 0,
+					"easing": "cubic-bezier(0.2, 0, 0, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": -0.7,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.31,
+					"dx": 0,
+					"dy": -0.483,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.655,
+					"dx": 0,
+					"dy": -0.242,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.817,
+					"dx": 0,
+					"dy": -0.128,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.909,
+					"dx": 0,
+					"dy": -0.064,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0.99,
+					"dx": 0,
+					"dy": -0.007,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"hazel": {
+			"timings": [
+				{
+					"kind": "CSSAnimation",
+					"name": "hz-countDown",
+					"duration": 180,
+					"delay": 0,
+					"easing": "cubic-bezier(0.2, 0, 0, 1)",
+					"iterations": 1
+				}
+			],
+			"samples": [
+				{
+					"at": 0,
+					"opacity": 0,
+					"dx": 0,
+					"dy": -0.7,
+					"scale": 1
+				},
+				{
+					"at": 25,
+					"opacity": 0.31,
+					"dx": 0,
+					"dy": -0.483,
+					"scale": 1
+				},
+				{
+					"at": 50,
+					"opacity": 0.655,
+					"dx": 0,
+					"dy": -0.242,
+					"scale": 1
+				},
+				{
+					"at": 75,
+					"opacity": 0.817,
+					"dx": 0,
+					"dy": -0.128,
+					"scale": 1
+				},
+				{
+					"at": 100,
+					"opacity": 0.909,
+					"dx": 0,
+					"dy": -0.064,
+					"scale": 1
+				},
+				{
+					"at": 150,
+					"opacity": 0.99,
+					"dx": 0,
+					"dy": -0.007,
+					"scale": 1
+				},
+				{
+					"at": 200,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				},
+				{
+					"at": 260,
+					"opacity": 1,
+					"dx": 0,
+					"dy": 0,
+					"scale": 1
+				}
+			]
+		},
+		"problems": []
+	}
+]

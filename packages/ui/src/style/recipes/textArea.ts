@@ -51,4 +51,7 @@ export const textArea = defineRecipe<
 	flags: { invalid: { parts: { input: { borderColor: "danger-subtle-fg" } } } },
 	states: { disabled: { parts: { input: { background: "muted", color: "muted-fg" } } } },
 	inert: ["disabled"],
+	motion: {
+		enter: [{ motion: "fieldErrorIn", part: "error" }],
+	},
 })

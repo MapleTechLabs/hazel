@@ -2,6 +2,7 @@
  * `hz:typingIndicator` (lane A5): three bouncing dots and who is typing (`page/chat/banners.ts`). A
  * polite live region that is always there, so screen readers announce who starts typing.
  */
+import { loop } from "../../motion.ts"
 import { definePrimitive, part } from "../define.ts"
 import { ensureStyles, text } from "./shared.ts"
 
@@ -24,7 +25,11 @@ export const primitive = definePrimitive("typingIndicator", ({ document, outer, 
 		if (names.length === 0) return
 		const dots = part(document, "span", "dots")
 		dots.setAttribute("aria-hidden", "true")
-		for (let index = 0; index < 3; index++) dots.append(part(document, "span", "dot"))
+		for (let index = 0; index < 3; index++) {
+			const dot = part(document, "span", "dot")
+			loop(dot, true)
+			dots.append(dot)
+		}
 		node.append(dots, text(document, "span", "label", typingText(names)))
 	}
 	return self(node, (name, value) => {

@@ -21,4 +21,7 @@ export const tooltip = defineRecipe<{}, never, "content" | "bubble">({
 		},
 	},
 	options: {},
+	motion: {
+		enter: [{ motion: "tooltipIn", part: "bubble" }],
+	},
 })

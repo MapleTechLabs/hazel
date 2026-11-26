@@ -26,7 +26,9 @@ export const toggle = defineRecipe<{}, never, "text" | "label" | "description" |
 				background: "secondary-hover",
 				paddingX: "0.5",
 				paddingY: "0.5",
+				// `switch.styles.ts`: `transition duration-200 ease-in-out`.
 				transition: "normal",
+				transitionEase: "inOut",
 			},
 			thumb: { size: "4.5", radius: "full", background: "bg", shadow: "xs" },
 		},

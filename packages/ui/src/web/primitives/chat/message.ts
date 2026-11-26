@@ -5,6 +5,7 @@
  */
 import type { MessageRow } from "../../../vocabulary/content.ts"
 import type { IconName, MessageAction } from "../../../vocabulary/options.ts"
+import { mark } from "../../motion.ts"
 import { definePrimitive, flag, part, type Primitive } from "../define.ts"
 import {
 	attachments,
@@ -16,6 +17,8 @@ import {
 	fire,
 	handles,
 	icon,
+	countsOf,
+	type ReactionCounts,
 	reactionPills,
 	richText,
 	text,
@@ -52,6 +55,8 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 	let row: MessageRow | undefined
 	/** The flags that are on. */
 	const on = new Set<Flag>()
+	// Reaction counts at the last draw; undefined until then, so a row's first pills do not move.
+	let counts: ReactionCounts | undefined
 
 	const avatar = (name: string | undefined, initials: string | undefined, url: string | undefined) => {
 		const box = part(document, "span", "avatarImage")
@@ -225,8 +230,10 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 					data.reactions ?? [],
 					(emoji) => fire(primitive, "pressReaction", { emoji }),
 					handles(primitive, "addReaction") ? () => fire(primitive, "addReaction") : undefined,
+					counts,
 				),
 			)
+		counts = countsOf(data.reactions ?? [])
 		if (data.thread !== undefined) body.append(thread(data.thread))
 		if (on.has("failed")) {
 			const status = part(document, "div", "failure")
@@ -254,6 +261,8 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 		set: (name, value) => {
 			if (name === "row") row = isRow(value) ? value : undefined
 			else if (isFlag(name)) {
+				// A live arrival rises in once (`recipe.motion` enter, today's `animate-message-enter`).
+				if (name === "entering" && value === true && !on.has(name)) mark(node, "enter")
 				if (value === true) on.add(name)
 				else on.delete(name)
 				flag(node, name, value)

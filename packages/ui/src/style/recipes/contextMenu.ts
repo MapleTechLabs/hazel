@@ -11,4 +11,7 @@ export const contextMenu = defineRecipe<{}, never, MenuListPart | "content">({
 		regular: { parts: { item: { minHeight: "8", text: "label" } } },
 	},
 	options: {},
+	motion: {
+		enter: [{ motion: "fadeIn", part: "panel" }],
+	},
 })

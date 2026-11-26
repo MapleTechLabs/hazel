@@ -3,6 +3,7 @@
  * Model `value`s through the G5 revision rule (`native/revisions.ts`), and the parts a labelled field
  * draws. No `primitive` export, so the registry glob skips this file.
  */
+import { onShow } from "../../motion.ts"
 import * as Revisions from "../../../native/revisions.ts"
 import { type Events, flag, part, type Plain } from "../define.ts"
 
@@ -70,6 +71,8 @@ export const labelledField = (document: Document, outer: HTMLElement, control: C
 	const error = part(document, "p", "error")
 	error.id = uniqueId("error")
 	error.hidden = true
+	// Drops into place each time it appears (`recipe.motion`, today's `field-error-enter`).
+	onShow(error, "enter")
 	label.append(caption, marker, control)
 	outer.append(label, description, error)
 

@@ -8,7 +8,14 @@ import { defineRecipe } from "../recipe.ts"
 export const list = defineRecipe<
 	{ anchor: "start" | "end" },
 	"stickToBottom" | "loading" | "loadingStart" | "loadingEnd" | "reorderable",
-	"viewport" | "content" | "loadingStart" | "loadingEnd" | "overlay"
+	| "viewport"
+	| "content"
+	| "loadingStart"
+	| "loadingEnd"
+	| "overlay"
+	| "skeleton"
+	| "skeletonAvatar"
+	| "skeletonLine"
 >({
 	primitive: "list",
 	parts: {
@@ -17,6 +24,10 @@ export const list = defineRecipe<
 		overlay: { kind: "slot", in: "content" },
 		loadingStart: { kind: "part", in: "viewport" },
 		loadingEnd: { kind: "part", in: "viewport" },
+		// The renderer's loading skeleton (`list/list.ts`): parts only motion names.
+		skeleton: { kind: "part", in: "viewport" },
+		skeletonAvatar: { kind: "part", in: "skeleton" },
+		skeletonLine: { kind: "part", in: "skeleton" },
 	},
 	base: {
 		root: { fill: true },
@@ -30,4 +41,11 @@ export const list = defineRecipe<
 	},
 	options: { anchor: { default: "start", values: { start: {}, end: {} } } },
 	flags: { stickToBottom: {}, loading: {}, loadingStart: {}, loadingEnd: {}, reorderable: {} },
+	motion: {
+		enter: [{ motion: "skeletonIn", part: "skeleton" }],
+		loop: [
+			{ motion: "skeletonPulse", part: "skeletonAvatar" },
+			{ motion: "skeletonPulse", part: "skeletonLine" },
+		],
+	},
 })

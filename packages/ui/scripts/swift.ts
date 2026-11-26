@@ -2,7 +2,12 @@ import type {
 	ColorExpr,
 	Declarations,
 	Layer,
+	Keyframe,
 	Length,
+	MotionTrigger,
+	MotionUse,
+	TokenNames,
+	Offset,
 	Recipe,
 	Tokens,
 	TypeMetrics,
@@ -15,6 +20,7 @@ import {
 	buttonVariants,
 	dataStates,
 	interactionStates,
+	motionTriggers,
 	recipeTextSteps,
 	textRoles,
 	textTones,
@@ -126,6 +132,8 @@ export const generateSwift = (tokens: Tokens, recipes: ReadonlyArray<Recipe>): s
 		if (d.textAlign !== undefined) add("textAlign", `.${d.textAlign}`)
 		if (d.lineClamp !== undefined) add("lineClamp", String(d.lineClamp))
 		if (d.overflow !== undefined) add("overflow", `.${d.overflow}`)
+		if (d.minWidth !== undefined) add("minWidth", num(space(d.minWidth)))
+		if (d.transitionEase !== undefined) add("transitionEase", str(d.transitionEase))
 		return `Style(${fields.join(", ")})`
 	}
 
@@ -344,6 +352,8 @@ ${Object.entries(tokens.shadow)
         /// A font weight above \`strong\` (600 or 700); wins over \`strong\`.
         public var weight: Int? = nil, uppercase: Bool? = nil, textAlign: TextAlign? = nil
         public var lineClamp: Int? = nil, overflow: Overflow? = nil
+        /// \`minWidth\` in points; \`transitionEase\` names a curve in \`easing\` (\`out\` when nil).
+        public var minWidth: CGFloat? = nil, transitionEase: String? = nil
 
         /// \`other\`'s fields over these.
         public func merged(_ other: Style) -> Style {
@@ -365,6 +375,7 @@ ${Object.entries(tokens.shadow)
             out.weight = other.weight ?? weight; out.uppercase = other.uppercase ?? uppercase
             out.textAlign = other.textAlign ?? textAlign; out.lineClamp = other.lineClamp ?? lineClamp
             out.overflow = other.overflow ?? overflow
+            out.minWidth = other.minWidth ?? minWidth; out.transitionEase = other.transitionEase ?? transitionEase
             return out
         }
     }
@@ -405,6 +416,101 @@ ${Object.entries(tokens.shadow)
     public enum Recipes {
 ${recipeLines.join("\n\n")}
     }
+
+${motionBlock(tokens, recipes)}
 }
 `
+}
+
+// Motion (MOTION.md): the named motions and each primitive's uses, for the iOS lanes.
+
+const swiftOffset = (value: Offset | undefined) =>
+	value === undefined
+		? ".points(0)"
+		: typeof value === "number"
+			? `.points(${num(value)})`
+			: `.fraction(${num(Number.parseFloat(value) / 100)})`
+
+const curveOf = (tokens: Tokens, name: string) => {
+	const curve = tokens.easing[name]
+	if (curve === undefined) throw new Error(`Unknown easing ${name}`)
+	return `Curve(${curve.join(", ")})`
+}
+
+/** Keyframes with explicit rest poses at 0 and 1, as SwiftUI's keyframe tracks need them. */
+const fullFrames = (frames: ReadonlyArray<Keyframe>): ReadonlyArray<Keyframe> => [
+	...(frames.some((f) => f.at === 0) ? [] : [{ at: 0, pose: {} }]),
+	...frames,
+	...(frames.some((f) => f.at === 1) ? [] : [{ at: 1, pose: {} }]),
+]
+
+const motionBlock = (tokens: Tokens, recipes: ReadonlyArray<Recipe>) => {
+	const spec = (name: string) => {
+		const m = tokens.motion[name]
+		if (m === undefined) throw new Error(`Unknown motion ${name}`)
+		const frames = tokens.keyframes[m.keyframes]
+		if (frames === undefined) throw new Error(`Unknown keyframes ${m.keyframes}`)
+		const keyframes = fullFrames(frames).map(
+			(f) =>
+				`Keyframe(at: ${num(f.at)}, pose: Pose(opacity: ${num(f.pose.opacity ?? 1)}, x: ${swiftOffset(f.pose.x)}, y: ${swiftOffset(f.pose.y)}, scale: ${num(f.pose.scale ?? 1)}), curve: ${f.easing === undefined ? "nil" : curveOf(tokens, f.easing)})`,
+		)
+		return `Spec(name: ${str(name)}, keyframes: [${keyframes.join(", ")}], duration: ${num((tokens.duration[m.duration] ?? 0) / 1000)}, curve: ${curveOf(tokens, m.easing)}, delay: ${num(m.delay === undefined ? 0 : (tokens.duration[m.delay] ?? 0) / 1000)}, repeats: ${m.repeat === "forever"})`
+	}
+	const specLines = Object.keys(tokens.motion).map(
+		(name) => `        public static let ${ident(name)} = ${spec(name)}`,
+	)
+	const useLines = recipes.flatMap((recipe) => {
+		const entries = Object.entries(recipe.motion ?? {}) as ReadonlyArray<
+			[MotionTrigger, ReadonlyArray<MotionUse<string, TokenNames>> | undefined]
+		>
+		const uses = entries.flatMap(([trigger, list]) =>
+			(list ?? []).map(
+				(use) =>
+					`Use(trigger: .${trigger}, motion: ${ident(use.motion)}, part: ${use.part === undefined ? "nil" : str(use.part)}, backdrop: ${use.backdrop === true}, regular: ${use.regular === undefined ? "nil" : ident(use.regular)})`,
+			),
+		)
+		return uses.length === 0 ? [] : [`            ${str(recipe.primitive)}: [${uses.join(", ")}],`]
+	})
+	return `    /// Motion (\`packages/ui/MOTION.md\`): the closed set of named motions, from today's styles.css, and
+    /// which primitive plays which. Reduce Motion (\`reduceMotion\`): jump to the end pose, loops do not run.
+    public enum Motion {
+        public static let reduceMotion = ${str(tokens.reducedMotion)}
+
+        /// A translation in points, or a fraction of the view's own size.
+        public enum Offset: Sendable, Equatable { case points(CGFloat), fraction(CGFloat) }
+
+        public struct Curve: Sendable, Equatable {
+            public let x1: Double, y1: Double, x2: Double, y2: Double
+            public init(_ x1: Double, _ y1: Double, _ x2: Double, _ y2: Double) {
+                self.x1 = x1; self.y1 = y1; self.x2 = x2; self.y2 = y2
+            }
+        }
+
+        public struct Pose: Sendable, Equatable {
+            public let opacity: Double, x: Offset, y: Offset, scale: Double
+        }
+
+        /// \`curve\`: to the next keyframe, when it is not the motion's own.
+        public struct Keyframe: Sendable, Equatable {
+            public let at: Double, pose: Pose, curve: Curve?
+        }
+
+        /// Seconds; \`repeats\` loops until the view leaves.
+        public struct Spec: Sendable, Equatable {
+            public let name: String, keyframes: [Keyframe], duration: Double, curve: Curve, delay: Double
+            public let repeats: Bool
+        }
+
+${enumOf("Trigger", motionTriggers).replace(/^    /gm, "        ")}
+
+        /// \`part\` nil is the root; \`backdrop\` is a modal's scrim; \`regular\` replaces \`motion\` there.
+        public struct Use: Sendable, Equatable {
+            public let trigger: Trigger, motion: Spec, part: String?, backdrop: Bool, regular: Spec?
+        }
+
+${specLines.join("\n")}
+
+        /// Each primitive's uses, by tag.
+        public static let uses: [String: [Use]] = ${useLines.length === 0 ? "[:]" : `[\n${useLines.join("\n")}\n        ]`}
+    }`
 }

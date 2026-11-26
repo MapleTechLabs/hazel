@@ -89,4 +89,7 @@ export const menu = defineRecipe<
 		regular: { parts: { item: { minHeight: "8", text: "label" }, button: { minHeight: "8" } } },
 	},
 	options: {},
+	motion: {
+		enter: [{ motion: "fadeIn", part: "panel" }],
+	},
 })
