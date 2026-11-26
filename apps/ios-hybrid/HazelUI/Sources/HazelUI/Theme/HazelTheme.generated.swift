@@ -844,7 +844,7 @@ public enum HazelTheme {
 
         public static let item = Recipe(
             primitive: "item",
-            defaults: ["nested": "none"],
+            defaults: ["nested": "none", "titleLines": "1", "subtitleLines": "1", "leadingSize": "regular"],
             inert: [.disabled],
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(fill: true)),
@@ -863,6 +863,11 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [.pressed], sizeClass: nil), part: "leading", style: Style(color: Colors.fg3)),
                 Layer(when: When(options: ["nested": "middle"], flags: [], states: [], sizeClass: nil), part: "control", style: Style(paddingY: 6, text: .label)),
                 Layer(when: When(options: ["nested": "last"], flags: [], states: [], sizeClass: nil), part: "control", style: Style(paddingY: 6, text: .label)),
+                Layer(when: When(options: ["titleLines": "2"], flags: [], states: [], sizeClass: nil), part: "title", style: Style(lineClamp: 2)),
+                Layer(when: When(options: ["subtitleLines": "2"], flags: [], states: [], sizeClass: nil), part: "subtitle", style: Style(lineClamp: 2)),
+                Layer(when: When(options: ["leadingSize": "large"], flags: [], states: [], sizeClass: nil), part: "control", style: Style(color: Colors.fg, radius: 0, paddingX: 16, paddingY: 12, text: .label)),
+                Layer(when: When(options: ["leadingSize": "large"], flags: [], states: [], sizeClass: nil), part: "title", style: Style(color: Colors.fg)),
+                Layer(when: When(options: ["leadingSize": "large"], flags: [], states: [], sizeClass: nil), part: "subtitle", style: Style(color: Colors.mutedFg)),
                 Layer(when: When(options: [:], flags: ["muted"], states: [], sizeClass: nil), part: "title", style: Style(opacity: 0.6)),
                 Layer(when: When(options: [:], flags: ["muted"], states: [], sizeClass: nil), part: "leading", style: Style(opacity: 0.6)),
                 Layer(when: When(options: [:], flags: [], states: [.selected], sizeClass: nil), part: "control", style: Style(background: Colors.washStrong, color: Colors.fg, strong: true)),
@@ -947,14 +952,14 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "gutterTime", style: Style(color: Colors.mutedFg, text: .micro, shrink: false)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "body", style: Style(grow: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "header", style: Style(gap: 8)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "author", style: Style(color: Colors.fg)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "author", style: Style(color: Colors.fg, weight: 600)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "time", style: Style(color: Colors.mutedFg, text: .caption)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "reactions", style: Style(layout: .row, gap: 4, rowGap: 4, wrap: true)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "thread", style: Style(background: Colors.wash, borderColor: Colors.border, borderWidth: 1, radius: 8, paddingX: 12, text: .label)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "thread", style: Style(background: Colors.secondaryBand, borderColor: Colors.border, borderWidth: 1, radius: 8, paddingX: 12, text: .label)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "failure", style: Style(color: Colors.dangerSubtleFg, gap: 6, text: .caption)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "toolbar", style: Style(layout: .row, align: .center, background: Colors.bg, borderColor: Colors.border, borderWidth: 1, radius: 8, paddingX: 2, paddingY: 2, gap: 2, shadow: "xs")),
                 Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: nil, style: Style(background: Colors.secondary)),
-                Layer(when: When(options: [:], flags: ["pinned"], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.warningSubtle, shadow: "xs")),
+                Layer(when: When(options: [:], flags: ["pinned"], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.warningTint, shadow: "xs")),
                 Layer(when: When(options: [:], flags: ["highlighted"], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.primarySubtle)),
                 Layer(when: When(options: [:], flags: ["pending"], states: [], sizeClass: nil), part: "main", style: Style(opacity: 0.6)),
             ]
