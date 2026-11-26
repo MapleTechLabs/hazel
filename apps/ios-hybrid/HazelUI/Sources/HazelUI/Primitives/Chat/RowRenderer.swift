@@ -130,7 +130,7 @@ public enum RowRenderer {
     static let actionLabels: [String: String] = [
         "react": "Add reaction", "reply": "Reply", "thread": "Reply in thread", "copy": "Copy message",
         "edit": "Edit message", "pin": "Pin message", "unpin": "Unpin message", "issue": "Create issue",
-        "delete": "Delete message",
+        "delete": "Delete message", "selectText": "Select text",
     ]
 
     static func avatar(_ initials: String, rect: CGRect, style: PartStyle, micro: Bool = false, _ b: inout Builder) {
@@ -152,7 +152,7 @@ public enum RowRenderer {
         let timeStyle = PartStyle(recipe, "time", b.c)
         let gap = PartStyle(recipe, "header", b.c).style.gap ?? Token.space("2")
         let lineHeight = root.lineHeight
-        let authorFont = RowFont.inter(root.metrics.size, weight: RowFont.semibold)
+        let authorFont = RowFont.inter(root.metrics.size, weight: authorStyle.style.weight ?? RowFont.semibold)
         // Where a font's baseline sits in a line box of `lineHeight` (half-leading above the ascent).
         func baseline(_ font: UIFont, _ height: CGFloat) -> CGFloat { (height - font.lineHeight) / 2 + font.ascender }
         let authorBaseline = baseline(authorFont, lineHeight)
@@ -168,11 +168,8 @@ public enum RowRenderer {
             let size = Token.space("3.5")
             let color = (provider == "discord" ? HazelTheme.Colors.discord : HazelTheme.Colors.slack).ui(b.c.dark)
             pieces.append(.box(CGSize(width: size, height: size)) { rect, b in
-                // HAZEL-GAP(row-icons): the provider's mark; a brand-coloured tile until S1's catalog.
-                b.items.append(.fill(rect, radius: Token.radius("xs"), color: color))
-                let letter = RowText.string(provider == "discord" ? "D" : "S", RowFont.inter(9, weight: RowFont.bold), .white, lineHeight: size, wrap: false)
-                let s = RowText.measure(letter)
-                b.items.append(.text(letter, CGRect(x: rect.midX - s.width / 2, y: rect.minY, width: s.width + 1, height: size)))
+                // The provider's mark from the catalog, in its own colours.
+                if let image = RowIcon.image(provider, size: size, color: color) { b.items.append(.image(image, rect)) }
             })
         }
         for badge in row.badges {
@@ -281,11 +278,19 @@ public enum RowRenderer {
         let fg = HazelTheme.Colors.fg.ui(b.c.dark)
         let top = rect.minY + (rect.height - line * 2 - Token.space("0.5")) / 2
         var px = rect.minX + padX
+        let chevron = Token.space("3.5")
         let count = RowText.string("\(thread.count) \(thread.count == 1 ? "Message" : "Messages")", style, weight: HazelTheme.Font.weightStrong, color: primary, wrap: false)
         let cw = RowText.measure(count).width
+        // The thread's name leads (`thread-name`), semibold and truncated; the count and chevron follow.
+        if let name = thread.name, !name.isEmpty {
+            let title = RowText.string(name, style, weight: RowFont.semibold, color: fg, wrap: false)
+            let room = rect.maxX - padX - px - Token.space("2") - cw - Token.space("0.5") - chevron
+            let nw = min(RowText.measure(title).width, max(0, room))
+            b.items.append(.text(title, CGRect(x: px, y: top, width: nw + 1, height: line)))
+            px += nw + Token.space("2")
+        }
         b.items.append(.text(count, CGRect(x: px, y: top, width: cw + 1, height: line)))
-        px += cw + gap
-        let chevron = Token.space("3.5")
+        px += cw + Token.space("0.5")
         if let image = RowIcon.image("chevron-right", size: chevron, color: primary) {
             b.items.append(.image(image, CGRect(x: px, y: top + (line - chevron) / 2, width: chevron, height: chevron)))
         }
@@ -307,7 +312,8 @@ public enum RowRenderer {
         b.items.append(.text(preview, CGRect(x: px, y: second, width: pw + 1, height: line)))
         px += pw + Token.space("1")
         b.items.append(.text(time, CGRect(x: px, y: second + (line - timeStyle.lineHeight) / 2, width: tw + 1, height: timeStyle.lineHeight)))
-        b.target(rect, "pressThread", label: "Open thread, \(thread.count) \(thread.count == 1 ? "message" : "messages")")
+        let named = thread.name.map { " \($0)" } ?? ""
+        b.target(rect, "pressThread", label: "Open thread\(named), \(thread.count) \(thread.count == 1 ? "message" : "messages")")
         return rect
     }
 
@@ -407,7 +413,7 @@ public enum RowRenderer {
             case .mention:
                 font = RowFont.inter(size, weight: HazelTheme.Font.weightStrong, italic: italic)
                 color = primary
-                chip = HazelTheme.Colors.primarySubtle.ui(c.dark)
+                chip = HazelTheme.Colors.primaryTint.ui(c.dark)
             case .link:
                 color = primary
                 extra[.underlineStyle] = NSUnderlineStyle.single.rawValue
@@ -502,10 +508,10 @@ public enum RowRenderer {
         for reaction in list {
             let style = PartStyle(recipe, "reaction", b.c)
             let mine = reaction.mine
-            // A pill of mine (`data-mine`): the primary tint and ink, renderer-owned on the web too.
+            // A pill of mine (`data-mine`): the primary tint, ring and ink, renderer-owned on the web too.
             let ink = mine ? HazelTheme.Colors.primary.ui(b.c.dark) : style.ink ?? .label
-            let fill = mine ? HazelTheme.Colors.primarySubtle.ui(b.c.dark) : style.fill ?? .clear
-            let ring = mine ? HazelTheme.Colors.primarySubtle.ui(b.c.dark) : style.ring ?? .separator
+            let fill = mine ? HazelTheme.Colors.primaryTint.ui(b.c.dark) : style.fill ?? .clear
+            let ring = mine ? HazelTheme.Colors.primaryTintRing.ui(b.c.dark) : style.ring ?? .separator
             let emoji = RowText.string(reaction.emoji, style, color: ink, wrap: false)
             let countAttrs = RowText.attrs(style.font().withMonospacedDigits(), ink, lineHeight: style.lineHeight, wrap: false)
             let count = NSAttributedString(string: "\(reaction.count)", attributes: countAttrs)

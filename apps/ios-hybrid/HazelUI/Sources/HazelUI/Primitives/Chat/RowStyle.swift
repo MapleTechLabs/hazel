@@ -35,10 +35,9 @@ enum Token {
 /// Inter as UIFont (the same faces `Inter.font` names), falling back to the system font when the app
 /// has not registered them (the snapshot tests).
 enum RowFont {
-    // HAZEL-GAP(chat-weights): author, thread and card titles are 600 and `**bold**` 700 on the web;
-    // the tokens have regular and strong only, so these two mirror the web renderer's literals.
-    static let semibold = 600
-    static let bold = 700
+    // Author, thread and card titles are semibold, `**bold**` runs bold (`chat-weights`).
+    static let semibold = HazelTheme.Font.weightSemibold
+    static let bold = HazelTheme.Font.weightBold
 
     nonisolated(unsafe) private static var cache: [String: UIFont] = [:]
     private static let lock = NSLock()
@@ -107,26 +106,18 @@ struct PartStyle {
     func font(weight: Int? = nil) -> UIFont { RowFont.of(style, sizeClass, weight: weight) }
 }
 
-/// Icons inside bitmap rows.
-/// HAZEL-GAP(row-icons): lane S1's icon catalog (`scripts/export-icons.ts`) is not in HazelUI yet, so rows
-/// draw SF Symbols of the same meaning; swap in the catalog's images when it lands.
+/// Icons inside bitmap rows, from S1's catalog (`row-icons`), tinted and cached per size and colour.
 enum RowIcon {
-    static func symbol(_ name: String) -> String? {
-        switch name {
-        case "pin": "pin.fill"
-        case "chevron-right": "chevron.right"
-        case "warning": "exclamationmark.triangle.fill"
-        case "paperclip": "paperclip"
-        case "emoji-add": "face.smiling"
-        case "close": "xmark"
-        case "play": "play.fill"
-        default: nil
-        }
-    }
+    nonisolated(unsafe) private static var cache: [String: UIImage] = [:]
+    private static let lock = NSLock()
 
     static func image(_ name: String, size: CGFloat, color: UIColor) -> UIImage? {
-        guard let symbol = symbol(name) else { return nil }
-        let config = UIImage.SymbolConfiguration(pointSize: size * 0.8, weight: .medium)
-        return UIImage(systemName: symbol, withConfiguration: config)?.withTintColor(color, renderingMode: .alwaysOriginal)
+        let key = "\(name)-\(size)-\(color.hashValue)"
+        lock.lock()
+        defer { lock.unlock() }
+        if let hit = cache[key] { return hit }
+        let image = HazelIcons.uiImage(name, size: size, color: color)
+        cache[key] = image
+        return image
     }
 }

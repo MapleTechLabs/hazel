@@ -59,7 +59,8 @@ export const message = defineRecipe<
 			gutterTime: { color: "muted-fg", text: "micro", shrink: false },
 			body: { grow: true },
 			header: { gap: "2" },
-			author: { color: "fg" },
+			// Today's author is semibold (`chat-weights`).
+			author: { color: "fg", weight: "semibold" },
 			time: { color: "muted-fg", text: "caption" },
 			reactions: { layout: "row", wrap: true, gap: "1", rowGap: "1" },
 			thread: {
@@ -67,7 +68,7 @@ export const message = defineRecipe<
 				radius: "lg",
 				borderWidth: "hairline",
 				borderColor: "border",
-				background: "wash",
+				background: "secondary-band",
 				text: "label",
 			},
 			failure: { gap: "1.5", color: "danger-subtle-fg", text: "caption" },
@@ -89,8 +90,8 @@ export const message = defineRecipe<
 	options: {},
 	flags: {
 		grouped: {},
-		// HAZEL-GAP(chat-tints): today's pinned tint is `warning/10`; `warning-subtle` is the nearest.
-		pinned: { root: { background: "warning-subtle", shadow: "xs" } },
+		// Today's pinned tint, `warning/10` (`chat-tints`); its hover and edge are the renderer's.
+		pinned: { root: { background: "warning-tint", shadow: "xs" } },
 		highlighted: { root: { background: "primary-subtle" } },
 		entering: {},
 		pending: { parts: { main: { opacity: 0.6 } } },

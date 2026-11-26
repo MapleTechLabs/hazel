@@ -38,8 +38,5 @@
 			"role": "button",
 			"name": "New message"
 		}
-	],
-	"pending": {
-		"ios": "S4"
-	}
+	]
 }

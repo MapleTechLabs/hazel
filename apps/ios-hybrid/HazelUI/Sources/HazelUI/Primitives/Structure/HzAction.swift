@@ -7,6 +7,8 @@ struct HzAction: View {
     let node: Node
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.hzRoundAction) private var round
+    @Environment(\.hzSectionAction) private var inSection
     @State private var hovering = false
 
     var body: some View {
@@ -43,10 +45,21 @@ struct HzAction: View {
     /// The 32pt square around the icon children, in the recipe's state.
     private func face(_ states: Set<HazelTheme.State>) -> some View {
         let sizeClass = HazelTheme.SizeClass(horizontalSizeClass)
-        let root = HazelTheme.Recipes.action.style(states: states, sizeClass: sizeClass)
-        let icon = HazelTheme.Recipes.action.style(part: "icon", sizeClass: sizeClass)
-        let shape = RoundedRectangle(cornerRadius: root.radius ?? 0, style: .continuous)
+        var root = HazelTheme.Recipes.action.style(states: states, sizeClass: sizeClass)
+        var icon = HazelTheme.Recipes.action.style(part: "icon", sizeClass: sizeClass)
+        if round {
+            // A collapsible section's "+": round and muted, 28pt with a 12pt icon at regular widths.
+            root.radius = HazelTheme.radius["full"]
+            if states.isEmpty { root.color = HazelTheme.Colors.mutedFg }
+            if sizeClass == .regular {
+                root.size = HazelTheme.space["7"]
+                icon.size = HazelTheme.space["3"]
+            }
+        }
+        let shape = RoundedRectangle(cornerRadius: min(root.radius ?? 0, 1000), style: .continuous)
         return ChildrenView(tree: tree, node: node)
+            // In a section's header the icon takes the recipe's size, as the web's 14pt (12pt round, regular).
+            .environment(\.hzIconSize, inSection ? icon.size : nil)
             .hzSize(icon)
             .hzSize(root)
             .foregroundStyle(root.color?.color ?? Color.primary)

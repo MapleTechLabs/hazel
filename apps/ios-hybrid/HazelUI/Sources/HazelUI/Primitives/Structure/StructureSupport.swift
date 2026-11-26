@@ -16,6 +16,10 @@ extension EnvironmentValues {
     @Entry var hzScrollProxy: ScrollViewProxy? = nil
     /// Set inside `navigation` and `splitView`: a screen there uses the system navigation bar.
     @Entry var hzNavigationBar: Bool = false
+    /// Set on a collapsible section's header actions: today's round, muted "+" (`sectionPlusButton`).
+    @Entry var hzRoundAction: Bool = false
+    /// Set on every section header action: its icon takes the action recipe's size.
+    @Entry var hzSectionAction: Bool = false
 }
 
 extension View {
@@ -36,23 +40,11 @@ func interactionStates(pressed: Bool, hovering: Bool) -> Set<HazelTheme.State> {
     return states
 }
 
-/// The icons a structure view draws itself (not an `hz:icon` node): a web icon name as an SF Symbol.
-/// Stand-in until lane S1's icon catalog is shared; the names are `options.ts` `iconNames`.
+/// The icons a structure view draws itself (not an `hz:icon` node), from S1's catalog (`native-icon-image`):
+/// at the icon grid's own size, so system bars and menus size it as they size a symbol.
 enum StructureIcon {
     static func image(_ name: String) -> Image {
-        Image(systemName: symbols[name] ?? "circle")
+        guard let image = HazelIcons.uiImage(name) else { return Image(uiImage: UIImage()) }
+        return Image(uiImage: image).renderingMode(HazelIcons.isTemplate(image) ? .template : .original)
     }
-
-    private static let symbols: [String: String] = [
-        "arrow-up": "arrow.up", "bell": "bell", "check": "checkmark", "chevron-down": "chevron.down",
-        "chevron-right": "chevron.right", "close": "xmark", "copy": "doc.on.doc", "dots": "ellipsis",
-        "download": "arrow.down.to.line", "edit": "pencil", "emoji": "face.smiling",
-        "emoji-add": "face.smiling", "gear": "gearshape", "gif": "photo", "hashtag": "number",
-        "leave": "rectangle.portrait.and.arrow.right", "lightbulb": "lightbulb", "lock": "lock",
-        "office": "building.2", "paperclip": "paperclip", "pin": "pin", "plus": "plus",
-        "reply": "arrowshape.turn.up.left", "search": "magnifyingglass", "share": "square.and.arrow.up",
-        "sparkles": "sparkles", "star": "star", "thread": "bubble.left.and.bubble.right", "trash": "trash",
-        "users": "person.2", "volume-mute": "speaker.slash", "warning": "exclamationmark.triangle",
-        "slack": "number.square", "discord": "gamecontroller",
-    ]
 }

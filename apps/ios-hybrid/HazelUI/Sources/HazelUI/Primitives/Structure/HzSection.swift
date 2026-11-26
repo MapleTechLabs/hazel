@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Owned by lane S4. `hz:section`: a titled group of rows with header actions (`hz:action` children).
-// Collapsible, its title is a disclosure raising `toggle`; reorderable, rows drag and raise `move`.
+// Collapsible, its title is a disclosure raising `toggle`; reorderable, rows drag and raise `move` by key.
 struct HzSection: View {
     let tree: Tree
     let node: Node
@@ -48,6 +48,8 @@ private struct SectionHeader: View {
             HStack(alignment: .center, spacing: 0) {
                 if !title.isEmpty { titleView }
                 ForEach(actions, id: \.id) { NodeView(tree: tree, node: $0) }
+                    .environment(\.hzRoundAction, collapsible)
+                    .environment(\.hzSectionAction, true)
             }
         }
     }
@@ -65,28 +67,38 @@ private struct SectionHeader: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityValue(collapsed ? "Collapsed" : "Expanded")
+                // Today's collapsible header (`sectionGroupHeader`): muted 12/20, pl-2.5, no gap below.
+                .hzText(Self.collapsibleTitle(style), sizeClass)
+                .padding(.leading, HazelTheme.space["2.5"] ?? 0)
             } else {
                 Text(title).lineLimit(1).accessibilityAddTraits(.isHeader)
+                    .hzText(style, sizeClass)
+                    .padding(.horizontal, style.paddingX ?? 0)
+                    .padding(.bottom, style.marginBottom ?? 0)
             }
         }
-        .hzText(style, sizeClass)
-        .padding(.horizontal, style.paddingX ?? 0)
-        .padding(.bottom, style.marginBottom ?? 0)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// The title's look when it is a disclosure, as the web renderer's `[data-collapsible]` rule.
+    private static func collapsibleTitle(_ style: HazelTheme.Style) -> HazelTheme.Style {
+        var out = style
+        out.leading = HazelTheme.space["5"]
+        out.color = HazelTheme.Colors.mutedFg
+        return out
+    }
+
+    /// The chevron leads the title (`section-disclosure-leading`) and takes the title's ink.
     private func disclosure(_ style: HazelTheme.Style, chevron: HazelTheme.Style) -> some View {
         HStack(spacing: style.gap ?? 0) {
-            Text(title).lineLimit(1)
             StructureIcon.image("chevron-down")
                 .resizable()
                 .scaledToFit()
                 .hzSize(chevron)
-                .foregroundStyle(chevron.color?.color ?? Color.secondary)
                 .rotationEffect(.degrees(collapsed ? -90 : 0))
                 .animation(reduceMotion ? nil : .easeOut(duration: style.transition ?? 0), value: collapsed)
+            Text(title).lineLimit(1)
         }
-        .foregroundStyle(style.color?.color ?? Color.primary)
         .contentShape(Rectangle())
     }
 }
@@ -103,12 +115,13 @@ private struct SectionRows: View {
         let rows = node.children.compactMap { tree.node($0) }.filter { $0.tag != "hz:slot" && $0.tag != "hz:action" }
         ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
             if reorderable {
-                // HAZEL-GAP(row-key): a row's id is its position until keys reach the host.
+                // Rows are named by their key (`row-key`); an unkeyed row by its position.
+                let key = row[prop: "key"]?.string ?? String(index)
                 NodeView(tree: tree, node: row)
-                    .draggable(String(index))
+                    .draggable(key)
                     .dropDestination(for: String.self) { items, _ in
-                        guard let id = items.first, id != String(index) else { return false }
-                        tree.fire(node.id, "move", ["id": .string(id), "before": .string(String(index))])
+                        guard let id = items.first, id != key else { return false }
+                        tree.fire(node.id, "move", ["id": .string(id), "before": .string(key)])
                         return true
                     }
             } else {
