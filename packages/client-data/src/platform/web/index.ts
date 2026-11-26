@@ -89,5 +89,13 @@ export const PlatformWeb = Layer.mergeAll(
 	HttpClientWeb,
 )
 
+export {
+	ClipboardWeb,
+	FilesWeb,
+	type FilesWebOptions,
+	holdDroppedFiles,
+	pickWithInput,
+	putFile,
+} from "./ui-services"
 export { bindLocalCache, channelSnapshots, forgetLocalCache, localCachePersistence } from "./local-cache"
 export * as ChannelSnapshotsWeb from "./channel-snapshots"
