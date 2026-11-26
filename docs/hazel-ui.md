@@ -317,7 +317,7 @@ that produced it would prove nothing.
 
 ### Native host (`@hazel/ui/native`) and the wire
 
-One batch per flush: `{"v": 1, "seq": n, "ops": [[name, ...fields]]}`. `seq` is exactly the previous plus
+One batch per flush: `{"v": 2, "seq": n, "ops": [[name, ...fields]]}`. `seq` is exactly the previous plus
 one, and Swift rejects a gap. Ids are numbers the host assigns; 0 is the root. A `props` value of `null`
 deletes that key. `remove` frees the whole subtree; `insert` of an existing or detached id moves it.
 
@@ -336,14 +336,23 @@ Swift sends back `fire(id, event, payload, seq)` and `reply(requestId, result)`.
 host through `Renderer.Refs` and the vocabulary's `Host` service, as `OpenTui` does; the spike stubbed
 them. The protocol is versioned (`WIRE_VERSION`), and Swift refuses an unknown version.
 
-- **Controlled props** are re-sent by the renderer on every patch. The host drops repeats, and for
-  text it stamps a revision; Swift applies a value only once it has caught up with its own edits.
+- **Controlled props** are re-sent by the renderer on every patch; the host drops repeats.
+- **Text fields use a revision pair (G5).** The field keeps `n` (its own edit count) and `e` (the last
+  Model edit it applied); the Model keeps `{text, rev, edit}` in a `TextField.State`. Field edits send
+  `change {value, rev: n, edit: e}`; the Model takes a change only if its `edit` matches its own; a Model
+  edit (clear, transform) bumps `edit`. The field ignores a value with `m < e`, or `m == e` and `r < n`;
+  applies it when `r >= n`; and when `m > e` but `r < n` rebases (appended keystrokes are kept on the
+  Model's text) and sends the result. The host only forwards the pair and never lets it go backwards.
+- **Rich rows cross as data (G7).** A `message` is a leaf whose content (rich text runs, reactions,
+  attachments) is a structured prop; native measures and draws it. Batches reach Swift as UTF-8 bytes,
+  not strings: the JS-to-Swift string conversion was the main decode cost, not JSON parsing.
 - **Ops outside a flush** (a failure's fallback placed between flushes) are sent by the host on its own
   next microtask rather than waiting for the next `commit`.
 
 ### Swift (`HazelUI`)
 
-- `Runtime`: one JavaScriptCore context on its own thread; timers, `console`, `TextEncoder`/`Decoder`,
+- `Runtime` (proven in G4): a `JSThread` with its own run loop and a `JSEngine` confined to it, with an
+  `onContextReady` hook where platform services install; one JavaScriptCore context on that thread; timers, `console`, `TextEncoder`/`Decoder`,
   `queueMicrotask`; an Effect `Scheduler` that runs in JS rather than hopping through `setTimeout(0)` into
   Swift. Batches hop to the main actor. Native never needs a synchronous answer from JS.
 - `Tree` (proven in G8): one `@Observable` class per node holding props, text, child ids and events; the
@@ -370,7 +379,8 @@ implementation; the Swift-backed ones come with G3.
 | `ClientDataConfig` | `apiUrl()`, retry policy | the chosen server URL |
 
 **Runtime baseline, not services:** `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`,
-`queueMicrotask`, `console`, `TextEncoder`/`TextDecoder` (the sync heartbeat, Effect and TanStack DB call
+`queueMicrotask`, `console`, `performance.now`, `TextEncoder`/`TextDecoder`, and for Effect's HTTP client
+`URL`, `URLSearchParams`, `AbortController`, `AbortSignal` (the sync heartbeat, Effect and TanStack DB call
 them directly). The iOS runtime installs them before loading anything.
 
 Still browser-bound: the lib's `events.ts` sends session-rejected events with `window.dispatchEvent`
@@ -382,7 +392,11 @@ or Commands), not data-layer ones.
 A converted screen is an island: the Foldkit view renders a container, and an `OnMount` mounts the
 screen there with the web host (Foldkit leaves the container's children alone; G2 confirms). The
 island gets `@hazel/client-data`'s instances, the same ones the Foldkit app uses, as Layers. Routing
-stays Foldkit's: the island gets the route as props and requests navigation through an event.
+stays Foldkit's: the island takes the route at mount and gets later changes as a message through
+`Root.send` (a root's props are fixed after mount); navigation is a host-provided `Command.Service`
+(`RequestNavigation`). The web host must cancel the default of a plain click on a link that handles
+`press` (G2 found the browser following a link Effect UI had already swapped for a button during the
+click; the island has a capture-listener workaround until lane A fixes it in the host).
 Focus and keyboard handoff, overlay stacking against the app's popover and tooltip hosts, global
 keybindings, theme switching, and Tailwind's preflight against `data-hz` CSS are all part of G2.
 
@@ -505,7 +519,10 @@ app moves to it and islands become ordinary children.
 | Lanes collide on shared files | C0 scaffold, glob registries, per-primitive recipe files, an integrator for shared files |
 | Two frameworks in the web app during islands | islands share the data package, not state; Foldkit owns routing and the head |
 | Lost hot reload and devtools for `hazel` roots | accepted for now; raise custom-root support upstream |
-| JSON decode dominates native mount cost (G8: about 80% of a 3,000-row mount) | decode on the JS thread; if G7 needs it, a compact row encoding or a binary wire |
+| Native mount decode cost | decode on the JS thread; pass batches as UTF-8 bytes (G7 cut a 3,000-message decode from 127 ms to about 35 ms) |
+| No JIT on a device | measured with JIT off on the simulator (G4): about 4.5x on tight loops, little on mount or a single update; 100 separate JS turns cost about 45 ms, so coalesce socket frames into one turn. Still to measure on a device |
+| 120 Hz scrolling of rich rows | G7 on the simulator: 0 dropped frames over 20 flings, worst main-thread turn 7.3 ms against an 8.3 ms budget, but the simulator runs at 60 Hz; measure on a device, fall back to the hybrid's web-laid-out list if it misses |
+| Rows drawn as bitmaps | about 1 MB per row at 3x (cache capped at 64 MB); text selection and per-span accessibility need their own work before the channel screen ships |
 
 ## Settled with the user (2026-11-26)
 
@@ -522,6 +539,10 @@ app moves to it and islands become ordinary children.
   does not render as designed today (twMerge drops its tint). One selected look across the system.
 - **Set additions from G6** (cases today's kit has): `button.size` `large`, `circle`; `badge.style`
   (`solid`, `outline`, `quiet`) and `pill`. Button line height per size is a recipe field, not an option.
+- **Default row weight is the app's (medium):** every real channel row renders at 500 because it is a
+  link; the kit's unlinked row at 400 is the outlier. Recipes follow the app.
+- **The selected row's faux-medium stroke is web only;** iOS uses medium weight.
+- **`hz:stack`** (a plain column, no options) joins the vocabulary: a root needs one element (G2).
 - **Order:** the phase 0 gates run first, in parallel where they do not share files. Lanes start only
   after the gates pass and the contracts are reviewed.
 
@@ -534,4 +555,13 @@ app moves to it and islands become ordinary children.
 | D0 | pass | `t3/hazel-ui-d0` | `@hazel/client-data` with 8 platform services; loads and live-queries in node with browser globals removed; web app unchanged (3,275 tests); old import paths are re-export shims for now |
 | G8 | pass | `t3/hazel-ui-g8` | one-row change redraws one row in 500; 3,000-row mount 21 ms decode + apply (Release, simulator) |
 
-All four are merged into `t3/effect-ui-native-spike`. Simulator only: no physical device so far.
+| style | done | `t3/hazel-ui-style` | both hosts draw from generated `tokens.css` and `Theme.swift`; selected look and set additions in; 334 of 334 pixel pairs within tolerance |
+| G2 | pass | `t3/hazel-ui-g2` | the channel list as an island in the real app over `ClientData`: live updates, navigation, focus order, keybindings, theme switching, preflight; overlays partial (no overlay primitives yet); shared screens live in `apps/shared-screens` |
+| G3 | pass (simulator) | `t3/hazel-ui-g3` | `ClientData` in JavaScriptCore over URLSession HTTP and WebSocket against a local fixture server; a server change is one 64 B op; Session and LocalCache stubbed (no keychain, in-memory cache); bundle with the data layer 785 KB minified |
+| G4 | pass on simulator, device to do | `t3/hazel-ui-g4` | JS on its own thread: press round trip about 1 ms with JIT off; a 50 ms JS stall drops 1 to 2 of 840 frames (same as no stall) vs 13 to 15 of 63 on the main thread; the JS-side scheduler removes host timer hops |
+| G5 | pass (simulator) | `t3/hazel-ui-g5` | revision pair; 87 fast characters with 30 ms injected latency came out exact, transforms and clear-on-submit included; IME composition untested |
+| G7 | pass on simulator, device to do | `t3/hazel-ui-g7` | rows as data (option C) chosen over full trees (A: 11x bytes, 2x memory) and JS windowing (B: placeholders while scrolling); anchoring on prepend pixel-identical, stick to bottom works, one-row redraw per update |
+
+All are merged into `t3/effect-ui-native-spike`, and the integrated app was checked live: JavaScript on its
+own thread, Swift networking, a server change arriving as one op. Simulator only: no physical device so
+far, so G4 and G7 still need one device run each before the contracts freeze.
