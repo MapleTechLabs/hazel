@@ -48,4 +48,6 @@ the message's `grouped` flag. This was a contract decision, not a gap.
 
 ## Open
 
-None yet.
+| Id        | Screen                | Need                                                                                                                                                                                                                                      | Nearest today (where)                                                                                                                            | Kind |
+| --------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---- |
+| `row-key` | sidebar, message list | `move {id, before}` and `scrollTo({key})` must name a row by its `.key()`, but keys never reach a host (Effect UI keeps them in the kernel; wire v2 has no key), so neither the web nor Swift can say which row moved or find a keyed row | the row's position as its id, or a host-set `data-hz-key` (`web/primitives/list/runtime.ts` `rowId`); `item.scrollTo` on the row's own ref works | prop |
