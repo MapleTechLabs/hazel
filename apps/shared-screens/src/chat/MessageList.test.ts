@@ -249,7 +249,7 @@ describe("MessageList", () => {
 	it.effect("loads, then pages older messages in when the top is reached with a full window", () =>
 		Effect.gen(function* () {
 			const s = yield* Story.make(MessageList, props)
-			assert.isNull(s.model.messages)
+			assert.isTrue(s.model.messages === null)
 			const page = window(PAGE_SIZE)
 			s.send(MessageListMessage.UpdatedMessages({ order: page.map((m) => m.id), upserts: page }))
 			assert.strictEqual(s.model.messages?.length, PAGE_SIZE)

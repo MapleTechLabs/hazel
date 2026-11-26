@@ -299,7 +299,7 @@ export const threadNamesStream = (threadIds: ReadonlyArray<ChannelId>) =>
 			)
 
 /** The thread cards' messages: their count and newest message. */
-export const threadMessagesStream = (threadIds: ReadonlyArray<ChannelId>) =>
+const threadMessagesQuery = (threadIds: ReadonlyArray<ChannelId>) =>
 	threadIds.length === 0
 		? Stream.make(MessageListMessage.UpdatedThreadMessages({ messages: [] }))
 		: withData((data) =>
@@ -322,6 +322,15 @@ export const threadMessagesStream = (threadIds: ReadonlyArray<ChannelId>) =>
 							})),
 						}),
 				),
+			)
+
+/** The thread cards' messages, each thread's channel source held open meanwhile (nothing else may). */
+export const threadMessagesStream = (threadIds: ReadonlyArray<ChannelId>) =>
+	threadIds.length === 0
+		? threadMessagesQuery(threadIds)
+		: Stream.merge(
+				threadMessagesQuery(threadIds),
+				withData((data) => data.retainChannels(threadIds) as Stream.Stream<never>),
 			)
 
 /** Replied-to messages, held loaded even when older than the window. */
