@@ -1,0 +1,17 @@
+{
+	"about": "Today's row (`chat/message/row.ts`) beside hz:message: an author, the time and one paragraph.",
+	"root": {
+		"tag": "message",
+		"props": {
+			"row": {
+				"author": "Ada Lovelace",
+				"time": "14:05",
+				"body": [[0, ["Shipping the new composer today, notes in the doc."]]]
+			}
+		}
+	},
+	"kit": {
+		"specimen": "message-default",
+		"target": "message"
+	}
+}

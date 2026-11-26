@@ -24,6 +24,11 @@ export const galleryConfig = (): InlineConfig => ({
 		alias: [
 			{ find: "~", replacement: resolve(webFoldkit, "src/core") },
 			{ find: /^foldkit$/, replacement: resolve(packageDir("foldkit"), "dist/index.js") },
+			// The one subpath whose file is not `<name>/public.js` (`@foldkit/ui` imports it).
+			{
+				find: /^foldkit\/devtools-host$/,
+				replacement: `${packageDir("foldkit")}/dist/devTools/host.js`,
+			},
 			{ find: /^foldkit\/(.*)$/, replacement: `${packageDir("foldkit")}/dist/$1/public.js` },
 			{ find: "@fontsource/inter", replacement: packageDir("@fontsource/inter") },
 		],
