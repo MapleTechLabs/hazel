@@ -1,3 +1,4 @@
+import HazelUI
 import SwiftUI
 
 /// The `hazel` vocabulary on a native host (G1, `docs/hazel-ui.md`): the shared ChannelList runs in
@@ -15,8 +16,20 @@ struct EffectUiSpikeApp: App {
         _runtime = State(initialValue: runtime)
     }
 
+    /// `-HazelScreen gallery`: every conformance case through HazelUI's `TreeView` instead of the script.
+    private let gallery = UserDefaults.standard.string(forKey: "HazelScreen") == "gallery"
+
     var body: some Scene {
         WindowGroup {
+            if gallery, let fixtures = Bundle.main.url(forResource: "fixtures", withExtension: nil) {
+                HazelGallery(fixtures: fixtures)
+            } else {
+                spike
+            }
+        }
+    }
+
+    private var spike: some View {
             ZStack {
                 Theme.screenBg.ignoresSafeArea()
                 ForEach(runtime.tree.root) { HzView(node: $0, runtime: runtime) }
@@ -26,6 +39,5 @@ struct EffectUiSpikeApp: App {
                 runtime.start()
                 G4Bench.autorun(runtime)
             }
-        }
     }
 }

@@ -69,6 +69,10 @@ targets:
             - path: build/effect-ui
               type: folder
               buildPhase: resources
+            # The conformance fixtures (`packages/ui/src/conformance/fixtures`), read by the gallery screen.
+            - path: ../../packages/ui/src/conformance/fixtures
+              type: folder
+              buildPhase: resources
             # The web's own icons (`scripts/export-icons.ts`) and Inter (`scripts/fonts.py`).
             - path: build/icons/Icons.xcassets
             - path: build/fonts

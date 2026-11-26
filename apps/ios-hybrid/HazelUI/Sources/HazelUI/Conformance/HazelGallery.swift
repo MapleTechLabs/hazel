@@ -52,24 +52,30 @@ public struct HazelGallery: View {
     }
 }
 
-/// One case's own tree, built once.
+/// One case's own tree, built once when the row is made.
 struct GalleryCase: View {
     let c: ConformanceCase
-    @State private var tree: Tree?
-    @State private var error: String?
+    private let tree: Tree?
+    private let error: String?
+
+    init(c: ConformanceCase) {
+        self.c = c
+        do {
+            tree = try ConformanceFixtures.tree(c)
+            error = nil
+        } catch {
+            tree = nil
+            self.error = "\(error)"
+        }
+    }
 
     var body: some View {
-        Group {
-            if let tree {
-                TreeView(tree: tree)
-                    .frame(maxWidth: c.frame == "sidebar" ? 240 : (c.frame == "inline" ? nil : .infinity), alignment: .leading)
-                    .fixedSize(horizontal: c.frame == "inline", vertical: true)
-            } else if let error {
-                Text(error).font(.caption).foregroundStyle(.red)
-            }
-        }
-        .task {
-            do { tree = try ConformanceFixtures.tree(c) } catch { self.error = "\(error)" }
+        if let tree {
+            TreeView(tree: tree)
+                .frame(width: c.frame == "sidebar" ? 240 : nil, alignment: .leading)
+                .frame(maxWidth: c.frame == "screen" ? .infinity : nil, alignment: .leading)
+        } else if let error {
+            Text(error).font(.caption).foregroundStyle(.red)
         }
     }
 }
