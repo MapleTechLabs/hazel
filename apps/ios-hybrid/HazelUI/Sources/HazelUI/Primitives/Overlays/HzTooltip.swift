@@ -1,10 +1,15 @@
 import SwiftUI
 
-// Owned by lane S3 (`docs/hazel-ui.md`, "Phase 2: lanes"). C0 stub: the lane draws `hz:tooltip` here
-// from `HazelTheme` and its recipe; until then it is a `NotImplementedView`.
+// `hz:tooltip` on iOS (lane S3): iOS has no tooltips, so the label is the children's `help`: a
+// pointer hover tooltip on iPad and Mac, and the accessibility hint VoiceOver reads everywhere.
+// Nothing else is drawn, in place or not; a long press stays free for context menus.
 struct HzTooltip: View {
     let tree: Tree
     let node: Node
 
-    var body: some View { NotImplementedView(tag: node.tag, lane: "S3") }
+    var body: some View {
+        let label = node.overlayText("label") ?? ""
+        VStack(alignment: .leading, spacing: 0) { ChildrenView(tree: tree, node: node) }
+            .help(label)
+    }
 }

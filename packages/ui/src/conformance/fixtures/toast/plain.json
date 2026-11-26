@@ -1,0 +1,14 @@
+{
+	"about": "hz:toast with no action (lane S3): title, description and the dismiss button in every tone.",
+	"frame": "inline",
+	"root": {
+		"tag": "toast",
+		"props": { "open": true, "title": "Link copied", "description": "Paste it anywhere to share #design." },
+		"events": ["dismiss"]
+	},
+	"axes": [
+		{ "prop": "tone", "values": ["accent", "success", "warning", "danger", "info"] },
+		{ "prop": "description", "values": [null] }
+	],
+	"aria": [{ "role": "status" }, { "role": "button", "name": "Dismiss" }]
+}
