@@ -42,6 +42,8 @@ export interface Overlay {
 }
 
 export const controlledOverlay = (config: OverlayConfig): Overlay => {
+	// At create, not first open: a closed panel's hiding rule must be there before it draws.
+	installOverlayStyles(config.outer.ownerDocument)
 	const schedule = whenConnected(config.outer)
 	let wanted = false
 	let shown = false
@@ -62,7 +64,6 @@ export const controlledOverlay = (config: OverlayConfig): Overlay => {
 	const present = () => {
 		if (wanted && !shown) {
 			const inPlace = isSpecimen(config.outer)
-			installOverlayStyles(config.outer.ownerDocument)
 			flag(config.outer, "specimen", inPlace)
 			flag(config.outer, "open", true)
 			config.beforeShow?.(inPlace)
