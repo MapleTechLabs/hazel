@@ -1,10 +1,13 @@
 import SwiftUI
 
-// Owned by lane S5 (`docs/hazel-ui.md`, "Phase 2: lanes"). C0 stub: the lane draws `hz:reactionBar` here
-// from `HazelTheme` and its recipe; until then it is a `NotImplementedView`.
+/// `hz:reactionBar` (lane S5): wrapping reaction pills, and the add pill when `addable`.
 struct HzReactionBar: View {
     let tree: Tree
     let node: Node
 
-    var body: some View { NotImplementedView(tag: node.tag, lane: "S5") }
+    var body: some View {
+        let reactions = (node[prop: "reactions"]?.array ?? []).compactMap(RowData.reaction)
+        let addable = node[prop: "addable"]?.bool ?? false
+        LeafView(tree: tree, node: node, fills: false) { RowRenderer.reactionBar(reactions, addable: addable, $0) }
+    }
 }
