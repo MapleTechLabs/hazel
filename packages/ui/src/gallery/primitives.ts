@@ -99,6 +99,10 @@ const run = async () => {
 		outcomes.push(outcome)
 	}
 	await document.fonts.ready
+	// Whole-pixel blocks: a case of fractional height (today's 80.5px DM row) would shift every later
+	// case by half a pixel and change how its text rasterises against the kit's.
+	for (const block of app.querySelectorAll<HTMLElement>(".case"))
+		block.style.height = `${Math.ceil(block.getBoundingClientRect().height)}px`
 	window.__hazelCases = outcomes
 	document.documentElement.dataset.ready = "true"
 }
