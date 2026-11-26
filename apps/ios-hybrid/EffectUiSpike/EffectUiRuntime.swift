@@ -5,14 +5,15 @@ import os
 import HazelUI
 
 /// Runs the `hazel` script (`effect-ui/entry.ts`) in a bare JavaScriptCore context on its own thread
-/// (`JSEngine`, G4): no WebKit, no DOM. Batches are decoded there and applied here; presses hop to the
-/// JS thread. The main actor never waits for JS.
+/// (`JSEngine`, G4): no WebKit, no DOM. HazelUI's `TreeHost` applies its batches to a `Tree` on the
+/// main actor and sends events back; the main actor never waits for JS.
 @MainActor
 final class EffectUiRuntime {
     nonisolated static let log = Logger(subsystem: "sh.hazel.effect-ui-spike", category: "runtime")
 
-    let tree = EffectUiTree()
     let engine = JSEngine()
+    let host: TreeHost
+    var tree: Tree { host.tree }
     private var readyHooks: [@Sendable (JSContext) -> Void] = []
     private var started = false
 
@@ -20,11 +21,8 @@ final class EffectUiRuntime {
     private(set) var samples: [String: [Double]] = [:]
 
     init() {
-        engine.onBatch = { [weak self] batch, trace in
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated { self?.applied(batch, trace) }
-            }
-        }
+        host = TreeHost(engine: engine)
+        host.onApplied = { [weak self] batch, trace, started, done in self?.applied(batch, trace, started, done) }
         installSpikeHooks()
     }
 
@@ -71,17 +69,14 @@ final class EffectUiRuntime {
         }
     }
 
-    /// An event on node `id` (`press`, or an extension's own), sent to the JS thread's `fire`.
-    func fire(_ id: Int, _ event: String = "press", payload: String = "{}", kind: String = "press") {
-        engine.perform(kind) { $0.call("fire", with: [id, event, payload]) }
+    /// An event on node `id`, traced as `kind` (the bench's presses).
+    func fire(_ id: NodeId, _ event: String = "press", payload: JSONValue = [:], kind: String = "press") {
+        host.send(.fire(id: id, event: event, payload: payload, seq: tree.lastSeq), kind: kind)
     }
 
     func resetSamples() { samples = [:] }
 
-    private func applied(_ batch: Batch, _ trace: BatchTrace) {
-        let applyStart = CACurrentMediaTime()
-        tree.apply(batch, bytes: trace.bytes)
-        let done = CACurrentMediaTime()
+    private func applied(_ batch: Batch, _ trace: BatchTrace, _ applyStart: CFTimeInterval, _ done: CFTimeInterval) {
         FrameMonitor.shared.noteBridge(done - applyStart)
         let ms = { (from: CFTimeInterval, to: CFTimeInterval) in (to - from) * 1000 }
         let total = ms(trace.origin, done)

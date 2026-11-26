@@ -2,7 +2,8 @@ import HazelUI
 import SwiftUI
 
 /// The `hazel` vocabulary on a native host (G1, `docs/hazel-ui.md`): the shared ChannelList runs in
-/// JavaScriptCore and SwiftUI draws the `hz:*` tree it commits, in Hazel's look (`Theme`). No web view.
+/// JavaScriptCore and HazelUI's `TreeView` draws the `hz:*` tree it commits, with each lane's
+/// primitive views. No web view.
 @main
 struct EffectUiSpikeApp: App {
     @State private var runtime: EffectUiRuntime
@@ -10,13 +11,13 @@ struct EffectUiSpikeApp: App {
     init() {
         Inter.register()
         let runtime = MainActor.assumeIsolated {
-            HazelExtensions.registerDemo()
+            DemoExtensions.register()
             return EffectUiRuntime()
         }
         _runtime = State(initialValue: runtime)
     }
 
-    /// `-HazelScreen gallery`: every conformance case through HazelUI's `TreeView` instead of the script.
+    /// `-HazelScreen gallery`: every conformance case through `TreeView` instead of the script.
     private let gallery = UserDefaults.standard.string(forKey: "HazelScreen") == "gallery"
 
     var body: some Scene {
@@ -30,14 +31,33 @@ struct EffectUiSpikeApp: App {
     }
 
     private var spike: some View {
-            ZStack {
-                Theme.screenBg.ignoresSafeArea()
-                ForEach(runtime.tree.root) { HzView(node: $0, runtime: runtime) }
+        ZStack {
+            HazelTheme.Recipes.screen.style(sizeClass: .compact).background?.color.ignoresSafeArea()
+            TreeView(tree: runtime.tree)
+        }
+        .overlay(alignment: .bottom) {
+            VStack(spacing: 4) {
+                TreeStats(host: runtime.host)
+                G4DebugBar(runtime: runtime)
             }
-            .overlay(alignment: .bottom) { G4DebugBar(runtime: runtime) }
-            .task {
-                runtime.start()
-                G4Bench.autorun(runtime)
-            }
+        }
+        .task {
+            runtime.start()
+            G4Bench.autorun(runtime)
+        }
+    }
+}
+
+/// What the last batch cost, so the numbers are in the screenshot.
+struct TreeStats: View {
+    let host: TreeHost
+
+    var body: some View {
+        Text("wire v\(WIRE_VERSION) · \(host.batches) batches · last \(host.lastOps) ops, \(host.lastBytes) B, \(String(format: "%.2f", host.lastApplyMs)) ms")
+            .font(Inter.font(size: 12, weight: 400))
+            .foregroundStyle(HazelTheme.Colors.mutedFg.color)
+        if let error = host.lastError {
+            Text(error).font(Inter.font(size: 12, weight: 400)).foregroundStyle(HazelTheme.Colors.danger.color)
+        }
     }
 }
