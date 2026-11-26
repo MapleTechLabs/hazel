@@ -33,8 +33,7 @@ import {
 import { dragDescription, sectionPlusButton } from "./channels-sidebar/tree"
 import { semantic } from "../ui/semantic"
 import { sectionGroupContent } from "./channels-sidebar/view"
-import { channelListIsland, channelListIslandView, isChannelListIslandEnabled } from "../islands/channel-list"
-import { type IslandMessage, messageOfIntent } from "../islands/channel-sidebar-intents"
+import { hole } from "../app/holes"
 
 /**
  * Chat sidebar next to the nav rail (`components/sidebar/channels-sidebar.tsx`): channel
@@ -229,29 +228,12 @@ export { badgeSubscriptions, subscriptions } from "./channels-sidebar/subscripti
 // VIEW
 
 /** `useScrollIntoViewOnActive`: the open channel's row scrolls into view when it becomes active. */
-/** Phase 3: the hazel channel sidebar, mounted in the island's container (`islands/channel-list.ts`). */
-const MountChannelListIsland = Mount.defineStream("MountChannelListIsland", {
-	args: {
-		organizationId: OrganizationIdSchema,
-		userId: UserIdSchema,
-		orgSlug: Schema.String,
-		hintDismissed: Schema.Boolean,
-		paletteKey: Schema.NullOr(Schema.String),
-	},
-	messages: [
-		Message.RequestedIslandNavigation,
-		Message.RequestedIslandMembers,
-		Message.ClickedBrowseChannels,
-		Message.ClickedDismissCreateChannelHint,
-		Message.GotRowMenuMessage,
-		Message.GotSectionMenuMessage,
-	],
-	execute: ({ element, ...args }) =>
-		channelListIsland(element, args).pipe(
-			Stream.map((intent) => messageOfIntent(args.orgSlug, intent)),
-			Stream.filter((message): message is IslandMessage => message !== null),
-		),
-})
+/** The Effect UI channel sidebar's place, between the org switcher and the account card. */
+const channelSidebarHole = <ParentMessage>(
+	h: HtmlBuilder<ParentMessage>,
+	organizationId: OrganizationId,
+	userId: UserId,
+): Html => hole(h, "channel-sidebar", `${organizationId}:${userId}`)
 
 const ScrollActiveIntoView = Mount.define("ScrollActiveIntoView", {
 	messages: [Message.CompletedScrollActiveIntoView],
@@ -353,25 +335,8 @@ const sidebarBody = <ParentMessage>(
 				: []),
 			orgSwitcherHeader(h, orgSwitcher, orgSwitcherEntries, shell, organizations, toOrgSwitcherMessage),
 			sidebarContent(h, { state: "expanded" }, [
-				isChannelListIslandEnabled && model.organizationId !== null && model.currentUserId !== null
-					? channelListIslandView(h, {
-							organizationId: model.organizationId,
-							userId: model.currentUserId,
-							activeChannelId,
-							membersActive: route._tag === "OrgHome",
-							onMount: h.OnMount(
-								Mount.mapMessage(
-									MountChannelListIsland({
-										organizationId: model.organizationId,
-										userId: model.currentUserId,
-										orgSlug,
-										hintDismissed: model.isCreateChannelHintDismissed,
-										paletteKey,
-									}),
-									toParentMessage,
-								),
-							),
-						})
+				model.organizationId !== null && model.currentUserId !== null
+					? channelSidebarHole(h, model.organizationId, model.currentUserId)
 					: sidebarSectionGroup(
 							h,
 							sectionGroupContent(h, model, {

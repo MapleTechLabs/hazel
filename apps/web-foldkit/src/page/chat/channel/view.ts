@@ -1,8 +1,7 @@
 import { ChannelId, type MessageId, UserId } from "@hazel/schema"
 import { Match, Stream } from "effect"
 import { Mount } from "foldkit"
-import type { HostRequest } from "@hazel/shared-screens/chat/messages"
-import { channelIsland, channelIslandView, isChannelIslandEnabled } from "../../../islands/channel"
+import { hole } from "../../../app/holes"
 import { TrackMessageKeys } from "./message-keys"
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { cn } from "~/lib/utils"
@@ -310,54 +309,12 @@ const imageViewerOverlay = (h: H, model: Model): Html => {
 	})
 }
 
-/** What an island row asks the page for, as the page's own messages; the rest the island does itself. */
-type IslandMessage = ReturnType<typeof Message.GotOverlaysMessage | typeof Message.ClickedThreadPreview>
+/** The shared message list's place (`src/root/portal.ts`): keyed by channel, so a switch starts fresh. */
+const messageListHole = (h: H, model: Model): Html | undefined =>
+	model.currentUserId === null ? undefined : hole(h, "message-list", model.channelId, [h.Class(MESSAGE_LIST_HOLE)])
 
-const islandRequests = (request: HostRequest): ReadonlyArray<IslandMessage> =>
-	Match.valueTags(request, {
-		Action: ({ messageId, action }) => {
-			const value = action === "issue" ? "create-issue" : action === "react" ? "add-reaction" : action
-			return [toOverlay(Overlays.Message.ChoseNativeAction({ messageId, value }))]
-		},
-		OpenThread: ({ messageId, threadChannelId }) => [
-			threadChannelId === null
-				? toOverlay(Overlays.Message.ChoseNativeAction({ messageId, value: "thread" }))
-				: Message.ClickedThreadPreview({ threadChannelId, messageId }),
-		],
-		OpenAttachment: ({ messageId, index, url }) => {
-			if (index >= 0) return [toOverlay(Overlays.Message.ClickedAttachmentImage({ messageId, index }))]
-			globalThis.open?.(url, "_blank", "noopener")
-			return []
-		},
-		OpenLink: ({ url }) => {
-			globalThis.open?.(url, "_blank", "noopener")
-			return []
-		},
-		// Today's profile popover and the jump to an unloaded reply live in the Foldkit list.
-		OpenProfile: () => [],
-		JumpToReply: () => [],
-		Retry: () => [],
-	})
-
-/** The shared message list in place of today's, behind `hazel:island:channel` (`islands/channel.ts`). */
-const MountChannelIsland = Mount.defineStream("MountChannelIsland", {
-	args: { channelId: ChannelId, userId: UserId },
-	messages: [Message.GotOverlaysMessage, Message.ClickedThreadPreview],
-	execute: ({ element, channelId, userId }) =>
-		channelIsland(element, { channelId, userId }).pipe(
-			Stream.flatMap((request) => Stream.fromIterable(islandRequests(request))),
-		),
-})
-
-const channelIslandOf = (h: H, model: Model): Html | undefined =>
-	!isChannelIslandEnabled || model.currentUserId === null
-		? undefined
-		: channelIslandView(h, {
-				channelId: model.channelId,
-				onMount: h.OnMount(
-					MountChannelIsland({ channelId: model.channelId, userId: model.currentUserId }),
-				),
-			})
+/** The screen's root fills the hole, so its list scrolls inside it. */
+const MESSAGE_LIST_HOLE = "flex min-h-0 flex-1 flex-col"
 
 /** `$id/index.tsx`: the join banner for non-members, else the list and the composer. */
 const messagesOutlet = (h: H, model: Model, nowMs: number, channelLinks: ChannelLinksMap) => {
@@ -375,13 +332,11 @@ const messagesOutlet = (h: H, model: Model, nowMs: number, channelLinks: Channel
 		]
 	// Passed to the lazy composer as strings, so an unchanged reply keeps its memo.
 	const reply = replyPreviewOf(model, model.draft)
-	const island = channelIslandOf(h, model)
+	const list = messageListHole(h, model)
 	return [
 		h.div(
 			[h.Class("relative flex min-h-0 flex-1 flex-col overflow-hidden")],
-			island === undefined
-				? [newMessagesBarView(h, model, nowMs), messageListView(h, model, nowMs)]
-				: [island],
+			list === undefined ? [] : [list],
 		),
 		lazyComposer(composerView, [
 			model.typingNames,

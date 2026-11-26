@@ -1,18 +1,23 @@
 /**
- * The island's intents as the Foldkit sidebar's own messages: a menu choice goes in as the choice of
- * a system menu (`ChoseFromNativeMenu`), so `menu-update.ts` runs the same write, modal and toast it
- * runs for the same key today. Flag off, none of this runs.
+ * The Effect UI channel sidebar's presses as this sidebar's own messages: a menu choice goes in as
+ * the choice of a system menu (`ChoseFromNativeMenu`), so `menu-update.ts` runs the same write,
+ * modal and toast it runs for the same key today.
  */
 import { Match } from "effect"
-import { Message } from "../shell/channels-sidebar/model"
-import * as Menu from "../ui/menu"
-import type { IslandIntent } from "./channel-list"
+import type { NavTarget, SidebarAction } from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
+import { Message } from "./model"
+import * as Menu from "../../ui/menu"
+
+/** A press in the channel sidebar: a route, or a menu choice by today's keys. */
+export type IslandIntent =
+	| { readonly _tag: "Navigate"; readonly to: NavTarget }
+	| { readonly _tag: "Act"; readonly action: SidebarAction }
 
 /** A menu choice by key, as the system menu reports one; the key is the item. */
 const chose = (key: string): Menu.Message =>
 	Menu.Message.ChoseFromNativeMenu({ key, entries: [Menu.item(key, { textValue: key })] })
 
-/** The sidebar messages an island intent becomes (the Mount's `messages`). */
+/** The sidebar messages a press becomes. */
 export type IslandMessage = Extract<
 	Message,
 	{

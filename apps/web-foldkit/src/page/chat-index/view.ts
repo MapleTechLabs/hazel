@@ -12,7 +12,7 @@ import { loadingState } from "../../ui/loader"
 import { pageHeader, pageLayout } from "../../ui/page-header"
 import * as Tabs from "../../ui/tabs"
 import { can, channelLinksOf, type PageViewInputs, type Shared } from "../contract"
-import { dmsIsland, dmsIslandView, isDmsIslandEnabled } from "../../islands/dms"
+import { hole } from "../../app/holes"
 import { channelCard, dmCard } from "./cards"
 import { mobileDmList } from "./mobile-dms"
 import { Message } from "./message"
@@ -172,37 +172,21 @@ const dmList = (h: HtmlBuilder<Message>, model: Model, groups: ChannelGroups, sh
 	])
 }
 
-/** The shared DMs screen in place of the phone list, behind `hazel:island:dms` (`islands/dms.ts`). */
-const MountDmsIsland = Mount.defineStream("MountDmsIsland", {
-	args: { organizationId: OrganizationId, userId: UserId, orgSlug: Schema.String },
-	messages: [Message.RequestedIslandNavigation, Message.PressedStartConversation],
-	execute: ({ element, organizationId, userId, orgSlug }) =>
-		dmsIsland(element, { organizationId, userId, orgSlug }).pipe(
-			Stream.map((request) =>
-				Match.valueTags(request, {
-					Open: ({ channelId }) => Message.RequestedIslandNavigation({ orgSlug, channelId }),
-					Compose: () => Message.PressedStartConversation(),
-				}),
-			),
-		),
-})
-
-const dmsIslandOf = (h: HtmlBuilder<Message>, shared: Shared): Html | undefined => {
+/** The shared DMs screen's place on a phone (`src/root/portal.ts`); it loads its own data. */
+const dmsHoleOf = (h: HtmlBuilder<Message>, shared: Shared): Html | undefined => {
 	const organizationId = shared.organization?.id
 	const userId = shared.currentUser?.id
-	if (!isDmsIslandEnabled || !shared.isMobile || !organizationId || !userId || shared.orgSlug === null)
-		return undefined
-	return dmsIslandView(h, {
-		organizationId,
-		userId,
-		onMount: h.OnMount(MountDmsIsland({ organizationId, userId, orgSlug: shared.orgSlug })),
-	})
+	if (!shared.isMobile || !organizationId || !userId || shared.orgSlug === null) return undefined
+	return hole(h, "dms", `${organizationId}:${userId}`, [h.Class(DMS_HOLE)])
 }
 
+/** As today's page root: the screen fills the column, so compose sits at its foot. */
+const DMS_HOLE = "flex min-h-full flex-col"
+
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
-	// The island loads its own data, so it skips the page's loader.
-	const island = model.isDmList ? dmsIslandOf(h, shared) : undefined
-	if (island !== undefined) return island
+	// The shared screen loads its own data, so it skips the page's loader.
+	const dms = model.isDmList ? dmsHoleOf(h, shared) : undefined
+	if (dms !== undefined) return dms
 	if (model.channels._tag === "Loading") {
 		return loadingState(h, { className: "h-screen py-0" })
 	}

@@ -6,8 +6,11 @@ import { HazelAuthClient } from "../auth/client"
 import { desktopAuthClient } from "../platform/desktop"
 import { runDesktopAuth } from "../platform/desktop-auth"
 import { unregisterPushDevice } from "../platform/push-device"
-import type { SessionAnswer } from "./message"
 import { clearRememberedSession, forgetRememberedSession } from "./remembered-user"
+
+/** What the API said about the session, when it answered. */
+export const SessionAnswer = Schema.Literals(["SignedIn", "SignedOut"])
+export type SessionAnswer = typeof SessionAnswer.Type
 
 /**
  * The Hazel session, read from the API. In a browser it is an HttpOnly cookie on the API host

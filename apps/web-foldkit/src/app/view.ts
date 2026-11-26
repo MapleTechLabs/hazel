@@ -1,54 +1,45 @@
-import { AsyncData } from "foldkit"
-import type { Document, Html, HtmlBuilder } from "foldkit/html"
-import { commonMessage } from "~/lib/error-messages"
+import type { Html, HtmlBuilder } from "foldkit/html"
 import { comboLabel } from "~/lib/keybindings/key-combo"
 import * as AiPanel from "../assistant"
 import * as CommandPalette from "../overlay/command-palette"
 import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
 import { type PageMessage, viewPage } from "../page/registry"
-import {
-	channelSettingsTabOf,
-	chatChannelIdOf,
-	hasContentColumn,
-	isPublicRoute,
-	orgSectionOf,
-	orgSlugOf,
-	titleOf,
-} from "../route"
-import { type CurrentUser, displayNameOf, type Organization } from "../session"
-import { orgShell } from "../shell/app-shell"
+import { channelLinksOf } from "../page/contract"
+import { channelSettingsTabOf, chatChannelIdOf, hasContentColumn, orgSectionOf, orgSlugOf } from "../route"
+import { displayNameOf } from "../session"
 import * as ChannelsSidebar from "../shell/channels-sidebar"
 import * as CustomersSidebar from "../shell/customers-sidebar"
 import type { ShellContext } from "../shell/context"
-import {
-	appError,
-	appLoader,
-	channelSettingsLayout,
-	organizationNotFound,
-	sectionLayout,
-	contentColumnLayout,
-} from "../shell/layouts"
+import { channelSettingsLayout, contentColumnLayout, sectionLayout } from "../shell/layouts"
 import { formatStatusExpirationAt } from "../shell/menus"
+import { mobileSidebarSheet } from "../shell/mobile"
 import * as Shell from "../shell/model"
 import * as Notifications from "../shell/notifications"
 import { notificationsSidebar, settingsSidebar } from "../shell/sidebars"
 import type * as Menu from "../ui/menu"
 import type * as ModalKit from "../ui/modal"
 import { Message } from "./message"
-import { aiPanelInputsOf, badgeOfModel, type Model, OrgState, Session, sharedOf } from "./model"
-import { badgedTitle } from "../platform/badge"
-import { channelLinksOf } from "../page/contract"
+import { aiPanelInputsOf, type Model, sharedOf } from "./model"
 
-// Module-level and built as literals: memoized shell views compare them by reference, and
-// wrapper constructors would re-validate large payloads (sidebar rows, message pages) per dispatch.
+/**
+ * The host draws its parts into fixed regions; the Effect UI shell moves each region into its
+ * place in the frame (`src/root/foldkit.ts`). The list and order never change, so Foldkit only ever
+ * patches inside a region and never inserts next to one it no longer holds.
+ */
+export const REGIONS = ["sidebar", "page", "ai-toggle", "ai-panel", "overlays"] as const
+export type Region = (typeof REGIONS)[number]
+
+export const REGION_ATTRIBUTE = "data-foldkit-region"
+
+// Module-level and built as literals: memoized views compare them by reference, and wrapper
+// constructors would re-validate large payloads (sidebar rows, message pages) per dispatch.
 const toShellMessage = (message: Shell.Message): Message => ({ _tag: "GotShellMessage", message })
 const toChannelsSidebarMessage = (message: ChannelsSidebar.Message) =>
 	toShellMessage({ _tag: "GotChannelsSidebarMessage", message })
 const toCustomersSidebarMessage = (message: CustomersSidebar.Message) =>
 	toShellMessage(Shell.Message.GotCustomersSidebarMessage({ message }))
-const toUserMenuMessage = (message: Menu.Message) =>
-	toShellMessage(Shell.Message.GotUserMenuMessage({ message }))
+const toUserMenuMessage = (message: Menu.Message) => toShellMessage(Shell.Message.GotUserMenuMessage({ message }))
 const toOrgSwitcherMessage = (message: Menu.Message) =>
 	toShellMessage(Shell.Message.GotOrgSwitcherMessage({ message }))
 const toMobileSidebarMessage = (message: ModalKit.Message) =>
@@ -56,11 +47,8 @@ const toMobileSidebarMessage = (message: ModalKit.Message) =>
 const clickedMarkAllRead = toShellMessage(
 	Shell.Message.GotNotificationsMessage({ message: Notifications.Message.ClickedMarkAllRead() }),
 )
-const openedMobileSidebar = toShellMessage(Shell.Message.ToggledSidebar({ isOpen: true }))
 export const toPageMessage = (message: PageMessage): Message => ({ _tag: "GotPageMessage", message })
 const toToastsMessage = (message: Toasts.Message): Message => ({ _tag: "GotToastsMessage", message })
-const toaster = (h: HtmlBuilder<Message>, model: Model): Html =>
-	Toasts.view(h, model.toasts, toToastsMessage, model.isMobile)
 const toModalMessage = (message: Modal.Message): Message => ({ _tag: "GotModalMessage", message })
 const toCommandPaletteMessage = (message: CommandPalette.Message): Message => ({
 	_tag: "GotCommandPaletteMessage",
@@ -69,48 +57,42 @@ const toCommandPaletteMessage = (message: CommandPalette.Message): Message => ({
 const toAiPanelMessage = (message: AiPanel.Message): Message => ({ _tag: "GotAiPanelMessage", message })
 const pressedAiPanelToggle = toAiPanelMessage(AiPanel.Message.PressedToggle())
 
-/** What the org shell shows: the loaded user and organization of `orgSlug`. */
-interface ShellData {
-	readonly orgSlug: string
-	readonly user: CurrentUser
-	readonly organization: Organization
+/** The org shell's context: the loaded user and organization of the route's slug, or none yet. */
+const shellContextOf = (model: Model): ShellContext | null => {
+	const { context } = model
+	const orgSlug = orgSlugOf(context.route)
+	const user = context.currentUser
+	const organization = context.organization
+	if (orgSlug === undefined || user === null || organization === null) return null
+	return {
+		orgSlug,
+		route: context.route,
+		organization,
+		currentUser: { displayName: displayNameOf(user), email: user.email, avatarUrl: user.avatarUrl },
+		currentUserId: user.id,
+		appVersion: __APP_VERSION__,
+		paletteKey: sharedOf(model).keys["commandPalette.open"],
+		createChannelKey: sharedOf(model).keys["channel.create"],
+	}
 }
-
-const shellContextOf = (model: Model, data: ShellData): ShellContext => ({
-	orgSlug: data.orgSlug,
-	route: model.route,
-	organization: data.organization,
-	currentUser: {
-		displayName: displayNameOf(data.user),
-		email: data.user.email,
-		avatarUrl: data.user.avatarUrl,
-	},
-	currentUserId: data.user.id,
-	appVersion: __APP_VERSION__,
-	paletteKey: sharedOf(model).keys["commandPalette.open"],
-	createChannelKey: sharedOf(model).keys["channel.create"],
-})
 
 /** The routed page, or an empty placeholder until its page is ported. */
 const pageBody = (model: Model, h: HtmlBuilder<Message>, isInsideMain: boolean): Html => {
 	if (model.page !== null) return viewPage(h, model.page, { shared: sharedOf(model) }, toPageMessage)
-	const placeholder = h.Attribute("data-page-placeholder", model.route._tag)
+	const placeholder = h.Attribute("data-page-placeholder", model.context.route._tag)
 	return isInsideMain ? h.div([placeholder]) : h.main([placeholder])
 }
 
 /** The route's section layout around the page (`settings/layout.tsx` and friends). */
 const sectionBody = (model: Model, h: HtmlBuilder<Message>): Html => {
-	const { route } = model
+	const { route } = model.context
 	const section = orgSectionOf(route)
 	if (section === "Settings")
 		return sectionLayout(
 			h,
-			hasContentColumn(route)
-				? contentColumnLayout(h, pageBody(model, h, true))
-				: pageBody(model, h, true),
+			hasContentColumn(route) ? contentColumnLayout(h, pageBody(model, h, true)) : pageBody(model, h, true),
 		)
-	if (section === "MySettings" || section === "Notifications")
-		return sectionLayout(h, pageBody(model, h, true))
+	if (section === "MySettings" || section === "Notifications") return sectionLayout(h, pageBody(model, h, true))
 	// Customers pages own their scrolling (the queue's preview panel spans the full height).
 	if (section === "Customers")
 		return h.main([h.Class("h-full w-full min-w-0 overflow-hidden bg-bg")], [pageBody(model, h, true)])
@@ -125,8 +107,7 @@ const sectionBody = (model: Model, h: HtmlBuilder<Message>): Html => {
 				links: channelLinksOf(sharedOf(model), route.channelId),
 				selectedTab: tab,
 				onSelectTab: (tabRoute) => h.OnClick(Message.ClickedLayoutTab({ route: tabRoute })),
-				onChangeTab: (toRoute) =>
-					h.OnChange((value) => Message.ClickedLayoutTab({ route: toRoute(value) })),
+				onChangeTab: (toRoute) => h.OnChange((value) => Message.ClickedLayoutTab({ route: toRoute(value) })),
 			},
 			pageBody(model, h, true),
 		)
@@ -142,11 +123,11 @@ const secondarySidebar = (model: Model, h: HtmlBuilder<Message>, context: ShellC
 		orgSwitcherEntries: shell.orgSwitcherEntries,
 		organizations: shell.userOrganizations,
 		userStatus: shell.userStatus,
-		statusExpiration: formatStatusExpirationAt(shell.userStatus?.expiresAtMs ?? null, model.nowMs),
+		statusExpiration: formatStatusExpirationAt(shell.userStatus?.expiresAtMs ?? null, model.context.nowMs),
 		toUserMenuMessage,
 		toOrgSwitcherMessage,
 	}
-	const section = orgSectionOf(model.route)
+	const section = orgSectionOf(model.context.route)
 	if (section === "Settings" || section === "MySettings") return settingsSidebar(h, context, chrome)
 	if (section === "Customers")
 		return CustomersSidebar.view(h, shell.customersSidebar, context, chrome, toCustomersSidebarMessage)
@@ -159,17 +140,15 @@ const secondarySidebar = (model: Model, h: HtmlBuilder<Message>, context: ShellC
 	return ChannelsSidebar.view(
 		h,
 		shell.channelsSidebar,
-		{ shell: context, activeChannelId: chatChannelIdOf(model.route), nowMs: model.nowMs, chrome },
+		{
+			shell: context,
+			activeChannelId: chatChannelIdOf(model.context.route),
+			nowMs: model.context.nowMs,
+			chrome,
+		},
 		toChannelsSidebarMessage,
 	)
 }
-
-/** The app loader; once loading has stalled it also offers a reload. */
-const loader = (h: HtmlBuilder<Message>, isStalled: boolean): Html =>
-	appLoader(h, isStalled ? Message.PressedReload() : undefined)
-
-const appRoot = (h: HtmlBuilder<Message>, model: Model, children: ReadonlyArray<Html>): Html =>
-	h.div([h.Id("app")], [toaster(h, model), ...children])
 
 /**
  * On a phone, the chat list is the Chats tab's page (the channels sidebar, full screen) rather
@@ -185,113 +164,76 @@ const phoneChatList = (h: HtmlBuilder<Message>, sidebar: Html): Html =>
 		[sidebar],
 	)
 
-const orgShellView = (model: Model, h: HtmlBuilder<Message>, data: ShellData): Html => {
-	const context = shellContextOf(model, data)
+/** The toggle's key, as the user's keyboard labels it ("⌘J"); null when unbound. */
+const aiPanelShortcutOf = (model: Model): string | null => {
+	const key = sharedOf(model).keys["aiPanel.toggle"]
+	return key === null ? null : comboLabel(key, model.context.keyboardPlatform)
+}
+
+interface Regions {
+	readonly sidebar: ReadonlyArray<Html>
+	readonly page: ReadonlyArray<Html>
+	readonly "ai-toggle": ReadonlyArray<Html>
+	readonly "ai-panel": ReadonlyArray<Html>
+	readonly overlays: ReadonlyArray<Html>
+}
+
+const regionsOf = (model: Model, h: HtmlBuilder<Message>): Regions => {
+	const context = shellContextOf(model)
+	const shared = sharedOf(model)
+	const overlays = [
+		Toasts.view(h, model.toasts, toToastsMessage, model.context.isMobile),
+		Modal.view(h, model.modal, shared, toModalMessage),
+		h.submodel({
+			slotId: "command-palette",
+			model: model.commandPalette,
+			view: CommandPalette.view,
+			viewInputs: { shared },
+			toParentMessage: toCommandPaletteMessage,
+		}),
+	]
+	if (context === null) return { sidebar: [], page: [pageBody(model, h, false)], "ai-toggle": [], "ai-panel": [], overlays }
+	const { isMobile } = model.context
 	const sidebar = secondarySidebar(model, h, context)
-	return orgShell(h, context, {
-		page:
-			model.isMobile && model.route._tag === "ChatIndex"
-				? phoneChatList(h, sidebar)
-				: sectionBody(model, h),
-		secondarySidebar: sidebar,
-		// The bell counts unread mentions, as the tab title does (`isMentionReason`); no optimistic layer.
-		unreadNotificationCount: model.shell.notifications.unreadMentionIds.length,
-		toaster: toaster(h, model),
-		overlays: [
-			Modal.view(h, model.modal, sharedOf(model), toModalMessage),
-			h.submodel({
-				slotId: "command-palette",
-				model: model.commandPalette,
-				view: CommandPalette.view,
-				viewInputs: { shared: sharedOf(model) },
-				toParentMessage: toCommandPaletteMessage,
-			}),
-		],
-		assistant: {
-			panel: h.submodel({
-				slotId: "ai-panel",
-				model: model.aiPanel,
-				view: AiPanel.view,
-				viewInputs: {
-					...aiPanelInputsOf(model),
-					isSidebarCollapsed: model.shell.isSidebarCollapsed,
-				},
-				toParentMessage: toAiPanelMessage,
-			}),
-			isResizing: model.aiPanel.drag !== null,
-			toggle: AiPanel.toggleButton(h, {
+	const isPhoneChatList = isMobile && model.context.route._tag === "ChatIndex"
+	return {
+		sidebar: isMobile ? [] : [sidebar],
+		page: [isPhoneChatList ? phoneChatList(h, sidebar) : sectionBody(model, h)],
+		"ai-toggle": [
+			AiPanel.toggleButton(h, {
 				isOpen: model.aiPanel.isOpen,
 				onPress: pressedAiPanelToggle,
 				shortcut: aiPanelShortcutOf(model),
 			}),
-		},
-		mobile: {
-			isMobile: model.isMobile,
-			isSidebarCollapsed: model.shell.isSidebarCollapsed,
-			isSidebarOpen: model.shell.isSidebarOpen,
-			onMenu: h.OnClick(openedMobileSidebar),
-			onSearch: h.OnClick(Message.PressedHotkey({ actionId: "search.open" })),
-			toSheetMessage: toMobileSidebarMessage,
-		},
-	})
-}
-
-/** The toggle's key, as the user's keyboard labels it ("⌘J"); null when unbound. */
-const aiPanelShortcutOf = (model: Model): string | null => {
-	const key = sharedOf(model).keys["aiPanel.toggle"]
-	return key === null ? null : comboLabel(key, model.keyboardPlatform)
-}
-
-/** `$orgSlug/layout.tsx`: a loader while `useOrganization()` loads the route's organization. */
-const orgBody = (model: Model, h: HtmlBuilder<Message>, user: CurrentUser): Html => {
-	const orgSlug = orgSlugOf(model.route)
-	if (orgSlug === undefined) return appRoot(h, model, [pageBody(model, h, false)])
-	return OrgState.match(model.org, {
-		None: () => appRoot(h, model, [loader(h, false)]),
-		Loading: ({ isStalled }) => appRoot(h, model, [loader(h, isStalled)]),
-		NotFound: () => appRoot(h, model, [organizationNotFound(h, orgSlug)]),
-		Loaded: ({ organization }) => orgShellView(model, h, { orgSlug, user, organization }),
-	})
-}
-
-const body = (model: Model, h: HtmlBuilder<Message>): Html => {
-	const { route } = model
-	if (route._tag === "NotFound") return h.div([h.Id("app")], [`Not found: ${route.path}`])
-	if (isPublicRoute(route)) return appRoot(h, model, [pageBody(model, h, false)])
-	// `_app/layout.tsx`: a loader until the API answers for the session; signed out redirects to sign-in.
-	return Session.match(model.session, {
-		Loading: () => appRoot(h, model, [loader(h, false)]),
-		SignedOut: () => appRoot(h, model, [loader(h, false)]),
-		Unreachable: ({ reason }) =>
-			appRoot(h, model, [
-				appError(h, {
-					title: "Can't reach Hazel",
-					description: commonMessage(reason).description,
-					onRetry: Message.PressedRetrySession(),
-				}),
-			]),
-		// `AppShell`: a loader until `user.me` answers, then the error if it could not.
-		SignedIn: ({ user }) =>
-			AsyncData.matchData(user, {
-				onEmpty: () => appRoot(h, model, [loader(h, false)]),
-				onFailure: (reason) =>
-					appRoot(h, model, [
-						appError(h, {
-							title: "Couldn't load your account",
-							description: commonMessage(reason).description,
-							onRetry: Message.PressedRetryCurrentUser(),
-						}),
-					]),
-				onData: (data) => orgBody(model, h, data),
+		],
+		"ai-panel": [
+			h.submodel({
+				slotId: "ai-panel",
+				model: model.aiPanel,
+				view: AiPanel.view,
+				viewInputs: { ...aiPanelInputsOf(model), isSidebarCollapsed: model.shell.isSidebarCollapsed },
+				toParentMessage: toAiPanelMessage,
 			}),
-	})
+		],
+		overlays: isMobile
+			? [
+					mobileSidebarSheet(h, {
+						isOpen: model.shell.isSidebarOpen && !isPhoneChatList,
+						children: [sidebar],
+						toMessage: toMobileSidebarMessage,
+					}),
+					...overlays,
+				]
+			: overlays,
+	}
 }
 
-/** The route's title with Discord's unread prefix: `(3) Chat · Hazel`, or `• Chat · Hazel`. */
-export const documentTitleOf = (model: Model): string =>
-	badgedTitle(titleOf(model.route), badgeOfModel(model))
-
-export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
-	title: documentTitleOf(model),
-	body: body(model, h),
-})
+export const view = (model: Model, h: HtmlBuilder<Message>): Html => {
+	const regions = regionsOf(model, h)
+	return h.div(
+		[h.Attribute("data-foldkit-host", ""), h.Attribute("hidden", "")],
+		REGIONS.map((region) =>
+			h.keyed("div")(region, [h.Attribute(REGION_ATTRIBUTE, region), h.Class("contents")], [...regions[region]]),
+		),
+	)
+}

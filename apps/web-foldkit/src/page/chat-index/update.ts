@@ -42,13 +42,6 @@ export const update = (model: Model, message: Message): PageReturn<Model, Messag
 			outMessage: PageOutMessage.RequestedModal({ modal: { _tag: "NewChannel" } }),
 		}),
 		PressedDmFilter: ({ filter }) => ({ model: modifyFields(model, { dmFilter: () => filter }) }),
-		RequestedIslandNavigation: ({ orgSlug, channelId }) => ({
-			model,
-			outMessage: PageOutMessage.RequestedNavigation({
-				route: AppRoute.ChatChannel({ orgSlug, channelId }),
-				replace: false,
-			}),
-		}),
 		PressedStartConversation: () => ({
 			model,
 			outMessage: PageOutMessage.RequestedModal({ modal: { _tag: "CreateDm" } }),

@@ -11,7 +11,5 @@ export const Message = defineMessageUnion({
 	PressedCreateChannel: {},
 	PressedStartConversation: {},
 	PressedDmFilter: { filter: DmFilter },
-	/** The DMs island (`islands/dms.ts`) asked to open a DM. */
-	RequestedIslandNavigation: { orgSlug: Schema.String, channelId: ChannelId },
 })
 export type Message = typeof Message.Type

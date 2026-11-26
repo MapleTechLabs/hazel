@@ -17,6 +17,10 @@ export const PageOutMessage = defineMessageUnion({
 		replace: Schema.Boolean,
 		toast: Schema.optionalKey(ToastRequest),
 	},
+	/** An in-app URL that may carry a search the route does not model (the palette's `?messageId=`). */
+	RequestedHref: { href: Schema.String },
+	/** Slack's Mod+[ / Mod+]: the history's previous or next page. */
+	RequestedHistory: { direction: Schema.Literals(["Back", "Forward"]) },
 	RequestedToast: { toast: ToastRequest },
 	RequestedModal: { modal: ModalRequest },
 	RequestedCommandPalette: { page: CommandPalettePage },
