@@ -12,7 +12,7 @@ export const item = defineRecipe<
 		nested: "none" | "middle" | "last"
 		titleLines: "1" | "2"
 		subtitleLines: "1" | "2"
-		leadingSize: "regular" | "large"
+		leadingSize: "regular" | "large" | "conversation"
 	},
 	"muted",
 	"control" | "content" | "leading" | "title" | "subtitle" | "trailing" | "badge" | "count" | "shortcut"
@@ -52,16 +52,9 @@ export const item = defineRecipe<
 			title: { grow: true, truncate: true },
 			trailing: { layout: "row", align: "center", gap: "1", shrink: false },
 			subtitle: { text: "caption", color: "fg-2", truncate: true },
-			// `kbd` (`ui/kbd.styles.ts`): a hairline key cap in muted ink.
-			shortcut: {
-				text: "caption",
-				color: "muted-fg",
-				paddingX: "1",
-				radius: "sm",
-				ring: "border",
-				numeric: true,
-				shrink: false,
-			},
+			// The sidebar's palette hint (`channels-sidebar/view.ts`): bare `font-mono text-xs` in muted ink;
+			// its family, its place at the row's end and its breakpoint are the renderer's.
+			shortcut: { text: "caption", color: "muted-fg", shrink: false },
 			// `countBadge` (`ui/count-badge.ts`): the solid brand pill with the unread count, round at
 			// one digit (`min-w-5`), tabular figures.
 			badge: {
@@ -117,6 +110,24 @@ export const item = defineRecipe<
 						subtitle: { color: "muted-fg" },
 					},
 				},
+				// Today's DM row (`item-conversation-row`, `mobile-dms.ts`): `py-2.5 px-4`, a medium title,
+				// a 14/19.25 preview; unread, the title semibold and the preview in full ink.
+				conversation: {
+					parts: {
+						control: {
+							paddingX: "4",
+							paddingY: "2.5",
+							radius: "none",
+							text: "label",
+							color: "fg",
+						},
+						title: { color: "fg", strong: true },
+						subtitle: { text: "snug", color: "muted-fg" },
+					},
+					states: {
+						emphasized: { parts: { title: { weight: "semibold" }, subtitle: { color: "fg" } } },
+					},
+				},
 			},
 		},
 	},
@@ -138,6 +149,13 @@ export const item = defineRecipe<
 		emphasized: { parts: { title: { color: "fg", strong: true } } },
 		disabled: { parts: { control: { opacity: 0.5 } } },
 	},
+	// A muted conversation's name is muted ink, not faded (`mobile-dms.ts`).
+	compounds: [
+		{
+			when: { leadingSize: "conversation", muted: true },
+			style: { parts: { title: { opacity: 1, color: "muted-fg" }, leading: { opacity: 1 } } },
+		},
+	],
 	inert: ["disabled"],
 	// The unread count rolls to its new value (`MOTION.md`, "Counts": reaction pills roll today).
 	motion: {

@@ -75,7 +75,7 @@ export const contract = (h: H<"m">) => [
 	// @ts-expect-error a leaf takes no children
 	h.button.children(h.text.children("label")),
 	// @ts-expect-error options come from closed sets
-	h.stack.density("tight"),
+	h.stack.density("dense"),
 	// @ts-expect-error button variants are closed
 	h.button.variant("link"),
 	// @ts-expect-error structured props are typed: a reaction is [emoji, count, mine]

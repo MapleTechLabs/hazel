@@ -106,6 +106,8 @@ export const generateSwift = (tokens: Tokens, recipes: ReadonlyArray<Recipe>): s
 		if (d.paddingX !== undefined) add("paddingX", num(length(d.paddingX)))
 		if (d.paddingY !== undefined) add("paddingY", num(length(d.paddingY)))
 		if (d.paddingStart !== undefined) add("paddingStart", num(length(d.paddingStart)))
+		if (d.paddingTop !== undefined) add("paddingTop", num(length(d.paddingTop)))
+		if (d.paddingBottom !== undefined) add("paddingBottom", num(length(d.paddingBottom)))
 		if (d.gap !== undefined) add("gap", num(space(d.gap)))
 		if (d.rowGap !== undefined) add("rowGap", num(space(d.rowGap)))
 		if (d.marginBottom !== undefined) add("marginBottom", num(space(d.marginBottom)))
@@ -340,6 +342,8 @@ ${Object.entries(tokens.shadow)
         public var borderWidth: CGFloat? = nil, radius: CGFloat? = nil
         public var ring: ThemedColor? = nil, divider: ThemedColor? = nil
         public var paddingX: CGFloat? = nil, paddingY: CGFloat? = nil, paddingStart: CGFloat? = nil
+        /// One edge over \`paddingY\` (a list header's \`pt-3\`).
+        public var paddingTop: CGFloat? = nil, paddingBottom: CGFloat? = nil
         // In the order codegen writes the fields: the memberwise initializer takes them so.
         public var gap: CGFloat? = nil, rowGap: CGFloat? = nil, marginBottom: CGFloat? = nil
         public var marginX: CGFloat? = nil, bleedX: CGFloat? = nil
@@ -365,6 +369,7 @@ ${Object.entries(tokens.shadow)
             out.ring = other.ring ?? ring; out.divider = other.divider ?? divider; out.marginX = other.marginX ?? marginX
             out.wrap = other.wrap ?? wrap; out.fill = other.fill ?? fill; out.numeric = other.numeric ?? numeric
             out.paddingY = other.paddingY ?? paddingY; out.paddingStart = other.paddingStart ?? paddingStart
+            out.paddingTop = other.paddingTop ?? paddingTop; out.paddingBottom = other.paddingBottom ?? paddingBottom
             out.gap = other.gap ?? gap; out.rowGap = other.rowGap ?? rowGap
             out.marginBottom = other.marginBottom ?? marginBottom; out.bleedX = other.bleedX ?? bleedX
             out.minHeight = other.minHeight ?? minHeight; out.size = other.size ?? size

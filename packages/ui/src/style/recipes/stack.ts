@@ -24,6 +24,7 @@ export const stack = defineRecipe<
 		density: {
 			default: "regular",
 			values: {
+				tight: { root: { gap: "0.5", rowGap: "0.5" } },
 				compact: { root: { gap: "2", rowGap: "2" } },
 				regular: { root: { gap: "4", rowGap: "4" } },
 				relaxed: { root: { gap: "6", rowGap: "6" } },

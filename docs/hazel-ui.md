@@ -247,22 +247,24 @@ ones), which replaces today's `sm:` and `max-md:` branches. Recipes may vary by 
 widened after checking them against today's kit (`button.styles.ts`, `badge.styles.ts`, text sizes in
 use); Phase 1 re-derives them from the message row, composer and sidebar before they freeze.
 
-| Choice           | Options (proposed, closed)                                                                                       |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `text.role`      | `body`, `label`, `caption`, `title`, `display`, `code`, `overline`, `kbd`                                        |
-| `text.tone`      | `default`, `muted`, `subtle`, `accent`, `success`, `warning`, `danger`, `info`                                   |
-| `text.strong`    | on or off (the one weight choice a view has; an author name, an unread row)                                      |
-| `button.variant` | `primary`, `secondary`, `outline`, `ghost`, `warning`, `danger`, `chip` (on with `selected`)                     |
-| `button.size`    | `large`, `regular`, `small`, `xsmall`; `iconOnly` makes it square, `circle` makes it round                       |
-| `badge.tone`     | `neutral`, `accent`, `success`, `warning`, `danger`, `info`                                                      |
-| `badge.style`    | `solid`, `outline`, `quiet` (today's `muted` is `neutral` + `quiet`)                                             |
-| `badge.size`     | `regular`, `small`; `pill` rounds it fully                                                                       |
-| `stack.density`  | `compact`, `regular`, `relaxed`                                                                                  |
-| `frame.surface`  | `none`, `card`, `inset`, `muted`, `overlay`, `danger`, `flush`                                                   |
-| `avatar.size`    | `regular`, `medium` (the kit's `md`), `large`; `avatarStack.layout` `row`, `pair`                                |
-| `item` rows      | `unread` (`none`, `pip`, `dot`), `titleLines` and `subtitleLines` (`1`, `2`), `leadingSize` (`regular`, `large`) |
-| `iconTile.tone`  | `neutral`, `accent`, `success`, `warning`, `danger`                                                              |
-| states           | `selected`, `emphasized`, `disabled`, `loading`, `destructive`, plus each primitive's own (`message.pinned`...)  |
+| Choice           | Options (proposed, closed)                                                                                                       |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `text.role`      | `body`, `label`, `caption`, `title`, `display`, `code`, `overline`, `kbd`                                                        |
+| `text.tone`      | `default`, `muted`, `subtle`, `accent`, `success`, `warning`, `danger`, `info`                                                   |
+| `text.strong`    | on or off (the one weight choice a view has; an author name, an unread row)                                                      |
+| `button.variant` | `primary`, `secondary`, `outline`, `ghost`, `warning`, `danger`, `chip` (on with `selected`)                                     |
+| `button.size`    | `large`, `regular`, `small`, `xsmall`; `iconOnly` makes it square, `circle` makes it round                                       |
+| `badge.tone`     | `neutral`, `accent`, `success`, `warning`, `danger`, `info`                                                                      |
+| `badge.style`    | `solid`, `outline`, `quiet` (today's `muted` is `neutral` + `quiet`)                                                             |
+| `badge.size`     | `regular`, `small`; `pill` rounds it fully                                                                                       |
+| `stack.density`  | `tight`, `compact`, `regular`, `relaxed`                                                                                         |
+| `frame.surface`  | `none`, `card`, `inset`, `muted`, `overlay`, `danger`, `flush`, `hint`                                                           |
+| `avatar.size`    | `regular`, `medium` (the kit's `md`), `large`; `avatarStack.layout` `row`, `pair`                                                |
+| `item` rows      | `unread` (`none`, `pip`, `dot`), `titleLines` and `subtitleLines` (`1`, `2`), `leadingSize` (`regular`, `large`, `conversation`) |
+| `section.style`  | `sidebar`, `tree` (the channel sidebar), `list` (a phone list), `sticky` (the inbox)                                             |
+| `screen.surface` | `sidebar`, `page` (a phone tab under its top bar)                                                                                |
+| `iconTile.tone`  | `neutral`, `accent`, `success`, `warning`, `danger`                                                                              |
+| states           | `selected`, `emphasized`, `disabled`, `loading`, `destructive`, plus each primitive's own (`message.pinned`...)                  |
 
 Rules:
 
