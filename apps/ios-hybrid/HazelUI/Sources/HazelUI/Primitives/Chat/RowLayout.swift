@@ -59,11 +59,29 @@ public final class RowLayout: @unchecked Sendable {
     let background: UIColor?
     /// The row asks to animate in (a message's `entering`).
     public let entering: Bool
+    /// The pieces a reaction motion moves (pill, emoji, count), by the items that draw them.
+    public let motionParts: [MotionPart]
+
+    /// A piece of the row that moves on its own: a reaction's pill, its emoji or its count.
+    public struct MotionPart: Sendable, Equatable {
+        public enum Role: Sendable { case reaction, emoji, count }
+        /// The reaction's emoji.
+        public let key: String
+        public let role: Role
+        public let rect: CGRect
+        public let items: Range<Int>
+        public let count: Int
+    }
+
+    /// Each reaction's count as drawn, for the next draw to compare with.
+    public var reactionCounts: [String: Int] {
+        Dictionary(motionParts.filter { $0.role == .count }.map { ($0.key, $0.count) }, uniquingKeysWith: { a, _ in a })
+    }
 
     init(
         width: CGFloat, height: CGFloat, usedWidth: CGFloat? = nil, items: [Item], targets: [Target] = [],
         actions: [Action] = [], selectable: [Selectable] = [], label: String = "", background: UIColor? = nil,
-        entering: Bool = false
+        entering: Bool = false, motionParts: [MotionPart] = []
     ) {
         self.width = width
         self.height = height
@@ -75,6 +93,7 @@ public final class RowLayout: @unchecked Sendable {
         self.label = label
         self.background = background
         self.entering = entering
+        self.motionParts = motionParts
     }
 
     /// The front-most target under `point` (row coordinates).
@@ -86,7 +105,8 @@ public final class RowLayout: @unchecked Sendable {
 extension RowLayout {
     /// Draws into a bitmap at `scale`. Thread-safe (UIKit string drawing off the main thread).
     /// `transparent` leaves out the list's background (a leaf drawn over whatever is behind it).
-    public func draw(scale: CGFloat, transparent: Bool = false) -> CGImage? {
+    /// `skipping`: items left out (the pieces a motion draws on their own).
+    public func draw(scale: CGFloat, transparent: Bool = false, skipping: IndexSet = []) -> CGImage? {
         guard height > 0, width > 0 else { return nil }
         let background = transparent ? nil : self.background
         let w = Int(ceil(width * scale)), h = Int(ceil(height * scale))
@@ -95,9 +115,33 @@ extension RowLayout {
         cg.translateBy(x: 0, y: CGFloat(h))
         cg.scaleBy(x: scale, y: -scale)
         UIGraphicsPushContext(cg)
-        paint(cg, background: background)
+        paint(cg, background: background, skipping: skipping)
         UIGraphicsPopContext()
         return cg.makeImage()
+    }
+
+    /// One motion part alone on a transparent bitmap of its pixel-aligned rect (`pixelRect`), so it
+    /// lies over the base drawn `skipping` it exactly where the whole row draws it.
+    public func drawPart(_ part: MotionPart, scale: CGFloat) -> CGImage? {
+        let rect = Self.pixelRect(part.rect, scale: scale)
+        let w = Int((rect.width * scale).rounded()), h = Int((rect.height * scale).rounded())
+        guard w > 0, h > 0, let cg = Self.context(width: w, height: h, data: nil, bytesPerRow: 0, opaque: false)
+        else { return nil }
+        cg.translateBy(x: 0, y: CGFloat(h))
+        cg.scaleBy(x: scale, y: -scale)
+        cg.translateBy(x: -rect.minX, y: -rect.minY)
+        UIGraphicsPushContext(cg)
+        paint(cg, background: nil, only: part.items)
+        UIGraphicsPopContext()
+        return cg.makeImage()
+    }
+
+    /// `rect` grown to whole device pixels, with a pixel to spare for antialiasing and the stroke.
+    public static func pixelRect(_ rect: CGRect, scale: CGFloat) -> CGRect {
+        let grown = rect.insetBy(dx: -1, dy: -1)
+        let x0 = floor(grown.minX * scale) / scale, y0 = floor(grown.minY * scale) / scale
+        let x1 = ceil(grown.maxX * scale) / scale, y1 = ceil(grown.maxY * scale) / scale
+        return CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
     }
 
     /// Row surfaces are 8-bit Display P3 (`row-wide-gamut`): the wide-gamut tokens keep their colour
@@ -130,17 +174,19 @@ extension RowLayout {
         cg.translateBy(x: 0, y: CGFloat(h))
         cg.scaleBy(x: scale, y: -scale)
         UIGraphicsPushContext(cg)
-        paint(cg, background: background)
+        paint(cg, background: background, skipping: [])
         UIGraphicsPopContext()
         return RowSurface(surface: surface, bytes: surface.allocationSize)
     }
 
-    private func paint(_ cg: CGContext, background: UIColor?) {
+    private func paint(_ cg: CGContext, background: UIColor?, skipping: IndexSet = [], only: Range<Int>? = nil) {
         if let background {
             background.setFill()
             cg.fill(CGRect(x: 0, y: 0, width: width, height: height))
         }
-        for item in items {
+        for (index, item) in items.enumerated() {
+            if skipping.contains(index) { continue }
+            if let only, !only.contains(index) { continue }
             switch item {
             case let .text(text, rect):
                 text.draw(with: rect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], context: nil)

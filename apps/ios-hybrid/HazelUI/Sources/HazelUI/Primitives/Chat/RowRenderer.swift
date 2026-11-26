@@ -519,10 +519,20 @@ public enum RowRenderer {
             let inner = style.style.gap ?? Token.space("1")
             let padX = style.style.paddingX ?? 0, padY = style.style.paddingY ?? 0
             let rect = place(CGSize(width: padX * 2 + ew + inner + cw, height: style.lineHeight + padY * 2))
+            let first = b.items.count
+            let emojiRect = CGRect(x: rect.minX + padX, y: rect.minY + padY, width: ew + 1, height: style.lineHeight)
+            let countRect = CGRect(x: rect.minX + padX + ew + inner, y: rect.minY + padY, width: cw + 1, height: style.lineHeight)
             b.items.append(.fill(rect, radius: rect.height / 2, color: fill))
             b.items.append(.stroke(rect, radius: rect.height / 2, color: ring, width: 1))
-            b.items.append(.text(emoji, CGRect(x: rect.minX + padX, y: rect.minY + padY, width: ew + 1, height: style.lineHeight)))
-            b.items.append(.text(count, CGRect(x: rect.minX + padX + ew + inner, y: rect.minY + padY, width: cw + 1, height: style.lineHeight)))
+            b.items.append(.text(emoji, emojiRect))
+            b.items.append(.text(count, countRect))
+            // The pieces reaction motions move (`reactionIn` the pill, `reactionPop` the emoji, counts the number).
+            let key = reaction.emoji, n = reaction.count
+            b.motionParts += [
+                .init(key: key, role: .reaction, rect: rect, items: first..<first + 4, count: n),
+                .init(key: key, role: .emoji, rect: emojiRect, items: first + 2..<first + 3, count: n),
+                .init(key: key, role: .count, rect: countRect, items: first + 3..<first + 4, count: n),
+            ]
             var target = RowLayout.Target(rect: rect, event: "pressReaction", payload: ["emoji": .string(reaction.emoji)], label: reactionLabel(reaction), role: .button)
             target.selected = mine
             b.targets.append(target)
@@ -801,6 +811,7 @@ struct Builder {
     var targets: [RowLayout.Target] = []
     var actions: [RowLayout.Action] = []
     var selectable: [RowLayout.Selectable] = []
+    var motionParts: [RowLayout.MotionPart] = []
 
     init(_ c: RowContext, opaque: Bool = true) {
         self.c = c
@@ -814,7 +825,8 @@ struct Builder {
     func finish(height: CGFloat, usedWidth: CGFloat? = nil, label: String, entering: Bool = false) -> RowLayout {
         RowLayout(
             width: c.width, height: ceil(height), usedWidth: usedWidth.map(ceil), items: items, targets: targets, actions: actions,
-            selectable: selectable, label: label, background: opaque ? RowRenderer.background(c) : nil, entering: entering
+            selectable: selectable, label: label, background: opaque ? RowRenderer.background(c) : nil, entering: entering,
+            motionParts: motionParts
         )
     }
 }

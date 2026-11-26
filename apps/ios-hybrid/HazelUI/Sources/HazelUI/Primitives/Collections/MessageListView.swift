@@ -79,6 +79,10 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
     /// Nothing drawn yet: the first rows are drawn on the main thread, so the first frame is whole.
     private var firstPaint = true
     private var entered: Set<Int> = []
+    /// Each shown row's reaction counts, so the next draw of it knows what moved; and its moving pieces.
+    private var shownCounts: [Int: [String: Int]] = [:]
+    private var moving: [Int: (id: Int, pieces: [CALayer], image: AnyObject)] = [:]
+    private var motions = 0
     private var selection: UITextView?
     private var accessibilityCache: [Int: [UIAccessibilityElement]] = [:]
     /// Rows draw in parallel; on-screen ones jump the queue, ones scrolled past are cancelled.
@@ -425,23 +429,43 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
         }
     }
 
-    /// Puts a bitmap on a row's layer; a row that asks to enter fades and rises in once.
+    /// Puts a bitmap on a row's layer. A row that asks to enter plays the message's enter once; a row
+    /// drawn again with changed reactions plays their motions on its pieces (`ReactionMotion`).
     private func present(_ key: Int, _ image: AnyObject, on layer: CALayer) {
+        settle(key, layer)
         layer.contents = image
-        guard let layout = layouts[key], layout.entering, entered.insert(key).inserted,
-              !UIAccessibility.isReduceMotionEnabled else { return }
-        let duration = HazelTheme.duration["normal"] ?? 0.2
-        let ease = HazelTheme.easing["out"] ?? (0.23, 1, 0.32, 1)
-        let fade = CABasicAnimation(keyPath: "opacity")
-        fade.fromValue = 0
-        // The layer is flipped: rising on screen is a positive y in its parent.
-        let rise = CABasicAnimation(keyPath: "transform.translation.y")
-        rise.fromValue = -6
-        let group = CAAnimationGroup()
-        group.animations = [fade, rise]
-        group.duration = duration
-        group.timingFunction = CAMediaTimingFunction(controlPoints: Float(ease.0), Float(ease.1), Float(ease.2), Float(ease.3))
-        layer.add(group, forKey: "enter")
+        guard let layout = layouts[key] else { return }
+        let old = shownCounts.updateValue(layout.reactionCounts, forKey: key)
+        guard HazelMotion.enabled, !HazelMotion.reduced() else { return }
+        if layout.entering, entered.insert(key).inserted, let spec = HazelMotion.spec("message", .enter),
+           let timeline = MotionTimeline(spec, reduceMotion: false) {
+            // The layer is flipped in a flipped list: rising on screen is a positive y in its parent.
+            layer.add(timeline.layerAnimation(size: layer.bounds.size, flipped: true), forKey: "enter")
+        }
+        let plays = ReactionMotion.plan("message", from: old, to: layout, reduceMotion: false)
+        let scale = context.scale
+        guard !plays.isEmpty,
+              let base = layout.draw(scale: scale, skipping: ReactionMotion.skipping(plays)) else { return }
+        layer.contents = base
+        let pieces = ReactionMotion.layers(plays, layout, scale: scale)
+        pieces.forEach(layer.addSublayer)
+        motions += 1
+        let id = motions
+        moving[key] = (id, pieces, image)
+        DispatchQueue.main.asyncAfter(deadline: .now() + ReactionMotion.duration(plays)) { [weak self] in
+            guard let self, self.moving[key]?.id == id, let layer = self.layers[key] else { return }
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            self.settle(key, layer)
+            CATransaction.commit()
+        }
+    }
+
+    /// Ends a row's reaction motion: the whole bitmap back, its pieces gone.
+    private func settle(_ key: Int, _ layer: CALayer?) {
+        guard let motion = moving.removeValue(forKey: key) else { return }
+        motion.pieces.forEach { $0.removeFromSuperlayer() }
+        if let layer, layer.contents != nil { layer.contents = motion.image }
     }
 
     private func render(_ key: Int, index i: Int, context c: RowContext, urgent: Bool) {
@@ -515,6 +539,8 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
 
     private func recycle(_ key: Int) {
         blankShown.remove(key)
+        shownCounts[key] = nil
+        if let motion = moving.removeValue(forKey: key) { motion.pieces.forEach { $0.removeFromSuperlayer() } }
         guard let layer = layers.removeValue(forKey: key) else { return }
         layer.removeAllAnimations()
         layer.removeFromSuperlayer()

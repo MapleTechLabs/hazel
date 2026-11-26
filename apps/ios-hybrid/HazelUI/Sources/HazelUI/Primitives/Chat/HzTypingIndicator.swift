@@ -42,8 +42,8 @@ struct HzTypingIndicator: View {
     }
 }
 
-/// The dots, bounced by Core Animation (`hz-typing-bounce`: a quarter of a dot up and back each second,
-/// staggered), so the bounce costs no SwiftUI updates and stops under Reduce Motion.
+/// The dots, bounced by Core Animation with the recipe's loop (`bounce` on `dot`), so the bounce costs no
+/// SwiftUI updates; it does not run under Reduce Motion.
 private struct TypingDots: UIViewRepresentable {
     let size: CGFloat
     let gap: CGFloat
@@ -52,13 +52,17 @@ private struct TypingDots: UIViewRepresentable {
     func makeUIView(context: Context) -> DotsView { DotsView() }
 
     func updateUIView(_ view: DotsView, context: Context) {
-        view.configure(size: size, gap: gap, color: color, dark: context.environment.colorScheme == .dark)
+        let reduce = HazelMotion.reduced(context.environment.accessibilityReduceMotion)
+        view.configure(size: size, gap: gap, color: color, dark: context.environment.colorScheme == .dark, reduce: reduce)
     }
 
     final class DotsView: UIView {
         private var dots: [CALayer] = []
+        /// The web renderer's stagger (`chat/styles.ts`: -0.3s, -0.15s, 0), not in the contract yet
+        /// (GAPS `motion-stagger`).
+        private static let stagger: [Double] = [0.3, 0.15, 0]
 
-        func configure(size: CGFloat, gap: CGFloat, color: HazelTheme.ThemedColor, dark: Bool) {
+        func configure(size: CGFloat, gap: CGFloat, color: HazelTheme.ThemedColor, dark: Bool, reduce: Bool) {
             if dots.isEmpty {
                 for _ in 0..<3 {
                     let dot = CALayer()
@@ -66,20 +70,16 @@ private struct TypingDots: UIViewRepresentable {
                     dots.append(dot)
                 }
             }
-            let reduce = UIAccessibility.isReduceMotionEnabled
+            let spec = HazelMotion.spec("typingIndicator", .loop, part: "dot")
+            let timeline = HazelMotion.enabled ? spec.flatMap { MotionTimeline($0, reduceMotion: reduce) } : nil
             for (i, dot) in dots.enumerated() {
                 dot.frame = CGRect(x: CGFloat(i) * (size + gap), y: 0, width: size, height: size)
                 dot.cornerRadius = size / 2
                 dot.backgroundColor = color.ui(dark).cgColor
-                if reduce { dot.removeAllAnimations(); continue }
+                guard let timeline else { dot.removeAllAnimations(); continue }
                 guard dot.animation(forKey: "bounce") == nil else { continue }
-                let bounce = CAKeyframeAnimation(keyPath: "transform.translation.y")
-                bounce.values = [-size / 4, 0, -size / 4]
-                bounce.keyTimes = [0, 0.5, 1]
-                bounce.timingFunctions = [CAMediaTimingFunction(controlPoints: 0, 0, 0.2, 1), CAMediaTimingFunction(controlPoints: 0.8, 0, 1, 1)]
-                bounce.duration = 1
-                bounce.repeatCount = .infinity
-                bounce.beginTime = CACurrentMediaTime() - [0.3, 0.15, 0][i]
+                let bounce = timeline.layerAnimation(size: dot.bounds.size)
+                bounce.beginTime = CACurrentMediaTime() - Self.stagger[i]
                 dot.add(bounce, forKey: "bounce")
             }
         }
