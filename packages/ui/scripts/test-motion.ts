@@ -198,15 +198,13 @@ const strip = (page: Page, kit: ReadonlyArray<Buffer>, hazel: ReadonlyArray<Buff
 					image.src = `data:image/png;base64,${data}`
 				})
 			const rows = [await Promise.all(kitFrames.map(load)), await Promise.all(hazelFrames.map(load))]
-			const cell = rows
-				.flat()
-				.reduce(
-					(size, image) => ({
-						w: Math.max(size.w, image.width),
-						h: Math.max(size.h, image.height),
-					}),
-					{ w: 0, h: 0 },
-				)
+			const cell = rows.flat().reduce(
+				(size, image) => ({
+					w: Math.max(size.w, image.width),
+					h: Math.max(size.h, image.height),
+				}),
+				{ w: 0, h: 0 },
+			)
 			const gutter = 160
 			const head = 56
 			const canvas = document.createElement("canvas")

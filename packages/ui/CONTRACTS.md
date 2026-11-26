@@ -20,6 +20,10 @@ anything here is a contract proposal. A lane starts from `LANES.md`.
    are resolved in `GAPS.md` ("Resolved in the parity pass"), with the lane that implements each.
    New tags `iconTile`, `channelIcon`, `peopleStrip`; keys reach the hosts (`row-key`); fixtures may
    wait on a lane with `pending`.
+8. Motion (2026-11-26): C3 gains a motion layer (`MOTION.md`): named keyframes and motions as tokens,
+   `recipe.motion` uses per trigger (enter, exit, counts, pop, loop), transition curves, and Reduce
+   Motion as today's instant rule. Codegen writes the web CSS and `HazelTheme.Motion`; renderers only
+   mark when (`src/web/motion.ts`). Checked against today by `bun scripts/test-motion.ts`.
 
 | Contract      | Source of truth                                                                                                                                        |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |

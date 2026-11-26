@@ -38,4 +38,20 @@ describe("ui:generate", () => {
 			"TypeMetrics(size: 24, lineHeight: 32, tracking: -0.48)",
 		)
 	})
+
+	it("writes the motion layer: keyframes, uses per trigger, today's reduced-motion rule", () => {
+		const css = generateCss(tokens, recipes)
+		expect(css).toContain("@keyframes hz-countUp {\n\t0% { opacity: 0; translate: 0px 70%; }\n}")
+		expect(css).toContain(
+			'[data-hz="toast"] [data-hz-part="panel"][data-motion~="exit"] {\n\tanimation: hz-toastOut var(--hz-duration-fast) var(--hz-ease-in) 0s 1 both;',
+		)
+		expect(css).toContain('[data-hz="dialog"] [data-hz-part="panel"][data-motion~="enter"]::backdrop')
+		expect(css).toContain("animation-duration: 0.01ms !important;")
+		expect(css).toContain("--hz-palette-brand-600: var(--color-brand-600, rgb(127 86 217));")
+		const swift = generateSwift(tokens, recipes)
+		expect(swift).toContain('public static let reduceMotion = "instant"')
+		expect(swift).toContain(
+			'"toast": [Use(trigger: .enter, motion: toastIn, part: "panel", backdrop: false, regular: nil), Use(trigger: .exit, motion: toastOut, part: "panel", backdrop: false, regular: nil)],',
+		)
+	})
 })

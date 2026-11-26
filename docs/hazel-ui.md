@@ -285,6 +285,8 @@ Rules:
   spacing, radii, durations and curves.
 - **Recipes** (`src/style/recipes/<primitive>.ts`, one file per primitive, owned with the primitive):
   per variant, state and size class, which tokens apply.
+- **Motion** (`packages/ui/MOTION.md`): the closed set of named motions taken from today's app, which
+  primitive plays which (`recipe.motion`), and Reduce Motion; codegen emits CSS and Swift for both.
 - **Supported CSS features** (fixed in C3): what a recipe can express, so lane D does not discover gaps
   late. Today's kit uses `color-mix`, pseudo-element hit areas, `forced-colors`, child-slot selectors
   and breakpoints; each is either a recipe feature or moved into the web renderer of that primitive.
