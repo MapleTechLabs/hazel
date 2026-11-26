@@ -386,3 +386,11 @@ they never read as the phase 2 web (`A1` to `A5`) or iOS (`S0` to `S5`) lanes.
    until Effect UI supports custom roots in `BrowserHost.mount`?
 4. **Effect UI distribution:** vendor the `4d6d7ec` tarball in the repo, or keep the pkg.pr.new URL?
 5. **The app's name after Z2:** keep `apps/web-foldkit`, or rename it `apps/web` in Z2?
+
+## Answers (2026-11-27)
+
+1. The contract set is approved, both exceptions included (`ChoiceOption.swatch` raw hex, business-named `ChartTone`).
+2. A Foldkit page is deleted in its own lane once its hazel page passes parity; no screen ships twice.
+3. Proceed; hot reload and devtools must work again before `Z1` lands (root support upstream in Effect UI or a small local patch).
+4. Effect UI stays on the pkg.pr.new URL (`4d6d7ec`); no vendoring.
+5. `Z2` renames `apps/web-foldkit` to `apps/web`, with every path, script, CI and doc reference.
