@@ -1,0 +1,65 @@
+{
+	"about": "iOS lane: a screen of plain rows and a text toolbar, with and without a back button.",
+	"root": {
+		"tag": "screen",
+		"props": {
+			"title": "Channels"
+		},
+		"events": ["back"],
+		"slots": [
+			{
+				"name": "toolbar",
+				"children": [
+					{
+						"tag": "text",
+						"children": ["Edit"]
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "section",
+				"props": {
+					"title": "Channels"
+				},
+				"children": [
+					{
+						"tag": "item",
+						"key": "general",
+						"props": {
+							"title": "general",
+							"href": "#"
+						},
+						"events": ["press"]
+					},
+					{
+						"tag": "item",
+						"key": "design",
+						"props": {
+							"title": "design",
+							"selected": true
+						},
+						"events": ["press"]
+					},
+					{
+						"tag": "item",
+						"key": "engineering",
+						"props": {
+							"title": "engineering",
+							"href": "#",
+							"badge": 3
+						},
+						"events": ["press"]
+					}
+				]
+			}
+		]
+	},
+	"axes": [
+		{
+			"prop": "back",
+			"values": [true]
+		}
+	]
+}

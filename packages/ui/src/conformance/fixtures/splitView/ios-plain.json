@@ -1,0 +1,63 @@
+{
+	"about": "iOS lane: the sidebar column of plain rows beside a screen (regular), the sidebar alone (compact).",
+	"root": {
+		"tag": "splitView",
+		"slots": [
+			{
+				"name": "sidebar",
+				"children": [
+					{
+						"tag": "section",
+						"props": {
+							"title": "Channels"
+						},
+						"children": [
+							{
+								"tag": "item",
+								"key": "general",
+								"props": {
+									"title": "general",
+									"href": "#"
+								},
+								"events": ["press"]
+							},
+							{
+								"tag": "item",
+								"key": "design",
+								"props": {
+									"title": "design",
+									"selected": true
+								},
+								"events": ["press"]
+							},
+							{
+								"tag": "item",
+								"key": "engineering",
+								"props": {
+									"title": "engineering",
+									"href": "#",
+									"badge": 3
+								},
+								"events": ["press"]
+							}
+						]
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "screen",
+				"props": {
+					"title": "design"
+				},
+				"children": [
+					{
+						"tag": "text",
+						"children": ["Pick a channel"]
+					}
+				]
+			}
+		]
+	}
+}
