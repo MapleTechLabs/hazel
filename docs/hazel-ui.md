@@ -125,10 +125,12 @@ Foldkit or `Html`.
 | `packages/client-data` (`@hazel/client-data`) | collections, live queries, the sync client and RPC, moved out of `apps/web-foldkit/src/core/db` and `src/data`, with every browser API behind a platform service |
 | `apps/ios-hybrid/HazelUI/` | Swift package: wire decoding, `Tree`, one view per primitive, generated `Theme.swift`, the JavaScriptCore runtime, platform services, the extension registry |
 | `apps/web-foldkit/src/islands/` | mounting a shared screen inside the Foldkit app |
-| shared screens (home to settle, see open questions) | the screens, with their queries and Commands |
+| `apps/shared-screens` | the screens, with their queries and Commands |
+| `packages/ui/src/custom/` | governed `h.custom` composites, capped by `hazel/custom-cap` |
 
 Registries (primitive renderers, extensions, fixtures, recipes) discover their entries by file glob,
-so adding one never edits a shared list.
+so adding one never edits a shared list. Swift has no glob: `ui:generate` writes HazelUI's tag-to-view
+switch from `src/vocabulary/spec.ts`, and C0 pre-created one stub view file per tag for its lane.
 
 ## The vocabulary
 
@@ -332,9 +334,13 @@ deletes that key. `remove` frees the whole subtree; `insert` of an existing or d
 | `detach` | id (a kept-alive subtree held outside the tree, from `createContainer`) |
 | `command` | request id, node id, name (`focus`, `blur`, `scrollTo`, `measure`, `select`), args |
 
-Swift sends back `fire(id, event, payload, seq)` and `reply(requestId, result)`. Commands reach the
+Swift sends back `["fire", id, event, payload, seq]` and `["reply", requestId, ok, result]`, one JSON
+array each, to `__hazel.receive(json)`. Commands reach the
 host through `Renderer.Refs` and the vocabulary's `Host` service, as `OpenTui` does; the spike stubbed
-them. The protocol is versioned (`WIRE_VERSION`), and Swift refuses an unknown version.
+them; `Hazel.Host`'s commands return Effects that resolve on the reply. The protocol is versioned
+(`WIRE_VERSION`), and Swift refuses an unknown version. `src/native/wire.ts` is the single source;
+`HazelUI/Wire/Wire.swift` mirrors it by hand, and both decode the shared goldens to the same canonical
+text (C2).
 
 - **Controlled props** are re-sent by the renderer on every patch; the host drops repeats.
 - **Text fields use a revision pair (G5).** The field keeps `n` (its own edit count) and `e` (the last
@@ -359,7 +365,8 @@ them. The protocol is versioned (`WIRE_VERSION`), and Swift refuses an unknown v
   node table itself is not observed, so creating or removing nodes never reaches unrelated views;
   child lists are their own small views, so a parent's header does not redraw when its children change.
   Decoding is safe off the main actor and should run on the JS thread; it is about 80% of mount cost.
-- `Primitives/`: one SwiftUI view per tag, reading `Theme`.
+- `Primitives/<Group>/Hz<Tag>.swift`: one SwiftUI view per tag, reading `Theme`. The `EffectUiSpike` app
+  depends on the package for its runtime and wire since C0; its own snapshot tree and views go in S0.
 - `Extensions/`: the registry and the manifest check.
 
 ### Platform services
@@ -448,6 +455,9 @@ Exit: the message row, the composer, the channel sidebar and a settings form typ
 using only defaults, the closed sets and `HAZEL-GAP` markers; the user has reviewed the sets and the
 gap list. What the screens needed changes the sets now, not during the lanes.
 
+Result (branch `t3/hazel-ui-contracts`): `packages/ui/CONTRACTS.md` summarises C0 to C3 and each lane's
+verification command; `packages/ui/GAPS.md` lists the 25 gaps the four screens marked.
+
 ### Phase 1.5: harness (one agent, serial)
 
 - **E Conformance harness and gallery:** the fixture JSON schema; the browser runner in CI; a macOS CI
@@ -467,7 +477,7 @@ Each lane owns only the paths listed and verifies with its own command, never th
 | A4 Web: structure and list | `src/web/primitives/{structure,list}/` | same, plus list virtualization and anchoring |
 | A5 Web: chat primitives | `src/web/primitives/chat/` | same, against today's message row in the gallery |
 | B Native host (TS) | `src/native/` | goldens pass, commands and replies round trip, nodes freed on removal, extensions cross with typed props |
-| S0 Swift: Tree and registry (first, then the rest start) | `HazelUI/Tree/`, `HazelUI/Extensions/` | goldens decode and apply, per-node observation holds (G8), manifest check works |
+| S0 Swift: Tree and registry (first, then the rest start) | `HazelUI/Tree/`, `HazelUI/Extensions/`, `EffectUiSpike/` | goldens decode and apply, per-node observation holds (G8), manifest check works, the spike app draws through `TreeView` |
 | S1 Swift: layout and content | `HazelUI/Primitives/{Layout,Content}/` | snapshot fixtures pass |
 | S2 Swift: controls | `HazelUI/Primitives/Controls/` | snapshots pass, text-input stress test passes |
 | S3 Swift: overlays | `HazelUI/Primitives/Overlays/` | system components, snapshots pass |
