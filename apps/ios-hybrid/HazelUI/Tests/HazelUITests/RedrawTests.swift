@@ -97,6 +97,33 @@ final class RedrawTests: XCTestCase {
         XCTAssertEqual(insertLists, [2: 1, newId: 1])
     }
 
+    /// A motion is the moving view's own state: a badge rolling its count (motion on) redraws its row
+    /// once and nothing else, through the whole roll.
+    func testCountRollRedrawsOnlyThatRow() async throws {
+        #if !DEBUG
+        throw XCTSkip("render counters exist in debug builds only")
+        #endif
+        HazelMotion.enabled = true
+        HazelMotion.reduceOverride = false
+        defer {
+            HazelMotion.enabled = false
+            HazelMotion.reduceOverride = nil
+        }
+        RenderCounter.reset()
+        let tree = Tree()
+        try tree.apply(WireDecoder.decode(Fixture.mount(rows: 200)))
+        let controller = await host(tree)
+        let before = RenderCounter.counts
+        let beforeLists = RenderCounter.listCounts
+        // Row 101's badge is 1 (`i % 5`): 1 to 42 rolls up.
+        try tree.apply(WireDecoder.decode(Fixture.badge(row: 101, value: 42, seq: 2)))
+        await settle(controller)
+        try? await Task.sleep(for: .seconds(HazelTheme.Motion.countUp.duration + 0.1))
+        await settle(controller)
+        XCTAssertEqual(delta(since: before), [Fixture.rowId(101): 1], "the roll redraws no other view")
+        XCTAssertEqual(delta(since: beforeLists, RenderCounter.listCounts), [:])
+    }
+
     /// Hosted cost of a one-prop change: apply plus SwiftUI's update and layout.
     func testHostedSinglePropUpdateTime() async throws {
         let tree = Tree()
