@@ -49,7 +49,20 @@
 				"actions": ["react", "reply", "thread", "copy", "edit", "pin", "issue", "delete"]
 			}
 		},
-		"events": ["press", "action", "pressReaction", "pressMention", "pressLink"]
+		"events": [
+			"press",
+			"longPress",
+			"action",
+			"pressAuthor",
+			"pressReaction",
+			"addReaction",
+			"pressMention",
+			"pressLink",
+			"pressAttachment",
+			"pressReply",
+			"pressThread",
+			"retry"
+		]
 	},
 	"axes": [
 		{
@@ -75,6 +88,40 @@
 		{
 			"prop": "failed",
 			"values": [true]
+		}
+	],
+	"aria": [
+		{
+			"role": "article",
+			"name": "Ada Lovelace, 14:05"
+		},
+		{
+			"role": "button",
+			"name": "Ada Lovelace"
+		},
+		{
+			"role": "button",
+			"name": "@Grace"
+		},
+		{
+			"role": "link",
+			"name": "the doc"
+		},
+		{
+			"role": "toolbar",
+			"name": "Message actions"
+		},
+		{
+			"role": "button",
+			"name": "React with 👍"
+		},
+		{
+			"role": "button",
+			"name": "Delete message"
+		},
+		{
+			"role": "button",
+			"name": "Open thread, 2 messages"
 		}
 	]
 }

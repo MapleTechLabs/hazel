@@ -1,5 +1,43 @@
-// Owned by lane A5 (`docs/hazel-ui.md`, "Phase 2: lanes"). Phase 1.5 stub: draws a
-// placeholder naming the lane; the lane replaces it with the renderer (`definePrimitive`).
-import { stubPrimitive } from "../define.ts"
+/**
+ * `hz:reactionBar` (lane A5): a message's reaction pills (`chat/message/tooltips.ts` `reactionButton`),
+ * and with `addable` the "Add reaction" pill. A press raises `pressReaction {emoji}` or `add`.
+ */
+import type { Reaction } from "../../../vocabulary/content.ts"
+import { definePrimitive, flag, type Primitive } from "../define.ts"
+import { batched, ensureStyles, fire, reactionPills } from "./shared.ts"
 
-export const primitive = stubPrimitive("reactionBar")
+const isReactions = (value: unknown): value is ReadonlyArray<Reaction> => Array.isArray(value)
+
+export const primitive = definePrimitive("reactionBar", ({ document, tag, outer }) => {
+	ensureStyles(document)
+	const node = outer("div")
+	node.setAttribute("role", "group")
+	node.setAttribute("aria-label", "Reactions")
+	let reactions: ReadonlyArray<Reaction> = []
+	let addable = false
+	const draw = batched(() => {
+		const bar = reactionPills(
+			document,
+			reactions,
+			(emoji) => fire(primitive, "pressReaction", { emoji }),
+			addable ? () => fire(primitive, "add") : undefined,
+		)
+		node.replaceChildren(...bar.childNodes)
+	})
+	const primitive: Primitive = {
+		tag,
+		outer: node,
+		content: node,
+		set: (name, value) => {
+			if (name === "reactions") reactions = isReactions(value) ? value : []
+			else if (name === "addable") {
+				addable = value === true
+				flag(node, "addable", value)
+			} else return
+			draw()
+		},
+		events: undefined,
+	}
+	draw()
+	return primitive
+})

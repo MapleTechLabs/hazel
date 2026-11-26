@@ -11,6 +11,7 @@ import {
 	sidebarLink,
 	sidebarSection,
 } from "../../../../apps/web-foldkit/src/ui/sidebar.ts"
+import { chatSpecimens } from "./kit-chat.ts"
 import { applyTheme } from "./page.ts"
 import {
 	type BadgeSpec,
@@ -140,6 +141,7 @@ const view = (h: H): Html =>
 				[h.Class("frames frame-buttons")],
 				badges.map((spec) => h.div([h.Class("frame-button")], [kitBadge(h, spec)])),
 			),
+			chatSpecimens(h),
 		],
 	)
 
