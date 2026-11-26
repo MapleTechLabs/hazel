@@ -1,0 +1,289 @@
+import type {
+	ColorExpr,
+	InteractionState,
+	Declarations,
+	Layer,
+	Length,
+	PartStyles,
+	Recipe,
+	State,
+	Tokens,
+} from "../src/style/schema.ts"
+import { interactionStates } from "../src/style/schema.ts"
+
+/** Writes `tokens.css`: custom properties for the tokens, then one rule set per recipe. */
+
+/** The size class on the web: `regular` from Tailwind's `sm` breakpoint up. */
+export const REGULAR_MEDIA = "(width >= 40rem)"
+
+const safe = (name: string) => name.replaceAll(".", "_")
+export const colorVar = (name: string) =>
+	name.startsWith("palette.") ? `var(--hz-palette-${safe(name.slice(8))})` : `var(--hz-color-${safe(name)})`
+const spaceVar = (step: string) => `var(--hz-space-${safe(step)})`
+
+export const colorCss = (expr: ColorExpr): string => {
+	if ("literal" in expr) return expr.literal
+	if ("ref" in expr) return colorVar(expr.ref)
+	if ("mix" in expr)
+		return `color-mix(in oklab, ${colorCss(expr.mix[0])} ${expr.mix[1]}%, ${colorCss(expr.mix[2])})`
+	return `color-mix(in oklab, ${colorCss(expr.alpha[0])} ${expr.alpha[1] * 100}%, transparent)`
+}
+
+const sameExpr = (a: ColorExpr, b: ColorExpr) => JSON.stringify(a) === JSON.stringify(b)
+
+const tokenBlock = (tokens: Tokens): string => {
+	const light: string[] = []
+	const dark: string[] = []
+	for (const [name, value] of Object.entries(tokens.palette))
+		light.push(`--hz-palette-${safe(name)}: ${value};`)
+	for (const [name, value] of Object.entries(tokens.color)) {
+		light.push(`--hz-color-${safe(name)}: ${colorCss(value.light)};`)
+		if (!sameExpr(value.light, value.dark))
+			dark.push(`--hz-color-${safe(name)}: ${colorCss(value.dark)};`)
+	}
+	light.push(`--hz-font-sans: ${tokens.font.sans};`, `--hz-font-mono: ${tokens.font.mono};`)
+	light.push(`--hz-font-sans-features: ${tokens.font.sansFeatures};`)
+	light.push(
+		`--hz-weight-regular: ${tokens.font.weight.regular};`,
+		`--hz-weight-strong: ${tokens.font.weight.strong};`,
+	)
+	const regular: string[] = []
+	for (const [role, metrics] of Object.entries(tokens.text)) {
+		light.push(
+			`--hz-text-${role}-size: ${metrics.compact.size}px;`,
+			`--hz-text-${role}-leading: ${metrics.compact.lineHeight}px;`,
+		)
+		regular.push(
+			`--hz-text-${role}-size: ${metrics.regular.size}px;`,
+			`--hz-text-${role}-leading: ${metrics.regular.lineHeight}px;`,
+		)
+	}
+	for (const [step, px] of Object.entries(tokens.space)) light.push(`--hz-space-${safe(step)}: ${px}px;`)
+	for (const [name, px] of Object.entries(tokens.radius)) light.push(`--hz-radius-${name}: ${px}px;`)
+	for (const [name, ms] of Object.entries(tokens.duration)) light.push(`--hz-duration-${name}: ${ms}ms;`)
+	for (const [name, curve] of Object.entries(tokens.easing))
+		light.push(`--hz-ease-${name}: cubic-bezier(${curve.join(", ")});`)
+	for (const [name, shadow] of Object.entries(tokens.shadow)) {
+		light.push(`--hz-shadow-${name}: ${shadow.light};`)
+		dark.push(`--hz-shadow-${name}: ${shadow.dark};`)
+	}
+	const block = (selector: string, lines: ReadonlyArray<string>, indent = "") =>
+		`${indent}${selector} {\n${lines.map((line) => `${indent}\t${line}`).join("\n")}\n${indent}}`
+	return [
+		block(":root", light),
+		block(".dark", dark),
+		`@media ${REGULAR_MEDIA} {\n${block(":root", regular, "\t")}\n}`,
+		// Every primitive's own element and parts start from nothing, as Tailwind's preflight would.
+		block(":where([data-hz], [data-hz] > [data-hz-part], [data-hz] > [data-hz-slot])", [
+			"box-sizing: border-box;",
+			"margin: 0;",
+			"padding: 0;",
+			"border: 0 solid transparent;",
+			"background: none;",
+			"color: inherit;",
+			"font: inherit;",
+			"letter-spacing: inherit;",
+			"text-align: inherit;",
+			"appearance: none;",
+		]),
+		block(":where([data-hz]:not([data-hz] *))", [
+			"font-family: var(--hz-font-sans);",
+			"font-feature-settings: var(--hz-font-sans-features);",
+			"font-variation-settings: normal;",
+			"-webkit-font-smoothing: antialiased;",
+			"-moz-osx-font-smoothing: grayscale;",
+			"text-rendering: optimizeLegibility;",
+		]),
+		block(':where([data-hz="icon"])', ["display: block;", "width: 100%;", "height: 100%;"]),
+	].join("\n\n")
+}
+
+const length = (value: Length<string>) =>
+	typeof value === "string" ? spaceVar(value) : `calc(${spaceVar(value.step)} - 1px)`
+
+const declarations = (d: Declarations): ReadonlyArray<string> => {
+	const out: string[] = []
+	const add = (property: string, value: string) => out.push(`${property}: ${value};`)
+	if (d.layout !== undefined) {
+		add("display", d.layout === "inline-row" ? "inline-flex" : "flex")
+		add("flex-direction", d.layout === "column" ? "column" : "row")
+	}
+	if (d.align !== undefined) add("align-items", d.align === "start" ? "flex-start" : "center")
+	if (d.justify !== undefined) add("justify-content", d.justify === "start" ? "flex-start" : "center")
+	if (d.background !== undefined)
+		add("background-color", d.background === "transparent" ? "transparent" : colorVar(d.background))
+	if (d.color !== undefined) add("color", colorVar(d.color))
+	if (d.borderWidth !== undefined) {
+		add("border-style", "solid")
+		add("border-width", d.borderWidth === "hairline" ? "1px" : "0")
+	}
+	if (d.borderColor !== undefined)
+		add("border-color", d.borderColor === "transparent" ? "transparent" : colorVar(d.borderColor))
+	if (d.radius !== undefined) add("border-radius", `var(--hz-radius-${d.radius})`)
+	if (d.paddingX !== undefined) add("padding-inline", length(d.paddingX))
+	if (d.paddingStart !== undefined) add("padding-inline-start", length(d.paddingStart))
+	if (d.paddingY !== undefined) add("padding-block", length(d.paddingY))
+	if (d.gap !== undefined) add("column-gap", spaceVar(d.gap))
+	if (d.rowGap !== undefined) add("row-gap", spaceVar(d.rowGap))
+	if (d.marginBottom !== undefined) add("margin-bottom", spaceVar(d.marginBottom))
+	if (d.bleedX !== undefined) add("margin-inline", `calc(${spaceVar(d.bleedX)} * -1)`)
+	if (d.minHeight !== undefined) add("min-height", spaceVar(d.minHeight))
+	if (d.size !== undefined) {
+		add("width", spaceVar(d.size))
+		add("height", spaceVar(d.size))
+	}
+	if (d.text !== undefined) {
+		add("font-size", `var(--hz-text-${d.text}-size)`)
+		add("line-height", `var(--hz-text-${d.text}-leading)`)
+	}
+	if (d.leading !== undefined) add("line-height", spaceVar(d.leading))
+	if (d.strong !== undefined)
+		add("font-weight", d.strong ? "var(--hz-weight-strong)" : "var(--hz-weight-regular)")
+	if (d.opacity !== undefined) add("opacity", String(d.opacity))
+	if (d.shadow !== undefined) add("box-shadow", `var(--hz-shadow-${d.shadow})`)
+	if (d.truncate) {
+		add("min-width", "0")
+		add("overflow", "hidden")
+		add("text-overflow", "ellipsis")
+		add("white-space", "nowrap")
+	}
+	if (d.nowrap) add("white-space", "nowrap")
+	if (d.grow !== undefined) add("flex-grow", d.grow ? "1" : "0")
+	if (d.shrink !== undefined) add("flex-shrink", d.shrink ? "1" : "0")
+	if (d.transition !== undefined) {
+		add("transition-property", "color, background-color, border-color, box-shadow, opacity")
+		add("transition-duration", `var(--hz-duration-${d.transition})`)
+		add("transition-timing-function", "var(--hz-ease-out)")
+	}
+	return out
+}
+
+const kebab = (name: string) => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)
+
+const interactionSelector = {
+	hover: ":hover",
+	pressed: ":active",
+	focusVisible: ":focus-visible",
+} as const satisfies Record<InteractionState, string>
+
+const isInteraction = (state: State): state is InteractionState =>
+	interactionStates.some((interaction) => interaction === state)
+
+/** The condition a layer adds to the root selector. */
+const stateSelector = (recipe: Recipe, state: State) =>
+	isInteraction(state)
+		? `${interactionSelector[state]}${(recipe.inert ?? []).length === 0 ? "" : `:not(${(recipe.inert ?? []).map((s) => `[data-${kebab(s)}]`).join(", ")})`}`
+		: `[data-${kebab(state)}]`
+
+const optionSelector = (recipe: Recipe, option: string, value: string) => {
+	const attribute = `data-${kebab(option)}`
+	const isDefault = recipe.options[option]?.default === value
+	return isDefault ? `:is([${attribute}="${value}"], :not([${attribute}]))` : `[${attribute}="${value}"]`
+}
+
+interface Rule {
+	readonly media: ReadonlyArray<string>
+	readonly selector: string
+	readonly lines: ReadonlyArray<string>
+}
+
+const partRules = (
+	recipe: Recipe,
+	root: string,
+	styles: PartStyles<string, never>,
+	media: ReadonlyArray<string>,
+) => {
+	const rules: Rule[] = []
+	if (styles.root !== undefined) rules.push({ media, selector: root, lines: declarations(styles.root) })
+	for (const [part, decls] of Object.entries(styles.parts ?? {})) {
+		const kind = recipe.parts[part] === "slot" ? "data-hz-slot" : "data-hz-part"
+		if (decls !== undefined)
+			rules.push({ media, selector: `${root} > [${kind}="${part}"]`, lines: declarations(decls) })
+	}
+	return rules
+}
+
+/** A layer's rules: compact, then its `regular` overrides, then its states (interactions last). */
+const layerRules = (recipe: Recipe, root: string, layer: Layer<string, never>): ReadonlyArray<Rule> => {
+	const states = Object.entries(layer.states ?? {}) as ReadonlyArray<
+		[State, NonNullable<Layer<string, never>["states"]>[State]]
+	>
+	const ordered = [
+		...states.filter(([s]) => !isInteraction(s)),
+		...states.filter(([s]) => isInteraction(s)),
+	]
+	return [
+		...partRules(recipe, root, layer, []),
+		...(layer.regular === undefined ? [] : partRules(recipe, root, layer.regular, [REGULAR_MEDIA])),
+		...ordered.flatMap(([state, styles]) => {
+			if (styles === undefined) return []
+			const selector = `${root}${stateSelector(recipe, state)}`
+			const media = state === "hover" ? ["(hover: hover)"] : []
+			return [
+				...partRules(recipe, selector, styles, media),
+				...(styles.regular === undefined
+					? []
+					: partRules(recipe, selector, styles.regular, [...media, REGULAR_MEDIA])),
+			]
+		}),
+	]
+}
+
+export const recipeRules = (recipe: Recipe): ReadonlyArray<Rule> => {
+	const root = `[data-hz="${recipe.primitive}"]`
+	const asLayer = (layer: Layer<string, never>) => layer
+	const states = (recipe.states ?? {}) as Record<string, Layer<string, never> | undefined>
+	const ordered = [
+		...Object.keys(states).filter((s) => !isInteraction(s as State)),
+		...Object.keys(states).filter((s) => isInteraction(s as State)),
+	]
+	return [
+		...layerRules(recipe, root, recipe.base as Layer<string, never>),
+		...Object.entries(recipe.options).flatMap(([option, spec]) =>
+			Object.entries(spec.values).flatMap(([value, layer]) =>
+				layerRules(
+					recipe,
+					`${root}${optionSelector(recipe, option, value)}`,
+					asLayer(layer as Layer<string, never>),
+				),
+			),
+		),
+		...Object.entries(recipe.flags ?? {}).flatMap(([flag, layer]) =>
+			layerRules(recipe, `${root}[data-${kebab(flag)}]`, layer as Layer<string, never>),
+		),
+		...(recipe.compounds ?? []).flatMap((compound) => {
+			const conditions = Object.entries(compound.when)
+				.map(([key, value]) =>
+					value === true ? `[data-${kebab(key)}]` : optionSelector(recipe, key, String(value)),
+				)
+				.join("")
+			return layerRules(recipe, `${root}${conditions}`, compound.style as Layer<string, never>)
+		}),
+		...ordered.flatMap((state) => {
+			const layer = states[state]
+			return layer === undefined
+				? []
+				: layerRules(recipe, `${root}${stateSelector(recipe, state as State)}`, layer)
+		}),
+	]
+}
+
+const printRule = (rule: Rule) => {
+	const body = (indent: string) =>
+		`${indent}${rule.selector} {\n${rule.lines.map((line) => `${indent}\t${line}`).join("\n")}\n${indent}}`
+	if (rule.media.length === 0) return body("")
+	return `@media ${rule.media.join(" and ")} {\n${body("\t")}\n}`
+}
+
+export const generateCss = (tokens: Tokens, recipes: ReadonlyArray<Recipe>): string =>
+	[
+		"/* Generated by packages/ui/scripts/generate.ts from src/style. Do not edit. */",
+		tokenBlock(tokens),
+		...recipes.map(
+			(recipe) =>
+				`/* ${recipe.primitive} */\n${recipeRules(recipe)
+					.filter((rule) => rule.lines.length > 0)
+					.map(printRule)
+					.join("\n\n")}`,
+		),
+	].join("\n\n") + "\n"
