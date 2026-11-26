@@ -9,7 +9,8 @@ export const screen = defineRecipe<{}, never, "header" | "title" | "content">({
 		parts: {
 			header: { layout: "row", align: "center", minHeight: "14", paddingX: "6", divider: "separator" },
 			title: { text: "label", strong: true, color: "fg", opacity: 0.8 },
-			content: { layout: "column", rowGap: "3", paddingY: "3" },
+			// Sections pad themselves, as in the sidebar; extensions add their own space below.
+			content: { layout: "column", paddingY: "3" },
 		},
 	},
 	options: {},

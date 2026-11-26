@@ -450,7 +450,7 @@ public enum HazelTheme {
             defaults: [:],
             inert: [],
             layers: [
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(marginX: 16)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(marginBottom: 12, marginX: 16)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(radius: 8, ring: Colors.border, paddingX: 12, paddingY: 10)),
             ]
         )
@@ -488,7 +488,7 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column, background: Colors.sidebar)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "header", style: Style(layout: .row, align: .center, divider: Colors.separator, paddingX: 24, minHeight: 56)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "title", style: Style(color: Colors.fg, text: .label, strong: true, opacity: 0.8)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(layout: .column, paddingY: 12, rowGap: 12)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(layout: .column, paddingY: 12)),
             ]
         )
 

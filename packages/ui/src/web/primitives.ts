@@ -166,7 +166,10 @@ export const create = (document: Document, tag: string): Primitive | undefined =
 		case "hz:slot": {
 			const node = outer("span")
 			return self(node, (name, value) => {
-				if (name === "name") option(node, "name", value)
+				if (name !== "name") return
+				option(node, "name", value)
+				// What the owner's recipe targets (`[data-hz-slot=leading]`).
+				option(node, "hz-slot", value)
 			})
 		}
 		case "hz:action": {
@@ -183,6 +186,8 @@ export const create = (document: Document, tag: string): Primitive | undefined =
 			const node = outer("div")
 			const surface = part(document, "div", "surface")
 			const content = part(document, "div", "content")
+			// One of the two shows: the platform's drawing once drawn, else the fallback.
+			surface.hidden = true
 			node.append(surface, content)
 			let ext: string | undefined
 			let args: unknown
@@ -202,7 +207,11 @@ export const create = (document: Document, tag: string): Primitive | undefined =
 						return handler !== undefined && primitive.events!.dispatch(event, handler, payload)
 					}
 					// Drawn here if this platform registered it; else the fallback slot shows.
-					if (mountExtension(surface, ext, args, send)) node.dataset.drawn = ""
+					if (mountExtension(surface, ext, args, send)) {
+						node.dataset.drawn = ""
+						surface.hidden = false
+						content.hidden = true
+					}
 				},
 				events: undefined,
 			}

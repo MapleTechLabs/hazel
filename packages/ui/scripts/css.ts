@@ -87,6 +87,8 @@ const tokenBlock = (tokens: Tokens): string => {
 			"text-decoration: none;",
 			"appearance: none;",
 		]),
+		// `hidden` wins over a recipe's `display`: hosts hide parts with it (a badge at 0, a fallback).
+		block(":where([data-hz], [data-hz-part], [data-hz-slot])[hidden]", ["display: none !important;"]),
 		block(":where([data-hz]:not([data-hz] *))", [
 			"font-family: var(--hz-font-sans);",
 			"font-feature-settings: var(--hz-font-sans-features);",

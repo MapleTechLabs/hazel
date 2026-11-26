@@ -15,6 +15,7 @@ export const registerDemoWebExtensions = () =>
 		const canvas = container.ownerDocument.createElement("canvas")
 		canvas.width = 320
 		canvas.height = 48
+		canvas.style.cssText = "display: block; width: 100%; height: 48px;"
 		canvas.setAttribute("role", "img")
 		canvas.setAttribute("aria-label", "Recent activity")
 		container.append(canvas)

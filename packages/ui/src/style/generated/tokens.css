@@ -204,6 +204,10 @@
 	appearance: none;
 }
 
+:where([data-hz], [data-hz-part], [data-hz-slot])[hidden] {
+	display: none !important;
+}
+
 :where([data-hz]:not([data-hz] *)) {
 	font-family: var(--hz-font-sans);
 	font-feature-settings: var(--hz-font-sans-features);
@@ -788,6 +792,7 @@
 
 /* ext */
 [data-hz="ext"] {
+	margin-bottom: var(--hz-space-3);
 	margin-inline: var(--hz-space-4);
 }
 
@@ -943,7 +948,6 @@
 	display: flex;
 	flex-direction: column;
 	padding-block: var(--hz-space-3);
-	row-gap: var(--hz-space-3);
 }
 
 /* section */
