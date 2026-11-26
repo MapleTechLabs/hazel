@@ -1,0 +1,20 @@
+{
+	"name": "@hazel/shared-screens",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./*": "./src/*.ts"
+	},
+	"scripts": {
+		"typecheck": "effect-tsgo tsrs --noEmit"
+	},
+	"dependencies": {
+		"@effect/ui": "https://pkg.pr.new/Effect-TS/ui/@effect/ui@4d6d7ec",
+		"@hazel/client-data": "workspace:*",
+		"@hazel/schema": "workspace:*",
+		"@hazel/ui": "workspace:*",
+		"@tanstack/db": "1.0.0-rc.1.5",
+		"effect": "catalog:effect"
+	}
+}
