@@ -68,21 +68,6 @@ jobs:
                   bun run --cwd packages/ui test
                   bun run --cwd packages/client-data test
 
-            - name: Install Chromium
-              run: bunx playwright install --with-deps chromium
-              working-directory: packages/ui
-
-            - name: Browser runner (every fixture on the web host)
-              run: bun run --cwd packages/ui test:web
-
-            - name: Upload screenshots
-              if: always()
-              uses: actions/upload-artifact@v4
-              with:
-                  name: hazel-ui-web-shots-${{ github.run_id }}
-                  path: packages/ui/src/conformance/__shots__
-                  if-no-files-found: ignore
-
     ios:
         runs-on: macos-26
         timeout-minutes: 45
@@ -119,6 +104,25 @@ jobs:
 
             - name: HazelUI tests and snapshots
               run: bun run --cwd apps/ios-hybrid test:hazelui
+
+            # The kit pixel diffs run here, not on Linux: Linux Chromium draws the same text at a different
+            # sub-pixel phase on the kit and hazel sides, and the references were authored on macOS.
+            - name: Install Chromium
+              if: success() || failure()
+              run: bunx playwright install chromium
+              working-directory: packages/ui
+
+            - name: Browser runner (every fixture on the web host)
+              if: success() || failure()
+              run: bun run --cwd packages/ui test:web
+
+            - name: Upload screenshots
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: hazel-ui-web-shots-${{ github.run_id }}
+                  path: packages/ui/src/conformance/__shots__
+                  if-no-files-found: ignore
 
             - name: Upload failed snapshots and the log
               if: failure()
