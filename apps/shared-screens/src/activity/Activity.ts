@@ -329,10 +329,10 @@ export const Activity = Hazel.component({
 					.leading(leading(item))
 					.href(target === null ? undefined : `/${h.props.orgSlug}/chat/${target}`)
 					.trailing(
+						// Proportional figures, as today's (\`text-muted-fg text-xs\`).
 						h.text
 							.role("caption")
 							.tone("muted")
-							.numeric()
 							// A row newer than the Model's clock (it ticks once a minute) is "less than a minute ago".
 							.children(
 								formatDistanceToNow(Math.min(item.createdAtMs, model.nowMs), model.nowMs),
@@ -356,12 +356,12 @@ export const Activity = Hazel.component({
 
 		const list = (items: ReadonlyArray<ActivityItem>) =>
 			groupByTime(items, model.nowMs).map((group) =>
-				// Not a `section`: that is the sidebar's group, inset and titled in sidebar ink.
-				h.stack
+				// Today's inbox group: its label sticks over the card while it scrolls.
+				h.section
 					.key(group.label)
-					.density("compact")
+					.style("sticky")
+					.title(group.label)
 					.children(
-						h.text.role("overline").tone("subtle").children(group.label),
 						h.frame
 							.surface("flush")
 							.children(

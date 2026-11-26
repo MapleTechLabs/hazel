@@ -533,6 +533,7 @@ export const ChannelSidebar = Hazel.component({
 			const collapsed = isCollapsed(key)
 			const section = h.section
 				.key(key)
+				.style("tree")
 				.title(title)
 				.collapsible()
 				.collapsed(collapsed)
@@ -570,25 +571,29 @@ export const ChannelSidebar = Hazel.component({
 			!model.hintDismissed
 		const showDiscover = model.loaded && model.discover.length > 0 && model.memberCount < DISCOVER_BELOW
 
-		const goto = h.section.key("goto").children(
-			h.item
-				.key("browse")
-				.title("Browse channels")
-				.leading(h.icon.name("search"))
-				.shortcut(h.props.paletteKey ?? undefined)
-				.on("press", SidebarMessage.PressedBrowse()),
-			h.item
-				.key("members")
-				.title("Members")
-				.leading(h.icon.name("users"))
-				.selected(model.membersActive)
-				.href(model.membersActive ? undefined : `/${orgSlug}`)
-				.on("press", SidebarMessage.PressedMembers()),
-		)
+		const goto = h.section
+			.key("goto")
+			.style("tree")
+			.children(
+				h.item
+					.key("browse")
+					.title("Browse channels")
+					.leading(h.icon.name("search"))
+					.shortcut(h.props.paletteKey ?? undefined)
+					.on("press", SidebarMessage.PressedBrowse()),
+				h.item
+					.key("members")
+					.title("Members")
+					.leading(h.icon.name("users"))
+					.selected(model.membersActive)
+					.href(model.membersActive ? undefined : `/${orgSlug}`)
+					.on("press", SidebarMessage.PressedMembers()),
+			)
 
 		const discover = showDiscover
 			? h.section
 					.key("discover")
+					.style("tree")
 					.title("Discover")
 					.children(
 						...model.discover.slice(0, MAX_DISCOVERABLE).map((channel) => {
@@ -618,11 +623,11 @@ export const ChannelSidebar = Hazel.component({
 		const hint = showHint
 			? h.frame
 					.key("hint")
-					.surface("muted")
+					.surface("hint")
 					.children(
 						h.stack
 							.axis("horizontal")
-							.align("start")
+							.align("center")
 							.density("compact")
 							.children(
 								h.icon.name("lightbulb"),
@@ -652,6 +657,7 @@ export const ChannelSidebar = Hazel.component({
 						? null
 						: h.section
 								.key("favorites")
+								.style("tree")
 								.title("Favorites")
 								.children(
 									...favorites
@@ -696,7 +702,8 @@ export const ChannelSidebar = Hazel.component({
 				]
 			: [goto]
 
-		if (!h.props.chrome) return h.stack.density("compact").children(...body)
+		// Today's section group: sections 2px apart (`gap-y-0.5`).
+		if (!h.props.chrome) return h.stack.density("tight").children(...body)
 
 		const org = model.orgs.find((candidate) => candidate.id === h.props.organizationId)
 		const orgName = org?.name ?? "Hazel"

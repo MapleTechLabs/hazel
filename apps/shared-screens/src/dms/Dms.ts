@@ -337,7 +337,7 @@ export const Dms = Hazel.component({
 				.title(titleOf(dm, others))
 				.subtitle(previewOf(dm, members, others, userId))
 				.subtitleLines("2")
-				.leadingSize("large")
+				.leadingSize("conversation")
 				.leading(leading)
 				.trailing(
 					dm.lastMessageAtMs === null
@@ -390,21 +390,28 @@ export const Dms = Hazel.component({
 		const filters =
 			dms.length === 0
 				? undefined
-				: h.section.key("filters").children(
-						h.stack
-							.axis("horizontal")
-							.density("compact")
-							.children(
-								chip("all", "All"),
-								chip("unreads", unread.length > 0 ? `Unreads · ${unread.length}` : "Unreads"),
-							),
-					)
+				: h.section
+						.key("filters")
+						.style("list")
+						.children(
+							h.stack
+								.axis("horizontal")
+								.density("compact")
+								.children(
+									chip("all", "All"),
+									chip(
+										"unreads",
+										unread.length > 0 ? `Unreads · ${unread.length}` : "Unreads",
+									),
+								),
+						)
 
 		const section = (key: string, title: string | undefined, list: ReadonlyArray<Dm>) =>
 			list.length === 0
 				? undefined
 				: h.section
 						.key(key)
+						.style("list")
 						.title(title)
 						.children(...list.map(row))
 
@@ -432,7 +439,7 @@ export const Dms = Hazel.component({
 			.size("large")
 			.on("press", DmsMessage.PressedCompose())
 
-		return h.screen.title("DMs").floatingAction(compose).children(strip, filters, body)
+		return h.screen.title("DMs").surface("page").floatingAction(compose).children(strip, filters, body)
 	},
 })
 
