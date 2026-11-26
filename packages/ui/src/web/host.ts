@@ -10,12 +10,44 @@ import { Context, Effect, Layer, Scheduler } from "effect"
 import { Hazel } from "../vocabulary/index.ts"
 import { NotImplemented } from "../vocabulary/spec.ts"
 import type { Plain } from "./primitives/define.ts"
+import { scrollTo } from "./primitives/list/scroll.ts"
 import { create, type Primitive, release } from "./primitives.ts"
 
 type Handlers = Readonly<Record<string, View.Handler<unknown, any>>>
 
 /** Semantic events to the DOM events that raise them. Extension events come through `send`. */
 const domEvent = new Map([["press", "click"]])
+
+/** The link a primitive draws as its own box (`item`'s control, `link`), if it draws one now. */
+const ownLink = (primitive: Primitive) =>
+	primitive.outer.matches("a[href]") ? primitive.outer : primitive.outer.querySelector(":scope > a[href]")
+
+const isPlain = (payload: unknown) => {
+	// SAFETY: a `click` payload from BrowserHost (`button` and the four modifiers, `html/internal/payload.ts`).
+	const click = payload as {
+		button?: number
+		meta?: boolean
+		ctrl?: boolean
+		shift?: boolean
+		alt?: boolean
+	}
+	return (click.button ?? 0) === 0 && !click.meta && !click.ctrl && !click.shift && !click.alt
+}
+
+/**
+ * A press on a link the view handles is the view's (G2): a plain click raises `press` and cancels the
+ * browser's navigation, read before the press's flush can swap the link for a button; a modified click
+ * (new tab, download) raises nothing and is left to the browser.
+ */
+const pressDispatch =
+	(primitive: Primitive, dispatch: Parameters<Renderer.Host<Node>["setEvents"]>[2]) =>
+	(event: string, handler: View.Handler<unknown, any>, payload: unknown, cancel?: () => void) => {
+		if (event !== "click") return dispatch(event, handler, payload)
+		// `press` carries no payload (`spec.ts`), never the DOM click's.
+		if (ownLink(primitive) === null) return dispatch(event, handler, {})
+		if (!isPlain(payload)) return false
+		return dispatch(event, handler, {}, cancel)
+	}
 
 export const wrapHost = (inner: Renderer.Host<Node>, document: Document): Renderer.Host<Node> => {
 	const primitives = new WeakMap<Node, Primitive>()
@@ -63,19 +95,21 @@ export const wrapHost = (inner: Renderer.Host<Node>, document: Document): Render
 				const dom = domEvent.get(name)
 				if (dom !== undefined) mapped[dom] = handler
 			}
-			inner.setEvents(node, mapped, dispatch, {})
+			const press: Record<string, View.EventOptions> =
+				mapped.click === undefined ? {} : { click: { preventDefault: true } }
+			inner.setEvents(node, mapped, pressDispatch(primitive, dispatch), press)
 		},
 		elements: [Hazel.name, ...(inner.elements === "any" ? [] : inner.elements)],
 	}
 }
 
-// C1: focus is real; the rest belong to the lanes that own scrolling (A4) and fields (A2).
+// C1: focus is real, `scrollTo` is lane A4's; the rest belong to the lanes that own them (A2, A3).
 const notYet = (name: string, lane: string) =>
 	Effect.die(new NotImplemented({ what: `web command ${name}`, lane }))
 const commands: Hazel.Host["Service"] = {
 	focus: (node) => Effect.sync(() => (node as HTMLElement).focus()),
 	blur: (node) => Effect.sync(() => (node as HTMLElement).blur()),
-	scrollTo: () => notYet("scrollTo", "A4"),
+	scrollTo: (node, target) => Effect.sync(() => scrollTo(node, target)),
 	measure: () => notYet("measure", "A3"),
 	select: () => notYet("select", "A2"),
 }
