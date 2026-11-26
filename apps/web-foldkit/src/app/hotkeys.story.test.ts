@@ -4,19 +4,20 @@ import { Schema } from "effect"
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import { appKeymap } from "~/lib/keybindings/app-keymap"
-import { update } from "../main"
 import { LayoutHotkeyActionId } from "../overlay/hotkeys"
+import { PageOutMessage } from "../page/out-message"
 import * as ShellModel from "../shell/model"
 import * as Notifications from "../shell/notifications"
-import { hazelOrg, signedIn } from "../test/root-fixtures"
-import { NavigateHistory, NavigateInternal } from "./command"
+import { changedContext, hazelOrg, hotkey, navigation, signedIn, toShell } from "../test/root-fixtures"
+import { Emit } from "./command"
 import { Message } from "./message"
+import { update } from "./update"
 
-/** The org layout's Discord hotkeys that act at the root: organizations, read state, inbox, help, sidebar. */
+/** The org layout's Discord hotkeys the shell hands the host: organizations, read state, inbox, help, sidebar. */
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
 const shell = (inner: ShellModel.Message): Message => Message.GotShellMessage({ message: inner })
-const hotkey = (actionId: LayoutHotkeyActionId) => Message.PressedHotkey({ actionId })
+const emitted = Command.resolve(Emit, Message.CompletedEmit())
 
 const maple = {
 	id: Schema.decodeSync(OrganizationId)(uuid(7001)),
@@ -45,8 +46,8 @@ describe("organizations (Mod+Alt+ArrowUp/Down)", () => {
 			update,
 			given(withOrganizations()),
 			message(hotkey("organization.next")),
-			Command.expectExact(NavigateInternal({ url: "/maple" })),
-			Command.resolve(NavigateInternal, Message.CompletedNavigateInternal()),
+			Command.expectExact(navigation("/maple")),
+			emitted,
 		)
 	})
 
@@ -55,8 +56,8 @@ describe("organizations (Mod+Alt+ArrowUp/Down)", () => {
 			update,
 			given(withOrganizations()),
 			message(hotkey("organization.previous")),
-			Command.expectExact(NavigateInternal({ url: "/oak" })),
-			Command.resolve(NavigateInternal, Message.CompletedNavigateInternal()),
+			Command.expectExact(navigation("/oak")),
+			emitted,
 		)
 	})
 
@@ -125,8 +126,8 @@ describe("inbox, help and sidebar", () => {
 			update,
 			given(signedIn("/hazel/chat")),
 			message(hotkey("inbox.open")),
-			Command.expectExact(NavigateInternal({ url: "/hazel/notifications" })),
-			Command.resolve(NavigateInternal, Message.CompletedNavigateInternal()),
+			Command.expectExact(navigation("/hazel/notifications")),
+			emitted,
 		)
 	})
 
@@ -135,6 +136,8 @@ describe("inbox, help and sidebar", () => {
 			update,
 			given(signedIn("/hazel/chat")),
 			message(hotkey("shortcuts.open")),
+			// The frame learns an overlay is open.
+			emitted,
 			model((current) => expect(current.modal.current?._tag).toBe("KeyboardShortcuts")),
 		)
 	})
@@ -146,7 +149,8 @@ describe("inbox, help and sidebar", () => {
 	})
 
 	test("on mobile Mod+Shift+D opens and closes the sidebar sheet instead", () => {
-		const mobile = update(signedIn("/hazel/chat"), Message.ChangedViewport({ isMobile: true })).model
+		const desktop = signedIn("/hazel/chat")
+		const mobile = update(desktop, changedContext(desktop, { isMobile: true })).model
 		const opened = update(mobile, hotkey("sidebar.toggle"))
 		expect(opened.model.shell.isSidebarOpen).toBe(true)
 		expect(opened.model.shell.isSidebarCollapsed).toBe(false)
@@ -159,15 +163,15 @@ describe("Mod+[ / Mod+] (Slack)", () => {
 			update,
 			given(signedIn("/hazel/chat")),
 			message(hotkey("history.back")),
-			Command.expectExact(NavigateHistory({ direction: "Back" })),
-			Command.resolve(NavigateHistory, Message.CompletedNavigateHistory()),
+			Command.expectExact(toShell(PageOutMessage.RequestedHistory({ direction: "Back" }))),
+			emitted,
 		)
 		story(
 			update,
 			given(signedIn("/hazel/chat")),
 			message(hotkey("history.forward")),
-			Command.expectExact(NavigateHistory({ direction: "Forward" })),
-			Command.resolve(NavigateHistory, Message.CompletedNavigateHistory()),
+			Command.expectExact(toShell(PageOutMessage.RequestedHistory({ direction: "Forward" }))),
+			emitted,
 		)
 	})
 })

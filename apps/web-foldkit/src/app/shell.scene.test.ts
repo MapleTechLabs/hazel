@@ -23,19 +23,30 @@ import * as CommandPalette from "../overlay/command-palette"
 import { AutoFocusSearch } from "../page/home/commands"
 import { Message as HomeMessage } from "../page/home/message"
 import { CreateChannel, FocusInput } from "../overlay/command-palette/commands"
+import { PageOutMessage } from "../page/out-message"
 import * as ChannelsSidebar from "../shell/channels-sidebar"
 import * as Shell from "../shell/model"
-import { after, ada, hazelOrg, rootScene, signedIn } from "../test/root-fixtures"
+import {
+	ada,
+	after,
+	changedContext,
+	hazelOrg,
+	hotkey,
+	rootScene,
+	signedIn,
+	toShell,
+} from "../test/root-fixtures"
 import { drainToast, playToastFeedback } from "../test/toast-fixtures"
 import * as CommandMenu from "../ui/command-menu"
 import { PortalCommandMenu } from "../ui/command-menu-view"
 import * as Menu from "../ui/menu"
 import { FocusTriggerOnPress } from "../ui/menu-view"
 import * as Modal from "../ui/modal"
-import { NavigateInternal } from "./command"
+import { emit } from "./command"
 import { Message } from "./message"
+import { reportOf } from "./model"
 
-/** The org shell around every page: nav rail, mobile nav, the sidebar sheet and the command palette. */
+/** The host's parts of the org shell: the sidebar's paint mark, the sidebar sheet and the command palette. */
 
 // The sidebar header's org switcher and footer user menu focus their trigger on press.
 const menusMounted = [
@@ -44,35 +55,17 @@ const menusMounted = [
 ] as const
 
 const navItem = (name: string) => role("link", { name })
-const currentLink = selector('a[aria-current="page"]')
 const paletteDone = CommandPalette.Message.CompletedFocusInput()
 const palette = role("dialog", { name: "Command Menu" })
-
-describe("nav rail", () => {
-	test("marks the section of the current route", () => {
-		scene(
-			rootScene,
-			given(signedIn("/hazel/settings/team")),
-			...menusMounted,
-			sceneExpect(within(navItem("Settings"), currentLink)).toExist(),
-			sceneExpect(within(navItem("Chat"), currentLink)).toBeAbsent(),
-			sceneExpect(within(navItem("Home"), currentLink)).toBeAbsent(),
-		)
-	})
-
-	test("an account settings page is in Settings too", () => {
-		scene(
-			rootScene,
-			given(signedIn("/hazel/my-settings/keybinds")),
-			...menusMounted,
-			sceneExpect(within(navItem("Settings"), currentLink)).toExist(),
-			sceneExpect(within(navItem("Chat"), currentLink)).toBeAbsent(),
-		)
-	})
-})
+// The frame learns of each overlay opening or closing.
+const overlayReport = (isOverlayOpen: boolean) =>
+	emit({ _tag: "Report", report: { ...reportOf(signedIn("/hazel/chat")), isOverlayOpen } })
+const reported = (isOverlayOpen: boolean) =>
+	Command.resolve(overlayReport(isOverlayOpen), Message.CompletedEmit())
 
 describe("the last screen's paint", () => {
-	const waiting = selector('#app[data-paint="shell"] [data-paint="loading"]')
+	// The shell's `#app[data-paint="shell"]` holds the sidebar region (`root/frame.scene.test.ts`).
+	const waiting = selector('[data-foldkit-region="sidebar"] [data-paint="loading"]')
 	const toSidebar = (message: ChannelsSidebar.Message) =>
 		Message.GotShellMessage({ message: Shell.Message.GotChannelsSidebarMessage({ message }) })
 	const membershipsArrived = toSidebar(ChannelsSidebar.Message.UpdatedMemberChannelIds({ channelIds: [] }))
@@ -104,95 +97,82 @@ describe("the last screen's paint", () => {
 			rootScene,
 			given(after(signedIn("/hazel/chat"), channelListsArrived)),
 			...menusMounted,
-			// Named for the signed-in user: a paint is only kept under its own user.
-			sceneExpect(selector(`#app[data-paint="shell"][data-paint-user="${ada.id}"]`)).toExist(),
 			sceneExpect(waiting).toBeAbsent(),
 		)
 	})
 })
 
+// The tab bar and top bars are the shell's (`root/frame.scene.test.ts`); the host draws the rest.
 describe("mobile", () => {
-	const mobile = Message.ChangedViewport({ isMobile: true })
-	const tabs = role("navigation", { name: "Tabs" })
+	const toPhone = (path: string) => {
+		const desktop = signedIn(path)
+		return { desktop, phone: changedContext(desktop, { isMobile: true }) }
+	}
+	const sheet = role("dialog", { name: "Sidebar" })
 
-	test("a section's top bar opens its sidebar sheet; the tab bar has no Menu tab", () => {
+	test("a section's top bar menu opens its sidebar sheet", () => {
+		const { desktop, phone } = toPhone("/hazel/settings/team")
 		scene(
 			rootScene,
-			given(signedIn("/hazel/settings/team")),
+			given(desktop),
 			...menusMounted,
-			Subscription.emit(mobile),
+			Subscription.emit(phone),
 			// The desktop dock (and its two menus) leaves the tree.
 			Mount.expectEnded(FocusTriggerOnPress, FocusTriggerOnPress),
-			// Settings is the gear in the chat list's header, not a tab.
-			sceneExpect(within(tabs, navItem("Settings"))).toBeAbsent(),
-			sceneExpect(within(tabs, role("button", { name: /Menu/ }))).toBeAbsent(),
-			sceneExpect(role("dialog", { name: "Sidebar" })).toBeAbsent(),
-			click(role("button", { name: "Settings menu" })),
-			sceneExpect(role("dialog", { name: "Sidebar" })).toExist(),
+			sceneExpect(sheet).toBeAbsent(),
+			Subscription.emit(Message.ReceivedShellRequest({ request: { _tag: "PressedMobileMenu" } })),
+			sceneExpect(sheet).toExist(),
 			Mount.resolve(Modal.AcquireResources, Modal.Message.SucceededAcquireResources()),
 			...menusMounted,
-			sceneExpect(within(role("dialog", { name: "Sidebar" }), navItem("Settings"))).toExist(),
+			sceneExpect(within(sheet, navItem("Settings"))).toExist(),
 		)
 	})
 
-	test("the DMs tab is the direct messages list", () => {
+	// The Effect UI channel sidebar fills the hole, with its Members link (`ChannelSidebar.test.ts`).
+	test("the Home tab's page is the chat list", () => {
+		const chat = toPhone("/hazel/chat")
 		scene(
 			rootScene,
-			given(signedIn("/hazel/chat/dms")),
-			...menusMounted,
-			Subscription.emit(mobile),
-			// The desktop dock (and its two menus) leaves the tree.
-			Mount.expectEnded(FocusTriggerOnPress, FocusTriggerOnPress),
-			sceneExpect(within(tabs, navItem("DMs"))).toHaveAttr("aria-current", "page"),
-			sceneExpect(within(tabs, navItem("Home"))).not.toHaveAttr("aria-current", "page"),
-		)
-	})
-
-	test("the Home tab is the chat list, and Members opens from it with a way back", () => {
-		scene(
-			rootScene,
-			given(signedIn("/hazel/chat")),
+			given(chat.desktop),
 			...menusMounted,
 			// The channels sidebar moves from the dock into the page, its org switcher and user menu
 			// still mounted.
-			Subscription.emit(mobile),
-			sceneExpect(within(tabs, navItem("Home"))).toHaveAttr("aria-current", "page"),
-			sceneExpect(navItem("Members")).toExist(),
-			sceneExpect(role("dialog", { name: "Sidebar" })).toBeAbsent(),
+			Subscription.emit(chat.phone),
+			sceneExpect(
+				selector('[data-foldkit-region="page"] [data-hazel-hole="channel-sidebar"]'),
+			).toExist(),
+			sceneExpect(sheet).toBeAbsent(),
 		)
+		const home = toPhone("/hazel")
 		scene(
 			rootScene,
-			given(signedIn("/hazel")),
+			given(home.desktop),
 			...menusMounted,
 			// The desktop focuses the member search; a phone leaves its keyboard down.
 			Mount.resolve(AutoFocusSearch, HomeMessage.CompletedFocusSearch()),
-			Subscription.emit(mobile),
+			Subscription.emit(home.phone),
 			Mount.expectEnded(FocusTriggerOnPress, FocusTriggerOnPress, AutoFocusSearch),
-			sceneExpect(role("link", { name: "Back to Chats" })).toHaveAttr("href", "/hazel/chat"),
-			sceneExpect(within(tabs, navItem("Home"))).toHaveAttr("aria-current", "page"),
 		)
 	})
 
-	test("the bar is Slack's: Home, DMs, Activity, More, and a search button; Customers is under More", () => {
+	test("Customers is under More", () => {
+		const { desktop, phone } = toPhone("/hazel/more")
 		scene(
 			rootScene,
-			given(signedIn("/hazel/more")),
+			given(desktop),
 			...menusMounted,
-			Subscription.emit(mobile),
+			Subscription.emit(phone),
 			Mount.expectEnded(FocusTriggerOnPress, FocusTriggerOnPress),
-			sceneExpect(within(tabs, navItem("Customers"))).toBeAbsent(),
 			sceneExpect(role("link", { name: /Customers/ })).toHaveAttr("href", "/hazel/customers"),
-			sceneExpect(within(tabs, navItem("More"))).toHaveAttr("aria-current", "page"),
-			sceneExpect(within(tabs, navItem("More"))).toHaveAttr("href", "/hazel/more"),
-			sceneExpect(within(tabs, role("button", { name: "Search" }))).toExist(),
 		)
 	})
 })
 
 describe("command palette", () => {
 	const opened = [
-		Subscription.emit(Message.PressedHotkey({ actionId: "commandPalette.open" })),
+		Subscription.emit(hotkey("commandPalette.open")),
 		Command.resolve(FocusInput, paletteDone),
+		reported(true),
 		Mount.resolve(PortalCommandMenu, CommandMenu.Message.CompletedPortalCommandMenu()),
 	] as const
 
@@ -205,6 +185,7 @@ describe("command palette", () => {
 			...opened,
 			sceneExpect(within(palette, role("menuitem", { name: /Create channel/ }))).toExist(),
 			keydown("Escape")(within(palette, selector("input"))),
+			reported(false),
 			sceneExpect(palette).toBeAbsent(),
 			Mount.expectEnded(PortalCommandMenu),
 		)
@@ -213,6 +194,8 @@ describe("command palette", () => {
 	test("creating a channel validates, then closes, navigates and toasts", () => {
 		const channelId = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-0000000000c1")
 		const nameField = placeholder("e.g. general, design, marketing")
+		// The palette's links stay hrefs: they can carry a search.
+		const toChannel = toShell(PageOutMessage.RequestedHref({ href: `/hazel/chat/${channelId}` }))
 		scene(
 			rootScene,
 			given(signedIn("/hazel/settings/team")),
@@ -234,8 +217,9 @@ describe("command palette", () => {
 				}),
 			),
 			Command.resolve(CreateChannel, CommandPalette.Message.SucceededCreateChannel({ channelId })),
-			Command.expectHas(NavigateInternal({ url: `/hazel/chat/${channelId}` })),
-			Command.resolve(NavigateInternal, Message.CompletedNavigateInternal()),
+			Command.expectHas(toChannel),
+			Command.resolve(toChannel, Message.CompletedEmit()),
+			reported(false),
 			sceneExpect(palette).toBeAbsent(),
 			Mount.expectEnded(PortalCommandMenu),
 			sceneExpect(text("Channel created successfully")).toExist(),

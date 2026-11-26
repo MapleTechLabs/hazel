@@ -3,12 +3,13 @@ import { AssistantItemId, AssistantThreadId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, Mount, click, expect as sceneExpect, given, role, scene, text, type } from "foldkit/scene"
 import { describe, expect, test } from "vitest"
-import { aiPanelInputsOf } from "../app/model"
+import { emit } from "../app/command"
+import { aiPanelInputsOf, reportOf } from "../app/model"
+import { update } from "../app/update"
 import { Message as RootMessage } from "../app/message"
-import { update } from "../main"
 import * as CommandPalette from "../overlay/command-palette"
 import * as CommandMenu from "../ui/command-menu"
-import { after, hazelOrg, rootScene, signedIn } from "../test/root-fixtures"
+import { after, hazelOrg, hotkey, rootScene, signedIn } from "../test/root-fixtures"
 import * as Menu from "../ui/menu"
 import { FocusTriggerOnPress } from "../ui/menu-view"
 import {
@@ -30,26 +31,34 @@ const threadId = Schema.decodeSync(AssistantThreadId)(messageId)
 const menuMounted = Mount.resolve(FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress())
 const shellMenusMounted = [menuMounted, menuMounted] as const
 
+// The frame learns the panel opened.
+const reportedOpen = Command.resolve(
+	emit({ _tag: "Report", report: { ...reportOf(signedIn("/hazel/settings/team")), isAiPanelOpen: true } }),
+	RootMessage.CompletedEmit(),
+)
+
 const openedPanel = [
 	click(role("button", { name: "AI assistant" })),
+	reportedOpen,
 	Command.resolve(FocusAssistantComposer, Message.CompletedFocusComposer()),
 	Command.resolve(SaveAssistantPanel, Message.CompletedSaveStored()),
 ] as const
 
 describe("the toggle", () => {
 	test("the nav rail's button opens the panel beside the page; Mod+J closes it again", () => {
+		// The shell hands the host the rail's press (`PressedAiPanelToggle`) and the key alike.
 		const opened = update(
 			signedIn("/hazel/settings/team"),
-			RootMessage.PressedHotkey({ actionId: "aiPanel.toggle" }),
+			RootMessage.ReceivedShellRequest({ request: { _tag: "PressedAiPanelToggle" } }),
 		)
 		expect(opened.model.aiPanel.isOpen).toBe(true)
-		const closed = update(opened.model, RootMessage.PressedHotkey({ actionId: "aiPanel.toggle" }))
+		const closed = update(opened.model, hotkey("aiPanel.toggle"))
 		expect(closed.model.aiPanel.isOpen).toBe(false)
 	})
 
 	test("the command palette's entry opens it", () => {
 		const model = after(signedIn("/hazel/settings/team"), [
-			RootMessage.PressedHotkey({ actionId: "commandPalette.open" }),
+			hotkey("commandPalette.open"),
 			RootMessage.GotCommandPaletteMessage({
 				message: CommandPalette.Message.GotMenuMessage({
 					message: CommandMenu.Message.ClickedItem({ key: "action:ai-panel" }),
