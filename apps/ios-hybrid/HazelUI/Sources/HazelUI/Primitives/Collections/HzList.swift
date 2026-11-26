@@ -330,7 +330,8 @@ private struct Pulse: ViewModifier {
             .opacity(dim ? 0.5 : 1)
             .onAppear {
                 guard on else { return }
-                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true).delay(delay)) { dim = true }
+                // A short hold before the first pulse, so the first frames (and snapshots) show rest.
+                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true).delay(delay + 0.25)) { dim = true }
             }
     }
 }
