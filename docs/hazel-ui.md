@@ -12,7 +12,8 @@ vocabulary: on the web it becomes DOM styled with our CSS, on iOS it becomes Swi
 with no web view. Styles are data: one `tokens.ts` file of tokens and per-primitive recipes, which
 codegen turns into CSS for the web and `Theme.swift` for iOS. Model, update, Commands, queries and
 the data layer are shared. Each platform owns only its renderers, its look's output and a few
-platform services.
+platform services. A part only one platform draws, such as a shader, is a platform
+extension: declared once with typed props, drawn where it is implemented, skipped elsewhere.
 
 ## What the spike showed
 
@@ -57,9 +58,12 @@ moving web-only screens (settings, admin) off `Html`.
    `RenderTarget` in a fork.
 2. **Shared screens use the `hazel` vocabulary, not annotated `Html`.** A screen in `hazel` can only
    use primitives every host implements, so an unconverted part is a type error, not a silent gap.
-3. **`Html` is the escape hatch, as a child component.** The web host draws `hazel` and `html`; the
-   native host draws only `hazel`. A web-only part is an `Html` child component: it works on the
-   web and fails visibly as that child on iOS (counted, with a fallback), which replaces `webOnly(...)`.
+3. **Platform-specific parts are declared, not leaked.** A part only one platform draws (a Metal
+   shader, a native map, a web canvas, a web-only settings panel) is a platform extension: declared
+   once with typed props and events and the platforms that implement it, drawn where it is
+   implemented and skipped (or replaced by its fallback) elsewhere. Skipping it is intended, so it is
+   not counted as a gap. A part that should exist everywhere but has no renderer yet is a different
+   thing: it fails the type check. See "Platform extensions".
 4. **Styles are data.** Views choose variants (`tone`, `size`, `emphasis`, `selected`), never classes
    or raw values. `tokens.ts` holds tokens and recipes; codegen writes the CSS and `Theme.swift`.
 5. **Primitives are semantic and platform-shaped.** `menu` is a popover on the web and `UIMenu` on
@@ -142,6 +146,45 @@ Rules:
   plain-data payloads. Each host maps them from its own input.
 - A primitive lands only with its web renderer, its Swift renderer and its conformance fixtures.
 - Adding a prop to an existing primitive beats adding a primitive.
+
+### Platform extensions
+
+For parts one platform draws and the other skips. An extension is declared once, in shared code:
+
+```ts
+// packages/ui/src/extensions/MeshBackground.ts
+export const MeshBackground = Hazel.extension({
+	name: "MeshBackground",
+	props: Schema.Struct({ colors: Schema.Array(TokenColor), speed: Schema.Finite }),
+	events: { Tapped: {} },
+	platforms: ["ios"],
+})
+
+// in a shared view
+h.extension(MeshBackground, { colors: ["brand.500", "brand.300"], speed: 0.4 })
+	.on("Tapped", Msg.TappedBackground())
+	.fallback(h.frame.tone("muted")) // optional: what platforms without it draw
+```
+
+Each platform registers its implementations by name:
+
+- **iOS:** `HazelUI.register("MeshBackground") { props, send in MeshBackgroundView(props) }`. Codegen
+  turns each declaration's props Schema into a decodable Swift struct, so the view gets typed props
+  and `send(.tapped)`. Shaders, `MapKit`, `RealityKit`, anything SwiftUI can host.
+- **Web:** `registerWebExtension(MeshBackground, (container, props, send) => ...)`, or an `Html`
+  child component: a canvas, WebGL, a third-party widget, a web-only settings panel.
+
+Rules:
+
+- A platform not in `platforms` skips the extension silently: its host creates no node, or draws
+  `fallback` when one is given. The view never checks the platform.
+- A platform listed in `platforms` must register it: a startup check in each host, and a test that
+  compares the generated manifest with what each platform registered, fail otherwise.
+- Props are data (tokens, numbers, strings, ids), as for primitives; events come back typed.
+- An extension implemented on every platform is a candidate primitive: promote it when a second
+  screen wants it.
+- Platform behaviour that is not drawing (haptics, share, clipboard) is a platform service, not an
+  extension.
 
 ## Style layer
 
@@ -233,7 +276,7 @@ parallel and touch only their own paths. A contract changes only through its own
 
 | Gate | Question | Done when |
 | --- | --- | --- |
-| G1 | Can one web host draw `hazel` and `html` together, built on `BrowserHost.makeHost`? | a `hazel` component with an `Html` child renders in the browser, and the same tree on the native host fails only that child |
+| G1 | Can one web host draw `hazel` and `html` together, built on `BrowserHost.makeHost`, and do extensions skip cleanly? | a `hazel` component with an `Html` child and an iOS-only extension renders in the browser with the extension skipped; on the native host the extension draws a registered SwiftUI view and the web-only extension is skipped |
 | G2 | Can an Effect UI island run inside the Foldkit app over its data services? | the spike's channel list mounts in `web-foldkit` from the real collections and updates live |
 | G3 | Does the data layer run in JavaScriptCore with Swift-backed `fetch` and `WebSocket`? | the iOS spike shows live channels from a dev backend |
 | G4 | JavaScriptCore on its own thread | presses and batches cross threads with no dropped frames while JS is busy for 50 ms |
@@ -245,7 +288,8 @@ Gates are short spikes on the spike branch. A failed gate changes this document 
 ### Phase 1: contracts (one agent, reviewed)
 
 - **C1 Vocabulary API:** `packages/ui/src/vocabulary/`: every v1 tag's builder, props and events as
-  types, plus `textParents`. Implemented only enough to type-check example screens.
+  types, plus `textParents`, and `Hazel.extension` with its manifest. Implemented only enough to
+  type-check example screens.
 - **C2 Wire:** `packages/ui/src/native/wire.ts` (op types, `WIRE_VERSION`) and its golden streams.
 - **C3 Tokens schema:** `packages/ui/src/style/schema.ts`: the shape of tokens and recipes, and the
   codegen interfaces.
@@ -257,12 +301,12 @@ the user.
 
 | Lane | Owns | Depends on | Done when |
 | --- | --- | --- | --- |
-| A Web host | `packages/ui/src/web/` | C1, C3 | every v1 primitive renders, conformance fixtures pass in the browser runner |
-| B Native host and runtime (TS) | `packages/ui/src/native/` | C1, C2 | goldens pass, `fire` round trips, nodes free on removal |
+| A Web host | `packages/ui/src/web/` | C1, C3 | every v1 primitive renders, conformance fixtures pass in the browser runner; web extensions register and others skip or draw their fallback |
+| B Native host and runtime (TS) | `packages/ui/src/native/` | C1, C2 | goldens pass, `fire` round trips, nodes free on removal; extensions cross the wire with typed props |
 | C1 Swift: layout and content | `HazelUI/Primitives/{Layout,Content}/` | C2, C3 | fixtures for stack, scroll, frame, divider, text, heading, icon, image, avatar, badge pass snapshots |
 | C2 Swift: controls | `HazelUI/Primitives/Controls/` | C2, C3, G5 | button, link, toggle, select, textField, textArea, searchField pass; text-input stress test passes |
 | C3 Swift: overlays | `HazelUI/Primitives/Overlays/` | C2, C3 | menu, contextMenu, sheet, dialog, popover, toast use the system components |
-| C4 Swift: structure and lists | `HazelUI/Primitives/{Structure,Collections}/`, `HazelUI/Tree.swift` | C2, C3 | screen, navigation (route and stack in sync), tabBar, splitView, section, item, list (keyed, sections, reach end, stick to bottom) |
+| C4 Swift: structure and lists | `HazelUI/Primitives/{Structure,Collections}/`, `HazelUI/Tree.swift` | C2, C3 | screen, navigation (route and stack in sync), tabBar, splitView, section, item, list (keyed, sections, reach end, stick to bottom); the extension registry and its manifest check |
 | D Tokens and codegen | `packages/ui/src/style/`, `packages/ui/scripts/` | C3 | every recipe filled from the seeds, generated files current, parity test green in both themes |
 | E Conformance harness | `packages/ui/src/conformance/`, the browser runner, Swift snapshot target | C1, C2 | lanes A and C can add fixtures; CI runs both sides |
 | F Platform services | `packages/ui/src/platform/`, `HazelUI/Runtime/` | G3, G4 | fetch, WebSocket, storage, auth, haptics, clipboard, share behind Effect services, web and Swift implementations |
