@@ -9,6 +9,7 @@
 		"./platform": "./src/platform/index.ts",
 		"./web": "./src/platform/web/index.ts",
 		"./web/*": "./src/platform/web/*.ts",
+		"./jsc": "./src/platform/jsc/index.ts",
 		"./*": "./src/*.ts"
 	},
 	"scripts": {
