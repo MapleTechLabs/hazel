@@ -102,7 +102,8 @@ export const item = defineRecipe<
 		leadingSize: {
 			default: "regular",
 			values: {
-				regular: {},
+				// A sidebar row that links takes today's link weight (`sidebarLink`'s `font-medium`).
+				regular: { states: { linked: { parts: { control: { strong: true } } } } },
 				large: {
 					parts: {
 						control: { paddingX: "4", paddingY: "3", radius: "none", text: "label", color: "fg" },

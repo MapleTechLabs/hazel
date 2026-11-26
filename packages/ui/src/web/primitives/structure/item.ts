@@ -156,8 +156,6 @@ ${I}[data-leading-size="conversation"]:not([data-unread="dot"])[data-badged] ${C
 // position, and a disabled link taking no clicks.
 const css = `
 [data-hz="item"] > [data-hz-part="control"] { position: relative; }
-/* A sidebar row that links takes today's link weight (\`sidebarLink\`'s \`font-medium\`); a button row stays regular. */
-[data-hz="item"]:not(${LARGE}) > a[data-hz-part="control"] { font-weight: var(--hz-weight-strong); }
 [data-hz="item"] > [data-hz-part="control"] > [data-hz-part="title"],
 [data-hz="item"] > [data-hz-part="control"] > [data-hz-part="subtitle"] { order: 1; min-width: 0; }
 [data-hz="item"] > [data-hz-part="control"] > [data-hz-part="badge"] { order: 2; overflow: hidden; }
@@ -286,6 +284,8 @@ export const primitive = definePrimitive("item", ({ document, tag, outer }) => {
 				control.removeAttribute("aria-disabled")
 			}
 		}
+		// The recipe's \`linked\` state: a linking row takes today's link weight.
+		flag(node, "linked", control instanceof HTMLAnchorElement)
 		if (selected) control.setAttribute("aria-current", "page")
 		else control.removeAttribute("aria-current")
 	}

@@ -2189,6 +2189,10 @@
 	overflow: hidden;
 }
 
+[data-hz="item"]:is([data-leading-size="regular"], :not([data-leading-size]))[data-linked] > [data-hz-part="control"] {
+	font-weight: var(--hz-weight-strong);
+}
+
 [data-hz="item"][data-leading-size="large"] > [data-hz-part="control"] {
 	color: var(--hz-color-fg);
 	border-radius: var(--hz-radius-none);

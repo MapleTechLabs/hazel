@@ -69,6 +69,7 @@ const item = (spec: ItemSpec) =>
 			"data-specimen": spec.id,
 			"data-selected": spec.selected,
 			"data-emphasized": spec.emphasized,
+			"data-linked": !spec.selected,
 		},
 		[
 			el(

@@ -85,6 +85,7 @@ public enum HazelTheme {
         case disabled = "disabled"
         case loading = "loading"
         case destructive = "destructive"
+        case linked = "linked"
         case hover = "hover"
         case pressed = "pressed"
         case focusVisible = "focusVisible"
@@ -873,6 +874,7 @@ public enum HazelTheme {
                 Layer(when: When(options: ["nested": "last"], flags: [], states: [], sizeClass: nil), part: "control", style: Style(paddingY: 6, text: .label)),
                 Layer(when: When(options: ["titleLines": "2"], flags: [], states: [], sizeClass: nil), part: "title", style: Style(lineClamp: 2)),
                 Layer(when: When(options: ["subtitleLines": "2"], flags: [], states: [], sizeClass: nil), part: "subtitle", style: Style(lineClamp: 2)),
+                Layer(when: When(options: ["leadingSize": "regular"], flags: [], states: [.linked], sizeClass: nil), part: "control", style: Style(strong: true)),
                 Layer(when: When(options: ["leadingSize": "large"], flags: [], states: [], sizeClass: nil), part: "control", style: Style(color: Colors.fg, radius: 0, paddingX: 16, paddingY: 12, text: .label)),
                 Layer(when: When(options: ["leadingSize": "large"], flags: [], states: [], sizeClass: nil), part: "title", style: Style(color: Colors.fg)),
                 Layer(when: When(options: ["leadingSize": "large"], flags: [], states: [], sizeClass: nil), part: "subtitle", style: Style(color: Colors.mutedFg)),

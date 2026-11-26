@@ -186,8 +186,11 @@ export type ListDividerKind = (typeof listDividerKinds)[number]
 export const listAnchors = ["start", "end"] as const
 export type ListAnchor = (typeof listAnchors)[number]
 
-/** Boolean states a view sets (`data-<state>` on the web). Chat states are the message's own. */
-export const dataStates = ["selected", "emphasized", "disabled", "loading", "destructive"] as const
+/**
+ * Boolean states a view sets (`data-<state>` on the web). Chat states are the message's own. `linked`
+ * is the host's, not a view's: the row's control is a link (`href`, `item-link-weight`).
+ */
+export const dataStates = ["selected", "emphasized", "disabled", "loading", "destructive", "linked"] as const
 export type DataState = (typeof dataStates)[number]
 
 /** States the host derives from input; views never set them. */

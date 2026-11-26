@@ -70,11 +70,8 @@ private struct ItemRow: View {
                        "titleLines": node[prop: "titleLines"]?.string ?? "1",
                        "subtitleLines": node[prop: "subtitleLines"]?.string ?? "1"]
         let flags: Set<String> = node[prop: "muted"]?.bool == true ? ["muted"] : []
-        var out = recipe.style(part: part, options: options, flags: flags, states: interaction.union(viewStates),
-                               sizeClass: sizeClass)
-        // A sidebar row that links takes today's link weight (`sidebarLink`'s `font-medium`), as the web's.
-        if part == "control", !large, node[prop: "href"]?.string != nil { out.strong = true }
-        return out
+        return recipe.style(part: part, options: options, flags: flags, states: interaction.union(viewStates),
+                            sizeClass: sizeClass)
     }
 
     var body: some View {
@@ -208,10 +205,11 @@ private struct ItemRow: View {
         }
     }
 
-    /// The view states the props set: `selected`, `emphasized`, `disabled`.
+    /// The view states the props set: `selected`, `emphasized`, `disabled`; and `linked` with an `href`.
     private var viewStates: Set<HazelTheme.State> {
         let flags: [(String, HazelTheme.State)] = [("selected", .selected), ("emphasized", .emphasized), ("disabled", .disabled)]
-        return Set(flags.filter { node[prop: $0.0]?.bool == true }.map(\.1))
+        let linked: Set<HazelTheme.State> = node[prop: "href"]?.string != nil ? [.linked] : []
+        return Set(flags.filter { node[prop: $0.0]?.bool == true }.map(\.1)).union(linked)
     }
 }
 
