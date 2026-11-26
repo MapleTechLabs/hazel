@@ -39,7 +39,8 @@ const toChannelsSidebarMessage = (message: ChannelsSidebar.Message) =>
 	toShellMessage({ _tag: "GotChannelsSidebarMessage", message })
 const toCustomersSidebarMessage = (message: CustomersSidebar.Message) =>
 	toShellMessage(Shell.Message.GotCustomersSidebarMessage({ message }))
-const toUserMenuMessage = (message: Menu.Message) => toShellMessage(Shell.Message.GotUserMenuMessage({ message }))
+const toUserMenuMessage = (message: Menu.Message) =>
+	toShellMessage(Shell.Message.GotUserMenuMessage({ message }))
 const toOrgSwitcherMessage = (message: Menu.Message) =>
 	toShellMessage(Shell.Message.GotOrgSwitcherMessage({ message }))
 const toMobileSidebarMessage = (message: ModalKit.Message) =>
@@ -90,9 +91,12 @@ const sectionBody = (model: Model, h: HtmlBuilder<Message>): Html => {
 	if (section === "Settings")
 		return sectionLayout(
 			h,
-			hasContentColumn(route) ? contentColumnLayout(h, pageBody(model, h, true)) : pageBody(model, h, true),
+			hasContentColumn(route)
+				? contentColumnLayout(h, pageBody(model, h, true))
+				: pageBody(model, h, true),
 		)
-	if (section === "MySettings" || section === "Notifications") return sectionLayout(h, pageBody(model, h, true))
+	if (section === "MySettings" || section === "Notifications")
+		return sectionLayout(h, pageBody(model, h, true))
 	// Customers pages own their scrolling (the queue's preview panel spans the full height).
 	if (section === "Customers")
 		return h.main([h.Class("h-full w-full min-w-0 overflow-hidden bg-bg")], [pageBody(model, h, true)])
@@ -107,7 +111,8 @@ const sectionBody = (model: Model, h: HtmlBuilder<Message>): Html => {
 				links: channelLinksOf(sharedOf(model), route.channelId),
 				selectedTab: tab,
 				onSelectTab: (tabRoute) => h.OnClick(Message.ClickedLayoutTab({ route: tabRoute })),
-				onChangeTab: (toRoute) => h.OnChange((value) => Message.ClickedLayoutTab({ route: toRoute(value) })),
+				onChangeTab: (toRoute) =>
+					h.OnChange((value) => Message.ClickedLayoutTab({ route: toRoute(value) })),
 			},
 			pageBody(model, h, true),
 		)
@@ -123,7 +128,10 @@ const secondarySidebar = (model: Model, h: HtmlBuilder<Message>, context: ShellC
 		orgSwitcherEntries: shell.orgSwitcherEntries,
 		organizations: shell.userOrganizations,
 		userStatus: shell.userStatus,
-		statusExpiration: formatStatusExpirationAt(shell.userStatus?.expiresAtMs ?? null, model.context.nowMs),
+		statusExpiration: formatStatusExpirationAt(
+			shell.userStatus?.expiresAtMs ?? null,
+			model.context.nowMs,
+		),
 		toUserMenuMessage,
 		toOrgSwitcherMessage,
 	}
@@ -192,7 +200,8 @@ const regionsOf = (model: Model, h: HtmlBuilder<Message>): Regions => {
 			toParentMessage: toCommandPaletteMessage,
 		}),
 	]
-	if (context === null) return { sidebar: [], page: [pageBody(model, h, false)], "ai-toggle": [], "ai-panel": [], overlays }
+	if (context === null)
+		return { sidebar: [], page: [pageBody(model, h, false)], "ai-toggle": [], "ai-panel": [], overlays }
 	const { isMobile } = model.context
 	const sidebar = secondarySidebar(model, h, context)
 	const isPhoneChatList = isMobile && model.context.route._tag === "ChatIndex"
@@ -233,7 +242,11 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Html => {
 	return h.div(
 		[h.Attribute("data-foldkit-host", ""), h.Attribute("hidden", "")],
 		REGIONS.map((region) =>
-			h.keyed("div")(region, [h.Attribute(REGION_ATTRIBUTE, region), h.Class("contents")], [...regions[region]]),
+			h.keyed("div")(
+				region,
+				[h.Attribute(REGION_ATTRIBUTE, region), h.Class("contents")],
+				[...regions[region]],
+			),
 		),
 	)
 }

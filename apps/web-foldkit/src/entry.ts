@@ -67,11 +67,7 @@ const services = Layer.mergeAll(HazelRpcLive, HazelAuthClientLive, NotificationS
 const start = () => {
 	const container = mountPoint()
 	const main = Layer.effectDiscard(
-		Renderer.mount(
-			App,
-			Effect.all({ route: Router.currentRoute(AppRoutes), boot }),
-			container,
-		),
+		Renderer.mount(App, Effect.all({ route: Router.currentRoute(AppRoutes), boot }), container),
 	).pipe(
 		Layer.provide(commandsLayer),
 		Layer.provide(

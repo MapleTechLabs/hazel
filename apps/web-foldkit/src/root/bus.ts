@@ -34,5 +34,7 @@ export const events: Stream.Stream<BusEvent> = Stream.callback<BusEvent>((queue)
 )
 
 /** The events of one kind, as their payloads. */
-export const eventsOf = <Tag extends BusEvent["_tag"]>(tag: Tag): Stream.Stream<Extract<BusEvent, { _tag: Tag }>> =>
+export const eventsOf = <Tag extends BusEvent["_tag"]>(
+	tag: Tag,
+): Stream.Stream<Extract<BusEvent, { _tag: Tag }>> =>
 	events.pipe(Stream.filter((event): event is Extract<BusEvent, { _tag: Tag }> => event._tag === tag))

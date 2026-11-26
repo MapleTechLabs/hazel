@@ -311,7 +311,9 @@ const imageViewerOverlay = (h: H, model: Model): Html => {
 
 /** The shared message list's place (`src/root/portal.ts`): keyed by channel, so a switch starts fresh. */
 const messageListHole = (h: H, model: Model): Html | undefined =>
-	model.currentUserId === null ? undefined : hole(h, "message-list", model.channelId, [h.Class(MESSAGE_LIST_HOLE)])
+	model.currentUserId === null
+		? undefined
+		: hole(h, "message-list", model.channelId, [h.Class(MESSAGE_LIST_HOLE)])
 
 /** The screen's root fills the hole, so its list scrolls inside it. */
 const MESSAGE_LIST_HOLE = "flex min-h-0 flex-1 flex-col"

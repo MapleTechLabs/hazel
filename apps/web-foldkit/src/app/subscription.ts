@@ -40,17 +40,19 @@ const channelSidebarActions = Subscription.make<Model, Message>()((entry) => ({
 					: Bus.eventsOf("ChannelSidebarAct").pipe(
 							Stream.map(({ action }) => messageOfIntent(orgSlug, { _tag: "Act", action })),
 							Stream.filter((message) => message !== null),
-							Stream.map(
-								(message): Message => ({
-									_tag: "GotShellMessage",
-									message: { _tag: "GotChannelsSidebarMessage", message },
-								}),
-							),
+							Stream.map((message): Message => ({
+								_tag: "GotShellMessage",
+								message: { _tag: "GotChannelsSidebarMessage", message },
+							})),
 						),
 		},
 	),
 	backgroundToasts: Subscription.persistentEntry(
-		backgroundToasts.pipe(Stream.map((toast) => Message.ReceivedShellRequest({ request: { _tag: "RequestedToast", toast } }))),
+		backgroundToasts.pipe(
+			Stream.map((toast) =>
+				Message.ReceivedShellRequest({ request: { _tag: "RequestedToast", toast } }),
+			),
+		),
 	),
 }))
 

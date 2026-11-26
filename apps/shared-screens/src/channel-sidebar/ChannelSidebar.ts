@@ -319,13 +319,17 @@ export const ChannelSidebar = Hazel.component({
 				),
 			),
 			// A parent passes the route as props: each change arrives as `ChangedRoute`, as a host's send.
-			Subscription.make("route", [props.activeChannelId, props.membersActive], ([activeChannelId, membersActive]) =>
-				Stream.make(
-					SidebarMessage.ChangedRoute({
-						activeChannelId: activeChannelId === null ? null : ChannelId.make(activeChannelId),
-						membersActive,
-					}),
-				),
+			Subscription.make(
+				"route",
+				[props.activeChannelId, props.membersActive],
+				([activeChannelId, membersActive]) =>
+					Stream.make(
+						SidebarMessage.ChangedRoute({
+							activeChannelId:
+								activeChannelId === null ? null : ChannelId.make(activeChannelId),
+							membersActive,
+						}),
+					),
 			),
 			...(props.chrome
 				? [

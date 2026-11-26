@@ -27,14 +27,7 @@ import * as Shell from "../shell/update"
 import { CreateDm, emit } from "./command"
 import type { HostContext } from "./context"
 import { type Message, type ShellRequest } from "./message"
-import {
-	aiPanelInputsOf,
-	dmRequestKey,
-	type Model,
-	reportOf,
-	sharedOf,
-	shellContextOf,
-} from "./model"
+import { aiPanelInputsOf, dmRequestKey, type Model, reportOf, sharedOf, shellContextOf } from "./model"
 import { toPageMessage } from "./view"
 
 type Return = Update.Return<Model, Message, Resources>
@@ -379,7 +372,9 @@ const receivedShellRequest = (request: ShellRequest): Step =>
 		PressedInstallUpdate: () => stepUpdates(Updates.install),
 		PressedMobileMenu: () => openMobileSidebar,
 		PressedAiPanelToggle: () => (model: Model) =>
-			foldAiPanel(model, (panel) => AiPanel.update(panel, AiPanel.Message.PressedToggle(), aiPanelInputsOf(model))),
+			foldAiPanel(model, (panel) =>
+				AiPanel.update(panel, AiPanel.Message.PressedToggle(), aiPanelInputsOf(model)),
+			),
 		PressedMobileSearch: () => openCommandPalette("search"),
 		RequestedToast: ({ toast }) => showToast(toast),
 		PressedComposeDm: () => openModal({ _tag: "CreateDm" }),
@@ -391,7 +386,10 @@ const dmToastId = (key: string) => `create-dm:${key}`
 const setCreatingDm = (key: string, isCreating: boolean): Step =>
 	setModel((model) =>
 		modifyFields(model, {
-			creatingDms: (keys) => [...keys.filter((current) => current !== key), ...(isCreating ? [key] : [])],
+			creatingDms: (keys) => [
+				...keys.filter((current) => current !== key),
+				...(isCreating ? [key] : []),
+			],
 		}),
 	)
 
@@ -404,7 +402,10 @@ const requestedDmCreation =
 			? { model }
 			: Update.combine(model, [
 					setCreatingDm(key, true),
-					showToast({ ...loadingToast(`Starting conversation with ${name}...`), id: dmToastId(key) }),
+					showToast({
+						...loadingToast(`Starting conversation with ${name}...`),
+						id: dmToastId(key),
+					}),
 					command(CreateDm({ organizationId, orgSlug, userId, name })),
 				])
 	}
@@ -460,7 +461,10 @@ const changedContext =
 
 // INIT
 
-export const init = (context: HostContext, options: { readonly isCreateChannelHintDismissed: boolean; readonly aiPanel: AiPanel.Stored }): Return => {
+export const init = (
+	context: HostContext,
+	options: { readonly isCreateChannelHintDismissed: boolean; readonly aiPanel: AiPanel.Stored },
+): Return => {
 	const model: Model = {
 		context,
 		page: null,
@@ -476,7 +480,10 @@ export const init = (context: HostContext, options: { readonly isCreateChannelHi
 		creatingDms: [],
 	}
 	const result = Update.combine(model, [enteredRoute, informShell])
-	return { ...result, commands: [...(result.commands ?? []), emit({ _tag: "Report", report: reportOf(result.model) })] }
+	return {
+		...result,
+		commands: [...(result.commands ?? []), emit({ _tag: "Report", report: reportOf(result.model) })],
+	}
 }
 
 // UPDATE
@@ -503,7 +510,8 @@ const step = (model: Model, message: Message): Return =>
 			]),
 		CompletedEmit: () => ({ model }),
 		ClickedLayoutTab: ({ route }) => navigateTo(route)(model),
-		GotPageMessage: ({ message }) => foldPage(model, (page) => updatePage(page, message, sharedOf(model))),
+		GotPageMessage: ({ message }) =>
+			foldPage(model, (page) => updatePage(page, message, sharedOf(model))),
 		GotShellMessage: ({ message }) =>
 			foldShell(model, (shell) => Shell.update(shell, message, shellContextOf(model))),
 		GotModalMessage: ({ message }) =>
@@ -513,7 +521,8 @@ const step = (model: Model, message: Message): Return =>
 		GotAiPanelMessage: ({ message }) =>
 			foldAiPanel(model, (panel) => AiPanel.update(panel, message, aiPanelInputsOf(model))),
 		GotToastsMessage: ({ message }) => foldToastsWithAction(model, message),
-		GotPlatformMessage: ({ message }) => foldPlatform(model, (platform) => Platform.update(platform, message)),
+		GotPlatformMessage: ({ message }) =>
+			foldPlatform(model, (platform) => Platform.update(platform, message)),
 		GotUpdatesMessage: ({ message }) => stepUpdates((updates) => Updates.update(updates, message))(model),
 	})
 
