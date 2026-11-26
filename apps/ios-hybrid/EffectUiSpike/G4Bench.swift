@@ -1,3 +1,4 @@
+import HazelUI
 import QuartzCore
 import SwiftUI
 
@@ -12,7 +13,7 @@ enum G4Bench {
     }
 
     static func run(_ runtime: EffectUiRuntime) async {
-        while runtime.tree.root.isEmpty { try? await Task.sleep(for: .milliseconds(20)) }
+        while runtime.tree.root.children.isEmpty { try? await Task.sleep(for: .milliseconds(20)) }
         try? await Task.sleep(for: .milliseconds(500))
         report(runtime, "mount", runtime.samples["mount"] ?? [])
         runtime.engine.perform("spin") { engine in
@@ -33,7 +34,7 @@ enum G4Bench {
             }
         }
 
-        let items = itemIds(runtime.tree.root)
+        let items = itemIds(runtime.tree)
         runtime.resetSamples()
         for i in 0 ..< 20 {
             runtime.fire(items[i % min(items.count, 4)])
@@ -76,7 +77,7 @@ enum G4Bench {
     /// JS busy 50 ms every 100 ms while the main thread draws (and scrolls, if driven); presses during
     /// it measure how long the stall delays a round trip. A main-thread stall afterwards is the control.
     static func stallTest(_ runtime: EffectUiRuntime, seconds: Double) async {
-        let items = itemIds(runtime.tree.root)
+        let items = itemIds(runtime.tree)
         runtime.resetSamples()
         EffectUiRuntime.log.log("[g4] JS stall window starts (\(seconds, privacy: .public)s)")
         let stall = Int(ProcessInfo.processInfo.environment["G4_STALL_MS"] ?? "") ?? 50
@@ -115,8 +116,9 @@ enum G4Bench {
         )
     }
 
-    private static func itemIds(_ nodes: [HzNode]) -> [Int] {
-        nodes.flatMap { ($0.tag == "hz:item" ? [$0.id] : []) + itemIds($0.children) }
+    private static func itemIds(_ tree: Tree, _ id: NodeId = Tree.rootId) -> [NodeId] {
+        guard let node = tree.node(id) else { return [] }
+        return (node.tag == "hz:item" ? [id] : []) + node.children.flatMap { itemIds(tree, $0) }
     }
 }
 

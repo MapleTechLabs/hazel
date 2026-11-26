@@ -63,10 +63,11 @@ struct TextFieldProps {
 /// HAZEL-GAP(textField-recipe): no `textField` recipe yet (controls lane); these are its tokens.
 private let danger = HazelTheme.Colors.danger.color
 
-/// `hz:textField`: a native `TextField` that owns its text; Model values apply by the rule above.
-struct HzTextField: View {
-    let node: HzNode
-    let runtime: EffectUiRuntime
+/// G5's `hz:textField`, kept as lane S2's starting point (`Primitives/Controls/HzTextField.swift`
+/// replaces it, then this file goes). Not drawn: `TreeView` draws HazelUI's own view for the tag.
+struct G5TextField: View {
+    let tree: Tree
+    let node: Node
     @State private var field = TextFieldRevisions()
     @FocusState private var focused: Bool
 
@@ -105,9 +106,6 @@ struct HzTextField: View {
     }
 
     private func send(_ event: String, _ change: TextFieldRevisions.Change) {
-        let payload: [String: Any] = ["value": change.value, "rev": change.rev, "edit": change.edit]
-        guard let data = try? JSONSerialization.data(withJSONObject: payload),
-              let json = String(data: data, encoding: .utf8) else { return }
-        runtime.fire(node.id, event, payload: json)
+        tree.fire(node.id, event, ["value": .string(change.value), "rev": .number(Double(change.rev)), "edit": .number(Double(change.edit))])
     }
 }

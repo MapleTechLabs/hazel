@@ -1,36 +1,32 @@
-import SwiftUI
 import HazelUI
+import SwiftUI
+import UIKit
 
-/// The iOS extension registry (`docs/hazel-ui.md`, "Platform extensions"): an extension name to the
-/// view drawn in its `hz:ext` placeholder. Unregistered names draw their fallback slot.
+/// The demo's extensions on iOS (`packages/ui/src/demo/extensions.ts`), registered with HazelUI's
+/// registry and checked against what the shared code declares.
 @MainActor
-enum HazelExtensions {
-    typealias Send = (_ event: String, _ payload: String) -> Void
-    typealias Draw = (_ args: [String: JSONValue], _ send: @escaping Send) -> AnyView
+enum DemoExtensions {
+    /// Stand-in for the generated manifest: the demo's two declarations.
+    static let manifest = ExtensionManifest([
+        .init(name: "MeshBackground", platforms: ["ios"], events: ["Tapped"]),
+        .init(name: "ActivityChart", platforms: ["web"]),
+    ])
 
-    private(set) static var registry: [String: Draw] = [:]
-
-    static func register(_ name: String, _ draw: @escaping Draw) { registry[name] = draw }
-
-    /// The extensions this platform implements (`packages/ui/src/demo/extensions.ts`, `platforms: ["ios"]`).
-    static func registerDemo() {
-        register("MeshBackground") { args, send in
-            AnyView(MeshBackgroundView(props: MeshBackgroundProps(args)).onTapGesture { send("Tapped", "{}") })
+    static func register() {
+        HazelExtensions.register("MeshBackground", props: MeshBackgroundProps.self) { props, send in
+            MeshBackgroundView(props: props).onTapGesture { send("Tapped", [:]) }
         }
+        HazelExtensions.check(manifest)
     }
 }
 
-/// `MeshBackground`'s props, decoded from its Schema's JSON (codegen writes this in phase 1).
-struct MeshBackgroundProps {
+/// `MeshBackground`'s props, decoded from its Schema's JSON (codegen writes this struct later).
+struct MeshBackgroundProps: Decodable {
     let colors: [String]
     let speed: Double
-    init(_ args: [String: JSONValue]) {
-        colors = args["colors"]?.array?.compactMap(\.string) ?? []
-        speed = args["speed"]?.number ?? 0
-    }
 }
 
-/// Token colour names to colours (G1 stand-in until the generated `Theme.swift`).
+/// Token colour names to colours (G1 stand-in until extensions get token lookups from the theme).
 enum TokenColors {
     static func color(_ token: String) -> Color {
         switch token {
@@ -69,5 +65,22 @@ struct MeshBackgroundView: View {
                 .foregroundStyle(.white)
                 .padding(10)
         }
+    }
+}
+
+extension Color {
+    /// `#rrggbb` or `#rrggbbaa`, for the stand-in token colours above.
+    init(hex: String) {
+        var value: UInt64 = 0
+        let digits = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        Scanner(string: digits).scanHexInt64(&value)
+        let hasAlpha = digits.count == 8
+        let rgb = hasAlpha ? value >> 8 : value
+        self.init(uiColor: UIColor(
+            red: CGFloat((rgb >> 16) & 0xFF) / 255,
+            green: CGFloat((rgb >> 8) & 0xFF) / 255,
+            blue: CGFloat(rgb & 0xFF) / 255,
+            alpha: hasAlpha ? CGFloat(value & 0xFF) / 255 : 1
+        ))
     }
 }
