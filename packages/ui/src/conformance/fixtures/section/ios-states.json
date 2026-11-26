@@ -1,0 +1,92 @@
+{
+	"about": "iOS lane: header actions (a press and a menu) over plain rows, collapsible, collapsed and reorderable.",
+	"root": {
+		"tag": "section",
+		"props": {
+			"title": "Projects"
+		},
+		"children": [
+			{
+				"tag": "action",
+				"props": {
+					"label": "New in Projects",
+					"entries": [
+						{
+							"entries": [
+								{
+									"id": "create",
+									"label": "Create channel",
+									"icon": "plus"
+								}
+							]
+						},
+						{
+							"title": "Section",
+							"entries": [
+								{
+									"id": "notify",
+									"label": "Notifications",
+									"icon": "bell",
+									"entries": [
+										{
+											"id": "all",
+											"label": "All messages",
+											"checked": true
+										}
+									]
+								},
+								{
+									"id": "delete",
+									"label": "Delete section",
+									"icon": "trash",
+									"destructive": true
+								}
+							]
+						}
+					]
+				},
+				"events": ["select"],
+				"children": [
+					{
+						"tag": "text",
+						"children": ["+"]
+					}
+				]
+			},
+			{
+				"tag": "item",
+				"key": "roadmap",
+				"props": {
+					"title": "roadmap",
+					"href": "#"
+				},
+				"events": ["press"]
+			},
+			{
+				"tag": "item",
+				"key": "launch",
+				"props": {
+					"title": "launch",
+					"href": "#",
+					"emphasized": true
+				},
+				"events": ["press"]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"axes": [
+		{
+			"prop": "collapsible",
+			"values": [true]
+		},
+		{
+			"prop": "collapsed",
+			"values": [true]
+		},
+		{
+			"prop": "reorderable",
+			"values": [true]
+		}
+	]
+}
