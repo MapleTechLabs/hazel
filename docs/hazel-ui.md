@@ -64,8 +64,12 @@ moving web-only screens (settings, admin) off `Html`.
    implemented and skipped (or replaced by its fallback) elsewhere. Skipping it is intended, so it is
    not counted as a gap. A part that should exist everywhere but has no renderer yet is a different
    thing: it fails the type check. See "Platform extensions".
-4. **Styles are data.** Views choose variants (`tone`, `size`, `emphasis`, `selected`), never classes
-   or raw values. `tokens.ts` holds tokens and recipes; codegen writes the CSS and `Theme.swift`.
+4. **The design language lives in the primitives.** A primitive with no props already looks right:
+   its spacing, type, colour, radius, height, icon size, press and focus states, and motion are
+   decided by its recipe. A view says what something is and what state it is in (`item.selected()`,
+   `text.role("caption")`, `button.variant("danger")`), never how it looks. The few choices a view has
+   are small closed sets of named options, not values. Styles are data: `tokens.ts` holds tokens and
+   recipes, and codegen writes the CSS and `Theme.swift`. See "Design language".
 5. **Primitives are semantic and platform-shaped.** `menu` is a popover on the web and `UIMenu` on
    iOS; `tabBar` is the rail on wide web and the system tab bar on iOS. A view never asks which
    platform it is on.
@@ -116,9 +120,9 @@ v1 is the `cross-platform-ui.md` list. Each tag is a typed builder with chainabl
 
 | Group | Tags |
 | --- | --- |
-| Layout | `stack` (axis, gap, align, justify), `spacer`, `scroll`, `frame`, `divider` |
+| Layout | `stack` (axis, density, align), `spacer`, `scroll`, `frame` (surface), `divider` |
 | Collections | `list` (keyed rows, sections, reach start or end, stick to bottom) |
-| Content | `text` (tone, size, weight, numeric, truncate), `heading`, `icon` (a name from the icon set), `image`, `avatar`, `badge`, `richText` |
+| Content | `text` (role, tone, numeric, truncate), `heading` (level), `icon` (a name from the icon set), `image`, `avatar`, `badge`, `richText` |
 | Controls | `button` (variant, size), `link`, `textField`, `textArea`, `toggle`, `select`, `searchField`, `composer` |
 | Overlays | `menu`, `contextMenu`, `sheet`, `dialog`, `popover`, `toast` |
 | Structure | `screen` (title, toolbar, back), `navigation`, `tabBar`, `splitView`, `section`, `item` |
@@ -140,8 +144,8 @@ h.section.title("Projects").action(h.icon.name("plus"), Msg.PressedCreate()).chi
 
 Rules:
 
-- Props are values the recipes understand (variants, text, numbers, icon names, children), never
-  CSS, classes or colours.
+- Props are content (text, icon names, children, counts) and named options from closed sets
+  (variants, roles, tones, states), never CSS, classes, colours, sizes or spacing values.
 - Events are semantic (`press`, `longPress`, `change`, `submit`, `reachEnd`, `dismiss`), with typed
   plain-data payloads. Each host maps them from its own input.
 - A primitive lands only with its web renderer, its Swift renderer and its conformance fixtures.
@@ -185,6 +189,50 @@ Rules:
   screen wants it.
 - Platform behaviour that is not drawing (haptics, share, clipboard) is a platform service, not an
   extension.
+
+## Design language
+
+Most styling is decided before a view is written. The goal is that two people building two screens
+get the same result without talking, and that a screen cannot drift from the system by accident.
+
+**What primitives decide, always:** type (font, size, weight, line height, tracking per role),
+colour per state, heights, paddings and radii, icon sizes and their alignment with text, spacing
+between a primitive's own parts, press, hover, focus and disabled states, selection, and motion
+(durations and curves). A view cannot set any of these.
+
+**What containers decide:** the rhythm between things. A `section` spaces its header and rows, a
+`list` spaces its rows, a `screen` sets its margins and the gap between sections, a `stack` spaces
+its children from its `density` (`compact`, `regular`, `relaxed`), not from a number. A view picks a
+container, not a gap.
+
+**What a view chooses:** what each thing is and its state, from small named sets:
+
+| Choice | Options (v1, closed) |
+| --- | --- |
+| `text.role` | `body`, `label`, `caption`, `title`, `display`, `code` |
+| `text.tone` | `default`, `muted`, `subtle`, `accent`, `danger`, `success` |
+| `button.variant` | `primary`, `secondary`, `ghost`, `danger` |
+| `button.size` | `regular`, `small` |
+| `stack.density` | `compact`, `regular`, `relaxed` |
+| `frame.surface` | `none`, `card`, `inset`, `muted`, `overlay` |
+| states | `selected`, `emphasized`, `disabled`, `loading`, `destructive` |
+
+The sets are typed unions, so anything else is a compile error.
+
+**Rules that keep it consistent:**
+
+- Defaults are the common case. A row, a section, a button or a field with no style props is correct.
+  If most call sites pass the same option, that option becomes the default.
+- New options are design decisions. Adding a role, tone, variant or density goes through the
+  user's review, lands in `tokens.ts` with both renderers, and gets a gallery entry. Lanes and
+  screen agents never add options to unblock themselves; they ask.
+- No escape hatches in shared screens: no `style`, `className`, raw numbers or colours on primitives.
+  What a screen cannot express is a missing option or primitive, raised as such. A platform
+  extension may take tokens as props, never raw values.
+- Composite patterns are primitives, not recipes repeated in screens. An `item` already lays out its
+  leading icon or avatar, title, subtitle, badge and trailing accessory; screens fill slots.
+- A gallery (web page and iOS screen, both from the conformance fixtures) shows every primitive in
+  every option and state, light and dark. It is the reference for what the system can say.
 
 ## Style layer
 
