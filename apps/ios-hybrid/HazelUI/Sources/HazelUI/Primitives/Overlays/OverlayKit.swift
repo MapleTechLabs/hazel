@@ -134,9 +134,10 @@ extension View {
             .foregroundStyle(style.color?.color ?? Color.primary)
     }
 
-    /// The scrim a modal specimen sits on (token `scrim`, `overlay-tokens`).
-    func hzOverlayScrim() -> some View {
-        background(HazelTheme.Colors.scrim.color)
+    /// The scrim a modal specimen sits on (token `scrim`, `overlay-tokens`), fading in with the
+    /// recipe's backdrop motion for `tag`.
+    func hzOverlayScrim(_ tag: String, _ sizeClass: HazelTheme.SizeClass) -> some View {
+        background { HazelTheme.Colors.scrim.color.hzEnter(tag, part: "panel", backdrop: true, sizeClass: sizeClass) }
     }
 }
 

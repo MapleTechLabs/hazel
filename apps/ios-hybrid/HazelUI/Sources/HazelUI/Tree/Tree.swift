@@ -70,6 +70,9 @@ public final class Tree {
     }
 
     private var handlers: [NodeId: Handler] = [:]
+    /// Nodes a view keeps past their removal (an exiting toast), and the held ones already removed.
+    private var holds: [NodeId: Int] = [:]
+    private var retired: Set<NodeId> = []
     /// Commands whose node has no handler yet (its view has not appeared), oldest first.
     private var waiting: [NodeId: [PendingCommand]] = [:]
 
@@ -162,6 +165,12 @@ public final class Tree {
     }
 
     private func free(_ node: Node) {
+        // A held subtree leaves the tree but stays readable until its holder lets go (`release`).
+        if holds[node.id] != nil {
+            node.parent = nil
+            retired.insert(node.id)
+            return
+        }
         for child in node.children {
             if let c = nodes[child] { free(c) }
         }
@@ -172,6 +181,26 @@ public final class Tree {
             reply(command.request, ok: false, .string("node \(node.id) was removed"))
         }
     }
+
+    // MARK: holds
+
+    /// Keeps `id` and its subtree readable after a batch removes it, until `release`: the web's
+    /// `onRemoved` linger, so an overlay's exit motion still draws its content.
+    public func hold(_ id: NodeId) {
+        guard nodes[id] != nil else { return }
+        holds[id, default: 0] += 1
+    }
+
+    /// Ends one `hold`; a held node the tree already removed is freed now.
+    public func release(_ id: NodeId) {
+        guard let count = holds[id] else { return }
+        if count > 1 { holds[id] = count - 1; return }
+        holds.removeValue(forKey: id)
+        if retired.remove(id) != nil, let node = nodes[id] { free(node) }
+    }
+
+    /// Whether `id` is out of the tree and kept only by a hold.
+    public func isRetired(_ id: NodeId) -> Bool { retired.contains(id) }
 
     // MARK: events
 
