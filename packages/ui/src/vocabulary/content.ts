@@ -89,6 +89,8 @@ export const ThreadSummary = Schema.Struct({
 	/** The last reply: its author, initials, text and time label. */
 	author: Schema.String,
 	initials: Schema.String,
+	/** The last reply's author picture (`thread-reply-avatar`); else their seeded face. */
+	avatar: Schema.optional(Schema.String),
 	preview: Schema.String,
 	time: Schema.String,
 })
@@ -119,7 +121,13 @@ export const MessageRow = Schema.Struct({
 	badges: Schema.optional(Schema.Array(AuthorBadge)),
 	/** The message this one replies to: its author and first line, or absent when it was deleted. */
 	reply: Schema.optional(
-		Schema.Struct({ author: Schema.String, initials: Schema.String, text: Schema.String }),
+		Schema.Struct({
+			author: Schema.String,
+			initials: Schema.String,
+			text: Schema.String,
+			/** The quoted author's picture (`thread-reply-avatar`). */
+			avatar: Schema.optional(Schema.String),
+		}),
 	),
 	files: Schema.optional(Schema.Array(Attachment)),
 	embeds: Schema.optional(Schema.Array(Embed)),

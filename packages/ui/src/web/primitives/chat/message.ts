@@ -137,7 +137,7 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 		const line = button(document, "replyLine", `Jump to ${data.author}'s message`, () =>
 			fire(primitive, "pressReply"),
 		)
-		const face = avatar(data.author, data.initials, undefined, { decorative: true, px: 16 })
+		const face = avatar(data.author, data.initials, data.avatar, { decorative: true, px: 16 })
 		face.dataset.hzPart = "replyAvatar"
 		line.append(
 			face,
@@ -167,7 +167,7 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 		count.append(icon(document, "chevron-right"))
 		top.append(count)
 		const last = part(document, "span", "threadLast")
-		const face = avatar(data.author, data.initials, undefined, { decorative: true, px: 16 })
+		const face = avatar(data.author, data.initials, data.avatar, { decorative: true, px: 16 })
 		face.dataset.hzPart = "threadAvatar"
 		last.append(
 			face,

@@ -162,11 +162,13 @@ const threadOf = (lookups: Lookups, names: Names, threadChannelId: ChannelId | n
 	const last = thread?.messages[0]
 	if (thread === undefined || last === undefined) return undefined
 	const author = displayNameOf(lookups, last.authorId) ?? ""
+	const avatar = lookups.users.get(last.authorId)?.avatarUrl ?? undefined
 	return {
 		name: thread.name || "Thread",
 		count: thread.messages.length,
 		author,
 		initials: initialsOf(author),
+		...(avatar === undefined ? {} : { avatar }),
 		preview: plainLine(last.content, names),
 		time: distanceStrict(last.createdAtMs, lookups.nowMs),
 	} satisfies Content.ThreadSummary
@@ -177,9 +179,11 @@ const replyOf = (lookups: Lookups, names: Names, replyTo: MessageId | null) => {
 	const target = lookups.replyTargets.get(replyTo)
 	if (target === undefined) return undefined
 	const author = displayNameOf(lookups, target.authorId) ?? ""
+	const avatar = lookups.users.get(target.authorId)?.avatarUrl ?? undefined
 	return {
 		author,
 		initials: initialsOf(author),
+		...(avatar === undefined ? {} : { avatar }),
 		text: plainLine(target.content, names),
 	}
 }

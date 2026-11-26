@@ -73,8 +73,9 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 	// A seeded avatar: today's dither under one white initial, sized to the box (`avatar-seed-tint`).
 	[
 		`${M} [data-seeded]:is(${p("avatarImage")}, ${p("replyAvatar")}, ${p("threadAvatar")})`,
-		"position: relative; container-type: size;",
+		"position: relative; container-type: size; overflow: visible;",
 	],
+	[`${M} [data-seeded] > ${p("dither")}`, "corner-shape: squircle;"],
 	[
 		`${M} [data-seeded] > ${p("initials")}`,
 		`position: relative; color: white; font-weight: var(--hz-weight-semibold); font-size: 46cqw; line-height: 1; text-box: trim-both cap alphabetic;`,

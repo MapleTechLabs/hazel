@@ -1,14 +1,16 @@
 /// <reference path="../../../../apps/web-foldkit/src/vite-env.d.ts" />
 import { Schema } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { messageRowView, type RowContext } from "../../../../apps/web-foldkit/src/chat/message/row.ts"
+import {
+	avatarButton,
+	messageRowView,
+	type RowContext,
+} from "../../../../apps/web-foldkit/src/chat/message/row.ts"
 import { MessageRowData } from "../../../../apps/web-foldkit/src/page/chat/rows.ts"
-import { avatar } from "../../../../apps/web-foldkit/src/ui/avatar.ts"
-import { ariaButton } from "../../../../apps/web-foldkit/src/ui/button.ts"
 
 /**
  * The kit side of the chat specimens (lane A5): today's message row (`chat/message/row.ts`) with the
- * content of `fixtures/message/kit.json`. The avatar has no image or seed, as the fixture has none.
+ * content of `fixtures/message/kit.json`. The avatar is the app's: no image, seeded by the author's name.
  */
 
 type H = HtmlBuilder<never>
@@ -75,8 +77,7 @@ const context = (h: H): RowContext<never> => ({
 	}),
 	toReact: unreachable,
 	contextMenu: (_row, render) => render([], h.empty),
-	avatar: () =>
-		ariaButton(h, { className: "size-fit outline-hidden", attributes: [] }, [avatar(h, { size: "md" })]),
+	avatar: (message) => avatarButton(h, message, []),
 	mention: () => (_mention, toTrigger) => toTrigger([]),
 	toHtmlRenderMessage: unreachable,
 	toPressEmbedAction: unreachable,

@@ -23,12 +23,13 @@ const css = `
 	flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-anchor: none; overscroll-behavior: contain;
 }
 [data-hz="list"] > [data-hz-part="viewport"] > [data-hz-part="content"] { display: flex; flex-direction: column; }
-/* Chat rhythm (today's \`mt-2\` on a group's first row, \`mb-2\` on its last, collapsed): 8px between
-   author groups, none after a divider, 8px under the last row. */
-[data-hz="list"] > [data-hz-part="viewport"] > [data-hz-part="content"] > [data-hz="message"]:not([data-grouped]):not([data-hz="listDivider"] + *) {
+/* Chat rhythm, today's: 8px above an author group's first row and below its last (no collapsing). */
+[data-hz="list"] > [data-hz-part="viewport"] > [data-hz-part="content"] > [data-hz="message"]:not([data-grouped]) {
 	margin-top: var(--hz-space-2);
 }
-[data-hz="list"] > [data-hz-part="viewport"] > [data-hz-part="content"] > [data-hz="message"]:last-child { margin-bottom: var(--hz-space-2); }
+[data-hz="list"] > [data-hz-part="viewport"] > [data-hz-part="content"] > [data-hz="message"]:not(:has(+ [data-hz="message"][data-grouped])) {
+	margin-bottom: var(--hz-space-2);
+}
 [data-hz="list"] > [data-hz-part="viewport"] > [data-hz-part="content"] > [data-hz-offscreen] {
 	content-visibility: auto; contain-intrinsic-size: auto var(--hz-row-size, var(--hz-space-11));
 }
