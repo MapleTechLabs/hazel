@@ -1,0 +1,18 @@
+{
+	"about": "The kit's `iconTile` (`md`) in its `danger` intent, diffed against today's (`icon-tile-tints`).",
+	"root": {
+		"tag": "iconTile",
+		"props": {
+			"name": "hashtag",
+			"tone": "danger"
+		}
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "icon-tile-danger",
+		"target": "iconTile"
+	},
+	"pending": {
+		"ios": "S1"
+	}
+}

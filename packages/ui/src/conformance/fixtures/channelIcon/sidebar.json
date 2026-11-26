@@ -1,0 +1,100 @@
+{
+	"about": "Channel icons in a sidebar row (`channel-icon-surface`): the lock, partner and sync marks are cut from the sidebar, not the page.",
+	"root": {
+		"tag": "screen",
+		"props": {
+			"title": "Channels"
+		},
+		"children": [
+			{
+				"tag": "section",
+				"props": {
+					"title": "Customers"
+				},
+				"children": [
+					{
+						"tag": "item",
+						"key": "linear",
+						"props": {
+							"title": "linear",
+							"href": "#"
+						},
+						"slots": [
+							{
+								"name": "leading",
+								"children": [
+									{
+										"tag": "channelIcon",
+										"props": {
+											"customer": {
+												"name": "Linear",
+												"initials": "L"
+											},
+											"private": true
+										}
+									}
+								]
+							}
+						]
+					},
+					{
+						"tag": "item",
+						"key": "maple",
+						"props": {
+							"title": "maple-shared",
+							"href": "#"
+						},
+						"slots": [
+							{
+								"name": "leading",
+								"children": [
+									{
+										"tag": "channelIcon",
+										"props": {
+											"partners": [
+												{
+													"name": "Maple",
+													"initials": "M"
+												},
+												{
+													"name": "Acme",
+													"initials": "A"
+												}
+											],
+											"sync": "slack"
+										}
+									}
+								]
+							}
+						]
+					},
+					{
+						"tag": "item",
+						"key": "general",
+						"props": {
+							"title": "general",
+							"href": "#"
+						},
+						"slots": [
+							{
+								"name": "leading",
+								"children": [
+									{
+										"tag": "channelIcon",
+										"props": {
+											"sync": "discord"
+										}
+									}
+								]
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"pending": {
+		"ios": "S1"
+	}
+}

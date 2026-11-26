@@ -156,6 +156,26 @@ const color = {
 	"warning-tint-hover": same(alpha(ref("warning"), 0.15)),
 	/** A quiet destructive control under the pointer (`hover:bg-danger/10`). */
 	"danger-tint": same(alpha(ref("danger"), 0.1)),
+	/** An icon tile's faint fills (`icon-tile.ts` `bg-primary/5`, `bg-danger/5`, gap `icon-tile-tints`). */
+	"primary-wash": same(alpha(ref("primary"), 0.05)),
+	"danger-wash": same(alpha(ref("danger"), 0.05)),
+	/** Tinted edges of icon tiles and callouts (`border-success/20`, `border-danger/15`, `callout.ts`). */
+	"success-edge": same(alpha(ref("success"), 0.2)),
+	"warning-edge": same(alpha(ref("warning"), 0.2)),
+	"danger-edge": same(alpha(ref("danger"), 0.15)),
+	"info-edge": same(alpha(ref("info-subtle-fg"), 0.15)),
+	/** A chip of ink over code (`markdown-view.ts` copy button `bg-fg/10`, hover `/20`). */
+	"fg-tint": same(alpha(ref("fg"), 0.1)),
+	"fg-tint-hover": same(alpha(ref("fg"), 0.2)),
+	// Code highlighting (`core/styles/code-syntax.css`): one ink per group of Prism token types.
+	"syntax-comment": themed(lit("oklch(0.6 0.02 240)"), lit("oklch(0.55 0.02 240)")),
+	"syntax-punctuation": themed(lit("oklch(0.5 0.02 240)"), lit("oklch(0.65 0.02 240)")),
+	"syntax-constant": themed(lit("oklch(0.65 0.2 20)"), lit("oklch(0.75 0.2 20)")),
+	"syntax-string": themed(lit("oklch(0.6 0.18 150)"), lit("oklch(0.7 0.18 150)")),
+	"syntax-operator": themed(lit("oklch(0.65 0.15 200)"), lit("oklch(0.7 0.15 200)")),
+	"syntax-keyword": themed(lit("oklch(0.6 0.2 260)"), lit("oklch(0.7 0.2 280)")),
+	"syntax-function": themed(lit("oklch(0.65 0.18 40)"), lit("oklch(0.75 0.18 50)")),
+	"syntax-variable": themed(lit("oklch(0.65 0.2 30)"), lit("oklch(0.75 0.2 40)")),
 	/** Search hits, starred items, the verified mark (styles.css `--highlight`, `--favorite`, `--verified`). */
 	highlight: themed(p("amber-200"), alpha(p("amber-400"), 0.2)),
 	"highlight-fg": themed(p("amber-900"), p("amber-200")),
