@@ -36,6 +36,11 @@ export const primitive = definePrimitive("menu", ({ document, tag, outer }) => {
 		const hasSlot = content.querySelector(":scope > [data-hz-slot=trigger]") !== null
 		button.hidden = hasSlot
 		const control = trigger()
+		// A slot of plain content (a line of text) becomes the button itself: focusable and named.
+		if (control !== button && control.matches("[data-hz-slot=trigger]")) {
+			control.setAttribute("role", "button")
+			if (!control.hasAttribute("tabindex")) control.tabIndex = 0
+		}
 		control.setAttribute("aria-haspopup", "menu")
 		control.setAttribute("aria-expanded", String(list.isOpen()))
 		control.setAttribute("aria-controls", list.panel.id)
@@ -60,6 +65,14 @@ export const primitive = definePrimitive("menu", ({ document, tag, outer }) => {
 	content.addEventListener("click", toggle)
 	button.addEventListener("click", toggle)
 	const onKey = (event: KeyboardEvent) => {
+		// Enter and Space on a slot-as-button (a native button already clicks on its own).
+		const onSlot =
+			event.target instanceof HTMLElement && event.target.matches("[data-hz-slot=trigger][role=button]")
+		if (onSlot && (event.key === "Enter" || event.key === " ")) {
+			event.preventDefault()
+			toggle()
+			return
+		}
 		if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
 		event.preventDefault()
 		open(event.key === "ArrowDown" ? "first" : "last")
