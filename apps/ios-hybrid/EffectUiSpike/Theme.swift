@@ -2,53 +2,13 @@ import CoreText
 import SwiftUI
 import UIKit
 
-/// Hazel's sidebar look as data (`docs/cross-platform-ui.md`, option B): the values the hybrid shell
-/// measured from the web page (`web/look.ts`, light and dark), so the native screen matches the web's
-/// without a page to read. The selected row's colours are `--sidebar-primary` / `--sidebar-primary-fg`
-/// (`web-foldkit/src/core/styles/styles.css`), which no captured screen had.
+/// How the `hz:*` views read Hazel's look: every value comes from the generated `HazelTheme`
+/// (`HazelTheme.swift`, a link to `packages/ui/src/style/generated/Theme.swift`). This file only adds
+/// the host's assets (Inter, the web's icons) and turns a recipe's resolved `Style` into SwiftUI.
 enum Theme {
-    static let screenBg = Color(light: "#fafafa", dark: "#111114")
-    static let bandBorder = Color(light: "#09090b12", dark: "#ffffff12")
-    static let pressedBg = Color(light: "#00000009", dark: "#ffffff0b")
-
-    /// A channel or person row (`sidebarItem`, `web-foldkit/src/ui/sidebar.ts`).
-    enum Row {
-        static let height: CGFloat = 40
-        static let radius: CGFloat = 8
-        static let spacing: CGFloat = 2
-        static let padLeading: CGFloat = 8
-        static let iconSize: CGFloat = 20
-        static let avatarSize: CGFloat = 24
-        static let gap: CGFloat = 8
-        static let label = Color(light: "#424245", dark: "#b2b2b3")
-        static let labelEmphasized = Color(light: "#09090b", dark: "#fafafa")
-        static let icon = Color(light: "#68686a", dark: "#8a8a8c")
-        static let selectedBg = Color(light: "#9e77ed26", dark: "#9e77ed33")
-        static let selectedFg = Color(light: "#6941c6", dark: "#d6bbfb")
-        static let font = Inter.font(size: 16, weight: 500)
-    }
-
-    /// A section's header: chevron, title and its `+`.
-    enum Section {
-        static let padTop: CGFloat = 16
-        static let headerHeight: CGFloat = 32
-        static let padBottom: CGFloat = 16
-        static let spacing: CGFloat = 2
-        static let chevronLeading: CGFloat = 10
-        static let chevronSize: CGFloat = 12
-        static let actionSize: CGFloat = 14
-        static let label = Color(light: "#52525c", dark: "#9f9fa9")
-        static let font = Inter.font(size: 12, weight: 500)
-    }
-
-    enum Badge {
-        static let bg = Color(hex: "#6938ef")
-        static let fg = Color.white
-        static let height: CGFloat = 20
-        static let minWidth: CGFloat = 20
-        static let padX: CGFloat = 6
-        static let trailing: CGFloat = 6
-        static let font = Inter.font(size: 11, weight: 500)
+    /// Behind the screen, under the safe areas: the screen recipe's own background.
+    static var screenBg: Color {
+        HazelTheme.Recipes.screen.style(sizeClass: .compact).background?.color ?? .clear
     }
 
     /// The web's own icon for a semantic `symbol` (`scripts/export-icons.ts`), else the SF Symbol.
@@ -56,6 +16,61 @@ enum Theme {
         let asset = ["hashtag": "hazel.hashtag", "number": "hazel.hashtag", "lock": "hazel.lock", "plus": "hazel.plus", "chevron-down": "hazel.chevron-down"][symbol]
         if let asset, UIImage(named: asset) != nil { return Image(asset) }
         return Image(systemName: symbol)
+    }
+}
+
+extension HazelTheme.SizeClass {
+    init(_ sizeClass: UserInterfaceSizeClass?) {
+        self = sizeClass == .regular ? .regular : .compact
+    }
+}
+
+extension HazelTheme.Style {
+    /// Inter at the style's type step and weight (`strong`), for this size class.
+    func font(_ sizeClass: HazelTheme.SizeClass) -> SwiftUI.Font {
+        let metrics = HazelTheme.text(text ?? .body, sizeClass)
+        let weight = strong == true ? HazelTheme.Font.weightStrong : HazelTheme.Font.weightRegular
+        return Inter.font(size: metrics.size, weight: weight)
+    }
+
+    /// The line box: `leading` when the recipe sets one, else the type step's line height.
+    func lineHeight(_ sizeClass: HazelTheme.SizeClass) -> CGFloat {
+        leading ?? HazelTheme.text(text ?? .body, sizeClass).lineHeight
+    }
+}
+
+extension View {
+    /// A style's text: font, ink and a line box of the web's height (single-line labels).
+    func hzText(_ style: HazelTheme.Style, _ sizeClass: HazelTheme.SizeClass) -> some View {
+        font(style.font(sizeClass))
+            .monospacedDigit(style.numeric == true)
+            .foregroundStyle(style.color?.color ?? Color.primary)
+            .frame(minHeight: style.lineHeight(sizeClass))
+    }
+
+    /// A style's box: padding, minimum height, fill, ring, corner radius, bottom divider, opacity.
+    func hzBox(_ style: HazelTheme.Style) -> some View {
+        let shape = RoundedRectangle(cornerRadius: min(style.radius ?? 0, 1000), style: .continuous)
+        return padding(.horizontal, style.paddingX ?? 0)
+            .padding(.vertical, style.paddingY ?? 0)
+            .frame(minHeight: style.minHeight)
+            .frame(maxWidth: style.fill == true ? .infinity : nil, alignment: .leading)
+            .background(shape.fill(style.background?.color ?? .clear))
+            .overlay { if let ring = style.ring { shape.strokeBorder(ring.color, lineWidth: 1) } }
+            .overlay(alignment: .bottom) {
+                if let divider = style.divider { Rectangle().fill(divider.color).frame(height: 1) }
+            }
+            .contentShape(shape)
+            .opacity(style.opacity ?? 1)
+    }
+
+    /// A square of the style's `size` (an icon, an avatar, an icon-only control).
+    @ViewBuilder func hzSize(_ style: HazelTheme.Style) -> some View {
+        if let size = style.size { frame(width: size, height: size) } else { self }
+    }
+
+    @ViewBuilder fileprivate func monospacedDigit(_ on: Bool) -> some View {
+        if on { monospacedDigit() } else { self }
     }
 }
 
@@ -70,7 +85,7 @@ enum Inter {
         }
     }
 
-    static func font(size: CGFloat, weight: Int) -> Font {
+    static func font(size: CGFloat, weight: Int) -> SwiftUI.Font {
         let name = switch weight {
         case ..<450: "Inter-Regular"
         case ..<550: "Inter-Medium"
@@ -82,14 +97,9 @@ enum Inter {
 }
 
 extension Color {
-    /// `#rrggbb` or `#rrggbbaa`.
+    /// `#rrggbb` or `#rrggbbaa`: only `Extensions.swift`'s G1 stand-in token colours still use it.
     init(hex: String) {
         self.init(uiColor: UIColor(hex: hex))
-    }
-
-    init(light: String, dark: String) {
-        let light = UIColor(hex: light), dark = UIColor(hex: dark)
-        self.init(uiColor: UIColor { $0.userInterfaceStyle == .dark ? dark : light })
     }
 }
 

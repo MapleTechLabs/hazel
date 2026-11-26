@@ -258,13 +258,14 @@ public enum HazelTheme {
         public var borderWidth: CGFloat? = nil, radius: CGFloat? = nil
         public var ring: ThemedColor? = nil, divider: ThemedColor? = nil
         public var paddingX: CGFloat? = nil, paddingY: CGFloat? = nil, paddingStart: CGFloat? = nil
-        public var gap: CGFloat? = nil, rowGap: CGFloat? = nil, marginBottom: CGFloat? = nil, bleedX: CGFloat? = nil
-        public var marginX: CGFloat? = nil
+        // In the order codegen writes the fields: the memberwise initializer takes them so.
+        public var gap: CGFloat? = nil, rowGap: CGFloat? = nil, marginBottom: CGFloat? = nil
+        public var marginX: CGFloat? = nil, bleedX: CGFloat? = nil
         public var minHeight: CGFloat? = nil, size: CGFloat? = nil
         public var text: TextStep? = nil, leading: CGFloat? = nil, strong: Bool? = nil
-        public var opacity: Double? = nil, shadow: String? = nil
-        public var truncate: Bool? = nil, nowrap: Bool? = nil, grow: Bool? = nil, shrink: Bool? = nil
-        public var wrap: Bool? = nil, fill: Bool? = nil, numeric: Bool? = nil
+        public var numeric: Bool? = nil, opacity: Double? = nil, shadow: String? = nil
+        public var truncate: Bool? = nil, nowrap: Bool? = nil, wrap: Bool? = nil, fill: Bool? = nil
+        public var grow: Bool? = nil, shrink: Bool? = nil
         public var transition: Double? = nil
 
         /// `other`'s fields over these.
