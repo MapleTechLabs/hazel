@@ -1,11 +1,11 @@
 /**
- * The closed option sets a view chooses from (`docs/hazel-ui.md`, "Design language"). G1 carries only
- * the ones its tags use; phase 1 freezes the full sets.
+ * The closed option sets a view chooses from (`docs/hazel-ui.md`, "Design language"; contract C1).
+ * Style sets come from the style layer's lists (`src/style/schema.ts`), which the recipes key on.
+ * Changes are design decisions the user reviews (`packages/ui/CONTRACTS.md`).
  */
 import { Schema } from "effect"
 import * as Sets from "../style/schema.ts"
 
-// One source for each set: the style layer's lists (`src/style/schema.ts`), which the recipes key on.
 export const TextRole = Schema.Literals(Sets.textRoles)
 export type TextRole = typeof TextRole.Type
 
@@ -29,11 +29,119 @@ export type BadgeStyle = typeof BadgeStyle.Type
 export const BadgeSize = Schema.Literals(Sets.badgeSizes)
 export type BadgeSize = typeof BadgeSize.Type
 
-/** Icon names both hosts draw: the web's own SVGs, the iOS asset catalog (`scripts/export-icons.ts`). */
-export const IconName = Schema.Literals(["hashtag", "lock", "plus", "chevron-down", "sparkles"])
+export const StackAxis = Schema.Literals(Sets.stackAxes)
+export type StackAxis = typeof StackAxis.Type
+
+export const StackDensity = Schema.Literals(Sets.stackDensities)
+export type StackDensity = typeof StackDensity.Type
+
+export const StackAlign = Schema.Literals(Sets.stackAligns)
+export type StackAlign = typeof StackAlign.Type
+
+export const FrameSurface = Schema.Literals(Sets.frameSurfaces)
+export type FrameSurface = typeof FrameSurface.Type
+
+export const HeadingLevel = Schema.Literals(Sets.headingLevels)
+export type HeadingLevel = typeof HeadingLevel.Type
+
+export const AvatarPresence = Schema.Literals(Sets.avatarPresences)
+export type AvatarPresence = typeof AvatarPresence.Type
+
+export const ListDividerKind = Schema.Literals(Sets.listDividerKinds)
+export type ListDividerKind = typeof ListDividerKind.Type
+
+export const ListAnchor = Schema.Literals(Sets.listAnchors)
+export type ListAnchor = typeof ListAnchor.Type
+
+/**
+ * Icon names both hosts draw, each the web's own icon (`web-foldkit/src/icons`, `iconSources`). C1 adds
+ * what the four phase 1 screens draw; the iOS asset catalog exports the same list.
+ */
+export const iconNames = [
+	"arrow-up",
+	"bell",
+	"check",
+	"chevron-down",
+	"chevron-right",
+	"close",
+	"copy",
+	"dots",
+	"download",
+	"edit",
+	"emoji",
+	"emoji-add",
+	"gear",
+	"gif",
+	"hashtag",
+	"leave",
+	"lock",
+	"office",
+	"paperclip",
+	"pin",
+	"plus",
+	"reply",
+	"search",
+	"share",
+	"sparkles",
+	"star",
+	"thread",
+	"trash",
+	"users",
+	"volume-mute",
+	"warning",
+] as const
+export const IconName = Schema.Literals(iconNames)
 export type IconName = typeof IconName.Type
 
-/** Colour token names an extension may take (G1 stand-in until `src/style/tokens.ts` lands). */
+/** Each name's web icon export (`apps/web-foldkit/src/icons`). */
+export const iconSources: { readonly [K in IconName]: string } = {
+	"arrow-up": "IconArrowUp",
+	bell: "IconBell",
+	check: "IconCheck",
+	"chevron-down": "IconChevronDown",
+	"chevron-right": "IconChevronRight",
+	close: "IconClose",
+	copy: "IconCopy",
+	dots: "IconDots",
+	download: "IconDownload",
+	edit: "IconEdit",
+	emoji: "IconEmoji1",
+	"emoji-add": "IconEmojiAdd",
+	gear: "IconGear",
+	gif: "IconGif",
+	hashtag: "IconHashtag",
+	leave: "IconLeave",
+	lock: "IconLock",
+	office: "IconOffice",
+	paperclip: "IconPaperclip2",
+	pin: "IconPin",
+	plus: "IconPlus",
+	reply: "IconReply",
+	search: "IconMagnifier3",
+	share: "IconShare",
+	sparkles: "IconSparkles",
+	star: "IconStar",
+	thread: "IconThread",
+	trash: "IconTrash",
+	users: "IconUsers",
+	"volume-mute": "IconVolumeMute",
+	warning: "IconWarning",
+}
+
+/** What a message row offers on hover (web toolbar) or long press (iOS menu); `action` reports one. */
+export const MessageAction = Schema.Literals([
+	"react",
+	"reply",
+	"thread",
+	"copy",
+	"edit",
+	"pin",
+	"unpin",
+	"delete",
+])
+export type MessageAction = typeof MessageAction.Type
+
+/** Colour token names an extension may take (G1 stand-in; lane D replaces it with `tokens.ts` names). */
 export const TokenColor = Schema.Literals(["brand.500", "brand.300", "accent.400", "neutral.200"])
 export type TokenColor = typeof TokenColor.Type
 

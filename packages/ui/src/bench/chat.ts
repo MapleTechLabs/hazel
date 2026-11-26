@@ -48,34 +48,45 @@ const set = <B extends View.ElementBuilder<any, any, any, any>>(builder: B, prop
 	return View.withFields(builder, { props: next })
 }
 
-export class ChatContainer<out Msg, out R = never, in out E = {}, out T extends string = string> extends Hazel.HzContainer<
+const textParents = [Hazel.tag.text, chatTag.run, chatTag.codeBlock]
+
+/** An untyped bench element: props through `set`, element children only. */
+export class ChatContainer<out Msg, out R = never, in out E = {}, out T extends string = string> extends View.ElementBuilder<
 	Msg,
 	R,
 	E,
+	unknown,
 	T
 > {
 	set(props: Readonly<Record<string, Json | undefined>>): this {
 		return set(this, props)
 	}
-	override children<const C extends ReadonlyArray<Hazel.NoTextInput<Msg>>>(
+	children<const C extends ReadonlyArray<Hazel.NoTextInput<Msg>>>(
 		...inputs: C
 	): ChatContainer<Msg, R | View.Requirements<C[number]>, E, T> {
-		return View.withNoTextContent(this, inputs as ReadonlyArray<View.Input<Msg, any>>, vocabulary) as any
+		return View.withNoTextContent(this, inputs as ReadonlyArray<View.Input<Msg, any>>, { name: Hazel.name, textParents }) as any
 	}
 }
 
-export class ChatText<out Msg, out R = never, in out E = {}, out T extends string = string> extends Hazel.HzText<
+/** An untyped bench text element (`run`, `codeBlock`). */
+export class ChatText<out Msg, out R = never, in out E = {}, out T extends string = string> extends View.ElementBuilder<
 	Msg,
 	R,
 	E,
+	unknown,
 	T
 > {
 	set(props: Readonly<Record<string, Json | undefined>>): this {
 		return set(this, props)
 	}
+	children<const C extends ReadonlyArray<View.Input<Msg, any>>>(
+		...inputs: C
+	): ChatText<Msg, R | View.Requirements<C[number]>, E, T> {
+		return View.withContent(this, inputs) as any
+	}
 }
 
-export type ChatTags<Msg> = Hazel.Tags<Msg> & {
+interface BenchTags<Msg> {
 	readonly list: View.Shorthand<ChatContainer<Msg, never, ListEvents, "hz:list">>
 	readonly listDivider: ChatContainer<Msg, never, {}, "hz:listDivider">
 	readonly message: View.Shorthand<ChatContainer<Msg, never, {}, "hz:message">>
@@ -88,8 +99,10 @@ export type ChatTags<Msg> = Hazel.Tags<Msg> & {
 	readonly reaction: ChatContainer<Msg, never, {}, "hz:reaction">
 	readonly attachmentGrid: View.Shorthand<ChatContainer<Msg, never, {}, "hz:attachmentGrid">>
 	readonly image: ChatContainer<Msg, never, {}, "hz:image">
-	readonly label: View.Shorthand<ChatText<Msg, never, {}, "hz:text">>
 }
+
+/** G7's tags over the vocabulary's: the bench's untyped stand-ins win where the names meet. */
+export type ChatTags<Msg> = Omit<Hazel.HazelTags<Msg>, keyof BenchTags<Msg>> & BenchTags<Msg>
 
 export interface ChatElements extends View.Elements {
 	readonly Tags: ChatTags<this["Msg"]>
@@ -112,13 +125,12 @@ const tags: Readonly<Record<string, View.ElementBuilder<any, any, any, any>>> = 
 	reaction: new ChatContainer(chatTag.reaction),
 	attachmentGrid: View.shorthand(new ChatContainer(chatTag.attachmentGrid)),
 	image: new ChatContainer(chatTag.image),
-	label: View.shorthand(new ChatText(Hazel.tag.text)),
 }
 
 export const vocabulary: View.Vocabulary<ChatElements> = {
 	name: Hazel.name,
 	tags,
-	textParents: [Hazel.tag.text, chatTag.run, chatTag.codeBlock],
+	textParents,
 }
 
 export const component: Component.Define<ChatElements> = (options) =>

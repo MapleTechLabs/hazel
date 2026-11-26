@@ -5,8 +5,9 @@
  * and sends each flush to Swift as one wire batch (`wire.ts`). Props cross as JSON, deduped by value.
  */
 import { Renderer, type View } from "@effect/ui"
-import { Layer } from "effect"
+import { Effect, Layer } from "effect"
 import { Hazel, TextField } from "../vocabulary/index.ts"
+import { NotImplemented } from "../vocabulary/spec.ts"
 import * as Revisions from "./revisions.ts"
 import { type Batch, type Json, type Op, WIRE_VERSION } from "./wire.ts"
 
@@ -176,10 +177,14 @@ export const makeNativeHost = (send: (batch: Batch) => void): NativeHost => {
 		return false
 	}
 
+	// C1: commands become `command` ops resolved by Swift's `reply` (lane B owns them).
+	const notYet = (name: string) => Effect.die(new NotImplemented({ what: `native command ${name}`, lane: "B" }))
 	const commands: Hazel.Host["Service"] = {
-		// G1 stub: commands become `command` ops with replies (lane B).
-		focus: () => {},
-		scrollTo: () => {},
+		focus: () => notYet("focus"),
+		blur: () => notYet("blur"),
+		scrollTo: () => notYet("scrollTo"),
+		measure: () => notYet("measure"),
+		select: () => notYet("select"),
 	}
 
 	const layer = Layer.mergeAll(Renderer.layer(host), Layer.succeed(Hazel.Host, commands))

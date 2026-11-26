@@ -46,8 +46,8 @@ const runNode = <Msg>(h: H<Msg>, run: Run) =>
 export const rowTree = <Msg>(h: H<Msg>, row: Row) =>
 	h.message.set({ grouped: row.g === 1 ? true : undefined }).children(
 		row.g === 1 ? null : h.slot.set({ name: "avatar" }).children(h.avatar.initials(row.i ?? "")),
-		row.g === 1 ? null : h.slot.set({ name: "author" }).children(h.label.strong().children(row.a ?? "")),
-		h.slot.set({ name: "time" }).children(h.label.role("caption").tone("muted").children(row.t)),
+		row.g === 1 ? null : h.slot.set({ name: "author" }).children(h.text.strong().children(row.a ?? "")),
+		h.slot.set({ name: "time" }).children(h.text.role("caption").tone("muted").children(row.t)),
 		h.slot.set({ name: "body" }).children(
 			h.richText.children(
 				...row.b.map((block) =>

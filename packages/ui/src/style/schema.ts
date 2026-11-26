@@ -61,7 +61,35 @@ export type BadgeStyle = (typeof badgeStyles)[number]
 export const badgeSizes = ["regular", "small"] as const
 export type BadgeSize = (typeof badgeSizes)[number]
 
-/** Boolean states a view sets (`data-<state>` on the web). */
+// C1: the sets the doc names for layout, content and chat tags (values fixed in phase 1).
+
+export const stackAxes = ["vertical", "horizontal"] as const
+export type StackAxis = (typeof stackAxes)[number]
+
+export const stackDensities = ["compact", "regular", "relaxed"] as const
+export type StackDensity = (typeof stackDensities)[number]
+
+export const stackAligns = ["stretch", "start", "center", "end"] as const
+export type StackAlign = (typeof stackAligns)[number]
+
+export const frameSurfaces = ["none", "card", "inset", "muted", "overlay"] as const
+export type FrameSurface = (typeof frameSurfaces)[number]
+
+/** `1` is a screen's title, `2` a section's, `3` a group's. */
+export const headingLevels = ["1", "2", "3"] as const
+export type HeadingLevel = (typeof headingLevels)[number]
+
+export const avatarPresences = ["none", "online", "away", "busy", "offline"] as const
+export type AvatarPresence = (typeof avatarPresences)[number]
+
+export const listDividerKinds = ["date", "unread"] as const
+export type ListDividerKind = (typeof listDividerKinds)[number]
+
+/** Where a list rests and what it keeps still when rows arrive: `end` is a chat. */
+export const listAnchors = ["start", "end"] as const
+export type ListAnchor = (typeof listAnchors)[number]
+
+/** Boolean states a view sets (`data-<state>` on the web). Chat states are the message's own. */
 export const dataStates = ["selected", "emphasized", "disabled", "loading", "destructive"] as const
 export type DataState = (typeof dataStates)[number]
 

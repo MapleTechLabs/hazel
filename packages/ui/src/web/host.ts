@@ -8,6 +8,7 @@ import { Renderer, type View } from "@effect/ui"
 import { BrowserHost, HtmlScheduler } from "@effect/ui/html"
 import { Context, Effect, Layer, Scheduler } from "effect"
 import { Hazel } from "../vocabulary/index.ts"
+import { NotImplemented } from "../vocabulary/spec.ts"
 import { create, type Primitive, release } from "./primitives.ts"
 
 type Handlers = Readonly<Record<string, View.Handler<unknown, any>>>
@@ -64,9 +65,14 @@ export const wrapHost = (inner: Renderer.Host<Node>, document: Document): Render
 	}
 }
 
+// C1: focus is real; the rest belong to the lanes that own scrolling (A4) and fields (A2).
+const notYet = (name: string, lane: string) => Effect.die(new NotImplemented({ what: `web command ${name}`, lane }))
 const commands: Hazel.Host["Service"] = {
-	focus: (node) => (node as HTMLElement).focus(),
-	scrollTo: () => {},
+	focus: (node) => Effect.sync(() => (node as HTMLElement).focus()),
+	blur: (node) => Effect.sync(() => (node as HTMLElement).blur()),
+	scrollTo: () => notYet("scrollTo", "A4"),
+	measure: () => notYet("measure", "A3"),
+	select: () => notYet("select", "A2"),
 }
 
 /**
