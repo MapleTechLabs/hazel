@@ -15,8 +15,7 @@ struct HzFrame: View {
         let surface = node[prop: "surface"]?.string
         let style = HazelTheme.Recipes.frame.style(options: surface.map { ["surface": $0] } ?? [:], sizeClass: sizeClass)
         let flush = surface == "flush"
-        // The base layer's row gap would part a flush frame's rows; the kit has none there.
-        VStack(alignment: .leading, spacing: flush ? 0 : style.rowGap ?? 0) {
+        VStack(alignment: .leading, spacing: style.rowGap ?? 0) {
             ChildrenView(tree: tree, node: node).frame(maxWidth: .infinity, alignment: .leading)
         }
         .environment(\.hzInRow, false)

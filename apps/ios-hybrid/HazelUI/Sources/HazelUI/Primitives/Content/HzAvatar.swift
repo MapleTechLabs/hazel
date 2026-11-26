@@ -7,10 +7,12 @@ extension EnvironmentValues {
     @Entry var hzAvatarCutout: CGFloat? = nil
     /// A side an `hz:avatarStack` `pair` sets on its avatars, over their recipe's size.
     @Entry var hzAvatarSide: CGFloat? = nil
+    /// A `pair`'s corner radius, over the recipe's (the web's `rounded-xl` on both).
+    @Entry var hzAvatarRadius: CGFloat? = nil
 }
 
 // Owned by lane S1 (`docs/hazel-ui.md`, "Phase 2: lanes"). A picture, else the dithered tint seeded by
-// the name (`avatar-seed-tint`) under the initials; a presence dot or provider mark at the bottom right
+// the name (`avatar-seed-tint`) under its first letter, else the initials; a presence dot or provider mark at the bottom right
 // corner, a quarter outside. Pressable when the view handles `press`.
 struct HzAvatar: View {
     let tree: Tree
@@ -46,7 +48,8 @@ struct HzAvatar: View {
 }
 
 /// The avatar's drawing, shared with `peopleStrip`: the recipe's shape at its size (or `side`), the
-/// picture or the seeded dither (the accent when there is no name), and the corner badge.
+/// picture, the seeded dither under the name's first letter (else the initials on the muted fill), and
+/// the corner badge.
 struct AvatarFace: View {
     let name: String
     let initials: String
@@ -57,6 +60,7 @@ struct AvatarFace: View {
     @Environment(\.hzAvatarRing) private var stackRing
     @Environment(\.hzAvatarCutout) private var cutout
     @Environment(\.hzAvatarSide) private var stackSide
+    @Environment(\.hzAvatarRadius) private var stackRadius
 
     var body: some View {
         let recipe = HazelTheme.Recipes.avatar
@@ -66,7 +70,8 @@ struct AvatarFace: View {
         let side = side ?? stackSide ?? natural
         // A side over the recipe's scales the picture and corner radius with it.
         let scale = side / natural
-        let shape = RoundedRectangle(cornerRadius: min((root.radius ?? 0) * scale, side / 2), style: .continuous)
+        let radius = stackRadius ?? (root.radius ?? 0) * scale
+        let shape = RoundedRectangle(cornerRadius: min(radius, side / 2), style: .continuous)
         let seed = name.trimmingCharacters(in: .whitespaces)
         let presence = options["presence"] ?? "none"
         let mark = options["mark"] ?? "none"
@@ -79,19 +84,14 @@ struct AvatarFace: View {
                     .tracking(root.tracking(sizeClass))
                     .hzText(root, sizeClass)
             } else {
-                // The web's dither face: the initials in semibold white at 46% of the side.
                 DitherFill(seed: seed, side: side).clipShape(shape)
-                Text(initials)
-                    .font(Inter.font(size: side * 0.46, weight: HazelTheme.Font.weightSemibold))
-                    .lineLimit(1)
-                    .fixedSize()
-                    .foregroundStyle(root.color?.color ?? .white)
+                DitherInitial(seed: seed, side: side)
             }
             if let src {
                 let imageSide = (image.size ?? natural) * scale
                 Picture(src: src)
                     .frame(width: imageSide, height: imageSide)
-                    .clipShape(RoundedRectangle(cornerRadius: min((image.radius ?? 0) * scale, imageSide / 2), style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: min(stackRadius ?? (image.radius ?? 0) * scale, imageSide / 2), style: .continuous))
             }
         }
         .frame(width: side, height: side)
@@ -104,20 +104,12 @@ struct AvatarFace: View {
         }
         .overlay(alignment: .bottomTrailing) {
             if presence != "none" {
-                corner(Self.presenceStyle(recipe.style(part: "presence", options: options, sizeClass: sizeClass), presence))
+                corner(recipe.style(part: "presence", options: options, sizeClass: sizeClass))
             } else if mark != "none" {
                 corner(recipe.style(part: "mark", options: options, sizeClass: sizeClass), glyph: mark)
             }
         }
         .contentShape(shape)
-    }
-
-    /// `presence-busy-tone`: busy is the `presence-busy` amber, as the kit draws it.
-    static func presenceStyle(_ style: HazelTheme.Style, _ presence: String) -> HazelTheme.Style {
-        guard presence == "busy" else { return style }
-        var out = style
-        out.background = HazelTheme.Colors.presenceBusy
-        return out
     }
 
     /// A corner badge: its recipe box, offset a quarter of its size past the avatar's corner.
