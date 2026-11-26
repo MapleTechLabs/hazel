@@ -80,6 +80,8 @@ public struct RowData: Sendable, Hashable {
     }
 
     public struct Thread: Sendable, Hashable {
+        /// The thread's name (`ThreadSummary.name`), which leads the card.
+        public var name: String?
         public var count: Int
         public var author: String
         public var initials: String
@@ -199,7 +201,7 @@ extension RowData {
         embeds = (o["embeds"]?.array ?? []).compactMap(RowData.embed)
         if let t = o["thread"]?.object, let count = t["count"]?.number {
             thread = Thread(
-                count: Int(count), author: t["author"]?.string ?? "", initials: t["initials"]?.string ?? "",
+                name: t["name"]?.string, count: Int(count), author: t["author"]?.string ?? "", initials: t["initials"]?.string ?? "",
                 preview: t["preview"]?.string ?? "", time: t["time"]?.string ?? ""
             )
         }
