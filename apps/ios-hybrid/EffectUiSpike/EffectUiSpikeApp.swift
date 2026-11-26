@@ -21,7 +21,11 @@ struct EffectUiSpikeApp: App {
                 Theme.screenBg.ignoresSafeArea()
                 ForEach(runtime.tree.root) { HzView(node: $0, runtime: runtime) }
             }
-            .task { runtime.start() }
+            .overlay(alignment: .bottom) { G4DebugBar(runtime: runtime) }
+            .task {
+                runtime.start()
+                G4Bench.autorun(runtime)
+            }
         }
     }
 }
