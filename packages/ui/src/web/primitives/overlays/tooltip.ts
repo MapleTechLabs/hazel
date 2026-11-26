@@ -15,6 +15,7 @@ import {
 	showPanel,
 	whenConnected,
 } from "../../focus/surface.ts"
+import { play } from "../../motion.ts"
 import { definePrimitive, part, type Primitive } from "../define.ts"
 import { nextId, textOf } from "./overlay.ts"
 
@@ -52,7 +53,9 @@ export const primitive = definePrimitive("tooltip", ({ document, tag, outer }) =
 		timer = undefined
 		if (label === "") return
 		showing.get(document)?.()
+		const wasOpen = bubble.dataset.open !== undefined
 		showPanel(bubble, { modal: false, inPlace })
+		if (!wasOpen) void play(bubble, "enter")
 		showing.set(document, hide)
 		if (!inPlace) applyPlacement(bubble, measureNode(content), { side: "top", align: "center", gap: 6 })
 	}

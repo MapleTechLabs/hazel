@@ -92,9 +92,9 @@ export const makePopoverPanel = (panel: HTMLElement) => {
 	return panel
 }
 
-// Renderer-owned CSS (C3 `rendererFeatures`): the top layer's reset, placement, the scrim, motion,
+// Renderer-owned CSS (C3 `rendererFeatures`): the top layer's reset, placement, the scrim,
 // highlight and focus rings, and the in-place specimen layout. Looks (colour, type, radius, padding)
-// are the recipes'.
+// and motion (`recipe.motion`, played by `motion.ts`) are the recipes'.
 const css = `
 :where([data-hz-layer]) {
 	position: fixed;
@@ -113,10 +113,6 @@ const css = `
 [data-hz-layer][data-hz-layer]:not([data-open]) { display: none; }
 dialog[data-hz-layer]::backdrop { background: var(--hz-color-scrim); }
 [data-hz-layer][data-scroll] { overflow: auto; overscroll-behavior: contain; }
-@media (prefers-reduced-motion: no-preference) {
-	[data-hz-layer][data-open] { animation: hz-layer-in var(--hz-duration-fast) var(--hz-ease-out); }
-}
-@keyframes hz-layer-in { from { opacity: 0; } }
 [data-hz-part="item"] { cursor: default; outline: none; user-select: none; }
 [data-hz-part="item"][data-highlighted] { background: var(--hz-color-wash-strong); }
 [data-hz-part="item"][aria-disabled="true"] { opacity: 0.5; }

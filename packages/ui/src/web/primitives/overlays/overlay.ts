@@ -5,6 +5,7 @@
  */
 import { type DismissReason, type Layer, type LayerOptions, openLayer } from "../../focus/layers.ts"
 import { hidePanel, installOverlayStyles, isSpecimen, showPanel, whenConnected } from "../../focus/surface.ts"
+import { play, playThen, stop } from "../../motion.ts"
 import { flag, type Plain, type Primitive } from "../define.ts"
 
 /** Fires `event` through the primitive's handlers; false when the view does not listen. */
@@ -52,14 +53,19 @@ export const controlledOverlay = (config: OverlayConfig): Overlay => {
 	const hide = (restoreFocus: boolean) => {
 		if (!shown) return
 		shown = false
-		stopPlacing?.()
-		stopPlacing = undefined
-		hidePanel(config.panel)
 		flag(config.outer, "open", false)
 		const closing = layer
 		layer = undefined
 		closing?.close({ restoreFocus })
 		config.onHide?.()
+		// The panel stays until its exit motion ends (none of today's overlays but a toast has one).
+		stop(config.panel, "enter")
+		playThen(config.panel, "exit", () => {
+			if (shown) return
+			stopPlacing?.()
+			stopPlacing = undefined
+			hidePanel(config.panel)
+		})
 	}
 	const present = () => {
 		if (wanted && !shown) {
@@ -67,9 +73,12 @@ export const controlledOverlay = (config: OverlayConfig): Overlay => {
 			flag(config.outer, "specimen", inPlace)
 			flag(config.outer, "open", true)
 			config.beforeShow?.(inPlace)
+			stop(config.panel, "exit")
 			showPanel(config.panel, { modal: config.modal, inPlace })
 			shown = true
+			void play(config.panel, "enter")
 			if (inPlace) return
+			stopPlacing?.()
 			stopPlacing = config.place?.()
 			layer = openLayer({
 				...config.layer?.(),

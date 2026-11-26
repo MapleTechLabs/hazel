@@ -13,6 +13,7 @@ import {
 	whenConnected,
 } from "../../focus/surface.ts"
 import { svg } from "../../icons.ts"
+import { onRemoved, play, playThen, stop } from "../../motion.ts"
 import { definePrimitive, flag, option, part, type Primitive } from "../define.ts"
 import { fire, textOf } from "./overlay.ts"
 
@@ -59,6 +60,14 @@ export const primitive = definePrimitive("toast", ({ document, tag, outer }) => 
 	const schedule = whenConnected(node)
 	let wanted = false
 	let shown = false
+	const leave = () => {
+		hidePanel(panel)
+		open.set(
+			document,
+			(open.get(document) ?? []).filter((each) => each !== panel),
+		)
+		stack(document)
+	}
 	const present = () => {
 		if (wanted === shown) return
 		shown = wanted
@@ -66,18 +75,35 @@ export const primitive = definePrimitive("toast", ({ document, tag, outer }) => 
 			const inPlace = isSpecimen(node)
 			flag(node, "specimen", inPlace)
 			flag(node, "open", true)
+			stop(panel, "exit")
 			showPanel(panel, { modal: false, inPlace })
-			if (!inPlace) open.set(document, [...(open.get(document) ?? []), panel])
+			void play(panel, "enter")
+			if (!inPlace && !(open.get(document) ?? []).includes(panel))
+				open.set(document, [...(open.get(document) ?? []), panel])
 		} else {
 			flag(node, "open", false)
-			hidePanel(panel)
-			open.set(
-				document,
-				(open.get(document) ?? []).filter((each) => each !== panel),
-			)
+			// It keeps its place in the stack until its exit motion (`toastOut`) ends.
+			stop(panel, "enter")
+			playThen(panel, "exit", () => {
+				if (!shown) leave()
+			})
 		}
 		stack(document)
 	}
+	// Removed by the view while showing: back in the page for its exit, then gone.
+	onRemoved(node, () => {
+		if (!shown || node.dataset.specimen !== undefined || document.body === null) return
+		shown = false
+		wanted = false
+		flag(node, "open", false)
+		document.body.append(node)
+		showPanel(panel, { modal: false, inPlace: false })
+		stop(panel, "enter")
+		playThen(panel, "exit", () => {
+			leave()
+			node.remove()
+		})
+	})
 
 	const primitive: Primitive = {
 		tag,

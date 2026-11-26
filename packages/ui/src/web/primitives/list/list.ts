@@ -1,6 +1,7 @@
 // Owned by lane A4 (`docs/hazel-ui.md`, "Phase 2: lanes"). `hz:list`: rows in a scroll viewport.
 // Every row stays mounted (the renderer owns them); rows far from the viewport skip layout and paint.
 // The skeleton and edge spinners are renderer-owned (GAPS `skeleton`): their look is here, over tokens.
+import { loop, onShow } from "../../motion.ts"
 import { definePrimitive, flag, option, part, type Primitive } from "../define.ts"
 import { attachReorder, reorderCss } from "./reorder.ts"
 import { ensureSheet, fire, rowsOf } from "./runtime.ts"
@@ -30,7 +31,6 @@ const css = `
 	display: flex; justify-content: center; pointer-events: none;
 }
 [data-hz="list"] > [data-hz-part="viewport"] > [data-hz-part="content"] > [data-hz-slot="overlay"] > * { pointer-events: auto; }
-[data-hz="list"] [data-hz-part="skeletonAvatar"], [data-hz="list"] [data-hz-part="skeletonLine"],
 [data-hz="list"] [data-hz-part="spinner"] { animation: hz-list-pulse 1.4s var(--hz-ease-inOut) infinite; }
 [data-hz="list"] [data-hz-part="skeleton"] {
 	display: flex; flex-direction: column; gap: var(--hz-space-5); padding: var(--hz-space-4);
@@ -57,7 +57,6 @@ const css = `
 [data-hz="list"] [data-hz-part="skeletonLine"]:first-child { width: 30%; }
 @keyframes hz-list-pulse { 50% { opacity: 0.5; } }
 @media (prefers-reduced-motion: reduce) {
-	[data-hz="list"] [data-hz-part="skeletonAvatar"], [data-hz="list"] [data-hz-part="skeletonLine"],
 	[data-hz="list"] [data-hz-part="spinner"] { animation: none; }
 }
 ${reorderCss('[data-hz="list"] > [data-hz-part="viewport"] > [data-hz-part="content"]')}
@@ -66,11 +65,19 @@ ${reorderCss('[data-hz="list"] > [data-hz-part="viewport"] > [data-hz-part="cont
 const skeletonRows = (document: Document) => {
 	const skeleton = part(document, "div", "skeleton")
 	skeleton.setAttribute("aria-hidden", "true")
+	// Fades in after a beat each time it shows, its shapes pulsing (`recipe.motion`, today's skeleton).
+	onShow(skeleton, "enter")
 	for (let index = 0; index < SKELETON_ROWS; index++) {
 		const row = part(document, "div", "skeletonRow")
 		const lines = part(document, "div", "skeletonLines")
-		lines.append(part(document, "div", "skeletonLine"), part(document, "div", "skeletonLine"))
-		row.append(part(document, "div", "skeletonAvatar"), lines)
+		const placeholders = [
+			part(document, "div", "skeletonAvatar"),
+			part(document, "div", "skeletonLine"),
+			part(document, "div", "skeletonLine"),
+		] as const
+		for (const placeholder of placeholders) loop(placeholder, true)
+		lines.append(placeholders[1], placeholders[2])
+		row.append(placeholders[0], lines)
 		skeleton.append(row)
 	}
 	return skeleton

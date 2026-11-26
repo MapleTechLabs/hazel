@@ -16,7 +16,7 @@ const css = `
 }
 [data-hz=toggle] > [data-hz-part=control] { inline-size: var(--hz-space-10); align-self: start; }
 [data-hz=toggle] > [data-hz-part=control] > [data-hz-part=thumb] {
-	transition: translate var(--hz-duration-normal) var(--hz-ease-out);
+	transition: translate var(--hz-duration-normal) var(--hz-ease-inOut);
 }
 [data-hz=toggle][data-selected] > [data-hz-part=control] > [data-hz-part=thumb] { translate: var(--hz-space-4) 0; }
 @media (width >= 40rem) {

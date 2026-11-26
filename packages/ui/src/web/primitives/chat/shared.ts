@@ -7,6 +7,7 @@ import type { Attachment, Block, Embed, Reaction, Run } from "../../../vocabular
 import { BlockKind, RunKind } from "../../../vocabulary/content.ts"
 import type { IconName } from "../../../vocabulary/options.ts"
 import { svg } from "../../icons.ts"
+import { mark } from "../../motion.ts"
 import { part, type Plain, type Primitive } from "../define.ts"
 import { chatCss } from "./styles.ts"
 
@@ -195,7 +196,18 @@ export const reactedBy = (reaction: Reaction): string | undefined => {
 
 const isImage = (emoji: string) => /^(https?:|\/|data:)/.test(emoji)
 
-export const reactionPill = (document: Document, reaction: Reaction, onPress: () => void) => {
+/** Counts by emoji from the last draw: a new pill enters, a rise pops and rolls up, a fall rolls down. */
+export type ReactionCounts = ReadonlyMap<string, number>
+
+export const countsOf = (reactions: ReadonlyArray<Reaction>): ReactionCounts =>
+	new Map(reactions.map((reaction) => [reaction.emoji, reaction.count]))
+
+export const reactionPill = (
+	document: Document,
+	reaction: Reaction,
+	onPress: () => void,
+	previous?: ReactionCounts,
+) => {
 	const pill = button(document, "reaction", undefined, onPress)
 	pill.setAttribute("aria-pressed", String(reaction.mine))
 	if (reaction.mine) pill.setAttribute("data-mine", "")
@@ -212,7 +224,18 @@ export const reactionPill = (document: Document, reaction: Reaction, onPress: ()
 		image.alt = ""
 		pill.append(image)
 	} else pill.append(text(document, "span", "emoji", reaction.emoji))
-	pill.append(text(document, "span", "count", String(reaction.count)))
+	// Today's `countView`: the number in a clipping box, so it can roll.
+	const box = part(document, "span", "countBox")
+	const count = text(document, "span", "count", String(reaction.count))
+	box.append(count)
+	pill.append(box)
+	const before = previous?.get(reaction.emoji)
+	if (previous !== undefined && before === undefined) mark(pill, "enter")
+	else if (before !== undefined && reaction.count !== before) {
+		mark(count, reaction.count > before ? "countUp" : "countDown")
+		const emoji = pill.querySelector<HTMLElement>('[data-hz-part="emoji"]')
+		if (reaction.count > before && emoji !== null) mark(emoji, "pop")
+	}
 	return pill
 }
 
@@ -221,10 +244,11 @@ export const reactionPills = (
 	reactions: ReadonlyArray<Reaction>,
 	onPress: (emoji: string) => void,
 	onAdd: (() => void) | undefined,
+	previous?: ReactionCounts,
 ) => {
 	const bar = part(document, "div", "reactions")
 	for (const reaction of reactions)
-		bar.append(reactionPill(document, reaction, () => onPress(reaction.emoji)))
+		bar.append(reactionPill(document, reaction, () => onPress(reaction.emoji), previous))
 	if (onAdd !== undefined) {
 		const add = button(document, "addReaction", "Add reaction", onAdd)
 		add.append(icon(document, "emoji-add"))
