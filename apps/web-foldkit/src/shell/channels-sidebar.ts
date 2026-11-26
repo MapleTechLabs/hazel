@@ -34,6 +34,7 @@ import { dragDescription, sectionPlusButton } from "./channels-sidebar/tree"
 import { semantic } from "../ui/semantic"
 import { sectionGroupContent } from "./channels-sidebar/view"
 import { channelListIsland, channelListIslandView, isChannelListIslandEnabled } from "../islands/channel-list"
+import { type IslandMessage, messageOfIntent } from "../islands/channel-sidebar-intents"
 
 /**
  * Chat sidebar next to the nav rail (`components/sidebar/channels-sidebar.tsx`): channel
@@ -161,6 +162,13 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 				replace: false,
 			}),
 		}),
+		RequestedIslandMembers: ({ orgSlug }) => ({
+			model,
+			outMessage: PageOutMessage.RequestedNavigation({
+				route: AppRoute.OrgHome({ orgSlug }),
+				replace: false,
+			}),
+		}),
 		ClickedBrowseChannels: () => ({
 			model,
 			outMessage: PageOutMessage.RequestedCommandPalette({ page: "home" }),
@@ -221,13 +229,27 @@ export { badgeSubscriptions, subscriptions } from "./channels-sidebar/subscripti
 // VIEW
 
 /** `useScrollIntoViewOnActive`: the open channel's row scrolls into view when it becomes active. */
-/** G2: the hazel channel list, mounted in the island's container (`islands/channel-list.ts`). */
+/** Phase 3: the hazel channel sidebar, mounted in the island's container (`islands/channel-list.ts`). */
 const MountChannelListIsland = Mount.defineStream("MountChannelListIsland", {
-	args: { organizationId: OrganizationIdSchema, userId: UserIdSchema, orgSlug: Schema.String },
-	messages: [Message.RequestedIslandNavigation],
-	execute: ({ element, organizationId, userId, orgSlug }) =>
-		channelListIsland(element, { organizationId, userId, orgSlug }).pipe(
-			Stream.map((channelId) => Message.RequestedIslandNavigation({ orgSlug, channelId })),
+	args: {
+		organizationId: OrganizationIdSchema,
+		userId: UserIdSchema,
+		orgSlug: Schema.String,
+		hintDismissed: Schema.Boolean,
+		paletteKey: Schema.NullOr(Schema.String),
+	},
+	messages: [
+		Message.RequestedIslandNavigation,
+		Message.RequestedIslandMembers,
+		Message.ClickedBrowseChannels,
+		Message.ClickedDismissCreateChannelHint,
+		Message.GotRowMenuMessage,
+		Message.GotSectionMenuMessage,
+	],
+	execute: ({ element, ...args }) =>
+		channelListIsland(element, args).pipe(
+			Stream.map((intent) => messageOfIntent(args.orgSlug, intent)),
+			Stream.filter((message): message is IslandMessage => message !== null),
 		),
 })
 
@@ -336,12 +358,15 @@ const sidebarBody = <ParentMessage>(
 							organizationId: model.organizationId,
 							userId: model.currentUserId,
 							activeChannelId,
+							membersActive: route._tag === "OrgHome",
 							onMount: h.OnMount(
 								Mount.mapMessage(
 									MountChannelListIsland({
 										organizationId: model.organizationId,
 										userId: model.currentUserId,
 										orgSlug,
+										hintDismissed: model.isCreateChannelHintDismissed,
+										paletteKey,
 									}),
 									toParentMessage,
 								),

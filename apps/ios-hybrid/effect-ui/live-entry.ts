@@ -15,8 +15,9 @@ import { makeNativeHost } from "../../../packages/ui/src/native/host.ts"
 import { type Json, WIRE_VERSION } from "../../../packages/ui/src/native/wire.ts"
 import { makeLiveChannelList } from "./live-channel-list"
 import { type SidebarRows, sidebarSections } from "./live-sections"
+import { mountChannelSidebarNative } from "../../shared-screens/src/channel-sidebar/native.ts"
 
-declare const __native: { post: (json: string) => void }
+declare const __native: { post: (json: string) => void; screen?: string }
 
 const native = makeNativeHost((batch) => __native.post(JSON.stringify(batch)))
 const started = Date.now()
@@ -29,6 +30,13 @@ const program = Effect.gen(function* () {
 	const me = yield* rpc("user.me", undefined)
 	console.log(`[live] user.me over HTTP: ${me.id} (${since()})`)
 	yield* Stream.runDrain(client.syncSession(me.id)).pipe(Effect.forkScoped)
+
+	// The Phase 3 screens, by launch arg (`-HazelScreen <name>`); the G3 list otherwise.
+	switch (__native.screen) {
+		case "sidebar":
+			yield* mountChannelSidebarNative(native.container, me.id)
+			return yield* Effect.never
+	}
 
 	const { collections: c } = client
 	const sections = Stream.zipLatestAll(
