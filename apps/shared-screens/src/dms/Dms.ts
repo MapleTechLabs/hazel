@@ -365,10 +365,9 @@ export const Dms = Hazel.component({
 		const strip =
 			people.length === 0
 				? undefined
-				: h.scroll
-						.key("people")
-						.axis("horizontal")
-						.children(
+				: // An untitled section, for the screen's inset.
+					h.section.key("people").children(
+						h.scroll.axis("horizontal").children(
 							h.stack.axis("horizontal").children(
 								...people.slice(0, STRIP_LIMIT).map(({ dm, partner }) =>
 									h.stack
@@ -386,7 +385,8 @@ export const Dms = Hazel.component({
 										),
 								),
 							),
-						)
+						),
+					)
 
 		// HAZEL-GAP(filter-chip): today's `All` / `Unreads` are pressed-state toggle chips, fully round
 		const chip = (filter: DmFilter, label: string) =>
@@ -399,14 +399,15 @@ export const Dms = Hazel.component({
 		const filters =
 			dms.length === 0
 				? undefined
-				: h.stack
-						.key("filters")
-						.axis("horizontal")
-						.density("compact")
-						.children(
-							chip("all", "All"),
-							chip("unreads", unread.length > 0 ? `Unreads · ${unread.length}` : "Unreads"),
-						)
+				: h.section.key("filters").children(
+						h.stack
+							.axis("horizontal")
+							.density("compact")
+							.children(
+								chip("all", "All"),
+								chip("unreads", unread.length > 0 ? `Unreads · ${unread.length}` : "Unreads"),
+							),
+					)
 
 		const section = (key: string, title: string | undefined, list: ReadonlyArray<Dm>) =>
 			list.length === 0

@@ -21,13 +21,8 @@ export interface DmSummary {
 
 export const fullName = (person: Person) => `${person.firstName} ${person.lastName}`.trim()
 
-export const initialsOf = (name: string) =>
-	name
-		.split(/\s+/)
-		.map((part) => part[0] ?? "")
-		.join("")
-		.slice(0, 2)
-		.toUpperCase()
+/** The avatar's letter, as today's kit avatar draws it: the name's first. */
+export const initialsOf = (name: string) => (name.trim()[0] ?? "").toUpperCase()
 
 /** The other member of a one-to-one DM, or none for a group DM. */
 export const partnerOf = (dm: DmSummary, others: ReadonlyArray<Person>): Person | undefined =>
