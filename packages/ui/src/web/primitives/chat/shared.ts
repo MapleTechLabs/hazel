@@ -5,10 +5,10 @@
  */
 import type { Attachment, Block, Embed, Reaction, Run } from "../../../vocabulary/content.ts"
 import { BlockKind, RunKind } from "../../../vocabulary/content.ts"
-import type { IconName } from "../../../vocabulary/options.ts"
+import type { AttachmentLayout, IconName } from "../../../vocabulary/options.ts"
 import { svg } from "../../icons.ts"
 import { mark } from "../../motion.ts"
-import { part, type Plain, type Primitive } from "../define.ts"
+import { flag, part, type Plain, type Primitive } from "../define.ts"
 import { chatCss } from "./styles.ts"
 
 /** Raises `event` with `payload` if the view handles it; true when it did. */
@@ -98,6 +98,8 @@ export interface RunHandlers {
 	readonly mention: (userId: string, run: number) => void
 	/** True when the view handled the press: the link then does not navigate. */
 	readonly link: (url: string) => boolean
+	/** A code block's copy button, drawn only when set; `block` is the block's index in the body. */
+	readonly copyCode?: ((block: number) => void) | undefined
 }
 
 /**
@@ -110,7 +112,7 @@ export const richText = (document: Document, blocks: ReadonlyArray<Block>, on: R
 	const runs = (into: HTMLElement, list: ReadonlyArray<Run>) => {
 		for (const run of list) into.append(runNode(document, run, index++, on))
 	}
-	for (const block of blocks) {
+	blocks.forEach((block, at) => {
 		if (block[0] === BlockKind.paragraph) {
 			const node = part(document, "p", "paragraph")
 			runs(node, block[1])
@@ -118,11 +120,21 @@ export const richText = (document: Document, blocks: ReadonlyArray<Block>, on: R
 		} else if (block[0] === BlockKind.code) {
 			const wrap = part(document, "div", "codeBlock")
 			const [, code, language] = block
+			// Today's corner (`codeBlockView`): the language pill, then the copy button on hover.
+			const controls = part(document, "div", "codeControls")
 			if (language !== "" && language !== "plaintext") {
 				const tag = badge(document, language, "info", { pill: true })
 				tag.dataset.hzPart = "language"
-				wrap.append(tag)
+				controls.append(tag)
 			}
+			const copy = on.copyCode
+			if (copy !== undefined) {
+				const press = button(document, "copyCode", "Copy code", () => copy(at))
+				press.title = "Copy code"
+				press.append(icon(document, "copy"))
+				controls.append(press)
+			}
+			if (controls.childElementCount > 0) wrap.append(controls)
 			const pre = part(document, "pre", "code")
 			pre.textContent = code
 			wrap.append(pre)
@@ -139,7 +151,7 @@ export const richText = (document: Document, blocks: ReadonlyArray<Block>, on: R
 			runs(node, block[1])
 			fragment.append(node)
 		}
-	}
+	})
 	return fragment
 }
 
@@ -264,6 +276,8 @@ export const reactionPills = (
 export interface AttachmentHandlers {
 	readonly press: (id: string) => void
 	readonly remove: ((id: string) => void) | undefined
+	/** A failed attachment's press; without it a failed one raises `press`. */
+	readonly retry?: ((id: string) => void) | undefined
 }
 
 const progressBar = (document: Document, value: number | undefined) => {
@@ -287,13 +301,50 @@ const element = <K extends "img" | "video">(document: Document, tagName: K, name
 	return node
 }
 
+/** The press of one attachment: `retry` when it failed and the view retries, else `press`. */
+const pressOf = (attachment: Attachment, on: AttachmentHandlers) => () => {
+	if (attachment.failed === true && on.retry !== undefined) on.retry(attachment.id)
+	else on.press(attachment.id)
+}
+
+const labelOf = (attachment: Attachment, on: AttachmentHandlers) =>
+	attachment.failed === true && on.retry !== undefined
+		? `Retry ${attachment.name}`
+		: `Open ${attachment.name}`
+
+/** What a failed attachment shows: a warning, "Upload failed" and, when it retries, "Retry". */
+const failure = (document: Document, on: AttachmentHandlers) => {
+	const node = part(document, "span", "failure")
+	node.append(icon(document, "warning"), text(document, "span", "failureText", "Upload failed"))
+	if (on.retry !== undefined) node.append(text(document, "span", "retryLabel", "Retry"))
+	return node
+}
+
+/** The picture of an image or video, when it has a url. */
+const picture = (document: Document, attachment: Attachment, lazy: boolean) => {
+	if (attachment.url === undefined || attachment.kind === "file") return undefined
+	if (attachment.kind === "image") {
+		const image = element(document, "img", "image")
+		image.src = attachment.url
+		image.alt = attachment.name
+		if (lazy) image.loading = "lazy"
+		return image
+	}
+	const video = element(document, "video", "image")
+	video.src = attachment.url
+	video.muted = true
+	video.preload = "metadata"
+	return video
+}
+
 /** Today's mosaic caps a lone image at 400 by 300; whole pixels keep later rows on the pixel grid. */
 const LONE_WIDTH = 400
 const LONE_HEIGHT = 300
 
 const media = (document: Document, attachment: Attachment, on: AttachmentHandlers, lone: boolean) => {
-	const tile = button(document, "media", `Open ${attachment.name}`, () => on.press(attachment.id))
+	const tile = button(document, "media", labelOf(attachment, on), pressOf(attachment, on))
 	tile.dataset.kind = attachment.kind
+	flag(tile, "failed", attachment.failed)
 	// A lone tile takes its pixel size before the image loads, as native lays it out.
 	const { width, height } = attachment
 	if (lone && width !== undefined && height !== undefined && width > 0 && height > 0) {
@@ -301,42 +352,114 @@ const media = (document: Document, attachment: Attachment, on: AttachmentHandler
 		tile.style.width = `${Math.round(width * scale)}px`
 		tile.style.height = `${Math.round(height * scale)}px`
 	}
-	if (attachment.url !== undefined && attachment.kind === "image") {
-		const image = element(document, "img", "image")
-		image.src = attachment.url
-		image.alt = attachment.name
-		image.loading = "lazy"
-		tile.append(image)
-	} else if (attachment.url !== undefined) {
-		const video = element(document, "video", "image")
-		video.src = attachment.url
-		video.muted = true
-		video.preload = "metadata"
-		tile.append(video)
-	}
+	const shown = picture(document, attachment, true)
+	if (shown !== undefined) tile.append(shown)
 	if (attachment.kind === "video") tile.append(text(document, "span", "play", "▶"))
+	if (attachment.failed === true) tile.append(failure(document, on))
 	const bar = progressBar(document, attachment.progress)
 	if (bar !== undefined) tile.append(bar)
 	return tile
 }
 
 const fileCard = (document: Document, attachment: Attachment, on: AttachmentHandlers) => {
-	const card = button(document, "file", undefined, () => on.press(attachment.id))
+	const card = button(
+		document,
+		"file",
+		attachment.failed === true ? labelOf(attachment, on) : undefined,
+		pressOf(attachment, on),
+	)
+	flag(card, "failed", attachment.failed)
 	card.append(icon(document, "paperclip", "fileIcon"))
 	const info = part(document, "span", "fileInfo")
 	info.append(text(document, "span", "fileName", attachment.name))
-	if (attachment.size !== undefined) info.append(text(document, "span", "fileSize", attachment.size))
-	card.append(info, icon(document, "download", "fileAction"))
+	if (attachment.failed === true) info.append(failure(document, on))
+	else if (attachment.size !== undefined) info.append(text(document, "span", "fileSize", attachment.size))
+	card.append(info)
+	if (attachment.failed !== true) card.append(icon(document, "download", "fileAction"))
 	const bar = progressBar(document, attachment.progress)
 	if (bar !== undefined) card.append(bar)
 	return card
 }
 
-/** Images and videos in a grid, then files as cards; each removable when `on.remove` is set. */
-export const attachments = (document: Document, list: ReadonlyArray<Attachment>, on: AttachmentHandlers) => {
+/** The icon a file list row or a file tile leads with. */
+const kindIcon = (attachment: Attachment): IconName =>
+	attachment.kind === "image" ? "image" : attachment.kind === "video" ? "play" : "paperclip"
+
+/** Today's centred play badge (`playBadge`), for the grid and masonry tiles. */
+const playBadge = (document: Document) => {
+	const badge = part(document, "span", "playBadge")
+	badge.setAttribute("aria-hidden", "true")
+	badge.append(icon(document, "play"))
+	return badge
+}
+
+/**
+ * One tile of the files page's grid (`gridItem`) or masonry (`masonryItem`): the picture cropped
+ * square or at its own aspect, a play badge and length on a video, a file's icon and name.
+ */
+const tile = (document: Document, attachment: Attachment, on: AttachmentHandlers, masonry: boolean) => {
+	const node = button(document, "tile", labelOf(attachment, on), pressOf(attachment, on))
+	node.dataset.kind = attachment.kind
+	flag(node, "failed", attachment.failed)
+	const { width, height } = attachment
+	// Masonry keeps each picture's own aspect; before it loads, the pixel size holds the space.
+	if (masonry && width !== undefined && height !== undefined && width > 0 && height > 0)
+		node.style.aspectRatio = `${width} / ${height}`
+	const shown = picture(document, attachment, masonry)
+	if (shown !== undefined) node.append(shown)
+	else if (attachment.failed !== true) {
+		const empty = part(document, "span", "tileEmpty")
+		empty.append(icon(document, kindIcon(attachment), "tileIcon"))
+		if (attachment.kind === "file") empty.append(text(document, "span", "tileName", attachment.name))
+		node.append(empty)
+	}
+	if (attachment.kind === "video" && attachment.failed !== true) node.append(playBadge(document))
+	if (attachment.duration !== undefined && attachment.failed !== true)
+		node.append(text(document, "span", "duration", attachment.duration))
+	if (attachment.failed === true) {
+		const failed = failure(document, on)
+		// A file has no picture to recognise it by: its name sits under "Upload failed".
+		if (attachment.kind === "file")
+			failed.children[1]?.after(text(document, "span", "tileName", attachment.name))
+		node.append(failed)
+	}
+	const bar = progressBar(document, attachment.progress)
+	if (bar !== undefined) node.append(bar)
+	return node
+}
+
+/** One row of the files page's list (`documentItem`): icon, name, size and length, a download cue. */
+const listRow = (document: Document, attachment: Attachment, on: AttachmentHandlers) => {
+	const row = button(document, "row", labelOf(attachment, on), pressOf(attachment, on))
+	row.dataset.kind = attachment.kind
+	flag(row, "failed", attachment.failed)
+	row.append(icon(document, kindIcon(attachment), "rowIcon"))
+	const info = part(document, "span", "fileInfo")
+	info.append(text(document, "span", "fileName", attachment.name))
+	const meta = [attachment.size, attachment.duration].filter((each) => each !== undefined)
+	if (attachment.failed === true) info.append(failure(document, on))
+	// HAZEL-GAP(p4-files-list-meta): today's row also shows the upload time and the uploader.
+	else if (meta.length > 0) info.append(text(document, "span", "fileSize", meta.join(" · ")))
+	row.append(info)
+	// HAZEL-GAP(p4-media-download): today's download is a button of its own; here a cue on the row.
+	if (attachment.failed !== true) row.append(icon(document, "download", "fileAction"))
+	const bar = progressBar(document, attachment.progress)
+	if (bar !== undefined) row.append(bar)
+	return row
+}
+
+/**
+ * Attachments in a `layout`: the message's `mosaic` (images and videos, then files as cards), or the
+ * files page's `grid`, `masonry` and `list` of every attachment in order. Each is removable when
+ * `on.remove` is set.
+ */
+export const attachments = (
+	document: Document,
+	list: ReadonlyArray<Attachment>,
+	on: AttachmentHandlers,
+	layout: AttachmentLayout = "mosaic",
+) => {
 	const grid = part(document, "div", "attachments")
-	const visual = list.filter((each) => each.kind !== "file")
-	const files = list.filter((each) => each.kind === "file")
 	const wrap = (attachment: Attachment, node: HTMLElement) => {
 		const remove = on.remove
 		if (remove === undefined) return node
@@ -346,6 +469,26 @@ export const attachments = (document: Document, list: ReadonlyArray<Attachment>,
 		cell.append(node, close)
 		return cell
 	}
+	if (layout !== "mosaic") {
+		const holder = part(
+			document,
+			"div",
+			layout === "list" ? "rows" : layout === "grid" ? "tiles" : "masonry",
+		)
+		for (const each of list)
+			holder.append(
+				wrap(
+					each,
+					layout === "list"
+						? listRow(document, each, on)
+						: tile(document, each, on, layout === "masonry"),
+				),
+			)
+		grid.append(holder)
+		return grid
+	}
+	const visual = list.filter((each) => each.kind !== "file")
+	const files = list.filter((each) => each.kind === "file")
 	if (visual.length > 0) {
 		const mosaic = part(document, "div", "mosaic")
 		mosaic.dataset.count = String(Math.min(visual.length, 4))
