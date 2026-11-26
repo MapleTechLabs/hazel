@@ -57,7 +57,7 @@ const utf8DecodeRange = (
 	}
 	let i = 0
 	while (i < bytes.length) {
-		const lead = bytes[i]!
+		const lead = bytes[i] ?? 0
 		if (lead < 0x80) {
 			push(lead)
 			i++
@@ -94,7 +94,7 @@ const utf8DecodeRange = (
 				}
 				break
 			}
-			const byte = bytes[j]!
+			const byte = bytes[j] ?? 0
 			if (byte < lower || byte > upper) break
 			lower = 0x80
 			upper = 0xbf
@@ -132,7 +132,7 @@ export class ShimTextEncoder {
 		const written = Math.min(bytes.length, into.length)
 		// Never splits a character: back off to the last whole sequence.
 		let end = written
-		while (end > 0 && end < bytes.length && (bytes[end]! & 0xc0) === 0x80) end--
+		while (end > 0 && end < bytes.length && ((bytes[end] ?? 0) & 0xc0) === 0x80) end--
 		into.set(bytes.subarray(0, end))
 		return { read: utf8Decode(bytes.subarray(0, end)).length, written: end }
 	}
@@ -191,7 +191,7 @@ const USERINFO = `${PATH}/:;=@[\\]|`
 const encodeSet = (text: string, set: string): string => {
 	let out = ""
 	for (const char of text) {
-		const code = char.codePointAt(0)!
+		const code = char.codePointAt(0) ?? 0
 		if (code < 0x20 || code === 0x7f) out += percent(code)
 		else if (code < 0x80) out += set.includes(char) ? percent(code) : char
 		else for (const byte of utf8Encode(char)) out += percent(byte)
@@ -206,7 +206,7 @@ const percentDecode = (text: string): string => {
 	if (!text.includes("%")) return text
 	const bytes: Array<number> = []
 	for (let i = 0; i < text.length; i++) {
-		const char = text[i]!
+		const char = text[i] ?? ""
 		if (char === "%" && isHex(text[i + 1]) && isHex(text[i + 2])) {
 			bytes.push(parseInt(text.slice(i + 1, i + 3), 16))
 			i += 2
@@ -257,7 +257,7 @@ export class ShimURLSearchParams {
 			this.list = init.list.map(([k, v]) => [k, v])
 			return
 		}
-		if (typeof (init as Iterable<unknown>)[Symbol.iterator] === "function") {
+		if (Symbol.iterator in init) {
 			for (const pair of init as Iterable<ReadonlyArray<string>>) {
 				const entry = [...pair]
 				if (entry.length !== 2) throw new TypeError("Each pair must have exactly two items")
@@ -324,12 +324,12 @@ export class ShimURLSearchParams {
 	}
 	forEach(callback: (value: string, name: string, params: ShimURLSearchParams) => void, thisArg?: unknown) {
 		for (let i = 0; i < this.list.length; i++) {
-			const [k, v] = this.list[i]!
+			const [k, v] = this.list[i] ?? ["", ""]
 			callback.call(thisArg, v, k, this)
 		}
 	}
 	*entries(): IterableIterator<[string, string]> {
-		for (let i = 0; i < this.list.length; i++) yield [...this.list[i]!]
+		for (let i = 0; i < this.list.length; i++) yield [...(this.list[i] ?? ["", ""])]
 	}
 	*keys(): IterableIterator<string> {
 		for (const [k] of this.entries()) yield k
@@ -362,14 +362,14 @@ const parseForm = (query: string): Array<[string, string]> => {
 
 // URL
 
-const DEFAULT_PORTS: Readonly<Record<string, string>> = {
-	"http:": "80",
-	"https:": "443",
-	"ws:": "80",
-	"wss:": "443",
-	"ftp:": "21",
-}
-const isSpecial = (protocol: string) => protocol in DEFAULT_PORTS || protocol === "file:"
+const DEFAULT_PORTS = new Map([
+	["http:", "80"],
+	["https:", "443"],
+	["ws:", "80"],
+	["wss:", "443"],
+	["ftp:", "21"],
+])
+const isSpecial = (protocol: string) => DEFAULT_PORTS.has(protocol) || protocol === "file:"
 
 const FORBIDDEN_HOST = /[\u0000\t\n\r #/:<>?@[\\\]^|]/
 const FORBIDDEN_DOMAIN = /[\u0000-\u001f\t\n\r #%/:<>?@[\\\]^|\u007f]/
@@ -387,7 +387,7 @@ const ipv4Part = (part: string): number | undefined => {
 const parseIPv4 = (host: string): string | null => {
 	const parts = host.split(".")
 	if (parts[parts.length - 1] === "" && parts.length > 1) parts.pop()
-	const last = parts[parts.length - 1]!
+	const last = parts[parts.length - 1] ?? ""
 	// The WHATWG "ends in a number" check: otherwise a domain.
 	if (!(/^[0-9]+$/.test(last) || /^0x[0-9a-f]*$/i.test(last))) return null
 	if (parts.length > 4) throw new TypeError("Invalid URL: bad IPv4 address")
@@ -395,10 +395,10 @@ const parseIPv4 = (host: string): string | null => {
 	if (numbers.some((n) => n === undefined)) throw new TypeError("Invalid URL: bad IPv4 address")
 	const values = numbers as Array<number>
 	if (values.slice(0, -1).some((n) => n > 255)) throw new TypeError("Invalid URL: bad IPv4 address")
-	if (values[values.length - 1]! >= 256 ** (5 - values.length))
+	if ((values[values.length - 1] ?? 0) >= 256 ** (5 - values.length))
 		throw new TypeError("Invalid URL: bad IPv4 address")
-	let address = values[values.length - 1]!
-	for (let i = 0; i < values.length - 1; i++) address += values[i]! * 256 ** (3 - i)
+	let address = values[values.length - 1] ?? 0
+	for (let i = 0; i < values.length - 1; i++) address += (values[i] ?? 0) * 256 ** (3 - i)
 	return [address >>> 24, (address >>> 16) & 255, (address >>> 8) & 255, address & 255].join(".")
 }
 
@@ -408,16 +408,19 @@ const parseIPv6 = (input: string): string => {
 	let text = input.toLowerCase()
 	const v4 = /^(.*:)(\d+\.\d+\.\d+\.\d+)$/.exec(text)
 	if (v4 !== null) {
-		const octets = v4[2]!.split(".").map(Number)
-		if (octets.some((o) => o > 255) || v4[2]!.split(".").some((o) => o.length > 1 && o.startsWith("0")))
+		const octets = (v4[2] ?? "").split(".").map(Number)
+		if (
+			octets.some((o) => o > 255) ||
+			(v4[2] ?? "").split(".").some((o) => o.length > 1 && o.startsWith("0"))
+		)
 			throw bad()
-		text = `${v4[1]}${((octets[0]! << 8) | octets[1]!).toString(16)}:${((octets[2]! << 8) | octets[3]!).toString(16)}`
+		text = `${v4[1]}${(((octets[0] ?? 0) << 8) | (octets[1] ?? 0)).toString(16)}:${(((octets[2] ?? 0) << 8) | (octets[3] ?? 0)).toString(16)}`
 	}
 	const halves = text.split("::")
 	if (halves.length > 2) throw bad()
 	const groups = (part: string) => (part === "" ? [] : part.split(":"))
-	const head = groups(halves[0]!)
-	const tail = halves.length === 2 ? groups(halves[1]!) : []
+	const head = groups(halves[0] ?? "")
+	const tail = halves.length === 2 ? groups(halves[1] ?? "") : []
 	if ([...head, ...tail].some((g) => !/^[0-9a-f]{1,4}$/.test(g))) throw bad()
 	const missing = 8 - head.length - tail.length
 	if ((halves.length === 1 && missing !== 0) || (halves.length === 2 && missing < 1)) throw bad()
@@ -477,10 +480,10 @@ const parsePath = (
 	const segments = [...base]
 	const parts = (special ? input.replace(/\\/g, "/") : input).split("/")
 	for (let i = 0; i < parts.length; i++) {
-		const raw = parts[i]!
+		const raw = parts[i] ?? ""
 		const last = i === parts.length - 1
 		if (isDoubleDot(raw)) {
-			if (!(protocol === "file:" && segments.length === 1 && isWindowsLetter(segments[0]!)))
+			if (!(protocol === "file:" && segments.length === 1 && isWindowsLetter(segments[0] ?? "")))
 				segments.pop()
 			if (last) segments.push("")
 		} else if (isSingleDot(raw)) {
@@ -535,12 +538,12 @@ const parseAuthority = (parts: Parts, authority: string, special: boolean) => {
 	let host = authority
 	if (portMatch !== null) {
 		host = authority.slice(0, portMatch.index)
-		const port = portMatch[1]!
+		const port = portMatch[1] ?? ""
 		if (!/^[0-9]*$/.test(port)) throw new TypeError("Invalid URL: bad port")
 		if (port !== "") {
 			const value = Number(port)
 			if (value > 65535) throw new TypeError("Invalid URL: port out of range")
-			parts.port = String(value) === DEFAULT_PORTS[parts.protocol] ? "" : String(value)
+			parts.port = String(value) === DEFAULT_PORTS.get(parts.protocol) ? "" : String(value)
 		}
 	}
 	if (host === "" && special && parts.protocol !== "file:") throw new TypeError("Invalid URL: empty host")
@@ -557,7 +560,7 @@ const parseURL = (rawInput: string, base: Parts | undefined): Parts => {
 	const input = rawInput.replace(/^[\u0000- ]+|[\u0000- ]+$/g, "").replace(/[\t\n\r]/g, "")
 	const scheme = SCHEME.exec(input)
 	if (scheme !== null) {
-		const protocol = `${scheme[1]!.toLowerCase()}:`
+		const protocol = `${(scheme[1] ?? "").toLowerCase()}:`
 		const special = isSpecial(protocol)
 		const rest = input.slice(scheme[0].length)
 		// `http:foo` against an `http:` base is relative to it.
@@ -688,7 +691,7 @@ export class ShimURL {
 	}
 	get origin(): string {
 		const p = this.parts
-		if (!(p.protocol in DEFAULT_PORTS)) return "null"
+		if (!DEFAULT_PORTS.has(p.protocol)) return "null"
 		return `${p.protocol}//${this.host}`
 	}
 	get protocol() {
@@ -697,11 +700,11 @@ export class ShimURL {
 	set protocol(value: string) {
 		const match = /^([a-zA-Z][a-zA-Z0-9+.-]*):?/.exec(value)
 		if (match === null) return
-		const next = `${match[1]!.toLowerCase()}:`
+		const next = `${(match[1] ?? "").toLowerCase()}:`
 		// Special and non-special schemes do not trade places (the WHATWG rule).
 		if (isSpecial(next) !== this.special) return
 		this.parts.protocol = next
-		if (this.parts.port === DEFAULT_PORTS[next]) this.parts.port = ""
+		if (this.parts.port === DEFAULT_PORTS.get(next)) this.parts.port = ""
 	}
 	get username() {
 		return this.parts.username
@@ -725,7 +728,7 @@ export class ShimURL {
 		try {
 			const next = parseURL(`${this.parts.protocol}//${value.split(/[/?#\\]/)[0]}`, undefined)
 			this.parts.hostname = next.hostname
-			if (/:[0-9]*$/.test(value.split(/[/?#\\]/)[0]!)) this.parts.port = next.port
+			if (/:[0-9]*$/.test(value.split(/[/?#\\]/)[0] ?? "")) this.parts.port = next.port
 		} catch {}
 	}
 	get hostname() {
@@ -734,7 +737,7 @@ export class ShimURL {
 	set hostname(value: string) {
 		if (this.parts.opaque !== undefined) return
 		try {
-			this.parts.hostname = parseHost(value.split(/[/?#:\\]/)[0]!, this.special)
+			this.parts.hostname = parseHost(value.split(/[/?#:\\]/)[0] ?? "", this.special)
 		} catch {}
 	}
 	get port() {
@@ -742,7 +745,7 @@ export class ShimURL {
 	}
 	set port(value: string) {
 		if (this.parts.hostname === "" || this.parts.protocol === "file:") return
-		const digits = /^[0-9]*/.exec(String(value))![0]
+		const digits = /^[0-9]*/.exec(String(value))?.[0] ?? ""
 		if (digits === "" && String(value) !== "") return
 		if (digits === "") {
 			this.parts.port = ""
@@ -750,7 +753,7 @@ export class ShimURL {
 		}
 		const port = Number(digits)
 		if (port > 65535) return
-		this.parts.port = String(port) === DEFAULT_PORTS[this.parts.protocol] ? "" : String(port)
+		this.parts.port = String(port) === DEFAULT_PORTS.get(this.parts.protocol) ? "" : String(port)
 	}
 	get pathname(): string {
 		const p = this.parts
