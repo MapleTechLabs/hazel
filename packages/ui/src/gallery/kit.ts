@@ -5,6 +5,7 @@ import { IconHashtag, IconPlus } from "../../../../apps/web-foldkit/src/icons/in
 import { CHANNEL_ACTIVE } from "../../../../apps/web-foldkit/src/shell/channels-sidebar/items.ts"
 import { badge } from "../../../../apps/web-foldkit/src/ui/badge.ts"
 import { button, type ButtonVariants } from "../../../../apps/web-foldkit/src/ui/button.ts"
+import { toggleChip } from "../../../../apps/web-foldkit/src/ui/toggle-chip.ts"
 import {
 	sidebarItem,
 	sidebarLabel,
@@ -64,7 +65,7 @@ const intentOf = {
 	ghost: "plain",
 	warning: "warning",
 	danger: "danger",
-	// No kit button is a chip: DMs' filter chips are their own markup; the gallery draws them as plain.
+	// A chip is `toggleChip` (`kitChip`), never a kit button; this entry only closes the map.
 	chip: "plain",
 } as const satisfies Record<ButtonSpec["variant"], ButtonVariants["intent"]>
 
@@ -73,19 +74,37 @@ const sizeOf = (spec: ButtonSpec): ButtonVariants["size"] => {
 	return spec.iconOnly ? `sq-${size[spec.size]}` : size[spec.size]
 }
 
-const kitButton = (h: H, spec: ButtonSpec): Html =>
-	button(
-		h,
-		{
-			intent: intentOf[spec.variant],
-			size: sizeOf(spec),
-			isCircle: spec.circle ?? false,
-			isDisabled: spec.disabled ?? false,
-			isPending: spec.loading ?? false,
-			attributes: [h.Attribute("data-specimen", spec.id)],
-		},
-		[...(spec.icon ? [icon(h, spec.icon)] : []), ...(spec.label ? [spec.label] : [])],
+/**
+ * The DMs filter chip (`page/chat-index/mobile-dms.ts`): `toggleChip` with its round override, in a
+ * shrink-wrapped span that carries the specimen id (the chip takes no attributes).
+ */
+const kitChip = (h: H, spec: ButtonSpec): Html =>
+	h.span(
+		[h.Class("inline-flex"), h.Attribute("data-specimen", spec.id)],
+		[
+			toggleChip(h, {
+				label: spec.label ?? "",
+				isPressed: spec.selected ?? false,
+				className: "h-8 rounded-full px-3.5",
+			}),
+		],
 	)
+
+const kitButton = (h: H, spec: ButtonSpec): Html =>
+	spec.variant === "chip"
+		? kitChip(h, spec)
+		: button(
+				h,
+				{
+					intent: intentOf[spec.variant],
+					size: sizeOf(spec),
+					isCircle: spec.circle ?? false,
+					isDisabled: spec.disabled ?? false,
+					isPending: spec.loading ?? false,
+					attributes: [h.Attribute("data-specimen", spec.id)],
+				},
+				[...(spec.icon ? [icon(h, spec.icon)] : []), ...(spec.label ? [spec.label] : [])],
+			)
 
 type BadgeIntent = Parameters<typeof badge>[1]["intent"]
 

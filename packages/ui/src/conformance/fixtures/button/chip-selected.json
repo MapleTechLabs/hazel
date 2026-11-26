@@ -1,0 +1,27 @@
+{
+	"about": "A filter chip that is on (`selected`, `aria-pressed`), against today's pressed `toggleChip`.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"label": "All",
+			"variant": "chip",
+			"size": "small",
+			"selected": true
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "All"
+		}
+	],
+	"kit": {
+		"specimen": "button-chip-selected",
+		"target": "button"
+	},
+	"pending": {
+		"ios": "S2"
+	}
+}

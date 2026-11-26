@@ -72,14 +72,24 @@ export const button = defineRecipe<
 						pressed: { root: { background: "secondary" } },
 					},
 				},
-				// Seed (lane A2 matches today's DMs filter chips): fully round, filled while `selected`.
+				// toggle-chip.ts as the DMs filter uses it: outlined and muted, tinted while `selected`.
 				chip: {
-					root: { background: "transparent", color: "fg", radius: "full" },
+					root: {
+						background: "transparent",
+						color: "muted-fg",
+						borderColor: "border",
+						radius: "full",
+					},
 					parts: { icon: { color: "muted-fg" } },
 					states: {
-						hover: { root: { background: "secondary" } },
-						pressed: { root: { background: "secondary" } },
-						selected: { root: { background: "secondary", color: "secondary-fg" } },
+						selected: {
+							root: {
+								background: "chip-selected",
+								borderColor: "chip-selected-border",
+								color: "fg",
+							},
+						},
+						hover: { root: { background: "secondary", color: "fg" } },
 					},
 				},
 				warning: {
@@ -189,6 +199,14 @@ export const button = defineRecipe<
 	},
 	flags: { iconOnly: { root: { paddingX: "0", paddingY: "0" } }, circle: { root: { radius: "full" } } },
 	compounds: [
+		// A chip has one size (`h-8 sm:h-7 px-3.5 text-sm`), so it overrides every `size`.
+		{
+			when: { variant: "chip" },
+			style: {
+				root: { minHeight: "8", gap: "1.5", paddingX: "3.5", paddingY: "0", text: "label" },
+				regular: { root: { minHeight: "7", paddingX: "3.5", paddingY: "0", text: "label" } },
+			},
+		},
 		{
 			when: { iconOnly: true, size: "large" },
 			style: {

@@ -58,6 +58,7 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 	send.setAttribute("aria-label", "Send")
 	send.innerHTML = svg("arrow-up")
 	send.firstElementChild?.setAttribute("aria-hidden", "true")
+	send.firstElementChild?.setAttribute("data-hz-part", "sendIcon")
 	node.append(content, area, send)
 
 	const events = () => primitive.events

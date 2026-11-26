@@ -2,6 +2,7 @@
  * `hz:button`: a native `button` (Enter and Space press it) holding an icon part and a label part, the
  * structure `tokens.css` and the parity gallery (`gallery/hazel.ts`) style. `iconOnly` drops the label
  * part and names the button with `aria-label`; `loading` keeps it focusable but swallows presses.
+ * `selected` is a toggle's on state (`aria-pressed`); a `chip` is always a toggle, so it says `false` too.
  */
 // Owned by lane A2.
 import { svg } from "../../icons.ts"
@@ -18,6 +19,8 @@ export const primitive = definePrimitive("button", ({ document, outer, self }) =
 	let iconName: string | undefined
 	let iconOnly = false
 	let loading = false
+	let chip = false
+	let selected = false
 
 	const iconOf = (name: string) => {
 		const holder = document.createElement("span")
@@ -38,6 +41,10 @@ export const primitive = definePrimitive("button", ({ document, outer, self }) =
 		if (iconOnly && text !== "") node.setAttribute("aria-label", text)
 		else node.removeAttribute("aria-label")
 	}
+	const pressed = () => {
+		if (chip || selected) node.setAttribute("aria-pressed", selected ? "true" : "false")
+		else node.removeAttribute("aria-pressed")
+	}
 	// A loading button stays in the tab order (React Aria's pending) but presses do nothing.
 	node.addEventListener("click", (event) => {
 		if (!loading) return
@@ -57,8 +64,17 @@ export const primitive = definePrimitive("button", ({ document, outer, self }) =
 			iconOnly = value === true
 			flag(node, "icon-only", value)
 			draw()
-		} else if (name === "variant" || name === "size") option(node, name, value)
-		else if (name === "circle") flag(node, "circle", value)
+		} else if (name === "variant" || name === "size") {
+			option(node, name, value)
+			if (name === "variant") {
+				chip = value === "chip"
+				pressed()
+			}
+		} else if (name === "selected") {
+			selected = value === true
+			flag(node, "selected", value)
+			pressed()
+		} else if (name === "circle") flag(node, "circle", value)
 		else if (name === "disabled") {
 			flag(node, "disabled", value)
 			node.disabled = value === true
