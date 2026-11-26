@@ -1,3 +1,4 @@
+import SwiftUI
 import UIKit
 
 /// Lays out list entries and the chat leaves from the generated theme (`HazelTheme.Recipes`): message
@@ -62,7 +63,7 @@ public enum RowRenderer {
 
         if row.showsHeader {
             let rect = CGRect(x: x0, y: y, width: avatarSize, height: avatarSize)
-            avatar(row.initials ?? "", rect: rect, style: avatarStyle, &b)
+            avatar(row.initials ?? "", seed: row.author, rect: rect, style: avatarStyle, &b)
             b.target(rect, "pressAuthor", label: row.author ?? "Author")
         }
 
@@ -70,7 +71,9 @@ public enum RowRenderer {
         if row.showsHeader, let author = row.author {
             by = header(row, author: author, x: bodyX, y: by, width: bodyWidth, pinned: pinned, &b)
         }
-        by = richText(row.blocks, x: bodyX, y: by, width: bodyWidth, base: root, events: true, &b)
+        // A body of only emoji is drawn large, as today's `text-2xl` (`isEmojiOnly`).
+        let bodyStyle = isEmojiOnly(row.blocks) ? root.at(.display) : root
+        by = richText(row.blocks, x: bodyX, y: by, width: bodyWidth, base: bodyStyle, events: true, &b)
         if !row.files.isEmpty {
             by += Token.space("2")
             by = attachments(row.files, x: bodyX, y: by, width: bodyWidth, removable: false, press: "pressAttachment", &b)
@@ -119,7 +122,8 @@ public enum RowRenderer {
         }
         for action in row.actions {
             let label = actionLabels[action] ?? action
-            b.actions.append(action == "react"
+            // As the web: `react` raises `addReaction` when the row handles it, else an `action`.
+            b.actions.append(action == "react" && row.flags.contains(.addable)
                 ? .init(label: label, event: "addReaction", payload: [:])
                 : .init(label: label, event: "action", payload: ["action": .string(action)]))
         }
@@ -133,8 +137,20 @@ public enum RowRenderer {
         "delete": "Delete message", "selectText": "Select text",
     ]
 
-    static func avatar(_ initials: String, rect: CGRect, style: PartStyle, micro: Bool = false, _ b: inout Builder) {
-        b.items.append(.fill(rect, radius: micro ? Token.radius("sm") : style.style.radius ?? Token.radius("xl"), color: style.fill ?? .clear))
+    /// A face: today's dither seeded by the name under its one white initial, else initials on the fill.
+    static func avatar(_ initials: String, seed: String? = nil, rect: CGRect, style: PartStyle, micro: Bool = false, _ b: inout Builder) {
+        let radius = micro ? Token.radius("sm") : style.style.radius ?? Token.radius("xl")
+        if let seed, !seed.trimmingCharacters(in: .whitespaces).isEmpty {
+            b.items.append(.image(RowDither.image(seed, side: rect.width, radius: radius, scale: b.c.scale), rect))
+            let font = RowFont.inter(rect.width * 0.46, weight: HazelTheme.Font.weightSemibold)
+            let text = RowText.string(Dither.initial(seed), font, .white, lineHeight: font.lineHeight, wrap: false)
+            let size = RowText.measure(text)
+            // Centred on the cap height, as the web's `text-box: trim-both cap alphabetic`.
+            let top = rect.midY - (font.ascender - font.capHeight / 2)
+            b.items.append(.text(text, CGRect(x: rect.midX - size.width / 2, y: top, width: size.width + 1, height: font.lineHeight)))
+            return
+        }
+        b.items.append(.fill(rect, radius: radius, color: style.fill ?? .clear))
         guard !initials.isEmpty else { return }
         let metrics = HazelTheme.text(micro ? HazelTheme.TextStep.micro : style.style.text ?? .caption, b.c.sizeClass)
         let font = RowFont.inter(metrics.size, weight: HazelTheme.Font.weightStrong)
@@ -236,7 +252,7 @@ public enum RowRenderer {
         let gap = Token.space("1.5")
         let face = Token.space("4")
         let avatarStyle = PartStyle(HazelTheme.Recipes.message, "avatarImage", b.c)
-        avatar(reply.initials, rect: CGRect(x: px, y: y + (height - face) / 2, width: face, height: face), style: avatarStyle, micro: true, &b)
+        avatar(reply.initials, seed: reply.author, rect: CGRect(x: px, y: y + (height - face) / 2, width: face, height: face), style: avatarStyle, micro: true, &b)
         px += face + gap
         let author = RowText.string(reply.author, label, weight: HazelTheme.Font.weightStrong, color: HazelTheme.Colors.fg.ui(b.c.dark), wrap: false)
         let aw = RowText.measure(author).width
@@ -297,9 +313,10 @@ public enum RowRenderer {
         let second = top + line + Token.space("0.5")
         px = rect.minX + padX
         let face = Token.space("4")
-        avatar(thread.initials, rect: CGRect(x: px, y: second + (line - face) / 2, width: face, height: face), style: PartStyle(HazelTheme.Recipes.message, "avatarImage", b.c), micro: true, &b)
+        avatar(thread.initials, seed: thread.author, rect: CGRect(x: px, y: second + (line - face) / 2, width: face, height: face), style: PartStyle(HazelTheme.Recipes.message, "avatarImage", b.c), micro: true, &b)
         px += face + gap
-        let author = RowText.string(thread.author, style, weight: HazelTheme.Font.weightStrong, color: fg, wrap: false)
+        // Today's `text-fg/85`, as the web's thread author.
+        let author = RowText.string(thread.author, style, weight: HazelTheme.Font.weightStrong, color: fg.withAlphaComponent(0.85), wrap: false)
         let aw = RowText.measure(author).width
         b.items.append(.text(author, CGRect(x: px, y: second, width: aw + 1, height: line)))
         px += aw + gap
@@ -343,6 +360,16 @@ public enum RowRenderer {
     }
 
     // MARK: rich text
+
+    /// One plain paragraph of emoji and spaces only (the web's `isEmojiOnly` in `chat/message.ts`).
+    static func isEmojiOnly(_ blocks: [RowData.Block]) -> Bool {
+        guard blocks.count == 1, case let .paragraph(runs, nil) = blocks[0],
+              runs.allSatisfy({ $0.kind == .plain }) else { return false }
+        let text = runs.map(\.text).joined().filter { !$0.isWhitespace }
+        return !text.isEmpty && text.allSatisfy { ch in
+            ch.unicodeScalars.contains { $0.properties.isEmojiPresentation || ($0.properties.isEmoji && $0.value > 0x238C) }
+        }
+    }
 
     /// A row's body blocks: paragraphs and list items, quotes, code blocks. Runs number across the
     /// whole body (the index `pressMention` reports). Returns the bottom.
@@ -741,8 +768,18 @@ public enum RowRenderer {
         let padX = root.style.paddingX ?? 0, padY = root.style.paddingY ?? 0
         let gap = root.style.gap ?? 0
         let lpx = labelStyle.style.paddingX ?? 0, lpy = labelStyle.style.paddingY ?? 0
+        // Today's date pill is set in the monospace (`font-mono`), as the web renderer does.
+        let text = kind == "unread"
+            ? RowText.string(label, labelStyle, wrap: false)
+            : RowText.string(
+                label,
+                .monospacedSystemFont(ofSize: labelStyle.metrics.size, weight: .regular),
+                labelStyle.ink ?? .secondaryLabel,
+                lineHeight: labelStyle.lineHeight,
+                wrap: false
+            )
         let pill = label.isEmpty ? CGSize.zero : {
-            let s = RowText.measure(RowText.string(label, labelStyle, wrap: false))
+            let s = RowText.measure(text)
             return CGSize(width: s.width + lpx * 2, height: labelStyle.lineHeight + lpy * 2)
         }()
         let height = max(pill.height, 1) + padY * 2
@@ -757,9 +794,10 @@ public enum RowRenderer {
         var px = padX + startWidth + (label.isEmpty ? 0 : gap)
         if !label.isEmpty {
             let rect = CGRect(x: px, y: (height - pill.height) / 2, width: pill.width, height: pill.height)
-            b.items.append(.fill(rect, radius: rect.height / 2, color: labelStyle.fill ?? .clear))
-            b.items.append(.stroke(rect, radius: rect.height / 2, color: labelStyle.ring ?? .separator, width: 1))
-            b.items.append(.text(RowText.string(label, labelStyle, wrap: false), CGRect(x: rect.minX + lpx, y: rect.minY + lpy, width: pill.width - lpx * 2 + 1, height: labelStyle.lineHeight)))
+            let radius = min(labelStyle.style.radius ?? rect.height / 2, rect.height / 2)
+            b.items.append(.fill(rect, radius: radius, color: labelStyle.fill ?? .clear))
+            if let ring = labelStyle.ring { b.items.append(.stroke(rect, radius: radius, color: ring, width: 1)) }
+            b.items.append(.text(text, CGRect(x: rect.minX + lpx, y: rect.minY + lpy, width: pill.width - lpx * 2 + 1, height: labelStyle.lineHeight)))
             px = rect.maxX + gap
         }
         if !unread {
@@ -838,5 +876,38 @@ extension UIFont {
             .featureSettings: [[UIFontDescriptor.FeatureKey.type: kNumberSpacingType, UIFontDescriptor.FeatureKey.selector: kMonospacedNumbersSelector]],
         ])
         return UIFont(descriptor: descriptor, size: pointSize)
+    }
+}
+
+
+/// The dithered face (`Dither`) as a clipped bitmap, cached by seed, size and corner.
+enum RowDither {
+    nonisolated(unsafe) private static var cache: [String: UIImage] = [:]
+    private static let lock = NSLock()
+
+    static func image(_ seed: String, side: CGFloat, radius: CGFloat, scale: CGFloat) -> UIImage {
+        let key = "\(seed)|\(side)|\(radius)|\(scale)"
+        lock.lock()
+        defer { lock.unlock() }
+        if let hit = cache[key] { return hit }
+        let hue = Dither.hue(seed), n = Dither.cells(side)
+        let dark = UIColor(Dither.oklch(0.4, 0.13, hue)), light = UIColor(Dither.oklch(0.55, 0.12, hue))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        let rect = CGRect(x: 0, y: 0, width: side, height: side)
+        let image = UIGraphicsImageRenderer(size: rect.size, format: format).image { context in
+            UIBezierPath(roundedRect: rect, cornerRadius: radius).addClip()
+            dark.setFill()
+            context.fill(rect)
+            light.setFill()
+            let cell = side / CGFloat(n)
+            for y in 0..<n {
+                for x in 0..<n where Dither.lit(x, y, n) {
+                    context.fill(CGRect(x: CGFloat(x) * cell, y: CGFloat(y) * cell, width: cell, height: cell))
+                }
+            }
+        }
+        cache[key] = image
+        return image
     }
 }

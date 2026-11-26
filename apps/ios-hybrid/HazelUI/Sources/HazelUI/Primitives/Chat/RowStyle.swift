@@ -88,7 +88,7 @@ enum RowFont {
 
 /// A recipe part resolved for one row: style, its UIColors under the row's appearance, its font.
 struct PartStyle {
-    let style: HazelTheme.Style
+    private(set) var style: HazelTheme.Style
     let dark: Bool
     let sizeClass: HazelTheme.SizeClass
 
@@ -104,6 +104,14 @@ struct PartStyle {
     var metrics: HazelTheme.TypeMetrics { HazelTheme.text(style.text ?? .body, sizeClass) }
     var lineHeight: CGFloat { style.leading ?? metrics.lineHeight }
     func font(weight: Int? = nil) -> UIFont { RowFont.of(style, sizeClass, weight: weight) }
+
+    /// The same part at another type step, at that step's line height (an emoji-only body).
+    func at(_ step: HazelTheme.TextStep) -> PartStyle {
+        var copy = self
+        copy.style.text = step
+        copy.style.leading = nil
+        return copy
+    }
 }
 
 /// Icons inside bitmap rows, from S1's catalog (`row-icons`), tinted and cached per size and colour.

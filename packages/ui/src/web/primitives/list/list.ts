@@ -1,5 +1,6 @@
 // Owned by lane A4 (`docs/hazel-ui.md`, "Phase 2: lanes"). `hz:list`: rows in a scroll viewport.
 // Every row stays mounted (the renderer owns them); rows far from the viewport skip layout and paint.
+// A list fills the column it sits in, so its viewport, not the page, scrolls.
 // The skeleton and edge spinners are renderer-owned (GAPS `skeleton`): their look is here, over tokens.
 import { loop, onShow } from "../../motion.ts"
 import { definePrimitive, flag, option, part, type Primitive } from "../define.ts"
@@ -17,11 +18,18 @@ const REACH_MIN = 64
 const RENDER_BAND = 2
 
 const css = `
-[data-hz="list"] { position: relative; display: flex; flex-direction: column; min-height: 0; }
+[data-hz="list"] { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 [data-hz="list"] > [data-hz-part="viewport"] {
 	flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-anchor: none; overscroll-behavior: contain;
 }
 [data-hz="list"] > [data-hz-part="viewport"] > [data-hz-part="content"] { display: flex; flex-direction: column; }
+/* Chat rhythm, today's: 8px above an author group's first row and below its last (no collapsing). */
+[data-hz="list"] > [data-hz-part="viewport"] > [data-hz-part="content"] > [data-hz="message"]:not([data-grouped]) {
+	margin-top: var(--hz-space-2);
+}
+[data-hz="list"] > [data-hz-part="viewport"] > [data-hz-part="content"] > [data-hz="message"]:not(:has(+ [data-hz="message"][data-grouped])) {
+	margin-bottom: var(--hz-space-2);
+}
 [data-hz="list"] > [data-hz-part="viewport"] > [data-hz-part="content"] > [data-hz-offscreen] {
 	content-visibility: auto; contain-intrinsic-size: auto var(--hz-row-size, var(--hz-space-11));
 }

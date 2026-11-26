@@ -1,0 +1,43 @@
+{
+	"about": "Faces in a row: the seeded dither with one initial when there is no picture (`avatar-seed-tint`), and the pictures the reply line and the thread card take (`thread-reply-avatar`); a body of only emoji draws large.",
+	"root": {
+		"tag": "message",
+		"props": {
+			"row": {
+				"author": "Dennis Ritchie",
+				"initials": "DR",
+				"time": "01:23",
+				"reply": {
+					"author": "Ada Lovelace",
+					"initials": "AL",
+					"text": "Benchmarks after lunch?",
+					"avatar": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Crect width='8' height='8' fill='%23f59e0b'/%3E%3C/svg%3E"
+				},
+				"body": [[0, ["Off to update the benchmarks with the release build."]]],
+				"thread": {
+					"name": "Benchmarks",
+					"count": 3,
+					"author": "Alan Turing",
+					"initials": "AT",
+					"avatar": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Crect width='8' height='8' fill='%230ea5e9'/%3E%3C/svg%3E",
+					"preview": "Numbers in an hour.",
+					"time": "21 days ago"
+				}
+			}
+		}
+	},
+	"aria": [{ "role": "article", "name": "Dennis Ritchie, 01:23" }],
+	"cases": [
+		{
+			"name": "emoji-only",
+			"props": {
+				"row": {
+					"author": "Alan Turing",
+					"initials": "AT",
+					"time": "01:19",
+					"body": [[0, ["🎉"]]]
+				}
+			}
+		}
+	]
+}

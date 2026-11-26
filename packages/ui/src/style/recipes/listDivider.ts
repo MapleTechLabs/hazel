@@ -12,34 +12,40 @@ export const listDivider = defineRecipe<
 	primitive: "listDivider",
 	parts: { lineStart: "part", label: "part", lineEnd: "part" },
 	base: {
-		root: { layout: "row", align: "center", gap: "2", paddingX: "4", paddingY: "2", fill: true },
+		root: { layout: "row", align: "center", paddingX: "4", paddingY: "2", fill: true },
 		parts: {
 			lineStart: { grow: true, divider: "border" },
 			lineEnd: { grow: true, divider: "border" },
-			label: {
-				text: "caption",
-				strong: true,
-				color: "fg-3",
-				paddingX: "2",
-				paddingY: "0.5",
-				radius: "full",
-				ring: "border",
-				background: "bg",
-				nowrap: true,
-				shrink: false,
-			},
+			label: { text: "caption", nowrap: true, shrink: false },
 		},
 	},
 	options: {
 		kind: {
 			default: "date",
 			values: {
-				date: {},
+				// Today's date pill (`chat/message/row.ts` `dateDividerView`); its mono family is the renderer's.
+				date: {
+					parts: {
+						label: {
+							color: "muted-fg",
+							paddingX: "3",
+							paddingY: "1",
+							radius: "lg",
+							background: "secondary",
+							shadow: "sm",
+						},
+					},
+				},
 				unread: {
+					root: { gap: "2" },
 					parts: {
 						lineStart: { divider: "danger" },
 						label: {
+							strong: true,
 							color: "danger-subtle-fg",
+							paddingX: "2",
+							paddingY: "0.5",
+							radius: "full",
 							ring: "danger-subtle",
 							background: "danger-subtle",
 						},

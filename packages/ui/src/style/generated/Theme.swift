@@ -901,6 +901,7 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "loadingStart", style: Style(layout: .row, justify: .center, paddingY: 12, gap: 4)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "loadingEnd", style: Style(layout: .row, justify: .center, paddingY: 12, gap: 4)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "overlay", style: Style(gap: 8)),
+                Layer(when: When(options: ["anchor": "end"], flags: [], states: [], sizeClass: nil), part: "content", style: Style(paddingX: 16)),
             ]
         )
 
@@ -909,12 +910,14 @@ public enum HazelTheme {
             defaults: ["kind": "date"],
             inert: [],
             layers: [
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .row, align: .center, paddingX: 16, paddingY: 8, gap: 8, fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .row, align: .center, paddingX: 16, paddingY: 8, fill: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "lineStart", style: Style(divider: Colors.border, grow: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "lineEnd", style: Style(divider: Colors.border, grow: true)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "label", style: Style(background: Colors.bg, color: Colors.fg3, radius: 9999, ring: Colors.border, paddingX: 8, paddingY: 2, text: .caption, strong: true, nowrap: true, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "label", style: Style(text: .caption, nowrap: true, shrink: false)),
+                Layer(when: When(options: ["kind": "date"], flags: [], states: [], sizeClass: nil), part: "label", style: Style(background: Colors.secondary, color: Colors.mutedFg, radius: 8, paddingX: 12, paddingY: 4, shadow: "sm")),
+                Layer(when: When(options: ["kind": "unread"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 8)),
                 Layer(when: When(options: ["kind": "unread"], flags: [], states: [], sizeClass: nil), part: "lineStart", style: Style(divider: Colors.danger)),
-                Layer(when: When(options: ["kind": "unread"], flags: [], states: [], sizeClass: nil), part: "label", style: Style(background: Colors.dangerSubtle, color: Colors.dangerSubtleFg, ring: Colors.dangerSubtle)),
+                Layer(when: When(options: ["kind": "unread"], flags: [], states: [], sizeClass: nil), part: "label", style: Style(background: Colors.dangerSubtle, color: Colors.dangerSubtleFg, radius: 9999, ring: Colors.dangerSubtle, paddingX: 8, paddingY: 2, strong: true)),
             ]
         )
 

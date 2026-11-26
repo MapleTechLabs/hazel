@@ -110,7 +110,38 @@ export interface FixtureWebSocketOptions {
 	readonly latencyMs?: number
 	/** The rows each source serves. @default `snapshotFor` */
 	readonly snapshot?: (kind: SyncSourceKind, sourceId: string) => FixtureTables | undefined
+	/**
+	 * Page paged tables as the source objects do: a snapshot sends the newest `pageSize` rows and
+	 * `LoadOlder` the ones before its cursor. @default undefined (whole history at once)
+	 */
+	readonly pageSize?: number
 }
+
+interface Cursor {
+	readonly createdAt: string
+	readonly id: string
+}
+
+const cursorOf = (row: unknown): Cursor | undefined =>
+	typeof row === "object" && row !== null && "createdAt" in row && "id" in row
+		? { createdAt: String(row.createdAt), id: String(row.id) }
+		: undefined
+
+/** Newest first, by `createdAt` then `id`, as the objects order history. */
+const newestFirst = (rows: ReadonlyArray<unknown>) =>
+	rows
+		.flatMap((row) => {
+			const cursor = cursorOf(row)
+			return cursor === undefined ? [] : [{ row, cursor }]
+		})
+		.sort((a, b) =>
+			a.cursor.createdAt === b.cursor.createdAt
+				? b.cursor.id.localeCompare(a.cursor.id)
+				: b.cursor.createdAt.localeCompare(a.cursor.createdAt),
+		)
+
+const isBefore = (a: Cursor, b: Cursor) =>
+	a.createdAt < b.createdAt || (a.createdAt === b.createdAt && a.id < b.id)
 
 /** One source's stream: `receive` answers client frames; `close` stops server writes reaching it. */
 type SourceStream = { readonly receive: (frame: string) => void; readonly close: () => void }
@@ -122,19 +153,43 @@ const sourceStream = (
 	tables: FixtureTables,
 	emit: (frame: ServerFrame) => void,
 	server: FixtureServer | undefined,
+	pageSize?: number,
 ): SourceStream => {
 	const unsubscribe = server?.subscribe(kind, sourceId, emit)
 	const currentSeq = () => (server?.seqOf(kind, sourceId) ?? FIXTURE_SEQ) as never
 	const paging = pagedTables(kind).length > 0
-	const snapshot = () => {
+	const paged = new Set(pagedTables(kind))
+	/** The newest `pageSize` rows of a paged table (when paging), and its window. */
+	const firstPage = (table: string, rows: ReadonlyArray<unknown>) => {
+		const sorted = newestFirst(rows)
+		const page = sorted.slice(0, pageSize)
+		const oldest = page.at(-1)?.cursor ?? null
+		return {
+			rows: page.map((each) => each.row),
+			window: { table, oldest, hasMore: sorted.length > page.length },
+		}
+	}
+	const snapshot = (pages: boolean) => {
+		const paginate = pages && pageSize !== undefined
+		const sent = Object.entries(tables).map(([table, rows]) =>
+			paginate && paged.has(table)
+				? { table, ...firstPage(table, rows) }
+				: { table, rows, window: undefined },
+		)
 		emit(
 			paging
-				? { _tag: "Begin", reset: true, windows: windowsFor(kind, tables) }
+				? {
+						_tag: "Begin",
+						reset: true,
+						windows: paginate
+							? sent.flatMap((each) => (each.window === undefined ? [] : [each.window]))
+							: windowsFor(kind, tables),
+					}
 				: { _tag: "Begin", reset: true },
 		)
 		// Like the source objects, an empty table sends no `Rows`.
-		for (const [table, upserts] of Object.entries(tables))
-			if (upserts.length > 0) emit({ _tag: "Rows", table, upserts, deletes: [] })
+		for (const { table, rows } of sent)
+			if (rows.length > 0) emit({ _tag: "Rows", table, upserts: rows, deletes: [] })
 		emit({ _tag: "Commit", seq: currentSeq() })
 		// Like the objects, `paging` only from a source that pages a table.
 		emit(paging ? { _tag: "Ready", paging: true } : { _tag: "Ready" })
@@ -148,20 +203,41 @@ const sourceStream = (
 		const frame = decoded.success
 		switch (frame._tag) {
 			case "Hello":
-				return snapshot()
+				return snapshot(frame.paging === true)
 			case "Ping":
 				return emit({ _tag: "Pong" })
 			case "Reauth":
 				return emit({ _tag: "Reauthed", expiresInMs: null })
-			case "LoadOlder":
-				// The snapshot holds the whole history: nothing older.
+			case "LoadOlder": {
+				// Paging: the rows before the cursor, a page at a time; else the snapshot held them all.
+				const older =
+					pageSize === undefined
+						? []
+						: newestFirst(tables[frame.table] ?? []).filter((each) =>
+								isBefore(each.cursor, frame.before),
+							)
+				const page = older.slice(0, frame.limit)
 				emit({
 					_tag: "Begin",
 					reset: false,
 					request: frame.requestId,
-					windows: [{ table: frame.table, oldest: frame.before, hasMore: false }],
+					windows: [
+						{
+							table: frame.table,
+							oldest: page.at(-1)?.cursor ?? frame.before,
+							hasMore: older.length > page.length,
+						},
+					],
 				})
+				if (page.length > 0)
+					emit({
+						_tag: "Rows",
+						table: frame.table,
+						upserts: page.map((each) => each.row),
+						deletes: [],
+					})
 				return emit({ _tag: "Commit", seq: currentSeq() })
+			}
 			case "LoadByIds": {
 				const ids = new Set(frame.ids)
 				const rows = (tables[frame.table] ?? []).filter(
@@ -222,6 +298,7 @@ export const makeFixtureWebSocket = (options: FixtureWebSocketOptions = {}): Web
 							tables,
 							(frame) => this.deliver(JSON.stringify(frame)),
 							options.server,
+							options.pageSize,
 						),
 					)
 				}
@@ -258,6 +335,7 @@ export const makeFixtureWebSocket = (options: FixtureWebSocketOptions = {}): Web
 				tables,
 				(frame) => this.deliver(encodeMuxData(control.id, JSON.stringify(frame))),
 				options.server,
+				options.pageSize,
 			)
 			this.streams.get(control.id)?.close()
 			this.streams.set(control.id, stream)
