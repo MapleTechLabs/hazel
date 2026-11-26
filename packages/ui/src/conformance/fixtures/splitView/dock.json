@@ -1,0 +1,100 @@
+{
+	"about": "Today's org shell dock (`shell/app-shell.ts`): the nav rail and the sidebar, 350px together, beside the page; collapsed, only the rail. Compact: the sidebar above the page, no rail.",
+	"root": {
+		"tag": "splitView",
+		"slots": [
+			{
+				"name": "rail",
+				"children": [
+					{
+						"tag": "stack",
+						"children": [
+							{
+								"tag": "button",
+								"props": {
+									"label": "Chat",
+									"icon": "messages",
+									"iconOnly": true,
+									"variant": "ghost"
+								}
+							},
+							{
+								"tag": "button",
+								"props": {
+									"label": "Customers",
+									"icon": "users",
+									"iconOnly": true,
+									"variant": "ghost"
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"name": "sidebar",
+				"children": [
+					{
+						"tag": "section",
+						"props": {
+							"title": "Channels"
+						},
+						"children": [
+							{
+								"tag": "item",
+								"key": "general",
+								"props": {
+									"title": "general",
+									"href": "#"
+								},
+								"events": ["press"]
+							},
+							{
+								"tag": "item",
+								"key": "design",
+								"props": {
+									"title": "design",
+									"selected": true
+								},
+								"events": ["press"]
+							}
+						]
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "screen",
+				"props": {
+					"title": "design"
+				},
+				"children": [
+					{
+						"tag": "text",
+						"children": ["Pick a channel"]
+					}
+				]
+			}
+		]
+	},
+	"axes": [
+		{
+			"prop": "sidebarCollapsed",
+			"values": [true]
+		}
+	],
+	"aria": [
+		{
+			"role": "region",
+			"name": "Channels"
+		},
+		{
+			"role": "heading",
+			"name": "design"
+		}
+	],
+	"pending": {
+		"ios": "S4"
+	}
+}
