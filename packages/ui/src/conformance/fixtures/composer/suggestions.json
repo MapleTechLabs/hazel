@@ -1,0 +1,65 @@
+{
+	"about": "The composer with an open @ trigger: today's mention list (autocomplete-view.ts) above the field, grouped, the second row active; then the : emoji list.",
+	"root": {
+		"tag": "composer",
+		"props": {
+			"placeholder": "Message #general",
+			"value": { "text": "Thanks @", "rev": 0, "edit": 0 },
+			"suggestions": [
+				{
+					"id": "u1",
+					"label": "Maya Chen",
+					"description": "Design lead",
+					"group": "Members",
+					"face": { "name": "Maya Chen", "initials": "MC", "presence": "online" }
+				},
+				{
+					"id": "u2",
+					"label": "Leo Park",
+					"group": "Members",
+					"face": { "name": "Leo Park", "initials": "LP", "presence": "offline" }
+				},
+				{
+					"id": "u3",
+					"label": "Ana Ruiz",
+					"description": "From Slack",
+					"group": "Members",
+					"face": { "name": "Ana Ruiz", "initials": "AR" },
+					"mark": "discord"
+				},
+				{
+					"id": "here",
+					"label": "@here",
+					"description": "Notify everyone online",
+					"group": "Groups",
+					"icon": "users"
+				}
+			],
+			"activeSuggestion": "u2"
+		},
+		"events": ["change", "submit", "trigger", "key", "pressSuggestion"]
+	},
+	"aria": [
+		{ "role": "textbox", "name": "Message #general" },
+		{ "role": "listbox", "name": "Suggestions" },
+		{ "role": "option", "name": "Leo Park" }
+	],
+	"cases": [
+		{
+			"name": "emoji",
+			"props": {
+				"value": { "text": "Ship it :ta", "rev": 0, "edit": 0 },
+				"suggestions": [
+					{ "id": "tada", "label": ":tada:", "emoji": "🎉" },
+					{ "id": "taco", "label": ":taco:", "emoji": "🌮" },
+					{
+						"id": "tanuki",
+						"label": ":tanuki:",
+						"emoji": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='10' cy='10' r='9' fill='%23f59e0b'/%3E%3C/svg%3E"
+					}
+				],
+				"activeSuggestion": "tada"
+			}
+		}
+	]
+}
