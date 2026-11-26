@@ -65,7 +65,8 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 	let canSend = false
 	let disabled = false
 	const syncTrigger = () => {
-		const next = area.selectionStart === area.selectionEnd ? triggerAt(area.value, area.selectionStart) : undefined
+		const next =
+			area.selectionStart === area.selectionEnd ? triggerAt(area.value, area.selectionStart) : undefined
 		if (next?.kind === trigger?.kind && next?.query === trigger?.query) return
 		const closed = trigger
 		trigger = next

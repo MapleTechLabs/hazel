@@ -31,7 +31,10 @@ export const primitive = definePrimitive("button", ({ document, outer, self }) =
 		const wanted = iconName === undefined ? undefined : iconOf(iconName)
 		icon?.remove()
 		icon = wanted
-		node.replaceChildren(...(icon === undefined ? [] : [icon]), ...(iconOnly || text === "" ? [] : [label]))
+		node.replaceChildren(
+			...(icon === undefined ? [] : [icon]),
+			...(iconOnly || text === "" ? [] : [label]),
+		)
 		if (iconOnly && text !== "") node.setAttribute("aria-label", text)
 		else node.removeAttribute("aria-label")
 	}

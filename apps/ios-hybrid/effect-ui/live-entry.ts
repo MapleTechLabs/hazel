@@ -44,7 +44,10 @@ const program = Effect.gen(function* () {
 			(q) => q.from({ row: c.channelMemberCollection }),
 			(rows: SidebarRows["members"]) => rows,
 		),
-		client.liveQueryStream((q) => q.from({ row: c.userCollection }), (rows: SidebarRows["users"]) => rows),
+		client.liveQueryStream(
+			(q) => q.from({ row: c.userCollection }),
+			(rows: SidebarRows["users"]) => rows,
+		),
 	).pipe(
 		Stream.map(([channels, sections, members, users]) =>
 			sidebarSections(me.id, { channels, sections, members, users }),
@@ -64,7 +67,10 @@ const program = Effect.gen(function* () {
 
 program.pipe(
 	Effect.provide(
-		Layer.mergeAll(Layer.mergeAll(ClientData.layer, HazelRpcLayer).pipe(Layer.provide(PlatformJsc)), native.layer),
+		Layer.mergeAll(
+			Layer.mergeAll(ClientData.layer, HazelRpcLayer).pipe(Layer.provide(PlatformJsc)),
+			native.layer,
+		),
 	),
 	Effect.scoped,
 	Effect.tapCause((cause) => Effect.sync(() => console.error(`[live] failed: ${String(cause)}`))),
@@ -74,6 +80,8 @@ program.pipe(
 Object.assign(globalThis, {
 	__hazel: {
 		version: WIRE_VERSION,
-		fire: (id: number, event: string, payload: string) => native.fire(id, event, JSON.parse(payload) as Json),
+		fire: (id: number, event: string, payload: string) =>
+			// SAFETY: the shell sends `payload` as JSON.stringify of a plain object (`TreeHost`).
+			native.fire(id, event, JSON.parse(payload) as Json),
 	},
 })

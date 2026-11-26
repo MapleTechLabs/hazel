@@ -30,7 +30,11 @@ let tick = 1_000
 Effect.gen(function* () {
 	if (__native.screen === "textField") yield* Renderer.mount(TextFieldDemo, {}, native.container)
 	else {
-		const root = yield* Renderer.mount(ChannelList, { sections: sections(), tickMs: 2000 }, native.container)
+		const root = yield* Renderer.mount(
+			ChannelList,
+			{ sections: sections(), tickMs: 2000 },
+			native.container,
+		)
 		send = root.send
 	}
 	return yield* Effect.never
@@ -48,13 +52,17 @@ const busy = (ms: number) => {
 
 // Debug latency (G5): every event waits before it reaches its handler, so echoes come back late.
 const latencyMs = __native.latencyMs ?? 0
-const fire = (id: number, event: string, payload: string) => native.fire(id, event, JSON.parse(payload) as Json)
+const fire = (id: number, event: string, payload: string) =>
+	// SAFETY: the shell sends `payload` as JSON.stringify of a plain object (`TreeHost`).
+	native.fire(id, event, JSON.parse(payload) as Json)
 
 Object.assign(globalThis, {
 	__hazel: {
 		version: WIRE_VERSION,
 		fire: (id: number, event: string, payload: string) =>
-			latencyMs > 0 ? void setTimeout(() => fire(id, event, payload), latencyMs) : fire(id, event, payload),
+			latencyMs > 0
+				? void setTimeout(() => fire(id, event, payload), latencyMs)
+				: fire(id, event, payload),
 		// G4 measurements: driven by `G4Bench.swift`, not part of the wire.
 		debug: {
 			message: () => send?.(ChannelListMessage.ReceivedMessage({ tick: tick++ })),

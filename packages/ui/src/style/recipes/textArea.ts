@@ -39,7 +39,10 @@ export const textArea = defineRecipe<
 		},
 		regular: {
 			parts: {
-				input: { paddingX: { step: "3", lessBorder: true }, paddingY: { step: "1.5", lessBorder: true } },
+				input: {
+					paddingX: { step: "3", lessBorder: true },
+					paddingY: { step: "1.5", lessBorder: true },
+				},
 			},
 		},
 		states: { hover: { parts: { input: { background: "secondary-hover" } } } },

@@ -41,6 +41,22 @@ const stub = new Proxy(
 	},
 )
 
+/** The stub's output, checked: an element node with a tag, attributes and children. */
+const asNode = (value: unknown): Node => {
+	if (
+		typeof value === "object" &&
+		value !== null &&
+		"tag" in value &&
+		typeof value.tag === "string" &&
+		"attrs" in value &&
+		Array.isArray(value.attrs) &&
+		"children" in value &&
+		Array.isArray(value.children)
+	)
+		return { tag: value.tag, attrs: value.attrs, children: value.children }
+	throw new Error("an icon did not build an element")
+}
+
 const escape = (value: string) =>
 	value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;")
 
@@ -62,7 +78,9 @@ for (const [name, make] of Object.entries(EXPORTS)) {
 	const set = join(out, `${name}.imageset`)
 	mkdirSync(set, { recursive: true })
 	// The stub stands in for Foldkit's builder: the icon only calls its element and attribute functions.
-	writeFileSync(join(set, "icon.svg"), svg(make(stub as never) as unknown as Node))
+	// SAFETY: `stub` implements every builder call an icon makes (element functions and Attribute).
+	const tree: unknown = make(stub as never)
+	writeFileSync(join(set, "icon.svg"), svg(asNode(tree)))
 	writeFileSync(
 		join(set, "Contents.json"),
 		JSON.stringify({

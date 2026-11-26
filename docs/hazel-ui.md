@@ -23,14 +23,14 @@ declared once with typed props, drawn where it is implemented, a placeholder or 
 The channel list ran as an Effect UI component in a bare JavaScriptCore context, on a custom
 `Renderer.Host` with no DOM, and SwiftUI drew it in Hazel's look (iPhone 17 Pro simulator):
 
-| | |
-| --- | --- |
-| Script evaluated and mounted | 26 ms |
-| First screen | 111 ops |
-| A press, or a new message on a row | 1 op, about 110 bytes |
-| Swift applying a batch | 0.1 to 0.4 ms |
-| Bundle (minified, with the fixture and `@hazel/domain`) | 242 KB, 82 KB gzipped |
-| Globals JavaScriptCore lacked | `TextEncoder`, `TextDecoder`, `queueMicrotask`, timers, `console` |
+|                                                         |                                                                   |
+| ------------------------------------------------------- | ----------------------------------------------------------------- |
+| Script evaluated and mounted                            | 26 ms                                                             |
+| First screen                                            | 111 ops                                                           |
+| A press, or a new message on a row                      | 1 op, about 110 bytes                                             |
+| Swift applying a batch                                  | 0.1 to 0.4 ms                                                     |
+| Bundle (minified, with the fixture and `@hazel/domain`) | 242 KB, 82 KB gzipped                                             |
+| Globals JavaScriptCore lacked                           | `TextEncoder`, `TextDecoder`, `queueMicrotask`, timers, `console` |
 
 Verified in the Effect UI source (installed commit `4d6d7ec`):
 
@@ -119,14 +119,14 @@ Foldkit or `Html`.
 
 ### Packages
 
-| Path | Holds |
-| --- | --- |
-| `packages/ui` (`@hazel/ui`) | the vocabulary (`src/vocabulary/`), tokens (`src/style/tokens.ts`) and one recipe file per primitive (`src/style/recipes/<primitive>.ts`), codegen (`scripts/`), the web host (`src/web/`), the native host and wire (`src/native/`), conformance fixtures and the gallery (`src/conformance/`) |
-| `packages/client-data` (`@hazel/client-data`) | collections, live queries, the sync client and RPC, moved out of `apps/web-foldkit/src/core/db` and `src/data`, with every browser API behind a platform service |
-| `apps/ios-hybrid/HazelUI/` | Swift package: wire decoding, `Tree`, one view per primitive, generated `Theme.swift`, the JavaScriptCore runtime, platform services, the extension registry |
-| `apps/web-foldkit/src/islands/` | mounting a shared screen inside the Foldkit app |
-| `apps/shared-screens` | the screens, with their queries and Commands |
-| `packages/ui/src/custom/` | governed `h.custom` composites, capped by `hazel/custom-cap` |
+| Path                                          | Holds                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/ui` (`@hazel/ui`)                   | the vocabulary (`src/vocabulary/`), tokens (`src/style/tokens.ts`) and one recipe file per primitive (`src/style/recipes/<primitive>.ts`), codegen (`scripts/`), the web host (`src/web/`), the native host and wire (`src/native/`), conformance fixtures and the gallery (`src/conformance/`) |
+| `packages/client-data` (`@hazel/client-data`) | collections, live queries, the sync client and RPC, moved out of `apps/web-foldkit/src/core/db` and `src/data`, with every browser API behind a platform service                                                                                                                                |
+| `apps/ios-hybrid/HazelUI/`                    | Swift package: wire decoding, `Tree`, one view per primitive, generated `Theme.swift`, the JavaScriptCore runtime, platform services, the extension registry                                                                                                                                    |
+| `apps/web-foldkit/src/islands/`               | mounting a shared screen inside the Foldkit app                                                                                                                                                                                                                                                 |
+| `apps/shared-screens`                         | the screens, with their queries and Commands                                                                                                                                                                                                                                                    |
+| `packages/ui/src/custom/`                     | governed `h.custom` composites, capped by `hazel/custom-cap`                                                                                                                                                                                                                                    |
 
 Registries (primitive renderers, extensions, fixtures, recipes) discover their entries by file glob,
 so adding one never edits a shared list. Swift has no glob: `ui:generate` writes HazelUI's tag-to-view
@@ -137,15 +137,15 @@ switch from `src/vocabulary/spec.ts`, and C0 pre-created one stub view file per 
 Each tag is a typed builder with chainable props, as `OpenTui`'s are. Text lives only in text
 primitives (`textParents`).
 
-| Group | Tags |
-| --- | --- |
-| Layout | `stack` (axis, density, align), `spacer`, `scroll`, `frame` (surface), `divider` |
-| Collections | `list` (keyed rows, sections, anchoring, reach start or end, stick to bottom), `listDivider` (kind: `date`, `unread`) |
-| Content | `text` (role, tone, strong, numeric, truncate), `heading` (level), `icon`, `image`, `avatar` (presence, size, mark), `avatarStack`, `badge` (tone, size), `progress`, `emptyState`, `richText` (paragraphs, mentions, links, code, code blocks, quotes) |
-| Chat | `message` (states: `grouped`, `pinned`, `highlighted`, `entering`, `pending`, `failed`; slots: author, time, body, attachments, reactions, thread summary), `reactionBar`, `attachmentGrid`, `embed`, `typingIndicator` |
-| Controls | `button` (variant, size, iconOnly), `link`, `textField`, `textArea`, `toggle`, `select`, `searchField`, `composer` |
-| Overlays | `menu`, `contextMenu`, `sheet`, `dialog`, `popover`, `toast`, `tooltip`, `emojiPicker` |
-| Structure | `screen` (title, toolbar, back), `navigation`, `tabBar`, `splitView`, `section`, `item` |
+| Group       | Tags                                                                                                                                                                                                                                                    |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Layout      | `stack` (axis, density, align), `spacer`, `scroll`, `frame` (surface), `divider`                                                                                                                                                                        |
+| Collections | `list` (keyed rows, sections, anchoring, reach start or end, stick to bottom), `listDivider` (kind: `date`, `unread`)                                                                                                                                   |
+| Content     | `text` (role, tone, strong, numeric, truncate), `heading` (level), `icon`, `image`, `avatar` (presence, size, mark), `avatarStack`, `badge` (tone, size), `progress`, `emptyState`, `richText` (paragraphs, mentions, links, code, code blocks, quotes) |
+| Chat        | `message` (states: `grouped`, `pinned`, `highlighted`, `entering`, `pending`, `failed`; slots: author, time, body, attachments, reactions, thread summary), `reactionBar`, `attachmentGrid`, `embed`, `typingIndicator`                                 |
+| Controls    | `button` (variant, size, iconOnly), `link`, `textField`, `textArea`, `toggle`, `select`, `searchField`, `composer`                                                                                                                                      |
+| Overlays    | `menu`, `contextMenu`, `sheet`, `dialog`, `popover`, `toast`, `tooltip`, `emojiPicker`                                                                                                                                                                  |
+| Structure   | `screen` (title, toolbar, back), `navigation`, `tabBar`, `splitView`, `section`, `item`                                                                                                                                                                 |
 
 The chat group exists because slot-based `item` cannot express a message row: today's row
 (`chat/message/row.ts`) has a hover-only timestamp gutter, group spacing, a pinned border and tint, an
@@ -155,16 +155,19 @@ enter animation and focus rings; the sidebar has a thread elbow and avatar stack
 Example:
 
 ```ts
-h.section.title("Projects").action(h.icon.name("plus"), Msg.PressedCreate()).children(
-	h.item
-		.key(channel.id)
-		.title(channel.name)
-		.leading(h.icon.name("hashtag"))
-		.badge(unread)
-		.emphasized(unread > 0)
-		.selected(channel.id === model.selectedId)
-		.on("press", Msg.PressedChannel({ id: channel.id })),
-)
+h.section
+	.title("Projects")
+	.action(h.icon.name("plus"), Msg.PressedCreate())
+	.children(
+		h.item
+			.key(channel.id)
+			.title(channel.name)
+			.leading(h.icon.name("hashtag"))
+			.badge(unread)
+			.emphasized(unread > 0)
+			.selected(channel.id === model.selectedId)
+			.on("press", Msg.PressedChannel({ id: channel.id })),
+	)
 ```
 
 ### How the builders compile (constraints from the renderer)
@@ -244,19 +247,19 @@ ones), which replaces today's `sm:` and `max-md:` branches. Recipes may vary by 
 widened after checking them against today's kit (`button.styles.ts`, `badge.styles.ts`, text sizes in
 use); Phase 1 re-derives them from the message row, composer and sidebar before they freeze.
 
-| Choice | Options (proposed, closed) |
-| --- | --- |
-| `text.role` | `body`, `label`, `caption`, `title`, `display`, `code` |
-| `text.tone` | `default`, `muted`, `subtle`, `accent`, `success`, `warning`, `danger`, `info` |
-| `text.strong` | on or off (the one weight choice a view has; an author name, an unread row) |
-| `button.variant` | `primary`, `secondary`, `outline`, `ghost`, `warning`, `danger` |
-| `button.size` | `large`, `regular`, `small`, `xsmall`; `iconOnly` makes it square, `circle` makes it round |
-| `badge.tone` | `neutral`, `accent`, `success`, `warning`, `danger`, `info` |
-| `badge.style` | `solid`, `outline`, `quiet` (today's `muted` is `neutral` + `quiet`) |
-| `badge.size` | `regular`, `small`; `pill` rounds it fully |
-| `stack.density` | `compact`, `regular`, `relaxed` |
-| `frame.surface` | `none`, `card`, `inset`, `muted`, `overlay` |
-| states | `selected`, `emphasized`, `disabled`, `loading`, `destructive`, plus each primitive's own (`message.pinned`...) |
+| Choice           | Options (proposed, closed)                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------------------------- |
+| `text.role`      | `body`, `label`, `caption`, `title`, `display`, `code`                                                          |
+| `text.tone`      | `default`, `muted`, `subtle`, `accent`, `success`, `warning`, `danger`, `info`                                  |
+| `text.strong`    | on or off (the one weight choice a view has; an author name, an unread row)                                     |
+| `button.variant` | `primary`, `secondary`, `outline`, `ghost`, `warning`, `danger`                                                 |
+| `button.size`    | `large`, `regular`, `small`, `xsmall`; `iconOnly` makes it square, `circle` makes it round                      |
+| `badge.tone`     | `neutral`, `accent`, `success`, `warning`, `danger`, `info`                                                     |
+| `badge.style`    | `solid`, `outline`, `quiet` (today's `muted` is `neutral` + `quiet`)                                            |
+| `badge.size`     | `regular`, `small`; `pill` rounds it fully                                                                      |
+| `stack.density`  | `compact`, `regular`, `relaxed`                                                                                 |
+| `frame.surface`  | `none`, `card`, `inset`, `muted`, `overlay`                                                                     |
+| states           | `selected`, `emphasized`, `disabled`, `loading`, `destructive`, plus each primitive's own (`message.pinned`...) |
 
 Rules:
 
@@ -323,15 +326,15 @@ One batch per flush: `{"v": 2, "seq": n, "ops": [[name, ...fields]]}`. `seq` is 
 one, and Swift rejects a gap. Ids are numbers the host assigns; 0 is the root. A `props` value of `null`
 deletes that key. `remove` frees the whole subtree; `insert` of an existing or detached id moves it.
 
-| Op | Fields |
-| --- | --- |
-| `create` | id, tag |
-| `props` | id, changed props as JSON (deduped by value; controlled props carry a revision) |
-| `text` | id, text |
-| `insert` | parent id, id, before id or null |
-| `remove` | id |
-| `events` | id, event names it handles |
-| `detach` | id (a kept-alive subtree held outside the tree, from `createContainer`) |
+| Op        | Fields                                                                             |
+| --------- | ---------------------------------------------------------------------------------- |
+| `create`  | id, tag                                                                            |
+| `props`   | id, changed props as JSON (deduped by value; controlled props carry a revision)    |
+| `text`    | id, text                                                                           |
+| `insert`  | parent id, id, before id or null                                                   |
+| `remove`  | id                                                                                 |
+| `events`  | id, event names it handles                                                         |
+| `detach`  | id (a kept-alive subtree held outside the tree, from `createContainer`)            |
 | `command` | request id, node id, name (`focus`, `blur`, `scrollTo`, `measure`, `select`), args |
 
 Swift sends back `["fire", id, event, payload, seq]` and `["reply", requestId, ok, result]`, one JSON
@@ -374,16 +377,16 @@ text (C2).
 From D0 (`@hazel/client-data`, exports `.`, `./platform`, `./web`). Each is an Effect service with a web
 implementation; the Swift-backed ones come with G3.
 
-| Service | Web | iOS |
-| --- | --- | --- |
-| `Ids` | `crypto.randomUUID` | `UUID().uuidString` |
-| `KeyValue` | `localStorage` | `UserDefaults` |
-| `Sockets` | `WebSocket` | a `WebSocketLike` bridge over `URLSessionWebSocketTask` (subprotocols, close codes) |
-| `Connectivity` | window `online` | `NWPathMonitor` |
-| `Session` (token, invalidate, RPC authorization) | the app's access-token and session-bearer code | keychain session and token exchange, sends a bearer |
-| `LocalCache` | wa-sqlite on OPFS, Web Locks, IndexedDB channel states | native SQLite behind the existing `LocalCacheHost` |
-| `HttpClient` (Effect's) | `FetchHttpClient` with credentials | a URLSession `HttpClient` layer |
-| `ClientDataConfig` | `apiUrl()`, retry policy | the chosen server URL |
+| Service                                          | Web                                                    | iOS                                                                                 |
+| ------------------------------------------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `Ids`                                            | `crypto.randomUUID`                                    | `UUID().uuidString`                                                                 |
+| `KeyValue`                                       | `localStorage`                                         | `UserDefaults`                                                                      |
+| `Sockets`                                        | `WebSocket`                                            | a `WebSocketLike` bridge over `URLSessionWebSocketTask` (subprotocols, close codes) |
+| `Connectivity`                                   | window `online`                                        | `NWPathMonitor`                                                                     |
+| `Session` (token, invalidate, RPC authorization) | the app's access-token and session-bearer code         | keychain session and token exchange, sends a bearer                                 |
+| `LocalCache`                                     | wa-sqlite on OPFS, Web Locks, IndexedDB channel states | native SQLite behind the existing `LocalCacheHost`                                  |
+| `HttpClient` (Effect's)                          | `FetchHttpClient` with credentials                     | a URLSession `HttpClient` layer                                                     |
+| `ClientDataConfig`                               | `apiUrl()`, retry policy                               | the chosen server URL                                                               |
 
 **Runtime baseline, not services:** `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`,
 `queueMicrotask`, `console`, `performance.now`, `TextEncoder`/`TextDecoder`, and for Effect's HTTP client
@@ -430,17 +433,17 @@ Serial until the risky parts are proven and the shared scaffolding exists; paral
 Short spikes on the spike branch, in this order. A failed gate changes this document before anything
 else starts.
 
-| Gate | Question | Done when |
-| --- | --- | --- |
-| G1 | Does a typed `hazel` vocabulary work on both hosts? | `hz:` tags with slot children, a link-vs-button prop swap, an iOS-only extension and a web-only extension: the browser draws the web parts and the placeholder, iOS draws the native parts and the fallback, both from one component; JSON props cross the wire |
-| G6 | Codegen and parity | recipes for `item`, `section` and `button` generate CSS and Swift; the gallery pixel-diffs the `hazel` versions against today's Foldkit components in both themes within tolerance |
-| G4 | JavaScriptCore on its own thread, on a device | measured JS cost without JIT for mount and update of the channel list; presses and batches cross threads with no dropped frames while JS is busy for 50 ms; the JS-side scheduler is in place |
-| G8 | Per-node observation in Swift | changing one row's prop redraws only that row (Instruments or a render counter), on a 500-row tree |
-| G7 | Native message list | 3,000 messages with `richText`, reactions and attachments in a native `list`: prepend older pages with anchoring, stick to bottom, 120 fps flings on a device; settles who windows rows (JS or native) and what a row costs on the wire |
-| G5 | Controlled text through the wire | typing fast into a native `textField` bound to Model never loses or reorders characters, with the revision scheme above |
-| D0 | Data package extraction (not a gate, a prerequisite for G2 and G3) | `@hazel/client-data` holds collections, live queries and sync with platform services injected; `web-foldkit` uses it unchanged in behaviour |
-| G2 | An island inside the Foldkit app | the channel list mounts in `web-foldkit` over `@hazel/client-data`, updates live, and passes the island checks above |
-| G3 | Data layer in JavaScriptCore | the iOS app shows live channels from a dev backend through the Swift-backed services; no browser API left unprovided |
+| Gate | Question                                                           | Done when                                                                                                                                                                                                                                                       |
+| ---- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| G1   | Does a typed `hazel` vocabulary work on both hosts?                | `hz:` tags with slot children, a link-vs-button prop swap, an iOS-only extension and a web-only extension: the browser draws the web parts and the placeholder, iOS draws the native parts and the fallback, both from one component; JSON props cross the wire |
+| G6   | Codegen and parity                                                 | recipes for `item`, `section` and `button` generate CSS and Swift; the gallery pixel-diffs the `hazel` versions against today's Foldkit components in both themes within tolerance                                                                              |
+| G4   | JavaScriptCore on its own thread, on a device                      | measured JS cost without JIT for mount and update of the channel list; presses and batches cross threads with no dropped frames while JS is busy for 50 ms; the JS-side scheduler is in place                                                                   |
+| G8   | Per-node observation in Swift                                      | changing one row's prop redraws only that row (Instruments or a render counter), on a 500-row tree                                                                                                                                                              |
+| G7   | Native message list                                                | 3,000 messages with `richText`, reactions and attachments in a native `list`: prepend older pages with anchoring, stick to bottom, 120 fps flings on a device; settles who windows rows (JS or native) and what a row costs on the wire                         |
+| G5   | Controlled text through the wire                                   | typing fast into a native `textField` bound to Model never loses or reorders characters, with the revision scheme above                                                                                                                                         |
+| D0   | Data package extraction (not a gate, a prerequisite for G2 and G3) | `@hazel/client-data` holds collections, live queries and sync with platform services injected; `web-foldkit` uses it unchanged in behaviour                                                                                                                     |
+| G2   | An island inside the Foldkit app                                   | the channel list mounts in `web-foldkit` over `@hazel/client-data`, updates live, and passes the island checks above                                                                                                                                            |
+| G3   | Data layer in JavaScriptCore                                       | the iOS app shows live channels from a dev backend through the Swift-backed services; no browser API left unprovided                                                                                                                                            |
 
 ### Phase 1: contracts (one agent, user-reviewed)
 
@@ -477,22 +480,22 @@ row keys); fixtures for every tag; `test:web` and `test:hazelui`; galleries at `
 
 Each lane owns only the paths listed and verifies with its own command, never the whole suite.
 
-| Lane | Owns | Done when |
-| --- | --- | --- |
-| A1 Web: layout and content | `src/web/primitives/{layout,content}/` | fixtures pass in the browser runner, pixel diffs within tolerance |
-| A2 Web: controls | `src/web/primitives/controls/` | same, plus keyboard and ARIA checks per control |
-| A3 Web: overlays and focus | `src/web/primitives/overlays/`, `src/web/focus/` | same, plus focus trapping and return, stacking with the Foldkit app's hosts |
-| A4 Web: structure and list | `src/web/primitives/{structure,list}/` | same, plus list virtualization and anchoring |
-| A5 Web: chat primitives | `src/web/primitives/chat/` | same, against today's message row in the gallery |
-| B Native host (TS) | `src/native/` | goldens pass, commands and replies round trip, nodes freed on removal, extensions cross with typed props |
-| S0 Swift: Tree and registry (first, then the rest start) | `HazelUI/Tree/`, `HazelUI/Extensions/`, `EffectUiSpike/` | goldens decode and apply, per-node observation holds (G8), manifest check works, the spike app draws through `TreeView` |
-| S1 Swift: layout and content | `HazelUI/Primitives/{Layout,Content}/` | snapshot fixtures pass |
-| S2 Swift: controls | `HazelUI/Primitives/Controls/` | snapshots pass, text-input stress test passes |
-| S3 Swift: overlays | `HazelUI/Primitives/Overlays/` | system components, snapshots pass |
-| S4 Swift: navigation and structure | `HazelUI/Primitives/Structure/` | route and `NavigationStack` stay in sync both ways, tab bar, split view |
-| S5 Swift: list and chat primitives | `HazelUI/Primitives/{Collections,Chat}/` | G7's numbers hold with the real primitives |
-| D Tokens and recipes | `src/style/tokens.ts`, `scripts/` | every token and option filled from the seeds, generated files current; recipe files are written by the primitive's lanes, D reviews them |
-| F Platform services | `packages/client-data/src/platform/`, `HazelUI/Runtime/` | every service in the list, web and Swift implementations, G3 still passes |
+| Lane                                                     | Owns                                                     | Done when                                                                                                                                |
+| -------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| A1 Web: layout and content                               | `src/web/primitives/{layout,content}/`                   | fixtures pass in the browser runner, pixel diffs within tolerance                                                                        |
+| A2 Web: controls                                         | `src/web/primitives/controls/`                           | same, plus keyboard and ARIA checks per control                                                                                          |
+| A3 Web: overlays and focus                               | `src/web/primitives/overlays/`, `src/web/focus/`         | same, plus focus trapping and return, stacking with the Foldkit app's hosts                                                              |
+| A4 Web: structure and list                               | `src/web/primitives/{structure,list}/`                   | same, plus list virtualization and anchoring                                                                                             |
+| A5 Web: chat primitives                                  | `src/web/primitives/chat/`                               | same, against today's message row in the gallery                                                                                         |
+| B Native host (TS)                                       | `src/native/`                                            | goldens pass, commands and replies round trip, nodes freed on removal, extensions cross with typed props                                 |
+| S0 Swift: Tree and registry (first, then the rest start) | `HazelUI/Tree/`, `HazelUI/Extensions/`, `EffectUiSpike/` | goldens decode and apply, per-node observation holds (G8), manifest check works, the spike app draws through `TreeView`                  |
+| S1 Swift: layout and content                             | `HazelUI/Primitives/{Layout,Content}/`                   | snapshot fixtures pass                                                                                                                   |
+| S2 Swift: controls                                       | `HazelUI/Primitives/Controls/`                           | snapshots pass, text-input stress test passes                                                                                            |
+| S3 Swift: overlays                                       | `HazelUI/Primitives/Overlays/`                           | system components, snapshots pass                                                                                                        |
+| S4 Swift: navigation and structure                       | `HazelUI/Primitives/Structure/`                          | route and `NavigationStack` stay in sync both ways, tab bar, split view                                                                  |
+| S5 Swift: list and chat primitives                       | `HazelUI/Primitives/{Collections,Chat}/`                 | G7's numbers hold with the real primitives                                                                                               |
+| D Tokens and recipes                                     | `src/style/tokens.ts`, `scripts/`                        | every token and option filled from the seeds, generated files current; recipe files are written by the primitive's lanes, D reviews them |
+| F Platform services                                      | `packages/client-data/src/platform/`, `HazelUI/Runtime/` | every service in the list, web and Swift implementations, G3 still passes                                                                |
 
 ### Phase 3: screens (one lane each)
 
@@ -526,21 +529,21 @@ app moves to it and islands become ordinary children.
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| Effect UI is a public preview and changes under us | one pinned commit, bumps as their own PRs; the vocabulary isolates screens from most of its API |
-| JavaScriptCore without JIT is too slow on a device | G4 on a device before contracts; keep JS work per interaction small (per-component renders, deduped props); native owns scrolling and typing |
-| Native rich-text list misses the frame budget | G7 before contracts; if it fails, keep the hybrid's web-laid-out list for messages and revisit |
-| Web regressions moving from Tailwind to recipes | pixel diffs against today's kit per primitive and per screen |
-| The closed sets do not fit real screens | sets derived from the hardest screens in phase 1; `HAZEL-GAP` ledger instead of ad hoc styling |
-| Vocabulary bloat | props and states before primitives; a primitive lands only with both renderers and fixtures |
-| Lanes collide on shared files | C0 scaffold, glob registries, per-primitive recipe files, an integrator for shared files |
-| Two frameworks in the web app during islands | islands share the data package, not state; Foldkit owns routing and the head |
-| Lost hot reload and devtools for `hazel` roots | accepted for now; raise custom-root support upstream |
-| Native mount decode cost | decode on the JS thread; pass batches as UTF-8 bytes (G7 cut a 3,000-message decode from 127 ms to about 35 ms) |
-| No JIT on a device | measured with JIT off on the simulator (G4): about 4.5x on tight loops, little on mount or a single update; 100 separate JS turns cost about 45 ms, so coalesce socket frames into one turn. Still to measure on a device |
-| 120 Hz scrolling of rich rows | G7 on the simulator: 0 dropped frames over 20 flings, worst main-thread turn 7.3 ms against an 8.3 ms budget, but the simulator runs at 60 Hz; measure on a device, fall back to the hybrid's web-laid-out list if it misses |
-| Rows drawn as bitmaps | about 1 MB per row at 3x (cache capped at 64 MB); text selection and per-span accessibility need their own work before the channel screen ships |
+| Risk                                               | Mitigation                                                                                                                                                                                                                   |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Effect UI is a public preview and changes under us | one pinned commit, bumps as their own PRs; the vocabulary isolates screens from most of its API                                                                                                                              |
+| JavaScriptCore without JIT is too slow on a device | G4 on a device before contracts; keep JS work per interaction small (per-component renders, deduped props); native owns scrolling and typing                                                                                 |
+| Native rich-text list misses the frame budget      | G7 before contracts; if it fails, keep the hybrid's web-laid-out list for messages and revisit                                                                                                                               |
+| Web regressions moving from Tailwind to recipes    | pixel diffs against today's kit per primitive and per screen                                                                                                                                                                 |
+| The closed sets do not fit real screens            | sets derived from the hardest screens in phase 1; `HAZEL-GAP` ledger instead of ad hoc styling                                                                                                                               |
+| Vocabulary bloat                                   | props and states before primitives; a primitive lands only with both renderers and fixtures                                                                                                                                  |
+| Lanes collide on shared files                      | C0 scaffold, glob registries, per-primitive recipe files, an integrator for shared files                                                                                                                                     |
+| Two frameworks in the web app during islands       | islands share the data package, not state; Foldkit owns routing and the head                                                                                                                                                 |
+| Lost hot reload and devtools for `hazel` roots     | accepted for now; raise custom-root support upstream                                                                                                                                                                         |
+| Native mount decode cost                           | decode on the JS thread; pass batches as UTF-8 bytes (G7 cut a 3,000-message decode from 127 ms to about 35 ms)                                                                                                              |
+| No JIT on a device                                 | measured with JIT off on the simulator (G4): about 4.5x on tight loops, little on mount or a single update; 100 separate JS turns cost about 45 ms, so coalesce socket frames into one turn. Still to measure on a device    |
+| 120 Hz scrolling of rich rows                      | G7 on the simulator: 0 dropped frames over 20 flings, worst main-thread turn 7.3 ms against an 8.3 ms budget, but the simulator runs at 60 Hz; measure on a device, fall back to the hybrid's web-laid-out list if it misses |
+| Rows drawn as bitmaps                              | about 1 MB per row at 3x (cache capped at 64 MB); text selection and per-span accessibility need their own work before the channel screen ships                                                                              |
 
 ## Settled with the user (2026-11-26)
 
@@ -566,12 +569,12 @@ app moves to it and islands become ordinary children.
 
 ## Gate results
 
-| Gate | Result | Branch | Notes |
-| --- | --- | --- | --- |
-| G1 | pass | `t3/hazel-ui-g1` | one `hazel` channel list in Chromium and on iOS; extensions draw or fall back per platform; prop changes send only changed keys, reorders only moves; 11 type tests for the escape hatches (`h.el` is typed `never` but exists at runtime: the lint rule closes it) |
-| G6 | pass | `t3/hazel-ui-g6` | 178 of 178 kit-vs-hazel pairs within tolerance (both themes, size classes, hover); a one-step colour change fails it; generated Swift colours match the live page |
-| D0 | pass | `t3/hazel-ui-d0` | `@hazel/client-data` with 8 platform services; loads and live-queries in node with browser globals removed; web app unchanged (3,275 tests); old import paths are re-export shims for now |
-| G8 | pass | `t3/hazel-ui-g8` | one-row change redraws one row in 500; 3,000-row mount 21 ms decode + apply (Release, simulator) |
+| Gate | Result | Branch           | Notes                                                                                                                                                                                                                                                               |
+| ---- | ------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| G1   | pass   | `t3/hazel-ui-g1` | one `hazel` channel list in Chromium and on iOS; extensions draw or fall back per platform; prop changes send only changed keys, reorders only moves; 11 type tests for the escape hatches (`h.el` is typed `never` but exists at runtime: the lint rule closes it) |
+| G6   | pass   | `t3/hazel-ui-g6` | 178 of 178 kit-vs-hazel pairs within tolerance (both themes, size classes, hover); a one-step colour change fails it; generated Swift colours match the live page                                                                                                   |
+| D0   | pass   | `t3/hazel-ui-d0` | `@hazel/client-data` with 8 platform services; loads and live-queries in node with browser globals removed; web app unchanged (3,275 tests); old import paths are re-export shims for now                                                                           |
+| G8   | pass   | `t3/hazel-ui-g8` | one-row change redraws one row in 500; 3,000-row mount 21 ms decode + apply (Release, simulator)                                                                                                                                                                    |
 
 | style | done | `t3/hazel-ui-style` | both hosts draw from generated `tokens.css` and `Theme.swift`; selected look and set additions in; 334 of 334 pixel pairs within tolerance |
 | G2 | pass | `t3/hazel-ui-g2` | the channel list as an island in the real app over `ClientData`: live updates, navigation, focus order, keybindings, theme switching, preflight; overlays partial (no overlay primitives yet); shared screens live in `apps/shared-screens` |

@@ -27,14 +27,16 @@ declare const Bun: {
 		hostname: string
 		fetch: (
 			request: Request,
-			server: { upgrade(request: Request, options: { data: T; headers: Record<string, string> }): boolean },
+			server: {
+				upgrade(request: Request, options: { data: T; headers: Record<string, string> }): boolean
+			},
 		) => Response | Promise<Response> | undefined
 		websocket: {
 			open(ws: ServerWebSocket<T>): void
 			message(ws: ServerWebSocket<T>, message: string | Uint8Array): void
 			close(ws: ServerWebSocket<T>, code: number): void
 		}
-	}): unknown
+	}): { readonly port: number; stop(): void }
 }
 
 const port = Number(process.argv[2] ?? 4320)
@@ -56,7 +58,9 @@ const channels = new Map(channelRows.map((row) => [row.id, row]))
 const change = (url: URL): Response => {
 	const channelId = url.searchParams.get("channel") ?? ""
 	if (url.pathname === "/__fixture/unread") {
-		const member = [...members.values()].find((row) => row.channelId === channelId && row.userId === adaUserId)
+		const member = [...members.values()].find(
+			(row) => row.channelId === channelId && row.userId === adaUserId,
+		)
 		if (member === undefined) return new Response("no such membership\n", { status: 404 })
 		const next = { ...member, notificationCount: member.notificationCount + 1 }
 		members.set(next.id, next)

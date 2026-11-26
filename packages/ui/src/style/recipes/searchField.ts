@@ -27,7 +27,10 @@ export const searchField = defineRecipe<{}, never, "icon" | "input">({
 		},
 		regular: {
 			root: { paddingX: { step: "2.5", lessBorder: true } },
-			parts: { icon: { size: "4" }, input: { paddingY: { step: "1.5", lessBorder: true }, leading: "6" } },
+			parts: {
+				icon: { size: "4" },
+				input: { paddingY: { step: "1.5", lessBorder: true }, leading: "6" },
+			},
 		},
 		states: { hover: { root: { background: "secondary-hover" } } },
 	},

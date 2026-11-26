@@ -5,13 +5,13 @@ const LOOKUP = new Map([...ALPHABET].map((char, index) => [char, index]))
 export const encodeBase64 = (bytes: Uint8Array): string => {
 	let out = ""
 	for (let i = 0; i < bytes.length; i += 3) {
-		const a = bytes[i]!
+		const a = bytes[i] ?? 0
 		const b = bytes[i + 1]
 		const c = bytes[i + 2]
 		const n = (a << 16) | ((b ?? 0) << 8) | (c ?? 0)
-		out += ALPHABET[(n >> 18) & 63]! + ALPHABET[(n >> 12) & 63]!
-		out += b === undefined ? "=" : ALPHABET[(n >> 6) & 63]!
-		out += c === undefined ? "=" : ALPHABET[n & 63]!
+		out += ALPHABET.charAt((n >> 18) & 63) + ALPHABET.charAt((n >> 12) & 63)
+		out += b === undefined ? "=" : ALPHABET.charAt((n >> 6) & 63)
+		out += c === undefined ? "=" : ALPHABET.charAt(n & 63)
 	}
 	return out
 }
@@ -22,7 +22,7 @@ export const decodeBase64 = (text: string): Uint8Array => {
 	let length = 0
 	for (let i = 0; i < clean.length; i += 4) {
 		const n =
-			((LOOKUP.get(clean[i]!) ?? 0) << 18) |
+			((LOOKUP.get(clean.charAt(i)) ?? 0) << 18) |
 			((LOOKUP.get(clean[i + 1] ?? "A") ?? 0) << 12) |
 			((LOOKUP.get(clean[i + 2] ?? "A") ?? 0) << 6) |
 			(LOOKUP.get(clean[i + 3] ?? "A") ?? 0)

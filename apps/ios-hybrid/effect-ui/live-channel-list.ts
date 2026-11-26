@@ -60,13 +60,18 @@ export const makeLiveChannelList = (sections: Stream.Stream<ReadonlyArray<Sectio
 											.leading(
 												channel.symbol === undefined
 													? h.avatar.initials(channel.initials ?? "")
-													: h.icon.name(channel.symbol === "lock" ? "lock" : "hashtag"),
+													: h.icon.name(
+															channel.symbol === "lock" ? "lock" : "hashtag",
+														),
 											)
 											.badge(channel.unread)
 											.emphasized(channel.unread > 0)
 											.selected(selected)
 											.href(selected ? undefined : `#/chat/${channel.id}`)
-											.on("press", LiveChannelListMessage.PressedChannel({ id: channel.id }))
+											.on(
+												"press",
+												LiveChannelListMessage.PressedChannel({ id: channel.id }),
+											)
 									}),
 								),
 						)),

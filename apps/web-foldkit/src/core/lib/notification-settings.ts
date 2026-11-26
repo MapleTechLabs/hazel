@@ -7,8 +7,6 @@ import { Option, Schema } from "effect"
 
 export type NotificationLevel = ChannelMember.NotificationLevel
 
-export type ChannelKind = "public" | "private" | "thread" | "direct" | "single"
-
 /** The server's defaults (`notification-rules.ts`): everything in DMs and threads, mentions elsewhere. */
 export const defaultLevelOf = (type: string): NotificationLevel =>
 	type === "direct" || type === "single" || type === "thread" ? "all" : "mentions"

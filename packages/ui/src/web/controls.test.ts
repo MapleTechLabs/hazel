@@ -41,7 +41,12 @@ const part = <E extends Element = HTMLElement>(node: Element, name: string) =>
 
 describe("hz:button", () => {
 	it("is a native button with its options as attributes; iconOnly names it by aria-label", () => {
-		const { node, set } = mount("button", { label: "Invite", variant: "ghost", size: "small", icon: "plus" })
+		const { node, set } = mount("button", {
+			label: "Invite",
+			variant: "ghost",
+			size: "small",
+			icon: "plus",
+		})
 		expect(node.tagName).toBe("BUTTON")
 		expect(node.getAttribute("type")).toBe("button")
 		expect(node.dataset.variant).toBe("ghost")

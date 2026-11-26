@@ -36,8 +36,10 @@ export const sidebarSections = (me: UserId, rows: SidebarRows): ReadonlyArray<Se
 		symbol: channel.type === "private" ? "lock" : "number",
 		unread: unread(channel.id),
 	})
-	const isRoom = (channel: (typeof visible)[number]) => channel.type === "public" || channel.type === "private"
-	const byName = (a: { readonly name: string }, b: { readonly name: string }) => a.name.localeCompare(b.name)
+	const isRoom = (channel: (typeof visible)[number]) =>
+		channel.type === "public" || channel.type === "private"
+	const byName = (a: { readonly name: string }, b: { readonly name: string }) =>
+		a.name.localeCompare(b.name)
 
 	const grouped: Array<Section> = [...rows.sections]
 		.filter((section) => section.deletedAt === null)
@@ -58,10 +60,15 @@ export const sidebarSections = (me: UserId, rows: SidebarRows): ReadonlyArray<Se
 	const people = visible
 		.filter((channel) => channel.type === "single" || channel.type === "direct")
 		.map((channel) => {
-			const partner = rows.members.find((member) => member.channelId === channel.id && member.userId !== me)
+			const partner = rows.members.find(
+				(member) => member.channelId === channel.id && member.userId !== me,
+			)
 			const user = rows.users.find((candidate) => candidate.id === partner?.userId)
 			const title = user === undefined ? channel.name : `${user.firstName} ${user.lastName}`.trim()
 			return { id: channel.id, title, initials: initialsOf(title), unread: unread(channel.id) }
 		})
-	return [...grouped.filter((section) => section.channels.length > 0), { title: "Direct messages", channels: people }]
+	return [
+		...grouped.filter((section) => section.channels.length > 0),
+		{ title: "Direct messages", channels: people },
+	]
 }

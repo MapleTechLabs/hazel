@@ -8,4 +8,3 @@ export const {
 	openHostBackend,
 	openIdbBackend,
 } = ChannelSnapshotsWeb
-export type { ChannelSnapshots, SnapshotBackend } from "@hazel/client-data/web/channel-snapshots"

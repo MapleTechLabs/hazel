@@ -3,7 +3,11 @@
 	"frame": "inline",
 	"root": {
 		"tag": "toast",
-		"props": { "open": true, "title": "Link copied", "description": "Paste it anywhere to share #design." },
+		"props": {
+			"open": true,
+			"title": "Link copied",
+			"description": "Paste it anywhere to share #design."
+		},
 		"events": ["dismiss"]
 	},
 	"axes": [

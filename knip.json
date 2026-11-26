@@ -38,8 +38,16 @@
 			"entry": ["alchemy.run.ts"]
 		},
 		"apps/ios-hybrid": {
+			// The JavaScriptCore bundles (`build:effect-ui`, `build:effect-ui:live`) and the build scripts.
+			"entry": ["effect-ui/entry.ts", "effect-ui/live-entry.ts", "scripts/**/*.ts"],
 			// web-foldkit's Vite config (which this package's spreads) imports these, resolved here.
 			"ignoreDependencies": ["foldkit", "@foldkit/vite-plugin"]
+		},
+		"packages/ui": {
+			// Codegen and stub scripts run by hand or from package scripts.
+			"entry": ["scripts/**/*.ts"],
+			// The parity gallery draws today's kit through web-foldkit's own foldkit (tsconfig paths).
+			"ignoreDependencies": ["foldkit"]
 		},
 		"apps/raycast": {
 			// Raycast provides React to extensions at runtime.
