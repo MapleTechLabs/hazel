@@ -21,7 +21,7 @@ packages/customer-integrations/src/
     config.ts        its config schema and default
     presentation.ts  what the pages say and show about it: copy, connect and settings fields
     server.ts        its adapter, loaded with a dynamic import from the definition
-    demo.ts          its part in the demo seed and the lab: id shapes, links, a sample config
+    demo.ts          its part in the demo seed and the test fixtures: id shapes, links, a sample config
     ...              wire, map, pull, webhook, fixtures, tests
 ```
 
@@ -47,7 +47,7 @@ defineIntegration({
 		attentionDefault?: true,
 	},
 	presentation, // everything the pages say and show about it
-	demo?, // its role in the demo book and the lab
+	demo?, // its role in the demo book and the test fixtures
 	server: () => import("./server"),
 })
 ```
@@ -61,8 +61,8 @@ Capabilities are descriptive and combinable. An integration may hold any set of 
 is reserved for a type of integration.
 
 `demo` is optional and separate from capabilities: it casts the integration in one role of the demo
-book (`directory`, `plans`, `invoices` or `activity`, one integration each). The seed and the lab
-ask for a role with `demoSource(role)` and take the tool's id shapes, links and sample config from
+book (`directory`, `plans`, `invoices` or `activity`, one integration each). The seed and the test
+fixtures ask for a role with `demoSource(role)` and take the tool's id shapes, links and sample config from
 what it returns.
 
 ## The guard

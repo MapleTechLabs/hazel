@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { EMPTY_SUPPORT_REPORT, SUPPORT_REPORT } from "../../../lab/fixtures/issues"
+import { EMPTY_SUPPORT_REPORT, SUPPORT_REPORT } from "../../../test/fixtures/issues"
 import { makeShared } from "../../../test/pages-fixtures"
 import { Message } from "./message"
 import { isEmptyReport, type Model } from "./model"

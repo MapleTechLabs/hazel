@@ -1,4 +1,4 @@
-/* The kit side: the app's fonts and stylesheet exactly as `src/lab/kit.gallery.ts` loads them. */
+/* The kit side: the app's fonts and stylesheet, as the web app loads them. */
 @import "@fontsource/inter/400.css";
 @import "@fontsource/inter/400-italic.css";
 @import "@fontsource/inter/500.css";

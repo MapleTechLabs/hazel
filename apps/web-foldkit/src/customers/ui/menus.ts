@@ -1,13 +1,11 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { IconCheck, IconClock, IconClose, IconCopy, IconOffice, IconUser } from "../../icons"
 import * as Menu from "../../ui/menu"
 import { menuKeyboard, menuLabel } from "../../ui/menu-view"
 import { formatWeekdayTime, type Instant } from "../format"
 
 /**
  * The queue's menus (Foundations › Menus Snooze And Row Actions) for the app's `ui/menu` Submodel:
- * `entries` is the structure (pass it as `viewInputs.entries`), `content` renders each key
- * (`viewInputs.content`). The page keeps the `Menu.Model` and maps `Menu.OutMessage.SelectedItem`
+ * the page builds its `entries` from these keys, `content` renders each key (`viewInputs.content`). The page keeps the `Menu.Model` and maps `Menu.OutMessage.SelectedItem`
  * keys to its own Messages; `snoozeUntil` turns a snooze key into the instant.
  */
 
@@ -35,17 +33,7 @@ export const snoozeUntil = (key: SnoozeKey, now: Date): Date => {
 export const isSnoozeKey = (key: string): key is SnoozeKey =>
 	(SNOOZE_KEYS as ReadonlyArray<string>).includes(key)
 
-/** `Snooze until` · Tomorrow · In 3 days · Next week · ─ · Pick date… */
-export const snoozeMenuEntries: ReadonlyArray<Menu.Entry> = [
-	Menu.section(
-		"Snooze until",
-		SNOOZE_KEYS.map((key) => Menu.item(key, { textValue: SNOOZE_LABEL[key] })),
-	),
-	Menu.separator,
-	Menu.item(PICK_DATE_KEY, { textValue: "Pick date" }),
-]
-
-/** Item content for `snoozeMenuEntries`, with each option's wake time. */
+/** Snooze menu item content (`SNOOZE_KEYS` and `PICK_DATE_KEY`), with each option's wake time. */
 export const snoozeMenuContent =
 	<M>(h: HtmlBuilder<M>, menuId: string, now: Date, options: Readonly<{ timeZone?: string }> = {}) =>
 	(key: string): ReadonlyArray<Html | string> =>
@@ -90,12 +78,9 @@ export const muteLeaves: ReadonlyArray<Menu.Leaf> = MUTE_KEYS.map((key) =>
 export const muteUntil = (key: MuteKey, now: Date): Date | null =>
 	key === "mute:forever" ? null : new Date(now.getTime() + (key === "mute:week" ? 7 : 30) * 86_400_000)
 
-// ROW ACTIONS
+// SNOOZE SUBMENU LEAVES
 
-export const ROW_ACTION_KEYS = ["assign", "snooze", "done", "dismiss", "open", "copy_email"] as const
-export type RowActionKey = (typeof ROW_ACTION_KEYS)[number]
-
-/** The submenu's leaves are `snooze:<SnoozeKey>` (and `snooze:pick_date`). */
+/** Snooze submenu leaves are `snooze:<SnoozeKey>` (and `snooze:pick_date`). */
 export const snoozeLeafKey = (key: SnoozeKey | typeof PICK_DATE_KEY) => `snooze:${key}`
 
 /** Reads `snooze:<key>` back. */
@@ -103,57 +88,6 @@ export const snoozeKeyOfLeaf = (key: string): SnoozeKey | typeof PICK_DATE_KEY |
 	const rest = key.startsWith("snooze:") ? key.slice("snooze:".length) : null
 	return rest === null ? null : rest === PICK_DATE_KEY ? PICK_DATE_KEY : isSnoozeKey(rest) ? rest : null
 }
-
-/** Assign · Snooze ▸ · Mark done · Dismiss · ─ · Open customer · Copy champion's email (when there is one). */
-export const rowActionsEntries = (
-	options: Readonly<{ championEmail: boolean }>,
-): ReadonlyArray<Menu.Entry> => [
-	Menu.item("assign", { textValue: "Assign" }),
-	Menu.item("snooze", {
-		textValue: "Snooze",
-		submenu: [
-			...SNOOZE_KEYS.map((key) => Menu.leaf(snoozeLeafKey(key), { textValue: SNOOZE_LABEL[key] })),
-			Menu.leaf(snoozeLeafKey(PICK_DATE_KEY), { textValue: "Pick date" }),
-		],
-	}),
-	Menu.item("done", { textValue: "Mark done" }),
-	Menu.item("dismiss", { textValue: "Dismiss" }),
-	Menu.separator,
-	Menu.item("open", { textValue: "Open customer" }),
-	...(options.championEmail ? [Menu.item("copy_email", { textValue: "Copy champion's email" })] : []),
-]
-
-/** A row action's menu line: label, key hint (`null`: none) and icon. */
-type RowAction = Readonly<{ label: string; key: string | null; icon: <M>(h: HtmlBuilder<M>) => Html }>
-
-const ROW_ACTION = {
-	assign: { label: "Assign…", key: "A", icon: (h) => IconUser(h) },
-	snooze: { label: "Snooze", key: "S", icon: (h) => IconClock(h) },
-	done: { label: "Mark done…", key: "D", icon: (h) => IconCheck(h) },
-	dismiss: { label: "Dismiss, not useful", key: null, icon: (h) => IconClose(h) },
-	open: { label: "Open customer", key: "Enter", icon: (h) => IconOffice(h) },
-	copy_email: { label: "Copy champion’s email", key: null, icon: (h) => IconCopy(h) },
-} satisfies Record<RowActionKey, RowAction>
-
-const isRowActionKey = (key: string): key is RowActionKey =>
-	(ROW_ACTION_KEYS as ReadonlyArray<string>).includes(key)
-
-/** Item content for `rowActionsEntries`, with the queue's key hints and the snooze submenu's times. */
-export const rowActionsContent =
-	<M>(h: HtmlBuilder<M>, menuId: string, now: Date, options: Readonly<{ timeZone?: string }> = {}) =>
-	(key: string): ReadonlyArray<Html | string> => {
-		if (isRowActionKey(key)) {
-			const action = ROW_ACTION[key]
-			return [
-				action.icon(h),
-				menuLabel(h, menuId, key, action.label),
-				// The snooze item's chevron sits where a key hint would.
-				...(action.key && key !== "snooze" ? [menuKeyboard(h, action.key)] : []),
-			]
-		}
-		const snooze = snoozeKeyOfLeaf(key)
-		return snooze === null ? [key] : snoozeMenuContent(h, menuId, now, options)(snooze)
-	}
 
 /** A key → when the snooze ends, for the page's `SelectedItem` handler (`null` for pick-date or other keys). */
 export const snoozeInstantOf = (key: string, now: Date): Instant | null => {

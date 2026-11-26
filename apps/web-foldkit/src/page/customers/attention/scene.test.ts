@@ -2,7 +2,7 @@
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
 import { toAccountRow, toSignalRow } from "../../../customers/queries"
-import { ACCOUNTS, ACCOUNTS_BY_KEY, SIGNALS } from "../../../lab/fixtures/customers"
+import { ACCOUNTS, ACCOUNTS_BY_KEY, SIGNALS } from "../../../test/fixtures/customers"
 import { makeShared, pageScene } from "../../../test/pages-fixtures"
 import * as Menu from "../../../ui/menu"
 import { FocusTriggerOnPress } from "../../../ui/menu-view"

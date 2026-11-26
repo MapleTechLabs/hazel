@@ -27,9 +27,7 @@
 		"apps/web-foldkit/src/page/settings/general/view.ts": 1,
 		"apps/web-foldkit/src/shell/layouts.ts": 1
 	},
-	"no-raw-heading": {
-		"apps/web-foldkit/src/lab/frame.ts": 1
-	},
+	"no-raw-heading": {},
 	"no-raw-shadow": {},
 	"no-transition-all": {},
 	"no-unknown-color": {}

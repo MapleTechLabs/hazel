@@ -14,7 +14,6 @@ import {
 	integrations,
 	requiredSourcesOf,
 	startingIntegration,
-	suggestedBillingIntegration,
 } from "@hazel/customer-integrations"
 import type { CustomerProvider, CustomerSource, SignalTemplate } from "@hazel/domain/customers"
 import type { CustomerConnectionId, OrganizationId } from "@hazel/schema"
@@ -53,9 +52,8 @@ export const sourceLabel = (source: CustomerSource): string =>
 export const namesLabel = (names: ReadonlyArray<string>): string =>
 	names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
 
-/** Where first-run copy starts, and the billing source it suggests next. */
+/** Where first-run copy starts. */
 export const startingSource = startingIntegration.presentation
-export const suggestedBillingSource = suggestedBillingIntegration.presentation
 
 /** The source holding feature flags, and the one impersonation goes through. */
 export const featureFlagsSource = (featureFlagsIntegration ?? startingIntegration).presentation

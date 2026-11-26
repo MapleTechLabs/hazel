@@ -9,12 +9,12 @@ import {
 	shownSuggestions,
 	SuggestionMessage,
 } from "../../../customers/suggestions"
-import { ACCOUNTS, ACCOUNTS_BY_KEY } from "../../../lab/fixtures/customers"
+import { ACCOUNTS, ACCOUNTS_BY_KEY } from "../../../test/fixtures/customers"
 import {
 	CONTACT_SUGGESTION,
 	STRONG_SUGGESTION,
 	SUGGESTION_CHANNEL_OPTIONS,
-} from "../../../lab/fixtures/customers-suggestions"
+} from "../../../test/fixtures/customers-suggestions"
 import { AppRoute } from "../../../route"
 import { makeShared, organizationId, storyUpdate, userId } from "../../../test/pages-fixtures"
 import { PageOutMessage } from "../../out-message"

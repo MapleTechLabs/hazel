@@ -5,12 +5,12 @@ import { describe, expect, test } from "vitest"
 import { toAccountRow } from "../../../customers/queries"
 import { AcceptSuggestion, DismissSuggestion, SuggestionMessage } from "../../../customers/suggestions"
 import { successToast } from "../../../data/actions"
-import { ACCOUNTS, overviewFixture } from "../../../lab/fixtures/customers"
+import { ACCOUNTS, overviewFixture } from "../../../test/fixtures/customers"
 import {
 	STRONG_SUGGESTION,
 	SUGGESTION_CHANNEL_OPTIONS,
 	SUGGESTIONS,
-} from "../../../lab/fixtures/customers-suggestions"
+} from "../../../test/fixtures/customers-suggestions"
 import { makeShared, organizationId, pageScene, storyUpdate, userId } from "../../../test/pages-fixtures"
 import { PageOutMessage } from "../../out-message"
 import { FetchSuggestedChannelLinks } from "./commands"

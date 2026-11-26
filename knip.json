@@ -54,7 +54,7 @@
 			"ignoreDependencies": ["react"]
 		},
 		"apps/web-foldkit": {
-			"entry": ["alchemy.run.ts", "src/main.ts", "**/*.gallery.ts", "public/sw.js"],
+			"entry": ["alchemy.run.ts", "src/main.ts", "public/sw.js"],
 			// @foldkit/devtools is loaded by @foldkit/vite-plugin's dev overlay; the oxlint plugin by
 			// path from the root .oxlintrc.json.
 			"ignoreDependencies": ["@foldkit/devtools", "@foldkit/oxlint-plugin"]

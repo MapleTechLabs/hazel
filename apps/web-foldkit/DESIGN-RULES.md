@@ -46,9 +46,6 @@ Domain views (a lifecycle stage badge, a company logo) live with their feature, 
 If the kit lacks what you need, add the variant or option to the kit component and use it. That is
 the whole point: the next page gets it for free, and a design change lands in one place.
 
-The whole kit is drawn, live, on `/lab/kit` (`src/lab/kit/`): add a specimen there with the variant,
-and look at it in both themes before using it on a page.
-
 ### Headings
 
 `heading(h, { variant }, children)` has five variants. `level` sets the element for the document
@@ -94,5 +91,5 @@ may keep the count it had, never more; new files get zero. When you fix violatio
 so the baseline only shrinks. The script refuses to grow an entry (`--allow-increase` exists for a
 new rule landing, never for new code).
 
-Exempt: the kit itself (`src/ui`, `src/core/components`) may render raw elements; tests and
-`*.gallery.ts` files build fixtures and skip all of these rules.
+Exempt: the kit itself (`src/ui`, `src/core/components`) may render raw elements; tests build
+fixtures and skip all of these rules.

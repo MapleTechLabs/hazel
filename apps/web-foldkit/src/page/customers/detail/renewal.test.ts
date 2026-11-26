@@ -1,6 +1,6 @@
 import type * as Customers from "@hazel/domain/customers"
 import { describe, expect, test } from "vitest"
-import { ACME_DETAIL } from "../../../lab/fixtures/customers"
+import { ACME_DETAIL } from "../../../test/fixtures/customers"
 import { renewingSubscriptionOf } from "./model"
 
 const base = ACME_DETAIL.subscriptions[0]

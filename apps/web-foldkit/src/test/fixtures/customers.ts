@@ -17,12 +17,9 @@ import {
 	type Settings,
 	type Signal,
 	type SignalEvidence,
-	type SignalRule,
 	type SignalSeverity,
 	type SignalStatus,
 	type SignalTemplate,
-	type SyncProgress,
-	type SyncRun,
 	TEMPLATES,
 } from "@hazel/domain/customers"
 import {
@@ -36,7 +33,6 @@ import {
 	CustomerSignalId,
 	CustomerSignalRuleId,
 	CustomerSubscriptionId,
-	CustomerSyncRunId,
 	OrganizationId,
 	UserId,
 } from "@hazel/schema"
@@ -100,9 +96,6 @@ export const DANA = member(3, "Dana Kim", "dana@hazel.sh")
 export const PRIYA = member(4, "Priya Shah", "priya@hazel.sh")
 export const TEAM: ReadonlyArray<TeamMember> = [MAYA, JONAS, DANA, PRIYA]
 /** The signed-in user ("Mine"). */
-
-export const memberOf = (id: UserId | null): TeamMember | null =>
-	TEAM.find((entry) => entry.id === id) ?? null
 
 // ---------------------------------------------------------------------------
 // Accounts
@@ -1283,34 +1276,6 @@ export const OPEN_SIGNALS = OPEN_ENTRIES.map((entry) => entry.signal)
 // Rules and settings
 // ---------------------------------------------------------------------------
 
-export const RULES: ReadonlyArray<SignalRule> = (Object.keys(TEMPLATES) as ReadonlyArray<SignalTemplate>).map(
-	(template) => {
-		const meta = TEMPLATES[template]
-		const matching = SIGNALS.filter(
-			(signal) => signal.template === template && signal.status === "open",
-		).length
-		return {
-			id: RULE_IDS[template],
-			organizationId: ORGANIZATION_ID,
-			name: meta.name,
-			template,
-			kind: meta.kind,
-			severity: meta.defaultSeverity,
-			config: meta.defaultConfig,
-			scope: {},
-			// One rule off, so the rules list shows a disabled row.
-			enabled: template !== "churned",
-			createdBy: null,
-			updatedBy: null,
-			lastTriggeredAt: matching > 0 ? daysAgo(1) : null,
-			matchingCount: matching,
-			createdAt: daysAgo(120),
-			updatedAt: daysAgo(120),
-			deletedAt: null,
-		}
-	},
-)
-
 export const SETTINGS: Settings = {
 	id: Schema.decodeSync(CustomerSettingsId)(uuid(22, 1)),
 	organizationId: ORGANIZATION_ID,
@@ -1383,26 +1348,6 @@ export const CONNECTIONS: ReadonlyArray<Connection> = [
 	DIRECTORY_CONNECTION,
 	INVOICES_CONNECTION,
 	ACTIVITY_CONNECTION,
-]
-
-/** The invoice source's backfill in flight. */
-export const INVOICES_PROGRESS: SyncProgress = { step: "invoices", done: 1_204, total: 3_310 }
-
-export const SYNC_RUNS: ReadonlyArray<SyncRun> = [
-	{
-		id: Schema.decodeSync(CustomerSyncRunId)(uuid(24, 1)),
-		organizationId: ORGANIZATION_ID,
-		connectionId: INVOICES_CONNECTION.id,
-		provider: INVOICES.id,
-		trigger: "backfill",
-		status: "running",
-		startedAt: ago(6 * 60_000),
-		finishedAt: null,
-		progress: INVOICES_PROGRESS,
-		stats: { ...EMPTY_SYNC_STATS, invoices: 1_204 },
-		error: null,
-		cursor: "in_1Q8f2Lk",
-	},
 ]
 
 // ---------------------------------------------------------------------------
@@ -1764,6 +1709,3 @@ export const ACME_DETAIL: AccountDetail = {
 		},
 	],
 }
-
-/** 14 days of daily active users for an account (bar sparkline evidence). */
-export const DAU_14D: ReadonlyArray<number> = [9, 11, 10, 12, 6, 5, 11, 10, 9, 7, 4, 3, 5, 2]

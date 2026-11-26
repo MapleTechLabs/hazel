@@ -94,38 +94,6 @@ export const sparkline = <M>(
 	)
 }
 
-/** Mini bars (e.g. daily active users, 14 days); the last bar can stand out as "today". */
-export const barSparkline = <M>(
-	h: HtmlBuilder<M>,
-	options: Readonly<{
-		values: ReadonlyArray<number>
-		ariaLabel: string
-		highlightLast?: boolean
-		className?: string
-	}>,
-): Html => {
-	const [, hi] = extent(options.values)
-	const width = bandWidth(options.values.length)
-	return h.div(
-		[
-			h.Role("img"),
-			h.AriaLabel(options.ariaLabel),
-			h.Class(twMerge("flex h-6 w-20 shrink-0 items-end gap-px", options.className)),
-		],
-		options.values.map((value, index) =>
-			h.span([
-				h.Class(
-					twMerge(
-						"block min-h-px rounded-xs bg-chart-neutral",
-						options.highlightLast && index === options.values.length - 1 && "bg-chart-series-2",
-					),
-				),
-				h.Style({ width: `${width}%`, height: `${hi === 0 ? 0 : (value / hi) * 100}%` }),
-			]),
-		),
-	)
-}
-
 /** A limit meter: `value` of `limit`, blue under the limit, amber at it, red past it. */
 export const meter = <M>(
 	h: HtmlBuilder<M>,

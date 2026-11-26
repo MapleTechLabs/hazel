@@ -132,10 +132,7 @@ Timestamps and the new note's id are taken when the action runs (`Clock`), so ca
 them. A Command's name must match its const (`foldkit/command-binding-matches-name`) and be unique
 app-wide.
 
-## Lab
+## Fixtures
 
-Page entries live in `src/lab/entries/customers/pages/<page>.ts` (every file there is a lab page).
-`attention.ts` and `overview.ts` show the pattern: the real `update`/`view` over
-`src/lab/fixtures/customers.ts` rows (`toAccountRow`, `toSignalRow`), `labShared` from
-`./lab-shared.ts` as `Shared`, Commands dropped and RPC answers filled from fixtures in the lab's
-own `update`.
+Scene and story tests run the real `update`/`view` over `src/test/fixtures/customers.ts` rows
+(`toAccountRow`, `toSignalRow`).

@@ -12,14 +12,14 @@ import {
 	type NamedAccount,
 	NOW,
 	RICH_COMPANY,
-} from "../../../lab/fixtures/customers"
+} from "../../../test/fixtures/customers"
 import {
 	LONG_SUGGESTION,
 	STRONG_SUGGESTION,
 	SUGGESTION_CHANNEL_OPTIONS,
 	UNSEEN_SUGGESTION,
 	WORKSPACE_SUGGESTION,
-} from "../../../lab/fixtures/customers-suggestions"
+} from "../../../test/fixtures/customers-suggestions"
 import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { makeShared, memberWithRole, pageScene } from "../../../test/pages-fixtures"
 import * as Menu from "../../../ui/menu"

@@ -7,7 +7,6 @@
 import * as Customers from "@hazel/domain/customers"
 import { ChannelId, CustomerIssueId, MessageId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
-import type { ChannelOption } from "../../customers/channels"
 import type { IssueRow } from "../../customers/issues"
 import type { IssueSlaRow } from "../../customers/sla"
 import { ACCOUNTS_BY_KEY, JONAS, MAYA, NOW, type NamedAccount } from "./customers"
@@ -17,14 +16,6 @@ const MINUTE = 60_000
 const uuid = (kind: number, n: number) =>
 	`${String(kind).padStart(8, "0")}-0000-4000-8000-${String(n).padStart(12, "0")}`
 const channelId = (n: number) => Schema.decodeSync(ChannelId)(uuid(40, n))
-
-export const ISSUE_CHANNELS: ReadonlyArray<ChannelOption> = [
-	{ id: channelId(1), name: "ext-acme", isPrivate: false, origin: "slack" },
-	{ id: channelId(2), name: "kestrel-support", isPrivate: true, origin: "connect" },
-	{ id: channelId(3), name: "northwind", isPrivate: false, origin: "discord" },
-	{ id: channelId(4), name: "brightfield-shared", isPrivate: false, origin: "hazel" },
-	{ id: channelId(5), name: "halcyon-eng", isPrivate: false, origin: "slack" },
-]
 
 const CUSTOMER = Schema.decodeSync(UserId)(uuid(41, 1))
 

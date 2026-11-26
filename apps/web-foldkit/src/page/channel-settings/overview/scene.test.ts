@@ -4,7 +4,7 @@ import { describe, test } from "vitest"
 import * as SuggestionPrompt from "../../../customers/suggestion-prompt"
 import { AcceptSuggestion, SuggestionMessage } from "../../../customers/suggestions"
 import { successToast } from "../../../data/actions"
-import { CONTACT_SUGGESTION, suggestionFor } from "../../../lab/fixtures/customers-suggestions"
+import { CONTACT_SUGGESTION, suggestionFor } from "../../../test/fixtures/customers-suggestions"
 import {
 	channelId,
 	failureToastFixture,
