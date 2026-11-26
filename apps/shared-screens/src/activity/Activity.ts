@@ -334,7 +334,8 @@ export const Activity = Hazel.component({
 						.role("caption")
 						.tone("muted")
 						.numeric()
-						.children(formatDistanceToNow(item.createdAtMs, model.nowMs)),
+						// A row newer than the Model's clock (it ticks once a minute) is "less than a minute ago".
+						.children(formatDistanceToNow(Math.min(item.createdAtMs, model.nowMs), model.nowMs)),
 					item.isUnread
 						? h.button
 								.icon("check")
