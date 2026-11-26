@@ -109,8 +109,13 @@ jobs:
             - name: Install dependencies
               run: bun install --frozen-lockfile
 
+            - name: Setup Python (the runner's system Python refuses pip installs)
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+
             - name: Inter for the snapshots (fontTools converts the web's woff2)
-              run: python3 -m pip install --quiet fonttools brotli
+              run: python -m pip install --quiet fonttools brotli
 
             - name: HazelUI tests and snapshots
               run: bun run --cwd apps/ios-hybrid test:hazelui
