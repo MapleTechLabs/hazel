@@ -342,8 +342,9 @@ Gates are short spikes on the spike branch. A failed gate changes this document 
 - **C3 Tokens schema:** `packages/ui/src/style/schema.ts`: the shape of tokens and recipes, and the
   codegen interfaces.
 
-Exit: three example screens (channel list, DMs, a settings form) type-check against C1, reviewed by
-the user.
+Exit: three example screens (channel list, DMs, a settings form) type-check against C1 using only
+the default looks and the closed option sets in "Design language", and the user has reviewed those
+sets. A screen that needed something outside them changes the sets now, not during the lanes.
 
 ### Phase 2: lanes (parallel)
 
@@ -355,8 +356,8 @@ the user.
 | C2 Swift: controls | `HazelUI/Primitives/Controls/` | C2, C3, G5 | button, link, toggle, select, textField, textArea, searchField pass; text-input stress test passes |
 | C3 Swift: overlays | `HazelUI/Primitives/Overlays/` | C2, C3 | menu, contextMenu, sheet, dialog, popover, toast use the system components |
 | C4 Swift: structure and lists | `HazelUI/Primitives/{Structure,Collections}/`, `HazelUI/Tree.swift` | C2, C3 | screen, navigation (route and stack in sync), tabBar, splitView, section, item, list (keyed, sections, reach end, stick to bottom); the extension registry and its manifest check |
-| D Tokens and codegen | `packages/ui/src/style/`, `packages/ui/scripts/` | C3 | every recipe filled from the seeds, generated files current, parity test green in both themes |
-| E Conformance harness | `packages/ui/src/conformance/`, the browser runner, Swift snapshot target | C1, C2 | lanes A and C can add fixtures; CI runs both sides |
+| D Tokens and codegen | `packages/ui/src/style/`, `packages/ui/scripts/` | C3 | every recipe and every option of the closed sets filled from the seeds, generated files current, parity test green in both themes |
+| E Conformance harness and gallery | `packages/ui/src/conformance/`, the browser runner, Swift snapshot target, the gallery (web page and iOS screen) | C1, C2 | lanes A and C can add fixtures; CI runs both sides; the gallery shows every primitive in every option and state, light and dark |
 | F Platform services | `packages/ui/src/platform/`, `HazelUI/Runtime/` | G3, G4 | fetch, WebSocket, storage, auth, haptics, clipboard, share behind Effect services, web and Swift implementations |
 
 ### Phase 3: screens (parallel, one lane per screen)
