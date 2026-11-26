@@ -346,7 +346,7 @@ export const notificationRows: ReadonlyArray<Wire<typeof Notification.Schema>> =
 		resourceType: "message",
 		createdAt: iso(-(n + 1) * 45 * MINUTE),
 		readAt: null,
-		reason: c.type === "single" ? "direct_message" : "mention",
+		reason: c.type === "single" ? "direct" : "mention",
 		silent: false,
 	})),
 )
@@ -354,6 +354,50 @@ export const notificationRows: ReadonlyArray<Wire<typeof Notification.Schema>> =
 // CHANNEL SOURCE ROWS: #general
 
 const mention = (p: Person) => `@[userId:${p.id}]`
+
+/** What each of Ada's notifications points at, by channel number: author and text, newest first. */
+const NOTIFIED = new Map<number, ReadonlyArray<readonly [Person, string]>>([
+	[
+		5,
+		[
+			[katherine, `${mention(ada)} can you look at the new sidebar spacing before Friday?`],
+			[margaret, `Icon set is in Figma, ${mention(ada)} the hashtag one is still too heavy.`],
+			[katherine, `${mention(ada)} the dark mode tokens are ready for review.`],
+		],
+	],
+	[7, [[alan, `${mention(ada)} release candidate 2 is tagged and on staging.`]]],
+	[
+		9,
+		[
+			[grace, "Are you free for a quick call about the roadmap?"],
+			[grace, "Sent the doc over, take a look when you can."],
+		],
+	],
+])
+
+/** The messages Ada's notifications name (`resourceId`), each in its channel's own source. */
+export const notificationMessageRows: ReadonlyArray<Wire<typeof Message.Schema>> = CHANNELS.flatMap((c) =>
+	notificationRows
+		.filter((row) => row.targetedResourceId === c.id)
+		.flatMap((row, n) => {
+			const [author, content] = NOTIFIED.get(c.n)?.[n] ?? [grace, "Ping"]
+			return [
+				{
+					id: Schema.decodeSync(MessageId)(row.resourceId ?? uuid(9, 0x1000 + c.n * 16 + n)),
+					channelId: c.id,
+					conversationId: null,
+					authorId: author.id,
+					content,
+					embeds: null,
+					replyToMessageId: null,
+					threadChannelId: null,
+					createdAt: row.createdAt,
+					updatedAt: null,
+					deletedAt: null,
+				},
+			]
+		}),
+)
 
 interface Extras {
 	readonly reactions?: ReadonlyArray<readonly [Person, string]>
@@ -623,7 +667,11 @@ export const snapshotFor = (kind: SyncSourceKind, sourceId: string): FixtureTabl
 					message_reactions: generalReactionRows,
 					pinned_messages: generalPinnedRows,
 				})
-			return CHANNELS.some((c) => c.id === sourceId) ? withEmpty("channel", {}) : undefined
+			return CHANNELS.some((c) => c.id === sourceId)
+				? withEmpty("channel", {
+						messages: notificationMessageRows.filter((row) => row.channelId === sourceId),
+					})
+				: undefined
 	}
 }
 

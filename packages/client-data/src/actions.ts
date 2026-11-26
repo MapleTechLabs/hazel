@@ -8,6 +8,7 @@ import {
 	CustomEmojiId,
 	MessageId,
 	MessageReactionId,
+	type NotificationId,
 	OrganizationId,
 	PinnedMessageId,
 	type UserId,
@@ -39,6 +40,7 @@ export const makeActions = (deps: ActionDeps) => {
 		customEmojiCollection,
 		messageCollection,
 		messageReactionCollection,
+		notificationCollection,
 		organizationCollection,
 		organizationMemberCollection,
 		pinnedMessageCollection,
@@ -759,7 +761,30 @@ export const makeActions = (deps: ActionDeps) => {
 			}),
 	})
 
+	/** One notification read now (the inbox's "Mark as read", `notification.update`). */
+	const markNotificationReadAction = optimisticAction({
+		collections: [notificationCollection],
+
+		onMutate: (props: { notificationId: NotificationId; readAt: Date }) => {
+			notificationCollection.update(props.notificationId, (notification) => {
+				notification.readAt = props.readAt
+			})
+			return { notificationId: props.notificationId }
+		},
+
+		mutate: (props, _ctx) =>
+			Effect.gen(function* () {
+				const client = yield* HazelRpc
+				const result = yield* client("notification.update", {
+					id: props.notificationId,
+					readAt: props.readAt,
+				})
+				return { data: result, transactionId: result.transactionId }
+			}),
+	})
+
 	return {
+		markNotificationReadAction,
 		sendMessageAction,
 		createChannelAction,
 		toggleReactionAction,

@@ -18,6 +18,7 @@ import { Dms, dmsLayer } from "../../shared-screens/src/dms/Dms.ts"
 import { makeLiveChannelList } from "./live-channel-list"
 import { type SidebarRows, sidebarSections } from "./live-sections"
 import { mountChannelSidebarNative } from "../../shared-screens/src/channel-sidebar/native.ts"
+import { mountActivityLive } from "../../shared-screens/src/activity/live.ts"
 
 declare const __native: { post: (json: string) => void; screen?: string }
 
@@ -37,6 +38,10 @@ const program = Effect.gen(function* () {
 	switch (__native.screen) {
 		case "sidebar":
 			yield* mountChannelSidebarNative(native.container, me.id)
+			return yield* Effect.never
+		case "activity":
+			yield* mountActivityLive(me.id, native.container, (id) => console.log(`[live] open channel ${id}`))
+			console.log(`[live] activity mounted (${since()})`)
 			return yield* Effect.never
 	}
 

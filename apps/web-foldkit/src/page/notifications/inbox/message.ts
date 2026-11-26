@@ -21,5 +21,7 @@ export const Message = defineMessageUnion({
 	ClickedMarkAllChannelsRead: {},
 	SucceededMarkAllChannelsRead: {},
 	FailedMarkAllChannelsRead: { channelIds: Schema.Array(ChannelId), reason: CommonReason },
+	/** A row of the hazel Activity island (`islands/activity.ts`) asked to open its channel. */
+	RequestedIslandNavigation: { orgSlug: Schema.String, channelId: ChannelId },
 })
 export type Message = typeof Message.Type
