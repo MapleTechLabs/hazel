@@ -78,10 +78,6 @@ export const stop = (element: HTMLElement, trigger: MotionTrigger) => {
 	write(element, triggers)
 }
 
-/** Whether `trigger` is still playing on `element` (an exit not yet finished). */
-export const isPlaying = (element: HTMLElement, trigger: MotionTrigger) =>
-	plays.get(element)?.has(trigger) === true
-
 /**
  * Marks an element not yet in the page (a pill a draw just built): its motion starts when it is
  * inserted, and the mark goes when the animation ends.

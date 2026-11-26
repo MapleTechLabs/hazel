@@ -134,6 +134,10 @@ dialog[data-hz-layer]::backdrop { background: var(--hz-color-scrim); }
 	color: var(--hz-color-fg);
 	box-shadow: var(--hz-shadow-overlay);
 }
+/* The GIF picker is a web extension, not a recipe: it fades in as a popover does (\`fadeIn\`). */
+[data-hz=ext] [data-hz-part="gifPanel"][data-motion~="enter"] {
+	animation: hz-fade var(--hz-duration-fast) var(--hz-ease-out) 0s 1 both;
+}
 [data-hz=ext] [data-hz-part="gifPanel"] > [data-hz-part="search"] {
 	padding: var(--hz-space-2);
 	border: 0;
