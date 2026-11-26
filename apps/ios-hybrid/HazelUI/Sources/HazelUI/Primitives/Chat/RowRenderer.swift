@@ -315,7 +315,8 @@ public enum RowRenderer {
         let face = Token.space("4")
         avatar(thread.initials, seed: thread.author, rect: CGRect(x: px, y: second + (line - face) / 2, width: face, height: face), style: PartStyle(HazelTheme.Recipes.message, "avatarImage", b.c), micro: true, &b)
         px += face + gap
-        let author = RowText.string(thread.author, style, weight: HazelTheme.Font.weightStrong, color: fg, wrap: false)
+        // Today's `text-fg/85`, as the web's thread author.
+        let author = RowText.string(thread.author, style, weight: HazelTheme.Font.weightStrong, color: fg.withAlphaComponent(0.85), wrap: false)
         let aw = RowText.measure(author).width
         b.items.append(.text(author, CGRect(x: px, y: second, width: aw + 1, height: line)))
         px += aw + gap

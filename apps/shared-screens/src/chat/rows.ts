@@ -118,6 +118,11 @@ export const namesOf = (lookups: Lookups): Names => ({
 	group: (id) => lookups.groupHandles.get(id),
 })
 
+/** Drops absent keys, so equal rows compare equal and the wire never carries `undefined`. */
+const compact = <A extends object>(value: A): A =>
+	// SAFETY: the same object minus keys whose value is undefined, which `A`'s optional keys allow.
+	Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as A
+
 const reactionsOf = (lookups: Lookups, messageId: MessageId) => {
 	const reactions = lookups.reactions.get(messageId)
 	if (reactions === undefined || reactions.length === 0) return undefined
@@ -163,15 +168,15 @@ const threadOf = (lookups: Lookups, names: Names, threadChannelId: ChannelId | n
 	if (thread === undefined || last === undefined) return undefined
 	const author = displayNameOf(lookups, last.authorId) ?? ""
 	const avatar = lookups.users.get(last.authorId)?.avatarUrl ?? undefined
-	return {
+	return compact<Content.ThreadSummary>({
 		name: thread.name || "Thread",
 		count: thread.messages.length,
 		author,
 		initials: initialsOf(author),
-		...(avatar === undefined ? {} : { avatar }),
+		avatar,
 		preview: plainLine(last.content, names),
 		time: distanceStrict(last.createdAtMs, lookups.nowMs),
-	} satisfies Content.ThreadSummary
+	})
 }
 
 const replyOf = (lookups: Lookups, names: Names, replyTo: MessageId | null) => {
@@ -180,12 +185,12 @@ const replyOf = (lookups: Lookups, names: Names, replyTo: MessageId | null) => {
 	if (target === undefined) return undefined
 	const author = displayNameOf(lookups, target.authorId) ?? ""
 	const avatar = lookups.users.get(target.authorId)?.avatarUrl ?? undefined
-	return {
+	return compact<NonNullable<Content.MessageRow["reply"]>>({
 		author,
 		initials: initialsOf(author),
-		...(avatar === undefined ? {} : { avatar }),
+		avatar,
 		text: plainLine(target.content, names),
-	}
+	})
 }
 
 /** What the row offers: today's toolbar (react, copy, edit, reply, delete) and its More menu. */
@@ -199,11 +204,6 @@ export const actionsOf = (isOwn: boolean, isPinned: boolean): ReadonlyArray<Mess
 	"selectText",
 	...(isOwn ? (["delete"] as const) : []),
 ]
-
-/** Drops absent keys, so equal rows compare equal and the wire never carries `undefined`. */
-const compact = <A extends object>(value: A): A =>
-	// SAFETY: the same object minus keys whose value is undefined, which `A`'s optional keys allow.
-	Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as A
 
 /** A message's row data; the header fields are left out on a grouped row. */
 export const messageRow = (message: ChatMessage, grouped: boolean, lookups: Lookups): Content.MessageRow => {

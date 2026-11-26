@@ -19,6 +19,7 @@ import { makeFixtureServer, makeFixtureWebSocket } from "../fixture/fixture-sock
 import { seedGeneralThread, snapshotWithThread } from "../fixture/thread-seed"
 import { bigChannel } from "../web/big-channel"
 import {
+	snapshotFor,
 	adaUserId,
 	channelMemberRows,
 	channelRows,
@@ -60,7 +61,7 @@ const FixtureWebSocket = makeFixtureWebSocket({
 	// History pages as the source objects page it: a 3,000-message snapshot would pass URLSession's
 	// 1 MiB WebSocket message limit (close 1009).
 	pageSize: 100,
-	...(process.argv.includes("--thread") ? { snapshot: snapshotWithThread } : {}),
+	snapshot: process.argv.includes("--thread") ? snapshotWithThread : snapshotFor,
 })
 const offlineFetch = makeOfflineFetch({
 	backendUrl,

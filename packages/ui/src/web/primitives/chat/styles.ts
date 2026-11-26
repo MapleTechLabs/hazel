@@ -307,7 +307,11 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 		`${M} ${p("threadCount")} > ${p("icon")}`,
 		`width: ${space("3.5")}; height: ${space("3.5")}; color: ${color("primary")};`,
 	],
-	[`${M} ${p("threadAuthor")}`, `flex-shrink: 0; ${STRONG} color: ${color("fg")};`],
+	// Today's `text-fg/85`: the default ink a little quieter than the card's name.
+	[
+		`${M} ${p("threadAuthor")}`,
+		`flex-shrink: 0; ${STRONG} color: color-mix(in oklab, ${color("fg")} 85%, transparent);`,
+	],
 	[
 		`${M} ${p("threadPreview")}`,
 		`min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${color("muted-fg")};`,
