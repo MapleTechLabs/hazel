@@ -1,8 +1,11 @@
 // Owned by lane A1 (`docs/hazel-ui.md`, "Phase 2: lanes").
+import { ditherInitial } from "../../../../../../apps/web-foldkit/src/ui/dither-avatar.ts"
 import type { AvatarPresence } from "../../../vocabulary/options.ts"
 import { glyph } from "../../icons.ts"
-import { definePrimitive, option, part, type Primitive } from "../define.ts"
+import { definePrimitive, flag, option, part, type Primitive } from "../define.ts"
+import { ditherLayer, observeWidth } from "./dither.ts"
 import { pressable } from "./press.ts"
+import { ensureStyles } from "./styles.ts"
 
 const presenceLabels = {
 	none: "",
@@ -15,6 +18,13 @@ const presenceLabels = {
 const presenceLabel = (status: string) =>
 	Object.hasOwn(presenceLabels, status) ? presenceLabels[status as AvatarPresence] : ""
 
+/** Each size's box before layout, in px (`regular` steps down from the size class); layout corrects it. */
+const sizePx = (size: string, document: Document) => {
+	if (size === "medium") return 40
+	if (size === "large") return 48
+	return document.defaultView?.matchMedia("(width >= 40rem)").matches ? 16 : 20
+}
+
 /** A corner badge: absolutely placed at the bottom right, a quarter outside (`presence-dot.ts`). */
 const corner = (node: HTMLElement) => {
 	node.style.position = "absolute"
@@ -26,8 +36,11 @@ const corner = (node: HTMLElement) => {
 }
 
 export const primitive = definePrimitive("avatar", ({ document, tag, outer }) => {
+	ensureStyles(document)
 	const node = outer("span")
-	node.style.position = "relative"
+	// Seeded by `name`: today's dither and its one initial (`avatar-seed-tint`); else `initials`.
+	const dither = ditherLayer(document)
+	observeWidth(node, dither.resize)
 	const initials = part(document, "span", "initials")
 	initials.setAttribute("aria-hidden", "true")
 	const image = part(document, "img", "image")
@@ -39,9 +52,17 @@ export const primitive = definePrimitive("avatar", ({ document, tag, outer }) =>
 	const presence = corner(part(document, "span", "presence"))
 	const mark = corner(part(document, "span", "mark"))
 	mark.setAttribute("aria-hidden", "true")
-	node.append(initials, image, presence, mark)
+	node.append(dither.layer, initials, image, presence, mark)
 	let name = ""
+	let initialsText = ""
+	let size = "regular"
 	let status = ""
+	const seed = () => {
+		const seeded = name.trim() !== ""
+		flag(node, "seeded", seeded)
+		dither.seed(seeded ? name : undefined, sizePx(size, document))
+		initials.textContent = seeded ? ditherInitial(name) : initialsText
+	}
 	// One accessible name: the person, and their presence when it shows.
 	const label = () => {
 		const text = [name, presenceLabel(status)].filter(Boolean).join(", ")
@@ -61,14 +82,21 @@ export const primitive = definePrimitive("avatar", ({ document, tag, outer }) =>
 		content: node,
 		set: (prop, value) => {
 			const text = typeof value === "string" ? value : undefined
-			if (prop === "name") name = text ?? ""
-			else if (prop === "initials") initials.textContent = text ?? ""
-			else if (prop === "src") {
+			if (prop === "name") {
+				name = text ?? ""
+				seed()
+			} else if (prop === "initials") {
+				initialsText = text ?? ""
+				seed()
+			} else if (prop === "src") {
 				image.hidden = text === undefined
 				if (text === undefined) image.removeAttribute("src")
 				else image.setAttribute("src", text)
-			} else if (prop === "size") option(node, "size", value)
-			else if (prop === "presence") {
+			} else if (prop === "size") {
+				option(node, "size", value)
+				size = text ?? "regular"
+				seed()
+			} else if (prop === "presence") {
 				option(node, "presence", value)
 				status = text ?? ""
 				presence.hidden = text === undefined || text === "none"

@@ -20,8 +20,6 @@ const illustrationOf = (name: string | undefined) =>
 
 export const primitive = definePrimitive("emptyState", ({ document, tag, outer }) => {
 	const node = outer("div")
-	// HAZEL-GAP(recipe-text-align): a recipe cannot centre text; the renderer does.
-	node.style.textAlign = "center"
 	const illustration = part(document, "img", "illustration")
 	illustration.hidden = true
 	// Renderer-owned asset sizing: the kit's `aspect-square w-full max-w-sm`, cropped to cover.

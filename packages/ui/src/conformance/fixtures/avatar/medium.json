@@ -15,7 +15,8 @@
 			"values": ["online", "busy"]
 		}
 	],
-	"pending": {
-		"web": "A1"
+	"kit": {
+		"specimen": "avatar-medium",
+		"target": "avatar"
 	}
 }

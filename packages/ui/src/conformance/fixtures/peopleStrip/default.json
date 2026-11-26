@@ -32,5 +32,9 @@
 		},
 		"events": ["press"]
 	},
-	"frame": "screen"
+	"frame": "screen",
+	"kit": {
+		"specimen": "people-strip",
+		"target": "peopleStrip"
+	}
 }

@@ -18,7 +18,8 @@
 			}
 		}
 	],
-	"pending": {
-		"web": "A1"
+	"kit": {
+		"specimen": "text-overline",
+		"target": "text"
 	}
 }

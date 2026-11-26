@@ -29,6 +29,7 @@ export const emptyState = defineRecipe<
 			rowGap: "1",
 			paddingY: "14",
 			fill: true,
+			textAlign: "center",
 		},
 		parts: {
 			illustration: { radius: "md", opacity: 0.5, marginBottom: "3" },
@@ -46,7 +47,7 @@ export const emptyState = defineRecipe<
 				shrink: false,
 			},
 			icon: { size: "6" },
-			title: { text: "body", strong: true, color: "fg" },
+			title: { text: "body", weight: "semibold", color: "fg" },
 			description: { text: "label", color: "muted-fg", marginBottom: "3" },
 			content: { layout: "row", align: "center", gap: "2" },
 		},

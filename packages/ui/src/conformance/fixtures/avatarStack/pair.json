@@ -23,7 +23,8 @@
 		]
 	},
 	"frame": "inline",
-	"pending": {
-		"web": "A1"
+	"kit": {
+		"specimen": "avatar-pair",
+		"target": "avatarStack"
 	}
 }

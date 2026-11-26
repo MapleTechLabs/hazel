@@ -23,8 +23,5 @@
 			}
 		]
 	},
-	"frame": "screen",
-	"pending": {
-		"web": "A1"
-	}
+	"frame": "screen"
 }

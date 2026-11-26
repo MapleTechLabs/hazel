@@ -47,6 +47,7 @@ export const frame = defineRecipe<{ readonly surface: FrameSurface }, never, nev
 				// A bordered box with no padding or shadow; its dividers run edge to edge (`frame-flush`).
 				flush: {
 					root: {
+						rowGap: "0",
 						radius: "xl",
 						borderWidth: "hairline",
 						borderColor: "border",

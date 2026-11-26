@@ -1,0 +1,15 @@
+{
+	"about": "A `kbd` key cap against today's kit `kbd` (`md`).",
+	"root": {
+		"tag": "text",
+		"props": {
+			"role": "kbd"
+		},
+		"children": ["⌘K"]
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "text-kbd",
+		"target": "text"
+	}
+}

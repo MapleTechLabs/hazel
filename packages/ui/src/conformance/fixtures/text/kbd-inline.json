@@ -13,12 +13,9 @@
 				"props": {
 					"role": "kbd"
 				},
-				"children": ["⌥⌘N"]
+				"children": ["\u2325\u2318N"]
 			}
 		]
 	},
-	"frame": "sidebar",
-	"pending": {
-		"web": "A1"
-	}
+	"frame": "sidebar"
 }

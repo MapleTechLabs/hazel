@@ -12,5 +12,9 @@
 			"prop": "tone",
 			"values": ["accent", "success", "warning", "danger"]
 		}
-	]
+	],
+	"kit": {
+		"specimen": "icon-tile-neutral",
+		"target": "iconTile"
+	}
 }

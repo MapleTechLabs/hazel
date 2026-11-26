@@ -2,9 +2,9 @@ import { defineRecipe } from "../recipe.ts"
 import type { AvatarPresence, AvatarSize, ProviderMark } from "../schema.ts"
 
 /**
- * `avatar`: initials in a filled circle, sized like the icon it stands beside, or the `src` image over
- * them. `large` is the settings logo (the kit's `lg`, `size-12 rounded-xl`). `presence` is the kit's
- * presence dot (`presence-dot.ts`: online, away, busy filled; offline a hollow ring) and `mark` a
+ * `avatar`: sized like the icon it stands beside; the `src` image, else today's dither seeded by
+ * `name` (drawn by the web renderer), else `initials` on the kit's muted fill. `large` is the
+ * settings logo (the kit's `lg`, `size-12 rounded-xl`). `presence` is the kit's presence dot (`presence-dot.ts`: online, away, busy filled; offline a hollow ring) and `mark` a
  * provider's logo, both at the bottom-right corner (placed by the web renderer).
  */
 export const avatar = defineRecipe<
@@ -21,8 +21,8 @@ export const avatar = defineRecipe<
 			justify: "center",
 			size: "5",
 			radius: "full",
-			background: "primary",
-			color: "primary-fg",
+			background: "muted",
+			color: "muted-fg",
 			text: "micro",
 			strong: true,
 			shrink: false,
@@ -71,10 +71,11 @@ export const avatar = defineRecipe<
 			default: "none",
 			values: {
 				none: {},
-				online: { parts: { presence: { background: "success" } } },
-				away: { parts: { presence: { background: "warning" } } },
-				busy: { parts: { presence: { background: "danger" } } },
-				offline: { parts: { presence: { background: "bg", ring: "muted-fg" } } },
+				online: { parts: { presence: { background: "presence-online" } } },
+				away: { parts: { presence: { background: "presence-away" } } },
+				// Amber, as the kit's busy dot (`presence-busy-tone`).
+				busy: { parts: { presence: { background: "presence-busy" } } },
+				offline: { parts: { presence: { background: "bg", ring: "presence-offline" } } },
 			},
 		},
 		mark: { default: "none", values: { none: {}, slack: {}, discord: {} } },

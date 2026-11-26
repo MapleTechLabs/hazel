@@ -45,5 +45,9 @@
 				"sync": "slack"
 			}
 		}
-	]
+	],
+	"kit": {
+		"specimen": "channel-icon",
+		"target": "channelIcon"
+	}
 }
