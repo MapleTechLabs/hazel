@@ -8,7 +8,12 @@ import { defineRecipe } from "../recipe.ts"
  * subtitle's second line and the thread elbow are the web renderer's (`structure/item.ts`).
  */
 export const item = defineRecipe<
-	{ nested: "none" | "middle" | "last" },
+	{
+		nested: "none" | "middle" | "last"
+		titleLines: "1" | "2"
+		subtitleLines: "1" | "2"
+		leadingSize: "regular" | "large"
+	},
 	"muted",
 	"control" | "content" | "leading" | "title" | "subtitle" | "trailing" | "badge" | "shortcut"
 >({
@@ -88,6 +93,24 @@ export const item = defineRecipe<
 				none: {},
 				middle: { parts: { control: { paddingY: "1.5", text: "label" } } },
 				last: { parts: { control: { paddingY: "1.5", text: "label" } } },
+			},
+		},
+		// Two lines wrap and clamp (`item-title-lines`, `item-subtitle-lines`).
+		titleLines: { default: "1", values: { "1": {}, "2": { parts: { title: { lineClamp: 2 } } } } },
+		subtitleLines: { default: "1", values: { "1": {}, "2": { parts: { subtitle: { lineClamp: 2 } } } } },
+		// Today's activity row (`item-leading-size`): square, `py-3 px-4`, 14/20 in full ink, muted context.
+		// The grid, the 40pt column and the dot's column are the renderer's.
+		leadingSize: {
+			default: "regular",
+			values: {
+				regular: {},
+				large: {
+					parts: {
+						control: { paddingX: "4", paddingY: "3", radius: "none", text: "label", color: "fg" },
+						title: { color: "fg" },
+						subtitle: { color: "muted-fg" },
+					},
+				},
 			},
 		},
 	},
