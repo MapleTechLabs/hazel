@@ -49,6 +49,7 @@ struct HzComposer: View {
                 Button {
                     if canSend, !disabled { input.submit() }
                 } label: {
+                    // HAZEL-GAP(composer-send-icon): no recipe size for the send arrow.
                     ControlIcon(name: "arrow-up", size: 16, color: send.color?.color ?? .secondary)
                         .hzSize(send)
                         .hzControlBox(send, scheme)
