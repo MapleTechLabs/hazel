@@ -1,21 +1,97 @@
-// Owned by lane A4 (`docs/hazel-ui.md`, "Phase 2: lanes"). The G1 renderer, moved here in C0.
-import { definePrimitive, part } from "../define.ts"
+// Owned by lane A4 (`docs/hazel-ui.md`, "Phase 2: lanes"). `hz:section`: a titled group of rows with
+// one header action. Collapsible, its title is a disclosure; reorderable, its rows drag (`move`).
+import { svg } from "../../icons.ts"
+import { definePrimitive, flag, part, type Primitive } from "../define.ts"
+import { attachReorder, reorderCss } from "../list/reorder.ts"
+import { ensureSheet, fire, rowsOf, textOf } from "../list/runtime.ts"
+
+const css = `
+[data-hz="section"] > [data-hz-part="title"] > [data-hz-part="disclosure"] {
+	display: inline-flex; align-items: center; gap: var(--hz-space-1); cursor: default;
+	border-radius: var(--hz-radius-md);
+}
+[data-hz="section"] > [data-hz-part="title"] > [data-hz-part="disclosure"]:hover { color: var(--hz-color-fg); }
+[data-hz="section"] > [data-hz-part="title"] > [data-hz-part="disclosure"]:focus-visible {
+	outline: 2px solid var(--hz-color-ring); outline-offset: 1px;
+}
+[data-hz="section"] [data-hz-part="chevron"] {
+	display: block; width: var(--hz-space-3); height: var(--hz-space-3);
+	transition: transform var(--hz-duration-fast) var(--hz-ease-out);
+}
+[data-hz="section"][data-collapsed] [data-hz-part="chevron"] { transform: rotate(-90deg); }
+[data-hz="section"][data-collapsed] > [data-hz-part="content"] > :not([data-hz="action"]) { display: none; }
+@media (prefers-reduced-motion: reduce) { [data-hz="section"] [data-hz-part="chevron"] { transition: none; } }
+${reorderCss('[data-hz="section"] > [data-hz-part="content"]')}
+`
 
 export const primitive = definePrimitive("section", ({ document, tag, outer }) => {
+	ensureSheet(document, "section", css)
 	const node = outer("section")
 	const title = part(document, "h2", "title")
+	const label = part(document, "span", "label")
+	const disclosure = part(document, "button", "disclosure")
+	disclosure.setAttribute("type", "button")
+	const chevron = part(document, "span", "chevron")
+	chevron.setAttribute("aria-hidden", "true")
+	chevron.innerHTML = svg("chevron-down")
 	const content = part(document, "div", "content")
+	title.append(label)
+	title.hidden = true
 	node.append(title, content)
-	return {
+
+	let collapsible = false
+	let collapsed = false
+	let reorderable = false
+
+	// The title's text lives in one label; collapsible, the label moves into the disclosure button.
+	const layout = () => {
+		if (collapsible && disclosure.parentNode !== title) {
+			disclosure.append(label, chevron)
+			title.append(disclosure)
+		} else if (!collapsible && label.parentNode !== title) {
+			title.append(label)
+			disclosure.remove()
+		}
+		if (collapsible) disclosure.setAttribute("aria-expanded", String(!collapsed))
+	}
+
+	disclosure.addEventListener("click", () => fire(primitive, "toggle", { collapsed: !collapsed }))
+
+	const reorder = attachReorder({
+		container: content,
+		rows: () => rowsOf(content),
+		enabled: () => reorderable,
+		move: (id, before) => fire(primitive, "move", { id, before }),
+	})
+	const win = document.defaultView
+	if (win?.MutationObserver !== undefined)
+		new win.MutationObserver(() => reorder.sync()).observe(content, { childList: true })
+
+	const primitive: Primitive = {
 		tag,
 		outer: node,
 		content,
 		set: (name, value) => {
 			if (name === "title") {
-				title.textContent = typeof value === "string" ? value : ""
-				node.setAttribute("aria-label", title.textContent)
+				label.textContent = textOf(value)
+				title.hidden = textOf(value) === ""
+				if (textOf(value) === "") node.removeAttribute("aria-label")
+				else node.setAttribute("aria-label", textOf(value))
+			} else if (name === "collapsible") {
+				collapsible = value === true
+				flag(node, "collapsible", value)
+				layout()
+			} else if (name === "collapsed") {
+				collapsed = value === true
+				flag(node, "collapsed", value)
+				layout()
+			} else if (name === "reorderable") {
+				reorderable = value === true
+				flag(node, "reorderable", value)
+				reorder.sync()
 			}
 		},
 		events: undefined,
 	}
+	return primitive
 })
