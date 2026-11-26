@@ -48,6 +48,10 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
     /// Appearance and size class to draw with; nil follows the view's traits (the bench).
     public var dark: Bool? { didSet { if dark != oldValue { remeasureAll() } } }
     public var sizeClass: HazelTheme.SizeClass? { didSet { if sizeClass != oldValue { remeasureAll() } } }
+    /// The inset each side of the rows (the list recipe's `content` padding; a chat's `px-4`).
+    public var insetX: CGFloat = 0 { didSet { if insetX != oldValue { remeasureAll() } } }
+    /// The width rows lay out at: the view's, less the inset each side.
+    private var rowWidth: CGFloat { max(0, bounds.width - insetX * 2) }
 
     nonisolated static let startSpinner = Int.min
     nonisolated static let endSpinner = Int.min + 1
@@ -130,7 +134,7 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
     /// What rows draw with: width, size class, appearance, scale.
     public var context: RowContext {
         RowContext(
-            width: bounds.width,
+            width: rowWidth,
             sizeClass: sizeClass ?? (traitCollection.horizontalSizeClass == .regular ? .regular : .compact),
             dark: dark ?? (traitCollection.userInterfaceStyle == .dark),
             scale: window?.screen.scale ?? max(traitCollection.displayScale, 1)
@@ -157,7 +161,7 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
     /// Every row's height at `width`, measured now on this thread (small lists sized to their content).
     public func contentHeight(width: CGFloat) -> CGFloat {
         var c = context
-        c.width = width
+        c.width = max(0, width - insetX * 2)
         let entries = self.entries
         return zip(keys, entries).enumerated().reduce(0) { sum, item in
             let (i, pair) = item
@@ -183,7 +187,7 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
             dropImage(key)
             accessibilityCache[key] = nil
         }
-        let width = bounds.width
+        let width = rowWidth
         let sameOrder = nextKeys == keys
         entries = nextEntries
         if sameOrder && !heights.isEmpty {
@@ -259,16 +263,22 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
         applyContentSize()
     }
 
-    /// Chat rhythm, as the web list's: 8pt above an author group's first row (a message that is not
-    /// grouped), none when a divider or the list's top is above it. Entries run newest first.
+    /// Chat rhythm, as the web list's (today's `mt-2`/`mb-2`, not collapsed): 8pt above an author
+    /// group's first row and 8pt below its last. Entries run newest first, so `i + 1` is above `i`.
     private func gapAbove(_ i: Int) -> CGFloat {
         Self.gapAbove(i, entries)
     }
 
     nonisolated static func gapAbove(_ i: Int, _ entries: [ListEntry]) -> CGFloat {
-        guard i + 1 < entries.count, case let .message(row) = entries[i], !row.grouped,
-              case .message = entries[i + 1] else { return 0 }
-        return Token.space("2")
+        guard i + 1 < entries.count else { return 0 }
+        var groupedHere = false
+        var gap: CGFloat = 0
+        if case let .message(row) = entries[i] {
+            groupedHere = row.grouped
+            if !row.grouped { gap += Token.space("2") }
+        }
+        if case .message = entries[i + 1], !groupedHere { gap += Token.space("2") }
+        return gap
     }
 
     private func applyContentSize() {
@@ -348,6 +358,9 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
     }
 
     private func remeasureAll() {
+        // Keep the reader's place: a new appearance, size class or inset re-lays rows, it does not scroll.
+        let anchor = anchorNow()
+        let wasAtBottom = keys.isEmpty || isAtBottom
         layouts.removeAll()
         images.removeAll()
         imageOrder.removeAll()
@@ -357,6 +370,10 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
         applyBackground()
         keys = []
         set(keys: given.keys, entries: given.entries, dirty: [])
+        if !wasAtBottom {
+            restore(anchor, atBottom: false)
+            show()
+        }
     }
 
     // MARK: drawing
@@ -385,7 +402,7 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
         for i in lo...hi {
             let key = keys[i]
             let layer = layers[key] ?? take(key)
-            layer.frame = CGRect(x: 0, y: offsets[i], width: bounds.width, height: heights[i])
+            layer.frame = CGRect(x: insetX, y: offsets[i], width: rowWidth, height: heights[i])
             guard layer.contents == nil else { continue }
             if let image = images[key] {
                 present(key, image.contents, on: layer)
@@ -569,7 +586,7 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
 
     /// Row `i`'s rect in this view's (unflipped) coordinates.
     private func screenRect(_ i: Int) -> CGRect {
-        CGRect(x: 0, y: bounds.height - (offsets[i + 1] - scroll.contentOffset.y), width: bounds.width, height: heights[i])
+        CGRect(x: insetX, y: bounds.height - (offsets[i + 1] - scroll.contentOffset.y), width: rowWidth, height: heights[i])
     }
 
     /// The row under `point` (this view's coordinates) and the point in the row's own coordinates.
@@ -729,7 +746,7 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
     public var bottomRow: (key: Int, delta: CGFloat)? { anchorNow() }
     public func frameOfRow(_ key: Int) -> CGRect? {
         guard let i = indexOf[key] else { return nil }
-        return CGRect(x: 0, y: offsets[i] - scroll.contentOffset.y, width: bounds.width, height: heights[i])
+        return CGRect(x: insetX, y: offsets[i] - scroll.contentOffset.y, width: rowWidth, height: heights[i])
     }
     public var count: Int { keys.count }
     /// The layout drawn for row `key`, if measured.

@@ -156,6 +156,9 @@ final class ListBridge {
     func apply(props: [String: JSONValue]) {
         guard let view else { return }
         view.anchorAtEnd = props["anchor"]?.string == "end"
+        // The recipe's `content` padding: a chat insets its rows (`px-4`), as the web list does.
+        let anchor = props["anchor"]?.string ?? "start"
+        view.insetX = HazelTheme.Recipes.list.style(part: "content", options: ["anchor": anchor], sizeClass: view.sizeClass ?? .compact).paddingX ?? 0
         view.stickToBottom = props["stickToBottom"]?.bool ?? false
         view.loadingStart = props["loadingStart"]?.bool ?? false
         view.loadingEnd = props["loadingEnd"]?.bool ?? false
