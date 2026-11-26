@@ -43,15 +43,24 @@ const markup = (node: Node | string): string => {
 	return `<${node.tag}${attrs}>${node.children.map(markup).join("")}</${node.tag}>`
 }
 
-type IconBuilder = (h: never) => unknown
-
 const build = (name: IconName) => {
-	const make: IconBuilder = Icons[iconSources[name]]
-	// SAFETY: the stub stands in for Foldkit's `HtmlBuilder`; an icon only calls `h.<tag>` and `h.Attribute`.
-	return markup(make(stub as never) as Node)
+	// SAFETY: the stub stands in for Foldkit's `HtmlBuilder`; an icon only calls `h.<tag>` and
+	// `h.Attribute`, so what it returns is the stub's `Node` tree.
+	const make = Icons[iconSources[name]] as unknown as (h: typeof stub) => Node
+	return markup(make(stub))
 }
 
 const icons: ReadonlyMap<string, string> = new Map(iconNames.map((name) => [name, build(name)]))
 
 /** An icon's SVG; an unknown name draws an empty 18pt box, so a bad name never throws in a view. */
 export const svg = (name: string) => icons.get(name) ?? '<svg viewBox="0 0 18 18" aria-hidden="true"></svg>'
+
+/** Draws icon `name` filling `container` (a part with its own recipe size); undefined clears it. */
+export const glyph = (container: HTMLElement, name: string | undefined) => {
+	container.innerHTML = name === undefined ? "" : svg(name)
+	const drawn = container.firstElementChild
+	if (!(drawn instanceof SVGElement)) return
+	drawn.style.display = "block"
+	drawn.style.width = "100%"
+	drawn.style.height = "100%"
+}
