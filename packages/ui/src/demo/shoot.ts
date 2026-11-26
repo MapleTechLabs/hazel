@@ -2,6 +2,7 @@
  * Builds the browser demo and screenshots it in Playwright's Chromium (G1 evidence):
  * `bun src/demo/shoot.ts` writes `src/demo/__shots__/channel-list-web.png` and prints what it checked.
  */
+import { readFileSync } from "node:fs"
 import { chromium } from "playwright"
 
 // Run with Bun; the package has no `@types/bun`, so the one call is declared here.
@@ -9,21 +10,35 @@ declare const Bun: {
 	build: (options: { entrypoints: Array<string>; target: "browser"; format: "iife" }) => Promise<{
 		success: boolean
 		logs: Array<unknown>
-		outputs: Array<{ text: () => Promise<string> }>
+		outputs: Array<{ path: string; text: () => Promise<string> }>
 	}>
 }
+declare const require: { resolve: (id: string, options: { paths: Array<string> }) => string }
 
 const here = new URL(".", import.meta.url).pathname
 const built = await Bun.build({ entrypoints: [`${here}web-entry.ts`], target: "browser", format: "iife" })
 if (!built.success) throw new AggregateError(built.logs, "demo build failed")
-const script = await built.outputs[0]!.text()
+const script = await built.outputs.find((output) => output.path.endsWith(".js"))!.text()
+// The generated tokens.css (imported by the entry), and Inter from the web app's files: a host asset.
+const css = await built.outputs.find((output) => output.path.endsWith(".css"))!.text()
+const fontDir = require.resolve("@fontsource/inter/package.json", {
+	paths: [`${here}../../../../apps/web-foldkit`],
+}).replace(/package\.json$/, "files/")
+const fonts = [400, 500, 600]
+	.map((weight) => {
+		const data = readFileSync(`${fontDir}inter-latin-${weight}-normal.woff2`).toString("base64")
+		return `@font-face { font-family: "Inter"; font-weight: ${weight}; src: url(data:font/woff2;base64,${data}) format("woff2"); }`
+	})
+	.join("\n")
 
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 402, height: 874 }, deviceScaleFactor: 2 })
 const errors: Array<string> = []
 page.on("pageerror", (error) => errors.push(String(error)))
-await page.setContent('<!doctype html><html><body style="margin:0"><div id="app"></div></body></html>')
+await page.setContent('<!doctype html><html><body style="margin:0; background: var(--hz-color-sidebar)"><div id="app"></div></body></html>')
+await page.addStyleTag({ content: `${fonts}\n${css}` })
 await page.addScriptTag({ content: script })
+await page.evaluate(() => document.fonts.ready.then(() => undefined))
 await page.waitForSelector("[data-hz=ext][data-ext=ActivityChart][data-drawn] canvas")
 
 // Press a row: it becomes the selected button, the others stay links.

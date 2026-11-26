@@ -74,7 +74,7 @@ const tokenBlock = (tokens: Tokens): string => {
 		block(".dark", dark),
 		`@media ${REGULAR_MEDIA} {\n${block(":root", regular, "\t")}\n}`,
 		// Every primitive's own element and parts start from nothing, as Tailwind's preflight would.
-		block(":where([data-hz], [data-hz] > [data-hz-part], [data-hz] > [data-hz-slot])", [
+		block(":where([data-hz], [data-hz-part], [data-hz-slot])", [
 			"box-sizing: border-box;",
 			"margin: 0;",
 			"padding: 0;",
@@ -84,8 +84,11 @@ const tokenBlock = (tokens: Tokens): string => {
 			"font: inherit;",
 			"letter-spacing: inherit;",
 			"text-align: inherit;",
+			"text-decoration: none;",
 			"appearance: none;",
 		]),
+		// `hidden` wins over a recipe's `display`: hosts hide parts with it (a badge at 0, a fallback).
+		block(":where([data-hz], [data-hz-part], [data-hz-slot])[hidden]", ["display: none !important;"]),
 		block(":where([data-hz]:not([data-hz] *))", [
 			"font-family: var(--hz-font-sans);",
 			"font-feature-settings: var(--hz-font-sans-features);",
@@ -94,7 +97,11 @@ const tokenBlock = (tokens: Tokens): string => {
 			"-moz-osx-font-smoothing: grayscale;",
 			"text-rendering: optimizeLegibility;",
 		]),
-		block(':where([data-hz="icon"])', ["display: block;", "width: 100%;", "height: 100%;"]),
+		block(':where([data-hz="icon"], [data-hz="icon"] > svg)', [
+			"display: block;",
+			"width: 100%;",
+			"height: 100%;",
+		]),
 	].join("\n\n")
 }
 
@@ -104,10 +111,13 @@ const length = (value: Length<string>) =>
 const declarations = (d: Declarations): ReadonlyArray<string> => {
 	const out: string[] = []
 	const add = (property: string, value: string) => out.push(`${property}: ${value};`)
-	if (d.layout !== undefined) {
+	if (d.layout === "contents") add("display", "contents")
+	else if (d.layout !== undefined) {
 		add("display", d.layout === "inline-row" ? "inline-flex" : "flex")
 		add("flex-direction", d.layout === "column" ? "column" : "row")
 	}
+	if (d.wrap !== undefined) add("flex-wrap", d.wrap ? "wrap" : "nowrap")
+	if (d.fill) add("width", "100%")
 	if (d.align !== undefined) add("align-items", d.align === "start" ? "flex-start" : "center")
 	if (d.justify !== undefined) add("justify-content", d.justify === "start" ? "flex-start" : "center")
 	if (d.background !== undefined)
@@ -120,12 +130,15 @@ const declarations = (d: Declarations): ReadonlyArray<string> => {
 	if (d.borderColor !== undefined)
 		add("border-color", d.borderColor === "transparent" ? "transparent" : colorVar(d.borderColor))
 	if (d.radius !== undefined) add("border-radius", `var(--hz-radius-${d.radius})`)
+	if (d.ring !== undefined) add("box-shadow", `inset 0 0 0 1px ${colorVar(d.ring)}`)
+	if (d.divider !== undefined) add("border-bottom", `1px solid ${colorVar(d.divider)}`)
 	if (d.paddingX !== undefined) add("padding-inline", length(d.paddingX))
 	if (d.paddingStart !== undefined) add("padding-inline-start", length(d.paddingStart))
 	if (d.paddingY !== undefined) add("padding-block", length(d.paddingY))
 	if (d.gap !== undefined) add("column-gap", spaceVar(d.gap))
 	if (d.rowGap !== undefined) add("row-gap", spaceVar(d.rowGap))
 	if (d.marginBottom !== undefined) add("margin-bottom", spaceVar(d.marginBottom))
+	if (d.marginX !== undefined) add("margin-inline", spaceVar(d.marginX))
 	if (d.bleedX !== undefined) add("margin-inline", `calc(${spaceVar(d.bleedX)} * -1)`)
 	if (d.minHeight !== undefined) add("min-height", spaceVar(d.minHeight))
 	if (d.size !== undefined) {
@@ -139,6 +152,9 @@ const declarations = (d: Declarations): ReadonlyArray<string> => {
 	if (d.leading !== undefined) add("line-height", spaceVar(d.leading))
 	if (d.strong !== undefined)
 		add("font-weight", d.strong ? "var(--hz-weight-strong)" : "var(--hz-weight-regular)")
+	// Set only when on: any stroke value, even 0, changes how Chromium rasters text.
+	if (d.stroke) add("-webkit-text-stroke", "0.011em currentColor")
+	if (d.numeric !== undefined) add("font-variant-numeric", d.numeric ? "tabular-nums" : "normal")
 	if (d.opacity !== undefined) add("opacity", String(d.opacity))
 	if (d.shadow !== undefined) add("box-shadow", `var(--hz-shadow-${d.shadow})`)
 	if (d.truncate) {
@@ -181,6 +197,18 @@ const optionSelector = (recipe: Recipe, option: string, value: string) => {
 	return isDefault ? `:is([${attribute}="${value}"], :not([${attribute}]))` : `[${attribute}="${value}"]`
 }
 
+/** A part's path from the root: ` > [data-hz-part="control"] > [data-hz-part="title"]`. */
+const partPath = (recipe: Recipe, part: string, seen: ReadonlySet<string> = new Set()): string => {
+	const spec = recipe.parts[part]
+	if (spec === undefined) throw new Error(`${recipe.primitive} has no part ${part}`)
+	if (seen.has(part)) throw new Error(`${recipe.primitive}'s part ${part} is inside itself`)
+	const kind = typeof spec === "string" ? spec : spec.kind
+	const self =
+		kind === "children" ? "[data-hz]" : `[${kind === "slot" ? "data-hz-slot" : "data-hz-part"}="${part}"]`
+	const parent = typeof spec === "string" ? "" : partPath(recipe, spec.in, new Set([...seen, part]))
+	return `${parent} > ${self}`
+}
+
 interface Rule {
 	readonly media: ReadonlyArray<string>
 	readonly selector: string
@@ -195,11 +223,9 @@ const partRules = (
 ) => {
 	const rules: Rule[] = []
 	if (styles.root !== undefined) rules.push({ media, selector: root, lines: declarations(styles.root) })
-	for (const [part, decls] of Object.entries(styles.parts ?? {})) {
-		const kind = recipe.parts[part] === "slot" ? "data-hz-slot" : "data-hz-part"
+	for (const [part, decls] of Object.entries(styles.parts ?? {}))
 		if (decls !== undefined)
-			rules.push({ media, selector: `${root} > [${kind}="${part}"]`, lines: declarations(decls) })
-	}
+			rules.push({ media, selector: `${root}${partPath(recipe, part)}`, lines: declarations(decls) })
 	return rules
 }
 

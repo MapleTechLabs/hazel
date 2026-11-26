@@ -1,4 +1,4 @@
-import type { ButtonSize, ButtonVariant } from "../style/schema.ts"
+import type { BadgeSize, BadgeStyle, BadgeTone, ButtonSize, ButtonVariant } from "../style/schema.ts"
 
 /**
  * The gallery's content, shared by both sides: each specimen is drawn once by today's Foldkit kit
@@ -28,6 +28,7 @@ export interface ButtonSpec {
 	readonly label?: string
 	readonly icon?: IconName
 	readonly iconOnly?: boolean
+	readonly circle?: boolean
 	readonly disabled?: boolean
 	readonly loading?: boolean
 }
@@ -53,7 +54,7 @@ const variants: ReadonlyArray<ButtonVariant> = [
 	"warning",
 	"danger",
 ]
-const sizes: ReadonlyArray<ButtonSize> = ["regular", "small", "xsmall"]
+const sizes: ReadonlyArray<ButtonSize> = ["large", "regular", "small", "xsmall"]
 
 export const buttons: ReadonlyArray<ButtonSpec> = [
 	...variants.flatMap((variant) =>
@@ -75,12 +76,44 @@ export const buttons: ReadonlyArray<ButtonSpec> = [
 			iconOnly: true,
 		})),
 	),
+	...(["primary", "outline", "ghost"] as const).flatMap((variant) =>
+		(["large", "regular", "small"] as const).map((size) => ({
+			id: `button-${variant}-${size}-circle`,
+			variant,
+			size,
+			icon: "plus" as const,
+			iconOnly: true,
+			circle: true,
+		})),
+	),
 	{ id: "button-primary-disabled", variant: "primary", size: "regular", label: "Invite", disabled: true },
 	{ id: "button-secondary-loading", variant: "secondary", size: "regular", label: "Invite", loading: true },
 ]
+
+export interface BadgeSpec {
+	readonly id: string
+	readonly tone: BadgeTone
+	readonly style: BadgeStyle
+	readonly size: BadgeSize
+	readonly pill?: boolean
+	readonly label: string
+}
+
+const tones: ReadonlyArray<BadgeTone> = ["neutral", "accent", "success", "warning", "danger", "info"]
+const badgeSizes: ReadonlyArray<BadgeSize> = ["regular", "small"]
+
+export const badges: ReadonlyArray<BadgeSpec> = badgeSizes.flatMap((size) => [
+	...tones.map((tone) => ({ id: `badge-${tone}-${size}`, tone, style: "solid" as const, size, label: "Beta" })),
+	{ id: `badge-neutral-outline-${size}`, tone: "neutral", style: "outline", size, label: "Draft" },
+	{ id: `badge-success-outline-${size}`, tone: "success", style: "outline", size, label: "Met" },
+	{ id: `badge-neutral-quiet-${size}`, tone: "neutral", style: "quiet", size, label: "Paused" },
+	{ id: `badge-accent-${size}-pill`, tone: "accent", style: "solid", size, pill: true, label: "New" },
+	{ id: `badge-neutral-outline-${size}-pill`, tone: "neutral", style: "outline", size, pill: true, label: "12" },
+])
 
 /** Every specimen id, in page order: the shot script walks this list on both sides. */
 export const specimenIds: ReadonlyArray<string> = [
 	...sections.flatMap((section) => [section.id, ...section.items.map((item) => item.id)]),
 	...buttons.map((button) => button.id),
+	...badges.map((badge) => badge.id),
 ]

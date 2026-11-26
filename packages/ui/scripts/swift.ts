@@ -1,11 +1,13 @@
 import type { ColorExpr, Declarations, Layer, Length, Recipe, Tokens } from "../src/style/schema.ts"
 import {
 	badgeSizes,
+	badgeStyles,
 	badgeTones,
 	buttonSizes,
 	buttonVariants,
 	dataStates,
 	interactionStates,
+	recipeTextSteps,
 	textRoles,
 	textTones,
 } from "../src/style/schema.ts"
@@ -84,22 +86,29 @@ export const generateSwift = (tokens: Tokens, recipes: ReadonlyArray<Recipe>): s
 		if (d.borderColor !== undefined) add("borderColor", colorField(d.borderColor))
 		if (d.borderWidth !== undefined) add("borderWidth", d.borderWidth === "hairline" ? "1" : "0")
 		if (d.radius !== undefined) add("radius", num(tokens.radius[d.radius] ?? 0))
+		if (d.ring !== undefined) add("ring", colorField(d.ring))
+		if (d.divider !== undefined) add("divider", colorField(d.divider))
 		if (d.paddingX !== undefined) add("paddingX", num(length(d.paddingX)))
 		if (d.paddingY !== undefined) add("paddingY", num(length(d.paddingY)))
 		if (d.paddingStart !== undefined) add("paddingStart", num(length(d.paddingStart)))
 		if (d.gap !== undefined) add("gap", num(space(d.gap)))
 		if (d.rowGap !== undefined) add("rowGap", num(space(d.rowGap)))
 		if (d.marginBottom !== undefined) add("marginBottom", num(space(d.marginBottom)))
+		if (d.marginX !== undefined) add("marginX", num(space(d.marginX)))
 		if (d.bleedX !== undefined) add("bleedX", num(space(d.bleedX)))
 		if (d.minHeight !== undefined) add("minHeight", num(space(d.minHeight)))
 		if (d.size !== undefined) add("size", num(space(d.size)))
 		if (d.text !== undefined) add("text", `.${d.text}`)
 		if (d.leading !== undefined) add("leading", num(space(d.leading)))
+		// `stroke` is web-only: SwiftUI text has no stroke, the weight carries it.
 		if (d.strong !== undefined) add("strong", String(d.strong))
+		if (d.numeric !== undefined) add("numeric", String(d.numeric))
 		if (d.opacity !== undefined) add("opacity", num(d.opacity))
 		if (d.shadow !== undefined) add("shadow", str(d.shadow))
 		if (d.truncate !== undefined) add("truncate", String(d.truncate))
 		if (d.nowrap !== undefined) add("nowrap", String(d.nowrap))
+		if (d.wrap !== undefined) add("wrap", String(d.wrap))
+		if (d.fill !== undefined) add("fill", String(d.fill))
 		if (d.grow !== undefined) add("grow", String(d.grow))
 		if (d.shrink !== undefined) add("shrink", String(d.shrink))
 		if (d.transition !== undefined) add("transition", num((tokens.duration[d.transition] ?? 0) / 1000))
@@ -162,7 +171,13 @@ export const generateSwift = (tokens: Tokens, recipes: ReadonlyArray<Recipe>): s
 				else if (typeof value === "string") options[key] = value
 			emit({ options, flags }, compound.style as Layer<string, never>)
 		}
-		for (const [state, layer] of Object.entries(recipe.states ?? {}))
+		// Data states before interaction states, as the CSS orders them.
+		const states = Object.entries(recipe.states ?? {})
+		const isInteraction = (state: string) => (interactionStates as ReadonlyArray<string>).includes(state)
+		for (const [state, layer] of [
+			...states.filter(([s]) => !isInteraction(s)),
+			...states.filter(([s]) => isInteraction(s)),
+		])
 			if (layer !== undefined) emit({ states: [state] }, layer as Layer<string, never>)
 		return out
 	}
@@ -202,9 +217,13 @@ ${enumOf("TextTone", textTones)}
 
 ${enumOf("ButtonVariant", buttonVariants)}
 
+${enumOf("TextStep", [...textRoles, ...recipeTextSteps])}
+
 ${enumOf("ButtonSize", buttonSizes)}
 
 ${enumOf("BadgeTone", badgeTones)}
+
+${enumOf("BadgeStyle", badgeStyles)}
 
 ${enumOf("BadgeSize", badgeSizes)}
 
@@ -248,7 +267,11 @@ ${colorLines.join("\n")}
     }
 
     public static func text(_ role: TextRole, _ sizeClass: SizeClass) -> TypeMetrics {
-        switch role {
+        text(TextStep(rawValue: role.rawValue)!, sizeClass)
+    }
+
+    public static func text(_ step: TextStep, _ sizeClass: SizeClass) -> TypeMetrics {
+        switch step {
 ${textLines.join("\n")}
         }
     }
@@ -275,7 +298,7 @@ ${Object.entries(tokens.shadow)
 	.join("\n")}
     ]
 
-    public enum Layout: Sendable { case row, column, inlineRow }
+    public enum Layout: Sendable { case row, column, inlineRow, contents }
     public enum Align: Sendable { case center, start }
 
     /// A recipe's declarations, resolved to values; \`nil\` leaves the field to earlier layers.
@@ -283,12 +306,16 @@ ${Object.entries(tokens.shadow)
         public var layout: Layout? = nil, align: Align? = nil, justify: Align? = nil
         public var background: ThemedColor? = nil, color: ThemedColor? = nil, borderColor: ThemedColor? = nil
         public var borderWidth: CGFloat? = nil, radius: CGFloat? = nil
+        public var ring: ThemedColor? = nil, divider: ThemedColor? = nil
         public var paddingX: CGFloat? = nil, paddingY: CGFloat? = nil, paddingStart: CGFloat? = nil
-        public var gap: CGFloat? = nil, rowGap: CGFloat? = nil, marginBottom: CGFloat? = nil, bleedX: CGFloat? = nil
+        // In the order codegen writes the fields: the memberwise initializer takes them so.
+        public var gap: CGFloat? = nil, rowGap: CGFloat? = nil, marginBottom: CGFloat? = nil
+        public var marginX: CGFloat? = nil, bleedX: CGFloat? = nil
         public var minHeight: CGFloat? = nil, size: CGFloat? = nil
-        public var text: TextRole? = nil, leading: CGFloat? = nil, strong: Bool? = nil
-        public var opacity: Double? = nil, shadow: String? = nil
-        public var truncate: Bool? = nil, nowrap: Bool? = nil, grow: Bool? = nil, shrink: Bool? = nil
+        public var text: TextStep? = nil, leading: CGFloat? = nil, strong: Bool? = nil
+        public var numeric: Bool? = nil, opacity: Double? = nil, shadow: String? = nil
+        public var truncate: Bool? = nil, nowrap: Bool? = nil, wrap: Bool? = nil, fill: Bool? = nil
+        public var grow: Bool? = nil, shrink: Bool? = nil
         public var transition: Double? = nil
 
         /// \`other\`'s fields over these.
@@ -298,6 +325,8 @@ ${Object.entries(tokens.shadow)
             out.background = other.background ?? background; out.color = other.color ?? color
             out.borderColor = other.borderColor ?? borderColor; out.borderWidth = other.borderWidth ?? borderWidth
             out.radius = other.radius ?? radius; out.paddingX = other.paddingX ?? paddingX
+            out.ring = other.ring ?? ring; out.divider = other.divider ?? divider; out.marginX = other.marginX ?? marginX
+            out.wrap = other.wrap ?? wrap; out.fill = other.fill ?? fill; out.numeric = other.numeric ?? numeric
             out.paddingY = other.paddingY ?? paddingY; out.paddingStart = other.paddingStart ?? paddingStart
             out.gap = other.gap ?? gap; out.rowGap = other.rowGap ?? rowGap
             out.marginBottom = other.marginBottom ?? marginBottom; out.bleedX = other.bleedX ?? bleedX

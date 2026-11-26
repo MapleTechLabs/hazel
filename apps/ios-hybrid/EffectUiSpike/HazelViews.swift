@@ -14,6 +14,14 @@ struct ItemProps {
         selected = p["selected"]?.bool ?? false
         href = p["href"]?.string
     }
+
+    /// The recipe states this row is in (the host adds `pressed`).
+    var states: Set<HazelTheme.State> {
+        var states: Set<HazelTheme.State> = []
+        if selected { states.insert(.selected) }
+        if emphasized { states.insert(.emphasized) }
+        return states
+    }
 }
 struct TextProps {
     let role: String, tone: String, strong: Bool
@@ -26,7 +34,9 @@ struct TextProps {
 struct ExtProps { let name: String, args: [String: JSONValue]
     init(_ p: [String: JSONValue]) { name = p["ext"]?.string ?? ""; args = p["args"]?.object ?? [:] } }
 
-/// Draws one `hazel` node in Hazel's look (`Theme`). Tags this build does not know draw nothing.
+private typealias Recipes = HazelTheme.Recipes
+
+/// Draws one `hazel` node from the generated recipes (`HazelTheme`). Tags this build does not know draw nothing.
 struct HzView: View {
     let node: HzNode
     let runtime: EffectUiRuntime
@@ -46,61 +56,85 @@ struct HzView: View {
     }
 }
 
+/// A press-driven control: the style draws the whole label, so recipes can read `pressed`.
+private struct Pressable<Label: View>: ButtonStyle {
+    let label: (_ pressed: Bool) -> Label
+    init(@ViewBuilder _ label: @escaping (_ pressed: Bool) -> Label) { self.label = label }
+    func makeBody(configuration: Configuration) -> some View { label(configuration.isPressed) }
+}
+
 struct HzScreen: View {
     let node: HzNode
     let runtime: EffectUiRuntime
+    @Environment(\.horizontalSizeClass) private var horizontal
 
     var body: some View {
+        let sizeClass = HazelTheme.SizeClass(horizontal)
+        let style = { (part: String?) in Recipes.screen.style(part: part, sizeClass: sizeClass) }
         VStack(spacing: 0) {
             Text(ScreenProps(node.props).title)
-                .font(Inter.font(size: 14, weight: 500))
-                .foregroundStyle(Theme.Row.labelEmphasized.opacity(0.8))
+                .hzText(style("title"), sizeClass)
+                .opacity(style("title").opacity ?? 1)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 24)
-                .frame(height: 56)
-                .overlay(alignment: .bottom) { Rectangle().fill(Theme.bandBorder).frame(height: 1) }
+                .hzBox(style("header"))
             ScrollView {
-                LazyVStack(spacing: Theme.Section.spacing) {
+                VStack(spacing: style("content").rowGap ?? 0) {
                     ForEach(node.content) { HzView(node: $0, runtime: runtime) }
                     HzStats(tree: runtime.tree)
                 }
-                .padding(.horizontal, 16)
+                .hzBox(style("content"))
             }
         }
+        .background(style(nil).background?.color ?? .clear)
     }
 }
 
+/// A section: its title and header actions on one row, then each item on a row of its own.
 struct HzSection: View {
     let node: HzNode
     let runtime: EffectUiRuntime
+    @Environment(\.horizontalSizeClass) private var horizontal
 
     var body: some View {
+        let sizeClass = HazelTheme.SizeClass(horizontal)
+        let root = Recipes.section.style(sizeClass: sizeClass)
+        let title = Recipes.section.style(part: "title", sizeClass: sizeClass)
         let actions = node.content.filter { $0.tag == "hz:action" }
-        VStack(spacing: Theme.Row.spacing) {
-            HStack(spacing: 4) {
-                Image("hazel.chevron-down")
-                    .resizable()
-                    .frame(width: Theme.Section.chevronSize, height: Theme.Section.chevronSize)
-                Text(SectionProps(node.props).title).font(Theme.Section.font)
-                Spacer()
-                ForEach(actions) { action in
-                    Button { runtime.fire(action.id) } label: {
-                        ForEach(action.children) { HzView(node: $0, runtime: runtime) }
-                            .frame(width: Theme.Section.actionSize, height: Theme.Section.actionSize)
-                            .frame(width: 32, height: 32)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(action.props["label"]?.string ?? "")
-                }
+        VStack(alignment: .leading, spacing: root.rowGap ?? 0) {
+            HStack(spacing: 0) {
+                Text(SectionProps(node.props).title)
+                    .hzText(title, sizeClass)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .hzBox(title)
+                    .padding(.bottom, title.marginBottom ?? 0)
+                ForEach(actions) { HzAction(node: $0, runtime: runtime) }
             }
-            .foregroundStyle(Theme.Section.label)
-            .padding(.leading, Theme.Section.chevronLeading)
-            .frame(height: Theme.Section.headerHeight)
-            .padding(.top, Theme.Section.padTop)
             ForEach(node.content.filter { $0.tag != "hz:action" }) { HzView(node: $0, runtime: runtime) }
         }
-        .padding(.bottom, Theme.Section.padBottom)
+        .hzBox(root)
+    }
+}
+
+/// A section's header action: a square button around its icon.
+struct HzAction: View {
+    let node: HzNode
+    let runtime: EffectUiRuntime
+    @Environment(\.horizontalSizeClass) private var horizontal
+
+    var body: some View {
+        let sizeClass = HazelTheme.SizeClass(horizontal)
+        Button { runtime.fire(node.id) } label: { EmptyView() }
+            .buttonStyle(Pressable { pressed in
+                let states: Set<HazelTheme.State> = pressed ? [.pressed] : []
+                let root = Recipes.action.style(states: states, sizeClass: sizeClass)
+                let icon = Recipes.action.style(part: "icon", states: states, sizeClass: sizeClass)
+                ForEach(node.children) { HzView(node: $0, runtime: runtime).hzSize(icon) }
+                    .foregroundStyle(root.color?.color ?? .primary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .hzSize(root)
+                    .hzBox(root)
+            })
+            .accessibilityLabel(node.props["label"]?.string ?? "")
     }
 }
 
@@ -108,71 +142,73 @@ struct HzSection: View {
 struct HzItem: View {
     let node: HzNode
     let runtime: EffectUiRuntime
+    @Environment(\.horizontalSizeClass) private var horizontal
 
     var body: some View {
         let item = ItemProps(node.props)
-        let fg = item.selected ? Theme.Row.selectedFg : item.emphasized ? Theme.Row.labelEmphasized : Theme.Row.label
-        Button { runtime.fire(node.id) } label: {
-            HStack(spacing: Theme.Row.gap) {
-                if let leading = node.slot("leading") {
-                    ForEach(leading.children) { child in
-                        HzView(node: child, runtime: runtime)
-                            .frame(width: child.tag == "hz:avatar" ? Theme.Row.avatarSize : Theme.Row.iconSize,
-                                   height: child.tag == "hz:avatar" ? Theme.Row.avatarSize : Theme.Row.iconSize)
-                            .foregroundStyle(item.selected ? Theme.Row.selectedFg : Theme.Row.icon)
+        let sizeClass = HazelTheme.SizeClass(horizontal)
+        Button { runtime.fire(node.id) } label: { EmptyView() }
+            .buttonStyle(Pressable { pressed in
+                let states = pressed ? item.states.union([.pressed]) : item.states
+                let style = { (part: String) in Recipes.item.style(part: part, states: states, sizeClass: sizeClass) }
+                let control = style("control")
+                HStack(spacing: control.gap ?? 0) {
+                    if let leading = node.slot("leading") {
+                        let slot = style("leading")
+                        ForEach(leading.children) { HzView(node: $0, runtime: runtime) }
+                            .hzSize(slot)
+                            .foregroundStyle(slot.color?.color ?? .primary)
+                    }
+                    Text(item.title)
+                        .hzText(control.merged(style("title")), sizeClass)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if item.badge > 0 {
+                        let badge = style("badge")
+                        Text("\(item.badge)")
+                            .hzText(badge, sizeClass)
+                            .hzBox(badge)
                     }
                 }
-                Text(item.title).font(Theme.Row.font).foregroundStyle(fg).lineLimit(1)
-                Spacer(minLength: 0)
-                if item.badge > 0 { HzBadge(count: item.badge) }
-            }
-            .padding(.leading, Theme.Row.padLeading)
-            .padding(.trailing, Theme.Badge.trailing)
-            .frame(height: Theme.Row.height)
-            .background(RoundedRectangle(cornerRadius: Theme.Row.radius).fill(item.selected ? Theme.Row.selectedBg : .clear))
-            .contentShape(RoundedRectangle(cornerRadius: Theme.Row.radius))
-        }
-        .buttonStyle(PressStyle())
-        .accessibilityLabel(item.title)
-        .accessibilityAddTraits(item.href == nil ? [] : .isLink)
-        .accessibilityAddTraits(item.selected ? .isSelected : [])
+                .hzBox(control)
+            })
+            .accessibilityLabel(item.title)
+            .accessibilityAddTraits(item.href == nil ? [] : .isLink)
+            .accessibilityAddTraits(item.selected ? .isSelected : [])
     }
 }
 
 struct HzText: View {
     let node: HzNode
+    @Environment(\.horizontalSizeClass) private var horizontal
 
     var body: some View {
         let text = TextProps(node.props)
-        let size: CGFloat = text.role == "caption" ? 12 : text.role == "title" ? 17 : 14
+        let sizeClass = HazelTheme.SizeClass(horizontal)
+        let style = Recipes.text.style(
+            options: ["role": text.role, "tone": text.tone],
+            flags: text.strong ? ["strong"] : [],
+            sizeClass: sizeClass
+        )
         Text(node.joinedText)
-            .font(Inter.font(size: size, weight: text.strong ? 600 : 400))
-            .foregroundStyle(text.tone == "muted" ? Theme.Section.label : Theme.Row.labelEmphasized)
+            .hzText(style, sizeClass)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 struct HzAvatar: View {
     let initials: String
-    var body: some View {
-        Text(initials)
-            .font(Inter.font(size: 10, weight: 600))
-            .foregroundStyle(.white)
-            .frame(width: Theme.Row.avatarSize, height: Theme.Row.avatarSize)
-            .background(Circle().fill(Color(hex: "#7d2800")))
-    }
-}
+    @Environment(\.horizontalSizeClass) private var horizontal
 
-struct HzBadge: View {
-    let count: Int
     var body: some View {
-        Text("\(count)")
-            .font(Theme.Badge.font)
-            .monospacedDigit()
-            .foregroundStyle(Theme.Badge.fg)
-            .padding(.horizontal, Theme.Badge.padX)
-            .frame(minWidth: Theme.Badge.minWidth, minHeight: Theme.Badge.height)
-            .background(Capsule().fill(Theme.Badge.bg))
+        let sizeClass = HazelTheme.SizeClass(horizontal)
+        let style = Recipes.avatar.style(sizeClass: sizeClass)
+        Text(initials)
+            .font(style.font(sizeClass))
+            .foregroundStyle(style.color?.color ?? .primary)
+            .hzSize(style)
+            .background(Circle().fill(style.background?.color ?? .clear))
     }
 }
 
@@ -180,20 +216,22 @@ struct HzBadge: View {
 struct HzExtension: View {
     let node: HzNode
     let runtime: EffectUiRuntime
+    @Environment(\.horizontalSizeClass) private var horizontal
 
     var body: some View {
         let ext = ExtProps(node.props)
+        let sizeClass = HazelTheme.SizeClass(horizontal)
+        let root = Recipes.ext.style(sizeClass: sizeClass)
         Group {
             if let draw = HazelExtensions.registry[ext.name] {
                 draw(ext.args) { event, payload in runtime.fire(node.id, event, payload: payload) }
             } else if let fallback = node.slot("fallback") {
                 HzView(node: fallback, runtime: runtime)
-                    .padding(.vertical, 10)
-                    .padding(.horizontal, 12)
-                    .overlay(RoundedRectangle(cornerRadius: Theme.Row.radius).strokeBorder(Theme.bandBorder, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+                    .hzBox(Recipes.ext.style(part: "content", sizeClass: sizeClass))
             }
         }
-        .padding(.top, 12)
+        .padding(.horizontal, root.marginX ?? 0)
+        .padding(.bottom, root.marginBottom ?? 0)
     }
 }
 
@@ -203,19 +241,9 @@ struct HzStats: View {
     var body: some View {
         Text("wire v\(Wire.version) · \(tree.batches) batches · last \(tree.lastOps) ops, \(tree.lastBytes) B, \(String(format: "%.2f", tree.lastApplyMs)) ms")
             .font(Inter.font(size: 12, weight: 400))
-            .foregroundStyle(Theme.Section.label)
+            .foregroundStyle(HazelTheme.Colors.mutedFg.color)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.leading, Theme.Section.chevronLeading)
+            .padding(.horizontal, 24)
             .padding(.vertical, 16)
-    }
-}
-
-/// The web's pressed wash (`--wash`) under a row while it is held.
-struct PressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label.background(
-            RoundedRectangle(cornerRadius: Theme.Row.radius)
-                .fill(configuration.isPressed ? Theme.pressedBg : .clear)
-        )
     }
 }
