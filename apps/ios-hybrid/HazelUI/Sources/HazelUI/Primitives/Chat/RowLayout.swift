@@ -50,6 +50,8 @@ public final class RowLayout: @unchecked Sendable {
     let items: [Item]
     public let targets: [Target]
     public let actions: [Action]
+    /// Whether the row's actions offer `selectText` (a long press on its text selects it).
+    public var offersSelectText: Bool { actions.contains { $0.payload.object?["action"]?.string == "selectText" } }
     public let selectable: [Selectable]
     /// What a screen reader reads for the whole row.
     public let label: String
@@ -87,14 +89,27 @@ extension RowLayout {
     public func draw(scale: CGFloat, transparent: Bool = false) -> CGImage? {
         guard height > 0, width > 0 else { return nil }
         let background = transparent ? nil : self.background
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = scale
-        format.opaque = background != nil
-        // HAZEL-GAP(row-wide-gamut): 8-bit sRGB, as the list's surfaces are; the wide-gamut tokens would
-        // otherwise pick 16-bit extended range, doubling every row's bytes.
-        format.preferredRange = .standard
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format)
-        return renderer.image { context in paint(context.cgContext, background: background) }.cgImage
+        let w = Int(ceil(width * scale)), h = Int(ceil(height * scale))
+        guard let cg = Self.context(width: w, height: h, data: nil, bytesPerRow: 0, opaque: background != nil)
+        else { return nil }
+        cg.translateBy(x: 0, y: CGFloat(h))
+        cg.scaleBy(x: scale, y: -scale)
+        UIGraphicsPushContext(cg)
+        paint(cg, background: background)
+        UIGraphicsPopContext()
+        return cg.makeImage()
+    }
+
+    /// Row surfaces are 8-bit Display P3 (`row-wide-gamut`): the wide-gamut tokens keep their colour
+    /// without the 16-bit extended range, which would double every row's bytes.
+    static let colorSpace = CGColorSpace(name: CGColorSpace.displayP3)!
+
+    static func context(width: Int, height: Int, data: UnsafeMutableRawPointer?, bytesPerRow: Int, opaque: Bool) -> CGContext? {
+        let alpha = opaque ? CGImageAlphaInfo.noneSkipFirst : CGImageAlphaInfo.premultipliedFirst
+        return CGContext(
+            data: data, width: width, height: height, bitsPerComponent: 8, bytesPerRow: bytesPerRow,
+            space: colorSpace, bitmapInfo: alpha.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        )
     }
 
     /// Draws into an IOSurface a layer shows as is: setting it as `contents` copies nothing on the main
@@ -106,13 +121,12 @@ extension RowLayout {
             .width: w, .height: h, .bytesPerElement: 4, .pixelFormat: kCVPixelFormatType_32BGRA,
         ]
         guard let surface = IOSurface(properties: properties) else { return nil }
+        // Tagged, so Core Animation reads the pixels as Display P3.
+        if let space = Self.colorSpace.copyPropertyList() { surface.setAttachment(space, forKey: "IOSurfaceColorSpace") }
         surface.lock(options: [], seed: nil)
         defer { surface.unlock(options: [], seed: nil) }
-        guard let cg = CGContext(
-            data: surface.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: surface.bytesPerRow,
-            space: CGColorSpace(name: CGColorSpace.sRGB)!,
-            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
-        ) else { return nil }
+        guard let cg = Self.context(width: w, height: h, data: surface.baseAddress, bytesPerRow: surface.bytesPerRow, opaque: false)
+        else { return nil }
         cg.translateBy(x: 0, y: CGFloat(h))
         cg.scaleBy(x: scale, y: -scale)
         UIGraphicsPushContext(cg)

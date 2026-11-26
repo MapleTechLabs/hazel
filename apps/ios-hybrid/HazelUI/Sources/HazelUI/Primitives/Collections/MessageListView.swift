@@ -575,10 +575,21 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
 
     @objc private func held(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began, let (i, local) = row(at: gesture.location(in: self)) else { return }
+        // A row offering `selectText` selects when held on its text; held elsewhere it opens its menu.
+        if let layout = layouts[keys[i]], layout.offersSelectText,
+           layout.selectable.contains(where: { $0.rect.insetBy(dx: -8, dy: -4).contains(local) }) {
+            beginSelection(i, at: local)
+            onAccessibilityEvent?(keys[i], "action", ["action": .string("selectText")])
+            return
+        }
         if onLongPress?(keys[i]) == true { return }
-        // HAZEL-GAP(message-select-text): the action menu cannot start selection yet, so only a row
-        // without a `longPress` handler selects on a long press.
         beginSelection(i, at: local)
+    }
+
+    /// `selectText` (`message-select-text`): selects row `key`'s text natively; the caller then reports it.
+    public func selectText(_ key: Int) {
+        guard let i = indexOf[key], let block = layouts[key]?.selectable.first else { return }
+        beginSelection(i, at: CGPoint(x: block.rect.midX, y: block.rect.midY))
     }
 
     public func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
@@ -661,6 +672,8 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
         row.accessibilityTraits = key == Self.startSpinner || key == Self.endSpinner ? .updatesFrequently : .staticText
         var actions = layout.actions.map { action in
             UIAccessibilityCustomAction(name: action.label) { [weak self] _ in
+                // The host acts first on `selectText`, then reports it.
+                if action.payload.object?["action"]?.string == "selectText" { self?.selectText(key) }
                 self?.onAccessibilityEvent?(key, action.event, action.payload)
                 return true
             }
