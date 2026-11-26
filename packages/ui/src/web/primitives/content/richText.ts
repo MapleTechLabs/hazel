@@ -3,8 +3,9 @@ import { BlockKind, RunKind, type Block, type Run } from "../../../vocabulary/co
 import { definePrimitive, part, type Primitive } from "../define.ts"
 
 /**
- * Blocks to DOM. Runs are numbered in reading order across the whole value (`data-run`): what
- * `pressMention` reports as `run`, so a popover can anchor at that mention (`popover.anchorTo`).
+ * Blocks to DOM. Runs are numbered in reading order across the whole value (`data-hz-run`): what
+ * `pressMention` reports as `run`, so a popover can anchor at that mention (`popover.anchorTo`,
+ * `[data-hz-key=key] [data-hz-run=run]`).
  */
 const render = (document: Document, blocks: ReadonlyArray<Block>) => {
 	let index = 0
@@ -38,7 +39,7 @@ const render = (document: Document, blocks: ReadonlyArray<Block>) => {
 			node = document.createElement(kind === RunKind.emphasis ? "em" : "s")
 			node.textContent = text
 		}
-		node.dataset.run = String(at)
+		node.dataset.hzRun = String(at)
 		return node
 	}
 	const line = (runs: ReadonlyArray<Run>, marker?: string) => {
@@ -91,10 +92,10 @@ export const primitive = definePrimitive("richText", ({ document, tag, outer }) 
 		events: undefined,
 	}
 	node.addEventListener("click", (event) => {
-		const target = event.target instanceof Element ? event.target.closest("[data-run]") : null
+		const target = event.target instanceof Element ? event.target.closest("[data-hz-run]") : null
 		const events = primitive.events
 		if (!(target instanceof HTMLElement) || events === undefined || !node.contains(target)) return
-		const run = Number(target.dataset.run)
+		const run = Number(target.dataset.hzRun)
 		const mention = events.handlers.pressMention
 		const link = events.handlers.pressLink
 		if (target.dataset.hzPart === "mention" && mention !== undefined)
