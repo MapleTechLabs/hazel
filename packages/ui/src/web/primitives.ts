@@ -3,6 +3,7 @@
  * parent for the renderer's children; props later only change attributes, text and internal swaps.
  */
 import { dispose, mountExtension } from "./extensions.ts"
+import { createTextField } from "./textField.ts"
 
 export interface Events {
 	readonly handlers: Readonly<Record<string, unknown>>
@@ -208,6 +209,8 @@ export const create = (document: Document, tag: string): Primitive | undefined =
 			}
 			return primitive
 		}
+		case "hz:textField":
+			return createTextField(document, outer("div"))
 		default:
 			return undefined
 	}
