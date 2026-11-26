@@ -1,5 +1,5 @@
 /**
- * Outside `platform/web/`, no source names a browser global: those reach the package only through
+ * Outside `platform/web/` and `platform/jsc/` (the hosts), no source names a browser global: those reach the package only through
  * the platform services. `node-load.test.ts` checks the same by running without them.
  */
 import { readdirSync, readFileSync } from "node:fs"
@@ -33,11 +33,12 @@ const BROWSER_GLOBALS = [
 ]
 
 const root = new URL(".", import.meta.url).pathname
+const HOSTS = [join("platform", "web"), join("platform", "jsc")]
 
 const sources = (dir: string): Array<string> =>
 	readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
 		const path = join(dir, entry.name)
-		if (entry.isDirectory()) return relative(root, path) === join("platform", "web") ? [] : sources(path)
+		if (entry.isDirectory()) return HOSTS.includes(relative(root, path)) ? [] : sources(path)
 		return entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts") ? [path] : []
 	})
 
@@ -65,7 +66,7 @@ const importedNames = (text: string) =>
 		),
 	)
 
-test("no browser global outside platform/web", () => {
+test("no browser global outside the platform hosts", () => {
 	const found = sources(root).flatMap((path) => {
 		const text = readFileSync(path, "utf8")
 		const imported = importedNames(text)

@@ -26,6 +26,8 @@ final class EffectUiRuntime {
         let native = JSValue(newObjectIn: context)!
         native.setObject(post, forKeyedSubscript: "post" as NSString)
         context.setObject(native, forKeyedSubscript: "__native" as NSString)
+        // G3: the data layer's platform services (`Platform/`), on the JS thread's queue.
+        HazelPlatform.install(in: context)
     }
 
     func start() {
