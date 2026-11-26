@@ -15,11 +15,13 @@ import { ChannelSidebar, channelSidebarLayer, type SidebarAction } from "./Chann
 type Data = ClientData["Service"]
 
 const firstRow = <Row>(data: Data, query: Parameters<Data["liveQueryStream"]>[0]) =>
-	data.liveQueryStream<Row, ReadonlyArray<Row>>(query, (rows) => rows).pipe(
-		Stream.filter((rows) => rows.length > 0),
-		Stream.runHead,
-		Effect.map(Option.flatMap((rows) => Option.fromNullishOr(rows[0]))),
-	)
+	data
+		.liveQueryStream<Row, ReadonlyArray<Row>>(query, (rows) => rows)
+		.pipe(
+			Stream.filter((rows) => rows.length > 0),
+			Stream.runHead,
+			Effect.map(Option.flatMap((rows) => Option.fromNullishOr(rows[0]))),
+		)
 
 /** The member toggles a row menu can write here; the rest is the web app's (modals, routes). */
 const actOn =
@@ -31,7 +33,9 @@ const actOn =
 			const member = yield* firstRow<{ id: ChannelMemberId; isFavorite: boolean }>(data, (q) =>
 				q
 					.from({ member: data.collections.channelMemberCollection })
-					.where(({ member }) => and(eq(member.channelId, action.channelId), eq(member.userId, userId))),
+					.where(({ member }) =>
+						and(eq(member.channelId, action.channelId), eq(member.userId, userId)),
+					),
 			)
 			if (Option.isNone(member)) return
 			const memberId = member.value.id
@@ -58,7 +62,9 @@ export const mountChannelSidebarNative = (container: Parameters<typeof Renderer.
 			void Effect.runFork(
 				effect.pipe(
 					Effect.provideService(HazelRpc, rpc),
-					Effect.tapCause((cause) => Effect.sync(() => console.log(`[sidebar] write failed: ${cause}`))),
+					Effect.tapCause((cause) =>
+						Effect.sync(() => console.log(`[sidebar] write failed: ${cause}`)),
+					),
 				),
 			)
 		console.log(`[sidebar] mounting for org ${org.value.id}`)
