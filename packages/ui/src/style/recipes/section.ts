@@ -1,15 +1,20 @@
 import { defineRecipe } from "../recipe.ts"
 
-/** A sidebar section: `sidebarSection` with a label (`apps/web-foldkit/src/ui/sidebar.ts`). */
-export const section = defineRecipe<{}, never, "header" | "content">({
+/**
+ * A sidebar section: `sidebarSection` with a label (`apps/web-foldkit/src/ui/sidebar.ts`). The rows
+ * wrap, so a header action (`hz:action`, first in `content`) shares the title's line and each item,
+ * filling the width, takes a line of its own.
+ */
+export const section = defineRecipe<{}, never, "title" | "content">({
 	primitive: "section",
-	parts: { header: "part", content: "part" },
+	parts: { title: "part", content: "part" },
 	base: {
-		root: { layout: "column", rowGap: "0.5", paddingX: "4", paddingY: "4" },
+		root: { layout: "row", wrap: true, align: "center", rowGap: "0.5", paddingX: "4", paddingY: "4" },
 		parts: {
-			header: {
+			title: {
 				layout: "row",
 				align: "center",
+				grow: true,
 				paddingX: "2",
 				marginBottom: "1",
 				radius: "md",
@@ -17,9 +22,8 @@ export const section = defineRecipe<{}, never, "header" | "content">({
 				leading: "6",
 				strong: true,
 				color: "sidebar-title",
-				shrink: false,
 			},
-			content: { layout: "column", rowGap: "0.5" },
+			content: { layout: "contents" },
 		},
 	},
 	options: {},

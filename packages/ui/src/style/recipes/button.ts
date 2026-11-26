@@ -3,11 +3,12 @@ import type { ButtonSize, ButtonVariant } from "../schema.ts"
 
 /**
  * `button` (`apps/web-foldkit/src/core/components/ui/button.styles.ts`): intent `plain` is `ghost`;
- * sizes `md`, `sm`, `xs` are `regular`, `small`, `xsmall`; `sq-*` are those with `iconOnly`.
+ * sizes `lg`, `md`, `sm`, `xs` are `large`, `regular`, `small`, `xsmall`; `sq-*` are those with
+ * `iconOnly`; `isCircle` is `circle`.
  */
 export const button = defineRecipe<
 	{ readonly variant: ButtonVariant; readonly size: ButtonSize },
-	"iconOnly",
+	"iconOnly" | "circle",
 	"icon" | "label"
 >({
 	primitive: "button",
@@ -98,6 +99,25 @@ export const button = defineRecipe<
 		size: {
 			default: "regular",
 			values: {
+				large: {
+					root: {
+						minHeight: "10",
+						gap: "2",
+						paddingX: { step: "3.5", lessBorder: true },
+						paddingY: { step: "3", lessBorder: true },
+						text: "body",
+					},
+					parts: { icon: { size: "5" } },
+					regular: {
+						root: {
+							minHeight: "9",
+							paddingX: "3",
+							paddingY: { step: "1.5", lessBorder: true },
+							leading: "7",
+						},
+						parts: { icon: { size: "4.5" } },
+					},
+				},
 				regular: {
 					root: {
 						minHeight: "10",
@@ -157,8 +177,16 @@ export const button = defineRecipe<
 			},
 		},
 	},
-	flags: { iconOnly: { root: { paddingX: "0", paddingY: "0" } } },
+	flags: { iconOnly: { root: { paddingX: "0", paddingY: "0" } }, circle: { root: { radius: "full" } } },
 	compounds: [
+		{
+			when: { iconOnly: true, size: "large" },
+			style: {
+				root: { size: "12" },
+				parts: { icon: { size: "6" } },
+				regular: { root: { size: "10" }, parts: { icon: { size: "5" } } },
+			},
+		},
 		{
 			when: { iconOnly: true, size: "regular" },
 			style: {

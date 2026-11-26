@@ -60,6 +60,10 @@ const color = {
 	"fg-1": same(mix(ref("fg"), 28, ref("bg"))),
 	wash: themed(lit("oklch(0 0 0 / 0.035)"), lit("oklch(1 0 0 / 0.045)")),
 	"wash-strong": themed(lit("oklch(0 0 0 / 0.06)"), lit("oklch(1 0 0 / 0.08)")),
+	/** `wash` under `wash-strong`: the active channel row under the pointer (two layers, one colour). */
+	"wash-stacked": themed(lit("oklch(0 0 0 / 0.0929)"), lit("oklch(1 0 0 / 0.1214)")),
+	/** A bar's bottom edge (the hybrid's measured band, `Theme.bandBorder`). */
+	separator: themed(alpha(p("zinc-950"), 0.07), alpha(p("white"), 0.07)),
 	border: themed(p("zinc-200"), lit("oklch(1 0 0 / 0.085)")),
 	"border-hover": themed(p("zinc-300"), lit("oklch(1 0 0 / 0.14)")),
 	ring: same(ref("primary")),
@@ -73,6 +77,12 @@ const color = {
 	success: same(p("emerald-600")),
 	"success-fg": same(p("white")),
 	"success-subtle-fg": themed(p("emerald-700"), p("emerald-400")),
+	// Tinted fills (styles.css `--*-subtle`): badges.
+	"primary-subtle": same(alpha(p("brand-500"), 0.15)),
+	"success-subtle": themed(alpha(p("emerald-500"), 0.15), alpha(p("emerald-500"), 0.1)),
+	"info-subtle": themed(alpha(p("sky-500"), 0.15), alpha(p("sky-500"), 0.1)),
+	"warning-subtle": themed(alpha(p("amber-400"), 0.2), alpha(p("amber-400"), 0.1)),
+	"danger-subtle": themed(alpha(p("red-500"), 0.15), alpha(p("red-500"), 0.1)),
 	"info-subtle-fg": themed(p("sky-700"), p("sky-300")),
 	warning: same(p("amber-400")),
 	"warning-fg": same(p("amber-950")),
@@ -122,6 +132,9 @@ export const tokens = {
 		title: { compact: { size: 18, lineHeight: 28 }, regular: { size: 16, lineHeight: 24 } },
 		display: { compact: { size: 24, lineHeight: 32 }, regular: { size: 20, lineHeight: 28 } },
 		code: { compact: { size: 14, lineHeight: 20 }, regular: { size: 13, lineHeight: 20 } },
+		// Recipe-only steps (styles.css `--text-2xs`, `--text-3xs`): counts and small badges.
+		tiny: { compact: { size: 11, lineHeight: 16 }, regular: { size: 11, lineHeight: 16 } },
+		micro: { compact: { size: 10, lineHeight: 16 }, regular: { size: 10, lineHeight: 16 } },
 	},
 	/** Tailwind's 4px grid by step name (`3` is `--spacing(3)`, 12px). */
 	space: {
@@ -143,6 +156,8 @@ export const tokens = {
 		"9": 36,
 		"10": 40,
 		"11": 44,
+		"12": 48,
+		"14": 56,
 	},
 	/** styles.css `--radius-*` (lg is 0.5rem). */
 	radius: { xs: 2, sm: 4, md: 6, lg: 8, xl: 12, full: 9999 },
