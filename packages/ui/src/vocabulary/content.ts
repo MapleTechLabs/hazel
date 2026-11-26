@@ -1,12 +1,12 @@
 /**
  * Structured props (contract C1): data a primitive measures and draws itself, crossing the wire as one
- * JSON value (G7 option C). Arrays and short keys where a value repeats per row; objects elsewhere.
+ * JSON value (G7 option C). Objects with readable keys; rich text stays compact tuples.
  */
 import { Schema } from "effect"
-import { BadgeTone, IconName, MessageAction } from "./options.ts"
+import { BadgeTone, IconName, MessageAction, Provider } from "./options.ts"
 
 // ---------------------------------------------------------------------------
-// rich text (`richText.blocks`, `message.row.b`)
+// rich text (`richText.blocks`, `message.row.body`)
 // ---------------------------------------------------------------------------
 
 export const RunKind = { mention: 1, link: 2, code: 3, strong: 4, emphasis: 5, strike: 6 } as const
@@ -40,8 +40,17 @@ export type RichText = typeof RichText.Type
 // chat
 // ---------------------------------------------------------------------------
 
-/** `[emoji, count, mine]`; a custom emoji is its image url. */
-export const Reaction = Schema.Tuple([Schema.String, Schema.Finite, Schema.Literals([0, 1])])
+/** Who reacted, for the tooltip: up to three names and how many others. */
+export const ReactionWho = Schema.Struct({ names: Schema.Array(Schema.String), others: Schema.Finite })
+export type ReactionWho = typeof ReactionWho.Type
+
+/** One reaction; a custom emoji is its image url. */
+export const Reaction = Schema.Struct({
+	emoji: Schema.String,
+	count: Schema.Finite,
+	mine: Schema.Boolean,
+	who: Schema.optional(ReactionWho),
+})
 export type Reaction = typeof Reaction.Type
 
 export const AttachmentKind = Schema.Literals(["image", "video", "file"])
@@ -84,22 +93,25 @@ export const ThreadSummary = Schema.Struct({
 export type ThreadSummary = typeof ThreadSummary.Type
 
 /**
- * One message row (G7 option C, extended for the real row). `a i t g b r` keep G7's keys, which
- * `HazelUI/Chat/RowData.swift` decodes; the rest are new in C1.
+ * One message row (G7 option C, extended for the real row), readable keys only. Grouping is the
+ * message's own `grouped` flag, not row data. `HazelUI/Chat/RowData.swift` decodes the same keys.
  */
 export const MessageRow = Schema.Struct({
 	/** Author name and initials; absent on a grouped row. */
-	a: Schema.optional(Schema.String),
-	i: Schema.optional(Schema.String),
+	author: Schema.optional(Schema.String),
+	initials: Schema.optional(Schema.String),
 	/** Author avatar url. */
 	avatar: Schema.optional(Schema.String),
+	/** The Slack or Discord mark after a synced author's name. */
+	provider: Schema.optional(Provider),
 	/** Time label (`14:05`), shown in the header or, grouped, in the hover gutter. */
-	t: Schema.String,
-	g: Schema.optional(Schema.Literal(1)),
-	b: RichText,
-	r: Schema.optional(Schema.Array(Reaction)),
+	time: Schema.String,
+	body: RichText,
+	reactions: Schema.optional(Schema.Array(Reaction)),
+	/** Quick emoji in the hover toolbar before "Add reaction"; a press raises `pressReaction`. */
+	quick: Schema.optional(Schema.Array(Schema.String)),
 	/** Edited since sent. */
-	edited: Schema.optional(Schema.Literal(1)),
+	edited: Schema.optional(Schema.Boolean),
 	/** A status emoji after the name. */
 	status: Schema.optional(Schema.String),
 	badges: Schema.optional(Schema.Array(AuthorBadge)),
@@ -115,11 +127,15 @@ export const MessageRow = Schema.Struct({
 })
 export type MessageRow = typeof MessageRow.Type
 
+/** Where a popover anchors inside a leaf: run `run` of the element keyed `key`. */
+export const LeafAnchor = Schema.Struct({ key: Schema.String, run: Schema.Finite })
+export type LeafAnchor = typeof LeafAnchor.Type
+
 // ---------------------------------------------------------------------------
 // menus, selects, tabs
 // ---------------------------------------------------------------------------
 
-export const MenuEntry = Schema.Struct({
+const menuEntryFields = {
 	id: Schema.String,
 	label: Schema.String,
 	icon: Schema.optional(IconName),
@@ -127,6 +143,16 @@ export const MenuEntry = Schema.Struct({
 	disabled: Schema.optional(Schema.Boolean),
 	/** A check mark (the current choice in a group). */
 	checked: Schema.optional(Schema.Boolean),
+}
+
+/** A submenu's entry: one level only, so it maps onto `UIMenu` children. */
+export const MenuLeaf = Schema.Struct(menuEntryFields)
+export type MenuLeaf = typeof MenuLeaf.Type
+
+export const MenuEntry = Schema.Struct({
+	...menuEntryFields,
+	/** A submenu (`menu-submenu`); selecting one of its entries reports that entry's id. */
+	entries: Schema.optional(Schema.Array(MenuLeaf)),
 })
 export type MenuEntry = typeof MenuEntry.Type
 

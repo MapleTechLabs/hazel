@@ -790,6 +790,12 @@
 	opacity: 0.5;
 }
 
+/* emojiPicker */
+
+
+/* emptyState */
+
+
 /* ext */
 [data-hz="ext"] {
 	margin-bottom: var(--hz-space-3);
@@ -919,6 +925,9 @@
 	color: var(--hz-color-fg);
 	font-weight: var(--hz-weight-strong);
 }
+
+/* progress */
+
 
 /* screen */
 [data-hz="screen"] {

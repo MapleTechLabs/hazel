@@ -8,6 +8,7 @@
 import * as Component from "@effect/ui/Component"
 import * as View from "@effect/ui/View"
 import { Context, type Effect, type Schema } from "effect"
+import type { MenuGroups } from "./content.ts"
 import type { Platform } from "./options.ts"
 import * as Spec from "./spec.ts"
 import type { PropSpec, TagKey, Tags } from "./spec.ts"
@@ -58,10 +59,33 @@ type ChildInput<Msg, K extends TagKey> = Tags[K]["content"] extends "text"
 		? NoTextInput<Msg>
 		: never
 
-/** Per-tag methods that are not a prop or a slot: a section's header `action` (an `hz:action` child). */
+/** A header action that opens a menu: its entries and the message for the chosen entry's id. */
+export interface ActionMenu<Msg> {
+	readonly _tag: "HazelActionMenu"
+	readonly entries: MenuGroups
+	readonly select: (choice: { readonly id: string }) => Msg
+}
+
+/** `section.action(icon, actionMenu(entries, select), label)`: the "+" that opens a menu. */
+export const actionMenu = <Msg>(
+	entries: MenuGroups,
+	select: (choice: { readonly id: string }) => Msg,
+): ActionMenu<Msg> => ({ _tag: "HazelActionMenu", entries, select })
+
+const isActionMenu = (value: unknown): value is ActionMenu<unknown> =>
+	typeof value === "object" && value !== null && "_tag" in value && value._tag === "HazelActionMenu"
+
+/**
+ * Per-tag methods that are not a prop or a slot: a section's one header `action` (an `hz:action`
+ * child), which raises a message on press or, given an `actionMenu`, opens a menu.
+ */
 type Extra<Msg, R, K extends TagKey> = K extends "section"
 	? {
-			readonly action: (content: NoTextContent<Msg>, message: Msg, label?: string) => Hz<Msg, R, K>
+			readonly action: (
+				content: NoTextContent<Msg>,
+				message: Msg | ActionMenu<Msg>,
+				label?: string,
+			) => Hz<Msg, R, K>
 		}
 	: {}
 
@@ -183,9 +207,10 @@ const builderFor = (key: TagKey): HzBuilder<any, never, TagKey> => {
 				message: unknown,
 				label?: string,
 			) {
-				const action = merge(new HzBuilder<any, never, "action">(Spec.tagName("action")), {
-					label,
-				}).on("press", message as never)
+				const base = new HzBuilder<any, never, "action">(Spec.tagName("action"))
+				const action = isActionMenu(message)
+					? merge(base, { label, entries: message.entries }).on("select", message.select as never)
+					: merge(base, { label }).on("press", message as never)
 				return View.withContent(this, [
 					View.withNoTextContent(action, [content], { name, textParents }),
 				])

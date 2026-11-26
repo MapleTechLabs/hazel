@@ -59,7 +59,7 @@ ${cases}
 `
 }
 
-const stub = (key: TagKey) => `import SwiftUI
+export const swiftStub = (key: TagKey) => `import SwiftUI
 
 // Owned by lane ${tags[key].ios} (\`docs/hazel-ui.md\`, "Phase 2: lanes"). C0 stub: the lane draws \`hz:${key}\` here
 // from \`HazelTheme\` and its recipe; until then it is a \`NotImplementedView\`.
@@ -76,7 +76,7 @@ if (import.meta.main && process.argv.includes("--stubs")) {
 		const path = resolve(hazelUI, viewPath(key))
 		if (existsSync(path)) continue
 		mkdirSync(dirname(path), { recursive: true })
-		writeFileSync(path, stub(key))
+		writeFileSync(path, swiftStub(key))
 		console.log(`stub ${viewPath(key)}`)
 	}
 }

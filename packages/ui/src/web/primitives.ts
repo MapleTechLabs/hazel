@@ -22,8 +22,15 @@ for (const [path, module] of Object.entries(modules)) {
 	registry.set(found.key, found)
 }
 
-/** The tags the web draws today. */
-export const implemented = (): ReadonlyArray<TagKey> => [...registry.keys()]
+/** The tags the web draws today (a stub does not count). */
+export const implemented = (): ReadonlyArray<TagKey> =>
+	[...registry.values()].filter((found) => found.stub !== true).map((found) => found.key)
+
+/** Whether the web draws `key` for real (not a stub, not missing). */
+export const isImplemented = (key: TagKey): boolean => {
+	const found = registry.get(key)
+	return found !== undefined && found.stub !== true
+}
 
 /** The DOM for `tag`; undefined for a tag that is not `hazel` (the browser host takes it). */
 export const create = (document: Document, tag: string): Primitive | undefined => {

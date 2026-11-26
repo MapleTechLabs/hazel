@@ -47,6 +47,26 @@ export type HeadingLevel = typeof HeadingLevel.Type
 export const AvatarPresence = Schema.Literals(Sets.avatarPresences)
 export type AvatarPresence = typeof AvatarPresence.Type
 
+export const AvatarSize = Schema.Literals(Sets.avatarSizes)
+export type AvatarSize = typeof AvatarSize.Type
+
+export const ProviderMark = Schema.Literals(Sets.providerMarks)
+export type ProviderMark = typeof ProviderMark.Type
+
+/** A provider in data (`row.provider`): a mark without `none`. */
+export const Provider = Schema.Literals(["slack", "discord"])
+export type Provider = typeof Provider.Type
+
+export const ItemNesting = Schema.Literals(Sets.itemNestings)
+export type ItemNesting = typeof ItemNesting.Type
+
+export const EmptyIllustration = Schema.Literals(Sets.emptyIllustrations)
+export type EmptyIllustration = typeof EmptyIllustration.Type
+
+/** Keys the composer reports while a trigger's suggestions are open (`autocomplete-keys`). */
+export const ComposerKey = Schema.Literals(["up", "down", "enter", "tab", "escape"])
+export type ComposerKey = typeof ComposerKey.Type
+
 export const ListDividerKind = Schema.Literals(Sets.listDividerKinds)
 export type ListDividerKind = typeof ListDividerKind.Type
 
@@ -65,6 +85,7 @@ export const iconNames = [
 	"chevron-right",
 	"close",
 	"copy",
+	"discord",
 	"dots",
 	"download",
 	"edit",
@@ -83,6 +104,7 @@ export const iconNames = [
 	"reply",
 	"search",
 	"share",
+	"slack",
 	"sparkles",
 	"star",
 	"thread",
@@ -103,6 +125,7 @@ export const iconSources = {
 	"chevron-right": "IconChevronRight",
 	close: "IconClose",
 	copy: "IconCopy",
+	discord: "IconDiscord",
 	dots: "IconDots",
 	download: "IconDownload",
 	edit: "IconEdit",
@@ -121,6 +144,7 @@ export const iconSources = {
 	reply: "IconReply",
 	search: "IconMagnifier3",
 	share: "IconShare",
+	slack: "IconSlack",
 	sparkles: "IconSparkles",
 	star: "IconStar",
 	thread: "IconThread",
@@ -139,6 +163,7 @@ export const MessageAction = Schema.Literals([
 	"edit",
 	"pin",
 	"unpin",
+	"issue",
 	"delete",
 ])
 export type MessageAction = typeof MessageAction.Type

@@ -5,7 +5,7 @@
  * the closed sets and the closed escape hatches (`attr`, `attrs`, `prop`, `h.el`, text placement).
  */
 import { MeshBackground } from "../demo/extensions.ts"
-import type { H } from "./Hazel.ts"
+import { actionMenu, type H } from "./Hazel.ts"
 
 export const closed = (h: H<"m">) => [
 	h.item.title("ok").badge(2).selected().href("#/x").leading(h.icon.name("hashtag")).on("press", "m"),
@@ -40,13 +40,32 @@ export const contract = (h: H<"m">) => [
 	h.stack.axis("horizontal").density("compact").align("center").children(h.spacer, h.divider),
 	h.button.label("Save").icon("plus").variant("ghost").size("xsmall").iconOnly().on("press", "m"),
 	h.message
-		.row({ t: "14:05", b: [[0, ["hi ", [1, "@Ada", "u1"]]]], r: [["👍", 2, 1]] })
+		.row({
+			time: "14:05",
+			body: [[0, ["hi ", [1, "@Ada", "u1"]]]],
+			reactions: [{ emoji: "👍", count: 2, mine: true }],
+		})
+		.grouped()
 		.pinned()
 		.on("action", ({ action }) => (action === "reply" ? "m" : "m")),
 	h.list.anchor("end").stickToBottom().on("reachStart", "m").children(h.listDivider.kind("unread")),
 	h.textField.value({ text: "", rev: 0, edit: 0 }).on("change", ({ rev }) => (rev > 0 ? "m" : "m")),
 	h.menu.entries([{ entries: [{ id: "a", label: "A" }] }]).trigger(h.button.label("Open")),
 	h.section.title("S").action(h.icon.name("plus"), "m", "Add").children(h.item.title("x")),
+	h.section
+		.title("S")
+		.action(h.icon.name("plus"), actionMenu([{ entries: [{ id: "a", label: "A" }] }], () => "m"))
+		.reorderable()
+		.on("move", ({ before }) => (before === null ? "m" : "m")),
+	h.item.title("x").muted().nested("last").shortcut("⌘K"),
+	h.avatar.size("large").mark("slack").on("press", "m"),
+	h.list.loading().overlay(h.text.children("2 new")).on("move", () => "m"),
+	h.progress.value(0.4),
+	h.emptyState.title("Nothing here").illustration("squirrel").action(h.button.label("Join")),
+	h.emojiPicker.open().on("select", ({ emoji }) => (emoji === "" ? "m" : "m")),
+	h.composer.on("key", ({ key }) => (key === "up" ? "m" : "m")).on("files", () => "m"),
+	h.popover.anchorTo({ key: "m1", run: 2 }),
+	h.textField.required().monospace(),
 	// @ts-expect-error a leaf takes no children
 	h.button.children(h.text.children("label")),
 	// @ts-expect-error options come from closed sets

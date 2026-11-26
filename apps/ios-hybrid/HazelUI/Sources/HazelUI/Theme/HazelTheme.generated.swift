@@ -446,6 +446,24 @@ public enum HazelTheme {
             ]
         )
 
+        public static let emojiPicker = Recipe(
+            primitive: "emojiPicker",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+            ]
+        )
+
+        public static let emptyState = Recipe(
+            primitive: "emptyState",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+            ]
+        )
+
         public static let ext = Recipe(
             primitive: "ext",
             defaults: [:],
@@ -478,6 +496,15 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [.selected, .hover], sizeClass: nil), part: "control", style: Style(background: Colors.washStacked)),
                 Layer(when: When(options: [:], flags: [], states: [.selected, .pressed], sizeClass: nil), part: "control", style: Style(background: Colors.washStacked)),
                 Layer(when: When(options: [:], flags: [], states: [.emphasized], sizeClass: nil), part: "title", style: Style(color: Colors.fg, strong: true)),
+            ]
+        )
+
+        public static let progress = Recipe(
+            primitive: "progress",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
             ]
         )
 

@@ -19,6 +19,8 @@ public enum HazelVocabulary {
         "hz:avatar": "S1",
         "hz:avatarStack": "S1",
         "hz:badge": "S1",
+        "hz:progress": "S1",
+        "hz:emptyState": "S1",
         "hz:richText": "S1",
         "hz:message": "S5",
         "hz:reactionBar": "S5",
@@ -40,6 +42,7 @@ public enum HazelVocabulary {
         "hz:popover": "S3",
         "hz:toast": "S3",
         "hz:tooltip": "S3",
+        "hz:emojiPicker": "S3",
         "hz:screen": "S4",
         "hz:navigation": "S4",
         "hz:tabBar": "S4",
@@ -70,6 +73,8 @@ enum Primitives {
         case "hz:avatar": HzAvatar(tree: tree, node: node)
         case "hz:avatarStack": HzAvatarStack(tree: tree, node: node)
         case "hz:badge": HzBadge(tree: tree, node: node)
+        case "hz:progress": HzProgress(tree: tree, node: node)
+        case "hz:emptyState": HzEmptyState(tree: tree, node: node)
         case "hz:richText": HzRichText(tree: tree, node: node)
         case "hz:message": HzMessage(tree: tree, node: node)
         case "hz:reactionBar": HzReactionBar(tree: tree, node: node)
@@ -91,6 +96,7 @@ enum Primitives {
         case "hz:popover": HzPopover(tree: tree, node: node)
         case "hz:toast": HzToast(tree: tree, node: node)
         case "hz:tooltip": HzTooltip(tree: tree, node: node)
+        case "hz:emojiPicker": HzEmojiPicker(tree: tree, node: node)
         case "hz:screen": HzScreen(tree: tree, node: node)
         case "hz:navigation": HzNavigation(tree: tree, node: node)
         case "hz:tabBar": HzTabBar(tree: tree, node: node)

@@ -93,7 +93,8 @@ export type StackDensity = (typeof stackDensities)[number]
 export const stackAligns = ["stretch", "start", "center", "end"] as const
 export type StackAlign = (typeof stackAligns)[number]
 
-export const frameSurfaces = ["none", "card", "inset", "muted", "overlay"] as const
+/** `danger` is the danger zone's card with a tinted header (`frame-danger`, phase 1.5). */
+export const frameSurfaces = ["none", "card", "inset", "muted", "overlay", "danger"] as const
 export type FrameSurface = (typeof frameSurfaces)[number]
 
 /** `1` is a screen's title, `2` a section's, `3` a group's. */
@@ -102,6 +103,22 @@ export type HeadingLevel = (typeof headingLevels)[number]
 
 export const avatarPresences = ["none", "online", "away", "busy", "offline"] as const
 export type AvatarPresence = (typeof avatarPresences)[number]
+
+/** `large` is the settings logo that is its own upload button (`avatar-large`). */
+export const avatarSizes = ["regular", "large"] as const
+export type AvatarSize = (typeof avatarSizes)[number]
+
+/** A synced author's or mention's provider mark: `none`, Slack or Discord. */
+export const providerMarks = ["none", "slack", "discord"] as const
+export type ProviderMark = (typeof providerMarks)[number]
+
+/** A row hanging off the row above (a thread under its channel): the elbow's shape. */
+export const itemNestings = ["none", "middle", "last"] as const
+export type ItemNesting = (typeof itemNestings)[number]
+
+/** An empty state's illustration: an asset each platform ships under this name. */
+export const emptyIllustrations = ["none", "squirrel"] as const
+export type EmptyIllustration = (typeof emptyIllustrations)[number]
 
 export const listDividerKinds = ["date", "unread"] as const
 export type ListDividerKind = (typeof listDividerKinds)[number]

@@ -39,6 +39,10 @@ const controlled = <const S extends Schema.Top>(schema: S) => ({ kind: "controll
 
 const none = Schema.Struct({})
 const ids = Schema.Struct({ id: Schema.String })
+/** A dragged row or section dropped before `before` (null: at the end). */
+const move = Schema.Struct({ id: Schema.String, before: Schema.NullOr(Schema.String) })
+/** A mention pressed inside a leaf, with its run index so a popover can anchor at it (`popover.anchorTo`). */
+const mention = Schema.Struct({ userId: Schema.String, run: Schema.Finite })
 
 /** Imperative requests a Command sends through the vocabulary's `Host` (wire op `command`). */
 export const commandNames = ["focus", "blur", "scrollTo", "measure", "select"] as const
@@ -135,10 +139,15 @@ export const tags = {
 		props: {
 			anchor: option(O.ListAnchor, "start"),
 			stickToBottom: flag,
+			// `loading`: the first load; the renderer draws skeleton rows (renderer-owned, no API).
+			loading: flag,
 			loadingStart: flag,
 			loadingEnd: flag,
+			reorderable: flag,
 		},
-		events: { reachStart: none, reachEnd: none },
+		// `overlay`: a bar floating over the list's top edge ("N new messages").
+		slots: ["overlay"],
+		events: { reachStart: none, reachEnd: none, move },
 		commands: ["scrollTo"],
 	}),
 	listDivider: tag({
@@ -190,7 +199,15 @@ export const tags = {
 		web: "A1",
 		ios: "S1",
 		content: "none",
-		props: { name: text, initials: text, src: text, presence: option(O.AvatarPresence, "none") },
+		props: {
+			name: text,
+			initials: text,
+			src: text,
+			presence: option(O.AvatarPresence, "none"),
+			size: option(O.AvatarSize, "regular"),
+			mark: option(O.ProviderMark, "none"),
+		},
+		events: { press: none },
 	}),
 	avatarStack: tag({
 		group: "content",
@@ -212,6 +229,27 @@ export const tags = {
 			pill: flag,
 		},
 	}),
+	progress: tag({
+		group: "content",
+		web: "A1",
+		ios: "S1",
+		content: "none",
+		// `value` 0 to 1; `indeterminate` when the amount is unknown.
+		props: { value: count, indeterminate: flag, label: text },
+	}),
+	emptyState: tag({
+		group: "content",
+		web: "A1",
+		ios: "S1",
+		content: "none",
+		props: {
+			title: text,
+			description: text,
+			icon: value(O.IconName),
+			illustration: option(O.EmptyIllustration, "none"),
+		},
+		slots: ["action"],
+	}),
 	richText: tag({
 		group: "content",
 		web: "A1",
@@ -219,7 +257,7 @@ export const tags = {
 		content: "none",
 		props: { blocks: value(Content.RichText) },
 		events: {
-			pressMention: Schema.Struct({ userId: Schema.String }),
+			pressMention: mention,
 			pressLink: Schema.Struct({ url: Schema.String }),
 		},
 	}),
@@ -246,7 +284,7 @@ export const tags = {
 			pressAuthor: none,
 			pressReaction: Schema.Struct({ emoji: Schema.String }),
 			addReaction: none,
-			pressMention: Schema.Struct({ userId: Schema.String }),
+			pressMention: mention,
 			pressLink: Schema.Struct({ url: Schema.String }),
 			pressAttachment: ids,
 			pressReply: none,
@@ -326,6 +364,8 @@ export const tags = {
 			error: text,
 			disabled: flag,
 			readOnly: flag,
+			required: flag,
+			monospace: flag,
 		},
 		events: textFieldEvents,
 		commands: ["focus", "blur", "select"],
@@ -391,6 +431,10 @@ export const tags = {
 				kind: Schema.Literals(["@", "#", "/", ":"]),
 				query: Schema.NullOr(Schema.String),
 			}),
+			// Only while a trigger is open: these keys drive the suggestions, not the text.
+			key: Schema.Struct({ key: O.ComposerKey }),
+			// Files dropped or pasted; the host hands them to `Files` and reports the count.
+			files: Schema.Struct({ count: Schema.Finite }),
 		},
 		commands: ["focus", "blur", "select"],
 	}),
@@ -435,7 +479,8 @@ export const tags = {
 		web: "A3",
 		ios: "S3",
 		content: "elements",
-		props: { open: flag },
+		// `anchorTo`: anchor at run `run` of the leaf keyed `key` (a mention in a message), not the slot.
+		props: { open: flag, anchorTo: value(Content.LeafAnchor) },
 		slots: ["anchor"],
 		events: { dismiss: none },
 	}),
@@ -449,6 +494,15 @@ export const tags = {
 		events: { dismiss: none },
 	}),
 	tooltip: tag({ group: "overlays", web: "A3", ios: "S3", content: "elements", props: { label: text } }),
+	// The system-like emoji picker; the GIF picker is a web extension (`extensions/GifPicker.ts`).
+	emojiPicker: tag({
+		group: "overlays",
+		web: "A3",
+		ios: "S3",
+		content: "none",
+		props: { open: flag },
+		events: { select: Schema.Struct({ emoji: Schema.String }), dismiss: none },
+	}),
 
 	// Structure
 	screen: tag({
@@ -482,8 +536,8 @@ export const tags = {
 		ios: "S4",
 		content: "elements",
 		// Header actions: `.action(icon, message, label)` appends an `hz:action` (`Hazel.ts`).
-		props: { title: text, collapsible: flag, collapsed: flag },
-		events: { toggle: Schema.Struct({ collapsed: Schema.Boolean }) },
+		props: { title: text, collapsible: flag, collapsed: flag, reorderable: flag },
+		events: { toggle: Schema.Struct({ collapsed: Schema.Boolean }), move },
 	}),
 	item: tag({
 		group: "structure",
@@ -497,6 +551,11 @@ export const tags = {
 			emphasized: flag,
 			selected: flag,
 			disabled: flag,
+			// Dimmed but still pressable (a muted channel, a discover row).
+			muted: flag,
+			nested: option(O.ItemNesting, "none"),
+			// A keyboard shortcut hint at the row's end; web only, iOS ignores it.
+			shortcut: text,
 			href: text,
 		},
 		slots: ["leading", "trailing"],
@@ -511,8 +570,9 @@ export const tags = {
 		web: "A4",
 		ios: "S4",
 		content: "elements",
-		props: { label: text },
-		events: { press: none },
+		// A press, or with `entries` a menu whose choice raises `select` (`section.action`).
+		props: { label: text, entries: value(Content.MenuGroups) },
+		events: { press: none, select: ids },
 	}),
 	ext: tag({
 		group: "internal",

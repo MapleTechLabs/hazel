@@ -3,7 +3,7 @@
  * parent for the renderer's children; props later only change attributes, text and internal swaps.
  * Each renderer is a file `primitives/<group>/<tag>.ts` exporting `primitive` (the glob registry).
  */
-import type { TagKey } from "../../vocabulary/spec.ts"
+import { tags, type TagKey } from "../../vocabulary/spec.ts"
 
 export interface Events {
 	readonly handlers: Readonly<Record<string, unknown>>
@@ -31,11 +31,32 @@ export interface Context {
 export interface WebPrimitive {
 	readonly key: TagKey
 	readonly create: (context: Context) => Primitive
+	/** A placeholder its lane has not replaced yet: the runner reports it as not implemented. */
+	readonly stub?: true
 }
 
 export const definePrimitive = (key: TagKey, create: (context: Context) => Primitive): WebPrimitive => ({
 	key,
 	create,
+})
+
+/**
+ * What a tag whose renderer its lane has not written draws: a dashed box naming the tag and lane
+ * (`data-hz-stub=<lane>`), with a content parent so children still mount. Swift's twin is `NotImplementedView`.
+ */
+export const stubPrimitive = (key: TagKey): WebPrimitive => ({
+	key,
+	stub: true,
+	create: ({ document, tag, outer }) => {
+		const lane = tags[key].web
+		const node = outer("div")
+		node.dataset.hzStub = lane
+		const label = part(document, "span", "stub")
+		label.textContent = `${tag}: lane ${lane}`
+		const content = part(document, "div", "content")
+		node.append(label, content)
+		return { tag, outer: node, content, set: () => {}, events: undefined }
+	},
 })
 
 export const part = (document: Document, tagName: string, name: string) => {
