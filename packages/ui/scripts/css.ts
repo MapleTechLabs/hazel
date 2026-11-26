@@ -57,6 +57,10 @@ const tokenBlock = (tokens: Tokens): string => {
 			`--hz-text-${role}-size: ${metrics.regular.size}px;`,
 			`--hz-text-${role}-leading: ${metrics.regular.lineHeight}px;`,
 		)
+		if (trackedRoles(tokens).has(role)) {
+			light.push(`--hz-text-${role}-tracking: ${metrics.compact.tracking ?? 0}px;`)
+			regular.push(`--hz-text-${role}-tracking: ${metrics.regular.tracking ?? 0}px;`)
+		}
 	}
 	for (const [step, px] of Object.entries(tokens.space)) light.push(`--hz-space-${safe(step)}: ${px}px;`)
 	for (const [name, px] of Object.entries(tokens.radius)) light.push(`--hz-radius-${name}: ${px}px;`)
@@ -105,10 +109,21 @@ const tokenBlock = (tokens: Tokens): string => {
 	].join("\n\n")
 }
 
+/** Roles whose tracking is set in either size class: only they write `letter-spacing`. */
+const trackedRoles = (tokens: Tokens): ReadonlySet<string> =>
+	new Set(
+		Object.entries(tokens.text)
+			.filter(([, m]) => m.compact.tracking !== undefined || m.regular.tracking !== undefined)
+			.map(([role]) => role),
+	)
+
+/** The text role set in the mono family, with the kit's slashed zero (`--font-mono--font-feature-settings`). */
+export const MONO_ROLE = "code"
+
 const length = (value: Length<string>) =>
 	typeof value === "string" ? spaceVar(value) : `calc(${spaceVar(value.step)} - 1px)`
 
-const declarations = (d: Declarations): ReadonlyArray<string> => {
+const declarations = (d: Declarations, tracked: ReadonlySet<string>): ReadonlyArray<string> => {
 	const out: string[] = []
 	const add = (property: string, value: string) => out.push(`${property}: ${value};`)
 	if (d.layout === "contents") add("display", "contents")
@@ -148,6 +163,11 @@ const declarations = (d: Declarations): ReadonlyArray<string> => {
 	if (d.text !== undefined) {
 		add("font-size", `var(--hz-text-${d.text}-size)`)
 		add("line-height", `var(--hz-text-${d.text}-leading)`)
+		if (tracked.has(d.text)) add("letter-spacing", `var(--hz-text-${d.text}-tracking)`)
+		if (d.text === MONO_ROLE) {
+			add("font-family", "var(--hz-font-mono)")
+			add("font-feature-settings", '"zero"')
+		}
 	}
 	if (d.leading !== undefined) add("line-height", spaceVar(d.leading))
 	if (d.strong !== undefined)
@@ -216,21 +236,32 @@ interface Rule {
 }
 
 const partRules = (
+	tracked: ReadonlySet<string>,
 	recipe: Recipe,
 	root: string,
 	styles: PartStyles<string, never>,
 	media: ReadonlyArray<string>,
 ) => {
 	const rules: Rule[] = []
-	if (styles.root !== undefined) rules.push({ media, selector: root, lines: declarations(styles.root) })
+	if (styles.root !== undefined)
+		rules.push({ media, selector: root, lines: declarations(styles.root, tracked) })
 	for (const [part, decls] of Object.entries(styles.parts ?? {}))
 		if (decls !== undefined)
-			rules.push({ media, selector: `${root}${partPath(recipe, part)}`, lines: declarations(decls) })
+			rules.push({
+				media,
+				selector: `${root}${partPath(recipe, part)}`,
+				lines: declarations(decls, tracked),
+			})
 	return rules
 }
 
 /** A layer's rules: compact, then its `regular` overrides, then its states (interactions last). */
-const layerRules = (recipe: Recipe, root: string, layer: Layer<string, never>): ReadonlyArray<Rule> => {
+const layerRules = (
+	tracked: ReadonlySet<string>,
+	recipe: Recipe,
+	root: string,
+	layer: Layer<string, never>,
+): ReadonlyArray<Rule> => {
 	const states = Object.entries(layer.states ?? {}) as ReadonlyArray<
 		[State, NonNullable<Layer<string, never>["states"]>[State]]
 	>
@@ -239,23 +270,25 @@ const layerRules = (recipe: Recipe, root: string, layer: Layer<string, never>): 
 		...states.filter(([s]) => isInteraction(s)),
 	]
 	return [
-		...partRules(recipe, root, layer, []),
-		...(layer.regular === undefined ? [] : partRules(recipe, root, layer.regular, [REGULAR_MEDIA])),
+		...partRules(tracked, recipe, root, layer, []),
+		...(layer.regular === undefined
+			? []
+			: partRules(tracked, recipe, root, layer.regular, [REGULAR_MEDIA])),
 		...ordered.flatMap(([state, styles]) => {
 			if (styles === undefined) return []
 			const selector = `${root}${stateSelector(recipe, state)}`
 			const media = state === "hover" ? ["(hover: hover)"] : []
 			return [
-				...partRules(recipe, selector, styles, media),
+				...partRules(tracked, recipe, selector, styles, media),
 				...(styles.regular === undefined
 					? []
-					: partRules(recipe, selector, styles.regular, [...media, REGULAR_MEDIA])),
+					: partRules(tracked, recipe, selector, styles.regular, [...media, REGULAR_MEDIA])),
 			]
 		}),
 	]
 }
 
-export const recipeRules = (recipe: Recipe): ReadonlyArray<Rule> => {
+export const recipeRules = (recipe: Recipe, tracked: ReadonlySet<string>): ReadonlyArray<Rule> => {
 	const root = `[data-hz="${recipe.primitive}"]`
 	const asLayer = (layer: Layer<string, never>) => layer
 	const states = (recipe.states ?? {}) as Record<string, Layer<string, never> | undefined>
@@ -264,10 +297,11 @@ export const recipeRules = (recipe: Recipe): ReadonlyArray<Rule> => {
 		...Object.keys(states).filter((s) => isInteraction(s as State)),
 	]
 	return [
-		...layerRules(recipe, root, recipe.base as Layer<string, never>),
+		...layerRules(tracked, recipe, root, recipe.base as Layer<string, never>),
 		...Object.entries(recipe.options).flatMap(([option, spec]) =>
 			Object.entries(spec.values).flatMap(([value, layer]) =>
 				layerRules(
+					tracked,
 					recipe,
 					`${root}${optionSelector(recipe, option, value)}`,
 					asLayer(layer as Layer<string, never>),
@@ -275,7 +309,7 @@ export const recipeRules = (recipe: Recipe): ReadonlyArray<Rule> => {
 			),
 		),
 		...Object.entries(recipe.flags ?? {}).flatMap(([flag, layer]) =>
-			layerRules(recipe, `${root}[data-${kebab(flag)}]`, layer as Layer<string, never>),
+			layerRules(tracked, recipe, `${root}[data-${kebab(flag)}]`, layer as Layer<string, never>),
 		),
 		...(recipe.compounds ?? []).flatMap((compound) => {
 			const conditions = Object.entries(compound.when)
@@ -283,13 +317,13 @@ export const recipeRules = (recipe: Recipe): ReadonlyArray<Rule> => {
 					value === true ? `[data-${kebab(key)}]` : optionSelector(recipe, key, String(value)),
 				)
 				.join("")
-			return layerRules(recipe, `${root}${conditions}`, compound.style as Layer<string, never>)
+			return layerRules(tracked, recipe, `${root}${conditions}`, compound.style as Layer<string, never>)
 		}),
 		...ordered.flatMap((state) => {
 			const layer = states[state]
 			return layer === undefined
 				? []
-				: layerRules(recipe, `${root}${stateSelector(recipe, state as State)}`, layer)
+				: layerRules(tracked, recipe, `${root}${stateSelector(recipe, state as State)}`, layer)
 		}),
 	]
 }
@@ -307,7 +341,7 @@ export const generateCss = (tokens: Tokens, recipes: ReadonlyArray<Recipe>): str
 		tokenBlock(tokens),
 		...recipes.map(
 			(recipe) =>
-				`/* ${recipe.primitive} */\n${recipeRules(recipe)
+				`/* ${recipe.primitive} */\n${recipeRules(recipe, trackedRoles(tokens))
 					.filter((rule) => rule.lines.length > 0)
 					.map(printRule)
 					.join("\n\n")}`,
