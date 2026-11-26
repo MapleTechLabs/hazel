@@ -116,20 +116,20 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 		const card = button(
 			document,
 			"thread",
-			`Open thread, ${data.count} ${data.count === 1 ? "message" : "messages"}`,
+			`Open thread${data.name === undefined ? "" : ` ${data.name}`}, ${data.count} ${data.count === 1 ? "message" : "messages"}`,
 			() => fire(primitive, "pressThread"),
 		)
 		const top = part(document, "span", "threadTop")
-		// HAZEL-GAP(thread-name): today's card leads with the thread's name; `ThreadSummary` has none.
-		top.append(
-			text(
-				document,
-				"span",
-				"threadCount",
-				`${data.count} ${data.count === 1 ? "Message" : "Messages"}`,
-			),
-			icon(document, "chevron-right"),
+		if (data.name !== undefined) top.append(text(document, "span", "threadName", data.name))
+		// Today's count and chevron are one span (`gap-0.5`), after the name.
+		const count = text(
+			document,
+			"span",
+			"threadCount",
+			`${data.count} ${data.count === 1 ? "Message" : "Messages"}`,
 		)
+		count.append(icon(document, "chevron-right"))
+		top.append(count)
 		const last = part(document, "span", "threadLast")
 		const face = avatar(undefined, data.initials, undefined)
 		face.dataset.hzPart = "threadAvatar"
@@ -145,7 +145,8 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 
 	const toolbar = (data: MessageRow) => {
 		const quick = data.quick ?? []
-		const actions = data.actions ?? []
+		// The web's text is selectable already, so its toolbar leaves `selectText` out.
+		const actions = (data.actions ?? []).filter((action) => action !== "selectText")
 		if (quick.length === 0 && actions.length === 0) return undefined
 		const bar = part(document, "div", "toolbar")
 		bar.setAttribute("role", "toolbar")

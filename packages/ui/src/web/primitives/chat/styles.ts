@@ -9,10 +9,9 @@ const radius = (name: string) => `var(--hz-radius-${name})`
 const type = (step: string) =>
 	`font-size: var(--hz-text-${step}-size); line-height: var(--hz-text-${step}-leading);`
 const STRONG = "font-weight: var(--hz-weight-strong);"
-// HAZEL-GAP(chat-weights): today's author and thread names are semibold (600) and `**bold**` is 700;
-// the tokens have regular and strong (500) only.
-const SEMIBOLD = "font-weight: 600;"
-const BOLD = "font-weight: 700;"
+// Today's author, thread and card titles are semibold; `**bold**` runs are bold (`chat-weights`).
+const SEMIBOLD = "font-weight: var(--hz-weight-semibold);"
+const BOLD = "font-weight: var(--hz-weight-bold);"
 
 const M = '[data-hz="message"]'
 const p = (name: string) => `[data-hz-part="${name}"]`
@@ -45,12 +44,13 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 	[`${M}:hover, ${M}:focus-visible`, `background-color: ${color("secondary")};`],
 	[`${M}:focus-visible`, `box-shadow: 0 0 0 2px ${color("ring")};`],
 	[`${M}[data-highlighted]`, `background-color: ${color("primary-subtle")};`],
-	// HAZEL-GAP(chat-tints): today's pinned tint is `warning/10` (hover `/15`); `warning-subtle` is nearest.
+	// Today's pinned row: `bg-warning/10`, `/15` under the pointer (`chat-tints`).
 	[
 		`${M}[data-pinned]`,
 		`border-left: ${space("1")} solid ${color("warning")}; border-radius: 0 ${radius("lg")} ${radius("lg")} 0;
-		padding-left: ${space("2")}; background-color: ${color("warning-subtle")}; box-shadow: var(--hz-shadow-xs);`,
+		padding-left: ${space("2")}; background-color: ${color("warning-tint")}; box-shadow: var(--hz-shadow-xs);`,
 	],
+	[`${M}[data-pinned]:is(:hover, :focus-visible)`, `background-color: ${color("warning-tint-hover")};`],
 	[`${M}[data-pending] > ${p("main")}`, "opacity: 0.6;"],
 	[`${M}[data-entering]`, "animation: hz-message-enter var(--hz-duration-normal) var(--hz-ease-out) both;"],
 	[
@@ -113,8 +113,9 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 	[
 		`${M} ${p("mention")}`,
 		`display: inline-block; padding: ${space("0.5")} ${space("1")}; border-radius: ${radius("sm")};
-		background-color: ${color("primary-subtle")}; color: ${color("primary")}; ${STRONG} cursor: pointer;`,
+		background-color: ${color("primary-tint")}; color: ${color("primary")}; ${STRONG} cursor: pointer;`,
 	],
+	[`${M} ${p("mention")}:hover`, `background-color: ${color("primary-tint-hover")};`],
 	[`${M} ${p("link")}`, `color: ${color("primary")}; text-decoration: underline; cursor: pointer;`],
 	[
 		`${M} ${p("inlineCode")}`,
@@ -165,9 +166,10 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 	[`${reactions("reaction")}:active, ${reactions("addReaction")}:active`, "scale: 0.95;"],
 	[
 		`${reactions("reaction")}[data-mine]`,
-		`background-color: ${color("primary-subtle")}; color: ${color("primary")};
-		box-shadow: inset 0 0 0 1px ${color("primary-subtle")};`,
+		`background-color: ${color("primary-tint")}; color: ${color("primary")};
+		box-shadow: inset 0 0 0 1px ${color("primary-tint-ring")};`,
 	],
+	[`${reactions("reaction")}[data-mine]:hover`, `background-color: ${color("primary-tint-hover")};`],
 	[`${reactions("count")}`, "font-variant-numeric: tabular-nums;"],
 	[`${reactions("emojiImage")}`, `width: ${space("5")}; height: ${space("5")}; object-fit: contain;`],
 	[`${reactions("addReaction")}`, `color: ${color("muted-fg")}; padding-inline: ${space("2")};`],
@@ -271,7 +273,7 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 		`${M} ${p("thread")}`,
 		`display: flex; flex-direction: column; justify-content: center; row-gap: ${space("0.5")}; width: 100%;
 		max-width: ${THREAD_COLUMN}; height: 58px; margin-top: ${space("2")}; padding-inline: ${space("3")};
-		border: 1px solid ${color("border")}; border-radius: ${radius("lg")}; background-color: ${color("wash")};
+		border: 1px solid ${color("border")}; border-radius: ${radius("lg")}; background-color: ${color("secondary-band")};
 		${type("label")} cursor: pointer; user-select: none;
 		transition: background-color var(--hz-duration-fast) var(--hz-ease-out);`,
 	],
@@ -281,9 +283,18 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 		`${M} :is(${p("threadTop")}, ${p("threadLast")})`,
 		`display: flex; align-items: center; min-width: 0; column-gap: ${space("1.5")};`,
 	],
-	[`${M} ${p("threadCount")}`, `${STRONG} color: ${color("primary")};`],
+	[`${M} ${p("threadTop")}:has(${p("threadName")})`, `column-gap: ${space("2")};`],
 	[
-		`${M} ${p("threadTop")} > ${p("icon")}`,
+		`${M} ${p("threadName")}`,
+		`min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; ${SEMIBOLD} color: ${color("fg")};`,
+	],
+	[
+		`${M} ${p("threadCount")}`,
+		`display: flex; flex-shrink: 0; align-items: center; column-gap: ${space("0.5")}; ${STRONG} color: ${color("primary")};`,
+	],
+	[`${M} ${p("thread")}:hover ${p("threadCount")}`, "text-decoration: underline;"],
+	[
+		`${M} ${p("threadCount")} > ${p("icon")}`,
 		`width: ${space("3.5")}; height: ${space("3.5")}; color: ${color("primary")};`,
 	],
 	[`${M} ${p("threadAuthor")}`, `flex-shrink: 0; ${STRONG} color: ${color("fg")};`],

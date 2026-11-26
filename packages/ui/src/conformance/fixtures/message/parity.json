@@ -22,8 +22,14 @@
 		"events": ["press", "longPress", "action", "pressThread"]
 	},
 	"frame": "screen",
-	"pending": {
-		"web": "A5",
-		"ios": "S5"
-	}
+	"aria": [
+		{
+			"role": "button",
+			"name": "Open thread Release 2.4 notes, 4 messages"
+		},
+		{
+			"role": "toolbar",
+			"name": "Message actions"
+		}
+	]
 }
