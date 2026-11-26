@@ -1,133 +1,517 @@
 // Effect UI is a public preview: every API is experimental by design here.
 // @effect-diagnostics experimentalApiUsage:off
 /**
- * Phase 1 exit screen: the channel's message list and its rows (`web-foldkit/src/chat/message/row.ts`,
- * `page/chat/channel/view.ts`) in `hazel`. Type-checks against C1; not rendered yet. Each message is one
- * `message` leaf whose row is data (G7 option C); the list anchors at its end and sticks to the bottom.
+ * The channel's message list (Phase 3), today's `web-foldkit/src/page/chat/channel/view.ts` list in
+ * `hazel`. Each message is one `message` leaf whose row is data (G7 option C); the list anchors at
+ * its end, sticks to the bottom and pages older messages in from its top. The host provides the data
+ * (`messageListLayer`) and handles what a row asks of it (`RequestHost`).
  */
-import { UiSchema } from "@effect/ui"
+import { Subscription } from "@effect/ui"
 import { ChannelId, MessageId, UserId } from "@hazel/schema"
-import { Content, Hazel, MessageAction } from "@hazel/ui/vocabulary/index"
+import { Content, Hazel, type IconName, type MessageAction } from "@hazel/ui/vocabulary/index"
 import { Match, Schema } from "effect"
+import { initialsOf, sinceLabel } from "./format"
+import {
+	activityStream,
+	attachmentsStream,
+	botsStream,
+	clockStream,
+	historyStream,
+	ListRef,
+	messagesStream,
+	MoveWindow,
+	PAGE_SIZE,
+	reactionsStream,
+	readPositionStream,
+	replyTargetsStream,
+	RequestHost,
+	ScrollToRow,
+	threadMessagesStream,
+	threadNamesStream,
+	ToggleReaction,
+	TogglePin,
+	usersStream,
+} from "./live"
+import {
+	ChatAttachment,
+	ChatMessage,
+	ChatReaction,
+	ChatUser,
+	Activity,
+	MessageListMessage,
+	Named,
+	ReplyTarget,
+	ThreadMessage,
+} from "./messages"
+import {
+	type Entry,
+	type Lookups,
+	firstNewIdOf,
+	newCountOf,
+	type RowEntry,
+	toEntries,
+	displayNameOf,
+} from "./rows"
 
-/** A message as the screen holds it: already shaped by its query into the row the primitive draws. */
-export const Message = Schema.Struct({
-	id: MessageId,
-	authorId: UserId,
-	row: Content.MessageRow,
-	grouped: Schema.Boolean,
-	pinned: Schema.Boolean,
-	highlighted: Schema.Boolean,
-	pending: Schema.Boolean,
-	failed: Schema.Boolean,
-})
-export type Message = typeof Message.Type
+export { MessageListMessage } from "./messages"
 
-export const Entry = Schema.Union([
+const EntrySchema = Schema.Union([
 	Schema.TaggedStruct("Date", { key: Schema.String, label: Schema.String }),
 	Schema.TaggedStruct("Unread", { key: Schema.String }),
-	Schema.TaggedStruct("Row", { message: Message }),
+	Schema.TaggedStruct("Row", {
+		key: MessageId,
+		authorId: UserId,
+		threadChannelId: Schema.NullOr(ChannelId),
+		isPinned: Schema.Boolean,
+		isOwn: Schema.Boolean,
+		grouped: Schema.Boolean,
+		entering: Schema.Boolean,
+		row: Content.MessageRow,
+	}),
 ])
-export type Entry = typeof Entry.Type
 
-export const MessageListMessage = UiSchema.TaggedEnum({
-	ReachedStart: {},
-	ReachedEnd: {},
-	PressedAction: { id: MessageId, action: MessageAction },
-	PressedReaction: { id: MessageId, emoji: Schema.String },
-	PressedAddReaction: { id: MessageId },
-	PressedAuthor: { id: MessageId },
-	PressedMention: { id: MessageId, userId: Schema.String, run: Schema.Finite },
-	DismissedProfile: {},
-	PressedLink: { url: Schema.String },
-	PressedAttachment: { id: MessageId, attachmentId: Schema.String },
-	PressedReply: { id: MessageId },
-	PressedThread: { id: MessageId },
-	PressedRetry: { id: MessageId },
-	PressedJumpToUnread: {},
-	PressedMarkRead: {},
-	PressedJoin: {},
+export const MessageListProps = Schema.Struct({
+	channelId: ChannelId,
+	userId: UserId,
+	/** Where attachments without their own url live (today's `currentServer().cdn`). */
+	cdnUrl: Schema.String,
+	/** The clock at mount; `Ticked` moves it on. */
+	nowMs: Schema.Finite,
 })
-export type MessageListMessage = typeof MessageListMessage.Type
+export type MessageListProps = typeof MessageListProps.Type
 
-export const MessageListProps = Schema.Struct({ channelId: ChannelId, channelName: Schema.String })
+export const MessageListModel = Schema.Struct({
+	/** The window, newest first; null until the query first answers. */
+	messages: Schema.NullOr(Schema.Array(ChatMessage)),
+	/** How many of the newest messages the window holds. */
+	limit: Schema.Finite,
+	/** The channel's history has older messages than are loaded. */
+	hasMore: Schema.Boolean,
+	loadingOlder: Schema.Boolean,
+	reactions: Schema.Array(ChatReaction),
+	users: Schema.Array(ChatUser),
+	bots: Schema.Array(Named),
+	attachments: Schema.Array(ChatAttachment),
+	threadNames: Schema.Array(Named),
+	threadMessages: Schema.Array(ThreadMessage),
+	replyTargets: Schema.Array(ReplyTarget),
+	/** The channel's newest message, once its query answered (`undefined` before). */
+	activity: Schema.optional(Schema.NullOr(Activity)),
+	/** The read position, once its query answered (`undefined` before). */
+	readUpToMs: Schema.optional(Schema.NullOr(Schema.Finite)),
+	/** The read position when the list opened, if anything was new: the "New" line and bar sit after it. */
+	sinceMs: Schema.NullOr(Schema.Finite),
+	sinceCaptured: Schema.Boolean,
+	/** "Jump" asked for the "New" line before it was loaded. */
+	jumpPending: Schema.Boolean,
+	entries: Schema.Array(EntrySchema),
+	nowMs: Schema.Finite,
+	/** The message the emoji picker reacts to. */
+	picker: Schema.NullOr(MessageId),
+	profile: Schema.NullOr(Schema.Struct({ id: MessageId, userId: Schema.String, run: Schema.Finite })),
+	/** The message whose action sheet is open. */
+	menu: Schema.NullOr(MessageId),
+})
+export type MessageListModel = typeof MessageListModel.Type
 
-/** One row: the leaf, its states, and every event it raises mapped to the screen's messages. */
-const messageRow = (h: Hazel.H<MessageListMessage>, message: Message) =>
-	h.message
-		.key(message.id)
-		.row(message.row)
-		.grouped(message.grouped)
-		.pinned(message.pinned)
-		.highlighted(message.highlighted)
-		.pending(message.pending)
-		.failed(message.failed)
-		// The provider mark, who reacted, quick emoji and "Create issue" are row data (`row.provider`...).
-		.on("action", ({ action }) => MessageListMessage.PressedAction({ id: message.id, action }))
-		.on("pressReaction", ({ emoji }) => MessageListMessage.PressedReaction({ id: message.id, emoji }))
-		.on("addReaction", () => MessageListMessage.PressedAddReaction({ id: message.id }))
-		.on("pressAuthor", () => MessageListMessage.PressedAuthor({ id: message.id }))
-		// The profile popover anchors at the pressed mention's run inside this row (`popover.anchorTo`).
-		.on("pressMention", ({ userId, run }) =>
-			MessageListMessage.PressedMention({ id: message.id, userId, run }),
-		)
-		.on("pressLink", ({ url }) => MessageListMessage.PressedLink({ url }))
-		.on("pressAttachment", ({ id }) =>
-			MessageListMessage.PressedAttachment({ id: message.id, attachmentId: id }),
-		)
-		.on("pressReply", () => MessageListMessage.PressedReply({ id: message.id }))
-		.on("pressThread", () => MessageListMessage.PressedThread({ id: message.id }))
-		.on("retry", () => MessageListMessage.PressedRetry({ id: message.id }))
+const byKey = <A, K extends string>(items: ReadonlyArray<A>, key: (item: A) => K | null) => {
+	const map = new Map<string, Array<A>>()
+	for (const item of items) {
+		const k = key(item)
+		if (k === null) continue
+		let list = map.get(k)
+		if (list === undefined) map.set(k, (list = []))
+		list.push(item)
+	}
+	return map
+}
 
-const entry = (h: Hazel.H<MessageListMessage>, item: Entry) =>
-	Match.valueTags(item, {
-		Date: ({ key, label }) => h.listDivider.key(key).label(label),
-		Unread: ({ key }) => h.listDivider.key(key).kind("unread").label("New"),
-		Row: ({ message }) => messageRow(h, message),
+/** The lookups a derivation reads, indexed once. */
+export const lookupsOf = (model: MessageListModel, userId: UserId): Lookups => {
+	const threadNames = new Map(model.threadNames.map((thread) => [thread.id, thread.name]))
+	const threadMessages = byKey(model.threadMessages, (message) => message.channelId)
+	return {
+		currentUserId: userId,
+		users: new Map(model.users.map((user) => [user.id, user])),
+		botNames: new Map(model.bots.map((bot) => [bot.id, bot.name])),
+		groupHandles: new Map(),
+		reactions: byKey(model.reactions, (reaction) => reaction.messageId),
+		attachments: byKey(model.attachments, (attachment) => attachment.messageId),
+		threads: new Map(
+			[...threadNames.keys(), ...threadMessages.keys()].map((id) => [
+				id,
+				{ name: threadNames.get(id) ?? "", messages: threadMessages.get(id) ?? [] },
+			]),
+		),
+		replyTargets: new Map(model.replyTargets.map((target) => [target.id, target])),
+		emojiUrls: new Map(),
+		nowMs: model.nowMs,
+	}
+}
+
+/** The window's entries again, after any of their inputs changed. */
+export const derive = (model: MessageListModel, userId: UserId): MessageListModel => {
+	if (model.messages === null) return model
+	const firstNewId = firstNewIdOf(model.messages, model.sinceMs, userId)
+	const entries = toEntries(model.messages, lookupsOf(model, userId), model.entries, firstNewId)
+	const loadingOlder = model.loadingOlder && model.messages.length < model.limit && model.hasMore
+	return { ...model, entries, loadingOlder }
+}
+
+/**
+ * The read position the visit started from, once both its queries answered (today's
+ * `new-messages.ts` `capture`): kept only when someone else wrote after it.
+ */
+export const capture = (model: MessageListModel, userId: UserId): MessageListModel => {
+	if (model.sinceCaptured || model.activity === undefined || model.readUpToMs === undefined) return model
+	const since = model.readUpToMs
+	const activity = model.activity
+	const isNew =
+		since !== null &&
+		activity !== null &&
+		activity.lastMessageAuthorId !== userId &&
+		activity.lastMessageAtMs > since
+	return { ...model, sinceCaptured: true, sinceMs: isNew ? since : null }
+}
+
+/** A change set over the window: rows in `order`, upserts replacing, the rest kept. */
+export const applyChanges = (
+	previous: ReadonlyArray<typeof ChatMessage.Type> | null,
+	order: ReadonlyArray<MessageId>,
+	upserts: ReadonlyArray<typeof ChatMessage.Type>,
+): ReadonlyArray<typeof ChatMessage.Type> => {
+	const byId = new Map((previous ?? []).map((message) => [message.id, message]))
+	for (const message of upserts) byId.set(message.id, message)
+	return order.flatMap((id) => {
+		const message = byId.get(id)
+		return message === undefined ? [] : [message]
 	})
+}
+
+/** Older messages may exist: the window is full, or the history says so. */
+export const hasOlder = (model: MessageListModel) =>
+	model.messages !== null && (model.messages.length >= model.limit || model.hasMore)
+
+/** Reaching the top pages in when the window is full (a short window is still filling). */
+export const nextLimit = (model: MessageListModel): number | null =>
+	model.messages === null || model.loadingOlder || model.messages.length < model.limit
+		? null
+		: model.limit + PAGE_SIZE
+
+const rowOf = (model: MessageListModel, id: MessageId): RowEntry | undefined =>
+	model.entries.find((entry): entry is RowEntry => entry._tag === "Row" && entry.key === id)
+
+const messageOf = (model: MessageListModel, id: MessageId) =>
+	model.messages?.find((message) => message.id === id)
+
+const hasUnreadLine = (model: MessageListModel) => model.entries.some((entry) => entry._tag === "Unread")
+
+/** `$.evolve` that sets every field of `next`: a derived Model with Commands to run. */
+const all = <M extends object>(next: M) =>
+	// SAFETY: one thunk per own key of `next`, which is what `evolve` takes.
+	Object.fromEntries(Object.entries(next).map(([key, value]) => [key, () => value])) as {
+		readonly [K in keyof M]: () => M[K]
+	}
+
+const joined = (ids: ReadonlyArray<string>) => [...new Set(ids)].sort().join(",")
+
+/** Each action's label and icon in the long-press sheet (the web toolbar's `actionLook`). */
+const ACTION_LOOK = {
+	react: { label: "Add reaction", icon: "emoji-add" },
+	reply: { label: "Reply", icon: "reply" },
+	thread: { label: "Reply in thread", icon: "thread" },
+	copy: { label: "Copy message", icon: "copy" },
+	edit: { label: "Edit message", icon: "edit" },
+	pin: { label: "Pin message", icon: "pin" },
+	unpin: { label: "Unpin message", icon: "pin" },
+	issue: { label: "Create issue", icon: "lightbulb" },
+	selectText: { label: "Select text", icon: "copy" },
+	delete: { label: "Delete message", icon: "trash" },
+} as const satisfies Record<MessageAction, { readonly label: string; readonly icon: IconName }>
+
+/** What a row action does: open the picker, run a Command, or nothing (`selectText` is the host's). */
+const actionStep = (props: MessageListProps, message: typeof ChatMessage.Type, action: MessageAction) =>
+	Match.value(action).pipe(
+		Match.when("react", () => "picker" as const),
+		// The host acts first for `selectText` (native selection on iOS); nothing more here.
+		Match.when("selectText", () => null),
+		Match.whenOr("pin", "unpin", () =>
+			TogglePin.make({
+				messageId: message.id,
+				channelId: props.channelId,
+				userId: props.userId,
+				pinnedId: message.pinnedId,
+			}),
+		),
+		Match.when("thread", () =>
+			RequestHost.make({
+				request: {
+					_tag: "OpenThread",
+					messageId: message.id,
+					threadChannelId: message.threadChannelId,
+				},
+			}),
+		),
+		Match.orElse(() =>
+			RequestHost.make({
+				request: { _tag: "Action", messageId: message.id, action, content: message.content },
+			}),
+		),
+	)
 
 export const MessageList = Hazel.component({
 	name: "MessageList",
 	props: MessageListProps,
-	model: Schema.Struct({
-		entries: Schema.Array(Entry),
-		loading: Schema.Boolean,
-		loadingOlder: Schema.Boolean,
-		isMember: Schema.Boolean,
-		unreadSince: Schema.NullOr(Schema.Struct({ count: Schema.Finite, label: Schema.String })),
-		profile: Schema.NullOr(Schema.Struct({ id: MessageId, userId: Schema.String, run: Schema.Finite })),
-	}),
+	model: MessageListModel,
 	message: MessageListMessage,
 }).make({
-	init: () => ({
-		entries: [],
-		loading: true,
+	init: ({ props }) => ({
+		messages: null,
+		limit: PAGE_SIZE,
+		hasMore: true,
 		loadingOlder: false,
-		isMember: true,
-		unreadSince: null,
+		reactions: [],
+		users: [],
+		bots: [],
+		attachments: [],
+		threadNames: [],
+		threadMessages: [],
+		replyTargets: [],
+		sinceMs: null,
+		sinceCaptured: false,
+		jumpPending: false,
+		entries: [],
+		nowMs: props.nowMs,
+		picker: null,
 		profile: null,
+		menu: null,
 	}),
 	update: {
-		ReachedStart: ($) => $.evolve({ loadingOlder: () => true }),
+		UpdatedMessages: ($, { order, upserts }) => {
+			const next = derive(
+				{ ...$.model, messages: applyChanges($.model.messages, order, upserts) },
+				$.props.userId,
+			)
+			if (!next.jumpPending || !hasUnreadLine(next)) return next
+			return $.evolve(all({ ...next, jumpPending: false })).run(ScrollToRow.make({ key: "unread" }))
+		},
+		UpdatedHistory: ($, { hasMore }) => derive({ ...$.model, hasMore }, $.props.userId),
+		UpdatedReactions: ($, { reactions }) => derive({ ...$.model, reactions }, $.props.userId),
+		UpdatedUsers: ($, { users }) => derive({ ...$.model, users }, $.props.userId),
+		UpdatedBots: ($, { bots }) => derive({ ...$.model, bots }, $.props.userId),
+		UpdatedAttachments: ($, { attachments }) => derive({ ...$.model, attachments }, $.props.userId),
+		UpdatedThreadNames: ($, { threads }) => derive({ ...$.model, threadNames: threads }, $.props.userId),
+		UpdatedThreadMessages: ($, { messages }) =>
+			derive({ ...$.model, threadMessages: messages }, $.props.userId),
+		UpdatedReplyTargets: ($, { targets }) =>
+			derive({ ...$.model, replyTargets: targets }, $.props.userId),
+		UpdatedReadPosition: ($, { readUpToMs }) =>
+			derive(capture({ ...$.model, readUpToMs }, $.props.userId), $.props.userId),
+		UpdatedActivity: ($, { activity }) =>
+			derive(capture({ ...$.model, activity }, $.props.userId), $.props.userId),
+		Ticked: ($, { nowMs }) => derive({ ...$.model, nowMs }, $.props.userId),
+		ReachedStart: ($) => {
+			const limit = nextLimit($.model)
+			return limit === null
+				? $.model
+				: $.evolve({ limit: () => limit, loadingOlder: () => true }).run(
+						MoveWindow.make({ channelId: $.props.channelId, limit }),
+					)
+		},
 		ReachedEnd: ($) => $.model,
-		PressedAction: ($) => $.model,
-		PressedReaction: ($) => $.model,
-		PressedAddReaction: ($) => $.model,
-		PressedAuthor: ($) => $.model,
+		PressedAction: ($, { id, action }) => {
+			const message = messageOf($.model, id)
+			const step = message === undefined ? null : actionStep($.props, message, action)
+			return step === null ? $.model : step === "picker" ? $.evolve({ picker: () => id }) : $.run(step)
+		},
+		PressedReaction: ($, { id, emoji }) =>
+			$.run(
+				ToggleReaction.make({
+					messageId: id,
+					channelId: $.props.channelId,
+					userId: $.props.userId,
+					emoji,
+				}),
+			),
+		PressedAddReaction: ($, { id }) => $.evolve({ picker: () => id }),
+		LongPressedMessage: ($, { id }) => $.evolve({ menu: () => id }),
+		DismissedMenu: ($) => $.evolve({ menu: () => null }),
+		PressedMenuAction: ($, { action }) => {
+			const id = $.model.menu
+			if (id === null) return $.model
+			const message = messageOf($.model, id)
+			const step = message === undefined ? null : actionStep($.props, message, action)
+			return step === null
+				? $.evolve({ menu: () => null })
+				: step === "picker"
+					? $.evolve({ menu: () => null, picker: () => id })
+					: $.evolve({ menu: () => null }).run(step)
+		},
+		PressedMenuReaction: ($, { emoji }) =>
+			$.model.menu === null
+				? $.model
+				: $.evolve({ menu: () => null }).run(
+						ToggleReaction.make({
+							messageId: $.model.menu,
+							channelId: $.props.channelId,
+							userId: $.props.userId,
+							emoji,
+						}),
+					),
+		SelectedEmoji: ($, { emoji }) =>
+			$.model.picker === null
+				? $.model
+				: $.evolve({ picker: () => null }).run(
+						ToggleReaction.make({
+							messageId: $.model.picker,
+							channelId: $.props.channelId,
+							userId: $.props.userId,
+							emoji,
+						}),
+					),
+		DismissedEmojiPicker: ($) => $.evolve({ picker: () => null }),
+		PressedAuthor: ($, { id }) => {
+			const row = rowOf($.model, id)
+			return row === undefined
+				? $.model
+				: $.run(RequestHost.make({ request: { _tag: "OpenProfile", userId: row.authorId } }))
+		},
 		PressedMention: ($, { id, userId, run }) => $.evolve({ profile: () => ({ id, userId, run }) }),
 		DismissedProfile: ($) => $.evolve({ profile: () => null }),
-		PressedLink: ($) => $.model,
-		PressedAttachment: ($) => $.model,
-		PressedReply: ($) => $.model,
-		PressedThread: ($) => $.model,
-		PressedRetry: ($) => $.model,
-		PressedJumpToUnread: ($) => $.model,
-		PressedMarkRead: ($) => $.evolve({ unreadSince: () => null }),
-		PressedJoin: ($) => $.evolve({ isMember: () => true }),
+		PressedLink: ($, { url }) => $.run(RequestHost.make({ request: { _tag: "OpenLink", url } })),
+		PressedAttachment: ($, { id, attachmentId }) => {
+			const files = rowOf($.model, id)?.row.files ?? []
+			const file = files.find((each) => each.id === attachmentId)
+			if (file === undefined) return $.model
+			const media = files.filter((each) => each.kind !== "file")
+			return $.run(
+				RequestHost.make({
+					request: {
+						_tag: "OpenAttachment",
+						messageId: id,
+						attachmentId,
+						url: file.url ?? "",
+						index: file.kind === "file" ? -1 : media.indexOf(file),
+					},
+				}),
+			)
+		},
+		PressedReply: ($, { id }) => {
+			const target = messageOf($.model, id)?.replyToMessageId ?? null
+			if (target === null) return $.model
+			return rowOf($.model, target) === undefined
+				? $.run(
+						RequestHost.make({
+							request: { _tag: "JumpToReply", fromMessageId: id, messageId: target },
+						}),
+					)
+				: $.run(ScrollToRow.make({ key: target }))
+		},
+		PressedThread: ($, { id }) =>
+			$.run(
+				RequestHost.make({
+					request: {
+						_tag: "OpenThread",
+						messageId: id,
+						threadChannelId: messageOf($.model, id)?.threadChannelId ?? null,
+					},
+				}),
+			),
+		PressedRetry: ($, { id }) => $.run(RequestHost.make({ request: { _tag: "Retry", messageId: id } })),
+		PressedJumpToUnread: ($) => {
+			if (hasUnreadLine($.model)) return $.run(ScrollToRow.make({ key: "unread" }))
+			const limit = nextLimit($.model)
+			return limit === null
+				? $.evolve({ jumpPending: () => true })
+				: $.evolve({ limit: () => limit, loadingOlder: () => true, jumpPending: () => true }).run(
+						MoveWindow.make({ channelId: $.props.channelId, limit }),
+					)
+		},
+		PressedMarkRead: ($) => derive({ ...$.model, sinceMs: null }, $.props.userId),
+		CompletedCommand: ($) => $.model,
+	},
+	subscriptions: ({ props, model }) => {
+		const messages = model.messages ?? []
+		const threadIds = joined(messages.flatMap((message) => message.threadChannelId ?? []))
+		const replyIds = joined(messages.flatMap((message) => message.replyToMessageId ?? []))
+		return [
+			Subscription.make("messages", [props.channelId], ([channelId]) =>
+				messagesStream(ChannelId.make(channelId)),
+			),
+			// A page past the window is kept loading ahead, as today.
+			Subscription.make("history", [props.channelId, model.limit + PAGE_SIZE], ([channelId, count]) =>
+				historyStream(ChannelId.make(channelId), count),
+			),
+			Subscription.make("reactions", [props.channelId], ([channelId]) =>
+				reactionsStream(ChannelId.make(channelId)),
+			),
+			Subscription.make("users", [], () => usersStream),
+			Subscription.make("bots", [], () => botsStream),
+			Subscription.make("attachments", [props.channelId, props.cdnUrl], ([channelId, cdnUrl]) =>
+				attachmentsStream(ChannelId.make(channelId), cdnUrl),
+			),
+			Subscription.make("threadNames", [threadIds], ([ids]) =>
+				threadNamesStream(ids === "" ? [] : ids.split(",").map((id) => ChannelId.make(id))),
+			),
+			Subscription.make("threadMessages", [threadIds], ([ids]) =>
+				threadMessagesStream(ids === "" ? [] : ids.split(",").map((id) => ChannelId.make(id))),
+			),
+			Subscription.make("replyTargets", [props.channelId, replyIds], ([channelId, ids]) =>
+				replyTargetsStream(
+					ChannelId.make(channelId),
+					ids === "" ? [] : ids.split(",").map((id) => MessageId.make(id)),
+				),
+			),
+			Subscription.make("readPosition", [props.channelId, props.userId], ([channelId, userId]) =>
+				readPositionStream(ChannelId.make(channelId), UserId.make(userId)),
+			),
+			Subscription.make("activity", [props.channelId], ([channelId]) =>
+				activityStream(ChannelId.make(channelId)),
+			),
+			Subscription.make("clock", [], () => clockStream),
+		]
 	},
 	view: (h, model) => {
-		const unreadBar =
-			model.unreadSince === null
+		const row = (entry: RowEntry) =>
+			h.message
+				.key(entry.key)
+				.row(entry.row)
+				.grouped(entry.grouped)
+				.pinned(entry.isPinned)
+				.entering(entry.entering)
+				.on("action", ({ action }) => MessageListMessage.PressedAction({ id: entry.key, action }))
+				.on("pressReaction", ({ emoji }) =>
+					MessageListMessage.PressedReaction({ id: entry.key, emoji }),
+				)
+				// No `addReaction`: today's row has no add pill; the toolbar's react raises `action`.
+				.on("pressAuthor", () => MessageListMessage.PressedAuthor({ id: entry.key }))
+				.on("longPress", () => MessageListMessage.LongPressedMessage({ id: entry.key }))
+				// The profile popover anchors at the pressed mention's run inside this row.
+				.on("pressMention", ({ userId, run }) =>
+					MessageListMessage.PressedMention({ id: entry.key, userId, run }),
+				)
+				.on("pressLink", ({ url }) => MessageListMessage.PressedLink({ url }))
+				.on("pressAttachment", ({ id }) =>
+					MessageListMessage.PressedAttachment({ id: entry.key, attachmentId: id }),
+				)
+				.on("pressReply", () => MessageListMessage.PressedReply({ id: entry.key }))
+				.on("pressThread", () => MessageListMessage.PressedThread({ id: entry.key }))
+				.on("retry", () => MessageListMessage.PressedRetry({ id: entry.key }))
+
+		const entry = (item: Entry) =>
+			Match.valueTags(item, {
+				Date: ({ key, label }) => h.listDivider.key(key).label(label),
+				Unread: ({ key }) => h.listDivider.key(key).kind("unread").label("New"),
+				Row: (rowEntry) => row(rowEntry),
+			})
+
+		const fresh =
+			model.messages === null
+				? null
+				: newCountOf(model.messages, model.sinceMs, h.props.userId, hasOlder(model))
+		// HAZEL-GAP(list-new-messages-bar): today's bar is a primary band with two halves; nearest is a muted frame.
+		const bar =
+			fresh === null || model.sinceMs === null
 				? null
 				: h.frame.surface("muted").children(
 						h.stack
@@ -137,7 +521,7 @@ export const MessageList = Hazel.component({
 								h.text
 									.role("label")
 									.children(
-										`${model.unreadSince.count} new messages since ${model.unreadSince.label}`,
+										`${fresh.count}${fresh.isAtLeast ? "+" : ""} ${fresh.count === 1 && !fresh.isAtLeast ? "new message" : "new messages"} since ${sinceLabel(model.sinceMs, model.nowMs)}`,
 									),
 								h.spacer,
 								h.button
@@ -152,40 +536,77 @@ export const MessageList = Hazel.component({
 									.on("press", MessageListMessage.PressedMarkRead()),
 							),
 					)
-		return h.stack.density("compact").children(
-			model.loading
+
+		const list =
+			model.messages === null
 				? h.list.loading()
-				: model.entries.length === 0
+				: model.messages.length === 0
 					? h.emptyState.illustration("squirrel").title("Quiet as an ocean gazing squirrel...")
 					: h.list
+							.ref(ListRef)
 							.anchor("end")
 							.stickToBottom()
 							.loadingStart(model.loadingOlder)
 							.on("reachStart", MessageListMessage.ReachedStart())
 							.on("reachEnd", MessageListMessage.ReachedEnd())
-							.overlay(unreadBar)
-							.children(...model.entries.map((item) => entry(h, item))),
-			h.popover
-				.open(model.profile !== null)
-				.anchorTo(
-					model.profile === null ? undefined : { key: model.profile.id, run: model.profile.run },
-				)
-				.on("dismiss", MessageListMessage.DismissedProfile())
-				.children(h.text.children(model.profile?.userId ?? "")),
-			model.isMember
-				? null
-				: h.frame.children(
-						h.stack
-							.align("center")
-							.children(
-								h.icon.name("hashtag"),
-								h.heading.level("2").children(h.props.channelName),
+							.overlay(bar)
+							.children(...model.entries.map(entry))
+
+		const menuRow = model.menu === null ? undefined : rowOf(model, model.menu)
+		const menuSheet = () =>
+			h.sheet
+				.open(menuRow !== undefined)
+				.title("Message")
+				.on("dismiss", MessageListMessage.DismissedMenu())
+				.children(
+					h.stack
+						.axis("horizontal")
+						.children(
+							...(menuRow?.row.quick ?? []).map((emoji) =>
 								h.button
-									.label(`Join #${h.props.channelName}`)
-									.size("large")
-									.on("press", MessageListMessage.PressedJoin()),
+									.key(`react:${emoji}`)
+									.label(emoji)
+									.variant("ghost")
+									.on("press", MessageListMessage.PressedMenuReaction({ emoji })),
+							),
+						),
+					h.frame.surface("flush").children(
+						// Holding on the text already selects it natively, so the sheet leaves `selectText` out.
+						...(menuRow?.row.actions ?? [])
+							.filter((action) => action !== "selectText")
+							.map((action) =>
+								h.item
+									.key(action)
+									.title(ACTION_LOOK[action].label)
+									.leading(h.icon.name(ACTION_LOOK[action].icon))
+									.on("press", MessageListMessage.PressedMenuAction({ action })),
 							),
 					),
+				)
+
+		const profile = model.profile
+		const profileName =
+			profile === null ? "" : (displayNameOf(lookupsOf(model, h.props.userId), profile.userId) ?? "")
+		return h.stack.children(
+			list,
+			h.popover
+				.open(profile !== null)
+				.anchorTo(profile === null ? undefined : { key: profile.id, run: profile.run })
+				.on("dismiss", MessageListMessage.DismissedProfile())
+				.children(
+					h.stack
+						.axis("horizontal")
+						.align("center")
+						.children(
+							h.avatar.name(profileName).initials(initialsOf(profileName)),
+							h.text.strong().children(profileName),
+						),
+				),
+			menuSheet(),
+			h.emojiPicker
+				.open(model.picker !== null)
+				.on("select", ({ emoji }) => MessageListMessage.SelectedEmoji({ emoji }))
+				.on("dismiss", MessageListMessage.DismissedEmojiPicker()),
 		)
 	},
 })
