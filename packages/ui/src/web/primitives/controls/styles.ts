@@ -9,11 +9,58 @@ const css = `
 	outline: 2px solid var(--hz-color-ring);
 	outline-offset: 2px;
 }
-:where([data-hz=textField], [data-hz=textArea], [data-hz=select], [data-hz=searchField], [data-hz=composer])
-	:is(input, textarea, select):focus-visible {
+:where([data-hz=textArea], [data-hz=searchField], [data-hz=composer]) :is(input, textarea):focus-visible {
 	outline: 2px solid color-mix(in oklab, var(--hz-color-ring) 70%, transparent);
 	outline-offset: 0;
 }
+/* The field's box shows focus (the kit's \`focus:border-ring/70 focus:ring-3 ring-ring/20\`), not the input. */
+:is([data-hz=textField], [data-hz=select]) [data-hz-part=control] > :is(input, select) {
+	min-width: 0;
+	outline: none;
+}
+:is([data-hz=textField], [data-hz=select]) input::placeholder { color: var(--hz-color-muted-fg); opacity: 1; }
+:is([data-hz=textField], [data-hz=select]) [data-hz-part=control]:has(> :is(input, select):focus) {
+	border-color: var(--hz-color-focus-ring);
+	box-shadow: 0 0 0 3px var(--hz-color-focus-halo);
+}
+:is([data-hz=textField], [data-hz=select])[data-invalid] [data-hz-part=control]:has(> input:focus) {
+	border-color: var(--hz-color-invalid-border);
+	box-shadow: 0 0 0 3px var(--hz-color-invalid-halo);
+}
+[data-hz=textField] [data-hz-part=input]::-ms-reveal { display: none; }
+[data-hz=textField] :is([data-hz-part=reveal], [data-hz-part=copy]),
+[data-hz=select][data-searchable] [data-hz-part=button] {
+	display: grid;
+	place-items: center;
+	cursor: pointer;
+}
+[data-hz=textField] :is([data-hz-part=reveal], [data-hz-part=copy]):is(:hover, :focus-visible):not(:disabled) {
+	color: var(--hz-color-fg);
+}
+:is([data-hz=textField] :is([data-hz-part=reveal], [data-hz-part=copy]), [data-hz=dropZone]):focus-visible {
+	outline: 2px solid var(--hz-color-ring);
+	outline-offset: 2px;
+}
+[data-hz=select][data-searchable] [data-hz-part=button] { cursor: default; }
+[data-hz=select] > [data-hz-part=status] {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+[data-hz=select] [data-hz-part=listbox] { max-height: 24rem; overscroll-behavior: contain; }
+[data-hz=select] [data-hz-part=group] + [data-hz-part=group] { margin-top: var(--hz-space-4); }
+[data-hz=select] [data-hz-part=option] { cursor: default; user-select: none; }
+[data-hz=select] [data-hz-part=option]:is([data-highlighted], :hover):not([data-disabled]) {
+	background: var(--hz-color-wash-strong);
+}
+[data-hz=select] [data-hz-part=option][data-disabled] { opacity: 0.5; }
+[data-hz=select] [data-hz-part=content]:empty { display: none; }
+/* HAZEL-GAP(drop-zone-dashed-edge): Declarations have no border style or 2px width; the colour is the recipe's. */
+[data-hz=dropZone] { border-width: 2px; border-style: dashed; cursor: pointer; }
+[data-hz=dropZone]:is(:disabled, [data-loading]) { cursor: default; }
 [data-hz=toggle] > [data-hz-part=control] { inline-size: var(--hz-space-10); align-self: start; }
 [data-hz=toggle] > [data-hz-part=control] > [data-hz-part=thumb] {
 	transition: translate var(--hz-duration-normal) var(--hz-ease-inOut);
