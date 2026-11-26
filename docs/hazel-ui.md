@@ -264,7 +264,8 @@ Rules:
   `// HAZEL-GAP(<id>): <what is needed>`, and appends the gap to `packages/ui/GAPS.md`. It never waits
   and never invents an option. The user resolves the ledger.
 - No escape hatches in shared screens: no `style`, classes, raw numbers or colours.
-- Composite patterns are primitives, filled through slots.
+- Composite patterns are primitives, filled through slots. A one-off layout that no primitive covers is
+  a governed `h.custom` composite (see "Settled with the user"), never ad hoc styling.
 - The gallery (web page and iOS screen, generated from the conformance fixtures) shows every primitive
   in every option and state, in both themes and size classes. It is the reference for what the system
   can say.
@@ -479,15 +480,15 @@ app moves to it and islands become ordinary children.
 | Two frameworks in the web app during islands | islands share the data package, not state; Foldkit owns routing and the head |
 | Lost hot reload and devtools for `hazel` roots | accepted for now; raise custom-root support upstream |
 
-## Open questions for the user
+## Settled with the user (2026-11-26)
 
-1. Where shared screens live: `apps/shared-screens`, or a folder in `packages/ui`?
-2. During the transition, does the iOS app keep the web-view fallback for unconverted screens (as the
-   hybrid does now), or ship only once the core loop is native?
-3. Names: `hazel` (runtime tags `hz:*`), `@hazel/ui`, `@hazel/client-data`?
-4. A governed composite valve: should screens be allowed `h.custom("Name")` composites built only from
-   primitives and tokens, registered in one file with a gallery entry, capped in number by a lint
-   count only you raise? It keeps consistency (no raw styling) while letting a one-off layout ship
-   without a new primitive. Without it, every such case is a `HAZEL-GAP`.
-5. The proposed option sets in "Design language": in particular `text.strong` as the only weight choice,
-   and `outline` and `warning` buttons.
+- **Governed composites: yes.** Screens may use `h.custom("Name")` composites built only from
+  primitives, tokens and the closed options, registered in one file (`packages/ui/src/custom/`) with a
+  gallery entry. A lint rule caps their number; only the user raises the cap. A composite never takes
+  raw styling. A composite a second screen wants is a candidate primitive.
+- **`text.strong`: yes,** as the only weight choice a view has.
+- **Defaults until the user says otherwise:** shared screens live in `apps/shared-screens`; the iOS app
+  keeps the web-view fallback for unconverted screens during the transition; names are `hazel`
+  (runtime tags `hz:*`), `@hazel/ui` and `@hazel/client-data`.
+- **Order:** the phase 0 gates run first, in parallel where they do not share files. Lanes start only
+  after the gates pass and the contracts are reviewed.
