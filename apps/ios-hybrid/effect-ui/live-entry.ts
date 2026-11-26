@@ -40,7 +40,9 @@ const program = Effect.gen(function* () {
 			yield* mountChannelSidebarNative(native.container, me.id)
 			return yield* Effect.never
 		case "activity":
-			yield* mountActivityLive(me.id, native.container, (id) => console.log(`[live] open channel ${id}`))
+			yield* mountActivityLive(me.id, native.container, (id) =>
+				console.log(`[live] open channel ${id}`),
+			)
 			console.log(`[live] activity mounted (${since()})`)
 			return yield* Effect.never
 	}

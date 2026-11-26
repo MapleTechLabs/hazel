@@ -100,7 +100,8 @@ export type Me = typeof Me.Type
 
 /** Roles with `channels:write`, which `channel.create` and `channel.delete` need (`role-scopes.ts`). */
 export const canManageChannels = (role: string | null) => role === "owner" || role === "admin"
-export const canCreateChannels = canManageChannels
+/** Creating channels needs the same role as managing them, today. */
+export const canCreateChannels = (role: string | null) => canManageChannels(role)
 
 export const isDmType = (type: string) => type === "direct" || type === "single"
 
