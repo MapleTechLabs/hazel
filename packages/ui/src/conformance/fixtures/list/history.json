@@ -1,0 +1,91 @@
+{
+	"about": "A chat-shaped list anchored at its end, loading older rows above, with dividers and the overlay bar.",
+	"root": {
+		"tag": "list",
+		"props": {
+			"anchor": "end",
+			"stickToBottom": true,
+			"loadingStart": true
+		},
+		"events": ["reachStart"],
+		"slots": [
+			{
+				"name": "overlay",
+				"children": [
+					{
+						"tag": "text",
+						"children": ["2 new messages since 14:00"],
+						"props": {
+							"role": "caption",
+							"tone": "accent"
+						}
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "listDivider",
+				"key": "d1",
+				"props": {
+					"label": "Yesterday"
+				}
+			},
+			{
+				"tag": "text",
+				"children": ["Ada: the build is green"]
+			},
+			{
+				"tag": "listDivider",
+				"key": "d2",
+				"props": {
+					"label": "Today"
+				}
+			},
+			{
+				"tag": "text",
+				"children": ["Grace: shipping at five"]
+			},
+			{
+				"tag": "listDivider",
+				"key": "unread",
+				"props": {
+					"kind": "unread",
+					"label": "New"
+				}
+			},
+			{
+				"tag": "text",
+				"children": ["Alan: one more fix"]
+			}
+		]
+	},
+	"aria": [
+		{
+			"role": "log"
+		},
+		{
+			"role": "status",
+			"name": "Loading"
+		},
+		{
+			"role": "separator",
+			"name": "Today"
+		}
+	],
+	"cases": [
+		{
+			"name": "loaded",
+			"props": {
+				"loadingStart": null
+			}
+		},
+		{
+			"name": "first-load",
+			"props": {
+				"loading": true,
+				"loadingStart": null
+			}
+		}
+	]
+}

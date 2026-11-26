@@ -1,6 +1,34 @@
 {
-	"about": "hz:listDivider with no props: lane A4 and lane S5 replace this with real cases.",
+	"about": "A day divider, and the unread divider with its label at the end.",
 	"root": {
-		"tag": "listDivider"
-	}
+		"tag": "listDivider",
+		"props": {
+			"label": "Today"
+		}
+	},
+	"aria": [
+		{
+			"role": "separator",
+			"name": "Today"
+		}
+	],
+	"axes": [
+		{
+			"prop": "kind",
+			"values": ["unread"]
+		},
+		{
+			"prop": "label",
+			"values": ["Wednesday, November 25"]
+		}
+	],
+	"cases": [
+		{
+			"name": "unread-new",
+			"props": {
+				"kind": "unread",
+				"label": "New"
+			}
+		}
+	]
 }
