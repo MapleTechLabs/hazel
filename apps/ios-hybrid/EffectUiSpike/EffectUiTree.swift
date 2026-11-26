@@ -1,100 +1,110 @@
 import Foundation
 import Observation
 import QuartzCore
+import os
 
-/// A semantic node (`web-foldkit/src/ui/semantic.ts`): an element the view marked with `data-ui`.
-struct UiNode: Identifiable {
+/// A `hazel` node as the views read it: its `hz:*` tag, its props as they crossed the wire, and its
+/// children. Typed views over the props are in `HazelViews.swift`.
+struct HzNode: Identifiable {
     let id: Int
-    let kind: String
-    let props: [String: Any]
-    let children: [UiNode]
+    let tag: String
+    let props: [String: JSONValue]
+    let text: String
+    let events: Set<String>
+    let children: [HzNode]
 
-    var title: String { props["title"] as? String ?? "" }
-    var symbol: String? { props["symbol"] as? String }
-    var badge: Int { props["badge"] as? Int ?? 0 }
-    var isSelected: Bool { props["isSelected"] as? Bool ?? false }
-    var isEmphasized: Bool { props["isEmphasized"] as? Bool ?? false }
-    var initials: String? { (props["avatar"] as? [String: Any])?["initials"] as? String }
+    /// The slot named `name` among the children (`hz:slot`, `.leading(...)`, `.fallback(...)`).
+    func slot(_ name: String) -> HzNode? {
+        children.first { $0.tag == "hz:slot" && $0.props["name"]?.string == name }
+    }
+
+    /// Children that are not slots: what a container lays out.
+    var content: [HzNode] { children.filter { $0.tag != "hz:slot" } }
+
+    /// The text of a text primitive: its text children joined.
+    var joinedText: String { children.map { $0.tag == "#text" ? $0.text : $0.joinedText }.joined() }
 }
 
-/// The host's tree as the script last committed it (`effect-ui/native-host.ts` ops), and the
-/// semantic screen read from it.
+/// The host's tree as the script last committed it (`packages/ui/src/native/host.ts` ops, wire v2).
 @Observable
 @MainActor
 final class EffectUiTree {
-    private final class Element {
+    private final class Node {
         let tag: String
-        var attrs: [String: String] = [:]
+        var props: [String: JSONValue] = [:]
+        var text = ""
+        var events: Set<String> = []
         var children: [Int] = []
         var parent: Int?
         init(tag: String) { self.tag = tag }
     }
 
-    private var elements: [Int: Element] = [0: Element(tag: "#container")]
-    private(set) var screen: UiNode?
+    private var nodes: [Int: Node] = [0: Node(tag: "#root")]
+    private(set) var root: [HzNode] = []
 
     /// What the last batches cost: shown on screen, so the numbers are in the screenshot.
     private(set) var batches = 0
+    private(set) var lastSeq = 0
     private(set) var lastOps = 0
     private(set) var lastBytes = 0
     private(set) var lastApplyMs = 0.0
 
-    func apply(_ ops: [[Any]], bytes: Int) {
+    func apply(_ batch: Batch, bytes: Int) {
         let started = CACurrentMediaTime()
-        for op in ops {
-            guard let name = op.first as? String, let id = op[safe: 1] as? Int else { continue }
-            switch name {
-            case "element":
-                elements[id] = Element(tag: op[safe: 2] as? String ?? "")
-            case "text":
-                elements[id] = Element(tag: "#text")
-            case "attr":
-                guard let element = elements[id], let key = op[safe: 2] as? String else { continue }
-                element.attrs[key] = op[safe: 3] as? String
-            case "insert":
-                guard let parent = elements[id], let child = op[safe: 2] as? Int else { continue }
-                detach(child)
-                let before = op[safe: 3] as? Int
+        if batch.seq != lastSeq + 1 {
+            EffectUiRuntime.log.error("[tree] batch \(batch.seq) after \(self.lastSeq): out of order")
+        }
+        for op in batch.ops {
+            switch op {
+            case let .create(id, tag):
+                nodes[id] = Node(tag: tag)
+            case let .props(id, changed):
+                guard let node = nodes[id] else { continue }
+                for (name, value) in changed {
+                    if value == .null { node.props[name] = nil } else { node.props[name] = value }
+                }
+            case let .text(id, text):
+                nodes[id]?.text = text
+            case let .insert(parentId, id, before):
+                guard let parent = nodes[parentId] else { continue }
+                detach(id)
                 let index = before.flatMap { parent.children.firstIndex(of: $0) } ?? parent.children.count
-                parent.children.insert(child, at: index)
-                elements[child]?.parent = id
-            case "remove":
+                parent.children.insert(id, at: index)
+                nodes[id]?.parent = parentId
+            case let .remove(id):
                 detach(id)
                 forget(id)
-            default:
+            case let .events(id, names):
+                nodes[id]?.events = Set(names)
+            case .detach, .command:
                 continue
             }
         }
-        screen = read(0).first
+        // G1 re-reads the tree per batch; per-node observation is G8.
+        root = nodes[0]?.children.compactMap(read) ?? []
         batches += 1
-        lastOps = ops.count
+        lastSeq = batch.seq
+        lastOps = batch.ops.count
         lastBytes = bytes
         lastApplyMs = (CACurrentMediaTime() - started) * 1000
     }
 
     private func detach(_ id: Int) {
-        guard let parent = elements[id]?.parent else { return }
-        elements[parent]?.children.removeAll { $0 == id }
-        elements[id]?.parent = nil
+        guard let parent = nodes[id]?.parent else { return }
+        nodes[parent]?.children.removeAll { $0 == id }
+        nodes[id]?.parent = nil
     }
 
     private func forget(_ id: Int) {
-        guard let element = elements.removeValue(forKey: id) else { return }
-        for child in element.children { forget(child) }
+        guard let node = nodes.removeValue(forKey: id) else { return }
+        for child in node.children { forget(child) }
     }
 
-    /// The semantic nodes at and under `id`: elements without `data-ui` are the web's drawing only.
-    private func read(_ id: Int) -> [UiNode] {
-        guard let element = elements[id] else { return [] }
-        let below = element.children.flatMap(read)
-        guard let kind = element.attrs["data-ui"] else { return below }
-        let props = element.attrs["data-ui-props"]
-            .flatMap { $0.data(using: .utf8) }
-            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
-        return [UiNode(id: id, kind: kind, props: props, children: below)]
+    private func read(_ id: Int) -> HzNode? {
+        guard let node = nodes[id] else { return nil }
+        return HzNode(
+            id: id, tag: node.tag, props: node.props, text: node.text, events: node.events,
+            children: node.children.compactMap(read)
+        )
     }
-}
-
-private extension Array {
-    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
 }

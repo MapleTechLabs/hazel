@@ -53,7 +53,7 @@ enum Theme {
 
     /// The web's own icon for a semantic `symbol` (`scripts/export-icons.ts`), else the SF Symbol.
     static func icon(_ symbol: String) -> Image {
-        let asset = ["number": "hazel.hashtag", "lock": "hazel.lock", "plus": "hazel.plus"][symbol]
+        let asset = ["hashtag": "hazel.hashtag", "number": "hazel.hashtag", "lock": "hazel.lock", "plus": "hazel.plus", "chevron-down": "hazel.chevron-down"][symbol]
         if let asset, UIImage(named: asset) != nil { return Image(asset) }
         return Image(systemName: symbol)
     }

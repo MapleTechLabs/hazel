@@ -2,7 +2,7 @@ import Foundation
 import JavaScriptCore
 import os
 
-/// Runs the Effect UI script (`effect-ui/entry.ts`) in a bare JavaScriptCore context: no WebKit, no
+/// Runs the `hazel` script (`effect-ui/entry.ts`) in a bare JavaScriptCore context: no WebKit, no
 /// DOM. It gives the script timers, `console` and `__native.post`, and hands each batch of ops to
 /// the tree.
 @MainActor
@@ -40,17 +40,25 @@ final class EffectUiRuntime {
         Self.log.log("[shell] script ran in \(ContinuousClock.now - started, privacy: .public)")
     }
 
-    /// A press on node `id`, delivered as the element's `event` (`NativeHost.fire`).
-    func fire(_ id: Int, _ event: String = "click") {
-        let fire = context.objectForKeyedSubscript("__effectUi")?.objectForKeyedSubscript("fire")
-        _ = fire?.call(withArguments: [id, event])
+    /// An event on node `id` (`press`, or an extension's own), back to the native host's `fire`.
+    func fire(_ id: Int, _ event: String = "press", payload: String = "{}") {
+        let fire = context.objectForKeyedSubscript("__hazel")?.objectForKeyedSubscript("fire")
+        _ = fire?.call(withArguments: [id, event, payload])
     }
 
     private func receive(_ json: String) {
-        guard let data = json.data(using: .utf8),
-              let ops = try? JSONSerialization.jsonObject(with: data) as? [[Any]]
-        else { return }
-        tree.apply(ops, bytes: data.count)
+        guard let data = json.data(using: .utf8) else { return }
+        do {
+            let batch = try JSONDecoder().decode(Batch.self, from: data)
+            // A wire this build does not speak is refused, not guessed at.
+            guard batch.v == Wire.version else {
+                Self.log.error("[shell] refused wire v\(batch.v), this build speaks v\(Wire.version)")
+                return
+            }
+            tree.apply(batch, bytes: data.count)
+        } catch {
+            Self.log.error("[shell] undecodable batch: \(error, privacy: .public)")
+        }
     }
 
     private func installConsole() {
