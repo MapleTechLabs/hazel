@@ -5,6 +5,8 @@
 	"scripts": {
 		"build:web": "vite build --config web/vite.config.mts",
 		"build:effect-ui": "bun build effect-ui/entry.ts --target=browser --format=iife --minify --outfile=build/effect-ui/effect-ui.js",
+		"build:effect-ui:live": "bun build effect-ui/live-entry.ts --target=browser --format=iife --minify --outfile=build/effect-ui/effect-ui.js",
+		"fixture-backend": "bun scripts/fixture-backend.ts",
 		"ios": "bun run build:web && bash scripts/run.sh",
 		"build:web:offline": "vite build --config web/vite.config.mts --mode offline",
 		"serve-fixture-html": "bun scripts/serve-fixture-html.ts",

@@ -3,7 +3,8 @@
 #   build/derived/Build/Products/Debug-iphonesimulator/EffectUiSpike.app
 set -euo pipefail
 cd "$(dirname "$0")/.."
-bun run build:effect-ui >/dev/null
+# EFFECT_UI_BUILD=build:effect-ui:live bundles the live-data entry (G3) instead of the demo.
+bun run "${EFFECT_UI_BUILD:-build:effect-ui}" >/dev/null
 # The hybrid target's folders, which the project spec requires to exist (left empty if unbuilt).
 mkdir -p build/web build/fonts
 bun scripts/export-icons.ts build/icons/Icons.xcassets >/dev/null
