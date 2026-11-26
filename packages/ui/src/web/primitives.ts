@@ -95,6 +95,8 @@ export const create = (document: Document, tag: string): Primitive | undefined =
 				events: undefined,
 			}
 		}
+		case "hz:stack":
+			return self(outer("div"), () => {})
 		case "hz:item": {
 			const node = outer("div")
 			const content = part(document, "span", "content")

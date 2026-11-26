@@ -20,6 +20,7 @@ export const structureCss = `
 [data-hz=screen] { display: flex; flex-direction: column; background: var(--hz-bg); min-height: 100%; padding: 0 16px 16px; }
 [data-hz=screen] > header { margin: 0 -16px; padding: 0 24px; height: 56px; display: flex; align-items: center; border-bottom: 1px solid var(--hz-band); }
 [data-hz=screen] > header > h1 { margin: 0; font-size: 14px; font-weight: 500; color: var(--hz-label-strong); opacity: .8; }
+[data-hz=stack] { display: flex; flex-direction: column; }
 [data-hz=section] { display: grid; grid-template-columns: 1fr auto; row-gap: 2px; padding: 16px 0; }
 [data-hz=section] > h2 { grid-column: 1; grid-row: 1; margin: 0; padding-left: 10px; height: 32px; display: flex; align-items: center; font-size: 12px; font-weight: 500; color: var(--hz-section); }
 [data-hz=section] > [data-hz-part=content] > * { grid-column: 1 / -1; }
