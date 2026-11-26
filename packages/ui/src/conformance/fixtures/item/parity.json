@@ -1,5 +1,5 @@
 {
-	"about": "Phase 3 row options: unread marks, two-line title and subtitle, a large leading avatar, a hover-only trailing slot.",
+	"about": "Phase 3 row options: unread marks, two-line title and subtitle, and hover-only `actions` after the trailing slot.",
 	"root": {
 		"tag": "item",
 		"props": {
@@ -23,6 +23,20 @@
 				"name": "trailing",
 				"children": [
 					{
+						"tag": "text",
+						"props": {
+							"role": "caption",
+							"tone": "muted",
+							"numeric": true
+						},
+						"children": ["2m"]
+					}
+				]
+			},
+			{
+				"name": "actions",
+				"children": [
+					{
 						"tag": "button",
 						"props": {
 							"label": "Mark as read",
@@ -42,10 +56,6 @@
 		{
 			"prop": "unread",
 			"values": ["pip", "dot"]
-		},
-		{
-			"prop": "trailingOnHover",
-			"values": [true]
 		}
 	],
 	"cases": [

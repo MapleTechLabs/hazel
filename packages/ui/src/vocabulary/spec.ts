@@ -596,13 +596,13 @@ export const tags = {
 			subtitleLines: option(O.LineCount, "1"),
 			// `large`: a 40pt avatar or icon tile leads the row, top aligned.
 			leadingSize: option(O.ItemLeadingSize, "regular"),
-			// The trailing slot shows on hover or focus within (always on touch); it never grows the row.
-			trailingOnHover: flag,
 			// A keyboard shortcut hint at the row's end; web only, iOS ignores it.
 			shortcut: text,
 			href: text,
 		},
-		slots: ["leading", "trailing"],
+		// `actions`: controls shown on hover or focus within (always on touch), after `trailing`; they
+		// never grow the row (`item-hover-trailing`, `item-hover-action`).
+		slots: ["leading", "trailing", "actions"],
 		events: { press: none, longPress: none },
 		commands: ["scrollTo"],
 	}),
