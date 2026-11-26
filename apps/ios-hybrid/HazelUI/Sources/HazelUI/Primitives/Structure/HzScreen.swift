@@ -95,7 +95,7 @@ private struct ScreenHeader: View {
 }
 
 /// The content column. It scrolls unless it holds its own scroller (`list`, `scroll`), and hands
-/// its scroll view to rows for `item.scrollTo`.
+/// its scroll view to rows for `item.scrollTo`. The `floatingAction` slot floats over its end corner.
 private struct ScreenContent: View {
     let tree: Tree
     let node: Node
@@ -104,15 +104,66 @@ private struct ScreenContent: View {
     var body: some View {
         let style = HazelTheme.Recipes.screen.style(part: "content", sizeClass: sizeClass)
         let scrolls = tree.content(of: node).contains { $0.tag == "hz:list" || $0.tag == "hz:scroll" }
-        let column = VStack(alignment: .leading, spacing: 0) { ChildrenView(tree: tree, node: node) }
+        // As the web's sticky slot after the last row: 16pt, the 56pt action, then the content's padding.
+        let floating = tree.slot("floatingAction", of: node) != nil
+        let reserve = floating ? (HazelTheme.space["4"] ?? 0) + (HazelTheme.space["14"] ?? 0) : 0
+        let column = VStack(alignment: .leading, spacing: 0) { ScreenChildren(tree: tree, node: node) }
             .padding(.vertical, style.paddingY ?? 0)
+            .padding(.bottom, reserve)
             .frame(maxWidth: .infinity, alignment: .topLeading)
-        if scrolls {
-            column.frame(maxHeight: .infinity, alignment: .top)
-        } else {
-            ScrollViewReader { proxy in
-                ScrollView { column }.environment(\.hzScrollProxy, proxy)
+        Group {
+            if scrolls {
+                column.frame(maxHeight: .infinity, alignment: .top)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView { column }.environment(\.hzScrollProxy, proxy)
+                }
             }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            FloatingAction(tree: tree, node: node).padding(.bottom, style.paddingY ?? 0)
+        }
+    }
+}
+
+/// The screen's children inside its margins (`screen-margins`): 16pt each side, except rows and
+/// containers that inset themselves or run edge to edge (sections, items, lists, the people strip).
+private struct ScreenChildren: View {
+    let tree: Tree
+    let node: Node
+
+    static let fullBleed: Set<String> = [
+        "hz:section", "hz:item", "hz:list", "hz:listDivider", "hz:scroll", "hz:peopleStrip", "hz:divider", "hz:ext",
+    ]
+
+    var body: some View {
+        let _ = RenderCounter.recordList(node.id)
+        let margin = HazelTheme.space["4"] ?? 0
+        ForEach(node.children, id: \.self) { id in
+            if let child = tree.node(id), child.tag != "hz:slot" {
+                NodeView(tree: tree, node: child)
+                    .padding(.horizontal, Self.fullBleed.contains(child.tag) ? 0 : margin)
+            }
+        }
+    }
+}
+
+/// `floatingAction`: today's DMs compose, a 56pt primary disc with the `lg` shadow around the slot's
+/// button, 16pt in from the content's end corner. Not Liquid Glass yet: `layer.render` snapshots draw
+/// a glass view black, so the web's disc stands in until the harness captures glass.
+private struct FloatingAction: View {
+    let tree: Tree
+    let node: Node
+
+    var body: some View {
+        if let slot = tree.slot("floatingAction", of: node) {
+            let side = HazelTheme.space["14"] ?? 0
+            let disc = HazelTheme.Style(background: HazelTheme.Colors.primary, radius: side / 2, shadow: "lg")
+            HStack(spacing: 0) { ChildrenView(tree: tree, node: slot) }
+                .frame(width: side, height: side)
+                .background(Circle().fill(HazelTheme.Colors.primary.color))
+                .hzShadow(disc)
+                .padding(.trailing, HazelTheme.space["4"] ?? 0)
         }
     }
 }
