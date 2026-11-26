@@ -1,359 +1,60 @@
-import {
-	Assistant,
-	Attachment,
-	Bot,
-	BotCommand,
-	BotInstallation,
-	Channel,
-	ChannelActivity,
-	ChannelMember,
-	ChannelSection,
-	ChannelCustomer,
-	ChatSyncChannelLink,
-	ChatSyncConnection,
-	ChatSyncMessageLink,
-	ConnectConversation,
-	ConnectConversationChannel,
-	CustomerChatAuthor,
-	CustomEmoji,
-	IntegrationConnection,
-	JsonDate,
-	Message,
-	MessageAgentMark,
-	MessageReaction,
-	Notification,
-	NotificationOverride,
-	Organization,
-	OrganizationExport,
-	OrganizationMember,
-	PinnedMessage,
-	TypingIndicator,
-	User,
-	UserGroup,
-	UserPresenceStatus,
-} from "@hazel/domain/models"
-import { OrganizationId } from "@hazel/schema"
-import { Schema } from "effect"
-import {
-	type CollectionSources,
-	channelPartition,
-	createEffectCollection,
-	type EffectCollection,
-} from "@hazel/effect-db-collection"
-import { persistedCollectionOptions } from "@tanstack/browser-db-sqlite-persistence"
-import { localCachePersistence } from "./local-cache"
-import * as Customers from "@hazel/domain/customers"
-import { customersSources, orgSources, syncHub, unionSources, userSources } from "./sync"
+/** Re-exports `@hazel/client-data` (and the app's instance, `./client.ts`) at its old path. */
+import { clientData } from "./client"
 
-/**
- * Collections over the Durable Object sources (`./sync.ts`): the user's own object, the orgs it
- * belongs to (plus Connect host orgs), and on demand the channels a query names by `channelId`.
- * Rows are keyed by `id`, the server's `pk`.
- */
-const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/
+export { cacheVersionOf, parseTimestamps, UserOrganization } from "@hazel/client-data"
 
-/**
- * Rows carry timestamps as ISO text; the models' `JsonDate` would decode that to a `DateTime`, while
- * the app reads `Date`s, so ISO timestamp strings are parsed into `Date`s first.
- */
-export const parseTimestamps = (row: unknown): unknown => {
-	if (typeof row !== "object" || row === null) return row
-	const parsed: Record<string, unknown> = {}
-	for (const [key, value] of Object.entries(row)) {
-		parsed[key] = typeof value === "string" && ISO_TIMESTAMP.test(value) ? new Date(value) : value
-	}
-	return parsed
-}
-
-/**
- * Bump it when what the cache stores changes outside the models (e.g. `parseTimestamps`): every
- * collection's stored rows are dropped. A model's own changes need no bump (`cacheVersionOf`).
- */
-const CACHE_EPOCH = 5
-
-/**
- * The local cache's version of a collection's stored rows (`./local-cache.ts`): a hash of its model,
- * so a changed model drops that collection's rows and stored seq, and its source sends a snapshot.
- * Stored rows are not decoded again, so a row kept from before a field was added would lack it.
- */
-export const cacheVersionOf = (schema: Schema.Top): number => {
-	const text = `${CACHE_EPOCH}:${JSON.stringify(Schema.toJsonSchemaDocument(schema))}`
-	// FNV-1a, 32 bits: a non-negative integer, as the persistence requires.
-	let hash = 0x811c9dc5
-	for (let index = 0; index < text.length; index++) {
-		hash ^= text.charCodeAt(index)
-		hash = Math.imul(hash, 0x01000193)
-	}
-	return hash >>> 0
-}
-
-/** Keeps an eager collection's rows on disk while the local cache is on. */
-const persist = (schema: Schema.Top) =>
-	localCachePersistence === undefined
-		? undefined
-		: <O extends object>(options: O) =>
-				persistedCollectionOptions({
-					...(options as O & Parameters<typeof persistedCollectionOptions>[0]),
-					persistence: localCachePersistence!,
-					schemaVersion: cacheVersionOf(schema),
-				})
-
-const syncedCollection = <A extends { readonly id: string }>(
-	table: string,
-	schema: Schema.Schema<A>,
-	sources: CollectionSources,
-): EffectCollection<A> =>
-	createEffectCollection<A, string | number>(
-		{
-			id: table,
-			table,
-			schema,
-			parseRow: parseTimestamps,
-			getKey: (item) => item.id,
-			hub: syncHub,
-			sources,
-		},
-		// Channel-partitioned collections keep nothing: a channel's source sends its snapshot.
-		"partition" in sources ? undefined : persist(schema),
-	)
-
-const orgCollection = <A extends { readonly id: string }>(table: string, schema: Schema.Schema<A>) =>
-	syncedCollection(table, schema, orgSources)
-
-const channelCollectionOf = <A extends { readonly id: string }>(table: string, schema: Schema.Schema<A>) =>
-	syncedCollection(table, schema, channelPartition())
-
-/** The user's organizations (`UserObject`): which `OrgObject`s to open. Keyed by `organizationId`. */
-export const UserOrganization = Schema.Struct({
-	organizationId: OrganizationId,
-	joinedAt: JsonDate,
-})
-export type UserOrganization = typeof UserOrganization.Type
-
-export const userOrganizationCollection = createEffectCollection(
-	{
-		id: "user_organizations",
-		table: "user_organizations",
-		schema: UserOrganization,
-		parseRow: parseTimestamps,
-		getKey: (row) => row.organizationId,
-		hub: syncHub,
-		sources: userSources,
-	},
-	persist(UserOrganization),
-)
-
-export const organizationCollection = orgCollection("organizations", Organization.Schema)
-export const messageCollection = channelCollectionOf("messages", Message.Schema)
-export const messageReactionCollection = channelCollectionOf("message_reactions", MessageReaction.Schema)
-/** Messages an agent wrote for their author (the author's organization only). */
-export const messageAgentMarkCollection = channelCollectionOf("message_agent_marks", MessageAgentMark.Schema)
-export const pinnedMessageCollection = channelCollectionOf("pinned_messages", PinnedMessage.Schema)
-export const notificationCollection = syncedCollection("notifications", Notification.Schema, userSources)
-export const userCollection = orgCollection("users", User.Schema)
-export const organizationMemberCollection = orgCollection("organization_members", OrganizationMember.Schema)
-export const channelCollection = orgCollection("channels", Channel.Schema)
-export const connectConversationCollection = orgCollection(
-	"connect_conversations",
-	ConnectConversation.Schema,
-)
-export const connectConversationChannelCollection = orgCollection(
-	"connect_conversation_channels",
-	ConnectConversationChannel.Schema,
-)
-export const channelMemberCollection = orgCollection("channel_members", ChannelMember.Schema)
-export const channelSectionCollection = orgCollection("channel_sections", ChannelSection.Schema)
-/** The organization's user groups (Discord's mentionable roles), for `@handle` mentions. */
-export const userGroupCollection = orgCollection("user_groups", UserGroup.Schema)
-/** Who is in each user group. Keyed by `groupId:userId`. */
-export const userGroupMemberCollection = createEffectCollection(
-	{
-		id: "user_group_members",
-		table: "user_group_members",
-		schema: UserGroup.MemberSchema,
-		parseRow: parseTimestamps,
-		getKey: (row) => `${row.groupId}:${row.userId}`,
-		hub: syncHub,
-		sources: orgSources,
-	},
-	persist(UserGroup.MemberSchema),
-)
-export const attachmentCollection = channelCollectionOf("attachments", Attachment.Schema)
-export const typingIndicatorCollection = channelCollectionOf("typing_indicators", TypingIndicator.Schema)
-export const userPresenceStatusCollection = syncedCollection(
-	"user_presence_status",
-	UserPresenceStatus.Schema,
-	unionSources(userSources, orgSources),
-)
-export const integrationConnectionCollection = orgCollection(
-	"integration_connections",
-	IntegrationConnection.Schema,
-)
-export const chatSyncConnectionCollection = orgCollection("chat_sync_connections", ChatSyncConnection.Schema)
-export const chatSyncChannelLinkCollection = orgCollection(
-	"chat_sync_channel_links",
-	ChatSyncChannelLink.Schema,
-)
-export const chatSyncMessageLinkCollection = channelCollectionOf(
-	"chat_sync_message_links",
-	ChatSyncMessageLink.Schema,
-)
-/**
- * Each channel's newest message (`channel_activity`): with the user's read position, whether the
- * channel is unread (`core/lib/unread.ts`). Keyed by `channelId`; members who see the channel only.
- */
-export const channelActivityCollection = createEffectCollection(
-	{
-		id: "channel_activity",
-		table: "channel_activity",
-		schema: ChannelActivity.Schema,
-		parseRow: parseTimestamps,
-		getKey: (row) => row.channelId,
-		hub: syncHub,
-		sources: orgSources,
-	},
-	persist(ChannelActivity.Schema),
-)
-/**
- * The user's own read position in each channel (`channel_read_state`; nobody else's is sent).
- * Keyed by `channelId:userId`.
- */
-export const channelReadStateCollection = createEffectCollection(
-	{
-		id: "channel_read_state",
-		table: "channel_read_state",
-		schema: ChannelActivity.ReadState,
-		parseRow: parseTimestamps,
-		getKey: (row) => `${row.channelId}:${row.userId}`,
-		hub: syncHub,
-		sources: orgSources,
-	},
-	persist(ChannelActivity.ReadState),
-)
-/**
- * The user's own organization and section notification settings (`notification_overrides`).
- * Keyed by `userId:scope:scopeId`.
- */
-export const notificationOverrideCollection = createEffectCollection(
-	{
-		id: "notification_overrides",
-		table: "notification_overrides",
-		schema: NotificationOverride.Schema,
-		parseRow: parseTimestamps,
-		getKey: (row) => `${row.userId}:${row.scope}:${row.scopeId}`,
-		hub: syncHub,
-		sources: orgSources,
-	},
-	persist(NotificationOverride.Schema),
-)
-/**
- * Each linked channel's customer (`channel_customers`, the `CustomersObject`'s projection into the
- * org): what chat shows on a channel. Keyed by `channelId`; members who see the channel only.
- */
-export const channelCustomerCollection = createEffectCollection(
-	{
-		id: "channel_customers",
-		table: "channel_customers",
-		schema: ChannelCustomer.Schema,
-		parseRow: parseTimestamps,
-		getKey: (row) => row.channelId,
-		hub: syncHub,
-		sources: orgSources,
-	},
-	persist(ChannelCustomer.Schema),
-)
-/**
- * Who writes in the org's channels linked to customers (`customer_chat_authors`,
- * `docs/customers/author-side.md`): each author's side (customer, team, bot, unknown), why, and a
- * member's override. Keyed by `organizationId:userId`; the org's members only.
- */
-export const customerChatAuthorCollection = createEffectCollection(
-	{
-		id: "customer_chat_authors",
-		table: "customer_chat_authors",
-		schema: CustomerChatAuthor.Schema,
-		parseRow: parseTimestamps,
-		getKey: (row) => `${row.organizationId}:${row.userId}`,
-		hub: syncHub,
-		sources: orgSources,
-	},
-	persist(CustomerChatAuthor.Schema),
-)
-export const botCollection = orgCollection("bots", Bot.Schema)
-export const botCommandCollection = orgCollection("bot_commands", BotCommand.Schema)
-export const botInstallationCollection = orgCollection("bot_installations", BotInstallation.Schema)
-export const customEmojiCollection = orgCollection("custom_emojis", CustomEmoji.Schema)
-/** Data exports and their progress (owners and admins only; `organizationExport.*`). */
-export const organizationExportCollection = orgCollection("organization_exports", OrganizationExport.Schema)
-/** The AI panel's threads and their items: the member's own, and those shared with the org. */
-export const assistantThreadCollection = orgCollection("assistant_threads", Assistant.Thread)
-export const assistantItemCollection = orgCollection("assistant_items", Assistant.Item)
-
-// Customers (`docs/customers/tech-design.md` §6): the org's `CustomersObject`, opened when the
-// Customers area is first entered (`openCustomersSource`). Filter by `organizationId`.
-const customersCollection = <A extends { readonly id: string }>(table: string, schema: Schema.Schema<A>) =>
-	syncedCollection(table, schema, customersSources)
-
-export const customerAccountCollection = customersCollection("customer_accounts", Customers.Account.Schema)
-export const customerSignalCollection = customersCollection("customer_signals", Customers.Signal.Schema)
-export const customerIssueCollection = customersCollection("customer_issues", Customers.Issue.Schema)
-export const customerIssueSlaCollection = customersCollection(
-	"customer_issue_slas",
-	Customers.IssueSla.Schema,
-)
-export const customerSignalRuleCollection = customersCollection(
-	"customer_signal_rules",
-	Customers.SignalRule.Schema,
-)
-export const customerSlaPolicyCollection = customersCollection(
-	"customer_sla_policies",
-	Customers.SlaPolicy.Schema,
-)
-export const customerNoteCollection = customersCollection("customer_notes", Customers.Note.Schema)
-export const customerSavedViewCollection = customersCollection(
-	"customer_saved_views",
-	Customers.SavedView.Schema,
-)
-export const customerViewLayoutCollection = customersCollection(
-	"customer_view_layouts",
-	Customers.ViewLayout.Schema,
-)
-export const customerSettingsCollection = customersCollection("customer_settings", Customers.Settings.Schema)
-export const customerMetricDefinitionCollection = customersCollection(
-	"customer_metric_definitions",
-	Customers.MetricDefinition.Schema,
-)
-export const customerConnectionCollection = customersCollection(
-	"customer_connections",
-	Customers.Connection.Schema,
-)
-export const customerSyncRunCollection = customersCollection("customer_sync_runs", Customers.SyncRun.Schema)
-export const customerChannelLinkCollection = customersCollection(
-	"customer_channel_links",
-	Customers.ChannelLink.Schema,
-)
-/** Per account, who wrote in its linked channels and their side. Keyed by `accountId:userId`. */
-export const customerChatParticipantCollection = createEffectCollection(
-	{
-		id: "customer_chat_participants",
-		table: "customer_chat_participants",
-		schema: Customers.ChatParticipant,
-		parseRow: parseTimestamps,
-		getKey: (row) => `${row.accountId}:${row.userId}`,
-		hub: syncHub,
-		sources: customersSources,
-	},
-	persist(Customers.ChatParticipant),
-)
-export const customerFeatureFlagCollection = customersCollection(
-	"customer_feature_flags",
-	Customers.FeatureFlag.Schema,
-)
-export const customerImpersonatorCollection = customersCollection(
-	"customer_impersonators",
-	Customers.Impersonator.Schema,
-)
-export const customerImpersonationCollection = customersCollection(
-	"customer_impersonations",
-	Customers.Impersonation.Schema,
-)
+export const {
+	userOrganizationCollection,
+	organizationCollection,
+	messageCollection,
+	messageReactionCollection,
+	messageAgentMarkCollection,
+	pinnedMessageCollection,
+	notificationCollection,
+	userCollection,
+	organizationMemberCollection,
+	channelCollection,
+	connectConversationCollection,
+	connectConversationChannelCollection,
+	channelMemberCollection,
+	channelSectionCollection,
+	userGroupCollection,
+	userGroupMemberCollection,
+	attachmentCollection,
+	typingIndicatorCollection,
+	userPresenceStatusCollection,
+	integrationConnectionCollection,
+	chatSyncConnectionCollection,
+	chatSyncChannelLinkCollection,
+	chatSyncMessageLinkCollection,
+	channelActivityCollection,
+	channelReadStateCollection,
+	notificationOverrideCollection,
+	channelCustomerCollection,
+	customerChatAuthorCollection,
+	botCollection,
+	botCommandCollection,
+	botInstallationCollection,
+	customEmojiCollection,
+	organizationExportCollection,
+	assistantThreadCollection,
+	assistantItemCollection,
+	customerAccountCollection,
+	customerSignalCollection,
+	customerIssueCollection,
+	customerIssueSlaCollection,
+	customerSignalRuleCollection,
+	customerSlaPolicyCollection,
+	customerNoteCollection,
+	customerSavedViewCollection,
+	customerViewLayoutCollection,
+	customerSettingsCollection,
+	customerMetricDefinitionCollection,
+	customerConnectionCollection,
+	customerSyncRunCollection,
+	customerChannelLinkCollection,
+	customerChatParticipantCollection,
+	customerFeatureFlagCollection,
+	customerImpersonatorCollection,
+	customerImpersonationCollection,
+} = clientData.collections
