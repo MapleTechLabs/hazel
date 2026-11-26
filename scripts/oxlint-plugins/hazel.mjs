@@ -49,8 +49,13 @@ const noRawEscape = {
 			CallExpression(node) {
 				const name = propertyName(node.callee)
 				if (name === undefined) return
-				if (RAW_METHODS.has(name)) context.report({ node: node.callee.property, messageId: "rawMethod", data: { name } })
-				else if (DEFINERS.has(name) && node.callee.object.type === "Identifier" && node.callee.object.name === "Hazel")
+				if (RAW_METHODS.has(name))
+					context.report({ node: node.callee.property, messageId: "rawMethod", data: { name } })
+				else if (
+					DEFINERS.has(name) &&
+					node.callee.object.type === "Identifier" &&
+					node.callee.object.name === "Hazel"
+				)
 					context.report({ node, messageId: "definer", data: { object: "Hazel", name } })
 			},
 			MemberExpression(node) {
@@ -61,7 +66,12 @@ const noRawEscape = {
 			ImportDeclaration(node) {
 				const source = node.source.value
 				for (const [pattern, why] of BANNED_IMPORTS)
-					if (pattern.test(source)) context.report({ node: node.source, messageId: "bannedImport", data: { source, why } })
+					if (pattern.test(source))
+						context.report({
+							node: node.source,
+							messageId: "bannedImport",
+							data: { source, why },
+						})
 			},
 		}
 	},
@@ -84,7 +94,12 @@ const customCap = {
 				const files = readdirSync(dirname(context.filename)).filter(
 					(file) => file.endsWith(".ts") && file !== "index.ts" && !file.includes(".test."),
 				)
-				if (files.length > cap) context.report({ node: program, messageId: "overCap", data: { count: files.length, cap } })
+				if (files.length > cap)
+					context.report({
+						node: program,
+						messageId: "overCap",
+						data: { count: files.length, cap },
+					})
 			},
 		}
 	},

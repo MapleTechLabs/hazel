@@ -353,8 +353,8 @@ export type HazelTags<Msg> = { readonly [K in PublicKey]: TagBuilder<Msg, K> } &
 	) => HzExtension<Msg, never, ExtensionEvents<D>>
 	readonly custom: <P, Ev extends string>(
 		definition: Composite<string, P, Ev>,
-		props: P,
-		on?: { readonly [K in Ev]?: Msg },
+		props: NoInfer<P>,
+		on?: { readonly [K in NoInfer<Ev>]?: Msg },
 	) => NoTextContent<Msg>
 	/** Closed: a shared screen names only `hazel` tags (`hazel/no-raw-escape` covers runtime). */
 	readonly el: never
