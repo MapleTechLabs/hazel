@@ -11,19 +11,24 @@ struct HzSection: View {
     var body: some View {
         let _ = RenderCounter.record(node.id)
         let sizeClass = HazelTheme.SizeClass(horizontalSizeClass)
-        let root = HazelTheme.Recipes.section.style(sizeClass: sizeClass)
+        let look = node[prop: "style"]?.string ?? "sidebar"
+        let root = HazelTheme.Recipes.section.style(part: nil, options: ["style": look], flags: [], states: [],
+                                                     sizeClass: sizeClass)
         let title = node[prop: "title"]?.string ?? ""
         let collapsed = node[prop: "collapsed"]?.bool == true
         // The web lays the header and rows out as one wrapping row; `rowGap` separates every line.
         VStack(alignment: .leading, spacing: root.rowGap ?? 0) {
             SectionHeader(tree: tree, node: node, title: title, collapsible: node[prop: "collapsible"]?.bool == true,
-                          collapsed: collapsed, sizeClass: sizeClass)
+                          collapsed: collapsed, look: look, sizeClass: sizeClass)
             if !collapsed {
-                SectionRows(tree: tree, node: node, reorderable: node[prop: "reorderable"]?.bool == true)
+                // A `list` section's rows run edge to edge, past its inset (as the web's bleed).
+                SectionRows(tree: tree, node: node, reorderable: node[prop: "reorderable"]?.bool == true,
+                            bleed: look == "list" ? root.paddingX ?? 0 : 0)
             }
         }
         .padding(.horizontal, root.paddingX ?? 0)
-        .padding(.vertical, root.paddingY ?? 0)
+        .padding(.top, root.paddingTop ?? root.paddingY ?? 0)
+        .padding(.bottom, root.paddingBottom ?? root.paddingY ?? 0)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
@@ -38,6 +43,7 @@ private struct SectionHeader: View {
     let title: String
     let collapsible: Bool
     let collapsed: Bool
+    let look: String
     let sizeClass: HazelTheme.SizeClass
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -56,7 +62,7 @@ private struct SectionHeader: View {
 
     private var titleView: some View {
         let recipe = HazelTheme.Recipes.section
-        let style = recipe.style(part: "title", sizeClass: sizeClass)
+        let style = recipe.style(part: "title", options: ["style": look], flags: [], states: [], sizeClass: sizeClass)
         return Group {
             if collapsible {
                 Button {
@@ -74,6 +80,8 @@ private struct SectionHeader: View {
                 Text(title).lineLimit(1).accessibilityAddTraits(.isHeader)
                     .hzText(style, sizeClass)
                     .padding(.horizontal, style.paddingX ?? 0)
+                    .padding(.leading, style.paddingStart ?? 0)
+                    .padding(.vertical, style.paddingY ?? 0)
                     .padding(.bottom, style.marginBottom ?? 0)
             }
         }
@@ -109,6 +117,8 @@ private struct SectionRows: View {
     let tree: Tree
     let node: Node
     let reorderable: Bool
+    /// How far each `hz:item` row reaches past the section's inset on both sides.
+    let bleed: CGFloat
 
     var body: some View {
         let _ = RenderCounter.recordList(node.id)
@@ -125,7 +135,7 @@ private struct SectionRows: View {
                         return true
                     }
             } else {
-                NodeView(tree: tree, node: row)
+                NodeView(tree: tree, node: row).padding(.horizontal, row.tag == "hz:item" ? -bleed : 0)
             }
         }
     }
