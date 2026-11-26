@@ -31,7 +31,13 @@ export const galleryConfig = (): InlineConfig => ({
 	// One copy of foldkit's modules, as the app's own gallery config does.
 	optimizeDeps: { exclude: ["foldkit"] },
 	define: { __APP_VERSION__: JSON.stringify("gallery") },
-	server: { port: 3190, strictPort: false, fs: { allow: [resolve(import.meta.dirname, "../../../..")] } },
+	// One address family: on `localhost` a parallel run on [::1] shadows this one's 127.0.0.1 port.
+	server: {
+		host: "127.0.0.1",
+		port: 3190,
+		strictPort: false,
+		fs: { allow: [resolve(import.meta.dirname, "../../../..")] },
+	},
 	build: {
 		rollupOptions: {
 			input: {

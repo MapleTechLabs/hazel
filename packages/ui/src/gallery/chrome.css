@@ -18,7 +18,15 @@ body {
 	background: var(--frame-sidebar);
 }
 
+/* Whole-pixel columns: a specimen at a fractional x rasters its glyphs differently from a fixture case. */
+.frame-buttons {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, 160px);
+}
+
+/* Own layer: Chrome rasters a shadow's edges by page position, so each frame rasters at its own origin. */
 .frame-button {
 	display: flex;
 	padding: 8px;
+	will-change: transform;
 }
