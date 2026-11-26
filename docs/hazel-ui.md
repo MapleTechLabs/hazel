@@ -137,15 +137,15 @@ switch from `src/vocabulary/spec.ts`, and C0 pre-created one stub view file per 
 Each tag is a typed builder with chainable props, as `OpenTui`'s are. Text lives only in text
 primitives (`textParents`).
 
-| Group       | Tags                                                                                                                                                                                                                                                    |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Layout      | `stack` (axis, density, align), `spacer`, `scroll`, `frame` (surface), `divider`                                                                                                                                                                        |
-| Collections | `list` (keyed rows, sections, anchoring, reach start or end, stick to bottom), `listDivider` (kind: `date`, `unread`)                                                                                                                                   |
-| Content     | `text` (role, tone, strong, numeric, truncate), `heading` (level), `icon`, `image`, `avatar` (presence, size, mark), `avatarStack`, `badge` (tone, size), `progress`, `emptyState`, `richText` (paragraphs, mentions, links, code, code blocks, quotes) |
-| Chat        | `message` (states: `grouped`, `pinned`, `highlighted`, `entering`, `pending`, `failed`; slots: author, time, body, attachments, reactions, thread summary), `reactionBar`, `attachmentGrid`, `embed`, `typingIndicator`                                 |
-| Controls    | `button` (variant, size, iconOnly), `link`, `textField`, `textArea`, `toggle`, `select`, `searchField`, `composer`                                                                                                                                      |
-| Overlays    | `menu`, `contextMenu`, `sheet`, `dialog`, `popover`, `toast`, `tooltip`, `emojiPicker`                                                                                                                                                                  |
-| Structure   | `screen` (title, toolbar, back), `navigation`, `tabBar`, `splitView`, `section`, `item`                                                                                                                                                                 |
+| Group       | Tags                                                                                                                                                                                                                                                                                                                      |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Layout      | `stack` (axis, density, align), `spacer`, `scroll`, `frame` (surface), `divider`                                                                                                                                                                                                                                          |
+| Collections | `list` (keyed rows, sections, anchoring, reach start or end, stick to bottom), `listDivider` (kind: `date`, `unread`)                                                                                                                                                                                                     |
+| Content     | `text` (role, tone, strong, numeric, truncate), `heading` (level), `icon`, `iconTile` (tone), `channelIcon` (marks), `image`, `avatar` (presence, size, mark), `avatarStack` (layout), `badge` (tone, size), `progress`, `emptyState`, `peopleStrip`, `richText` (paragraphs, mentions, links, code, code blocks, quotes) |
+| Chat        | `message` (states: `grouped`, `pinned`, `highlighted`, `entering`, `pending`, `failed`; slots: author, time, body, attachments, reactions, thread summary), `reactionBar`, `attachmentGrid`, `embed`, `typingIndicator`                                                                                                   |
+| Controls    | `button` (variant, size, iconOnly), `link`, `textField`, `textArea`, `toggle`, `select`, `searchField`, `composer`                                                                                                                                                                                                        |
+| Overlays    | `menu`, `contextMenu`, `sheet`, `dialog`, `popover`, `toast`, `tooltip`, `emojiPicker`                                                                                                                                                                                                                                    |
+| Structure   | `screen` (title, toolbar, back), `navigation`, `tabBar`, `splitView`, `section`, `item`                                                                                                                                                                                                                                   |
 
 The chat group exists because slot-based `item` cannot express a message row: today's row
 (`chat/message/row.ts`) has a hover-only timestamp gutter, group spacing, a pinned border and tint, an
@@ -247,19 +247,22 @@ ones), which replaces today's `sm:` and `max-md:` branches. Recipes may vary by 
 widened after checking them against today's kit (`button.styles.ts`, `badge.styles.ts`, text sizes in
 use); Phase 1 re-derives them from the message row, composer and sidebar before they freeze.
 
-| Choice           | Options (proposed, closed)                                                                                      |
-| ---------------- | --------------------------------------------------------------------------------------------------------------- |
-| `text.role`      | `body`, `label`, `caption`, `title`, `display`, `code`                                                          |
-| `text.tone`      | `default`, `muted`, `subtle`, `accent`, `success`, `warning`, `danger`, `info`                                  |
-| `text.strong`    | on or off (the one weight choice a view has; an author name, an unread row)                                     |
-| `button.variant` | `primary`, `secondary`, `outline`, `ghost`, `warning`, `danger`                                                 |
-| `button.size`    | `large`, `regular`, `small`, `xsmall`; `iconOnly` makes it square, `circle` makes it round                      |
-| `badge.tone`     | `neutral`, `accent`, `success`, `warning`, `danger`, `info`                                                     |
-| `badge.style`    | `solid`, `outline`, `quiet` (today's `muted` is `neutral` + `quiet`)                                            |
-| `badge.size`     | `regular`, `small`; `pill` rounds it fully                                                                      |
-| `stack.density`  | `compact`, `regular`, `relaxed`                                                                                 |
-| `frame.surface`  | `none`, `card`, `inset`, `muted`, `overlay`                                                                     |
-| states           | `selected`, `emphasized`, `disabled`, `loading`, `destructive`, plus each primitive's own (`message.pinned`...) |
+| Choice           | Options (proposed, closed)                                                                                       |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `text.role`      | `body`, `label`, `caption`, `title`, `display`, `code`, `overline`, `kbd`                                        |
+| `text.tone`      | `default`, `muted`, `subtle`, `accent`, `success`, `warning`, `danger`, `info`                                   |
+| `text.strong`    | on or off (the one weight choice a view has; an author name, an unread row)                                      |
+| `button.variant` | `primary`, `secondary`, `outline`, `ghost`, `warning`, `danger`, `chip` (on with `selected`)                     |
+| `button.size`    | `large`, `regular`, `small`, `xsmall`; `iconOnly` makes it square, `circle` makes it round                       |
+| `badge.tone`     | `neutral`, `accent`, `success`, `warning`, `danger`, `info`                                                      |
+| `badge.style`    | `solid`, `outline`, `quiet` (today's `muted` is `neutral` + `quiet`)                                             |
+| `badge.size`     | `regular`, `small`; `pill` rounds it fully                                                                       |
+| `stack.density`  | `compact`, `regular`, `relaxed`                                                                                  |
+| `frame.surface`  | `none`, `card`, `inset`, `muted`, `overlay`, `danger`, `flush`                                                   |
+| `avatar.size`    | `regular`, `medium` (the kit's `md`), `large`; `avatarStack.layout` `row`, `pair`                                |
+| `item` rows      | `unread` (`none`, `pip`, `dot`), `titleLines` and `subtitleLines` (`1`, `2`), `leadingSize` (`regular`, `large`) |
+| `iconTile.tone`  | `neutral`, `accent`, `success`, `warning`, `danger`                                                              |
+| states           | `selected`, `emphasized`, `disabled`, `loading`, `destructive`, plus each primitive's own (`message.pinned`...)  |
 
 Rules:
 
@@ -606,6 +609,7 @@ Still open before Phase 3 screens ship:
 - **No physical-device run yet:** G4 (no-JIT cost) and G7 (120 Hz) are simulator numbers.
 - **The CI workflow has never run on GitHub;** macOS snapshots may need re-recording on the runner.
 - **Untested by automation:** real keyboard typing and IME, opening touch-only menus, dismissing a sheet.
-- **21 open gaps in `GAPS.md`**, mostly renderer-internal (icon catalog and illustration assets in the
-  Swift package, a semibold weight, chat tints) plus one contract hook (`message-select-text`, so text
-  selection coexists with a row's long-press menu).
+- **Gaps:** none open. The parity pass (2026-11-26) resolved the 48 that the lanes and the phase 3
+  screens raised (`GAPS.md`, with the lane implementing each); its fixtures wait on those lanes with
+  `pending`. Recipes gained `weight` (semibold, bold), `uppercase`, `textAlign`, `lineClamp`,
+  `overflow` and `align: "end"`; keys reach the hosts as the wire prop `key`.
