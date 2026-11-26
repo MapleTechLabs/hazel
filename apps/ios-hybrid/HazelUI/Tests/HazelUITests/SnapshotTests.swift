@@ -32,6 +32,12 @@ final class SnapshotTests: XCTestCase {
 
     private var window: UIWindow?
 
+    /// Inter, from the TTFs `scripts/fonts.py` writes (`test-hazelui.sh` makes them first): the app's font.
+    override class func setUp() {
+        super.setUp()
+        Inter.register(from: checkout.appending(path: "../../../build/fonts").standardized)
+    }
+
     /// A case id without its tag, safe as a file name (`plain.subtitle-Last_message_preview`).
     static func fileName(_ id: String) -> String {
         let name = id.split(separator: "/").dropFirst().joined(separator: "/")

@@ -109,6 +109,9 @@ jobs:
             - name: Install dependencies
               run: bun install --frozen-lockfile
 
+            - name: Inter for the snapshots (fontTools converts the web's woff2)
+              run: python3 -m pip install --quiet fonttools brotli
+
             - name: HazelUI tests and snapshots
               run: bun run --cwd apps/ios-hybrid test:hazelui
 

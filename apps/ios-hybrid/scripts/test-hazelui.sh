@@ -25,13 +25,17 @@ only=()
 case "$lane" in
 	"") ;;
 	S0) only=(-only-testing:HazelUITests/GoldenTests -only-testing:HazelUITests/RedrawTests -only-testing:HazelUITests/SnapshotTests) ;;
-	S1 | S2 | S3 | S4) only=(-only-testing:HazelUITests/SnapshotTests) ;;
+	S1 | S2) only=(-only-testing:HazelUITests/SnapshotTests) ;;
+	S3) only=(-only-testing:HazelUITests/SnapshotTests -only-testing:HazelUITests/OverlayPresentationTests) ;;
+	S4) only=(-only-testing:HazelUITests/SnapshotTests -only-testing:HazelUITests/NavigationTests -only-testing:HazelUITests/RedrawTests) ;;
 	S5) only=(-only-testing:HazelUITests/SnapshotTests -only-testing:HazelUITests/G7Tests) ;;
 	F) ;;
 	*) echo "unknown lane $lane (S0 to S5, F, or none)" >&2; exit 2 ;;
 esac
 
 bash "$here/HazelUI/Bench/build-js.sh" >/dev/null
+# Inter for the snapshots (the same TTFs the app bundles).
+[ -f "$here/build/fonts/Inter-500.ttf" ] || python3 "$here/scripts/fonts.py" >/dev/null
 cd "$here/HazelUI"
 mkdir -p .build
 log=".build/test-hazelui.log"

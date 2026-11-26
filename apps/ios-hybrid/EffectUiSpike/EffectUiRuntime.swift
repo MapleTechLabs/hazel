@@ -38,7 +38,7 @@ final class EffectUiRuntime {
         }
         let engine = self.engine
         onContextReady { context in
-            HazelPlatform.install(in: context, perform: { block in engine.perform("platform") { _ in block() } })
+            _ = NativePlatform.install(in: context, perform: { block in engine.perform("platform") { _ in block() } })
         }
     }
 
