@@ -1,0 +1,28 @@
+{
+  "steps": [
+    {
+      "batch": {"v": 1, "seq": 1, "ops": [
+        ["create", 1, "hz:screen"],
+        ["props", 1, {"title": "Channels"}],
+        ["create", 2, "hz:section"],
+        ["props", 2, {"title": "Favorites"}],
+        ["create", 3, "hz:item"],
+        ["props", 3, {"title": "general", "badge": 3, "isSelected": true}],
+        ["events", 3, ["press"]],
+        ["create", 4, "hz:text"],
+        ["text", 4, "Welcome"],
+        ["insert", 3, 4, null],
+        ["insert", 2, 3, null],
+        ["insert", 1, 2, null],
+        ["insert", 0, 1, null]
+      ]},
+      "expect": [
+        "#root#0",
+        "  hz:screen#1 {title=\"Channels\"}",
+        "    hz:section#2 {title=\"Favorites\"}",
+        "      hz:item#3 {badge=3,isSelected=true,title=\"general\"} on[press]",
+        "        hz:text#4 \"Welcome\""
+      ]
+    }
+  ]
+}

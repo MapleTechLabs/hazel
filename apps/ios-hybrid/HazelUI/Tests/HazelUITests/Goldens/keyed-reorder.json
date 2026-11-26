@@ -1,0 +1,34 @@
+{
+  "steps": [
+    {
+      "batch": {"v": 1, "seq": 1, "ops": [
+        ["create", 1, "hz:section"],
+        ["create", 2, "hz:item"], ["props", 2, {"title": "a"}],
+        ["create", 3, "hz:item"], ["props", 3, {"title": "b"}],
+        ["create", 4, "hz:item"], ["props", 4, {"title": "c"}],
+        ["insert", 1, 2, null], ["insert", 1, 3, null], ["insert", 1, 4, null],
+        ["insert", 0, 1, null]
+      ]},
+      "expect": [
+        "#root#0",
+        "  hz:section#1",
+        "    hz:item#2 {title=\"a\"}",
+        "    hz:item#3 {title=\"b\"}",
+        "    hz:item#4 {title=\"c\"}"
+      ]
+    },
+    {
+      "batch": {"v": 1, "seq": 2, "ops": [
+        ["insert", 1, 4, 2],
+        ["insert", 1, 2, null]
+      ]},
+      "expect": [
+        "#root#0",
+        "  hz:section#1",
+        "    hz:item#4 {title=\"c\"}",
+        "    hz:item#3 {title=\"b\"}",
+        "    hz:item#2 {title=\"a\"}"
+      ]
+    }
+  ]
+}
