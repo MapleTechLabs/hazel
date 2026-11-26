@@ -29,7 +29,8 @@ import { AppMessage } from "./message"
 /** How long the app waits before asking again after the API did not answer. */
 export const RETRY_DELAY = Duration.seconds(10)
 
-const silent = <A, E, R>(effect: Effect.Effect<A, E, R>) => effect.pipe(Effect.ignore, Effect.as(Component.noop))
+const silent = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+	effect.pipe(Effect.ignore, Effect.as(Component.noop))
 
 export const ApplyTheme = Command.make(
 	"ApplyTheme",
@@ -48,7 +49,9 @@ export const SaveThemePreference = Command.make(
 	({ preference }) =>
 		saveThemePreference(preference).pipe(
 			Effect.as(Component.noop),
-			Effect.catchTag("StorageWriteError", () => Effect.succeed(AppMessage.FailedSaveThemePreference())),
+			Effect.catchTag("StorageWriteError", () =>
+				Effect.succeed(AppMessage.FailedSaveThemePreference()),
+			),
 		),
 )
 
@@ -62,11 +65,14 @@ export const SaveSoundSettings = Command.make(
 		),
 )
 
-export const SaveKeybindings = Command.make("SaveKeybindings", { args: { overrides: Overrides } }, ({ overrides }) =>
-	saveKeybindingOverrides(overrides).pipe(
-		Effect.as(Component.noop),
-		Effect.catchTag("StorageWriteError", () => Effect.succeed(AppMessage.FailedSaveKeybindings())),
-	),
+export const SaveKeybindings = Command.make(
+	"SaveKeybindings",
+	{ args: { overrides: Overrides } },
+	({ overrides }) =>
+		saveKeybindingOverrides(overrides).pipe(
+			Effect.as(Component.noop),
+			Effect.catchTag("StorageWriteError", () => Effect.succeed(AppMessage.FailedSaveKeybindings())),
+		),
 )
 
 /** The organization the user opened, for the next app start (`page/root`). */
@@ -113,7 +119,9 @@ export const WarmSyncObjects = Command.make(
 
 const checkSession = readSession.pipe(
 	Effect.map((auth) => AppMessage.ChangedAuth({ auth })),
-	Effect.catchTag("SessionCheckError", ({ reason }) => Effect.succeed(AppMessage.FailedCheckSession({ reason }))),
+	Effect.catchTag("SessionCheckError", ({ reason }) =>
+		Effect.succeed(AppMessage.FailedCheckSession({ reason })),
+	),
 	catchCommon((reason) => AppMessage.FailedCheckSession({ reason })),
 )
 
@@ -123,10 +131,14 @@ export class CheckSession extends Command.Service<CheckSession>()("shell/CheckSe
 	success: AppMessage,
 }) {
 	static readonly layer = this.toLayer(
-		Effect.map(Effect.service(HazelAuthClient), (client) => ({ delayed }) =>
-			(delayed ? Effect.sleep(RETRY_DELAY).pipe(Effect.andThen(checkSession)) : checkSession).pipe(
-				Effect.provideService(HazelAuthClient, client),
-			),
+		Effect.map(
+			Effect.service(HazelAuthClient),
+			(client) =>
+				({ delayed }) =>
+					(delayed
+						? Effect.sleep(RETRY_DELAY).pipe(Effect.andThen(checkSession))
+						: checkSession
+					).pipe(Effect.provideService(HazelAuthClient, client)),
 		),
 	)
 }
@@ -136,13 +148,17 @@ export class SignOut extends Command.Service<SignOut>()("shell/SignOut", {
 	success: AppMessage,
 }) {
 	static readonly layer = this.toLayer(
-		Effect.map(Effect.service(HazelAuthClient), (client) => () =>
-			signOut.pipe(
-				Effect.as(AppMessage.SucceededSignOut()),
-				Effect.catchTag("SignOutError", ({ reason }) => Effect.succeed(AppMessage.FailedSignOut({ reason }))),
-				catchCommon((reason) => AppMessage.FailedSignOut({ reason })),
-				Effect.provideService(HazelAuthClient, client),
-			),
+		Effect.map(
+			Effect.service(HazelAuthClient),
+			(client) => () =>
+				signOut.pipe(
+					Effect.as(AppMessage.SucceededSignOut()),
+					Effect.catchTag("SignOutError", ({ reason }) =>
+						Effect.succeed(AppMessage.FailedSignOut({ reason })),
+					),
+					catchCommon((reason) => AppMessage.FailedSignOut({ reason })),
+					Effect.provideService(HazelAuthClient, client),
+				),
 		),
 	)
 }
@@ -174,10 +190,14 @@ export class FetchCurrentUser extends Command.Service<FetchCurrentUser>()("shell
 	success: AppMessage,
 }) {
 	static readonly layer = this.toLayer(
-		Effect.map(Effect.service(HazelRpc), (rpc) => ({ delayed }) =>
-			(delayed ? Effect.sleep(RETRY_DELAY).pipe(Effect.andThen(fetchCurrentUser)) : fetchCurrentUser).pipe(
-				Effect.provideService(HazelRpc, rpc),
-			),
+		Effect.map(
+			Effect.service(HazelRpc),
+			(rpc) =>
+				({ delayed }) =>
+					(delayed
+						? Effect.sleep(RETRY_DELAY).pipe(Effect.andThen(fetchCurrentUser))
+						: fetchCurrentUser
+					).pipe(Effect.provideService(HazelRpc, rpc)),
 		),
 	)
 }

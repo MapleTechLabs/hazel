@@ -20,7 +20,6 @@ import { Effect, Layer } from "effect"
 import { clientData } from "~/db/client"
 import { AppRoute } from "../route"
 import { publish } from "./bus"
-import { AppRoutes } from "./routes"
 
 /** A push of `route` on the shell's Router, from a screen's host callback. */
 const pushOn = (router: Router.Router) => (route: AppRoute) => {
@@ -33,22 +32,20 @@ const withRouter = <A, E, R>(build: (push: (route: AppRoute) => void) => Layer.L
 const channelOf = (orgSlug: string) => (channelId: ChannelId) => AppRoute.ChatChannel({ orgSlug, channelId })
 
 /** The sidebar's presses: a route on the Router, a menu choice to the Foldkit sidebar's menus. */
-export const ShellChannelSidebar = Component.provide(
-	ChannelSidebar,
-	(props) =>
-		withRouter((push) =>
-			channelSidebarLayer(
-				clientData,
-				(to) =>
-					push(
-						matchTarget<AppRoute>(to, {
-							Channel: (channelId) => AppRoute.ChatChannel({ orgSlug: props.orgSlug, channelId }),
-							Members: () => AppRoute.OrgHome({ orgSlug: props.orgSlug }),
-						}),
-					),
-				(action) => Effect.sync(() => publish({ _tag: "ChannelSidebarAct", action })),
-			),
+export const ShellChannelSidebar = Component.provide(ChannelSidebar, (props) =>
+	withRouter((push) =>
+		channelSidebarLayer(
+			clientData,
+			(to) =>
+				push(
+					matchTarget<AppRoute>(to, {
+						Channel: (channelId) => AppRoute.ChatChannel({ orgSlug: props.orgSlug, channelId }),
+						Members: () => AppRoute.OrgHome({ orgSlug: props.orgSlug }),
+					}),
+				),
+			(action) => Effect.sync(() => publish({ _tag: "ChannelSidebarAct", action })),
 		),
+	),
 )
 
 /** A row's request goes to the Foldkit channel page that still owns its overlays and threads. */
@@ -64,7 +61,9 @@ export const ShellMessageList = Component.provide(
 export const ShellActivity = Component.provide(Activity, (props) =>
 	Layer.unwrap(
 		Effect.map(Effect.service(HazelRpc), (rpc) =>
-			withRouter((push) => activityLayer(clientData, rpc, (channelId) => push(channelOf(props.orgSlug)(channelId)))),
+			withRouter((push) =>
+				activityLayer(clientData, rpc, (channelId) => push(channelOf(props.orgSlug)(channelId))),
+			),
 		),
 	),
 )
@@ -78,5 +77,3 @@ export const ShellDms = Component.provide(Dms, (props) =>
 		),
 	),
 )
-
-export { AppRoutes }

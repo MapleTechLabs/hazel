@@ -40,7 +40,9 @@ export const RunFoldkitHost = Mount.makeStream(
 					(handle) => Effect.promise(() => handle.disposeAsync()),
 				)
 				yield* Effect.acquireRelease(
-					Effect.sync(() => handle.ports.out.subscribe((out) => Queue.offerUnsafe(queue, out as HostOut))),
+					Effect.sync(() =>
+						handle.ports.out.subscribe((out) => Queue.offerUnsafe(queue, out as HostOut)),
+					),
 					(unsubscribe) => Effect.sync(unsubscribe),
 				)
 				// `changes` starts with the current args, which the host already started from.
@@ -69,10 +71,11 @@ const whileMounted = (document: Document, place: () => void, release: () => void
 			const view = document.defaultView
 			const schedule = () => {
 				if (frame !== 0) return
-				frame = view?.requestAnimationFrame(() => {
-					frame = 0
-					place()
-				}) ?? 0
+				frame =
+					view?.requestAnimationFrame(() => {
+						frame = 0
+						place()
+					}) ?? 0
 			}
 			const observer = new MutationObserver(schedule)
 			observer.observe(document.body, { childList: true, subtree: true })

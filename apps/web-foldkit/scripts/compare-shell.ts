@@ -39,7 +39,7 @@ const argument = (name: string) => {
 	return index === -1 ? undefined : process.argv[index + 1]
 }
 
-const types: Record<string, string> = {
+const types = {
 	html: "text/html",
 	js: "text/javascript",
 	css: "text/css",
@@ -48,7 +48,7 @@ const types: Record<string, string> = {
 	png: "image/png",
 	webp: "image/webp",
 	woff2: "font/woff2",
-}
+} as const satisfies Record<string, string>
 
 const isFile = (path: string) => {
 	try {
@@ -62,9 +62,14 @@ const serve = (root: string): Promise<Server> =>
 	new Promise((ready) => {
 		const server = createServer((request, response) => {
 			const path = new URL(request.url ?? "/", "http://localhost").pathname
-			const file = path !== "/" && isFile(resolve(root, `.${path}`)) ? resolve(root, `.${path}`) : resolve(root, "index.html")
+			const file =
+				path !== "/" && isFile(resolve(root, `.${path}`))
+					? resolve(root, `.${path}`)
+					: resolve(root, "index.html")
 			response.writeHead(200, {
-				"content-type": Object.entries(types).find(([extension]) => file.endsWith(`.${extension}`))?.[1] ?? "application/octet-stream",
+				"content-type":
+					Object.entries(types).find(([extension]) => file.endsWith(`.${extension}`))?.[1] ??
+					"application/octet-stream",
 			})
 			response.end(readFileSync(file))
 		})
@@ -107,7 +112,8 @@ const shoot = async (
 	// The phase 3 flags, read by the build before the shell (the islands it compares against).
 	await context.addInitScript((value) => {
 		localStorage.setItem("hazel-ui-theme", JSON.stringify(value))
-		for (const flag of ["channel-list", "dms", "activity", "channel"]) localStorage.setItem(`hazel:island:${flag}`, "1")
+		for (const flag of ["channel-list", "dms", "activity", "channel"])
+			localStorage.setItem(`hazel:island:${flag}`, "1")
 	}, theme)
 	const page = await context.newPage()
 	page.on("console", (message) => {
@@ -149,15 +155,20 @@ const main = async () => {
 	const out = resolve(repo, argument("--out") ?? "docs/hazel-ui-screens/phase4/shell")
 	const only = argument("--only")
 	const browser = await chromium.launch()
-	const servers = await Promise.all([serve(afterRoot), ...(beforeRoot === undefined ? [] : [serve(resolve(repo, beforeRoot))])])
-	const [afterBase, beforeBase] = servers.map((server) => `http://localhost:${(server.address() as AddressInfo).port}/`)
+	const servers = await Promise.all([
+		serve(afterRoot),
+		...(beforeRoot === undefined ? [] : [serve(resolve(repo, beforeRoot))]),
+	])
+	const [afterBase, beforeBase] = servers.map(
+		(server) => `http://localhost:${(server.address() as AddressInfo).port}/`,
+	)
 	const errors: Array<string> = []
 	const tool = await (await browser.newContext()).newPage()
 	try {
 		for (const screen of screens.filter((candidate) => only === undefined || candidate.id === only))
 			for (const theme of themes)
 				for (const width of widths) {
-					const after = await shoot(browser, afterBase!, screen, width, theme, errors)
+					const after = await shoot(browser, afterBase, screen, width, theme, errors)
 					mkdirSync(resolve(out, screen.id), { recursive: true })
 					writeFileSync(resolve(out, screen.id, `${theme}-${width}-after.png`), after)
 					if (beforeBase === undefined) {
@@ -168,7 +179,9 @@ const main = async () => {
 					writeFileSync(resolve(out, screen.id, `${theme}-${width}-before.png`), before)
 					const result = await strip(tool, before, after)
 					writeFileSync(resolve(out, screen.id, `${theme}-${width}-diff.png`), result.png)
-					console.log(`${screen.id} ${theme}-${width}: ${(result.ratio * 100).toFixed(3)}% of pixels differ`)
+					console.log(
+						`${screen.id} ${theme}-${width}: ${(result.ratio * 100).toFixed(3)}% of pixels differ`,
+					)
 				}
 	} finally {
 		for (const error of errors) console.log(`console: ${error}`)

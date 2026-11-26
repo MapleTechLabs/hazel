@@ -9,7 +9,16 @@ import { Mount } from "@effect/ui"
 import type { Html } from "@effect/ui/html"
 import { Effect, Schema, Stream } from "effect"
 import { twJoin, twMerge } from "tailwind-merge"
-import { IconBell, IconChevronLeft, IconDots, IconMagnifier3, IconMenu, IconMsgs, IconMsgUser, Logo } from "../icons"
+import {
+	IconBell,
+	IconChevronLeft,
+	IconDots,
+	IconMagnifier3,
+	IconMenu,
+	IconMsgs,
+	IconMsgUser,
+	Logo,
+} from "../icons"
 import { hasDesktopTitlebar } from "../platform/desktop"
 import { systemUi } from "../platform/system-ui"
 import {
@@ -56,7 +65,9 @@ export const sidebarDock = <M>(h: H<M>, isCollapsed: boolean, className: string,
 		})
 		.class("group peer hidden text-sidebar-fg md:block")
 		.children(
-				h.div.attrs({ "data-slot": "sidebar-gap", "aria-hidden": "true" }).class(
+			h.div
+				.attrs({ "data-slot": "sidebar-gap", "aria-hidden": "true" })
+				.class(
 					twMerge([
 						"w-(--sidebar-width) group-data-[collapsible=hidden]:w-0",
 						"group-data-[side=right]:rotate-180",
@@ -64,37 +75,41 @@ export const sidebarDock = <M>(h: H<M>, isCollapsed: boolean, className: string,
 						"group-data-[collapsible=dock]:w-(--sidebar-width-dock)",
 					]),
 				),
-				h.div
-					.attr("data-slot", "sidebar-container")
-					.class(
-						twMerge(
-							"fixed inset-y-0 z-10 hidden w-(--sidebar-width) bg-sidebar",
-							"not-has-data-[slot=sidebar-footer]:pb-2",
-							"transition-[left,right,width] duration-200 ease-linear",
-							"md:flex",
-							"left-0 group-data-[collapsible=hidden]:left-[calc(var(--sidebar-width)*-1)]",
-							[
-								"group-data-[collapsible=dock]:w-(--sidebar-width-dock)",
-								"border-sidebar-border group-data-[side=left]:border-r group-data-[side=right]:border-l",
-							],
-							className,
-						),
-					)
-					.children(inner as never),
+			h.div
+				.attr("data-slot", "sidebar-container")
+				.class(
+					twMerge(
+						"fixed inset-y-0 z-10 hidden w-(--sidebar-width) bg-sidebar",
+						"not-has-data-[slot=sidebar-footer]:pb-2",
+						"transition-[left,right,width] duration-200 ease-linear",
+						"md:flex",
+						"left-0 group-data-[collapsible=hidden]:left-[calc(var(--sidebar-width)*-1)]",
+						[
+							"group-data-[collapsible=dock]:w-(--sidebar-width-dock)",
+							"border-sidebar-border group-data-[side=left]:border-r group-data-[side=right]:border-l",
+						],
+						className,
+					),
+				)
+				.children(inner as never),
 		)
 
 /** The dock's inner column, where the nav rail and the secondary sidebar sit side by side. */
 export const sidebarInner = <M>(h: H<M>) =>
-	h.div.attrs({ "data-sidebar": "default", "data-slot": "sidebar-inner" }).class(
-		twJoin(
-			"flex h-full w-full flex-col text-sidebar-fg",
-			"group-data-[intent=inset]:bg-sidebar dark:group-data-[intent=inset]:bg-bg",
-			"group-data-[intent=float]:rounded-lg group-data-[intent=float]:border group-data-[intent=float]:border-sidebar-border group-data-[intent=float]:bg-sidebar group-data-[intent=float]:shadow-xs",
-		),
-	)
+	h.div
+		.attrs({ "data-sidebar": "default", "data-slot": "sidebar-inner" })
+		.class(
+			twJoin(
+				"flex h-full w-full flex-col text-sidebar-fg",
+				"group-data-[intent=inset]:bg-sidebar dark:group-data-[intent=inset]:bg-bg",
+				"group-data-[intent=float]:rounded-lg group-data-[intent=float]:border group-data-[intent=float]:border-sidebar-border group-data-[intent=float]:bg-sidebar group-data-[intent=float]:shadow-xs",
+			),
+		)
 
 export const sidebarInset = <M>(h: H<M>, className: string) =>
-	h.main.attr("data-slot", "sidebar-inset").class(twMerge("relative flex w-full flex-1 flex-col bg-bg lg:min-w-0", className))
+	h.main
+		.attr("data-slot", "sidebar-inset")
+		.class(twMerge("relative flex w-full flex-1 flex-col bg-bg lg:min-w-0", className))
 
 // NAV RAIL (`NavSidebar`)
 
@@ -131,22 +146,20 @@ const linkClass = (isActive: boolean) =>
 
 /** `useUnreadNotificationCount` badge on the bell; the item's label carries the count for screen readers. */
 const bellIcon = <M>(h: H<M>, unreadCount: number) =>
-	h.div
-		.class("relative")
-		.children(
-			fromKit(h, IconBell(kit, { className: "size-5" })),
-			unreadCount > 0 &&
-				fromKit(
-					h,
-					countBadge(kit, {
-						count: unreadCount,
-						isCapped: true,
-						className:
-							"absolute -top-1.5 -right-2 h-4 min-w-4 bg-danger px-1 text-3xs text-danger-fg leading-none",
-						attributes: [kit.AriaHidden(true)],
-					}),
-				),
-		)
+	h.div.class("relative").children(
+		fromKit(h, IconBell(kit, { className: "size-5" })),
+		unreadCount > 0 &&
+			fromKit(
+				h,
+				countBadge(kit, {
+					count: unreadCount,
+					isCapped: true,
+					className:
+						"absolute -top-1.5 -right-2 h-4 min-w-4 bg-danger px-1 text-3xs text-danger-fg leading-none",
+					attributes: [kit.AriaHidden(true)],
+				}),
+			),
+	)
 
 export interface RailInputs {
 	readonly orgSlug: string
@@ -155,7 +168,14 @@ export interface RailInputs {
 	readonly appVersion: string
 }
 
-const navItem = <M>(h: H<M>, orgSlug: string, id: DestinationId, isActive: boolean, icon?: unknown, ariaLabel?: string) => {
+const navItem = <M>(
+	h: H<M>,
+	orgSlug: string,
+	id: DestinationId,
+	isActive: boolean,
+	icon?: unknown,
+	ariaLabel?: string,
+) => {
 	if (!isAvailable(id)) return null
 	const page = destination(id)
 	return h.span
@@ -170,12 +190,13 @@ const navItem = <M>(h: H<M>, orgSlug: string, id: DestinationId, isActive: boole
 		.children(
 			h.a
 				.attrs({
-					...(isActive ? { "data-status": "active" } : {}),
+					"data-status": isActive ? "active" : undefined,
 					class: linkClass(isActive),
 					href: destinationHref(id, orgSlug),
 					tabindex: "0",
 					"data-react-aria-pressable": "true",
-					...(isActive ? { "aria-current": "page", "data-current": "true" } : {}),
+					"aria-current": isActive ? "page" : undefined,
+					"data-current": isActive ? "true" : undefined,
 				})
 				.children((icon as never) ?? fromKit(h, page.icon(kit, { className: "size-5" }))),
 		)
@@ -206,7 +227,10 @@ export const navRail = <M>(h: H<M>, inputs: RailInputs, assistantToggle: unknown
 				.children(
 					h.a
 						.attrs({
-							class: linkClassName({ hasHref: true, className: "flex items-center justify-center" }),
+							class: linkClassName({
+								hasHref: true,
+								className: "flex items-center justify-center",
+							}),
 							href: hrefOf(AppRoute.Root()),
 							tabindex: "0",
 							"data-react-aria-pressable": "true",
@@ -239,7 +263,9 @@ export const navRail = <M>(h: H<M>, inputs: RailInputs, assistantToggle: unknown
 								.children(
 									h.div
 										.attr("data-slot", "sidebar-section-inner")
-										.class("grid grid-cols-[auto_1fr] gap-y-0.5 in-data-[state=collapsed]:gap-y-1.5")
+										.class(
+											"grid grid-cols-[auto_1fr] gap-y-0.5 in-data-[state=collapsed]:gap-y-1.5",
+										)
 										.children(
 											navItem(h, orgSlug, "home", route._tag === "OrgHome"),
 											navItem(h, orgSlug, "chat", isChatRoute(route)),
@@ -254,7 +280,12 @@ export const navRail = <M>(h: H<M>, inputs: RailInputs, assistantToggle: unknown
 													? `${destination("notifications").label}, ${unreadCount} unread`
 													: undefined,
 											),
-											navItem(h, orgSlug, "settings", isSettingsRoute(route) || isMySettingsRoute(route)),
+											navItem(
+												h,
+												orgSlug,
+												"settings",
+												isSettingsRoute(route) || isMySettingsRoute(route),
+											),
 										),
 								),
 						),
@@ -270,7 +301,9 @@ export const navRail = <M>(h: H<M>, inputs: RailInputs, assistantToggle: unknown
 				)
 				.children(
 					assistantToggle as never,
-					h.span.class("text-center text-3xs font-mono text-muted-fg").children("v", inputs.appVersion),
+					h.span
+						.class("text-center text-3xs font-mono text-muted-fg")
+						.children("v", inputs.appVersion),
 				),
 		)
 }
@@ -287,12 +320,12 @@ const nativeItemAttrs = (item: {
 	readonly isSelected?: boolean
 	readonly badge?: number | undefined
 	readonly role?: "search"
-}): Record<string, string> => ({
-	...(item.role === undefined ? {} : { "data-native-role": item.role }),
+}): Record<string, string | undefined> => ({
+	"data-native-role": item.role,
 	"data-native-item": item.id,
-	...(item.symbol === undefined ? {} : { "data-native-symbol": item.symbol }),
-	...(item.isSelected ? { "data-native-selected": "true" } : {}),
-	...(item.badge === undefined ? {} : { "data-native-badge": String(item.badge) }),
+	"data-native-symbol": item.symbol,
+	"data-native-selected": item.isSelected ? "true" : undefined,
+	"data-native-badge": item.badge === undefined ? undefined : String(item.badge),
 })
 
 /** The tab bar, as Slack's: Home, DMs, Activity, More, and Search beside them (`mobileNav`). */
@@ -309,9 +342,14 @@ export const tabBar = <M>(h: H<M>, inputs: RailInputs, onSearch: M) => {
 		h.a
 			.attrs({
 				...nativeItemAttrs({ id: label, symbol, isSelected: isActive, badge: badge?.count }),
-				class: twMerge(NAV_ITEM, isActive ? "bg-primary-subtle/60 text-primary" : "text-muted-fg", isActive && "active"),
+				class: twMerge(
+					NAV_ITEM,
+					isActive ? "bg-primary-subtle/60 text-primary" : "text-muted-fg",
+					isActive && "active",
+				),
 				href,
-				...(isActive ? { "aria-current": "page", "data-status": "active" } : {}),
+				"aria-current": isActive ? "page" : undefined,
+				"data-status": isActive ? "active" : undefined,
 			})
 			.children(
 				h.span.class("relative").children(icon as never, (badge?.html as never) ?? null),
@@ -334,7 +372,10 @@ export const tabBar = <M>(h: H<M>, inputs: RailInputs, onSearch: M) => {
 				}
 			: undefined
 	const isMore =
-		route._tag === "OrgMore" || isCustomersRoute(route) || isSettingsRoute(route) || isMySettingsRoute(route)
+		route._tag === "OrgMore" ||
+		isCustomersRoute(route) ||
+		isSettingsRoute(route) ||
+		isMySettingsRoute(route)
 	const icon = (render: typeof IconBell) => fromKit(h, render(kit, { className: "size-5" }))
 	return h.nav
 		.attrs({ "aria-label": "Tabs", "data-native": "tab-bar" })
@@ -342,7 +383,9 @@ export const tabBar = <M>(h: H<M>, inputs: RailInputs, onSearch: M) => {
 		.children(
 			h.div.class("flex items-center gap-2 px-3 pt-1.5 pb-2").children(
 				h.div
-					.class("flex h-14 flex-1 items-stretch gap-0.5 rounded-full border border-border bg-overlay p-1 shadow-md")
+					.class(
+						"flex h-14 flex-1 items-stretch gap-0.5 rounded-full border border-border bg-overlay p-1 shadow-md",
+					)
 					.children(
 						tab(
 							"Home",
@@ -352,7 +395,13 @@ export const tabBar = <M>(h: H<M>, inputs: RailInputs, onSearch: M) => {
 							icon(IconMsgs),
 							"house",
 						),
-						tab("DMs", hrefOf(AppRoute.ChatDms({ orgSlug })), route._tag === "ChatDms", icon(IconMsgUser), "bubble.left.and.bubble.right"),
+						tab(
+							"DMs",
+							hrefOf(AppRoute.ChatDms({ orgSlug })),
+							route._tag === "ChatDms",
+							icon(IconMsgUser),
+							"bubble.left.and.bubble.right",
+						),
 						tab(
 							"Activity",
 							hrefOf(AppRoute.NotificationsMentions({ orgSlug })),
@@ -361,7 +410,13 @@ export const tabBar = <M>(h: H<M>, inputs: RailInputs, onSearch: M) => {
 							"bell",
 							unread,
 						),
-						tab("More", hrefOf(AppRoute.OrgMore({ orgSlug })), isMore, icon(IconDots), "ellipsis"),
+						tab(
+							"More",
+							hrefOf(AppRoute.OrgMore({ orgSlug })),
+							isMore,
+							icon(IconDots),
+							"ellipsis",
+						),
 					),
 				fromKit(
 					h,
@@ -370,42 +425,44 @@ export const tabBar = <M>(h: H<M>, inputs: RailInputs, onSearch: M) => {
 						{
 							intent: "plain",
 							size: "sq-lg",
-							className: "size-14 shrink-0 rounded-full border border-border bg-overlay text-fg shadow-md",
+							className:
+								"size-14 shrink-0 rounded-full border border-border bg-overlay text-fg shadow-md",
 							attributes: [
 								kit.AriaLabel("Search"),
-								...Object.entries(nativeItemAttrs({ id: "Search", symbol: "magnifyingglass", role: "search" })).map(
-									([name, value]) => kit.Attribute(name, value),
-								),
+								kit.Attribute("data-native-role", "search"),
+								kit.Attribute("data-native-item", "Search"),
+								kit.Attribute("data-native-symbol", "magnifyingglass"),
 							],
 						},
 						[IconMagnifier3(kit, { className: "size-5" })],
 					),
-				).on("click", onSearch),
+					{ press: onSearch },
+				),
 			),
 		)
 }
 
 /** While a back chevron shows, the shell's edge swipe goes where it leads (`platform/system-ui.ts`). */
-const SwipeBack = Mount.makeStream("SwipeBack", { args: { href: Schema.String } }, (_node: HTMLElement, { href }) =>
-	Stream.unwrap(
-		Effect.acquireRelease(
-			Effect.sync(() => systemUi()?.setSwipeBack(href)),
-			(release) => Effect.sync(() => release?.()),
-		).pipe(Effect.as(Stream.never)),
-	),
+const SwipeBack = Mount.makeStream(
+	"SwipeBack",
+	{ args: { href: Schema.String } },
+	(_node: HTMLElement, { href }) =>
+		Stream.unwrap(
+			Effect.acquireRelease(
+				Effect.sync(() => systemUi()?.setSwipeBack(href)),
+				(release) => Effect.sync(() => release?.()),
+			).pipe(Effect.as(Stream.never)),
+		),
 )
 
 /** The top bar a page without its own header gets on a phone (`mobileTopBar`). */
 export const topBar = <M>(h: H<M>, bar: MobileTopBar, onMenu: M) => {
 	const back = (href: string) => {
-		const link = h.a
-			.key(`back:${href}`)
-			.attrs({
-				href,
-				"aria-label": "Back to Chats",
-				class:
-					"-ml-1 flex size-11 shrink-0 items-center justify-center rounded-lg text-primary transition-opacity duration-100 active:opacity-60 md:hidden",
-			})
+		const link = h.a.key(`back:${href}`).attrs({
+			href,
+			"aria-label": "Back to Chats",
+			class: "-ml-1 flex size-11 shrink-0 items-center justify-center rounded-lg text-primary transition-opacity duration-100 active:opacity-60 md:hidden",
+		})
 		// Only a shell with the swipe (installed before the app starts) gets the Mount.
 		return (systemUi() === undefined ? link : link.onMount(SwipeBack({ href }))).children(
 			fromKit(h, IconChevronLeft(kit, { className: "size-6" })),
@@ -418,15 +475,26 @@ export const topBar = <M>(h: H<M>, bar: MobileTopBar, onMenu: M) => {
 					h,
 					button(
 						kit,
-						{ intent: "plain", size: "sq-md", className: "size-11", attributes: [kit.AriaLabel(`${bar.title} menu`)] },
+						{
+							intent: "plain",
+							size: "sq-md",
+							className: "size-11",
+							attributes: [kit.AriaLabel(`${bar.title} menu`)],
+						},
 						[IconMenu(kit, { className: "size-5" })],
 					),
-				).on("click", onMenu)
+					{ press: onMenu },
+				)
 	return h.header
 		.class(twMerge("flex h-14 shrink-0 items-center gap-1 border-border border-b bg-bg px-2", "pr-4"))
 		.children(
 			leading,
-			fromKit(h, heading(kit, { variant: "section", level: 1, className: "min-w-0 flex-1 truncate" }, [bar.title])),
+			fromKit(
+				h,
+				heading(kit, { variant: "section", level: 1, className: "min-w-0 flex-1 truncate" }, [
+					bar.title,
+				]),
+			),
 		)
 }
 

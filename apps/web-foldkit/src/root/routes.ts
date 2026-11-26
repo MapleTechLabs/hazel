@@ -9,6 +9,9 @@ import { Option } from "effect"
 import * as Url from "foldkit/url"
 import { AppRoute, hrefOf, urlToAppRoute } from "../route"
 
+// SAFETY: a type-only field (`Router.Routes["Type"]`): the Router never reads its value.
+const phantom = <A>(): A => undefined as A
+
 /** Any absolute origin: only the path and search of a same-origin href reach the table. */
 const ORIGIN = "https://hazel.invalid"
 
@@ -25,14 +28,11 @@ export const pathOf = (route: AppRoute): string => {
 	return at < 0 ? href : href.slice(0, at)
 }
 
-let base = ""
-
 /**
  * Every same-origin path resolves (unknown ones to `NotFound`, as today), so every in-app link is
  * a push and only another origin is a full load. Search keys the table does not model are kept.
  */
-export const AppRoutes: Router.Routes & { readonly Type: AppRoute } = {
-	Type: undefined as unknown as AppRoute,
+const table: Omit<Router.Routes, "Type"> = {
 	parse: (url) => routeOfHref(url),
 	resolve: (url) =>
 		Option.map(routeOfHref(url), (route) => ({
@@ -43,10 +43,12 @@ export const AppRoutes: Router.Routes & { readonly Type: AppRoute } = {
 		})),
 	print: (route: AppRoute) => hrefOf(route),
 	printPath: (route: AppRoute) => pathOf(route),
-	base: () => base,
-	setBase: (next) => {
-		base = next
-	},
+	// The app lives at the origin's root; only a hash router sets another base.
+	base: () => "",
+	setBase: () => {},
 }
+
+/** `Type` is the route values' type for the Router's signatures; nothing reads it at runtime. */
+export const AppRoutes: Router.Routes & { readonly Type: AppRoute } = { ...table, Type: phantom<AppRoute>() }
 
 export { AppRoute }

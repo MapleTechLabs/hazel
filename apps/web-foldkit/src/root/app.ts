@@ -20,16 +20,19 @@ import { hotkeyLabel } from "../shell/channels-sidebar/hotkey-label"
 import { appError, appLoader, organizationNotFound } from "../shell/layouts"
 import { ShellActivity, ShellChannelSidebar, ShellDms, ShellMessageList } from "./children"
 import { AdoptRegion, RunFoldkitHost } from "./foldkit"
-import { mobileChromeOf, navRail, type RailInputs, sidebarDock, sidebarInner, sidebarInset, sidebarProvider, tabBar, topBar } from "./frame"
-import { fromKit, kit } from "./kit"
 import {
-	type AppFlags,
-	AppModel,
-	hostContextOf,
-	init,
-	keysOf,
-	update,
-} from "./logic"
+	mobileChromeOf,
+	navRail,
+	type RailInputs,
+	sidebarDock,
+	sidebarInner,
+	sidebarInset,
+	sidebarProvider,
+	tabBar,
+	topBar,
+} from "./frame"
+import { fromKit, kit } from "./kit"
+import { type AppFlags, AppModel, hostContextOf, init, keysOf, update } from "./logic"
 import { AppMessage } from "./message"
 import { Hole } from "./portal"
 import { subscriptions as subscriptionsOf } from "./subscriptions"
@@ -57,7 +60,11 @@ type H = Parameters<Parameters<typeof AppDef.view>[0]>[0]
 
 /** Where the Foldkit host's region shows in the frame: an element the region moves into. */
 const slot = (h: H, region: Region) =>
-	h.div.key(`slot:${region}`).class("contents").attr("data-foldkit-slot", region).onMount(AdoptRegion({ region }))
+	h.div
+		.key(`slot:${region}`)
+		.class("contents")
+		.attr("data-foldkit-slot", region)
+		.onMount(AdoptRegion({ region }))
 
 const loader = (h: H, isStalled: boolean) =>
 	fromKit(h, appLoader(kit, isStalled ? "reload" : undefined), { press: AppMessage.PressedReload() })
@@ -79,14 +86,13 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 	const channelId = chatChannelIdOf(route)
 	const section = orgSectionOf(route)
 	const memberId = hostContextOf(model).member?.id ?? null
-	const tab = route._tag === "NotificationsAll" ? "all" : route._tag === "NotificationsMentions" ? "mentions" : null
+	const tab =
+		route._tag === "NotificationsAll" ? "all" : route._tag === "NotificationsMentions" ? "mentions" : null
 	const orgUser = `${data.organization.id}:${data.user.id}`
 	return [
 		section === "Chat" || route._tag === "OrgHome"
-			? Hole(
-					h,
-					{ hole: "channel-sidebar", key: orgUser },
-					[ShellChannelSidebar(h, {
+			? Hole(h, { hole: "channel-sidebar", key: orgUser }, [
+					ShellChannelSidebar(h, {
 						key: orgUser,
 						props: {
 							organizationId: data.organization.id,
@@ -98,8 +104,8 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 							paletteKey: paletteKey === null ? null : hotkeyLabel(paletteKey),
 							chrome: false,
 						},
-					})],
-				)
+					}),
+				])
 			: null,
 		route._tag === "ChatChannel" && channelId !== null
 			? Hole(
@@ -109,32 +115,30 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 						key: channelId,
 						className: "flex min-h-0 flex-1 flex-col [&>[data-hz]]:min-h-0 [&>[data-hz]]:flex-1",
 					},
-					[ShellMessageList(h, {
-						key: channelId,
-						props: {
-							channelId,
-							userId: data.user.id,
-							cdnUrl: currentServer().cdn ?? "https://cdn.hazel.sh",
-							nowMs: model.nowMs,
-						},
-					})],
+					[
+						ShellMessageList(h, {
+							key: channelId,
+							props: {
+								channelId,
+								userId: data.user.id,
+								cdnUrl: currentServer().cdn ?? "https://cdn.hazel.sh",
+								nowMs: model.nowMs,
+							},
+						}),
+					],
 				)
 			: null,
 		tab !== null && memberId !== null
-			? Hole(
-					h,
-					{ hole: "activity", key: memberId },
-					[ShellActivity(h, {
+			? Hole(h, { hole: "activity", key: memberId }, [
+					ShellActivity(h, {
 						key: memberId,
 						props: { memberId, orgSlug: data.orgSlug, tab, nowMs: model.nowMs, titled: false },
-					})],
-				)
+					}),
+				])
 			: null,
 		model.isMobile && route._tag === "ChatDms"
-			? Hole(
-					h,
-					{ hole: "dms", key: orgUser, className: "flex min-h-full flex-col" },
-					[ShellDms(h, {
+			? Hole(h, { hole: "dms", key: orgUser, className: "flex min-h-full flex-col" }, [
+					ShellDms(h, {
 						key: orgUser,
 						props: {
 							organizationId: data.organization.id,
@@ -142,8 +146,8 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 							orgSlug: data.orgSlug,
 							nowMs: model.nowMs,
 						},
-					})],
-				)
+					}),
+				])
 			: null,
 	]
 }
@@ -167,7 +171,10 @@ const orgShell = (h: H, model: AppModel, data: ShellData) => {
 		.attr("id", "app")
 		.attrs(paintAttrs(data))
 		.children(
-			sidebarProvider(h, isResizing ? "cursor-col-resize select-none [&_iframe]:pointer-events-none" : "").children(
+			sidebarProvider(
+				h,
+				isResizing ? "cursor-col-resize select-none [&_iframe]:pointer-events-none" : "",
+			).children(
 				sidebarDock(
 					h,
 					model.report?.isSidebarCollapsed ?? false,
@@ -196,10 +203,15 @@ const phoneShell = (h: H, model: AppModel, data: ShellData, rail: RailInputs) =>
 				h,
 				"h-dvh flex-col overflow-hidden pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]",
 			).children(
-				sidebarInset(h, chrome.hasTabBar ? "min-h-0" : "min-h-0 pb-[env(safe-area-inset-bottom)]").children(
+				sidebarInset(
+					h,
+					chrome.hasTabBar ? "min-h-0" : "min-h-0 pb-[env(safe-area-inset-bottom)]",
+				).children(
 					chrome.topBar === null ? null : topBar(h, chrome.topBar, AppMessage.PressedMobileMenu()),
 					// Pages that fill the screen (`h-full`) scroll inside themselves; the rest scroll here.
-					h.div.class("relative min-h-0 flex-1 overflow-y-auto overscroll-contain").children(slot(h, "page")),
+					h.div
+						.class("relative min-h-0 flex-1 overflow-y-auto overscroll-contain")
+						.children(slot(h, "page")),
 					chrome.hasTabBar ? tabBar(h, rail, AppMessage.PressedMobileSearch()) : null,
 				),
 			),
@@ -233,7 +245,15 @@ const body = (h: H, model: AppModel) => {
 		Loading: () => appRoot(h, loader(h, false)),
 		SignedOut: () => appRoot(h, loader(h, false)),
 		Unreachable: ({ reason }) =>
-			appRoot(h, errorScreen(h, "Can't reach Hazel", commonMessage(reason).description, AppMessage.PressedRetrySession())),
+			appRoot(
+				h,
+				errorScreen(
+					h,
+					"Can't reach Hazel",
+					commonMessage(reason).description,
+					AppMessage.PressedRetrySession(),
+				),
+			),
 		// `AppShell`: a loader until `user.me` answers, then the error if it could not.
 		SignedIn: ({ user }) =>
 			AsyncData.matchData(user, {
@@ -264,7 +284,9 @@ export const App = AppDef.make({
 	},
 	update: ($, message) => {
 		const next = update($.model, message)
-		return next.model === $.model && next.commands.length === 0 ? $.model : $.set(next.model).run(...next.commands)
+		return next.model === $.model && next.commands.length === 0
+			? $.model
+			: $.set(next.model).run(...next.commands)
 	},
 	subscriptions: subscriptionsOf,
 	head: ({ model }) => [Head.title(documentTitleOf(model))],
@@ -287,4 +309,3 @@ export const App = AppDef.make({
 				body(h, model),
 			),
 })
-

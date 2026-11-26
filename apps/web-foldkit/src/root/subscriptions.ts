@@ -11,7 +11,11 @@ import { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { eq, isNull } from "@tanstack/db"
 import { Clock, Duration, Option, Schema, Stream } from "effect"
 import { Dom } from "foldkit"
-import { notificationCollection, organizationCollection, organizationMemberCollection } from "~/db/collections"
+import {
+	notificationCollection,
+	organizationCollection,
+	organizationMemberCollection,
+} from "~/db/collections"
 import { appOrgSourcesSettled, syncSession } from "~/db/sync-manager"
 import { SESSION_REJECTED_EVENT } from "~/lib/access-token"
 import { wireNotificationSinks } from "../app/notification-sinks"
@@ -73,7 +77,12 @@ export const subscriptions = ({ model }: { readonly model: AppModel }) => {
 		Subscription.make("sessionRejected", [isSignedIn], ([signedIn]) =>
 			signedIn
 				? Stream.fromEventListener(window, SESSION_REJECTED_EVENT).pipe(
-						Stream.throttle({ cost: () => 1, units: 1, duration: Duration.seconds(30), strategy: "enforce" }),
+						Stream.throttle({
+							cost: () => 1,
+							units: 1,
+							duration: Duration.seconds(30),
+							strategy: "enforce",
+						}),
 						Stream.map(() => AppMessage.RejectedSession()),
 					)
 				: Stream.empty,
@@ -82,7 +91,9 @@ export const subscriptions = ({ model }: { readonly model: AppModel }) => {
 		Subscription.make("sessionEndedElsewhere", [isSignedIn], ([signedIn]) =>
 			signedIn
 				? Stream.fromEventListener<StorageEvent>(window, "storage").pipe(
-						Stream.filter((event) => event.key === REMEMBERED_USER_KEY && event.newValue === null),
+						Stream.filter(
+							(event) => event.key === REMEMBERED_USER_KEY && event.newValue === null,
+						),
 						Stream.flatMap(() =>
 							Stream.make(AppMessage.RejectedSession(), AppMessage.PressedRetryCurrentUser()),
 						),
@@ -105,7 +116,12 @@ export const subscriptions = ({ model }: { readonly model: AppModel }) => {
 							return AppMessage.UpdatedOrganization({
 								orgSlug: slug,
 								organization: org
-									? { id: org.id, name: org.name, slug: org.slug ?? null, logoUrl: org.logoUrl ?? null }
+									? {
+											id: org.id,
+											name: org.name,
+											slug: org.slug ?? null,
+											logoUrl: org.logoUrl ?? null,
+										}
 									: null,
 							})
 						},
@@ -160,9 +176,14 @@ export const subscriptions = ({ model }: { readonly model: AppModel }) => {
 		Subscription.make("unreadMentions", [userId], ([id]) =>
 			id === null
 				? Stream.empty
-				: liveQueryStream<{ readonly id: NotificationId; readonly reason: string | null }, AppMessage>(
+				: liveQueryStream<
+						{ readonly id: NotificationId; readonly reason: string | null },
+						AppMessage
+					>(
 						(q) =>
-							q.from({ notification: notificationCollection }).where(({ notification }) => isNull(notification.readAt)),
+							q
+								.from({ notification: notificationCollection })
+								.where(({ notification }) => isNull(notification.readAt)),
 						(rows) =>
 							AppMessage.UpdatedUnreadMentions({
 								ids: rows.filter((row) => isMentionReason(row.reason)).map((row) => row.id),
@@ -177,7 +198,9 @@ export const subscriptions = ({ model }: { readonly model: AppModel }) => {
 						(q) =>
 							q
 								.from({ notification: notificationCollection })
-								.where(({ notification }) => eq(notification.memberId, OrganizationMemberId.make(id)))
+								.where(({ notification }) =>
+									eq(notification.memberId, OrganizationMemberId.make(id)),
+								)
 								.orderBy(({ notification }) => notification.createdAt, "desc")
 								.limit(MAX_RECENT_NOTIFICATIONS),
 						(rows) => AppMessage.UpdatedRecentNotifications({ ids: rows.map((row) => row.id) }),
@@ -205,5 +228,3 @@ export const subscriptions = ({ model }: { readonly model: AppModel }) => {
 		),
 	]
 }
-
-

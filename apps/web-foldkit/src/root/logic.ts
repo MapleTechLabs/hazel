@@ -13,7 +13,7 @@ import { commonMessage, type CommonReason, isRetryableReason } from "~/lib/error
 import { Platform as KeyboardPlatform } from "~/lib/keybindings/key-combo"
 import { Overrides } from "~/lib/keybindings/keymap"
 import { appKeymap } from "~/lib/keybindings/app-keymap"
-import { HostContextSchema, type HostContext, type HostOut, type HostReport } from "../app/context"
+import { type HostContext, type HostOut, type HostReport } from "../app/context"
 import { ShellRequest } from "../app/message"
 import { errorToast, errorToastOf } from "../data/actions"
 import type { LayoutHotkeyActionId } from "../overlay/hotkeys"
@@ -89,13 +89,16 @@ export interface Next {
 }
 type Step = (model: AppModel) => Next
 
-const unchanged: Step = (model) => ({ model, commands: [] })
+/** No Commands: one shared empty list. */
+const none: ReadonlyArray<AppCommand> = []
+
+const unchanged: Step = (model) => ({ model, commands: none })
 const command =
 	(...commands: ReadonlyArray<AppCommand>): Step =>
 	(model) => ({ model, commands })
 const setModel =
 	(f: (model: AppModel) => AppModel): Step =>
-	(model) => ({ model: f(model), commands: [] })
+	(model) => ({ model: f(model), commands: none })
 
 /** Runs the steps in order, each from the Model the one before returned. */
 export const combine =
@@ -106,7 +109,7 @@ export const combine =
 				const result = step(next.model)
 				return { model: result.model, commands: [...next.commands, ...result.commands] }
 			},
-			{ model, commands: [] },
+			{ model, commands: none },
 		)
 
 /** A command that publishes to the Foldkit host: the work behind it is still there. */
@@ -126,7 +129,9 @@ const showToastIf = (toast: ToastRequest | null | undefined): Step =>
 
 const navigateTo = (route: AppRoute, options: { readonly replace?: boolean } = {}): Step =>
 	command(
-		(options.replace ? Router.replace(AppRoutes, route) : Router.push(AppRoutes, route)).pipe(Command.asNoop),
+		(options.replace ? Router.replace(AppRoutes, route) : Router.push(AppRoutes, route)).pipe(
+			Command.asNoop,
+		),
 	)
 
 // DERIVED
@@ -145,7 +150,8 @@ export const memberOf = (model: AppModel): Member | null => memberOfOrg(model.or
 export const isShellReady = (model: AppModel): boolean =>
 	currentUserOf(model) !== null && Option.isSome(loadedOrgOf(model.org, model.route))
 
-export const keysOf = (model: AppModel) => appKeymap.resolve(model.keybindingOverrides, model.keyboardPlatform)
+export const keysOf = (model: AppModel) =>
+	appKeymap.resolve(model.keybindingOverrides, model.keyboardPlatform)
 
 const contextCache = new WeakMap<AppModel, HostContext>()
 
@@ -173,8 +179,6 @@ export const hostContextOf = (model: AppModel): HostContext => {
 	contextCache.set(model, context)
 	return context
 }
-
-export { HostContextSchema }
 
 // SESSION
 
@@ -302,7 +306,8 @@ const updatedOrganization =
 								: MemberData.Loading(),
 					})
 		const isNew =
-			next._tag === "Loaded" && !(current._tag === "Loaded" && current.organization.id === next.organization.id)
+			next._tag === "Loaded" &&
+			!(current._tag === "Loaded" && current.organization.id === next.organization.id)
 		return {
 			model: { ...model, org: next },
 			commands:
@@ -318,7 +323,10 @@ const updatedMember =
 	(model) => {
 		const current = model.org
 		if (current._tag !== "Loaded" || current.organization.id !== organizationId) return unchanged(model)
-		return unchanged({ ...model, org: OrgState.Loaded({ ...current, member: MemberData.Success({ data: member }) }) })
+		return unchanged({
+			...model,
+			org: OrgState.Loaded({ ...current, member: MemberData.Success({ data: member }) }),
+		})
 	}
 
 // ROUTE
@@ -339,7 +347,9 @@ export const currentUrlOf = (): string =>
 // THEME
 
 const isSameCustomization = (first: ThemeCustomization, second: ThemeCustomization) =>
-	first.primary === second.primary && first.grayPalette === second.grayPalette && first.radius === second.radius
+	first.primary === second.primary &&
+	first.grayPalette === second.grayPalette &&
+	first.radius === second.radius
 
 /** Re-applies when the resolved mode or the customization changed, and persists a user's choice. */
 const transitionTheme =
@@ -355,7 +365,9 @@ const transitionTheme =
 			model,
 			commands: [
 				...(isApplied ? [Commands.ApplyTheme.make({ resolved, customization })] : []),
-				...(shouldPersist ? [Commands.SaveThemePreference.make({ preference: model.themePreference })] : []),
+				...(shouldPersist
+					? [Commands.SaveThemePreference.make({ preference: model.themePreference })]
+					: []),
 			],
 		}
 	}
@@ -377,10 +389,13 @@ const navigateHref = (href: string): Step =>
 /** A page or overlay of the Foldkit host reported a fact the shell owns. */
 const handleOutMessage = (outMessage: PageOutMessage): Step =>
 	PageOutMessage.match<Step>(outMessage, {
-		RequestedNavigation: ({ route, replace, toast }) => combine([showToastIf(toast), navigateTo(route, { replace })]),
+		RequestedNavigation: ({ route, replace, toast }) =>
+			combine([showToastIf(toast), navigateTo(route, { replace })]),
 		RequestedHref: ({ href }) => navigateHref(href),
 		RequestedHistory: ({ direction }) =>
-			command((direction === "Back" ? Router.Back.make({}) : Router.Forward.make({})).pipe(Command.asNoop)),
+			command(
+				(direction === "Back" ? Router.Back.make({}) : Router.Forward.make({})).pipe(Command.asNoop),
+			),
 		RequestedToast: ({ toast }) => showToast(toast),
 		RequestedSignOut: () => command(Commands.SignOut.make({})),
 		RequestedTheme: ({ preference }) => requestedTheme(preference),
@@ -406,7 +421,10 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 const receivedHostOut = (out: HostOut): Step =>
 	out._tag === "Page"
 		? handleOutMessage(out.outMessage)
-		: (model) => ({ model: { ...model, report: out.report }, commands: [Commands.ApplyBadge.make({ badge: out.report.badge })] })
+		: (model) => ({
+				model: { ...model, report: out.report },
+				commands: [Commands.ApplyBadge.make({ badge: out.report.badge })],
+			})
 
 // INIT
 
@@ -450,7 +468,10 @@ export const init = (route: AppRoute, flags: AppFlags): Next => {
 		(m) => ({
 			model: m,
 			commands: [
-				Commands.ApplyTheme.make({ resolved: resolvedThemeOf(m), customization: m.themePreference.customization }),
+				Commands.ApplyTheme.make({
+					resolved: resolvedThemeOf(m),
+					customization: m.themePreference.customization,
+				}),
 			],
 		}),
 		redirect,
@@ -473,12 +494,14 @@ export const init = (route: AppRoute, flags: AppFlags): Next => {
 /** The hotkeys the shell follows itself; the rest go to the Foldkit host, whose work they are. */
 const pressedHotkey = (actionId: LayoutHotkeyActionId): Step => toHost({ _tag: "PressedHotkey", actionId })
 
-const pressedDesktopMenuItem = (item: DesktopMenuItem): Step => toHost({ _tag: "PressedDesktopMenuItem", item })
+const pressedDesktopMenuItem = (item: DesktopMenuItem): Step =>
+	toHost({ _tag: "PressedDesktopMenuItem", item })
 
 export const update = (model: AppModel, message: AppMessage): Next =>
 	Match.valueTags(message, {
 		ChangedRoute: ({ route }) => combine([redirect])(withRoute(model, route)),
-		ChangedSystemTheme: ({ theme }) => transitionTheme((current) => ({ ...current, systemTheme: theme }), false)(model),
+		ChangedSystemTheme: ({ theme }) =>
+			transitionTheme((current) => ({ ...current, systemTheme: theme }), false)(model),
 		ChangedViewport: ({ isMobile }) => unchanged({ ...model, isMobile }),
 		FailedSaveThemePreference: () => savingFailed("Couldn't save your theme")(model),
 		FailedSaveSoundSettings: () => savingFailed("Couldn't save your sound settings")(model),
@@ -502,9 +525,9 @@ export const update = (model: AppModel, message: AppMessage): Next =>
 		// A full load of `/`: every collection, token and subscription starts over, signed out.
 		SucceededSignOut: () => command(Commands.LoadExternal.make({ href: hrefOf(AppRoute.Root()) }))(model),
 		FailedSignOut: ({ reason }) =>
-			showToast(errorToastOf({ title: "Failed to sign out", description: commonMessage(reason).description }))(
-				model,
-			),
+			showToast(
+				errorToastOf({ title: "Failed to sign out", description: commonMessage(reason).description }),
+			)(model),
 		UpdatedOrganization: ({ orgSlug, organization }) => updatedOrganization(orgSlug, organization)(model),
 		// Only a slug still loading counts: data already on screen stays when its sync hiccups.
 		StalledOrganization: ({ orgSlug }) =>
@@ -522,4 +545,3 @@ export const update = (model: AppModel, message: AppMessage): Next =>
 		PressedMobileMenu: () => toHost({ _tag: "PressedMobileMenu" })(model),
 		PressedAiPanelToggle: () => toHost({ _tag: "PressedAiPanelToggle" })(model),
 	})
-
