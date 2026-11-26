@@ -3,6 +3,16 @@
  * tones of a hue picked from the name, drawn behind the initial. The hue, path and grain are the app's.
  */
 import { ditherHue, ditherPath } from "../../../../../../apps/web-foldkit/src/ui/dither-avatar.ts"
+import { flag } from "../define.ts"
+
+/**
+ * Today's avatar shows only its picture once it loads, over the muted ground: the fallback steps aside
+ * (`data-pictured`), or its tint would show through the picture's antialiased corners.
+ */
+export const showsPicture = (box: HTMLElement, image: HTMLElement) => {
+	image.addEventListener("load", () => flag(box, "pictured", true))
+	image.addEventListener("error", () => flag(box, "pictured", false))
+}
 
 const SVG = "http://www.w3.org/2000/svg"
 

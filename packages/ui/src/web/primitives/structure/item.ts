@@ -16,6 +16,8 @@ const SPINE_THROUGH = `M1.75 0V-100M1.75 -27${BRANCH}`
 const SPINE_TO_BRANCH = `M1.75 -100V-27${BRANCH}`
 
 const I = '[data-hz="item"]'
+// `large` and `conversation` share the grid; `conversation` then moves its metrics (`conversationCss`).
+const LARGE = ':is([data-leading-size="large"], [data-leading-size="conversation"])'
 const CONTROL = '> [data-hz-part="control"]'
 const SLOT = (name: string) =>
 	`> [data-hz-part="control"] > [data-hz-part="content"] > [data-hz-slot="${name}"]`
@@ -30,7 +32,7 @@ ${I}[data-unread="pip"] ${CONTROL}::before {
 	border-start-end-radius: var(--hz-radius-full); border-end-end-radius: var(--hz-radius-full);
 }
 ${I}[data-unread="dot"] ${CONTROL} > [data-hz-part="unread"],
-:has(> ${I}[data-unread="dot"]) > ${I}[data-leading-size="large"] ${CONTROL} > [data-hz-part="unread"] {
+:has(> ${I}[data-unread="dot"]) > ${I}${LARGE} ${CONTROL} > [data-hz-part="unread"] {
 	display: flex; order: -1; align-items: center; justify-content: center; flex-shrink: 0;
 	width: var(--hz-space-2); align-self: stretch;
 }
@@ -52,11 +54,11 @@ ${I} ${SLOT("actions")} {
 }
 ${I}:is(:hover, :focus-within) ${SLOT("actions")} { opacity: 1; }
 @media (hover: none) { ${I} ${SLOT("actions")} { opacity: 1; } }
-@media (width < 48rem) { ${I}[data-leading-size="large"] ${SLOT("actions")} { opacity: 1; } }
-${I}:not([data-leading-size="large"]) ${SLOT("actions")} {
+@media (width < 48rem) { ${I}${LARGE} ${SLOT("actions")} { opacity: 1; } }
+${I}:not(${LARGE}) ${SLOT("actions")} {
 	position: absolute; inset-block: 0; inset-inline-end: 0; padding-inline-end: var(--hz-space-1_5);
 }
-${I}:is(:hover, :focus-within):not([data-leading-size="large"]):has(${SLOT("actions")} > *) ${CONTROL} > [data-hz-part="badge"] {
+${I}:is(:hover, :focus-within):not(${LARGE}):has(${SLOT("actions")} > *) ${CONTROL} > [data-hz-part="badge"] {
 	margin-inline-end: var(--hz-space-6);
 }
 ${I}:has(${SLOT("actions")} :focus-visible) ${CONTROL} { background-color: var(--hz-color-wash); }
@@ -72,59 +74,90 @@ ${I}[data-subtitle-lines="2"] ${CONTROL} > [data-hz-part="subtitle"] { ${clamp} 
 
 // `leadingSize` `large` (`item-leading-size`): today's activity row. A 40px leading column, top
 // aligned; the trailing slot on the title's line, the subtitle under both; the dot column first.
-// HAZEL-GAP(item-conversation-row): today's DM row differs (semibold title, 14px preview, py-2.5).
 const largeCss = `
-${I}[data-leading-size="large"] ${CONTROL} {
+${I}${LARGE} ${CONTROL} {
 	transition: color var(--hz-duration-fast) var(--hz-ease-standard),
 		background-color var(--hz-duration-fast) var(--hz-ease-standard);
 	display: grid; align-items: start; column-gap: 0; row-gap: 0; border-radius: 0;
 	grid-template-columns: auto minmax(0, 1fr) auto auto;
 	grid-template-rows: auto minmax(0, 1fr);
 	grid-template-areas: "leading title trailing actions" "leading subtitle subtitle actions";
+}
+${I}[data-leading-size="large"] ${CONTROL} {
 	padding: var(--hz-space-3) var(--hz-space-4); color: var(--hz-color-fg);
 	min-height: calc(var(--hz-space-10) + var(--hz-space-1_5) + 2 * var(--hz-space-3));
 	font-size: var(--hz-text-label-size); line-height: var(--hz-text-label-leading);
 }
-${I}[data-leading-size="large"][data-badged] ${CONTROL} {
+${I}${LARGE}[data-badged] ${CONTROL} {
 	grid-template-areas: "leading title trailing actions" "leading subtitle badge actions";
 }
-${I}[data-leading-size="large"][data-unread="dot"] ${CONTROL},
-:has(> ${I}[data-unread="dot"]) > ${I}[data-leading-size="large"] ${CONTROL} {
+${I}${LARGE}[data-unread="dot"] ${CONTROL},
+:has(> ${I}[data-unread="dot"]) > ${I}${LARGE} ${CONTROL} {
 	grid-template-columns: auto auto minmax(0, 1fr) auto auto;
 	grid-template-areas: "unread leading title trailing actions" "unread leading subtitle subtitle actions";
 }
-${I}[data-leading-size="large"][data-unread="dot"][data-badged] ${CONTROL},
-:has(> ${I}[data-unread="dot"]) > ${I}[data-leading-size="large"][data-badged] ${CONTROL} {
+${I}${LARGE}[data-unread="dot"][data-badged] ${CONTROL},
+:has(> ${I}[data-unread="dot"]) > ${I}${LARGE}[data-badged] ${CONTROL} {
 	grid-template-areas: "unread leading title trailing actions" "unread leading subtitle badge actions";
 }
-${I}[data-leading-size="large"] ${CONTROL} > [data-hz-part="unread"] {
+${I}${LARGE} ${CONTROL} > [data-hz-part="unread"] {
 	grid-area: unread; height: var(--hz-space-10); margin-inline-end: var(--hz-space-3);
 }
 /* The leading column adds no height of its own (a spanning item skews the rows); the row's min-height
    holds it, 6px taller than the avatar as today's 16/24 line box is. */
-${I}[data-leading-size="large"] ${SLOT("leading")} {
+${I}${LARGE} ${SLOT("leading")} {
 	grid-area: leading; display: flex; width: auto; height: 0; margin-inline-end: var(--hz-space-3);
 }
-${I}[data-leading-size="large"] ${CONTROL} > [data-hz-part="title"] { grid-area: title; color: var(--hz-color-fg); }
-${I}[data-leading-size="large"] ${SLOT("trailing")} { grid-area: trailing; margin-inline-start: var(--hz-space-2); }
-${I}[data-leading-size="large"] ${CONTROL} > [data-hz-part="subtitle"] {
-	grid-area: subtitle; margin-top: var(--hz-space-0_5); color: var(--hz-color-muted-fg);
+${I}${LARGE} ${CONTROL} > [data-hz-part="title"] { grid-area: title; }
+${I}[data-leading-size="large"] ${CONTROL} > [data-hz-part="title"] { color: var(--hz-color-fg); }
+${I}${LARGE} ${SLOT("trailing")} { grid-area: trailing; margin-inline-start: var(--hz-space-2); }
+${I}${LARGE} ${CONTROL} > [data-hz-part="subtitle"] {
+	grid-area: subtitle; margin-top: var(--hz-space-0_5);
 }
-${I}[data-leading-size="large"] ${CONTROL} > [data-hz-part="badge"] {
+${I}[data-leading-size="large"] ${CONTROL} > [data-hz-part="subtitle"] { color: var(--hz-color-muted-fg); }
+${I}${LARGE} ${CONTROL} > [data-hz-part="badge"] {
 	grid-area: badge; align-self: start; justify-self: end; margin: var(--hz-space-0_5) 0 0 var(--hz-space-2);
 }
-${I}[data-leading-size="large"] ${SLOT("actions")} {
+${I}${LARGE} ${SLOT("actions")} {
 	grid-area: actions; align-self: center; margin-inline-start: var(--hz-space-4);
 }
-${I}[data-leading-size="large"]:has(${SLOT("actions")} > *) ${CONTROL} { padding-inline-end: var(--hz-space-3); }
+${I}${LARGE}:has(${SLOT("actions")} > *) ${CONTROL} { padding-inline-end: var(--hz-space-3); }
 /* A web-only hint for sidebar rows; a large row has no place for it. */
-${I}[data-leading-size="large"] ${CONTROL} > [data-hz-part="shortcut"] { display: none; }
+${I}${LARGE} ${CONTROL} > [data-hz-part="shortcut"] { display: none; }
+`
+
+// `leadingSize` `conversation` (`item-conversation-row`): today's DM row. The avatar 2px down
+// (`pt-0.5`), the time on the title's baseline. The row's minimum: the avatar's column is 48px
+// (2px over it, 6px under it from today's 16/24 line box) plus its 10px padding.
+const conversationCss = `
+${I}[data-leading-size="conversation"] ${CONTROL} {
+	min-height: calc(var(--hz-space-10) + var(--hz-space-0_5) + var(--hz-space-1_5) + 2 * var(--hz-space-2_5));
+}
+${I}[data-leading-size="conversation"] ${SLOT("leading")} { margin-top: var(--hz-space-0_5); }
+${I}[data-leading-size="conversation"] ${CONTROL} > [data-hz-part="title"],
+${I}[data-leading-size="conversation"] ${SLOT("trailing")} { align-self: baseline; }
+/* Today's preview breaks words (\`break-words\`), so its clamp ends mid-word as the kit's does. */
+${I}[data-leading-size="conversation"] ${CONTROL} > [data-hz-part="subtitle"] { overflow-wrap: break-word; }
+/* Today's countBadge keeps text-2xs's own 1.5 line box (16.5px) inside its 20px pill, 2px under the
+   preview's top. The time and the count each take their own width, so the preview runs to the count. */
+${I}[data-leading-size="conversation"] ${CONTROL} > [data-hz-part="badge"] {
+	line-height: 1.5; margin-top: var(--hz-space-1);
+}
+${I}[data-leading-size="conversation"]:not([data-unread="dot"]) ${CONTROL} {
+	grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+	grid-template-areas: "leading title trailing trailing actions" "leading subtitle subtitle subtitle actions";
+}
+${I}[data-leading-size="conversation"]:not([data-unread="dot"])[data-badged] ${CONTROL} {
+	grid-template-areas: "leading title trailing trailing actions" "leading subtitle subtitle badge actions";
+}
 `
 
 // What the recipe cannot say: slot order inside the row, the subtitle's second line, the elbow's
 // position, and a disabled link taking no clicks.
 const css = `
 [data-hz="item"] > [data-hz-part="control"] { position: relative; }
+/* A sidebar row that links takes today's link weight (\`sidebarLink\`'s \`font-medium\`); a button row stays regular. */
+[data-hz="item"]:not(${LARGE}) > a[data-hz-part="control"] { font-weight: var(--hz-weight-strong); }
 [data-hz="item"] > [data-hz-part="control"] > [data-hz-part="title"],
 [data-hz="item"] > [data-hz-part="control"] > [data-hz-part="subtitle"] { order: 1; min-width: 0; }
 [data-hz="item"] > [data-hz-part="control"] > [data-hz-part="badge"] { order: 2; overflow: hidden; }
@@ -133,10 +166,16 @@ const css = `
 /* An empty trailing slot (a DM row's) takes no gap, or the badge sits 8px off today's place. */
 [data-hz="item"] > [data-hz-part="control"] > [data-hz-part="content"] > [data-hz-slot="trailing"]:empty { display: none; }
 /* Today's sidebar badge sits 6px from the row's end (\`right-1.5\`), inside the row's 8px padding. */
-[data-hz="item"]:not([data-leading-size="large"]) > [data-hz-part="control"] > [data-hz-part="badge"] {
+[data-hz="item"]:not(${LARGE}) > [data-hz-part="control"] > [data-hz-part="badge"] {
 	margin-inline-end: calc(var(--hz-space-0_5) * -1);
 }
 [data-hz="item"] > [data-hz-part="control"] > [data-hz-part="shortcut"] { order: 3; }
+/* Today's palette hint (\`hidden lg:inline absolute top-1/2 right-2 font-mono\`): a desk hint, at the row's end. */
+[data-hz="item"]:not(${LARGE}) > [data-hz-part="control"] > [data-hz-part="shortcut"] {
+	position: absolute; top: 50%; inset-inline-end: var(--hz-space-2); translate: 0 -50%;
+	font-family: var(--hz-font-mono);
+}
+@media (width < 64rem) { [data-hz="item"] > [data-hz-part="control"] > [data-hz-part="shortcut"] { display: none; } }
 [data-hz="item"] > [data-hz-part="control"] > [data-hz-part="content"] > [data-hz-slot="trailing"] { order: 4; }
 [data-hz="item"][data-subtitled] > [data-hz-part="control"] {
 	display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto;
@@ -166,6 +205,7 @@ ${unreadCss}
 ${actionsCss}
 ${linesCss}
 ${largeCss}
+${conversationCss}
 `
 
 const elbowOf = (document: Document) => {

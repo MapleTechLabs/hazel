@@ -3,7 +3,7 @@ import { ditherInitial } from "../../../../../../apps/web-foldkit/src/ui/dither-
 import type { AvatarPresence } from "../../../vocabulary/options.ts"
 import { glyph } from "../../icons.ts"
 import { definePrimitive, flag, option, part, type Primitive } from "../define.ts"
-import { ditherLayer, observeWidth } from "./dither.ts"
+import { ditherLayer, observeWidth, showsPicture } from "./dither.ts"
 import { pressable } from "./press.ts"
 import { ensureStyles } from "./styles.ts"
 
@@ -52,6 +52,7 @@ export const primitive = definePrimitive("avatar", ({ document, tag, outer }) =>
 	const presence = corner(part(document, "span", "presence"))
 	const mark = corner(part(document, "span", "mark"))
 	mark.setAttribute("aria-hidden", "true")
+	showsPicture(node, image)
 	node.append(dither.layer, initials, image, presence, mark)
 	let name = ""
 	let initialsText = ""
@@ -90,6 +91,7 @@ export const primitive = definePrimitive("avatar", ({ document, tag, outer }) =>
 				seed()
 			} else if (prop === "src") {
 				image.hidden = text === undefined
+				flag(node, "pictured", false)
 				if (text === undefined) image.removeAttribute("src")
 				else image.setAttribute("src", text)
 			} else if (prop === "size") {

@@ -36,6 +36,16 @@ const css = `
 [data-hz=peopleStrip] [data-hz-part=avatar] > :is([data-hz-part=image], [data-hz-part=dither]) {
 	corner-shape: squircle;
 }
+/* A 40pt row avatar's dot is today's \`presenceDot\` \`xs\`: 10px, cut out by a 2px outer ring (\`ring-2 ring-bg\`). */
+[data-hz=avatar][data-size=medium] > [data-hz-part=presence] {
+	border-width: 0;
+	box-shadow: 0 0 0 2px var(--hz-color-bg);
+}
+[data-hz=avatar][data-size=medium][data-presence=offline] > [data-hz-part=presence] {
+	box-shadow: 0 0 0 2px var(--hz-color-bg), inset 0 0 0 2px var(--hz-color-presence-offline);
+}
+/* A loaded picture covers the avatar alone (\`showsPicture\`). */
+[data-pictured] > :is([data-hz-part=dither], [data-hz-part=initials]) { visibility: hidden; }
 [data-hz-part=dither] {
 	position: absolute;
 	inset: 0;

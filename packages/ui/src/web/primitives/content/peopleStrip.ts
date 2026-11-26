@@ -4,7 +4,7 @@ import { ditherInitial } from "../../../../../../apps/web-foldkit/src/ui/dither-
 import { StripPerson } from "../../../vocabulary/content.ts"
 import type { AvatarPresence } from "../../../vocabulary/options.ts"
 import { definePrimitive, flag, part, type Primitive } from "../define.ts"
-import { ditherLayer } from "./dither.ts"
+import { ditherLayer, showsPicture } from "./dither.ts"
 import { ensureStyles } from "./styles.ts"
 
 const isPerson = Schema.is(StripPerson)
@@ -36,6 +36,7 @@ const tileOf = (document: Document, person: StripPerson) => {
 		const image = part(document, "img", "image")
 		image.setAttribute("src", person.src)
 		image.setAttribute("alt", "")
+		showsPicture(avatar, image)
 		avatar.append(image)
 	}
 	// Today's seeded fallback, at the kit's `xl` (56px): seeded by the full name.
