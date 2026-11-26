@@ -1,6 +1,4 @@
-import { OrganizationId, UserId } from "@hazel/schema"
-import { Match, Schema, Stream } from "effect"
-import { Mount, Submodel } from "foldkit"
+import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconHashtag, IconLock, IconMsgs, IconPlus } from "../../icons"
 import { badge } from "../../ui/badge"

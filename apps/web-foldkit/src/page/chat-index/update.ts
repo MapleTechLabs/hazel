@@ -1,6 +1,6 @@
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
-import { AppRoute, type RouteOf } from "../../route"
+import type { RouteOf } from "../../route"
 import * as Tabs from "../../ui/tabs"
 import type { PageReturn } from "../contract"
 import { PageOutMessage } from "../out-message"

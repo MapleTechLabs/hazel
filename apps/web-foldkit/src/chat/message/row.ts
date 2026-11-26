@@ -48,23 +48,6 @@ export interface RowContext<M> {
 	readonly toPressEmbedAction: (channelId: ChannelId, messageId: MessageId, actionId: string) => M
 }
 
-/** `DateDivider`: the line is hidden while the divider is pinned to the top. */
-export const dateDividerView = <M>(h: HtmlBuilder<M>, label: string, isStuck: boolean): Html =>
-	h.div(
-		[h.Class("sticky top-0 z-0 my-2 flex items-center justify-center")],
-		[
-			...(isStuck ? [] : [h.div([h.Class("absolute inset-x-4 border-t border-border")])]),
-			h.span(
-				[
-					h.Class(
-						"relative rounded-lg bg-secondary px-3 py-1 font-mono text-muted-fg text-xs shadow-sm",
-					),
-				],
-				[label],
-			),
-		],
-	)
-
 const isGroupStartOf = (row: MessageRow) =>
 	row.groupPosition === "start" || row.groupPosition === "standalone"
 const isGroupEndOf = (row: MessageRow) => row.groupPosition === "end" || row.groupPosition === "standalone"

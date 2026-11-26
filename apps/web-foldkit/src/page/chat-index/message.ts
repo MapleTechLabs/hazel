@@ -1,4 +1,3 @@
-import { ChannelId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import * as Tabs from "../../ui/tabs"

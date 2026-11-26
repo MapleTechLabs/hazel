@@ -1,6 +1,6 @@
 import { ChannelId } from "@hazel/schema"
-import { Match, Option, Schema, Stream } from "effect"
-import { Mount, Submodel } from "foldkit"
+import { Match, Option, Schema } from "effect"
+import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconBell, IconCheck, IconHashtag, IconMsgs, IconSupport, IconThread } from "../../../icons"
@@ -17,7 +17,6 @@ import { pageHeader, pageLayout } from "../../../ui/page-header"
 import { statusDot } from "../../../ui/status-dot"
 import type { PageViewInputs } from "../../contract"
 import { hole } from "../../../app/holes"
-import { OrganizationMemberId } from "@hazel/schema"
 import { formatDistanceToNow } from "~/lib/format-distance"
 import {
 	contextOf,

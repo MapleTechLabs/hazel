@@ -13,6 +13,8 @@ import { view } from "./view"
 /** The inbox fed by its live queries: rows replace the loader, rows link to the chat, and Mark as read. */
 
 const shared = makeShared({ nowMs: 600_000 })
+/** Before the membership is known the page draws the notification list itself. */
+const memberless = makeShared({ nowMs: 600_000, member: null })
 const unread = {
 	id: Schema.decodeSync(NotificationId)(uuid(1)),
 	isUnread: true,
@@ -39,9 +41,21 @@ const mentions = () => init(AppRoute.NotificationsMentions.make({ orgSlug: "haze
 const unreads = () => init(AppRoute.NotificationsUnreads.make({ orgSlug: "hazel" })).model
 
 describe("notifications inbox view", () => {
-	test("rows arrive from the live query; a channel row links to the chat and marks itself read", () => {
+	test.each([
+		["Mentions", mentions],
+		["All", () => init(AppRoute.NotificationsAll.make({ orgSlug: "hazel" })).model],
+	])("%s leaves the shared Activity screen's hole where the notification list was", (_, model) => {
 		Scene.scene(
 			pageScene(update, view, shared),
+			Scene.given(model()),
+			Scene.expect(Scene.selector('[data-hazel-hole="activity"]')).toExist(),
+			Scene.expect(Scene.role("progressbar")).toBeAbsent(),
+		)
+	})
+
+	test("rows arrive from the live query; a channel row links to the chat and marks itself read", () => {
+		Scene.scene(
+			pageScene(update, view, memberless),
 			Scene.given(mentions()),
 			Scene.expect(Scene.role("progressbar")).toExist(),
 			Scene.Subscription.emit(Message.UpdatedNotifications({ notifications: [unread] })),
@@ -62,7 +76,7 @@ describe("notifications inbox view", () => {
 
 	test("an unread notification's Mark as read action marks it read", () => {
 		Scene.scene(
-			pageScene(update, view, shared),
+			pageScene(update, view, memberless),
 			Scene.given(mentions()),
 			Scene.Subscription.emit(Message.UpdatedNotifications({ notifications: [unread] })),
 			Scene.click(Scene.role("button", { name: /^Mark as read: / })),
@@ -76,7 +90,7 @@ describe("notifications inbox view", () => {
 
 	test("an empty live result shows the all-caught-up state", () => {
 		Scene.scene(
-			pageScene(update, view, shared),
+			pageScene(update, view, memberless),
 			Scene.given(init(AppRoute.NotificationsAll.make({ orgSlug: "hazel" })).model),
 			Scene.Subscription.emit(Message.UpdatedNotifications({ notifications: [] })),
 			Scene.expect(Scene.text("No notifications")).toExist(),
