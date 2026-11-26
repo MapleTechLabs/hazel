@@ -12,6 +12,11 @@ public final class FrameMonitor {
         public var longFrames = 0
         public var worstMs: Double = 0
         public var hz = 0
+        /// Main-thread busy time per run-loop turn (woke to went idle): what a 120 Hz frame must fit
+        /// in 8.3 ms, measurable even where the display runs at 60 Hz (the simulator).
+        public var busyWorstMs: Double = 0
+        public var busyOver8ms = 0
+        public var busyOver4ms = 0
     }
 
     public static let shared = FrameMonitor()
@@ -20,6 +25,8 @@ public final class FrameMonitor {
     public var counting = true
     private var link: CADisplayLink?
     private var last: CFTimeInterval = 0
+    private var observer: CFRunLoopObserver?
+    private var woke: CFTimeInterval = 0
 
     public func start() {
         guard link == nil else { return }
@@ -27,6 +34,26 @@ public final class FrameMonitor {
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 80, maximum: 120, preferred: 120)
         link.add(to: .main, forMode: .common)
         self.link = link
+        let activities = CFRunLoopActivity.afterWaiting.rawValue | CFRunLoopActivity.beforeWaiting.rawValue
+        let observer = CFRunLoopObserverCreateWithHandler(nil, activities, true, 0) { _, activity in
+            MainActor.assumeIsolated { FrameMonitor.shared.runLoop(activity) }
+        }
+        CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
+        self.observer = observer
+    }
+
+    private func runLoop(_ activity: CFRunLoopActivity) {
+        let now = CACurrentMediaTime()
+        if activity == .afterWaiting {
+            woke = now
+            return
+        }
+        guard counting, woke > 0 else { return }
+        let busy = (now - woke) * 1000
+        woke = 0
+        totals.busyWorstMs = max(totals.busyWorstMs, busy)
+        if busy > 8.33 { totals.busyOver8ms += 1 }
+        if busy > 4 { totals.busyOver4ms += 1 }
     }
 
     public func reset() {

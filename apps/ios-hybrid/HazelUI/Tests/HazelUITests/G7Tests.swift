@@ -9,7 +9,7 @@ import XCTest
 /// Prints `G7_TIMING` lines; run with `TEST_RUNNER_JSC_useJIT=false` for the no-JIT numbers.
 @MainActor
 final class G7Tests: XCTestCase {
-    static let script: String = {
+    nonisolated static let script: String = {
         let url = Bundle.module.url(forResource: "g7bench", withExtension: "js", subdirectory: "JS")!
         return try! String(contentsOf: url, encoding: .utf8)
     }()
@@ -157,5 +157,28 @@ final class G7DecodeTests: XCTestCase {
         }
         print(String(format: "G7_DECODE C mount %d bytes: JSONSerialization %.1f ms, WireDecoder %.1f ms (min of 5)",
                      lines.reduce(0) { $0 + $1.count }, parse.min()!, full.min()!))
+    }
+}
+
+/// What one row costs to lay out and draw at 3x, on one thread.
+final class G7RenderTests: XCTestCase {
+    func testRowDrawCost() throws {
+        let bench = JSBench(script: G7Tests.script)
+        let entries: [ListEntry] = try MainActor.assumeIsolated {
+            let tree = Tree()
+            let source = ListSource(tree: tree)
+            for batch in bench.start(.c, initial: 3000).batches { try tree.apply(batch) }
+            source.refresh()
+            return Array(source.entries.prefix(300))
+        }
+        let clock = ContinuousClock()
+        let t0 = clock.now
+        let layouts = entries.map { RowRenderer.layout($0, width: 402) }
+        let t1 = clock.now
+        var bytes = 0
+        for layout in layouts { bytes += RowRenderer.draw(layout, scale: 3).map { $0.bytesPerRow * $0.height } ?? 0 }
+        let t2 = clock.now
+        print(String(format: "G7_RENDER 300 rows: layout %.3f ms/row, draw %.3f ms/row, %.0f KB/row",
+                     JSBench.ms(t1 - t0) / 300, JSBench.ms(t2 - t1) / 300, Double(bytes) / 300 / 1024))
     }
 }

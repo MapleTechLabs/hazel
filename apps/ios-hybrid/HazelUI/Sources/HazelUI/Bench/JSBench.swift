@@ -33,7 +33,8 @@ public final class JSBench: @unchecked Sendable {
         }
     }
 
-    public static var jitDisabled: Bool { ProcessInfo.processInfo.environment["JSC_useJIT"] == "false" }
+    /// Read live: an app may `setenv` it after launch, before its first JSContext.
+    public static var jitDisabled: Bool { getenv("JSC_useJIT").map { String(cString: $0) } == "false" }
 
     private var bench: JSValue { context.objectForKeyedSubscript("__bench") }
 

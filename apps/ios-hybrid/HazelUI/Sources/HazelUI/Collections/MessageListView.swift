@@ -10,8 +10,10 @@ public final class MessageListView: UIView, UIScrollViewDelegate {
     public struct Stats: Sendable {
         public var renders = 0
         public var rendersByKey: [Int: Int] = [:]
-        /// A row came into view before its bitmap was ready.
+        /// A row came into view before its bitmap was ready (once per appearance), and the frames
+        /// on which some visible row was still blank.
         public var blanks = 0
+        public var blankFrames = 0
         public var measured = 0
         public var bitmapBytes = 0
     }
@@ -34,17 +36,29 @@ public final class MessageListView: UIView, UIScrollViewDelegate {
     private var layouts: [Int: RowLayout] = [:]
     private var images: [Int: CGImage] = [:]
     private var imageOrder: [Int] = []
-    private var rendering: Set<Int> = []
+    private var rendering: [Int: Operation] = [:]
+    private var blankShown: Set<Int> = []
+    /// Rows in view or drawn ahead: never evicted. +1 scrolls toward older rows.
+    private var protected: Set<Int> = []
+    private var direction = 1
+    private var lastTop: CGFloat = 0
     private var layers: [Int: CALayer] = [:]
     private var pool: [CALayer] = []
     private var generation = 0
     private var lastReach = -1
     private var lastViewport = (-1, -1)
-    private let renderQueue = DispatchQueue(label: "sh.hazel.ui.rows", qos: .userInteractive)
+    /// Rows draw in parallel; on-screen ones jump the queue, ones scrolled past are cancelled.
+    private let renderQueue: OperationQueue = {
+        let q = OperationQueue()
+        q.name = "sh.hazel.ui.rows"
+        q.maxConcurrentOperationCount = 4
+        q.qualityOfService = .userInitiated
+        return q
+    }()
     private let measureQueue = DispatchQueue(label: "sh.hazel.ui.measure", qos: .userInitiated)
     private static let flip = CATransform3DMakeScale(1, -1, 1)
     /// Bitmaps kept (bytes); rows beyond it are drawn again when they return.
-    public var bitmapBudget = 48 * 1024 * 1024
+    public var bitmapBudget = 64 * 1024 * 1024
 
     public override init(frame: CGRect) {
         super.init(frame: frame)
@@ -166,7 +180,7 @@ public final class MessageListView: UIView, UIScrollViewDelegate {
         let chunk = 200
         for start in stride(from: 0, to: missing.count, by: chunk) {
             let part = Array(missing[start..<min(missing.count, start + chunk)])
-            measureQueue.async { [weak self] in
+            measureQueue.async { @Sendable [weak self] in
                 let made = part.map { ($0.0, RowRenderer.layout($0.1, width: width)) }
                 DispatchQueue.main.async {
                     guard let self, self.generation == generation, self.bounds.width == width else { return }
@@ -200,14 +214,18 @@ public final class MessageListView: UIView, UIScrollViewDelegate {
         let lo = index(at: visible.0)
         let hi = min(keys.count - 1, index(at: visible.1))
         guard lo <= hi else { return }
-        // Draw ahead of the scroll: a screen and a half either way.
-        let ahead = bounds.height * 1.5
-        let preLo = index(at: max(0, visible.0 - ahead))
-        let preHi = min(keys.count - 1, index(at: visible.1 + ahead))
+        // Draw ahead of the scroll: a screen and a half the way it moves, half a screen behind.
+        let dy = top - lastTop
+        if abs(dy) > 0.5 { direction = dy > 0 ? 1 : -1 }
+        lastTop = top
+        let forward = bounds.height * 1.5, back = bounds.height * 0.5
+        let preLo = index(at: max(0, visible.0 - (direction < 0 ? forward : back)))
+        let preHi = min(keys.count - 1, index(at: visible.1 + (direction > 0 ? forward : back)))
         var wanted = Set<Int>()
         for i in lo...hi { wanted.insert(keys[i]) }
         for key in Array(layers.keys) where !wanted.contains(key) { recycle(key) }
         let scale = window?.screen.scale ?? 3
+        var anyBlank = false
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for i in lo...hi {
@@ -220,13 +238,24 @@ public final class MessageListView: UIView, UIScrollViewDelegate {
                 } else if case .placeholder = entries[i] {
                     layer.backgroundColor = RowRenderer.wash.cgColor
                 } else {
-                    stats.blanks += 1
+                    anyBlank = true
+                    if blankShown.insert(key).inserted { stats.blanks += 1 }
                     render(key, index: i, scale: scale, urgent: true)
                 }
             }
         }
         CATransaction.commit()
-        for i in preLo...preHi where images[keys[i]] == nil { render(keys[i], index: i, scale: scale, urgent: false) }
+        if anyBlank { stats.blankFrames += 1 }
+        var prefetch = Set<Int>()
+        for i in preLo...preHi {
+            prefetch.insert(keys[i])
+            if images[keys[i]] == nil { render(keys[i], index: i, scale: scale, urgent: false) }
+        }
+        protected = prefetch
+        for (key, op) in rendering where !prefetch.contains(key) {
+            op.cancel()
+            rendering[key] = nil
+        }
         if hi >= keys.count - 20, lastReach != keys.count {
             lastReach = keys.count
             onReachStart?()
@@ -242,18 +271,24 @@ public final class MessageListView: UIView, UIScrollViewDelegate {
     }
 
     private func render(_ key: Int, index i: Int, scale: CGFloat, urgent: Bool) {
-        guard !rendering.contains(key), i < entries.count else { return }
+        guard i < entries.count else { return }
+        if let pending = rendering[key] {
+            if urgent { pending.queuePriority = .veryHigh }
+            return
+        }
         if case .placeholder = entries[i] { return }
-        rendering.insert(key)
         let entry = entries[i]
         let layout = layouts[key]
         let width = bounds.width
-        let work = DispatchWorkItem(qos: urgent ? .userInteractive : .userInitiated) { [weak self] in
+        let work = BlockOperation()
+        work.queuePriority = urgent ? .veryHigh : .normal
+        work.addExecutionBlock { @Sendable [weak self, weak work] in
+            if work?.isCancelled == true { return }
             let made = layout ?? RowRenderer.layout(entry, width: width)
             let image = RowRenderer.draw(made, scale: scale)
             DispatchQueue.main.async {
                 guard let self else { return }
-                self.rendering.remove(key)
+                if self.rendering[key] === work { self.rendering[key] = nil }
                 guard self.indexOf[key] != nil, let image else { return }
                 if self.layouts[key] == nil { self.layouts[key] = made }
                 self.stats.renders += 1
@@ -268,7 +303,8 @@ public final class MessageListView: UIView, UIScrollViewDelegate {
                 if self.onShown != nil { self.show() }
             }
         }
-        renderQueue.async(execute: work)
+        rendering[key] = work
+        renderQueue.addOperation(work)
     }
 
     private func keep(_ key: Int, _ image: CGImage) {
@@ -276,15 +312,10 @@ public final class MessageListView: UIView, UIScrollViewDelegate {
         images[key] = image
         imageOrder.append(key)
         stats.bitmapBytes += image.bytesPerRow * image.height
-        while stats.bitmapBytes > bitmapBudget, let oldest = imageOrder.first {
-            if layers[oldest] != nil, imageOrder.count > 1 {
-                // On screen: keep it, move it to the back.
-                imageOrder.removeFirst()
-                imageOrder.append(oldest)
-                if imageOrder.allSatisfy({ layers[$0] != nil }) { break }
-                continue
-            }
-            dropImage(oldest)
+        // Over budget: drop the least recent bitmaps outside what is shown or drawn ahead.
+        while stats.bitmapBytes > bitmapBudget,
+              let victim = imageOrder.first(where: { !protected.contains($0) && layers[$0] == nil }) {
+            dropImage(victim)
         }
     }
 
@@ -310,10 +341,16 @@ public final class MessageListView: UIView, UIScrollViewDelegate {
     }
 
     private func recycle(_ key: Int) {
+        blankShown.remove(key)
         guard let layer = layers.removeValue(forKey: key) else { return }
         layer.removeFromSuperlayer()
         layer.contents = nil
         pool.append(layer)
+    }
+
+    /// Zeroes the blank and render counters (bitmap bytes stay true).
+    public func resetStats() {
+        stats = Stats(bitmapBytes: stats.bitmapBytes)
     }
 
     public func scrollViewDidScroll(_ scrollView: UIScrollView) { show() }
