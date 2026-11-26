@@ -1,0 +1,59 @@
+{
+	"about": "The channel sidebar's tip (`surface` `hint`): inset, quiet, a 14pt icon, the caption with its small key cap (wide only) and a 20pt close button.",
+	"root": {
+		"tag": "frame",
+		"props": {
+			"surface": "hint"
+		},
+		"children": [
+			{
+				"tag": "stack",
+				"props": {
+					"axis": "horizontal",
+					"align": "center",
+					"density": "compact"
+				},
+				"children": [
+					{
+						"tag": "icon",
+						"props": {
+							"name": "lightbulb"
+						}
+					},
+					{
+						"tag": "text",
+						"props": {
+							"role": "caption",
+							"tone": "muted"
+						},
+						"children": [
+							"Create your first channel with ",
+							{
+								"tag": "text",
+								"props": {
+									"role": "kbd"
+								},
+								"children": ["⌥⌘N"]
+							}
+						]
+					},
+					{
+						"tag": "spacer"
+					},
+					{
+						"tag": "button",
+						"props": {
+							"icon": "close",
+							"iconOnly": true,
+							"variant": "ghost",
+							"size": "xsmall",
+							"label": "Dismiss"
+						},
+						"events": ["press"]
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar"
+}

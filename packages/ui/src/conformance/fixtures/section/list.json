@@ -1,0 +1,40 @@
+{
+	"about": "A phone list's section (`style` `list`, the DMs tab): an inset uppercase label over rows that run edge to edge.",
+	"root": {
+		"tag": "section",
+		"props": {
+			"style": "list",
+			"title": "Unreads"
+		},
+		"children": [
+			{
+				"tag": "item",
+				"props": {
+					"title": "Grace Hopper",
+					"subtitle": "Sent it to you directly.",
+					"leadingSize": "conversation",
+					"badge": 2,
+					"emphasized": true,
+					"href": "#"
+				},
+				"key": "grace",
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "avatar",
+								"props": {
+									"name": "Grace Hopper",
+									"initials": "GH",
+									"size": "medium"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen"
+}

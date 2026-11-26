@@ -1,0 +1,36 @@
+{
+	"about": "The inbox's group (`style` `sticky`): its label `px-4 py-2` sticks over the card while the rows scroll.",
+	"root": {
+		"tag": "section",
+		"props": {
+			"style": "sticky",
+			"title": "Older"
+		},
+		"children": [
+			{
+				"tag": "frame",
+				"props": {
+					"surface": "flush"
+				},
+				"children": [
+					{
+						"tag": "item",
+						"props": {
+							"title": "First row"
+						}
+					},
+					{
+						"tag": "divider"
+					},
+					{
+						"tag": "item",
+						"props": {
+							"title": "Second row"
+						}
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen"
+}
