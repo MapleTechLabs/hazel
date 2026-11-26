@@ -75,7 +75,16 @@ final class RevisionedText {
     func attach(_ tree: Tree, _ node: Node) {
         self.tree = tree
         id = node.id
+        #if DEBUG
+        Self.live[node.id] = Weak(value: self)
+        #endif
     }
+
+    #if DEBUG
+    /// The live control per node, for the stress test to type through the view's own binding path.
+    struct Weak { weak var value: RevisionedText? }
+    static var live: [NodeId: Weak] = [:]
+    #endif
 
     /// The control's text binding: every write is a local edit.
     var binding: Binding<String> {
