@@ -121,6 +121,7 @@ export class MarkNotificationRead extends Command.Service<MarkNotificationRead>(
 						Effect.succeed(ActivityMessage.FailedMarkRead({ id, reason: "NotFound" })),
 					),
 					// BOUNDARY: every other failure (offline, unauthorized, sync timeout) reads the same here.
+					Effect.tapCause((cause) => Effect.logWarning("mark read failed", cause)),
 					Effect.catchCause(() =>
 						Effect.succeed(ActivityMessage.FailedMarkRead({ id, reason: "Other" })),
 					),
@@ -349,10 +350,13 @@ export const Activity = Hazel.component({
 
 		const list = (items: ReadonlyArray<ActivityItem>) =>
 			groupByTime(items, model.nowMs).map((group) =>
-				h.section
+				// Not a `section`: that is the sidebar's group, inset and titled in sidebar ink.
+				h.stack
 					.key(group.label)
-					.title(group.label)
+					.density("compact")
 					.children(
+						// HAZEL-GAP(text-overline): the group label is the kit's uppercase `label` heading.
+						h.text.role("caption").tone("muted").strong().children(group.label),
 						// HAZEL-GAP(frame-flush): today's card is a bordered box with no padding, rows split by hairlines.
 						h.frame.children(
 							...group.items.flatMap((item, index) =>
@@ -377,8 +381,10 @@ export const Activity = Hazel.component({
 			.description("Check your connection and try again.")
 			.on("dismiss", ActivityMessage.DismissedError())
 		return Match.value(h.props.titled).pipe(
-			Match.when(true, () => h.screen.title(copy.heading).children(...body, error)),
-			Match.orElse(() => h.stack.children(...body, error)),
+			Match.when(true, () =>
+				h.screen.title(copy.heading).children(h.stack.density("relaxed").children(...body), error),
+			),
+			Match.orElse(() => h.stack.density("relaxed").children(...body, error)),
 		)
 	},
 })
