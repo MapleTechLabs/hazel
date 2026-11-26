@@ -14,6 +14,7 @@ import {
 } from "../../../../apps/web-foldkit/src/ui/sidebar.ts"
 import { chatSpecimens } from "./kit-chat.ts"
 import { contentSpecimens } from "./kit-content.ts"
+import { rowSpecimens } from "./kit-rows.ts"
 import { applyTheme } from "./page.ts"
 import {
 	type BadgeSpec,
@@ -165,6 +166,8 @@ const view = (h: H): Html =>
 			),
 			chatSpecimens(h),
 			contentSpecimens(h),
+			// Last: today's DM row is 80.5px tall on a phone, which would set later specimens off the pixel grid.
+			rowSpecimens(h),
 		],
 	)
 

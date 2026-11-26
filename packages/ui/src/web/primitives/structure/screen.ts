@@ -4,6 +4,22 @@ import { svg } from "../../icons.ts"
 import { definePrimitive, flag, part, type Primitive } from "../define.ts"
 import { ensureSheet, fire, textOf } from "../list/runtime.ts"
 
+// `floatingAction` (`floating-action`): today's DMs compose, a 56px round button that sticks to the
+// end corner of the scrolling content, after the last row; only the button takes the pointer.
+const FLOATING = '[data-hz="screen"] > [data-hz-part="content"] > [data-hz-slot="floatingAction"]'
+const floatingCss = `
+${FLOATING} {
+	order: 1; position: sticky; bottom: var(--hz-space-4); margin-top: auto; display: flex;
+	justify-content: flex-end; padding: var(--hz-space-4) var(--hz-space-4) 0; pointer-events: none;
+}
+${FLOATING} > * { pointer-events: auto; }
+${FLOATING} > [data-hz="button"] {
+	width: var(--hz-space-14); height: var(--hz-space-14); border-radius: var(--hz-radius-full);
+	box-shadow: var(--hz-shadow-lg);
+}
+${FLOATING} > [data-hz="button"] > [data-hz-part="icon"] { width: var(--hz-space-6); height: var(--hz-space-6); }
+`
+
 // The toolbar slot stays in the content parent (slots never move) and is placed over the bar's end.
 // A recipe's interaction states are the root's, so the back button's own hover is here.
 const css = `
@@ -23,6 +39,7 @@ const css = `
 	outline: 2px solid var(--hz-color-ring); outline-offset: -2px;
 }
 [data-hz="screen"] > [data-hz-part="header"] > [data-hz-part="title"] { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+${floatingCss}
 `
 
 export const primitive = definePrimitive("screen", ({ document, tag, outer }) => {

@@ -8,8 +8,28 @@ import { ensureSheet, fire, rowsOf, textOf } from "../list/runtime.ts"
 const css = `
 [data-hz="section"] > [data-hz-part="title"] > [data-hz-part="disclosure"] {
 	display: inline-flex; align-items: center; gap: var(--hz-space-1); cursor: default;
-	border-radius: var(--hz-radius-md);
+	border-radius: var(--hz-radius-md); color: inherit;
 }
+/* Today's collapsible header (sectionGroupHeader): the chevron leads, pl-2.5, muted text-xs/5. */
+[data-hz="section"][data-collapsible] > [data-hz-part="title"] {
+	padding-inline: var(--hz-space-2_5) 0; margin-bottom: 0; line-height: var(--hz-space-5);
+	color: var(--hz-color-muted-fg);
+}
+[data-hz="section"][data-collapsible] > [data-hz-part="title"] [data-hz-part="chevron"] { color: currentColor; }
+/* Its "+" is today's round sq-xs button (sectionPlusButton): 28px with a 12px icon at regular widths. */
+[data-hz="section"][data-collapsible] > [data-hz-part="content"] > [data-hz="action"] {
+	border-radius: var(--hz-radius-full); color: var(--hz-color-muted-fg);
+}
+[data-hz="section"] [data-hz-part="chevron"] > svg { display: block; width: 100%; height: 100%; }
+@media (width >= 40rem) {
+	[data-hz="section"][data-collapsible] > [data-hz-part="content"] > [data-hz="action"] {
+		width: var(--hz-space-7); height: var(--hz-space-7);
+	}
+	[data-hz="section"][data-collapsible] > [data-hz-part="content"] > [data-hz="action"] > [data-hz="icon"] {
+		width: var(--hz-space-3); height: var(--hz-space-3);
+	}
+}
+[data-hz="section"] > [data-hz-part="title"] > [data-hz-part="disclosure"]:active { color: var(--hz-color-fg); }
 [data-hz="section"] > [data-hz-part="title"] > [data-hz-part="disclosure"]:hover { color: var(--hz-color-fg); }
 [data-hz="section"] > [data-hz-part="title"] > [data-hz-part="disclosure"]:focus-visible {
 	outline: 2px solid var(--hz-color-ring); outline-offset: 1px;
@@ -46,7 +66,7 @@ export const primitive = definePrimitive("section", ({ document, tag, outer }) =
 	// The title's text lives in one label; collapsible, the label moves into the disclosure button.
 	const layout = () => {
 		if (collapsible && disclosure.parentNode !== title) {
-			disclosure.append(label, chevron)
+			disclosure.append(chevron, label)
 			title.append(disclosure)
 		} else if (!collapsible && label.parentNode !== title) {
 			title.append(label)

@@ -1,0 +1,65 @@
+{
+	"about": "A collapsible section with its \"+\" against today's `sectionGroupHeader`: the chevron leads the title.",
+	"root": {
+		"tag": "section",
+		"props": {
+			"title": "Channels",
+			"collapsible": true
+		},
+		"events": ["toggle"],
+		"children": [
+			{
+				"tag": "action",
+				"props": {
+					"label": "New in Channels"
+				},
+				"events": ["press"],
+				"children": [
+					{
+						"tag": "icon",
+						"props": {
+							"name": "plus"
+						}
+					}
+				]
+			},
+			{
+				"tag": "item",
+				"key": "general",
+				"props": {
+					"title": "general",
+					"href": "#"
+				},
+				"events": ["press"],
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "icon",
+								"props": {
+									"name": "hashtag"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Channels"
+		},
+		{
+			"role": "button",
+			"name": "New in Channels"
+		}
+	],
+	"kit": {
+		"specimen": "section-collapsible",
+		"target": "frame"
+	}
+}

@@ -106,6 +106,65 @@ describe("lane A4 on the web host", () => {
 			},
 		))
 
+	it("names unread rows, marks line counts and leading size, and keeps the dot's column", () =>
+		mounted(
+			{
+				tag: "section",
+				children: [
+					item("design", { unread: "pip", href: "#" }),
+					item("mention", {
+						unread: "dot",
+						leadingSize: "large",
+						titleLines: "2",
+						subtitleLines: "2",
+					}),
+				],
+			},
+			async (dom) => {
+				const [design, mention] = [...dom.querySelectorAll<HTMLElement>("[data-hz=item]")]
+				expect(design!.querySelector("[data-hz-part=title]")?.textContent).toBe("design, unread")
+				expect(mention!.querySelector("[data-hz-part=title]")?.textContent).toBe("Unread: mention")
+				expect(mention!.dataset).toMatchObject({
+					unread: "dot",
+					leadingSize: "large",
+					titleLines: "2",
+					subtitleLines: "2",
+				})
+			},
+		))
+
+	it("presses a control in `actions` without pressing or following the row", () =>
+		mounted(
+			{
+				tag: "item",
+				key: "n1",
+				props: { title: "n1", href: "#/n1" } as never,
+				events: ["press"],
+				children: [
+					{
+						tag: "slot",
+						props: { name: "actions" } as never,
+						children: [
+							{
+								tag: "button",
+								props: { label: "Mark as read", icon: "check", iconOnly: true } as never,
+								events: ["press"],
+							},
+						],
+					},
+				],
+			},
+			async (dom, fired) => {
+				const button = dom.querySelector("[data-hz-slot=actions] button") as HTMLButtonElement
+				const click = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 })
+				button.dispatchEvent(click)
+				await settle()
+				expect(click.defaultPrevented).toBe(true)
+				expect(fired()).toEqual(["press {}"])
+				expect(fired()).toHaveLength(1)
+			},
+		))
+
 	it("toggles a collapsible section and moves a row with Alt+Arrow", () =>
 		mounted(
 			{

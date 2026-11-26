@@ -27,7 +27,6 @@
 	},
 	"frame": "screen",
 	"pending": {
-		"web": "A4",
 		"ios": "S4"
 	}
 }

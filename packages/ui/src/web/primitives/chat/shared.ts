@@ -100,7 +100,7 @@ export interface RunHandlers {
 }
 
 /**
- * The blocks of a row's body. Runs are numbered across the whole body (`data-run`), the index
+ * The blocks of a row's body. Runs are numbered across the whole body (`data-hz-run`), the index
  * `pressMention` reports and `popover.anchorTo` finds.
  */
 export const richText = (document: Document, blocks: ReadonlyArray<Block>, on: RunHandlers): Node => {
@@ -161,7 +161,7 @@ const runNode = (document: Document, run: Run, index: number, on: RunHandlers): 
 									: "strike",
 					)
 	if (node.textContent === "") node.textContent = run[1]
-	node.dataset.run = String(index)
+	node.dataset.hzRun = String(index)
 	return node
 }
 
