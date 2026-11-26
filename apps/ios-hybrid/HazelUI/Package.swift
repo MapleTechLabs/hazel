@@ -12,7 +12,7 @@ let package = Package(
         .testTarget(
             name: "HazelUITests",
             dependencies: ["HazelUI"],
-            resources: [.copy("Goldens")]
+            resources: [.copy("Goldens"), .copy("JS")]
         ),
     ],
     swiftLanguageModes: [.v6]
