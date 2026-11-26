@@ -121,6 +121,11 @@ export const generateSwift = (tokens: Tokens, recipes: ReadonlyArray<Recipe>): s
 		if (d.grow !== undefined) add("grow", String(d.grow))
 		if (d.shrink !== undefined) add("shrink", String(d.shrink))
 		if (d.transition !== undefined) add("transition", num((tokens.duration[d.transition] ?? 0) / 1000))
+		if (d.weight !== undefined) add("weight", String(tokens.font.weight[d.weight]))
+		if (d.uppercase !== undefined) add("uppercase", String(d.uppercase))
+		if (d.textAlign !== undefined) add("textAlign", `.${d.textAlign}`)
+		if (d.lineClamp !== undefined) add("lineClamp", String(d.lineClamp))
+		if (d.overflow !== undefined) add("overflow", `.${d.overflow}`)
 		return `Style(${fields.join(", ")})`
 	}
 
@@ -279,6 +284,8 @@ ${colorLines.join("\n")}
         public static let monoStep: TextStep = .${MONO_ROLE}
         public static let weightRegular = ${tokens.font.weight.regular}
         public static let weightStrong = ${tokens.font.weight.strong}
+        public static let weightSemibold = ${tokens.font.weight.semibold}
+        public static let weightBold = ${tokens.font.weight.bold}
     }
 
     public static func text(_ role: TextRole, _ sizeClass: SizeClass) -> TypeMetrics {
@@ -314,7 +321,9 @@ ${Object.entries(tokens.shadow)
     ]
 
     public enum Layout: Sendable { case row, column, inlineRow, contents }
-    public enum Align: Sendable { case center, start }
+    public enum Align: Sendable { case center, start, end }
+    public enum TextAlign: Sendable { case center }
+    public enum Overflow: Sendable { case scrollX, scrollY }
 
     /// A recipe's declarations, resolved to values; \`nil\` leaves the field to earlier layers.
     public struct Style: Sendable {
@@ -332,6 +341,9 @@ ${Object.entries(tokens.shadow)
         public var truncate: Bool? = nil, nowrap: Bool? = nil, wrap: Bool? = nil, fill: Bool? = nil
         public var grow: Bool? = nil, shrink: Bool? = nil
         public var transition: Double? = nil
+        /// A font weight above \`strong\` (600 or 700); wins over \`strong\`.
+        public var weight: Int? = nil, uppercase: Bool? = nil, textAlign: TextAlign? = nil
+        public var lineClamp: Int? = nil, overflow: Overflow? = nil
 
         /// \`other\`'s fields over these.
         public func merged(_ other: Style) -> Style {
@@ -350,6 +362,9 @@ ${Object.entries(tokens.shadow)
             out.opacity = other.opacity ?? opacity; out.shadow = other.shadow ?? shadow
             out.truncate = other.truncate ?? truncate; out.nowrap = other.nowrap ?? nowrap
             out.grow = other.grow ?? grow; out.shrink = other.shrink ?? shrink; out.transition = other.transition ?? transition
+            out.weight = other.weight ?? weight; out.uppercase = other.uppercase ?? uppercase
+            out.textAlign = other.textAlign ?? textAlign; out.lineClamp = other.lineClamp ?? lineClamp
+            out.overflow = other.overflow ?? overflow
             return out
         }
     }

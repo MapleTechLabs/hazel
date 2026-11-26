@@ -40,6 +40,19 @@ export const avatar = defineRecipe<
 			default: "regular",
 			values: {
 				regular: {},
+				// The kit's `md` (`size-10 rounded-xl`): DM and activity rows.
+				medium: {
+					root: { size: "10", radius: "xl", text: "label" },
+					parts: {
+						image: { size: "10", radius: "xl" },
+						presence: { size: "2.5" },
+						mark: { size: "3.5" },
+					},
+					regular: {
+						root: { size: "10" },
+						parts: { image: { size: "10" }, presence: { size: "2.5" } },
+					},
+				},
 				large: {
 					root: { size: "12", radius: "xl", text: "title" },
 					parts: {

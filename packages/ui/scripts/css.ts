@@ -46,6 +46,8 @@ const tokenBlock = (tokens: Tokens): string => {
 	light.push(
 		`--hz-weight-regular: ${tokens.font.weight.regular};`,
 		`--hz-weight-strong: ${tokens.font.weight.strong};`,
+		`--hz-weight-semibold: ${tokens.font.weight.semibold};`,
+		`--hz-weight-bold: ${tokens.font.weight.bold};`,
 	)
 	const regular: string[] = []
 	for (const [role, metrics] of Object.entries(tokens.text)) {
@@ -133,7 +135,8 @@ const declarations = (d: Declarations, tracked: ReadonlySet<string>): ReadonlyAr
 	}
 	if (d.wrap !== undefined) add("flex-wrap", d.wrap ? "wrap" : "nowrap")
 	if (d.fill) add("width", "100%")
-	if (d.align !== undefined) add("align-items", d.align === "start" ? "flex-start" : "center")
+	if (d.align !== undefined)
+		add("align-items", d.align === "center" ? "center" : d.align === "start" ? "flex-start" : "flex-end")
 	if (d.justify !== undefined) add("justify-content", d.justify === "start" ? "flex-start" : "center")
 	if (d.background !== undefined)
 		add("background-color", d.background === "transparent" ? "transparent" : colorVar(d.background))
@@ -172,6 +175,19 @@ const declarations = (d: Declarations, tracked: ReadonlySet<string>): ReadonlyAr
 	if (d.leading !== undefined) add("line-height", spaceVar(d.leading))
 	if (d.strong !== undefined)
 		add("font-weight", d.strong ? "var(--hz-weight-strong)" : "var(--hz-weight-regular)")
+	if (d.weight !== undefined) add("font-weight", `var(--hz-weight-${d.weight})`)
+	if (d.uppercase) add("text-transform", "uppercase")
+	if (d.textAlign !== undefined) add("text-align", d.textAlign)
+	if (d.lineClamp !== undefined) {
+		add("display", "-webkit-box")
+		add("-webkit-box-orient", "vertical")
+		add("-webkit-line-clamp", String(d.lineClamp))
+		add("overflow", "hidden")
+	}
+	if (d.overflow !== undefined) {
+		add(d.overflow === "scrollX" ? "overflow-x" : "overflow-y", "auto")
+		add(d.overflow === "scrollX" ? "overflow-y" : "overflow-x", "hidden")
+	}
 	// Set only when on: any stroke value, even 0, changes how Chromium rasters text.
 	if (d.stroke) add("-webkit-text-stroke", "0.011em currentColor")
 	if (d.numeric !== undefined) add("font-variant-numeric", d.numeric ? "tabular-nums" : "normal")

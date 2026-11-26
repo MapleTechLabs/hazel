@@ -57,6 +57,21 @@ export type ProviderMark = typeof ProviderMark.Type
 export const Provider = Schema.Literals(["slack", "discord"])
 export type Provider = typeof Provider.Type
 
+export const AvatarStackLayout = Schema.Literals(Sets.avatarStackLayouts)
+export type AvatarStackLayout = typeof AvatarStackLayout.Type
+
+export const IconTileTone = Schema.Literals(Sets.iconTileTones)
+export type IconTileTone = typeof IconTileTone.Type
+
+export const ItemUnreadMark = Schema.Literals(Sets.itemUnreadMarks)
+export type ItemUnreadMark = typeof ItemUnreadMark.Type
+
+export const LineCount = Schema.Literals(Sets.lineCounts)
+export type LineCount = typeof LineCount.Type
+
+export const ItemLeadingSize = Schema.Literals(Sets.itemLeadingSizes)
+export type ItemLeadingSize = typeof ItemLeadingSize.Type
+
 export const ItemNesting = Schema.Literals(Sets.itemNestings)
 export type ItemNesting = typeof ItemNesting.Type
 
@@ -91,12 +106,14 @@ export const iconNames = [
 	"edit",
 	"emoji",
 	"emoji-add",
+	"folder-plus",
 	"gear",
 	"gif",
 	"hashtag",
 	"leave",
 	"lightbulb",
 	"lock",
+	"messages",
 	"office",
 	"paperclip",
 	"pin",
@@ -107,6 +124,7 @@ export const iconNames = [
 	"slack",
 	"sparkles",
 	"star",
+	"support",
 	"thread",
 	"trash",
 	"users",
@@ -131,12 +149,14 @@ export const iconSources = {
 	edit: "IconEdit",
 	emoji: "IconEmoji1",
 	"emoji-add": "IconEmojiAdd",
+	"folder-plus": "IconFolderPlus",
 	gear: "IconGear",
 	gif: "IconGif",
 	hashtag: "IconHashtag",
 	leave: "IconLeave",
 	lightbulb: "IconLightbulb",
 	lock: "IconLock",
+	messages: "IconMsgs",
 	office: "IconOffice",
 	paperclip: "IconPaperclip2",
 	pin: "IconPin",
@@ -147,6 +167,7 @@ export const iconSources = {
 	slack: "IconSlack",
 	sparkles: "IconSparkles",
 	star: "IconStar",
+	support: "IconSupport",
 	thread: "IconThread",
 	trash: "IconTrash",
 	users: "IconUsers",
@@ -154,7 +175,11 @@ export const iconSources = {
 	warning: "IconWarning",
 } as const satisfies { readonly [K in IconName]: string }
 
-/** What a message row offers on hover (web toolbar) or long press (iOS menu); `action` reports one. */
+/**
+ * What a message row offers on hover (web toolbar) or long press (iOS menu); `action` reports one.
+ * `selectText` is handled by the host first (iOS starts native selection on the row; the web never
+ * lists it, its text is selectable already), then reported (`message-select-text`).
+ */
 export const MessageAction = Schema.Literals([
 	"react",
 	"reply",
@@ -164,6 +189,7 @@ export const MessageAction = Schema.Literals([
 	"pin",
 	"unpin",
 	"issue",
+	"selectText",
 	"delete",
 ])
 export type MessageAction = typeof MessageAction.Type

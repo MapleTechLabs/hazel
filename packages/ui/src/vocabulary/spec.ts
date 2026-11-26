@@ -214,7 +214,40 @@ export const tags = {
 		web: "A1",
 		ios: "S1",
 		content: "elements",
-		props: { overflow: count },
+		// `pair`: a group DM's two avatars, offset diagonally in one avatar's box (`dm-group-avatar`).
+		props: { overflow: count, layout: option(O.AvatarStackLayout, "row") },
+	}),
+	// The kit's `iconTile` (size `md`, 40pt): a glyph on a tinted square leading a row.
+	iconTile: tag({
+		group: "content",
+		web: "A1",
+		ios: "S1",
+		content: "none",
+		props: { name: value(O.IconName), tone: option(O.IconTileTone, "neutral") },
+	}),
+	// A channel's icon with its marks, as today's `channelIcon`: the emoji, `#` or a lock; a customer's
+	// logo (a lock mark when private); up to two Connect partners' logos; the sync provider's mark.
+	channelIcon: tag({
+		group: "content",
+		web: "A1",
+		ios: "S1",
+		content: "none",
+		props: {
+			emoji: text,
+			private: flag,
+			customer: value(Content.Logo),
+			partners: value(Schema.Array(Content.Logo)),
+			sync: option(O.ProviderMark, "none"),
+		},
+	}),
+	// A snapping, edge-to-edge horizontal row of avatar-over-label tiles (`people-strip`).
+	peopleStrip: tag({
+		group: "content",
+		web: "A1",
+		ios: "S1",
+		content: "none",
+		props: { people: value(Schema.Array(Content.StripPerson)) },
+		events: { press: ids },
 	}),
 	badge: tag({
 		group: "content",
@@ -337,6 +370,8 @@ export const tags = {
 			size: option(O.ButtonSize, "regular"),
 			iconOnly: flag,
 			circle: flag,
+			// A toggle that is on (`aria-pressed`): a `chip` draws filled (`filter-chip`).
+			selected: flag,
 			disabled: flag,
 			loading: flag,
 		},
@@ -511,7 +546,8 @@ export const tags = {
 		ios: "S4",
 		content: "elements",
 		props: { title: text, back: flag },
-		slots: ["toolbar"],
+		// `floatingAction`: the screen's primary action, a round button over the content's end corner.
+		slots: ["toolbar", "floatingAction"],
 		events: { back: none },
 	}),
 	navigation: tag({
@@ -554,6 +590,14 @@ export const tags = {
 			// Dimmed but still pressable (a muted channel, a discover row).
 			muted: flag,
 			nested: option(O.ItemNesting, "none"),
+			// An unread mark at the row's start: the sidebar's edge `pip` or activity's brand `dot`.
+			unread: option(O.ItemUnreadMark, "none"),
+			titleLines: option(O.LineCount, "1"),
+			subtitleLines: option(O.LineCount, "1"),
+			// `large`: a 40pt avatar or icon tile leads the row, top aligned.
+			leadingSize: option(O.ItemLeadingSize, "regular"),
+			// The trailing slot shows on hover or focus within (always on touch); it never grows the row.
+			trailingOnHover: flag,
 			// A keyboard shortcut hint at the row's end; web only, iOS ignores it.
 			shortcut: text,
 			href: text,

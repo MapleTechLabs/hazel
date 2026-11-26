@@ -35,6 +35,8 @@ const actionLook = {
 	pin: { label: "Pin message", icon: "pin" },
 	unpin: { label: "Unpin message", icon: "pin" },
 	issue: { label: "Create issue", icon: "lightbulb" },
+	// iOS only (native selection on a bitmap row): the web's toolbar leaves it out, its text is selectable.
+	selectText: { label: "Select text", icon: "copy" },
 	delete: { label: "Delete message", icon: "trash" },
 } as const satisfies Record<MessageAction, { readonly label: string; readonly icon: IconName }>
 

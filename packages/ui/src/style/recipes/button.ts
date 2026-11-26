@@ -72,6 +72,16 @@ export const button = defineRecipe<
 						pressed: { root: { background: "secondary" } },
 					},
 				},
+				// Seed (lane A2 matches today's DMs filter chips): fully round, filled while `selected`.
+				chip: {
+					root: { background: "transparent", color: "fg", radius: "full" },
+					parts: { icon: { color: "muted-fg" } },
+					states: {
+						hover: { root: { background: "secondary" } },
+						pressed: { root: { background: "secondary" } },
+						selected: { root: { background: "secondary", color: "secondary-fg" } },
+					},
+				},
 				warning: {
 					root: { background: "warning", color: "warning-fg", shadow: "control" },
 					parts: { icon: { color: "warning-icon" } },

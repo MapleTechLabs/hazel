@@ -48,7 +48,8 @@ export const rendererFeatures = [
 
 // Closed sets (docs/hazel-ui.md, "Design language")
 
-export const textRoles = ["body", "label", "caption", "title", "display", "code"] as const
+/** `overline` is the kit's uppercase group label (Today, Older); `kbd` a key cap inside a line of text. */
+export const textRoles = ["body", "label", "caption", "title", "display", "code", "overline", "kbd"] as const
 export type TextRole = (typeof textRoles)[number]
 
 export const textTones = [
@@ -66,7 +67,16 @@ export type TextTone = (typeof textTones)[number]
 /** `text.strong`: on or off, the one weight choice a view has. */
 export type TextStrong = boolean
 
-export const buttonVariants = ["primary", "secondary", "outline", "ghost", "warning", "danger"] as const
+/** `chip` is a fully round filter chip: filled while `pressed`, quiet otherwise (`filter-chip`). */
+export const buttonVariants = [
+	"primary",
+	"secondary",
+	"outline",
+	"ghost",
+	"warning",
+	"danger",
+	"chip",
+] as const
 export type ButtonVariant = (typeof buttonVariants)[number]
 
 export const buttonSizes = ["large", "regular", "small", "xsmall"] as const
@@ -93,8 +103,11 @@ export type StackDensity = (typeof stackDensities)[number]
 export const stackAligns = ["stretch", "start", "center", "end"] as const
 export type StackAlign = (typeof stackAligns)[number]
 
-/** `danger` is the danger zone's card with a tinted header (`frame-danger`, phase 1.5). */
-export const frameSurfaces = ["none", "card", "inset", "muted", "overlay", "danger"] as const
+/**
+ * `danger` is the danger zone's card with a tinted header (`frame-danger`); `flush` a bordered box with
+ * no padding or shadow, its dividers running edge to edge (`frame-flush`).
+ */
+export const frameSurfaces = ["none", "card", "inset", "muted", "overlay", "danger", "flush"] as const
 export type FrameSurface = (typeof frameSurfaces)[number]
 
 /** `1` is a screen's title, `2` a section's, `3` a group's. */
@@ -104,13 +117,36 @@ export type HeadingLevel = (typeof headingLevels)[number]
 export const avatarPresences = ["none", "online", "away", "busy", "offline"] as const
 export type AvatarPresence = (typeof avatarPresences)[number]
 
-/** `large` is the settings logo that is its own upload button (`avatar-large`). */
-export const avatarSizes = ["regular", "large"] as const
+/**
+ * `regular` sits beside an icon (sidebar rows); `medium` is the kit's `md`, a 40pt rounded square
+ * (DM and activity rows, `avatar-row-size`); `large` the settings logo that is its own upload button.
+ */
+export const avatarSizes = ["regular", "medium", "large"] as const
 export type AvatarSize = (typeof avatarSizes)[number]
 
 /** A synced author's or mention's provider mark: `none`, Slack or Discord. */
 export const providerMarks = ["none", "slack", "discord"] as const
 export type ProviderMark = (typeof providerMarks)[number]
+
+/** A stack of avatars: `row` overlaps them in a line, `pair` sets two diagonally in one avatar's box. */
+export const avatarStackLayouts = ["row", "pair"] as const
+export type AvatarStackLayout = (typeof avatarStackLayouts)[number]
+
+/** A tinted square behind a glyph (the kit's `iconTile`); tones are the kit's intents. */
+export const iconTileTones = ["neutral", "accent", "success", "warning", "danger"] as const
+export type IconTileTone = (typeof iconTileTones)[number]
+
+/** An unread row's mark at its start: the sidebar's edge `pip`, or activity's brand `dot`. */
+export const itemUnreadMarks = ["none", "pip", "dot"] as const
+export type ItemUnreadMark = (typeof itemUnreadMarks)[number]
+
+/** How many lines an item's title or subtitle wraps to before it truncates. */
+export const lineCounts = ["1", "2"] as const
+export type LineCount = (typeof lineCounts)[number]
+
+/** An item's leading slot: icon-sized, or `large` (a 40pt avatar or icon tile, top aligned). */
+export const itemLeadingSizes = ["regular", "large"] as const
+export type ItemLeadingSize = (typeof itemLeadingSizes)[number]
 
 /** A row hanging off the row above (a thread under its channel): the elbow's shape. */
 export const itemNestings = ["none", "middle", "last"] as const
@@ -188,7 +224,13 @@ export interface Tokens {
 		readonly sans: string
 		readonly mono: string
 		readonly sansFeatures: string
-		readonly weight: { readonly regular: number; readonly strong: number }
+		/** `semibold` (600): kit headings, dialog titles, chat authors; `bold` (700): `**bold**` runs. */
+		readonly weight: {
+			readonly regular: number
+			readonly strong: number
+			readonly semibold: number
+			readonly bold: number
+		}
 	}
 	readonly text: Readonly<Record<TextStep, TypeRole>>
 	/** Spacing steps in px (Tailwind's 4px grid: step `3` is 12). */
@@ -236,6 +278,16 @@ export interface Declarations<T extends TokenNames = TokenNames> {
 	/** Line height as a spacing step, over the text role's (a control's box metric). */
 	readonly leading?: T["space"]
 	readonly strong?: boolean
+	/** A weight above `strong` (`semibold-weight`, `chat-weights`); wins over `strong`. */
+	readonly weight?: "semibold" | "bold"
+	/** Uppercase text (the `overline` role). */
+	readonly uppercase?: boolean
+	/** Centred text (`recipe-text-align`). */
+	readonly textAlign?: "center"
+	/** Lines before the text truncates with an ellipsis (`item-title-lines`); 1 is `truncate`. */
+	readonly lineClamp?: 2
+	/** Scrolls its overflow along one axis (`recipe-overflow`). */
+	readonly overflow?: "scrollX" | "scrollY"
 	/** A hairline text stroke over the weight (`faux-medium`); the web only, iOS draws the weight. */
 	readonly stroke?: boolean
 	/** Tabular figures (counts). */
@@ -248,7 +300,7 @@ export interface Declarations<T extends TokenNames = TokenNames> {
 	readonly wrap?: boolean
 	/** Fills its container's width. */
 	readonly fill?: boolean
-	readonly align?: "center" | "start"
+	readonly align?: "center" | "start" | "end"
 	readonly justify?: "center" | "start"
 	readonly truncate?: boolean
 	readonly nowrap?: boolean

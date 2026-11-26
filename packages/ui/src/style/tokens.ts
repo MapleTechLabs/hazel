@@ -98,6 +98,8 @@ const color = {
 	"dialog-ring": themed(alpha(ref("fg"), 0.08), alpha(ref("fg"), 0.1)),
 	/** A sheet's edge (`border-muted-fg/20 dark:border-border`). */
 	"sheet-border": themed(alpha(ref("muted-fg"), 0.2), ref("border")),
+	/** A modal's scrim (`overlay-tokens`): fg at 32% over the page. */
+	scrim: same(alpha(ref("fg"), 0.32)),
 	"overlay-backdrop": themed(lit("oklch(0.2 0.01 286 / 0.2)"), lit("oklch(0 0 0 / 0.5)")),
 	/** A tooltip: ink on the page colour (`bg-fg text-bg`, muted text `text-bg/60`). */
 	inverse: same(ref("fg")),
@@ -206,7 +208,7 @@ export const tokens = {
 		sans: '"Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
 		mono: 'ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
 		sansFeatures: '"cv02", "cv03", "cv04", "cv11"',
-		weight: { regular: 400, strong: 500 },
+		weight: { regular: 400, strong: 500, semibold: 600, bold: 700 },
 	},
 	/**
 	 * Tailwind's steps as the kit uses them per size class (`text-base/6 sm:text-sm/5` is `body`).
@@ -226,6 +228,12 @@ export const tokens = {
 			regular: { size: 24, lineHeight: 32, tracking: -0.48 },
 		},
 		code: { compact: { size: 14, lineHeight: 20 }, regular: { size: 14, lineHeight: 20 } },
+		// heading.styles.ts `label` (`text-xs uppercase tracking-wider`) and kbd.styles.ts `md` (`text-2xs`).
+		overline: {
+			compact: { size: 12, lineHeight: 16, tracking: 0.6 },
+			regular: { size: 12, lineHeight: 16, tracking: 0.6 },
+		},
+		kbd: { compact: { size: 11, lineHeight: 16 }, regular: { size: 11, lineHeight: 16 } },
 		// Recipe-only steps (styles.css `--text-2xs`, `--text-3xs`): counts and small badges.
 		tiny: { compact: { size: 11, lineHeight: 16 }, regular: { size: 11, lineHeight: 16 } },
 		micro: { compact: { size: 10, lineHeight: 16 }, regular: { size: 10, lineHeight: 16 } },
@@ -299,6 +307,8 @@ export const tokens = {
 			dark: "inset 0 1px 0 oklch(1 0 0 / 0.14), inset 0 -1px 0 oklch(0 0 0 / 0.2), 0 1px 2px oklch(0 0 0 / 0.3)",
 		},
 		xs: { light: "0 1px 2px 0 oklch(0 0 0 / 0.04)", dark: "0 1px 2px 0 oklch(0 0 0 / 0.3)" },
+		/** Menus, popovers and dialogs (`overlay-tokens`): today they float with `shadow-xs`. */
+		overlay: { light: "0 1px 2px 0 oklch(0 0 0 / 0.04)", dark: "0 1px 2px 0 oklch(0 0 0 / 0.3)" },
 		sm: {
 			light: "0 1px 2px -1px oklch(0 0 0 / 0.06), 0 1px 3px 0 oklch(0 0 0 / 0.06)",
 			dark: "0 1px 2px -1px oklch(0 0 0 / 0.3), 0 1px 3px 0 oklch(0 0 0 / 0.35)",

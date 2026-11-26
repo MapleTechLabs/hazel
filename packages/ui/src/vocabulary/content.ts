@@ -3,7 +3,7 @@
  * JSON value (G7 option C). Objects with readable keys; rich text stays compact tuples.
  */
 import { Schema } from "effect"
-import { BadgeTone, IconName, MessageAction, Provider } from "./options.ts"
+import { AvatarPresence, BadgeTone, IconName, MessageAction, Provider } from "./options.ts"
 
 // ---------------------------------------------------------------------------
 // rich text (`richText.blocks`, `message.row.body`)
@@ -83,6 +83,8 @@ export const AuthorBadge = Schema.Struct({ label: Schema.String, tone: BadgeTone
 export type AuthorBadge = typeof AuthorBadge.Type
 
 export const ThreadSummary = Schema.Struct({
+	/** The thread's name, which leads the card (`thread-name`). */
+	name: Schema.optional(Schema.String),
 	count: Schema.Finite,
 	/** The last reply: its author, initials, text and time label. */
 	author: Schema.String,
@@ -126,6 +128,33 @@ export const MessageRow = Schema.Struct({
 	actions: Schema.optional(Schema.Array(MessageAction)),
 })
 export type MessageRow = typeof MessageRow.Type
+
+// ---------------------------------------------------------------------------
+// channel icons and people
+// ---------------------------------------------------------------------------
+
+/** An organization's or customer's mark: its logo, else its initials on a tint seeded by `name`. */
+export const Logo = Schema.Struct({
+	name: Schema.String,
+	initials: Schema.String,
+	src: Schema.optional(Schema.String),
+})
+export type Logo = typeof Logo.Type
+
+/** One tile of a `peopleStrip`: an avatar over a label; `name` seeds the avatar's tint. */
+export const StripPerson = Schema.Struct({
+	id: Schema.String,
+	label: Schema.String,
+	name: Schema.String,
+	initials: Schema.String,
+	src: Schema.optional(Schema.String),
+	presence: Schema.optional(AvatarPresence),
+	/** Unread: the label in default ink and strong, else muted. */
+	emphasized: Schema.optional(Schema.Boolean),
+	/** Where the tile links on the web (middle click, copy link). */
+	href: Schema.optional(Schema.String),
+})
+export type StripPerson = typeof StripPerson.Type
 
 /** Where a popover anchors inside a leaf: run `run` of the element keyed `key`. */
 export const LeafAnchor = Schema.Struct({ key: Schema.String, run: Schema.Finite })

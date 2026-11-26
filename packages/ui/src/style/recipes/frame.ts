@@ -44,6 +44,15 @@ export const frame = defineRecipe<{ readonly surface: FrameSurface }, never, nev
 				inset: {
 					root: { rowGap: "3", radius: "lg", ring: "border", paddingX: "3", paddingY: "2.5" },
 				},
+				// A bordered box with no padding or shadow; its dividers run edge to edge (`frame-flush`).
+				flush: {
+					root: {
+						radius: "xl",
+						borderWidth: "hairline",
+						borderColor: "border",
+						background: "bg",
+					},
+				},
 				overlay: {
 					root: {
 						rowGap: "2",

@@ -64,6 +64,8 @@ const intentOf = {
 	ghost: "plain",
 	warning: "warning",
 	danger: "danger",
+	// No kit button is a chip: DMs' filter chips are their own markup; the gallery draws them as plain.
+	chip: "plain",
 } as const satisfies Record<ButtonSpec["variant"], ButtonVariants["intent"]>
 
 const sizeOf = (spec: ButtonSpec): ButtonVariants["size"] => {
