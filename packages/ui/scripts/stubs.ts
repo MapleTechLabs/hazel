@@ -56,7 +56,14 @@ const fixtureStub = (key: TagKey) =>
 	)}\n`
 
 /** Tags added after C3 whose recipe file starts as an empty stub. */
-const recipeStubs: ReadonlyArray<TagKey> = ["progress", "emptyState", "emojiPicker"]
+const recipeStubs: ReadonlyArray<TagKey> = [
+	"progress",
+	"emptyState",
+	"emojiPicker",
+	"iconTile",
+	"channelIcon",
+	"peopleStrip",
+]
 
 const write = (path: string, content: string) => {
 	if (existsSync(path)) return

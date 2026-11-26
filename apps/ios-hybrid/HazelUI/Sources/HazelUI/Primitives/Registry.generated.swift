@@ -18,6 +18,9 @@ public enum HazelVocabulary {
         "hz:image": "S1",
         "hz:avatar": "S1",
         "hz:avatarStack": "S1",
+        "hz:iconTile": "S1",
+        "hz:channelIcon": "S1",
+        "hz:peopleStrip": "S1",
         "hz:badge": "S1",
         "hz:progress": "S1",
         "hz:emptyState": "S1",
@@ -72,6 +75,9 @@ enum Primitives {
         case "hz:image": HzImage(tree: tree, node: node)
         case "hz:avatar": HzAvatar(tree: tree, node: node)
         case "hz:avatarStack": HzAvatarStack(tree: tree, node: node)
+        case "hz:iconTile": HzIconTile(tree: tree, node: node)
+        case "hz:channelIcon": HzChannelIcon(tree: tree, node: node)
+        case "hz:peopleStrip": HzPeopleStrip(tree: tree, node: node)
         case "hz:badge": HzBadge(tree: tree, node: node)
         case "hz:progress": HzProgress(tree: tree, node: node)
         case "hz:emptyState": HzEmptyState(tree: tree, node: node)
