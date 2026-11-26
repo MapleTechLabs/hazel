@@ -174,7 +174,8 @@ export interface Shadow {
 }
 
 /** Type steps only recipes use (a count badge's 11px), never a view's `text.role`. */
-export const recipeTextSteps = ["tiny", "micro"] as const
+/** `reading` is chat text, 16/24 at every width (a message row does not step down like `body`). */
+export const recipeTextSteps = ["tiny", "micro", "reading"] as const
 export type RecipeTextStep = (typeof recipeTextSteps)[number]
 export type TextStep = TextRole | RecipeTextStep
 

@@ -41,9 +41,7 @@ export const message = defineRecipe<
 		toolbar: "part",
 	},
 	base: {
-		root: { paddingX: "0.5", paddingY: "1", radius: "lg", color: "fg", text: "body" },
-		// HAZEL-GAP(message-text-size): today's row stays 16/24 at regular, where `body` is 14/20.
-		regular: { root: { text: "title" } },
+		root: { paddingX: "0.5", paddingY: "1", radius: "lg", color: "fg", text: "reading" },
 		parts: {
 			main: { layout: "row", gap: "4" },
 			avatarImage: {

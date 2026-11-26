@@ -229,6 +229,8 @@ export const tokens = {
 		// Recipe-only steps (styles.css `--text-2xs`, `--text-3xs`): counts and small badges.
 		tiny: { compact: { size: 11, lineHeight: 16 }, regular: { size: 11, lineHeight: 16 } },
 		micro: { compact: { size: 10, lineHeight: 16 }, regular: { size: 10, lineHeight: 16 } },
+		// Chat text: today's message row is `text-base/6` at every width.
+		reading: { compact: { size: 16, lineHeight: 24 }, regular: { size: 16, lineHeight: 24 } },
 	},
 	/** Tailwind's 4px grid by step name (`3` is `--spacing(3)`, 12px): every step the kit uses. */
 	space: {

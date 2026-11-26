@@ -43,6 +43,7 @@ public enum HazelTheme {
         case code = "code"
         case tiny = "tiny"
         case micro = "micro"
+        case reading = "reading"
     }
 
     public enum ButtonSize: String, CaseIterable, Sendable {
@@ -101,8 +102,9 @@ public enum HazelTheme {
         }
     }
 
+    /// Points; `tracking` is the kern between glyphs (SwiftUI `.tracking`).
     public struct TypeMetrics: Sendable, Equatable {
-        public let size: CGFloat, lineHeight: CGFloat
+        public let size: CGFloat, lineHeight: CGFloat, tracking: CGFloat
     }
 
     public struct Shadow: Sendable, Equatable {
@@ -135,8 +137,52 @@ public enum HazelTheme {
         public static let border = ThemedColor(light: RGBA(0.894477, 0.894477, 0.906151, 1), dark: RGBA(1, 1, 1, 0.085))
         /// `border-hover`: #d4d4d8ff / #ffffff24
         public static let borderHover = ThemedColor(light: RGBA(0.831088, 0.831083, 0.848345, 1), dark: RGBA(1, 1, 1, 0.14))
+        /// `input`: #d4d4d8ff / #ffffff1a
+        public static let input = ThemedColor(light: RGBA(0.831088, 0.831083, 0.848345, 1), dark: RGBA(1, 1, 1, 0.1))
+        /// `field`: #0000000a / #ffffff0d
+        public static let field = ThemedColor(light: RGBA(0, 0, 0, 0.04), dark: RGBA(1, 1, 1, 0.05))
+        /// `field-hover`: #00000011 / #ffffff14
+        public static let fieldHover = ThemedColor(light: RGBA(0, 0, 0, 0.065), dark: RGBA(1, 1, 1, 0.08))
         /// `ring`: #7f56d9ff / #7f56d9ff
         public static let ring = ThemedColor(light: RGBA(0.498039, 0.337255, 0.85098, 1), dark: RGBA(0.498039, 0.337255, 0.85098, 1))
+        /// `focus-ring`: #7f56d9b3 / #7f56d9b3
+        public static let focusRing = ThemedColor(light: RGBA(0.498039, 0.337255, 0.85098, 0.7), dark: RGBA(0.498039, 0.337255, 0.85098, 0.7))
+        /// `focus-ring-hover`: #7f56d9cc / #7f56d9cc
+        public static let focusRingHover = ThemedColor(light: RGBA(0.498039, 0.337255, 0.85098, 0.8), dark: RGBA(0.498039, 0.337255, 0.85098, 0.8))
+        /// `focus-halo`: #7f56d933 / #7f56d933
+        public static let focusHalo = ThemedColor(light: RGBA(0.498039, 0.337255, 0.85098, 0.2), dark: RGBA(0.498039, 0.337255, 0.85098, 0.2))
+        /// `invalid-border`: #c10007b3 / #ff6467b3
+        public static let invalidBorder = ThemedColor(light: RGBA(0.756885, -0.062395, 0.028754, 0.7), dark: RGBA(1.005562, 0.391153, 0.403857, 0.7))
+        /// `invalid-border-hover`: #c10007cc / #ff6467cc
+        public static let invalidBorderHover = ThemedColor(light: RGBA(0.756885, -0.062395, 0.028754, 0.8), dark: RGBA(1.005562, 0.391153, 0.403857, 0.8))
+        /// `invalid-halo`: #c1000733 / #ff646733
+        public static let invalidHalo = ThemedColor(light: RGBA(0.756885, -0.062395, 0.028754, 0.2), dark: RGBA(1.005562, 0.391153, 0.403857, 0.2))
+        /// `overlay`: #ffffffff / #1d1d21ff
+        public static let overlay = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.115511, 0.115483, 0.127859, 1))
+        /// `overlay-fg`: #09090bff / #fafafaff
+        public static let overlayFg = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 1), dark: RGBA(0.980256, 0.980256, 0.980256, 1))
+        /// `overlay-border`: #09090b1a / #fafafa1a
+        public static let overlayBorder = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 0.1), dark: RGBA(0.980256, 0.980256, 0.980256, 0.1))
+        /// `dialog-ring`: #09090b14 / #fafafa1a
+        public static let dialogRing = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 0.08), dark: RGBA(0.980256, 0.980256, 0.980256, 0.1))
+        /// `sheet-border`: #52525c33 / #ffffff16
+        public static let sheetBorder = ThemedColor(light: RGBA(0.321182, 0.32109, 0.362108, 0.2), dark: RGBA(1, 1, 1, 0.085))
+        /// `overlay-backdrop`: #15151a33 / #00000080
+        public static let overlayBackdrop = ThemedColor(light: RGBA(0.084263, 0.08403, 0.103791, 0.2), dark: RGBA(0, 0, 0, 0.5))
+        /// `inverse`: #09090bff / #fafafaff
+        public static let inverse = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 1), dark: RGBA(0.980256, 0.980256, 0.980256, 1))
+        /// `inverse-fg`: #ffffffff / #131316ff
+        public static let inverseFg = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.076194, 0.076176, 0.087912, 1))
+        /// `inverse-muted`: #ffffff99 / #13131699
+        public static let inverseMuted = ThemedColor(light: RGBA(1, 1, 1, 0.6), dark: RGBA(0.076194, 0.076176, 0.087912, 0.6))
+        /// `navbar`: #fbfbfbff / #0f0f12ff
+        public static let navbar = ThemedColor(light: RGBA(0.984199, 0.984199, 0.984199, 1), dark: RGBA(0.059055, 0.05902, 0.070426, 1))
+        /// `navbar-fg`: #09090bff / #fafafaff
+        public static let navbarFg = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 1), dark: RGBA(0.980256, 0.980256, 0.980256, 1))
+        /// `selection-bg`: #f4ebffff / #42307dff
+        public static let selectionBg = ThemedColor(light: RGBA(0.956863, 0.921569, 1, 1), dark: RGBA(0.258824, 0.188235, 0.490196, 1))
+        /// `selection-fg`: #6941c6ff / #e9d7feff
+        public static let selectionFg = ThemedColor(light: RGBA(0.411765, 0.254902, 0.776471, 1), dark: RGBA(0.913725, 0.843137, 0.996078, 1))
         /// `muted`: #f4f4f5ff / #18181bff
         public static let muted = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 1), dark: RGBA(0.093796, 0.093793, 0.105832, 1))
         /// `muted-fg`: #52525cff / #9f9fa9ff
@@ -179,8 +225,60 @@ public enum HazelTheme {
         public static let dangerFg = ThemedColor(light: RGBA(0.996841, 0.949585, 0.949586, 1), dark: RGBA(0.996841, 0.949585, 0.949586, 1))
         /// `danger-subtle-fg`: #c10007ff / #ff6467ff
         public static let dangerSubtleFg = ThemedColor(light: RGBA(0.756885, -0.062395, 0.028754, 1), dark: RGBA(1.005562, 0.391153, 0.403857, 1))
+        /// `primary-subtle-fg`: #6941c6ff / #d6bbfbff
+        public static let primarySubtleFg = ThemedColor(light: RGBA(0.411765, 0.254902, 0.776471, 1), dark: RGBA(0.839216, 0.733333, 0.984314, 1))
         /// `accent-fg`: #6941c6ff / #d6bbfbff
         public static let accentFg = ThemedColor(light: RGBA(0.411765, 0.254902, 0.776471, 1), dark: RGBA(0.839216, 0.733333, 0.984314, 1))
+        /// `primary-tint`: #7f56d91a / #7f56d91a
+        public static let primaryTint = ThemedColor(light: RGBA(0.498039, 0.337255, 0.85098, 0.1), dark: RGBA(0.498039, 0.337255, 0.85098, 0.1))
+        /// `primary-tint-hover`: #7f56d933 / #7f56d933
+        public static let primaryTintHover = ThemedColor(light: RGBA(0.498039, 0.337255, 0.85098, 0.2), dark: RGBA(0.498039, 0.337255, 0.85098, 0.2))
+        /// `primary-tint-ring`: #7f56d94d / #7f56d94d
+        public static let primaryTintRing = ThemedColor(light: RGBA(0.498039, 0.337255, 0.85098, 0.3), dark: RGBA(0.498039, 0.337255, 0.85098, 0.3))
+        /// `primary-focus`: #7f56d966 / #7f56d966
+        public static let primaryFocus = ThemedColor(light: RGBA(0.498039, 0.337255, 0.85098, 0.4), dark: RGBA(0.498039, 0.337255, 0.85098, 0.4))
+        /// `secondary-band`: #f4f4f566 / #27272a66
+        public static let secondaryBand = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 0.4), dark: RGBA(0.152897, 0.152887, 0.16577, 0.4))
+        /// `secondary-soft`: #f4f4f5cc / #27272acc
+        public static let secondarySoft = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 0.8), dark: RGBA(0.152897, 0.152887, 0.16577, 0.8))
+        /// `warning-tint`: #ffb9001a / #ffb9001a
+        public static let warningTint = ThemedColor(light: RGBA(1.000316, 0.727256, -0.229846, 0.1), dark: RGBA(1.000316, 0.727256, -0.229846, 0.1))
+        /// `warning-tint-hover`: #ffb90026 / #ffb90026
+        public static let warningTintHover = ThemedColor(light: RGBA(1.000316, 0.727256, -0.229846, 0.15), dark: RGBA(1.000316, 0.727256, -0.229846, 0.15))
+        /// `danger-tint`: #e7000b1a / #e7000b1a
+        public static let dangerTint = ThemedColor(light: RGBA(0.906458, -0.095944, 0.042214, 0.1), dark: RGBA(0.906458, -0.095944, 0.042214, 0.1))
+        /// `highlight`: #fee685ff / #ffb90033
+        public static let highlight = ThemedColor(light: RGBA(0.99573, 0.901205, 0.522189, 1), dark: RGBA(1.000316, 0.727256, -0.229846, 0.2))
+        /// `highlight-fg`: #7b3306ff / #fee685ff
+        public static let highlightFg = ThemedColor(light: RGBA(0.480446, 0.199765, 0.024833, 1), dark: RGBA(0.99573, 0.901205, 0.522189, 1))
+        /// `favorite`: #ffb900ff / #ffb900ff
+        public static let favorite = ThemedColor(light: RGBA(1.000316, 0.727256, -0.229846, 1), dark: RGBA(1.000316, 0.727256, -0.229846, 1))
+        /// `favorite-fg`: #e17100ff / #ffd230ff
+        public static let favoriteFg = ThemedColor(light: RGBA(0.883769, 0.443351, -0.169808, 1), dark: RGBA(1.002991, 0.82385, 0.187605, 1))
+        /// `verified`: #9e77edff / #b692f6ff
+        public static let verified = ThemedColor(light: RGBA(0.619608, 0.466667, 0.929412, 1), dark: RGBA(0.713725, 0.572549, 0.964706, 1))
+        /// `presence-online`: #009966ff / #009966ff
+        public static let presenceOnline = ThemedColor(light: RGBA(-0.174526, 0.598939, 0.398984, 1), dark: RGBA(-0.174526, 0.598939, 0.398984, 1))
+        /// `presence-away`: #ffb900ff / #ffb900ff
+        public static let presenceAway = ThemedColor(light: RGBA(1.000316, 0.727256, -0.229846, 1), dark: RGBA(1.000316, 0.727256, -0.229846, 1))
+        /// `presence-busy`: #ffb900ff / #ffb900ff
+        public static let presenceBusy = ThemedColor(light: RGBA(1.000316, 0.727256, -0.229846, 1), dark: RGBA(1.000316, 0.727256, -0.229846, 1))
+        /// `presence-offline`: #52525cff / #9f9fa9ff
+        public static let presenceOffline = ThemedColor(light: RGBA(0.321182, 0.32109, 0.362108, 1), dark: RGBA(0.622613, 0.622562, 0.66336, 1))
+        /// `presence-cutout`: #ffffffff / #131316ff
+        public static let presenceCutout = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.076194, 0.076176, 0.087912, 1))
+        /// `toggle-track`: #09090b26 / #fafafa26
+        public static let toggleTrack = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 0.15), dark: RGBA(0.980256, 0.980256, 0.980256, 0.15))
+        /// `toggle-track-hover`: #09090b33 / #fafafa33
+        public static let toggleTrackHover = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 0.2), dark: RGBA(0.980256, 0.980256, 0.980256, 0.2))
+        /// `toggle-edge`: #09090b0d / #fafafa0d
+        public static let toggleEdge = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 0.05), dark: RGBA(0.980256, 0.980256, 0.980256, 0.05))
+        /// `toggle-thumb`: #ffffffff / #ffffffff
+        public static let toggleThumb = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(1, 1, 1, 1))
+        /// `slack`: #4a154bff / #4a154bff
+        public static let slack = ThemedColor(light: RGBA(0.290196, 0.082353, 0.294118, 1), dark: RGBA(0.290196, 0.082353, 0.294118, 1))
+        /// `discord`: #5865f2ff / #5865f2ff
+        public static let discord = ThemedColor(light: RGBA(0.345098, 0.396078, 0.94902, 1), dark: RGBA(0.345098, 0.396078, 0.94902, 1))
         /// `sidebar`: #fafafaff / #111114ff
         public static let sidebar = ThemedColor(light: RGBA(0.980256, 0.980256, 0.980256, 1), dark: RGBA(0.067564, 0.067538, 0.079113, 1))
         /// `sidebar-fg`: #09090bff / #fafafaff
@@ -189,6 +287,14 @@ public enum HazelTheme {
         public static let sidebarPrimary = ThemedColor(light: RGBA(0.619608, 0.466667, 0.929412, 0.15), dark: RGBA(0.619608, 0.466667, 0.929412, 0.2))
         /// `sidebar-primary-fg`: #6941c6ff / #d6bbfbff
         public static let sidebarPrimaryFg = ThemedColor(light: RGBA(0.411765, 0.254902, 0.776471, 1), dark: RGBA(0.839216, 0.733333, 0.984314, 1))
+        /// `sidebar-accent`: #e4e4e7ff / #27272aff
+        public static let sidebarAccent = ThemedColor(light: RGBA(0.894477, 0.894477, 0.906151, 1), dark: RGBA(0.152897, 0.152887, 0.16577, 1))
+        /// `sidebar-accent-fg`: #09090bff / #fafafaff
+        public static let sidebarAccentFg = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 1), dark: RGBA(0.980256, 0.980256, 0.980256, 1))
+        /// `sidebar-border`: #dedee2ff / #ffffff12
+        public static let sidebarBorder = ThemedColor(light: RGBA(0.869456, 0.869453, 0.886862, 1), dark: RGBA(1, 1, 1, 0.07))
+        /// `sidebar-ring`: #9e77edff / #9e77edff
+        public static let sidebarRing = ThemedColor(light: RGBA(0.619608, 0.466667, 0.929412, 1), dark: RGBA(0.619608, 0.466667, 0.929412, 1))
         /// `sidebar-title`: #09090bb3 / #fafafab3
         public static let sidebarTitle = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 0.7), dark: RGBA(0.980256, 0.980256, 0.980256, 0.7))
         /// `primary-icon`: #ffffff99 / #ffffff99
@@ -217,6 +323,9 @@ public enum HazelTheme {
 
     public enum Font {
         public static let sans = "\"Inter\", ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\""
+        public static let mono = "ui-monospace, \"SF Mono\", SFMono-Regular, Menlo, Consolas, \"Liberation Mono\", monospace, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\""
+        /// The text step drawn in the monospaced system font.
+        public static let monoStep: TextStep = .code
         public static let weightRegular = 400
         public static let weightStrong = 500
     }
@@ -227,25 +336,30 @@ public enum HazelTheme {
 
     public static func text(_ step: TextStep, _ sizeClass: SizeClass) -> TypeMetrics {
         switch step {
-        case .body: sizeClass == .compact ? TypeMetrics(size: 16, lineHeight: 24) : TypeMetrics(size: 14, lineHeight: 20)
-        case .label: sizeClass == .compact ? TypeMetrics(size: 14, lineHeight: 20) : TypeMetrics(size: 14, lineHeight: 20)
-        case .caption: sizeClass == .compact ? TypeMetrics(size: 12, lineHeight: 16) : TypeMetrics(size: 12, lineHeight: 16)
-        case .title: sizeClass == .compact ? TypeMetrics(size: 18, lineHeight: 28) : TypeMetrics(size: 16, lineHeight: 24)
-        case .display: sizeClass == .compact ? TypeMetrics(size: 24, lineHeight: 32) : TypeMetrics(size: 20, lineHeight: 28)
-        case .code: sizeClass == .compact ? TypeMetrics(size: 14, lineHeight: 20) : TypeMetrics(size: 13, lineHeight: 20)
-        case .tiny: sizeClass == .compact ? TypeMetrics(size: 11, lineHeight: 16) : TypeMetrics(size: 11, lineHeight: 16)
-        case .micro: sizeClass == .compact ? TypeMetrics(size: 10, lineHeight: 16) : TypeMetrics(size: 10, lineHeight: 16)
+        case .body: sizeClass == .compact ? TypeMetrics(size: 16, lineHeight: 24, tracking: 0) : TypeMetrics(size: 14, lineHeight: 20, tracking: 0)
+        case .label: sizeClass == .compact ? TypeMetrics(size: 14, lineHeight: 20, tracking: 0) : TypeMetrics(size: 14, lineHeight: 20, tracking: 0)
+        case .caption: sizeClass == .compact ? TypeMetrics(size: 12, lineHeight: 16, tracking: 0) : TypeMetrics(size: 12, lineHeight: 16, tracking: 0)
+        case .title: sizeClass == .compact ? TypeMetrics(size: 16, lineHeight: 24, tracking: -0.176) : TypeMetrics(size: 16, lineHeight: 24, tracking: -0.176)
+        case .display: sizeClass == .compact ? TypeMetrics(size: 24, lineHeight: 32, tracking: -0.48) : TypeMetrics(size: 24, lineHeight: 32, tracking: -0.48)
+        case .code: sizeClass == .compact ? TypeMetrics(size: 14, lineHeight: 20, tracking: 0) : TypeMetrics(size: 14, lineHeight: 20, tracking: 0)
+        case .tiny: sizeClass == .compact ? TypeMetrics(size: 11, lineHeight: 16, tracking: 0) : TypeMetrics(size: 11, lineHeight: 16, tracking: 0)
+        case .micro: sizeClass == .compact ? TypeMetrics(size: 10, lineHeight: 16, tracking: 0) : TypeMetrics(size: 10, lineHeight: 16, tracking: 0)
+        case .reading: sizeClass == .compact ? TypeMetrics(size: 16, lineHeight: 24, tracking: 0) : TypeMetrics(size: 16, lineHeight: 24, tracking: 0)
         }
     }
 
-    public static let space: [String: CGFloat] = ["0": 0, "1": 4, "2": 8, "3": 12, "4": 16, "5": 20, "6": 24, "7": 28, "8": 32, "9": 36, "10": 40, "11": 44, "12": 48, "14": 56, "px": 1, "0.5": 2, "1.5": 6, "2.5": 10, "3.5": 14, "4.5": 18]
-    public static let radius: [String: CGFloat] = ["xs": 2, "sm": 4, "md": 6, "lg": 8, "xl": 12, "full": 9999]
+    public static let space: [String: CGFloat] = ["0": 0, "1": 4, "2": 8, "3": 12, "4": 16, "5": 20, "6": 24, "7": 28, "8": 32, "9": 36, "10": 40, "11": 44, "12": 48, "14": 56, "16": 64, "20": 80, "24": 96, "px": 1, "0.5": 2, "1.5": 6, "2.5": 10, "3.5": 14, "4.5": 18, "5.5": 22]
+    public static let radius: [String: CGFloat] = ["none": 0, "xs": 2, "sm": 4, "md": 6, "lg": 8, "xl": 12, "2xl": 16, "3xl": 24, "4xl": 32, "full": 9999]
     /// Seconds.
-    public static let duration: [String: Double] = ["micro": 0.1, "fast": 0.15, "normal": 0.2, "slow": 0.3]
-    public static let easing: [String: (Double, Double, Double, Double)] = ["out": (0.23, 1, 0.32, 1), "inOut": (0.77, 0, 0.175, 1)]
+    public static let duration: [String: Double] = ["micro": 0.1, "fast": 0.15, "normal": 0.2, "slow": 0.3, "enter": 0.18, "reactionEnter": 0.22, "reactionPop": 0.26, "progressSweep": 1.6]
+    public static let easing: [String: (Double, Double, Double, Double)] = ["out": (0.23, 1, 0.32, 1), "inOut": (0.77, 0, 0.175, 1), "outQuad": (0.25, 0.46, 0.45, 0.94), "outCubic": (0.215, 0.61, 0.355, 1), "outQuart": (0.165, 0.84, 0.44, 1), "inOutCubic": (0.645, 0.045, 0.355, 1), "enter": (0.2, 0, 0, 1), "overshoot": (0.34, 1.56, 0.64, 1), "cssOut": (0, 0, 0.58, 1), "cssIn": (0.42, 0, 1, 1), "cssInOut": (0.42, 0, 0.58, 1)]
     public static let shadows: [String: (light: [Shadow], dark: [Shadow])] = [
         "control": (light: [Shadow(inset: true, x: 0, y: 1, blur: 0, spread: 0, color: RGBA(1, 1, 1, 0.16)), Shadow(inset: true, x: 0, y: -1, blur: 0, spread: 0, color: RGBA(0, 0, 0, 0.12)), Shadow(inset: false, x: 0, y: 1, blur: 2, spread: 0, color: RGBA(0, 0, 0, 0.08))], dark: [Shadow(inset: true, x: 0, y: 1, blur: 0, spread: 0, color: RGBA(1, 1, 1, 0.14)), Shadow(inset: true, x: 0, y: -1, blur: 0, spread: 0, color: RGBA(0, 0, 0, 0.2)), Shadow(inset: false, x: 0, y: 1, blur: 2, spread: 0, color: RGBA(0, 0, 0, 0.3))]),
         "xs": (light: [Shadow(inset: false, x: 0, y: 1, blur: 2, spread: 0, color: RGBA(0, 0, 0, 0.04))], dark: [Shadow(inset: false, x: 0, y: 1, blur: 2, spread: 0, color: RGBA(0, 0, 0, 0.3))]),
+        "sm": (light: [Shadow(inset: false, x: 0, y: 1, blur: 2, spread: -1, color: RGBA(0, 0, 0, 0.06)), Shadow(inset: false, x: 0, y: 1, blur: 3, spread: 0, color: RGBA(0, 0, 0, 0.06))], dark: [Shadow(inset: false, x: 0, y: 1, blur: 2, spread: -1, color: RGBA(0, 0, 0, 0.3)), Shadow(inset: false, x: 0, y: 1, blur: 3, spread: 0, color: RGBA(0, 0, 0, 0.35))]),
+        "md": (light: [Shadow(inset: false, x: 0, y: 2, blur: 4, spread: -2, color: RGBA(0, 0, 0, 0.05)), Shadow(inset: false, x: 0, y: 6, blur: 16, spread: -4, color: RGBA(0, 0, 0, 0.1))], dark: [Shadow(inset: true, x: 0, y: 1, blur: 0, spread: 0, color: RGBA(1, 1, 1, 0.04)), Shadow(inset: false, x: 0, y: 2, blur: 4, spread: -2, color: RGBA(0, 0, 0, 0.3)), Shadow(inset: false, x: 0, y: 6, blur: 16, spread: -4, color: RGBA(0, 0, 0, 0.45))]),
+        "lg": (light: [Shadow(inset: false, x: 0, y: 4, blur: 8, spread: -4, color: RGBA(0, 0, 0, 0.06)), Shadow(inset: false, x: 0, y: 16, blur: 36, spread: -8, color: RGBA(0, 0, 0, 0.14))], dark: [Shadow(inset: true, x: 0, y: 1, blur: 0, spread: 0, color: RGBA(1, 1, 1, 0.05)), Shadow(inset: false, x: 0, y: 4, blur: 8, spread: -4, color: RGBA(0, 0, 0, 0.4)), Shadow(inset: false, x: 0, y: 16, blur: 36, spread: -8, color: RGBA(0, 0, 0, 0.6))]),
+        "xl": (light: [Shadow(inset: false, x: 0, y: 8, blur: 16, spread: -8, color: RGBA(0, 0, 0, 0.08)), Shadow(inset: false, x: 0, y: 28, blur: 64, spread: -12, color: RGBA(0, 0, 0, 0.22))], dark: [Shadow(inset: true, x: 0, y: 1, blur: 0, spread: 0, color: RGBA(1, 1, 1, 0.06)), Shadow(inset: false, x: 0, y: 8, blur: 16, spread: -8, color: RGBA(0, 0, 0, 0.45)), Shadow(inset: false, x: 0, y: 28, blur: 64, spread: -12, color: RGBA(0, 0, 0, 0.7))]),
     ]
 
     public enum Layout: Sendable { case row, column, inlineRow, contents }
@@ -335,13 +449,56 @@ public enum HazelTheme {
             ]
         )
 
-        public static let avatar = Recipe(
-            primitive: "avatar",
+        public static let attachmentGrid = Recipe(
+            primitive: "attachmentGrid",
             defaults: [:],
             inert: [],
             layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column, rowGap: 8)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "mosaic", style: Style(gap: 4)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "media", style: Style(background: Colors.muted, radius: 8)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "files", style: Style(layout: .column, rowGap: 8)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "file", style: Style(layout: .row, align: .center, background: Colors.bg, borderColor: Colors.border, borderWidth: 1, radius: 8, paddingX: 12, paddingY: 12, gap: 12, shadow: "xs")),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "fileName", style: Style(color: Colors.fg, text: .label, strong: true, truncate: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "fileSize", style: Style(color: Colors.mutedFg, text: .caption)),
+            ]
+        )
+
+        public static let avatar = Recipe(
+            primitive: "avatar",
+            defaults: ["size": "regular", "presence": "none", "mark": "none"],
+            inert: [],
+            layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .row, align: .center, justify: .center, background: Colors.primary, color: Colors.primaryFg, radius: 9999, size: 20, text: .micro, strong: true, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "image", style: Style(radius: 9999, size: 20)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "presence", style: Style(borderColor: Colors.bg, borderWidth: 1, radius: 9999, size: 8)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "mark", style: Style(background: Colors.bg, color: Colors.fg, radius: 2, size: 10)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(size: 16)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "image", style: Style(size: 16)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "presence", style: Style(size: 6)),
+                Layer(when: When(options: [:], flags: [], states: [.focusVisible], sizeClass: nil), part: nil, style: Style(ring: Colors.ring)),
+                Layer(when: When(options: ["size": "large"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(radius: 12, size: 48, text: .title)),
+                Layer(when: When(options: ["size": "large"], flags: [], states: [], sizeClass: nil), part: "image", style: Style(radius: 12, size: 48)),
+                Layer(when: When(options: ["size": "large"], flags: [], states: [], sizeClass: nil), part: "presence", style: Style(size: 12)),
+                Layer(when: When(options: ["size": "large"], flags: [], states: [], sizeClass: nil), part: "mark", style: Style(size: 16)),
+                Layer(when: When(options: ["size": "large"], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(size: 48)),
+                Layer(when: When(options: ["size": "large"], flags: [], states: [], sizeClass: .regular), part: "image", style: Style(size: 48)),
+                Layer(when: When(options: ["size": "large"], flags: [], states: [], sizeClass: .regular), part: "presence", style: Style(size: 12)),
+                Layer(when: When(options: ["presence": "online"], flags: [], states: [], sizeClass: nil), part: "presence", style: Style(background: Colors.success)),
+                Layer(when: When(options: ["presence": "away"], flags: [], states: [], sizeClass: nil), part: "presence", style: Style(background: Colors.warning)),
+                Layer(when: When(options: ["presence": "busy"], flags: [], states: [], sizeClass: nil), part: "presence", style: Style(background: Colors.danger)),
+                Layer(when: When(options: ["presence": "offline"], flags: [], states: [], sizeClass: nil), part: "presence", style: Style(background: Colors.bg, ring: Colors.mutedFg)),
+            ]
+        )
+
+        public static let avatarStack = Recipe(
+            primitive: "avatarStack",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .inlineRow, align: .center, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "children", style: Style(ring: Colors.bg, bleedX: 2)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "overflow", style: Style(color: Colors.mutedFg, paddingStart: 6, text: .tiny, numeric: true, nowrap: true)),
             ]
         )
 
@@ -446,21 +603,114 @@ public enum HazelTheme {
             ]
         )
 
+        public static let composer = Recipe(
+            primitive: "composer",
+            defaults: [:],
+            inert: [.disabled],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.bg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 8, paddingY: 8, gap: 4, shadow: "xs", fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "input", style: Style(background: Colors.clear, color: Colors.fg, paddingX: 6, paddingY: 4, text: .body, fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "send", style: Style(layout: .row, align: .center, justify: .center, background: Colors.secondary, color: Colors.mutedFg, radius: 8, size: 32, transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "above", style: Style(layout: .row, gap: 4, wrap: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "actions", style: Style(layout: .row, align: .center, gap: 4)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "send", style: Style(size: 28)),
+                Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: nil, style: Style(borderColor: Colors.borderHover)),
+                Layer(when: When(options: [:], flags: ["canSend"], states: [], sizeClass: nil), part: "send", style: Style(background: Colors.primary, color: Colors.primaryFg)),
+                Layer(when: When(options: [:], flags: [], states: [.disabled], sizeClass: nil), part: nil, style: Style(opacity: 0.5)),
+            ]
+        )
+
+        public static let contextMenu = Recipe(
+            primitive: "contextMenu",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .contents)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "panel", style: Style(layout: .column, background: Colors.bg, color: Colors.fg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 4, paddingY: 4, shadow: "xs")),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "group", style: Style(layout: .column)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "groupTitle", style: Style(color: Colors.mutedFg, paddingX: 8, paddingY: 6, text: .caption, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "separator", style: Style(divider: Colors.separator, paddingY: 2, marginBottom: 4, marginX: 4)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "item", style: Style(layout: .row, align: .center, radius: 6, paddingX: 8, gap: 8, minHeight: 36, text: .body)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "itemIcon", style: Style(color: Colors.mutedFg, size: 16, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "itemLabel", style: Style(truncate: true, grow: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "itemCheck", style: Style(size: 16, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "itemChevron", style: Style(color: Colors.mutedFg, size: 16, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(layout: .contents)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "item", style: Style(minHeight: 32, text: .label)),
+            ]
+        )
+
+        public static let dialog = Recipe(
+            primitive: "dialog",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .contents)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "panel", style: Style(layout: .column, background: Colors.bg, color: Colors.fg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 20, paddingY: 20, rowGap: 16, shadow: "xs")),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "header", style: Style(layout: .column, rowGap: 4)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "title", style: Style(text: .title, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "description", style: Style(color: Colors.mutedFg, text: .body)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(layout: .column, rowGap: 16)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "actions", style: Style(gap: 8)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "panel", style: Style(paddingX: 24, paddingY: 24)),
+                Layer(when: When(options: [:], flags: [], states: [.destructive], sizeClass: nil), part: "title", style: Style(color: Colors.dangerSubtleFg)),
+            ]
+        )
+
+        public static let divider = Recipe(
+            primitive: "divider",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.border, minHeight: 1, fill: true, shrink: false)),
+            ]
+        )
+
+        public static let embed = Recipe(
+            primitive: "embed",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "card", style: Style(background: Colors.wash, color: Colors.fg, borderColor: Colors.border, borderWidth: 1, radius: 8)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "cardText", style: Style(layout: .column, paddingX: 12, paddingY: 12)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "title", style: Style(text: .label, truncate: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "description", style: Style(color: Colors.fg3, text: .caption)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "site", style: Style(color: Colors.accentFg, text: .micro)),
+                Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: "card", style: Style(background: Colors.muted)),
+            ]
+        )
+
         public static let emojiPicker = Recipe(
             primitive: "emojiPicker",
             defaults: [:],
             inert: [],
             layers: [
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .contents)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "panel", style: Style(background: Colors.bg, color: Colors.fg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 8, paddingY: 8, rowGap: 8, shadow: "xs")),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "search", style: Style(background: Colors.secondary, color: Colors.fg, radius: 6, paddingX: 10, minHeight: 36, text: .body)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "category", style: Style(layout: .column)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "categoryTitle", style: Style(color: Colors.mutedFg, paddingX: 4, paddingY: 4, text: .caption, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "emoji", style: Style(layout: .row, align: .center, justify: .center, radius: 6, size: 36, text: .title)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "empty", style: Style(color: Colors.mutedFg, paddingY: 16, text: .caption)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "search", style: Style(minHeight: 32, text: .label)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "emoji", style: Style(size: 32)),
             ]
         )
 
         public static let emptyState = Recipe(
             primitive: "emptyState",
-            defaults: [:],
+            defaults: ["illustration": "none"],
             inert: [],
             layers: [
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column, align: .center, justify: .center, paddingY: 56, rowGap: 4, fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "illustration", style: Style(radius: 6, marginBottom: 12, opacity: 0.5)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "tile", style: Style(layout: .row, align: .center, justify: .center, background: Colors.secondary, color: Colors.mutedFg, borderColor: Colors.border, borderWidth: 1, radius: 12, marginBottom: 12, size: 48, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(size: 24)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "title", style: Style(color: Colors.fg, text: .body, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "description", style: Style(color: Colors.mutedFg, marginBottom: 12, text: .label)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(layout: .row, align: .center, gap: 8)),
+                Layer(when: When(options: ["illustration": "squirrel"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(paddingY: 32)),
+                Layer(when: When(options: ["illustration": "squirrel"], flags: [], states: [], sizeClass: nil), part: "title", style: Style(text: .title)),
             ]
         )
 
@@ -474,9 +724,46 @@ public enum HazelTheme {
             ]
         )
 
+        public static let frame = Recipe(
+            primitive: "frame",
+            defaults: ["surface": "card"],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column, rowGap: 16)),
+                Layer(when: When(options: ["surface": "card"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.bg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 16, paddingY: 16, shadow: "xs")),
+                Layer(when: When(options: ["surface": "card"], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(paddingX: 24, paddingY: 24)),
+                Layer(when: When(options: ["surface": "danger"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(borderColor: Colors.dangerSubtle, borderWidth: 1, radius: 12, paddingX: 16, paddingY: 16)),
+                Layer(when: When(options: ["surface": "danger"], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(paddingX: 24, paddingY: 24)),
+                Layer(when: When(options: ["surface": "muted"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.muted, radius: 8, paddingX: 12, paddingY: 6, rowGap: 8)),
+                Layer(when: When(options: ["surface": "inset"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(radius: 8, ring: Colors.border, paddingX: 12, paddingY: 10, rowGap: 12)),
+                Layer(when: When(options: ["surface": "overlay"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.bg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 12, paddingY: 12, rowGap: 8, shadow: "xs")),
+            ]
+        )
+
+        public static let heading = Recipe(
+            primitive: "heading",
+            defaults: ["level": "2"],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(color: Colors.fg, strong: true)),
+                Layer(when: When(options: ["level": "1"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(text: .display)),
+                Layer(when: When(options: ["level": "2"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(text: .title)),
+                Layer(when: When(options: ["level": "3"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(text: .label)),
+            ]
+        )
+
+        public static let image = Recipe(
+            primitive: "image",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.muted, radius: 8, shrink: false)),
+            ]
+        )
+
         public static let item = Recipe(
             primitive: "item",
-            defaults: [:],
+            defaults: ["nested": "none"],
             inert: [.disabled],
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(fill: true)),
@@ -484,18 +771,130 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(layout: .contents)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "leading", style: Style(color: Colors.fg2, size: 20, shrink: false)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "title", style: Style(truncate: true, grow: true)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "trailing", style: Style(shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "trailing", style: Style(layout: .row, align: .center, gap: 4, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "subtitle", style: Style(color: Colors.fg2, text: .caption, truncate: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "shortcut", style: Style(color: Colors.mutedFg, radius: 4, ring: Colors.border, paddingX: 4, text: .caption, numeric: true, shrink: false)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "badge", style: Style(layout: .row, align: .center, justify: .center, background: Colors.primary, color: Colors.primaryFg, radius: 9999, paddingX: 6, minHeight: 20, text: .tiny, strong: true, shrink: false)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "leading", style: Style(size: 16)),
                 Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: "control", style: Style(background: Colors.wash, color: Colors.fg)),
                 Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: "leading", style: Style(color: Colors.fg3)),
                 Layer(when: When(options: [:], flags: [], states: [.pressed], sizeClass: nil), part: "control", style: Style(background: Colors.wash, color: Colors.fg)),
                 Layer(when: When(options: [:], flags: [], states: [.pressed], sizeClass: nil), part: "leading", style: Style(color: Colors.fg3)),
+                Layer(when: When(options: ["nested": "middle"], flags: [], states: [], sizeClass: nil), part: "control", style: Style(paddingY: 6, text: .label)),
+                Layer(when: When(options: ["nested": "last"], flags: [], states: [], sizeClass: nil), part: "control", style: Style(paddingY: 6, text: .label)),
+                Layer(when: When(options: [:], flags: ["muted"], states: [], sizeClass: nil), part: "title", style: Style(opacity: 0.6)),
+                Layer(when: When(options: [:], flags: ["muted"], states: [], sizeClass: nil), part: "leading", style: Style(opacity: 0.6)),
                 Layer(when: When(options: [:], flags: [], states: [.selected], sizeClass: nil), part: "control", style: Style(background: Colors.washStrong, color: Colors.fg, strong: true)),
                 Layer(when: When(options: [:], flags: [], states: [.selected], sizeClass: nil), part: "leading", style: Style(color: Colors.fg3)),
                 Layer(when: When(options: [:], flags: [], states: [.selected, .hover], sizeClass: nil), part: "control", style: Style(background: Colors.washStacked)),
                 Layer(when: When(options: [:], flags: [], states: [.selected, .pressed], sizeClass: nil), part: "control", style: Style(background: Colors.washStacked)),
                 Layer(when: When(options: [:], flags: [], states: [.emphasized], sizeClass: nil), part: "title", style: Style(color: Colors.fg, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [.disabled], sizeClass: nil), part: "control", style: Style(opacity: 0.5)),
+            ]
+        )
+
+        public static let link = Recipe(
+            primitive: "link",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .inlineRow)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "control", style: Style(color: Colors.accentFg, strong: true, transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: "control", style: Style(color: Colors.fg)),
+            ]
+        )
+
+        public static let list = Recipe(
+            primitive: "list",
+            defaults: ["anchor": "start"],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "viewport", style: Style(fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(paddingY: 8)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "loadingStart", style: Style(layout: .row, justify: .center, paddingY: 12, gap: 4)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "loadingEnd", style: Style(layout: .row, justify: .center, paddingY: 12, gap: 4)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "overlay", style: Style(gap: 8)),
+            ]
+        )
+
+        public static let listDivider = Recipe(
+            primitive: "listDivider",
+            defaults: ["kind": "date"],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .row, align: .center, paddingX: 16, paddingY: 8, gap: 8, fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "lineStart", style: Style(divider: Colors.border, grow: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "lineEnd", style: Style(divider: Colors.border, grow: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "label", style: Style(background: Colors.bg, color: Colors.fg3, radius: 9999, ring: Colors.border, paddingX: 8, paddingY: 2, text: .caption, strong: true, nowrap: true, shrink: false)),
+                Layer(when: When(options: ["kind": "unread"], flags: [], states: [], sizeClass: nil), part: "lineStart", style: Style(divider: Colors.danger)),
+                Layer(when: When(options: ["kind": "unread"], flags: [], states: [], sizeClass: nil), part: "label", style: Style(background: Colors.dangerSubtle, color: Colors.dangerSubtleFg, ring: Colors.dangerSubtle)),
+            ]
+        )
+
+        public static let menu = Recipe(
+            primitive: "menu",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .inlineRow, align: .center)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "panel", style: Style(layout: .column, background: Colors.bg, color: Colors.fg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 4, paddingY: 4, shadow: "xs")),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "group", style: Style(layout: .column)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "groupTitle", style: Style(color: Colors.mutedFg, paddingX: 8, paddingY: 6, text: .caption, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "separator", style: Style(divider: Colors.separator, paddingY: 2, marginBottom: 4, marginX: 4)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "item", style: Style(layout: .row, align: .center, radius: 6, paddingX: 8, gap: 8, minHeight: 36, text: .body)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "itemIcon", style: Style(color: Colors.mutedFg, size: 16, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "itemLabel", style: Style(truncate: true, grow: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "itemCheck", style: Style(size: 16, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "itemChevron", style: Style(color: Colors.mutedFg, size: 16, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(layout: .contents)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "button", style: Style(layout: .inlineRow, align: .center, background: Colors.bg, color: Colors.fg, borderColor: Colors.border, borderWidth: 1, radius: 8, paddingX: 12, gap: 6, minHeight: 36, text: .label, strong: true, shadow: "xs", transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "buttonIcon", style: Style(color: Colors.mutedFg, size: 16)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "item", style: Style(minHeight: 32, text: .label)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "button", style: Style(minHeight: 32)),
+            ]
+        )
+
+        public static let message = Recipe(
+            primitive: "message",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(color: Colors.fg, radius: 8, paddingX: 2, paddingY: 4, text: .reading)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "main", style: Style(layout: .row, gap: 16)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "avatarImage", style: Style(layout: .row, align: .center, justify: .center, background: Colors.muted, color: Colors.mutedFg, radius: 12, size: 40, text: .caption, strong: true, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "gutterTime", style: Style(color: Colors.mutedFg, text: .micro, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "body", style: Style(grow: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "header", style: Style(gap: 8)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "author", style: Style(color: Colors.fg)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "time", style: Style(color: Colors.mutedFg, text: .caption)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "reactions", style: Style(layout: .row, gap: 4, rowGap: 4, wrap: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "thread", style: Style(background: Colors.wash, borderColor: Colors.border, borderWidth: 1, radius: 8, paddingX: 12, text: .label)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "failure", style: Style(color: Colors.dangerSubtleFg, gap: 6, text: .caption)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "toolbar", style: Style(layout: .row, align: .center, background: Colors.bg, borderColor: Colors.border, borderWidth: 1, radius: 8, paddingX: 2, paddingY: 2, gap: 2, shadow: "xs")),
+                Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: nil, style: Style(background: Colors.secondary)),
+                Layer(when: When(options: [:], flags: ["pinned"], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.warningSubtle, shadow: "xs")),
+                Layer(when: When(options: [:], flags: ["highlighted"], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.primarySubtle)),
+                Layer(when: When(options: [:], flags: ["pending"], states: [], sizeClass: nil), part: "main", style: Style(opacity: 0.6)),
+            ]
+        )
+
+        public static let navigation = Recipe(
+            primitive: "navigation",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(fill: true)),
+            ]
+        )
+
+        public static let popover = Recipe(
+            primitive: "popover",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .contents)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "panel", style: Style(layout: .column, background: Colors.bg, color: Colors.fg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 12, paddingY: 12, rowGap: 8, shadow: "xs")),
             ]
         )
 
@@ -504,7 +903,37 @@ public enum HazelTheme {
             defaults: [:],
             inert: [],
             layers: [
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column, rowGap: 8, fill: true, grow: true, shrink: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "label", style: Style(color: Colors.fg, text: .label, strong: true, truncate: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "track", style: Style(background: Colors.secondary, radius: 9999, minHeight: 6, fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "fill", style: Style(background: Colors.primary, radius: 9999, minHeight: 6)),
+            ]
+        )
+
+        public static let reactionBar = Recipe(
+            primitive: "reactionBar",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .row, gap: 4, rowGap: 4, wrap: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "reaction", style: Style(layout: .inlineRow, align: .center, background: Colors.secondary, color: Colors.fg, radius: 9999, ring: Colors.border, paddingX: 10, paddingY: 2, gap: 4, text: .label, strong: true, nowrap: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "addReaction", style: Style(layout: .inlineRow, align: .center, background: Colors.secondary, color: Colors.mutedFg, radius: 9999, ring: Colors.border, paddingX: 8, paddingY: 2, text: .label)),
+            ]
+        )
+
+        public static let richText = Recipe(
+            primitive: "richText",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column, color: Colors.fg, rowGap: 4, text: .body)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "marker", style: Style(color: Colors.mutedFg, paddingX: 4)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "mention", style: Style(background: Colors.primarySubtle, color: Colors.accentFg, radius: 4, paddingX: 4, strong: true, transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "link", style: Style(color: Colors.accentFg, transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "code", style: Style(background: Colors.muted, radius: 4, paddingX: 4, text: .code)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "strong", style: Style(strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "codeBlock", style: Style(background: Colors.muted, radius: 8, paddingX: 16, paddingY: 16, text: .code)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "quote", style: Style(color: Colors.fg2, paddingStart: 16)),
             ]
         )
 
@@ -514,9 +943,37 @@ public enum HazelTheme {
             inert: [],
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column, background: Colors.sidebar)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "header", style: Style(layout: .row, align: .center, divider: Colors.separator, paddingX: 24, minHeight: 56)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "header", style: Style(layout: .row, align: .center, divider: Colors.separator, paddingX: 24, gap: 8, minHeight: 56)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "back", style: Style(color: Colors.fg3, radius: 8, paddingX: 8, bleedX: 8, size: 32, shrink: false, transition: 0.15)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "title", style: Style(color: Colors.fg, text: .label, strong: true, opacity: 0.8)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(layout: .column, paddingY: 12)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "toolbar", style: Style(gap: 4)),
+            ]
+        )
+
+        public static let scroll = Recipe(
+            primitive: "scroll",
+            defaults: ["axis": "vertical"],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(minHeight: 0, grow: true, shrink: true)),
+                Layer(when: When(options: ["axis": "vertical"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column)),
+                Layer(when: When(options: ["axis": "horizontal"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .row)),
+            ]
+        )
+
+        public static let searchField = Recipe(
+            primitive: "searchField",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .row, align: .center, background: Colors.secondary, radius: 8, paddingX: 11, gap: 8, fill: true, transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(color: Colors.mutedFg, size: 20, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "input", style: Style(background: Colors.clear, color: Colors.fg, paddingY: 9, text: .body, grow: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(paddingX: 9)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "icon", style: Style(size: 16)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "input", style: Style(paddingY: 5, leading: 24)),
+                Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: nil, style: Style(background: Colors.secondaryHover)),
             ]
         )
 
@@ -527,16 +984,95 @@ public enum HazelTheme {
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .row, align: .center, paddingX: 16, paddingY: 16, rowGap: 2, wrap: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "title", style: Style(layout: .row, align: .center, color: Colors.sidebarTitle, radius: 6, paddingX: 8, marginBottom: 4, text: .caption, leading: 24, strong: true, grow: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "label", style: Style(truncate: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "disclosure", style: Style(layout: .inlineRow, align: .center, color: Colors.sidebarTitle, gap: 4, transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "chevron", style: Style(color: Colors.fg2, size: 12)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(layout: .contents)),
+            ]
+        )
+
+        public static let select = Recipe(
+            primitive: "select",
+            defaults: [:],
+            inert: [.disabled],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column, fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "label", style: Style(layout: .column, gap: 4, fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "caption", style: Style(color: Colors.fg, text: .label, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "control", style: Style(layout: .row, align: .center, background: Colors.secondary, radius: 8, paddingX: 13, gap: 8, fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "input", style: Style(background: Colors.clear, color: Colors.fg, paddingY: 9, text: .body, grow: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(color: Colors.mutedFg, size: 16, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "input", style: Style(paddingY: 5, leading: 24)),
+                Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: "control", style: Style(background: Colors.secondaryHover)),
+                Layer(when: When(options: [:], flags: ["placeholder"], states: [], sizeClass: nil), part: "input", style: Style(color: Colors.mutedFg)),
+                Layer(when: When(options: [:], flags: [], states: [.disabled], sizeClass: nil), part: nil, style: Style(opacity: 0.5)),
+            ]
+        )
+
+        public static let sheet = Recipe(
+            primitive: "sheet",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .contents)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "panel", style: Style(layout: .column, background: Colors.bg, color: Colors.fg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 16, paddingY: 16, rowGap: 16, shadow: "xs")),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "header", style: Style(layout: .row, align: .center, gap: 8)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "title", style: Style(text: .title, strong: true, truncate: true, grow: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "close", style: Style(layout: .row, align: .center, justify: .center, color: Colors.mutedFg, radius: 6, size: 32, shrink: false, transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(layout: .column, rowGap: 16)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "panel", style: Style(paddingX: 24, paddingY: 24)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "close", style: Style(size: 28)),
+            ]
+        )
+
+        public static let spacer = Recipe(
+            primitive: "spacer",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(grow: true, shrink: true)),
+            ]
+        )
+
+        public static let splitView = Recipe(
+            primitive: "splitView",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.bg, fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "sidebar", style: Style(background: Colors.sidebar)),
             ]
         )
 
         public static let stack = Recipe(
             primitive: "stack",
-            defaults: [:],
+            defaults: ["axis": "vertical", "density": "regular", "align": "stretch"],
             inert: [],
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column)),
+                Layer(when: When(options: ["axis": "vertical"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column)),
+                Layer(when: When(options: ["axis": "horizontal"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .row)),
+                Layer(when: When(options: ["density": "compact"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 8, rowGap: 8)),
+                Layer(when: When(options: ["density": "regular"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 16, rowGap: 16)),
+                Layer(when: When(options: ["density": "relaxed"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 24, rowGap: 24)),
+                Layer(when: When(options: ["align": "start"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(align: .start)),
+                Layer(when: When(options: ["align": "center"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(align: .center)),
+            ]
+        )
+
+        public static let tabBar = Recipe(
+            primitive: "tabBar",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column, background: Colors.bg, fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "panel", style: Style(layout: .column, grow: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "bar", style: Style(layout: .row, background: Colors.sidebar, paddingX: 8, paddingY: 4)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "tab", style: Style(layout: .column, align: .center, justify: .center, color: Colors.fg2, radius: 8, gap: 2, minHeight: 48, text: .micro, strong: true, grow: true, transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "tabIcon", style: Style(size: 20)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "tabLabel", style: Style(truncate: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "tabBadge", style: Style(layout: .row, align: .center, justify: .center, background: Colors.primary, color: Colors.primaryFg, radius: 9999, paddingX: 4, minHeight: 16, text: .micro, strong: true, numeric: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "tab", style: Style(text: .tiny)),
             ]
         )
 
@@ -561,6 +1097,107 @@ public enum HazelTheme {
                 Layer(when: When(options: ["tone": "danger"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(color: Colors.dangerSubtleFg)),
                 Layer(when: When(options: ["tone": "info"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(color: Colors.infoSubtleFg)),
                 Layer(when: When(options: [:], flags: ["strong"], states: [], sizeClass: nil), part: nil, style: Style(strong: true)),
+                Layer(when: When(options: [:], flags: ["numeric"], states: [], sizeClass: nil), part: nil, style: Style(numeric: true)),
+                Layer(when: When(options: [:], flags: ["truncate"], states: [], sizeClass: nil), part: nil, style: Style(truncate: true)),
+            ]
+        )
+
+        public static let textArea = Recipe(
+            primitive: "textArea",
+            defaults: [:],
+            inert: [.disabled],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column, gap: 4, fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "label", style: Style(layout: .row, gap: 4, wrap: true, fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "caption", style: Style(color: Colors.fg, text: .label, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "required", style: Style(color: Colors.dangerSubtleFg, text: .label)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "input", style: Style(background: Colors.secondary, color: Colors.fg, borderColor: Colors.clear, borderWidth: 1, radius: 8, paddingX: 13, paddingY: 9, minHeight: 56, text: .body, fill: true, transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "description", style: Style(color: Colors.mutedFg, text: .caption)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "error", style: Style(color: Colors.dangerSubtleFg, text: .caption)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "input", style: Style(paddingX: 11, paddingY: 5)),
+                Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: "input", style: Style(background: Colors.secondaryHover)),
+                Layer(when: When(options: [:], flags: ["invalid"], states: [], sizeClass: nil), part: "input", style: Style(borderColor: Colors.dangerSubtleFg)),
+                Layer(when: When(options: [:], flags: [], states: [.disabled], sizeClass: nil), part: "input", style: Style(background: Colors.muted, color: Colors.mutedFg)),
+            ]
+        )
+
+        public static let textField = Recipe(
+            primitive: "textField",
+            defaults: [:],
+            inert: [.disabled],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column, gap: 4, fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "label", style: Style(layout: .row, gap: 4, wrap: true, fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "caption", style: Style(color: Colors.fg, text: .label, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "required", style: Style(color: Colors.dangerSubtleFg, text: .label)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "input", style: Style(background: Colors.secondary, color: Colors.fg, borderColor: Colors.clear, borderWidth: 1, radius: 8, paddingX: 13, paddingY: 9, text: .body, fill: true, transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "description", style: Style(color: Colors.mutedFg, text: .caption)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "error", style: Style(color: Colors.dangerSubtleFg, text: .caption)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "input", style: Style(paddingX: 11, paddingY: 5, leading: 24)),
+                Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: "input", style: Style(background: Colors.secondaryHover)),
+                Layer(when: When(options: [:], flags: ["readOnly"], states: [], sizeClass: nil), part: "input", style: Style(background: Colors.muted)),
+                Layer(when: When(options: [:], flags: ["monospace"], states: [], sizeClass: nil), part: "input", style: Style(text: .code)),
+                Layer(when: When(options: [:], flags: ["invalid"], states: [], sizeClass: nil), part: "input", style: Style(borderColor: Colors.dangerSubtleFg)),
+                Layer(when: When(options: [:], flags: [], states: [.disabled], sizeClass: nil), part: "input", style: Style(background: Colors.muted, color: Colors.mutedFg)),
+            ]
+        )
+
+        public static let toast = Recipe(
+            primitive: "toast",
+            defaults: ["tone": "neutral"],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .contents)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "panel", style: Style(layout: .row, background: Colors.bg, color: Colors.fg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 16, paddingY: 12, gap: 12, shadow: "xs")),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "body", style: Style(layout: .column, rowGap: 2)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "title", style: Style(text: .label, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "description", style: Style(color: Colors.mutedFg, text: .caption)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(layout: .row, align: .center, gap: 8)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "close", style: Style(layout: .row, align: .center, justify: .center, color: Colors.mutedFg, radius: 6, size: 24, shrink: false)),
+                Layer(when: When(options: ["tone": "accent"], flags: [], states: [], sizeClass: nil), part: "title", style: Style(color: Colors.accentFg)),
+                Layer(when: When(options: ["tone": "success"], flags: [], states: [], sizeClass: nil), part: "title", style: Style(color: Colors.successSubtleFg)),
+                Layer(when: When(options: ["tone": "warning"], flags: [], states: [], sizeClass: nil), part: "title", style: Style(color: Colors.warningSubtleFg)),
+                Layer(when: When(options: ["tone": "danger"], flags: [], states: [], sizeClass: nil), part: "title", style: Style(color: Colors.dangerSubtleFg)),
+                Layer(when: When(options: ["tone": "info"], flags: [], states: [], sizeClass: nil), part: "title", style: Style(color: Colors.infoSubtleFg)),
+            ]
+        )
+
+        public static let toggle = Recipe(
+            primitive: "toggle",
+            defaults: [:],
+            inert: [.disabled],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .row, gap: 24, fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "text", style: Style(layout: .column, gap: 4, grow: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "label", style: Style(color: Colors.fg, text: .body, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "description", style: Style(color: Colors.mutedFg, text: .caption)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "control", style: Style(layout: .row, background: Colors.secondaryHover, radius: 9999, paddingX: 2, paddingY: 2, shrink: false, transition: 0.2)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "thumb", style: Style(background: Colors.bg, radius: 9999, size: 18, shadow: "xs")),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "thumb", style: Style(size: 14)),
+                Layer(when: When(options: [:], flags: [], states: [.selected], sizeClass: nil), part: "control", style: Style(background: Colors.primary)),
+                Layer(when: When(options: [:], flags: [], states: [.disabled], sizeClass: nil), part: nil, style: Style(opacity: 0.5)),
+            ]
+        )
+
+        public static let tooltip = Recipe(
+            primitive: "tooltip",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .contents)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(layout: .contents)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "bubble", style: Style(background: Colors.fg, color: Colors.bg, radius: 6, paddingX: 8, paddingY: 4, text: .caption, strong: true, nowrap: true)),
+            ]
+        )
+
+        public static let typingIndicator = Recipe(
+            primitive: "typingIndicator",
+            defaults: [:],
+            inert: [],
+            layers: [
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .row, align: .center, color: Colors.mutedFg, gap: 8, minHeight: 12, text: .caption)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "dots", style: Style(layout: .row, gap: 4)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "dot", style: Style(background: Colors.mutedFg, radius: 9999, size: 6)),
             ]
         )
     }

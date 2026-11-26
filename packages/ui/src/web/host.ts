@@ -8,7 +8,6 @@ import { Renderer, type View } from "@effect/ui"
 import { BrowserHost, HtmlScheduler } from "@effect/ui/html"
 import { Context, Effect, Layer, Scheduler } from "effect"
 import { Hazel } from "../vocabulary/index.ts"
-import { NotImplemented } from "../vocabulary/spec.ts"
 import type { Plain } from "./primitives/define.ts"
 import { measureNode } from "./focus/measure.ts"
 import { scrollTo } from "./primitives/list/scroll.ts"
@@ -104,9 +103,6 @@ export const wrapHost = (inner: Renderer.Host<Node>, document: Document): Render
 	}
 }
 
-// C1: focus is real; measure is A3's, select A2's, scrollTo A4's.
-const notYet = (name: string, lane: string) =>
-	Effect.die(new NotImplemented({ what: `web command ${name}`, lane }))
 /** The element a command acts on: a control's `data-hz-focus` part (its input), else the node. */
 const target = (node: Hazel.HostNode): HTMLElement => {
 	const element = node as HTMLElement
