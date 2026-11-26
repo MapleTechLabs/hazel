@@ -307,6 +307,8 @@ export const Dms = Hazel.component({
 		const press = (dm: Dm) => DmsMessage.PressedDm({ id: dm.id })
 		const hrefOf = (dm: Dm) => `/${h.props.orgSlug}/chat/${dm.id}`
 
+		// HAZEL-GAP(avatar-row-size): today's DM row avatar is 40pt (kit `md`); `regular` is the sidebar's small one
+		// HAZEL-GAP(avatar-seed-tint): today's avatar tints by a seed (the name); `avatar` has one brand tint
 		const avatarOf = (person: PersonType, size: "regular" | "large") =>
 			h.avatar
 				.name(fullName(person))
