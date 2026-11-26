@@ -11,7 +11,8 @@
 		"build:web:offline": "vite build --config web/vite.config.mts --mode offline",
 		"serve-fixture-html": "bun scripts/serve-fixture-html.ts",
 		"test": "vitest run",
-		"typecheck": "effect-tsgo tsrs --noEmit"
+		"typecheck": "effect-tsgo tsrs --noEmit",
+		"test:hazelui": "bash scripts/test-hazelui.sh"
 	},
 	"dependencies": {
 		"@effect/ui": "https://pkg.pr.new/Effect-TS/ui/@effect/ui@4d6d7ec",

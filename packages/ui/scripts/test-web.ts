@@ -109,7 +109,7 @@ const main = async () => {
 				for (const html of await unnamedControls(page, c.id)) problems.push(`control without a name: ${html}`)
 				await page.mouse.move(0, 0)
 				const shot = await caseTarget(page, c).screenshot({ animations: "disabled" })
-				const file = c.id.replaceAll("/", "__")
+				const file = c.id.replaceAll("/", "__").replaceAll(/[^A-Za-z0-9._-]/g, "_")
 				writeFileSync(resolve(dir, `${file}.png`), shot)
 				let detail = "drawn"
 				if (c.kit !== undefined && kit !== undefined && scratch !== undefined) {

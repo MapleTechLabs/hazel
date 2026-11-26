@@ -1,0 +1,46 @@
+{
+	"about": "A titled section of rows with no slots.",
+	"root": {
+		"tag": "section",
+		"props": {
+			"title": "Channels"
+		},
+		"children": [
+			{
+				"tag": "item",
+				"key": "general",
+				"props": {
+					"title": "general",
+					"href": "#"
+				},
+				"events": [
+					"press"
+				]
+			},
+			{
+				"tag": "item",
+				"key": "design",
+				"props": {
+					"title": "design",
+					"selected": true
+				},
+				"events": [
+					"press"
+				]
+			},
+			{
+				"tag": "item",
+				"key": "engineering",
+				"props": {
+					"title": "engineering",
+					"href": "#",
+					"badge": 3
+				},
+				"events": [
+					"press"
+				]
+			}
+		]
+	},
+	"frame": "sidebar"
+}

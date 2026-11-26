@@ -8,6 +8,7 @@ struct HzText: View {
 
     var body: some View {
         let _ = RenderCounter.record(node.id)
-        Text(node.text)
+        // Its text arrives as `#text` children (Effect UI's text nodes), or as its own text op.
+        Text(node.text + node.children.compactMap { tree.node($0) }.filter { $0.tag == "#text" }.map(\.text).joined())
     }
 }

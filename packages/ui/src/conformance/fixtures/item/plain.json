@@ -1,0 +1,35 @@
+{
+	"about": "A row with no slots (draws on every platform before icons do), with a subtitle and a badge.",
+	"root": {
+		"tag": "item",
+		"key": "general",
+		"props": {
+			"title": "general",
+			"href": "#"
+		},
+		"events": [
+			"press"
+		]
+	},
+	"frame": "sidebar",
+	"axes": [
+		{
+			"prop": "selected",
+			"values": [
+				true
+			]
+		},
+		{
+			"prop": "badge",
+			"values": [
+				12
+			]
+		},
+		{
+			"prop": "subtitle",
+			"values": [
+				"Last message preview"
+			]
+		}
+	]
+}
