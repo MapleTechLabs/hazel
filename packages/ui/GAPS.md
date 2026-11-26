@@ -90,3 +90,16 @@ the message's `grouped` flag. This was a contract decision, not a gap.
 | `row-icons`           | S5   | bitmap rows (message, reactions, attachments) draw icons (`pin`, `chevron-right`, `warning`, `paperclip`, `emoji-add`, `close`) and the Slack and Discord marks | SF Symbols of the same meaning and a brand-coloured tile with the initial until S1's icon catalog is in HazelUI (`Primitives/Chat/RowStyle.swift`) | renderer |
 | `message-select-text` | S5   | a way for the message action menu to start native text selection on a bitmap row (a `selectText` `MessageAction`, or a `select` command on `message`)          | a long press selects the row's text only when the row does not handle `longPress`; VoiceOver gets a "Copy text" action (`MessageListView.swift`) | prop     |
 | `row-wide-gamut`      | S5   | bitmap rows are 8-bit sRGB (IOSurface, for the frame budget), so wide-gamut tokens (`warning`, `danger`, `success`) are clamped to sRGB in rows                  | clamped in list rows and standalone leaves alike, so both match (`Primitives/Chat/RowLayout.swift`); a P3-tagged surface would keep them            | renderer |
+
+| Id | Screen | Need | Nearest used (where) | Kind |
+| --- | --- | --- | --- | --- |
+| `item-unread-dot` | activity | an unread notification leads with a brand dot (`statusDot` primary) | `item.emphasized` only (`apps/shared-screens/src/activity/Activity.ts`) | prop |
+| `item-title-lines` | activity | the preview wraps to two lines (`line-clamp-2`); `item.title` truncates to one | one truncated line | prop |
+| `item-leading-size` | activity | a 40px avatar or icon tile leads the row; the item's leading slot is icon-sized (16 to 20px) | the default avatar and icon in `leading` | option |
+| `activity-icon-tile` | activity | a toned icon tile (`iconTile` intent `warning`, `danger`) for support alerts | a plain `warning` icon | primitive |
+| `icon-messages` | activity | the web's `IconMsgs` (a direct message) has no `IconName` | `users` | option |
+| `text-overline` | activity | the group label is the kit's uppercase `label` heading (Today, Older) | `text` caption, muted, strong | option |
+| `frame-flush` | activity | today's card is a bordered box with no padding or shadow, its rows split by full-width hairlines | `frame` `card` (padded, `shadow.xs`) with `divider`s | option |
+| `item-hover-action` | activity | the row's "Mark as read" shows on hover or focus on the web (always on a phone) | the button always shows | renderer |
+| `item-trailing-control-ios` | activity, S4 | a `button` in an `item`'s trailing slot is not its own element in the iOS accessibility tree (the row's button swallows it); a tap at its spot works | as is (`Primitives/Structure/HzItem.swift`) | renderer |
+| `screen-margins` | activity, S4 | on iOS a `screen`'s content runs edge to edge (labels and cards touch the screen's sides); the doc says a screen sets its margins | none | renderer |
