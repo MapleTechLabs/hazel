@@ -48,4 +48,6 @@ the message's `grouped` flag. This was a contract decision, not a gap.
 
 ## Open
 
-None yet.
+| Id | Screen | Need | Proposal | Kind |
+| --- | --- | --- | --- | --- |
+| `semibold-weight` | message, settings | kit headings, dialog titles and the message author are `font-semibold` (600); `font.weight` has `regular` and `strong` (500) only | a third weight in `Tokens.font.weight` and a recipe `weight` step (`schema.ts`); until then recipes use `strong` (lane D, `RECIPES-REVIEW.md`) | option |
