@@ -124,7 +124,7 @@ Foldkit or `Html`.
 | `packages/ui` (`@hazel/ui`)                   | the vocabulary (`src/vocabulary/`), tokens (`src/style/tokens.ts`) and one recipe file per primitive (`src/style/recipes/<primitive>.ts`), codegen (`scripts/`), the web host (`src/web/`), the native host and wire (`src/native/`), conformance fixtures and the gallery (`src/conformance/`) |
 | `packages/client-data` (`@hazel/client-data`) | collections, live queries, the sync client and RPC, moved out of `apps/web-foldkit/src/core/db` and `src/data`, with every browser API behind a platform service                                                                                                                                |
 | `apps/ios-hybrid/HazelUI/`                    | Swift package: wire decoding, `Tree`, one view per primitive, generated `Theme.swift`, the JavaScriptCore runtime, platform services, the extension registry                                                                                                                                    |
-| `apps/web-foldkit/src/islands/`               | mounting a shared screen inside the Foldkit app                                                                                                                                                                                                                                                 |
+| `apps/web-foldkit/src/root/`                  | the web app's Effect UI root: the shell, the frame and the Foldkit adapter                                                                                                                                                                                                                      |
 | `apps/shared-screens`                         | the screens, with their queries and Commands                                                                                                                                                                                                                                                    |
 | `packages/ui/src/custom/`                     | governed `h.custom` composites, capped by `hazel/custom-cap`                                                                                                                                                                                                                                    |
 
@@ -404,18 +404,42 @@ Still browser-bound: the lib's `events.ts` sends session-rejected events with `w
 (guarded); iOS needs another path. Haptics, clipboard and share are UI platform services (extensions
 or Commands), not data-layer ones.
 
-## Running inside the Foldkit app (islands)
+## The web shell and the Foldkit adapter (phase 4)
 
-A converted screen is an island: the Foldkit view renders a container, and an `OnMount` mounts the
-screen there with the web host (Foldkit leaves the container's children alone; G2 confirms). The
-island gets `@hazel/client-data`'s instances, the same ones the Foldkit app uses, as Layers. Routing
-stays Foldkit's: the island takes the route at mount and gets later changes as a message through
-`Root.send` (a root's props are fixed after mount); navigation is a host-provided `Command.Service`
-(`RequestNavigation`). The web host must cancel the default of a plain click on a link that handles
-`press` (G2 found the browser following a link Effect UI had already swapped for a button during the
-click; the island has a capture-listener workaround until lane A fixes it in the host).
-Focus and keyboard handoff, overlay stacking against the app's popover and tooltip hosts, global
-keybindings, theme switching, and Tailwind's preflight against `data-hz` CSS are all part of G2.
+The web app's root is an Effect UI component (`apps/web-foldkit/src/root/app.ts`), mounted on the
+web host with Effect UI's `BrowserRouter` (`entry.ts`). It owns the boot, the session and its gate,
+organization selection, routing (today's route table `src/route.ts` behind the Router's `Routes`
+contract, `root/routes.ts`, so every URL and redirect is today's), the theme, the keys, the
+notification sinks and the page frame (`root/frame.ts`: nav rail, dock and main column; on a phone
+the column, top bar and tab bar, with today's markup and classes). Its decisions are pure functions
+in `root/logic.ts`, ported from the Foldkit root.
+
+Everything not yet on Effect UI runs in one adapter: the Foldkit "host" (`src/main.ts`, `src/app/`),
+an embedded Foldkit program with the page registry, the modal, the command palette, the AI panel,
+the toaster, the desktop updates and the Foldkit sidebars. The shell starts it with the
+`RunFoldkitHost` mount (`root/foldkit.ts`), sends it a `HostContext` (route, session, organization,
+theme, clock) on every change, and hears its `HostOut` (navigation, sign-out, theme, sound and key
+settings, user refresh, and a report for the frame: dock, bell, badge, AI panel). The host draws
+fixed regions (`sidebar`, `page`, `ai-toggle`, `ai-panel`, `overlays`); each `AdoptRegion` slot in
+the frame moves its region in. The shell's own requests of the host (keys, desktop menu, toasts,
+the phone's menu and search buttons) go over `root/bus.ts`.
+
+The converted screens (the channel sidebar, the message list, Activity, DMs) are ordinary children
+of the shell (`root/children.ts`), with their Layers on the shell's Router and the app's ClientData.
+Where a Foldkit page still draws around one, the page leaves an empty hole (`app/holes.ts`) and
+`Hole`/`PlaceInHole` (`root/portal.ts`) move the child's element in; it stays the shell's child.
+Static kit visuals the frame shows (icons, loader, empty states) are today's kit views converted to
+Effect UI elements (`root/kit.ts`).
+
+**Moving a page:** render its Effect UI page in `root/app.ts` for its routes, in the `page` slot's
+place (or inside the section layout it needs), and remove its entry from `src/page/registry.ts`.
+The host then renders nothing for those routes. A page that a Foldkit sidebar or overlay still talks
+to keeps doing so through the bus. When the registry is empty and the overlays and sidebars have
+moved, delete `src/main.ts`, `src/app/` (host), `root/foldkit.ts`, `root/portal.ts`, `root/kit.ts`,
+`root/bus.ts` and Foldkit.
+
+`apps/web-foldkit/scripts/compare-shell.ts` shoots the frame before and after a change
+(`docs/hazel-ui-screens/phase4/shell/`).
 
 ## Testing
 
