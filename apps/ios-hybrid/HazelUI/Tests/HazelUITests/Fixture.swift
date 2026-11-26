@@ -31,6 +31,6 @@ enum Fixture {
     }
 
     static func batch(seq: Int, ops: [String]) -> Data {
-        Data(#"{"v":1,"seq":\#(seq),"ops":[\#(ops.joined(separator: ","))]}"#.utf8)
+        Data(#"{"v":2,"seq":\#(seq),"ops":[\#(ops.joined(separator: ","))]}"#.utf8)
     }
 }

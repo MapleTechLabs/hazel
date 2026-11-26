@@ -1,7 +1,7 @@
 {
   "steps": [
     {
-      "batch": {"v": 1, "seq": 1, "ops": [
+      "batch": {"v": 2, "seq": 1, "ops": [
         ["create", 1, "hz:screen"],
         ["create", 2, "hz:section"], ["props", 2, {"title": "kept"}],
         ["create", 3, "hz:item"], ["props", 3, {"title": "row"}],
@@ -11,7 +11,7 @@
       ]}
     },
     {
-      "batch": {"v": 1, "seq": 2, "ops": [["detach", 2]]},
+      "batch": {"v": 2, "seq": 2, "ops": [["detach", 2]]},
       "expect": [
         "#root#0",
         "  hz:screen#1"
@@ -20,14 +20,14 @@
       "count": 4
     },
     {
-      "batch": {"v": 1, "seq": 3, "ops": [
+      "batch": {"v": 2, "seq": 3, "ops": [
         ["props", 3, {"title": "row while detached"}]
       ]},
       "detached": [2],
       "count": 4
     },
     {
-      "batch": {"v": 1, "seq": 4, "ops": [["insert", 1, 2, null]]},
+      "batch": {"v": 2, "seq": 4, "ops": [["insert", 1, 2, null]]},
       "expect": [
         "#root#0",
         "  hz:screen#1",
@@ -38,7 +38,7 @@
       "count": 4
     },
     {
-      "batch": {"v": 1, "seq": 5, "ops": [["detach", 2], ["remove", 2]]},
+      "batch": {"v": 2, "seq": 5, "ops": [["detach", 2], ["remove", 2]]},
       "expect": [
         "#root#0",
         "  hz:screen#1"

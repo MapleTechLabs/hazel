@@ -1,7 +1,7 @@
 {
   "steps": [
     {
-      "batch": {"v": 1, "seq": 1, "ops": [
+      "batch": {"v": 2, "seq": 1, "ops": [
         ["create", 1, "hz:section"],
         ["create", 2, "hz:item"], ["props", 2, {"title": "a"}],
         ["create", 3, "hz:item"], ["props", 3, {"title": "b"}],
@@ -18,7 +18,7 @@
       ]
     },
     {
-      "batch": {"v": 1, "seq": 2, "ops": [
+      "batch": {"v": 2, "seq": 2, "ops": [
         ["insert", 1, 4, 2],
         ["insert", 1, 2, null]
       ]},

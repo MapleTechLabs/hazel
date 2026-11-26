@@ -1,7 +1,7 @@
 {
   "steps": [
     {
-      "batch": {"v": 1, "seq": 1, "ops": [
+      "batch": {"v": 2, "seq": 1, "ops": [
         ["create", 1, "hz:section"],
         ["create", 2, "hz:item"],
         ["props", 2, {"title": "general", "badge": 3, "meta": {"muted": false, "tags": ["a"]}}],
@@ -15,7 +15,7 @@
       ]
     },
     {
-      "batch": {"v": 1, "seq": 2, "ops": [
+      "batch": {"v": 2, "seq": 2, "ops": [
         ["props", 2, {"badge": 4, "meta": null, "isSelected": true}]
       ]},
       "expect": [

@@ -1,7 +1,7 @@
 {
   "steps": [
     {
-      "batch": {"v": 1, "seq": 1, "ops": [
+      "batch": {"v": 2, "seq": 1, "ops": [
         ["create", 1, "hz:section"],
         ["create", 2, "hz:item"], ["props", 2, {"title": "a"}],
         ["create", 3, "hz:text"], ["text", 3, "inside a"],
@@ -13,7 +13,7 @@
       "count": 5
     },
     {
-      "batch": {"v": 1, "seq": 2, "ops": [["remove", 2]]},
+      "batch": {"v": 2, "seq": 2, "ops": [["remove", 2]]},
       "expect": [
         "#root#0",
         "  hz:section#1",

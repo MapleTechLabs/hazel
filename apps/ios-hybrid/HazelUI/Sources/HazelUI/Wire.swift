@@ -2,7 +2,7 @@ import CoreFoundation
 import Foundation
 
 /// The wire version this build applies (`docs/hazel-ui.md`, "Native host and the wire").
-public let WIRE_VERSION = 1
+public let WIRE_VERSION = 2
 
 /// A node id the JS host assigns; 0 is the root.
 public typealias NodeId = Int
@@ -32,7 +32,7 @@ public enum Op: Sendable, Hashable {
     case detach(id: NodeId)
 }
 
-/// One flush from the JS host: `{"v": 1, "seq": n, "ops": [[name, ...fields], ...]}`.
+/// One flush from the JS host: `{"v": 2, "seq": n, "ops": [[name, ...fields], ...]}`.
 public struct Batch: Sendable, Hashable {
     public let seq: Int
     public let ops: [Op]

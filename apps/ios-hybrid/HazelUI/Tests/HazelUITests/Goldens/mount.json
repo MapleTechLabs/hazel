@@ -1,7 +1,7 @@
 {
   "steps": [
     {
-      "batch": {"v": 1, "seq": 1, "ops": [
+      "batch": {"v": 2, "seq": 1, "ops": [
         ["create", 1, "hz:screen"],
         ["props", 1, {"title": "Channels"}],
         ["create", 2, "hz:section"],

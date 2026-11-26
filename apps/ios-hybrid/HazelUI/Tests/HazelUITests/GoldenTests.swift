@@ -56,12 +56,12 @@ struct GoldenTests {
     }
 
     @Test func rejectsUnknownVersion() {
-        let data = Data(#"{"v": 2, "seq": 1, "ops": []}"#.utf8)
-        #expect(throws: WireError.unsupportedVersion(2)) { try WireDecoder.decode(data) }
+        let data = Data(#"{"v": 3, "seq": 1, "ops": []}"#.utf8)
+        #expect(throws: WireError.unsupportedVersion(3)) { try WireDecoder.decode(data) }
     }
 
     @Test func rejectsUnknownOp() {
-        let data = Data(#"{"v": 1, "seq": 1, "ops": [["element", 1, "div"]]}"#.utf8)
+        let data = Data(#"{"v": 2, "seq": 1, "ops": [["element", 1, "div"]]}"#.utf8)
         #expect(throws: WireError.unknownOp("element")) { try WireDecoder.decode(data) }
     }
 
@@ -73,7 +73,7 @@ struct GoldenTests {
     }
 
     @Test func decodesBooleansAndNumbersApart() throws {
-        let data = Data(#"{"v": 1, "seq": 1, "ops": [["props", 1, {"a": true, "b": 1, "c": 1.5, "d": 0}]]}"#.utf8)
+        let data = Data(#"{"v": 2, "seq": 1, "ops": [["props", 1, {"a": true, "b": 1, "c": 1.5, "d": 0}]]}"#.utf8)
         let batch = try WireDecoder.decode(data)
         #expect(batch.ops == [.props(id: 1, changed: ["a": .bool(true), "b": .number(1), "c": .number(1.5), "d": .number(0)])])
     }

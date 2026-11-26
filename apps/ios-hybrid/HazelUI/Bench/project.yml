@@ -1,0 +1,36 @@
+# G7's bench app: the native message list over the JS bench in JavaScriptCore (`Bench/build.sh`).
+name: HazelUIBench
+options:
+    bundleIdPrefix: sh.hazel
+    deploymentTarget:
+        iOS: "26.0"
+packages:
+    HazelUI:
+        path: ..
+targets:
+    HazelUIBench:
+        type: application
+        platform: iOS
+        sources:
+            - path: Sources
+            - path: build/g7bench.js
+              buildPhase: resources
+        dependencies:
+            - package: HazelUI
+        info:
+            path: build/Info.plist
+            properties:
+                CFBundleDisplayName: G7 Bench
+                UILaunchScreen: {}
+                # 120 Hz on ProMotion iPhones (otherwise capped at 60).
+                CADisableMinimumFrameDurationOnPhone: true
+                UIApplicationSceneManifest:
+                    UIApplicationSupportsMultipleScenes: false
+                UISupportedInterfaceOrientations:
+                    - UIInterfaceOrientationPortrait
+        settings:
+            base:
+                PRODUCT_BUNDLE_IDENTIFIER: sh.hazel.ui-bench
+                SWIFT_VERSION: "6.0"
+                TARGETED_DEVICE_FAMILY: "1"
+                CODE_SIGN_STYLE: Automatic
