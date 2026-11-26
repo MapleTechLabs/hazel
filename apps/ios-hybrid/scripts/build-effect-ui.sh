@@ -6,6 +6,8 @@ cd "$(dirname "$0")/.."
 bun run build:effect-ui >/dev/null
 # The hybrid target's folders, which the project spec requires to exist (left empty if unbuilt).
 mkdir -p build/web build/fonts
+bun scripts/export-icons.ts build/icons/Icons.xcassets >/dev/null
+python3 scripts/fonts.py >/dev/null
 xcodegen generate --quiet
 xcodebuild -project HazelHybrid.xcodeproj -scheme EffectUiSpike -configuration Debug \
 	-destination 'generic/platform=iOS Simulator' -derivedDataPath build/derived CODE_SIGNING_ALLOWED=NO \

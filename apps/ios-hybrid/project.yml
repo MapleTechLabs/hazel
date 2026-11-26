@@ -63,6 +63,11 @@ targets:
             - path: build/effect-ui
               type: folder
               buildPhase: resources
+            # The web's own icons (`scripts/export-icons.ts`) and Inter (`scripts/fonts.py`).
+            - path: build/icons/Icons.xcassets
+            - path: build/fonts
+              type: folder
+              buildPhase: resources
         info:
             path: EffectUiSpike/Info.plist
             properties:
@@ -77,6 +82,8 @@ targets:
         settings:
             base:
                 PRODUCT_BUNDLE_IDENTIFIER: sh.hazel.effect-ui-spike
+                # No app icon: the catalog holds only the web's icons.
+                ASSETCATALOG_COMPILER_APPICON_NAME: ""
                 MARKETING_VERSION: "0.1.0"
                 CURRENT_PROJECT_VERSION: "1"
                 TARGETED_DEVICE_FAMILY: "1"
