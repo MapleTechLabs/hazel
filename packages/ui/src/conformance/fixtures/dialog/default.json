@@ -1,6 +1,40 @@
 {
-	"about": "hz:dialog with no props: lane A3 and lane S3 replace this with real cases.",
+	"about": "hz:dialog open: title, description, a field and the actions slot (drawn last; square icon actions until a case uses lane A2's buttons, see confirm.json). The destructive axis makes it an alertdialog with a red title.",
+	"frame": "screen",
 	"root": {
-		"tag": "dialog"
-	}
+		"tag": "dialog",
+		"props": {
+			"open": true,
+			"title": "Rename channel",
+			"description": "Everyone in the channel sees the new name."
+		},
+		"events": ["dismiss"],
+		"slots": [
+			{
+				"name": "actions",
+				"children": [
+					{
+						"tag": "action",
+						"props": { "label": "Cancel" },
+						"children": [{ "tag": "icon", "props": { "name": "close" } }]
+					},
+					{
+						"tag": "action",
+						"props": { "label": "Rename" },
+						"children": [{ "tag": "icon", "props": { "name": "check" } }]
+					}
+				]
+			}
+		],
+		"children": [{ "tag": "textField", "props": { "label": "Name", "placeholder": "general" } }]
+	},
+	"axes": [
+		{ "prop": "destructive", "values": [true] },
+		{ "prop": "description", "values": [null] }
+	],
+	"aria": [
+		{ "role": "dialog", "name": "Rename channel" },
+		{ "role": "textbox", "name": "Name" },
+		{ "role": "button", "name": "Rename" }
+	]
 }

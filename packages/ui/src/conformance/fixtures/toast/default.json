@@ -1,6 +1,34 @@
 {
-	"about": "hz:toast with no props: lane A3 and lane S3 replace this with real cases.",
+	"about": "hz:toast open with a title, a description and an action; the tone axis inks the title and makes danger and warning alerts.",
+	"frame": "inline",
 	"root": {
-		"tag": "toast"
-	}
+		"tag": "toast",
+		"props": {
+			"open": true,
+			"title": "Message deleted",
+			"description": "It is gone for everyone in #general."
+		},
+		"events": ["dismiss"],
+		"slots": [
+			{
+				"name": "action",
+				"children": [
+					{
+						"tag": "action",
+						"props": { "label": "Undo" },
+						"children": [{ "tag": "icon", "props": { "name": "reply" } }]
+					}
+				]
+			}
+		]
+	},
+	"axes": [
+		{ "prop": "tone", "values": ["accent", "success", "warning", "danger", "info"] },
+		{ "prop": "description", "values": [null] }
+	],
+	"aria": [
+		{ "role": "status" },
+		{ "role": "button", "name": "Undo" },
+		{ "role": "button", "name": "Dismiss" }
+	]
 }

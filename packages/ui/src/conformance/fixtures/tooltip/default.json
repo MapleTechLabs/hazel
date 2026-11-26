@@ -1,6 +1,19 @@
 {
-	"about": "hz:tooltip with no props: lane A3 and lane S3 replace this with real cases.",
+	"about": "hz:tooltip around an icon action: the label describes the trigger; a gallery frame shows it.",
+	"frame": "inline",
 	"root": {
-		"tag": "tooltip"
-	}
+		"tag": "tooltip",
+		"props": { "label": "Pin message" },
+		"children": [
+			{
+				"tag": "action",
+				"props": { "label": "Pin" },
+				"children": [{ "tag": "icon", "props": { "name": "pin" } }]
+			}
+		]
+	},
+	"aria": [
+		{ "role": "tooltip", "name": "Pin message" },
+		{ "role": "button", "name": "Pin" }
+	]
 }

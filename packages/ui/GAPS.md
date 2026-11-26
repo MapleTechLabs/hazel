@@ -48,4 +48,7 @@ the message's `grouped` flag. This was a contract decision, not a gap.
 
 ## Open
 
-None yet.
+| Id                | Lane | Need                                                                                                                                                                                    | Meanwhile (where)                                                                                                                                          | Kind     |
+| ----------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `leaf-anchor-key` | A3   | `popover.anchorTo({key, run})` needs the leaf keyed `key` in the DOM, but the web host never sees view keys; the leaves that draw runs (`message` A5, `richText` A1) must mark each run | A leaf may set `data-hz-key`; else the run pressed last with that index is the anchor. Leaves mark runs `data-hz-run=<index>` (`src/web/focus/anchors.ts`) | renderer |
+| `overlay-tokens`  | A3   | a scrim colour and an overlay shadow token (menus, popovers, dialogs float with `shadow.xs`)                                                                                            | the scrim mixes 32% `fg` into transparent (`src/web/focus/surface.ts`); recipes use `shadow: "xs"`                                                         | token    |

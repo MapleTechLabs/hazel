@@ -1,0 +1,38 @@
+{
+	"about": "hz:menu whose trigger slot is the view's own control (an icon action), with a single untitled group.",
+	"frame": "inline",
+	"root": {
+		"tag": "menu",
+		"props": {
+			"label": "More actions",
+			"entries": [
+				{
+					"entries": [
+						{ "id": "reply", "label": "Reply", "icon": "reply" },
+						{ "id": "thread", "label": "Reply in thread", "icon": "thread" },
+						{ "id": "edit", "label": "Edit", "icon": "edit" },
+						{ "id": "delete", "label": "Delete", "icon": "trash", "destructive": true }
+					]
+				}
+			]
+		},
+		"events": ["select"],
+		"slots": [
+			{
+				"name": "trigger",
+				"children": [
+					{
+						"tag": "action",
+						"props": { "label": "More actions" },
+						"children": [{ "tag": "icon", "props": { "name": "dots" } }]
+					}
+				]
+			}
+		]
+	},
+	"aria": [
+		{ "role": "button", "name": "More actions" },
+		{ "role": "menu", "name": "More actions" },
+		{ "role": "menuitem", "name": "Reply in thread" }
+	]
+}
