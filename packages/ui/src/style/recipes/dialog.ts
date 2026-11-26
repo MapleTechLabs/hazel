@@ -43,4 +43,10 @@ export const dialog = defineRecipe<
 	},
 	options: {},
 	states: { destructive: { parts: { title: { color: "danger-subtle-fg" } } } },
+	motion: {
+		enter: [
+			{ motion: "riseIn", part: "panel", regular: "scaleIn" },
+			{ motion: "scrimIn", part: "panel", backdrop: true },
+		],
+	},
 })

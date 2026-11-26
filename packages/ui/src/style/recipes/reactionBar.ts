@@ -4,9 +4,14 @@ import { defineRecipe } from "../recipe.ts"
  * `reactionBar` (`chat/message/tooltips.ts` `reactionButton`): wrapping pills. A pill of mine
  * (`data-mine` on the pill), its press scale and its count roll are renderer-owned.
  */
-export const reactionBar = defineRecipe<{}, "addable", "reaction" | "addReaction">({
+export const reactionBar = defineRecipe<{}, "addable", "reaction" | "addReaction" | "emoji" | "count">({
 	primitive: "reactionBar",
-	parts: { reaction: "part", addReaction: "part" },
+	parts: {
+		reaction: "part",
+		addReaction: "part",
+		emoji: { kind: "part", in: "reaction" },
+		count: { kind: "part", in: "reaction" },
+	},
 	base: {
 		root: { layout: "row", wrap: true, gap: "1", rowGap: "1" },
 		parts: {
@@ -39,4 +44,10 @@ export const reactionBar = defineRecipe<{}, "addable", "reaction" | "addReaction
 	},
 	options: {},
 	flags: { addable: {} },
+	motion: {
+		enter: [{ motion: "reactionIn", part: "reaction" }],
+		pop: [{ motion: "reactionPop", part: "emoji" }],
+		countUp: [{ motion: "countUp", part: "count" }],
+		countDown: [{ motion: "countDown", part: "count" }],
+	},
 })

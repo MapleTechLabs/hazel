@@ -17,4 +17,7 @@ export const progress = defineRecipe<{}, never, "label" | "track" | "fill">({
 		},
 	},
 	options: {},
+	motion: {
+		loop: [{ motion: "progressSweep", part: "fill" }],
+	},
 })

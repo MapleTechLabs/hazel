@@ -285,6 +285,9 @@ export const tokens = {
 		reactionEnter: 220,
 		reactionPop: 260,
 		progressSweep: 1600,
+		/** Tailwind's `animate-bounce` (typing and thinking dots) and `animate-pulse` (skeletons). */
+		bounce: 1000,
+		pulse: 2000,
 	},
 	/** styles.css `--ease-*` (theme and `:root`) and the curves its animations name. */
 	easing: {
@@ -302,6 +305,17 @@ export const tokens = {
 		cssOut: [0, 0, 0.58, 1],
 		cssIn: [0.42, 0, 1, 1],
 		cssInOut: [0.42, 0, 0.58, 1],
+		/** CSS's `ease`, the default of an animation with no curve. */
+		css: [0.25, 0.1, 0.25, 1],
+		/** Tailwind's `ease-in` (a toast leaving) and its default curve (a transition with no `ease-*`). */
+		in: [0.4, 0, 1, 1],
+		standard: [0.4, 0, 0.2, 1],
+		/** Tailwind's `animate-pulse`, and `animate-bounce`'s fall and rise. */
+		pulse: [0.4, 0, 0.6, 1],
+		fall: [0.8, 0, 1, 1],
+		rise: [0, 0, 0.2, 1],
+		/** A progress bar's value (`ease-linear`). */
+		linear: [0, 0, 1, 1],
 	},
 	/** `--control-shadow` and `--elevation-*`: dark deepens them and lights raised surfaces' top edge. */
 	shadow: {
@@ -329,6 +343,68 @@ export const tokens = {
 			dark: "inset 0 1px 0 oklch(1 0 0 / 0.06), 0 8px 16px -8px oklch(0 0 0 / 0.45), 0 28px 64px -12px oklch(0 0 0 / 0.7)",
 		},
 	},
+	/** Poses over time (`MOTION.md`, from styles.css `@keyframes`); a pose left out is at rest. */
+	keyframes: {
+		fade: [{ at: 0, pose: { opacity: 0 } }],
+		/** A tooltip above its trigger: in from 4px below (`starting:translate-y-1`). */
+		tooltip: [{ at: 0, pose: { opacity: 0, y: 4 } }],
+		/** A dialog on a phone, a sheet's menu (`starting:translate-y-4`). */
+		rise: [{ at: 0, pose: { opacity: 0, y: 16 } }],
+		/** A dialog from `sm` up (`sm:starting:scale-[0.97]`). */
+		scale: [{ at: 0, pose: { opacity: 0, scale: 0.97 } }],
+		/** A bottom sheet (`starting:translate-y-full`). */
+		slideUp: [{ at: 0, pose: { opacity: 0, y: "100%" } }],
+		/** A toast (`data-closed:translate-y-2`), in and out. */
+		toast: [{ at: 0, pose: { opacity: 0, y: 8 } }],
+		toastOut: [{ at: 1, pose: { opacity: 0, y: 8 } }],
+		message: [{ at: 0, pose: { opacity: 0, y: 6 } }],
+		reaction: [{ at: 0, pose: { opacity: 0, scale: 0.6 } }],
+		pop: [{ at: 0.45, pose: { scale: 1.3 } }],
+		countUp: [{ at: 0, pose: { opacity: 0, y: "70%" } }],
+		countDown: [{ at: 0, pose: { opacity: 0, y: "-70%" } }],
+		fieldError: [{ at: 0, pose: { opacity: 0, y: -4 } }],
+		pulse: [{ at: 0.5, pose: { opacity: 0.5 } }],
+		sweep: [
+			{ at: 0, pose: { x: "-100%" } },
+			{ at: 1, pose: { x: "250%" } },
+		],
+		bounce: [
+			{ at: 0, pose: { y: "-25%" }, easing: "fall" },
+			{ at: 0.5, pose: {}, easing: "rise" },
+			{ at: 1, pose: { y: "-25%" } },
+		],
+	},
+	/** The closed set of motions (`MOTION.md`): nothing else moves. */
+	motion: {
+		/** Menus, popovers, the emoji picker (`popover.styles.ts`). */
+		fadeIn: { keyframes: "fade", duration: "fast", easing: "out" },
+		/** A modal's backdrop (`modal.styles.ts`, `sheet.styles.ts`). */
+		scrimIn: { keyframes: "fade", duration: "normal", easing: "out" },
+		tooltipIn: { keyframes: "tooltip", duration: "fast", easing: "out" },
+		riseIn: { keyframes: "rise", duration: "normal", easing: "out" },
+		scaleIn: { keyframes: "scale", duration: "normal", easing: "out" },
+		slideUpIn: { keyframes: "slideUp", duration: "normal", easing: "out" },
+		toastIn: { keyframes: "toast", duration: "normal", easing: "out" },
+		toastOut: { keyframes: "toastOut", duration: "fast", easing: "in" },
+		messageIn: { keyframes: "message", duration: "enter", easing: "enter" },
+		reactionIn: { keyframes: "reaction", duration: "reactionEnter", easing: "overshoot" },
+		reactionPop: { keyframes: "pop", duration: "reactionPop", easing: "overshoot" },
+		countUp: { keyframes: "countUp", duration: "enter", easing: "enter" },
+		countDown: { keyframes: "countDown", duration: "enter", easing: "enter" },
+		skeletonIn: { keyframes: "fade", duration: "fast", easing: "cssOut", delay: "slow" },
+		skeletonPulse: { keyframes: "pulse", duration: "pulse", easing: "pulse", repeat: "forever" },
+		fieldErrorIn: { keyframes: "fieldError", duration: "normal", easing: "cssOut" },
+		progressSweep: {
+			keyframes: "sweep",
+			duration: "progressSweep",
+			easing: "cssInOut",
+			repeat: "forever",
+		},
+		bounce: { keyframes: "bounce", duration: "bounce", easing: "css", repeat: "forever" },
+	},
+	reducedMotion: "instant",
+	/** The app's theme presets set `--color-brand-*` on the page (`core/lib/theme/apply.ts`). */
+	hostPalette: { prefix: "brand-", cssPrefix: "--color-brand-" },
 } as const satisfies Tokens
 
 export interface HazelTokenNames {
@@ -337,4 +413,6 @@ export interface HazelTokenNames {
 	readonly space: keyof typeof tokens.space & string
 	readonly shadow: keyof typeof tokens.shadow & string
 	readonly duration: keyof typeof tokens.duration & string
+	readonly easing: keyof typeof tokens.easing & string
+	readonly motion: keyof typeof tokens.motion & string
 }

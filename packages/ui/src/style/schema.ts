@@ -23,6 +23,9 @@
  * - Breakpoints other than the size class, `pointer-fine:`, container queries.
  * - Focus rings (offset rings over a page colour), `scale` on press, and transitions'
  *   property lists. Swift has its own press and focus feedback.
+ *
+ * Motion (`MOTION.md`): named motions are tokens (`keyframes`, `motion`); a recipe's `motion` says which
+ * one plays on which part for a trigger. The renderer only marks when (`data-motion`).
  */
 
 /** What a recipe expresses (C3, frozen): each maps to CSS and to Swift. Anything else is renderer code. */
@@ -34,6 +37,8 @@ export const recipeFeatures = [
 	"view states (selected, emphasized, disabled, loading, destructive)",
 	"interaction states (hover, pressed, focusVisible), suppressed by inert states",
 	"the size class (compact, regular)",
+	"motion uses: a named motion per trigger (enter, exit, counts, pop, loop) on a part or the backdrop",
+	"transitions: a duration and a curve for hover and press",
 ] as const
 
 /** What the web renderer of a primitive owns instead (C3, frozen). */
@@ -43,7 +48,7 @@ export const rendererFeatures = [
 	"selectors into children it does not own, subgrid, group and ancestor variants",
 	"breakpoints other than the size class, pointer-fine, container queries",
 	"focus rings, scale on press, transition property lists",
-	"animations (message enter, typing dots, count rolls)",
+	"when a motion plays (data-motion), staggers between siblings, keeping a panel until its exit ends",
 ] as const
 
 // Closed sets (docs/hazel-ui.md, "Design language")
@@ -239,6 +244,56 @@ export interface Tokens {
 	readonly duration: Readonly<Record<string, number>>
 	readonly easing: Readonly<Record<string, readonly [number, number, number, number]>>
 	readonly shadow: Readonly<Record<string, Shadow>>
+	/** Poses over time, by name (`MOTION.md`). */
+	readonly keyframes: Readonly<Record<string, ReadonlyArray<Keyframe>>>
+	/** The closed set of motions: what may move, how long and on which curve. */
+	readonly motion: Readonly<Record<string, Motion>>
+	/** What Reduce Motion does: today every motion and transition completes at once, loops play once. */
+	readonly reducedMotion: "instant"
+	/** Palette steps the web host may set at runtime (the app's brand preset): `brand-` reads `--color-brand-*`. */
+	readonly hostPalette?: { readonly prefix: string; readonly cssPrefix: string }
+}
+
+// Motion (MOTION.md)
+
+/** A length a pose moves by: px, or a fraction of the element's own size (`"70%"`). */
+export type Offset = number | `${number}%`
+
+/** What a keyframe sets; a field it leaves out is at rest (opacity 1, no offset, scale 1). */
+export interface Pose {
+	readonly opacity?: number
+	readonly x?: Offset
+	readonly y?: Offset
+	readonly scale?: number
+}
+
+/** A pose at a point of the motion (0 to 1), with the curve to the next keyframe if it has its own. */
+export interface Keyframe {
+	readonly at: number
+	readonly pose: Pose
+	readonly easing?: string
+}
+
+export interface Motion {
+	readonly keyframes: string
+	readonly duration: string
+	readonly easing: string
+	/** Waits this long before it starts (a skeleton that a fast load never shows). */
+	readonly delay?: string
+	readonly repeat?: "forever"
+}
+
+/** When a motion plays: a primitive appearing, leaving, its count rising or falling, a pop, a loop. */
+export const motionTriggers = ["enter", "exit", "countUp", "countDown", "pop", "loop"] as const
+export type MotionTrigger = (typeof motionTriggers)[number]
+
+/** One motion a primitive plays: on its root or a part, or on a modal panel's `::backdrop`. */
+export interface MotionUse<Part extends string, T extends TokenNames> {
+	readonly motion: T["motion"]
+	readonly part?: Part
+	readonly backdrop?: true
+	/** The motion at the `regular` size class, when it differs. */
+	readonly regular?: T["motion"]
 }
 
 // Recipes
@@ -307,6 +362,10 @@ export interface Declarations<T extends TokenNames = TokenNames> {
 	readonly grow?: boolean
 	readonly shrink?: boolean
 	readonly transition?: T["duration"]
+	/** The transition's curve (`out` when unset). */
+	readonly transitionEase?: T["easing"]
+	/** A minimum width (a count pill that stays round at one digit). */
+	readonly minWidth?: T["space"]
 	/** A negative inline margin by this step (Tailwind `-mx-0.5`). */
 	readonly bleedX?: T["space"]
 }
@@ -317,6 +376,8 @@ export interface TokenNames {
 	readonly space: string
 	readonly shadow: string
 	readonly duration: string
+	readonly easing: string
+	readonly motion: string
 }
 
 /** The declarations for the root and for each named part. */
@@ -357,4 +418,6 @@ export interface Recipe<
 	}>
 	/** States whose presence suppresses the interaction states. */
 	readonly inert?: ReadonlyArray<DataState>
+	/** The motions it plays, by trigger (`MOTION.md`). */
+	readonly motion?: Partial<Record<MotionTrigger, ReadonlyArray<MotionUse<Part, T>>>>
 }

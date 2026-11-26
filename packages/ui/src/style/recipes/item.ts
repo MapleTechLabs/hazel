@@ -10,7 +10,7 @@ import { defineRecipe } from "../recipe.ts"
 export const item = defineRecipe<
 	{ nested: "none" | "middle" | "last" },
 	"muted",
-	"control" | "content" | "leading" | "title" | "subtitle" | "trailing" | "badge" | "shortcut"
+	"control" | "content" | "leading" | "title" | "subtitle" | "trailing" | "badge" | "count" | "shortcut"
 >({
 	primitive: "item",
 	parts: {
@@ -21,6 +21,8 @@ export const item = defineRecipe<
 		title: { kind: "part", in: "control" },
 		subtitle: { kind: "part", in: "control" },
 		badge: { kind: "part", in: "control" },
+		// The number inside the badge, re-keyed on a change so it can roll (`structure/item.ts`).
+		count: { kind: "part", in: "badge" },
 		shortcut: { kind: "part", in: "control" },
 	},
 	base: {
@@ -36,7 +38,8 @@ export const item = defineRecipe<
 				text: "body",
 				strong: false,
 				color: "fg-3",
-				transition: "fast",
+				// No transition: today's sidebar rows switch colours at once (`ui/sidebar.ts`); activity's
+				// large rows ease them (`structure/item.ts`).
 				fill: true,
 			},
 			content: { layout: "contents" },
@@ -54,12 +57,15 @@ export const item = defineRecipe<
 				numeric: true,
 				shrink: false,
 			},
-			// `countBadge` (`ui/count-badge.ts`): the solid brand pill with the unread count.
+			// `countBadge` (`ui/count-badge.ts`): the solid brand pill with the unread count, round at
+			// one digit (`min-w-5`), tabular figures.
 			badge: {
 				layout: "row",
 				align: "center",
 				justify: "center",
 				minHeight: "5",
+				minWidth: "5",
+				numeric: true,
 				paddingX: "1.5",
 				radius: "full",
 				background: "primary",
@@ -110,4 +116,9 @@ export const item = defineRecipe<
 		disabled: { parts: { control: { opacity: 0.5 } } },
 	},
 	inert: ["disabled"],
+	// The unread count rolls to its new value (`MOTION.md`, "Counts": reaction pills roll today).
+	motion: {
+		countUp: [{ motion: "countUp", part: "count" }],
+		countDown: [{ motion: "countDown", part: "count" }],
+	},
 })

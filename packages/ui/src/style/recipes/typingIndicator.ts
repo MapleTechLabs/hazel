@@ -19,4 +19,7 @@ export const typingIndicator = defineRecipe<{}, never, "dots" | "dot" | "label">
 		},
 	},
 	options: {},
+	motion: {
+		loop: [{ motion: "bounce", part: "dot" }],
+	},
 })
