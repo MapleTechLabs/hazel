@@ -1,6 +1,28 @@
 {
-	"about": "hz:badge with no props: lane A1 and lane S1 replace this with real cases.",
+	"about": "A badge in every tone, style and size, and pill.",
 	"root": {
-		"tag": "badge"
-	}
+		"tag": "badge",
+		"props": {
+			"label": "Beta"
+		}
+	},
+	"frame": "inline",
+	"axes": [
+		{
+			"prop": "tone",
+			"values": ["accent", "success", "warning", "danger", "info"]
+		},
+		{
+			"prop": "style",
+			"values": ["outline", "quiet"]
+		},
+		{
+			"prop": "size",
+			"values": ["small"]
+		},
+		{
+			"prop": "pill",
+			"values": [true]
+		}
+	]
 }
