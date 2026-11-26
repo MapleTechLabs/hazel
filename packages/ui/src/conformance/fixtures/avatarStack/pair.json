@@ -23,8 +23,11 @@
 		]
 	},
 	"frame": "inline",
+	"kit": {
+		"specimen": "avatar-pair",
+		"target": "avatarStack"
+	},
 	"pending": {
-		"web": "A1",
 		"ios": "S1"
 	}
 }
