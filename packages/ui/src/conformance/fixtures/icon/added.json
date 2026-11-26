@@ -12,8 +12,5 @@
 			"prop": "name",
 			"values": ["folder-plus", "support"]
 		}
-	],
-	"pending": {
-		"ios": "S1"
-	}
+	]
 }

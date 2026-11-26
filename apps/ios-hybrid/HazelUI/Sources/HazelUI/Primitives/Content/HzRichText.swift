@@ -16,17 +16,19 @@ struct HzRichText: View {
         let styles = RichStyles(recipe: recipe, sizeClass: sizeClass)
         let built = RichBuilder.build(node[prop: "blocks"]?.array ?? [], styles)
         let tree = tree, node = node, targets = built.targets
+        let key = node[prop: "key"]?.string
         VStack(alignment: .leading, spacing: styles.root.rowGap ?? 0) {
             ForEach(built.blocks.indices, id: \.self) { index in
-                block(built.blocks[index], styles)
+                block(built.blocks[index], index, key, styles)
             }
         }
         .hzFillWidth(!inRow)
         .tint(styles.link.color?.color)
         .textRenderer(ChipRenderer(
             mention: styles.mention.background?.color ?? .clear, mentionRadius: styles.mention.radius ?? 0,
-            code: styles.code.background?.color ?? .clear, codeRadius: styles.code.radius ?? 0
+            code: styles.code.background?.color ?? .clear, codeRadius: styles.code.radius ?? 0, key: key
         ))
+        .onDisappear { if let key { RunAnchors.shared.clear(key) } }
         .environment(\.openURL, OpenURLAction { url in
             guard url.scheme == RichBuilder.scheme, let index = Int(url.absoluteString.dropFirst(RichBuilder.scheme.count + 1)),
                   let target = targets[index] else { return .systemAction }
@@ -45,13 +47,16 @@ struct HzRichText: View {
         })
     }
 
-    @ViewBuilder private func block(_ block: RichBuilder.Block, _ styles: RichStyles) -> some View {
+    @ViewBuilder private func block(_ block: RichBuilder.Block, _ index: Int, _ key: String?, _ styles: RichStyles) -> some View {
         let sizeClass = styles.sizeClass
         switch block {
         case let .text(text):
-            text.hzParagraph(styles.root, sizeClass)
+            text
+                .hzAnchorBlock(key, index)
+                .hzParagraph(styles.root, sizeClass)
         case let .quote(text):
             text.italic().customAttribute(Oblique())
+                .hzAnchorBlock(key, index)
                 .hzParagraph(styles.root.merged(styles.quote), sizeClass)
                 .padding(.leading, styles.quote.paddingStart ?? 0)
         case let .code(source):
@@ -112,7 +117,7 @@ enum RichBuilder {
         func runs(_ value: JSONValue?) -> Text {
             var out = Text(verbatim: "")
             for run in value?.array ?? [] {
-                out = Text("\(out)\(self.run(run, index, styles, &built.targets))")
+                out = Text("\(out)\(self.run(run, index, styles, &built.targets).customAttribute(RunTag(run: index, block: built.blocks.count)))")
                 index += 1
             }
             return out
@@ -205,8 +210,11 @@ struct ChipRenderer: TextRenderer {
     let mentionRadius: CGFloat
     let code: Color
     let codeRadius: CGFloat
+    /// The leaf's key: when set, each run's rect is published (`RunAnchors`).
+    var key: String? = nil
 
     func draw(layout: Text.Layout, in context: inout GraphicsContext) {
+        if let key { publish(layout, key) }
         for line in layout {
             var boxes: [Chip: CGRect] = [:]
             var order: [Chip] = []
@@ -236,6 +244,32 @@ struct ChipRenderer: TextRenderer {
                 slanted.translateBy(x: 0, y: -baseline)
                 slanted.draw(run)
             }
+        }
+    }
+}
+
+extension ChipRenderer {
+    /// Each tagged run's rect in this text (a run split over lines is the union of its pieces).
+    private func publish(_ layout: Text.Layout, _ key: String) {
+        var runs: [Int: (block: Int, rect: CGRect)] = [:]
+        for line in layout {
+            for run in line {
+                guard let tag = run[RunTag.self] else { continue }
+                let rect = run.typographicBounds.rect
+                runs[tag.run] = (tag.block, runs[tag.run].map { $0.rect.union(rect) } ?? rect)
+            }
+        }
+        if !runs.isEmpty { RunAnchors.shared.setRuns(key, runs) }
+    }
+}
+
+extension View {
+    /// Publishes the block's frame on screen for a keyed leaf (`RunAnchors.setBlock`).
+    @ViewBuilder fileprivate func hzAnchorBlock(_ key: String?, _ block: Int) -> some View {
+        if let key {
+            onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { RunAnchors.shared.setBlock(key, block, $0) }
+        } else {
+            self
         }
     }
 }
