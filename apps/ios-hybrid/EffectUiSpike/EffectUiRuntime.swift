@@ -1,107 +1,77 @@
 import Foundation
 import JavaScriptCore
+import QuartzCore
 import os
 
-/// Runs the `hazel` script (`effect-ui/entry.ts`) in a bare JavaScriptCore context: no WebKit, no
-/// DOM. It gives the script timers, `console` and `__native.post`, and hands each batch of ops to
-/// the tree.
+/// Runs the `hazel` script (`effect-ui/entry.ts`) in a bare JavaScriptCore context on its own thread
+/// (`JSEngine`, G4): no WebKit, no DOM. Batches are decoded there and applied here; presses hop to the
+/// JS thread. The main actor never waits for JS.
 @MainActor
 final class EffectUiRuntime {
-    static let log = Logger(subsystem: "sh.hazel.effect-ui-spike", category: "runtime")
+    nonisolated static let log = Logger(subsystem: "sh.hazel.effect-ui-spike", category: "runtime")
 
     let tree = EffectUiTree()
-    private let context = JSContext()!
-    private var timers: [Int: DispatchWorkItem] = [:]
-    private var nextTimer = 1
+    let engine = JSEngine()
+    private var readyHooks: [@Sendable (JSContext) -> Void] = []
+    private var started = false
+
+    /// Per cause, origin-to-applied times in ms, for the bench (`G4Bench`).
+    private(set) var samples: [String: [Double]] = [:]
 
     init() {
-        context.exceptionHandler = { _, exception in
-            Self.log.error("[js] \(exception?.toString() ?? "?", privacy: .public)")
+        engine.onBatch = { [weak self] batch, trace in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.applied(batch, trace) }
+            }
         }
-        installConsole()
-        installTimers()
-        let post: @convention(block) (String) -> Void = { [weak self] json in
-            MainActor.assumeIsolated { self?.receive(json) }
-        }
-        let native = JSValue(newObjectIn: context)!
-        native.setObject(post, forKeyedSubscript: "post" as NSString)
-        context.setObject(native, forKeyedSubscript: "__native" as NSString)
+    }
+
+    /// Runs `hook` on the JS thread once the context and its globals exist, before the script. Platform
+    /// services install themselves here. Call before `start()`.
+    func onContextReady(_ hook: @escaping @Sendable (JSContext) -> Void) {
+        precondition(!started, "onContextReady after start")
+        readyHooks.append(hook)
     }
 
     func start() {
+        guard !started else { return }
+        started = true
         guard let url = Bundle.main.url(forResource: "effect-ui", withExtension: "js", subdirectory: "effect-ui"),
               let script = try? String(contentsOf: url, encoding: .utf8)
         else {
             Self.log.error("[shell] effect-ui.js missing from the bundle")
             return
         }
-        let started = ContinuousClock.now
-        context.evaluateScript(script, withSourceURL: url)
-        Self.log.log("[shell] script ran in \(ContinuousClock.now - started, privacy: .public)")
-    }
-
-    /// An event on node `id` (`press`, or an extension's own), back to the native host's `fire`.
-    func fire(_ id: Int, _ event: String = "press", payload: String = "{}") {
-        let fire = context.objectForKeyedSubscript("__hazel")?.objectForKeyedSubscript("fire")
-        _ = fire?.call(withArguments: [id, event, payload])
-    }
-
-    private func receive(_ json: String) {
-        guard let data = json.data(using: .utf8) else { return }
-        do {
-            let batch = try JSONDecoder().decode(Batch.self, from: data)
-            // A wire this build does not speak is refused, not guessed at.
-            guard batch.v == Wire.version else {
-                Self.log.error("[shell] refused wire v\(batch.v), this build speaks v\(Wire.version)")
-                return
-            }
-            tree.apply(batch, bytes: data.count)
-        } catch {
-            Self.log.error("[shell] undecodable batch: \(error, privacy: .public)")
+        let hooks = readyHooks
+        let jit = ProcessInfo.processInfo.environment["JSC_useJIT"] ?? "default"
+        engine.perform("mount") { engine in
+            let began = CACurrentMediaTime()
+            engine.boot(ready: hooks)
+            engine.evaluate(script, url: url)
+            let ms = (CACurrentMediaTime() - began) * 1000
+            Self.log.log("[g4] script eval + mount (JS thread) \(String(format: "%.1f", ms), privacy: .public)ms, JSC_useJIT=\(jit, privacy: .public)")
         }
     }
 
-    private func installConsole() {
-        let log: @convention(block) () -> Void = {
-            let args = JSContext.currentArguments() as? [JSValue] ?? []
-            Self.log.log("[js] \(args.map { $0.toString() ?? "" }.joined(separator: " "), privacy: .public)")
-        }
-        let console = JSValue(newObjectIn: context)!
-        for name in ["log", "info", "warn", "error", "debug"] {
-            console.setObject(log, forKeyedSubscript: name as NSString)
-        }
-        context.setObject(console, forKeyedSubscript: "console" as NSString)
+    /// An event on node `id` (`press`, or an extension's own), sent to the JS thread's `fire`.
+    func fire(_ id: Int, _ event: String = "press", payload: String = "{}", kind: String = "press") {
+        engine.perform(kind) { $0.call("fire", with: [id, event, payload]) }
     }
 
-    private func installTimers() {
-        let schedule: @convention(block) (JSValue, Double) -> Int = { [weak self] callback, ms in
-            MainActor.assumeIsolated { self?.schedule(callback, after: ms) ?? 0 }
-        }
-        let cancel: @convention(block) (Int) -> Void = { [weak self] id in
-            MainActor.assumeIsolated { self?.timers.removeValue(forKey: id)?.cancel() }
-        }
-        context.setObject(schedule, forKeyedSubscript: "setTimeout" as NSString)
-        context.setObject(cancel, forKeyedSubscript: "clearTimeout" as NSString)
-    }
+    func resetSamples() { samples = [:] }
 
-    private func schedule(_ callback: JSValue, after ms: Double) -> Int {
-        let id = nextTimer
-        nextTimer += 1
-        let box = Box(callback)
-        let item = DispatchWorkItem { [weak self] in
-            MainActor.assumeIsolated {
-                self?.timers[id] = nil
-                _ = box.value.call(withArguments: [])
-            }
-        }
-        timers[id] = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + max(ms, 0) / 1000, execute: item)
-        return id
+    private func applied(_ batch: Batch, _ trace: BatchTrace) {
+        let applyStart = CACurrentMediaTime()
+        tree.apply(batch, bytes: trace.bytes)
+        let done = CACurrentMediaTime()
+        FrameMonitor.shared.noteBridge(done - applyStart)
+        let ms = { (from: CFTimeInterval, to: CFTimeInterval) in (to - from) * 1000 }
+        let total = ms(trace.origin, done)
+        samples[trace.kind, default: []].append(total)
+        // Bursts log in aggregate (`G4Bench`); everything else logs per batch.
+        guard !trace.kind.hasPrefix("burst") else { return }
+        Self.log.log(
+            "[g4] \(trace.kind, privacy: .public) total \(String(format: "%.2f", total), privacy: .public)ms: js \(String(format: "%.2f", ms(trace.origin, trace.posted)), privacy: .public), decode \(String(format: "%.2f", ms(trace.posted, trace.decoded)), privacy: .public), hop \(String(format: "%.2f", ms(trace.decoded, applyStart)), privacy: .public), apply \(String(format: "%.2f", ms(applyStart, done)), privacy: .public) | \(batch.ops.count, privacy: .public) ops \(trace.bytes, privacy: .public) B"
+        )
     }
-}
-
-/// A JS value carried into a main-queue work item (it only runs there).
-private final class Box: @unchecked Sendable {
-    let value: JSValue
-    init(_ value: JSValue) { self.value = value }
 }
