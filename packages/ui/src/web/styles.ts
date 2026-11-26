@@ -27,7 +27,7 @@ export const structureCss = `
 [data-hz=action] { all: unset; width: 32px; height: 32px; display: grid; place-items: center; color: var(--hz-section); cursor: pointer; border-radius: 8px; }
 [data-hz=action]:hover { background: var(--hz-wash); }
 [data-hz=action] [data-hz=icon] { width: 14px; height: 14px; }
-[data-hz=item] > [data-hz-part=control] { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 6px 0 8px; border-radius: 8px; cursor: pointer; color: var(--hz-label); font-size: 16px; font-weight: 500; }
+[data-hz=item] > [data-hz-part=control] { all: unset; box-sizing: border-box; display: flex; width: 100%; align-items: center; gap: 8px; height: 40px; padding: 0 6px 0 8px; border-radius: 8px; cursor: pointer; color: var(--hz-label); font-size: 16px; font-weight: 500; }
 [data-hz=item] > [data-hz-part=control]:hover { background: var(--hz-wash); }
 [data-hz=item] > [data-hz-part=control]:focus-visible { outline: 2px solid var(--hz-brand); outline-offset: 1px; }
 [data-hz=item][data-emphasized] > [data-hz-part=control] { color: var(--hz-label-strong); }
