@@ -14,7 +14,8 @@
 	},
 	"scripts": {
 		"test": "vitest run",
-		"typecheck": "effect-tsgo tsrs --noEmit"
+		"typecheck": "effect-tsgo tsrs --noEmit",
+		"verify:F": "bun run typecheck && vitest run && bun run --cwd ../../apps/ios-hybrid build:effect-ui:live && bash ../../apps/ios-hybrid/scripts/test-hazelui.sh F"
 	},
 	"dependencies": {
 		"@hazel/domain": "workspace:*",

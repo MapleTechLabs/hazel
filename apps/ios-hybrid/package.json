@@ -12,7 +12,13 @@
 		"serve-fixture-html": "bun scripts/serve-fixture-html.ts",
 		"test": "vitest run",
 		"typecheck": "effect-tsgo tsrs --noEmit",
-		"test:hazelui": "bash scripts/test-hazelui.sh"
+		"test:hazelui": "bash scripts/test-hazelui.sh",
+		"verify:S0": "bash scripts/test-hazelui.sh S0 && bash scripts/build-effect-ui.sh",
+		"verify:S1": "bash scripts/test-hazelui.sh S1",
+		"verify:S2": "bash scripts/test-hazelui.sh S2",
+		"verify:S3": "bash scripts/test-hazelui.sh S3",
+		"verify:S4": "bash scripts/test-hazelui.sh S4",
+		"verify:S5": "bash scripts/test-hazelui.sh S5"
 	},
 	"dependencies": {
 		"@effect/ui": "https://pkg.pr.new/Effect-TS/ui/@effect/ui@4d6d7ec",

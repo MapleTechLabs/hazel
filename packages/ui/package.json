@@ -16,7 +16,15 @@
 		"ui:check": "bun scripts/generate.ts --check",
 		"gallery:shots": "bun scripts/shoot.ts",
 		"gallery:dev": "vite --config src/gallery/vite.config.ts",
-		"test:web": "bun scripts/test-web.ts"
+		"test:web": "bun scripts/test-web.ts",
+		"verify:A1": "bun run typecheck && vitest run src/web src/conformance && bun scripts/test-web.ts --lane A1",
+		"verify:A2": "bun run typecheck && vitest run src/web src/conformance && bun scripts/test-web.ts --lane A2",
+		"verify:A3": "bun run typecheck && vitest run src/web src/conformance && bun scripts/test-web.ts --lane A3",
+		"verify:A4": "bun run typecheck && vitest run src/web src/conformance && bun scripts/test-web.ts --lane A4",
+		"verify:A5": "bun run typecheck && vitest run src/web src/conformance && bun scripts/test-web.ts --lane A5",
+		"verify:B": "bun run typecheck && vitest run src/native src/conformance",
+		"verify:D": "bun run typecheck && bun run ui:check && vitest run src/style scripts/generate.test.ts",
+		"test:contracts": "vitest run src/native/wire.test.ts scripts/hazel-lint.test.ts src/conformance src/style/recipes"
 	},
 	"dependencies": {
 		"@effect/ui": "https://pkg.pr.new/Effect-TS/ui/@effect/ui@4d6d7ec",

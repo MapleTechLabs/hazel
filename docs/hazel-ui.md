@@ -141,10 +141,10 @@ primitives (`textParents`).
 | --- | --- |
 | Layout | `stack` (axis, density, align), `spacer`, `scroll`, `frame` (surface), `divider` |
 | Collections | `list` (keyed rows, sections, anchoring, reach start or end, stick to bottom), `listDivider` (kind: `date`, `unread`) |
-| Content | `text` (role, tone, strong, numeric, truncate), `heading` (level), `icon`, `image`, `avatar` (presence), `avatarStack`, `badge` (tone, size), `richText` (paragraphs, mentions, links, code, code blocks, quotes) |
+| Content | `text` (role, tone, strong, numeric, truncate), `heading` (level), `icon`, `image`, `avatar` (presence, size, mark), `avatarStack`, `badge` (tone, size), `progress`, `emptyState`, `richText` (paragraphs, mentions, links, code, code blocks, quotes) |
 | Chat | `message` (states: `grouped`, `pinned`, `highlighted`, `entering`, `pending`, `failed`; slots: author, time, body, attachments, reactions, thread summary), `reactionBar`, `attachmentGrid`, `embed`, `typingIndicator` |
 | Controls | `button` (variant, size, iconOnly), `link`, `textField`, `textArea`, `toggle`, `select`, `searchField`, `composer` |
-| Overlays | `menu`, `contextMenu`, `sheet`, `dialog`, `popover`, `toast`, `tooltip` |
+| Overlays | `menu`, `contextMenu`, `sheet`, `dialog`, `popover`, `toast`, `tooltip`, `emojiPicker` |
 | Structure | `screen` (title, toolbar, back), `navigation`, `tabBar`, `splitView`, `section`, `item` |
 
 The chat group exists because slot-based `item` cannot express a message row: today's row
@@ -410,9 +410,11 @@ keybindings, theme switching, and Tailwind's preflight against `data-hz` CSS are
 ## Testing
 
 - **Unit:** components on Effect UI's `TestHost`.
-- **Conformance fixtures** (`packages/ui/src/conformance/<primitive>/*.json`, schema fixed in phase 1.5):
-  trees with props and expected semantics. The web renders them in the browser runner (screenshots,
-  ARIA, pixel diff against today's kit); Swift renders them in snapshot tests on a pinned simulator.
+- **Conformance fixtures** (`packages/ui/src/conformance/fixtures/<tag>/<name>.json`, schema in
+  `src/conformance/schema.ts`): trees with wire props, axes of options, ARIA expectations and a kit
+  counterpart. The web renders them in the browser runner (`test:web`: screenshots, ARIA, pixel diff
+  against today's kit); Swift renders them in `SnapshotTests` on the pinned simulator `hazel-ui-ci`
+  (`test:hazelui`). Both compile a tree the same way (`compile.ts`, checked against the native host).
 - **Wire goldens:** op streams for mount, prop change, keyed reorder, removal, detach, commands; Swift
   decodes the same files.
 - **Performance bar:** 120 fps with no dropped frames on the 3,000-message channel, on a device, typing
@@ -464,6 +466,12 @@ verification command; `packages/ui/GAPS.md` lists the 25 gaps the four screens m
   job with the exact `xcodebuild test` command, a pinned simulator, snapshot storage and tolerance; the
   gallery on both platforms; one command per lane to verify its work. After E, every "done when" below
   names a command that passes or fails without the user.
+
+Result (branch `t3/hazel-ui-harness`): the user's contract decisions applied (`CONTRACTS.md`,
+"Decisions"; every gap resolved in `GAPS.md`; new tags `progress`, `emptyState`, `emojiPicker`; readable
+row keys); fixtures for every tag; `test:web` and `test:hazelui`; galleries at `fixtures.html` and
+`-HazelScreen gallery`; `.github/workflows/hazel-ui.yml`; every tag has a stub on both platforms.
+`packages/ui/LANES.md` is the brief each lane starts from, with its one verify command.
 
 ### Phase 2: lanes (parallel)
 
