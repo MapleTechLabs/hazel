@@ -167,6 +167,8 @@ const declarations = (d: Declarations, tracked: ReadonlySet<string>): ReadonlyAr
 	if (d.paddingX !== undefined) add("padding-inline", length(d.paddingX))
 	if (d.paddingStart !== undefined) add("padding-inline-start", length(d.paddingStart))
 	if (d.paddingY !== undefined) add("padding-block", length(d.paddingY))
+	if (d.paddingTop !== undefined) add("padding-top", length(d.paddingTop))
+	if (d.paddingBottom !== undefined) add("padding-bottom", length(d.paddingBottom))
 	if (d.gap !== undefined) add("column-gap", spaceVar(d.gap))
 	if (d.rowGap !== undefined) add("row-gap", spaceVar(d.rowGap))
 	if (d.marginBottom !== undefined) add("margin-bottom", spaceVar(d.marginBottom))

@@ -545,7 +545,8 @@ export const tags = {
 		web: "A4",
 		ios: "S4",
 		content: "elements",
-		props: { title: text, back: flag },
+		// `surface`: the sidebar's column, or a phone tab's page (`screen-surface`).
+		props: { title: text, back: flag, surface: option(O.ScreenSurface, "sidebar") },
 		// `floatingAction`: the screen's primary action, a round button over the content's end corner.
 		slots: ["toolbar", "floatingAction"],
 		events: { back: none },
@@ -572,7 +573,14 @@ export const tags = {
 		ios: "S4",
 		content: "elements",
 		// Header actions: `.action(icon, message, label)` appends an `hz:action` (`Hazel.ts`).
-		props: { title: text, collapsible: flag, collapsed: flag, reorderable: flag },
+		props: {
+			title: text,
+			collapsible: flag,
+			collapsed: flag,
+			reorderable: flag,
+			// Its header's look (`section-style`): a sidebar's group, the channel tree's, a phone list's, the inbox's.
+			style: option(O.SectionStyle, "sidebar"),
+		},
 		events: { toggle: Schema.Struct({ collapsed: Schema.Boolean }), move },
 	}),
 	item: tag({

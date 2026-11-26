@@ -102,18 +102,36 @@ export type BadgeSize = (typeof badgeSizes)[number]
 export const stackAxes = ["vertical", "horizontal"] as const
 export type StackAxis = (typeof stackAxes)[number]
 
-export const stackDensities = ["compact", "regular", "relaxed"] as const
+/** `tight` is a sidebar's section group (`gap-y-0.5`, `stack-tight`). */
+export const stackDensities = ["tight", "compact", "regular", "relaxed"] as const
 export type StackDensity = (typeof stackDensities)[number]
 
 export const stackAligns = ["stretch", "start", "center", "end"] as const
 export type StackAlign = (typeof stackAligns)[number]
 
 /**
- * `danger` is the danger zone's card with a tinted header (`frame-danger`); `flush` a bordered box with
- * no padding or shadow, its dividers running edge to edge (`frame-flush`).
+ * `danger` is the danger zone's card with a tinted header (`frame-danger`); `flush` the card with no
+ * padding, its dividers running edge to edge (`frame-flush`); `hint` a sidebar's quiet
+ * tip, inset by the rows' margin (`frame-hint`).
  */
-export const frameSurfaces = ["none", "card", "inset", "muted", "overlay", "danger", "flush"] as const
+export const frameSurfaces = ["none", "card", "inset", "muted", "overlay", "danger", "flush", "hint"] as const
 export type FrameSurface = (typeof frameSurfaces)[number]
+
+/**
+ * A section's header (`section-style`): `sidebar` is the sidebar's group; `tree` the channel
+ * sidebar's (`tree.ts`: the name `pl-2.5`, muted 12/20, rows right under it); `list` a phone list's
+ * (DMs: an inset uppercase label over full-width rows); `sticky` the inbox's, whose label sticks
+ * over its group while it scrolls (activity).
+ */
+/**
+ * A screen's surface (`screen-surface`): `sidebar` is the sidebar's column under its own title;
+ * `page` a phone tab's page (`mobileTopBar`: a 56pt sticky bar, the section heading, the page ground).
+ */
+export const screenSurfaces = ["sidebar", "page"] as const
+export type ScreenSurface = (typeof screenSurfaces)[number]
+
+export const sectionStyles = ["sidebar", "tree", "list", "sticky"] as const
+export type SectionStyle = (typeof sectionStyles)[number]
 
 /** `1` is a screen's title, `2` a section's, `3` a group's. */
 export const headingLevels = ["1", "2", "3"] as const
@@ -150,7 +168,7 @@ export const lineCounts = ["1", "2"] as const
 export type LineCount = (typeof lineCounts)[number]
 
 /** An item's leading slot: icon-sized, or `large` (a 40pt avatar or icon tile, top aligned). */
-export const itemLeadingSizes = ["regular", "large"] as const
+export const itemLeadingSizes = ["regular", "large", "conversation"] as const
 export type ItemLeadingSize = (typeof itemLeadingSizes)[number]
 
 /** A row hanging off the row above (a thread under its channel): the elbow's shape. */
@@ -168,8 +186,11 @@ export type ListDividerKind = (typeof listDividerKinds)[number]
 export const listAnchors = ["start", "end"] as const
 export type ListAnchor = (typeof listAnchors)[number]
 
-/** Boolean states a view sets (`data-<state>` on the web). Chat states are the message's own. */
-export const dataStates = ["selected", "emphasized", "disabled", "loading", "destructive"] as const
+/**
+ * Boolean states a view sets (`data-<state>` on the web). Chat states are the message's own. `linked`
+ * is the host's, not a view's: the row's control is a link (`href`, `item-link-weight`).
+ */
+export const dataStates = ["selected", "emphasized", "disabled", "loading", "destructive", "linked"] as const
 export type DataState = (typeof dataStates)[number]
 
 /** States the host derives from input; views never set them. */
@@ -214,9 +235,11 @@ export interface Shadow {
 	readonly dark: string
 }
 
-/** Type steps only recipes use (a count badge's 11px), never a view's `text.role`. */
-/** `reading` is chat text, 16/24 at every width (a message row does not step down like `body`). */
-export const recipeTextSteps = ["tiny", "micro", "reading"] as const
+/**
+ * Type steps only recipes use (a count badge's 11px), never a view's `text.role`. `reading` is chat
+ * text, 16/24 at every width (a message row does not step down like `body`); `snug` a DM preview, 14/19.25.
+ */
+export const recipeTextSteps = ["tiny", "micro", "reading", "snug"] as const
 export type RecipeTextStep = (typeof recipeTextSteps)[number]
 export type TextStep = TextRole | RecipeTextStep
 
@@ -321,6 +344,9 @@ export interface Declarations<T extends TokenNames = TokenNames> {
 	readonly paddingX?: Length<T["space"]>
 	readonly paddingY?: Length<T["space"]>
 	readonly paddingStart?: Length<T["space"]>
+	/** One edge over `paddingY` (a list header's `pt-3`, `section-style`). */
+	readonly paddingTop?: Length<T["space"]>
+	readonly paddingBottom?: Length<T["space"]>
 	readonly gap?: T["space"]
 	/** Gap between rows of a container's own children. */
 	readonly rowGap?: T["space"]

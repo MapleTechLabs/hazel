@@ -46,18 +46,23 @@ const emphasizedLabel = (h: H, title: string): Html =>
 		[title],
 	)
 
-/** A selected row is the app's active channel row: a `sidebarLink` with `CHANNEL_ACTIVE` (`channelItem`). */
+/**
+ * Every row is the app's channel row (`channelItem`): a `sidebarLink`, whose `font-medium` the label
+ * takes; the selected one is active, with `CHANNEL_ACTIVE`.
+ */
 const item = (h: H, spec: ItemSpec): Html => {
 	const content = [
 		icon(h, spec.icon),
 		spec.emphasized ? emphasizedLabel(h, spec.title) : sidebarLabel(h, [spec.title]),
 	]
 	const attributes = [h.Attribute("data-specimen", spec.id)]
-	return spec.selected
-		? sidebarItem(h, { attributes }, [
-				sidebarLink(h, { href: "#", isActive: true, activeClassName: CHANNEL_ACTIVE }, content),
-			])
-		: sidebarItem(h, { attributes }, content)
+	return sidebarItem(h, { attributes }, [
+		sidebarLink(
+			h,
+			{ href: "#", isActive: spec.selected === true, activeClassName: CHANNEL_ACTIVE },
+			content,
+		),
+	])
 }
 
 const intentOf = {

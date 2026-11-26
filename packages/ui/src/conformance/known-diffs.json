@@ -1,7 +1,1 @@
-[
-	{
-		"case": "item/dm",
-		"lane": "A4",
-		"reason": "HAZEL-GAP(item-conversation-row): today's DM row is its own style (semibold title, 14px two-line preview, py-2.5, baseline time); item has no option for it"
-	}
-]
+[]

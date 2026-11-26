@@ -247,22 +247,24 @@ ones), which replaces today's `sm:` and `max-md:` branches. Recipes may vary by 
 widened after checking them against today's kit (`button.styles.ts`, `badge.styles.ts`, text sizes in
 use); Phase 1 re-derives them from the message row, composer and sidebar before they freeze.
 
-| Choice           | Options (proposed, closed)                                                                                       |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `text.role`      | `body`, `label`, `caption`, `title`, `display`, `code`, `overline`, `kbd`                                        |
-| `text.tone`      | `default`, `muted`, `subtle`, `accent`, `success`, `warning`, `danger`, `info`                                   |
-| `text.strong`    | on or off (the one weight choice a view has; an author name, an unread row)                                      |
-| `button.variant` | `primary`, `secondary`, `outline`, `ghost`, `warning`, `danger`, `chip` (on with `selected`)                     |
-| `button.size`    | `large`, `regular`, `small`, `xsmall`; `iconOnly` makes it square, `circle` makes it round                       |
-| `badge.tone`     | `neutral`, `accent`, `success`, `warning`, `danger`, `info`                                                      |
-| `badge.style`    | `solid`, `outline`, `quiet` (today's `muted` is `neutral` + `quiet`)                                             |
-| `badge.size`     | `regular`, `small`; `pill` rounds it fully                                                                       |
-| `stack.density`  | `compact`, `regular`, `relaxed`                                                                                  |
-| `frame.surface`  | `none`, `card`, `inset`, `muted`, `overlay`, `danger`, `flush`                                                   |
-| `avatar.size`    | `regular`, `medium` (the kit's `md`), `large`; `avatarStack.layout` `row`, `pair`                                |
-| `item` rows      | `unread` (`none`, `pip`, `dot`), `titleLines` and `subtitleLines` (`1`, `2`), `leadingSize` (`regular`, `large`) |
-| `iconTile.tone`  | `neutral`, `accent`, `success`, `warning`, `danger`                                                              |
-| states           | `selected`, `emphasized`, `disabled`, `loading`, `destructive`, plus each primitive's own (`message.pinned`...)  |
+| Choice           | Options (proposed, closed)                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `text.role`      | `body`, `label`, `caption`, `title`, `display`, `code`, `overline`, `kbd`                                                            |
+| `text.tone`      | `default`, `muted`, `subtle`, `accent`, `success`, `warning`, `danger`, `info`                                                       |
+| `text.strong`    | on or off (the one weight choice a view has; an author name, an unread row)                                                          |
+| `button.variant` | `primary`, `secondary`, `outline`, `ghost`, `warning`, `danger`, `chip` (on with `selected`)                                         |
+| `button.size`    | `large`, `regular`, `small`, `xsmall`; `iconOnly` makes it square, `circle` makes it round                                           |
+| `badge.tone`     | `neutral`, `accent`, `success`, `warning`, `danger`, `info`                                                                          |
+| `badge.style`    | `solid`, `outline`, `quiet` (today's `muted` is `neutral` + `quiet`)                                                                 |
+| `badge.size`     | `regular`, `small`; `pill` rounds it fully                                                                                           |
+| `stack.density`  | `tight`, `compact`, `regular`, `relaxed`                                                                                             |
+| `frame.surface`  | `none`, `card`, `inset`, `muted`, `overlay`, `danger`, `flush`, `hint`                                                               |
+| `avatar.size`    | `regular`, `medium` (the kit's `md`), `large`; `avatarStack.layout` `row`, `pair`                                                    |
+| `item` rows      | `unread` (`none`, `pip`, `dot`), `titleLines` and `subtitleLines` (`1`, `2`), `leadingSize` (`regular`, `large`, `conversation`)     |
+| `section.style`  | `sidebar`, `tree` (the channel sidebar), `list` (a phone list), `sticky` (the inbox)                                                 |
+| `screen.surface` | `sidebar`, `page` (a phone tab under its top bar)                                                                                    |
+| `iconTile.tone`  | `neutral`, `accent`, `success`, `warning`, `danger`                                                                                  |
+| states           | `selected`, `emphasized`, `disabled`, `loading`, `destructive`, `linked` (host-set), plus each primitive's own (`message.pinned`...) |
 
 Rules:
 
@@ -427,6 +429,12 @@ keybindings, theme switching, and Tailwind's preflight against `data-hz` CSS are
   decodes the same files.
 - **Performance bar:** 120 fps with no dropped frames on the 3,000-message channel, on a device, typing
   included. Each screen PR logs `FrameMonitor` numbers and op counts per interaction.
+- **Island parity:** `bun packages/ui/scripts/compare-islands.ts [--build] [--only <screen>] [--probe]`
+  opens the offline web build with each island's flag off and on (390 and 1180 wide, light and dark,
+  a pinned clock) and pixel-diffs them; strips (today | island | diff) land in
+  `docs/hazel-ui-screens/phase3/<screen>/`. `--probe` pairs text runs and prints what moved. On
+  2026-11-26: channel sidebar 0.002 to 0.003%, DMs 0.000% (phone only; wide it has no island),
+  activity 0.000 to 0.001%, every residue a channel delta of 5 or less (antialiasing).
 - **Every screen PR** carries web and iOS screenshots from the gallery harness, light and dark.
 
 ## Phases and work packages

@@ -11,6 +11,7 @@ import { countBadge } from "../../../../apps/web-foldkit/src/ui/count-badge.ts"
 import {
 	sidebarItem,
 	sidebarLabel,
+	sidebarLink,
 	sidebarSection,
 	sidebarUnreadPip,
 } from "../../../../apps/web-foldkit/src/ui/sidebar.ts"
@@ -25,6 +26,21 @@ import { statusDot } from "../../../../apps/web-foldkit/src/ui/status-dot.ts"
  */
 
 type H = HtmlBuilder<never>
+
+/** Each channel row is a `sidebarLink` inside its `sidebarItem`, as `channelItem` draws it. */
+const link = { href: "#", isActive: false, activeClassName: "" }
+
+/** The unread name: full ink and medium (`channelItem`'s `label`). */
+const emphasizedLabel = (h: H, name: string): Html =>
+	h.span(
+		[
+			h.Class(
+				"col-start-2 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis outline-hidden font-medium text-fg",
+			),
+			h.Attribute("data-slot", "sidebar-label"),
+		],
+		[name],
+	)
 
 /** A collapsible section: the chevron leads its name, the "+" ends the header (`sectionGroupHeader`). */
 const collapsibleSection = (h: H): Html =>
@@ -41,7 +57,11 @@ const collapsibleSection = (h: H): Html =>
 					action: sectionPlusButton(h, "New in Channels", []),
 				}),
 				allowsDragging: false,
-				rows: [sidebarItem(h, {}, [IconHashtag(h), sidebarLabel(h, ["general"])])],
+				rows: [
+					sidebarItem(h, {}, [
+						sidebarLink(h, link, [IconHashtag(h), sidebarLabel(h, ["general"])]),
+					]),
+				],
 			}),
 		],
 	)
@@ -54,16 +74,7 @@ const unreadChannel = (h: H): Html =>
 			sidebarSection(h, { label: "Channels" }, [
 				sidebarItem(h, { attributes: [h.Attribute("data-specimen", "item-unread-pip")] }, [
 					sidebarUnreadPip(h),
-					IconHashtag(h),
-					h.span(
-						[
-							h.Class(
-								"col-start-2 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis outline-hidden font-medium text-fg",
-							),
-							h.Attribute("data-slot", "sidebar-label"),
-						],
-						["design"],
-					),
+					sidebarLink(h, link, [IconHashtag(h), emphasizedLabel(h, "design")]),
 				]),
 			]),
 		],
@@ -80,16 +91,7 @@ const badgedChannel = (h: H, count: number): Html =>
 			sidebarSection(h, { label: "Channels" }, [
 				sidebarItem(h, { attributes: [h.Attribute("data-specimen", `item-badge-${count}`)] }, [
 					sidebarUnreadPip(h),
-					IconHashtag(h),
-					h.span(
-						[
-							h.Class(
-								"col-start-2 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis outline-hidden font-medium text-fg",
-							),
-							h.Attribute("data-slot", "sidebar-label"),
-						],
-						["design"],
-					),
+					sidebarLink(h, link, [IconHashtag(h), emphasizedLabel(h, "design")]),
 					// `sidebarBadge`'s classes (not exported from `items.ts`).
 					countBadge(h, {
 						count,

@@ -60,10 +60,13 @@ private struct ItemRow: View {
     private var recipe: HazelTheme.Recipe { HazelTheme.Recipes.item }
     private var nested: String { node[prop: "nested"]?.string ?? "none" }
     private var unread: String { node[prop: "unread"]?.string ?? "none" }
-    private var large: Bool { node[prop: "leadingSize"]?.string == "large" }
+    private var leadingSize: String { node[prop: "leadingSize"]?.string ?? "regular" }
+    /// `large` and `conversation` share the row's layout; `conversation` moves its metrics.
+    private var large: Bool { leadingSize != "regular" }
+    private var conversation: Bool { leadingSize == "conversation" }
 
     private func style(_ part: String) -> HazelTheme.Style {
-        let options = ["nested": nested, "leadingSize": large ? "large" : "regular",
+        let options = ["nested": nested, "leadingSize": leadingSize,
                        "titleLines": node[prop: "titleLines"]?.string ?? "1",
                        "subtitleLines": node[prop: "subtitleLines"]?.string ?? "1"]
         let flags: Set<String> = node[prop: "muted"]?.bool == true ? ["muted"] : []
@@ -102,8 +105,9 @@ private struct ItemRow: View {
         }
     }
 
-    /// `leadingSize` `large` (today's activity and DM rows): the dot's column, a 40pt leading column
-    /// top aligned, the trailing slot on the title's line, the subtitle and badge under both.
+    /// `leadingSize` `large` (today's activity row): the dot's column, a 40pt leading column top
+    /// aligned, the trailing slot on the title's line, the subtitle and badge under both.
+    /// `conversation` (today's DM row): the avatar 2pt down, the time on the title's baseline.
     private func largeRow(_ control: HazelTheme.Style) -> some View {
         let space = { (step: String) in HazelTheme.space[step] ?? 0 }
         let hasActions = tree.slot("actions", of: node) != nil
@@ -118,10 +122,11 @@ private struct ItemRow: View {
                         .padding(.trailing, space("3"))
                 }
                 ItemSlot(tree: tree, node: node, name: "leading", style: HazelTheme.Style())
+                    .padding(.top, conversation ? space("0.5") : 0)
                     .padding(.trailing, space("3"))
                     .accessibilityHidden(ownTrailing)
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack(alignment: .top, spacing: 0) {
+                    HStack(alignment: conversation ? .firstTextBaseline : .top, spacing: 0) {
                         lines("title", control)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .modifier(OptionalLabel(label: ownTrailing ? label : nil))
@@ -130,14 +135,15 @@ private struct ItemRow: View {
                     }
                     HStack(alignment: .top, spacing: 0) {
                         lines("subtitle", control).frame(maxWidth: .infinity, alignment: .leading)
-                        badge.padding(.leading, space("2"))
+                        badge.padding(.leading, space("2")).padding(.top, conversation ? space("0.5") : 0)
                     }
                     .padding(.top, node[prop: "subtitle"]?.string?.isEmpty == false ? space("0.5") : 0)
                     .accessibilityHidden(ownTrailing)
                 }
             }
-            // The row's minimum: 6pt more than the 40pt column, as today's 16/24 line box makes it.
-            .frame(minHeight: space("10") + space("1.5"), alignment: .top)
+            // The row's minimum: 6pt more than the 40pt column, as today's 16/24 line box makes it
+            // (a conversation's column starts 2pt down).
+            .frame(minHeight: space("10") + space("1.5") + (conversation ? space("0.5") : 0), alignment: .top)
             .modifier(OptionalLabel(label: ownTrailing ? nil : label))
             // With actions the row's end padding is 12pt, the actions' column 16pt from the text.
             ItemSlot(tree: tree, node: node, name: "actions", style: style("trailing"))
@@ -202,10 +208,11 @@ private struct ItemRow: View {
         }
     }
 
-    /// The view states the props set: `selected`, `emphasized`, `disabled`.
+    /// The view states the props set: `selected`, `emphasized`, `disabled`; and `linked` with an `href`.
     private var viewStates: Set<HazelTheme.State> {
         let flags: [(String, HazelTheme.State)] = [("selected", .selected), ("emphasized", .emphasized), ("disabled", .disabled)]
-        return Set(flags.filter { node[prop: $0.0]?.bool == true }.map(\.1))
+        let linked: Set<HazelTheme.State> = node[prop: "href"]?.string != nil ? [.linked] : []
+        return Set(flags.filter { node[prop: $0.0]?.bool == true }.map(\.1)).union(linked)
     }
 }
 

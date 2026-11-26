@@ -41,6 +41,12 @@ export type StackAlign = typeof StackAlign.Type
 export const FrameSurface = Schema.Literals(Sets.frameSurfaces)
 export type FrameSurface = typeof FrameSurface.Type
 
+export const ScreenSurface = Schema.Literals(Sets.screenSurfaces)
+export type ScreenSurface = typeof ScreenSurface.Type
+
+export const SectionStyle = Schema.Literals(Sets.sectionStyles)
+export type SectionStyle = typeof SectionStyle.Type
+
 export const HeadingLevel = Schema.Literals(Sets.headingLevels)
 export type HeadingLevel = typeof HeadingLevel.Type
 

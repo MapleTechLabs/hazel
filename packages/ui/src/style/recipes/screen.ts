@@ -1,7 +1,12 @@
 import { defineRecipe } from "../recipe.ts"
+import type { ScreenSurface } from "../schema.ts"
 
 /** A screen: a title bar over its content (the spike's channel list, `Theme.swift`'s measured look). */
-export const screen = defineRecipe<{}, never, "header" | "back" | "title" | "content" | "toolbar">({
+export const screen = defineRecipe<
+	{ readonly surface: ScreenSurface },
+	never,
+	"header" | "back" | "title" | "content" | "toolbar"
+>({
 	primitive: "screen",
 	parts: {
 		header: "part",
@@ -37,5 +42,22 @@ export const screen = defineRecipe<{}, never, "header" | "back" | "title" | "con
 			toolbar: { gap: "1" },
 		},
 	},
-	options: {},
+	options: {
+		surface: {
+			default: "sidebar",
+			values: {
+				sidebar: {},
+				// A phone tab (`ui/mobile-top-bar.ts`): `h-14 gap-1 border-b bg-bg pl-4`, the title
+				// `heading` `section` (16/24 semibold, tight), and content that pads itself.
+				page: {
+					root: { background: "bg" },
+					parts: {
+						header: { gap: "1", paddingX: "4", divider: "border" },
+						title: { text: "title", weight: "semibold", opacity: 1 },
+						content: { paddingY: "0", grow: true },
+					},
+				},
+			},
+		},
+	},
 })

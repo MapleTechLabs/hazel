@@ -149,6 +149,8 @@ const color = {
 	/** A band under a block (`bg-secondary/40`) and a quiet chip under the pointer (`bg-secondary/80`). */
 	"secondary-band": same(alpha(ref("secondary"), 0.4)),
 	"secondary-soft": same(alpha(ref("secondary"), 0.8)),
+	/** The channel sidebar's tip (`bg-secondary/50`, `frame-hint`). */
+	"secondary-half": same(alpha(ref("secondary"), 0.5)),
 	/** A pinned message (`bg-warning/10`, hover `/15`, its edge `border-warning`). */
 	"warning-tint": same(alpha(ref("warning"), 0.1)),
 	"warning-tint-hover": same(alpha(ref("warning"), 0.15)),
@@ -240,6 +242,8 @@ export const tokens = {
 		// Recipe-only steps (styles.css `--text-2xs`, `--text-3xs`): counts and small badges.
 		tiny: { compact: { size: 11, lineHeight: 16 }, regular: { size: 11, lineHeight: 16 } },
 		micro: { compact: { size: 10, lineHeight: 16 }, regular: { size: 10, lineHeight: 16 } },
+		// A conversation row's two-line preview (`mobile-dms.ts`: `text-sm leading-snug`).
+		snug: { compact: { size: 14, lineHeight: 19.25 }, regular: { size: 14, lineHeight: 19.25 } },
 		// Chat text: today's message row is `text-base/6` at every width.
 		reading: { compact: { size: 16, lineHeight: 24 }, regular: { size: 16, lineHeight: 24 } },
 	},

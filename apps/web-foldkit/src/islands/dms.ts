@@ -88,5 +88,7 @@ export const dmsIslandView = <ParentMessage>(
 ): Html =>
 	h.keyed("div")(`hazel-island-dms:${options.organizationId}:${options.userId}`, [
 		h.Attribute("data-island", "dms"),
+		// As today's page root (\`mobile-dms.ts\`): the screen fills the column, so compose sits at its foot.
+		h.Class("flex min-h-full flex-col"),
 		options.onMount,
 	])

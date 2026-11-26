@@ -1,7 +1,7 @@
 // Owned by lane A4 (`docs/hazel-ui.md`, "Phase 2: lanes"). `hz:section`: a titled group of rows with
 // one header action. Collapsible, its title is a disclosure; reorderable, its rows drag (`move`).
 import { svg } from "../../icons.ts"
-import { definePrimitive, flag, part, type Primitive } from "../define.ts"
+import { definePrimitive, flag, option, part, type Primitive } from "../define.ts"
 import { attachReorder, reorderCss } from "../list/reorder.ts"
 import { ensureSheet, fire, rowsOf, textOf } from "../list/runtime.ts"
 
@@ -41,6 +41,21 @@ const css = `
 [data-hz="section"][data-collapsed] [data-hz-part="chevron"] { transform: rotate(-90deg); }
 [data-hz="section"][data-collapsed] > [data-hz-part="content"] > :not([data-hz="action"]) { display: none; }
 @media (prefers-reduced-motion: reduce) { [data-hz="section"] [data-hz-part="chevron"] { transition: none; } }
+/* A \`tree\` section keeps today's empty rows grid under its header: 2px more when it has no rows. */
+[data-hz="section"][data-style="tree"]:not(:has(> [data-hz-part="content"] > :not([data-hz="action"]))) {
+	padding-bottom: calc(var(--hz-space-4) + var(--hz-space-0_5));
+}
+/* \`list\` and \`sticky\` (\`section-style\`): each child takes a line; a list's rows bleed past its inset. */
+[data-hz="section"]:is([data-style="list"], [data-style="sticky"]) > [data-hz-part="content"] > * { flex: 1 1 100%; }
+[data-hz="section"][data-style="list"] > [data-hz-part="content"] > [data-hz="item"] {
+	width: calc(100% + 2 * var(--hz-space-4)); margin-inline: calc(var(--hz-space-4) * -1);
+	flex-basis: calc(100% + 2 * var(--hz-space-4));
+}
+/* The inbox's label stays over its group while it scrolls (\`sticky top-0 bg-bg/95 backdrop-blur-sm\`). */
+[data-hz="section"][data-style="sticky"] > [data-hz-part="title"] {
+	position: sticky; top: 0; z-index: 1; backdrop-filter: blur(4px);
+	background: color-mix(in oklab, var(--hz-color-bg) 95%, transparent);
+}
 ${reorderCss('[data-hz="section"] > [data-hz-part="content"]')}
 `
 
@@ -105,7 +120,8 @@ export const primitive = definePrimitive("section", ({ document, tag, outer }) =
 				collapsed = value === true
 				flag(node, "collapsed", value)
 				layout()
-			} else if (name === "reorderable") {
+			} else if (name === "style") option(node, "style", value)
+			else if (name === "reorderable") {
 				reorderable = value === true
 				flag(node, "reorderable", value)
 				reorder.sync()

@@ -1,7 +1,7 @@
 // Owned by lane A4 (`docs/hazel-ui.md`, "Phase 2: lanes"). `hz:screen`: a title bar over its content,
 // with a back button (`back`) and a `toolbar` slot drawn at the bar's end.
 import { svg } from "../../icons.ts"
-import { definePrimitive, flag, part, type Primitive } from "../define.ts"
+import { definePrimitive, flag, option, part, type Primitive } from "../define.ts"
 import { ensureSheet, fire, textOf } from "../list/runtime.ts"
 
 // `floatingAction` (`floating-action`): today's DMs compose, a 56px round button that sticks to the
@@ -39,6 +39,10 @@ const css = `
 	outline: 2px solid var(--hz-color-ring); outline-offset: -2px;
 }
 [data-hz="screen"] > [data-hz-part="header"] > [data-hz-part="title"] { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A phone tab's page (\`surface\` \`page\`): at least its container's height, so the floating action
+   reaches the bottom, under a bar that sticks (\`sticky top-0 z-10\`). */
+[data-hz="screen"][data-surface="page"] { min-height: 100%; flex: 1 0 auto; }
+[data-hz="screen"][data-surface="page"] > [data-hz-part="header"] { position: sticky; top: 0; z-index: 10; background: inherit; }
 ${floatingCss}
 `
 
@@ -62,6 +66,7 @@ export const primitive = definePrimitive("screen", ({ document, tag, outer }) =>
 		content,
 		set: (name, value) => {
 			if (name === "title") title.textContent = textOf(value)
+			else if (name === "surface") option(node, "surface", value)
 			else if (name === "back") {
 				back.hidden = value !== true
 				flag(node, "back", value)

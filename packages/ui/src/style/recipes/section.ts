@@ -1,11 +1,16 @@
 import { defineRecipe } from "../recipe.ts"
+import type { SectionStyle } from "../schema.ts"
 
 /**
  * A sidebar section: `sidebarSection` with a label (`apps/web-foldkit/src/ui/sidebar.ts`). The rows
  * wrap, so a header action (`hz:action`, first in `content`) shares the title's line and each item,
  * filling the width, takes a line of its own. Collapsed rows and the drop line are the renderer's.
  */
-export const section = defineRecipe<{}, never, "title" | "label" | "disclosure" | "chevron" | "content">({
+export const section = defineRecipe<
+	{ readonly style: SectionStyle },
+	never,
+	"title" | "label" | "disclosure" | "chevron" | "content"
+>({
 	primitive: "section",
 	parts: {
 		title: "part",
@@ -42,5 +47,57 @@ export const section = defineRecipe<{}, never, "title" | "label" | "disclosure" 
 			content: { layout: "contents" },
 		},
 	},
-	options: {},
+	options: {
+		style: {
+			default: "sidebar",
+			values: {
+				sidebar: {},
+				// The channel sidebar's (`shell/channels-sidebar/tree.ts`): `pl-2.5 text-muted-fg text-xs/5`, the
+				// name medium, its rows 2px under it. A collapsible section draws this look whatever its style.
+				tree: {
+					parts: {
+						title: {
+							paddingX: "0",
+							paddingStart: "2.5",
+							marginBottom: "0",
+							leading: "5",
+							color: "muted-fg",
+						},
+					},
+				},
+				// The DMs tab's (`mobile-dms.ts`): `pt-3` (`pb-1` as its filters), a `heading` `label` inset
+				// `px-4` over its rows, which run edge to edge (the renderer bleeds them).
+				list: {
+					root: { rowGap: "0", paddingY: "0", paddingTop: "3", paddingBottom: "1" },
+					parts: {
+						title: {
+							paddingX: "0",
+							marginBottom: "1",
+							text: "overline",
+							leading: "4",
+							uppercase: true,
+							color: "fg-2",
+						},
+					},
+				},
+				// The inbox's group (`notifications/inbox/view.ts`): the label `px-4 py-2`, sticky over the
+				// rows while they scroll (the renderer's), then its rows at full width.
+				sticky: {
+					root: { rowGap: "0", paddingX: "0", paddingY: "0" },
+					parts: {
+						title: {
+							paddingX: "4",
+							paddingY: "2",
+							marginBottom: "0",
+							radius: "none",
+							text: "overline",
+							leading: "4",
+							uppercase: true,
+							color: "fg-2",
+						},
+					},
+				},
+			},
+		},
+	},
 })

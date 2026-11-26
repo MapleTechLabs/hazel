@@ -1,5 +1,5 @@
 {
-	"about": "Today's DM row (`mobile-dms.ts`): a 40pt avatar, the name with its time, a two-line preview and the unread count.",
+	"about": "Today's DM row (`mobile-dms.ts`, `leadingSize` `conversation`): a 40pt avatar 2pt down, the name with its time on one baseline, a two-line 14/19.25 preview and the unread count.",
 	"root": {
 		"tag": "item",
 		"key": "dm1",
@@ -9,7 +9,7 @@
 			"subtitleLines": "2",
 			"badge": 2,
 			"emphasized": true,
-			"leadingSize": "large",
+			"leadingSize": "conversation",
 			"href": "#"
 		},
 		"events": ["press"],

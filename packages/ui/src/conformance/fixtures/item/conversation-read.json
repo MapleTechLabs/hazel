@@ -1,0 +1,44 @@
+{
+	"about": "A read, muted conversation row (`leadingSize` `conversation`): the name medium in muted ink, a one-line muted preview, the time muted.",
+	"root": {
+		"tag": "item",
+		"props": {
+			"title": "Alan Turing",
+			"subtitle": "You: The proofs are attached.",
+			"subtitleLines": "2",
+			"muted": true,
+			"leadingSize": "conversation"
+		},
+		"events": ["press"],
+		"slots": [
+			{
+				"name": "leading",
+				"children": [
+					{
+						"tag": "avatar",
+						"props": {
+							"name": "Alan Turing",
+							"initials": "AT",
+							"size": "medium"
+						}
+					}
+				]
+			},
+			{
+				"name": "trailing",
+				"children": [
+					{
+						"tag": "text",
+						"props": {
+							"role": "caption",
+							"tone": "muted",
+							"numeric": true
+						},
+						"children": ["Yesterday"]
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen"
+}

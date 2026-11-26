@@ -1,0 +1,46 @@
+{
+	"about": "A sidebar's section group (`density` `tight`): sections 2pt apart, as today's `gap-y-0.5`.",
+	"root": {
+		"tag": "stack",
+		"props": {
+			"density": "tight"
+		},
+		"children": [
+			{
+				"tag": "section",
+				"key": "goto",
+				"props": {
+					"style": "tree"
+				},
+				"children": [
+					{
+						"tag": "item",
+						"props": {
+							"title": "Browse channels"
+						},
+						"key": "browse"
+					}
+				]
+			},
+			{
+				"tag": "section",
+				"key": "favorites",
+				"props": {
+					"style": "tree",
+					"title": "Favorites"
+				},
+				"children": [
+					{
+						"tag": "item",
+						"props": {
+							"title": "engineering",
+							"href": "#"
+						},
+						"key": "engineering"
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar"
+}
