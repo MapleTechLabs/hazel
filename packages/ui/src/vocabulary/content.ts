@@ -104,7 +104,9 @@ export const MessageRow = Schema.Struct({
 	status: Schema.optional(Schema.String),
 	badges: Schema.optional(Schema.Array(AuthorBadge)),
 	/** The message this one replies to: its author and first line, or absent when it was deleted. */
-	reply: Schema.optional(Schema.Struct({ author: Schema.String, initials: Schema.String, text: Schema.String })),
+	reply: Schema.optional(
+		Schema.Struct({ author: Schema.String, initials: Schema.String, text: Schema.String }),
+	),
 	files: Schema.optional(Schema.Array(Attachment)),
 	embeds: Schema.optional(Schema.Array(Embed)),
 	thread: Schema.optional(ThreadSummary),

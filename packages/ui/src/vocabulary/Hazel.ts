@@ -135,15 +135,21 @@ export class HzBuilder<Msg, R, K extends TagKey> extends View.ElementBuilder<
 		const content = key === undefined ? "elements" : Spec.tags[key].content
 		if (content === "none") throw new Error(`${this.tag} is a leaf: its content is props, not children`)
 		const all = inputs as ReadonlyArray<View.Input<Msg, any>>
-		return (content === "text" ? View.withContent(this, all) : View.withNoTextContent(this, all, vocabulary)) as never
+		return (
+			content === "text" ? View.withContent(this, all) : View.withNoTextContent(this, all, vocabulary)
+		) as never
 	}
 }
 
 const slot = (name: string, content: ReadonlyArray<View.Input<any, any>>) =>
-	View.withNoTextContent(merge(new HzBuilder<any, never, "slot">(Spec.tagName("slot")), { name }), content, {
-		name: "hazel",
-		textParents,
-	})
+	View.withNoTextContent(
+		merge(new HzBuilder<any, never, "slot">(Spec.tagName("slot")), { name }),
+		content,
+		{
+			name: "hazel",
+			textParents,
+		},
+	)
 
 /** One builder per tag, its prototype carrying the tag's setters and slots. */
 const builderFor = (key: TagKey): HzBuilder<any, never, TagKey> => {
@@ -153,25 +159,36 @@ const builderFor = (key: TagKey): HzBuilder<any, never, TagKey> => {
 		const spec = props[name]!
 		Object.defineProperty(Tag.prototype, name, {
 			value: function (this: HzBuilder<any, never, TagKey>, value?: unknown) {
-				return merge(this, { [name]: stored(spec, spec.kind === "flag" && value === undefined ? true : value) })
+				return merge(this, {
+					[name]: stored(spec, spec.kind === "flag" && value === undefined ? true : value),
+				})
 			},
 		})
 	}
 	for (const name of Spec.tags[key].slots) {
 		Object.defineProperty(Tag.prototype, name, {
-			value: function (this: HzBuilder<any, never, TagKey>, ...content: ReadonlyArray<View.Input<any, any>>) {
+			value: function (
+				this: HzBuilder<any, never, TagKey>,
+				...content: ReadonlyArray<View.Input<any, any>>
+			) {
 				return View.withContent(this, [slot(name, content)])
 			},
 		})
 	}
 	if (key === "section") {
 		Object.defineProperty(Tag.prototype, "action", {
-			value: function (this: HzBuilder<any, never, TagKey>, content: View.Input<any, any>, message: unknown, label?: string) {
-				const action = merge(new HzBuilder<any, never, "action">(Spec.tagName("action")), { label }).on(
-					"press",
-					message as never,
-				)
-				return View.withContent(this, [View.withNoTextContent(action, [content], { name, textParents })])
+			value: function (
+				this: HzBuilder<any, never, TagKey>,
+				content: View.Input<any, any>,
+				message: unknown,
+				label?: string,
+			) {
+				const action = merge(new HzBuilder<any, never, "action">(Spec.tagName("action")), {
+					label,
+				}).on("press", message as never)
+				return View.withContent(this, [
+					View.withNoTextContent(action, [content], { name, textParents }),
+				])
 			},
 		})
 	}
@@ -217,7 +234,13 @@ export const extension = <
 })
 
 /** `h.extension(def, props)`: an `hz:ext` placeholder with the extension's events and a fallback slot. */
-export class HzExtension<out Msg, out R, in out Ev> extends View.ElementBuilder<Msg, R, Ev, unknown, "hz:ext"> {
+export class HzExtension<out Msg, out R, in out Ev> extends View.ElementBuilder<
+	Msg,
+	R,
+	Ev,
+	unknown,
+	"hz:ext"
+> {
 	override attr(_name: never, _value: never): this {
 		throw banned("attributes")
 	}
@@ -232,7 +255,9 @@ export class HzExtension<out Msg, out R, in out Ev> extends View.ElementBuilder<
 	}
 	/** What a platform that does not implement it draws, as an `hz:slot` named `fallback`. */
 	fallback(...content: ReadonlyArray<NoTextInput<Msg>>): this {
-		return View.withContent(this, [slot("fallback", content as ReadonlyArray<View.Input<any, any>>)]) as this
+		return View.withContent(this, [
+			slot("fallback", content as ReadonlyArray<View.Input<any, any>>),
+		]) as this
 	}
 }
 
@@ -269,7 +294,12 @@ export const composite = <const Name extends string, P, const Ev extends string 
 	view: options.view,
 })
 
-function makeCustom(this: H<unknown>, definition: AnyComposite, props: unknown, on?: Readonly<Record<string, unknown>>) {
+function makeCustom(
+	this: H<unknown>,
+	definition: AnyComposite,
+	props: unknown,
+	on?: Readonly<Record<string, unknown>>,
+) {
 	return definition.view(this, props, on ?? {})
 }
 
@@ -298,7 +328,10 @@ export class Host extends Context.Service<
 		readonly blur: (node: unknown) => Effect.Effect<void>
 		readonly scrollTo: (node: unknown, target: ScrollTarget) => Effect.Effect<void>
 		readonly measure: (node: unknown) => Effect.Effect<Rect>
-		readonly select: (node: unknown, range: { readonly start: number; readonly end: number }) => Effect.Effect<void>
+		readonly select: (
+			node: unknown,
+			range: { readonly start: number; readonly end: number },
+		) => Effect.Effect<void>
 	}
 >()("@hazel/ui/Hazel/Host") {}
 
@@ -314,7 +347,10 @@ type TagBuilder<Msg, K extends TagKey> = Tags[K]["content"] extends "none"
 	: View.Shorthand<Hz<Msg, never, K>>
 
 export type HazelTags<Msg> = { readonly [K in PublicKey]: TagBuilder<Msg, K> } & {
-	readonly extension: <D extends AnyExtension>(definition: D, props: PropsOf<D>) => HzExtension<Msg, never, ExtensionEvents<D>>
+	readonly extension: <D extends AnyExtension>(
+		definition: D,
+		props: PropsOf<D>,
+	) => HzExtension<Msg, never, ExtensionEvents<D>>
 	readonly custom: <P, Ev extends string>(
 		definition: Composite<string, P, Ev>,
 		props: P,

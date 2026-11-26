@@ -35,7 +35,9 @@ export const wrapHost = (inner: Renderer.Host<Node>, document: Document): Render
 			if (!primitives.has(node)) inner.setAttr(node, name, value, previous)
 		},
 		normalizeAttrs: (node, attrs) =>
-			primitives.has(node) || inner.normalizeAttrs === undefined ? attrs : inner.normalizeAttrs(node, attrs),
+			primitives.has(node) || inner.normalizeAttrs === undefined
+				? attrs
+				: inner.normalizeAttrs(node, attrs),
 		setProp: (node, name, value) => {
 			const primitive = primitives.get(node)
 			if (primitive === undefined) inner.setProp(node, name, value)
@@ -66,7 +68,8 @@ export const wrapHost = (inner: Renderer.Host<Node>, document: Document): Render
 }
 
 // C1: focus is real; the rest belong to the lanes that own scrolling (A4) and fields (A2).
-const notYet = (name: string, lane: string) => Effect.die(new NotImplemented({ what: `web command ${name}`, lane }))
+const notYet = (name: string, lane: string) =>
+	Effect.die(new NotImplemented({ what: `web command ${name}`, lane }))
 const commands: Hazel.Host["Service"] = {
 	focus: (node) => Effect.sync(() => (node as HTMLElement).focus()),
 	blur: (node) => Effect.sync(() => (node as HTMLElement).blur()),

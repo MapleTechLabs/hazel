@@ -170,7 +170,13 @@ export const tags = {
 		content: "text",
 		props: { level: option(O.HeadingLevel, "2") },
 	}),
-	icon: tag({ group: "content", web: "A1", ios: "S1", content: "none", props: { name: value(O.IconName) } }),
+	icon: tag({
+		group: "content",
+		web: "A1",
+		ios: "S1",
+		content: "none",
+		props: { name: value(O.IconName) },
+	}),
 	image: tag({
 		group: "content",
 		web: "A1",
@@ -555,4 +561,5 @@ export class NotImplemented extends Schema.TaggedError<NotImplemented>()("NotImp
 }
 
 /** The web renderer's lane for `hz:<key>`, as a `NotImplemented` to throw. */
-export const notOnWeb = (key: TagKey) => new NotImplemented({ what: `${tagName(key)} on the web`, lane: tags[key].web })
+export const notOnWeb = (key: TagKey) =>
+	new NotImplemented({ what: `${tagName(key)} on the web`, lane: tags[key].web })

@@ -172,13 +172,15 @@ export const makeNativeHost = (send: (batch: Batch) => void): NativeHost => {
 	const fire = (id: number, event: string, payload: Json = {}): boolean => {
 		for (let at = nodes.get(id); at !== undefined; at = at.parent) {
 			const handler = at.events?.handlers[event]
-			if (handler !== undefined && at.events !== undefined) return at.events.dispatch(event, handler, payload)
+			if (handler !== undefined && at.events !== undefined)
+				return at.events.dispatch(event, handler, payload)
 		}
 		return false
 	}
 
 	// C1: commands become `command` ops resolved by Swift's `reply` (lane B owns them).
-	const notYet = (name: string) => Effect.die(new NotImplemented({ what: `native command ${name}`, lane: "B" }))
+	const notYet = (name: string) =>
+		Effect.die(new NotImplemented({ what: `native command ${name}`, lane: "B" }))
 	const commands: Hazel.Host["Service"] = {
 		focus: () => notYet("focus"),
 		blur: () => notYet("blur"),

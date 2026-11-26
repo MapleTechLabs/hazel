@@ -38,7 +38,10 @@ export interface ListEvents {
 	readonly bench: BenchCommand
 }
 
-const set = <B extends View.ElementBuilder<any, any, any, any>>(builder: B, props: Readonly<Record<string, Json | undefined>>): B => {
+const set = <B extends View.ElementBuilder<any, any, any, any>>(
+	builder: B,
+	props: Readonly<Record<string, Json | undefined>>,
+): B => {
 	const next: Record<string, unknown> = { ...builder.props }
 	for (const key in props) {
 		const value = props[key]
@@ -51,31 +54,32 @@ const set = <B extends View.ElementBuilder<any, any, any, any>>(builder: B, prop
 const textParents = [Hazel.tag.text, chatTag.run, chatTag.codeBlock]
 
 /** An untyped bench element: props through `set`, element children only. */
-export class ChatContainer<out Msg, out R = never, in out E = {}, out T extends string = string> extends View.ElementBuilder<
-	Msg,
-	R,
-	E,
-	unknown,
-	T
-> {
+export class ChatContainer<
+	out Msg,
+	out R = never,
+	in out E = {},
+	out T extends string = string,
+> extends View.ElementBuilder<Msg, R, E, unknown, T> {
 	set(props: Readonly<Record<string, Json | undefined>>): this {
 		return set(this, props)
 	}
 	children<const C extends ReadonlyArray<Hazel.NoTextInput<Msg>>>(
 		...inputs: C
 	): ChatContainer<Msg, R | View.Requirements<C[number]>, E, T> {
-		return View.withNoTextContent(this, inputs as ReadonlyArray<View.Input<Msg, any>>, { name: Hazel.name, textParents }) as any
+		return View.withNoTextContent(this, inputs as ReadonlyArray<View.Input<Msg, any>>, {
+			name: Hazel.name,
+			textParents,
+		}) as any
 	}
 }
 
 /** An untyped bench text element (`run`, `codeBlock`). */
-export class ChatText<out Msg, out R = never, in out E = {}, out T extends string = string> extends View.ElementBuilder<
-	Msg,
-	R,
-	E,
-	unknown,
-	T
-> {
+export class ChatText<
+	out Msg,
+	out R = never,
+	in out E = {},
+	out T extends string = string,
+> extends View.ElementBuilder<Msg, R, E, unknown, T> {
 	set(props: Readonly<Record<string, Json | undefined>>): this {
 		return set(this, props)
 	}

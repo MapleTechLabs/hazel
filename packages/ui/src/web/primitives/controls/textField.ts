@@ -2,10 +2,11 @@
  * `hz:textField` in the DOM (G5): a label, a real `input` and an error line. The input owns its text
  * while editing; Model `value`s go through the same revision rule as Swift (`native/revisions.ts`).
  */
-import * as Revisions from "../native/revisions.ts"
-import type { Primitive } from "./primitives.ts"
+// Owned by lane A2. The G5 renderer, moved here in C0.
+import * as Revisions from "../../../native/revisions.ts"
+import { definePrimitive, type Primitive } from "../define.ts"
 
-export const createTextField = (document: Document, outer: HTMLElement): Primitive => {
+const createTextField = (document: Document, outer: HTMLElement): Primitive => {
 	const part = (tagName: string, name: string) => {
 		const node = document.createElement(tagName)
 		node.dataset.hzPart = name
@@ -67,3 +68,7 @@ export const createTextField = (document: Document, outer: HTMLElement): Primiti
 	}
 	return primitive
 }
+
+export const primitive = definePrimitive("textField", ({ document, outer }) =>
+	createTextField(document, outer("div")),
+)
