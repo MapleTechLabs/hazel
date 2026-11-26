@@ -364,7 +364,7 @@ export const ChannelSidebar = Hazel.component({
 						: {
 								name: customer.accountName,
 								initials: initialsOf(customer.accountName),
-								...(customer.accountLogoUrl ? { src: customer.accountLogoUrl } : {}),
+								src: customer.accountLogoUrl ?? undefined,
 							},
 				)
 				.sync(syncedOf.get(entry.id) ?? "none")

@@ -371,7 +371,7 @@ export const Dms = Hazel.component({
 								label: partner.firstName,
 								name: fullName(partner),
 								initials: initialsOf(fullName(partner)),
-								...(partner.avatarUrl ? { src: partner.avatarUrl } : {}),
+								src: partner.avatarUrl ?? undefined,
 								presence: model.presence[partner.userId] ?? "offline",
 								emphasized: dm.unread > 0,
 								href: hrefOf(dm),
