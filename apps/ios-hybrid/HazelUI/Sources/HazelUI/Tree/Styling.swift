@@ -88,12 +88,12 @@ extension View {
             .frame(minHeight: style.lineHeight(sizeClass))
     }
 
-    /// A style's box: padding, minimum height, fill, ring, corner radius, bottom divider, opacity.
+    /// A style's box: padding, minimum size, fill, ring, corner radius, bottom divider, opacity.
     public func hzBox(_ style: HazelTheme.Style) -> some View {
         let shape = RoundedRectangle(cornerRadius: min(style.radius ?? 0, 1000), style: .continuous)
         return padding(.horizontal, style.paddingX ?? 0)
             .padding(.vertical, style.paddingY ?? 0)
-            .frame(minHeight: style.minHeight)
+            .frame(minWidth: style.minWidth, minHeight: style.minHeight)
             .frame(maxWidth: style.fill == true ? .infinity : nil, alignment: .leading)
             .background(shape.fill(style.background?.color ?? .clear))
             .overlay { if let ring = style.ring { shape.strokeBorder(ring.color, lineWidth: 1) } }
