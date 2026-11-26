@@ -3,17 +3,26 @@
  * structure `tokens.css` and the parity gallery (`gallery/hazel.ts`) style. `iconOnly` drops the label
  * part and names the button with `aria-label`; `loading` keeps it focusable but swallows presses.
  * `selected` is a toggle's on state (`aria-pressed`); a `chip` is always a toggle, so it says `false` too.
+ * `removable` adds a trailing remove mark: a press on it, or Delete or Backspace, raises `remove`.
  */
 // Owned by lane A2.
 import { svg } from "../../icons.ts"
 import { definePrimitive, flag, option, part } from "../define.ts"
+import { ensureChoiceStyles } from "./choice-styles.ts"
+import { fire } from "./field.ts"
 import { ensureStyles } from "./styles.ts"
 
 export const primitive = definePrimitive("button", ({ document, outer, self }) => {
 	ensureStyles(document)
+	ensureChoiceStyles(document)
 	const node = outer("button") as HTMLButtonElement
 	node.setAttribute("type", "button")
 	const label = part(document, "span", "label")
+	// A button cannot hold another, so the mark is pointer-only; the keyboard removes with Delete.
+	const remove = part(document, "span", "remove")
+	remove.setAttribute("aria-hidden", "true")
+	remove.innerHTML = svg("close")
+	let removable = false
 	let icon: Element | undefined
 	let text = ""
 	let iconName: string | undefined
@@ -37,6 +46,7 @@ export const primitive = definePrimitive("button", ({ document, outer, self }) =
 		node.replaceChildren(
 			...(icon === undefined ? [] : [icon]),
 			...(iconOnly || text === "" ? [] : [label]),
+			...(removable ? [remove] : []),
 		)
 		if (iconOnly && text !== "") node.setAttribute("aria-label", text)
 		else node.removeAttribute("aria-label")
@@ -52,7 +62,17 @@ export const primitive = definePrimitive("button", ({ document, outer, self }) =
 		event.stopImmediatePropagation()
 	})
 
-	return self(node, (name, value) => {
+	remove.addEventListener("click", (event) => {
+		event.preventDefault()
+		event.stopImmediatePropagation()
+		if (!loading && !node.disabled) fire(primitive.events, "remove", {})
+	})
+	node.addEventListener("keydown", (event) => {
+		if (!removable || loading || (event.key !== "Delete" && event.key !== "Backspace")) return
+		if (fire(primitive.events, "remove", {})) event.preventDefault()
+	})
+
+	const primitive = self(node, (name, value) => {
 		if (name === "label") {
 			text = typeof value === "string" ? value : ""
 			label.textContent = text
@@ -74,6 +94,12 @@ export const primitive = definePrimitive("button", ({ document, outer, self }) =
 			selected = value === true
 			flag(node, "selected", value)
 			pressed()
+		} else if (name === "removable") {
+			removable = value === true
+			flag(node, "removable", value)
+			if (removable) node.setAttribute("aria-keyshortcuts", "Delete")
+			else node.removeAttribute("aria-keyshortcuts")
+			draw()
 		} else if (name === "circle") flag(node, "circle", value)
 		else if (name === "disabled") {
 			flag(node, "disabled", value)
@@ -90,4 +116,5 @@ export const primitive = definePrimitive("button", ({ document, outer, self }) =
 			}
 		}
 	})
+	return primitive
 })

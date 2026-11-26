@@ -9,10 +9,10 @@ import type { ButtonSize, ButtonVariant } from "../schema.ts"
 export const button = defineRecipe<
 	{ readonly variant: ButtonVariant; readonly size: ButtonSize },
 	"iconOnly" | "circle",
-	"icon" | "label"
+	"icon" | "label" | "remove"
 >({
 	primitive: "button",
-	parts: { icon: "part", label: "part" },
+	parts: { icon: "part", label: "part", remove: "part" },
 	base: {
 		root: {
 			layout: "inline-row",
@@ -25,7 +25,18 @@ export const button = defineRecipe<
 			strong: true,
 			transition: "fast",
 		},
-		parts: { icon: { shrink: false, bleedX: "0.5" } },
+		parts: {
+			icon: { shrink: false, bleedX: "0.5" },
+			// A filter chip's trailing remove mark (`filter-bar.ts` `filterChip`).
+			remove: {
+				size: "4",
+				shrink: false,
+				bleedX: "0.5",
+				color: "muted-fg",
+				radius: "sm",
+				transition: "fast",
+			},
+		},
 	},
 	options: {
 		variant: {

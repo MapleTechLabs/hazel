@@ -1,18 +1,40 @@
 import { defineRecipe } from "../recipe.ts"
 
 /**
- * `hz:slider` (phase 4): the kit's slider (`ui/slider.ts`): label, value text, track, fill and thumb. Declared by the contract wave: parts and option values
- * are named, every layer is empty until lane A2 fills it from today's kit (lane D reviews).
+ * `hz:slider` (`ui/slider.ts`, `slider.styles.ts`): the label and value text over a `h-1.5` track with
+ * its fill and a `size-5` white thumb. Positions along the track, the drag scale and the focus ring are
+ * the web renderer's (`controls/choice-styles.ts`).
  */
-export const slider = defineRecipe<{}, never, "label" | "value" | "track" | "fill" | "thumb">({
+export const slider = defineRecipe<{}, never, "header" | "label" | "value" | "track" | "fill" | "thumb">({
 	primitive: "slider",
 	parts: {
-		label: "part",
-		value: "part",
+		header: "part",
+		label: { kind: "part", in: "header" },
+		value: { kind: "part", in: "header" },
 		track: "part",
 		fill: { kind: "part", in: "track" },
 		thumb: { kind: "part", in: "track" },
 	},
-	base: { root: {} },
+	base: {
+		root: { layout: "column", rowGap: "2", fill: true },
+		parts: {
+			header: { layout: "row", align: "center", gap: "2" },
+			label: { text: "label", strong: true, color: "fg", grow: true },
+			value: { text: "label", strong: true, numeric: true, color: "muted-fg" },
+			track: { fill: true, minHeight: "1.5", radius: "full", background: "secondary" },
+			fill: { radius: "full", background: "primary" },
+			// HAZEL-GAP(slider-thumb-edge): today's edge is `border-fg/10`; `toggle-edge` is fg/5.
+			thumb: {
+				size: "5",
+				radius: "full",
+				borderWidth: "hairline",
+				borderColor: "toggle-edge",
+				background: "toggle-thumb",
+				shadow: "sm",
+			},
+		},
+	},
 	options: {},
+	states: { disabled: { root: { opacity: 0.5 } } },
+	inert: ["disabled"],
 })

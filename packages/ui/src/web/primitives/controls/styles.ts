@@ -14,13 +14,13 @@ const css = `
 	outline: 2px solid color-mix(in oklab, var(--hz-color-ring) 70%, transparent);
 	outline-offset: 0;
 }
-[data-hz=toggle] > [data-hz-part=control] { inline-size: var(--hz-space-10); align-self: start; }
+[data-hz=toggle]:not([data-style=checkbox]) > [data-hz-part=control] { inline-size: var(--hz-space-10); align-self: start; }
 [data-hz=toggle] > [data-hz-part=control] > [data-hz-part=thumb] {
 	transition: translate var(--hz-duration-normal) var(--hz-ease-inOut);
 }
 [data-hz=toggle][data-selected] > [data-hz-part=control] > [data-hz-part=thumb] { translate: var(--hz-space-4) 0; }
 @media (width >= 40rem) {
-	[data-hz=toggle] > [data-hz-part=control] { inline-size: var(--hz-space-8); }
+	[data-hz=toggle]:not([data-style=checkbox]) > [data-hz-part=control] { inline-size: var(--hz-space-8); }
 	[data-hz=toggle][data-selected] > [data-hz-part=control] > [data-hz-part=thumb] { translate: var(--hz-space-3) 0; }
 }
 @media (prefers-reduced-motion: reduce) {
