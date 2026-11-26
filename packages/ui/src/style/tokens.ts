@@ -31,8 +31,12 @@ const palette = {
 	"red-500": "oklch(63.7% 0.237 25.331)",
 	"red-600": "oklch(57.7% 0.245 27.325)",
 	"red-700": "oklch(50.5% 0.213 27.518)",
+	"amber-200": "oklch(92.4% 0.12 95.746)",
+	"amber-300": "oklch(87.9% 0.169 91.605)",
 	"amber-400": "oklch(82.8% 0.189 84.429)",
+	"amber-600": "oklch(66.6% 0.179 58.318)",
 	"amber-700": "oklch(55.5% 0.163 48.998)",
+	"amber-900": "oklch(41.4% 0.112 45.904)",
 	"amber-950": "oklch(27.9% 0.077 45.635)",
 	"emerald-400": "oklch(76.5% 0.177 163.223)",
 	"emerald-500": "oklch(69.6% 0.17 162.48)",
@@ -41,10 +45,14 @@ const palette = {
 	"sky-300": "oklch(82.8% 0.111 230.318)",
 	"sky-500": "oklch(68.5% 0.169 237.323)",
 	"sky-700": "oklch(50% 0.134 242.749)",
+	"brand-100": "rgb(244 235 255)",
+	"brand-200": "rgb(233 215 254)",
 	"brand-300": "rgb(214 187 251)",
+	"brand-400": "rgb(182 146 246)",
 	"brand-500": "rgb(158 119 237)",
 	"brand-600": "rgb(127 86 217)",
 	"brand-700": "rgb(105 65 198)",
+	"brand-900": "rgb(66 48 125)",
 } as const
 
 const p = (name: keyof typeof palette): ColorExpr => ({ ref: `palette.${name}` })
@@ -66,7 +74,39 @@ const color = {
 	separator: themed(alpha(p("zinc-950"), 0.07), alpha(p("white"), 0.07)),
 	border: themed(p("zinc-200"), lit("oklch(1 0 0 / 0.085)")),
 	"border-hover": themed(p("zinc-300"), lit("oklch(1 0 0 / 0.14)")),
+	/** An outlined control's edge (`--input`). */
+	input: themed(p("zinc-300"), lit("oklch(1 0 0 / 0.1)")),
+	/** A filled field's surface (fields have a fill, not a border). */
+	field: themed(lit("oklch(0 0 0 / 0.04)"), lit("oklch(1 0 0 / 0.05)")),
+	"field-hover": themed(lit("oklch(0 0 0 / 0.065)"), lit("oklch(1 0 0 / 0.08)")),
 	ring: same(ref("primary")),
+	/** Keyboard focus (`ring-ring/70`), the field's focused edge, and its halo (`ring-ring/20`). */
+	"focus-ring": same(alpha(ref("ring"), 0.7)),
+	"focus-ring-hover": same(alpha(ref("ring"), 0.8)),
+	"focus-halo": same(alpha(ref("ring"), 0.2)),
+	/** An invalid field (`data-invalid:border-danger-subtle-fg/70`, its focus halo at 20%). */
+	"invalid-border": same(alpha(ref("danger-subtle-fg"), 0.7)),
+	"invalid-border-hover": same(alpha(ref("danger-subtle-fg"), 0.8)),
+	"invalid-halo": same(alpha(ref("danger-subtle-fg"), 0.2)),
+
+	// Raised surfaces: menus, popovers, dialogs, sheets, toasts (styles.css `--overlay*`).
+	overlay: themed(p("white"), lit("oklch(0.234 0.006 286.033)")),
+	"overlay-fg": themed(p("zinc-950"), p("zinc-50")),
+	/** A popover's, toast's or tooltip's edge (`border-fg/10`). */
+	"overlay-border": same(alpha(ref("fg"), 0.1)),
+	/** A dialog's ring (`ring-fg/8 dark:ring-fg/10`). */
+	"dialog-ring": themed(alpha(ref("fg"), 0.08), alpha(ref("fg"), 0.1)),
+	/** A sheet's edge (`border-muted-fg/20 dark:border-border`). */
+	"sheet-border": themed(alpha(ref("muted-fg"), 0.2), ref("border")),
+	"overlay-backdrop": themed(lit("oklch(0.2 0.01 286 / 0.2)"), lit("oklch(0 0 0 / 0.5)")),
+	/** A tooltip: ink on the page colour (`bg-fg text-bg`, muted text `text-bg/60`). */
+	inverse: same(ref("fg")),
+	"inverse-fg": same(ref("bg")),
+	"inverse-muted": same(alpha(ref("bg"), 0.6)),
+	navbar: themed(lit("oklch(0.988 0 0)"), lit("oklch(0.17 0.006 285.885)")),
+	"navbar-fg": themed(p("zinc-950"), p("zinc-50")),
+	"selection-bg": themed(p("brand-100"), p("brand-900")),
+	"selection-fg": themed(p("brand-700"), p("brand-200")),
 	muted: themed(p("zinc-100"), p("zinc-900")),
 	"muted-fg": themed(p("zinc-600"), p("zinc-400")),
 
@@ -90,13 +130,57 @@ const color = {
 	danger: same(p("red-600")),
 	"danger-fg": same(p("red-50")),
 	"danger-subtle-fg": themed(p("red-700"), p("red-400")),
-	"accent-fg": themed(p("brand-700"), p("brand-300")),
+	"primary-subtle-fg": themed(p("brand-700"), p("brand-300")),
+	/** The `accent` tone's ink: the brand's subtle ink (styles.css's own `--accent` is a grey, unused here). */
+	"accent-fg": same(ref("primary-subtle-fg")),
+
+	// Light tints over the page, from the chat seeds (`bg-primary/10`, `bg-warning/10`...).
+	/** A mention, my reaction, a selected chip (`bg-primary/10`, hover `/20`, ring `/30`). */
+	"primary-tint": same(alpha(ref("primary"), 0.1)),
+	"primary-tint-hover": same(alpha(ref("primary"), 0.2)),
+	"primary-tint-ring": same(alpha(ref("primary"), 0.3)),
+	/** A focused message row's ring (`ring-primary/40`). */
+	"primary-focus": same(alpha(ref("primary"), 0.4)),
+	/** A band under a block (`bg-secondary/40`) and a quiet chip under the pointer (`bg-secondary/80`). */
+	"secondary-band": same(alpha(ref("secondary"), 0.4)),
+	"secondary-soft": same(alpha(ref("secondary"), 0.8)),
+	/** A pinned message (`bg-warning/10`, hover `/15`, its edge `border-warning`). */
+	"warning-tint": same(alpha(ref("warning"), 0.1)),
+	"warning-tint-hover": same(alpha(ref("warning"), 0.15)),
+	/** A quiet destructive control under the pointer (`hover:bg-danger/10`). */
+	"danger-tint": same(alpha(ref("danger"), 0.1)),
+	/** Search hits, starred items, the verified mark (styles.css `--highlight`, `--favorite`, `--verified`). */
+	highlight: themed(p("amber-200"), alpha(p("amber-400"), 0.2)),
+	"highlight-fg": themed(p("amber-900"), p("amber-200")),
+	favorite: same(p("amber-400")),
+	"favorite-fg": themed(p("amber-600"), p("amber-300")),
+	verified: themed(p("brand-500"), p("brand-400")),
+
+	// Presence dots (`utils/status.ts`): busy is the app's warning; offline is a hollow ring.
+	"presence-online": same(ref("success")),
+	"presence-away": same(ref("warning")),
+	"presence-busy": same(ref("warning")),
+	"presence-offline": same(ref("muted-fg")),
+	/** The ring that cuts a dot out of its avatar (`ring-bg`). */
+	"presence-cutout": same(ref("bg")),
+	// Toggle (switch.styles.ts): the track at rest and under the pointer, its edge, the thumb.
+	"toggle-track": same(alpha(ref("fg"), 0.15)),
+	"toggle-track-hover": same(alpha(ref("fg"), 0.2)),
+	"toggle-edge": same(alpha(ref("fg"), 0.05)),
+	"toggle-thumb": same(p("white")),
+	/** Vendor marks, the same in both themes (`--color-slack`, `--color-discord`). */
+	slack: same(lit("#4a154b")),
+	discord: same(lit("#5865f2")),
 
 	// The sidebar (styles.css `--sidebar-*`).
 	sidebar: themed(lit("oklch(0.985 0 0)"), lit("oklch(0.18 0.006 285.885)")),
 	"sidebar-fg": themed(lit("oklch(0.141 0.005 285.823)"), lit("oklch(0.985 0 0)")),
 	"sidebar-primary": themed(alpha(p("brand-500"), 0.15), alpha(p("brand-500"), 0.2)),
 	"sidebar-primary-fg": themed(p("brand-700"), p("brand-300")),
+	"sidebar-accent": themed(lit("oklch(0.92 0.004 286.32)"), lit("oklch(0.274 0.006 286.033)")),
+	"sidebar-accent-fg": themed(lit("oklch(0.141 0.005 285.823)"), lit("oklch(0.985 0 0)")),
+	"sidebar-border": themed(lit("oklch(0.901 0.006 286.286)"), lit("oklch(1 0 0 / 0.07)")),
+	"sidebar-ring": same(p("brand-500")),
 	/** A section's title: `text-sidebar-fg/70`. */
 	"sidebar-title": same(alpha(ref("sidebar-fg"), 0.7)),
 
@@ -120,23 +204,33 @@ export const tokens = {
 	color,
 	font: {
 		sans: '"Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
-		mono: 'ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace',
+		mono: 'ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
 		sansFeatures: '"cv02", "cv03", "cv04", "cv11"',
 		weight: { regular: 400, strong: 500 },
 	},
-	/** Tailwind's steps as the kit uses them per size class (`text-base/6 sm:text-sm/5` is `body`). */
+	/**
+	 * Tailwind's steps as the kit uses them per size class (`text-base/6 sm:text-sm/5` is `body`).
+	 * `title` and `display` are heading.styles.ts's `section` and `display` (tracking in px from its em);
+	 * `code` is the app's `font-mono text-sm` (code blocks, inline code), set in the mono family.
+	 */
 	text: {
 		body: { compact: { size: 16, lineHeight: 24 }, regular: { size: 14, lineHeight: 20 } },
 		label: { compact: { size: 14, lineHeight: 20 }, regular: { size: 14, lineHeight: 20 } },
 		caption: { compact: { size: 12, lineHeight: 16 }, regular: { size: 12, lineHeight: 16 } },
-		title: { compact: { size: 18, lineHeight: 28 }, regular: { size: 16, lineHeight: 24 } },
-		display: { compact: { size: 24, lineHeight: 32 }, regular: { size: 20, lineHeight: 28 } },
-		code: { compact: { size: 14, lineHeight: 20 }, regular: { size: 13, lineHeight: 20 } },
+		title: {
+			compact: { size: 16, lineHeight: 24, tracking: -0.176 },
+			regular: { size: 16, lineHeight: 24, tracking: -0.176 },
+		},
+		display: {
+			compact: { size: 24, lineHeight: 32, tracking: -0.48 },
+			regular: { size: 24, lineHeight: 32, tracking: -0.48 },
+		},
+		code: { compact: { size: 14, lineHeight: 20 }, regular: { size: 14, lineHeight: 20 } },
 		// Recipe-only steps (styles.css `--text-2xs`, `--text-3xs`): counts and small badges.
 		tiny: { compact: { size: 11, lineHeight: 16 }, regular: { size: 11, lineHeight: 16 } },
 		micro: { compact: { size: 10, lineHeight: 16 }, regular: { size: 10, lineHeight: 16 } },
 	},
-	/** Tailwind's 4px grid by step name (`3` is `--spacing(3)`, 12px). */
+	/** Tailwind's 4px grid by step name (`3` is `--spacing(3)`, 12px): every step the kit uses. */
 	space: {
 		"0": 0,
 		px: 1,
@@ -150,6 +244,7 @@ export const tokens = {
 		"4": 16,
 		"4.5": 18,
 		"5": 20,
+		"5.5": 22,
 		"6": 24,
 		"7": 28,
 		"8": 32,
@@ -158,21 +253,66 @@ export const tokens = {
 		"11": 44,
 		"12": 48,
 		"14": 56,
+		"16": 64,
+		"20": 80,
+		"24": 96,
 	},
-	/** styles.css `--radius-*` (lg is 0.5rem). */
-	radius: { xs: 2, sm: 4, md: 6, lg: 8, xl: 12, full: 9999 },
-	/** styles.css `--duration-*`. */
-	duration: { micro: 100, fast: 150, normal: 200, slow: 300 },
+	/** styles.css `--radius-*` (lg is 0.5rem, the rest multiples of it); `none` is `rounded-none`. */
+	radius: { none: 0, xs: 2, sm: 4, md: 6, lg: 8, xl: 12, "2xl": 16, "3xl": 24, "4xl": 32, full: 9999 },
+	/**
+	 * styles.css `--duration-*`, then the animations' own lengths (`--animate-*`): a message or a
+	 * count arriving, a reaction pill appearing and popping, the indeterminate progress sweep.
+	 */
+	duration: {
+		micro: 100,
+		fast: 150,
+		normal: 200,
+		slow: 300,
+		enter: 180,
+		reactionEnter: 220,
+		reactionPop: 260,
+		progressSweep: 1600,
+	},
+	/** styles.css `--ease-*` (theme and `:root`) and the curves its animations name. */
 	easing: {
 		out: [0.23, 1, 0.32, 1],
 		inOut: [0.77, 0, 0.175, 1],
+		outQuad: [0.25, 0.46, 0.45, 0.94],
+		outCubic: [0.215, 0.61, 0.355, 1],
+		outQuart: [0.165, 0.84, 0.44, 1],
+		inOutCubic: [0.645, 0.045, 0.355, 1],
+		/** Message enter and count rolls. */
+		enter: [0.2, 0, 0, 1],
+		/** Reaction enter and pop: a slight overshoot. */
+		overshoot: [0.34, 1.56, 0.64, 1],
+		/** CSS's own `ease-out`, `ease-in` and `ease-in-out` (field errors, toasts leaving, the toggle). */
+		cssOut: [0, 0, 0.58, 1],
+		cssIn: [0.42, 0, 1, 1],
+		cssInOut: [0.42, 0, 0.58, 1],
 	},
+	/** `--control-shadow` and `--elevation-*`: dark deepens them and lights raised surfaces' top edge. */
 	shadow: {
 		control: {
 			light: "inset 0 1px 0 oklch(1 0 0 / 0.16), inset 0 -1px 0 oklch(0 0 0 / 0.12), 0 1px 2px oklch(0 0 0 / 0.08)",
 			dark: "inset 0 1px 0 oklch(1 0 0 / 0.14), inset 0 -1px 0 oklch(0 0 0 / 0.2), 0 1px 2px oklch(0 0 0 / 0.3)",
 		},
 		xs: { light: "0 1px 2px 0 oklch(0 0 0 / 0.04)", dark: "0 1px 2px 0 oklch(0 0 0 / 0.3)" },
+		sm: {
+			light: "0 1px 2px -1px oklch(0 0 0 / 0.06), 0 1px 3px 0 oklch(0 0 0 / 0.06)",
+			dark: "0 1px 2px -1px oklch(0 0 0 / 0.3), 0 1px 3px 0 oklch(0 0 0 / 0.35)",
+		},
+		md: {
+			light: "0 2px 4px -2px oklch(0 0 0 / 0.05), 0 6px 16px -4px oklch(0 0 0 / 0.1)",
+			dark: "inset 0 1px 0 oklch(1 0 0 / 0.04), 0 2px 4px -2px oklch(0 0 0 / 0.3), 0 6px 16px -4px oklch(0 0 0 / 0.45)",
+		},
+		lg: {
+			light: "0 4px 8px -4px oklch(0 0 0 / 0.06), 0 16px 36px -8px oklch(0 0 0 / 0.14)",
+			dark: "inset 0 1px 0 oklch(1 0 0 / 0.05), 0 4px 8px -4px oklch(0 0 0 / 0.4), 0 16px 36px -8px oklch(0 0 0 / 0.6)",
+		},
+		xl: {
+			light: "0 8px 16px -8px oklch(0 0 0 / 0.08), 0 28px 64px -12px oklch(0 0 0 / 0.22)",
+			dark: "inset 0 1px 0 oklch(1 0 0 / 0.06), 0 8px 16px -8px oklch(0 0 0 / 0.45), 0 28px 64px -12px oklch(0 0 0 / 0.7)",
+		},
 	},
 } as const satisfies Tokens
 
