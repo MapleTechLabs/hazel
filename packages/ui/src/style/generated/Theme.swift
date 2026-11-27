@@ -265,6 +265,8 @@ public enum HazelTheme {
         public static let secondaryFaint = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 0.2), dark: RGBA(0.152897, 0.152887, 0.16577, 0.2))
         /// `warning-tint`: #ffb9001a / #ffb9001a
         public static let warningTint = ThemedColor(light: RGBA(1.000316, 0.727256, -0.229846, 0.1), dark: RGBA(1.000316, 0.727256, -0.229846, 0.1))
+        /// `warning-chip`: #ffb90033 / #ffb90033
+        public static let warningChip = ThemedColor(light: RGBA(1.000316, 0.727256, -0.229846, 0.2), dark: RGBA(1.000316, 0.727256, -0.229846, 0.2))
         /// `warning-tint-hover`: #ffb90026 / #ffb90026
         public static let warningTintHover = ThemedColor(light: RGBA(1.000316, 0.727256, -0.229846, 0.15), dark: RGBA(1.000316, 0.727256, -0.229846, 0.15))
         /// `danger-tint`: #e7000b1a / #e7000b1a
@@ -973,8 +975,33 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "sendIcon", style: Style(color: Colors.mutedFg, size: 14)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "above", style: Style(layout: .row, gap: 4, wrap: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "actions", style: Style(layout: .row, align: .center, gap: 4)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "quote", style: Style(paddingStart: 16)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "codeBlock", style: Style(background: Colors.muted, radius: 8, paddingX: 16, paddingY: 16, text: .code)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "subtext", style: Style(color: Colors.mutedFg, text: .caption)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "context", style: Style(layout: .row, align: .center, background: Colors.secondary, divider: Colors.border, paddingX: 12, paddingY: 8, gap: 8)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "contextLabel", style: Style(layout: .row, align: .center, gap: 8, text: .label, grow: true, minWidth: 0)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "contextPrefix", style: Style(color: Colors.mutedFg, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "contextAuthor", style: Style(color: Colors.fg, truncate: true, weight: 600)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "contextText", style: Style(color: Colors.mutedFg, truncate: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "contextIcon", style: Style(layout: .row, color: Colors.primary, size: 14, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "contextTitle", style: Style(color: Colors.primary, weight: 600)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "suggestions", style: Style(background: Colors.overlay, color: Colors.fg, borderColor: Colors.overlayBorder, borderWidth: 1, radius: 12, paddingX: 8, paddingY: 8, shadow: "lg")),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "suggestionGroup", style: Style(color: Colors.mutedFg, paddingX: 12, paddingTop: 8, paddingBottom: 4, text: .caption, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "suggestionEmpty", style: Style(color: Colors.mutedFg, paddingX: 8, paddingY: 8, text: .label, textAlign: .center)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "suggestion", style: Style(layout: .row, align: .center, radius: 8, paddingX: 12, paddingY: 8, gap: 8, text: .label, transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "suggestionFace", style: Style(layout: .row, align: .center, justify: .center, background: Colors.muted, color: Colors.mutedFg, radius: 12, size: 24, text: .micro, strong: true, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "suggestionIcon", style: Style(layout: .row, align: .center, justify: .center, background: Colors.primary, color: Colors.primaryFg, radius: 6, size: 24, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "suggestionEmoji", style: Style(shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "suggestionText", style: Style(layout: .column, grow: true, minWidth: 0)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "suggestionLine", style: Style(layout: .row, align: .center, gap: 6, rowGap: 4, wrap: true, minWidth: 0)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "suggestionLabel", style: Style(strong: true, truncate: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "suggestionChip", style: Style(background: Colors.muted, color: Colors.mutedFg, radius: 4, paddingX: 6, paddingY: 2, text: .caption)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "suggestionDescription", style: Style(color: Colors.mutedFg, text: .caption, truncate: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "send", style: Style(size: 28)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "sendIcon", style: Style(size: 12)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "suggestion", style: Style(background: Colors.primaryTint, color: Colors.primary), partState: PartState(part: "suggestion", state: .selected)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "suggestion", style: Style(background: Colors.muted), partState: PartState(part: "suggestion", state: .hover)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "suggestionChip", style: Style(background: Colors.warningChip, color: Colors.warning), partState: PartState(part: "suggestionChip", state: .emphasized)),
                 Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: nil, style: Style(borderColor: Colors.borderHover)),
                 Layer(when: When(options: [:], flags: ["canSend"], states: [], sizeClass: nil), part: "send", style: Style(background: Colors.primary, color: Colors.primaryFg, shadow: "control")),
                 Layer(when: When(options: [:], flags: ["canSend"], states: [], sizeClass: nil), part: "sendIcon", style: Style(color: Colors.primaryIcon)),
@@ -2008,6 +2035,7 @@ public enum HazelTheme {
         public static let toastIn = Spec(name: "toastIn", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .points(8), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.2, curve: Curve(0.23, 1, 0.32, 1), delay: 0, repeats: false)
         public static let toastOut = Spec(name: "toastOut", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 0, x: .points(0), y: .points(8), scale: 1), curve: nil)], duration: 0.15, curve: Curve(0.4, 0, 1, 1), delay: 0, repeats: false)
         public static let messageIn = Spec(name: "messageIn", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .points(6), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.18, curve: Curve(0.2, 0, 0, 1), delay: 0, repeats: false)
+        public static let suggestionsIn = Spec(name: "suggestionsIn", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .points(8), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.15, curve: Curve(0.25, 0.1, 0.25, 1), delay: 0, repeats: false)
         public static let reactionIn = Spec(name: "reactionIn", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .points(0), scale: 0.6), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.22, curve: Curve(0.34, 1.56, 0.64, 1), delay: 0, repeats: false)
         public static let reactionPop = Spec(name: "reactionPop", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil), Keyframe(at: 0.45, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1.3), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.26, curve: Curve(0.34, 1.56, 0.64, 1), delay: 0, repeats: false)
         public static let countUp = Spec(name: "countUp", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .fraction(0.7), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.18, curve: Curve(0.2, 0, 0, 1), delay: 0, repeats: false)
@@ -2023,6 +2051,7 @@ public enum HazelTheme {
             "actionBar": [Use(trigger: .enter, motion: slideUpIn, part: nil, backdrop: false, regular: nil)],
             "chart": [Use(trigger: .loop, motion: skeletonPulse, part: "skeleton", backdrop: false, regular: nil)],
             "commandPalette": [Use(trigger: .enter, motion: riseIn, part: "panel", backdrop: false, regular: scaleIn), Use(trigger: .enter, motion: scrimIn, part: "panel", backdrop: true, regular: nil)],
+            "composer": [Use(trigger: .enter, motion: suggestionsIn, part: "suggestions", backdrop: false, regular: nil)],
             "contextMenu": [Use(trigger: .enter, motion: fadeIn, part: "panel", backdrop: false, regular: nil)],
             "datePicker": [Use(trigger: .enter, motion: fieldErrorIn, part: "error", backdrop: false, regular: nil), Use(trigger: .enter, motion: fadeIn, part: "panel", backdrop: false, regular: nil)],
             "dialog": [Use(trigger: .enter, motion: riseIn, part: "panel", backdrop: false, regular: scaleIn), Use(trigger: .enter, motion: scrimIn, part: "panel", backdrop: true, regular: nil)],

@@ -1,16 +1,13 @@
 /**
- * The composer's suggestions panel and context bar (lane A2, W12a): today's `composer/autocomplete-view.ts`,
- * `trigger-views.ts` and `draft-view.ts` indicators. Renderer-owned like the chat leaves' (`chat/styles.ts`):
- * every value is a token variable; no primitive export, so the registry glob skips this file.
+ * What the composer's recipe cannot say (C3 `rendererFeatures`): the editor's ProseMirror rules, the
+ * quote's bar, list items, nested paragraphs, inline atoms and markdown runs at any depth, the panel's
+ * and bar's positions, the face's squircle and badges, and a `/` list's row shape. Tokens only; no
+ * primitive export, so the registry glob skips this file.
  */
-// HAZEL-GAP(composer-recipe-parts): these parts belong in the composer recipe; filling it needs a
-// regenerated `tokens.css` (integrator), so they live here until then.
 
 const color = (name: string) => `var(--hz-color-${name})`
 const space = (step: string) => `var(--hz-space-${step.replace(".", "_")})`
 const radius = (name: string) => `var(--hz-radius-${name})`
-const type = (step: string) =>
-	`font-size: var(--hz-text-${step}-size); line-height: var(--hz-text-${step}-leading);`
 
 const C = '[data-hz="composer"]'
 const p = (name: string) => `[data-hz-part="${name}"]`
@@ -37,24 +34,15 @@ const editorRules: ReadonlyArray<readonly [string, string]> = [
 		`${input} > ${p("placeholder")}`,
 		`position: absolute; pointer-events: none; user-select: none; color: ${color("muted-fg")};`,
 	],
-	// `relative my-1 pl-4 italic`, the accent bar `w-1 rounded-xs bg-primary` down its left.
-	[
-		`${input} ${p("quote")}`,
-		`position: relative; margin-block: ${space("1")}; padding-left: ${space("4")}; font-style: italic;`,
-	],
+	// `relative my-1 pl-4 italic` (the padding is the recipe's), the bar `w-1 rounded-xs bg-primary`.
+	[`${input} ${p("quote")}`, `position: relative; margin-block: ${space("1")}; font-style: italic;`],
 	[
 		`${input} ${p("quote")}::before`,
 		`content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: ${space("1")};
 		border-radius: ${radius("xs")}; background-color: ${color("primary")};`,
 	],
 	// `my-2 overflow-x-auto whitespace-pre-wrap rounded-lg bg-muted p-4 font-mono text-sm`.
-	[
-		`${input} ${p("codeBlock")}`,
-		`margin-block: ${space("2")}; padding: ${space("4")}; overflow-x: auto; white-space: pre-wrap;
-		border-radius: ${radius("lg")}; background-color: ${color("muted")}; font-family: var(--hz-font-mono);
-		${type("code")}`,
-	],
-	[`${input} ${p("subtext")}`, `color: ${color("muted-fg")}; ${type("caption")}`],
+	[`${input} ${p("codeBlock")}`, `margin-block: ${space("2")}; overflow-x: auto; white-space: pre-wrap;`],
 	// `my-0.5 ml-4`; an ordered item shows its own number.
 	[`${input} ${p("listItem")}`, `margin-block: ${space("0.5")}; margin-left: ${space("4")};`],
 	[`${input} ${p("listItem")}[data-number]::marker`, `content: attr(data-number) ". ";`],
@@ -123,90 +111,33 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 	],
 	// `flex items-center justify-between gap-2 border bg-secondary px-3 py-2` above the card's top border;
 	// it bleeds over the card's padding (`space-2`), and the card's border is its bottom line.
+	// It bleeds over the card's padding (`space-2`); its top corners are the card's.
 	[
 		bar,
-		`grid-area: context; display: flex; align-items: center; justify-content: space-between;
-		column-gap: ${space("2")}; margin: calc(-1 * ${space("2")}) calc(-1 * ${space("2")}) ${space("1")};
-		padding: ${space("2")} ${space("3")}; background-color: ${color("secondary")};
-		border-bottom: 1px solid ${color("border")};
+		`grid-area: context; margin: calc(-1 * ${space("2")}) calc(-1 * ${space("2")}) ${space("1")};
 		border-top-left-radius: calc(${radius("lg")} - 1px); border-top-right-radius: calc(${radius("lg")} - 1px);`,
 	],
-	[bar + "[hidden]", "display: none;"],
-	[
-		`${bar} > ${p("contextLabel")}`,
-		`display: flex; align-items: center; column-gap: ${space("2")}; min-width: 0; ${type("label")}`,
-	],
-	[`${bar} ${p("contextPrefix")}`, `flex-shrink: 0; color: ${color("muted-fg")};`],
-	[
-		`${bar} ${p("contextAuthor")}`,
-		`min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-		color: ${color("fg")}; font-weight: var(--hz-weight-semibold);`,
-	],
-	// `max-w-xs truncate text-muted-fg`.
-	[
-		`${bar} ${p("contextText")}`,
-		`min-width: 0; max-width: calc(${space("20")} * 4); overflow: hidden; text-overflow: ellipsis;
-		white-space: nowrap; color: ${color("muted-fg")};`,
-	],
-	[
-		`${bar} ${p("contextIcon")}`,
-		`display: flex; flex-shrink: 0; width: ${space("3.5")}; height: ${space("3.5")}; color: ${color("primary")};`,
-	],
+	// `max-w-xs`.
+	[`${bar} ${p("contextText")}`, `max-width: calc(${space("20")} * 4);`],
 	[`${bar} ${p("contextIcon")} > svg`, "width: 100%; height: 100%;"],
-	[`${bar} ${p("contextTitle")}`, `color: ${color("primary")}; font-weight: var(--hz-weight-semibold);`],
 	// The close button is today's `sq-xs` with a 14px icon at every size (`!p-1`, `size-3.5`).
 	[`${bar} > [data-hz="button"]`, "flex-shrink: 0;"],
 	[`${bar} > [data-hz="button"] > ${p("icon")}`, `width: ${space("3.5")}; height: ${space("3.5")};`],
 
-	// The panel: `absolute inset-x-0 bottom-full mb-2 z-50 overflow-y-auto rounded-xl border border-fg/10
-	// bg-overlay shadow-lg`, anchored over the field's top (the renderer sets `top`).
+	// The panel: `absolute inset-x-0 bottom-full mb-2 z-50 overflow-y-auto`, anchored over the field's
+	// top (the renderer sets `top`); its look is the recipe's.
 	[
 		panel,
 		`position: absolute; left: 0; right: 0; z-index: 50; translate: 0 calc(-100% - ${space("2")});
-		overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: ${space("2")};
-		border: 1px solid ${color("overlay-border")}; border-radius: ${radius("xl")};
-		background-color: ${color("overlay")}; color: ${color("fg")}; box-shadow: var(--hz-shadow-lg);
-		text-align: left;`,
-	],
-	[panel + "[hidden]", "display: none;"],
-	// A group heading (no today counterpart: today's lists are ungrouped).
-	[
-		`${panel} ${p("suggestionGroup")}`,
-		`padding: ${space("2")} ${space("3")} ${space("1")}; color: ${color("muted-fg")}; ${type("caption")}
-		font-weight: var(--hz-weight-strong);`,
+		overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; text-align: left;`,
 	],
 	[`${panel} ${p("suggestionGroup")}:first-child`, `padding-top: ${space("1")};`],
-	// A row: `flex items-center gap-2 rounded-lg px-3 py-2 text-sm`; active `bg-primary/10 text-primary`.
-	[
-		option,
-		`display: flex; align-items: center; column-gap: ${space("2")}; padding: ${space("2")} ${space("3")};
-		border-radius: ${radius("lg")}; cursor: pointer; ${type("label")}
-		transition: color var(--hz-duration-fast) var(--hz-ease-standard),
-			background-color var(--hz-duration-fast) var(--hz-ease-standard);`,
-	],
-	[`${option}:not([aria-selected="true"]):hover`, `background-color: ${color("muted")};`],
-	[
-		`${option}[aria-selected="true"]`,
-		`background-color: ${color("primary-tint")}; color: ${color("primary")};`,
-	],
-	[`${option} > ${p("suggestionText")}`, "min-width: 0; flex: 1 1 0%;"],
-	[
-		`${option} ${p("suggestionLabel")}`,
-		`overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--hz-weight-strong);`,
-	],
-	[
-		`${option} ${p("suggestionDescription")}`,
-		`overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${color("muted-fg")};
-		${type("caption")}`,
-	],
-	// The face: today's `avatar` `xs` (24px, `rounded-xl` squircle over `bg-muted`), its badge in the corner.
-	[
-		`${option} ${p("suggestionFace")}`,
-		`position: relative; display: flex; flex-shrink: 0; align-items: center; justify-content: center;
-		width: ${space("6")}; height: ${space("6")}; border-radius: ${radius("xl")}; corner-shape: squircle;
-		background-color: ${color("muted")}; color: ${color("muted-fg")}; ${type("micro")}
-		font-weight: var(--hz-weight-strong);`,
-	],
+	// The empty line is `p-4` with no list padding around it.
+	[`${panel}:has(> ${p("suggestionEmpty")})`, "padding: 0;"],
+	[`${panel} > ${p("suggestionEmpty")}`, `padding: ${space("4")};`],
+	[option, "cursor: pointer;"],
+	// The face's squircle and its badge in the corner.
+	[`${option} ${p("suggestionFace")}`, "position: relative; corner-shape: squircle;"],
 	[
 		`${option} ${p("suggestionFace")} > img`,
 		`width: 100%; height: 100%; object-fit: cover; border-radius: inherit; corner-shape: squircle;`,
@@ -251,22 +182,12 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 		`${option} ${p("suggestionMark")} > svg`,
 		`display: block; width: ${space("2")}; height: ${space("2")};`,
 	],
-	// An icon lead: today's `@` tile, `size-6 rounded-md bg-primary text-primary-fg`.
-	[
-		`${option} ${p("suggestionIcon")}`,
-		`display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: ${space("6")};
-		height: ${space("6")}; border-radius: ${radius("md")}; background-color: ${color("primary")};
-		color: ${color("primary-fg")};`,
-	],
 	[
 		`${option} ${p("suggestionIcon")} > svg`,
 		`display: block; width: ${space("3.5")}; height: ${space("3.5")};`,
 	],
 	// An emoji row: the glyph at `text-xl` (20/28) or a custom emoji's `size-5 object-contain`, then the muted name.
-	[
-		`${option} ${p("suggestionEmoji")}`,
-		`flex-shrink: 0; font-size: ${space("5")}; line-height: ${space("7")};`,
-	],
+	[`${option} ${p("suggestionEmoji")}`, `font-size: ${space("5")}; line-height: ${space("7")};`],
 	[
 		`${option} img${p("suggestionEmoji")}`,
 		`width: ${space("5")}; height: ${space("5")}; object-fit: contain;`,
@@ -285,7 +206,6 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 		`width: ${space("5")}; height: ${space("5")}; margin-top: ${space("0.5")};`,
 	],
 	[`${panel}[data-trigger="/"] ${p("suggestionDescription")}`, `margin-top: ${space("0.5")};`],
-	[`@media (prefers-reduced-motion: reduce)`, `${option} { transition: none; }`],
 	...editorRules,
 ]
 

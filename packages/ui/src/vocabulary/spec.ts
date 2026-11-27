@@ -655,6 +655,10 @@ export const tags = {
 			suggestions: value(Schema.Array(Content.Suggestion)),
 			activeSuggestion: text,
 			context: value(Content.ComposerContext),
+			// What an open trigger with no suggestions says ("No users found"); the names of the
+			// mentions a draft holds, for atoms the composer never suggested.
+			emptyText: text,
+			mentions: value(Schema.Array(Content.MentionName)),
 		},
 		slots: ["above", "actions"],
 		events: {
@@ -673,6 +677,11 @@ export const tags = {
 			pressSuggestion: ids,
 			editLast: none,
 			cancelContext: none,
+			// The pointer over a suggestion (today it moves the active row); Escape with no context and
+			// no trigger open; Shift+Tab out of the field (today focus goes to the messages).
+			hoverSuggestion: ids,
+			escape: none,
+			leave: none,
 		},
 		commands: ["focus", "blur", "select"],
 	}),

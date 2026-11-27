@@ -4,7 +4,7 @@
  */
 import { history } from "prosemirror-history"
 import type { Node as ProseMirrorNode } from "prosemirror-model"
-import { EditorState, PluginKey, TextSelection, type Transaction } from "prosemirror-state"
+import { EditorState, PluginKey, Selection, TextSelection, type Transaction } from "prosemirror-state"
 import { EditorView, type NodeView } from "prosemirror-view"
 import { carriesFiles, transferFiles } from "./files.ts"
 import { type KeyHost, keysPlugin, pastePlainText } from "./keys.ts"
@@ -33,6 +33,12 @@ export interface ComposerEditor {
 	readonly setEditable: (editable: boolean) => void
 	/** Redraws what reads the host (the placeholder). */
 	readonly refresh: () => void
+	/** Redraws the mention atoms, whose names the host just learned. */
+	readonly renamed: () => void
+	/** Focuses and selects `start..end`, offsets in the markdown text (clamped). */
+	readonly select: (start: number, end: number) => void
+	/** Ends the view and its document listeners. */
+	readonly destroy: () => void
 }
 
 /** Marks a transaction the Model made, so it is not reported back as an edit. */
@@ -81,6 +87,20 @@ const views = new WeakMap<Element, EditorView>()
 
 /** The editor whose editable element this is (today's `composerEditorOf`, for harnesses that type). */
 export const editorOf = (element: Element): EditorView | undefined => views.get(element)
+
+/** The document position whose markdown prefix first reaches `offset` (a binary search over cuts). */
+const positionAt = (doc: ProseMirrorNode, offset: number): number => {
+	let low = 0
+	let high = doc.content.size
+	if (offset <= 0) return Selection.atStart(doc).from
+	if (offset >= toMarkdown(doc).length) return Selection.atEnd(doc).to
+	while (low < high) {
+		const middle = Math.floor((low + high) / 2)
+		if (toMarkdown(doc.cut(0, middle)).length < offset) low = middle + 1
+		else high = middle
+	}
+	return low
+}
 
 const sameTrigger = (a: Trigger | null, b: Trigger | null) => a?.kind === b?.kind && a?.query === b?.query
 
@@ -137,5 +157,19 @@ export const createEditor = (mount: HTMLElement, host: EditorHost): ComposerEdit
 			view.setProps({})
 		},
 		refresh: () => view.dispatch(view.state.tr),
+		renamed: () => view.setProps({ nodeViews: { mention: mentionView(host) } }),
+		select: (start, end) => {
+			const { doc } = view.state
+			const from = positionAt(doc, Math.min(start, end))
+			const to = positionAt(doc, Math.max(start, end))
+			view.focus()
+			view.dispatch(
+				view.state.tr.setSelection(TextSelection.between(doc.resolve(from), doc.resolve(to))),
+			)
+		},
+		destroy: () => {
+			views.delete(view.dom)
+			view.destroy()
+		},
 	}
 }

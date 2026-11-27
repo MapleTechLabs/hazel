@@ -5,12 +5,15 @@
  * `![custom-emoji:...](...)` draw as atoms. `@ # / :` typed at a word start opens a trigger (`trigger
  * {kind, query}`); while its suggestions show, arrows, Enter, Tab and Escape raise `key`. Dropped or
  * pasted files raise `files`. W12a: the `suggestions` listbox (`pressSuggestion`), the `context` bar
- * (`cancelContext`), and Up in an empty composer (`editLast`).
+ * (`cancelContext`), and Up in an empty composer (`editLast`). G3: the panel's empty line
+ * (`emptyText`), command argument chips, `hoverSuggestion`, `mentions` names, `escape` and `leave`
+ * (Shift+Tab), and the host's `select` and `dispose` reaching the editor.
  */
 // Owned by lane A2.
 import { ditherInitial } from "../../../../../../apps/web-foldkit/src/ui/dither-avatar.ts"
-import type { ComposerContext, Face, Suggestion } from "../../../vocabulary/content.ts"
+import type { ComposerContext, Face, MentionName, Suggestion } from "../../../vocabulary/content.ts"
 import { glyph, svg } from "../../icons.ts"
+import { play } from "../../motion.ts"
 import { ditherLayer } from "../content/dither.ts"
 import { ensureStyles as ensureContentStyles } from "../content/styles.ts"
 import { definePrimitive, flag, option, part, type Primitive } from "../define.ts"
@@ -31,6 +34,7 @@ export const takeDropped = (): ReadonlyArray<File> => {
 }
 
 const isSuggestions = (value: unknown): value is ReadonlyArray<Suggestion> => Array.isArray(value)
+const isMentions = (value: unknown): value is ReadonlyArray<MentionName> => Array.isArray(value)
 const isContext = (value: unknown): value is ComposerContext =>
 	typeof value === "object" && value !== null && "kind" in value && "text" in value
 
@@ -98,7 +102,20 @@ const suggestionRow = (document: Document, suggestion: Suggestion, id: string, c
 		row.append(tile)
 	}
 	const body = part(document, "div", "suggestionText")
-	body.append(textPart(document, "div", "suggestionLabel", suggestion.label))
+	const line = part(document, "div", "suggestionLine")
+	line.append(textPart(document, "span", "suggestionLabel", suggestion.label))
+	// A command's arguments: `<required>` emphasized, `[optional]` muted.
+	for (const chip of suggestion.chips ?? []) {
+		const node = textPart(
+			document,
+			"span",
+			"suggestionChip",
+			chip.required === true ? `<${chip.label}>` : `[${chip.label}]`,
+		)
+		flag(node, "emphasized", chip.required === true)
+		line.append(node)
+	}
+	body.append(line)
 	if (suggestion.description !== undefined && suggestion.description !== "")
 		body.append(textPart(document, "div", "suggestionDescription", suggestion.description))
 	row.append(body)
@@ -153,10 +170,19 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 	panel.hidden = true
 	// Pressing in the list keeps the focus and the caret in the field.
 	panel.addEventListener("mousedown", (event) => event.preventDefault())
+	const rowOf = (target: EventTarget | null) => {
+		const row = target instanceof Element ? target.closest("[data-hz-part=suggestion]") : null
+		return row instanceof HTMLElement && row.dataset.id !== undefined ? row.dataset.id : undefined
+	}
 	panel.addEventListener("click", (event) => {
-		const row = event.target instanceof Element ? event.target.closest("[data-hz-part=suggestion]") : null
-		if (!(row instanceof HTMLElement) || row.dataset.id === undefined) return
-		fire(events(), "pressSuggestion", { id: row.dataset.id })
+		const id = rowOf(event.target)
+		if (id !== undefined) fire(events(), "pressSuggestion", { id })
+	})
+	// Today the pointer moves the active row (`HoveredAutocompleteOption`); a move, not an enter,
+	// so rows scrolling under a still pointer do not steal it.
+	panel.addEventListener("mousemove", (event) => {
+		const id = rowOf(event.target)
+		if (id !== undefined && id !== active) fire(events(), "hoverSuggestion", { id })
 	})
 
 	const events = () => primitive.events
@@ -165,13 +191,16 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 	let context: ComposerContext | undefined
 	/** The last trigger opened: the `/` list draws today's bot command rows. */
 	let lastKind: Trigger["kind"] | undefined
+	/** A trigger is open at the caret: an empty list then shows `emptyText`. */
+	let triggerOpen = false
+	let emptyText: string | undefined
+	let wasOpen = false
 	let placeholder = ""
 	let field = Revisions.initial
 	let canSend = false
 	let disabled = false
 	const rows = new Map<string, HTMLElement>()
-	// HAZEL-GAP(composer-mention-names): a mention's name is its `@` suggestion's label, kept once seen;
-	// a draft loaded with mentions the composer never suggested shows their ids.
+	// A mention's name: the screen's `mentions`, else its `@` suggestion's label, kept once seen.
 	const names = new Map<string, string>()
 
 	const editor = createEditor(input, {
@@ -183,6 +212,11 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 			if (next.change !== undefined) fire(events(), "change", { ...next.change })
 		},
 		triggered: (next, previous) => {
+			const open = next !== null
+			if (open !== triggerOpen) {
+				triggerOpen = open
+				drawSuggestions()
+			}
 			if (next !== null && next.kind !== lastKind) {
 				lastKind = next.kind
 				option(panel, "trigger", lastKind)
@@ -194,7 +228,10 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 		suggestionKey: (key) =>
 			suggestions.length > 0 && handles(events(), "key") && fire(events(), "key", { key }),
 		editLast: () => fire(events(), "editLast", {}),
-		escape: () => context !== undefined && fire(events(), "cancelContext", {}),
+		// Escape closes the reply or edit bar; with none, the screen's (close the thread, mark read).
+		escape: () =>
+			context !== undefined ? fire(events(), "cancelContext", {}) : fire(events(), "escape", {}),
+		leave: () => fire(events(), "leave", {}),
 		submit: () => {
 			if (canSend && !disabled) fire(events(), "submit", { ...Revisions.current(field) })
 		},
@@ -206,8 +243,6 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 	input.setAttribute("aria-label", "Message")
 	input.addEventListener("focus", () => fire(events(), "focus", {}))
 	input.addEventListener("blur", () => fire(events(), "blur", {}))
-	// HAZEL-GAP(composer-editor-teardown): the web host has no removal hook for a primitive, so the
-	// editor's view is never destroyed; ProseMirror's document listeners outlive a removed composer.
 	node.append(bar, content, input, send, panel)
 
 	const drawContext = () => {
@@ -246,6 +281,7 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 		for (const [id, row] of rows) {
 			const on = id === active
 			row.setAttribute("aria-selected", on ? "true" : "false")
+			flag(row, "selected", on)
 			if (on) current = row
 		}
 		if (current === undefined || panel.hidden) input.removeAttribute("aria-activedescendant")
@@ -257,10 +293,13 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 
 	const drawSuggestions = () => {
 		rows.clear()
-		// HAZEL-GAP(composer-suggestions-empty): today an open trigger with nothing found says so ("No
-		// users found"); the contract has no empty text, so an empty list draws nothing.
-		const open = suggestions.length > 0
+		// An open trigger with nothing found says so ("No users found"), as today.
+		const empty = suggestions.length === 0 && triggerOpen && emptyText !== undefined
+		const open = suggestions.length > 0 || empty
 		panel.hidden = !open
+		// Today's panel slides in each time it opens (`suggestionsIn`).
+		if (open && !wasOpen) void play(panel, "enter")
+		wasOpen = open
 		option(panel, "trigger", lastKind)
 		if (open) {
 			input.setAttribute("aria-controls", panel.id)
@@ -269,11 +308,13 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 			input.removeAttribute("aria-controls")
 			input.removeAttribute("aria-expanded")
 		}
-		// HAZEL-GAP(composer-command-args): today's `/` rows chip each argument; `Suggestion` has none.
-		// HAZEL-GAP(composer-suggestion-hover): hover tints a row but cannot move `activeSuggestion`.
-		// HAZEL-GAP(composer-suggestions-motion): today's panel slides in; the recipe has no motion yet.
 		const command = lastKind === "/"
 		const children: Array<HTMLElement> = []
+		if (empty) {
+			const line = textPart(document, "div", "suggestionEmpty", emptyText ?? "")
+			line.setAttribute("role", "presentation")
+			children.push(line)
+		}
 		let group: string | undefined
 		for (const [index, suggestion] of suggestions.entries()) {
 			if (suggestion.group !== undefined && suggestion.group !== group) {
@@ -337,6 +378,12 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 			} else if (name === "suggestions") {
 				suggestions = isSuggestions(value) ? value : []
 				drawSuggestions()
+			} else if (name === "emptyText") {
+				emptyText = typeof value === "string" ? value : undefined
+				drawSuggestions()
+			} else if (name === "mentions") {
+				for (const mention of isMentions(value) ? value : []) names.set(mention.id, mention.name)
+				editor.renamed()
 			} else if (name === "activeSuggestion") {
 				active = typeof value === "string" ? value : undefined
 				markActive()
@@ -351,6 +398,10 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 			}
 		},
 		events: undefined,
+		// The host's `select`: offsets in the markdown text, mapped to the document.
+		select: (start, end) => editor.select(start, end),
+		// Removed for good: ProseMirror's view and its document listeners go with it.
+		dispose: () => editor.destroy(),
 	}
 	return primitive
 })

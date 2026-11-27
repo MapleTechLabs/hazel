@@ -1,0 +1,74 @@
+{
+	"about": "Bot commands under `/` (`trigger-views.ts`): each command's arguments chipped after its name, `<required>` warning-tinted, `[optional]` muted; the draft's mention named from `mentions`; `emptyText` for a trigger that finds nothing.",
+	"root": {
+		"tag": "composer",
+		"props": {
+			"placeholder": "Message #general",
+			"value": {
+				"text": "@[userId:u1] /de",
+				"rev": 0,
+				"edit": 0
+			},
+			"mentions": [
+				{
+					"id": "u1",
+					"name": "Maya Chen"
+				}
+			],
+			"emptyText": "No bot commands available",
+			"suggestions": [
+				{
+					"id": "deploy",
+					"label": "/deploy",
+					"description": "Ship a build to an environment",
+					"face": {
+						"name": "Release Bot",
+						"initials": "RB"
+					},
+					"chips": [
+						{
+							"label": "env",
+							"required": true
+						},
+						{
+							"label": "tag"
+						}
+					]
+				},
+				{
+					"id": "describe",
+					"label": "/describe",
+					"description": "Summarise the thread",
+					"face": {
+						"name": "Hazel",
+						"initials": "H"
+					}
+				}
+			],
+			"activeSuggestion": "deploy"
+		},
+		"events": [
+			"change",
+			"submit",
+			"trigger",
+			"key",
+			"pressSuggestion",
+			"hoverSuggestion",
+			"escape",
+			"leave"
+		]
+	},
+	"pending": {
+		"ios": "S2"
+	},
+	"aria": [
+		{
+			"role": "listbox",
+			"name": "Suggestions"
+		},
+		{
+			"role": "option",
+			"name": "/deploy <env> [tag] Ship a build to an environment"
+		}
+	]
+}

@@ -21,6 +21,10 @@ export interface Primitive {
 	readonly content: HTMLElement
 	readonly set: (name: string, value: Plain) => void
 	events: Events | undefined
+	/** The `select` command on a control that is not a native field (offsets in its text). */
+	readonly select?: (start: number, end: number) => void
+	/** Called once when the host removes it for good: tear down what outlives the DOM. */
+	readonly dispose?: () => void
 }
 
 export interface Context {

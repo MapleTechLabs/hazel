@@ -341,6 +341,10 @@ export const Crumb = Schema.Struct({ label: Schema.String, href: Schema.optional
 export type Crumb = typeof Crumb.Type
 
 /** One composer suggestion for an open trigger (`@`, `#`, `/`, `:`), drawn above the composer. */
+/** A bot command's argument after its name: `<required>` warning-tinted, `[optional]` muted. */
+export const SuggestionChip = Schema.Struct({ label: Schema.String, required: Schema.optional(Schema.Boolean) })
+export type SuggestionChip = typeof SuggestionChip.Type
+
 export const Suggestion = Schema.Struct({
 	id: Schema.String,
 	label: Schema.String,
@@ -352,8 +356,14 @@ export const Suggestion = Schema.Struct({
 	/** An emoji (or a custom emoji's image url) for `:` suggestions. */
 	emoji: Schema.optional(Schema.String),
 	mark: Schema.optional(Provider),
+	/** A `/` command's arguments, drawn after the label (`composer-command-args`). */
+	chips: Schema.optional(Schema.Array(SuggestionChip)),
 })
 export type Suggestion = typeof Suggestion.Type
+
+/** A member's name for the mentions in a draft the composer never suggested (`composer-mention-names`). */
+export const MentionName = Schema.Struct({ id: Schema.String, name: Schema.String })
+export type MentionName = typeof MentionName.Type
 
 /** What the composer is doing besides a new message: replying to one, or editing one. */
 export const ComposerContext = Schema.Struct({
