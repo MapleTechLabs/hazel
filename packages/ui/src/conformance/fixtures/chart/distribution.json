@@ -1,0 +1,38 @@
+{
+	"about": "The kit's 100% bar (`distributionBar`, the customer's users by activity), diffed against today's (`chart-tone-tokens`).",
+	"root": {
+		"tag": "chart",
+		"props": {
+			"kind": "distribution",
+			"label": "Users by activity",
+			"series": [
+				{
+					"key": "active",
+					"label": "Active",
+					"tone": "new",
+					"values": [18]
+				},
+				{
+					"key": "dormant",
+					"label": "Dormant",
+					"tone": "contraction",
+					"values": [7]
+				},
+				{
+					"key": "never",
+					"label": "Never active",
+					"tone": "neutral",
+					"values": [3]
+				}
+			]
+		}
+	},
+	"frame": "screen",
+	"kit": {
+		"specimen": "chart-distribution",
+		"target": "chart"
+	},
+	"pending": {
+		"ios": "S1"
+	}
+}

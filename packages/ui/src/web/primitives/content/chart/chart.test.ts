@@ -177,9 +177,76 @@ describe("hz:chart", () => {
 		expect(node.getAttribute("aria-busy")).toBe("true")
 		expect(node.querySelector("[data-hz-part=skeleton]")?.getAttribute("data-motion")).toBe("loop")
 	})
+})
 
-	it("leaves W2b's small kinds to a stub", () => {
-		const { node } = mount({ kind: "sparkline", label: "Seats" })
-		expect(node.querySelector("[data-hz-stub=A1]")).not.toBeNull()
+/** Lane W2b: the small kinds draw their plot alone, with no axes, legend or hover. */
+describe("hz:chart small kinds", () => {
+	const seats: ChartSeries = { key: "seats", label: "Seats", tone: "new", values: [4, null, 6, 11] }
+
+	it("draws a sparkline with its end dot inline, bare in a cell, over its fill on a card", () => {
+		const inline = mount({ kind: "sparkline", label: "Seats", series: [seats] }, ["hover"])
+		const svg = inline.node.querySelector("svg[data-hz-part=spark]")!
+		expect(inline.node.getAttribute("role")).toBe("img")
+		expect(svg.getAttribute("viewBox")).toBe("0 0 80 24")
+		expect(svg.getAttribute("data-tone")).toBe("new")
+		expect(parts(svg, "endDot")).toHaveLength(1)
+		expect(parts(svg, "area")).toHaveLength(0)
+		// Nulls are skipped: three points, the first inset by the dot's radius.
+		expect(svg.querySelector("[data-hz-part=line]")?.getAttribute("d")).toMatch(
+			/^M2\.5 [\d.]+ L[\d.]+ [\d.]+ L77\.5 2\.5$/,
+		)
+		inline.plot.dispatchEvent(new PointerEvent("pointermove", { clientX: 40, bubbles: true }))
+		expect(inline.fired).toEqual([])
+		expect(parts(inline.node, "tick")).toHaveLength(0)
+
+		const cell = mount({ kind: "sparkline", size: "small", series: [seats] })
+		expect(parts(cell.node, "endDot")).toHaveLength(0)
+		const card = mount({ kind: "sparkline", size: "large", series: [seats] })
+		expect(card.node.querySelector("svg")?.getAttribute("viewBox")).toBe("0 0 120 32")
+		expect(parts(card.node, "area")).toHaveLength(1)
+	})
+
+	it("highlights the evidence bars' tail and dashes the prior average", () => {
+		const { node } = mount({
+			kind: "barSparkline",
+			series: [{ key: "calls", label: "Calls", tone: "churn", values: [10, 20, 30, 5] }],
+			highlightFrom: 3,
+			net: true,
+		})
+		const bars = parts(node, "bar") as Array<HTMLElement>
+		expect(bars.map((bar) => bar.dataset.tone ?? "rest")).toEqual(["rest", "rest", "rest", "churn"])
+		expect(bars.map((bar) => bar.style.height)).toEqual([
+			"33.33333333333333%",
+			"66.66666666666666%",
+			"100%",
+			"16.666666666666664%",
+		])
+		expect((parts(node, "baseline")[0] as HTMLElement).style.bottom).toBe("66.66666666666666%")
+		const plain = mount({
+			kind: "barSparkline",
+			series: [{ key: "c", label: "C", tone: "series2", values: [1, 2] }],
+		})
+		expect(parts(plain.node, "baseline")).toHaveLength(0)
+		expect(
+			(parts(plain.node, "bar") as Array<HTMLElement>).every((bar) => bar.dataset.tone === "series2"),
+		).toBe(true)
+	})
+
+	it("splits the 100% bar by each series' total, leaving zero shares out", () => {
+		const { node } = mount({
+			kind: "distribution",
+			label: "Users by activity",
+			series: [
+				{ key: "active", label: "Active", tone: "new", values: [18] },
+				{ key: "dormant", label: "Dormant", tone: "contraction", values: [0] },
+				{ key: "never", label: "Never", tone: "neutral", values: [4, 2] },
+			],
+		})
+		const shares = parts(node, "share") as Array<HTMLElement>
+		expect(shares.map((share) => [share.dataset.tone, share.style.width])).toEqual([
+			["new", "75%"],
+			["neutral", "25%"],
+		])
+		expect(parts(mount({ kind: "distribution", series: [] }).node, "share")).toHaveLength(0)
 	})
 })
