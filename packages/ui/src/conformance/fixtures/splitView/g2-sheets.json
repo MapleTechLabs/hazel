@@ -12,11 +12,7 @@
 			"sidebarSheet": true,
 			"sidebarOpen": true
 		},
-		"events": [
-			"resize",
-			"dismissSidebar",
-			"dismissDetail"
-		],
+		"events": ["resize", "dismissSidebar", "dismissDetail"],
 		"slots": [
 			{
 				"name": "sidebar",
@@ -29,9 +25,7 @@
 						"children": [
 							{
 								"tag": "text",
-								"children": [
-									"general"
-								]
+								"children": ["general"]
 							}
 						]
 					}
@@ -48,9 +42,7 @@
 						"children": [
 							{
 								"tag": "text",
-								"children": [
-									"Replies"
-								]
+								"children": ["Replies"]
 							}
 						]
 					}
@@ -66,9 +58,7 @@
 				"children": [
 					{
 						"tag": "text",
-						"children": [
-							"Messages"
-						]
+						"children": ["Messages"]
 					}
 				]
 			}
@@ -77,9 +67,7 @@
 	"axes": [
 		{
 			"prop": "sidebarOpen",
-			"values": [
-				null
-			]
+			"values": [null]
 		}
 	],
 	"pending": {

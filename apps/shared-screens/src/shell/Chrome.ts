@@ -156,7 +156,10 @@ export const AccountMenu = Hazel.component({
 		return h.menu
 			.key("account")
 			.label("Profile")
-			.entries([{ title: name, subtitle: email, entries: entries[0]?.entries ?? [] }, ...entries.slice(1)])
+			.entries([
+				{ title: name, subtitle: email, entries: entries[0]?.entries ?? [] },
+				...entries.slice(1),
+			])
 			.on("select", ({ id }) => ChromeMessage.Selected({ id }))
 			.trigger(
 				h.item

@@ -12,9 +12,7 @@
 				"children": [
 					{
 						"tag": "text",
-						"children": [
-							"MRR"
-						]
+						"children": ["MRR"]
 					}
 				]
 			},
@@ -23,9 +21,7 @@
 				"children": [
 					{
 						"tag": "text",
-						"children": [
-							"Accounts"
-						]
+						"children": ["Accounts"]
 					}
 				]
 			},
@@ -34,9 +30,7 @@
 				"children": [
 					{
 						"tag": "text",
-						"children": [
-							"Churn"
-						]
+						"children": ["Churn"]
 					}
 				]
 			},
@@ -45,9 +39,7 @@
 				"children": [
 					{
 						"tag": "text",
-						"children": [
-							"Trials"
-						]
+						"children": ["Trials"]
 					}
 				]
 			}
@@ -57,10 +49,7 @@
 	"axes": [
 		{
 			"prop": "density",
-			"values": [
-				"snug",
-				"loose"
-			]
+			"values": ["snug", "loose"]
 		}
 	],
 	"pending": {

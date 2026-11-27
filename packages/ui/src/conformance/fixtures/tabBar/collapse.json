@@ -24,9 +24,7 @@
 				}
 			]
 		},
-		"events": [
-			"change"
-		]
+		"events": ["change"]
 	},
 	"frame": "screen",
 	"pending": {

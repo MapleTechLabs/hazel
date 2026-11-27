@@ -8,9 +8,7 @@
 			"tone": "muted",
 			"icon": "arrow-left"
 		},
-		"events": [
-			"press"
-		]
+		"events": ["press"]
 	},
 	"frame": "inline",
 	"aria": [

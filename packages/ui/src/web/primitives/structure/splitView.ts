@@ -160,7 +160,9 @@ export const primitive = definePrimitive("splitView", ({ document, tag, outer })
 		event.preventDefault()
 	})
 	// A horizontal swipe: toward the trailing edge on the detail, toward the leading edge on the sidebar.
-	let swipe: { readonly id: number; readonly x: number; readonly y: number; readonly on: "detail" | "sidebar" } | undefined
+	let swipe:
+		| { readonly id: number; readonly x: number; readonly y: number; readonly on: "detail" | "sidebar" }
+		| undefined
 	node.addEventListener("pointerdown", (event) => {
 		if (event.pointerType === "mouse" || !compact() || !(event.target instanceof Element)) return
 		const slot = event.target.closest<HTMLElement>("[data-hz-slot]")
@@ -254,7 +256,10 @@ export const primitive = definePrimitive("splitView", ({ document, tag, outer })
 		set: (name, value) => {
 			if (name === "sidebarCollapsed") flag(node, "sidebar-collapsed", value)
 			else if (name === "resizeLabel")
-				handle.setAttribute("aria-label", typeof value === "string" && value !== "" ? value : "Resize panel")
+				handle.setAttribute(
+					"aria-label",
+					typeof value === "string" && value !== "" ? value : "Resize panel",
+				)
 			else if (name === "detailMin" || name === "detailMax" || name === "contentMin") {
 				if (name === "detailMin") minDetail = countOf(value, MIN_DETAIL)
 				else if (name === "detailMax") maxDetail = countOf(value, MAX_DETAIL)
@@ -267,8 +272,7 @@ export const primitive = definePrimitive("splitView", ({ document, tag, outer })
 			} else if (name === "sidebarOpen") {
 				sidebarOpen = value === true
 				flag(node, "sidebar-open", value)
-			}
-			else if (name === "resizable") flag(node, "resizable", value)
+			} else if (name === "resizable") flag(node, "resizable", value)
 			// A drag in progress keeps its own width until it is released.
 			else if (name === "detailWidth" && drag === undefined)
 				show(typeof value === "number" && value > 0 ? clamp(value, maxDetail) : DEFAULT_DETAIL)

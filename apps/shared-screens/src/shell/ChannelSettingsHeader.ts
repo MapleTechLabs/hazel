@@ -72,7 +72,10 @@ export const ChannelSettingsHeader = Hazel.component({
 					.children(
 						icon,
 						h.stack.density("none").children(
-							h.heading.level("1").size("large").children(channel?.name ?? "Channel"),
+							h.heading
+								.level("1")
+								.size("large")
+								.children(channel?.name ?? "Channel"),
 							h.text.role("label").tone("muted").children("Channel settings"),
 						),
 					),

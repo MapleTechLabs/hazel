@@ -9,9 +9,7 @@
 			"size": "xsmall",
 			"shortcut": "A"
 		},
-		"events": [
-			"press"
-		]
+		"events": ["press"]
 	},
 	"frame": "inline",
 	"aria": [

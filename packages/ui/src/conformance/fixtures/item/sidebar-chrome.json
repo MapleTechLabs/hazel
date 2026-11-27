@@ -6,9 +6,7 @@
 			"title": "Hazel",
 			"style": "switcher"
 		},
-		"events": [
-			"press"
-		],
+		"events": ["press"],
 		"slots": [
 			{
 				"name": "leading",

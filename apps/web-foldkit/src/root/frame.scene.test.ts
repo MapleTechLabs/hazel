@@ -66,7 +66,7 @@ describe("the docked sidebar's first paint", () => {
 			.toExist()
 			.expect(Locator.attr("data-settled"))
 			.toBeAbsent()
-			.expectMount(SettleAfterPaint({}))
+			.expectMount(SettleAfterPaint())
 	})
 
 	test("every transition utility on the dock waits for data-settled", () => {

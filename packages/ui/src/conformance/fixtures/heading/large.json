@@ -6,9 +6,7 @@
 			"level": "1",
 			"size": "large"
 		},
-		"children": [
-			"general"
-		]
+		"children": ["general"]
 	},
 	"frame": "inline",
 	"pending": {

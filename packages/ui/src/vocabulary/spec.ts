@@ -935,7 +935,11 @@ export const tags = {
 			sidebarOpen: flag,
 		},
 		slots: ["sidebar", "rail", "detail"],
-		events: { resize: Schema.Struct({ width: Schema.Finite }), dismissSidebar: none, dismissDetail: none },
+		events: {
+			resize: Schema.Struct({ width: Schema.Finite }),
+			dismissSidebar: none,
+			dismissDetail: none,
+		},
 	}),
 	section: tag({
 		group: "structure",

@@ -465,7 +465,9 @@ const motionRules = (tokens: Tokens, recipe: Recipe): ReadonlyArray<Rule> => {
 								`[data-motion~="${trigger}"]`,
 								`:${use.staggerAhead ? "nth-last-child" : "nth-child"}(${nth})[data-motion~="${trigger}"]`,
 							),
-							lines: [`animation-delay: ${Math.round((use.staggerAhead ? -1 : 1) * (nth - 1) * stagger * 1000) / 1000}s;`],
+							lines: [
+								`animation-delay: ${Math.round((use.staggerAhead ? -1 : 1) * (nth - 1) * stagger * 1000) / 1000}s;`,
+							],
 						}))
 			return [
 				rule([], use.motion),

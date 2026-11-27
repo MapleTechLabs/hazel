@@ -56,7 +56,9 @@ describe.runIf(inBrowser)("item badge on hover", () => {
 		expect(getComputedStyle(badge).transitionDuration).toBe("0.15s")
 		await hover(badge.closest('[data-hz="item"]')!)
 		// Running: the badge's own transition, not a jump.
-		expect(badge.getAnimations().map((a) => (a as CSSTransition).transitionProperty)).toContain("translate")
+		expect(badge.getAnimations().map((a) => (a as CSSTransition).transitionProperty)).toContain(
+			"translate",
+		)
 		await new Promise((resolve) => setTimeout(resolve, 250))
 		expect(getComputedStyle(badge).translate).toBe("-24px")
 	})

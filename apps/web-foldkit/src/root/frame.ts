@@ -43,18 +43,17 @@ type H<M> = Html.H<M>
 // SIDEBAR KIT (`ui/sidebar.ts`, the same class compositions)
 
 export const sidebarProvider = <M>(h: H<M>, className: string) =>
-	h.div
-		.class(
-			twMerge(
-				"@container **:data-[slot=icon]:shrink-0",
-				"flex w-full text-sidebar-fg",
-				"group/sidebar-root peer/sidebar-root",
-				// In the class, not \`style\`: the widths exist on the first frame, so the dock's width
-				// transition never runs from its unsized width while the app loads.
-				"[--sidebar-width:350px] [--sidebar-width-dock:3.25rem]",
-				className,
-			),
-		)
+	h.div.class(
+		twMerge(
+			"@container **:data-[slot=icon]:shrink-0",
+			"flex w-full text-sidebar-fg",
+			"group/sidebar-root peer/sidebar-root",
+			// In the class, not \`style\`: the widths exist on the first frame, so the dock's width
+			// transition never runs from its unsized width while the app loads.
+			"[--sidebar-width:350px] [--sidebar-width-dock:3.25rem]",
+			className,
+		),
+	)
 
 /**
  * The dock's width transitions wait for its first painted frame: it is inserted before its widths
@@ -93,7 +92,7 @@ export const SIDEBAR_CONTAINER_CLASS = twJoin(
 
 export const sidebarDock = <M>(h: H<M>, isCollapsed: boolean, className: string, inner: unknown) =>
 	h.div
-		.onMount(SettleAfterPaint({}))
+		.onMount(SettleAfterPaint())
 		.attrs({
 			"data-state": isCollapsed ? "collapsed" : "expanded",
 			"data-collapsible": isCollapsed ? "dock" : "",
@@ -103,9 +102,7 @@ export const sidebarDock = <M>(h: H<M>, isCollapsed: boolean, className: string,
 		})
 		.class("group peer hidden text-sidebar-fg md:block")
 		.children(
-			h.div
-				.attrs({ "data-slot": "sidebar-gap", "aria-hidden": "true" })
-				.class(SIDEBAR_GAP_CLASS),
+			h.div.attrs({ "data-slot": "sidebar-gap", "aria-hidden": "true" }).class(SIDEBAR_GAP_CLASS),
 			h.div
 				.attr("data-slot", "sidebar-container")
 				.class(

@@ -212,7 +212,10 @@ const color = {
 	"sidebar-title": same(alpha(ref("sidebar-fg"), 0.7)),
 	/** The sidebar's account card (`bg-accent/20`, hover `/50`; styles.css's grey `--accent`, `p4-sidebar-account-card`). */
 	"account-card": themed(lit("oklch(0.92 0.004 286.32 / 0.2)"), lit("oklch(0.32 0.013 285.805 / 0.2)")),
-	"account-card-hover": themed(lit("oklch(0.92 0.004 286.32 / 0.5)"), lit("oklch(0.32 0.013 285.805 / 0.5)")),
+	"account-card-hover": themed(
+		lit("oklch(0.92 0.004 286.32 / 0.5)"),
+		lit("oklch(0.32 0.013 285.805 / 0.5)"),
+	),
 	/** The org switcher's resting ink (`text-fg/80`, hover `fg`). */
 	"switcher-fg": same(alpha(ref("fg"), 0.8)),
 	/** A selected table row (`bg-primary-subtle/40`, `table-selected-wash`). */

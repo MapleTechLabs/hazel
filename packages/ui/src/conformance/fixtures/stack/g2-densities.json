@@ -8,9 +8,7 @@
 		"children": [
 			{
 				"tag": "text",
-				"children": [
-					"general"
-				]
+				"children": ["general"]
 			},
 			{
 				"tag": "text",
@@ -18,9 +16,7 @@
 					"role": "label",
 					"tone": "muted"
 				},
-				"children": [
-					"Channel settings"
-				]
+				"children": ["Channel settings"]
 			}
 		]
 	},
@@ -28,10 +24,7 @@
 	"axes": [
 		{
 			"prop": "density",
-			"values": [
-				"snug",
-				"loose"
-			]
+			"values": ["snug", "loose"]
 		}
 	],
 	"pending": {

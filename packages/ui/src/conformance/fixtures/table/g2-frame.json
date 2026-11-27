@@ -24,9 +24,7 @@
 			"frame": "card",
 			"rowActions": "trailing"
 		},
-		"events": [
-			"sort"
-		],
+		"events": ["sort"],
 		"children": [
 			{
 				"tag": "tableRow",
@@ -34,9 +32,7 @@
 				"props": {
 					"current": true
 				},
-				"events": [
-					"press"
-				],
+				"events": ["press"],
 				"slots": [
 					{
 						"name": "actions",
@@ -50,9 +46,7 @@
 									"size": "small",
 									"iconOnly": true
 								},
-								"events": [
-									"press"
-								]
+								"events": ["press"]
 							}
 						]
 					}
@@ -66,9 +60,7 @@
 						"children": [
 							{
 								"tag": "text",
-								"children": [
-									"Ada Lovelace"
-								],
+								"children": ["Ada Lovelace"],
 								"props": {
 									"role": "label",
 									"strong": true
@@ -84,9 +76,7 @@
 						"children": [
 							{
 								"tag": "text",
-								"children": [
-									"Admin"
-								],
+								"children": ["Admin"],
 								"props": {
 									"role": "label"
 								}
@@ -98,9 +88,7 @@
 			{
 				"tag": "tableRow",
 				"key": "grace",
-				"events": [
-					"press"
-				],
+				"events": ["press"],
 				"slots": [
 					{
 						"name": "actions",
@@ -114,9 +102,7 @@
 									"size": "small",
 									"iconOnly": true
 								},
-								"events": [
-									"press"
-								]
+								"events": ["press"]
 							}
 						]
 					}
@@ -130,9 +116,7 @@
 						"children": [
 							{
 								"tag": "text",
-								"children": [
-									"Grace Hopper"
-								],
+								"children": ["Grace Hopper"],
 								"props": {
 									"role": "label",
 									"strong": true
@@ -148,9 +132,7 @@
 						"children": [
 							{
 								"tag": "text",
-								"children": [
-									"Member"
-								],
+								"children": ["Member"],
 								"props": {
 									"role": "label"
 								}
@@ -182,9 +164,7 @@
 	"axes": [
 		{
 			"prop": "frame",
-			"values": [
-				"band"
-			]
+			"values": ["band"]
 		}
 	],
 	"cases": [
