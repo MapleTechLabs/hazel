@@ -8,7 +8,7 @@
 import { Command, Component, UiSchema } from "@effect/ui"
 import { Theme } from "@hazel/domain/models"
 import { OrganizationId, UserId } from "@hazel/schema"
-import { Effect, Layer, Schema } from "effect"
+import { Context, Effect, Layer, Schema } from "effect"
 import { Overrides } from "../lib/keybindings/keymap"
 
 /** A toast (sonner's options): a later one with the same `id` replaces it in place. */
@@ -166,6 +166,15 @@ export class InstallUpdate extends Command.Service<InstallUpdate>()("hazel/app/I
 	success: Component.Noop,
 }) {}
 
+/**
+ * The same requests from inside a Command body, for feedback that must outlive the component that
+ * ran it (a modal that closed before its write answered still toasts).
+ */
+export class AppRequests extends Context.Service<
+	AppRequests,
+	{ readonly send: (request: AppRequest) => Effect.Effect<void> }
+>()("hazel/app/AppRequests") {}
+
 /** Hands each request to `send` and answers nothing: a page never waits on the app. */
 const sending =
 	(send: (request: AppRequest) => void) =>
@@ -194,5 +203,6 @@ export const appRequestsLayer = (send: (request: AppRequest) => void) => {
 		RefreshCurrentUser.toLayer(Effect.succeed(to(AppRequest.RefreshCurrentUser))),
 		CheckForUpdate.toLayer(Effect.succeed(to(() => AppRequest.CheckForUpdate()))),
 		InstallUpdate.toLayer(Effect.succeed(to(() => AppRequest.InstallUpdate()))),
+		Layer.succeed(AppRequests, { send: (request) => Effect.sync(() => send(request)) }),
 	)
 }

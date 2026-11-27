@@ -56,6 +56,8 @@ export const AppMessage = UiSchema.TaggedEnum({
 	ReceivedHostOut: { out: HostOutSchema },
 	/** A native page asked the app for something (`native-pages.ts`). */
 	ReceivedAppRequest: { request: AppRequest },
+	/** The open native modal asked to close (`modals.ts`); a stale opening's ask is ignored. */
+	RequestedCloseModal: { instance: Schema.Int },
 	/** The tab bar's search, a section's top bar menu and the nav rail's AI button. */
 	PressedMobileSearch: {},
 	PressedMobileMenu: {},

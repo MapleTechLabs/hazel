@@ -52,7 +52,7 @@ export const badgeOfModel = (model: Model): Badge =>
 	})
 
 export const isOverlayOpenOf = (model: Model): boolean =>
-	model.modal.current !== null || model.commandPalette.isOpen
+	model.modal.current !== null || model.commandPalette.isOpen || model.context.isNativeModalOpen === true
 
 /** What the shell's frame shows from here. */
 export const reportOf = (model: Model): HostReport => ({

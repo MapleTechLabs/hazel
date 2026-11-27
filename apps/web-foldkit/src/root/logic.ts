@@ -30,6 +30,7 @@ import { ResolvedTheme, resolveTheme, type ThemeCustomization, ThemePreference }
 import * as Commands from "./commands"
 import { publish } from "./bus"
 import type { AppMessage } from "./message"
+import { isNativeModal, OpenModal } from "./modals"
 import { AppRoutes, routeOfHref } from "./routes"
 import {
 	authOf,
@@ -69,6 +70,10 @@ export const AppModel = Schema.Struct({
 	unreadMentionIds: Schema.Array(Schema.String),
 	/** The Foldkit host's state the frame shows (the dock, the bell, the badge, the AI panel). */
 	report: Schema.NullOr(HostReportSchema),
+	/** The open native modal (`modals.ts`); at most one, a new opening replaces it. */
+	modal: Schema.NullOr(OpenModal),
+	/** The number the next opening gets. */
+	modalOpenings: Schema.Int,
 })
 export type AppModel = typeof AppModel.Type
 
@@ -177,6 +182,7 @@ export const hostContextOf = (model: AppModel): HostContext => {
 		keybindingOverrides: model.keybindingOverrides,
 		keyboardPlatform: model.keyboardPlatform,
 		unreadMentionIds: model.unreadMentionIds as ReadonlyArray<NotificationId>,
+		isNativeModalOpen: model.modal !== null,
 	}
 	contextCache.set(model, context)
 	return context
@@ -412,13 +418,25 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 				command(Commands.SaveKeybindings.make({ overrides })),
 			]),
 		RequestedCurrentUserRefresh: ({ toast }) => combine([showToastIf(toast), refreshCurrentUser]),
+		// A native kind opens here; the rest are still the host's.
+		RequestedModal: ({ modal }) =>
+			isNativeModal(modal._tag) ? openModal(modal) : toHost({ _tag: "RequestedPageOut", outMessage }),
 		// The host's own: only a native page sends these, and the host does the work.
-		RequestedModal: () => toHost({ _tag: "RequestedPageOut", outMessage }),
 		RequestedCommandPalette: () => toHost({ _tag: "RequestedPageOut", outMessage }),
 		RequestedDmCreation: () => toHost({ _tag: "RequestedPageOut", outMessage }),
 		RequestedUpdateCheck: () => toHost({ _tag: "RequestedPageOut", outMessage }),
 		RequestedUpdateInstall: () => toHost({ _tag: "RequestedPageOut", outMessage }),
 	})
+
+/** Opens a native modal over whatever native modal is open (one visible at a time, as today). */
+const openModal =
+	(request: ModalRequest): Step =>
+	(model) =>
+		unchanged({
+			...model,
+			modal: { instance: model.modalOpenings, request },
+			modalOpenings: model.modalOpenings + 1,
+		})
 
 const decodeModal = Schema.decodeUnknownOption(ModalRequest)
 
@@ -502,6 +520,8 @@ export const init = (route: AppRoute, flags: AppFlags): Next => {
 		sessionStartMs: flags.sessionStartMs,
 		unreadMentionIds: [],
 		report: null,
+		modal: null,
+		modalOpenings: 0,
 	}
 	return combine([
 		(m) => ({
@@ -581,6 +601,8 @@ export const update = (model: AppModel, message: AppMessage): Next =>
 		PressedHotkey: ({ actionId }) => pressedHotkey(actionId)(model),
 		ReceivedHostOut: ({ out }) => receivedHostOut(out)(model),
 		ReceivedAppRequest: ({ request }) => appRequest(request)(model),
+		RequestedCloseModal: ({ instance }) =>
+			model.modal?.instance === instance ? unchanged({ ...model, modal: null }) : unchanged(model),
 		PressedMobileSearch: () => toHost({ _tag: "PressedMobileSearch" })(model),
 		PressedMobileMenu: () => toHost({ _tag: "PressedMobileMenu" })(model),
 		PressedAiPanelToggle: () => toHost({ _tag: "PressedAiPanelToggle" })(model),

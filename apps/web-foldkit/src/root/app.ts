@@ -44,6 +44,7 @@ import {
 	update,
 } from "./logic"
 import { AppMessage } from "./message"
+import { modalOf } from "./modals"
 import { nativePageOf } from "./native-pages"
 import { Hole } from "./portal"
 import { subscriptions as subscriptionsOf } from "./subscriptions"
@@ -98,8 +99,12 @@ const page = (h: H, model: AppModel) =>
 		fallback: (failed) => loader(h, failed),
 	}) ?? slot(h, "page")
 
-const appRoot = (h: H, ...children: ReadonlyArray<unknown>) =>
-	h.div.attr("id", "app").children(...(children as Array<never>), slot(h, "overlays"))
+/** The open native modal, over the frame (`modals.ts`). */
+const modal = (h: H, model: AppModel) =>
+	modalOf(h, model.modal, { session: sessionOf(model), route: model.route, nowMs: model.nowMs })
+
+const appRoot = (h: H, model: AppModel, ...children: ReadonlyArray<unknown>) =>
+	h.div.attr("id", "app").children(...(children as Array<never>), slot(h, "overlays"), modal(h, model))
 
 interface ShellData {
 	readonly orgSlug: string
@@ -214,6 +219,7 @@ const orgShell = (h: H, model: AppModel, data: ShellData) => {
 				slot(h, "ai-panel"),
 			),
 			slot(h, "overlays"),
+			modal(h, model),
 			...children(h, model, data),
 		)
 }
@@ -246,6 +252,7 @@ const phoneShell = (h: H, model: AppModel, data: ShellData, rail: RailInputs) =>
 			),
 			slot(h, "ai-panel"),
 			slot(h, "overlays"),
+			modal(h, model),
 			...children(h, model, data),
 		)
 }
@@ -253,11 +260,11 @@ const phoneShell = (h: H, model: AppModel, data: ShellData, rail: RailInputs) =>
 /** `$orgSlug/layout.tsx`: a loader while `useOrganization()` loads the route's organization. */
 const orgBody = (h: H, model: AppModel, user: CurrentUser) => {
 	const orgSlug = orgSlugOf(model.route)
-	if (orgSlug === undefined) return appRoot(h, page(h, model))
+	if (orgSlug === undefined) return appRoot(h, model, page(h, model))
 	return OrgState.match(model.org, {
-		None: () => appRoot(h, loader(h, false)),
-		Loading: ({ isStalled }) => appRoot(h, loader(h, isStalled)),
-		NotFound: () => appRoot(h, fromKit(h, organizationNotFound(kit, orgSlug))),
+		None: () => appRoot(h, model, loader(h, false)),
+		Loading: ({ isStalled }) => appRoot(h, model, loader(h, isStalled)),
+		NotFound: () => appRoot(h, model, fromKit(h, organizationNotFound(kit, orgSlug))),
 		Loaded: ({ organization }) => orgShell(h, model, { orgSlug, user, organization }),
 	})
 }
@@ -268,14 +275,15 @@ const errorScreen = (h: H, title: string, description: string | undefined, onRet
 const body = (h: H, model: AppModel) => {
 	const { route } = model
 	if (route._tag === "NotFound") return h.div.attr("id", "app").children(`Not found: ${route.path}`)
-	if (isPublicRoute(route)) return appRoot(h, page(h, model))
+	if (isPublicRoute(route)) return appRoot(h, model, page(h, model))
 	// `_app/layout.tsx`: a loader until the API answers for the session; signed out redirects to sign-in.
 	return Session.match(model.session, {
-		Loading: () => appRoot(h, loader(h, false)),
-		SignedOut: () => appRoot(h, loader(h, false)),
+		Loading: () => appRoot(h, model, loader(h, false)),
+		SignedOut: () => appRoot(h, model, loader(h, false)),
 		Unreachable: ({ reason }) =>
 			appRoot(
 				h,
+				model,
 				errorScreen(
 					h,
 					"Can't reach Hazel",
@@ -286,10 +294,11 @@ const body = (h: H, model: AppModel) => {
 		// `AppShell`: a loader until `user.me` answers, then the error if it could not.
 		SignedIn: ({ user }) =>
 			AsyncData.matchData(user, {
-				onEmpty: () => appRoot(h, loader(h, false)),
+				onEmpty: () => appRoot(h, model, loader(h, false)),
 				onFailure: (reason) =>
 					appRoot(
 						h,
+						model,
 						errorScreen(
 							h,
 							"Couldn't load your account",
