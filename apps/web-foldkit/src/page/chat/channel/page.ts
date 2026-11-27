@@ -238,6 +238,17 @@ const liftHtmlRender = (model: Model, message: HtmlRender.Message, nowMs: number
 const threadMessagesOf = (model: Model): ReadonlyArray<ChatMessage> => model.threadPanel?.messages ?? []
 
 /**
+ * What this page still draws rich content for: the thread panel's messages and its starter. The
+ * channel's list is the hazel `MessageList`, which unfurls and streams its own.
+ */
+const panelMessagesOf = (model: Model): ReadonlyArray<ChatMessage> => {
+	const panel = model.threadPanel
+	if (panel === null) return []
+	const starter = model.messages.find((message) => message.id === panel.messageId)
+	return starter === undefined ? panel.messages : [starter, ...panel.messages]
+}
+
+/**
  * Starts the unfurl fetches the loaded messages need and marks them loading (legacy runs one atom
  * query per URL or tweet id, shared by every message that shows it).
  */
@@ -282,7 +293,7 @@ const withThreadRows = (model: Model, isLiveReactions: boolean): Model => {
  * `isLiveReactions`: the reactions just changed live, so their pills animate the change.
  */
 const deriveRows = (current: Model, isLiveReactions = false): PageReturn => {
-	const requested = requestUnfurls(current, [...current.messages, ...threadMessagesOf(current)])
+	const requested = requestUnfurls(current, panelMessagesOf(current))
 	const model = withThreadRows(requested.model, isLiveReactions)
 	const rows = toDisplayRows(
 		model.messages,
@@ -318,10 +329,7 @@ const deriveRows = (current: Model, isLiveReactions = false): PageReturn => {
 
 /** The live replies, re-read only when the window's or the thread panel's messages change. */
 const withLiveReplies = (model: Model): Model => {
-	const liveReplies = Live.shareReplies(
-		model.liveReplies,
-		Live.connectedReplies([...model.messages, ...threadMessagesOf(model)]),
-	)
+	const liveReplies = Live.shareReplies(model.liveReplies, Live.connectedReplies(panelMessagesOf(model)))
 	return liveReplies === model.liveReplies ? model : modifyFields(model, { liveReplies: () => liveReplies })
 }
 

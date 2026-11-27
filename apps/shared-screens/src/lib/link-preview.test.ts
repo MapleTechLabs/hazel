@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { extractUrls } from "./link-preview.utils"
+import { extractUrls } from "./link-preview"
 
 describe("extractUrls", () => {
 	it("finds full URLs, www. links and bare domains", () => {

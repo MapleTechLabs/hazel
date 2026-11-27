@@ -64,14 +64,10 @@ describe("channel subscription gates", () => {
 		expect(keepAliveEquivalence(window, { ...window, channelId: threadChannelId })).toBe(false)
 	})
 
-	test("an AI reply in the window opens its live socket; finished ones never do", () => {
+	test("an AI reply in the window opens no socket here: the hazel message list streams it", () => {
 		const live = chatMessageOf(10, { embeds: liveEmbeds, hasEmbeds: true })
 		const model = updateWithShared(loadedModel(), loadedMessages([live, ...messages])).model
-		expect(subscriptions.chatLiveReplies.modelToDependencies(input(model))).toEqual({
-			replies: [{ messageId: live.id, channelId: live.channelId }],
-		})
-		const idle = updateWithShared(loadedModel(), loadedMessages(messages)).model
-		expect(subscriptions.chatLiveReplies.modelToDependencies(input(idle))).toEqual({ replies: [] })
+		expect(subscriptions.chatLiveReplies.modelToDependencies(input(model))).toEqual({ replies: [] })
 	})
 
 	test("a new live reply keeps the running stream; only the last one leaving stops it", () => {

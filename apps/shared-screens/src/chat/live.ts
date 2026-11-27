@@ -7,11 +7,16 @@
  */
 import { Command, Renderer } from "@effect/ui"
 import { ClientData, HazelRpc, type LiveQueryWindow, liveQueryChangeSetStream } from "@hazel/client-data"
+import type { MessageEmbed } from "@hazel/domain/models"
 import { ChannelId, MessageId, PinnedMessageId, UserId } from "@hazel/schema"
 import { Hazel } from "@hazel/ui/vocabulary/index"
 import { and, eq, inArray, isNull } from "@tanstack/db"
 import { Clock, Context, Duration, Effect, Layer, Option, Queue, Schedule, Schema, Stream } from "effect"
 import { HostRequest, MessageListMessage } from "./messages"
+import { richPartsOf } from "./rich/embeds"
+import { GetHtmlRenderUrl } from "./rich/html-renders"
+import { LiveConnection, type LiveReply, liveEventStream } from "./rich/live-replies"
+import { unfurlLayer } from "./rich/unfurls"
 import type { ChatMessage } from "./rows"
 
 /** Messages the list holds at first, and how many more each page adds. */
@@ -92,38 +97,13 @@ interface MessageRow {
 	readonly channelId: ChannelId
 	readonly authorId: UserId
 	readonly content: string
-	readonly embeds?: ReadonlyArray<{
-		readonly url?: string | undefined
-		readonly title?: string | undefined
-		readonly description?: string | undefined
-		readonly author?: { readonly name?: string | undefined } | undefined
-		readonly image?: { readonly url: string } | undefined
-		readonly thumbnail?: { readonly url: string } | undefined
-	}> | null
+	readonly embeds?: ReadonlyArray<MessageEmbed.MessageEmbed> | null
 	readonly replyToMessageId?: MessageId | null
 	readonly threadChannelId?: ChannelId | null
 	readonly createdAt: Date
 	readonly updatedAt?: Date | null
 	readonly pinned?: { readonly id: string } | null
 }
-
-/** Bot and link cards that carry a url, as the `embed` card draws them. */
-const embedsOf = (row: MessageRow) =>
-	(row.embeds ?? []).flatMap((embed) =>
-		embed.url === undefined
-			? []
-			: [
-					Object.fromEntries(
-						Object.entries({
-							url: embed.url,
-							title: embed.title,
-							description: embed.description,
-							site: embed.author?.name,
-							image: embed.image?.url ?? embed.thumbnail?.url,
-						}).filter(([, value]) => value !== undefined),
-					) as { readonly url: string },
-				],
-	)
 
 export const toChatMessage = (row: MessageRow): ChatMessage => ({
 	id: row.id,
@@ -136,7 +116,7 @@ export const toChatMessage = (row: MessageRow): ChatMessage => ({
 	threadChannelId: row.threadChannelId ?? null,
 	isPinned: row.pinned?.id !== undefined,
 	pinnedId: row.pinned?.id ?? null,
-	embeds: embedsOf(row),
+	rich: richPartsOf(row.id, row.content, row.embeds),
 })
 
 /** The channel's messages newest first, following the window; change sets after the first. */
@@ -551,6 +531,7 @@ export const messageListLayer = (
 	data: ClientData["Service"],
 	rpc: HazelRpc["Service"],
 	handle: (request: HostRequest) => void,
+	live: LiveConnection["Service"],
 ) =>
 	Layer.mergeAll(
 		MoveWindow.layer,
@@ -558,12 +539,21 @@ export const messageListLayer = (
 		TogglePin.layer,
 		ScrollToRow.layer,
 		RequestHost.layerWith(handle),
+		unfurlLayer,
+		GetHtmlRenderUrl.layer,
 	).pipe(
 		Layer.provideMerge(
 			Layer.mergeAll(
 				MessageWindows.layer,
 				Layer.succeed(ClientData, data),
 				Layer.succeed(HazelRpc, rpc),
+				Layer.succeed(LiveConnection, live),
 			),
 		),
+	)
+
+/** One live reply's events as the list's messages (a Subscription per reply keeps its socket). */
+export const liveStream = (reply: LiveReply) =>
+	liveEventStream(reply).pipe(
+		Stream.map((event) => MessageListMessage.ReceivedLiveEvent({ messageId: reply.messageId, event })),
 	)

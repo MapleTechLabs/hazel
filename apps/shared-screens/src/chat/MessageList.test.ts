@@ -8,6 +8,7 @@ import { Effect } from "effect"
 import { distanceStrict, initialsOf } from "./format"
 import { MoveWindow, PAGE_SIZE, RequestHost, ScrollToRow, ToggleReaction } from "./live"
 import { MessageList, MessageListMessage } from "./MessageList"
+import { noRichParts } from "./rich/embeds"
 import { parseMarkdown, plainLine } from "./rich-text"
 import { type ChatMessage, type Entry, firstNewIdOf, type Lookups, newCountOf, toEntries } from "./rows"
 
@@ -35,7 +36,7 @@ const message = (
 	threadChannelId: null,
 	isPinned: false,
 	pinnedId: null,
-	embeds: [],
+	rich: noRichParts(`message ${n}`),
 	...overrides,
 })
 
@@ -60,6 +61,7 @@ const lookups = (overrides: Partial<Lookups> = {}): Lookups => ({
 	threads: new Map(),
 	replyTargets: new Map(),
 	emojiUrls: new Map(),
+	live: new Map(),
 	nowMs: NOW,
 	...overrides,
 })
@@ -239,7 +241,13 @@ describe("rich text", () => {
 })
 
 describe("MessageList", () => {
-	const props = { channelId, userId: ada, cdnUrl: "https://cdn.test", nowMs: NOW }
+	const props = {
+		channelId,
+		userId: ada,
+		linkPreviewUrl: "https://link-preview.test",
+		cdnUrl: "https://cdn.test",
+		nowMs: NOW,
+	}
 	/** `count` messages, newest first, one a minute by alternating authors. */
 	const window = (count: number, from = 0) =>
 		Array.from({ length: count }, (_, index) =>

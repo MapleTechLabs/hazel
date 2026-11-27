@@ -71,6 +71,8 @@ const installOffline = async () => {
 	globalThis.fetch = (input, init) => {
 		const url = new Request(input, init).url
 		if (new URL(url).origin === new URL(BACKEND_URL).origin) return offlineFetch(input, init)
+		const unfurl = page?.unfurls?.(new URL(url))
+		if (unfurl !== undefined) return Promise.resolve(Response.json(unfurl))
 		return network(input, init)
 	}
 	Object.assign(globalThis, {
@@ -79,6 +81,7 @@ const installOffline = async () => {
 			latencyMs: 0,
 			// The thread's own source: a channel's tables, as an empty channel has them.
 			snapshot: snapshotWithThread,
+			live: page?.live,
 		}),
 	})
 	if (location.pathname === "/" || location.pathname === "/index.html")

@@ -1,12 +1,56 @@
+import { initialLiveState as initialServerState } from "@hazel/domain/live"
 import { ChannelId, MessageId } from "@hazel/schema"
 import { Effect, Fiber, Ref, Schema, Stream } from "effect"
-import { describe, expect, test, vi } from "vitest"
-import { type LiveReply, liveRepliesStream } from "./live-state"
-import { live } from "./live-socket-fake.test-support"
+import { describe, expect, test } from "vitest"
+import {
+	initialLiveState,
+	LiveConnection,
+	type LiveReply,
+	type LiveSocket,
+	liveRepliesStream,
+	reduceLive,
+} from "./live-replies"
 
 /** The live reply streams against a fake socket: per-reply failures, reconnects, keyed sockets. */
 
-vi.mock("~/lib/live-socket", () => import("./live-socket-fake.test-support"))
+const live = {
+	opened: [] as Array<string>,
+	closed: [] as Array<string>,
+	invalidated: [] as Array<string>,
+	/** Opening throws. */
+	broken: new Set<string>(),
+	/** Closed with 4003 (not a viewer). */
+	refused: new Set<string>(),
+	/** Closed with 4001 on the first open only. */
+	reauthOnce: new Set<string>(),
+}
+
+/** Sockets open at once, send a snapshot and two text chunks. */
+const fakeConnection: LiveConnection["Service"] = {
+	readToken: () => Promise.resolve("token"),
+	invalidateToken: (token) => void live.invalidated.push(token),
+	open: ({ messageId }) => {
+		if (live.broken.has(messageId)) throw new Error("bad url")
+		live.opened.push(messageId)
+		const socket: LiveSocket = {
+			onopen: null,
+			onmessage: null,
+			onclose: null,
+			onerror: null,
+			close: () => void live.closed.push(messageId),
+		}
+		const frame = (value: unknown) => socket.onmessage?.({ data: JSON.stringify(value) })
+		setTimeout(() => {
+			if (live.refused.has(messageId)) return socket.onclose?.({ code: 4003 })
+			if (live.reauthOnce.delete(messageId)) return socket.onclose?.({ code: 4001 })
+			socket.onopen?.()
+			frame({ _tag: "Snapshot", state: initialServerState })
+			frame({ _tag: "TextAppended", chunk: "hi " })
+			frame({ _tag: "TextAppended", chunk: messageId })
+		}, 5)
+		return socket
+	},
+}
 
 const channelId = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-000000000999")
 const replyOf = (n: number): LiveReply => ({
@@ -19,6 +63,7 @@ const textChunks = (replies: () => ReadonlyArray<LiveReply>, count: number) =>
 		Stream.filter((message) => message.event._tag === "TextChunk"),
 		Stream.take(count),
 		Stream.runCollect,
+		Effect.provideService(LiveConnection, fakeConnection),
 	)
 
 describe("live reply streams", () => {
@@ -69,5 +114,28 @@ describe("live reply streams", () => {
 		])
 		expect(live.opened).toEqual([first.messageId, second.messageId])
 		expect(live.closed).toEqual(expect.arrayContaining([first.messageId, second.messageId]))
+	})
+})
+
+describe("reduceLive", () => {
+	test("chunks stream the text, the end and completion settle it", () => {
+		const events = [
+			{ _tag: "Started" },
+			{ _tag: "TextChunk", fullText: "Hel" },
+			{ _tag: "TextChunk", fullText: "Hello" },
+			{ _tag: "StreamEnd", text: "Hello" },
+			{ _tag: "Completed" },
+		] as const
+		const states = events.reduce<Array<typeof initialLiveState>>(
+			(all, event) => [...all, reduceLive(all.at(-1) ?? initialLiveState, event)],
+			[],
+		)
+		expect(states.map((state) => [state.status, state.text, state.isStreaming])).toEqual([
+			["active", "", false],
+			["active", "Hel", true],
+			["active", "Hello", true],
+			["active", "Hello", false],
+			["completed", "Hello", false],
+		])
 	})
 })
