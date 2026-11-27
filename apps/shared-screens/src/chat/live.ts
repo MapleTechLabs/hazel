@@ -219,6 +219,7 @@ interface UserRow {
 	readonly avatarUrl?: string | null
 	readonly userType: string
 	readonly email?: string | null
+	readonly timezone?: string | null
 }
 
 export const usersStream = withData((data) =>
@@ -233,10 +234,44 @@ export const usersStream = withData((data) =>
 					avatarUrl: user.avatarUrl ?? null,
 					userType: user.userType,
 					email: user.email ?? null,
+					timezone: user.timezone ?? null,
 				})),
 			}),
 	),
 )
+
+interface PresenceRow {
+	readonly status: string
+	readonly statusEmoji?: string | null
+	readonly customMessage?: string | null
+	readonly statusExpiresAt?: Date | null
+}
+
+/** The presence of the person whose profile card is open (today's `presenceStream`, one person). */
+export const profilePresenceStream = (userId: UserId) =>
+	withData((data) =>
+		data.liveQueryStream<PresenceRow, MessageListMessage>(
+			(q) =>
+				q
+					.from({ presence: data.collections.userPresenceStatusCollection })
+					.where(({ presence }) => eq(presence.userId, userId))
+					.orderBy(({ presence }) => presence.updatedAt, "desc"),
+			(rows) => {
+				const row = rows[0]
+				return MessageListMessage.UpdatedProfilePresence({
+					presence:
+						row === undefined
+							? null
+							: {
+									status: row.status,
+									statusEmoji: row.statusEmoji ?? null,
+									customMessage: row.customMessage ?? null,
+									statusExpiresAtMs: row.statusExpiresAt?.getTime() ?? null,
+								},
+				})
+			},
+		),
+	)
 
 export const botsStream = withData((data) =>
 	data.liveQueryStream<{ userId: UserId; name: string }, MessageListMessage>(

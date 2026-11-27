@@ -797,6 +797,13 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				: { model },
 		ClickedThreadPreview: ({ threadChannelId, messageId }) =>
 			Write.openThread(model, threadChannelId, messageId, "Created"),
+		ClickedEditProfile: () => ({
+			model,
+			outMessage: PageOutMessage.RequestedNavigation({
+				route: AppRoute.MySettingsProfile({ orgSlug: model.orgSlug }),
+				replace: false,
+			}),
+		}),
 		ClickedReplyPreview: ({ fromMessageId, messageId }) =>
 			Jump.toMessage(model, fromMessageId, messageId),
 		LocatedJumpTarget: ({ messageId, newerCount }) => Jump.located(model, messageId, newerCount),

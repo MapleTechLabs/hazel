@@ -32,6 +32,7 @@ export interface ChatUser {
 	readonly avatarUrl: string | null
 	readonly userType: string
 	readonly email: string | null
+	readonly timezone?: string | null
 }
 
 export interface ChatReaction {
@@ -96,7 +97,7 @@ export const QUICK_EMOJIS = ["👍", "❤️", "😂"] as const
 const MAX_ENTERING = 3
 
 /** A chat sync shadow user's platform, from their address (today's `shadowProviderOf`). */
-const providerOf = (user: ChatUser): "slack" | "discord" | undefined =>
+export const providerOf = (user: ChatUser): "slack" | "discord" | undefined =>
 	user.userType !== "machine"
 		? undefined
 		: user.email?.startsWith("discord-user-")
