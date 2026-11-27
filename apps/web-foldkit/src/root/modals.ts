@@ -69,6 +69,18 @@ const SetStatusModal = Component.lazy("SetStatusModal", () =>
 	),
 )
 
+// Needs attention's dialogs (PK2).
+const MarkSignalDoneModal = Component.lazy("MarkSignalDoneModal", () =>
+	import("@hazel/shared-screens/customers/queue/MarkSignalDoneModal").then((module) =>
+		module.MarkSignalDoneModal.pipe(Component.provide(dataLayer)),
+	),
+)
+const SnoozeUntilModal = Component.lazy("SnoozeUntilModal", () =>
+	import("@hazel/shared-screens/customers/queue/SnoozeUntilModal").then((module) =>
+		module.SnoozeUntilModal.pipe(Component.provide(dataLayer)),
+	),
+)
+
 /** What a modal reads: its request, the session and route it opened over, and the clock. */
 export interface ModalInputs<Tag extends ModalTag> {
 	readonly request: RequestOf<Tag>
@@ -127,6 +139,24 @@ const nativeModals: Registry = {
 		DeleteMessageModal(h, { ...placement, props: { messageId: request.messageId } }),
 	SetStatus: (h, { session, nowMs }, placement) =>
 		SetStatusModal(h, { ...placement, props: { session, nowMs } }),
+	MarkSignalDone: (h, { request, session }, placement) =>
+		MarkSignalDoneModal(h, {
+			...placement,
+			props: {
+				session,
+				signalId: request.signalId,
+				accountName: request.accountName,
+				accountLogoUrl: request.accountLogoUrl,
+				title: request.title,
+				reason: request.reason,
+				severity: request.severity,
+			},
+		}),
+	SnoozeSignalUntil: (h, { request, session, nowMs }, placement) =>
+		SnoozeUntilModal(h, {
+			...placement,
+			props: { session, signalId: request.signalId, title: request.title, nowMs },
+		}),
 }
 
 /** The parity flag of a native modal: `"0"` opens today's Foldkit modal instead (`compare-pages.ts`). */
