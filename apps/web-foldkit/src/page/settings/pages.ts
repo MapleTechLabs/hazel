@@ -1,4 +1,3 @@
-import * as SettingsChatSync from "./chat-sync"
 import * as SettingsChatSyncConnection from "./chat-sync-connection"
 import * as SettingsConnectInvites from "./connect-invites"
 import * as SettingsCustomEmojis from "./custom-emojis"
@@ -27,6 +26,5 @@ export const pages = [
 	SettingsConnectInvites.page,
 	SettingsInvitations.page,
 	SettingsCustomEmojis.page,
-	SettingsChatSync.page,
 	SettingsChatSyncConnection.page,
 ]
