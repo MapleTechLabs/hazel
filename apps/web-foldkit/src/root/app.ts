@@ -55,6 +55,7 @@ import { AppMessage } from "./message"
 import { modalOf } from "./modals"
 import { nativePageOf } from "./native-pages"
 import { paletteDestinations, paletteShortcuts, ShellCommandPalette } from "./palette"
+import { customersListHoles } from "./customers-list-holes"
 import { Hole } from "./portal"
 import {
 	type ChromeData,
@@ -221,6 +222,7 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 					}),
 				])
 			: null,
+		...customersListHoles(h, route, data.organization.id, data.user.id),
 		tab !== null && memberId !== null
 			? Hole(h, { hole: "activity", key: memberId }, [
 					ShellActivity(h, {

@@ -13,10 +13,10 @@ import { BULK_BATCH, bulkUpdateAccountsAction } from "../../../customers/actions
 import { saveLayoutAction } from "../../../customers/view-layout"
 import { catchCommon } from "../../../data/actions"
 import { HazelRpc } from "../../../rpc"
-import { searchFieldIds } from "../../../ui/search-field"
 import { createViewAction, deleteViewAction, updateViewAction } from "./data"
+import { CURRENT_ROW_SELECTOR, SEARCH_SELECTOR } from "./hole"
 import { Message } from "./message"
-import { SEARCH_ID, SPARKLINE_DAYS } from "./model"
+import { SPARKLINE_DAYS } from "./model"
 
 /** The list's Commands: sparklines, saved views, bulk updates, CSV export, focus and the hover card. */
 
@@ -190,7 +190,7 @@ export const ExportCustomersCsv = Command.define("ExportCustomersCsv", {
 /** `/` focuses the search field. */
 export const FocusListSearch = Command.define("FocusListSearch", {
 	messages: [Message.CompletedFocusSearch],
-	execute: Dom.focus(`#${searchFieldIds(SEARCH_ID).input}`).pipe(
+	execute: Dom.focus(SEARCH_SELECTOR).pipe(
 		// Best effort: the first-run state has no search field.
 		Effect.ignore,
 		Effect.as(Message.CompletedFocusSearch()),
@@ -209,11 +209,11 @@ export const WaitBeforeHoverCard = Command.define("WaitBeforeHoverCard", {
 
 /** Places the hover card beside its row's name (fixed, so the table's scroll box does not clip it). */
 export const PositionHoverCard = Mount.define("PositionHoverCard", {
-	args: { anchorId: Schema.String },
+	args: { anchor: Schema.String },
 	messages: [Message.CompletedPositionHoverCard],
-	execute: ({ element, anchorId }) =>
+	execute: ({ element, anchor: selector }) =>
 		Effect.sync(() => {
-			const anchor = element.ownerDocument.getElementById(anchorId)
+			const anchor = element.ownerDocument.querySelector(selector)
 			if (anchor === null || !(element instanceof HTMLElement)) return
 			const rect = anchor.getBoundingClientRect()
 			const height = element.offsetHeight
@@ -225,37 +225,24 @@ export const PositionHoverCard = Mount.define("PositionHoverCard", {
 		}).pipe(Effect.as(Message.CompletedPositionHoverCard())),
 })
 
-/**
- * A Cmd/Ctrl/Shift/middle click on a link in the table (the customer's name) is the browser's: it
- * stops here, before the row's click opens the customer in this tab, and the link opens a new one.
- */
-export const LetModifierClicksThrough = Mount.define("LetModifierClicksThrough", {
-	messages: [Message.CompletedLetModifierClicksThrough],
-	execute: ({ element }) =>
-		Effect.acquireRelease(
-			Effect.sync(() => {
-				const onClick = (event: Event) => {
-					if (!(event instanceof MouseEvent)) return
-					const isModified =
-						event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0
-					if (isModified && event.target instanceof Element && event.target.closest("a") !== null)
-						event.stopPropagation()
-				}
-				element.addEventListener("click", onClick, { capture: true })
-				return () => element.removeEventListener("click", onClick, { capture: true })
-			}),
-			(release) => Effect.sync(release),
-		).pipe(Effect.as(Message.CompletedLetModifierClicksThrough())),
+const nextFrame = Effect.callback<void>((resume) => {
+	requestAnimationFrame(() => resume(Effect.void))
 })
 
 /** Keeps the keyboard cursor's row on screen. */
 export const ScrollListRowIntoView = Mount.define("ScrollListRowIntoView", {
-	args: { tableId: Schema.String },
 	messages: [Message.CompletedScrollRow],
-	execute: ({ element, tableId }) =>
-		Effect.sync(() =>
-			element.ownerDocument
-				.querySelector(`#${tableId} tr[data-focused]`)
-				?.scrollIntoView({ block: "nearest" }),
-		).pipe(Effect.as(Message.CompletedScrollRow())),
+	// The hazel table marks its row once it has read the page's state off its hole.
+	execute: ({ element }) =>
+		nextFrame.pipe(
+			Effect.andThen(nextFrame),
+			Effect.andThen(
+				Effect.sync(() =>
+					element.ownerDocument
+						.querySelector(CURRENT_ROW_SELECTOR)
+						?.scrollIntoView({ block: "nearest" }),
+				),
+			),
+			Effect.as(Message.CompletedScrollRow()),
+		),
 })

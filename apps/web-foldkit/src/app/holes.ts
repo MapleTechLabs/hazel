@@ -12,6 +12,8 @@ export type HoleName =
 	| "channel-header"
 	| "join-banner"
 	| "issue-control"
+	| "customers-list-controls"
+	| "customers-list-table"
 
 export const HOLE_ATTRIBUTE = "data-hazel-hole"
 /** The hole's key, so a child keyed the same lands only in its own hole, never the page it replaces. */

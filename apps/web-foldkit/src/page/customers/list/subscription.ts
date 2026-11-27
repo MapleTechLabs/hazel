@@ -1,6 +1,6 @@
 import { DragAndDrop } from "@foldkit/ui"
-import { OrganizationId, UserId } from "@hazel/schema"
-import { Effect, Option, Queue, Schema, Stream } from "effect"
+import { CustomerAccountId, OrganizationId, UserId } from "@hazel/schema"
+import { Effect, Match, Option, Queue, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import {
 	accountsStream,
@@ -15,6 +15,8 @@ import { viewRowsStream } from "./data"
 import { Message } from "./message"
 import type { ListKey, Model } from "./model"
 import { isInAssistantPanel } from "../../assistant-context"
+import { eventsOf } from "../../../root/bus"
+import type { ListHoleEvent } from "./hole"
 
 /** The list's live rows, and its keyboard while nothing else holds it. */
 
@@ -44,6 +46,8 @@ export const listKeyOf = (event: {
 }): ListKey | null => {
 	const element = elementOf(event.target)
 	if (event.altKey || event.ctrlKey || event.metaKey || isInAssistantPanel(event.target)) return null
+	// The hazel controls' builder, column picker and sort menu hold the keyboard while open.
+	if (element?.closest('[role="dialog"], [role="menu"]') != null) return null
 	if (
 		element !== null &&
 		(element.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName))
@@ -55,13 +59,31 @@ export const listKeyOf = (event: {
 	return key
 }
 
+/** A hole's event as the page's own message. */
+export const messageOfHoleEvent = (event: ListHoleEvent): Message =>
+	Match.valueTags(event, {
+		ChangedSearch: ({ value }) => Message.ChangedSearch({ value }),
+		ClearedFilter: ({ field }) => Message.ClearedFilter({ field }),
+		AppliedFilters: ({ filters }) => Message.AppliedFilters({ filters }),
+		ChangedSort: ({ sort }) => Message.ChangedSort({ sort }),
+		ChangedColumns: ({ columns }) => Message.ChangedColumns({ columns }),
+		ResetColumns: () => Message.ResetColumns(),
+		ClickedSortHeader: ({ column }) => Message.ClickedSortHeader({ column }),
+		ToggledRow: ({ accountId, selected }) => Message.ToggledRow({ accountId, isSelected: selected }),
+		ToggledAllRows: ({ selected }) => Message.ToggledAllRows({ isSelected: selected }),
+		PressedRow: ({ accountId }) => Message.ClickedRow({ accountId }),
+		PressedShowMore: () => Message.PressedShowMoreRows(),
+		HoveredName: ({ accountId }) =>
+			accountId === null
+				? Message.UnhoveredRow()
+				: Message.HoveredRow({ accountId: Schema.decodeSync(CustomerAccountId)(accountId) }),
+	})
+
 const holdsKeyboard = (model: Model) =>
 	model.saveModal.isOpen ||
 	model.deleteModal.isOpen ||
-	model.filterPopover.isOpen ||
-	model.columnsPopover.isOpen ||
 	model.tagPopover.isOpen ||
-	[model.sortMenu, model.viewMenu, model.ownerMenu].some((menu) => menu.popup._tag === "Open")
+	[model.viewMenu, model.ownerMenu].some((menu) => menu.popup._tag === "Open")
 
 const organization = { organizationId: Schema.NullOr(OrganizationId) }
 const organizationOf = ({ shared }: Input) => ({ organizationId: shared.organization?.id ?? null })
@@ -129,6 +151,15 @@ const live = Subscription.make<Input, Message>()((entry) => ({
 						}),
 					),
 	}),
+	// What the hazel controls and table ask for (the shell draws them in the page's holes).
+	listEvents: entry(
+		{},
+		{
+			modelToDependencies: () => ({}),
+			dependenciesToStream: () =>
+				eventsOf("CustomersList").pipe(Stream.map(({ event }) => messageOfHoleEvent(event))),
+		},
+	),
 	keys: entry(
 		{ isActive: Schema.Boolean },
 		{
