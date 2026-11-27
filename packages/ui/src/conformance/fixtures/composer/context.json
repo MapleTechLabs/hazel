@@ -21,5 +21,8 @@
 				"context": { "kind": "edit", "text": "Shipping the new sidebar today" }
 			}
 		}
-	]
+	],
+	"pending": {
+		"ios": "S2"
+	}
 }

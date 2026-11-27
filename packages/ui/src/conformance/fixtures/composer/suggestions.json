@@ -61,5 +61,8 @@
 				"activeSuggestion": "tada"
 			}
 		}
-	]
+	],
+	"pending": {
+		"ios": "S2"
+	}
 }

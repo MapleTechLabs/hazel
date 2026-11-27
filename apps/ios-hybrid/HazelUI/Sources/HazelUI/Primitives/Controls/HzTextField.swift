@@ -24,36 +24,42 @@ struct HzTextField: View {
         var states: Set<HazelTheme.State> = disabled ? [.disabled] : []
         if hovering { states.insert(.hover) }
         let s = HazelTheme.Recipes.textField.styles(
-            ["label", "caption", "required", "input", "description", "error"],
+            ["label", "caption", "required", "control", "prefix", "input", "suffix", "description", "error"],
             flags: flags, states: states, sizeClass: sizeClass)
-        let field = s["input"]!
+        // The recipe's `control` is the box; `input` is the text inside it, between optional affixes.
+        let control = s["control"]!, field = s["input"]!
         let label = node.string("label") ?? ""
 
         return FieldLayout(tag: "textField", styles: s, label: label, required: node.flag("required"),
                            description: node.string("description"), error: error, sizeClass: sizeClass) {
-            // Read-only keeps focus and selection; writes are dropped, so the text never changes.
-            TextField(text: readOnly ? .constant(input.text) : input.binding, selection: $input.selection,
-                      prompt: Text(node.string("placeholder") ?? "").foregroundStyle(HazelTheme.Colors.mutedFg.color)) {
-                Text(label)
+            HStack(spacing: control.gap ?? 0) {
+                if let prefix = node.string("prefix") { Text(prefix).hzText(s["prefix"]!, sizeClass) }
+                // Read-only keeps focus and selection; writes are dropped, so the text never changes.
+                TextField(text: readOnly ? .constant(input.text) : input.binding, selection: $input.selection,
+                          prompt: Text(node.string("placeholder") ?? "").foregroundStyle(HazelTheme.Colors.mutedFg.color)) {
+                    Text(label)
+                }
+                .font(field.controlFont(sizeClass))
+                .foregroundStyle(field.color?.color ?? .primary)
+                .frame(minHeight: field.lineHeight(sizeClass))
+                .padding(.vertical, field.paddingY ?? 0)
+                .textInputAutocapitalization(node.flag("monospace") ? .never : nil)
+                .autocorrectionDisabled(node.flag("monospace"))
+                .submitLabel(.done)
+                .focused($focused)
+                .disabled(disabled)
+                .onSubmit {
+                    input.submit()
+                    focused = true
+                }
+                .accessibilityLabel(label)
+                .accessibilityIdentifier("hz-textField")
+                if let suffix = node.string("suffix") { Text(suffix).hzText(s["suffix"]!, sizeClass) }
             }
-            .font(field.controlFont(sizeClass))
-            .foregroundStyle(field.color?.color ?? .primary)
-            .frame(minHeight: field.lineHeight(sizeClass))
-            .textInputAutocapitalization(node.flag("monospace") ? .never : nil)
-            .autocorrectionDisabled(node.flag("monospace"))
-            .submitLabel(.done)
-            .focused($focused)
-            .disabled(disabled)
-            .onSubmit {
-                input.submit()
-                focused = true
-            }
-            .hzControlBox(field, scheme)
-            .hzFocusRing(focused, field.shape)
+            .hzControlBox(control, scheme)
+            .hzFocusRing(focused, control.shape)
             .onHover { hovering = $0 }
-            .animation(controlAnimation(field, reduceMotion: reduceMotion), value: hovering)
-            .accessibilityLabel(label)
-            .accessibilityIdentifier("hz-textField")
+            .animation(controlAnimation(control, reduceMotion: reduceMotion), value: hovering)
         }
         .hzTextControl(tree, node, input, focused: $focused)
     }
