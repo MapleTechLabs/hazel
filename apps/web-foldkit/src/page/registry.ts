@@ -21,6 +21,7 @@ import * as Join from "./join"
  * signed-out one's (sign-in) can show. Adding one: import its module and append `X.page`.
  */
 export const pages = [
+	// Root, inbox, home, more, profile and the organization picker are native (`root/native-pages.ts`).
 	ChatChannel.page,
 	Join.page,
 	BotInstall.page,
