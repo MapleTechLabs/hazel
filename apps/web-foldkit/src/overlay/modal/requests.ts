@@ -1,4 +1,12 @@
-import { BotId, ChannelId, MessageId, OrganizationMemberId, UserId } from "@hazel/schema"
+import {
+	BotId,
+	ChannelId,
+	CustomerAccountId,
+	MessageId,
+	OrganizationId,
+	OrganizationMemberId,
+	UserId,
+} from "@hazel/schema"
 import { Schema } from "effect"
 
 /**
@@ -48,6 +56,18 @@ export const RegenerateBotToken = Schema.TaggedStruct("RegenerateBotToken", {
 export const DeleteBot = Schema.TaggedStruct("DeleteBot", { botId: BotId, botName: Schema.String })
 export const DeleteMessage = Schema.TaggedStruct("DeleteMessage", { messageId: MessageId })
 export const KeyboardShortcuts = Schema.TaggedStruct("KeyboardShortcuts", {})
+// The customer page's More menu (native only).
+export const CustomerRawData = Schema.TaggedStruct("CustomerRawData", { json: Schema.String })
+export const CustomerLink = Schema.TaggedStruct("CustomerLink", {
+	organizationId: OrganizationId,
+	accountId: CustomerAccountId,
+})
+export const CustomerEnvironment = Schema.TaggedStruct("CustomerEnvironment", {
+	organizationId: OrganizationId,
+	accountId: CustomerAccountId,
+	name: Schema.String,
+	environment: Schema.NullOr(Schema.String),
+})
 
 export const ModalRequest = Schema.Union([
 	NewChannel,
@@ -70,5 +90,8 @@ export const ModalRequest = Schema.Union([
 	DeleteBot,
 	DeleteMessage,
 	KeyboardShortcuts,
+	CustomerRawData,
+	CustomerLink,
+	CustomerEnvironment,
 ])
 export type ModalRequest = typeof ModalRequest.Type

@@ -8,13 +8,15 @@
 import { Component, type View } from "@effect/ui"
 import type { Html } from "@effect/ui/html"
 import { ClientData } from "@hazel/client-data"
+import { Clipboard, ClipboardError } from "@hazel/client-data/platform"
 import type { Session } from "@hazel/shared-screens/app/session"
-import { Layer, Option } from "effect"
+import { Effect, Layer, Option } from "effect"
 import { canChooseServer, currentServer, isBuildServer, serverLabel } from "~/config/server"
 import { clientData } from "~/db/client"
 import { safeReturnTo } from "../auth/return-to"
 import { AppRoute, hrefOf, type RouteOf, signInHref } from "../route"
 import { ShellDms } from "./children"
+import { AdoptRegion } from "./foldkit"
 import type { AppMessage } from "./message"
 
 // The `import()`s are the only references to the pages' modules: a static import undoes the split.
@@ -58,6 +60,21 @@ export const ContinuePage = Component.lazy("ContinuePage", () =>
 export const DesktopPage = Component.lazy("DesktopPage", () =>
 	Promise.all([import("@hazel/shared-screens/auth/pages/auth/desktop/DesktopPage"), authFlows()]).then(
 		([module, flows]) => module.DesktopPage.pipe(Component.provide(flows)),
+	),
+)
+
+/** The browser's clipboard, for pages that copy (PK5's customer page). */
+const webClipboard = Layer.succeed(Clipboard, {
+	write: (text) =>
+		Effect.tryPromise({
+			try: () => navigator.clipboard.writeText(text),
+			catch: () => new ClipboardError({ reason: "denied" }),
+		}),
+})
+
+export const CustomerDetailPage = Component.lazy("CustomerDetailPage", () =>
+	import("@hazel/shared-screens/customers/pages/CustomerDetailPage").then((module) =>
+		withClientData(module.CustomerDetailPage).pipe(Component.provide(webClipboard)),
 	),
 )
 
@@ -182,6 +199,21 @@ const nativePages: Registry = {
 			fallback: (result) => fallback(result._tag === "Failure"),
 		}),
 	),
+	// The shell is native; until PK6a and PK6b the tab's content is the Foldkit page's, adopted
+	// into the page's `tab` slot. One instance per account: a tab change keeps it.
+	CustomerDetail: (h, { route, session, isMobile, nowMs, fallback }) =>
+		CustomerDetailPage(h, {
+			key: `${route.orgSlug}:${route.accountId}`,
+			props: {
+				accountId: route.accountId,
+				tab: Option.getOrElse(route.tab, () => "overview" as const),
+				session,
+				isMobile,
+				nowMs,
+			},
+			slots: { tab: h.div.class("contents").onMount(AdoptRegion({ region: "page" })) },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
 	AuthDesktop: fillWindow<"AuthDesktop">((h, { route, session, fallback }) =>
 		DesktopPage(h, {
 			key: hrefOf(route),

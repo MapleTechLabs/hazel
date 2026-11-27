@@ -69,6 +69,22 @@ const SetStatusModal = Component.lazy("SetStatusModal", () =>
 	),
 )
 
+const CustomerRawDataModal = Component.lazy("CustomerRawDataModal", () =>
+	import("@hazel/shared-screens/customers/modals/CustomerRawDataModal").then(
+		(module) => module.CustomerRawDataModal,
+	),
+)
+const CustomerLinkModal = Component.lazy("CustomerLinkModal", () =>
+	import("@hazel/shared-screens/customers/modals/CustomerLinkModal").then((module) =>
+		module.CustomerLinkModal.pipe(Component.provide(dataLayer)),
+	),
+)
+const CustomerEnvironmentModal = Component.lazy("CustomerEnvironmentModal", () =>
+	import("@hazel/shared-screens/customers/modals/CustomerEnvironmentModal").then((module) =>
+		module.CustomerEnvironmentModal.pipe(Component.provide(dataLayer)),
+	),
+)
+
 /** What a modal reads: its request, the session and route it opened over, and the clock. */
 export interface ModalInputs<Tag extends ModalTag> {
 	readonly request: RequestOf<Tag>
@@ -127,6 +143,23 @@ const nativeModals: Registry = {
 		DeleteMessageModal(h, { ...placement, props: { messageId: request.messageId } }),
 	SetStatus: (h, { session, nowMs }, placement) =>
 		SetStatusModal(h, { ...placement, props: { session, nowMs } }),
+	CustomerRawData: (h, { request }, placement) =>
+		CustomerRawDataModal(h, { ...placement, props: { json: request.json } }),
+	CustomerLink: (h, { request }, placement) =>
+		CustomerLinkModal(h, {
+			...placement,
+			props: { organizationId: request.organizationId, accountId: request.accountId },
+		}),
+	CustomerEnvironment: (h, { request }, placement) =>
+		CustomerEnvironmentModal(h, {
+			...placement,
+			props: {
+				organizationId: request.organizationId,
+				accountId: request.accountId,
+				name: request.name,
+				environment: request.environment,
+			},
+		}),
 }
 
 /** The parity flag of a native modal: `"0"` opens today's Foldkit modal instead (`compare-pages.ts`). */
