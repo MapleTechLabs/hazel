@@ -14,6 +14,8 @@ export type HoleName =
 	| "channel-files"
 
 export const HOLE_ATTRIBUTE = "data-hazel-hole"
+/** The hole's key, so a child keyed the same lands only in its own hole, never the page it replaces. */
+export const HOLE_KEY_ATTRIBUTE = "data-hazel-hole-key"
 
 /** An empty element the shell fills; `key` remounts it, so a switch of org or channel starts fresh. */
 export const hole = <Message>(
@@ -21,4 +23,9 @@ export const hole = <Message>(
 	name: HoleName,
 	key: string,
 	attributes: ReadonlyArray<Attribute<Message>> = [],
-): Html => h.keyed("div")(`hazel-hole:${name}:${key}`, [h.Attribute(HOLE_ATTRIBUTE, name), ...attributes])
+): Html =>
+	h.keyed("div")(`hazel-hole:${name}:${key}`, [
+		h.Attribute(HOLE_ATTRIBUTE, name),
+		h.Attribute(HOLE_KEY_ATTRIBUTE, key),
+		...attributes,
+	])
