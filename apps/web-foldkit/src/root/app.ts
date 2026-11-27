@@ -23,6 +23,7 @@ import {
 	ShellChannelHeader,
 	ShellChannelSidebar,
 	ShellDms,
+	ShellJoinBanner,
 	ShellMessageList,
 } from "./children"
 import { AdoptRegion, RunFoldkitHost } from "./foldkit"
@@ -50,7 +51,7 @@ import {
 	update,
 } from "./logic"
 import { AppMessage } from "./message"
-import { drawsToday, nativePageOf } from "./native-pages"
+import { nativePageOf } from "./native-pages"
 import { Hole } from "./portal"
 import { subscriptions as subscriptionsOf } from "./subscriptions"
 import { AppRoute } from "./routes"
@@ -163,7 +164,18 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 					],
 				)
 			: null,
-		route._tag === "ChatChannel" && channelId !== null && !drawsToday("ChatChannel")
+		route._tag === "ChatChannel" && channelId !== null
+			? Hole(
+					h,
+					{
+						hole: "join-banner",
+						key: channelId,
+						className: "flex flex-1 flex-col items-center justify-center p-8",
+					},
+					[ShellJoinBanner(h, { key: channelId, props: { channelId, userId: data.user.id } })],
+				)
+			: null,
+		route._tag === "ChatChannel" && channelId !== null
 			? Hole(h, { hole: "channel-header", key: channelId }, [
 					ShellChannelHeader(h, {
 						key: channelId,

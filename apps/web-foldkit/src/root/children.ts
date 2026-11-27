@@ -13,6 +13,7 @@ import {
 	matchTarget,
 } from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
 import { ChannelHeader, channelHeaderLayer } from "@hazel/shared-screens/chat/header/ChannelHeader"
+import { JoinBanner, joinBannerLayer } from "@hazel/shared-screens/chat/header/JoinBanner"
 import { MessageList } from "@hazel/shared-screens/chat/MessageList"
 import { messageListLayer } from "@hazel/shared-screens/chat/live"
 import { Dms, dmsLayer } from "@hazel/shared-screens/dms/Dms"
@@ -90,4 +91,10 @@ export const ShellChannelHeader = Component.provide(
 			}),
 		),
 	),
+)
+
+/** A non-member's "Join #channel", in the place of the list and the composer. */
+export const ShellJoinBanner = Component.provide(
+	JoinBanner,
+	Layer.unwrap(Effect.map(Effect.service(HazelRpc), (rpc) => joinBannerLayer(clientData, rpc))),
 )

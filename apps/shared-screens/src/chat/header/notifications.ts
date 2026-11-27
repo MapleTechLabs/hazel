@@ -43,7 +43,9 @@ export const bellEntries = (options: {
 		entries: LEVELS.map((candidate) => ({
 			id: levelKeyOf(candidate),
 			label:
-				candidate === null ? `Default (${levelLabels[options.inheritedLevel]})` : levelLabels[candidate],
+				candidate === null
+					? `Default (${levelLabels[options.inheritedLevel]})`
+					: levelLabels[candidate],
 			checked: candidate === options.level,
 		})),
 	}

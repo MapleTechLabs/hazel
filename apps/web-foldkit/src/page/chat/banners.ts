@@ -1,72 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { heading } from "../../ui/heading"
-import { button } from "../../ui/button"
-import { type ChannelLinks, channelIcon } from "../../ui/channel-icon"
 import type { ChannelMemberInfo, TypingInfo, UserInfo } from "./lookups"
-import type { ChannelInfo } from "./queries"
 
-/** `ChannelJoinBanner` and `TypingIndicator`. */
-
-export interface JoinBannerInputs<M> {
-	readonly isJoining: boolean
-	readonly onJoin: M
-	/** What the channel is linked or connected to, marked on its icon. */
-	readonly links: ChannelLinks
-}
-
-export const joinBannerView = <M>(
-	h: HtmlBuilder<M>,
-	channel: ChannelInfo | null,
-	inputs: JoinBannerInputs<M>,
-): Html =>
-	channel === null
-		? h.empty
-		: h.div(
-				[h.Class("flex flex-1 flex-col items-center justify-center gap-6 p-8")],
-				[
-					h.div(
-						[h.Class("flex flex-col items-center gap-3")],
-						[
-							h.div(
-								[
-									h.Class(
-										"flex size-16 items-center justify-center rounded-2xl bg-secondary text-3xl text-muted-fg",
-									),
-								],
-								[
-									channelIcon(h, {
-										icon: channel.icon,
-										isPrivate: channel.type === "private",
-										links: inputs.links,
-										size: "lg",
-										surface: "secondary",
-									}),
-								],
-							),
-							h.div(
-								[h.Class("flex flex-col items-center gap-1")],
-								[
-									heading(h, { variant: "title" }, [channel.name]),
-									h.p(
-										[h.Class("max-w-sm text-center text-muted-fg text-sm")],
-										["You're previewing this channel. Join to start chatting."],
-									),
-								],
-							),
-						],
-					),
-					button(
-						h,
-						{
-							intent: "primary",
-							size: "lg",
-							onPress: inputs.onJoin,
-							isPending: inputs.isJoining,
-						},
-						["Join #", channel.name],
-					),
-				],
-			)
+/** `TypingIndicator` (the join banner is the shared `chat/header/JoinBanner.ts`). */
 
 const STALE_THRESHOLD_MS = 6000
 

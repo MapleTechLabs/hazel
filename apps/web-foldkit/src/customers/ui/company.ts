@@ -93,12 +93,6 @@ export const companySocials = <M>(
 export const companyPageLinks = <M>(h: HtmlBuilder<M>, company: CompanyProfile): ReadonlyArray<Html> =>
 	companyPages(company).flatMap((link) => pageLink(h, link))
 
-/** The company's socials as logos, then its own pages by name. */
-export const companyLinks = <M>(h: HtmlBuilder<M>, company: CompanyProfile): ReadonlyArray<Html> => [
-	...companySocials(h, company),
-	...companyPages(company).flatMap((link) => pageLink(h, link)),
-]
-
 type IconComponent = <M>(h: HtmlBuilder<M>, options?: IconOptions) => Html
 
 /**

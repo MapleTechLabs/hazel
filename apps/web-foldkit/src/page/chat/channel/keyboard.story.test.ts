@@ -135,13 +135,9 @@ describe("channel shortcuts", () => {
 		)
 	})
 
-	test("Mod+P toggles the pinned messages", () => {
-		const opened = updateWithShared(loadedModel(), Message.PressedChannelHotkey({ action: "Pins" }))
-		expect(opened.model.overlays.pinned.isOpen).toBe(true)
-		expect(
-			updateWithShared(opened.model, Message.PressedChannelHotkey({ action: "Pins" })).model.overlays
-				.pinned.isOpen,
-		).toBe(false)
+	test("Mod+P goes to the channel header's pins", () => {
+		const pressed = updateWithShared(loadedModel(), Message.PressedChannelHotkey({ action: "Pins" }))
+		expect(pressed.commands?.map((command) => command.name)).toEqual(["PublishPinsHotkey"])
 	})
 })
 

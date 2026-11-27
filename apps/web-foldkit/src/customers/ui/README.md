@@ -33,7 +33,7 @@ The little text grammar the kit has no component for. Headings are the kit's `he
 (`display` for a page's title, `section` for a panel's, `subsection` for a group); `pageHeader` and
 `panelHeader` render them for you.
 
-- `titleClass` (an emphasised line, 14px semibold), `descriptionClass` (14px muted). Labels are
+- `descriptionClass` (14px muted). Labels are
   sentence case; nothing is uppercase. A table head is `dataTable`'s.
 - Links: `moreLink(h, href, "View queue")` (a panel's way out, with `›`, on the kit `link`);
   `linkClass` (the kit link's classes in primary, for an element `link` can't render).

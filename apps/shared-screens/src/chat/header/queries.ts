@@ -124,8 +124,9 @@ export const inheritedLevelStream = <M>(
 			(q) =>
 				q
 					.from({ channel: data.collections.channelCollection })
-					.leftJoin({ section: data.collections.notificationOverrideCollection }, ({ channel, section }) =>
-						eq(section.scopeId, channel.sectionId),
+					.leftJoin(
+						{ section: data.collections.notificationOverrideCollection },
+						({ channel, section }) => eq(section.scopeId, channel.sectionId),
 					)
 					.leftJoin({ org: data.collections.notificationOverrideCollection }, ({ channel, org }) =>
 						eq(org.scopeId, channel.organizationId),
@@ -154,7 +155,9 @@ export const customerStream = <M>(
 	to: (customer: ReturnType<typeof toCustomer>) => M,
 ): Stream.Stream<M, never, ClientData> =>
 	withData((data) =>
-		makeChannelData(data).channelCustomerStream(channelId, (row) => to(row === null ? null : toCustomer(row))),
+		makeChannelData(data).channelCustomerStream(channelId, (row) =>
+			to(row === null ? null : toCustomer(row)),
+		),
 	)
 
 type CustomerRow = Parameters<Parameters<ReturnType<typeof makeChannelData>["channelCustomerStream"]>[1]>[0]
@@ -229,14 +232,13 @@ export const ownerNameStream = <M>(
 ): Stream.Stream<M, never, ClientData> =>
 	withData((data) =>
 		data.liveQueryStream<{ firstName: string; lastName: string; email?: string | null }, M>(
-			(q) =>
-				q
-					.from({ user: data.collections.userCollection })
-					.where(({ user }) => eq(user.id, userId)),
+			(q) => q.from({ user: data.collections.userCollection }).where(({ user }) => eq(user.id, userId)),
 			(rows) => {
 				const row = rows[0]
 				return to(
-					row === undefined ? null : `${row.firstName} ${row.lastName}`.trim() || (row.email ?? null),
+					row === undefined
+						? null
+						: `${row.firstName} ${row.lastName}`.trim() || (row.email ?? null),
 				)
 			},
 		),

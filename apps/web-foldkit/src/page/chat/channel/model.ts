@@ -36,9 +36,7 @@ import {
 } from "../lookups"
 import * as FilesPage from "../files/page"
 import * as IssueControl from "../issue-control"
-import * as NotificationControl from "../notification-control"
 import { Message as ActionMessage } from "../message-actions"
-import * as CustomerCard from "../customer-card"
 import * as Overlays from "../overlays"
 import { ChannelInfo, ParentChannelInfo } from "../queries"
 import { ChatMessage, ChatReaction, DisplayRow } from "../rows"
@@ -142,8 +140,6 @@ export const Model = Schema.Struct({
 	customer: Schema.NullOr(ChannelCustomerRow),
 	/** Top-level messages of the (linked) channel that already have a support issue. */
 	issueRootIds: Schema.Array(MessageId),
-	/** The customer chip's card (desktop) and sheet (phone). */
-	customerCard: CustomerCard.Model,
 	typing: Schema.Array(TypingInfo),
 	typingNowMs: Schema.Finite,
 	/** First names of the other members typing now (`useTypingIndicators`), derived in `update`. */
@@ -179,10 +175,6 @@ export const Model = Schema.Struct({
 	notifications: NotificationClear.Model,
 	/** What was new when the user opened the channel: the "New" line and the bar (`new-messages.ts`). */
 	newMessages: NewMessages.Model,
-	/** The header's notification settings bell (`../notification-control.ts`). */
-	notificationControl: NotificationControl.Model,
-	/** The non-member's "Join #channel" is running. */
-	isJoining: Schema.Boolean,
 	/**
 	 * Row heights measured in channels visited earlier, by channel, least recent first. A revisit
 	 * lays its rows out at their real heights on the switch frame; rows re-measure as they render.
@@ -252,12 +244,10 @@ export const Message = defineMessageUnion({
 	/** Tagged with the channel queried: a late answer for the previous channel is dropped. */
 	UpdatedActivity: { channelId: ChannelId, activity: Schema.NullOr(NewMessages.Activity) },
 	/** Tagged with the channel queried: a late answer for the previous channel is dropped. */
-	UpdatedInheritedNotificationLevel: { channelId: ChannelId, level: ChannelMember.NotificationLevel },
 	/** The user's read position; null while they are not a member. Tagged like the activity. */
 	UpdatedReadPosition: { channelId: ChannelId, readUpToMs: Schema.NullOr(Schema.Finite) },
 	/** The new-messages bar: jump to the first new message, or mark the channel read. */
 	ClickedJumpToNew: {},
-	GotNotificationControlMessage: { message: NotificationControl.Message },
 	ClickedMarkNewRead: {},
 	UpdatedPinned: { pins: Schema.Array(PinnedInfo) },
 	/** Tagged with the channel queried: a late answer for the previous channel is dropped. */
@@ -277,7 +267,6 @@ export const Message = defineMessageUnion({
 	GotLiveMessage: { message: Live.Message },
 	GotHtmlRenderMessage: { message: HtmlRender.Message },
 	GotOverlaysMessage: { message: Overlays.Message },
-	GotCustomerCardMessage: { message: CustomerCard.Message },
 	GotFilesMessage: { message: FilesPage.Message },
 	GotDraftMessage: { message: Draft.Message },
 	GotThreadDraftMessage: { message: Draft.Message },
@@ -300,7 +289,6 @@ export const Message = defineMessageUnion({
 	/** Follow the open thread (join it) or unfollow it (leave it): Discord's thread following. */
 	ClickedToggleFollowThread: {},
 	/** The thread page's Follow, for a thread the user does not follow. */
-	ClickedFollowThread: {},
 	CompletedToggleFollowThread: { isFollowing: Schema.Boolean, isSuccess: Schema.Boolean },
 	/** The panel's edge was grabbed: its rendered width and the widest it may grow. */
 	PressedThreadPanelEdge: { clientX: Schema.Finite, startWidth: Schema.Finite, maxWidth: Schema.Finite },
@@ -310,9 +298,7 @@ export const Message = defineMessageUnion({
 	PressedThreadPanelEdgeKey: { delta: Schema.Finite },
 	LoadedThreadPanelWidth: { width: Schema.NullOr(Schema.Finite) },
 	CompletedSaveThreadPanelWidth: {},
-	ClickedJoinChannel: {},
 	/** The header's "Unhide conversation" on a DM the signed-in user hid. */
-	ClickedUnhideConversation: {},
 	/** A printable key typed outside any input (`useGlobalKeyboardFocus`). */
 	PressedGlobalKey: { key: Schema.String },
 	/** Files pasted outside any input: they attach to the focused composer. */

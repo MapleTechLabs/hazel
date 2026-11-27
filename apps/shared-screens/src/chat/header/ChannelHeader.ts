@@ -111,7 +111,11 @@ export class WriteNotificationChoice extends Command.Service<WriteNotificationCh
 							update(
 								minutes === null
 									? { memberId, isMuted: true, mutedUntil: null }
-									: { memberId, isMuted: false, mutedUntil: new Date(nowMs + minutes * 60_000) },
+									: {
+											memberId,
+											isMuted: false,
+											mutedUntil: new Date(nowMs + minutes * 60_000),
+										},
 							),
 						),
 					Unmute: () => update({ memberId, isMuted: false, mutedUntil: null }),
@@ -127,7 +131,9 @@ export class WriteNotificationChoice extends Command.Service<WriteNotificationCh
 					// BOUNDARY: every failure reads as one of two here (the optimistic row rolls back).
 					Effect.tapError((error) => Effect.logWarning("notification choice failed", error)),
 					Effect.catch((error) =>
-						Effect.succeed(ChannelHeaderMessage.FailedNotificationChoice({ reason: failureOf(error) })),
+						Effect.succeed(
+							ChannelHeaderMessage.FailedNotificationChoice({ reason: failureOf(error) }),
+						),
 					),
 				)
 		}),
@@ -257,13 +263,17 @@ export const ChannelHeader = Hazel.component({
 					: toast("error", "Something went wrong", SOMETHING_WRONG),
 			),
 		PressedFollowThread: ($) =>
-			$.model.channel?.type === "thread" ? $.run(FollowThread.make({ channelId: $.props.channelId })) : $.model,
+			$.model.channel?.type === "thread"
+				? $.run(FollowThread.make({ channelId: $.props.channelId }))
+				: $.model,
 		SucceededFollowThread: ($) => $.run(toast("success", "Following thread")),
 		FailedFollowThread: ($) => $.run(toast("error", "Couldn't follow the thread")),
 	},
 	subscriptions: ({ props, model }) => {
 		const partner =
-			model.channel === null ? undefined : partnerOf(model.channel, othersOf(model.members ?? [], props.userId))
+			model.channel === null
+				? undefined
+				: partnerOf(model.channel, othersOf(model.members ?? [], props.userId))
 		const parentId = model.channel?.type === "thread" ? model.channel.parentChannelId : null
 		const ownerId = model.customer?.ownerUserId ?? null
 		return [
@@ -273,13 +283,17 @@ export const ChannelHeader = Hazel.component({
 			Subscription.make("parent", [parentId ?? ""], ([id]) =>
 				id === ""
 					? Stream.empty
-					: channelStream(ChannelId.make(id), (channel) => ChannelHeaderMessage.UpdatedParent({ channel })),
+					: channelStream(ChannelId.make(id), (channel) =>
+							ChannelHeaderMessage.UpdatedParent({ channel }),
+						),
 			),
 			Subscription.make("members", [props.channelId], ([channelId]) =>
 				membersStream(channelId, (members) => ChannelHeaderMessage.UpdatedMembers({ members })),
 			),
 			Subscription.make("inherited", [props.channelId], ([channelId]) =>
-				inheritedLevelStream(channelId, (level) => ChannelHeaderMessage.UpdatedInheritedLevel({ level })),
+				inheritedLevelStream(channelId, (level) =>
+					ChannelHeaderMessage.UpdatedInheritedLevel({ level }),
+				),
 			),
 			Subscription.make("presence", [partner?.userId ?? ""], ([userId]) =>
 				userId === ""
@@ -294,7 +308,9 @@ export const ChannelHeader = Hazel.component({
 			Subscription.make("owner", [ownerId ?? ""], ([userId]) =>
 				userId === ""
 					? Stream.empty
-					: ownerNameStream(UserId.make(userId), (name) => ChannelHeaderMessage.UpdatedOwnerName({ name })),
+					: ownerNameStream(UserId.make(userId), (name) =>
+							ChannelHeaderMessage.UpdatedOwnerName({ name }),
+						),
 			),
 			Subscription.make("sync", [props.channelId], ([channelId]) =>
 				syncStream(channelId, (provider) => ChannelHeaderMessage.UpdatedSync({ provider })),
@@ -311,9 +327,8 @@ export const ChannelHeader = Hazel.component({
 		const isDm = channel !== null && isDmType(channel.type)
 		const others = othersOf(members, props.userId)
 
-		const title =
-			channel === null ? "" : isDm ? dmTitleOf(others) : channel.name
-		// HAZEL-GAP(screen-title-leading): today's title leads with the channel icon (with its customer
+		const title = channel === null ? "" : isDm ? dmTitleOf(others) : channel.name
+		// HAZEL-GAP(p4-screen-leading, p4-screen-chat-header): today's title leads with the channel icon (with its customer
 		// and sync marks), a DM partner's avatar and presence, or a thread mark.
 		const crumbs =
 			isThread && !props.isMobile && model.parent !== null && channel?.parentChannelId != null
@@ -328,7 +343,9 @@ export const ChannelHeader = Hazel.component({
 					bellEntries({
 						isMuted: isMemberMutedNow(member, props.nowMs),
 						level: member.notificationLevel,
-						inheritedLevel: model.inheritedLevel ?? (isDmType(type) || type === "thread" ? "all" : "mentions"),
+						inheritedLevel:
+							model.inheritedLevel ??
+							(isDmType(type) || type === "thread" ? "all" : "mentions"),
 						channelType: type,
 					}),
 				)
@@ -367,7 +384,11 @@ export const ChannelHeader = Hazel.component({
 				? []
 				: !isMember
 					? [follow]
-					: [unhide, bell(current, channel.type), PinnedMessages(h, { key: channel.id, props: { channelId: channel.id } })]
+					: [
+							unhide,
+							bell(current, channel.type),
+							PinnedMessages(h, { key: channel.id, props: { channelId: channel.id } }),
+						]
 
 		const customer = model.customer
 		const chip =
@@ -412,4 +433,3 @@ export const channelHeaderLayer = (
 		FollowThread.layer,
 		pinnedMessagesLayer(page.jumpToMessage, page.pinsHotkey),
 	).pipe(Layer.provideMerge(Layer.mergeAll(Layer.succeed(ClientData, data), Layer.succeed(HazelRpc, rpc))))
-

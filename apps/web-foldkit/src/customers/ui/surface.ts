@@ -11,8 +11,6 @@ import { link, linkClassName } from "../../ui/link"
 
 // TYPE
 
-/** An emphasised line that is not a heading (an empty state's headline). */
-export const titleClass = "font-semibold text-fg text-sm/6"
 export const descriptionClass = "text-muted-fg text-sm"
 
 /** An inline text link: the kit `link`'s classes, in the primary colour (for an element `link` can't render). */

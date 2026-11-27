@@ -55,10 +55,6 @@ export type CopyTextFailure = typeof CopyTextFailure.Type
 export const CopiedContent = Schema.Literals(["MessageText", "MessageId", "ImageUrl"])
 export type CopiedContent = typeof CopiedContent.Type
 
-/** What can go wrong joining a channel, beyond the shared reasons. */
-export const JoinChannelFailure = Schema.Union([Schema.Literals(["NotFound"]), CommonReason])
-export type JoinChannelFailure = typeof JoinChannelFailure.Type
-
 /** What can go wrong reacting to or pinning a message, beyond the shared reasons. */
 export const MessageActionFailure = Schema.Union([Schema.Literals(["MessageNotFound"]), CommonReason])
 export type MessageActionFailure = typeof MessageActionFailure.Type
@@ -81,10 +77,6 @@ export const CreateIssueFailure = Schema.Union([
 ])
 export type CreateIssueFailure = typeof CreateIssueFailure.Type
 
-/** What can go wrong bringing a hidden conversation back, beyond the shared reasons. */
-export const UnhideConversationFailure = Schema.Union([Schema.Literals(["MemberNotFound"]), CommonReason])
-export type UnhideConversationFailure = typeof UnhideConversationFailure.Type
-
 // MESSAGE
 
 export const ActionMessage = defineMessageUnion({
@@ -105,14 +97,10 @@ export const ActionMessage = defineMessageUnion({
 	CompletedOpenUrl: {},
 	SucceededGenerateThreadName: { threadChannelId: ChannelId },
 	FailedGenerateThreadName: { threadChannelId: ChannelId, reason: GenerateThreadNameFailure },
-	SucceededJoinChannel: {},
-	FailedJoinChannel: { reason: JoinChannelFailure },
 	SucceededPressEmbedAction: {},
 	FailedPressEmbedAction: { reason: PressEmbedActionFailure },
 	SucceededCreateIssue: { messageId: MessageId },
 	FailedCreateIssue: { messageId: MessageId, reason: CreateIssueFailure },
-	SucceededUnhideConversation: {},
-	FailedUnhideConversation: { reason: UnhideConversationFailure },
 })
 export type ActionMessage = typeof ActionMessage.Type
 /** `ActionMessage` under the Submodel name, so a parent's Got wrapper imports it as `Message`. */
@@ -163,21 +151,6 @@ export const PinMessage = Command.define("PinMessage", {
 					Effect.succeed(ActionMessage.FailedPinMessage({ reason: "MessageNotFound" })),
 			}),
 			catchCommon((reason) => ActionMessage.FailedPinMessage({ reason })),
-		),
-})
-
-/** The header's "Unhide conversation": the hidden DM comes back to the sidebar. */
-export const UnhideConversation = Command.define("UnhideConversation", {
-	args: { memberId: ChannelMemberId },
-	messages: [ActionMessage.SucceededUnhideConversation, ActionMessage.FailedUnhideConversation],
-	execute: ({ memberId }) =>
-		updateChannelMemberAction({ memberId, isHidden: false }).pipe(
-			Effect.as(ActionMessage.SucceededUnhideConversation()),
-			Effect.catchTags({
-				ChannelMemberNotFoundError: () =>
-					Effect.succeed(ActionMessage.FailedUnhideConversation({ reason: "MemberNotFound" })),
-			}),
-			catchCommon((reason) => ActionMessage.FailedUnhideConversation({ reason })),
 		),
 })
 
@@ -349,21 +322,6 @@ export const GenerateThreadName = Command.define("GenerateThreadName", {
 			catchCommon(failed),
 		)
 	},
-})
-
-/** `ChannelJoinBanner`'s "Join #channel": `joinChannelAction`, as the join modal runs it. */
-export const JoinChannel = Command.define("JoinChannel", {
-	args: { channelId: ChannelId, userId: UserId },
-	messages: [ActionMessage.SucceededJoinChannel, ActionMessage.FailedJoinChannel],
-	execute: (args) =>
-		joinChannelAction(args).pipe(
-			Effect.as(ActionMessage.SucceededJoinChannel()),
-			Effect.catchTags({
-				ChannelNotFoundError: () =>
-					Effect.succeed(ActionMessage.FailedJoinChannel({ reason: "NotFound" })),
-			}),
-			catchCommon((reason) => ActionMessage.FailedJoinChannel({ reason })),
-		),
 })
 
 /**

@@ -98,8 +98,6 @@ export const Model = Schema.Struct({
 	open: OpenOverlay,
 	/** The image viewer's right-click menu; reset whenever a viewer opens or closes. */
 	viewerMenu: Menu.Model,
-	/** The header's pinned messages popover. */
-	pinned: Popover.Model,
 })
 export type Model = typeof Model.Type
 
@@ -112,7 +110,6 @@ export const init = (): Model => ({
 	focusedTrigger: null,
 	open: OpenOverlay.None(),
 	viewerMenu: initViewerMenu(),
-	pinned: Popover.init("pinned-messages"),
 })
 
 /** The message the toolbar shows for. */
@@ -188,11 +185,8 @@ export const Message = defineMessageUnion({
 	 */
 	ChoseNativeAction: { messageId: MessageId, value: Schema.String },
 	GotPopoverMessage: { messageId: MessageId, key: Schema.String, message: Popover.Message },
-	GotPinnedMessage: { message: Popover.Message },
-	/** A pin in the header's pinned messages popover: the popover closes and the list jumps to it. */
+	/** A pin in the shared channel header's pinned messages: the list jumps to it. */
 	ClickedPinnedMessage: { messageId: MessageId },
-	/** The unpin button on a pin in the pinned messages popover. */
-	ClickedUnpin: { messageId: MessageId },
 	ClickedReply: { messageId: MessageId },
 	ClickedDelete: { messageId: MessageId },
 	ClickedCopy: { messageId: MessageId },
@@ -231,9 +225,8 @@ export const OutMessage = defineMessageUnion({
 	RequestedViewerAction: { action: ViewerAction, url: Schema.String, fileName: Schema.String },
 	/** The viewer's menu chose an action for the open image, which the page knows. */
 	RequestedOpenImageAction: { action: ViewerAction },
-	/** A pin was chosen in the pinned messages popover: the page scrolls to its message. */
+	/** A pin was chosen in the channel header's pins: the page scrolls to its message. */
 	RequestedJump: { messageId: MessageId },
-	RequestedUnpin: { messageId: MessageId },
 })
 export type OutMessage = typeof OutMessage.Type
 
@@ -581,26 +574,10 @@ const updateOverlays = (model: Model, message: Message): OverlaysReturn =>
 				wrap: (inner) => Message.GotPopoverMessage({ messageId, key, message: inner }),
 			})
 		},
-		GotPinnedMessage: ({ message: popoverMessage }) => {
-			const result = Popover.update(model.pinned, popoverMessage)
-			return {
-				model: modifyFields(model, { pinned: () => result.model }),
-				commands: Command.mapMessages(result.commands ?? [], (inner) =>
-					Message.GotPinnedMessage({ message: inner }),
-				),
-			}
-		},
-		ClickedPinnedMessage: ({ messageId }) => {
-			const result = Popover.update(model.pinned, Popover.Message.RequestedClose())
-			return {
-				model: modifyFields(model, { pinned: () => result.model }),
-				commands: Command.mapMessages(result.commands ?? [], (inner) =>
-					Message.GotPinnedMessage({ message: inner }),
-				),
-				outMessage: OutMessage.RequestedJump({ messageId }),
-			}
-		},
-		ClickedUnpin: ({ messageId }) => ({ model, outMessage: OutMessage.RequestedUnpin({ messageId }) }),
+		ClickedPinnedMessage: ({ messageId }) => ({
+			model,
+			outMessage: OutMessage.RequestedJump({ messageId }),
+		}),
 		ClickedReply: ({ messageId }) => action(model, messageId, "reply"),
 		ClickedDelete: ({ messageId }) => action(model, messageId, "delete"),
 		ClickedCopy: ({ messageId }) => action(model, messageId, "copy"),

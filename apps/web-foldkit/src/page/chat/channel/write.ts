@@ -440,14 +440,6 @@ const draftForMessage = (model: Model, messageId: MessageId): Which =>
 		? "thread"
 		: "channel"
 
-/** The pinned messages popover's unpin: never pins, so a second press on a leaving row does nothing. */
-const unpin = (model: Model, messageId: MessageId): PageReturn => {
-	const pinnedId = pinnedIdOf(model, messageId)
-	return Option.isSome(pinnedId)
-		? { model, commands: actionCommands([UnpinMessage({ pinnedMessageId: pinnedId.value })]) }
-		: { model }
-}
-
 /** `handlePin`: unpin by the pin's id, else pin. */
 const togglePin = (model: Model, messageId: MessageId): PageReturn => {
 	const pinnedId = pinnedIdOf(model, messageId)
@@ -590,7 +582,6 @@ export const handleOverlaysOut = (model: Model, out: Overlays.OutMessage): PageR
 		},
 		RequestedMessageAction: ({ messageId, action }) => messageAction(model, messageId, action),
 		RequestedJump: ({ messageId }) => Jump.toMessage(model, messageId, messageId),
-		RequestedUnpin: ({ messageId }) => unpin(model, messageId),
 	})
 
 /** A reaction or pin on a message that is gone. */
@@ -769,37 +760,6 @@ export const handleActionMessage = (model: Model, message: ActionMessage): PageR
 						SaveFailed: {
 							title: "Update failed",
 							description: "Failed to save the thread name. Please try again.",
-						},
-					}),
-				),
-			),
-		SucceededUnhideConversation: () => withToast(model, successToast("Conversation unhidden")),
-		FailedUnhideConversation: ({ reason }) =>
-			withToast(
-				model,
-				errorToastOf(
-					failureMessage(reason, {
-						MemberNotFound: {
-							title: "Couldn't unhide the conversation",
-							description: "You may no longer be in this conversation.",
-						},
-					}),
-				),
-			),
-		// The members query brings the membership; the banner then gives way to the composer.
-		SucceededJoinChannel: () =>
-			withToast(
-				modifyFields(model, { isJoining: () => false }),
-				successToast("Successfully joined channel"),
-			),
-		FailedJoinChannel: ({ reason }) =>
-			withToast(
-				modifyFields(model, { isJoining: () => false }),
-				errorToastOf(
-					failureMessage(reason, {
-						NotFound: {
-							title: "Channel not found",
-							description: "This channel may have been deleted.",
 						},
 					}),
 				),

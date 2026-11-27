@@ -125,7 +125,9 @@ const pinnedLoad = (channelId: ChannelId): Stream.Stream<never, never, ClientDat
 						? Stream.empty
 						: Stream.callback<never>(() =>
 								Effect.acquireRelease(
-									Effect.sync(() => data.collections.messageCollection.utils.loadByIds(channelId, ids)),
+									Effect.sync(() =>
+										data.collections.messageCollection.utils.loadByIds(channelId, ids),
+									),
 									(demand) => Effect.sync(() => demand.release()),
 								).pipe(Effect.flatMap(() => Effect.never)),
 							),
@@ -152,7 +154,9 @@ export class UnpinMessage extends Command.Service<UnpinMessage>()("hazel/chat/pi
 					}),
 					// BOUNDARY: any other failure rolls the pin back and says so once.
 					Effect.tapCause((cause) => Effect.logWarning("unpin failed", cause)),
-					Effect.catchCause(() => Effect.succeed(PinnedMessagesMessage.FailedUnpin({ reason: "Other" }))),
+					Effect.catchCause(() =>
+						Effect.succeed(PinnedMessagesMessage.FailedUnpin({ reason: "Other" })),
+					),
 				)
 		}),
 	)
@@ -175,7 +179,9 @@ export class JumpToPin extends Command.Service<JumpToPin>()("hazel/chat/pins/Jum
 }
 
 /** The page's pins shortcut, which opens the popover from anywhere in the channel. */
-export class PinsHotkey extends Context.Service<PinsHotkey, Stream.Stream<void>>()("hazel/chat/pins/PinsHotkey") {}
+export class PinsHotkey extends Context.Service<PinsHotkey, Stream.Stream<void>>()(
+	"hazel/chat/pins/PinsHotkey",
+) {}
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 const pad = (value: number) => String(value).padStart(2, "0")
@@ -200,7 +206,8 @@ export const PinnedMessages = Hazel.component({
 		PressedPinsButton: ($) => $.evolve({ isOpen: (isOpen) => !isOpen }),
 		PressedPinsHotkey: ($) => $.evolve({ isOpen: (isOpen) => !isOpen }),
 		DismissedPins: ($) => $.evolve({ isOpen: () => false }),
-		PressedPin: ($, { messageId }) => $.evolve({ isOpen: () => false }).run(JumpToPin.make({ messageId })),
+		PressedPin: ($, { messageId }) =>
+			$.evolve({ isOpen: () => false }).run(JumpToPin.make({ messageId })),
 		PressedUnpin: ($, { pinnedId }) => $.run(UnpinMessage.make({ pinnedId })),
 		FailedUnpin: ($, { reason }) =>
 			$.run(
@@ -212,7 +219,11 @@ export const PinnedMessages = Hazel.component({
 									title: "Message not found",
 									description: "This message may have been deleted.",
 								}
-							: { intent: "error", title: "Something went wrong", description: "Please try again." },
+							: {
+									intent: "error",
+									title: "Something went wrong",
+									description: "Please try again.",
+								},
 				}),
 			),
 	},
@@ -252,7 +263,7 @@ export const PinnedMessages = Hazel.component({
 					.style("quiet")
 					.pill(),
 			)
-		// HAZEL-GAP(pins-row-meta): the row's time, "(edited)" and "Pinned Mar 12 at 2:05 PM" lines.
+		// HAZEL-GAP(p4-pins-row-meta): the row's time, "(edited)" and "Pinned Mar 12 at 2:05 PM" lines.
 		const row = (pin: Pin) => {
 			const name = pin.authorName ?? "Unknown user"
 			const isEdited = pin.updatedAtMs !== null && pin.updatedAtMs > pin.createdAtMs
@@ -292,12 +303,14 @@ export const PinnedMessages = Hazel.component({
 				? h.emptyState
 						.key("empty")
 						.title("No pinned messages yet")
-						.description("Pin a message from its menu to keep it here for everyone in the channel.")
+						.description(
+							"Pin a message from its menu to keep it here for everyone in the channel.",
+						)
 				: h.section
 						.key("pins")
 						.style("list")
 						.children(...model.pins.map(row))
-		// HAZEL-GAP(pins-panel-size): today's panel is 384px wide and scrolls past 400px.
+		// HAZEL-GAP(p4-pins-panel-size): today's panel is 384px wide and scrolls past 400px.
 		return h.popover
 			.open(model.isOpen)
 			.anchor(trigger)
@@ -307,9 +320,5 @@ export const PinnedMessages = Hazel.component({
 })
 
 /** The pins' Commands and the page's shortcut, from the host's data instance. */
-export const pinnedMessagesLayer = (
-	jump: (messageId: MessageId) => void,
-	hotkey: Stream.Stream<void>,
-) =>
+export const pinnedMessagesLayer = (jump: (messageId: MessageId) => void, hotkey: Stream.Stream<void>) =>
 	Layer.mergeAll(UnpinMessage.layer, JumpToPin.layerWith(jump), Layer.succeed(PinsHotkey, hotkey))
-

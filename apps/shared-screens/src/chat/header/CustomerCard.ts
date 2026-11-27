@@ -99,7 +99,9 @@ export const CustomerCard = Hazel.component({
 	init: () => ({ isPinned: false, isSheetOpen: false }),
 	update: {
 		PressedChip: ($) =>
-			$.props.isMobile ? $.evolve({ isSheetOpen: () => true }) : $.evolve({ isPinned: (pinned) => !pinned }),
+			$.props.isMobile
+				? $.evolve({ isSheetOpen: () => true })
+				: $.evolve({ isPinned: (pinned) => !pinned }),
 		// A hover card asks to close when the pointer leaves; it stays armed for the next hover.
 		DismissedCard: ($) => ($.model.isPinned ? $.evolve({ isPinned: () => false }) : $.model),
 		DismissedSheet: ($) => $.evolve({ isSheetOpen: () => false }),
@@ -132,7 +134,7 @@ export const CustomerCard = Hazel.component({
 			const hidden = customer.openSignalCount - customer.topSignals.length
 			const description = customer.company?.description?.trim() ?? ""
 			const muted = (text: string) => h.text.tone("muted").children(text)
-			// HAZEL-GAP(customer-card-company): today's company facts chips and links under the name.
+			// HAZEL-GAP(p4-card-company): today's company facts chips and links under the name.
 			return [
 				h.stack
 					.key("who")
@@ -155,14 +157,26 @@ export const CustomerCard = Hazel.component({
 					.key("facts")
 					.style("list")
 					.children(
-						h.property.key("revenue").label("Revenue").children(revenue === null ? muted("No MRR") : h.text.numeric().children(revenue)),
+						h.property
+							.key("revenue")
+							.label("Revenue")
+							.children(
+								revenue === null ? muted("No MRR") : h.text.numeric().children(revenue),
+							),
 						h.property
 							.key("owner")
 							.label("Owner")
-							.children(props.ownerName === null ? muted("No owner") : h.text.children(props.ownerName)),
+							.children(
+								props.ownerName === null
+									? muted("No owner")
+									: h.text.children(props.ownerName),
+							),
 						seats === null
 							? undefined
-							: h.property.key("seats").label("Seats").children(h.text.numeric().children(seats)),
+							: h.property
+									.key("seats")
+									.label("Seats")
+									.children(h.text.numeric().children(seats)),
 						h.property
 							.key("active")
 							.label("Last active")
@@ -184,10 +198,13 @@ export const CustomerCard = Hazel.component({
 							? undefined
 							: h.link.key("queue").label("Queue").href(props.queueHref),
 						hidden > 0
-							? h.link.key("more").label(`${hidden} more on the customer page`).href(props.customerHref)
+							? h.link
+									.key("more")
+									.label(`${hidden} more on the customer page`)
+									.href(props.customerHref)
 							: undefined,
 					),
-				// HAZEL-GAP(customer-card-provider-marks): today's provider links are logo buttons.
+				// HAZEL-GAP(p4-card-provider-marks): today's provider links are logo buttons.
 				h.stack
 					.key("out")
 					.axis("horizontal")
@@ -211,7 +228,7 @@ export const CustomerCard = Hazel.component({
 
 		const body = () => h.stack.children(...(hasGlance(customer) ? full() : pending()))
 		const isOpen = props.isMobile ? model.isSheetOpen : model.isPinned
-		// HAZEL-GAP(customer-chip): today's chip is a bordered 12px office mark and name, not a chip button.
+		// HAZEL-GAP(p4-customer-chip): today's chip is a bordered 12px office mark and name, not a chip button.
 		const chip = h.button
 			.label(customer.accountName)
 			.icon("office")
@@ -228,7 +245,7 @@ export const CustomerCard = Hazel.component({
 					.on("dismiss", CustomerCardMessage.DismissedSheet())
 					.children(body()),
 			)
-		// HAZEL-GAP(popover-hover-interactive): a hover card takes no presses; a press pins it first.
+		// HAZEL-GAP(p4-popover-hover-press): a hover card takes no presses; a press pins it first.
 		return h.popover
 			.open()
 			.trigger(model.isPinned ? "press" : "hover")
@@ -237,4 +254,3 @@ export const CustomerCard = Hazel.component({
 			.children(h.frame.surface("overlay").children(body()))
 	},
 })
-

@@ -15,7 +15,6 @@ import {
 	CreateThread,
 	GenerateThreadChannelId,
 	GenerateThreadName,
-	JoinChannel,
 	PinMessage,
 	ToggleReaction,
 	UnpinMessage,
@@ -186,44 +185,11 @@ describe("message actions", () => {
 		expect(UnpinMessage.name).toBe("UnpinMessage")
 	})
 
-	test("the pinned popover's unpin only unpins: a pin already gone is not pinned again", () => {
-		const pinnedId = Schema.decodeSync(PinnedMessageId)("00000000-0000-4000-8000-000000005555")
-		const pinned: Model = {
-			...loadedModel(),
-			pinned: [
-				{
-					pinnedId,
-					messageId: graceMessageId,
-					authorId: ada,
-					author: null,
-					content: "",
-					createdAtMs: 0,
-					updatedAtMs: null,
-					pinnedAtMs: 0,
-				},
-			],
-		}
-		const unpinOut = Overlays.OutMessage.RequestedUnpin({ messageId: graceMessageId })
-		expect(
-			Write.handleOverlaysOut(pinned, unpinOut).commands?.map((command) => [
-				command.name,
-				command.args,
-			]),
-		).toEqual([["UnpinMessage", { pinnedMessageId: pinnedId }]])
-		expect(Write.handleOverlaysOut(loadedModel(), unpinOut).commands ?? []).toEqual([])
-	})
-
-	test("pressing a pin closes the pinned popover and jumps to its message", () => {
-		const open = Overlays.update(
-			loadedModel().overlays,
-			Overlays.Message.GotPinnedMessage({ message: Popover.Message.ClickedButton() }),
-		).model
+	test("a pin pressed in the channel header jumps to its message", () => {
 		const result = Overlays.update(
-			open,
+			loadedModel().overlays,
 			Overlays.Message.ClickedPinnedMessage({ messageId: graceMessageId }),
 		)
-		expect(open.pinned.isOpen).toBe(true)
-		expect(result.model.pinned.isOpen).toBe(false)
 		expect(result.outMessage).toEqual(Overlays.OutMessage.RequestedJump({ messageId: graceMessageId }))
 	})
 
@@ -505,53 +471,6 @@ describe("Reply in thread twice on one message", () => {
 		const opened = updateWithShared(known, generated)
 		expect(opened.model.threadPanel).toMatchObject({ threadChannelId, creation: "Created" })
 		expect((opened.commands ?? []).map((command) => command.name)).not.toContain(CreateThread.name)
-	})
-})
-
-describe("join banner", () => {
-	const notMember = (): Model => ({
-		...loadedModel(),
-		members: loadedModel().members?.filter((member) => member.userId !== ada) ?? null,
-	})
-
-	test("Join #channel runs `joinChannelAction` once; success toasts and ends the pending state", () => {
-		story(
-			updateWithShared,
-			given(notMember()),
-			message(Message.ClickedJoinChannel()),
-			Command.expectExact(JoinChannel({ channelId, userId: ada })),
-			model((current) => {
-				expect(current.isJoining).toBe(true)
-				// A second press while it runs sends nothing.
-				expect(updateWithShared(current, Message.ClickedJoinChannel()).commands ?? []).toEqual([])
-			}),
-			Command.resolve(JoinChannel, ActionMessage.SucceededJoinChannel()),
-			expectOutMessage(
-				PageOutMessage.RequestedToast({
-					toast: { intent: "success", title: "Successfully joined channel", description: null },
-				}),
-			),
-			model((current) => expect(current.isJoining).toBe(false)),
-		)
-	})
-
-	test("a failed join shows the reason's copy and lets the reader try again", () => {
-		story(
-			updateWithShared,
-			given(notMember()),
-			message(Message.ClickedJoinChannel()),
-			Command.resolve(JoinChannel, ActionMessage.FailedJoinChannel({ reason: "NotFound" })),
-			expectOutMessage(
-				PageOutMessage.RequestedToast({
-					toast: {
-						intent: "error",
-						title: "Channel not found",
-						description: "This channel may have been deleted.",
-					},
-				}),
-			),
-			model((current) => expect(current.isJoining).toBe(false)),
-		)
 	})
 })
 
