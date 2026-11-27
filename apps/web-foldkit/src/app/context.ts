@@ -11,6 +11,7 @@ import type { Overrides } from "~/lib/keybindings/keymap"
 import type { SoundSettings } from "../notification-sound"
 import type { PageOutMessage } from "../page/out-message"
 import type { Badge } from "../platform/badge"
+import type * as Updates from "../platform/updates"
 import type { AppRoute } from "../route"
 import type { Auth, CurrentUser, Member, Organization } from "../session"
 import type { ResolvedTheme, ThemePreference } from "../theme"
@@ -51,6 +52,8 @@ export interface HostReport {
 	readonly badge: Badge
 	/** What a Foldkit page says it shows, for the AI panel (`PageSpec.assistantContext`). */
 	readonly assistantContext: Assistant.Context | null
+	/** The desktop app's update state, for the native Desktop settings page (PS6). */
+	readonly desktopUpdate: Updates.Model
 }
 
 /** A page or overlay's request the shell acts on, or the host's state for the frame. */

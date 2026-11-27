@@ -13,9 +13,13 @@ import { Layer, Option } from "effect"
 import { canChooseServer, currentServer, isBuildServer, serverLabel } from "~/config/server"
 import { clientData } from "~/db/client"
 import { safeReturnTo } from "../auth/return-to"
+import { hasUpdater, isDesktop } from "../platform/desktop"
 import { AppRoute, hrefOf, type RouteOf, signInHref } from "../route"
 import { ShellDms } from "./children"
 import type { AppMessage } from "./message"
+import type { ThemePreference } from "../theme"
+import type { SoundSettings } from "../notification-sound"
+import type { DesktopUpdate } from "@hazel/shared-screens/my-settings/platform"
 
 // The `import()`s are the only references to the pages' modules: a static import undoes the split.
 export const InvitePage = Component.lazy("InvitePage", () =>
@@ -61,6 +65,32 @@ export const DesktopPage = Component.lazy("DesktopPage", () =>
 	),
 )
 
+// My settings (PS6): the theme cards' web drawing loads with Appearance.
+export const MySettingsAppearancePage = Component.lazy("MySettingsAppearancePage", () =>
+	Promise.all([
+		import("@hazel/shared-screens/my-settings/pages/appearance/AppearancePage"),
+		import("../my-settings/theme-preview-extension"),
+	]).then(([module]) => module.AppearancePage),
+)
+
+export const MySettingsNotificationsPage = Component.lazy("MySettingsNotificationsPage", () =>
+	Promise.all([
+		import("@hazel/shared-screens/my-settings/pages/notifications/NotificationsPage"),
+		import("../my-settings/platform"),
+	]).then(([module, platform]) =>
+		withClientData(module.NotificationsPage.pipe(Component.provide(platform.notificationPreviewsLayer))),
+	),
+)
+
+export const MySettingsDesktopPage = Component.lazy("MySettingsDesktopPage", () =>
+	Promise.all([
+		import("@hazel/shared-screens/my-settings/pages/desktop/DesktopPage"),
+		import("../my-settings/platform"),
+	]).then(([module, platform]) =>
+		module.DesktopSettingsPage.pipe(Component.provide(platform.desktopAppLayer)),
+	),
+)
+
 /** The native app's install (`~/config/server`), which its sign-in page can change; `null` on the web. */
 const initialServer = () =>
 	canChooseServer() ? { label: serverLabel(currentServer()), isDefault: isBuildServer(), form: null } : null
@@ -74,6 +104,11 @@ export interface NativeInputs<Tag extends AppRoute["_tag"]> {
 	/** The shell's phone layout (`(max-width: 767px)`), and its clock. */
 	readonly isMobile: boolean
 	readonly nowMs: number
+	/** The app's theme and notification sounds, which my settings change through the app (PS6). */
+	readonly theme: ThemePreference
+	readonly soundSettings: SoundSettings
+	/** The desktop app's update state, as the Foldkit host reports it (PS6). */
+	readonly desktopUpdate: DesktopUpdate
 	/** Shown while the page's chunk loads, and if the load fails. */
 	readonly fallback: (failed: boolean) => View.Content<AppMessage, any>
 }
@@ -193,6 +228,24 @@ const nativePages: Registry = {
 			fallback: (result) => fallback(result._tag === "Failure"),
 		}),
 	),
+	MySettingsAppearance: (h, { route, theme, fallback }) =>
+		MySettingsAppearancePage(h, {
+			key: route.orgSlug,
+			props: { theme },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	MySettingsNotifications: (h, { route, session, soundSettings, nowMs, fallback }) =>
+		MySettingsNotificationsPage(h, {
+			key: route.orgSlug,
+			props: { session, soundSettings, nowMs },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	MySettingsDesktop: (h, { route, desktopUpdate, fallback }) =>
+		MySettingsDesktopPage(h, {
+			key: route.orgSlug,
+			props: { hasAutostart: isDesktop, hasUpdates: hasUpdater, update: desktopUpdate },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
 }
 
 /** The parity flag of a route's native page: `"0"` draws today's Foldkit page instead (`compare-pages.ts`). */
