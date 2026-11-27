@@ -24,9 +24,6 @@ export const initFrame = (id: string): Frame => ({ id })
 /** The frame's close icon, a close button, Escape or a press on the backdrop. */
 export const isCloseRequest = KitModal.isCloseRequest
 
-/** The frame's dialog rendered and moved focus in: the moment for a field's `autoFocus`. */
-export const isPortalReady = KitModal.isReady
-
 export interface FrameOptions {
 	readonly size?: ModalSize
 	readonly role?: "dialog" | "alertdialog"
