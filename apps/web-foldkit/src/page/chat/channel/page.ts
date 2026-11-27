@@ -1,5 +1,5 @@
 import type { ChannelId, MessageId, UserId } from "@hazel/schema"
-import { Record, Struct } from "effect"
+import { Effect, Record, Struct } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import * as HtmlRender from "../../../chat/html-render"
@@ -54,6 +54,8 @@ import { liftList, loadWhenNearEdge } from "./window"
 import * as ThreadWidth from "./thread-width"
 import * as Write from "./write"
 import { errorToast, successToast } from "../../../data/actions"
+import { publish } from "../../../root/bus"
+import { drawsToday } from "../../../root/native-pages"
 
 /** Channel page (`routes/_app/$orgSlug/chat/$id.tsx` + `$id/index.tsx`), read path. */
 
@@ -374,6 +376,14 @@ const liftFiles = (model: Model, result: FilesPage.FilesReturn): PageReturn => {
 			)
 }
 
+/** The pins shortcut, for the shared channel header's pins (they own the popover now). */
+const PublishPinsHotkey = Command.define("PublishPinsHotkey", {
+	messages: [Message.CompletedPublishPinsHotkey],
+	execute: Effect.sync(() => publish({ _tag: "PinsHotkey" })).pipe(
+		Effect.as(Message.CompletedPublishPinsHotkey()),
+	),
+})
+
 /** `ChannelJoinBanner`'s `handleJoin`. */
 const joinChannel = (model: Model): PageReturn =>
 	model.isJoining || model.currentUserId === null
@@ -425,6 +435,7 @@ const pressedChannelHotkey = (model: Model, action: ChannelHotkey, shared: Share
 		case "Upload":
 			return send(toDraft(Draft.Message.ClickedAttach()))
 		case "Pins":
+			if (!drawsToday("ChatChannel")) return { model, commands: [PublishPinsHotkey()] }
 			return send(
 				Message.GotOverlaysMessage({
 					message: Overlays.Message.GotPinnedMessage({ message: Popover.Message.ClickedButton() }),
@@ -868,6 +879,7 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				? { model }
 				: { model: modifyFields(model, { focusedMessageId: () => messageId }) },
 		CompletedFocusMessage: () => ({ model }),
+		CompletedPublishPinsHotkey: () => ({ model }),
 		StartedMessageKeys: () => ({ model }),
 		SucceededDeleteMessageNow: () => ({ model }),
 		FailedDeleteMessageNow: ({ reason }) => Write.withToast(model, Write.messageNotFoundToast(reason)),

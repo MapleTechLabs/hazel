@@ -39,6 +39,7 @@ import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { isMemberOf, Message, type Model, routeTabOf, type ThreadPanel } from "./page"
 import { threadPanelWidthOf } from "./thread-width"
 import { openViewerOf } from "./viewer-images"
+import { drawsToday } from "../../../root/native-pages"
 
 /** The channel route's content: header, tab bar, message list and composer (desktop). */
 
@@ -340,24 +341,29 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 			h.div(
 				[h.Class(splitContentClassName())],
 				[
-					lazyHeader(headerView, [
-						model.channel,
-						model.parentChannel,
-						model.orgSlug,
-						model.members,
-						model.lookups,
-						model.currentUserId,
-						model.overlays.pinned,
-						model.pinned,
-						model.customer,
-						CustomerCard.isOpenOf(model.customerCard, options.isMobile ?? false),
-						options.isMobile ?? false,
-						options.channelLinks ?? NO_CHANNEL_LINKS_MAP,
-						model.notificationControl,
-						headerClockOf(model, nowMs),
-						h,
-					]) ?? h.empty,
-					customerCardView(h, model, options.isMobile ?? false, nowMs),
+					// The channel header is the shared screen in its hole; the parity runner draws today's.
+					...(drawsToday("ChatChannel")
+						? [
+								lazyHeader(headerView, [
+									model.channel,
+									model.parentChannel,
+									model.orgSlug,
+									model.members,
+									model.lookups,
+									model.currentUserId,
+									model.overlays.pinned,
+									model.pinned,
+									model.customer,
+									CustomerCard.isOpenOf(model.customerCard, options.isMobile ?? false),
+									options.isMobile ?? false,
+									options.channelLinks ?? NO_CHANNEL_LINKS_MAP,
+									model.notificationControl,
+									headerClockOf(model, nowMs),
+									h,
+								]) ?? h.empty,
+								customerCardView(h, model, options.isMobile ?? false, nowMs),
+							]
+						: [hole(h, "channel-header", model.channelId, [h.Class("shrink-0")])]),
 					lazyTabBar(chatTabBarView, [routeTabOf(model.tab), toSelf, h]) ?? h.empty,
 					...(model.tab._tag === "Files"
 						? [

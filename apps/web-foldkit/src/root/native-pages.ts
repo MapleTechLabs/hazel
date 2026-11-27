@@ -48,6 +48,9 @@ export const parityFlag = (tag: AppRoute["_tag"]) => `hazel:native:${tag}`
 const forcedOff = (tag: AppRoute["_tag"]): boolean =>
 	typeof localStorage !== "undefined" && localStorage.getItem(parityFlag(tag)) === "0"
 
+/** Whether the parity runner asked for today's Foldkit screen of `tag` (a converted hole included). */
+export const drawsToday = (tag: AppRoute["_tag"]): boolean => forcedOff(tag)
+
 export const isNativeRoute = (route: AppRoute): boolean =>
 	nativePages[route._tag] !== undefined && !forcedOff(route._tag)
 

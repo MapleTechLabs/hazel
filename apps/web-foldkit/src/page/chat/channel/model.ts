@@ -328,6 +328,8 @@ export const Message = defineMessageUnion({
 	/** The message keyboard listens on the list (`TrackMessageKeys`). */
 	StartedMessageKeys: {},
 	CompletedFocusMessage: {},
+	/** The pins shortcut reached the shared channel header's pins (`root/bus.ts`). */
+	CompletedPublishPinsHotkey: {},
 	SucceededDeleteMessageNow: {},
 	FailedDeleteMessageNow: { reason: DeleteMessageNowFailure },
 	/** The window lost focus or the tab was hidden: typing stops. */

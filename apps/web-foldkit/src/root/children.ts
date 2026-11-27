@@ -12,14 +12,15 @@ import {
 	channelSidebarLayer,
 	matchTarget,
 } from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
+import { ChannelHeader, channelHeaderLayer } from "@hazel/shared-screens/chat/header/ChannelHeader"
 import { MessageList } from "@hazel/shared-screens/chat/MessageList"
 import { messageListLayer } from "@hazel/shared-screens/chat/live"
 import { Dms, dmsLayer } from "@hazel/shared-screens/dms/Dms"
 import type { ChannelId } from "@hazel/schema"
-import { Effect, Layer } from "effect"
+import { Effect, Layer, Stream } from "effect"
 import { clientData } from "~/db/client"
 import { AppRoute } from "../route"
-import { publish } from "./bus"
+import { eventsOf, publish } from "./bus"
 
 /** A push of `route` on the shell's Router, from a screen's host callback. */
 const pushOn = (router: Router.Router) => (route: AppRoute) => {
@@ -74,6 +75,19 @@ export const ShellDms = Component.provide(Dms, (props) =>
 			clientData,
 			(channelId) => push(channelOf(props.orgSlug)(channelId)),
 			() => publish({ _tag: "Shell", request: { _tag: "PressedComposeDm" } }),
+		),
+	),
+)
+
+/** The channel header: a pin's jump and the pins shortcut go through the Foldkit channel page. */
+export const ShellChannelHeader = Component.provide(
+	ChannelHeader,
+	Layer.unwrap(
+		Effect.map(Effect.service(HazelRpc), (rpc) =>
+			channelHeaderLayer(clientData, rpc, {
+				jumpToMessage: (messageId) => publish({ _tag: "JumpToPin", messageId }),
+				pinsHotkey: eventsOf("PinsHotkey").pipe(Stream.map(() => undefined)),
+			}),
 		),
 	),
 )

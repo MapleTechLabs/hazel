@@ -18,7 +18,13 @@ import { chatChannelIdOf, isPublicRoute, orgSectionOf, orgSlugOf, titleOf } from
 import type { CurrentUser, Organization } from "../session"
 import { hotkeyLabel } from "../shell/channels-sidebar/hotkey-label"
 import { appError, appLoader, organizationNotFound } from "../shell/layouts"
-import { ShellActivity, ShellChannelSidebar, ShellDms, ShellMessageList } from "./children"
+import {
+	ShellActivity,
+	ShellChannelHeader,
+	ShellChannelSidebar,
+	ShellDms,
+	ShellMessageList,
+} from "./children"
 import { AdoptRegion, RunFoldkitHost } from "./foldkit"
 import {
 	mobileChromeOf,
@@ -44,7 +50,7 @@ import {
 	update,
 } from "./logic"
 import { AppMessage } from "./message"
-import { nativePageOf } from "./native-pages"
+import { drawsToday, nativePageOf } from "./native-pages"
 import { Hole } from "./portal"
 import { subscriptions as subscriptionsOf } from "./subscriptions"
 import { AppRoute } from "./routes"
@@ -156,6 +162,21 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 						}),
 					],
 				)
+			: null,
+		route._tag === "ChatChannel" && channelId !== null && !drawsToday("ChatChannel")
+			? Hole(h, { hole: "channel-header", key: channelId }, [
+					ShellChannelHeader(h, {
+						key: channelId,
+						props: {
+							channelId,
+							organizationId: data.organization.id,
+							userId: data.user.id,
+							orgSlug: data.orgSlug,
+							isMobile: model.isMobile,
+							nowMs: model.nowMs,
+						},
+					}),
+				])
 			: null,
 		tab !== null && memberId !== null
 			? Hole(h, { hole: "activity", key: memberId }, [
