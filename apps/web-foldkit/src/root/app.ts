@@ -94,6 +94,8 @@ const page = (h: H, model: AppModel) =>
 	nativePageOf(h, {
 		route: model.route,
 		session: sessionOf(model),
+		isMobile: model.isMobile,
+		nowMs: model.nowMs,
 		// A failed chunk offers a reload, as a lazy area's pending page does.
 		fallback: (failed) => loader(h, failed),
 	}) ?? slot(h, "page")
