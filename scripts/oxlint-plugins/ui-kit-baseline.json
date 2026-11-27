@@ -24,8 +24,7 @@
 		"apps/web-foldkit/src/overlay/modal/bot-avatar-upload.ts": 1,
 		"apps/web-foldkit/src/page/my-settings/profile/avatar-view.ts": 1,
 		"apps/web-foldkit/src/page/settings/custom-emojis/view.ts": 1,
-		"apps/web-foldkit/src/page/settings/general/view.ts": 1,
-		"apps/web-foldkit/src/shell/layouts.ts": 1
+		"apps/web-foldkit/src/page/settings/general/view.ts": 1
 	},
 	"no-raw-heading": {},
 	"no-raw-shadow": {},

@@ -118,7 +118,7 @@ const program = Effect.gen(function* () {
 program.pipe(
 	Effect.provide(
 		Layer.mergeAll(
-			Layer.mergeAll(ClientData.layer, HazelRpcLayer).pipe(Layer.provide(PlatformJsc)),
+			Layer.mergeAll(ClientData.layer, HazelRpcLayer).pipe(Layer.provideMerge(PlatformJsc)),
 			native.layer,
 		),
 	),

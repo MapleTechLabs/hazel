@@ -7,6 +7,7 @@ import { describe, expect, test } from "vitest"
 import { RequestHost, ToggleReaction, TogglePin } from "./live"
 import { MessageList, MessageListMessage } from "./MessageList"
 import type { ChatMessage } from "./rows"
+import { EmojiPicker, EmojiPickerEvents } from "./pickers/EmojiPicker"
 
 /** The list's overlays: the hover toolbar and right-click menu, the picker, the profile card, reactions. */
 
@@ -130,12 +131,12 @@ describe("message overlays", () => {
 	})
 
 	test("Add reaction opens the emoji picker on that message; a pick reacts and closes it", () => {
-		const s = loaded().fire(row(0), "action", { action: "react" }).expectNone()
-		expect(s.get(Locator.tag("hz:emojiPicker")).props?.["open"]).toBe(true)
-		s.fire(Locator.tag("hz:emojiPicker"), "select", { emoji: "🎉" })
+		loaded()
+			.fire(row(0), "action", { action: "react" })
+			.childEmit(EmojiPicker, EmojiPickerEvents.Picked({ emoji: "🎉" }))
 			.expectExact(ToggleReaction.make({ messageId: id(1), channelId, userId: ada, emoji: "🎉" }))
 			.resolve(ToggleReaction, MessageListMessage.CompletedCommand())
-		expect(s.get(Locator.tag("hz:emojiPicker")).props?.["open"]).toBeFalsy()
+			.childEmit(EmojiPicker, EmojiPickerEvents.RequestedClose())
 	})
 
 	test("the author opens their profile card at the row, with presence once it loads", () => {
