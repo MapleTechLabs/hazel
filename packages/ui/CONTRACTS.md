@@ -176,7 +176,9 @@ compile to. Structured props (`row`, `blocks`, `entries`, `reactions`, `attachme
 `status`, `badges`, `reply`, `files`, `embeds`, `thread` (with an optional `name`), `actions`. Rich text runs and blocks stay
 compact tuples. `MenuEntry.entries` is a one-level submenu.
 
-Extensions: `GifPicker` (`src/extensions/GifPicker.ts`, web only, lane A3); `HtmlRender` (`src/extensions/HtmlRender.ts`, web only, lane PC6: a bot's sandboxed page from a signed URL, drawn by the app in `apps/web-foldkit/src/chat/html-render-extension.ts` because it speaks the domain's frame protocol). Services (interfaces in
+Extensions: `GifPicker` (`src/extensions/GifPicker.ts`, web only, lane A3); `HtmlRender` (`src/extensions/HtmlRender.ts`, web only, lane PC6: a bot's sandboxed page from a signed URL, drawn by the app in `apps/web-foldkit/src/chat/html-render-extension.ts` because it speaks the domain's frame protocol); `BrandPanel`
+(`src/extensions/BrandPanel.ts`, web only, lane PA1: the auth frame's picture, logo and tagline in
+`screen`'s `aside`). Services (interfaces in
 `packages/client-data/src/platform/ui-services.ts`, lane F implements web and Swift): `Files.pick`,
 `Files.dropped`, `Clipboard.write`; screens reach them through a `Command.Service`.
 

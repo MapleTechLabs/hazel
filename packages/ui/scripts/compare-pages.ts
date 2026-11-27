@@ -249,7 +249,9 @@ const probe = (today: ReadonlyArray<Run>, hazel: ReadonlyArray<Run>) => {
 
 /** In-app navigation (a deep link can hang on the loader offline): a link click, else history. */
 const openRoute = async (page: Page, href: string) => {
-	if (new URL(page.url()).pathname === href) return
+	// The path and query, so a route's search params (`/sign-in?error=`) open too.
+	const at = (url: URL) => `${url.pathname}${url.search}`
+	if (at(new URL(page.url())) === href) return
 	const link = page.locator(`a[href="${href}"]`).first()
 	if ((await link.count()) > 0 && (await link.isVisible())) await link.click()
 	else
@@ -257,7 +259,7 @@ const openRoute = async (page: Page, href: string) => {
 			history.pushState(null, "", href)
 			dispatchEvent(new PopStateEvent("popstate"))
 		}, href)
-	await page.waitForURL((url) => url.pathname === href, { timeout: 10_000 })
+	await page.waitForURL((url) => at(url) === href, { timeout: 10_000 })
 }
 
 const settle = async (page: Page, ms = 1500) => {

@@ -5,7 +5,6 @@ import type { Command } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import type { Resources } from "../rpc"
 import { AppRoute, isCustomersRoute, isMySettingsRoute, isSettingsRoute } from "../route"
-import * as Auth from "./auth"
 import * as BotInstall from "./bot-install"
 import * as OAuthAuthorize from "./oauth-authorize"
 import * as ChatChannel from "./chat/channel"
@@ -34,10 +33,6 @@ export const pages = [
 	OrgHome.page,
 	OrgMore.page,
 	Profile.page,
-	Auth.signInPage,
-	Auth.registerPage,
-	Auth.continuePage,
-	Auth.desktopPage,
 	SelectOrganization.page,
 	Join.page,
 	BotInstall.page,
