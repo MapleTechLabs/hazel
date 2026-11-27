@@ -79,13 +79,13 @@ describe("RequestedCommandPalette", () => {
 })
 
 describe("RequestedModal", () => {
-	test("a sidebar section action opens its modal in the root slot", () => {
+	test("a sidebar section action's modal goes to the shell, which draws it (`root/modals.ts`)", () => {
 		story(
 			update,
 			given(signedIn("/hazel/chat")),
 			message(sidebar(ChannelsSidebar.Message.ClickedSectionAction({ action: "create-channel" }))),
-			overlayOpened,
-			model((m) => expect(m.modal.current?._tag).toBe("NewChannel")),
+			sent(PageOutMessage.RequestedModal({ modal: { _tag: "NewChannel" } })),
+			model((m) => expect(m.modal.current).toBeNull()),
 		)
 	})
 
@@ -351,8 +351,8 @@ describe("hotkeys", () => {
 			update,
 			given(signedIn("/hazel/chat")),
 			message(hotkey("channel.create")),
-			overlayOpened,
-			model((m) => expect(m.modal.current?._tag).toBe("NewChannel")),
+			sent(PageOutMessage.RequestedModal({ modal: { _tag: "NewChannel" } })),
+			model((m) => expect(m.modal.current).toBeNull()),
 		)
 	})
 

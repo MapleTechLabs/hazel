@@ -34,6 +34,8 @@ export interface HostContext {
 	readonly keybindingOverrides: Overrides
 	readonly keyboardPlatform: KeyboardPlatform
 	readonly unreadMentionIds: ReadonlyArray<NotificationId>
+	/** The root draws a modal over the frame (`root/modals.ts`): keys and typing stay out of the page. */
+	readonly isNativeModalOpen?: boolean
 }
 
 /** What the shell shows from the host's state: the dock, the bell, the badge and the page's context. */

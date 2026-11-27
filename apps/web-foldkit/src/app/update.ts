@@ -23,6 +23,7 @@ import * as ChannelNavigation from "../shell/channels-sidebar/navigation"
 import { Message as ShellMessage, type Model as ShellModel } from "../shell/model"
 import * as Notifications from "../shell/notifications"
 import * as Shell from "../shell/update"
+import { isNativeModal } from "../root/modals"
 import { CreateDm, emit } from "./command"
 import type { HostContext } from "./context"
 import { type Message, type ShellRequest } from "./message"
@@ -141,10 +142,13 @@ const modalContextOf = (model: Model): Modal.ModalContext => ({
 	route: model.context.route,
 })
 
+/** A kind the root draws goes to it (`root/modals.ts`); the rest open here. */
 const openModal =
 	(request: Modal.ModalRequest): Step =>
 	(model) =>
-		foldModal(model, (modal) => Modal.open(modal, request, modalContextOf(model)))
+		isNativeModal(request._tag)
+			? toShell(PageOutMessage.RequestedModal({ modal: request }))(model)
+			: foldModal(model, (modal) => Modal.open(modal, request, modalContextOf(model)))
 
 const foldPlatform = Update.foldChild({
 	update: (

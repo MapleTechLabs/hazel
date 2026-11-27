@@ -115,9 +115,9 @@ describe("a native page's requests", () => {
 
 	test("what the host still owns goes to it; an unknown modal opens nothing", () => {
 		expect(
-			hostRequestsOf(request(AppRequest.OpenModal({ modal: { _tag: "CreateDm" } })).commands),
+			hostRequestsOf(request(AppRequest.OpenModal({ modal: { _tag: "Feedback" } })).commands),
 		).toEqual([
-			{ _tag: "RequestedPageOut", outMessage: { _tag: "RequestedModal", modal: { _tag: "CreateDm" } } },
+			{ _tag: "RequestedPageOut", outMessage: { _tag: "RequestedModal", modal: { _tag: "Feedback" } } },
 		])
 		expect(request(AppRequest.OpenModal({ modal: { _tag: "NoSuchModal" } })).commands).toEqual([])
 		expect(hostRequestsOf(request(AppRequest.OpenCommandPalette({ page: "search" })).commands)).toEqual([

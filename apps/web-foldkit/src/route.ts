@@ -721,12 +721,6 @@ export const customerRoute = (
 	tab: CustomerTab | null = null,
 ): AppRoute => AppRoute.CustomerDetail({ orgSlug, accountId, tab: Option.fromNullishOr(tab) })
 
-/** An org route, or `undefined` outside an org, where the org-only overlays never open. */
-export const orgRouteOf = (
-	orgSlug: string | null,
-	toRoute: (orgSlug: string) => AppRoute,
-): AppRoute | undefined => (orgSlug === null ? undefined : toRoute(orgSlug))
-
 /** An org route's href, or `null` outside an org, where the org-only overlays never open. */
 export const orgHrefOf = (orgSlug: string | null, toRoute: (orgSlug: string) => AppRoute): string | null =>
 	orgSlug === null ? null : hrefOf(toRoute(orgSlug))

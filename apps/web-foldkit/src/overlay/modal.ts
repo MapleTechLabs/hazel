@@ -8,43 +8,27 @@ import type { Resources } from "../rpc"
 import type { ModalContext, ModalHost, ModalMessageBase, ModalStep } from "./modal/contract"
 import * as ChangeRole from "./modal/change-role"
 import * as CreateBot from "./modal/create-bot"
-import * as CreateDm from "./modal/create-dm"
 import * as CreateOrganization from "./modal/create-organization"
-import * as CreateSection from "./modal/create-section"
-import * as DeleteChannel from "./modal/delete-channel"
-import * as DeleteMessage from "./modal/delete-message"
 import * as DeleteBot from "./modal/delete-bot"
 import * as EditBot from "./modal/edit-bot"
 import * as EmailInvite from "./modal/email-invite"
 import * as Feedback from "./modal/feedback"
 import * as InstallBotById from "./modal/install-bot-by-id"
-import * as JoinChannel from "./modal/join-channel"
 import * as KeyboardShortcuts from "./modal/keyboard-shortcuts"
-import * as NewChannel from "./modal/new-channel"
 import * as RegenerateBotToken from "./modal/regenerate-bot-token"
-import * as RenameChannel from "./modal/rename-channel"
-import * as RenameThread from "./modal/rename-thread"
 import * as RequestIntegration from "./modal/request-integration"
-import * as SetStatus from "./modal/set-status"
 import type { ModalRequest } from "./modal/requests"
 import { ModalOutMessage } from "./out-message"
 
 /**
  * Root modal slot (legacy `atoms/modal-atoms`, the global modals in `$orgSlug/layout.tsx`, and the
- * page-local modals). Pages and the shell open one with `RequestedModal`; at most one is open.
+ * page-local modals). Pages and the shell open one with `RequestedModal`; at most one is open. The
+ * kinds `root/modals.ts` draws never open here (`app/update.ts` hands them to the shell).
  */
 const modals = [
-	NewChannel.modal,
-	CreateDm.modal,
-	JoinChannel.modal,
 	EmailInvite.modal,
 	CreateOrganization.modal,
-	CreateSection.modal,
-	DeleteChannel.modal,
 	Feedback.modal,
-	SetStatus.modal,
-	RenameChannel.modal,
-	RenameThread.modal,
 	ChangeRole.modal,
 	RequestIntegration.modal,
 	CreateBot.modal,
@@ -52,7 +36,6 @@ const modals = [
 	InstallBotById.modal,
 	RegenerateBotToken.modal,
 	DeleteBot.modal,
-	DeleteMessage.modal,
 	KeyboardShortcuts.modal,
 ]
 
