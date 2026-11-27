@@ -43,19 +43,56 @@ type H<M> = Html.H<M>
 // SIDEBAR KIT (`ui/sidebar.ts`, the same class compositions)
 
 export const sidebarProvider = <M>(h: H<M>, className: string) =>
-	h.div
-		.class(
-			twMerge(
-				"@container **:data-[slot=icon]:shrink-0",
-				"flex w-full text-sidebar-fg",
-				"group/sidebar-root peer/sidebar-root",
-				className,
-			),
-		)
-		.style({ "--sidebar-width": "350px", "--sidebar-width-dock": "3.25rem" })
+	h.div.class(
+		twMerge(
+			"@container **:data-[slot=icon]:shrink-0",
+			"flex w-full text-sidebar-fg",
+			"group/sidebar-root peer/sidebar-root",
+			// In the class, not \`style\`: the widths exist on the first frame, so the dock's width
+			// transition never runs from its unsized width while the app loads.
+			"[--sidebar-width:350px] [--sidebar-width-dock:3.25rem]",
+			className,
+		),
+	)
+
+/**
+ * The dock's width transitions wait for its first painted frame: it is inserted before its widths
+ * resolve (0px, then 350px), and today's sidebar appears at its width. Toggles and resizes animate.
+ */
+export const SettleAfterPaint = Mount.makeStream("SettleAfterPaint", { args: {} }, (node: HTMLElement) =>
+	Stream.unwrap(
+		Effect.acquireRelease(
+			Effect.sync(() => {
+				const view = node.ownerDocument.defaultView
+				let frame = view?.requestAnimationFrame(() => {
+					frame = view.requestAnimationFrame(() => node.setAttribute("data-settled", ""))
+				})
+				return () => {
+					if (frame !== undefined) view?.cancelAnimationFrame(frame)
+				}
+			}),
+			(cancel) => Effect.sync(cancel),
+		).pipe(Effect.as(Stream.never)),
+	),
+)
+
+/** The dock's spacer and its fixed column; every transition waits for \`data-settled\`. */
+export const SIDEBAR_GAP_CLASS = twMerge([
+	"w-(--sidebar-width) group-data-[collapsible=hidden]:w-0",
+	"group-data-[side=right]:rotate-180",
+	"relative h-svh bg-transparent group-data-settled:transition-[width] group-data-settled:duration-200 group-data-settled:ease-linear",
+	"group-data-[collapsible=dock]:w-(--sidebar-width-dock)",
+])
+export const SIDEBAR_CONTAINER_CLASS = twJoin(
+	"fixed inset-y-0 z-10 hidden w-(--sidebar-width) bg-sidebar",
+	"not-has-data-[slot=sidebar-footer]:pb-2",
+	"group-data-settled:transition-[left,right,width] group-data-settled:duration-200 group-data-settled:ease-linear",
+	"md:flex",
+)
 
 export const sidebarDock = <M>(h: H<M>, isCollapsed: boolean, className: string, inner: unknown) =>
 	h.div
+		.onMount(SettleAfterPaint())
 		.attrs({
 			"data-state": isCollapsed ? "collapsed" : "expanded",
 			"data-collapsible": isCollapsed ? "dock" : "",
@@ -65,24 +102,12 @@ export const sidebarDock = <M>(h: H<M>, isCollapsed: boolean, className: string,
 		})
 		.class("group peer hidden text-sidebar-fg md:block")
 		.children(
-			h.div
-				.attrs({ "data-slot": "sidebar-gap", "aria-hidden": "true" })
-				.class(
-					twMerge([
-						"w-(--sidebar-width) group-data-[collapsible=hidden]:w-0",
-						"group-data-[side=right]:rotate-180",
-						"relative h-svh bg-transparent transition-[width] duration-200 ease-linear",
-						"group-data-[collapsible=dock]:w-(--sidebar-width-dock)",
-					]),
-				),
+			h.div.attrs({ "data-slot": "sidebar-gap", "aria-hidden": "true" }).class(SIDEBAR_GAP_CLASS),
 			h.div
 				.attr("data-slot", "sidebar-container")
 				.class(
 					twMerge(
-						"fixed inset-y-0 z-10 hidden w-(--sidebar-width) bg-sidebar",
-						"not-has-data-[slot=sidebar-footer]:pb-2",
-						"transition-[left,right,width] duration-200 ease-linear",
-						"md:flex",
+						SIDEBAR_CONTAINER_CLASS,
 						"left-0 group-data-[collapsible=hidden]:left-[calc(var(--sidebar-width)*-1)]",
 						[
 							"group-data-[collapsible=dock]:w-(--sidebar-width-dock)",

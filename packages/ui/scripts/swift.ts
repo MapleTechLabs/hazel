@@ -471,7 +471,7 @@ const motionBlock = (tokens: Tokens, recipes: ReadonlyArray<Recipe>) => {
 		const uses = entries.flatMap(([trigger, list]) =>
 			(list ?? []).map(
 				(use) =>
-					`Use(trigger: .${trigger}, motion: ${ident(use.motion)}, part: ${use.part === undefined ? "nil" : str(use.part)}, backdrop: ${use.backdrop === true}, regular: ${use.regular === undefined ? "nil" : ident(use.regular)})`,
+					`Use(trigger: .${trigger}, motion: ${ident(use.motion)}, part: ${use.part === undefined ? "nil" : str(use.part)}, backdrop: ${use.backdrop === true}, regular: ${use.regular === undefined ? "nil" : ident(use.regular)}${use.stagger === undefined ? "" : `, stagger: ${num(use.stagger)}, staggerAhead: ${use.staggerAhead === true}`})`,
 			),
 		)
 		return uses.length === 0 ? [] : [`            ${str(recipe.primitive)}: [${uses.join(", ")}],`]
@@ -509,8 +509,10 @@ const motionBlock = (tokens: Tokens, recipes: ReadonlyArray<Recipe>) => {
 ${enumOf("Trigger", motionTriggers).replace(/^    /gm, "        ")}
 
         /// \`part\` nil is the root; \`backdrop\` is a modal's scrim; \`regular\` replaces \`motion\` there.
+        /// \`stagger\`: seconds between siblings; \`staggerAhead\` counts back from the last (already running).
         public struct Use: Sendable, Equatable {
             public let trigger: Trigger, motion: Spec, part: String?, backdrop: Bool, regular: Spec?
+            public var stagger: Double = 0, staggerAhead: Bool = false
         }
 
 ${specLines.join("\n")}

@@ -80,6 +80,24 @@ export const section = defineRecipe<
 						},
 					},
 				},
+				// Settings' eyebrow (`p4-sidebar-eyebrow`, `sectionTitle` in `sidebars.ts` before PH1): a
+				// `heading` `label` (`text-xs uppercase tracking-wider`, `fg-2`) 12px in, `pt-3`, then `pb-1`
+				// the group's 2px gap and the rows' own `p-4` under it (20px here plus the 2px row gap).
+				eyebrow: {
+					root: { paddingTop: "3" },
+					parts: {
+						title: {
+							paddingX: "0",
+							bleedX: "1",
+							marginBottom: "5",
+							radius: "none",
+							text: "overline",
+							leading: "4",
+							uppercase: true,
+							color: "fg-2",
+						},
+					},
+				},
 				// The inbox's group (`notifications/inbox/view.ts`): the label `px-4 py-2`, sticky over the
 				// rows while they scroll (the renderer's), then its rows at full width.
 				sticky: {

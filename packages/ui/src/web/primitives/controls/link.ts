@@ -4,7 +4,8 @@
  * (G2); a modified or middle click keeps the browser's own behaviour and raises no `press`.
  */
 // Owned by lane A2.
-import { definePrimitive, part, type Primitive } from "../define.ts"
+import { glyph } from "../../icons.ts"
+import { definePrimitive, option, part, type Primitive } from "../define.ts"
 import { handles } from "./field.ts"
 import { ensureStyles } from "./styles.ts"
 
@@ -23,6 +24,7 @@ export const primitive = definePrimitive("link", ({ document, tag, outer }) => {
 	let control: HTMLElement = make("button")
 	let href: string | undefined
 	let text = ""
+	let icon: string | undefined
 
 	const draw = () => {
 		const wanted = href === undefined ? "BUTTON" : "A"
@@ -34,6 +36,13 @@ export const primitive = definePrimitive("link", ({ document, tag, outer }) => {
 		if (href === undefined) control.setAttribute("type", "button")
 		else control.setAttribute("href", href)
 		control.textContent = text
+		// A leading icon (`p4-channel-settings-header`), decorative: the label names the link.
+		if (icon !== undefined) {
+			const mark = part(document, "span", "icon")
+			mark.setAttribute("aria-hidden", "true")
+			glyph(mark, icon)
+			control.prepend(mark)
+		}
 	}
 	function onClick(event: MouseEvent) {
 		if (control.tagName !== "A") return
@@ -50,6 +59,8 @@ export const primitive = definePrimitive("link", ({ document, tag, outer }) => {
 		set: (name, value) => {
 			if (name === "label") text = typeof value === "string" ? value : ""
 			else if (name === "href") href = typeof value === "string" ? value : undefined
+			else if (name === "icon") icon = typeof value === "string" ? value : undefined
+			else if (name === "tone") return option(node, "tone", value)
 			else return
 			draw()
 		},

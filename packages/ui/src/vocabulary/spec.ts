@@ -185,6 +185,10 @@ export const tags = {
 			selectable: flag,
 			loading: flag,
 			stickyHeader: flag,
+			// Its own edge (`table-frame`) and how many skeleton rows `loading` draws (0: the renderer's 6).
+			frame: option(O.TableFrame, "none"),
+			loadingRows: count,
+			rowActions: option(O.TableRowActions, "lastCell"),
 		},
 		events: {
 			sort: Schema.Struct({ column: Schema.String }),
@@ -231,7 +235,8 @@ export const tags = {
 		web: "A1",
 		ios: "S1",
 		content: "text",
-		props: { level: option(O.HeadingLevel, "2") },
+		// `size` `large`: the kit's `title` whatever the level (`p4-channel-settings-header`).
+		props: { level: option(O.HeadingLevel, "2"), size: option(O.HeadingSize, "auto") },
 	}),
 	icon: tag({
 		group: "content",
@@ -292,6 +297,8 @@ export const tags = {
 			customer: value(Content.Logo),
 			partners: value(Schema.Array(Content.Logo)),
 			sync: option(O.ProviderMark, "none"),
+			// On a 40pt secondary tile, the header's size (`p4-channel-settings-header`).
+			tile: flag,
 		},
 	}),
 	// A snapping, edge-to-edge horizontal row of avatar-over-label tiles (`people-strip`).
@@ -530,6 +537,8 @@ export const tags = {
 			loading: flag,
 			// A filter chip's trailing remove mark (phase 4), raising `remove`.
 			removable: flag,
+			// A key cap after the label (`pk0-action-shortcut`, a queue action's key); web only.
+			shortcut: text,
 		},
 		events: { press: none, remove: none },
 		commands: ["focus"],
@@ -539,7 +548,8 @@ export const tags = {
 		web: "A2",
 		ios: "S2",
 		content: "none",
-		props: { label: text, href: text },
+		// `tone` `muted` and a leading `icon`: channel settings' "Back to channel" (`p4-channel-settings-header`).
+		props: { label: text, href: text, tone: option(O.LinkTone, "accent"), icon: value(O.IconName) },
 		events: { press: none },
 	}),
 	textField: tag({
@@ -902,6 +912,8 @@ export const tags = {
 			// Phase 4: in-page tabs, and tabs the user drags to reorder (saved views).
 			style: option(O.TabBarStyle, "app"),
 			reorderable: flag,
+			// Below today's `md` a `page` bar is a native select (`p4-mobile-select-tabs`); web only.
+			collapse: flag,
 		},
 		events: { change: ids, move },
 	}),
@@ -913,9 +925,26 @@ export const tags = {
 		// Phase 4: `rail` is an icon column before the sidebar; `detail` a side panel after the
 		// content (a thread, the assistant, a preview), `resizable` by its edge, which reports
 		// `resize`; a sheet on the compact size class.
-		props: { sidebarCollapsed: flag, detailWidth: count, resizable: flag },
+		// G2: the edge's name (`resizeLabel`), the panel's limits (0: the renderer's 320, 1200 and 400),
+		// a compact leading sheet for the sidebar (`sidebarSheet`, shown while `sidebarOpen`), and the
+		// sheets' own dismissals (a scrim tap, a swipe, Escape).
+		props: {
+			sidebarCollapsed: flag,
+			detailWidth: count,
+			resizable: flag,
+			resizeLabel: text,
+			detailMin: count,
+			detailMax: count,
+			contentMin: count,
+			sidebarSheet: flag,
+			sidebarOpen: flag,
+		},
 		slots: ["sidebar", "rail", "detail"],
-		events: { resize: Schema.Struct({ width: Schema.Finite }) },
+		events: {
+			resize: Schema.Struct({ width: Schema.Finite }),
+			dismissSidebar: none,
+			dismissDetail: none,
+		},
 	}),
 	section: tag({
 		group: "structure",
@@ -954,6 +983,8 @@ export const tags = {
 			subtitleLines: option(O.LineCount, "1"),
 			// `large`: a 40pt avatar or icon tile leads the row, top aligned.
 			leadingSize: option(O.ItemLeadingSize, "regular"),
+			// `switcher` and `account`: a sidebar's org switcher and account card (`p4-sidebar-account-card`).
+			style: option(O.ItemStyle, "row"),
 			// A keyboard shortcut hint at the row's end; web only, iOS ignores it.
 			shortcut: text,
 			href: text,

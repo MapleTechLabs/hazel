@@ -25,7 +25,7 @@ export type AccountRunMark = Readonly<{ continuesAbove: boolean; continuesBelow:
 
 /** The queue's columns; `evidence` drops on the compact size class, as today's phone rows. */
 export const QUEUE_COLUMNS: ReadonlyArray<Content.TableColumn> = [
-	// HAZEL-GAP(table-column-widths): today's rank is `w-5`, the account `w-52`, age `w-8` and the assignee `w-6`; the table has `narrow` (w-24), `regular` (w-32) and `wide` (w-44).
+	// Beside the `fill` signal column every other column takes its content's width, as today's `w-*` do.
 	{ key: "rank", label: "#", align: "end", width: "auto", optional: true },
 	{ key: "account", label: "Account", width: "wide" },
 	{ key: "signal", label: "Signal", width: "fill" },
@@ -57,9 +57,12 @@ export const queueTable = <Msg>(
 	}>,
 	rows: ReadonlyArray<Hazel.NoTextInput<Msg>>,
 ) => {
-	// HAZEL-GAP(table-frame): today's queue sits in a rounded bordered box (`rounded-xl border`); the table has no frame, so the page wraps it in a `frame`.
+	// Today's queue sits in a rounded bordered box (`rounded-xl border`, `table-frame`).
 	const table = h.table
 		.label(options.label)
+		.frame("card")
+		// On hover the actions take the evidence-to-owner cells' place (`pk0-queue-actions-swap`).
+		.rowActions("trailing")
 		.columns(options.columns ?? QUEUE_COLUMNS)
 		.sort(options.sort)
 		.loading(options.loading ?? false)
@@ -138,7 +141,6 @@ export const queueRow = <Msg>(h: Hazel.H<Msg>, options: QueueRowOptions<Msg>) =>
 		.title(`${options.account.name}: ${options.signal.title}`)
 		.current(options.isFocused ?? false)
 		.selected(options.isSelected ?? false)
-	// HAZEL-GAP(pk0-queue-actions-swap): today the actions replace evidence to assignee on hover; the table draws them over the last cell.
 	const withActions = options.actions === undefined ? row : row.actions(...options.actions)
 	return (options.onPress === undefined ? withActions : withActions.on("press", options.onPress)).children(
 		cell("rank", h.text.tone("muted").numeric().children(String(options.rank))),
@@ -163,9 +165,10 @@ export const queueAction = <Msg>(
 		shortcut?: string
 	}>,
 ) => {
-	// HAZEL-GAP(pk0-action-shortcut): today an action shows its queue key after the label (`A`, `H`, `D`) as a key cap; `button` has no shortcut.
+	// Its queue key after the label (`A`, `H`, `D`) as a key cap (`pk0-action-shortcut`).
 	const button = h.button
 		.label(options.label)
+		.shortcut(options.iconOnly ? undefined : options.shortcut)
 		.icon(options.icon)
 		.variant(options.iconOnly ? "ghost" : "outline")
 		.size("xsmall")

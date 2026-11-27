@@ -13,6 +13,7 @@ export const item = defineRecipe<
 		titleLines: "1" | "2"
 		subtitleLines: "1" | "2"
 		leadingSize: "regular" | "large" | "conversation"
+		style: "row" | "nav" | "switcher" | "account"
 	},
 	"muted",
 	"control" | "content" | "leading" | "title" | "subtitle" | "trailing" | "badge" | "count" | "shortcut"
@@ -127,6 +128,80 @@ export const item = defineRecipe<
 					},
 					states: {
 						emphasized: { parts: { title: { weight: "semibold" }, subtitle: { color: "fg" } } },
+					},
+				},
+			},
+		},
+		// A sidebar's menu triggers (`p4-sidebar-account-card`, `menus.ts` before PH1): the org switcher
+		// (`font-medium text-sm/6`, `text-fg/80`, no wash) and the account card (`rounded-lg border
+		// bg-accent/20 px-2 py-1`). Both lead with a 32pt square face; the renderer squares it.
+		style: {
+			default: "row",
+			values: {
+				row: {},
+				// A section sidebar's page (`sidebars.ts` before PH1): the current one is `SECTION_ACTIVE`
+				// (`bg-sidebar-accent font-medium`), its icon in the brand ink (`--sidebar-current-fg`).
+				nav: {
+					states: {
+						selected: {
+							parts: {
+								control: {
+									background: "sidebar-accent",
+									color: "sidebar-accent-fg",
+									strong: true,
+									stroke: false,
+								},
+								leading: { color: "sidebar-primary-fg" },
+							},
+						},
+					},
+				},
+				switcher: {
+					parts: {
+						control: {
+							paddingX: "0",
+							paddingY: "0",
+							radius: "none",
+							text: "label",
+							leading: "6",
+							strong: true,
+							color: "switcher-fg",
+						},
+						leading: { size: "8", color: "fg" },
+						trailing: { color: "muted-fg" },
+					},
+					regular: { parts: { leading: { size: "8" } } },
+					states: {
+						hover: {
+							parts: {
+								control: { background: "transparent", color: "fg" },
+								leading: { color: "fg" },
+								trailing: { color: "fg" },
+							},
+						},
+						pressed: { parts: { control: { background: "transparent", color: "fg" } } },
+					},
+				},
+				account: {
+					parts: {
+						control: {
+							paddingX: "2",
+							paddingY: "1",
+							radius: "lg",
+							borderWidth: "hairline",
+							borderColor: "border",
+							background: "account-card",
+							text: "label",
+							color: "fg",
+						},
+						leading: { size: "8", color: "fg" },
+						subtitle: { text: "label", color: "muted-fg" },
+						trailing: { color: "muted-fg" },
+					},
+					regular: { parts: { leading: { size: "8" } } },
+					states: {
+						hover: { parts: { control: { background: "account-card-hover", color: "fg" } } },
+						pressed: { parts: { control: { background: "account-card-hover", color: "fg" } } },
 					},
 				},
 			},

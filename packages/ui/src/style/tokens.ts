@@ -218,6 +218,16 @@ const color = {
 	"sidebar-ring": same(p("brand-500")),
 	/** A section's title: `text-sidebar-fg/70`. */
 	"sidebar-title": same(alpha(ref("sidebar-fg"), 0.7)),
+	/** The sidebar's account card (`bg-accent/20`, hover `/50`; styles.css's grey `--accent`, `p4-sidebar-account-card`). */
+	"account-card": themed(lit("oklch(0.92 0.004 286.32 / 0.2)"), lit("oklch(0.32 0.013 285.805 / 0.2)")),
+	"account-card-hover": themed(
+		lit("oklch(0.92 0.004 286.32 / 0.5)"),
+		lit("oklch(0.32 0.013 285.805 / 0.5)"),
+	),
+	/** The org switcher's resting ink (`text-fg/80`, hover `fg`). */
+	"switcher-fg": same(alpha(ref("fg"), 0.8)),
+	/** A selected table row (`bg-primary-subtle/40`, `table-selected-wash`). */
+	"row-selected": same(alpha(ref("primary-subtle"), 0.4)),
 
 	// Control colours derived in button.styles.ts (`--btn-icon`, `--btn-overlay`).
 	"primary-icon": same(alpha(ref("primary-fg"), 0.6)),
@@ -274,6 +284,11 @@ export const tokens = {
 		snug: { compact: { size: 14, lineHeight: 19.25 }, regular: { size: 14, lineHeight: 19.25 } },
 		// Chat text: today's message row is `text-base/6` at every width.
 		reading: { compact: { size: 16, lineHeight: 24 }, regular: { size: 16, lineHeight: 24 } },
+		// heading.styles.ts `title` (`text-lg/7 tracking-[-0.014em]`): channel settings' name.
+		headline: {
+			compact: { size: 18, lineHeight: 28, tracking: -0.252 },
+			regular: { size: 18, lineHeight: 28, tracking: -0.252 },
+		},
 	},
 	/** Tailwind's 4px grid by step name (`3` is `--spacing(3)`, 12px): every step the kit uses. */
 	space: {
@@ -322,6 +337,8 @@ export const tokens = {
 		pulse: 2000,
 		/** The lightbox's morph between the page's image and the slide (`image-viewer.css`). */
 		morph: 320,
+		/** The list's edge spinner dots (`hz-list-pulse`, 1.4s, `motion-renderer-loops`). */
+		spinnerPulse: 1400,
 	},
 	/** styles.css `--ease-*` (theme and `:root`) and the curves its animations name. */
 	easing: {
@@ -438,6 +455,7 @@ export const tokens = {
 			repeat: "forever",
 		},
 		bounce: { keyframes: "bounce", duration: "bounce", easing: "css", repeat: "forever" },
+		spinnerPulse: { keyframes: "pulse", duration: "spinnerPulse", easing: "inOut", repeat: "forever" },
 	},
 	reducedMotion: "instant",
 	/** The app's theme presets set `--color-brand-*` on the page (`core/lib/theme/apply.ts`). */

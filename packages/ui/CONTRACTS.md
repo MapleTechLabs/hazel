@@ -157,7 +157,15 @@ Extended in phase 4 (proposed): `toggle` (style, indeterminate), `progress` (sty
 slots aside and meta, surface `centered`; `crumb`), `tabBar` (style, reorderable; `move`), `splitView`
 (sidebarCollapsed, detailWidth, resizable, slots rail and detail; `resize`), `attachmentGrid` (layout;
 `retry`), `richText` and `message` (`copyCode`), `composer` (suggestions, activeSuggestion, context;
-`pressSuggestion`, `editLast`, `cancelContext`). Data: `TableColumn`, `TableSort`, `ChartSeries`,
+`pressSuggestion`, `editLast`, `cancelContext`).
+
+Gap lane G2 (phase 4): `item` (style `row` `nav` `switcher` `account`; a bare `icon` in `trailing` is
+icon-sized), `section` (style `eyebrow`), `link` (tone `accent` `muted`, icon), `heading` (size `auto`
+`large`), `channelIcon` (tile), `stack` and `grid` (density `none` `snug` `loose`), `tabBar` (collapse,
+web only), `button` (shortcut, web only), `table` (frame `none` `card` `band`, loadingRows, rowActions
+`lastCell` `trailing`), `splitView` (resizeLabel, detailMin, detailMax, contentMin, sidebarSheet,
+sidebarOpen; `dismissSidebar`, `dismissDetail`); `MenuGroups` gained `subtitle` (a header group);
+`recipe.motion` uses gained `stagger` and `staggerAhead`, and the named motion `spinnerPulse`. Data: `TableColumn`, `TableSort`, `ChartSeries`,
 `ChartTone`, `HeatmapDay`, `ChoiceOption`, `Face`, `PaletteItem`, `PaletteGroups`, `Crumb`,
 `Suggestion`, `ComposerContext`; `Tab.icon` became optional and gained `href`; `SelectOption`
 gained `description`, `group`, `disabled`; `Attachment` gained `failed`, `duration`.
@@ -192,7 +200,7 @@ Values fixed in C1 for props the doc names without values (each needs your sign-
 | Set                                | Values (default first)                                                                         | Reason                                                                                                                                      |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `stack.axis`                       | `vertical`, `horizontal`                                                                       | doc names `axis`                                                                                                                            |
-| `stack.density`                    | `regular`, `tight`, `compact`, `relaxed`                                                       | doc's values; `tight` from `stack-tight`                                                                                                    |
+| `stack.density`                    | `regular`, `tight`, `compact`, `relaxed`, `none`, `snug`, `loose`         | doc's values; `tight` from `stack-tight`; `none`, `snug`, `loose` from `p4-channel-settings-header`              |
 | `stack.align`                      | `stretch`, `start`, `center`, `end`                                                            | doc names `align`; the screens use `start`, `center`, `end`                                                                                 |
 | `text.role`                        | `body`, `label`, `caption`, `title`, `display`, `code`, `overline`, `kbd`                      | `overline`: the kit's uppercase group label; `kbd`: a key cap inside a line (parity pass)                                                   |
 | `button.variant`                   | the doc's six, plus `chip` (with flag `selected`)                                              | `filter-chip`                                                                                                                               |
@@ -205,7 +213,7 @@ Values fixed in C1 for props the doc names without values (each needs your sign-
 | `item.unread`                      | `none`, `pip`, `dot`                                                                           | `item-unread-pip`, `item-unread-dot`                                                                                                        |
 | `item.titleLines`, `subtitleLines` | `1`, `2`                                                                                       | `item-title-lines`, `item-subtitle-lines`                                                                                                   |
 | `item.leadingSize`                 | `regular`, `large`, `conversation`                                                             | `item-leading-size`; `conversation` from `item-conversation-row`                                                                            |
-| `section.style`                    | `sidebar`, `tree`, `list`, `sticky`                                                            | `section-style`                                                                                                                             |
+| `section.style`                    | `sidebar`, `tree`, `list`, `sticky`, `eyebrow`                            | `section-style`; `eyebrow` from `p4-sidebar-eyebrow`                                                             |
 | `screen.surface`                   | `sidebar`, `page`                                                                              | `screen-surface`                                                                                                                            |
 | `avatar.mark`, `channelIcon.sync`  | `none`, `slack`, `discord`                                                                     | `avatar-provider-mark`, `icon-mark` (`row.provider` takes the same without `none`)                                                          |
 | `item.nested`                      | `none`, `middle`, `last`                                                                       | `thread-elbow`                                                                                                                              |
@@ -218,6 +226,10 @@ Values fixed in C1 for props the doc names without values (each needs your sign-
 | `AttachmentFileType`               | `empty csv doc docx gif jpg mp3 mp4 pdf png svg txt wav webp xls xlsx`                         | today's `chat/file-icons.ts`; the icons are data (`web/file-icons.ts`), from G4                                                             |
 | `composer` trigger                 | `@ # / :`                                                                                      | mentions, channels, commands, emoji                                                                                                         |
 | `IconName`                         | 37 names, each mapped to a web icon (`iconSources`)                                            | what the screens draw, plus `slack` and `discord`; `folder-plus`, `messages`, `support` from the parity pass                                |
+| `item.style`                       | `row`, `nav`, `switcher`, `account`                                       | `p4-sidebar-account-card`                                                                                        |
+| `link.tone`                        | `accent`, `muted`                                                         | `p4-channel-settings-header`                                                                                     |
+| `heading.size`                     | `auto`, `large`                                                           | `p4-channel-settings-header`                                                                                     |
+| `table.frame`, `table.rowActions`  | `none`, `card`, `band`; `lastCell`, `trailing`                            | `table-frame`, `pk0-queue-actions-swap`                                                                          |
 
 Removed: G7's short row keys. Added in phase 1.5 and the parity pass: everything in `GAPS.md`.
 

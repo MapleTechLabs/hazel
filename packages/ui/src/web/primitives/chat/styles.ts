@@ -623,8 +623,6 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 		`display: inline-block; width: ${space("1.5")}; height: ${space("1.5")}; border-radius: ${radius("full")};
 		background-color: ${color("muted-fg")};`,
 	],
-	[`[data-hz="typingIndicator"] ${p("dot")}:nth-child(1)`, "animation-delay: -0.3s;"],
-	[`[data-hz="typingIndicator"] ${p("dot")}:nth-child(2)`, "animation-delay: -0.15s;"],
 
 	// Focus rings on every control inside the leaves.
 	[

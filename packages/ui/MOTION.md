@@ -83,11 +83,13 @@ means a motion jumps to its end pose with no animation and a loop does not run.
 
 - **Named motions** (`tokens.motion`): `fadeIn`, `scrimIn`, `tooltipIn`, `riseIn`, `scaleIn`,
   `slideUpIn`, `toastIn`, `toastOut`, `messageIn`, `reactionIn`, `reactionPop`, `countUp`, `countDown`,
-  `skeletonIn`, `skeletonPulse`, `fieldErrorIn`, `progressSweep`, `bounce`. Each names keyframes
+  `skeletonIn`, `skeletonPulse`, `fieldErrorIn`, `progressSweep`, `bounce`, `spinnerPulse`. Each names keyframes
   (`tokens.keyframes`, poses of opacity, translate, scale), a duration and a curve from the tokens, and
   optionally a delay and `repeat: "forever"`. Nothing else may move: a new motion is a contract change.
 - **Uses** (`recipe.motion`): a trigger (`enter`, `exit`, `countUp`, `countDown`, `pop`, `loop`), the
   motion, the part it plays on (or the panel's `::backdrop`), and a `regular` size-class override.
+  `stagger` (seconds) delays each sibling one step after the last; with `staggerAhead` the last starts
+  at once and the earlier ones run ahead by those steps (the typing dots, `motion-stagger`).
 - **Transitions**: a declaration's `transition` (a duration) with `transitionEase` (a curve, `out` by
   default) for hover and press.
 - **Web**: a renderer marks the element with `data-motion="<trigger>"` (`src/web/motion.ts`); the CSS
@@ -99,18 +101,18 @@ means a motion jumps to its end pose with no animation and a loop does not run.
   the recipe's motions play where HazelUI draws the panel itself (in place, toasts). An exiting toast's
   node is held (`Tree.hold`) until `toastOut` ends.
 
-| Primitive                  | enter                                                   | exit       | other                                          |
-| -------------------------- | ------------------------------------------------------- | ---------- | ---------------------------------------------- |
-| menu, popover, emojiPicker | `fadeIn` (panel)                                        |            |                                                |
-| contextMenu                | `fadeIn` (panel)                                        |            |                                                |
-| tooltip                    | `tooltipIn` (bubble)                                    |            |                                                |
-| dialog                     | `riseIn`, `scaleIn` at regular; `scrimIn` (backdrop)    |            |                                                |
-| sheet                      | `slideUpIn`, `scaleIn` at regular; `scrimIn` (backdrop) |            |                                                |
-| toast                      | `toastIn` (panel)                                       | `toastOut` |                                                |
-| message                    | `messageIn` (row, `entering`)                           |            | reactions: `reactionIn`, `reactionPop`, counts |
-| reactionBar                | `reactionIn` (new pill)                                 |            | `reactionPop` (emoji), `countUp`/`countDown`   |
-| item                       |                                                         |            | badge `countUp`/`countDown`                    |
-| list                       | `skeletonIn` (skeleton)                                 |            | `skeletonPulse` loop (skeleton shapes)         |
-| textField, textArea        | `fieldErrorIn` (error)                                  |            |                                                |
-| progress                   |                                                         |            | `progressSweep` loop (fill, indeterminate)     |
-| typingIndicator            |                                                         |            | `bounce` loop (dots)                           |
+| Primitive                  | enter                                                   | exit       | other                                                                                    |
+| -------------------------- | ------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------- |
+| menu, popover, emojiPicker | `fadeIn` (panel)                                        |            |                                                                                          |
+| contextMenu                | `fadeIn` (panel)                                        |            |                                                                                          |
+| tooltip                    | `tooltipIn` (bubble)                                    |            |                                                                                          |
+| dialog                     | `riseIn`, `scaleIn` at regular; `scrimIn` (backdrop)    |            |                                                                                          |
+| sheet                      | `slideUpIn`, `scaleIn` at regular; `scrimIn` (backdrop) |            |                                                                                          |
+| toast                      | `toastIn` (panel)                                       | `toastOut` |                                                                                          |
+| message                    | `messageIn` (row, `entering`)                           |            | reactions: `reactionIn`, `reactionPop`, counts                                           |
+| reactionBar                | `reactionIn` (new pill)                                 |            | `reactionPop` (emoji), `countUp`/`countDown`                                             |
+| item                       |                                                         |            | badge `countUp`/`countDown`; a hover slide on the motion tokens (renderer)               |
+| list                       | `skeletonIn` (skeleton)                                 |            | `skeletonPulse` loop (skeleton shapes); `spinnerPulse` loop (edge spinner, stagger 0.2s) |
+| textField, textArea        | `fieldErrorIn` (error)                                  |            |                                                                                          |
+| progress                   |                                                         |            | `progressSweep` loop (fill, indeterminate)                                               |
+| typingIndicator            |                                                         |            | `bounce` loop (dots, stagger 0.15s ahead)                                                |

@@ -342,7 +342,7 @@ const sidebarBody = <ParentMessage>(
 							}),
 						),
 			]),
-			sidebarFooter(h, undefined, [hole(h, "account-menu", orgSlug)]),
+			sidebarFooter(h, undefined, [hole(h, "account-menu", orgSlug, [h.Class("flex w-full min-w-0")])]),
 			dragDescription(h),
 		],
 		semantic(h, { kind: "screen", title: orgName ?? "Chats" }),

@@ -1,4 +1,5 @@
 import { defineRecipe } from "../recipe.ts"
+import type { TableFrame, TableRowActions } from "../schema.ts"
 
 /**
  * `hz:table` (phase 4): today's data table (`ui/data-table.ts`): column heads `h-9` in muted 12px
@@ -7,7 +8,7 @@ import { defineRecipe } from "../recipe.ts"
  * compact columns are the web renderer's (`list/table-shared.ts`).
  */
 export const table = defineRecipe<
-	{},
+	{ readonly frame: TableFrame; readonly rowActions: TableRowActions },
 	"selectable" | "loading" | "stickyHeader",
 	| "grid"
 	| "head"
@@ -68,7 +69,20 @@ export const table = defineRecipe<
 			skeletonBar: { radius: "sm", background: "secondary" },
 		},
 	},
-	options: {},
+	options: {
+		// `card`: today's framed `dataTable` (`rounded-xl border border-border`); `band`'s top and bottom
+		// hairlines (`rounded-none border-x-0`) are the renderer's, as `Declarations` draw all four edges.
+		frame: {
+			default: "none",
+			values: {
+				none: {},
+				card: { root: { borderWidth: "hairline", borderColor: "border", radius: "xl" } },
+				band: {},
+			},
+		},
+		// Where hover actions sit is the renderer's (`list/table-shared.ts`).
+		rowActions: { default: "lastCell", values: { lastCell: {}, trailing: {} } },
+	},
 	flags: { selectable: {}, loading: {}, stickyHeader: {} },
 	motion: {
 		enter: [{ motion: "skeletonIn", part: "skeleton" }],

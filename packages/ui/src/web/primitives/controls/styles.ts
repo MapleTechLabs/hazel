@@ -4,6 +4,9 @@
  * textarea, and the toggle track and thumb slide. One stylesheet per document, tokens only; recipes style everything else.
  */
 const css = `
+/* A button's key cap (\`pk0-action-shortcut\`) sits close to the label's end and leaves on phones, as \`max-md:hidden\`. */
+[data-hz=button] > [data-hz-part=shortcut] { margin-inline-end: calc(var(--hz-space-0_5) * -1); font-family: inherit; }
+@media (width < 48rem) { [data-hz=button] > [data-hz-part=shortcut] { display: none; } }
 :where([data-hz=button], [data-hz=link] > [data-hz-part=control], [data-hz=toggle] > [data-hz-part=control],
 	[data-hz=composer] > [data-hz-part=send]):focus-visible {
 	outline: 2px solid var(--hz-color-ring);

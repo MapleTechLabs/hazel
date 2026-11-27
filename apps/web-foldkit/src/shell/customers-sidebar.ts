@@ -492,6 +492,6 @@ export const view = <ParentMessage>(
 			]),
 		]),
 		// The account card is the shell's (`shared-screens/src/shell/Chrome.ts`).
-		sidebarFooter(h, undefined, [hole(h, "account-menu", orgSlug)]),
+		sidebarFooter(h, undefined, [hole(h, "account-menu", orgSlug, [h.Class("flex w-full min-w-0")])]),
 	])
 }
