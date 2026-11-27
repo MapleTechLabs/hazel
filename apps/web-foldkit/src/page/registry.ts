@@ -11,7 +11,6 @@ import * as ChatChannel from "./chat/channel"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
 import * as Lazy from "./lazy"
 import type { PageOutMessage } from "./out-message"
-import * as OrgHome from "./home"
 import * as Join from "./join"
 
 /**
@@ -23,7 +22,6 @@ import * as Join from "./join"
  */
 export const pages = [
 	ChatChannel.page,
-	OrgHome.page,
 	Join.page,
 	BotInstall.page,
 	OAuthAuthorize.page,

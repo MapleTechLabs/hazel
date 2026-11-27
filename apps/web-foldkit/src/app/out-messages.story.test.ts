@@ -35,8 +35,6 @@ import { CreateDm, Emit, emit } from "./command"
 import { Message, type ShellRequest } from "./message"
 import { dmRequestKey, type Model, reportOf, sharedOf } from "./model"
 import { update } from "./update"
-import { Message as HomeMessage } from "../page/home/message"
-import type { DirectoryMember } from "../page/home/model"
 
 /** The facts children report (OutMessages): the host opens its overlays and asks the shell for the rest. */
 
@@ -103,23 +101,21 @@ describe("RequestedSignOut", () => {
 describe("RequestedDmCreation", () => {
 	const grace = Schema.decodeSync(UserId)("00000000-0000-4000-8000-0000000000d1")
 	const dmId = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-0000000000d2")
-	const home = (message: HomeMessage): Message =>
-		Message.GotPageMessage({ message: { _tag: "OrgHome", message } })
-	const graceMember: DirectoryMember = {
-		id: grace,
-		firstName: "Grace",
-		lastName: "Hopper",
-		email: "grace@hazel.test",
-		avatarUrl: null,
-		role: "member",
-		presenceStatus: null,
-	}
-	const pressGrace = home(HomeMessage.PressedMessageMember({ userId: grace, name: "Grace Hopper" }))
-	const pressMessageGrace = [
-		home(HomeMessage.UpdatedMembers({ members: [graceMember] })),
-		home(HomeMessage.UpdatedDmChannels({ rows: [] })),
-		pressGrace,
-	]
+	// The member directory's Message (a native page): the root forwards its request to the host.
+	const requestDm = (userId: UserId, name: string): Message =>
+		Message.ReceivedShellRequest({
+			request: {
+				_tag: "RequestedPageOut",
+				outMessage: PageOutMessage.RequestedDmCreation({
+					organizationId: hazelOrg.id,
+					orgSlug: "hazel",
+					userId,
+					name,
+				}),
+			},
+		})
+	const pressGrace = requestDm(grace, "Grace Hopper")
+	const pressMessageGrace = [pressGrace]
 	const createDm = CreateDm({
 		organizationId: hazelOrg.id,
 		orgSlug: "hazel",
@@ -159,7 +155,6 @@ describe("RequestedDmCreation", () => {
 
 		// The user moves on before the RPC answers; the home page is gone.
 		const left = run(pressed.model, [navigated(pressed.model, "/hazel/notifications")])
-		expect(left.model.page?._tag).not.toBe("OrgHome")
 
 		const done = run(left.model, [succeeded])
 		expect(toastTitles(done.model)).toEqual(["Started conversation with Grace Hopper"])
@@ -178,20 +173,8 @@ describe("RequestedDmCreation", () => {
 
 	test("a request for another member runs beside the first, with its own toast", () => {
 		const alan = Schema.decodeSync(UserId)("00000000-0000-4000-8000-0000000000d3")
-		const alanMember: DirectoryMember = {
-			...graceMember,
-			id: alan,
-			firstName: "Alan",
-			lastName: "Turing",
-		}
-		const pressed = run(signedIn("/hazel"), [
-			home(HomeMessage.UpdatedMembers({ members: [graceMember, alanMember] })),
-			home(HomeMessage.UpdatedDmChannels({ rows: [] })),
-			pressGrace,
-		])
-		const both = run(pressed.model, [
-			home(HomeMessage.PressedMessageMember({ userId: alan, name: "Alan Turing" })),
-		])
+		const pressed = run(signedIn("/hazel"), pressMessageGrace)
+		const both = run(pressed.model, [requestDm(alan, "Alan Turing")])
 		expect(both.commands.map((command) => command.name)).toContain("CreateDm")
 		expect(toastTitles(both.model)).toEqual([
 			"Starting conversation with Grace Hopper...",

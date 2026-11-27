@@ -19,8 +19,6 @@ import {
 	within,
 } from "foldkit/scene"
 import { describe, test } from "vitest"
-import { AutoFocusSearch } from "../page/home/commands"
-import { Message as HomeMessage } from "../page/home/message"
 import { PageOutMessage } from "../page/out-message"
 import * as ChannelsSidebar from "../shell/channels-sidebar"
 import * as Shell from "../shell/model"
@@ -121,15 +119,6 @@ describe("mobile", () => {
 				selector('[data-foldkit-region="page"] [data-hazel-hole="channel-sidebar"]'),
 			).toExist(),
 			sceneExpect(sheet).toBeAbsent(),
-		)
-		const home = toPhone("/hazel")
-		scene(
-			rootScene,
-			given(home.desktop),
-			// The desktop focuses the member search; a phone leaves its keyboard down.
-			Mount.resolve(AutoFocusSearch, HomeMessage.CompletedFocusSearch()),
-			Subscription.emit(home.phone),
-			Mount.expectEnded(AutoFocusSearch),
 		)
 	})
 })
