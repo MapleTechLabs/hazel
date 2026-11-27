@@ -19,6 +19,31 @@ type Handlers = Readonly<Record<string, View.Handler<unknown, any>>>
 /** Semantic events to the DOM events that raise them. Extension events come through `send`. */
 const domEvent = new Map([["press", "click"]])
 
+/** Tags whose renderer raises `press` itself, with its own payload (`chart`'s `{index}`). */
+const ownPress = new Set(["hz:chart"])
+
+/**
+ * The target of the click being delivered, per document: a window capture listener runs before Effect
+ * UI's container listener, which hands the host no target (`press-inner-controls`).
+ */
+const clickTargets = new WeakMap<Document, { target: EventTarget | null }>()
+const watchClicks = (document: Document) => {
+	if (clickTargets.has(document)) return
+	const current = { target: null as EventTarget | null }
+	clickTargets.set(document, current)
+	const win = document.defaultView
+	win?.addEventListener("click", (event) => (current.target = event.target), { capture: true })
+	win?.addEventListener("click", () => (current.target = null))
+}
+
+/** A click from an inner control the renderer marked `data-hz-inner` (a statTile's definition label). */
+const fromInnerControl = (primitive: Primitive) => {
+	const target = clickTargets.get(primitive.outer.ownerDocument)?.target
+	if (!(target instanceof Element)) return false
+	const inner = target.closest("[data-hz-inner]")
+	return inner !== null && inner.parentElement?.closest("[data-hz]") === primitive.outer
+}
+
 /** The link a primitive draws as its own box (`item`'s control, `link`), if it draws one now. */
 const ownLink = (primitive: Primitive) =>
 	primitive.outer.matches("a[href]") ? primitive.outer : primitive.outer.querySelector(":scope > a[href]")
@@ -44,6 +69,7 @@ const pressDispatch =
 	(primitive: Primitive, dispatch: Parameters<Renderer.Host<Node>["setEvents"]>[2]) =>
 	(event: string, handler: View.Handler<unknown, any>, payload: unknown, cancel?: () => void) => {
 		if (event !== "click") return dispatch(event, handler, payload)
+		if (fromInnerControl(primitive)) return false
 		// `press` carries no payload (`spec.ts`), never the DOM click's.
 		if (ownLink(primitive) === null) return dispatch(event, handler, {})
 		if (!isPlain(payload)) return false
@@ -55,6 +81,7 @@ export const wrapHost = (inner: Renderer.Host<Node>, document: Document): Render
 	// A primitive's content parent, back to its outer node: what `parentOf` reports.
 	const owners = new WeakMap<Node, Node>()
 	const contentOf = (node: Node) => primitives.get(node)?.content ?? node
+	watchClicks(document)
 
 	return {
 		...inner,
@@ -100,7 +127,7 @@ export const wrapHost = (inner: Renderer.Host<Node>, document: Document): Render
 			primitive.events = { handlers, dispatch }
 			const mapped: Record<string, View.Handler<unknown, any>> = {}
 			for (const [name, handler] of Object.entries(handlers)) {
-				const dom = domEvent.get(name)
+				const dom = ownPress.has(primitive.tag) ? undefined : domEvent.get(name)
 				if (dom !== undefined) mapped[dom] = handler
 			}
 			const press: Record<string, View.EventOptions> =

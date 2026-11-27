@@ -1,16 +1,20 @@
 /// <reference types="vite/client" />
 // Owned by lane A1 (`docs/hazel-ui.md`, "Phase 2: lanes").
 import squirrel from "../../../../../../apps/web-foldkit/public/images/squirrle_ocean.webp?url"
+import mask from "../../../../../../apps/web-foldkit/public/images/image-mask.webp?url"
 import type { EmptyIllustration } from "../../../vocabulary/options.ts"
 import { glyph } from "../../icons.ts"
 import { definePrimitive, option, part, type Primitive } from "../define.ts"
 
-/** Each `emptyIllustrations` value's asset: the web app's own picture (`page/chat/channel/view.ts`). */
+/**
+ * Each `emptyIllustrations` value's asset and the mask its edges dissolve through (renderer-owned, as
+ * `emptyStateView`'s `mask-[url(/images/image-mask.webp)] mask-size-[110%_90%] mask-center`).
+ */
 const illustrations = {
-	squirrel: { src: squirrel, alt: "A squirrel gazing at the ocean" },
+	squirrel: { src: squirrel, alt: "A squirrel gazing at the ocean", mask },
 } as const satisfies Record<
 	Exclude<EmptyIllustration, "none">,
-	{ readonly src: string; readonly alt: string }
+	{ readonly src: string; readonly alt: string; readonly mask: string }
 >
 
 const illustrationOf = (name: string | undefined) =>
@@ -26,6 +30,9 @@ export const primitive = definePrimitive("emptyState", ({ document, tag, outer }
 	illustration.style.width = "min(100%, 24rem)"
 	illustration.style.aspectRatio = "1"
 	illustration.style.objectFit = "cover"
+	illustration.style.maskSize = "110% 90%"
+	illustration.style.maskPosition = "center"
+	illustration.style.maskRepeat = "no-repeat"
 	const tile = part(document, "span", "tile")
 	tile.setAttribute("aria-hidden", "true")
 	tile.hidden = true
@@ -55,6 +62,7 @@ export const primitive = definePrimitive("emptyState", ({ document, tag, outer }
 				option(node, "illustration", value)
 				const asset = illustrationOf(text)
 				illustration.hidden = asset === undefined
+				illustration.style.maskImage = asset === undefined ? "" : `url("${asset.mask}")`
 				if (asset === undefined) illustration.removeAttribute("src")
 				else {
 					illustration.setAttribute("src", asset.src)

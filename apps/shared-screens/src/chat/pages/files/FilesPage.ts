@@ -154,6 +154,7 @@ const header = (h: H, model: FilesModel, count: number) =>
 		.align("center")
 		.density("compact")
 		.wrap()
+		.inset("bar")
 		.children(
 			h.searchField
 				.placeholder("Search files…")
@@ -254,18 +255,19 @@ export const FilesPageNoDeps = Def.make({
 		),
 	],
 	view: (h, model) =>
-		// HAZEL-GAP(p4-page-gutter): today's header is `px-4 py-3` and the content `p-4`; no container insets.
 		h.stack.children(
 			header(h, model, filteredOf(model).length),
-			h.scroll.children(
-				h.stack
-					.density("relaxed")
-					.children(
-						...(model.attachments === null
-							? [h.progress.style("spinner").label("Loading files…")]
-							: body(h, model)),
-					),
-			),
+			h.scroll
+				.inset("page")
+				.children(
+					h.stack
+						.density("relaxed")
+						.children(
+							...(model.attachments === null
+								? [h.progress.style("spinner").label("Loading files…")]
+								: body(h, model)),
+						),
+				),
 			viewer(h, model),
 		),
 })

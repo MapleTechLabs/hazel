@@ -1,0 +1,46 @@
+{
+	"about": "A sync running inside a line of text: the 14pt ring in the accent ink, named for assistive tech only (`pk0-inline-spinner`, `connectCard`).",
+	"root": {
+		"tag": "stack",
+		"props": {
+			"axis": "horizontal",
+			"density": "compact",
+			"align": "center"
+		},
+		"children": [
+			{
+				"tag": "progress",
+				"props": {
+					"style": "inline",
+					"label": "Syncing organizations"
+				}
+			},
+			{
+				"tag": "text",
+				"props": {
+					"tone": "accent",
+					"strong": true
+				},
+				"children": ["Syncing…"]
+			},
+			{
+				"tag": "text",
+				"props": {
+					"tone": "muted",
+					"numeric": true
+				},
+				"children": ["120 of 214 organizations"]
+			}
+		]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "progressbar",
+			"name": "Syncing organizations"
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	}
+}

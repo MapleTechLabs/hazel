@@ -1,0 +1,28 @@
+{
+	"about": "A fact (`pk0-facts`, today's evidence `fact`): the muted label, its value at the row's end.",
+	"root": {
+		"tag": "property",
+		"props": {
+			"label": "Projected by Dec 1",
+			"style": "justified"
+		},
+		"children": [
+			{
+				"tag": "text",
+				"props": {
+					"role": "label",
+					"numeric": true
+				},
+				"children": ["1,240 · 124%"]
+			}
+		]
+	},
+	"frame": "screen",
+	"kit": {
+		"specimen": "fact-row",
+		"target": "property"
+	},
+	"pending": {
+		"ios": "S4"
+	}
+}

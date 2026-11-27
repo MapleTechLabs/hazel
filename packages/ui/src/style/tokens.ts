@@ -201,6 +201,27 @@ const color = {
 	"presence-away": same(ref("warning")),
 	"presence-busy": same(ref("warning")),
 	"presence-offline": same(ref("muted-fg")),
+	/**
+	 * Customers' chart hues (theme.css `--chart-*`): marks only, never text, always beside a label or
+	 * legend. Fixed hues, not the brand preset's.
+	 */
+	"chart-new": same(lit("rgb(7 148 85)")),
+	"chart-expansion": same(lit("rgb(46 144 250)")),
+	"chart-contraction": same(lit("rgb(201 133 0)")),
+	"chart-churn": same(lit("rgb(217 45 32)")),
+	"chart-neutral": themed(lit("oklch(0.552 0.016 285.938)"), lit("oklch(0.442 0.017 285.786)")),
+	"chart-series-1": themed(lit("rgb(89 37 220)"), lit("rgb(105 56 239)")),
+	"chart-series-2": themed(lit("rgb(122 90 248)"), lit("rgb(155 138 251)")),
+	"chart-series-3": themed(lit("rgb(189 180 254)"), lit("rgb(217 214 254)")),
+	"chart-grid": same(ref("border")),
+	"chart-net": same(ref("fg")),
+	/** A signal's severity bars (theme.css `--severity-*`): lit up to the level, the rest `off`. */
+	"severity-high": same(ref("danger-subtle-fg")),
+	"severity-medium": same(ref("warning-subtle-fg")),
+	"severity-low": same(ref("muted-fg")),
+	"severity-off": same(ref("secondary")),
+	/** An empty avatar's dashed ring ("Unassigned", `border-muted-fg/60`). */
+	"placeholder-edge": same(alpha(ref("muted-fg"), 0.6)),
 	/** The ring that cuts a dot out of its avatar (`ring-bg`). */
 	"presence-cutout": same(ref("bg")),
 	// Toggle (switch.styles.ts): the track at rest and under the pointer, its edge, the thumb.
@@ -306,7 +327,14 @@ export const tokens = {
 		snug: { compact: { size: 14, lineHeight: 19.25 }, regular: { size: 14, lineHeight: 19.25 } },
 		// Chat text: today's message row is `text-base/6` at every width.
 		reading: { compact: { size: 16, lineHeight: 24 }, regular: { size: 16, lineHeight: 24 } },
-		// heading.styles.ts `title` (`text-lg/7 tracking-[-0.014em]`): channel settings' name.
+		// A KPI's value (kpi-tile.ts `text-2xl/8 tracking-tight max-md:text-xl/7`, -0.025em).
+		stat: {
+			compact: { size: 20, lineHeight: 28, tracking: -0.5 },
+			regular: { size: 24, lineHeight: 32, tracking: -0.6 },
+		},
+		// Tailwind's `text-xl` (20/28): the empty channel's line.
+		hero: { compact: { size: 20, lineHeight: 28 }, regular: { size: 20, lineHeight: 28 } },
+		// A page header's title (heading.styles.ts `title`: `text-lg/7 tracking-[-0.014em]`).
 		headline: {
 			compact: { size: 18, lineHeight: 28, tracking: -0.252 },
 			regular: { size: 18, lineHeight: 28, tracking: -0.252 },

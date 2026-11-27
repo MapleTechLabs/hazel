@@ -1,0 +1,39 @@
+{
+	"about": "A page opened from another (`surface` `detail`, today's All media header): an arrow back, the 18/28 semibold title over a `px-4 py-3` bar, and a gutter-padded scroll (`p4-media-page-header`).",
+	"root": {
+		"tag": "screen",
+		"props": {
+			"title": "All media",
+			"surface": "detail",
+			"back": true
+		},
+		"events": ["back"],
+		"children": [
+			{
+				"tag": "scroll",
+				"props": {
+					"inset": "page"
+				},
+				"children": [
+					{
+						"tag": "text",
+						"props": {
+							"role": "label",
+							"tone": "muted"
+						},
+						"children": ["3 photos"]
+					}
+				]
+			}
+		]
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Back"
+		}
+	],
+	"pending": {
+		"ios": "S4"
+	}
+}

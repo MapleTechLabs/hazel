@@ -1,0 +1,20 @@
+{
+	"about": "A data source's chip: its mark and name in a 28pt outlined box (`pk0-source-chip`, today's `sourceChip`).",
+	"root": {
+		"tag": "badge",
+		"props": {
+			"label": "Hazel",
+			"style": "outline",
+			"size": "large",
+			"image": "/icon.svg"
+		}
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "badge-source",
+		"target": "badge"
+	},
+	"pending": {
+		"ios": "S1"
+	}
+}

@@ -29,6 +29,9 @@ export type BadgeStyle = typeof BadgeStyle.Type
 export const BadgeSize = Schema.Literals(Sets.badgeSizes)
 export type BadgeSize = typeof BadgeSize.Type
 
+export const BadgeSeverity = Schema.Literals(Sets.badgeSeverities)
+export type BadgeSeverity = typeof BadgeSeverity.Type
+
 export const StackAxis = Schema.Literals(Sets.stackAxes)
 export type StackAxis = typeof StackAxis.Type
 
@@ -40,6 +43,8 @@ export type StackAlign = typeof StackAlign.Type
 
 export const FieldWidth = Schema.Literals(Sets.fieldWidths)
 export type FieldWidth = typeof FieldWidth.Type
+export const StackInset = Schema.Literals(Sets.stackInsets)
+export type StackInset = typeof StackInset.Type
 
 export const FrameSurface = Schema.Literals(Sets.frameSurfaces)
 export type FrameSurface = typeof FrameSurface.Type
@@ -59,6 +64,12 @@ export type AvatarPresence = typeof AvatarPresence.Type
 export const AvatarSize = Schema.Literals(Sets.avatarSizes)
 export type AvatarSize = typeof AvatarSize.Type
 
+export const AvatarCorners = Schema.Literals(Sets.avatarCorners)
+export type AvatarCorners = typeof AvatarCorners.Type
+
+export const AvatarTint = Schema.Literals(Sets.avatarTints)
+export type AvatarTint = typeof AvatarTint.Type
+
 export const ProviderMark = Schema.Literals(Sets.providerMarks)
 export type ProviderMark = typeof ProviderMark.Type
 
@@ -71,6 +82,9 @@ export type AvatarStackLayout = typeof AvatarStackLayout.Type
 
 export const IconTileTone = Schema.Literals(Sets.iconTileTones)
 export type IconTileTone = typeof IconTileTone.Type
+
+export const IconTileSize = Schema.Literals(Sets.iconTileSizes)
+export type IconTileSize = typeof IconTileSize.Type
 
 export const ItemUnreadMark = Schema.Literals(Sets.itemUnreadMarks)
 export type ItemUnreadMark = typeof ItemUnreadMark.Type
@@ -124,6 +138,12 @@ export type ToggleStyle = typeof ToggleStyle.Type
 
 export const ProgressStyle = Schema.Literals(Sets.progressStyles)
 export type ProgressStyle = typeof ProgressStyle.Type
+
+export const PropertyStyle = Schema.Literals(Sets.propertyStyles)
+export type PropertyStyle = typeof PropertyStyle.Type
+
+export const DisclosureTone = Schema.Literals(Sets.disclosureTones)
+export type DisclosureTone = typeof DisclosureTone.Type
 
 export const BannerStyle = Schema.Literals(Sets.bannerStyles)
 export type BannerStyle = typeof BannerStyle.Type
@@ -253,6 +273,7 @@ export const iconNames = [
 	"minus",
 	"moon",
 	"office",
+	"opportunity",
 	"paintbrush",
 	"paperclip",
 	"pause",
@@ -266,6 +287,7 @@ export const iconNames = [
 	"profiles",
 	"refresh",
 	"reply",
+	"risk",
 	"robot",
 	"rocket",
 	"search",
@@ -356,6 +378,7 @@ export const iconSources = {
 	paintbrush: "IconPaintbrush",
 	paperclip: "IconPaperclip2",
 	pause: "IconCirclePause",
+	opportunity: "IconOpportunity",
 	"pen-sparkle": "IconPenSparkle",
 	phone: "IconPhone",
 	pin: "IconPin",
@@ -366,6 +389,7 @@ export const iconSources = {
 	profiles: "IconProfiles2",
 	refresh: "IconArrowPath",
 	reply: "IconReply",
+	risk: "IconRisk",
 	robot: "IconRobot",
 	rocket: "IconRocket",
 	search: "IconMagnifier3",

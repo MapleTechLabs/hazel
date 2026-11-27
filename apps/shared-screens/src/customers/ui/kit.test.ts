@@ -21,7 +21,7 @@ import {
 	shortcutBar,
 	viewTabs,
 } from "./filter-bar"
-import { companyLogo, initialsOf, personAvatar, safeLogoUrl, sourceLogoSrc } from "./identity"
+import { companyLogo, initialsOf, personAvatar, safeLogoUrl, sourceLogoSrc, tintOf } from "./identity"
 import { deltaLook, kpiTile } from "./kpi-tile"
 import { planLine, queueAction, queueRow, queueTable } from "./queue-row"
 import { slaChip } from "./sla-chip"
@@ -115,10 +115,16 @@ describe("identity", () => {
 		)
 		const avatars = s.all(tagged("avatar")).map((node) => node.props)
 		expect(avatars).toEqual([
-			{ initials: "NL" },
-			{ initials: "K" },
-			{ initials: "AC", src: "https://acme.io/logo.png", size: "large" },
-			{ initials: "?" },
+			{ initials: "NL", size: "row", corners: "square", tint: tintOf("Northwind Labs") },
+			{ initials: "K", size: "xxsmall", corners: "square", tint: tintOf("Kestrel") },
+			{
+				initials: "AC",
+				src: "https://acme.io/logo.png",
+				size: "large",
+				corners: "square",
+				tint: tintOf("Acme"),
+			},
+			{ size: "xsmall", placeholder: true },
 		])
 	})
 })
@@ -135,21 +141,22 @@ describe("badges", () => {
 			),
 		)
 		expect(s.all(tagged("badge")).map((node) => node.props)).toEqual([
-			{ label: "High", style: "outline" },
-			{ label: "Risk", tone: "danger" },
-			{ label: "Opportunity", tone: "info" },
-			{ label: "Trialing · 4 days left", tone: "info" },
-			{ label: "Churned", style: "outline" },
+			{ label: "High", style: "outline", severity: "high" },
+			{ label: "Risk", tone: "danger", icon: "risk" },
+			{ label: "Opportunity", tone: "info", icon: "opportunity" },
+			{ label: "Trialing", tone: "info", detail: "· 4 days left" },
+			{ label: "Churned", style: "quietOutline" },
 		])
 	})
 
 	test("signal counts name each non-zero count, and a dash for none", () => {
 		const counts = { high: 2, medium: 0, low: 1, opportunities: 1 }
 		expect(signalCountsLabel(counts)).toBe("2 high risk, 1 low risk, 1 opportunity")
-		expect(texts(draw((h) => h.stack.children(signalCounts(h, counts))))).toEqual([
-			"2 high",
-			"1 low",
-			"1 opp.",
+		const drawn = draw((h) => h.stack.children(signalCounts(h, counts)))
+		expect(drawn.all(tagged("badge")).map((node) => node.props)).toEqual([
+			{ label: "2", style: "plain", severity: "high" },
+			{ label: "1", style: "plain", severity: "low" },
+			{ label: "1", style: "plain", tone: "info", icon: "opportunity" },
 		])
 		const none = draw((h) =>
 			h.stack.children(signalCounts(h, { high: 0, medium: 0, low: 0, opportunities: 0 })),
@@ -183,7 +190,12 @@ describe("SLA chip", () => {
 			),
 		)
 		expect(s.all(tagged("badge")).map((node) => node.props)).toEqual([
-			{ label: "Reply overdue by 1h", tone: "danger" },
+			{
+				label: "Reply overdue by 1h",
+				tone: "danger",
+				icon: "clock",
+				title: "Standard policy · was due Fri 12:00",
+			},
 		])
 	})
 })
@@ -204,7 +216,12 @@ describe("evidence", () => {
 			highlightFrom: 7,
 			net: true,
 		})
-		expect(texts(s)).toEqual(["Last 7 days avg", "25", "Prior 23 days avg", "44", "Change", "−43%"])
+		expect(s.all(tagged("property")).map((node) => node.props?.label)).toEqual([
+			"Last 7 days avg",
+			"Prior 23 days avg",
+			"Change",
+		])
+		expect(texts(s)).toEqual(["25", "44", "−43%"])
 	})
 })
 
@@ -327,7 +344,10 @@ describe("cards and tiles", () => {
 			),
 		)
 		expect(s.all(tagged("heading")).map(textOf)).toEqual(["Stripe", "Clerk"])
-		expect(s.get(tagged("progress")).props).toMatchObject({ value: 0.25, label: "Syncing users" })
+		expect(s.all(tagged("progress")).map((node) => node.props)).toEqual([
+			{ style: "inline" },
+			{ value: 0.25, label: "Syncing users" },
+		])
 		const after = s.fire(byProp("button", "label", "Connect"), "press")
 		expect(logOf(after)).toEqual(["connect"])
 	})

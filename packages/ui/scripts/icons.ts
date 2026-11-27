@@ -1,12 +1,14 @@
 import { spawnSync } from "node:child_process"
 import { readFileSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
-import * as Icons from "../../../apps/web-foldkit/src/icons/index.ts"
+import * as CustomerIcons from "../../../apps/web-foldkit/src/customers/ui/icons.ts"
+import * as AppIcons from "../../../apps/web-foldkit/src/icons/index.ts"
 import { iconNames, iconSources, type IconName } from "../src/vocabulary/options.ts"
 
 /**
  * `bun scripts/icons.ts`: writes `src/web/icons.generated.ts`, the web's own icons
- * (`apps/web-foldkit/src/icons`, one per `IconName` via `iconSources`) as SVG markup. Each icon is
+ * (`apps/web-foldkit/src/icons`, and the customers kit's `risk` and `opportunity`, one per `IconName`
+ * via `iconSources`) as SVG markup. Each icon is
  * built once with a stub of Foldkit's `h`. `--check` writes nothing and exits 1 when the file is stale.
  */
 
@@ -23,6 +25,9 @@ const stub = new Proxy(
 		get: (_, key: string) => {
 			if (key === "Attribute") return attribute
 			if (key === "Class") return (value: string) => attribute("class", value)
+			// The customers kit's glyphs mark themselves decorative.
+			if (key === "AriaHidden") return (value: boolean) => attribute("aria-hidden", String(value))
+			if (key === "Role") return (value: string) => attribute("role", value)
 			return (
 				attrs: ReadonlyArray<readonly [string, string]> = [],
 				children: ReadonlyArray<Node | string> = [],
@@ -46,6 +51,9 @@ const markup = (node: Node | string): string => {
 		.join("")
 	return `<${node.tag}${attrs}>${node.children.map(markup).join("")}</${node.tag}>`
 }
+
+// The app's icons win a shared name (both export `IconArrowUp`).
+const Icons = { ...CustomerIcons, ...AppIcons }
 
 const build = (name: IconName) => {
 	// SAFETY: the stub stands in for Foldkit's `HtmlBuilder`; an icon only calls `h.<tag>` and

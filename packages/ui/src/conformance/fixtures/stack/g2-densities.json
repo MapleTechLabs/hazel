@@ -24,7 +24,7 @@
 	"axes": [
 		{
 			"prop": "density",
-			"values": ["snug", "loose"]
+			"values": ["cozy", "loose"]
 		}
 	],
 	"pending": {

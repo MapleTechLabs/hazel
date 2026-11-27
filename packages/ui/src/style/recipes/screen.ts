@@ -22,6 +22,7 @@ export const screen = defineRecipe<
 	| "toolbar"
 	| "meta"
 	| "aside"
+	| "leading"
 >({
 	primitive: "screen",
 	parts: {
@@ -37,6 +38,7 @@ export const screen = defineRecipe<
 		toolbar: { kind: "slot", in: "content" },
 		meta: { kind: "slot", in: "content" },
 		aside: { kind: "slot", in: "content" },
+		leading: { kind: "slot", in: "content" },
 	},
 	base: {
 		root: { layout: "column", background: "sidebar" },
@@ -96,6 +98,25 @@ export const screen = defineRecipe<
 						content: { paddingY: "0", grow: true },
 					},
 				},
+				// A page opened from another (`files/view.ts` All media): `gap-3 border-b px-4 py-3`, an
+				// `arrow-left` plain `sq-sm` button and the heading `title` (18/28 semibold).
+				detail: {
+					root: { background: "bg" },
+					parts: {
+						header: {
+							gap: "3",
+							rowGap: "0",
+							minHeight: "0",
+							paddingX: "4",
+							paddingY: "3",
+							divider: "border",
+						},
+						back: { size: "10", paddingX: "2.5", bleedX: "0", color: "muted-fg" },
+						title: { text: "headline", weight: "semibold", opacity: 1 },
+						content: { paddingY: "0", grow: true },
+					},
+					regular: { parts: { back: { size: "8", paddingX: "2" } } },
+				},
 				// `auth/layout.ts`: one card (`max-w-sm`) centred beside the `aside` brand panel; the
 				// header is `authHeading` (display title, muted `text-sm` subtitle, `mb-8 space-y-2`).
 				// The two columns and the card's width are the web renderer's grid.
@@ -112,6 +133,8 @@ export const screen = defineRecipe<
 						title: { text: "display", weight: "semibold", opacity: 1 },
 						// Its children are the card's rows, laid out in the screen's grid.
 						content: { layout: "contents", paddingY: "0" },
+						// The kit's `mb-6` under the invitation's logo.
+						leading: { marginBottom: "6" },
 					},
 					regular: { root: { paddingX: "12", paddingY: "12" } },
 				},

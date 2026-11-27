@@ -24,8 +24,9 @@ export interface SmallInput {
 	readonly size: ChartSize
 	/** Bars from this index on are the recent window (`barSparkline`). */
 	readonly highlightFrom: number | undefined
-	/** `barSparkline`: the dashed baseline at the mean before `highlightFrom`. */
+	/** `barSparkline`: the dashed baseline at `baseline`, else (with `net`) the mean before `highlightFrom`. */
 	readonly net: boolean
+	readonly baseline: number | undefined
 }
 
 const numbers = (series: ChartSeries | undefined): ReadonlyArray<number> =>
@@ -38,6 +39,7 @@ const numbers = (series: ChartSeries | undefined): ReadonlyArray<number> =>
  */
 const sparkBox = {
 	small: [80, 24],
+	medium: [80, 24],
 	regular: [80, 24],
 	large: [120, 32],
 } as const satisfies Record<ChartSize, readonly [number, number]>
@@ -93,9 +95,8 @@ export const baselineOf = (values: ReadonlyArray<number>, from: number | undefin
 const barSparkline = (document: Document, input: SmallInput): ReadonlyArray<Element> => {
 	const series = input.series[0]
 	const values = series === undefined ? [] : series.values.map((value) => value ?? 0)
-	// HAZEL-GAP(chart-baseline): today's baseline is the evidence's own average; here `net` draws the
-	// mean of the bars before `highlightFrom`.
-	const baseline = input.net ? baselineOf(values, input.highlightFrom) : null
+	// The evidence's own average when the page has it (`baselineAvg`), else the prior window's mean.
+	const baseline = input.baseline ?? (input.net ? baselineOf(values, input.highlightFrom) : null)
 	const [, hi] = extent([...values, baseline ?? 0])
 	const top = hi === 0 ? 1 : hi
 	const width = bandWidth(values.length)

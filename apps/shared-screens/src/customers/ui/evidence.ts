@@ -63,12 +63,12 @@ const sparkline = <Msg>(
 
 /** Two right-aligned lines: the figure, and what it means. */
 const lines = <Msg>(h: Hazel.H<Msg>, top: string, bottom: string | null, danger = false) =>
-	// HAZEL-GAP(pk0-evidence-lines): today's figure is 14px medium over a 12px caption, right-aligned; a stack's `end` aligns the lines but not their text, and a bottom-only danger tone needs its own run.
 	h.stack
 		.density("tight")
 		.align("end")
 		.children(
 			h.text
+				.role("label")
 				.strong()
 				.numeric()
 				.tone(danger ? "danger" : "default")
@@ -77,9 +77,9 @@ const lines = <Msg>(h: Hazel.H<Msg>, top: string, bottom: string | null, danger 
 		)
 
 const limitMeter = <Msg>(h: Hazel.H<Msg>, evidence: Of<"limit">) =>
-	// HAZEL-GAP(chart-meter): today's meter turns amber at the limit and red past 120%; `progress` is one tone.
 	h.progress
-		.value(Math.min(1, evidence.limit === 0 ? 1 : evidence.value / evidence.limit))
+		.style("meter")
+		.value(evidence.limit <= 0 ? 0 : evidence.value / evidence.limit)
 		.label(`${evidence.metricName}: ${formatPct(evidence.pct, { digits: 0 })} of limit`)
 
 /** The queue row's evidence cell: one or two lines, or a sparkline or meter. */
@@ -92,6 +92,7 @@ export const evidenceViz = <Msg>(h: Hazel.H<Msg>, evidence: SignalEvidence) =>
 						.align("end")
 						.children(
 							h.text
+								.role("label")
 								.strong()
 								.numeric()
 								.children(formatMoney(evidence.amountMinor, evidence.currency)),
@@ -167,15 +168,12 @@ export const evidenceViz = <Msg>(h: Hazel.H<Msg>, evidence: SignalEvidence) =>
 
 /** One fact: its label, then its value at the row's end (today's `dl` row, `justify-between`). */
 const fact = <Msg>(h: Hazel.H<Msg>, label: string, value: string, danger = false) =>
-	// HAZEL-GAP(pk0-facts): `property` lays its label in a column (`detail/parts.ts`); today's facts are a justified `dl` row, drawn here as a stack without the `dt`/`dd` semantics.
-	h.stack
-		.axis("horizontal")
-		.density("compact")
-		.align("center")
+	h.property
+		.style("justified")
+		.label(label)
 		.children(
-			h.text.tone("muted").children(label),
-			h.spacer,
 			h.text
+				.role("label")
 				.numeric()
 				.tone(danger ? "danger" : "default")
 				.children(value),
@@ -206,7 +204,7 @@ export const evidenceDetail = <Msg>(
 		at === null ? NO_VALUE : formatDate(new Date(at), { now: options.now })
 	type Entry = ReturnType<typeof fact<Msg>> | null
 	const facts = (entries: ReadonlyArray<Entry>, chart?: Hazel.NoTextInput<Msg>) =>
-		h.stack.children(chart ?? null, h.stack.density("compact").children(...entries))
+		h.stack.density("cozy").children(chart ?? null, h.stack.density("snug").children(...entries))
 	return Match.valueTags(evidence, {
 		amount: (evidence) =>
 			facts([

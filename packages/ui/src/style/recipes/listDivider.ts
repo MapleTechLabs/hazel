@@ -23,7 +23,7 @@ export const listDivider = defineRecipe<
 		kind: {
 			default: "date",
 			values: {
-				// Today's date pill (`chat/message/row.ts` `dateDividerView`); its mono family is the renderer's.
+				// Today's date pill (`chat/message/row.ts` `dateDividerView`, `font-mono text-xs`).
 				date: {
 					parts: {
 						label: {
@@ -33,6 +33,7 @@ export const listDivider = defineRecipe<
 							radius: "lg",
 							background: "secondary",
 							shadow: "sm",
+							mono: true,
 						},
 					},
 				},

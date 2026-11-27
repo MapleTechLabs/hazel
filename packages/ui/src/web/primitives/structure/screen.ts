@@ -72,6 +72,7 @@ ${CENTERED} > [data-hz-part="header"], ${CENTERED} > [data-hz-part="content"] > 
 	grid-column: -2; width: min(100%, calc(var(--hz-space-24) * 4));
 }
 ${ROOT} > [data-hz-part="content"] > [data-hz-slot="aside"] { display: none; }
+${CENTERED} > [data-hz-part="content"] > [data-hz-slot="leading"] { order: -1; }
 ${CENTERED} > header[data-hz-part="header"] > [data-hz-part="title"] { white-space: normal; }
 ${CENTERED} > header[data-hz-part="header"] > [data-hz-part="subtitle"] { margin-top: var(--hz-space-2); }
 @media (width >= 40rem) {
@@ -104,6 +105,12 @@ ${ROOT} > [data-hz-part="header"] > [data-hz-part="back"]:focus-visible {
    reaches the bottom, under a bar that sticks (\`sticky top-0 z-10\`). */
 ${ROOT}[data-surface="page"] { min-height: 100%; flex: 1 0 auto; }
 ${ROOT}[data-surface="page"] > [data-hz-part="header"] { position: sticky; top: 0; z-index: 10; background: inherit; }
+/* A page opened from another (\`detail\`): the column's full height, its back an unflipped arrow. */
+${ROOT}[data-surface="detail"] { height: 100%; min-height: 0; }
+/* Its back spans the empty crumb and subtitle rows; the title's row takes the back's extra height. */
+${ROOT}[data-surface="detail"] > header[data-hz-part="header"] { flex-shrink: 0; grid-template-rows: auto 1fr auto; }
+${ROOT}[data-surface="detail"] > [data-hz-part="header"] > [data-hz-part="back"] > svg { transform: none; }
+${ROOT}[data-surface="detail"] > [data-hz-part="content"] { min-height: 0; }
 ${headingCss}
 ${centeredCss}
 ${floatingCss}
@@ -203,8 +210,10 @@ export const primitive = definePrimitive("screen", ({ document, tag, outer }) =>
 			if (name === "title") title.textContent = textOf(value)
 			else if (name === "subtitle") subtitle.textContent = textOf(value)
 			else if (name === "crumbs") drawCrumbs(crumbsOf(value))
-			else if (name === "surface") option(node, "surface", value)
-			else if (name === "back") {
+			else if (name === "surface") {
+				option(node, "surface", value)
+				back.innerHTML = svg(value === "detail" ? "arrow-left" : "chevron-right")
+			} else if (name === "back") {
 				back.hidden = value !== true
 				flag(node, "back", value)
 			} else return

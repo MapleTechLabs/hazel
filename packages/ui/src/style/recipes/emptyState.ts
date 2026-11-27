@@ -4,8 +4,8 @@ import type { EmptyIllustration } from "../schema.ts"
 /**
  * `hz:emptyState` (`empty-state.styles.ts`): a centred column, the icon on the kit's neutral `lg`
  * `iconTile` (`size-12 rounded-xl border bg-secondary`, glyph `size-6 text-muted-fg`), a semibold
- * title, a muted description, then the action slot. `squirrel` is the message list's empty state:
- * its picture at half opacity over the title in the larger type.
+ * title, a muted description, then the action slot. `squirrel` is the message list's empty state
+ * (`emptyStateView`): its masked picture at half opacity right over a bold mono 20/28 line, `p-4 sm:p-8`.
  */
 export const emptyState = defineRecipe<
 	{ readonly illustration: EmptyIllustration },
@@ -57,7 +57,15 @@ export const emptyState = defineRecipe<
 			default: "none",
 			values: {
 				none: {},
-				squirrel: { root: { paddingY: "8" }, parts: { title: { text: "title" } } },
+				squirrel: {
+					root: { paddingX: "4", paddingY: "4", rowGap: "0" },
+					parts: {
+						illustration: { marginBottom: "0" },
+						// A plain block today: a wrapped line starts at its left edge.
+						title: { text: "hero", weight: "bold", mono: true, textAlign: "start" },
+					},
+					regular: { root: { paddingX: "8", paddingY: "8" } },
+				},
 			},
 		},
 	},

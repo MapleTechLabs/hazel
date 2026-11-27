@@ -41,6 +41,8 @@ export interface AxisInput {
 	readonly kind: AxisKind
 	readonly series: ReadonlyArray<ChartSeries>
 	readonly labels: ReadonlyArray<string>
+	/** The tooltip's heading per label, when longer than the tick. */
+	readonly headings?: ReadonlyArray<string>
 	readonly format: ChartFormat
 	readonly currency: string
 	readonly net: boolean
@@ -181,7 +183,7 @@ export const layout = (input: AxisInput): AxisLayout => {
 					tone: series.tone,
 					mark: isBars ? "square" : "line",
 				})),
-			// HAZEL-GAP(chart-net-label): the net line's word is the renderer's.
+			// The net line's word is the renderer's (`chart-net-label`): every page says "Net".
 			...(nets === undefined
 				? []
 				: [{ label: "Net", tone: "net", mark: "line" } satisfies LegendEntry]),
@@ -310,8 +312,7 @@ export const drawHover = (
 	tooltip: HTMLElement,
 ): { readonly behind: ReadonlyArray<Element>; readonly front: ReadonlyArray<Element> } => {
 	const x = plan.xAt(index)
-	// HAZEL-GAP(chart-tooltip-heading): today heads with a longer date than the tick; the label stands in.
-	const heading = plan.input.labels[index] ?? ""
+	const heading = plan.input.headings?.[index] ?? plan.input.labels[index] ?? ""
 	if (plan.isBars) {
 		const band = part(document, "span", "band")
 		band.setAttribute("aria-hidden", "true")

@@ -1,0 +1,20 @@
+{
+	"about": "An SLA on time: muted ink on the ring, a clock, its policy on hover (`pk0-badge-quiet-outline`, `pk0-badge-title`, today's `slaChip`).",
+	"root": {
+		"tag": "badge",
+		"props": {
+			"label": "Reply due in 3h 10m",
+			"style": "quietOutline",
+			"icon": "clock",
+			"title": "Standard policy · due Mon 09:50"
+		}
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "badge-sla",
+		"target": "badge"
+	},
+	"pending": {
+		"ios": "S1"
+	}
+}

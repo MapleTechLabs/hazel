@@ -1,0 +1,18 @@
+{
+	"about": "A long environment truncated at today's `max-w-32`, its name on hover (`pk0-badge-truncate`, today's `environmentBadge`).",
+	"root": {
+		"tag": "badge",
+		"props": {
+			"label": "production-eu-west-1",
+			"truncate": true
+		}
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "badge-environment",
+		"target": "badge"
+	},
+	"pending": {
+		"ios": "S1"
+	}
+}

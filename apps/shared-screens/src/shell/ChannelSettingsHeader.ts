@@ -67,7 +67,7 @@ export const ChannelSettingsHeader = Hazel.component({
 				h.link.label("Back to channel").href(h.props.channelHref).tone("muted").icon("arrow-left"),
 				h.stack
 					.axis("horizontal")
-					.density("snug")
+					.density("cozy")
 					.align("center")
 					.children(
 						icon,

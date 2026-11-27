@@ -104,7 +104,7 @@
 		},
 		{
 			"prop": "density",
-			"values": ["tight", "compact", "relaxed"]
+			"values": ["tight", "snug", "compact", "cozy", "relaxed"]
 		}
 	],
 	"pending": {

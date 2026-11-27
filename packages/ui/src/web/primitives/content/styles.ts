@@ -27,16 +27,31 @@ const css = `
 	user-select: none;
 }
 
+/* The kit's status dot (\`statusLine\`): 6px, \`gap-1.5\`, in the tone's fill (\`status-dot.ts\` \`TONE\`). */
+[data-hz=text][data-dot] { display: inline-flex; align-items: center; gap: var(--hz-space-1_5); white-space: nowrap; }
+[data-hz=text][data-dot]::before {
+	content: ""; flex-shrink: 0; width: var(--hz-space-1_5); height: var(--hz-space-1_5);
+	border-radius: var(--hz-radius-full); background: var(--hz-color-muted-fg);
+}
+[data-hz=text][data-dot][data-tone=success]::before { background: var(--hz-color-success); }
+[data-hz=text][data-dot][data-tone=warning]::before { background: var(--hz-color-warning); }
+[data-hz=text][data-dot][data-tone=danger]::before { background: var(--hz-color-danger); }
+[data-hz=text][data-dot][data-tone=info]::before { background: var(--hz-color-info-subtle-fg); }
+[data-hz=text][data-dot][data-tone=accent]::before { background: var(--hz-color-primary); }
+
 :where([data-hz=avatar]) { position: relative; }
 [data-hz=avatar][data-seeded] { container-type: size; }
-[data-hz=avatar]:is([data-size=medium], [data-size=large]),
-[data-hz=avatar]:is([data-size=medium], [data-size=large]) > :is([data-hz-part=image], [data-hz-part=dither]),
+[data-hz=avatar]:is([data-size=medium], [data-size=large], [data-size=xlarge]):not([data-corners]),
+[data-hz=avatar]:is([data-size=medium], [data-size=large], [data-size=xlarge]):not([data-corners]) > :is([data-hz-part=image], [data-hz-part=dither]),
 [data-hz=avatarStack][data-layout=pair] > [data-hz=avatar],
 [data-hz=avatarStack][data-layout=pair] > [data-hz=avatar] > :is([data-hz-part=image], [data-hz-part=dither]),
 [data-hz=peopleStrip] [data-hz-part=avatar],
 [data-hz=peopleStrip] [data-hz-part=avatar] > :is([data-hz-part=image], [data-hz-part=dither]) {
 	corner-shape: squircle;
 }
+/* "Unassigned" (\`placeholder\`): a dashed ring around a 12px user glyph. */
+[data-hz=avatar][data-placeholder] { border-style: dashed; }
+[data-hz=avatar][data-placeholder] > [data-hz-part=initials] { width: var(--hz-space-3); height: var(--hz-space-3); }
 /* A 40pt row avatar's dot is today's \`presenceDot\` \`xs\`: 10px, cut out by a 2px outer ring (\`ring-2 ring-bg\`). */
 [data-hz=avatar][data-size=medium] > [data-hz-part=presence] {
 	border-width: 0;
@@ -94,8 +109,6 @@ const css = `
 /* A banner's \`actions\` slot mounts before its children; it reads after them, as the kit's. */
 [data-hz=banner] > [data-hz-part=content] > [data-hz-slot=actions] { order: 1; }
 [data-hz=banner] > [data-hz-part=content] > [data-hz-slot=actions]:empty { display: none; }
-/* The bar hangs from the edge above it (\`rounded-b-lg\`): square top corners. */
-[data-hz=banner][data-style=bar] { border-top-left-radius: 0; border-top-right-radius: 0; }
 [data-hz=banner] > [data-hz-part=dismiss] { cursor: pointer; }
 [data-hz=banner] > [data-hz-part=dismiss]:hover { opacity: 1; }
 [data-hz=banner] > [data-hz-part=dismiss]:focus-visible {

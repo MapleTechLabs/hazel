@@ -1,0 +1,19 @@
+{
+	"about": "A trialing stage with its days left as a quieter run (`pk0-badge-runs`, today's `stageBadge`).",
+	"root": {
+		"tag": "badge",
+		"props": {
+			"label": "Trialing",
+			"tone": "info",
+			"detail": "· 4 days left"
+		}
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "badge-trial",
+		"target": "badge"
+	},
+	"pending": {
+		"ios": "S1"
+	}
+}

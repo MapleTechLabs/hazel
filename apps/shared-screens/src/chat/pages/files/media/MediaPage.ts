@@ -152,14 +152,12 @@ export const MediaPageNoDeps = Def.make({
 		),
 	],
 	view: (h, model) =>
-		// HAZEL-GAP(p4-page-gutter): today's gallery is inset `p-4`; no container insets.
-		// HAZEL-GAP(p4-media-page-header): today's back is an arrow icon and the title 18px semibold.
 		h.screen
-			.surface("page")
+			.surface("detail")
 			.title("All media")
 			.back(true)
 			.on("back", () => MediaMessage.PressedBack())
-			.children(h.scroll.children(gallery(h, model.attachments)), viewer(h, model)),
+			.children(h.scroll.inset("page").children(gallery(h, model.attachments)), viewer(h, model)),
 })
 
 /** The page with its file actions, on the host's `FilesHost` and `ClientData`. */

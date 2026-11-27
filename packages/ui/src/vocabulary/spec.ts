@@ -117,6 +117,8 @@ export const tags = {
 			// class (a desk's key hint bar, `pk0-web-only`).
 			wrap: flag,
 			regularOnly: flag,
+			// Phase 4 (`p4-page-gutter`): a page's gutter inside the stack.
+			inset: option(O.StackInset, "none"),
 		},
 	}),
 	spacer: tag({ group: "layout", web: "A1", ios: "S1", content: "none" }),
@@ -125,7 +127,7 @@ export const tags = {
 		web: "A1",
 		ios: "S1",
 		content: "elements",
-		props: { axis: option(O.StackAxis, "vertical") },
+		props: { axis: option(O.StackAxis, "vertical"), inset: option(O.StackInset, "none") },
 		commands: ["scrollTo"],
 	}),
 	frame: tag({
@@ -134,6 +136,8 @@ export const tags = {
 		ios: "S1",
 		content: "elements",
 		props: { surface: option(O.FrameSurface, "card") },
+		// Phase 4 (`pk0-card-footer`): a row under a hairline at the frame's end, its parts at either end.
+		slots: ["footer"],
 	}),
 	divider: tag({ group: "layout", web: "A1", ios: "S1", content: "none" }),
 	// Phase 4: children in equal columns (KPI tiles, integration cards, settings cards); one column
@@ -232,6 +236,8 @@ export const tags = {
 			strong: flag,
 			numeric: flag,
 			truncate: flag,
+			// Phase 4 (`pk0-status-dot`): the kit's 6pt status dot before the text, in its tone.
+			dot: flag,
 		},
 	}),
 	heading: tag({
@@ -269,6 +275,11 @@ export const tags = {
 			presence: option(O.AvatarPresence, "none"),
 			size: option(O.AvatarSize, "regular"),
 			mark: option(O.ProviderMark, "none"),
+			// Phase 4 (PK0): a logo's square corners, initials on a tint, and "Unassigned" (a dashed
+			// ring around a user glyph).
+			corners: option(O.AvatarCorners, "auto"),
+			tint: option(O.AvatarTint, "none"),
+			placeholder: flag,
 		},
 		events: { press: none },
 	}),
@@ -286,7 +297,13 @@ export const tags = {
 		web: "A1",
 		ios: "S1",
 		content: "none",
-		props: { name: value(O.IconName), tone: option(O.IconTileTone, "neutral") },
+		// Phase 4 (`pk0-source-tile`): a mark's picture in place of the glyph, and smaller tiles.
+		props: {
+			name: value(O.IconName),
+			tone: option(O.IconTileTone, "neutral"),
+			image: text,
+			size: option(O.IconTileSize, "regular"),
+		},
 	}),
 	// A channel's icon with its marks, as today's `channelIcon`: the emoji, `#` or a lock; a customer's
 	// logo (a lock mark when private); up to two Connect partners' logos; the sync provider's mark.
@@ -325,6 +342,14 @@ export const tags = {
 			style: option(O.BadgeStyle, "solid"),
 			size: option(O.BadgeSize, "regular"),
 			pill: flag,
+			// Phase 4 (PK0): a glyph, a mark's picture or the severity bars before the label; a
+			// quieter `detail` run after it; `title` on hover; `truncate` caps a long label.
+			icon: value(O.IconName),
+			image: text,
+			severity: option(O.BadgeSeverity, "none"),
+			detail: text,
+			title: text,
+			truncate: flag,
 		},
 	}),
 	progress: tag({
@@ -382,6 +407,10 @@ export const tags = {
 			net: flag,
 			highlightFrom: count,
 			loading: flag,
+			// Phase 4: the tooltip's heading per label (`Mon, Oct 12` over the tick's `Oct 12`), and the
+			// evidence bars' dashed baseline at a value of the page's (else `net`'s prior mean).
+			headings: value(Schema.Array(Schema.String)),
+			baseline: value(Schema.Finite),
 		},
 		events: {
 			hover: Schema.Struct({ index: Schema.NullOr(Schema.Finite) }),
@@ -925,8 +954,9 @@ export const tags = {
 		},
 		// `floatingAction`: the screen's primary action, a round button over the content's end corner.
 		// Phase 4: `aside` is `centered`'s brand panel beside the card (regular size class only);
-		// `meta` holds badges after the title.
-		slots: ["toolbar", "floatingAction", "aside", "meta"],
+		// `meta` holds badges after the title; `leading` a mark over the title in `centered` (an
+		// invitation's workspace logo, `p4-avatar-xl`), elsewhere at the content's start.
+		slots: ["toolbar", "floatingAction", "aside", "meta", "leading"],
 		events: { back: none, crumb: Schema.Struct({ index: Schema.Finite }) },
 	}),
 	navigation: tag({
@@ -1038,7 +1068,8 @@ export const tags = {
 		web: "A4",
 		ios: "S4",
 		content: "elements",
-		props: { label: text, description: text },
+		// `justified` (`pk0-facts`): one row, the value at its end (customers' evidence facts).
+		props: { label: text, description: text, style: option(O.PropertyStyle, "column") },
 	}),
 	// Phase 4: a header that shows or hides its children (`ui/thought-line.ts`, customers'
 	// `disclosure`, a reasoning step); `running` marks work in progress.
@@ -1047,7 +1078,15 @@ export const tags = {
 		web: "A4",
 		ios: "S4",
 		content: "elements",
-		props: { title: text, subtitle: text, open: flag, running: flag },
+		// `icon` (`disclosure-glyph`): the thought line's glyph leads and the chevron trails it.
+		props: {
+			title: text,
+			subtitle: text,
+			open: flag,
+			running: flag,
+			icon: value(O.IconName),
+			tone: option(O.DisclosureTone, "default"),
+		},
 		slots: ["trailing"],
 		events: { toggle: Schema.Struct({ open: Schema.Boolean }) },
 	}),

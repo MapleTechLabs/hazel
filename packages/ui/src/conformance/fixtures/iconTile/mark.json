@@ -1,0 +1,24 @@
+{
+	"about": "A data source's mark on its tile (`pk0-source-tile`, today's `sourceMark`): the borderless secondary square at 40, 32 and 24pt, the picture at 24, 20 and 16pt.",
+	"root": {
+		"tag": "iconTile",
+		"props": {
+			"tone": "mark",
+			"image": "/icon.svg"
+		}
+	},
+	"frame": "inline",
+	"axes": [
+		{
+			"prop": "size",
+			"values": ["small", "xsmall"]
+		}
+	],
+	"kit": {
+		"specimen": "icon-tile-mark",
+		"target": "iconTile"
+	},
+	"pending": {
+		"ios": "S1"
+	}
+}

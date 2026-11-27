@@ -56,6 +56,8 @@ export const primitive = definePrimitive("chart", ({ document, tag, outer }) => 
 	let kind = "line"
 	let series: ReadonlyArray<ChartSeries> = []
 	let labels: ReadonlyArray<string> = []
+	let headings: ReadonlyArray<string> = []
+	let baseline: number | undefined
 	let format: ChartFormat = "number"
 	let currency = "USD"
 	let net = false
@@ -85,12 +87,12 @@ export const primitive = definePrimitive("chart", ({ document, tag, outer }) => 
 			for (const axis of [legend, yAxis, endAxis, xAxis]) axis.replaceChildren()
 			// SAFETY: a kind that is not an axis kind is a small kind (`ChartKind`); an unknown one draws a sparkline.
 			const small = (smallKinds.has(kind) ? kind : "sparkline") as SmallKind
-			resting = drawSmall(document, { kind: small, series, size, highlightFrom, net })
+			resting = drawSmall(document, { kind: small, series, size, highlightFrom, net, baseline })
 			drawHovered()
 			return
 		}
 		// SAFETY: `axisKinds` holds exactly the `AxisKind` values.
-		plan = layout({ kind: kind as AxisKind, series, labels, format, currency, net })
+		plan = layout({ kind: kind as AxisKind, series, labels, headings, format, currency, net })
 		if (hovered !== null && hovered >= plan.count) hovered = null
 		legend.replaceChildren(...legendEntries(document, plan.legend))
 		yAxis.replaceChildren(...yTicks(document, plan.yTicks))
@@ -146,6 +148,9 @@ export const primitive = definePrimitive("chart", ({ document, tag, outer }) => 
 				option(node, "kind", value)
 			} else if (name === "series") series = Array.isArray(value) ? value.filter(isSeries) : []
 			else if (name === "labels") labels = strings(value)
+			else if (name === "headings") headings = strings(value)
+			else if (name === "baseline")
+				baseline = typeof value === "number" && Number.isFinite(value) ? value : undefined
 			else if (name === "format") format = isFormat(value) ? value : "number"
 			else if (name === "currency") currency = typeof value === "string" && value !== "" ? value : "USD"
 			else if (name === "net") net = value === true

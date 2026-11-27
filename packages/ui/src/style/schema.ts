@@ -98,24 +98,41 @@ export type ButtonSize = (typeof buttonSizes)[number]
 export const badgeTones = ["neutral", "accent", "success", "warning", "danger", "info"] as const
 export type BadgeTone = (typeof badgeTones)[number]
 
-/** `solid` is the tinted fill, `outline` a hairline ring, `quiet` a grey fill with muted ink. */
-export const badgeStyles = ["solid", "outline", "quiet"] as const
+/**
+ * `solid` is the tinted fill, `outline` a hairline ring, `quiet` a grey fill with muted ink. Phase 4:
+ * `quietOutline` the ring with muted ink (the kit's `quiet` intent, an SLA on time); `plain` the glyph
+ * and label with no chip (signal counts in a table cell, in the tone's ink).
+ */
+export const badgeStyles = ["solid", "outline", "quiet", "quietOutline", "plain"] as const
 export type BadgeStyle = (typeof badgeStyles)[number]
 
-export const badgeSizes = ["regular", "small"] as const
+/** `large` is a 28pt chip naming a thing beside its mark (customers' `sourceChip`). */
+export const badgeSizes = ["regular", "small", "large"] as const
 export type BadgeSize = (typeof badgeSizes)[number]
+
+/** A signal's severity as three rising bars lit up to the level (`severityGlyph`). */
+export const badgeSeverities = ["none", "low", "medium", "high"] as const
+export type BadgeSeverity = (typeof badgeSeverities)[number]
 
 // C1: the sets the doc names for layout, content and chat tags (values fixed in phase 1).
 
 export const stackAxes = ["vertical", "horizontal"] as const
 export type StackAxis = (typeof stackAxes)[number]
 
-/** `tight` is a sidebar's section group (`gap-y-0.5`, `stack-tight`). */
 /**
- * `none` sets a title on its subtitle; `snug` is the kit's `gap-3` (an icon tile beside its name);
- * `loose` its `gap-5` (a page header over its tabs).
+ * `tight` is a sidebar's section group (`gap-y-0.5`, `stack-tight`); phase 4: `none` sets a title on
+ * its subtitle, `snug` the kit's `gap-1.5`, `cozy` its `gap-3`, `loose` its `gap-5`.
  */
-export const stackDensities = ["tight", "compact", "regular", "relaxed", "none", "snug", "loose"] as const
+export const stackDensities = [
+	"tight",
+	"snug",
+	"compact",
+	"cozy",
+	"regular",
+	"relaxed",
+	"none",
+	"loose",
+] as const
 export type StackDensity = (typeof stackDensities)[number]
 
 /**
@@ -128,12 +145,27 @@ export type FieldWidth = (typeof fieldWidths)[number]
 export const stackAligns = ["stretch", "start", "center", "end"] as const
 export type StackAlign = (typeof stackAligns)[number]
 
+/** Padding inside a stack or scroll: `page` is a page's content gutter (`p-4`), `bar` a page header's (`px-4 py-3`). */
+export const stackInsets = ["none", "page", "bar"] as const
+export type StackInset = (typeof stackInsets)[number]
+
 /**
  * `danger` is the danger zone's card with a tinted header (`frame-danger`); `flush` the card with no
  * padding, its dividers running edge to edge (`frame-flush`); `hint` a sidebar's quiet
- * tip, inset by the rows' margin (`frame-hint`).
+ * tip, inset by the rows' margin (`frame-hint`); `tile` a card in a grid of cards (customers'
+ * `connectCard`: `p-4 sm:p-5`).
  */
-export const frameSurfaces = ["none", "card", "inset", "muted", "overlay", "danger", "flush", "hint"] as const
+export const frameSurfaces = [
+	"none",
+	"card",
+	"inset",
+	"muted",
+	"overlay",
+	"danger",
+	"flush",
+	"hint",
+	"tile",
+] as const
 export type FrameSurface = (typeof frameSurfaces)[number]
 
 /**
@@ -144,9 +176,10 @@ export type FrameSurface = (typeof frameSurfaces)[number]
  */
 /**
  * A screen's surface (`screen-surface`): `sidebar` is the sidebar's column under its own title;
- * `page` a phone tab's page (`mobileTopBar`: a 56pt sticky bar, the section heading, the page ground).
+ * `page` a phone tab's page (`mobileTopBar`: a 56pt sticky bar, the section heading, the page ground);
+ * `detail` a page opened from another (All media): an arrow back and a headline title over a `px-4 py-3` bar.
  */
-export const screenSurfaces = ["sidebar", "page", "centered"] as const
+export const screenSurfaces = ["sidebar", "page", "centered", "detail"] as const
 export type ScreenSurface = (typeof screenSurfaces)[number]
 
 /** `eyebrow`: settings' "Account" and "Workspace" (a `heading` `label` inset `px-3 pt-3 pb-1` over its rows). */
@@ -185,9 +218,29 @@ export type AvatarPresence = (typeof avatarPresences)[number]
 /**
  * `regular` sits beside an icon (sidebar rows); `medium` is the kit's `md`, a 40pt rounded square
  * (DM and activity rows, `avatar-row-size`); `large` the settings logo that is its own upload button.
+ * Phase 4: the kit's `xxs` (16), `xs` (24), `sm` (32) and `xl` (56) as `xxsmall`, `xsmall`, `small`
+ * and `xlarge`; `inline` a 20pt mark beside a label at every width; `row` a table row's 28pt logo.
  */
-export const avatarSizes = ["regular", "medium", "large"] as const
+export const avatarSizes = [
+	"regular",
+	"medium",
+	"large",
+	"xxsmall",
+	"xsmall",
+	"small",
+	"xlarge",
+	"inline",
+	"row",
+] as const
 export type AvatarSize = (typeof avatarSizes)[number]
+
+/** `auto` is the size's own shape (round up to `small`, the kit's squircle from `medium`). */
+export const avatarCorners = ["auto", "round", "square"] as const
+export type AvatarCorners = (typeof avatarCorners)[number]
+
+/** Initials on a subtle tint (customers' logos and owners); the view picks it, stable per name. */
+export const avatarTints = ["none", "accent", "info", "success", "warning", "danger", "neutral"] as const
+export type AvatarTint = (typeof avatarTints)[number]
 
 /** A synced author's or mention's provider mark: `none`, Slack or Discord. */
 export const providerMarks = ["none", "slack", "discord"] as const
@@ -198,8 +251,13 @@ export const avatarStackLayouts = ["row", "pair"] as const
 export type AvatarStackLayout = (typeof avatarStackLayouts)[number]
 
 /** A tinted square behind a glyph (the kit's `iconTile`); tones are the kit's intents. */
-export const iconTileTones = ["neutral", "accent", "success", "warning", "danger"] as const
+/** Phase 4: `mark` is a brand mark's borderless secondary tile (customers' `sourceMark`). */
+export const iconTileTones = ["neutral", "accent", "success", "warning", "danger", "mark"] as const
 export type IconTileTone = (typeof iconTileTones)[number]
+
+/** The kit's `md` (40pt); `small` and `xsmall` are `sourceMark`'s 32 and 24pt tiles. */
+export const iconTileSizes = ["regular", "small", "xsmall"] as const
+export type IconTileSize = (typeof iconTileSizes)[number]
 
 /** An unread row's mark at its start: the sidebar's edge `pip`, or activity's brand `dot`. */
 export const itemUnreadMarks = ["none", "pip", "dot"] as const
@@ -250,9 +308,21 @@ export type ChoiceStyle = (typeof choiceStyles)[number]
 export const toggleStyles = ["switch", "checkbox"] as const
 export type ToggleStyle = (typeof toggleStyles)[number]
 
-/** `spinner` is the kit's loader ring, for an inline wait; `bar` the progress bar. */
-export const progressStyles = ["bar", "spinner"] as const
+/**
+ * `spinner` is the kit's loader ring, for an inline wait; `bar` the progress bar; `inline` a 14pt ring
+ * in the accent ink inside a line of text (a sync running, `connectCard`), its label for assistive tech;
+ * `meter` a usage against its limit (`value` may pass 1): blue, amber at the limit, red past 120%.
+ */
+export const progressStyles = ["bar", "spinner", "inline", "meter"] as const
 export type ProgressStyle = (typeof progressStyles)[number]
+
+/** A disclosure's ink: `danger` is a failed step (the thought line's `text-danger`). */
+export const disclosureTones = ["default", "danger"] as const
+export type DisclosureTone = (typeof disclosureTones)[number]
+
+/** A property's row: the label column (`detail/parts.ts`), or `justified`, a fact with its value at the end. */
+export const propertyStyles = ["column", "justified"] as const
+export type PropertyStyle = (typeof propertyStyles)[number]
 
 /** `callout` is the kit's bordered note; `bar` a full-width band (the "N new messages" bar). */
 export const bannerStyles = ["callout", "bar"] as const
@@ -292,7 +362,8 @@ export const chartKinds = [
 ] as const
 export type ChartKind = (typeof chartKinds)[number]
 
-export const chartSizes = ["regular", "small", "large"] as const
+/** Plot heights: `small` h-32, `medium` h-44 (billing's MRR), `regular` h-52 (lines) or h-56 (bars), `large` h-72. */
+export const chartSizes = ["regular", "small", "medium", "large"] as const
 export type ChartSize = (typeof chartSizes)[number]
 
 /** A stat tile's delta: its direction, and whether that direction is good (`goodWhen`, decided by the view). */
@@ -357,9 +428,11 @@ export interface Shadow {
 
 /**
  * Type steps only recipes use (a count badge's 11px), never a view's `text.role`. `reading` is chat
- * text, 16/24 at every width (a message row does not step down like `body`); `snug` a DM preview, 14/19.25.
+ * text, 16/24 at every width (a message row does not step down like `body`); `snug` a DM preview, 14/19.25;
+ * `headline` a page header's title (the kit's heading `title`, 18/28); `hero` Tailwind's `text-xl` (20/28);
+ * `stat` a KPI's value (`text-2xl/8 tracking-tight`, `max-md:text-xl/7`).
  */
-export const recipeTextSteps = ["tiny", "micro", "reading", "snug", "headline"] as const
+export const recipeTextSteps = ["tiny", "micro", "reading", "snug", "headline", "hero", "stat"] as const
 export type RecipeTextStep = (typeof recipeTextSteps)[number]
 export type TextStep = TextRole | RecipeTextStep
 
@@ -466,6 +539,8 @@ export interface Declarations<T extends TokenNames = TokenNames> {
 	/** `dashed` draws the border in dashes (a drop target, `+ Filter`); `solid` when unset. */
 	readonly borderStyle?: "solid" | "dashed"
 	readonly radius?: T["radius"]
+	/** The two top corners over `radius` (a bar hanging from the edge above, `rounded-b-lg`). */
+	readonly radiusTop?: T["radius"]
 	/** A hairline drawn inside the box (`inset 0 0 0 1px`), taking no space; not with `shadow`. */
 	readonly ring?: T["color"]
 	/** A hairline under the box (a bar's bottom edge). */
@@ -492,8 +567,10 @@ export interface Declarations<T extends TokenNames = TokenNames> {
 	readonly weight?: "semibold" | "bold"
 	/** Uppercase text (the `overline` role). */
 	readonly uppercase?: boolean
-	/** Centred text (`recipe-text-align`). */
-	readonly textAlign?: "center"
+	/** The monospace family over the text step (`font-mono`: a date pill, the empty channel's line). */
+	readonly mono?: boolean
+	/** Centred text (`recipe-text-align`), `start` back from an inherited centre, or `end` (a stack aligned end). */
+	readonly textAlign?: "center" | "start" | "end"
 	/** Lines before the text truncates with an ellipsis (`item-title-lines`); 1 is `truncate`. */
 	readonly lineClamp?: 2
 	/** Scrolls its overflow along one axis (`recipe-overflow`). */

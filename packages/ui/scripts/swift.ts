@@ -141,6 +141,8 @@ export const generateSwift = (tokens: Tokens, recipes: ReadonlyArray<Recipe>): s
 		if (d.hidden !== undefined) add("hidden", String(d.hidden))
 		if (d.borderStyle !== undefined) add("borderStyle", `.${d.borderStyle}`)
 		if (d.tracking !== undefined) add("tracking", `.${d.tracking}`)
+		if (d.mono !== undefined) add("mono", String(d.mono))
+		if (d.radiusTop !== undefined) add("radiusTop", num(tokens.radius[d.radiusTop] ?? 0))
 		return `Style(${fields.join(", ")})`
 	}
 
@@ -352,7 +354,7 @@ ${Object.entries(tokens.shadow)
 
     public enum Layout: Sendable { case row, column, inlineRow, contents }
     public enum Align: Sendable { case center, start, end }
-    public enum TextAlign: Sendable { case center }
+    public enum TextAlign: Sendable { case center, start, end }
     public enum Overflow: Sendable { case scrollX, scrollY }
     public enum BorderStyle: Sendable { case solid, dashed }
     public enum Tracking: Sendable { case wider }
@@ -383,6 +385,10 @@ ${Object.entries(tokens.shadow)
         /// A fixed width in points; \`hidden\` not drawn; a dashed border; \`wider\` tracking (0.05em).
         public var width: CGFloat? = nil, hidden: Bool? = nil
         public var borderStyle: BorderStyle? = nil, tracking: Tracking? = nil
+        /// The monospace family over \`text\` (\`font-mono\`).
+        public var mono: Bool? = nil
+        /// The two top corners over \`radius\`.
+        public var radiusTop: CGFloat? = nil
 
         /// \`other\`'s fields over these.
         public func merged(_ other: Style) -> Style {
@@ -408,6 +414,7 @@ ${Object.entries(tokens.shadow)
             out.minWidth = other.minWidth ?? minWidth; out.transitionEase = other.transitionEase ?? transitionEase
             out.width = other.width ?? width; out.hidden = other.hidden ?? hidden
             out.borderStyle = other.borderStyle ?? borderStyle; out.tracking = other.tracking ?? tracking
+            out.mono = other.mono ?? mono; out.radiusTop = other.radiusTop ?? radiusTop
             return out
         }
     }

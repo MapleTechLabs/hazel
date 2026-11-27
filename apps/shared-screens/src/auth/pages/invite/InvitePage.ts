@@ -201,17 +201,15 @@ const invitation = (h: H, model: InviteModel, preview: Preview) =>
 				h,
 				`Join ${preview.organizationName}`,
 				"You've been invited to this workspace on Hazel.",
-				// HAZEL-GAP(p4-avatar-xl): today's logo is `xl` (64px) above the heading; `large` is the biggest, under it.
-				h.stack.axis("horizontal").children(
-					h.avatar
-						.name(preview.organizationName)
-						.src(preview.organizationLogoUrl ?? undefined)
-						.size("large"),
-				),
 				...actions(h, model, preview),
 				model.acceptance._tag === "Failed"
 					? h.banner.tone("danger").description(acceptFailureMessage(model.acceptance.reason))
 					: null,
+			).leading(
+				h.avatar
+					.name(preview.organizationName)
+					.src(preview.organizationLogoUrl ?? undefined)
+					.size("xlarge"),
 			)
 
 const notFound = (h: H) =>

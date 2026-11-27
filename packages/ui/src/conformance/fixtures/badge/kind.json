@@ -1,0 +1,29 @@
+{
+	"about": "A risk signal's kind chip: a glyph before the label (`pk0-badge-icon`, today's `kindChip`).",
+	"root": {
+		"tag": "badge",
+		"props": {
+			"label": "Risk",
+			"tone": "danger",
+			"icon": "risk"
+		}
+	},
+	"frame": "inline",
+	"cases": [
+		{
+			"name": "opportunity",
+			"props": {
+				"label": "Opportunity",
+				"tone": "info",
+				"icon": "opportunity"
+			}
+		}
+	],
+	"kit": {
+		"specimen": "badge-kind",
+		"target": "badge"
+	},
+	"pending": {
+		"ios": "S1"
+	}
+}

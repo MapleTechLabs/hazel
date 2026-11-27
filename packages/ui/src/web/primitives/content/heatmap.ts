@@ -5,15 +5,15 @@ import type { HeatmapDay } from "../../../vocabulary/content.ts"
 import { definePrimitive, part, type Primitive } from "../define.ts"
 import { ensureSheet, fire, textOf } from "../list/runtime.ts"
 import { registerScroller } from "../list/scroll.ts"
-import { SERIES_1, toneOf } from "./chart/styles.ts"
+import { toneOf } from "./chart/styles.ts"
 import { type CalendarLayout, calendarLayout, formatDayLong, stepDay } from "./heatmap/layout.ts"
 
 const ROOT = '[data-hz="heatmap"]'
-const level = (alpha: number) => `color-mix(in oklab, ${toneOf("series-1", SERIES_1)} ${alpha}%, transparent)`
+const level = (alpha: number) => `color-mix(in oklab, ${toneOf("series-1")} ${alpha}%, transparent)`
 
 /**
  * What the recipe cannot say: positions in the calendar's own space (percent of its box), the level
- * fills (`chart-tone-tokens`), the phone's scrolling year (`min-w-160` below `sm`, opened on the
+ * fills (mixes of `chart-series-1`), the phone's scrolling year (`min-w-160` below `sm`, opened on the
  * latest weeks by `rtl`), the focus ring and the tooltip's placement.
  */
 const css = `

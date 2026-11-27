@@ -164,6 +164,10 @@ const declarations = (d: Declarations, tracked: ReadonlySet<string>): ReadonlyAr
 	if (d.borderColor !== undefined)
 		add("border-color", d.borderColor === "transparent" ? "transparent" : colorVar(d.borderColor))
 	if (d.radius !== undefined) add("border-radius", `var(--hz-radius-${d.radius})`)
+	if (d.radiusTop !== undefined) {
+		add("border-top-left-radius", `var(--hz-radius-${d.radiusTop})`)
+		add("border-top-right-radius", `var(--hz-radius-${d.radiusTop})`)
+	}
 	if (d.ring !== undefined) add("box-shadow", `inset 0 0 0 1px ${colorVar(d.ring)}`)
 	if (d.divider !== undefined) add("border-bottom", `1px solid ${colorVar(d.divider)}`)
 	if (d.paddingX !== undefined) add("padding-inline", length(d.paddingX))
@@ -197,6 +201,10 @@ const declarations = (d: Declarations, tracked: ReadonlySet<string>): ReadonlyAr
 		add("font-weight", d.strong ? "var(--hz-weight-strong)" : "var(--hz-weight-regular)")
 	if (d.weight !== undefined) add("font-weight", `var(--hz-weight-${d.weight})`)
 	if (d.uppercase) add("text-transform", "uppercase")
+	if (d.mono) {
+		add("font-family", "var(--hz-font-mono)")
+		add("font-feature-settings", '"zero"')
+	}
 	if (d.textAlign !== undefined) add("text-align", d.textAlign)
 	if (d.lineClamp !== undefined) {
 		add("display", "-webkit-box")

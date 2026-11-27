@@ -1,13 +1,18 @@
 import { defineRecipe } from "../recipe.ts"
-import type { StackAlign, StackAxis, StackDensity } from "../schema.ts"
+import type { StackAlign, StackAxis, StackDensity, StackInset } from "../schema.ts"
 
 /**
  * `hz:stack`: a column or row whose gap is its `density` (the kit's `gap-2`, `gap-4`, `gap-6`).
- * `align` places children across the axis; `wrap` lets a row's children wrap onto more lines;
- * `regularOnly` draws it only at the regular size class (`max-md:hidden`).
+ * `align` places children across the axis; `inset` pads it as a page's gutter (`p-4`) or header
+ * (`px-4 py-3`); `wrap` lets a row's children wrap; `regularOnly` draws it only at the regular size class.
  */
 export const stack = defineRecipe<
-	{ readonly axis: StackAxis; readonly density: StackDensity; readonly align: StackAlign },
+	{
+		readonly axis: StackAxis
+		readonly density: StackDensity
+		readonly align: StackAlign
+		readonly inset: StackInset
+	},
 	"wrap" | "regularOnly",
 	never
 >({
@@ -26,11 +31,12 @@ export const stack = defineRecipe<
 			default: "regular",
 			values: {
 				tight: { root: { gap: "0.5", rowGap: "0.5" } },
+				snug: { root: { gap: "1.5", rowGap: "1.5" } },
 				compact: { root: { gap: "2", rowGap: "2" } },
+				cozy: { root: { gap: "3", rowGap: "3" } },
 				regular: { root: { gap: "4", rowGap: "4" } },
 				relaxed: { root: { gap: "6", rowGap: "6" } },
 				none: { root: { gap: "0", rowGap: "0" } },
-				snug: { root: { gap: "3", rowGap: "3" } },
 				loose: { root: { gap: "5", rowGap: "5" } },
 			},
 		},
@@ -40,7 +46,16 @@ export const stack = defineRecipe<
 				stretch: {},
 				start: { root: { align: "start" } },
 				center: { root: { align: "center" } },
-				end: { root: { align: "end" } },
+				// Its lines' text too (`pk0-evidence-lines`: today's `items-end text-right`).
+				end: { root: { align: "end", textAlign: "end" } },
+			},
+		},
+		inset: {
+			default: "none",
+			values: {
+				none: {},
+				page: { root: { paddingX: "4", paddingY: "4" } },
+				bar: { root: { paddingX: "4", paddingY: "3" } },
 			},
 		},
 	},

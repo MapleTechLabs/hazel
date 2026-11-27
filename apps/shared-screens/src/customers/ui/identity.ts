@@ -6,6 +6,7 @@
  */
 import type { CustomerSource } from "@hazel/domain/customers"
 import type { Hazel } from "@hazel/ui/vocabulary/index"
+import type { AvatarSize, AvatarTint } from "@hazel/ui/vocabulary/options"
 import { providerOf, sourceLabel } from "../data/providers"
 
 // SOURCES
@@ -26,8 +27,10 @@ export const sourceMark = <Msg>(
 	source: CustomerSource,
 	options: Readonly<{ size?: "xs" | "sm" | "md" }> = {},
 ) =>
-	// HAZEL-GAP(pk0-source-tile): today's mark sits on a `bg-secondary` rounded tile (24, 32 or 40px); `iconTile` takes only an `IconName`, so the mark is drawn bare at the tile's inner size.
-	sourceLogo(h, source, options.size === "md" ? 24 : options.size === "xs" ? 16 : 20)
+	h.iconTile
+		.tone("mark")
+		.image(sourceLogoSrc(source))
+		.size(options.size === "md" ? "regular" : options.size === "xs" ? "xsmall" : "small")
 
 /** `[mark] Name` in an outlined chip. */
 export const sourceChip = <Msg>(
@@ -35,18 +38,11 @@ export const sourceChip = <Msg>(
 	source: CustomerSource,
 	options: Readonly<{ label?: string }> = {},
 ) =>
-	// HAZEL-GAP(pk0-source-chip): today's chip is a 28px outlined box with the mark; `badge` has no image, so the mark and label sit in a horizontal stack.
-	h.stack
-		.axis("horizontal")
-		.density("compact")
-		.align("center")
-		.children(
-			sourceLogo(h, source),
-			h.text
-				.role("label")
-				.strong()
-				.children(options.label ?? sourceLabel(source)),
-		)
+	h.badge
+		.style("outline")
+		.size("large")
+		.image(sourceLogoSrc(source))
+		.label(options.label ?? sourceLabel(source))
 
 // INITIALS
 
@@ -84,9 +80,34 @@ export const safeLogoUrl = (url: string | null | undefined): string | null => {
 	}
 }
 
-const logoSize = (size: LogoSize) =>
-	// HAZEL-GAP(pk0-logo-sizes): today's logos are 16, 20, 28, 40 and 48px rounded squares; `avatarSizes` has 20 (round), 40 and 48.
-	size === "lg" ? "large" : size === "md" ? "medium" : "regular"
+/** 16 · 20 · 28 · 40 · 48px rounded squares. */
+const LOGO_SIZE = {
+	"2xs": "xxsmall",
+	xs: "inline",
+	sm: "row",
+	md: "medium",
+	lg: "large",
+} as const satisfies Record<LogoSize, AvatarSize>
+
+/** Initials tints, picked by a hash of the name so a company keeps its colour everywhere. */
+const TINTS = [
+	"accent",
+	"info",
+	"success",
+	"warning",
+	"danger",
+	"neutral",
+] as const satisfies ReadonlyArray<AvatarTint>
+
+/** FNV-1a, so the tint is stable across sessions and machines. */
+export const tintOf = (name: string): AvatarTint => {
+	let hash = 0x811c9dc5
+	for (const char of name.trim().toLowerCase()) {
+		hash ^= char.codePointAt(0) ?? 0
+		hash = Math.imul(hash, 0x01000193)
+	}
+	return TINTS[(hash >>> 0) % TINTS.length] ?? "neutral"
+}
 
 /** The company's logo, else its initials. Decorative: the name is always next to it. */
 export const companyLogo = <Msg>(
@@ -95,24 +116,31 @@ export const companyLogo = <Msg>(
 ) => {
 	const size = options.size ?? "sm"
 	const initials = initialsOf(options.name)
-	// HAZEL-GAP(pk0-initials-tint): today's initials sit on one of six subtle tints picked by a hash of the name; `avatar` draws initials on its muted fill (a `name` would draw the dither instead).
 	return h.avatar
 		.initials(size === "2xs" ? initials.slice(0, 1) : initials)
 		.src(safeLogoUrl(options.logoUrl) ?? undefined)
-		.size(logoSize(size))
+		.size(LOGO_SIZE[size])
+		.corners("square")
+		.tint(tintOf(options.name))
 }
 
 // PEOPLE
 
 export type Person = Readonly<{ name: string; avatarUrl?: string | null }>
 
-/** An owner or assignee: their picture, else initials; `null` is "Unassigned". */
-export const personAvatar = <Msg>(h: Hazel.H<Msg>, person: Person | null) =>
-	// HAZEL-GAP(pk0-avatar-sizes): today's owner avatars are 24 and 32px; `avatar` regular is 20.
-	person === null
-		? // HAZEL-GAP(pk0-unassigned): today's "Unassigned" is a dashed ring around a user glyph; the avatar shows `?` on its muted fill.
-			h.avatar.initials("?")
-		: h.avatar.initials(initialsOf(person.name)).src(safeLogoUrl(person.avatarUrl) ?? undefined)
+/** 24 · 32px. */
+export type PersonSize = "sm" | "md"
+
+/** An owner or assignee: their picture, else initials on a tint; `null` is the dashed "Unassigned". */
+export const personAvatar = <Msg>(h: Hazel.H<Msg>, person: Person | null, size: PersonSize = "sm") => {
+	const avatar = h.avatar.size(size === "md" ? "small" : "xsmall")
+	return person === null
+		? avatar.placeholder()
+		: avatar
+				.initials(initialsOf(person.name))
+				.src(safeLogoUrl(person.avatarUrl) ?? undefined)
+				.tint(tintOf(person.name))
+}
 
 /** Avatar plus name; `null` reads "Unassigned", muted. */
 export const personLabel = <Msg>(h: Hazel.H<Msg>, person: Person | null) =>

@@ -21,6 +21,11 @@ ${H} [data-hz="text"][data-role="kbd"] {
 	font-size: var(--hz-text-micro-size); line-height: calc(4 / 3);
 }
 @media (width < 64rem) { ${H} [data-hz="text"][data-role="kbd"] { display: none; } }
+/* The footer (slots compile first) closes the frame under a hairline, its parts at either end. */
+[data-hz="frame"] > [data-hz-slot="footer"] {
+	order: 1; justify-content: space-between; border-top: 1px solid var(--hz-color-border);
+}
+[data-hz="frame"] > [data-hz-slot="footer"]:empty { display: none; }
 `
 
 export const primitive = definePrimitive("frame", ({ document, outer, self }) => {
