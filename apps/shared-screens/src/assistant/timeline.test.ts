@@ -1,15 +1,17 @@
 import { AssistantItemId, AssistantThreadId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { describe, expect, test } from "vitest"
-import type { ItemRow, ThreadRow } from "./model"
 import {
-	hasOwnWorkingState,
 	historyOf,
-	showsWorkingIndicator,
 	isFoldOpen,
+	type ItemRow,
+	showsWorkingIndicator,
 	sortItems,
+	suggestionsFor,
+	type ThreadRow,
 	timelineOf,
 	workSummaryOf,
+	workTitleOf,
 } from "./timeline"
 
 /** How a thread reads: order, work logs, and the history menu's groups. */
@@ -119,18 +121,6 @@ describe("isFoldOpen", () => {
 	})
 })
 
-describe("hasOwnWorkingState", () => {
-	test("a running thought or tool step shows its own work; a streaming reply does not", () => {
-		expect(hasOwnWorkingState(item(1, "reasoning", { status: "running" }))).toBe(true)
-		expect(hasOwnWorkingState(item(2, "tool", { status: "running" }))).toBe(true)
-		expect(hasOwnWorkingState(item(3, "assistant", { status: "running" }))).toBe(false)
-	})
-
-	test("a finished one does not", () => {
-		expect(hasOwnWorkingState(item(4, "tool", { status: "completed" }))).toBe(false)
-	})
-})
-
 describe("showsWorkingIndicator", () => {
 	test("shows while the thread runs and only a reply streams", () => {
 		expect(showsWorkingIndicator("running", [item(1, "assistant", { status: "running" })], false)).toBe(
@@ -150,5 +140,24 @@ describe("showsWorkingIndicator", () => {
 		expect(showsWorkingIndicator("idle", [], true)).toBe(true)
 		expect(showsWorkingIndicator("idle", [], false)).toBe(false)
 		expect(showsWorkingIndicator(null, [], false)).toBe(false)
+	})
+})
+
+describe("workTitleOf", () => {
+	test("says how many steps ran, and how many failed", () => {
+		expect(workTitleOf([item(1, "tool", { status: "completed" }), item(2, "tool")])).toBe(
+			"Worked · 2 steps",
+		)
+		expect(workTitleOf([item(1, "tool", { status: "running" })])).toBe("Working · 1 step")
+		expect(workTitleOf([item(1, "tool", { status: "failed" })])).toBe("Worked · 1 step · 1 failed")
+	})
+})
+
+describe("suggestionsFor", () => {
+	test("adapts the suggestions to the page", () => {
+		const at = (route: string) => ({ label: "", path: "/", route, entities: [] })
+		expect(suggestionsFor(at("CustomerDetail"))).toContain("Summarize this customer")
+		expect(suggestionsFor(at("ChatChannel"))).toContain("Summarize this channel")
+		expect(suggestionsFor(null)).toHaveLength(3)
 	})
 })

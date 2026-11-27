@@ -27,6 +27,12 @@ import { AppRoute, chatChannelIdOf, hrefOf, isPublicRoute } from "../route"
 import { CurrentUser, type Member, type Organization } from "../session"
 import { SoundSettings } from "../notification-sound"
 import { ResolvedTheme, resolveTheme, type ThemeCustomization, ThemePreference } from "../theme"
+import {
+	initialStored,
+	SaveAssistantPanel,
+	FocusAssistantToggle,
+	Stored as AssistantStored,
+} from "./assistant"
 import * as Commands from "./commands"
 import { publish } from "./bus"
 import type { AppMessage } from "./message"
@@ -67,8 +73,10 @@ export const AppModel = Schema.Struct({
 	sessionStartMs: Schema.Finite,
 	/** The user's unread notifications in every organization: the badges' mention count. */
 	unreadMentionIds: Schema.Array(Schema.String),
-	/** The Foldkit host's state the frame shows (the dock, the bell, the badge, the AI panel). */
+	/** The Foldkit host's state the frame shows (the dock, the bell, the badge, the page's context). */
 	report: Schema.NullOr(HostReportSchema),
+	/** The AI panel: open, and its width (null: the default). Stored on a wide screen. */
+	assistant: AssistantStored,
 })
 export type AppModel = typeof AppModel.Type
 
@@ -457,13 +465,39 @@ const appRequest = (request: AppRequest): Step =>
 		InstallUpdate: () => handleOutMessage(PageOutMessage.RequestedUpdateInstall()),
 	})
 
-const receivedHostOut = (out: HostOut): Step =>
-	out._tag === "Page"
-		? handleOutMessage(out.outMessage)
-		: (model) => ({
-				model: { ...model, report: out.report },
-				commands: [Commands.ApplyBadge.make({ badge: out.report.badge })],
+// THE AI PANEL
+
+/** A phone's open panel is not remembered: the next load starts on the page. */
+const savedAssistant: Step = (model) =>
+	model.isMobile ? unchanged(model) : command(SaveAssistantPanel.make({ stored: model.assistant }))(model)
+
+const openAssistant: Step = (model) =>
+	model.assistant.isOpen
+		? unchanged(model)
+		: savedAssistant({ ...model, assistant: { ...model.assistant, isOpen: true } })
+
+/** Focus goes back to the toggle; a phone's panel has none. */
+const closeAssistant: Step = (model) =>
+	!model.assistant.isOpen
+		? unchanged(model)
+		: combine([savedAssistant, model.isMobile ? unchanged : command(FocusAssistantToggle.make({}))])({
+				...model,
+				assistant: { ...model.assistant, isOpen: false },
 			})
+
+const toggleAssistant: Step = (model) => (model.assistant.isOpen ? closeAssistant : openAssistant)(model)
+
+const receivedHostOut = (out: HostOut): Step =>
+	Match.valueTags(out, {
+		Page: ({ outMessage }) => handleOutMessage(outMessage),
+		Report:
+			({ report }): Step =>
+			(model) => ({
+				model: { ...model, report },
+				commands: [Commands.ApplyBadge.make({ badge: report.badge })],
+			}),
+		Assistant: ({ request }) => (request === "Open" ? openAssistant : toggleAssistant),
+	})
 
 // INIT
 
@@ -476,6 +510,7 @@ export interface AppFlags {
 	readonly sessionStartMs: number
 	readonly isMobile: boolean
 	readonly rememberedUser: CurrentUser | null
+	readonly aiPanel: AssistantStored
 }
 
 export const init = (route: AppRoute, flags: AppFlags): Next => {
@@ -502,6 +537,7 @@ export const init = (route: AppRoute, flags: AppFlags): Next => {
 		sessionStartMs: flags.sessionStartMs,
 		unreadMentionIds: [],
 		report: null,
+		assistant: initialStored(flags.aiPanel, flags.isMobile),
 	}
 	return combine([
 		(m) => ({
@@ -583,5 +619,10 @@ export const update = (model: AppModel, message: AppMessage): Next =>
 		ReceivedAppRequest: ({ request }) => appRequest(request)(model),
 		PressedMobileSearch: () => toHost({ _tag: "PressedMobileSearch" })(model),
 		PressedMobileMenu: () => toHost({ _tag: "PressedMobileMenu" })(model),
-		PressedAiPanelToggle: () => toHost({ _tag: "PressedAiPanelToggle" })(model),
+		PressedAiPanelToggle: () => toggleAssistant(model),
+		ResizedAssistantPanel: ({ width }) =>
+			width === model.assistant.width
+				? unchanged(model)
+				: savedAssistant({ ...model, assistant: { ...model.assistant, width: Math.round(width) } }),
+		RequestedCloseAssistantPanel: () => closeAssistant(model),
 	})

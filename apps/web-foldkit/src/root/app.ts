@@ -10,15 +10,22 @@ import { Html } from "@effect/ui/html"
 import { Schema } from "effect"
 import { AsyncData } from "foldkit"
 import { currentServer } from "~/config/server"
+import { comboLabel } from "~/lib/keybindings/key-combo"
 import { commonMessage } from "~/lib/error-messages"
 import type { Region } from "../app/view"
-import * as AiPanel from "../assistant"
 import { badgedTitle } from "../platform/badge"
 import { chatChannelIdOf, isPublicRoute, orgSectionOf, orgSlugOf, titleOf } from "../route"
 import type { CurrentUser, Organization } from "../session"
 import { hotkeyLabel } from "../shell/channels-sidebar/hotkey-label"
 import { appError, appLoader, organizationNotFound } from "../shell/layouts"
-import { ShellActivity, ShellChannelSidebar, ShellDms, ShellMessageList } from "./children"
+import { assistantContextOf, column, setupHrefOf, toggleButton } from "./assistant"
+import {
+	ShellActivity,
+	ShellAssistantPanel,
+	ShellChannelSidebar,
+	ShellDms,
+	ShellMessageList,
+} from "./children"
 import { AdoptRegion, RunFoldkitHost } from "./foldkit"
 import {
 	mobileChromeOf,
@@ -53,7 +60,6 @@ import { authOf, OrgState, Session } from "./state"
 /** Read before the first render (`entry.ts`), so a stored theme or the viewport never flash. */
 export interface Boot extends AppFlags {
 	readonly isCreateChannelHintDismissed: boolean
-	readonly aiPanel: AiPanel.Stored
 }
 
 const BootSchema = Schema.declare((_: unknown): _ is Boot => true)
@@ -181,6 +187,45 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 	]
 }
 
+/** The AI panel in its column (`assistant.ts`), drawn closed too so it keeps its chat. */
+const assistant = (h: H, model: AppModel, data: ShellData) =>
+	column(
+		h,
+		{
+			isOpen: model.assistant.isOpen,
+			isMobile: model.isMobile,
+			width: model.assistant.width,
+			isSidebarCollapsed: model.report?.isSidebarCollapsed ?? false,
+		},
+		(event) =>
+			event._tag === "Resized"
+				? AppMessage.ResizedAssistantPanel({ width: event.width })
+				: AppMessage.RequestedCloseAssistantPanel(),
+		ShellAssistantPanel(h, {
+			key: data.organization.id,
+			props: {
+				organizationId: data.organization.id,
+				userId: data.user.id,
+				open: model.assistant.isOpen,
+				mobile: model.isMobile,
+				context: assistantContextOf(model.route, model.report?.assistantContext),
+				setupHref: setupHrefOf(data.orgSlug),
+			},
+			onEmit: { RequestedClose: () => AppMessage.RequestedCloseAssistantPanel() },
+		}),
+	)
+
+/** The rail's toggle, titled with its key as the user's keyboard labels it ("⌘J"). */
+const assistantToggle = (h: H, model: AppModel) => {
+	const key = keysOf(model)["aiPanel.toggle"]
+	return toggleButton(
+		h,
+		model.assistant.isOpen,
+		key === null ? null : comboLabel(key, model.keyboardPlatform),
+		AppMessage.PressedAiPanelToggle(),
+	)
+}
+
 /** Whose screen this is, for the last screen's paint (`app/paint.ts`). */
 const paintAttrs = (data: ShellData) => ({ "data-paint": "shell", "data-paint-user": data.user.id })
 
@@ -195,23 +240,20 @@ const railInputsOf = (model: AppModel, data: ShellData): RailInputs => ({
 const orgShell = (h: H, model: AppModel, data: ShellData) => {
 	const rail = railInputsOf(model, data)
 	if (model.isMobile) return phoneShell(h, model, data, rail)
-	const isResizing = model.report?.isAiPanelResizing ?? false
 	return h.div
 		.attr("id", "app")
 		.attrs(paintAttrs(data))
 		.children(
-			sidebarProvider(
-				h,
-				isResizing ? "cursor-col-resize select-none [&_iframe]:pointer-events-none" : "",
-			).children(
+			// The panel's edge marks the frame while it is dragged (`assistant.ts`).
+			sidebarProvider(h, "[&.cursor-col-resize_iframe]:pointer-events-none").children(
 				sidebarDock(
 					h,
 					model.report?.isSidebarCollapsed ?? false,
 					"overflow-hidden *:data-[sidebar=default]:flex-row",
-					sidebarInner(h).children(navRail(h, rail, slot(h, "ai-toggle")), slot(h, "sidebar")),
+					sidebarInner(h).children(navRail(h, rail, assistantToggle(h, model)), slot(h, "sidebar")),
 				),
 				sidebarInset(h, "").children(page(h, model)),
-				slot(h, "ai-panel"),
+				assistant(h, model, data),
 			),
 			slot(h, "overlays"),
 			...children(h, model, data),
@@ -244,7 +286,7 @@ const phoneShell = (h: H, model: AppModel, data: ShellData, rail: RailInputs) =>
 					chrome.hasTabBar ? tabBar(h, rail, AppMessage.PressedMobileSearch()) : null,
 				),
 			),
-			slot(h, "ai-panel"),
+			assistant(h, model, data),
 			slot(h, "overlays"),
 			...children(h, model, data),
 		)
@@ -332,7 +374,6 @@ export const App = AppDef.make({
 						RunFoldkitHost({
 							context: hostContextOf(model),
 							isCreateChannelHintDismissed: h.props.boot.isCreateChannelHintDismissed,
-							aiPanel: h.props.boot.aiPanel,
 						}).pipe(Mount.map((out) => AppMessage.ReceivedHostOut({ out }))),
 					),
 				body(h, model),

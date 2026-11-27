@@ -14,6 +14,8 @@ export default {
 		{ press: "ControlOrMeta+j" },
 		{ waitFor: '[aria-label="Chat history"]' },
 		{ click: '[aria-label="Chat history"]' },
+		// The threads' live query starts when the panel opens: wait for the chat's row.
+		{ waitFor: "text=Summarize #general" },
 		{ click: "text=Summarize #general" },
 		{ waitFor: "text=Nobody raised a blocker since Monday." },
 	],

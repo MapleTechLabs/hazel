@@ -19,7 +19,7 @@ import { desktopSessionBearer } from "./platform/desktop-auth"
 import { NotificationSinks } from "./app/notification-sinks"
 import { handOffPaint, installPaintCapture, paintStorage } from "./app/paint"
 import { loadRememberedUser } from "./app/remembered-user"
-import * as AiPanel from "./assistant"
+import * as AssistantPanel from "./root/assistant"
 import { installImageViewerMorph } from "./chat/viewer/morph"
 import { installChannelPrefetch } from "./core/db/channel-prefetch"
 import { localCacheHost } from "./core/db/local-cache-host"
@@ -46,7 +46,7 @@ const boot: Effect.Effect<Boot> = Effect.all({
 	isMobile: Effect.sync(() => globalThis.matchMedia?.(MOBILE_QUERY).matches ?? false),
 	isCreateChannelHintDismissed: loadIsCreateChannelHintDismissed,
 	rememberedUser: loadRememberedUser,
-	aiPanel: AiPanel.loadStored,
+	aiPanel: AssistantPanel.loadStored,
 })
 
 /**

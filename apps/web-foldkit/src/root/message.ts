@@ -60,5 +60,9 @@ export const AppMessage = UiSchema.TaggedEnum({
 	PressedMobileSearch: {},
 	PressedMobileMenu: {},
 	PressedAiPanelToggle: {},
+	/** The AI panel's edge was released or moved by a key (`root/assistant.ts`). */
+	ResizedAssistantPanel: { width: Schema.Finite },
+	/** The AI panel's close button, or Escape inside it. */
+	RequestedCloseAssistantPanel: {},
 })
 export type AppMessage = typeof AppMessage.Type

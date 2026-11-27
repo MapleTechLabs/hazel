@@ -2,7 +2,7 @@ import { Schema, Stream } from "effect"
 import { Dom } from "foldkit"
 import { type AppKeys, appKeymap } from "~/lib/keybindings/app-keymap"
 import { KeyCombo } from "~/lib/keybindings/key-combo"
-import { isInAssistantPanel } from "../../../assistant/keyboard"
+import { isInAssistantPanel } from "../../assistant-context"
 
 /**
  * Discord's channel shortcuts that this page owns, on the user's keys (`Shared.keys`). The Mod combos

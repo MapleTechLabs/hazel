@@ -90,6 +90,7 @@ export const flagsOf = (options: BootOptions = {}): AppFlags => ({
 	sessionStartMs: 0,
 	isMobile: options.isMobile ?? false,
 	rememberedUser: options.rememberedUser ?? null,
+	aiPanel: { isOpen: false, width: null },
 })
 
 // SHELL
@@ -158,8 +159,7 @@ export const hostRequestsOf = (commands: ReadonlyArray<AppCommand> | undefined) 
 // HOST
 
 /** The Foldkit host started from the shell's `context`. */
-export const hostBootReturn = (context: HostContext) =>
-	init(context, { isCreateChannelHintDismissed: false, aiPanel: { isOpen: false, width: null } })
+export const hostBootReturn = (context: HostContext) => init(context, { isCreateChannelHintDismissed: false })
 
 /** The host at `path` before the session is known (the shell's boot context). */
 export const boot = (path: string, options: BootOptions = {}): Model =>

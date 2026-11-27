@@ -4,7 +4,6 @@
  */
 import { Effect, Layer, Schema } from "effect"
 import { Runtime } from "foldkit"
-import * as AiPanel from "./assistant"
 import { hostOut } from "./app/command"
 import { HostContextSchema } from "./app/context"
 import { Message } from "./app/message"
@@ -23,7 +22,6 @@ export { Message, Model, subscriptions, update, view }
 export const HostFlags = Schema.Struct({
 	context: HostContextSchema,
 	isCreateChannelHintDismissed: Schema.Boolean,
-	aiPanel: AiPanel.Stored,
 })
 export type HostFlags = typeof HostFlags.Type
 

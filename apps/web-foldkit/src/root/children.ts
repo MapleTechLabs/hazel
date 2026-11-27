@@ -5,7 +5,8 @@
  * the RPC client, navigation on the shell's Router, and the Foldkit host for what is still there.
  */
 import { Component, Router } from "@effect/ui"
-import { HazelRpc } from "@hazel/client-data"
+import { ClientData, HazelRpc } from "@hazel/client-data"
+import { AssistantPanel } from "@hazel/shared-screens/assistant/AssistantPanel"
 import { Activity, activityLayer } from "@hazel/shared-screens/activity/Activity"
 import {
 	ChannelSidebar,
@@ -67,6 +68,9 @@ export const ShellActivity = Component.provide(Activity, (props) =>
 		),
 	),
 )
+
+/** The AI panel on the app's data; its RPCs, `Navigate` and `Hazel.Host` come from the shell. */
+export const ShellAssistantPanel = Component.provide(AssistantPanel, Layer.succeed(ClientData, clientData))
 
 export const ShellDms = Component.provide(Dms, (props) =>
 	withRouter((push) =>
