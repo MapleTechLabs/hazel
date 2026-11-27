@@ -16,7 +16,7 @@ export interface ProviderFacts {
 	readonly channelNote: string | null
 }
 
-export const PROVIDERS: Readonly<Record<ChatSyncProvider, ProviderFacts>> = {
+export const PROVIDERS = {
 	discord: {
 		name: "Discord",
 		workspaceKind: "server",
@@ -31,7 +31,7 @@ export const PROVIDERS: Readonly<Record<ChatSyncProvider, ProviderFacts>> = {
 		blurb: "Bring over your workspace's public channels.",
 		channelNote: "Hazel joins the channel when you link it. Private channels are not supported yet.",
 	},
-}
+} satisfies Record<ChatSyncProvider, ProviderFacts>
 
 /** The order the first step offers them in. */
 export const PROVIDER_ORDER: ReadonlyArray<ChatSyncProvider> = ["discord", "slack"]

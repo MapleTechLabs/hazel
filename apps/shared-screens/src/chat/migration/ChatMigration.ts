@@ -319,14 +319,14 @@ const migratedToast = (provider: ChatSyncProvider, history: ChatSyncHistoryRange
 				history === "none" ? null : "Past messages import in the background.",
 			)
 
-const HISTORY_WINDOW: Record<ChatSyncHistoryRange, string | null> = {
+const HISTORY_WINDOW = {
 	none: null,
 	"7d": "the last 7 days",
 	"30d": "the last 30 days",
 	"90d": "the last 90 days",
 	"1y": "the last year",
 	all: "their history",
-}
+} satisfies Record<ChatSyncHistoryRange, string | null>
 
 /** What the progress step says is importing: the range, bounded by the provider's per-channel cap. */
 export const historyPhrase = (provider: ChatSyncProvider, history: ChatSyncHistoryRange): string => {

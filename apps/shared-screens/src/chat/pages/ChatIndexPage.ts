@@ -50,11 +50,11 @@ export const ChatIndexModel = Schema.Struct({
 })
 export type ChatIndexModel = typeof ChatIndexModel.Type
 
-const TAB_LABELS: Record<ChatIndexTab, string> = {
+const TAB_LABELS = {
 	public: "Public",
 	private: "Private",
 	dms: "Direct messages",
-}
+} satisfies Record<ChatIndexTab, string>
 
 const channelsOf = (groups: ChannelGroups, tab: ChatIndexTab): ReadonlyArray<ChannelSummary> =>
 	Match.value(tab).pipe(
