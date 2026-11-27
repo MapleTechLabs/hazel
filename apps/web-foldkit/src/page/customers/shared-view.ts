@@ -2,10 +2,6 @@ import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import type * as Menu from "../../ui/menu"
 import { view as menuView } from "../../ui/menu-view"
-import { IconArrowPath } from "../../icons"
-import { button } from "../../ui/button"
-import { cardClassName } from "../../ui/card"
-import { emptyState } from "../../ui/empty-state"
 
 /** View pieces every Customers page draws the same way. */
 
@@ -62,18 +58,3 @@ export const stat = <M>(
 					]),
 		],
 	)
-
-/** A page's data failed to load: what went wrong and `Try again`, in a card. */
-export const loadFailure = <M>(
-	h: HtmlBuilder<M>,
-	options: Readonly<{ title: string; description?: string; onRetry: M }>,
-): Html =>
-	emptyState(h, {
-		title: options.title,
-		description: options.description,
-		action: button(h, { intent: "outline", size: "sm", onPress: options.onRetry }, [
-			IconArrowPath(h, { attributes: { "data-slot": "icon" } }),
-			"Try again",
-		]),
-		className: cardClassName("px-6 py-14"),
-	})

@@ -8,7 +8,7 @@ here is an ordinary page (`definePage`), registered in `pages.ts`, the Customers
 
 | Route tag                       | URL (`/$orgSlug/customers…`)      | Fields                                  | Page module               |
 | ------------------------------- | --------------------------------- | --------------------------------------- | ------------------------- |
-| `CustomersOverview`             | ``                                |                                         | `overview/`               |
+| `CustomersOverview`             | ``                                |                                         | native (`shared-screens`) |
 | `CustomersAttention`            | `/attention`                      |                                         | `attention/`              |
 | `CustomersList`                 | `/list?view=`                     | `view: Option<string>`                  | `list/`                   |
 | `CustomerDetail`                | `/$accountId?tab=`                | `accountId`, `tab: Option<CustomerTab>` | `detail/`                 |

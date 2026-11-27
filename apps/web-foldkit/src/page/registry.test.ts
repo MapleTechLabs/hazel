@@ -8,7 +8,7 @@ import { areas, enterRoute, loadPages, pages, updatePage } from "./registry"
 /** The page areas outside the first chunk (`lazy.ts`): what each owns, and how a route of one opens. */
 
 const shared = makeShared()
-const overview = AppRoute.CustomersOverview({ orgSlug: "hazel" })
+const overview = AppRoute.CustomersUnmatched({ orgSlug: "hazel" })
 
 // In order: the first test needs the areas not loaded yet.
 describe("a route of an area", () => {
@@ -24,12 +24,12 @@ describe("a route of an area", () => {
 			message: Lazy.Message.LoadedPages(),
 		}
 		const opened = updatePage(entered.slot, loadedPages, shared)
-		expect(opened.slot).toMatchObject({ _tag: "CustomersOverview", instance: 4 })
+		expect(opened.slot).toMatchObject({ _tag: "CustomersUnmatched", instance: 4 })
 	})
 
 	test("opens at once when the area is loaded", async () => {
 		await loadPages()
-		expect(enterRoute(null, overview, shared, 5).slot?._tag).toBe("CustomersOverview")
+		expect(enterRoute(null, overview, shared, 5).slot?._tag).toBe("CustomersUnmatched")
 	})
 })
 
