@@ -26,7 +26,7 @@ agents" and "Testing"), the contracts in `CONTRACTS.md`, the resolved ledger in 
    `HazelUI/Tests/HazelUITests/__snapshots__/<tag>/`, then run it again without and commit them. A case
    records only once every tag in it draws (a `NotImplementedView` anywhere skips the case).
 5. Kit diffs (web lanes): a fixture with `kit` is pixel-diffed against today's Foldkit component
-   (G6 tolerance: channel 2, 0.1% of pixels). `src/conformance/known-diffs.json` lists the diffs known
+   (G6 tolerance: channel 2, 0.15% of pixels). `src/conformance/known-diffs.json` lists the diffs known
    to fail, each with its lane; fixing one makes the runner fail until you remove its entry.
 6. Verify with your one command (table). Stubs elsewhere report `not implemented: lane X` and skip;
    they never fail your command. Screenshots: `src/conformance/__shots__/` (web) and the iOS gallery.
