@@ -59,6 +59,7 @@ export const reportOf = (model: Model): HostReport => ({
 	isMarkingAllRead: Notifications.isMarkingAllRead(model.shell.notifications),
 	badge: badgeOfModel(model),
 	assistantContext: assistantContextOf(model.page, sharedOf(model)),
+	desktopUpdate: model.desktopUpdate,
 })
 
 /** One DM request: the member, in an org. */

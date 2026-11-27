@@ -96,7 +96,8 @@ const sameReport = (a: ReturnType<typeof reportOf>, b: ReturnType<typeof reportO
 	a.unreadNotificationCount === b.unreadNotificationCount &&
 	a.isMarkingAllRead === b.isMarkingAllRead &&
 	JSON.stringify(a.assistantContext) === JSON.stringify(b.assistantContext) &&
-	JSON.stringify(a.badge) === JSON.stringify(b.badge)
+	JSON.stringify(a.badge) === JSON.stringify(b.badge) &&
+	a.desktopUpdate === b.desktopUpdate
 
 // CHILDREN
 

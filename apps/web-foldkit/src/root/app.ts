@@ -115,6 +115,9 @@ const page = (h: H, model: AppModel, chrome?: ChromeData) =>
 		session: sessionOf(model),
 		isMobile: model.isMobile,
 		nowMs: model.nowMs,
+		theme: model.themePreference,
+		soundSettings: model.soundSettings,
+		desktopUpdate: model.report?.desktopUpdate ?? { _tag: "Idle" },
 		// A failed chunk offers a reload, as a lazy area's pending page does.
 		fallback: (failed) => loader(h, failed),
 	}) ??

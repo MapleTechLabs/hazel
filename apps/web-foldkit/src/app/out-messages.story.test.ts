@@ -28,7 +28,6 @@ import {
 	shellSignedIn,
 	toShell,
 } from "../test/root-fixtures"
-import { DEFAULT_SOUND_SETTINGS } from "../notification-sound"
 import { combo } from "~/lib/keybindings/key-combo"
 import * as Menu from "../ui/menu"
 import { CreateDm, Emit, emit } from "./command"
@@ -190,30 +189,6 @@ describe("RequestedDmCreation", () => {
 		expect(toastTitles(failed.model)).toEqual(["You already have a conversation with them"])
 		expect(failed.model.creatingDms).toEqual([])
 		expect(run(failed.model, [pressGrace]).commands).toContainEqual(asCall(createDm))
-	})
-})
-
-describe("RequestedSoundSettings", () => {
-	// The shell stores them (`root/host-out.test.ts`) and its context brings them back.
-	test("the notifications page's sound toggle goes to the shell and is shared back", () => {
-		const off = { ...DEFAULT_SOUND_SETTINGS, enabled: false }
-		const signed = signedIn("/hazel/my-settings/notifications")
-		story(
-			update,
-			given(signed),
-			message(
-				Message.GotPageMessage({
-					message: {
-						_tag: "MySettingsNotifications",
-						message: { _tag: "ToggledSounds", isSelected: false },
-					},
-				}),
-			),
-			Command.expectHas(toShell(PageOutMessage.RequestedSoundSettings({ settings: off }))),
-			emitted,
-			message(changedContext(signed, { soundSettings: off })),
-			model((m) => expect(sharedOf(m).soundSettings).toEqual(off)),
-		)
 	})
 })
 
