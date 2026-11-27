@@ -12,6 +12,7 @@ import type { Session } from "@hazel/shared-screens/app/session"
 import { Layer, Option } from "effect"
 import { canChooseServer, currentServer, isBuildServer, serverLabel } from "~/config/server"
 import { clientData } from "~/db/client"
+import { shareOrigin } from "~/utils/share-origin"
 import { safeReturnTo } from "../auth/return-to"
 import { AppRoute, hrefOf, type RouteOf, signInHref } from "../route"
 import { ShellDms } from "./children"
@@ -61,6 +62,21 @@ export const DesktopPage = Component.lazy("DesktopPage", () =>
 	),
 )
 
+// The organization settings pages (PS1), loaded together with their browser Layers.
+const settingsPages = () => import("./settings-pages")
+export const SettingsTeamPage = Component.lazy("SettingsTeamPage", () =>
+	settingsPages().then((module) => module.SettingsTeamPage),
+)
+export const SettingsInvitationsPage = Component.lazy("SettingsInvitationsPage", () =>
+	settingsPages().then((module) => module.SettingsInvitationsPage),
+)
+export const SettingsGeneralPage = Component.lazy("SettingsGeneralPage", () =>
+	settingsPages().then((module) => module.SettingsGeneralPage),
+)
+export const SettingsDebugPage = Component.lazy("SettingsDebugPage", () =>
+	settingsPages().then((module) => module.SettingsDebugPage),
+)
+
 /** The native app's install (`~/config/server`), which its sign-in page can change; `null` on the web. */
 const initialServer = () =>
 	canChooseServer() ? { label: serverLabel(currentServer()), isDefault: isBuildServer(), form: null } : null
@@ -90,6 +106,16 @@ const fillWindow =
 	<Tag extends AppRoute["_tag"]>(page: NativePage<Tag>): NativePage<Tag> =>
 	(h, inputs) =>
 		h.div.class("h-dvh").children(page(h, inputs))
+
+/**
+ * A settings page's column (today's `pageLayout`): the cards 24px apart in the app's side gutter,
+ * as `sections.ts` draws it for the integration pages.
+ */
+// HAZEL-GAP(p4-section-scroll-column): the gutter is the frame's own markup, no primitive pads only the sides.
+const settingsColumn =
+	<Tag extends AppRoute["_tag"]>(page: NativePage<Tag>): NativePage<Tag> =>
+	(h, inputs) =>
+		h.div.class("flex flex-col gap-6 px-4 lg:px-8").children(page(h, inputs))
 
 /** Keyed by what makes a new instance (Foldkit's page `key`): a new token mounts a fresh page. */
 const nativePages: Registry = {
@@ -182,6 +208,36 @@ const nativePages: Registry = {
 			fallback: (result) => fallback(result._tag === "Failure"),
 		}),
 	),
+	TeamSettings: settingsColumn<"TeamSettings">((h, { route, session, fallback }) =>
+		SettingsTeamPage(h, {
+			key: route.orgSlug,
+			props: { session },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	),
+	SettingsInvitations: settingsColumn<"SettingsInvitations">((h, { route, session, fallback }) =>
+		SettingsInvitationsPage(h, {
+			key: route.orgSlug,
+			props: { session },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	),
+	SettingsGeneral: settingsColumn<"SettingsGeneral">((h, { route, session, nowMs, fallback }) =>
+		SettingsGeneralPage(h, {
+			key: route.orgSlug,
+			props: { session, orgSlug: route.orgSlug, origin: shareOrigin(), nowMs },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	),
+	SettingsDebug: (h, { route, fallback }) =>
+		SettingsDebugPage(h, {
+			key: route.orgSlug,
+			props: {
+				production: import.meta.env.PROD,
+				generalHref: hrefOf(AppRoute.SettingsGeneral({ orgSlug: route.orgSlug })),
+			},
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
 	AuthDesktop: fillWindow<"AuthDesktop">((h, { route, session, fallback }) =>
 		DesktopPage(h, {
 			key: hrefOf(route),
