@@ -12,6 +12,7 @@ import { PageOutMessage } from "../page/out-message"
 import { Message as PageMessage } from "../page/registry"
 import { AppRoute } from "../route"
 import * as Platform from "../platform"
+import { PresenceStatus } from "../platform/presence/model"
 import { DesktopMenuItem } from "../platform/desktop-menu"
 import * as Updates from "../platform/updates"
 import * as Shell from "../shell/model"
@@ -39,6 +40,10 @@ export const ShellRequest = Schema.Union([
 	Schema.TaggedStruct("RequestedToast", { toast: ToastRequest }),
 	/** A native page's request whose work is still the host's (a modal, the palette, a DM, updates). */
 	Schema.TaggedStruct("RequestedPageOut", { outMessage: PageOutMessage }),
+	/** The command palette's "Ask the AI assistant": the panel opens (never toggles shut). */
+	Schema.TaggedStruct("RequestedAiPanel", {}),
+	/** A status picked in the palette: presence keeps it ahead of the away timer. */
+	Schema.TaggedStruct("PickedPresenceStatus", { status: PresenceStatus }),
 ])
 export type ShellRequest = typeof ShellRequest.Type
 

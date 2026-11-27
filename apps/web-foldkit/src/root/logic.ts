@@ -6,7 +6,7 @@
  * (`git show cd159551c:apps/web-foldkit/src/main.ts`) with the same rules; `app.ts` runs them.
  */
 import { Command, Component, Router } from "@effect/ui"
-import { AppRequest } from "@hazel/shared-screens/app/requests"
+import { AppRequest, PalettePage } from "@hazel/shared-screens/app/requests"
 import type { NotificationId, OrganizationId } from "@hazel/schema"
 import { Effect, Match, Option, Schema } from "effect"
 import { AsyncData } from "foldkit"
@@ -29,6 +29,7 @@ import { SoundSettings } from "../notification-sound"
 import { ResolvedTheme, resolveTheme, type ThemeCustomization, ThemePreference } from "../theme"
 import * as Commands from "./commands"
 import { publish } from "./bus"
+import { isNativePalette } from "./palette-flag"
 import type { AppMessage } from "./message"
 import { AppRoutes, routeOfHref } from "./routes"
 import {
@@ -69,6 +70,8 @@ export const AppModel = Schema.Struct({
 	unreadMentionIds: Schema.Array(Schema.String),
 	/** The Foldkit host's state the frame shows (the dock, the bell, the badge, the AI panel). */
 	report: Schema.NullOr(HostReportSchema),
+	/** The last command palette: the page it opened on, a count that mounts a fresh one per open, and whether it is still open. */
+	palette: Schema.NullOr(Schema.Struct({ page: PalettePage, opened: Schema.Int, isOpen: Schema.Boolean })),
 })
 export type AppModel = typeof AppModel.Type
 
@@ -177,6 +180,7 @@ export const hostContextOf = (model: AppModel): HostContext => {
 		keybindingOverrides: model.keybindingOverrides,
 		keyboardPlatform: model.keyboardPlatform,
 		unreadMentionIds: model.unreadMentionIds as ReadonlyArray<NotificationId>,
+		isPaletteOpen: model.palette?.isOpen === true,
 	}
 	contextCache.set(model, context)
 	return context
@@ -380,6 +384,26 @@ const requestedTheme = (preference: ThemePreference): Step =>
 const savingFailed = (title: string) =>
 	showToast(errorToast(title, "It applies for now, but won't be remembered next time."))
 
+// THE COMMAND PALETTE
+
+/** Opens a fresh palette on `page` (today's `open`: no history), over one that is open. */
+const openPalette =
+	(page: PalettePage): Step =>
+	(model) =>
+		isNativePalette()
+			? unchanged({
+					...model,
+					palette: { page, opened: (model.palette?.opened ?? 0) + 1, isOpen: true },
+				})
+			: toHost({
+					_tag: "RequestedPageOut",
+					outMessage: PageOutMessage.RequestedCommandPalette({ page }),
+				})(model)
+
+/** A closed palette stays mounted: the Commands of its last pick (a link, a recent) still run. */
+const closePalette: Step = (model) =>
+	unchanged({ ...model, palette: model.palette === null ? null : { ...model.palette, isOpen: false } })
+
 // THE HOST'S REQUESTS
 
 const navigateHref = (href: string): Step =>
@@ -414,7 +438,7 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 		RequestedCurrentUserRefresh: ({ toast }) => combine([showToastIf(toast), refreshCurrentUser]),
 		// The host's own: only a native page sends these, and the host does the work.
 		RequestedModal: () => toHost({ _tag: "RequestedPageOut", outMessage }),
-		RequestedCommandPalette: () => toHost({ _tag: "RequestedPageOut", outMessage }),
+		RequestedCommandPalette: ({ page }) => openPalette(page),
 		RequestedDmCreation: () => toHost({ _tag: "RequestedPageOut", outMessage }),
 		RequestedUpdateCheck: () => toHost({ _tag: "RequestedPageOut", outMessage }),
 		RequestedUpdateInstall: () => toHost({ _tag: "RequestedPageOut", outMessage }),
@@ -502,6 +526,7 @@ export const init = (route: AppRoute, flags: AppFlags): Next => {
 		sessionStartMs: flags.sessionStartMs,
 		unreadMentionIds: [],
 		report: null,
+		palette: null,
 	}
 	return combine([
 		(m) => ({
@@ -531,7 +556,13 @@ export const init = (route: AppRoute, flags: AppFlags): Next => {
 // UPDATE
 
 /** The hotkeys the shell follows itself; the rest go to the Foldkit host, whose work they are. */
-const pressedHotkey = (actionId: LayoutHotkeyActionId): Step => toHost({ _tag: "PressedHotkey", actionId })
+const pressedHotkey = (actionId: LayoutHotkeyActionId): Step =>
+	actionId === "commandPalette.open"
+		? openPalette("home")
+		: // Straight into message search, as the hotkey's description says.
+			actionId === "search.open"
+			? openPalette("search")
+			: toHost({ _tag: "PressedHotkey", actionId })
 
 const pressedDesktopMenuItem = (item: DesktopMenuItem): Step =>
 	toHost({ _tag: "PressedDesktopMenuItem", item })
@@ -581,7 +612,10 @@ export const update = (model: AppModel, message: AppMessage): Next =>
 		PressedHotkey: ({ actionId }) => pressedHotkey(actionId)(model),
 		ReceivedHostOut: ({ out }) => receivedHostOut(out)(model),
 		ReceivedAppRequest: ({ request }) => appRequest(request)(model),
-		PressedMobileSearch: () => toHost({ _tag: "PressedMobileSearch" })(model),
+		PressedMobileSearch: () => openPalette("search")(model),
+		RequestedClosePalette: () => closePalette(model),
+		RequestedAiPanelFromPalette: () => toHost({ _tag: "RequestedAiPanel" })(model),
+		PickedPaletteStatus: ({ status }) => toHost({ _tag: "PickedPresenceStatus", status })(model),
 		PressedMobileMenu: () => toHost({ _tag: "PressedMobileMenu" })(model),
 		PressedAiPanelToggle: () => toHost({ _tag: "PressedAiPanelToggle" })(model),
 	})

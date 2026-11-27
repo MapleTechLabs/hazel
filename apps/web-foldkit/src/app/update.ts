@@ -6,6 +6,7 @@ import { failureMessage } from "~/lib/error-messages"
 import * as AiPanel from "../assistant"
 import { errorToastOf, loadingToast, successToast } from "../data/actions"
 import * as CommandPalette from "../overlay/command-palette"
+import { isNativePalette } from "../root/palette-flag"
 import type { LayoutHotkeyActionId } from "../overlay/hotkeys"
 import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
@@ -379,6 +380,9 @@ const receivedShellRequest = (request: ShellRequest): Step =>
 		RequestedToast: ({ toast }) => showToast(toast),
 		PressedComposeDm: () => openModal({ _tag: "CreateDm" }),
 		RequestedPageOut: ({ outMessage }) => handleOutMessage(outMessage),
+		RequestedAiPanel: () => openAiPanel,
+		PickedPresenceStatus: ({ status }) =>
+			foldPlatform((platform) => Platform.pickPresenceStatus(platform, status)),
 	})
 
 /** Each request's toasts share an id, so each replaces the previous: loading, then success or error. */
@@ -439,7 +443,9 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 		RequestedHistory: () => toShell(outMessage),
 		RequestedToast: ({ toast }) => showToast(toast),
 		RequestedModal: ({ modal }) => openModal(modal),
-		RequestedCommandPalette: ({ page }) => openCommandPalette(page),
+		// The shell draws the palette (`root/palette.ts`); the flag's "0" keeps today's for parity.
+		RequestedCommandPalette: ({ page }) =>
+			isNativePalette() ? toShell(outMessage) : openCommandPalette(page),
 		RequestedSignOut: () => toShell(outMessage),
 		RequestedDmCreation: requestedDmCreation,
 		RequestedTheme: () => toShell(outMessage),

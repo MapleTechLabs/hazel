@@ -33,6 +33,8 @@ export interface HostContext {
 	readonly keybindingOverrides: Overrides
 	readonly keyboardPlatform: KeyboardPlatform
 	readonly unreadMentionIds: ReadonlyArray<NotificationId>
+	/** The shell's command palette is open: pages keep their keys off, as under a modal. */
+	readonly isPaletteOpen: boolean
 }
 
 /** What the shell shows from the host's state: the dock, the bell, the badge and the AI panel. */

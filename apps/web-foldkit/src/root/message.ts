@@ -2,6 +2,7 @@
 // @effect-diagnostics experimentalApiUsage:off
 import { UiSchema } from "@effect/ui"
 import { AppRequest } from "@hazel/shared-screens/app/requests"
+import { PresenceStatus } from "@hazel/shared-screens/palette/CommandPalette"
 import { NotificationId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { CommonReason } from "~/lib/error-messages"
@@ -60,5 +61,9 @@ export const AppMessage = UiSchema.TaggedEnum({
 	PressedMobileSearch: {},
 	PressedMobileMenu: {},
 	PressedAiPanelToggle: {},
+	/** The command palette's events (`palette.ts`). */
+	RequestedClosePalette: {},
+	RequestedAiPanelFromPalette: {},
+	PickedPaletteStatus: { status: PresenceStatus },
 })
 export type AppMessage = typeof AppMessage.Type

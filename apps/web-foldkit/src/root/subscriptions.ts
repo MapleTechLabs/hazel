@@ -48,7 +48,7 @@ export const subscriptions = ({ model }: { readonly model: AppModel }) => {
 	const orgSlug = orgSlugOf(model.route) ?? null
 	const organizationId = organizationOf(model)?.id ?? null
 	const memberId = memberOf(model)?.id ?? null
-	const isOverlayOpen = model.report?.isOverlayOpen ?? false
+	const isOverlayOpen = (model.report?.isOverlayOpen ?? false) || model.palette?.isOpen === true
 	return [
 		Router.subscription(AppRoutes, model.route, (route) => AppMessage.ChangedRoute({ route })),
 		Subscription.make("systemTheme", [], () =>
