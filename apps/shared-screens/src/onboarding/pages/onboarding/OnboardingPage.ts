@@ -204,9 +204,9 @@ const stepView = (h: H, running: Running) => {
 		back: OnboardingMessage.RequestedBackStep(),
 	}
 	// HAZEL-GAP(p4-onboarding-step-motion): today's step slides and unblurs in (300ms, by direction).
-	return h.stack
-		.key(`step-${running.step}`)
-		.children(view === undefined ? h.slots.legacyStep : (view(h, input) as never))
+	// A step is typed as plain view content; the stack takes it as one of its hazel children.
+	const body = view === undefined ? h.slots.legacyStep : (view(h, input) as never)
+	return h.stack.key(`step-${running.step}`).children(body)
 }
 
 export const OnboardingPageNoDeps = OnboardingDef.make({

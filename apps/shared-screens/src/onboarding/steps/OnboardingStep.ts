@@ -5,11 +5,11 @@
  * drawn inside the step's frame, given the flow and two messages, Continue and Back. A step with state
  * of its own is a component whose `OnboardingStepEvents` map to those two (`ProfileStep`).
  */
-import { UiSchema } from "@effect/ui"
+import { UiSchema, type View } from "@effect/ui"
 import type { Hazel } from "@hazel/ui/vocabulary/index"
 import { Schema } from "effect"
 import type { Session } from "../../app/session"
-import type { Flow, OnboardingData } from "../domain/OnboardingFlow"
+import type { Flow, OnboardingData, Step } from "../domain/OnboardingFlow"
 
 /** The answers a step adds to `OnboardingData` as it continues (none: it collects nothing). */
 export const DataPatch = Schema.Struct({
@@ -37,4 +37,7 @@ export interface StepInput<Msg> {
 }
 
 /** One step: what it draws inside the shell's frame. */
-export type StepView = <Msg>(h: Hazel.H<Msg>, input: StepInput<Msg>) => unknown
+export type StepView = <Msg>(h: Hazel.H<Msg>, input: StepInput<Msg>) => View.Content<Msg, any>
+
+/** The steps the shell draws itself, by flow position (`registry.ts`). */
+export type StepRegistry = { readonly [S in Step]?: StepView }

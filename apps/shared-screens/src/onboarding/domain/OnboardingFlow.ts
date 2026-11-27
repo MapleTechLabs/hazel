@@ -103,7 +103,7 @@ export const directionOf = (from: Step, to: Step, userType: UserType): Direction
 	return flow.indexOf(to) < flow.indexOf(from) ? "backward" : "forward"
 }
 
-const STEP_NUMBERS: Readonly<Record<Step, { creator: number; invited: number | null }>> = {
+const STEP_NUMBERS = {
 	welcome: { creator: 1, invited: 1 },
 	profileInfo: { creator: 2, invited: 2 },
 	timezoneSelection: { creator: 3, invited: 3 },
@@ -114,7 +114,7 @@ const STEP_NUMBERS: Readonly<Record<Step, { creator: number; invited: number | n
 	teamInvitation: { creator: 8, invited: null },
 	finalization: { creator: 8, invited: 5 },
 	completed: { creator: 8, invited: 5 },
-}
+} satisfies Readonly<Record<Step, { creator: number; invited: number | null }>>
 
 export const stepNumber = (step: Step, userType: UserType): number =>
 	(userType === "creator" ? STEP_NUMBERS[step].creator : STEP_NUMBERS[step].invited) ?? 1

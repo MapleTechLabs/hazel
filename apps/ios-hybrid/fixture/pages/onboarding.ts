@@ -1,6 +1,7 @@
 import { Schema } from "effect"
 import * as CurrentUser from "../../../../packages/domain/src/current-user"
 import { currentUser } from "../offline-session"
+import { adaUserId, userRows } from "../snapshot"
 import type { PageFixture } from "../page-fixture"
 
 /**
@@ -13,6 +14,11 @@ const encode = Schema.encodeSync(Schema.toCodecJson(CurrentUser.Schema))
 export const notOnboarded: PageFixture = {
 	rpcs: {
 		"user.me": () => encode(new CurrentUser.Schema({ ...currentUser, isOnboarded: false })),
+		// The profile and time zone steps save through `user.update`: Ada's row with the change.
+		"user.update": (payload) => ({
+			data: { ...userRows.find((row) => row.id === adaUserId), ...payload },
+			transactionId: "00000000-0000-4000-8000-0000000000ac",
+		}),
 	},
 }
 

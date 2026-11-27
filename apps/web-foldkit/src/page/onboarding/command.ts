@@ -1,7 +1,7 @@
 import { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Duration, Effect, Option, Schema } from "effect"
 import { Command } from "foldkit"
-import { load, replaceUrl } from "foldkit/navigation"
+import { load } from "foldkit/navigation"
 import { orgOfMember } from "~/db/routing-hints"
 import { catchCommon } from "../../data/actions"
 import { sendInvitations } from "../../data/invitations"
@@ -63,28 +63,6 @@ export const ReadBrowserTimezone = Command.define("ReadBrowserTimezone", {
 			browserTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
 		}),
 	),
-})
-
-/** `navigate({ search: (prev) => ({ ...prev, step }), replace: true })`, the href from `onboardingHref`. */
-export const ReplaceOnboardingStepUrl = Command.define("ReplaceOnboardingStepUrl", {
-	args: { href: Schema.String },
-	messages: [Message.CompletedReplaceStepUrl],
-	execute: ({ href }) => replaceUrl(href).pipe(Effect.as(Message.CompletedReplaceStepUrl())),
-})
-
-/** The profile step's name, through `user.update`. */
-export const UpdateProfile = Command.define("UpdateProfile", {
-	args: { userId: UserId, firstName: Schema.String, lastName: Schema.String },
-	messages: [Message.SucceededUpdateProfile, Message.FailedUpdateProfile],
-	execute: ({ userId, firstName, lastName }) =>
-		HazelRpc.use((client) => client("user.update", { id: userId, firstName, lastName })).pipe(
-			Effect.as(Message.SucceededUpdateProfile()),
-			Effect.catchTags({
-				UserNotFoundError: () =>
-					Effect.succeed(Message.FailedUpdateProfile({ reason: "UserNotFound" })),
-			}),
-			catchCommon((reason) => Message.FailedUpdateProfile({ reason })),
-		),
 })
 
 export const DebounceTimezoneQuery = Command.define("DebounceTimezoneQuery", {

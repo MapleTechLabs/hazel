@@ -33,7 +33,7 @@ describe("onboarding answers across the import step's OAuth", () => {
 			Message.UpdatedMembership({ membership }),
 		].reduce(
 			(model, message) => update(model, message, shared).model,
-			init(route("teamInvitation"), shared).model,
+			init(route("teamInvitation")).model,
 		)
 		const back = update(invite, Message.ClickedBack(), shared)
 		expect(back.model.phase._tag === "Running" ? back.model.phase.step._tag : null).toBe("Import")
@@ -41,7 +41,7 @@ describe("onboarding answers across the import step's OAuth", () => {
 	})
 
 	test("coming back to the import step reads them, and the flow starts with them", () => {
-		const first = init(route("import"), shared)
+		const first = init(route("import"))
 		expect(first.commands?.map((command) => command.name)).toContain("ReadOnboardingAnswers")
 		const restored = [
 			Message.RestoredAnswers({ data: answers }),
@@ -64,7 +64,7 @@ describe("onboarding answers across the import step's OAuth", () => {
 					names: [...step.names, ...(next.commands ?? []).map((c) => c.name)],
 				}
 			},
-			{ model: init(route("import"), shared).model, names: [] },
+			{ model: init(route("import")).model, names: [] },
 		)
 		expect(started.names).not.toContain("StoreOnboardingAnswers")
 	})
@@ -74,10 +74,7 @@ describe("onboarding answers across the import step's OAuth", () => {
 			Message.DetectedBrowserTimezone({ browserTimezone: "UTC" }),
 			Message.UpdatedMembership({ membership }),
 			Message.RestoredAnswers({ data: answers }),
-		].reduce(
-			(model, message) => update(model, message, shared).model,
-			init(route("import"), shared).model,
-		)
+		].reduce((model, message) => update(model, message, shared).model, init(route("import")).model)
 		expect(running.phase._tag === "Running" ? running.phase.data : null).toEqual(answers)
 	})
 
@@ -85,10 +82,7 @@ describe("onboarding answers across the import step's OAuth", () => {
 		const opened = [
 			Message.DetectedBrowserTimezone({ browserTimezone: "UTC" }),
 			Message.UpdatedMembership({ membership: null }),
-		].reduce(
-			(model, message) => update(model, message, shared).model,
-			init(route("import"), shared).model,
-		)
+		].reduce((model, message) => update(model, message, shared).model, init(route("import")).model)
 		const migrationOf = (model: typeof opened) =>
 			model.phase._tag === "Running" && model.phase.step._tag === "Import"
 				? model.phase.step.migration

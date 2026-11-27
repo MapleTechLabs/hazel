@@ -2,12 +2,15 @@ import { definePage } from "../contract"
 import { Message } from "./message"
 import { Model } from "./model"
 import { subscriptions } from "./subscription"
-import { init, sharedChanged, update } from "./update"
+import { init, routeChanged, update } from "./update"
 import { view } from "./view"
 
-/** `/onboarding`: one instance per visit; `?step=` changes come from the page itself. */
+/**
+ * `/onboarding`: the steps the native shell (`shared-screens/src/onboarding`) does not draw yet, shown
+ * in its `legacyStep` slot. One instance per visit; `?step=` changes from the shell arrive as `routeChanged`.
+ */
 export const page = definePage(
 	"Onboarding",
 	{ Model, Message },
-	{ routes: ["Onboarding"], key: () => "Onboarding", init, update, view, subscriptions, sharedChanged },
+	{ routes: ["Onboarding"], key: () => "Onboarding", init, update, view, subscriptions, routeChanged },
 )
