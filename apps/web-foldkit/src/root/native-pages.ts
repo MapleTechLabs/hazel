@@ -168,6 +168,21 @@ export const SelectOrganizationPage = Component.lazy("SelectOrganizationPage", (
 	),
 )
 
+// The member directory (PA5): DMs are found in the synced rows; email copies through the clipboard.
+export const HomePage = Component.lazy("HomePage", () =>
+	Promise.all([
+		import("@hazel/shared-screens/org/pages/HomePage"),
+		import("@hazel/client-data/web/ui-services"),
+	]).then(([page, web]) =>
+		Component.provide(
+			page.HomePage,
+			Layer.mergeAll(page.FindMemberDm.layer, page.CopyEmail.layer).pipe(
+				Layer.provideMerge(Layer.mergeAll(Layer.succeed(ClientData, clientData), web.ClipboardWeb)),
+			),
+		),
+	),
+)
+
 /** The More tab's rows (PA5). */
 const moreHrefsOf = (orgSlug: string) => ({
 	profile: hrefOf(AppRoute.MySettingsProfile({ orgSlug })),
@@ -222,6 +237,12 @@ const inbox =
 
 /** Keyed by what makes a new instance (Foldkit's page `key`): a new token mounts a fresh page. */
 const nativePages: Registry = {
+	OrgHome: (h, { route, session, isMobile, fallback }) =>
+		HomePage(h, {
+			key: route.orgSlug,
+			props: { session, isMobile },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
 	SelectOrganization: fillWindow<"SelectOrganization">((h, { session, isMobile, fallback }) =>
 		SelectOrganizationPage(h, {
 			key: "select-organization",
