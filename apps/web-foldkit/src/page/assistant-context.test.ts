@@ -2,7 +2,7 @@ import { ChannelId, CustomerAccountId, CustomerSignalRuleId } from "@hazel/schem
 import { Option, Schema } from "effect"
 import { describe, expect, test } from "vitest"
 import { AppRoute } from "../route"
-import { channelContext, customerContext, routeContextOf, suggestionsFor } from "./context"
+import { channelContext, customerContext, routeContextOf } from "./assistant-context"
 
 /** What the panel sends as "where the member is": a page's own description, else its route's. */
 
@@ -58,16 +58,5 @@ describe("routeContextOf", () => {
 		expect(
 			routeContextOf(AppRoute.SignIn({ redirectUrl: Option.none(), error: Option.none() })),
 		).toBeNull()
-	})
-})
-
-describe("suggestionsFor", () => {
-	test("adapts the chips to the page", () => {
-		const customer = customerContext("hazel", { id: accountId, name: "Acme" }, "overview")
-		expect(suggestionsFor(customer)).toContain("Summarize this customer")
-		expect(suggestionsFor(channelContext("hazel", { id: channelId, name: "general" }))).toContain(
-			"Summarize this channel",
-		)
-		expect(suggestionsFor(null)).toHaveLength(3)
 	})
 })

@@ -1,7 +1,6 @@
 import type { UserId } from "@hazel/schema"
 import { Option, Schema, Stream } from "effect"
 import { Port, Subscription } from "foldkit"
-import * as AiPanel from "../assistant"
 import * as CommandPalette from "../overlay/command-palette"
 import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
@@ -61,13 +60,6 @@ const commandPaletteSubscriptions = Subscription.lift(CommandPalette.subscriptio
 	toParentMessage: (message): Message => ({ _tag: "GotCommandPaletteMessage", message }),
 })
 
-const aiPanelSubscriptions = Subscription.lift(AiPanel.subscriptions)<Model, Message>({
-	read: (model) =>
-		Option.some({ model: model.aiPanel, organizationId: model.context.organization?.id ?? null }),
-	// Literal wrapper: the constructor would re-validate every synced row.
-	toParentMessage: (message): Message => ({ _tag: "GotAiPanelMessage", message }),
-})
-
 const modalSubscriptions = Subscription.lift(Modal.subscriptions)<Model, Message>({
 	read: (model) => Option.some({ modal: model.modal, shared: sharedOf(model) }),
 	toParentMessage: (message): Message => ({ _tag: "GotModalMessage", message }),
@@ -112,7 +104,6 @@ export const subscriptions = Subscription.aggregate(
 	shellSubscriptions,
 	channelSidebarActions,
 	commandPaletteSubscriptions,
-	aiPanelSubscriptions,
 	modalSubscriptions,
 	toastSubscriptions,
 	sidebarSubscriptions,

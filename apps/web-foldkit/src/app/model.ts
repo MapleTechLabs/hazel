@@ -1,5 +1,4 @@
 import { Schema } from "effect"
-import * as AiPanel from "../assistant"
 import * as CommandPalette from "../overlay/command-palette"
 import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
@@ -20,7 +19,7 @@ import type { OrganizationId, UserId } from "@hazel/schema"
 
 /**
  * The Foldkit host's Model: what the Effect UI shell tells it (`context`), and the Foldkit parts it
- * still owns (the page, the sidebar's menus and data, the modal, the palette, the AI panel).
+ * still owns (the page, the sidebar's menus and data, the modal, the palette).
  */
 export const Model = Schema.Struct({
 	context: HostContextSchema,
@@ -30,8 +29,6 @@ export const Model = Schema.Struct({
 	shell: Shell.Model,
 	modal: Modal.Model,
 	commandPalette: CommandPalette.Model,
-	/** The AI side panel (`assistant/`). */
-	aiPanel: AiPanel.Model,
 	/** The toaster: the shell raises toasts, the Foldkit kit still draws them. */
 	toasts: Toasts.Model,
 	/** Presence (legacy `PresenceProvider`). */
@@ -64,8 +61,7 @@ export const reportOf = (model: Model): HostReport => ({
 	unreadNotificationCount: Notifications.unreadIdsOf(model.shell.notifications).length,
 	isMarkingAllRead: Notifications.isMarkingAllRead(model.shell.notifications),
 	badge: badgeOfModel(model),
-	isAiPanelOpen: model.aiPanel.isOpen,
-	isAiPanelResizing: model.aiPanel.drag !== null,
+	assistantContext: assistantContextOf(model.page, sharedOf(model)),
 })
 
 /** One DM request: the member, in an org. */
@@ -114,15 +110,6 @@ export const pageHostOf = (model: Model): PageHost => {
 	const host = { page: model.page, shared: sharedOf(model) }
 	pageHostCache.set(model, host)
 	return host
-}
-
-/** What the AI panel reads: the shared state, and what the page shows (else its route). */
-export const aiPanelInputsOf = (model: Model): AiPanel.Inputs => {
-	const shared = sharedOf(model)
-	return {
-		shared,
-		context: assistantContextOf(model.page, shared) ?? AiPanel.routeContextOf(model.context.route),
-	}
 }
 
 export const shellContextOf = (model: Model): ShellUpdateContext => ({

@@ -24,7 +24,6 @@ const hostMount = (model: AppModel) =>
 	RunFoldkitHost({
 		context: hostContextOf(model),
 		isCreateChannelHintDismissed: boot.isCreateChannelHintDismissed,
-		aiPanel: boot.aiPanel,
 	})
 
 /** The root component's view of `model`; no end check, so the host's mounts may keep running. */

@@ -6,6 +6,7 @@
  */
 import { Component, Router } from "@effect/ui"
 import { ClientData, HazelRpc } from "@hazel/client-data"
+import { AssistantPanel } from "@hazel/shared-screens/assistant/AssistantPanel"
 import { Activity, activityLayer } from "@hazel/shared-screens/activity/Activity"
 import {
 	ChannelSidebar,
@@ -81,6 +82,9 @@ export const ShellActivity = Component.provide(Activity, (props) =>
 		),
 	),
 )
+
+/** The AI panel on the app's data; its RPCs, `Navigate` and `Hazel.Host` come from the shell. */
+export const ShellAssistantPanel = Component.provide(AssistantPanel, Layer.succeed(ClientData, clientData))
 
 export const ShellDms = Component.provide(Dms, (props) =>
 	withRouter((push) =>

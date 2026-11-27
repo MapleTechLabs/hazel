@@ -1,7 +1,6 @@
 import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
-import * as AiPanel from "../assistant"
 import { CommonReason } from "~/lib/error-messages"
 import * as CommandPalette from "../overlay/command-palette"
 import { LayoutHotkeyActionId } from "../overlay/hotkeys"
@@ -29,8 +28,6 @@ export const ShellRequest = Schema.Union([
 	Schema.TaggedStruct("PressedInstallUpdate", {}),
 	/** A phone section's top bar menu button: the sidebar sheet. */
 	Schema.TaggedStruct("PressedMobileMenu", {}),
-	/** The nav rail's AI button. */
-	Schema.TaggedStruct("PressedAiPanelToggle", {}),
 	/** The tab bar's search button: the palette in message search. */
 	Schema.TaggedStruct("PressedMobileSearch", {}),
 	/** The DMs screen's compose button: today's Create DM modal. */
@@ -62,7 +59,6 @@ export const Message = defineMessageUnion({
 	GotShellMessage: { message: Shell.Message },
 	GotModalMessage: { message: Modal.Message },
 	GotCommandPaletteMessage: { message: CommandPalette.Message },
-	GotAiPanelMessage: { message: AiPanel.Message },
 	GotToastsMessage: { message: Toasts.Message },
 	GotPlatformMessage: { message: Platform.Message },
 	GotUpdatesMessage: { message: Updates.Message },

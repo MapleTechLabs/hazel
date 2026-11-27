@@ -10,7 +10,6 @@ import { Effect, Queue, Schema, Stream } from "effect"
 import { Runtime } from "foldkit"
 import { HostContextSchema, type HostOut } from "../app/context"
 import { REGION_ATTRIBUTE, type Region } from "../app/view"
-import * as AiPanel from "../assistant"
 import { makeHost } from "../main"
 
 const HOST_ATTRIBUTE = "data-foldkit-host"
@@ -25,7 +24,6 @@ export const RunFoldkitHost = Mount.makeStream(
 		args: {
 			context: HostContextSchema,
 			isCreateChannelHintDismissed: Schema.Boolean,
-			aiPanel: AiPanel.Stored,
 		},
 	},
 	(node: HTMLElement, args, changes) =>

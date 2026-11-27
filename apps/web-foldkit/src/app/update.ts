@@ -3,7 +3,6 @@ import { Match, Option } from "effect"
 import { Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
-import * as AiPanel from "../assistant"
 import { errorToastOf, loadingToast, successToast } from "../data/actions"
 import * as CommandPalette from "../overlay/command-palette"
 import type { LayoutHotkeyActionId } from "../overlay/hotkeys"
@@ -27,7 +26,7 @@ import * as Shell from "../shell/update"
 import { CreateDm, emit } from "./command"
 import type { HostContext } from "./context"
 import { type Message, type ShellRequest } from "./message"
-import { aiPanelInputsOf, dmRequestKey, type Model, reportOf, sharedOf, shellContextOf } from "./model"
+import { dmRequestKey, type Model, reportOf, sharedOf, shellContextOf } from "./model"
 import { toPageMessage } from "./view"
 
 type Return = Update.Return<Model, Message, Resources>
@@ -80,7 +79,7 @@ const toShell = (outMessage: PageOutMessage): Step => command(emit({ _tag: "Page
 const navigateTo = (route: AppRoute, options: { readonly replace?: boolean } = {}): Step =>
 	toShell(PageOutMessage.RequestedNavigation({ route, replace: options.replace ?? false }))
 
-/** After each step: the shell's frame reads the dock, bell, badge and AI panel from the report. */
+/** After each step: the shell's frame reads the dock, bell, badge and page context from the report. */
 const reported = (previous: Model, result: Return): Return => {
 	const before = reportOf(previous)
 	const after = reportOf(result.model)
@@ -95,8 +94,7 @@ const sameReport = (a: ReturnType<typeof reportOf>, b: ReturnType<typeof reportO
 	a.bellCount === b.bellCount &&
 	a.unreadNotificationCount === b.unreadNotificationCount &&
 	a.isMarkingAllRead === b.isMarkingAllRead &&
-	a.isAiPanelOpen === b.isAiPanelOpen &&
-	a.isAiPanelResizing === b.isAiPanelResizing &&
+	JSON.stringify(a.assistantContext) === JSON.stringify(b.assistantContext) &&
 	JSON.stringify(a.badge) === JSON.stringify(b.badge)
 
 // CHILDREN
@@ -158,20 +156,9 @@ const foldPlatform = Update.foldChild({
 	toParentMessage: (message: Platform.Message): Message => ({ _tag: "GotPlatformMessage", message }),
 })
 
-const foldAiPanel = Update.foldChild({
-	update: (panel: AiPanel.Model, step: (panel: AiPanel.Model) => ReturnType<typeof AiPanel.update>) =>
-		step(panel),
-	read: (model: Model) => Option.some(model.aiPanel),
-	write: (model, aiPanel) => modifyFields(model, { aiPanel: () => aiPanel }),
-	toParentMessage: (message: AiPanel.Message): Message => ({ _tag: "GotAiPanelMessage", message }),
-})
-
-/** Mod+J, the nav rail's button and the palette: the AI panel opens beside the page (a sheet on phones). */
-const toggleAiPanel: Step = (model) =>
-	foldAiPanel(model, (panel) => AiPanel.toggle(panel, aiPanelInputsOf(model)))
-
-const openAiPanel: Step = (model) =>
-	foldAiPanel(model, (panel) => AiPanel.open(panel, aiPanelInputsOf(model)))
+/** Mod+J and the palette: the shell owns the AI panel (`root/assistant.ts`). */
+const toggleAiPanel: Step = command(emit({ _tag: "Assistant", request: "Toggle" }))
+const openAiPanel: Step = command(emit({ _tag: "Assistant", request: "Open" }))
 
 const foldCommandPalette = Update.foldChild({
 	update: (
@@ -373,10 +360,6 @@ const receivedShellRequest = (request: ShellRequest): Step =>
 		PressedDesktopMenuItem: ({ item }) => pressedDesktopMenuItem(item),
 		PressedInstallUpdate: () => stepUpdates(Updates.install),
 		PressedMobileMenu: () => openMobileSidebar,
-		PressedAiPanelToggle: () => (model: Model) =>
-			foldAiPanel(model, (panel) =>
-				AiPanel.update(panel, AiPanel.Message.PressedToggle(), aiPanelInputsOf(model)),
-			),
 		PressedMobileSearch: () => openCommandPalette("search"),
 		RequestedToast: ({ toast }) => showToast(toast),
 		PressedComposeDm: () => openModal({ _tag: "CreateDm" }),
@@ -476,7 +459,7 @@ const changedContext =
 
 export const init = (
 	context: HostContext,
-	options: { readonly isCreateChannelHintDismissed: boolean; readonly aiPanel: AiPanel.Stored },
+	options: { readonly isCreateChannelHintDismissed: boolean },
 ): Return => {
 	const model: Model = {
 		context,
@@ -485,8 +468,6 @@ export const init = (
 		shell: Shell.init({ isCreateChannelHintDismissed: options.isCreateChannelHintDismissed }),
 		modal: Modal.initialModel,
 		commandPalette: CommandPalette.init(),
-		// A phone opens the panel as a sheet over the page: it never starts open.
-		aiPanel: AiPanel.init(context.isMobile ? { ...options.aiPanel, isOpen: false } : options.aiPanel),
 		toasts: Toasts.init(),
 		platform: Platform.init(),
 		desktopUpdate: Updates.init(),
@@ -531,8 +512,6 @@ const step = (model: Model, message: Message): Return =>
 			foldModal(model, (modal) => Modal.update(modal, message, modalContextOf(model))),
 		GotCommandPaletteMessage: ({ message }) =>
 			foldCommandPalette(model, (palette) => CommandPalette.update(palette, message, sharedOf(model))),
-		GotAiPanelMessage: ({ message }) =>
-			foldAiPanel(model, (panel) => AiPanel.update(panel, message, aiPanelInputsOf(model))),
 		GotToastsMessage: ({ message }) => foldToastsWithAction(model, message),
 		GotPlatformMessage: ({ message }) =>
 			foldPlatform(model, (platform) => Platform.update(platform, message)),

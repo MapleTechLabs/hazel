@@ -6,6 +6,7 @@ import { Locator } from "@effect/ui/testing"
 import { describe, expect, test } from "vitest"
 import { ada, flagsOf, owner, shellSignedIn } from "../test/root-fixtures"
 import { App, type Boot } from "./app"
+import { TrackAssistantColumn } from "./assistant"
 import { AdoptRegion, RunFoldkitHost } from "./foldkit"
 import { type AppModel, hostContextOf } from "./logic"
 
@@ -23,7 +24,6 @@ const hostMount = (model: AppModel) =>
 	RunFoldkitHost({
 		context: hostContextOf(model),
 		isCreateChannelHintDismissed: boot.isCreateChannelHintDismissed,
-		aiPanel: boot.aiPanel,
 	})
 const frame = (model: AppModel) => HtmlScene.start(App, { route: model.route, boot }).given(model)
 const onPhone = (path: string) => shellSignedIn(path, owner, { isMobile: true })
@@ -76,7 +76,7 @@ describe("mobile", () => {
 			.toBeAbsent()
 			.expectMount(hostMount(model))
 			.expectMount(AdoptRegion({ region: "page" }))
-			.expectMount(AdoptRegion({ region: "ai-panel" }))
+			.expectMount(TrackAssistantColumn())
 			.expectMount(AdoptRegion({ region: "overlays" }))
 			.click(HtmlLocator.role("button", { name: "Settings menu" }))
 		// Settings' sheet is the shell's (`sections.ts`, `logic.test.ts`); the host is not asked.

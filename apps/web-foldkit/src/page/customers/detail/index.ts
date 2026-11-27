@@ -1,4 +1,4 @@
-import { customerContext } from "../../../assistant/context"
+import { customerContext } from "../../assistant-context"
 import { definePage } from "../../contract"
 import { Message } from "./message"
 import { accountOf, Model } from "./model"

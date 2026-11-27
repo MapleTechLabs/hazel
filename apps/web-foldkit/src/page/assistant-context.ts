@@ -1,6 +1,5 @@
 import type { Assistant } from "@hazel/domain/models"
 import type { ChannelId, CustomerAccountId } from "@hazel/schema"
-import { Match } from "effect"
 import { AppRoute, type CustomerTab, customerRoute, hrefOf, orgSlugOf, titleOf } from "../route"
 
 /**
@@ -85,26 +84,12 @@ export const channelContext = (
 		entities: [entityOf("channel", channel.id, channel.name)],
 	})
 
-const CUSTOMER_SUGGESTIONS = [
-	"Summarize this customer",
-	"What should we follow up on?",
-	"Draft talking points for a call",
-]
-const CHANNEL_SUGGESTIONS = [
-	"Summarize this channel",
-	"What decisions were made recently?",
-	"What questions are still open?",
-]
-const GENERIC_SUGGESTIONS = [
-	"Summarize what's on this page",
-	"What needs my attention today?",
-	"Help me draft a message",
-]
+/** Every element of the AI panel sits under this mark (`root/assistant.ts`). */
+export const PANEL_MARK = "data-ai-panel"
 
-/** The new chat's suggestion chips, for the page the member is on. */
-export const suggestionsFor = (context: Assistant.Context | null): ReadonlyArray<string> =>
-	Match.value(context?.route ?? null).pipe(
-		Match.when("CustomerDetail", () => CUSTOMER_SUGGESTIONS),
-		Match.whenOr("ChatChannel", "ChatFiles", "ChatFilesMedia", () => CHANNEL_SUGGESTIONS),
-		Match.orElse(() => GENERIC_SUGGESTIONS),
-	)
+/**
+ * Whether a key event comes from inside the AI panel: page hotkeys leave those keys to it, so typing
+ * in its composer never opens a page's picker or marks a channel read.
+ */
+export const isInAssistantPanel = (target: EventTarget | null): boolean =>
+	typeof Element !== "undefined" && target instanceof Element && target.closest(`[${PANEL_MARK}]`) !== null

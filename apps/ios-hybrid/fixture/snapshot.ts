@@ -614,6 +614,8 @@ export const SOURCE_TABLES = {
 		"connect_conversations",
 		"connect_conversation_channels",
 		"connect_participants",
+		"assistant_threads",
+		"assistant_items",
 	],
 	channel: [
 		"messages",

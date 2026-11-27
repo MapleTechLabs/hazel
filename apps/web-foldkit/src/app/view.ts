@@ -1,6 +1,4 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { comboLabel } from "~/lib/keybindings/key-combo"
-import * as AiPanel from "../assistant"
 import * as CommandPalette from "../overlay/command-palette"
 import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
@@ -15,14 +13,14 @@ import { mobileSidebarSheet } from "../shell/mobile"
 import * as Shell from "../shell/model"
 import type * as ModalKit from "../ui/modal"
 import { Message } from "./message"
-import { aiPanelInputsOf, type Model, sharedOf } from "./model"
+import { type Model, sharedOf } from "./model"
 
 /**
  * The host draws its parts into fixed regions; the Effect UI shell moves each region into its
  * place in the frame (`src/root/foldkit.ts`). The list and order never change, so Foldkit only ever
  * patches inside a region and never inserts next to one it no longer holds.
  */
-export const REGIONS = ["sidebar", "page", "ai-toggle", "ai-panel", "overlays"] as const
+export const REGIONS = ["sidebar", "page", "overlays"] as const
 export type Region = (typeof REGIONS)[number]
 
 export const REGION_ATTRIBUTE = "data-foldkit-region"
@@ -43,8 +41,6 @@ const toCommandPaletteMessage = (message: CommandPalette.Message): Message => ({
 	_tag: "GotCommandPaletteMessage",
 	message,
 })
-const toAiPanelMessage = (message: AiPanel.Message): Message => ({ _tag: "GotAiPanelMessage", message })
-const pressedAiPanelToggle = toAiPanelMessage(AiPanel.Message.PressedToggle())
 
 /** The org shell's context: the loaded user and organization of the route's slug, or none yet. */
 const shellContextOf = (model: Model): ShellContext | null => {
@@ -110,17 +106,9 @@ const phoneChatList = (h: HtmlBuilder<Message>, sidebar: Html): Html =>
 		[sidebar],
 	)
 
-/** The toggle's key, as the user's keyboard labels it ("⌘J"); null when unbound. */
-const aiPanelShortcutOf = (model: Model): string | null => {
-	const key = sharedOf(model).keys["aiPanel.toggle"]
-	return key === null ? null : comboLabel(key, model.context.keyboardPlatform)
-}
-
 interface Regions {
 	readonly sidebar: ReadonlyArray<Html>
 	readonly page: ReadonlyArray<Html>
-	readonly "ai-toggle": ReadonlyArray<Html>
-	readonly "ai-panel": ReadonlyArray<Html>
 	readonly overlays: ReadonlyArray<Html>
 }
 
@@ -138,8 +126,7 @@ const regionsOf = (model: Model, h: HtmlBuilder<Message>): Regions => {
 			toParentMessage: toCommandPaletteMessage,
 		}),
 	]
-	if (context === null)
-		return { sidebar: [], page: [pageBody(model, h, false)], "ai-toggle": [], "ai-panel": [], overlays }
+	if (context === null) return { sidebar: [], page: [pageBody(model, h, false)], overlays }
 	const { isMobile } = model.context
 	// Settings' and Activity's sidebars are the shell's (`src/root/sections.ts`), on a phone too.
 	const layout = sectionLayoutOf(model.context.route)
@@ -149,22 +136,6 @@ const regionsOf = (model: Model, h: HtmlBuilder<Message>): Regions => {
 	return {
 		sidebar: isMobile ? [] : [sidebar],
 		page: [isPhoneChatList ? phoneChatList(h, sidebar) : sectionBody(model, h)],
-		"ai-toggle": [
-			AiPanel.toggleButton(h, {
-				isOpen: model.aiPanel.isOpen,
-				onPress: pressedAiPanelToggle,
-				shortcut: aiPanelShortcutOf(model),
-			}),
-		],
-		"ai-panel": [
-			h.submodel({
-				slotId: "ai-panel",
-				model: model.aiPanel,
-				view: AiPanel.view,
-				viewInputs: { ...aiPanelInputsOf(model), isSidebarCollapsed: model.shell.isSidebarCollapsed },
-				toParentMessage: toAiPanelMessage,
-			}),
-		],
 		overlays: isMobile
 			? [
 					mobileSidebarSheet(h, {

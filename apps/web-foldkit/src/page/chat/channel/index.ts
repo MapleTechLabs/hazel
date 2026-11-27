@@ -1,5 +1,5 @@
 import { Submodel } from "foldkit"
-import { channelContext } from "../../../assistant/context"
+import { channelContext } from "../../assistant-context"
 import type { RouteOf } from "../../../route"
 import { definePage, type PageViewInputs } from "../../contract"
 import { type ChatTab, init, Message, Model, setCurrentUserId, setTab, switchChannel, update } from "./page"

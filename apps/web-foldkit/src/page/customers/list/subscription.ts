@@ -14,7 +14,7 @@ import type { PageSubscriptionInput } from "../../contract"
 import { viewRowsStream } from "./data"
 import { Message } from "./message"
 import type { ListKey, Model } from "./model"
-import { isInAssistantPanel } from "../../../assistant/keyboard"
+import { isInAssistantPanel } from "../../assistant-context"
 
 /** The list's live rows, and its keyboard while nothing else holds it. */
 

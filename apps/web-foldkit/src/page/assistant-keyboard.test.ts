@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, test } from "vitest"
-import { queueKeyOf } from "../page/customers/attention/subscription"
-import { inboxKeyOf } from "../page/customers/inbox/subscription"
-import { listKeyOf } from "../page/customers/list/subscription"
-import { isInAssistantPanel } from "./keyboard"
+import { queueKeyOf } from "./customers/attention/subscription"
+import { inboxKeyOf } from "./customers/inbox/subscription"
+import { listKeyOf } from "./customers/list/subscription"
+import { isInAssistantPanel } from "./assistant-context"
 
 /** Page keys leave keys pressed inside the AI panel alone (the channel's are in its hotkeys test). */
 

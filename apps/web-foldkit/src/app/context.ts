@@ -3,6 +3,7 @@
  * The shell owns the route, the session, the organization, the theme and the toasts; the host owns
  * the Foldkit pages and overlays that have not moved yet. Part of the adapter.
  */
+import type { Assistant } from "@hazel/domain/models"
 import type { NotificationId } from "@hazel/schema"
 import { Schema } from "effect"
 import type { Platform as KeyboardPlatform } from "~/lib/keybindings/key-combo"
@@ -35,7 +36,7 @@ export interface HostContext {
 	readonly unreadMentionIds: ReadonlyArray<NotificationId>
 }
 
-/** What the shell shows from the host's state: the dock, the bell, the badge and the AI panel. */
+/** What the shell shows from the host's state: the dock, the bell, the badge and the page's context. */
 export interface HostReport {
 	readonly isOverlayOpen: boolean
 	readonly isSidebarCollapsed: boolean
@@ -44,14 +45,16 @@ export interface HostReport {
 	readonly unreadNotificationCount: number
 	readonly isMarkingAllRead: boolean
 	readonly badge: Badge
-	readonly isAiPanelOpen: boolean
-	readonly isAiPanelResizing: boolean
+	/** What a Foldkit page says it shows, for the AI panel (`PageSpec.assistantContext`). */
+	readonly assistantContext: Assistant.Context | null
 }
 
 /** A page or overlay's request the shell acts on, or the host's state for the frame. */
 export type HostOut =
 	| { readonly _tag: "Page"; readonly outMessage: PageOutMessage }
 	| { readonly _tag: "Report"; readonly report: HostReport }
+	/** Mod+J or the palette asked for the AI panel, which the shell owns. */
+	| { readonly _tag: "Assistant"; readonly request: "Open" | "Toggle" }
 
 /** Values cross the port by reference: both sides are this app, and decoding would copy every row. */
 const passthrough = <A>() => Schema.declare((_: unknown): _ is A => true)
