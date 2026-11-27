@@ -1,7 +1,5 @@
-import { Option } from "effect"
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
-import { failureMessage, type UserErrorMessage } from "~/lib/error-messages"
-import type { AuthFailure } from "../../auth/flows"
+import type { UserErrorMessage } from "~/lib/error-messages"
 import { AppRoute, hrefOf } from "../../route"
 import { backgroundImage, logoContent, panelCard, panelFrame } from "../onboarding/brand-panel"
 import { heading } from "../../ui/heading"
@@ -13,7 +11,7 @@ const logoLink = <M>(h: HtmlBuilder<M>, className: string, children: ReadonlyArr
 	h.a([h.Class(className), h.Href(hrefOf(AppRoute.Root()))], [...children])
 
 /** The underlined text link the auth-framed pages end on (`Go to Hazel`, `Back to sign in`). */
-export const textLink = <M>(
+const textLink = <M>(
 	h: HtmlBuilder<M>,
 	href: string,
 	label: string,
@@ -84,12 +82,8 @@ export const authHeading = <M>(h: HtmlBuilder<M>, title: string, description: st
 		[heading(h, { variant: "display" }, [title]), h.p([h.Class("text-muted-fg text-sm")], [description])],
 	)
 
-/** How a message under the form reads: a failure, or a notice that the flow moved on (`AccountCreated`). */
-export type AuthMessageTone = "danger" | "success"
-
-/** `AccountCreated` is not a failure: the account exists, it only needs a sign-in. */
-export const authFailureTone = (reason: string): AuthMessageTone =>
-	reason === "AccountCreated" ? "success" : "danger"
+/** How a message under the form reads: a failure, or a notice that the flow moved on. */
+type AuthMessageTone = "danger" | "success"
 
 /** A failure (or notice) under the form, announced to screen readers. */
 export const authError = <M>(
@@ -110,33 +104,3 @@ export const authError = <M>(
 						: `${message.title}. ${message.description}`,
 				],
 			)
-
-/** What a failed sign-in says; nothing when the visitor cancelled it themselves. */
-export const authFailureMessage = (reason: AuthFailure): UserErrorMessage | null =>
-	reason === "Cancelled"
-		? null
-		: failureMessage<Exclude<AuthFailure, "Cancelled">>(reason, {
-				PasskeyUnsupported: {
-					title: "This browser can't use passkeys",
-					description: "Continue with GitHub or Google instead.",
-				},
-				Rejected: { title: "Hazel couldn't verify that sign-in", description: "Please try again." },
-				Expired: {
-					title: "That sign-in expired or was already used",
-					description: "Please start again.",
-				},
-				// The install's access rules refused it (`ALLOWED_EMAIL_DOMAINS`, `docs/self-hosting.md`).
-				Denied: {
-					title: "This account can't sign in to Hazel",
-					description:
-						"This workspace only accepts certain email addresses. Sign in with your work account, or ask your admin for access.",
-				},
-				AccountConflict: {
-					title: "That account is already linked to another Hazel user",
-					description: "Sign in with the account you used before.",
-				},
-				AccountCreated: { title: "Your account is ready", description: "Sign in to continue." },
-			})
-
-export const signInLink = <M>(h: HtmlBuilder<M>, label: string): Html =>
-	textLink(h, hrefOf(AppRoute.SignIn({ redirectUrl: Option.none(), error: Option.none() })), label)

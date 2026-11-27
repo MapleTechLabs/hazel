@@ -9,6 +9,7 @@ import { HazelRpc } from "@hazel/client-data"
 import { Hazel } from "@hazel/ui/vocabulary/index"
 import { Cause, Effect, Layer, Match, Option, Schema } from "effect"
 import { LoadPage, SignOut } from "../../../app/requests"
+import { authFrame, homeLink } from "../../components/AuthFrame"
 import { isSessionLoading, Session } from "../../../app/session"
 
 export const Preview = Schema.Struct({
@@ -157,18 +158,9 @@ const InviteDef = Hazel.component({
 
 type H = Parameters<Parameters<typeof InviteDef.make>[0]["view"]>[0]
 
-/** The centred card with the brand panel beside it (today's `authFrame`). */
+/** The auth frame (`components/AuthFrame.ts`): one stack, which `centered` widens to the card. */
 const frame = (h: H, title: string, subtitle: string, ...children: ReadonlyArray<unknown>) =>
-	h.screen
-		.surface("centered")
-		.title(title)
-		.subtitle(subtitle)
-		// HAZEL-GAP(p4-auth-brand-panel): today's panel is the dithered picture, the logo and a tagline card (PA1's `BrandPanel`).
-		.aside(h.text.role("title").children("A calm place for your team to talk, decide and ship."))
-		// One stack: `centered` widens each of its children to the card.
-		.children(h.stack.density("relaxed").children(...(children as Array<never>)))
-
-const homeLink = (h: H) => h.link.label("Go to Hazel").href("/")
+	authFrame(h, { title, subtitle }, h.stack.density("relaxed").children(...(children as Array<never>)))
 
 const loading = (h: H) =>
 	h.screen.surface("centered").children(h.progress.style("spinner").label("Loading invitation..."))

@@ -81,7 +81,7 @@ describe("a native page", () => {
 
 	test("a Foldkit route keeps the host's page region", () => {
 		expect(isNativeRoute(AppRoute.Invite({ token: TOKEN }))).toBe(true)
-		const s = shell("/sign-in").expect(pageSlot).toExist()
+		const s = shell("/join/hazel").expect(pageSlot).toExist()
 		expect(invitePagesIn(s)).toEqual([])
 	})
 })
