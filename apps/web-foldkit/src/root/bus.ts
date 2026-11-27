@@ -5,7 +5,12 @@
  */
 import type { AppRequest } from "@hazel/shared-screens/app/requests"
 import type { HostRequest as MessageListRequest } from "@hazel/shared-screens/chat/messages"
-import type { MessageId } from "@hazel/schema"
+import type { ChannelId, MessageId } from "@hazel/schema"
+import type {
+	ComposerNotice,
+	ComposerRequest,
+	ThreadTarget,
+} from "@hazel/shared-screens/chat/composer/host"
 import type { SidebarAction } from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
 import { Effect, Queue, Stream } from "effect"
 import type { ShellRequest } from "../app/message"
@@ -23,6 +28,12 @@ export type BusEvent =
 	| { readonly _tag: "PinsHotkey" }
 	/** What a native page asks the app for (`shared-screens/src/app/requests.ts`); the shell acts on it. */
 	| { readonly _tag: "AppRequest"; readonly request: AppRequest }
+	/** What the channel page asks of the composer of `channelId` (`./composer.ts`). */
+	| { readonly _tag: "ComposerRequest"; readonly channelId: ChannelId; readonly request: ComposerRequest }
+	/** What a composer tells the channel page (a send, Escape, Shift+Tab). */
+	| { readonly _tag: "ComposerNotice"; readonly notice: ComposerNotice }
+	/** The channel page's open thread panel, for the thread composer. */
+	| { readonly _tag: "ComposerThread"; readonly thread: ThreadTarget | null }
 
 const listeners = new Set<(event: BusEvent) => void>()
 

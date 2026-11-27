@@ -25,8 +25,10 @@ import {
 	ShellAssistantPanel,
 	ShellChannelHeader,
 	ShellChannelSidebar,
+	ShellChannelComposer,
 	ShellJoinBanner,
 	ShellMessageList,
+	ShellThreadComposer,
 } from "./children"
 import { ShellFilesPage, ShellMediaPage } from "./children"
 import { AdoptRegion, RunFoldkitHost } from "./foldkit"
@@ -57,6 +59,7 @@ import { AppMessage } from "./message"
 import { modalOf } from "./modals"
 import { nativePageOf } from "./native-pages"
 import { paletteDestinations, paletteShortcuts, ShellCommandPalette } from "./palette"
+import { isComposerNative } from "./composer"
 import { Hole } from "./portal"
 import { chromeHoles, sectionContent, sectionSidebar } from "./sections"
 import { sectionLayoutOf } from "../shell/sections"
@@ -230,6 +233,29 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 					},
 					[ShellJoinBanner(h, { key: channelId, props: { channelId, userId: data.user.id } })],
 				)
+			: null,
+		route._tag === "ChatChannel" && channelId !== null && isComposerNative()
+			? Hole(h, { hole: "composer", key: channelId, matchKey: true }, [
+					ShellChannelComposer(h, {
+						key: channelId,
+						props: {
+							channelId,
+							organizationId: data.organization.id,
+							userId: data.user.id,
+							placeholder: "Type a message...",
+							ready: true,
+							autoFocus: false,
+						},
+					}),
+				])
+			: null,
+		// The open thread panel's composer; it follows the panel's thread itself.
+		route._tag === "ChatChannel" && isComposerNative()
+			? Hole(h, { hole: "thread-composer", key: "" }, [
+					ShellThreadComposer(h, {
+						props: { organizationId: data.organization.id, userId: data.user.id },
+					}),
+				])
 			: null,
 		route._tag === "ChatChannel" && channelId !== null
 			? Hole(h, { hole: "channel-header", key: channelId, matchKey: true }, [

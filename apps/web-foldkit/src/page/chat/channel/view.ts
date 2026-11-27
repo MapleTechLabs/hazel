@@ -1,4 +1,5 @@
 import { hole } from "../../../app/holes"
+import { isComposerNative } from "../../../root/composer"
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { cn } from "~/lib/utils"
 import { splitContentClassName, splitRootClassName } from "../../../ui/split-panel"
@@ -80,6 +81,9 @@ const messageListHole = (h: H, model: Model): Html | undefined =>
 		? undefined
 		: hole(h, "message-list", model.channelId, [h.Class(MESSAGE_LIST_HOLE)])
 
+/** The composer's padded area (`composer-view.ts`); the shared composer fills it. */
+const COMPOSER_HOLE = "relative shrink-0 px-4 pb-4 pt-2.5"
+
 /** The screen's root fills the hole, so its list scrolls inside it. */
 const MESSAGE_LIST_HOLE = "flex min-h-0 flex-1 flex-col"
 
@@ -98,14 +102,16 @@ const messagesOutlet = (h: H, model: Model, nowMs: number) => {
 			[h.Class("relative flex min-h-0 flex-1 flex-col overflow-hidden")],
 			list === undefined ? [] : [list],
 		),
-		lazyComposer(composerView, [
-			model.typingNames,
-			model.draft,
-			reply?.authorName ?? null,
-			reply?.firstLine ?? null,
-			model.lookups.attachments,
-			h,
-		]) ?? h.empty,
+		isComposerNative()
+			? hole(h, "composer", model.channelId, [h.Class(COMPOSER_HOLE)])
+			: (lazyComposer(composerView, [
+					model.typingNames,
+					model.draft,
+					reply?.authorName ?? null,
+					reply?.firstLine ?? null,
+					model.lookups.attachments,
+					h,
+				]) ?? h.empty),
 		imageViewerOverlay(h, model),
 		lazyToolbar(messageToolbarOverlay, [h, toolbarInputOf(model)]) ?? h.empty,
 		reactionModalView(h, model),
@@ -292,7 +298,9 @@ const threadPanelOverlay = (
 					toMessage: toIssueControlMessage,
 				})
 			: h.empty,
-		composer: draftView(h, panel.draft, {
+		composer: isComposerNative()
+			? hole(h, "thread-composer", panel.threadChannelId)
+			: draftView(h, panel.draft, {
 			toMessage: toThreadDraftMessage,
 			replyPreview: replyPreviewOf(
 				{ lookups, currentUserId, messages, threadPanel: panel },
