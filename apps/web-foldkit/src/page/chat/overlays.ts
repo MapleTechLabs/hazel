@@ -203,6 +203,8 @@ export const Message = defineMessageUnion({
 	ClosedImageViewer: {},
 	SelectedViewerImage: { index: Schema.Finite },
 	ClickedViewerAction: { action: ViewerAction, url: Schema.String, fileName: Schema.String },
+	/** The shared list's right-click "Copy image" or "Copy image address", with the image under it. */
+	ChoseImageAction: { action: ViewerAction, url: Schema.String },
 	/** The viewer's right-click menu on the open image. */
 	GotViewerMenuMessage: { message: Menu.Message },
 	GotReactionPickerMessage: { messageId: MessageId, message: EmojiDialog.Message },
@@ -649,6 +651,10 @@ const updateOverlays = (model: Model, message: Message): OverlaysReturn =>
 			model.open._tag === "ImageViewer"
 				? { model, outMessage: OutMessage.RequestedViewerAction({ action, url, fileName }) }
 				: { model },
+		ChoseImageAction: ({ action, url }) => ({
+			model,
+			outMessage: OutMessage.RequestedViewerAction({ action, url, fileName: "" }),
+		}),
 		GotViewerMenuMessage: ({ message: menuMessage }) => {
 			if (model.open._tag !== "ImageViewer") return { model }
 			const result = Menu.update(model.viewerMenu, menuMessage)

@@ -1,0 +1,35 @@
+{
+	"about": "Phase 4 gap lane G4 (`lightbox-caption-author`): the open item's uploader and time top left, and an embed image's title and description under it.",
+	"frame": "screen",
+	"root": {
+		"tag": "lightbox",
+		"props": {
+			"open": true,
+			"items": [
+				{
+					"id": "i1",
+					"kind": "image",
+					"name": "launch.png",
+					"url": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3Crect width='16' height='9' fill='%237f56d9'/%3E%3C/svg%3E",
+					"width": 1280,
+					"height": 720,
+					"uploader": { "name": "Grace Hopper" },
+					"meta": "11/26/2026, 3:00:00 PM",
+					"caption": {
+						"title": "Launch day",
+						"description": "The release notes and the first numbers."
+					}
+				}
+			]
+		},
+		"events": ["dismiss"]
+	},
+	"pending": {
+		"ios": "S3"
+	},
+	"aria": [
+		{
+			"role": "dialog"
+		}
+	]
+}

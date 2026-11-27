@@ -176,6 +176,20 @@ public enum HazelTheme {
         public static let sheetBorder = ThemedColor(light: RGBA(0.321182, 0.32109, 0.362108, 0.2), dark: RGBA(1, 1, 1, 0.085))
         /// `scrim`: #09090b52 / #fafafa52
         public static let scrim = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 0.32), dark: RGBA(0.980256, 0.980256, 0.980256, 0.32))
+        /// `lightbox-scrim`: #000000e6 / #000000e6
+        public static let lightboxScrim = ThemedColor(light: RGBA(0, 0, 0, 0.9), dark: RGBA(0, 0, 0, 0.9))
+        /// `lightbox-fg`: #ffffffff / #ffffffff
+        public static let lightboxFg = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(1, 1, 1, 1))
+        /// `lightbox-muted`: #ffffff99 / #ffffff99
+        public static let lightboxMuted = ThemedColor(light: RGBA(1, 1, 1, 0.6), dark: RGBA(1, 1, 1, 0.6))
+        /// `lightbox-chrome`: #00000080 / #00000080
+        public static let lightboxChrome = ThemedColor(light: RGBA(0, 0, 0, 0.5), dark: RGBA(0, 0, 0, 0.5))
+        /// `lightbox-chrome-hover`: #000000b3 / #000000b3
+        public static let lightboxChromeHover = ThemedColor(light: RGBA(0, 0, 0, 0.7), dark: RGBA(0, 0, 0, 0.7))
+        /// `lightbox-edge`: #ffffff1a / #ffffff1a
+        public static let lightboxEdge = ThemedColor(light: RGBA(1, 1, 1, 0.1), dark: RGBA(1, 1, 1, 0.1))
+        /// `lightbox-press`: #ffffff1a / #ffffff1a
+        public static let lightboxPress = ThemedColor(light: RGBA(1, 1, 1, 0.1), dark: RGBA(1, 1, 1, 0.1))
         /// `overlay-backdrop`: #15151a33 / #00000080
         public static let overlayBackdrop = ThemedColor(light: RGBA(0.084263, 0.08403, 0.103791, 0.2), dark: RGBA(0, 0, 0, 0.5))
         /// `inverse`: #09090bff / #fafafaff
@@ -403,8 +417,8 @@ public enum HazelTheme {
     public static let space: [String: CGFloat] = ["0": 0, "1": 4, "2": 8, "3": 12, "4": 16, "5": 20, "6": 24, "7": 28, "8": 32, "9": 36, "10": 40, "11": 44, "12": 48, "14": 56, "16": 64, "20": 80, "24": 96, "px": 1, "0.5": 2, "1.5": 6, "2.5": 10, "3.5": 14, "4.5": 18, "5.5": 22]
     public static let radius: [String: CGFloat] = ["none": 0, "xs": 2, "sm": 4, "md": 6, "lg": 8, "xl": 12, "2xl": 16, "3xl": 24, "4xl": 32, "full": 9999]
     /// Seconds.
-    public static let duration: [String: Double] = ["micro": 0.1, "fast": 0.15, "normal": 0.2, "slow": 0.3, "enter": 0.18, "reactionEnter": 0.22, "reactionPop": 0.26, "progressSweep": 1.6, "bounce": 1, "pulse": 2]
-    public static let easing: [String: (Double, Double, Double, Double)] = ["out": (0.23, 1, 0.32, 1), "inOut": (0.77, 0, 0.175, 1), "outQuad": (0.25, 0.46, 0.45, 0.94), "outCubic": (0.215, 0.61, 0.355, 1), "outQuart": (0.165, 0.84, 0.44, 1), "inOutCubic": (0.645, 0.045, 0.355, 1), "enter": (0.2, 0, 0, 1), "overshoot": (0.34, 1.56, 0.64, 1), "cssOut": (0, 0, 0.58, 1), "cssIn": (0.42, 0, 1, 1), "cssInOut": (0.42, 0, 0.58, 1), "css": (0.25, 0.1, 0.25, 1), "in": (0.4, 0, 1, 1), "standard": (0.4, 0, 0.2, 1), "pulse": (0.4, 0, 0.6, 1), "fall": (0.8, 0, 1, 1), "rise": (0, 0, 0.2, 1), "linear": (0, 0, 1, 1)]
+    public static let duration: [String: Double] = ["micro": 0.1, "fast": 0.15, "normal": 0.2, "slow": 0.3, "enter": 0.18, "reactionEnter": 0.22, "reactionPop": 0.26, "progressSweep": 1.6, "bounce": 1, "pulse": 2, "morph": 0.32]
+    public static let easing: [String: (Double, Double, Double, Double)] = ["out": (0.23, 1, 0.32, 1), "inOut": (0.77, 0, 0.175, 1), "outQuad": (0.25, 0.46, 0.45, 0.94), "outCubic": (0.215, 0.61, 0.355, 1), "outQuart": (0.165, 0.84, 0.44, 1), "inOutCubic": (0.645, 0.045, 0.355, 1), "enter": (0.2, 0, 0, 1), "overshoot": (0.34, 1.56, 0.64, 1), "cssOut": (0, 0, 0.58, 1), "cssIn": (0.42, 0, 1, 1), "cssInOut": (0.42, 0, 0.58, 1), "css": (0.25, 0.1, 0.25, 1), "in": (0.4, 0, 1, 1), "standard": (0.4, 0, 0.2, 1), "pulse": (0.4, 0, 0.6, 1), "fall": (0.8, 0, 1, 1), "rise": (0, 0, 0.2, 1), "linear": (0, 0, 1, 1), "morph": (0.44, 0.58, 0, 1), "morphRoot": (0.16, 1, 0.3, 1)]
     public static let shadows: [String: (light: [Shadow], dark: [Shadow])] = [
         "control": (light: [Shadow(inset: true, x: 0, y: 1, blur: 0, spread: 0, color: RGBA(1, 1, 1, 0.16)), Shadow(inset: true, x: 0, y: -1, blur: 0, spread: 0, color: RGBA(0, 0, 0, 0.12)), Shadow(inset: false, x: 0, y: 1, blur: 2, spread: 0, color: RGBA(0, 0, 0, 0.08))], dark: [Shadow(inset: true, x: 0, y: 1, blur: 0, spread: 0, color: RGBA(1, 1, 1, 0.14)), Shadow(inset: true, x: 0, y: -1, blur: 0, spread: 0, color: RGBA(0, 0, 0, 0.2)), Shadow(inset: false, x: 0, y: 1, blur: 2, spread: 0, color: RGBA(0, 0, 0, 0.3))]),
         "xs": (light: [Shadow(inset: false, x: 0, y: 1, blur: 2, spread: 0, color: RGBA(0, 0, 0, 0.04))], dark: [Shadow(inset: false, x: 0, y: 1, blur: 2, spread: 0, color: RGBA(0, 0, 0, 0.3))]),
@@ -1226,17 +1240,27 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "itemLabel", style: Style(truncate: true, grow: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "itemCheck", style: Style(size: 16, shrink: false)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "itemChevron", style: Style(color: Colors.mutedFg, size: 16, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "stage", style: Style(color: Colors.lightboxFg)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "backdrop", style: Style(background: Colors.lightboxScrim)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "media", style: Style(radius: 6)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "file", style: Style(text: .body, strong: true)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "counter", style: Style(radius: 6, paddingX: 12, paddingY: 6, text: .label, numeric: true)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "step", style: Style(layout: .row, align: .center, justify: .center, radius: 9999, size: 44)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "counter", style: Style(background: Colors.lightboxChrome, radius: 6, paddingX: 12, paddingY: 6, text: .label, numeric: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "step", style: Style(layout: .row, align: .center, justify: .center, background: Colors.lightboxChrome, radius: 9999, size: 44)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "stepIcon", style: Style(size: 20)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "toolbar", style: Style(layout: .row, borderWidth: 1, radius: 6, paddingX: 4, paddingY: 4, gap: 4)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "toolbar", style: Style(layout: .row, background: Colors.lightboxChrome, borderColor: Colors.lightboxEdge, borderWidth: 1, radius: 6, paddingX: 4, paddingY: 4, gap: 4)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "tool", style: Style(layout: .row, align: .center, justify: .center, radius: 8, size: 40)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "toolIcon", style: Style(size: 18, shrink: false)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "thumbs", style: Style(layout: .row, radius: 6, gap: 8, overflow: .scrollX)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "thumb", style: Style(radius: 6)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "thumbIcon", style: Style(size: 24)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "author", style: Style(layout: .row, align: .center, gap: 8)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "authorAvatar", style: Style(background: Colors.muted, radius: 12, size: 40, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "authorLines", style: Style(layout: .column)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "authorName", style: Style(color: Colors.lightboxFg, text: .label)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "authorMeta", style: Style(color: Colors.mutedFg, text: .caption)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "caption", style: Style(textAlign: .center)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "captionTitle", style: Style(color: Colors.lightboxFg, text: .label, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "captionDescription", style: Style(color: Colors.lightboxMuted, text: .caption)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "item", style: Style(minHeight: 32, text: .label)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "step", style: Style(size: 36)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "stepIcon", style: Style(size: 18)),

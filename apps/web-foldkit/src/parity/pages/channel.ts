@@ -5,7 +5,7 @@ export default {
 	flag: "hazel:island:channel",
 	// `generalChannelId` in `apps/ios-hybrid/fixture/snapshot.ts`.
 	href: "/hazel/chat/00000005-0000-4000-8000-000000000001",
-	island: '[data-island="channel"]',
+	island: '[data-hazel-hole="message-list"]',
 	wide: true,
 	steps: [],
 } satisfies ComparePage

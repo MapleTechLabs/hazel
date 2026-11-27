@@ -456,7 +456,8 @@ export const tags = {
 		events: {
 			press: none,
 			longPress: none,
-			action: Schema.Struct({ action: O.MessageAction }),
+			// `image`: the url of the attachment under the pointer (`copyImage`, `copyImageUrl`).
+			action: Schema.Struct({ action: O.MessageAction, image: Schema.optional(Schema.String) }),
 			pressAuthor: none,
 			pressReaction: Schema.Struct({ emoji: Schema.String }),
 			addReaction: none,
@@ -487,8 +488,12 @@ export const tags = {
 			removable: flag,
 			// Phase 4: the files page's grid, masonry and list; a message keeps the mosaic.
 			layout: option(O.AttachmentLayout, "mosaic"),
+			// Phase 4 (`p4-media-see-all`): how many more there are; the last tile reads "+N See all"
+			// and raises `pressMore`.
+			more: count,
 		},
-		events: { press: ids, remove: ids, retry: ids },
+		// `download`: a tile's or row's own download button (`p4-media-download`), drawn when handled.
+		events: { press: ids, remove: ids, retry: ids, download: ids, pressMore: none },
 	}),
 	embed: tag({
 		group: "chat",

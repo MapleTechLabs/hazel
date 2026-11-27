@@ -12,6 +12,7 @@ import { ditherLayer } from "../content/dither.ts"
 import { ensureStyles as ensureContentStyles } from "../content/styles.ts"
 import { definePrimitive, flag, part, type Primitive } from "../define.ts"
 import { createMenuList } from "../overlays/menu-list.ts"
+import { attachTip } from "../overlays/tooltip.ts"
 import {
 	attachments,
 	badge,
@@ -46,14 +47,17 @@ const actionLook = {
 	// iOS only (native selection on a bitmap row): the web's toolbar leaves it out, its text is selectable.
 	selectText: { label: "Select text", icon: "copy" },
 	delete: { label: "Delete message", icon: "trash" },
+	copyImage: { label: "Copy image", icon: "image" },
+	copyImageUrl: { label: "Copy image address", icon: "link" },
+	copyId: { label: "Copy message ID", icon: "copy" },
 } as const satisfies Record<MessageAction, { readonly label: string; readonly icon: IconName }>
 
 /** The right-click menu's groups and labels, in today's order (`contextMenuEntries`). */
 const menuGroups: ReadonlyArray<ReadonlyArray<MessageAction>> = [
 	["react"],
 	["reply", "edit", "thread", "issue"],
-	["copy", "pin", "unpin"],
-	["delete"],
+	["copy", "copyImage", "copyImageUrl", "pin", "unpin"],
+	["delete", "copyId"],
 ]
 /** Today's menu words and icons, where they differ from the toolbar's. */
 const menuLook = {
@@ -64,15 +68,16 @@ const menuLook = {
 	issue: { label: "Create issue", icon: "support" },
 } as const satisfies Record<MessageAction, { readonly label: string; readonly icon: IconName }>
 
+type Looks = Readonly<Record<MessageAction, { readonly label: string; readonly icon: IconName }>>
+
 /** The row's actions as menu groups; `selectText` is iOS only, as on the toolbar. */
-// HAZEL-GAP(p4-message-menu-extras): today's menu also copies the image, its address and the message ID.
-const menuOf = (actions: ReadonlyArray<MessageAction>): MenuGroups =>
+const menuOf = (actions: ReadonlyArray<MessageAction>, looks: Looks): MenuGroups =>
 	menuGroups
 		.map((group) => ({
 			entries: group
 				.filter((action) => actions.includes(action))
 				.map((action) => {
-					const look = menuLook[action]
+					const look = looks[action]
 					return {
 						id: action,
 						label: look.label,
@@ -82,6 +87,20 @@ const menuOf = (actions: ReadonlyArray<MessageAction>): MenuGroups =>
 				}),
 		}))
 		.filter((group) => group.entries.length > 0)
+
+/** The actions today's toolbar keeps on the bar, in its order, and those its More menu holds. */
+const barActions: ReadonlyArray<MessageAction> = ["react", "copy", "edit", "reply", "delete"]
+const moreActions: ReadonlyArray<MessageAction> = ["thread", "issue", "pin", "unpin"]
+/** Only over an image: the right-click menu's image entries. */
+const imageActions: ReadonlyArray<MessageAction> = ["copyImage", "copyImageUrl"]
+/** The More menu's look (`overlay-views.ts`): thread, support and star icons. */
+const moreLook = {
+	...menuLook,
+	pin: { label: "Pin message", icon: "star" },
+	unpin: { label: "Unpin message", icon: "star" },
+} as const satisfies Record<MessageAction, { readonly label: string; readonly icon: IconName }>
+/** Today's toolbar tooltips wait React Aria's 1.5s. */
+const TOOL_TIP_MS = 1500
 
 const isAction = (id: string): id is MessageAction => Object.hasOwn(actionLook, id)
 
@@ -218,34 +237,70 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 		return card
 	}
 
+	/** A toolbar button with today's styled tooltip (React Aria's 1.5s delay). */
+	const tool = (name: string, label: string, onPress: (event: MouseEvent) => void) => {
+		const press = button(document, name, label, onPress)
+		return {
+			press,
+			tip: attachTip(document, press, () => [label], { delay: TOOL_TIP_MS, look: "panel" }),
+		}
+	}
+
 	const toolbar = (data: MessageRow) => {
 		const quick = data.quick ?? []
 		// The web's text is selectable already, so its toolbar leaves `selectText` out.
-		const actions = (data.actions ?? []).filter((action) => action !== "selectText")
+		const actions: ReadonlyArray<MessageAction> = (data.actions ?? []).filter(
+			(action) => action !== "selectText",
+		)
+		// Today's bar keeps `react copy edit reply delete`; the rest fold into More (`moreMenuEntries`).
+		const onBar = barActions.filter((action) => actions.includes(action))
+		const more = actions.filter((action) => moreActions.includes(action))
 		if (quick.length === 0 && actions.length === 0) return undefined
 		const bar = part(document, "div", "toolbar")
 		bar.setAttribute("role", "toolbar")
 		bar.setAttribute("aria-label", "Message actions")
 		for (const emoji of quick) {
-			const press = button(document, "quick", `React with ${emoji}`, () =>
+			const { press, tip } = tool("quick", `React with ${emoji}`, () =>
 				fire(primitive, "pressReaction", { emoji }),
 			)
 			press.textContent = emoji
-			bar.append(press)
+			bar.append(press, tip)
 		}
 		if (quick.length > 0 && actions.length > 0) bar.append(part(document, "span", "separator"))
-		for (const action of actions) {
+		for (const action of onBar) {
 			const look = actionLook[action]
-			const press = button(document, "tool", look.label, () =>
+			const { press, tip } = tool("tool", look.label, () =>
 				// `react` opens the screen's picker: through `addReaction` when handled, else as an action.
 				action === "react" && handles(primitive, "addReaction")
 					? fire(primitive, "addReaction")
 					: fire(primitive, "action", { action }),
 			)
-			press.title = look.label
 			press.dataset.action = action
 			press.append(icon(document, look.icon))
-			bar.append(press)
+			bar.append(press, tip)
+		}
+		if (more.length > 0) {
+			if (onBar.length > 0) bar.append(part(document, "span", "separator"))
+			const { press, tip } = tool("tool", "More actions", () => {
+				const rect = press.getBoundingClientRect()
+				// One group, no separators, as today's More menu.
+				const entries = menuOf(more, moreLook).flatMap((group) => group.entries)
+				menuImage = undefined
+				openMenu(
+					[{ entries }],
+					{ x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+					{
+						placement: { side: "bottom", align: "end", gap: 4 },
+						quick: [],
+						trigger: press,
+						flag: "more-open",
+					},
+				)
+			})
+			press.dataset.action = "more"
+			press.setAttribute("aria-haspopup", "menu")
+			press.append(icon(document, "dots-vertical"))
+			bar.append(press, tip)
 		}
 		return bar
 	}
@@ -343,8 +398,12 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 	const menu = createMenuList(document, menuHost, (action) => {
 		if (!isAction(action)) return
 		if (action === "react" && handles(primitive, "addReaction")) fire(primitive, "addReaction")
+		else if (imageActions.includes(action) && menuImage !== undefined)
+			fire(primitive, "action", { action, image: menuImage })
 		else fire(primitive, "action", { action })
 	})
+	/** The attachment image the right-click menu opened over, which its image entries copy. */
+	let menuImage: string | undefined
 	menu.setLabel("Message actions")
 
 	/** Today's header of quick reactions over the entries (`contextMenuHeader`). */
@@ -375,22 +434,50 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 		return header
 	}
 
-	const openMenu = (x: number, y: number): boolean => {
-		const data = row
-		const actions = (data?.actions ?? []).filter((action) => action !== "selectText")
-		const quick = data?.quick ?? []
-		if (actions.length === 0 && quick.length === 0) return false
+	const openMenu = (
+		groups: MenuGroups,
+		anchor: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
+		options: {
+			readonly placement: {
+				readonly side: "bottom"
+				readonly align: "start" | "end"
+				readonly gap: number
+			}
+			readonly quick: ReadonlyArray<string>
+			readonly trigger?: HTMLElement
+			/** The row flag set while it is open (the toolbar stays shown under its More menu). */
+			readonly flag?: "menuOpen" | "more-open"
+		},
+	): boolean => {
+		if (groups.length === 0 && options.quick.length === 0) return false
 		menu.close(false)
-		menu.setEntries(menuOf(actions))
-		if (quick.length > 0) menu.panel.prepend(quickHeader(quick))
+		menu.setEntries(groups)
+		if (options.quick.length > 0) menu.panel.prepend(quickHeader(options.quick))
 		menu.open({
-			anchor: () => ({ x, y, width: 0, height: 0 }),
-			placement: { side: "bottom", align: "start", gap: 2 },
+			anchor: () => anchor,
+			placement: options.placement,
 			focus: "first",
-			onClose: () => flag(node, "menuOpen", false),
+			inside: () => [options.trigger],
+			onClose: () => flag(node, options.flag ?? "menuOpen", false),
 		})
-		flag(node, "menuOpen", true)
+		flag(node, options.flag ?? "menuOpen", true)
 		return true
+	}
+
+	/** The right-click menu at the pointer: quick reactions over every action (today's context menu). */
+	const openContextMenu = (x: number, y: number, image?: string): boolean => {
+		menuImage = image
+		const actions = (row?.actions ?? []).filter(
+			(action) => action !== "selectText" && (image !== undefined || !imageActions.includes(action)),
+		)
+		return openMenu(
+			menuOf(actions, menuLook),
+			{ x, y, width: 0, height: 0 },
+			{
+				placement: { side: "bottom", align: "start", gap: 2 },
+				quick: row?.quick ?? [],
+			},
+		)
 	}
 
 	node.addEventListener("contextmenu", (event) => {
@@ -399,13 +486,19 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 			return
 		}
 		// Without actions the screen decides (its long-press sheet, `longPress`).
-		if (openMenu(event.clientX, event.clientY) || fire(primitive, "longPress")) event.preventDefault()
+		const image =
+			event.target instanceof HTMLImageElement &&
+			event.target.closest('[data-hz-part="media"]') !== null
+				? event.target.currentSrc || event.target.src
+				: undefined
+		if (openContextMenu(event.clientX, event.clientY, image) || fire(primitive, "longPress"))
+			event.preventDefault()
 	})
 	node.addEventListener("keydown", (event) => {
 		if (event.target !== node) return
 		if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return
 		const rect = node.getBoundingClientRect()
-		if (openMenu(rect.left, rect.top + rect.height / 2)) event.preventDefault()
+		if (openContextMenu(rect.left, rect.top + rect.height / 2)) event.preventDefault()
 	})
 
 	const primitive: Primitive = {

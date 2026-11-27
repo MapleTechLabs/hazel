@@ -166,6 +166,7 @@ describe("toEntries", () => {
 			"pin",
 			"selectText",
 			"delete",
+			"copyId",
 		])
 	})
 })

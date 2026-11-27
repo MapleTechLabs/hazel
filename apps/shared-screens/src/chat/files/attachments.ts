@@ -4,6 +4,7 @@
  */
 import { AttachmentId, type ChannelId } from "@hazel/schema"
 import type { Attachment } from "@hazel/ui/vocabulary/content"
+import { AttachmentFileType } from "@hazel/ui/vocabulary/options"
 import { and, eq, isNull } from "@tanstack/db"
 import { Schema } from "effect"
 import { withData } from "../../app/live"
@@ -59,7 +60,8 @@ const epochMs = (at: Date | string) => (typeof at === "string" ? Date.parse(at) 
 export const channelFilesStream = <Message>(
 	channelId: ChannelId,
 	cdnUrl: string,
-	toMessage: (attachments: ReadonlyArray<FileAttachment>) => Message,
+	/** `nowMs`: the clock when the rows arrived, for each row's "Yesterday" (today read it at render). */
+	toMessage: (attachments: ReadonlyArray<FileAttachment>, nowMs: number) => Message,
 ) =>
 	withData((data) =>
 		data.liveQueryStream<Row, Message>(
@@ -94,6 +96,7 @@ export const channelFilesStream = <Message>(
 										avatarUrl: user.avatarUrl ?? null,
 									},
 					})),
+					Date.now(),
 				),
 		),
 	)
@@ -131,6 +134,50 @@ export type Breakpoint = typeof Breakpoint.Type
 /** `visibleCount` of `ChannelFilesMediaGrid`: one row of the grid's columns. */
 export const visibleCountFor = (breakpoint: Breakpoint): number =>
 	breakpoint === "xl" ? 5 : breakpoint === "lg" ? 4 : breakpoint === "sm" ? 3 : 2
+
+const DAY_MS = 1000 * 60 * 60 * 24
+
+/** `formatRelativeTime` of `channel-files-documents-list.tsx`, with the clock passed in. */
+export const formatRelativeTime = (dateMs: number, nowMs: number): string => {
+	const days = Math.floor((nowMs - dateMs) / DAY_MS)
+	if (days === 0) return "Today"
+	if (days === 1) return "Yesterday"
+	if (days < 7) return `${days} days ago`
+	if (days < 30) {
+		const weeks = Math.floor(days / 7)
+		return `${weeks} ${weeks === 1 ? "week" : "weeks"} ago`
+	}
+	return new Date(dateMs).toLocaleDateString()
+}
+
+const isFileType = Schema.is(AttachmentFileType)
+
+/** The uploader's name, "Unknown" without one (today's `uploaderIdentity`). */
+const uploaderOf = (uploader: FileUploader | null): NonNullable<Attachment["uploader"]> => {
+	const name =
+		uploader === null ? "" : [uploader.firstName, uploader.lastName].filter(Boolean).join(" ").trim()
+	const shown = name === "" ? "Unknown" : name
+	const avatar = uploader?.avatarUrl
+	return avatar == null ? { name: shown } : { name: shown, avatar }
+}
+
+/** A documents row (`DocumentItem`): its type's icon, the upload time and the uploader. */
+export const toFileRow = (attachment: FileAttachment, nowMs: number | null): Attachment => {
+	const type = getFileTypeFromName(attachment.fileName)
+	const row: Attachment = {
+		...toAttachment(attachment),
+		fileType: isFileType(type) ? type : "empty",
+		uploader: uploaderOf(attachment.uploader),
+	}
+	return nowMs === null ? row : { ...row, meta: formatRelativeTime(attachment.uploadedAtMs, nowMs) }
+}
+
+/** A lightbox item: the uploader and the upload's date and time over it (today's viewer author). */
+export const toViewerItem = (attachment: FileAttachment): Attachment => ({
+	...toAttachment(attachment),
+	uploader: uploaderOf(attachment.uploader),
+	meta: new Date(attachment.uploadedAtMs).toLocaleString(),
+})
 
 /** A file as a hazel attachment, its size formatted as today. */
 export const toAttachment = (attachment: FileAttachment): Attachment => ({

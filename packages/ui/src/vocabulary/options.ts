@@ -137,6 +137,30 @@ export type StatDeltaTone = typeof StatDeltaTone.Type
 export const AttachmentLayout = Schema.Literals(Sets.attachmentLayouts)
 export type AttachmentLayout = typeof AttachmentLayout.Type
 
+/**
+ * A file's type for its coloured icon (`p4-file-type-icons`, today's `chat/file-icons.ts`, keyed as
+ * `getFileTypeFromName` returns); `empty` is the blank page a type without its own icon draws.
+ */
+export const AttachmentFileType = Schema.Literals([
+	"empty",
+	"csv",
+	"doc",
+	"docx",
+	"gif",
+	"jpg",
+	"mp3",
+	"mp4",
+	"pdf",
+	"png",
+	"svg",
+	"txt",
+	"wav",
+	"webp",
+	"xls",
+	"xlsx",
+])
+export type AttachmentFileType = typeof AttachmentFileType.Type
+
 /** What a text field holds, for the keyboard and validation hints; a password is `secret`. */
 export const InputKind = Schema.Literals(["text", "email", "url", "number"])
 export type InputKind = typeof InputKind.Type
@@ -367,6 +391,10 @@ export const MessageAction = Schema.Literals([
 	"issue",
 	"selectText",
 	"delete",
+	// Phase 4 (`p4-message-menu-extras`): the web's right-click menu over an image, and the id.
+	"copyImage",
+	"copyImageUrl",
+	"copyId",
 ])
 export type MessageAction = typeof MessageAction.Type
 

@@ -15,8 +15,25 @@ type ListMessage = ReturnType<
 
 export const listRequests = (request: HostRequest): ReadonlyArray<ListMessage> =>
 	Match.valueTags(request, {
-		Action: ({ messageId, action }) => {
-			const value = action === "issue" ? "create-issue" : action === "react" ? "add-reaction" : action
+		Action: ({ messageId, action, image }) => {
+			// Today's image entries copy the image under the pointer (`IMAGE_ACTIONS`).
+			if ((action === "copyImage" || action === "copyImageUrl") && image !== undefined)
+				return [
+					toOverlay(
+						Overlays.Message.ChoseImageAction({
+							action: action === "copyImage" ? "copyImage" : "copyUrl",
+							url: image,
+						}),
+					),
+				]
+			const value =
+				action === "issue"
+					? "create-issue"
+					: action === "react"
+						? "add-reaction"
+						: action === "copyId"
+							? "copy-id"
+							: action
 			return [toOverlay(Overlays.Message.ChoseNativeAction({ messageId, value }))]
 		},
 		OpenThread: ({ messageId, threadChannelId }) => [

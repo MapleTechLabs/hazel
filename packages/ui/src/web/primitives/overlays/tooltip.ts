@@ -103,3 +103,55 @@ export const primitive = definePrimitive("tooltip", ({ document, tag, outer }) =
 	}
 	return primitive
 })
+
+/**
+ * A tooltip a leaf draws for one of its own controls (the message toolbar, a reaction pill): the
+ * `tooltip` recipe's bubble in the top layer above `trigger`, after `delay`, one per document.
+ */
+export const attachTip = (
+	document: Document,
+	trigger: HTMLElement,
+	content: () => ReadonlyArray<Node | string>,
+	options: { readonly delay: number; readonly look?: string },
+): HTMLElement => {
+	installOverlayStyles(document)
+	const host = document.createElement("span")
+	host.dataset.hz = "tooltip"
+	const bubble = makePopoverPanel(part(document, "span", "bubble"))
+	bubble.setAttribute("role", "tooltip")
+	bubble.id = nextId("tooltip")
+	if (options.look !== undefined) bubble.dataset.look = options.look
+	host.append(bubble)
+	trigger.setAttribute("aria-describedby", bubble.id)
+	let timer: ReturnType<typeof setTimeout> | undefined
+	const hide = () => {
+		if (timer !== undefined) clearTimeout(timer)
+		timer = undefined
+		if (bubble.dataset.open === undefined) return
+		hidePanel(bubble)
+		if (showing.get(document) === hide) showing.delete(document)
+	}
+	const show = () => {
+		timer = undefined
+		if (!trigger.isConnected) return
+		showing.get(document)?.()
+		bubble.replaceChildren(...content())
+		showPanel(bubble, { modal: false, inPlace: false })
+		void play(bubble, "enter")
+		showing.set(document, hide)
+		applyPlacement(bubble, measureNode(trigger), { side: "top", align: "center", gap: 6 })
+	}
+	trigger.addEventListener("pointerenter", (event) => {
+		if (event.pointerType !== "touch" && timer === undefined) timer = setTimeout(show, options.delay)
+	})
+	trigger.addEventListener("pointerleave", hide)
+	trigger.addEventListener("pointerdown", hide)
+	trigger.addEventListener("focus", () => {
+		if (trigger.matches(":focus-visible")) show()
+	})
+	trigger.addEventListener("blur", hide)
+	trigger.addEventListener("keydown", (event) => {
+		if (event.key === "Escape" && bubble.dataset.open !== undefined) hide()
+	})
+	return host
+}

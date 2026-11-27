@@ -102,13 +102,29 @@ describe("files page", () => {
 			.resolve(RunFileAction, "downloaded")
 	})
 
-	test("with more media than one row, the last tile opens All media", () => {
-		const s = start()
-			.subscription(
-				FILES,
-				FilesMessage.UpdatedAttachments({ attachments: [file(5, "a.png"), ...files] }),
+	test("a row shows its type, upload time and uploader, and its own button downloads", () => {
+		const s = start().subscription(
+			FILES,
+			FilesMessage.UpdatedAttachments({ attachments: files, nowMs: roadmap.uploadedAtMs + 86_400_000 }),
+		)
+		const rows = s.get(grid("list")).props?.["attachments"]
+		expect(rows).toContainEqual(
+			expect.objectContaining({ id: roadmap.id, fileType: "pdf", meta: "Yesterday" }),
+		)
+		s.fire(grid("list"), "download", { id: roadmap.id })
+			.expectExact(
+				RunFileAction.make({ action: "download", url: roadmap.url, fileName: roadmap.fileName }),
 			)
-			.fire(grid("grid"), "press", { id: banner.id })
+			.resolve(RunFileAction, "downloaded")
+	})
+
+	test("with more media than one row, the last tile reads See all and opens All media", () => {
+		const s = start().subscription(
+			FILES,
+			FilesMessage.UpdatedAttachments({ attachments: [file(5, "a.png"), ...files] }),
+		)
+		expect(s.get(grid("grid")).props?.["more"]).toBe(2)
+		s.fire(grid("grid"), "pressMore", {})
 			.expectExact(Navigate.make({ href: `/hazel/chat/${channelId}/files/media`, replace: false }))
 			.resolve(Navigate, Component.noop)
 		expect(s.get(tag("lightbox")).props?.["open"]).toBeUndefined()

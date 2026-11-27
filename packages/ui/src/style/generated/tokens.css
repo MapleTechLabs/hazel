@@ -67,6 +67,13 @@
 	--hz-color-dialog-ring: color-mix(in oklab, var(--hz-color-fg) 8%, transparent);
 	--hz-color-sheet-border: color-mix(in oklab, var(--hz-color-muted-fg) 20%, transparent);
 	--hz-color-scrim: color-mix(in oklab, var(--hz-color-fg) 32%, transparent);
+	--hz-color-lightbox-scrim: color-mix(in oklab, var(--hz-palette-black) 90%, transparent);
+	--hz-color-lightbox-fg: var(--hz-palette-white);
+	--hz-color-lightbox-muted: color-mix(in oklab, var(--hz-palette-white) 60%, transparent);
+	--hz-color-lightbox-chrome: color-mix(in oklab, var(--hz-palette-black) 50%, transparent);
+	--hz-color-lightbox-chrome-hover: color-mix(in oklab, var(--hz-palette-black) 70%, transparent);
+	--hz-color-lightbox-edge: color-mix(in oklab, var(--hz-palette-white) 10%, transparent);
+	--hz-color-lightbox-press: color-mix(in oklab, var(--hz-palette-white) 10%, transparent);
 	--hz-color-overlay-backdrop: oklch(0.2 0.01 286 / 0.2);
 	--hz-color-inverse: var(--hz-color-fg);
 	--hz-color-inverse-fg: var(--hz-color-bg);
@@ -240,6 +247,7 @@
 	--hz-duration-progressSweep: 1600ms;
 	--hz-duration-bounce: 1000ms;
 	--hz-duration-pulse: 2000ms;
+	--hz-duration-morph: 320ms;
 	--hz-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 	--hz-ease-inOut: cubic-bezier(0.77, 0, 0.175, 1);
 	--hz-ease-outQuad: cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -258,6 +266,8 @@
 	--hz-ease-fall: cubic-bezier(0.8, 0, 1, 1);
 	--hz-ease-rise: cubic-bezier(0, 0, 0.2, 1);
 	--hz-ease-linear: cubic-bezier(0, 0, 1, 1);
+	--hz-ease-morph: cubic-bezier(0.44, 0.58, 0, 1);
+	--hz-ease-morphRoot: cubic-bezier(0.16, 1, 0.3, 1);
 	--hz-shadow-control: inset 0 1px 0 oklch(1 0 0 / 0.16), inset 0 -1px 0 oklch(0 0 0 / 0.12), 0 1px 2px oklch(0 0 0 / 0.08);
 	--hz-shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.04);
 	--hz-shadow-overlay: 0 1px 2px 0 oklch(0 0 0 / 0.04);
@@ -3945,6 +3955,14 @@
 	flex-shrink: 0;
 }
 
+[data-hz="lightbox"] > [data-hz-part="stage"] {
+	color: var(--hz-color-lightbox-fg);
+}
+
+[data-hz="lightbox"] > [data-hz-part="stage"] > [data-hz-part="backdrop"] {
+	background-color: var(--hz-color-lightbox-scrim);
+}
+
 [data-hz="lightbox"] > [data-hz-part="stage"] > [data-hz-part="viewport"] > [data-hz-part="slides"] > [data-hz-part="slide"] > [data-hz-part="zoom"] > [data-hz-part="media"] {
 	border-radius: var(--hz-radius-md);
 }
@@ -3956,6 +3974,7 @@
 }
 
 [data-hz="lightbox"] > [data-hz-part="stage"] > [data-hz-part="counter"] {
+	background-color: var(--hz-color-lightbox-chrome);
 	border-radius: var(--hz-radius-md);
 	padding-inline: var(--hz-space-3);
 	padding-block: var(--hz-space-1_5);
@@ -3969,6 +3988,7 @@
 	flex-direction: row;
 	align-items: center;
 	justify-content: center;
+	background-color: var(--hz-color-lightbox-chrome);
 	border-radius: var(--hz-radius-full);
 	width: var(--hz-space-11);
 	height: var(--hz-space-11);
@@ -3982,8 +4002,10 @@
 [data-hz="lightbox"] > [data-hz-part="stage"] > [data-hz-part="toolbar"] {
 	display: flex;
 	flex-direction: row;
+	background-color: var(--hz-color-lightbox-chrome);
 	border-style: solid;
 	border-width: 1px;
+	border-color: var(--hz-color-lightbox-edge);
 	border-radius: var(--hz-radius-md);
 	padding-inline: var(--hz-space-1);
 	padding-block: var(--hz-space-1);
@@ -4022,6 +4044,55 @@
 [data-hz="lightbox"] > [data-hz-part="stage"] > [data-hz-part="strip"] > [data-hz-part="thumbs"] > [data-hz-part="thumb"] > [data-hz-part="thumbIcon"] {
 	width: var(--hz-space-6);
 	height: var(--hz-space-6);
+}
+
+[data-hz="lightbox"] > [data-hz-part="stage"] > [data-hz-part="author"] {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	column-gap: var(--hz-space-2);
+}
+
+[data-hz="lightbox"] > [data-hz-part="stage"] > [data-hz-part="author"] > [data-hz-part="authorAvatar"] {
+	background-color: var(--hz-color-muted);
+	border-radius: var(--hz-radius-xl);
+	width: var(--hz-space-10);
+	height: var(--hz-space-10);
+	flex-shrink: 0;
+}
+
+[data-hz="lightbox"] > [data-hz-part="stage"] > [data-hz-part="author"] > [data-hz-part="authorLines"] {
+	display: flex;
+	flex-direction: column;
+}
+
+[data-hz="lightbox"] > [data-hz-part="stage"] > [data-hz-part="author"] > [data-hz-part="authorLines"] > [data-hz-part="authorName"] {
+	color: var(--hz-color-lightbox-fg);
+	font-size: var(--hz-text-label-size);
+	line-height: var(--hz-text-label-leading);
+}
+
+[data-hz="lightbox"] > [data-hz-part="stage"] > [data-hz-part="author"] > [data-hz-part="authorLines"] > [data-hz-part="authorMeta"] {
+	color: var(--hz-color-muted-fg);
+	font-size: var(--hz-text-caption-size);
+	line-height: var(--hz-text-caption-leading);
+}
+
+[data-hz="lightbox"] > [data-hz-part="stage"] > [data-hz-part="viewport"] > [data-hz-part="slides"] > [data-hz-part="slide"] > [data-hz-part="caption"] {
+	text-align: center;
+}
+
+[data-hz="lightbox"] > [data-hz-part="stage"] > [data-hz-part="viewport"] > [data-hz-part="slides"] > [data-hz-part="slide"] > [data-hz-part="caption"] > [data-hz-part="captionTitle"] {
+	color: var(--hz-color-lightbox-fg);
+	font-size: var(--hz-text-label-size);
+	line-height: var(--hz-text-label-leading);
+	font-weight: var(--hz-weight-strong);
+}
+
+[data-hz="lightbox"] > [data-hz-part="stage"] > [data-hz-part="viewport"] > [data-hz-part="slides"] > [data-hz-part="slide"] > [data-hz-part="caption"] > [data-hz-part="captionDescription"] {
+	color: var(--hz-color-lightbox-muted);
+	font-size: var(--hz-text-caption-size);
+	line-height: var(--hz-text-caption-leading);
 }
 
 @media (width >= 40rem) {

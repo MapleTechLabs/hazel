@@ -195,7 +195,11 @@ const replyOf = (lookups: Lookups, names: Names, replyTo: MessageId | null) => {
 }
 
 /** What the row offers: today's toolbar (react, copy, edit, reply, delete) and its More menu. */
-export const actionsOf = (isOwn: boolean, isPinned: boolean): ReadonlyArray<MessageAction> => [
+export const actionsOf = (
+	isOwn: boolean,
+	isPinned: boolean,
+	hasImage = false,
+): ReadonlyArray<MessageAction> => [
 	"react",
 	"copy",
 	...(isOwn ? (["edit"] as const) : []),
@@ -204,6 +208,9 @@ export const actionsOf = (isOwn: boolean, isPinned: boolean): ReadonlyArray<Mess
 	isPinned ? "unpin" : "pin",
 	"selectText",
 	...(isOwn ? (["delete"] as const) : []),
+	// The web's right-click menu: over an image it copies it or its address; always the id.
+	...(hasImage ? (["copyImage", "copyImageUrl"] as const) : []),
+	"copyId",
 ]
 
 /** A message's row data; the header fields are left out on a grouped row. */
@@ -213,6 +220,7 @@ export const messageRow = (message: ChatMessage, grouped: boolean, lookups: Look
 	const author = displayNameOf(lookups, message.authorId)
 	const isOwn = message.authorId === lookups.currentUserId
 	const reply = replyOf(lookups, names, message.replyToMessageId)
+	const files = filesOf(lookups, message.id)
 	const showHeader = !grouped || reply !== undefined
 	return compact({
 		author: showHeader ? author : undefined,
@@ -228,10 +236,10 @@ export const messageRow = (message: ChatMessage, grouped: boolean, lookups: Look
 				? true
 				: undefined,
 		reply,
-		files: filesOf(lookups, message.id),
+		files,
 		embeds: message.embeds.length === 0 ? undefined : message.embeds,
 		thread: threadOf(lookups, names, message.threadChannelId),
-		actions: actionsOf(isOwn, message.isPinned),
+		actions: actionsOf(isOwn, message.isPinned, files?.some((file) => file.kind === "image") === true),
 	})
 }
 

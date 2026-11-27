@@ -100,6 +100,14 @@ const color = {
 	"sheet-border": themed(alpha(ref("muted-fg"), 0.2), ref("border")),
 	/** A modal's scrim (`overlay-tokens`): fg at 32% over the page. */
 	scrim: same(alpha(ref("fg"), 0.32)),
+	/** The lightbox is dark in both themes (`lightbox-tokens`): its stage, ink, chrome and edges. */
+	"lightbox-scrim": same(alpha(p("black"), 0.9)),
+	"lightbox-fg": same(p("white")),
+	"lightbox-muted": same(alpha(p("white"), 0.6)),
+	"lightbox-chrome": same(alpha(p("black"), 0.5)),
+	"lightbox-chrome-hover": same(alpha(p("black"), 0.7)),
+	"lightbox-edge": same(alpha(p("white"), 0.1)),
+	"lightbox-press": same(alpha(p("white"), 0.1)),
 	"overlay-backdrop": themed(lit("oklch(0.2 0.01 286 / 0.2)"), lit("oklch(0 0 0 / 0.5)")),
 	/** A tooltip: ink on the page colour (`bg-fg text-bg`, muted text `text-bg/60`). */
 	inverse: same(ref("fg")),
@@ -312,6 +320,8 @@ export const tokens = {
 		/** Tailwind's `animate-bounce` (typing and thinking dots) and `animate-pulse` (skeletons). */
 		bounce: 1000,
 		pulse: 2000,
+		/** The lightbox's morph between the page's image and the slide (`image-viewer.css`). */
+		morph: 320,
 	},
 	/** styles.css `--ease-*` (theme and `:root`) and the curves its animations name. */
 	easing: {
@@ -340,6 +350,9 @@ export const tokens = {
 		rise: [0, 0, 0.2, 1],
 		/** A progress bar's value (`ease-linear`). */
 		linear: [0, 0, 1, 1],
+		/** The lightbox's morph: the image's box, and the page's crossfade under it (300ms, `slow`). */
+		morph: [0.44, 0.58, 0, 1],
+		morphRoot: [0.16, 1, 0.3, 1],
 	},
 	/** `--control-shadow` and `--elevation-*`: dark deepens them and lights raised surfaces' top edge. */
 	shadow: {

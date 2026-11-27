@@ -6,9 +6,13 @@
 import type { Attachment, Block, Embed, Reaction, Run } from "../../../vocabulary/content.ts"
 import { BlockKind, RunKind } from "../../../vocabulary/content.ts"
 import type { AttachmentLayout, IconName } from "../../../vocabulary/options.ts"
+import { ditherInitial } from "../../../../../../apps/web-foldkit/src/ui/dither-avatar.ts"
+import { fileIconSvg } from "../../file-icons.ts"
 import { svg } from "../../icons.ts"
 import { mark } from "../../motion.ts"
+import { ditherLayer } from "../content/dither.ts"
 import { flag, part, type Plain, type Primitive } from "../define.ts"
+import { attachTip } from "../overlays/tooltip.ts"
 import { chatCss } from "./styles.ts"
 
 /** Raises `event` with `payload` if the view handles it; true when it did. */
@@ -200,11 +204,16 @@ const linkNode = (document: Document, label: string, url: string, on: RunHandler
 export const reactedBy = (reaction: Reaction): string | undefined => {
 	const who = reaction.who
 	if (who === undefined || who.names.length === 0) return undefined
+	// Today's `ReactionUserList`: "A, B and C", or "A, B, C, and 2 others".
+	if (who.others > 0)
+		return `reacted by ${who.names.join(", ")}, and ${who.others} ${who.others === 1 ? "other" : "others"}`
 	const names = [...who.names]
-	if (who.others > 0) names.push(`${who.others} ${who.others === 1 ? "other" : "others"}`)
 	const last = names.pop()
 	return `reacted by ${names.length === 0 ? last : `${names.join(", ")} and ${last}`}`
 }
+
+/** Today's reaction tooltip delay (`delayMs: 300`). */
+const REACTION_TIP_MS = 300
 
 const isImage = (emoji: string) => /^(https?:|\/|data:)/.test(emoji)
 
@@ -229,7 +238,25 @@ export const reactionPill = (
 		"aria-label",
 		`${name} ${reaction.count} ${reaction.count === 1 ? "reaction" : "reactions"}${who ? `, ${who}` : ""}`,
 	)
-	if (who !== undefined) pill.title = who
+	// Today's styled tooltip after 300ms: the emoji large over who reacted (`reactionButton`).
+	if (who !== undefined)
+		pill.append(
+			attachTip(
+				document,
+				pill,
+				() => {
+					const face = isImage(reaction.emoji)
+						? element(document, "img", "tipEmojiImage")
+						: text(document, "span", "tipEmoji", reaction.emoji)
+					if (face instanceof HTMLImageElement) {
+						face.src = reaction.emoji
+						face.alt = ""
+					}
+					return [face, text(document, "span", "tipText", who)]
+				},
+				{ delay: REACTION_TIP_MS, look: "reaction" },
+			),
+		)
 	if (isImage(reaction.emoji)) {
 		const image = element(document, "img", "emojiImage")
 		image.src = reaction.emoji
@@ -278,7 +305,45 @@ export interface AttachmentHandlers {
 	readonly remove: ((id: string) => void) | undefined
 	/** A failed attachment's press; without it a failed one raises `press`. */
 	readonly retry?: ((id: string) => void) | undefined
+	/** A tile's or row's own download button, drawn only when set (`p4-media-download`). */
+	readonly download?: ((id: string) => void) | undefined
+	/** How many more there are: the last grid tile reads "+N See all" and presses this instead. */
+	readonly more?: { readonly count: number; readonly press: () => void } | undefined
 }
+
+/**
+ * A control that holds its own buttons (a download button inside a row): a `div` with the button
+ * role, pressed by click, Enter or Space, since a `<button>` cannot nest another.
+ */
+const pressable = (document: Document, name: string, label: string, onPress: () => void) => {
+	const node = part(document, "div", name)
+	node.setAttribute("role", "button")
+	node.tabIndex = 0
+	node.setAttribute("aria-label", label)
+	node.addEventListener("click", (event) => {
+		event.stopPropagation()
+		onPress()
+	})
+	node.addEventListener("keydown", (event) => {
+		if (event.target !== node || (event.key !== "Enter" && event.key !== " ")) return
+		event.preventDefault()
+		onPress()
+	})
+	return node
+}
+
+/** Today's download button (`downloadOverlay`, the row's `sq-sm` plain button). */
+const downloadButton = (document: Document, attachment: Attachment, download: (id: string) => void) => {
+	const press = button(document, "download", `Download ${attachment.name}`, () => download(attachment.id))
+	press.append(icon(document, "download"))
+	return press
+}
+
+/** A picture whose media fails to load leaves the grid, as today's `FailedToLoadMedia` drops it. */
+const dropOnError = (media: HTMLElement | undefined, node: HTMLElement) =>
+	media?.addEventListener("error", () => (node.closest('[data-hz-part="cell"]') ?? node).remove(), {
+		once: true,
+	})
 
 const progressBar = (document: Document, value: number | undefined) => {
 	if (value === undefined) return undefined
@@ -398,7 +463,11 @@ const playBadge = (document: Document) => {
  * square or at its own aspect, a play badge and length on a video, a file's icon and name.
  */
 const tile = (document: Document, attachment: Attachment, on: AttachmentHandlers, masonry: boolean) => {
-	const node = button(document, "tile", labelOf(attachment, on), pressOf(attachment, on))
+	const download = attachment.failed === true ? undefined : on.download
+	const node =
+		download === undefined
+			? button(document, "tile", labelOf(attachment, on), pressOf(attachment, on))
+			: pressable(document, "tile", labelOf(attachment, on), pressOf(attachment, on))
 	node.dataset.kind = attachment.kind
 	flag(node, "failed", attachment.failed)
 	const { width, height } = attachment
@@ -406,8 +475,12 @@ const tile = (document: Document, attachment: Attachment, on: AttachmentHandlers
 	if (masonry && width !== undefined && height !== undefined && width > 0 && height > 0)
 		node.style.aspectRatio = `${width} / ${height}`
 	const shown = picture(document, attachment, masonry)
-	if (shown !== undefined) node.append(shown)
-	else if (attachment.failed !== true) {
+	if (shown !== undefined) {
+		node.append(shown)
+		dropOnError(shown, node)
+		// An unsized masonry tile takes the loaded picture's own height (`p4-masonry-natural-size`).
+		if (masonry && node.style.aspectRatio === "") naturalAspect(shown, node)
+	} else if (attachment.failed !== true) {
 		const empty = part(document, "span", "tileEmpty")
 		empty.append(icon(document, kindIcon(attachment), "tileIcon"))
 		if (attachment.kind === "file") empty.append(text(document, "span", "tileName", attachment.name))
@@ -425,24 +498,113 @@ const tile = (document: Document, attachment: Attachment, on: AttachmentHandlers
 	}
 	const bar = progressBar(document, attachment.progress)
 	if (bar !== undefined) node.append(bar)
+	if (download !== undefined) {
+		const overlay = part(document, "span", "tileActions")
+		overlay.append(downloadButton(document, attachment, download))
+		node.append(overlay)
+	}
+	return node
+}
+
+const naturalAspect = (media: HTMLImageElement | HTMLVideoElement, node: HTMLElement) => {
+	const size = () =>
+		media instanceof HTMLImageElement
+			? { width: media.naturalWidth, height: media.naturalHeight }
+			: { width: media.videoWidth, height: media.videoHeight }
+	const apply = () => {
+		const { width, height } = size()
+		if (width > 0 && height > 0) node.style.aspectRatio = `${width} / ${height}`
+	}
+	media.addEventListener(media instanceof HTMLImageElement ? "load" : "loadedmetadata", apply, {
+		once: true,
+	})
+	apply()
+}
+
+/** The last grid tile when there are more: the picture under "+N" and "See all" (`seeAllItem`). */
+const seeAllTile = (
+	document: Document,
+	attachment: Attachment,
+	more: NonNullable<AttachmentHandlers["more"]>,
+) => {
+	const node = button(document, "tile", `See all, ${more.count} more`, more.press)
+	node.dataset.kind = attachment.kind
+	node.dataset.more = ""
+	const shown = picture(document, attachment, false)
+	if (shown !== undefined) node.append(shown)
+	const cover = part(document, "span", "moreCover")
+	cover.append(
+		text(document, "span", "moreCount", `+${more.count}`),
+		text(document, "span", "moreLabel", "See all"),
+	)
+	node.append(cover)
+	return node
+}
+
+/** A file row's leading icon: its type's coloured icon, else one by kind. */
+const rowIcon = (document: Document, attachment: Attachment) => {
+	if (attachment.fileType === undefined || attachment.failed === true)
+		return icon(document, kindIcon(attachment), "rowIcon")
+	const node = part(document, "span", "rowIcon")
+	node.setAttribute("aria-hidden", "true")
+	node.dataset.fileType = attachment.fileType
+	node.append(fileIconSvg(document, attachment.fileType))
+	return node
+}
+
+/** Who uploaded a row's file: today's `xs` avatar (a picture, else the seeded face) and the name. */
+const uploaderOf = (document: Document, uploader: NonNullable<Attachment["uploader"]>) => {
+	const node = part(document, "span", "uploader")
+	const face = part(document, "span", "uploaderAvatar")
+	face.setAttribute("aria-hidden", "true")
+	if (uploader.avatar !== undefined) {
+		const image = element(document, "img", "image")
+		image.src = uploader.avatar
+		image.alt = ""
+		face.append(image)
+	} else {
+		const dither = ditherLayer(document)
+		dither.seed(uploader.name, 24)
+		face.dataset.seeded = ""
+		face.append(dither.layer, text(document, "span", "initials", ditherInitial(uploader.name)))
+	}
+	node.append(face, text(document, "span", "uploaderName", uploader.name))
 	return node
 }
 
 /** One row of the files page's list (`documentItem`): icon, name, size and length, a download cue. */
 const listRow = (document: Document, attachment: Attachment, on: AttachmentHandlers) => {
-	const row = button(document, "row", labelOf(attachment, on), pressOf(attachment, on))
+	const download = attachment.failed === true ? undefined : on.download
+	const row =
+		download === undefined
+			? button(document, "row", labelOf(attachment, on), pressOf(attachment, on))
+			: pressable(document, "row", labelOf(attachment, on), pressOf(attachment, on))
 	row.dataset.kind = attachment.kind
 	flag(row, "failed", attachment.failed)
-	row.append(icon(document, kindIcon(attachment), "rowIcon"))
+	row.append(rowIcon(document, attachment))
 	const info = part(document, "span", "fileInfo")
 	info.append(text(document, "span", "fileName", attachment.name))
-	const meta = [attachment.size, attachment.duration].filter((each) => each !== undefined)
+	const meta = [attachment.size, attachment.duration, attachment.meta].filter((each) => each !== undefined)
 	if (attachment.failed === true) info.append(failure(document, on))
-	// HAZEL-GAP(p4-files-list-meta): today's row also shows the upload time and the uploader.
-	else if (meta.length > 0) info.append(text(document, "span", "fileSize", meta.join(" · ")))
+	else if (meta.length > 0) {
+		// Today's `flex gap-2` line with a hidden `·` between the size and the time.
+		const line = part(document, "span", "fileSize")
+		meta.forEach((each, index) => {
+			if (index > 0) {
+				const dot = text(document, "span", "metaDot", "·")
+				dot.setAttribute("aria-hidden", "true")
+				line.append(dot)
+			}
+			line.append(text(document, "span", "metaPart", each))
+		})
+		info.append(line)
+	}
 	row.append(info)
-	// HAZEL-GAP(p4-media-download): today's download is a button of its own; here a cue on the row.
-	if (attachment.failed !== true) row.append(icon(document, "download", "fileAction"))
+	if (attachment.uploader !== undefined && attachment.failed !== true)
+		row.append(uploaderOf(document, attachment.uploader))
+	// Its own download button when the view downloads, else a cue that a press downloads.
+	if (download !== undefined) row.append(downloadButton(document, attachment, download))
+	else if (attachment.failed !== true) row.append(icon(document, "download", "fileAction"))
 	const bar = progressBar(document, attachment.progress)
 	if (bar !== undefined) row.append(bar)
 	return row
@@ -475,15 +637,19 @@ export const attachments = (
 			"div",
 			layout === "list" ? "rows" : layout === "grid" ? "tiles" : "masonry",
 		)
-		for (const each of list)
+		const more = layout === "grid" && on.more !== undefined && on.more.count > 0 ? on.more : undefined
+		list.forEach((each, index) =>
 			holder.append(
 				wrap(
 					each,
 					layout === "list"
 						? listRow(document, each, on)
-						: tile(document, each, on, layout === "masonry"),
+						: more !== undefined && index === list.length - 1
+							? seeAllTile(document, each, more)
+							: tile(document, each, on, layout === "masonry"),
 				),
-			)
+			),
+		)
 		grid.append(holder)
 		return grid
 	}

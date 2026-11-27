@@ -23,6 +23,16 @@ type LightboxPart =
 	| "thumbMedia"
 	| "thumbIcon"
 	| "menu"
+	| "author"
+	| "authorAvatar"
+	| "authorImage"
+	| "authorInitial"
+	| "authorLines"
+	| "authorName"
+	| "authorMeta"
+	| "caption"
+	| "captionTitle"
+	| "captionDescription"
 	| MenuListPart
 
 /**
@@ -55,6 +65,16 @@ export const lightbox = defineRecipe<{}, never, LightboxPart>({
 		thumbMedia: { kind: "part", in: "thumb" },
 		thumbIcon: { kind: "part", in: "thumb" },
 		menu: { kind: "part", in: "stage" },
+		author: { kind: "part", in: "stage" },
+		authorAvatar: { kind: "part", in: "author" },
+		authorImage: { kind: "part", in: "authorAvatar" },
+		authorInitial: { kind: "part", in: "authorAvatar" },
+		authorLines: { kind: "part", in: "author" },
+		authorName: { kind: "part", in: "authorLines" },
+		authorMeta: { kind: "part", in: "authorLines" },
+		caption: { kind: "part", in: "slide" },
+		captionTitle: { kind: "part", in: "caption" },
+		captionDescription: { kind: "part", in: "caption" },
 		...menuListParts,
 		panel: { kind: "part", in: "menu" },
 	},
@@ -62,10 +82,26 @@ export const lightbox = defineRecipe<{}, never, LightboxPart>({
 		root: { layout: "contents" },
 		parts: {
 			...menuListStyles,
+			stage: { color: "lightbox-fg" },
+			backdrop: { background: "lightbox-scrim" },
 			media: { radius: "md" },
 			file: { text: "body", strong: true },
-			counter: { paddingX: "3", paddingY: "1.5", radius: "md", text: "label", numeric: true },
-			step: { layout: "row", align: "center", justify: "center", size: "11", radius: "full" },
+			counter: {
+				paddingX: "3",
+				paddingY: "1.5",
+				radius: "md",
+				text: "label",
+				numeric: true,
+				background: "lightbox-chrome",
+			},
+			step: {
+				layout: "row",
+				align: "center",
+				justify: "center",
+				size: "11",
+				radius: "full",
+				background: "lightbox-chrome",
+			},
 			stepIcon: { size: "5" },
 			toolbar: {
 				layout: "row",
@@ -74,12 +110,24 @@ export const lightbox = defineRecipe<{}, never, LightboxPart>({
 				paddingY: "1",
 				radius: "md",
 				borderWidth: "hairline",
+				borderColor: "lightbox-edge",
+				background: "lightbox-chrome",
 			},
 			tool: { layout: "row", align: "center", justify: "center", size: "10", radius: "lg" },
 			toolIcon: { size: "4.5", shrink: false },
 			thumbs: { layout: "row", gap: "2", radius: "md", overflow: "scrollX" },
 			thumb: { radius: "md" },
 			thumbIcon: { size: "6" },
+			// Today's author: an `md` avatar beside the name (`text-sm` white) over the time (`text-xs`).
+			author: { layout: "row", align: "center", gap: "2" },
+			authorAvatar: { size: "10", radius: "xl", background: "muted", shrink: false },
+			authorLines: { layout: "column" },
+			authorName: { text: "label", color: "lightbox-fg" },
+			authorMeta: { text: "caption", color: "muted-fg" },
+			// An embed image's caption: the title `text-sm` medium, the description `text-xs` at 60%.
+			caption: { textAlign: "center" },
+			captionTitle: { text: "label", strong: true, color: "lightbox-fg" },
+			captionDescription: { text: "caption", color: "lightbox-muted" },
 		},
 		regular: {
 			parts: {

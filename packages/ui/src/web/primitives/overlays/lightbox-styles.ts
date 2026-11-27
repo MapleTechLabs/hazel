@@ -4,32 +4,19 @@
  * Transition and the in-place specimen. Spacing, type and the menu are the recipe's (`lightbox.ts`).
  */
 
-// HAZEL-GAP(lightbox-tokens): the viewer is dark in both themes (`bg-black/90`, white ink, `bg-black/50`
-// chrome with a `white/10` edge); no colour role is theme-invariant, so today's values live here
-// until lane D adds `lightbox-*` roles.
-const palette = `
-[data-hz=lightbox] {
-	--hz-lightbox-scrim: oklch(0 0 0 / 0.9);
-	--hz-lightbox-fg: oklch(1 0 0);
-	--hz-lightbox-chrome: oklch(0 0 0 / 0.5);
-	--hz-lightbox-chrome-hover: oklch(0 0 0 / 0.7);
-	--hz-lightbox-edge: oklch(1 0 0 / 0.1);
-	--hz-lightbox-press: oklch(1 0 0 / 0.1);
-}
-`
-
-// HAZEL-GAP(lightbox-morph-motion): today's morph timings (`image-viewer.css`) have no motion token.
+// The morph's timings are motion tokens (`duration.morph`, `easing.morph` and `morphRoot`); the View
+// Transition's pseudo-elements stay renderer CSS.
 const morph = `
 :root[data-hz-lightbox-morph]::view-transition-old(root),
 :root[data-hz-lightbox-morph]::view-transition-new(root) {
 	animation-duration: var(--hz-duration-slow);
-	animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+	animation-timing-function: var(--hz-ease-morphRoot);
 }
 :root[data-hz-lightbox-morph]::view-transition-group(hz-lightbox-media) {
 	overflow: hidden;
 	border-radius: var(--hz-radius-md);
-	animation-duration: 320ms;
-	animation-timing-function: cubic-bezier(0.44, 0.58, 0, 1);
+	animation-duration: var(--hz-duration-morph);
+	animation-timing-function: var(--hz-ease-morph);
 }
 /* No crossfade: only the viewer's image is drawn, stretched between the two boxes. */
 :root[data-hz-lightbox-morph]::view-transition-old(hz-lightbox-media),
@@ -54,7 +41,6 @@ const layout = `
 	height: 100%;
 	overflow: hidden;
 	isolation: isolate;
-	color: var(--hz-lightbox-fg);
 	--hz-lightbox-inset-top: calc(4.75rem + env(safe-area-inset-top, 0px));
 	--hz-lightbox-inset-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
 	--hz-lightbox-inset-inline: 0.75rem;
@@ -76,7 +62,6 @@ const layout = `
 [data-hz=lightbox] [data-hz-part="backdrop"] {
 	position: absolute;
 	inset: 0;
-	background: var(--hz-lightbox-scrim);
 	/* Thinned by a pull, then back on the snap's own clock. */
 	opacity: calc(1 - var(--hz-lightbox-pull-progress, 0) * 0.6);
 	transition: opacity var(--hz-lightbox-pull-snap-duration, 0s) var(--hz-lightbox-pull-snap-easing, linear);
@@ -159,14 +144,12 @@ const layout = `
 	top: var(--hz-space-5);
 	left: 50%;
 	translate: -50% 0;
-	background: var(--hz-lightbox-chrome);
 }
 [data-hz=lightbox] [data-hz-part="toolbar"] {
 	position: absolute;
 	top: var(--hz-space-5);
 	right: var(--hz-space-5);
-	border-color: var(--hz-lightbox-edge);
-	background: var(--hz-lightbox-chrome);
+	border-style: solid;
 }
 @media (width < 48rem) {
 	[data-hz=lightbox] [data-hz-part="counter"] {
@@ -189,7 +172,7 @@ const layout = `
 	-webkit-tap-highlight-color: transparent;
 }
 [data-hz=lightbox] [data-hz-part="tool"] { background: transparent; color: inherit; }
-[data-hz=lightbox] [data-hz-part="tool"]:is(:hover, :active):not([aria-disabled="true"]) { background: var(--hz-lightbox-press); }
+[data-hz=lightbox] [data-hz-part="tool"]:is(:hover, :active):not([aria-disabled="true"]) { background: var(--hz-color-lightbox-press); }
 [data-hz=lightbox] :is([data-hz-part="tool"], [data-hz-part="step"]):focus-visible {
 	outline: 2px solid var(--hz-color-ring);
 	outline-offset: 1px;
@@ -204,11 +187,10 @@ const layout = `
 	position: absolute;
 	top: 50%;
 	translate: 0 -50%;
-	background: var(--hz-lightbox-chrome);
 	color: inherit;
 	transition: opacity var(--hz-duration-fast) var(--hz-ease-out), background-color var(--hz-duration-fast) var(--hz-ease-out);
 }
-[data-hz=lightbox] [data-hz-part="step"]:hover { background: var(--hz-lightbox-chrome-hover); }
+[data-hz=lightbox] [data-hz-part="step"]:hover { background: var(--hz-color-lightbox-chrome-hover); }
 [data-hz=lightbox] [data-hz-part="step"][data-side="previous"] { left: var(--hz-space-4); }
 [data-hz=lightbox] [data-hz-part="step"][data-side="next"] { right: var(--hz-space-4); }
 [data-hz=lightbox] [data-hz-part="step"][aria-disabled="true"] { opacity: 0.4; cursor: default; }
@@ -259,7 +241,7 @@ const layout = `
 	border-radius: inherit;
 	pointer-events: none;
 }
-[data-hz=lightbox] [data-hz-part="thumb"][aria-current="true"]::after { box-shadow: inset 0 0 0 2px var(--hz-lightbox-fg); }
+[data-hz=lightbox] [data-hz-part="thumb"][aria-current="true"]::after { box-shadow: inset 0 0 0 2px var(--hz-color-lightbox-fg); }
 [data-hz=lightbox] [data-hz-part="thumb"]:focus-visible::after { box-shadow: inset 0 0 0 2px var(--hz-color-ring); }
 [data-hz=lightbox] [data-hz-part="thumbMedia"] {
 	display: block;
@@ -277,6 +259,43 @@ const layout = `
 	filter: drop-shadow(0 1px 0 oklch(0 0 0 / 0.25));
 }
 [data-hz=lightbox] [data-hz-part="file"] { color: inherit; }
+/* Today's author block (\`absolute top-5 left-5\`, below the bar on a phone). */
+[data-hz=lightbox] [data-hz-part="author"] {
+	position: absolute;
+	top: var(--hz-space-5);
+	left: var(--hz-space-5);
+}
+@media (width < 48rem) {
+	[data-hz=lightbox] [data-hz-part="author"] {
+		top: calc(env(safe-area-inset-top, 0px) + 4rem);
+		left: var(--hz-space-3);
+	}
+}
+[data-hz=lightbox] [data-hz-part="authorAvatar"] { position: relative; overflow: hidden; corner-shape: squircle; }
+[data-hz=lightbox] [data-hz-part="authorAvatar"][data-seeded] { container-type: size; overflow: visible; }
+[data-hz=lightbox] [data-hz-part="authorImage"] { width: 100%; height: 100%; object-fit: cover; }
+[data-hz=lightbox] [data-hz-part="authorAvatar"] > [data-hz-part="dither"] { corner-shape: squircle; }
+[data-hz=lightbox] [data-hz-part="authorInitial"] {
+	position: relative;
+	display: flex;
+	height: 100%;
+	align-items: center;
+	justify-content: center;
+	color: var(--hz-color-lightbox-fg);
+	font-weight: var(--hz-weight-semibold);
+	font-size: 46cqw;
+	line-height: 1;
+}
+/* The caption under the image (\`mt-3 max-h-[12vh] max-w-xl overflow-y-auto\`); a long one scrolls. */
+[data-hz=lightbox] [data-hz-part="caption"] {
+	flex-shrink: 0;
+	max-width: 36rem;
+	max-height: 12vh;
+	margin-top: var(--hz-space-3);
+	overflow-y: auto;
+}
+[data-hz=lightbox] [data-hz-part="captionTitle"], [data-hz=lightbox] [data-hz-part="captionDescription"] { margin: 0; }
+[data-hz=lightbox] [data-hz-part="captionDescription"] { margin-top: var(--hz-space-0_5); }
 [data-hz=lightbox] [data-hz-part="menu"] { display: contents; color: var(--hz-color-fg); }
 /* The recipe gives the menu's panel a display; closed, it stays hidden. */
 [data-hz=lightbox] > [data-hz-part="stage"] > [data-hz-part="menu"] > [data-hz-part="panel"]:not([data-open]) { display: none; }
@@ -307,6 +326,6 @@ export const installLightboxStyles = (document: Document) => {
 	installed.add(document)
 	const style = document.createElement("style")
 	style.dataset.hzLightbox = ""
-	style.textContent = palette + layout + morph
+	style.textContent = layout + morph
 	;(document.head ?? document.documentElement).append(style)
 }

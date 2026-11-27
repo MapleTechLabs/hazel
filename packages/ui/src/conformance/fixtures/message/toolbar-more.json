@@ -1,0 +1,46 @@
+{
+	"about": "Phase 4 gap lane G4 (`p4-message-toolbar-more`): today's hover toolbar keeps the quick reactions, Add reaction, Copy, Edit, Reply and Delete on the bar and folds Reply in thread, Create issue and Pin into a More menu; each button has a styled tooltip.",
+	"root": {
+		"tag": "message",
+		"props": {
+			"row": {
+				"author": "Ada Lovelace",
+				"initials": "AL",
+				"time": "01:17",
+				"body": [[0, ["Shipping it. Thanks everyone for a smooth week."]]],
+				"quick": ["👍", "❤️", "😂"],
+				"actions": [
+					"react",
+					"copy",
+					"edit",
+					"reply",
+					"thread",
+					"issue",
+					"pin",
+					"selectText",
+					"delete",
+					"copyId"
+				]
+			}
+		},
+		"events": ["action", "pressReaction", "addReaction"]
+	},
+	"frame": "screen",
+	"pending": {
+		"ios": "S5"
+	},
+	"aria": [
+		{
+			"role": "toolbar",
+			"name": "Message actions"
+		},
+		{
+			"role": "button",
+			"name": "More actions"
+		},
+		{
+			"role": "button",
+			"name": "Delete message"
+		}
+	]
+}

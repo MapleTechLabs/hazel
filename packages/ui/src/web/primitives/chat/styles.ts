@@ -14,6 +14,7 @@ const SEMIBOLD = "font-weight: var(--hz-weight-semibold);"
 const BOLD = "font-weight: var(--hz-weight-bold);"
 
 const M = '[data-hz="message"]'
+const TIP = '[data-hz="tooltip"] > [data-hz-part="bubble"]'
 const p = (name: string) => `[data-hz-part="${name}"]`
 /** Parts the message shares with the standalone tags. */
 const inChat = (tags: ReadonlyArray<string>, name: string) =>
@@ -380,6 +381,68 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 	[`${G} ${p("row")}[data-failed] ${p("rowIcon")}`, `color: ${color("warning")};`],
 	[`${G} ${p("row")}:is(:hover, :focus-visible) ${p("fileAction")}`, "opacity: 1;"],
 	["@media (width < 48rem)", `${G} ${p("row")} ${p("fileAction")} { opacity: 1; }`],
+	[`${G} ${p("rowIcon")}[data-file-type] > svg`, "display: block; width: 100%; height: 100%;"],
+	// The size and time (`flex items-center gap-2 text-muted-fg text-xs`).
+	[`${G} ${p("row")} ${p("fileSize")}`, `display: flex; align-items: center; column-gap: ${space("2")};`],
+	// The uploader (`flex gap-2`, an `xs` avatar, the name `text-xs` from `sm` up).
+	[
+		`${G} ${p("uploader")}`,
+		`display: flex; flex-shrink: 0; align-items: center; column-gap: ${space("2")}; color: ${color("muted-fg")};
+		${type("caption")}`,
+	],
+	[
+		`${G} ${p("uploaderAvatar")}`,
+		`position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+		width: ${space("6")}; height: ${space("6")}; overflow: hidden; border-radius: ${radius("md")};
+		corner-shape: squircle; outline: 0.5px solid ${color("overlay-border")}; outline-offset: -0.5px;
+		background-color: ${color("muted")};`,
+	],
+	[`${G} ${p("uploaderAvatar")} > ${p("image")}`, "width: 100%; height: 100%; object-fit: cover;"],
+	[`${G} ${p("uploaderAvatar")}[data-seeded]`, "container-type: size; overflow: visible;"],
+	[`${G} ${p("uploaderAvatar")} > ${p("dither")}`, "corner-shape: squircle;"],
+	[
+		`${G} ${p("uploaderAvatar")} > ${p("initials")}`,
+		`position: relative; color: ${WHITE}; ${SEMIBOLD} font-size: 46cqw; line-height: 1; text-box: trim-both cap alphabetic;`,
+	],
+	["@media (width < 40rem)", `${G} ${p("uploaderName")} { display: none; }`],
+	// The row's own download (`plain sq-sm`), shown on hover or focus, always on a phone.
+	[
+		`${G} ${p("download")}`,
+		`display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: ${space("8")};
+		height: ${space("8")}; border-radius: ${radius("md")}; color: ${color("muted-fg")}; cursor: pointer;
+		opacity: 0; transition: opacity var(--hz-duration-fast) var(--hz-ease-out);`,
+	],
+	[`${G} ${p("download")} > ${p("icon")}`, `width: ${space("4")}; height: ${space("4")};`],
+	[
+		`${G} ${p("row")} > ${p("download")}:hover`,
+		`background-color: ${color("secondary")}; color: ${color("fg")};`,
+	],
+	[
+		`${G} :is(${p("row")}:hover, ${p("row")}:focus-within, ${p("tile")}:hover, ${p("tile")}:focus-within) ${p("download")}`,
+		"opacity: 1;",
+	],
+	["@media (width < 48rem)", `${G} ${p("row")} ${p("download")} { opacity: 1; }`],
+	// A tile's download (`downloadOverlay`): a gradient from the bottom, the `secondary` button at the end.
+	[
+		`${G} ${p("tileActions")}`,
+		`position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: flex-end;
+		padding: ${space("2")}; background-image: linear-gradient(to top, ${tint(BLACK, 40)}, transparent);
+		opacity: 0; pointer-events: none; transition: opacity var(--hz-duration-fast) var(--hz-ease-out);`,
+	],
+	[`${G} ${p("tile")}:is(:hover, :focus-within) > ${p("tileActions")}`, "opacity: 1;"],
+	[
+		`${G} ${p("tileActions")} > ${p("download")}`,
+		`opacity: 1; pointer-events: auto; border: 1px solid ${color("border")}; color: ${color("fg")};
+		background-color: ${tint(color("bg"), 90)}; box-shadow: var(--hz-shadow-xs);`,
+	],
+	// "+N See all" over the last grid tile (`seeAllItem`): `bg-black/60`, `text-2xl` semibold over `text-sm`.
+	[
+		`${G} ${p("moreCover")}`,
+		`position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+		justify-content: center; background-color: ${tint(BLACK, 60)}; color: ${WHITE};`,
+	],
+	[`${G} ${p("moreCount")}`, `${type("display")} ${SEMIBOLD} letter-spacing: normal;`],
+	[`${G} ${p("moreLabel")}`, `${type("label")} color: ${tint(WHITE, 80)};`],
 
 	// Link cards (`linkPreviewView`).
 	[`${M} ${p("card")}`, `margin-top: ${space("2")};`],
@@ -487,7 +550,11 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 		box-shadow: var(--hz-shadow-xs); opacity: 0; pointer-events: none;
 		transition: opacity var(--hz-duration-micro) var(--hz-ease-out);`,
 	],
-	[`${M}:is(:hover, :focus-within) > ${p("toolbar")}`, "opacity: 1; pointer-events: auto;"],
+	[
+		`${M}:is(:hover, :focus-within, [data-more-open]) > ${p("toolbar")}`,
+		"opacity: 1; pointer-events: auto;",
+	],
+	[`${M}[data-more-open] ${p("tool")}[data-action="more"]`, `background-color: ${color("secondary")};`],
 	[
 		`${M} :is(${p("quick")}, ${p("tool")})`,
 		`display: flex; align-items: center; justify-content: center; width: ${space("7")}; height: ${space("7")};
@@ -504,6 +571,27 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 		`${M} > ${p("toolbar")} > ${p("separator")}`,
 		`width: 1px; height: ${space("4")}; margin-inline: ${space("0.5")}; background-color: ${color("border")};`,
 	],
+
+	// The chat's tooltips (`tooltip-host.ts`): the kit's default panel, `rounded-lg border px-2.5 py-1
+	// text-xs/5 shadow-md`, in the `tooltip` recipe's bubble; reactions lay out `gap-3 px-3 py-2`.
+	[
+		`${TIP}:is([data-look="panel"], [data-look="reaction"])`,
+		`max-width: calc(${space("24")} * 4); padding: ${space("1")} ${space("2.5")}; border: 1px solid ${color("overlay-border")};
+		border-radius: ${radius("lg")}; background-color: ${color("overlay")}; color: ${color("overlay-fg")};
+		box-shadow: var(--hz-shadow-md); font-size: var(--hz-text-caption-size); line-height: ${space("5")};
+		font-weight: normal; white-space: normal;`,
+	],
+	[
+		`${TIP}[data-look="reaction"]`,
+		`display: flex; align-items: center; column-gap: ${space("3")}; padding: ${space("2")} ${space("3")};`,
+	],
+	// Today's `text-3xl` emoji (30/36) and `size-7` custom emoji over a `text-sm` line.
+	[
+		`${TIP} > ${p("tipEmoji")}`,
+		`font-size: calc(var(--hz-text-display-size) * 1.25); line-height: ${space("9")};`,
+	],
+	[`${TIP} > ${p("tipEmojiImage")}`, `width: ${space("7")}; height: ${space("7")}; object-fit: contain;`],
+	[`${TIP} > ${p("tipText")}`, type("label")],
 
 	// The right-click menu's quick reactions (`contextMenuHeader`): `flex gap-1 px-1 py-1`, `sq-md` buttons.
 	[

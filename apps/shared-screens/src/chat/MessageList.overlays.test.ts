@@ -93,7 +93,15 @@ describe("message overlays", () => {
 	test("the hover toolbar offers quick reactions and the row's actions; own rows add edit and delete", () => {
 		const s = loaded()
 		expect(rowData(s, 0).quick).toEqual(["👍", "❤️", "😂"])
-		expect(rowData(s, 0).actions).toEqual(["react", "copy", "reply", "thread", "pin", "selectText"])
+		expect(rowData(s, 0).actions).toEqual([
+			"react",
+			"copy",
+			"reply",
+			"thread",
+			"pin",
+			"selectText",
+			"copyId",
+		])
 		expect(rowData(s, 1).actions).toEqual([
 			"react",
 			"copy",
@@ -103,6 +111,7 @@ describe("message overlays", () => {
 			"pin",
 			"selectText",
 			"delete",
+			"copyId",
 		])
 		s.fire(row(0), "pressReaction", { emoji: "👍" })
 			.expectExact(ToggleReaction.make({ messageId: id(1), channelId, userId: ada, emoji: "👍" }))

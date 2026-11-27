@@ -60,7 +60,13 @@ export const Activity = Schema.Struct({ lastMessageAtMs: Schema.Finite, lastMess
 
 /** What a row asks the host to do: the composer, threads and dialogs are the host's. */
 export const HostRequest = Schema.Union([
-	Schema.TaggedStruct("Action", { messageId: MessageId, action: MessageAction, content: Schema.String }),
+	/** `image`: the attachment the web's right-click menu opened over (`copyImage`, `copyImageUrl`). */
+	Schema.TaggedStruct("Action", {
+		messageId: MessageId,
+		action: MessageAction,
+		content: Schema.String,
+		image: Schema.optional(Schema.String),
+	}),
 	Schema.TaggedStruct("OpenThread", { messageId: MessageId, threadChannelId: Schema.NullOr(ChannelId) }),
 	Schema.TaggedStruct("OpenLink", { url: Schema.String }),
 	/** `index` counts the message's images and videos, as the image viewer does; -1 for a file. */
@@ -95,7 +101,7 @@ export const MessageListMessage = UiSchema.TaggedEnum({
 	Ticked: { nowMs: Schema.Finite },
 	ReachedStart: {},
 	ReachedEnd: {},
-	PressedAction: { id: MessageId, action: MessageAction },
+	PressedAction: { id: MessageId, action: MessageAction, image: Schema.optional(Schema.String) },
 	PressedReaction: { id: MessageId, emoji: Schema.String },
 	PressedAddReaction: { id: MessageId },
 	/** A long press (or the web's right click): the row's actions in a sheet. */

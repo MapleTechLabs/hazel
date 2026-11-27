@@ -31,17 +31,21 @@ import {
 	isVideo,
 	mediaOf,
 	toAttachment,
+	toViewerItem,
+	toFileRow,
 	visibleCountFor,
 } from "../../files/attachments"
 import { mediaHref, viewerOf } from "../../files/viewer"
 
 export const FilesMessage = UiSchema.TaggedEnum({
-	UpdatedAttachments: { attachments: Schema.Array(FileAttachment) },
+	UpdatedAttachments: { attachments: Schema.Array(FileAttachment), nowMs: Schema.optional(Schema.Finite) },
 	ChangedBreakpoint: { breakpoint: Breakpoint },
 	ChangedSearch: { payload: TextField.ChangePayload },
 	ChangedFilter: { value: Schema.String },
 	PressedMedia: { id: Schema.String },
 	PressedDocument: { id: Schema.String },
+	PressedDownload: { id: Schema.String },
+	PressedSeeAll: {},
 	ChangedViewer: { index: Schema.Finite },
 	SelectedViewerEntry: { id: Schema.String },
 	DismissedViewer: {},
@@ -65,6 +69,8 @@ export const FilesModel = Schema.Struct({
 	breakpoint: Breakpoint,
 	/** The image the viewer shows, among the channel's images. */
 	viewerId: Schema.NullOr(Schema.String),
+	/** The clock when the files last arrived, for the rows' "Yesterday"; null before. */
+	nowMs: Schema.NullOr(Schema.Finite),
 })
 export type FilesModel = typeof FilesModel.Type
 
@@ -118,12 +124,13 @@ const body = (h: H, model: FilesModel) => {
 			? labelled(
 					h,
 					"Media",
-					// HAZEL-GAP(p4-media-see-all): today's last tile reads "+N See all" over the picture.
-					// HAZEL-GAP(p4-media-download): today's tiles have a hover download button.
 					h.attachmentGrid
 						.layout("grid")
 						.attachments(mediaStrip(model, media).visible.map(toAttachment))
-						.on("press", ({ id }) => FilesMessage.PressedMedia({ id })),
+						.more(mediaStrip(model, media).more)
+						.on("press", ({ id }) => FilesMessage.PressedMedia({ id }))
+						.on("download", ({ id }) => FilesMessage.PressedDownload({ id }))
+						.on("pressMore", () => FilesMessage.PressedSeeAll()),
 				)
 			: null,
 		documents.length > 0
@@ -132,8 +139,9 @@ const body = (h: H, model: FilesModel) => {
 					"Documents",
 					h.attachmentGrid
 						.layout("list")
-						.attachments(documents.map(toAttachment))
-						.on("press", ({ id }) => FilesMessage.PressedDocument({ id })),
+						.attachments(documents.map((each) => toFileRow(each, model.nowMs)))
+						.on("press", ({ id }) => FilesMessage.PressedDocument({ id }))
+						.on("download", ({ id }) => FilesMessage.PressedDownload({ id })),
 				)
 			: null,
 	]
@@ -163,10 +171,9 @@ const header = (h: H, model: FilesModel, count: number) =>
 
 const viewer = (h: H, model: FilesModel) => {
 	const { images, index } = viewerOf(model.attachments ?? [], model.viewerId)
-	// HAZEL-GAP(lightbox-caption-author): today's viewer shows the uploader and the upload time.
 	return h.lightbox
 		.open(index !== -1)
-		.items(images.map(toAttachment))
+		.items(images.map(toViewerItem))
 		.index(Math.max(index, 0))
 		.entries(viewerEntries)
 		.on("change", ({ index }) => FilesMessage.ChangedViewer({ index }))
@@ -181,11 +188,13 @@ export const FilesPageNoDeps = Def.make({
 		filter: "all",
 		breakpoint: "base",
 		viewerId: null,
+		nowMs: null,
 	}),
 	update: {
-		UpdatedAttachments: ($, { attachments }) =>
+		UpdatedAttachments: ($, { attachments, nowMs }) =>
 			$.evolve({
 				attachments: () => attachments,
+				nowMs: (current) => nowMs ?? current,
 				// A deleted image closes the viewer.
 				viewerId: (id) => (id !== null && attachments.some((each) => each.id === id) ? id : null),
 			}),
@@ -194,16 +203,19 @@ export const FilesPageNoDeps = Def.make({
 			$.evolve({ search: (search) => TextField.changed(search, payload) }),
 		ChangedFilter: ($, { value }) => (isFilter(value) ? $.evolve({ filter: () => value }) : $.model),
 		PressedMedia: ($, { id }) => {
-			const { visible, more } = mediaStrip($.model, mediaOf(filteredOf($.model)))
-			const found = visible.find((each) => each.id === id)
+			const found = mediaStrip($.model, mediaOf(filteredOf($.model))).visible.find(
+				(each) => each.id === id,
+			)
 			if (found === undefined) return $.model
-			if (more > 0 && visible.at(-1)?.id === id)
-				return $.run(
-					Navigate.make({ href: mediaHref($.props.orgSlug, $.props.channelId), replace: false }),
-				)
 			return isVideo(found)
 				? $.run(fileAction(found, "openInBrowser", false))
 				: $.evolve({ viewerId: () => found.id })
+		},
+		PressedSeeAll: ($) =>
+			$.run(Navigate.make({ href: mediaHref($.props.orgSlug, $.props.channelId), replace: false })),
+		PressedDownload: ($, { id }) => {
+			const found = $.model.attachments?.find((each) => each.id === id)
+			return found === undefined ? $.model : $.run(fileAction(found, "download", false))
 		},
 		PressedDocument: ($, { id }) => {
 			const found = $.model.attachments?.find((each) => each.id === id)
@@ -225,8 +237,8 @@ export const FilesPageNoDeps = Def.make({
 	},
 	subscriptions: ({ props }) => [
 		Subscription.make("files", [props.channelId, props.cdnUrl], ([channelId, cdnUrl]) =>
-			channelFilesStream(ChannelId.make(channelId), cdnUrl, (attachments) =>
-				FilesMessage.UpdatedAttachments({ attachments }),
+			channelFilesStream(ChannelId.make(channelId), cdnUrl, (attachments, nowMs) =>
+				FilesMessage.UpdatedAttachments({ attachments, nowMs }),
 			),
 		),
 		Subscription.make("breakpoint", [], () =>

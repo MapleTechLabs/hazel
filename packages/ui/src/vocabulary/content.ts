@@ -3,7 +3,14 @@
  * JSON value (G7 option C). Objects with readable keys; rich text stays compact tuples.
  */
 import { Schema } from "effect"
-import { AvatarPresence, BadgeTone, IconName, MessageAction, Provider } from "./options.ts"
+import {
+	AttachmentFileType,
+	AvatarPresence,
+	BadgeTone,
+	IconName,
+	MessageAction,
+	Provider,
+} from "./options.ts"
 
 // ---------------------------------------------------------------------------
 // rich text (`richText.blocks`, `message.row.body`)
@@ -70,6 +77,16 @@ export const Attachment = Schema.Struct({
 	failed: Schema.optional(Schema.Boolean),
 	/** A video's length, formatted by the screen (`1:24`), for the media grid (phase 4). */
 	duration: Schema.optional(Schema.String),
+	/** The file's type, drawn as its coloured icon on a file row (`p4-file-type-icons`). */
+	fileType: Schema.optional(AttachmentFileType),
+	/** A formatted line after the size on a file row, such as the upload time (`p4-files-list-meta`). */
+	meta: Schema.optional(Schema.String),
+	/** Who uploaded it, at a file row's end: a name and a picture, else the name's seeded face. */
+	uploader: Schema.optional(Schema.Struct({ name: Schema.String, avatar: Schema.optional(Schema.String) })),
+	/** An embed image's title and description, under it in the lightbox (`lightbox-caption-author`). */
+	caption: Schema.optional(
+		Schema.Struct({ title: Schema.optional(Schema.String), description: Schema.optional(Schema.String) }),
+	),
 })
 export type Attachment = typeof Attachment.Type
 

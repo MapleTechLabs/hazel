@@ -9,10 +9,14 @@
 import type { Attachment, MenuGroups } from "../../../vocabulary/content.ts"
 import type { Rect } from "../../../vocabulary/Hazel.ts"
 import { focusElement } from "../../focus/focusable.ts"
+import { lockScroll } from "../../focus/isolate.ts"
 import { type Layer, openLayer } from "../../focus/layers.ts"
 import { measureNode } from "../../focus/measure.ts"
 import { hidePanel, installOverlayStyles, isSpecimen, showPanel, whenConnected } from "../../focus/surface.ts"
+import { ditherInitial } from "../../../../../../apps/web-foldkit/src/ui/dither-avatar.ts"
 import { svg } from "../../icons.ts"
+import { ditherLayer } from "../content/dither.ts"
+import { ensureStyles as ensureContentStyles } from "../content/styles.ts"
 import { play } from "../../motion.ts"
 import { definePrimitive, flag, part, type Plain, type Primitive } from "../define.ts"
 import { attachViewer, type Viewer } from "./lightbox-gestures.ts"
@@ -74,39 +78,12 @@ type Transitioning = Document & {
 	startViewTransition?: (update: () => void) => { readonly finished: Promise<void> }
 }
 
-// HAZEL-GAP(overlay-scroll-lock): lane W6 owns the overlays' shared scroll lock; this one is the
-// lightbox's until it lands. Holders are counted, so the page unlocks when the last one leaves.
-const locks = new WeakMap<Document, { holders: Set<HTMLElement>; overflow: string; paddingRight: string }>()
-
-const lockScroll = (document: Document, holder: HTMLElement) => {
-	const html = document.documentElement
-	const held = locks.get(document)
-	if (held !== undefined) {
-		held.holders.add(holder)
-		return
-	}
-	const gutter = (document.defaultView?.innerWidth ?? 0) - html.clientWidth
-	locks.set(document, {
-		holders: new Set([holder]),
-		overflow: html.style.overflow,
-		paddingRight: html.style.paddingRight,
-	})
-	html.style.overflow = "hidden"
-	if (gutter > 0) html.style.paddingRight = `${gutter}px`
-}
-
-const unlockScroll = (document: Document, holder: HTMLElement) => {
-	const held = locks.get(document)
-	if (held === undefined || !held.holders.delete(holder) || held.holders.size > 0) return
-	locks.delete(document)
-	document.documentElement.style.overflow = held.overflow
-	document.documentElement.style.paddingRight = held.paddingRight
-}
-
 export const primitive = definePrimitive("lightbox", ({ document, tag, outer }) => {
 	// At create, not first open: the closed stage's hiding rule must be there before it draws.
 	installOverlayStyles(document)
 	installLightboxStyles(document)
+	// The seeded author face's dither layer is styled with the avatar's.
+	ensureContentStyles(document)
 	const window = document.defaultView
 	const node = outer("div")
 	const stage = part(document, "dialog", "stage") as HTMLDialogElement
@@ -140,6 +117,9 @@ export const primitive = definePrimitive("lightbox", ({ document, tag, outer }) 
 	}
 	const toolbar = part(document, "div", "toolbar")
 	toolbar.dataset.chrome = ""
+	// Who shared the open item and when (its `uploader` and `meta`), top left as today's.
+	const author = part(document, "div", "author")
+	author.dataset.chrome = ""
 	const zoomOut = button(document, "tool", "Zoom out", "minus", "toolIcon")
 	const zoomIn = button(document, "tool", "Zoom in", "plus", "toolIcon")
 	const close = button(document, "tool", "Close", "close", "toolIcon")
@@ -149,7 +129,7 @@ export const primitive = definePrimitive("lightbox", ({ document, tag, outer }) 
 	strip.append(thumbs)
 	// Inside the dialog: outside it, a modal dialog makes the menu inert.
 	const menuHost = part(document, "div", "menu")
-	stage.append(backdrop, viewport, live, counter, previous, next, toolbar, strip, menuHost)
+	stage.append(backdrop, viewport, live, counter, author, previous, next, toolbar, strip, menuHost)
 	node.append(stage)
 	const menu = createMenuList(document, menuHost, (id) => fire(primitive, "select", { id }))
 	menu.setLabel("Image actions")
@@ -166,13 +146,19 @@ export const primitive = definePrimitive("lightbox", ({ document, tag, outer }) 
 	let layer: Layer | undefined
 	let viewer: Viewer | undefined
 	let watch: MutationObserver | undefined
+	/** The overlays' shared page lock (W6's `isolate.ts`); the modal dialog makes the rest inert. */
+	let unlock: (() => void) | undefined
+	const unlockScroll = () => {
+		unlock?.()
+		unlock = undefined
+	}
 	const schedule = whenConnected(node)
 
 	/** The view removed the viewer while it was open: the page gets its scroll back. */
 	const release = () => {
 		watch?.disconnect()
 		watch = undefined
-		unlockScroll(document, node)
+		unlockScroll()
 		viewer?.dispose()
 		viewer = undefined
 		for (const marked of document.querySelectorAll(`[${PLATE}]`)) marked.removeAttribute(PLATE)
@@ -259,17 +245,70 @@ export const primitive = definePrimitive("lightbox", ({ document, tag, outer }) 
 			else thumb.removeAttribute("aria-current")
 		})
 		counter.textContent = `${index + 1} of ${count}`
+		drawAuthor(items[index])
 		previous.setAttribute("aria-disabled", String(index === 0))
 		next.setAttribute("aria-disabled", String(index >= count - 1))
 		const item = items[index]
 		live.textContent =
-			item === undefined ? "" : `${count > 1 ? `${index + 1} of ${count}. ` : ""}${item.name}`
+			item === undefined
+				? ""
+				: `${count > 1 ? `${index + 1} of ${count}. ` : ""}${item.caption?.title ?? item.name}`
 		stage.setAttribute("aria-label", count > 1 ? "Image gallery" : "Image viewer")
 		mountNear()
 		// Each slide opens at rest (the gestures reset the pose when it changes).
 		showZoom(false, true)
 		keepThumbInView()
 		markPlate()
+	}
+
+	/** Today's `md` avatar, the name in white and the time in muted ink. */
+	const drawAuthor = (item: Attachment | undefined) => {
+		const uploader = item?.uploader
+		author.hidden = uploader === undefined
+		if (uploader === undefined) return author.replaceChildren()
+		const face = part(document, "span", "authorAvatar")
+		face.setAttribute("aria-hidden", "true")
+		if (uploader.avatar !== undefined) {
+			const image = part(document, "img", "authorImage") as HTMLImageElement
+			image.src = uploader.avatar
+			image.alt = ""
+			face.append(image)
+		} else {
+			const dither = ditherLayer(document)
+			dither.seed(uploader.name, 40)
+			const initial = part(document, "span", "authorInitial")
+			initial.textContent = ditherInitial(uploader.name)
+			face.dataset.seeded = ""
+			face.append(dither.layer, initial)
+		}
+		const lines = part(document, "div", "authorLines")
+		const name = part(document, "span", "authorName")
+		name.textContent = uploader.name
+		lines.append(name)
+		if (item?.meta !== undefined) {
+			const meta = part(document, "span", "authorMeta")
+			meta.textContent = item.meta
+			lines.append(meta)
+		}
+		author.replaceChildren(face, lines)
+	}
+
+	/** An embed image's title and description under it (`captionView`). */
+	const captionOf = (item: Attachment) => {
+		const { title, description } = item.caption ?? {}
+		if (title === undefined && description === undefined) return undefined
+		const caption = part(document, "div", "caption")
+		if (title !== undefined) {
+			const line = part(document, "p", "captionTitle")
+			line.textContent = title
+			caption.append(line)
+		}
+		if (description !== undefined) {
+			const line = part(document, "p", "captionDescription")
+			line.textContent = description
+			caption.append(line)
+		}
+		return caption
 	}
 
 	/** The strip follows the open slide (today's carousel `keepSnaps`): the thumbnail stays in view. */
@@ -342,6 +381,8 @@ export const primitive = definePrimitive("lightbox", ({ document, tag, outer }) 
 				slide.setAttribute("aria-roledescription", "slide")
 				slide.setAttribute("aria-label", `${at + 1} of ${items.length}`)
 				slide.append(part(document, "div", "zoom"))
+				const caption = captionOf(item)
+				if (caption !== undefined) slide.append(caption)
 				return slide
 			}),
 		)
@@ -499,7 +540,7 @@ export const primitive = definePrimitive("lightbox", ({ document, tag, outer }) 
 		attach()
 		select(index)
 		if (inPlace) return
-		lockScroll(document, node)
+		unlock ??= lockScroll(document)
 		if (typeof MutationObserver === "function") {
 			watch = new MutationObserver(() => {
 				if (!node.isConnected) {
@@ -550,7 +591,7 @@ export const primitive = definePrimitive("lightbox", ({ document, tag, outer }) 
 		if (restoreFocus && returnTo != null) focusElement(returnTo)
 		watch?.disconnect()
 		watch = undefined
-		unlockScroll(document, node)
+		unlockScroll()
 		const media = activeMedia() ?? undefined
 		morph("close", into === undefined ? undefined : media, () => {
 			detach()

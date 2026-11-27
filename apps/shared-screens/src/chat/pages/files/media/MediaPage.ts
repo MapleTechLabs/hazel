@@ -25,6 +25,7 @@ import {
 	isViewerImage,
 	mediaOf,
 	toAttachment,
+	toViewerItem,
 } from "../../../files/attachments"
 import { filesHref, viewerOf } from "../../../files/viewer"
 
@@ -32,6 +33,7 @@ export const MediaMessage = UiSchema.TaggedEnum({
 	UpdatedAttachments: { attachments: Schema.Array(FileAttachment) },
 	PressedBack: {},
 	PressedMedia: { id: Schema.String },
+	PressedDownload: { id: Schema.String },
 	ChangedViewer: { index: Schema.Finite },
 	SelectedViewerEntry: { id: Schema.String },
 	DismissedViewer: {},
@@ -85,24 +87,21 @@ const gallery = (h: H, attachments: ReadonlyArray<FileAttachment> | null) => {
 			.icon("image")
 			.title("No media yet")
 			.description("Images and videos shared in this channel will appear here.")
-	// HAZEL-GAP(p4-media-download): today's tiles have a hover download button.
-	// HAZEL-GAP(p4-masonry-natural-size): unsized tiles hold 4:3; today's take the picture's height.
-	// HAZEL-GAP(p4-media-load-error): today drops a tile whose picture fails to load.
 	return h.stack.density("regular").children(
 		h.text.role("label").tone("muted").children(countsLine(media)),
 		h.attachmentGrid
 			.layout("masonry")
 			.attachments(media.map(toAttachment))
-			.on("press", ({ id }) => MediaMessage.PressedMedia({ id })),
+			.on("press", ({ id }) => MediaMessage.PressedMedia({ id }))
+			.on("download", ({ id }) => MediaMessage.PressedDownload({ id })),
 	)
 }
 
 const viewer = (h: H, model: MediaModel) => {
 	const { images, index } = viewerOf(model.attachments ?? [], model.viewerId)
-	// HAZEL-GAP(lightbox-caption-author): today's viewer shows the uploader and the upload time.
 	return h.lightbox
 		.open(index !== -1)
-		.items(images.map(toAttachment))
+		.items(images.map(toViewerItem))
 		.index(Math.max(index, 0))
 		.entries(viewerEntries)
 		.on("change", ({ index }) => MediaMessage.ChangedViewer({ index }))
@@ -126,6 +125,10 @@ export const MediaPageNoDeps = Def.make({
 			return isVideo(found)
 				? $.run(fileAction(found, "openInBrowser"))
 				: $.evolve({ viewerId: () => id })
+		},
+		PressedDownload: ($, { id }) => {
+			const found = $.model.attachments?.find((each) => each.id === id)
+			return found === undefined ? $.model : $.run(fileAction(found, "download"))
 		},
 		ChangedViewer: ($, { index }) => {
 			const image = viewerOf($.model.attachments ?? [], $.model.viewerId).images[index]

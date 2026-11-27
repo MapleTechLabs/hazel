@@ -234,10 +234,21 @@ const ACTION_LOOK = {
 	issue: { label: "Create issue", icon: "lightbulb" },
 	selectText: { label: "Select text", icon: "copy" },
 	delete: { label: "Delete message", icon: "trash" },
+	copyImage: { label: "Copy image", icon: "image" },
+	copyImageUrl: { label: "Copy image address", icon: "link" },
+	copyId: { label: "Copy message ID", icon: "copy" },
 } as const satisfies Record<MessageAction, { readonly label: string; readonly icon: IconName }>
 
+/** Holding already selects the text natively, and the sheet has no image under a pointer. */
+const SHEET_SKIPS: ReadonlyArray<MessageAction> = ["selectText", "copyImage", "copyImageUrl"]
+
 /** What a row action does: open the picker, run a Command, or nothing (`selectText` is the host's). */
-const actionStep = (props: MessageListProps, message: typeof ChatMessage.Type, action: MessageAction) =>
+const actionStep = (
+	props: MessageListProps,
+	message: typeof ChatMessage.Type,
+	action: MessageAction,
+	image?: string,
+) =>
 	Match.value(action).pipe(
 		Match.when("react", () => "picker" as const),
 		// The host acts first for `selectText` (native selection on iOS); nothing more here.
@@ -259,11 +270,16 @@ const actionStep = (props: MessageListProps, message: typeof ChatMessage.Type, a
 				},
 			}),
 		),
-		Match.orElse(() =>
-			RequestHost.make({
-				request: { _tag: "Action", messageId: message.id, action, content: message.content },
-			}),
-		),
+		Match.orElse(() => {
+			const request = {
+				_tag: "Action",
+				messageId: message.id,
+				action,
+				content: message.content,
+			} as const
+			// The image under the pointer, for the web menu's `copyImage` and `copyImageUrl`.
+			return RequestHost.make({ request: image === undefined ? request : { ...request, image } })
+		}),
 	)
 
 /** The anchor run of a profile opened from the author: no run has it, so the row itself anchors. */
@@ -353,9 +369,9 @@ export const MessageList = Hazel.component({
 					)
 		},
 		ReachedEnd: ($) => $.model,
-		PressedAction: ($, { id, action }) => {
+		PressedAction: ($, { id, action, image }) => {
 			const message = messageOf($.model, id)
-			const step = message === undefined ? null : actionStep($.props, message, action)
+			const step = message === undefined ? null : actionStep($.props, message, action, image)
 			return step === null ? $.model : step === "picker" ? $.evolve({ picker: () => id }) : $.run(step)
 		},
 		PressedReaction: ($, { id, emoji }) =>
@@ -530,7 +546,7 @@ export const MessageList = Hazel.component({
 				.grouped(entry.grouped)
 				.pinned(entry.isPinned)
 				.entering(entry.entering)
-				.on("action", ({ action }) => MessageListMessage.PressedAction({ id: entry.key, action }))
+				.on("action", (payload) => MessageListMessage.PressedAction({ id: entry.key, ...payload }))
 				.on("pressReaction", ({ emoji }) =>
 					MessageListMessage.PressedReaction({ id: entry.key, emoji }),
 				)
@@ -621,18 +637,19 @@ export const MessageList = Hazel.component({
 									.on("press", MessageListMessage.PressedMenuReaction({ emoji })),
 							),
 						),
-					h.frame.surface("flush").children(
-						// Holding on the text already selects it natively, so the sheet leaves `selectText` out.
-						...(menuRow?.row.actions ?? [])
-							.filter((action) => action !== "selectText")
-							.map((action) =>
-								h.item
-									.key(action)
-									.title(ACTION_LOOK[action].label)
-									.leading(h.icon.name(ACTION_LOOK[action].icon))
-									.on("press", MessageListMessage.PressedMenuAction({ action })),
-							),
-					),
+					h.frame
+						.surface("flush")
+						.children(
+							...(menuRow?.row.actions ?? [])
+								.filter((action) => !SHEET_SKIPS.includes(action))
+								.map((action) =>
+									h.item
+										.key(action)
+										.title(ACTION_LOOK[action].label)
+										.leading(h.icon.name(ACTION_LOOK[action].icon))
+										.on("press", MessageListMessage.PressedMenuAction({ action })),
+								),
+						),
 				)
 
 		const profile = model.profile
