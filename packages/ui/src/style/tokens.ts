@@ -98,8 +98,8 @@ const color = {
 	"dialog-ring": themed(alpha(ref("fg"), 0.08), alpha(ref("fg"), 0.1)),
 	/** A sheet's edge (`border-muted-fg/20 dark:border-border`). */
 	"sheet-border": themed(alpha(ref("muted-fg"), 0.2), ref("border")),
-	/** A modal's scrim (`overlay-tokens`): fg at 32% over the page. */
-	scrim: same(alpha(ref("fg"), 0.32)),
+	/** A modal's scrim: the kit's `bg-overlay-backdrop` (modal, sheet and command menu backdrops). */
+	scrim: themed(lit("oklch(0.2 0.01 286 / 0.2)"), lit("oklch(0 0 0 / 0.5)")),
 	/** The lightbox is dark in both themes (`lightbox-tokens`): its stage, ink, chrome and edges. */
 	"lightbox-scrim": same(alpha(p("black"), 0.9)),
 	"lightbox-fg": same(p("white")),
@@ -339,6 +339,12 @@ export const tokens = {
 			compact: { size: 18, lineHeight: 28, tracking: -0.252 },
 			regular: { size: 18, lineHeight: 28, tracking: -0.252 },
 		},
+		// A dialog's title and description (dialog.styles.ts `text-lg/6 sm:text-base/6`, `text-base/6 sm:text-sm/6`).
+		modalTitle: {
+			compact: { size: 18, lineHeight: 24, tracking: -0.198 },
+			regular: { size: 16, lineHeight: 24, tracking: -0.176 },
+		},
+		modalText: { compact: { size: 16, lineHeight: 24 }, regular: { size: 14, lineHeight: 24 } },
 	},
 	/** Tailwind's 4px grid by step name (`3` is `--spacing(3)`, 12px): every step the kit uses. */
 	space: {
@@ -448,6 +454,21 @@ export const tokens = {
 		xl: {
 			light: "0 8px 16px -8px oklch(0 0 0 / 0.08), 0 28px 64px -12px oklch(0 0 0 / 0.22)",
 			dark: "inset 0 1px 0 oklch(1 0 0 / 0.06), 0 8px 16px -8px oklch(0 0 0 / 0.45), 0 28px 64px -12px oklch(0 0 0 / 0.7)",
+		},
+		/** The command palette (`commandMenuModalBase`): `ring-muted-fg/15 dark:ring-border` over the deeper `xl`. */
+		palette: {
+			light: "0 0 0 1px oklch(44.2% 0.017 285.786 / 0.15), 0 8px 16px -8px oklch(0 0 0 / 0.08), 0 28px 64px -12px oklch(0 0 0 / 0.22)",
+			dark: "0 0 0 1px oklch(1 0 0 / 0.085), inset 0 1px 0 oklch(1 0 0 / 0.06), 0 8px 16px -8px oklch(0 0 0 / 0.45), 0 28px 64px -12px oklch(0 0 0 / 0.7)",
+		},
+		/** A floating sheet (`sheet.styles.ts` `isFloat`): `shadow-lg` under `ring-fg/5 dark:ring-border`. */
+		"sheet-card": {
+			light: "0 0 0 1px oklch(14.1% 0.005 285.823 / 0.05), 0 4px 8px -4px oklch(0 0 0 / 0.06), 0 16px 36px -8px oklch(0 0 0 / 0.14)",
+			dark: "0 0 0 1px oklch(1 0 0 / 0.085), inset 0 1px 0 oklch(1 0 0 / 0.05), 0 4px 8px -4px oklch(0 0 0 / 0.4), 0 16px 36px -8px oklch(0 0 0 / 0.6)",
+		},
+		/** A modal panel (`modalContentBase`): `shadow-xl` under a 1px ring (`ring-fg/8 dark:ring-fg/10`). */
+		dialog: {
+			light: "0 0 0 1px oklch(14.1% 0.005 285.823 / 0.08), 0 8px 16px -8px oklch(0 0 0 / 0.08), 0 28px 64px -12px oklch(0 0 0 / 0.22)",
+			dark: "0 0 0 1px oklch(98.5% 0 none / 0.1), inset 0 1px 0 oklch(1 0 0 / 0.06), 0 8px 16px -8px oklch(0 0 0 / 0.45), 0 28px 64px -12px oklch(0 0 0 / 0.7)",
 		},
 	},
 	/** Poses over time (`MOTION.md`, from styles.css `@keyframes`); a pose left out is at rest. */

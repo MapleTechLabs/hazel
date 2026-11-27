@@ -109,10 +109,13 @@ describe("overlay primitives on the web host", () => {
 				expect(panel.hasAttribute("data-open")).toBe(true)
 				expect(panel.getAttribute("aria-labelledby")).toBe(panel.querySelector("h2")?.id)
 				expect(panel.getAttribute("aria-describedby")).toBe(panel.querySelector("p")?.id)
-				const [name, topic] = [...panel.querySelectorAll("input")]
+				const [name] = [...panel.querySelectorAll("input")]
 				expect(document.activeElement).toBe(name)
-				topic!.focus()
-				key(topic!, "Tab")
+				// The close button (today's, inside the panel) is the last stop; Tab wraps from it.
+				const close = panel.querySelector<HTMLButtonElement>("[data-hz-part=close]")!
+				expect(close.hidden).toBe(false)
+				close.focus()
+				key(close, "Tab")
 				expect(document.activeElement).toBe(name)
 
 				key(name!, "Escape")

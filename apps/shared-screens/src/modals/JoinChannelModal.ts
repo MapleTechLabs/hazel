@@ -159,6 +159,7 @@ export const JoinChannelModalNoDeps = Hazel.component({
 		const shown = (unjoined ?? []).filter((channel) => channel.name.toLowerCase().includes(query))
 		return h.dialog
 			.open(true)
+			.size("large")
 			.title("Browse channels")
 			.description("Join a public channel in your organization")
 			.on("dismiss", JoinChannelMessage.DismissedDialog())

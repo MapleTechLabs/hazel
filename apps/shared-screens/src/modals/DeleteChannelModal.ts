@@ -101,6 +101,7 @@ export const DeleteChannelModalNoDeps = Hazel.component({
 	view: (h, model) =>
 		h.dialog
 			.open(true)
+			.size("large")
 			.title("Delete channel")
 			// HAZEL-GAP(p4-dialog-description-strong): today's description sets `#name` in medium weight.
 			.description(

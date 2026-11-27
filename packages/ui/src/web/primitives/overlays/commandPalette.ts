@@ -283,14 +283,16 @@ export const primitive = definePrimitive("commandPalette", ({ document, tag, out
 		flag(results, "empty", items.length === 0)
 		results.replaceChildren(...sections, empty)
 		showEmpty()
-		// After an edit the first result; otherwise the same item while it is still there.
+		// After an edit the first result, on the first draw that has one (a debounced query lands late);
+		// otherwise the same item while it is still there.
 		if (edited) highlight(input.value === "" ? undefined : items[0]?.item.id, true)
 		else highlight(previous, false)
-		edited = false
+		if (input.value === "" || items.length > 0) edited = false
 	}
 
 	const step = (direction: 1 | -1) => {
 		if (items.length === 0) return
+		edited = false
 		const at = items.findIndex((entry) => entry.item.id === highlighted)
 		const next =
 			at < 0 ? (direction === 1 ? 0 : items.length - 1) : (at + direction + items.length) % items.length

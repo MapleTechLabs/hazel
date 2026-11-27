@@ -787,10 +787,10 @@ export const MessageList = Hazel.component({
 			shown === null
 				? undefined
 				: rowOf(model, shown.messageId)?.renders.find((render) => render.renderId === shown.renderId)
-		// HAZEL-GAP(p4-dialog-fullscreen): today's fullscreen render fills the window less a margin; `dialog` has no size option, so it is the regular dialog.
 		const fullscreenDialog = () =>
 			h.dialog
 				.open(shown !== null && shownRender !== undefined)
+				.size("fullscreen")
 				.title(shownRender?.title ?? "")
 				.on("dismiss", MessageListMessage.DismissedRenderFullscreen())
 				.children(

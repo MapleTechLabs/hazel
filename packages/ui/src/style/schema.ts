@@ -179,7 +179,7 @@ export type FrameSurface = (typeof frameSurfaces)[number]
  * `page` a phone tab's page (`mobileTopBar`: a 56pt sticky bar, the section heading, the page ground);
  * `detail` a page opened from another (All media): an arrow back and a headline title over a `px-4 py-3` bar.
  */
-export const screenSurfaces = ["sidebar", "page", "centered", "detail"] as const
+export const screenSurfaces = ["sidebar", "page", "centered", "detail", "panel"] as const
 export type ScreenSurface = (typeof screenSurfaces)[number]
 
 /** `eyebrow`: settings' "Account" and "Workspace" (a `heading` `label` inset `px-3 pt-3 pb-1` over its rows). */
@@ -258,6 +258,22 @@ export type IconTileTone = (typeof iconTileTones)[number]
 /** The kit's `md` (40pt); `small` and `xsmall` are `sourceMark`'s 32 and 24pt tiles. */
 export const iconTileSizes = ["regular", "small", "xsmall"] as const
 export type IconTileSize = (typeof iconTileSizes)[number]
+
+/**
+ * A sheet's look: `panel` a bottom panel with its title row (a centred form sheet from `sm`);
+ * `card` today's floating sheet (`ui/sheet.ts` `isFloat`): 8px from the edges, the close button in
+ * its corner and the title only named to assistive tech.
+ */
+export const sheetStyles = ["panel", "card"] as const
+export type SheetStyle = (typeof sheetStyles)[number]
+
+/** A dialog's width (the kit's modal sizes): `regular` 28rem, `large` 32rem, `fullscreen` the window. */
+export const dialogSizes = ["regular", "large", "fullscreen"] as const
+export type DialogSize = (typeof dialogSizes)[number]
+
+/** A dialog's icon tile: `accent` beside the title (today's create DM), `danger` above it (a warning). */
+export const dialogIconTones = ["accent", "danger"] as const
+export type DialogIconTone = (typeof dialogIconTones)[number]
 
 /** An unread row's mark at its start: the sidebar's edge `pip`, or activity's brand `dot`. */
 export const itemUnreadMarks = ["none", "pip", "dot"] as const
@@ -432,7 +448,17 @@ export interface Shadow {
  * `headline` a page header's title (the kit's heading `title`, 18/28); `hero` Tailwind's `text-xl` (20/28);
  * `stat` a KPI's value (`text-2xl/8 tracking-tight`, `max-md:text-xl/7`).
  */
-export const recipeTextSteps = ["tiny", "micro", "reading", "snug", "headline", "hero", "stat"] as const
+export const recipeTextSteps = [
+	"tiny",
+	"micro",
+	"reading",
+	"snug",
+	"headline",
+	"hero",
+	"stat",
+	"modalTitle",
+	"modalText",
+] as const
 export type RecipeTextStep = (typeof recipeTextSteps)[number]
 export type TextStep = TextRole | RecipeTextStep
 

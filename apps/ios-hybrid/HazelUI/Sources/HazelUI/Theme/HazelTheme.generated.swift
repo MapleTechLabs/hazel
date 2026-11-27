@@ -55,6 +55,8 @@ public enum HazelTheme {
         case headline = "headline"
         case hero = "hero"
         case stat = "stat"
+        case modalTitle = "modalTitle"
+        case modalText = "modalText"
     }
 
     public enum ButtonSize: String, CaseIterable, Sendable {
@@ -183,8 +185,8 @@ public enum HazelTheme {
         public static let dialogRing = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 0.08), dark: RGBA(0.980256, 0.980256, 0.980256, 0.1))
         /// `sheet-border`: #52525c33 / #ffffff16
         public static let sheetBorder = ThemedColor(light: RGBA(0.321182, 0.32109, 0.362108, 0.2), dark: RGBA(1, 1, 1, 0.085))
-        /// `scrim`: #09090b52 / #fafafa52
-        public static let scrim = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 0.32), dark: RGBA(0.980256, 0.980256, 0.980256, 0.32))
+        /// `scrim`: #15151a33 / #00000080
+        public static let scrim = ThemedColor(light: RGBA(0.084263, 0.08403, 0.103791, 0.2), dark: RGBA(0, 0, 0, 0.5))
         /// `lightbox-scrim`: #000000e6 / #000000e6
         public static let lightboxScrim = ThemedColor(light: RGBA(0, 0, 0, 0.9), dark: RGBA(0, 0, 0, 0.9))
         /// `lightbox-fg`: #ffffffff / #ffffffff
@@ -495,6 +497,8 @@ public enum HazelTheme {
         case .stat: sizeClass == .compact ? TypeMetrics(size: 20, lineHeight: 28, tracking: -0.5) : TypeMetrics(size: 24, lineHeight: 32, tracking: -0.6)
         case .hero: sizeClass == .compact ? TypeMetrics(size: 20, lineHeight: 28, tracking: 0) : TypeMetrics(size: 20, lineHeight: 28, tracking: 0)
         case .headline: sizeClass == .compact ? TypeMetrics(size: 18, lineHeight: 28, tracking: -0.252) : TypeMetrics(size: 18, lineHeight: 28, tracking: -0.252)
+        case .modalTitle: sizeClass == .compact ? TypeMetrics(size: 18, lineHeight: 24, tracking: -0.198) : TypeMetrics(size: 16, lineHeight: 24, tracking: -0.176)
+        case .modalText: sizeClass == .compact ? TypeMetrics(size: 16, lineHeight: 24, tracking: 0) : TypeMetrics(size: 14, lineHeight: 24, tracking: 0)
         }
     }
 
@@ -511,6 +515,9 @@ public enum HazelTheme {
         "md": (light: [Shadow(inset: false, x: 0, y: 2, blur: 4, spread: -2, color: RGBA(0, 0, 0, 0.05)), Shadow(inset: false, x: 0, y: 6, blur: 16, spread: -4, color: RGBA(0, 0, 0, 0.1))], dark: [Shadow(inset: true, x: 0, y: 1, blur: 0, spread: 0, color: RGBA(1, 1, 1, 0.04)), Shadow(inset: false, x: 0, y: 2, blur: 4, spread: -2, color: RGBA(0, 0, 0, 0.3)), Shadow(inset: false, x: 0, y: 6, blur: 16, spread: -4, color: RGBA(0, 0, 0, 0.45))]),
         "lg": (light: [Shadow(inset: false, x: 0, y: 4, blur: 8, spread: -4, color: RGBA(0, 0, 0, 0.06)), Shadow(inset: false, x: 0, y: 16, blur: 36, spread: -8, color: RGBA(0, 0, 0, 0.14))], dark: [Shadow(inset: true, x: 0, y: 1, blur: 0, spread: 0, color: RGBA(1, 1, 1, 0.05)), Shadow(inset: false, x: 0, y: 4, blur: 8, spread: -4, color: RGBA(0, 0, 0, 0.4)), Shadow(inset: false, x: 0, y: 16, blur: 36, spread: -8, color: RGBA(0, 0, 0, 0.6))]),
         "xl": (light: [Shadow(inset: false, x: 0, y: 8, blur: 16, spread: -8, color: RGBA(0, 0, 0, 0.08)), Shadow(inset: false, x: 0, y: 28, blur: 64, spread: -12, color: RGBA(0, 0, 0, 0.22))], dark: [Shadow(inset: true, x: 0, y: 1, blur: 0, spread: 0, color: RGBA(1, 1, 1, 0.06)), Shadow(inset: false, x: 0, y: 8, blur: 16, spread: -8, color: RGBA(0, 0, 0, 0.45)), Shadow(inset: false, x: 0, y: 28, blur: 64, spread: -12, color: RGBA(0, 0, 0, 0.7))]),
+        "palette": (light: [Shadow(inset: false, x: 0, y: 0, blur: 0, spread: 1, color: RGBA(0.321182, 0.32109, 0.362108, 0.15)), Shadow(inset: false, x: 0, y: 8, blur: 16, spread: -8, color: RGBA(0, 0, 0, 0.08)), Shadow(inset: false, x: 0, y: 28, blur: 64, spread: -12, color: RGBA(0, 0, 0, 0.22))], dark: [Shadow(inset: false, x: 0, y: 0, blur: 0, spread: 1, color: RGBA(1, 1, 1, 0.085)), Shadow(inset: true, x: 0, y: 1, blur: 0, spread: 0, color: RGBA(1, 1, 1, 0.06)), Shadow(inset: false, x: 0, y: 8, blur: 16, spread: -8, color: RGBA(0, 0, 0, 0.45)), Shadow(inset: false, x: 0, y: 28, blur: 64, spread: -12, color: RGBA(0, 0, 0, 0.7))]),
+        "sheet-card": (light: [Shadow(inset: false, x: 0, y: 0, blur: 0, spread: 1, color: RGBA(0.035374, 0.035359, 0.044318, 0.05)), Shadow(inset: false, x: 0, y: 4, blur: 8, spread: -4, color: RGBA(0, 0, 0, 0.06)), Shadow(inset: false, x: 0, y: 16, blur: 36, spread: -8, color: RGBA(0, 0, 0, 0.14))], dark: [Shadow(inset: false, x: 0, y: 0, blur: 0, spread: 1, color: RGBA(1, 1, 1, 0.085)), Shadow(inset: true, x: 0, y: 1, blur: 0, spread: 0, color: RGBA(1, 1, 1, 0.05)), Shadow(inset: false, x: 0, y: 4, blur: 8, spread: -4, color: RGBA(0, 0, 0, 0.4)), Shadow(inset: false, x: 0, y: 16, blur: 36, spread: -8, color: RGBA(0, 0, 0, 0.6))]),
+        "dialog": (light: [Shadow(inset: false, x: 0, y: 0, blur: 0, spread: 1, color: RGBA(0.035374, 0.035359, 0.044318, 0.08)), Shadow(inset: false, x: 0, y: 8, blur: 16, spread: -8, color: RGBA(0, 0, 0, 0.08)), Shadow(inset: false, x: 0, y: 28, blur: 64, spread: -12, color: RGBA(0, 0, 0, 0.22))], dark: [Shadow(inset: false, x: 0, y: 0, blur: 0, spread: 1, color: RGBA(0.980256, 0.980256, 0.980256, 0.1)), Shadow(inset: true, x: 0, y: 1, blur: 0, spread: 0, color: RGBA(1, 1, 1, 0.06)), Shadow(inset: false, x: 0, y: 8, blur: 16, spread: -8, color: RGBA(0, 0, 0, 0.45)), Shadow(inset: false, x: 0, y: 28, blur: 64, spread: -12, color: RGBA(0, 0, 0, 0.7))]),
     ]
 
     public enum Layout: Sendable { case row, column, inlineRow, contents }
@@ -1075,13 +1082,13 @@ public enum HazelTheme {
             inert: [],
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .contents)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "panel", style: Style(layout: .column, background: Colors.overlay, color: Colors.overlayFg, borderColor: Colors.border, borderWidth: 1, radius: 16, shadow: "xl")),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "panel", style: Style(layout: .column, background: Colors.overlay, color: Colors.overlayFg, radius: 16, shadow: "palette")),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "field", style: Style(layout: .row, align: .center, divider: Colors.border, paddingX: 10, paddingY: 4, fill: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "fieldIcon", style: Style(color: Colors.mutedFg, size: 20, shrink: false)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "input", style: Style(color: Colors.fg, paddingX: 10, paddingY: 8, text: .body, grow: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "escape", style: Style(borderColor: Colors.border, borderWidth: 1, radius: 4, paddingX: 6, paddingY: 2, text: .caption, shrink: false)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "results", style: Style(layout: .column, paddingX: 8, paddingY: 8, rowGap: 12)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "group", style: Style(layout: .column, rowGap: 2)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "group", style: Style(layout: .column, rowGap: 1)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "groupTitle", style: Style(color: Colors.mutedFg, paddingX: 10, marginBottom: 4, text: .caption, truncate: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "item", style: Style(layout: .row, align: .center, color: Colors.fg, radius: 8, paddingX: 12, paddingY: 8, gap: 10, text: .body, leading: 24)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "itemIcon", style: Style(color: Colors.fg2, size: 20, shrink: false)),
@@ -1231,17 +1238,28 @@ public enum HazelTheme {
 
         public static let dialog = Recipe(
             primitive: "dialog",
-            defaults: [:],
+            defaults: ["size": "regular", "iconTone": "accent"],
             inert: [],
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .contents)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "panel", style: Style(layout: .column, background: Colors.bg, color: Colors.fg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 20, paddingY: 20, rowGap: 16, shadow: "overlay")),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "panel", style: Style(layout: .column, background: Colors.overlay, color: Colors.overlayFg, radius: 16, paddingX: 24, paddingY: 24, rowGap: 16, shadow: "dialog")),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "header", style: Style(layout: .column, rowGap: 4)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "title", style: Style(text: .title, weight: 600)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "description", style: Style(color: Colors.mutedFg, text: .body)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(layout: .column, rowGap: 16)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "actions", style: Style(gap: 8)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "panel", style: Style(paddingX: 24, paddingY: 24)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(layout: .row, align: .center, justify: .center, radius: 8, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "heading", style: Style(layout: .column, rowGap: 4)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "title", style: Style(color: Colors.fg, text: .modalTitle, weight: 600)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "description", style: Style(color: Colors.mutedFg, text: .modalText)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "close", style: Style(layout: .row, align: .center, justify: .center, color: Colors.fg2, radius: 8, size: 32, transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(rowGap: 16)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "actions", style: Style(paddingTop: 4, gap: 12)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "secondaryActions", style: Style(paddingTop: 4, gap: 12)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "panel", style: Style(radius: 12, paddingX: 32, paddingY: 32, rowGap: 24)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "close", style: Style(radius: 6, size: 28)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "actions", style: Style(paddingTop: 12)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "secondaryActions", style: Style(paddingTop: 12)),
+                Layer(when: When(options: ["size": "fullscreen"], flags: [], states: [], sizeClass: nil), part: "panel", style: Style(radius: 6)),
+                Layer(when: When(options: ["iconTone": "accent"], flags: [], states: [], sizeClass: nil), part: "header", style: Style(layout: .row, align: .center, gap: 12)),
+                Layer(when: When(options: ["iconTone": "accent"], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(background: Colors.primarySubtle, color: Colors.primary, size: 40)),
+                Layer(when: When(options: ["iconTone": "danger"], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(background: Colors.dangerWash, color: Colors.danger, borderColor: Colors.dangerTint, borderWidth: 1, size: 48)),
                 Layer(when: When(options: [:], flags: [], states: [.destructive], sizeClass: nil), part: "title", style: Style(color: Colors.dangerSubtleFg)),
             ]
         )
@@ -1787,6 +1805,10 @@ public enum HazelTheme {
                 Layer(when: When(options: ["surface": "detail"], flags: [], states: [], sizeClass: nil), part: "title", style: Style(text: .headline, opacity: 1, weight: 600)),
                 Layer(when: When(options: ["surface": "detail"], flags: [], states: [], sizeClass: nil), part: "content", style: Style(paddingY: 0, grow: true)),
                 Layer(when: When(options: ["surface": "detail"], flags: [], states: [], sizeClass: .regular), part: "back", style: Style(paddingX: 8, size: 32)),
+                Layer(when: When(options: ["surface": "panel"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.clear)),
+                Layer(when: When(options: ["surface": "panel"], flags: [], states: [], sizeClass: nil), part: "header", style: Style(divider: Colors.border, paddingX: 16, gap: 4)),
+                Layer(when: When(options: ["surface": "panel"], flags: [], states: [], sizeClass: nil), part: "title", style: Style(text: .label, opacity: 1, weight: 600)),
+                Layer(when: When(options: ["surface": "panel"], flags: [], states: [], sizeClass: nil), part: "content", style: Style(paddingY: 0, grow: true)),
                 Layer(when: When(options: ["surface": "centered"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.bg, paddingX: 24, paddingY: 24)),
                 Layer(when: When(options: ["surface": "centered"], flags: [], states: [], sizeClass: nil), part: "header", style: Style(borderWidth: 0, paddingX: 0, paddingY: 0, marginBottom: 32, minHeight: 0)),
                 Layer(when: When(options: ["surface": "centered"], flags: [], states: [], sizeClass: nil), part: "title", style: Style(text: .display, opacity: 1, weight: 600)),
@@ -1887,17 +1909,19 @@ public enum HazelTheme {
 
         public static let sheet = Recipe(
             primitive: "sheet",
-            defaults: [:],
+            defaults: ["style": "panel"],
             inert: [],
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .contents)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "panel", style: Style(layout: .column, background: Colors.bg, color: Colors.fg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 16, paddingY: 16, rowGap: 16, shadow: "overlay")),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "header", style: Style(layout: .row, align: .center, gap: 8)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "title", style: Style(text: .title, truncate: true, grow: true, weight: 600)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "close", style: Style(layout: .row, align: .center, justify: .center, color: Colors.mutedFg, radius: 6, size: 32, shrink: false, transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "close", style: Style(layout: .row, align: .center, justify: .center, color: Colors.fg2, radius: 8, size: 32, shrink: false, transition: 0.15)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(layout: .column, rowGap: 16)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "panel", style: Style(paddingX: 24, paddingY: 24)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "close", style: Style(size: 28)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "close", style: Style(radius: 6, size: 28)),
+                Layer(when: When(options: ["style": "card"], flags: [], states: [], sizeClass: nil), part: "panel", style: Style(background: Colors.overlay, color: Colors.overlayFg, borderWidth: 0, radius: 8, paddingX: 16, paddingY: 16, rowGap: 0, shadow: "sheet-card")),
+                Layer(when: When(options: ["style": "card"], flags: [], states: [], sizeClass: .regular), part: "panel", style: Style(paddingX: 16, paddingY: 16)),
             ]
         )
 

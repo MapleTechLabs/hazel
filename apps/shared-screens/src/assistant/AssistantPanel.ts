@@ -1145,7 +1145,7 @@ export const AssistantPanelNoDeps = PanelDef.make({
 	view: (h, model) => {
 		const thread = threadOf(model)
 		return h.screen
-			.surface("page")
+			.surface("panel")
 			.title(thread === null || thread.title === "" ? "New chat" : thread.title)
 			.toolbar(toolbar(h, model))
 			.children(...body(h, model))

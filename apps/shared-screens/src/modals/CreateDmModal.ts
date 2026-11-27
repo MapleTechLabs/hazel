@@ -270,75 +270,71 @@ export const CreateDmModalNoDeps = Hazel.component({
 				.name(fullName(user))
 				.initials(initialsOf(user))
 				.src(user.avatarUrl ?? undefined)
-		return (
-			h.dialog
-				.open(true)
-				// HAZEL-GAP(p4-dialog-icon): today's header leads with a primary icon tile (messages) beside the title.
-				.title("Start a conversation")
-				.description("Select one or more team members to start a conversation")
-				.on("dismiss", CreateDmMessage.DismissedDialog())
-				.children(
-					h.searchField
-						.placeholder("Search team members...")
-						.value(model.search)
-						.on("change", (payload) => CreateDmMessage.ChangedSearch({ payload })),
-					selected.length === 0
-						? null
-						: h.stack
-								.axis("horizontal")
-								.align("center")
-								.density("compact")
-								.children(
-									h.text
-										.role("caption")
-										.tone("muted")
-										.children(`${selected.length} selected`),
-									h.avatarStack
-										.overflow(selected.length > 3 ? selected.length - 3 : 0)
-										.children(
-											...selected.slice(0, 3).map((user) => avatar(user).key(user.id)),
-										),
-								),
-					users.length === 0
-						? h.emptyState.title(
-								model.search.text !== "" ? "No users found" : "No team members available",
-							)
-						: h.list.children(
-								...users.map((user) => {
-									const isSelected = model.selected.includes(user.id)
-									return (
-										h.item
-											.key(user.id)
-											.title(fullName(user))
-											// HAZEL-GAP(p4-item-subtitle-tone): today's "Active now" is success-green; subtitles are muted.
-											.subtitle(user.online ? "Active now" : (user.customMessage ?? ""))
-											// HAZEL-GAP(p4-item-check): today a picked row also rings in primary and ends in a check.
-											.selected(isSelected)
-											// HAZEL-GAP(p4-item-avatar-small): today's row avatar is the kit's `sm` (32px).
-											.leading(avatar(user))
-											.on("press", CreateDmMessage.PressedUser({ userId: user.id }))
-									)
-								}),
+		return h.dialog
+			.open(true)
+			.size("large")
+			.icon("messages")
+			.title("Start a conversation")
+			.description("Select one or more team members to start a conversation")
+			.on("dismiss", CreateDmMessage.DismissedDialog())
+			.children(
+				h.searchField
+					.placeholder("Search team members...")
+					.value(model.search)
+					.on("change", (payload) => CreateDmMessage.ChangedSearch({ payload })),
+				selected.length === 0
+					? null
+					: h.stack
+							.axis("horizontal")
+							.align("center")
+							.density("compact")
+							.children(
+								h.text.role("caption").tone("muted").children(`${selected.length} selected`),
+								h.avatarStack
+									.overflow(selected.length > 3 ? selected.length - 3 : 0)
+									.children(
+										...selected.slice(0, 3).map((user) => avatar(user).key(user.id)),
+									),
 							),
-				)
-				.actions(
-					h.button
-						.label("Cancel")
-						.variant("outline")
-						.disabled(model.submitting)
-						.on("press", CreateDmMessage.PressedCancel()),
-					h.button
-						.label(
-							model.submitting
-								? "Creating..."
-								: selected.length > 1
-									? `Start group conversation (${selected.length})`
-									: "Start conversation",
+				users.length === 0
+					? h.emptyState.title(
+							model.search.text !== "" ? "No users found" : "No team members available",
 						)
-						.disabled(model.submitting || selected.length === 0)
-						.on("press", CreateDmMessage.PressedStart()),
-				)
-		)
+					: h.list.children(
+							...users.map((user) => {
+								const isSelected = model.selected.includes(user.id)
+								return (
+									h.item
+										.key(user.id)
+										.title(fullName(user))
+										// HAZEL-GAP(p4-item-subtitle-tone): today's "Active now" is success-green; subtitles are muted.
+										.subtitle(user.online ? "Active now" : (user.customMessage ?? ""))
+										// HAZEL-GAP(p4-item-check): today a picked row also rings in primary and ends in a check.
+										.selected(isSelected)
+										// HAZEL-GAP(p4-item-avatar-small): today's row avatar is the kit's `sm` (32px).
+										.leading(avatar(user))
+										.on("press", CreateDmMessage.PressedUser({ userId: user.id }))
+								)
+							}),
+						),
+			)
+			.actions(
+				h.button
+					.label("Cancel")
+					.variant("outline")
+					.disabled(model.submitting)
+					.on("press", CreateDmMessage.PressedCancel()),
+				h.button
+					.label(
+						model.submitting
+							? "Creating..."
+							: selected.length > 1
+								? `Start group conversation (${selected.length})`
+								: "Start conversation",
+					)
+					.disabled(model.submitting || selected.length === 0)
+					.on("press", CreateDmMessage.PressedStart()),
+			)
 	},
 })
 

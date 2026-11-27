@@ -155,6 +155,7 @@ export const RenameChannelModalNoDeps = RenameChannelDef.make({
 		const copy = copies[h.props.kind]
 		return h.dialog
 			.open(true)
+			.size("large")
 			.title(copy.title)
 			.description(copy.description)
 			.on("dismiss", RenameChannelMessage.DismissedDialog())

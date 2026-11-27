@@ -55,11 +55,9 @@ export const commandPalette = defineRecipe<{}, never, Part>({
 			panel: {
 				layout: "column",
 				radius: "2xl",
-				borderWidth: "hairline",
-				borderColor: "border",
 				background: "overlay",
 				color: "overlay-fg",
-				shadow: "xl",
+				shadow: "palette",
 			},
 			field: {
 				layout: "row",
@@ -81,7 +79,8 @@ export const commandPalette = defineRecipe<{}, never, Part>({
 				shrink: false,
 			},
 			results: { layout: "column", rowGap: "3", paddingX: "2", paddingY: "2" },
-			group: { layout: "column", rowGap: "0.5" },
+			// `gap-y-[calc(var(--spacing)*0.25)]`: a pixel between rows.
+			group: { layout: "column", rowGap: "px" },
 			groupTitle: {
 				paddingX: "2.5",
 				marginBottom: "1",

@@ -1,0 +1,27 @@
+{
+	"about": "hz:sheet `style` `card` (G5): today's floating phone sheet (the customer card), 8px from the edges, the close button in its corner, the title named to assistive tech only.",
+	"frame": "screen",
+	"root": {
+		"tag": "sheet",
+		"props": { "open": true, "title": "Linear at a glance", "style": "card" },
+		"events": ["dismiss"],
+		"children": [
+			{
+				"tag": "stack",
+				"children": [
+					{ "tag": "text", "props": { "strong": true }, "children": ["Linear"] },
+					{
+						"tag": "text",
+						"props": { "tone": "muted" },
+						"children": ["Revenue and signals show here after the next customer sync."]
+					}
+				]
+			}
+		]
+	},
+	"aria": [
+		{ "role": "dialog", "name": "Linear at a glance" },
+		{ "role": "button", "name": "Close" }
+	],
+	"pending": { "ios": "S3" }
+}

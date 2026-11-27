@@ -1,0 +1,42 @@
+{
+	"about": "hz:dialog in today's modal (G5): `size` `large` (32rem), an `accent` icon tile beside the title, the close button (the view listens to `dismiss`), and a footer with `secondaryActions` at its start. The axes draw the full-window size and the `danger` tile above the title.",
+	"frame": "screen",
+	"root": {
+		"tag": "dialog",
+		"props": {
+			"open": true,
+			"size": "large",
+			"icon": "messages",
+			"title": "Set your status",
+			"description": "Let your team know what you are up to."
+		},
+		"events": ["dismiss"],
+		"slots": [
+			{
+				"name": "secondaryActions",
+				"children": [{ "tag": "button", "props": { "label": "Clear status", "variant": "danger" } }]
+			},
+			{
+				"name": "actions",
+				"children": [
+					{ "tag": "button", "props": { "label": "Cancel", "variant": "outline" } },
+					{ "tag": "button", "props": { "label": "Save" } }
+				]
+			}
+		],
+		"children": [
+			{ "tag": "textField", "props": { "label": "Status", "placeholder": "What's happening?" } }
+		]
+	},
+	"axes": [
+		{ "prop": "size", "values": ["fullscreen"] },
+		{ "prop": "iconTone", "values": ["danger"] }
+	],
+	"aria": [
+		{ "role": "dialog", "name": "Set your status" },
+		{ "role": "button", "name": "Close" },
+		{ "role": "button", "name": "Clear status" },
+		{ "role": "button", "name": "Save" }
+	],
+	"pending": { "ios": "S3" }
+}

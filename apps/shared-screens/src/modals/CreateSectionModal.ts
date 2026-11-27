@@ -110,32 +110,26 @@ export const CreateSectionModalNoDeps = CreateSectionDef.make({
 	},
 	view: (h: H, model) => {
 		const error = errorOf(model)
-		return (
-			h.dialog
-				.open(true)
-				// HAZEL-GAP(p4-dialog-size): today's panel is `md` (28rem); the dialog has one width.
-				.title("Create section")
-				.on("dismiss", CreateSectionMessage.DismissedDialog())
-				.children(
-					h.textField
-						.label("Section name")
-						.placeholder("Design")
-						.value(model.name)
-						.error(error ?? undefined)
-						.on("change", (payload) => CreateSectionMessage.ChangedName({ payload }))
-						.on("submit", (payload) => CreateSectionMessage.SubmittedName({ payload })),
-				)
-				.actions(
-					h.button
-						.label("Cancel")
-						.variant("outline")
-						.on("press", CreateSectionMessage.PressedCancel()),
-					h.button
-						.label(model.submitting ? "Creating..." : "Create section")
-						.disabled(error !== null || model.submitting)
-						.on("press", CreateSectionMessage.PressedCreate()),
-				)
-		)
+		return h.dialog
+			.open(true)
+			.title("Create section")
+			.on("dismiss", CreateSectionMessage.DismissedDialog())
+			.children(
+				h.textField
+					.label("Section name")
+					.placeholder("Design")
+					.value(model.name)
+					.error(error ?? undefined)
+					.on("change", (payload) => CreateSectionMessage.ChangedName({ payload }))
+					.on("submit", (payload) => CreateSectionMessage.SubmittedName({ payload })),
+			)
+			.actions(
+				h.button.label("Cancel").variant("outline").on("press", CreateSectionMessage.PressedCancel()),
+				h.button
+					.label(model.submitting ? "Creating..." : "Create section")
+					.disabled(error !== null || model.submitting)
+					.on("press", CreateSectionMessage.PressedCreate()),
+			)
 	},
 })
 

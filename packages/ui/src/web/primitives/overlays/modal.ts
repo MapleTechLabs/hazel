@@ -15,6 +15,10 @@ export interface ModalParts {
 	readonly title: HTMLElement
 	/** Asks the view to close. */
 	readonly dismiss: () => void
+	/** Whether the view listens to `event` (read when the panel shows, once handlers are bound). */
+	readonly listens: (event: string) => boolean
+	/** Runs just before the panel shows. */
+	readonly beforeShow: (run: () => void) => void
 }
 
 /** Adds a tag's own parts; returns its own props' setter (true when it took the prop). */
@@ -32,7 +36,16 @@ const createModal = (document: Document, tag: string, node: HTMLElement, setup: 
 	const content = part(document, "div", "content")
 	panel.append(header, content)
 	node.append(panel)
-	const own = setup({ node, panel, header, title, dismiss: () => fire(primitive, "dismiss") })
+	const showing: Array<() => void> = []
+	const own = setup({
+		node,
+		panel,
+		header,
+		title,
+		dismiss: () => fire(primitive, "dismiss"),
+		listens: (event) => primitive.events?.handlers[event] !== undefined,
+		beforeShow: (run) => showing.push(run),
+	})
 
 	const overlay = controlledOverlay({
 		outer: node,
@@ -44,6 +57,7 @@ const createModal = (document: Document, tag: string, node: HTMLElement, setup: 
 			initialFocus: () => tabbables(content)[0] ?? null,
 		}),
 		onDismiss: () => fire(primitive, "dismiss"),
+		beforeShow: () => showing.forEach((run) => run()),
 	})
 	// Escape is the layer stack's; a press on the scrim lands on the dialog outside its box.
 	panel.addEventListener("cancel", (event) => event.preventDefault())
