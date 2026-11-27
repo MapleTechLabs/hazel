@@ -16,6 +16,8 @@ const css = `
 	outline: 2px solid color-mix(in oklab, var(--hz-color-ring) 70%, transparent);
 	outline-offset: 0;
 }
+/* An inline link is underlined like today's sentence links (\`underline underline-offset-2\`). */
+[data-hz=link][data-tone=inline] > [data-hz-part=control] { text-decoration: underline; text-underline-offset: 2px; }
 /* A field reads from the start whatever its parent aligns (an end-aligned stack's \`text-align: end\`). */
 :where([data-hz=textField], [data-hz=select], [data-hz=textArea], [data-hz=searchField], [data-hz=datePicker]) { text-align: start; }
 /* The field's box shows focus (the kit's \`focus:border-ring/70 focus:ring-3 ring-ring/20\`), not the input. */

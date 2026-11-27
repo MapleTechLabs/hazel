@@ -3,7 +3,7 @@ import type { LinkTone } from "../schema.ts"
 
 /**
  * `link` (`link.styles.ts`): medium weight in the accent ink; the control is an `a` or a `button`.
- * `muted` is channel settings' way back (`text-muted-fg text-sm hover:text-fg`, a 16px arrow, `gap-2`).
+ * `inline` sits inside a line of text. `muted` is channel settings' way back (`text-muted-fg text-sm hover:text-fg`, a 16px arrow, `gap-2`).
  */
 export const link = defineRecipe<{ readonly tone: LinkTone }, never, "control" | "icon">({
 	primitive: "link",
@@ -21,6 +21,9 @@ export const link = defineRecipe<{ readonly tone: LinkTone }, never, "control" |
 			default: "accent",
 			values: {
 				accent: {},
+				// A link inside a sentence (sign-in's `New to Hazel? Create an account`): the sentence's
+				// size and weight in `fg` ink, `underline underline-offset-2` (the renderer's).
+				inline: { parts: { control: { color: "fg", strong: false } } },
 				muted: {
 					parts: {
 						control: {

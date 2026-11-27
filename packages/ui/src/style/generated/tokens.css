@@ -5656,6 +5656,11 @@
 	}
 }
 
+[data-hz="link"][data-tone="inline"] > [data-hz-part="control"] {
+	color: var(--hz-color-fg);
+	font-weight: var(--hz-weight-regular);
+}
+
 [data-hz="link"][data-tone="muted"] > [data-hz-part="control"] {
 	display: inline-flex;
 	flex-direction: row;

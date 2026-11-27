@@ -339,19 +339,18 @@ const choices = (h: H, methods: SignInMethods | null, pending: Attempt | null) =
 		.children(...oauth, ...(oauth.length > 0 && passkey.length > 0 ? [orDivider(h)] : []), ...passkey)
 }
 
-// HAZEL-GAP(p4-inline-text): today's line is one sentence with an underlined link inside it; a stack stands in.
+// Today's one sentence with an underlined link inside it (`switchLink`).
 const switchLine = (h: H) => {
 	const isSignIn = h.props.mode === "SignIn"
-	return h.stack
-		.axis("horizontal")
-		.align("center")
-		.density("tight")
+	return h.text
+		.role("label")
+		.tone("muted")
 		.children(
-			h.text
-				.role("label")
-				.tone("muted")
-				.children(isSignIn ? "New to Hazel?" : "Already have an account?"),
-			h.link.label(isSignIn ? "Create an account" : "Sign in").href(h.props.switchHref),
+			isSignIn ? "New to Hazel? " : "Already have an account? ",
+			h.link
+				.tone("inline")
+				.label(isSignIn ? "Create an account" : "Sign in")
+				.href(h.props.switchHref),
 		)
 }
 
@@ -455,8 +454,11 @@ const serverLine = (h: H, model: SignInModel, server: ServerChoice) =>
 		.align("center")
 		.density("tight")
 		.children(
-			h.text.role("label").tone("muted").children("Signing in to"),
-			h.text.role("label").strong(true).children(server.label),
+			// Today's one span: `Signing in to ` with the server as a `font-medium text-fg` run.
+			h.text
+				.role("label")
+				.tone("muted")
+				.children("Signing in to ", h.text.role("label").strong(true).children(server.label)),
 			h.text.role("label").tone("muted").children("·"),
 			h.button
 				.label("Change")

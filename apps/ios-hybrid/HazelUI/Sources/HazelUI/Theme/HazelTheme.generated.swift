@@ -1605,6 +1605,7 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "control", style: Style(color: Colors.accentFg, strong: true, transition: 0.15)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(size: 16, shrink: false)),
                 Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: "control", style: Style(color: Colors.fg)),
+                Layer(when: When(options: ["tone": "inline"], flags: [], states: [], sizeClass: nil), part: "control", style: Style(color: Colors.fg, strong: false)),
                 Layer(when: When(options: ["tone": "muted"], flags: [], states: [], sizeClass: nil), part: "control", style: Style(layout: .inlineRow, align: .center, color: Colors.mutedFg, gap: 8, text: .label, strong: false)),
             ]
         )

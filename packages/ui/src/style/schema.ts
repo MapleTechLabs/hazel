@@ -188,7 +188,7 @@ export const sectionStyles = ["sidebar", "tree", "list", "sticky", "eyebrow"] as
 export type SectionStyle = (typeof sectionStyles)[number]
 
 /** A link's ink: `accent` the kit's link; `muted` a quiet way back ("Back to channel", hover `fg`). */
-export const linkTones = ["accent", "muted"] as const
+export const linkTones = ["accent", "muted", "inline"] as const
 export type LinkTone = (typeof linkTones)[number]
 
 /**
