@@ -4,10 +4,12 @@ import { extname, resolve } from "node:path"
 import { chromium, type Page } from "playwright"
 
 /**
- * `bun packages/ui/scripts/test-channel-shift.ts [--frames]`: serves the offline build (run
- * `bun run --cwd apps/ios-hybrid build:web:offline` first; this builds nothing), switches through every
- * fixture channel from the sidebar, twice round, and fails when one switch's summed layout-shift score
- * passes MAX_SCORE, printing each shift's sources.
+ * `bun run --cwd packages/ui test:channel-shift [--frames] [--cold N] [--throttle X] [--only ID]`:
+ * serves the offline build (run `bun run --cwd apps/ios-hybrid build:web:offline` first; this builds
+ * nothing) and switches to every fixture channel from the sidebar: N times (default COLD_RUNS) as the
+ * first switch after a fresh page load, then twice round on one page (warm). Fails when one switch's summed
+ * layout-shift score passes MAX_SCORE, printing each shift's sources. `--throttle` slows the CPU by X
+ * (4 makes a cold load's late lookups reliably lose the race); `--only` keeps channels ending in ID.
  *
  * It also reports, without failing, a row that moved on screen between two painted frames: the
  * layout-shift API leaves out moves the list makes by scrolling (sticking to the bottom while a row
@@ -21,6 +23,14 @@ const root = resolve(import.meta.dirname, "../../../apps/ios-hybrid/build/web")
 if (!existsSync(`${root}/index.html`))
 	throw new Error(`no offline build at ${root}: run bun run --cwd apps/ios-hybrid build:web:offline`)
 const showFrames = process.argv.includes("--frames")
+/** A race must lose every time to pass: each channel's cold switch runs this many times. */
+const COLD_RUNS = 5
+const flag = (name: string, fallback: number) => {
+	const at = process.argv.indexOf(name)
+	return at === -1 ? fallback : Number(process.argv[at + 1])
+}
+const coldRuns = flag("--cold", COLD_RUNS)
+const throttle = flag("--throttle", 1)
 
 const TYPES = new Map([
 	[".html", "text/html"],
@@ -144,41 +154,62 @@ const watch = (page: Page) =>
 
 const browser = await chromium.launch()
 let failed = false
-try {
+
+/** One switch to `href`, recorded and reported. */
+const switchTo = async (page: Page, href: string, label: string) => {
+	const watched = watch(page)
+	// Evaluations run in order, so the recording has started once this one answers.
+	await page.evaluate(() => 0)
+	await page.click(`a[href="${href}"] >> nth=0`, { noWaitAfter: true })
+	const { shifts, moves, frames } = await watched
+	const score = shifts.reduce((sum, shift) => sum + shift.value, 0)
+	const over = score > MAX_SCORE
+	failed ||= over
+	console.log(`${over ? "FAIL" : "ok  "} ${label} ${href.slice(-4)} score=${score.toFixed(4)}`)
+	for (const shift of shifts)
+		if (shift.value >= 0.0001)
+			console.log(`     shift +${shift.at}ms ${shift.value.toFixed(4)} ${shift.sources.join(", ")}`)
+	for (const move of moves) console.log(`     moved +${move.at}ms ${move.text} (not scored)`)
+	if (showFrames) for (const frame of frames) console.log(`     frame +${frame.at}ms ${frame.text}`)
+}
+
+/** A fresh page on the channel index, its sidebar drawn. */
+const freshPage = async () => {
 	const page = await browser.newPage({ viewport: VIEWPORT })
+	if (throttle > 1) {
+		const cdp = await page.context().newCDPSession(page)
+		await cdp.send("Emulation.setCPUThrottlingRate", { rate: throttle })
+	}
 	await page.goto(`http://127.0.0.1:${port}/`)
 	await page.waitForSelector('a[href*="/chat/"]', { timeout: 20_000 })
 	await page.waitForTimeout(1000)
-	const hrefs = [
-		...new Set(
-			await page.$$eval('a[href*="/chat/"]', (links) =>
-				links
-					.map((link) => link.getAttribute("href") ?? "")
-					.filter((href) => /\/chat\/[0-9a-f-]{36}$/.test(href)),
-			),
+	return page
+}
+
+const channelsOf = async (page: Page) => [
+	...new Set(
+		await page.$$eval('a[href*="/chat/"]', (links) =>
+			links
+				.map((link) => link.getAttribute("href") ?? "")
+				.filter((href) => /\/chat\/[0-9a-f-]{36}$/.test(href)),
 		),
-	]
-	// Twice round, so every channel is also visited again (a warm switch).
-	for (const pass of ["cold", "warm"]) {
-		for (const href of hrefs) {
-			const watched = watch(page)
-			// Evaluations run in order, so the recording has started once this one answers.
-			await page.evaluate(() => 0)
-			await page.click(`a[href="${href}"] >> nth=0`, { noWaitAfter: true })
-			const { shifts, moves, frames } = await watched
-			const score = shifts.reduce((sum, shift) => sum + shift.value, 0)
-			const over = score > MAX_SCORE
-			failed ||= over
-			console.log(`${over ? "FAIL" : "ok  "} ${pass} ${href.slice(-4)} score=${score.toFixed(4)}`)
-			for (const shift of shifts)
-				if (shift.value >= 0.0001)
-					console.log(
-						`     shift +${shift.at}ms ${shift.value.toFixed(4)} ${shift.sources.join(", ")}`,
-					)
-			for (const move of moves) console.log(`     moved +${move.at}ms ${move.text} (not scored)`)
-			if (showFrames) for (const frame of frames) console.log(`     frame +${frame.at}ms ${frame.text}`)
+	),
+]
+
+try {
+	const warm = await freshPage()
+	const only = process.argv.indexOf("--only")
+	const suffix = only === -1 ? "" : (process.argv[only + 1] ?? "")
+	const hrefs = (await channelsOf(warm)).filter((href) => href.endsWith(suffix))
+	for (const href of hrefs)
+		for (let run = 1; run <= coldRuns; run++) {
+			const page = await freshPage()
+			await switchTo(page, href, `cold#${run}`)
+			await page.close()
 		}
-	}
+	// Then one page through them all, and round again: channels already visited.
+	if (hrefs.length > 1)
+		for (const pass of ["warm#1", "warm#2"]) for (const href of hrefs) await switchTo(warm, href, pass)
 } finally {
 	await browser.close()
 	server.close()
