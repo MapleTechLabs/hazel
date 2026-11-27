@@ -13,7 +13,6 @@ import * as Lazy from "./lazy"
 import type { PageOutMessage } from "./out-message"
 import * as OrgHome from "./home"
 import * as Join from "./join"
-import * as SelectOrganization from "./select-organization"
 
 /**
  * Every routed page, registered once. Routes without a page render their layout around an empty
@@ -25,7 +24,6 @@ import * as SelectOrganization from "./select-organization"
 export const pages = [
 	ChatChannel.page,
 	OrgHome.page,
-	SelectOrganization.page,
 	Join.page,
 	BotInstall.page,
 	OAuthAuthorize.page,
