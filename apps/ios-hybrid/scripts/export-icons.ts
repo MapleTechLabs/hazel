@@ -1,6 +1,6 @@
 /**
  * HazelUI's checked-in resources (`icon-catalog`, `illustration-asset`): every `IconName` as a template
- * image in `Resources/Icons.xcassets` (the web's own SVG, `packages/ui/src/web/icons.ts`; `currentColor`
+ * image in `Resources/Icons.xcassets` (the web's own SVG, `packages/ui/src/web/icons.generated.ts`; `currentColor`
  * becomes black, its opacities stay; an icon with no `currentColor`, the Slack mark, keeps its colours),
  * and the empty state's illustrations in `Resources/Illustrations`.
  *   bun scripts/export-icons.ts            rewrite the resources
@@ -10,21 +10,21 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
-import { svg } from "../../../packages/ui/src/web/icons.ts"
-import { iconNames } from "../../../packages/ui/src/vocabulary/options.ts"
+import { iconNames, type IconName } from "../../../packages/ui/src/vocabulary/options.ts"
+import { iconSvgs } from "../../../packages/ui/src/web/icons.generated.ts"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const resources = join(here, "../HazelUI/Sources/HazelUI/Resources")
 const images = join(here, "../../web-foldkit/public/images")
 
 /** An icon drawn in its own colours: its markup never uses the ink (the web's Discord icon does). */
-const isOriginal = (name: string) => !svg(name).includes("currentColor")
+const isOriginal = (name: IconName) => !iconSvgs[name].includes("currentColor")
 /** `emptyIllustrations` (`style/schema.ts`) and the web picture each one is. */
 const illustrations = { squirrel: "squirrle_ocean.webp" } as const
 
 /** The web's markup as a catalog SVG: black ink, and the view box as its size (the natural size). */
-const catalogSvg = (name: string) => {
-	const markup = svg(name).replace(' aria-hidden="true"', "")
+const catalogSvg = (name: IconName) => {
+	const markup = iconSvgs[name].replace(' aria-hidden="true"', "")
 	const box = /viewBox="([\d.\s-]+)"/.exec(markup)?.[1]?.trim().split(/\s+/) ?? ["0", "0", "18", "18"]
 	const sized = outlinedText(
 		middleBaselines(markup.replace("<svg ", `<svg width="${box[2]}" height="${box[3]}" `)),
