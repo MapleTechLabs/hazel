@@ -12,9 +12,9 @@ here is an ordinary page (`definePage`), registered in `pages.ts`, the Customers
 | `CustomersAttention`            | `/attention`                      |                                         | `attention/`              |
 | `CustomersList`                 | `/list?view=`                     | `view: Option<string>`                  | `list/`                   |
 | `CustomerDetail`                | `/$accountId?tab=`                | `accountId`, `tab: Option<CustomerTab>` | `detail/`                 |
-| `CustomersSettingsSignals`      | `/settings/signals`               |                                         | `settings/signals/`       |
-| `CustomersSettingsSignalNew`    | `/settings/signals/new?template=` | `template: Option<SignalTemplate>`      | `settings/signals/`       |
-| `CustomersSettingsSignalRule`   | `/settings/signals/$ruleId`       | `ruleId`                                | `settings/signals/`       |
+| `CustomersSettingsSignals`      | `/settings/signals`               |                                         | native (PK7a)             |
+| `CustomersSettingsSignalNew`    | `/settings/signals/new?template=` | `template: Option<SignalTemplate>`      | native (PK7a)             |
+| `CustomersSettingsSignalRule`   | `/settings/signals/$ruleId`       | `ruleId`                                | native (PK7a)             |
 | `CustomersSettingsPlans`        | `/settings/plans`                 |                                         | `settings/plans/`         |
 | `CustomersSettingsSla`          | `/settings/sla`                   |                                         | `settings/sla/`           |
 | `CustomersSettingsFeatureFlags` | `/settings/feature-flags`         |                                         | `settings/feature-flags/` |
@@ -33,9 +33,9 @@ here is an ordinary page (`definePage`), registered in `pages.ts`, the Customers
 
 ## Page instances
 
-`CustomersList` and `CustomersSettingsSignals` are keyed by org (a view or editor change arrives as
+`CustomersList` is keyed by org (a view change arrives as
 `routeChanged`), `CustomerDetail` by `accountId` (tab changes arrive as `routeChanged`); the others
-by their whole route. A Command's answer reaches only the instance that sent it
+by their whole route. The Signals pages are native (`@hazel/shared-screens/customers/pages/settings/signals/`). A Command's answer reaches only the instance that sent it
 (`page/contract.ts`), so answers need no org or account check of their own.
 
 ## Live data: `src/customers/queries.ts`

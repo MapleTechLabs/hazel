@@ -1,22 +1,7 @@
 import * as Customers from "@hazel/domain/customers"
-import type { Html, HtmlBuilder } from "foldkit/html"
-import { formatMoney } from "../../../../customers/format"
-import { STAGE_LABEL } from "../../../../customers/ui/badges"
-import {
-	IconChartBar,
-	IconCirclePause,
-	IconClock,
-	IconLeave,
-	IconLoader,
-	IconPresentationChart,
-	IconReply,
-	IconRocket,
-	IconStar,
-	IconSupport,
-	IconUsers,
-	IconWarning,
-	type IconOptions,
-} from "../../../../icons"
+import type { Hazel, IconName } from "@hazel/ui/vocabulary/index"
+import { formatMoney } from "../../data/format"
+import { STAGE_LABEL } from "../../ui/badges"
 import type { ConfigForm, ConfigValue } from "./model"
 
 /**
@@ -25,22 +10,21 @@ import type { ConfigForm, ConfigValue } from "./model"
  * editor's "In plain words" paragraph. Built from the config, not `TEMPLATES[t].description`.
  */
 
-type Icon = <M>(h: HtmlBuilder<M>, options?: IconOptions) => Html
-
+// HAZEL-GAP(pk7-template-glyphs): today's chart-line, circle-pause, loader-dots and lifebuoy glyphs.
 export const TEMPLATE_ICON = {
-	inactive: IconClock,
-	usage_drop: IconPresentationChart,
-	payment_failed: IconWarning,
-	cancel_scheduled: IconCirclePause,
-	trial_ending_low_activation: IconRocket,
-	onboarding_stalled: IconLoader,
-	champion_inactive: IconStar,
-	near_limit: IconChartBar,
-	seat_growth: IconUsers,
-	churned: IconLeave,
-	response_overdue: IconReply,
-	resolution_overdue: IconSupport,
-} as const satisfies Record<Customers.SignalTemplate, Icon>
+	inactive: "clock",
+	usage_drop: "presentation",
+	payment_failed: "warning",
+	cancel_scheduled: "pause",
+	trial_ending_low_activation: "rocket",
+	onboarding_stalled: "loader",
+	champion_inactive: "star",
+	near_limit: "chart",
+	seat_growth: "users",
+	churned: "leave",
+	response_overdue: "reply",
+	resolution_overdue: "support",
+} as const satisfies Record<Customers.SignalTemplate, IconName>
 
 /** The picker card's one-liner. */
 export const TEMPLATE_BLURB = {
@@ -66,10 +50,9 @@ const bold = (text: string): Part => ({ bold: text })
 export const plainText = (parts: ReadonlyArray<Part>): string =>
 	parts.map((part) => (typeof part === "string" ? part : part.bold)).join("")
 
-export const renderParts = <M>(h: HtmlBuilder<M>, parts: ReadonlyArray<Part>): ReadonlyArray<Html | string> =>
-	parts.map((part) =>
-		typeof part === "string" ? part : h.strong([h.Class("font-semibold text-fg")], [part.bold]),
-	)
+/** The pieces as one run of text, the values strong in the default ink. */
+export const renderParts = <M>(h: Hazel.H<M>, parts: ReadonlyArray<Part>) =>
+	parts.map((part) => (typeof part === "string" ? part : h.text.strong().children(part.bold)))
 
 const text = (value: ConfigValue | undefined): string => (typeof value === "string" ? value.trim() : "")
 const isOn = (value: ConfigValue | undefined): boolean => value === true

@@ -625,8 +625,8 @@ export const SOURCE_TABLES = {
 		"chat_sync_message_links",
 		"typing_indicators",
 	],
-	// The native app has no Customers area.
-	customers: [],
+	// The web's Customers area: empty unless a page fixture writes rows (`pages/<id>.ts`).
+	customers: ["customer_signal_rules", "customer_connections", "customer_metric_definitions"],
 } as const satisfies Record<SyncSourceKind, ReadonlyArray<string>>
 
 /** Tables a source pages (`Begin.windows`): a channel's `messages`. */
@@ -662,6 +662,8 @@ export const snapshotFor = (kind: SyncSourceKind, sourceId: string): FixtureTabl
 						chat_sync_channel_links: chatSyncChannelLinkRows,
 					})
 				: undefined
+		case "customers":
+			return sourceId === orgId ? withEmpty("customers", {}) : undefined
 		case "channel":
 			if (sourceId === general.id)
 				return withEmpty("channel", {
