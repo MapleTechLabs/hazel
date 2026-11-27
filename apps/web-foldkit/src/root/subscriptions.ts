@@ -226,5 +226,11 @@ export const subscriptions = ({ model }: { readonly model: AppModel }) => {
 		Subscription.make("desktopMenu", [], () =>
 			desktopMenuItems.pipe(Stream.map((item) => AppMessage.PressedDesktopMenuItem({ item }))),
 		),
+		// Native pages' requests (`commands.ts` sends them on the bus).
+		Subscription.make("appRequests", [], () =>
+			Bus.eventsOf("AppRequest").pipe(
+				Stream.map(({ request }) => AppMessage.ReceivedAppRequest({ request })),
+			),
+		),
 	]
 }

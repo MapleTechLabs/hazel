@@ -8,6 +8,7 @@ import { LayoutHotkeyActionId } from "../overlay/hotkeys"
 import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
 import { ToastRequest } from "../overlay/toasts"
+import { PageOutMessage } from "../page/out-message"
 import { Message as PageMessage } from "../page/registry"
 import { AppRoute } from "../route"
 import * as Platform from "../platform"
@@ -36,6 +37,8 @@ export const ShellRequest = Schema.Union([
 	Schema.TaggedStruct("PressedComposeDm", {}),
 	/** A toast the shell raised. */
 	Schema.TaggedStruct("RequestedToast", { toast: ToastRequest }),
+	/** A native page's request whose work is still the host's (a modal, the palette, a DM, updates). */
+	Schema.TaggedStruct("RequestedPageOut", { outMessage: PageOutMessage }),
 ])
 export type ShellRequest = typeof ShellRequest.Type
 

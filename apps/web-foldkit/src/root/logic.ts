@@ -6,6 +6,7 @@
  * (`git show cd159551c:apps/web-foldkit/src/main.ts`) with the same rules; `app.ts` runs them.
  */
 import { Command, Component, Router } from "@effect/ui"
+import { AppRequest } from "@hazel/shared-screens/app/requests"
 import type { NotificationId, OrganizationId } from "@hazel/schema"
 import { Effect, Match, Option, Schema } from "effect"
 import { AsyncData } from "foldkit"
@@ -16,6 +17,7 @@ import { appKeymap } from "~/lib/keybindings/app-keymap"
 import { type HostContext, type HostOut, type HostReport } from "../app/context"
 import { ShellRequest } from "../app/message"
 import { errorToast, errorToastOf } from "../data/actions"
+import { ModalRequest } from "../overlay/modal/requests"
 import type { LayoutHotkeyActionId } from "../overlay/hotkeys"
 import type { ToastRequest } from "../overlay/toasts"
 import { PageOutMessage } from "../page/out-message"
@@ -410,12 +412,49 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 				command(Commands.SaveKeybindings.make({ overrides })),
 			]),
 		RequestedCurrentUserRefresh: ({ toast }) => combine([showToastIf(toast), refreshCurrentUser]),
-		// The host's own: it never sends these up.
-		RequestedModal: () => unchanged,
-		RequestedCommandPalette: () => unchanged,
-		RequestedDmCreation: () => unchanged,
-		RequestedUpdateCheck: () => unchanged,
-		RequestedUpdateInstall: () => unchanged,
+		// The host's own: only a native page sends these, and the host does the work.
+		RequestedModal: () => toHost({ _tag: "RequestedPageOut", outMessage }),
+		RequestedCommandPalette: () => toHost({ _tag: "RequestedPageOut", outMessage }),
+		RequestedDmCreation: () => toHost({ _tag: "RequestedPageOut", outMessage }),
+		RequestedUpdateCheck: () => toHost({ _tag: "RequestedPageOut", outMessage }),
+		RequestedUpdateInstall: () => toHost({ _tag: "RequestedPageOut", outMessage }),
+	})
+
+const decodeModal = Schema.decodeUnknownOption(ModalRequest)
+
+/** A native page's request: today's `PageOutMessage` where there is one, so both kinds act alike. */
+const appRequest = (request: AppRequest): Step =>
+	Match.valueTags(request, {
+		// As `RequestedNavigation`; an href the table can't route loads in full.
+		Navigate: ({ href, replace, toast }) =>
+			combine([
+				showToastIf(toast),
+				Option.match(routeOfHref(href), {
+					onNone: () => command(Commands.LoadExternal.make({ href })),
+					onSome: (route) => navigateTo(route, { replace }),
+				}),
+			]),
+		LoadPage: ({ href }) => command(Commands.LoadExternal.make({ href })),
+		History: ({ direction }) => handleOutMessage(PageOutMessage.RequestedHistory({ direction })),
+		ShowToast: ({ toast }) => showToast(toast),
+		// A kind the registry does not know is a page bug, not the user's: nothing opens.
+		OpenModal: ({ modal }) =>
+			Option.match(decodeModal(modal), {
+				onNone: () => unchanged,
+				onSome: (decoded) => handleOutMessage(PageOutMessage.RequestedModal({ modal: decoded })),
+			}),
+		OpenCommandPalette: ({ page }) => handleOutMessage(PageOutMessage.RequestedCommandPalette({ page })),
+		SignOut: () => handleOutMessage(PageOutMessage.RequestedSignOut()),
+		CreateDm: ({ organizationId, orgSlug, userId, name }) =>
+			handleOutMessage(PageOutMessage.RequestedDmCreation({ organizationId, orgSlug, userId, name })),
+		SetTheme: ({ preference }) => requestedTheme(preference),
+		SetSoundSettings: ({ settings }) =>
+			handleOutMessage(PageOutMessage.RequestedSoundSettings({ settings })),
+		SetKeybindings: ({ overrides }) =>
+			handleOutMessage(PageOutMessage.RequestedKeybindings({ overrides })),
+		RefreshCurrentUser: ({ toast }) => combine([showToastIf(toast), refreshCurrentUser]),
+		CheckForUpdate: () => handleOutMessage(PageOutMessage.RequestedUpdateCheck()),
+		InstallUpdate: () => handleOutMessage(PageOutMessage.RequestedUpdateInstall()),
 	})
 
 const receivedHostOut = (out: HostOut): Step =>
@@ -541,6 +580,7 @@ export const update = (model: AppModel, message: AppMessage): Next =>
 		PressedDesktopMenuItem: ({ item }) => pressedDesktopMenuItem(item)(model),
 		PressedHotkey: ({ actionId }) => pressedHotkey(actionId)(model),
 		ReceivedHostOut: ({ out }) => receivedHostOut(out)(model),
+		ReceivedAppRequest: ({ request }) => appRequest(request)(model),
 		PressedMobileSearch: () => toHost({ _tag: "PressedMobileSearch" })(model),
 		PressedMobileMenu: () => toHost({ _tag: "PressedMobileMenu" })(model),
 		PressedAiPanelToggle: () => toHost({ _tag: "PressedAiPanelToggle" })(model),

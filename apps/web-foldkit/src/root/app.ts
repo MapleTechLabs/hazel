@@ -32,12 +32,23 @@ import {
 	topBar,
 } from "./frame"
 import { fromKit, kit } from "./kit"
-import { type AppFlags, AppModel, hostContextOf, init, keysOf, update } from "./logic"
+import {
+	type AppFlags,
+	AppModel,
+	currentUserOf,
+	hostContextOf,
+	init,
+	keysOf,
+	memberOf,
+	organizationOf,
+	update,
+} from "./logic"
 import { AppMessage } from "./message"
+import { nativePageOf } from "./native-pages"
 import { Hole } from "./portal"
 import { subscriptions as subscriptionsOf } from "./subscriptions"
 import { AppRoute } from "./routes"
-import { OrgState, Session } from "./state"
+import { authOf, OrgState, Session } from "./state"
 
 /** Read before the first render (`entry.ts`), so a stored theme or the viewport never flash. */
 export interface Boot extends AppFlags {
@@ -68,6 +79,24 @@ const slot = (h: H, region: Region) =>
 
 const loader = (h: H, isStalled: boolean) =>
 	fromKit(h, appLoader(kit, isStalled ? "reload" : undefined), { press: AppMessage.PressedReload() })
+
+/** The session a native page reads (`shared-screens/src/app/session.ts`). */
+const sessionOf = (model: AppModel) => ({
+	auth: authOf(model.session),
+	user: currentUserOf(model),
+	organization: organizationOf(model),
+	member: memberOf(model),
+	orgSlug: orgSlugOf(model.route) ?? null,
+})
+
+/** The route's page: a native page (`native-pages.ts`), or the Foldkit host's page region. */
+const page = (h: H, model: AppModel) =>
+	nativePageOf(h, {
+		route: model.route,
+		session: sessionOf(model),
+		// A failed chunk offers a reload, as a lazy area's pending page does.
+		fallback: (failed) => loader(h, failed),
+	}) ?? slot(h, "page")
 
 const appRoot = (h: H, ...children: ReadonlyArray<unknown>) =>
 	h.div.attr("id", "app").children(...(children as Array<never>), slot(h, "overlays"))
@@ -181,7 +210,7 @@ const orgShell = (h: H, model: AppModel, data: ShellData) => {
 					"overflow-hidden *:data-[sidebar=default]:flex-row",
 					sidebarInner(h).children(navRail(h, rail, slot(h, "ai-toggle")), slot(h, "sidebar")),
 				),
-				sidebarInset(h, "").children(slot(h, "page")),
+				sidebarInset(h, "").children(page(h, model)),
 				slot(h, "ai-panel"),
 			),
 			slot(h, "overlays"),
@@ -211,7 +240,7 @@ const phoneShell = (h: H, model: AppModel, data: ShellData, rail: RailInputs) =>
 					// Pages that fill the screen (`h-full`) scroll inside themselves; the rest scroll here.
 					h.div
 						.class("relative min-h-0 flex-1 overflow-y-auto overscroll-contain")
-						.children(slot(h, "page")),
+						.children(page(h, model)),
 					chrome.hasTabBar ? tabBar(h, rail, AppMessage.PressedMobileSearch()) : null,
 				),
 			),
@@ -224,7 +253,7 @@ const phoneShell = (h: H, model: AppModel, data: ShellData, rail: RailInputs) =>
 /** `$orgSlug/layout.tsx`: a loader while `useOrganization()` loads the route's organization. */
 const orgBody = (h: H, model: AppModel, user: CurrentUser) => {
 	const orgSlug = orgSlugOf(model.route)
-	if (orgSlug === undefined) return appRoot(h, slot(h, "page"))
+	if (orgSlug === undefined) return appRoot(h, page(h, model))
 	return OrgState.match(model.org, {
 		None: () => appRoot(h, loader(h, false)),
 		Loading: ({ isStalled }) => appRoot(h, loader(h, isStalled)),
@@ -239,7 +268,7 @@ const errorScreen = (h: H, title: string, description: string | undefined, onRet
 const body = (h: H, model: AppModel) => {
 	const { route } = model
 	if (route._tag === "NotFound") return h.div.attr("id", "app").children(`Not found: ${route.path}`)
-	if (isPublicRoute(route)) return appRoot(h, slot(h, "page"))
+	if (isPublicRoute(route)) return appRoot(h, page(h, model))
 	// `_app/layout.tsx`: a loader until the API answers for the session; signed out redirects to sign-in.
 	return Session.match(model.session, {
 		Loading: () => appRoot(h, loader(h, false)),
