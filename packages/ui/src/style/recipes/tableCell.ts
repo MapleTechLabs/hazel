@@ -1,12 +1,12 @@
 import { defineRecipe } from "../recipe.ts"
 
 /**
- * `hz:tableCell` (phase 4): a table cell, padded and aligned by its column. Declared by the contract wave: parts and option values
- * are named, every layer is empty until lane A4 fills it from today's kit (lane D reviews).
+ * `hz:tableCell` (phase 4): a data table cell (`ui/data-table.ts`): `px-3 text-fg text-sm
+ * tabular-nums`. Its height, alignment and width by column are the web renderer's.
  */
 export const tableCell = defineRecipe<{}, never, never>({
 	primitive: "tableCell",
 	parts: {},
-	base: { root: {} },
+	base: { root: { paddingX: "3", text: "label", color: "fg", numeric: true } },
 	options: {},
 })

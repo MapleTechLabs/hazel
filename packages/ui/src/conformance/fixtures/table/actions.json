@@ -1,0 +1,162 @@
+{
+	"about": "Row actions (today's `rowActions`): the `actions` slot over the last cell, shown on hover, focus and the keyboard row; an ascending sort and no select column.",
+	"root": {
+		"tag": "table",
+		"props": {
+			"label": "Members",
+			"columns": [
+				{
+					"key": "name",
+					"label": "Member",
+					"width": "fill",
+					"sortable": true
+				},
+				{
+					"key": "role",
+					"label": "Role",
+					"width": "wide"
+				}
+			],
+			"sort": {
+				"column": "name",
+				"direction": "ascending"
+			}
+		},
+		"events": ["sort"],
+		"children": [
+			{
+				"tag": "tableRow",
+				"key": "ada",
+				"props": {
+					"current": true
+				},
+				"events": ["press"],
+				"slots": [
+					{
+						"name": "actions",
+						"children": [
+							{
+								"tag": "button",
+								"props": {
+									"label": "More",
+									"icon": "dots-vertical",
+									"variant": "ghost",
+									"size": "small",
+									"iconOnly": true
+								},
+								"events": ["press"]
+							}
+						]
+					}
+				],
+				"children": [
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "name"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Ada Lovelace"],
+								"props": {
+									"role": "label",
+									"strong": true
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "role"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Admin"],
+								"props": {
+									"role": "label"
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"tag": "tableRow",
+				"key": "grace",
+				"events": ["press"],
+				"slots": [
+					{
+						"name": "actions",
+						"children": [
+							{
+								"tag": "button",
+								"props": {
+									"label": "More",
+									"icon": "dots-vertical",
+									"variant": "ghost",
+									"size": "small",
+									"iconOnly": true
+								},
+								"events": ["press"]
+							}
+						]
+					}
+				],
+				"children": [
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "name"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Grace Hopper"],
+								"props": {
+									"role": "label",
+									"strong": true
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "role"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Member"],
+								"props": {
+									"role": "label"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen",
+	"aria": [
+		{
+			"role": "grid",
+			"name": "Members"
+		},
+		{
+			"role": "button",
+			"name": "Member"
+		},
+		{
+			"role": "button",
+			"name": "More"
+		}
+	],
+	"pending": {
+		"ios": "S5"
+	}
+}

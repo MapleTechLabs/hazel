@@ -1,5 +1,5 @@
 {
-	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): a cell of each alignment.",
+	"about": "A read-only table (no row events, so a `table`, not a `grid`): a cell of each alignment and width.",
 	"root": {
 		"tag": "table",
 		"props": {
@@ -7,30 +7,31 @@
 			"columns": [
 				{
 					"key": "name",
-					"label": "Customer",
-					"width": "fill",
-					"sortable": true
-				},
-				{
-					"key": "plan",
 					"label": "Plan",
-					"width": "narrow",
-					"optional": true
+					"width": "fill"
 				},
 				{
-					"key": "mrr",
-					"label": "MRR",
+					"key": "seats",
+					"label": "Seats",
 					"align": "end",
-					"sortable": true,
+					"width": "narrow"
+				},
+				{
+					"key": "price",
+					"label": "Price",
+					"align": "end",
 					"width": "regular"
+				},
+				{
+					"key": "note",
+					"label": "Note"
 				}
 			]
 		},
 		"children": [
 			{
 				"tag": "tableRow",
-				"key": "a",
-				"events": ["press", "select"],
+				"key": "pro",
 				"children": [
 					{
 						"tag": "tableCell",
@@ -40,8 +41,9 @@
 						"children": [
 							{
 								"tag": "text",
-								"children": ["Acme"],
+								"children": ["Pro"],
 								"props": {
+									"role": "label",
 									"strong": true
 								}
 							}
@@ -50,14 +52,15 @@
 					{
 						"tag": "tableCell",
 						"props": {
-							"column": "plan"
+							"column": "seats"
 						},
 						"children": [
 							{
-								"tag": "badge",
+								"tag": "text",
+								"children": ["25"],
 								"props": {
-									"label": "Pro",
-									"style": "quiet"
+									"role": "label",
+									"numeric": true
 								}
 							}
 						]
@@ -65,14 +68,31 @@
 					{
 						"tag": "tableCell",
 						"props": {
-							"column": "mrr"
+							"column": "price"
 						},
 						"children": [
 							{
 								"tag": "text",
-								"children": ["$12,400"],
+								"children": ["$12"],
 								"props": {
+									"role": "label",
 									"numeric": true
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "note"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Most teams"],
+								"props": {
+									"role": "label",
+									"tone": "muted"
 								}
 							}
 						]
@@ -82,8 +102,17 @@
 		]
 	},
 	"frame": "screen",
+	"aria": [
+		{
+			"role": "table",
+			"name": "Plans"
+		},
+		{
+			"role": "cell",
+			"name": "Most teams"
+		}
+	],
 	"pending": {
-		"web": "A4",
 		"ios": "S5"
 	}
 }

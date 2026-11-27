@@ -1,5 +1,5 @@
 {
-	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): the customers table: a sorted column, a checkbox column, a selected row, a keyboard row, the footer totals.",
+	"about": "The customers table (`page/customers/list/view.ts`): a sorted column, the select column with a selected row, the keyboard row, an optional column (hidden on compact) and the footer totals; also loading (skeleton rows) and a sticky head.",
 	"root": {
 		"tag": "table",
 		"props": {
@@ -52,6 +52,7 @@
 								"tag": "text",
 								"children": ["Acme"],
 								"props": {
+									"role": "label",
 									"strong": true
 								}
 							}
@@ -64,10 +65,11 @@
 						},
 						"children": [
 							{
-								"tag": "badge",
+								"tag": "text",
+								"children": ["Pro"],
 								"props": {
-									"label": "Pro",
-									"style": "quiet"
+									"role": "label",
+									"tone": "muted"
 								}
 							}
 						]
@@ -82,6 +84,7 @@
 								"tag": "text",
 								"children": ["$12,400"],
 								"props": {
+									"role": "label",
 									"numeric": true
 								}
 							}
@@ -107,6 +110,7 @@
 								"tag": "text",
 								"children": ["Globex"],
 								"props": {
+									"role": "label",
 									"strong": true
 								}
 							}
@@ -119,10 +123,11 @@
 						},
 						"children": [
 							{
-								"tag": "badge",
+								"tag": "text",
+								"children": ["Team"],
 								"props": {
-									"label": "Team",
-									"style": "quiet"
+									"role": "label",
+									"tone": "muted"
 								}
 							}
 						]
@@ -137,6 +142,7 @@
 								"tag": "text",
 								"children": ["$3,100"],
 								"props": {
+									"role": "label",
 									"numeric": true
 								}
 							}
@@ -161,7 +167,8 @@
 								"tag": "text",
 								"children": ["2 customers"],
 								"props": {
-									"tone": "muted"
+									"role": "label",
+									"strong": true
 								}
 							}
 						]
@@ -182,6 +189,7 @@
 								"tag": "text",
 								"children": ["$15,500"],
 								"props": {
+									"role": "label",
 									"numeric": true,
 									"strong": true
 								}
@@ -203,12 +211,23 @@
 	],
 	"aria": [
 		{
-			"role": "table",
+			"role": "grid",
 			"name": "Customers"
+		},
+		{
+			"role": "columnheader",
+			"name": "MRR"
+		},
+		{
+			"role": "checkbox",
+			"name": "Select all rows"
+		},
+		{
+			"role": "checkbox",
+			"name": "Select Acme"
 		}
 	],
 	"pending": {
-		"web": "A4",
 		"ios": "S5"
 	}
 }

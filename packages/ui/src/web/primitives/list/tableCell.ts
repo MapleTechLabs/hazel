@@ -1,5 +1,12 @@
-// Owned by lane A4 (`docs/hazel-ui.md`, "Phase 2: lanes"). Phase 1.5 stub: draws a
-// placeholder naming the lane; the lane replaces it with the renderer (`definePrimitive`).
-import { stubPrimitive } from "../define.ts"
+// Owned by lane A4 (phase 4, W8). `hz:tableCell`: a `<td>` holding any elements; its table aligns and
+// sizes it by `column` (or by position while it names none).
+import { definePrimitive, option } from "../define.ts"
+import { ensureTableSheet } from "./table-shared.ts"
 
-export const primitive = stubPrimitive("tableCell")
+export const primitive = definePrimitive("tableCell", ({ document, outer, self }) => {
+	ensureTableSheet(document)
+	const node = outer("td")
+	return self(node, (name, value) => {
+		if (name === "column") option(node, "column", value)
+	})
+})

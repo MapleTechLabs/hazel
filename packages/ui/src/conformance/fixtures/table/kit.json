@@ -1,0 +1,259 @@
+{
+	"about": "Today's `dataTable` (`ui/data-table.ts`, unframed as the pages draw it) with a sorted column, the select column and the footer, diffed against the kit.",
+	"root": {
+		"tag": "table",
+		"props": {
+			"label": "Customers",
+			"columns": [
+				{
+					"key": "name",
+					"label": "Customer",
+					"width": "fill",
+					"sortable": true
+				},
+				{
+					"key": "plan",
+					"label": "Plan",
+					"width": "narrow",
+					"optional": true
+				},
+				{
+					"key": "mrr",
+					"label": "MRR",
+					"align": "end",
+					"sortable": true,
+					"width": "regular"
+				}
+			],
+			"sort": {
+				"column": "mrr",
+				"direction": "descending"
+			},
+			"selectable": true
+		},
+		"events": ["sort", "selectAll"],
+		"children": [
+			{
+				"tag": "tableRow",
+				"key": "acme",
+				"events": ["press", "select"],
+				"children": [
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "name"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Acme"],
+								"props": {
+									"role": "label",
+									"strong": true
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "plan"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Pro"],
+								"props": {
+									"role": "label",
+									"tone": "muted"
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "mrr"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["$12,400"],
+								"props": {
+									"role": "label",
+									"numeric": true
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"tag": "tableRow",
+				"key": "globex",
+				"events": ["press", "select"],
+				"children": [
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "name"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Globex"],
+								"props": {
+									"role": "label",
+									"strong": true
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "plan"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Team"],
+								"props": {
+									"role": "label",
+									"tone": "muted"
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "mrr"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["$3,100"],
+								"props": {
+									"role": "label",
+									"numeric": true
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"tag": "tableRow",
+				"key": "initech",
+				"events": ["press", "select"],
+				"children": [
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "name"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Initech"],
+								"props": {
+									"role": "label",
+									"strong": true
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "plan"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Free"],
+								"props": {
+									"role": "label",
+									"tone": "muted"
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "mrr"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["$0"],
+								"props": {
+									"role": "label",
+									"numeric": true
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"tag": "tableRow",
+				"key": "total",
+				"props": {
+					"footer": true
+				},
+				"children": [
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "name"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["3 customers"],
+								"props": {
+									"role": "label",
+									"strong": true
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "plan"
+						}
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "mrr"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["$15,500"],
+								"props": {
+									"role": "label",
+									"numeric": true,
+									"strong": true
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen",
+	"kit": {
+		"specimen": "data-table",
+		"target": "table"
+	},
+	"pending": {
+		"ios": "S5"
+	}
+}
