@@ -297,6 +297,8 @@ export const createMenuList = (
 		layer = openLayer({
 			panel,
 			modal: false,
+			// Today's menus are modal popovers (`openModalPopover`): page scroll locks, the rest goes inert.
+			isolate: outer,
 			dismissOnOutside: true,
 			dismissOnTab: true,
 			inside: () => [submenu, ...(opening.inside?.() ?? [])],

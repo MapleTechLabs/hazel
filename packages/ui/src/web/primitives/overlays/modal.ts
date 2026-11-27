@@ -38,6 +38,7 @@ const createModal = (document: Document, tag: string, node: HTMLElement, setup: 
 		outer: node,
 		panel,
 		modal: true,
+		isolate: true,
 		layer: () => ({
 			// The first stop in the content (its actions come first), not the header's close button.
 			initialFocus: () => tabbables(content)[0] ?? null,

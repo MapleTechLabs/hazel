@@ -10,7 +10,11 @@
 	},
 	"frame": "screen",
 	"pending": {
-		"web": "A3",
 		"ios": "S3"
-	}
+	},
+	"aria": [
+		{
+			"role": "status"
+		}
+	]
 }

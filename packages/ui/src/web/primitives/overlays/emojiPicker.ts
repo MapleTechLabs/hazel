@@ -128,6 +128,8 @@ export const primitive = definePrimitive("emojiPicker", ({ document, tag, outer 
 		outer: node,
 		panel,
 		modal: false,
+		// A modal popover today (`picker-popover/popover.ts`): the page scrolls no further and goes inert.
+		isolate: true,
 		layer: () => ({ dismissOnOutside: true, returnFocus: opener, initialFocus: () => search }),
 		place: () =>
 			trackPlacement(panel, () => openerRect(opener, node), { side: "top", align: "start", gap: 8 }),

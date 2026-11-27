@@ -2,7 +2,7 @@
  * `hz:toast` on the web (lane A3): a notice at the bottom edge, in the top layer so it shows over
  * the app's overlays too. Open toasts stack upwards, newest at the bottom. It takes no focus and no
  * Escape (it is not a layer); its close button and the view's timer close it (`dismiss`). A danger or
- * warning tone is an `alert`, the rest a polite `status`.
+ * warning tone is an `alert`, the rest a polite `status`. `loading` leads with today's spinner.
  */
 import {
 	hidePanel,
@@ -16,6 +16,7 @@ import { svg } from "../../icons.ts"
 import { onRemoved, play, playThen, stop } from "../../motion.ts"
 import { definePrimitive, flag, option, part, type Primitive } from "../define.ts"
 import { fire, textOf } from "./overlay.ts"
+import { spinner } from "./spinner.ts"
 
 const GAP = 8
 const open = new WeakMap<Document, Array<HTMLElement>>()
@@ -36,6 +37,8 @@ export const primitive = definePrimitive("toast", ({ document, tag, outer }) => 
 	// At create, not first open: a closed panel's hiding rule must be there before it draws.
 	installOverlayStyles(document)
 	const panel = makePopoverPanel(part(document, "div", "panel"))
+	const busy = spinner(document, "spinner")
+	busy.hidden = true
 	const body = part(document, "div", "body")
 	const title = part(document, "p", "title")
 	const description = part(document, "p", "description")
@@ -47,7 +50,7 @@ export const primitive = definePrimitive("toast", ({ document, tag, outer }) => 
 	close.setAttribute("aria-label", "Dismiss")
 	close.innerHTML = svg("close")
 	close.addEventListener("click", () => fire(primitive, "dismiss"))
-	panel.append(body, content, close)
+	panel.append(busy, body, content, close)
 	node.append(panel)
 
 	const tone = (value: unknown) => {
@@ -116,6 +119,11 @@ export const primitive = definePrimitive("toast", ({ document, tag, outer }) => 
 			} else if (name === "tone") {
 				option(node, "tone", value)
 				tone(value)
+			} else if (name === "loading") {
+				flag(node, "loading", value)
+				busy.hidden = value !== true
+				if (value === true) panel.setAttribute("aria-busy", "true")
+				else panel.removeAttribute("aria-busy")
 			} else if (name === "title") title.textContent = textOf(value)
 			else if (name === "description") {
 				description.textContent = textOf(value)

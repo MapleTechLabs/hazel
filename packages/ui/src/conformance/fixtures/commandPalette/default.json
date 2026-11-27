@@ -1,5 +1,5 @@
 {
-	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): the palette's home: recent channels and actions, one with a shortcut; then a form page.",
+	"about": "hz:commandPalette (today's `ui/command-menu-view.ts`): the palette's home, recent channels and people, then actions with a description and a key hint; loading swaps the search icon for a spinner; no results shows the empty line.",
 	"root": {
 		"tag": "commandPalette",
 		"props": {
@@ -38,6 +38,12 @@
 							"label": "New channel",
 							"icon": "plus",
 							"shortcut": "mod+shift+n"
+						},
+						{
+							"id": "invite",
+							"label": "Invite members",
+							"icon": "user-plus",
+							"description": "Send an email invite"
 						}
 					]
 				}
@@ -64,17 +70,23 @@
 					"edit": 0
 				}
 			}
-		},
-		{
-			"name": "form",
-			"props": {
-				"title": "Create channel",
-				"groups": []
-			}
 		}
 	],
 	"pending": {
-		"web": "A3",
 		"ios": "S3"
-	}
+	},
+	"aria": [
+		{
+			"role": "dialog",
+			"name": "Command Menu"
+		},
+		{
+			"role": "searchbox",
+			"name": "Quick search"
+		},
+		{
+			"role": "menu",
+			"name": "Suggestions"
+		}
+	]
 }
