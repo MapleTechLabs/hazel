@@ -5,6 +5,7 @@
  */
 import type { AppRequest } from "@hazel/shared-screens/app/requests"
 import type { HostRequest as MessageListRequest } from "@hazel/shared-screens/chat/messages"
+import type { MessageId } from "@hazel/schema"
 import type { SidebarAction } from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
 import { Effect, Queue, Stream } from "effect"
 import type { ShellRequest } from "../app/message"
@@ -16,6 +17,10 @@ export type BusEvent =
 	| { readonly _tag: "MessageList"; readonly request: MessageListRequest }
 	/** A key, menu item or frame button whose work is still the Foldkit host's. */
 	| { readonly _tag: "Shell"; readonly request: ShellRequest }
+	/** A pin pressed in the channel header: the channel page scrolls to its message. */
+	| { readonly _tag: "JumpToPin"; readonly messageId: MessageId }
+	/** The channel page's pins shortcut, which the channel header's pins answer. */
+	| { readonly _tag: "PinsHotkey" }
 	/** What a native page asks the app for (`shared-screens/src/app/requests.ts`); the shell acts on it. */
 	| { readonly _tag: "AppRequest"; readonly request: AppRequest }
 

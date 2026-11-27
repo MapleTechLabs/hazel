@@ -1,5 +1,5 @@
 import type { ChannelId, MessageId, UserId } from "@hazel/schema"
-import { Record, Struct } from "effect"
+import { Effect, Record, Struct } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import * as HtmlRender from "../../../chat/html-render"
@@ -29,9 +29,6 @@ import {
 import { typingNamesOf, typingUsersOf } from "../banners"
 import { emptyLookups, type Lookups } from "../lookups"
 import * as IssueControl from "../issue-control"
-import * as NotificationControl from "../notification-control"
-import { JoinChannel, UnhideConversation } from "../message-actions"
-import * as CustomerCard from "../customer-card"
 import * as Overlays from "../overlays"
 import { PAGE_SIZE } from "../queries"
 import {
@@ -53,6 +50,7 @@ import { liftList, loadWhenNearEdge } from "./window"
 import * as ThreadWidth from "./thread-width"
 import * as Write from "./write"
 import { errorToast, successToast } from "../../../data/actions"
+import { publish } from "../../../root/bus"
 
 /** Channel page (`routes/_app/$orgSlug/chat/$id.tsx` + `$id/index.tsx`), read path. */
 
@@ -95,7 +93,6 @@ export const init = (
 	pinned: [],
 	customer: null,
 	issueRootIds: [],
-	customerCard: CustomerCard.init(),
 	typing: [],
 	typingNowMs: 0,
 	typingNames: [],
@@ -123,8 +120,6 @@ export const init = (
 	threadPanelDrag: null,
 	notifications: NotificationClear.init({ isFocused: options.carry?.isWindowFocused ?? true }),
 	newMessages: NewMessages.init(),
-	notificationControl: NotificationControl.init(channelId),
-	isJoining: false,
 	heightsByChannel: Record.remove(options.carry?.heightsByChannel ?? {}, channelId),
 })
 
@@ -157,8 +152,6 @@ export const switchChannel = (
 	// The theme, users, presence and bots streams are not keyed by channel, so they keep running
 	// across the switch without emitting again: the new page keeps what they last sent.
 	return modifyFields(next, {
-		// Closed for the new channel; its timers keep counting, so the old channel's never match.
-		customerCard: () => CustomerCard.reset(model.customerCard),
 		htmlRender: (htmlRender) => modifyFields(htmlRender, { theme: () => model.htmlRender.theme }),
 		lookups: (lookups) =>
 			modifyFields(lookups, {
@@ -357,24 +350,13 @@ const liftOverlays = (model: Model, result: Overlays.OverlaysReturn): PageReturn
 		: Write.andThen(lifted, (current) => Write.handleOverlaysOut(current, result.outMessage!))
 }
 
-/** `ChannelJoinBanner`'s `handleJoin`. */
-const joinChannel = (model: Model): PageReturn =>
-	model.isJoining || model.currentUserId === null
-		? { model }
-		: {
-				model: modifyFields(model, { isJoining: () => true }),
-				commands: Write.actionCommands([
-					JoinChannel({ channelId: model.channelId, userId: model.currentUserId }),
-				]),
-			}
-
-/** The header's "Unhide conversation": the signed-in user's hidden membership comes back. */
-const unhideConversation = (model: Model): PageReturn => {
-	const member = model.members?.find((candidate) => candidate.userId === model.currentUserId)
-	return member === undefined || !member.isHidden
-		? { model }
-		: { model, commands: Write.actionCommands([UnhideConversation({ memberId: member.id })]) }
-}
+/** The pins shortcut, for the shared channel header's pins (they own the popover now). */
+const PublishPinsHotkey = Command.define("PublishPinsHotkey", {
+	messages: [Message.CompletedPublishPinsHotkey],
+	execute: Effect.sync(() => publish({ _tag: "PinsHotkey" })).pipe(
+		Effect.as(Message.CompletedPublishPinsHotkey()),
+	),
+})
 
 /**
  * What a channel shortcut does. The pickers, the file picker and the pins are what their buttons send
@@ -408,11 +390,7 @@ const pressedChannelHotkey = (model: Model, action: ChannelHotkey, shared: Share
 		case "Upload":
 			return send(toDraft(Draft.Message.ClickedAttach()))
 		case "Pins":
-			return send(
-				Message.GotOverlaysMessage({
-					message: Overlays.Message.GotPinnedMessage({ message: Popover.Message.ClickedButton() }),
-				}),
-			)
+			return { model, commands: [PublishPinsHotkey()] }
 		case "ScrollUp":
 			return loadWhenNearEdge(liftList(model, MessageList.scrollByPage(model.list, "Up")))
 		case "ScrollDown":
@@ -547,15 +525,6 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 							replace: false,
 						}),
 					},
-		UpdatedInheritedNotificationLevel: ({ channelId, level }) =>
-			channelId !== model.channelId
-				? { model }
-				: {
-						model: modifyFields(model, {
-							notificationControl: (control) =>
-								modifyFields(control, { inheritedLevel: () => level }),
-						}),
-					},
 		UpdatedParentChannel: ({ channel }) => ({
 			model: modifyFields(model, { parentChannel: () => channel }),
 		}),
@@ -657,33 +626,13 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 						}),
 					),
 		ClickedJumpToNew: () => jumpToNew(model),
-		GotNotificationControlMessage: ({ message }) => {
-			const own = model.members?.find((member) => member.userId === model.currentUserId) ?? null
-			const result = NotificationControl.update(model.notificationControl, message, own)
-			const lifted: PageReturn = {
-				model: modifyFields(model, { notificationControl: () => result.model }),
-				commands: Command.mapMessages(result.commands ?? [], (inner) =>
-					Message.GotNotificationControlMessage({ message: inner }),
-				),
-			}
-			return result.toast === undefined
-				? lifted
-				: Write.andThen(lifted, (current) => Write.withToast(current, result.toast ?? null))
-		},
 		ClickedMarkNewRead: () => markRead(model),
 		// Focus back: the open thread's replies that came while away are read too.
 		ChangedWindowFocus: ({ isFocused }) =>
 			Write.andThen(stepNotifications(model, { _tag: "ChangedFocus", isFocused }), readOpenThread),
 		UpdatedPinned: ({ pins }) => ({ model: modifyFields(model, { pinned: () => pins }) }),
 		UpdatedCustomer: ({ channelId, customer }) => ({
-			model:
-				channelId !== model.channelId
-					? model
-					: modifyFields(model, {
-							customer: () => customer,
-							// Unlinked: nothing left to show.
-							customerCard: (card) => (customer === null ? CustomerCard.reset(card) : card),
-						}),
+			model: channelId !== model.channelId ? model : modifyFields(model, { customer: () => customer }),
 		}),
 		UpdatedIssueRoots: ({ channelId, rootMessageIds }) => ({
 			model:
@@ -692,15 +641,6 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 					: model,
 		}),
 		GotIssueControlMessage: ({ message: issueMessage }) => liftIssueControl(model, issueMessage),
-		GotCustomerCardMessage: ({ message }) => {
-			const result = CustomerCard.update(model.customerCard, message)
-			return {
-				model: modifyFields(model, { customerCard: () => result.model }),
-				commands: Command.mapMessages(result.commands ?? [], (inner) =>
-					Message.GotCustomerCardMessage({ message: inner }),
-				),
-			}
-		},
 		// A result for a thread the panel no longer shows is dropped.
 		UpdatedThreadPanelMessages: ({ threadChannelId, messages }) => {
 			const panel = model.threadPanel
@@ -816,13 +756,6 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				],
 			}
 		},
-		ClickedFollowThread: () =>
-			model.channel?.type === "thread"
-				? {
-						model,
-						commands: [ToggleFollowThread({ threadChannelId: model.channelId, memberId: null })],
-					}
-				: { model },
 		CompletedToggleFollowThread: ({ isFollowing, isSuccess }) =>
 			Write.withToast(
 				model,
@@ -846,8 +779,6 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		PressedThreadPanelEdgeKey: ({ delta }) => ThreadWidth.nudgeEdge(model, delta),
 		LoadedThreadPanelWidth: ({ width }) => ThreadWidth.loadedWidth(model, width),
 		CompletedSaveThreadPanelWidth: () => ({ model }),
-		ClickedJoinChannel: () => joinChannel(model),
-		ClickedUnhideConversation: () => unhideConversation(model),
 		PressedGlobalKey: ({ key }) => Write.insertGlobalKey(model, key),
 		PastedGlobalFiles: ({ files }) => Write.pasteGlobalFiles(model, files, shared),
 		PastedGlobalText: ({ text }) => Write.pasteGlobalText(model, text),
@@ -858,6 +789,7 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				? { model }
 				: { model: modifyFields(model, { focusedMessageId: () => messageId }) },
 		CompletedFocusMessage: () => ({ model }),
+		CompletedPublishPinsHotkey: () => ({ model }),
 		StartedMessageKeys: () => ({ model }),
 		SucceededDeleteMessageNow: () => ({ model }),
 		FailedDeleteMessageNow: ({ reason }) => Write.withToast(model, Write.messageNotFoundToast(reason)),

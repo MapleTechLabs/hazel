@@ -4,7 +4,6 @@ import * as Composer from "../composer/composer"
 import * as Draft from "../composer/draft"
 import { DragState, DropEvent } from "../composer/drop"
 import * as Overlays from "../page/chat/overlays"
-import * as Menu from "../ui/menu"
 import { Message, type Model } from "../page/chat/channel/model"
 import {
 	loadedMessages,
@@ -33,11 +32,8 @@ export const composer = (message: Composer.Message) => draft(Draft.Message.GotCo
 export const derivedModel = (base: Model = loadedModel()): Model =>
 	updateWithShared(base, loadedMessages(base.messages.length === 0 ? messages : base.messages)).model
 
-/** The channel's first render: the editor, the drop zone and the header's bell start. */
-export const mountedChannel = (
-	/** The header shows the notification bell (false: the user is not a member, e.g. an unfollowed thread). */
-	hasBell = true,
-): Step =>
+/** The channel's first render: the editor and the drop zone start (the header is a shared screen). */
+export const mountedChannel = (): Step =>
 	Scene.Mount.resolveAll(
 		[{ name: "MountEditor" }, composer(Composer.Message.UpdatedDraft({ markdown: "", isEmpty: true }))],
 		[
@@ -48,10 +44,6 @@ export const mountedChannel = (
 				}),
 			),
 		],
-		// The header's notification bell (`notification-control.ts`).
-		...(hasBell
-			? [[{ name: "FocusTriggerOnPress" }, Menu.Message.CompletedFocusTriggerOnPress()] as const]
-			: []),
 	)
 
 /** A row of the shared message list asks the page for something: spread, one step per page message. */

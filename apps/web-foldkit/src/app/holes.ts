@@ -12,6 +12,9 @@ export type HoleName =
 	| "org-switcher"
 	| "account-menu"
 	| "channel-files"
+	| "channel-header"
+	| "join-banner"
+	| "issue-control"
 
 export const HOLE_ATTRIBUTE = "data-hazel-hole"
 

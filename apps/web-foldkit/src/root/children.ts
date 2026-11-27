@@ -12,6 +12,8 @@ import {
 	channelSidebarLayer,
 	matchTarget,
 } from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
+import { ChannelHeader, channelHeaderLayer } from "@hazel/shared-screens/chat/header/ChannelHeader"
+import { JoinBanner, joinBannerLayer } from "@hazel/shared-screens/chat/header/JoinBanner"
 import { MessageList } from "@hazel/shared-screens/chat/MessageList"
 import { messageListLayer } from "@hazel/shared-screens/chat/live"
 import { Dms, dmsLayer } from "@hazel/shared-screens/dms/Dms"
@@ -19,13 +21,13 @@ import { ChannelSettingsHeader } from "@hazel/shared-screens/shell/ChannelSettin
 import { AccountMenu, OrgSwitcher, SwitchOrganization } from "@hazel/shared-screens/shell/Chrome"
 import { MarkAllNotificationsRead, SectionSidebar } from "@hazel/shared-screens/shell/SectionSidebar"
 import type { ChannelId } from "@hazel/schema"
-import { Effect, Layer } from "effect"
+import { Effect, Layer, Stream } from "effect"
 import { clientData } from "~/db/client"
 // The list's HTML renders draw through this web extension.
 import "../chat/html-render-extension"
 import { liveConnection } from "../chat/live-state"
 import { AppRoute, organizationRoute } from "../route"
-import { publish } from "./bus"
+import { eventsOf, publish } from "./bus"
 import { pickersWebLayer } from "./pickers"
 
 /** A push of `route` on the shell's Router, from a screen's host callback. */
@@ -123,4 +125,23 @@ export const ShellFilesPage = Component.lazy("FilesPage", () =>
 
 export const ShellMediaPage = Component.lazy("MediaPage", () =>
 	import("./files-pages").then((module) => module.ShellMediaPage),
+)
+
+/** The channel header: a pin's jump and the pins shortcut go through the Foldkit channel page. */
+export const ShellChannelHeader = Component.provide(
+	ChannelHeader,
+	Layer.unwrap(
+		Effect.map(Effect.service(HazelRpc), (rpc) =>
+			channelHeaderLayer(clientData, rpc, {
+				jumpToMessage: (messageId) => publish({ _tag: "JumpToPin", messageId }),
+				pinsHotkey: eventsOf("PinsHotkey").pipe(Stream.map(() => undefined)),
+			}),
+		),
+	),
+)
+
+/** A non-member's "Join #channel", in the place of the list and the composer. */
+export const ShellJoinBanner = Component.provide(
+	JoinBanner,
+	Layer.unwrap(Effect.map(Effect.service(HazelRpc), (rpc) => joinBannerLayer(clientData, rpc))),
 )

@@ -142,8 +142,6 @@ const CHANNEL_ONLY = [
 	"chatIssueRoots",
 	"chatThreadIssue",
 	"chatMembers",
-	// The header bell's "Default": the channel's own section and organization settings.
-	"chatInheritedNotificationLevel",
 	// The "New" line is the channel's; the thread panel has none (it reads its thread as it shows it).
 	"chatActivity",
 	"chatReadPosition",

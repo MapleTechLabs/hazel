@@ -19,7 +19,14 @@ import type { CurrentUser, Organization } from "../session"
 import { hotkeyLabel } from "../shell/channels-sidebar/hotkey-label"
 import { appError, appLoader, organizationNotFound } from "../shell/layouts"
 import { LINK_PREVIEW_URL } from "../chat/unfurl"
-import { ShellActivity, ShellChannelSidebar, ShellDms, ShellMessageList } from "./children"
+import {
+	ShellActivity,
+	ShellChannelHeader,
+	ShellChannelSidebar,
+	ShellDms,
+	ShellJoinBanner,
+	ShellMessageList,
+} from "./children"
 import { ShellFilesPage, ShellMediaPage } from "./children"
 import { AdoptRegion, RunFoldkitHost } from "./foldkit"
 import {
@@ -199,6 +206,32 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 							channelId,
 							orgSlug: data.orgSlug,
 							cdnUrl: currentServer().cdn ?? "https://cdn.hazel.sh",
+						},
+					}),
+				])
+			: null,
+		route._tag === "ChatChannel" && channelId !== null
+			? Hole(
+					h,
+					{
+						hole: "join-banner",
+						key: channelId,
+						className: "flex flex-1 flex-col items-center justify-center p-8",
+					},
+					[ShellJoinBanner(h, { key: channelId, props: { channelId, userId: data.user.id } })],
+				)
+			: null,
+		route._tag === "ChatChannel" && channelId !== null
+			? Hole(h, { hole: "channel-header", key: channelId }, [
+					ShellChannelHeader(h, {
+						key: channelId,
+						props: {
+							channelId,
+							organizationId: data.organization.id,
+							userId: data.user.id,
+							orgSlug: data.orgSlug,
+							isMobile: model.isMobile,
+							nowMs: model.nowMs,
 						},
 					}),
 				])

@@ -57,6 +57,10 @@ export const listRequests = (request: HostRequest): ReadonlyArray<ListMessage> =
 	})
 
 /** The list's requests, which the shell renders as its own child and publishes on the bus. */
-export const listRequestStream: Stream.Stream<ListMessage> = eventsOf("MessageList").pipe(
-	Stream.flatMap(({ request }) => Stream.fromIterable(listRequests(request))),
+export const listRequestStream: Stream.Stream<ListMessage> = Stream.merge(
+	eventsOf("MessageList").pipe(Stream.flatMap(({ request }) => Stream.fromIterable(listRequests(request)))),
+	// A pin pressed in the shared channel header: the page scrolls to its message.
+	eventsOf("JumpToPin").pipe(
+		Stream.map(({ messageId }) => toOverlay(Overlays.Message.ClickedPinnedMessage({ messageId }))),
+	),
 )

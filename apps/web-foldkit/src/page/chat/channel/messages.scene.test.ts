@@ -27,13 +27,7 @@ import * as Overlays from "../overlays"
 import { TrackMessageHover } from "../../../chat/message/toolbar"
 import { imageAttachmentOf } from "../../../test/chat-messages"
 import { PageOutMessage } from "../../out-message"
-import {
-	ActionMessage,
-	CreateThread,
-	DownloadImage,
-	GenerateThreadChannelId,
-	JoinChannel,
-} from "../message-actions"
+import { ActionMessage, CreateThread, DownloadImage, GenerateThreadChannelId } from "../message-actions"
 import {
 	ada,
 	adaMessageId,
@@ -64,7 +58,7 @@ describe("reading", () => {
 })
 
 describe("join banner", () => {
-	test("a non-member's Join #channel joins the channel", () => {
+	test("a non-member's channel leaves the shared join banner its hole", () => {
 		const base = loadedModel()
 		Scene.scene(
 			channelScene,
@@ -72,9 +66,8 @@ describe("join banner", () => {
 				...base,
 				members: base.members?.filter((member) => member.userId !== ada) ?? null,
 			}),
-			Scene.click(Scene.role("button", { name: "Join #general" })),
-			Scene.Command.expectExact(JoinChannel({ channelId, userId: ada })),
-			Scene.Command.resolve(JoinChannel, ActionMessage.SucceededJoinChannel()),
+			Scene.expect(Scene.selector('[data-hazel-hole="join-banner"]')).toExist(),
+			Scene.expect(Scene.selector('[data-hazel-hole="message-list"]')).toBeAbsent(),
 		)
 	})
 })

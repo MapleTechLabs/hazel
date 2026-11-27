@@ -39,8 +39,6 @@ export const NO_CHANNEL_LINKS: ChannelLinks = { customer: null, partners: [], sy
 /** Channels' links by id; only channels with some are listed. Data, not a function: it rides on `Shared`. */
 export type ChannelLinksMap = ReadonlyMap<string, ChannelLinks>
 
-export const NO_CHANNEL_LINKS_MAP: ChannelLinksMap = new Map()
-
 /** The channel's links, `NO_CHANNEL_LINKS` when it has none. */
 export const linksFor = (map: ChannelLinksMap | undefined, channelId: string): ChannelLinks =>
 	map?.get(channelId) ?? NO_CHANNEL_LINKS

@@ -1,39 +1,24 @@
-import type { MessageId } from "@hazel/schema"
 import { hole } from "../../../app/holes"
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { cn } from "~/lib/utils"
-import { button } from "../../../ui/button"
 import { splitContentClassName, splitRootClassName } from "../../../ui/split-panel"
-import { getEffectivePresenceStatus } from "~/utils/presence"
 import { htmlRenderFullscreenView } from "../../../chat/embeds/html-render"
 import type * as HtmlRender from "../../../chat/html-render"
 import { imageViewerView } from "../../../chat/image-viewer"
 import type { RowContext } from "../../../chat/message/row"
 import type * as Draft from "../../../composer/draft"
 import { draftView } from "../../../composer/draft-view"
-import { mobileBackLink } from "../../../shell/mobile"
-import { joinBannerView, typingIndicatorView } from "../banners"
+import { typingIndicatorView } from "../banners"
 import { attachmentInfoFrom, composerAreaView, replyPreviewOf } from "../composer-view"
-import { authorIdentity, toDeriveContext } from "../derive"
-import { chatHeaderView } from "../header"
-import {
-	type ChannelLinks,
-	type ChannelLinksMap,
-	linksFor,
-	NO_CHANNEL_LINKS,
-	NO_CHANNEL_LINKS_MAP,
-} from "../../../ui/channel-icon"
+import { toDeriveContext } from "../derive"
 import { messageToolbarOverlay, reactionModalView, trackHoverAttribute } from "../overlay-views"
 import * as Overlays from "../overlays"
-import { pinnedPopoverView } from "../pinned"
 import { threadRowContextFor } from "../row-context"
 import type { MessageRow } from "../rows"
-import * as CustomerCard from "../customer-card"
 import { chatTabBarView } from "../tab-bar"
 import { threadPanelView } from "../thread-panel"
 import * as IssueControl from "../issue-control"
-import * as NotificationControl from "../notification-control"
-import { AppRoute, customerRoute, hrefOf } from "../../../route"
+import { AppRoute, hrefOf } from "../../../route"
 import { isMemberOf, Message, type Model, routeTabOf, type ThreadPanel } from "./page"
 import { threadPanelWidthOf } from "./thread-width"
 import { openViewerOf } from "./viewer-images"
@@ -53,15 +38,6 @@ const toPressEdge = (clientX: number, startWidth: number, maxWidth: number) =>
 	Message.PressedThreadPanelEdge({ clientX, startWidth, maxWidth })
 const toNudgeEdge = (delta: number) => Message.PressedThreadPanelEdgeKey({ delta })
 const toIssueControlMessage = (message: IssueControl.Message) => Message.GotIssueControlMessage({ message })
-const toCustomerCard = (message: CustomerCard.Message) => Message.GotCustomerCardMessage({ message })
-const toNotificationControl = (message: NotificationControl.Message) =>
-	Message.GotNotificationControlMessage({ message })
-const toPinnedMessage = (message: Parameters<typeof Overlays.Message.GotPinnedMessage>[0]["message"]) =>
-	toOverlay(Overlays.Message.GotPinnedMessage({ message }))
-const pinnedActions = {
-	toJump: (messageId: MessageId) => toOverlay(Overlays.Message.ClickedPinnedMessage({ messageId })),
-	toUnpin: (messageId: MessageId) => toOverlay(Overlays.Message.ClickedUnpin({ messageId })),
-}
 
 /** `ImageViewerModal` for the message whose attachment was clicked. */
 const imageViewerOverlay = (h: H, model: Model): Html => {
@@ -108,19 +84,12 @@ const messageListHole = (h: H, model: Model): Html | undefined =>
 const MESSAGE_LIST_HOLE = "flex min-h-0 flex-1 flex-col"
 
 /** `$id/index.tsx`: the join banner for non-members, else the list and the composer. */
-const messagesOutlet = (h: H, model: Model, nowMs: number, channelLinks: ChannelLinksMap) => {
+const messagesOutlet = (h: H, model: Model, nowMs: number) => {
+	// The shared join banner (`src/root/app.ts`) fills its hole.
 	if (isMemberOf(model) === false)
-		return [
-			joinBannerView(h, model.channel, {
-				isJoining: model.isJoining,
-				onJoin: Message.ClickedJoinChannel(),
-				links: headerLinks(
-					linksFor(channelLinks, model.channelId),
-					model.customer,
-					model.lookups.syncProvider,
-				),
-			}),
-		]
+		return model.channel === null
+			? []
+			: [hole(h, "join-banner", model.channelId, [h.Class("flex flex-1 flex-col")])]
 	// Passed to the lazy composer as strings, so an unchanged reply keeps its memo.
 	const reply = replyPreviewOf(model, model.draft)
 	const list = messageListHole(h, model)
@@ -161,125 +130,6 @@ const composerView = (
 	})
 
 /**
- * The page's own customer and sync rows know about this channel before the org-wide lists do (and
- * for a channel the sidebar does not list), so they win; Connect partners come from the org's.
- */
-const headerLinks = (
-	shared: ChannelLinks,
-	customer: Model["customer"],
-	syncProvider: Model["lookups"]["syncProvider"],
-): ChannelLinks => ({
-	customer:
-		customer === null
-			? shared.customer
-			: { name: customer.accountName, logoUrl: customer.accountLogoUrl ?? null },
-	partners: shared.partners,
-	syncProvider: syncProvider ?? shared.syncProvider,
-})
-
-/**
- * The header's clock: to the minute, so the 30 s ticks keep its memo, or the bell's mute end once it
- * has passed within the minute, so the bell unmutes when the sidebar row does.
- */
-const headerClockOf = (model: Model, nowMs: number): number => {
-	const minuteMs = Math.floor(nowMs / 60_000) * 60_000
-	const mutedUntilMs =
-		(model.members ?? []).find((member) => member.userId === model.currentUserId)?.mutedUntilMs ?? null
-	return mutedUntilMs !== null && mutedUntilMs > minuteMs && mutedUntilMs <= nowMs ? mutedUntilMs : minuteMs
-}
-
-const headerView = (
-	channel: Model["channel"],
-	parentChannel: Model["parentChannel"],
-	orgSlug: Model["orgSlug"],
-	members: Model["members"],
-	lookups: Model["lookups"],
-	currentUserId: Model["currentUserId"],
-	pinnedPopover: Model["overlays"]["pinned"],
-	pins: Model["pinned"],
-	customer: Model["customer"],
-	isCustomerCardOpen: boolean,
-	isMobile: boolean,
-	channelLinks: ChannelLinksMap,
-	notificationControl: Model["notificationControl"],
-	/** The clock to the minute, or the bell's mute end (`headerClockOf`). */
-	minuteMs: number,
-	h: H,
-): Html => {
-	const users = new Map(lookups.users.map((user) => [user.id, user]))
-	const botNames = new Map(lookups.bots.map((bot) => [bot.userId, bot.name]))
-	const others = (members ?? []).filter((member) => member.userId !== currentUserId)
-	const currentMember = (members ?? []).find((member) => member.userId === currentUserId)
-	const partner = channel?.type === "single" && others.length === 1 ? others[0] : undefined
-	const dmPresence =
-		partner === undefined || botNames.has(partner.userId)
-			? null
-			: getEffectivePresenceStatus(
-					lookups.presence.find((presence) => presence.userId === partner.userId),
-				)
-	return chatHeaderView(h, {
-		channel,
-		links: headerLinks(linksFor(channelLinks, channel?.id ?? ""), customer, lookups.syncProvider),
-		parentLinks: parentChannel === null ? NO_CHANNEL_LINKS : linksFor(channelLinks, parentChannel.id),
-		parentChannel,
-		orgSlug,
-		isMember: currentMember !== undefined,
-		otherMembers: [...others].reverse().flatMap((member) => {
-			const user = users.get(member.userId)
-			return user ? [authorIdentity(user, botNames.get(member.userId))] : []
-		}),
-		isHiddenDm: currentMember?.isHidden ?? false,
-		onUnhide: Message.ClickedUnhideConversation(),
-		dmPresence,
-		// A phone opens a conversation from the chat list, a DM from the DMs tab; a thread from its channel.
-		mobileBack:
-			isMobile && orgSlug !== null
-				? channel?.type === "thread" && channel.parentChannelId
-					? mobileBackLink(
-							h,
-							hrefOf(AppRoute.ChatChannel({ orgSlug, channelId: channel.parentChannelId })),
-							parentChannel?.name ?? "channel",
-							"-ml-3 -mr-1",
-						)
-					: channel?.type === "direct" || channel?.type === "single"
-						? // A DM leads back to the DMs tab's list.
-							mobileBackLink(h, hrefOf(AppRoute.ChatDms({ orgSlug })), "DMs", "-ml-3 -mr-1")
-						: mobileBackLink(h, hrefOf(AppRoute.ChatIndex({ orgSlug })), "Chats", "-ml-3 -mr-1")
-				: h.empty,
-		pinnedTrigger: pinnedPopoverView(h, pinnedPopover, pins, toPinnedMessage, pinnedActions),
-		notificationsTrigger:
-			channel === null
-				? h.empty
-				: currentMember === undefined
-					? // A thread you do not follow (its access is its parent's): follow it here.
-						channel.type === "thread"
-						? button(
-								h,
-								{ intent: "outline", size: "sm", onPress: Message.ClickedFollowThread() },
-								["Follow thread"],
-							)
-						: h.empty
-					: NotificationControl.view(
-							h,
-							notificationControl,
-							currentMember,
-							channel.type,
-							minuteMs,
-							toNotificationControl,
-						),
-		customerChip:
-			customer === null
-				? null
-				: CustomerCard.chip(h, {
-						customer,
-						isOpen: isCustomerCardOpen,
-						isMobile,
-						toMessage: toCustomerCard,
-					}),
-	})
-}
-
-/**
  * A view memo, not state: hands back the last page given while `isEqual` holds, so a lazy view
  * keyed on it keeps its memo when the page changed only in fields that view never reads.
  */
@@ -306,7 +156,6 @@ const toolbarInputOf = stableInput(isToolbarInputEqual)
 const lazyToolbar = createLazy()
 
 // The chrome around the list only changes with the channel, not on every scroll frame.
-const lazyHeader = createLazy()
 const lazyTabBar = createLazy()
 const lazyComposer = createLazy()
 const lazyThreadPanel = createLazy()
@@ -315,8 +164,6 @@ export interface ViewOptions {
 	readonly isMobile?: boolean
 	/** `Shared.nowMs`, the presence clock the profile popover and the Files dates read. */
 	readonly nowMs?: number
-	/** `Shared.channelLinks`: what the header's channel icon marks. */
-	readonly channelLinks?: ChannelLinksMap
 }
 
 /** `SplitPanelRoot` > `SplitPanelContent` with the channel's current tab inside. */
@@ -343,28 +190,12 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 			h.div(
 				[h.Class(splitContentClassName())],
 				[
-					lazyHeader(headerView, [
-						model.channel,
-						model.parentChannel,
-						model.orgSlug,
-						model.members,
-						model.lookups,
-						model.currentUserId,
-						model.overlays.pinned,
-						model.pinned,
-						model.customer,
-						CustomerCard.isOpenOf(model.customerCard, options.isMobile ?? false),
-						options.isMobile ?? false,
-						options.channelLinks ?? NO_CHANNEL_LINKS_MAP,
-						model.notificationControl,
-						headerClockOf(model, nowMs),
-						h,
-					]) ?? h.empty,
-					customerCardView(h, model, options.isMobile ?? false, nowMs),
+					// The channel header is the shared screen in its hole (`src/root/app.ts`).
+					hole(h, "channel-header", model.channelId, [h.Class("shrink-0")]),
 					lazyTabBar(chatTabBarView, [routeTabOf(model.tab), toSelf, h]) ?? h.empty,
 					...(model.tab._tag === "Files"
 						? [filesHole(h, model, model.tab.view)]
-						: messagesOutlet(h, model, nowMs, options.channelLinks ?? NO_CHANNEL_LINKS_MAP)),
+						: messagesOutlet(h, model, nowMs)),
 				],
 			),
 			model.threadPanel === null
@@ -393,25 +224,6 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 			htmlRenderFullscreenView(h, model.htmlRender, toHtmlRenderMessage),
 		],
 	)
-}
-
-/** The customer chip's card (desktop) or sheet (phone); nothing while the channel has no customer. */
-const customerCardView = (h: H, model: Model, isMobile: boolean, nowMs: number): Html => {
-	const customer = model.customer
-	if (customer === null) return h.empty
-	const owner =
-		customer.ownerUserId === null
-			? undefined
-			: model.lookups.users.find((user) => user.id === customer.ownerUserId)
-	const context: CustomerCard.CardContext = {
-		customer,
-		ownerName: owner === undefined ? null : `${owner.firstName} ${owner.lastName}`.trim() || owner.email,
-		customerHref: hrefOf(customerRoute(model.orgSlug, customer.accountId)),
-		queueHref: hrefOf(AppRoute.CustomersAttention({ orgSlug: model.orgSlug })),
-		nowMs,
-	}
-	const inputs = { context, model: model.customerCard, toMessage: toCustomerCard }
-	return isMobile ? CustomerCard.sheet(h, inputs) : CustomerCard.card(h, inputs)
 }
 
 /** The thread's starter message as the channel list shows it; null outside the loaded window. */

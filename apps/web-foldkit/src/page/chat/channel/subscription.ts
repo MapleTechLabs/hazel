@@ -21,7 +21,6 @@ import {
 	channelSyncProviderStream,
 	membersStream,
 	activityStream,
-	inheritedLevelStream,
 	readPositionStream,
 	pinnedStream,
 	presenceStream,
@@ -38,7 +37,6 @@ import { issueAtMessageStream } from "../../../customers/issues"
 import { issueSlaStream } from "../../../customers/sla"
 import { orgMembersStream } from "../../../customers/queries"
 import * as IssueControl from "../issue-control"
-import * as CustomerCard from "../customer-card"
 import * as Composer from "../../../composer/composer"
 import {
 	botCommandsStream,
@@ -459,13 +457,6 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 		dependenciesToStream: ({ channelId }) =>
 			activityStream(channelId, (activity) => Message.UpdatedActivity({ channelId, activity })),
 	}),
-	chatInheritedNotificationLevel: entry(byChannel, {
-		modelToDependencies: channelOf,
-		dependenciesToStream: ({ channelId }) =>
-			inheritedLevelStream(channelId, (level) =>
-				Message.UpdatedInheritedNotificationLevel({ channelId, level }),
-			),
-	}),
 	chatReadPosition: entry(
 		{ channelId: ChannelId, userId: Schema.NullOr(UserId) },
 		{
@@ -576,8 +567,6 @@ const hasOpenDialog = (model: Model) =>
 	model.overlays.open._tag === "ReactionPicker" ||
 	model.overlays.open._tag === "ReactionModal" ||
 	(model.overlays.open._tag === "Popover" && model.overlays.open.popover.isOpen) ||
-	model.overlays.pinned.isOpen ||
-	CustomerCard.isPinnedOf(model.customerCard) ||
 	[model.draft, model.threadPanel?.draft ?? null].some(
 		(draft) => draft !== null && (draft.emojiPicker.isOpen || draft.gifPicker.isOpen),
 	)

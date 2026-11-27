@@ -93,57 +93,6 @@ export const mobileChromeOf = (route: AppRoute): MobileChrome => {
  * While a back chevron is on screen, the swipe from the screen's left edge goes where it leads, as
  * a phone's navigation does (where the shell has the swipe: `platform/system-ui.ts`).
  */
-/**
- * What `SwipeBack` declares it sends, and never does: the shell follows the link itself. Foldkit
- * requires a Mount to declare a Message it can send; this one is never constructed, and the view
- * maps it away (`neverSent`), so `mobileBackLink` stays usable from any page's Message type.
- */
-const SwipeBackFollowed = Schema.TaggedStruct("SwipeBackFollowed", {})
-
-const neverSent = (message: typeof SwipeBackFollowed.Type): never => {
-	throw new Error(`SwipeBack never sends a Message, yet sent ${message._tag}`)
-}
-
-const SwipeBack = Mount.defineStream("SwipeBack", {
-	messages: [SwipeBackFollowed],
-	// The swipe goes where the chevron's own link does.
-	execute: ({ element }) =>
-		Stream.unwrap(
-			Effect.acquireRelease(
-				Effect.sync(() => {
-					const href = element.getAttribute("href")
-					return href === null ? undefined : systemUi()?.setSwipeBack(href)
-				}),
-				(release) => Effect.sync(() => release?.()),
-			).pipe(Effect.as(Stream.never)),
-		),
-})
-
-/** A back chevron (44pt square) leading to `href`, labelled for where it goes. */
-export const mobileBackLink = <Message>(
-	h: HtmlBuilder<Message>,
-	href: string,
-	to: string,
-	className?: string,
-): Html =>
-	h.a(
-		[
-			h.Href(href),
-			h.AriaLabel(`Back to ${to}`),
-			// Keyed by where it leads, so its swipe follows a new destination. Only a shell with
-			// the swipe (installed before the app starts) gets the Mount; a browser has none.
-			h.Key(`back:${href}`),
-			...(systemUi() === undefined ? [] : [h.OnMount(Mount.mapMessage(SwipeBack(), neverSent))]),
-			h.Class(
-				twMerge(
-					"-ml-1 flex size-11 shrink-0 items-center justify-center rounded-lg text-primary transition-opacity duration-100 active:opacity-60 md:hidden",
-					className,
-				),
-			),
-		],
-		[IconChevronLeft(h, { className: "size-6" })],
-	)
-
 /** The sheet's Model, derived from the shell's `isSidebarOpen`: open for as long as the flag is set. */
 export const mobileSidebarModel = (isOpen: boolean): Modal.Model =>
 	isOpen ? Modal.initOpen(MOBILE_SIDEBAR_ID) : Modal.init(MOBILE_SIDEBAR_ID)

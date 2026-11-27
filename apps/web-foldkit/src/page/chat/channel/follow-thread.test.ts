@@ -1,9 +1,8 @@
 import { describe, expect, test, vi } from "vitest"
-import { channelId, loadedModel, updateWithShared } from "./fixtures.test-support"
-import { ToggleFollowThread } from "./clear-notifications"
+import { loadedModel, updateWithShared } from "./fixtures.test-support"
 import { Message } from "./model"
 
-/** Following a thread from its page, and the toast its result shows. */
+/** Following a thread from the thread panel: the toast its result shows. */
 
 vi.hoisted(() => {
 	if (!("document" in globalThis))
@@ -21,17 +20,6 @@ const threadPage = () => {
 }
 
 describe("following a thread", () => {
-	test("the thread page's Follow joins it", () => {
-		const followed = updateWithShared(threadPage(), Message.ClickedFollowThread())
-		expect(followed.commands?.map((command) => [command.name, command.args])).toEqual([
-			[ToggleFollowThread.name, { threadChannelId: channelId, memberId: null }],
-		])
-	})
-
-	test("a channel page has nothing to follow", () => {
-		expect(updateWithShared(loadedModel(), Message.ClickedFollowThread()).commands ?? []).toEqual([])
-	})
-
 	test("the result says what happened", () => {
 		const done = updateWithShared(
 			threadPage(),
