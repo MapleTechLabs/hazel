@@ -1,7 +1,7 @@
 // Effect UI is a public preview: every API is experimental by design here.
 // @effect-diagnostics experimentalApiUsage:off
 /**
- * Create section (today's `overlay/modal/create-section.ts`, legacy `create-section-modal.tsx`):
+ * Create section (the deleted Foldkit `overlay/modal/create-section.ts`, legacy `create-section-modal.tsx`):
  * a name of two characters or more, created optimistically in the organization.
  */
 import { Command, Component, UiSchema } from "@effect/ui"
@@ -45,19 +45,27 @@ export class CreateSection extends Command.Service<CreateSection>()("hazel/modal
 	success: CreateSectionMessage,
 }) {
 	static readonly layer = this.toLayer(
-		Effect.map(modalServices, ({ data, run }) => (args) =>
-			run(
-				data.actions.createChannelSectionAction(args).pipe(
-					Effect.andThen(toast(successToast("Section created successfully"))),
-					Effect.as(CreateSectionMessage.SucceededCreateSection()),
-					// BOUNDARY: the action names no failure of its own; every one reads as its common reason.
-					Effect.catchCause((cause) =>
-						toast(errorToast(copyOf(reasonOf(Option.getOrUndefined(Cause.findErrorOption(cause))), {}))).pipe(
-							Effect.as(CreateSectionMessage.FailedCreateSection()),
+		Effect.map(
+			modalServices,
+			({ data, run }) =>
+				(args) =>
+					run(
+						data.actions.createChannelSectionAction(args).pipe(
+							Effect.andThen(toast(successToast("Section created successfully"))),
+							Effect.as(CreateSectionMessage.SucceededCreateSection()),
+							// BOUNDARY: the action names no failure of its own; every one reads as its common reason.
+							Effect.catchCause((cause) =>
+								toast(
+									errorToast(
+										copyOf(
+											reasonOf(Option.getOrUndefined(Cause.findErrorOption(cause))),
+											{},
+										),
+									),
+								).pipe(Effect.as(CreateSectionMessage.FailedCreateSection())),
+							),
 						),
 					),
-				),
-			),
 		),
 	)
 }
@@ -102,27 +110,32 @@ export const CreateSectionModalNoDeps = CreateSectionDef.make({
 	},
 	view: (h: H, model) => {
 		const error = errorOf(model)
-		return h.dialog
-			.open(true)
-			// HAZEL-GAP(p4-dialog-size): today's panel is `md` (28rem); the dialog has one width.
-			.title("Create section")
-			.on("dismiss", CreateSectionMessage.DismissedDialog())
-			.children(
-				h.textField
-					.label("Section name")
-					.placeholder("Design")
-					.value(model.name)
-					.error(error ?? undefined)
-					.on("change", (payload) => CreateSectionMessage.ChangedName({ payload }))
-					.on("submit", (payload) => CreateSectionMessage.SubmittedName({ payload })),
-			)
-			.actions(
-				h.button.label("Cancel").variant("outline").on("press", CreateSectionMessage.PressedCancel()),
-				h.button
-					.label(model.submitting ? "Creating..." : "Create section")
-					.disabled(error !== null || model.submitting)
-					.on("press", CreateSectionMessage.PressedCreate()),
-			)
+		return (
+			h.dialog
+				.open(true)
+				// HAZEL-GAP(p4-dialog-size): today's panel is `md` (28rem); the dialog has one width.
+				.title("Create section")
+				.on("dismiss", CreateSectionMessage.DismissedDialog())
+				.children(
+					h.textField
+						.label("Section name")
+						.placeholder("Design")
+						.value(model.name)
+						.error(error ?? undefined)
+						.on("change", (payload) => CreateSectionMessage.ChangedName({ payload }))
+						.on("submit", (payload) => CreateSectionMessage.SubmittedName({ payload })),
+				)
+				.actions(
+					h.button
+						.label("Cancel")
+						.variant("outline")
+						.on("press", CreateSectionMessage.PressedCancel()),
+					h.button
+						.label(model.submitting ? "Creating..." : "Create section")
+						.disabled(error !== null || model.submitting)
+						.on("press", CreateSectionMessage.PressedCreate()),
+				)
+		)
 	},
 })
 

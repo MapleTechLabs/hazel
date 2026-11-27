@@ -1,7 +1,7 @@
 // Effect UI is a public preview: every API is experimental by design here.
 // @effect-diagnostics experimentalApiUsage:off
 /**
- * Delete message (today's `overlay/modal/delete-message.ts`, legacy `delete-message-modal.tsx`):
+ * Delete message (the deleted Foldkit `overlay/modal/delete-message.ts`, legacy `delete-message-modal.tsx`):
  * confirming closes at once; the optimistic delete runs on, and a failure still toasts.
  */
 import { Command, Component, UiSchema } from "@effect/ui"
@@ -42,7 +42,14 @@ export class DeleteMessage extends Command.Service<DeleteMessage>()("hazel/modal
 							Effect.catchTags({ MessageNotFoundError: () => toast(errorToast(notFound)) }),
 							// BOUNDARY: every other failure reads as its common reason.
 							Effect.catchCause((cause) =>
-								toast(errorToast(copyOf(reasonOf(Option.getOrUndefined(Cause.findErrorOption(cause))), {}))),
+								toast(
+									errorToast(
+										copyOf(
+											reasonOf(Option.getOrUndefined(Cause.findErrorOption(cause))),
+											{},
+										),
+									),
+								),
 							),
 							Effect.as(Component.noop),
 						),

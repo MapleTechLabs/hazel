@@ -28,7 +28,7 @@ export interface ErrorCopy {
 	readonly description?: string
 }
 
-const COMMON_COPY: { readonly [R in CommonReason]: ErrorCopy } = {
+const COMMON_COPY = {
 	Offline: { title: "Connection lost", description: "Check your internet connection and try again." },
 	Timeout: {
 		title: "Request timed out",
@@ -38,7 +38,7 @@ const COMMON_COPY: { readonly [R in CommonReason]: ErrorCopy } = {
 	RateLimited: { title: "Rate limit exceeded", description: "Please wait before trying again." },
 	Unavailable: { title: "Service temporarily unavailable", description: "Please try again in a moment." },
 	Unexpected: { title: "Something went wrong", description: "Please try again." },
-}
+} satisfies { readonly [R in CommonReason]: ErrorCopy }
 
 const tagOf = (error: unknown): string | undefined =>
 	Predicate.hasProperty(error, "_tag") && typeof error._tag === "string" ? error._tag : undefined

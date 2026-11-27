@@ -29,28 +29,44 @@ const dataLayer = Layer.succeed(ClientData, clientData)
 // Nothing shows while a modal's chunk loads (a component child needs no fallback).
 // The `import()`s are the only references to the modals' modules: a static import undoes the split.
 const CreateChannelModal = Component.lazy("CreateChannelModal", () =>
-	import("@hazel/shared-screens/modals/CreateChannelModal").then((module) => module.CreateChannelModal.pipe(Component.provide(dataLayer))),
+	import("@hazel/shared-screens/modals/CreateChannelModal").then((module) =>
+		module.CreateChannelModal.pipe(Component.provide(dataLayer)),
+	),
 )
 const CreateDmModal = Component.lazy("CreateDmModal", () =>
-	import("@hazel/shared-screens/modals/CreateDmModal").then((module) => module.CreateDmModal.pipe(Component.provide(dataLayer))),
+	import("@hazel/shared-screens/modals/CreateDmModal").then((module) =>
+		module.CreateDmModal.pipe(Component.provide(dataLayer)),
+	),
 )
 const JoinChannelModal = Component.lazy("JoinChannelModal", () =>
-	import("@hazel/shared-screens/modals/JoinChannelModal").then((module) => module.JoinChannelModal.pipe(Component.provide(dataLayer))),
+	import("@hazel/shared-screens/modals/JoinChannelModal").then((module) =>
+		module.JoinChannelModal.pipe(Component.provide(dataLayer)),
+	),
 )
 const CreateSectionModal = Component.lazy("CreateSectionModal", () =>
-	import("@hazel/shared-screens/modals/CreateSectionModal").then((module) => module.CreateSectionModal.pipe(Component.provide(dataLayer))),
+	import("@hazel/shared-screens/modals/CreateSectionModal").then((module) =>
+		module.CreateSectionModal.pipe(Component.provide(dataLayer)),
+	),
 )
 const DeleteChannelModal = Component.lazy("DeleteChannelModal", () =>
-	import("@hazel/shared-screens/modals/DeleteChannelModal").then((module) => module.DeleteChannelModal.pipe(Component.provide(dataLayer))),
+	import("@hazel/shared-screens/modals/DeleteChannelModal").then((module) =>
+		module.DeleteChannelModal.pipe(Component.provide(dataLayer)),
+	),
 )
 const RenameChannelModal = Component.lazy("RenameChannelModal", () =>
-	import("@hazel/shared-screens/modals/RenameChannelModal").then((module) => module.RenameChannelModal.pipe(Component.provide(dataLayer))),
+	import("@hazel/shared-screens/modals/RenameChannelModal").then((module) =>
+		module.RenameChannelModal.pipe(Component.provide(dataLayer)),
+	),
 )
 const DeleteMessageModal = Component.lazy("DeleteMessageModal", () =>
-	import("@hazel/shared-screens/modals/DeleteMessageModal").then((module) => module.DeleteMessageModal.pipe(Component.provide(dataLayer))),
+	import("@hazel/shared-screens/modals/DeleteMessageModal").then((module) =>
+		module.DeleteMessageModal.pipe(Component.provide(dataLayer)),
+	),
 )
 const SetStatusModal = Component.lazy("SetStatusModal", () =>
-	import("@hazel/shared-screens/modals/SetStatusModal").then((module) => module.SetStatusModal.pipe(Component.provide(dataLayer))),
+	import("@hazel/shared-screens/modals/SetStatusModal").then((module) =>
+		module.SetStatusModal.pipe(Component.provide(dataLayer)),
+	),
 )
 
 /** What a modal reads: its request, the session and route it opened over, and the clock. */
@@ -109,7 +125,8 @@ const nativeModals: Registry = {
 		RenameChannelModal(h, { ...placement, props: { channelId: request.threadId, kind: "thread" } }),
 	DeleteMessage: (h, { request }, placement) =>
 		DeleteMessageModal(h, { ...placement, props: { messageId: request.messageId } }),
-	SetStatus: (h, { session, nowMs }, placement) => SetStatusModal(h, { ...placement, props: { session, nowMs } }),
+	SetStatus: (h, { session, nowMs }, placement) =>
+		SetStatusModal(h, { ...placement, props: { session, nowMs } }),
 }
 
 /** The parity flag of a native modal: `"0"` opens today's Foldkit modal instead (`compare-pages.ts`). */
@@ -121,7 +138,7 @@ const forcedOff = (tag: ModalTag): boolean =>
 
 /** Whether the root draws this kind; the Foldkit host draws the rest. */
 export const isNativeModal = (tag: string): boolean =>
-	(nativeModals as Record<string, unknown>)[tag] !== undefined && !forcedOff(tag as ModalTag)
+	Object.hasOwn(nativeModals, tag) && !forcedOff(tag as ModalTag)
 
 /** The open modal's view, keyed by its opening, or null. */
 export const modalOf = (

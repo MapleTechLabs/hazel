@@ -1,7 +1,7 @@
 // Effect UI is a public preview: every API is experimental by design here.
 // @effect-diagnostics experimentalApiUsage:off
 /**
- * Rename channel and rename thread (today's `overlay/modal/rename-channel.ts` and
+ * Rename channel and rename thread (the deleted Foldkit `overlay/modal/rename-channel.ts` and
  * `rename-thread.ts`): one modal, two copies. The field follows the live name until it is edited.
  */
 import { Command, Component, Subscription, UiSchema } from "@effect/ui"
@@ -83,7 +83,12 @@ export class RenameChannel extends Command.Service<RenameChannel>()("hazel/modal
 							// BOUNDARY: every other failure reads as its common reason.
 							Effect.catchCause((cause) =>
 								toast(
-									errorToast(copyOf(reasonOf(Option.getOrUndefined(Cause.findErrorOption(cause))), {})),
+									errorToast(
+										copyOf(
+											reasonOf(Option.getOrUndefined(Cause.findErrorOption(cause))),
+											{},
+										),
+									),
 								).pipe(Effect.as(RenameChannelMessage.FailedRenameChannel())),
 							),
 						),

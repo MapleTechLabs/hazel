@@ -1,7 +1,7 @@
 // Effect UI is a public preview: every API is experimental by design here.
 // @effect-diagnostics experimentalApiUsage:off
 /**
- * Browse channels (today's `overlay/modal/join-channel.ts`, legacy `join-channel-modal.tsx`): the
+ * Browse channels (the deleted Foldkit `overlay/modal/join-channel.ts`, legacy `join-channel-modal.tsx`): the
  * organization's channels the user is not in, searchable, each with Join.
  */
 import { Command, Component, Subscription, UiSchema } from "@effect/ui"
@@ -66,7 +66,12 @@ export class JoinChannel extends Command.Service<JoinChannel>()("hazel/modals/Jo
 							// BOUNDARY: every other failure reads as its common reason.
 							Effect.catchCause((cause) =>
 								toast(
-									errorToast(copyOf(reasonOf(Option.getOrUndefined(Cause.findErrorOption(cause))), {})),
+									errorToast(
+										copyOf(
+											reasonOf(Option.getOrUndefined(Cause.findErrorOption(cause))),
+											{},
+										),
+									),
 								).pipe(Effect.as(JoinChannelMessage.FailedJoinChannel())),
 							),
 						),
@@ -91,10 +96,14 @@ const organizationChannels = (organizationId: OrganizationId) =>
 			q
 				.from({ channel: data.collections.channelCollection })
 				.where(({ channel }) =>
-					and(eq(channel.organizationId, organizationId), inArray(channel.type, ["public", "private"])),
+					and(
+						eq(channel.organizationId, organizationId),
+						inArray(channel.type, ["public", "private"]),
+					),
 				)
 				.select(({ channel }) => ({ id: channel.id, name: channel.name })),
-		(rows) => JoinChannelMessage.UpdatedChannels({ channels: rows.map(({ id, name }) => ({ id, name })) }),
+		(rows) =>
+			JoinChannelMessage.UpdatedChannels({ channels: rows.map(({ id, name }) => ({ id, name })) }),
 	)
 
 /** The channels to offer: loaded, not joined, matching the search. */
@@ -122,7 +131,8 @@ export const JoinChannelModalNoDeps = Hazel.component({
 }).make({
 	init: () => ({ search: TextField.empty, memberChannelIds: null, channels: null }),
 	update: {
-		ChangedSearch: ($, { payload }) => $.evolve({ search: (search) => TextField.changed(search, payload) }),
+		ChangedSearch: ($, { payload }) =>
+			$.evolve({ search: (search) => TextField.changed(search, payload) }),
 		UpdatedMemberChannels: ($, { channelIds }) => $.evolve({ memberChannelIds: channelIds }),
 		UpdatedChannels: ($, { channels }) => $.evolve({ channels }),
 		// The shell renders only signed in; without a user there is nobody to join.
@@ -170,12 +180,17 @@ export const JoinChannelModalNoDeps = Hazel.component({
 										h.button
 											.label("Join")
 											.size("small")
-											.on("press", JoinChannelMessage.PressedJoin({ channelId: channel.id })),
+											.on(
+												"press",
+												JoinChannelMessage.PressedJoin({ channelId: channel.id }),
+											),
 									),
 							),
 						),
 			)
-			.actions(h.button.label("Close").variant("outline").on("press", JoinChannelMessage.PressedClose()))
+			.actions(
+				h.button.label("Close").variant("outline").on("press", JoinChannelMessage.PressedClose()),
+			)
 	},
 })
 

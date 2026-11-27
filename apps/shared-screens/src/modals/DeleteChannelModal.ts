@@ -1,7 +1,7 @@
 // Effect UI is a public preview: every API is experimental by design here.
 // @effect-diagnostics experimentalApiUsage:off
 /**
- * Delete channel (today's `overlay/modal/delete-channel.ts`, legacy `delete-channel-modal.tsx`):
+ * Delete channel (the deleted Foldkit `overlay/modal/delete-channel.ts`, legacy `delete-channel-modal.tsx`):
  * confirm, delete optimistically, and leave the channel's pages for the chat index.
  */
 import { Command, Component, UiSchema } from "@effect/ui"
@@ -59,7 +59,12 @@ export class DeleteChannel extends Command.Service<DeleteChannel>()("hazel/modal
 							// BOUNDARY: every other failure reads as its common reason.
 							Effect.catchCause((cause) =>
 								toast(
-									errorToast(copyOf(reasonOf(Option.getOrUndefined(Cause.findErrorOption(cause))), {})),
+									errorToast(
+										copyOf(
+											reasonOf(Option.getOrUndefined(Cause.findErrorOption(cause))),
+											{},
+										),
+									),
 								).pipe(Effect.as(DeleteChannelMessage.FailedDeleteChannel())),
 							),
 						),
@@ -86,7 +91,8 @@ export const DeleteChannelModalNoDeps = Hazel.component({
 			if ($.model.deleting) return $.model
 			const { channelId, routeChannelId, session } = $.props
 			// Leave the deleted channel's pages for the chat index.
-			const leaveTo = routeChannelId === channelId && session.orgSlug !== null ? `/${session.orgSlug}/chat` : null
+			const leaveTo =
+				routeChannelId === channelId && session.orgSlug !== null ? `/${session.orgSlug}/chat` : null
 			return $.evolve({ deleting: true }).run(DeleteChannel.make({ channelId, leaveTo }))
 		},
 		SucceededDeleteChannel: ($) => $.emit(close),

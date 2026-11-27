@@ -37,3 +37,7 @@ export const dialog = (title: string) => byProp("dialog", "title", title)
 
 /** A text field's `change`, as the renderer reports a keystroke. */
 export const typed = (value: string, rev = 1) => ({ value, rev, edit: 0 })
+
+/** A running Subscription's key in a Scene: its name, then each dependency as JSON. */
+export const subscriptionKey = (name: string, ...dependencies: ReadonlyArray<unknown>) =>
+	[name, ...dependencies.map((dependency) => JSON.stringify(dependency))].join(":")

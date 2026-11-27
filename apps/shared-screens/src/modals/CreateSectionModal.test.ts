@@ -20,13 +20,17 @@ describe("create section modal", () => {
 
 	test("a short name says why and blocks the submit", () => {
 		const s = start().fire(field("Section name"), "change", typed("D"))
-		expect(s.get(field("Section name")).props?.["error"]).toBe("Section name must be at least 2 characters")
+		expect(s.get(field("Section name")).props?.["error"]).toBe(
+			"Section name must be at least 2 characters",
+		)
 		expect(s.get(button("Create section")).props?.["disabled"]).toBe(true)
 	})
 
 	test("submitting empty shows the error instead of creating", () => {
 		const s = start().fire(field("Section name"), "submit", typed(""))
-		expect(s.get(field("Section name")).props?.["error"]).toBe("Section name must be at least 2 characters")
+		expect(s.get(field("Section name")).props?.["error"]).toBe(
+			"Section name must be at least 2 characters",
+		)
 	})
 
 	test("a valid name creates the section and closes", () => {

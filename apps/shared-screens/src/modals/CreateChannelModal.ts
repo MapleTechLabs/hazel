@@ -1,7 +1,7 @@
 // Effect UI is a public preview: every API is experimental by design here.
 // @effect-diagnostics experimentalApiUsage:off
 /**
- * Create channel (today's `overlay/modal/new-channel.ts`, legacy `create-channel-modal.tsx`): a
+ * Create channel (the deleted Foldkit `overlay/modal/new-channel.ts`, legacy `create-channel-modal.tsx`): a
  * name of three characters or more, public or private, optionally with every member; then it opens.
  */
 import { Command, Component, UiSchema } from "@effect/ui"
@@ -79,7 +79,12 @@ export class CreateChannel extends Command.Service<CreateChannel>()("hazel/modal
 							// BOUNDARY: the action names no failure of its own; every one reads as its common reason.
 							Effect.catchCause((cause) =>
 								toast(
-									errorToast(copyOf(reasonOf(Option.getOrUndefined(Cause.findErrorOption(cause))), {})),
+									errorToast(
+										copyOf(
+											reasonOf(Option.getOrUndefined(Cause.findErrorOption(cause))),
+											{},
+										),
+									),
 								).pipe(Effect.as(CreateChannelMessage.FailedCreateChannel())),
 							),
 						),
@@ -133,7 +138,8 @@ export const CreateChannelModalNoDeps = CreateChannelDef.make({
 		ChangedName: ($, { payload }) =>
 			$.evolve({ name: (name) => TextField.changed(name, payload), touched: true }),
 		SubmittedName: ($, { payload }) => $.combine(submitted(TextField.changed($.model.name, payload))),
-		ChangedChannelType: ($, { value }) => (isChannelType(value) ? $.evolve({ channelType: value }) : $.model),
+		ChangedChannelType: ($, { value }) =>
+			isChannelType(value) ? $.evolve({ channelType: value }) : $.model,
 		ToggledAddAllMembers: ($, { checked }) => $.evolve({ addAllMembers: checked }),
 		PressedCreate: ($) => $.combine(submitted($.model.name)),
 		PressedCancel: ($) => $.emit(close),
