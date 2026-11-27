@@ -1,8 +1,5 @@
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
-import * as Composer from "../../../composer/composer"
-import * as Draft from "../../../composer/draft"
-import * as EditorCommands from "../../../composer/editor-commands"
 import { PageOutMessage } from "../../out-message"
 import { ActionMessage, CopyText, PinMessage } from "../message-actions"
 import * as EmojiPicker from "../../../emoji-picker/picker"
@@ -17,6 +14,7 @@ import {
 } from "./fixtures.test-support"
 import { DeleteMessageNow, FocusMessage, messageKeyOf } from "./message-keys"
 import { Message, type MessageKey, type Model } from "./model"
+import { RequestComposer } from "./write"
 
 /**
  * Discord's message keyboard: Shift+Tab from the composer onto the messages, the arrows between
@@ -31,16 +29,14 @@ vi.hoisted(() => {
 		})
 })
 
-const editorId = `composer-${channelId}`
 const loaded = (): Model => updateWithShared(loadedModel(), loadedMessages(messages)).model
 const key = (messageId: typeof adaMessageId, pressed: MessageKey) =>
 	Message.PressedMessageKey({ messageId, key: pressed })
-const shiftTab = Message.GotDraftMessage({
-	message: Draft.Message.GotComposerMessage({ message: Composer.Message.PressedShiftTab() }),
-})
+const shiftTab = Message.ReceivedComposerNotice({ notice: { _tag: "Left", channelId } })
+/** The page asks the channel's shared composer for the keyboard. */
 const focusesComposer = [
-	Command.expectExact(EditorCommands.FocusEditor({ editorId })),
-	Command.resolve(EditorCommands.FocusEditor, Composer.Message.CompletedFocusEditor()),
+	Command.expectExact(RequestComposer({ channelId, request: { _tag: "Focus" } })),
+	Command.resolve(RequestComposer, Message.CompletedRequestComposer()),
 ] as const
 const focuses = (messageId: typeof adaMessageId) =>
 	[
@@ -121,32 +117,30 @@ describe("actions on the focused message", () => {
 			updateWithShared,
 			given(loaded()),
 			message(key(adaMessageId, "Edit")),
-			model((current) => expect(Draft.editingMessageIdOf(current.draft)).toBe(adaMessageId)),
 			Command.expectExact(
-				EditorCommands.SetEditorContent({ editorId, markdown: "Shipped the onboarding copy" }),
+				RequestComposer({
+					channelId,
+					request: {
+						_tag: "Edit",
+						messageId: adaMessageId,
+						content: "Shipped the onboarding copy",
+					},
+				}),
 			),
-			Command.resolve(EditorCommands.SetEditorContent, Composer.Message.CompletedSetEditorContent()),
+			Command.resolve(RequestComposer, Message.CompletedRequestComposer()),
 		)
 	})
 
 	test("E on someone else's message does nothing", () => {
-		story(
-			updateWithShared,
-			given(loaded()),
-			message(key(graceMessageId, "Edit")),
-			Command.expectNone(),
-			model((current) => expect(Draft.editingMessageIdOf(current.draft)).toBeNull()),
-		)
+		story(updateWithShared, given(loaded()), message(key(graceMessageId, "Edit")), Command.expectNone())
 	})
 
-	test("R replies to it and puts the keyboard in the composer", () => {
-		story(
-			updateWithShared,
-			given(loaded()),
-			message(key(graceMessageId, "Reply")),
-			model((current) => expect(Draft.replyToMessageIdOf(current.draft)).toBe(graceMessageId)),
-			...focusesComposer,
-		)
+	test("R asks the composer to reply to it and puts the keyboard there", () => {
+		const pressed = updateWithShared(loaded(), key(graceMessageId, "Reply"))
+		expect(pressed.commands?.map((command) => command.name)).toEqual([
+			"RequestComposer",
+			"RequestComposer",
+		])
 	})
 
 	test("P pins it", () => {

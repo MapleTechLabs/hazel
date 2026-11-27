@@ -5,11 +5,6 @@ import { modifyFields } from "foldkit/struct"
 import * as HtmlRender from "../../../chat/html-render"
 import * as Live from "../../../chat/live-state"
 import * as Unfurl from "../../../chat/unfurl"
-import * as Composer from "../../../composer/composer"
-import * as Draft from "../../../composer/draft"
-import * as EmojiDialog from "../../../emoji-picker/dialog"
-import * as GifPicker from "../../../gif-picker/picker"
-import { PopoverEvent } from "../../../picker-popover/popover"
 import * as Popover from "../../../ui/popover"
 import * as MessageList from "../../../mount/message-list"
 import { AppRoute } from "../../../route"
@@ -26,7 +21,6 @@ import {
 	unfurlRequestsOf,
 	isLiveReactionChange,
 } from "../derive"
-import { typingNamesOf, typingUsersOf } from "../banners"
 import { emptyLookups, type Lookups } from "../lookups"
 import * as IssueControl from "../issue-control"
 import * as Overlays from "../overlays"
@@ -50,6 +44,7 @@ import { liftList, loadWhenNearEdge } from "./window"
 import * as ThreadWidth from "./thread-width"
 import * as Write from "./write"
 import { errorToast, successToast } from "../../../data/actions"
+import type { ComposerRequest } from "@hazel/shared-screens/chat/composer/host"
 import { publish } from "../../../root/bus"
 
 /** Channel page (`routes/_app/$orgSlug/chat/$id.tsx` + `$id/index.tsx`), read path. */
@@ -93,9 +88,6 @@ export const init = (
 	pinned: [],
 	customer: null,
 	issueRootIds: [],
-	typing: [],
-	typingNowMs: 0,
-	typingNames: [],
 	replyIds: [],
 	threadIds: [],
 	unfurls: {},
@@ -114,7 +106,6 @@ export const init = (
 	focusedMessageId: null,
 	pendingJump: null,
 	overlays: Overlays.init(),
-	draft: Draft.init(channelId, composerEditorId(channelId)),
 	threadPanel: null,
 	threadPanelWidth: options.carry?.threadPanelWidth ?? null,
 	threadPanelDrag: null,
@@ -161,8 +152,6 @@ export const switchChannel = (
 			}),
 	})
 }
-
-export const composerEditorId = (channelId: string) => `composer-${channelId}`
 
 /** The tab for a route: Messages keeps its instance; Files and All media are hazel pages. */
 const tabFor = (routeTab: ChatTab, previous: Tab): Tab =>
@@ -318,21 +307,6 @@ const withLiveReplies = (model: Model): Model => {
 	return liveReplies === model.liveReplies ? model : modifyFields(model, { liveReplies: () => liveReplies })
 }
 
-/** Who is typing, re-read when the indicators, members, users or the clock change. */
-const withTypingNames = (model: Model): Model => {
-	const typingNames = typingNamesOf(
-		model.typingNames,
-		typingUsersOf(
-			model.typing,
-			model.members,
-			model.lookups.users,
-			model.currentUserId,
-			model.typingNowMs,
-		),
-	)
-	return typingNames === model.typingNames ? model : modifyFields(model, { typingNames: () => typingNames })
-}
-
 const withLookup = <K extends keyof Lookups>(model: Model, key: K, value: Lookups[K]): PageReturn =>
 	deriveRows(modifyFields(model, { lookups: (lookups) => ({ ...lookups, [key]: value }) }))
 
@@ -363,32 +337,15 @@ const PublishPinsHotkey = Command.define("PublishPinsHotkey", {
  * (the emoji and GIF pickers and files go to the composer the keyboard is in: the thread's while one
  * is open); the page keys scroll the messages; Escape marks the channel read.
  */
-const pressedChannelHotkey = (model: Model, action: ChannelHotkey, shared: Shared | null): PageReturn => {
-	const toDraft =
-		Write.focusedDraft(model) === "thread"
-			? (message: Draft.Message) => Message.GotThreadDraftMessage({ message })
-			: (message: Draft.Message) => Message.GotDraftMessage({ message })
-	const pressedTrigger = PopoverEvent.ClickedTrigger()
-	const send = (message: Message) => update(model, message, shared)
+const pressedChannelHotkey = (model: Model, action: ChannelHotkey): PageReturn => {
+	const ask = (request: ComposerRequest) => Write.askComposer(model, Write.focusedComposer(model), request)
 	switch (action) {
 		case "EmojiPicker":
-			return send(
-				toDraft(
-					Draft.Message.GotEmojiPickerMessage({
-						message: EmojiDialog.Message.ReceivedPopoverEvent({ event: pressedTrigger }),
-					}),
-				),
-			)
+			return ask({ _tag: "OpenEmojiPicker" })
 		case "GifPicker":
-			return send(
-				toDraft(
-					Draft.Message.GotGifPickerMessage({
-						message: GifPicker.Message.ReceivedPopoverEvent({ event: pressedTrigger }),
-					}),
-				),
-			)
+			return ask({ _tag: "OpenGifPicker" })
 		case "Upload":
-			return send(toDraft(Draft.Message.ClickedAttach()))
+			return ask({ _tag: "Attach" })
 		case "Pins":
 			return { model, commands: [PublishPinsHotkey()] }
 		case "ScrollUp":
@@ -506,9 +463,6 @@ const pressedMessageKey = (model: Model, messageId: MessageId, key: MessageKey):
 	}
 }
 
-const isShiftTab = (message: Draft.Message) =>
-	message._tag === "GotComposerMessage" && message.message._tag === "PressedShiftTab"
-
 export const update = (model: Model, message: Message, shared: Shared | null = null): PageReturn =>
 	Message.match<PageReturn>(message, {
 		UpdatedChannel: ({ channelId, channel }) =>
@@ -552,39 +506,11 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 						model.hasLoadedReactions && isLiveReactionChange(model.reactions, reactions),
 					)
 				: { model },
-		UpdatedUsers: ({ users }) => {
-			const result = withLookup(model, "users", users)
-			return { ...result, model: withTypingNames(result.model) }
-		},
-		UpdatedPresence: ({ presence }) =>
-			Write.andThen(withLookup(model, "presence", presence), (next) =>
-				Write.forwardComposerData(
-					next,
-					Composer.Message.UpdatedPresence({ presence: Write.toComposerPresence(presence) }),
-				),
-			),
+		UpdatedUsers: ({ users }) => withLookup(model, "users", users),
+		UpdatedPresence: ({ presence }) => withLookup(model, "presence", presence),
 		UpdatedBots: ({ bots }) => withLookup(model, "bots", bots),
-		UpdatedCustomEmojis: ({ customEmojis }) =>
-			Write.andThen(withLookup(model, "customEmojis", customEmojis), (next) =>
-				Write.forwardComposerData(
-					next,
-					Composer.Message.UpdatedCustomEmojis({ emojis: customEmojis }),
-				),
-			),
-		UpdatedUserGroups: ({ groups }) =>
-			Write.andThen(withLookup(model, "userGroups", groups), (next) =>
-				Write.forwardComposerData(
-					next,
-					Composer.Message.UpdatedUserGroups({
-						groups: groups.map((group) => ({
-							id: group.id,
-							handle: group.handle,
-							name: group.name,
-							memberCount: group.memberIds.length,
-						})),
-					}),
-				),
-			),
+		UpdatedCustomEmojis: ({ customEmojis }) => withLookup(model, "customEmojis", customEmojis),
+		UpdatedUserGroups: ({ groups }) => withLookup(model, "userGroups", groups),
 		// A late result from the channel just left must not replace the new channel's lookups.
 		UpdatedAttachments: ({ channelId, attachments }) =>
 			channelId === model.channelId ? withLookup(model, "attachments", attachments) : { model },
@@ -599,8 +525,7 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		UpdatedThreadChannels: ({ channels }) => withLookup(model, "threadChannels", channels),
 		UpdatedThreadMessages: ({ messages }) => withLookup(model, "threadMessages", messages),
 		UpdatedReplyTargets: ({ targets }) => withLookup(model, "replyTargets", targets),
-		UpdatedMembers: ({ members }) =>
-			syncUnread(withTypingNames(modifyFields(model, { members: () => members }))),
+		UpdatedMembers: ({ members }) => syncUnread(modifyFields(model, { members: () => members })),
 		UpdatedActivity: ({ channelId, activity }) =>
 			channelId !== model.channelId
 				? { model }
@@ -664,12 +589,6 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 						}),
 					}
 				: { model },
-		UpdatedTyping: ({ typing }) => ({
-			model: withTypingNames(modifyFields(model, { typing: () => typing })),
-		}),
-		TickedTypingClock: ({ nowMs }) => ({
-			model: withTypingNames(modifyFields(model, { typingNowMs: () => nowMs })),
-		}),
 		GotUnfurlMessage: ({ message: unfurlMessage }) =>
 			deriveRows(
 				modifyFields(model, { unfurls: (unfurls) => Unfurl.applyMessage(unfurls, unfurlMessage) }),
@@ -693,21 +612,20 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			loadWhenNearEdge(liftList(model, MessageList.update(model.list, listMessage))),
 		GotOverlaysMessage: ({ message: overlaysMessage }) =>
 			liftOverlays(model, Overlays.update(model.overlays, overlaysMessage)),
-		GotDraftMessage: ({ message: draftMessage }) =>
-			isShiftTab(draftMessage)
-				? focusMessages(model)
-				: // A send dismisses the "New" line: the rows re-derive without it.
-					Write.andThen(Write.updateDraft(model, "channel", draftMessage, shared), (next) =>
+		// Shift+Tab out of the channel's composer moves to the messages; a send dismisses the "New"
+		// line, so the rows re-derive without it.
+		ReceivedComposerNotice: ({ notice }) =>
+			notice._tag === "Left"
+				? notice.channelId === model.channelId
+					? focusMessages(model)
+					: { model }
+				: Write.andThen(Write.composerNotice(model, notice), (next) =>
 						next.newMessages.sinceMs === model.newMessages.sinceMs
 							? { model: next }
 							: deriveRows(next),
 					),
-		GotThreadDraftMessage: ({ message: draftMessage }) =>
-			Write.updateDraft(model, "thread", draftMessage, shared),
-		GotActionMessage: ({ message: actionMessage }) =>
-			Write.andThen(Write.handleActionMessage(model, actionMessage), (next) =>
-				Write.playHeldThreadMessages(next, shared),
-			),
+		CompletedRequestComposer: () => ({ model }),
+		GotActionMessage: ({ message: actionMessage }) => Write.handleActionMessage(model, actionMessage),
 		// The membership can land after the thread's messages: a followed thread is read then.
 		UpdatedThreadMember: ({ threadChannelId, memberId }) =>
 			model.threadPanel?.threadChannelId === threadChannelId
@@ -779,10 +697,10 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		PressedThreadPanelEdgeKey: ({ delta }) => ThreadWidth.nudgeEdge(model, delta),
 		LoadedThreadPanelWidth: ({ width }) => ThreadWidth.loadedWidth(model, width),
 		CompletedSaveThreadPanelWidth: () => ({ model }),
-		PressedGlobalKey: ({ key }) => Write.insertGlobalKey(model, key),
-		PastedGlobalFiles: ({ files }) => Write.pasteGlobalFiles(model, files, shared),
-		PastedGlobalText: ({ text }) => Write.pasteGlobalText(model, text),
-		PressedChannelHotkey: ({ action }) => pressedChannelHotkey(model, action, shared),
+		PressedGlobalKey: ({ key }) => Write.insertGlobalText(model, key),
+		PastedGlobalFiles: ({ files }) => Write.pasteGlobalFiles(model, files),
+		PastedGlobalText: ({ text }) => Write.insertGlobalText(model, text),
+		PressedChannelHotkey: ({ action }) => pressedChannelHotkey(model, action),
 		PressedMessageKey: ({ messageId, key }) => pressedMessageKey(model, messageId, key),
 		FocusedMessage: ({ messageId }) =>
 			model.focusedMessageId === messageId
@@ -793,10 +711,6 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		StartedMessageKeys: () => ({ model }),
 		SucceededDeleteMessageNow: () => ({ model }),
 		FailedDeleteMessageNow: ({ reason }) => Write.withToast(model, Write.messageNotFoundToast(reason)),
-		LeftWindow: () =>
-			Write.andThen(Write.updateDraft(model, "channel", Draft.Message.LeftWindow(), shared), (next) =>
-				Write.updateDraft(next, "thread", Draft.Message.LeftWindow(), shared),
-			),
 		// A result for the channel the page has since switched away from is dropped.
 		CompletedReadThread: () => ({ model }),
 		SucceededClearNotifications: ({ channelId }) =>

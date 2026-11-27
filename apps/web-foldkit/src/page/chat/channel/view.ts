@@ -6,10 +6,6 @@ import { htmlRenderFullscreenView } from "../../../chat/embeds/html-render"
 import type * as HtmlRender from "../../../chat/html-render"
 import { imageViewerView } from "../../../chat/image-viewer"
 import type { RowContext } from "../../../chat/message/row"
-import type * as Draft from "../../../composer/draft"
-import { draftView } from "../../../composer/draft-view"
-import { typingIndicatorView } from "../banners"
-import { attachmentInfoFrom, composerAreaView, replyPreviewOf } from "../composer-view"
 import { toDeriveContext } from "../derive"
 import { messageToolbarOverlay, reactionModalView, trackHoverAttribute } from "../overlay-views"
 import * as Overlays from "../overlays"
@@ -30,8 +26,6 @@ type H = HtmlBuilder<Message>
 // The page's mappers, built once, so the lazy views that take them keep their memo.
 
 const toSelf = (message: Message) => message
-const toDraftMessage = (message: Draft.Message) => Message.GotDraftMessage({ message })
-const toThreadDraftMessage = (message: Draft.Message) => Message.GotThreadDraftMessage({ message })
 const toOverlay = (message: Overlays.Message) => Message.GotOverlaysMessage({ message })
 const toHtmlRenderMessage = (message: HtmlRender.Message) => Message.GotHtmlRenderMessage({ message })
 const toPressEdge = (clientX: number, startWidth: number, maxWidth: number) =>
@@ -80,6 +74,9 @@ const messageListHole = (h: H, model: Model): Html | undefined =>
 		? undefined
 		: hole(h, "message-list", model.channelId, [h.Class(MESSAGE_LIST_HOLE)])
 
+/** The composer's padded area (`composer-view.ts`); the shared composer fills it. */
+const COMPOSER_HOLE = "relative shrink-0 px-4 pb-4 pt-2.5"
+
 /** The screen's root fills the hole, so its list scrolls inside it. */
 const MESSAGE_LIST_HOLE = "flex min-h-0 flex-1 flex-col"
 
@@ -90,44 +87,18 @@ const messagesOutlet = (h: H, model: Model, nowMs: number) => {
 		return model.channel === null
 			? []
 			: [hole(h, "join-banner", model.channelId, [h.Class("flex flex-1 flex-col")])]
-	// Passed to the lazy composer as strings, so an unchanged reply keeps its memo.
-	const reply = replyPreviewOf(model, model.draft)
 	const list = messageListHole(h, model)
 	return [
 		h.div(
 			[h.Class("relative flex min-h-0 flex-1 flex-col overflow-hidden")],
 			list === undefined ? [] : [list],
 		),
-		lazyComposer(composerView, [
-			model.typingNames,
-			model.draft,
-			reply?.authorName ?? null,
-			reply?.firstLine ?? null,
-			model.lookups.attachments,
-			h,
-		]) ?? h.empty,
+		hole(h, "composer", model.channelId, [h.Class(COMPOSER_HOLE)]),
 		imageViewerOverlay(h, model),
 		lazyToolbar(messageToolbarOverlay, [h, toolbarInputOf(model)]) ?? h.empty,
 		reactionModalView(h, model),
 	]
 }
-
-const composerView = (
-	typingNames: ReadonlyArray<string>,
-	draft: Draft.Model,
-	replyAuthorName: string | null,
-	replyFirstLine: string | null,
-	attachments: Model["lookups"]["attachments"],
-	h: H,
-) =>
-	composerAreaView(h, typingIndicatorView(h, typingNames), draft, {
-		toMessage: toDraftMessage,
-		replyPreview:
-			replyAuthorName === null || replyFirstLine === null
-				? null
-				: { authorName: replyAuthorName, firstLine: replyFirstLine },
-		attachmentInfo: attachmentInfoFrom(attachments),
-	})
 
 /**
  * A view memo, not state: hands back the last page given while `isEqual` holds, so a lazy view
@@ -157,7 +128,6 @@ const lazyToolbar = createLazy()
 
 // The chrome around the list only changes with the channel, not on every scroll frame.
 const lazyTabBar = createLazy()
-const lazyComposer = createLazy()
 const lazyThreadPanel = createLazy()
 
 export interface ViewOptions {
@@ -292,13 +262,6 @@ const threadPanelOverlay = (
 					toMessage: toIssueControlMessage,
 				})
 			: h.empty,
-		composer: draftView(h, panel.draft, {
-			toMessage: toThreadDraftMessage,
-			replyPreview: replyPreviewOf(
-				{ lookups, currentUserId, messages, threadPanel: panel },
-				panel.draft,
-			),
-			attachmentInfo: attachmentInfoFrom(lookups.attachments),
-		}),
+		composer: hole(h, "thread-composer", panel.threadChannelId),
 	})
 }

@@ -1,8 +1,8 @@
 import { Option, Stream } from "effect"
 import * as Dom from "foldkit/dom"
-import { clipboardFiles } from "../editor/file-types"
+import { clipboardFiles } from "../../../editor/file-types"
 
-/** Document-level events the composer reacts to (`useGlobalKeyboardFocus`, `useTyping`'s blur). */
+/** Typing and pasting outside any field, for the shared composer (`useGlobalKeyboardFocus`). */
 
 const isEditableTarget = (target: EventTarget | null) =>
 	target instanceof HTMLElement &&
@@ -53,15 +53,3 @@ export const globalPasteStream = <Message>(
 			return text === "" ? Option.none() : Option.some(toMessage({ _tag: "Text", text }))
 		},
 	})
-
-/** The window lost focus or the document was hidden. */
-export const leftWindowStream = <Message>(message: Message): Stream.Stream<Message> =>
-	Stream.merge(
-		Dom.streamFromEvent({ target: () => window, type: "blur", mapEvent: () => message }),
-		Dom.streamFromEventFilterMap({
-			target: () => document,
-			type: "visibilitychange",
-			filterMapEvent: () =>
-				document.visibilityState === "hidden" ? Option.some(message) : Option.none(),
-		}),
-	)

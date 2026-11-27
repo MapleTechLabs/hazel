@@ -16,6 +16,8 @@ import {
 } from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
 import { CustomersSidebar, customersSidebarLayer } from "@hazel/shared-screens/customers/CustomersSidebar"
 import { ChatSidebarSheet } from "@hazel/shared-screens/shell/ChatSidebarSheet"
+import { ChannelComposer } from "@hazel/shared-screens/chat/composer/ChannelComposer"
+import { ThreadComposer } from "@hazel/shared-screens/chat/composer/ThreadComposer"
 import { ChannelHeader, channelHeaderLayer } from "@hazel/shared-screens/chat/header/ChannelHeader"
 import { JoinBanner, joinBannerLayer } from "@hazel/shared-screens/chat/header/JoinBanner"
 import { MessageList } from "@hazel/shared-screens/chat/MessageList"
@@ -33,6 +35,7 @@ import { liveConnection } from "../chat/live-state"
 import { AppRoute, organizationRoute } from "../route"
 import { eventsOf, publish } from "./bus"
 import { persistDismissedHint } from "./hints"
+import { composerWebLayer } from "./composer"
 import { pickersWebLayer } from "./pickers"
 
 /** A push of `route` on the shell's Router, from a screen's host callback. */
@@ -178,3 +181,12 @@ export const ShellJoinBanner = Component.provide(
 	JoinBanner,
 	Layer.unwrap(Effect.map(Effect.service(HazelRpc), (rpc) => joinBannerLayer(clientData, rpc))),
 )
+
+/** What a composer needs: the app's data, the web's files, uploads, bot commands and the pickers. */
+const composerLayer = Layer.mergeAll(composerWebLayer, pickersWebLayer, Layer.succeed(ClientData, clientData))
+
+/** The channel's composer, in the Foldkit channel page's hole under the list. */
+export const ShellChannelComposer = Component.provide(ChannelComposer, composerLayer)
+
+/** The open thread panel's composer, in the panel's hole. */
+export const ShellThreadComposer = Component.provide(ThreadComposer, composerLayer)

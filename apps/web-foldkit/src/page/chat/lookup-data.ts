@@ -1,4 +1,4 @@
-import type { ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
+import type { ChannelId, ChannelMemberId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { and, eq, inArray, isNull } from "@tanstack/db"
 import { Effect, Stream } from "effect"
 import {
@@ -17,7 +17,6 @@ import {
 	notificationOverrideCollection,
 	organizationCollection,
 	pinnedMessageCollection,
-	typingIndicatorCollection,
 	userCollection,
 	userPresenceStatusCollection,
 } from "~/db/collections"
@@ -42,7 +41,6 @@ import {
 	type ReplyTarget,
 	type ThreadChannelInfo,
 	type ThreadMessageInfo,
-	type TypingInfo,
 	type UserInfo,
 	type UserRow,
 	toChannelMemberInfo,
@@ -373,18 +371,6 @@ export const readPositionStream = <M>(
 		{ holdEmptyUntil: appOrgSourcesSettled },
 	)
 
-/** `useTypingIndicators`' indicator query. */
-export const typingStream = <M>(channelId: ChannelId, toMessage: (typing: ReadonlyArray<TypingInfo>) => M) =>
-	liveQueryStream<TypingInfo, M>(
-		(q) =>
-			q
-				.from({ typing: typingIndicatorCollection })
-				.where(({ typing }) => eq(typing.channelId, channelId))
-				.orderBy(({ typing }) => typing.lastTyped, "desc")
-				.limit(10),
-		(rows) => toMessage(rows.map((row) => ({ memberId: row.memberId, lastTyped: row.lastTyped }))),
-	)
-
 interface PinnedRow {
 	readonly pinned: { readonly id: string; readonly messageId: MessageId; readonly pinnedAt: Date }
 	readonly message: {
@@ -470,4 +456,20 @@ const pinnedQueryStream = <M>(channelId: ChannelId, toMessage: (pins: ReadonlyAr
 					}))
 					.sort((a, b) => a.pinnedAtMs - b.pinnedAtMs),
 			),
+	)
+
+/** The signed-in user's member row in a channel (whether they follow a thread). */
+export const ownMembershipStream = <Message>(
+	channelId: ChannelId,
+	userId: UserId,
+	toMessage: (memberId: ChannelMemberId | null) => Message,
+) =>
+	liveQueryStream<{ id: ChannelMemberId }, Message>(
+		(q) =>
+			q
+				.from({ member: channelMemberCollection })
+				.where(({ member }) => and(eq(member.channelId, channelId), eq(member.userId, userId)))
+				.orderBy(({ member }) => member.createdAt, "desc")
+				.findOne(),
+		(rows) => toMessage(rows[0]?.id ?? null),
 	)
