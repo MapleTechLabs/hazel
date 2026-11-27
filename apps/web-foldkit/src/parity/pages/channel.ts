@@ -1,6 +1,6 @@
 import type { ComparePage } from "../compare-entry"
 
-/** The phase 3 message list screen in the offline fixture's #general. (no flag since the shell; compare it in baseline mode). */
+/** The phase 3 message list screen in the offline fixture's #general (no flag since the shell, so compare it in baseline mode). */
 export default {
 	flag: "hazel:island:channel",
 	// `generalChannelId` in `apps/ios-hybrid/fixture/snapshot.ts`.
