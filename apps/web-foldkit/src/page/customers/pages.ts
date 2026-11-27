@@ -3,7 +3,6 @@ import * as CustomersInbox from "./inbox"
 import * as CustomersList from "./list"
 import * as CustomersSettingsFeatureFlags from "./settings/feature-flags"
 import * as CustomersSettingsPlans from "./settings/plans"
-import * as CustomersSettingsSignals from "./settings/signals"
 import * as CustomersSettingsSla from "./settings/sla"
 import * as CustomersSettingsSources from "./settings/sources"
 import * as CustomersUnmatched from "./settings/unmatched"
@@ -13,7 +12,6 @@ export const pages = [
 	CustomersInbox.page,
 	CustomersList.page,
 	CustomerDetail.page,
-	CustomersSettingsSignals.page,
 	CustomersSettingsPlans.page,
 	CustomersSettingsSla.page,
 	CustomersSettingsFeatureFlags.page,

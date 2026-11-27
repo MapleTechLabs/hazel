@@ -62,6 +62,18 @@ export const ChatDmsPage = Component.lazy("ChatDmsPage", () =>
 	),
 )
 
+// Customers settings: Signals (PK7a). The editor holds its own state; PK7b fills its preview seam.
+export const SignalsPage = Component.lazy("SignalsPage", () =>
+	import("@hazel/shared-screens/customers/pages/settings/signals/SignalsPage").then((module) =>
+		withClientData(module.SignalsPage),
+	),
+)
+export const SignalRulePage = Component.lazy("SignalRulePage", () =>
+	import("@hazel/shared-screens/customers/pages/settings/signals/SignalRulePage").then((module) =>
+		withClientData(module.SignalRulePage),
+	),
+)
+
 // The auth pages (PA1), each loaded with the web's `AuthFlows` (`auth/flows-layer.ts`).
 const authFlows = () => import("../auth/flows-layer").then((module) => module.AuthFlowsLive)
 export const SignInPage = Component.lazy("SignInPage", () =>
@@ -358,6 +370,34 @@ const nativePages: Registry = {
 					}),
 				)
 	},
+	// The list, and `/new` with the picker open (its own instance, so the picker opens with it).
+	CustomersSettingsSignals: (h, { route, session, nowMs, fallback }) =>
+		SignalsPage(h, {
+			key: route.orgSlug,
+			props: { session, pickerOpen: false, nowMs },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	CustomersSettingsSignalNew: (h, { route, session, nowMs, fallback }) =>
+		Option.match(route.template, {
+			onNone: () =>
+				SignalsPage(h, {
+					key: `${route.orgSlug}:new`,
+					props: { session, pickerOpen: true, nowMs },
+					fallback: (result) => fallback(result._tag === "Failure"),
+				}),
+			onSome: (template) =>
+				SignalRulePage(h, {
+					key: route.orgSlug,
+					props: { session, ruleId: null, template, nowMs },
+					fallback: (result) => fallback(result._tag === "Failure"),
+				}),
+		}),
+	CustomersSettingsSignalRule: (h, { route, session, nowMs, fallback }) =>
+		SignalRulePage(h, {
+			key: route.orgSlug,
+			props: { session, ruleId: route.ruleId, template: null, nowMs },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
 	// One instance per mode, as today's page keyed by route tag.
 	SignIn: fillWindow<"SignIn">((h, { route, fallback }) => {
 		const redirectUrl = safeReturnTo(Option.getOrNull(route.redirectUrl))

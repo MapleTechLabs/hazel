@@ -1,13 +1,11 @@
 import * as Customers from "@hazel/domain/customers"
 import { Option, Schema, type Types } from "effect"
-import { toMajor, toMinor } from "../../../../customers/format"
-import type { AccountRow } from "../../../../customers/queries"
+import type { CustomerSignalRuleId } from "@hazel/schema"
+import { toMajor, toMinor } from "../../data/format"
+import type { AccountRow } from "../../data/queries"
 import {
 	type ConfigForm,
 	type ConfigValue,
-	currencyOf,
-	type Editor,
-	type Model,
 	type RuleForm,
 	type RuleRow,
 	ruleById,
@@ -268,9 +266,17 @@ export interface EditorStatus {
 	readonly canSave: boolean
 }
 
-export const editorStatus = (model: Model, editor: Editor, form: RuleForm): EditorStatus => {
-	const currency = currencyOf(model)
-	const saved = ruleById(model, editor.ruleId)
+export const editorStatus = (
+	options: Readonly<{
+		form: RuleForm
+		ruleId: CustomerSignalRuleId | null
+		rules: ReadonlyArray<RuleRow> | null
+		currency: string
+		isSaving: boolean
+	}>,
+): EditorStatus => {
+	const { form, ruleId, currency } = options
+	const saved = ruleById(options.rules, ruleId)
 	const baseline = saved === undefined ? formOfTemplate(form.template) : formOfRule(saved, currency)
 	const draft = draftOf(form, currency)
 	const changes = changeCount(form, baseline, currency)
@@ -279,6 +285,6 @@ export const editorStatus = (model: Model, editor: Editor, form: RuleForm): Edit
 		draft,
 		saved,
 		changes,
-		canSave: Option.isSome(draft) && (editor.ruleId === null || changes > 0) && !editor.isSaving,
+		canSave: Option.isSome(draft) && (ruleId === null || changes > 0) && !options.isSaving,
 	}
 }
