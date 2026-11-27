@@ -59,6 +59,7 @@ const installOffline = async () => {
 	const network = globalThis.fetch.bind(globalThis)
 	const offlineFetch = makeOfflineFetch({
 		rpcs: page?.rpcs,
+		http: page?.http,
 		htmlRenderUrl: renderUrl,
 		backendUrl: BACKEND_URL,
 		unfurls: network,

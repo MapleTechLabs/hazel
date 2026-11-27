@@ -12,6 +12,8 @@ export interface PageFixture {
 	readonly seed?: (server: FixtureServer) => void
 	/** RPC answers by tag (encoded success values), over the fixture's own. */
 	readonly rpcs?: Readonly<Record<string, Responder>>
+	/** HTTP API answers by path (`makeOfflineFetch`'s `http`). */
+	readonly http?: Readonly<Record<string, () => object>>
 }
 
 /** The localStorage key naming the page whose fixture the offline build applies. */

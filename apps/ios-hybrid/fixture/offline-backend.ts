@@ -39,6 +39,8 @@ export const makeOfflineFetch = (options: {
 	readonly unfurls?: typeof fetch
 	/** RPC answers by tag over the ones below (a page's fixture, `page-fixture.ts`). */
 	readonly rpcs?: Readonly<Record<string, Responder>>
+	/** HTTP API answers (encoded JSON) by `GET` path, e.g. `/integrations/resources/<org>/slack/channels`. */
+	readonly http?: Readonly<Record<string, () => object>>
 }): typeof fetch => {
 	const now = Date.now()
 	const session: typeof HazelAuthApi.sessions.Session.Type = Schema.decodeSync(
@@ -220,8 +222,10 @@ export const makeOfflineFetch = (options: {
 					headers: { "content-type": "application/ndjson" },
 				})
 			}
-			default:
-				return new Response(null, { status: 404 })
+			default: {
+				const answer = options.http?.[url.pathname.replace(/\/$/, "")]
+				return answer === undefined ? new Response(null, { status: 404 }) : json(answer())
+			}
 		}
 	}
 	return offlineFetch
