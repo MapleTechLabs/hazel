@@ -1,5 +1,5 @@
 {
-	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): a group heading row spanning the columns (unmatched records) over one row.",
+	"about": "Unmatched records (`page/customers/settings/unmatched/table.ts`): a group heading row spanning the columns over a row and a disabled row, in a selectable table.",
 	"root": {
 		"tag": "table",
 		"props": {
@@ -24,14 +24,16 @@
 					"sortable": true,
 					"width": "regular"
 				}
-			]
+			],
+			"selectable": true
 		},
+		"events": ["selectAll"],
 		"children": [
 			{
 				"tag": "tableRow",
 				"key": "g",
 				"props": {
-					"title": "Stripe",
+					"title": "Stripe customers · 2",
 					"group": true
 				}
 			},
@@ -39,7 +41,7 @@
 				"tag": "tableRow",
 				"key": "a",
 				"props": {
-					"disabled": true
+					"title": "Initech"
 				},
 				"events": ["press", "select"],
 				"children": [
@@ -53,6 +55,7 @@
 								"tag": "text",
 								"children": ["Initech"],
 								"props": {
+									"role": "label",
 									"strong": true
 								}
 							}
@@ -65,10 +68,11 @@
 						},
 						"children": [
 							{
-								"tag": "badge",
+								"tag": "text",
+								"children": ["Free"],
 								"props": {
-									"label": "Free",
-									"style": "quiet"
+									"role": "label",
+									"tone": "muted"
 								}
 							}
 						]
@@ -83,6 +87,65 @@
 								"tag": "text",
 								"children": ["$0"],
 								"props": {
+									"role": "label",
+									"numeric": true
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"tag": "tableRow",
+				"key": "b",
+				"props": {
+					"disabled": true
+				},
+				"events": ["press", "select"],
+				"children": [
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "name"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Umbrella"],
+								"props": {
+									"role": "label",
+									"strong": true
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "plan"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Pro"],
+								"props": {
+									"role": "label",
+									"tone": "muted"
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "mrr"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["$900"],
+								"props": {
+									"role": "label",
 									"numeric": true
 								}
 							}
@@ -93,8 +156,21 @@
 		]
 	},
 	"frame": "screen",
+	"aria": [
+		{
+			"role": "grid",
+			"name": "Unmatched"
+		},
+		{
+			"role": "columnheader",
+			"name": "Stripe customers · 2"
+		},
+		{
+			"role": "checkbox",
+			"name": "Select Initech"
+		}
+	],
 	"pending": {
-		"web": "A4",
 		"ios": "S5"
 	}
 }
