@@ -1,4 +1,5 @@
-import { BotId, ChannelId, MessageId, OrganizationMemberId, UserId } from "@hazel/schema"
+import { SignalSeverity } from "@hazel/domain/customers"
+import { BotId, ChannelId, CustomerSignalId, MessageId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 
 /**
@@ -48,6 +49,19 @@ export const RegenerateBotToken = Schema.TaggedStruct("RegenerateBotToken", {
 export const DeleteBot = Schema.TaggedStruct("DeleteBot", { botId: BotId, botName: Schema.String })
 export const DeleteMessage = Schema.TaggedStruct("DeleteMessage", { messageId: MessageId })
 export const KeyboardShortcuts = Schema.TaggedStruct("KeyboardShortcuts", {})
+/** Needs attention's dialogs (PK2): native only. */
+export const MarkSignalDone = Schema.TaggedStruct("MarkSignalDone", {
+	signalId: CustomerSignalId,
+	accountName: Schema.String,
+	accountLogoUrl: Schema.NullOr(Schema.String),
+	title: Schema.String,
+	reason: Schema.String,
+	severity: SignalSeverity,
+})
+export const SnoozeSignalUntil = Schema.TaggedStruct("SnoozeSignalUntil", {
+	signalId: CustomerSignalId,
+	title: Schema.String,
+})
 
 export const ModalRequest = Schema.Union([
 	NewChannel,
@@ -70,5 +84,7 @@ export const ModalRequest = Schema.Union([
 	DeleteBot,
 	DeleteMessage,
 	KeyboardShortcuts,
+	MarkSignalDone,
+	SnoozeSignalUntil,
 ])
 export type ModalRequest = typeof ModalRequest.Type

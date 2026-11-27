@@ -76,7 +76,6 @@ The little text grammar the kit has no component for. Headings are the kit's `he
   — `delta = { value, text, goodWhen? }`; `trend` is usually `sparkline(h, { values, size: "md", area: true, ariaLabel })`.
 - `deltaPill(h, delta)`, `definedLabel(h, { id, label, definition })` (hover/focus definition card, CSS only).
 - `evidenceViz(h, evidence)` — the queue's mini-viz per `_tag` (amount, last_active, series, limit, delta, ratio).
-- `evidenceDetail(h, evidence, { now })` — side panel: facts + chart (series → `evidenceBars`, limit → meter).
 - `deltaSummary(deltaEvidence)` — `$1,240 → $0`, `8 → 20 users`.
 
 ## Charts — `src/customers/charts/`
@@ -95,10 +94,7 @@ Charts fill their container's width (no measuring); set the height with `heightC
 
 Tables are the kit's `dataTable` and `primaryCell` (`src/ui/data-table.ts`).
 
-- `queueRow(h, { id, rank, account, signal, evidence, age, assignee, isFocused?, isSelected?, run?, onPress?, actions? })`,
-  `queueList(h, { ariaLabel }, rows)`, `queueAction(h, { label, icon?, onPress?, iconOnly?, shortcut?, attributes?, overlay? })`, `planLine(account)`,
-  `accountMark(h, account, run?)` (the logo, joined by a line to the same account's rows).
-  Inline actions replace evidence…assignee on hover / focus. A press on an action also reaches the row's `onPress` (selects it).
+- `queueList(h, { ariaLabel }, rows)`, `queueAction(h, { label, icon?, onPress?, iconOnly?, shortcut?, attributes?, overlay? })`.
 
 ## Controls — `ui/filter-bar.ts`, `ui/shortcuts.ts`
 

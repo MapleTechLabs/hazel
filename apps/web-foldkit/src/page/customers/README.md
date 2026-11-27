@@ -9,7 +9,7 @@ here is an ordinary page (`definePage`), registered in `pages.ts`, the Customers
 | Route tag                       | URL (`/$orgSlug/customers…`)      | Fields                                  | Page module               |
 | ------------------------------- | --------------------------------- | --------------------------------------- | ------------------------- |
 | `CustomersOverview`             | ``                                |                                         | native (`shared-screens`) |
-| `CustomersAttention`            | `/attention`                      |                                         | `attention/`              |
+| `CustomersAttention`            | `/attention`                      |                                         | native (`shared-screens`) |
 | `CustomersList`                 | `/list?view=`                     | `view: Option<string>`                  | `list/`                   |
 | `CustomerDetail`                | `/$accountId?tab=`                | `accountId`, `tab: Option<CustomerTab>` | `detail/`                 |
 | `CustomersSettingsSignals`      | `/settings/signals`               |                                         | `settings/signals/`       |

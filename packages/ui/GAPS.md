@@ -488,6 +488,22 @@ which move every card below them.
 
 PK1 also marks `p4-screen-page-column` (the page column and header), `p4-icon-link` ("SLA settings" is a link drawn as a button), `p4-link-quiet` (account names in the support table), `p4-item-subtitle-icons` (the queue rows' severity bars) and the resolved `chart-heights` (support's h-48 plot draws at `regular`).
 
+## Open from lane PK2 (Needs attention)
+
+Kept apart from "Open" so parallel lanes only add lines. The page also draws `p4-screen-page-column`
+and `pk0-account-run` (above).
+
+| Id                       | Screen or lane              | Need                                                                                                                                                | Proposal                                                                           | Kind     |
+| ------------------------ | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | -------- |
+| `pk2-menu-open`          | PK2 queue keys              | today A and H open the selected row's Assign and Snooze menus from the keyboard; a `menu` has no command to open it, so the keys only select a row  | a `menu` command `open` (as `focus`), or an `open` flag with `dismiss`             | command  |
+| `pk2-menu-entry-hint`    | PK2 snooze and assign menus | today each snooze option shows its wake time, and "Assign to me" its `I` key cap, as a muted hint at the row's end; here the time follows the label | `MenuEntry.hint` (a muted run at the end) and `MenuEntry.shortcut` (key caps, web) | prop     |
+| `pk2-table-headless`     | PK2 rows beside the preview | the compact list beside the preview has no header row; `table` always draws one                                                                     | a `table` flag `headless` (the column labels stay for assistive tech)              | prop     |
+| `pk2-table-footnote`     | PK2 snoozed tab             | today the "Snoozed signals return to Open ..." note is the table's last row under a hairline; here it is a caption under the table                  | a `table` slot `footer` (a row spanning every column)                              | prop     |
+| `pk2-text-struck`        | PK2 done tab                | today a resolved signal's title is struck through in muted ink                                                                                      | a `text` flag `struck`                                                             | prop     |
+| `pk2-heading-link`       | PK2 preview                 | today the account's name is a title-sized (18/28 semibold) link to its page; here it is a `link` at body size                                       | `heading.href`, or `link.size` `title`                                             | prop     |
+| `pk2-empty-state-tile`   | PK2 all clear               | today "All clear" leads with a success-toned check tile (`iconTile` `md`) over a subsection heading; `emptyState`'s icon is neutral                 | an `emptyState` `tone`                                                             | option   |
+| `pk2-current-row-scroll` | PK2 queue keys              | today the j/k row scrolls into view (`scrollIntoView({block: "nearest"})`); a `current` row does not                                                | the web `table` keeps its `current` row in view (renderer)                         | renderer |
+
 ## Phase 4 contract wave (proposed 2026-11-27, awaiting the user)
 
 Written into `spec.ts`, `options.ts`, `content.ts` and `src/style/schema.ts` by the phase 4 plan

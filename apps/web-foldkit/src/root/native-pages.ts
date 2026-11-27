@@ -207,6 +207,18 @@ const customersColumn =
 			.class("h-full overflow-y-auto")
 			.children(h.div.class(`mx-auto w-full ${width} px-4 py-6 lg:px-8`).children(page(h, inputs)))
 
+// Needs attention (PK2), with the web's queue keyboard and clipboard.
+const customersQueueLayers = () =>
+	Promise.all([import("../customers/queue-keyboard"), import("@hazel/client-data/web")]).then(
+		([keyboard, web]) => Layer.mergeAll(keyboard.QueueKeyboardWeb, web.ClipboardWeb),
+	)
+export const AttentionPage = Component.lazy("AttentionPage", () =>
+	Promise.all([
+		import("@hazel/shared-screens/customers/pages/attention/AttentionPage"),
+		customersQueueLayers(),
+	]).then(([module, layers]) => withClientData(module.AttentionPage).pipe(Component.provide(layers))),
+)
+
 /** The native app's install (`~/config/server`), which its sign-in page can change; `null` on the web. */
 const initialServer = () =>
 	canChooseServer() ? { label: serverLabel(currentServer()), isDefault: isBuildServer(), form: null } : null
@@ -406,6 +418,13 @@ const nativePages: Registry = {
 				production: import.meta.env.PROD,
 				generalHref: hrefOf(AppRoute.SettingsGeneral({ orgSlug: route.orgSlug })),
 			},
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	// One instance per org, as today's page keyed by its whole route.
+	CustomersAttention: (h, { route, session, nowMs, fallback }) =>
+		AttentionPage(h, {
+			key: route.orgSlug,
+			props: { session, nowMs },
 			fallback: (result) => fallback(result._tag === "Failure"),
 		}),
 	AuthDesktop: fillWindow<"AuthDesktop">((h, { route, session, fallback }) =>
