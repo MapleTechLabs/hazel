@@ -322,107 +322,98 @@ export const SetStatusModalNoDeps = Hazel.component({
 	],
 	view: (h, model) => {
 		const today = todayValue(h.props.nowMs)
-		return (
-			h.dialog
-				.open(true)
-				.size("large")
-				.title("Set a status")
-				.description("Let others know what you're up to.")
-				.on("dismiss", SetStatusMessage.DismissedDialog())
-				.children(
-					// HAZEL-GAP(p4-status-emoji-field): today the emoji button sits inside the Status field's row.
-					h.stack
-						.axis("horizontal")
-						.align("end")
-						.density("compact")
-						.children(
-							h.button
-								.label(model.emoji || "😊")
-								.variant("outline")
-								.on("press", SetStatusMessage.PressedEmoji()),
-							h.textField
-								.label("Status")
-								.placeholder("What's your status?")
-								.value(model.message)
-								.on("change", (payload) => SetStatusMessage.ChangedMessage({ payload })),
-						),
-					// HAZEL-GAP(p4-emoji-picker-custom): today's picker also lists the organization's custom emojis.
-					h.emojiPicker
-						.open(model.emojiPickerOpen)
-						.on("select", ({ emoji }) => SetStatusMessage.PickedEmoji({ emoji }))
-						.on("dismiss", SetStatusMessage.DismissedEmojiPicker()),
-					h.select
-						.label("Clear after")
-						.options(
-							EXPIRATIONS.map((option) => ({
-								value: option.value,
-								label: expirationLabel(model, option),
-							})),
+		return h.dialog
+			.open(true)
+			.size("large")
+			.title("Set a status")
+			.description("Let others know what you're up to.")
+			.on("dismiss", SetStatusMessage.DismissedDialog())
+			.children(
+				// HAZEL-GAP(p4-status-emoji-field): today the emoji button sits inside the Status field's row.
+				h.stack
+					.axis("horizontal")
+					.align("end")
+					.density("compact")
+					.children(
+						h.button
+							.label(model.emoji || "😊")
+							.variant("outline")
+							.on("press", SetStatusMessage.PressedEmoji()),
+						h.textField
+							.label("Status")
+							.placeholder("What's your status?")
+							.value(model.message)
+							.on("change", (payload) => SetStatusMessage.ChangedMessage({ payload })),
+					),
+				// HAZEL-GAP(p4-emoji-picker-custom): today's picker also lists the organization's custom emojis.
+				h.emojiPicker
+					.open(model.emojiPickerOpen)
+					.on("select", ({ emoji }) => SetStatusMessage.PickedEmoji({ emoji }))
+					.on("dismiss", SetStatusMessage.DismissedEmojiPicker()),
+				h.select
+					.label("Clear after")
+					.options(
+						EXPIRATIONS.map((option) => ({
+							value: option.value,
+							label: expirationLabel(model, option),
+						})),
+					)
+					.value(model.expiration)
+					.on("change", ({ value }) => SetStatusMessage.ChangedExpiration({ value })),
+				model.expiration === "custom"
+					? h.stack.axis("horizontal").children(
+							h.datePicker
+								.label("Date")
+								.value(model.customDate ?? undefined)
+								.min(today)
+								.on("change", ({ value }) => SetStatusMessage.ChangedCustomDate({ value })),
+							h.datePicker
+								.label("Time")
+								.granularity("time")
+								.value(model.customTime ?? undefined)
+								.on("change", ({ value }) => SetStatusMessage.ChangedCustomTime({ value })),
 						)
-						.value(model.expiration)
-						.on("change", ({ value }) => SetStatusMessage.ChangedExpiration({ value })),
-					model.expiration === "custom"
-						? h.stack.axis("horizontal").children(
-								h.datePicker
-									.label("Date")
-									.value(model.customDate ?? undefined)
-									.min(today)
-									.on("change", ({ value }) =>
-										SetStatusMessage.ChangedCustomDate({ value }),
-									),
-								h.datePicker
-									.label("Time")
-									.granularity("time")
-									.value(model.customTime ?? undefined)
-									.on("change", ({ value }) =>
-										SetStatusMessage.ChangedCustomTime({ value }),
-									),
-							)
-						: null,
-					// HAZEL-GAP(p4-toggle-box): today's switch sits in a muted, bordered box.
-					h.toggle
-						.label("Pause notifications")
-						.description("Don't receive notifications while this status is set")
-						.checked(model.pauseNotifications)
-						.on("change", ({ checked }) =>
-							SetStatusMessage.ToggledPauseNotifications({ checked }),
-						),
-					h.divider,
-					// HAZEL-GAP(p4-status-preset-chips): today's presets are small outline buttons, emoji and text apart.
-					h.choiceGroup
-						.label("Quick presets")
-						.style("chips")
-						.options(
-							STATUS_PRESETS.map((preset) => ({
-								value: preset.message,
-								label: `${preset.emoji} ${preset.message}`,
-							})),
-						)
-						.selected(
-							STATUS_PRESETS.filter(
-								(preset) =>
-									model.emoji === preset.emoji && model.message.text === preset.message,
-							).map((preset) => preset.message),
-						)
-						.on("change", ({ selected }) => SetStatusMessage.PickedPreset({ selected })),
-				)
-				.secondaryActions(
-					hasExistingStatus(model)
-						? h.button
-								.label("Clear status")
-								.variant("danger")
-								.disabled(model.submitting)
-								.on("press", SetStatusMessage.PressedClear())
-						: null,
-				)
-				.actions(
-					h.button.label("Cancel").variant("outline").on("press", SetStatusMessage.PressedCancel()),
-					h.button
-						.label(model.submitting ? "Saving..." : "Save")
-						.disabled(isSaveDisabled(model))
-						.on("press", SetStatusMessage.PressedSave()),
-				)
-		)
+					: null,
+				// HAZEL-GAP(p4-toggle-box): today's switch sits in a muted, bordered box.
+				h.toggle
+					.label("Pause notifications")
+					.description("Don't receive notifications while this status is set")
+					.checked(model.pauseNotifications)
+					.on("change", ({ checked }) => SetStatusMessage.ToggledPauseNotifications({ checked })),
+				h.divider,
+				// HAZEL-GAP(p4-status-preset-chips): today's presets are small outline buttons, emoji and text apart.
+				h.choiceGroup
+					.label("Quick presets")
+					.style("chips")
+					.options(
+						STATUS_PRESETS.map((preset) => ({
+							value: preset.message,
+							label: `${preset.emoji} ${preset.message}`,
+						})),
+					)
+					.selected(
+						STATUS_PRESETS.filter(
+							(preset) => model.emoji === preset.emoji && model.message.text === preset.message,
+						).map((preset) => preset.message),
+					)
+					.on("change", ({ selected }) => SetStatusMessage.PickedPreset({ selected })),
+			)
+			.secondaryActions(
+				hasExistingStatus(model)
+					? h.button
+							.label("Clear status")
+							.variant("danger")
+							.disabled(model.submitting)
+							.on("press", SetStatusMessage.PressedClear())
+					: null,
+			)
+			.actions(
+				h.button.label("Cancel").variant("outline").on("press", SetStatusMessage.PressedCancel()),
+				h.button
+					.label(model.submitting ? "Saving..." : "Save")
+					.disabled(isSaveDisabled(model))
+					.on("press", SetStatusMessage.PressedSave()),
+			)
 	},
 })
 
