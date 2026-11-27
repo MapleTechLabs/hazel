@@ -88,15 +88,13 @@ const gallery = (h: H, attachments: ReadonlyArray<FileAttachment> | null) => {
 	// HAZEL-GAP(p4-media-download): today's tiles have a hover download button.
 	// HAZEL-GAP(p4-masonry-natural-size): unsized tiles hold 4:3; today's take the picture's height.
 	// HAZEL-GAP(p4-media-load-error): today drops a tile whose picture fails to load.
-	return h.stack
-		.density("regular")
-		.children(
-			h.text.role("label").tone("muted").children(countsLine(media)),
-			h.attachmentGrid
-				.layout("masonry")
-				.attachments(media.map(toAttachment))
-				.on("press", ({ id }) => MediaMessage.PressedMedia({ id })),
-		)
+	return h.stack.density("regular").children(
+		h.text.role("label").tone("muted").children(countsLine(media)),
+		h.attachmentGrid
+			.layout("masonry")
+			.attachments(media.map(toAttachment))
+			.on("press", ({ id }) => MediaMessage.PressedMedia({ id })),
+	)
 }
 
 const viewer = (h: H, model: MediaModel) => {
@@ -125,7 +123,9 @@ export const MediaPageNoDeps = Def.make({
 		PressedMedia: ($, { id }) => {
 			const found = mediaOf($.model.attachments ?? []).find((each) => each.id === id)
 			if (found === undefined) return $.model
-			return isVideo(found) ? $.run(fileAction(found, "openInBrowser")) : $.evolve({ viewerId: () => id })
+			return isVideo(found)
+				? $.run(fileAction(found, "openInBrowser"))
+				: $.evolve({ viewerId: () => id })
 		},
 		ChangedViewer: ($, { index }) => {
 			const image = viewerOf($.model.attachments ?? [], $.model.viewerId).images[index]

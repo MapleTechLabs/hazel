@@ -15,8 +15,6 @@ import { mobileBackLink } from "../../../shell/mobile"
 import { joinBannerView, typingIndicatorView } from "../banners"
 import { attachmentInfoFrom, composerAreaView, replyPreviewOf } from "../composer-view"
 import { authorIdentity, toDeriveContext } from "../derive"
-import * as FilesPage from "../files/page"
-import * as FilesView from "../files/view"
 import { chatHeaderView } from "../header"
 import {
 	type ChannelLinks,
@@ -38,7 +36,6 @@ import * as NotificationControl from "../notification-control"
 import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { isMemberOf, Message, type Model, routeTabOf, type ThreadPanel } from "./page"
 import { threadPanelWidthOf } from "./thread-width"
-import { isParityOff } from "../../../root/native-pages"
 import { openViewerOf } from "./viewer-images"
 
 /** The channel route's content: header, tab bar, message list and composer (desktop). */
@@ -50,7 +47,6 @@ type H = HtmlBuilder<Message>
 const toSelf = (message: Message) => message
 const toDraftMessage = (message: Draft.Message) => Message.GotDraftMessage({ message })
 const toThreadDraftMessage = (message: Draft.Message) => Message.GotThreadDraftMessage({ message })
-const toFilesMessage = (message: FilesPage.Message) => Message.GotFilesMessage({ message })
 const toOverlay = (message: Overlays.Message) => Message.GotOverlaysMessage({ message })
 const toHtmlRenderMessage = (message: HtmlRender.Message) => Message.GotHtmlRenderMessage({ message })
 const toPressEdge = (clientX: number, startWidth: number, maxWidth: number) =>
@@ -367,12 +363,7 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 					customerCardView(h, model, options.isMobile ?? false, nowMs),
 					lazyTabBar(chatTabBarView, [routeTabOf(model.tab), toSelf, h]) ?? h.empty,
 					...(model.tab._tag === "Files"
-						? isParityOff(model.tab.files.view === "media" ? "ChatFilesMedia" : "ChatFiles")
-							? [
-									FilesView.view(h, model.tab.files, toFilesMessage, nowMs),
-									FilesView.imageViewerOverlay(h, model.tab.files, toFilesMessage),
-								]
-							: [filesHole(h, model, model.tab.files.view)]
+						? [filesHole(h, model, model.tab.view)]
 						: messagesOutlet(h, model, nowMs, options.channelLinks ?? NO_CHANNEL_LINKS_MAP)),
 				],
 			),

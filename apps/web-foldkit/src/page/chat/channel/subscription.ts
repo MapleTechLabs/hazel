@@ -3,7 +3,6 @@ import { Effect, Option, PubSub, Schema, Stream } from "effect"
 import { Dom, Subscription } from "foldkit"
 import * as HtmlRender from "../../../chat/html-render"
 import * as Live from "../../../chat/live-state"
-import * as FilesSubscriptions from "../files/subscriptions"
 import { listRequestStream } from "./list-requests"
 import {
 	channelStream,
@@ -719,9 +718,4 @@ const write = Subscription.make<Input, Message, HazelRpc | HazelApiClient>()((en
 	),
 }))
 
-const files = Subscription.lift(FilesSubscriptions.subscriptions)<Input, Message>({
-	read: ({ model }) => (model.tab._tag === "Files" ? Option.some(model.tab.files) : Option.none()),
-	toParentMessage: (message) => Message.GotFilesMessage({ message }),
-})
-
-export const subscriptions = Subscription.aggregate(chat, write, files)
+export const subscriptions = Subscription.aggregate(chat, write)

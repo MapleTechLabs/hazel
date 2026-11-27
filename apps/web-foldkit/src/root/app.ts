@@ -46,7 +46,6 @@ import {
 } from "./logic"
 import { AppMessage } from "./message"
 import { nativePageOf } from "./native-pages"
-import { isParityOff } from "./native-pages"
 import { Hole } from "./portal"
 import { subscriptions as subscriptionsOf } from "./subscriptions"
 import { AppRoute } from "./routes"
@@ -160,9 +159,7 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 				)
 			: null,
 		// The channel's Files and All media tabs, under the Foldkit channel page's header and tab bar.
-		(route._tag === "ChatFiles" || route._tag === "ChatFilesMedia") &&
-		channelId !== null &&
-		!isParityOff(route._tag)
+		(route._tag === "ChatFiles" || route._tag === "ChatFilesMedia") && channelId !== null
 			? Hole(h, { hole: "channel-files", key: `${route._tag}:${channelId}`, className: FILES_HOLE }, [
 					(route._tag === "ChatFiles" ? ShellFilesPage : ShellMediaPage)(h, {
 						key: channelId,

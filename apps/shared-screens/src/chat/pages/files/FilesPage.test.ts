@@ -96,17 +96,20 @@ describe("files page", () => {
 		start()
 			.subscription(FILES, FilesMessage.UpdatedAttachments({ attachments: files }))
 			.fire(grid("list"), "press", { id: roadmap.id })
-			.expectExact(RunFileAction.make({ action: "download", url: roadmap.url, fileName: roadmap.fileName }))
+			.expectExact(
+				RunFileAction.make({ action: "download", url: roadmap.url, fileName: roadmap.fileName }),
+			)
 			.resolve(RunFileAction, "downloaded")
 	})
 
 	test("with more media than one row, the last tile opens All media", () => {
 		const s = start()
-			.subscription(FILES, FilesMessage.UpdatedAttachments({ attachments: [file(5, "a.png"), ...files] }))
-			.fire(grid("grid"), "press", { id: banner.id })
-			.expectExact(
-				Navigate.make({ href: `/hazel/chat/${channelId}/files/media`, replace: false }),
+			.subscription(
+				FILES,
+				FilesMessage.UpdatedAttachments({ attachments: [file(5, "a.png"), ...files] }),
 			)
+			.fire(grid("grid"), "press", { id: banner.id })
+			.expectExact(Navigate.make({ href: `/hazel/chat/${channelId}/files/media`, replace: false }))
 			.resolve(Navigate, Component.noop)
 		expect(s.get(tag("lightbox")).props?.["open"]).toBeUndefined()
 	})

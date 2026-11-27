@@ -107,7 +107,9 @@ const body = (h: H, model: FilesModel) => {
 				.icon("folders")
 				.title("No files found")
 				.description(
-					isFiltered ? "Try another search or filter." : "Files shared in this channel will appear here.",
+					isFiltered
+						? "Try another search or filter."
+						: "Files shared in this channel will appear here.",
 				),
 		]
 	}
@@ -153,7 +155,10 @@ const header = (h: H, model: FilesModel, count: number) =>
 				.value(model.filter)
 				.on("change", ({ value }) => FilesMessage.ChangedFilter({ value })),
 			h.spacer,
-			h.text.role("label").tone("muted").children(`${count} ${count === 1 ? "file" : "files"}`),
+			h.text
+				.role("label")
+				.tone("muted")
+				.children(`${count} ${count === 1 ? "file" : "files"}`),
 		)
 
 const viewer = (h: H, model: FilesModel) => {
@@ -227,7 +232,9 @@ export const FilesPageNoDeps = Def.make({
 		Subscription.make("breakpoint", [], () =>
 			Stream.unwrap(
 				Effect.map(Effect.service(FilesHost), (host) =>
-					Stream.map(host.breakpoint, (breakpoint) => FilesMessage.ChangedBreakpoint({ breakpoint })),
+					Stream.map(host.breakpoint, (breakpoint) =>
+						FilesMessage.ChangedBreakpoint({ breakpoint }),
+					),
 				),
 			),
 		),

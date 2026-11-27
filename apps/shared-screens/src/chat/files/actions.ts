@@ -52,12 +52,16 @@ export class RunFileAction extends Command.Service<RunFileAction>()("hazel/files
 			const host = yield* FilesHost
 			return ({ action, url, fileName }) =>
 				Match.value(action).pipe(
-					Match.when("download", () => host.download(url, fileName).pipe(Effect.as("downloaded" as const))),
+					Match.when("download", () =>
+						host.download(url, fileName).pipe(Effect.as("downloaded" as const)),
+					),
 					Match.when("openInBrowser", () => host.open(url).pipe(Effect.as("opened" as const))),
 					Match.when("copyImage", () =>
 						host.copyImage(url).pipe(
 							Effect.as("copiedImage" as const),
-							Effect.catchTag("FilesHostError", () => Effect.succeed("failedCopyImage" as const)),
+							Effect.catchTag("FilesHostError", () =>
+								Effect.succeed("failedCopyImage" as const),
+							),
 						),
 					),
 					Match.when("copyUrl", () =>

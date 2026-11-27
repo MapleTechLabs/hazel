@@ -72,7 +72,8 @@ export const filesHostLayer = Layer.succeed(
 			Effect.sync(() => {
 				window.open(url, "_blank")
 			}),
-		copyImage: (url) => clipboard((target) => target.write([new ClipboardItem({ "image/png": fetchPng(url) })])),
+		copyImage: (url) =>
+			clipboard((target) => target.write([new ClipboardItem({ "image/png": fetchPng(url) })])),
 		copyText: (text) => clipboard((target) => target.writeText(text)),
 		breakpoint,
 	}),

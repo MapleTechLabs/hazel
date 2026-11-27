@@ -61,21 +61,32 @@ describe("media page", () => {
 	})
 
 	test("an image opens the viewer and saves with a toast; a video opens in a tab", () => {
-		const s = start().subscription(FILES, MediaMessage.UpdatedAttachments({ attachments: [banner, clip] }))
+		const s = start().subscription(
+			FILES,
+			MediaMessage.UpdatedAttachments({ attachments: [banner, clip] }),
+		)
 		s.fire(masonry, "press", { id: banner.id })
 		expect(s.get(tag("lightbox")).props).toMatchObject({ open: true })
 		s.fire(tag("lightbox"), "select", { id: "download" })
-			.expectExact(RunFileAction.make({ action: "download", url: banner.url, fileName: banner.fileName }))
+			.expectExact(
+				RunFileAction.make({ action: "download", url: banner.url, fileName: banner.fileName }),
+			)
 			.resolve(RunFileAction, "downloaded")
 			.expectExact(
 				ShowToast.make({
-					toast: { intent: "success", title: "Image downloaded", description: "Your image has been downloaded." },
+					toast: {
+						intent: "success",
+						title: "Image downloaded",
+						description: "Your image has been downloaded.",
+					},
 				}),
 			)
 			.resolve(ShowToast, Component.noop)
 			.fire(tag("lightbox"), "dismiss")
 			.fire(masonry, "press", { id: clip.id })
-			.expectExact(RunFileAction.make({ action: "openInBrowser", url: clip.url, fileName: clip.fileName }))
+			.expectExact(
+				RunFileAction.make({ action: "openInBrowser", url: clip.url, fileName: clip.fileName }),
+			)
 			.resolve(RunFileAction, "opened")
 	})
 

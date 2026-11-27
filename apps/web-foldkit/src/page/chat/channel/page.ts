@@ -28,7 +28,6 @@ import {
 } from "../derive"
 import { typingNamesOf, typingUsersOf } from "../banners"
 import { emptyLookups, type Lookups } from "../lookups"
-import * as FilesPage from "../files/page"
 import * as IssueControl from "../issue-control"
 import * as NotificationControl from "../notification-control"
 import { JoinChannel, UnhideConversation } from "../message-actions"
@@ -82,7 +81,7 @@ export const init = (
 	options: InitOptions = {},
 ): Model => ({
 	channelId,
-	tab: tabFor(channelId, orgSlug, options.tab ?? "messages", Tab.Messages()),
+	tab: tabFor(options.tab ?? "messages", Tab.Messages()),
 	orgSlug,
 	currentUserId,
 	channel: null,
@@ -172,27 +171,20 @@ export const switchChannel = (
 
 export const composerEditorId = (channelId: string) => `composer-${channelId}`
 
-/** The tab for a route: the Files Submodel is kept across `files` and `files/media`, dropped on Messages. */
-const tabFor = (channelId: ChannelId, orgSlug: string, routeTab: ChatTab, previous: Tab): Tab =>
+/** The tab for a route: Messages keeps its instance; Files and All media are hazel pages. */
+const tabFor = (routeTab: ChatTab, previous: Tab): Tab =>
 	routeTab === "messages"
 		? previous._tag === "Messages"
 			? previous
 			: Tab.Messages()
-		: Tab.Files({
-				files:
-					previous._tag === "Files"
-						? FilesPage.setView(previous.files, routeTab)
-						: FilesPage.init(channelId, orgSlug, routeTab),
-			})
+		: Tab.Files({ view: routeTab })
 
 /** The route tab the page shows (what the tab bar highlights). */
-export const routeTabOf = (tab: Tab): ChatTab => (tab._tag === "Messages" ? "messages" : tab.files.view)
+export const routeTabOf = (tab: Tab): ChatTab => (tab._tag === "Messages" ? "messages" : tab.view)
 
 /** The route moved between this channel's tabs. */
 export const setTab = (model: Model, routeTab: ChatTab): Model =>
-	routeTabOf(model.tab) === routeTab
-		? model
-		: modifyFields(model, { tab: (tab) => tabFor(model.channelId, model.orgSlug, routeTab, tab) })
+	routeTabOf(model.tab) === routeTab ? model : modifyFields(model, { tab: (tab) => tabFor(routeTab, tab) })
 
 // ROUTES
 
@@ -355,23 +347,6 @@ const liftOverlays = (model: Model, result: Overlays.OverlaysReturn): PageReturn
 	return result.outMessage === undefined
 		? lifted
 		: Write.andThen(lifted, (current) => Write.handleOverlaysOut(current, result.outMessage!))
-}
-
-const liftFiles = (model: Model, result: FilesPage.FilesReturn): PageReturn => {
-	const lifted: PageReturn = {
-		model: modifyFields(model, { tab: () => Tab.Files({ files: result.model }) }),
-		commands: Command.mapMessages(result.commands ?? [], (message) =>
-			Message.GotFilesMessage({ message }),
-		),
-	}
-	return result.outMessage === undefined
-		? lifted
-		: Write.andThen(lifted, (current) =>
-				FilesPage.OutMessage.match<PageReturn>(result.outMessage!, {
-					RequestedViewerAction: ({ action, url, fileName }) =>
-						Write.viewerAction(current, action, url, fileName),
-				}),
-			)
 }
 
 /** `ChannelJoinBanner`'s `handleJoin`. */
@@ -886,10 +861,6 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				: { model },
 		ElapsedClearNotificationsRetry: ({ channelId }) =>
 			channelId === model.channelId ? stepNotifications(model, { _tag: "ElapsedRetry" }) : { model },
-		GotFilesMessage: ({ message: filesMessage }) =>
-			model.tab._tag === "Files"
-				? liftFiles(model, FilesPage.update(model.tab.files, filesMessage))
-				: { model },
 	})
 
 /** A step of the thread panel's issue control; an issue for a thread no longer shown is dropped. */

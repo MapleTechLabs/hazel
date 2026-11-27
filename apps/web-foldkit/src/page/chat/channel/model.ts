@@ -34,7 +34,6 @@ import {
 	UserGroupInfo,
 	UserInfo,
 } from "../lookups"
-import * as FilesPage from "../files/page"
 import * as IssueControl from "../issue-control"
 import * as NotificationControl from "../notification-control"
 import { Message as ActionMessage } from "../message-actions"
@@ -53,10 +52,10 @@ export type ChatTab = typeof ChatTab.Type
 
 // MODEL
 
-/** The tab shown: the message list, or the Files Submodel (which knows whether it shows files or media). */
+/** The tab shown: the message list, or Files or All media (hazel pages in the `channel-files` hole). */
 export const Tab = defineTaggedUnion({
 	Messages: {},
-	Files: { files: FilesPage.Model },
+	Files: { view: Schema.Literals(["files", "media"]) },
 })
 export type Tab = typeof Tab.Type
 
@@ -278,7 +277,6 @@ export const Message = defineMessageUnion({
 	GotHtmlRenderMessage: { message: HtmlRender.Message },
 	GotOverlaysMessage: { message: Overlays.Message },
 	GotCustomerCardMessage: { message: CustomerCard.Message },
-	GotFilesMessage: { message: FilesPage.Message },
 	GotDraftMessage: { message: Draft.Message },
 	GotThreadDraftMessage: { message: Draft.Message },
 	GotActionMessage: { message: ActionMessage },
