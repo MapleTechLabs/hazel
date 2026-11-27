@@ -8,7 +8,7 @@
 import { Query } from "@effect/ui"
 import { KeyValue } from "@hazel/client-data"
 import { Effect, Option, Schedule, Schema } from "effect"
-import { HttpClient, HttpClientResponse } from "effect/http"
+import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/http"
 import type { Content } from "@hazel/ui/vocabulary/index"
 import type { RecentEmoji } from "./recent"
 
@@ -254,7 +254,13 @@ export class LoadEmojiData extends Query.Service<LoadEmojiData>()("hazel/pickers
 			const fetchJson = <S extends Schema.Top & { readonly DecodingServices: never }>(
 				url: string,
 				schema: S,
-			) => client.get(url).pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)))
+			) =>
+				client.get(url).pipe(
+					Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
+					// The CDN's CORS answer refuses the app client's credentials and `traceparent` header.
+					Effect.provideService(FetchHttpClient.RequestInit, { credentials: "omit" }),
+					Effect.provideService(HttpClient.TracerPropagationEnabled, false),
+				)
 			const download = (locale: string) =>
 				Effect.all(
 					[
