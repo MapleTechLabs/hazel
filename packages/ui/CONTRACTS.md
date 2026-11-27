@@ -169,7 +169,9 @@ compile to. Structured props (`row`, `blocks`, `entries`, `reactions`, `attachme
 `status`, `badges`, `reply`, `files`, `embeds`, `thread` (with an optional `name`), `actions`. Rich text runs and blocks stay
 compact tuples. `MenuEntry.entries` is a one-level submenu.
 
-Extensions: `GifPicker` (`src/extensions/GifPicker.ts`, web only, lane A3). Services (interfaces in
+Extensions: `GifPicker` (`src/extensions/GifPicker.ts`, web only, lane A3); `BrandPanel`
+(`src/extensions/BrandPanel.ts`, web only, lane PA1: the auth frame's picture, logo and tagline in
+`screen`'s `aside`). Services (interfaces in
 `packages/client-data/src/platform/ui-services.ts`, lane F implements web and Swift): `Files.pick`,
 `Files.dropped`, `Clipboard.write`; screens reach them through a `Command.Service`.
 
