@@ -2,10 +2,11 @@
 // @effect-diagnostics experimentalApiUsage:off
 import { Component } from "@effect/ui"
 import { Locator, Scene } from "@effect/ui/testing"
-import { ChannelId, CustomerAccountId, CustomerChannelSuggestionId, OrganizationId } from "@hazel/schema"
+import { ChannelId, OrganizationId } from "@hazel/schema"
+import { Schema } from "effect"
 import { describe, expect, test } from "vitest"
 import { ShowToast } from "../../app/requests"
-import type { SuggestionRow } from "../data/suggestions"
+import { SuggestionRow } from "../data/suggestions"
 import {
 	AcceptSuggestion,
 	DismissSuggestion,
@@ -17,16 +18,16 @@ import {
 
 const organizationId = OrganizationId.make("00000002-0000-4000-8000-000000000001")
 const channelId = ChannelId.make("00000005-0000-4000-8000-000000000001")
-const suggestion = {
-	id: CustomerChannelSuggestionId.make("00000030-0000-4000-8000-000000000001"),
+const suggestion = Schema.decodeUnknownSync(SuggestionRow)({
+	id: "00000030-0000-4000-8000-000000000001",
 	channelId,
-	accountId: CustomerAccountId.make("00000012-0000-4000-8000-000000000001"),
+	accountId: "00000012-0000-4000-8000-000000000001",
 	accountName: "Acme",
 	score: 10,
 	strength: "strong",
 	reasons: [],
-	computedAt: new Date(0),
-} as unknown as SuggestionRow
+	computedAt: "2026-11-26T15:00:00.000Z",
+})
 
 const button = (label: string): Locator.Locator => ({
 	description: `<hz:button label=${label}>`,

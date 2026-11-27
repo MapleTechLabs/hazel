@@ -1,7 +1,6 @@
 /**
  * The one-channel suggestion prompt: "Looks like Acme" with the strongest reason, Link and Dismiss.
- * Channel settings → Overview shows it while the channel has no customer; the chat-sync and Connect
- * pages show it right after a channel becomes shared. A page embeds it like a kit component: it keeps
+ * The chat-sync and Connect pages show it right after a channel becomes shared. A page embeds it like a kit component: it keeps
  * the `Model`, wraps the `Message`, calls `request` when the prompt should ask (which re-scores the
  * channel, and may link it automatically), and folds `update`.
  *
@@ -92,9 +91,6 @@ export const request = (organizationId: OrganizationId, channelId: ChannelId): R
 	commands: [FetchChannelSuggestion({ organizationId, channelId })],
 	toast: null,
 })
-
-/** Forget the channel (the page left it, or it has a customer now). */
-export const reset = (): Model => init()
 
 /** Ask again after an action on `channelId`, if the prompt still shows that channel. */
 const again = (

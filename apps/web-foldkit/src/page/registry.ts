@@ -58,12 +58,7 @@ export const areas: ReadonlyArray<Lazy.LazyArea<AreaPage>> = [
 	Lazy.lazyArea("MySettings", isMySettingsRoute, () => import("./my-settings/pages")),
 	Lazy.lazyArea(
 		"ChannelSettings",
-		AppRoute.isAnyOf([
-			"ChannelSettings",
-			"ChannelSettingsOverview",
-			"ChannelSettingsIntegrations",
-			"ChannelSettingsConnect",
-		]),
+		AppRoute.isAnyOf(["ChannelSettingsIntegrations"]),
 		() => import("./channel-settings/pages"),
 	),
 	Lazy.lazyArea(
