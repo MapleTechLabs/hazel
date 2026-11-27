@@ -13,8 +13,10 @@ import type { ChannelId } from "@hazel/schema"
 import { Effect, Layer, Option } from "effect"
 import { canChooseServer, currentServer, isBuildServer, serverLabel } from "~/config/server"
 import { clientData } from "~/db/client"
-import { safeReturnTo } from "../auth/return-to"
-import { AppRoute, hrefOf, type RouteOf, signInHref } from "../route"
+import { forgetReturnTo, readReturnTo, safeReturnTo } from "../auth/return-to"
+import { readLastOrganization } from "../data/last-organization"
+import { rootRedirect } from "../redirect"
+import { AppRoute, hrefOf, type RouteOf, routeOfPath, signInHref } from "../route"
 import { ShellDms } from "./children"
 import type { AppMessage } from "./message"
 
@@ -101,6 +103,39 @@ export const NotificationsPage = Component.lazy("NotificationsPage", () =>
 	),
 )
 
+/** `/` (PA5): this device's remembered page and organization, and the redirect on the shell's Router. */
+export const RootPage = Component.lazy("RootPage", () =>
+	import("@hazel/shared-screens/org/pages/RootPage").then((page) =>
+		Component.provide(
+			page.RootPage,
+			Layer.mergeAll(
+				Layer.succeed(ClientData, clientData),
+				page.ReadRootRemembered.layerWith(
+					Effect.all({ returnTo: readReturnTo, lastOrganizationId: readLastOrganization }),
+				),
+				Layer.unwrap(
+					Effect.map(Effect.service(Router.Router), (router) =>
+						page.RedirectFromRoot.toLayer(
+							Effect.succeed(({ returnTo, isOnboarded, membership, isMobile }) => {
+								const isReturn = returnTo !== null && isOnboarded
+								const route = isReturn
+									? routeOfPath(returnTo)
+									: rootRedirect({ isOnboarded }, Option.fromNullishOr(membership), {
+											isMobile,
+										})
+								return (isReturn ? forgetReturnTo : Effect.void).pipe(
+									Effect.andThen(router.replace(route)),
+									Effect.as(Component.noop),
+								)
+							}),
+						),
+					),
+				),
+			),
+		),
+	),
+)
+
 /** The native app's install (`~/config/server`), which its sign-in page can change; `null` on the web. */
 const initialServer = () =>
 	canChooseServer() ? { label: serverLabel(currentServer()), isDefault: isBuildServer(), form: null } : null
@@ -143,6 +178,12 @@ const inbox =
 
 /** Keyed by what makes a new instance (Foldkit's page `key`): a new token mounts a fresh page. */
 const nativePages: Registry = {
+	Root: (h, { session, isMobile, fallback }) =>
+		RootPage(h, {
+			key: "root",
+			props: { session, isMobile },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
 	NotificationsMentions: inbox("mentions"),
 	NotificationsUnreads: inbox("unreads"),
 	NotificationsAll: inbox("all"),
