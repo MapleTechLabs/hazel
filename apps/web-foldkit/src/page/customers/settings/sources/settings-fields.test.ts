@@ -111,8 +111,7 @@ const route = AppRoute.CustomersSourceDetail({ orgSlug: "hazel", provider: "mapl
 const run = (messages: ReadonlyArray<Message>): Model =>
 	messages.reduce(
 		(current, next) => update(current, next, shared).model,
-		update(init(route, shared).model, Message.UpdatedConnections({ connections: [connection] }), shared)
-			.model,
+		update(init(route).model, Message.UpdatedConnections({ connections: [connection] }), shared).model,
 	)
 const addItem = (key: string, value: string) => [
 	Message.ChangedSettingsListInput({ key, value }),

@@ -1,4 +1,13 @@
-import { BotId, ChannelId, MessageId, OrganizationMemberId, UserId } from "@hazel/schema"
+import { IntegrationConfig } from "@hazel/customer-integrations"
+import { CustomerProvider } from "@hazel/domain/customers"
+import {
+	BotId,
+	ChannelId,
+	CustomerConnectionId,
+	MessageId,
+	OrganizationMemberId,
+	UserId,
+} from "@hazel/schema"
 import { Schema } from "effect"
 
 /**
@@ -48,6 +57,12 @@ export const RegenerateBotToken = Schema.TaggedStruct("RegenerateBotToken", {
 export const DeleteBot = Schema.TaggedStruct("DeleteBot", { botId: BotId, botName: Schema.String })
 export const DeleteMessage = Schema.TaggedStruct("DeleteMessage", { messageId: MessageId })
 export const KeyboardShortcuts = Schema.TaggedStruct("KeyboardShortcuts", {})
+/** Connect a customers data source, or rotate the key of `reconnectId`, starting from `config`. */
+export const CustomerSourceConnect = Schema.TaggedStruct("CustomerSourceConnect", {
+	provider: CustomerProvider,
+	reconnectId: Schema.NullOr(CustomerConnectionId),
+	config: IntegrationConfig,
+})
 
 export const ModalRequest = Schema.Union([
 	NewChannel,
@@ -70,5 +85,6 @@ export const ModalRequest = Schema.Union([
 	DeleteBot,
 	DeleteMessage,
 	KeyboardShortcuts,
+	CustomerSourceConnect,
 ])
 export type ModalRequest = typeof ModalRequest.Type

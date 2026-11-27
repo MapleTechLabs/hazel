@@ -8,21 +8,20 @@ import {
 	OrganizationMemberId,
 	UserId,
 } from "@hazel/schema"
-import { Redacted, Schema } from "effect"
+import { Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
 import { AppRoute } from "../../../../route"
 import * as Menu from "../../../../ui/menu"
 import type { Shared } from "../../../contract"
+import { CustomerSourceConnect } from "../../../../overlay/modal/requests"
 import { PageOutMessage } from "../../../out-message"
 import { sharedDefaults } from "../../../test-shared"
 import {
-	ConnectCustomerSource,
 	DisconnectCustomerSource,
 	GrantCustomerImpersonator,
 	RevokeCustomerImpersonator,
 	SaveCustomerSourceSettings,
-	SaveCustomerWebhookSecret,
 	SyncCustomerSource,
 } from "./commands"
 import { Message } from "./message"
@@ -36,8 +35,8 @@ vi.hoisted(() => {
 })
 
 /**
- * Update-loop tests for Data sources: connect, webhook secret, sync, disconnect, Maple settings,
- * who may impersonate.
+ * Update-loop tests for a source's detail: connect (the native modal), sync, disconnect, Maple
+ * settings, who may impersonate.
  */
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
@@ -93,173 +92,33 @@ const maple = connection(2, {
 })
 const stripe = connection(3, { provider: "stripe", status: "disconnected", disconnectedAtMs: NOW - 1_000 })
 
-const overviewRoute = AppRoute.CustomersSettingsSources({ orgSlug: "hazel" })
+const clerkRoute = AppRoute.CustomersSourceDetail({ orgSlug: "hazel", provider: "clerk" })
 const pageUpdate = (current: Model, next: Message) => update(current, next, shared)
 
-const loaded = (route: Parameters<typeof init>[0] = overviewRoute): Model =>
-	pageUpdate(init(route, shared).model, Message.UpdatedConnections({ connections: [clerk, maple, stripe] }))
-		.model
-
-describe("data sources: the unmatched count", () => {
-	test("admins ask for it; members, whom the RPC refuses, do not", () => {
-		expect((init(overviewRoute, shared).commands ?? []).map((command) => command.name)).toEqual([
-			"FetchUnmatchedCount",
-		])
-		const member = { ...shared, member: shared.member && { ...shared.member, role: "member" as const } }
-		expect(init(overviewRoute, member).commands ?? []).toEqual([])
-	})
-})
+const loaded = (route: Parameters<typeof init>[0] = clerkRoute): Model =>
+	pageUpdate(init(route).model, Message.UpdatedConnections({ connections: [clerk, maple, stripe] })).model
 
 describe("data sources: connect", () => {
-	test("Test and connect sends the key and the form's config, then shows the webhook step", () => {
-		story(
-			pageUpdate,
-			given(loaded()),
-			message(Message.PressedConnect({ provider: "stripe" })),
-			model((current) => {
-				expect(current.connectModal.isOpen).toBe(true)
-				// A disconnected source starts from its kept config.
-				expect(current.connectForm?.config).toEqual(stripe.config)
-			}),
-			message(Message.ChangedApiKey({ value: " rk_live_1 " })),
-			message(
-				Message.ToggledConfigField({ target: "connect", key: "matchByDomain", isSelected: false }),
-			),
-			message(
-				Message.ChangedConfigText({ target: "connect", key: "clerkOrgMetadataKey", value: "org_id" }),
-			),
-			message(Message.SubmittedConnect()),
-			Command.expectHas(
-				ConnectCustomerSource({
-					organizationId,
+	test("Connect and Reconnect open the native modal with the connection's config", () => {
+		const detail = loaded(AppRoute.CustomersSourceDetail({ orgSlug: "hazel", provider: "stripe" }))
+		expect(pageUpdate(detail, Message.PressedConnect({ provider: "stripe" })).outMessage).toEqual(
+			PageOutMessage.RequestedModal({
+				modal: CustomerSourceConnect.make({
 					provider: "stripe",
 					reconnectId: null,
-					apiKey: Redacted.make("rk_live_1"),
-					config: {
-						_tag: "stripe",
-						clerkOrgMetadataKey: "org_id",
-						matchByDomain: false,
-						accountId: "",
-					},
+					config: stripe.config,
 				}),
-			),
-			Command.resolve(
-				ConnectCustomerSource,
-				Message.SucceededConnect({
-					provider: "stripe",
-					connectionId: stripe.id,
-					accountName: "Northwind Inc.",
-				}),
-			),
-			model((current) => {
-				expect(current.connectForm?.connected).toEqual({
-					connectionId: stripe.id,
-					accountName: "Northwind Inc.",
-				})
-				expect(current.connectForm?.isPending).toBe(false)
-			}),
-			message(Message.ChangedWebhookSecret({ value: "whsec_1" })),
-			message(Message.SubmittedWebhookSecret()),
-			Command.expectHas(
-				SaveCustomerWebhookSecret({
-					organizationId,
-					connectionId: stripe.id,
-					webhookSecret: Redacted.make("whsec_1"),
-				}),
-			),
-			Command.resolve(
-				SaveCustomerWebhookSecret,
-				Message.SucceededSaveWebhookSecret({ connectionId: stripe.id }),
-			),
-			model((current) => {
-				expect(current.connectModal.isOpen).toBe(false)
-				expect(current.connectForm).toBeNull()
 			}),
 		)
-	})
-
-	test("a refused key keeps the form with the failure; editing clears it", () => {
-		story(
-			pageUpdate,
-			given(loaded()),
-			message(Message.PressedConnect({ provider: "stripe" })),
-			message(Message.ChangedApiKey({ value: "rk_live_1" })),
-			message(Message.SubmittedConnect()),
-			Command.resolve(
-				ConnectCustomerSource,
-				Message.FailedConnect({ provider: "stripe", reason: "Refused" }),
-			),
-			model((current) => {
-				expect(current.connectForm?.failure).toBe("Refused")
-				expect(current.connectForm?.connected).toBeNull()
-				expect(current.connectModal.isOpen).toBe(true)
-			}),
-			message(Message.ChangedApiKey({ value: "rk_live_2" })),
-			model((current) => expect(current.connectForm?.failure).toBeNull()),
-		)
-	})
-
-	test("a provider with no integration answers coming soon", () => {
-		story(
-			pageUpdate,
-			given(loaded()),
-			message(Message.PressedConnect({ provider: "maple" })),
-			message(Message.ChangedApiKey({ value: "mpl_live_1" })),
-			message(Message.SubmittedConnect()),
-			Command.resolve(
-				ConnectCustomerSource,
-				Message.FailedConnect({ provider: "maple", reason: "ComingSoon" }),
-			),
-			model((current) => expect(current.connectForm?.failure).toBe("ComingSoon")),
-		)
-	})
-
-	test("an answer for another provider's form is dropped", () => {
-		const opened = pageUpdate(loaded(), Message.PressedConnect({ provider: "autumn" })).model
-		const stale = pageUpdate(
-			opened,
-			Message.SucceededConnect({ provider: "stripe", connectionId: stripe.id, accountName: null }),
-		).model
-		expect(stale.connectForm?.connected).toBeNull()
-		expect(
-			pageUpdate(opened, Message.FailedConnect({ provider: "stripe", reason: "Refused" })).model
-				.connectForm?.failure,
-		).toBeNull()
-	})
-
-	test("Reconnect rotates the failing connection's key", () => {
-		story(
-			pageUpdate,
-			given(loaded()),
-			message(Message.PressedReconnect({ connectionId: maple.id })),
-			message(Message.ChangedApiKey({ value: "mpl_live_2" })),
-			message(Message.SubmittedConnect()),
-			Command.expectHas(
-				ConnectCustomerSource({
-					organizationId,
+		expect(pageUpdate(detail, Message.PressedReconnect({ connectionId: maple.id })).outMessage).toEqual(
+			PageOutMessage.RequestedModal({
+				modal: CustomerSourceConnect.make({
 					provider: "maple",
 					reconnectId: maple.id,
-					apiKey: Redacted.make("mpl_live_2"),
 					config: maple.config,
 				}),
-			),
-			Command.resolve(
-				ConnectCustomerSource,
-				Message.SucceededConnect({
-					provider: "maple",
-					connectionId: maple.id,
-					accountName: "Northwind",
-				}),
-			),
-			// Maple has no webhooks: Done closes.
-			message(Message.SubmittedWebhookSecret()),
-			model((current) => expect(current.connectForm).toBeNull()),
+			}),
 		)
-	})
-
-	test("an empty key sends nothing", () => {
-		const opened = pageUpdate(loaded(), Message.PressedConnect({ provider: "clerk" })).model
-		expect(pageUpdate(opened, Message.SubmittedConnect()).commands ?? []).toHaveLength(0)
 	})
 })
 
@@ -288,16 +147,10 @@ describe("data sources: sync and disconnect", () => {
 		)
 	})
 
-	test("Sync all syncs every connection that is not disconnected", () => {
-		const next = pageUpdate(loaded(), Message.PressedSyncAll())
-		expect(next.model.syncing).toEqual([clerk.id, maple.id])
-		expect(next.commands).toHaveLength(2)
-	})
-
 	test("Disconnect asks first, then disconnects", () => {
 		story(
 			pageUpdate,
-			given(loaded(AppRoute.CustomersSourceDetail({ orgSlug: "hazel", provider: "clerk" }))),
+			given(loaded()),
 			message(Message.PressedDisconnect()),
 			model((current) => expect(current.disconnectModal.isOpen).toBe(true)),
 			message(Message.ConfirmedDisconnect({ connectionId: clerk.id })),
@@ -349,9 +202,9 @@ describe("data sources: Maple settings", () => {
 					value: "dashboards_created",
 				}),
 			),
-			message(Message.ChangedConfigText({ target: "settings", key: "region", value: "eu" })),
+			message(Message.ChangedConfigText({ key: "region", value: "eu" })),
 			// The config's schema refuses a region of its own: the field keeps what it had.
-			message(Message.ChangedConfigText({ target: "settings", key: "region", value: "apac" })),
+			message(Message.ChangedConfigText({ key: "region", value: "apac" })),
 			message(Message.ClickedSettingsNumber({ key: "lookbackDays", value: 180 })),
 			model((current) => expect(current.settingsListInputs.activityEvents).toBe("")),
 			message(Message.PressedSaveSettings()),
@@ -399,7 +252,7 @@ describe("data sources: Maple settings", () => {
 	test("a field value that does not fit the config is ignored", () => {
 		const next = pageUpdate(
 			detail(),
-			Message.ToggledConfigField({ target: "settings", key: "region", isSelected: true }),
+			Message.ToggledConfigField({ key: "region", isSelected: true }),
 		).model
 		expect(next.settingsDraft).toEqual(maple.config)
 	})

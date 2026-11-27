@@ -25,8 +25,8 @@ import { Message } from "./message"
 import type { ConnectFailure } from "./model"
 
 /**
- * The Data sources Commands: connect, rotate keys, save settings, sync, disconnect, demo data, a
- * metric's unit, who may impersonate.
+ * A source detail's Commands: rotate keys, save settings, sync, disconnect, a metric's unit, who
+ * may impersonate. Connecting is the native modal's.
  */
 
 const org = { organizationId: OrganizationId }
@@ -75,78 +75,6 @@ const settleUpdate =
 
 const updateConnection = (payload: UpdatePayload) =>
 	HazelRpc.use((rpc) => rpc("customers.connection.update", payload))
-
-export const FetchUnmatchedCount = Command.define("FetchUnmatchedCount", {
-	args: org,
-	messages: [Message.SucceededFetchUnmatchedCount, Message.FailedFetchUnmatchedCount],
-	execute: ({ organizationId }) =>
-		HazelRpc.use((rpc) =>
-			rpc("customers.unmatched.list", { organizationId, status: "open", limit: 1 }),
-		).pipe(
-			Effect.map((result) => Message.SucceededFetchUnmatchedCount({ count: result.openCount })),
-			catchCommon((reason) => Message.FailedFetchUnmatchedCount({ reason })),
-		),
-})
-
-/**
- * Validates the key with the provider, stores it and starts the backfill, in one call. With
- * `reconnectId` it rotates that connection's key instead (`update`).
- */
-export const ConnectCustomerSource = Command.define("ConnectCustomerSource", {
-	args: {
-		...org,
-		provider: Customers.CustomerProvider,
-		reconnectId: Schema.NullOr(CustomerConnectionId),
-		apiKey: Secret,
-		config: IntegrationConfig,
-	},
-	messages: [Message.SucceededConnect, Message.FailedConnect],
-	execute: ({ organizationId, provider, reconnectId, apiKey: secret, config }) => {
-		const apiKey = Redacted.value(secret)
-		const connected = ({ data }: { readonly data: Customers.Connection }) =>
-			Message.SucceededConnect({
-				provider,
-				connectionId: data.id,
-				accountName: data.externalAccountName,
-			})
-		const failed = (reason: ConnectFailure) => Message.FailedConnect({ provider, reason })
-		if (reconnectId !== null)
-			return updateConnection({ organizationId, connectionId: reconnectId, apiKey, config }).pipe(
-				settleUpdate(connected, failed),
-			)
-		return HazelRpc.use((rpc) =>
-			rpc("customers.connection.connect", {
-				organizationId,
-				provider,
-				apiKey,
-				webhookSecret: null,
-				config,
-			}),
-		).pipe(
-			Effect.map(connected),
-			Effect.catchTags({
-				CustomerProviderUnavailableError: () => Effect.succeed(failed("ComingSoon")),
-				CustomerConnectionCredentialsError: (error) =>
-					Effect.succeed(failed(credentialsFailure(error))),
-				CustomersInvalidRequestError: () => Effect.succeed(failed("Invalid")),
-			}),
-			catchCommon(failed),
-		)
-	},
-})
-
-/** The connect modal's last step: the webhook's signing secret, once the endpoint exists. */
-export const SaveCustomerWebhookSecret = Command.define("SaveCustomerWebhookSecret", {
-	args: { ...org, connectionId: CustomerConnectionId, webhookSecret: Secret },
-	messages: [Message.SucceededSaveWebhookSecret, Message.FailedSaveWebhookSecret],
-	execute: ({ organizationId, connectionId, webhookSecret }) =>
-		updateConnection({ organizationId, connectionId, webhookSecret: Redacted.value(webhookSecret) }).pipe(
-			settleUpdate(
-				() => Message.SucceededSaveWebhookSecret({ connectionId }),
-				(reason) => Message.FailedSaveWebhookSecret({ connectionId, reason }),
-			),
-		),
-})
 
 /** "Update keys": the API key and/or the signing secret (null: keep the current one). */
 export const UpdateCustomerSourceKeys = Command.define("UpdateCustomerSourceKeys", {
@@ -210,20 +138,6 @@ export const DisconnectCustomerSource = Command.define("DisconnectCustomerSource
 				Effect.succeed(Message.FailedDisconnect({ reason: "NotFound" })),
 			),
 			catchCommon((reason) => Message.FailedDisconnect({ reason })),
-		),
-})
-
-/** Dev and preview only: fake customers through the ingest path, with demo connections. */
-export const SeedCustomersDemo = Command.define("SeedCustomersDemo", {
-	args: org,
-	messages: [Message.SucceededSeedDemo, Message.FailedSeedDemo],
-	execute: ({ organizationId }) =>
-		HazelRpc.use((rpc) => rpc("customers.demo.seed", { organizationId })).pipe(
-			Effect.as(Message.SucceededSeedDemo()),
-			Effect.catchTag("CustomersInvalidRequestError", () =>
-				Effect.succeed(Message.FailedSeedDemo({ reason: "Refused" })),
-			),
-			catchCommon((reason) => Message.FailedSeedDemo({ reason })),
 		),
 })
 

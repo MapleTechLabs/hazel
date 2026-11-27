@@ -9,10 +9,6 @@ import * as Modal from "../../../../ui/modal"
 import { ConnectFailure, HistoryFilter } from "./model"
 import { ConnectionRow, ImpersonationRow, SyncRunRow, UnitMetricRow } from "./queries"
 
-/** Which form a config field edits: the connect modal's, or the detail's provider settings. */
-export const ConfigTarget = Schema.Literals(["connect", "settings"])
-export type ConfigTarget = typeof ConfigTarget.Type
-
 /** `NotFound`: the connection is gone (disconnected meanwhile); `ComingSoon`: no integration yet. */
 export const SyncFailure = Schema.Union([Schema.Literals(["NotFound", "ComingSoon"]), CommonReason])
 export type SyncFailure = typeof SyncFailure.Type
@@ -24,10 +20,6 @@ export type DisconnectFailure = typeof DisconnectFailure.Type
 export const UnitFailure = Schema.Union([Schema.Literals(["NotFound"]), CommonReason])
 export type UnitFailure = typeof UnitFailure.Type
 
-/** Demo data is refused outside dev and preview stages. */
-export const SeedFailure = Schema.Union([Schema.Literals(["Refused"]), CommonReason])
-export type SeedFailure = typeof SeedFailure.Type
-
 /** `NotMember` (a grant): the member left the organization since the picker showed them. */
 export const ImpersonatorFailure = Schema.Union([Schema.Literals(["NotMember"]), CommonReason])
 export type ImpersonatorFailure = typeof ImpersonatorFailure.Type
@@ -35,40 +27,19 @@ export type ImpersonatorFailure = typeof ImpersonatorFailure.Type
 export const Message = defineMessageUnion({
 	UpdatedConnections: { connections: Schema.Array(ConnectionRow) },
 	UpdatedSyncRuns: { runs: Schema.Array(SyncRunRow) },
-	UpdatedAccountCount: { count: Schema.Int },
 	UpdatedMembers: { members: Schema.Array(MemberRow) },
 	UpdatedUnitMetrics: { metrics: Schema.Array(UnitMetricRow) },
-	SucceededFetchUnmatchedCount: { count: Schema.Int },
-	FailedFetchUnmatchedCount: { reason: CommonReason },
 
 	PressedSyncNow: { connectionId: CustomerConnectionId },
-	PressedSyncAll: {},
 	SucceededSyncNow: { connectionId: CustomerConnectionId },
 	FailedSyncNow: { connectionId: CustomerConnectionId, reason: SyncFailure },
-	PressedLoadDemo: {},
-	SucceededSeedDemo: {},
-	FailedSeedDemo: { reason: SeedFailure },
 	ClickedHistoryFilter: { filter: HistoryFilter },
 
-	// Connect modal
+	// Connect (the native modal) and the matching options in the settings
 	PressedConnect: { provider: Customers.CustomerProvider },
 	PressedReconnect: { connectionId: CustomerConnectionId },
-	GotConnectModalMessage: { message: Modal.Message },
-	ChangedApiKey: { value: Schema.String },
-	ToggledConfigField: { target: ConfigTarget, key: Schema.String, isSelected: Schema.Boolean },
-	ChangedConfigText: { target: ConfigTarget, key: Schema.String, value: Schema.String },
-	SubmittedConnect: {},
-	/** `provider` / `connectionId` name the form asked from: an answer for a form closed since is dropped. */
-	SucceededConnect: {
-		provider: Customers.CustomerProvider,
-		connectionId: CustomerConnectionId,
-		accountName: Schema.NullOr(Schema.String),
-	},
-	FailedConnect: { provider: Customers.CustomerProvider, reason: ConnectFailure },
-	ChangedWebhookSecret: { value: Schema.String },
-	SubmittedWebhookSecret: {},
-	SucceededSaveWebhookSecret: { connectionId: CustomerConnectionId },
-	FailedSaveWebhookSecret: { connectionId: CustomerConnectionId, reason: ConnectFailure },
+	ToggledConfigField: { key: Schema.String, isSelected: Schema.Boolean },
+	ChangedConfigText: { key: Schema.String, value: Schema.String },
 	PressedCopyWebhookUrl: { url: Schema.String },
 	SucceededCopyWebhookUrl: {},
 	FailedCopyWebhookUrl: {},

@@ -1,7 +1,7 @@
 import { OrganizationId } from "@hazel/schema"
 import { Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
-import { accountsStream, impersonatorsStream, orgMembersStream } from "../../../../customers/queries"
+import { impersonatorsStream, orgMembersStream } from "../../../../customers/queries"
 import type { PageSubscriptionInput } from "../../../contract"
 import { Message } from "./message"
 import type { Model } from "./model"
@@ -13,7 +13,7 @@ const organization = { organizationId: Schema.NullOr(OrganizationId) }
 const organizationOf = ({ shared }: Input) => ({ organizationId: shared.organization?.id ?? null })
 
 /**
- * Connections, their runs, the account count (identity coverage), the people who connected them,
+ * Connections, their runs, the people who connected them,
  * the sources' metrics (for their units), and who may impersonate and did.
  */
 export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
@@ -32,15 +32,6 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 			organizationId === null
 				? Stream.empty
 				: syncRunsStream(organizationId, (runs) => Message.UpdatedSyncRuns({ runs })),
-	}),
-	accounts: entry(organization, {
-		modelToDependencies: organizationOf,
-		dependenciesToStream: ({ organizationId }) =>
-			organizationId === null
-				? Stream.empty
-				: accountsStream(organizationId, (accounts) =>
-						Message.UpdatedAccountCount({ count: accounts.length }),
-					),
 	}),
 	metrics: entry(organization, {
 		modelToDependencies: organizationOf,

@@ -2,18 +2,17 @@ import { definePage } from "../../../contract"
 import { Message } from "./message"
 import { Model } from "./model"
 import { subscriptions } from "./subscription"
-import { init, sharedChanged, update } from "./update"
+import { init, update } from "./update"
 import { view } from "./view"
 
-/** `/$orgSlug/customers/settings/sources[/$provider]`: data sources, and one source's detail. */
+/** `/$orgSlug/customers/settings/sources/$provider`: one source's detail (the overview is native). */
 export const page = definePage(
 	"CustomersSettingsSources",
 	{ Model, Message },
 	{
-		routes: ["CustomersSettingsSources", "CustomersSourceDetail"],
+		routes: ["CustomersSourceDetail"],
 		init,
 		update,
-		sharedChanged,
 		view,
 		subscriptions,
 	},

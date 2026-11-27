@@ -1,4 +1,9 @@
-import { IntegrationConfig, IntegrationId, isIntegrationId } from "@hazel/customer-integrations"
+import {
+	type ConnectionRow,
+	type SyncRunRow,
+	toConnectionRows,
+	toSyncRunRow,
+} from "@hazel/shared-screens/customers/settings/sources/rows"
 import * as Customers from "@hazel/domain/customers"
 import {
 	CustomerConnectionId,
@@ -25,38 +30,7 @@ import { liveQueryStream } from "../../../../data/live-query"
  * stale) and the sync runs the source keeps (the last 7 days), dates as epoch ms.
  */
 
-export const ConnectionRow = Schema.Struct({
-	id: CustomerConnectionId,
-	provider: IntegrationId,
-	status: Customers.ConnectionStatus,
-	externalAccountName: Schema.NullOr(Schema.String),
-	config: IntegrationConfig,
-	connectedBy: UserId,
-	connectedAtMs: Schema.Finite,
-	hasWebhookSecret: Schema.Boolean,
-	lastSyncAtMs: Schema.NullOr(Schema.Finite),
-	lastSuccessAtMs: Schema.NullOr(Schema.Finite),
-	lastErrorAtMs: Schema.NullOr(Schema.Finite),
-	lastError: Schema.NullOr(Customers.SyncError),
-	consecutiveFailures: Schema.Int,
-	nextSyncAtMs: Schema.NullOr(Schema.Finite),
-	stats: Customers.SyncStats,
-	disconnectedAtMs: Schema.NullOr(Schema.Finite),
-})
-export type ConnectionRow = typeof ConnectionRow.Type
-
-export const SyncRunRow = Schema.Struct({
-	id: CustomerSyncRunId,
-	connectionId: CustomerConnectionId,
-	trigger: Customers.SyncTrigger,
-	status: Customers.SyncRunStatus,
-	startedAtMs: Schema.Finite,
-	finishedAtMs: Schema.NullOr(Schema.Finite),
-	progress: Schema.NullOr(Customers.SyncProgress),
-	stats: Customers.SyncStats,
-	error: Schema.NullOr(Customers.SyncError),
-})
-export type SyncRunRow = typeof SyncRunRow.Type
+export { ConnectionRow, SyncRunRow } from "@hazel/shared-screens/customers/settings/sources/rows"
 
 /** A source's metric, for its unit: the one the source gives, and the one set by hand. */
 export const UnitMetricRow = Schema.Struct({
@@ -80,61 +54,6 @@ export const ImpersonationRow = Schema.Struct({
 	createdAtMs: Schema.Finite,
 })
 export type ImpersonationRow = typeof ImpersonationRow.Type
-
-type JsonDate = Customers.Connection["connectedAt"]
-const msOrNull = (date: JsonDate | null): number | null => (date === null ? null : msOf(date))
-
-const decodeConfig = Schema.decodeUnknownOption(IntegrationConfig)
-
-/**
- * The rows the page can show, each config through its integration's schema (stored ones rely on it
- * for defaults and dropped keys); a row of a provider this build does not know is left out.
- */
-export const toConnectionRows = (
-	connections: ReadonlyArray<Customers.Connection>,
-): ReadonlyArray<ConnectionRow> =>
-	connections.flatMap((connection) => {
-		const { provider } = connection
-		const config = decodeConfig(connection.config)
-		return isIntegrationId(provider) && Option.isSome(config)
-			? [toConnectionRow(connection, provider, config.value)]
-			: []
-	})
-
-const toConnectionRow = (
-	connection: Customers.Connection,
-	provider: IntegrationId,
-	config: IntegrationConfig,
-): ConnectionRow => ({
-	id: connection.id,
-	provider,
-	status: connection.status,
-	externalAccountName: connection.externalAccountName,
-	config,
-	connectedBy: connection.connectedBy,
-	connectedAtMs: msOf(connection.connectedAt),
-	hasWebhookSecret: connection.hasWebhookSecret,
-	lastSyncAtMs: msOrNull(connection.lastSyncAt),
-	lastSuccessAtMs: msOrNull(connection.lastSuccessAt),
-	lastErrorAtMs: msOrNull(connection.lastErrorAt),
-	lastError: connection.lastError,
-	consecutiveFailures: connection.consecutiveFailures,
-	nextSyncAtMs: msOrNull(connection.nextSyncAt),
-	stats: connection.stats,
-	disconnectedAtMs: msOrNull(connection.disconnectedAt),
-})
-
-export const toSyncRunRow = (run: Customers.SyncRun): SyncRunRow => ({
-	id: run.id,
-	connectionId: run.connectionId,
-	trigger: run.trigger,
-	status: run.status,
-	startedAtMs: msOf(run.startedAt),
-	finishedAtMs: msOrNull(run.finishedAt),
-	progress: run.progress,
-	stats: run.stats,
-	error: run.error,
-})
 
 export const connectionsStream = <Message>(
 	organizationId: OrganizationId,

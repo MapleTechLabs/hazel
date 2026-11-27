@@ -16,7 +16,7 @@ import { pageHeader } from "../../../../ui/page-header"
 import { Message } from "./message"
 import { impersonationCard } from "./impersonation-view"
 import { connectionOf, type HistoryFilter, isLive, type Model, runsOf, statusOf, visibleRuns } from "./model"
-import { addsList, type Context, connectButton, errorBanner, syncModeLines } from "./overview-view"
+import { addsList, type Context, connectButton, errorBanner, syncModeLines } from "./detail-parts"
 import {
 	BACKEND_URL,
 	chips,
@@ -497,9 +497,7 @@ export const detailView = (h: H, model: Model, provider: CustomerProvider, conte
 								h.div(
 									[h.Class("flex min-w-0 flex-col gap-5")],
 									[
-										...(live.status === "error"
-											? [errorBanner(h, live, context, false)]
-											: []),
+										...(live.status === "error" ? [errorBanner(h, live, context)] : []),
 										historyCard(h, model, live),
 										settingsCard(h, model, live, context.isAdmin),
 										...(integrationOf(provider)?.capabilities.meteredLimits === true

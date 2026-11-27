@@ -61,6 +61,12 @@ export const DesktopPage = Component.lazy("DesktopPage", () =>
 	),
 )
 
+export const CustomersSourcesPage = Component.lazy("CustomersSourcesPage", () =>
+	import("@hazel/shared-screens/customers/pages/settings/sources/SourcesPage").then((module) =>
+		withClientData(module.SourcesPage),
+	),
+)
+
 /** The native app's install (`~/config/server`), which its sign-in page can change; `null` on the web. */
 const initialServer = () =>
 	canChooseServer() ? { label: serverLabel(currentServer()), isDefault: isBuildServer(), form: null } : null
@@ -193,6 +199,13 @@ const nativePages: Registry = {
 			fallback: (result) => fallback(result._tag === "Failure"),
 		}),
 	),
+	// Customers settings: drawn in the customers frame (its sidebar is the host's, PH2).
+	CustomersSettingsSources: (h, { route, session, nowMs, fallback }) =>
+		CustomersSourcesPage(h, {
+			key: route.orgSlug,
+			props: { session, nowMs, canSeedDemo: import.meta.env.DEV },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
 }
 
 /** The parity flag of a route's native page: `"0"` draws today's Foldkit page instead (`compare-pages.ts`). */
