@@ -15,6 +15,7 @@ import {
 import { chartSpecimens } from "./kit-charts.ts"
 import { chatSpecimens } from "./kit-chat.ts"
 import { contentSpecimens } from "./kit-content.ts"
+import { controlSpecimens } from "./kit-controls.ts"
 import { rowSpecimens } from "./kit-rows.ts"
 import { tableSpecimens } from "./kit-table.ts"
 import { applyTheme } from "./page.ts"
@@ -74,12 +75,15 @@ const intentOf = {
 	ghost: "plain",
 	warning: "warning",
 	danger: "danger",
-	// A chip is `toggleChip` (`kitChip`), never a kit button; this entry only closes the map.
+	// A chip is `toggleChip` (`kitChip`), never a kit button; these entries only close the map (the
+	// filter and dashed buttons are the customers filter bar's, `kit-controls.ts`).
 	chip: "plain",
+	filter: "plain",
+	dashed: "plain",
 } as const satisfies Record<ButtonSpec["variant"], ButtonVariants["intent"]>
 
 const sizeOf = (spec: ButtonSpec): ButtonVariants["size"] => {
-	const size = { large: "lg", regular: "md", small: "sm", xsmall: "xs" } as const
+	const size = { large: "lg", regular: "md", small: "sm", xsmall: "xs", toolbar: "xs" } as const
 	return spec.iconOnly ? `sq-${size[spec.size]}` : size[spec.size]
 }
 
@@ -173,6 +177,7 @@ const view = (h: H): Html =>
 			),
 			chatSpecimens(h),
 			contentSpecimens(h),
+			controlSpecimens(h),
 			// After the other kit specimens: the DM row (80.5px on a phone) and the charts' heights are off the
 			// pixel grid, so anything placed after them crops at a fractional offset.
 			rowSpecimens(h),

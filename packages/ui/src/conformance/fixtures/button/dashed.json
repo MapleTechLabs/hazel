@@ -1,0 +1,29 @@
+{
+	"about": "`+ Filter` (`dashed`, size `toolbar`): a dashed edge in `fg-3` ink; against today's `addFilterButton`.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"label": "Filter",
+			"icon": "plus",
+			"variant": "dashed",
+			"size": "toolbar"
+		},
+		"events": [
+			"press"
+		]
+	},
+	"frame": "inline",
+	"pending": {
+		"ios": "S2"
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Filter"
+		}
+	],
+	"kit": {
+		"specimen": "button-dashed",
+		"target": "button"
+	}
+}

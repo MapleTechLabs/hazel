@@ -1,0 +1,39 @@
+{
+	"about": "A filter select whose control is `narrow` (today's `w-36` trigger) while the field keeps its row, and one at `regular` (`w-64`, the row on a phone).",
+	"root": {
+		"tag": "select",
+		"props": {
+			"options": [
+				{
+					"value": "all",
+					"label": "All files"
+				},
+				{
+					"value": "images",
+					"label": "Images"
+				},
+				{
+					"value": "documents",
+					"label": "Documents"
+				}
+			],
+			"value": "all",
+			"width": "narrow"
+		},
+		"events": [
+			"change"
+		]
+	},
+	"frame": "inline",
+	"pending": {
+		"ios": "S2"
+	},
+	"axes": [
+		{
+			"prop": "width",
+			"values": [
+				"regular"
+			]
+		}
+	]
+}

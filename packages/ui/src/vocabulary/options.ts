@@ -38,6 +38,9 @@ export type StackDensity = typeof StackDensity.Type
 export const StackAlign = Schema.Literals(Sets.stackAligns)
 export type StackAlign = typeof StackAlign.Type
 
+export const FieldWidth = Schema.Literals(Sets.fieldWidths)
+export type FieldWidth = typeof FieldWidth.Type
+
 export const FrameSurface = Schema.Literals(Sets.frameSurfaces)
 export type FrameSurface = typeof FrameSurface.Type
 

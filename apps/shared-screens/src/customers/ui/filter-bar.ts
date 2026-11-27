@@ -97,8 +97,12 @@ export const searchBox = <Msg>(
 		onChange: (payload: TextField.ChangePayload) => Msg
 	}>,
 ) =>
-	// HAZEL-GAP(pk0-search-hint): today the empty field shows a `/` key cap at its end and is `w-64` (full width on phones); `searchField` has neither.
-	h.searchField.placeholder(options.placeholder).value(options.value).on("change", options.onChange)
+	h.searchField
+		.placeholder(options.placeholder)
+		.value(options.value)
+		.width("regular")
+		.shortcut("/")
+		.on("change", options.onChange)
 
 // FILTERS
 
@@ -107,11 +111,11 @@ export const filterChip = <Msg>(
 	h: Hazel.H<Msg>,
 	options: Readonly<{ field: string; operator: string; value: string; onPress?: Msg; onRemove: Msg }>,
 ) => {
-	// HAZEL-GAP(pk0-filter-chip): today's chip is a square 32px box, `field operator` muted then the value strong and truncated, with a divided remove half; `chip` is round, one run.
 	const chip = h.button
-		.variant("chip")
-		.size("small")
-		.label(`${options.field} ${options.operator} ${options.value}`)
+		.variant("filter")
+		.size("toolbar")
+		.detail(`${options.field} ${options.operator}`)
+		.label(options.value)
 		.removable()
 		.on("remove", options.onRemove)
 	return options.onPress === undefined ? chip : chip.on("press", options.onPress)
@@ -119,15 +123,18 @@ export const filterChip = <Msg>(
 
 /** `+ Filter`: the trigger of the page's filter builder popover. */
 export const addFilterButton = <Msg>(h: Hazel.H<Msg>, options: Readonly<{ onPress?: Msg }> = {}) => {
-	// HAZEL-GAP(pk0-dashed-button): today's `+ Filter` has a dashed edge in `fg-3` ink; no button variant is dashed.
-	const button = h.button.label("Filter").icon("plus").variant("ghost").size("xsmall")
+	const button = h.button.label("Filter").icon("plus").variant("dashed").size("toolbar")
 	return options.onPress === undefined ? button : button.on("press", options.onPress)
 }
 
 /** `Sort Priority`: the trigger of the page's sort menu (`menu`'s `trigger` slot). */
 export const sortTrigger = <Msg>(h: Hazel.H<Msg>, options: Readonly<{ label: string }>) =>
-	// HAZEL-GAP(pk0-sort-trigger): today "Sort" is muted, the label strong, and a chevron trails; a button label is one run with a leading icon.
-	h.button.label(`Sort ${options.label}`).icon("chevron-down").variant("ghost").size("xsmall")
+	h.button
+		.detail("Sort")
+		.label(options.label)
+		.trailingIcon("chevron-down")
+		.variant("ghost")
+		.size("toolbar")
 
 /** The row the controls sit in: filters at the start, the rest at the end. */
 export const filterBar = <Msg>(
@@ -137,16 +144,17 @@ export const filterBar = <Msg>(
 		end?: ReadonlyArray<Hazel.NoTextInput<Msg>>
 	}>,
 ) =>
-	// HAZEL-GAP(pk0-wrap-row): today the bar and its chips wrap onto more lines (`flex-wrap`); a horizontal stack never wraps.
 	h.stack
 		.axis("horizontal")
 		.density("compact")
 		.align("center")
+		.wrap()
 		.children(
 			h.stack
 				.axis("horizontal")
 				.density("compact")
 				.align("center")
+				.wrap()
 				.children(...options.start),
 			options.end === undefined ? null : h.spacer,
 			options.end === undefined
@@ -166,10 +174,10 @@ export const kbd = <Msg>(h: Hazel.H<Msg>, key: string) => h.text.role("kbd").chi
 
 /** `j k Navigate · a Assign · …`: the queue's hint bar. */
 export const shortcutBar = <Msg>(h: Hazel.H<Msg>, shortcuts: ReadonlyArray<Shortcut>) =>
-	// HAZEL-GAP(pk0-web-only): today's bar hides on phones (`max-md:hidden`); a view has no size class to hide by.
 	h.stack
 		.axis("horizontal")
 		.align("center")
+		.regularOnly()
 		.children(
 			...shortcuts.map((shortcut) =>
 				h.stack

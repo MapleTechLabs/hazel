@@ -1,0 +1,74 @@
+{
+	"about": "A row that wraps its children onto more lines (`wrap`, `pk0-wrap-row`), and one drawn only at the regular size class (`regularOnly`, `pk0-web-only`).",
+	"root": {
+		"tag": "stack",
+		"props": {
+			"axis": "horizontal",
+			"density": "compact",
+			"wrap": true
+		},
+		"children": [
+			{
+				"tag": "button",
+				"props": {
+					"label": "Unreads",
+					"variant": "chip",
+					"size": "small"
+				}
+			},
+			{
+				"tag": "button",
+				"props": {
+					"label": "Mentions",
+					"variant": "chip",
+					"size": "small"
+				}
+			},
+			{
+				"tag": "button",
+				"props": {
+					"label": "Direct messages",
+					"variant": "chip",
+					"size": "small"
+				}
+			},
+			{
+				"tag": "button",
+				"props": {
+					"label": "Channels",
+					"variant": "chip",
+					"size": "small"
+				}
+			},
+			{
+				"tag": "button",
+				"props": {
+					"label": "Threads",
+					"variant": "chip",
+					"size": "small"
+				}
+			},
+			{
+				"tag": "button",
+				"props": {
+					"label": "Bots",
+					"variant": "chip",
+					"size": "small"
+				}
+			}
+		]
+	},
+	"frame": "sidebar",
+	"pending": {
+		"ios": "S1"
+	},
+	"cases": [
+		{
+			"name": "regular-only",
+			"props": {
+				"wrap": null,
+				"regularOnly": true
+			}
+		}
+	]
+}

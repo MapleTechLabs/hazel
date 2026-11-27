@@ -147,8 +147,10 @@ const declarations = (d: Declarations, tracked: ReadonlySet<string>): ReadonlyAr
 		add("display", d.layout === "inline-row" ? "inline-flex" : "flex")
 		add("flex-direction", d.layout === "column" ? "column" : "row")
 	}
+	if (d.hidden) add("display", "none")
 	if (d.wrap !== undefined) add("flex-wrap", d.wrap ? "wrap" : "nowrap")
 	if (d.fill) add("width", "100%")
+	if (d.width !== undefined) add("width", spaceVar(d.width))
 	if (d.align !== undefined)
 		add("align-items", d.align === "center" ? "center" : d.align === "start" ? "flex-start" : "flex-end")
 	if (d.justify !== undefined) add("justify-content", d.justify === "start" ? "flex-start" : "center")
@@ -156,9 +158,9 @@ const declarations = (d: Declarations, tracked: ReadonlySet<string>): ReadonlyAr
 		add("background-color", d.background === "transparent" ? "transparent" : colorVar(d.background))
 	if (d.color !== undefined) add("color", colorVar(d.color))
 	if (d.borderWidth !== undefined) {
-		add("border-style", "solid")
-		add("border-width", d.borderWidth === "hairline" ? "1px" : "0")
-	}
+		add("border-style", d.borderStyle ?? "solid")
+		add("border-width", d.borderWidth === "hairline" ? "1px" : d.borderWidth === "thick" ? "2px" : "0")
+	} else if (d.borderStyle !== undefined) add("border-style", d.borderStyle)
 	if (d.borderColor !== undefined)
 		add("border-color", d.borderColor === "transparent" ? "transparent" : colorVar(d.borderColor))
 	if (d.radius !== undefined) add("border-radius", `var(--hz-radius-${d.radius})`)
@@ -190,6 +192,7 @@ const declarations = (d: Declarations, tracked: ReadonlySet<string>): ReadonlyAr
 		}
 	}
 	if (d.leading !== undefined) add("line-height", spaceVar(d.leading))
+	if (d.tracking === "wider") add("letter-spacing", "0.05em")
 	if (d.strong !== undefined)
 		add("font-weight", d.strong ? "var(--hz-weight-strong)" : "var(--hz-weight-regular)")
 	if (d.weight !== undefined) add("font-weight", `var(--hz-weight-${d.weight})`)

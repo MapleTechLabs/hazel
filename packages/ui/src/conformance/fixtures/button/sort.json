@@ -1,0 +1,30 @@
+{
+	"about": "The sort trigger: `Sort` as a muted `detail`, the label, a trailing chevron (`trailingIcon`); against today's `sortTrigger`.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"label": "Priority",
+			"detail": "Sort",
+			"trailingIcon": "chevron-down",
+			"variant": "ghost",
+			"size": "toolbar"
+		},
+		"events": [
+			"press"
+		]
+	},
+	"frame": "inline",
+	"pending": {
+		"ios": "S2"
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Sort Priority"
+		}
+	],
+	"kit": {
+		"specimen": "button-sort",
+		"target": "button"
+	}
+}

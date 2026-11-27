@@ -9,10 +9,10 @@ import type { ButtonSize, ButtonVariant } from "../schema.ts"
 export const button = defineRecipe<
 	{ readonly variant: ButtonVariant; readonly size: ButtonSize },
 	"iconOnly" | "circle",
-	"icon" | "label" | "remove"
+	"icon" | "detail" | "label" | "trailingIcon" | "remove"
 >({
 	primitive: "button",
-	parts: { icon: "part", label: "part", remove: "part" },
+	parts: { icon: "part", detail: "part", label: "part", trailingIcon: "part", remove: "part" },
 	base: {
 		root: {
 			layout: "inline-row",
@@ -27,6 +27,9 @@ export const button = defineRecipe<
 		},
 		parts: {
 			icon: { shrink: false, bleedX: "0.5" },
+			// `Sort` before the sort's label, in muted ink.
+			detail: { color: "muted-fg", shrink: false },
+			trailingIcon: { size: "3", shrink: false, bleedX: "px", color: "muted-fg" },
 			// A filter chip's trailing remove mark (`filter-bar.ts` `filterChip`).
 			remove: {
 				size: "4",
@@ -101,6 +104,33 @@ export const button = defineRecipe<
 							},
 						},
 						hover: { root: { background: "secondary", color: "fg" } },
+					},
+				},
+				// filter-bar.ts `filterChip`: `h-8 rounded-lg border bg-secondary/50 text-sm`, the
+				// value medium and truncated; the remove half's divider is the renderer's.
+				filter: {
+					root: {
+						background: "secondary-half",
+						color: "fg",
+						borderColor: "border",
+						radius: "lg",
+						paddingY: "0",
+						text: "label",
+						strong: false,
+					},
+					parts: {
+						detail: { color: "muted-fg" },
+						label: { truncate: true, strong: true },
+						remove: { bleedX: "0", radius: "none" },
+					},
+				},
+				// `+ Filter`: the plain intent with `border-border border-dashed text-fg-3 hover:text-fg`.
+				dashed: {
+					root: { background: "transparent", color: "fg-3", borderColor: "border", borderStyle: "dashed" },
+					parts: { icon: { color: "muted-fg" } },
+					states: {
+						hover: { root: { background: "secondary", color: "fg" }, parts: { icon: { color: "fg" } } },
+						pressed: { root: { background: "secondary" } },
 					},
 				},
 				warning: {
@@ -205,6 +235,25 @@ export const button = defineRecipe<
 						parts: { icon: { size: "3" } },
 					},
 				},
+				toolbar: {
+					root: {
+						minHeight: "10",
+						gap: "1.5",
+						paddingX: { step: "3", lessBorder: true },
+						paddingY: { step: "1.5", lessBorder: true },
+						text: "label",
+					},
+					parts: { icon: { size: "3.5", bleedX: "px" }, trailingIcon: { size: "3.5" } },
+					regular: {
+						root: {
+							minHeight: "8",
+							paddingX: "2",
+							paddingY: { step: "1.5", lessBorder: true },
+							text: "caption",
+						},
+						parts: { icon: { size: "3" }, trailingIcon: { size: "3" } },
+					},
+				},
 			},
 		},
 	},
@@ -218,6 +267,16 @@ export const button = defineRecipe<
 				regular: { root: { minHeight: "7", paddingX: "3.5", paddingY: "0", text: "label" } },
 			},
 		},
+		// The filter chip keeps `text-sm` at every width; the value half pads `px-2.5`.
+		{
+			when: { variant: "filter" },
+			style: {
+				root: { paddingStart: "2.5", paddingX: "0", gap: "1", text: "label" },
+				regular: { root: { paddingStart: "2.5", paddingX: "0", gap: "1", text: "label" } },
+			},
+		},
+		// `sortTrigger`: `gap-1` between `Sort`, the label and the chevron.
+		{ when: { size: "toolbar", variant: "ghost" }, style: { root: { gap: "1" } } },
 		{
 			when: { iconOnly: true, size: "large" },
 			style: {

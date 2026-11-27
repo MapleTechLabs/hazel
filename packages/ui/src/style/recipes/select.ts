@@ -1,4 +1,5 @@
 import { defineRecipe } from "../recipe.ts"
+import type { FieldWidth } from "../schema.ts"
 
 type SelectPart =
 	| "label"
@@ -23,9 +24,10 @@ type SelectPart =
  * `select` (`select.styles.ts`): a caption over the field's fill, a chevron at its end. Searchable, the
  * combo box (`combo-box.styles.ts`, `dropdown.styles.ts`): an up-down chevron button, and under the
  * field a panel (`popover.styles.ts`) with the list (group titles, rows with a check, a label and a
- * description line) and the footer slot. Highlight, placement and the status line's hiding are the renderer's.
+ * description line) and the footer slot. `width` sizes the control, not the field. Highlight,
+ * placement and the status line's hiding are the renderer's.
  */
-export const select = defineRecipe<{}, "placeholder", SelectPart>({
+export const select = defineRecipe<{ readonly width: FieldWidth }, "placeholder", SelectPart>({
 	primitive: "select",
 	parts: {
 		label: "part",
@@ -111,7 +113,17 @@ export const select = defineRecipe<{}, "placeholder", SelectPart>({
 		},
 		states: { hover: { parts: { control: { background: "field-hover" } } } },
 	},
-	options: {},
+	options: {
+		// The control's width; the field keeps its row (today's `triggerClassName: "w-36"`).
+		width: {
+			default: "auto",
+			values: {
+				auto: {},
+				narrow: { parts: { control: { width: "36" } } },
+				regular: { regular: { parts: { control: { width: "64" } } } },
+			},
+		},
+	},
 	flags: { placeholder: { parts: { input: { color: "muted-fg" } } } },
 	states: { disabled: { root: { opacity: 0.5 } } },
 	inert: ["disabled"],

@@ -113,6 +113,10 @@ export const tags = {
 			axis: option(O.StackAxis, "vertical"),
 			density: option(O.StackDensity, "regular"),
 			align: option(O.StackAlign, "stretch"),
+			// A row's children wrap onto more lines (`pk0-wrap-row`); drawn only at the regular size
+			// class (a desk's key hint bar, `pk0-web-only`).
+			wrap: flag,
+			regularOnly: flag,
 		},
 	}),
 	spacer: tag({ group: "layout", web: "A1", ios: "S1", content: "none" }),
@@ -525,6 +529,9 @@ export const tags = {
 			loading: flag,
 			// A filter chip's trailing remove mark (phase 4), raising `remove`.
 			removable: flag,
+			// A quieter run before the label (`Sort` Priority, `Kind is` Risk) and an icon after it.
+			detail: text,
+			trailingIcon: value(O.IconName),
 		},
 		events: { press: none, remove: none },
 		commands: ["focus"],
@@ -609,6 +616,8 @@ export const tags = {
 			// Phase 4, the combobox: typing filters the options (label and description); `query`
 			// reports the text for options the screen loads; `footer` holds a "Create ..." row.
 			searchable: flag,
+			// The control's width (`narrow`: a filter's `w-36`); the field still takes its row.
+			width: option(O.FieldWidth, "auto"),
 		},
 		slots: ["footer"],
 		events: {
@@ -621,7 +630,13 @@ export const tags = {
 		web: "A2",
 		ios: "S2",
 		content: "none",
-		props: { placeholder: text, value: controlled(TextField.State) },
+		props: {
+			placeholder: text,
+			value: controlled(TextField.State),
+			// Phase 4: its width in a row, and a key cap shown while empty (`/`, web only).
+			width: option(O.FieldWidth, "auto"),
+			shortcut: text,
+		},
 		events: { change: TextField.ChangePayload, submit: TextField.ChangePayload },
 		commands: ["focus", "blur"],
 	}),

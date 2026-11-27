@@ -115,6 +115,19 @@ ${optionOf("swatches")}:focus-visible > ${box} { box-shadow: inset 0 0 0 1px var
 }
 
 [data-hz=button] > [data-hz-part=remove] > svg { display: block; width: 100%; height: 100%; }
+[data-hz=button] > [data-hz-part=trailingIcon] { display: block; }
+[data-hz=button][data-variant=filter] { max-width: 100%; align-items: stretch; }
+[data-hz=button][data-variant=filter] > :is([data-hz-part=detail], [data-hz-part=label]) { align-self: center; }
+[data-hz=button][data-variant=filter] > [data-hz-part=remove] {
+	display: flex; align-items: center; justify-content: center; align-self: stretch;
+	width: var(--hz-space-10); height: auto; margin-inline-start: var(--hz-space-1_5);
+	border-inline-start: 1px solid var(--hz-color-border);
+	border-start-end-radius: calc(var(--hz-radius-lg) - 1px); border-end-end-radius: calc(var(--hz-radius-lg) - 1px);
+}
+[data-hz=button][data-variant=filter] > [data-hz-part=remove] > svg { width: var(--hz-space-3); height: var(--hz-space-3); }
+@media (width >= 48rem) {
+	[data-hz=button][data-variant=filter] > [data-hz-part=remove] { width: var(--hz-space-7); }
+}
 [data-hz=button]:not([data-disabled]) > [data-hz-part=remove]:hover { color: var(--hz-color-fg); background-color: var(--hz-color-secondary-hover); }
 `
 

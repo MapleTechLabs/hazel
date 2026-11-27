@@ -72,7 +72,11 @@ export type TextTone = (typeof textTones)[number]
 /** `text.strong`: on or off, the one weight choice a view has. */
 export type TextStrong = boolean
 
-/** `chip` is a fully round filter chip: filled while `pressed`, quiet otherwise (`filter-chip`). */
+/**
+ * `chip` is a fully round filter chip: filled while `pressed`, quiet otherwise (`filter-chip`).
+ * `filter` an applied filter: a square tinted box with a divided remove half (`pk0-filter-chip`);
+ * `dashed` a quiet add control with a dashed edge (`+ Filter`, `pk0-dashed-button`).
+ */
 export const buttonVariants = [
 	"primary",
 	"secondary",
@@ -81,10 +85,13 @@ export const buttonVariants = [
 	"warning",
 	"danger",
 	"chip",
+	"filter",
+	"dashed",
 ] as const
 export type ButtonVariant = (typeof buttonVariants)[number]
 
-export const buttonSizes = ["large", "regular", "small", "xsmall"] as const
+/** `toolbar` is `xsmall` at a page toolbar's height (`h-8`, `h-10` on a phone: filters, sort). */
+export const buttonSizes = ["large", "regular", "small", "xsmall", "toolbar"] as const
 export type ButtonSize = (typeof buttonSizes)[number]
 
 export const badgeTones = ["neutral", "accent", "success", "warning", "danger", "info"] as const
@@ -105,6 +112,13 @@ export type StackAxis = (typeof stackAxes)[number]
 /** `tight` is a sidebar's section group (`gap-y-0.5`, `stack-tight`). */
 export const stackDensities = ["tight", "compact", "regular", "relaxed"] as const
 export type StackDensity = (typeof stackDensities)[number]
+
+/**
+ * A field's width in a row (`p4-files-header-widths`): `auto` fills, `narrow` is a filter's `w-36`,
+ * `regular` a search box's `w-64` that fills the row on the compact size class.
+ */
+export const fieldWidths = ["auto", "narrow", "regular"] as const
+export type FieldWidth = (typeof fieldWidths)[number]
 
 export const stackAligns = ["stretch", "start", "center", "end"] as const
 export type StackAlign = (typeof stackAligns)[number]
@@ -387,7 +401,10 @@ export interface Declarations<T extends TokenNames = TokenNames> {
 	readonly background?: T["color"] | "transparent"
 	readonly color?: T["color"]
 	readonly borderColor?: T["color"] | "transparent"
-	readonly borderWidth?: "none" | "hairline"
+	/** `thick` is 2px (a drop zone's dashed edge, `drop-zone-dashed-edge`). */
+	readonly borderWidth?: "none" | "hairline" | "thick"
+	/** `dashed` draws the border in dashes (a drop target, `+ Filter`); `solid` when unset. */
+	readonly borderStyle?: "solid" | "dashed"
 	readonly radius?: T["radius"]
 	/** A hairline drawn inside the box (`inset 0 0 0 1px`), taking no space; not with `shadow`. */
 	readonly ring?: T["color"]
@@ -446,6 +463,12 @@ export interface Declarations<T extends TokenNames = TokenNames> {
 	readonly minWidth?: T["space"]
 	/** A negative inline margin by this step (Tailwind `-mx-0.5`). */
 	readonly bleedX?: T["space"]
+	/** A fixed width (a search field's `w-64`, a filter's `w-36`); wins over `fill`. */
+	readonly width?: T["space"]
+	/** Not drawn (a key hint bar on a phone, `pk0-web-only`); a later layer sets `layout` to show it. */
+	readonly hidden?: boolean
+	/** Letter spacing over the text role's: `wider` is Tailwind's `tracking-wider` (0.05em). */
+	readonly tracking?: "wider"
 }
 
 export interface TokenNames {
