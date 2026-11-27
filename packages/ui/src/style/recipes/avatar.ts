@@ -1,12 +1,12 @@
 import { defineRecipe } from "../recipe.ts"
-import type { AvatarPresence, AvatarShape, AvatarSize, AvatarTint, ProviderMark } from "../schema.ts"
+import type { AvatarPresence, AvatarCorners, AvatarSize, AvatarTint, ProviderMark } from "../schema.ts"
 
 /**
  * `avatar`: sized like the icon it stands beside; the `src` image, else today's dither seeded by
  * `name` (drawn by the web renderer), else `initials` on the kit's muted fill. `large` is the
  * settings logo (the kit's `lg`, `size-12 rounded-xl`). `presence` is the kit's presence dot (`presence-dot.ts`: online, away, busy filled; offline a hollow ring) and `mark` a
  * provider's logo, both at the bottom-right corner (placed by the web renderer). Phase 4 (PK0):
- * the kit's other steps, `shape` (`square` takes today's logo radius per size), initials on a
+ * the kit's other steps, `corners` (`square` takes today's logo radius per size), initials on a
  * `tint` (semibold, as `identity.ts`), and `placeholder`, a dashed ring around a user glyph.
  */
 export const avatar = defineRecipe<
@@ -14,7 +14,7 @@ export const avatar = defineRecipe<
 		readonly size: AvatarSize
 		readonly presence: AvatarPresence
 		readonly mark: ProviderMark
-		readonly shape: AvatarShape
+		readonly corners: AvatarCorners
 		readonly tint: AvatarTint
 	},
 	"placeholder",
@@ -119,7 +119,7 @@ export const avatar = defineRecipe<
 			},
 		},
 		mark: { default: "none", values: { none: {}, slack: {}, discord: {} } },
-		shape: {
+		corners: {
 			default: "auto",
 			values: {
 				auto: {},
@@ -163,39 +163,39 @@ export const avatar = defineRecipe<
 	// Today's logo radii (`LOGO_SIZE`): 16 and 20 `sm`, 28 `md`, 40 `lg`, 48 and 56 `xl`.
 	compounds: [
 		{
-			when: { shape: "square", size: "xxsmall" },
+			when: { corners: "square", size: "xxsmall" },
 			style: { root: { radius: "sm" }, parts: { image: { radius: "sm" } } },
 		},
 		{
-			when: { shape: "square", size: "inline" },
+			when: { corners: "square", size: "inline" },
 			style: { root: { radius: "sm" }, parts: { image: { radius: "sm" } } },
 		},
 		{
-			when: { shape: "square", size: "regular" },
+			when: { corners: "square", size: "regular" },
 			style: { root: { radius: "sm" }, parts: { image: { radius: "sm" } } },
 		},
 		{
-			when: { shape: "square", size: "xsmall" },
+			when: { corners: "square", size: "xsmall" },
 			style: { root: { radius: "md" }, parts: { image: { radius: "md" } } },
 		},
 		{
-			when: { shape: "square", size: "row" },
+			when: { corners: "square", size: "row" },
 			style: { root: { radius: "md" }, parts: { image: { radius: "md" } } },
 		},
 		{
-			when: { shape: "square", size: "small" },
+			when: { corners: "square", size: "small" },
 			style: { root: { radius: "lg" }, parts: { image: { radius: "lg" } } },
 		},
 		{
-			when: { shape: "square", size: "medium" },
+			when: { corners: "square", size: "medium" },
 			style: { root: { radius: "lg" }, parts: { image: { radius: "lg" } } },
 		},
 		{
-			when: { shape: "square", size: "large" },
+			when: { corners: "square", size: "large" },
 			style: { root: { radius: "xl" }, parts: { image: { radius: "xl" } } },
 		},
 		{
-			when: { shape: "square", size: "xlarge" },
+			when: { corners: "square", size: "xlarge" },
 			style: { root: { radius: "xl" }, parts: { image: { radius: "xl" } } },
 		},
 	],

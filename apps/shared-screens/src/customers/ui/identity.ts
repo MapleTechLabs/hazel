@@ -120,7 +120,7 @@ export const companyLogo = <Msg>(
 		.initials(size === "2xs" ? initials.slice(0, 1) : initials)
 		.src(safeLogoUrl(options.logoUrl) ?? undefined)
 		.size(LOGO_SIZE[size])
-		.shape("square")
+		.corners("square")
 		.tint(tintOf(options.name))
 }
 

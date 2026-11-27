@@ -188,8 +188,8 @@ export const avatarSizes = [
 export type AvatarSize = (typeof avatarSizes)[number]
 
 /** `auto` is the size's own shape (round up to `small`, the kit's squircle from `medium`). */
-export const avatarShapes = ["auto", "round", "square"] as const
-export type AvatarShape = (typeof avatarShapes)[number]
+export const avatarCorners = ["auto", "round", "square"] as const
+export type AvatarCorners = (typeof avatarCorners)[number]
 
 /** Initials on a subtle tint (customers' logos and owners); the view picks it, stable per name. */
 export const avatarTints = ["none", "accent", "info", "success", "warning", "danger", "neutral"] as const

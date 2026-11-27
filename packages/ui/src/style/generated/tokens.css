@@ -989,11 +989,11 @@
 	box-shadow: inset 0 0 0 1px var(--hz-color-presence-offline);
 }
 
-[data-hz="avatar"][data-shape="round"] {
+[data-hz="avatar"][data-corners="round"] {
 	border-radius: var(--hz-radius-full);
 }
 
-[data-hz="avatar"][data-shape="round"] > [data-hz-part="image"] {
+[data-hz="avatar"][data-corners="round"] > [data-hz-part="image"] {
 	border-radius: var(--hz-radius-full);
 }
 
@@ -1041,75 +1041,75 @@
 	border-color: var(--hz-color-placeholder-edge);
 }
 
-[data-hz="avatar"][data-shape="square"][data-size="xxsmall"] {
+[data-hz="avatar"][data-corners="square"][data-size="xxsmall"] {
 	border-radius: var(--hz-radius-sm);
 }
 
-[data-hz="avatar"][data-shape="square"][data-size="xxsmall"] > [data-hz-part="image"] {
+[data-hz="avatar"][data-corners="square"][data-size="xxsmall"] > [data-hz-part="image"] {
 	border-radius: var(--hz-radius-sm);
 }
 
-[data-hz="avatar"][data-shape="square"][data-size="inline"] {
+[data-hz="avatar"][data-corners="square"][data-size="inline"] {
 	border-radius: var(--hz-radius-sm);
 }
 
-[data-hz="avatar"][data-shape="square"][data-size="inline"] > [data-hz-part="image"] {
+[data-hz="avatar"][data-corners="square"][data-size="inline"] > [data-hz-part="image"] {
 	border-radius: var(--hz-radius-sm);
 }
 
-[data-hz="avatar"][data-shape="square"]:is([data-size="regular"], :not([data-size])) {
+[data-hz="avatar"][data-corners="square"]:is([data-size="regular"], :not([data-size])) {
 	border-radius: var(--hz-radius-sm);
 }
 
-[data-hz="avatar"][data-shape="square"]:is([data-size="regular"], :not([data-size])) > [data-hz-part="image"] {
+[data-hz="avatar"][data-corners="square"]:is([data-size="regular"], :not([data-size])) > [data-hz-part="image"] {
 	border-radius: var(--hz-radius-sm);
 }
 
-[data-hz="avatar"][data-shape="square"][data-size="xsmall"] {
+[data-hz="avatar"][data-corners="square"][data-size="xsmall"] {
 	border-radius: var(--hz-radius-md);
 }
 
-[data-hz="avatar"][data-shape="square"][data-size="xsmall"] > [data-hz-part="image"] {
+[data-hz="avatar"][data-corners="square"][data-size="xsmall"] > [data-hz-part="image"] {
 	border-radius: var(--hz-radius-md);
 }
 
-[data-hz="avatar"][data-shape="square"][data-size="row"] {
+[data-hz="avatar"][data-corners="square"][data-size="row"] {
 	border-radius: var(--hz-radius-md);
 }
 
-[data-hz="avatar"][data-shape="square"][data-size="row"] > [data-hz-part="image"] {
+[data-hz="avatar"][data-corners="square"][data-size="row"] > [data-hz-part="image"] {
 	border-radius: var(--hz-radius-md);
 }
 
-[data-hz="avatar"][data-shape="square"][data-size="small"] {
+[data-hz="avatar"][data-corners="square"][data-size="small"] {
 	border-radius: var(--hz-radius-lg);
 }
 
-[data-hz="avatar"][data-shape="square"][data-size="small"] > [data-hz-part="image"] {
+[data-hz="avatar"][data-corners="square"][data-size="small"] > [data-hz-part="image"] {
 	border-radius: var(--hz-radius-lg);
 }
 
-[data-hz="avatar"][data-shape="square"][data-size="medium"] {
+[data-hz="avatar"][data-corners="square"][data-size="medium"] {
 	border-radius: var(--hz-radius-lg);
 }
 
-[data-hz="avatar"][data-shape="square"][data-size="medium"] > [data-hz-part="image"] {
+[data-hz="avatar"][data-corners="square"][data-size="medium"] > [data-hz-part="image"] {
 	border-radius: var(--hz-radius-lg);
 }
 
-[data-hz="avatar"][data-shape="square"][data-size="large"] {
+[data-hz="avatar"][data-corners="square"][data-size="large"] {
 	border-radius: var(--hz-radius-xl);
 }
 
-[data-hz="avatar"][data-shape="square"][data-size="large"] > [data-hz-part="image"] {
+[data-hz="avatar"][data-corners="square"][data-size="large"] > [data-hz-part="image"] {
 	border-radius: var(--hz-radius-xl);
 }
 
-[data-hz="avatar"][data-shape="square"][data-size="xlarge"] {
+[data-hz="avatar"][data-corners="square"][data-size="xlarge"] {
 	border-radius: var(--hz-radius-xl);
 }
 
-[data-hz="avatar"][data-shape="square"][data-size="xlarge"] > [data-hz-part="image"] {
+[data-hz="avatar"][data-corners="square"][data-size="xlarge"] > [data-hz-part="image"] {
 	border-radius: var(--hz-radius-xl);
 }
 

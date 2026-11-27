@@ -62,8 +62,8 @@ export type AvatarPresence = typeof AvatarPresence.Type
 export const AvatarSize = Schema.Literals(Sets.avatarSizes)
 export type AvatarSize = typeof AvatarSize.Type
 
-export const AvatarShape = Schema.Literals(Sets.avatarShapes)
-export type AvatarShape = typeof AvatarShape.Type
+export const AvatarCorners = Schema.Literals(Sets.avatarCorners)
+export type AvatarCorners = typeof AvatarCorners.Type
 
 export const AvatarTint = Schema.Literals(Sets.avatarTints)
 export type AvatarTint = typeof AvatarTint.Type

@@ -1,6 +1,6 @@
 // Owned by lane A1 (`docs/hazel-ui.md`, "Phase 2: lanes").
 import { ditherInitial } from "../../../../../../apps/web-foldkit/src/ui/dither-avatar.ts"
-import type { AvatarPresence } from "../../../vocabulary/options.ts"
+import type { AvatarPresence, AvatarSize } from "../../../vocabulary/options.ts"
 import { glyph } from "../../icons.ts"
 import { definePrimitive, flag, option, part, type Primitive } from "../define.ts"
 import { ditherLayer, observeWidth, showsPicture } from "./dither.ts"
@@ -19,7 +19,7 @@ const presenceLabel = (status: string) =>
 	Object.hasOwn(presenceLabels, status) ? presenceLabels[status as AvatarPresence] : ""
 
 /** Each size's box before layout, in px (`regular` steps down from the size class); layout corrects it. */
-const fixedPx: Readonly<Record<string, number>> = {
+const fixedPx = {
 	xxsmall: 16,
 	inline: 20,
 	xsmall: 24,
@@ -28,11 +28,12 @@ const fixedPx: Readonly<Record<string, number>> = {
 	medium: 40,
 	large: 48,
 	xlarge: 56,
-}
+} as const satisfies Partial<Record<AvatarSize, number>>
+
+const isFixed = (size: string): size is keyof typeof fixedPx => Object.hasOwn(fixedPx, size)
 
 const sizePx = (size: string, document: Document) => {
-	const fixed = fixedPx[size]
-	if (fixed !== undefined) return fixed
+	if (isFixed(size)) return fixedPx[size]
 	return document.defaultView?.matchMedia("(width >= 40rem)").matches ? 16 : 20
 }
 
@@ -115,7 +116,7 @@ export const primitive = definePrimitive("avatar", ({ document, tag, outer }) =>
 				option(node, "presence", value)
 				status = text ?? ""
 				presence.hidden = text === undefined || text === "none"
-			} else if (prop === "shape" || prop === "tint") {
+			} else if (prop === "corners" || prop === "tint") {
 				option(node, prop, text === "auto" || text === "none" ? undefined : value)
 			} else if (prop === "placeholder") {
 				placeholder = value === true

@@ -53,7 +53,7 @@ const markup = (node: Node | string): string => {
 }
 
 // The app's icons win a shared name (both export `IconArrowUp`).
-const Icons: Record<string, unknown> = { ...CustomerIcons, ...AppIcons }
+const Icons = { ...CustomerIcons, ...AppIcons }
 
 const build = (name: IconName) => {
 	// SAFETY: the stub stands in for Foldkit's `HtmlBuilder`; an icon only calls `h.<tag>` and

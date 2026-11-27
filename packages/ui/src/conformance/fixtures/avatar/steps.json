@@ -19,7 +19,7 @@
 			"values": ["info", "success", "warning", "danger", "neutral"]
 		},
 		{
-			"prop": "shape",
+			"prop": "corners",
 			"values": ["round", "square"]
 		}
 	],
@@ -28,7 +28,7 @@
 			"name": "logo-row",
 			"props": {
 				"size": "row",
-				"shape": "square",
+				"corners": "square",
 				"tint": "info"
 			}
 		},
@@ -36,7 +36,7 @@
 			"name": "logo-large",
 			"props": {
 				"size": "large",
-				"shape": "square",
+				"corners": "square",
 				"tint": "success"
 			}
 		},

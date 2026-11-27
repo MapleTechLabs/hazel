@@ -268,7 +268,7 @@ export const tags = {
 			mark: option(O.ProviderMark, "none"),
 			// Phase 4 (PK0): a logo's square corners, initials on a tint, and "Unassigned" (a dashed
 			// ring around a user glyph).
-			shape: option(O.AvatarShape, "auto"),
+			corners: option(O.AvatarCorners, "auto"),
 			tint: option(O.AvatarTint, "none"),
 			placeholder: flag,
 		},

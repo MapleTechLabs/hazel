@@ -115,13 +115,13 @@ describe("identity", () => {
 		)
 		const avatars = s.all(tagged("avatar")).map((node) => node.props)
 		expect(avatars).toEqual([
-			{ initials: "NL", size: "row", shape: "square", tint: tintOf("Northwind Labs") },
-			{ initials: "K", size: "xxsmall", shape: "square", tint: tintOf("Kestrel") },
+			{ initials: "NL", size: "row", corners: "square", tint: tintOf("Northwind Labs") },
+			{ initials: "K", size: "xxsmall", corners: "square", tint: tintOf("Kestrel") },
 			{
 				initials: "AC",
 				src: "https://acme.io/logo.png",
 				size: "large",
-				shape: "square",
+				corners: "square",
 				tint: tintOf("Acme"),
 			},
 			{ size: "xsmall", placeholder: true },
@@ -216,7 +216,7 @@ describe("evidence", () => {
 			highlightFrom: 7,
 			net: true,
 		})
-		expect(s.all(tagged("property")).map((node) => node.props.label)).toEqual([
+		expect(s.all(tagged("property")).map((node) => node.props?.label)).toEqual([
 			"Last 7 days avg",
 			"Prior 23 days avg",
 			"Change",
