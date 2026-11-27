@@ -4,7 +4,7 @@ import {
 	sectionGroupHeader,
 	sectionPlusButton,
 	treeSection,
-} from "../../../../apps/web-foldkit/src/shell/channels-sidebar/tree.ts"
+} from "../../../../apps/web-foldkit/src/ui/sidebar-tree.ts"
 import { avatar } from "../../../../apps/web-foldkit/src/ui/avatar.ts"
 import { iconButton } from "../../../../apps/web-foldkit/src/ui/button.ts"
 import { countBadge } from "../../../../apps/web-foldkit/src/ui/count-badge.ts"

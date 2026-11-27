@@ -28,15 +28,11 @@ import {
 import { nativeIsland, nativeItem } from "../platform/native-island"
 import { systemUi } from "../platform/system-ui"
 import { button } from "../ui/button"
-import * as Modal from "../ui/modal"
-import * as Sheet from "../ui/sheet"
 import type { ShellContext } from "./context"
 import { countBadge } from "../ui/count-badge"
 import { mobileTopBar as topBar } from "../ui/mobile-top-bar"
 
 /** The phone shell's Foldkit parts: which chrome a route gets, the back link and the sidebar sheet. */
-
-export const MOBILE_SIDEBAR_ID = "mobile-sidebar"
 
 /** What a phone shows around the page: the tab bar, and a top bar for pages that have no header. */
 export type MobileChrome = Readonly<{
@@ -93,33 +89,3 @@ export const mobileChromeOf = (route: AppRoute): MobileChrome => {
  * While a back chevron is on screen, the swipe from the screen's left edge goes where it leads, as
  * a phone's navigation does (where the shell has the swipe: `platform/system-ui.ts`).
  */
-/** The sheet's Model, derived from the shell's `isSidebarOpen`: open for as long as the flag is set. */
-export const mobileSidebarModel = (isOpen: boolean): Modal.Model =>
-	isOpen ? Modal.initOpen(MOBILE_SIDEBAR_ID) : Modal.init(MOBILE_SIDEBAR_ID)
-
-/** `<Sidebar>` on mobile: a controlled left `SheetContent` labelled "Sidebar", without a close button. */
-export const mobileSidebarSheet = <Message>(
-	h: HtmlBuilder<Message>,
-	options: Readonly<{
-		isOpen: boolean
-		children: ReadonlyArray<Html>
-		toMessage: (message: Modal.Message) => Message
-	}>,
-): Html =>
-	h.submodel({
-		slotId: MOBILE_SIDEBAR_ID,
-		model: mobileSidebarModel(options.isOpen),
-		view: Sheet.view,
-		viewInputs: {
-			toContent: () => options.children,
-			side: "left",
-			// A drawer the screen's height, under the status bar and home indicator, as a phone's is.
-			isFloat: false,
-			closeButton: false,
-			ariaLabel: "Sidebar",
-			panelAttributes: { "data-slot": "sidebar", "data-intent": "default" },
-			className:
-				"w-(--sidebar-width) bg-sidebar [--sidebar-width:18rem] has-data-[slot=calendar]:[--sidebar-width:23rem]",
-		},
-		toParentMessage: options.toMessage,
-	})

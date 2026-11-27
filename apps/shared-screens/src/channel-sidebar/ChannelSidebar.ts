@@ -4,13 +4,16 @@
  * The chat sidebar (`web-foldkit/src/shell/channels-sidebar/`) as one shared `hazel` screen over
  * `@hazel/client-data`: goto rows, favorites, the default and user sections, discover, customers and
  * DMs, threads under their channel, each row's and section's menu, and (with `chrome`) the org
- * switcher and account card. Navigation and every write go to the host as Commands, by today's keys.
+ * switcher and account card. Navigation goes to the host; each menu choice runs its own write
+ * (`actions.ts`), modal or toast through the app's requests.
  */
 import { Command, Subscription, UiSchema } from "@effect/ui"
 import { ClientData } from "@hazel/client-data"
 import { ChannelId, ChannelSectionId, OrganizationId, UserId } from "@hazel/schema"
 import { type Content, Hazel } from "@hazel/ui/vocabulary/index"
 import { Clock, Effect, Layer, Match, Schema, Stream } from "effect"
+import { AppToast, Navigate, OpenCommandPalette, OpenModal, ShowToast } from "../app/requests"
+import { type MenuOutcome, rowOutcome, sectionOutcome, WriteSidebar } from "./actions"
 import {
 	channelMenu,
 	Customer,
@@ -51,15 +54,8 @@ export const NavTarget = UiSchema.TaggedEnum({
 })
 export type NavTarget = typeof NavTarget.Type
 
-/**
- * What the sidebar asks the host to do, by today's menu keys (`channels-sidebar/menus.ts`): the host
- * runs the write, the modal or the toast, as the Foldkit sidebar does for the same key.
- */
+/** What only the host can do: keep the hint dismissed, and (with `chrome`) its switcher's and account's choices. */
 export const SidebarAction = UiSchema.TaggedEnum({
-	RowMenu: { channelId: ChannelId, key: Schema.String },
-	/** `sectionKey`: `default`, `dms` or a section id; `key` an action or a menu key. */
-	SectionMenu: { sectionKey: Schema.String, key: Schema.String },
-	Browse: {},
 	DismissHint: {},
 	OrgMenu: { key: Schema.String },
 	AccountMenu: { key: Schema.String },
@@ -91,8 +87,14 @@ export const SidebarMessage = UiSchema.TaggedEnum({
 	SelectedOrgMenu: { entry: Schema.String },
 	SelectedAccountMenu: { entry: Schema.String },
 	CompletedRequest: {},
+	/** A write answered: its toast, none for a silent success. */
+	CompletedWrite: { toast: Schema.NullOr(AppToast) },
 })
 export type SidebarMessage = typeof SidebarMessage.Type
+
+/** `Loaded`: the memberships arrived, so the host can hand its last screen's paint off. */
+export const ChannelSidebarEvents = UiSchema.TaggedEnum({ Loaded: {} })
+export type ChannelSidebarEvents = typeof ChannelSidebarEvents.Type
 
 /** Opens a channel or the members page; the host navigates. */
 export class RequestNavigation extends Command.Service<RequestNavigation>()(
@@ -193,6 +195,25 @@ export const initModel = (props: ChannelSidebarProps): Model => ({
 
 const act = (action: SidebarAction) => RequestSidebarAction.make({ action })
 
+/** A menu choice's write, modal or link. */
+const runOutcome = (outcome: MenuOutcome) =>
+	Match.valueTags(outcome, {
+		Write: ({ write }) => [
+			WriteSidebar.make({ write }).pipe(
+				Command.map((toast) => SidebarMessage.CompletedWrite({ toast })),
+			),
+		],
+		Modal: ({ modal }) => [
+			OpenModal.make({ modal }).pipe(Command.map(() => SidebarMessage.CompletedRequest())),
+		],
+		Navigate: ({ href }) => [
+			Navigate.make({ href, replace: false }).pipe(
+				Command.map(() => SidebarMessage.CompletedRequest()),
+			),
+		],
+		None: () => [],
+	})
+
 const dmIdsOf = (model: Model) =>
 	model.entries
 		.filter((entry) => isDmType(entry.type))
@@ -209,12 +230,15 @@ export const ChannelSidebar = Hazel.component({
 	props: ChannelSidebarProps,
 	model: Model,
 	message: SidebarMessage,
+	events: ChannelSidebarEvents,
 }).make({
 	init: ({ props }) => initModel(props),
 	update: {
 		UpdatedSections: ($, { sections }) => $.evolve({ sections: () => sections }),
-		UpdatedMemberships: ($, { entries, threads }) =>
-			$.evolve({ entries: () => entries, threads: () => threads, loaded: () => true }),
+		UpdatedMemberships: ($, { entries, threads }) => {
+			const next = $.evolve({ entries: () => entries, threads: () => threads, loaded: () => true })
+			return $.model.loaded ? next : next.emit(ChannelSidebarEvents.Loaded())
+		},
 		UpdatedDmPeople: ($, { people }) => $.evolve({ dmPeople: () => people }),
 		UpdatedPresence: ($, { presence }) => $.evolve({ presence: () => presence }),
 		UpdatedRole: ($, { role, memberId }) => $.evolve({ role: () => role, memberId: () => memberId }),
@@ -238,20 +262,46 @@ export const ChannelSidebar = Hazel.component({
 			$.evolve({ activeChannelId: () => null, membersActive: () => true }).run(
 				RequestNavigation.make({ to: NavTarget.Members() }),
 			),
-		PressedBrowse: ($) => $.run(act(SidebarAction.Browse())),
+		// The palette opens home: today's `initialPage` was never read.
+		PressedBrowse: ($) =>
+			$.run(
+				OpenCommandPalette.make({ page: "home" }).pipe(
+					Command.map(() => SidebarMessage.CompletedRequest()),
+				),
+			),
 		ToggledSection: ($, { key, collapsed }) =>
 			$.evolve({
 				collapsed: (all) =>
 					collapsed ? [...all.filter((k) => k !== key), key] : all.filter((k) => k !== key),
 			}),
-		SelectedRowMenu: ($, { id, entry }) =>
-			$.run(act(SidebarAction.RowMenu({ channelId: id, key: entry }))),
+		SelectedRowMenu: ($, { id, entry: key }) => {
+			const entry = $.model.entries.find((candidate) => candidate.id === id)
+			return entry === undefined
+				? $.model
+				: $.run(
+						...runOutcome(
+							rowOutcome(entry, key, { orgSlug: $.props.orgSlug, sections: $.model.sections }),
+						),
+					)
+		},
 		SelectedSectionMenu: ($, { key, entry }) =>
-			$.run(act(SidebarAction.SectionMenu({ sectionKey: key, key: entry }))),
+			$.run(
+				...runOutcome(
+					sectionOutcome(key, entry, {
+						organizationId: $.props.organizationId,
+						sections: $.model.sections,
+						settings: $.model.scopeSettings,
+					}),
+				),
+			),
 		DismissedHint: ($) => $.evolve({ hintDismissed: () => true }).run(act(SidebarAction.DismissHint())),
 		SelectedOrgMenu: ($, { entry }) => $.run(act(SidebarAction.OrgMenu({ key: entry }))),
 		SelectedAccountMenu: ($, { entry }) => $.run(act(SidebarAction.AccountMenu({ key: entry }))),
 		CompletedRequest: ($) => $.model,
+		CompletedWrite: ($, { toast }) =>
+			toast === null
+				? $.model
+				: $.run(ShowToast.make({ toast }).pipe(Command.map(() => SidebarMessage.CompletedRequest()))),
 	},
 	subscriptions: ({ props, model }) => {
 		const org = props.organizationId

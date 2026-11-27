@@ -7,96 +7,6 @@ import { linkClassName } from "./link"
  * Each function copies the legacy `twMerge` arguments verbatim so class strings match.
  */
 
-export type SidebarState = "expanded" | "collapsed"
-
-/** `<Sidebar collapsible="none">` */
-export const sidebarStatic = <Message>(
-	h: HtmlBuilder<Message>,
-	className: string,
-	children: Html[],
-	attributes: ReadonlyArray<Attribute<Message>> = [],
-): Html =>
-	h.div(
-		[
-			...attributes,
-			h.Attribute("data-intent", "default"),
-			h.Attribute("data-collapsible", "none"),
-			h.Attribute("data-slot", "sidebar"),
-			h.Class(
-				twMerge("flex h-full w-(--sidebar-width) flex-col bg-sidebar text-sidebar-fg", className),
-			),
-		],
-		children,
-	)
-
-export const sidebarHeader = <Message>(
-	h: HtmlBuilder<Message>,
-	options: { readonly state: SidebarState; readonly className?: string },
-	children: Html[],
-): Html =>
-	h.div(
-		[
-			h.Attribute("data-slot", "sidebar-header"),
-			h.Class(
-				twMerge(
-					"flex flex-col gap-2 [.border-b]:border-sidebar-border",
-					"in-data-[intent=inset]:p-4",
-					options.state === "collapsed" ? "items-center p-2.5" : "p-4",
-					options.className,
-				),
-			),
-			h.Attribute("data-tauri-drag-region", "true"),
-		],
-		children,
-	)
-
-export const sidebarContent = <Message>(
-	h: HtmlBuilder<Message>,
-	options: { readonly state: SidebarState; readonly className?: string },
-	children: Html[],
-): Html =>
-	h.div(
-		[
-			h.Attribute("data-slot", "sidebar-content"),
-			h.Class(
-				twMerge(
-					"flex min-h-0 flex-1 scroll-mb-96 flex-col overflow-auto overscroll-none *:data-[slot=sidebar-section]:border-l-0",
-					options.state === "collapsed" ? "items-center" : "mask-b-from-95%",
-					options.className,
-				),
-			),
-		],
-		children,
-	)
-
-export const sidebarFooter = <Message>(
-	h: HtmlBuilder<Message>,
-	className: string | undefined,
-	children: Html[],
-): Html =>
-	h.div(
-		[
-			h.Attribute("data-slot", "sidebar-footer"),
-			h.Class(
-				twMerge([
-					"mt-auto flex shrink-0 items-center justify-center p-4 **:data-[slot=chevron]:text-muted-fg",
-					"in-data-[intent=inset]:px-6 in-data-[intent=inset]:py-4",
-					className,
-				]),
-			),
-		],
-		children,
-	)
-
-export const sidebarSectionGroup = <Message>(h: HtmlBuilder<Message>, children: Html[]): Html =>
-	h.section(
-		[
-			h.Attribute("data-slot", "sidebar-section-group"),
-			h.Class(twMerge("flex w-full min-w-0 flex-col gap-y-0.5")),
-		],
-		children,
-	)
-
 export const sidebarSection = <Message>(
 	h: HtmlBuilder<Message>,
 	options: {
@@ -258,7 +168,3 @@ export const sidebarUnreadPip = <Message>(h: HtmlBuilder<Message>): Html =>
 		h.Attribute("data-slot", "sidebar-unread"),
 		h.Class("pointer-events-none absolute top-1/2 left-0 h-2 w-1 -translate-y-1/2 rounded-r-full bg-fg"),
 	])
-
-/** The unread pill's words for a screen reader, inside the row's link after its name. */
-export const sidebarUnreadLabel = <Message>(h: HtmlBuilder<Message>): Html =>
-	h.span([h.Class("sr-only")], [", unread"])

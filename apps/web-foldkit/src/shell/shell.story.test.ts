@@ -4,22 +4,14 @@ import { Schema } from "effect"
 import { given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import { ada, hazelOrg } from "../test/root-fixtures"
-import * as Modal from "../ui/modal"
 import { Message, type Model } from "./model"
 import { type Context, informContext, init, update } from "./update"
 
-/** What the Foldkit shell still owns: the user's organizations and the phone's sidebar sheet. */
+/** What the Foldkit shell still owns: the user's organizations. */
 
-const context: Context = {
-	orgSlug: "hazel",
-	isChatSection: true,
-	canCreateChannel: true,
-	organizationId: hazelOrg.id,
-	currentUserId: ada.id,
-	isMobile: false,
-}
-const run = (model: Model, msg: Message) => update(model, msg, context)
-const ready = informContext(init({ isCreateChannelHintDismissed: false }), context)
+const context: Context = { organizationId: hazelOrg.id, currentUserId: ada.id }
+const run = (model: Model, msg: Message) => update(model, msg)
+const ready = informContext(init(), context)
 
 const otherOrgId = Schema.decodeSync(OrganizationId)("00000000-0000-4000-8000-0000000000a2")
 
@@ -34,19 +26,6 @@ describe("organizations", () => {
 			given(ready),
 			message(Message.UpdatedUserOrganizations({ organizations })),
 			model((m) => expect(m.userOrganizations).toEqual(organizations)),
-		)
-	})
-})
-
-describe("mobile sidebar sheet", () => {
-	test("opens from the header and closes on Escape", () => {
-		story(
-			run,
-			given(ready),
-			message(Message.ToggledSidebar({ isOpen: true })),
-			model((m) => expect(m.isSidebarOpen).toBe(true)),
-			message(Message.GotMobileSidebarMessage({ message: Modal.Message.RequestedClose() })),
-			model((m) => expect(m.isSidebarOpen).toBe(false)),
 		)
 	})
 })

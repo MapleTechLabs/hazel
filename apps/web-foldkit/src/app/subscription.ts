@@ -1,14 +1,13 @@
 import type { UserId } from "@hazel/schema"
-import { Option, Schema, Stream } from "effect"
+import { Option, Stream } from "effect"
 import { Port, Subscription } from "foldkit"
 import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
 import { pageSubscriptions } from "../page/registry"
 import * as Platform from "../platform"
 import * as Updates from "../platform/updates"
-import { chatChannelIdOf, orgSlugOf } from "../route"
+import { chatChannelIdOf } from "../route"
 import { backgroundToasts } from "../overlay/background-toasts"
-import { messageOfIntent } from "../shell/channels-sidebar/intents"
 import * as Bus from "../root/bus"
 import * as ShellSubscription from "../shell/subscription"
 import { HostContextSchema } from "./context"
@@ -26,25 +25,8 @@ const shellSubscriptions = Subscription.make<Model, Message>()(() => ({
 	),
 }))
 
-/** The Effect UI channel sidebar's menu choices, run by this sidebar's menus (`intents.ts`). */
-const channelSidebarActions = Subscription.make<Model, Message>()((entry) => ({
-	channelSidebarActions: entry(
-		{ orgSlug: Schema.NullOr(Schema.String) },
-		{
-			modelToDependencies: (model) => ({ orgSlug: orgSlugOf(model.context.route) ?? null }),
-			dependenciesToStream: ({ orgSlug }) =>
-				orgSlug === null
-					? Stream.empty
-					: Bus.eventsOf("ChannelSidebarAct").pipe(
-							Stream.map(({ action }) => messageOfIntent(orgSlug, { _tag: "Act", action })),
-							Stream.filter((message) => message !== null),
-							Stream.map((message): Message => ({
-								_tag: "GotShellMessage",
-								message: { _tag: "GotChannelsSidebarMessage", message },
-							})),
-						),
-		},
-	),
+/** Toasts raised outside any page (`overlay/background-toasts.ts`). */
+const backgroundToastSubscriptions = Subscription.make<Model, Message>()(() => ({
 	backgroundToasts: Subscription.persistentEntry(
 		backgroundToasts.pipe(
 			Stream.map((toast) =>
@@ -96,7 +78,7 @@ const pages = Subscription.lift(pageSubscriptions)<Model, Message>({
 
 export const subscriptions = Subscription.aggregate(
 	shellSubscriptions,
-	channelSidebarActions,
+	backgroundToastSubscriptions,
 	modalSubscriptions,
 	toastSubscriptions,
 	sidebarSubscriptions,

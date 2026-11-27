@@ -20,11 +20,7 @@ const boot: Boot = {
 }
 
 // The Foldkit host and the regions it fills keep running beside the shell's view.
-const hostMount = (model: AppModel) =>
-	RunFoldkitHost({
-		context: hostContextOf(model),
-		isCreateChannelHintDismissed: boot.isCreateChannelHintDismissed,
-	})
+const hostMount = (model: AppModel) => RunFoldkitHost({ context: hostContextOf(model) })
 
 /** The root component's view of `model`; no end check, so the host's mounts may keep running. */
 const gate = (model: AppModel) => HtmlScene.start(App, { route: model.route, boot }).given(model)

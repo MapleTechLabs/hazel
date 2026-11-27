@@ -145,62 +145,6 @@ export const favoritesStream = <M>(
 		(rows) => toMessage(rows.map(toEntry)),
 	)
 
-/** The threads the user joined and has not hidden, oldest first (the view picks the recent ones). */
-export const threadsStream = <M>(
-	organizationId: OrganizationId,
-	userId: UserId,
-	toMessage: (threads: Array<SidebarThread>) => M,
-) =>
-	liveQueryStream<
-		{
-			id: ChannelId
-			name: string
-			parentChannelId: ChannelId | null
-			createdAt: Date
-			notificationCount: number
-		},
-		M
-	>(
-		(q) =>
-			q
-				.from({ channel: channelCollection })
-				.innerJoin({ member: channelMemberCollection }, ({ channel, member }) =>
-					eq(member.channelId, channel.id),
-				)
-				.where((q) =>
-					and(
-						eq(q.channel.organizationId, organizationId),
-						eq(q.channel.type, "thread"),
-						eq(q.member.userId, userId),
-						eq(q.member.isHidden, false),
-					),
-				)
-				.orderBy(({ channel }) => channel.createdAt, "asc")
-				.select(({ channel, member }) => ({
-					id: channel.id,
-					name: channel.name,
-					parentChannelId: channel.parentChannelId,
-					createdAt: channel.createdAt,
-					notificationCount: member.notificationCount,
-				})),
-		(rows) =>
-			toMessage(
-				rows.flatMap((row) =>
-					row.parentChannelId === null
-						? []
-						: [
-								{
-									id: row.id,
-									name: row.name,
-									parentChannelId: row.parentChannelId,
-									createdAtMs: new Date(row.createdAt).getTime(),
-									notificationCount: row.notificationCount,
-								},
-							],
-				),
-			),
-	)
-
 /**
  * The user's channels with messages they have not read (`~/lib/unread`), sorted, with when their
  * mute ends: the channel's own, its section's or the organization's (as the server's rules count
@@ -287,81 +231,6 @@ export const unreadChannelsStream = <M>(
 
 const decodeSectionId = Schema.decodeSync(ChannelSectionIdSchema)
 
-/** The user's notification settings for the org's sections (only their own are synced). */
-export const sectionSettingsStream = <M>(
-	organizationId: OrganizationId,
-	toMessage: (settings: Array<SectionSetting>) => M,
-) =>
-	liveQueryStream<
-		{
-			scopeId: string
-			isMuted: boolean
-			mutedUntil: Date | null
-			level: NotificationLevel | null
-		},
-		M
-	>(
-		(q) =>
-			q
-				.from({ override: notificationOverrideCollection })
-				.where(({ override }) =>
-					and(eq(override.organizationId, organizationId), eq(override.scope, "section")),
-				)
-				.select(({ override }) => ({
-					scopeId: override.scopeId,
-					isMuted: override.isMuted,
-					mutedUntil: override.mutedUntil,
-					level: override.level,
-				})),
-		(rows) =>
-			toMessage(
-				rows
-					.map((row) => ({
-						sectionId: decodeSectionId(row.scopeId),
-						isMuted: row.isMuted,
-						mutedUntilMs: row.mutedUntil === null ? null : new Date(row.mutedUntil).getTime(),
-						notificationLevel: row.level,
-					}))
-					.sort((a, b) => a.sectionId.localeCompare(b.sectionId)),
-			),
-	)
-
-/** The user's notification settings for the organization; null while it has none. */
-export const organizationSettingStream = <M>(
-	organizationId: OrganizationId,
-	toMessage: (setting: OrganizationSetting | null) => M,
-) =>
-	liveQueryStream<
-		{
-			isMuted: boolean
-			mutedUntil: Date | null
-			level: NotificationLevel | null
-		},
-		M
-	>(
-		(q) =>
-			q
-				.from({ override: notificationOverrideCollection })
-				.where(({ override }) =>
-					and(eq(override.organizationId, organizationId), eq(override.scope, "organization")),
-				)
-				.select(({ override }) => ({
-					isMuted: override.isMuted,
-					mutedUntil: override.mutedUntil,
-					level: override.level,
-				})),
-		([row]) =>
-			toMessage(
-				row === undefined
-					? null
-					: {
-							isMuted: row.isMuted,
-							mutedUntilMs: row.mutedUntil === null ? null : new Date(row.mutedUntil).getTime(),
-							notificationLevel: row.level,
-						},
-			),
-	)
-
 /** `DmChannelGroup`. */
 export const dmChannelIdsStream = <M>(
 	organizationId: OrganizationId,
@@ -386,52 +255,6 @@ export const dmChannelIdsStream = <M>(
 				)
 				.orderBy(({ channel }) => channel.createdAt, "asc"),
 		(rows) => toMessage(rows.map((row) => row.channel.id)),
-	)
-
-/** `DiscoverableChannels`, first query: top-level public/private channels the user belongs to. */
-export const memberChannelIdsStream = <M>(
-	organizationId: OrganizationId,
-	userId: UserId,
-	toMessage: (channelIds: Array<ChannelId>) => M,
-) =>
-	liveQueryStream<{ channelId: ChannelId }, M>(
-		(q) =>
-			q
-				.from({ channel: channelCollection })
-				.innerJoin({ m: channelMemberCollection }, ({ channel, m }) => eq(m.channelId, channel.id))
-				.where(({ m, channel }) =>
-					and(
-						eq(m.userId, userId),
-						eq(channel.organizationId, organizationId),
-						or(eq(channel.type, "public"), eq(channel.type, "private")),
-						isNull(channel.parentChannelId),
-					),
-				)
-				.select(({ m }) => ({ channelId: m.channelId })),
-		(rows) => toMessage(rows.map((row) => row.channelId)),
-	)
-
-/** `DiscoverableChannels`, second query: public top-level channels the user hasn't joined. */
-export const discoverableChannelsStream = <M>(
-	organizationId: OrganizationId,
-	memberChannelIds: ReadonlyArray<ChannelId>,
-	toMessage: (channels: Array<DiscoverableChannel>) => M,
-) =>
-	liveQueryStream<ChannelRow, M>(
-		(q) => {
-			let query = q
-				.from({ channel: channelCollection })
-				.where(({ channel }) => eq(channel.organizationId, organizationId))
-				.where(({ channel }) => eq(channel.type, "public"))
-				.where(({ channel }) => isNull(channel.parentChannelId))
-			if (memberChannelIds.length > 0) {
-				query = query.where(({ channel }) => not(inArray(channel.id, [...memberChannelIds])))
-			}
-			return query
-				.orderBy(({ channel }) => channel.createdAt, "asc")
-				.select(({ channel }) => ({ ...channel }))
-		},
-		(rows) => toMessage(rows.map((row) => ({ id: row.id, name: row.name, icon: row.icon ?? null }))),
 	)
 
 /** The org's channels linked to a customer (`channel_customers`), with the customer's name. */

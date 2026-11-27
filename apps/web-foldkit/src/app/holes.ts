@@ -5,12 +5,9 @@ import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
  * (`src/root/portal.ts` moves it in). Foldkit leaves the element's children alone. Part of the adapter.
  */
 export type HoleName =
-	| "channel-sidebar"
 	| "message-list"
 	| "activity"
 	| "dms"
-	| "org-switcher"
-	| "account-menu"
 	| "channel-files"
 	| "channel-header"
 	| "join-banner"

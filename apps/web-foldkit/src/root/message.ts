@@ -63,8 +63,10 @@ export const AppMessage = UiSchema.TaggedEnum({
 	PressedMobileSearch: {},
 	PressedMobileMenu: {},
 	PressedAiPanelToggle: {},
-	/** A native section's sidebar sheet on a phone was dismissed. */
+	/** A phone's sidebar sheet was dismissed. */
 	DismissedSectionSheet: {},
+	/** The channel list of `org:user` loaded (`ChannelSidebar`'s `Loaded`). */
+	LoadedChannelList: { key: Schema.String },
 	/** The AI panel's edge was released or moved by a key (`root/assistant.ts`). */
 	ResizedAssistantPanel: { width: Schema.Finite },
 	/** The AI panel's close button, or Escape inside it. */

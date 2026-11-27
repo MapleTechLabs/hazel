@@ -21,7 +21,6 @@ export { Message, Model, subscriptions, update, view }
 /** What the host starts from: the shell's context at mount, and what was stored for the host's parts. */
 export const HostFlags = Schema.Struct({
 	context: HostContextSchema,
-	isCreateChannelHintDismissed: Schema.Boolean,
 })
 export type HostFlags = typeof HostFlags.Type
 
@@ -33,7 +32,7 @@ export const makeHost = (container: HTMLElement, flags: HostFlags) =>
 		Model,
 		Flags: HostFlags,
 		flags: Effect.succeed(flags),
-		init: (flags: HostFlags) => init(flags.context, flags),
+		init: (flags: HostFlags) => init(flags.context),
 		update,
 		view,
 		subscriptions,

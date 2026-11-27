@@ -158,14 +158,6 @@ describe("inbox, help and sidebar", () => {
 		expect(once.shell.isSidebarCollapsed).toBe(true)
 		expect(update(once, hotkey("sidebar.toggle")).model.shell.isSidebarCollapsed).toBe(false)
 	})
-
-	test("on mobile Mod+Shift+D opens and closes the sidebar sheet instead", () => {
-		const desktop = signedIn("/hazel/chat")
-		const mobile = update(desktop, changedContext(desktop, { isMobile: true })).model
-		const opened = update(mobile, hotkey("sidebar.toggle"))
-		expect(opened.model.shell.isSidebarOpen).toBe(true)
-		expect(opened.model.shell.isSidebarCollapsed).toBe(false)
-	})
 })
 
 describe("Mod+[ / Mod+] (Slack)", () => {

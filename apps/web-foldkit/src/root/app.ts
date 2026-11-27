@@ -14,9 +14,8 @@ import { comboLabel } from "~/lib/keybindings/key-combo"
 import { commonMessage } from "~/lib/error-messages"
 import type { Region } from "../app/view"
 import { badgedTitle } from "../platform/badge"
-import { chatChannelIdOf, isPublicRoute, orgSectionOf, orgSlugOf, titleOf } from "../route"
+import { chatChannelIdOf, isPublicRoute, orgSlugOf, titleOf } from "../route"
 import type { CurrentUser, Organization } from "../session"
-import { hotkeyLabel } from "../shell/channels-sidebar/hotkey-label"
 import { appError, appLoader, organizationNotFound } from "../shell/layouts"
 import { LINK_PREVIEW_URL } from "../chat/unfurl"
 import { assistantContextOf, column, setupHrefOf, toggleButton } from "./assistant"
@@ -24,7 +23,6 @@ import {
 	ShellActivity,
 	ShellAssistantPanel,
 	ShellChannelHeader,
-	ShellChannelSidebar,
 	ShellJoinBanner,
 	ShellMessageList,
 } from "./children"
@@ -58,7 +56,14 @@ import { modalOf } from "./modals"
 import { nativePageOf } from "./native-pages"
 import { paletteDestinations, paletteShortcuts, ShellCommandPalette } from "./palette"
 import { Hole } from "./portal"
-import { chromeHoles, sectionContent, sectionSidebar } from "./sections"
+import {
+	type ChromeData,
+	dockSidebar,
+	isPhoneChatList,
+	phoneChatList,
+	phoneSheet,
+	sectionContent,
+} from "./sections"
 import { sectionLayoutOf } from "../shell/sections"
 import { subscriptions as subscriptionsOf } from "./subscriptions"
 import { AppRoute } from "./routes"
@@ -103,7 +108,8 @@ const sessionOf = (model: AppModel) => ({
 })
 
 /** The route's page: a native page (`native-pages.ts`), or the Foldkit host's page region. */
-const page = (h: H, model: AppModel) =>
+const page = (h: H, model: AppModel, chrome?: ChromeData) =>
+	(chrome !== undefined && isPhoneChatList(model) ? phoneChatList(h, model, chrome) : null) ??
 	nativePageOf(h, {
 		route: model.route,
 		session: sessionOf(model),
@@ -111,7 +117,8 @@ const page = (h: H, model: AppModel) =>
 		nowMs: model.nowMs,
 		// A failed chunk offers a reload, as a lazy area's pending page does.
 		fallback: (failed) => loader(h, failed),
-	}) ?? slot(h, "page")
+	}) ??
+	slot(h, "page")
 
 /** The open native modal, over the frame (`modals.ts`). */
 const modal = (h: H, model: AppModel) =>
@@ -126,63 +133,28 @@ interface ShellData {
 	readonly organization: Organization
 }
 
-const chromeDataOf = (model: AppModel, data: ShellData) => ({ ...data, member: memberOf(model) })
+const chromeDataOf = (h: H, model: AppModel, data: ShellData): ChromeData => ({
+	...data,
+	member: memberOf(model),
+	isHintDismissedAtBoot: h.props.boot.isCreateChannelHintDismissed,
+})
 
 /** The route's page inside its section layout, when the shell draws one (`sections.ts`). */
-const sectionPage = (h: H, model: AppModel) => {
+const sectionPage = (h: H, model: AppModel, data: ShellData) => {
 	const layout = sectionLayoutOf(model.route)
-	return layout === null ? page(h, model) : sectionContent(h, model, layout, page(h, model))
-}
-
-/** The dock's secondary sidebar: a native section's, else the Foldkit host's (chat, customers). */
-const dockSidebar = (h: H, model: AppModel, data: ShellData) => {
-	const layout = sectionLayoutOf(model.route)
-	return (
-		(layout === null ? null : sectionSidebar(h, model, layout, chromeDataOf(model, data))) ??
-		slot(h, "sidebar")
-	)
-}
-
-/** A native section's sidebar as the phone's sheet, opened from its top bar's menu button. */
-const phoneSectionSheet = (h: H, model: AppModel, data: ShellData) => {
-	const layout = sectionLayoutOf(model.route)
-	return layout === null ? null : sectionSidebar(h, model, layout, chromeDataOf(model, data))
+	const routed = page(h, model, chromeDataOf(h, model, data))
+	return layout === null ? routed : sectionContent(h, model, layout, routed)
 }
 
 /** The converted screens, each an ordinary child placed in its Foldkit page's hole (`portal.ts`). */
 const children = (h: H, model: AppModel, data: ShellData) => {
 	const { route } = model
 	const keys = keysOf(model)
-	const paletteKey = keys["commandPalette.open"]
 	const channelId = chatChannelIdOf(route)
-	const section = orgSectionOf(route)
 	const memberId = hostContextOf(model).member?.id ?? null
 	const tab =
 		route._tag === "NotificationsAll" ? "all" : route._tag === "NotificationsMentions" ? "mentions" : null
-	const orgUser = `${data.organization.id}:${data.user.id}`
-	const native = sectionLayoutOf(route)
 	return [
-		// The org switcher and account card in the host's chat and customers sidebars.
-		...(native !== "settings" && native !== "activity"
-			? chromeHoles(h, model, chromeDataOf(model, data))
-			: []),
-		section === "Chat" || route._tag === "OrgHome"
-			? Hole(h, { hole: "channel-sidebar", key: orgUser }, [
-					ShellChannelSidebar(h, {
-						key: orgUser,
-						props: {
-							organizationId: data.organization.id,
-							userId: data.user.id,
-							orgSlug: data.orgSlug,
-							activeChannelId: channelId,
-							membersActive: route._tag === "OrgHome",
-							hintDismissed: h.props.boot.isCreateChannelHintDismissed,
-							paletteKey: paletteKey === null ? null : hotkeyLabel(paletteKey),
-							chrome: false,
-						},
-					}),
-				])
-			: null,
 		route._tag === "ChatChannel" && channelId !== null
 			? Hole(
 					h,
@@ -346,10 +318,10 @@ const orgShell = (h: H, model: AppModel, data: ShellData) => {
 					"overflow-hidden *:data-[sidebar=default]:flex-row",
 					sidebarInner(h).children(
 						navRail(h, rail, assistantToggle(h, model)),
-						dockSidebar(h, model, data),
+						dockSidebar(h, model, chromeDataOf(h, model, data)),
 					),
 				),
-				sidebarInset(h, "").children(sectionPage(h, model)),
+				sidebarInset(h, "").children(sectionPage(h, model, data)),
 				assistant(h, model, data),
 			),
 			slot(h, "overlays"),
@@ -380,13 +352,13 @@ const phoneShell = (h: H, model: AppModel, data: ShellData, rail: RailInputs) =>
 					// Pages that fill the screen (`h-full`) scroll inside themselves; the rest scroll here.
 					h.div
 						.class("relative min-h-0 flex-1 overflow-y-auto overscroll-contain")
-						.children(sectionPage(h, model)),
+						.children(sectionPage(h, model, data)),
 					chrome.hasTabBar ? tabBar(h, rail, AppMessage.PressedMobileSearch()) : null,
 				),
 			),
 			assistant(h, model, data),
 			slot(h, "overlays"),
-			phoneSectionSheet(h, model, data),
+			phoneSheet(h, model, chromeDataOf(h, model, data)),
 			modal(h, model),
 			...children(h, model, data),
 		)
@@ -475,7 +447,6 @@ export const App = AppDef.make({
 					.onMount(
 						RunFoldkitHost({
 							context: hostContextOf(model),
-							isCreateChannelHintDismissed: h.props.boot.isCreateChannelHintDismissed,
 						}).pipe(Mount.map((out) => AppMessage.ReceivedHostOut({ out }))),
 					),
 				body(h, model),

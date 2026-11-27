@@ -7,18 +7,29 @@ import type { ChannelSettingsTab } from "@hazel/shared-screens/shell/ChannelSett
 import type { NavGroup, NavRow } from "@hazel/shared-screens/shell/SectionSidebar"
 import type { IconName } from "@hazel/ui/vocabulary/options"
 import type { UserId } from "@hazel/schema"
+import { Option } from "effect"
 import { AppRoute, channelSettingsTabOf, hrefOf, orgSectionOf, type RouteTag } from "../route"
 import { type DestinationId, destination, destinationHref, isAvailable } from "./destinations"
 
-/** `settings` (and my settings), `activity` (notifications), `channelSettings`, or none. */
-export type SectionLayout = "settings" | "activity" | "channelSettings"
+/** `settings` (and my settings), `activity` (notifications), `channelSettings`, `customers`, or none. */
+export type SectionLayout = "settings" | "activity" | "channelSettings" | "customers"
 
 export const sectionLayoutOf = (route: AppRoute): SectionLayout | null => {
 	if (channelSettingsTabOf(route) !== undefined) return "channelSettings"
 	const section = orgSectionOf(route)
 	if (section === "Settings" || section === "MySettings") return "settings"
 	if (section === "Notifications") return "activity"
+	if (section === "Customers") return "customers"
 	return null
+}
+
+/** The dock's sidebar: a section's own, else (chat, home, channel settings, profiles) the channel list. */
+export type DockSidebar = "settings" | "activity" | "customers" | "chat"
+
+export const dockSidebarOf = (route: AppRoute): DockSidebar | null => {
+	if (orgSectionOf(route) === undefined) return null
+	const layout = sectionLayoutOf(route)
+	return layout === null || layout === "channelSettings" ? "chat" : layout
 }
 
 export const isNativeSectionRoute = (route: AppRoute): boolean => sectionLayoutOf(route) !== null
@@ -143,3 +154,34 @@ export const channelSettingsTabsOf = (route: AppRoute): Array<ChannelSettingsTab
 		},
 	]
 }
+
+/** The customers sidebar's pages above its views (`CustomersSidebar` adds the counts). */
+export const customersPages = (orgSlug: string, route: AppRoute): Array<NavRow> =>
+	rowsOf(orgSlug, route, [
+		["customersOverview", "presentation", ["CustomersOverview"]],
+		["customersAttention", "warning", ["CustomersAttention"]],
+		["customersInbox", "support", ["CustomersInbox"]],
+		["customersSupportReport", "chart", ["CustomersSupportReport"]],
+	])
+
+/** The customers sidebar's settings pages. */
+export const customersSettings = (orgSlug: string, route: AppRoute): Array<NavRow> =>
+	rowsOf(orgSlug, route, [
+		[
+			"customersSignals",
+			"lightbulb",
+			["CustomersSettingsSignals", "CustomersSettingsSignalNew", "CustomersSettingsSignalRule"],
+		],
+		["customersSla", "clock", ["CustomersSettingsSla"]],
+		["customersPlans", "cube", ["CustomersSettingsPlans"]],
+		["customersFeatureFlags", "rocket", ["CustomersSettingsFeatureFlags"]],
+		[
+			"customersSources",
+			"servers",
+			["CustomersSettingsSources", "CustomersSourceDetail", "CustomersUnmatched"],
+		],
+	])
+
+/** The list's view shown (`current` for none), or null off the list. */
+export const customersViewOf = (route: AppRoute): string | null =>
+	route._tag === "CustomersList" ? Option.getOrElse(route.view, () => "current") : null

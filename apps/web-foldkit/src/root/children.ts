@@ -8,11 +8,14 @@ import { Component, Router } from "@effect/ui"
 import { ClientData, HazelRpc } from "@hazel/client-data"
 import { AssistantPanel } from "@hazel/shared-screens/assistant/AssistantPanel"
 import { Activity, activityLayer } from "@hazel/shared-screens/activity/Activity"
+import { sidebarWritesLayer } from "@hazel/shared-screens/channel-sidebar/actions"
 import {
 	ChannelSidebar,
 	channelSidebarLayer,
 	matchTarget,
 } from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
+import { CustomersSidebar, customersSidebarLayer } from "@hazel/shared-screens/customers/CustomersSidebar"
+import { ChatSidebarSheet } from "@hazel/shared-screens/shell/ChatSidebarSheet"
 import { ChannelHeader, channelHeaderLayer } from "@hazel/shared-screens/chat/header/ChannelHeader"
 import { JoinBanner, joinBannerLayer } from "@hazel/shared-screens/chat/header/JoinBanner"
 import { MessageList } from "@hazel/shared-screens/chat/MessageList"
@@ -22,13 +25,14 @@ import { ChannelSettingsHeader } from "@hazel/shared-screens/shell/ChannelSettin
 import { AccountMenu, OrgSwitcher, SwitchOrganization } from "@hazel/shared-screens/shell/Chrome"
 import { MarkAllNotificationsRead, SectionSidebar } from "@hazel/shared-screens/shell/SectionSidebar"
 import type { ChannelId } from "@hazel/schema"
-import { Effect, Layer, Stream } from "effect"
+import { Effect, Layer, Match, Stream } from "effect"
 import { clientData } from "~/db/client"
 // The list's HTML renders draw through this web extension.
 import "../chat/html-render-extension"
 import { liveConnection } from "../chat/live-state"
 import { AppRoute, organizationRoute } from "../route"
 import { eventsOf, publish } from "./bus"
+import { persistDismissedHint } from "./hints"
 import { pickersWebLayer } from "./pickers"
 
 /** A push of `route` on the shell's Router, from a screen's host callback. */
@@ -41,21 +45,33 @@ const withRouter = <A, E, R>(build: (push: (route: AppRoute) => void) => Layer.L
 
 const channelOf = (orgSlug: string) => (channelId: ChannelId) => AppRoute.ChatChannel({ orgSlug, channelId })
 
-/** The sidebar's presses: a route on the Router, a menu choice to the Foldkit sidebar's menus. */
-export const ShellChannelSidebar = Component.provide(ChannelSidebar, (props) =>
-	withRouter((push) =>
-		channelSidebarLayer(
-			clientData,
-			(to) =>
-				push(
-					matchTarget<AppRoute>(to, {
-						Channel: (channelId) => AppRoute.ChatChannel({ orgSlug: props.orgSlug, channelId }),
-						Members: () => AppRoute.OrgHome({ orgSlug: props.orgSlug }),
+/** The channel list's Layers: its routes on the Router, its writes on the app's data, the hint's storage. */
+const channelListLayer = (orgSlug: string) =>
+	Layer.mergeAll(
+		withRouter((push) =>
+			channelSidebarLayer(
+				clientData,
+				(to) =>
+					push(
+						matchTarget<AppRoute>(to, {
+							Channel: (channelId) => AppRoute.ChatChannel({ orgSlug, channelId }),
+							Members: () => AppRoute.OrgHome({ orgSlug }),
+						}),
+					),
+				(action) =>
+					Match.valueTags(action, {
+						DismissHint: () => persistDismissedHint("create-channel"),
+						// The web app draws its own org switcher and account card (`chrome: false`).
+						OrgMenu: () => Effect.void,
+						AccountMenu: () => Effect.void,
 					}),
-				),
-			(action) => Effect.sync(() => publish({ _tag: "ChannelSidebarAct", action })),
+			),
 		),
-	),
+		Layer.unwrap(Effect.map(Effect.service(HazelRpc), (rpc) => sidebarWritesLayer(clientData, rpc))),
+	)
+
+export const ShellChannelSidebar = Component.provide(ChannelSidebar, (props) =>
+	channelListLayer(props.orgSlug),
 )
 
 /** A row's request goes to the Foldkit channel page that still owns its overlays and threads. */
@@ -111,6 +127,19 @@ const chromeLayer = (isMobile: boolean) =>
 			publish({ _tag: "Shell", request: { _tag: "PressedMarkAllRead" } }),
 		),
 	)
+
+/** A phone's chat sidebar sheet: the channel list with the switcher and the account card. */
+export const ShellChatSidebarSheet = Component.provide(ChatSidebarSheet, (props) =>
+	Layer.mergeAll(channelListLayer(props.sidebar.orgSlug), chromeLayer(props.switcher.compact)),
+)
+
+/** The customers sidebar: its layout save on the app's data; its account card's chrome. */
+export const ShellCustomersSidebar = Component.provide(CustomersSidebar, () =>
+	Layer.mergeAll(
+		Layer.unwrap(Effect.map(Effect.service(HazelRpc), (rpc) => customersSidebarLayer(clientData, rpc))),
+		chromeLayer(false),
+	),
+)
 
 export const ShellSectionSidebar = Component.provide(SectionSidebar, (props) =>
 	chromeLayer(props.switcher.compact),

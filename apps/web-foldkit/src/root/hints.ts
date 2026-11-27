@@ -1,12 +1,9 @@
-import { Effect, Option, Schema } from "effect"
-import { Command } from "foldkit"
-import { readStored, writeStored } from "../../data/storage"
-import { Message } from "./model"
-
 /**
  * `useFeatureHint` (`atoms/feature-discovery-atoms.ts`): dismissed hints live in the same
  * `hazel-dismissed-hints` storage entry, JSON-encoded like `Atom.kvs` writes it.
  */
+import { Effect, Option, Schema } from "effect"
+import { readStored, writeStored } from "../data/storage"
 
 const STORAGE_KEY = "hazel-dismissed-hints"
 const DismissedHints = Schema.toCodecJson(Schema.Record(Schema.String, Schema.Boolean))
@@ -21,13 +18,15 @@ export const loadIsCreateChannelHintDismissed: Effect.Effect<boolean> = readHint
 	Effect.map((hints) => hints["create-channel"] === true),
 )
 
-export const PersistDismissedHint = Command.define("PersistDismissedHint", {
-	args: { hintId: Schema.String },
-	messages: [Message.CompletedPersistDismissedHint, Message.FailedPersistDismissedHint],
-	execute: ({ hintId }) =>
-		readHints.pipe(
-			Effect.flatMap((hints) => writeStored(STORAGE_KEY, DismissedHints, { ...hints, [hintId]: true })),
-			Effect.as(Message.CompletedPersistDismissedHint()),
-			Effect.catchTag("StorageWriteError", () => Effect.succeed(Message.FailedPersistDismissedHint())),
-		),
-})
+// Dismissed since boot: a sidebar mounted again (another org, back from settings) keeps it hidden.
+const dismissedNow = new Set<string>()
+
+export const isDismissedNow = (hintId: string): boolean => dismissedNow.has(hintId)
+
+/** Hides `hintId` for the session and stores it; full or blocked storage only brings it back next boot. */
+export const persistDismissedHint = (hintId: string): Effect.Effect<void> =>
+	Effect.sync(() => dismissedNow.add(hintId)).pipe(
+		Effect.andThen(readHints),
+		Effect.flatMap((hints) => writeStored(STORAGE_KEY, DismissedHints, { ...hints, [hintId]: true })),
+		Effect.catchTag("StorageWriteError", () => Effect.void),
+	)

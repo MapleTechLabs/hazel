@@ -102,7 +102,8 @@ describe("what the shell hands the host", () => {
 		expect(requestOf(AppMessage.PressedDesktopMenuItem({ item: "CheckForUpdates" }))).toEqual([
 			{ _tag: "PressedDesktopMenuItem", item: "CheckForUpdates" },
 		])
-		expect(requestOf(AppMessage.PressedMobileMenu())).toEqual([{ _tag: "PressedMobileMenu" }])
+		// A phone's sidebar sheet is the shell's (`sections.scene.test.ts`).
+		expect(requestOf(AppMessage.PressedMobileMenu())).toEqual([])
 		// The AI panel and the palette's search are the shell's own (`assistant.test.ts`, `palette.test.ts`).
 		expect(requestOf(AppMessage.PressedAiPanelToggle())).toEqual([])
 	})

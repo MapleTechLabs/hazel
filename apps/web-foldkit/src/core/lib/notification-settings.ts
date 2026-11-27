@@ -29,22 +29,7 @@ export const muteDurations: ReadonlyArray<{ readonly minutes: MuteDuration; read
 	{ minutes: null, label: "Until I turn it back on" },
 ]
 
-/** Menu keys: `mute:<minutes>` / `mute:forever`, `level:<level>` / `level:default`. */
-export const muteKeyOf = (minutes: MuteDuration) => `mute:${minutes ?? "forever"}`
-export const levelKeyOf = (level: NotificationLevel | null) => `level:${level ?? "default"}`
-
-export const muteDurationOfKey = (key: string): Option.Option<MuteDuration> => {
-	if (!key.startsWith("mute:")) return Option.none()
-	const found = muteDurations.find((duration) => muteKeyOf(duration.minutes) === key)
-	return found === undefined ? Option.none() : Option.some(found.minutes)
-}
-
 const LEVELS: ReadonlyArray<NotificationLevel | null> = [null, "all", "mentions", "nothing"]
-
-export const levelOfKey = (key: string): Option.Option<NotificationLevel | null> => {
-	const found = LEVELS.find((level) => levelKeyOf(level) === key)
-	return found === undefined ? Option.none() : Option.some(found)
-}
 
 /**
  * What a channel with no level of its own is notified of (`notification-rules.ts`): its section's
@@ -61,10 +46,6 @@ export const inheritedLevelOf = (
 	channelType === "direct" || channelType === "single" || channelType === "thread"
 		? defaultLevelOf(channelType)
 		: (scopes.sectionLevel ?? scopes.organizationLevel ?? defaultLevelOf(channelType))
-
-/** The level's label; the default names the level it inherits (`inheritedLevelOf`). */
-export const levelLabelOf = (level: NotificationLevel | null, inheritedLevel: NotificationLevel) =>
-	level === null ? `Default (${levelLabels[inheritedLevel]})` : levelLabels[level]
 
 /** Muted now: for good, or until a time still ahead. */
 export const isMutedNow = (
