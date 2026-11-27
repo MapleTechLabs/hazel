@@ -3,7 +3,6 @@ import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import * as AiPanel from "../assistant"
 import { CommonReason } from "~/lib/error-messages"
-import * as CommandPalette from "../overlay/command-palette"
 import { LayoutHotkeyActionId } from "../overlay/hotkeys"
 import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
@@ -32,8 +31,6 @@ export const ShellRequest = Schema.Union([
 	Schema.TaggedStruct("PressedMobileMenu", {}),
 	/** The nav rail's AI button. */
 	Schema.TaggedStruct("PressedAiPanelToggle", {}),
-	/** The tab bar's search button: the palette in message search. */
-	Schema.TaggedStruct("PressedMobileSearch", {}),
 	/** The DMs screen's compose button: today's Create DM modal. */
 	Schema.TaggedStruct("PressedComposeDm", {}),
 	/** A toast the shell raised. */
@@ -64,7 +61,6 @@ export const Message = defineMessageUnion({
 	GotPageMessage: { message: PageMessage },
 	GotShellMessage: { message: Shell.Message },
 	GotModalMessage: { message: Modal.Message },
-	GotCommandPaletteMessage: { message: CommandPalette.Message },
 	GotAiPanelMessage: { message: AiPanel.Message },
 	GotToastsMessage: { message: Toasts.Message },
 	GotPlatformMessage: { message: Platform.Message },

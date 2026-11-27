@@ -53,11 +53,14 @@ const nonEmpty = (groups: ReadonlyArray<Group>) => groups.filter((entry) => entr
 
 const initialOf = (name: string) => (name.trim()[0] ?? "").toUpperCase()
 
-const face = (name: string, src: string | null): Item["face"] => ({
-	name,
-	initials: initialOf(name),
-	...(src === null ? {} : { src }),
-})
+const face = (name: string, src: string | null): Item["face"] => {
+	const base = { name, initials: initialOf(name) }
+	return src === null ? base : { ...base, src }
+}
+
+/** An item with a description when there is one. */
+const described = (item: Item, description: string | undefined): Item =>
+	description === undefined || description === "" ? item : { ...item, description }
 
 /** `displayName` of a DM: the partner's full name, or the first names of a group. */
 export const dmDisplayName = (dm: DmChannel) => {
@@ -110,12 +113,10 @@ const accountNameOf = (model: PaletteModel, accountId: string): string | null =>
 
 // HAZEL-GAP(p4-palette-customer-badge): today's row adds the environment badge after the name; the item has no badge.
 const customerEntry = (customer: CustomerSummary): Entry => ({
-	item: {
-		id: `customer:${customer.id}`,
-		label: customer.name,
-		face: face(customer.name, customer.logoUrl),
-		...(customer.domains[0] === undefined ? {} : { description: customer.domains[0] }),
-	},
+	item: described(
+		{ id: `customer:${customer.id}`, label: customer.name, face: face(customer.name, customer.logoUrl) },
+		customer.domains[0],
+	),
 	text: [customer.name, customer.environment, ...customer.domains]
 		.filter((part) => part !== null)
 		.join(" "),
@@ -128,22 +129,20 @@ const customerUserEntry = (model: PaletteModel, user: CustomerUserSummary): Entr
 		.filter((part) => part !== null)
 		.join(" ")
 	return {
-		item: {
-			id: `customer-user:${user.id}`,
-			label: name,
-			face: face(name, user.avatarUrl),
-			...(details === "" ? {} : { description: details }),
-		},
+		item: described(
+			{ id: `customer-user:${user.id}`, label: name, face: face(name, user.avatarUrl) },
+			details,
+		),
 		text: [user.name, user.email, account].filter((part) => part !== null).join(" "),
 	}
 }
 
 /** The quick actions in today's order, with the host's key labels. */
 const quickActions = ({ shortcuts }: PaletteProps): ReadonlyArray<Entry> => {
-	const action = (id: string, label: string, icon: IconName, text: string, shortcut?: string | null) => ({
-		item: { id, label, icon, ...(shortcut ? { shortcut } : {}) },
-		text,
-	})
+	const action = (id: string, label: string, icon: IconName, text: string, shortcut?: string | null) => {
+		const item = { id, label, icon }
+		return { item: shortcut ? { ...item, shortcut } : item, text }
+	}
 	return [
 		action("action:search", "Search messages", "search", "search messages find", shortcuts.search),
 		action("action:create-channel", "Create channel", "plus", "create channel", shortcuts.createChannel),

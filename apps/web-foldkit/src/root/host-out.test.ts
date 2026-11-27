@@ -103,7 +103,6 @@ describe("what the shell hands the host", () => {
 			{ _tag: "PressedDesktopMenuItem", item: "CheckForUpdates" },
 		])
 		expect(requestOf(AppMessage.PressedMobileMenu())).toEqual([{ _tag: "PressedMobileMenu" }])
-		expect(requestOf(AppMessage.PressedMobileSearch())).toEqual([{ _tag: "PressedMobileSearch" }])
 		expect(requestOf(AppMessage.PressedAiPanelToggle())).toEqual([{ _tag: "PressedAiPanelToggle" }])
 	})
 })

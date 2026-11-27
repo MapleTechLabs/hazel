@@ -7,8 +7,6 @@ import { emit } from "../app/command"
 import { aiPanelInputsOf, reportOf } from "../app/model"
 import { update } from "../app/update"
 import { Message as RootMessage } from "../app/message"
-import * as CommandPalette from "../overlay/command-palette"
-import * as CommandMenu from "../ui/command-menu"
 import { after, hazelOrg, hotkey, rootScene, signedIn } from "../test/root-fixtures"
 import * as Menu from "../ui/menu"
 import { FocusTriggerOnPress } from "../ui/menu-view"
@@ -56,16 +54,9 @@ describe("the toggle", () => {
 		expect(closed.model.aiPanel.isOpen).toBe(false)
 	})
 
-	test("the command palette's entry opens it", () => {
-		const model = after(signedIn("/hazel/settings/team"), [
-			hotkey("commandPalette.open"),
-			RootMessage.GotCommandPaletteMessage({
-				message: CommandPalette.Message.GotMenuMessage({
-					message: CommandMenu.Message.ClickedItem({ key: "action:ai-panel" }),
-				}),
-			}),
-		])
-		expect(model.commandPalette.isOpen).toBe(false)
+	test("the command palette's entry opens it, and never toggles it shut", () => {
+		const request = RootMessage.ReceivedShellRequest({ request: { _tag: "RequestedAiPanel" } })
+		const model = after(signedIn("/hazel/settings/team"), [request, request])
 		expect(model.aiPanel.isOpen).toBe(true)
 	})
 })

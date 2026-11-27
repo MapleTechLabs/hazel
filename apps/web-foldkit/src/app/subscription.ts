@@ -2,7 +2,6 @@ import type { UserId } from "@hazel/schema"
 import { Option, Schema, Stream } from "effect"
 import { Port, Subscription } from "foldkit"
 import * as AiPanel from "../assistant"
-import * as CommandPalette from "../overlay/command-palette"
 import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
 import { pageSubscriptions } from "../page/registry"
@@ -56,11 +55,6 @@ const channelSidebarActions = Subscription.make<Model, Message>()((entry) => ({
 	),
 }))
 
-const commandPaletteSubscriptions = Subscription.lift(CommandPalette.subscriptions)<Model, Message>({
-	read: (model) => Option.some({ model: model.commandPalette, shared: sharedOf(model) }),
-	toParentMessage: (message): Message => ({ _tag: "GotCommandPaletteMessage", message }),
-})
-
 const aiPanelSubscriptions = Subscription.lift(AiPanel.subscriptions)<Model, Message>({
 	read: (model) =>
 		Option.some({ model: model.aiPanel, organizationId: model.context.organization?.id ?? null }),
@@ -111,7 +105,6 @@ const pages = Subscription.lift(pageSubscriptions)<Model, Message>({
 export const subscriptions = Subscription.aggregate(
 	shellSubscriptions,
 	channelSidebarActions,
-	commandPaletteSubscriptions,
 	aiPanelSubscriptions,
 	modalSubscriptions,
 	toastSubscriptions,

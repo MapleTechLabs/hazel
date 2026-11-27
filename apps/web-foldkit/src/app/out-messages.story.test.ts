@@ -4,9 +4,7 @@ import { ChannelId, ChannelMemberId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import * as CommandPalette from "../overlay/command-palette"
 import * as Toaster from "../overlay/toaster"
-import { FocusInput, SetPresenceStatus } from "../overlay/command-palette/commands"
 import { LayoutHotkeyActionId } from "../overlay/hotkeys"
 import * as ChannelsSidebar from "../shell/channels-sidebar"
 import { userMenuEntries } from "../shell/menus"
@@ -31,7 +29,6 @@ import {
 	shellSignedIn,
 	toShell,
 } from "../test/root-fixtures"
-import * as CommandMenu from "../ui/command-menu"
 import { DEFAULT_SOUND_SETTINGS } from "../notification-sound"
 import { combo } from "~/lib/keybindings/key-combo"
 import * as Menu from "../ui/menu"
@@ -46,11 +43,6 @@ import type { DirectoryMember } from "../page/home/model"
 
 const sidebar = (inner: ChannelsSidebar.Message): Message =>
 	Message.GotShellMessage({ message: Shell.Message.GotChannelsSidebarMessage({ message: inner }) })
-const paletteItem = (key: string): Message =>
-	Message.GotCommandPaletteMessage({
-		message: CommandPalette.Message.GotMenuMessage({ message: CommandMenu.Message.ClickedItem({ key }) }),
-	})
-const focused = CommandPalette.Message.CompletedFocusInput()
 const done = Message.CompletedEmit()
 const emitted = Command.resolve(Emit, done)
 // The frame learns of each overlay opening or closing.
@@ -63,18 +55,15 @@ const presence = (inner: Presence.Message): Message =>
 	Message.GotPlatformMessage({ message: Platform.Message.GotPresenceMessage({ message: inner }) })
 
 describe("RequestedCommandPalette", () => {
-	test("the sidebar's Browse channels opens the palette on its home page", () => {
+	// The palette is the shell's (`root/palette.ts`): the host passes every open on.
+	test("the sidebar's Browse channels asks the shell for the palette on its home page", () => {
+		const palette = PageOutMessage.RequestedCommandPalette({ page: "home" })
 		story(
 			update,
 			given(signedIn("/hazel/chat")),
 			message(sidebar(ChannelsSidebar.Message.ClickedBrowseChannels())),
-			Command.expectExact(FocusInput, overlayReport(true)),
-			Command.resolve(FocusInput, focused),
-			overlayOpened,
-			model((m) => {
-				expect(m.commandPalette.isOpen).toBe(true)
-				expect(m.commandPalette.page._tag).toBe("Home")
-			}),
+			Command.expectExact(toShell(palette)),
+			sent(palette),
 		)
 	})
 })
@@ -87,59 +76,6 @@ describe("RequestedModal", () => {
 			message(sidebar(ChannelsSidebar.Message.ClickedSectionAction({ action: "create-channel" }))),
 			overlayOpened,
 			model((m) => expect(m.modal.current?._tag).toBe("NewChannel")),
-		)
-	})
-
-	test("the palette closes itself before the modal opens", () => {
-		story(
-			update,
-			given(signedIn("/hazel/chat")),
-			message(hotkey("commandPalette.open")),
-			Command.resolve(FocusInput, focused),
-			overlayOpened,
-			message(paletteItem("action:invite")),
-			model((m) => {
-				expect(m.commandPalette.isOpen).toBe(false)
-				expect(m.modal.current?._tag).toBe("EmailInvite")
-			}),
-		)
-	})
-})
-
-describe("RequestedTheme", () => {
-	// The shell applies, persists and shares it (`root/host-out.test.ts`).
-	test("picking Dark in the palette closes it and asks the shell for the theme", () => {
-		const signed = signedIn("/hazel/chat")
-		const dark = { mode: "dark" as const, customization: signed.context.themePreference.customization }
-		story(
-			update,
-			given(signed),
-			message(hotkey("commandPalette.open")),
-			Command.resolve(FocusInput, focused),
-			overlayOpened,
-			message(paletteItem("theme:dark")),
-			Command.expectHas(toShell(PageOutMessage.RequestedTheme({ preference: dark }))),
-			sent(PageOutMessage.RequestedTheme({ preference: dark })),
-			overlayClosed,
-			model((m) => expect(m.commandPalette.isOpen).toBe(false)),
-		)
-	})
-})
-
-describe("Completed (palette navigation)", () => {
-	test("a palette link closes the palette and follows the org-relative path", () => {
-		story(
-			update,
-			given(signedIn("/hazel/chat")),
-			message(hotkey("commandPalette.open")),
-			Command.resolve(FocusInput, focused),
-			overlayOpened,
-			message(paletteItem("go:settingsTeam")),
-			// A palette link stays an href: it can carry a search (`?messageId=`).
-			Command.expectHas(toShell(PageOutMessage.RequestedHref({ href: "/hazel/settings/team" }))),
-			sent(PageOutMessage.RequestedHref({ href: "/hazel/settings/team" })),
-			overlayClosed,
-			model((m) => expect(m.commandPalette.isOpen).toBe(false)),
 		)
 	})
 })
@@ -424,22 +360,6 @@ describe("hotkeys", () => {
 })
 
 describe("palette status and presence", () => {
-	const succeeded = CommandPalette.Message.SucceededSetPresenceStatus()
-
-	test("picking a status sends it", () => {
-		story(
-			update,
-			given(signedIn("/hazel/chat")),
-			message(hotkey("commandPalette.open")),
-			Command.resolve(FocusInput, focused),
-			overlayOpened,
-			message(paletteItem("status:dnd")),
-			Command.expectExact(SetPresenceStatus({ status: "dnd" }), overlayReport(false)),
-			Command.resolve(SetPresenceStatus, succeeded),
-			overlayClosed,
-		)
-	})
-
 	// B3: legacy `setStatus` sets `manualStatusAtom`, which overrides the AFK-derived status, and
 	// its sync effect sends the new computed status once.
 	test("a picked status survives going AFK and coming back", () => {
@@ -459,12 +379,10 @@ describe("palette status and presence", () => {
 					sent: { status: "online", activeChannelId: null },
 				}),
 			),
-			message(hotkey("commandPalette.open")),
-			Command.resolve(FocusInput, focused),
-			overlayOpened,
-			message(paletteItem("status:dnd")),
-			Command.resolve(SetPresenceStatus, succeeded),
-			overlayClosed,
+			// The shell's palette ran the status RPC; the host keeps the pick ahead of the away timer.
+			message(
+				Message.ReceivedShellRequest({ request: { _tag: "PickedPresenceStatus", status: "dnd" } }),
+			),
 			model((m) => expect(m.platform.presence.manualStatus).toBe("dnd")),
 			message(presence(Presence.Message.ElapsedSyncDebounce({ version: 2 }))),
 			Command.expectExact(

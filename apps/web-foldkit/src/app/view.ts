@@ -1,7 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { comboLabel } from "~/lib/keybindings/key-combo"
 import * as AiPanel from "../assistant"
-import * as CommandPalette from "../overlay/command-palette"
 import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
 import { type PageMessage, viewPage } from "../page/registry"
@@ -51,10 +50,6 @@ const clickedMarkAllRead = toShellMessage(
 export const toPageMessage = (message: PageMessage): Message => ({ _tag: "GotPageMessage", message })
 const toToastsMessage = (message: Toasts.Message): Message => ({ _tag: "GotToastsMessage", message })
 const toModalMessage = (message: Modal.Message): Message => ({ _tag: "GotModalMessage", message })
-const toCommandPaletteMessage = (message: CommandPalette.Message): Message => ({
-	_tag: "GotCommandPaletteMessage",
-	message,
-})
 const toAiPanelMessage = (message: AiPanel.Message): Message => ({ _tag: "GotAiPanelMessage", message })
 const pressedAiPanelToggle = toAiPanelMessage(AiPanel.Message.PressedToggle())
 
@@ -192,13 +187,6 @@ const regionsOf = (model: Model, h: HtmlBuilder<Message>): Regions => {
 	const overlays = [
 		Toasts.view(h, model.toasts, toToastsMessage, model.context.isMobile),
 		Modal.view(h, model.modal, shared, toModalMessage),
-		h.submodel({
-			slotId: "command-palette",
-			model: model.commandPalette,
-			view: CommandPalette.view,
-			viewInputs: { shared },
-			toParentMessage: toCommandPaletteMessage,
-		}),
 	]
 	if (context === null)
 		return { sidebar: [], page: [pageBody(model, h, false)], "ai-toggle": [], "ai-panel": [], overlays }

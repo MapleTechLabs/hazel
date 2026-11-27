@@ -726,7 +726,3 @@ export const orgRouteOf = (
 	orgSlug: string | null,
 	toRoute: (orgSlug: string) => AppRoute,
 ): AppRoute | undefined => (orgSlug === null ? undefined : toRoute(orgSlug))
-
-/** An org route's href, or `null` outside an org, where the org-only overlays never open. */
-export const orgHrefOf = (orgSlug: string | null, toRoute: (orgSlug: string) => AppRoute): string | null =>
-	orgSlug === null ? null : hrefOf(toRoute(orgSlug))

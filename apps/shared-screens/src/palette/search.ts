@@ -80,16 +80,20 @@ export const toSearchRequest = (
 	const after = dateOf(find("after"))
 	const from = find("from")
 	const inChannel = find("in")
-	return {
+	const request: SearchPayloadDraft = {
 		organizationId,
 		query: text.slice(0, 500),
-		...(from === undefined ? {} : { authorId: from.id as UserId }),
-		...(inChannel === undefined ? {} : { channelId: inChannel.id as ChannelId }),
-		...(before === null ? {} : { before }),
-		...(after === null ? {} : { after }),
 		limit: SEARCH_LIMIT,
 	}
+	if (from !== undefined) request.authorId = from.id as UserId
+	if (inChannel !== undefined) request.channelId = inChannel.id as ChannelId
+	if (before !== null) request.before = before
+	if (after !== null) request.after = after
+	return request
 }
+
+/** The payload built key by key, so its optional keys stay absent when not given. */
+type SearchPayloadDraft = { -readonly [K in keyof MessageSearchPayload]: MessageSearchPayload[K] }
 
 export type Hit = MessageSearchResponse["results"][number]
 

@@ -29,7 +29,6 @@ import { SoundSettings } from "../notification-sound"
 import { ResolvedTheme, resolveTheme, type ThemeCustomization, ThemePreference } from "../theme"
 import * as Commands from "./commands"
 import { publish } from "./bus"
-import { isNativePalette } from "./palette-flag"
 import type { AppMessage } from "./message"
 import { AppRoutes, routeOfHref } from "./routes"
 import {
@@ -390,15 +389,7 @@ const savingFailed = (title: string) =>
 const openPalette =
 	(page: PalettePage): Step =>
 	(model) =>
-		isNativePalette()
-			? unchanged({
-					...model,
-					palette: { page, opened: (model.palette?.opened ?? 0) + 1, isOpen: true },
-				})
-			: toHost({
-					_tag: "RequestedPageOut",
-					outMessage: PageOutMessage.RequestedCommandPalette({ page }),
-				})(model)
+		unchanged({ ...model, palette: { page, opened: (model.palette?.opened ?? 0) + 1, isOpen: true } })
 
 /** A closed palette stays mounted: the Commands of its last pick (a link, a recent) still run. */
 const closePalette: Step = (model) =>

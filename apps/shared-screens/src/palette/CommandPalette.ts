@@ -386,7 +386,9 @@ const goBackOrClose = ($: Step) => {
 }
 
 const navigation = (href: string, toast?: AppToast) =>
-	Navigate.make({ href, replace: false, ...(toast === undefined ? {} : { toast }) })
+	toast === undefined
+		? Navigate.make({ href, replace: false })
+		: Navigate.make({ href, replace: false, toast })
 
 /** Follows an in-app link, then closes. */
 const navigate = ($: Step, href: string) => $.run(navigation(href)).emit(PaletteEvents.RequestedClose())
@@ -624,6 +626,7 @@ const listGroups = (h: H, model: PaletteModel) =>
 	)
 
 /** The search page's empty line: what to type, nothing found, or the server's failure. */
+// HAZEL-GAP(p4-palette-search-chrome): today's empty state has a search icon tile, and the page a footer of key hints.
 const searchEmpty = (h: H, model: PaletteModel, filters: ReadonlyArray<SearchFilter>) => {
 	if (!hasQuery(model.query.text, filters)) return "Start typing to search messages"
 	return AsyncResult.isFailure(h.queries.serverResults)

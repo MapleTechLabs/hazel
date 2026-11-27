@@ -5,8 +5,7 @@ import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
 import * as AiPanel from "../assistant"
 import { errorToastOf, loadingToast, successToast } from "../data/actions"
-import * as CommandPalette from "../overlay/command-palette"
-import { isNativePalette } from "../root/palette-flag"
+import type { PalettePage } from "@hazel/shared-screens/app/requests"
 import type { LayoutHotkeyActionId } from "../overlay/hotkeys"
 import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
@@ -172,38 +171,9 @@ const toggleAiPanel: Step = (model) =>
 const openAiPanel: Step = (model) =>
 	foldAiPanel(model, (panel) => AiPanel.open(panel, aiPanelInputsOf(model)))
 
-const foldCommandPalette = Update.foldChild({
-	update: (
-		palette: CommandPalette.Model,
-		step: (palette: CommandPalette.Model) => ReturnType<typeof CommandPalette.update>,
-	) => step(palette),
-	read: (model: Model) => Option.some(model.commandPalette),
-	write: (model, commandPalette) => modifyFields(model, { commandPalette: () => commandPalette }),
-	toParentMessage: (message: CommandPalette.Message): Message => ({
-		_tag: "GotCommandPaletteMessage",
-		message,
-	}),
-	foldOutMessage: (outMessage: CommandPalette.OutMessage) =>
-		CommandPalette.OutMessage.match<Step>(outMessage, {
-			// The palette's links can carry a search (`?messageId=`), so they stay URLs.
-			Completed: ({ href, toast }) =>
-				Update.combine([
-					href === null ? unchanged : toShell(PageOutMessage.RequestedHref({ href })),
-					showToastIf(toast),
-				]),
-			RequestedModal: ({ modal }) => openModal(modal),
-			RequestedToast: ({ toast }) => showToast(toast),
-			RequestedTheme: ({ preference }) => toShell(PageOutMessage.RequestedTheme({ preference })),
-			RequestedAiPanel: () => openAiPanel,
-			RequestedPresenceStatus: ({ status }) =>
-				foldPlatform((platform) => Platform.pickPresenceStatus(platform, status)),
-		}),
-})
-
-const openCommandPalette =
-	(page: CommandPalette.Page): Step =>
-	(model) =>
-		foldCommandPalette(model, (palette) => CommandPalette.open(palette, page, sharedOf(model)))
+/** The palette is the shell's (`root/palette.ts`): every way of opening it goes there. */
+const openCommandPalette = (page: PalettePage): Step =>
+	toShell(PageOutMessage.RequestedCommandPalette({ page }))
 
 const foldShell = Update.foldChild({
 	update: (shell: ShellModel, step: (shell: ShellModel) => Shell.ShellReturn) => step(shell),
@@ -376,7 +346,6 @@ const receivedShellRequest = (request: ShellRequest): Step =>
 			foldAiPanel(model, (panel) =>
 				AiPanel.update(panel, AiPanel.Message.PressedToggle(), aiPanelInputsOf(model)),
 			),
-		PressedMobileSearch: () => openCommandPalette("search"),
 		RequestedToast: ({ toast }) => showToast(toast),
 		PressedComposeDm: () => openModal({ _tag: "CreateDm" }),
 		RequestedPageOut: ({ outMessage }) => handleOutMessage(outMessage),
@@ -443,9 +412,7 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 		RequestedHistory: () => toShell(outMessage),
 		RequestedToast: ({ toast }) => showToast(toast),
 		RequestedModal: ({ modal }) => openModal(modal),
-		// The shell draws the palette (`root/palette.ts`); the flag's "0" keeps today's for parity.
-		RequestedCommandPalette: ({ page }) =>
-			isNativePalette() ? toShell(outMessage) : openCommandPalette(page),
+		RequestedCommandPalette: () => toShell(outMessage),
 		RequestedSignOut: () => toShell(outMessage),
 		RequestedDmCreation: requestedDmCreation,
 		RequestedTheme: () => toShell(outMessage),
@@ -478,7 +445,6 @@ export const init = (
 		pageInstances: 0,
 		shell: Shell.init({ isCreateChannelHintDismissed: options.isCreateChannelHintDismissed }),
 		modal: Modal.initialModel,
-		commandPalette: CommandPalette.init(),
 		// A phone opens the panel as a sheet over the page: it never starts open.
 		aiPanel: AiPanel.init(context.isMobile ? { ...options.aiPanel, isOpen: false } : options.aiPanel),
 		toasts: Toasts.init(),
@@ -523,8 +489,6 @@ const step = (model: Model, message: Message): Return =>
 			foldShell(model, (shell) => Shell.update(shell, message, shellContextOf(model))),
 		GotModalMessage: ({ message }) =>
 			foldModal(model, (modal) => Modal.update(modal, message, modalContextOf(model))),
-		GotCommandPaletteMessage: ({ message }) =>
-			foldCommandPalette(model, (palette) => CommandPalette.update(palette, message, sharedOf(model))),
 		GotAiPanelMessage: ({ message }) =>
 			foldAiPanel(model, (panel) => AiPanel.update(panel, message, aiPanelInputsOf(model))),
 		GotToastsMessage: ({ message }) => foldToastsWithAction(model, message),
