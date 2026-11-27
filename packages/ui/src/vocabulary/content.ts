@@ -199,7 +199,12 @@ export type MenuEntry = typeof MenuEntry.Type
 
 /** Entries in groups; a host draws a separator between groups. Data, so it maps onto `UIMenu`. */
 export const MenuGroups = Schema.Array(
-	Schema.Struct({ title: Schema.optional(Schema.String), entries: Schema.Array(MenuEntry) }),
+	Schema.Struct({
+		title: Schema.optional(Schema.String),
+		/** A second line under `title` (`p4-menu-header`): the group opens on a header, name and email. */
+		subtitle: Schema.optional(Schema.String),
+		entries: Schema.Array(MenuEntry),
+	}),
 )
 export type MenuGroups = typeof MenuGroups.Type
 

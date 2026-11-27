@@ -5,6 +5,8 @@ export const menuListParts = {
 	panel: "part",
 	group: { kind: "part", in: "panel" },
 	groupTitle: { kind: "part", in: "group" },
+	// A header group's second line (`p4-menu-header`: the account menu's email under the name).
+	groupSubtitle: { kind: "part", in: "group" },
 	separator: { kind: "part", in: "panel" },
 	item: { kind: "part", in: "group" },
 	itemIcon: { kind: "part", in: "item" },
@@ -34,6 +36,9 @@ export const menuListStyles = {
 	},
 	group: { layout: "column" },
 	groupTitle: { paddingX: "2", paddingY: "1.5", text: "caption", strong: true, color: "muted-fg" },
+	// Today's menu header's email (`block truncate font-normal text-muted-fg`); the header's name and
+	// padding (`menuHeaderBase`: `px-2.5 py-2 font-medium text-base sm:text-sm`) are the renderer's.
+	groupSubtitle: { paddingX: "2.5", text: "body", color: "muted-fg", truncate: true },
 	separator: { divider: "separator", marginX: "1", paddingY: "0.5", marginBottom: "1" },
 	item: {
 		layout: "row",

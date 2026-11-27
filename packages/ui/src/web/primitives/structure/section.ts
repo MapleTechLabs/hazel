@@ -46,6 +46,8 @@ const css = `
 	padding-bottom: calc(var(--hz-space-4) + var(--hz-space-0_5));
 }
 /* \`list\` and \`sticky\` (\`section-style\`): each child takes a line; a list's rows bleed past its inset. */
+/* An eyebrow opens a group (\`p4-sidebar-eyebrow\`): groups follow each other with no stack gap. */
+[data-hz="section"][data-style="eyebrow"]:not(:first-child) { margin-top: calc(var(--hz-space-0_5) * -1); }
 [data-hz="section"]:is([data-style="list"], [data-style="sticky"]) > [data-hz-part="content"] > * { flex: 1 1 100%; }
 [data-hz="section"][data-style="list"] > [data-hz-part="content"] > [data-hz="item"] {
 	width: calc(100% + 2 * var(--hz-space-4)); margin-inline: calc(var(--hz-space-4) * -1);

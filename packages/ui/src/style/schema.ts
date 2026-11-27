@@ -103,7 +103,8 @@ export const stackAxes = ["vertical", "horizontal"] as const
 export type StackAxis = (typeof stackAxes)[number]
 
 /** `tight` is a sidebar's section group (`gap-y-0.5`, `stack-tight`). */
-export const stackDensities = ["tight", "compact", "regular", "relaxed"] as const
+/** `none` sets a title on its subtitle; `snug` is the kit's `gap-3` (an icon tile beside its name). */
+export const stackDensities = ["tight", "compact", "regular", "relaxed", "none", "snug"] as const
 export type StackDensity = (typeof stackDensities)[number]
 
 export const stackAligns = ["stretch", "start", "center", "end"] as const
@@ -130,8 +131,17 @@ export type FrameSurface = (typeof frameSurfaces)[number]
 export const screenSurfaces = ["sidebar", "page", "centered"] as const
 export type ScreenSurface = (typeof screenSurfaces)[number]
 
-export const sectionStyles = ["sidebar", "tree", "list", "sticky"] as const
+/** `eyebrow`: settings' "Account" and "Workspace" (a `heading` `label` inset `px-3 pt-3 pb-1` over its rows). */
+export const sectionStyles = ["sidebar", "tree", "list", "sticky", "eyebrow"] as const
 export type SectionStyle = (typeof sectionStyles)[number]
+
+/** A link's ink: `accent` the kit's link; `muted` a quiet way back ("Back to channel", hover `fg`). */
+export const linkTones = ["accent", "muted"] as const
+export type LinkTone = (typeof linkTones)[number]
+
+/** A heading's size over its level's: `large` is the kit's `title` (18/28), a page's subject. */
+export const headingSizes = ["auto", "large"] as const
+export type HeadingSize = (typeof headingSizes)[number]
 
 /** `1` is a screen's title, `2` a section's, `3` a group's. */
 export const headingLevels = ["1", "2", "3"] as const
@@ -170,6 +180,14 @@ export type LineCount = (typeof lineCounts)[number]
 /** An item's leading slot: icon-sized, or `large` (a 40pt avatar or icon tile, top aligned). */
 export const itemLeadingSizes = ["regular", "large", "conversation"] as const
 export type ItemLeadingSize = (typeof itemLeadingSizes)[number]
+
+/**
+ * A sidebar row's look: `row` a list row; `nav` a section sidebar's page link (settings, activity:
+ * the current page on `sidebar-accent` with a brand icon); `switcher` the org switcher at the sidebar's top (a 32pt
+ * square logo, no wash); `account` the account card at its foot (bordered, tinted, a 32pt square face).
+ */
+export const itemStyles = ["row", "nav", "switcher", "account"] as const
+export type ItemStyle = (typeof itemStyles)[number]
 
 /** A row hanging off the row above (a thread under its channel): the elbow's shape. */
 export const itemNestings = ["none", "middle", "last"] as const
@@ -291,7 +309,7 @@ export interface Shadow {
  * Type steps only recipes use (a count badge's 11px), never a view's `text.role`. `reading` is chat
  * text, 16/24 at every width (a message row does not step down like `body`); `snug` a DM preview, 14/19.25.
  */
-export const recipeTextSteps = ["tiny", "micro", "reading", "snug"] as const
+export const recipeTextSteps = ["tiny", "micro", "reading", "snug", "headline"] as const
 export type RecipeTextStep = (typeof recipeTextSteps)[number]
 export type TextStep = TextRole | RecipeTextStep
 

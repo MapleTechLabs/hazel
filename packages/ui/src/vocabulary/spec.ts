@@ -231,7 +231,8 @@ export const tags = {
 		web: "A1",
 		ios: "S1",
 		content: "text",
-		props: { level: option(O.HeadingLevel, "2") },
+		// `size` `large`: the kit's `title` whatever the level (`p4-channel-settings-header`).
+		props: { level: option(O.HeadingLevel, "2"), size: option(O.HeadingSize, "auto") },
 	}),
 	icon: tag({
 		group: "content",
@@ -292,6 +293,8 @@ export const tags = {
 			customer: value(Content.Logo),
 			partners: value(Schema.Array(Content.Logo)),
 			sync: option(O.ProviderMark, "none"),
+			// On a 40pt secondary tile, the header's size (`p4-channel-settings-header`).
+			tile: flag,
 		},
 	}),
 	// A snapping, edge-to-edge horizontal row of avatar-over-label tiles (`people-strip`).
@@ -534,7 +537,8 @@ export const tags = {
 		web: "A2",
 		ios: "S2",
 		content: "none",
-		props: { label: text, href: text },
+		// `tone` `muted` and a leading `icon`: channel settings' "Back to channel" (`p4-channel-settings-header`).
+		props: { label: text, href: text, tone: option(O.LinkTone, "accent"), icon: value(O.IconName) },
 		events: { press: none },
 	}),
 	textField: tag({
@@ -949,6 +953,8 @@ export const tags = {
 			subtitleLines: option(O.LineCount, "1"),
 			// `large`: a 40pt avatar or icon tile leads the row, top aligned.
 			leadingSize: option(O.ItemLeadingSize, "regular"),
+			// `switcher` and `account`: a sidebar's org switcher and account card (`p4-sidebar-account-card`).
+			style: option(O.ItemStyle, "row"),
 			// A keyboard shortcut hint at the row's end; web only, iOS ignores it.
 			shortcut: text,
 			href: text,

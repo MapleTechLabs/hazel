@@ -208,6 +208,14 @@ dialog[data-hz-layer]::backdrop { background: var(--hz-color-scrim); }
 	min-width: 12rem;
 	max-height: min(100vh - 2 * var(--hz-space-3), 28rem);
 }
+/* A header group (\`p4-menu-header\`, \`menuHeaderBase\`): the name \`px-2.5 pt-2 font-medium\` in full ink, the email under it. */
+:is([data-hz=menu], [data-hz=contextMenu]) [data-hz-part="group"][data-header] > [data-hz-part="groupTitle"] {
+	padding: var(--hz-space-2) var(--hz-space-2_5) 0; color: var(--hz-color-fg);
+	font-size: var(--hz-text-body-size); line-height: var(--hz-text-body-leading);
+}
+:is([data-hz=menu], [data-hz=contextMenu]) [data-hz-part="group"][data-header] > [data-hz-part="groupSubtitle"] {
+	padding-bottom: var(--hz-space-2);
+}
 [data-hz][data-specimen] [data-hz-layer][data-open] { position: relative; inset: auto; z-index: auto; max-height: none; }
 /* A shown panel's display is its recipe's; this only beats the engine's hidden popover. */
 :where([data-hz][data-specimen] [data-hz-layer][data-open]) { display: block; }

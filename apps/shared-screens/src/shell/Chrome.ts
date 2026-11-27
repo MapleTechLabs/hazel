@@ -107,13 +107,16 @@ export const OrgSwitcher = Hazel.component({
 			)
 			.on("select", ({ id }) => ChromeMessage.Selected({ id }))
 			.trigger(
-				h.item.title(orgName).leading(
-					h.avatar
-						.name(orgName)
-						.initials(initialsOf(orgName))
-						.src(h.props.logoUrl ?? undefined),
-				),
-				// HAZEL-GAP(item-trailing-icon): the trailing slot does not size a bare icon, so today's up-down chevron waits.
+				h.item
+					.title(orgName)
+					.style("switcher")
+					.leading(
+						h.avatar
+							.name(orgName)
+							.initials(initialsOf(orgName))
+							.src(h.props.logoUrl ?? undefined),
+					)
+					.trailing(h.icon.name("chevron-up-down")),
 			)
 	},
 })
@@ -148,23 +151,25 @@ export const AccountMenu = Hazel.component({
 	view: (h, model) => {
 		const { name, email } = h.props
 		const emoji = model.status?.emoji ?? null
-		// HAZEL-GAP(menu-header): today's menu opens on the name and email; a group title holds the name only.
+		// The menu opens on a header: the name over the email (`p4-menu-header`).
 		const entries = accountEntries(emoji)
 		return h.menu
 			.key("account")
 			.label("Profile")
-			.entries([{ title: name, entries: entries[0]?.entries ?? [] }, ...entries.slice(1)])
+			.entries([{ title: name, subtitle: email, entries: entries[0]?.entries ?? [] }, ...entries.slice(1)])
 			.on("select", ({ id }) => ChromeMessage.Selected({ id }))
 			.trigger(
 				h.item
 					.title(emoji === null ? name : `${name} ${emoji}`)
 					.subtitle(email)
+					.style("account")
 					.leading(
 						h.avatar
 							.name(name)
 							.initials(initialsOf(name))
 							.src(h.props.avatarUrl ?? undefined),
-					),
+					)
+					.trailing(h.icon.name("chevron-up-down")),
 			)
 	},
 })

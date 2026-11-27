@@ -85,18 +85,21 @@ export const SectionSidebar = Hazel.component({
 			h.item
 				.key(item.id)
 				.title(item.label)
+				.style("nav")
 				.leading(h.icon.name(item.icon))
 				.selected(item.selected)
 				.href(item.href)
+		// An eyebrow (`Account`, `Workspace`) is its section's heading (`p4-sidebar-eyebrow`).
 		const group = (navGroup: NavGroup) => {
 			const section = h.section.key(navGroup.key)
-			return (navGroup.title === null ? section : section.title(navGroup.title)).children(
-				...navGroup.rows.map(row),
-			)
+			const titled =
+				navGroup.eyebrow !== null
+					? section.style("eyebrow").title(navGroup.eyebrow)
+					: navGroup.title === null
+						? section
+						: section.title(navGroup.title)
+			return titled.children(...navGroup.rows.map(row))
 		}
-		// HAZEL-GAP(sidebar-eyebrow): today's `heading` `label` eyebrow over a run of sections; an overline text stands in.
-		const eyebrow = (text: string) =>
-			h.text.key(`eyebrow:${text}`).role("overline").tone("muted").children(text)
 		const docked = props.sheet === null
 		const header = docked
 			? null
@@ -122,11 +125,7 @@ export const SectionSidebar = Hazel.component({
 			.children(
 				header,
 				docked ? null : h.divider,
-				...props.groups.flatMap((navGroup) =>
-					navGroup.eyebrow === null
-						? [group(navGroup)]
-						: [eyebrow(navGroup.eyebrow), group(navGroup)],
-				),
+				...props.groups.map(group),
 				markAll,
 				docked ? null : h.spacer,
 				docked ? null : AccountMenu(h, { key: "account", props: props.account }),

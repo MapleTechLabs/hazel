@@ -9,7 +9,7 @@ import type { ProviderMark } from "../schema.ts"
  */
 export const channelIcon = defineRecipe<
 	{ readonly sync: ProviderMark },
-	"private",
+	"private" | "tile",
 	"glyph" | "emoji" | "logo" | "lock" | "lockIcon" | "partners" | "partner" | "sync" | "syncLogo"
 >({
 	primitive: "channelIcon",
@@ -88,5 +88,20 @@ export const channelIcon = defineRecipe<
 			values: { none: {}, slack: {}, discord: { parts: { syncLogo: { color: "discord" } } } },
 		},
 	},
-	flags: { private: {} },
+	flags: {
+		private: {},
+		// Channel settings' header (`p4-channel-settings-header`): a `size-10 rounded-lg bg-secondary`
+		// tile around the `md` icon (`size-5`, the emoji `text-lg/none`) in muted ink.
+		tile: {
+			root: { size: "10", radius: "lg", background: "secondary", color: "muted-fg" },
+			parts: {
+				glyph: { size: "5" },
+				emoji: { size: "5", text: "title", leading: "4.5" },
+				logo: { size: "5" },
+			},
+			regular: {
+				parts: { glyph: { size: "5" }, emoji: { size: "5", leading: "4.5" }, logo: { size: "5" } },
+			},
+		},
+	},
 })

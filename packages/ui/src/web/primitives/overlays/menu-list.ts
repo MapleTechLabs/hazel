@@ -193,6 +193,14 @@ export const createMenuList = (
 			title.setAttribute("role", "presentation")
 			node.setAttribute("aria-labelledby", title.id)
 			node.append(title)
+			// A subtitle makes the title a header (`p4-menu-header`): the name over the email.
+			if (group.subtitle !== undefined) {
+				const subtitle = part(document, "div", "groupSubtitle")
+				subtitle.textContent = group.subtitle
+				subtitle.setAttribute("role", "presentation")
+				node.setAttribute("data-header", "")
+				node.append(subtitle)
+			}
 		}
 		for (const entry of group.entries) node.append(itemNode(entry, inSubmenu))
 		return node

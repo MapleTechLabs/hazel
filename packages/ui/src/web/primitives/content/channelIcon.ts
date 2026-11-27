@@ -120,6 +120,9 @@ export const primitive = definePrimitive("channelIcon", ({ document, tag, outer 
 			if (name === "private") {
 				flag(node, "private", value)
 				isPrivate = value === true
+			} else if (name === "tile") {
+				flag(node, "tile", value)
+				return
 			} else if (name === "emoji") emojiText = typeof value === "string" ? value : ""
 			else if (name === "customer") customer = isLogo(value) ? value : undefined
 			else if (name === "partners") partnerList = Array.isArray(value) ? value.filter(isLogo) : []

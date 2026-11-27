@@ -55,26 +55,28 @@ export const ChannelSettingsHeader = Hazel.component({
 	],
 	view: (h, model) => {
 		const { channel } = model
-		// Today's 40px secondary tile; an emoji icon has no tile (HAZEL-GAP(channel-settings-icon-tile)), and
-		// the customer, partner and sync marks need the root's channel links (HAZEL-GAP(channel-settings-links)).
-		const icon = channel?.icon
-			? h.channelIcon.private(channel.type === "private").emoji(channel.icon)
-			: h.iconTile.name(channel?.type === "private" ? "lock" : "hashtag")
-		// HAZEL-GAP(back-link): today's muted "Back to channel" with a leading arrow; `link` is the accent text link.
+		// Today's 40px secondary tile (`p4-channel-settings-header`). The customer, partner and sync marks
+		// need the root's channel links (HAZEL-GAP(p4-channel-settings-links)).
+		const icon = h.channelIcon
+			.tile(true)
+			.private(channel?.type === "private")
+			.emoji(channel?.icon ?? undefined)
+		// Today's `gap-5` between the header and the tabs; the nearest density is `regular` (16).
 		return h.stack.children(
-			h.link.label("Back to channel").href(h.props.channelHref),
-			h.stack
-				.axis("horizontal")
-				.align("center")
-				.children(
-					icon,
-					h.stack
-						.density("tight")
-						.children(
-							h.heading.level("1").children(channel?.name ?? "Channel"),
+			h.stack.children(
+				h.link.label("Back to channel").href(h.props.channelHref).tone("muted").icon("arrow-left"),
+				h.stack
+					.axis("horizontal")
+					.density("snug")
+					.align("center")
+					.children(
+						icon,
+						h.stack.density("none").children(
+							h.heading.level("1").size("large").children(channel?.name ?? "Channel"),
 							h.text.role("label").tone("muted").children("Channel settings"),
 						),
-				),
+					),
+			),
 			h.tabBar
 				.style("page")
 				.tabs(h.props.tabs.map((tab) => ({ id: tab.id, label: tab.label, href: tab.href })))

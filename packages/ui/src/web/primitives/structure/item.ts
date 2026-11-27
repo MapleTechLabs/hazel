@@ -152,6 +152,37 @@ ${I}[data-leading-size="conversation"]:not([data-unread="dot"])[data-badged] ${C
 }
 `
 
+// A bare icon in `trailing` (`p4-item-trailing-icon`) draws at the icon size, as in `leading`: 20px
+// compact, 16px regular (the account card's chevron, `size-5 sm:size-4`); the switcher's stays 16px.
+const trailingIconCss = `
+${I} ${SLOT("trailing")} > [data-hz=icon] { width: var(--hz-space-5); height: var(--hz-space-5); flex-shrink: 0; }
+@media (width >= 40rem) { ${I} ${SLOT("trailing")} > [data-hz=icon] { width: var(--hz-space-4); height: var(--hz-space-4); } }
+${I}[data-style="switcher"] ${SLOT("trailing")} > [data-hz=icon] { width: var(--hz-space-4); height: var(--hz-space-4); }
+`
+
+// \`style\` \`switcher\` and \`account\` (\`p4-sidebar-account-card\`): the face fills the 32pt leading
+// slot as a rounded square (\`isSquare\`, \`rounded-xl\`); the trigger fills its row and the chevron
+// sits at its end. The card's email hugs the name (\`-mt-0.5\`) and stops at \`max-w-36\`.
+const TRIGGER = ':is([data-style="switcher"], [data-style="account"])'
+const styleCss = `
+${I}${TRIGGER} ${SLOT("leading")} > [data-hz=avatar],
+${I}${TRIGGER} ${SLOT("leading")} > [data-hz=avatar] > :is([data-hz-part=image], [data-hz-part=dither]) {
+	width: 100%; height: 100%; border-radius: var(--hz-radius-xl); corner-shape: squircle;
+}
+${I}${TRIGGER} ${SLOT("trailing")} { margin-inline-start: auto; }
+/* The menu around the trigger fills the row, as today's \`w-full\` trigger. */
+[data-hz=menu]:has(> [data-hz-part=content] > [data-hz-slot=trigger] > ${I}${TRIGGER}),
+[data-hz=menu] > [data-hz-part=content]:has(> [data-hz-slot=trigger] > ${I}${TRIGGER}),
+[data-hz=menu] > [data-hz-part=content] > [data-hz-slot=trigger]:has(> ${I}${TRIGGER}) { display: flex; width: 100%; min-width: 0; }
+/* Today's switcher name tops the logo (its span has no \`items-center\`); the chevron stays centred. */
+${I}[data-style="switcher"] ${CONTROL} > [data-hz-part="title"] { align-self: start; }
+${I}[data-style="account"][data-subtitled] ${CONTROL} { align-items: center; row-gap: 0; }
+${I}[data-style="account"][data-subtitled] ${SLOT("leading")} { grid-row: 1 / span 2; }
+${I}[data-style="account"] ${CONTROL} > [data-hz-part="subtitle"] {
+	margin-top: calc(var(--hz-space-0_5) * -1); max-width: calc(4 * var(--hz-space-9));
+}
+`
+
 // What the recipe cannot say: slot order inside the row, the subtitle's second line, the elbow's
 // position, and a disabled link taking no clicks.
 const css = `
@@ -204,6 +235,8 @@ ${actionsCss}
 ${linesCss}
 ${largeCss}
 ${conversationCss}
+${trailingIconCss}
+${styleCss}
 `
 
 const elbowOf = (document: Document) => {
@@ -375,6 +408,7 @@ export const primitive = definePrimitive("item", ({ document, tag, outer }) => {
 			} else if (name === "titleLines") option(node, "title-lines", value)
 			else if (name === "subtitleLines") option(node, "subtitle-lines", value)
 			else if (name === "leadingSize") option(node, "leading-size", value)
+			else if (name === "style") option(node, "style", value)
 			else if (name === "nested") {
 				option(node, "nested", value)
 				if (value === "middle" || value === "last") {

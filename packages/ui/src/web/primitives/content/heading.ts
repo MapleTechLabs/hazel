@@ -7,6 +7,7 @@ export const primitive = definePrimitive("heading", ({ outer, self }) => {
 	node.setAttribute("role", "heading")
 	node.setAttribute("aria-level", "2")
 	return self(node, (name, value) => {
+		if (name === "size") return option(node, "size", value)
 		if (name !== "level") return
 		option(node, "level", value)
 		node.setAttribute("aria-level", typeof value === "string" ? value : "2")

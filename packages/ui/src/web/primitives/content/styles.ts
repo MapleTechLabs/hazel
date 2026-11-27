@@ -184,6 +184,7 @@ const css = `
 	[data-hz=dialog], [data-hz=sheet], [data-hz=popover], [data-hz=menu], [data-hz=contextMenu],
 	[data-hz=commandPalette]) { --hz-cutout: var(--hz-color-bg); }
 :where([data-hz=frame][data-surface=muted]) { --hz-cutout: var(--hz-color-muted); }
+:where([data-hz=channelIcon][data-tile]) { --hz-cutout: var(--hz-color-secondary); }
 [data-hz=channelIcon] > :is([data-hz-part=lock], [data-hz-part=sync]) {
 	background-color: var(--hz-cutout, var(--hz-color-bg));
 }
