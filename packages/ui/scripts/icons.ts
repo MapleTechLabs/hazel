@@ -39,17 +39,20 @@ const stub = new Proxy(
 const escape = (value: string) =>
 	value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;")
 
-// Sizing comes from the recipe (`[data-hz=icon] > svg` fills its box), so the fixed size is dropped.
-const dropped = new Set(["class", "data-slot", "width", "height"])
+// Sizing comes from the recipe (`[data-hz=icon] > svg` fills its box), so the root's fixed size is
+// dropped; an inner shape's `width` and `height` are its geometry (the GIF icon's box) and stay.
+const dropped = new Set(["class", "data-slot"])
+const droppedAtRoot = new Set([...dropped, "width", "height"])
 
-const markup = (node: Node | string): string => {
+const markup = (node: Node | string, isRoot = true): string => {
 	if (typeof node === "string") return escape(node)
 	if (node.tag === "title") return ""
+	const drop = isRoot ? droppedAtRoot : dropped
 	const attrs = node.attrs
-		.filter(([name]) => !dropped.has(name))
+		.filter(([name]) => !drop.has(name))
 		.map(([name, value]) => ` ${name}="${escape(value)}"`)
 		.join("")
-	return `<${node.tag}${attrs}>${node.children.map(markup).join("")}</${node.tag}>`
+	return `<${node.tag}${attrs}>${node.children.map((child) => markup(child, false)).join("")}</${node.tag}>`
 }
 
 // The app's icons win a shared name (both export `IconArrowUp`).
