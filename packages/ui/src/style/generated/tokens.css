@@ -5979,6 +5979,13 @@
 }
 
 @media (width >= 40rem) {
+	[data-hz="select"][data-width="narrow"] {
+		width: var(--hz-space-36);
+		flex-grow: 1;
+	}
+}
+
+@media (width >= 40rem) {
 	[data-hz="select"][data-width="regular"] > [data-hz-part="label"] > [data-hz-part="control"] {
 		width: var(--hz-space-64);
 	}

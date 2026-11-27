@@ -1670,6 +1670,7 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "option", style: Style(paddingX: 10, paddingY: 6, leading: 24)),
                 Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: "control", style: Style(background: Colors.fieldHover)),
                 Layer(when: When(options: ["width": "narrow"], flags: [], states: [], sizeClass: nil), part: "control", style: Style(width: 144)),
+                Layer(when: When(options: ["width": "narrow"], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(grow: true, width: 144)),
                 Layer(when: When(options: ["width": "regular"], flags: [], states: [], sizeClass: .regular), part: "control", style: Style(width: 256)),
                 Layer(when: When(options: [:], flags: ["placeholder"], states: [], sizeClass: nil), part: "input", style: Style(color: Colors.mutedFg)),
                 Layer(when: When(options: [:], flags: [], states: [.disabled], sizeClass: nil), part: nil, style: Style(opacity: 0.5)),

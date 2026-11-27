@@ -119,7 +119,12 @@ export const select = defineRecipe<{ readonly width: FieldWidth }, "placeholder"
 			default: "auto",
 			values: {
 				auto: {},
-				narrow: { parts: { control: { width: "36" } } },
+				// The field fills its row on a phone (a wrapping row puts it on its own line); from the
+				// regular size class it starts at the control's width, then takes the row's rest.
+				narrow: {
+					parts: { control: { width: "36" } },
+					regular: { root: { width: "36", grow: true } },
+				},
 				regular: { regular: { parts: { control: { width: "64" } } } },
 			},
 		},
