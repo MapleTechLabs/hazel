@@ -17,6 +17,7 @@ import { safeReturnTo } from "../auth/return-to"
 import { hasUpdater, isDesktop } from "../platform/desktop"
 import { AppRoute, hrefOf, type RouteOf, signInHref } from "../route"
 import { ShellDms } from "./children"
+import { pickersWebLayer } from "./pickers"
 import type { AppMessage } from "./message"
 import type { ThemePreference } from "../theme"
 import type { SoundSettings } from "../notification-sound"
@@ -25,6 +26,22 @@ import type { DesktopUpdate } from "@hazel/shared-screens/my-settings/platform"
 // The `import()`s are the only references to the pages' modules: a static import undoes the split.
 export const InvitePage = Component.lazy("InvitePage", () =>
 	import("@hazel/shared-screens/auth/pages/invite/InvitePage").then((module) => module.InvitePage),
+)
+
+// The channel settings tabs (PS8); the section layout around them is `sections.ts`'s.
+export const ChannelSettingsRedirectPage = Component.lazy("ChannelSettingsRedirectPage", () =>
+	import("@hazel/shared-screens/channel-settings/pages/RedirectPage").then((module) => module.RedirectPage),
+)
+export const ChannelSettingsOverviewPage = Component.lazy("ChannelSettingsOverviewPage", () =>
+	// The icon's emoji picker reads the web's storage and emoji CDN (`pickers.ts`).
+	import("@hazel/shared-screens/channel-settings/pages/overview/OverviewPage").then((module) =>
+		withClientData(Component.provide(module.OverviewPage, pickersWebLayer)),
+	),
+)
+export const ChannelSettingsConnectPage = Component.lazy("ChannelSettingsConnectPage", () =>
+	import("@hazel/shared-screens/channel-settings/pages/connect/ConnectPage").then((module) =>
+		withClientData(module.ConnectPage),
+	),
 )
 
 /** The app's one data instance, for pages that run live queries. */
@@ -206,8 +223,43 @@ const settingsColumn =
 	(h, inputs) =>
 		h.div.class("flex flex-col gap-6 px-4 lg:px-8").children(page(h, inputs))
 
+// HAZEL-GAP(p4-section-scroll-column): a section page's side gutter (today's `pageLayout`,
+// `px-4 lg:px-8`) is the frame's markup, as the channel settings header's in `sections.ts`.
+const sectionGutter =
+	<Tag extends AppRoute["_tag"]>(page: NativePage<Tag>): NativePage<Tag> =>
+	(h, inputs) =>
+		h.div.class("px-4 lg:px-8").children(page(h, inputs))
+
 /** Keyed by what makes a new instance (Foldkit's page `key`): a new token mounts a fresh page. */
 const nativePages: Registry = {
+	ChannelSettings: (h, { route }) =>
+		ChannelSettingsRedirectPage(h, {
+			key: route.channelId,
+			props: {
+				overviewHref: hrefOf(
+					AppRoute.ChannelSettingsOverview({ orgSlug: route.orgSlug, channelId: route.channelId }),
+				),
+			},
+		}),
+	ChannelSettingsOverview: sectionGutter<"ChannelSettingsOverview">((h, { route, session, fallback }) =>
+		ChannelSettingsOverviewPage(h, {
+			key: route.channelId,
+			props: {
+				channelId: route.channelId,
+				session,
+				// The customer's page is this prefix and its account id (`CustomerDetail`).
+				customerHrefPrefix: `${hrefOf(AppRoute.CustomersOverview({ orgSlug: route.orgSlug }))}/`,
+			},
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	),
+	ChannelSettingsConnect: sectionGutter<"ChannelSettingsConnect">((h, { route, session, fallback }) =>
+		ChannelSettingsConnectPage(h, {
+			key: route.channelId,
+			props: { channelId: route.channelId, session },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	),
 	Invite: fillWindow<"Invite">((h, { route, session, fallback }) =>
 		InvitePage(h, {
 			key: route.token,

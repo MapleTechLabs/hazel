@@ -10,8 +10,5 @@ const nameRules = (label: string): Rules<string> =>
 		],
 	})
 
-/** The channel settings form's name. */
-export const channelNameRules = nameRules("Channel name")
-
 /** The create-webhook form's name (the same bounds as a channel's). */
 export const webhookNameRules = nameRules("Webhook name")
