@@ -12,6 +12,7 @@ import type { Session } from "@hazel/shared-screens/app/session"
 import { Layer, Option } from "effect"
 import { canChooseServer, currentServer, isBuildServer, serverLabel } from "~/config/server"
 import { clientData } from "~/db/client"
+import { agentRequestOf, installRequestOf } from "../auth/consent-requests"
 import { safeReturnTo } from "../auth/return-to"
 import { AppRoute, hrefOf, type RouteOf, signInHref } from "../route"
 import { ShellDms } from "./children"
@@ -58,6 +59,22 @@ export const ContinuePage = Component.lazy("ContinuePage", () =>
 export const DesktopPage = Component.lazy("DesktopPage", () =>
 	Promise.all([import("@hazel/shared-screens/auth/pages/auth/desktop/DesktopPage"), authFlows()]).then(
 		([module, flows]) => module.DesktopPage.pipe(Component.provide(flows)),
+	),
+)
+
+// PA2: the pages that borrow the auth frame (join, OAuth consent, bot install).
+export const JoinPage = Component.lazy("JoinPage", () =>
+	import("@hazel/shared-screens/auth/pages/join/JoinPage").then((module) => module.JoinPage),
+)
+export const OAuthAuthorizePage = Component.lazy("OAuthAuthorizePage", () =>
+	Promise.all([
+		import("@hazel/shared-screens/auth/pages/oauth/authorize/OAuthAuthorizePage"),
+		import("../auth/agent-access-layer"),
+	]).then(([module, access]) => module.OAuthAuthorizePage.pipe(Component.provide(access.AgentAccessLive))),
+)
+export const BotInstallPage = Component.lazy("BotInstallPage", () =>
+	import("@hazel/shared-screens/auth/pages/oauth/bot-install/BotInstallPage").then((module) =>
+		withClientData(module.BotInstallPage),
 	),
 )
 
@@ -190,6 +207,27 @@ const nativePages: Registry = {
 				session,
 				signInHref: signInHref(hrefOf(route)),
 			},
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	),
+	Join: fillWindow<"Join">((h, { route, session, fallback }) =>
+		JoinPage(h, {
+			key: route.slug,
+			props: { slug: route.slug, session, signInHref: signInHref(hrefOf(route)) },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	),
+	OAuthAuthorize: fillWindow<"OAuthAuthorize">((h, { route, session, fallback }) =>
+		OAuthAuthorizePage(h, {
+			key: hrefOf(route),
+			props: { request: agentRequestOf(route), session, signInHref: signInHref(hrefOf(route)) },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	),
+	BotInstall: fillWindow<"BotInstall">((h, { route, session, fallback }) =>
+		BotInstallPage(h, {
+			key: hrefOf(route),
+			props: { request: installRequestOf(route), session, signInHref: signInHref(hrefOf(route)) },
 			fallback: (result) => fallback(result._tag === "Failure"),
 		}),
 	),

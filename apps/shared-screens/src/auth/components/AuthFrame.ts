@@ -24,6 +24,10 @@ export interface FrameOptions {
 	readonly tagline?: string | null
 }
 
+/** The frame's `aside`: the season's picture, the logo home and `tagline` (none when `null`). */
+export const brandPanel = <Msg>(h: Hazel.H<Msg>, tagline: string | null = DEFAULT_TAGLINE) =>
+	h.extension(BrandPanel, { pictures: PICTURES, homeHref: HOME_HREF, tagline })
+
 /**
  * The frame around `children`, the card's rows under its heading.
  * HAZEL-GAP(p4-auth-compact-logo): on a phone today's frame shows the logo and wordmark above the
@@ -34,20 +38,14 @@ export const authFrame = <Msg>(h: Hazel.H<Msg>, options: FrameOptions, ...childr
 		.surface("centered")
 		.title(options.title)
 		.subtitle(options.subtitle)
-		.aside(
-			h.extension(BrandPanel, {
-				pictures: PICTURES,
-				homeHref: HOME_HREF,
-				tagline: options.tagline === undefined ? DEFAULT_TAGLINE : options.tagline,
-			}),
-		)
+		.aside(brandPanel(h, options.tagline === undefined ? DEFAULT_TAGLINE : options.tagline))
 		.children(...(children as Array<never>))
 
 /** A frame with no rows: a page that only waits (today's loader under no heading). */
-export const authWaiting = <Msg>(h: Hazel.H<Msg>, label: string) =>
+export const authWaiting = <Msg>(h: Hazel.H<Msg>, label: string, tagline: string | null = DEFAULT_TAGLINE) =>
 	h.screen
 		.surface("centered")
-		.aside(h.extension(BrandPanel, { pictures: PICTURES, homeHref: HOME_HREF, tagline: DEFAULT_TAGLINE }))
+		.aside(brandPanel(h, tagline))
 		.children(h.progress.style("spinner").label(label))
 
 /** A failure (or a notice) under the form, as one line: `title. description`. */
