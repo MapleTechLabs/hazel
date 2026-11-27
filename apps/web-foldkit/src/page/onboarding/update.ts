@@ -6,6 +6,7 @@ import { failureMessage } from "~/lib/error-messages"
 import { errorToast, errorToastOf, successToast, warningToast } from "../../data/actions"
 import type { ToastRequest } from "../../overlay/toasts"
 import { AppRoute, hrefOf, onboardingHref, type RouteOf } from "../../route"
+import { stepFromUrl } from "./flow"
 import type { ThemeCustomization, ThemeMode } from "../../theme"
 import * as Interaction from "../../ui/aria/interaction"
 import * as ChoiceBox from "../../ui/choice-box"
@@ -19,11 +20,18 @@ import {
 	ReadBrowserTimezone,
 	ReadOnboardingAnswers,
 	SendInvites,
-	UpdateProfile,
 	UpdateUserTimezone,
 } from "./command"
 import { Message } from "./message"
-import { type Model, Phase, type Running, type StepOf, StepState, type UpdateUserFailure } from "./model"
+import {
+	type Model,
+	Phase,
+	type Running,
+	type StepOf,
+	StepState,
+	stepOf,
+	type UpdateUserFailure,
+} from "./model"
 import { CITIES } from "./timezone/data"
 import {
 	advance,
@@ -36,28 +44,11 @@ import {
 	startWhenReady,
 	withPhase,
 } from "./transition"
-import { filledEmails, inviteRowError, isProfileValid, MAX_INVITES } from "./validation"
+import { filledEmails, inviteRowError, MAX_INVITES } from "./validation"
 
 const toast = (request: ToastRequest) => PageOutMessage.RequestedToast({ toast: request })
 
-/** Before the flow runs, or while it still can: finishing it must not race a redirect. */
-const canRedirect = (model: Model): boolean =>
-	Phase.match(model.phase, {
-		Starting: () => true,
-		Leaving: () => false,
-		Running: ({ step }) => step._tag !== "Finalizing" && step._tag !== "Completed",
-	})
-
-/** The reverse guard: an onboarded user who lands here goes to the app root, once. */
-const redirectIfOnboarded = (model: Model, shared: Shared): Return =>
-	shared.currentUser?.isOnboarded && canRedirect(model)
-		? {
-				model: modifyFields(model, { phase: () => Phase.Leaving() }),
-				outMessage: PageOutMessage.RequestedNavigation({ route: AppRoute.Root(), replace: false }),
-			}
-		: { model }
-
-export const init = (route: RouteOf<"Onboarding">, shared: Shared): Return => {
+export const init = (route: RouteOf<"Onboarding">): Return => {
 	const model: Model = {
 		urlStep: Option.getOrNull(route.step),
 		orgId: Option.getOrNull(route.orgId),
@@ -65,13 +56,9 @@ export const init = (route: RouteOf<"Onboarding">, shared: Shared): Return => {
 		restoredData: null,
 		interaction: Interaction.init(),
 	}
-	const redirected = redirectIfOnboarded(model, shared)
 	// Back on the import step from a provider's OAuth: the answers given before it come back.
 	const isImport = Option.getOrNull(route.step) === "import"
-	return {
-		...redirected,
-		commands: [ReadBrowserTimezone(), ...(isImport ? [ReadOnboardingAnswers()] : [])],
-	}
+	return { model, commands: [ReadBrowserTimezone(), ...(isImport ? [ReadOnboardingAnswers()] : [])] }
 }
 
 const isStep = <Tag extends StepState["_tag"]>(step: StepState, tag: Tag): step is StepOf<Tag> =>
@@ -90,23 +77,19 @@ const withStep = <Tag extends StepState["_tag"]>(
 const withRunning = (model: Model, f: (running: Running) => Return): Return =>
 	model.phase._tag === "Running" ? f(model.phase) : { model }
 
-/** The profile defaults come from `user.me`, which may arrive after the step was entered. */
-export const sharedChanged = (model: Model, shared: Shared): Return => {
-	const seeded = withStep(model, "Profile", (form, running) => ({
-		model:
-			!form.hasChanged && shared.currentUser && !form.firstName && !form.lastName
-				? setStep(
-						model,
-						running,
-						StepState.Profile({
-							...form,
-							firstName: shared.currentUser.firstName,
-							lastName: shared.currentUser.lastName,
-						}),
-					)
-				: model,
-	})).model
-	return redirectIfOnboarded(seeded, shared)
+/**
+ * The native shell (`shared-screens/src/onboarding`) moved the flow, or drew its own step: enter the
+ * URL's step here too, without writing the URL again. The onboarded redirect is the shell's.
+ */
+export const routeChanged = (model: Model, route: RouteOf<"Onboarding">): Return => {
+	const urlStep = Option.getOrNull(route.step)
+	const withUrl = modifyFields(model, { urlStep: () => urlStep })
+	return withRunning(withUrl, (running) => {
+		const step = stepFromUrl(urlStep, running.flow.userType)
+		return step === null || step === stepOf(running.step)
+			? { model: withUrl }
+			: enterStep(withUrl, running, step, { direction: "forward", syncUrl: false })
+	})
 }
 
 const decodeHexColor = Schema.decodeUnknownOption(Theme.HexColor)
@@ -133,17 +116,13 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 	Message.match<Return>(message, {
 		DetectedBrowserTimezone: ({ browserTimezone }) =>
 			model.phase._tag === "Starting"
-				? startWhenReady(
-						model,
-						{ ...model.phase, browserTimezone: Option.some(browserTimezone) },
-						shared,
-					)
+				? startWhenReady(model, { ...model.phase, browserTimezone: Option.some(browserTimezone) })
 				: { model },
 		// A running flow keeps its user type; the membership itself stays current.
 		UpdatedMembership: ({ membership }) =>
 			Phase.match(model.phase, {
 				Starting: (starting) =>
-					startWhenReady(model, { ...starting, membership: Option.some(membership) }, shared),
+					startWhenReady(model, { ...starting, membership: Option.some(membership) }),
 				Leaving: () => ({ model }),
 				Running: (running) => {
 					const next = modifyFields(running, {
@@ -175,55 +154,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					}
 				},
 			}),
-		ClickedBack: () => withRunning(model, (running) => goBack(model, running, shared)),
-		ClickedGetStarted: () => withStep(model, "Welcome", (_, running) => advance(model, running, shared)),
-
-		ChangedFirstName: ({ value }) =>
-			withStep(model, "Profile", (form, running) => ({
-				model: setStep(
-					model,
-					running,
-					StepState.Profile({ ...form, firstName: value, hasChanged: true }),
-				),
-			})),
-		ChangedLastName: ({ value }) =>
-			withStep(model, "Profile", (form, running) => ({
-				model: setStep(
-					model,
-					running,
-					StepState.Profile({ ...form, lastName: value, hasChanged: true }),
-				),
-			})),
-		SubmittedProfile: () =>
-			withStep(model, "Profile", (form, running) => {
-				if (form.isSubmitting) return { model }
-				const userId = shared.currentUser?.id
-				return !isProfileValid(form) || userId === undefined
-					? { model: setStep(model, running, StepState.Profile({ ...form, hasChanged: true })) }
-					: {
-							model: setStep(
-								model,
-								running,
-								StepState.Profile({ ...form, isSubmitting: true }),
-							),
-							commands: [
-								UpdateProfile({
-									userId,
-									firstName: form.firstName.trim(),
-									lastName: form.lastName.trim(),
-								}),
-							],
-						}
-			}),
-		SucceededUpdateProfile: () =>
-			withStep(model, "Profile", (form, running) =>
-				form.isSubmitting ? advance(model, running, shared) : { model },
-			),
-		FailedUpdateProfile: ({ reason }) =>
-			withStep(model, "Profile", (form, running) => ({
-				model: setStep(model, running, StepState.Profile({ ...form, isSubmitting: false })),
-				outMessage: toast(updateUserFailureToast(reason)),
-			})),
+		ClickedBack: () => withRunning(model, (running) => goBack(model, running)),
 
 		ChangedTimezoneQuery: ({ value }) =>
 			withStep(model, "Timezone", (form, running) => ({
@@ -286,7 +217,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			),
 		SucceededUpdateTimezone: ({ timezone }) =>
 			withStep(model, "Timezone", (form, running) =>
-				form.isSubmitting ? advance(model, running, shared, { timezone: () => timezone }) : { model },
+				form.isSubmitting ? advance(model, running, { timezone: () => timezone }) : { model },
 			),
 		FailedUpdateTimezone: ({ reason }) =>
 			withStep(model, "Timezone", (form, running) => ({
@@ -304,7 +235,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			),
 		SelectedTheme: ({ theme }) =>
 			withStep(model, "Theme", () => requestTheme(model, theme, shared.theme.customization)),
-		ClickedContinueTheme: () => withStep(model, "Theme", (_, running) => advance(model, running, shared)),
+		ClickedContinueTheme: () => withStep(model, "Theme", (_, running) => advance(model, running)),
 
 		GotChoiceBoxMessage: ({ message: boxMessage }) =>
 			withRunning(model, (running) => {
@@ -331,8 +262,8 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				const [selected] = step.box.selectedKeys
 				if (selected === undefined) return { model }
 				return step._tag === "UseCases"
-					? advance(model, running, shared, { useCases: () => [selected] })
-					: advance(model, running, shared, { role: () => selected })
+					? advance(model, running, { useCases: () => [selected] })
+					: advance(model, running, { role: () => selected })
 			}),
 
 		GotMigrationMessage: ({ message: migrationMessage }) =>
@@ -346,7 +277,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				if (outcome === undefined) return { model: next, commands }
 				if (outcome._tag === "Toast")
 					return { model: next, commands, outMessage: toast(outcome.toast) }
-				const advanced = advance(next, running, shared)
+				const advanced = advance(next, running)
 				return { ...advanced, commands: [...commands, ...(advanced.commands ?? [])] }
 			}),
 
@@ -415,7 +346,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			withStep(model, "Invite", (form, running) => {
 				if (form.isSending) return { model }
 				const emails = filledEmails(form.rows)
-				if (emails.length === 0) return finalize(model, running, shared)
+				if (emails.length === 0) return finalize(model, running)
 				const rows = form.rows.map((row) => ({ ...row, error: inviteRowError(row.email) }))
 				if (rows.some((row) => Option.isSome(row.error)))
 					return { model: setStep(model, running, StepState.Invite({ ...form, rows })) }
@@ -431,17 +362,16 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			withStep(model, "Invite", (form, running) =>
 				!form.isSending
 					? { model }
-					: {
-							...finalize(model, running, shared),
-							outMessage:
-								failedCount === 0
-									? toast(successToast(`Sent ${plural(emails.length)}`))
-									: toast(
-											warningToast(
-												`Sent ${plural(emails.length - failedCount)}, ${failedCount} failed`,
-											),
-										),
-						},
+					: // The toast goes with the step's navigation: one update, one OutMessage.
+						finalize(
+							model,
+							running,
+							failedCount === 0
+								? successToast(`Sent ${plural(emails.length)}`)
+								: warningToast(
+										`Sent ${plural(emails.length - failedCount)}, ${failedCount} failed`,
+									),
+						),
 			),
 		FailedSendInvites: () =>
 			withStep(model, "Invite", (form, running) => ({
@@ -454,7 +384,6 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				const slug = running.flow.membership?.slug
 				const completed = enterStep(model, running, "completed", {
 					direction: "forward",
-					shared,
 					syncUrl: true,
 				})
 				return {
@@ -481,7 +410,6 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 							commands: [completeOnboarding(running)],
 						},
 			),
-		CompletedReplaceStepUrl: () => ({ model }),
 		CompletedLoadHome: () => ({ model }),
 		CompletedAutoFocus: () => ({ model }),
 		StartedGlobeAnimation: () => ({ model }),

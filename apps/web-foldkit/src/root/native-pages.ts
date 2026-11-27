@@ -271,6 +271,20 @@ export const BotInstallPage = Component.lazy("BotInstallPage", () =>
 	),
 )
 
+// Onboarding (PA3): the flow and its first steps; the later steps are still the Foldkit page's.
+export const OnboardingPage = Component.lazy("OnboardingPage", () =>
+	import("@hazel/shared-screens/onboarding/pages/onboarding/OnboardingPage").then((module) =>
+		withClientData(module.OnboardingPage),
+	),
+)
+
+/** The Foldkit onboarding page's region, moved into the shell's `legacyStep` slot (until PA4). */
+const legacyOnboardingStep = (h: Html.H<AppMessage>) =>
+	h.div
+		.class("contents")
+		.attr("data-foldkit-slot", "page")
+		.onMount(AdoptRegion({ region: "page" }))
+
 /** The native app's install (`~/config/server`), which its sign-in page can change; `null` on the web. */
 const initialServer = () =>
 	canChooseServer() ? { label: serverLabel(currentServer()), isDefault: isBuildServer(), form: null } : null
@@ -471,6 +485,19 @@ const nativePages: Registry = {
 		CustomersSettingsSlaPage(h, {
 			key: route.orgSlug,
 			props: { session },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	),
+	// One instance per visit; `?step=` changes reach it as props.
+	Onboarding: fillWindow<"Onboarding">((h, { route, session, fallback }) =>
+		OnboardingPage(h, {
+			key: route._tag,
+			props: {
+				session,
+				urlStep: Option.getOrNull(route.step),
+				orgId: Option.getOrNull(route.orgId),
+			},
+			slots: { legacyStep: legacyOnboardingStep(h) },
 			fallback: (result) => fallback(result._tag === "Failure"),
 		}),
 	),

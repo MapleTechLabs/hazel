@@ -1,7 +1,7 @@
 import { Option } from "effect"
 import type { InviteRow, InviteRowError } from "./model"
 
-/** The onboarding forms' rules, read by both `update` (to block a submit) and the views (to show why). */
+/** The invite step's rules, read by both `update` (to block a send) and the view (to show why). */
 
 /** `invite-team-step.tsx` sends at most this many at once. */
 export const MAX_INVITES = 10
@@ -9,17 +9,6 @@ export const MAX_INVITES = 10
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const isFilled = (value: string) => value.trim().length > 0
-
-/** Which names are missing. Trimmed, so "   " is missing too. */
-export const profileErrors = (form: { readonly firstName: string; readonly lastName: string }) => ({
-	firstName: !isFilled(form.firstName),
-	lastName: !isFilled(form.lastName),
-})
-
-export const isProfileValid = (form: { readonly firstName: string; readonly lastName: string }) => {
-	const errors = profileErrors(form)
-	return !errors.firstName && !errors.lastName
-}
 
 /** An empty row is skipped, not an error. */
 export const inviteRowError = (email: string): Option.Option<InviteRowError> =>

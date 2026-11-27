@@ -10,13 +10,6 @@ export const Message = defineMessageUnion({
 	DetectedBrowserTimezone: { browserTimezone: Schema.String },
 	UpdatedMembership: { membership: Schema.NullOr(Membership) },
 	ClickedBack: {},
-	ClickedGetStarted: {},
-	// Profile
-	ChangedFirstName: { value: Schema.String },
-	ChangedLastName: { value: Schema.String },
-	SubmittedProfile: {},
-	SucceededUpdateProfile: {},
-	FailedUpdateProfile: { reason: UpdateUserFailure },
 	// Timezone
 	ChangedTimezoneQuery: { value: Schema.String },
 	ElapsedTimezoneDebounce: { query: Schema.String },
@@ -51,7 +44,6 @@ export const Message = defineMessageUnion({
 	SucceededCompleteOnboarding: {},
 	FailedCompleteOnboarding: { reason: CommonReason },
 	ClickedRetryFinalize: {},
-	CompletedReplaceStepUrl: {},
 	CompletedLoadHome: {},
 	CompletedAutoFocus: {},
 	StartedGlobeAnimation: {},
