@@ -137,6 +137,7 @@ export const generateSwift = (tokens: Tokens, recipes: ReadonlyArray<Recipe>): s
 		if (d.minWidth !== undefined) add("minWidth", num(space(d.minWidth)))
 		if (d.transitionEase !== undefined) add("transitionEase", str(d.transitionEase))
 		if (d.mono !== undefined) add("mono", String(d.mono))
+		if (d.radiusTop !== undefined) add("radiusTop", num(tokens.radius[d.radiusTop] ?? 0))
 		return `Style(${fields.join(", ")})`
 	}
 
@@ -361,6 +362,8 @@ ${Object.entries(tokens.shadow)
         public var minWidth: CGFloat? = nil, transitionEase: String? = nil
         /// The monospace family over \`text\` (\`font-mono\`).
         public var mono: Bool? = nil
+        /// The two top corners over \`radius\`.
+        public var radiusTop: CGFloat? = nil
 
         /// \`other\`'s fields over these.
         public func merged(_ other: Style) -> Style {
@@ -384,7 +387,7 @@ ${Object.entries(tokens.shadow)
             out.textAlign = other.textAlign ?? textAlign; out.lineClamp = other.lineClamp ?? lineClamp
             out.overflow = other.overflow ?? overflow
             out.minWidth = other.minWidth ?? minWidth; out.transitionEase = other.transitionEase ?? transitionEase
-            out.mono = other.mono ?? mono
+            out.mono = other.mono ?? mono; out.radiusTop = other.radiusTop ?? radiusTop
             return out
         }
     }

@@ -130,6 +130,9 @@ export type ProgressStyle = typeof ProgressStyle.Type
 export const PropertyStyle = Schema.Literals(Sets.propertyStyles)
 export type PropertyStyle = typeof PropertyStyle.Type
 
+export const DisclosureTone = Schema.Literals(Sets.disclosureTones)
+export type DisclosureTone = typeof DisclosureTone.Type
+
 export const BannerStyle = Schema.Literals(Sets.bannerStyles)
 export type BannerStyle = typeof BannerStyle.Type
 

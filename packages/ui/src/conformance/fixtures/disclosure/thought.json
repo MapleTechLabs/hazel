@@ -1,0 +1,39 @@
+{
+	"about": "The thought line (`disclosure-glyph`, today's `thoughtLine`): its glyph leads, dimmed once done, the chevron trails; `danger` is a failed step.",
+	"root": {
+		"tag": "disclosure",
+		"props": {
+			"title": "Thought",
+			"icon": "brain",
+			"tone": "danger"
+		},
+		"events": ["toggle"],
+		"children": [
+			{
+				"tag": "text",
+				"props": {
+					"tone": "muted"
+				},
+				"children": ["Read 3 channels."]
+			}
+		]
+	},
+	"frame": "inline",
+	"axes": [
+		{
+			"prop": "tone",
+			"values": [null]
+		},
+		{
+			"prop": "running",
+			"values": [true]
+		}
+	],
+	"kit": {
+		"specimen": "thought-line",
+		"target": "disclosure"
+	},
+	"pending": {
+		"ios": "S4"
+	}
+}

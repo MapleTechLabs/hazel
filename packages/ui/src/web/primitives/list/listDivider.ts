@@ -4,11 +4,9 @@ import { definePrimitive, option, part } from "../define.ts"
 import { ensureSheet } from "./runtime.ts"
 
 // The unread rule runs up to its label at the end; a recipe cannot drop a part. A day sticks to the
-// list's top with its pill where today's stuck one sits (`top-0` in a `py-2` list, `my-2`),
-// in the mono family (no mono caption step yet).
+// list's top with its pill where today's stuck one sits (`top-0` in a `py-2` list, `my-2`).
 const css = `[data-hz="listDivider"][data-kind="unread"] > [data-hz-part="lineEnd"] { display: none; }
-[data-hz="listDivider"]:not([data-kind="unread"]) { position: sticky; top: var(--hz-space-2); z-index: 1; }
-[data-hz="listDivider"]:not([data-kind="unread"]) > [data-hz-part="label"] { font-family: var(--hz-font-mono); }`
+[data-hz="listDivider"]:not([data-kind="unread"]) { position: sticky; top: var(--hz-space-2); z-index: 1; }`
 
 export const primitive = definePrimitive("listDivider", ({ document, tag, outer }) => {
 	ensureSheet(document, "listDivider", css)

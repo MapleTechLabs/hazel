@@ -162,6 +162,10 @@ const declarations = (d: Declarations, tracked: ReadonlySet<string>): ReadonlyAr
 	if (d.borderColor !== undefined)
 		add("border-color", d.borderColor === "transparent" ? "transparent" : colorVar(d.borderColor))
 	if (d.radius !== undefined) add("border-radius", `var(--hz-radius-${d.radius})`)
+	if (d.radiusTop !== undefined) {
+		add("border-top-left-radius", `var(--hz-radius-${d.radiusTop})`)
+		add("border-top-right-radius", `var(--hz-radius-${d.radiusTop})`)
+	}
 	if (d.ring !== undefined) add("box-shadow", `inset 0 0 0 1px ${colorVar(d.ring)}`)
 	if (d.divider !== undefined) add("border-bottom", `1px solid ${colorVar(d.divider)}`)
 	if (d.paddingX !== undefined) add("padding-inline", length(d.paddingX))

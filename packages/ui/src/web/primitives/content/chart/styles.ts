@@ -42,8 +42,9 @@ const css = `
 	min-width: 0;
 }
 [data-hz="chart"]:is([data-kind="bar"], [data-kind="stackedBar"]) { --hz-chart-height: calc(var(--hz-space-14) * 4); }
-/* HAZEL-GAP(chart-heights): today's h-44 and h-48 plots have no size step; small is h-32, large h-72. */
+/* small h-32, medium h-44 (billing's MRR), large h-72. */
 [data-hz="chart"][data-size="small"] { --hz-chart-height: calc(var(--hz-space-16) * 2); }
+[data-hz="chart"][data-size="medium"] { --hz-chart-height: calc(var(--hz-space-11) * 4); }
 [data-hz="chart"][data-size="large"] { --hz-chart-height: calc(var(--hz-space-24) * 3); }
 [data-hz="chart"] > [data-hz-part="legend"] { grid-area: legend; margin-block-start: 0; margin-inline: 0; padding: 0; list-style: none; }
 [data-hz="chart"]:not([data-legend]) > [data-hz-part="legend"] { display: none; }

@@ -396,6 +396,10 @@ export const tags = {
 			net: flag,
 			highlightFrom: count,
 			loading: flag,
+			// Phase 4: the tooltip's heading per label (`Mon, Oct 12` over the tick's `Oct 12`), and the
+			// evidence bars' dashed baseline at a value of the page's (else `net`'s prior mean).
+			headings: value(Schema.Array(Schema.String)),
+			baseline: value(Schema.Finite),
 		},
 		events: {
 			hover: Schema.Struct({ index: Schema.NullOr(Schema.Finite) }),
@@ -1003,7 +1007,15 @@ export const tags = {
 		web: "A4",
 		ios: "S4",
 		content: "elements",
-		props: { title: text, subtitle: text, open: flag, running: flag },
+		// `icon` (`disclosure-glyph`): the thought line's glyph leads and the chevron trails it.
+		props: {
+			title: text,
+			subtitle: text,
+			open: flag,
+			running: flag,
+			icon: value(O.IconName),
+			tone: option(O.DisclosureTone, "default"),
+		},
 		slots: ["trailing"],
 		events: { toggle: Schema.Struct({ open: Schema.Boolean }) },
 	}),

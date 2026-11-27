@@ -107,7 +107,8 @@ export const primitive = definePrimitive("statTile", ({ document, tag, outer }) 
 	const term = part(document, "button", "term")
 	term.setAttribute("type", "button")
 	term.setAttribute("aria-describedby", `${id}-definition`)
-	// HAZEL-GAP(press-inner-controls): the host raises the tile's `press` for a click on the label too.
+	// An inner control: the host keeps its click from raising the tile's `press` (`host.ts`).
+	term.dataset.hzInner = ""
 	const definition = part(document, "span", "definition")
 	definition.id = `${id}-definition`
 	definition.setAttribute("role", "tooltip")

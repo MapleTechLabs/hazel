@@ -1,13 +1,14 @@
 // @vitest-environment happy-dom
 // Effect UI is a public preview: every API is experimental by design here.
 // @effect-diagnostics experimentalApiUsage:off
-import { Renderer } from "@effect/ui"
-import { Effect } from "effect"
+import { Renderer, UiSchema } from "@effect/ui"
+import { Effect, Schema } from "effect"
 import { describe, expect, it } from "vitest"
 import { ChannelList } from "../demo/ChannelList.ts"
 import { ActivityChart, MeshBackground } from "../demo/extensions.ts"
 import { Rows, RowsMessage } from "../demo/Rows.ts"
 import { registerDemoWebExtensions } from "../demo/web-extensions.ts"
+import { Hazel } from "../vocabulary/index.ts"
 import { missingWebExtensions } from "./extensions.ts"
 import * as WebHost from "./host.ts"
 
@@ -23,7 +24,53 @@ const container = () => {
 const titles = (root: Element) =>
 	[...root.querySelectorAll("[data-hz=item] [data-hz-part=title]")].map((node) => node.textContent)
 
+const PressMessage = UiSchema.TaggedEnum({ PressedTile: {}, PressedPoint: { index: Schema.Finite } })
+
+/** A tile with a definition label and a chart, logging the presses they raise (`press-inner-controls`). */
+const Presses = Hazel.component({
+	name: "Presses",
+	props: Schema.Struct({}),
+	model: Schema.Struct({ log: Schema.Array(Schema.String) }),
+	message: PressMessage,
+}).make({
+	init: () => ({ log: [] }),
+	update: {
+		PressedTile: ($) => $.evolve({ log: (log) => [...log, "tile"] }),
+		PressedPoint: ($, { index }) => $.evolve({ log: (log) => [...log, `point ${index}`] }),
+	},
+	view: (h) =>
+		h.stack.children(
+			h.statTile
+				.label("Seats")
+				.value("42")
+				.definition("Paid seats in use")
+				.on("press", () => PressMessage.PressedTile()),
+			h.chart
+				.label("Seats")
+				.series([{ key: "seats", label: "Seats", tone: "series1", values: [1, 2, 3] }])
+				.labels(["Mon", "Tue", "Wed"])
+				.on("press", ({ index }) => PressMessage.PressedPoint({ index })),
+		),
+})
+
 describe("web host", () => {
+	it("keeps an inner control's click and a chart's own press from raising a bare press", async () => {
+		const root = container()
+		await Effect.gen(function* () {
+			const app = yield* Renderer.mount(Presses, {}, root)
+			yield* Effect.promise(settle)
+			;(root.querySelector("[data-hz=statTile] [data-hz-part=term]") as HTMLElement).click()
+			yield* Effect.promise(settle)
+			expect(app.model()?.log).toEqual([])
+			;(root.querySelector("[data-hz=statTile] [data-hz-part=value]") as HTMLElement).click()
+			yield* Effect.promise(settle)
+			expect(app.model()?.log).toEqual(["tile"])
+			;(root.querySelector("[data-hz=chart] [data-hz-part=legend]") as HTMLElement).click()
+			yield* Effect.promise(settle)
+			expect(app.model()?.log).toEqual(["tile"])
+		}).pipe(Effect.provide(WebHost.layer()), Effect.scoped, Effect.runPromise)
+	})
+
 	it("builds each hz tag's structure, swaps link and button, and keeps nodes across a keyed reorder", async () => {
 		const root = container()
 		await Effect.gen(function* () {

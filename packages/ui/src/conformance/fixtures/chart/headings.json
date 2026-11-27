@@ -1,0 +1,87 @@
+{
+	"about": "A line chart whose tooltip heads each point with a longer date than its tick (`chart-tooltip-heading`), and billing's h-44 plot (`chart-heights`, size `medium`).",
+	"root": {
+		"tag": "chart",
+		"props": {
+			"kind": "stackedBar",
+			"label": "MRR movement by month",
+			"series": [
+				{
+					"key": "new",
+					"label": "New",
+					"tone": "new",
+					"values": [
+						940000, 1210000, 870000, 1530000, 1120000, 980000, 1340000, 1460000, 1010000, 1250000,
+						1390000, 1620000
+					]
+				},
+				{
+					"key": "expansion",
+					"label": "Expansion",
+					"tone": "expansion",
+					"values": [
+						360000, 420000, 150000, 510000, 290000, 330000, 470000, 380000, 260000, 440000,
+						350000, 520000
+					]
+				},
+				{
+					"key": "contraction",
+					"label": "Contraction",
+					"tone": "contraction",
+					"values": [
+						-100000, -80000, -120000, -60000, -90000, -150000, -70000, -110000, -40000, -90000,
+						-130000, -80000
+					]
+				},
+				{
+					"key": "churn",
+					"label": "Churned",
+					"tone": "churn",
+					"values": [
+						-260000,
+						-310000,
+						null,
+						-180000,
+						-420000,
+						-220000,
+						-350000,
+						-190000,
+						-500000,
+						-240000,
+						-280000,
+						-160000
+					]
+				}
+			],
+			"labels": ["Dec", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov"],
+			"format": "currency",
+			"currency": "USD",
+			"legend": true,
+			"net": true,
+			"headings": [
+				"Mon, Dec",
+				"Mon, Jan",
+				"Mon, Feb",
+				"Mon, Mar",
+				"Mon, Apr",
+				"Mon, May",
+				"Mon, Jun",
+				"Mon, Jul",
+				"Mon, Aug",
+				"Mon, Sep",
+				"Mon, Oct",
+				"Mon, Nov"
+			]
+		}
+	},
+	"frame": "screen",
+	"axes": [
+		{
+			"prop": "size",
+			"values": ["medium"]
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	}
+}

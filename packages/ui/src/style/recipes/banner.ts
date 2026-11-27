@@ -86,7 +86,9 @@ export const banner = defineRecipe<
 						gap: "0",
 						minHeight: "7",
 						marginX: "3",
+						// It hangs from the edge above (`rounded-b-lg`).
 						radius: "lg",
+						radiusTop: "none",
 						borderWidth: "none",
 						text: "caption",
 						shadow: "sm",

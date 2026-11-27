@@ -287,6 +287,11 @@ export const tokens = {
 		snug: { compact: { size: 14, lineHeight: 19.25 }, regular: { size: 14, lineHeight: 19.25 } },
 		// Chat text: today's message row is `text-base/6` at every width.
 		reading: { compact: { size: 16, lineHeight: 24 }, regular: { size: 16, lineHeight: 24 } },
+		// A KPI's value (kpi-tile.ts `text-2xl/8 tracking-tight max-md:text-xl/7`, -0.025em).
+		stat: {
+			compact: { size: 20, lineHeight: 28, tracking: -0.5 },
+			regular: { size: 24, lineHeight: 32, tracking: -0.6 },
+		},
 		// Tailwind's `text-xl` (20/28): the empty channel's line.
 		hero: { compact: { size: 20, lineHeight: 28 }, regular: { size: 20, lineHeight: 28 } },
 		// A page header's title (heading.styles.ts `title`: `text-lg/7 tracking-[-0.014em]`).

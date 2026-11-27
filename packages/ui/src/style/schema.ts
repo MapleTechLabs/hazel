@@ -261,6 +261,10 @@ export type ToggleStyle = (typeof toggleStyles)[number]
 export const progressStyles = ["bar", "spinner", "inline", "meter"] as const
 export type ProgressStyle = (typeof progressStyles)[number]
 
+/** A disclosure's ink: `danger` is a failed step (the thought line's `text-danger`). */
+export const disclosureTones = ["default", "danger"] as const
+export type DisclosureTone = (typeof disclosureTones)[number]
+
 /** A property's row: the label column (`detail/parts.ts`), or `justified`, a fact with its value at the end. */
 export const propertyStyles = ["column", "justified"] as const
 export type PropertyStyle = (typeof propertyStyles)[number]
@@ -285,7 +289,8 @@ export const chartKinds = [
 ] as const
 export type ChartKind = (typeof chartKinds)[number]
 
-export const chartSizes = ["regular", "small", "large"] as const
+/** Plot heights: `small` h-32, `medium` h-44 (billing's MRR), `regular` h-52 (lines) or h-56 (bars), `large` h-72. */
+export const chartSizes = ["regular", "small", "medium", "large"] as const
 export type ChartSize = (typeof chartSizes)[number]
 
 /** A stat tile's delta: its direction, and whether that direction is good (`goodWhen`, decided by the view). */
@@ -351,9 +356,10 @@ export interface Shadow {
 /**
  * Type steps only recipes use (a count badge's 11px), never a view's `text.role`. `reading` is chat
  * text, 16/24 at every width (a message row does not step down like `body`); `snug` a DM preview, 14/19.25;
- * `headline` a page header's title (the kit's heading `title`, 18/28); `hero` Tailwind's `text-xl` (20/28).
+ * `headline` a page header's title (the kit's heading `title`, 18/28); `hero` Tailwind's `text-xl` (20/28);
+ * `stat` a KPI's value (`text-2xl/8 tracking-tight`, `max-md:text-xl/7`).
  */
-export const recipeTextSteps = ["tiny", "micro", "reading", "snug", "headline", "hero"] as const
+export const recipeTextSteps = ["tiny", "micro", "reading", "snug", "headline", "hero", "stat"] as const
 export type RecipeTextStep = (typeof recipeTextSteps)[number]
 export type TextStep = TextRole | RecipeTextStep
 
@@ -451,6 +457,8 @@ export interface Declarations<T extends TokenNames = TokenNames> {
 	readonly borderColor?: T["color"] | "transparent"
 	readonly borderWidth?: "none" | "hairline"
 	readonly radius?: T["radius"]
+	/** The two top corners over `radius` (a bar hanging from the edge above, `rounded-b-lg`). */
+	readonly radiusTop?: T["radius"]
 	/** A hairline drawn inside the box (`inset 0 0 0 1px`), taking no space; not with `shadow`. */
 	readonly ring?: T["color"]
 	/** A hairline under the box (a bar's bottom edge). */

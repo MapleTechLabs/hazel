@@ -9,7 +9,7 @@ import {
 import { meter } from "../../../../apps/web-foldkit/src/customers/charts/sparkline.ts"
 import { connectCard } from "../../../../apps/web-foldkit/src/customers/ui/connect-card.ts"
 import { sourceChip, sourceMark } from "../../../../apps/web-foldkit/src/customers/ui/identity.ts"
-import { IconClock, IconHashtag } from "../../../../apps/web-foldkit/src/icons/index.ts"
+import { IconBrainSparkle, IconClock, IconHashtag } from "../../../../apps/web-foldkit/src/icons/index.ts"
 import { badge } from "../../../../apps/web-foldkit/src/ui/badge.ts"
 import { avatar, type AvatarProps } from "../../../../apps/web-foldkit/src/ui/avatar.ts"
 import { callout } from "../../../../apps/web-foldkit/src/ui/callout.ts"
@@ -18,6 +18,7 @@ import { heading } from "../../../../apps/web-foldkit/src/ui/heading.ts"
 import { iconTile } from "../../../../apps/web-foldkit/src/ui/icon-tile.ts"
 import { kbd } from "../../../../apps/web-foldkit/src/ui/kbd.ts"
 import { presenceDot } from "../../../../apps/web-foldkit/src/ui/presence-dot.ts"
+import { thoughtLine } from "../../../../apps/web-foldkit/src/ui/thought-line.ts"
 
 /**
  * The kit side of lane A1's parity tags: today's avatar, group DM pair, icon tile, channel icon,
@@ -148,6 +149,25 @@ const customerChips = (h: H): ReadonlyArray<Html> => [
 				),
 				h.span([h.Class("whitespace-nowrap text-muted-fg text-xs tabular-nums")], ["was 12 active"]),
 			],
+		),
+	),
+	specimen(
+		h,
+		"thought-line",
+		thoughtLine(
+			h,
+			{
+				isRunning: false,
+				label: "Thought",
+				doneLabel: "Thought",
+				icon: IconBrainSparkle(h),
+				hasClock: false,
+				isOpen: false,
+				onToggle: () => undefined as never,
+				bodyId: "thought-body",
+				tone: "danger",
+			},
+			[],
 		),
 	),
 	// One of `signalCounts`' runs: the bars and the count.

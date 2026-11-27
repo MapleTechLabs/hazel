@@ -6,7 +6,6 @@ import type { StatDeltaTone, StatTrend } from "../schema.ts"
  * border bg-bg shadow-xs p-4`, `max-md:p-3`, `gap-1.5`): the label (`text-xs/5 font-medium`), the
  * value (`text-2xl/8 font-semibold`), the delta pill (`deltaPill`, green or red by `deltaTone`), the
  * comparison and the definition card. Layout, the link, the reveal and skeleton shapes are the renderer's.
- * HAZEL-GAP(stat-value-step): today's value is `max-md:text-xl/7 tracking-tight`; Hazel has no 20/28 step.
  */
 export const statTile = defineRecipe<
 	{ readonly trend: StatTrend; readonly deltaTone: StatDeltaTone },
@@ -75,7 +74,7 @@ export const statTile = defineRecipe<
 				text: "caption",
 				leading: "5",
 			},
-			value: { text: "display", weight: "semibold", color: "fg", numeric: true },
+			value: { text: "stat", weight: "semibold", color: "fg", numeric: true },
 			detail: { text: "label", color: "muted-fg", numeric: true, truncate: true },
 			footer: { layout: "row", align: "center", gap: "1.5", text: "caption", leading: "5" },
 			delta: {

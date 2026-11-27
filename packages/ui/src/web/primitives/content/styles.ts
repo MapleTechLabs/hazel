@@ -109,8 +109,6 @@ const css = `
 /* A banner's \`actions\` slot mounts before its children; it reads after them, as the kit's. */
 [data-hz=banner] > [data-hz-part=content] > [data-hz-slot=actions] { order: 1; }
 [data-hz=banner] > [data-hz-part=content] > [data-hz-slot=actions]:empty { display: none; }
-/* The bar hangs from the edge above it (\`rounded-b-lg\`): square top corners. */
-[data-hz=banner][data-style=bar] { border-top-left-radius: 0; border-top-right-radius: 0; }
 [data-hz=banner] > [data-hz-part=dismiss] { cursor: pointer; }
 [data-hz=banner] > [data-hz-part=dismiss]:hover { opacity: 1; }
 [data-hz=banner] > [data-hz-part=dismiss]:focus-visible {

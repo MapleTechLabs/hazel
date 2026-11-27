@@ -90,7 +90,7 @@ export const chart = defineRecipe<
 		},
 		size: {
 			default: "regular",
-			values: { regular: {}, small: {}, large: {} },
+			values: { regular: {}, small: {}, medium: {}, large: {} },
 		},
 	},
 	flags: { legend: {}, loading: {} },
