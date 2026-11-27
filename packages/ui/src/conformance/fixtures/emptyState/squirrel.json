@@ -16,5 +16,8 @@
 	"kit": {
 		"specimen": "empty-channel",
 		"target": "frame"
+	},
+	"pending": {
+		"ios": "S1"
 	}
 }
