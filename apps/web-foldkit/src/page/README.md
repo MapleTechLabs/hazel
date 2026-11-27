@@ -39,7 +39,7 @@ Never import an area's page statically from the first chunk (`registry.ts`, the 
 that puts the page, and what it imports, back into the first download. A lazy page declares at
 most `SUBSCRIPTION_POOL_SIZE` Subscriptions (`registry.test.ts` checks).
 
-`page/settings/team/` is the minimal example; `page/chat/channel/` shows a page keyed by a route param,
+`page/settings/groups/` is a small example; `page/chat/channel/` shows a page keyed by a route param,
 memoized views and a `sharedChanged` hook. `page/root/` shows a page that only redirects.
 
 ## The contract (`page/contract.ts`)

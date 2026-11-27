@@ -57,6 +57,8 @@ const header = <Msg>(h: Hazel.H<Msg>, options: CardHeader<Msg>) =>
 				.axis("horizontal")
 				.align("start")
 				// Today's actions drop under the title when the row is narrow (`flex-wrap`, the title's `basis-72`).
+				// HAZEL-GAP(p4-wrap-justify): wrapped, today's action starts its line; the spacer ends it here.
+				// HAZEL-GAP(p4-icon-tone): today's glyph is muted `size-5` (the danger zone's in danger ink).
 				.wrap()
 				.density("cozy")
 				.children(

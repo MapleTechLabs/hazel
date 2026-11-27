@@ -67,10 +67,10 @@ const exportCopy = {
 	},
 }
 
-const COPIED: { readonly [T in CopyTarget]: { readonly success: string; readonly failure: string } } = {
+const COPIED = {
 	WorkspaceUrl: { success: "Workspace URL copied to clipboard", failure: "Failed to copy URL" },
 	InviteLink: { success: "Invite link copied to clipboard", failure: "Failed to copy link" },
-}
+} satisfies Record<CopyTarget, { readonly success: string; readonly failure: string }>
 
 const toast = (title: string, description?: string) =>
 	ShowToast.make({ toast: { ...successToast(title), description: description ?? null } })
@@ -156,6 +156,7 @@ const profileCard = (h: H, model: GeneralModel, organization: SessionOrganizatio
 							),
 						),
 				),
+			// HAZEL-GAP(p4-field-width): today's name field is capped at 448px (`max-w-md`).
 			h.textField
 				.key("name")
 				.label("Organization name")
@@ -212,6 +213,7 @@ const publicInviteCard = (h: H, model: GeneralModel) => {
 		},
 		cardBody(
 			h,
+			// HAZEL-GAP(p4-toggle-label): today's switch label is regular weight; the toggle's is medium.
 			h.toggle
 				.key("public")
 				.label("Enable public invite link")

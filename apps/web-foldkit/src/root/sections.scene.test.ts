@@ -50,7 +50,7 @@ const inLayout = (name: string, locator: Locator.Locator) => Locator.inside(layo
 
 describe("settings layout", () => {
 	test("the native sidebar in the dock, and the Foldkit page region inside the content column", () => {
-		const s = frame(shellSignedIn("/hazel/settings/team"))
+		const s = frame(shellSignedIn("/hazel/settings/groups"))
 			.expect(inLayout("settings", pageSlot))
 			.toExist()
 		const [sidebar] = childOf(s, ShellSectionSidebar)
@@ -61,7 +61,7 @@ describe("settings layout", () => {
 		const selected = groups.flatMap((group) =>
 			group.rows.filter((row) => row.selected).map((row) => row.id),
 		)
-		expect(selected).toEqual(["settingsTeam"])
+		expect(selected).toEqual(["settingsGroups"])
 		// Docked, the frame draws the switcher and the account card around the rows.
 		expect(childOf(s, ShellOrgSwitcher)).toHaveLength(1)
 		expect(childOf(s, ShellAccountMenu)).toHaveLength(1)

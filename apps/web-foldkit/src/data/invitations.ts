@@ -1,6 +1,6 @@
 import { InvitationEmail, type InvitationRole } from "@hazel/domain/rpc"
-import type { InvitationId, OrganizationId } from "@hazel/schema"
-import { DateTime, Effect, Schema } from "effect"
+import type { OrganizationId } from "@hazel/schema"
+import { Effect, Schema } from "effect"
 import { HazelRpc } from "../rpc"
 
 /** Organization email invitations (`invitation.*`), shared by settings, onboarding and the invite modal. */
@@ -47,29 +47,4 @@ export const sendInvitations = (organizationId: OrganizationId, invites: Readonl
 			}),
 			{ successCount: 0, errorCount: 0 },
 		)
-	})
-
-export interface PendingInvitation {
-	readonly id: InvitationId
-	readonly emailAddress: string
-	readonly role: InvitationRole
-	readonly createdAtMs: number
-}
-
-export const listInvitations = (organizationId: OrganizationId) =>
-	Effect.gen(function* () {
-		const client = yield* HazelRpc
-		const invitations = yield* client("invitation.list", { organizationId })
-		return invitations.map((invitation): PendingInvitation => ({
-			id: invitation.id,
-			emailAddress: invitation.email,
-			role: invitation.role,
-			createdAtMs: DateTime.toEpochMillis(invitation.createdAt),
-		}))
-	})
-
-export const revokeInvitation = (id: InvitationId) =>
-	Effect.gen(function* () {
-		const client = yield* HazelRpc
-		yield* client("invitation.revoke", { id })
 	})

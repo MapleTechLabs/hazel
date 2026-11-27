@@ -18,10 +18,7 @@ import { currentServer } from "~/config/server"
 export {
 	ALLOWED_AVATAR_TYPES,
 	ALLOWED_EMOJI_TYPES,
-	MAX_AVATAR_SIZE,
-	MAX_EMOJI_SIZE,
 	UploadProblem,
-	type UploadKind,
 	uploadProblemMessage,
 	validateUploadFile,
 } from "@hazel/shared-screens/settings/shared/upload"

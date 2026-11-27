@@ -140,6 +140,8 @@ const memberRow = (h: H, member: TeamMember, current: TeamMember | undefined) =>
 	)
 	const cell = (column: string, ...content: ReadonlyArray<Hazel.NoTextInput<TeamMessage>>) =>
 		h.tableCell.column(column).children(...content)
+	// HAZEL-GAP(p4-table-cell-wrap): on a phone today's email wraps anywhere (`break-all`) and the name
+	// ends in an ellipsis; here both clip at the cell's edge.
 	// HAZEL-GAP(p4-avatar-36): today's row avatar is 36px (`size-9`); `medium` is 40.
 	return h.tableRow
 		.key(member.id)
