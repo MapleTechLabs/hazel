@@ -23,6 +23,7 @@ import { Effect, Layer } from "effect"
 import { clientData } from "~/db/client"
 import { AppRoute, organizationRoute } from "../route"
 import { publish } from "./bus"
+import { pickersWebLayer } from "./pickers"
 
 /** A push of `route` on the shell's Router, from a screen's host callback. */
 const pushOn = (router: Router.Router) => (route: AppRoute) => {
@@ -58,7 +59,7 @@ export const ShellMessageList = Component.provide(
 		Effect.map(Effect.service(HazelRpc), (rpc) =>
 			messageListLayer(clientData, rpc, (request) => publish({ _tag: "MessageList", request })),
 		),
-	),
+	).pipe(Layer.provideMerge(pickersWebLayer)),
 )
 
 export const ShellActivity = Component.provide(Activity, (props) =>

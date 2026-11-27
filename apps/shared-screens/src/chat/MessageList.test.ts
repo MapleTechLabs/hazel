@@ -1,6 +1,6 @@
 // Effect UI is a public preview: every API is experimental by design here.
 // @effect-diagnostics experimentalApiUsage:off
-import { Story } from "@effect/ui/testing"
+import { Locator, Scene, Story } from "@effect/ui/testing"
 import { ChannelId, MessageId, UserId } from "@hazel/schema"
 import { BlockKind, RunKind } from "@hazel/ui/vocabulary/content"
 import { assert, describe, it } from "@effect/vitest"
@@ -8,6 +8,7 @@ import { Effect } from "effect"
 import { distanceStrict, initialsOf } from "./format"
 import { MoveWindow, PAGE_SIZE, RequestHost, ScrollToRow, ToggleReaction } from "./live"
 import { MessageList, MessageListMessage } from "./MessageList"
+import { EmojiPicker, EmojiPickerEvents } from "./pickers/EmojiPicker"
 import { parseMarkdown, plainLine } from "./rich-text"
 import { type ChatMessage, type Entry, firstNewIdOf, type Lookups, newCountOf, toEntries } from "./rows"
 
@@ -358,6 +359,22 @@ describe("MessageList", () => {
 			s.resolve(RequestHost, MessageListMessage.CompletedCommand())
 		}),
 	)
+
+	it("the toolbar's add reaction opens the emoji picker; its pick reacts and closes it", () => {
+		const page = window(1)
+		const s = Scene.start(MessageList, props)
+			.subscription(
+				`messages:"${channelId}"`,
+				MessageListMessage.UpdatedMessages({ order: page.map((m) => m.id), upserts: page }),
+			)
+			.fire(Locator.tag("hz:message"), "action", { action: "react" })
+			.childEmit(EmojiPicker, EmojiPickerEvents.Picked({ emoji: "🎉" }))
+			.expectExact(ToggleReaction.make({ messageId: id(1), channelId, userId: ada, emoji: "🎉" }))
+		s.resolve(ToggleReaction, MessageListMessage.CompletedCommand()).childEmit(
+			EmojiPicker,
+			EmojiPickerEvents.RequestedClose(),
+		)
+	})
 
 	it.effect("a long press opens the row's actions; one closes the sheet and runs", () =>
 		Effect.gen(function* () {

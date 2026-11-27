@@ -11,6 +11,7 @@ import { ChannelId, MessageId, UserId } from "@hazel/schema"
 import { Content, Hazel, type IconName, type MessageAction } from "@hazel/ui/vocabulary/index"
 import { Match, Schema } from "effect"
 import { initialsOf, sinceLabel } from "./format"
+import { EmojiPicker } from "./pickers/EmojiPicker"
 import {
 	activityStream,
 	attachmentsStream,
@@ -358,7 +359,7 @@ export const MessageList = Hazel.component({
 							emoji,
 						}),
 					),
-		SelectedEmoji: ($, { emoji }) =>
+		PickedReactionEmoji: ($, { emoji }) =>
 			$.model.picker === null
 				? $.model
 				: $.evolve({ picker: () => null }).run(
@@ -369,7 +370,7 @@ export const MessageList = Hazel.component({
 							emoji,
 						}),
 					),
-		DismissedEmojiPicker: ($) => $.evolve({ picker: () => null }),
+		RequestedCloseEmojiPicker: ($) => $.evolve({ picker: () => null }),
 		PressedAuthor: ($, { id }) => {
 			const row = rowOf($.model, id)
 			return row === undefined
@@ -603,10 +604,13 @@ export const MessageList = Hazel.component({
 						),
 				),
 			menuSheet(),
-			h.emojiPicker
-				.open(model.picker !== null)
-				.on("select", ({ emoji }) => MessageListMessage.SelectedEmoji({ emoji }))
-				.on("dismiss", MessageListMessage.DismissedEmojiPicker()),
+			EmojiPicker(h, {
+				props: { open: model.picker !== null },
+				onEmit: {
+					Picked: ({ emoji }) => MessageListMessage.PickedReactionEmoji({ emoji }),
+					RequestedClose: () => MessageListMessage.RequestedCloseEmojiPicker(),
+				},
+			}),
 		)
 	},
 })
