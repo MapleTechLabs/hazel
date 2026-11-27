@@ -10,7 +10,15 @@
 	},
 	"frame": "inline",
 	"pending": {
-		"web": "A4",
 		"ios": "S4"
-	}
+	},
+	"cases": [
+		{
+			"name": "last",
+			"props": {
+				"current": 6,
+				"label": "Step 6 of 6"
+			}
+		}
+	]
 }

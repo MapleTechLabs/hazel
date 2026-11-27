@@ -10,7 +10,8 @@
 				{
 					"id": "open",
 					"label": "Open",
-					"badge": 12
+					"badge": 12,
+					"href": "?tab=open"
 				},
 				{
 					"id": "snoozed",
@@ -23,11 +24,58 @@
 				}
 			]
 		},
-		"events": ["change", "move"]
+		"events": ["change", "move"],
+		"children": [
+			{
+				"tag": "text",
+				"children": ["Twelve customers need a reply."],
+				"props": {
+					"tone": "muted"
+				}
+			}
+		]
 	},
 	"frame": "screen",
 	"pending": {
-		"web": "A4",
 		"ios": "S4"
-	}
+	},
+	"cases": [
+		{
+			"name": "icons",
+			"props": {
+				"reorderable": null,
+				"selected": "snoozed",
+				"tabs": [
+					{
+						"id": "open",
+						"label": "Open",
+						"icon": "bell",
+						"badge": 12
+					},
+					{
+						"id": "snoozed",
+						"label": "Snoozed",
+						"icon": "clock"
+					},
+					{
+						"id": "done",
+						"label": "Done",
+						"icon": "check"
+					}
+				]
+			}
+		}
+	],
+	"aria": [
+		{
+			"role": "tablist"
+		},
+		{
+			"role": "tab",
+			"name": "Open 12"
+		},
+		{
+			"role": "tabpanel"
+		}
+	]
 }

@@ -1,0 +1,90 @@
+{
+	"about": "A page's header (`ui/page-header.ts`): breadcrumbs over the title, `meta` badges after it, a subtitle, actions in the toolbar, over a page's content.",
+	"root": {
+		"tag": "screen",
+		"props": {
+			"title": "Acme Corporation",
+			"surface": "page",
+			"subtitle": "acme.com · Customer since March",
+			"crumbs": [
+				{
+					"label": "Customers",
+					"href": "#customers"
+				},
+				{
+					"label": "Acme Corporation"
+				}
+			]
+		},
+		"events": ["crumb"],
+		"slots": [
+			{
+				"name": "meta",
+				"children": [
+					{
+						"tag": "badge",
+						"props": {
+							"label": "Pro",
+							"tone": "accent"
+						}
+					},
+					{
+						"tag": "badge",
+						"props": {
+							"label": "At risk",
+							"tone": "warning"
+						}
+					}
+				]
+			},
+			{
+				"name": "toolbar",
+				"children": [
+					{
+						"tag": "button",
+						"props": {
+							"label": "Edit",
+							"variant": "outline",
+							"size": "small"
+						}
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "text",
+				"children": ["Overview"],
+				"props": {
+					"tone": "muted"
+				}
+			}
+		]
+	},
+	"frame": "screen",
+	"aria": [
+		{
+			"role": "navigation",
+			"name": "Breadcrumb"
+		},
+		{
+			"role": "link",
+			"name": "Customers"
+		},
+		{
+			"role": "heading",
+			"name": "Acme Corporation"
+		}
+	],
+	"cases": [
+		{
+			"name": "long",
+			"props": {
+				"title": "Acme Corporation International Holdings and Subsidiaries Worldwide"
+			}
+		}
+	],
+	"pending": {
+		"ios": "S4"
+	}
+}
