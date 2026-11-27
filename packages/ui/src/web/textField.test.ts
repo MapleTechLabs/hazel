@@ -33,7 +33,9 @@ describe("hz:textField on the web", () => {
 			const app = yield* Renderer.mount(TextFieldDemo, {}, root)
 			yield* Effect.promise(settle)
 			const field = root.querySelector("[data-hz=textField]")!
-			const input = field.querySelector("label[data-hz-part=label] > input") as HTMLInputElement
+			const input = field.querySelector(
+				"label[data-hz-part=label] [data-hz-part=input]",
+			) as HTMLInputElement
 			expect(field.querySelector("[data-hz-part=caption]")?.textContent).toBe("Message")
 			expect(input.placeholder).toBe("Type, #tags go upper case")
 

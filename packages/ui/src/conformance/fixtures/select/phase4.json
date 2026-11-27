@@ -40,7 +40,20 @@
 	},
 	"frame": "sidebar",
 	"pending": {
-		"web": "A2",
 		"ios": "S2"
-	}
+	},
+	"aria": [
+		{
+			"role": "combobox",
+			"name": "Time zone"
+		}
+	],
+	"cases": [
+		{
+			"name": "native",
+			"props": {
+				"searchable": null
+			}
+		}
+	]
 }

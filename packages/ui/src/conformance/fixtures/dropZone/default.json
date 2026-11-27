@@ -26,7 +26,12 @@
 		}
 	],
 	"pending": {
-		"web": "A2",
 		"ios": "S2"
-	}
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Drop images here or browse"
+		}
+	]
 }
