@@ -88,7 +88,7 @@ describe("the last screen's paint", () => {
 
 describe("mobile", () => {
 	test("a native section's top bar opens its own sidebar sheet; the tab bar has no Menu tab", () => {
-		const model = onPhone("/hazel/settings/groups")
+		const model = onPhone("/hazel/settings/integrations/linear")
 		const s = frame(model)
 			// Settings is the gear in the chat list's header, not a tab.
 			.expect(inTabs(navItem("Settings")))

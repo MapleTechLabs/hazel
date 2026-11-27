@@ -53,7 +53,7 @@ const inLayout = (name: string, locator: Locator.Locator) => Locator.inside(layo
 
 describe("settings layout", () => {
 	test("the native sidebar in the dock, and the Foldkit page region inside the content column", () => {
-		const s = frame(shellSignedIn("/hazel/settings/groups"))
+		const s = frame(shellSignedIn("/hazel/settings/integrations/linear"))
 			.expect(inLayout("settings", pageSlot))
 			.toExist()
 		const [sidebar] = childOf(s, ShellSectionSidebar)
@@ -64,7 +64,7 @@ describe("settings layout", () => {
 		const selected = groups.flatMap((group) =>
 			group.rows.filter((row) => row.selected).map((row) => row.id),
 		)
-		expect(selected).toEqual(["settingsGroups"])
+		expect(selected).toEqual(["settingsIntegrations"])
 		// Docked, the frame draws the switcher and the account card around the rows.
 		expect(childOf(s, ShellOrgSwitcher)).toHaveLength(1)
 		expect(childOf(s, ShellAccountMenu)).toHaveLength(1)
@@ -74,7 +74,9 @@ describe("settings layout", () => {
 
 	test("my settings share it, and an integrations page gets the content column", () => {
 		frame(shellSignedIn("/hazel/my-settings/keybinds")).expect(inLayout("settings", pageSlot)).toExist()
-		frame(shellSignedIn("/hazel/settings/integrations")).expect(inLayout("settings", pageSlot)).toExist()
+		frame(shellSignedIn("/hazel/settings/integrations/linear"))
+			.expect(inLayout("settings", pageSlot))
+			.toExist()
 	})
 })
 

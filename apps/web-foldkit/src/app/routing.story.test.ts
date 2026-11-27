@@ -23,30 +23,12 @@ describe("links", () => {
 	})
 })
 
-describe("redirects", () => {
-	// A5: only the ChannelSettingsRedirect page forwards; the shell's `routeRedirect` does not double it.
-	test("the channel settings index forwards to its overview tab once", () => {
-		const channelId = "00000000-0000-4000-8000-0000000000c1"
-		const team = signedIn("/hazel/settings/team")
-		story(
-			update,
-			given(team),
-			message(navigated(team, `/hazel/channels/${channelId}/settings`)),
-			Command.expectExact(
-				navigation(`/hazel/channels/${channelId}/settings/overview`, { replace: true }),
-			),
-			model((m) => expect(m.context.route._tag).toBe("ChannelSettings")),
-			emitted,
-		)
-	})
-})
-
 describe("page instances", () => {
 	test("a route change builds the new route's page and drops the previous one", () => {
-		const team = signedIn("/hazel/settings/team")
-		const moved = after(team, [navigated(team, "/hazel/my-settings/desktop")])
-		expect(moved.context.route._tag).toBe("MySettingsDesktop")
-		expect(moved.page?._tag).not.toBe(team.page?._tag)
+		const keybinds = signedIn("/hazel/my-settings/keybinds")
+		const moved = after(keybinds, [navigated(keybinds, "/hazel/my-settings/profile")])
+		expect(moved.context.route._tag).toBe("MySettingsProfile")
+		expect(moved.page?._tag).not.toBe(keybinds.page?._tag)
 	})
 
 	test("tabs of one page keep its instance (the page key ignores the tab)", () => {

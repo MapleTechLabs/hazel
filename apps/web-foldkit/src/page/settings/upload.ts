@@ -17,7 +17,6 @@ import { currentServer } from "~/config/server"
  */
 export {
 	ALLOWED_AVATAR_TYPES,
-	ALLOWED_EMOJI_TYPES,
 	UploadProblem,
 	uploadProblemMessage,
 	validateUploadFile,

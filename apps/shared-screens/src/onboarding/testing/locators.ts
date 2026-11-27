@@ -1,3 +1,5 @@
+// Effect UI is a public preview: every API is experimental by design here.
+// @effect-diagnostics experimentalApiUsage:off
 import type { Locator } from "@effect/ui/testing"
 import { Locator as L } from "@effect/ui/testing"
 import { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"

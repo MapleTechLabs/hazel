@@ -70,13 +70,3 @@ export function uploadToStorage(
 		xhr.send(file)
 	})
 }
-
-/**
- * Error messages for upload failures.
- */
-export const uploadErrorMessages: Record<UploadErrorType, string> = {
-	network: "Network error. Check your connection and try again.",
-	timeout: "Upload timed out. Try a smaller file or check your connection.",
-	server: "Server error during upload. Please try again later.",
-	aborted: "Upload was cancelled.",
-}

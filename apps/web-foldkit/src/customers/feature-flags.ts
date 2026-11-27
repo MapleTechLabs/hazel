@@ -21,8 +21,6 @@ export const featureFlagKeysOf = (
 ): ReadonlyArray<string> =>
 	[...new Set([...created, ...accounts.flatMap((account) => Object.keys(account.featureFlags))])].sort()
 
-export const hasFlag = (account: AccountRow, key: string): boolean => account.featureFlags[key] === true
-
 /** Why a change failed: the server's own words (what the source refused), else a common reason. */
 export const FeatureFlagFailure = Schema.Union([
 	Schema.Struct({ message: Schema.String }),

@@ -144,7 +144,7 @@ describe("redirects", () => {
 		expect(names).toEqual(expect.arrayContaining([fetchCurrentUser.name, "ClearNoteDrafts"]))
 	})
 
-	// A5: only the ChannelSettingsRedirect page forwards (`app/routing.story.test.ts`); the shell does not.
+	// A5: only the channel settings redirect page forwards (shared-screens `RedirectPage`); the shell does not.
 	test("the channel settings index is not redirected by the shell", () => {
 		const channelId = "00000000-0000-4000-8000-0000000000c1"
 		const result = shellNavigate(
