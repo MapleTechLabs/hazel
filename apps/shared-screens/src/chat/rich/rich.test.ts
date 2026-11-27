@@ -5,6 +5,7 @@ import { ChannelId, HtmlRenderId, MessageId, UserId } from "@hazel/schema"
 import { BlockKind, RunKind } from "@hazel/ui/vocabulary/content"
 import { describe, expect, test } from "vitest"
 import { MessageList, MessageListMessage } from "../MessageList"
+import { answerRowLookups } from "../row-lookups.testing"
 import type { ChatMessage } from "../rows"
 import { richPartsOf } from "./embeds"
 import { previewCardOf, tweetCardOf, unfurlCardOf } from "./unfurls"
@@ -126,13 +127,15 @@ const rowOf = (_key: string): Locator.Locator => Locator.tag("hz:message")
 const frames: Locator.Locator = Locator.tag("hz:ext")
 
 const start = (messages: ReadonlyArray<ChatMessage>) =>
-	Scene.start(MessageList, {
-		channelId,
-		userId: ada,
-		cdnUrl: "https://cdn.test",
-		linkPreviewUrl: ORIGIN,
-		nowMs: NOW,
-	}).subscription(
+	answerRowLookups(
+		Scene.start(MessageList, {
+			channelId,
+			userId: ada,
+			cdnUrl: "https://cdn.test",
+			linkPreviewUrl: ORIGIN,
+			nowMs: NOW,
+		}),
+	).subscription(
 		`messages:"${channelId}"`,
 		MessageListMessage.UpdatedMessages({ order: messages.map((m) => m.id), upserts: messages }),
 	)

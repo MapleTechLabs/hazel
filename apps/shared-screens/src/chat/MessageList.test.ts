@@ -9,6 +9,7 @@ import { distanceStrict, initialsOf } from "./format"
 import { MoveWindow, PAGE_SIZE, RequestHost, ScrollToRow, ToggleReaction } from "./live"
 import { MessageList, MessageListMessage } from "./MessageList"
 import { EmojiPicker, EmojiPickerEvents } from "./pickers/EmojiPicker"
+import { answerRowLookups } from "./row-lookups.testing"
 import { noRichParts } from "./rich/embeds"
 import { parseMarkdown, plainLine } from "./rich-text"
 import { type ChatMessage, type Entry, firstNewIdOf, type Lookups, newCountOf, toEntries } from "./rows"
@@ -369,9 +370,31 @@ describe("MessageList", () => {
 		}),
 	)
 
+	it("the first window waits for the lookups that size its rows, in whichever order they answer", () => {
+		const page = window(3)
+		const messages = MessageListMessage.UpdatedMessages({ order: page.map((m) => m.id), upserts: page })
+		const loading = (s: { readonly all: (l: Locator.Locator) => ReadonlyArray<Locator.Node> }) =>
+			s.all(Locator.tag("hz:list")).some((list) => list.props?.["loading"] === true)
+		const rows = (s: { readonly all: (l: Locator.Locator) => ReadonlyArray<Locator.Node> }) =>
+			s.all(Locator.tag("hz:message")).length
+		// Messages first (a cold load): no row draws until the users and the rest answer.
+		const first = Scene.start(MessageList, props).subscription(`messages:"${channelId}"`, messages)
+		assert.isTrue(loading(first))
+		assert.strictEqual(rows(first), 0)
+		const ready = answerRowLookups(first)
+		assert.isFalse(loading(ready))
+		assert.strictEqual(rows(ready), 3)
+		// Lookups first (a warm load): the window shows as soon as it arrives.
+		const warm = answerRowLookups(Scene.start(MessageList, props)).subscription(
+			`messages:"${channelId}"`,
+			messages,
+		)
+		assert.strictEqual(rows(warm), 3)
+	})
+
 	it("the toolbar's add reaction opens the emoji picker; its pick reacts and closes it", () => {
 		const page = window(1)
-		const s = Scene.start(MessageList, props)
+		const s = answerRowLookups(Scene.start(MessageList, props))
 			.subscription(
 				`messages:"${channelId}"`,
 				MessageListMessage.UpdatedMessages({ order: page.map((m) => m.id), upserts: page }),

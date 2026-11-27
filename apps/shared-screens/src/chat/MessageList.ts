@@ -95,7 +95,17 @@ export const MessageListProps = Schema.Struct({
 })
 export type MessageListProps = typeof MessageListProps.Type
 
+/** The lookups that set a row's height (its header, reactions and pictures). */
+const RowLookup = Schema.Literals(["users", "bots", "reactions", "attachments"])
+type RowLookup = typeof RowLookup.Type
+const ROW_LOOKUPS: ReadonlyArray<RowLookup> = ["users", "bots", "reactions", "attachments"]
+
 export const MessageListModel = Schema.Struct({
+	/**
+	 * Row lookups that have not answered yet. The first window waits for them, so its rows paint once,
+	 * at their final heights (a cold load answers users after messages: headers would pop in).
+	 */
+	awaiting: Schema.Array(RowLookup),
 	/** The window, newest first; null until the query first answers. */
 	messages: Schema.NullOr(Schema.Array(ChatMessage)),
 	/** How many of the newest messages the window holds. */
@@ -210,6 +220,15 @@ export const applyChanges = (
 		return message === undefined ? [] : [message]
 	})
 }
+
+/** `lookup` answered: the first window no longer waits for it. */
+const answered = (model: MessageListModel, lookup: RowLookup): MessageListModel =>
+	model.awaiting.includes(lookup)
+		? { ...model, awaiting: model.awaiting.filter((each) => each !== lookup) }
+		: model
+
+/** The window can show: its query answered, and every lookup that sizes a row did too. */
+export const windowReady = (model: MessageListModel) => model.messages !== null && model.awaiting.length === 0
 
 /** Older messages may exist: the window is full, or the history says so. */
 export const hasOlder = (model: MessageListModel) =>
@@ -365,6 +384,7 @@ export const MessageList = Hazel.component({
 	},
 }).make({
 	init: ({ props }) => ({
+		awaiting: ROW_LOOKUPS,
 		messages: null,
 		limit: PAGE_SIZE,
 		hasMore: true,
@@ -398,10 +418,12 @@ export const MessageList = Hazel.component({
 			return $.evolve(all({ ...next, jumpPending: false })).run(ScrollToRow.make({ key: "unread" }))
 		},
 		UpdatedHistory: ($, { hasMore }) => derive({ ...$.model, hasMore }, $.props.userId),
-		UpdatedReactions: ($, { reactions }) => derive({ ...$.model, reactions }, $.props.userId),
-		UpdatedUsers: ($, { users }) => derive({ ...$.model, users }, $.props.userId),
-		UpdatedBots: ($, { bots }) => derive({ ...$.model, bots }, $.props.userId),
-		UpdatedAttachments: ($, { attachments }) => derive({ ...$.model, attachments }, $.props.userId),
+		UpdatedReactions: ($, { reactions }) =>
+			derive({ ...answered($.model, "reactions"), reactions }, $.props.userId),
+		UpdatedUsers: ($, { users }) => derive({ ...answered($.model, "users"), users }, $.props.userId),
+		UpdatedBots: ($, { bots }) => derive({ ...answered($.model, "bots"), bots }, $.props.userId),
+		UpdatedAttachments: ($, { attachments }) =>
+			derive({ ...answered($.model, "attachments"), attachments }, $.props.userId),
 		UpdatedThreadNames: ($, { threads }) => derive({ ...$.model, threadNames: threads }, $.props.userId),
 		UpdatedThreadMessages: ($, { messages }) =>
 			derive({ ...$.model, threadMessages: messages }, $.props.userId),
@@ -735,7 +757,7 @@ export const MessageList = Hazel.component({
 					)
 
 		const list =
-			model.messages === null
+			model.messages === null || (model.messages.length > 0 && !windowReady(model))
 				? h.list.loading()
 				: model.messages.length === 0
 					? h.emptyState.illustration("squirrel").title("Quiet as an ocean gazing squirrel...")

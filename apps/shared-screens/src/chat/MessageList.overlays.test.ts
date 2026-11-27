@@ -6,6 +6,7 @@ import type { Content } from "@hazel/ui/vocabulary/index"
 import { describe, expect, test } from "vitest"
 import { RequestHost, ToggleReaction, TogglePin } from "./live"
 import { MessageList, MessageListMessage } from "./MessageList"
+import { answerRowLookups } from "./row-lookups.testing"
 import type { ChatMessage } from "./rows"
 import { EmojiPicker, EmojiPickerEvents } from "./pickers/EmojiPicker"
 import { noRichParts } from "./rich/embeds"
@@ -55,7 +56,7 @@ const loaded = () => {
 	})
 	return deliver(
 		deliver(
-			s,
+			answerRowLookups(s),
 			"messages",
 			MessageListMessage.UpdatedMessages({ order: page.map((m) => m.id), upserts: page }),
 		),
