@@ -132,14 +132,4 @@ describe("mobile", () => {
 			Mount.expectEnded(AutoFocusSearch),
 		)
 	})
-
-	test("Customers is under More", () => {
-		const { desktop, phone } = toPhone("/hazel/more")
-		scene(
-			rootScene,
-			given(desktop),
-			Subscription.emit(phone),
-			sceneExpect(role("link", { name: /Customers/ })).toHaveAttr("href", "/hazel/customers"),
-		)
-	})
 })
