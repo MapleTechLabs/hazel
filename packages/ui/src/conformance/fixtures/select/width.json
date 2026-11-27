@@ -20,9 +20,7 @@
 			"value": "all",
 			"width": "narrow"
 		},
-		"events": [
-			"change"
-		]
+		"events": ["change"]
 	},
 	"frame": "inline",
 	"pending": {
@@ -31,9 +29,7 @@
 	"axes": [
 		{
 			"prop": "width",
-			"values": [
-				"regular"
-			]
+			"values": ["regular"]
 		}
 	]
 }

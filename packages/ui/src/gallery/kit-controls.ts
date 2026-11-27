@@ -30,7 +30,12 @@ export const controlSpecimens = (h: H): Html =>
 					specimen(
 						h,
 						"button-filter",
-						filterChip(h, { field: "Kind", operator: "is", value: "Risk", onRemove: undefined as never }),
+						filterChip(h, {
+							field: "Kind",
+							operator: "is",
+							value: "Risk",
+							onRemove: undefined as never,
+						}),
 					),
 					specimen(h, "button-dashed", addFilterButton(h)),
 					specimen(h, "button-sort", sortTrigger(h, { label: "Priority" })),

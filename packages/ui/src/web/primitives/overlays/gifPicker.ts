@@ -210,7 +210,10 @@ registerWebExtension(GifPicker, (container, initial, send) => {
 	const drawResults = () => {
 		results.setAttribute("aria-busy", props.status === "loading" ? "true" : "false")
 		if (props.status === "failed") {
-			const failure = props.failure ?? { title: "GIFs are unavailable", description: "Please try again." }
+			const failure = props.failure ?? {
+				title: "GIFs are unavailable",
+				description: "Please try again.",
+			}
 			const node = state(
 				textPart(document, "span", "gifStateTitle", failure.title),
 				textPart(document, "span", "gifStateText", failure.description),

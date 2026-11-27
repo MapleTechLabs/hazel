@@ -38,7 +38,10 @@ describe("GIF picker", () => {
 			'page:"",1,0',
 			GifPickerMessage.LoadedPage({ search: "", page: 1, result: { gifs: [cat], hasNext: true } }),
 		)
-		s.subscription("categories:0", GifPickerMessage.LoadedCategories({ categories: [{ label: "Happy", query: "happy" }] }))
+		s.subscription(
+			"categories:0",
+			GifPickerMessage.LoadedCategories({ categories: [{ label: "Happy", query: "happy" }] }),
+		)
 		const args = argsOf(s)
 		assert.strictEqual(args?.["status"], "ready")
 		assert.deepStrictEqual(args?.["gifs"], [cat])
@@ -106,7 +109,11 @@ describe("GIF picker", () => {
 			const message = yield* Stream.runHead(pageStream("cats", 2)).pipe(Effect.provide(services))
 			assert.deepStrictEqual(
 				message._tag === "Some" ? message.value : null,
-				GifPickerMessage.LoadedPage({ search: "cats", page: 2, result: { gifs: [cat], hasNext: false } }),
+				GifPickerMessage.LoadedPage({
+					search: "cats",
+					page: 2,
+					result: { gifs: [cat], hasNext: false },
+				}),
 			)
 			assert.deepStrictEqual(asked, ["cats#2"])
 		}),

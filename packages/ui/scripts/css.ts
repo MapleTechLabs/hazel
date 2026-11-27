@@ -324,12 +324,18 @@ const partStateRules = (
 			const at = `${root}${own}${partStateSelector(state as State)}`
 			const media = state === "hover" ? ["(hover: hover)"] : []
 			const rules: Rule[] = []
-			if (styles.root !== undefined) rules.push({ media, selector: at, lines: declarations(styles.root, tracked) })
+			if (styles.root !== undefined)
+				rules.push({ media, selector: at, lines: declarations(styles.root, tracked) })
 			for (const [inner, decls] of Object.entries(styles.parts ?? {})) {
 				const path = partPath(recipe, inner)
 				if (decls === undefined) continue
-				if (!path.startsWith(own)) throw new Error(`${recipe.primitive}'s part ${inner} is not inside ${part}`)
-				rules.push({ media, selector: `${at}${path.slice(own.length)}`, lines: declarations(decls, tracked) })
+				if (!path.startsWith(own))
+					throw new Error(`${recipe.primitive}'s part ${inner} is not inside ${part}`)
+				rules.push({
+					media,
+					selector: `${at}${path.slice(own.length)}`,
+					lines: declarations(decls, tracked),
+				})
 			}
 			return rules
 		})

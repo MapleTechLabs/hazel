@@ -9,10 +9,7 @@
 			"size": "toolbar",
 			"removable": true
 		},
-		"events": [
-			"press",
-			"remove"
-		]
+		"events": ["press", "remove"]
 	},
 	"frame": "inline",
 	"pending": {

@@ -36,7 +36,10 @@ const searchGifsKlipy = SearchGifs.toLayer(
 					? client.klipy.trending({ query: { page, per_page: PER_PAGE } })
 					: client.klipy.search({ query: { q: query, page, per_page: PER_PAGE } })
 				).pipe(
-					Effect.map((response) => ({ gifs: response.data.map(toGif), hasNext: response.has_next })),
+					Effect.map((response) => ({
+						gifs: response.data.map(toGif),
+						hasNext: response.has_next,
+					})),
 					Effect.tapCause((cause) => Effect.logWarning("GIF search failed", cause)),
 					Effect.mapError(reasonOf),
 				),

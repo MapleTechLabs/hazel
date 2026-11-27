@@ -199,10 +199,10 @@ export const GifPicker = Hazel.component({
 				open: h.props.open,
 				gifs: model.gifs,
 				categories: model.categories ?? [],
-				...(model.category === null ? {} : { category: model.category }),
+				category: model.category ?? undefined,
 				categoriesFailed: model.categoriesFailed,
 				status: model.status,
-				...(model.failure === null ? {} : { failure: failureText(model.failure) }),
+				failure: model.failure === null ? undefined : failureText(model.failure),
 				paging: model.paging,
 			})
 			.on("select", ({ url }) => GifPickerMessage.SelectedGif({ url }))

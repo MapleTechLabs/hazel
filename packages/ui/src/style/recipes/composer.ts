@@ -124,7 +124,14 @@ export const composer = defineRecipe<{}, "canSend", Part>({
 				background: "secondary",
 				divider: "border",
 			},
-			contextLabel: { layout: "row", align: "center", gap: "2", grow: true, minWidth: "0", text: "label" },
+			contextLabel: {
+				layout: "row",
+				align: "center",
+				gap: "2",
+				grow: true,
+				minWidth: "0",
+				text: "label",
+			},
 			contextPrefix: { shrink: false, color: "muted-fg" },
 			contextAuthor: { truncate: true, color: "fg", weight: "semibold" },
 			contextText: { truncate: true, color: "muted-fg" },
@@ -150,7 +157,13 @@ export const composer = defineRecipe<{}, "canSend", Part>({
 				color: "muted-fg",
 			},
 			// An open trigger with nothing found: `p-4 text-center text-muted-fg text-sm`.
-			suggestionEmpty: { paddingX: "2", paddingY: "2", text: "label", color: "muted-fg", textAlign: "center" },
+			suggestionEmpty: {
+				paddingX: "2",
+				paddingY: "2",
+				text: "label",
+				color: "muted-fg",
+				textAlign: "center",
+			},
 			// `flex items-center gap-2 rounded-lg px-3 py-2 text-sm`.
 			suggestion: {
 				layout: "row",
@@ -189,7 +202,14 @@ export const composer = defineRecipe<{}, "canSend", Part>({
 			suggestionEmoji: { shrink: false },
 			suggestionText: { layout: "column", grow: true, minWidth: "0" },
 			// A command's name and its argument chips: `flex flex-wrap items-center gap-1.5`.
-			suggestionLine: { layout: "row", wrap: true, align: "center", gap: "1.5", rowGap: "1", minWidth: "0" },
+			suggestionLine: {
+				layout: "row",
+				wrap: true,
+				align: "center",
+				gap: "1.5",
+				rowGap: "1",
+				minWidth: "0",
+			},
 			suggestionLabel: { truncate: true, strong: true },
 			// `rounded px-1.5 py-0.5 text-xs`, `bg-muted text-muted-fg` or `bg-warning/20 text-warning`.
 			suggestionChip: {

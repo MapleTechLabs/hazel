@@ -145,7 +145,10 @@ export const emojiPicker = defineRecipe<{}, never, Part>({
 			},
 		},
 		partStates: {
-			emoji: { hover: { root: { background: "wash-strong" } }, selected: { root: { background: "wash-strong" } } },
+			emoji: {
+				hover: { root: { background: "wash-strong" } },
+				selected: { root: { background: "wash-strong" } },
+			},
 		},
 	},
 	options: {},

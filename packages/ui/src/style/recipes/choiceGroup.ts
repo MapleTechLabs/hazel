@@ -79,7 +79,9 @@ export const choiceGroup = defineRecipe<
 		// A chosen radio fills with the brand and shows its dot (`radio.styles.ts`).
 		partStates: {
 			option: {
-				selected: { parts: { box: { background: "primary", ring: "primary" }, mark: { background: "bg" } } },
+				selected: {
+					parts: { box: { background: "primary", ring: "primary" }, mark: { background: "bg" } },
+				},
 			},
 		},
 	},
@@ -92,7 +94,9 @@ export const choiceGroup = defineRecipe<
 			partStates: {
 				option: {
 					selected: { parts: { box: { ring: "ring" }, mark: { background: "transparent" } } },
-					hover: { parts: { box: { ring: "control-hover-edge" }, mark: { background: "transparent" } } },
+					hover: {
+						parts: { box: { ring: "control-hover-edge" }, mark: { background: "transparent" } },
+					},
 				},
 			},
 		},
@@ -102,7 +106,9 @@ export const choiceGroup = defineRecipe<
 			default: "list",
 			values: {
 				list: {
-					partStates: { option: { hover: { parts: { mark: { background: "control-hover-fill" } } } } },
+					partStates: {
+						option: { hover: { parts: { mark: { background: "control-hover-fill" } } } },
+					},
 				},
 				// The choice box: an inset-ringed card, `p-3 sm:p-4`, medium label, check at the end.
 				cards: {
@@ -115,7 +121,11 @@ export const choiceGroup = defineRecipe<
 						option: {
 							hover: { root: { ring: "control-hover-edge" } },
 							selected: {
-								root: { background: "primary-subtle", color: "primary-subtle-fg", ring: "focus-ring" },
+								root: {
+									background: "primary-subtle",
+									color: "primary-subtle-fg",
+									ring: "focus-ring",
+								},
 								parts: {
 									optionLabel: { color: "primary-subtle-fg" },
 									optionDescription: { color: "primary-subtle-fg" },
@@ -197,7 +207,10 @@ export const choiceGroup = defineRecipe<
 					regular: { parts: { option: { minHeight: "7" } } },
 					partStates: {
 						option: {
-							hover: { root: { background: "secondary" }, parts: { optionLabel: { color: "fg" } } },
+							hover: {
+								root: { background: "secondary" },
+								parts: { optionLabel: { color: "fg" } },
+							},
 							selected: {
 								root: { background: "chip-selected", borderColor: "chip-selected-border" },
 								parts: { optionLabel: { color: "fg" } },

@@ -262,7 +262,9 @@ describe("emoji and GIF pickers", () => {
 					.categories([
 						{
 							label: "Custom",
-							emojis: [{ emoji: ":parrot:", name: "parrot", image: "https://emoji/parrot.gif" }],
+							emojis: [
+								{ emoji: ":parrot:", name: "parrot", image: "https://emoji/parrot.gif" },
+							],
 						},
 						{
 							label: "Smileys & emotion",

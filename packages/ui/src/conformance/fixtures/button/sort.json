@@ -9,9 +9,7 @@
 			"variant": "ghost",
 			"size": "toolbar"
 		},
-		"events": [
-			"press"
-		]
+		"events": ["press"]
 	},
 	"frame": "inline",
 	"pending": {

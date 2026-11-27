@@ -342,7 +342,10 @@ export type Crumb = typeof Crumb.Type
 
 /** One composer suggestion for an open trigger (`@`, `#`, `/`, `:`), drawn above the composer. */
 /** A bot command's argument after its name: `<required>` warning-tinted, `[optional]` muted. */
-export const SuggestionChip = Schema.Struct({ label: Schema.String, required: Schema.optional(Schema.Boolean) })
+export const SuggestionChip = Schema.Struct({
+	label: Schema.String,
+	required: Schema.optional(Schema.Boolean),
+})
 export type SuggestionChip = typeof SuggestionChip.Type
 
 export const Suggestion = Schema.Struct({

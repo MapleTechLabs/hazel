@@ -24,13 +24,9 @@
 					"label": "12m"
 				}
 			],
-			"selected": [
-				"30d"
-			]
+			"selected": ["30d"]
 		},
-		"events": [
-			"change"
-		]
+		"events": ["change"]
 	},
 	"frame": "inline",
 	"pending": {

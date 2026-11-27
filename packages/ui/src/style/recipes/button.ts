@@ -126,10 +126,18 @@ export const button = defineRecipe<
 				},
 				// `+ Filter`: the plain intent with `border-border border-dashed text-fg-3 hover:text-fg`.
 				dashed: {
-					root: { background: "transparent", color: "fg-3", borderColor: "border", borderStyle: "dashed" },
+					root: {
+						background: "transparent",
+						color: "fg-3",
+						borderColor: "border",
+						borderStyle: "dashed",
+					},
 					parts: { icon: { color: "muted-fg" } },
 					states: {
-						hover: { root: { background: "secondary", color: "fg" }, parts: { icon: { color: "fg" } } },
+						hover: {
+							root: { background: "secondary", color: "fg" },
+							parts: { icon: { color: "fg" } },
+						},
 						pressed: { root: { background: "secondary" } },
 					},
 				},

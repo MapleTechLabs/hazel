@@ -8,9 +8,7 @@
 			"variant": "dashed",
 			"size": "toolbar"
 		},
-		"events": [
-			"press"
-		]
+		"events": ["press"]
 	},
 	"frame": "inline",
 	"pending": {

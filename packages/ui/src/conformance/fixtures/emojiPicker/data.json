@@ -40,17 +40,12 @@
 						{
 							"emoji": "😀",
 							"name": "Grinning face",
-							"keywords": [
-								"smile",
-								"happy"
-							]
+							"keywords": ["smile", "happy"]
 						},
 						{
 							"emoji": "😃",
 							"name": "Grinning face with big eyes",
-							"keywords": [
-								"smile"
-							]
+							"keywords": ["smile"]
 						},
 						{
 							"emoji": "😄",
@@ -88,11 +83,7 @@
 				}
 			]
 		},
-		"events": [
-			"select",
-			"dismiss",
-			"retry"
-		]
+		"events": ["select", "dismiss", "retry"]
 	},
 	"aria": [
 		{

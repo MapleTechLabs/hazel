@@ -30,15 +30,11 @@
 				}
 			]
 		},
-		"events": [
-			"change"
-		],
+		"events": ["change"],
 		"children": [
 			{
 				"tag": "text",
-				"children": [
-					"Forty-two customers."
-				],
+				"children": ["Forty-two customers."],
 				"props": {
 					"tone": "muted"
 				}

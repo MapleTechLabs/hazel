@@ -96,7 +96,12 @@ describe("emoji picker", () => {
 	it.effect("loads the full set into the model", () =>
 		Effect.gen(function* () {
 			const message = yield* Stream.runHead(catalogStream).pipe(
-				Effect.provide(Layer.mergeAll(LoadEmojiData.toLayer(() => Effect.succeed(data)), Query.layer())),
+				Effect.provide(
+					Layer.mergeAll(
+						LoadEmojiData.toLayer(() => Effect.succeed(data)),
+						Query.layer(),
+					),
+				),
 			)
 			assert.deepStrictEqual(
 				message._tag === "Some" ? message.value : null,
@@ -149,7 +154,10 @@ describe("emoji picker", () => {
 	})
 
 	it("a custom pick is remembered with its image", () => {
-		Scene.start(EmojiPickerNoDeps, { open: true, custom: [{ name: "parrot", imageUrl: "https://cdn/p.png" }] })
+		Scene.start(EmojiPickerNoDeps, {
+			open: true,
+			custom: [{ name: "parrot", imageUrl: "https://cdn/p.png" }],
+		})
 			.subscription("recent:", EmojiPickerMessage.LoadedRecentEmojis({ recent: [] }))
 			.fire(picker, "select", { emoji: ":parrot:" })
 			.expectExact(

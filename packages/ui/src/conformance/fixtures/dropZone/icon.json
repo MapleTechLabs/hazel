@@ -8,10 +8,7 @@
 			"icon": "emoji-add",
 			"accept": "image/png,image/gif,image/webp"
 		},
-		"events": [
-			"press",
-			"files"
-		]
+		"events": ["press", "files"]
 	},
 	"frame": "screen",
 	"pending": {

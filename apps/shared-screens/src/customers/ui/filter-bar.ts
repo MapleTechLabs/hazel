@@ -13,7 +13,12 @@ import type { Content, Hazel, TextField } from "@hazel/ui/vocabulary/index"
 /** A saved view's look (`view-look.ts`): its icon in its colour, or a dot in its colour. */
 export type ViewTabLook = Readonly<{ icon?: Content.Tab["icon"]; tint?: Content.Tab["tint"] }>
 
-export type ViewTab<K extends string> = Readonly<{ key: K; label: string; count?: number; look?: ViewTabLook }>
+export type ViewTab<K extends string> = Readonly<{
+	key: K
+	label: string
+	count?: number
+	look?: ViewTabLook
+}>
 
 /** `Open 12 · Snoozed 4 · Done` as in-page tabs; `trailing` follows them. */
 export const viewTabs = <Msg, K extends string>(
@@ -134,12 +139,7 @@ export const addFilterButton = <Msg>(h: Hazel.H<Msg>, options: Readonly<{ onPres
 
 /** `Sort Priority`: the trigger of the page's sort menu (`menu`'s `trigger` slot). */
 export const sortTrigger = <Msg>(h: Hazel.H<Msg>, options: Readonly<{ label: string }>) =>
-	h.button
-		.detail("Sort")
-		.label(options.label)
-		.trailingIcon("chevron-down")
-		.variant("ghost")
-		.size("toolbar")
+	h.button.detail("Sort").label(options.label).trailingIcon("chevron-down").variant("ghost").size("toolbar")
 
 /** The row the controls sit in: filters at the start, the rest at the end. */
 export const filterBar = <Msg>(

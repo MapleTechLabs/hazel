@@ -1,5 +1,5 @@
 {
-	"about": "A row that wraps its children onto more lines (`wrap`, `pk0-wrap-row`), and one drawn only at the regular size class (`regularOnly`, `pk0-web-only`).",
+	"about": "A row that wraps its children onto more lines (`wrap`, `pk0-wrap-row`).",
 	"root": {
 		"tag": "stack",
 		"props": {
@@ -61,14 +61,5 @@
 	"frame": "sidebar",
 	"pending": {
 		"ios": "S1"
-	},
-	"cases": [
-		{
-			"name": "regular-only",
-			"props": {
-				"wrap": null,
-				"regularOnly": true
-			}
-		}
-	]
+	}
 }

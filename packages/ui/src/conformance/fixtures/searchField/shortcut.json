@@ -7,9 +7,7 @@
 			"width": "regular",
 			"shortcut": "/"
 		},
-		"events": [
-			"change"
-		]
+		"events": ["change"]
 	},
 	"frame": "sidebar",
 	"pending": {
@@ -24,9 +22,7 @@
 	"axes": [
 		{
 			"prop": "width",
-			"values": [
-				"narrow"
-			]
+			"values": ["narrow"]
 		}
 	]
 }

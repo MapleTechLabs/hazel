@@ -211,7 +211,7 @@ export const categoriesOf = (
 		list.push({
 			emoji: tone === null ? emoji.emoji : (emoji.skins?.[tone] ?? emoji.emoji),
 			name: emoji.label,
-			...(emoji.tags.length === 0 ? {} : { keywords: emoji.tags }),
+			keywords: emoji.tags,
 		})
 		byCategory.set(emoji.category, list)
 	}
