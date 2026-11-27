@@ -18,6 +18,101 @@ const panel = `${C} > ${p("suggestions")}`
 const option = `${panel} ${p("suggestion")}`
 const bar = `${C} > ${p("context")}`
 
+const input = `${C} > ${p("input")}`
+const md = (style: string) => `${input} [data-hz-md="${style}"]`
+
+/** The editor (W12b): today's `EDITABLE_CLASS`, the blocks' `toDOM` classes and `leafClassName`. */
+const editorRules: ReadonlyArray<readonly [string, string]> = [
+	// ProseMirror's own required styles, then today's `whitespace-pre-wrap break-all caret-primary`.
+	[
+		input,
+		`position: relative; white-space: pre-wrap; word-break: break-all; font-variant-ligatures: none;
+		font-feature-settings: "liga" 0; caret-color: ${color("primary")}; outline: none; cursor: text;`,
+	],
+	[`${input}[contenteditable="false"]`, "cursor: default;"],
+	[`${input} :is(p, li, blockquote, pre)`, "margin: 0;"],
+	[`${input} ${p("paragraph")}`, `min-height: var(--hz-text-body-leading);`],
+	// Before the empty paragraph, over it: `absolute top-0`, muted, never hit by the pointer.
+	[
+		`${input} > ${p("placeholder")}`,
+		`position: absolute; pointer-events: none; user-select: none; color: ${color("muted-fg")};`,
+	],
+	// `relative my-1 pl-4 italic`, the accent bar `w-1 rounded-xs bg-primary` down its left.
+	[
+		`${input} ${p("quote")}`,
+		`position: relative; margin-block: ${space("1")}; padding-left: ${space("4")}; font-style: italic;`,
+	],
+	[
+		`${input} ${p("quote")}::before`,
+		`content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: ${space("1")};
+		border-radius: ${radius("xs")}; background-color: ${color("primary")};`,
+	],
+	// `my-2 overflow-x-auto whitespace-pre-wrap rounded-lg bg-muted p-4 font-mono text-sm`.
+	[
+		`${input} ${p("codeBlock")}`,
+		`margin-block: ${space("2")}; padding: ${space("4")}; overflow-x: auto; white-space: pre-wrap;
+		border-radius: ${radius("lg")}; background-color: ${color("muted")}; font-family: var(--hz-font-mono);
+		${type("code")}`,
+	],
+	[`${input} ${p("subtext")}`, `color: ${color("muted-fg")}; ${type("caption")}`],
+	// `my-0.5 ml-4`; an ordered item shows its own number.
+	[`${input} ${p("listItem")}`, `margin-block: ${space("0.5")}; margin-left: ${space("4")};`],
+	[`${input} ${p("listItem")}[data-number]::marker`, `content: attr(data-number) ". ";`],
+	// A mention: `inline-block rounded bg-primary/10 px-1 py-0.5 font-medium text-primary`.
+	[
+		`${input} ${p("mention")}`,
+		`display: inline-block; padding: ${space("0.5")} ${space("1")}; border-radius: ${radius("sm")};
+		background-color: ${color("primary-tint")}; color: ${color("primary")};
+		font-weight: var(--hz-weight-strong); white-space: nowrap; cursor: default;
+		transition: background-color var(--hz-duration-fast) var(--hz-ease-standard);`,
+	],
+	[
+		`${input} ${p("mention")}:not([data-kind="directive"]):hover`,
+		`background-color: ${color("primary-tint-hover")};`,
+	],
+	// `size-5 align-text-bottom`.
+	[
+		`${input} ${p("customEmoji")}`,
+		`display: inline-block; width: ${space("5")}; height: ${space("5")}; vertical-align: text-bottom;
+		object-fit: contain;`,
+	],
+	// Slate's `ring-2 ring-primary ring-offset-1` on a selected atom.
+	[
+		`${input} :is(${p("mention")}[data-selected], ${p("customEmoji")}.ProseMirror-selectednode)`,
+		`box-shadow: 0 0 0 1px ${color("bg")}, 0 0 0 3px ${color("primary")};`,
+	],
+	[
+		`${md("marker")}`,
+		`color: color-mix(in oklab, ${color("muted-fg")} 50%, transparent); user-select: none;`,
+	],
+	[`${md("bold")}`, "font-weight: var(--hz-weight-bold);"],
+	[`${md("italic")}`, "font-style: italic;"],
+	[`${md("strikethrough")}`, "text-decoration: line-through;"],
+	[`${md("underline")}`, "text-decoration: underline;"],
+	// `bg-accent/50 rounded px-1 py-0.5 font-mono text-sm`.
+	[
+		`${md("code")}`,
+		`padding: ${space("0.5")} ${space("1")}; border-radius: ${radius("sm")};
+		background-color: ${color("muted")}; font-family: var(--hz-font-mono); font-size: var(--hz-text-code-size);`,
+	],
+	[
+		`${md("highlight")}`,
+		`padding-inline: ${space("0.5")}; border-radius: ${radius("sm")}; background-color: ${color("highlight")};`,
+	],
+	// `bg-muted blur-sm hover:blur-none`.
+	[
+		`${md("spoiler")}`,
+		`background-color: ${color("muted")}; filter: blur(4px);
+		transition: filter var(--hz-duration-fast) var(--hz-ease-standard);`,
+	],
+	[`${md("spoiler")}:hover`, "filter: none;"],
+	[`:is(${md("link")}, ${md("url")})`, `color: ${color("primary")}; text-decoration: underline;`],
+	[
+		`@media (prefers-reduced-motion: reduce)`,
+		`${input} ${p("mention")}, ${md("spoiler")} { transition: none; }`,
+	],
+]
+
 const rules: ReadonlyArray<readonly [string, string]> = [
 	[C, "position: relative;"],
 	// The context bar takes the card's first row; the card's top corners are the bar's (`rounded-t-lg`).
@@ -191,6 +286,7 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 	],
 	[`${panel}[data-trigger="/"] ${p("suggestionDescription")}`, `margin-top: ${space("0.5")};`],
 	[`@media (prefers-reduced-motion: reduce)`, `${option} { transition: none; }`],
+	...editorRules,
 ]
 
 const css = rules.map(([selector, body]) => `${selector} { ${body} }`).join("\n")

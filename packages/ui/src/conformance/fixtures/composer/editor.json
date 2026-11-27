@@ -1,0 +1,35 @@
+{
+	"about": "The composer's ProseMirror editor (W12b): markdown kept in the text and highlighted, mention and custom emoji atoms; then a quote, a code block and a list.",
+	"root": {
+		"tag": "composer",
+		"props": {
+			"placeholder": "Message #general",
+			"canSend": true,
+			"value": {
+				"text": "Thanks @[directive:here], **shipping** the _new_ `sidebar` ~~tomorrow~~ today ![custom-emoji:tanuki](data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2020%2020'%3E%3Ccircle%20cx='10'%20cy='10'%20r='9'%20fill='%23f59e0b'/%3E%3C/svg%3E)",
+				"rev": 0,
+				"edit": 0
+			}
+		},
+		"events": ["change", "submit", "trigger", "key", "files"]
+	},
+	"aria": [
+		{ "role": "textbox", "name": "Message #general" },
+		{ "role": "button", "name": "Send" }
+	],
+	"cases": [
+		{
+			"name": "blocks",
+			"props": {
+				"value": {
+					"text": "> Can we ship the sidebar today?\nYes, see ==the plan==:\n```ts\nconst ship = true\n```\n- review the diff\n2. merge it\n-# edited",
+					"rev": 0,
+					"edit": 0
+				}
+			}
+		}
+	],
+	"pending": {
+		"ios": "S2"
+	}
+}

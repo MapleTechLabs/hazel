@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest"
 import type { Plain, Primitive } from "../../define.ts"
 import { primitive as composer } from "../composer.ts"
+import { editorOf } from "../composer/editor.ts"
 
 const mount = (props: Readonly<Record<string, Plain>>, on: ReadonlyArray<string>) => {
 	const made: Primitive = composer.create({
@@ -105,10 +106,8 @@ describe("hz:composer suggestions", () => {
 		expect(node.querySelector("img[data-hz-part=suggestionEmoji]")?.getAttribute("src")).toBe(
 			"https://cdn.example/party.png",
 		)
-		const area = part("input") as HTMLTextAreaElement
-		area.value = "/dep"
-		area.setSelectionRange(4, 4)
-		area.dispatchEvent(new Event("input", { bubbles: true }))
+		const view = editorOf(part("input")!)!
+		view.someProp("handleTextInput", (handle) => handle(view, 1, 1, "/", () => view.state.tr))
 		expect(part("suggestions")!.dataset.trigger).toBe("/")
 	})
 })

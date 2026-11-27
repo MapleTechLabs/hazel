@@ -7,7 +7,6 @@ import { describe, expect, it } from "vitest"
 import { Hazel } from "../vocabulary/index.ts"
 import * as WebHost from "./host.ts"
 import type { Plain } from "./primitives/define.ts"
-import { triggerAt } from "./primitives/controls/composer.ts"
 import { create, type Primitive } from "./primitives.ts"
 
 /** A control with `props` set and every event in `on` recorded as `[event, payload]`. */
@@ -186,42 +185,25 @@ describe("text controls", () => {
 })
 
 describe("hz:composer", () => {
-	it("finds a trigger at a word start, and a command only as the first word", () => {
-		expect(triggerAt("hi @ma", 6)).toEqual({ kind: "@", query: "ma" })
-		expect(triggerAt("see #", 5)).toEqual({ kind: "#", query: "" })
-		expect(triggerAt("/gif cats", 4)).toEqual({ kind: "/", query: "gif" })
-		expect(triggerAt("a /gif", 6)).toBeUndefined()
-		expect(triggerAt("mail@x", 6)).toBeUndefined()
-		expect(triggerAt("hi @ma ", 7)).toBeUndefined()
-	})
-
-	it("routes keys to an open trigger, sends on Enter only when it can, and keeps Shift+Enter", () => {
-		const { node, fired, set } = mount("composer", { placeholder: "Message #general" }, [
-			"change",
-			"submit",
-			"trigger",
-			"key",
-		])
-		const area = part<HTMLTextAreaElement>(node, "input")
+	it("is a labelled textbox with a send button that sends only when it can", () => {
+		const { node, fired, set } = mount("composer", { placeholder: "Message #general" }, ["submit"])
+		const input = part(node, "input")
 		const send = part<HTMLButtonElement>(node, "send")
-		expect(area.getAttribute("aria-label")).toBe("Message #general")
+		expect(input.getAttribute("role")).toBe("textbox")
+		expect(input.getAttribute("aria-label")).toBe("Message #general")
+		expect(input.hasAttribute("data-hz-focus")).toBe(true)
 		expect(send.disabled).toBe(true)
-		typeInto(area, "hi @ma")
-		expect(fired.at(-1)).toEqual(["trigger", { kind: "@", query: "ma" }])
-		expect(key(area, { key: "ArrowDown" }).defaultPrevented).toBe(true)
-		expect(fired.at(-1)).toEqual(["key", { key: "down" }])
-		key(area, { key: "Escape" })
-		typeInto(area, " ")
-		expect(fired.at(-1)).toEqual(["change", { value: "hi @ma ", rev: 2, edit: 0 }])
-		expect(key(area, { key: "Enter" }).defaultPrevented).toBe(true)
-		expect(fired.some(([event]) => event === "submit")).toBe(false)
+		expect(key(input, { key: "Enter" }).defaultPrevented).toBe(true)
+		expect(fired).toEqual([])
+		set("value", { text: "hi", rev: 0, edit: 1 })
 		set("canSend", true)
 		expect(send.disabled).toBe(false)
-		expect(key(area, { key: "Enter", shiftKey: true }).defaultPrevented).toBe(false)
-		key(area, { key: "Enter" })
-		expect(fired.at(-1)).toEqual(["submit", { value: "hi @ma ", rev: 2, edit: 0 }])
+		key(input, { key: "Enter" })
 		send.click()
-		expect(fired.filter(([event]) => event === "submit")).toHaveLength(2)
+		expect(fired).toEqual([
+			["submit", { value: "hi", rev: 0, edit: 1 }],
+			["submit", { value: "hi", rev: 0, edit: 1 }],
+		])
 	})
 })
 

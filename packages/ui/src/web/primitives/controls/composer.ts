@@ -1,49 +1,26 @@
 /**
- * `hz:composer` (phase 2 leaf; the rich editor is phase 3): a growing `textarea` with the G5 revision
- * pair, a send button, and the `above` and `actions` slots placed by grid (`styles.ts`). Enter sends,
- * Shift+Enter is a new line. `@ # / :` at a word start opens a trigger (`trigger {kind, query}`); while
- * one is open, arrows, Enter, Tab and Escape raise `key` instead. Dropped or pasted files raise `files`.
- * Phase 4 (W12a): the screen's `suggestions` as a listbox over the field (`activeSuggestion` marked,
- * pressing one raises `pressSuggestion`), the reply or edit bar from `context` (its close and Escape
- * raise `cancelContext`), and Up in an empty composer raises `editLast`.
+ * `hz:composer`: a ProseMirror editor over markdown text (W12b, `composer/editor.ts`) with the G5
+ * revision pair, a send button, and the `above` and `actions` slots placed by grid (`styles.ts`). Enter
+ * sends, Shift+Enter is a new line; markdown stays in the text, highlighted, and `@[userId:...]` and
+ * `![custom-emoji:...](...)` draw as atoms. `@ # / :` typed at a word start opens a trigger (`trigger
+ * {kind, query}`); while its suggestions show, arrows, Enter, Tab and Escape raise `key`. Dropped or
+ * pasted files raise `files`. W12a: the `suggestions` listbox (`pressSuggestion`), the `context` bar
+ * (`cancelContext`), and Up in an empty composer (`editLast`).
  */
 // Owned by lane A2.
 import { ditherInitial } from "../../../../../../apps/web-foldkit/src/ui/dither-avatar.ts"
 import type { ComposerContext, Face, Suggestion } from "../../../vocabulary/content.ts"
-import type { ComposerKey } from "../../../vocabulary/options.ts"
 import { glyph, svg } from "../../icons.ts"
 import { ditherLayer } from "../content/dither.ts"
 import { ensureStyles as ensureContentStyles } from "../content/styles.ts"
 import { definePrimitive, flag, option, part, type Primitive } from "../define.ts"
 import { primitive as buttonRenderer } from "./button.ts"
 import { ensureComposerStyles } from "./composer-styles.ts"
-import { fire, focusEvents, handles, revisioned, uniqueId } from "./field.ts"
+import * as Revisions from "../../../native/revisions.ts"
+import { createEditor, type Trigger } from "./composer/editor.ts"
+import { carriesFiles, transferFiles } from "./composer/files.ts"
+import { fire, handles, uniqueId } from "./field.ts"
 import { ensureStyles } from "./styles.ts"
-
-type TriggerKind = "@" | "#" | "/" | ":"
-interface Trigger {
-	readonly kind: TriggerKind
-	readonly query: string
-}
-
-/** The trigger the caret is in: a trigger character at a word start, then no whitespace. */
-export const triggerAt = (text: string, caret: number): Trigger | undefined => {
-	const before = text.slice(0, caret)
-	const match = /(?:^|\s)([@#/:])([^\s@#/:]*)$/.exec(before)
-	if (match === null) return undefined
-	const kind = match[1] as TriggerKind
-	// A command is the message's first word only.
-	if (kind === "/" && before.trimStart().indexOf("/") !== 0) return undefined
-	return { kind, query: match[2] ?? "" }
-}
-
-const keys: ReadonlyMap<string, ComposerKey> = new Map([
-	["ArrowUp", "up"],
-	["ArrowDown", "down"],
-	["Enter", "enter"],
-	["Tab", "tab"],
-	["Escape", "escape"],
-])
 
 let dropped: ReadonlyArray<File> = []
 /** The files of the last `files` event, for the web's `Files.dropped` (lane F); taking clears them. */
@@ -128,16 +105,16 @@ const suggestionRow = (document: Document, suggestion: Suggestion, id: string, c
 	return row
 }
 
+/** A mention's name from its `@` suggestion: the label without a leading `@` (`@here` is `here`). */
+const mentionName = (suggestion: Suggestion) => suggestion.label.replace(/^@/, "")
+
 export const primitive = definePrimitive("composer", ({ document, tag, outer }) => {
 	ensureStyles(document)
 	ensureContentStyles(document)
 	ensureComposerStyles(document)
 	const node = outer("div")
 	const content = part(document, "div", "content")
-	const area = part(document, "textarea", "input") as HTMLTextAreaElement
-	area.rows = 1
-	area.dataset.hzFocus = ""
-	area.setAttribute("aria-label", "Message")
+	const input = part(document, "div", "input")
 	const send = part(document, "button", "send") as HTMLButtonElement
 	send.type = "button"
 	send.disabled = true
@@ -181,15 +158,57 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 		if (!(row instanceof HTMLElement) || row.dataset.id === undefined) return
 		fire(events(), "pressSuggestion", { id: row.dataset.id })
 	})
-	node.append(bar, content, area, send, panel)
 
 	const events = () => primitive.events
 	let suggestions: ReadonlyArray<Suggestion> = []
 	let active: string | undefined
 	let context: ComposerContext | undefined
 	/** The last trigger opened: the `/` list draws today's bot command rows. */
-	let lastKind: TriggerKind | undefined
+	let lastKind: Trigger["kind"] | undefined
+	let placeholder = ""
+	let field = Revisions.initial
+	let canSend = false
+	let disabled = false
 	const rows = new Map<string, HTMLElement>()
+	// HAZEL-GAP(composer-mention-names): a mention's name is its `@` suggestion's label, kept once seen;
+	// a draft loaded with mentions the composer never suggested shows their ids.
+	const names = new Map<string, string>()
+
+	const editor = createEditor(input, {
+		placeholder: () => placeholder,
+		nameOf: (id) => names.get(id) ?? id,
+		changed: (markdown) => {
+			const next = Revisions.edit(field, markdown)
+			field = next.field
+			if (next.change !== undefined) fire(events(), "change", { ...next.change })
+		},
+		triggered: (next, previous) => {
+			if (next !== null && next.kind !== lastKind) {
+				lastKind = next.kind
+				option(panel, "trigger", lastKind)
+			}
+			if (next !== null) fire(events(), "trigger", { kind: next.kind, query: next.query })
+			else if (previous !== null) fire(events(), "trigger", { kind: previous.kind, query: null })
+		},
+		// Today's rule: the keys go to the suggestions only while some show.
+		suggestionKey: (key) =>
+			suggestions.length > 0 && handles(events(), "key") && fire(events(), "key", { key }),
+		editLast: () => fire(events(), "editLast", {}),
+		escape: () => context !== undefined && fire(events(), "cancelContext", {}),
+		submit: () => {
+			if (canSend && !disabled) fire(events(), "submit", { ...Revisions.current(field) })
+		},
+		files: (files) => takeFiles(files),
+	})
+	input.dataset.hzFocus = ""
+	input.setAttribute("role", "textbox")
+	input.setAttribute("aria-multiline", "true")
+	input.setAttribute("aria-label", "Message")
+	input.addEventListener("focus", () => fire(events(), "focus", {}))
+	input.addEventListener("blur", () => fire(events(), "blur", {}))
+	// HAZEL-GAP(composer-editor-teardown): the web host has no removal hook for a primitive, so the
+	// editor's view is never destroyed; ProseMirror's document listeners outlive a removed composer.
+	node.append(bar, content, input, send, panel)
 
 	const drawContext = () => {
 		bar.hidden = context === undefined
@@ -216,7 +235,7 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 	/** Today's `FitAutocompleteHeight`: the room above the field less 16px, between 150 and 400. */
 	const place = () => {
 		const padding = Number.parseFloat(document.defaultView?.getComputedStyle(node).paddingTop ?? "") || 0
-		const anchor = Math.max(0, area.offsetTop - padding)
+		const anchor = Math.max(0, input.offsetTop - padding)
 		panel.style.top = `${anchor}px`
 		const top = node.getBoundingClientRect().top + node.clientTop + anchor
 		panel.style.maxHeight = `${Math.min(Math.max(top - 16, 150), 400)}px`
@@ -229,9 +248,9 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 			row.setAttribute("aria-selected", on ? "true" : "false")
 			if (on) current = row
 		}
-		if (current === undefined || panel.hidden) area.removeAttribute("aria-activedescendant")
+		if (current === undefined || panel.hidden) input.removeAttribute("aria-activedescendant")
 		else {
-			area.setAttribute("aria-activedescendant", current.id)
+			input.setAttribute("aria-activedescendant", current.id)
 			if (typeof current.scrollIntoView === "function") current.scrollIntoView({ block: "nearest" })
 		}
 	}
@@ -244,11 +263,11 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 		panel.hidden = !open
 		option(panel, "trigger", lastKind)
 		if (open) {
-			area.setAttribute("aria-controls", panel.id)
-			area.setAttribute("aria-expanded", "true")
+			input.setAttribute("aria-controls", panel.id)
+			input.setAttribute("aria-expanded", "true")
 		} else {
-			area.removeAttribute("aria-controls")
-			area.removeAttribute("aria-expanded")
+			input.removeAttribute("aria-controls")
+			input.removeAttribute("aria-expanded")
 		}
 		// HAZEL-GAP(composer-command-args): today's `/` rows chip each argument; `Suggestion` has none.
 		// HAZEL-GAP(composer-suggestion-hover): hover tints a row but cannot move `activeSuggestion`.
@@ -263,6 +282,7 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 				children.push(heading)
 			}
 			group = suggestion.group
+			if (suggestion.emoji === undefined) names.set(suggestion.id, mentionName(suggestion))
 			const row = suggestionRow(document, suggestion, `${panel.id}-${index}`, command)
 			rows.set(suggestion.id, row)
 			children.push(row)
@@ -271,69 +291,25 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 		if (open) place()
 		markActive()
 	}
-	let trigger: Trigger | undefined
-	let canSend = false
-	let disabled = false
-	const syncTrigger = () => {
-		const next =
-			area.selectionStart === area.selectionEnd ? triggerAt(area.value, area.selectionStart) : undefined
-		if (next?.kind === trigger?.kind && next?.query === trigger?.query) return
-		const closed = trigger
-		trigger = next
-		if (next !== undefined && next.kind !== lastKind) {
-			lastKind = next.kind
-			option(panel, "trigger", lastKind)
-		}
-		if (next !== undefined) fire(events(), "trigger", { kind: next.kind, query: next.query })
-		else if (closed !== undefined) fire(events(), "trigger", { kind: closed.kind, query: null })
-	}
-	const text = revisioned(area, (change) => {
-		fire(events(), "change", { ...change })
+	send.addEventListener("click", () => {
+		if (!disabled) fire(events(), "submit", { ...Revisions.current(field) })
 	})
-	area.addEventListener("input", syncTrigger)
-	area.addEventListener("click", syncTrigger)
-	area.addEventListener("keyup", (event) => {
-		if (event.key.startsWith("Arrow") && trigger === undefined) syncTrigger()
-	})
-	focusEvents(area, events)
-	const submit = () => {
-		if (disabled) return
-		fire(events(), "submit", { ...text.current() })
-	}
-	area.addEventListener("keydown", (event) => {
-		if (event.isComposing) return
-		const key = keys.get(event.key)
-		if (trigger !== undefined && key !== undefined && handles(events(), "key") && !event.shiftKey) {
-			event.preventDefault()
-			fire(events(), "key", { key })
-			if (key === "escape") trigger = undefined
-			return
-		}
-		if (event.key === "Enter" && !event.shiftKey) {
-			event.preventDefault()
-			if (canSend) submit()
-			return
-		}
-		const bare = !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey
-		// Up in an empty composer edits the last message (today's `write.ts` ArrowUp-to-edit).
-		if (event.key === "ArrowUp" && bare && area.value === "" && fire(events(), "editLast", {}))
-			event.preventDefault()
-		else if (event.key === "Escape" && context !== undefined && fire(events(), "cancelContext", {}))
-			event.preventDefault()
-	})
-	send.addEventListener("click", submit)
 
-	const takeFiles = (files: FileList | null | undefined, event: Event) => {
-		if (files === null || files === undefined || files.length === 0 || !handles(events(), "files")) return
-		event.preventDefault()
-		dropped = [...files]
-		fire(events(), "files", { count: files.length })
+	/** Hands files to `Files.dropped` and reports them; false when the screen takes no files. */
+	const takeFiles = (files: ReadonlyArray<File>) => {
+		if (files.length === 0 || disabled || !handles(events(), "files")) return false
+		dropped = files
+		return fire(events(), "files", { count: files.length })
 	}
-	area.addEventListener("paste", (event) => takeFiles(event.clipboardData?.files, event))
 	node.addEventListener("dragover", (event) => {
-		if (event.dataTransfer?.types.includes("Files") === true) event.preventDefault()
+		if (carriesFiles(event.dataTransfer)) event.preventDefault()
 	})
-	node.addEventListener("drop", (event) => takeFiles(event.dataTransfer?.files, event))
+	node.addEventListener("drop", (event) => {
+		if (event.dataTransfer === null || !carriesFiles(event.dataTransfer)) return
+		// Taken or not, a file dropped here never opens in the tab.
+		event.preventDefault()
+		takeFiles(transferFiles(event.dataTransfer))
+	})
 
 	const primitive: Primitive = {
 		tag,
@@ -341,14 +317,21 @@ export const primitive = definePrimitive("composer", ({ document, tag, outer }) 
 		content,
 		set: (name, value) => {
 			if (name === "placeholder") {
-				area.placeholder = typeof value === "string" ? value : ""
-				area.setAttribute("aria-label", typeof value === "string" ? value : "Message")
+				placeholder = typeof value === "string" ? value : ""
+				input.setAttribute("aria-label", placeholder === "" ? "Message" : placeholder)
+				editor.refresh()
 			} else if (name === "value") {
-				text.receive(value)
-				syncTrigger()
+				const incoming = Revisions.decode(value)
+				if (incoming === undefined) return
+				const next = Revisions.receive(field, incoming)
+				field = next.field
+				editor.receive(field.text)
+				if (next.change !== undefined) fire(events(), "change", { ...next.change })
 			} else if (name === "disabled") {
 				disabled = value === true
-				area.disabled = disabled
+				editor.setEditable(!disabled)
+				if (disabled) input.setAttribute("aria-disabled", "true")
+				else input.removeAttribute("aria-disabled")
 				send.disabled = disabled || !canSend
 				flag(node, "disabled", value)
 			} else if (name === "suggestions") {
