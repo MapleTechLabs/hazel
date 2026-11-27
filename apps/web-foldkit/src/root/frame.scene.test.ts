@@ -7,6 +7,7 @@ import { describe, expect, test } from "vitest"
 import { ada, flagsOf, owner, shellSignedIn } from "../test/root-fixtures"
 import { App, type Boot } from "./app"
 import { AdoptRegion, RunFoldkitHost } from "./foldkit"
+import { SIDEBAR_CONTAINER_CLASS, SIDEBAR_GAP_CLASS, SettleAfterPaint } from "./frame"
 import { type AppModel, hostContextOf } from "./logic"
 
 /** The shell's frame around every page: the nav rail, the phone's tab and top bars, and the paint marks. */
@@ -53,6 +54,30 @@ describe("nav rail", () => {
 			.toExist()
 			.expect(currentIn("Chat"))
 			.toBeAbsent()
+	})
+})
+
+describe("the docked sidebar's first paint", () => {
+	// Today's sidebar appears at its width: no width (or any) transition runs while the app loads.
+	test("the first frame is static: the dock is unsettled and settles after it paints", () => {
+		const model = shellSignedIn("/hazel/settings/team")
+		frame(model)
+			.expect(Locator.attr("data-slot", "sidebar"))
+			.toExist()
+			.expect(Locator.attr("data-settled"))
+			.toBeAbsent()
+			.expectMount(SettleAfterPaint({}))
+	})
+
+	test("every transition utility on the dock waits for data-settled", () => {
+		const motion = /^(transition|duration-|ease-)/
+		for (const className of [SIDEBAR_GAP_CLASS, SIDEBAR_CONTAINER_CLASS]) {
+			const ungated = className
+				.split(/\s+/)
+				.filter((token) => motion.test(token.split(":").at(-1) ?? ""))
+				.filter((token) => !token.startsWith("group-data-settled:"))
+			expect(ungated).toEqual([])
+		}
 	})
 })
 

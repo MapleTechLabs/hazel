@@ -58,8 +58,16 @@ ${I}:is(:hover, :focus-within) ${SLOT("actions")} { opacity: 1; }
 ${I}:not(${LARGE}) ${SLOT("actions")} {
 	position: absolute; inset-block: 0; inset-inline-end: 0; padding-inline-end: var(--hz-space-1_5);
 }
+/* Today's badge (\`right-1.5\`, \`group-hover:right-8\`) makes room for the row's options: it slides
+   24px toward the start on hover, a transform so the title never reflows (reduced motion: instant). */
+${I}:not(${LARGE}) ${CONTROL} > [data-hz-part="badge"] {
+	transition: translate var(--hz-duration-fast) var(--hz-ease-out);
+}
 ${I}:is(:hover, :focus-within):not(${LARGE}):has(${SLOT("actions")} > *) ${CONTROL} > [data-hz-part="badge"] {
-	margin-inline-end: var(--hz-space-6);
+	translate: calc(-1 * var(--hz-space-6)) 0;
+}
+${I}:is(:hover, :focus-within):not(${LARGE}):has(${SLOT("actions")} > *):dir(rtl) ${CONTROL} > [data-hz-part="badge"] {
+	translate: var(--hz-space-6) 0;
 }
 ${I}:has(${SLOT("actions")} :focus-visible) ${CONTROL} { background-color: var(--hz-color-wash); }
 `
