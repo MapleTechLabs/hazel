@@ -38,7 +38,7 @@ export type ConnectCardStatus<Msg> =
 
 /** `● Connected · Synced 2h ago`: the state in its tone, then the rest muted. */
 const stateLine = <Msg>(h: Hazel.H<Msg>, tone: TextTone, label: string, rest: string | null) =>
-	// HAZEL-GAP(p4-customers-status-dot): today's state leads with the kit's status dot in its tone; `text` has no dot.
+	// HAZEL-GAP(pk0-status-dot): today's state leads with the kit's status dot in its tone; `text` has no dot.
 	h.stack
 		.axis("horizontal")
 		.density("compact")
@@ -65,7 +65,7 @@ const footer = <Msg>(h: Hazel.H<Msg>, status: ConnectCardStatus<Msg>, now: Insta
 			const known = status.total !== null && status.total > 0
 			return [
 				h.stack.density("compact").children(
-					// HAZEL-GAP(p4-customers-inline-spinner): today's line leads with a 14px loader ring in the accent ink; a `progress` spinner is its own row.
+					// HAZEL-GAP(pk0-inline-spinner): today's line leads with a 14px loader ring in the accent ink; a `progress` spinner is its own row.
 					h.stack
 						.axis("horizontal")
 						.density("compact")
@@ -130,7 +130,7 @@ export const connectCard = <Msg>(
 		description?: string
 	}>,
 ) =>
-	// HAZEL-GAP(p4-customers-card-footer): today the footer sits under a hairline with its parts at either end (`justify-between`); a stack has no divider-topped row or space-between, so a `divider` and a `spacer` stand in.
+	// HAZEL-GAP(pk0-card-footer): today the footer sits under a hairline with its parts at either end (`justify-between`); a stack has no divider-topped row or space-between, so a `divider` and a `spacer` stand in.
 	h.frame.children(
 		h.stack.children(
 			h.stack

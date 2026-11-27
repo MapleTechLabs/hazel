@@ -49,6 +49,8 @@ export const queueTable = <Msg>(
 	h: Hazel.H<Msg>,
 	options: Readonly<{
 		label: string
+		/** The page's own headers (today's `queueColumnHeader` cells); keys stay the row's cell keys. */
+		columns?: ReadonlyArray<Content.TableColumn>
 		sort?: Content.TableSort
 		onSort?: (column: string) => Msg
 		loading?: boolean
@@ -58,7 +60,7 @@ export const queueTable = <Msg>(
 	// HAZEL-GAP(table-frame): today's queue sits in a rounded bordered box (`rounded-xl border`); the table has no frame, so the page wraps it in a `frame`.
 	const table = h.table
 		.label(options.label)
-		.columns(QUEUE_COLUMNS)
+		.columns(options.columns ?? QUEUE_COLUMNS)
 		.sort(options.sort)
 		.loading(options.loading ?? false)
 	const onSort = options.onSort
@@ -90,7 +92,7 @@ export type QueueRowOptions<Msg> = Readonly<{
 }>
 
 const accountCell = <Msg>(h: Hazel.H<Msg>, options: QueueRowOptions<Msg>) =>
-	// HAZEL-GAP(p4-customers-account-run): today a run of one account's rows joins their logos with a vertical line and drops the hairline between them; a continuing row here only leaves the account blank.
+	// HAZEL-GAP(pk0-account-run): today a run of one account's rows joins their logos with a vertical line and drops the hairline between them; a continuing row here only leaves the account blank.
 	options.run?.continuesAbove
 		? null
 		: h.stack
@@ -136,14 +138,15 @@ export const queueRow = <Msg>(h: Hazel.H<Msg>, options: QueueRowOptions<Msg>) =>
 		.title(`${options.account.name}: ${options.signal.title}`)
 		.current(options.isFocused ?? false)
 		.selected(options.isSelected ?? false)
-	// HAZEL-GAP(p4-customers-queue-actions-swap): today the actions replace evidence to assignee on hover; the table draws them over the last cell.
+	// HAZEL-GAP(pk0-queue-actions-swap): today the actions replace evidence to assignee on hover; the table draws them over the last cell.
 	const withActions = options.actions === undefined ? row : row.actions(...options.actions)
 	return (options.onPress === undefined ? withActions : withActions.on("press", options.onPress)).children(
 		cell("rank", h.text.tone("muted").numeric().children(String(options.rank))),
 		cell("account", accountCell(h, options)),
 		cell("signal", signalCell(h, options.signal)),
 		cell("evidence", options.evidence),
-		cell("severity", severityChip(h, options.signal.severity)),
+		// A horizontal stack keeps the chip at its own width (a cell stretches its child).
+		cell("severity", h.stack.axis("horizontal").children(severityChip(h, options.signal.severity))),
 		cell("age", h.text.tone("muted").numeric().children(options.age)),
 		cell("assignee", personAvatar(h, options.assignee)),
 	)
@@ -160,7 +163,7 @@ export const queueAction = <Msg>(
 		shortcut?: string
 	}>,
 ) => {
-	// HAZEL-GAP(p4-customers-action-shortcut): today an action shows its queue key after the label (`A`, `H`, `D`) as a key cap; `button` has no shortcut.
+	// HAZEL-GAP(pk0-action-shortcut): today an action shows its queue key after the label (`A`, `H`, `D`) as a key cap; `button` has no shortcut.
 	const button = h.button
 		.label(options.label)
 		.icon(options.icon)

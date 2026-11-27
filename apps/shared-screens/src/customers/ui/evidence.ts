@@ -63,7 +63,7 @@ const sparkline = <Msg>(
 
 /** Two right-aligned lines: the figure, and what it means. */
 const lines = <Msg>(h: Hazel.H<Msg>, top: string, bottom: string | null, danger = false) =>
-	// HAZEL-GAP(p4-customers-evidence-lines): today's figure is 14px medium over a 12px caption, right-aligned; a stack's `end` aligns the lines but not their text, and a bottom-only danger tone needs its own run.
+	// HAZEL-GAP(pk0-evidence-lines): today's figure is 14px medium over a 12px caption, right-aligned; a stack's `end` aligns the lines but not their text, and a bottom-only danger tone needs its own run.
 	h.stack
 		.density("tight")
 		.align("end")
@@ -165,14 +165,21 @@ export const evidenceViz = <Msg>(h: Hazel.H<Msg>, evidence: SignalEvidence) =>
 			),
 	})
 
-/** One fact: its label and value (a `dl` row today). */
+/** One fact: its label, then its value at the row's end (today's `dl` row, `justify-between`). */
 const fact = <Msg>(h: Hazel.H<Msg>, label: string, value: string, danger = false) =>
-	h.property.label(label).children(
-		h.text
-			.numeric()
-			.tone(danger ? "danger" : "default")
-			.children(value),
-	)
+	// HAZEL-GAP(pk0-facts): `property` lays its label in a column (`detail/parts.ts`); today's facts are a justified `dl` row, drawn here as a stack without the `dt`/`dd` semantics.
+	h.stack
+		.axis("horizontal")
+		.density("compact")
+		.align("center")
+		.children(
+			h.text.tone("muted").children(label),
+			h.spacer,
+			h.text
+				.numeric()
+				.tone(danger ? "danger" : "default")
+				.children(value),
+		)
 
 /** Where a metered feature lands at its current pace. */
 const forecastFacts = <Msg>(h: Hazel.H<Msg>, forecast: LimitForecast) => [

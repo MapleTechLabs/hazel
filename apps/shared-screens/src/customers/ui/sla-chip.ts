@@ -11,7 +11,7 @@ import { type IssueSlaRow, slaChipCopy, slaDisplayOf, type SlaTone } from "../da
 
 /** Today's badge intents per tone, as the badge recipe maps them. */
 const LOOK = {
-	// HAZEL-GAP(p4-customers-badge-quiet-outline): today's `quiet` is outlined with muted ink; `outline` keeps the default ink.
+	// HAZEL-GAP(pk0-badge-quiet-outline): today's `quiet` is outlined with muted ink; `outline` keeps the default ink.
 	quiet: { tone: "neutral", style: "outline" },
 	warning: { tone: "warning", style: "solid" },
 	danger: { tone: "danger", style: "solid" },
@@ -38,7 +38,7 @@ export const slaChip = <Msg>(
 		status: options.status,
 	})
 	if (copy === null) return null
-	// HAZEL-GAP(p4-customers-badge-icon): today's chip leads with a clock, pause or check glyph.
-	// HAZEL-GAP(p4-customers-badge-title): today's chip names its policy and due time on hover (`copy.title`); `badge` has no tooltip, and `tooltip` around it would change its box.
+	// HAZEL-GAP(pk0-badge-icon): today's chip leads with a clock, pause or check glyph.
+	// HAZEL-GAP(pk0-badge-title): today's chip names its policy and due time on hover (`copy.title`); `badge` has no tooltip, and `tooltip` around it would change its box.
 	return h.badge.tone(LOOK[copy.tone].tone).style(LOOK[copy.tone].style).label(copy.text)
 }

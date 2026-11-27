@@ -19,7 +19,7 @@ export const SEVERITY_LABEL = {
 
 /** `High` in an outlined chip. */
 export const severityChip = <Msg>(h: Hazel.H<Msg>, severity: SignalSeverity) =>
-	// HAZEL-GAP(p4-customers-severity-glyph): today's chip leads with three rising bars lit up to the severity (`severity-*` tokens); `badge` has no glyph, so the label stands alone.
+	// HAZEL-GAP(pk0-severity-glyph): today's chip leads with three rising bars lit up to the severity (`severity-*` tokens); `badge` has no glyph, so the label stands alone.
 	h.badge.style("outline").label(SEVERITY_LABEL[severity])
 
 // KIND
@@ -31,7 +31,7 @@ export const KIND_LABEL = { risk: "Risk", opportunity: "Opportunity" } as const 
 
 /** `Risk` (danger) or `Opportunity` (info). */
 export const kindChip = <Msg>(h: Hazel.H<Msg>, kind: SignalKind) =>
-	// HAZEL-GAP(p4-customers-badge-icon): today's kind chip leads with `!` or `↗`; `badge` has an icon part but no `icon` prop.
+	// HAZEL-GAP(pk0-badge-icon): today's kind chip leads with `!` or `↗`; `badge` has an icon part but no `icon` prop.
 	h.badge.tone(kind === "risk" ? "danger" : "info").label(KIND_LABEL[kind])
 
 // LIFECYCLE STAGE
@@ -65,7 +65,7 @@ export const stageBadge = <Msg>(
 	stage: LifecycleStage,
 	options: Readonly<{ trialDaysLeft?: number | null }> = {},
 ) =>
-	// HAZEL-GAP(p4-customers-badge-runs): today's `· 4 days left` is regular weight at 80% opacity and churned's ink is muted; a badge label is one run in its tone's ink.
+	// HAZEL-GAP(pk0-badge-runs): today's `· 4 days left` is regular weight at 80% opacity and churned's ink is muted; a badge label is one run in its tone's ink.
 	h.badge
 		.tone(STAGE_LOOK[stage].tone)
 		.style(STAGE_LOOK[stage].style)
@@ -91,7 +91,7 @@ export const signalCountsLabel = (counts: SignalCounts): string =>
 export const signalCounts = <Msg>(h: Hazel.H<Msg>, counts: SignalCounts) => {
 	const risks = (["high", "medium", "low"] as const).filter((severity) => counts[severity] > 0)
 	if (risks.length === 0 && counts.opportunities === 0) return h.text.tone("muted").children(NO_VALUE)
-	// HAZEL-GAP(p4-customers-severity-glyph): today each count leads with its severity bars, and opportunities with `↗` in info ink.
+	// HAZEL-GAP(pk0-severity-glyph): today each count leads with its severity bars, and opportunities with `↗` in info ink.
 	return h.stack
 		.axis("horizontal")
 		.density("compact")
@@ -110,7 +110,7 @@ export const signalCounts = <Msg>(h: Hazel.H<Msg>, counts: SignalCounts) => {
 
 /** `EU`: an account's environment, beside its name. */
 export const environmentBadge = <Msg>(h: Hazel.H<Msg>, environment: string) =>
-	// HAZEL-GAP(p4-customers-badge-truncate): today a long environment truncates at `max-w-32` with its name on hover; a badge never truncates.
+	// HAZEL-GAP(pk0-badge-truncate): today a long environment truncates at `max-w-32` with its name on hover; a badge never truncates.
 	h.badge.label(environment)
 
 /** `+2 environments` beside a primary's name, muted; nothing for an account without environments. */

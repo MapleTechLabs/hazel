@@ -204,11 +204,7 @@ describe("evidence", () => {
 			highlightFrom: 7,
 			net: true,
 		})
-		expect(s.all(tagged("property")).map((node) => node.props?.["label"])).toEqual([
-			"Last 7 days avg",
-			"Prior 23 days avg",
-			"Change",
-		])
+		expect(texts(s)).toEqual(["Last 7 days avg", "25", "Prior 23 days avg", "44", "Change", "−43%"])
 	})
 })
 

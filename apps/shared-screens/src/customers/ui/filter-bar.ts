@@ -25,7 +25,7 @@ export const viewTabs = <Msg, K extends string>(
 	}>,
 ) => {
 	const byKey = new Map(options.tabs.map((tab) => [tab.key as string, tab.key]))
-	// HAZEL-GAP(p4-customers-tab-leading): today a saved view's tab leads with its icon or tinted dot (`view-look.ts`); `Tab.icon` is an `IconName` with no tint.
+	// HAZEL-GAP(pk0-tab-leading): today a saved view's tab leads with its icon or tinted dot (`view-look.ts`); `Tab.icon` is an `IconName` with no tint.
 	const tabs: ReadonlyArray<Content.Tab> = options.tabs.map((tab) => ({
 		id: tab.key,
 		label: tab.label,
@@ -75,9 +75,9 @@ export const rangePicker = <Msg>(
 			options.caption === null
 				? null
 				: h.text.tone("muted").children(options.caption ?? "vs previous period"),
+			// HAZEL-GAP(pk0-choice-name): today's control is named "Date range" for assistive tech only; a `choiceGroup` label is drawn above it, so it goes unnamed.
 			h.choiceGroup
 				.style("segmented")
-				.label("Date range")
 				.options(RANGES.map((range) => ({ value: range, label: range })))
 				.selected([options.selected])
 				.on("change", ({ selected }) => {
@@ -97,7 +97,7 @@ export const searchBox = <Msg>(
 		onChange: (payload: TextField.ChangePayload) => Msg
 	}>,
 ) =>
-	// HAZEL-GAP(p4-customers-search-hint): today the empty field shows a `/` key cap at its end and is `w-64` (full width on phones); `searchField` has neither.
+	// HAZEL-GAP(pk0-search-hint): today the empty field shows a `/` key cap at its end and is `w-64` (full width on phones); `searchField` has neither.
 	h.searchField.placeholder(options.placeholder).value(options.value).on("change", options.onChange)
 
 // FILTERS
@@ -107,7 +107,7 @@ export const filterChip = <Msg>(
 	h: Hazel.H<Msg>,
 	options: Readonly<{ field: string; operator: string; value: string; onPress?: Msg; onRemove: Msg }>,
 ) => {
-	// HAZEL-GAP(p4-customers-filter-chip): today's chip is a square 32px box, `field operator` muted then the value strong and truncated, with a divided remove half; `chip` is round, one run.
+	// HAZEL-GAP(pk0-filter-chip): today's chip is a square 32px box, `field operator` muted then the value strong and truncated, with a divided remove half; `chip` is round, one run.
 	const chip = h.button
 		.variant("chip")
 		.size("small")
@@ -119,14 +119,14 @@ export const filterChip = <Msg>(
 
 /** `+ Filter`: the trigger of the page's filter builder popover. */
 export const addFilterButton = <Msg>(h: Hazel.H<Msg>, options: Readonly<{ onPress?: Msg }> = {}) => {
-	// HAZEL-GAP(p4-customers-dashed-button): today's `+ Filter` has a dashed edge in `fg-3` ink; no button variant is dashed.
+	// HAZEL-GAP(pk0-dashed-button): today's `+ Filter` has a dashed edge in `fg-3` ink; no button variant is dashed.
 	const button = h.button.label("Filter").icon("plus").variant("ghost").size("xsmall")
 	return options.onPress === undefined ? button : button.on("press", options.onPress)
 }
 
 /** `Sort Priority`: the trigger of the page's sort menu (`menu`'s `trigger` slot). */
 export const sortTrigger = <Msg>(h: Hazel.H<Msg>, options: Readonly<{ label: string }>) =>
-	// HAZEL-GAP(p4-customers-sort-trigger): today "Sort" is muted, the label strong, and a chevron trails; a button label is one run with a leading icon.
+	// HAZEL-GAP(pk0-sort-trigger): today "Sort" is muted, the label strong, and a chevron trails; a button label is one run with a leading icon.
 	h.button.label(`Sort ${options.label}`).icon("chevron-down").variant("ghost").size("xsmall")
 
 /** The row the controls sit in: filters at the start, the rest at the end. */
@@ -137,7 +137,7 @@ export const filterBar = <Msg>(
 		end?: ReadonlyArray<Hazel.NoTextInput<Msg>>
 	}>,
 ) =>
-	// HAZEL-GAP(p4-customers-wrap-row): today the bar and its chips wrap onto more lines (`flex-wrap`); a horizontal stack never wraps.
+	// HAZEL-GAP(pk0-wrap-row): today the bar and its chips wrap onto more lines (`flex-wrap`); a horizontal stack never wraps.
 	h.stack
 		.axis("horizontal")
 		.density("compact")
@@ -166,7 +166,7 @@ export const kbd = <Msg>(h: Hazel.H<Msg>, key: string) => h.text.role("kbd").chi
 
 /** `j k Navigate · a Assign · …`: the queue's hint bar. */
 export const shortcutBar = <Msg>(h: Hazel.H<Msg>, shortcuts: ReadonlyArray<Shortcut>) =>
-	// HAZEL-GAP(p4-customers-web-only): today's bar hides on phones (`max-md:hidden`); a view has no size class to hide by.
+	// HAZEL-GAP(pk0-web-only): today's bar hides on phones (`max-md:hidden`); a view has no size class to hide by.
 	h.stack
 		.axis("horizontal")
 		.align("center")

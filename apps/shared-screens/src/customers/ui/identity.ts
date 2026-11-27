@@ -26,7 +26,7 @@ export const sourceMark = <Msg>(
 	source: CustomerSource,
 	options: Readonly<{ size?: "xs" | "sm" | "md" }> = {},
 ) =>
-	// HAZEL-GAP(p4-customers-source-tile): today's mark sits on a `bg-secondary` rounded tile (24, 32 or 40px); `iconTile` takes only an `IconName`, so the mark is drawn bare at the tile's inner size.
+	// HAZEL-GAP(pk0-source-tile): today's mark sits on a `bg-secondary` rounded tile (24, 32 or 40px); `iconTile` takes only an `IconName`, so the mark is drawn bare at the tile's inner size.
 	sourceLogo(h, source, options.size === "md" ? 24 : options.size === "xs" ? 16 : 20)
 
 /** `[mark] Name` in an outlined chip. */
@@ -35,7 +35,7 @@ export const sourceChip = <Msg>(
 	source: CustomerSource,
 	options: Readonly<{ label?: string }> = {},
 ) =>
-	// HAZEL-GAP(p4-customers-source-chip): today's chip is a 28px outlined box with the mark; `badge` has no image, so the mark and label sit in a horizontal stack.
+	// HAZEL-GAP(pk0-source-chip): today's chip is a 28px outlined box with the mark; `badge` has no image, so the mark and label sit in a horizontal stack.
 	h.stack
 		.axis("horizontal")
 		.density("compact")
@@ -85,7 +85,7 @@ export const safeLogoUrl = (url: string | null | undefined): string | null => {
 }
 
 const logoSize = (size: LogoSize) =>
-	// HAZEL-GAP(p4-customers-logo-sizes): today's logos are 16, 20, 28, 40 and 48px rounded squares; `avatarSizes` has 20 (round), 40 and 48.
+	// HAZEL-GAP(pk0-logo-sizes): today's logos are 16, 20, 28, 40 and 48px rounded squares; `avatarSizes` has 20 (round), 40 and 48.
 	size === "lg" ? "large" : size === "md" ? "medium" : "regular"
 
 /** The company's logo, else its initials. Decorative: the name is always next to it. */
@@ -95,7 +95,7 @@ export const companyLogo = <Msg>(
 ) => {
 	const size = options.size ?? "sm"
 	const initials = initialsOf(options.name)
-	// HAZEL-GAP(p4-customers-initials-tint): today's initials sit on one of six subtle tints picked by a hash of the name; `avatar` draws initials on its muted fill (a `name` would draw the dither instead).
+	// HAZEL-GAP(pk0-initials-tint): today's initials sit on one of six subtle tints picked by a hash of the name; `avatar` draws initials on its muted fill (a `name` would draw the dither instead).
 	return h.avatar
 		.initials(size === "2xs" ? initials.slice(0, 1) : initials)
 		.src(safeLogoUrl(options.logoUrl) ?? undefined)
@@ -108,9 +108,9 @@ export type Person = Readonly<{ name: string; avatarUrl?: string | null }>
 
 /** An owner or assignee: their picture, else initials; `null` is "Unassigned". */
 export const personAvatar = <Msg>(h: Hazel.H<Msg>, person: Person | null) =>
-	// HAZEL-GAP(p4-customers-avatar-sizes): today's owner avatars are 24 and 32px; `avatar` regular is 20.
+	// HAZEL-GAP(pk0-avatar-sizes): today's owner avatars are 24 and 32px; `avatar` regular is 20.
 	person === null
-		? // HAZEL-GAP(p4-customers-unassigned): today's "Unassigned" is a dashed ring around a user glyph; the avatar shows `?` on its muted fill.
+		? // HAZEL-GAP(pk0-unassigned): today's "Unassigned" is a dashed ring around a user glyph; the avatar shows `?` on its muted fill.
 			h.avatar.initials("?")
 		: h.avatar.initials(initialsOf(person.name)).src(safeLogoUrl(person.avatarUrl) ?? undefined)
 
