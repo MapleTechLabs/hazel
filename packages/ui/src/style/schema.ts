@@ -222,6 +222,24 @@ export type ProgressStyle = (typeof progressStyles)[number]
 export const bannerStyles = ["callout", "bar"] as const
 export type BannerStyle = (typeof bannerStyles)[number]
 
+/**
+ * A tab's colour (`pk0-tab-leading`): a saved view's dot, or its icon's ink; `muted` is a view that
+ * picked none. Each is a `tint-*` colour token.
+ */
+export const tabTints = [
+	"muted",
+	"gray",
+	"red",
+	"orange",
+	"yellow",
+	"green",
+	"teal",
+	"blue",
+	"purple",
+	"pink",
+] as const
+export type TabTint = (typeof tabTints)[number]
+
 /** `app` is the phone's bottom tabs; `page` in-page tabs under a header (customer detail, queues). */
 export const tabBarStyles = ["app", "page"] as const
 export type TabBarStyle = (typeof tabBarStyles)[number]

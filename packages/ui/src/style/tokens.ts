@@ -224,6 +224,17 @@ const color = {
 	"secondary-icon-hover": same(alpha(ref("secondary-fg"), 0.9)),
 	"warning-icon-hover": same(alpha(ref("warning-fg"), 0.9)),
 	"danger-icon-hover": same(alpha(ref("danger-fg"), 0.9)),
+	// A saved view's colour (`theme.css` `--view-*`, `pk0-tab-leading`): its tab's dot or icon.
+	"tint-muted": same(alpha(ref("muted-fg"), 0.6)),
+	"tint-gray": themed(lit("oklch(0.552 0.016 285.938)"), lit("oklch(0.6 0.016 285.9)")),
+	"tint-red": themed(lit("rgb(240 68 56)"), lit("rgb(249 112 102)")),
+	"tint-orange": themed(lit("rgb(239 104 32)"), lit("rgb(243 135 68)")),
+	"tint-yellow": themed(lit("rgb(247 144 9)"), lit("rgb(253 176 34)")),
+	"tint-green": themed(lit("rgb(23 178 106)"), lit("rgb(71 205 137)")),
+	"tint-teal": themed(lit("rgb(21 183 158)"), lit("rgb(46 211 183)")),
+	"tint-blue": themed(lit("rgb(46 144 250)"), lit("rgb(83 177 253)")),
+	"tint-purple": themed(lit("rgb(122 90 248)"), lit("rgb(155 138 251)")),
+	"tint-pink": themed(lit("rgb(238 70 188)"), lit("rgb(246 112 199)")),
 } satisfies Record<string, ThemedColor>
 
 export const tokens = {

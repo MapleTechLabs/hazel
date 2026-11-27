@@ -694,6 +694,8 @@ export const tags = {
 			style: option(O.ChoiceStyle, "list"),
 			columns: option(O.ChoiceColumns, "1"),
 			disabled: flag,
+			// The label names the group for assistive tech only (a range picker, `pk0-choice-name`).
+			labelHidden: flag,
 		},
 		events: { change: Schema.Struct({ selected: Schema.Array(Schema.String) }) },
 	}),

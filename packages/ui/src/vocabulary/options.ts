@@ -121,6 +121,9 @@ export type BannerStyle = typeof BannerStyle.Type
 export const TabBarStyle = Schema.Literals(Sets.tabBarStyles)
 export type TabBarStyle = typeof TabBarStyle.Type
 
+export const TabTint = Schema.Literals(Sets.tabTints)
+export type TabTint = typeof TabTint.Type
+
 export const ChartKind = Schema.Literals(Sets.chartKinds)
 export type ChartKind = typeof ChartKind.Type
 

@@ -10,6 +10,7 @@ interface Tab {
 	readonly id: string
 	readonly label: string
 	readonly icon?: string
+	readonly tint?: string
 	readonly badge?: number
 	readonly href?: string
 }
@@ -30,7 +31,8 @@ ${PAGE_TAB}:first-child { margin-inline-start: calc(-1 * var(--hz-space-2_5)); }
 ${PAGE_TAB}:hover { background: var(--hz-color-secondary); color: var(--hz-color-fg); }
 ${PAGE_TAB}[data-selected] { color: var(--hz-color-primary-subtle-fg); }
 ${PAGE_TAB}[data-selected]:hover { background: var(--hz-color-primary-subtle); }
-${PAGE_TAB} > [data-hz-part="tabIcon"] { color: var(--hz-color-muted-fg); margin-inline-start: calc(-1 * var(--hz-space-0_5)); }
+${PAGE_TAB} > [data-hz-part="tabIcon"] { color: var(--hz-color-muted-fg); }
+${PAGE_TAB} > :is([data-hz-part="tabIcon"], [data-hz-part="tabDot"]) { margin-inline-start: calc(-1 * var(--hz-space-0_5)); }
 ${PAGE_TAB}[data-selected] > [data-hz-part="tabIcon"] { color: var(--hz-color-primary-subtle-fg); }
 ${PAGE_TAB} > [data-hz-part="tabBadge"] { position: static; }
 ${PAGE_TAB}[data-selected]::after {
@@ -120,11 +122,21 @@ export const primitive = definePrimitive("tabBar", ({ document, tag, outer }) =>
 				button.id = `${panel.id}-${tab.id}`
 				// What `move` reports (`rowId`).
 				button.dataset.hzKey = tab.id
+				// A `tint` colours the icon, or is a dot when the tab has none (`pk0-tab-leading`).
+				const tint = tab.tint === undefined ? undefined : `var(--hz-color-tint-${tab.tint})`
 				if (tab.icon !== undefined) {
 					const icon = part(document, "span", "tabIcon")
 					icon.setAttribute("aria-hidden", "true")
 					icon.innerHTML = svg(tab.icon)
+					if (tint !== undefined) icon.style.color = tint
 					button.append(icon)
+				} else if (tint !== undefined) {
+					const dot = part(document, "span", "tabDot")
+					dot.setAttribute("aria-hidden", "true")
+					const mark = part(document, "span", "tabDotMark")
+					mark.style.backgroundColor = tint
+					dot.append(mark)
+					button.append(dot)
 				}
 				const label = part(document, "span", "tabLabel")
 				label.textContent = tab.label

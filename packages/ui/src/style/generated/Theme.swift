@@ -369,6 +369,26 @@ public enum HazelTheme {
         public static let warningIconHover = ThemedColor(light: RGBA(0.274067, 0.098493, 0.004667, 0.9), dark: RGBA(0.274067, 0.098493, 0.004667, 0.9))
         /// `danger-icon-hover`: #fef2f2e6 / #fef2f2e6
         public static let dangerIconHover = ThemedColor(light: RGBA(0.996841, 0.949585, 0.949586, 0.9), dark: RGBA(0.996841, 0.949585, 0.949586, 0.9))
+        /// `tint-muted`: #52525c99 / #9f9fa999
+        public static let tintMuted = ThemedColor(light: RGBA(0.321182, 0.32109, 0.362108, 0.6), dark: RGBA(0.622613, 0.622562, 0.66336, 0.6))
+        /// `tint-gray`: #71717bff / #7f7f8aff
+        public static let tintGray = ThemedColor(light: RGBA(0.442995, 0.442929, 0.483804, 1), dark: RGBA(0.498013, 0.49802, 0.539773, 1))
+        /// `tint-red`: #f04438ff / #f97066ff
+        public static let tintRed = ThemedColor(light: RGBA(0.941176, 0.266667, 0.219608, 1), dark: RGBA(0.976471, 0.439216, 0.4, 1))
+        /// `tint-orange`: #ef6820ff / #f38744ff
+        public static let tintOrange = ThemedColor(light: RGBA(0.937255, 0.407843, 0.12549, 1), dark: RGBA(0.952941, 0.529412, 0.266667, 1))
+        /// `tint-yellow`: #f79009ff / #fdb022ff
+        public static let tintYellow = ThemedColor(light: RGBA(0.968627, 0.564706, 0.035294, 1), dark: RGBA(0.992157, 0.690196, 0.133333, 1))
+        /// `tint-green`: #17b26aff / #47cd89ff
+        public static let tintGreen = ThemedColor(light: RGBA(0.090196, 0.698039, 0.415686, 1), dark: RGBA(0.278431, 0.803922, 0.537255, 1))
+        /// `tint-teal`: #15b79eff / #2ed3b7ff
+        public static let tintTeal = ThemedColor(light: RGBA(0.082353, 0.717647, 0.619608, 1), dark: RGBA(0.180392, 0.827451, 0.717647, 1))
+        /// `tint-blue`: #2e90faff / #53b1fdff
+        public static let tintBlue = ThemedColor(light: RGBA(0.180392, 0.564706, 0.980392, 1), dark: RGBA(0.32549, 0.694118, 0.992157, 1))
+        /// `tint-purple`: #7a5af8ff / #9b8afbff
+        public static let tintPurple = ThemedColor(light: RGBA(0.478431, 0.352941, 0.972549, 1), dark: RGBA(0.607843, 0.541176, 0.984314, 1))
+        /// `tint-pink`: #ee46bcff / #f670c7ff
+        public static let tintPink = ThemedColor(light: RGBA(0.933333, 0.27451, 0.737255, 1), dark: RGBA(0.964706, 0.439216, 0.780392, 1))
     }
 
     public enum Font {
@@ -1685,6 +1705,8 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "bar", style: Style(layout: .row, background: Colors.sidebar, paddingX: 8, paddingY: 4)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "tab", style: Style(layout: .column, align: .center, justify: .center, color: Colors.fg2, radius: 8, gap: 2, minHeight: 48, text: .micro, strong: true, grow: true, transition: 0.15)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "tabIcon", style: Style(size: 20)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "tabDot", style: Style(layout: .row, align: .center, justify: .center, size: 16, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "tabDotMark", style: Style(radius: 9999, size: 8)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "tabLabel", style: Style(truncate: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "tabBadge", style: Style(layout: .row, align: .center, justify: .center, background: Colors.primary, color: Colors.primaryFg, radius: 9999, paddingX: 4, minHeight: 16, text: .micro, strong: true, numeric: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "tab", style: Style(text: .tiny)),

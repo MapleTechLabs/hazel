@@ -1,0 +1,45 @@
+{
+	"about": "The range picker: a segmented control named \"Date range\" for assistive tech only (`labelHidden`, `pk0-choice-name`).",
+	"root": {
+		"tag": "choiceGroup",
+		"props": {
+			"label": "Date range",
+			"labelHidden": true,
+			"style": "segmented",
+			"options": [
+				{
+					"value": "7d",
+					"label": "7d"
+				},
+				{
+					"value": "30d",
+					"label": "30d"
+				},
+				{
+					"value": "90d",
+					"label": "90d"
+				},
+				{
+					"value": "12m",
+					"label": "12m"
+				}
+			],
+			"selected": [
+				"30d"
+			]
+		},
+		"events": [
+			"change"
+		]
+	},
+	"frame": "inline",
+	"pending": {
+		"ios": "S2"
+	},
+	"aria": [
+		{
+			"role": "radiogroup",
+			"name": "Date range"
+		}
+	]
+}

@@ -10,7 +10,10 @@ import type { Content, Hazel, TextField } from "@hazel/ui/vocabulary/index"
 
 // VIEW TABS
 
-export type ViewTab<K extends string> = Readonly<{ key: K; label: string; count?: number }>
+/** A saved view's look (`view-look.ts`): its icon in its colour, or a dot in its colour. */
+export type ViewTabLook = Readonly<{ icon?: Content.Tab["icon"]; tint?: Content.Tab["tint"] }>
+
+export type ViewTab<K extends string> = Readonly<{ key: K; label: string; count?: number; look?: ViewTabLook }>
 
 /** `Open 12 · Snoozed 4 · Done` as in-page tabs; `trailing` follows them. */
 export const viewTabs = <Msg, K extends string>(
@@ -25,11 +28,12 @@ export const viewTabs = <Msg, K extends string>(
 	}>,
 ) => {
 	const byKey = new Map(options.tabs.map((tab) => [tab.key as string, tab.key]))
-	// HAZEL-GAP(pk0-tab-leading): today a saved view's tab leads with its icon or tinted dot (`view-look.ts`); `Tab.icon` is an `IconName` with no tint.
 	const tabs: ReadonlyArray<Content.Tab> = options.tabs.map((tab) => ({
 		id: tab.key,
 		label: tab.label,
 		badge: tab.count,
+		icon: tab.look?.icon,
+		tint: tab.look?.tint,
 	}))
 	const bar = h.tabBar
 		.style("page")
@@ -75,8 +79,9 @@ export const rangePicker = <Msg>(
 			options.caption === null
 				? null
 				: h.text.tone("muted").children(options.caption ?? "vs previous period"),
-			// HAZEL-GAP(pk0-choice-name): today's control is named "Date range" for assistive tech only; a `choiceGroup` label is drawn above it, so it goes unnamed.
 			h.choiceGroup
+				.label("Date range")
+				.labelHidden()
 				.style("segmented")
 				.options(RANGES.map((range) => ({ value: range, label: range })))
 				.selected([options.selected])

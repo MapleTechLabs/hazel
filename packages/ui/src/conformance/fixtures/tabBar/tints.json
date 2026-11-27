@@ -1,0 +1,58 @@
+{
+	"about": "Saved views as page tabs (`pk0-tab-leading`): a tinted dot, a tinted icon, a muted dot and an untinted icon.",
+	"root": {
+		"tag": "tabBar",
+		"props": {
+			"style": "page",
+			"selected": "current",
+			"tabs": [
+				{
+					"id": "current",
+					"label": "Current customers",
+					"tint": "purple",
+					"badge": 42
+				},
+				{
+					"id": "mine",
+					"label": "My customers",
+					"icon": "user",
+					"tint": "blue"
+				},
+				{
+					"id": "churned",
+					"label": "Churned",
+					"tint": "muted"
+				},
+				{
+					"id": "paying",
+					"label": "Paying",
+					"icon": "star"
+				}
+			]
+		},
+		"events": [
+			"change"
+		],
+		"children": [
+			{
+				"tag": "text",
+				"children": [
+					"Forty-two customers."
+				],
+				"props": {
+					"tone": "muted"
+				}
+			}
+		]
+	},
+	"frame": "screen",
+	"pending": {
+		"ios": "S4"
+	},
+	"aria": [
+		{
+			"role": "tab",
+			"name": "Current customers 42"
+		}
+	]
+}

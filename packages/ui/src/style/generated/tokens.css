@@ -162,6 +162,16 @@
 	--hz-color-secondary-icon-hover: color-mix(in oklab, var(--hz-color-secondary-fg) 90%, transparent);
 	--hz-color-warning-icon-hover: color-mix(in oklab, var(--hz-color-warning-fg) 90%, transparent);
 	--hz-color-danger-icon-hover: color-mix(in oklab, var(--hz-color-danger-fg) 90%, transparent);
+	--hz-color-tint-muted: color-mix(in oklab, var(--hz-color-muted-fg) 60%, transparent);
+	--hz-color-tint-gray: oklch(0.552 0.016 285.938);
+	--hz-color-tint-red: rgb(240 68 56);
+	--hz-color-tint-orange: rgb(239 104 32);
+	--hz-color-tint-yellow: rgb(247 144 9);
+	--hz-color-tint-green: rgb(23 178 106);
+	--hz-color-tint-teal: rgb(21 183 158);
+	--hz-color-tint-blue: rgb(46 144 250);
+	--hz-color-tint-purple: rgb(122 90 248);
+	--hz-color-tint-pink: rgb(238 70 188);
 	--hz-font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 	--hz-font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 	--hz-font-sans-features: "cv02", "cv03", "cv04", "cv11";
@@ -322,6 +332,15 @@
 	--hz-color-sidebar-accent: oklch(0.274 0.006 286.033);
 	--hz-color-sidebar-accent-fg: oklch(0.985 0 0);
 	--hz-color-sidebar-border: oklch(1 0 0 / 0.07);
+	--hz-color-tint-gray: oklch(0.6 0.016 285.9);
+	--hz-color-tint-red: rgb(249 112 102);
+	--hz-color-tint-orange: rgb(243 135 68);
+	--hz-color-tint-yellow: rgb(253 176 34);
+	--hz-color-tint-green: rgb(71 205 137);
+	--hz-color-tint-teal: rgb(46 211 183);
+	--hz-color-tint-blue: rgb(83 177 253);
+	--hz-color-tint-purple: rgb(155 138 251);
+	--hz-color-tint-pink: rgb(246 112 199);
 	--hz-shadow-control: inset 0 1px 0 oklch(1 0 0 / 0.14), inset 0 -1px 0 oklch(0 0 0 / 0.2), 0 1px 2px oklch(0 0 0 / 0.3);
 	--hz-shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.3);
 	--hz-shadow-overlay: 0 1px 2px 0 oklch(0 0 0 / 0.3);
@@ -5946,6 +5965,22 @@
 [data-hz="tabBar"] > [data-hz-part="bar"] > [data-hz-part="tab"] > [data-hz-part="tabIcon"] {
 	width: var(--hz-space-5);
 	height: var(--hz-space-5);
+}
+
+[data-hz="tabBar"] > [data-hz-part="bar"] > [data-hz-part="tab"] > [data-hz-part="tabDot"] {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	width: var(--hz-space-4);
+	height: var(--hz-space-4);
+	flex-shrink: 0;
+}
+
+[data-hz="tabBar"] > [data-hz-part="bar"] > [data-hz-part="tab"] > [data-hz-part="tabDot"] > [data-hz-part="tabDotMark"] {
+	border-radius: var(--hz-radius-full);
+	width: var(--hz-space-2);
+	height: var(--hz-space-2);
 }
 
 [data-hz="tabBar"] > [data-hz-part="bar"] > [data-hz-part="tab"] > [data-hz-part="tabLabel"] {

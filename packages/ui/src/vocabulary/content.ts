@@ -3,7 +3,7 @@
  * JSON value (G7 option C). Objects with readable keys; rich text stays compact tuples.
  */
 import { Schema } from "effect"
-import { AvatarPresence, BadgeTone, IconName, MessageAction, Provider } from "./options.ts"
+import { AvatarPresence, BadgeTone, IconName, MessageAction, Provider, TabTint } from "./options.ts"
 
 // ---------------------------------------------------------------------------
 // rich text (`richText.blocks`, `message.row.body`)
@@ -219,6 +219,8 @@ export const Tab = Schema.Struct({
 	label: Schema.String,
 	/** Required by `tabBar` style `app` (a phone's tabs); `page` tabs are text (phase 4: optional). */
 	icon: Schema.optional(IconName),
+	/** A saved view's colour: tints `icon`, or is drawn as a dot before the label when there is none. */
+	tint: Schema.optional(TabTint),
 	badge: Schema.optional(Schema.Finite),
 	/** Where the tab links on the web (`?tab=`), for middle click and copy link. */
 	href: Schema.optional(Schema.String),
