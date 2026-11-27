@@ -173,10 +173,11 @@ const view = (h: H): Html =>
 			),
 			chatSpecimens(h),
 			contentSpecimens(h),
-			chartSpecimens(h),
-			// Last: today's DM row is 80.5px tall on a phone, which would set later specimens off the pixel grid.
+			// After the other kit specimens: the DM row (80.5px on a phone) and the charts' heights are off the
+			// pixel grid, so anything placed after them crops at a fractional offset.
 			rowSpecimens(h),
 			tableSpecimens(h),
+			chartSpecimens(h),
 		],
 	)
 

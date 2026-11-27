@@ -7,6 +7,7 @@
 		"./*": "./src/*.ts"
 	},
 	"scripts": {
+		"test": "vitest run",
 		"typecheck": "effect-tsgo tsrs --noEmit"
 	},
 	"dependencies": {

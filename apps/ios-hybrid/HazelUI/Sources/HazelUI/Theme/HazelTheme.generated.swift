@@ -1662,7 +1662,14 @@ public enum HazelTheme {
             defaults: [:],
             inert: [],
             layers: [
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "grid", style: Style(fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "headCell", style: Style(color: Colors.mutedFg, divider: Colors.border, paddingX: 12, text: .caption, strong: true, nowrap: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "sort", style: Style(layout: .inlineRow, align: .center, radius: 4, gap: 4, transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "sortMark", style: Style(layout: .inlineRow, align: .center, justify: .center, background: Colors.secondary, color: Colors.fg, radius: 4, size: 16)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "selectCell", style: Style(divider: Colors.border, paddingStart: 16)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "skeletonCell", style: Style(paddingX: 12)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "skeletonBar", style: Style(background: Colors.secondary, radius: 4)),
             ]
         )
 
@@ -1671,16 +1678,24 @@ public enum HazelTheme {
             defaults: [:],
             inert: [],
             layers: [
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(color: Colors.fg, paddingX: 12, text: .label, numeric: true)),
             ]
         )
 
         public static let tableRow = Recipe(
             primitive: "tableRow",
             defaults: [:],
-            inert: [],
+            inert: [.selected, .disabled],
             layers: [
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "selectCell", style: Style(paddingStart: 16)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "heading", style: Style(background: Colors.secondaryBand, color: Colors.mutedFg, paddingX: 16, paddingY: 6, text: .caption, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "actions", style: Style(layout: .row, align: .center, gap: 4)),
+                Layer(when: When(options: [:], flags: ["current"], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.wash)),
+                Layer(when: When(options: [:], flags: ["footer"], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.wash)),
+                Layer(when: When(options: [:], flags: [], states: [.selected], sizeClass: nil), part: nil, style: Style(background: Colors.chipSelected)),
+                Layer(when: When(options: [:], flags: [], states: [.disabled], sizeClass: nil), part: nil, style: Style(opacity: 0.5)),
+                Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: nil, style: Style(background: Colors.wash)),
             ]
         )
 
@@ -1917,6 +1932,7 @@ public enum HazelTheme {
             "select": [Use(trigger: .enter, motion: fadeIn, part: "panel", backdrop: false, regular: nil)],
             "sheet": [Use(trigger: .enter, motion: slideUpIn, part: "panel", backdrop: false, regular: scaleIn), Use(trigger: .enter, motion: scrimIn, part: "panel", backdrop: true, regular: nil)],
             "statTile": [Use(trigger: .loop, motion: skeletonPulse, part: "skeleton", backdrop: false, regular: nil), Use(trigger: .loop, motion: skeletonPulse, part: "skeletonLine", backdrop: false, regular: nil)],
+            "table": [Use(trigger: .enter, motion: skeletonIn, part: "skeleton", backdrop: false, regular: nil), Use(trigger: .loop, motion: skeletonPulse, part: "skeletonBar", backdrop: false, regular: nil)],
             "textArea": [Use(trigger: .enter, motion: fieldErrorIn, part: "error", backdrop: false, regular: nil)],
             "textField": [Use(trigger: .enter, motion: fieldErrorIn, part: "error", backdrop: false, regular: nil)],
             "toast": [Use(trigger: .enter, motion: toastIn, part: "panel", backdrop: false, regular: nil), Use(trigger: .exit, motion: toastOut, part: "panel", backdrop: false, regular: nil)],
