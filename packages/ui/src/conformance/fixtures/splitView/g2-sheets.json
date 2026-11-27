@@ -1,0 +1,88 @@
+{
+	"about": "G2 additions: a named, limited edge (`resizeLabel`, `detailMin`, `detailMax`, `contentMin`: today's thread panel, 360 over a 400 floor), and on compact the sidebar as a leading sheet over a scrim while `sidebarOpen` (`sidebarSheet`), dismissed by a tap, swipe or Escape (`dismissSidebar`); the detail's swipe and Escape raise `dismissDetail`.",
+	"root": {
+		"tag": "splitView",
+		"props": {
+			"resizable": true,
+			"detailWidth": 480,
+			"resizeLabel": "Resize thread panel",
+			"detailMin": 360,
+			"detailMax": 1200,
+			"contentMin": 400,
+			"sidebarSheet": true,
+			"sidebarOpen": true
+		},
+		"events": [
+			"resize",
+			"dismissSidebar",
+			"dismissDetail"
+		],
+		"slots": [
+			{
+				"name": "sidebar",
+				"children": [
+					{
+						"tag": "screen",
+						"props": {
+							"title": "Channels"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": [
+									"general"
+								]
+							}
+						]
+					}
+				]
+			},
+			{
+				"name": "detail",
+				"children": [
+					{
+						"tag": "screen",
+						"props": {
+							"title": "Thread"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": [
+									"Replies"
+								]
+							}
+						]
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "screen",
+				"props": {
+					"title": "general"
+				},
+				"children": [
+					{
+						"tag": "text",
+						"children": [
+							"Messages"
+						]
+					}
+				]
+			}
+		]
+	},
+	"axes": [
+		{
+			"prop": "sidebarOpen",
+			"values": [
+				null
+			]
+		}
+	],
+	"pending": {
+		"ios": "S4"
+	}
+}

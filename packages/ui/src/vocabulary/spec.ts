@@ -920,9 +920,22 @@ export const tags = {
 		// Phase 4: `rail` is an icon column before the sidebar; `detail` a side panel after the
 		// content (a thread, the assistant, a preview), `resizable` by its edge, which reports
 		// `resize`; a sheet on the compact size class.
-		props: { sidebarCollapsed: flag, detailWidth: count, resizable: flag },
+		// G2: the edge's name (`resizeLabel`), the panel's limits (0: the renderer's 320, 1200 and 400),
+		// a compact leading sheet for the sidebar (`sidebarSheet`, shown while `sidebarOpen`), and the
+		// sheets' own dismissals (a scrim tap, a swipe, Escape).
+		props: {
+			sidebarCollapsed: flag,
+			detailWidth: count,
+			resizable: flag,
+			resizeLabel: text,
+			detailMin: count,
+			detailMax: count,
+			contentMin: count,
+			sidebarSheet: flag,
+			sidebarOpen: flag,
+		},
 		slots: ["sidebar", "rail", "detail"],
-		events: { resize: Schema.Struct({ width: Schema.Finite }) },
+		events: { resize: Schema.Struct({ width: Schema.Finite }), dismissSidebar: none, dismissDetail: none },
 	}),
 	section: tag({
 		group: "structure",
