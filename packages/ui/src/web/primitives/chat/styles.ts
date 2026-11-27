@@ -582,7 +582,8 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 		font-weight: normal; white-space: normal;`,
 	],
 	[
-		`${TIP}[data-look="reaction"]`,
+		// Open only: a `display` here would beat the layer's closed rule (same specificity, later).
+		`${TIP}[data-look="reaction"][data-open]`,
 		`display: flex; align-items: center; column-gap: ${space("3")}; padding: ${space("2")} ${space("3")};`,
 	],
 	// Today's `text-3xl` emoji (30/36) and `size-7` custom emoji over a `text-sm` line.
