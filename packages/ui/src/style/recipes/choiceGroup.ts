@@ -100,13 +100,12 @@ export const choiceGroup = defineRecipe<
 				segmented: {
 					root: { align: "start" },
 					parts: {
-						// HAZEL-GAP(choice-segmented-track): today's track is `bg-secondary/70`; `secondary-soft` is /80.
 						options: {
 							layout: "inline-row",
 							align: "center",
 							gap: "0.5",
 							radius: "lg",
-							background: "secondary-soft",
+							background: "secondary-track",
 							paddingX: "0.5",
 							paddingY: "0.5",
 						},
@@ -169,8 +168,7 @@ export const choiceGroup = defineRecipe<
 						options: { layout: "row", wrap: true, gap: "2", rowGap: "2" },
 						option: { radius: "full" },
 						indicator: { minHeight: "0" },
-						// HAZEL-GAP(choice-swatch-edge): today's edge is `outline-black/10`; `toggle-edge` is fg/5.
-						box: { size: "8", ring: "toggle-edge" },
+						box: { size: "8", ring: "swatch-edge" },
 					},
 					regular: { parts: { box: { size: "7" } } },
 				},

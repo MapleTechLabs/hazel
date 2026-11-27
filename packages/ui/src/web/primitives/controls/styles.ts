@@ -74,8 +74,7 @@ const css = `
 }
 [data-hz=select] [data-hz-part=option][data-disabled] { opacity: 0.5; }
 [data-hz=select] [data-hz-part=content]:empty { display: none; }
-/* HAZEL-GAP(drop-zone-dashed-edge): Declarations have no border style or 2px width; the colour is the recipe's. */
-[data-hz=dropZone] { border-width: 2px; border-style: dashed; cursor: pointer; }
+[data-hz=dropZone] { cursor: pointer; }
 [data-hz=dropZone]:is(:disabled, [data-loading]) { cursor: default; }
 [data-hz=toggle]:not([data-style=checkbox]) > [data-hz-part=control] { inline-size: var(--hz-space-10); align-self: start; }
 [data-hz=toggle] > [data-hz-part=control] > [data-hz-part=thumb] {

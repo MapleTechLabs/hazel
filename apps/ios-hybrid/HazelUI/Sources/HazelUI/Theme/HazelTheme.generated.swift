@@ -259,6 +259,10 @@ public enum HazelTheme {
         public static let secondarySoft = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 0.8), dark: RGBA(0.152897, 0.152887, 0.16577, 0.8))
         /// `secondary-half`: #f4f4f580 / #27272a80
         public static let secondaryHalf = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 0.5), dark: RGBA(0.152897, 0.152887, 0.16577, 0.5))
+        /// `secondary-track`: #f4f4f5b3 / #27272ab3
+        public static let secondaryTrack = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 0.7), dark: RGBA(0.152897, 0.152887, 0.16577, 0.7))
+        /// `secondary-faint`: #f4f4f533 / #27272a33
+        public static let secondaryFaint = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 0.2), dark: RGBA(0.152897, 0.152887, 0.16577, 0.2))
         /// `warning-tint`: #ffb9001a / #ffb9001a
         public static let warningTint = ThemedColor(light: RGBA(1.000316, 0.727256, -0.229846, 0.1), dark: RGBA(1.000316, 0.727256, -0.229846, 0.1))
         /// `warning-tint-hover`: #ffb90026 / #ffb90026
@@ -323,6 +327,10 @@ public enum HazelTheme {
         public static let toggleTrackHover = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 0.2), dark: RGBA(0.980256, 0.980256, 0.980256, 0.2))
         /// `toggle-edge`: #09090b0d / #fafafa0d
         public static let toggleEdge = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 0.05), dark: RGBA(0.980256, 0.980256, 0.980256, 0.05))
+        /// `thumb-edge`: #09090b1a / #fafafa1a
+        public static let thumbEdge = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 0.1), dark: RGBA(0.980256, 0.980256, 0.980256, 0.1))
+        /// `swatch-edge`: #0000001a / #0000001a
+        public static let swatchEdge = ThemedColor(light: RGBA(0, 0, 0, 0.1), dark: RGBA(0, 0, 0, 0.1))
         /// `toggle-thumb`: #ffffffff / #ffffffff
         public static let toggleThumb = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(1, 1, 1, 1))
         /// `slack`: #4a154bff / #4a154bff
@@ -838,7 +846,7 @@ public enum HazelTheme {
                 Layer(when: When(options: ["style": "cards"], flags: [], states: [], sizeClass: nil), part: "optionLabel", style: Style(strong: true)),
                 Layer(when: When(options: ["style": "cards"], flags: [], states: [], sizeClass: .regular), part: "option", style: Style(paddingX: 16, paddingY: 16)),
                 Layer(when: When(options: ["style": "segmented"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(align: .start)),
-                Layer(when: When(options: ["style": "segmented"], flags: [], states: [], sizeClass: nil), part: "options", style: Style(layout: .inlineRow, align: .center, background: Colors.secondarySoft, radius: 8, paddingX: 2, paddingY: 2, gap: 2)),
+                Layer(when: When(options: ["style": "segmented"], flags: [], states: [], sizeClass: nil), part: "options", style: Style(layout: .inlineRow, align: .center, background: Colors.secondaryTrack, radius: 8, paddingX: 2, paddingY: 2, gap: 2)),
                 Layer(when: When(options: ["style": "segmented"], flags: [], states: [], sizeClass: nil), part: "option", style: Style(layout: .inlineRow, align: .center, color: Colors.mutedFg, radius: 6, paddingX: 10, gap: 6, minHeight: 36, text: .label, strong: true, numeric: true, nowrap: true, transition: 0.15)),
                 Layer(when: When(options: ["style": "segmented"], flags: [], states: [], sizeClass: nil), part: "optionText", style: Style(layout: .row, rowGap: 0)),
                 Layer(when: When(options: ["style": "segmented"], flags: [], states: [], sizeClass: nil), part: "optionLabel", style: Style(color: Colors.mutedFg, text: .label)),
@@ -856,7 +864,7 @@ public enum HazelTheme {
                 Layer(when: When(options: ["style": "swatches"], flags: [], states: [], sizeClass: nil), part: "options", style: Style(layout: .row, gap: 8, rowGap: 8, wrap: true)),
                 Layer(when: When(options: ["style": "swatches"], flags: [], states: [], sizeClass: nil), part: "option", style: Style(radius: 9999)),
                 Layer(when: When(options: ["style": "swatches"], flags: [], states: [], sizeClass: nil), part: "indicator", style: Style(minHeight: 0)),
-                Layer(when: When(options: ["style": "swatches"], flags: [], states: [], sizeClass: nil), part: "box", style: Style(ring: Colors.toggleEdge, size: 32)),
+                Layer(when: When(options: ["style": "swatches"], flags: [], states: [], sizeClass: nil), part: "box", style: Style(ring: Colors.swatchEdge, size: 32)),
                 Layer(when: When(options: ["style": "swatches"], flags: [], states: [], sizeClass: .regular), part: "box", style: Style(size: 28)),
                 Layer(when: When(options: [:], flags: ["multiple"], states: [], sizeClass: nil), part: "box", style: Style(radius: 4)),
                 Layer(when: When(options: [:], flags: ["multiple"], states: [], sizeClass: nil), part: "mark", style: Style(radius: 0, size: 16)),
@@ -965,7 +973,7 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column, rowGap: 8, fill: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "label", style: Style(color: Colors.fg, text: .body, strong: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "field", style: Style(layout: .row, align: .center, background: Colors.field, color: Colors.fg, borderColor: Colors.clear, borderWidth: 1, radius: 8, text: .body, fill: true, transition: 0.15)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "segments", style: Style(paddingX: 13, paddingY: 9, grow: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "segments", style: Style(paddingX: 13, paddingY: 9, grow: true, tracking: .wider)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "segment", style: Style(radius: 4, paddingX: 4, paddingY: 2, numeric: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "clear", style: Style(layout: .row, align: .center, justify: .center, color: Colors.mutedFg, paddingX: 4, paddingY: 9, shrink: false)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "clearIcon", style: Style(size: 14)),
@@ -1063,12 +1071,12 @@ public enum HazelTheme {
             defaults: [:],
             inert: [.disabled, .loading],
             layers: [
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column, align: .center, background: Colors.secondaryBand, color: Colors.fg, borderColor: Colors.border, radius: 8, paddingX: 16, paddingY: 32, gap: 8, fill: true, transition: 0.15, textAlign: .center)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column, align: .center, background: Colors.secondaryFaint, color: Colors.fg, borderColor: Colors.border, borderWidth: 2, radius: 8, paddingX: 16, paddingY: 32, gap: 8, fill: true, transition: 0.15, textAlign: .center, borderStyle: .dashed)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(color: Colors.mutedFg, size: 32, shrink: false)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "text", style: Style(layout: .column, align: .center, gap: 2)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "label", style: Style(color: Colors.fg, text: .label, strong: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "description", style: Style(color: Colors.mutedFg, text: .caption)),
-                Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: nil, style: Style(background: Colors.secondaryHalf, borderColor: Colors.borderHover)),
+                Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: nil, style: Style(background: Colors.secondaryBand, borderColor: Colors.borderHover)),
                 Layer(when: When(options: [:], flags: ["over"], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.primaryTint, borderColor: Colors.primary)),
                 Layer(when: When(options: [:], flags: [], states: [.disabled], sizeClass: nil), part: nil, style: Style(opacity: 0.5)),
                 Layer(when: When(options: [:], flags: [], states: [.loading], sizeClass: nil), part: nil, style: Style(opacity: 0.7)),
@@ -1616,7 +1624,7 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "value", style: Style(color: Colors.mutedFg, text: .label, strong: true, numeric: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "track", style: Style(background: Colors.secondary, radius: 9999, minHeight: 6, fill: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "fill", style: Style(background: Colors.primary, radius: 9999)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "thumb", style: Style(background: Colors.toggleThumb, borderColor: Colors.toggleEdge, borderWidth: 1, radius: 9999, size: 20, shadow: "sm")),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "thumb", style: Style(background: Colors.toggleThumb, borderColor: Colors.thumbEdge, borderWidth: 1, radius: 9999, size: 20, shadow: "sm")),
                 Layer(when: When(options: [:], flags: [], states: [.disabled], sizeClass: nil), part: nil, style: Style(opacity: 0.5)),
             ]
         )

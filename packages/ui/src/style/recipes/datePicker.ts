@@ -84,8 +84,10 @@ export const datePicker = defineRecipe<
 				text: "body",
 				transition: "fast",
 			},
+			// The kit's segments are `tracking-wider`; the literals between them inherit it.
 			segments: {
 				grow: true,
+				tracking: "wider",
 				paddingX: { step: "3.5", lessBorder: true },
 				paddingY: { step: "2.5", lessBorder: true },
 			},

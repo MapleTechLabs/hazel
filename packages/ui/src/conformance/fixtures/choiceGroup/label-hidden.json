@@ -1,5 +1,5 @@
 {
-	"about": "The range picker: a segmented control named \"Date range\" for assistive tech only (`labelHidden`, `pk0-choice-name`).",
+	"about": "The range picker: a segmented control named \"Date range\" for assistive tech only (`labelHidden`, `pk0-choice-name`), on today's `bg-secondary/70` track; against today's `segmented`.",
 	"root": {
 		"tag": "choiceGroup",
 		"props": {
@@ -41,5 +41,9 @@
 			"role": "radiogroup",
 			"name": "Date range"
 		}
-	]
+	],
+	"kit": {
+		"specimen": "choice-segmented",
+		"target": "choiceGroup"
+	}
 }

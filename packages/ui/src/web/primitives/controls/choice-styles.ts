@@ -69,7 +69,7 @@ ${style("cards")}:is([data-columns="1"], :not([data-columns])) > [data-hz-part=o
 ${optionOf("segmented")}:not([data-selected], :disabled):hover > [data-hz-part=optionText] > [data-hz-part=optionLabel] { color: var(--hz-color-fg); }
 ${optionOf("segmented")}[data-selected] {
 	background-color: var(--hz-color-bg);
-	box-shadow: var(--hz-shadow-xs), 0 0 0 1px ${mix("fg", 10)};
+	box-shadow: 0 0 0 1px ${mix("fg", 10)}, var(--hz-shadow-xs);
 }
 ${optionOf("segmented")}[data-selected] > [data-hz-part=optionText] > [data-hz-part=optionLabel] { color: var(--hz-color-fg); }
 ${optionOf("segmented")}:focus-visible, ${optionOf("chips")}:focus-visible { box-shadow: 0 0 0 2px var(--hz-color-focus-ring); }

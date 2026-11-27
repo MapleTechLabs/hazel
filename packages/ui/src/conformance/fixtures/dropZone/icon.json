@@ -1,0 +1,26 @@
+{
+	"about": "The custom emoji target: its own `icon` (`emoji-add`) over the label, on today's `bg-secondary/20` fill inside a dashed 2px edge.",
+	"root": {
+		"tag": "dropZone",
+		"props": {
+			"label": "Drop an image or click to upload",
+			"description": "PNG, GIF or WebP, up to 256 KB",
+			"icon": "emoji-add",
+			"accept": "image/png,image/gif,image/webp"
+		},
+		"events": [
+			"press",
+			"files"
+		]
+	},
+	"frame": "screen",
+	"pending": {
+		"ios": "S2"
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Drop an image or click to upload"
+		}
+	]
+}

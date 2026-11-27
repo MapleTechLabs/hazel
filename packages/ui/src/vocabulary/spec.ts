@@ -748,6 +748,8 @@ export const tags = {
 		props: {
 			label: text,
 			description: text,
+			// The glyph over the label (`emoji-add` for custom emojis); else picked from `accept`.
+			icon: value(O.IconName),
 			accept: text,
 			multiple: flag,
 			disabled: flag,

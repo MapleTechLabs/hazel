@@ -107,6 +107,8 @@
 	--hz-color-secondary-band: color-mix(in oklab, var(--hz-color-secondary) 40%, transparent);
 	--hz-color-secondary-soft: color-mix(in oklab, var(--hz-color-secondary) 80%, transparent);
 	--hz-color-secondary-half: color-mix(in oklab, var(--hz-color-secondary) 50%, transparent);
+	--hz-color-secondary-track: color-mix(in oklab, var(--hz-color-secondary) 70%, transparent);
+	--hz-color-secondary-faint: color-mix(in oklab, var(--hz-color-secondary) 20%, transparent);
 	--hz-color-warning-tint: color-mix(in oklab, var(--hz-color-warning) 10%, transparent);
 	--hz-color-warning-tint-hover: color-mix(in oklab, var(--hz-color-warning) 15%, transparent);
 	--hz-color-danger-tint: color-mix(in oklab, var(--hz-color-danger) 10%, transparent);
@@ -139,6 +141,8 @@
 	--hz-color-toggle-track: color-mix(in oklab, var(--hz-color-fg) 15%, transparent);
 	--hz-color-toggle-track-hover: color-mix(in oklab, var(--hz-color-fg) 20%, transparent);
 	--hz-color-toggle-edge: color-mix(in oklab, var(--hz-color-fg) 5%, transparent);
+	--hz-color-thumb-edge: color-mix(in oklab, var(--hz-color-fg) 10%, transparent);
+	--hz-color-swatch-edge: color-mix(in oklab, var(--hz-palette-black) 10%, transparent);
 	--hz-color-toggle-thumb: var(--hz-palette-white);
 	--hz-color-slack: #4a154b;
 	--hz-color-discord: #5865f2;
@@ -2007,7 +2011,7 @@
 	display: inline-flex;
 	flex-direction: row;
 	align-items: center;
-	background-color: var(--hz-color-secondary-soft);
+	background-color: var(--hz-color-secondary-track);
 	border-radius: var(--hz-radius-lg);
 	padding-inline: var(--hz-space-0_5);
 	padding-block: var(--hz-space-0_5);
@@ -2147,7 +2151,7 @@
 }
 
 [data-hz="choiceGroup"][data-style="swatches"] > [data-hz-part="options"] > [data-hz-part="option"] > [data-hz-part="indicator"] > [data-hz-part="box"] {
-	box-shadow: inset 0 0 0 1px var(--hz-color-toggle-edge);
+	box-shadow: inset 0 0 0 1px var(--hz-color-swatch-edge);
 	width: var(--hz-space-8);
 	height: var(--hz-space-8);
 }
@@ -2743,6 +2747,7 @@
 [data-hz="datePicker"] > [data-hz-part="field"] > [data-hz-part="segments"] {
 	padding-inline: calc(var(--hz-space-3_5) - 1px);
 	padding-block: calc(var(--hz-space-2_5) - 1px);
+	letter-spacing: 0.05em;
 	flex-grow: 1;
 }
 
@@ -3264,8 +3269,10 @@
 	flex-direction: column;
 	width: 100%;
 	align-items: center;
-	background-color: var(--hz-color-secondary-band);
+	background-color: var(--hz-color-secondary-faint);
 	color: var(--hz-color-fg);
+	border-style: dashed;
+	border-width: 2px;
 	border-color: var(--hz-color-border);
 	border-radius: var(--hz-radius-lg);
 	padding-inline: var(--hz-space-4);
@@ -3306,7 +3313,7 @@
 
 @media (hover: hover) {
 	[data-hz="dropZone"]:hover:not([data-disabled], [data-loading]) {
-		background-color: var(--hz-color-secondary-half);
+		background-color: var(--hz-color-secondary-band);
 		border-color: var(--hz-color-border-hover);
 	}
 }
@@ -5674,7 +5681,7 @@
 	background-color: var(--hz-color-toggle-thumb);
 	border-style: solid;
 	border-width: 1px;
-	border-color: var(--hz-color-toggle-edge);
+	border-color: var(--hz-color-thumb-edge);
 	border-radius: var(--hz-radius-full);
 	width: var(--hz-space-5);
 	height: var(--hz-space-5);

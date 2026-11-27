@@ -2,8 +2,8 @@ import { defineRecipe } from "../recipe.ts"
 
 /**
  * `hz:dropZone`: today's dashed file target (`custom-emojis/view.ts`, `page/shared/drop-zone.ts`): an
- * icon over a centred label and a caption line, tinted while a file drag is `over` it. The dashed 2px
- * edge is the renderer's (`styles.ts`, gap `drop-zone-dashed-edge`).
+ * icon (`icon`, else picked from `accept`) over a centred label and a caption line, inside a dashed
+ * 2px edge, tinted while a file drag is `over` it.
  */
 export const dropZone = defineRecipe<{}, "over", "icon" | "text" | "label" | "description">({
 	primitive: "dropZone",
@@ -22,9 +22,10 @@ export const dropZone = defineRecipe<{}, "over", "icon" | "text" | "label" | "de
 			paddingX: "4",
 			paddingY: "8",
 			radius: "lg",
+			borderWidth: "thick",
+			borderStyle: "dashed",
 			borderColor: "border",
-			// HAZEL-GAP(drop-zone-fill): today's `bg-secondary/20`; `secondary-band` (40%) is the nearest token.
-			background: "secondary-band",
+			background: "secondary-faint",
 			color: "fg",
 			textAlign: "center",
 			transition: "fast",
@@ -35,7 +36,7 @@ export const dropZone = defineRecipe<{}, "over", "icon" | "text" | "label" | "de
 			label: { text: "label", strong: true, color: "fg" },
 			description: { text: "caption", color: "muted-fg" },
 		},
-		states: { hover: { root: { borderColor: "border-hover", background: "secondary-half" } } },
+		states: { hover: { root: { borderColor: "border-hover", background: "secondary-band" } } },
 	},
 	options: {},
 	flags: {

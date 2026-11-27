@@ -151,6 +151,9 @@ const color = {
 	"secondary-soft": same(alpha(ref("secondary"), 0.8)),
 	/** The channel sidebar's tip (`bg-secondary/50`, `frame-hint`). */
 	"secondary-half": same(alpha(ref("secondary"), 0.5)),
+	/** A segmented control's track (`bg-secondary/70`) and a drop zone's fill (`bg-secondary/20`). */
+	"secondary-track": same(alpha(ref("secondary"), 0.7)),
+	"secondary-faint": same(alpha(ref("secondary"), 0.2)),
 	/** A pinned message (`bg-warning/10`, hover `/15`, its edge `border-warning`). */
 	"warning-tint": same(alpha(ref("warning"), 0.1)),
 	"warning-tint-hover": same(alpha(ref("warning"), 0.15)),
@@ -194,6 +197,9 @@ const color = {
 	"toggle-track": same(alpha(ref("fg"), 0.15)),
 	"toggle-track-hover": same(alpha(ref("fg"), 0.2)),
 	"toggle-edge": same(alpha(ref("fg"), 0.05)),
+	/** A slider thumb's edge (`border-fg/10`) and a colour swatch's (`outline-black/10`, both themes). */
+	"thumb-edge": same(alpha(ref("fg"), 0.1)),
+	"swatch-edge": same(alpha(p("black"), 0.1)),
 	"toggle-thumb": same(p("white")),
 	/** Vendor marks, the same in both themes (`--color-slack`, `--color-discord`). */
 	slack: same(lit("#4a154b")),

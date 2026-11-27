@@ -23,12 +23,11 @@ export const slider = defineRecipe<{}, never, "header" | "label" | "value" | "tr
 			value: { text: "label", strong: true, numeric: true, color: "muted-fg" },
 			track: { fill: true, minHeight: "1.5", radius: "full", background: "secondary" },
 			fill: { radius: "full", background: "primary" },
-			// HAZEL-GAP(slider-thumb-edge): today's edge is `border-fg/10`; `toggle-edge` is fg/5.
 			thumb: {
 				size: "5",
 				radius: "full",
 				borderWidth: "hairline",
-				borderColor: "toggle-edge",
+				borderColor: "thumb-edge",
 				background: "toggle-thumb",
 				shadow: "sm",
 			},

@@ -52,14 +52,16 @@ export const primitive = definePrimitive("dropZone", ({ document, tag, outer }) 
 	node.append(icon, text)
 
 	let accept: string | undefined
+	let iconName: string | undefined
 	let multiple = false
 	let disabled = false
 	let loading = false
 	// Nested dragenter and dragleave pairs: a drag over the label still counts as over the zone.
 	let depth = 0
 
-	// HAZEL-GAP(drop-zone-icon): no icon prop; an image target draws `image`, anything else `paperclip`.
+	// Its own `icon`, else `image` for an image-only target and `paperclip` for anything else.
 	const drawIcon = () => {
+		if (iconName !== undefined) return glyph(icon, iconName)
 		const images = (accept ?? "")
 			.split(",")
 			.map((rule) => rule.trim())
@@ -121,6 +123,9 @@ export const primitive = definePrimitive("dropZone", ({ document, tag, outer }) 
 				else node.removeAttribute("aria-describedby")
 			} else if (name === "accept") {
 				accept = typeof value === "string" ? value : undefined
+				drawIcon()
+			} else if (name === "icon") {
+				iconName = typeof value === "string" ? value : undefined
 				drawIcon()
 			} else if (name === "multiple") multiple = value === true
 			else if (name === "disabled") {
