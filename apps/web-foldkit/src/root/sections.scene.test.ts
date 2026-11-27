@@ -17,6 +17,7 @@ import {
 } from "./children"
 import { type AppModel, update } from "./logic"
 import { AppMessage } from "./message"
+import { NotificationsPage } from "./native-pages"
 import { sectionContent } from "./sections"
 
 /** The section layouts the shell draws: its sidebars, the content column, and the page inside it. */
@@ -76,10 +77,11 @@ describe("settings layout", () => {
 })
 
 describe("activity layout", () => {
-	test("its sidebar carries the unread count for Mark all as read", () => {
+	test("its sidebar carries the unread count for Mark all as read; the inbox is native", () => {
 		const s = frame(shellSignedIn("/hazel/notifications/unreads"))
 			.expect(inLayout("activity", pageSlot))
-			.toExist()
+			.toBeAbsent()
+		expect(childOf(s, NotificationsPage)[0]?.props).toMatchObject({ tab: "unreads", isMobile: false })
 		const [sidebar] = childOf(s, ShellSectionSidebar)
 		expect(sidebar?.props.kind).toBe("activity")
 		expect(sidebar?.props.unreadCount).toBe(0)

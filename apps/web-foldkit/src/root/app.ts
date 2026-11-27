@@ -21,7 +21,6 @@ import { appError, appLoader, organizationNotFound } from "../shell/layouts"
 import { LINK_PREVIEW_URL } from "../chat/unfurl"
 import { assistantContextOf, column, setupHrefOf, toggleButton } from "./assistant"
 import {
-	ShellActivity,
 	ShellAssistantPanel,
 	ShellChannelHeader,
 	ShellChannelSidebar,
@@ -156,9 +155,6 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 	const paletteKey = keys["commandPalette.open"]
 	const channelId = chatChannelIdOf(route)
 	const section = orgSectionOf(route)
-	const memberId = hostContextOf(model).member?.id ?? null
-	const tab =
-		route._tag === "NotificationsAll" ? "all" : route._tag === "NotificationsMentions" ? "mentions" : null
 	const orgUser = `${data.organization.id}:${data.user.id}`
 	const native = sectionLayoutOf(route)
 	return [
@@ -243,14 +239,6 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 							isMobile: model.isMobile,
 							nowMs: model.nowMs,
 						},
-					}),
-				])
-			: null,
-		tab !== null && memberId !== null
-			? Hole(h, { hole: "activity", key: memberId }, [
-					ShellActivity(h, {
-						key: memberId,
-						props: { memberId, orgSlug: data.orgSlug, tab, nowMs: model.nowMs, titled: false },
 					}),
 				])
 			: null,

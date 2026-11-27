@@ -11,7 +11,6 @@ import * as ChatChannel from "./chat/channel"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
 import * as Lazy from "./lazy"
 import type { PageOutMessage } from "./out-message"
-import * as NotificationsInbox from "./notifications/inbox"
 import * as OrgHome from "./home"
 import * as OrgMore from "./more"
 import * as Profile from "./profile"
@@ -29,7 +28,6 @@ import * as SelectOrganization from "./select-organization"
 export const pages = [
 	Root.page,
 	ChatChannel.page,
-	NotificationsInbox.page,
 	OrgHome.page,
 	OrgMore.page,
 	Profile.page,

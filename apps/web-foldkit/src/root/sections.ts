@@ -21,7 +21,6 @@ import {
 import { sidebarHeaderHeightClass } from "../platform/desktop"
 import { AppMessage } from "./message"
 import type { AppModel } from "./logic"
-import { isNativeRoute } from "./native-pages"
 import { Hole } from "./portal"
 
 type H = Html.H<AppMessage>
@@ -131,8 +130,8 @@ export const sectionContent = (h: H, model: AppModel, layout: SectionLayout, pag
 			h,
 			layout,
 			"pt-6",
-			// The native inbox (PA5) sits in the content column too, as today's page draws its own.
-			hasContentColumn(route) || (layout === "activity" && isNativeRoute(route))
+			// The inbox (PA5) sits in the content column too, as its Foldkit page drew its own.
+			hasContentColumn(route) || layout === "activity"
 				? h.div.class("flex flex-col gap-6 px-4 lg:px-8").children(page)
 				: page,
 		)
