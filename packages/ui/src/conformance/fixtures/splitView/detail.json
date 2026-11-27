@@ -1,0 +1,32 @@
+{
+	"about": "A fixed detail panel after the content (the attention preview, the assistant): no edge to drag. Compact: it covers the content.",
+	"root": {
+		"tag": "splitView",
+		"props": { "detailWidth": 320 },
+		"slots": [
+			{
+				"name": "detail",
+				"children": [
+					{
+						"tag": "screen",
+						"props": { "title": "Preview" },
+						"children": [{ "tag": "text", "children": ["The selected customer"] }]
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "screen",
+				"props": { "title": "Attention" },
+				"children": [{ "tag": "text", "children": ["Needs attention"] }]
+			}
+		]
+	},
+	"axes": [{ "prop": "detailWidth", "values": [null, 420] }],
+	"aria": [
+		{ "role": "heading", "name": "Attention" },
+		{ "role": "heading", "name": "Preview" }
+	],
+	"pending": { "ios": "S4" }
+}
