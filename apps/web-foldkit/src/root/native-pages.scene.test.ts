@@ -20,7 +20,7 @@ import {
 import { App, type Boot } from "./app"
 import { update } from "./logic"
 import { AppMessage } from "./message"
-import { InvitePage, isNativeRoute } from "./native-pages"
+import { BotInstallPage, InvitePage, isNativeRoute, JoinPage, OAuthAuthorizePage } from "./native-pages"
 import { AppRoute } from "./routes"
 
 /** A route with a native page: the shell draws it, and the Foldkit host's page region stays out. */
@@ -81,8 +81,26 @@ describe("a native page", () => {
 
 	test("a Foldkit route keeps the host's page region", () => {
 		expect(isNativeRoute(AppRoute.Invite({ token: TOKEN }))).toBe(true)
-		const s = shell("/join/hazel").expect(pageSlot).toExist()
+		const s = shell("/hazel/notifications", sessionMessages()).expect(pageSlot).toExist()
 		expect(invitePagesIn(s)).toEqual([])
+	})
+
+	test("join, OAuth consent and bot install are native, their links parsed for the page", () => {
+		const join = shell("/join/hazel").expect(pageSlot).toBeAbsent()
+		expect(
+			childrenOf(join.current.root).find((child) => child.component === JoinPage)?.props,
+		).toMatchObject({
+			slug: "hazel",
+			signInHref: "/sign-in?redirect_url=%2Fjoin%2Fhazel",
+		})
+		const install = shell("/oauth/bot-install").expect(pageSlot).toBeAbsent()
+		expect(
+			childrenOf(install.current.root).find((child) => child.component === BotInstallPage)?.props,
+		).toMatchObject({ request: null })
+		const consent = shell("/oauth/authorize").expect(pageSlot).toBeAbsent()
+		expect(
+			childrenOf(consent.current.root).find((child) => child.component === OAuthAuthorizePage)?.props,
+		).toMatchObject({ request: null })
 	})
 })
 

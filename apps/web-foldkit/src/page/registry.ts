@@ -5,8 +5,6 @@ import type { Command } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import type { Resources } from "../rpc"
 import { AppRoute, isCustomersRoute, isMySettingsRoute, isSettingsRoute } from "../route"
-import * as BotInstall from "./bot-install"
-import * as OAuthAuthorize from "./oauth-authorize"
 import * as ChatChannel from "./chat/channel"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
 import * as Lazy from "./lazy"
@@ -16,7 +14,6 @@ import * as OrgHome from "./home"
 import * as OrgMore from "./more"
 import * as Profile from "./profile"
 import * as Root from "./root"
-import * as Join from "./join"
 import * as SelectOrganization from "./select-organization"
 
 /**
@@ -34,9 +31,6 @@ export const pages = [
 	OrgMore.page,
 	Profile.page,
 	SelectOrganization.page,
-	Join.page,
-	BotInstall.page,
-	OAuthAuthorize.page,
 ]
 
 type AreaPage =
