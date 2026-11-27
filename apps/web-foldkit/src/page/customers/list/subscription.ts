@@ -1,6 +1,6 @@
 import { DragAndDrop } from "@foldkit/ui"
 import { CustomerAccountId, OrganizationId, UserId } from "@hazel/schema"
-import { Effect, Option, Queue, Schema, Stream } from "effect"
+import { Effect, Match, Option, Queue, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import {
 	accountsStream,
@@ -60,44 +60,30 @@ export const listKeyOf = (event: {
 }
 
 /** A hole's event as the page's own message. */
-export const messageOfHoleEvent = (event: ListHoleEvent): Message => {
-	switch (event._tag) {
-		case "ChangedSearch":
-			return Message.ChangedSearch({ value: event.value })
-		case "ClearedFilter":
-			return Message.ClearedFilter({ field: event.field })
-		case "AppliedFilters":
-			return Message.AppliedFilters({ filters: event.filters })
-		case "ChangedSort":
-			return Message.ChangedSort({ sort: event.sort })
-		case "ChangedColumns":
-			return Message.ChangedColumns({ columns: event.columns })
-		case "ResetColumns":
-			return Message.ResetColumns()
-		case "ClickedSortHeader":
-			return Message.ClickedSortHeader({ column: event.column })
-		case "ToggledRow":
-			return Message.ToggledRow({ accountId: event.accountId, isSelected: event.selected })
-		case "ToggledAllRows":
-			return Message.ToggledAllRows({ isSelected: event.selected })
-		case "PressedRow":
-			return Message.ClickedRow({ accountId: event.accountId })
-		case "PressedShowMore":
-			return Message.PressedShowMoreRows()
-		case "HoveredName":
-			return event.accountId === null
+export const messageOfHoleEvent = (event: ListHoleEvent): Message =>
+	Match.valueTags(event, {
+		ChangedSearch: ({ value }) => Message.ChangedSearch({ value }),
+		ClearedFilter: ({ field }) => Message.ClearedFilter({ field }),
+		AppliedFilters: ({ filters }) => Message.AppliedFilters({ filters }),
+		ChangedSort: ({ sort }) => Message.ChangedSort({ sort }),
+		ChangedColumns: ({ columns }) => Message.ChangedColumns({ columns }),
+		ResetColumns: () => Message.ResetColumns(),
+		ClickedSortHeader: ({ column }) => Message.ClickedSortHeader({ column }),
+		ToggledRow: ({ accountId, selected }) => Message.ToggledRow({ accountId, isSelected: selected }),
+		ToggledAllRows: ({ selected }) => Message.ToggledAllRows({ isSelected: selected }),
+		PressedRow: ({ accountId }) => Message.ClickedRow({ accountId }),
+		PressedShowMore: () => Message.PressedShowMoreRows(),
+		HoveredName: ({ accountId }) =>
+			accountId === null
 				? Message.UnhoveredRow()
-				: Message.HoveredRow({ accountId: Schema.decodeSync(CustomerAccountId)(event.accountId) })
-	}
-}
+				: Message.HoveredRow({ accountId: Schema.decodeSync(CustomerAccountId)(accountId) }),
+	})
 
 const holdsKeyboard = (model: Model) =>
 	model.saveModal.isOpen ||
 	model.deleteModal.isOpen ||
-	model.filterPopover.isOpen ||
-	model.columnsPopover.isOpen ||
 	model.tagPopover.isOpen ||
-	[model.sortMenu, model.viewMenu, model.ownerMenu].some((menu) => menu.popup._tag === "Open")
+	[model.viewMenu, model.ownerMenu].some((menu) => menu.popup._tag === "Open")
 
 const organization = { organizationId: Schema.NullOr(OrganizationId) }
 const organizationOf = ({ shared }: Input) => ({ organizationId: shared.organization?.id ?? null })

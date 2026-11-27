@@ -48,15 +48,4 @@ export const CURRENT_ROW_SELECTOR =
 /** What the holes ask the page for. */
 export type ListHoleEvent = ListControlsEvents | ListTableEvents | ListHover
 
-/** `"0"` draws today's Foldkit controls and table (`compare-pages.ts`), as a native page's flag. */
-export const LIST_FLAG = "hazel:native:CustomersList"
-
-export const isHazelList = (): boolean => {
-	try {
-		return globalThis.localStorage?.getItem(LIST_FLAG) !== "0"
-	} catch {
-		return true
-	}
-}
-
 export const encodeHoleState = Schema.encodeSync(Schema.fromJsonString(ListHoleState))

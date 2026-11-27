@@ -32,44 +32,35 @@ import {
 } from "./commands"
 import { Message, type ViewAction } from "./message"
 import {
-	activeFields,
 	builtInDefaultOf,
 	canDeleteView,
 	canUpdateView,
-	clearField,
-	COLUMNS_POPOVER_ID,
 	currentTab,
 	DELETE_MODAL_ID,
 	type Draft,
-	FILTER_POPOVER_ID,
 	type ListKey,
 	keepVisibleSelection,
 	layoutKeyOf,
 	missingSparklines,
 	type Model,
-	moveColumn,
-	nextSort,
 	OWNER_ME,
 	OWNER_MENU_ID,
 	OWNER_NONE,
-	parseSortKey,
 	orderedTabsOf,
 	ROW_PAGE,
 	SAVE_MODAL_ID,
 	sameDraft,
 	sidebarStateOf,
-	SORT_MENU_ID,
-	shownColumns,
 	TAB_LIST_ID,
 	TAG_POPOVER_ID,
-	toggleColumn,
 	userIdOfOwnerKey,
 	VIEW_MENU_ID,
 	ViewMenuKey,
-	type Viewer,
 	visibleAccounts,
 } from "./model"
-import { toCsv } from "./table"
+import { toCsv } from "./csv"
+import { nextSort, shownColumns } from "@hazel/shared-screens/customers/list/columns"
+import { clearField, type Viewer } from "@hazel/shared-screens/customers/list/filters"
 
 type Return = PageReturn<Model, Message>
 type Commands = NonNullable<Return["commands"]>
@@ -110,12 +101,8 @@ export const init = (route: Route): Return => {
 			focusedId: null,
 			hoverPendingId: null,
 			hoveredId: null,
-			builder: null,
-			filterPopover: Popover.init(FILTER_POPOVER_ID),
-			columnsPopover: Popover.init(COLUMNS_POPOVER_ID),
 			tagPopover: Popover.init(TAG_POPOVER_ID),
 			tagInput: "",
-			sortMenu: Menu.init({ id: SORT_MENU_ID, placement: "bottom end", selectionMode: "Single" }),
 			viewMenu: Menu.init({ id: VIEW_MENU_ID, placement: "bottom end" }),
 			ownerMenu: Menu.init({ id: OWNER_MENU_ID, placement: "top start" }),
 			saveModal: Modal.init(SAVE_MODAL_ID),
@@ -136,7 +123,6 @@ export const routeChanged = (model: Model, route: Route): Return => {
 			selected: () => [],
 			rowLimit: () => ROW_PAGE,
 			focusedId: () => null,
-			builder: () => null,
 		}),
 	}
 }
@@ -409,13 +395,11 @@ const exportCsv = (model: Model, shared: Shared, scope: "all" | "selected"): Ret
 
 // MENUS AND POPOVERS
 
-type MenuField = "sortMenu" | "viewMenu" | "ownerMenu"
+type MenuField = "viewMenu" | "ownerMenu"
 type MenuCommands = NonNullable<ReturnType<typeof Menu.update>["commands"]>
 
 const mapMenuCommands = (field: MenuField, commands: MenuCommands): Commands => {
 	switch (field) {
-		case "sortMenu":
-			return Command.mapMessages(commands, (message) => Message.GotSortMenuMessage({ message }))
 		case "viewMenu":
 			return Command.mapMessages(commands, (message) => Message.GotViewMenuMessage({ message }))
 		case "ownerMenu":
@@ -439,7 +423,7 @@ const updateMenu = (
 	}
 }
 
-type PopoverField = "filterPopover" | "columnsPopover" | "tagPopover"
+type PopoverField = "tagPopover"
 type PopoverResult = ReturnType<typeof Popover.update>
 
 const mapPopoverCommands = (
@@ -447,36 +431,16 @@ const mapPopoverCommands = (
 	commands: NonNullable<PopoverResult["commands"]>,
 ): Commands => {
 	switch (field) {
-		case "filterPopover":
-			return Command.mapMessages(commands, (message) => Message.GotFilterPopoverMessage({ message }))
-		case "columnsPopover":
-			return Command.mapMessages(commands, (message) => Message.GotColumnsPopoverMessage({ message }))
 		case "tagPopover":
 			return Command.mapMessages(commands, (message) => Message.GotTagPopoverMessage({ message }))
 	}
 }
 
-/** Folds a popover step; the filter builder starts on open and ends on close. */
-const withPopover = (model: Model, field: PopoverField, result: PopoverResult): Return => {
-	const out = result.outMessage?._tag
-	const next = { ...model, [field]: result.model }
-	return {
-		model:
-			field !== "filterPopover"
-				? next
-				: out === "Closed"
-					? modifyFields(next, { builder: () => null })
-					: out === "Opened" && next.builder === null
-						? modifyFields(next, {
-								builder: () => ({
-									field: activeFields(next.draft.filters)[0] ?? "stage",
-									pending: next.draft.filters,
-								}),
-							})
-						: next,
-		commands: mapPopoverCommands(field, result.commands ?? []),
-	}
-}
+/** Folds a popover step. */
+const withPopover = (model: Model, field: PopoverField, result: PopoverResult): Return => ({
+	model: { ...model, [field]: result.model },
+	commands: mapPopoverCommands(field, result.commands ?? []),
+})
 
 // KEYBOARD AND HOVER
 
@@ -587,7 +551,6 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		CompletedSaveLayout: () => ({ model }),
 		FailedSaveLayout: ({ reason }) => ({ model, outMessage: toast(reasonToast(reason)) }),
 		ChangedSearch: ({ value }) => withRows(modifyFields(model, { search: () => value }), shared),
-		ClearedSearch: () => withRows(modifyFields(model, { search: () => "" }), shared),
 		ClickedSortHeader: ({ column }) =>
 			withDraft(model, shared, (draft) => ({ ...draft, sort: nextSort(draft.sort, column) })),
 		ClearedFilter: ({ field }) =>
@@ -598,62 +561,13 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				filters: {},
 			})),
 
-		PressedEditFilter: ({ field }) => {
-			const opened = PopoverControl.open(model.filterPopover)
-			return {
-				model: modifyFields(model, {
-					filterPopover: () => opened.model,
-					builder: () => ({ field, pending: model.draft.filters }),
-				}),
-				commands: mapPopoverCommands("filterPopover", opened.commands ?? []),
-			}
-		},
-		ClickedBuilderField: ({ field }) => ({
-			model: modifyFields(model, {
-				builder: (builder) => (builder === null ? null : { ...builder, field }),
-			}),
-		}),
-		ChangedPendingFilters: ({ filters }) => ({
-			model: modifyFields(model, {
-				builder: (builder) => (builder === null ? null : { ...builder, pending: filters }),
-			}),
-		}),
-		AppliedFilter: () => {
-			const pending = model.builder?.pending
-			if (pending === undefined) return { model }
-			const closed = withPopover(model, "filterPopover", PopoverControl.close(model.filterPopover))
-			const applied = withDraft(closed.model, shared, (draft) => ({ ...draft, filters: pending }))
-			return { ...applied, commands: [...(closed.commands ?? []), ...(applied.commands ?? [])] }
-		},
-		GotFilterPopoverMessage: ({ message: popoverMessage }) =>
-			withPopover(model, "filterPopover", Popover.update(model.filterPopover, popoverMessage)),
-
 		AppliedFilters: ({ filters }) => withDraft(model, shared, (draft) => ({ ...draft, filters })),
 		ChangedSort: ({ sort }) => withDraft(model, shared, (draft) => ({ ...draft, sort })),
 		ChangedColumns: ({ columns }) => withDraft(model, shared, (draft) => ({ ...draft, columns })),
 
-		GotColumnsPopoverMessage: ({ message: popoverMessage }) =>
-			withPopover(model, "columnsPopover", Popover.update(model.columnsPopover, popoverMessage)),
-		ToggledColumn: ({ column, isShown }) =>
-			withDraft(model, shared, (draft) => ({
-				...draft,
-				columns: toggleColumn(draft.columns, column, isShown),
-			})),
-		MovedColumn: ({ column, step }) =>
-			withDraft(model, shared, (draft) => ({
-				...draft,
-				columns: moveColumn(draft.columns, column, step),
-			})),
 		ResetColumns: () =>
 			withDraft(model, shared, (draft) => ({ ...draft, columns: currentTab(model).draft.columns })),
 
-		GotSortMenuMessage: ({ message: menuMessage }) =>
-			updateMenu(model, "sortMenu", menuMessage, (next, key) => {
-				const sort = parseSortKey(key)
-				return sort === null
-					? { model: next }
-					: withDraft(next, shared, (draft) => ({ ...draft, sort }))
-			}),
 		GotViewMenuMessage: ({ message: menuMessage }) =>
 			updateMenu(model, "viewMenu", menuMessage, (next, key) => onViewMenu(next, shared, key)),
 		PressedSaveView: () => openSaveModal(model, "create"),
@@ -836,5 +750,4 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		CompletedFocusSearch: () => ({ model }),
 		CompletedScrollRow: () => ({ model }),
 		CompletedPositionHoverCard: () => ({ model }),
-		CompletedLetModifierClicksThrough: () => ({ model }),
 	})

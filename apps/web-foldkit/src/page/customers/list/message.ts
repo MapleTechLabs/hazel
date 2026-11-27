@@ -8,7 +8,8 @@ import { AccountRow, MemberRow, SignalRow, ViewLayoutRow } from "../../../custom
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
-import { FilterField, ListKey, ViewRow } from "./model"
+import { FilterField } from "@hazel/shared-screens/customers/list/filters"
+import { ListKey, ViewRow } from "./model"
 
 /** Saving, renaming or deleting a view: it is gone, the store refuses it (a built-in), or a common reason. */
 export const ViewFailure = Schema.Union([Schema.Literals(["NotFound", "Refused"]), CommonReason])
@@ -36,28 +37,17 @@ export const Message = defineMessageUnion({
 	CompletedSaveLayout: {},
 	FailedSaveLayout: { reason: CommonReason },
 	ChangedSearch: { value: Schema.String },
-	ClearedSearch: {},
 	ClickedSortHeader: { column: Customers.ListColumn },
 	ClearedFilter: { field: FilterField },
 	ClearedFilters: {},
 
-	PressedEditFilter: { field: FilterField },
-	ClickedBuilderField: { field: FilterField },
-	ChangedPendingFilters: { filters: Customers.ViewFilters },
-	AppliedFilter: {},
-	GotFilterPopoverMessage: { message: Popover.Message },
-
-	/** The hazel controls' builder applied, or their sort menu or column picker changed the draft. */
+	/** The hazel controls (`./hole.ts`): the builder applied, or the sort menu or column picker changed the draft. */
 	AppliedFilters: { filters: Customers.ViewFilters },
 	ChangedSort: { sort: Customers.ViewSort },
 	ChangedColumns: { columns: Schema.Array(Customers.ListColumn) },
 
-	GotColumnsPopoverMessage: { message: Popover.Message },
-	ToggledColumn: { column: Customers.ListColumn, isShown: Schema.Boolean },
-	MovedColumn: { column: Customers.ListColumn, step: Schema.Literals([-1, 1]) },
 	ResetColumns: {},
 
-	GotSortMenuMessage: { message: Menu.Message },
 	GotViewMenuMessage: { message: Menu.Message },
 	PressedSaveView: {},
 	GotSaveModalMessage: { message: Modal.Message },
@@ -100,6 +90,5 @@ export const Message = defineMessageUnion({
 	CompletedFocusSearch: {},
 	CompletedScrollRow: {},
 	CompletedPositionHoverCard: {},
-	CompletedLetModifierClicksThrough: {},
 })
 export type Message = typeof Message.Type
