@@ -21,6 +21,11 @@ const inChat = (tags: ReadonlyArray<string>, name: string) =>
 const reactions = (name: string) => inChat(["message", "reactionBar"], name)
 const files = (name: string) => inChat(["message", "attachmentGrid"], name)
 const cards = (name: string) => inChat(["message", "embed"], name)
+const G = '[data-hz="attachmentGrid"]'
+/** A token colour at `percent` over transparent (today's `bg-secondary/30`, `bg-black/60`). */
+const tint = (token: string, percent: number) => `color-mix(in oklab, ${token} ${percent}%, transparent)`
+const BLACK = "var(--hz-palette-black)"
+const WHITE = "var(--hz-palette-white)"
 
 // Today's `max-w-md` (28rem) and `max-w-lg` (32rem) column caps, and the 300px media cap.
 const COLUMN = `calc(${space("14")} * 8)`
@@ -149,7 +154,27 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 		background-color: ${color("muted")}; font-family: var(--hz-font-mono); ${type("code")}`,
 	],
 	[`${M} ${p("codeBlock")}:has(${p("language")}) > ${p("code")}`, `padding-right: ${space("14")};`],
-	[`${M} ${p("language")}`, `position: absolute; top: ${space("2")}; right: ${space("2")};`],
+	// Today's corner: `absolute top-2 right-2 z-10 flex items-center gap-2`, the copy button `pr-24`.
+	[
+		`${M} ${p("codeControls")}`,
+		`position: absolute; z-index: 1; top: ${space("2")}; right: ${space("2")}; display: flex;
+		align-items: center; column-gap: ${space("2")};`,
+	],
+	[`${M} ${p("codeBlock")}:has(${p("copyCode")}) > ${p("code")}`, `padding-right: ${space("24")};`],
+	[
+		"@media (width < 48rem)",
+		`${M} ${p("codeBlock")}:has(${p("copyCode")}) > ${p("code")} { padding-right: ${space("4")}; }
+		${M} ${p("codeBlock")}:has(${p("copyCode")}):has(${p("language")}) > ${p("code")} { padding-top: ${space("10")}; }`,
+	],
+	[
+		`${M} ${p("copyCode")}`,
+		`display: flex; padding: ${space("1.5")}; border-radius: ${radius("sm")}; color: ${color("fg")};
+		background-color: ${tint(color("fg"), 10)}; cursor: pointer; opacity: 0;
+		transition: opacity var(--hz-duration-fast) var(--hz-ease-out);`,
+	],
+	[`${M} ${p("copyCode")}:hover`, `background-color: ${tint(color("fg"), 20)};`],
+	[`${M} ${p("codeBlock")}:hover ${p("copyCode")}, ${M} ${p("copyCode")}:focus-visible`, "opacity: 1;"],
+	[`${M} ${p("copyCode")} > ${p("icon")}`, `width: ${space("3.5")}; height: ${space("3.5")};`],
 
 	// Reactions (`reactionButton`).
 	[
@@ -252,6 +277,109 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 		background-color: ${color("bg")}; color: ${color("fg")}; box-shadow: var(--hz-shadow-xs); cursor: pointer;`,
 	],
 	[`${files("remove")} > ${p("icon")}`, `width: ${space("3.5")}; height: ${space("3.5")};`],
+	// A failed upload (phase 4): the tile tints and says so; with `retry` a press retries it.
+	[`${files("media")}[data-failed]`, `background-color: ${color("warning-tint")};`],
+	[
+		`:is(${files("media")}, ${G} ${p("tile")}) > ${p("failure")}`,
+		`position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+		justify-content: center; row-gap: ${space("1")}; padding: ${space("2")}; text-align: center;`,
+	],
+	[
+		files("failure"),
+		`display: flex; align-items: center; column-gap: ${space("1")}; color: ${color("warning")}; ${type("caption")}`,
+	],
+	[
+		`${files("failure")} > ${p("icon")}`,
+		`flex-shrink: 0; width: ${space("3.5")}; height: ${space("3.5")};`,
+	],
+	[files("retryLabel"), `${STRONG} color: ${color("primary")};`],
+	[`:is(${files("file")}, ${G} ${p("row")})[data-failed]`, `border-color: ${color("warning")};`],
+	[`${files("file")}[data-failed] ${p("fileIcon")}`, `color: ${color("warning")};`],
+
+	// The files page (phase 4, `media-view.ts`): a square grid, masonry columns, a list of rows.
+	[
+		`${G} > ${p("tiles")}`,
+		`display: grid; gap: ${space("2")}; grid-template-columns: repeat(2, minmax(0, 1fr));`,
+	],
+	[`${G} > ${p("masonry")}`, `columns: 1; column-gap: ${space("3")};`],
+	[`${G} > ${p("masonry")} > *`, `break-inside: avoid; margin-bottom: ${space("2")};`],
+	[`${G} > ${p("rows")}`, `display: flex; flex-direction: column; row-gap: ${space("2")};`],
+	[
+		"@media (width >= 40rem)",
+		`${G} > ${p("tiles")} { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+		${G} > ${p("masonry")} { columns: 2; }`,
+	],
+	[
+		"@media (width >= 64rem)",
+		`${G} > ${p("tiles")} { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+		${G} > ${p("masonry")} { columns: 3; }`,
+	],
+	[
+		"@media (width >= 80rem)",
+		`${G} > ${p("tiles")} { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+		${G} > ${p("masonry")} { columns: 4; }`,
+	],
+	[
+		`${G} ${p("tile")}`,
+		`position: relative; display: block; width: 100%; overflow: hidden; border-radius: ${radius("lg")};
+		background-color: ${color("muted")}; cursor: pointer;`,
+	],
+	// `aspect-square rounded-lg border border-border bg-secondary/30 hover:border-muted-fg/50`.
+	[
+		`${G} > ${p("tiles")} ${p("tile")}`,
+		`aspect-ratio: 1; border: 1px solid ${color("border")}; background-color: ${tint(color("secondary"), 30)};
+		transition: border-color var(--hz-duration-fast) var(--hz-ease-out);`,
+	],
+	[`${G} > ${p("tiles")} ${p("tile")}:hover`, `border-color: ${tint(color("muted-fg"), 50)};`],
+	[`${G} > ${p("masonry")} ${p("tile")}:not([style])`, "aspect-ratio: 4 / 3;"],
+	[`${G} ${p("tile")}[data-failed]`, `background-color: ${color("warning-tint")};`],
+	[`${G} > ${p("tiles")} ${p("tile")}[data-failed]`, `border-color: ${tint(color("warning"), 50)};`],
+	[`${G} ${p("tile")} > ${p("image")}`, "display: block; width: 100%; height: 100%; object-fit: cover;"],
+	[`${G} > ${p("masonry")} ${p("tile")}:not([style]) > ${p("image")}`, "height: auto;"],
+	[
+		`${G} ${p("tileEmpty")}`,
+		`position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+		justify-content: center; row-gap: ${space("2")}; padding: ${space("3")}; color: ${color("muted-fg")};`,
+	],
+	[`${G} ${p("tileIcon")}`, `width: ${space("8")}; height: ${space("8")};`],
+	[
+		`${G} ${p("tileName")}`,
+		`max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${color("fg")};
+		${type("caption")}`,
+	],
+	// Today's `size-12 rounded-full bg-black/60` badge round a white `size-6` play icon.
+	[
+		`${G} ${p("playBadge")}`,
+		`position: absolute; top: 50%; left: 50%; display: flex; align-items: center; justify-content: center;
+		width: ${space("12")}; height: ${space("12")}; border-radius: ${radius("full")}; transform: translate(-50%, -50%);
+		background-color: ${tint(BLACK, 60)}; color: ${WHITE}; pointer-events: none;`,
+	],
+	[
+		`${G} ${p("playBadge")} > ${p("icon")}`,
+		`width: ${space("6")}; height: ${space("6")}; margin-left: ${space("0.5")};`,
+	],
+	[
+		`${G} ${p("duration")}`,
+		`position: absolute; left: ${space("2")}; bottom: ${space("2")}; padding: ${space("0.5")} ${space("1.5")};
+		border-radius: ${radius("sm")}; background-color: ${tint(BLACK, 60)}; color: ${WHITE};
+		font-variant-numeric: tabular-nums; pointer-events: none; ${type("caption")}`,
+	],
+	// `documentItem`: `flex items-center gap-3 rounded-lg border bg-secondary/30 p-3 hover:bg-secondary/60`.
+	[
+		`${G} ${p("row")}`,
+		`position: relative; display: flex; align-items: center; column-gap: ${space("3")}; width: 100%;
+		overflow: hidden; padding: ${space("3")}; border: 1px solid ${color("border")}; border-radius: ${radius("lg")};
+		background-color: ${tint(color("secondary"), 30)}; text-align: left; cursor: pointer;
+		transition: background-color var(--hz-duration-fast) var(--hz-ease-out);`,
+	],
+	[`${G} ${p("row")}:hover`, `background-color: ${tint(color("secondary"), 60)};`],
+	[
+		`${G} ${p("rowIcon")}`,
+		`flex-shrink: 0; width: ${space("10")}; height: ${space("10")}; color: ${color("muted-fg")};`,
+	],
+	[`${G} ${p("row")}[data-failed] ${p("rowIcon")}`, `color: ${color("warning")};`],
+	[`${G} ${p("row")}:is(:hover, :focus-visible) ${p("fileAction")}`, "opacity: 1;"],
+	["@media (width < 48rem)", `${G} ${p("row")} ${p("fileAction")} { opacity: 1; }`],
 
 	// Link cards (`linkPreviewView`).
 	[`${M} ${p("card")}`, `margin-top: ${space("2")};`],
@@ -373,8 +501,26 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 	[`${M} ${p("tool")}[data-action="delete"]:hover`, `background-color: ${color("danger-subtle")};`],
 	[`${M} ${p("tool")} > ${p("icon")}`, `width: ${space("3.5")}; height: ${space("3.5")};`],
 	[
-		`${M} ${p("separator")}`,
+		`${M} > ${p("toolbar")} > ${p("separator")}`,
 		`width: 1px; height: ${space("4")}; margin-inline: ${space("0.5")}; background-color: ${color("border")};`,
+	],
+
+	// The right-click menu's quick reactions (`contextMenuHeader`): `flex gap-1 px-1 py-1`, `sq-md` buttons.
+	[
+		`${M} ${p("menuQuick")}`,
+		`display: flex; align-items: center; column-gap: ${space("1")}; padding: ${space("1")};
+		border-bottom: 1px solid ${color("border")};`,
+	],
+	// Each emoji is today's `text-lg`: 18px over the 16px title step.
+	[
+		`${M} ${p("menuQuick")} > ${p("item")}`,
+		`display: flex; align-items: center; justify-content: center; width: ${space("9")}; height: ${space("9")};
+		padding: ${space("1")}; border-radius: ${radius("md")}; cursor: pointer; outline: none;
+		font-size: calc(var(--hz-text-title-size) * 1.125);`,
+	],
+	[
+		`${M} ${p("menuQuick")} > ${p("item")}:is(:hover, [data-highlighted])`,
+		`background-color: ${color("secondary")};`,
 	],
 
 	// Typing (`typingIndicatorView`): `flex h-3 items-center gap-2 text-muted-fg text-xs`.

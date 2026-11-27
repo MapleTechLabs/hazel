@@ -1,15 +1,17 @@
 /**
  * `hz:message` (lane A5): one chat row drawn from its data (`content.ts` `MessageRow`), today's
  * `chat/message/row.ts`. A leaf: the row is one structured prop, redrawn as a whole when it changes;
- * the states are flags (`data-<flag>`), and the hover toolbar is part of the row.
+ * the states are flags (`data-<flag>`), and the hover toolbar is part of the row. A right click opens
+ * a menu at the pointer from the row's own `quick` and `actions` (today's context menu).
  */
-import type { MessageRow } from "../../../vocabulary/content.ts"
+import type { MenuGroups, MessageRow } from "../../../vocabulary/content.ts"
 import type { IconName, MessageAction } from "../../../vocabulary/options.ts"
 import { ditherInitial } from "../../../../../../apps/web-foldkit/src/ui/dither-avatar.ts"
 import { mark } from "../../motion.ts"
 import { ditherLayer } from "../content/dither.ts"
 import { ensureStyles as ensureContentStyles } from "../content/styles.ts"
 import { definePrimitive, flag, part, type Primitive } from "../define.ts"
+import { createMenuList } from "../overlays/menu-list.ts"
 import {
 	attachments,
 	badge,
@@ -45,6 +47,43 @@ const actionLook = {
 	selectText: { label: "Select text", icon: "copy" },
 	delete: { label: "Delete message", icon: "trash" },
 } as const satisfies Record<MessageAction, { readonly label: string; readonly icon: IconName }>
+
+/** The right-click menu's groups and labels, in today's order (`contextMenuEntries`). */
+const menuGroups: ReadonlyArray<ReadonlyArray<MessageAction>> = [
+	["react"],
+	["reply", "edit", "thread", "issue"],
+	["copy", "pin", "unpin"],
+	["delete"],
+]
+/** Today's menu words and icons, where they differ from the toolbar's. */
+const menuLook = {
+	...actionLook,
+	copy: { label: "Copy text", icon: "copy" },
+	pin: { label: "Pin message", icon: "star" },
+	unpin: { label: "Unpin message", icon: "unpin" },
+	issue: { label: "Create issue", icon: "support" },
+} as const satisfies Record<MessageAction, { readonly label: string; readonly icon: IconName }>
+
+/** The row's actions as menu groups; `selectText` is iOS only, as on the toolbar. */
+// HAZEL-GAP(p4-message-menu-extras): today's menu also copies the image, its address and the message ID.
+const menuOf = (actions: ReadonlyArray<MessageAction>): MenuGroups =>
+	menuGroups
+		.map((group) => ({
+			entries: group
+				.filter((action) => actions.includes(action))
+				.map((action) => {
+					const look = menuLook[action]
+					return {
+						id: action,
+						label: look.label,
+						icon: look.icon,
+						destructive: action === "delete",
+					}
+				}),
+		}))
+		.filter((group) => group.entries.length > 0)
+
+const isAction = (id: string): id is MessageAction => Object.hasOwn(actionLook, id)
 
 const EMOJI_ONLY =
 	/^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|[\u{1F3FB}-\u{1F3FF}\uFE0F\u200D\u20E3])+$/u
@@ -212,7 +251,8 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 	}
 
 	const draw = batched(() => {
-		node.replaceChildren()
+		// The menu host stays put: moving an open popover would close it.
+		for (const child of [...node.childNodes]) if (child !== menuHost) child.remove()
 		const data = row
 		if (data === undefined) return
 		// A grouped row still shows its author when it quotes another message (today's `showAvatar`).
@@ -247,6 +287,10 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 			richText(document, data.body, {
 				mention: (userId, run) => fire(primitive, "pressMention", { userId, run }),
 				link: (url) => fire(primitive, "pressLink", { url }),
+				// The copy button shows when the screen copies (`copyCode`, through `Clipboard`).
+				copyCode: handles(primitive, "copyCode")
+					? (block) => fire(primitive, "copyCode", { block })
+					: undefined,
 			}),
 		)
 		body.append(content)
@@ -291,8 +335,77 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 		if (bar !== undefined) node.append(bar)
 	})
 
+	// The right-click menu: its host is a `contextMenu` (the overlay recipe), kept in the row across draws.
+	const menuHost = document.createElement("div")
+	menuHost.dataset.hz = "contextMenu"
+	menuHost.dataset.hzPart = "menu"
+	node.append(menuHost)
+	const menu = createMenuList(document, menuHost, (action) => {
+		if (!isAction(action)) return
+		if (action === "react" && handles(primitive, "addReaction")) fire(primitive, "addReaction")
+		else fire(primitive, "action", { action })
+	})
+	menu.setLabel("Message actions")
+
+	/** Today's header of quick reactions over the entries (`contextMenuHeader`). */
+	const quickHeader = (quick: ReadonlyArray<string>) => {
+		const header = part(document, "div", "menuQuick")
+		header.setAttribute("role", "group")
+		header.setAttribute("aria-label", "Quick reactions")
+		for (const emoji of quick) {
+			// An `item` so the menu's arrow keys reach it; it reacts on its own, the menu never picks it.
+			const item = part(document, "div", "item")
+			item.tabIndex = -1
+			item.setAttribute("role", "menuitem")
+			item.setAttribute("aria-label", `React with ${emoji}`)
+			item.textContent = emoji
+			const react = () => {
+				menu.close(true)
+				fire(primitive, "pressReaction", { emoji })
+			}
+			item.addEventListener("click", react)
+			item.addEventListener("keydown", (event) => {
+				if (event.key !== "Enter" && event.key !== " ") return
+				event.preventDefault()
+				event.stopPropagation()
+				react()
+			})
+			header.append(item)
+		}
+		return header
+	}
+
+	const openMenu = (x: number, y: number): boolean => {
+		const data = row
+		const actions = (data?.actions ?? []).filter((action) => action !== "selectText")
+		const quick = data?.quick ?? []
+		if (actions.length === 0 && quick.length === 0) return false
+		menu.close(false)
+		menu.setEntries(menuOf(actions))
+		if (quick.length > 0) menu.panel.prepend(quickHeader(quick))
+		menu.open({
+			anchor: () => ({ x, y, width: 0, height: 0 }),
+			placement: { side: "bottom", align: "start", gap: 2 },
+			focus: "first",
+			onClose: () => flag(node, "menuOpen", false),
+		})
+		flag(node, "menuOpen", true)
+		return true
+	}
+
 	node.addEventListener("contextmenu", (event) => {
-		if (fire(primitive, "longPress")) event.preventDefault()
+		if (event.target instanceof Node && menuHost.contains(event.target)) {
+			event.preventDefault()
+			return
+		}
+		// Without actions the screen decides (its long-press sheet, `longPress`).
+		if (openMenu(event.clientX, event.clientY) || fire(primitive, "longPress")) event.preventDefault()
+	})
+	node.addEventListener("keydown", (event) => {
+		if (event.target !== node) return
+		if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return
+		const rect = node.getBoundingClientRect()
+		if (openMenu(rect.left, rect.top + rect.height / 2)) event.preventDefault()
 	})
 
 	const primitive: Primitive = {
