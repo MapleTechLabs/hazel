@@ -189,6 +189,7 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 					{
 						hole: "message-list",
 						key: channelId,
+						matchKey: true,
 						className: "flex min-h-0 flex-1 flex-col [&>[data-hz]]:min-h-0 [&>[data-hz]]:flex-1",
 					},
 					[

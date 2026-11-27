@@ -151,6 +151,8 @@ export const primitive = definePrimitive("list", ({ document, tag, outer }) => {
 		return found
 	}
 
+	const laidOut = () => viewport.clientHeight > 0
+
 	const toEnd = () => {
 		viewport.scrollTop = viewport.scrollHeight
 		atEnd = true
@@ -166,7 +168,7 @@ export const primitive = definePrimitive("list", ({ document, tag, outer }) => {
 		else if (viewport.scrollTop < lastTop && viewport.scrollHeight === lastHeight) atEnd = false
 		lastTop = viewport.scrollTop
 		lastHeight = viewport.scrollHeight
-		if (!settled || props.loading || rowCount === 0) return
+		if (!settled || props.loading || rowCount === 0 || !laidOut()) return
 		const near = Math.max(REACH_MIN, viewport.clientHeight / 2)
 		if (viewport.scrollTop > near) armedStart = true
 		else if (armedStart && !props.loadingStart) {
@@ -190,6 +192,8 @@ export const primitive = definePrimitive("list", ({ document, tag, outer }) => {
 			reorder.sync()
 			band()
 		}
+		// Not laid out (a hidden home, a detached pane): nothing can scroll, so wait for a box.
+		if (!laidOut()) return
 		if (!settled) {
 			if (list.length === 0 || props.loading) return
 			settled = true
@@ -211,6 +215,17 @@ export const primitive = definePrimitive("list", ({ document, tag, outer }) => {
 
 	// Far rows skip rendering; the band follows the viewport (an IntersectionObserver per list).
 	const win = document.defaultView
+	const boxEdges = (row: HTMLElement) => {
+		const style = win?.getComputedStyle(row)
+		if (style === undefined) return 0
+		const px = (value: string) => Number.parseFloat(value) || 0
+		return (
+			px(style.paddingTop) +
+			px(style.paddingBottom) +
+			px(style.borderTopWidth) +
+			px(style.borderBottomWidth)
+		)
+	}
 	const intersections =
 		win?.IntersectionObserver === undefined
 			? undefined
@@ -221,7 +236,8 @@ export const primitive = definePrimitive("list", ({ document, tag, outer }) => {
 							if (entry.isIntersecting) delete row.dataset.hzOffscreen
 							else {
 								// Skipped at its measured height, so leaving the band never moves the rows below it.
-								const height = entry.boundingClientRect.height
+								// `contain-intrinsic-size` sizes the content box, so padding and borders come off.
+								const height = entry.boundingClientRect.height - boxEdges(row)
 								if (height > 0) row.style.setProperty("--hz-row-size", `${height}px`)
 								row.dataset.hzOffscreen = ""
 							}

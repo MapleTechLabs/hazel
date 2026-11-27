@@ -5,7 +5,7 @@ import { UiSchema } from "@effect/ui"
 import { BrowserHost, Html } from "@effect/ui/html"
 import { Effect, Layer, Schema } from "effect"
 import { afterEach, beforeEach, describe, expect, test } from "vitest"
-import { HOLE_ATTRIBUTE } from "../app/holes"
+import { HOLE_ATTRIBUTE, HOLE_KEY_ATTRIBUTE } from "../app/holes"
 import { REGION_ATTRIBUTE } from "../app/view"
 import { AdoptRegion } from "./foldkit"
 import { Hole } from "./portal"
@@ -14,7 +14,11 @@ import { Hole } from "./portal"
 const Message = UiSchema.TaggedEnum({ Toggled: {} })
 const Frame = Html.component({
 	name: "Frame",
-	props: Schema.Struct({ withSlot: Schema.Boolean, withChild: Schema.Boolean }),
+	props: Schema.Struct({
+		withSlot: Schema.Boolean,
+		withChild: Schema.Boolean,
+		matchKey: Schema.optional(Schema.Boolean),
+	}),
 	model: Schema.Struct({}),
 	message: Message,
 }).make({
@@ -29,18 +33,23 @@ const Frame = Html.component({
 						.onMount(AdoptRegion({ region: "page" }))
 				: null,
 			h.props.withChild
-				? Hole(h, { hole: "dms", key: "k" }, [h.p.attr("data-test", "child").children("shell child")])
+				? Hole(h, { hole: "dms", key: "k", matchKey: h.props.matchKey === true }, [
+						h.p.attr("data-test", "child").children("shell child"),
+					])
 				: null,
 		),
 })
 
 /** What the Foldkit host leaves in the document: its root with a region, and a page with a hole. */
-const foldkitDom = () => {
-	document.body.innerHTML = `<div data-foldkit-host hidden><div ${REGION_ATTRIBUTE}="page"><main data-test="page">a Foldkit page<div ${HOLE_ATTRIBUTE}="dms"></div></main></div></div><div id="root"></div>`
+const foldkitDom = (holeKey = "k") => {
+	document.body.innerHTML = `<div data-foldkit-host hidden><div ${REGION_ATTRIBUTE}="page"><main data-test="page">a Foldkit page<div ${HOLE_ATTRIBUTE}="dms" ${HOLE_KEY_ATTRIBUTE}="${holeKey}"></div></main></div></div><div id="root"></div>`
 	return document.getElementById("root")!
 }
 
-const mount = (container: Element, props: { withSlot: boolean; withChild: boolean }) =>
+const mount = (
+	container: Element,
+	props: { readonly withSlot: boolean; readonly withChild: boolean; readonly matchKey?: boolean },
+) =>
 	Effect.runPromise(
 		Effect.scoped(
 			Effect.gen(function* () {
@@ -89,5 +98,24 @@ describe("the Foldkit adapter", () => {
 		document.body.innerHTML = `<div id="root"></div>`
 		const inside = await mount(document.getElementById("root")!, { withSlot: false, withChild: true })
 		expect(inside.childInHole).toBe(false)
+	})
+
+	test("a keyed child lands only in the hole the page keyed the same, not the page it replaces", async () => {
+		const container = foldkitDom("previous")
+		const inside = await mount(container, { withSlot: false, withChild: true, matchKey: true })
+		expect(inside.childInHole).toBe(false)
+	})
+
+	test("a keyed child stays in its hole, inert, until the page replaces the hole or fills it anew", async () => {
+		const container = foldkitDom()
+		const inside = await mount(container, { withSlot: false, withChild: true, matchKey: true })
+		expect(inside.childInHole).toBe(true)
+		const hole = document.querySelector(`[${HOLE_ATTRIBUTE}="dms"]`)!
+		const child = () => hole.querySelector<HTMLElement>('[data-test="child"]')
+		// Unmounted with the page still showing its hole: kept, so no frame shows the hole empty.
+		expect(child()?.closest("[inert]")).not.toBeNull()
+		hole.append(document.createElement("div"))
+		await Promise.resolve()
+		expect(child()).toBeNull()
 	})
 })
