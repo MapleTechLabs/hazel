@@ -70,6 +70,8 @@ const color = {
 	"wash-strong": themed(lit("oklch(0 0 0 / 0.06)"), lit("oklch(1 0 0 / 0.08)")),
 	/** `wash` under `wash-strong`: the active channel row under the pointer (two layers, one colour). */
 	"wash-stacked": themed(lit("oklch(0 0 0 / 0.0929)"), lit("oklch(1 0 0 / 0.1214)")),
+	/** A card that takes input: the page in light, `wash` over it in dark (the composer's `bg-bg dark:bg-wash`). */
+	"input-card": themed(ref("bg"), ref("wash")),
 	/** A bar's bottom edge (the hybrid's measured band, `Theme.bandBorder`). */
 	separator: themed(alpha(p("zinc-950"), 0.07), alpha(p("white"), 0.07)),
 	border: themed(p("zinc-200"), lit("oklch(1 0 0 / 0.085)")),

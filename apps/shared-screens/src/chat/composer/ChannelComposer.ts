@@ -1126,22 +1126,11 @@ export const ChannelComposerNoDeps = Hazel.component({
 					h.button
 						.icon("paperclip")
 						.label("Attach")
-						.variant("ghost")
-						.size("xsmall")
+						.variant("quiet")
 						.disabled(uploading)
 						.on("press", M.PressedAttach()),
-					h.button
-						.icon("gif")
-						.label("GIF")
-						.variant("ghost")
-						.size("xsmall")
-						.on("press", M.PressedGif()),
-					h.button
-						.icon("emoji")
-						.label("Emoji")
-						.variant("ghost")
-						.size("xsmall")
-						.on("press", M.PressedEmoji()),
+					h.button.icon("gif").label("GIF").variant("quiet").on("press", M.PressedGif()),
+					h.button.icon("emoji").label("Emoji").variant("quiet").on("press", M.PressedEmoji()),
 				)
 				.on("change", (payload) => M.ChangedDraft({ payload }))
 				.on("submit", (payload) => M.SubmittedDraft({ payload }))

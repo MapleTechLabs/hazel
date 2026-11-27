@@ -78,20 +78,20 @@ export const composer = defineRecipe<{}, "canSend", Part>({
 			radius: "xl",
 			borderWidth: "hairline",
 			borderColor: "border",
-			background: "bg",
+			background: "input-card",
 			shadow: "xs",
-			paddingX: "2",
+			// Today's editor `px-3 py-2 min-h-10` over the actions row `px-3 py-2`.
+			paddingX: "3",
 			paddingY: "2",
-			gap: "1",
+			gap: "0",
 		},
 		parts: {
 			input: {
 				fill: true,
+				minHeight: "10",
 				color: "fg",
 				text: "body",
 				background: "transparent",
-				paddingX: "1.5",
-				paddingY: "1",
 			},
 			send: {
 				size: "8",
@@ -108,7 +108,7 @@ export const composer = defineRecipe<{}, "canSend", Part>({
 			},
 			sendIcon: { size: "3.5", color: "muted-fg" },
 			above: { layout: "row", wrap: true, gap: "1" },
-			actions: { layout: "row", align: "center", gap: "1" },
+			actions: { layout: "row", align: "center", gap: "3" },
 			// The editor's blocks: `my-1 pl-4 italic`, `my-2 rounded-lg bg-muted p-4 font-mono text-sm`,
 			// `-#` subtext (paragraphs, which also nest in quotes, and list items are the renderer's).
 			quote: { paddingStart: "4" },

@@ -111,10 +111,10 @@ const rules: ReadonlyArray<readonly [string, string]> = [
 	],
 	// `flex items-center justify-between gap-2 border bg-secondary px-3 py-2` above the card's top border;
 	// it bleeds over the card's padding (`space-2`), and the card's border is its bottom line.
-	// It bleeds over the card's padding (`space-2`); its top corners are the card's.
+	// It bleeds over the card's padding (`space-2` above, `space-3` at the sides); its top corners are the card's.
 	[
 		bar,
-		`grid-area: context; margin: calc(-1 * ${space("2")}) calc(-1 * ${space("2")}) ${space("1")};
+		`grid-area: context; margin: calc(-1 * ${space("2")}) calc(-1 * ${space("3")}) ${space("1")};
 		border-top-left-radius: calc(${radius("lg")} - 1px); border-top-right-radius: calc(${radius("lg")} - 1px);`,
 	],
 	// `max-w-xs`.

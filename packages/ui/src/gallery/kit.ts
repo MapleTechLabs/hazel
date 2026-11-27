@@ -80,6 +80,8 @@ const intentOf = {
 	chip: "plain",
 	filter: "plain",
 	dashed: "plain",
+	// The composer's picker buttons are a plain `ariaButton` with their own classes, not a kit button.
+	quiet: "plain",
 } as const satisfies Record<ButtonSpec["variant"], ButtonVariants["intent"]>
 
 const sizeOf = (spec: ButtonSpec): ButtonVariants["size"] => {

@@ -37,6 +37,7 @@ public enum HazelTheme {
         case chip = "chip"
         case filter = "filter"
         case dashed = "dashed"
+        case quiet = "quiet"
     }
 
     public enum TextStep: String, CaseIterable, Sendable {
@@ -149,6 +150,8 @@ public enum HazelTheme {
         public static let washStrong = ThemedColor(light: RGBA(0, 0, 0, 0.06), dark: RGBA(1, 1, 1, 0.08))
         /// `wash-stacked`: #00000018 / #ffffff1f
         public static let washStacked = ThemedColor(light: RGBA(0, 0, 0, 0.0929), dark: RGBA(1, 1, 1, 0.1214))
+        /// `input-card`: #ffffffff / #ffffff0b
+        public static let inputCard = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(1, 1, 1, 0.045))
         /// `separator`: #09090b12 / #ffffff12
         public static let separator = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 0.07), dark: RGBA(1, 1, 1, 0.07))
         /// `border`: #e4e4e7ff / #ffffff16
@@ -877,6 +880,9 @@ public enum HazelTheme {
                 Layer(when: When(options: ["variant": "filter"], flags: [], states: [], sizeClass: nil), part: "detail", style: Style(color: Colors.mutedFg)),
                 Layer(when: When(options: ["variant": "filter"], flags: [], states: [], sizeClass: nil), part: "label", style: Style(strong: true, truncate: true)),
                 Layer(when: When(options: ["variant": "filter"], flags: [], states: [], sizeClass: nil), part: "remove", style: Style(radius: 0, bleedX: 0)),
+                Layer(when: When(options: ["variant": "quiet"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.clear, color: Colors.mutedFg, radius: 2, weight: 600)),
+                Layer(when: When(options: ["variant": "quiet"], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(color: Colors.mutedFg)),
+                Layer(when: When(options: ["variant": "quiet"], flags: [], states: [.hover], sizeClass: nil), part: nil, style: Style(color: Colors.fg)),
                 Layer(when: When(options: ["variant": "dashed"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.clear, color: Colors.fg3, borderColor: Colors.border, borderStyle: .dashed)),
                 Layer(when: When(options: ["variant": "dashed"], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(color: Colors.mutedFg)),
                 Layer(when: When(options: ["variant": "dashed"], flags: [], states: [.hover], sizeClass: nil), part: nil, style: Style(background: Colors.secondary, color: Colors.fg)),
@@ -920,6 +926,10 @@ public enum HazelTheme {
                 Layer(when: When(options: ["variant": "chip"], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(paddingX: 14, paddingY: 0, minHeight: 28, text: .label)),
                 Layer(when: When(options: ["variant": "filter"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(paddingX: 0, paddingStart: 10, gap: 4, text: .label)),
                 Layer(when: When(options: ["variant": "filter"], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(paddingX: 0, paddingStart: 10, gap: 4, text: .label)),
+                Layer(when: When(options: ["variant": "quiet"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(paddingX: 0, paddingY: 0, gap: 6, minHeight: 0, text: .caption)),
+                Layer(when: When(options: ["variant": "quiet"], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(size: 16)),
+                Layer(when: When(options: ["variant": "quiet"], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(paddingX: 0, paddingY: 0, gap: 6, minHeight: 0, text: .caption)),
+                Layer(when: When(options: ["variant": "quiet"], flags: [], states: [], sizeClass: .regular), part: "icon", style: Style(size: 16)),
                 Layer(when: When(options: ["size": "toolbar", "variant": "ghost"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 4)),
                 Layer(when: When(options: ["size": "large"], flags: ["iconOnly"], states: [], sizeClass: nil), part: nil, style: Style(size: 48)),
                 Layer(when: When(options: ["size": "large"], flags: ["iconOnly"], states: [], sizeClass: nil), part: "icon", style: Style(size: 24)),
@@ -1116,12 +1126,12 @@ public enum HazelTheme {
             defaults: [:],
             inert: [.disabled],
             layers: [
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.bg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 8, paddingY: 8, gap: 4, shadow: "xs", fill: true)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "input", style: Style(background: Colors.clear, color: Colors.fg, paddingX: 6, paddingY: 4, text: .body, fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.inputCard, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 12, paddingY: 8, gap: 0, shadow: "xs", fill: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "input", style: Style(background: Colors.clear, color: Colors.fg, minHeight: 40, text: .body, fill: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "send", style: Style(layout: .row, align: .center, justify: .center, background: Colors.clear, color: Colors.mutedFg, borderColor: Colors.clear, borderWidth: 1, radius: 9999, size: 32, shrink: false, transition: 0.15)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "sendIcon", style: Style(color: Colors.mutedFg, size: 14)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "above", style: Style(layout: .row, gap: 4, wrap: true)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "actions", style: Style(layout: .row, align: .center, gap: 4)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "actions", style: Style(layout: .row, align: .center, gap: 12)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "quote", style: Style(paddingStart: 16)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "codeBlock", style: Style(background: Colors.muted, radius: 8, paddingX: 16, paddingY: 16, text: .code)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "subtext", style: Style(color: Colors.mutedFg, text: .caption)),

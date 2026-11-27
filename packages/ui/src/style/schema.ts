@@ -88,6 +88,7 @@ export const buttonVariants = [
 	"chip",
 	"filter",
 	"dashed",
+	"quiet",
 ] as const
 export type ButtonVariant = (typeof buttonVariants)[number]
 

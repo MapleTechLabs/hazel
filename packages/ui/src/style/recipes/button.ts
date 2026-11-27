@@ -151,6 +151,13 @@ export const button = defineRecipe<
 						remove: { bleedX: "0", radius: "none" },
 					},
 				},
+				// A toolbar's text action with no box (the composer's Attach, GIF and Emoji, `composer/view.ts`):
+				// `p-0 font-semibold text-muted-fg text-xs hover:text-fg`, the icon `size-4 text-muted-fg`.
+				quiet: {
+					root: { background: "transparent", color: "muted-fg", radius: "xs", weight: "semibold" },
+					parts: { icon: { color: "muted-fg" } },
+					states: { hover: { root: { color: "fg" } } },
+				},
 				// `+ Filter`: the plain intent with `border-border border-dashed text-fg-3 hover:text-fg`.
 				dashed: {
 					root: {
@@ -308,6 +315,18 @@ export const button = defineRecipe<
 			style: {
 				root: { paddingStart: "2.5", paddingX: "0", gap: "1", text: "label" },
 				regular: { root: { paddingStart: "2.5", paddingX: "0", gap: "1", text: "label" } },
+			},
+		},
+		// The quiet action has one size: no padding or minimum height, `gap-1.5 text-xs`.
+		{
+			when: { variant: "quiet" },
+			style: {
+				root: { minHeight: "0", gap: "1.5", paddingX: "0", paddingY: "0", text: "caption" },
+				parts: { icon: { size: "4" } },
+				regular: {
+					root: { minHeight: "0", gap: "1.5", paddingX: "0", paddingY: "0", text: "caption" },
+					parts: { icon: { size: "4" } },
+				},
 			},
 		},
 		// `sortTrigger`: `gap-1` between `Sort`, the label and the chevron.
