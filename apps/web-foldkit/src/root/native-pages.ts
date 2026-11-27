@@ -59,3 +59,6 @@ export const nativePageOf = <Tag extends AppRoute["_tag"]>(
 	const page = nativePages[inputs.route._tag] as NativePage<Tag> | undefined
 	return page === undefined || forcedOff(inputs.route._tag) ? null : page(h, inputs)
 }
+
+/** Whether the parity runner asked for today's Foldkit screen in place of a converted one. */
+export const isParityOff = (tag: AppRoute["_tag"]): boolean => forcedOff(tag)

@@ -38,6 +38,7 @@ import * as NotificationControl from "../notification-control"
 import { AppRoute, customerRoute, hrefOf } from "../../../route"
 import { isMemberOf, Message, type Model, routeTabOf, type ThreadPanel } from "./page"
 import { threadPanelWidthOf } from "./thread-width"
+import { isParityOff } from "../../../root/native-pages"
 import { openViewerOf } from "./viewer-images"
 
 /** The channel route's content: header, tab bar, message list and composer (desktop). */
@@ -94,6 +95,12 @@ const imageViewerOverlay = (h: H, model: Model): Html => {
 		},
 	})
 }
+
+/** The Files or All media page's place (`src/root/app.ts`), keyed by tab and channel. */
+const filesHole = (h: H, model: Model, view: "files" | "media"): Html =>
+	hole(h, "channel-files", `${view === "media" ? "ChatFilesMedia" : "ChatFiles"}:${model.channelId}`, [
+		h.Class(MESSAGE_LIST_HOLE),
+	])
 
 /** The shared message list's place (`src/root/portal.ts`): keyed by channel, so a switch starts fresh. */
 const messageListHole = (h: H, model: Model): Html | undefined =>
@@ -360,10 +367,12 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 					customerCardView(h, model, options.isMobile ?? false, nowMs),
 					lazyTabBar(chatTabBarView, [routeTabOf(model.tab), toSelf, h]) ?? h.empty,
 					...(model.tab._tag === "Files"
-						? [
-								FilesView.view(h, model.tab.files, toFilesMessage, nowMs),
-								FilesView.imageViewerOverlay(h, model.tab.files, toFilesMessage),
-							]
+						? isParityOff(model.tab.files.view === "media" ? "ChatFilesMedia" : "ChatFiles")
+							? [
+									FilesView.view(h, model.tab.files, toFilesMessage, nowMs),
+									FilesView.imageViewerOverlay(h, model.tab.files, toFilesMessage),
+								]
+							: [filesHole(h, model, model.tab.files.view)]
 						: messagesOutlet(h, model, nowMs, options.channelLinks ?? NO_CHANNEL_LINKS_MAP)),
 				],
 			),
