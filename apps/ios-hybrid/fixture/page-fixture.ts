@@ -12,6 +12,10 @@ export interface PageFixture {
 	readonly seed?: (server: FixtureServer) => void
 	/** RPC answers by tag (encoded success values), over the fixture's own. */
 	readonly rpcs?: Readonly<Record<string, Responder>>
+	/** The link-preview worker's JSON for a request (`/link-preview`, `/tweet`), over the network's. */
+	readonly unfurls?: (url: URL) => object | undefined
+	/** A live reply socket's frames by message id (`fixture-socket.ts` `live`). */
+	readonly live?: (messageId: string) => ReadonlyArray<object> | undefined
 }
 
 /** The localStorage key naming the page whose fixture the offline build applies. */

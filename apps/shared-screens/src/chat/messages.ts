@@ -5,10 +5,12 @@
  * component so its Commands (`live.ts`) and its view share them without a cycle.
  */
 import { UiSchema } from "@effect/ui"
-import { ChannelId, MessageId, UserId } from "@hazel/schema"
+import { ChannelId, HtmlRenderId, MessageId, UserId } from "@hazel/schema"
 import { Content, MessageAction } from "@hazel/ui/vocabulary/index"
 import { Schema } from "effect"
 import { ProfilePresence } from "./components/ProfileCard"
+import { RichParts } from "./rich/embeds"
+import { LiveEvent } from "./rich/live-replies"
 
 export const ChatMessage = Schema.Struct({
 	id: MessageId,
@@ -21,7 +23,8 @@ export const ChatMessage = Schema.Struct({
 	threadChannelId: Schema.NullOr(ChannelId),
 	isPinned: Schema.Boolean,
 	pinnedId: Schema.NullOr(Schema.String),
-	embeds: Schema.Array(Content.Embed),
+	/** Its embeds and the links its text unfurls (`rich/embeds.ts`). */
+	rich: RichParts,
 })
 
 export const ChatUser = Schema.Struct({
@@ -124,6 +127,11 @@ export const MessageListMessage = UiSchema.TaggedEnum({
 	PressedRetry: { id: MessageId },
 	PressedJumpToUnread: {},
 	PressedMarkRead: {},
+	/** One live reply's socket event (`rich/live-replies.ts`). */
+	ReceivedLiveEvent: { messageId: MessageId, event: LiveEvent },
+	/** An HTML render's fullscreen button, and the dialog closing (Escape in the page too). */
+	PressedRenderFullscreen: { messageId: MessageId, renderId: HtmlRenderId },
+	DismissedRenderFullscreen: {},
 	CompletedCommand: {},
 })
 export type MessageListMessage = typeof MessageListMessage.Type

@@ -7,9 +7,10 @@
  * (`messageListLayer`) and handles what a row asks of it (`RequestHost`).
  */
 import { Subscription } from "@effect/ui"
-import { ChannelId, MessageId, UserId } from "@hazel/schema"
+import { ChannelId, HtmlRenderId, MessageId, UserId } from "@hazel/schema"
+import { HtmlRender } from "@hazel/ui/extensions/HtmlRender"
 import { Content, Hazel, type IconName, type MessageAction } from "@hazel/ui/vocabulary/index"
-import { Match, Schema } from "effect"
+import { Match, Option, Schema } from "effect"
 import { ProfileCard, type ProfilePerson, ProfilePresence } from "./components/ProfileCard"
 import { initialsOf, sinceLabel } from "./format"
 import { EmojiPicker } from "./pickers/EmojiPicker"
@@ -20,6 +21,7 @@ import {
 	clockStream,
 	historyStream,
 	ListRef,
+	liveStream,
 	messagesStream,
 	MoveWindow,
 	PAGE_SIZE,
@@ -57,6 +59,11 @@ import {
 	providerOf,
 } from "./rows"
 
+import { HtmlRenderRef, PreviewRequest } from "./rich/embeds"
+import { GetHtmlRenderUrl } from "./rich/html-renders"
+import { initialLiveState, LiveActorState, reduceLive } from "./rich/live-replies"
+import { GetLinkPreview, GetTweet, unfurlArgs, unfurlCardOf } from "./rich/unfurls"
+
 export { MessageListMessage } from "./messages"
 
 const EntrySchema = Schema.Union([
@@ -71,6 +78,8 @@ const EntrySchema = Schema.Union([
 		grouped: Schema.Boolean,
 		entering: Schema.Boolean,
 		row: Content.MessageRow,
+		previews: Schema.Array(PreviewRequest),
+		renders: Schema.Array(HtmlRenderRef),
 	}),
 ])
 
@@ -79,6 +88,8 @@ export const MessageListProps = Schema.Struct({
 	userId: UserId,
 	/** Where attachments without their own url live (today's `currentServer().cdn`). */
 	cdnUrl: Schema.String,
+	/** The install's link-preview worker, which unfurls links (today's `currentServer().linkPreview`). */
+	linkPreviewUrl: Schema.String,
 	/** The clock at mount; `Ticked` moves it on. */
 	nowMs: Schema.Finite,
 })
@@ -118,6 +129,10 @@ export const MessageListModel = Schema.Struct({
 	profilePresence: Schema.NullOr(ProfilePresence),
 	/** The message whose action sheet is open. */
 	menu: Schema.NullOr(MessageId),
+	/** Each live reply's state so far, by message id. */
+	live: Schema.Record(Schema.String, LiveActorState),
+	/** The HTML render shown fullscreen. */
+	fullscreen: Schema.NullOr(Schema.Struct({ messageId: MessageId, renderId: HtmlRenderId })),
 })
 export type MessageListModel = typeof MessageListModel.Type
 
@@ -152,6 +167,7 @@ export const lookupsOf = (model: MessageListModel, userId: UserId): Lookups => {
 		),
 		replyTargets: new Map(model.replyTargets.map((target) => [target.id, target])),
 		emojiUrls: new Map(),
+		live: new Map(Object.entries(model.live)),
 		nowMs: model.nowMs,
 	}
 }
@@ -308,11 +324,45 @@ export const personOf = (
 	}
 }
 
+/** Every link the rows unfurl. */
+const previewsOf = (model: MessageListModel) =>
+	model.entries.flatMap((entry) => (entry._tag === "Row" ? entry.previews : []))
+
+/** Every HTML render the rows draw, as its URL query's args. */
+const renderArgsOf = (model: MessageListModel, channelId: ChannelId) =>
+	model.entries.flatMap((entry) =>
+		entry._tag === "Row"
+			? entry.renders.map((render) => ({ channelId, messageId: entry.key, renderId: render.renderId }))
+			: [],
+	)
+
+/** Replies that stream over a socket: live, and not answered from their cached snapshot. */
+const liveRepliesOf = (model: MessageListModel) =>
+	(model.messages ?? []).flatMap((message) =>
+		message.rich.live !== null && message.rich.live.cached === null
+			? [{ messageId: message.id, channelId: message.channelId }]
+			: [],
+	)
+
 export const MessageList = Hazel.component({
 	name: "MessageList",
 	props: MessageListProps,
 	model: MessageListModel,
 	message: MessageListMessage,
+	queries: {
+		previews: {
+			queryMany: GetLinkPreview,
+			args: ({ props, model }) => unfurlArgs(props.linkPreviewUrl, previewsOf(model)).links,
+		},
+		tweets: {
+			queryMany: GetTweet,
+			args: ({ props, model }) => unfurlArgs(props.linkPreviewUrl, previewsOf(model)).tweets,
+		},
+		renders: {
+			queryMany: GetHtmlRenderUrl,
+			args: ({ props, model }) => renderArgsOf(model, props.channelId),
+		},
+	},
 }).make({
 	init: ({ props }) => ({
 		messages: null,
@@ -335,6 +385,8 @@ export const MessageList = Hazel.component({
 		profile: null,
 		profilePresence: null,
 		menu: null,
+		live: {},
+		fullscreen: null,
 	}),
 	update: {
 		UpdatedMessages: ($, { order, upserts }) => {
@@ -437,7 +489,9 @@ export const MessageList = Hazel.component({
 			$.model.profile === null ? $.model : $.evolve({ profilePresence: () => presence }),
 		PressedEditProfile: ($) =>
 			$.evolve({ profile: () => null }).run(RequestHost.make({ request: { _tag: "EditProfile" } })),
-		PressedLink: ($, { url }) => $.run(RequestHost.make({ request: { _tag: "OpenLink", url } })),
+		// A bot card without a link has an empty url: nothing to open.
+		PressedLink: ($, { url }) =>
+			url === "" ? $.model : $.run(RequestHost.make({ request: { _tag: "OpenLink", url } })),
 		PressedAttachment: ($, { id, attachmentId }) => {
 			const files = rowOf($.model, id)?.row.files ?? []
 			const file = files.find((each) => each.id === attachmentId)
@@ -487,6 +541,20 @@ export const MessageList = Hazel.component({
 					)
 		},
 		PressedMarkRead: ($) => derive({ ...$.model, sinceMs: null }, $.props.userId),
+		ReceivedLiveEvent: ($, { messageId, event }) =>
+			derive(
+				{
+					...$.model,
+					live: {
+						...$.model.live,
+						[messageId]: reduceLive($.model.live[messageId] ?? initialLiveState, event),
+					},
+				},
+				$.props.userId,
+			),
+		PressedRenderFullscreen: ($, { messageId, renderId }) =>
+			$.evolve({ fullscreen: () => ({ messageId, renderId }) }),
+		DismissedRenderFullscreen: ($) => $.evolve({ fullscreen: () => null }),
 		CompletedCommand: ($) => $.model,
 	},
 	subscriptions: ({ props, model }) => {
@@ -536,13 +604,72 @@ export const MessageList = Hazel.component({
 							profilePresenceStream(UserId.make(userId)),
 						),
 					]),
+			// One per streaming reply, so a reply joining or leaving the window leaves the others' sockets alone.
+			...liveRepliesOf(model).map((reply) =>
+				Subscription.make(
+					`live-${reply.messageId}`,
+					[reply.messageId, reply.channelId],
+					([messageId, channelId]) =>
+						liveStream({
+							messageId: MessageId.make(messageId),
+							channelId: ChannelId.make(channelId),
+						}),
+				),
+			),
 		]
 	},
 	view: (h, model) => {
+		/** The row with its unfurled links' cards before its own, as today's URL embeds come first. */
+		const rowData = (entry: RowEntry): Content.MessageRow => {
+			if (entry.previews.length === 0) return entry.row
+			const origin = h.props.linkPreviewUrl
+			const cards = entry.previews.flatMap((request) => {
+				const result =
+					request._tag === "Link"
+						? Option.getOrUndefined(h.queries.previews.get({ origin, url: request.url }))?.result
+						: Option.getOrUndefined(
+								h.queries.tweets.get({ origin, url: request.url, tweetId: request.tweetId }),
+							)?.result
+				const card = unfurlCardOf(request, result)
+				return card === undefined ? [] : [card]
+			})
+			return cards.length === 0
+				? entry.row
+				: { ...entry.row, embeds: [...cards, ...(entry.row.embeds ?? [])] }
+		}
+
+		/** One HTML render's frame: its signed URL as the query has it. */
+		const frame = (messageId: MessageId, render: HtmlRenderRef, mode: "inline" | "fullscreen") => {
+			const result = Option.getOrUndefined(
+				h.queries.renders.get({ channelId: h.props.channelId, messageId, renderId: render.renderId }),
+			)?.result
+			return h
+				.extension(HtmlRender, {
+					src: result?._tag === "Success" ? result.value : null,
+					title: render.title,
+					height: render.height,
+					failed: result?._tag === "Failure" && !result.waiting,
+					mode,
+				})
+				.on("openLink", ({ url }) => MessageListMessage.PressedLink({ url }))
+				.on("fullscreen", () =>
+					MessageListMessage.PressedRenderFullscreen({ messageId, renderId: render.renderId }),
+				)
+				.on("leaveFullscreen", () => MessageListMessage.DismissedRenderFullscreen())
+		}
+
+		// HAZEL-GAP(p4-message-extension-slot): a `message` row has no slot for an extension, so a render is its own list child under the row; the web extension insets itself to the row's content column.
+		const renders = (entry: RowEntry) =>
+			entry.renders.map((render) =>
+				h.stack
+					.key(`${entry.key}:render:${render.renderId}`)
+					.children(frame(entry.key, render, "inline")),
+			)
+
 		const row = (entry: RowEntry) =>
 			h.message
 				.key(entry.key)
-				.row(entry.row)
+				.row(rowData(entry))
 				.grouped(entry.grouped)
 				.pinned(entry.isPinned)
 				.entering(entry.entering)
@@ -571,6 +698,9 @@ export const MessageList = Hazel.component({
 				Unread: ({ key }) => h.listDivider.key(key).kind("unread").label("New"),
 				Row: (rowEntry) => row(rowEntry),
 			})
+		type Child = ReturnType<typeof entry> | ReturnType<typeof renders>[number]
+		const children = (item: Entry): ReadonlyArray<Child> =>
+			item._tag === "Row" ? [entry(item), ...renders(item)] : [entry(item)]
 
 		const fresh =
 			model.messages === null
@@ -617,7 +747,7 @@ export const MessageList = Hazel.component({
 							.on("reachStart", MessageListMessage.ReachedStart())
 							.on("reachEnd", MessageListMessage.ReachedEnd())
 							.overlay(bar)
-							.children(...model.entries.map(entry))
+							.children(...model.entries.flatMap(children))
 
 		const menuRow = model.menu === null ? undefined : rowOf(model, model.menu)
 		const menuSheet = () =>
@@ -652,6 +782,23 @@ export const MessageList = Hazel.component({
 						),
 				)
 
+		const shown = model.fullscreen
+		const shownRender =
+			shown === null
+				? undefined
+				: rowOf(model, shown.messageId)?.renders.find((render) => render.renderId === shown.renderId)
+		// HAZEL-GAP(p4-dialog-fullscreen): today's fullscreen render fills the window less a margin; `dialog` has no size option, so it is the regular dialog.
+		const fullscreenDialog = () =>
+			h.dialog
+				.open(shown !== null && shownRender !== undefined)
+				.title(shownRender?.title ?? "")
+				.on("dismiss", MessageListMessage.DismissedRenderFullscreen())
+				.children(
+					...(shown === null || shownRender === undefined
+						? []
+						: [frame(shown.messageId, shownRender, "fullscreen")]),
+				)
+
 		const profile = model.profile
 		const person = profile === null ? undefined : personOf(model, h.props.userId, profile.userId)
 		return h.stack.children(
@@ -670,6 +817,7 @@ export const MessageList = Hazel.component({
 							}),
 				),
 			menuSheet(),
+			fullscreenDialog(),
 			EmojiPicker(h, {
 				props: { open: model.picker !== null },
 				onEmit: {

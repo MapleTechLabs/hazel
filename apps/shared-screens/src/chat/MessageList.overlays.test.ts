@@ -8,6 +8,7 @@ import { RequestHost, ToggleReaction, TogglePin } from "./live"
 import { MessageList, MessageListMessage } from "./MessageList"
 import type { ChatMessage } from "./rows"
 import { EmojiPicker, EmojiPickerEvents } from "./pickers/EmojiPicker"
+import { noRichParts } from "./rich/embeds"
 
 /** The list's overlays: the hover toolbar and right-click menu, the picker, the profile card, reactions. */
 
@@ -29,7 +30,7 @@ const message = (n: number, authorId: UserId, atMs: number): ChatMessage => ({
 	threadChannelId: null,
 	isPinned: false,
 	pinnedId: null,
-	embeds: [],
+	rich: noRichParts(`message ${n}`),
 })
 
 const person = (userId: UserId, firstName: string, lastName: string, timezone: string | null = null) => ({
@@ -45,7 +46,13 @@ const person = (userId: UserId, firstName: string, lastName: string, timezone: s
 /** Grace wrote first, Ada (the viewer) last, five minutes apart so neither groups. */
 const loaded = () => {
 	const page = [message(2, ada, NOW - 5 * 60_000), message(1, grace, NOW - 10 * 60_000)]
-	const s = Scene.start(MessageList, { channelId, userId: ada, cdnUrl: "https://cdn.test", nowMs: NOW })
+	const s = Scene.start(MessageList, {
+		channelId,
+		userId: ada,
+		cdnUrl: "https://cdn.test",
+		linkPreviewUrl: "https://link-preview.test",
+		nowMs: NOW,
+	})
 	return deliver(
 		deliver(
 			s,

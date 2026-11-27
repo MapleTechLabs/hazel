@@ -10,6 +10,7 @@ import { ClientData, HazelRpc } from "@hazel/client-data"
 import type { ChannelId, UserId } from "@hazel/schema"
 import { Effect, Layer, Option, Stream } from "effect"
 import { messageListLayer } from "./live"
+import { noLiveConnection } from "./rich/live-replies"
 import { MessageList } from "./MessageList"
 // iOS has no picker renderer yet: the reaction picker draws nothing there.
 import { pickerCatalogNone } from "./pickers/catalog"
@@ -45,12 +46,21 @@ export const mountMessageListNative = (
 		console.log(`[channel] mounting #${channel.value.name}`)
 		return yield* Renderer.mount(
 			MessageList,
-			{ channelId: channel.value.id, userId, cdnUrl, nowMs: Date.now() },
+			{
+				channelId: channel.value.id,
+				userId,
+				cdnUrl,
+				linkPreviewUrl: "https://link-preview.hazel.sh",
+				nowMs: Date.now(),
+			},
 			container,
 		).pipe(
 			Effect.provide(
-				messageListLayer(data, rpc, (request) =>
-					console.log(`[channel] request ${JSON.stringify(request)}`),
+				messageListLayer(
+					data,
+					rpc,
+					(request) => console.log(`[channel] request ${JSON.stringify(request)}`),
+					noLiveConnection,
 				).pipe(Layer.provideMerge(pickerCatalogNone)),
 			),
 		)

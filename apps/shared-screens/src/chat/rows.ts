@@ -4,8 +4,11 @@
  * `message` primitive draws. Pure, so the grouping is tested without a host.
  */
 import type { ChannelId, MessageId, UserId } from "@hazel/schema"
+import { BlockKind, RunKind } from "@hazel/ui/vocabulary/content"
 import type { Content, MessageAction } from "@hazel/ui/vocabulary/index"
 import { dateLabel, distanceStrict, formatBytes, formatTime, initialsOf } from "./format"
+import type { HtmlRenderRef, PreviewRequest, RichParts } from "./rich/embeds"
+import { isWaitingForContent, type LiveActorState, liveStateOf } from "./rich/live-replies"
 import { type Names, parseMarkdown, plainLine } from "./rich-text"
 
 /** A message as its query gives it. */
@@ -21,8 +24,8 @@ export interface ChatMessage {
 	readonly isPinned: boolean
 	/** The pin's id, which unpinning names. */
 	readonly pinnedId: string | null
-	/** Link previews and bot cards that carry a url (`message.embeds`). */
-	readonly embeds: ReadonlyArray<Content.Embed>
+	/** Its embeds and the links its text unfurls (`rich/embeds.ts`). */
+	readonly rich: RichParts
 }
 
 export interface ChatUser {
@@ -68,6 +71,8 @@ export interface Lookups {
 	readonly replyTargets: ReadonlyMap<string, Pick<ChatMessage, "authorId" | "content">>
 	/** Custom emoji images by name, for `custom:<name>` reactions. */
 	readonly emojiUrls: ReadonlyMap<string, string>
+	/** What each live reply's socket said so far, by message id. */
+	readonly live: ReadonlyMap<string, LiveActorState>
 	readonly nowMs: number
 }
 
@@ -82,6 +87,10 @@ export interface RowEntry {
 	readonly grouped: boolean
 	readonly entering: boolean
 	readonly row: Content.MessageRow
+	/** The links the view unfurls into cards before the row's own (query results). */
+	readonly previews: ReadonlyArray<PreviewRequest>
+	/** The HTML renders drawn under the row. */
+	readonly renders: ReadonlyArray<HtmlRenderRef>
 }
 
 export type Entry =
@@ -150,16 +159,17 @@ const reactionsOf = (lookups: Lookups, messageId: MessageId) => {
 const IMAGE = /\.(png|jpe?g|gif|webp|avif|heic|svg)$/i
 const VIDEO = /\.(mp4|mov|webm|m4v)$/i
 
-const filesOf = (lookups: Lookups, messageId: MessageId) => {
-	const files = lookups.attachments.get(messageId)
-	if (files === undefined || files.length === 0) return undefined
-	return files.map((file): Content.Attachment => ({
+const filesOf = (lookups: Lookups, messageId: MessageId, pictures: ReadonlyArray<Content.Attachment>) => {
+	const files = (lookups.attachments.get(messageId) ?? []).map((file): Content.Attachment => ({
 		id: file.id,
 		kind: IMAGE.test(file.fileName) ? "image" : VIDEO.test(file.fileName) ? "video" : "file",
 		name: file.fileName,
 		size: formatBytes(file.fileSize),
 		url: file.url,
 	}))
+	// HAZEL-GAP(p4-embed-order): image-only embeds and GIFs show as pictures after the uploads; the renderer draws them before the cards.
+	const all = [...files, ...pictures]
+	return all.length === 0 ? undefined : all
 }
 
 const threadOf = (lookups: Lookups, names: Names, threadChannelId: ChannelId | null) => {
@@ -213,6 +223,22 @@ export const actionsOf = (
 	"copyId",
 ]
 
+/**
+ * The body: the text without the URLs that embed, or a live reply's text so far (it stands in for
+ * the content, as today); its loading line until the reply says anything, then its error.
+ */
+const bodyOf = (message: ChatMessage, lookups: Lookups, names: Names): Content.MessageRow["body"] => {
+	const live = message.rich.live
+	if (live === null) return parseMarkdown(message.rich.displayContent, names)
+	const state = liveStateOf(live.cached, lookups.live.get(message.id))
+	// HAZEL-GAP(p4-message-live): today's loading line has a breathing sparkle and a shimmer, a progress bar runs while it works, the text streams with a blinking cursor and an error is a danger callout; the row's body carries text only.
+	if (isWaitingForContent(state)) return [[BlockKind.paragraph, [[RunKind.emphasis, `${live.loading}...`]]]]
+	const text = parseMarkdown(state.text, names)
+	return state.status === "failed" && state.error !== null
+		? [...text, [BlockKind.paragraph, [[RunKind.strong, "Something went wrong"], ` ${state.error}`]]]
+		: text
+}
+
 /** A message's row data; the header fields are left out on a grouped row. */
 export const messageRow = (message: ChatMessage, grouped: boolean, lookups: Lookups): Content.MessageRow => {
 	const names = namesOf(lookups)
@@ -220,7 +246,7 @@ export const messageRow = (message: ChatMessage, grouped: boolean, lookups: Look
 	const author = displayNameOf(lookups, message.authorId)
 	const isOwn = message.authorId === lookups.currentUserId
 	const reply = replyOf(lookups, names, message.replyToMessageId)
-	const files = filesOf(lookups, message.id)
+	const files = filesOf(lookups, message.id, message.rich.images)
 	const showHeader = !grouped || reply !== undefined
 	return compact({
 		author: showHeader ? author : undefined,
@@ -228,7 +254,7 @@ export const messageRow = (message: ChatMessage, grouped: boolean, lookups: Look
 		avatar: showHeader ? (user?.avatarUrl ?? undefined) : undefined,
 		provider: showHeader && user !== undefined ? providerOf(user) : undefined,
 		time: formatTime(message.createdAtMs),
-		body: parseMarkdown(message.content, names),
+		body: bodyOf(message, lookups, names),
 		reactions: reactionsOf(lookups, message.id),
 		quick: [...QUICK_EMOJIS],
 		edited:
@@ -237,7 +263,7 @@ export const messageRow = (message: ChatMessage, grouped: boolean, lookups: Look
 				: undefined,
 		reply,
 		files,
-		embeds: message.embeds.length === 0 ? undefined : message.embeds,
+		embeds: message.rich.cards.length === 0 ? undefined : message.rich.cards,
 		thread: threadOf(lookups, names, message.threadChannelId),
 		actions: actionsOf(isOwn, message.isPinned, files?.some((file) => file.kind === "image") === true),
 	})
@@ -269,7 +295,9 @@ const isSameRow = (a: RowEntry, b: RowEntry) =>
 	a.entering === b.entering &&
 	a.isPinned === b.isPinned &&
 	a.threadChannelId === b.threadChannelId &&
-	sameJson(a.row, b.row)
+	sameJson(a.row, b.row) &&
+	sameJson(a.previews, b.previews) &&
+	sameJson(a.renders, b.renders)
 
 /**
  * Oldest-first entries from the window (`messagesNewestFirst`, the query's order): a date divider
@@ -319,6 +347,8 @@ export const toEntries = (
 			grouped,
 			entering: old?.entering ?? entering.has(message.id),
 			row: messageRow(message, grouped, lookups),
+			previews: message.rich.previews,
+			renders: message.rich.renders,
 		}
 		entries.push(
 			old === undefined

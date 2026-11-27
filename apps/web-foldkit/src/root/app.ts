@@ -18,6 +18,7 @@ import { chatChannelIdOf, isPublicRoute, orgSectionOf, orgSlugOf, titleOf } from
 import type { CurrentUser, Organization } from "../session"
 import { hotkeyLabel } from "../shell/channels-sidebar/hotkey-label"
 import { appError, appLoader, organizationNotFound } from "../shell/layouts"
+import { LINK_PREVIEW_URL } from "../chat/unfurl"
 import { ShellActivity, ShellChannelSidebar, ShellDms, ShellMessageList } from "./children"
 import { ShellFilesPage, ShellMediaPage } from "./children"
 import { AdoptRegion, RunFoldkitHost } from "./foldkit"
@@ -182,6 +183,7 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 								channelId,
 								userId: data.user.id,
 								cdnUrl: currentServer().cdn ?? "https://cdn.hazel.sh",
+								linkPreviewUrl: LINK_PREVIEW_URL,
 								nowMs: model.nowMs,
 							},
 						}),

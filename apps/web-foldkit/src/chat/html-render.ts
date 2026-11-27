@@ -234,7 +234,7 @@ export const themeFromTokens = (
 	return { appearance, variables }
 }
 
-const readDocumentTheme = (): HtmlRenderTheme => {
+export const readDocumentTheme = (): HtmlRenderTheme => {
 	const root = document.documentElement
 	const style = getComputedStyle(root)
 	return themeFromTokens(root.classList.contains("dark") ? "dark" : "light", (token) =>
@@ -558,17 +558,21 @@ const bridgeFrames = (): ReadonlyArray<BridgeFrame> =>
 const LINK_COOLDOWN_MS = 5_000
 let lastLinkAt = Number.NEGATIVE_INFINITY
 
+/** Takes this window's one link, if it is free (the list's frames and these share it). */
+export const takeLinkSlot = () => {
+	const now = performance.now()
+	if (now - lastLinkAt < LINK_COOLDOWN_MS) return false
+	lastLinkAt = now
+	return true
+}
+
 /** The frames' `postMessage`s, as Messages. Without the activation API, no link opens. */
 export const bridgeStream: Stream.Stream<Message> = Dom.streamFromEventFilterMap({
 	target: () => window,
 	type: "message",
 	filterMapEvent: (event) => {
 		const message = frameMessageOf(event, bridgeFrames(), navigator.userActivation?.isActive ?? false)
-		if (message?._tag === "RequestedOpenLink") {
-			const now = performance.now()
-			if (now - lastLinkAt < LINK_COOLDOWN_MS) return Option.none()
-			lastLinkAt = now
-		}
+		if (message?._tag === "RequestedOpenLink" && !takeLinkSlot()) return Option.none()
 		return Option.fromNullishOr(message)
 	},
 })
@@ -668,18 +672,21 @@ const POINTER_BACK_EVENTS = ["pointermove", "pointerover"] as const
  * A frame also loses the pointer while its list scrolls (`styles.css`) and gets it back, unmoved,
  * when the scroll settles: the app then only hears it come over the frame's element.
  */
+export const markPointerOutside = () => {
+	const root = document.documentElement
+	if (root.hasAttribute(POINTER_OUTSIDE_ATTRIBUTE)) return
+	root.setAttribute(POINTER_OUTSIDE_ATTRIBUTE, "")
+	const clear = () => {
+		root.removeAttribute(POINTER_OUTSIDE_ATTRIBUTE)
+		for (const type of POINTER_BACK_EVENTS) window.removeEventListener(type, clear)
+	}
+	for (const type of POINTER_BACK_EVENTS) window.addEventListener(type, clear)
+}
+
 export const MarkPointerOutside = Command.define("MarkPointerOutside", {
 	messages: [Message.CompletedMarkPointerOutside],
 	execute: Effect.sync(() => {
-		const root = document.documentElement
-		if (!root.hasAttribute(POINTER_OUTSIDE_ATTRIBUTE)) {
-			root.setAttribute(POINTER_OUTSIDE_ATTRIBUTE, "")
-			const clear = () => {
-				root.removeAttribute(POINTER_OUTSIDE_ATTRIBUTE)
-				for (const type of POINTER_BACK_EVENTS) window.removeEventListener(type, clear)
-			}
-			for (const type of POINTER_BACK_EVENTS) window.addEventListener(type, clear)
-		}
+		markPointerOutside()
 		return Message.CompletedMarkPointerOutside()
 	}),
 })

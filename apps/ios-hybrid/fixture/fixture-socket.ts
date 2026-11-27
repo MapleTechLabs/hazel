@@ -115,7 +115,11 @@ export interface FixtureWebSocketOptions {
 	 * `LoadOlder` the ones before its cursor. @default undefined (whole history at once)
 	 */
 	readonly pageSize?: number
+	/** A live reply socket's frames (`/live/<messageId>`), sent on open; the socket then stays quiet. */
+	readonly live?: (messageId: string) => ReadonlyArray<object> | undefined
 }
+
+const LIVE_PATH = /\/live\/([^/?]+)/
 
 interface Cursor {
 	readonly createdAt: string
@@ -304,6 +308,10 @@ export const makeFixtureWebSocket = (options: FixtureWebSocketOptions = {}): Web
 				}
 				this.readyState = OPEN
 				this.onopen?.({})
+				const live = LIVE_PATH.exec(url)?.[1]
+				if (live !== undefined)
+					for (const frame of options.live?.(decodeURIComponent(live)) ?? [])
+						this.deliver(JSON.stringify(frame))
 			})
 		}
 

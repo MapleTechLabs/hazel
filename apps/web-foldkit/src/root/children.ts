@@ -21,6 +21,9 @@ import { MarkAllNotificationsRead, SectionSidebar } from "@hazel/shared-screens/
 import type { ChannelId } from "@hazel/schema"
 import { Effect, Layer } from "effect"
 import { clientData } from "~/db/client"
+// The list's HTML renders draw through this web extension.
+import "../chat/html-render-extension"
+import { liveConnection } from "../chat/live-state"
 import { AppRoute, organizationRoute } from "../route"
 import { publish } from "./bus"
 import { pickersWebLayer } from "./pickers"
@@ -57,7 +60,12 @@ export const ShellMessageList = Component.provide(
 	MessageList,
 	Layer.unwrap(
 		Effect.map(Effect.service(HazelRpc), (rpc) =>
-			messageListLayer(clientData, rpc, (request) => publish({ _tag: "MessageList", request })),
+			messageListLayer(
+				clientData,
+				rpc,
+				(request) => publish({ _tag: "MessageList", request }),
+				liveConnection,
+			),
 		),
 	).pipe(Layer.provideMerge(pickersWebLayer)),
 )
