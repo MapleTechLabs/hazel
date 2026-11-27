@@ -39,7 +39,10 @@ const toMember = (user: UserRow, provider: "slack" | "discord" | null): MentionM
  * The channel's members, and in a channel synced to Slack or Discord that platform's people too
  * (the shadow users chat sync made, who join no channel), so a message can ping them there.
  */
-export const membersStream = <M>(channelId: ChannelId, toMessage: (members: ReadonlyArray<MentionMember>) => M) =>
+export const membersStream = <M>(
+	channelId: ChannelId,
+	toMessage: (members: ReadonlyArray<MentionMember>) => M,
+) =>
 	withData((data) => {
 		const c = data.collections
 		const members = data.liveQueryStream<{ user?: UserRow }, ReadonlyArray<UserRow>>(
@@ -94,7 +97,10 @@ export const membersStream = <M>(channelId: ChannelId, toMessage: (members: Read
 	})
 
 /** The mentionable bots installed in the organization. */
-export const botsStream = <M>(organizationId: OrganizationId, toMessage: (bots: ReadonlyArray<MentionBot>) => M) =>
+export const botsStream = <M>(
+	organizationId: OrganizationId,
+	toMessage: (bots: ReadonlyArray<MentionBot>) => M,
+) =>
 	liveQuery<
 		{ userId: UserId; name: string; description?: string | null; user?: { avatarUrl?: string | null } },
 		M
@@ -105,7 +111,9 @@ export const botsStream = <M>(organizationId: OrganizationId, toMessage: (bots: 
 				.innerJoin({ bot: data.collections.botCollection }, ({ installation, bot }) =>
 					eq(installation.botId, bot.id),
 				)
-				.innerJoin({ user: data.collections.userCollection }, ({ bot, user }) => eq(bot.userId, user.id))
+				.innerJoin({ user: data.collections.userCollection }, ({ bot, user }) =>
+					eq(bot.userId, user.id),
+				)
 				.where(({ installation, bot }) =>
 					and(
 						eq(installation.organizationId, organizationId),
@@ -149,11 +157,16 @@ export const commandsStream = <M>(
 		(data) => (q) =>
 			q
 				.from({ command: data.collections.botCommandCollection })
-				.innerJoin({ bot: data.collections.botCollection }, ({ command, bot }) => eq(command.botId, bot.id))
-				.innerJoin({ installation: data.collections.botInstallationCollection }, ({ bot, installation }) =>
-					eq(bot.id, installation.botId),
+				.innerJoin({ bot: data.collections.botCollection }, ({ command, bot }) =>
+					eq(command.botId, bot.id),
 				)
-				.innerJoin({ user: data.collections.userCollection }, ({ bot, user }) => eq(bot.userId, user.id))
+				.innerJoin(
+					{ installation: data.collections.botInstallationCollection },
+					({ bot, installation }) => eq(bot.id, installation.botId),
+				)
+				.innerJoin({ user: data.collections.userCollection }, ({ bot, user }) =>
+					eq(bot.userId, user.id),
+				)
 				.where(({ command, installation, bot }) =>
 					and(
 						eq(installation.organizationId, organizationId),
@@ -190,7 +203,10 @@ export const commandsStream = <M>(
 	)
 
 /** The organization's user groups (`@handle`) with how many current members each has. */
-export const groupsStream = <M>(organizationId: OrganizationId, toMessage: (groups: ReadonlyArray<MentionGroup>) => M) =>
+export const groupsStream = <M>(
+	organizationId: OrganizationId,
+	toMessage: (groups: ReadonlyArray<MentionGroup>) => M,
+) =>
 	withData((data) => {
 		const c = data.collections
 		const groups = data.liveQueryStream<
@@ -200,7 +216,9 @@ export const groupsStream = <M>(organizationId: OrganizationId, toMessage: (grou
 			(q) =>
 				q
 					.from({ group: c.userGroupCollection })
-					.where(({ group }) => and(eq(group.organizationId, organizationId), isNull(group.deletedAt))),
+					.where(({ group }) =>
+						and(eq(group.organizationId, organizationId), isNull(group.deletedAt)),
+					),
 			(rows) => rows,
 		)
 		const members = data.liveQueryStream<
@@ -214,7 +232,9 @@ export const groupsStream = <M>(organizationId: OrganizationId, toMessage: (grou
 			(q) =>
 				q
 					.from({ member: c.organizationMemberCollection })
-					.where(({ member }) => and(eq(member.organizationId, organizationId), isNull(member.deletedAt)))
+					.where(({ member }) =>
+						and(eq(member.organizationId, organizationId), isNull(member.deletedAt)),
+					)
 					.select(({ member }) => ({ userId: member.userId })),
 			(rows) => new Set(rows.map((row) => row.userId)),
 		)
@@ -309,7 +329,11 @@ export const typingStream = <M>(
 	channelId: ChannelId,
 	userId: UserId,
 	toMessage: (
-		typing: ReadonlyArray<{ readonly name: string; readonly isSelf: boolean; readonly lastTypedMs: number }>,
+		typing: ReadonlyArray<{
+			readonly name: string
+			readonly isSelf: boolean
+			readonly lastTypedMs: number
+		}>,
 	) => M,
 ) =>
 	liveQuery<{ lastTyped: number; member?: { userId: UserId }; user?: { firstName: string } }, M>(
@@ -319,7 +343,9 @@ export const typingStream = <M>(
 				.innerJoin({ member: data.collections.channelMemberCollection }, ({ typing, member }) =>
 					eq(typing.memberId, member.id),
 				)
-				.innerJoin({ user: data.collections.userCollection }, ({ member, user }) => eq(member.userId, user.id))
+				.innerJoin({ user: data.collections.userCollection }, ({ member, user }) =>
+					eq(member.userId, user.id),
+				)
 				.where(({ typing }) => eq(typing.channelId, channelId))
 				.orderBy(({ typing }) => typing.lastTyped, "desc")
 				.limit(10)

@@ -3,6 +3,7 @@ import { ChannelCustomerRow } from "../../../customers/channels"
 import { CustomerAuthorInfo } from "../../../customers/chat-authors"
 import { ChannelMember } from "@hazel/domain/models"
 import { ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
+import { ComposerNotice } from "@hazel/shared-screens/chat/composer/host"
 import { Schema } from "effect"
 import { File, type Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
@@ -11,9 +12,7 @@ import { CommonReason } from "~/lib/error-messages"
 import * as HtmlRender from "../../../chat/html-render"
 import * as Live from "../../../chat/live-state"
 import * as Unfurl from "../../../chat/unfurl"
-import * as Draft from "../../../composer/draft"
 import * as MessageList from "../../../mount/message-list"
-import type { EditorRegistry } from "../../../editor/registry"
 import type { HazelApiClient, HazelRpc } from "../../../rpc"
 import type { PageOutMessage } from "../../out-message"
 import {
@@ -30,7 +29,6 @@ import {
 	ReplyTarget,
 	ThreadChannelInfo,
 	ThreadMessageInfo,
-	TypingInfo,
 	UserGroupInfo,
 	UserInfo,
 } from "../lookups"
@@ -61,33 +59,15 @@ export type Tab = typeof Tab.Type
 export const ThreadCreation = Schema.Literals(["Creating", "Created"])
 export type ThreadCreation = typeof ThreadCreation.Type
 
-/** `useChatThread`: the thread panel beside the channel, with everything that lives and dies with it. */
-/**
- * A composer action held while its thread is created. A bot command keeps what was submitted (the
- * command and its arguments): it runs only if the command field still holds exactly that.
- */
-export const HeldThreadMessage = Schema.Struct({
-	message: Draft.Message,
-	command: Schema.NullOr(
-		Schema.Struct({ id: Schema.String, values: Schema.Record(Schema.String, Schema.String) }),
-	),
-})
-export type HeldThreadMessage = typeof HeldThreadMessage.Type
+/** `useChatThread`: the thread panel beside the channel; its composer is the shared one (`root/composer.ts`). */
 
 export const ThreadPanel = Schema.Struct({
 	threadChannelId: ChannelId,
 	/** The message the thread hangs off. */
 	messageId: MessageId,
-	/** The panel's own composer draft. */
-	draft: Draft.Model,
-	/** The signed-in user's membership of the thread (its typing indicator). */
+	/** The signed-in user's membership of the thread (whether they follow it). */
 	memberId: Schema.NullOr(ChannelMemberId),
 	creation: ThreadCreation,
-	/**
-	 * What the composer did while the thread was still being created (a send, files picked, pasted
-	 * or dropped), in order: played back once it exists.
-	 */
-	held: Schema.Array(HeldThreadMessage),
 	/** "Generate thread name" is running for this thread. */
 	isNaming: Schema.Boolean,
 	/** The thread's messages, oldest first. */
@@ -139,10 +119,6 @@ export const Model = Schema.Struct({
 	customer: Schema.NullOr(ChannelCustomerRow),
 	/** Top-level messages of the (linked) channel that already have a support issue. */
 	issueRootIds: Schema.Array(MessageId),
-	typing: Schema.Array(TypingInfo),
-	typingNowMs: Schema.Finite,
-	/** First names of the other members typing now (`useTypingIndicators`), derived in `update`. */
-	typingNames: Schema.Array(Schema.String),
 	/** Ids the reply and thread lookups select, kept stable while the window does not change them. */
 	replyIds: Schema.Array(MessageId),
 	threadIds: Schema.Array(ChannelId),
@@ -164,8 +140,6 @@ export const Model = Schema.Struct({
 	focusedMessageId: Schema.NullOr(MessageId),
 	pendingJump: Schema.NullOr(PendingJump),
 	overlays: Overlays.Model,
-	/** The channel composer's draft (`ChatProvider` + `ComposerEditor` state). */
-	draft: Draft.Model,
 	threadPanel: Schema.NullOr(ThreadPanel),
 	/** The thread panel's width in px, the same for every thread; null until read from storage. */
 	threadPanelWidth: Schema.NullOr(Schema.Finite),
@@ -259,15 +233,11 @@ export const Message = defineMessageUnion({
 	UpdatedThreadPanelMessages: { threadChannelId: ChannelId, messages: Schema.Array(ChatMessage) },
 	/** The open thread's pins; tagged with the thread they were queried for. */
 	UpdatedThreadPanelPins: { threadChannelId: ChannelId, pins: Schema.Array(PinnedInfo) },
-	UpdatedTyping: { typing: Schema.Array(TypingInfo) },
-	TickedTypingClock: { nowMs: Schema.Finite },
 	GotListMessage: { message: MessageList.Message },
 	GotUnfurlMessage: { message: Unfurl.Message },
 	GotLiveMessage: { message: Live.Message },
 	GotHtmlRenderMessage: { message: HtmlRender.Message },
 	GotOverlaysMessage: { message: Overlays.Message },
-	GotDraftMessage: { message: Draft.Message },
-	GotThreadDraftMessage: { message: Draft.Message },
 	GotActionMessage: { message: ActionMessage },
 	UpdatedThreadMember: { threadChannelId: ChannelId, memberId: Schema.NullOr(ChannelMemberId) },
 	ClickedThreadPreview: { threadChannelId: ChannelId, messageId: MessageId },
@@ -318,8 +288,9 @@ export const Message = defineMessageUnion({
 	CompletedPublishPinsHotkey: {},
 	SucceededDeleteMessageNow: {},
 	FailedDeleteMessageNow: { reason: DeleteMessageNowFailure },
-	/** The window lost focus or the tab was hidden: typing stops. */
-	LeftWindow: {},
+	/** A composer told the page something (`root/composer.ts`): a send, Escape, Shift+Tab. */
+	ReceivedComposerNotice: { notice: ComposerNotice },
+	CompletedRequestComposer: {},
 	ChangedWindowFocus: { isFocused: Schema.Boolean },
 	SucceededClearNotifications: { channelId: ChannelId },
 	/** The open thread was marked read (the panel reads it as it shows it); a failure is left be. */
@@ -333,5 +304,5 @@ export type PageReturn = Update.ReturnWithOutMessage<
 	Model,
 	Message,
 	PageOutMessage,
-	HazelRpc | HazelApiClient | EditorRegistry
+	HazelRpc | HazelApiClient
 >

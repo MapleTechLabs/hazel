@@ -209,8 +209,11 @@ export class FocusField extends Command.Service<FocusField>()("hazel/composer/Fo
 	success: Component.Noop,
 }) {
 	static readonly layer = this.toLayer(
-		Effect.map(Effect.service(Hazel.Host), (host) => ({ end }) =>
-			withField(host, (host, node) => host.select(node, { start: end, end })),
+		Effect.map(
+			Effect.service(Hazel.Host),
+			(host) =>
+				({ end }) =>
+					withField(host, (host, node) => host.select(node, { start: end, end })),
 		),
 	)
 }
@@ -221,7 +224,10 @@ export class BlurField extends Command.Service<BlurField>()("hazel/composer/Blur
 	success: Component.Noop,
 }) {
 	static readonly layer = this.toLayer(
-		Effect.map(Effect.service(Hazel.Host), (host) => () => withField(host, (host, node) => host.blur(node))),
+		Effect.map(
+			Effect.service(Hazel.Host),
+			(host) => () => withField(host, (host, node) => host.blur(node)),
+		),
 	)
 }
 
@@ -230,8 +236,9 @@ export class PickFiles extends Command.Service<PickFiles>()("hazel/composer/Pick
 	success: ChannelComposerMessage,
 }) {
 	static readonly layer = this.toLayer(
-		Effect.map(Effect.service(ComposerFiles), (files) => () =>
-			Effect.map(files.pick, (picked) => M.AddedFiles({ files: picked })),
+		Effect.map(
+			Effect.service(ComposerFiles),
+			(files) => () => Effect.map(files.pick, (picked) => M.AddedFiles({ files: picked })),
 		),
 	)
 }
@@ -241,8 +248,9 @@ export class TakeDroppedFiles extends Command.Service<TakeDroppedFiles>()("hazel
 	success: ChannelComposerMessage,
 }) {
 	static readonly layer = this.toLayer(
-		Effect.map(Effect.service(ComposerFiles), (files) => () =>
-			Effect.map(files.dropped, (dropped) => M.AddedFiles({ files: dropped })),
+		Effect.map(
+			Effect.service(ComposerFiles),
+			(files) => () => Effect.map(files.dropped, (dropped) => M.AddedFiles({ files: dropped })),
 		),
 	)
 }
@@ -252,8 +260,13 @@ export class ReleaseFiles extends Command.Service<ReleaseFiles>()("hazel/compose
 	success: Component.Noop,
 }) {
 	static readonly layer = this.toLayer(
-		Effect.map(Effect.service(ComposerFiles), (files) => ({ localIds }) =>
-			Effect.forEach(localIds, files.release, { discard: true }).pipe(Effect.as(Component.noop)),
+		Effect.map(
+			Effect.service(ComposerFiles),
+			(files) =>
+				({ localIds }) =>
+					Effect.forEach(localIds, files.release, { discard: true }).pipe(
+						Effect.as(Component.noop),
+					),
 		),
 	)
 }
@@ -263,11 +276,14 @@ export class SaveDraft extends Command.Service<SaveDraft>()("hazel/composer/Save
 	success: Component.Noop,
 }) {
 	static readonly layer = this.toLayer(
-		Effect.map(Effect.service(Drafts), (drafts) => ({ channelId, draft }) =>
-			Effect.sync(() => {
-				drafts.write(channelId, draft)
-				return Component.noop
-			}),
+		Effect.map(
+			Effect.service(Drafts),
+			(drafts) =>
+				({ channelId, draft }) =>
+					Effect.sync(() => {
+						drafts.write(channelId, draft)
+						return Component.noop
+					}),
 		),
 	)
 }
@@ -278,17 +294,22 @@ export class NotifyHost extends Command.Service<NotifyHost>()("hazel/composer/No
 	success: Component.Noop,
 }) {
 	static readonly layer = this.toLayer(
-		Effect.map(Effect.service(ComposerHost), (host) => ({ notice }) =>
-			host
-				.notify(notice as Parameters<typeof host.notify>[0])
-				.pipe(Effect.as(Component.noop)),
+		Effect.map(
+			Effect.service(ComposerHost),
+			(host) =>
+				({ notice }) =>
+					host.notify(notice as Parameters<typeof host.notify>[0]).pipe(Effect.as(Component.noop)),
 		),
 	)
 }
 
 const sendFailureOf = (error: unknown): typeof SendFailure.Type => {
 	const tag = typeof error === "object" && error !== null && "_tag" in error ? error._tag : undefined
-	return tag === "ChannelNotFoundError" ? "ChannelNotFound" : tag === "SyncError" ? "SyncDelayed" : "Unavailable"
+	return tag === "ChannelNotFoundError"
+		? "ChannelNotFound"
+		: tag === "SyncError"
+			? "SyncDelayed"
+			: "Unavailable"
 }
 
 /** `sendMessageAction` (optimistic): the row shows at once and rolls back if the server refuses. */
@@ -311,7 +332,11 @@ export class SendMessage extends Command.Service<SendMessage>()("hazel/composer/
 			const rpc = yield* HazelRpc
 			return ({ mode, uploads, restore, ...variables }) =>
 				data.actions
-					.sendMessageAction({ ...variables, threadChannelId: null, attachmentIds: [...variables.attachmentIds] })
+					.sendMessageAction({
+						...variables,
+						threadChannelId: null,
+						attachmentIds: [...variables.attachmentIds],
+					})
 					.pipe(
 						Effect.provideService(HazelRpc, rpc),
 						Effect.match({
@@ -352,26 +377,32 @@ export class EditMessage extends Command.Service<EditMessage>()("hazel/composer/
 	)
 }
 
-export class ExecuteBotCommand extends Command.Service<ExecuteBotCommand>()("hazel/composer/ExecuteBotCommand", {
-	args: {
-		orgId: OrganizationId,
-		botId: BotCommand.fields.botId,
-		commandName: Schema.String,
-		botName: Schema.String,
-		channelId: ChannelId,
-		arguments: Schema.Array(Schema.Struct({ name: Schema.String, value: Schema.String })),
+export class ExecuteBotCommand extends Command.Service<ExecuteBotCommand>()(
+	"hazel/composer/ExecuteBotCommand",
+	{
+		args: {
+			orgId: OrganizationId,
+			botId: BotCommand.fields.botId,
+			commandName: Schema.String,
+			botName: Schema.String,
+			channelId: ChannelId,
+			arguments: Schema.Array(Schema.Struct({ name: Schema.String, value: Schema.String })),
+		},
+		success: ChannelComposerMessage,
 	},
-	success: ChannelComposerMessage,
-}) {
+) {
 	static readonly layer = this.toLayer(
-		Effect.map(Effect.service(BotCommands), (bots) => ({ botName, ...args }) =>
-			bots.execute(args).pipe(
-				Effect.match({
-					onSuccess: () => M.SucceededExecuteBotCommand({ name: args.commandName }),
-					onFailure: (reason) =>
-						M.FailedExecuteBotCommand({ name: args.commandName, botName, reason }),
-				}),
-			),
+		Effect.map(
+			Effect.service(BotCommands),
+			(bots) =>
+				({ botName, ...args }) =>
+					bots.execute(args).pipe(
+						Effect.match({
+							onSuccess: () => M.SucceededExecuteBotCommand({ name: args.commandName }),
+							onFailure: (reason) =>
+								M.FailedExecuteBotCommand({ name: args.commandName, botName, reason }),
+						}),
+					),
 		),
 	)
 }
@@ -384,18 +415,24 @@ export class SendTypingHeartbeat extends Command.Service<SendTypingHeartbeat>()(
 	},
 ) {
 	static readonly layer = this.toLayer(
-		Effect.map(Effect.service(HazelRpc), (rpc) => ({ channelId, memberId, sessionId }) =>
-			Effect.gen(function* () {
-				const lastTyped = yield* Clock.currentTimeMillis
-				const response = yield* rpc(
-					"typingIndicator.create",
-					new CreateTypingIndicatorPayload({ channelId, memberId, lastTyped }),
-				)
-				return M.SucceededSendTypingHeartbeat({ sessionId, indicator: { id: response.data.id, channelId } })
-			}).pipe(
-				// BOUNDARY: a lost heartbeat only means the indicator shows a little later.
-				Effect.catchCause(() => Effect.succeed(M.FailedSendTypingHeartbeat())),
-			),
+		Effect.map(
+			Effect.service(HazelRpc),
+			(rpc) =>
+				({ channelId, memberId, sessionId }) =>
+					Effect.gen(function* () {
+						const lastTyped = yield* Clock.currentTimeMillis
+						const response = yield* rpc(
+							"typingIndicator.create",
+							new CreateTypingIndicatorPayload({ channelId, memberId, lastTyped }),
+						)
+						return M.SucceededSendTypingHeartbeat({
+							sessionId,
+							indicator: { id: response.data.id, channelId },
+						})
+					}).pipe(
+						// BOUNDARY: a lost heartbeat only means the indicator shows a little later.
+						Effect.catchCause(() => Effect.succeed(M.FailedSendTypingHeartbeat())),
+					),
 		),
 	)
 }
@@ -409,8 +446,9 @@ export class DeleteTypingIndicator extends Command.Service<DeleteTypingIndicator
 	{ args: Typing.Indicator.fields, success: Component.Noop },
 ) {
 	static readonly layer = this.toLayer(
-		Effect.map(Effect.service(HazelRpc), (rpc) => (indicator) =>
-			deleteIndicator(rpc, indicator).pipe(Effect.as(Component.noop)),
+		Effect.map(
+			Effect.service(HazelRpc),
+			(rpc) => (indicator) => deleteIndicator(rpc, indicator).pipe(Effect.as(Component.noop)),
 		),
 	)
 }
@@ -480,7 +518,9 @@ const typingCommands = (props: Props, model: Model, step: Typing.TypingStep): Re
 			case "WaitTimeout":
 				return [WaitForTypingTimeout.make({ version: effect.version })]
 			case "Delete":
-				return effect.indicator.id === model.typing.indicator?.id ? [] : [DeleteTypingIndicator.make(effect.indicator)]
+				return effect.indicator.id === model.typing.indicator?.id
+					? []
+					: [DeleteTypingIndicator.make(effect.indicator)]
 		}
 	})
 
@@ -506,7 +546,10 @@ const botCommandText = (reason: BotCommandFailure, name: string, botName: string
 			: reason === "CommandNotFound"
 				? { title: `Command /${name} not found`, description: null }
 				: reason === "ExecutionFailed"
-					? { title: `/${name} failed`, description: "The bot reported an error running the command." }
+					? {
+							title: `/${name} failed`,
+							description: "The bot reported an error running the command.",
+						}
 					: { title: "Service temporarily unavailable", description: null }
 
 /** The longest excerpt of a failed message a toast quotes. */
@@ -620,7 +663,9 @@ const submit = (s: S, props: Props, raw: string): S => {
 	if (isUploading(model.uploads)) return s
 	if (model.mode._tag === "Editing") {
 		const { messageId, hadText } = model.mode
-		const left = s.evolve({ mode: plain, draft: TextField.set(model.draft, "") }).run(save(props, "", plain))
+		const left = s
+			.evolve({ mode: plain, draft: TextField.set(model.draft, "") })
+			.run(save(props, "", plain))
 		// An edit emptied of its text deletes the message, once confirmed (Discord).
 		if (content === "")
 			return hadText ? left.run(OpenModal.make({ modal: { _tag: "DeleteMessage", messageId } })) : s
@@ -666,7 +711,9 @@ const pick = (s: S, props: Props, id: string): S => {
 			.run(save(props, text, s.model.mode))
 	}
 	const text = replaceTrigger(s.model.draft.text, trigger, `${option.pick.markdown} `)
-	return s.evolve({ ...closed, draft: TextField.set(s.model.draft, text) }).run(save(props, text, s.model.mode))
+	return s
+		.evolve({ ...closed, draft: TextField.set(s.model.draft, text) })
+		.run(save(props, text, s.model.mode))
 }
 
 // ---------------------------------------------------------------------------
@@ -729,20 +776,27 @@ export const ChannelComposerNoDeps = Hazel.component({
 		HoveredSuggestion: ($, { id }) => $.evolve({ active: id }),
 		// Up in an empty composer edits the user's last message here.
 		PressedEditLast: ($) =>
-			$.model.lastOwn === null ? $.model : startEditing($, $.props, $.model.lastOwn.id, $.model.lastOwn.content),
+			$.model.lastOwn === null
+				? $.model
+				: startEditing($, $.props, $.model.lastOwn.id, $.model.lastOwn.content),
 		// The bar's close, or Escape while replying or editing: an edit leaves its text, a reply keeps it.
 		CancelledContext: ($) =>
 			$.model.mode._tag === "Editing"
-				? $.evolve({ mode: plain, draft: TextField.set($.model.draft, "") }).run(save($.props, "", plain))
+				? $.evolve({ mode: plain, draft: TextField.set($.model.draft, "") }).run(
+						save($.props, "", plain),
+					)
 				: $.evolve({ mode: plain }).run(save($.props, $.model.draft.text, plain)),
 		PressedEscape: ($) =>
 			$.model.command !== null
 				? $.evolve(emptyCommand).run(FocusField.make({ end: $.model.draft.text.length }))
 				: $.run(NotifyHost.make({ notice: { _tag: "Escaped", channelId: $.props.channelId } })),
 		LeftComposer: ($) =>
-			$.run(BlurField.make({})).run(NotifyHost.make({ notice: { _tag: "Left", channelId: $.props.channelId } })),
+			$.run(BlurField.make({})).run(
+				NotifyHost.make({ notice: { _tag: "Left", channelId: $.props.channelId } }),
+			),
 		DroppedFiles: ($) => $.run(TakeDroppedFiles.make({})),
-		PressedAttach: ($) => (currentUpload($.model.uploads) === undefined ? $.run(PickFiles.make({})) : $.model),
+		PressedAttach: ($) =>
+			currentUpload($.model.uploads) === undefined ? $.run(PickFiles.make({})) : $.model,
 		AddedFiles: ($, { files }) =>
 			files.length === 0 ? $.model : $.evolve({ uploads: (all) => [...all, ...files.map(uploadOf)] }),
 		PressedRemoveAttachment: ($, { id }) =>
@@ -752,11 +806,15 @@ export const ChannelComposerNoDeps = Hazel.component({
 		PressedRetryAttachment: ($, { id }) =>
 			$.evolve({
 				uploads: (all) =>
-					all.map((upload) => (upload.localId === id ? { ...upload, failed: false, progress: 0 } : upload)),
+					all.map((upload) =>
+						upload.localId === id ? { ...upload, failed: false, progress: 0 } : upload,
+					),
 			}),
 		ReceivedUploadEvent: ($, { localId, event }) => {
 			const change = (f: (upload: Upload) => Upload) =>
-				$.evolve({ uploads: (all) => all.map((upload) => (upload.localId === localId ? f(upload) : upload)) })
+				$.evolve({
+					uploads: (all) => all.map((upload) => (upload.localId === localId ? f(upload) : upload)),
+				})
 			switch (event._tag) {
 				case "Progressed":
 					return change((upload) => ({ ...upload, progress: event.progress }))
@@ -772,7 +830,9 @@ export const ChannelComposerNoDeps = Hazel.component({
 						? $.evolve({ uploads: (all) => all.filter((upload) => upload.localId !== localId) })
 								.run(ReleaseFiles.make({ localIds: [localId] }))
 								.run(toast("error", text.title, text.description))
-						: change((upload) => ({ ...upload, failed: true })).run(toast("error", text.title, text.description))
+						: change((upload) => ({ ...upload, failed: true })).run(
+								toast("error", text.title, text.description),
+							)
 				}
 			}
 		},
@@ -790,10 +850,14 @@ export const ChannelComposerNoDeps = Hazel.component({
 		RequestedCloseGifPicker: ($) => $.evolve({ picker: "none" }),
 		ChangedCommandField: ($, { name, payload }) =>
 			$.evolve({
-				fields: (fields) => ({ ...fields, [name]: TextField.changed(fields[name] ?? TextField.empty, payload) }),
+				fields: (fields) => ({
+					...fields,
+					[name]: TextField.changed(fields[name] ?? TextField.empty, payload),
+				}),
 			}),
 		PressedExecuteCommand: ($) => executeCommand($, $.props),
-		PressedCancelCommand: ($) => $.evolve(emptyCommand).run(FocusField.make({ end: $.model.draft.text.length })),
+		PressedCancelCommand: ($) =>
+			$.evolve(emptyCommand).run(FocusField.make({ end: $.model.draft.text.length })),
 		SucceededSendMessage: ($, { localIds }) =>
 			$.run(
 				NotifyHost.make({ notice: { _tag: "Sent", channelId: $.props.channelId } }),
@@ -802,10 +866,12 @@ export const ChannelComposerNoDeps = Hazel.component({
 		// Restore what the optimistic send cleared, then toast; a delayed sync was delivered.
 		FailedSendMessage: ($, { text, mode, uploads, restore, reason }) => {
 			if (reason === "SyncDelayed")
-				return $.run(toast("warning", "Message sent", "Sync is delayed but your message was delivered."))
-			const title = reason === "ChannelNotFound" ? "Channel not found" : "Service temporarily unavailable"
-			if (!restore || $.model.draft.text !== "")
-				return $.run(toast("error", title, notSent(text)))
+				return $.run(
+					toast("warning", "Message sent", "Sync is delayed but your message was delivered."),
+				)
+			const title =
+				reason === "ChannelNotFound" ? "Channel not found" : "Service temporarily unavailable"
+			if (!restore || $.model.draft.text !== "") return $.run(toast("error", title, notSent(text)))
 			return $.evolve({
 				draft: TextField.set($.model.draft, text),
 				mode,
@@ -822,7 +888,8 @@ export const ChannelComposerNoDeps = Hazel.component({
 		},
 		// The optimistic edit already shows.
 		SucceededEditMessage: ($) => $.model,
-		FailedEditMessage: ($) => $.run(toast("error", "Message not found", "This message may have been deleted.")),
+		FailedEditMessage: ($) =>
+			$.run(toast("error", "Message not found", "This message may have been deleted.")),
 		// Success leaves the argument panel and focuses the field; a failure keeps the panel.
 		SucceededExecuteBotCommand: ($, { name }) =>
 			$.evolve(emptyCommand)
@@ -830,9 +897,9 @@ export const ChannelComposerNoDeps = Hazel.component({
 				.run(FocusField.make({ end: $.model.draft.text.length })),
 		FailedExecuteBotCommand: ($, { name, botName, reason }) => {
 			const text = botCommandText(reason, name, botName)
-			return $.evolve({ command: (input) => (input === null ? null : { ...input, executing: false }) }).run(
-				toast("error", text.title, text.description),
-			)
+			return $.evolve({
+				command: (input) => (input === null ? null : { ...input, executing: false }),
+			}).run(toast("error", text.title, text.description))
 		},
 		SucceededSendTypingHeartbeat: ($, { sessionId, indicator }) => {
 			const step = Typing.heartbeatSucceeded($.model.typing, sessionId, indicator)
@@ -851,7 +918,12 @@ export const ChannelComposerNoDeps = Hazel.component({
 			switch (request._tag) {
 				case "Reply":
 					return $.evolve({
-						mode: { _tag: "Replying", messageId: request.messageId, author: request.author, text: request.text },
+						mode: {
+							_tag: "Replying",
+							messageId: request.messageId,
+							author: request.author,
+							text: request.text,
+						},
 					})
 						.run(save($.props, $.model.draft.text, $.model.mode))
 						.run(FocusField.make({ end: $.model.draft.text.length }))
@@ -878,7 +950,8 @@ export const ChannelComposerNoDeps = Hazel.component({
 		},
 		ChangedDragging: ($, { dragging }) => $.evolve({ dragging }),
 		ReleasedHeld: ($) => releaseHeld($, $.props),
-		Mounted: ($) => ($.props.autoFocus ? $.run(FocusField.make({ end: $.model.draft.text.length })) : $.model),
+		Mounted: ($) =>
+			$.props.autoFocus ? $.run(FocusField.make({ end: $.model.draft.text.length })) : $.model,
 		UpdatedMembers: ($, { members }) => $.evolve({ members }),
 		UpdatedBots: ($, { bots }) => $.evolve({ bots }),
 		UpdatedGroups: ($, { groups }) => $.evolve({ groups }),
@@ -906,7 +979,9 @@ export const ChannelComposerNoDeps = Hazel.component({
 			Subscription.make("requests", [props.channelId], ([channelId]) =>
 				Stream.unwrap(
 					Effect.map(Effect.service(ComposerHost), (host) =>
-						host.requests(ChannelId.make(channelId)).pipe(Stream.map((request) => M.ReceivedRequest({ request }))),
+						host
+							.requests(ChannelId.make(channelId))
+							.pipe(Stream.map((request) => M.ReceivedRequest({ request }))),
 					),
 				),
 			),
@@ -929,12 +1004,18 @@ export const ChannelComposerNoDeps = Hazel.component({
 			Subscription.make("groups", [props.organizationId], ([organizationId]) =>
 				groupsStream(OrganizationId.make(organizationId), (groups) => M.UpdatedGroups({ groups })),
 			),
-			Subscription.make("presence", [], () => presenceStream((presence) => M.UpdatedPresence({ presence }))),
+			Subscription.make("presence", [], () =>
+				presenceStream((presence) => M.UpdatedPresence({ presence })),
+			),
 			Subscription.make("commands", [props.organizationId], ([organizationId]) =>
-				commandsStream(OrganizationId.make(organizationId), (commands) => M.UpdatedCommands({ commands })),
+				commandsStream(OrganizationId.make(organizationId), (commands) =>
+					M.UpdatedCommands({ commands }),
+				),
 			),
 			Subscription.make("customEmojis", [props.organizationId], ([organizationId]) =>
-				customEmojisStream(OrganizationId.make(organizationId), (emojis) => M.UpdatedCustomEmojis({ emojis })),
+				customEmojisStream(OrganizationId.make(organizationId), (emojis) =>
+					M.UpdatedCustomEmojis({ emojis }),
+				),
 			),
 			Subscription.make("membership", [props.channelId, props.userId], ([channelId, userId]) =>
 				membershipStream(ChannelId.make(channelId), UserId.make(userId), (memberId) =>
@@ -942,10 +1023,14 @@ export const ChannelComposerNoDeps = Hazel.component({
 				),
 			),
 			Subscription.make("lastOwn", [props.channelId, props.userId], ([channelId, userId]) =>
-				lastOwnStream(ChannelId.make(channelId), UserId.make(userId), (last) => M.UpdatedLastOwn({ last })),
+				lastOwnStream(ChannelId.make(channelId), UserId.make(userId), (last) =>
+					M.UpdatedLastOwn({ last }),
+				),
 			),
 			Subscription.make("typing", [props.channelId, props.userId], ([channelId, userId]) =>
-				typingStream(ChannelId.make(channelId), UserId.make(userId), (typing) => M.UpdatedTyping({ typing })),
+				typingStream(ChannelId.make(channelId), UserId.make(userId), (typing) =>
+					M.UpdatedTyping({ typing }),
+				),
 			),
 			// `useTypingIndicators`' one-second clock, only while someone else has typed.
 			anyoneTyping &&
@@ -967,14 +1052,21 @@ export const ChannelComposerNoDeps = Hazel.component({
 					),
 				),
 			upload !== undefined &&
-				Subscription.make("upload", [upload.localId, props.channelId, props.organizationId], ([localId]) =>
-					Stream.unwrap(
-						Effect.map(Effect.service(ComposerFiles), (files) =>
-							files
-								.upload({ localId, organizationId: props.organizationId, channelId: props.channelId })
-								.pipe(Stream.map((event) => M.ReceivedUploadEvent({ localId, event }))),
+				Subscription.make(
+					"upload",
+					[upload.localId, props.channelId, props.organizationId],
+					([localId]) =>
+						Stream.unwrap(
+							Effect.map(Effect.service(ComposerFiles), (files) =>
+								files
+									.upload({
+										localId,
+										organizationId: props.organizationId,
+										channelId: props.channelId,
+									})
+									.pipe(Stream.map((event) => M.ReceivedUploadEvent({ localId, event }))),
+							),
 						),
-					),
 				),
 			props.ready &&
 				model.held.length > 0 &&
@@ -1038,8 +1130,18 @@ export const ChannelComposerNoDeps = Hazel.component({
 						.size("xsmall")
 						.disabled(uploading)
 						.on("press", M.PressedAttach()),
-					h.button.icon("gif").label("GIF").variant("ghost").size("xsmall").on("press", M.PressedGif()),
-					h.button.icon("emoji").label("Emoji").variant("ghost").size("xsmall").on("press", M.PressedEmoji()),
+					h.button
+						.icon("gif")
+						.label("GIF")
+						.variant("ghost")
+						.size("xsmall")
+						.on("press", M.PressedGif()),
+					h.button
+						.icon("emoji")
+						.label("Emoji")
+						.variant("ghost")
+						.size("xsmall")
+						.on("press", M.PressedEmoji()),
 				)
 				.on("change", (payload) => M.ChangedDraft({ payload }))
 				.on("submit", (payload) => M.SubmittedDraft({ payload }))
@@ -1086,15 +1188,21 @@ const commandPanel = (h: Hazel.H<ChannelComposerMessage>, input: CommandInput, f
 				.on("change", (payload) => M.ChangedCommandField({ name: arg.name, payload }))
 				.on("submit", () => M.PressedExecuteCommand()),
 		),
-		h.stack.axis("horizontal").children(
-			h.button
-				.label("Execute")
-				.variant("primary")
-				.size("xsmall")
-				.loading(input.executing)
-				.on("press", M.PressedExecuteCommand()),
-			h.button.label("Cancel").variant("ghost").size("xsmall").on("press", M.PressedCancelCommand()),
-		),
+		h.stack
+			.axis("horizontal")
+			.children(
+				h.button
+					.label("Execute")
+					.variant("primary")
+					.size("xsmall")
+					.loading(input.executing)
+					.on("press", M.PressedExecuteCommand()),
+				h.button
+					.label("Cancel")
+					.variant("ghost")
+					.size("xsmall")
+					.on("press", M.PressedCancelCommand()),
+			),
 	)
 
 /** What the composer runs; the host gives `ComposerHost`, `ComposerFiles`, `BotCommands` and the data. */

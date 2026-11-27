@@ -27,7 +27,7 @@ import {
 	replyTargetsStream,
 	threadChannelsStream,
 	threadMessagesStream,
-	typingStream,
+	ownMembershipStream,
 	usersStream,
 } from "../lookup-data"
 import type { PageSubscriptionInput } from "../../contract"
@@ -37,20 +37,12 @@ import { issueAtMessageStream } from "../../../customers/issues"
 import { issueSlaStream } from "../../../customers/sla"
 import { orgMembersStream } from "../../../customers/queries"
 import * as IssueControl from "../issue-control"
-import * as Composer from "../../../composer/composer"
-import {
-	botCommandsStream,
-	mentionableBotsStream,
-	mentionMembersStream,
-	ownMembershipStream,
-} from "../../../composer/data"
-import * as Draft from "../../../composer/draft"
-import * as Typing from "../../../composer/typing"
-import { uploadStream } from "../../../composer/upload"
 import { MessageWindows } from "../../../data/message-windows"
 import { userGroupsStream } from "../../../data/user-groups"
 import type { HazelApiClient, HazelRpc } from "../../../rpc"
-import { globalPasteStream, globalTypingStream, leftWindowStream } from "../../../composer/window-events"
+import { eventsOf } from "../../../root/bus"
+import { clearThread, reportThread } from "../../../root/composer"
+import { globalPasteStream, globalTypingStream } from "./global-input"
 import { ChannelKeys, channelHotkeysStream, channelKeysOf } from "./hotkeys"
 import { isMemberOf, Message, type Model } from "./page"
 import { windowFocus } from "../../../platform/presence/activity"
@@ -469,149 +461,17 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 						),
 		},
 	),
-	chatTyping: entry(byChannel, {
-		modelToDependencies: channelOf,
-		dependenciesToStream: ({ channelId }) =>
-			typingStream(channelId, (typing) => Message.UpdatedTyping({ typing })),
-	}),
-	// `useTypingIndicators`' one-second clock, only while someone has typed.
-	chatTypingClock: entry(
-		{ isTyping: Schema.Boolean },
-		{
-			modelToDependencies: ({ model }) => ({ isTyping: model.typing.length > 0 }),
-			dependenciesToStream: ({ isTyping }) =>
-				isTyping
-					? Stream.concat(Stream.succeed(undefined), Stream.tick("1 second")).pipe(
-							Stream.map(() => Message.TickedTypingClock({ nowMs: Date.now() })),
-						)
-					: Stream.empty,
-		},
-	),
 }))
-
-const toChannelComposer = (message: Composer.Message) =>
-	Message.GotDraftMessage({ message: Draft.Message.GotComposerMessage({ message }) })
-
-const uploadEntry = (which: "channel" | "thread") => ({
-	modelToDependencies: ({ model }: Input) => {
-		const draft = which === "channel" ? model.draft : (model.threadPanel?.draft ?? null)
-		return {
-			upload: draft === null ? null : Draft.currentUploadOf(draft),
-			channelId: draft?.channelId ?? null,
-			organizationId: model.channel?.organizationId ?? null,
-		}
-	},
-	dependenciesToStream: ({ upload, channelId, organizationId }: UploadDependencies) =>
-		upload === null || channelId === null || organizationId === null
-			? Stream.empty
-			: uploadStream({ fileId: upload.fileId, file: upload.file, channelId, organizationId }).pipe(
-					Stream.map((event) => {
-						const message = Draft.Message.ReceivedUploadEvent({ event })
-						return which === "channel"
-							? Message.GotDraftMessage({ message })
-							: Message.GotThreadDraftMessage({ message })
-					}),
-				),
-})
-
-const UploadDependencies = Schema.Struct({
-	upload: Schema.NullOr(Draft.CurrentUpload),
-	channelId: Schema.NullOr(ChannelId),
-	organizationId: Schema.NullOr(OrganizationId),
-})
-type UploadDependencies = typeof UploadDependencies.Type
-
-export const TypingCleanup = Schema.Struct({
-	channelId: ChannelId,
-	indicators: Schema.Array(Typing.Indicator),
-})
-export type TypingCleanup = typeof TypingCleanup.Type
-const isSameCleanup = Schema.toEquivalence(TypingCleanup)
-
-/** The indicators the page's drafts hold (channel, and the open thread's). */
-export const indicatorsOf = (model: Model): ReadonlyArray<Typing.Indicator> =>
-	[model.draft.typing.indicator, model.threadPanel?.draft.typing.indicator ?? null].filter(
-		(indicator): indicator is Typing.Indicator => indicator !== null,
-	)
-
-/**
- * `useTyping`'s unmount cleanup for a page that is left while typing. A restart inside the page is a
- * stop that already deleted; once the page is gone (or is another channel's) the latest dependencies
- * fall back to the stream's own, or name another channel, and the indicators are deleted.
- */
-export const typingCleanupStream = <R>(
-	own: TypingCleanup,
-	readLatest: () => TypingCleanup,
-	deleteIndicator: (indicator: Typing.Indicator) => Effect.Effect<void, never, R>,
-): Stream.Stream<never, never, R> =>
-	own.indicators.length === 0
-		? Stream.empty
-		: Stream.fromEffect(
-				Effect.never.pipe(
-					Effect.ensuring(
-						Effect.suspend(() => {
-							const latest = readLatest()
-							const isPageLeft =
-								latest.channelId !== own.channelId || isSameCleanup(latest, own)
-							return isPageLeft
-								? Effect.forEach(own.indicators, deleteIndicator, { discard: true })
-								: Effect.void
-						}),
-					),
-				),
-			)
 
 /** A dialog of the page holds the keyboard, so typed keys stay there (legacy checked the DOM for one). */
 const hasOpenDialog = (model: Model) =>
 	model.overlays.open._tag === "ImageViewer" ||
 	model.overlays.open._tag === "ReactionPicker" ||
 	model.overlays.open._tag === "ReactionModal" ||
-	(model.overlays.open._tag === "Popover" && model.overlays.open.popover.isOpen) ||
-	[model.draft, model.threadPanel?.draft ?? null].some(
-		(draft) => draft !== null && (draft.emojiPicker.isOpen || draft.gifPicker.isOpen),
-	)
+	(model.overlays.open._tag === "Popover" && model.overlays.open.popover.isOpen)
 
 /** The write path's streams: composer data, uploads, global typing and window blur. */
 const write = Subscription.make<Input, Message, HazelRpc | HazelApiClient>()((entry) => ({
-	composerMembers: entry(byChannel, {
-		modelToDependencies: channelOf,
-		dependenciesToStream: ({ channelId }) =>
-			mentionMembersStream(channelId, (members) =>
-				toChannelComposer(Composer.Message.UpdatedMentionMembers({ members })),
-			),
-	}),
-	composerBots: entry(
-		// Keyed by channel too: a channel switch starts a fresh draft, which needs them sent again.
-		{ channelId: ChannelId, organizationId: Schema.NullOr(OrganizationId) },
-		{
-			modelToDependencies: ({ model, shared }) => ({
-				channelId: model.channelId,
-				organizationId: shared.organization?.id ?? null,
-			}),
-			dependenciesToStream: ({ organizationId }) =>
-				organizationId === null
-					? Stream.empty
-					: mentionableBotsStream(organizationId, (bots) =>
-							toChannelComposer(Composer.Message.UpdatedMentionableBots({ bots })),
-						),
-		},
-	),
-	composerCommands: entry(
-		// Keyed by channel too: a channel switch starts a fresh draft, which needs them sent again.
-		{ channelId: ChannelId, organizationId: Schema.NullOr(OrganizationId) },
-		{
-			modelToDependencies: ({ model, shared }) => ({
-				channelId: model.channelId,
-				organizationId: shared.organization?.id ?? null,
-			}),
-			dependenciesToStream: ({ organizationId }) =>
-				organizationId === null
-					? Stream.empty
-					: botCommandsStream(organizationId, (commands) =>
-							toChannelComposer(Composer.Message.UpdatedBotCommands({ commands })),
-						),
-		},
-	),
 	threadMembership: entry(
 		{ threadChannelId: Schema.NullOr(ChannelId), userId: Schema.NullOr(UserId) },
 		{
@@ -627,18 +487,36 @@ const write = Subscription.make<Input, Message, HazelRpc | HazelApiClient>()((en
 						),
 		},
 	),
-	typingCleanup: entry(TypingCleanup.fields, {
-		modelToDependencies: ({ model }) => ({
-			channelId: model.channelId,
-			indicators: indicatorsOf(model),
-		}),
-		// Restarts on every change like the default; the variant only adds `readDependencies`.
-		keepAliveEquivalence: isSameCleanup,
-		dependenciesToStream: (own, readDependencies) =>
-			typingCleanupStream(own, readDependencies, Typing.deleteIndicator),
-	}),
-	channelUpload: entry(UploadDependencies.fields, uploadEntry("channel")),
-	threadUpload: entry(UploadDependencies.fields, uploadEntry("thread")),
+	// The thread panel's composer follows the open thread (`root/composer.ts`).
+	composerThread: entry(
+		{ threadChannelId: Schema.NullOr(ChannelId), ready: Schema.Boolean },
+		{
+			modelToDependencies: ({ model }) => ({
+				threadChannelId: model.threadPanel?.threadChannelId ?? null,
+				ready: model.threadPanel?.creation === "Created",
+			}),
+			dependenciesToStream: ({ threadChannelId, ready }) => {
+				const target = threadChannelId === null ? null : { threadChannelId, ready }
+				return Stream.fromEffect(
+					Effect.sync(() => reportThread(target)).pipe(
+						Effect.andThen(Effect.never),
+						Effect.ensuring(Effect.sync(() => clearThread(target))),
+					),
+				)
+			},
+		},
+	),
+	// What the shared composers tell the page: a send, Escape, Shift+Tab.
+	composerNotices: entry(
+		{},
+		{
+			modelToDependencies: () => ({}),
+			dependenciesToStream: () =>
+				eventsOf("ComposerNotice").pipe(
+					Stream.map(({ notice }) => Message.ReceivedComposerNotice({ notice })),
+				),
+		},
+	),
 	globalTyping: entry(
 		{ isActive: Schema.Boolean },
 		{
@@ -696,13 +574,6 @@ const write = Subscription.make<Input, Message, HazelRpc | HazelApiClient>()((en
 		{
 			modelToDependencies: () => ({}),
 			dependenciesToStream: () => listRequestStream,
-		},
-	),
-	leftWindow: entry(
-		{},
-		{
-			modelToDependencies: () => ({}),
-			dependenciesToStream: () => leftWindowStream(Message.LeftWindow()),
 		},
 	),
 }))

@@ -46,7 +46,12 @@ export const Upload = Schema.Struct({
 })
 export type Upload = typeof Upload.Type
 
-export const uploadOf = (file: HeldFile): Upload => ({ ...file, progress: 0, attachmentId: null, failed: false })
+export const uploadOf = (file: HeldFile): Upload => ({
+	...file,
+	progress: 0,
+	attachmentId: null,
+	failed: false,
+})
 
 /** Files go one after another, as today: the first not yet uploaded nor failed. */
 export const currentUpload = (uploads: ReadonlyArray<Upload>): Upload | undefined =>
@@ -74,9 +79,9 @@ export const attachmentsOf = (uploads: ReadonlyArray<Upload>): ReadonlyArray<Con
 			upload.attachmentId === null && !upload.failed
 				? `${Math.round(upload.progress * 100)}% of ${formatSize(upload.size)}`
 				: formatSize(upload.size),
-		...(upload.preview === null ? {} : { url: upload.preview }),
-		...(upload.attachmentId === null && !upload.failed ? { progress: upload.progress } : {}),
-		...(upload.failed ? { failed: true } : {}),
+		url: upload.preview ?? undefined,
+		progress: upload.attachmentId === null && !upload.failed ? upload.progress : undefined,
+		failed: upload.failed || undefined,
 	}))
 
 /** Sends with text, or with attachments alone; never while a file uploads (it would go without it). */
@@ -215,7 +220,7 @@ const mentionOptions = (data: SuggestionData, query: string): ReadonlyArray<Opti
 				face: {
 					name: bot.name,
 					initials: initialsOf(bot.name),
-					...(bot.avatarUrl === null ? {} : { src: bot.avatarUrl }),
+					src: bot.avatarUrl ?? undefined,
 				},
 			},
 			pick: { _tag: "Mention", markdown: `@[userId:${bot.userId}]` },
@@ -230,11 +235,12 @@ const mentionOptions = (data: SuggestionData, query: string): ReadonlyArray<Opti
 				face: {
 					name: member.name,
 					initials: initialsOf(member.name),
-					...(member.avatarUrl === null ? {} : { src: member.avatarUrl }),
+					src: member.avatarUrl ?? undefined,
 					// A Slack or Discord person has no Hazel presence.
-					...(member.provider === null ? { presence: statusOf.get(member.userId) ?? "offline" } : {}),
+					presence:
+						member.provider === null ? (statusOf.get(member.userId) ?? "offline") : undefined,
 				},
-				...(member.provider === null ? {} : { mark: member.provider }),
+				mark: member.provider ?? undefined,
 			},
 			pick: { _tag: "Mention", markdown: `@[userId:${member.userId}]` },
 		}))
@@ -258,7 +264,7 @@ const commandOptions = (data: SuggestionData, query: string): ReadonlyArray<Opti
 				face: {
 					name: command.botName,
 					initials: initialsOf(command.botName),
-					...(command.botAvatarUrl === null ? {} : { src: command.botAvatarUrl }),
+					src: command.botAvatarUrl ?? undefined,
 				},
 				chips: command.arguments.map((arg) => ({ label: arg.name, required: arg.required })),
 			},
@@ -279,13 +285,12 @@ const emojiOptions = (data: SuggestionData, query: string): ReadonlyArray<Option
 			pick: { _tag: "Emoji", markdown: customEmojiMarkdown(emoji) },
 		}))
 	const standard = STANDARD_EMOJIS.filter(
-		(option) => option.name.includes(search) || option.keywords.some((keyword) => keyword.includes(search)),
-	).map(
-		(option): Option => ({
-			suggestion: { id: option.name, label: `:${option.name}:`, emoji: option.emoji },
-			pick: { _tag: "Emoji", markdown: option.emoji },
-		}),
-	)
+		(option) =>
+			option.name.includes(search) || option.keywords.some((keyword) => keyword.includes(search)),
+	).map((option): Option => ({
+		suggestion: { id: option.name, label: `:${option.name}:`, emoji: option.emoji },
+		pick: { _tag: "Emoji", markdown: option.emoji },
+	}))
 	return [...custom, ...standard].slice(0, 20)
 }
 
@@ -327,7 +332,9 @@ export const replaceTrigger = (text: string, trigger: Trigger, insert: string): 
 	const token = `${trigger.kind}${trigger.query}`
 	let index = text.lastIndexOf(token)
 	while (index > 0 && !/\s/.test(text[index - 1] ?? "")) index = text.lastIndexOf(token, index - 1)
-	return index < 0 ? `${text}${insert}` : `${text.slice(0, index)}${insert}${text.slice(index + token.length)}`
+	return index < 0
+		? `${text}${insert}`
+		: `${text.slice(0, index)}${insert}${text.slice(index + token.length)}`
 }
 
 /** An emoji picked from the picker: a standard one as itself, a custom one (`:name:`) as its atom. */

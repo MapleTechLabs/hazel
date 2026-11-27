@@ -41,6 +41,8 @@ interface Held {
 }
 
 const held = new Map<string, Held>()
+/** Ids for held files: unique for the app's run. */
+const ids = { next: 0 }
 
 const kindOf = (type: string): HeldFile["kind"] =>
 	type.startsWith("image/") ? "image" : type.startsWith("video/") ? "video" : "file"
@@ -48,9 +50,11 @@ const kindOf = (type: string): HeldFile["kind"] =>
 /** Keeps `files` for the composer: their ids, names and, for an image, a local preview url. */
 export const holdFiles = (files: ReadonlyArray<File>): ReadonlyArray<HeldFile> =>
 	files.map((file) => {
-		const localId = crypto.randomUUID()
+		ids.next += 1
+		const localId = `held-${ids.next}`
 		const kind = kindOf(file.type)
-		const preview = kind === "image" && typeof URL.createObjectURL === "function" ? URL.createObjectURL(file) : null
+		const preview =
+			kind === "image" && typeof URL.createObjectURL === "function" ? URL.createObjectURL(file) : null
 		held.set(localId, { file, preview })
 		return { localId, name: file.name, size: file.size, kind, preview }
 	})
@@ -126,7 +130,9 @@ const uploadOne = (
 			return put(uploadUrl, file, onProgress).pipe(
 				Effect.flatMap((stored) =>
 					stored
-						? HazelRpc.use((rpc) => rpc("attachment.complete", { id, channelId: args.channelId })).pipe(
+						? HazelRpc.use((rpc) =>
+								rpc("attachment.complete", { id, channelId: args.channelId }),
+							).pipe(
 								Effect.as<UploadEvent>({ _tag: "Uploaded", attachmentId: id }),
 								Effect.catchCause(() =>
 									markFailed(id, args.channelId, "Failed to finalize upload").pipe(
@@ -134,7 +140,9 @@ const uploadOne = (
 									),
 								),
 							)
-						: markFailed(id, args.channelId, "Storage upload failed").pipe(Effect.as(failed("Network"))),
+						: markFailed(id, args.channelId, "Storage upload failed").pipe(
+								Effect.as(failed("Network")),
+							),
 				),
 				Effect.onInterrupt(() => markFailed(id, args.channelId, "Upload cancelled")),
 			)
@@ -162,7 +170,8 @@ const filesLayer = Layer.effect(
 			}),
 			upload: ({ localId, organizationId, channelId }) => {
 				const entry = held.get(localId)
-				if (entry === undefined) return Stream.succeed<UploadEvent>({ _tag: "Failed", reason: "Failed" })
+				if (entry === undefined)
+					return Stream.succeed<UploadEvent>({ _tag: "Failed", reason: "Failed" })
 				return Stream.callback<UploadEvent>((queue) =>
 					uploadOne(entry.file, { organizationId, channelId }, (progress) =>
 						Queue.offerUnsafe(queue, { _tag: "Progressed", progress }),
@@ -220,12 +229,20 @@ const dragging = Stream.callback<boolean>((queue) =>
 const appDrafts = makeDrafts()
 
 /** The open thread panel's thread, kept so a composer mounted later starts from it. */
-let currentThread: ThreadTarget | null = null
+interface ThreadCell {
+	current: ThreadTarget | null
+}
+const thread: ThreadCell = { current: null }
 
 /** The channel page reports its thread panel (opened, created, closed). */
-export const reportThread = (thread: ThreadTarget | null) => {
-	currentThread = thread
-	publish({ _tag: "ComposerThread", thread })
+export const reportThread = (target: ThreadTarget | null) => {
+	thread.current = target
+	publish({ _tag: "ComposerThread", thread: target })
+}
+
+/** The panel that reported `thread` closed or moved on: nothing open, unless another took its place. */
+export const clearThread = (target: ThreadTarget | null) => {
+	if (target !== null && thread.current?.threadChannelId === target.threadChannelId) reportThread(null)
 }
 
 /** What the channel page asks of a composer, over the bus. */
@@ -243,8 +260,8 @@ const hostLayer = Layer.succeed(
 		notify: (notice: ComposerNotice) => Effect.sync(() => publish({ _tag: "ComposerNotice", notice })),
 		dragging,
 		thread: Stream.concat(
-			Stream.suspend(() => Stream.succeed(currentThread)),
-			eventsOf("ComposerThread").pipe(Stream.map(({ thread }) => thread)),
+			Stream.suspend(() => Stream.succeed(thread.current)),
+			eventsOf("ComposerThread").pipe(Stream.map((event) => event.thread)),
 		),
 	}),
 )
@@ -274,7 +291,11 @@ const botCommandsLayer = Layer.effect(
 						Effect.asVoid,
 						// BOUNDARY: the API's errors by tag, anything else as unavailable.
 						Effect.mapError((error) =>
-							failureOf(typeof error === "object" && error !== null && "_tag" in error ? String(error._tag) : ""),
+							failureOf(
+								typeof error === "object" && error !== null && "_tag" in error
+									? String(error._tag)
+									: "",
+							),
 						),
 					),
 		}),
@@ -291,10 +312,3 @@ export const composerWebLayer = Layer.mergeAll(
 	// Custom emoji in a draft draw from the server's storage only (W12b).
 	Layer.effectDiscard(Effect.sync(() => trustCustomEmojiBase(currentServer().cdn ?? undefined))),
 )
-
-/** The parity flag (`compare-pages.ts`): `"0"` draws today's Foldkit composer instead. */
-export const COMPOSER_PARITY_FLAG = "hazel:native:Composer"
-
-// The parity runner sets the flag before the app loads.
-export const isComposerNative = (): boolean =>
-	typeof localStorage === "undefined" || localStorage.getItem(COMPOSER_PARITY_FLAG) !== "0"

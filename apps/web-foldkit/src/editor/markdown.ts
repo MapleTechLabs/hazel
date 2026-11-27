@@ -309,12 +309,6 @@ export function deserializeFromMarkdown(
 
 export const createEmptyValue = (): Array<ProseMirrorNode> => [schema.node("paragraph")]
 
-/** Composer blocks as a ProseMirror document. */
-export const toDoc = (blocks: ReadonlyArray<ProseMirrorNode>) => schema.node("doc", null, [...blocks])
-
-/** Top-level blocks of a document. */
-export const blocksOf = (doc: ProseMirrorNode) => childrenOf(doc)
-
 /** True when there is nothing to send. Mentions and custom emoji count as content. */
 export function isValueEmpty(nodes: ReadonlyArray<ProseMirrorNode>): boolean {
 	const hasMeaningfulContent = (node: ProseMirrorNode): boolean => {

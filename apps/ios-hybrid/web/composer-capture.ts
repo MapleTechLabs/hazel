@@ -7,7 +7,8 @@
  * The web's composer stays laid out, unseen: the web view never resizes for this keyboard, so
  * WebKit never makes the shell wait on a page layout while the keyboard moves.
  */
-import { composerEditorOf, replaceDraft } from "../../web-foldkit/src/editor/editor-view"
+import { editorOf as composerEditorOf } from "../../../packages/ui/src/web/primitives/controls/composer/editor"
+import { fromMarkdown } from "../../../packages/ui/src/web/primitives/controls/composer/markdown"
 import { hex, iconKey } from "./look"
 
 type Text = { color: string; size: number; weight: number }
@@ -70,11 +71,15 @@ const idOf = (element: HTMLElement) => {
 }
 
 const composer = () =>
-	Array.from(document.querySelectorAll<HTMLElement>('[data-ui="composer"]')).find((element) =>
+	Array.from(document.querySelectorAll<HTMLElement>('[data-hz="composer"]')).find((element) =>
 		element.checkVisibility({ checkVisibilityCSS: false }),
 	)
 
-const editorOf = (root: HTMLElement) => root.querySelector<HTMLElement>(".ProseMirror")
+const editorOf = (root: HTMLElement) => root.querySelector<HTMLElement>(':scope > [data-hz-part="input"]')
+
+/** The hazel composer's send button; enabled once the draft can go. */
+const sendOf = (root: HTMLElement | undefined) =>
+	root?.querySelector<HTMLButtonElement>(':scope > [data-hz-part="send"]') ?? undefined
 
 export const readComposer = (): ComposerLook | null => {
 	const root = composer()
@@ -87,11 +92,13 @@ export const readComposer = (): ComposerLook | null => {
 	}
 	const boxStyle = getComputedStyle(box)
 	const rect = box.getBoundingClientRect()
-	const props = JSON.parse(root.getAttribute("data-ui-props") ?? "{}")
-	const placeholder =
-		editor.querySelector("[data-slate-placeholder]") ?? root.querySelector("[data-slate-placeholder]")
-	const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>("button"))
-	const send = buttons.find((button) => button.getAttribute("aria-label") === "Send message")
+	const placeholder = editor.querySelector('[data-hz-part="placeholder"]')
+	const buttons = Array.from(
+		root.querySelectorAll<HTMLButtonElement>(
+			':scope > [data-hz-part="content"] [data-hz-slot="actions"] button',
+		),
+	)
+	const send = sendOf(root)
 	const sendStyle = send === undefined ? null : getComputedStyle(send)
 	const sendIcon = send?.querySelector("svg")
 	const sendLook: ComposerLook["send"] = {
@@ -115,7 +122,7 @@ export const readComposer = (): ComposerLook | null => {
 		},
 		font: textOf(editor),
 		placeholder: {
-			text: typeof props.placeholder === "string" ? props.placeholder : "",
+			text: editor.getAttribute("aria-label") ?? "",
 			color: placeholder === null ? hex("gray") : drawnColor(placeholder),
 		},
 		actions: buttons
@@ -132,7 +139,7 @@ export const readComposer = (): ComposerLook | null => {
 				return action
 			}),
 		send: sendLook,
-		hasContent: props.hasContent === true,
+		hasContent: send !== undefined && !send.disabled,
 		bottom: window.innerHeight - rect.bottom,
 	}
 }
@@ -144,21 +151,21 @@ export const setDraft = (text: string) => {
 	const view = editor === null ? undefined : composerEditorOf(editor)
 	// Through the editor's own transactions, never focusing it: a focused web field would start
 	// WebKit's text input on the shell's main thread, under the native composer's keyboard.
-	if (view !== undefined) replaceDraft(view, text)
+	if (view !== undefined)
+		view.dispatch(view.state.tr.replaceWith(0, view.state.doc.content.size, fromMarkdown(text).content))
 }
 
 /**
  * Presses the web's own send once the draft above has reached the app: the composer says so itself
- * (`hasContent` in its semantic props, from its Model), a few frames later. Gives up after a second.
+ * (its send button enabled, from its Model), a few frames later. Gives up after a second.
  */
 export const send = (text: string) => {
 	setDraft(text)
 	const startedAt = performance.now()
 	const tryPress = () => {
-		const root = composer()
-		const props = JSON.parse(root?.getAttribute("data-ui-props") ?? "{}")
-		if (props.hasContent === true) {
-			root?.querySelector<HTMLElement>('button[aria-label="Send message"]')?.click()
+		const button = sendOf(composer())
+		if (button !== undefined && !button.disabled) {
+			button.click()
 			return
 		}
 		if (performance.now() - startedAt < 1000) requestAnimationFrame(tryPress)

@@ -70,9 +70,6 @@ export type ThreadChannelInfo = typeof ThreadChannelInfo.Type
 export const ReplyTarget = Schema.Struct({ id: MessageId, authorId: UserId, content: Schema.String })
 export type ReplyTarget = typeof ReplyTarget.Type
 
-export const TypingInfo = Schema.Struct({ memberId: ChannelMemberId, lastTyped: Schema.Finite })
-export type TypingInfo = typeof TypingInfo.Type
-
 export const CustomEmojiInfo = Schema.Struct({ name: Schema.String, imageUrl: Schema.String })
 export type CustomEmojiInfo = typeof CustomEmojiInfo.Type
 

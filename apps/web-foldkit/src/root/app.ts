@@ -59,7 +59,6 @@ import { AppMessage } from "./message"
 import { modalOf } from "./modals"
 import { nativePageOf } from "./native-pages"
 import { paletteDestinations, paletteShortcuts, ShellCommandPalette } from "./palette"
-import { isComposerNative } from "./composer"
 import { Hole } from "./portal"
 import { chromeHoles, sectionContent, sectionSidebar } from "./sections"
 import { sectionLayoutOf } from "../shell/sections"
@@ -234,7 +233,7 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 					[ShellJoinBanner(h, { key: channelId, props: { channelId, userId: data.user.id } })],
 				)
 			: null,
-		route._tag === "ChatChannel" && channelId !== null && isComposerNative()
+		route._tag === "ChatChannel" && channelId !== null
 			? Hole(h, { hole: "composer", key: channelId, matchKey: true }, [
 					ShellChannelComposer(h, {
 						key: channelId,
@@ -250,7 +249,7 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 				])
 			: null,
 		// The open thread panel's composer; it follows the panel's thread itself.
-		route._tag === "ChatChannel" && isComposerNative()
+		route._tag === "ChatChannel"
 			? Hole(h, { hole: "thread-composer", key: "" }, [
 					ShellThreadComposer(h, {
 						props: { organizationId: data.organization.id, userId: data.user.id },

@@ -114,7 +114,11 @@ export const timeoutPassed = (state: TypingState, version: number): TypingStep =
 
 /** Others' fresh indicators, as the names the indicator shows. */
 export const typingNamesOf = (
-	indicators: ReadonlyArray<{ readonly name: string; readonly isSelf: boolean; readonly lastTypedMs: number }>,
+	indicators: ReadonlyArray<{
+		readonly name: string
+		readonly isSelf: boolean
+		readonly lastTypedMs: number
+	}>,
 	nowMs: number,
 ): ReadonlyArray<string> =>
 	indicators

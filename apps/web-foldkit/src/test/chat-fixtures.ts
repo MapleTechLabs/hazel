@@ -1,8 +1,5 @@
 import * as Scene from "foldkit/scene"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import * as Composer from "../composer/composer"
-import * as Draft from "../composer/draft"
-import { DragState, DropEvent } from "../composer/drop"
 import * as Overlays from "../page/chat/overlays"
 import { Message, type Model } from "../page/chat/channel/model"
 import {
@@ -25,26 +22,13 @@ export const channelScene = {
 }
 
 export const overlays = (message: Overlays.Message) => Message.GotOverlaysMessage({ message })
-export const draft = (message: Draft.Message) => Message.GotDraftMessage({ message })
-export const composer = (message: Composer.Message) => draft(Draft.Message.GotComposerMessage({ message }))
 
 /** `loadedModel` with its rows derived by update, as the messages query delivers them. */
 export const derivedModel = (base: Model = loadedModel()): Model =>
 	updateWithShared(base, loadedMessages(base.messages.length === 0 ? messages : base.messages)).model
 
-/** The channel's first render: the editor and the drop zone start (the header is a shared screen). */
-export const mountedChannel = (): Step =>
-	Scene.Mount.resolveAll(
-		[{ name: "MountEditor" }, composer(Composer.Message.UpdatedDraft({ markdown: "", isEmpty: true }))],
-		[
-			{ name: "TrackFileDrop" },
-			draft(
-				Draft.Message.ReceivedDropEvent({
-					event: DropEvent.ChangedDragState({ drag: DragState.Idle() }),
-				}),
-			),
-		],
-	)
+/** The channel's first render: nothing to resolve (the header, list and composer are shared screens). */
+export const mountedChannel = (): Step => (simulation) => simulation
 
 /** A row of the shared message list asks the page for something: spread, one step per page message. */
 export const listRequest = (request: HostRequest) =>

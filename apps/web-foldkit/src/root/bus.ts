@@ -6,11 +6,7 @@
 import type { AppRequest } from "@hazel/shared-screens/app/requests"
 import type { HostRequest as MessageListRequest } from "@hazel/shared-screens/chat/messages"
 import type { ChannelId, MessageId } from "@hazel/schema"
-import type {
-	ComposerNotice,
-	ComposerRequest,
-	ThreadTarget,
-} from "@hazel/shared-screens/chat/composer/host"
+import type { ComposerNotice, ComposerRequest, ThreadTarget } from "@hazel/shared-screens/chat/composer/host"
 import type { SidebarAction } from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
 import { Effect, Queue, Stream } from "effect"
 import type { ShellRequest } from "../app/message"

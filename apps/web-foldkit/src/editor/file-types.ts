@@ -1,5 +1,5 @@
 /**
- * The one list of file types a message can carry, for the file input's `accept`, drag-and-drop,
+ * The one list of file types a message can carry, for drag-and-drop,
  * paste and the draft's own check of selected files.
  */
 
@@ -18,9 +18,6 @@ const ACCEPTED_MIME_TYPES: ReadonlyArray<string> = [
 
 /** Some systems report no MIME type for these; the extension decides then. */
 const ACCEPTED_EXTENSIONS: ReadonlyArray<string> = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".csv"]
-
-/** The file input's `accept` attribute. */
-export const ACCEPT_ATTRIBUTE = [...ACCEPTED_MIME_TYPES, ...ACCEPTED_EXTENSIONS].join(",")
 
 /** A MIME type (as `DataTransferItem.type` or `File.type` reports it) a message can carry. */
 export const isAcceptedMimeType = (type: string): boolean =>

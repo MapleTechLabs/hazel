@@ -42,15 +42,15 @@ export const ThreadComposer = Hazel.component({
 			model.thread === null
 				? null
 				: ChannelComposer(h, {
-					key: model.thread.threadChannelId,
-					props: {
-						channelId: model.thread.threadChannelId,
-						organizationId: h.props.organizationId,
-						userId: h.props.userId,
-						placeholder: "Reply in thread...",
-						ready: model.thread.ready,
-						autoFocus: true,
-					},
-				}),
+						key: model.thread.threadChannelId,
+						props: {
+							channelId: model.thread.threadChannelId,
+							organizationId: h.props.organizationId,
+							userId: h.props.userId,
+							placeholder: "Reply in thread...",
+							ready: model.thread.ready,
+							autoFocus: true,
+						},
+					}),
 		),
 })

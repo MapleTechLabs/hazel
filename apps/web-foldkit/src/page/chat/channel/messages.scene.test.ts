@@ -3,26 +3,17 @@ import { ChannelId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
-import * as Composer from "../../../composer/composer"
-import * as EditorCommands from "../../../composer/editor-commands"
 import {
 	channelScene,
 	derivedModel,
 	listRequest,
 	mountedChannel,
 	overlays,
-	draft,
 } from "../../../test/chat-fixtures"
 import * as Menu from "../../../ui/menu"
-import * as Draft from "../../../composer/draft"
-import { DragState, DropEvent, TrackFileDrop } from "../../../composer/drop"
-import { MountEditor } from "../../../composer/composer"
 import { Message } from "./model"
 import { LoadThreadPanelWidth } from "./thread-width"
-import * as Picker from "../../../emoji-picker/picker"
-import * as EmojiDialog from "../../../emoji-picker/dialog"
-import { PopoverEvent, popoverId } from "../../../picker-popover/popover"
-import type { EmojiData } from "../../../emoji-picker/data"
+import { RequestComposer } from "./write"
 import * as Overlays from "../overlays"
 import { TrackMessageHover } from "../../../chat/message/toolbar"
 import { imageAttachmentOf } from "../../../test/chat-messages"
@@ -42,7 +33,6 @@ import {
  * its row requests reach the page through `listRequests`, and the page shows the rest.
  */
 
-const editorId = `composer-${channelId}`
 const threadChannelId = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-000000004444")
 
 describe("reading", () => {
@@ -76,36 +66,45 @@ describe("row actions", () => {
 	const action = (messageId: typeof adaMessageId, value: "reply" | "edit" | "delete", content: string) =>
 		listRequest({ _tag: "Action", messageId, action: value, content })
 
-	test("reply: the composer shows who is being replied to, and Cancel reply drops it", () => {
+	// The fixture has no users loaded, so the author's name is empty here.
+	test("reply: asks the channel's composer (a shared screen) to reply to the message", () => {
 		Scene.scene(
 			channelScene,
 			Scene.given(derivedModel()),
 			mountedChannel(),
 			...action(graceMessageId, "reply", "Launch window confirmed"),
-			Scene.expect(Scene.text("Replying to")).toExist(),
-			Scene.click(Scene.role("button", { name: "Cancel reply" })),
-			Scene.expect(Scene.text("Replying to")).toBeAbsent(),
+			Scene.Command.expectExact(
+				RequestComposer({
+					channelId,
+					request: {
+						_tag: "Reply",
+						messageId: graceMessageId,
+						author: "",
+						text: "Launch window confirmed",
+					},
+				}),
+			),
+			Scene.Command.resolve(RequestComposer, Message.CompletedRequestComposer()),
 		)
 	})
 
-	test("edit: the message loads into the editor under an Editing indicator", () => {
+	test("edit: asks the channel's composer to edit the message with its text", () => {
 		Scene.scene(
 			channelScene,
 			Scene.given(derivedModel()),
 			mountedChannel(),
 			...action(adaMessageId, "edit", "Shipped the onboarding copy"),
-			Scene.expect(Scene.text("Editing message")).toExist(),
 			Scene.Command.expectExact(
-				EditorCommands.SetEditorContent({ editorId, markdown: "Shipped the onboarding copy" }),
+				RequestComposer({
+					channelId,
+					request: {
+						_tag: "Edit",
+						messageId: adaMessageId,
+						content: "Shipped the onboarding copy",
+					},
+				}),
 			),
-			Scene.Command.resolve(
-				EditorCommands.SetEditorContent,
-				Composer.Message.CompletedSetEditorContent(),
-			),
-			Scene.click(Scene.role("button", { name: "Cancel editing" })),
-			Scene.Command.expectExact(EditorCommands.ClearEditor({ editorId })),
-			Scene.Command.resolve(EditorCommands.ClearEditor, Composer.Message.CompletedClearEditor()),
-			Scene.expect(Scene.text("Editing message")).toBeAbsent(),
+			Scene.Command.resolve(RequestComposer, Message.CompletedRequestComposer()),
 		)
 	})
 
@@ -124,28 +123,11 @@ describe("row actions", () => {
 })
 
 describe("threads", () => {
-	const threadEditorId = `thread-composer-${threadChannelId}`
-	const threadDraft = (message: Draft.Message) => Message.GotThreadDraftMessage({ message })
-	/** The open panel's composer, drop zone and reply hover tracker (the pointer is not on a reply). */
-	const panelMounted = Scene.Mount.resolveAll(
-		[
-			MountEditor({ editorId: threadEditorId, placeholder: "Reply in thread...", initialMarkdown: "" }),
-			threadDraft(
-				Draft.Message.GotComposerMessage({
-					message: Composer.Message.UpdatedDraft({ markdown: "", isEmpty: true }),
-				}),
-			),
-		],
-		[
-			{ name: "TrackFileDrop" },
-			threadDraft(
-				Draft.Message.ReceivedDropEvent({
-					event: DropEvent.ChangedDragState({ drag: DragState.Idle() }),
-				}),
-			),
-		],
-		[{ name: "TrackMessageHover" }, overlays(Overlays.Message.PointerLeftList())],
-	)
+	/** The open panel's reply hover tracker (the pointer is not on a reply); its composer is a hole. */
+	const panelMounted = Scene.Mount.resolveAll([
+		{ name: "TrackMessageHover" },
+		overlays(Overlays.Message.PointerLeftList()),
+	])
 
 	test("an existing thread's preview opens the panel on it, with no thread to create", () => {
 		Scene.scene(
@@ -156,7 +138,6 @@ describe("threads", () => {
 			Scene.expect(Scene.role("heading", { name: "Thread" })).toExist(),
 			Scene.expect(Scene.text("Creating thread...")).toBeAbsent(),
 			Scene.Command.resolve(LoadThreadPanelWidth, Message.LoadedThreadPanelWidth({ width: null })),
-			Scene.Command.resolve(EditorCommands.FocusEditor, Composer.Message.CompletedFocusEditor()),
 			panelMounted,
 			Scene.Command.expectNone(),
 		)
@@ -180,22 +161,13 @@ describe("threads", () => {
 			Scene.expect(Scene.role("heading", { name: "Thread" })).toExist(),
 			Scene.expect(Scene.text("Creating thread...")).toExist(),
 			Scene.Command.resolve(LoadThreadPanelWidth, Message.LoadedThreadPanelWidth({ width: null })),
-			Scene.Command.resolve(EditorCommands.FocusEditor, Composer.Message.CompletedFocusEditor()),
 			// The composer is there while the thread is created: typing never waits on it.
 			panelMounted,
 			Scene.Command.resolve(CreateThread, ActionMessage.SucceededCreateThread({ threadChannelId })),
 			Scene.expect(Scene.text("Creating thread...")).toBeAbsent(),
 			Scene.click(Scene.role("button", { name: "Close thread" })),
 			Scene.expect(Scene.role("heading", { name: "Thread" })).toBeAbsent(),
-			Scene.Mount.expectEnded(
-				MountEditor({
-					editorId: threadEditorId,
-					placeholder: "Reply in thread...",
-					initialMarkdown: "",
-				}),
-				TrackFileDrop,
-				TrackMessageHover,
-			),
+			Scene.Mount.expectEnded(TrackMessageHover),
 		)
 	})
 })
@@ -274,77 +246,6 @@ describe("image viewer", () => {
 				}),
 			),
 			Scene.Command.resolve(DownloadImage, ActionMessage.CompletedDownloadImage()),
-		)
-	})
-})
-
-describe("composer emoji picker", () => {
-	const data: EmojiData = {
-		locale: "en",
-		emojis: [
-			{ emoji: "🎉", category: 0, label: "party popper", version: 1, tags: ["party"] },
-			{ emoji: "👋", category: 0, label: "waving hand", version: 1, tags: ["wave"] },
-		],
-		categories: [{ index: 0, label: "Smileys & emotion" }],
-		skinTones: {
-			light: "Light",
-			"medium-light": "Medium-light",
-			medium: "Medium",
-			"medium-dark": "Medium-dark",
-			dark: "Dark",
-		},
-	}
-
-	const measured = Picker.Message.MeasuredPicker({
-		rowHeight: 40,
-		categoryHeaderHeight: 40,
-		viewportWidth: 376,
-		viewportHeight: 222,
-	})
-	const emojiDialog = (message: EmojiDialog.Message) =>
-		draft(Draft.Message.GotEmojiPickerMessage({ message }))
-
-	test("Emoji opens the picker dialog with its data; Escape closes it", () => {
-		Scene.scene(
-			channelScene,
-			Scene.given(derivedModel()),
-			mountedChannel(),
-			// Nucleo icons carry a <title>, so the button's accessible name is "<icon title> Emoji".
-			Scene.click(Scene.role("button", { name: /Emoji$/ })),
-			Scene.Command.expectExact(Picker.LoadEmojiData(), Picker.LoadRecentEmojis()),
-			Scene.Command.resolve(Picker.LoadEmojiData, Picker.Message.SucceededLoadEmojiData({ data })),
-			Scene.Command.resolve(Picker.LoadRecentEmojis, Picker.Message.LoadedRecentEmojis({ recent: [] })),
-			Scene.Mount.resolveAll(
-				[
-					{ name: "PortalPickerPopover" },
-					emojiDialog(
-						EmojiDialog.Message.ReceivedPopoverEvent({
-							event: PopoverEvent.CompletedPortalPickerPopover(),
-						}),
-					),
-				],
-				[
-					{ name: "MeasurePicker" },
-					emojiDialog(EmojiDialog.Message.GotPickerMessage({ message: measured })),
-				],
-				[
-					{ name: "TrackPickerFocusOut" },
-					emojiDialog(
-						EmojiDialog.Message.GotPickerMessage({ message: Picker.Message.BlurredPicker() }),
-					),
-				],
-			),
-			Scene.expect(Scene.role("dialog", { name: "Emoji picker" })).toExist(),
-			Scene.expect(Scene.role("gridcell", { name: "party popper" })).toExist(),
-			// The popover around the dialog owns the Escape key (React Aria's Popover).
-			Scene.keydown(Scene.selector(`#${popoverId(`${editorId}-emoji-picker`)}`), "Escape"),
-			Scene.Mount.expectEnded(
-				{ name: "PortalPickerPopover" },
-				{ name: "MeasurePicker" },
-				{ name: "TrackPickerFocusOut" },
-			),
-			Scene.expect(Scene.role("dialog", { name: "Emoji picker" })).toBeAbsent(),
-			Scene.Command.expectNone(),
 		)
 	})
 })
