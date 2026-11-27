@@ -3573,6 +3573,11 @@
 	row-gap: var(--hz-space-3);
 }
 
+[data-hz="grid"][data-density="loose"] {
+	column-gap: var(--hz-space-5);
+	row-gap: var(--hz-space-5);
+}
+
 /* heading */
 [data-hz="heading"] {
 	color: var(--hz-color-fg);
@@ -5789,6 +5794,11 @@
 [data-hz="stack"][data-density="snug"] {
 	column-gap: var(--hz-space-3);
 	row-gap: var(--hz-space-3);
+}
+
+[data-hz="stack"][data-density="loose"] {
+	column-gap: var(--hz-space-5);
+	row-gap: var(--hz-space-5);
 }
 
 [data-hz="stack"][data-align="start"] {

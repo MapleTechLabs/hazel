@@ -103,8 +103,11 @@ export const stackAxes = ["vertical", "horizontal"] as const
 export type StackAxis = (typeof stackAxes)[number]
 
 /** `tight` is a sidebar's section group (`gap-y-0.5`, `stack-tight`). */
-/** `none` sets a title on its subtitle; `snug` is the kit's `gap-3` (an icon tile beside its name). */
-export const stackDensities = ["tight", "compact", "regular", "relaxed", "none", "snug"] as const
+/**
+ * `none` sets a title on its subtitle; `snug` is the kit's `gap-3` (an icon tile beside its name);
+ * `loose` its `gap-5` (a page header over its tabs).
+ */
+export const stackDensities = ["tight", "compact", "regular", "relaxed", "none", "snug", "loose"] as const
 export type StackDensity = (typeof stackDensities)[number]
 
 export const stackAligns = ["stretch", "start", "center", "end"] as const

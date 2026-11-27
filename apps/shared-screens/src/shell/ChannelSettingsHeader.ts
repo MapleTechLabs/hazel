@@ -61,8 +61,8 @@ export const ChannelSettingsHeader = Hazel.component({
 			.tile(true)
 			.private(channel?.type === "private")
 			.emoji(channel?.icon ?? undefined)
-		// Today's `gap-5` between the header and the tabs; the nearest density is `regular` (16).
-		return h.stack.children(
+		// Today's `gap-5` between the header and the tabs, `gap-4` inside the header.
+		return h.stack.density("loose").children(
 			h.stack.children(
 				h.link.label("Back to channel").href(h.props.channelHref).tone("muted").icon("arrow-left"),
 				h.stack
@@ -79,6 +79,7 @@ export const ChannelSettingsHeader = Hazel.component({
 			),
 			h.tabBar
 				.style("page")
+				.collapse(true)
 				.tabs(h.props.tabs.map((tab) => ({ id: tab.id, label: tab.label, href: tab.href })))
 				.selected(h.props.selected)
 				.on("change", ({ id }) => HeaderMessage.ChangedTab({ id })),

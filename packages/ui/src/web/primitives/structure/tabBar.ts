@@ -44,6 +44,24 @@ ${PAGE_TAB}[data-selected]::after {
 }
 `
 
+// `collapse` (`p4-mobile-select-tabs`): below `md` the bar is today's native select (`appearance-none
+// rounded-lg border-input bg-bg`, `px-3.5 py-2.5` less the border, `text-base/6`, the ring on focus).
+const collapseCss = `
+${ROOT} > [data-hz-part="select"] { display: none; }
+@media (width < 48rem) {
+	${ROOT}[data-collapse] > [data-hz-part="bar"] { display: none; }
+	${ROOT}[data-collapse] > [data-hz-part="select"] {
+		display: block; order: -1; width: 100%; appearance: none; outline: none;
+		border: 1px solid var(--hz-color-input); border-radius: var(--hz-radius-lg); background: var(--hz-color-bg);
+		padding: calc(var(--hz-space-2_5) - 1px) calc(var(--hz-space-3_5) - 1px);
+		font: inherit; font-size: var(--hz-text-reading-size); line-height: var(--hz-text-reading-leading); color: var(--hz-color-fg);
+	}
+	${ROOT}[data-collapse] > [data-hz-part="select"]:focus {
+		border-color: var(--hz-color-focus-ring); box-shadow: 0 0 0 3px var(--hz-color-focus-halo);
+	}
+}
+`
+
 const css = `
 ${ROOT} { display: flex; flex-direction: column; min-height: 0; }
 ${ROOT} > [data-hz-part="panel"] { flex: 1 1 auto; min-height: 0; }
@@ -53,6 +71,7 @@ ${ROOT} [data-hz-part="tab"]:focus-visible { outline: 2px solid var(--hz-color-r
 ${ROOT} [data-hz-part="tabIcon"] > svg { display: block; width: 100%; height: 100%; }
 ${ROOT} [data-hz-part="tabBadge"] { position: absolute; top: var(--hz-space-1); inset-inline-start: calc(50% + var(--hz-space-1)); }
 ${pageCss}
+${collapseCss}
 ${reorderCss(`${ROOT} > [data-hz-part="bar"]`, "horizontal")}
 `
 
@@ -66,7 +85,11 @@ export const primitive = definePrimitive("tabBar", ({ document, tag, outer }) =>
 	panel.id = `hz-tabpanel-${++counter}`
 	const bar = part(document, "div", "bar")
 	bar.setAttribute("role", "tablist")
-	node.append(panel, bar)
+	// The collapsed bar (`collapse`): one option per tab, choosing raises `change` as a tab does.
+	const select = part(document, "select", "select") as HTMLSelectElement
+	select.setAttribute("aria-label", "Section")
+	select.addEventListener("change", () => choose(select.value))
+	node.append(panel, bar, select)
 
 	let tabs: ReadonlyArray<Tab> = []
 	let selected = ""
@@ -97,6 +120,7 @@ export const primitive = definePrimitive("tabBar", ({ document, tag, outer }) =>
 				panel.setAttribute("aria-labelledby", button.id)
 			} else delete button.dataset.selected
 		}
+		if (current !== undefined) select.value = current
 	}
 
 	// A tab with `href` is a link (middle click, copy link); a plain click still raises `change`.
@@ -112,6 +136,14 @@ export const primitive = definePrimitive("tabBar", ({ document, tag, outer }) =>
 	}
 
 	const draw = () => {
+		select.replaceChildren(
+			...tabs.map((tab) => {
+				const choice = document.createElement("option")
+				choice.value = tab.id
+				choice.textContent = tab.label
+				return choice
+			}),
+		)
 		bar.replaceChildren(
 			...tabs.map((tab) => {
 				const button = tabNode(tab)
@@ -184,6 +216,7 @@ export const primitive = definePrimitive("tabBar", ({ document, tag, outer }) =>
 				selected = textOf(value)
 				mark()
 			} else if (name === "style") option(node, "style", value)
+			else if (name === "collapse") flag(node, "collapse", value)
 			else if (name === "reorderable") {
 				reorderable = value === true
 				flag(node, "reorderable", value)

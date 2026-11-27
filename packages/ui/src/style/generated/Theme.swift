@@ -1131,6 +1131,7 @@ public enum HazelTheme {
                 Layer(when: When(options: ["density": "relaxed"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 24, rowGap: 24)),
                 Layer(when: When(options: ["density": "none"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 0, rowGap: 0)),
                 Layer(when: When(options: ["density": "snug"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 12, rowGap: 12)),
+                Layer(when: When(options: ["density": "loose"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 20, rowGap: 20)),
             ]
         )
 
@@ -1642,6 +1643,7 @@ public enum HazelTheme {
                 Layer(when: When(options: ["density": "relaxed"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 24, rowGap: 24)),
                 Layer(when: When(options: ["density": "none"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 0, rowGap: 0)),
                 Layer(when: When(options: ["density": "snug"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 12, rowGap: 12)),
+                Layer(when: When(options: ["density": "loose"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 20, rowGap: 20)),
                 Layer(when: When(options: ["align": "start"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(align: .start)),
                 Layer(when: When(options: ["align": "center"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(align: .center)),
                 Layer(when: When(options: ["align": "end"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(align: .end)),

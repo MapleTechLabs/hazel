@@ -901,6 +901,8 @@ export const tags = {
 			// Phase 4: in-page tabs, and tabs the user drags to reorder (saved views).
 			style: option(O.TabBarStyle, "app"),
 			reorderable: flag,
+			// Below today's `md` a `page` bar is a native select (`p4-mobile-select-tabs`); web only.
+			collapse: flag,
 		},
 		events: { change: ids, move },
 	}),
