@@ -28,7 +28,12 @@
 	},
 	"dependencies": {
 		"@effect/ui": "https://pkg.pr.new/Effect-TS/ui/@effect/ui@4d6d7ec",
-		"effect": "catalog:effect"
+		"effect": "catalog:effect",
+		"prosemirror-commands": "^1.7.2",
+		"prosemirror-history": "^1.5.1",
+		"prosemirror-model": "^1.25.12",
+		"prosemirror-state": "^1.4.4",
+		"prosemirror-view": "^1.42.9"
 	},
 	"devDependencies": {
 		"@types/node": "^24.19.2",
