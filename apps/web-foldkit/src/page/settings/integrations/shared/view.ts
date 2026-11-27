@@ -1,13 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { type Integration, integrationLogoSrc } from "~/lib/integrations/__data"
 
-/**
- * Legacy routes here render a fragment straight into the layout's flex column. Foldkit has no
- * fragments, so the children sit in a `display: contents` box that keeps the column's gaps.
- */
-export const fragment = <Message>(h: HtmlBuilder<Message>, children: ReadonlyArray<Html>): Html =>
-	h.div([h.Class("contents")], [...children])
-
 /** The inline stroke icons the integration pages draw (`<svg fill="none" stroke="currentColor">`). */
 export const strokeIcon = <Message>(
 	h: HtmlBuilder<Message>,
@@ -30,7 +23,6 @@ export const strokeIcon = <Message>(
 		],
 	)
 
-export const CHEVRON_RIGHT = "M9 5l7 7-7 7"
 export const CHECK = "M5 13l4 4L19 7"
 
 const LOGO_TILE = {

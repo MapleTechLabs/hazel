@@ -61,6 +61,28 @@ export const DesktopPage = Component.lazy("DesktopPage", () =>
 	),
 )
 
+// Settings: Integrations (PS5a); the settings layout (`sections.ts`) wraps each.
+export const IntegrationsPage = Component.lazy("IntegrationsPage", () =>
+	import("@hazel/shared-screens/settings/pages/integrations/IntegrationsPage").then((module) =>
+		withClientData(module.IntegrationsPage),
+	),
+)
+export const InstalledAppsPage = Component.lazy("InstalledAppsPage", () =>
+	import("@hazel/shared-screens/settings/pages/integrations/installed/InstalledAppsPage").then((module) =>
+		withClientData(module.InstalledAppsPage),
+	),
+)
+export const MarketplacePage = Component.lazy("MarketplacePage", () =>
+	import("@hazel/shared-screens/settings/pages/integrations/marketplace/MarketplacePage").then((module) =>
+		withClientData(module.MarketplacePage),
+	),
+)
+export const YourAppsPage = Component.lazy("YourAppsPage", () =>
+	import("@hazel/shared-screens/settings/pages/integrations/your-apps/YourAppsPage").then((module) =>
+		withClientData(module.YourAppsPage),
+	),
+)
+
 /** The native app's install (`~/config/server`), which its sign-in page can change; `null` on the web. */
 const initialServer = () =>
 	canChooseServer() ? { label: serverLabel(currentServer()), isDefault: isBuildServer(), form: null } : null
@@ -193,6 +215,30 @@ const nativePages: Registry = {
 			fallback: (result) => fallback(result._tag === "Failure"),
 		}),
 	),
+	SettingsIntegrations: (h, { route, session, fallback }) =>
+		IntegrationsPage(h, {
+			key: route.orgSlug,
+			props: { orgSlug: route.orgSlug, session },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	SettingsIntegrationsInstalled: (h, { route, session, fallback }) =>
+		InstalledAppsPage(h, {
+			key: route.orgSlug,
+			props: { orgSlug: route.orgSlug, session },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	SettingsIntegrationsMarketplace: (h, { route, session, fallback }) =>
+		MarketplacePage(h, {
+			key: route.orgSlug,
+			props: { session },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	SettingsIntegrationsYourApps: (h, { route, session, fallback }) =>
+		YourAppsPage(h, {
+			key: route.orgSlug,
+			props: { session },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
 }
 
 /** The parity flag of a route's native page: `"0"` draws today's Foldkit page instead (`compare-pages.ts`). */

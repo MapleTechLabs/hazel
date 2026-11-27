@@ -15,7 +15,7 @@ import {
 import { isProvider } from "./command"
 import { Message } from "./message"
 import type { Model } from "./model"
-import { MAPLE_BOT_IDS } from "../shared/integration-bots"
+import { MAPLE_BOT_IDS } from "@hazel/shared-screens/settings/integrations/data"
 
 interface T3CodeMemberRow {
 	readonly userId: UserId

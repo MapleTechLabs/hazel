@@ -5,10 +5,6 @@ import * as SettingsCustomEmojis from "./custom-emojis"
 import * as SettingsDebug from "./debug"
 import * as SettingsGeneral from "./general"
 import * as IntegrationSettings from "./integrations/detail"
-import * as IntegrationsSettings from "./integrations/index"
-import * as InstalledAppsSettings from "./integrations/installed"
-import * as MarketplaceSettings from "./integrations/marketplace"
-import * as YourAppsSettings from "./integrations/your-apps"
 import * as SettingsInvitations from "./invitations"
 import * as SettingsGroups from "./groups"
 import * as TeamSettings from "./team"
@@ -17,10 +13,6 @@ import * as TeamSettings from "./team"
 export const pages = [
 	TeamSettings.page,
 	SettingsGroups.page,
-	IntegrationsSettings.page,
-	InstalledAppsSettings.page,
-	MarketplaceSettings.page,
-	YourAppsSettings.page,
 	IntegrationSettings.page,
 	SettingsGeneral.page,
 	SettingsDebug.page,
