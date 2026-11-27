@@ -247,6 +247,7 @@
 	--hz-duration-progressSweep: 1600ms;
 	--hz-duration-bounce: 1000ms;
 	--hz-duration-pulse: 2000ms;
+	--hz-duration-spinnerPulse: 1400ms;
 	--hz-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 	--hz-ease-inOut: cubic-bezier(0.77, 0, 0.175, 1);
 	--hz-ease-outQuad: cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -4390,6 +4391,30 @@
 	animation: hz-pulse var(--hz-duration-pulse) var(--hz-ease-pulse) 0s infinite both;
 }
 
+[data-hz="list"] [data-hz-part="spinner"][data-motion~="loop"] {
+	animation: hz-pulse var(--hz-duration-spinnerPulse) var(--hz-ease-inOut) 0s infinite both;
+}
+
+[data-hz="list"] [data-hz-part="spinner"]:nth-child(2)[data-motion~="loop"] {
+	animation-delay: 0.2s;
+}
+
+[data-hz="list"] [data-hz-part="spinner"]:nth-child(3)[data-motion~="loop"] {
+	animation-delay: 0.4s;
+}
+
+[data-hz="list"] [data-hz-part="spinner"]:nth-child(4)[data-motion~="loop"] {
+	animation-delay: 0.6s;
+}
+
+[data-hz="list"] [data-hz-part="spinner"]:nth-child(5)[data-motion~="loop"] {
+	animation-delay: 0.8s;
+}
+
+[data-hz="list"] [data-hz-part="spinner"]:nth-child(6)[data-motion~="loop"] {
+	animation-delay: 1s;
+}
+
 /* listDivider */
 [data-hz="listDivider"] {
 	display: flex;
@@ -6877,4 +6902,24 @@
 
 [data-hz="typingIndicator"] [data-hz-part="dot"][data-motion~="loop"] {
 	animation: hz-bounce var(--hz-duration-bounce) var(--hz-ease-css) 0s infinite both;
+}
+
+[data-hz="typingIndicator"] [data-hz-part="dot"]:nth-last-child(2)[data-motion~="loop"] {
+	animation-delay: -0.15s;
+}
+
+[data-hz="typingIndicator"] [data-hz-part="dot"]:nth-last-child(3)[data-motion~="loop"] {
+	animation-delay: -0.3s;
+}
+
+[data-hz="typingIndicator"] [data-hz-part="dot"]:nth-last-child(4)[data-motion~="loop"] {
+	animation-delay: -0.45s;
+}
+
+[data-hz="typingIndicator"] [data-hz-part="dot"]:nth-last-child(5)[data-motion~="loop"] {
+	animation-delay: -0.6s;
+}
+
+[data-hz="typingIndicator"] [data-hz-part="dot"]:nth-last-child(6)[data-motion~="loop"] {
+	animation-delay: -0.75s;
 }

@@ -413,7 +413,7 @@ public enum HazelTheme {
     public static let space: [String: CGFloat] = ["0": 0, "1": 4, "2": 8, "3": 12, "4": 16, "5": 20, "6": 24, "7": 28, "8": 32, "9": 36, "10": 40, "11": 44, "12": 48, "14": 56, "16": 64, "20": 80, "24": 96, "px": 1, "0.5": 2, "1.5": 6, "2.5": 10, "3.5": 14, "4.5": 18, "5.5": 22]
     public static let radius: [String: CGFloat] = ["none": 0, "xs": 2, "sm": 4, "md": 6, "lg": 8, "xl": 12, "2xl": 16, "3xl": 24, "4xl": 32, "full": 9999]
     /// Seconds.
-    public static let duration: [String: Double] = ["micro": 0.1, "fast": 0.15, "normal": 0.2, "slow": 0.3, "enter": 0.18, "reactionEnter": 0.22, "reactionPop": 0.26, "progressSweep": 1.6, "bounce": 1, "pulse": 2]
+    public static let duration: [String: Double] = ["micro": 0.1, "fast": 0.15, "normal": 0.2, "slow": 0.3, "enter": 0.18, "reactionEnter": 0.22, "reactionPop": 0.26, "progressSweep": 1.6, "bounce": 1, "pulse": 2, "spinnerPulse": 1.4]
     public static let easing: [String: (Double, Double, Double, Double)] = ["out": (0.23, 1, 0.32, 1), "inOut": (0.77, 0, 0.175, 1), "outQuad": (0.25, 0.46, 0.45, 0.94), "outCubic": (0.215, 0.61, 0.355, 1), "outQuart": (0.165, 0.84, 0.44, 1), "inOutCubic": (0.645, 0.045, 0.355, 1), "enter": (0.2, 0, 0, 1), "overshoot": (0.34, 1.56, 0.64, 1), "cssOut": (0, 0, 0.58, 1), "cssIn": (0.42, 0, 1, 1), "cssInOut": (0.42, 0, 0.58, 1), "css": (0.25, 0.1, 0.25, 1), "in": (0.4, 0, 1, 1), "standard": (0.4, 0, 0.2, 1), "pulse": (0.4, 0, 0.6, 1), "fall": (0.8, 0, 1, 1), "rise": (0, 0, 0.2, 1), "linear": (0, 0, 1, 1)]
     public static let shadows: [String: (light: [Shadow], dark: [Shadow])] = [
         "control": (light: [Shadow(inset: true, x: 0, y: 1, blur: 0, spread: 0, color: RGBA(1, 1, 1, 0.16)), Shadow(inset: true, x: 0, y: -1, blur: 0, spread: 0, color: RGBA(0, 0, 0, 0.12)), Shadow(inset: false, x: 0, y: 1, blur: 2, spread: 0, color: RGBA(0, 0, 0, 0.08))], dark: [Shadow(inset: true, x: 0, y: 1, blur: 0, spread: 0, color: RGBA(1, 1, 1, 0.14)), Shadow(inset: true, x: 0, y: -1, blur: 0, spread: 0, color: RGBA(0, 0, 0, 0.2)), Shadow(inset: false, x: 0, y: 1, blur: 2, spread: 0, color: RGBA(0, 0, 0, 0.3))]),
@@ -1938,8 +1938,10 @@ public enum HazelTheme {
         }
 
         /// `part` nil is the root; `backdrop` is a modal's scrim; `regular` replaces `motion` there.
+        /// `stagger`: seconds between siblings; `staggerAhead` counts back from the last (already running).
         public struct Use: Sendable, Equatable {
             public let trigger: Trigger, motion: Spec, part: String?, backdrop: Bool, regular: Spec?
+            public var stagger: Double = 0, staggerAhead: Bool = false
         }
 
         public static let fadeIn = Spec(name: "fadeIn", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .points(0), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.15, curve: Curve(0.23, 1, 0.32, 1), delay: 0, repeats: false)
@@ -1960,6 +1962,7 @@ public enum HazelTheme {
         public static let fieldErrorIn = Spec(name: "fieldErrorIn", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 0, x: .points(0), y: .points(-4), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 0.2, curve: Curve(0, 0, 0.58, 1), delay: 0, repeats: false)
         public static let progressSweep = Spec(name: "progressSweep", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 1, x: .fraction(-1), y: .points(0), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .fraction(2.5), y: .points(0), scale: 1), curve: nil)], duration: 1.6, curve: Curve(0.42, 0, 0.58, 1), delay: 0, repeats: true)
         public static let bounce = Spec(name: "bounce", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 1, x: .points(0), y: .fraction(-0.25), scale: 1), curve: Curve(0.8, 0, 1, 1)), Keyframe(at: 0.5, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: Curve(0, 0, 0.2, 1)), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .fraction(-0.25), scale: 1), curve: nil)], duration: 1, curve: Curve(0.25, 0.1, 0.25, 1), delay: 0, repeats: true)
+        public static let spinnerPulse = Spec(name: "spinnerPulse", keyframes: [Keyframe(at: 0, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil), Keyframe(at: 0.5, pose: Pose(opacity: 0.5, x: .points(0), y: .points(0), scale: 1), curve: nil), Keyframe(at: 1, pose: Pose(opacity: 1, x: .points(0), y: .points(0), scale: 1), curve: nil)], duration: 1.4, curve: Curve(0.77, 0, 0.175, 1), delay: 0, repeats: true)
 
         /// Each primitive's uses, by tag.
         public static let uses: [String: [Use]] = [
@@ -1973,7 +1976,7 @@ public enum HazelTheme {
             "emojiPicker": [Use(trigger: .enter, motion: fadeIn, part: "panel", backdrop: false, regular: nil)],
             "item": [Use(trigger: .countUp, motion: countUp, part: "count", backdrop: false, regular: nil), Use(trigger: .countDown, motion: countDown, part: "count", backdrop: false, regular: nil)],
             "lightbox": [Use(trigger: .enter, motion: scrimIn, part: "stage", backdrop: false, regular: nil), Use(trigger: .enter, motion: fadeIn, part: "panel", backdrop: false, regular: nil)],
-            "list": [Use(trigger: .enter, motion: skeletonIn, part: "skeleton", backdrop: false, regular: nil), Use(trigger: .loop, motion: skeletonPulse, part: "skeletonAvatar", backdrop: false, regular: nil), Use(trigger: .loop, motion: skeletonPulse, part: "skeletonLine", backdrop: false, regular: nil)],
+            "list": [Use(trigger: .enter, motion: skeletonIn, part: "skeleton", backdrop: false, regular: nil), Use(trigger: .loop, motion: skeletonPulse, part: "skeletonAvatar", backdrop: false, regular: nil), Use(trigger: .loop, motion: skeletonPulse, part: "skeletonLine", backdrop: false, regular: nil), Use(trigger: .loop, motion: spinnerPulse, part: "spinner", backdrop: false, regular: nil, stagger: 0.2, staggerAhead: false)],
             "menu": [Use(trigger: .enter, motion: fadeIn, part: "panel", backdrop: false, regular: nil)],
             "message": [Use(trigger: .enter, motion: messageIn, part: nil, backdrop: false, regular: nil), Use(trigger: .enter, motion: reactionIn, part: "reaction", backdrop: false, regular: nil), Use(trigger: .pop, motion: reactionPop, part: "emoji", backdrop: false, regular: nil), Use(trigger: .countUp, motion: countUp, part: "count", backdrop: false, regular: nil), Use(trigger: .countDown, motion: countDown, part: "count", backdrop: false, regular: nil)],
             "popover": [Use(trigger: .enter, motion: fadeIn, part: "panel", backdrop: false, regular: nil)],
@@ -1987,7 +1990,7 @@ public enum HazelTheme {
             "textField": [Use(trigger: .enter, motion: fieldErrorIn, part: "error", backdrop: false, regular: nil)],
             "toast": [Use(trigger: .enter, motion: toastIn, part: "panel", backdrop: false, regular: nil), Use(trigger: .exit, motion: toastOut, part: "panel", backdrop: false, regular: nil)],
             "tooltip": [Use(trigger: .enter, motion: tooltipIn, part: "bubble", backdrop: false, regular: nil)],
-            "typingIndicator": [Use(trigger: .loop, motion: bounce, part: "dot", backdrop: false, regular: nil)],
+            "typingIndicator": [Use(trigger: .loop, motion: bounce, part: "dot", backdrop: false, regular: nil, stagger: 0.15, staggerAhead: true)],
         ]
     }
 }

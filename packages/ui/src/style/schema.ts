@@ -404,6 +404,12 @@ export interface MotionUse<Part extends string, T extends TokenNames> {
 	readonly backdrop?: true
 	/** The motion at the `regular` size class, when it differs. */
 	readonly regular?: T["motion"]
+	/**
+	 * Seconds between siblings (`motion-stagger`): the n-th starts n steps later; with `staggerAhead`
+	 * the last starts at once and earlier ones are already that far into the loop (the typing dots).
+	 */
+	readonly stagger?: number
+	readonly staggerAhead?: true
 }
 
 // Recipes

@@ -16,6 +16,7 @@ export const list = defineRecipe<
 	| "skeleton"
 	| "skeletonAvatar"
 	| "skeletonLine"
+	| "spinner"
 >({
 	primitive: "list",
 	parts: {
@@ -28,6 +29,8 @@ export const list = defineRecipe<
 		skeleton: { kind: "part", in: "viewport" },
 		skeletonAvatar: { kind: "part", in: "skeleton" },
 		skeletonLine: { kind: "part", in: "skeleton" },
+		// An edge spinner's three dots (in `loadingStart` and `loadingEnd`); their look is the renderer's.
+		spinner: { kind: "part", in: "loadingStart" },
 	},
 	base: {
 		root: { fill: true },
@@ -49,6 +52,8 @@ export const list = defineRecipe<
 		loop: [
 			{ motion: "skeletonPulse", part: "skeletonAvatar" },
 			{ motion: "skeletonPulse", part: "skeletonLine" },
+			// The edge spinner's pulse, 0.2s apart (`motion-renderer-loops`, `motion-stagger`).
+			{ motion: "spinnerPulse", part: "spinner", stagger: 0.2 },
 		],
 	},
 })

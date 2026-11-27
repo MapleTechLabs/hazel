@@ -20,6 +20,7 @@ export const typingIndicator = defineRecipe<{}, never, "dots" | "dot" | "label">
 	},
 	options: {},
 	motion: {
-		loop: [{ motion: "bounce", part: "dot" }],
+		// The dots run 0.15s apart, already in motion (today's -0.3s, -0.15s, 0; `motion-stagger`).
+		loop: [{ motion: "bounce", part: "dot", stagger: 0.15, staggerAhead: true }],
 	},
 })

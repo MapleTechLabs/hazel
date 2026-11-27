@@ -39,7 +39,6 @@ const css = `
 	display: flex; justify-content: center; pointer-events: none;
 }
 [data-hz="list"] > [data-hz-part="viewport"] > [data-hz-part="content"] > [data-hz-slot="overlay"] > * { pointer-events: auto; }
-[data-hz="list"] [data-hz-part="spinner"] { animation: hz-list-pulse 1.4s var(--hz-ease-inOut) infinite; }
 [data-hz="list"] [data-hz-part="skeleton"] {
 	display: flex; flex-direction: column; gap: var(--hz-space-5); padding: var(--hz-space-4);
 }
@@ -58,15 +57,9 @@ const css = `
 	display: block; width: var(--hz-space-1_5); height: var(--hz-space-1_5); border-radius: var(--hz-radius-full);
 	background: var(--hz-color-fg-2);
 }
-[data-hz="list"] [data-hz-part="spinner"]:nth-child(2) { animation-delay: 0.2s; }
-[data-hz="list"] [data-hz-part="spinner"]:nth-child(3) { animation-delay: 0.4s; }
 [data-hz="list"] [data-hz-part="skeletonRow"]:nth-child(3n + 2) [data-hz-part="skeletonLine"]:last-child { width: 40%; }
 [data-hz="list"] [data-hz-part="skeletonRow"]:nth-child(3n) [data-hz-part="skeletonLine"]:last-child { width: 85%; }
 [data-hz="list"] [data-hz-part="skeletonLine"]:first-child { width: 30%; }
-@keyframes hz-list-pulse { 50% { opacity: 0.5; } }
-@media (prefers-reduced-motion: reduce) {
-	[data-hz="list"] [data-hz-part="spinner"] { animation: none; }
-}
 ${reorderCss('[data-hz="list"] > [data-hz-part="viewport"] > [data-hz-part="content"]')}
 `
 
@@ -95,7 +88,12 @@ const loadingRow = (document: Document, name: string) => {
 	const row = part(document, "div", name)
 	row.setAttribute("role", "status")
 	row.setAttribute("aria-label", "Loading")
-	for (let dot = 0; dot < 3; dot++) row.append(part(document, "span", "spinner"))
+	// The recipe's `spinnerPulse` loop, staggered by the recipe.
+	for (let dot = 0; dot < 3; dot++) {
+		const spinner = part(document, "span", "spinner")
+		loop(spinner, true)
+		row.append(spinner)
+	}
 	row.hidden = true
 	return row
 }

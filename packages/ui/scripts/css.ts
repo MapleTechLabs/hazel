@@ -454,9 +454,23 @@ const motionRules = (tokens: Tokens, recipe: Recipe): ReadonlyArray<Rule> => {
 				selector: target,
 				lines: [`animation: ${motionAnimation(tokens, name)};`],
 			})
+			// Siblings 2 to 6 wait a step each (`motion-stagger`), or run ahead counted from the last.
+			const stagger = use.stagger
+			const staggered =
+				stagger === undefined
+					? []
+					: [2, 3, 4, 5, 6].map((nth): Rule => ({
+							media: [],
+							selector: target.replace(
+								`[data-motion~="${trigger}"]`,
+								`:${use.staggerAhead ? "nth-last-child" : "nth-child"}(${nth})[data-motion~="${trigger}"]`,
+							),
+							lines: [`animation-delay: ${Math.round((use.staggerAhead ? -1 : 1) * (nth - 1) * stagger * 1000) / 1000}s;`],
+						}))
 			return [
 				rule([], use.motion),
 				...(use.regular === undefined ? [] : [rule([REGULAR_MEDIA], use.regular)]),
+				...staggered,
 			]
 		}),
 	)

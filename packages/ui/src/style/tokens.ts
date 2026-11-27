@@ -324,6 +324,8 @@ export const tokens = {
 		/** Tailwind's `animate-bounce` (typing and thinking dots) and `animate-pulse` (skeletons). */
 		bounce: 1000,
 		pulse: 2000,
+		/** The list's edge spinner dots (`hz-list-pulse`, 1.4s, `motion-renderer-loops`). */
+		spinnerPulse: 1400,
 	},
 	/** styles.css `--ease-*` (theme and `:root`) and the curves its animations name. */
 	easing: {
@@ -437,6 +439,7 @@ export const tokens = {
 			repeat: "forever",
 		},
 		bounce: { keyframes: "bounce", duration: "bounce", easing: "css", repeat: "forever" },
+		spinnerPulse: { keyframes: "pulse", duration: "spinnerPulse", easing: "inOut", repeat: "forever" },
 	},
 	reducedMotion: "instant",
 	/** The app's theme presets set `--color-brand-*` on the page (`core/lib/theme/apply.ts`). */
