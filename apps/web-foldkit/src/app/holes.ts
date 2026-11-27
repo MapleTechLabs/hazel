@@ -11,6 +11,7 @@ export type HoleName =
 	| "dms"
 	| "org-switcher"
 	| "account-menu"
+	| "channel-files"
 
 export const HOLE_ATTRIBUTE = "data-hazel-hole"
 

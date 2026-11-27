@@ -218,9 +218,6 @@ const STATELESS = [
 	"leftWindow",
 	"windowFocus",
 	"listRequests",
-	"filesBreakpoint",
-	"filesInteractionModality",
-	"filesInteractionPointerRelease",
 ]
 /**
  * Keyed by data the new channel derives again (threads, live replies, the parent, the open panel) or
@@ -236,7 +233,6 @@ const KEYED_BY_CHANNEL_DATA = [
 	"threadMembership",
 	"chatIssueMembers",
 	"chatThreadIssueSla",
-	"filesAttachments",
 ]
 
 describe("streams that keep running across a channel switch", () => {

@@ -19,6 +19,7 @@ import type { CurrentUser, Organization } from "../session"
 import { hotkeyLabel } from "../shell/channels-sidebar/hotkey-label"
 import { appError, appLoader, organizationNotFound } from "../shell/layouts"
 import { ShellActivity, ShellChannelSidebar, ShellDms, ShellMessageList } from "./children"
+import { ShellFilesPage, ShellMediaPage } from "./children"
 import { AdoptRegion, RunFoldkitHost } from "./foldkit"
 import {
 	mobileChromeOf,
@@ -187,6 +188,19 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 					],
 				)
 			: null,
+		// The channel's Files and All media tabs, under the Foldkit channel page's header and tab bar.
+		(route._tag === "ChatFiles" || route._tag === "ChatFilesMedia") && channelId !== null
+			? Hole(h, { hole: "channel-files", key: `${route._tag}:${channelId}`, className: FILES_HOLE }, [
+					(route._tag === "ChatFiles" ? ShellFilesPage : ShellMediaPage)(h, {
+						key: channelId,
+						props: {
+							channelId,
+							orgSlug: data.orgSlug,
+							cdnUrl: currentServer().cdn ?? "https://cdn.hazel.sh",
+						},
+					}),
+				])
+			: null,
 		tab !== null && memberId !== null
 			? Hole(h, { hole: "activity", key: memberId }, [
 					ShellActivity(h, {
@@ -210,6 +224,9 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 			: null,
 	]
 }
+
+/** The files pages fill the channel page's content column, as its list does. */
+const FILES_HOLE = "flex min-h-0 flex-1 flex-col [&>[data-hz]]:min-h-0 [&>[data-hz]]:flex-1"
 
 /** Whose screen this is, for the last screen's paint (`app/paint.ts`). */
 const paintAttrs = (data: ShellData) => ({ "data-paint": "shell", "data-paint-user": data.user.id })

@@ -107,3 +107,12 @@ export const ShellChannelSettingsHeader = Component.provide(
 	ChannelSettingsHeader,
 	Layer.succeed(ClientData, clientData),
 )
+
+// The `import()`s keep the files pages in their own chunk, loaded on the first Files tab.
+export const ShellFilesPage = Component.lazy("FilesPage", () =>
+	import("./files-pages").then((module) => module.ShellFilesPage),
+)
+
+export const ShellMediaPage = Component.lazy("MediaPage", () =>
+	import("./files-pages").then((module) => module.ShellMediaPage),
+)
