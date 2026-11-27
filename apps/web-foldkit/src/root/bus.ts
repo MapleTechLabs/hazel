@@ -9,6 +9,7 @@ import type { MessageId } from "@hazel/schema"
 import type { SidebarAction } from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
 import { Effect, Queue, Stream } from "effect"
 import type { ShellRequest } from "../app/message"
+import type { ListHoleEvent } from "../page/customers/list/hole"
 
 export type BusEvent =
 	/** A menu choice in the channel sidebar, by today's keys. */
@@ -23,6 +24,8 @@ export type BusEvent =
 	| { readonly _tag: "PinsHotkey" }
 	/** What a native page asks the app for (`shared-screens/src/app/requests.ts`); the shell acts on it. */
 	| { readonly _tag: "AppRequest"; readonly request: AppRequest }
+	/** What the customers list's hazel controls and table ask the Foldkit list page for. */
+	| { readonly _tag: "CustomersList"; readonly event: ListHoleEvent }
 
 const listeners = new Set<(event: BusEvent) => void>()
 

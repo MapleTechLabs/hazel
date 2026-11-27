@@ -628,6 +628,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		GotFilterPopoverMessage: ({ message: popoverMessage }) =>
 			withPopover(model, "filterPopover", Popover.update(model.filterPopover, popoverMessage)),
 
+		AppliedFilters: ({ filters }) => withDraft(model, shared, (draft) => ({ ...draft, filters })),
+		ChangedSort: ({ sort }) => withDraft(model, shared, (draft) => ({ ...draft, sort })),
+		ChangedColumns: ({ columns }) => withDraft(model, shared, (draft) => ({ ...draft, columns })),
+
 		GotColumnsPopoverMessage: ({ message: popoverMessage }) =>
 			withPopover(model, "columnsPopover", Popover.update(model.columnsPopover, popoverMessage)),
 		ToggledColumn: ({ column, isShown }) =>

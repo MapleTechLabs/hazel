@@ -47,6 +47,11 @@ export const Message = defineMessageUnion({
 	AppliedFilter: {},
 	GotFilterPopoverMessage: { message: Popover.Message },
 
+	/** The hazel controls' builder applied, or their sort menu or column picker changed the draft. */
+	AppliedFilters: { filters: Customers.ViewFilters },
+	ChangedSort: { sort: Customers.ViewSort },
+	ChangedColumns: { columns: Schema.Array(Customers.ListColumn) },
+
 	GotColumnsPopoverMessage: { message: Popover.Message },
 	ToggledColumn: { column: Customers.ListColumn, isShown: Schema.Boolean },
 	MovedColumn: { column: Customers.ListColumn, step: Schema.Literals([-1, 1]) },

@@ -15,6 +15,7 @@ import { catchCommon } from "../../../data/actions"
 import { HazelRpc } from "../../../rpc"
 import { searchFieldIds } from "../../../ui/search-field"
 import { createViewAction, deleteViewAction, updateViewAction } from "./data"
+import { CURRENT_ROW_SELECTOR, isHazelList, SEARCH_SELECTOR } from "./hole"
 import { Message } from "./message"
 import { SEARCH_ID, SPARKLINE_DAYS } from "./model"
 
@@ -190,7 +191,7 @@ export const ExportCustomersCsv = Command.define("ExportCustomersCsv", {
 /** `/` focuses the search field. */
 export const FocusListSearch = Command.define("FocusListSearch", {
 	messages: [Message.CompletedFocusSearch],
-	execute: Dom.focus(`#${searchFieldIds(SEARCH_ID).input}`).pipe(
+	execute: Dom.focus(isHazelList() ? SEARCH_SELECTOR : `#${searchFieldIds(SEARCH_ID).input}`).pipe(
 		// Best effort: the first-run state has no search field.
 		Effect.ignore,
 		Effect.as(Message.CompletedFocusSearch()),
@@ -209,11 +210,11 @@ export const WaitBeforeHoverCard = Command.define("WaitBeforeHoverCard", {
 
 /** Places the hover card beside its row's name (fixed, so the table's scroll box does not clip it). */
 export const PositionHoverCard = Mount.define("PositionHoverCard", {
-	args: { anchorId: Schema.String },
+	args: { anchor: Schema.String },
 	messages: [Message.CompletedPositionHoverCard],
-	execute: ({ element, anchorId }) =>
+	execute: ({ element, anchor: selector }) =>
 		Effect.sync(() => {
-			const anchor = element.ownerDocument.getElementById(anchorId)
+			const anchor = element.ownerDocument.querySelector(selector)
 			if (anchor === null || !(element instanceof HTMLElement)) return
 			const rect = anchor.getBoundingClientRect()
 			const height = element.offsetHeight
@@ -248,14 +249,31 @@ export const LetModifierClicksThrough = Mount.define("LetModifierClicksThrough",
 		).pipe(Effect.as(Message.CompletedLetModifierClicksThrough())),
 })
 
+const nextFrame = Effect.callback<void>((resume) => {
+	requestAnimationFrame(() => resume(Effect.void))
+})
+
 /** Keeps the keyboard cursor's row on screen. */
 export const ScrollListRowIntoView = Mount.define("ScrollListRowIntoView", {
 	args: { tableId: Schema.String },
 	messages: [Message.CompletedScrollRow],
 	execute: ({ element, tableId }) =>
-		Effect.sync(() =>
-			element.ownerDocument
-				.querySelector(`#${tableId} tr[data-focused]`)
-				?.scrollIntoView({ block: "nearest" }),
+		(isHazelList()
+			? // The hazel table marks its row once it has read the page's state off its hole.
+				nextFrame.pipe(
+					Effect.andThen(nextFrame),
+					Effect.andThen(
+						Effect.sync(() =>
+							element.ownerDocument
+								.querySelector(CURRENT_ROW_SELECTOR)
+								?.scrollIntoView({ block: "nearest" }),
+						),
+					),
+				)
+			: Effect.sync(() =>
+					element.ownerDocument
+						.querySelector(`#${tableId} tr[data-focused]`)
+						?.scrollIntoView({ block: "nearest" }),
+				)
 		).pipe(Effect.as(Message.CompletedScrollRow())),
 })

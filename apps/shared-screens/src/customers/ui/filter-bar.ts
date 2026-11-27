@@ -164,8 +164,10 @@ export const filterBar = <Msg>(
 			options.end === undefined ? null : h.spacer,
 			options.end === undefined
 				? null
-				: h.stack
+				: // Today's end group is `gap-3`.
+					h.stack
 						.axis("horizontal")
+						.density("cozy")
 						.align("center")
 						.children(...options.end),
 		)

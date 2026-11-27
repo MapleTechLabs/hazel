@@ -46,7 +46,9 @@ import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
 import type { PageViewInputs } from "../../contract"
 import { companyFacts } from "../../../customers/ui/company"
+import { hole } from "../../../app/holes"
 import { LetModifierClicksThrough, PositionHoverCard, ScrollListRowIntoView } from "./commands"
+import { encodeHoleState, isHazelList, nameCellSelector, STATE_ATTRIBUTE } from "./hole"
 import { chipOf, columnPicker, filterBuilder } from "./controls"
 import { Message } from "./message"
 import {
@@ -377,7 +379,11 @@ const hoverCard = (h: HtmlBuilder<Message>, model: Model, account: AccountRow, v
 			h.Class(
 				"pointer-events-none invisible fixed z-50 flex w-84 flex-col overflow-hidden rounded-xl border border-border bg-overlay text-sm shadow-lg",
 			),
-			h.OnMount(PositionHoverCard({ anchorId: nameAnchorId(account.id) })),
+			h.OnMount(
+				PositionHoverCard({
+					anchor: isHazelList() ? nameCellSelector(account.id) : `#${nameAnchorId(account.id)}`,
+				}),
+			),
 		],
 		[
 			h.div(
@@ -919,6 +925,44 @@ const table = (
 	)
 }
 
+// HOLES
+
+/** What the hazel controls and table show, written on their holes (`./hole.ts`). */
+const holeStateOf = (
+	model: Model,
+	viewer: Viewer,
+	rows: ReadonlyArray<AccountRow>,
+	isMobile: boolean,
+): string =>
+	encodeHoleState({
+		filters: model.draft.filters,
+		search: model.search,
+		sort: model.draft.sort,
+		columns: model.draft.columns,
+		selected: model.selected,
+		focusedId: model.focusedId,
+		rowLimit: model.rowLimit,
+		currency: model.reportingCurrency,
+		nowMs: viewer.nowMs,
+		isMobile,
+		sparklines: Object.fromEntries(
+			rows.slice(0, model.rowLimit).flatMap((account) => {
+				const values = model.sparklines[account.id]
+				return values === undefined ? [] : [[account.id, values]]
+			}),
+		),
+	})
+
+const keptInView = (h: HtmlBuilder<Message>, model: Model): ReadonlyArray<Html> =>
+	model.focusedId === null
+		? []
+		: [
+				h.keyed("span")(`scroll-${model.focusedId}`, [
+					h.Class("hidden"),
+					h.OnMount(ScrollListRowIntoView({ tableId: TABLE_ID })),
+				]),
+			]
+
 // PAGE
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
@@ -943,6 +987,18 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	const hovered =
 		model.hoveredId === null ? undefined : rows.find((account) => account.id === model.hoveredId)
 	const hasNoResults = model.accounts !== null && rows.length === 0
+	const hazel = isHazelList()
+	const state = hazel ? holeStateOf(model, viewer, rows, shared.isMobile) : ""
+	const listTable = (tableRows: ReadonlyArray<AccountRow>): Html =>
+		hazel
+			? h.div(
+					[],
+					[
+						hole(h, "customers-list-table", orgSlug, [h.Attribute(STATE_ATTRIBUTE, state)]),
+						...keptInView(h, model),
+					],
+				)
+			: table(h, model, viewer, tableRows, orgSlug)
 	return h.div(
 		[h.Class("relative h-full overflow-y-auto")],
 		[
@@ -951,17 +1007,15 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 				[
 					header(h, model, viewer, rows),
 					tabsRow(h, model, viewer),
-					controls(h, model, viewer, rows.length),
+					hazel
+						? hole(h, "customers-list-controls", orgSlug, [h.Attribute(STATE_ATTRIBUTE, state)])
+						: controls(h, model, viewer, rows.length),
 				],
 			),
 			h.div(
 				// Room under the last row for the bulk bar, which floats over the bottom.
 				[h.Class(model.selected.length > 0 ? "mt-3 pb-24" : "mt-3 pb-6")],
-				[
-					hasNoResults
-						? h.div([], [table(h, model, viewer, [], orgSlug), noResults(h, model, viewer)])
-						: table(h, model, viewer, rows, orgSlug),
-				],
+				[hasNoResults ? h.div([], [listTable([]), noResults(h, model, viewer)]) : listTable(rows)],
 			),
 			...(model.selected.length > 0 ? [bulkBar(h, model, viewer, rows.length)] : []),
 			// A tap fires mouseenter too; a phone has no hover to preview with.
