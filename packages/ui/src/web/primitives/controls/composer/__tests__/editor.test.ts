@@ -8,6 +8,9 @@ import { primitive as composer } from "../../composer.ts"
 import { editorOf } from "../editor.ts"
 import { fromMarkdown, toMarkdown, trustCustomEmojiBase } from "../markdown.ts"
 
+// Views mounted by a test, destroyed after it so ProseMirror's observer timers never outlive the DOM.
+const mounted: Array<EditorView> = []
+
 const mount = (props: Readonly<Record<string, Plain>>, on: ReadonlyArray<string>) => {
 	const made: Primitive = composer.create({
 		document,
@@ -31,6 +34,7 @@ const mount = (props: Readonly<Record<string, Plain>>, on: ReadonlyArray<string>
 	document.body.append(made.outer)
 	const input = made.outer.querySelector<HTMLElement>("[data-hz-part=input]")!
 	const view = editorOf(input)!
+	mounted.push(view)
 	return { node: made.outer, fired, set: made.set, input, view }
 }
 
@@ -52,6 +56,7 @@ const key = (target: Element, init: KeyboardEventInit) => {
 }
 
 afterEach(() => {
+	for (const view of mounted.splice(0)) view.destroy()
 	document.body.replaceChildren()
 	trustCustomEmojiBase(undefined)
 })
