@@ -7,7 +7,7 @@ import { CustomerAccountId, CustomerIssueId } from "@hazel/schema"
 import { Hazel, TextField } from "@hazel/ui/vocabulary/index"
 import { Schema } from "effect"
 import { describe, expect, test } from "vitest"
-import type { IssueSlaRow } from "../data/sla"
+import { formatDueAt, type IssueSlaRow } from "../data/sla"
 import { NO_VALUE, kindChip, severityChip, signalCounts, signalCountsLabel, stageBadge } from "./badges"
 import { connectCard } from "./connect-card"
 import { noResultsState } from "./empty-states"
@@ -194,7 +194,8 @@ describe("SLA chip", () => {
 				label: "Reply overdue by 1h",
 				tone: "danger",
 				icon: "clock",
-				title: "Standard policy · was due Fri 12:00",
+				// Due an hour before now, in the viewer's own time zone.
+				title: `Standard policy · was due ${formatDueAt(NOW.getTime() - 60 * 60_000, NOW.getTime())}`,
 			},
 		])
 	})
