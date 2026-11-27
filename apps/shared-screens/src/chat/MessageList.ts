@@ -10,6 +10,7 @@ import { Subscription } from "@effect/ui"
 import { ChannelId, MessageId, UserId } from "@hazel/schema"
 import { Content, Hazel, type IconName, type MessageAction } from "@hazel/ui/vocabulary/index"
 import { Match, Schema } from "effect"
+import { ProfileCard, type ProfilePerson, ProfilePresence } from "./components/ProfileCard"
 import { initialsOf, sinceLabel } from "./format"
 import { EmojiPicker } from "./pickers/EmojiPicker"
 import {
@@ -22,6 +23,7 @@ import {
 	messagesStream,
 	MoveWindow,
 	PAGE_SIZE,
+	profilePresenceStream,
 	reactionsStream,
 	readPositionStream,
 	replyTargetsStream,
@@ -52,6 +54,7 @@ import {
 	type RowEntry,
 	toEntries,
 	displayNameOf,
+	providerOf,
 } from "./rows"
 
 export { MessageListMessage } from "./messages"
@@ -109,7 +112,10 @@ export const MessageListModel = Schema.Struct({
 	nowMs: Schema.Finite,
 	/** The message the emoji picker reacts to. */
 	picker: Schema.NullOr(MessageId),
+	/** The open profile card: whose, and where it anchors (a mention's run, or -1 for the row). */
 	profile: Schema.NullOr(Schema.Struct({ id: MessageId, userId: Schema.String, run: Schema.Finite })),
+	/** The open profile's presence, once its query answered. */
+	profilePresence: Schema.NullOr(ProfilePresence),
 	/** The message whose action sheet is open. */
 	menu: Schema.NullOr(MessageId),
 })
@@ -260,6 +266,32 @@ const actionStep = (props: MessageListProps, message: typeof ChatMessage.Type, a
 		),
 	)
 
+/** The anchor run of a profile opened from the author: no run has it, so the row itself anchors. */
+const AUTHOR_RUN = -1
+
+/** Who a profile card shows, from the list's users and bots. */
+export const personOf = (
+	model: MessageListModel,
+	viewerId: UserId,
+	userId: string,
+): ProfilePerson | undefined => {
+	const lookups = lookupsOf(model, viewerId)
+	const user = lookups.users.get(userId)
+	const name = displayNameOf(lookups, userId)
+	if (user === undefined || name === undefined) return undefined
+	const provider = providerOf(user)
+	return {
+		name,
+		initials: initialsOf(name),
+		avatar: user.avatarUrl ?? undefined,
+		email: user.email,
+		timezone: user.timezone ?? null,
+		isBot: user.userType === "machine" && provider === undefined,
+		provider,
+		isOwn: user.id === viewerId,
+	}
+}
+
 export const MessageList = Hazel.component({
 	name: "MessageList",
 	props: MessageListProps,
@@ -285,6 +317,7 @@ export const MessageList = Hazel.component({
 		nowMs: props.nowMs,
 		picker: null,
 		profile: null,
+		profilePresence: null,
 		menu: null,
 	}),
 	update: {
@@ -373,12 +406,21 @@ export const MessageList = Hazel.component({
 		RequestedCloseEmojiPicker: ($) => $.evolve({ picker: () => null }),
 		PressedAuthor: ($, { id }) => {
 			const row = rowOf($.model, id)
+			// Today's avatar popover; the row anchors it (`AUTHOR_RUN` matches no run).
 			return row === undefined
 				? $.model
-				: $.run(RequestHost.make({ request: { _tag: "OpenProfile", userId: row.authorId } }))
+				: $.evolve({
+						profile: () => ({ id, userId: row.authorId, run: AUTHOR_RUN }),
+						profilePresence: () => null,
+					})
 		},
-		PressedMention: ($, { id, userId, run }) => $.evolve({ profile: () => ({ id, userId, run }) }),
+		PressedMention: ($, { id, userId, run }) =>
+			$.evolve({ profile: () => ({ id, userId, run }), profilePresence: () => null }),
 		DismissedProfile: ($) => $.evolve({ profile: () => null }),
+		UpdatedProfilePresence: ($, { presence }) =>
+			$.model.profile === null ? $.model : $.evolve({ profilePresence: () => presence }),
+		PressedEditProfile: ($) =>
+			$.evolve({ profile: () => null }).run(RequestHost.make({ request: { _tag: "EditProfile" } })),
 		PressedLink: ($, { url }) => $.run(RequestHost.make({ request: { _tag: "OpenLink", url } })),
 		PressedAttachment: ($, { id, attachmentId }) => {
 			const files = rowOf($.model, id)?.row.files ?? []
@@ -470,6 +512,14 @@ export const MessageList = Hazel.component({
 				activityStream(ChannelId.make(channelId)),
 			),
 			Subscription.make("clock", [], () => clockStream),
+			// Only while a profile card is open, for whoever it shows.
+			...(model.profile === null
+				? []
+				: [
+						Subscription.make("profilePresence", [model.profile.userId], ([userId]) =>
+							profilePresenceStream(UserId.make(userId)),
+						),
+					]),
 		]
 	},
 	view: (h, model) => {
@@ -586,8 +636,7 @@ export const MessageList = Hazel.component({
 				)
 
 		const profile = model.profile
-		const profileName =
-			profile === null ? "" : (displayNameOf(lookupsOf(model, h.props.userId), profile.userId) ?? "")
+		const person = profile === null ? undefined : personOf(model, h.props.userId, profile.userId)
 		return h.stack.children(
 			list,
 			h.popover
@@ -595,13 +644,13 @@ export const MessageList = Hazel.component({
 				.anchorTo(profile === null ? undefined : { key: profile.id, run: profile.run })
 				.on("dismiss", MessageListMessage.DismissedProfile())
 				.children(
-					h.stack
-						.axis("horizontal")
-						.align("center")
-						.children(
-							h.avatar.name(profileName).initials(initialsOf(profileName)),
-							h.text.strong().children(profileName),
-						),
+					person === undefined
+						? null
+						: ProfileCard(h, {
+								person,
+								presence: model.profilePresence,
+								onEditProfile: MessageListMessage.PressedEditProfile(),
+							}),
 				),
 			menuSheet(),
 			EmojiPicker(h, {

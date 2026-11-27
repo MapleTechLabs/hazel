@@ -8,6 +8,7 @@ import { UiSchema } from "@effect/ui"
 import { ChannelId, MessageId, UserId } from "@hazel/schema"
 import { Content, MessageAction } from "@hazel/ui/vocabulary/index"
 import { Schema } from "effect"
+import { ProfilePresence } from "./components/ProfileCard"
 
 export const ChatMessage = Schema.Struct({
 	id: MessageId,
@@ -30,6 +31,8 @@ export const ChatUser = Schema.Struct({
 	avatarUrl: Schema.NullOr(Schema.String),
 	userType: Schema.String,
 	email: Schema.NullOr(Schema.String),
+	/** For the profile card's local time; absent where a host does not load it. */
+	timezone: Schema.optionalKey(Schema.NullOr(Schema.String)),
 })
 
 export const ChatReaction = Schema.Struct({ messageId: MessageId, userId: UserId, emoji: Schema.String })
@@ -67,7 +70,8 @@ export const HostRequest = Schema.Union([
 		url: Schema.String,
 		index: Schema.Finite,
 	}),
-	Schema.TaggedStruct("OpenProfile", { userId: Schema.String }),
+	/** The profile card's "Edit profile": the host opens the viewer's profile settings. */
+	Schema.TaggedStruct("EditProfile", {}),
 	Schema.TaggedStruct("JumpToReply", { fromMessageId: MessageId, messageId: MessageId }),
 	Schema.TaggedStruct("Retry", { messageId: MessageId }),
 ])
@@ -104,6 +108,9 @@ export const MessageListMessage = UiSchema.TaggedEnum({
 	PressedAuthor: { id: MessageId },
 	PressedMention: { id: MessageId, userId: Schema.String, run: Schema.Finite },
 	DismissedProfile: {},
+	/** The open profile's presence row; null when the person has none. */
+	UpdatedProfilePresence: { presence: Schema.NullOr(ProfilePresence) },
+	PressedEditProfile: {},
 	PressedLink: { url: Schema.String },
 	PressedAttachment: { id: MessageId, attachmentId: Schema.String },
 	PressedReply: { id: MessageId },

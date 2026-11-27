@@ -7,7 +7,11 @@ import { Message } from "./page"
 const toOverlay = (message: Overlays.Message) => Message.GotOverlaysMessage({ message })
 
 /** What a row of the shared message list asks the page for; the rest the list does itself. */
-type ListMessage = ReturnType<typeof Message.GotOverlaysMessage | typeof Message.ClickedThreadPreview>
+type ListMessage = ReturnType<
+	| typeof Message.GotOverlaysMessage
+	| typeof Message.ClickedThreadPreview
+	| typeof Message.ClickedEditProfile
+>
 
 export const listRequests = (request: HostRequest): ReadonlyArray<ListMessage> =>
 	Match.valueTags(request, {
@@ -29,8 +33,8 @@ export const listRequests = (request: HostRequest): ReadonlyArray<ListMessage> =
 			globalThis.open?.(url, "_blank", "noopener")
 			return []
 		},
-		// Today's profile popover and the jump to an unloaded reply lived in the Foldkit list.
-		OpenProfile: () => [],
+		EditProfile: () => [Message.ClickedEditProfile()],
+		// The jump to an unloaded reply lived in the Foldkit list.
 		JumpToReply: () => [],
 		Retry: () => [],
 	})

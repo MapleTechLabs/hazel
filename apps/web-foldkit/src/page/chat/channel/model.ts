@@ -284,6 +284,8 @@ export const Message = defineMessageUnion({
 	GotActionMessage: { message: ActionMessage },
 	UpdatedThreadMember: { threadChannelId: ChannelId, memberId: Schema.NullOr(ChannelMemberId) },
 	ClickedThreadPreview: { threadChannelId: ChannelId, messageId: MessageId },
+	/** The list's profile card asked for the viewer's profile settings. */
+	ClickedEditProfile: {},
 	/** The quoted text of a reply (on message `fromMessageId`): jump to the message it quotes. */
 	ClickedReplyPreview: { fromMessageId: MessageId, messageId: MessageId },
 	/** The history reaches back to the jump's target, which has `newerCount` newer messages. */
