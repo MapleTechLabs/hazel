@@ -134,7 +134,8 @@ const shoot = async (
 		({ flag, hazel, theme, id, key }) => {
 			localStorage.setItem("hazel-ui-theme", JSON.stringify(theme))
 			localStorage.setItem(key, id)
-			if (hazel) localStorage.setItem(flag, "1")
+			// A native page's flag: "1" draws it, "0" draws today's Foldkit page (`root/native-pages.ts`).
+			localStorage.setItem(flag, hazel ? "1" : "0")
 		},
 		{ flag: entry.flag, hazel, theme, id: entry.id, key: PAGE_FIXTURE_KEY },
 	)

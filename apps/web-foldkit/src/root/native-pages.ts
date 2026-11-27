@@ -41,7 +41,15 @@ const nativePages: Registry = {
 		}),
 }
 
-export const isNativeRoute = (route: AppRoute): boolean => nativePages[route._tag] !== undefined
+/** The parity flag of a route's native page: `"0"` draws today's Foldkit page instead (`compare-pages.ts`). */
+export const parityFlag = (tag: AppRoute["_tag"]) => `hazel:native:${tag}`
+
+// The parity runner sets the flag before the app loads.
+const forcedOff = (tag: AppRoute["_tag"]): boolean =>
+	typeof localStorage !== "undefined" && localStorage.getItem(parityFlag(tag)) === "0"
+
+export const isNativeRoute = (route: AppRoute): boolean =>
+	nativePages[route._tag] !== undefined && !forcedOff(route._tag)
 
 /** The route's native page, or null when the Foldkit host still draws it. */
 export const nativePageOf = <Tag extends AppRoute["_tag"]>(
@@ -49,5 +57,5 @@ export const nativePageOf = <Tag extends AppRoute["_tag"]>(
 	inputs: NativeInputs<Tag>,
 ): View.Content<AppMessage, any> | null => {
 	const page = nativePages[inputs.route._tag] as NativePage<Tag> | undefined
-	return page === undefined ? null : page(h, inputs)
+	return page === undefined || forcedOff(inputs.route._tag) ? null : page(h, inputs)
 }

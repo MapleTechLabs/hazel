@@ -350,9 +350,11 @@ The iOS halves (S1 to S5) wait until iOS is live.
 ### Wave 2: pages
 
 Every page lane: rebuilds its area as components in `apps/shared-screens/src/<area>/` (pages under
-`pages/` mirroring the URL, per Effect UI's "Organizing an app"), adds its island page and parity entry
-(`X1`, `X2`), seeds the offline fixture, rewrites its tests on Effect UI `Story`/`Scene`, reaches
-parity, makes the hazel page the default, and deletes the Foldkit page and its tests in the same PR.
+`pages/` mirroring the URL, per Effect UI's "Organizing an app"), registers each page in
+`apps/web-foldkit/src/root/native-pages.ts` (X0+X1; invite is the worked example) and adds its parity
+entry under `src/parity/pages/` with `flag: parityFlag("<RouteTag>")` (`"0"` draws today's Foldkit page),
+seeds the offline fixture, rewrites its tests on Effect UI `Story`/`Scene`, reaches parity live, commits
+the "today" strips as the baseline, then deletes the Foldkit page and its tests in the same branch.
 Verify: `bun run --cwd apps/shared-screens typecheck && bun run --cwd apps/web-foldkit typecheck &&
 bun run --cwd apps/shared-screens test <area> && bun run --cwd apps/ios-hybrid build:web:offline &&
 bun packages/ui/scripts/compare-pages.ts --only <id>`, plus `bun run lint`.
