@@ -24,10 +24,21 @@ const tagsArg = arg("tags")
 const query = [lane ? `lane=${lane}` : "", tagsArg ? `tags=${tagsArg}` : ""].filter(Boolean).join("&")
 const shotsDir = resolve(import.meta.dirname, "../src/conformance/__shots__")
 
-/** Kit diffs known to fail, each with its owning lane; a listed case that passes fails the run. */
-const knownDiffs: ReadonlyArray<{ readonly case: string; readonly lane: string; readonly reason: string }> =
-	JSON.parse(readFileSync(resolve(import.meta.dirname, "../src/conformance/known-diffs.json"), "utf8"))
+/**
+ * Kit diffs known to fail, each with its owning lane; a listed case that passes fails the run.
+ * `runs` limits an entry to some runs (`light-compact`), for a residue only one size class shows.
+ */
+const knownDiffs: ReadonlyArray<{
+	readonly case: string
+	readonly lane: string
+	readonly reason: string
+	readonly runs?: ReadonlyArray<string>
+}> = JSON.parse(readFileSync(resolve(import.meta.dirname, "../src/conformance/known-diffs.json"), "utf8"))
 const known = new Map(knownDiffs.map((entry) => [entry.case, entry]))
+const knownIn = (id: string, run: string) => {
+	const entry = known.get(id)
+	return entry !== undefined && (entry.runs === undefined || entry.runs.includes(run)) ? entry : undefined
+}
 
 interface Result {
 	readonly run: string
@@ -147,7 +158,7 @@ const main = async () => {
 					writeFileSync(resolve(dir, `${file}.diff.png`), Buffer.from(diff.diffPng, "base64"))
 					detail = `kit ${c.kit.specimen}: ${Math.round(ratio * 1e5) / 1e3}% differ, max delta ${diff.maxDelta}, kit ${kitBox?.width}x${kitBox?.height}, hazel ${ourBox?.width}x${ourBox?.height}`
 					const over = !sameSize || ratio > PIXEL_TOLERANCE
-					const listed = known.get(c.id)
+					const listed = knownIn(c.id, name)
 					if (over && listed !== undefined) {
 						results.push({
 							run: name,

@@ -225,13 +225,14 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 					{
 						hole: "join-banner",
 						key: channelId,
+						matchKey: true,
 						className: "flex flex-1 flex-col items-center justify-center p-8",
 					},
 					[ShellJoinBanner(h, { key: channelId, props: { channelId, userId: data.user.id } })],
 				)
 			: null,
 		route._tag === "ChatChannel" && channelId !== null
-			? Hole(h, { hole: "channel-header", key: channelId }, [
+			? Hole(h, { hole: "channel-header", key: channelId, matchKey: true }, [
 					ShellChannelHeader(h, {
 						key: channelId,
 						props: {

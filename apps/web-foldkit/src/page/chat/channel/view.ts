@@ -190,8 +190,9 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 			h.div(
 				[h.Class(splitContentClassName())],
 				[
-					// The channel header is the shared screen in its hole (`src/root/app.ts`).
-					hole(h, "channel-header", model.channelId, [h.Class("shrink-0")]),
+					// The channel header is the shared screen in its hole (`src/root/app.ts`); today's `h-14`
+					// is reserved so the header's first frame, before its data, never moves the list.
+					hole(h, "channel-header", model.channelId, [h.Class("min-h-14 shrink-0")]),
 					lazyTabBar(chatTabBarView, [routeTabOf(model.tab), toSelf, h]) ?? h.empty,
 					...(model.tab._tag === "Files"
 						? [filesHole(h, model, model.tab.view)]

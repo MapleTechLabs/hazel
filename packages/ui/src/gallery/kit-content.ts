@@ -18,7 +18,7 @@ import { heading } from "../../../../apps/web-foldkit/src/ui/heading.ts"
 import { iconTile } from "../../../../apps/web-foldkit/src/ui/icon-tile.ts"
 import { kbd } from "../../../../apps/web-foldkit/src/ui/kbd.ts"
 import { presenceDot } from "../../../../apps/web-foldkit/src/ui/presence-dot.ts"
-import { thoughtLine } from "./kit-legacy/thought-line.ts"
+import { thoughtLine } from "../../../../apps/web-foldkit/src/parity/kit/thought-line.ts"
 
 /**
  * The kit side of lane A1's parity tags: today's avatar, group DM pair, icon tile, channel icon,

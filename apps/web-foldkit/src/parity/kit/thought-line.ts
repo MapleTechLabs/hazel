@@ -1,10 +1,8 @@
-// A frozen copy of today's thought line (deleted from the app by PC11), kept as the gallery's kit reference.
+// A frozen copy of today's thought line (PC11 deleted it from the app): the kit gallery's reference.
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { IconChevronRight } from "../../../../../apps/web-foldkit/src/icons/index.ts"
-import { ariaButton } from "../../../../../apps/web-foldkit/src/ui/button.ts"
-
-// The kit merged classes with tailwind-merge; this copy has no conflicting classes, so a join matches.
-const twMerge = (...classes: ReadonlyArray<string | undefined | false>) => classes.filter(Boolean).join(" ")
+import { twMerge } from "tailwind-merge"
+import { IconChevronRight } from "../../icons"
+import { ariaButton } from "../../ui/button"
 
 /**
  * The header of something an agent is working through (its thinking, a run of tool calls), after
