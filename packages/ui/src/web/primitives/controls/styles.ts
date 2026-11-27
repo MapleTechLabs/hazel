@@ -16,6 +16,8 @@ const css = `
 	outline: 2px solid color-mix(in oklab, var(--hz-color-ring) 70%, transparent);
 	outline-offset: 0;
 }
+/* A field reads from the start whatever its parent aligns (an end-aligned stack's \`text-align: end\`). */
+:where([data-hz=textField], [data-hz=select], [data-hz=textArea], [data-hz=searchField], [data-hz=datePicker]) { text-align: start; }
 /* The field's box shows focus (the kit's \`focus:border-ring/70 focus:ring-3 ring-ring/20\`), not the input. */
 :is([data-hz=textField], [data-hz=select]) [data-hz-part=control] > :is(input, select) {
 	min-width: 0;
