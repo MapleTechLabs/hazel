@@ -191,4 +191,3 @@ export const toShell = (outMessage: PageOutMessage) => emit({ _tag: "Page", outM
 /** The host asking the shell to navigate to `path`. */
 export const navigation = (path: string, options: { readonly replace?: boolean } = {}) =>
 	toShell(PageOutMessage.RequestedNavigation({ route: routeOf(path), replace: options.replace ?? false }))
-
