@@ -1,0 +1,18 @@
+{
+	"about": "The kit's `iconTile` (`md`) in its `success` intent, diffed against today's (`icon-tile-tints`).",
+	"root": {
+		"tag": "iconTile",
+		"props": {
+			"name": "hashtag",
+			"tone": "success"
+		}
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "icon-tile-success",
+		"target": "iconTile"
+	},
+	"pending": {
+		"ios": "S1"
+	}
+}

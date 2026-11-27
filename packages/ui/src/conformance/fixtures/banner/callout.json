@@ -1,0 +1,26 @@
+{
+	"about": "The kit's callout (`ui/callout.ts`) in `warning` with its glyph, a title and a note; `danger` is an alert, the rest a status.",
+	"root": {
+		"tag": "banner",
+		"props": {
+			"tone": "warning",
+			"icon": "warning",
+			"title": "Export paused",
+			"description": "Resumes in a few minutes."
+		}
+	},
+	"frame": "inline",
+	"axes": [
+		{
+			"prop": "tone",
+			"values": [null, "danger"]
+		}
+	],
+	"kit": {
+		"specimen": "callout-warning",
+		"target": "banner"
+	},
+	"pending": {
+		"ios": "S1"
+	}
+}

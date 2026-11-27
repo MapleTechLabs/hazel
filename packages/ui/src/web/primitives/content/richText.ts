@@ -1,6 +1,45 @@
 // Owned by lane A1 (`docs/hazel-ui.md`, "Phase 2: lanes").
 import { BlockKind, RunKind, type Block, type Run } from "../../../vocabulary/content.ts"
+import { glyph } from "../../icons.ts"
 import { definePrimitive, part, type Primitive } from "../define.ts"
+import { highlight } from "./code.ts"
+import { ensureStyles } from "./styles.ts"
+
+/**
+ * A code block as `markdown-view.ts` draws it: the highlighted code in a well, and over its corner the
+ * language (an `info` pill, none for plain text) and the copy button, shown on hover (`data-block` is
+ * the block's index, what `copyCode` reports); a block past 15 lines is clipped.
+ */
+const codeBlock = (document: Document, source: string, language: string, block: number) => {
+	const frame = part(document, "div", "codeFrame")
+	const tools = part(document, "div", "codeTools")
+	const named = language !== "" && language.toLowerCase() !== "plaintext"
+	if (named) {
+		const badge = part(document, "span", "codeLanguage")
+		badge.textContent = language
+		tools.append(badge)
+	}
+	const copy = part(document, "button", "codeCopy")
+	copy.setAttribute("type", "button")
+	copy.setAttribute("title", "Copy code")
+	copy.setAttribute("aria-label", "Copy code")
+	copy.dataset.block = String(block)
+	const icon = part(document, "span", "codeCopyIcon")
+	icon.setAttribute("aria-hidden", "true")
+	glyph(icon, "copy")
+	copy.append(icon)
+	tools.append(copy)
+	const pre = part(document, "pre", "codeBlock")
+	if (named) pre.dataset.named = ""
+	// Past 15 lines the block is clipped at 320px, as today's (no control opens it).
+	if (source.split("\n").length > 15) pre.dataset.collapsed = ""
+	const code = document.createElement("code")
+	if (language !== "") code.dataset.language = language
+	code.append(...highlight(document, source, language))
+	pre.append(code)
+	frame.append(tools, pre)
+	return frame
+}
 
 /**
  * Blocks to DOM. Runs are numbered in reading order across the whole value (`data-hz-run`): what
@@ -52,7 +91,7 @@ const render = (document: Document, blocks: ReadonlyArray<Block>) => {
 		node.append(...runs.map(run))
 		return node
 	}
-	return blocks.map((block): HTMLElement => {
+	return blocks.map((block, index): HTMLElement => {
 		if (block[0] === BlockKind.paragraph) return line(block[1])
 		if (block[0] === BlockKind.item) return line(block[1], block[2])
 		if (block[0] === BlockKind.quote) {
@@ -62,19 +101,12 @@ const render = (document: Document, blocks: ReadonlyArray<Block>) => {
 			quote.append(italic)
 			return quote
 		}
-		const pre = part(document, "pre", "codeBlock")
-		// Renderer-owned: long lines scroll inside the well.
-		pre.style.overflowX = "auto"
-		pre.style.whiteSpace = "pre-wrap"
-		const code = document.createElement("code")
-		if (block[2] !== "") code.dataset.language = block[2]
-		code.textContent = block[1]
-		pre.append(code)
-		return pre
+		return codeBlock(document, block[1], block[2], index)
 	})
 }
 
 export const primitive = definePrimitive("richText", ({ document, tag, outer }) => {
+	ensureStyles(document)
 	const node = outer("div")
 	let last: unknown
 	const primitive: Primitive = {
@@ -92,6 +124,13 @@ export const primitive = definePrimitive("richText", ({ document, tag, outer }) 
 		events: undefined,
 	}
 	node.addEventListener("click", (event) => {
+		const copy = event.target instanceof Element ? event.target.closest("[data-hz-part=codeCopy]") : null
+		const copyCode = primitive.events?.handlers.copyCode
+		if (copy instanceof HTMLElement && node.contains(copy)) {
+			if (primitive.events !== undefined && copyCode !== undefined)
+				primitive.events.dispatch("copyCode", copyCode, { block: Number(copy.dataset.block) })
+			return
+		}
 		const target = event.target instanceof Element ? event.target.closest("[data-hz-run]") : null
 		const events = primitive.events
 		if (!(target instanceof HTMLElement) || events === undefined || !node.contains(target)) return

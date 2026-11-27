@@ -64,7 +64,7 @@ export const primitive = definePrimitive("channelIcon", ({ document, tag, outer 
 	const emoji = part(document, "span", "emoji")
 	const logo = part(document, "span", "logo")
 	logo.setAttribute("aria-hidden", "true")
-	// HAZEL-GAP(channel-icon-surface): the marks are cut from the page (`bg`); a sidebar row's is `sidebar`.
+	// The marks are cut from the surface the icon sits on (`--hz-cutout`, `styles.ts`).
 	const lock = part(document, "span", "lock")
 	lock.title = "Private channel"
 	const lockIcon = part(document, "span", "lockIcon")

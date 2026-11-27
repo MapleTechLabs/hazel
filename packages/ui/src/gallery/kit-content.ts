@@ -1,6 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconHashtag } from "../../../../apps/web-foldkit/src/icons/index.ts"
 import { avatar, type AvatarProps } from "../../../../apps/web-foldkit/src/ui/avatar.ts"
+import { callout } from "../../../../apps/web-foldkit/src/ui/callout.ts"
 import { channelIcon } from "../../../../apps/web-foldkit/src/ui/channel-icon.ts"
 import { heading } from "../../../../apps/web-foldkit/src/ui/heading.ts"
 import { iconTile } from "../../../../apps/web-foldkit/src/ui/icon-tile.ts"
@@ -9,7 +10,8 @@ import { presenceDot } from "../../../../apps/web-foldkit/src/ui/presence-dot.ts
 
 /**
  * The kit side of lane A1's parity tags: today's avatar, group DM pair, icon tile, channel icon,
- * overline label, key cap and the DMs people strip, with the content of their fixtures' base cases.
+ * overline label, key cap and the DMs people strip, with the content of their fixtures' base cases;
+ * phase 4's icon tile tones and callout.
  */
 
 type H = HtmlBuilder<never>
@@ -94,6 +96,13 @@ export const contentSpecimens = (h: H): Html =>
 					specimen(h, "avatar-medium", avatar(h, { size: "md", seed: "Grace Hopper" })),
 					specimen(h, "avatar-pair", pair(h)),
 					specimen(h, "icon-tile-neutral", iconTile(h, { size: "md" }, IconHashtag(h))),
+					...(["primary", "success", "warning", "danger"] as const).map((intent) =>
+						specimen(
+							h,
+							`icon-tile-${intent}`,
+							iconTile(h, { size: "md", intent }, IconHashtag(h)),
+						),
+					),
 					specimen(h, "channel-icon", channelIcon(h, { icon: null })),
 					specimen(h, "text-overline", heading(h, { variant: "label" }, ["Today"])),
 					specimen(h, "text-kbd", kbd(h, { size: "md" }, "⌘K")),
@@ -102,6 +111,18 @@ export const contentSpecimens = (h: H): Html =>
 			h.div(
 				[h.Class("frames"), h.Attribute("style", "flex-direction: column; align-items: stretch;")],
 				[h.div([h.Attribute("style", "max-width: 720px;")], [strip(h)])],
+			),
+			h.div(
+				[h.Class("frames")],
+				[
+					specimen(
+						h,
+						"callout-warning",
+						callout(h, { intent: "warning", title: "Export paused" }, [
+							"Resumes in a few minutes.",
+						]),
+					),
+				],
 			),
 		],
 	)

@@ -1,5 +1,12 @@
-// Owned by lane A1 (`docs/hazel-ui.md`, "Phase 2: lanes"). Phase 1.5 stub: draws a
-// placeholder naming the lane; the lane replaces it with the renderer (`definePrimitive`).
-import { stubPrimitive } from "../define.ts"
+// Owned by lane A1 (`docs/hazel-ui.md`, "Phase 2: lanes").
+import { ensureStyles } from "../content/styles.ts"
+import { definePrimitive, option } from "../define.ts"
 
-export const primitive = stubPrimitive("grid")
+// Children in equal columns; the tracks are renderer CSS (`content/styles.ts`), the gap the recipe's.
+export const primitive = definePrimitive("grid", ({ document, outer, self }) => {
+	ensureStyles(document)
+	const node = outer("div")
+	return self(node, (name, value) => {
+		if (name === "columns" || name === "density") option(node, name, value)
+	})
+})

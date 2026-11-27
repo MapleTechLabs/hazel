@@ -25,24 +25,20 @@ export const iconTile = defineRecipe<{ readonly tone: IconTileTone }, never, "ic
 			default: "neutral",
 			values: {
 				neutral: { root: { borderColor: "border", background: "secondary", color: "muted-fg" } },
-				// HAZEL-GAP(icon-tile-tints): the kit fills `bg-primary/5`; nearest token is `/10`.
 				accent: {
-					root: { borderColor: "primary-tint", background: "primary-tint", color: "primary" },
+					root: { borderColor: "primary-tint", background: "primary-wash", color: "primary" },
 				},
-				// HAZEL-GAP(icon-tile-tints): the kit fills `bg-danger/5`; nearest token is `/10`.
-				danger: { root: { borderColor: "danger-tint", background: "danger-tint", color: "danger" } },
-				// HAZEL-GAP(icon-tile-tints): the kit's edge is `border-warning/20`; nearest is `/10`.
+				danger: { root: { borderColor: "danger-tint", background: "danger-wash", color: "danger" } },
 				warning: {
 					root: {
-						borderColor: "warning-tint",
+						borderColor: "warning-edge",
 						background: "warning-subtle",
 						color: "warning-subtle-fg",
 					},
 				},
-				// HAZEL-GAP(icon-tile-tints): the kit's edge is `border-success/20`; nearest is the fill.
 				success: {
 					root: {
-						borderColor: "success-subtle",
+						borderColor: "success-edge",
 						background: "success-subtle",
 						color: "success-subtle-fg",
 					},
