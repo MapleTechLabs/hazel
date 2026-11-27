@@ -15,6 +15,7 @@ import { clientData } from "~/db/client"
 import { safeReturnTo } from "../auth/return-to"
 import { AppRoute, hrefOf, type RouteOf, signInHref } from "../route"
 import { ShellDms } from "./children"
+import { AdoptRegion } from "./foldkit"
 import type { AppMessage } from "./message"
 
 // The `import()`s are the only references to the pages' modules: a static import undoes the split.
@@ -60,6 +61,20 @@ export const DesktopPage = Component.lazy("DesktopPage", () =>
 		([module, flows]) => module.DesktopPage.pipe(Component.provide(flows)),
 	),
 )
+
+// Onboarding (PA3): the flow and its first steps; the later steps are still the Foldkit page's.
+export const OnboardingPage = Component.lazy("OnboardingPage", () =>
+	import("@hazel/shared-screens/onboarding/pages/onboarding/OnboardingPage").then((module) =>
+		withClientData(module.OnboardingPage),
+	),
+)
+
+/** The Foldkit onboarding page's region, moved into the shell's `legacyStep` slot (until PA4). */
+const legacyOnboardingStep = (h: Html.H<AppMessage>) =>
+	h.div
+		.class("contents")
+		.attr("data-foldkit-slot", "page")
+		.onMount(AdoptRegion({ region: "page" }))
 
 /** The native app's install (`~/config/server`), which its sign-in page can change; `null` on the web. */
 const initialServer = () =>
@@ -133,6 +148,19 @@ const nativePages: Registry = {
 					}),
 				)
 	},
+	// One instance per visit; `?step=` changes reach it as props.
+	Onboarding: fillWindow<"Onboarding">((h, { route, session, fallback }) =>
+		OnboardingPage(h, {
+			key: route._tag,
+			props: {
+				session,
+				urlStep: Option.getOrNull(route.step),
+				orgId: Option.getOrNull(route.orgId),
+			},
+			slots: { legacyStep: legacyOnboardingStep(h) },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	),
 	// One instance per mode, as today's page keyed by route tag.
 	SignIn: fillWindow<"SignIn">((h, { route, fallback }) => {
 		const redirectUrl = safeReturnTo(Option.getOrNull(route.redirectUrl))
