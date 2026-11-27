@@ -88,16 +88,16 @@ export const radiusItems = (customization: ThemeCustomization): ReadonlyArray<Th
  * `parseColor(hex).getColorName("en-US")` for `COLOR_SWATCHES` (React Aria's colour names, as
  * today's swatches read them out).
  */
-export const SWATCH_COLOR_NAMES: Readonly<Record<string, string>> = {
-	"#535862": "dark grayish blue",
-	"#099250": "green",
-	"#1570EF": "vibrant cyan blue",
-	"#444CE7": "dark vibrant blue",
-	"#6938EF": "dark vibrant purple",
-	"#BA24D5": "vibrant magenta",
-	"#DD2590": "vibrant pink",
-	"#E04F16": "vibrant red orange",
-}
+export const SWATCH_COLOR_NAMES: ReadonlyMap<string, string> = new Map([
+	["#535862", "dark grayish blue"],
+	["#099250", "green"],
+	["#1570EF", "vibrant cyan blue"],
+	["#444CE7", "dark vibrant blue"],
+	["#6938EF", "dark vibrant purple"],
+	["#BA24D5", "vibrant magenta"],
+	["#DD2590", "vibrant pink"],
+	["#E04F16", "vibrant red orange"],
+])
 
 export interface BrandColorOptions<Msg> {
 	readonly primary: string
@@ -113,7 +113,7 @@ export const BrandColorChoice = <Msg>(h: H<Msg>, options: BrandColorOptions<Msg>
 		.options(
 			COLOR_SWATCHES.map((swatch) => ({
 				value: swatch.hex,
-				label: SWATCH_COLOR_NAMES[swatch.hex] ?? swatch.name,
+				label: SWATCH_COLOR_NAMES.get(swatch.hex) ?? swatch.name,
 				swatch: swatch.hex,
 			})),
 		)

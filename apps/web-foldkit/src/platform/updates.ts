@@ -68,8 +68,6 @@ const INSTALL_FAILURE_TEXT: { readonly [Reason in InstallFailure]: string } = {
 		"Update installed, but restart failed and Hazel could not quit automatically. Please quit and reopen Hazel manually.",
 }
 
-export const CHECK_FAILURE_TEXT = "Update check failed"
-
 export const installFailureText = (reason: InstallFailure): string => INSTALL_FAILURE_TEXT[reason]
 
 // COMMANDS

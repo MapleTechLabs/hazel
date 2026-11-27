@@ -18,28 +18,28 @@ import { twMerge } from "tailwind-merge"
 type Props = typeof ThemePreviewExtension.props.Type
 
 /** `ThemePresetCard`'s preview radius. */
-const presetPreviewRadius: Readonly<Record<Theme.RadiusPreset, string>> = {
+const presetPreviewRadius = {
 	tight: "2px",
 	normal: "4px",
 	round: "6px",
 	full: "8px",
-}
+} satisfies Record<Theme.RadiusPreset, string>
 
 /** `RadiusSelector`'s sample radius. */
-const radiusSampleRadius: Readonly<Record<Theme.RadiusPreset, string>> = {
+const radiusSampleRadius = {
 	tight: "4px",
 	normal: "8px",
 	round: "12px",
 	full: "16px",
-}
+} satisfies Record<Theme.RadiusPreset, string>
 
 /** `RemixOptionCard`'s dot radius. */
-const remixDotRadius: Readonly<Record<Theme.RadiusPreset, string>> = {
+const remixDotRadius = {
 	tight: "2px",
 	normal: "4px",
 	round: "6px",
 	full: "999px",
-}
+} satisfies Record<Theme.RadiusPreset, string>
 
 const el = <K extends keyof HTMLElementTagNameMap>(
 	document: Document,
@@ -120,8 +120,6 @@ const hiddenRadio = (document: Document, name: string, item: ThemePreviewItem, c
 	input.className = "sr-only"
 	return input
 }
-
-let groups = 0
 
 const presetCard = (document: Document, name: string, item: ThemePreviewItem, isSelected: boolean) =>
 	el(
@@ -248,7 +246,8 @@ const remixCard = (document: Document, item: ThemePreviewItem, onSelect: () => v
 
 registerWebExtension(ThemePreviewExtension, (container, initial, send) => {
 	const document = container.ownerDocument
-	const name = `theme-preview-${++groups}`
+	// One native radio group per picker on a page; its kind names it.
+	const name = `theme-preview-${initial.kind}`
 	let props: Props = initial
 
 	const draw = () => {
@@ -259,7 +258,9 @@ registerWebExtension(ThemePreviewExtension, (container, initial, send) => {
 					document,
 					"div",
 					"grid grid-cols-2 gap-3 sm:grid-cols-4",
-					...items.map((item) => remixCard(document, item, () => send("select", { value: item.value }))),
+					...items.map((item) =>
+						remixCard(document, item, () => send("select", { value: item.value })),
+					),
 				),
 			)
 			return

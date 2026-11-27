@@ -85,7 +85,7 @@ export class ReadVersion extends Command.Service<ReadVersion>()("hazel/my-settin
 	)
 }
 
-const INSTALL_FAILURE_TEXT: { readonly [Reason in InstallFailure]: string } = {
+const INSTALL_FAILURE_TEXT = {
 	NoUpdate: "No update to install",
 	DownloadFailed: "Download failed",
 	InstallFailed: "Installation failed",
@@ -93,7 +93,7 @@ const INSTALL_FAILURE_TEXT: { readonly [Reason in InstallFailure]: string } = {
 		"Update installed, but restart is unavailable. Please quit and reopen Hazel manually.",
 	RestartFailed:
 		"Update installed, but restart failed and Hazel could not quit automatically. Please quit and reopen Hazel manually.",
-}
+} satisfies { readonly [Reason in InstallFailure]: string }
 
 const megabytes = (bytes: number) => (bytes / 1024 / 1024).toFixed(1)
 
