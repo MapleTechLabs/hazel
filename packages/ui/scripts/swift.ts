@@ -179,6 +179,21 @@ export const generateSwift = (tokens: Tokens, recipes: ReadonlyArray<Recipe>): s
 			const base = when.states ?? []
 			parts(layer, null, base)
 			if (layer.regular !== undefined) parts(layer.regular, "regular", base)
+			// A part's own states: the part, then the parts inside it, keyed by the part's state.
+			for (const [owner, ownStates] of Object.entries(layer.partStates ?? {}))
+				for (const [state, styles] of Object.entries(ownStates ?? {})) {
+					if (styles === undefined) continue
+					const tag = `partState: PartState(part: ${str(owner)}, state: .${ident(state)})`
+					if (styles.root !== undefined)
+						out.push(
+							`Layer(when: ${condition(null, base)}, part: ${str(owner)}, style: ${style(styles.root)}, ${tag})`,
+						)
+					for (const [inner, decls] of Object.entries(styles.parts ?? {}))
+						if (decls !== undefined)
+							out.push(
+								`Layer(when: ${condition(null, base)}, part: ${str(inner)}, style: ${style(decls)}, ${tag})`,
+							)
+				}
 			for (const [state, styles] of Object.entries(layer.states ?? {})) {
 				if (styles === undefined) continue
 				parts(styles, null, [...base, state])
@@ -400,8 +415,14 @@ ${Object.entries(tokens.shadow)
         public let options: [String: String], flags: Set<String>, states: Set<State>, sizeClass: SizeClass?
     }
 
+    /// A layer that holds only while one part is in a state of its own (an option selected).
+    public struct PartState: Sendable {
+        public let part: String, state: State
+    }
+
     public struct Layer: Sendable {
         public let when: When, part: String?, style: Style
+        public var partState: PartState? = nil
     }
 
     /// Layers in CSS order: base, options, flags, compounds, states; later matches win field by field.
@@ -409,16 +430,24 @@ ${Object.entries(tokens.shadow)
         public let primitive: String, defaults: [String: String], inert: Set<State>, layers: [Layer]
 
         /// The style of the root (\`part: nil\`) or of one part, for these options, flags and states.
+        /// \`partStates\` are each part's own states (the option that is selected); a part's hover and
+        /// press hold only while it is neither selected nor disabled.
         public func style(
             part: String? = nil, options: [String: String] = [:], flags: Set<String> = [],
-            states: Set<State> = [], sizeClass: SizeClass
+            states: Set<State> = [], partStates: [String: Set<State>] = [:], sizeClass: SizeClass
         ) -> Style {
             let chosen = defaults.merging(options) { _, new in new }
             let interactions: Set<State> = [.hover, .pressed, .focusVisible]
             let active = inert.isDisjoint(with: states) ? states : states.subtracting(interactions)
+            let holds = { (owner: PartState) -> Bool in
+                let own = partStates[owner.part] ?? []
+                let still = own.isDisjoint(with: [.selected, .disabled]) ? own : own.subtracting(interactions)
+                return still.contains(owner.state)
+            }
             return layers.reduce(Style()) { style, layer in
                 let when = layer.when
                 guard layer.part == part,
+                      layer.partState.map(holds) ?? true,
                       when.options.allSatisfy({ chosen[$0.key] == $0.value }),
                       when.flags.isSubset(of: flags),
                       when.states.isSubset(of: active),

@@ -141,6 +141,8 @@
 	--hz-color-toggle-track: color-mix(in oklab, var(--hz-color-fg) 15%, transparent);
 	--hz-color-toggle-track-hover: color-mix(in oklab, var(--hz-color-fg) 20%, transparent);
 	--hz-color-toggle-edge: color-mix(in oklab, var(--hz-color-fg) 5%, transparent);
+	--hz-color-control-hover-fill: color-mix(in oklab, var(--hz-color-muted-fg) 20%, transparent);
+	--hz-color-control-hover-edge: color-mix(in oklab, var(--hz-color-muted-fg) 30%, transparent);
 	--hz-color-thumb-edge: color-mix(in oklab, var(--hz-color-fg) 10%, transparent);
 	--hz-color-swatch-edge: color-mix(in oklab, var(--hz-palette-black) 10%, transparent);
 	--hz-color-toggle-thumb: var(--hz-palette-white);
@@ -1984,6 +1986,21 @@
 	}
 }
 
+[data-hz="choiceGroup"] > [data-hz-part="options"] > [data-hz-part="option"][data-selected] > [data-hz-part="indicator"] > [data-hz-part="box"] {
+	background-color: var(--hz-color-primary);
+	box-shadow: inset 0 0 0 1px var(--hz-color-primary);
+}
+
+[data-hz="choiceGroup"] > [data-hz-part="options"] > [data-hz-part="option"][data-selected] > [data-hz-part="indicator"] > [data-hz-part="box"] > [data-hz-part="mark"] {
+	background-color: var(--hz-color-bg);
+}
+
+@media (hover: hover) {
+	[data-hz="choiceGroup"]:is([data-style="list"], :not([data-style])) > [data-hz-part="options"] > [data-hz-part="option"]:hover:not([data-selected], [data-disabled], :disabled) > [data-hz-part="indicator"] > [data-hz-part="box"] > [data-hz-part="mark"] {
+		background-color: var(--hz-color-control-hover-fill);
+	}
+}
+
 [data-hz="choiceGroup"][data-style="cards"] > [data-hz-part="options"] > [data-hz-part="option"] {
 	border-radius: var(--hz-radius-lg);
 	box-shadow: inset 0 0 0 1px var(--hz-color-border);
@@ -2000,6 +2017,30 @@
 	[data-hz="choiceGroup"][data-style="cards"] > [data-hz-part="options"] > [data-hz-part="option"] {
 		padding-inline: var(--hz-space-4);
 		padding-block: var(--hz-space-4);
+	}
+}
+
+[data-hz="choiceGroup"][data-style="cards"] > [data-hz-part="options"] > [data-hz-part="option"][data-selected] {
+	background-color: var(--hz-color-primary-subtle);
+	color: var(--hz-color-primary-subtle-fg);
+	box-shadow: inset 0 0 0 1px var(--hz-color-focus-ring);
+}
+
+[data-hz="choiceGroup"][data-style="cards"] > [data-hz-part="options"] > [data-hz-part="option"][data-selected] > [data-hz-part="optionText"] > [data-hz-part="optionLabel"] {
+	color: var(--hz-color-primary-subtle-fg);
+}
+
+[data-hz="choiceGroup"][data-style="cards"] > [data-hz-part="options"] > [data-hz-part="option"][data-selected] > [data-hz-part="optionText"] > [data-hz-part="optionDescription"] {
+	color: var(--hz-color-primary-subtle-fg);
+}
+
+[data-hz="choiceGroup"][data-style="cards"] > [data-hz-part="options"] > [data-hz-part="option"][data-selected] > [data-hz-part="optionIcon"] {
+	color: var(--hz-color-primary-subtle-fg);
+}
+
+@media (hover: hover) {
+	[data-hz="choiceGroup"][data-style="cards"] > [data-hz-part="options"] > [data-hz-part="option"]:hover:not([data-selected], [data-disabled], :disabled) {
+		box-shadow: inset 0 0 0 1px var(--hz-color-control-hover-edge);
 	}
 }
 
@@ -2069,6 +2110,20 @@
 	}
 }
 
+[data-hz="choiceGroup"][data-style="segmented"] > [data-hz-part="options"] > [data-hz-part="option"][data-selected] {
+	background-color: var(--hz-color-bg);
+}
+
+[data-hz="choiceGroup"][data-style="segmented"] > [data-hz-part="options"] > [data-hz-part="option"][data-selected] > [data-hz-part="optionText"] > [data-hz-part="optionLabel"] {
+	color: var(--hz-color-fg);
+}
+
+@media (hover: hover) {
+	[data-hz="choiceGroup"][data-style="segmented"] > [data-hz-part="options"] > [data-hz-part="option"]:hover:not([data-selected], [data-disabled], :disabled) > [data-hz-part="optionText"] > [data-hz-part="optionLabel"] {
+		color: var(--hz-color-fg);
+	}
+}
+
 [data-hz="choiceGroup"][data-style="chips"] {
 	align-items: flex-start;
 }
@@ -2130,6 +2185,27 @@
 	}
 }
 
+[data-hz="choiceGroup"][data-style="chips"] > [data-hz-part="options"] > [data-hz-part="option"][data-selected] {
+	background-color: var(--hz-color-chip-selected);
+	border-color: var(--hz-color-chip-selected-border);
+}
+
+[data-hz="choiceGroup"][data-style="chips"] > [data-hz-part="options"] > [data-hz-part="option"][data-selected] > [data-hz-part="optionText"] > [data-hz-part="optionLabel"] {
+	color: var(--hz-color-fg);
+}
+
+@media (hover: hover) {
+	[data-hz="choiceGroup"][data-style="chips"] > [data-hz-part="options"] > [data-hz-part="option"]:hover:not([data-selected], [data-disabled], :disabled) {
+		background-color: var(--hz-color-secondary);
+	}
+}
+
+@media (hover: hover) {
+	[data-hz="choiceGroup"][data-style="chips"] > [data-hz-part="options"] > [data-hz-part="option"]:hover:not([data-selected], [data-disabled], :disabled) > [data-hz-part="optionText"] > [data-hz-part="optionLabel"] {
+		color: var(--hz-color-fg);
+	}
+}
+
 [data-hz="choiceGroup"][data-style="swatches"] {
 	align-items: flex-start;
 }
@@ -2177,6 +2253,26 @@
 	[data-hz="choiceGroup"][data-multiple] > [data-hz-part="options"] > [data-hz-part="option"] > [data-hz-part="indicator"] > [data-hz-part="box"] > [data-hz-part="mark"] {
 		width: var(--hz-space-3_5);
 		height: var(--hz-space-3_5);
+	}
+}
+
+[data-hz="choiceGroup"][data-multiple] > [data-hz-part="options"] > [data-hz-part="option"][data-selected] > [data-hz-part="indicator"] > [data-hz-part="box"] {
+	box-shadow: inset 0 0 0 1px var(--hz-color-ring);
+}
+
+[data-hz="choiceGroup"][data-multiple] > [data-hz-part="options"] > [data-hz-part="option"][data-selected] > [data-hz-part="indicator"] > [data-hz-part="box"] > [data-hz-part="mark"] {
+	background-color: transparent;
+}
+
+@media (hover: hover) {
+	[data-hz="choiceGroup"][data-multiple] > [data-hz-part="options"] > [data-hz-part="option"]:hover:not([data-selected], [data-disabled], :disabled) > [data-hz-part="indicator"] > [data-hz-part="box"] {
+		box-shadow: inset 0 0 0 1px var(--hz-color-control-hover-edge);
+	}
+}
+
+@media (hover: hover) {
+	[data-hz="choiceGroup"][data-multiple] > [data-hz-part="options"] > [data-hz-part="option"]:hover:not([data-selected], [data-disabled], :disabled) > [data-hz-part="indicator"] > [data-hz-part="box"] > [data-hz-part="mark"] {
+		background-color: transparent;
 	}
 }
 

@@ -197,6 +197,9 @@ const color = {
 	"toggle-track": same(alpha(ref("fg"), 0.15)),
 	"toggle-track-hover": same(alpha(ref("fg"), 0.2)),
 	"toggle-edge": same(alpha(ref("fg"), 0.05)),
+	/** A radio's or checkbox's hover (`bg-muted-fg/20`, `ring-muted-fg/30`), and a choice card's edge. */
+	"control-hover-fill": same(alpha(ref("muted-fg"), 0.2)),
+	"control-hover-edge": same(alpha(ref("muted-fg"), 0.3)),
 	/** A slider thumb's edge (`border-fg/10`) and a colour swatch's (`outline-black/10`, both themes). */
 	"thumb-edge": same(alpha(ref("fg"), 0.1)),
 	"swatch-edge": same(alpha(p("black"), 0.1)),

@@ -36,6 +36,7 @@ export const recipeFeatures = [
 	"closed options, boolean flags and compounds of them",
 	"view states (selected, emphasized, disabled, loading, destructive)",
 	"interaction states (hover, pressed, focusVisible), suppressed by inert states",
+	"a part's own states (an option selected, disabled or hovered), on it and the parts inside it",
 	"the size class (compact, regular)",
 	"motion uses: a named motion per trigger (enter, exit, counts, pop, loop) on a part or the backdrop",
 	"transitions: a duration and a curve for hover and press",
@@ -505,10 +506,20 @@ export interface PartStyles<Part extends string, T extends TokenNames> {
 	readonly parts?: Partial<Record<Part, Declarations<T>>>
 }
 
+/**
+ * A part's own states (`choice-option-states`): one option of a group selected, disabled or hovered.
+ * `root` styles the part itself, `parts` the parts inside it. A part's `hover` and `pressed` hold only
+ * while it is neither selected nor disabled (a chosen option keeps its own look).
+ */
+export type PartStates<Part extends string, T extends TokenNames> = Partial<
+	Record<Part, Partial<Record<State, PartStyles<Part, T>>>>
+>
+
 /** Styles at `compact` (the default), with `regular` overrides and per-state layers. */
 export interface Layer<Part extends string, T extends TokenNames> extends PartStyles<Part, T> {
 	readonly regular?: PartStyles<Part, T>
 	readonly states?: Partial<Record<State, PartStyles<Part, T> & { readonly regular?: PartStyles<Part, T> }>>
+	readonly partStates?: PartStates<Part, T>
 }
 
 export interface Option<Value extends string, Part extends string, T extends TokenNames> {

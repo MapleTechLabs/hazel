@@ -301,6 +301,40 @@ const partRules = (
 	return rules
 }
 
+/** A part's own state: `[data-selected]`, or an interaction while it is neither selected nor disabled. */
+const partStateSelector = (state: State) =>
+	isInteraction(state)
+		? `${interactionSelector[state]}:not([data-selected], [data-disabled], :disabled)`
+		: `[data-${kebab(state)}]`
+
+/** Rules for `partStates`: the part in its state, then the parts inside it. */
+const partStateRules = (
+	tracked: ReadonlySet<string>,
+	recipe: Recipe,
+	root: string,
+	partStates: NonNullable<Layer<string, never>["partStates"]>,
+): ReadonlyArray<Rule> =>
+	Object.entries(partStates).flatMap(([part, states]) => {
+		const own = partPath(recipe, part)
+		const ordered = Object.entries(states ?? {}).sort(
+			([a], [b]) => Number(isInteraction(a as State)) - Number(isInteraction(b as State)),
+		)
+		return ordered.flatMap(([state, styles]) => {
+			if (styles === undefined) return []
+			const at = `${root}${own}${partStateSelector(state as State)}`
+			const media = state === "hover" ? ["(hover: hover)"] : []
+			const rules: Rule[] = []
+			if (styles.root !== undefined) rules.push({ media, selector: at, lines: declarations(styles.root, tracked) })
+			for (const [inner, decls] of Object.entries(styles.parts ?? {})) {
+				const path = partPath(recipe, inner)
+				if (decls === undefined) continue
+				if (!path.startsWith(own)) throw new Error(`${recipe.primitive}'s part ${inner} is not inside ${part}`)
+				rules.push({ media, selector: `${at}${path.slice(own.length)}`, lines: declarations(decls, tracked) })
+			}
+			return rules
+		})
+	})
+
 /** A layer's rules: compact, then its `regular` overrides, then its states (interactions last). */
 const layerRules = (
 	tracked: ReadonlySet<string>,
@@ -320,6 +354,7 @@ const layerRules = (
 		...(layer.regular === undefined
 			? []
 			: partRules(tracked, recipe, root, layer.regular, [REGULAR_MEDIA])),
+		...(layer.partStates === undefined ? [] : partStateRules(tracked, recipe, root, layer.partStates)),
 		...ordered.flatMap(([state, styles]) => {
 			if (styles === undefined) return []
 			const selector = `${root}${stateSelector(recipe, state)}`
