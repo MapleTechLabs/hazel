@@ -228,10 +228,23 @@ export const ListControls = ListControlsDef.make({
 					]
 		})
 		// The builder opens from `+ Filter`; a chip's press opens it there on that chip's field.
+		const search = searchBox(h, {
+			value: searchFieldOf(model, props.search),
+			placeholder: "Search name or domain…",
+			onChange: (payload) => M.ChangedSearch({ payload }),
+		}).key("search")
+		// Anchored at the row's start as today's panel is, so it opens under the search box, on screen.
 		const filterPopover = h.popover
 			.key("filter")
 			.open(model.filterOpen && builder !== null)
-			.anchor(addFilterButton(h, { onPress: M.PressedAddFilter() }))
+			.anchor(
+				h.stack
+					.axis("horizontal")
+					.density("compact")
+					.align("center")
+					.wrap()
+					.children(search, ...chips, addFilterButton(h, { onPress: M.PressedAddFilter() })),
+			)
 			.on("dismiss", M.DismissedFilter())
 			.children(
 				builder === null
@@ -277,15 +290,7 @@ export const ListControls = ListControlsDef.make({
 				}),
 			)
 		return filterBar(h, {
-			start: [
-				searchBox(h, {
-					value: searchFieldOf(model, props.search),
-					placeholder: "Search name or domain…",
-					onChange: (payload) => M.ChangedSearch({ payload }),
-				}).key("search"),
-				...chips,
-				filterPopover,
-			],
+			start: [filterPopover],
 			end: [
 				// HAZEL-GAP(pk4a-count-wide-only): today the count hides below the `lg` width (1024px); `regularOnly` hides it on the compact size class only.
 				h.stack

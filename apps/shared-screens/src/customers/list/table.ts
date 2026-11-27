@@ -74,7 +74,9 @@ const END_ALIGNED: ReadonlyArray<Customers.ListColumn> = [
  * Today's container queries (`COLUMN_LAYOUT`): below this table width a column drops, so the
  * table never runs off its frame until every picked column fits; a phone keeps name and MRR.
  */
-const DROP_BELOW_PX: Readonly<Partial<Record<Customers.ListColumn, number>>> = {
+const DROP_BELOW_PX = {
+	name: 0,
+	mrr: 0,
 	owner: 1024,
 	stage: 672,
 	plan: 768,
@@ -88,7 +90,7 @@ const DROP_BELOW_PX: Readonly<Partial<Record<Customers.ListColumn, number>>> = {
 	company_size: 1024,
 	headquarters: 1152,
 	funding: 1152,
-}
+} as const satisfies Record<Customers.ListColumn, number>
 
 // HAZEL-GAP(pk4a-table-column-drop): today each column drops by the table's own width (a container query); `table` has no such option, so the parent measures the width and the dropped columns are left out.
 /** The shown columns that fit `width` (all of them while it is unknown). */
@@ -96,7 +98,7 @@ export const fittingColumns = (
 	columns: ReadonlyArray<Customers.ListColumn>,
 	width: number | null,
 ): ReadonlyArray<Customers.ListColumn> =>
-	shownColumns(columns).filter((column) => width === null || width >= (DROP_BELOW_PX[column] ?? 0))
+	shownColumns(columns).filter((column) => width === null || width >= DROP_BELOW_PX[column])
 
 export const tableColumnsOf = (
 	columns: ReadonlyArray<Customers.ListColumn>,
