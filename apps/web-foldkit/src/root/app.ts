@@ -25,7 +25,6 @@ import {
 	ShellAssistantPanel,
 	ShellChannelHeader,
 	ShellChannelSidebar,
-	ShellDms,
 	ShellJoinBanner,
 	ShellMessageList,
 } from "./children"
@@ -106,6 +105,8 @@ const page = (h: H, model: AppModel) =>
 	nativePageOf(h, {
 		route: model.route,
 		session: sessionOf(model),
+		isMobile: model.isMobile,
+		nowMs: model.nowMs,
 		// A failed chunk offers a reload, as a lazy area's pending page does.
 		fallback: (failed) => loader(h, failed),
 	}) ?? slot(h, "page")
@@ -242,19 +243,6 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 					ShellActivity(h, {
 						key: memberId,
 						props: { memberId, orgSlug: data.orgSlug, tab, nowMs: model.nowMs, titled: false },
-					}),
-				])
-			: null,
-		model.isMobile && route._tag === "ChatDms"
-			? Hole(h, { hole: "dms", key: orgUser, className: "flex min-h-full flex-col" }, [
-					ShellDms(h, {
-						key: orgUser,
-						props: {
-							organizationId: data.organization.id,
-							userId: data.user.id,
-							orgSlug: data.orgSlug,
-							nowMs: model.nowMs,
-						},
 					}),
 				])
 			: null,

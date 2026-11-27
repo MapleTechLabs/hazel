@@ -16,6 +16,8 @@ export interface PageFixture {
 	readonly unfurls?: (url: URL) => object | undefined
 	/** A live reply socket's frames by message id (`fixture-socket.ts` `live`). */
 	readonly live?: (messageId: string) => ReadonlyArray<object> | undefined
+	/** HTTP API answers by path (`makeOfflineFetch`'s `http`). */
+	readonly http?: Readonly<Record<string, () => object>>
 }
 
 /** The localStorage key naming the page whose fixture the offline build applies. */
