@@ -54,7 +54,14 @@
 			"ignoreDependencies": ["react"]
 		},
 		"apps/web-foldkit": {
-			"entry": ["alchemy.run.ts", "src/main.ts", "public/sw.js", "scripts/*.ts"],
+			// `src/parity/pages/*.ts`: the parity harness's registry, loaded by `compare-pages.ts` from disk.
+			"entry": [
+				"alchemy.run.ts",
+				"src/main.ts",
+				"public/sw.js",
+				"scripts/*.ts",
+				"src/parity/pages/*.ts"
+			],
 			// @foldkit/devtools is loaded by @foldkit/vite-plugin's dev overlay; the oxlint plugin by
 			// path from the root .oxlintrc.json.
 			"ignoreDependencies": ["@foldkit/devtools", "@foldkit/oxlint-plugin"]

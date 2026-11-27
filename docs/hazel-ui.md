@@ -453,7 +453,8 @@ moved, delete `src/main.ts`, `src/app/` (host), `root/foldkit.ts`, `root/portal.
   decodes the same files.
 - **Performance bar:** 120 fps with no dropped frames on the 3,000-message channel, on a device, typing
   included. Each screen PR logs `FrameMonitor` numbers and op counts per interaction.
-- **Island parity:** `bun packages/ui/scripts/compare-islands.ts [--build] [--only <screen>] [--probe]`
+- **Island parity:** `bun packages/ui/scripts/compare-pages.ts [--build] [--only <screen>] [--probe]
+  --out docs/hazel-ui-screens/phase3` (it replaced `compare-islands.ts`; usage in `packages/ui/LANES.md`)
   opens the offline web build with each island's flag off and on (390 and 1180 wide, light and dark,
   a pinned clock) and pixel-diffs them; strips (today | island | diff) land in
   `docs/hazel-ui-screens/phase3/<screen>/`. `--probe` pairs text runs and prints what moved. On

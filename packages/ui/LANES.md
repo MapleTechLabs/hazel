@@ -81,6 +81,62 @@ Whole suite (integrator, CI): `bun run --cwd packages/ui test`, `bun run --cwd p
 CI: `.github/workflows/hazel-ui.yml` (a Linux web job and a macOS simulator job) on PRs touching
 `packages/ui`, `packages/client-data`, `apps/shared-screens` or `apps/ios-hybrid`.
 
+## Page parity (phase 4)
+
+`bun packages/ui/scripts/compare-pages.ts` diffs each hazel page against the Foldkit screen it
+replaces, over the offline web build (`apps/ios-hybrid/build/web`), 390 and 1180 wide, light and
+dark, with a pinned clock and reduced motion. It only needs a URL, a flag and steps, so it works the
+same whichever side is the app's root.
+
+1. Register the page: `apps/web-foldkit/src/parity/pages/<id>.ts` default-exports a `ComparePage`
+   (`parity/compare-entry.ts`), data only:
+
+    ```ts
+    import type { ComparePage } from "../compare-entry"
+
+    export default {
+    	flag: "hazel:page:settings-profile",
+    	href: "/hazel/settings/profile",
+    	island: '[data-page="settings-profile"]',
+    	wide: true,
+    	// Optional: `tab` (the phone tab bar's tab for `href`), `region: "viewport"` for a menu or
+    	// dialog drawn outside the page's slot (1180 wide compares the slot by default).
+    	steps: [{ click: 'button:has-text("Edit")' }, { at: "compact", press: "Escape" }],
+    } satisfies ComparePage
+    ```
+
+    Steps run in order after the route opens: `click`, `hover`, `press` (a key), `fill` + `text`,
+    `waitFor`, `route` (in-app navigation); `at: "compact" | "regular"` limits one to a width.
+    Selectors are Playwright's.
+
+2. Fixture data, if the page needs rows or RPC answers the shared fixture lacks:
+   `apps/ios-hybrid/fixture/pages/<id>.ts` default-exports a `PageFixture` (`fixture/page-fixture.ts`):
+   `seed(server)` writes rows (`server.write(kind, sourceId, table, rows)`), `rpcs` answers RPCs by
+   tag. Only the page under test gets its fixture (the harness names it under `hazel:fixture:page`),
+   on both sides, so pages never move each other's numbers. The fixture is in the build: rebuild
+   after changing it.
+
+3. Run it (from the repo root):
+
+    | Command                                                        | What it does                                                                                                                                                                                               |
+    | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | `bun packages/ui/scripts/compare-pages.ts --build --only <id>` | rebuilds the offline app, then shoots flag off (today) and on (hazel); strips (today, hazel, diff) to `docs/hazel-ui-screens/phase4/<id>/`                                                                 |
+    | `... --only <id> --probe`                                      | also pairs both sides' text runs and prints each that moved or changed type                                                                                                                                |
+    | `... --only <id> --strict`                                     | exits 1 when a shot has residue past a channel delta of 5 (the tolerance), as well as when the page did not mount                                                                                          |
+    | `... --baseline --only <id>`                                   | today is the left panel of the committed strip in `docs/hazel-ui-screens/phase4/<id>/` (`--from <dir>` for another); only the hazel side runs; strips go to `node_modules/.cache/compare-pages/` (`--out`) |
+
+    `--only` takes a comma list; without it every registered page runs. Each line prints the share of
+    pixels past a channel delta of 2, the count and the max delta; `OVER TOLERANCE` past 5,
+    `PAGE DID NOT MOUNT` when the hazel container is missing at a width the entry covers (exit 1).
+
+4. Before deleting the Foldkit page, commit its strips under `docs/hazel-ui-screens/phase4/<id>/`:
+   they are its baseline from then on, and `Z1` runs `--baseline` for every page.
+
+The phase 3 islands are registered too (`channel-sidebar`, `dms`, `activity`, `channel`). On
+2026-11-27: sidebar 0.002 to 0.003% (max delta 4), DMs 0.000% (390 only), activity 0.000 to 0.001%
+(max delta 5), the channel list 0.35 to 0.40% (the open `divider-stuck-line` gap), the same live
+and in baseline mode.
+
 ## Galleries
 
 - Web: `bun run --cwd packages/ui gallery:dev`, then `/fixtures.html` (every case light and dark,
