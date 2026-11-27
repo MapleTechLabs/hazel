@@ -16,7 +16,8 @@ import { clientData } from "~/db/client"
 import { forgetReturnTo, readReturnTo, safeReturnTo } from "../auth/return-to"
 import { readLastOrganization } from "../data/last-organization"
 import { rootRedirect } from "../redirect"
-import { AppRoute, hrefOf, type RouteOf, routeOfPath, signInHref } from "../route"
+import { shareHost } from "../core/utils/share-origin"
+import { AppRoute, hrefOf, organizationRoute, type RouteOf, routeOfPath, signInHref } from "../route"
 import { ShellDms } from "./children"
 import type { AppMessage } from "./message"
 
@@ -146,6 +147,27 @@ export const ProfilePage = Component.lazy("ProfilePage", () =>
 	),
 )
 
+// The organization picker (PA5): PH1's switcher query and `SwitchOrganization`, and the create form.
+export const SelectOrganizationPage = Component.lazy("SelectOrganizationPage", () =>
+	Promise.all([
+		import("@hazel/shared-screens/org/pages/select-organization/SelectOrganizationPage"),
+		import("@hazel/shared-screens/org/components/CreateWorkspace"),
+		import("@hazel/shared-screens/shell/Chrome"),
+	]).then(([page, create, chrome]) =>
+		Component.provide(page.SelectOrganizationPage, (props) =>
+			Layer.mergeAll(
+				Layer.succeed(ClientData, clientData),
+				create.CreateOrganization.layer,
+				withPush((push) =>
+					chrome.SwitchOrganization.layerWith((id, slug) =>
+						push(organizationRoute({ id, slug }, { isMobile: props.isMobile })),
+					),
+				),
+			),
+		),
+	),
+)
+
 /** The More tab's rows (PA5). */
 const moreHrefsOf = (orgSlug: string) => ({
 	profile: hrefOf(AppRoute.MySettingsProfile({ orgSlug })),
@@ -200,6 +222,18 @@ const inbox =
 
 /** Keyed by what makes a new instance (Foldkit's page `key`): a new token mounts a fresh page. */
 const nativePages: Registry = {
+	SelectOrganization: fillWindow<"SelectOrganization">((h, { session, isMobile, fallback }) =>
+		SelectOrganizationPage(h, {
+			key: "select-organization",
+			props: {
+				session,
+				isMobile,
+				createHref: hrefOf(AppRoute.OnboardingSetupOrganization({ orgId: Option.none() })),
+				shareHost: shareHost(),
+			},
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	),
 	Profile: (h, { route, session, fallback }) =>
 		ProfilePage(h, {
 			key: route.userId,

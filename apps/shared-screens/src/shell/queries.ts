@@ -16,6 +16,13 @@ export const SwitcherOrg = Schema.Struct({
 })
 export type SwitcherOrg = typeof SwitcherOrg.Type
 
+/** An organization with the user's role in it (the organization picker's badge). */
+export const UserOrganization = Schema.Struct({
+	...SwitcherOrg.fields,
+	role: Schema.Literals(["owner", "admin", "member"]),
+})
+export type UserOrganization = typeof UserOrganization.Type
+
 export const UserStatus = Schema.Struct({
 	emoji: Schema.NullOr(Schema.String),
 	message: Schema.NullOr(Schema.String),
@@ -31,6 +38,7 @@ export const ChannelSummary = Schema.Struct({
 export type ChannelSummary = typeof ChannelSummary.Type
 
 interface OrgRow {
+	readonly member: { readonly role: UserOrganization["role"] }
 	readonly org: {
 		readonly id: OrganizationId
 		readonly name: string
@@ -39,8 +47,8 @@ interface OrgRow {
 	}
 }
 
-/** `SwitchServerMenu`: every organization the user belongs to, oldest membership first. */
-export const organizationsStream = <M>(userId: UserId, to: (orgs: Array<SwitcherOrg>) => M) =>
+/** `SwitchServerMenu`: every organization the user belongs to, oldest membership first, with their role. */
+export const organizationsStream = <M>(userId: UserId, to: (orgs: Array<UserOrganization>) => M) =>
 	liveQuery<OrgRow, M>(
 		(data) => (q) =>
 			q
@@ -52,11 +60,12 @@ export const organizationsStream = <M>(userId: UserId, to: (orgs: Array<Switcher
 				.orderBy(({ member }) => member.createdAt, "asc"),
 		(rows) =>
 			to(
-				rows.map(({ org }) => ({
+				rows.map(({ member, org }) => ({
 					id: org.id,
 					name: org.name,
 					slug: org.slug ?? null,
 					logoUrl: org.logoUrl ?? null,
+					role: member.role,
 				})),
 			),
 	)
