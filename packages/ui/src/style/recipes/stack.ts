@@ -30,7 +30,9 @@ export const stack = defineRecipe<
 			default: "regular",
 			values: {
 				tight: { root: { gap: "0.5", rowGap: "0.5" } },
+				snug: { root: { gap: "1.5", rowGap: "1.5" } },
 				compact: { root: { gap: "2", rowGap: "2" } },
+				cozy: { root: { gap: "3", rowGap: "3" } },
 				regular: { root: { gap: "4", rowGap: "4" } },
 				relaxed: { root: { gap: "6", rowGap: "6" } },
 			},
@@ -41,7 +43,8 @@ export const stack = defineRecipe<
 				stretch: {},
 				start: { root: { align: "start" } },
 				center: { root: { align: "center" } },
-				end: { root: { align: "end" } },
+				// Its lines' text too (`pk0-evidence-lines`: today's `items-end text-right`).
+				end: { root: { align: "end", textAlign: "end" } },
 			},
 		},
 		inset: {

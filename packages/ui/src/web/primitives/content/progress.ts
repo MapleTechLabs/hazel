@@ -58,7 +58,10 @@ export const primitive = definePrimitive("progress", ({ document, tag, outer }) 
 	let indeterminate = false
 	let style = "bar"
 	const draw = () => {
-		const spinning = style === "spinner"
+		const spinning = style === "spinner" || style === "inline"
+		// An unnamed inline ring is decoration beside the words that say it (`connectCard`).
+		if (style === "inline" && label.textContent === "") node.setAttribute("aria-hidden", "true")
+		else node.removeAttribute("aria-hidden")
 		spinner.hidden = !spinning
 		track.hidden = spinning
 		if (spinning && spinner.firstChild === null) spinner.innerHTML = spinnerSvg
@@ -75,7 +78,12 @@ export const primitive = definePrimitive("progress", ({ document, tag, outer }) 
 		// The kit's `w-2/5 animate-progress-slide` (`recipe.motion` loop), or the value's width easing
 		// over 200ms (`transition-[width] duration-200 ease-linear`).
 		const percent = Math.round(Math.min(1, Math.max(0, value)) * 100)
-		node.setAttribute("aria-valuenow", String(percent))
+		node.setAttribute("aria-valuenow", String(style === "meter" ? Math.round(value * 100) : percent))
+		node.setAttribute("role", style === "meter" ? "meter" : "progressbar")
+		fill.style.background =
+			style !== "meter" || value < 1
+				? ""
+				: `var(--hz-color-chart-${value >= 1.2 ? "churn" : "contraction"})`
 		fill.style.transition = "width var(--hz-duration-normal) var(--hz-ease-linear)"
 		fill.style.width = `${percent}%`
 	}
@@ -89,16 +97,17 @@ export const primitive = definePrimitive("progress", ({ document, tag, outer }) 
 			else if (name === "style") {
 				option(node, "style", next)
 				style = typeof next === "string" ? next : "bar"
+				label.hidden = label.textContent === "" || style === "inline" || style === "meter"
 			} else if (name === "indeterminate") {
 				indeterminate = next === true
 				flag(node, "indeterminate", next)
 			} else if (name === "label") {
 				const text = typeof next === "string" ? next : ""
 				label.textContent = text
-				label.hidden = text === ""
+				// An inline ring and a meter are named for assistive tech only; the words beside them say it.
+				label.hidden = text === "" || style === "inline" || style === "meter"
 				if (text === "") node.removeAttribute("aria-label")
 				else node.setAttribute("aria-label", text)
-				return
 			} else return
 			draw()
 		},

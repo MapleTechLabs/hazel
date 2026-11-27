@@ -7,10 +7,14 @@ import type { FrameSurface } from "../schema.ts"
  * danger zone (`border-danger/20`; the kit's `bg-danger/5` wash has no token yet, so it stays clear);
  * `muted` a quiet bar (the unread bar); `inset` a hairline well; `overlay` a floating panel.
  */
-export const frame = defineRecipe<{ readonly surface: FrameSurface }, never, never>({
+export const frame = defineRecipe<{ readonly surface: FrameSurface }, never, "footer">({
 	primitive: "frame",
-	parts: {},
-	base: { root: { layout: "column", rowGap: "4" } },
+	// `footer`: `items-center gap-4 border-t pt-4`; its hairline, end and `justify-between` are the renderer's.
+	parts: { footer: "slot" },
+	base: {
+		root: { layout: "column", rowGap: "4" },
+		parts: { footer: { layout: "row", align: "center", gap: "4", paddingTop: "4" } },
+	},
 	options: {
 		surface: {
 			default: "card",
@@ -27,6 +31,18 @@ export const frame = defineRecipe<{ readonly surface: FrameSurface }, never, nev
 						paddingY: "4",
 					},
 					regular: { root: { paddingX: "6", paddingY: "6" } },
+				},
+				tile: {
+					root: {
+						radius: "xl",
+						borderWidth: "hairline",
+						borderColor: "border",
+						background: "bg",
+						shadow: "xs",
+						paddingX: "4",
+						paddingY: "4",
+					},
+					regular: { root: { paddingX: "5", paddingY: "5" } },
 				},
 				danger: {
 					root: {

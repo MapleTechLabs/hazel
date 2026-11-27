@@ -1,5 +1,16 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { IconHashtag } from "../../../../apps/web-foldkit/src/icons/index.ts"
+import {
+	environmentBadge,
+	kindChip,
+	severityChip,
+	severityGlyph,
+	stageBadge,
+} from "../../../../apps/web-foldkit/src/customers/ui/badges.ts"
+import { meter } from "../../../../apps/web-foldkit/src/customers/charts/sparkline.ts"
+import { connectCard } from "../../../../apps/web-foldkit/src/customers/ui/connect-card.ts"
+import { sourceChip, sourceMark } from "../../../../apps/web-foldkit/src/customers/ui/identity.ts"
+import { IconClock, IconHashtag } from "../../../../apps/web-foldkit/src/icons/index.ts"
+import { badge } from "../../../../apps/web-foldkit/src/ui/badge.ts"
 import { avatar, type AvatarProps } from "../../../../apps/web-foldkit/src/ui/avatar.ts"
 import { callout } from "../../../../apps/web-foldkit/src/ui/callout.ts"
 import { channelIcon } from "../../../../apps/web-foldkit/src/ui/channel-icon.ts"
@@ -107,6 +118,54 @@ const emptyChannel = (h: H): Html =>
 		],
 	)
 
+/** Customers' chips (PK0's `badges.ts`, `sla-chip.ts`, `identity.ts`), with their fixtures' content. */
+const customerChips = (h: H): ReadonlyArray<Html> => [
+	specimen(h, "badge-severity", severityChip(h, "high")),
+	specimen(h, "badge-kind", kindChip(h, "risk")),
+	specimen(h, "badge-trial", stageBadge(h, "trialing", { trialDaysLeft: 4 })),
+	specimen(
+		h,
+		"badge-sla",
+		badge(h, { intent: "quiet", attributes: [h.Title("Standard policy · due Mon 09:50")] }, [
+			IconClock(h, { attributes: { "data-slot": "icon" } }),
+			h.span([h.Class("truncate")], ["Reply due in 3h 10m"]),
+		]),
+	),
+	specimen(h, "badge-source", sourceChip(h, "hazel")),
+	specimen(h, "icon-tile-mark", sourceMark(h, "hazel", { size: "md" })),
+	specimen(h, "badge-environment", environmentBadge(h, "production-eu-west-1")),
+	specimen(h, "meter-over", meter(h, { value: 130, limit: 100, ariaLabel: "Seats: 130% of limit" })),
+	// `evidence.ts` `lines`: a figure over its caption, right-aligned.
+	specimen(
+		h,
+		"evidence-lines",
+		h.div(
+			[h.Class("flex min-w-0 flex-col items-end gap-0.5 text-right")],
+			[
+				h.span(
+					[h.Class("whitespace-nowrap font-medium text-fg text-sm tabular-nums")],
+					["14d quiet"],
+				),
+				h.span([h.Class("whitespace-nowrap text-muted-fg text-xs tabular-nums")], ["was 12 active"]),
+			],
+		),
+	),
+	// One of `signalCounts`' runs: the bars and the count.
+	specimen(
+		h,
+		"badge-count",
+		h.span(
+			[h.Class("inline-flex items-center gap-2.5 text-sm tabular-nums")],
+			[
+				h.span(
+					[h.Class("inline-flex items-center gap-1")],
+					[severityGlyph(h, "high", { labelled: false }), "2"],
+				),
+			],
+		),
+	),
+]
+
 export const contentSpecimens = (h: H): Html =>
 	h.div(
 		[],
@@ -127,6 +186,7 @@ export const contentSpecimens = (h: H): Html =>
 					specimen(h, "channel-icon", channelIcon(h, { icon: null })),
 					specimen(h, "text-overline", heading(h, { variant: "label" }, ["Today"])),
 					specimen(h, "text-kbd", kbd(h, { size: "md" }, "⌘K")),
+					...customerChips(h),
 				],
 			),
 			h.div(
@@ -142,6 +202,37 @@ export const contentSpecimens = (h: H): Html =>
 							h.Attribute("data-specimen", "empty-channel"),
 						],
 						[emptyChannel(h)],
+					),
+					h.div(
+						[h.Attribute("style", "max-width: 720px;"), h.Attribute("data-specimen", "fact-row")],
+						[
+							// `evidence.ts` `fact`: a justified `dl` row.
+							h.div(
+								[h.Class("flex items-baseline justify-between gap-4 text-sm")],
+								[
+									h.dt([h.Class("text-muted-fg")], ["Projected by Dec 1"]),
+									h.dd([h.Class("text-right text-fg tabular-nums")], ["1,240 · 124%"]),
+								],
+							),
+						],
+					),
+					h.div(
+						[
+							h.Attribute("style", "max-width: 720px;"),
+							h.Attribute("data-specimen", "connect-card"),
+						],
+						[
+							connectCard(h, {
+								provider: "hazel",
+								status: {
+									_tag: "Connected",
+									syncedAt: null,
+									summary: "214 organizations · 1,862 users",
+								},
+								now: new Date(0),
+								description: "Members and channels.",
+							}),
+						],
 					),
 				],
 			),

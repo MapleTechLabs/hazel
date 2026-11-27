@@ -27,6 +27,18 @@ const css = `
 	user-select: none;
 }
 
+/* The kit's status dot (\`statusLine\`): 6px, \`gap-1.5\`, in the tone's fill (\`status-dot.ts\` \`TONE\`). */
+[data-hz=text][data-dot] { display: inline-flex; align-items: center; gap: var(--hz-space-1_5); white-space: nowrap; }
+[data-hz=text][data-dot]::before {
+	content: ""; flex-shrink: 0; width: var(--hz-space-1_5); height: var(--hz-space-1_5);
+	border-radius: var(--hz-radius-full); background: var(--hz-color-muted-fg);
+}
+[data-hz=text][data-dot][data-tone=success]::before { background: var(--hz-color-success); }
+[data-hz=text][data-dot][data-tone=warning]::before { background: var(--hz-color-warning); }
+[data-hz=text][data-dot][data-tone=danger]::before { background: var(--hz-color-danger); }
+[data-hz=text][data-dot][data-tone=info]::before { background: var(--hz-color-info-subtle-fg); }
+[data-hz=text][data-dot][data-tone=accent]::before { background: var(--hz-color-primary); }
+
 :where([data-hz=avatar]) { position: relative; }
 [data-hz=avatar][data-seeded] { container-type: size; }
 [data-hz=avatar]:is([data-size=medium], [data-size=large], [data-size=xlarge]):not([data-shape]),

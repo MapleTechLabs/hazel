@@ -7,18 +7,20 @@
  */
 import type * as Customers from "@hazel/domain/customers"
 import type { BadgeStyle, BadgeTone, Hazel } from "@hazel/ui/vocabulary/index"
-import { type IssueSlaRow, slaChipCopy, slaDisplayOf, type SlaTone } from "../data/sla"
+import type { IconName } from "@hazel/ui/vocabulary/options"
+import { type IssueSlaRow, type SlaIcon, slaChipCopy, slaDisplayOf, type SlaTone } from "../data/sla"
 
 /** Today's badge intents per tone, as the badge recipe maps them. */
 const LOOK = {
-	// HAZEL-GAP(pk0-badge-quiet-outline): today's `quiet` is outlined with muted ink; `outline` keeps the default ink.
-	quiet: { tone: "neutral", style: "outline" },
+	quiet: { tone: "neutral", style: "quietOutline" },
 	warning: { tone: "warning", style: "solid" },
 	danger: { tone: "danger", style: "solid" },
 	paused: { tone: "neutral", style: "quiet" },
 	met: { tone: "success", style: "outline" },
 	late: { tone: "neutral", style: "solid" },
 } as const satisfies Record<SlaTone, { tone: BadgeTone; style: BadgeStyle }>
+
+const ICON = { clock: "clock", pause: "pause", check: "check" } as const satisfies Record<SlaIcon, IconName>
 
 /** The chip for an issue's SLA row at `nowMs`; `null` when it shows nothing. */
 export const slaChip = <Msg>(
@@ -38,7 +40,10 @@ export const slaChip = <Msg>(
 		status: options.status,
 	})
 	if (copy === null) return null
-	// HAZEL-GAP(pk0-badge-icon): today's chip leads with a clock, pause or check glyph.
-	// HAZEL-GAP(pk0-badge-title): today's chip names its policy and due time on hover (`copy.title`); `badge` has no tooltip, and `tooltip` around it would change its box.
-	return h.badge.tone(LOOK[copy.tone].tone).style(LOOK[copy.tone].style).label(copy.text)
+	return h.badge
+		.tone(LOOK[copy.tone].tone)
+		.style(LOOK[copy.tone].style)
+		.icon(ICON[copy.icon])
+		.title(copy.title)
+		.label(copy.text)
 }

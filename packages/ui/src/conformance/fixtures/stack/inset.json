@@ -30,6 +30,10 @@
 		{
 			"prop": "inset",
 			"values": ["bar"]
+		},
+		{
+			"prop": "density",
+			"values": ["snug", "cozy"]
 		}
 	],
 	"pending": {

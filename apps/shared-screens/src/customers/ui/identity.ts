@@ -27,8 +27,10 @@ export const sourceMark = <Msg>(
 	source: CustomerSource,
 	options: Readonly<{ size?: "xs" | "sm" | "md" }> = {},
 ) =>
-	// HAZEL-GAP(pk0-source-tile): today's mark sits on a `bg-secondary` rounded tile (24, 32 or 40px); `iconTile` takes only an `IconName`, so the mark is drawn bare at the tile's inner size.
-	sourceLogo(h, source, options.size === "md" ? 24 : options.size === "xs" ? 16 : 20)
+	h.iconTile
+		.tone("mark")
+		.image(sourceLogoSrc(source))
+		.size(options.size === "md" ? "regular" : options.size === "xs" ? "xsmall" : "small")
 
 /** `[mark] Name` in an outlined chip. */
 export const sourceChip = <Msg>(
@@ -36,18 +38,11 @@ export const sourceChip = <Msg>(
 	source: CustomerSource,
 	options: Readonly<{ label?: string }> = {},
 ) =>
-	// HAZEL-GAP(pk0-source-chip): today's chip is a 28px outlined box with the mark; `badge` has no image, so the mark and label sit in a horizontal stack.
-	h.stack
-		.axis("horizontal")
-		.density("compact")
-		.align("center")
-		.children(
-			sourceLogo(h, source),
-			h.text
-				.role("label")
-				.strong()
-				.children(options.label ?? sourceLabel(source)),
-		)
+	h.badge
+		.style("outline")
+		.size("large")
+		.image(sourceLogoSrc(source))
+		.label(options.label ?? sourceLabel(source))
 
 // INITIALS
 

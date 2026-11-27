@@ -132,6 +132,8 @@ export const tags = {
 		ios: "S1",
 		content: "elements",
 		props: { surface: option(O.FrameSurface, "card") },
+		// Phase 4 (`pk0-card-footer`): a row under a hairline at the frame's end, its parts at either end.
+		slots: ["footer"],
 	}),
 	divider: tag({ group: "layout", web: "A1", ios: "S1", content: "none" }),
 	// Phase 4: children in equal columns (KPI tiles, integration cards, settings cards); one column
@@ -226,6 +228,8 @@ export const tags = {
 			strong: flag,
 			numeric: flag,
 			truncate: flag,
+			// Phase 4 (`pk0-status-dot`): the kit's 6pt status dot before the text, in its tone.
+			dot: flag,
 		},
 	}),
 	heading: tag({
@@ -284,7 +288,13 @@ export const tags = {
 		web: "A1",
 		ios: "S1",
 		content: "none",
-		props: { name: value(O.IconName), tone: option(O.IconTileTone, "neutral") },
+		// Phase 4 (`pk0-source-tile`): a mark's picture in place of the glyph, and smaller tiles.
+		props: {
+			name: value(O.IconName),
+			tone: option(O.IconTileTone, "neutral"),
+			image: text,
+			size: option(O.IconTileSize, "regular"),
+		},
 	}),
 	// A channel's icon with its marks, as today's `channelIcon`: the emoji, `#` or a lock; a customer's
 	// logo (a lock mark when private); up to two Connect partners' logos; the sync provider's mark.
@@ -321,6 +331,14 @@ export const tags = {
 			style: option(O.BadgeStyle, "solid"),
 			size: option(O.BadgeSize, "regular"),
 			pill: flag,
+			// Phase 4 (PK0): a glyph, a mark's picture or the severity bars before the label; a
+			// quieter `detail` run after it; `title` on hover; `truncate` caps a long label.
+			icon: value(O.IconName),
+			image: text,
+			severity: option(O.BadgeSeverity, "none"),
+			detail: text,
+			title: text,
+			truncate: flag,
 		},
 	}),
 	progress: tag({
@@ -975,7 +993,8 @@ export const tags = {
 		web: "A4",
 		ios: "S4",
 		content: "elements",
-		props: { label: text, description: text },
+		// `justified` (`pk0-facts`): one row, the value at its end (customers' evidence facts).
+		props: { label: text, description: text, style: option(O.PropertyStyle, "column") },
 	}),
 	// Phase 4: a header that shows or hides its children (`ui/thought-line.ts`, customers'
 	// `disclosure`, a reasoning step); `running` marks work in progress.

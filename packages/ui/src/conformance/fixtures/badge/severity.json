@@ -1,0 +1,25 @@
+{
+	"about": "A signal's severity chip: the bars lit up to the level before the label (`pk0-severity-glyph`, today's `severityChip`).",
+	"root": {
+		"tag": "badge",
+		"props": {
+			"label": "High",
+			"style": "outline",
+			"severity": "high"
+		}
+	},
+	"frame": "inline",
+	"axes": [
+		{
+			"prop": "severity",
+			"values": ["medium", "low"]
+		}
+	],
+	"kit": {
+		"specimen": "badge-severity",
+		"target": "badge"
+	},
+	"pending": {
+		"ios": "S1"
+	}
+}

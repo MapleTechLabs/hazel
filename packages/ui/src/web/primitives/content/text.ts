@@ -6,7 +6,8 @@ export const primitive = definePrimitive("text", ({ document, outer, self }) => 
 	ensureStyles(document)
 	const node = outer("span")
 	return self(node, (name, value) => {
-		if (name === "strong" || name === "numeric" || name === "truncate") flag(node, name, value)
+		if (name === "strong" || name === "numeric" || name === "truncate" || name === "dot")
+			flag(node, name, value)
 		else if (name === "role" || name === "tone") option(node, name, value)
 	})
 })

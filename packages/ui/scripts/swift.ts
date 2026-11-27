@@ -333,7 +333,7 @@ ${Object.entries(tokens.shadow)
 
     public enum Layout: Sendable { case row, column, inlineRow, contents }
     public enum Align: Sendable { case center, start, end }
-    public enum TextAlign: Sendable { case center, start }
+    public enum TextAlign: Sendable { case center, start, end }
     public enum Overflow: Sendable { case scrollX, scrollY }
 
     /// A recipe's declarations, resolved to values; \`nil\` leaves the field to earlier layers.

@@ -1,11 +1,17 @@
 import { defineRecipe } from "../recipe.ts"
-import type { IconTileTone } from "../schema.ts"
+import type { IconTileSize, IconTileTone } from "../schema.ts"
 
 /**
  * `hz:iconTile` (`ui/icon-tile.ts`, size `md`): a glyph on a tinted square, `size-10 rounded-lg border`,
- * the glyph `size-5`. Tones are the kit's intents (`accent` is its `primary`).
+ * the glyph `size-5`. Tones are the kit's intents (`accent` is its `primary`). Phase 4: `mark` and the
+ * smaller sizes are customers' `sourceMark` (`rounded-lg bg-secondary`, `xsmall` `rounded-md`), whose
+ * `image` (`rounded-sm object-contain`) takes the glyph's place at 24, 20 and 16pt.
  */
-export const iconTile = defineRecipe<{ readonly tone: IconTileTone }, never, "icon">({
+export const iconTile = defineRecipe<
+	{ readonly tone: IconTileTone; readonly size: IconTileSize },
+	never,
+	"icon"
+>({
 	primitive: "iconTile",
 	parts: { icon: "part" },
 	base: {
@@ -18,7 +24,7 @@ export const iconTile = defineRecipe<{ readonly tone: IconTileTone }, never, "ic
 			borderWidth: "hairline",
 			shrink: false,
 		},
-		parts: { icon: { size: "5" } },
+		parts: { icon: { size: "5", radius: "sm" } },
 	},
 	options: {
 		tone: {
@@ -43,6 +49,15 @@ export const iconTile = defineRecipe<{ readonly tone: IconTileTone }, never, "ic
 						color: "success-subtle-fg",
 					},
 				},
+				mark: { root: { borderWidth: "none", background: "secondary", color: "muted-fg" } },
+			},
+		},
+		size: {
+			default: "regular",
+			values: {
+				regular: {},
+				small: { root: { size: "8" } },
+				xsmall: { root: { size: "6", radius: "md" }, parts: { icon: { size: "4" } } },
 			},
 		},
 	},

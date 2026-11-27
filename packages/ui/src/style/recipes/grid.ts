@@ -23,7 +23,9 @@ export const grid = defineRecipe<
 			default: "regular",
 			values: {
 				tight: { root: { gap: "0.5", rowGap: "0.5" } },
+				snug: { root: { gap: "1.5", rowGap: "1.5" } },
 				compact: { root: { gap: "2", rowGap: "2" } },
+				cozy: { root: { gap: "3", rowGap: "3" } },
 				regular: { root: { gap: "4", rowGap: "4" } },
 				relaxed: { root: { gap: "6", rowGap: "6" } },
 			},

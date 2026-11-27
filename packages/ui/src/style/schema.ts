@@ -90,20 +90,32 @@ export type ButtonSize = (typeof buttonSizes)[number]
 export const badgeTones = ["neutral", "accent", "success", "warning", "danger", "info"] as const
 export type BadgeTone = (typeof badgeTones)[number]
 
-/** `solid` is the tinted fill, `outline` a hairline ring, `quiet` a grey fill with muted ink. */
-export const badgeStyles = ["solid", "outline", "quiet"] as const
+/**
+ * `solid` is the tinted fill, `outline` a hairline ring, `quiet` a grey fill with muted ink. Phase 4:
+ * `quietOutline` the ring with muted ink (the kit's `quiet` intent, an SLA on time); `plain` the glyph
+ * and label with no chip (signal counts in a table cell, in the tone's ink).
+ */
+export const badgeStyles = ["solid", "outline", "quiet", "quietOutline", "plain"] as const
 export type BadgeStyle = (typeof badgeStyles)[number]
 
-export const badgeSizes = ["regular", "small"] as const
+/** `large` is a 28pt chip naming a thing beside its mark (customers' `sourceChip`). */
+export const badgeSizes = ["regular", "small", "large"] as const
 export type BadgeSize = (typeof badgeSizes)[number]
+
+/** A signal's severity as three rising bars lit up to the level (`severityGlyph`). */
+export const badgeSeverities = ["none", "low", "medium", "high"] as const
+export type BadgeSeverity = (typeof badgeSeverities)[number]
 
 // C1: the sets the doc names for layout, content and chat tags (values fixed in phase 1).
 
 export const stackAxes = ["vertical", "horizontal"] as const
 export type StackAxis = (typeof stackAxes)[number]
 
-/** `tight` is a sidebar's section group (`gap-y-0.5`, `stack-tight`). */
-export const stackDensities = ["tight", "compact", "regular", "relaxed"] as const
+/**
+ * `tight` is a sidebar's section group (`gap-y-0.5`, `stack-tight`); phase 4: `snug` the kit's `gap-1.5`
+ * (a state and its detail), `cozy` its `gap-3` (a mark beside its text).
+ */
+export const stackDensities = ["tight", "snug", "compact", "cozy", "regular", "relaxed"] as const
 export type StackDensity = (typeof stackDensities)[number]
 
 export const stackAligns = ["stretch", "start", "center", "end"] as const
@@ -116,9 +128,20 @@ export type StackInset = (typeof stackInsets)[number]
 /**
  * `danger` is the danger zone's card with a tinted header (`frame-danger`); `flush` the card with no
  * padding, its dividers running edge to edge (`frame-flush`); `hint` a sidebar's quiet
- * tip, inset by the rows' margin (`frame-hint`).
+ * tip, inset by the rows' margin (`frame-hint`); `tile` a card in a grid of cards (customers'
+ * `connectCard`: `p-4 sm:p-5`).
  */
-export const frameSurfaces = ["none", "card", "inset", "muted", "overlay", "danger", "flush", "hint"] as const
+export const frameSurfaces = [
+	"none",
+	"card",
+	"inset",
+	"muted",
+	"overlay",
+	"danger",
+	"flush",
+	"hint",
+	"tile",
+] as const
 export type FrameSurface = (typeof frameSurfaces)[number]
 
 /**
@@ -181,8 +204,13 @@ export const avatarStackLayouts = ["row", "pair"] as const
 export type AvatarStackLayout = (typeof avatarStackLayouts)[number]
 
 /** A tinted square behind a glyph (the kit's `iconTile`); tones are the kit's intents. */
-export const iconTileTones = ["neutral", "accent", "success", "warning", "danger"] as const
+/** Phase 4: `mark` is a brand mark's borderless secondary tile (customers' `sourceMark`). */
+export const iconTileTones = ["neutral", "accent", "success", "warning", "danger", "mark"] as const
 export type IconTileTone = (typeof iconTileTones)[number]
+
+/** The kit's `md` (40pt); `small` and `xsmall` are `sourceMark`'s 32 and 24pt tiles. */
+export const iconTileSizes = ["regular", "small", "xsmall"] as const
+export type IconTileSize = (typeof iconTileSizes)[number]
 
 /** An unread row's mark at its start: the sidebar's edge `pip`, or activity's brand `dot`. */
 export const itemUnreadMarks = ["none", "pip", "dot"] as const
@@ -225,9 +253,17 @@ export type ChoiceStyle = (typeof choiceStyles)[number]
 export const toggleStyles = ["switch", "checkbox"] as const
 export type ToggleStyle = (typeof toggleStyles)[number]
 
-/** `spinner` is the kit's loader ring, for an inline wait; `bar` the progress bar. */
-export const progressStyles = ["bar", "spinner"] as const
+/**
+ * `spinner` is the kit's loader ring, for an inline wait; `bar` the progress bar; `inline` a 14pt ring
+ * in the accent ink inside a line of text (a sync running, `connectCard`), its label for assistive tech;
+ * `meter` a usage against its limit (`value` may pass 1): blue, amber at the limit, red past 120%.
+ */
+export const progressStyles = ["bar", "spinner", "inline", "meter"] as const
 export type ProgressStyle = (typeof progressStyles)[number]
+
+/** A property's row: the label column (`detail/parts.ts`), or `justified`, a fact with its value at the end. */
+export const propertyStyles = ["column", "justified"] as const
+export type PropertyStyle = (typeof propertyStyles)[number]
 
 /** `callout` is the kit's bordered note; `bar` a full-width band (the "N new messages" bar). */
 export const bannerStyles = ["callout", "bar"] as const
@@ -443,8 +479,8 @@ export interface Declarations<T extends TokenNames = TokenNames> {
 	readonly uppercase?: boolean
 	/** The monospace family over the text step (`font-mono`: a date pill, the empty channel's line). */
 	readonly mono?: boolean
-	/** Centred text (`recipe-text-align`), or `start` back from an inherited centre. */
-	readonly textAlign?: "center" | "start"
+	/** Centred text (`recipe-text-align`), `start` back from an inherited centre, or `end` (a stack aligned end). */
+	readonly textAlign?: "center" | "start" | "end"
 	/** Lines before the text truncates with an ellipsis (`item-title-lines`); 1 is `truncate`. */
 	readonly lineClamp?: 2
 	/** Scrolls its overflow along one axis (`recipe-overflow`). */

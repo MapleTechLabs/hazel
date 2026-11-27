@@ -74,11 +74,14 @@ public enum HazelTheme {
         case solid = "solid"
         case outline = "outline"
         case quiet = "quiet"
+        case quietOutline = "quietOutline"
+        case plain = "plain"
     }
 
     public enum BadgeSize: String, CaseIterable, Sendable {
         case regular = "regular"
         case small = "small"
+        case large = "large"
     }
 
     public enum State: String, CaseIterable, Sendable {
@@ -451,7 +454,7 @@ public enum HazelTheme {
 
     public enum Layout: Sendable { case row, column, inlineRow, contents }
     public enum Align: Sendable { case center, start, end }
-    public enum TextAlign: Sendable { case center, start }
+    public enum TextAlign: Sendable { case center, start, end }
     public enum Overflow: Sendable { case scrollX, scrollY }
 
     /// A recipe's declarations, resolved to values; `nil` leaves the field to earlier layers.
@@ -678,11 +681,13 @@ public enum HazelTheme {
 
         public static let badge = Recipe(
             primitive: "badge",
-            defaults: ["tone": "neutral", "style": "solid", "size": "regular"],
+            defaults: ["tone": "neutral", "style": "solid", "size": "regular", "severity": "none"],
             inert: [],
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .inlineRow, align: .center, radius: 4, strong: true, numeric: true, nowrap: true, transition: 0.2)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "label", style: Style(minWidth: 0)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "detail", style: Style(strong: false, opacity: 0.8)),
                 Layer(when: When(options: ["tone": "neutral"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.secondary, color: Colors.secondaryFg)),
                 Layer(when: When(options: ["tone": "accent"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.primarySubtle, color: Colors.accentFg)),
                 Layer(when: When(options: ["tone": "success"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.successSubtle, color: Colors.successSubtleFg)),
@@ -691,13 +696,26 @@ public enum HazelTheme {
                 Layer(when: When(options: ["tone": "info"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.infoSubtle, color: Colors.infoSubtleFg)),
                 Layer(when: When(options: ["style": "outline"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.clear, ring: Colors.border)),
                 Layer(when: When(options: ["style": "quiet"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.secondary, color: Colors.mutedFg)),
+                Layer(when: When(options: ["style": "quietOutline"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.clear, color: Colors.mutedFg, ring: Colors.border)),
+                Layer(when: When(options: ["style": "plain"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.clear, color: Colors.fg)),
                 Layer(when: When(options: ["size": "regular"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(paddingX: 6, paddingY: 2, gap: 6, text: .caption, leading: 20)),
                 Layer(when: When(options: ["size": "regular"], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(size: 12)),
                 Layer(when: When(options: ["size": "small"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(paddingX: 4, paddingY: 1, gap: 4, text: .micro)),
                 Layer(when: When(options: ["size": "small"], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(size: 10)),
+                Layer(when: When(options: ["size": "large"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(radius: 6, paddingX: 8, paddingStart: 6, gap: 6, minHeight: 28, text: .caption)),
+                Layer(when: When(options: ["size": "large"], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(radius: 4, size: 16)),
                 Layer(when: When(options: [:], flags: ["pill"], states: [], sizeClass: nil), part: nil, style: Style(radius: 8)),
+                Layer(when: When(options: [:], flags: ["truncate"], states: [], sizeClass: nil), part: nil, style: Style(shrink: true, minWidth: 0)),
+                Layer(when: When(options: [:], flags: ["truncate"], states: [], sizeClass: nil), part: "label", style: Style(truncate: true)),
                 Layer(when: When(options: ["size": "regular"], flags: ["pill"], states: [], sizeClass: nil), part: nil, style: Style(paddingX: 8)),
                 Layer(when: When(options: ["size": "small"], flags: ["pill"], states: [], sizeClass: nil), part: nil, style: Style(paddingX: 6)),
+                Layer(when: When(options: ["style": "plain"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(radius: 0, paddingX: 0, paddingY: 0, gap: 4, text: .label, leading: 20, strong: false)),
+                Layer(when: When(options: ["style": "plain", "tone": "info"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(color: Colors.infoSubtleFg)),
+                Layer(when: When(options: ["style": "solid", "size": "regular"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 4)),
+                Layer(when: When(options: ["style": "outline", "size": "large"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(color: Colors.fg)),
+                Layer(when: When(options: ["style": "outline", "severity": "low"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(color: Colors.fg)),
+                Layer(when: When(options: ["style": "outline", "severity": "medium"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(color: Colors.fg)),
+                Layer(when: When(options: ["style": "outline", "severity": "high"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(color: Colors.fg)),
             ]
         )
 
@@ -1179,8 +1197,11 @@ public enum HazelTheme {
             inert: [],
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column, rowGap: 16)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "footer", style: Style(layout: .row, align: .center, paddingTop: 16, gap: 16)),
                 Layer(when: When(options: ["surface": "card"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.bg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 16, paddingY: 16, shadow: "xs")),
                 Layer(when: When(options: ["surface": "card"], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(paddingX: 24, paddingY: 24)),
+                Layer(when: When(options: ["surface": "tile"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.bg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 16, paddingY: 16, shadow: "xs")),
+                Layer(when: When(options: ["surface": "tile"], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(paddingX: 20, paddingY: 20)),
                 Layer(when: When(options: ["surface": "danger"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(borderColor: Colors.dangerSubtle, borderWidth: 1, radius: 12, paddingX: 16, paddingY: 16)),
                 Layer(when: When(options: ["surface": "danger"], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(paddingX: 24, paddingY: 24)),
                 Layer(when: When(options: ["surface": "muted"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.muted, radius: 8, paddingX: 12, paddingY: 6, rowGap: 8)),
@@ -1198,7 +1219,9 @@ public enum HazelTheme {
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(fill: true)),
                 Layer(when: When(options: ["density": "tight"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 2, rowGap: 2)),
+                Layer(when: When(options: ["density": "snug"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 6, rowGap: 6)),
                 Layer(when: When(options: ["density": "compact"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 8, rowGap: 8)),
+                Layer(when: When(options: ["density": "cozy"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 12, rowGap: 12)),
                 Layer(when: When(options: ["density": "regular"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 16, rowGap: 16)),
                 Layer(when: When(options: ["density": "relaxed"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 24, rowGap: 24)),
             ]
@@ -1234,16 +1257,20 @@ public enum HazelTheme {
 
         public static let iconTile = Recipe(
             primitive: "iconTile",
-            defaults: ["tone": "neutral"],
+            defaults: ["tone": "neutral", "size": "regular"],
             inert: [],
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .row, align: .center, justify: .center, borderWidth: 1, radius: 8, size: 40, shrink: false)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(size: 20)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(radius: 4, size: 20)),
                 Layer(when: When(options: ["tone": "neutral"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.secondary, color: Colors.mutedFg, borderColor: Colors.border)),
                 Layer(when: When(options: ["tone": "accent"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.primaryWash, color: Colors.primary, borderColor: Colors.primaryTint)),
                 Layer(when: When(options: ["tone": "danger"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.dangerWash, color: Colors.danger, borderColor: Colors.dangerTint)),
                 Layer(when: When(options: ["tone": "warning"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.warningSubtle, color: Colors.warningSubtleFg, borderColor: Colors.warningEdge)),
                 Layer(when: When(options: ["tone": "success"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.successSubtle, color: Colors.successSubtleFg, borderColor: Colors.successEdge)),
+                Layer(when: When(options: ["tone": "mark"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.secondary, color: Colors.mutedFg, borderWidth: 0)),
+                Layer(when: When(options: ["size": "small"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(size: 32)),
+                Layer(when: When(options: ["size": "xsmall"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(radius: 6, size: 24)),
+                Layer(when: When(options: ["size": "xsmall"], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(size: 16)),
             ]
         )
 
@@ -1469,18 +1496,26 @@ public enum HazelTheme {
                 Layer(when: When(options: ["style": "bar"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(fill: true, grow: true, shrink: true)),
                 Layer(when: When(options: ["style": "spinner"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .row, align: .center, gap: 12, shrink: false)),
                 Layer(when: When(options: ["style": "spinner"], flags: [], states: [], sizeClass: nil), part: "label", style: Style(color: Colors.mutedFg, strong: false)),
+                Layer(when: When(options: ["style": "meter"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(rowGap: 0, minWidth: 80)),
+                Layer(when: When(options: ["style": "meter"], flags: [], states: [], sizeClass: nil), part: "track", style: Style(minHeight: 4)),
+                Layer(when: When(options: ["style": "meter"], flags: [], states: [], sizeClass: nil), part: "fill", style: Style(background: Colors.chartExpansion, minHeight: 4)),
+                Layer(when: When(options: ["style": "inline"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .inlineRow, align: .center, color: Colors.accentFg, shrink: false)),
+                Layer(when: When(options: ["style": "inline"], flags: [], states: [], sizeClass: nil), part: "spinner", style: Style(size: 14)),
             ]
         )
 
         public static let property = Recipe(
             primitive: "property",
-            defaults: [:],
+            defaults: ["style": "column"],
             inert: [],
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(color: Colors.fg, gap: 8, minHeight: 32, text: .label)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "label", style: Style(color: Colors.mutedFg, truncate: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "description", style: Style(color: Colors.mutedFg, text: .caption, opacity: 0.8)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "value", style: Style(layout: .row, align: .center, color: Colors.fg, gap: 8)),
+                Layer(when: When(options: ["style": "justified"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 16, minHeight: 0)),
+                Layer(when: When(options: ["style": "justified"], flags: [], states: [], sizeClass: nil), part: "label", style: Style(truncate: false)),
+                Layer(when: When(options: ["style": "justified"], flags: [], states: [], sizeClass: nil), part: "value", style: Style(numeric: true)),
             ]
         )
 
@@ -1692,12 +1727,14 @@ public enum HazelTheme {
                 Layer(when: When(options: ["axis": "vertical"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column)),
                 Layer(when: When(options: ["axis": "horizontal"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .row)),
                 Layer(when: When(options: ["density": "tight"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 2, rowGap: 2)),
+                Layer(when: When(options: ["density": "snug"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 6, rowGap: 6)),
                 Layer(when: When(options: ["density": "compact"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 8, rowGap: 8)),
+                Layer(when: When(options: ["density": "cozy"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 12, rowGap: 12)),
                 Layer(when: When(options: ["density": "regular"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 16, rowGap: 16)),
                 Layer(when: When(options: ["density": "relaxed"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(gap: 24, rowGap: 24)),
                 Layer(when: When(options: ["align": "start"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(align: .start)),
                 Layer(when: When(options: ["align": "center"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(align: .center)),
-                Layer(when: When(options: ["align": "end"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(align: .end)),
+                Layer(when: When(options: ["align": "end"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(align: .end, textAlign: .end)),
                 Layer(when: When(options: ["inset": "page"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(paddingX: 16, paddingY: 16)),
                 Layer(when: When(options: ["inset": "bar"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(paddingX: 16, paddingY: 12)),
             ]

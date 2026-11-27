@@ -1,0 +1,22 @@
+{
+	"about": "A line with the kit's status dot in each tone (`pk0-status-dot`, `statusLine`).",
+	"root": {
+		"tag": "text",
+		"props": {
+			"dot": true,
+			"tone": "success",
+			"strong": true
+		},
+		"children": ["Connected"]
+	},
+	"frame": "inline",
+	"axes": [
+		{
+			"prop": "tone",
+			"values": [null, "muted", "danger", "warning", "info", "accent"]
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	}
+}

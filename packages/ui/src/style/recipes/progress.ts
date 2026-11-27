@@ -33,6 +33,20 @@ export const progress = defineRecipe<
 					root: { layout: "row", align: "center", gap: "3", shrink: false },
 					parts: { label: { strong: false, color: "muted-fg" } },
 				},
+				// `meter` (`charts/sparkline.ts`): `h-1 w-20 rounded-full bg-secondary`; its fill's tone by level
+				// is the renderer's (`chart-expansion`, `-contraction` at the limit, `-churn` past 120%).
+				meter: {
+					root: { rowGap: "0", minWidth: "20" },
+					parts: {
+						track: { minHeight: "1" },
+						fill: { minHeight: "1", background: "chart-expansion" },
+					},
+				},
+				// `connectCard`'s syncing line: `loader size-3.5 text-primary-subtle-fg`.
+				inline: {
+					root: { layout: "inline-row", align: "center", shrink: false, color: "accent-fg" },
+					parts: { spinner: { size: "3.5" } },
+				},
 			},
 		},
 	},

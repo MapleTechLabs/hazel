@@ -19,8 +19,7 @@ export const SEVERITY_LABEL = {
 
 /** `High` in an outlined chip. */
 export const severityChip = <Msg>(h: Hazel.H<Msg>, severity: SignalSeverity) =>
-	// HAZEL-GAP(pk0-severity-glyph): today's chip leads with three rising bars lit up to the severity (`severity-*` tokens); `badge` has no glyph, so the label stands alone.
-	h.badge.style("outline").label(SEVERITY_LABEL[severity])
+	h.badge.style("outline").severity(severity).label(SEVERITY_LABEL[severity])
 
 // KIND
 
@@ -31,8 +30,10 @@ export const KIND_LABEL = { risk: "Risk", opportunity: "Opportunity" } as const 
 
 /** `Risk` (danger) or `Opportunity` (info). */
 export const kindChip = <Msg>(h: Hazel.H<Msg>, kind: SignalKind) =>
-	// HAZEL-GAP(pk0-badge-icon): today's kind chip leads with `!` or `↗`; `badge` has an icon part but no `icon` prop.
-	h.badge.tone(kind === "risk" ? "danger" : "info").label(KIND_LABEL[kind])
+	h.badge
+		.tone(kind === "risk" ? "danger" : "info")
+		.icon(kind)
+		.label(KIND_LABEL[kind])
 
 // LIFECYCLE STAGE
 
@@ -50,7 +51,7 @@ const STAGE_LOOK = {
 	trialing: { tone: "info", style: "solid" },
 	active: { tone: "success", style: "solid" },
 	past_due: { tone: "warning", style: "solid" },
-	churned: { tone: "neutral", style: "outline" },
+	churned: { tone: "neutral", style: "quietOutline" },
 } as const satisfies Record<LifecycleStage, { tone: BadgeTone; style: BadgeStyle }>
 
 /** The stage's label; `trialDaysLeft` adds `· 4 days left` to a trialing badge. */
@@ -65,11 +66,15 @@ export const stageBadge = <Msg>(
 	stage: LifecycleStage,
 	options: Readonly<{ trialDaysLeft?: number | null }> = {},
 ) =>
-	// HAZEL-GAP(pk0-badge-runs): today's `· 4 days left` is regular weight at 80% opacity and churned's ink is muted; a badge label is one run in its tone's ink.
 	h.badge
 		.tone(STAGE_LOOK[stage].tone)
 		.style(STAGE_LOOK[stage].style)
-		.label(stageLabel(stage, options.trialDaysLeft))
+		.label(STAGE_LABEL[stage])
+		.detail(
+			stage === "trialing" && options.trialDaysLeft != null
+				? `· ${formatDaysLeft(options.trialDaysLeft)}`
+				: undefined,
+		)
 
 // SIGNAL COUNTS
 
@@ -91,17 +96,16 @@ export const signalCountsLabel = (counts: SignalCounts): string =>
 export const signalCounts = <Msg>(h: Hazel.H<Msg>, counts: SignalCounts) => {
 	const risks = (["high", "medium", "low"] as const).filter((severity) => counts[severity] > 0)
 	if (risks.length === 0 && counts.opportunities === 0) return h.text.tone("muted").children(NO_VALUE)
-	// HAZEL-GAP(pk0-severity-glyph): today each count leads with its severity bars, and opportunities with `↗` in info ink.
 	return h.stack
 		.axis("horizontal")
 		.density("compact")
 		.align("center")
 		.children(
 			...risks.map((severity) =>
-				h.text.numeric().children(`${counts[severity]} ${SEVERITY_LABEL[severity].toLowerCase()}`),
+				h.badge.style("plain").severity(severity).label(String(counts[severity])),
 			),
 			counts.opportunities > 0
-				? h.text.tone("info").numeric().children(`${counts.opportunities} opp.`)
+				? h.badge.style("plain").tone("info").icon("opportunity").label(String(counts.opportunities))
 				: null,
 		)
 }
@@ -110,8 +114,7 @@ export const signalCounts = <Msg>(h: Hazel.H<Msg>, counts: SignalCounts) => {
 
 /** `EU`: an account's environment, beside its name. */
 export const environmentBadge = <Msg>(h: Hazel.H<Msg>, environment: string) =>
-	// HAZEL-GAP(pk0-badge-truncate): today a long environment truncates at `max-w-32` with its name on hover; a badge never truncates.
-	h.badge.label(environment)
+	h.badge.truncate().label(environment)
 
 /** `+2 environments` beside a primary's name, muted; nothing for an account without environments. */
 export const environmentsHint = <Msg>(h: Hazel.H<Msg>, count: number) => {

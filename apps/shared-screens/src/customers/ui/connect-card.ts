@@ -38,17 +38,18 @@ export type ConnectCardStatus<Msg> =
 
 /** `● Connected · Synced 2h ago`: the state in its tone, then the rest muted. */
 const stateLine = <Msg>(h: Hazel.H<Msg>, tone: TextTone, label: string, rest: string | null) =>
-	// HAZEL-GAP(pk0-status-dot): today's state leads with the kit's status dot in its tone; `text` has no dot.
 	h.stack
 		.axis("horizontal")
-		.density("compact")
+		.density("snug")
 		.align("center")
 		.children(
 			h.text
+				.role("label")
+				.dot()
 				.strong(tone !== "muted")
 				.tone(tone)
 				.children(label),
-			rest === null ? null : h.text.tone("muted").children(`· ${rest}`),
+			rest === null ? null : h.text.role("label").tone("muted").children(`· ${rest}`),
 		)
 
 const footer = <Msg>(h: Hazel.H<Msg>, status: ConnectCardStatus<Msg>, now: Instant) =>
@@ -64,20 +65,24 @@ const footer = <Msg>(h: Hazel.H<Msg>, status: ConnectCardStatus<Msg>, now: Insta
 					: `${formatCount(status.done)} of ${formatCount(status.total)} ${status.step}`
 			const known = status.total !== null && status.total > 0
 			return [
-				h.stack.density("compact").children(
-					// HAZEL-GAP(pk0-inline-spinner): today's line leads with a 14px loader ring in the accent ink; a `progress` spinner is its own row.
-					h.stack
-						.axis("horizontal")
-						.density("compact")
-						.align("center")
-						.children(
-							h.text.strong().tone("accent").children("Syncing…"),
-							h.text.tone("muted").numeric().truncate().children(counts),
-						),
-					known
-						? h.progress.value(status.done / (status.total ?? 1)).label(`Syncing ${status.step}`)
-						: h.progress.indeterminate().label(`Syncing ${status.step}`),
-				),
+				h.stack
+					.density("compact")
+					.children(
+						h.stack
+							.axis("horizontal")
+							.density("snug")
+							.align("center")
+							.children(
+								h.progress.style("inline"),
+								h.text.role("label").strong().tone("accent").children("Syncing…"),
+								h.text.role("label").tone("muted").numeric().truncate().children(counts),
+							),
+						known
+							? h.progress
+									.value(status.done / (status.total ?? 1))
+									.label(`Syncing ${status.step}`)
+							: h.progress.indeterminate().label(`Syncing ${status.step}`),
+					),
 				status.onCancel === undefined
 					? null
 					: h.button.label("Cancel").variant("ghost").size("small").on("press", status.onCancel),
@@ -95,7 +100,7 @@ const footer = <Msg>(h: Hazel.H<Msg>, status: ConnectCardStatus<Msg>, now: Insta
 							? "Not synced yet"
 							: `Synced ${formatRelative(status.syncedAt, now)}`,
 					),
-					h.text.tone("muted").numeric().children(status.summary),
+					h.text.role("label").tone("muted").numeric().children(status.summary),
 				),
 			status.onSyncNow === undefined
 				? null
@@ -111,7 +116,7 @@ const footer = <Msg>(h: Hazel.H<Msg>, status: ConnectCardStatus<Msg>, now: Insta
 				.density("tight")
 				.children(
 					stateLine(h, "danger", "Sync failed", formatRelative(status.at, now)),
-					h.text.tone("muted").children(status.message),
+					h.text.role("label").tone("muted").children(status.message),
 				),
 			h.button
 				.label(status.action.label)
@@ -130,33 +135,22 @@ export const connectCard = <Msg>(
 		description?: string
 	}>,
 ) =>
-	// HAZEL-GAP(pk0-card-footer): today the footer sits under a hairline with its parts at either end (`justify-between`); a stack has no divider-topped row or space-between, so a `divider` and a `spacer` stand in.
-	h.frame.children(
-		h.stack.children(
+	h.frame
+		.surface("tile")
+		.footer(...footer(h, options.status, options.now))
+		.children(
 			h.stack
 				.axis("horizontal")
 				.align("start")
+				.density("cozy")
 				.children(
 					sourceMark(h, options.provider, { size: "md" }),
-					h.stack
-						.density("tight")
-						.children(
-							h.heading.level("3").children(sourceLabel(options.provider)),
-							h.text
-								.tone("muted")
-								.children(options.description ?? providerOf(options.provider).blurb),
-						),
+					h.stack.density("tight").children(
+						h.heading.children(sourceLabel(options.provider)),
+						h.text
+							.role("label")
+							.tone("muted")
+							.children(options.description ?? providerOf(options.provider).blurb),
+					),
 				),
-			h.divider,
-			h.stack
-				.axis("horizontal")
-				.align("center")
-				.children(...withSpacer(h, footer(h, options.status, options.now))),
-		),
-	)
-
-/** The footer's start, a spacer, then its end (today's `justify-between`). */
-const withSpacer = <Msg, A>(h: Hazel.H<Msg>, parts: ReadonlyArray<A>) => {
-	const [first, ...rest] = parts
-	return [first ?? null, h.spacer, ...rest]
-}
+		)
