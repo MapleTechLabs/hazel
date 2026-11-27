@@ -11,10 +11,8 @@ import type { Model } from "../app/model"
 import { init, update } from "../app/update"
 import { view } from "../app/view"
 import { DEFAULT_SOUND_SETTINGS } from "../notification-sound"
-import type { Shared } from "../page/contract"
 import { PageOutMessage } from "../page/out-message"
 import { loadPages } from "../page/registry"
-import { sharedDefaults } from "../page/test-shared"
 import { type AppRoute, hrefOf, urlToAppRoute } from "../route"
 import {
 	type AppCommand,
@@ -201,14 +199,3 @@ export const rootScene = {
 	update,
 	view: (model: Model, h: HtmlBuilder<Message>) => view(model, h),
 }
-
-/** `Shared` as the host derives it for a signed-in owner of `hazel` (for overlay and shell tests). */
-export const signedInShared = (member: Member | null = owner): Shared => ({
-	auth: "SignedIn",
-	orgSlug: "hazel",
-	currentUser: ada,
-	organization: hazelOrg,
-	member,
-	nowMs: 0,
-	...sharedDefaults,
-})
