@@ -116,6 +116,10 @@ jobs:
               if: success() || failure()
               run: bun run --cwd packages/ui test:web
 
+            - name: Browser tests (the composer's editor in Chromium)
+              if: success() || failure()
+              run: bun run --cwd packages/ui test:browser
+
             - name: Upload screenshots
               if: always()
               uses: actions/upload-artifact@v4
