@@ -159,8 +159,13 @@ const color = {
 	"secondary-soft": same(alpha(ref("secondary"), 0.8)),
 	/** The channel sidebar's tip (`bg-secondary/50`, `frame-hint`). */
 	"secondary-half": same(alpha(ref("secondary"), 0.5)),
+	/** A segmented control's track (`bg-secondary/70`) and a drop zone's fill (`bg-secondary/20`). */
+	"secondary-track": same(alpha(ref("secondary"), 0.7)),
+	"secondary-faint": same(alpha(ref("secondary"), 0.2)),
 	/** A pinned message (`bg-warning/10`, hover `/15`, its edge `border-warning`). */
 	"warning-tint": same(alpha(ref("warning"), 0.1)),
+	/** A required command argument's chip (`bg-warning/20`). */
+	"warning-chip": same(alpha(ref("warning"), 0.2)),
 	"warning-tint-hover": same(alpha(ref("warning"), 0.15)),
 	/** A quiet destructive control under the pointer (`hover:bg-danger/10`). */
 	"danger-tint": same(alpha(ref("danger"), 0.1)),
@@ -202,6 +207,12 @@ const color = {
 	"toggle-track": same(alpha(ref("fg"), 0.15)),
 	"toggle-track-hover": same(alpha(ref("fg"), 0.2)),
 	"toggle-edge": same(alpha(ref("fg"), 0.05)),
+	/** A radio's or checkbox's hover (`bg-muted-fg/20`, `ring-muted-fg/30`), and a choice card's edge. */
+	"control-hover-fill": same(alpha(ref("muted-fg"), 0.2)),
+	"control-hover-edge": same(alpha(ref("muted-fg"), 0.3)),
+	/** A slider thumb's edge (`border-fg/10`) and a colour swatch's (`outline-black/10`, both themes). */
+	"thumb-edge": same(alpha(ref("fg"), 0.1)),
+	"swatch-edge": same(alpha(p("black"), 0.1)),
 	"toggle-thumb": same(p("white")),
 	/** Vendor marks, the same in both themes (`--color-slack`, `--color-discord`). */
 	slack: same(lit("#4a154b")),
@@ -242,6 +253,17 @@ const color = {
 	"secondary-icon-hover": same(alpha(ref("secondary-fg"), 0.9)),
 	"warning-icon-hover": same(alpha(ref("warning-fg"), 0.9)),
 	"danger-icon-hover": same(alpha(ref("danger-fg"), 0.9)),
+	// A saved view's colour (`theme.css` `--view-*`, `pk0-tab-leading`): its tab's dot or icon.
+	"tint-muted": same(alpha(ref("muted-fg"), 0.6)),
+	"tint-gray": themed(lit("oklch(0.552 0.016 285.938)"), lit("oklch(0.6 0.016 285.9)")),
+	"tint-red": themed(lit("rgb(240 68 56)"), lit("rgb(249 112 102)")),
+	"tint-orange": themed(lit("rgb(239 104 32)"), lit("rgb(243 135 68)")),
+	"tint-yellow": themed(lit("rgb(247 144 9)"), lit("rgb(253 176 34)")),
+	"tint-green": themed(lit("rgb(23 178 106)"), lit("rgb(71 205 137)")),
+	"tint-teal": themed(lit("rgb(21 183 158)"), lit("rgb(46 211 183)")),
+	"tint-blue": themed(lit("rgb(46 144 250)"), lit("rgb(83 177 253)")),
+	"tint-purple": themed(lit("rgb(122 90 248)"), lit("rgb(155 138 251)")),
+	"tint-pink": themed(lit("rgb(238 70 188)"), lit("rgb(246 112 199)")),
 } satisfies Record<string, ThemedColor>
 
 export const tokens = {
@@ -316,6 +338,9 @@ export const tokens = {
 		"16": 64,
 		"20": 80,
 		"24": 96,
+		"36": 144,
+		"64": 256,
+		"105": 420,
 	},
 	/** styles.css `--radius-*` (lg is 0.5rem, the rest multiples of it); `none` is `rounded-none`. */
 	radius: { none: 0, xs: 2, sm: 4, md: 6, lg: 8, xl: 12, "2xl": 16, "3xl": 24, "4xl": 32, full: 9999 },
@@ -412,6 +437,8 @@ export const tokens = {
 		toast: [{ at: 0, pose: { opacity: 0, y: 8 } }],
 		toastOut: [{ at: 1, pose: { opacity: 0, y: 8 } }],
 		message: [{ at: 0, pose: { opacity: 0, y: 6 } }],
+		/** The composer's suggestions over the field (`slide-in-from-bottom-2`). */
+		lift: [{ at: 0, pose: { opacity: 0, y: 8 } }],
 		reaction: [{ at: 0, pose: { opacity: 0, scale: 0.6 } }],
 		pop: [{ at: 0.45, pose: { scale: 1.3 } }],
 		countUp: [{ at: 0, pose: { opacity: 0, y: "70%" } }],
@@ -441,6 +468,8 @@ export const tokens = {
 		toastIn: { keyframes: "toast", duration: "normal", easing: "out" },
 		toastOut: { keyframes: "toastOut", duration: "fast", easing: "in" },
 		messageIn: { keyframes: "message", duration: "enter", easing: "enter" },
+		/** `fade-in slide-in-from-bottom-2 animate-in duration-150` (tw-animate's `ease`). */
+		suggestionsIn: { keyframes: "lift", duration: "fast", easing: "css" },
 		reactionIn: { keyframes: "reaction", duration: "reactionEnter", easing: "overshoot" },
 		reactionPop: { keyframes: "pop", duration: "reactionPop", easing: "overshoot" },
 		countUp: { keyframes: "countUp", duration: "enter", easing: "enter" },

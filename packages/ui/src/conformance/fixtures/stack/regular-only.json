@@ -1,0 +1,44 @@
+{
+	"about": "A key hint row drawn only at the regular size class (`regularOnly`, `pk0-web-only`) under a line that always shows.",
+	"root": {
+		"tag": "stack",
+		"props": {
+			"density": "compact"
+		},
+		"children": [
+			{
+				"tag": "text",
+				"children": ["Always shown"]
+			},
+			{
+				"tag": "stack",
+				"props": {
+					"axis": "horizontal",
+					"density": "compact",
+					"regularOnly": true
+				},
+				"children": [
+					{
+						"tag": "text",
+						"props": {
+							"role": "kbd"
+						},
+						"children": ["j"]
+					},
+					{
+						"tag": "text",
+						"props": {
+							"role": "caption",
+							"tone": "muted"
+						},
+						"children": ["Navigate"]
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"pending": {
+		"ios": "S1"
+	}
+}

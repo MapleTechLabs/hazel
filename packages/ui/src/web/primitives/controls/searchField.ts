@@ -4,7 +4,7 @@
  */
 // Owned by lane A2.
 import { svg } from "../../icons.ts"
-import { definePrimitive, part, type Primitive } from "../define.ts"
+import { definePrimitive, option, part, type Primitive } from "../define.ts"
 import { fire, revisioned } from "./field.ts"
 import { ensureStyles } from "./styles.ts"
 
@@ -18,7 +18,15 @@ export const primitive = definePrimitive("searchField", ({ document, tag, outer 
 	input.type = "search"
 	input.dataset.hzFocus = ""
 	input.setAttribute("aria-label", "Search")
-	node.append(icon, input)
+	// The `/` key cap, shown while the field is empty (`pk0-search-hint`).
+	const shortcut = part(document, "kbd", "shortcut")
+	shortcut.setAttribute("aria-hidden", "true")
+	shortcut.hidden = true
+	node.append(icon, input, shortcut)
+	const syncShortcut = () => {
+		shortcut.hidden = shortcut.textContent === "" || input.value !== ""
+	}
+	input.addEventListener("input", syncShortcut)
 	const events = () => primitive.events
 	const text = revisioned(input, (change) => fire(events(), "change", { ...change }))
 	input.addEventListener("keydown", (event) => {
@@ -42,7 +50,16 @@ export const primitive = definePrimitive("searchField", ({ document, tag, outer 
 			if (name === "placeholder") {
 				input.placeholder = typeof value === "string" ? value : ""
 				input.setAttribute("aria-label", typeof value === "string" ? value : "Search")
-			} else if (name === "value") text.receive(value)
+			} else if (name === "value") {
+				text.receive(value)
+				syncShortcut()
+			} else if (name === "width") option(node, name, value)
+			else if (name === "shortcut") {
+				shortcut.textContent = typeof value === "string" ? value : ""
+				if (typeof value === "string") input.setAttribute("aria-keyshortcuts", value)
+				else input.removeAttribute("aria-keyshortcuts")
+				syncShortcut()
+			}
 		},
 		events: undefined,
 	}

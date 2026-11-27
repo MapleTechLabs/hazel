@@ -1,49 +1,62 @@
 // Effect UI is a public preview: every API is experimental by design here.
 // @effect-diagnostics experimentalApiUsage:off
 /**
- * The web's picker platform (`@hazel/shared-screens/chat/pickers`): the data handed to the web
- * renderers of `hz:emojiPicker` and `GifPicker`, KLIPY as `SearchGifs`, localStorage and `fetch`.
+ * The web's picker platform (`@hazel/shared-screens/chat/pickers`): KLIPY as `SearchGifs` and
+ * `GifCategories`, localStorage and `fetch`. The pickers pass their data to the renderers as props.
  */
 import { KeyValueWeb } from "@hazel/client-data/web"
 import type { KlipyGif } from "@hazel/domain/http"
-import { PickerCatalog } from "@hazel/shared-screens/chat/pickers/catalog"
-import { type Gif, SearchGifs } from "@hazel/shared-screens/chat/pickers/GifPicker"
-import { setEmojiSource } from "@hazel/ui/web/primitives/overlays/emoji-data"
-import { setGifSource } from "@hazel/ui/web/primitives/overlays/gifPicker"
+import { type Gif, GifCategories, SearchGifs } from "@hazel/shared-screens/chat/pickers/GifPicker"
 import { Effect, Layer } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
 import { HazelApiClient, HazelApiClientLive } from "../rpc"
 
 const PER_PAGE = 25
 
-/** The small still for the grid, the HD GIF as what is sent (as today). */
+/** The HD GIF as what is sent; the small jpg still, animating as the small webp (as today). */
 export const toGif = (gif: KlipyGif): Gif => ({
 	url: gif.file.hd.gif.url,
-	preview: gif.file.sm.jpg.url,
+	still: gif.file.sm.jpg.url,
+	animated: gif.file.sm.webp.url,
 	title: gif.title,
+	width: gif.file.sm.jpg.width,
+	height: gif.file.sm.jpg.height,
 })
 
-const catalogWeb = Layer.succeed(PickerCatalog, {
-	showEmoji: (categories) => Effect.sync(() => setEmojiSource(categories)),
-	showGifs: (search) => Effect.sync(() => setGifSource(search === undefined ? undefined : { search })),
-})
+// BOUNDARY: KLIPY's own failure, else a transport or decode one; the picker says so.
+const reasonOf = (error: { readonly _tag: string }) =>
+	error._tag === "KlipyApiError" ? ("ProviderFailed" as const) : ("Unavailable" as const)
 
 const searchGifsKlipy = SearchGifs.toLayer(
 	Effect.map(
 		Effect.service(HazelApiClient),
 		(client) =>
-			({ query }: { readonly query: string }) =>
+			({ query, page }: { readonly query: string; readonly page: number }) =>
 				(query === ""
-					? client.klipy.trending({ query: { page: 1, per_page: PER_PAGE } })
-					: client.klipy.search({ query: { q: query, page: 1, per_page: PER_PAGE } })
+					? client.klipy.trending({ query: { page, per_page: PER_PAGE } })
+					: client.klipy.search({ query: { q: query, page, per_page: PER_PAGE } })
 				).pipe(
-					Effect.map((response) => response.data.map(toGif)),
+					Effect.map((response) => ({
+						gifs: response.data.map(toGif),
+						hasNext: response.has_next,
+					})),
 					Effect.tapCause((cause) => Effect.logWarning("GIF search failed", cause)),
-					// BOUNDARY: KLIPY's own failure, else a transport or decode one; the picker says so.
-					Effect.mapError((error) =>
-						error._tag === "KlipyApiError" ? "ProviderFailed" : "Unavailable",
-					),
+					Effect.mapError(reasonOf),
 				),
+	),
+).pipe(Layer.provide(HazelApiClientLive))
+
+const gifCategoriesKlipy = GifCategories.toLayer(
+	Effect.map(
+		Effect.service(HazelApiClient),
+		(client) => () =>
+			client.klipy.categories().pipe(
+				Effect.map((response) =>
+					response.categories.map(({ category, query }) => ({ label: category, query })),
+				),
+				Effect.tapCause((cause) => Effect.logWarning("GIF categories failed", cause)),
+				Effect.mapError(reasonOf),
+			),
 	),
 ).pipe(Layer.provide(HazelApiClientLive))
 
@@ -53,4 +66,4 @@ const cdnHttpClient = Layer.merge(
 	Layer.succeed(HttpClient.TracerPropagationEnabled, false),
 )
 
-export const pickersWebLayer = Layer.mergeAll(catalogWeb, searchGifsKlipy, KeyValueWeb, cdnHttpClient)
+export const pickersWebLayer = Layer.mergeAll(searchGifsKlipy, gifCategoriesKlipy, KeyValueWeb, cdnHttpClient)

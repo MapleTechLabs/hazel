@@ -4,6 +4,7 @@
  * part and names the button with `aria-label`; `loading` keeps it focusable but swallows presses.
  * `selected` is a toggle's on state (`aria-pressed`); a `chip` is always a toggle, so it says `false` too.
  * `removable` adds a trailing remove mark: a press on it, or Delete or Backspace, raises `remove`.
+ * `detail` is a quieter run before the label; `trailingIcon` follows the label.
  */
 // Owned by lane A2.
 import { svg } from "../../icons.ts"
@@ -18,6 +19,10 @@ export const primitive = definePrimitive("button", ({ document, outer, self }) =
 	const node = outer("button") as HTMLButtonElement
 	node.setAttribute("type", "button")
 	const label = part(document, "span", "label")
+	const detail = part(document, "span", "detail")
+	let detailText = ""
+	let trailing: Element | undefined
+	let trailingName: string | undefined
 	// A button cannot hold another, so the mark is pointer-only; the keyboard removes with Delete.
 	const remove = part(document, "span", "remove")
 	remove.setAttribute("aria-hidden", "true")
@@ -47,13 +52,19 @@ export const primitive = definePrimitive("button", ({ document, outer, self }) =
 		const wanted = iconName === undefined ? undefined : iconOf(iconName)
 		icon?.remove()
 		icon = wanted
+		trailing = trailingName === undefined ? undefined : iconOf(trailingName)
+		trailing?.setAttribute("data-hz-part", "trailingIcon")
+		const named = iconOnly || text === ""
 		node.replaceChildren(
 			...(icon === undefined ? [] : [icon]),
-			...(iconOnly || text === "" ? [] : [label]),
+			...(named || detailText === "" ? [] : [detail]),
+			...(named ? [] : [label]),
+			...(trailing === undefined ? [] : [trailing]),
 			...(keys === "" || iconOnly ? [] : [shortcut]),
 			...(removable ? [remove] : []),
 		)
-		if (iconOnly && text !== "") node.setAttribute("aria-label", text)
+		const full = detailText === "" ? text : `${detailText} ${text}`
+		if (iconOnly && text !== "") node.setAttribute("aria-label", full)
 		else node.removeAttribute("aria-label")
 	}
 	const pressed = () => {
@@ -84,6 +95,13 @@ export const primitive = definePrimitive("button", ({ document, outer, self }) =
 			draw()
 		} else if (name === "icon") {
 			iconName = typeof value === "string" ? value : undefined
+			draw()
+		} else if (name === "detail") {
+			detailText = typeof value === "string" ? value : ""
+			detail.textContent = detailText
+			draw()
+		} else if (name === "trailingIcon") {
+			trailingName = typeof value === "string" ? value : undefined
 			draw()
 		} else if (name === "iconOnly") {
 			iconOnly = value === true

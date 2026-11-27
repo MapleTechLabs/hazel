@@ -15,7 +15,7 @@ import {
 } from "../../focus/surface.ts"
 import { glyph } from "../../icons.ts"
 import { play } from "../../motion.ts"
-import { definePrimitive, flag, part, type Primitive } from "../define.ts"
+import { definePrimitive, flag, option, part, type Primitive } from "../define.ts"
 import { fire, uniqueId } from "./field.ts"
 import { ensureStyles } from "./styles.ts"
 
@@ -407,7 +407,8 @@ export const primitive = definePrimitive("select", ({ document, tag, outer }) =>
 				select.disabled = input.disabled = button.disabled = next === true
 				if (next === true) revert()
 				flag(node, "disabled", next)
-			} else {
+			} else if (name === "width") option(node, "width", next)
+			else {
 				if (name === "options") choices = choicesOf(next)
 				else if (name === "placeholder") placeholder = typeof next === "string" ? next : undefined
 				else if (name === "value") value = typeof next === "string" ? next : undefined

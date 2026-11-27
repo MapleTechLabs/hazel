@@ -3,11 +3,12 @@ import type { StackAlign, StackAxis, StackDensity } from "../schema.ts"
 
 /**
  * `hz:stack`: a column or row whose gap is its `density` (the kit's `gap-2`, `gap-4`, `gap-6`).
- * `align` places children across the axis.
+ * `align` places children across the axis; `wrap` lets a row's children wrap onto more lines;
+ * `regularOnly` draws it only at the regular size class (`max-md:hidden`).
  */
 export const stack = defineRecipe<
 	{ readonly axis: StackAxis; readonly density: StackDensity; readonly align: StackAlign },
-	never,
+	"wrap" | "regularOnly",
 	never
 >({
 	primitive: "stack",
@@ -43,4 +44,13 @@ export const stack = defineRecipe<
 			},
 		},
 	},
+	flags: {
+		wrap: { root: { wrap: true } },
+		regularOnly: { root: { hidden: true } },
+	},
+	compounds: [
+		// Shown again from the regular size class, in its own axis.
+		{ when: { axis: "vertical", regularOnly: true }, style: { regular: { root: { layout: "column" } } } },
+		{ when: { axis: "horizontal", regularOnly: true }, style: { regular: { root: { layout: "row" } } } },
+	],
 })

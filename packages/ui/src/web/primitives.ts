@@ -15,6 +15,11 @@ const modules = import.meta.glob<{ readonly primitive?: WebPrimitive }>("./primi
 })
 
 const registry = new Map<TagKey, WebPrimitive>()
+/** Each live primitive by its outer node: the host's commands and removal reach it here. */
+const live = new WeakMap<Node, Primitive>()
+
+/** The primitive whose outer node is `node`, if it is one. */
+export const primitiveOf = (node: Node): Primitive | undefined => live.get(node)
 for (const [path, module] of Object.entries(modules)) {
 	const found = module.primitive
 	if (found === undefined) continue
@@ -50,12 +55,20 @@ export const create = (document: Document, tag: string): Primitive | undefined =
 		set,
 		events: undefined,
 	})
-	return renderer.create({ document, tag, outer, self })
+	const primitive = renderer.create({ document, tag, outer, self })
+	live.set(primitive.outer, primitive)
+	return primitive
 }
 
-/** Before a subtree leaves: ends the extension instances in it. */
+/** Before a subtree leaves: ends the extension instances in it and disposes its primitives. */
 export const release = (node: Node) => {
 	if (!(node instanceof Element)) return
+	for (const element of [node, ...node.querySelectorAll("[data-hz]")]) {
+		const primitive = live.get(element)
+		if (primitive === undefined) continue
+		live.delete(element)
+		primitive.dispose?.()
+	}
 	const all = node.matches("[data-hz=ext]") ? [node] : []
 	for (const ext of [...all, ...node.querySelectorAll("[data-hz=ext]")]) {
 		const surface = ext.querySelector(":scope > [data-hz-part=surface]")

@@ -36,6 +36,7 @@ export const recipeFeatures = [
 	"closed options, boolean flags and compounds of them",
 	"view states (selected, emphasized, disabled, loading, destructive)",
 	"interaction states (hover, pressed, focusVisible), suppressed by inert states",
+	"a part's own states (an option selected, disabled or hovered), on it and the parts inside it",
 	"the size class (compact, regular)",
 	"motion uses: a named motion per trigger (enter, exit, counts, pop, loop) on a part or the backdrop",
 	"transitions: a duration and a curve for hover and press",
@@ -72,7 +73,11 @@ export type TextTone = (typeof textTones)[number]
 /** `text.strong`: on or off, the one weight choice a view has. */
 export type TextStrong = boolean
 
-/** `chip` is a fully round filter chip: filled while `pressed`, quiet otherwise (`filter-chip`). */
+/**
+ * `chip` is a fully round filter chip: filled while `pressed`, quiet otherwise (`filter-chip`).
+ * `filter` an applied filter: a square tinted box with a divided remove half (`pk0-filter-chip`);
+ * `dashed` a quiet add control with a dashed edge (`+ Filter`, `pk0-dashed-button`).
+ */
 export const buttonVariants = [
 	"primary",
 	"secondary",
@@ -81,10 +86,13 @@ export const buttonVariants = [
 	"warning",
 	"danger",
 	"chip",
+	"filter",
+	"dashed",
 ] as const
 export type ButtonVariant = (typeof buttonVariants)[number]
 
-export const buttonSizes = ["large", "regular", "small", "xsmall"] as const
+/** `toolbar` is `xsmall` at a page toolbar's height (`h-8`, `h-10` on a phone: filters, sort). */
+export const buttonSizes = ["large", "regular", "small", "xsmall", "toolbar"] as const
 export type ButtonSize = (typeof buttonSizes)[number]
 
 export const badgeTones = ["neutral", "accent", "success", "warning", "danger", "info"] as const
@@ -109,6 +117,13 @@ export type StackAxis = (typeof stackAxes)[number]
  */
 export const stackDensities = ["tight", "compact", "regular", "relaxed", "none", "snug", "loose"] as const
 export type StackDensity = (typeof stackDensities)[number]
+
+/**
+ * A field's width in a row (`p4-files-header-widths`): `auto` fills, `narrow` is a filter's `w-36`,
+ * `regular` a search box's `w-64` that fills the row on the compact size class.
+ */
+export const fieldWidths = ["auto", "narrow", "regular"] as const
+export type FieldWidth = (typeof fieldWidths)[number]
 
 export const stackAligns = ["stretch", "start", "center", "end"] as const
 export type StackAlign = (typeof stackAligns)[number]
@@ -242,6 +257,24 @@ export type ProgressStyle = (typeof progressStyles)[number]
 /** `callout` is the kit's bordered note; `bar` a full-width band (the "N new messages" bar). */
 export const bannerStyles = ["callout", "bar"] as const
 export type BannerStyle = (typeof bannerStyles)[number]
+
+/**
+ * A tab's colour (`pk0-tab-leading`): a saved view's dot, or its icon's ink; `muted` is a view that
+ * picked none. Each is a `tint-*` colour token.
+ */
+export const tabTints = [
+	"muted",
+	"gray",
+	"red",
+	"orange",
+	"yellow",
+	"green",
+	"teal",
+	"blue",
+	"purple",
+	"pink",
+] as const
+export type TabTint = (typeof tabTints)[number]
 
 /** `app` is the phone's bottom tabs; `page` in-page tabs under a header (customer detail, queues). */
 export const tabBarStyles = ["app", "page"] as const
@@ -428,7 +461,10 @@ export interface Declarations<T extends TokenNames = TokenNames> {
 	readonly background?: T["color"] | "transparent"
 	readonly color?: T["color"]
 	readonly borderColor?: T["color"] | "transparent"
-	readonly borderWidth?: "none" | "hairline"
+	/** `thick` is 2px (a drop zone's dashed edge, `drop-zone-dashed-edge`). */
+	readonly borderWidth?: "none" | "hairline" | "thick"
+	/** `dashed` draws the border in dashes (a drop target, `+ Filter`); `solid` when unset. */
+	readonly borderStyle?: "solid" | "dashed"
 	readonly radius?: T["radius"]
 	/** A hairline drawn inside the box (`inset 0 0 0 1px`), taking no space; not with `shadow`. */
 	readonly ring?: T["color"]
@@ -487,6 +523,12 @@ export interface Declarations<T extends TokenNames = TokenNames> {
 	readonly minWidth?: T["space"]
 	/** A negative inline margin by this step (Tailwind `-mx-0.5`). */
 	readonly bleedX?: T["space"]
+	/** A fixed width (a search field's `w-64`, a filter's `w-36`); wins over `fill`. */
+	readonly width?: T["space"]
+	/** Not drawn (a key hint bar on a phone, `pk0-web-only`); a later layer sets `layout` to show it. */
+	readonly hidden?: boolean
+	/** Letter spacing over the text role's: `wider` is Tailwind's `tracking-wider` (0.05em). */
+	readonly tracking?: "wider"
 }
 
 export interface TokenNames {
@@ -505,10 +547,20 @@ export interface PartStyles<Part extends string, T extends TokenNames> {
 	readonly parts?: Partial<Record<Part, Declarations<T>>>
 }
 
+/**
+ * A part's own states (`choice-option-states`): one option of a group selected, disabled or hovered.
+ * `root` styles the part itself, `parts` the parts inside it. A part's `hover` and `pressed` hold only
+ * while it is neither selected nor disabled (a chosen option keeps its own look).
+ */
+export type PartStates<Part extends string, T extends TokenNames> = Partial<
+	Record<Part, Partial<Record<State, PartStyles<Part, T>>>>
+>
+
 /** Styles at `compact` (the default), with `regular` overrides and per-state layers. */
 export interface Layer<Part extends string, T extends TokenNames> extends PartStyles<Part, T> {
 	readonly regular?: PartStyles<Part, T>
 	readonly states?: Partial<Record<State, PartStyles<Part, T> & { readonly regular?: PartStyles<Part, T> }>>
+	readonly partStates?: PartStates<Part, T>
 }
 
 export interface Option<Value extends string, Part extends string, T extends TokenNames> {

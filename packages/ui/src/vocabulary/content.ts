@@ -10,6 +10,7 @@ import {
 	IconName,
 	MessageAction,
 	Provider,
+	TabTint,
 } from "./options.ts"
 
 // ---------------------------------------------------------------------------
@@ -241,6 +242,8 @@ export const Tab = Schema.Struct({
 	label: Schema.String,
 	/** Required by `tabBar` style `app` (a phone's tabs); `page` tabs are text (phase 4: optional). */
 	icon: Schema.optional(IconName),
+	/** A saved view's colour: tints `icon`, or is drawn as a dot before the label when there is none. */
+	tint: Schema.optional(TabTint),
 	badge: Schema.optional(Schema.Finite),
 	/** Where the tab links on the web (`?tab=`), for middle click and copy link. */
 	href: Schema.optional(Schema.String),
@@ -361,6 +364,13 @@ export const Crumb = Schema.Struct({ label: Schema.String, href: Schema.optional
 export type Crumb = typeof Crumb.Type
 
 /** One composer suggestion for an open trigger (`@`, `#`, `/`, `:`), drawn above the composer. */
+/** A bot command's argument after its name: `<required>` warning-tinted, `[optional]` muted. */
+export const SuggestionChip = Schema.Struct({
+	label: Schema.String,
+	required: Schema.optional(Schema.Boolean),
+})
+export type SuggestionChip = typeof SuggestionChip.Type
+
 export const Suggestion = Schema.Struct({
 	id: Schema.String,
 	label: Schema.String,
@@ -372,8 +382,35 @@ export const Suggestion = Schema.Struct({
 	/** An emoji (or a custom emoji's image url) for `:` suggestions. */
 	emoji: Schema.optional(Schema.String),
 	mark: Schema.optional(Provider),
+	/** A `/` command's arguments, drawn after the label (`composer-command-args`). */
+	chips: Schema.optional(Schema.Array(SuggestionChip)),
 })
 export type Suggestion = typeof Suggestion.Type
+
+/**
+ * One emoji the picker offers (`emoji-picker-data`): what a pick reports (`emoji`, a custom emoji's
+ * `:name:`), its name, a custom emoji's `image` url, and the tags search also matches.
+ */
+export const PickerEmoji = Schema.Struct({
+	emoji: Schema.String,
+	name: Schema.String,
+	image: Schema.optional(Schema.String),
+	keywords: Schema.optional(Schema.Array(Schema.String)),
+})
+export type PickerEmoji = typeof PickerEmoji.Type
+
+/** A titled run of the picker's emojis (Recently used, Custom, Smileys & emotion). */
+export const EmojiCategory = Schema.Struct({
+	label: Schema.String,
+	emojis: Schema.Array(PickerEmoji),
+	/** The recently used: left out of search results, where each emoji shows in its own category. */
+	recent: Schema.optional(Schema.Boolean),
+})
+export type EmojiCategory = typeof EmojiCategory.Type
+
+/** A member's name for the mentions in a draft the composer never suggested (`composer-mention-names`). */
+export const MentionName = Schema.Struct({ id: Schema.String, name: Schema.String })
+export type MentionName = typeof MentionName.Type
 
 /** What the composer is doing besides a new message: replying to one, or editing one. */
 export const ComposerContext = Schema.Struct({

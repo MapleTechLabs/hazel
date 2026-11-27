@@ -39,8 +39,6 @@ const css = `
 	border-color: var(--hz-color-invalid-border);
 	box-shadow: 0 0 0 3px var(--hz-color-invalid-halo);
 }
-/* HAZEL-GAP(date-segment-tracking): the kit's segments are \`tracking-wider\`; recipes have no tracking. */
-[data-hz=datePicker] [data-hz-part=segments] > * { letter-spacing: 0.05em; }
 [data-hz=datePicker] [data-hz-part=segment] { caret-color: transparent; outline: none; }
 [data-hz=datePicker] [data-hz-part=segment][data-placeholder]:not(:focus) { color: var(--hz-color-muted-fg); }
 [data-hz=datePicker] [data-hz-part=segment]:focus {

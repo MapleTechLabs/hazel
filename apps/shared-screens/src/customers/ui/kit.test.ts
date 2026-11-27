@@ -303,7 +303,7 @@ describe("controls", () => {
 			.fire(tagged("tabBar"), "change", { id: "done" })
 			.fire(tagged("choiceGroup"), "change", { selected: ["90d"] })
 			.fire(tagged("searchField"), "change", { value: "acme", rev: 1, edit: 0 })
-			.fire(byProp("button", "label", "Kind is Risk"), "remove")
+			.fire(byProp("button", "detail", "Kind is"), "remove")
 			.fire(byProp("button", "label", "Filter"), "press")
 		expect(logOf(after)).toEqual(["tab done", "range 90d", "search acme", "remove kind", "add filter"])
 		expect(s.all(byProp("text", "role", "kbd")).map(textOf)).toEqual(["j", "k"])

@@ -1,9 +1,9 @@
 /**
  * What the choice controls' web renderers own and a recipe cannot say (C3 `rendererFeatures`): focus
- * rings, an option's own selected, hover and disabled looks (recipe states sit on the root), the card
- * grid and joined column, the slider's positions and drag, and the checkbox's well. Tokens only.
+ * rings, a disabled option inside an enabled group, the invalid edge, a selected segment's raised
+ * edge, the card grid and joined column, the slider's positions and drag, and the checkbox's well.
+ * An option's selected and hover looks are the recipe's part states. Tokens only.
  */
-// HAZEL-GAP(choice-option-states): an option's selected and disabled looks need part-level states.
 const group = `[data-hz=choiceGroup]`
 const options = `${group} > [data-hz-part=options]`
 const option = `${options} > [data-hz-part=option]`
@@ -21,34 +21,15 @@ ${option}:disabled { cursor: default; }
 ${group}:not([data-disabled]) > [data-hz-part=options] > [data-hz-part=option][data-disabled] { opacity: 0.5; }
 
 ${option} > ${box} > [data-hz-part=mark] { transition: background-color var(--hz-duration-fast) var(--hz-ease-out); }
-${style("list")}:not([data-multiple]) > [data-hz-part=options] > [data-hz-part=option]:not([data-selected], :disabled):hover > ${box} > [data-hz-part=mark] {
-	background-color: ${mix("muted-fg", 20)};
-}
-${option}[data-selected] > ${box} { background-color: var(--hz-color-primary); box-shadow: inset 0 0 0 1px var(--hz-color-primary); }
-${group}:not([data-multiple]) > [data-hz-part=options] > [data-hz-part=option][data-selected] > ${box} > [data-hz-part=mark] {
-	background-color: var(--hz-color-bg);
-}
-${group}[data-multiple] > [data-hz-part=options] > [data-hz-part=option][data-selected] > ${box} { box-shadow: inset 0 0 0 1px var(--hz-color-ring); }
-${group}[data-multiple] > [data-hz-part=options] > [data-hz-part=option]:not([data-selected], :disabled):hover > ${box} {
-	box-shadow: inset 0 0 0 1px ${mix("muted-fg", 30)};
-}
 ${group}[data-multiple] > [data-hz-part=options] > [data-hz-part=option] > ${box} > [data-hz-part=mark] > svg { display: block; width: 100%; height: 100%; }
 ${group}[data-invalid] > [data-hz-part=options] > [data-hz-part=option] > ${box} { box-shadow: inset 0 0 0 1px var(--hz-color-invalid-border); }
 ${group}[data-invalid] > [data-hz-part=options] > [data-hz-part=option][data-selected] > ${box} { background-color: var(--hz-color-danger); }
 ${option}:focus-visible > ${box} { box-shadow: inset 0 0 0 1px var(--hz-color-primary), ${halo}; }
 
 ${optionOf("cards")} { position: relative; }
+${optionOf("cards")}[data-selected] { z-index: 1; }
 ${optionOf("cards")} > [data-hz-part=optionText] { min-width: 0; overflow-wrap: anywhere; }
-${optionOf("cards")}:not([data-selected], :disabled):hover { box-shadow: inset 0 0 0 1px ${mix("muted-fg", 30)}; }
-${optionOf("cards")}[data-selected] {
-	z-index: 1;
-	background-color: var(--hz-color-primary-subtle);
-	color: var(--hz-color-primary-subtle-fg);
-	box-shadow: inset 0 0 0 1px var(--hz-color-focus-ring);
-}
 ${optionOf("cards")}[data-selected]:hover { background-color: color-mix(in oklab, var(--hz-color-primary-subtle) 90%, transparent); }
-${optionOf("cards")}[data-selected] > [data-hz-part=optionText] > :is([data-hz-part=optionLabel], [data-hz-part=optionDescription]),
-${optionOf("cards")}[data-selected] > [data-hz-part=optionIcon] { color: var(--hz-color-primary-subtle-fg); }
 ${optionOf("cards")}:focus-visible { z-index: 1; box-shadow: inset 0 0 0 1px var(--hz-color-focus-ring), ${halo}; }
 ${optionOf("cards")} > [data-hz-part=optionIcon] > svg { display: block; width: 100%; height: 100%; }
 ${style("cards")}:is([data-columns="1"], :not([data-columns])) > [data-hz-part=options] > [data-hz-part=option] { border-radius: 0; }
@@ -66,27 +47,18 @@ ${style("cards")}:is([data-columns="1"], :not([data-columns])) > [data-hz-part=o
 	${style("cards")}[data-columns="3"] > [data-hz-part=options] { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
-${optionOf("segmented")}:not([data-selected], :disabled):hover > [data-hz-part=optionText] > [data-hz-part=optionLabel] { color: var(--hz-color-fg); }
 ${optionOf("segmented")}[data-selected] {
-	background-color: var(--hz-color-bg);
-	box-shadow: var(--hz-shadow-xs), 0 0 0 1px ${mix("fg", 10)};
+	box-shadow: 0 0 0 1px ${mix("fg", 10)}, var(--hz-shadow-xs);
 }
-${optionOf("segmented")}[data-selected] > [data-hz-part=optionText] > [data-hz-part=optionLabel] { color: var(--hz-color-fg); }
 ${optionOf("segmented")}:focus-visible, ${optionOf("chips")}:focus-visible { box-shadow: 0 0 0 2px var(--hz-color-focus-ring); }
-${optionOf("chips")}:not([data-selected], :disabled):hover { background-color: var(--hz-color-secondary); }
-${optionOf("chips")}:not([data-selected], :disabled):hover > [data-hz-part=optionText] > [data-hz-part=optionLabel] { color: var(--hz-color-fg); }
-${optionOf("chips")}[data-selected] { background-color: var(--hz-color-chip-selected); border-color: var(--hz-color-chip-selected-border); }
-${optionOf("chips")}[data-selected] > [data-hz-part=optionText] > [data-hz-part=optionLabel] { color: var(--hz-color-fg); }
 :is(${optionOf("segmented")}, ${optionOf("chips")}) > [data-hz-part=optionIcon] > svg { display: block; width: 100%; height: 100%; }
 ${optionOf("swatches")} { cursor: pointer; forced-color-adjust: none; }
 ${optionOf("swatches")}:is([data-selected], :focus-visible) { outline: 2px solid var(--hz-color-ring); outline-offset: 2px; }
-${optionOf("swatches")}[data-selected] > ${box} { box-shadow: inset 0 0 0 1px var(--hz-color-toggle-edge); }
-${optionOf("swatches")}:focus-visible > ${box} { box-shadow: inset 0 0 0 1px var(--hz-color-toggle-edge); }
 
 [data-hz=toggle][data-style=checkbox] > [data-hz-part=control] { outline: none; }
 [data-hz=toggle][data-style=checkbox] > [data-hz-part=control] > [data-hz-part=box] > [data-hz-part=mark] > svg { display: block; width: 100%; height: 100%; }
 [data-hz=toggle][data-style=checkbox]:not([data-selected], [data-indeterminate], [data-disabled]):hover > [data-hz-part=control] > [data-hz-part=box] {
-	box-shadow: inset 0 0 0 1px ${mix("muted-fg", 30)};
+	box-shadow: inset 0 0 0 1px var(--hz-color-control-hover-edge);
 }
 [data-hz=toggle][data-style=checkbox][data-disabled]:not([data-selected], [data-indeterminate]) > [data-hz-part=control] > [data-hz-part=box] {
 	background-color: var(--hz-color-muted);
@@ -115,6 +87,19 @@ ${optionOf("swatches")}:focus-visible > ${box} { box-shadow: inset 0 0 0 1px var
 }
 
 [data-hz=button] > [data-hz-part=remove] > svg { display: block; width: 100%; height: 100%; }
+[data-hz=button] > [data-hz-part=trailingIcon] { display: block; }
+[data-hz=button][data-variant=filter] { max-width: 100%; align-items: stretch; }
+[data-hz=button][data-variant=filter] > :is([data-hz-part=detail], [data-hz-part=label]) { align-self: center; }
+[data-hz=button][data-variant=filter] > [data-hz-part=remove] {
+	display: flex; align-items: center; justify-content: center; align-self: stretch;
+	width: var(--hz-space-10); height: auto; margin-inline-start: var(--hz-space-1_5);
+	border-inline-start: 1px solid var(--hz-color-border);
+	border-start-end-radius: calc(var(--hz-radius-lg) - 1px); border-end-end-radius: calc(var(--hz-radius-lg) - 1px);
+}
+[data-hz=button][data-variant=filter] > [data-hz-part=remove] > svg { width: var(--hz-space-3); height: var(--hz-space-3); }
+@media (width >= 48rem) {
+	[data-hz=button][data-variant=filter] > [data-hz-part=remove] { width: var(--hz-space-7); }
+}
 [data-hz=button]:not([data-disabled]) > [data-hz-part=remove]:hover { color: var(--hz-color-fg); background-color: var(--hz-color-secondary-hover); }
 `
 

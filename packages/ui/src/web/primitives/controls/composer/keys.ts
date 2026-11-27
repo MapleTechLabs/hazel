@@ -19,6 +19,8 @@ export interface KeyHost {
 	readonly suggestionKey: (key: ComposerKey) => boolean
 	readonly editLast: () => boolean
 	readonly escape: () => boolean
+	/** Shift+Tab: focus leaves for the messages (today's composer); false keeps the browser's move. */
+	readonly leave: () => boolean
 	readonly submit: () => void
 }
 
@@ -199,6 +201,7 @@ export const keysPlugin = (host: KeyHost) => {
 		// Up in an empty composer edits the last message (today's `write.ts`).
 		if (event.key === "ArrowUp" && !modified && isEmpty(state.doc) && host.editLast()) return true
 		if (event.key === "Escape" && !modified) return host.escape()
+		if (event.key === "Tab" && event.shiftKey && !mod && !event.altKey) return host.leave()
 		if (mod && event.key === "a") {
 			// In a code block or quote the first press selects the block, a second one everything.
 			const selectsBlock =

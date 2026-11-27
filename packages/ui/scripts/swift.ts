@@ -99,7 +99,8 @@ export const generateSwift = (tokens: Tokens, recipes: ReadonlyArray<Recipe>): s
 		if (d.background !== undefined) add("background", colorField(d.background))
 		if (d.color !== undefined) add("color", colorField(d.color))
 		if (d.borderColor !== undefined) add("borderColor", colorField(d.borderColor))
-		if (d.borderWidth !== undefined) add("borderWidth", d.borderWidth === "hairline" ? "1" : "0")
+		if (d.borderWidth !== undefined)
+			add("borderWidth", d.borderWidth === "hairline" ? "1" : d.borderWidth === "thick" ? "2" : "0")
 		if (d.radius !== undefined) add("radius", num(tokens.radius[d.radius] ?? 0))
 		if (d.ring !== undefined) add("ring", colorField(d.ring))
 		if (d.divider !== undefined) add("divider", colorField(d.divider))
@@ -136,6 +137,10 @@ export const generateSwift = (tokens: Tokens, recipes: ReadonlyArray<Recipe>): s
 		if (d.overflow !== undefined) add("overflow", `.${d.overflow}`)
 		if (d.minWidth !== undefined) add("minWidth", num(space(d.minWidth)))
 		if (d.transitionEase !== undefined) add("transitionEase", str(d.transitionEase))
+		if (d.width !== undefined) add("width", num(space(d.width)))
+		if (d.hidden !== undefined) add("hidden", String(d.hidden))
+		if (d.borderStyle !== undefined) add("borderStyle", `.${d.borderStyle}`)
+		if (d.tracking !== undefined) add("tracking", `.${d.tracking}`)
 		return `Style(${fields.join(", ")})`
 	}
 
@@ -175,6 +180,21 @@ export const generateSwift = (tokens: Tokens, recipes: ReadonlyArray<Recipe>): s
 			const base = when.states ?? []
 			parts(layer, null, base)
 			if (layer.regular !== undefined) parts(layer.regular, "regular", base)
+			// A part's own states: the part, then the parts inside it, keyed by the part's state.
+			for (const [owner, ownStates] of Object.entries(layer.partStates ?? {}))
+				for (const [state, styles] of Object.entries(ownStates ?? {})) {
+					if (styles === undefined) continue
+					const tag = `partState: PartState(part: ${str(owner)}, state: .${ident(state)})`
+					if (styles.root !== undefined)
+						out.push(
+							`Layer(when: ${condition(null, base)}, part: ${str(owner)}, style: ${style(styles.root)}, ${tag})`,
+						)
+					for (const [inner, decls] of Object.entries(styles.parts ?? {}))
+						if (decls !== undefined)
+							out.push(
+								`Layer(when: ${condition(null, base)}, part: ${str(inner)}, style: ${style(decls)}, ${tag})`,
+							)
+				}
 			for (const [state, styles] of Object.entries(layer.states ?? {})) {
 				if (styles === undefined) continue
 				parts(styles, null, [...base, state])
@@ -334,6 +354,8 @@ ${Object.entries(tokens.shadow)
     public enum Align: Sendable { case center, start, end }
     public enum TextAlign: Sendable { case center }
     public enum Overflow: Sendable { case scrollX, scrollY }
+    public enum BorderStyle: Sendable { case solid, dashed }
+    public enum Tracking: Sendable { case wider }
 
     /// A recipe's declarations, resolved to values; \`nil\` leaves the field to earlier layers.
     public struct Style: Sendable {
@@ -358,6 +380,9 @@ ${Object.entries(tokens.shadow)
         public var lineClamp: Int? = nil, overflow: Overflow? = nil
         /// \`minWidth\` in points; \`transitionEase\` names a curve in \`easing\` (\`out\` when nil).
         public var minWidth: CGFloat? = nil, transitionEase: String? = nil
+        /// A fixed width in points; \`hidden\` not drawn; a dashed border; \`wider\` tracking (0.05em).
+        public var width: CGFloat? = nil, hidden: Bool? = nil
+        public var borderStyle: BorderStyle? = nil, tracking: Tracking? = nil
 
         /// \`other\`'s fields over these.
         public func merged(_ other: Style) -> Style {
@@ -381,6 +406,8 @@ ${Object.entries(tokens.shadow)
             out.textAlign = other.textAlign ?? textAlign; out.lineClamp = other.lineClamp ?? lineClamp
             out.overflow = other.overflow ?? overflow
             out.minWidth = other.minWidth ?? minWidth; out.transitionEase = other.transitionEase ?? transitionEase
+            out.width = other.width ?? width; out.hidden = other.hidden ?? hidden
+            out.borderStyle = other.borderStyle ?? borderStyle; out.tracking = other.tracking ?? tracking
             return out
         }
     }
@@ -389,8 +416,14 @@ ${Object.entries(tokens.shadow)
         public let options: [String: String], flags: Set<String>, states: Set<State>, sizeClass: SizeClass?
     }
 
+    /// A layer that holds only while one part is in a state of its own (an option selected).
+    public struct PartState: Sendable {
+        public let part: String, state: State
+    }
+
     public struct Layer: Sendable {
         public let when: When, part: String?, style: Style
+        public var partState: PartState? = nil
     }
 
     /// Layers in CSS order: base, options, flags, compounds, states; later matches win field by field.
@@ -398,16 +431,24 @@ ${Object.entries(tokens.shadow)
         public let primitive: String, defaults: [String: String], inert: Set<State>, layers: [Layer]
 
         /// The style of the root (\`part: nil\`) or of one part, for these options, flags and states.
+        /// \`partStates\` are each part's own states (the option that is selected); a part's hover and
+        /// press hold only while it is neither selected nor disabled.
         public func style(
             part: String? = nil, options: [String: String] = [:], flags: Set<String> = [],
-            states: Set<State> = [], sizeClass: SizeClass
+            states: Set<State> = [], partStates: [String: Set<State>] = [:], sizeClass: SizeClass
         ) -> Style {
             let chosen = defaults.merging(options) { _, new in new }
             let interactions: Set<State> = [.hover, .pressed, .focusVisible]
             let active = inert.isDisjoint(with: states) ? states : states.subtracting(interactions)
+            let holds = { (owner: PartState) -> Bool in
+                let own = partStates[owner.part] ?? []
+                let still = own.isDisjoint(with: [.selected, .disabled]) ? own : own.subtracting(interactions)
+                return still.contains(owner.state)
+            }
             return layers.reduce(Style()) { style, layer in
                 let when = layer.when
                 guard layer.part == part,
+                      layer.partState.map(holds) ?? true,
                       when.options.allSatisfy({ chosen[$0.key] == $0.value }),
                       when.flags.isSubset(of: flags),
                       when.states.isSubset(of: active),

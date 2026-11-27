@@ -9,6 +9,7 @@ import { Query } from "@effect/ui"
 import { KeyValue } from "@hazel/client-data"
 import { Effect, Option, Schedule, Schema } from "effect"
 import { HttpClient, HttpClientResponse } from "effect/http"
+import type { Content } from "@hazel/ui/vocabulary/index"
 import type { RecentEmoji } from "./recent"
 
 const SkinTones = Schema.Struct({
@@ -44,17 +45,18 @@ export type EmojiData = typeof EmojiData.Type
 export const EmojiDataFailure = Schema.Literals(["Unavailable"])
 export type EmojiDataFailure = typeof EmojiDataFailure.Type
 
-/** What `hz:emojiPicker` draws (`@hazel/ui/web/primitives/overlays/emoji-data.ts`'s shape). */
-export interface PickerEmoji {
-	readonly emoji: string
+/** What `hz:emojiPicker` draws (`Content.EmojiCategory`). */
+export type PickerEmoji = Content.PickerEmoji
+export type PickerCategory = Content.EmojiCategory
+
+/** An organization's custom emoji: picked as `:name:`, drawn from its image. */
+export interface CustomEmoji {
 	readonly name: string
-}
-export interface PickerCategory {
-	readonly label: string
-	readonly emojis: ReadonlyArray<PickerEmoji>
+	readonly imageUrl: string
 }
 
 export const RECENT_CATEGORY_LABEL = "Recently used"
+export const CUSTOM_CATEGORY_LABEL = "Custom"
 
 const LOCAL_DATA_KEY = (locale: string) => `frimousse/data/${locale}`
 const BASE_URL = "https://cdn.jsdelivr.net/npm/emojibase-data@latest"
@@ -192,13 +194,15 @@ export const supportedOnly = (data: EmojiData, metadata: SessionMetadata): Emoji
 })
 
 /**
- * The picker's categories: the recently used first, then the dataset's. `tone` swaps in an emoji's
- * skin tone variant where it has one.
+ * The picker's categories: the recently used first (custom ones with their images), the
+ * organization's custom emojis, then the dataset's with their tags for search. `tone` swaps in an
+ * emoji's skin tone variant where it has one.
  */
 export const categoriesOf = (
 	data: EmojiData,
 	recent: ReadonlyArray<RecentEmoji>,
 	tone: SkinTone | null = null,
+	custom: ReadonlyArray<CustomEmoji> = [],
 ): ReadonlyArray<PickerCategory> => {
 	const labels = new Map(data.emojis.map((emoji) => [emoji.emoji, emoji.label]))
 	const byCategory = new Map<number, Array<PickerEmoji>>()
@@ -207,20 +211,29 @@ export const categoriesOf = (
 		list.push({
 			emoji: tone === null ? emoji.emoji : (emoji.skins?.[tone] ?? emoji.emoji),
 			name: emoji.label,
+			keywords: emoji.tags,
 		})
 		byCategory.set(emoji.category, list)
 	}
-	// HAZEL-GAP(emoji-picker-custom): a custom emoji draws as an image; the picker takes text only.
-	const recents = recent
-		.filter((entry) => entry.imageUrl === null)
-		.map((entry) => ({ emoji: entry.emoji, name: labels.get(entry.emoji) ?? entry.label }))
+	const recents: ReadonlyArray<PickerEmoji> = recent.map((entry) =>
+		entry.imageUrl === null
+			? { emoji: entry.emoji, name: labels.get(entry.emoji) ?? entry.label }
+			: { emoji: entry.emoji, name: entry.label, image: entry.imageUrl },
+	)
+	const customs: ReadonlyArray<PickerEmoji> = custom.map((emoji) => ({
+		emoji: `:${emoji.name}:`,
+		name: emoji.name,
+		image: emoji.imageUrl,
+	}))
 	const categories = data.categories.flatMap((category) => {
 		const emojis = byCategory.get(category.index) ?? []
 		return emojis.length === 0 ? [] : [{ label: category.label, emojis }]
 	})
-	return recents.length === 0
-		? categories
-		: [{ label: RECENT_CATEGORY_LABEL, emojis: recents }, ...categories]
+	return [
+		...(recents.length === 0 ? [] : [{ label: RECENT_CATEGORY_LABEL, emojis: recents, recent: true }]),
+		...(customs.length === 0 ? [] : [{ label: CUSTOM_CATEGORY_LABEL, emojis: customs }]),
+		...categories,
+	]
 }
 
 /**

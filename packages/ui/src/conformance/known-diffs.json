@@ -28,5 +28,10 @@
 		"case": "statTile/kit",
 		"lane": "A1",
 		"reason": "HAZEL-GAP(stat-value-step): today's value is tracking-tight (-0.6px, Hazel's display is -0.48px) and text-xl/7 on a phone (Hazel has no 20/28 step)"
+	},
+	{
+		"case": "button/filter",
+		"lane": "A2",
+		"reason": "Same box and runs (126.55 by 32); the remove half's divider sits at a fractional x (97.55) and rasters one device column differently (max delta 21, 0.25%)"
 	}
 ]

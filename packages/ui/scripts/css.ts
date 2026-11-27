@@ -147,8 +147,10 @@ const declarations = (d: Declarations, tracked: ReadonlySet<string>): ReadonlyAr
 		add("display", d.layout === "inline-row" ? "inline-flex" : "flex")
 		add("flex-direction", d.layout === "column" ? "column" : "row")
 	}
+	if (d.hidden) add("display", "none")
 	if (d.wrap !== undefined) add("flex-wrap", d.wrap ? "wrap" : "nowrap")
 	if (d.fill) add("width", "100%")
+	if (d.width !== undefined) add("width", spaceVar(d.width))
 	if (d.align !== undefined)
 		add("align-items", d.align === "center" ? "center" : d.align === "start" ? "flex-start" : "flex-end")
 	if (d.justify !== undefined) add("justify-content", d.justify === "start" ? "flex-start" : "center")
@@ -156,9 +158,9 @@ const declarations = (d: Declarations, tracked: ReadonlySet<string>): ReadonlyAr
 		add("background-color", d.background === "transparent" ? "transparent" : colorVar(d.background))
 	if (d.color !== undefined) add("color", colorVar(d.color))
 	if (d.borderWidth !== undefined) {
-		add("border-style", "solid")
-		add("border-width", d.borderWidth === "hairline" ? "1px" : "0")
-	}
+		add("border-style", d.borderStyle ?? "solid")
+		add("border-width", d.borderWidth === "hairline" ? "1px" : d.borderWidth === "thick" ? "2px" : "0")
+	} else if (d.borderStyle !== undefined) add("border-style", d.borderStyle)
 	if (d.borderColor !== undefined)
 		add("border-color", d.borderColor === "transparent" ? "transparent" : colorVar(d.borderColor))
 	if (d.radius !== undefined) add("border-radius", `var(--hz-radius-${d.radius})`)
@@ -190,6 +192,7 @@ const declarations = (d: Declarations, tracked: ReadonlySet<string>): ReadonlyAr
 		}
 	}
 	if (d.leading !== undefined) add("line-height", spaceVar(d.leading))
+	if (d.tracking === "wider") add("letter-spacing", "0.05em")
 	if (d.strong !== undefined)
 		add("font-weight", d.strong ? "var(--hz-weight-strong)" : "var(--hz-weight-regular)")
 	if (d.weight !== undefined) add("font-weight", `var(--hz-weight-${d.weight})`)
@@ -298,6 +301,46 @@ const partRules = (
 	return rules
 }
 
+/** A part's own state: `[data-selected]`, or an interaction while it is neither selected nor disabled. */
+const partStateSelector = (state: State) =>
+	isInteraction(state)
+		? `${interactionSelector[state]}:not([data-selected], [data-disabled], :disabled)`
+		: `[data-${kebab(state)}]`
+
+/** Rules for `partStates`: the part in its state, then the parts inside it. */
+const partStateRules = (
+	tracked: ReadonlySet<string>,
+	recipe: Recipe,
+	root: string,
+	partStates: NonNullable<Layer<string, never>["partStates"]>,
+): ReadonlyArray<Rule> =>
+	Object.entries(partStates).flatMap(([part, states]) => {
+		const own = partPath(recipe, part)
+		const ordered = Object.entries(states ?? {}).sort(
+			([a], [b]) => Number(isInteraction(a as State)) - Number(isInteraction(b as State)),
+		)
+		return ordered.flatMap(([state, styles]) => {
+			if (styles === undefined) return []
+			const at = `${root}${own}${partStateSelector(state as State)}`
+			const media = state === "hover" ? ["(hover: hover)"] : []
+			const rules: Rule[] = []
+			if (styles.root !== undefined)
+				rules.push({ media, selector: at, lines: declarations(styles.root, tracked) })
+			for (const [inner, decls] of Object.entries(styles.parts ?? {})) {
+				const path = partPath(recipe, inner)
+				if (decls === undefined) continue
+				if (!path.startsWith(own))
+					throw new Error(`${recipe.primitive}'s part ${inner} is not inside ${part}`)
+				rules.push({
+					media,
+					selector: `${at}${path.slice(own.length)}`,
+					lines: declarations(decls, tracked),
+				})
+			}
+			return rules
+		})
+	})
+
 /** A layer's rules: compact, then its `regular` overrides, then its states (interactions last). */
 const layerRules = (
 	tracked: ReadonlySet<string>,
@@ -317,6 +360,7 @@ const layerRules = (
 		...(layer.regular === undefined
 			? []
 			: partRules(tracked, recipe, root, layer.regular, [REGULAR_MEDIA])),
+		...(layer.partStates === undefined ? [] : partStateRules(tracked, recipe, root, layer.partStates)),
 		...ordered.flatMap(([state, styles]) => {
 			if (styles === undefined) return []
 			const selector = `${root}${stateSelector(recipe, state)}`

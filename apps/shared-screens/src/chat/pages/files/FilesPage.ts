@@ -148,21 +148,23 @@ const body = (h: H, model: FilesModel) => {
 }
 
 const header = (h: H, model: FilesModel, count: number) =>
-	// HAZEL-GAP(p4-files-header-widths): today's search is `w-64` and the filter `w-36`, full width on a phone.
+	// The filter's field takes the row's rest (the count at its end); on a phone the row wraps.
 	h.stack
 		.axis("horizontal")
 		.align("center")
 		.density("compact")
+		.wrap()
 		.children(
 			h.searchField
 				.placeholder("Search files…")
+				.width("regular")
 				.value(model.search)
 				.on("change", (payload) => FilesMessage.ChangedSearch({ payload })),
 			h.select
 				.options(filterOptions.map((option) => ({ value: option.value, label: option.label })))
 				.value(model.filter)
+				.width("narrow")
 				.on("change", ({ value }) => FilesMessage.ChangedFilter({ value })),
-			h.spacer,
 			h.text
 				.role("label")
 				.tone("muted")

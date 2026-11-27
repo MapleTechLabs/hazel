@@ -12,7 +12,7 @@ import type { Plain } from "./primitives/define.ts"
 import { measureNode } from "./focus/measure.ts"
 import { afterRemoved } from "./motion.ts"
 import { scrollTo } from "./primitives/list/scroll.ts"
-import { create, type Primitive, release } from "./primitives.ts"
+import { create, type Primitive, primitiveOf, release } from "./primitives.ts"
 
 type Handlers = Readonly<Record<string, View.Handler<unknown, any>>>
 
@@ -121,9 +121,12 @@ const commands: Hazel.Host["Service"] = {
 	blur: (node) => Effect.sync(() => target(node).blur()),
 	scrollTo: (node, to) => Effect.sync(() => scrollTo(node, to)),
 	measure: (node) => Effect.sync(() => measureNode(node as Node)),
-	// A2: focuses the field and selects `start..end` (clamped by the browser).
+	// A2: focuses the field and selects `start..end` (clamped by the browser); a primitive that is
+	// not a native field (the composer's editor) maps the offsets itself.
 	select: (node, range) =>
 		Effect.sync(() => {
+			const own = primitiveOf(node as Node)?.select
+			if (own !== undefined) return own(range.start, range.end)
 			const field = target(node)
 			if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return
 			field.focus()

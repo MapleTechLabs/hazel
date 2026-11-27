@@ -1,0 +1,36 @@
+{
+	"about": "An applied filter (`filter`, size `toolbar`): `Kind is` muted, the value strong, a divided remove half; against today's customers `filterChip`.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"label": "Risk",
+			"detail": "Kind is",
+			"variant": "filter",
+			"size": "toolbar",
+			"removable": true
+		},
+		"events": ["press", "remove"]
+	},
+	"frame": "inline",
+	"pending": {
+		"ios": "S2"
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Kind is Risk"
+		}
+	],
+	"kit": {
+		"specimen": "button-filter",
+		"target": "button"
+	},
+	"cases": [
+		{
+			"name": "long-value",
+			"props": {
+				"label": "High, Medium, Low, Informational, Unknown"
+			}
+		}
+	]
+}

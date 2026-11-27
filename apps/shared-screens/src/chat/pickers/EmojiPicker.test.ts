@@ -6,16 +6,16 @@ import { KeyValue } from "@hazel/client-data"
 import { assert, describe, it } from "@effect/vitest"
 import { Effect, Layer, Stream } from "effect"
 import { HttpClient, HttpClientResponse } from "effect/http"
-import { PickerCatalog } from "./catalog"
 import {
 	categoriesOf,
+	CUSTOM_CATEGORY_LABEL,
 	type EmojiData,
 	LoadEmojiData,
-	type PickerCategory,
 	RECENT_CATEGORY_LABEL,
 } from "./emoji-data"
 import {
 	catalogStream,
+	EMOJI_LOAD_FAILED,
 	EmojiPickerEvents,
 	EmojiPickerMessage,
 	EmojiPickerNoDeps,
@@ -67,18 +67,6 @@ const memoryStore = (entries: ReadonlyArray<readonly [string, string]> = []) => 
 	}
 }
 
-/** A `PickerCatalog` that keeps what it was shown. */
-const recordingCatalog = () => {
-	const shown: Array<ReadonlyArray<PickerCategory>> = []
-	return {
-		shown,
-		layer: Layer.succeed(PickerCatalog, {
-			showEmoji: (categories) => Effect.sync(() => void shown.push(categories)),
-			showGifs: () => Effect.void,
-		}),
-	}
-}
-
 describe("emoji picker", () => {
 	it("draws the picker the parent opens", () => {
 		const closed = Scene.start(EmojiPickerNoDeps, { open: false })
@@ -105,13 +93,11 @@ describe("emoji picker", () => {
 			.emitted(EmojiPickerEvents.RequestedClose())
 	})
 
-	it.effect("hands the picker the full set, the recently used first", () =>
+	it.effect("loads the full set into the model", () =>
 		Effect.gen(function* () {
-			const catalog = recordingCatalog()
-			const message = yield* Stream.runHead(catalogStream([recent("👍"), recent("🦄")])).pipe(
+			const message = yield* Stream.runHead(catalogStream).pipe(
 				Effect.provide(
 					Layer.mergeAll(
-						catalog.layer,
 						LoadEmojiData.toLayer(() => Effect.succeed(data)),
 						Query.layer(),
 					),
@@ -119,27 +105,16 @@ describe("emoji picker", () => {
 			)
 			assert.deepStrictEqual(
 				message._tag === "Some" ? message.value : null,
-				EmojiPickerMessage.ShowedEmojiCatalog(),
+				EmojiPickerMessage.LoadedEmojiData({ data }),
 			)
-			assert.deepStrictEqual(
-				catalog.shown[0]?.map((category) => category.label),
-				[RECENT_CATEGORY_LABEL, "Smileys & emotion", "People & body"],
-			)
-			// A remembered emoji gets its dataset name; one the set lacks keeps what was stored.
-			assert.deepStrictEqual(catalog.shown[0]?.[0]?.emojis, [
-				{ emoji: "👍", name: "Thumbs up" },
-				{ emoji: "🦄", name: "" },
-			])
 		}),
 	)
 
-	it.effect("a failed load reports it, and the built-in set stays", () =>
+	it.effect("a failed load reports it", () =>
 		Effect.gen(function* () {
-			const catalog = recordingCatalog()
-			const message = yield* Stream.runHead(catalogStream([])).pipe(
+			const message = yield* Stream.runHead(catalogStream).pipe(
 				Effect.provide(
 					Layer.mergeAll(
-						catalog.layer,
 						LoadEmojiData.toLayer(() => Effect.fail("Unavailable" as const)),
 						Query.layer(),
 					),
@@ -149,9 +124,50 @@ describe("emoji picker", () => {
 				message._tag === "Some" ? message.value : null,
 				EmojiPickerMessage.FailedLoadEmojiData(),
 			)
-			assert.strictEqual(catalog.shown.length, 0)
 		}),
 	)
+
+	it("passes the set as categories: a spinner first, then the recently used and the custom ones", () => {
+		const s = Scene.start(EmojiPickerNoDeps, {
+			open: true,
+			custom: [{ name: "parrot", imageUrl: "https://cdn/p.png" }],
+		})
+		assert.strictEqual(s.get(picker).props?.["loading"], true)
+		s.subscription("recent:", EmojiPickerMessage.LoadedRecentEmojis({ recent: [recent("👍")] }))
+		s.subscription("catalog:0", EmojiPickerMessage.LoadedEmojiData({ data }))
+		const props = s.get(picker).props
+		assert.strictEqual(props?.["loading"], undefined)
+		const categories = props?.["categories"] as ReadonlyArray<{ label: string }>
+		assert.deepStrictEqual(
+			categories.map((category) => category.label),
+			[RECENT_CATEGORY_LABEL, CUSTOM_CATEGORY_LABEL, "Smileys & emotion", "People & body"],
+		)
+	})
+
+	it("a failure shows its reason, and Try again loads anew", () => {
+		const s = Scene.start(EmojiPickerNoDeps, { open: true })
+		s.subscription("catalog:0", EmojiPickerMessage.FailedLoadEmojiData())
+		assert.strictEqual(s.get(picker).props?.["error"], EMOJI_LOAD_FAILED)
+		s.fire(picker, "retry")
+		assert.strictEqual(s.get(picker).props?.["loading"], true)
+		assert.strictEqual(s.get(picker).props?.["error"], undefined)
+	})
+
+	it("a custom pick is remembered with its image", () => {
+		Scene.start(EmojiPickerNoDeps, {
+			open: true,
+			custom: [{ name: "parrot", imageUrl: "https://cdn/p.png" }],
+		})
+			.subscription("recent:", EmojiPickerMessage.LoadedRecentEmojis({ recent: [] }))
+			.fire(picker, "select", { emoji: ":parrot:" })
+			.expectExact(
+				SaveRecentEmojis.make({
+					recent: [{ emoji: ":parrot:", label: "parrot", imageUrl: "https://cdn/p.png" }],
+				}),
+			)
+			.emitted(EmojiPickerEvents.Picked({ emoji: ":parrot:" }))
+			.resolve(SaveRecentEmojis, Component.noop)
+	})
 
 	it.effect("the dataset comes from the cache without a download", () =>
 		Effect.gen(function* () {
@@ -220,16 +236,24 @@ describe("emoji picker", () => {
 })
 
 describe("emoji picker data", () => {
-	it("swaps in a skin tone where an emoji has one", () => {
+	it("swaps in a skin tone where an emoji has one, with its tags for search", () => {
 		const people = categoriesOf(data, [], "dark").find((category) => category.label === "People & body")
-		assert.deepStrictEqual(people?.emojis, [{ emoji: "👍🏿", name: "Thumbs up" }])
+		assert.deepStrictEqual(people?.emojis, [{ emoji: "👍🏿", name: "Thumbs up", keywords: ["yes"] }])
 	})
 
-	it("keeps custom emoji out of the text-only picker", () => {
-		const categories = categoriesOf(data, [
+	it("keeps a recent custom emoji's image, and names a remembered one from the set", () => {
+		const [first] = categoriesOf(data, [
 			{ emoji: ":parrot:", label: "parrot", imageUrl: "https://cdn/p.png" },
+			recent("👍"),
+			recent("🦄"),
 		])
-		assert.notStrictEqual(categories[0]?.label, RECENT_CATEGORY_LABEL)
+		assert.strictEqual(first?.label, RECENT_CATEGORY_LABEL)
+		assert.strictEqual(first?.recent, true)
+		assert.deepStrictEqual(first?.emojis, [
+			{ emoji: ":parrot:", name: "parrot", image: "https://cdn/p.png" },
+			{ emoji: "👍", name: "Thumbs up" },
+			{ emoji: "🦄", name: "" },
+		])
 	})
 
 	it("remembers at most two rows, newest first", () => {

@@ -11,7 +11,7 @@ import type { TabBarStyle } from "../schema.ts"
 export const tabBar = defineRecipe<
 	{ readonly style: TabBarStyle },
 	never,
-	"panel" | "bar" | "tab" | "tabIcon" | "tabLabel" | "tabBadge"
+	"panel" | "bar" | "tab" | "tabIcon" | "tabDot" | "tabDotMark" | "tabLabel" | "tabBadge"
 >({
 	primitive: "tabBar",
 	parts: {
@@ -19,6 +19,8 @@ export const tabBar = defineRecipe<
 		bar: "part",
 		tab: { kind: "part", in: "bar" },
 		tabIcon: { kind: "part", in: "tab" },
+		tabDot: { kind: "part", in: "tab" },
+		tabDotMark: { kind: "part", in: "tabDot" },
 		tabLabel: { kind: "part", in: "tab" },
 		tabBadge: { kind: "part", in: "tab" },
 	},
@@ -41,6 +43,10 @@ export const tabBar = defineRecipe<
 				transition: "fast",
 			},
 			tabIcon: { size: "5" },
+			// A saved view's dot (`view-look.ts` `viewGlyph`): `size-2` round in a `size-4` cell; its
+			// colour is the tab's `tint` token, set by the renderer.
+			tabDot: { layout: "row", align: "center", justify: "center", size: "4", shrink: false },
+			tabDotMark: { size: "2", radius: "full" },
 			tabLabel: { truncate: true },
 			tabBadge: {
 				layout: "row",

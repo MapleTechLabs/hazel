@@ -113,6 +113,10 @@ export const tags = {
 			axis: option(O.StackAxis, "vertical"),
 			density: option(O.StackDensity, "regular"),
 			align: option(O.StackAlign, "stretch"),
+			// A row's children wrap onto more lines (`pk0-wrap-row`); drawn only at the regular size
+			// class (a desk's key hint bar, `pk0-web-only`).
+			wrap: flag,
+			regularOnly: flag,
 		},
 	}),
 	spacer: tag({ group: "layout", web: "A1", ios: "S1", content: "none" }),
@@ -537,6 +541,9 @@ export const tags = {
 			loading: flag,
 			// A filter chip's trailing remove mark (phase 4), raising `remove`.
 			removable: flag,
+			// A quieter run before the label (`Sort` Priority, `Kind is` Risk) and an icon after it.
+			detail: text,
+			trailingIcon: value(O.IconName),
 			// A key cap after the label (`pk0-action-shortcut`, a queue action's key); web only.
 			shortcut: text,
 		},
@@ -624,6 +631,8 @@ export const tags = {
 			// Phase 4, the combobox: typing filters the options (label and description); `query`
 			// reports the text for options the screen loads; `footer` holds a "Create ..." row.
 			searchable: flag,
+			// The control's width (`narrow`: a filter's `w-36`); the field still takes its row.
+			width: option(O.FieldWidth, "auto"),
 		},
 		slots: ["footer"],
 		events: {
@@ -636,7 +645,13 @@ export const tags = {
 		web: "A2",
 		ios: "S2",
 		content: "none",
-		props: { placeholder: text, value: controlled(TextField.State) },
+		props: {
+			placeholder: text,
+			value: controlled(TextField.State),
+			// Phase 4: its width in a row, and a key cap shown while empty (`/`, web only).
+			width: option(O.FieldWidth, "auto"),
+			shortcut: text,
+		},
 		events: { change: TextField.ChangePayload, submit: TextField.ChangePayload },
 		commands: ["focus", "blur"],
 	}),
@@ -655,6 +670,10 @@ export const tags = {
 			suggestions: value(Schema.Array(Content.Suggestion)),
 			activeSuggestion: text,
 			context: value(Content.ComposerContext),
+			// What an open trigger with no suggestions says ("No users found"); the names of the
+			// mentions a draft holds, for atoms the composer never suggested.
+			emptyText: text,
+			mentions: value(Schema.Array(Content.MentionName)),
 		},
 		slots: ["above", "actions"],
 		events: {
@@ -673,6 +692,11 @@ export const tags = {
 			pressSuggestion: ids,
 			editLast: none,
 			cancelContext: none,
+			// The pointer over a suggestion (today it moves the active row); Escape with no context and
+			// no trigger open; Shift+Tab out of the field (today focus goes to the messages).
+			hoverSuggestion: ids,
+			escape: none,
+			leave: none,
 		},
 		commands: ["focus", "blur", "select"],
 	}),
@@ -694,6 +718,8 @@ export const tags = {
 			style: option(O.ChoiceStyle, "list"),
 			columns: option(O.ChoiceColumns, "1"),
 			disabled: flag,
+			// The label names the group for assistive tech only (a range picker, `pk0-choice-name`).
+			labelHidden: flag,
 		},
 		events: { change: Schema.Struct({ selected: Schema.Array(Schema.String) }) },
 	}),
@@ -746,6 +772,8 @@ export const tags = {
 		props: {
 			label: text,
 			description: text,
+			// The glyph over the label (`emoji-add` for custom emojis); else picked from `accept`.
+			icon: value(O.IconName),
 			accept: text,
 			multiple: flag,
 			disabled: flag,
@@ -828,8 +856,15 @@ export const tags = {
 		web: "A3",
 		ios: "S3",
 		content: "none",
-		props: { open: flag },
-		events: { select: Schema.Struct({ emoji: Schema.String }), dismiss: none },
+		// The screen's set (custom emojis with their images, the recently used first); none draws a
+		// small built-in set. `loading` shows a spinner, `error` says why with a retry (`retry`).
+		props: {
+			open: flag,
+			categories: value(Schema.Array(Content.EmojiCategory)),
+			loading: flag,
+			error: text,
+		},
+		events: { select: Schema.Struct({ emoji: Schema.String }), dismiss: none, retry: none },
 	}),
 
 	// Phase 4: the command palette (`overlay/command-palette`): a query field over grouped results.

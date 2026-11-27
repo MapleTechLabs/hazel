@@ -150,3 +150,90 @@ describe("hz:composer context", () => {
 		expect(fired.filter(([event]) => event === "editLast")).toHaveLength(1)
 	})
 })
+
+describe("hz:composer G3", () => {
+	it("says so when an open trigger finds nothing, and only then", () => {
+		const { part, set } = mount({ emptyText: "No users found" }, ["trigger", "change"])
+		const panel = part("suggestions")!
+		expect(panel.hidden).toBe(true)
+		const view = editorOf(part("input")!)!
+		view.dispatch(view.state.tr.insertText("@"))
+		view.someProp("handleTextInput", (handle) => handle(view, 1, 1, "@", () => view.state.tr))
+		set("suggestions", [])
+		expect(panel.hidden).toBe(false)
+		expect(part("suggestionEmpty")?.textContent).toBe("No users found")
+		set("suggestions", people)
+		expect(part("suggestionEmpty")).toBeNull()
+	})
+
+	it("chips a command's arguments, required ones emphasized", () => {
+		const { node } = mount(
+			{
+				suggestions: [
+					{
+						id: "deploy",
+						label: "/deploy",
+						description: "Ship a build",
+						chips: [{ label: "env", required: true }, { label: "tag" }],
+					},
+				],
+			},
+			[],
+		)
+		const chips = [...node.querySelectorAll<HTMLElement>("[data-hz-part=suggestionChip]")]
+		expect(chips.map((chip) => chip.textContent)).toEqual(["<env>", "[tag]"])
+		expect(chips.map((chip) => chip.hasAttribute("data-emphasized"))).toEqual([true, false])
+	})
+
+	it("reports the row under the pointer, but not the active one", () => {
+		const { fired, node } = mount({ suggestions: people, activeSuggestion: "u1" }, ["hoverSuggestion"])
+		const [first, second] = [...node.querySelectorAll<HTMLElement>("[role=option]")]
+		first!.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }))
+		second!.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }))
+		expect(fired).toEqual([["hoverSuggestion", { id: "u2" }]])
+		expect(second!.hasAttribute("data-selected")).toBe(false)
+		expect(first!.hasAttribute("data-selected")).toBe(true)
+	})
+
+	it("names mentions from `mentions`", () => {
+		const { part, set } = mount({ value: { text: "hi @[userId:u9]", rev: 1, edit: 0 } }, [])
+		expect(part("mention")?.textContent).toBe("@u9")
+		set("mentions", [{ id: "u9", name: "Ada Lovelace" }])
+		expect(part("mention")?.textContent).toBe("@Ada Lovelace")
+	})
+
+	it("raises escape with no context, and leave on Shift+Tab", () => {
+		const { fired, part } = mount({}, ["escape", "leave"])
+		const area = part("input")!
+		expect(key(area, { key: "Escape" }).defaultPrevented).toBe(true)
+		expect(key(area, { key: "Tab", shiftKey: true }).defaultPrevented).toBe(true)
+		expect(key(area, { key: "Tab" }).defaultPrevented).toBe(false)
+		expect(fired).toEqual([
+			["escape", {}],
+			["leave", {}],
+		])
+	})
+
+	it("selects by markdown offsets and tears the editor down on dispose", () => {
+		const made = composer.create({
+			document,
+			tag: "hz:composer",
+			outer: (tagName) => {
+				const node = document.createElement(tagName)
+				node.dataset.hz = "composer"
+				return node
+			},
+			self: (node, set) => ({ tag: "hz:composer", outer: node, content: node, set, events: undefined }),
+		})
+		document.body.append(made.outer)
+		made.set("value", { text: "one **two** three", rev: 1, edit: 0 })
+		const area = made.outer.querySelector<HTMLElement>("[data-hz-part=input]")!
+		const view = editorOf(area)!
+		made.select?.(4, 11)
+		const { from, to } = view.state.selection
+		expect(view.state.doc.textBetween(from, to)).toBe("**two**")
+		made.dispose?.()
+		expect(editorOf(area)).toBeUndefined()
+		expect(view.isDestroyed).toBe(true)
+	})
+})

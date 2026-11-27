@@ -228,14 +228,21 @@ export const primitive = definePrimitive("choiceGroup", ({ document, tag, outer 
 		if (!multiple && value !== undefined) choose(value)
 	})
 
+	let labelText: string | undefined
+	let labelHidden = false
 	const primitive: Primitive = {
 		tag,
 		outer: node,
 		content: node,
 		set: (name, value) => {
 			if (name === "label") {
-				label.hidden = textOf(value) === undefined
-				label.textContent = textOf(value) ?? ""
+				labelText = textOf(value)
+				label.hidden = labelText === undefined || labelHidden
+				label.textContent = labelText ?? ""
+			} else if (name === "labelHidden") {
+				// Named for assistive tech only (`aria-labelledby` reads a hidden label).
+				labelHidden = value === true
+				label.hidden = labelText === undefined || labelHidden
 			} else if (name === "description" || name === "error") {
 				const line = name === "error" ? error : description
 				line.hidden = textOf(value) === undefined

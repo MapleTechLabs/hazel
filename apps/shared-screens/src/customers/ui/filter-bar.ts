@@ -10,7 +10,15 @@ import type { Content, Hazel, TextField } from "@hazel/ui/vocabulary/index"
 
 // VIEW TABS
 
-export type ViewTab<K extends string> = Readonly<{ key: K; label: string; count?: number }>
+/** A saved view's look (`view-look.ts`): its icon in its colour, or a dot in its colour. */
+export type ViewTabLook = Readonly<{ icon?: Content.Tab["icon"]; tint?: Content.Tab["tint"] }>
+
+export type ViewTab<K extends string> = Readonly<{
+	key: K
+	label: string
+	count?: number
+	look?: ViewTabLook
+}>
 
 /** `Open 12 · Snoozed 4 · Done` as in-page tabs; `trailing` follows them. */
 export const viewTabs = <Msg, K extends string>(
@@ -25,11 +33,12 @@ export const viewTabs = <Msg, K extends string>(
 	}>,
 ) => {
 	const byKey = new Map(options.tabs.map((tab) => [tab.key as string, tab.key]))
-	// HAZEL-GAP(pk0-tab-leading): today a saved view's tab leads with its icon or tinted dot (`view-look.ts`); `Tab.icon` is an `IconName` with no tint.
 	const tabs: ReadonlyArray<Content.Tab> = options.tabs.map((tab) => ({
 		id: tab.key,
 		label: tab.label,
 		badge: tab.count,
+		icon: tab.look?.icon,
+		tint: tab.look?.tint,
 	}))
 	const bar = h.tabBar
 		.style("page")
@@ -75,8 +84,9 @@ export const rangePicker = <Msg>(
 			options.caption === null
 				? null
 				: h.text.tone("muted").children(options.caption ?? "vs previous period"),
-			// HAZEL-GAP(pk0-choice-name): today's control is named "Date range" for assistive tech only; a `choiceGroup` label is drawn above it, so it goes unnamed.
 			h.choiceGroup
+				.label("Date range")
+				.labelHidden()
 				.style("segmented")
 				.options(RANGES.map((range) => ({ value: range, label: range })))
 				.selected([options.selected])
@@ -97,8 +107,12 @@ export const searchBox = <Msg>(
 		onChange: (payload: TextField.ChangePayload) => Msg
 	}>,
 ) =>
-	// HAZEL-GAP(pk0-search-hint): today the empty field shows a `/` key cap at its end and is `w-64` (full width on phones); `searchField` has neither.
-	h.searchField.placeholder(options.placeholder).value(options.value).on("change", options.onChange)
+	h.searchField
+		.placeholder(options.placeholder)
+		.value(options.value)
+		.width("regular")
+		.shortcut("/")
+		.on("change", options.onChange)
 
 // FILTERS
 
@@ -107,11 +121,11 @@ export const filterChip = <Msg>(
 	h: Hazel.H<Msg>,
 	options: Readonly<{ field: string; operator: string; value: string; onPress?: Msg; onRemove: Msg }>,
 ) => {
-	// HAZEL-GAP(pk0-filter-chip): today's chip is a square 32px box, `field operator` muted then the value strong and truncated, with a divided remove half; `chip` is round, one run.
 	const chip = h.button
-		.variant("chip")
-		.size("small")
-		.label(`${options.field} ${options.operator} ${options.value}`)
+		.variant("filter")
+		.size("toolbar")
+		.detail(`${options.field} ${options.operator}`)
+		.label(options.value)
 		.removable()
 		.on("remove", options.onRemove)
 	return options.onPress === undefined ? chip : chip.on("press", options.onPress)
@@ -119,15 +133,13 @@ export const filterChip = <Msg>(
 
 /** `+ Filter`: the trigger of the page's filter builder popover. */
 export const addFilterButton = <Msg>(h: Hazel.H<Msg>, options: Readonly<{ onPress?: Msg }> = {}) => {
-	// HAZEL-GAP(pk0-dashed-button): today's `+ Filter` has a dashed edge in `fg-3` ink; no button variant is dashed.
-	const button = h.button.label("Filter").icon("plus").variant("ghost").size("xsmall")
+	const button = h.button.label("Filter").icon("plus").variant("dashed").size("toolbar")
 	return options.onPress === undefined ? button : button.on("press", options.onPress)
 }
 
 /** `Sort Priority`: the trigger of the page's sort menu (`menu`'s `trigger` slot). */
 export const sortTrigger = <Msg>(h: Hazel.H<Msg>, options: Readonly<{ label: string }>) =>
-	// HAZEL-GAP(pk0-sort-trigger): today "Sort" is muted, the label strong, and a chevron trails; a button label is one run with a leading icon.
-	h.button.label(`Sort ${options.label}`).icon("chevron-down").variant("ghost").size("xsmall")
+	h.button.detail("Sort").label(options.label).trailingIcon("chevron-down").variant("ghost").size("toolbar")
 
 /** The row the controls sit in: filters at the start, the rest at the end. */
 export const filterBar = <Msg>(
@@ -137,16 +149,17 @@ export const filterBar = <Msg>(
 		end?: ReadonlyArray<Hazel.NoTextInput<Msg>>
 	}>,
 ) =>
-	// HAZEL-GAP(pk0-wrap-row): today the bar and its chips wrap onto more lines (`flex-wrap`); a horizontal stack never wraps.
 	h.stack
 		.axis("horizontal")
 		.density("compact")
 		.align("center")
+		.wrap()
 		.children(
 			h.stack
 				.axis("horizontal")
 				.density("compact")
 				.align("center")
+				.wrap()
 				.children(...options.start),
 			options.end === undefined ? null : h.spacer,
 			options.end === undefined
@@ -166,10 +179,10 @@ export const kbd = <Msg>(h: Hazel.H<Msg>, key: string) => h.text.role("kbd").chi
 
 /** `j k Navigate · a Assign · …`: the queue's hint bar. */
 export const shortcutBar = <Msg>(h: Hazel.H<Msg>, shortcuts: ReadonlyArray<Shortcut>) =>
-	// HAZEL-GAP(pk0-web-only): today's bar hides on phones (`max-md:hidden`); a view has no size class to hide by.
 	h.stack
 		.axis("horizontal")
 		.align("center")
+		.regularOnly()
 		.children(
 			...shortcuts.map((shortcut) =>
 				h.stack

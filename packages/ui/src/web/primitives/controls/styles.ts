@@ -21,7 +21,7 @@ const css = `
 	min-width: 0;
 	outline: none;
 }
-:is([data-hz=textField], [data-hz=select]) input::placeholder { color: var(--hz-color-muted-fg); opacity: 1; }
+:is([data-hz=textField], [data-hz=select], [data-hz=searchField]) input::placeholder { color: var(--hz-color-muted-fg); opacity: 1; }
 :is([data-hz=textField], [data-hz=select]) [data-hz-part=control]:has(> :is(input, select):focus) {
 	border-color: var(--hz-color-focus-ring);
 	box-shadow: 0 0 0 3px var(--hz-color-focus-halo);
@@ -32,6 +32,14 @@ const css = `
 }
 [data-hz=textField] [data-hz-part=input]::-ms-reveal { display: none; }
 [data-hz=textField] :is([data-hz-part=reveal], [data-hz-part=copy]),
+[data-hz=searchField] { position: relative; }
+[data-hz=searchField] > [data-hz-part=shortcut] {
+	position: absolute; inset-inline-end: calc(var(--hz-space-2) - 1px); pointer-events: none;
+	/* Today's 18px cap sits on the baseline of a 24px line box centred on the field (2.5px below
+	   centre), and its bottom edge is heavier. */
+	top: calc(50% - var(--hz-space-px) * 6.5);
+	border-bottom-color: var(--hz-color-border-hover);
+}
 [data-hz=select][data-searchable] [data-hz-part=button] {
 	display: grid;
 	place-items: center;
@@ -43,6 +51,14 @@ const css = `
 :is([data-hz=textField] :is([data-hz-part=reveal], [data-hz-part=copy]), [data-hz=dropZone]):focus-visible {
 	outline: 2px solid var(--hz-color-ring);
 	outline-offset: 2px;
+}
+[data-hz=searchField] { position: relative; }
+[data-hz=searchField] > [data-hz-part=shortcut] {
+	position: absolute; inset-inline-end: calc(var(--hz-space-2) - 1px); pointer-events: none;
+	/* Today's 18px cap sits on the baseline of a 24px line box centred on the field (2.5px below
+	   centre), and its bottom edge is heavier. */
+	top: calc(50% - var(--hz-space-px) * 6.5);
+	border-bottom-color: var(--hz-color-border-hover);
 }
 [data-hz=select][data-searchable] [data-hz-part=button] { cursor: default; }
 [data-hz=select] > [data-hz-part=status] {
@@ -61,8 +77,7 @@ const css = `
 }
 [data-hz=select] [data-hz-part=option][data-disabled] { opacity: 0.5; }
 [data-hz=select] [data-hz-part=content]:empty { display: none; }
-/* HAZEL-GAP(drop-zone-dashed-edge): Declarations have no border style or 2px width; the colour is the recipe's. */
-[data-hz=dropZone] { border-width: 2px; border-style: dashed; cursor: pointer; }
+[data-hz=dropZone] { cursor: pointer; }
 [data-hz=dropZone]:is(:disabled, [data-loading]) { cursor: default; }
 [data-hz=toggle]:not([data-style=checkbox]) > [data-hz-part=control] { inline-size: var(--hz-space-10); align-self: start; }
 [data-hz=toggle] > [data-hz-part=control] > [data-hz-part=thumb] {
