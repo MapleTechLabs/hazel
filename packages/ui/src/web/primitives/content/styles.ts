@@ -29,14 +29,17 @@ const css = `
 
 :where([data-hz=avatar]) { position: relative; }
 [data-hz=avatar][data-seeded] { container-type: size; }
-[data-hz=avatar]:is([data-size=medium], [data-size=large]),
-[data-hz=avatar]:is([data-size=medium], [data-size=large]) > :is([data-hz-part=image], [data-hz-part=dither]),
+[data-hz=avatar]:is([data-size=medium], [data-size=large], [data-size=xlarge]):not([data-shape]),
+[data-hz=avatar]:is([data-size=medium], [data-size=large], [data-size=xlarge]):not([data-shape]) > :is([data-hz-part=image], [data-hz-part=dither]),
 [data-hz=avatarStack][data-layout=pair] > [data-hz=avatar],
 [data-hz=avatarStack][data-layout=pair] > [data-hz=avatar] > :is([data-hz-part=image], [data-hz-part=dither]),
 [data-hz=peopleStrip] [data-hz-part=avatar],
 [data-hz=peopleStrip] [data-hz-part=avatar] > :is([data-hz-part=image], [data-hz-part=dither]) {
 	corner-shape: squircle;
 }
+/* "Unassigned" (\`placeholder\`): a dashed ring around a 12px user glyph. */
+[data-hz=avatar][data-placeholder] { border-style: dashed; }
+[data-hz=avatar][data-placeholder] > [data-hz-part=initials] { width: var(--hz-space-3); height: var(--hz-space-3); }
 /* A 40pt row avatar's dot is today's \`presenceDot\` \`xs\`: 10px, cut out by a 2px outer ring (\`ring-2 ring-bg\`). */
 [data-hz=avatar][data-size=medium] > [data-hz-part=presence] {
 	border-width: 0;

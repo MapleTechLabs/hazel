@@ -19,9 +19,20 @@ const presenceLabel = (status: string) =>
 	Object.hasOwn(presenceLabels, status) ? presenceLabels[status as AvatarPresence] : ""
 
 /** Each size's box before layout, in px (`regular` steps down from the size class); layout corrects it. */
+const fixedPx: Readonly<Record<string, number>> = {
+	xxsmall: 16,
+	inline: 20,
+	xsmall: 24,
+	row: 28,
+	small: 32,
+	medium: 40,
+	large: 48,
+	xlarge: 56,
+}
+
 const sizePx = (size: string, document: Document) => {
-	if (size === "medium") return 40
-	if (size === "large") return 48
+	const fixed = fixedPx[size]
+	if (fixed !== undefined) return fixed
 	return document.defaultView?.matchMedia("(width >= 40rem)").matches ? 16 : 20
 }
 
@@ -58,11 +69,13 @@ export const primitive = definePrimitive("avatar", ({ document, tag, outer }) =>
 	let initialsText = ""
 	let size = "regular"
 	let status = ""
+	let placeholder = false
 	const seed = () => {
-		const seeded = name.trim() !== ""
+		const seeded = name.trim() !== "" && !placeholder
 		flag(node, "seeded", seeded)
 		dither.seed(seeded ? name : undefined, sizePx(size, document))
-		initials.textContent = seeded ? ditherInitial(name) : initialsText
+		if (placeholder) glyph(initials, "user")
+		else initials.textContent = seeded ? ditherInitial(name) : initialsText
 	}
 	// One accessible name: the person, and their presence when it shows.
 	const label = () => {
@@ -102,6 +115,12 @@ export const primitive = definePrimitive("avatar", ({ document, tag, outer }) =>
 				option(node, "presence", value)
 				status = text ?? ""
 				presence.hidden = text === undefined || text === "none"
+			} else if (prop === "shape" || prop === "tint") {
+				option(node, prop, text === "auto" || text === "none" ? undefined : value)
+			} else if (prop === "placeholder") {
+				placeholder = value === true
+				flag(node, "placeholder", value)
+				seed()
 			} else if (prop === "mark") {
 				option(node, "mark", value)
 				mark.hidden = text === undefined || text === "none"

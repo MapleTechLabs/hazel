@@ -6,38 +6,27 @@
 import type { ChartTone } from "../../../../vocabulary/content.ts"
 import { ensureSheet } from "../../list/runtime.ts"
 
-/**
- * Each tone's colour. HAZEL-GAP(chart-tone-tokens): Hazel has no `chart-*` colour tokens yet, so a
- * mark takes `--hz-color-chart-<tone>` once lane D adds it, else the host app's `--color-chart-*`
- * (exact inside the Foldkit app), else the nearest Hazel role.
- */
-/** Today's `--chart-series-1`'s nearest Hazel colour (the heatmap's hue too). */
-export const SERIES_1 = "var(--hz-palette-brand-700)"
-
+/** Each tone's colour token (`chart-*`, theme.css `--chart-*`); the intents take the nearest hue. */
 const tones = {
-	series1: ["series-1", SERIES_1],
-	series2: ["series-2", "var(--hz-palette-brand-500)"],
-	series3: ["series-3", "var(--hz-palette-brand-300)"],
-	neutral: ["neutral", "var(--hz-color-muted-fg)"],
-	new: ["new", "var(--hz-color-success)"],
-	expansion: ["expansion", "var(--hz-palette-sky-500)"],
-	contraction: ["contraction", "var(--hz-color-warning)"],
-	churn: ["churn", "var(--hz-color-danger)"],
-	accent: ["series-1", "var(--hz-color-primary)"],
-	success: ["new", "var(--hz-color-success)"],
-	warning: ["contraction", "var(--hz-color-warning)"],
-	danger: ["churn", "var(--hz-color-danger)"],
-} satisfies Record<ChartTone, readonly [host: string, fallback: string]>
+	series1: "series-1",
+	series2: "series-2",
+	series3: "series-3",
+	neutral: "neutral",
+	new: "new",
+	expansion: "expansion",
+	contraction: "contraction",
+	churn: "churn",
+	accent: "series-1",
+	success: "new",
+	warning: "contraction",
+	danger: "churn",
+} satisfies Record<ChartTone, string>
 
-/** A chart colour by its host name (`series-1`, `grid`), with the Hazel fallback (`chart-tone-tokens`). */
-export const toneOf = (name: string, fallback: string) =>
-	`var(--hz-color-chart-${name}, var(--color-chart-${name}, ${fallback}))`
+/** A chart colour token by its name (`series-1`, `grid`). */
+export const toneOf = (name: string) => `var(--hz-color-chart-${name})`
 
 const toneRules = Object.entries(tones)
-	.map(
-		([tone, [host, fallback]]) =>
-			`[data-hz="chart"] [data-tone="${tone}"] { --hz-chart-tone: ${toneOf(host, fallback)}; }`,
-	)
+	.map(([tone, name]) => `[data-hz="chart"] [data-tone="${tone}"] { --hz-chart-tone: ${toneOf(name)}; }`)
 	.join("\n")
 
 const SMALL = '[data-kind="sparkline"], [data-kind="barSparkline"], [data-kind="distribution"]'
@@ -45,8 +34,8 @@ const SMALL = '[data-kind="sparkline"], [data-kind="barSparkline"], [data-kind="
 const css = `
 [data-hz="chart"] {
 	--hz-chart-height: calc(var(--hz-space-4) * 13);
-	--hz-chart-grid: ${toneOf("grid", "var(--hz-color-border)")};
-	--hz-chart-net: ${toneOf("net", "var(--hz-color-fg)")};
+	--hz-chart-grid: ${toneOf("grid")};
+	--hz-chart-net: ${toneOf("net")};
 	display: grid;
 	grid-template-columns: var(--hz-space-12) minmax(0, 1fr) auto;
 	grid-template-areas: "legend legend legend" "y plot end" ". x .";
@@ -154,7 +143,7 @@ const css = `
 	display: block; min-height: var(--hz-space-px); background: var(--hz-chart-tone);
 	border-start-start-radius: var(--hz-radius-xs); border-start-end-radius: var(--hz-radius-xs);
 }
-[data-hz="chart"] [data-hz-part="bar"][data-rest] { background: color-mix(in oklab, ${toneOf("neutral", "var(--hz-color-muted-fg)")} 60%, transparent); }
+[data-hz="chart"] [data-hz-part="bar"][data-rest] { background: color-mix(in oklab, ${toneOf("neutral")} 60%, transparent); }
 [data-hz="chart"] [data-hz-part="baseline"] {
 	position: absolute; inset-inline: 0; pointer-events: none; border-top: 1px dashed var(--hz-color-fg-2);
 }

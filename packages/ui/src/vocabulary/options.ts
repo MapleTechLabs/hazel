@@ -38,6 +38,9 @@ export type StackDensity = typeof StackDensity.Type
 export const StackAlign = Schema.Literals(Sets.stackAligns)
 export type StackAlign = typeof StackAlign.Type
 
+export const StackInset = Schema.Literals(Sets.stackInsets)
+export type StackInset = typeof StackInset.Type
+
 export const FrameSurface = Schema.Literals(Sets.frameSurfaces)
 export type FrameSurface = typeof FrameSurface.Type
 
@@ -55,6 +58,12 @@ export type AvatarPresence = typeof AvatarPresence.Type
 
 export const AvatarSize = Schema.Literals(Sets.avatarSizes)
 export type AvatarSize = typeof AvatarSize.Type
+
+export const AvatarShape = Schema.Literals(Sets.avatarShapes)
+export type AvatarShape = typeof AvatarShape.Type
+
+export const AvatarTint = Schema.Literals(Sets.avatarTints)
+export type AvatarTint = typeof AvatarTint.Type
 
 export const ProviderMark = Schema.Literals(Sets.providerMarks)
 export type ProviderMark = typeof ProviderMark.Type

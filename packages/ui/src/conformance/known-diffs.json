@@ -1,28 +1,8 @@
 [
 	{
-		"case": "chart/sparkline",
-		"lane": "A1",
-		"reason": "HAZEL-GAP(chart-tone-tokens): today's --chart-new has no Hazel colour; the line and dot take the nearest role (success). Same box, same path"
-	},
-	{
-		"case": "chart/sparklineCard",
-		"lane": "A1",
-		"reason": "HAZEL-GAP(chart-tone-tokens): today's --chart-new has no Hazel colour; the line and fill take the nearest role (success). Same box, same path"
-	},
-	{
-		"case": "chart/evidence",
-		"lane": "A1",
-		"reason": "HAZEL-GAP(chart-tone-tokens): today's --chart-churn and --chart-neutral have no Hazel colours; the bars take the nearest roles (danger, muted-fg). Same bars and baseline"
-	},
-	{
-		"case": "chart/distribution",
-		"lane": "A1",
-		"reason": "HAZEL-GAP(chart-tone-tokens): today's --chart-new, -contraction and -neutral have no Hazel colours; the shares take the nearest roles. Same widths"
-	},
-	{
 		"case": "heatmap/default",
 		"lane": "A1",
-		"reason": "HAZEL-GAP(chart-tone-tokens): today's --chart-series-1 has no Hazel colour; the levels mix the nearest (brand-700). Same cells, labels, tooltip and legend"
+		"reason": "Cell edges: the renderer places each cell in percent of the calendar's box, today in px, so their rounded edges antialias differently. Same colours (`chart-series-1`), cells, labels, tooltip and legend"
 	},
 	{
 		"case": "statTile/kit",

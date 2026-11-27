@@ -5,6 +5,6 @@ import { definePrimitive, option } from "../define.ts"
 export const primitive = definePrimitive("scroll", ({ outer, self }) => {
 	const node = outer("div")
 	return self(node, (name, value) => {
-		if (name === "axis") option(node, "axis", value)
+		if (name === "axis" || name === "inset") option(node, name, value)
 	})
 })

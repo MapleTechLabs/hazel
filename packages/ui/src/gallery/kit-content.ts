@@ -86,6 +86,27 @@ const strip = (h: H): Html =>
 		),
 	)
 
+/** `page/chat/channel/view.ts` `emptyStateView` (9096d67a1): the masked squirrel over its mono line. */
+const emptyChannel = (h: H): Html =>
+	h.div(
+		[h.Class("flex size-full flex-col items-center justify-center p-4 sm:p-8")],
+		[
+			h.div(
+				[h.Class("relative aspect-square w-full max-w-sm")],
+				[
+					h.img([
+						h.Attribute("src", "/images/squirrle_ocean.webp"),
+						h.Attribute("alt", "squirrel"),
+						h.Class(
+							"mask-size-[110%_90%] mask-linear-to-r mask-from-black mask-to-transparent mask-center mask-no-repeat mask-[url(/images/image-mask.webp)] h-full w-full rounded-md bg-center bg-cover bg-no-repeat object-cover opacity-50",
+						),
+					]),
+				],
+			),
+			h.p([h.Class("font-bold font-mono text-fg text-xl")], ["Quiet as an ocean gazing squirrel..."]),
+		],
+	)
+
 export const contentSpecimens = (h: H): Html =>
 	h.div(
 		[],
@@ -111,6 +132,18 @@ export const contentSpecimens = (h: H): Html =>
 			h.div(
 				[h.Class("frames"), h.Attribute("style", "flex-direction: column; align-items: stretch;")],
 				[h.div([h.Attribute("style", "max-width: 720px;")], [strip(h)])],
+			),
+			h.div(
+				[h.Class("frames"), h.Attribute("style", "flex-direction: column; align-items: stretch;")],
+				[
+					h.div(
+						[
+							h.Attribute("style", "max-width: 720px;"),
+							h.Attribute("data-specimen", "empty-channel"),
+						],
+						[emptyChannel(h)],
+					),
+				],
 			),
 			h.div(
 				[h.Class("frames")],

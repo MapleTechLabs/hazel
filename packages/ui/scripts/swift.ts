@@ -136,6 +136,7 @@ export const generateSwift = (tokens: Tokens, recipes: ReadonlyArray<Recipe>): s
 		if (d.overflow !== undefined) add("overflow", `.${d.overflow}`)
 		if (d.minWidth !== undefined) add("minWidth", num(space(d.minWidth)))
 		if (d.transitionEase !== undefined) add("transitionEase", str(d.transitionEase))
+		if (d.mono !== undefined) add("mono", String(d.mono))
 		return `Style(${fields.join(", ")})`
 	}
 
@@ -332,7 +333,7 @@ ${Object.entries(tokens.shadow)
 
     public enum Layout: Sendable { case row, column, inlineRow, contents }
     public enum Align: Sendable { case center, start, end }
-    public enum TextAlign: Sendable { case center }
+    public enum TextAlign: Sendable { case center, start }
     public enum Overflow: Sendable { case scrollX, scrollY }
 
     /// A recipe's declarations, resolved to values; \`nil\` leaves the field to earlier layers.
@@ -358,6 +359,8 @@ ${Object.entries(tokens.shadow)
         public var lineClamp: Int? = nil, overflow: Overflow? = nil
         /// \`minWidth\` in points; \`transitionEase\` names a curve in \`easing\` (\`out\` when nil).
         public var minWidth: CGFloat? = nil, transitionEase: String? = nil
+        /// The monospace family over \`text\` (\`font-mono\`).
+        public var mono: Bool? = nil
 
         /// \`other\`'s fields over these.
         public func merged(_ other: Style) -> Style {
@@ -381,6 +384,7 @@ ${Object.entries(tokens.shadow)
             out.textAlign = other.textAlign ?? textAlign; out.lineClamp = other.lineClamp ?? lineClamp
             out.overflow = other.overflow ?? overflow
             out.minWidth = other.minWidth ?? minWidth; out.transitionEase = other.transitionEase ?? transitionEase
+            out.mono = other.mono ?? mono
             return out
         }
     }

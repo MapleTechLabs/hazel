@@ -109,6 +109,10 @@ export type StackDensity = (typeof stackDensities)[number]
 export const stackAligns = ["stretch", "start", "center", "end"] as const
 export type StackAlign = (typeof stackAligns)[number]
 
+/** Padding inside a stack or scroll: `page` is a page's content gutter (`p-4`), `bar` a page header's (`px-4 py-3`). */
+export const stackInsets = ["none", "page", "bar"] as const
+export type StackInset = (typeof stackInsets)[number]
+
 /**
  * `danger` is the danger zone's card with a tinted header (`frame-danger`); `flush` the card with no
  * padding, its dividers running edge to edge (`frame-flush`); `hint` a sidebar's quiet
@@ -125,9 +129,10 @@ export type FrameSurface = (typeof frameSurfaces)[number]
  */
 /**
  * A screen's surface (`screen-surface`): `sidebar` is the sidebar's column under its own title;
- * `page` a phone tab's page (`mobileTopBar`: a 56pt sticky bar, the section heading, the page ground).
+ * `page` a phone tab's page (`mobileTopBar`: a 56pt sticky bar, the section heading, the page ground);
+ * `detail` a page opened from another (All media): an arrow back and a headline title over a `px-4 py-3` bar.
  */
-export const screenSurfaces = ["sidebar", "page", "centered"] as const
+export const screenSurfaces = ["sidebar", "page", "centered", "detail"] as const
 export type ScreenSurface = (typeof screenSurfaces)[number]
 
 export const sectionStyles = ["sidebar", "tree", "list", "sticky"] as const
@@ -143,9 +148,29 @@ export type AvatarPresence = (typeof avatarPresences)[number]
 /**
  * `regular` sits beside an icon (sidebar rows); `medium` is the kit's `md`, a 40pt rounded square
  * (DM and activity rows, `avatar-row-size`); `large` the settings logo that is its own upload button.
+ * Phase 4: the kit's `xxs` (16), `xs` (24), `sm` (32) and `xl` (56) as `xxsmall`, `xsmall`, `small`
+ * and `xlarge`; `inline` a 20pt mark beside a label at every width; `row` a table row's 28pt logo.
  */
-export const avatarSizes = ["regular", "medium", "large"] as const
+export const avatarSizes = [
+	"regular",
+	"medium",
+	"large",
+	"xxsmall",
+	"xsmall",
+	"small",
+	"xlarge",
+	"inline",
+	"row",
+] as const
 export type AvatarSize = (typeof avatarSizes)[number]
+
+/** `auto` is the size's own shape (round up to `small`, the kit's squircle from `medium`). */
+export const avatarShapes = ["auto", "round", "square"] as const
+export type AvatarShape = (typeof avatarShapes)[number]
+
+/** Initials on a subtle tint (customers' logos and owners); the view picks it, stable per name. */
+export const avatarTints = ["none", "accent", "info", "success", "warning", "danger", "neutral"] as const
+export type AvatarTint = (typeof avatarTints)[number]
 
 /** A synced author's or mention's provider mark: `none`, Slack or Discord. */
 export const providerMarks = ["none", "slack", "discord"] as const
@@ -289,9 +314,10 @@ export interface Shadow {
 
 /**
  * Type steps only recipes use (a count badge's 11px), never a view's `text.role`. `reading` is chat
- * text, 16/24 at every width (a message row does not step down like `body`); `snug` a DM preview, 14/19.25.
+ * text, 16/24 at every width (a message row does not step down like `body`); `snug` a DM preview, 14/19.25;
+ * `headline` a page header's title (the kit's heading `title`, 18/28); `hero` Tailwind's `text-xl` (20/28).
  */
-export const recipeTextSteps = ["tiny", "micro", "reading", "snug"] as const
+export const recipeTextSteps = ["tiny", "micro", "reading", "snug", "headline", "hero"] as const
 export type RecipeTextStep = (typeof recipeTextSteps)[number]
 export type TextStep = TextRole | RecipeTextStep
 
@@ -415,8 +441,10 @@ export interface Declarations<T extends TokenNames = TokenNames> {
 	readonly weight?: "semibold" | "bold"
 	/** Uppercase text (the `overline` role). */
 	readonly uppercase?: boolean
-	/** Centred text (`recipe-text-align`). */
-	readonly textAlign?: "center"
+	/** The monospace family over the text step (`font-mono`: a date pill, the empty channel's line). */
+	readonly mono?: boolean
+	/** Centred text (`recipe-text-align`), or `start` back from an inherited centre. */
+	readonly textAlign?: "center" | "start"
 	/** Lines before the text truncates with an ellipsis (`item-title-lines`); 1 is `truncate`. */
 	readonly lineClamp?: 2
 	/** Scrolls its overflow along one axis (`recipe-overflow`). */

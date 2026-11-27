@@ -1,0 +1,64 @@
+{
+	"about": "The phase 4 steps (the kit's xxs, xs, sm, xl and customers' 20 and 28pt logos), square logos, initials on a tint, and \"Unassigned\" (`pk0-avatar-sizes`, `pk0-logo-sizes`, `pk0-initials-tint`, `pk0-unassigned`, `p4-avatar-xl`).",
+	"root": {
+		"tag": "avatar",
+		"props": {
+			"initials": "NL",
+			"size": "small",
+			"tint": "accent"
+		}
+	},
+	"frame": "inline",
+	"axes": [
+		{
+			"prop": "size",
+			"values": ["xxsmall", "inline", "xsmall", "row", "xlarge"]
+		},
+		{
+			"prop": "tint",
+			"values": ["info", "success", "warning", "danger", "neutral"]
+		},
+		{
+			"prop": "shape",
+			"values": ["round", "square"]
+		}
+	],
+	"cases": [
+		{
+			"name": "logo-row",
+			"props": {
+				"size": "row",
+				"shape": "square",
+				"tint": "info"
+			}
+		},
+		{
+			"name": "logo-large",
+			"props": {
+				"size": "large",
+				"shape": "square",
+				"tint": "success"
+			}
+		},
+		{
+			"name": "unassigned",
+			"props": {
+				"initials": null,
+				"tint": null,
+				"placeholder": true
+			}
+		},
+		{
+			"name": "invite-logo",
+			"props": {
+				"initials": null,
+				"tint": null,
+				"name": "Hazel",
+				"size": "xlarge"
+			}
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	}
+}

@@ -1,12 +1,17 @@
 import { defineRecipe } from "../recipe.ts"
-import type { StackAlign, StackAxis, StackDensity } from "../schema.ts"
+import type { StackAlign, StackAxis, StackDensity, StackInset } from "../schema.ts"
 
 /**
  * `hz:stack`: a column or row whose gap is its `density` (the kit's `gap-2`, `gap-4`, `gap-6`).
- * `align` places children across the axis.
+ * `align` places children across the axis; `inset` pads it as a page's gutter (`p-4`) or header (`px-4 py-3`).
  */
 export const stack = defineRecipe<
-	{ readonly axis: StackAxis; readonly density: StackDensity; readonly align: StackAlign },
+	{
+		readonly axis: StackAxis
+		readonly density: StackDensity
+		readonly align: StackAlign
+		readonly inset: StackInset
+	},
 	never,
 	never
 >({
@@ -37,6 +42,14 @@ export const stack = defineRecipe<
 				start: { root: { align: "start" } },
 				center: { root: { align: "center" } },
 				end: { root: { align: "end" } },
+			},
+		},
+		inset: {
+			default: "none",
+			values: {
+				none: {},
+				page: { root: { paddingX: "4", paddingY: "4" } },
+				bar: { root: { paddingX: "4", paddingY: "3" } },
 			},
 		},
 	},

@@ -113,6 +113,8 @@ export const tags = {
 			axis: option(O.StackAxis, "vertical"),
 			density: option(O.StackDensity, "regular"),
 			align: option(O.StackAlign, "stretch"),
+			// Phase 4 (`p4-page-gutter`): a page's gutter inside the stack.
+			inset: option(O.StackInset, "none"),
 		},
 	}),
 	spacer: tag({ group: "layout", web: "A1", ios: "S1", content: "none" }),
@@ -121,7 +123,7 @@ export const tags = {
 		web: "A1",
 		ios: "S1",
 		content: "elements",
-		props: { axis: option(O.StackAxis, "vertical") },
+		props: { axis: option(O.StackAxis, "vertical"), inset: option(O.StackInset, "none") },
 		commands: ["scrollTo"],
 	}),
 	frame: tag({
@@ -260,6 +262,11 @@ export const tags = {
 			presence: option(O.AvatarPresence, "none"),
 			size: option(O.AvatarSize, "regular"),
 			mark: option(O.ProviderMark, "none"),
+			// Phase 4 (PK0): a logo's square corners, initials on a tint, and "Unassigned" (a dashed
+			// ring around a user glyph).
+			shape: option(O.AvatarShape, "auto"),
+			tint: option(O.AvatarTint, "none"),
+			placeholder: flag,
 		},
 		events: { press: none },
 	}),
@@ -875,8 +882,9 @@ export const tags = {
 		},
 		// `floatingAction`: the screen's primary action, a round button over the content's end corner.
 		// Phase 4: `aside` is `centered`'s brand panel beside the card (regular size class only);
-		// `meta` holds badges after the title.
-		slots: ["toolbar", "floatingAction", "aside", "meta"],
+		// `meta` holds badges after the title; `leading` a mark over the title in `centered` (an
+		// invitation's workspace logo, `p4-avatar-xl`), elsewhere at the content's start.
+		slots: ["toolbar", "floatingAction", "aside", "meta", "leading"],
 		events: { back: none, crumb: Schema.Struct({ index: Schema.Finite }) },
 	}),
 	navigation: tag({

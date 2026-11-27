@@ -194,6 +194,10 @@ const declarations = (d: Declarations, tracked: ReadonlySet<string>): ReadonlyAr
 		add("font-weight", d.strong ? "var(--hz-weight-strong)" : "var(--hz-weight-regular)")
 	if (d.weight !== undefined) add("font-weight", `var(--hz-weight-${d.weight})`)
 	if (d.uppercase) add("text-transform", "uppercase")
+	if (d.mono) {
+		add("font-family", "var(--hz-font-mono)")
+		add("font-feature-settings", '"zero"')
+	}
 	if (d.textAlign !== undefined) add("text-align", d.textAlign)
 	if (d.lineClamp !== undefined) {
 		add("display", "-webkit-box")

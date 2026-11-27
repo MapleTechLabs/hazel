@@ -105,7 +105,7 @@ export const sectionSidebar = (h: H, model: AppModel, layout: SectionLayout, dat
 		)
 }
 
-// HAZEL-GAP(section-scroll-column): no primitive scrolls a section's page under the frame with its
+// HAZEL-GAP(p4-section-scroll-column): no primitive scrolls a section's page under the frame with its
 // `pt-6 pb-12` rhythm, so the column stays the frame's own markup, as `settings/layout.tsx` draws it.
 const scrollColumn = (
 	h: H,
