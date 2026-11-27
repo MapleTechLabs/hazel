@@ -1,6 +1,6 @@
 import type { ComparePage } from "../compare-entry"
 
-/** The phase 3 channel list island (`islands/channel-list.ts`). */
+/** The phase 3 channel list screen. (no flag since the shell; compare it in baseline mode). */
 export default {
 	flag: "hazel:island:channel-list",
 	tab: "Home",

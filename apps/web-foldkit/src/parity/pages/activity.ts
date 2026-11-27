@@ -1,6 +1,6 @@
 import type { ComparePage } from "../compare-entry"
 
-/** The phase 3 Activity island (`islands/activity.ts`). */
+/** The phase 3 Activity screen. (no flag since the shell; compare it in baseline mode). */
 export default {
 	flag: "hazel:island:activity",
 	tab: "Activity",
