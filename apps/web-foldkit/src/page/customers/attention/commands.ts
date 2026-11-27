@@ -4,25 +4,15 @@ import type {
 	CustomersInvalidRequestError,
 	CustomersNotFoundError,
 } from "@hazel/domain/rpc"
-import { CustomerAccountId, CustomerSignalId, OrganizationId, UserId } from "@hazel/schema"
+import { CustomerSignalId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
-import { Command, Mount } from "foldkit"
-import * as Dom from "foldkit/dom"
+import { Command } from "foldkit"
 import type { CommonError } from "~/lib/error-messages"
-import {
-	assignSignalAction,
-	markSignalDoneAction,
-	reopenSignalAction,
-	setAttentionMuteAction,
-	snoozeSignalAction,
-} from "../../../customers/actions"
+import { assignSignalAction, markSignalDoneAction, snoozeSignalAction } from "../../../customers/actions"
 import { catchCommon } from "../../../data/actions"
-import { HazelRpc } from "../../../rpc"
-import { searchFieldIds } from "../../../ui/search-field"
 import { Message, type SignalAction } from "./message"
-import { SEARCH_ID } from "./model"
 
-/** The queue's Commands: the optimistic signal actions, the preview's detail, copying an email. */
+/** The customer page's optimistic signal actions (Needs attention itself is native now). */
 
 const signalMessages = [Message.SucceededSignalAction, Message.FailedSignalAction] as const
 
@@ -68,31 +58,6 @@ export const SnoozeSignal = Command.define("SnoozeSignal", {
 		snoozeSignalAction({ ...args, until: new Date(untilMs) }).pipe(settle(args.signalId, "snooze")),
 })
 
-/** Mute the signal's customer in Needs attention until `untilMs` (null: until unmuted). */
-export const MuteAccountAttention = Command.define("MuteAccountAttention", {
-	args: {
-		organizationId: OrganizationId,
-		accountId: CustomerAccountId,
-		userId: UserId,
-		untilMs: Schema.NullOr(Schema.Finite),
-	},
-	messages: [Message.SucceededMuteAccount, Message.FailedMuteAccount],
-	execute: ({ untilMs, ...args }) =>
-		setAttentionMuteAction({
-			...args,
-			mute: { until: untilMs === null ? null : new Date(untilMs) },
-		}).pipe(
-			Effect.as(Message.SucceededMuteAccount()),
-			Effect.catchTags({
-				CustomersNotFoundError: () =>
-					Effect.succeed(Message.FailedMuteAccount({ reason: "NotFound" })),
-				CustomersInvalidRequestError: () =>
-					Effect.succeed(Message.FailedMuteAccount({ reason: "Stale" })),
-			}),
-			catchCommon((reason) => Message.FailedMuteAccount({ reason })),
-		),
-})
-
 export const MarkSignalDone = Command.define("MarkSignalDone", {
 	args: { ...target, userId: UserId, outcome: Customers.SignalOutcome, note: Schema.String },
 	messages: signalMessages,
@@ -100,57 +65,4 @@ export const MarkSignalDone = Command.define("MarkSignalDone", {
 		markSignalDoneAction({ ...args, note: note.trim() === "" ? undefined : note.trim() }).pipe(
 			settle(args.signalId, "done"),
 		),
-})
-
-export const ReopenSignal = Command.define("ReopenSignal", {
-	args: target,
-	messages: signalMessages,
-	execute: (args) => reopenSignalAction(args).pipe(settle(args.signalId, "reopen")),
-})
-
-/** The preview panel's account summary, contacts to reach and recent timeline. */
-export const FetchAccountDetail = Command.define("FetchAccountDetail", {
-	args: { organizationId: OrganizationId, accountId: CustomerAccountId },
-	messages: [Message.SucceededFetchDetail, Message.FailedFetchDetail],
-	execute: ({ organizationId, accountId }) =>
-		HazelRpc.use((rpc) => rpc("customers.account.detail", { organizationId, accountId })).pipe(
-			Effect.map((detail) => Message.SucceededFetchDetail({ accountId, detail })),
-			// A deleted account reads like an unreachable one: the panel offers a retry.
-			Effect.catchTag("CustomersNotFoundError", () =>
-				Effect.succeed(Message.FailedFetchDetail({ accountId, reason: "Unexpected" })),
-			),
-			catchCommon((reason) => Message.FailedFetchDetail({ accountId, reason })),
-		),
-})
-
-export const CopyAttentionEmail = Command.define("CopyAttentionEmail", {
-	args: { email: Schema.String },
-	messages: [Message.SucceededCopyEmail, Message.FailedCopyEmail],
-	execute: ({ email }) =>
-		Effect.tryPromise(() => navigator.clipboard.writeText(email)).pipe(
-			Effect.match({
-				onSuccess: () => Message.SucceededCopyEmail({ email }),
-				onFailure: () => Message.FailedCopyEmail(),
-			}),
-		),
-})
-
-/** `/` focuses the search field. */
-export const FocusAttentionSearch = Command.define("FocusAttentionSearch", {
-	messages: [Message.CompletedFocusSearch],
-	execute: Dom.focus(`#${searchFieldIds(SEARCH_ID).input}`).pipe(
-		// Best effort: the field may not be on screen (the all-clear state still shows it).
-		Effect.ignore,
-		Effect.as(Message.CompletedFocusSearch()),
-	),
-})
-
-/** Keeps the keyboard cursor's row on screen: mounted (keyed by the selection) beside the list. */
-export const ScrollRowIntoView = Mount.define("ScrollQueueRowIntoView", {
-	args: { rowId: Schema.String },
-	messages: [Message.CompletedScrollRow],
-	execute: ({ element, rowId }) =>
-		Effect.sync(() =>
-			element.ownerDocument.getElementById(rowId)?.scrollIntoView({ block: "nearest" }),
-		).pipe(Effect.as(Message.CompletedScrollRow())),
 })

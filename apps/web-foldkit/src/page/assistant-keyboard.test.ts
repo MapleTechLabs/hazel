@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, test } from "vitest"
-import { queueKeyOf } from "./customers/attention/subscription"
+import { QUEUE_KEYS } from "@hazel/shared-screens/customers/pages/attention/AttentionPage"
+import { queueKeyFilter } from "../customers/ui/queue-keys"
 import { inboxKeyOf } from "./customers/inbox/subscription"
 import { listKeyOf } from "./customers/list/subscription"
 import { isInAssistantPanel } from "./assistant-context"
@@ -27,6 +28,9 @@ const keydown = (key: string, target: EventTarget) => ({
 })
 
 afterEach(() => document.body.replaceChildren())
+
+/** Needs attention's keys as the web's `QueueKeyboard` reads them (`customers/queue-keyboard.ts`). */
+const queueKeyOf = queueKeyFilter(QUEUE_KEYS.keys, QUEUE_KEYS.repeatable, QUEUE_KEYS.pressable)
 
 describe("isInAssistantPanel", () => {
 	test("is true inside the panel only", () => {
