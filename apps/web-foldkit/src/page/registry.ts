@@ -14,7 +14,6 @@ import type { PageOutMessage } from "./out-message"
 import * as OrgHome from "./home"
 import * as OrgMore from "./more"
 import * as Profile from "./profile"
-import * as Root from "./root"
 import * as Join from "./join"
 import * as SelectOrganization from "./select-organization"
 
@@ -26,7 +25,6 @@ import * as SelectOrganization from "./select-organization"
  * signed-out one's (sign-in) can show. Adding one: import its module and append `X.page`.
  */
 export const pages = [
-	Root.page,
 	ChatChannel.page,
 	OrgHome.page,
 	OrgMore.page,

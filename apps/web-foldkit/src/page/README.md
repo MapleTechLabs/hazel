@@ -40,7 +40,7 @@ that puts the page, and what it imports, back into the first download. A lazy pa
 most `SUBSCRIPTION_POOL_SIZE` Subscriptions (`registry.test.ts` checks).
 
 `page/settings/team/` is the minimal example; `page/chat/channel/` shows a page keyed by a route param,
-memoized views and a `sharedChanged` hook. `page/root/` shows a page that only redirects.
+memoized views and a `sharedChanged` hook.
 
 ## The contract (`page/contract.ts`)
 
