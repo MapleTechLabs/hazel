@@ -254,6 +254,74 @@ baselines (the integrator), no em dashes, `HAZEL-GAP` markers instead of inventi
 | X3b  | `customers/*.ts` (queries, actions, format, SLA, suggestions, groups, providers) into `apps/shared-screens/src/customers/data/`, shims left behind                                                                                                                                                                                                                       | about 4.1k | none       | both typechecks; the moved tests                                                                                         |
 | X5   | Icons as data: the 94 icons as generated SVG strings in `packages/ui/src/web/icons.generated.ts` (and `export-icons.ts` reads them), so nothing in `packages/ui` imports `web-foldkit/src/icons`                                                                                                                                                                         | about 0.3k | none       | `bun run --cwd packages/ui verify:A1`; icon pixel diffs unchanged                                                        |
 
+### X0 verdict (lane X0 + X1, 2026-11-27)
+
+X0 and X1 ran on the root a shell lane had already built (`apps/web-foldkit/src/root`: `Renderer.mount`
+with `BrowserRouter`, one Foldkit host for the unconverted pages, converted screens placed in holes).
+Islands are gone, so the island adapter became a **native page registry**:
+
+- `src/root/native-pages.ts` maps a route tag to an Effect UI page (`Component.lazy`) and its props
+  (the route, the `Session` from the root's Model, a loader fallback). For a registered route the root
+  draws the page where the frame shows the page (`app.ts` `page`), and the Foldkit host's `page` region
+  is never adopted. A page lane adds one entry and deletes its Foldkit page from `page/registry.ts`;
+  the host then builds no page Model for the route.
+- `apps/shared-screens/src/app/`: `requests.ts` (one `Command.Service` per `PageOutMessage`, silent to
+  the page, plus `LoadPage` for a full load), `session.ts` (the `Session` prop), `live.ts` (`withData`,
+  `liveQuery`, the helper the screens share). The root provides `appRequestsLayer` in `commandsLayer`;
+  each request goes on the bus to `AppMessage.ReceivedAppRequest`, which reuses the root's
+  `PageOutMessage` handling; what the host still owns (modals, palette, DM creation, updates) goes to it
+  as `ShellRequest.RequestedPageOut`.
+- The proof page is `invite` (`apps/shared-screens/src/auth/pages/invite/InvitePage.ts`, a `Query` for
+  the preview, `AcceptInvitation`, `LoadPage` and `SignOut` requests), with its scene test; the Foldkit
+  page is deleted.
+
+**The gate, measured** on the offline build with code splitting on (the shipping offline build sets
+`codeSplitting: false` and inlines one file, so a scratch config over `web/vite.config.mts` turned
+Rolldown's default splitting back on; the web config's chunk groups hang on the hybrid entry's
+top-level await), served from `dist`, driven by Playwright:
+
+| Check                            | Result                                                                                                                                                                                                                          |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lazy chunk                       | `InvitePage-*.js` 58.0 kB (19.6 kB gzip), not fetched on `/hazel/chat` (0 loads), fetched once on the push to `/invite/<token>` (page shown 33 to 35 ms after the push, two runs), not fetched again after Back (1 load in all) |
+| Native and Foldkit routes switch | `/hazel/chat` (Foldkit, page region present) to `/invite/<token>` (native, page region absent) to `/hazel/chat` (region back, invite gone)                                                                                      |
+| Back restores the Model          | the refused accept leaves `acceptance: Failed`; after the push away and Back the failure banner shows again (7 to 10 ms), which `init` (`Idle`) never draws; `history.state` holds `@effect/ui`                                 |
+| Head                             | `(6) Chat · Hazel`, `(6) Invitation · Hazel`, `(6) Chat · Hazel`, and `(6) Invitation · Hazel` after Back (the root's `head`)                                                                                                   |
+
+**Hot reload and devtools, measured.** A jsdom script with a devtools hook installed mounted one
+component each way: `Renderer.mount` registered no hot hook, logged 0 entries and offered 0 roots to
+the devtools; `BrowserHost.mount` registered the hook (`Symbol.for("@effect/ui/hot")`), logged 2 entries
+and offered 1 root. What that means today in `vite dev`:
+
+- No module in `apps/web-foldkit/src` and nothing in `@effect/ui@4d6d7ec` calls `import.meta.hot`, so an
+  edit to the root or a native page is a full reload. The Foldkit host keeps its Model across it (the
+  Foldkit Vite plugin, keyed on `#foldkit-host`); the root, the native pages and the converted screens
+  start from `init` (boot flags come back from storage; the session and queries refetch).
+- Foldkit DevTools shows the host's messages only. The Effect UI root is invisible to any devtools:
+  `Renderer.mount` never reads the devtools hook, and no Effect UI devtools client is installed.
+
+**What Z1 needs** (the user's answer 3: both must work before Z1 lands):
+
+1. **A browser mount for a hazel root.** `BrowserHost.mount` type-refuses the root (`HtmlRoot<V>`: the
+   vocabulary's host is not `Html.Host`), and at runtime `mountRoot` builds its own `Renderer`, which
+   would drop `@hazel/ui/web/host`'s wrapped host. Upstream ask: let `BrowserHost.mount` take a host
+   wrapper (`{ host: (inner) => wrapHost(inner, document) }`) or honour a provided `Renderer`, so the
+   hot session and the devtools hook run for any vocabulary. Local fallback until then: a `bun patch`
+   of `@effect/ui` that passes `hot.open(component, container)` and `hot.devTools(container)` through
+   `Renderer.mount` (both are already in `html/internal/hotOn.ts`); `package.json` and the patch are
+   the integrator's.
+2. **A caller for the hot hook.** Something must call `window[Symbol.for("@effect/ui/hot")]()` before
+   Vite's full reload (the saved state goes to `sessionStorage` and the next mount adopts it), and accept
+   component modules for the swap hook. Upstream ask: the Effect UI Vite plugin (not in this snapshot);
+   local fallback: `import.meta.hot?.on("vite:beforeFullReload", ...)` in `entry.ts`, state only, no swap.
+3. **A devtools client** that installs `Symbol.for("@effect/ui/devtools")` before the mount (Foldkit's
+   overlay goes with Foldkit at Z2).
+
+Also found: the offline fixture's session check fails (`[auth] session check failed Unavailable`), so a
+cold load of a public route (`/invite/<token>`) waits on the session forever offline; the gate starts on
+`/hazel/chat`, where the remembered user signs the shell in. A native page's section layout (settings'
+`main` and content column, channel settings' tabs) is still drawn by the host inside its `page` region,
+so the first settings page lane must move that layout into the frame (`frame.ts`) or into its page.
+
 ### Wave 1b: primitive renderers (start at once, from this branch)
 
 Each draws its tags on the web, deletes their `pending.web` entries, fills the declared recipe from
