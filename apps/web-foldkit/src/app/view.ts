@@ -1,5 +1,4 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
 import { type PageMessage, viewPage } from "../page/registry"
 import { isNativeSectionRoute } from "../shell/sections"
@@ -20,7 +19,6 @@ export const REGION_ATTRIBUTE = "data-foldkit-region"
 // constructors would re-validate large payloads (message pages) per dispatch.
 export const toPageMessage = (message: PageMessage): Message => ({ _tag: "GotPageMessage", message })
 const toToastsMessage = (message: Toasts.Message): Message => ({ _tag: "GotToastsMessage", message })
-const toModalMessage = (message: Modal.Message): Message => ({ _tag: "GotModalMessage", message })
 
 /** The routed page, or an empty placeholder until its page is ported. */
 const pageBody = (model: Model, h: HtmlBuilder<Message>, isInsideMain: boolean): Html => {
@@ -37,10 +35,7 @@ interface Regions {
 const regionsOf = (model: Model, h: HtmlBuilder<Message>): Regions => ({
 	// Settings, notifications, channel settings and customers draw their layout in the shell (`root/sections.ts`).
 	page: [pageBody(model, h, isNativeSectionRoute(model.context.route))],
-	overlays: [
-		Toasts.view(h, model.toasts, toToastsMessage, model.context.isMobile),
-		Modal.view(h, model.modal, sharedOf(model), toModalMessage),
-	],
+	overlays: [Toasts.view(h, model.toasts, toToastsMessage, model.context.isMobile)],
 })
 
 export const view = (model: Model, h: HtmlBuilder<Message>): Html => {

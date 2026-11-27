@@ -128,7 +128,14 @@ const page = (h: H, model: AppModel, chrome?: ChromeData) =>
 
 /** The open native modal, over the frame (`modals.ts`). */
 const modal = (h: H, model: AppModel) =>
-	modalOf(h, model.modal, { session: sessionOf(model), route: model.route, nowMs: model.nowMs })
+	modalOf(h, model.modal, {
+		session: sessionOf(model),
+		route: model.route,
+		nowMs: model.nowMs,
+		isMobile: model.isMobile,
+		keybindingOverrides: model.keybindingOverrides,
+		keyboardPlatform: model.keyboardPlatform,
+	})
 
 const appRoot = (h: H, model: AppModel, ...children: ReadonlyArray<unknown>) =>
 	h.div.attr("id", "app").children(...(children as Array<never>), slot(h, "overlays"), modal(h, model))

@@ -6,10 +6,9 @@ import { failureMessage } from "~/lib/error-messages"
 import { errorToastOf, loadingToast, successToast } from "../data/actions"
 import type { PalettePage } from "@hazel/shared-screens/app/requests"
 import type { LayoutHotkeyActionId } from "../overlay/hotkeys"
-import * as Modal from "../overlay/modal"
+import type { ModalRequest } from "../overlay/modal/requests"
 import * as Toasts from "../overlay/toaster"
 import type { ToastAction } from "../overlay/toasts"
-import { ModalOutMessage } from "../overlay/out-message"
 import type { ToastRequest } from "../overlay/toasts"
 import { can } from "../page/contract"
 import { PageOutMessage, type RequestedDmCreation } from "../page/out-message"
@@ -23,7 +22,6 @@ import * as ChannelNavigation from "../shell/channels-sidebar/navigation"
 import { Message as ShellMessage, type Model as ShellModel } from "../shell/model"
 import * as Notifications from "../shell/notifications"
 import * as Shell from "../shell/update"
-import { isNativeModal } from "../root/modals"
 import { CreateDm, emit } from "./command"
 import type { HostContext } from "./context"
 import { type Message, type ShellRequest } from "./message"
@@ -113,43 +111,11 @@ const foldUpdates = Update.foldChild({
 const stepUpdates = (step: (updates: Updates.Model) => Updates.Return): Step =>
 	Update.combine([foldUpdates(step), informPage])
 
-const followModalOutMessage = (outMessage: ModalOutMessage): Step =>
-	ModalOutMessage.match<Step>(outMessage, {
-		Closed: () => unchanged,
-		// Legacy `onSuccess` order: follow the link, then show the toast.
-		Completed: ({ route, toast }) =>
-			Update.combine([route === null ? unchanged : navigateTo(route), showToastIf(toast)]),
-		RequestedToast: ({ toast }) => showToast(toast),
-	})
-
-/** A closing OutMessage has already dropped the modal slot; the host still follows it. */
-const foldModal = Update.foldChild({
-	update: (modal: Modal.Model, step: (modal: Modal.Model) => Modal.Transition) => {
-		const transition = step(modal)
-		return Update.withOutMessage(
-			{ model: transition.model, commands: transition.commands ?? [] },
-			Option.getOrUndefined(transition.outMessage),
-		)
-	},
-	read: (model: Model) => Option.some(model.modal),
-	write: (model, modal) => modifyFields(model, { modal: () => modal }),
-	toParentMessage: (message: Modal.Message): Message => ({ _tag: "GotModalMessage", message }),
-	foldOutMessage: followModalOutMessage,
-})
-
-/** What a modal reads: the shared state, plus the route (to leave a channel it deleted). */
-const modalContextOf = (model: Model): Modal.ModalContext => ({
-	...sharedOf(model),
-	route: model.context.route,
-})
-
-/** A kind the root draws goes to it (`root/modals.ts`); the rest open here. */
+/** Every modal is the root's (`root/modals.ts`): a request goes to it. */
 const openModal =
-	(request: Modal.ModalRequest): Step =>
+	(request: ModalRequest): Step =>
 	(model) =>
-		isNativeModal(request._tag)
-			? toShell(PageOutMessage.RequestedModal({ modal: request }))(model)
-			: foldModal(model, (modal) => Modal.open(modal, request, modalContextOf(model)))
+		toShell(PageOutMessage.RequestedModal({ modal: request }))(model)
 
 const foldPlatform = Update.foldChild({
 	update: (
@@ -429,7 +395,6 @@ export const init = (context: HostContext): Return => {
 		page: null,
 		pageInstances: 0,
 		shell: Shell.init(),
-		modal: Modal.initialModel,
 		toasts: Toasts.init(),
 		platform: Platform.init(),
 		desktopUpdate: Updates.init(),
@@ -469,8 +434,6 @@ const step = (model: Model, message: Message): Return =>
 		GotPageMessage: ({ message }) =>
 			foldPage(model, (page) => updatePage(page, message, sharedOf(model))),
 		GotShellMessage: ({ message }) => foldShell(model, (shell) => Shell.update(shell, message)),
-		GotModalMessage: ({ message }) =>
-			foldModal(model, (modal) => Modal.update(modal, message, modalContextOf(model))),
 		GotToastsMessage: ({ message }) => foldToastsWithAction(model, message),
 		GotPlatformMessage: ({ message }) =>
 			foldPlatform(model, (platform) => Platform.update(platform, message)),

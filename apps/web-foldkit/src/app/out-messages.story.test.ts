@@ -230,14 +230,12 @@ describe("hotkeys", () => {
 			given(signedIn("/hazel/chat", plainMember)),
 			message(hotkey("channel.create")),
 			Command.expectNone(),
-			model((m) => expect(m.modal.current).toBeNull()),
 		)
 		story(
 			update,
 			given(signedIn("/hazel/chat")),
 			message(hotkey("channel.create")),
 			sent(PageOutMessage.RequestedModal({ modal: { _tag: "NewChannel" } })),
-			model((m) => expect(m.modal.current).toBeNull()),
 		)
 	})
 

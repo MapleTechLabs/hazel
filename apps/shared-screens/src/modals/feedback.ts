@@ -6,7 +6,7 @@
  * name itself collapses to a common reason, and no server text is ever shown.
  */
 import { UiSchema } from "@effect/ui"
-import { Effect, Predicate, Schema } from "effect"
+import { Cause, Effect, Option, Predicate, Schema } from "effect"
 import { type AppToast, AppRequest, AppRequests } from "../app/requests"
 
 /** A modal asks the app to stop drawing it: cancelled, dismissed or done. */
@@ -86,7 +86,23 @@ export const copyOf = <Own extends string>(
 		? COMMON_COPY[failure]
 		: ((own as Record<string, ErrorCopy>)[failure] ?? COMMON_COPY.Unexpected)
 
-export const successToast = (title: string): AppToast => ({ intent: "success", title, description: null })
+/** A failed Command's copy: its error's own tag in `own`, else the common reason's. */
+export const causeCopy = (
+	cause: Cause.Cause<unknown>,
+	own: { readonly [tag: string]: ErrorCopy } = {},
+): ErrorCopy => {
+	const error = Option.getOrUndefined(Cause.findErrorOption(cause))
+	const tag = tagOf(error)
+	return (tag === undefined ? undefined : own[tag]) ?? COMMON_COPY[reasonOf(error)]
+}
+
+export const successToast = (title: string, description: string | null = null): AppToast => ({
+	intent: "success",
+	title,
+	description,
+})
+
+export const warningToast = (title: string): AppToast => ({ intent: "warning", title, description: null })
 
 export const errorToast = (copy: ErrorCopy): AppToast => ({
 	intent: "error",

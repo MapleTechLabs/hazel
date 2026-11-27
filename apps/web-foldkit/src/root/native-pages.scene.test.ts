@@ -131,12 +131,10 @@ describe("a native page's requests", () => {
 		])
 	})
 
-	test("what the host still owns goes to it; an unknown modal opens nothing", () => {
-		expect(
-			hostRequestsOf(request(AppRequest.OpenModal({ modal: { _tag: "Feedback" } })).commands),
-		).toEqual([
-			{ _tag: "RequestedPageOut", outMessage: { _tag: "RequestedModal", modal: { _tag: "Feedback" } } },
-		])
+	test("a modal opens in the root; an unknown modal opens nothing", () => {
+		const feedback = request(AppRequest.OpenModal({ modal: { _tag: "Feedback" } }))
+		expect(hostRequestsOf(feedback.commands)).toEqual([])
+		expect(feedback.model.modal?.request).toEqual({ _tag: "Feedback" })
 		expect(request(AppRequest.OpenModal({ modal: { _tag: "NoSuchModal" } })).commands).toEqual([])
 		// The palette is the shell's own child (`palette.ts`).
 		const palette = request(AppRequest.OpenCommandPalette({ page: "search" }))

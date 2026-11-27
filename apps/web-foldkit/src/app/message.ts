@@ -3,7 +3,6 @@ import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
 import { LayoutHotkeyActionId } from "../overlay/hotkeys"
-import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
 import { ToastRequest } from "../overlay/toasts"
 import { PageOutMessage } from "../page/out-message"
@@ -58,7 +57,6 @@ export const Message = defineMessageUnion({
 	ClickedLayoutTab: { route: AppRoute },
 	GotPageMessage: { message: PageMessage },
 	GotShellMessage: { message: Shell.Message },
-	GotModalMessage: { message: Modal.Message },
 	GotToastsMessage: { message: Toasts.Message },
 	GotPlatformMessage: { message: Platform.Message },
 	GotUpdatesMessage: { message: Updates.Message },
