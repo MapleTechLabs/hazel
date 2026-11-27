@@ -6,7 +6,7 @@
  * (`git show cd159551c:apps/web-foldkit/src/main.ts`) with the same rules; `app.ts` runs them.
  */
 import { Command, Component, Router } from "@effect/ui"
-import { AppRequest } from "@hazel/shared-screens/app/requests"
+import { AppRequest, PalettePage } from "@hazel/shared-screens/app/requests"
 import type { NotificationId, OrganizationId } from "@hazel/schema"
 import { Effect, Match, Option, Schema } from "effect"
 import { AsyncData } from "foldkit"
@@ -85,6 +85,8 @@ export const AppModel = Schema.Struct({
 	modal: Schema.NullOr(OpenModal),
 	/** The number the next opening gets. */
 	modalOpenings: Schema.Int,
+	/** The last command palette: the page it opened on, a count that mounts a fresh one per open, and whether it is still open. */
+	palette: Schema.NullOr(Schema.Struct({ page: PalettePage, opened: Schema.Int, isOpen: Schema.Boolean })),
 })
 export type AppModel = typeof AppModel.Type
 
@@ -194,6 +196,7 @@ export const hostContextOf = (model: AppModel): HostContext => {
 		keyboardPlatform: model.keyboardPlatform,
 		unreadMentionIds: model.unreadMentionIds as ReadonlyArray<NotificationId>,
 		isNativeModalOpen: model.modal !== null,
+		isPaletteOpen: model.palette?.isOpen === true,
 	}
 	contextCache.set(model, context)
 	return context
@@ -398,6 +401,18 @@ const requestedTheme = (preference: ThemePreference): Step =>
 const savingFailed = (title: string) =>
 	showToast(errorToast(title, "It applies for now, but won't be remembered next time."))
 
+// THE COMMAND PALETTE
+
+/** Opens a fresh palette on `page` (today's `open`: no history), over one that is open. */
+const openPalette =
+	(page: PalettePage): Step =>
+	(model) =>
+		unchanged({ ...model, palette: { page, opened: (model.palette?.opened ?? 0) + 1, isOpen: true } })
+
+/** A closed palette stays mounted: the Commands of its last pick (a link, a recent) still run. */
+const closePalette: Step = (model) =>
+	unchanged({ ...model, palette: model.palette === null ? null : { ...model.palette, isOpen: false } })
+
 // THE HOST'S REQUESTS
 
 const navigateHref = (href: string): Step =>
@@ -434,7 +449,7 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 		RequestedModal: ({ modal }) =>
 			isNativeModal(modal._tag) ? openModal(modal) : toHost({ _tag: "RequestedPageOut", outMessage }),
 		// The host's own: only a native page sends these, and the host does the work.
-		RequestedCommandPalette: () => toHost({ _tag: "RequestedPageOut", outMessage }),
+		RequestedCommandPalette: ({ page }) => openPalette(page),
 		RequestedDmCreation: () => toHost({ _tag: "RequestedPageOut", outMessage }),
 		RequestedUpdateCheck: () => toHost({ _tag: "RequestedPageOut", outMessage }),
 		RequestedUpdateInstall: () => toHost({ _tag: "RequestedPageOut", outMessage }),
@@ -563,6 +578,7 @@ export const init = (route: AppRoute, flags: AppFlags): Next => {
 		assistant: initialStored(flags.aiPanel, flags.isMobile),
 		modal: null,
 		modalOpenings: 0,
+		palette: null,
 	}
 	return combine([
 		(m) => ({
@@ -592,7 +608,13 @@ export const init = (route: AppRoute, flags: AppFlags): Next => {
 // UPDATE
 
 /** The hotkeys the shell follows itself; the rest go to the Foldkit host, whose work they are. */
-const pressedHotkey = (actionId: LayoutHotkeyActionId): Step => toHost({ _tag: "PressedHotkey", actionId })
+const pressedHotkey = (actionId: LayoutHotkeyActionId): Step =>
+	actionId === "commandPalette.open"
+		? openPalette("home")
+		: // Straight into message search, as the hotkey's description says.
+			actionId === "search.open"
+			? openPalette("search")
+			: toHost({ _tag: "PressedHotkey", actionId })
 
 const pressedDesktopMenuItem = (item: DesktopMenuItem): Step =>
 	toHost({ _tag: "PressedDesktopMenuItem", item })
@@ -644,7 +666,7 @@ export const update = (model: AppModel, message: AppMessage): Next =>
 		ReceivedAppRequest: ({ request }) => appRequest(request)(model),
 		RequestedCloseModal: ({ instance }) =>
 			model.modal?.instance === instance ? unchanged({ ...model, modal: null }) : unchanged(model),
-		PressedMobileSearch: () => toHost({ _tag: "PressedMobileSearch" })(model),
+		PressedMobileSearch: () => openPalette("search")(model),
 		PressedMobileMenu: () =>
 			sectionLayoutOf(model.route) === "settings" || sectionLayoutOf(model.route) === "activity"
 				? unchanged({ ...model, isSectionSheetOpen: true })
@@ -656,4 +678,7 @@ export const update = (model: AppModel, message: AppMessage): Next =>
 				? unchanged(model)
 				: savedAssistant({ ...model, assistant: { ...model.assistant, width: Math.round(width) } }),
 		RequestedCloseAssistantPanel: () => closeAssistant(model),
+		RequestedClosePalette: () => closePalette(model),
+		RequestedAiPanelFromPalette: () => toHost({ _tag: "RequestedAiPanel" })(model),
+		PickedPaletteStatus: ({ status }) => toHost({ _tag: "PickedPresenceStatus", status })(model),
 	})

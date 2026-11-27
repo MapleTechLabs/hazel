@@ -120,8 +120,9 @@ describe("a native page's requests", () => {
 			{ _tag: "RequestedPageOut", outMessage: { _tag: "RequestedModal", modal: { _tag: "Feedback" } } },
 		])
 		expect(request(AppRequest.OpenModal({ modal: { _tag: "NoSuchModal" } })).commands).toEqual([])
-		expect(hostRequestsOf(request(AppRequest.OpenCommandPalette({ page: "search" })).commands)).toEqual([
-			{ _tag: "RequestedPageOut", outMessage: { _tag: "RequestedCommandPalette", page: "search" } },
-		])
+		// The palette is the shell's own child (`palette.ts`).
+		const palette = request(AppRequest.OpenCommandPalette({ page: "search" }))
+		expect(palette.commands).toEqual([])
+		expect(palette.model.palette).toMatchObject({ page: "search", isOpen: true })
 	})
 })

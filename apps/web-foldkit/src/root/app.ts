@@ -56,6 +56,7 @@ import {
 import { AppMessage } from "./message"
 import { modalOf } from "./modals"
 import { nativePageOf } from "./native-pages"
+import { paletteDestinations, paletteShortcuts, ShellCommandPalette } from "./palette"
 import { Hole } from "./portal"
 import { chromeHoles, sectionContent, sectionSidebar } from "./sections"
 import { sectionLayoutOf } from "../shell/sections"
@@ -251,6 +252,27 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 					}),
 				])
 			: null,
+		model.palette === null
+			? null
+			: ShellCommandPalette(h, {
+					key: `palette:${model.palette.opened}`,
+					props: {
+						page: model.palette.page,
+						open: model.palette.isOpen,
+						organizationId: data.organization.id,
+						userId: data.user.id,
+						orgSlug: data.orgSlug,
+						theme: model.themePreference,
+						destinations: paletteDestinations(data.orgSlug),
+						shortcuts: paletteShortcuts(keys["aiPanel.toggle"], model.keyboardPlatform),
+						nowMs: model.nowMs,
+					},
+					onEmit: {
+						RequestedClose: () => AppMessage.RequestedClosePalette(),
+						RequestedAiPanel: () => AppMessage.RequestedAiPanelFromPalette(),
+						PickedStatus: ({ status }) => AppMessage.PickedPaletteStatus({ status }),
+					},
+				}),
 	]
 }
 

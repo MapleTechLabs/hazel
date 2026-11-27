@@ -103,8 +103,7 @@ describe("what the shell hands the host", () => {
 			{ _tag: "PressedDesktopMenuItem", item: "CheckForUpdates" },
 		])
 		expect(requestOf(AppMessage.PressedMobileMenu())).toEqual([{ _tag: "PressedMobileMenu" }])
-		expect(requestOf(AppMessage.PressedMobileSearch())).toEqual([{ _tag: "PressedMobileSearch" }])
-		// The AI panel is the shell's own (`assistant.test.ts`).
+		// The AI panel and the palette's search are the shell's own (`assistant.test.ts`, `palette.test.ts`).
 		expect(requestOf(AppMessage.PressedAiPanelToggle())).toEqual([])
 	})
 })

@@ -4,7 +4,7 @@ import { Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
 import { errorToastOf, loadingToast, successToast } from "../data/actions"
-import * as CommandPalette from "../overlay/command-palette"
+import type { PalettePage } from "@hazel/shared-screens/app/requests"
 import type { LayoutHotkeyActionId } from "../overlay/hotkeys"
 import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
@@ -164,38 +164,9 @@ const foldPlatform = Update.foldChild({
 const toggleAiPanel: Step = command(emit({ _tag: "Assistant", request: "Toggle" }))
 const openAiPanel: Step = command(emit({ _tag: "Assistant", request: "Open" }))
 
-const foldCommandPalette = Update.foldChild({
-	update: (
-		palette: CommandPalette.Model,
-		step: (palette: CommandPalette.Model) => ReturnType<typeof CommandPalette.update>,
-	) => step(palette),
-	read: (model: Model) => Option.some(model.commandPalette),
-	write: (model, commandPalette) => modifyFields(model, { commandPalette: () => commandPalette }),
-	toParentMessage: (message: CommandPalette.Message): Message => ({
-		_tag: "GotCommandPaletteMessage",
-		message,
-	}),
-	foldOutMessage: (outMessage: CommandPalette.OutMessage) =>
-		CommandPalette.OutMessage.match<Step>(outMessage, {
-			// The palette's links can carry a search (`?messageId=`), so they stay URLs.
-			Completed: ({ href, toast }) =>
-				Update.combine([
-					href === null ? unchanged : toShell(PageOutMessage.RequestedHref({ href })),
-					showToastIf(toast),
-				]),
-			RequestedModal: ({ modal }) => openModal(modal),
-			RequestedToast: ({ toast }) => showToast(toast),
-			RequestedTheme: ({ preference }) => toShell(PageOutMessage.RequestedTheme({ preference })),
-			RequestedAiPanel: () => openAiPanel,
-			RequestedPresenceStatus: ({ status }) =>
-				foldPlatform((platform) => Platform.pickPresenceStatus(platform, status)),
-		}),
-})
-
-const openCommandPalette =
-	(page: CommandPalette.Page): Step =>
-	(model) =>
-		foldCommandPalette(model, (palette) => CommandPalette.open(palette, page, sharedOf(model)))
+/** The palette is the shell's (`root/palette.ts`): every way of opening it goes there. */
+const openCommandPalette = (page: PalettePage): Step =>
+	toShell(PageOutMessage.RequestedCommandPalette({ page }))
 
 const foldShell = Update.foldChild({
 	update: (shell: ShellModel, step: (shell: ShellModel) => Shell.ShellReturn) => step(shell),
@@ -364,7 +335,6 @@ const receivedShellRequest = (request: ShellRequest): Step =>
 		PressedDesktopMenuItem: ({ item }) => pressedDesktopMenuItem(item),
 		PressedInstallUpdate: () => stepUpdates(Updates.install),
 		PressedMobileMenu: () => openMobileSidebar,
-		PressedMobileSearch: () => openCommandPalette("search"),
 		RequestedToast: ({ toast }) => showToast(toast),
 		PressedComposeDm: () => openModal({ _tag: "CreateDm" }),
 		PressedMarkAllRead: () => (model: Model) =>
@@ -378,6 +348,9 @@ const receivedShellRequest = (request: ShellRequest): Step =>
 				),
 			),
 		RequestedPageOut: ({ outMessage }) => handleOutMessage(outMessage),
+		RequestedAiPanel: () => openAiPanel,
+		PickedPresenceStatus: ({ status }) =>
+			foldPlatform((platform) => Platform.pickPresenceStatus(platform, status)),
 	})
 
 /** Each request's toasts share an id, so each replaces the previous: loading, then success or error. */
@@ -438,7 +411,7 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 		RequestedHistory: () => toShell(outMessage),
 		RequestedToast: ({ toast }) => showToast(toast),
 		RequestedModal: ({ modal }) => openModal(modal),
-		RequestedCommandPalette: ({ page }) => openCommandPalette(page),
+		RequestedCommandPalette: () => toShell(outMessage),
 		RequestedSignOut: () => toShell(outMessage),
 		RequestedDmCreation: requestedDmCreation,
 		RequestedTheme: () => toShell(outMessage),
@@ -471,7 +444,6 @@ export const init = (
 		pageInstances: 0,
 		shell: Shell.init({ isCreateChannelHintDismissed: options.isCreateChannelHintDismissed }),
 		modal: Modal.initialModel,
-		commandPalette: CommandPalette.init(),
 		toasts: Toasts.init(),
 		platform: Platform.init(),
 		desktopUpdate: Updates.init(),
@@ -514,8 +486,6 @@ const step = (model: Model, message: Message): Return =>
 			foldShell(model, (shell) => Shell.update(shell, message, shellContextOf(model))),
 		GotModalMessage: ({ message }) =>
 			foldModal(model, (modal) => Modal.update(modal, message, modalContextOf(model))),
-		GotCommandPaletteMessage: ({ message }) =>
-			foldCommandPalette(model, (palette) => CommandPalette.update(palette, message, sharedOf(model))),
 		GotToastsMessage: ({ message }) => foldToastsWithAction(model, message),
 		GotPlatformMessage: ({ message }) =>
 			foldPlatform(model, (platform) => Platform.update(platform, message)),

@@ -1,5 +1,4 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import * as CommandPalette from "../overlay/command-palette"
 import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
 import { type PageMessage, viewPage } from "../page/registry"
@@ -37,10 +36,6 @@ const toMobileSidebarMessage = (message: ModalKit.Message) =>
 export const toPageMessage = (message: PageMessage): Message => ({ _tag: "GotPageMessage", message })
 const toToastsMessage = (message: Toasts.Message): Message => ({ _tag: "GotToastsMessage", message })
 const toModalMessage = (message: Modal.Message): Message => ({ _tag: "GotModalMessage", message })
-const toCommandPaletteMessage = (message: CommandPalette.Message): Message => ({
-	_tag: "GotCommandPaletteMessage",
-	message,
-})
 
 /** The org shell's context: the loaded user and organization of the route's slug, or none yet. */
 const shellContextOf = (model: Model): ShellContext | null => {
@@ -118,13 +113,6 @@ const regionsOf = (model: Model, h: HtmlBuilder<Message>): Regions => {
 	const overlays = [
 		Toasts.view(h, model.toasts, toToastsMessage, model.context.isMobile),
 		Modal.view(h, model.modal, shared, toModalMessage),
-		h.submodel({
-			slotId: "command-palette",
-			model: model.commandPalette,
-			view: CommandPalette.view,
-			viewInputs: { shared },
-			toParentMessage: toCommandPaletteMessage,
-		}),
 	]
 	if (context === null) return { sidebar: [], page: [pageBody(model, h, false)], overlays }
 	const { isMobile } = model.context

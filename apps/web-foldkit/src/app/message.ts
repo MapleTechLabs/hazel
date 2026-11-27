@@ -2,7 +2,6 @@ import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
-import * as CommandPalette from "../overlay/command-palette"
 import { LayoutHotkeyActionId } from "../overlay/hotkeys"
 import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
@@ -11,6 +10,7 @@ import { PageOutMessage } from "../page/out-message"
 import { Message as PageMessage } from "../page/registry"
 import { AppRoute } from "../route"
 import * as Platform from "../platform"
+import { PresenceStatus } from "../platform/presence/model"
 import { DesktopMenuItem } from "../platform/desktop-menu"
 import * as Updates from "../platform/updates"
 import * as Shell from "../shell/model"
@@ -28,8 +28,6 @@ export const ShellRequest = Schema.Union([
 	Schema.TaggedStruct("PressedInstallUpdate", {}),
 	/** A phone section's top bar menu button: the sidebar sheet. */
 	Schema.TaggedStruct("PressedMobileMenu", {}),
-	/** The tab bar's search button: the palette in message search. */
-	Schema.TaggedStruct("PressedMobileSearch", {}),
 	/** The DMs screen's compose button: today's Create DM modal. */
 	Schema.TaggedStruct("PressedComposeDm", {}),
 	/** Activity's sidebar: every unread notification read. */
@@ -38,6 +36,10 @@ export const ShellRequest = Schema.Union([
 	Schema.TaggedStruct("RequestedToast", { toast: ToastRequest }),
 	/** A native page's request whose work is still the host's (a modal, the palette, a DM, updates). */
 	Schema.TaggedStruct("RequestedPageOut", { outMessage: PageOutMessage }),
+	/** The command palette's "Ask the AI assistant": the panel opens (never toggles shut). */
+	Schema.TaggedStruct("RequestedAiPanel", {}),
+	/** A status picked in the palette: presence keeps it ahead of the away timer. */
+	Schema.TaggedStruct("PickedPresenceStatus", { status: PresenceStatus }),
 ])
 export type ShellRequest = typeof ShellRequest.Type
 
@@ -58,7 +60,6 @@ export const Message = defineMessageUnion({
 	GotPageMessage: { message: PageMessage },
 	GotShellMessage: { message: Shell.Message },
 	GotModalMessage: { message: Modal.Message },
-	GotCommandPaletteMessage: { message: CommandPalette.Message },
 	GotToastsMessage: { message: Toasts.Message },
 	GotPlatformMessage: { message: Platform.Message },
 	GotUpdatesMessage: { message: Updates.Message },

@@ -36,6 +36,8 @@ export interface HostContext {
 	readonly unreadMentionIds: ReadonlyArray<NotificationId>
 	/** The root draws a modal over the frame (`root/modals.ts`): keys and typing stay out of the page. */
 	readonly isNativeModalOpen?: boolean
+	/** The shell's command palette is open: pages keep their keys off, as under a modal. */
+	readonly isPaletteOpen: boolean
 }
 
 /** What the shell shows from the host's state: the dock, the bell, the badge and the page's context. */

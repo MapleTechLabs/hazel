@@ -2,6 +2,7 @@
 // @effect-diagnostics experimentalApiUsage:off
 import { UiSchema } from "@effect/ui"
 import { AppRequest } from "@hazel/shared-screens/app/requests"
+import { PresenceStatus } from "@hazel/shared-screens/palette/CommandPalette"
 import { NotificationId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { CommonReason } from "~/lib/error-messages"
@@ -68,5 +69,9 @@ export const AppMessage = UiSchema.TaggedEnum({
 	ResizedAssistantPanel: { width: Schema.Finite },
 	/** The AI panel's close button, or Escape inside it. */
 	RequestedCloseAssistantPanel: {},
+	/** The command palette's events (`palette.ts`). */
+	RequestedClosePalette: {},
+	RequestedAiPanelFromPalette: {},
+	PickedPaletteStatus: { status: PresenceStatus },
 })
 export type AppMessage = typeof AppMessage.Type

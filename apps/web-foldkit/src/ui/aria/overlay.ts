@@ -146,16 +146,6 @@ export const restoreFocusTo =
 		document.getElementById(triggerId)?.focus({ preventScroll: true })
 	}
 
-/** FocusScope `restoreFocus` for overlays opened without a trigger: back to whatever had focus. */
-export const restoreFocusToPrevious = (overlay: Element): (() => void) => {
-	const previous = document.activeElement
-	return () => {
-		const active = document.activeElement
-		if (active !== null && active !== document.body && !overlay.contains(active)) return
-		if (previous instanceof HTMLElement) previous.focus({ preventScroll: true })
-	}
-}
-
 /** FocusScope `contain`: Tab and Shift+Tab cycle through the tabbable elements inside `root`. */
 export const containFocus = (root: Element): (() => void) => {
 	const selector =
