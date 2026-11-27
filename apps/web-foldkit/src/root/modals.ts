@@ -3,7 +3,7 @@
 /**
  * The app's one modal system: the root keeps the open modal in its Model and draws it over the
  * frame. Native pages (`OpenModal`), the Foldkit host's own opens and the root's keys all reach it.
- * A kind not registered here still opens in the Foldkit host. Converting a modal is one entry.
+ * The registry covers every `ModalRequest` kind; a new kind is one entry.
  */
 import { Component, type View } from "@effect/ui"
 import type { Html } from "@effect/ui/html"
@@ -155,7 +155,7 @@ type NativeModal<Tag extends ModalTag> = (
 	placement: Placement,
 ) => View.Content<AppMessage, any>
 
-type Registry = { readonly [Tag in ModalTag]?: NativeModal<Tag> }
+type Registry = { readonly [Tag in ModalTag]: NativeModal<Tag> }
 
 /** Legacy fuzzy `matchRoute` on `/$orgSlug/chat/$id` or `/$orgSlug/channels/$channelId/settings`. */
 const routeChannelIdOf = (route: AppRoute): ChannelId | null =>
@@ -240,16 +240,8 @@ const nativeModals: Registry = {
 		}),
 }
 
-/** The parity flag of a native modal: `"0"` opens today's Foldkit modal instead (`compare-pages.ts`). */
-export const modalParityFlag = (tag: ModalTag) => `hazel:native:modal:${tag}`
-
-// The parity runner sets the flag before the app loads.
-const forcedOff = (tag: ModalTag): boolean =>
-	typeof localStorage !== "undefined" && localStorage.getItem(modalParityFlag(tag)) === "0"
-
-/** Whether the root draws this kind; the Foldkit host draws the rest. */
-export const isNativeModal = (tag: string): boolean =>
-	Object.hasOwn(nativeModals, tag) && !forcedOff(tag as ModalTag)
+/** Whether `tag` is a modal kind; the root draws every one (the Foldkit modal host is gone). */
+export const isNativeModal = (tag: string): boolean => Object.hasOwn(nativeModals, tag)
 
 /** The open modal's view, keyed by its opening, or null. */
 export const modalOf = (
@@ -258,8 +250,7 @@ export const modalOf = (
 	inputs: Omit<ModalInputs<ModalTag>, "request">,
 ): View.Content<AppMessage, any> | null => {
 	if (open === null) return null
-	const draw = nativeModals[open.request._tag] as NativeModal<ModalTag> | undefined
-	if (draw === undefined) return null
+	const draw = nativeModals[open.request._tag] as NativeModal<ModalTag>
 	const { instance } = open
 	return draw(
 		h,

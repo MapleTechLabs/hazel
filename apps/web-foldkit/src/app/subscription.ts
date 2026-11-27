@@ -1,7 +1,6 @@
 import type { UserId } from "@hazel/schema"
 import { Option, Schema, Stream } from "effect"
 import { Port, Subscription } from "foldkit"
-import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
 import { pageSubscriptions } from "../page/registry"
 import * as Platform from "../platform"
@@ -54,11 +53,6 @@ const channelSidebarActions = Subscription.make<Model, Message>()((entry) => ({
 	),
 }))
 
-const modalSubscriptions = Subscription.lift(Modal.subscriptions)<Model, Message>({
-	read: (model) => Option.some({ modal: model.modal, shared: sharedOf(model) }),
-	toParentMessage: (message): Message => ({ _tag: "GotModalMessage", message }),
-})
-
 const sidebarSubscriptions = Subscription.lift(ShellSubscription.subscriptions)<Model, Message>({
 	read: (model) => Option.some({ model: model.shell, route: model.context.route, shared: sharedOf(model) }),
 	// Literal wrappers: constructors would re-validate every row payload.
@@ -97,7 +91,6 @@ const pages = Subscription.lift(pageSubscriptions)<Model, Message>({
 export const subscriptions = Subscription.aggregate(
 	shellSubscriptions,
 	channelSidebarActions,
-	modalSubscriptions,
 	toastSubscriptions,
 	sidebarSubscriptions,
 	pages,

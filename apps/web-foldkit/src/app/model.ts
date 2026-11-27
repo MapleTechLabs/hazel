@@ -1,5 +1,4 @@
 import { Schema } from "effect"
-import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
 import type { PageHost, Shared } from "../page/contract"
 import { can } from "../page/contract"
@@ -26,7 +25,6 @@ export const Model = Schema.Struct({
 	/** Page instances built so far: numbers the next one (`page/contract.ts`). */
 	pageInstances: Schema.Int,
 	shell: Shell.Model,
-	modal: Modal.Model,
 	/** The toaster: the shell raises toasts, the Foldkit kit still draws them. */
 	toasts: Toasts.Model,
 	/** Presence (legacy `PresenceProvider`). */
@@ -48,7 +46,7 @@ export const badgeOfModel = (model: Model): Badge =>
 	})
 
 export const isOverlayOpenOf = (model: Model): boolean =>
-	model.modal.current !== null || model.context.isPaletteOpen || model.context.isNativeModalOpen === true
+	model.context.isPaletteOpen || model.context.isNativeModalOpen === true
 
 /** What the shell's frame shows from here. */
 export const reportOf = (model: Model): HostReport => ({

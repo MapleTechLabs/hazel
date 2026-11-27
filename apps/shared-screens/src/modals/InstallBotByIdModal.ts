@@ -40,16 +40,15 @@ const ownCopy = {
 	BotAlreadyInstalledError: { title: "Already installed" },
 }
 
-const fieldErrors: { readonly [tag: string]: string } = {
+const fieldErrors = {
 	BotNotFoundError: "Application not found. Please check the ID and try again.",
 	BotAlreadyInstalledError: "This application is already installed in your workspace.",
-}
+} as const
 
 const fieldErrorOf = (cause: Cause.Cause<unknown>): string | null => {
 	const error = Option.getOrUndefined(Cause.findErrorOption(cause))
-	return Predicate.hasProperty(error, "_tag") && typeof error._tag === "string"
-		? (fieldErrors[error._tag] ?? null)
-		: null
+	const tag = Predicate.hasProperty(error, "_tag") ? error._tag : undefined
+	return tag === "BotNotFoundError" || tag === "BotAlreadyInstalledError" ? fieldErrors[tag] : null
 }
 
 /** `bot.installById`; legacy casts the text to a BotId, so a non-UUID fails as the client refuses it. */

@@ -39,7 +39,7 @@ const childrenOf = (node: unknown): ReadonlyArray<ChildNode> => {
 }
 
 describe("the native modal layer", () => {
-	test("batch 1 kinds are native; the rest are still the host's", () => {
+	test("every modal kind is native", () => {
 		for (const tag of [
 			"NewChannel",
 			"CreateDm",
@@ -50,9 +50,12 @@ describe("the native modal layer", () => {
 			"RenameThread",
 			"DeleteMessage",
 			"SetStatus",
+			"Feedback",
+			"EmailInvite",
+			"KeyboardShortcuts",
 		])
 			expect(isNativeModal(tag)).toBe(true)
-		expect(isNativeModal("Feedback")).toBe(false)
+		expect(isNativeModal("NoSuchModal")).toBe(false)
 	})
 
 	test("a native page's open lands in the root's Model, not the host", () => {

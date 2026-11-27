@@ -1,45 +1,6 @@
-import type { ApiScope } from "@hazel/domain/scopes"
 import type { IntegrationConnection } from "@hazel/domain/models"
 
 type IntegrationProvider = IntegrationConnection.IntegrationProvider
-
-/**
- * Scope definitions for bot permissions UI.
- * Shared between create and edit bot modals.
- */
-export const BOT_SCOPES: Array<{ id: ApiScope; label: string; shortLabel: string; description: string }> = [
-	{
-		id: "messages:read",
-		label: "Read Messages",
-		shortLabel: "Read",
-		description: "Read messages in channels",
-	},
-	{
-		id: "messages:write",
-		label: "Send Messages",
-		shortLabel: "Write",
-		description: "Send and edit messages",
-	},
-	{
-		id: "channels:read",
-		label: "Read Channels",
-		shortLabel: "Read",
-		description: "View channel information",
-	},
-	{
-		id: "channels:write",
-		label: "Manage Channels",
-		shortLabel: "Manage",
-		description: "Create and modify channels",
-	},
-	{ id: "users:read", label: "Read Users", shortLabel: "Read", description: "View user profiles" },
-	{
-		id: "message-reactions:write",
-		label: "Add Reactions",
-		shortLabel: "React",
-		description: "React to messages",
-	},
-]
 
 /**
  * Group scopes by resource type for cleaner display

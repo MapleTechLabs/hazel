@@ -147,9 +147,11 @@ describe("inbox, help and sidebar", () => {
 			update,
 			given(signedIn("/hazel/chat")),
 			message(hotkey("shortcuts.open")),
-			// The frame learns an overlay is open.
-			emitted,
-			model((current) => expect(current.modal.current?._tag).toBe("KeyboardShortcuts")),
+			// The root draws every modal (`root/modals.ts`).
+			Command.resolve(
+				toShell(PageOutMessage.RequestedModal({ modal: { _tag: "KeyboardShortcuts" } })),
+				Message.CompletedEmit(),
+			),
 		)
 	})
 
