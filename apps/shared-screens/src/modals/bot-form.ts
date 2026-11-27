@@ -8,7 +8,7 @@ import { ApiScope } from "@hazel/domain/scopes"
 import type { Hazel } from "@hazel/ui/vocabulary/index"
 import { TextField } from "@hazel/ui/vocabulary/index"
 import { Schema } from "effect"
-import { BOT_SCOPES } from "../lib/bot-scopes"
+import { BOT_SCOPES } from "../settings/integrations/scopes"
 
 export const BotForm = Schema.Struct({
 	name: TextField.State,

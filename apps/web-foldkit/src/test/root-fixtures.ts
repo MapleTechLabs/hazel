@@ -1,7 +1,6 @@
 import type { Overrides } from "~/lib/keybindings/keymap"
 import { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
-import type { HtmlBuilder } from "foldkit/html"
 import { fromString, type Url } from "foldkit/url"
 import { expect } from "vitest"
 import { emit } from "../app/command"
@@ -9,7 +8,6 @@ import type { HostContext } from "../app/context"
 import { Message } from "../app/message"
 import type { Model } from "../app/model"
 import { init, update } from "../app/update"
-import { view } from "../app/view"
 import { DEFAULT_SOUND_SETTINGS } from "../notification-sound"
 import { PageOutMessage } from "../page/out-message"
 import { loadPages } from "../page/registry"
@@ -194,8 +192,3 @@ export const toShell = (outMessage: PageOutMessage) => emit({ _tag: "Page", outM
 export const navigation = (path: string, options: { readonly replace?: boolean } = {}) =>
 	toShell(PageOutMessage.RequestedNavigation({ route: routeOf(path), replace: options.replace ?? false }))
 
-/** Scene config for the Foldkit host: its view is the regions the shell adopts. */
-export const rootScene = {
-	update,
-	view: (model: Model, h: HtmlBuilder<Message>) => view(model, h),
-}
