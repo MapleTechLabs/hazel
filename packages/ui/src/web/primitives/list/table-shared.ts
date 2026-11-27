@@ -63,6 +63,9 @@ ${T}:not([data-selectable]) :is(${HEAD_ROW}, ${ROW}, ${SKELETON_ROW}) > ${COLUMN
 ${T} :is(${HEAD_ROW}, ${ROW}, ${SKELETON_ROW}) > ${COLUMN_CELL}${last(COLUMN_CELL)} { padding-inline-end: var(--hz-space-4); }
 
 ${T} ${COLUMN_CELL}[data-align="end"] { text-align: end; }
+/* \`frame\` (\`table-frame\`): a card clips its rows to its corners; a band keeps only the hairlines above and below. */
+${T}[data-frame="card"] { overflow: hidden; }
+${T}[data-frame="band"] { border-block: 1px solid var(--hz-color-border); }
 ${T} ${COLUMN_CELL}[data-width="fill"] { grid-template-columns: minmax(0, 1fr); }
 ${T} ${COLUMN_CELL}[data-width="fill"] > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (width < 40rem) { ${T} ${COLUMN_CELL}[data-optional] { display: none; } }
@@ -99,6 +102,8 @@ ${ROW}:focus-visible { outline: 2px solid var(--hz-color-ring); outline-offset: 
 ${ROW} > ${ACTIONS} { position: absolute; inset-block: 0; inset-inline-end: var(--hz-space-2); visibility: hidden; }
 ${ROW}:is(:hover, :focus-within, [data-current]) > ${ACTIONS} { visibility: visible; }
 ${ROW}:is(:hover, [data-current]):has(> ${ACTIONS} > *) > ${CELL}${last(CELL)} > * { visibility: hidden; }
+/* \`rowActions\` \`trailing\` (\`pk0-queue-actions-swap\`): the actions take the place of every cell after the fill column. */
+${T}[data-row-actions="trailing"] ${ROW}:is(:hover, :focus-within, [data-current]):has(> ${ACTIONS} > *) > ${CELL}[data-width="fill"] ~ ${CELL} > * { visibility: hidden; }
 `
 
 export const ensureTableSheet = (document: Document) => ensureSheet(document, "table", css)

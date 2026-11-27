@@ -23,6 +23,10 @@ export const primitive = definePrimitive("button", ({ document, outer, self }) =
 	remove.setAttribute("aria-hidden", "true")
 	remove.innerHTML = svg("close")
 	let removable = false
+	// The key that runs it (`pk0-action-shortcut`): decorative, named by `aria-keyshortcuts`.
+	const shortcut = part(document, "kbd", "shortcut")
+	shortcut.setAttribute("aria-hidden", "true")
+	let keys = ""
 	let icon: Element | undefined
 	let text = ""
 	let iconName: string | undefined
@@ -46,6 +50,7 @@ export const primitive = definePrimitive("button", ({ document, outer, self }) =
 		node.replaceChildren(
 			...(icon === undefined ? [] : [icon]),
 			...(iconOnly || text === "" ? [] : [label]),
+			...(keys === "" || iconOnly ? [] : [shortcut]),
 			...(removable ? [remove] : []),
 		)
 		if (iconOnly && text !== "") node.setAttribute("aria-label", text)
@@ -99,6 +104,12 @@ export const primitive = definePrimitive("button", ({ document, outer, self }) =
 			flag(node, "removable", value)
 			if (removable) node.setAttribute("aria-keyshortcuts", "Delete")
 			else node.removeAttribute("aria-keyshortcuts")
+			draw()
+		} else if (name === "shortcut") {
+			keys = typeof value === "string" ? value : ""
+			shortcut.textContent = keys
+			if (keys === "") node.removeAttribute("aria-keyshortcuts")
+			else node.setAttribute("aria-keyshortcuts", keys)
 			draw()
 		} else if (name === "circle") flag(node, "circle", value)
 		else if (name === "disabled") {

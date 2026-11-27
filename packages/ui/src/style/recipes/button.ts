@@ -9,10 +9,10 @@ import type { ButtonSize, ButtonVariant } from "../schema.ts"
 export const button = defineRecipe<
 	{ readonly variant: ButtonVariant; readonly size: ButtonSize },
 	"iconOnly" | "circle",
-	"icon" | "label" | "remove"
+	"icon" | "label" | "remove" | "shortcut"
 >({
 	primitive: "button",
-	parts: { icon: "part", label: "part", remove: "part" },
+	parts: { icon: "part", label: "part", remove: "part", shortcut: "part" },
 	base: {
 		root: {
 			layout: "inline-row",
@@ -27,6 +27,26 @@ export const button = defineRecipe<
 		},
 		parts: {
 			icon: { shrink: false, bleedX: "0.5" },
+			// A queue action's key (`pk0-action-shortcut`, `kbd(h, key, "-mr-0.5 h-4 min-w-4")`): a small
+			// key cap after the label; hidden below `md` (the renderer's, as `max-md:hidden`).
+			shortcut: {
+				layout: "inline-row",
+				align: "center",
+				justify: "center",
+				minHeight: "4",
+				minWidth: "4",
+				paddingX: "1",
+				text: "micro",
+				nowrap: true,
+				strong: true,
+				color: "fg-3",
+				background: "bg",
+				borderWidth: "hairline",
+				borderColor: "border",
+				radius: "sm",
+				shadow: "xs",
+				shrink: false,
+			},
 			// A filter chip's trailing remove mark (`filter-bar.ts` `filterChip`).
 			remove: {
 				size: "4",

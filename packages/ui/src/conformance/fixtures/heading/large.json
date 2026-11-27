@@ -1,0 +1,17 @@
+{
+	"about": "`size` `large` (G2, `p4-channel-settings-header`): the kit's `title` (`text-lg/7`, 18/28) at level 1, a channel's name over its settings.",
+	"root": {
+		"tag": "heading",
+		"props": {
+			"level": "1",
+			"size": "large"
+		},
+		"children": [
+			"general"
+		]
+	},
+	"frame": "inline",
+	"pending": {
+		"ios": "S1"
+	}
+}

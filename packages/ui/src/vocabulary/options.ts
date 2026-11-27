@@ -77,6 +77,10 @@ export type LineCount = typeof LineCount.Type
 
 export const ItemLeadingSize = Schema.Literals(Sets.itemLeadingSizes)
 export type ItemLeadingSize = typeof ItemLeadingSize.Type
+export const TableRowActions = Schema.Literals(Sets.tableRowActions)
+export type TableRowActions = typeof TableRowActions.Type
+export const TableFrame = Schema.Literals(Sets.tableFrames)
+export type TableFrame = typeof TableFrame.Type
 export const HeadingSize = Schema.Literals(Sets.headingSizes)
 export type HeadingSize = typeof HeadingSize.Type
 export const LinkTone = Schema.Literals(Sets.linkTones)

@@ -1,0 +1,40 @@
+{
+	"about": "Densities added in phase 4 (G2): `none` (a title on its subtitle), `snug` (`gap-3`, an icon tile beside its name), `loose` (`gap-5`, a page header over its tabs).",
+	"root": {
+		"tag": "stack",
+		"props": {
+			"density": "none"
+		},
+		"children": [
+			{
+				"tag": "text",
+				"children": [
+					"general"
+				]
+			},
+			{
+				"tag": "text",
+				"props": {
+					"role": "label",
+					"tone": "muted"
+				},
+				"children": [
+					"Channel settings"
+				]
+			}
+		]
+	},
+	"frame": "inline",
+	"axes": [
+		{
+			"prop": "density",
+			"values": [
+				"snug",
+				"loose"
+			]
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	}
+}

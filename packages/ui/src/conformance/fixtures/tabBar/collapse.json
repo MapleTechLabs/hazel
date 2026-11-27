@@ -1,0 +1,35 @@
+{
+	"about": "`collapse` (G2, `p4-mobile-select-tabs`): channel settings' page tabs; below `md` they are a native select, as today.",
+	"root": {
+		"tag": "tabBar",
+		"props": {
+			"style": "page",
+			"collapse": true,
+			"selected": "overview",
+			"tabs": [
+				{
+					"id": "overview",
+					"label": "Overview",
+					"href": "#overview"
+				},
+				{
+					"id": "integrations",
+					"label": "Integrations",
+					"href": "#integrations"
+				},
+				{
+					"id": "connect",
+					"label": "Connect",
+					"href": "#connect"
+				}
+			]
+		},
+		"events": [
+			"change"
+		]
+	},
+	"frame": "screen",
+	"pending": {
+		"ios": "S4"
+	}
+}

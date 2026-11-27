@@ -142,6 +142,20 @@ export type SectionStyle = (typeof sectionStyles)[number]
 export const linkTones = ["accent", "muted"] as const
 export type LinkTone = (typeof linkTones)[number]
 
+/**
+ * A table's own edge (`table-frame`): `none` inside a card that frames it; `card` today's
+ * `dataTable` (`rounded-xl border`); `band` the customers list's hairlines above and below only.
+ */
+export const tableFrames = ["none", "card", "band"] as const
+export type TableFrame = (typeof tableFrames)[number]
+
+/**
+ * Where a row's hover actions go (`pk0-queue-actions-swap`): `lastCell` over the last cell (today's
+ * `dataTable`), `trailing` in place of every cell after the `fill` column (the attention queue).
+ */
+export const tableRowActions = ["lastCell", "trailing"] as const
+export type TableRowActions = (typeof tableRowActions)[number]
+
 /** A heading's size over its level's: `large` is the kit's `title` (18/28), a page's subject. */
 export const headingSizes = ["auto", "large"] as const
 export type HeadingSize = (typeof headingSizes)[number]

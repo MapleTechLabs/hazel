@@ -185,6 +185,10 @@ export const tags = {
 			selectable: flag,
 			loading: flag,
 			stickyHeader: flag,
+			// Its own edge (`table-frame`) and how many skeleton rows `loading` draws (0: the renderer's 6).
+			frame: option(O.TableFrame, "none"),
+			loadingRows: count,
+			rowActions: option(O.TableRowActions, "lastCell"),
 		},
 		events: {
 			sort: Schema.Struct({ column: Schema.String }),
@@ -528,6 +532,8 @@ export const tags = {
 			loading: flag,
 			// A filter chip's trailing remove mark (phase 4), raising `remove`.
 			removable: flag,
+			// A key cap after the label (`pk0-action-shortcut`, a queue action's key); web only.
+			shortcut: text,
 		},
 		events: { press: none, remove: none },
 		commands: ["focus"],

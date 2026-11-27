@@ -658,6 +658,7 @@ public enum HazelTheme {
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .inlineRow, align: .center, justify: .center, borderColor: Colors.clear, borderWidth: 1, radius: 8, strong: true, nowrap: true, transition: 0.15)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(bleedX: 2, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "shortcut", style: Style(layout: .inlineRow, align: .center, justify: .center, background: Colors.bg, color: Colors.fg3, borderColor: Colors.border, borderWidth: 1, radius: 4, paddingX: 4, minHeight: 16, text: .micro, strong: true, shadow: "xs", nowrap: true, shrink: false, minWidth: 16)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "remove", style: Style(color: Colors.mutedFg, radius: 4, bleedX: 2, size: 16, shrink: false, transition: 0.15)),
                 Layer(when: When(options: ["variant": "primary"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.primary, color: Colors.primaryFg, shadow: "control")),
                 Layer(when: When(options: ["variant": "primary"], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(color: Colors.primaryIcon)),
@@ -1707,7 +1708,7 @@ public enum HazelTheme {
 
         public static let table = Recipe(
             primitive: "table",
-            defaults: [:],
+            defaults: ["frame": "none", "rowActions": "lastCell"],
             inert: [],
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(fill: true)),
@@ -1718,6 +1719,7 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "selectCell", style: Style(divider: Colors.border, paddingStart: 16)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "skeletonCell", style: Style(paddingX: 12)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "skeletonBar", style: Style(background: Colors.secondary, radius: 4)),
+                Layer(when: When(options: ["frame": "card"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(borderColor: Colors.border, borderWidth: 1, radius: 12)),
             ]
         )
 
@@ -1741,7 +1743,7 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "actions", style: Style(layout: .row, align: .center, gap: 4)),
                 Layer(when: When(options: [:], flags: ["current"], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.wash)),
                 Layer(when: When(options: [:], flags: ["footer"], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.wash)),
-                Layer(when: When(options: [:], flags: [], states: [.selected], sizeClass: nil), part: nil, style: Style(background: Colors.chipSelected)),
+                Layer(when: When(options: [:], flags: [], states: [.selected], sizeClass: nil), part: nil, style: Style(background: Colors.rowSelected)),
                 Layer(when: When(options: [:], flags: [], states: [.disabled], sizeClass: nil), part: nil, style: Style(opacity: 0.5)),
                 Layer(when: When(options: [:], flags: [], states: [.hover], sizeClass: nil), part: nil, style: Style(background: Colors.wash)),
             ]

@@ -1,0 +1,26 @@
+{
+	"about": "`shortcut` (G2, `pk0-action-shortcut`): a queue action with its key after the label as a small key cap, hidden below `md`.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"label": "Assign",
+			"icon": "user",
+			"variant": "outline",
+			"size": "xsmall",
+			"shortcut": "A"
+		},
+		"events": [
+			"press"
+		]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Assign"
+		}
+	],
+	"pending": {
+		"ios": "S2"
+	}
+}

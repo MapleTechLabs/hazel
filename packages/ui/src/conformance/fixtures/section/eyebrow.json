@@ -1,0 +1,65 @@
+{
+	"about": "`style` `eyebrow` (G2, `p4-sidebar-eyebrow`): settings' \"Account\" heading (`heading` `label`, `px-3 pt-3 pb-1`) over its page rows.",
+	"root": {
+		"tag": "section",
+		"props": {
+			"title": "Account",
+			"style": "eyebrow"
+		},
+		"children": [
+			{
+				"tag": "item",
+				"props": {
+					"title": "Profile",
+					"style": "nav",
+					"selected": true,
+					"href": "#profile"
+				},
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "icon",
+								"props": {
+									"name": "user"
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"tag": "item",
+				"props": {
+					"title": "Appearance",
+					"style": "nav",
+					"href": "#appearance"
+				},
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "icon",
+								"props": {
+									"name": "gear"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"aria": [
+		{
+			"role": "heading",
+			"name": "Account"
+		}
+	],
+	"pending": {
+		"ios": "S4"
+	}
+}

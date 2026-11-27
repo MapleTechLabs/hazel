@@ -40,8 +40,8 @@ export const tableRow = defineRecipe<
 	},
 	states: {
 		hover: { root: { background: "wash" } },
-		// HAZEL-GAP(table-selected-wash): today's `bg-primary-subtle/40`; `chip-selected` is its /50.
-		selected: { root: { background: "chip-selected" } },
+		// Today's `bg-primary-subtle/40` (`table-selected-wash`).
+		selected: { root: { background: "row-selected" } },
 		disabled: { root: { opacity: 0.5 } },
 	},
 	inert: ["selected", "disabled"],

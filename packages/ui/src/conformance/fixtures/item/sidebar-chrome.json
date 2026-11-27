@@ -1,0 +1,60 @@
+{
+	"about": "`style` (G2, `p4-sidebar-account-card`, `p4-item-trailing-icon`): the org switcher (a 32pt square logo, the up-down chevron), the account card (bordered, tinted, name over email) and a section's `nav` page link, current.",
+	"root": {
+		"tag": "item",
+		"props": {
+			"title": "Hazel",
+			"style": "switcher"
+		},
+		"events": [
+			"press"
+		],
+		"slots": [
+			{
+				"name": "leading",
+				"children": [
+					{
+						"tag": "avatar",
+						"props": {
+							"name": "Hazel",
+							"initials": "H"
+						}
+					}
+				]
+			},
+			{
+				"name": "trailing",
+				"children": [
+					{
+						"tag": "icon",
+						"props": {
+							"name": "chevron-up-down"
+						}
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"cases": [
+		{
+			"name": "account",
+			"props": {
+				"title": "Ada Lovelace",
+				"subtitle": "ada@hazel.test",
+				"style": "account"
+			}
+		},
+		{
+			"name": "nav",
+			"props": {
+				"title": "General",
+				"style": "nav",
+				"selected": true
+			}
+		}
+	],
+	"pending": {
+		"ios": "S4"
+	}
+}

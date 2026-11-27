@@ -4,7 +4,7 @@
 // A selectable table, or one whose rows press, is a `grid` the keyboard moves through by row.
 import { svg } from "../../icons.ts"
 import { loop, onShow } from "../../motion.ts"
-import { definePrimitive, flag, part, type Plain, type Primitive } from "../define.ts"
+import { definePrimitive, flag, option, part, type Plain, type Primitive } from "../define.ts"
 import { fire, rowsOf, textOf } from "./runtime.ts"
 import { registerScroller } from "./scroll.ts"
 import {
@@ -17,8 +17,7 @@ import {
 	guardRowChecks,
 } from "./table-shared.ts"
 
-/** Skeleton rows drawn while `loading` (renderer-owned, as the list's). */
-// HAZEL-GAP(table-skeleton-rows): today each page picks its count (`loadingRows`, 3 to 12).
+/** Skeleton rows drawn while `loading` when the view names no `loadingRows` (as the list's). */
 const SKELETON_ROWS = 6
 
 const recordOf = (value: Plain): { readonly [key: string]: Plain } | undefined =>
@@ -84,6 +83,7 @@ export const primitive = definePrimitive("table", ({ document, tag, outer }) => 
 	let sort: ReturnType<typeof sortOf>
 	let selectable = false
 	let loading = false
+	let loadingRows = SKELETON_ROWS
 	let allSelected = false
 	let someSelected = false
 
@@ -115,7 +115,7 @@ export const primitive = definePrimitive("table", ({ document, tag, outer }) => 
 
 	const drawSkeleton = () => {
 		skeleton.replaceChildren()
-		for (let index = 0; index < SKELETON_ROWS; index++) {
+		for (let index = 0; index < loadingRows; index++) {
 			const row = part(document, "tr", "skeletonRow")
 			const check = part(document, "td", "selectCell")
 			const well = part(document, "span", "skeletonBar")
@@ -270,6 +270,12 @@ export const primitive = definePrimitive("table", ({ document, tag, outer }) => 
 				if (loading) grid.setAttribute("aria-busy", "true")
 				else grid.removeAttribute("aria-busy")
 			} else if (name === "stickyHeader") flag(node, "sticky-header", value)
+			else if (name === "frame") option(node, "frame", value)
+			else if (name === "rowActions") option(node, "row-actions", value)
+			else if (name === "loadingRows") {
+				loadingRows = typeof value === "number" && value > 0 ? Math.round(value) : SKELETON_ROWS
+				drawSkeleton()
+			}
 		},
 		events: undefined,
 	}
