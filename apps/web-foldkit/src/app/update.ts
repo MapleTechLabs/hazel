@@ -93,6 +93,8 @@ const sameReport = (a: ReturnType<typeof reportOf>, b: ReturnType<typeof reportO
 	a.isOverlayOpen === b.isOverlayOpen &&
 	a.isSidebarCollapsed === b.isSidebarCollapsed &&
 	a.bellCount === b.bellCount &&
+	a.unreadNotificationCount === b.unreadNotificationCount &&
+	a.isMarkingAllRead === b.isMarkingAllRead &&
 	a.isAiPanelOpen === b.isAiPanelOpen &&
 	a.isAiPanelResizing === b.isAiPanelResizing &&
 	JSON.stringify(a.badge) === JSON.stringify(b.badge)
@@ -378,6 +380,16 @@ const receivedShellRequest = (request: ShellRequest): Step =>
 		PressedMobileSearch: () => openCommandPalette("search"),
 		RequestedToast: ({ toast }) => showToast(toast),
 		PressedComposeDm: () => openModal({ _tag: "CreateDm" }),
+		PressedMarkAllRead: () => (model: Model) =>
+			foldShell(model, (shell) =>
+				Shell.update(
+					shell,
+					ShellMessage.GotNotificationsMessage({
+						message: Notifications.Message.ClickedMarkAllRead(),
+					}),
+					shellContextOf(model),
+				),
+			),
 		RequestedPageOut: ({ outMessage }) => handleOutMessage(outMessage),
 	})
 

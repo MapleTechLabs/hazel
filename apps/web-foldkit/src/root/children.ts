@@ -5,7 +5,7 @@
  * the RPC client, navigation on the shell's Router, and the Foldkit host for what is still there.
  */
 import { Component, Router } from "@effect/ui"
-import { HazelRpc } from "@hazel/client-data"
+import { ClientData, HazelRpc } from "@hazel/client-data"
 import { Activity, activityLayer } from "@hazel/shared-screens/activity/Activity"
 import {
 	ChannelSidebar,
@@ -15,10 +15,13 @@ import {
 import { MessageList } from "@hazel/shared-screens/chat/MessageList"
 import { messageListLayer } from "@hazel/shared-screens/chat/live"
 import { Dms, dmsLayer } from "@hazel/shared-screens/dms/Dms"
+import { ChannelSettingsHeader } from "@hazel/shared-screens/shell/ChannelSettingsHeader"
+import { AccountMenu, OrgSwitcher, SwitchOrganization } from "@hazel/shared-screens/shell/Chrome"
+import { MarkAllNotificationsRead, SectionSidebar } from "@hazel/shared-screens/shell/SectionSidebar"
 import type { ChannelId } from "@hazel/schema"
 import { Effect, Layer } from "effect"
 import { clientData } from "~/db/client"
-import { AppRoute } from "../route"
+import { AppRoute, organizationRoute } from "../route"
 import { publish } from "./bus"
 
 /** A push of `route` on the shell's Router, from a screen's host callback. */
@@ -76,4 +79,30 @@ export const ShellDms = Component.provide(Dms, (props) =>
 			() => publish({ _tag: "Shell", request: { _tag: "PressedComposeDm" } }),
 		),
 	),
+)
+
+/** Another organization from the switcher: its home (a phone's chat list), or its setup. */
+const switchLayer = (isMobile: boolean) =>
+	withRouter((push) =>
+		SwitchOrganization.layerWith((id, slug) => push(organizationRoute({ id, slug }, { isMobile }))),
+	)
+
+/** The data the chrome reads, the switcher's routes, and Activity's "Mark all as read" on the host. */
+const chromeLayer = (isMobile: boolean) =>
+	Layer.mergeAll(
+		Layer.succeed(ClientData, clientData),
+		switchLayer(isMobile),
+		MarkAllNotificationsRead.layerWith(() =>
+			publish({ _tag: "Shell", request: { _tag: "PressedMarkAllRead" } }),
+		),
+	)
+
+export const ShellSectionSidebar = Component.provide(SectionSidebar, (props) =>
+	chromeLayer(props.switcher.compact),
+)
+export const ShellOrgSwitcher = Component.provide(OrgSwitcher, (props) => chromeLayer(props.compact))
+export const ShellAccountMenu = Component.provide(AccountMenu, chromeLayer(false))
+export const ShellChannelSettingsHeader = Component.provide(
+	ChannelSettingsHeader,
+	Layer.succeed(ClientData, clientData),
 )

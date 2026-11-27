@@ -12,6 +12,7 @@ import * as Platform from "../platform"
 import { type Badge, badgeOf } from "../platform/badge"
 import * as Updates from "../platform/updates"
 import * as Shell from "../shell/model"
+import * as Notifications from "../shell/notifications"
 import { channelLinksOf } from "../shell/channels-sidebar/channel-links"
 import type { Context as ShellUpdateContext } from "../shell/update"
 import { HostContextSchema, type HostReport } from "./context"
@@ -60,6 +61,8 @@ export const reportOf = (model: Model): HostReport => ({
 	isSidebarCollapsed: model.shell.isSidebarCollapsed,
 	// The bell counts unread mentions, as the tab title does (`isMentionReason`); no optimistic layer.
 	bellCount: model.shell.notifications.unreadMentionIds.length,
+	unreadNotificationCount: Notifications.unreadIdsOf(model.shell.notifications).length,
+	isMarkingAllRead: Notifications.isMarkingAllRead(model.shell.notifications),
 	badge: badgeOfModel(model),
 	isAiPanelOpen: model.aiPanel.isOpen,
 	isAiPanelResizing: model.aiPanel.drag !== null,

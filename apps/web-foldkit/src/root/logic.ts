@@ -26,6 +26,7 @@ import { authRedirect, routeRedirect } from "../redirect"
 import { AppRoute, chatChannelIdOf, hrefOf, isPublicRoute } from "../route"
 import { CurrentUser, type Member, type Organization } from "../session"
 import { SoundSettings } from "../notification-sound"
+import { sectionLayoutOf } from "../shell/sections"
 import { ResolvedTheme, resolveTheme, type ThemeCustomization, ThemePreference } from "../theme"
 import * as Commands from "./commands"
 import { publish } from "./bus"
@@ -69,6 +70,8 @@ export const AppModel = Schema.Struct({
 	unreadMentionIds: Schema.Array(Schema.String),
 	/** The Foldkit host's state the frame shows (the dock, the bell, the badge, the AI panel). */
 	report: Schema.NullOr(HostReportSchema),
+	/** A phone's sidebar sheet of a native section (settings, activity), opened from its top bar. */
+	isSectionSheetOpen: Schema.Boolean,
 })
 export type AppModel = typeof AppModel.Type
 
@@ -340,6 +343,7 @@ const withRoute = (model: AppModel, route: AppRoute): AppModel => ({
 	navigation: model.navigation + 1,
 	currentUrl: currentUrlOf(),
 	org: orgStateFor(model.org, route),
+	isSectionSheetOpen: false,
 })
 
 /** The browser's `pathname + search`: the URL as typed, with search keys the route does not model. */
@@ -502,6 +506,7 @@ export const init = (route: AppRoute, flags: AppFlags): Next => {
 		sessionStartMs: flags.sessionStartMs,
 		unreadMentionIds: [],
 		report: null,
+		isSectionSheetOpen: false,
 	}
 	return combine([
 		(m) => ({
@@ -582,6 +587,10 @@ export const update = (model: AppModel, message: AppMessage): Next =>
 		ReceivedHostOut: ({ out }) => receivedHostOut(out)(model),
 		ReceivedAppRequest: ({ request }) => appRequest(request)(model),
 		PressedMobileSearch: () => toHost({ _tag: "PressedMobileSearch" })(model),
-		PressedMobileMenu: () => toHost({ _tag: "PressedMobileMenu" })(model),
+		PressedMobileMenu: () =>
+			sectionLayoutOf(model.route) === "settings" || sectionLayoutOf(model.route) === "activity"
+				? unchanged({ ...model, isSectionSheetOpen: true })
+				: toHost({ _tag: "PressedMobileMenu" })(model),
+		DismissedSectionSheet: () => unchanged({ ...model, isSectionSheetOpen: false }),
 		PressedAiPanelToggle: () => toHost({ _tag: "PressedAiPanelToggle" })(model),
 	})

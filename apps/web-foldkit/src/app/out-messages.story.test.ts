@@ -9,7 +9,6 @@ import * as Toaster from "../overlay/toaster"
 import { FocusInput, SetPresenceStatus } from "../overlay/command-palette/commands"
 import { LayoutHotkeyActionId } from "../overlay/hotkeys"
 import * as ChannelsSidebar from "../shell/channels-sidebar"
-import { userMenuEntries } from "../shell/menus"
 import * as Shell from "../shell/model"
 import * as Platform from "../platform"
 import { update as shellUpdate } from "../root/logic"
@@ -145,24 +144,7 @@ describe("Completed (palette navigation)", () => {
 })
 
 describe("RequestedSignOut", () => {
-	// The shell signs out, then loads `/` afresh (`root/host-out.test.ts`).
-	test("Log out in the user menu asks the shell to sign out", () => {
-		const userMenu = (inner: Menu.Message): Message =>
-			Message.GotShellMessage({ message: Shell.Message.GotUserMenuMessage({ message: inner }) })
-		story(
-			update,
-			given(signedIn("/hazel/chat")),
-			message(userMenu(Menu.Message.PressedTrigger({ pointerType: "mouse" }))),
-			message(
-				userMenu(
-					Menu.Message.ClickedItem({ key: "logout", entries: userMenuEntries("hazel", ada.id) }),
-				),
-			),
-			Command.expectExact(toShell(PageOutMessage.RequestedSignOut())),
-			emitted,
-		)
-	})
-
+	// Log out in the account menu is a native request (`shared-screens/src/shell/Chrome.test.ts`).
 	test("a failed sign-out keeps the app up and says so", () => {
 		const [request] = hostRequestsOf(
 			shellUpdate(shellSignedIn("/hazel/chat"), AppMessage.FailedSignOut({ reason: "Offline" }))

@@ -46,6 +46,8 @@ import {
 import { AppMessage } from "./message"
 import { nativePageOf } from "./native-pages"
 import { Hole } from "./portal"
+import { chromeHoles, sectionContent, sectionSidebar } from "./sections"
+import { sectionLayoutOf } from "../shell/sections"
 import { subscriptions as subscriptionsOf } from "./subscriptions"
 import { AppRoute } from "./routes"
 import { authOf, OrgState, Session } from "./state"
@@ -107,6 +109,29 @@ interface ShellData {
 	readonly organization: Organization
 }
 
+const chromeDataOf = (model: AppModel, data: ShellData) => ({ ...data, member: memberOf(model) })
+
+/** The route's page inside its section layout, when the shell draws one (`sections.ts`). */
+const sectionPage = (h: H, model: AppModel) => {
+	const layout = sectionLayoutOf(model.route)
+	return layout === null ? page(h, model) : sectionContent(h, model, layout, page(h, model))
+}
+
+/** The dock's secondary sidebar: a native section's, else the Foldkit host's (chat, customers). */
+const dockSidebar = (h: H, model: AppModel, data: ShellData) => {
+	const layout = sectionLayoutOf(model.route)
+	return (
+		(layout === null ? null : sectionSidebar(h, model, layout, chromeDataOf(model, data))) ??
+		slot(h, "sidebar")
+	)
+}
+
+/** A native section's sidebar as the phone's sheet, opened from its top bar's menu button. */
+const phoneSectionSheet = (h: H, model: AppModel, data: ShellData) => {
+	const layout = sectionLayoutOf(model.route)
+	return layout === null ? null : sectionSidebar(h, model, layout, chromeDataOf(model, data))
+}
+
 /** The converted screens, each an ordinary child placed in its Foldkit page's hole (`portal.ts`). */
 const children = (h: H, model: AppModel, data: ShellData) => {
 	const { route } = model
@@ -118,7 +143,12 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 	const tab =
 		route._tag === "NotificationsAll" ? "all" : route._tag === "NotificationsMentions" ? "mentions" : null
 	const orgUser = `${data.organization.id}:${data.user.id}`
+	const native = sectionLayoutOf(route)
 	return [
+		// The org switcher and account card in the host's chat and customers sidebars.
+		...(native !== "settings" && native !== "activity"
+			? chromeHoles(h, model, chromeDataOf(model, data))
+			: []),
 		section === "Chat" || route._tag === "OrgHome"
 			? Hole(h, { hole: "channel-sidebar", key: orgUser }, [
 					ShellChannelSidebar(h, {
@@ -208,9 +238,12 @@ const orgShell = (h: H, model: AppModel, data: ShellData) => {
 					h,
 					model.report?.isSidebarCollapsed ?? false,
 					"overflow-hidden *:data-[sidebar=default]:flex-row",
-					sidebarInner(h).children(navRail(h, rail, slot(h, "ai-toggle")), slot(h, "sidebar")),
+					sidebarInner(h).children(
+						navRail(h, rail, slot(h, "ai-toggle")),
+						dockSidebar(h, model, data),
+					),
 				),
-				sidebarInset(h, "").children(page(h, model)),
+				sidebarInset(h, "").children(sectionPage(h, model)),
 				slot(h, "ai-panel"),
 			),
 			slot(h, "overlays"),
@@ -240,12 +273,13 @@ const phoneShell = (h: H, model: AppModel, data: ShellData, rail: RailInputs) =>
 					// Pages that fill the screen (`h-full`) scroll inside themselves; the rest scroll here.
 					h.div
 						.class("relative min-h-0 flex-1 overflow-y-auto overscroll-contain")
-						.children(page(h, model)),
+						.children(sectionPage(h, model)),
 					chrome.hasTabBar ? tabBar(h, rail, AppMessage.PressedMobileSearch()) : null,
 				),
 			),
 			slot(h, "ai-panel"),
 			slot(h, "overlays"),
+			phoneSectionSheet(h, model, data),
 			...children(h, model, data),
 		)
 }

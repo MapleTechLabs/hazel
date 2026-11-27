@@ -16,12 +16,10 @@ import {
 } from "foldkit/scene"
 import { describe, test } from "vitest"
 import * as CreateSection from "../overlay/modal/create-section"
-import { orgSwitcherEntries, userMenuEntries } from "../shell/menus"
-import * as Shell from "../shell/model"
-import { ada, after, hazelOrg, hotkey, rootScene, signedIn } from "../test/root-fixtures"
+import type { ModalRequest } from "../overlay/modal"
+import { PageOutMessage } from "../page/out-message"
+import { after, hazelOrg, hotkey, rootScene, signedIn } from "../test/root-fixtures"
 import { drainToast, playToastFeedback } from "../test/toast-fixtures"
-import * as Menu from "../ui/menu"
-import { FocusTriggerOnPress } from "../ui/menu-view"
 import * as Modal from "../ui/modal"
 import * as Select from "../ui/select"
 import { emit } from "./command"
@@ -30,31 +28,16 @@ import { reportOf } from "./model"
 
 /** The host's modal slot: a modal opened by the shell, its result toast, and closing (legacy `useModal`). */
 
-const orgSwitcher = (inner: Menu.Message): Message =>
-	Message.GotShellMessage({ message: Shell.Message.GotOrgSwitcherMessage({ message: inner }) })
+/** What the native org switcher and account menu send for a modal (`shared-screens/src/shell/Chrome.ts`). */
+const requestModal = (modal: ModalRequest): Message =>
+	Message.ReceivedShellRequest({
+		request: { _tag: "RequestedPageOut", outMessage: PageOutMessage.RequestedModal({ modal }) },
+	})
 
-const withCreateSection = after(signedIn("/hazel/chat"), [
-	orgSwitcher(Menu.Message.PressedTrigger({ pointerType: "mouse" })),
-	orgSwitcher(
-		Menu.Message.ClickedItem({
-			key: "create-category",
-			entries: orgSwitcherEntries({
-				orgSlug: "hazel",
-				isChat: true,
-				isMobile: false,
-				canCreateChannel: true,
-				organizations: [],
-			}),
-		}),
-	),
-])
+const withCreateSection = after(signedIn("/hazel/chat"), [requestModal({ _tag: "CreateSection" })])
 
 const dialog = role("dialog", { name: "Create section" })
-const mounted = [
-	Mount.resolve(FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress()),
-	Mount.resolve(FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress()),
-	Mount.resolve(Modal.AcquireResources, Modal.Message.SucceededAcquireResources()),
-] as const
+const mounted = [Mount.resolve(Modal.AcquireResources, Modal.Message.SucceededAcquireResources())] as const
 // Closing tells the frame no overlay is open any more.
 const closedReport = emit({ _tag: "Report", report: reportOf(signedIn("/hazel/chat")) })
 const reportedClosed = Command.resolve(closedReport, Message.CompletedEmit())
@@ -119,15 +102,8 @@ describe("modal host", () => {
 		)
 	})
 
-	test("the Feedback modal opens from the user menu with its Category select", () => {
-		const userMenu = (inner: Menu.Message): Message =>
-			Message.GotShellMessage({ message: Shell.Message.GotUserMenuMessage({ message: inner }) })
-		const withFeedback = after(signedIn("/hazel/chat"), [
-			userMenu(Menu.Message.PressedTrigger({ pointerType: "mouse" })),
-			userMenu(
-				Menu.Message.ClickedItem({ key: "feedback", entries: userMenuEntries("hazel", ada.id) }),
-			),
-		])
+	test("the Feedback modal opens from the account menu with its Category select", () => {
+		const withFeedback = after(signedIn("/hazel/chat"), [requestModal({ _tag: "Feedback" })])
 		const feedback = role("dialog", { name: "Send feedback" })
 		scene(
 			rootScene,
@@ -146,8 +122,7 @@ describe("keyboard shortcuts (Mod+/)", () => {
 		scene(
 			rootScene,
 			given(after(signedIn("/hazel/chat"), [hotkey("shortcuts.open")])),
-			...mounted.slice(0, 2),
-			Mount.resolve(Modal.AcquireResources, Modal.Message.SucceededAcquireResources()),
+			...mounted,
 			sceneExpect(shortcuts).toExist(),
 			sceneExpect(within(shortcuts, text("Previous Channel"))).toExist(),
 			sceneExpect(within(shortcuts, text("Delete Without Confirming"))).toExist(),

@@ -8,11 +8,15 @@ import { failureMessage } from "~/lib/error-messages"
 import { inheritedLevelOf, isMutedNow } from "~/lib/notification-settings"
 import { errorToastOf, successToast } from "../data/actions"
 import { AppRoute } from "../route"
-import type * as Menu from "../ui/menu"
-import { sidebarContent, sidebarSectionGroup, sidebarStatic } from "../ui/sidebar"
+import {
+	sidebarContent,
+	sidebarFooter,
+	sidebarHeader,
+	sidebarSectionGroup,
+	sidebarStatic,
+} from "../ui/sidebar"
+import { sidebarHeaderHeightClass } from "../platform/desktop"
 import type { ShellContext } from "./context"
-import type { SwitcherOrg, UserStatus } from "./model"
-import { orgSwitcherHeader, userMenuFooter } from "./menus"
 import { emptyData, isLoading, Message, type Model, type SidebarOutcome } from "./channels-sidebar/model"
 import { PageOutMessage } from "../page/out-message"
 import { PersistDismissedHint } from "./channels-sidebar/hints"
@@ -248,27 +252,12 @@ const ScrollActiveIntoView = Mount.define("ScrollActiveIntoView", {
 		}),
 })
 
-/** The shell's menus in the sidebar header and footer. Message mappers must be module-level (memo args). */
-export interface SidebarChrome<ParentMessage> {
-	readonly userMenu: Menu.Model
-	readonly orgSwitcher: Menu.Model
-	readonly userMenuEntries: ReadonlyArray<Menu.Entry>
-	readonly orgSwitcherEntries: ReadonlyArray<Menu.Entry>
-	readonly organizations: ReadonlyArray<SwitcherOrg>
-	readonly userStatus: UserStatus | null
-	/** The status's "Until ..." label at the root's clock (a string, so the memo stays cheap). */
-	readonly statusExpiration: string | null
-	readonly toUserMenuMessage: (message: Menu.Message) => ParentMessage
-	readonly toOrgSwitcherMessage: (message: Menu.Message) => ParentMessage
-}
-
 export interface ViewContext<ParentMessage> {
 	readonly shell: ShellContext
 	/** `chatChannelIdOf(route)`: the channel whose chat or files are open, its row is active. */
 	readonly activeChannelId: ChannelId | null
 	/** The root's wall clock (`presenceNowSignal`), for deriving stale DM presence. */
 	readonly nowMs: number
-	readonly chrome: SidebarChrome<ParentMessage>
 }
 
 /** The shell fields the sidebar reads, as primitives or stable refs so the lazy slot can compare them. */
@@ -291,15 +280,6 @@ const sidebarBody = <ParentMessage>(
 	activeChannelId: ChannelId | null,
 	nowMs: number,
 	toParentMessage: (message: Message) => ParentMessage,
-	userMenu: Menu.Model,
-	orgSwitcher: Menu.Model,
-	userMenuEntries: ReadonlyArray<Menu.Entry>,
-	orgSwitcherEntries: ReadonlyArray<Menu.Entry>,
-	organizations: ReadonlyArray<SwitcherOrg>,
-	userStatus: UserStatus | null,
-	statusExpiration: string | null,
-	toUserMenuMessage: (message: Menu.Message) => ParentMessage,
-	toOrgSwitcherMessage: (message: Menu.Message) => ParentMessage,
 	...[
 		orgSlug,
 		route,
@@ -333,7 +313,10 @@ const sidebarBody = <ParentMessage>(
 			...(isLoading(model)
 				? [h.div([h.Attribute("data-paint", "loading"), h.Attribute("hidden", "")])]
 				: []),
-			orgSwitcherHeader(h, orgSwitcher, orgSwitcherEntries, shell, organizations, toOrgSwitcherMessage),
+			// The org switcher and the account card are the shell's (`shared-screens/src/shell/Chrome.ts`).
+			sidebarHeader(h, { state: "expanded", className: `border-b ${sidebarHeaderHeightClass()}` }, [
+				hole(h, "org-switcher", orgSlug),
+			]),
 			sidebarContent(h, { state: "expanded" }, [
 				model.organizationId !== null && model.currentUserId !== null
 					? channelSidebarHole(h, model.organizationId, model.currentUserId)
@@ -359,15 +342,7 @@ const sidebarBody = <ParentMessage>(
 							}),
 						),
 			]),
-			userMenuFooter(
-				h,
-				userMenu,
-				userMenuEntries,
-				shell,
-				toUserMenuMessage,
-				userStatus,
-				statusExpiration,
-			),
+			sidebarFooter(h, undefined, [hole(h, "account-menu", orgSlug)]),
 			dragDescription(h),
 		],
 		semantic(h, { kind: "screen", title: orgName ?? "Chats" }),
@@ -430,22 +405,13 @@ export const view = <ParentMessage>(
 	context: ViewContext<ParentMessage>,
 	toParentMessage: (message: Message) => ParentMessage,
 ): Html => {
-	const { shell, chrome } = context
+	const { shell } = context
 	return sidebarSlot(sidebarBody<ParentMessage>, [
 		h,
 		model,
 		context.activeChannelId,
 		context.nowMs,
 		toParentMessage,
-		chrome.userMenu,
-		chrome.orgSwitcher,
-		chrome.userMenuEntries,
-		chrome.orgSwitcherEntries,
-		chrome.organizations,
-		chrome.userStatus,
-		chrome.statusExpiration,
-		chrome.toUserMenuMessage,
-		chrome.toOrgSwitcherMessage,
 		shell.orgSlug,
 		shell.route,
 		shell.organization?.name,

@@ -9,8 +9,9 @@ import { PageOutMessage } from "../page/out-message"
 import * as ShellModel from "../shell/model"
 import * as Notifications from "../shell/notifications"
 import { changedContext, hazelOrg, hotkey, navigation, signedIn, toShell } from "../test/root-fixtures"
-import { Emit } from "./command"
+import { Emit, emit } from "./command"
 import { Message } from "./message"
+import { reportOf } from "./model"
 import { update } from "./update"
 
 /** The org layout's Discord hotkeys the shell hands the host: organizations, read state, inbox, help, sidebar. */
@@ -92,16 +93,21 @@ describe("Shift+Escape marks the organization read", () => {
 				}),
 			),
 		).model
+		// The frame's report follows: Activity's "Mark all as read" shows its count and pending state.
+		const report = reportOf(update(unread, hotkey("organization.markRead")).model)
+		const reported = emit({ _tag: "Report", report })
 		story(
 			update,
 			given(unread),
 			message(hotkey("organization.markRead")),
 			Command.expectExact(
+				reported,
 				Notifications.MarkOrganizationRead({ organizationId: hazelOrg.id }),
 				Notifications.MarkNotificationRead({ id: first }),
 				Notifications.MarkNotificationRead({ id: second }),
 			),
 			Command.resolveAll(
+				[reported, Message.CompletedEmit()],
 				[
 					Notifications.MarkOrganizationRead({ organizationId: hazelOrg.id }),
 					Notifications.Message.CompletedMarkOrganizationRead(),
@@ -114,6 +120,11 @@ describe("Shift+Escape marks the organization read", () => {
 					Notifications.MarkNotificationRead({ id: second }),
 					Notifications.Message.SucceededMarkNotificationRead({ id: second }),
 				],
+			),
+			// The last call settles: the button stops pending.
+			Command.resolve(
+				emit({ _tag: "Report", report: { ...report, isMarkingAllRead: false } }),
+				Message.CompletedEmit(),
 			),
 			model((current) => expect(Notifications.unreadIdsOf(current.shell.notifications)).toEqual([])),
 		)

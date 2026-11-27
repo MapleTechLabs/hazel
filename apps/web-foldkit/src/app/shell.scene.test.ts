@@ -39,20 +39,12 @@ import {
 import { drainToast, playToastFeedback } from "../test/toast-fixtures"
 import * as CommandMenu from "../ui/command-menu"
 import { PortalCommandMenu } from "../ui/command-menu-view"
-import * as Menu from "../ui/menu"
-import { FocusTriggerOnPress } from "../ui/menu-view"
 import * as Modal from "../ui/modal"
 import { emit } from "./command"
 import { Message } from "./message"
 import { reportOf } from "./model"
 
 /** The host's parts of the org shell: the sidebar's paint mark, the sidebar sheet and the command palette. */
-
-// The sidebar header's org switcher and footer user menu focus their trigger on press.
-const menusMounted = [
-	Mount.resolve(FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress()),
-	Mount.resolve(FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress()),
-] as const
 
 const navItem = (name: string) => role("link", { name })
 const paletteDone = CommandPalette.Message.CompletedFocusInput()
@@ -80,14 +72,13 @@ describe("the last screen's paint", () => {
 	]
 
 	test("stays up while the sidebar's channel lists have yet to arrive", () => {
-		scene(rootScene, given(signedIn("/hazel/chat")), ...menusMounted, sceneExpect(waiting).toExist())
+		scene(rootScene, given(signedIn("/hazel/chat")), sceneExpect(waiting).toExist())
 	})
 
 	test("stays up while only the memberships have arrived, not the Channels list", () => {
 		scene(
 			rootScene,
 			given(after(signedIn("/hazel/chat"), [membershipsArrived])),
-			...menusMounted,
 			sceneExpect(waiting).toExist(),
 		)
 	})
@@ -96,7 +87,6 @@ describe("the last screen's paint", () => {
 		scene(
 			rootScene,
 			given(after(signedIn("/hazel/chat"), channelListsArrived)),
-			...menusMounted,
 			sceneExpect(waiting).toBeAbsent(),
 		)
 	})
@@ -110,21 +100,18 @@ describe("mobile", () => {
 	}
 	const sheet = role("dialog", { name: "Sidebar" })
 
+	// Settings' and Activity's sheets are the shell's (`root/frame.scene.test.ts`); Customers' is still the host's.
 	test("a section's top bar menu opens its sidebar sheet", () => {
-		const { desktop, phone } = toPhone("/hazel/settings/team")
+		const { desktop, phone } = toPhone("/hazel/customers")
 		scene(
 			rootScene,
 			given(desktop),
-			...menusMounted,
 			Subscription.emit(phone),
-			// The desktop dock (and its two menus) leaves the tree.
-			Mount.expectEnded(FocusTriggerOnPress, FocusTriggerOnPress),
 			sceneExpect(sheet).toBeAbsent(),
 			Subscription.emit(Message.ReceivedShellRequest({ request: { _tag: "PressedMobileMenu" } })),
 			sceneExpect(sheet).toExist(),
 			Mount.resolve(Modal.AcquireResources, Modal.Message.SucceededAcquireResources()),
-			...menusMounted,
-			sceneExpect(within(sheet, navItem("Settings"))).toExist(),
+			sceneExpect(within(sheet, navItem("Overview"))).toExist(),
 		)
 	})
 
@@ -134,9 +121,7 @@ describe("mobile", () => {
 		scene(
 			rootScene,
 			given(chat.desktop),
-			...menusMounted,
-			// The channels sidebar moves from the dock into the page, its org switcher and user menu
-			// still mounted.
+			// The channels sidebar moves from the dock into the page.
 			Subscription.emit(chat.phone),
 			sceneExpect(
 				selector('[data-foldkit-region="page"] [data-hazel-hole="channel-sidebar"]'),
@@ -147,11 +132,10 @@ describe("mobile", () => {
 		scene(
 			rootScene,
 			given(home.desktop),
-			...menusMounted,
 			// The desktop focuses the member search; a phone leaves its keyboard down.
 			Mount.resolve(AutoFocusSearch, HomeMessage.CompletedFocusSearch()),
 			Subscription.emit(home.phone),
-			Mount.expectEnded(FocusTriggerOnPress, FocusTriggerOnPress, AutoFocusSearch),
+			Mount.expectEnded(AutoFocusSearch),
 		)
 	})
 
@@ -160,9 +144,7 @@ describe("mobile", () => {
 		scene(
 			rootScene,
 			given(desktop),
-			...menusMounted,
 			Subscription.emit(phone),
-			Mount.expectEnded(FocusTriggerOnPress, FocusTriggerOnPress),
 			sceneExpect(role("link", { name: /Customers/ })).toHaveAttr("href", "/hazel/customers"),
 		)
 	})
@@ -180,7 +162,6 @@ describe("command palette", () => {
 		scene(
 			rootScene,
 			given(signedIn("/hazel/settings/team")),
-			...menusMounted,
 			sceneExpect(palette).toBeAbsent(),
 			...opened,
 			sceneExpect(within(palette, role("menuitem", { name: /Create channel/ }))).toExist(),
@@ -199,7 +180,6 @@ describe("command palette", () => {
 		scene(
 			rootScene,
 			given(signedIn("/hazel/settings/team")),
-			...menusMounted,
 			...opened,
 			click(role("menuitem", { name: /Create channel/ })),
 			Command.resolve(FocusInput, paletteDone),

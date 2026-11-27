@@ -45,13 +45,13 @@ import {
 	sidebarLink,
 	sidebarSection,
 	sidebarSectionGroup,
+	sidebarFooter,
 	sidebarStatic,
 } from "../ui/sidebar"
-import type { SidebarChrome } from "./channels-sidebar"
 import type { ShellContext } from "./context"
 import { countBadge } from "../ui/count-badge"
 import { type DestinationId, destination, destinationHref, isAvailable } from "./destinations"
-import { userMenuFooter } from "./menus"
+import { hole } from "../app/holes"
 
 /**
  * The Customers area's sidebar next to the nav rail (`docs/customers/spec.md` "UI surfaces"):
@@ -426,7 +426,6 @@ export const view = <ParentMessage>(
 	h: HtmlBuilder<ParentMessage>,
 	model: Model,
 	context: ShellContext,
-	chrome: SidebarChrome<ParentMessage>,
 	toParentMessage: (message: Message) => ParentMessage,
 ): Html => {
 	const { orgSlug, route } = context
@@ -492,14 +491,7 @@ export const view = <ParentMessage>(
 				]),
 			]),
 		]),
-		userMenuFooter(
-			h,
-			chrome.userMenu,
-			chrome.userMenuEntries,
-			context,
-			chrome.toUserMenuMessage,
-			chrome.userStatus,
-			chrome.statusExpiration,
-		),
+		// The account card is the shell's (`shared-screens/src/shell/Chrome.ts`).
+		sidebarFooter(h, undefined, [hole(h, "account-menu", orgSlug)]),
 	])
 }

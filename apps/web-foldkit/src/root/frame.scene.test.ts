@@ -66,7 +66,7 @@ describe("the last screen's paint", () => {
 })
 
 describe("mobile", () => {
-	test("a section's top bar asks the host for its sidebar sheet; the tab bar has no Menu tab", () => {
+	test("a native section's top bar opens its own sidebar sheet; the tab bar has no Menu tab", () => {
 		const model = onPhone("/hazel/settings/team")
 		const s = frame(model)
 			// Settings is the gear in the chat list's header, not a tab.
@@ -79,10 +79,8 @@ describe("mobile", () => {
 			.expectMount(AdoptRegion({ region: "ai-panel" }))
 			.expectMount(AdoptRegion({ region: "overlays" }))
 			.click(HtmlLocator.role("button", { name: "Settings menu" }))
-		// The host opens the sheet (`app/shell.scene.test.ts`).
-		expect(s.pending.map(({ command }) => [command.name, command.args])).toEqual([
-			["ToHost", { request: { _tag: "PressedMobileMenu" } }],
-		])
+		// Settings' sheet is the shell's (`sections.ts`, `logic.test.ts`); the host is not asked.
+		expect(s.pending).toEqual([])
 	})
 
 	test("the DMs tab is the direct messages list", () => {

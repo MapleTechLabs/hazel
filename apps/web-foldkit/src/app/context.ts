@@ -40,6 +40,9 @@ export interface HostReport {
 	readonly isOverlayOpen: boolean
 	readonly isSidebarCollapsed: boolean
 	readonly bellCount: number
+	/** Activity's "Mark all as read": the unread notifications left, and whether the calls run. */
+	readonly unreadNotificationCount: number
+	readonly isMarkingAllRead: boolean
 	readonly badge: Badge
 	readonly isAiPanelOpen: boolean
 	readonly isAiPanelResizing: boolean

@@ -35,6 +35,8 @@ export const ShellRequest = Schema.Union([
 	Schema.TaggedStruct("PressedMobileSearch", {}),
 	/** The DMs screen's compose button: today's Create DM modal. */
 	Schema.TaggedStruct("PressedComposeDm", {}),
+	/** Activity's sidebar: every unread notification read. */
+	Schema.TaggedStruct("PressedMarkAllRead", {}),
 	/** A toast the shell raised. */
 	Schema.TaggedStruct("RequestedToast", { toast: ToastRequest }),
 	/** A native page's request whose work is still the host's (a modal, the palette, a DM, updates). */

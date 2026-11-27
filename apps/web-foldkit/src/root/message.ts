@@ -60,5 +60,7 @@ export const AppMessage = UiSchema.TaggedEnum({
 	PressedMobileSearch: {},
 	PressedMobileMenu: {},
 	PressedAiPanelToggle: {},
+	/** A native section's sidebar sheet on a phone was dismissed. */
+	DismissedSectionSheet: {},
 })
 export type AppMessage = typeof AppMessage.Type

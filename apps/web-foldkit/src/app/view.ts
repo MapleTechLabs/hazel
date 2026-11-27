@@ -5,19 +5,14 @@ import * as CommandPalette from "../overlay/command-palette"
 import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
 import { type PageMessage, viewPage } from "../page/registry"
-import { channelLinksOf } from "../page/contract"
-import { channelSettingsTabOf, chatChannelIdOf, hasContentColumn, orgSectionOf, orgSlugOf } from "../route"
+import { chatChannelIdOf, orgSectionOf, orgSlugOf } from "../route"
+import { isNativeSectionRoute, sectionLayoutOf } from "../shell/sections"
 import { displayNameOf } from "../session"
 import * as ChannelsSidebar from "../shell/channels-sidebar"
 import * as CustomersSidebar from "../shell/customers-sidebar"
 import type { ShellContext } from "../shell/context"
-import { channelSettingsLayout, contentColumnLayout, sectionLayout } from "../shell/layouts"
-import { formatStatusExpirationAt } from "../shell/menus"
 import { mobileSidebarSheet } from "../shell/mobile"
 import * as Shell from "../shell/model"
-import * as Notifications from "../shell/notifications"
-import { notificationsSidebar, settingsSidebar } from "../shell/sidebars"
-import type * as Menu from "../ui/menu"
 import type * as ModalKit from "../ui/modal"
 import { Message } from "./message"
 import { aiPanelInputsOf, type Model, sharedOf } from "./model"
@@ -39,15 +34,8 @@ const toChannelsSidebarMessage = (message: ChannelsSidebar.Message) =>
 	toShellMessage({ _tag: "GotChannelsSidebarMessage", message })
 const toCustomersSidebarMessage = (message: CustomersSidebar.Message) =>
 	toShellMessage(Shell.Message.GotCustomersSidebarMessage({ message }))
-const toUserMenuMessage = (message: Menu.Message) =>
-	toShellMessage(Shell.Message.GotUserMenuMessage({ message }))
-const toOrgSwitcherMessage = (message: Menu.Message) =>
-	toShellMessage(Shell.Message.GotOrgSwitcherMessage({ message }))
 const toMobileSidebarMessage = (message: ModalKit.Message) =>
 	toShellMessage({ _tag: "GotMobileSidebarMessage", message })
-const clickedMarkAllRead = toShellMessage(
-	Shell.Message.GotNotificationsMessage({ message: Notifications.Message.ClickedMarkAllRead() }),
-)
 export const toPageMessage = (message: PageMessage): Message => ({ _tag: "GotPageMessage", message })
 const toToastsMessage = (message: Toasts.Message): Message => ({ _tag: "GotToastsMessage", message })
 const toModalMessage = (message: Modal.Message): Message => ({ _tag: "GotModalMessage", message })
@@ -84,76 +72,26 @@ const pageBody = (model: Model, h: HtmlBuilder<Message>, isInsideMain: boolean):
 	return isInsideMain ? h.div([placeholder]) : h.main([placeholder])
 }
 
-/** The route's section layout around the page (`settings/layout.tsx` and friends). */
+/**
+ * The route's section layout around the page. Settings, my settings, notifications and channel
+ * settings draw theirs in the shell (`src/root/sections.ts`), around this page region.
+ */
 const sectionBody = (model: Model, h: HtmlBuilder<Message>): Html => {
 	const { route } = model.context
-	const section = orgSectionOf(route)
-	if (section === "Settings")
-		return sectionLayout(
-			h,
-			hasContentColumn(route)
-				? contentColumnLayout(h, pageBody(model, h, true))
-				: pageBody(model, h, true),
-		)
-	if (section === "MySettings" || section === "Notifications")
-		return sectionLayout(h, pageBody(model, h, true))
 	// Customers pages own their scrolling (the queue's preview panel spans the full height).
-	if (section === "Customers")
+	if (orgSectionOf(route) === "Customers")
 		return h.main([h.Class("h-full w-full min-w-0 overflow-hidden bg-bg")], [pageBody(model, h, true)])
-	const tab = channelSettingsTabOf(route)
-	if (tab !== undefined && "channelId" in route)
-		return channelSettingsLayout(
-			h,
-			{
-				orgSlug: route.orgSlug,
-				channelId: route.channelId,
-				channel: model.shell.settingsChannel,
-				links: channelLinksOf(sharedOf(model), route.channelId),
-				selectedTab: tab,
-				onSelectTab: (tabRoute) => h.OnClick(Message.ClickedLayoutTab({ route: tabRoute })),
-				onChangeTab: (toRoute) =>
-					h.OnChange((value) => Message.ClickedLayoutTab({ route: toRoute(value) })),
-			},
-			pageBody(model, h, true),
-		)
-	return pageBody(model, h, false)
+	return pageBody(model, h, isNativeSectionRoute(route))
 }
 
 const secondarySidebar = (model: Model, h: HtmlBuilder<Message>, context: ShellContext): Html => {
 	const { shell } = model
-	const chrome = {
-		userMenu: shell.userMenu,
-		orgSwitcher: shell.orgSwitcher,
-		userMenuEntries: shell.userMenuEntries,
-		orgSwitcherEntries: shell.orgSwitcherEntries,
-		organizations: shell.userOrganizations,
-		userStatus: shell.userStatus,
-		statusExpiration: formatStatusExpirationAt(
-			shell.userStatus?.expiresAtMs ?? null,
-			model.context.nowMs,
-		),
-		toUserMenuMessage,
-		toOrgSwitcherMessage,
-	}
-	const section = orgSectionOf(model.context.route)
-	if (section === "Settings" || section === "MySettings") return settingsSidebar(h, context, chrome)
-	if (section === "Customers")
-		return CustomersSidebar.view(h, shell.customersSidebar, context, chrome, toCustomersSidebarMessage)
-	if (section === "Notifications")
-		return notificationsSidebar(h, context, chrome, {
-			unreadCount: Notifications.unreadIdsOf(shell.notifications).length,
-			isPending: Notifications.isMarkingAllRead(shell.notifications),
-			onPress: h.OnClick(clickedMarkAllRead),
-		})
+	if (orgSectionOf(model.context.route) === "Customers")
+		return CustomersSidebar.view(h, shell.customersSidebar, context, toCustomersSidebarMessage)
 	return ChannelsSidebar.view(
 		h,
 		shell.channelsSidebar,
-		{
-			shell: context,
-			activeChannelId: chatChannelIdOf(model.context.route),
-			nowMs: model.context.nowMs,
-			chrome,
-		},
+		{ shell: context, activeChannelId: chatChannelIdOf(model.context.route), nowMs: model.context.nowMs },
 		toChannelsSidebarMessage,
 	)
 }
@@ -203,7 +141,10 @@ const regionsOf = (model: Model, h: HtmlBuilder<Message>): Regions => {
 	if (context === null)
 		return { sidebar: [], page: [pageBody(model, h, false)], "ai-toggle": [], "ai-panel": [], overlays }
 	const { isMobile } = model.context
-	const sidebar = secondarySidebar(model, h, context)
+	// Settings' and Activity's sidebars are the shell's (`src/root/sections.ts`), on a phone too.
+	const layout = sectionLayoutOf(model.context.route)
+	const isNativeSection = layout === "settings" || layout === "activity"
+	const sidebar = isNativeSection ? h.empty : secondarySidebar(model, h, context)
 	const isPhoneChatList = isMobile && model.context.route._tag === "ChatIndex"
 	return {
 		sidebar: isMobile ? [] : [sidebar],
@@ -227,7 +168,7 @@ const regionsOf = (model: Model, h: HtmlBuilder<Message>): Regions => {
 		overlays: isMobile
 			? [
 					mobileSidebarSheet(h, {
-						isOpen: model.shell.isSidebarOpen && !isPhoneChatList,
+						isOpen: model.shell.isSidebarOpen && !isPhoneChatList && !isNativeSection,
 						children: [sidebar],
 						toMessage: toMobileSidebarMessage,
 					}),

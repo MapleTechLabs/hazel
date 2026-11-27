@@ -4,7 +4,13 @@ import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
  * Where a Foldkit view leaves room for an Effect UI screen the shell renders as its own child
  * (`src/root/portal.ts` moves it in). Foldkit leaves the element's children alone. Part of the adapter.
  */
-export type HoleName = "channel-sidebar" | "message-list" | "activity" | "dms"
+export type HoleName =
+	| "channel-sidebar"
+	| "message-list"
+	| "activity"
+	| "dms"
+	| "org-switcher"
+	| "account-menu"
 
 export const HOLE_ATTRIBUTE = "data-hazel-hole"
 
