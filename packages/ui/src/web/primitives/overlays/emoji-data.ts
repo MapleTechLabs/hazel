@@ -1,17 +1,10 @@
 /**
- * What `hz:emojiPicker` offers on the web (lane A3). A small built-in set so the picker works on its
- * own; an island hands it the app's full set (emojibase, custom emoji) with `setEmojiSource`.
+ * What `hz:emojiPicker` offers on the web (lane A3): a small built-in set for a picker given no
+ * `categories`, and today's search over names and tags.
  */
+import type { EmojiCategory, PickerEmoji } from "../../../vocabulary/content.ts"
 
-export interface PickerEmoji {
-	readonly emoji: string
-	readonly name: string
-}
-
-export interface EmojiCategory {
-	readonly label: string
-	readonly emojis: ReadonlyArray<PickerEmoji>
-}
+export type { EmojiCategory, PickerEmoji }
 
 const parse = (text: string): ReadonlyArray<PickerEmoji> =>
 	text
@@ -152,27 +145,33 @@ const builtIn: ReadonlyArray<EmojiCategory> = [
 	},
 ]
 
-let source: ReadonlyArray<EmojiCategory> = builtIn
+/** The built-in set, for a picker given no `categories`. */
+export const builtInCategories: ReadonlyArray<EmojiCategory> = builtIn
 
-/** What the picker offers from now on (an island's full set). */
-export const setEmojiSource = (categories: ReadonlyArray<EmojiCategory>) => {
-	source = categories
-}
+/** How well `each` matches `wanted` (today's `searchEmojis`): its name 10, each matching tag 1. */
+const score = (each: PickerEmoji, wanted: string) =>
+	(each.name.toLowerCase().includes(wanted) ? 10 : 0) +
+	(each.keywords ?? []).filter((tag) => tag.toLowerCase().includes(wanted)).length
 
-export const emojiCategories = (): ReadonlyArray<EmojiCategory> => source
-
-/** Categories narrowed to `query` (by name, any word prefix); empty ones drop out. */
-export const searchEmoji = (query: string): ReadonlyArray<EmojiCategory> => {
+/**
+ * Categories narrowed to `query`, best matches first within each; the recently used drop out while
+ * searching, as do categories left empty.
+ */
+export const searchEmoji = (
+	categories: ReadonlyArray<EmojiCategory>,
+	query: string,
+): ReadonlyArray<EmojiCategory> => {
 	const wanted = query.trim().toLowerCase()
-	if (wanted === "") return source
-	return source
+	if (wanted === "") return categories
+	return categories
+		.filter((category) => category.recent !== true)
 		.map((category) => ({
 			label: category.label,
-			emojis: category.emojis.filter(
-				(each) =>
-					each.name.split(" ").some((word) => word.startsWith(wanted)) ||
-					each.name.startsWith(wanted),
-			),
+			emojis: category.emojis
+				.map((each) => ({ each, points: score(each, wanted) }))
+				.filter(({ points }) => points > 0)
+				.sort((a, b) => b.points - a.points)
+				.map(({ each }) => each),
 		}))
 		.filter((category) => category.emojis.length > 0)
 }

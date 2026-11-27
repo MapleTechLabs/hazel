@@ -361,6 +361,27 @@ export const Suggestion = Schema.Struct({
 })
 export type Suggestion = typeof Suggestion.Type
 
+/**
+ * One emoji the picker offers (`emoji-picker-data`): what a pick reports (`emoji`, a custom emoji's
+ * `:name:`), its name, a custom emoji's `image` url, and the tags search also matches.
+ */
+export const PickerEmoji = Schema.Struct({
+	emoji: Schema.String,
+	name: Schema.String,
+	image: Schema.optional(Schema.String),
+	keywords: Schema.optional(Schema.Array(Schema.String)),
+})
+export type PickerEmoji = typeof PickerEmoji.Type
+
+/** A titled run of the picker's emojis (Recently used, Custom, Smileys & emotion). */
+export const EmojiCategory = Schema.Struct({
+	label: Schema.String,
+	emojis: Schema.Array(PickerEmoji),
+	/** The recently used: left out of search results, where each emoji shows in its own category. */
+	recent: Schema.optional(Schema.Boolean),
+})
+export type EmojiCategory = typeof EmojiCategory.Type
+
 /** A member's name for the mentions in a draft the composer never suggested (`composer-mention-names`). */
 export const MentionName = Schema.Struct({ id: Schema.String, name: Schema.String })
 export type MentionName = typeof MentionName.Type

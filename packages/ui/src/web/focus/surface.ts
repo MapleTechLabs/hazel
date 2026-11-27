@@ -117,35 +117,17 @@ dialog[data-hz-layer]::backdrop { background: var(--hz-color-scrim); }
 [data-hz-part="item"][data-highlighted] { background: var(--hz-color-wash-strong); }
 [data-hz-part="item"][aria-disabled="true"] { opacity: 0.5; }
 [data-hz-part="item"][data-destructive] { color: var(--hz-color-danger-subtle-fg); }
-[data-hz-part="emoji"], [data-hz-part="close"] { cursor: pointer; }
-[data-hz-part="emoji"]:hover, [data-hz-part="close"]:hover { background: var(--hz-color-wash-strong); }
+[data-hz-part="close"] { cursor: pointer; }
+[data-hz-part="close"]:hover { background: var(--hz-color-wash-strong); }
 :is([data-hz=menu], [data-hz=contextMenu], [data-hz=sheet], [data-hz=toast]) [data-hz-part] > svg {
 	display: block;
 	width: 100%;
 	height: 100%;
 }
-[data-hz=ext] [data-hz-part="gifPanel"] {
-	box-sizing: border-box;
-	padding: var(--hz-space-2);
-	gap: var(--hz-space-2);
-	border: 1px solid var(--hz-color-border);
-	border-radius: var(--hz-radius-xl);
-	background: var(--hz-color-bg);
-	color: var(--hz-color-fg);
-	box-shadow: var(--hz-shadow-overlay);
-}
 /* The GIF picker is a web extension, not a recipe: it fades in as a popover does (\`fadeIn\`). */
 [data-hz=ext] [data-hz-part="gifPanel"][data-motion~="enter"] {
 	animation: hz-fade var(--hz-duration-fast) var(--hz-ease-out) 0s 1 both;
 }
-[data-hz=ext] [data-hz-part="gifPanel"] > [data-hz-part="search"] {
-	padding: var(--hz-space-2);
-	border: 0;
-	border-radius: var(--hz-radius-md);
-	background: var(--hz-color-secondary);
-	font: inherit;
-}
-[data-hz=ext] [data-hz-part="gifPanel"] > [data-hz-part="empty"] { color: var(--hz-color-muted-fg); text-align: center; }
 [data-hz-part="emoji"]:focus-visible,
 [data-hz-part="close"]:focus-visible,
 [data-hz-part="button"]:focus-visible,
@@ -193,17 +175,7 @@ dialog[data-hz-layer]::backdrop { background: var(--hz-color-scrim); }
 [data-hz=toast] [data-hz-part="body"] { flex: 1; min-width: 0; }
 [data-hz=tooltip], [data-hz=tooltip] > [data-hz-part="content"] { display: contents; }
 [data-hz=tooltip] > [data-hz-part="bubble"] { pointer-events: none; white-space: nowrap; }
-[data-hz=emojiPicker] > [data-hz-part="panel"], [data-hz=ext] [data-hz-part="gifPanel"] {
-	width: min(100vw - 2 * var(--hz-space-3), 22rem);
-	max-height: min(100vh - 2 * var(--hz-space-3), 24rem);
-	display: flex;
-	flex-direction: column;
-}
-[data-hz=emojiPicker] [data-hz-part="grid"], [data-hz=ext] [data-hz-part="gifs"] { flex: 1; min-height: 0; overflow: auto; }
-[data-hz=emojiPicker] [data-hz-part="emojis"] { display: grid; grid-template-columns: repeat(8, 1fr); }
-[data-hz=ext] [data-hz-part="gifs"] { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--hz-space-1); }
-[data-hz=ext] [data-hz-part="gif"] { padding: 0; border: 0; background: none; border-radius: var(--hz-radius-md); overflow: hidden; }
-[data-hz=ext] [data-hz-part="gif"] img { display: block; width: 100%; height: auto; }
+[data-hz=emojiPicker] [data-hz-part="grid"] { min-height: 0; }
 [data-hz=menu] > [data-hz-part="panel"], [data-hz=contextMenu] > [data-hz-part="panel"] {
 	min-width: 12rem;
 	max-height: min(100vh - 2 * var(--hz-space-3), 28rem);

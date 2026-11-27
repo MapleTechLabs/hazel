@@ -8,7 +8,6 @@ import { GifPicker } from "../../extensions/GifPicker.ts"
 import { Hazel } from "../../vocabulary/index.ts"
 import { missingWebExtensions } from "../extensions.ts"
 import * as WebHost from "../host.ts"
-import { setGifSource } from "../primitives/overlays/gifPicker.ts"
 import { openPanels } from "./layers.ts"
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20))
@@ -244,38 +243,114 @@ describe("emoji and GIF pickers", () => {
 		}).pipe(Effect.provide(WebHost.layer()), Effect.scoped, Effect.runPromise)
 	})
 
-	it("GifPicker is registered on the web and searches the source the island sets", async () => {
-		expect(missingWebExtensions([GifPicker])).toEqual([])
-		const queries: Array<string> = []
-		setGifSource({
-			search: async (query) => {
-				queries.push(query)
-				return [{ url: "https://gif/hd.gif", preview: "https://gif/sm.webp", title: "cat" }]
-			},
-		})
+	it("emojiPicker: draws the screen's categories, custom images, tag search and the hovered footer", async () => {
 		const root = container()
-		const GifMsg = UiSchema.TaggedEnum({ Selected: { url: Schema.String } })
+		const Custom = Hazel.component({
+			name: "Custom",
+			props: Schema.Struct({}),
+			model: Schema.Struct({ picked: Schema.Array(Schema.String) }),
+			message: PickerMsg,
+		}).make({
+			init: () => ({ picked: [] }),
+			update: {
+				Picked: ($, { emoji }) => $.evolve({ picked: (all) => [...all, emoji] }),
+				Dismissed: ($) => $.model,
+			},
+			view: (h) =>
+				h.emojiPicker
+					.open(true)
+					.categories([
+						{
+							label: "Custom",
+							emojis: [{ emoji: ":parrot:", name: "parrot", image: "https://emoji/parrot.gif" }],
+						},
+						{
+							label: "Smileys & emotion",
+							emojis: [
+								{ emoji: "😄", name: "grinning face with smiling eyes", keywords: ["smile"] },
+								{ emoji: "🙂", name: "slightly smiling face", keywords: ["smile"] },
+							],
+						},
+					])
+					.on("select", ({ emoji }) => PickerMsg.Picked({ emoji })),
+		})
+		await Effect.gen(function* () {
+			const app = yield* Renderer.mount(Custom, {}, root)
+			yield* Effect.promise(settle)
+			const cells = () => [...root.querySelectorAll<HTMLElement>("[data-hz-part=emoji]")]
+			expect(cells()[0]?.querySelector("img")?.getAttribute("src")).toBe("https://emoji/parrot.gif")
+			expect(root.querySelector("[data-hz-part=footerHint]")?.textContent).toBe("Pick an emoji")
+			cells()[0]!.dispatchEvent(new Event("pointerover", { bubbles: true }))
+			expect(root.querySelector("[data-hz-part=footerLabel]")?.textContent).toBe("parrot")
+			const search = root.querySelector<HTMLInputElement>("[data-hz-part=search]")!
+			search.value = "smile"
+			search.dispatchEvent(new Event("input", { bubbles: true }))
+			// "smiling" is in neither name, so both match by their tag, in order.
+			expect(cells().map((cell) => cell.getAttribute("aria-label"))).toEqual([
+				"grinning face with smiling eyes",
+				"slightly smiling face",
+			])
+			cells()[0]!.click()
+			yield* Effect.promise(settle)
+			expect(app.model()?.picked).toEqual(["😄"])
+		}).pipe(Effect.provide(WebHost.layer()), Effect.scoped, Effect.runPromise)
+	})
+
+	it("GifPicker is registered on the web and draws the screen's results, chips and pager", async () => {
+		expect(missingWebExtensions([GifPicker])).toEqual([])
+		const root = container()
+		const GifMsg = UiSchema.TaggedEnum({
+			Selected: { url: Schema.String },
+			Queried: { text: Schema.String },
+			Chose: { query: Schema.String },
+		})
+		const cat = {
+			url: "https://gif/hd.gif",
+			still: "https://gif/sm.jpg",
+			animated: "https://gif/sm.webp",
+			title: "cat",
+			width: 200,
+			height: 150,
+		}
 		const Gifs = Hazel.component({
 			name: "Gifs",
 			props: Schema.Struct({}),
-			model: Schema.Struct({ urls: Schema.Array(Schema.String) }),
+			model: Schema.Struct({ events: Schema.Array(Schema.String) }),
 			message: GifMsg,
 		}).make({
-			init: () => ({ urls: [] }),
-			update: { Selected: ($, { url }) => $.evolve({ urls: (all) => [...all, url] }) },
+			init: () => ({ events: [] }),
+			update: {
+				Selected: ($, { url }) => $.evolve({ events: (all) => [...all, `select ${url}`] }),
+				Queried: ($, { text }) => $.evolve({ events: (all) => [...all, `query ${text}`] }),
+				Chose: ($, { query }) => $.evolve({ events: (all) => [...all, `category ${query}`] }),
+			},
 			view: (h) =>
-				h.extension(GifPicker, { open: true }).on("select", ({ url }) => GifMsg.Selected({ url })),
+				h
+					.extension(GifPicker, {
+						open: true,
+						gifs: [cat],
+						categories: [{ label: "Happy", query: "happy" }],
+						status: "ready",
+						paging: "loading",
+					})
+					.on("select", ({ url }) => GifMsg.Selected({ url }))
+					.on("query", ({ text }) => GifMsg.Queried({ text }))
+					.on("category", ({ query }) => GifMsg.Chose({ query })),
 		})
 		await Effect.gen(function* () {
 			const app = yield* Renderer.mount(Gifs, {}, root)
 			yield* Effect.promise(settle)
-			expect(queries).toEqual([""])
 			const tile = root.querySelector<HTMLButtonElement>("[data-hz-part=gif]")!
 			expect(tile.getAttribute("aria-label")).toBe("cat")
+			expect(tile.querySelector("img")?.getAttribute("src")).toBe(cat.still)
+			tile.dispatchEvent(new Event("pointerenter"))
+			expect(tile.querySelector("img")?.getAttribute("src")).toBe(cat.animated)
+			expect(root.querySelector("[data-hz-part=gifPager] [data-hz-spinner]")).not.toBeNull()
+			expect(root.querySelector("[data-hz-part=gifAttribution]")?.textContent).toBe("Powered by KLIPY")
+			root.querySelector<HTMLButtonElement>("[data-hz-part=gifChip]")!.click()
 			tile.click()
 			yield* Effect.promise(settle)
-			expect(app.model()?.urls).toEqual(["https://gif/hd.gif"])
+			expect(app.model()?.events).toEqual(["category happy", `select ${cat.url}`])
 		}).pipe(Effect.provide(WebHost.layer()), Effect.scoped, Effect.runPromise)
-		setGifSource(undefined)
 	})
 })

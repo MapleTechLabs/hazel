@@ -317,6 +317,7 @@ export const tokens = {
 		"24": 96,
 		"36": 144,
 		"64": 256,
+		"105": 420,
 	},
 	/** styles.css `--radius-*` (lg is 0.5rem, the rest multiples of it); `none` is `rounded-none`. */
 	radius: { none: 0, xs: 2, sm: 4, md: 6, lg: 8, xl: 12, "2xl": 16, "3xl": 24, "4xl": 32, full: 9999 },

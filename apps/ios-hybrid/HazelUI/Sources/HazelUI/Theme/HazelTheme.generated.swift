@@ -437,7 +437,7 @@ public enum HazelTheme {
         }
     }
 
-    public static let space: [String: CGFloat] = ["0": 0, "1": 4, "2": 8, "3": 12, "4": 16, "5": 20, "6": 24, "7": 28, "8": 32, "9": 36, "10": 40, "11": 44, "12": 48, "14": 56, "16": 64, "20": 80, "24": 96, "36": 144, "64": 256, "px": 1, "0.5": 2, "1.5": 6, "2.5": 10, "3.5": 14, "4.5": 18, "5.5": 22]
+    public static let space: [String: CGFloat] = ["0": 0, "1": 4, "2": 8, "3": 12, "4": 16, "5": 20, "6": 24, "7": 28, "8": 32, "9": 36, "10": 40, "11": 44, "12": 48, "14": 56, "16": 64, "20": 80, "24": 96, "36": 144, "64": 256, "105": 420, "px": 1, "0.5": 2, "1.5": 6, "2.5": 10, "3.5": 14, "4.5": 18, "5.5": 22]
     public static let radius: [String: CGFloat] = ["none": 0, "xs": 2, "sm": 4, "md": 6, "lg": 8, "xl": 12, "2xl": 16, "3xl": 24, "4xl": 32, "full": 9999]
     /// Seconds.
     public static let duration: [String: Double] = ["micro": 0.1, "fast": 0.15, "normal": 0.2, "slow": 0.3, "enter": 0.18, "reactionEnter": 0.22, "reactionPop": 0.26, "progressSweep": 1.6, "bounce": 1, "pulse": 2]
@@ -1167,14 +1167,29 @@ public enum HazelTheme {
             inert: [],
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .contents)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "panel", style: Style(background: Colors.bg, color: Colors.fg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 8, paddingY: 8, rowGap: 8, shadow: "overlay")),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "search", style: Style(background: Colors.secondary, color: Colors.fg, radius: 6, paddingX: 10, minHeight: 36, text: .body)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "panel", style: Style(layout: .column, background: Colors.overlay, color: Colors.overlayFg, borderColor: Colors.overlayBorder, borderWidth: 1, radius: 12, shadow: "lg")),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "header", style: Style(paddingX: 8, paddingTop: 8, paddingBottom: 4, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "searchBox", style: Style(layout: .row, align: .center, background: Colors.field, color: Colors.mutedFg, radius: 8, paddingX: 10, gap: 8, minHeight: 36, transition: 0.15)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "searchIcon", style: Style(size: 16, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "search", style: Style(background: Colors.clear, color: Colors.fg, text: .body, grow: true, minWidth: 0)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "grid", style: Style(layout: .column, paddingBottom: 6, grow: true, overflow: .scrollY)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "category", style: Style(layout: .column)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "categoryTitle", style: Style(color: Colors.mutedFg, paddingX: 4, paddingY: 4, text: .caption, strong: true)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "emoji", style: Style(layout: .row, align: .center, justify: .center, radius: 6, size: 36, text: .title)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "empty", style: Style(color: Colors.mutedFg, paddingY: 16, text: .caption)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "search", style: Style(minHeight: 32, text: .label)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "emoji", style: Style(size: 32)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "categoryTitle", style: Style(background: Colors.overlay, color: Colors.mutedFg, paddingX: 12, paddingTop: 12, paddingBottom: 6, text: .caption, leading: 12, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "emojis", style: Style(paddingX: 6)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "emoji", style: Style(layout: .row, align: .center, justify: .center, radius: 8, size: 36, text: .display, leading: 24)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "emojiImage", style: Style(size: 22)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "status", style: Style(layout: .column, align: .center, justify: .center, color: Colors.mutedFg, paddingX: 24, gap: 12, text: .label, grow: true, textAlign: .center)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "statusTitle", style: Style(color: Colors.fg, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "footer", style: Style(layout: .row, align: .center, paddingX: 12, gap: 10, minHeight: 48, text: .label, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "footerEmoji", style: Style(layout: .row, align: .center, justify: .center, size: 32, text: .display, leading: 24, shrink: false)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "footerImage", style: Style(size: 24)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "footerLabel", style: Style(color: Colors.fg, strong: true, truncate: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "footerHint", style: Style(color: Colors.mutedFg, paddingX: 2, truncate: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "search", style: Style(text: .label)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "emoji", style: Style(size: 40)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "emojiImage", style: Style(size: 24)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "emoji", style: Style(background: Colors.washStrong), partState: PartState(part: "emoji", state: .hover)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "emoji", style: Style(background: Colors.washStrong), partState: PartState(part: "emoji", state: .selected)),
             ]
         )
 

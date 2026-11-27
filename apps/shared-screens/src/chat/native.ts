@@ -12,7 +12,6 @@ import { Effect, Layer, Option, Stream } from "effect"
 import { messageListLayer } from "./live"
 import { MessageList } from "./MessageList"
 // iOS has no picker renderer yet: the reaction picker draws nothing there.
-import { pickerCatalogNone } from "./pickers/catalog"
 
 interface ChannelRow {
 	readonly id: ChannelId
@@ -51,7 +50,7 @@ export const mountMessageListNative = (
 			Effect.provide(
 				messageListLayer(data, rpc, (request) =>
 					console.log(`[channel] request ${JSON.stringify(request)}`),
-				).pipe(Layer.provideMerge(pickerCatalogNone)),
+				),
 			),
 		)
 	})

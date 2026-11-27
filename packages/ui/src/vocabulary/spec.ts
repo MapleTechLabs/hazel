@@ -841,8 +841,15 @@ export const tags = {
 		web: "A3",
 		ios: "S3",
 		content: "none",
-		props: { open: flag },
-		events: { select: Schema.Struct({ emoji: Schema.String }), dismiss: none },
+		// The screen's set (custom emojis with their images, the recently used first); none draws a
+		// small built-in set. `loading` shows a spinner, `error` says why with a retry (`retry`).
+		props: {
+			open: flag,
+			categories: value(Schema.Array(Content.EmojiCategory)),
+			loading: flag,
+			error: text,
+		},
+		events: { select: Schema.Struct({ emoji: Schema.String }), dismiss: none, retry: none },
 	}),
 
 	// Phase 4: the command palette (`overlay/command-palette`): a query field over grouped results.

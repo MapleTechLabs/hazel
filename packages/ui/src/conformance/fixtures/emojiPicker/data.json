@@ -1,0 +1,125 @@
+{
+	"about": "The screen's set as `categories` (`emoji-picker-data`): the recently used, the organization's custom emojis as images, then the dataset's; a spinner while it loads (`loading`) and the reason with Try again when it fails (`error`).",
+	"frame": "inline",
+	"pending": {
+		"ios": "S3"
+	},
+	"root": {
+		"tag": "emojiPicker",
+		"props": {
+			"open": true,
+			"categories": [
+				{
+					"label": "Recently used",
+					"recent": true,
+					"emojis": [
+						{
+							"emoji": "👍",
+							"name": "Thumbs up"
+						},
+						{
+							"emoji": ":tanuki:",
+							"name": "tanuki",
+							"image": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='10' cy='10' r='9' fill='%23f59e0b'/%3E%3C/svg%3E"
+						}
+					]
+				},
+				{
+					"label": "Custom",
+					"emojis": [
+						{
+							"emoji": ":tanuki:",
+							"name": "tanuki",
+							"image": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='10' cy='10' r='9' fill='%23f59e0b'/%3E%3C/svg%3E"
+						}
+					]
+				},
+				{
+					"label": "Smileys & emotion",
+					"emojis": [
+						{
+							"emoji": "😀",
+							"name": "Grinning face",
+							"keywords": [
+								"smile",
+								"happy"
+							]
+						},
+						{
+							"emoji": "😃",
+							"name": "Grinning face with big eyes",
+							"keywords": [
+								"smile"
+							]
+						},
+						{
+							"emoji": "😄",
+							"name": "Grinning face with smiling eyes"
+						},
+						{
+							"emoji": "😁",
+							"name": "Beaming face"
+						},
+						{
+							"emoji": "😆",
+							"name": "Grinning squinting face"
+						},
+						{
+							"emoji": "😅",
+							"name": "Grinning face with sweat"
+						},
+						{
+							"emoji": "😂",
+							"name": "Face with tears of joy"
+						},
+						{
+							"emoji": "🙂",
+							"name": "Slightly smiling face"
+						},
+						{
+							"emoji": "😉",
+							"name": "Winking face"
+						},
+						{
+							"emoji": "😊",
+							"name": "Smiling face with smiling eyes"
+						}
+					]
+				}
+			]
+		},
+		"events": [
+			"select",
+			"dismiss",
+			"retry"
+		]
+	},
+	"aria": [
+		{
+			"role": "dialog",
+			"name": "Emoji picker"
+		},
+		{
+			"role": "group",
+			"name": "Custom"
+		},
+		{
+			"role": "button",
+			"name": "tanuki"
+		}
+	],
+	"cases": [
+		{
+			"name": "loading",
+			"props": {
+				"loading": true
+			}
+		},
+		{
+			"name": "error",
+			"props": {
+				"error": "Service temporarily unavailable"
+			}
+		}
+	]
+}

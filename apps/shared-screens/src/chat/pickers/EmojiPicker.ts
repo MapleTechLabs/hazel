@@ -2,15 +2,15 @@
 // @effect-diagnostics experimentalApiUsage:off
 /**
  * The chat's emoji picker (today's `web-foldkit/src/emoji-picker/`): `hz:emojiPicker` over the full
- * emojibase set, the recently used emojis first. The parent owns `open`; a pick reports `Picked`
- * and is remembered, Escape or a press outside reports `RequestedClose`.
+ * emojibase set, the recently used emojis first, then the organization's custom ones. The parent
+ * owns `open` and the custom emojis; a pick reports `Picked` and is remembered, Escape or a press
+ * outside reports `RequestedClose`. A spinner shows while the set loads; a failure says so with a retry.
  */
 import { Command, Component, Subscription, UiSchema } from "@effect/ui"
 import { KeyValue } from "@hazel/client-data"
 import { Hazel } from "@hazel/ui/vocabulary/index"
 import { Effect, Layer, Schema, Stream } from "effect"
-import { PickerCatalog } from "./catalog"
-import { categoriesOf, LoadEmojiData } from "./emoji-data"
+import { categoriesOf, EmojiData, LoadEmojiData } from "./emoji-data"
 import {
 	decodeRecentEmojis,
 	encodeRecentEmojis,
@@ -19,23 +19,36 @@ import {
 	withRecentEmoji,
 } from "./recent"
 
-export const EmojiPickerProps = Schema.Struct({ open: Schema.Boolean })
+export const CustomEmojiProp = Schema.Struct({ name: Schema.String, imageUrl: Schema.String })
+
+export const EmojiPickerProps = Schema.Struct({
+	open: Schema.Boolean,
+	/** The organization's custom emojis, picked as `:name:`. */
+	custom: Schema.optional(Schema.Array(CustomEmojiProp)),
+})
 export type EmojiPickerProps = typeof EmojiPickerProps.Type
 
-/** Whether the full set reached the picker; until it does (or when it fails) the built-in set shows. */
+/** The full set: loading (a spinner), loaded, or failed (a reason and a retry). */
 export const EmojiCatalog = Schema.Literals(["Loading", "Shown", "Failed"])
 
 export const EmojiPickerModel = Schema.Struct({
 	/** This device's picks, newest first; null until read. */
 	recent: Schema.NullOr(Schema.Array(RecentEmoji)),
 	catalog: EmojiCatalog,
+	data: Schema.NullOr(EmojiData),
+	/** Bumped by "Try again": a new load. */
+	attempt: Schema.Finite,
 })
+
+/** Today's copy for an emoji set that would not load (`failureMessage("Unavailable")`). */
+export const EMOJI_LOAD_FAILED = "Service temporarily unavailable"
 export type EmojiPickerModel = typeof EmojiPickerModel.Type
 
 export const EmojiPickerMessage = UiSchema.TaggedEnum({
 	LoadedRecentEmojis: { recent: Schema.Array(RecentEmoji) },
-	ShowedEmojiCatalog: {},
+	LoadedEmojiData: { data: EmojiData },
 	FailedLoadEmojiData: {},
+	RetriedEmojiData: {},
 	SelectedEmoji: { emoji: Schema.String },
 	DismissedEmojiPicker: {},
 })
@@ -72,16 +85,13 @@ const recentStream = Stream.fromEffect(
 	),
 )
 
-/** Loads the dataset (once per run) and hands the picker its categories. */
-export const catalogStream = (recent: ReadonlyArray<RecentEmoji>) =>
-	Stream.fromEffect(
-		Effect.gen(function* () {
-			const catalog = yield* PickerCatalog
-			const data = yield* LoadEmojiData.get({ locale: "en" })
-			yield* catalog.showEmoji(categoriesOf(data, recent))
-			return EmojiPickerMessage.ShowedEmojiCatalog()
-		}).pipe(Effect.orElseSucceed(() => EmojiPickerMessage.FailedLoadEmojiData())),
-	)
+/** Loads the dataset (once per run; the query is cached) into the model. */
+export const catalogStream = Stream.fromEffect(
+	LoadEmojiData.get({ locale: "en" }).pipe(
+		Effect.map((data) => EmojiPickerMessage.LoadedEmojiData({ data })),
+		Effect.orElseSucceed(() => EmojiPickerMessage.FailedLoadEmojiData()),
+	),
+)
 
 export const EmojiPickerNoDeps = Hazel.component({
 	name: "EmojiPicker",
@@ -90,42 +100,48 @@ export const EmojiPickerNoDeps = Hazel.component({
 	message: EmojiPickerMessage,
 	events: EmojiPickerEvents,
 }).make({
-	init: () => ({ recent: null, catalog: "Loading" as const }),
+	init: () => ({ recent: null, catalog: "Loading" as const, data: null, attempt: 0 }),
 	update: {
 		LoadedRecentEmojis: ($, { recent }) => $.evolve({ recent }),
-		ShowedEmojiCatalog: ($) => $.evolve({ catalog: "Shown" }),
+		LoadedEmojiData: ($, { data }) => $.evolve({ catalog: () => "Shown" as const, data: () => data }),
 		FailedLoadEmojiData: ($) => $.evolve({ catalog: "Failed" }),
+		RetriedEmojiData: ($) =>
+			$.evolve({ catalog: () => "Loading" as const, attempt: (attempt) => attempt + 1 }),
 		SelectedEmoji: ($, { emoji }) => {
-			const recent = withRecentEmoji($.model.recent ?? [], { emoji, label: "", imageUrl: null })
+			// A custom emoji is remembered with its image, so the recent row can draw it.
+			const custom = ($.props.custom ?? []).find((each) => `:${each.name}:` === emoji)
+			const entry =
+				custom === undefined
+					? { emoji, label: "", imageUrl: null }
+					: { emoji, label: custom.name, imageUrl: custom.imageUrl }
+			const recent = withRecentEmoji($.model.recent ?? [], entry)
 			return $.evolve({ recent })
 				.run(SaveRecentEmojis.make({ recent }))
 				.emit(EmojiPickerEvents.Picked({ emoji }))
 		},
 		DismissedEmojiPicker: ($) => $.emit(EmojiPickerEvents.RequestedClose()),
 	},
-	subscriptions: ({ props, model }) => {
-		const recent = model.recent
-		return [
-			Subscription.make("recent", [], () => recentStream),
-			recent !== null &&
-				Subscription.make(
-					"catalog",
-					// A failed load tries again the next time the picker opens.
-					[recent.map((entry) => entry.emoji).join(" "), model.catalog === "Failed" && props.open],
-					() => catalogStream(recent),
-				),
-		]
-	},
-	// HAZEL-GAP(emoji-picker-data): the set reaches the renderer through `PickerCatalog`, not a prop.
-	// HAZEL-GAP(emoji-picker-layout): today's 9 columns, footer and search icon are the renderer's to draw.
-	view: (h) =>
+	subscriptions: ({ model }) => [
+		Subscription.make("recent", [], () => recentStream),
+		// "Try again" starts a new load.
+		model.catalog === "Loading" && Subscription.make("catalog", [model.attempt], () => catalogStream),
+	],
+	view: (h, model) =>
 		h.emojiPicker
 			.open(h.props.open)
+			.categories(
+				model.data === null
+					? undefined
+					: categoriesOf(model.data, model.recent ?? [], null, h.props.custom ?? []),
+			)
+			.loading(model.catalog === "Loading")
+			.error(model.catalog === "Failed" ? EMOJI_LOAD_FAILED : undefined)
 			.on("select", ({ emoji }) => EmojiPickerMessage.SelectedEmoji({ emoji }))
+			.on("retry", EmojiPickerMessage.RetriedEmojiData())
 			.on("dismiss", EmojiPickerMessage.DismissedEmojiPicker()),
 })
 
-/** Leaves the platform's `KeyValue`, `HttpClient` and `PickerCatalog` to the host. */
+/** Leaves the platform's `KeyValue` and `HttpClient` to the host. */
 export const emojiPickerLayer = Layer.mergeAll(SaveRecentEmojis.layer, LoadEmojiData.layer)
 
 export const EmojiPicker = EmojiPickerNoDeps.pipe(Component.provide(emojiPickerLayer))
