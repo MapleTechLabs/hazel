@@ -15,6 +15,7 @@ import { Activity } from "../../activity/Activity"
 import { formatDistanceToNow } from "../../activity/format"
 import { Navigate, ShowToast } from "../../app/requests"
 import { Session } from "../../app/session"
+import { pageHeader } from "../../org/components/PageHeader"
 import {
 	keptMarks,
 	MarkedRead,
@@ -162,23 +163,6 @@ const markAllButton = (h: H, model: NotificationsModel) =>
 		.loading(model.isMarkingAllRead)
 		.on("press", NotificationsMessage.PressedMarkAllRead())
 
-// Today's `pageHeader` (display title, subtitle, actions at its end) composed from a stack: `screen`
-// `page` is the phone's bar (`p4-screen-page-column`).
-const header = (h: H, model: NotificationsModel, hasAction: boolean) =>
-	h.stack
-		.axis("horizontal")
-		.align("start")
-		.children(
-			h.stack
-				.density("tight")
-				.children(
-					h.heading.level("1").children(COPY[h.props.tab].heading),
-					h.text.role("label").tone("muted").children(COPY[h.props.tab].subheading),
-				),
-			h.spacer,
-			hasAction ? markAllButton(h, model) : null,
-		)
-
 const channelGlyph = (type: string) =>
 	Match.value(type).pipe(
 		Match.when("thread", () => "thread" as const),
@@ -323,6 +307,15 @@ export const NotificationsPage = NotificationsDef.make({
 		return h.stack
 			.key("notifications")
 			.density("relaxed")
-			.children(isMobile ? null : header(h, model, hasUnreads), ...body)
+			.children(
+				isMobile
+					? null
+					: pageHeader(
+							h,
+							{ title: COPY[tab].heading, subtitle: COPY[tab].subheading },
+							hasUnreads ? markAllButton(h, model) : null,
+						),
+				...body,
+			)
 	},
 })

@@ -140,6 +140,12 @@ export const MorePage = Component.lazy("MorePage", () =>
 	import("@hazel/shared-screens/org/pages/more/MorePage").then((module) => module.MorePage),
 )
 
+export const ProfilePage = Component.lazy("ProfilePage", () =>
+	import("@hazel/shared-screens/org/pages/profile/ProfilePage").then((module) =>
+		withClientData(module.ProfilePage),
+	),
+)
+
 /** The More tab's rows (PA5). */
 const moreHrefsOf = (orgSlug: string) => ({
 	profile: hrefOf(AppRoute.MySettingsProfile({ orgSlug })),
@@ -194,6 +200,16 @@ const inbox =
 
 /** Keyed by what makes a new instance (Foldkit's page `key`): a new token mounts a fresh page. */
 const nativePages: Registry = {
+	Profile: (h, { route, session, fallback }) =>
+		ProfilePage(h, {
+			key: route.userId,
+			props: {
+				userId: route.userId,
+				session,
+				editHref: hrefOf(AppRoute.MySettingsProfile({ orgSlug: route.orgSlug })),
+			},
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
 	OrgMore: (h, { route, session, fallback }) =>
 		MorePage(h, {
 			key: route.orgSlug,
