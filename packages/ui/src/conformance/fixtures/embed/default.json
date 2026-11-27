@@ -1,0 +1,31 @@
+{
+	"about": "A link preview card: title, description and site; without them it falls back to the host.",
+	"root": {
+		"tag": "embed",
+		"props": {
+			"embed": {
+				"url": "https://hazel.sh/changelog",
+				"title": "Changelog: threads, faster search and the native app",
+				"description": "Everything that shipped this month, with a closer look at how threads stay in sync across devices and why search now feels instant.",
+				"site": "hazel.sh"
+			}
+		},
+		"events": ["press"]
+	},
+	"aria": [
+		{
+			"role": "link",
+			"name": "Changelog: threads, faster search and the native app Everything that shipped this month, with a closer look at how threads stay in sync across devices and why search now feels instant. hazel.sh"
+		}
+	],
+	"cases": [
+		{
+			"name": "bare",
+			"props": {
+				"embed": {
+					"url": "https://www.example.com/a/page"
+				}
+			}
+		}
+	]
+}

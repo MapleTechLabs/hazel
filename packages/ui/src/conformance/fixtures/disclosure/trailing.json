@@ -1,0 +1,41 @@
+{
+	"about": "A customer flag's row (`feature-flags/view.ts`): the header with a count at the end of its line, open over its list.",
+	"root": {
+		"tag": "disclosure",
+		"props": {
+			"title": "beta-composer",
+			"open": true
+		},
+		"events": ["toggle"],
+		"slots": [
+			{
+				"name": "trailing",
+				"children": [
+					{
+						"tag": "badge",
+						"props": {
+							"label": "3 customers",
+							"style": "quiet"
+						}
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "text",
+				"children": ["Acme, Globex and Initech."]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"aria": [
+		{
+			"role": "button",
+			"name": "beta-composer"
+		}
+	],
+	"pending": {
+		"ios": "S4"
+	}
+}

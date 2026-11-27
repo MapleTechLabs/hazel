@@ -1,0 +1,27 @@
+{
+	"about": "A labelled progress bar at 40%, full, and indeterminate (the export in settings).",
+	"root": {
+		"tag": "progress",
+		"props": {
+			"value": 0.4,
+			"label": "Exporting your workspace"
+		}
+	},
+	"frame": "sidebar",
+	"aria": [
+		{
+			"role": "progressbar",
+			"name": "Exporting your workspace"
+		}
+	],
+	"axes": [
+		{
+			"prop": "value",
+			"values": [1]
+		},
+		{
+			"prop": "indeterminate",
+			"values": [true]
+		}
+	]
+}

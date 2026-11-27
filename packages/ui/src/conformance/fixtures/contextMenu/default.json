@@ -1,0 +1,38 @@
+{
+	"about": "hz:contextMenu around a region (a right click or long press opens it at the pointer); a gallery frame draws it open in place under the region.",
+	"frame": "inline",
+	"root": {
+		"tag": "contextMenu",
+		"props": {
+			"entries": [
+				{
+					"entries": [
+						{ "id": "reply", "label": "Reply", "icon": "reply" },
+						{ "id": "copy", "label": "Copy text", "icon": "copy" },
+						{
+							"id": "move",
+							"label": "Move to section",
+							"entries": [
+								{ "id": "move-favorites", "label": "Favorites" },
+								{ "id": "move-projects", "label": "Projects" }
+							]
+						}
+					]
+				},
+				{
+					"entries": [
+						{ "id": "delete", "label": "Delete message", "icon": "trash", "destructive": true }
+					]
+				}
+			]
+		},
+		"events": ["select"],
+		"children": [{ "tag": "text", "children": ["Right click this message"] }]
+	},
+	"aria": [
+		{ "role": "menu" },
+		{ "role": "menuitem", "name": "Reply" },
+		{ "role": "menuitem", "name": "Move to section" },
+		{ "role": "menuitem", "name": "Delete message" }
+	]
+}

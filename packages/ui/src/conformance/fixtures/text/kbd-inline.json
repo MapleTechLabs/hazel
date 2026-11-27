@@ -1,0 +1,21 @@
+{
+	"about": "A caption with a `kbd` key cap inside it, as the create-channel hint draws its shortcut.",
+	"root": {
+		"tag": "text",
+		"props": {
+			"role": "caption",
+			"tone": "muted"
+		},
+		"children": [
+			"Create your first channel with ",
+			{
+				"tag": "text",
+				"props": {
+					"role": "kbd"
+				},
+				"children": ["\u2325\u2318N"]
+			}
+		]
+	},
+	"frame": "sidebar"
+}

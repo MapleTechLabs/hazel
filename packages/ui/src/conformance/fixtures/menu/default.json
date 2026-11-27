@@ -1,0 +1,45 @@
+{
+	"about": "hz:menu with its own trigger button (label): groups with titles, icons, a checked entry, a disabled and a destructive entry, and a one-level submenu. A gallery frame draws it open in place.",
+	"frame": "inline",
+	"root": {
+		"tag": "menu",
+		"props": {
+			"label": "Channel options",
+			"entries": [
+				{
+					"entries": [
+						{ "id": "copy", "label": "Copy link", "icon": "copy" },
+						{ "id": "pin", "label": "Pin channel", "icon": "pin", "checked": true },
+						{
+							"id": "notifications",
+							"label": "Notifications",
+							"icon": "bell",
+							"entries": [
+								{ "id": "notify-all", "label": "All messages", "checked": false },
+								{ "id": "notify-mentions", "label": "Mentions only", "checked": true },
+								{ "id": "notify-none", "label": "Nothing" }
+							]
+						}
+					]
+				},
+				{
+					"title": "Danger zone",
+					"entries": [
+						{ "id": "archive", "label": "Archive", "disabled": true },
+						{ "id": "leave", "label": "Leave channel", "icon": "leave", "destructive": true }
+					]
+				}
+			]
+		},
+		"events": ["select"]
+	},
+	"aria": [
+		{ "role": "button", "name": "Channel options" },
+		{ "role": "menu", "name": "Channel options" },
+		{ "role": "menuitem", "name": "Copy link" },
+		{ "role": "menuitemcheckbox", "name": "Pin channel" },
+		{ "role": "menuitem", "name": "Notifications" },
+		{ "role": "group", "name": "Danger zone" },
+		{ "role": "menuitem", "name": "Leave channel" }
+	]
+}

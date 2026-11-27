@@ -1,0 +1,19 @@
+{
+	"about": "A heading at each level: section (2) by default, page (1) and group (3).",
+	"root": {
+		"tag": "heading",
+		"children": ["Organization profile"]
+	},
+	"axes": [
+		{
+			"prop": "level",
+			"values": ["1", "3"]
+		}
+	],
+	"aria": [
+		{
+			"role": "heading",
+			"name": "Organization profile"
+		}
+	]
+}

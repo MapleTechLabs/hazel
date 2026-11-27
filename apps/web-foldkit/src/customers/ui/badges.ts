@@ -135,49 +135,6 @@ export const stageBadge = <M>(
 		],
 	)
 
-// SIGNAL COUNTS
-
-/** An account's open signals: a severity glyph per non-zero risk count, then opportunities; `—` when none. */
-export const signalCounts = <M>(
-	h: HtmlBuilder<M>,
-	counts: Readonly<{ high: number; medium: number; low: number; opportunities: number }>,
-	options: Readonly<{ className?: string }> = {},
-): Html => {
-	const risks = (["high", "medium", "low"] as const).filter((severity) => counts[severity] > 0)
-	const total = counts.high + counts.medium + counts.low + counts.opportunities
-	if (total === 0) return h.span([h.Class(twMerge("text-muted-fg text-sm", options.className))], ["—"])
-	const label = [
-		...risks.map((severity) => `${counts[severity]} ${SEVERITY_LABEL[severity].toLowerCase()} risk`),
-		...(counts.opportunities > 0 ? [`${counts.opportunities} opportunity`] : []),
-	].join(", ")
-	return h.span(
-		[
-			h.Class(twMerge("inline-flex items-center gap-2.5 text-sm tabular-nums", options.className)),
-			h.AriaLabel(label),
-			h.Title(label),
-		],
-		[
-			...risks.map((severity) =>
-				h.span(
-					[h.Class("inline-flex items-center gap-1"), h.AriaHidden(true)],
-					[severityGlyph(h, severity, { labelled: false }), String(counts[severity])],
-				),
-			),
-			...(counts.opportunities > 0
-				? [
-						h.span(
-							[
-								h.Class("inline-flex items-center gap-1 text-info-subtle-fg"),
-								h.AriaHidden(true),
-							],
-							[IconOpportunity(h, { className: "size-3" }), String(counts.opportunities)],
-						),
-					]
-				: []),
-		],
-	)
-}
-
 // ENVIRONMENT
 
 /** `EU`: an account's environment, beside its name; a long name truncates. */
@@ -189,11 +146,3 @@ export const environmentBadge = <M>(
 	badge(h, { intent: "secondary", className: twMerge("min-w-0 max-w-32 shrink-0", options.className) }, [
 		h.span([h.Class("min-w-0 truncate"), h.Title(environment)], [environment]),
 	])
-
-/** `+2 environments` beside a primary's name, muted; nothing for an account without environments. */
-export const environmentsHint = <M>(h: HtmlBuilder<M>, count: number): ReadonlyArray<Html> => {
-	const hint = environmentsHintOf(count)
-	return hint === null
-		? []
-		: [h.span([h.Class("shrink-0 whitespace-nowrap font-normal text-muted-fg text-xs")], [hint])]
-}

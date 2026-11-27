@@ -1,0 +1,127 @@
+{
+	"about": "One message row as data (readable keys), in each of the message's own states.",
+	"root": {
+		"tag": "message",
+		"props": {
+			"row": {
+				"author": "Ada Lovelace",
+				"initials": "AL",
+				"provider": "slack",
+				"time": "14:05",
+				"body": [
+					[0, ["Ship it ", [1, "@Grace", "u2"], ", see ", [2, "the doc", "https://hazel.sh/d"]]],
+					[1, "bun run test", "sh"]
+				],
+				"reactions": [
+					{
+						"emoji": "👍",
+						"count": 3,
+						"mine": true,
+						"who": {
+							"names": ["Grace", "Alan"],
+							"others": 1
+						}
+					},
+					{
+						"emoji": "🎉",
+						"count": 1,
+						"mine": false
+					}
+				],
+				"quick": ["👍", "❤️", "😂"],
+				"edited": true,
+				"files": [
+					{
+						"id": "f1",
+						"kind": "image",
+						"name": "shot.png",
+						"width": 1280,
+						"height": 720
+					}
+				],
+				"thread": {
+					"count": 2,
+					"author": "Grace Hopper",
+					"initials": "GH",
+					"preview": "On it",
+					"time": "14:09"
+				},
+				"actions": ["react", "reply", "thread", "copy", "edit", "pin", "issue", "delete"]
+			}
+		},
+		"events": [
+			"press",
+			"longPress",
+			"action",
+			"pressAuthor",
+			"pressReaction",
+			"addReaction",
+			"pressMention",
+			"pressLink",
+			"pressAttachment",
+			"pressReply",
+			"pressThread",
+			"retry"
+		]
+	},
+	"axes": [
+		{
+			"prop": "grouped",
+			"values": [true]
+		},
+		{
+			"prop": "pinned",
+			"values": [true]
+		},
+		{
+			"prop": "highlighted",
+			"values": [true]
+		},
+		{
+			"prop": "entering",
+			"values": [true]
+		},
+		{
+			"prop": "pending",
+			"values": [true]
+		},
+		{
+			"prop": "failed",
+			"values": [true]
+		}
+	],
+	"aria": [
+		{
+			"role": "article",
+			"name": "Ada Lovelace, 14:05"
+		},
+		{
+			"role": "button",
+			"name": "Ada Lovelace"
+		},
+		{
+			"role": "button",
+			"name": "@Grace"
+		},
+		{
+			"role": "link",
+			"name": "the doc"
+		},
+		{
+			"role": "toolbar",
+			"name": "Message actions"
+		},
+		{
+			"role": "button",
+			"name": "React with 👍"
+		},
+		{
+			"role": "button",
+			"name": "Delete message"
+		},
+		{
+			"role": "button",
+			"name": "Open thread, 2 messages"
+		}
+	]
+}

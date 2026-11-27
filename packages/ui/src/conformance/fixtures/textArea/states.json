@@ -1,0 +1,45 @@
+{
+	"about": "A labelled multi-line field with a description and a value, in each state.",
+	"root": {
+		"tag": "textArea",
+		"props": {
+			"label": "Channel description",
+			"placeholder": "What is this channel about?",
+			"description": "Shown at the top of the channel.",
+			"value": {
+				"text": "Design reviews and critique.\nFridays at 3pm.",
+				"rev": 0,
+				"edit": 0
+			}
+		},
+		"events": ["change", "submit", "focus", "blur"]
+	},
+	"aria": [
+		{
+			"role": "textbox",
+			"name": "Channel description"
+		}
+	],
+	"axes": [
+		{
+			"prop": "disabled",
+			"values": [true]
+		},
+		{
+			"prop": "description",
+			"values": [null]
+		},
+		{
+			"prop": "value",
+			"values": [null]
+		}
+	],
+	"cases": [
+		{
+			"name": "error",
+			"props": {
+				"error": "Keep it under 250 characters."
+			}
+		}
+	]
+}

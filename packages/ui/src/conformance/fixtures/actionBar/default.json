@@ -1,0 +1,86 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): three customers selected, with bulk actions, over the bottom of their page.",
+	"root": {
+		"tag": "screen",
+		"props": {
+			"title": "Customers",
+			"surface": "page"
+		},
+		"children": [
+			{
+				"tag": "stack",
+				"children": [
+					{
+						"tag": "text",
+						"children": ["Acme Corporation"]
+					},
+					{
+						"tag": "text",
+						"children": ["Globex"]
+					},
+					{
+						"tag": "text",
+						"children": ["Initech"]
+					},
+					{
+						"tag": "text",
+						"children": ["Umbrella"]
+					},
+					{
+						"tag": "text",
+						"children": ["Hooli"]
+					},
+					{
+						"tag": "text",
+						"children": ["Stark Industries"]
+					}
+				]
+			},
+			{
+				"tag": "actionBar",
+				"props": {
+					"open": true,
+					"label": "3 selected"
+				},
+				"events": ["dismiss"],
+				"slots": [
+					{
+						"name": "actions",
+						"children": [
+							{
+								"tag": "button",
+								"props": {
+									"label": "Add tag",
+									"variant": "secondary",
+									"size": "small"
+								}
+							},
+							{
+								"tag": "button",
+								"props": {
+									"label": "Export",
+									"variant": "secondary",
+									"size": "small"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen",
+	"pending": {
+		"ios": "S4"
+	},
+	"aria": [
+		{
+			"role": "toolbar",
+			"name": "3 selected"
+		},
+		{
+			"role": "button",
+			"name": "Clear selection"
+		}
+	]
+}

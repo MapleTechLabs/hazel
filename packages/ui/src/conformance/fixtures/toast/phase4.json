@@ -1,0 +1,20 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): today's loading toast.",
+	"root": {
+		"tag": "toast",
+		"props": {
+			"open": true,
+			"title": "Exporting...",
+			"loading": true
+		}
+	},
+	"frame": "screen",
+	"pending": {
+		"ios": "S3"
+	},
+	"aria": [
+		{
+			"role": "status"
+		}
+	]
+}

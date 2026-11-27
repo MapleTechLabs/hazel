@@ -1,15 +1,13 @@
 import {
-	DEFAULT_CONNECTION_CONFIG,
-	type IntegrationConfig,
+	defaultConfigOf,
+	IntegrationConfig,
 	type KeyValueListField,
-	isIntegrationId,
 	type SettingsField,
 } from "@hazel/customer-integrations"
 import type * as Customers from "@hazel/domain/customers"
 import type { CustomerConnectionId, UserId } from "@hazel/schema"
-import { Record, Redacted, Result } from "effect"
+import { Record, Redacted, Schema } from "effect"
 import { Command } from "foldkit"
-import * as AsyncData from "foldkit/asyncData"
 import { failureMessage } from "~/lib/error-messages"
 import { providerOf } from "../../../../customers/providers"
 import { errorToastOf, successToast } from "../../../../data/actions"
@@ -17,38 +15,25 @@ import type { AppRoute } from "../../../../route"
 import * as Menu from "../../../../ui/menu"
 import * as Modal from "../../../../ui/modal"
 import type { PageReturn, Shared } from "../../../contract"
+import { CustomerSourceConnect } from "../../../../overlay/modal/requests"
 import { PageOutMessage } from "../../../out-message"
-import { isCustomersAdmin } from "../shared"
 import {
-	ConnectCustomerSource,
 	CopyCustomerWebhookUrl,
 	DisconnectCustomerSource,
-	FetchUnmatchedCount,
 	GrantCustomerImpersonator,
 	RevokeCustomerImpersonator,
 	SaveCustomerSourceSettings,
 	SaveMetricUnit,
-	SaveCustomerWebhookSecret,
-	SeedCustomersDemo,
 	SyncCustomerSource,
 	UpdateCustomerSourceKeys,
 } from "./commands"
-import type {
-	ConfigTarget,
-	DisconnectFailure,
-	ImpersonatorFailure,
-	SeedFailure,
-	SyncFailure,
-	UnitFailure,
-} from "./message"
+import type { DisconnectFailure, ImpersonatorFailure, SyncFailure, UnitFailure } from "./message"
 import { Message } from "./message"
 import {
 	cellOf,
 	configList,
 	configRows,
-	CONNECT_MODAL_ID,
 	type ConfigRows,
-	type ConnectForm,
 	connectFailureMessage,
 	connectionOf,
 	DISCONNECT_MODAL_ID,
@@ -67,7 +52,12 @@ import {
 import type { ConnectionRow } from "./queries"
 
 type Return = PageReturn<Model, Message>
-type Route = Extract<AppRoute, { _tag: "CustomersSettingsSources" | "CustomersSourceDetail" }>
+type Route = Extract<AppRoute, { _tag: "CustomersSourceDetail" }>
+
+const connectModal = (modal: Omit<typeof CustomerSourceConnect.Type, "_tag">) =>
+	PageOutMessage.RequestedModal({ modal: CustomerSourceConnect.make(modal) })
+
+const isIntegrationConfig = Schema.is(IntegrationConfig)
 
 const toast = (request: Parameters<typeof PageOutMessage.RequestedToast>[0]["toast"]) =>
 	PageOutMessage.RequestedToast({ toast: request })
@@ -88,11 +78,6 @@ const syncFailureMessage = (reason: SyncFailure, provider: Customers.CustomerPro
 const disconnectFailureMessage = (reason: DisconnectFailure) =>
 	failureMessage(reason, { NotFound: { title: "Already disconnected" } })
 
-const seedFailureMessage = (reason: SeedFailure) =>
-	failureMessage(reason, {
-		Refused: { title: "Demo data is off here", description: "It is only available in dev and preview." },
-	})
-
 const unitFailureMessage = (reason: UnitFailure) =>
 	failureMessage(reason, {
 		NotFound: { title: "This metric is gone", description: "Its source no longer defines it." },
@@ -108,94 +93,39 @@ const impersonatorFailureMessage = (reason: ImpersonatorFailure) =>
 
 // INIT
 
-/** The unmatched count is admins' (the RPC refuses members), so only they ask for it. */
-const fetchUnmatched = (model: Model, shared: Shared): Return => {
-	const organizationId = shared.organization?.id
-	return organizationId === undefined || !isCustomersAdmin(shared)
-		? { model }
-		: {
-				model: { ...model, unmatched: AsyncData.Loading() },
-				commands: [FetchUnmatchedCount({ organizationId })],
-			}
-}
-
-export const init = (route: Route, shared: Shared): Return =>
-	fetchUnmatched(
-		{
-			provider: route._tag === "CustomersSourceDetail" ? route.provider : null,
-			connections: null,
-			syncRuns: null,
-			accountCount: null,
-			members: [],
-			unmatched: AsyncData.Idle(),
-			syncing: [],
-			isSeedingDemo: false,
-			historyFilter: "all",
-			connectModal: Modal.init(CONNECT_MODAL_ID),
-			connectForm: null,
-			keysModal: Modal.init(KEYS_MODAL_ID),
-			keysForm: null,
-			disconnectModal: Modal.init(DISCONNECT_MODAL_ID),
-			isDisconnecting: false,
-			settingsDraft: null,
-			settingsListInputs: {},
-			isSavingSettings: false,
-			unitMetrics: null,
-			unitDrafts: {},
-			impersonators: [],
-			impersonations: [],
-			impersonatorMenu: Menu.init({ id: IMPERSONATOR_MENU_ID, placement: "bottom end" }),
-			pendingGrants: [],
-		},
-		shared,
-	)
-
-/** The organization arrived after the page opened. */
-export const sharedChanged = (model: Model, shared: Shared): Return =>
-	AsyncData.isIdle(model.unmatched) ? fetchUnmatched(model, shared) : { model }
+export const init = (route: Route): Return => ({
+	model: {
+		provider: route.provider,
+		connections: null,
+		syncRuns: null,
+		members: [],
+		syncing: [],
+		historyFilter: "all",
+		keysModal: Modal.init(KEYS_MODAL_ID),
+		keysForm: null,
+		disconnectModal: Modal.init(DISCONNECT_MODAL_ID),
+		isDisconnecting: false,
+		settingsDraft: null,
+		settingsListInputs: {},
+		isSavingSettings: false,
+		unitMetrics: null,
+		unitDrafts: {},
+		impersonators: [],
+		impersonations: [],
+		impersonatorMenu: Menu.init({ id: IMPERSONATOR_MENU_ID, placement: "bottom end" }),
+		pendingGrants: [],
+	},
+})
 
 // HELPERS
 
-const detailConnection = (model: Model): ConnectionRow | undefined =>
-	model.provider === null ? undefined : connectionOf(model, model.provider)
+const detailConnection = (model: Model): ConnectionRow | undefined => connectionOf(model, model.provider)
 
-const withConnectForm = (model: Model, patch: (form: ConnectForm) => ConnectForm): Model =>
-	model.connectForm === null ? model : { ...model, connectForm: patch(model.connectForm) }
-
-const openConnect = (model: Model, form: ConnectForm): Return => ({
-	model: { ...model, connectForm: form, connectModal: Modal.open(model.connectModal).model },
-})
-
-const newConnectForm = (
-	provider: Customers.CustomerProvider,
-	reconnectId: CustomerConnectionId | null,
-	config: IntegrationConfig,
-): ConnectForm => ({
-	provider,
-	reconnectId,
-	apiKey: "",
-	config,
-	connected: null,
-	webhookSecret: "",
-	isPending: false,
-	failure: null,
-})
-
-const closeConnect = (model: Model): Model => ({
-	...model,
-	connectForm: null,
-	connectModal: Modal.close(model.connectModal).model,
-})
-
-type ModalField = "connectModal" | "keysModal" | "disconnectModal"
+type ModalField = "keysModal" | "disconnectModal"
 
 /** Its request is running: closing now would lose the answer (or let a second one start). */
 const isModalPending = (model: Model, field: ModalField): boolean =>
-	field === "connectModal"
-		? model.connectForm?.isPending === true
-		: field === "keysModal"
-			? model.keysForm?.isPending === true
-			: model.isDisconnecting
+	field === "keysModal" ? model.keysForm?.isPending === true : model.isDisconnecting
 
 /** A Modal's own Messages; closing from inside drops its form, and waits while its request runs. */
 const updateModal = (
@@ -211,23 +141,15 @@ const updateModal = (
 	return {
 		model: !isClosed
 			? next
-			: field === "connectModal"
-				? { ...next, connectForm: null }
-				: field === "keysModal"
-					? { ...next, keysForm: null }
-					: { ...next, isDisconnecting: false },
+			: field === "keysModal"
+				? { ...next, keysForm: null }
+				: { ...next, isDisconnecting: false },
 		commands: Command.mapMessages(result.commands ?? [], toMessage),
 	}
 }
 
-/** Edits the connect form's config or the detail's settings draft. */
-const editConfig = (
-	model: Model,
-	target: ConfigTarget,
-	edit: (config: IntegrationConfig) => IntegrationConfig,
-): Model => {
-	if (target === "connect")
-		return withConnectForm(model, (form) => ({ ...form, config: edit(form.config), failure: null }))
+/** Edits the detail's settings draft. */
+const editConfig = (model: Model, edit: (config: IntegrationConfig) => IntegrationConfig): Model => {
 	const connection = detailConnection(model)
 	return connection === undefined ? model : { ...model, settingsDraft: edit(settingsOf(model, connection)) }
 }
@@ -238,7 +160,7 @@ const editSettingsField = (
 	key: string,
 	edit: (config: IntegrationConfig, field: SettingsField) => IntegrationConfig,
 ): Model =>
-	editConfig(model, "settings", (config) => {
+	editConfig(model, (config) => {
 		const field = settingsFieldsOf(config).find((candidate) => candidate.key === key)
 		return field === undefined ? config : edit(config, field)
 	})
@@ -335,23 +257,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			}
 		},
 		UpdatedSyncRuns: ({ runs }) => ({ model: { ...model, syncRuns: runs } }),
-		UpdatedAccountCount: ({ count }) => ({ model: { ...model, accountCount: count } }),
 		UpdatedMembers: ({ members }) => ({ model: { ...model, members } }),
 		UpdatedUnitMetrics: ({ metrics }) => ({ model: { ...model, unitMetrics: metrics } }),
-		SucceededFetchUnmatchedCount: ({ count }) => ({
-			model: { ...model, unmatched: AsyncData.settle(model.unmatched, Result.succeed(count)) },
-		}),
-		FailedFetchUnmatchedCount: ({ reason }) => ({
-			model: { ...model, unmatched: AsyncData.settle(model.unmatched, Result.fail(reason)) },
-		}),
-
 		PressedSyncNow: ({ connectionId }) => syncNow(model, shared, [connectionId]),
-		PressedSyncAll: () =>
-			syncNow(
-				model,
-				shared,
-				(model.connections ?? []).filter(isLive).map((connection) => connection.id),
-			),
 		// The card shows the run once it starts; only a failure says anything.
 		SucceededSyncNow: ({ connectionId }) => ({
 			model: { ...model, syncing: model.syncing.filter((id) => id !== connectionId) },
@@ -367,132 +275,35 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				),
 			),
 		}),
-		PressedLoadDemo: () => {
-			const organizationId = shared.organization?.id
-			return organizationId === undefined || model.isSeedingDemo
-				? { model }
-				: {
-						model: { ...model, isSeedingDemo: true },
-						commands: [SeedCustomersDemo({ organizationId })],
-					}
-		},
-		SucceededSeedDemo: () => ({
-			model: { ...model, isSeedingDemo: false },
-			outMessage: toast(successToast("Demo data loaded", "Fake customers from demo connections.")),
-		}),
-		FailedSeedDemo: ({ reason }) => ({
-			model: { ...model, isSeedingDemo: false },
-			outMessage: toast(errorToastOf(seedFailureMessage(reason))),
-		}),
 		ClickedHistoryFilter: ({ filter }) => ({ model: { ...model, historyFilter: filter } }),
 
-		// CONNECT
+		// CONNECT (the native modal)
 
-		PressedConnect: ({ provider }) =>
-			isIntegrationId(provider)
-				? openConnect(
-						model,
-						newConnectForm(
-							provider,
-							null,
-							connectionOf(model, provider)?.config ?? DEFAULT_CONNECTION_CONFIG[provider],
-						),
-					)
-				: { model },
+		PressedConnect: ({ provider }) => {
+			const config = connectionOf(model, provider)?.config ?? defaultConfigOf(provider)
+			return isIntegrationConfig(config)
+				? { model, outMessage: connectModal({ provider, reconnectId: null, config }) }
+				: { model }
+		},
 		PressedReconnect: ({ connectionId }) => {
 			const connection = model.connections?.find((row) => row.id === connectionId)
 			return connection === undefined
 				? { model }
-				: openConnect(model, newConnectForm(connection.provider, connection.id, connection.config))
-		},
-		GotConnectModalMessage: ({ message: modalMessage }) =>
-			updateModal(model, "connectModal", modalMessage, (child) =>
-				Message.GotConnectModalMessage({ message: child }),
-			),
-		ChangedApiKey: ({ value }) => ({
-			model: withConnectForm(model, (form) => ({ ...form, apiKey: value, failure: null })),
-		}),
-		ToggledConfigField: ({ target, key, isSelected }) => ({
-			model: editConfig(model, target, (config) => withConfigField(config, key, isSelected)),
-		}),
-		ChangedConfigText: ({ target, key, value }) => ({
-			model: editConfig(model, target, (config) => withConfigField(config, key, value)),
-		}),
-		SubmittedConnect: () => {
-			const form = model.connectForm
-			const organizationId = shared.organization?.id
-			if (form === null || organizationId === undefined || form.isPending || form.apiKey.trim() === "")
-				return { model }
-			return {
-				model: withConnectForm(model, (current) => ({ ...current, isPending: true, failure: null })),
-				commands: [
-					ConnectCustomerSource({
-						organizationId,
-						provider: form.provider,
-						reconnectId: form.reconnectId,
-						apiKey: Redacted.make(form.apiKey.trim()),
-						config: form.config,
-					}),
-				],
-			}
-		},
-		SucceededConnect: ({ provider, connectionId, accountName }) =>
-			model.connectForm?.provider !== provider
-				? { model }
 				: {
-						model: withConnectForm(model, (form) => ({
-							...form,
-							apiKey: "",
-							isPending: false,
-							connected: { connectionId, accountName },
-						})),
-					},
-		FailedConnect: ({ provider, reason }) =>
-			model.connectForm?.provider !== provider
-				? { model }
-				: {
-						model: withConnectForm(model, (form) => ({
-							...form,
-							isPending: false,
-							failure: reason,
-						})),
-					},
-		ChangedWebhookSecret: ({ value }) => ({
-			model: withConnectForm(model, (form) => ({ ...form, webhookSecret: value, failure: null })),
-		}),
-		// Done: saves the signing secret first when one was pasted.
-		SubmittedWebhookSecret: () => {
-			const form = model.connectForm
-			const organizationId = shared.organization?.id
-			if (form === null || form.connected === null || organizationId === undefined || form.isPending)
-				return { model }
-			const webhookSecret = form.webhookSecret.trim()
-			if (webhookSecret === "") return { model: closeConnect(model) }
-			return {
-				model: withConnectForm(model, (current) => ({ ...current, isPending: true, failure: null })),
-				commands: [
-					SaveCustomerWebhookSecret({
-						organizationId,
-						connectionId: form.connected.connectionId,
-						webhookSecret: Redacted.make(webhookSecret),
-					}),
-				],
-			}
+						model,
+						outMessage: connectModal({
+							provider: connection.provider,
+							reconnectId: connection.id,
+							config: connection.config,
+						}),
+					}
 		},
-		SucceededSaveWebhookSecret: ({ connectionId }) => ({
-			model: model.connectForm?.connected?.connectionId === connectionId ? closeConnect(model) : model,
-			outMessage: toast(successToast("Signing secret saved")),
+		ToggledConfigField: ({ key, isSelected }) => ({
+			model: editConfig(model, (config) => withConfigField(config, key, isSelected)),
 		}),
-		FailedSaveWebhookSecret: ({ connectionId, reason }) =>
-			model.connectForm?.connected?.connectionId !== connectionId
-				? { model }
-				: {
-						model: withConnectForm(model, (form) => ({
-							...form,
-							isPending: false,
-							failure: reason,
-						})),
-					},
+		ChangedConfigText: ({ key, value }) => ({
+			model: editConfig(model, (config) => withConfigField(config, key, value)),
+		}),
 		PressedCopyWebhookUrl: ({ url }) => ({ model, commands: [CopyCustomerWebhookUrl({ url })] }),
 		SucceededCopyWebhookUrl: () => ({ model, outMessage: toast(successToast("Webhook URL copied")) }),
 		FailedCopyWebhookUrl: () => ({
@@ -668,13 +479,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		}),
 		FailedSaveSettings: ({ reason }) => {
 			const next = { ...model, isSavingSettings: false }
-			// Settings are saved from a source's detail, where `provider` is set.
-			return model.provider === null
-				? { model: next }
-				: {
-						model: next,
-						outMessage: toast(errorToastOf(connectFailureMessage(reason, model.provider))),
-					}
+			return {
+				model: next,
+				outMessage: toast(errorToastOf(connectFailureMessage(reason, model.provider))),
+			}
 		},
 
 		// USAGE UNITS

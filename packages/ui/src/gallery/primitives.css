@@ -1,0 +1,43 @@
+/* The fixture gallery's own chrome; only what is inside [data-case] is ever measured. Whole-pixel line
+   heights keep every case on whole pixels, as the kit's specimens are. */
+.case {
+	margin-bottom: 20px;
+}
+
+.case-label {
+	margin: 0 0 6px;
+	font:
+		11px/16px ui-monospace,
+		monospace;
+	color: var(--hz-color-muted-fg, #888);
+}
+
+.case-label[data-status="stub"],
+.case-label[data-status="missing"] {
+	opacity: 0.6;
+}
+
+.case-label[data-status="error"] {
+	color: red;
+}
+
+.tag-title {
+	margin: 32px 0 12px;
+	font:
+		600 14px/20px system-ui,
+		sans-serif;
+	color: var(--hz-color-fg, inherit);
+}
+
+/* Block-level, so no line box baseline-aligns it to a fractional y. */
+.frame-inline {
+	display: flex;
+	width: fit-content;
+	/* Its own layer, as the kit's .frame-button is: shadows raster the same at any page position. */
+	will-change: transform;
+	padding: 8px;
+}
+
+.frame-screen {
+	max-width: 720px;
+}

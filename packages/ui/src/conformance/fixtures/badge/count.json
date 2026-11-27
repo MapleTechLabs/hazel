@@ -1,0 +1,30 @@
+{
+	"about": "A signal count: the severity bars and the count with no chip, in a table cell (`pk0-severity-glyph`, today's `signalCounts`).",
+	"root": {
+		"tag": "badge",
+		"props": {
+			"label": "2",
+			"style": "plain",
+			"severity": "high"
+		}
+	},
+	"frame": "inline",
+	"cases": [
+		{
+			"name": "opportunities",
+			"props": {
+				"label": "1",
+				"tone": "info",
+				"severity": null,
+				"icon": "opportunity"
+			}
+		}
+	],
+	"kit": {
+		"specimen": "badge-count",
+		"target": "badge"
+	},
+	"pending": {
+		"ios": "S1"
+	}
+}

@@ -286,8 +286,6 @@ export type DestinationId = keyof typeof DESTINATIONS
 
 export const destination = (id: DestinationId): Destination => DESTINATIONS[id]
 
-export const isDestinationId = (value: string): value is DestinationId => Object.hasOwn(DESTINATIONS, value)
-
 /** The palette's groups, in order: each names its pages, the first one shows before you type. */
 export const DESTINATION_GROUPS: ReadonlyArray<{
 	readonly title: string

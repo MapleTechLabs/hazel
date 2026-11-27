@@ -1,0 +1,44 @@
+{
+	"about": "A channel row in a sidebar section, against the kit's sidebar item (G6 item-default).",
+	"root": {
+		"tag": "section",
+		"props": {
+			"title": "Channels"
+		},
+		"children": [
+			{
+				"tag": "item",
+				"key": "general",
+				"props": {
+					"title": "general",
+					"href": "#"
+				},
+				"events": ["press"],
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "icon",
+								"props": {
+									"name": "hashtag"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"aria": [
+		{
+			"role": "link",
+			"name": "general"
+		}
+	],
+	"kit": {
+		"specimen": "item-default",
+		"target": "item"
+	}
+}

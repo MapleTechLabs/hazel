@@ -1,0 +1,22 @@
+{
+	"about": "A primary xsmall button with a label, against the kit's button-primary-xsmall (G6).",
+	"root": {
+		"tag": "button",
+		"props": {
+			"size": "xsmall",
+			"label": "Invite"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Invite"
+		}
+	],
+	"kit": {
+		"specimen": "button-primary-xsmall",
+		"target": "button"
+	}
+}

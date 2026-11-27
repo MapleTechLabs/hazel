@@ -1,0 +1,34 @@
+{
+	"about": "A stack of three lines in each axis, density and alignment.",
+	"root": {
+		"tag": "stack",
+		"children": [
+			{
+				"tag": "text",
+				"children": ["One"]
+			},
+			{
+				"tag": "text",
+				"children": ["Two"]
+			},
+			{
+				"tag": "text",
+				"children": ["Three"]
+			}
+		]
+	},
+	"axes": [
+		{
+			"prop": "axis",
+			"values": ["horizontal"]
+		},
+		{
+			"prop": "density",
+			"values": ["compact", "relaxed"]
+		},
+		{
+			"prop": "align",
+			"values": ["start", "center", "end"]
+		}
+	]
+}

@@ -1,0 +1,104 @@
+{
+	"about": "The header action that opens a menu of entries (section.action with actionMenu): two groups, a destructive entry, a submenu.",
+	"root": {
+		"tag": "section",
+		"props": {
+			"title": "Projects"
+		},
+		"children": [
+			{
+				"tag": "action",
+				"props": {
+					"label": "New in Projects",
+					"entries": [
+						{
+							"entries": [
+								{
+									"id": "create",
+									"label": "Create channel",
+									"icon": "plus"
+								},
+								{
+									"id": "join",
+									"label": "Join channel",
+									"icon": "hashtag"
+								}
+							]
+						},
+						{
+							"title": "Section",
+							"entries": [
+								{
+									"id": "notify",
+									"label": "Notifications",
+									"icon": "bell",
+									"entries": [
+										{
+											"id": "all",
+											"label": "All messages",
+											"checked": true
+										},
+										{
+											"id": "mentions",
+											"label": "Mentions only",
+											"checked": false
+										}
+									]
+								},
+								{
+									"id": "delete",
+									"label": "Delete section",
+									"icon": "trash",
+									"destructive": true
+								},
+								{
+									"id": "archive",
+									"label": "Archive",
+									"disabled": true
+								}
+							]
+						}
+					]
+				},
+				"events": ["select"],
+				"children": [
+					{
+						"tag": "icon",
+						"props": {
+							"name": "plus"
+						}
+					}
+				]
+			},
+			{
+				"tag": "item",
+				"key": "roadmap",
+				"props": {
+					"title": "roadmap",
+					"href": "#"
+				},
+				"events": ["press"],
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "icon",
+								"props": {
+									"name": "hashtag"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"aria": [
+		{
+			"role": "button",
+			"name": "New in Projects"
+		}
+	]
+}

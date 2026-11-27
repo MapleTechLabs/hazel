@@ -6,7 +6,7 @@ import { ThemeMode } from "../../theme"
 import * as Interaction from "../../ui/aria/interaction"
 import * as ChoiceBox from "../../ui/choice-box"
 import * as ChatMigration from "../shared/chat-migration"
-import { Direction, type Step, UserType } from "./flow"
+import { Direction, Step, UserType } from "./flow"
 
 /** The theme step reads and requests `Shared.theme`; it keeps no theme state of its own. */
 export const Theme = ThemeMode
@@ -29,7 +29,7 @@ export const Data = Schema.Struct({
 })
 export type Data = typeof Data.Type
 
-/** Why `user.update` failed (the profile and timezone steps), beyond the shared reasons. */
+/** Why `user.update` failed (the timezone step), beyond the shared reasons. */
 export const UpdateUserFailure = Schema.Union([Schema.Literals(["UserNotFound"]), CommonReason])
 export type UpdateUserFailure = typeof UpdateUserFailure.Type
 
@@ -46,17 +46,11 @@ export type InviteRow = typeof InviteRow.Type
 
 /**
  * The step on screen with its own form state. A step's state is created fresh whenever the step
- * is entered, like the legacy step components remounting.
+ * is entered, like the legacy step components remounting. `Native`: a step the native shell
+ * (`shared-screens/src/onboarding`) draws itself; this page draws nothing for it.
  */
 export const StepState = defineTaggedUnion({
-	Welcome: {},
-	Profile: {
-		firstName: Schema.String,
-		lastName: Schema.String,
-		/** The form validates on change, so errors show only after an edit. */
-		hasChanged: Schema.Boolean,
-		isSubmitting: Schema.Boolean,
-	},
+	Native: { step: Step },
 	Timezone: {
 		selected: Schema.NullOr(Schema.String),
 		query: Schema.String,
@@ -100,8 +94,6 @@ export const Phase = defineTaggedUnion({
 		flow: Flow,
 		step: StepState,
 		direction: Direction,
-		/** `AnimatePresence initial={false}`: the first step appears without its enter transition. */
-		animatesStep: Schema.Boolean,
 		data: Data,
 	},
 })
@@ -123,8 +115,7 @@ export type Model = typeof Model.Type
 /** The flow position (and `?step=` value) of a step state. */
 export const stepOf = (state: StepState): Step =>
 	Match.valueTags(state, {
-		Welcome: (): Step => "welcome",
-		Profile: (): Step => "profileInfo",
+		Native: ({ step }): Step => step,
 		Timezone: (): Step => "timezoneSelection",
 		Theme: (): Step => "themeSelection",
 		UseCases: (): Step => "useCases",
@@ -138,8 +129,7 @@ export const stepOf = (state: StepState): Step =>
 /** A step with a request in flight (or finishing the flow): Back and resubmits wait for it. */
 export const isBusy = (state: StepState): boolean =>
 	Match.valueTags(state, {
-		Welcome: () => false,
-		Profile: ({ isSubmitting }) => isSubmitting,
+		Native: () => false,
 		Timezone: ({ isSubmitting }) => isSubmitting,
 		Theme: () => false,
 		UseCases: () => false,

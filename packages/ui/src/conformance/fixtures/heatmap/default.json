@@ -1,0 +1,2011 @@
+{
+	"about": "Today's activity calendar (`calendarHeatmap`, the customer's Activity tab): a year of daily active users by level, one day selected (its tooltip), and the legend; diffed against today's (`chart-tone-tokens`).",
+	"root": {
+		"tag": "heatmap",
+		"props": {
+			"label": "Daily active users over the last year",
+			"days": [
+				{
+					"date": "2025-11-28",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2025-11-29",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2025-11-30",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2025-12-01",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2025-12-02",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2025-12-03",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2025-12-04",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2025-12-05",
+					"level": 3,
+					"label": "9 active users"
+				},
+				{
+					"date": "2025-12-06",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2025-12-07",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2025-12-08",
+					"level": 3,
+					"label": "7 active users"
+				},
+				{
+					"date": "2025-12-09",
+					"level": 3,
+					"label": "7 active users"
+				},
+				{
+					"date": "2025-12-10",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2025-12-11",
+					"level": 3,
+					"label": "9 active users"
+				},
+				{
+					"date": "2025-12-12",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2025-12-13",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2025-12-14",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2025-12-15",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2025-12-16",
+					"level": 4,
+					"label": "13 active users"
+				},
+				{
+					"date": "2025-12-17",
+					"level": 4,
+					"label": "13 active users"
+				},
+				{
+					"date": "2025-12-18",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2025-12-19",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2025-12-20",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2025-12-21",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2025-12-22",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2025-12-23",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2025-12-24",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2025-12-25",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2025-12-26",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2025-12-27",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2025-12-28",
+					"level": 2,
+					"label": "6 active users"
+				},
+				{
+					"date": "2025-12-29",
+					"level": 2,
+					"label": "6 active users"
+				},
+				{
+					"date": "2025-12-30",
+					"level": 2,
+					"label": "6 active users"
+				},
+				{
+					"date": "2025-12-31",
+					"level": 2,
+					"label": "6 active users"
+				},
+				{
+					"date": "2026-01-01",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-01-02",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-01-03",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-01-04",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-01-05",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-01-06",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-01-07",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-01-08",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-01-09",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-01-10",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-01-11",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-01-12",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-01-13",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-01-14",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-01-15",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-01-16",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-01-17",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-01-18",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-01-19",
+					"level": 1,
+					"label": "1 active user"
+				},
+				{
+					"date": "2026-01-20",
+					"level": 1,
+					"label": "1 active user"
+				},
+				{
+					"date": "2026-01-21",
+					"level": 1,
+					"label": "1 active user"
+				},
+				{
+					"date": "2026-01-22",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-01-23",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-01-24",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-01-25",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-01-26",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-01-27",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2026-01-28",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-01-29",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-01-30",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-01-31",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-02-01",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-02-02",
+					"level": 3,
+					"label": "9 active users"
+				},
+				{
+					"date": "2026-02-03",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-02-04",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-02-05",
+					"level": 3,
+					"label": "7 active users"
+				},
+				{
+					"date": "2026-02-06",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-02-07",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-02-08",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2026-02-09",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-02-10",
+					"level": 4,
+					"label": "12 active users"
+				},
+				{
+					"date": "2026-02-11",
+					"level": 4,
+					"label": "13 active users"
+				},
+				{
+					"date": "2026-02-12",
+					"level": 4,
+					"label": "13 active users"
+				},
+				{
+					"date": "2026-02-13",
+					"level": 4,
+					"label": "12 active users"
+				},
+				{
+					"date": "2026-02-14",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-02-15",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-02-16",
+					"level": 3,
+					"label": "7 active users"
+				},
+				{
+					"date": "2026-02-17",
+					"level": 2,
+					"label": "6 active users"
+				},
+				{
+					"date": "2026-02-18",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-02-19",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-02-20",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-02-21",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-02-22",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-02-23",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-02-24",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-02-25",
+					"level": 2,
+					"label": "6 active users"
+				},
+				{
+					"date": "2026-02-26",
+					"level": 2,
+					"label": "6 active users"
+				},
+				{
+					"date": "2026-02-27",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-02-28",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-03-01",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-03-02",
+					"level": 1,
+					"label": "1 active user"
+				},
+				{
+					"date": "2026-03-03",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-03-04",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-03-05",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-03-06",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-03-07",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-03-08",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-03-09",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-03-10",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-03-11",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-03-12",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-03-13",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-03-14",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-03-15",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-03-16",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-03-17",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-03-18",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-03-19",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-03-20",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-03-21",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-03-22",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-03-23",
+					"level": 2,
+					"label": "6 active users"
+				},
+				{
+					"date": "2026-03-24",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-03-25",
+					"level": 3,
+					"label": "9 active users"
+				},
+				{
+					"date": "2026-03-26",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-03-27",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-03-28",
+					"level": 4,
+					"label": "12 active users"
+				},
+				{
+					"date": "2026-03-29",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-03-30",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-03-31",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2026-04-01",
+					"level": 3,
+					"label": "9 active users"
+				},
+				{
+					"date": "2026-04-02",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-04-03",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-04-04",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-04-05",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-04-06",
+					"level": 3,
+					"label": "9 active users"
+				},
+				{
+					"date": "2026-04-07",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2026-04-08",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-04-09",
+					"level": 4,
+					"label": "12 active users"
+				},
+				{
+					"date": "2026-04-10",
+					"level": 4,
+					"label": "12 active users"
+				},
+				{
+					"date": "2026-04-11",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-04-12",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-04-13",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-04-14",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-04-15",
+					"level": 2,
+					"label": "6 active users"
+				},
+				{
+					"date": "2026-04-16",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-04-17",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-04-18",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-04-19",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-04-20",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-04-21",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-04-22",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-04-23",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-04-24",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-04-25",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-04-26",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-04-27",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-04-28",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-04-29",
+					"level": 1,
+					"label": "1 active user"
+				},
+				{
+					"date": "2026-04-30",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-05-01",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-05-02",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-05-03",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-05-04",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-05-05",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-05-06",
+					"level": 1,
+					"label": "1 active user"
+				},
+				{
+					"date": "2026-05-07",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-05-08",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-05-09",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-05-10",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-05-11",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-05-12",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-05-13",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-05-14",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-05-15",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-05-16",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-05-17",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-05-18",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-05-19",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-05-20",
+					"level": 3,
+					"label": "7 active users"
+				},
+				{
+					"date": "2026-05-21",
+					"level": 3,
+					"label": "9 active users"
+				},
+				{
+					"date": "2026-05-22",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2026-05-23",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-05-24",
+					"level": 4,
+					"label": "12 active users"
+				},
+				{
+					"date": "2026-05-25",
+					"level": 4,
+					"label": "12 active users"
+				},
+				{
+					"date": "2026-05-26",
+					"level": 4,
+					"label": "12 active users"
+				},
+				{
+					"date": "2026-05-27",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-05-28",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2026-05-29",
+					"level": 3,
+					"label": "9 active users"
+				},
+				{
+					"date": "2026-05-30",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-05-31",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-06-01",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-06-02",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-06-03",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-06-04",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2026-06-05",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-06-06",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-06-07",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-06-08",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-06-09",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2026-06-10",
+					"level": 3,
+					"label": "9 active users"
+				},
+				{
+					"date": "2026-06-11",
+					"level": 3,
+					"label": "7 active users"
+				},
+				{
+					"date": "2026-06-12",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-06-13",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-06-14",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-06-15",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-06-16",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-06-17",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-06-18",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-06-19",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-06-20",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-06-21",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-06-22",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-06-23",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-06-24",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-06-25",
+					"level": 1,
+					"label": "1 active user"
+				},
+				{
+					"date": "2026-06-26",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-06-27",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-06-28",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-06-29",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-06-30",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-07-01",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-07-02",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-07-03",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-07-04",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-07-05",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-07-06",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-07-07",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-07-08",
+					"level": 2,
+					"label": "6 active users"
+				},
+				{
+					"date": "2026-07-09",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-07-10",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-07-11",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-07-12",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-07-13",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-07-14",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-07-15",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-07-16",
+					"level": 2,
+					"label": "6 active users"
+				},
+				{
+					"date": "2026-07-17",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-07-18",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-07-19",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-07-20",
+					"level": 4,
+					"label": "12 active users"
+				},
+				{
+					"date": "2026-07-21",
+					"level": 4,
+					"label": "13 active users"
+				},
+				{
+					"date": "2026-07-22",
+					"level": 4,
+					"label": "13 active users"
+				},
+				{
+					"date": "2026-07-23",
+					"level": 4,
+					"label": "12 active users"
+				},
+				{
+					"date": "2026-07-24",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-07-25",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-07-26",
+					"level": 3,
+					"label": "9 active users"
+				},
+				{
+					"date": "2026-07-27",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-07-28",
+					"level": 3,
+					"label": "7 active users"
+				},
+				{
+					"date": "2026-07-29",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-07-30",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-07-31",
+					"level": 3,
+					"label": "9 active users"
+				},
+				{
+					"date": "2026-08-01",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2026-08-02",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-08-03",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-08-04",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-08-05",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-08-06",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2026-08-07",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-08-08",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-08-09",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-08-10",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-08-11",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-08-12",
+					"level": 1,
+					"label": "1 active user"
+				},
+				{
+					"date": "2026-08-13",
+					"level": 1,
+					"label": "1 active user"
+				},
+				{
+					"date": "2026-08-14",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-08-15",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-08-16",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-08-17",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-08-18",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-08-19",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-08-20",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-08-21",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-08-22",
+					"level": 1,
+					"label": "1 active user"
+				},
+				{
+					"date": "2026-08-23",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-08-24",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-08-25",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-08-26",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-08-27",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-08-28",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-08-29",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-08-30",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-08-31",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-09-01",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-09-02",
+					"level": 2,
+					"label": "6 active users"
+				},
+				{
+					"date": "2026-09-03",
+					"level": 2,
+					"label": "6 active users"
+				},
+				{
+					"date": "2026-09-04",
+					"level": 2,
+					"label": "6 active users"
+				},
+				{
+					"date": "2026-09-05",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-09-06",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-09-07",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-09-08",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-09-09",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-09-10",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-09-11",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-09-12",
+					"level": 3,
+					"label": "7 active users"
+				},
+				{
+					"date": "2026-09-13",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-09-14",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2026-09-15",
+					"level": 4,
+					"label": "12 active users"
+				},
+				{
+					"date": "2026-09-16",
+					"level": 4,
+					"label": "13 active users"
+				},
+				{
+					"date": "2026-09-17",
+					"level": 4,
+					"label": "13 active users"
+				},
+				{
+					"date": "2026-09-18",
+					"level": 4,
+					"label": "13 active users"
+				},
+				{
+					"date": "2026-09-19",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-09-20",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-09-21",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2026-09-22",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-09-23",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-09-24",
+					"level": 3,
+					"label": "7 active users"
+				},
+				{
+					"date": "2026-09-25",
+					"level": 3,
+					"label": "7 active users"
+				},
+				{
+					"date": "2026-09-26",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-09-27",
+					"level": 3,
+					"label": "9 active users"
+				},
+				{
+					"date": "2026-09-28",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2026-09-29",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2026-09-30",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-10-01",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-10-02",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2026-10-03",
+					"level": 3,
+					"label": "9 active users"
+				},
+				{
+					"date": "2026-10-04",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-10-05",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-10-06",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-10-07",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-10-08",
+					"level": 1,
+					"label": "1 active user"
+				},
+				{
+					"date": "2026-10-09",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-10-10",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-10-11",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-10-12",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-10-13",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-10-14",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-10-15",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-10-16",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-10-17",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-10-18",
+					"level": 1,
+					"label": "2 active users"
+				},
+				{
+					"date": "2026-10-19",
+					"level": 1,
+					"label": "1 active user"
+				},
+				{
+					"date": "2026-10-20",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-10-21",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-10-22",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-10-23",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-10-24",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-10-25",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-10-26",
+					"level": 1,
+					"label": "1 active user"
+				},
+				{
+					"date": "2026-10-27",
+					"level": 1,
+					"label": "3 active users"
+				},
+				{
+					"date": "2026-10-28",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-10-29",
+					"level": 2,
+					"label": "6 active users"
+				},
+				{
+					"date": "2026-10-30",
+					"level": 3,
+					"label": "7 active users"
+				},
+				{
+					"date": "2026-10-31",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-11-01",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-11-02",
+					"level": 2,
+					"label": "6 active users"
+				},
+				{
+					"date": "2026-11-03",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-11-04",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-11-05",
+					"level": 2,
+					"label": "4 active users"
+				},
+				{
+					"date": "2026-11-06",
+					"level": 2,
+					"label": "5 active users"
+				},
+				{
+					"date": "2026-11-07",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-11-08",
+					"level": 2,
+					"label": "6 active users"
+				},
+				{
+					"date": "2026-11-09",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-11-10",
+					"level": 3,
+					"label": "9 active users"
+				},
+				{
+					"date": "2026-11-11",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-11-12",
+					"level": 4,
+					"label": "12 active users"
+				},
+				{
+					"date": "2026-11-13",
+					"level": 4,
+					"label": "13 active users"
+				},
+				{
+					"date": "2026-11-14",
+					"level": 4,
+					"label": "13 active users"
+				},
+				{
+					"date": "2026-11-15",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-11-16",
+					"level": 4,
+					"label": "12 active users"
+				},
+				{
+					"date": "2026-11-17",
+					"level": 4,
+					"label": "11 active users"
+				},
+				{
+					"date": "2026-11-18",
+					"level": 3,
+					"label": "9 active users"
+				},
+				{
+					"date": "2026-11-19",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-11-20",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-11-21",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-11-22",
+					"level": 0,
+					"label": "0 active users"
+				},
+				{
+					"date": "2026-11-23",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-11-24",
+					"level": 3,
+					"label": "8 active users"
+				},
+				{
+					"date": "2026-11-25",
+					"level": 3,
+					"label": "9 active users"
+				},
+				{
+					"date": "2026-11-26",
+					"level": 4,
+					"label": "10 active users"
+				},
+				{
+					"date": "2026-11-27",
+					"level": 4,
+					"label": "10 active users"
+				}
+			],
+			"selected": "2026-10-14"
+		},
+		"events": ["select"]
+	},
+	"frame": "screen",
+	"aria": [
+		{
+			"role": "group",
+			"name": "Daily active users over the last year. Use the arrow keys to read each day."
+		}
+	],
+	"kit": {
+		"specimen": "heatmap",
+		"target": "heatmap"
+	},
+	"cases": [
+		{
+			"name": "none",
+			"props": {
+				"selected": null
+			}
+		},
+		{
+			"name": "earlyWeek",
+			"props": {
+				"selected": "2026-01-05"
+			}
+		},
+		{
+			"name": "weeks",
+			"props": {
+				"days": [
+					{
+						"date": "2026-11-02",
+						"level": 2,
+						"label": "6 active users"
+					},
+					{
+						"date": "2026-11-03",
+						"level": 0,
+						"label": "0 active users"
+					},
+					{
+						"date": "2026-11-04",
+						"level": 2,
+						"label": "5 active users"
+					},
+					{
+						"date": "2026-11-05",
+						"level": 2,
+						"label": "4 active users"
+					},
+					{
+						"date": "2026-11-06",
+						"level": 2,
+						"label": "5 active users"
+					},
+					{
+						"date": "2026-11-07",
+						"level": 0,
+						"label": "0 active users"
+					},
+					{
+						"date": "2026-11-08",
+						"level": 2,
+						"label": "6 active users"
+					},
+					{
+						"date": "2026-11-09",
+						"level": 3,
+						"label": "8 active users"
+					},
+					{
+						"date": "2026-11-10",
+						"level": 3,
+						"label": "9 active users"
+					},
+					{
+						"date": "2026-11-11",
+						"level": 4,
+						"label": "11 active users"
+					},
+					{
+						"date": "2026-11-12",
+						"level": 4,
+						"label": "12 active users"
+					},
+					{
+						"date": "2026-11-13",
+						"level": 4,
+						"label": "13 active users"
+					},
+					{
+						"date": "2026-11-14",
+						"level": 4,
+						"label": "13 active users"
+					},
+					{
+						"date": "2026-11-15",
+						"level": 0,
+						"label": "0 active users"
+					},
+					{
+						"date": "2026-11-16",
+						"level": 4,
+						"label": "12 active users"
+					},
+					{
+						"date": "2026-11-17",
+						"level": 4,
+						"label": "11 active users"
+					},
+					{
+						"date": "2026-11-18",
+						"level": 3,
+						"label": "9 active users"
+					},
+					{
+						"date": "2026-11-19",
+						"level": 3,
+						"label": "8 active users"
+					},
+					{
+						"date": "2026-11-20",
+						"level": 0,
+						"label": "0 active users"
+					},
+					{
+						"date": "2026-11-21",
+						"level": 0,
+						"label": "0 active users"
+					},
+					{
+						"date": "2026-11-22",
+						"level": 0,
+						"label": "0 active users"
+					},
+					{
+						"date": "2026-11-23",
+						"level": 3,
+						"label": "8 active users"
+					},
+					{
+						"date": "2026-11-24",
+						"level": 3,
+						"label": "8 active users"
+					},
+					{
+						"date": "2026-11-25",
+						"level": 3,
+						"label": "9 active users"
+					},
+					{
+						"date": "2026-11-26",
+						"level": 4,
+						"label": "10 active users"
+					},
+					{
+						"date": "2026-11-27",
+						"level": 4,
+						"label": "10 active users"
+					}
+				],
+				"selected": null
+			}
+		},
+		{
+			"name": "empty",
+			"props": {
+				"days": [],
+				"selected": null
+			}
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	}
+}

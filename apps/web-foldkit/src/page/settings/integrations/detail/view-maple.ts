@@ -9,7 +9,7 @@ import { removalConfirm, sectionCard, steps } from "./view-connection"
  * from Maple through `/oauth/bot-install`) and the alerts it posts in channels you pick. Both are set up
  * from Maple, because the link starts there (Maple's org owns the request), so this page shows
  * what is connected, sends you to the right place in Maple, in the region that owns the install,
- * and removes the bot. It is not listed in Installed Apps (`../shared/integration-bots.ts`).
+ * and removes the bot. It is not listed in Installed Apps (`@hazel/shared-screens/settings/integrations/data`).
  */
 
 const MAPLE_APPS = {

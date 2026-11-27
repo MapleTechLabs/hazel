@@ -3,12 +3,11 @@ import { VIEW_TRANSITION_TYPE } from "../chat/viewer/morph"
 import type { Message } from "./message"
 import type { Model } from "./model"
 
-/** An image viewer is open on the page: the channel's (messages, threads) or the Files tab's. */
+/** The channel's image viewer (messages, threads) is open; the Files pages' lightbox morphs itself. */
 export const isImageViewerOpen = (model: Model): boolean => {
 	const page = model.page
 	if (page?._tag !== "ChatChannel") return false
-	const { overlays, tab } = page.model
-	return overlays.open._tag === "ImageViewer" || (tab._tag === "Files" && tab.files.viewerImageId !== null)
+	return page.model.overlays.open._tag === "ImageViewer"
 }
 
 /**

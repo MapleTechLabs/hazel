@@ -7,7 +7,7 @@ import {
 	SUGGESTION_CHANNELS,
 	SUGGESTIONS,
 	UNSEEN_SUGGESTION,
-} from "../lab/fixtures/customers-suggestions"
+} from "../test/fixtures/customers-suggestions"
 import { originOf } from "./channels"
 import {
 	EMPTY_SUGGESTIONS,

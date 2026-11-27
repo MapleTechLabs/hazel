@@ -1,4 +1,4 @@
-import type { ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
+import type { ChannelId, ChannelMemberId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { and, eq, inArray, isNull } from "@tanstack/db"
 import { Effect, Stream } from "effect"
 import {
@@ -17,7 +17,6 @@ import {
 	notificationOverrideCollection,
 	organizationCollection,
 	pinnedMessageCollection,
-	typingIndicatorCollection,
 	userCollection,
 	userPresenceStatusCollection,
 } from "~/db/collections"
@@ -42,7 +41,6 @@ import {
 	type ReplyTarget,
 	type ThreadChannelInfo,
 	type ThreadMessageInfo,
-	type TypingInfo,
 	type UserInfo,
 	type UserRow,
 	toChannelMemberInfo,
@@ -298,48 +296,6 @@ export const membersStream = <M>(
 		(rows) => toMessage(rows.map(toChannelMemberInfo)),
 	)
 
-/**
- * What the channel's "Default" level is for the user (`inheritedLevelOf`): their section's level,
- * else the organization's, else the type's default. Only their own overrides are synced.
- */
-export const inheritedLevelStream = <M>(channelId: ChannelId, toMessage: (level: NotificationLevel) => M) =>
-	liveQueryStream<
-		{
-			type: string
-			sectionLevel: NotificationLevel | null | undefined
-			organizationLevel: NotificationLevel | null | undefined
-		},
-		M
-	>(
-		(q) =>
-			q
-				.from({ channel: channelCollection })
-				.leftJoin({ section: notificationOverrideCollection }, ({ channel, section }) =>
-					eq(section.scopeId, channel.sectionId),
-				)
-				.leftJoin({ org: notificationOverrideCollection }, ({ channel, org }) =>
-					eq(org.scopeId, channel.organizationId),
-				)
-				.where(({ channel }) => eq(channel.id, channelId))
-				.select(({ channel, section, org }) => ({
-					type: channel.type,
-					sectionLevel: section?.level,
-					organizationLevel: org?.level,
-				})),
-		(rows) => {
-			const row = rows[0]
-			return toMessage(
-				row === undefined
-					? inheritedLevelOf("public")
-					: inheritedLevelOf(row.type, {
-							sectionLevel: row.sectionLevel,
-							organizationLevel: row.organizationLevel,
-						}),
-			)
-		},
-		{ holdEmptyUntil: appOrgSourcesSettled },
-	)
-
 /** The channel's newest message (`channel_activity`), for its new-messages line. */
 export const activityStream = <M>(
 	channelId: ChannelId,
@@ -413,18 +369,6 @@ export const readPositionStream = <M>(
 		},
 		// Before the org's sources settle, no row is not yet "not a member".
 		{ holdEmptyUntil: appOrgSourcesSettled },
-	)
-
-/** `useTypingIndicators`' indicator query. */
-export const typingStream = <M>(channelId: ChannelId, toMessage: (typing: ReadonlyArray<TypingInfo>) => M) =>
-	liveQueryStream<TypingInfo, M>(
-		(q) =>
-			q
-				.from({ typing: typingIndicatorCollection })
-				.where(({ typing }) => eq(typing.channelId, channelId))
-				.orderBy(({ typing }) => typing.lastTyped, "desc")
-				.limit(10),
-		(rows) => toMessage(rows.map((row) => ({ memberId: row.memberId, lastTyped: row.lastTyped }))),
 	)
 
 interface PinnedRow {
@@ -512,4 +456,20 @@ const pinnedQueryStream = <M>(channelId: ChannelId, toMessage: (pins: ReadonlyAr
 					}))
 					.sort((a, b) => a.pinnedAtMs - b.pinnedAtMs),
 			),
+	)
+
+/** The signed-in user's member row in a channel (whether they follow a thread). */
+export const ownMembershipStream = <Message>(
+	channelId: ChannelId,
+	userId: UserId,
+	toMessage: (memberId: ChannelMemberId | null) => Message,
+) =>
+	liveQueryStream<{ id: ChannelMemberId }, Message>(
+		(q) =>
+			q
+				.from({ member: channelMemberCollection })
+				.where(({ member }) => and(eq(member.channelId, channelId), eq(member.userId, userId)))
+				.orderBy(({ member }) => member.createdAt, "desc")
+				.findOne(),
+		(rows) => toMessage(rows[0]?.id ?? null),
 	)

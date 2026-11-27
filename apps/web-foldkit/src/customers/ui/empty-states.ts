@@ -1,14 +1,13 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { IconCheck, IconConnect, IconMagnifier3, IconPlus } from "../../icons"
+import { IconMagnifier3 } from "../../icons"
 import { button } from "../../ui/button"
 import { cardClassName } from "../../ui/card"
 import { emptyState } from "../../ui/empty-state"
-import { startingSource, suggestedBillingSource } from "../providers"
 
 /**
  * The Customers empty states (Foundations › Empty State Variants) over the app's `emptyState`:
- * all clear, no data source, no results. `framed` puts them in a bordered panel.
+ * no results. `framed` puts it in a bordered panel.
  */
 
 const frame = <M>(h: HtmlBuilder<M>, framed: boolean, className: string | undefined, child: Html): Html =>
@@ -18,55 +17,6 @@ const frame = <M>(h: HtmlBuilder<M>, framed: boolean, className: string | undefi
 				[child],
 			)
 		: child
-
-/** The queue with nothing open: `All clear`, and how many snoozed signals wake this week. */
-export const allClearState = <M>(
-	h: HtmlBuilder<M>,
-	options: Readonly<{ snoozedCount: number; onViewSnoozed?: M; framed?: boolean; className?: string }>,
-): Html =>
-	frame(
-		h,
-		options.framed ?? true,
-		options.className,
-		emptyState(h, {
-			title: "All clear",
-			icon: (className) => IconCheck(h, { className }),
-			description:
-				options.snoozedCount === 0
-					? "No open signals assigned to you."
-					: `No open signals assigned to you. ${options.snoozedCount} snoozed ${options.snoozedCount === 1 ? "signal wakes" : "signals wake"} up this week.`,
-			action:
-				options.snoozedCount > 0 && options.onViewSnoozed !== undefined
-					? button(h, { intent: "outline", size: "sm", onPress: options.onViewSnoozed }, [
-							"View snoozed",
-						])
-					: undefined,
-		}),
-	)
-
-/** No source connected: start with the suggested one. `action` overrides its default Connect button. */
-export const noSourcesState = <M>(
-	h: HtmlBuilder<M>,
-	options: Readonly<{ onConnect?: M; action?: Html; framed?: boolean; className?: string }>,
-): Html =>
-	frame(
-		h,
-		options.framed ?? true,
-		options.className,
-		emptyState(h, {
-			title: "Connect a data source",
-			icon: (className) => IconConnect(h, { className }),
-			description: `Start with ${startingSource.name} to import your ${startingSource.accountNoun}s, then add ${suggestedBillingSource.name} for revenue.`,
-			action:
-				options.action ??
-				(options.onConnect === undefined
-					? undefined
-					: button(h, { intent: "primary", size: "sm", onPress: options.onConnect }, [
-							IconPlus(h),
-							`Connect ${startingSource.name}`,
-						])),
-		}),
-	)
 
 /** Filters or search matched nothing. */
 export const noResultsState = <M>(

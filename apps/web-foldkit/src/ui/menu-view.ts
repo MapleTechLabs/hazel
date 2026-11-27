@@ -226,23 +226,6 @@ export const menuLabel = <M>(
 		typeof text === "string" ? [text] : [...text],
 	)
 
-/** `MenuDescription` (DropdownDescription): pair with `item(key, { hasDescription: true })`. */
-export const menuDescription = <M>(
-	h: HtmlBuilder<M>,
-	id: string,
-	key: string,
-	text: string,
-	className?: string,
-): Html =>
-	h.span(
-		[
-			h.Class(twMerge(dropdownDescriptionBase, className)),
-			h.Id(descriptionId(id, key)),
-			h.Attribute("slot", "description"),
-		],
-		[text],
-	)
-
 /** `MenuKeyboard` (DropdownKeyboard): the item's shortcut, as quiet text at its end. */
 export const menuKeyboard = <M>(h: HtmlBuilder<M>, text: string, className?: string): Html =>
 	h.kbd(

@@ -1,0 +1,23 @@
+{
+	"about": "The kit's KPI tile (`kpiTile`) with a definition and a delta that is good when up, no trend, diffed against today's.",
+	"root": {
+		"tag": "statTile",
+		"props": {
+			"label": "MRR",
+			"value": "$48.2k",
+			"delta": "4.1%",
+			"trend": "up",
+			"deltaTone": "success",
+			"comparison": "vs previous 30 days",
+			"definition": "Monthly recurring revenue: the sum of every active subscription, normalised to a month."
+		}
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "stat-tile",
+		"target": "statTile"
+	},
+	"pending": {
+		"ios": "S1"
+	}
+}

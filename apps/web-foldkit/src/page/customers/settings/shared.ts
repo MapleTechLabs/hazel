@@ -12,8 +12,6 @@ import type { Shared } from "../../contract"
 export const isCustomersAdmin = (shared: Shared): boolean =>
 	shared.member?.role === "admin" || shared.member?.role === "owner"
 
-export type { Crumb }
-
 /** The scrolling page root: settings pages scroll themselves inside the shell's `main`. */
 export const settingsPage = <M>(h: HtmlBuilder<M>, children: ReadonlyArray<Html>): Html =>
 	h.div(

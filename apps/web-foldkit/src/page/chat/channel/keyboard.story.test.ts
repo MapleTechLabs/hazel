@@ -1,24 +1,13 @@
-import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
+import { Command, given, message, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
-import * as Composer from "../../../composer/composer"
-import * as Draft from "../../../composer/draft"
-import * as EditorCommands from "../../../composer/editor-commands"
-import { PageOutMessage } from "../../out-message"
-import {
-	adaMessageId,
-	channelId,
-	loadedMessages,
-	loadedModel,
-	messages,
-	updateWithShared,
-} from "./fixtures.test-support"
+import type { ComposerRequest } from "@hazel/shared-screens/chat/composer/host"
+import { channelId, loadedModel, updateWithShared } from "./fixtures.test-support"
 import { Message } from "./model"
 import { ClearChannelNotifications } from "./clear-notifications"
 import * as MessageList from "../../../mount/message-list"
-import * as EmojiPicker from "../../../emoji-picker/picker"
-import * as GifPicker from "../../../gif-picker/picker"
+import { RequestComposer } from "./write"
 
-/** Channel-level keys: typing anywhere goes to the composer, ArrowUp edits your last message here. */
+/** Channel-level keys: typing anywhere and the composer shortcuts go to the shared composer. */
 
 vi.hoisted(() => {
 	if (!("document" in globalThis))
@@ -27,45 +16,20 @@ vi.hoisted(() => {
 		})
 })
 
-const editorId = `composer-${channelId}`
-const draft = (inner: Draft.Message) => Message.GotDraftMessage({ message: inner })
-const composer = (inner: Composer.Message) => draft(Draft.Message.GotComposerMessage({ message: inner }))
+/** The request the page publishes to the channel's composer, answered. */
+const asks = (request: ComposerRequest) =>
+	[
+		Command.expectExact(RequestComposer({ channelId, request })),
+		Command.resolve(RequestComposer, Message.CompletedRequestComposer()),
+	] as const
 
 describe("channel keys", () => {
-	test("a key typed outside the composer is inserted into it", () => {
+	test("a key typed outside the composer goes into it", () => {
 		story(
 			updateWithShared,
 			given(loadedModel()),
 			message(Message.PressedGlobalKey({ key: "h" })),
-			Command.expectExact(EditorCommands.InsertEditorText({ editorId, text: "h" })),
-			Command.resolve(EditorCommands.InsertEditorText, Composer.Message.CompletedInsertEditorText()),
-		)
-	})
-
-	test("ArrowUp in the empty composer edits your newest message in this channel", () => {
-		story(
-			updateWithShared,
-			given(updateWithShared(loadedModel(), loadedMessages(messages)).model),
-			message(composer(Composer.Message.PressedArrowUpInEmpty())),
-			Command.expectExact(
-				EditorCommands.SetEditorContent({ editorId, markdown: "Shipped the onboarding copy" }),
-			),
-			Command.resolve(EditorCommands.SetEditorContent, Composer.Message.CompletedSetEditorContent()),
-		)
-	})
-
-	test("Enter on your edit emptied of its text asks to delete the message", () => {
-		const loaded = updateWithShared(loadedModel(), loadedMessages(messages)).model
-		const editing = updateWithShared(loaded, composer(Composer.Message.PressedArrowUpInEmpty())).model
-		story(
-			updateWithShared,
-			given(editing),
-			message(composer(Composer.Message.SubmittedDraft({ markdown: "" }))),
-			Command.expectExact(EditorCommands.ClearEditor({ editorId })),
-			expectOutMessage(
-				PageOutMessage.RequestedModal({ modal: { _tag: "DeleteMessage", messageId: adaMessageId } }),
-			),
-			Command.resolve(EditorCommands.ClearEditor, Composer.Message.CompletedClearEditor()),
+			...asks({ _tag: "InsertText", text: "h" }),
 		)
 	})
 })
@@ -77,30 +41,7 @@ describe("channel shortcuts", () => {
 			updateWithShared,
 			given(loadedModel()),
 			message(Message.PressedChannelHotkey({ action: "EmojiPicker" })),
-			model((current) => expect(current.draft.emojiPicker.isOpen).toBe(true)),
-			Command.expectExact(EmojiPicker.LoadEmojiData, EmojiPicker.LoadRecentEmojis),
-			Command.resolve(
-				EmojiPicker.LoadEmojiData,
-				EmojiPicker.Message.FailedLoadEmojiData({ reason: "Offline" }),
-			),
-			Command.resolve(
-				EmojiPicker.LoadRecentEmojis,
-				EmojiPicker.Message.LoadedRecentEmojis({ recent: [] }),
-			),
-		)
-	})
-
-	test("Mod+E again closes it", () => {
-		const opened = updateWithShared(
-			loadedModel(),
-			Message.PressedChannelHotkey({ action: "EmojiPicker" }),
-		)
-		story(
-			updateWithShared,
-			given(opened.model),
-			message(Message.PressedChannelHotkey({ action: "EmojiPicker" })),
-			model((current) => expect(current.draft.emojiPicker.isOpen).toBe(false)),
-			Command.expectNone(),
+			...asks({ _tag: "OpenEmojiPicker" }),
 		)
 	})
 
@@ -109,19 +50,7 @@ describe("channel shortcuts", () => {
 			updateWithShared,
 			given(loadedModel()),
 			message(Message.PressedChannelHotkey({ action: "GifPicker" })),
-			model((current) => expect(current.draft.gifPicker.isOpen).toBe(true)),
-			Command.expectHas(GifPicker.FetchGifs, GifPicker.FetchCategories, GifPicker.FocusGifSearch),
-			Command.resolveAll(
-				[
-					GifPicker.FetchGifs,
-					GifPicker.Message.FailedFetchGifs({ query: "", page: 1, reason: "ProviderFailed" }),
-				],
-				[
-					GifPicker.FetchCategories,
-					GifPicker.Message.FailedFetchCategories({ reason: "ProviderFailed" }),
-				],
-				[GifPicker.FocusGifSearch, GifPicker.Message.CompletedFocusGifSearch()],
-			),
+			...asks({ _tag: "OpenGifPicker" }),
 		)
 	})
 
@@ -130,18 +59,13 @@ describe("channel shortcuts", () => {
 			updateWithShared,
 			given(loadedModel()),
 			message(Message.PressedChannelHotkey({ action: "Upload" })),
-			Command.expectExact(Draft.OpenFilePicker),
-			Command.resolve(Draft.OpenFilePicker, Draft.Message.CompletedOpenFilePicker()),
+			...asks({ _tag: "Attach" }),
 		)
 	})
 
-	test("Mod+P toggles the pinned messages", () => {
-		const opened = updateWithShared(loadedModel(), Message.PressedChannelHotkey({ action: "Pins" }))
-		expect(opened.model.overlays.pinned.isOpen).toBe(true)
-		expect(
-			updateWithShared(opened.model, Message.PressedChannelHotkey({ action: "Pins" })).model.overlays
-				.pinned.isOpen,
-		).toBe(false)
+	test("Mod+P goes to the channel header's pins", () => {
+		const pressed = updateWithShared(loadedModel(), Message.PressedChannelHotkey({ action: "Pins" }))
+		expect(pressed.commands?.map((command) => command.name)).toEqual(["PublishPinsHotkey"])
 	})
 })
 
@@ -160,7 +84,7 @@ describe("reading keys", () => {
 		story(
 			updateWithShared,
 			given(loadedModel()),
-			message(composer(Composer.Message.PressedEscape())),
+			message(Message.ReceivedComposerNotice({ notice: { _tag: "Escaped", channelId } })),
 			Command.expectExact(ClearChannelNotifications({ channelId })),
 			Command.resolve(ClearChannelNotifications, Message.SucceededClearNotifications({ channelId })),
 		)

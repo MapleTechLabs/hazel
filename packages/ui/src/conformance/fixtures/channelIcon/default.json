@@ -1,0 +1,53 @@
+{
+	"about": "A channel's icon: `#`, private, an emoji, a customer's logo, Connect partners and a sync mark.",
+	"root": {
+		"tag": "channelIcon"
+	},
+	"frame": "inline",
+	"axes": [
+		{
+			"prop": "private",
+			"values": [true]
+		},
+		{
+			"prop": "emoji",
+			"values": ["🚀"]
+		},
+		{
+			"prop": "sync",
+			"values": ["slack", "discord"]
+		}
+	],
+	"cases": [
+		{
+			"name": "customer-private",
+			"props": {
+				"customer": {
+					"name": "Linear",
+					"initials": "L"
+				},
+				"private": true
+			}
+		},
+		{
+			"name": "partners",
+			"props": {
+				"partners": [
+					{
+						"name": "Maple",
+						"initials": "M"
+					},
+					{
+						"name": "Acme",
+						"initials": "A"
+					}
+				],
+				"sync": "slack"
+			}
+		}
+	],
+	"kit": {
+		"specimen": "channel-icon",
+		"target": "channelIcon"
+	}
+}

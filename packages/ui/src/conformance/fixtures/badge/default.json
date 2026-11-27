@@ -1,0 +1,28 @@
+{
+	"about": "A badge in every tone, style and size, and pill.",
+	"root": {
+		"tag": "badge",
+		"props": {
+			"label": "Beta"
+		}
+	},
+	"frame": "inline",
+	"axes": [
+		{
+			"prop": "tone",
+			"values": ["accent", "success", "warning", "danger", "info"]
+		},
+		{
+			"prop": "style",
+			"values": ["outline", "quiet"]
+		},
+		{
+			"prop": "size",
+			"values": ["small"]
+		},
+		{
+			"prop": "pill",
+			"values": [true]
+		}
+	]
+}

@@ -1,7 +1,6 @@
 import { ChannelId, MessageId, TypingIndicatorId, UserId } from "@hazel/schema"
 import { Effect, type Equivalence, Fiber, Queue, Schema, Stream } from "effect"
 import { describe, expect, test, vi } from "vitest"
-import type * as Typing from "../../../composer/typing"
 import { chatMessageOf, liveEmbeds } from "../../../test/chat-messages"
 import {
 	adaMemberId,
@@ -19,13 +18,7 @@ import { PAGE_SIZE } from "../queries"
 import { init, setTab, switchChannel } from "./page"
 import { HTML_RENDER_DEFAULT_THEMES } from "@hazel/domain/html-render"
 import { Message, type Model } from "./model"
-import {
-	indicatorsOf,
-	shownChannelIdsOf,
-	subscriptions,
-	type TypingCleanup,
-	typingCleanupStream,
-} from "./subscription"
+import { shownChannelIdsOf, subscriptions } from "./subscription"
 
 /** Which Model slices gate the channel's Subscriptions (a changed dependency restarts the stream). */
 
@@ -41,13 +34,6 @@ const input = (model: Model) => ({ model, shared })
 const threadChannelId = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-000000004444")
 
 describe("channel subscription gates", () => {
-	test("the typing clock ticks only while someone is typing", () => {
-		const idle = loadedModel()
-		expect(subscriptions.chatTypingClock.modelToDependencies(input(idle))).toEqual({ isTyping: false })
-		const typing: Model = { ...idle, typing: [{ memberId: adaMemberId, lastTyped: 0 }] }
-		expect(subscriptions.chatTypingClock.modelToDependencies(input(typing))).toEqual({ isTyping: true })
-	})
-
 	test("the messages query follows the window (limit and offset)", () => {
 		const model = { ...loadedModel(), limit: 60, offset: 30 }
 		expect(subscriptions.chatMessages.modelToDependencies(input(model))).toEqual({
@@ -64,14 +50,10 @@ describe("channel subscription gates", () => {
 		expect(keepAliveEquivalence(window, { ...window, channelId: threadChannelId })).toBe(false)
 	})
 
-	test("an AI reply in the window opens its live socket; finished ones never do", () => {
+	test("an AI reply in the window opens no socket here: the hazel message list streams it", () => {
 		const live = chatMessageOf(10, { embeds: liveEmbeds, hasEmbeds: true })
 		const model = updateWithShared(loadedModel(), loadedMessages([live, ...messages])).model
-		expect(subscriptions.chatLiveReplies.modelToDependencies(input(model))).toEqual({
-			replies: [{ messageId: live.id, channelId: live.channelId }],
-		})
-		const idle = updateWithShared(loadedModel(), loadedMessages(messages)).model
-		expect(subscriptions.chatLiveReplies.modelToDependencies(input(idle))).toEqual({ replies: [] })
+		expect(subscriptions.chatLiveReplies.modelToDependencies(input(model))).toEqual({ replies: [] })
 	})
 
 	test("a new live reply keeps the running stream; only the last one leaving stops it", () => {
@@ -146,17 +128,9 @@ const CHANNEL_ONLY = [
 	"chatIssueRoots",
 	"chatThreadIssue",
 	"chatMembers",
-	// The header bell's "Default": the channel's own section and organization settings.
-	"chatInheritedNotificationLevel",
 	// The "New" line is the channel's; the thread panel has none (it reads its thread as it shows it).
 	"chatActivity",
 	"chatReadPosition",
-	"chatTyping",
-	"composerMembers",
-	"composerBots",
-	"composerCommands",
-	"typingCleanup",
-	"channelUpload",
 ]
 
 describe("lookups the thread panel's rows read", () => {
@@ -212,14 +186,11 @@ const CARRIED_ACROSS_SWITCH = {
 const STATELESS = [
 	"htmlRenderBridge",
 	"chatThreadPanelDrag",
-	"chatTypingClock",
 	"globalTyping",
 	"channelHotkeys",
-	"leftWindow",
+	"composerNotices",
 	"windowFocus",
-	"filesBreakpoint",
-	"filesInteractionModality",
-	"filesInteractionPointerRelease",
+	"listRequests",
 ]
 /**
  * Keyed by data the new channel derives again (threads, live replies, the parent, the open panel) or
@@ -233,9 +204,9 @@ const KEYED_BY_CHANNEL_DATA = [
 	"chatThreadPanel",
 	"chatThreadPanelPins",
 	"threadMembership",
+	"composerThread",
 	"chatIssueMembers",
 	"chatThreadIssueSla",
-	"filesAttachments",
 ]
 
 describe("streams that keep running across a channel switch", () => {
@@ -293,54 +264,6 @@ describe("streams that keep running across a channel switch", () => {
 		// A fresh page starts without it, so carrying it is what keeps it.
 		expect(slice(before)).not.toEqual(slice(init(otherChannel, before.orgSlug, before.currentUserId)))
 		expect(slice(after)).toEqual(slice(before))
-	})
-})
-
-describe("typing cleanup on leaving the page", () => {
-	const indicatorId = Schema.decodeSync(TypingIndicatorId)("00000000-0000-4000-8000-000000009999")
-	const otherChannel = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-000000005555")
-	const indicator = { id: indicatorId, channelId: loadedModel().channelId }
-	const own: TypingCleanup = { channelId: loadedModel().channelId, indicators: [indicator] }
-
-	/** Starts the cleanup stream, interrupts it as a restart or teardown would, and lists the deletes. */
-	const deletedOnInterrupt = (latest: TypingCleanup) =>
-		Effect.runPromise(
-			Effect.gen(function* () {
-				const deleted: Array<Typing.Indicator> = []
-				const fiber = yield* typingCleanupStream(
-					own,
-					() => latest,
-					(indicator) =>
-						Effect.sync(() => {
-							deleted.push(indicator)
-						}),
-				).pipe(Stream.runDrain, Effect.forkChild)
-				yield* Effect.yieldNow
-				yield* Fiber.interrupt(fiber)
-				return deleted
-			}),
-		)
-
-	test("the drafts' indicators are the dependencies", () => {
-		const model = loadedModel()
-		const typing: Model = {
-			...model,
-			draft: { ...model.draft, typing: { ...model.draft.typing, indicator } },
-		}
-		expect(indicatorsOf(model)).toEqual([])
-		expect(subscriptions.typingCleanup.modelToDependencies(input(typing))).toEqual(own)
-	})
-
-	test("switching to another channel while typing deletes the indicator", async () => {
-		expect(await deletedOnInterrupt({ channelId: otherChannel, indicators: [] })).toEqual([indicator])
-	})
-
-	test("leaving the chat while typing deletes the indicator", async () => {
-		expect(await deletedOnInterrupt(own)).toEqual([indicator])
-	})
-
-	test("a stop inside the page already deleted it: no second delete", async () => {
-		expect(await deletedOnInterrupt({ channelId: own.channelId, indicators: [] })).toEqual([])
 	})
 })
 

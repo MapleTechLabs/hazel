@@ -1,0 +1,30 @@
+{
+	"about": "hz:popover open next to its anchor slot, with a short profile card as its children.",
+	"frame": "inline",
+	"root": {
+		"tag": "popover",
+		"props": { "open": true },
+		"events": ["dismiss"],
+		"slots": [
+			{
+				"name": "anchor",
+				"children": [{ "tag": "avatar", "props": { "name": "Maya Chen", "initials": "MC" } }]
+			}
+		],
+		"children": [
+			{
+				"tag": "stack",
+				"props": { "density": "compact" },
+				"children": [
+					{ "tag": "text", "props": { "strong": true }, "children": ["Maya Chen"] },
+					{
+						"tag": "text",
+						"props": { "tone": "muted", "role": "caption" },
+						"children": ["Design lead, Berlin"]
+					}
+				]
+			}
+		]
+	},
+	"aria": [{ "role": "dialog" }]
+}

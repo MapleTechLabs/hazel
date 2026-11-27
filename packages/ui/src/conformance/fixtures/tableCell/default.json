@@ -1,0 +1,118 @@
+{
+	"about": "A read-only table (no row events, so a `table`, not a `grid`): a cell of each alignment and width.",
+	"root": {
+		"tag": "table",
+		"props": {
+			"label": "Plans",
+			"columns": [
+				{
+					"key": "name",
+					"label": "Plan",
+					"width": "fill"
+				},
+				{
+					"key": "seats",
+					"label": "Seats",
+					"align": "end",
+					"width": "narrow"
+				},
+				{
+					"key": "price",
+					"label": "Price",
+					"align": "end",
+					"width": "regular"
+				},
+				{
+					"key": "note",
+					"label": "Note"
+				}
+			]
+		},
+		"children": [
+			{
+				"tag": "tableRow",
+				"key": "pro",
+				"children": [
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "name"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Pro"],
+								"props": {
+									"role": "label",
+									"strong": true
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "seats"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["25"],
+								"props": {
+									"role": "label",
+									"numeric": true
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "price"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["$12"],
+								"props": {
+									"role": "label",
+									"numeric": true
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "note"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Most teams"],
+								"props": {
+									"role": "label",
+									"tone": "muted"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen",
+	"aria": [
+		{
+			"role": "table",
+			"name": "Plans"
+		},
+		{
+			"role": "cell",
+			"name": "Most teams"
+		}
+	],
+	"pending": {
+		"ios": "S5"
+	}
+}

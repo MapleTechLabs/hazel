@@ -1,0 +1,36 @@
+{
+	"about": "A spacer between a label and a count pushes the count to the row's far end.",
+	"root": {
+		"tag": "stack",
+		"props": {
+			"axis": "horizontal",
+			"align": "center"
+		},
+		"children": [
+			{
+				"tag": "text",
+				"children": ["Export data"],
+				"props": {
+					"role": "label"
+				}
+			},
+			{
+				"tag": "spacer"
+			},
+			{
+				"tag": "text",
+				"children": ["12 files"],
+				"props": {
+					"tone": "muted",
+					"numeric": true
+				}
+			}
+		]
+	},
+	"axes": [
+		{
+			"prop": "density",
+			"values": ["compact", "relaxed"]
+		}
+	]
+}

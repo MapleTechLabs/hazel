@@ -1,0 +1,64 @@
+{
+	"about": "A vertical scroll of twelve lines in a column that takes its container's height.",
+	"root": {
+		"tag": "scroll",
+		"children": [
+			{
+				"tag": "stack",
+				"props": {
+					"density": "compact"
+				},
+				"children": [
+					{
+						"tag": "text",
+						"children": ["Line 1"]
+					},
+					{
+						"tag": "text",
+						"children": ["Line 2"]
+					},
+					{
+						"tag": "text",
+						"children": ["Line 3"]
+					},
+					{
+						"tag": "text",
+						"children": ["Line 4"]
+					},
+					{
+						"tag": "text",
+						"children": ["Line 5"]
+					},
+					{
+						"tag": "text",
+						"children": ["Line 6"]
+					},
+					{
+						"tag": "text",
+						"children": ["Line 7"]
+					},
+					{
+						"tag": "text",
+						"children": ["Line 8"]
+					},
+					{
+						"tag": "text",
+						"children": ["Line 9"]
+					},
+					{
+						"tag": "text",
+						"children": ["Line 10"]
+					},
+					{
+						"tag": "text",
+						"children": ["Line 11"]
+					},
+					{
+						"tag": "text",
+						"children": ["Line 12"]
+					}
+				]
+			}
+		]
+	}
+}

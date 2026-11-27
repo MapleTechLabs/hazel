@@ -1,0 +1,139 @@
+name: Hazel UI
+
+# The shared-screens stack (docs/hazel-ui.md, phase 1.5): the web side on Linux, HazelUI on a macOS
+# simulator. Runs only when a PR touches it.
+on:
+    pull_request:
+        paths:
+            - "packages/ui/**"
+            - "packages/client-data/**"
+            - "apps/shared-screens/**"
+            - "apps/ios-hybrid/**"
+            - ".github/workflows/hazel-ui.yml"
+    push:
+        branches: [main]
+        paths:
+            - "packages/ui/**"
+            - "packages/client-data/**"
+            - "apps/shared-screens/**"
+            - "apps/ios-hybrid/**"
+            - ".github/workflows/hazel-ui.yml"
+
+concurrency:
+    group: hazel-ui-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    web:
+        runs-on: ubuntu-latest
+        timeout-minutes: 25
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v1
+              with:
+                  bun-version: latest
+
+            - name: Cache dependencies
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.bun/install/cache
+                      node_modules
+                      */node_modules
+                  key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-bun-
+
+            - name: Install dependencies
+              run: bun install --frozen-lockfile
+
+            - name: Type check
+              run: |
+                  bun run --cwd packages/ui typecheck
+                  bun run --cwd packages/client-data typecheck
+                  bun run --cwd apps/shared-screens typecheck
+                  bun run --cwd apps/ios-hybrid typecheck
+
+            - name: Generated files are current
+              run: bun run --cwd packages/ui ui:check
+
+            - name: Lint (hazel rules for shared screens)
+              run: bunx oxlint --disable-nested-config --quiet packages/ui apps/shared-screens
+
+            - name: Unit, contract and conformance tests
+              run: |
+                  bun run --cwd packages/ui test
+                  bun run --cwd packages/client-data test
+
+    ios:
+        runs-on: macos-26
+        timeout-minutes: 45
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Xcode
+              uses: maxim-lobanov/setup-xcode@v1
+              with:
+                  xcode-version: latest-stable
+
+            # The pinned simulator runs iOS 26.4 (test-hazelui.sh creates "hazel-ui-ci" on it).
+            - name: iOS 26.4 simulator runtime
+              run: |
+                  xcrun simctl list runtimes | grep -q "iOS 26.4" || xcodebuild -downloadPlatform iOS -buildVersion 26.4
+                  xcrun simctl list runtimes
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v1
+              with:
+                  bun-version: latest
+
+            - name: Install dependencies
+              run: bun install --frozen-lockfile
+
+            - name: Setup Python (the runner's system Python refuses pip installs)
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+
+            - name: Inter for the snapshots (fontTools converts the web's woff2)
+              run: python -m pip install --quiet fonttools brotli
+
+            - name: HazelUI tests and snapshots
+              run: bun run --cwd apps/ios-hybrid test:hazelui
+
+            # The kit pixel diffs run here, not on Linux: Linux Chromium draws the same text at a different
+            # sub-pixel phase on the kit and hazel sides, and the references were authored on macOS.
+            - name: Install Chromium
+              if: success() || failure()
+              run: bunx playwright install chromium
+              working-directory: packages/ui
+
+            - name: Browser runner (every fixture on the web host)
+              if: success() || failure()
+              run: bun run --cwd packages/ui test:web
+
+            - name: Browser tests (the composer's editor in Chromium)
+              if: success() || failure()
+              run: bun run --cwd packages/ui test:browser
+
+            - name: Upload screenshots
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: hazel-ui-web-shots-${{ github.run_id }}
+                  path: packages/ui/src/conformance/__shots__
+                  if-no-files-found: ignore
+
+            - name: Upload failed snapshots and the log
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: hazel-ui-ios-${{ github.run_id }}
+                  path: |
+                      apps/ios-hybrid/HazelUI/.build/snapshot-failures
+                      apps/ios-hybrid/HazelUI/.build/test-hazelui.log
+                  if-no-files-found: ignore

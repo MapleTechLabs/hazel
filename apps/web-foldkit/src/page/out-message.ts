@@ -1,7 +1,7 @@
 import { OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
-import { Page as CommandPalettePage } from "../overlay/command-palette/model"
+import { PalettePage } from "@hazel/shared-screens/app/requests"
 import { ModalRequest } from "../overlay/modal/requests"
 import { AppRoute } from "../route"
 import { ToastRequest } from "../overlay/toasts"
@@ -17,9 +17,13 @@ export const PageOutMessage = defineMessageUnion({
 		replace: Schema.Boolean,
 		toast: Schema.optionalKey(ToastRequest),
 	},
+	/** An in-app URL that may carry a search the route does not model (the palette's `?messageId=`). */
+	RequestedHref: { href: Schema.String },
+	/** Slack's Mod+[ / Mod+]: the history's previous or next page. */
+	RequestedHistory: { direction: Schema.Literals(["Back", "Forward"]) },
 	RequestedToast: { toast: ToastRequest },
 	RequestedModal: { modal: ModalRequest },
-	RequestedCommandPalette: { page: CommandPalettePage },
+	RequestedCommandPalette: { page: PalettePage },
 	RequestedSignOut: {},
 	/**
 	 * Create a single DM with `userId` in the org at `orgSlug`, then open it. The root runs the request,

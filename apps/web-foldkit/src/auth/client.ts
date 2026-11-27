@@ -21,9 +21,6 @@ export const HazelAuthClientLive = HazelAuthClient.layerFetch.pipe(Layer.orDie)
 export const Provider = SignInProvider.literals
 export type Provider = SignInProvider
 
-/** What an install offers before it answers, or when it can't: every provider, and passkeys. */
-export const allSignInMethods: AuthProviders = { providers: Provider, passkeys: true }
-
 export class SignInMethodsError extends Schema.TaggedError<
 	SignInMethodsError,
 	{ readonly brand: unique symbol }
@@ -46,6 +43,3 @@ export const fetchSignInMethods: Effect.Effect<AuthProviders, SignInMethodsError
 		),
 	),
 )
-
-export const isProvider = (value: string): value is Provider =>
-	(Provider as ReadonlyArray<string>).includes(value)

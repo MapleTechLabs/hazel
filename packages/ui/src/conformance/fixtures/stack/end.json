@@ -1,0 +1,35 @@
+{
+	"about": "Evidence lines (`pk0-evidence-lines`, today's `lines`): a stack aligned `end` right-aligns its text, the figure over its caption.",
+	"root": {
+		"tag": "stack",
+		"props": {
+			"density": "tight",
+			"align": "end"
+		},
+		"children": [
+			{
+				"tag": "text",
+				"props": {
+					"role": "label",
+					"strong": true,
+					"numeric": true
+				},
+				"children": ["14d quiet"]
+			},
+			{
+				"tag": "text",
+				"props": {
+					"role": "caption",
+					"tone": "muted",
+					"numeric": true
+				},
+				"children": ["was 12 active"]
+			}
+		]
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "evidence-lines",
+		"target": "stack"
+	}
+}

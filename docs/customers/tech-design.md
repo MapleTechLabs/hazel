@@ -539,6 +539,9 @@ Pages (artboards):
 
 ### 6.4 Lab
 
+Since deleted, with the design gallery: the customers fixtures now live in `src/test/fixtures/`
+and serve the scene and story tests only. The plan below is kept as history.
+
 Port Maple's lab: interactive, fixture-driven Foldkit programs at `/lab/<path>` (dev, or
 `VITE_HAZEL_LAB=on`), complementing the screenshot gallery.
 

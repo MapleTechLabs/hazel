@@ -1,15 +1,13 @@
-import { BotId, ChannelId, ExternalChannelId, SyncConnectionId } from "@hazel/schema"
+import { ExternalChannelId, SyncConnectionId } from "@hazel/schema"
 import { Schema } from "effect"
-import type { Connection, EmailInbox, HazelChannel } from "../page/settings/chat-sync/model"
-import type { ExternalChannel, Workspace } from "../page/settings/chat-sync/providers"
-import type { Bot } from "../page/settings/integrations/shared/bots"
+import type { Connection } from "../page/settings/chat-sync/model"
+import type { ExternalChannel } from "../page/settings/chat-sync/providers"
 import { uuid } from "./pages-fixtures"
 
-/** Fixtures for the chat sync and integrations page tests. */
+/** Fixtures for the chat sync page tests. */
 
 export const syncConnectionId = Schema.decodeSync(SyncConnectionId)(uuid(20))
 export const slackSyncConnectionId = Schema.decodeSync(SyncConnectionId)(uuid(21))
-export const botId = Schema.decodeSync(BotId)(uuid(30))
 
 export const connection: Connection = {
 	id: syncConnectionId,
@@ -31,29 +29,6 @@ export const slackConnection: Connection = {
 	lastSyncedAtMs: null,
 }
 
-export const emailSyncConnectionId = Schema.decodeSync(SyncConnectionId)(uuid(22))
-
-/** The org's #support channel, where its email inbox's threads arrive. */
-export const supportChannel: HazelChannel = { id: Schema.decodeSync(ChannelId)(uuid(42)), name: "support" }
-export const salesChannel: HazelChannel = { id: Schema.decodeSync(ChannelId)(uuid(43)), name: "sales" }
-
-/** An email support inbox forwarding to #support. */
-export const emailInbox: EmailInbox = {
-	id: emailSyncConnectionId,
-	displayName: "Acme Support",
-	status: "active",
-	errorMessage: null,
-	inboundAddress: "acme-support-7f3k@in.hazel.sh",
-	supportAddress: "support@acme.com",
-	hazelChannelId: supportChannel.id,
-}
-
-export const guild: Workspace = { id: "918273645500901", name: "Design Systems Guild", owner: true }
-export const otherGuild: Workspace = { id: "918273645500902", name: "Rust Hackers", owner: false }
-
-/** The org's Slack install, as the Slack channels endpoint names it. */
-export const slackWorkspace: Workspace = { id: "T024BE7LD", name: "Acme Corp", owner: false }
-
 const slackChannel = (id: string, name: string): ExternalChannel => ({
 	id: Schema.decodeSync(ExternalChannelId)(id),
 	name,
@@ -65,15 +40,3 @@ export const slackChannels: ReadonlyArray<ExternalChannel> = [
 	slackChannel("C02DESIGN", "design-reviews"),
 	slackChannel("C03LAUNCH", "launch-room"),
 ]
-
-export const bot: Bot = {
-	id: botId,
-	name: "Deploy Bot",
-	description: "Ships builds from chat.",
-	isPublic: true,
-	scopes: ["messages:write"],
-	allowedIntegrations: [],
-	installRedirectUris: [],
-	avatarUrl: null,
-	installCount: 12,
-}

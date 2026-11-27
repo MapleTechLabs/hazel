@@ -1,0 +1,25 @@
+{
+	"about": "A square ghost large icon button named by its label, against button-ghost-large-icon-only.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "ghost",
+			"size": "large",
+			"label": "Add",
+			"icon": "plus",
+			"iconOnly": true
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Add"
+		}
+	],
+	"kit": {
+		"specimen": "button-ghost-large-icon-only",
+		"target": "button"
+	}
+}

@@ -3,8 +3,6 @@ import { Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
 import type { IssueRow } from "../../../customers/issues"
-import * as Composer from "../../../composer/composer"
-import * as EditorCommands from "../../../composer/editor-commands"
 import * as Menu from "../../../ui/menu"
 import { PageOutMessage } from "../../out-message"
 import * as IssueControl from "../issue-control"
@@ -91,10 +89,9 @@ const issue: IssueRow = {
 const overlays = (inner: Overlays.Message) => Message.GotOverlaysMessage({ message: inner })
 const issueControl = (inner: IssueControl.Message) => Message.GotIssueControlMessage({ message: inner })
 const openThread = Message.ClickedThreadPreview({ threadChannelId, messageId: graceMessageId })
-/** What opening the panel starts: reading its width and focusing its composer. */
+/** What opening the panel starts: reading its width (its composer is a shared screen). */
 const openedThread = [
 	Command.resolve(LoadThreadPanelWidth, Message.LoadedThreadPanelWidth({ width: null })),
-	Command.resolve(EditorCommands.FocusEditor, Composer.Message.CompletedFocusEditor()),
 ] as const
 /** A pick from a menu, as the system menu reports it. */
 const pick = (key: string) => Menu.Message.ChoseFromNativeMenu({ key, entries: [Menu.item(key)] })

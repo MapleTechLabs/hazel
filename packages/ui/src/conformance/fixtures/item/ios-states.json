@@ -1,0 +1,31 @@
+{
+	"about": "iOS lane: a row with no slots in every state.",
+	"root": {
+		"tag": "item",
+		"key": "general",
+		"props": {
+			"title": "general",
+			"href": "#"
+		},
+		"events": ["press"]
+	},
+	"frame": "sidebar",
+	"axes": [
+		{
+			"prop": "emphasized",
+			"values": [true]
+		},
+		{
+			"prop": "disabled",
+			"values": [true]
+		},
+		{
+			"prop": "muted",
+			"values": [true]
+		},
+		{
+			"prop": "nested",
+			"values": ["middle", "last"]
+		}
+	]
+}

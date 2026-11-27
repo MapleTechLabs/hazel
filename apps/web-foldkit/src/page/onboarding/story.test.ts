@@ -2,8 +2,9 @@
 import { Option } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import { errorToast } from "../../data/actions"
-import { onboardingHref, routeOfPath } from "../../route"
+import { errorToast, successToast, warningToast } from "../../data/actions"
+import { AppRoute } from "../../route"
+import type { ToastRequest } from "../../overlay/toasts"
 import {
 	creatorMembership,
 	invitedMembership,
@@ -13,7 +14,7 @@ import {
 	runningOf,
 	withStep,
 } from "../../test/pages-entry-fixtures"
-import { makeShared, storyUpdate, userId } from "../../test/pages-fixtures"
+import { storyUpdate, userId } from "../../test/pages-fixtures"
 import * as ChoiceBox from "../../ui/choice-box"
 import { PageOutMessage } from "../out-message"
 import {
@@ -21,21 +22,23 @@ import {
 	DebounceTimezoneQuery,
 	ClearOnboardingAnswers,
 	LoadOnboardingHome,
-	ReadBrowserTimezone,
-	ReplaceOnboardingStepUrl,
 	SendInvites,
-	UpdateProfile,
 	UpdateUserTimezone,
 } from "./command"
 import { Message } from "./message"
 import { type InviteRow, type Model, StepState, stepOf } from "./model"
-import { init, sharedChanged, update } from "./update"
+import { init, routeChanged, update } from "./update"
 
 /** The onboarding update loop: start-up, each step's form, and finalization. */
 
 const run = storyUpdate(update, newcomer)
-const urlFor = (step: string) => ReplaceOnboardingStepUrl({ href: onboardingHref(null, step) })
-const urlDone = Message.CompletedReplaceStepUrl()
+/** A step change: the URL through the root, which the native shell follows. */
+const nav = (step: string, toast?: ToastRequest) => {
+	const route = AppRoute.Onboarding({ orgId: Option.none(), step: Option.some(step) })
+	return toast === undefined
+		? PageOutMessage.RequestedNavigation({ route, replace: true })
+		: PageOutMessage.RequestedNavigation({ route, replace: true, toast })
+}
 const errorOut = (title: string, description: string | null = null) =>
 	PageOutMessage.RequestedToast({ toast: errorToast(title, description) })
 
@@ -43,21 +46,21 @@ const stepNameOf = (current: Model) => stepOf(runningOf(current).step)
 const stepStateOf = (current: Model) => runningOf(current).step
 
 describe("start-up", () => {
-	test("an onboarded user is sent home once, and later shared changes do not redirect again", () => {
-		const onboarded = makeShared()
-		const started = init(onboardingRoute(null), onboarded)
-		expect(started.outMessage).toEqual(
-			PageOutMessage.RequestedNavigation({ route: routeOfPath("/"), replace: false }),
+	test("the shell's move reaches the page as a route change, which writes no URL", () => {
+		const welcome = onboardingAt(null)
+		const moved = routeChanged(welcome, onboardingRoute("timezoneSelection"))
+		expect(moved.outMessage).toBeUndefined()
+		expect(stepNameOf(moved.model)).toBe("timezoneSelection")
+		expect(routeChanged(moved.model, onboardingRoute("timezoneSelection")).model).toEqual(moved.model)
+		expect(stepNameOf(routeChanged(moved.model, onboardingRoute("nowhere")).model)).toBe(
+			"timezoneSelection",
 		)
-		expect(started.model.phase._tag).toBe("Leaving")
-		expect(started.commands?.map((command) => command.name)).toEqual([ReadBrowserTimezone.name])
-		expect(sharedChanged(started.model, onboarded).outMessage).toBeUndefined()
 	})
 
 	test("the flow starts only once both the timezone and the membership are known", () => {
 		story(
 			run,
-			given(init(onboardingRoute(null), newcomer).model),
+			given(init(onboardingRoute(null)).model),
 			message(Message.DetectedBrowserTimezone({ browserTimezone: "Europe/Vienna" })),
 			model((current) => expect(current.phase._tag).toBe("Starting")),
 			message(Message.UpdatedMembership({ membership: creatorMembership })),
@@ -69,8 +72,7 @@ describe("start-up", () => {
 					membership: creatorMembership,
 					browserTimezone: "Europe/Vienna",
 				})
-				expect(running.step._tag).toBe("Welcome")
-				expect(running.animatesStep).toBe(false)
+				expect(running.step).toEqual(StepState.Native({ step: "welcome" }))
 			}),
 		)
 	})
@@ -107,125 +109,18 @@ describe("start-up", () => {
 	})
 })
 
-describe("profile step", () => {
-	const profile = onboardingAt("profileInfo")
-	const profileForm = (firstName: string, lastName: string, isSubmitting = false) =>
-		withStep(profile, StepState.Profile({ firstName, lastName, hasChanged: false, isSubmitting }))
-
-	test("the form is seeded from user.me and submits the trimmed names", () => {
+describe("the shell's steps", () => {
+	test("Back from the time zone step moves the URL to the profile, which the shell draws", () => {
 		story(
 			run,
-			given(profile),
-			model((current) =>
-				expect(stepStateOf(current)).toMatchObject({ firstName: "Nora", lastName: "Newcomer" }),
-			),
-			message(Message.ChangedFirstName({ value: "  Ada " })),
-			message(Message.SubmittedProfile()),
-			Command.expectExact(UpdateProfile({ userId, firstName: "Ada", lastName: "Newcomer" })),
-			model((current) => expect(stepStateOf(current)).toMatchObject({ isSubmitting: true })),
-			Command.resolve(UpdateProfile, Message.SucceededUpdateProfile()),
-			Command.expectExact(urlFor("timezoneSelection")),
-			Command.resolve(ReplaceOnboardingStepUrl, urlDone),
-			model((current) => {
-				expect(stepNameOf(current)).toBe("timezoneSelection")
-				expect(runningOf(current).direction).toBe("forward")
-			}),
-		)
-	})
-
-	test("an empty name is not submitted and marks the form as edited", () => {
-		story(
-			run,
-			given(profileForm("", "Newcomer")),
-			message(Message.SubmittedProfile()),
+			given(onboardingAt("timezoneSelection")),
+			message(Message.ClickedBack()),
 			Command.expectNone(),
+			expectOutMessage(nav("profileInfo")),
 			model((current) =>
-				expect(stepStateOf(current)).toMatchObject({ hasChanged: true, isSubmitting: false }),
+				expect(stepStateOf(current)).toEqual(StepState.Native({ step: "profileInfo" })),
 			),
 		)
-	})
-
-	test("a failed profile update re-enables the form and says why", () => {
-		story(
-			run,
-			given(profile),
-			message(Message.SubmittedProfile()),
-			Command.resolve(UpdateProfile, Message.FailedUpdateProfile({ reason: "Offline" })),
-			expectOutMessage(errorOut("Connection lost", "Check your internet connection and try again.")),
-			model((current) => {
-				expect(stepNameOf(current)).toBe("profileInfo")
-				expect(stepStateOf(current)).toMatchObject({ isSubmitting: false })
-			}),
-		)
-	})
-
-	// SubmittedProfile is guarded on isSubmitting, so Enter while saving sends no second update.
-	test("a submit while saving sends nothing", () => {
-		story(
-			run,
-			given(profileForm("Nora", "Newcomer", true)),
-			message(Message.SubmittedProfile()),
-			Command.expectNone(),
-		)
-	})
-
-	// Validation trims, so "   " is not sent as a first name.
-	test("a whitespace-only name is not submitted", () => {
-		story(
-			run,
-			given(profile),
-			message(Message.ChangedFirstName({ value: "   " })),
-			message(Message.SubmittedProfile()),
-			Command.expectNone(),
-		)
-	})
-
-	test("a second profile success after the step moved on does not skip the timezone step", () => {
-		story(
-			run,
-			given(profile),
-			message(Message.SubmittedProfile()),
-			Command.resolve(UpdateProfile, Message.SucceededUpdateProfile()),
-			Command.resolve(ReplaceOnboardingStepUrl, urlDone),
-			message(Message.SucceededUpdateProfile()),
-			Command.expectNone(),
-			model((current) => expect(stepNameOf(current)).toBe("timezoneSelection")),
-		)
-	})
-
-	// Back then forward made a fresh form, and the earlier save's late success advanced it.
-	test("Back waits while the profile is saving", () => {
-		const saving = run(profile, Message.SubmittedProfile()).model
-		const back = run(saving, Message.ClickedBack())
-		expect(back.commands ?? []).toEqual([])
-		expect(stepStateOf(back.model)).toMatchObject({ _tag: "Profile", isSubmitting: true })
-		expect(stepNameOf(run(back.model, Message.SucceededUpdateProfile()).model)).toBe("timezoneSelection")
-	})
-
-	test("a profile success the form did not ask for is ignored", () => {
-		story(
-			run,
-			given(profile),
-			message(Message.SucceededUpdateProfile()),
-			Command.expectNone(),
-			model((current) => expect(stepNameOf(current)).toBe("profileInfo")),
-		)
-	})
-
-	test("user.me arriving late seeds an untouched empty form", () => {
-		const empty = profileForm("", "")
-		expect(stepStateOf(sharedChanged(empty, newcomer).model)).toMatchObject({
-			firstName: "Nora",
-			lastName: "Newcomer",
-		})
-		const edited = withStep(
-			profile,
-			StepState.Profile({ firstName: "", lastName: "", hasChanged: true, isSubmitting: false }),
-		)
-		expect(stepStateOf(sharedChanged(edited, newcomer).model)).toMatchObject({
-			firstName: "",
-			lastName: "",
-		})
 	})
 })
 
@@ -286,7 +181,7 @@ describe("timezone step", () => {
 				UpdateUserTimezone,
 				Message.SucceededUpdateTimezone({ timezone: "Europe/Vienna" }),
 			),
-			Command.resolve(urlFor("themeSelection"), urlDone),
+			expectOutMessage(nav("themeSelection")),
 			model((current) => {
 				expect(stepNameOf(current)).toBe("themeSelection")
 				expect(runningOf(current).data.timezone).toBe("Europe/Vienna")
@@ -363,7 +258,7 @@ describe("theme and choice steps", () => {
 				),
 			),
 			message(Message.ClickedContinueChoice()),
-			Command.resolve(urlFor("role"), urlDone),
+			expectOutMessage(nav("role")),
 			model((current) => {
 				expect(runningOf(current).data.useCases).toEqual(["small"])
 				expect(stepStateOf(current)).toMatchObject({ _tag: "Role", box: { selectedKeys: [] } })
@@ -421,23 +316,13 @@ describe("invite step and finalization", () => {
 			Command.expectExact(SendInvites({ organizationId: creatorMembership.organizationId, emails })),
 			model((current) => expect(stepStateOf(current)).toMatchObject({ isSending: true })),
 			Command.resolve(SendInvites, Message.SucceededSendInvites({ emails, failedCount: 0 })),
-			expectOutMessage(
-				PageOutMessage.RequestedToast({
-					toast: { intent: "success", title: "Sent 2 invitations", description: null },
-				}),
-			),
-			Command.expectExact(urlFor("finalization"), completeFor),
+			// One update, one OutMessage: the toast goes with the step's navigation.
+			expectOutMessage(nav("finalization", successToast("Sent 2 invitations"))),
+			Command.expectExact(completeFor),
+			Command.resolve(CompleteOnboarding, Message.SucceededCompleteOnboarding()),
+			expectOutMessage(nav("completed")),
+			Command.expectExact(LoadOnboardingHome({ href: "/" }), ClearOnboardingAnswers()),
 			Command.resolveAll(
-				[ReplaceOnboardingStepUrl, urlDone],
-				[CompleteOnboarding, Message.SucceededCompleteOnboarding()],
-			),
-			Command.expectExact(
-				urlFor("completed"),
-				LoadOnboardingHome({ href: "/" }),
-				ClearOnboardingAnswers(),
-			),
-			Command.resolveAll(
-				[ReplaceOnboardingStepUrl, urlDone],
 				[LoadOnboardingHome, Message.CompletedLoadHome()],
 				[ClearOnboardingAnswers, Message.CompletedStoreAnswers()],
 			),
@@ -451,17 +336,9 @@ describe("invite step and finalization", () => {
 			run,
 			given(inviteForm(emails, true)),
 			message(Message.SucceededSendInvites({ emails, failedCount: 2 })),
-			expectOutMessage(
-				PageOutMessage.RequestedToast({
-					toast: { intent: "warning", title: "Sent 1 invitation, 2 failed", description: null },
-				}),
-			),
+			expectOutMessage(nav("finalization", warningToast("Sent 1 invitation, 2 failed"))),
+			Command.resolve(CompleteOnboarding, Message.SucceededCompleteOnboarding()),
 			Command.resolveAll(
-				[ReplaceOnboardingStepUrl, urlDone],
-				[CompleteOnboarding, Message.SucceededCompleteOnboarding()],
-			),
-			Command.resolveAll(
-				[ReplaceOnboardingStepUrl, urlDone],
 				[LoadOnboardingHome, Message.CompletedLoadHome()],
 				[ClearOnboardingAnswers, Message.CompletedStoreAnswers()],
 			),
@@ -473,10 +350,8 @@ describe("invite step and finalization", () => {
 			run,
 			given(inviteForm([])),
 			message(Message.ClickedContinueInvite()),
-			Command.resolveAll(
-				[ReplaceOnboardingStepUrl, urlDone],
-				[CompleteOnboarding, Message.FailedCompleteOnboarding({ reason: "Unavailable" })],
-			),
+			expectOutMessage(nav("finalization")),
+			Command.resolve(CompleteOnboarding, Message.FailedCompleteOnboarding({ reason: "Unavailable" })),
 			model((current) =>
 				expect(stepStateOf(current)).toEqual(
 					StepState.Finalizing({ failure: Option.some("Unavailable") }),
@@ -493,7 +368,6 @@ describe("invite step and finalization", () => {
 			}),
 			Command.resolve(CompleteOnboarding, Message.SucceededCompleteOnboarding()),
 			Command.resolveAll(
-				[ReplaceOnboardingStepUrl, urlDone],
 				[LoadOnboardingHome, Message.CompletedLoadHome()],
 				[ClearOnboardingAnswers, Message.CompletedStoreAnswers()],
 			),
@@ -576,25 +450,16 @@ describe("invite step and finalization", () => {
 			run,
 			given(role),
 			message(Message.ClickedContinueChoice()),
+			expectOutMessage(nav("finalization")),
 			Command.expectExact(
-				urlFor("finalization"),
 				CompleteOnboarding({ memberId: invitedMembership.memberId, role: "developer", useCases: [] }),
 			),
-			Command.resolveAll(
-				[ReplaceOnboardingStepUrl, urlDone],
-				[CompleteOnboarding, Message.SucceededCompleteOnboarding()],
-			),
+			Command.resolve(CompleteOnboarding, Message.SucceededCompleteOnboarding()),
 			Command.expectHas(LoadOnboardingHome({ href: "/hazel" })),
 			Command.resolveAll(
-				[ReplaceOnboardingStepUrl, urlDone],
 				[LoadOnboardingHome, Message.CompletedLoadHome()],
 				[ClearOnboardingAnswers, Message.CompletedStoreAnswers()],
 			),
 		)
-	})
-
-	test("finishing the flow is not cut short by user.me turning onboarded", () => {
-		const finalizing = withStep(invite, StepState.Finalizing({ failure: Option.none() }))
-		expect(sharedChanged(finalizing, makeShared()).outMessage).toBeUndefined()
 	})
 })

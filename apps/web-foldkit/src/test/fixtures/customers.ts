@@ -1,0 +1,1711 @@
+import { DEFAULT_ATTENTION_SETTINGS, defaultConfigOf } from "@hazel/customer-integrations"
+import {
+	type Account,
+	type AccountDetail,
+	type ActiveUsersPoint,
+	type CompanyProfile,
+	type EmployeeRange,
+	type Connection,
+	type ContactRow,
+	type CustomersRange,
+	DEFAULT_BUSINESS_HOURS,
+	EMPTY_SYNC_STATS,
+	type LifecycleStage,
+	type MrrMovementBucket,
+	type OverviewResult,
+	type SeriesPoint,
+	type Settings,
+	type Signal,
+	type SignalEvidence,
+	type SignalSeverity,
+	type SignalStatus,
+	type SignalTemplate,
+	TEMPLATES,
+} from "@hazel/domain/customers"
+import {
+	CustomerAccountId,
+	CustomerConnectionId,
+	CustomerContactId,
+	CustomerEventId,
+	CustomerExternalRefId,
+	CustomerInvoiceId,
+	CustomerSettingsId,
+	CustomerSignalId,
+	CustomerSignalRuleId,
+	CustomerSubscriptionId,
+	OrganizationId,
+	UserId,
+} from "@hazel/schema"
+import { Schema } from "effect"
+import { ACTIVITY, DIRECTORY, INVOICES } from "./customers-demo-sources"
+
+/**
+ * Customers lab fixtures: one fictional org, internally consistent with the Wonder designs.
+ *
+ * - `NOW` is fixed (Tue 10 Nov 2026, 12:00 UTC); every age and date is relative to it.
+ * - 214 accounts, $48,210 MRR. The ~20 named accounts carry the edge cases (huge MRR, trial with no
+ *   MRR, churned, past due, long name, no logo); the rest are generated (seeded) to hit those totals.
+ * - Signals cover every evidence viz and every status.
+ * - Typed against `@hazel/domain/customers`, so a contract change breaks here first.
+ */
+
+export const NOW = new Date("2026-11-10T12:00:00Z")
+const DAY = 86_400_000
+const HOUR = 3_600_000
+const ago = (ms: number) => new Date(NOW.getTime() - ms)
+const daysAgo = (days: number) => ago(days * DAY)
+const iso = (date: Date) => date.toISOString()
+/** `YYYY-MM-DD` of `NOW - days`. */
+export const dayOf = (days: number) => iso(daysAgo(days)).slice(0, 10)
+
+/** Deterministic ids: `kind` keeps entity types apart. */
+const uuid = (kind: number, n: number) =>
+	`${String(kind).padStart(8, "0")}-0000-4000-8000-${String(n).padStart(12, "0")}`
+
+/** mulberry32: the same "random" data on every load. */
+const prng = (seed: number) => {
+	let state = seed >>> 0
+	return () => {
+		state = (state + 0x6d2b79f5) >>> 0
+		let t = state
+		t = Math.imul(t ^ (t >>> 15), t | 1)
+		t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+		return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296
+	}
+}
+
+export const ORGANIZATION_ID = Schema.decodeSync(OrganizationId)(uuid(1, 1))
+export const CURRENCY = "USD"
+
+// ---------------------------------------------------------------------------
+// Team (the CSMs who own accounts)
+// ---------------------------------------------------------------------------
+
+export type TeamMember = Readonly<{ id: UserId; name: string; email: string; avatarUrl: string | null }>
+
+const member = (n: number, name: string, email: string): TeamMember => ({
+	id: Schema.decodeSync(UserId)(uuid(2, n)),
+	name,
+	email,
+	avatarUrl: null,
+})
+
+export const MAYA = member(1, "Maya Reinhardt", "maya@hazel.sh")
+export const JONAS = member(2, "Jonas Ortega", "jonas@hazel.sh")
+export const DANA = member(3, "Dana Kim", "dana@hazel.sh")
+export const PRIYA = member(4, "Priya Shah", "priya@hazel.sh")
+export const TEAM: ReadonlyArray<TeamMember> = [MAYA, JONAS, DANA, PRIYA]
+/** The signed-in user ("Mine"). */
+
+// ---------------------------------------------------------------------------
+// Accounts
+// ---------------------------------------------------------------------------
+
+type AccountSeed = Readonly<{
+	name: string
+	domain: string | null
+	plan: string | null
+	mrr: number
+	stage?: LifecycleStage
+	owner?: TeamMember | null
+	contacts?: number
+	active30d?: number
+	trendPct?: number | null
+	lastActiveHours?: number | null
+	sinceDays?: number | null
+	firstSeenDays?: number
+	trialEndsInDays?: number
+	trialListMrr?: number
+	churnedDaysAgo?: number
+	seats?: readonly [number, number]
+	risk?: readonly [high: number, medium: number, low: number]
+	opportunities?: number
+	tags?: ReadonlyArray<string>
+	logoUrl?: string | null
+	/** The enriched company; absent: a generated one (or none, for every fifth); null: looked up, not found. */
+	company?: CompanyProfile | null
+}>
+
+// ---------------------------------------------------------------------------
+// Company profiles (enrichment)
+// ---------------------------------------------------------------------------
+
+const company = (fields: Partial<CompanyProfile> & Pick<CompanyProfile, "domain">): CompanyProfile => ({
+	name: null,
+	description: null,
+	industry: null,
+	subindustry: null,
+	employeeRange: null,
+	employeeCount: null,
+	headquarters: null,
+	foundedYear: null,
+	companyType: null,
+	operatingStatus: null,
+	stock: null,
+	funding: null,
+	revenue: null,
+	socials: [],
+	pages: [],
+	colors: [],
+	logoUrl: null,
+	...fields,
+})
+
+const hq = (
+	city: string | null,
+	country: string | null,
+	countryCode: string | null,
+	street: string | null = null,
+) => ({
+	street,
+	city,
+	region: null,
+	postalCode: street === null ? null : "10119",
+	country,
+	countryCode,
+})
+
+/** Everything context.dev can know. */
+export const RICH_COMPANY = company({
+	domain: "northwind.dev",
+	name: "Northwind Labs",
+	description: "Developer platform for building and running data pipelines on the edge.",
+	industry: "Technology",
+	subindustry: "Software (B2B)",
+	employeeRange: "201-500",
+	employeeCount: 312,
+	headquarters: hq("Berlin", "Germany", "DE", "Torstraße 140"),
+	foundedYear: 2019,
+	companyType: "privately_held",
+	operatingStatus: "active",
+	funding: {
+		stage: "series_b",
+		totalUsd: 58_000_000,
+		rounds: [
+			{ type: "series_b", date: "2026-03-10", amountUsd: 40_000_000 },
+			{ type: "series_a", date: "2023-06-01", amountUsd: 14_000_000 },
+			{ type: "seed", date: "2020-02-01", amountUsd: 4_000_000 },
+		],
+	},
+	revenue: { minUsd: 20_000_000, maxUsd: 50_000_000 },
+	socials: [
+		{ type: "linkedin", url: "https://www.linkedin.com/company/northwind" },
+		{ type: "x", url: "https://x.com/northwind" },
+		{ type: "github", url: "https://github.com/northwind" },
+		{ type: "crunchbase", url: "https://www.crunchbase.com/organization/northwind" },
+	],
+	pages: [
+		{ type: "careers", url: "https://northwind.dev/careers" },
+		{ type: "pricing", url: "https://northwind.dev/pricing" },
+		{ type: "blog", url: "https://northwind.dev/blog" },
+	],
+	colors: ["#4f46e5", "#06b6d4"],
+})
+
+/** A small startup: an industry, a size and a city, little else. */
+export const SPARSE_COMPANY = company({
+	domain: "acmerobotics.io",
+	name: "Acme Robotics",
+	description: "Warehouse picking robots.",
+	industry: "Manufacturing",
+	employeeRange: "1-10",
+	headquarters: hq("Lisbon", null, "PT"),
+	companyType: "privately_held",
+	socials: [{ type: "linkedin", url: "https://www.linkedin.com/company/acme-robotics" }],
+})
+
+const INDUSTRIES = [
+	["Technology", "Software (B2B)"],
+	["Technology", "Developer Tools & APIs"],
+	["Finance", "Fintech"],
+	["Healthcare", "Healthcare IT"],
+	["Professional Services & Agencies", "Consulting"],
+	["Retail & E-commerce", "Online Marketplaces"],
+	["Media & Entertainment", "Digital Media"],
+] as const
+const RANGES: readonly [EmployeeRange, ...ReadonlyArray<EmployeeRange>] = [
+	"1-10",
+	"11-50",
+	"11-50",
+	"51-200",
+	"51-200",
+	"201-500",
+	"501-1000",
+	"1001-5000",
+]
+const PLACES = [
+	["San Francisco", "United States", "US"],
+	["New York", "United States", "US"],
+	["London", "United Kingdom", "GB"],
+	["Berlin", "Germany", "DE"],
+	["Paris", "France", "FR"],
+	["Toronto", "Canada", "CA"],
+	["Amsterdam", "Netherlands", "NL"],
+	["Sydney", "Australia", "AU"],
+] as const
+const STAGES = ["seed", "series_a", "series_a", "series_b", "series_c", null] as const
+
+/** The `i`th entry, round and round. */
+const cycle = <const L extends readonly [unknown, ...ReadonlyArray<unknown>]>(
+	list: L,
+	i: number,
+): L[number] => list[i % list.length] ?? list[0]
+
+/** A deterministic profile for a generated account. */
+const generatedCompany = (name: string, domain: string, n: number): CompanyProfile => {
+	const [industry, subindustry] = cycle(INDUSTRIES, n)
+	const [city, country, countryCode] = cycle(PLACES, n * 3)
+	const stage = cycle(STAGES, n * 5)
+	return company({
+		domain,
+		name,
+		industry,
+		subindustry,
+		employeeRange: cycle(RANGES, n * 7),
+		headquarters: hq(city, country, countryCode),
+		foundedYear: 2008 + (n % 16),
+		companyType: "privately_held",
+		funding:
+			stage === null
+				? null
+				: {
+						stage,
+						totalUsd: (n % 9) * 6_000_000 + 2_000_000,
+						rounds: [{ type: stage, date: "2025-09-01", amountUsd: null }],
+					},
+		socials: [{ type: "linkedin", url: `https://www.linkedin.com/company/${domain.split(".")[0]}` }],
+	})
+}
+
+/** `n` is the account's number (1-based): its id, default owner and age come from it. */
+const makeAccount = (seed: AccountSeed, n: number): Account => {
+	const stage = seed.stage ?? (seed.mrr > 0 ? "active" : "lead")
+	const [high, medium, low] = seed.risk ?? [0, 0, 0]
+	const firstSeen = daysAgo(seed.firstSeenDays ?? 200 + ((n * 37) % 500))
+	const profile =
+		seed.company !== undefined
+			? seed.company
+			: seed.domain === null || n % 5 === 4
+				? null
+				: generatedCompany(seed.name, seed.domain, n)
+	return {
+		id: Schema.decodeSync(CustomerAccountId)(uuid(10, n)),
+		organizationId: ORGANIZATION_ID,
+		name: seed.name,
+		domains: seed.domain === null ? [] : [seed.domain],
+		logoUrl: seed.logoUrl ?? null,
+		ownerUserId:
+			seed.owner === undefined ? (TEAM[n % TEAM.length]?.id ?? null) : (seed.owner?.id ?? null),
+		lifecycleStage: stage,
+		lifecycleStageOverride: null,
+		planName: seed.plan,
+		mrrMinor: seed.mrr * 100,
+		currency: CURRENCY,
+		trialListMrrMinor: seed.trialListMrr === undefined ? null : seed.trialListMrr * 100,
+		trialEndsAt:
+			seed.trialEndsInDays === undefined ? null : new Date(NOW.getTime() + seed.trialEndsInDays * DAY),
+		seatsUsed: seed.seats?.[0] ?? null,
+		seatsLimit: seed.seats?.[1] ?? null,
+		contactCount: seed.contacts ?? 8,
+		activeUsers30d: seed.active30d ?? 4,
+		activeUsersTrendPct: seed.trendPct === undefined ? 0 : seed.trendPct,
+		openRiskHigh: high,
+		openRiskMedium: medium,
+		openRiskLow: low,
+		openOpportunities: seed.opportunities ?? 0,
+		championContactId: null,
+		championInactiveSince: null,
+		lastActiveContactId: null,
+		firstSeenAt: firstSeen,
+		lastActiveAt: seed.lastActiveHours === null ? null : ago((seed.lastActiveHours ?? 30) * HOUR),
+		customerSince:
+			seed.sinceDays === null
+				? null
+				: seed.sinceDays !== undefined
+					? daysAgo(seed.sinceDays)
+					: seed.mrr > 0
+						? firstSeen
+						: null,
+		churnedAt: seed.churnedDaysAgo === undefined ? null : daysAgo(seed.churnedDaysAgo),
+		tags: seed.tags ?? [],
+		attributes: {},
+		featureFlags: {},
+		attentionMutedAt: null,
+		attentionMutedUntil: null,
+		attentionMutedByUserId: null,
+		fieldSources: { name: DIRECTORY.id, mrrMinor: INVOICES.id, lastActiveAt: ACTIVITY.id },
+		primaryAccountId: null,
+		environment: null,
+		companyProfile: profile,
+		// Looked up 3 days ago, unless it never was (no domain, or every fifth generated one).
+		companyCheckedAt: profile !== null || seed.company === null ? daysAgo(3) : null,
+		createdAt: firstSeen,
+		updatedAt: ago(HOUR),
+		deletedAt: null,
+	}
+}
+
+/** The edge cases, by name. */
+const NAMED_SEEDS = {
+	northwind: {
+		name: "Northwind Labs",
+		domain: "northwind.dev",
+		plan: "Scale",
+		mrr: 4_800,
+		owner: MAYA,
+		contacts: 51,
+		active30d: 42,
+		trendPct: 12.4,
+		lastActiveHours: 2,
+		seats: [42, 50],
+		opportunities: 1,
+		sinceDays: 610,
+		company: RICH_COMPANY,
+	},
+	acme: {
+		name: "Acme Robotics",
+		domain: "acmerobotics.io",
+		plan: "Growth",
+		mrr: 2_150,
+		stage: "past_due",
+		owner: JONAS,
+		contacts: 24,
+		active30d: 18,
+		trendPct: -21.5,
+		lastActiveHours: 72,
+		risk: [1, 0, 0],
+		tags: ["enterprise-pilot"],
+		sinceDays: 410,
+		company: SPARSE_COMPANY,
+	},
+	kestrel: {
+		name: "Kestrel Systems",
+		domain: "kestrel.so",
+		plan: "Scale",
+		mrr: 1_320,
+		owner: MAYA,
+		contacts: 14,
+		active30d: 9,
+		trendPct: -64,
+		lastActiveHours: 18 * 24,
+		risk: [1, 1, 0],
+		sinceDays: 380,
+		// Looked up; context.dev knows no company there.
+		company: null,
+	},
+	brightfield: {
+		name: "Brightfield Analytics",
+		domain: "brightfield.co",
+		plan: "Trial",
+		mrr: 0,
+		stage: "trialing",
+		owner: null,
+		contacts: 7,
+		active30d: 6,
+		trendPct: null,
+		lastActiveHours: 5 * 24,
+		trialEndsInDays: 4,
+		trialListMrr: 490,
+		risk: [0, 1, 0],
+		firstSeenDays: 10,
+		sinceDays: null,
+	},
+	halcyon: {
+		name: "Halcyon Health",
+		domain: "halcyonhealth.com",
+		plan: "Enterprise",
+		mrr: 8_900,
+		owner: DANA,
+		contacts: 212,
+		active30d: 168,
+		trendPct: 4.2,
+		lastActiveHours: 1,
+		seats: [168, 250],
+		sinceDays: 900,
+		tags: ["enterprise", "annual"],
+	},
+	oakridge: {
+		name: "Oakridge Logistics",
+		domain: "oakridge-logistics.com",
+		plan: null,
+		mrr: 0,
+		stage: "churned",
+		owner: JONAS,
+		contacts: 9,
+		active30d: 0,
+		trendPct: null,
+		lastActiveHours: 41 * 24,
+		churnedDaysAgo: 20,
+		sinceDays: 300,
+	},
+	consolidated: {
+		name: "Consolidated International Widget Manufacturing Holdings GmbH",
+		domain: "ciwmh.de",
+		plan: "Growth",
+		mrr: 640,
+		owner: PRIYA,
+		contacts: 33,
+		active30d: 11,
+		trendPct: -42.5,
+		lastActiveHours: 26,
+		risk: [0, 1, 0],
+	},
+	pinecone: {
+		name: "Pinecone Studio",
+		domain: null,
+		plan: null,
+		mrr: 0,
+		stage: "lead",
+		owner: null,
+		contacts: 2,
+		active30d: 1,
+		trendPct: null,
+		lastActiveHours: 9 * 24,
+		firstSeenDays: 3,
+	},
+	lumen: {
+		name: "Lumen Health",
+		domain: "lumen.health",
+		plan: "Growth",
+		mrr: 890,
+		owner: DANA,
+		contacts: 19,
+		active30d: 12,
+		trendPct: -8,
+		lastActiveHours: 6,
+		risk: [1, 0, 0],
+	},
+	fernway: {
+		name: "Fernway",
+		domain: "fernway.app",
+		plan: "Starter",
+		mrr: 380,
+		owner: PRIYA,
+		contacts: 6,
+		active30d: 2,
+		trendPct: -55,
+		lastActiveHours: 4 * 24,
+		risk: [0, 1, 0],
+	},
+	quarry: {
+		name: "Quarry Labs",
+		domain: "quarrylabs.io",
+		plan: "Growth",
+		mrr: 1_150,
+		owner: MAYA,
+		contacts: 26,
+		active30d: 20,
+		trendPct: 96,
+		lastActiveHours: 3,
+		opportunities: 1,
+		seats: [20, 25],
+	},
+	tidewater: {
+		name: "Tidewater Co",
+		domain: "tidewater.co",
+		plan: "Starter",
+		mrr: 290,
+		owner: JONAS,
+		contacts: 5,
+		active30d: 1,
+		trendPct: null,
+		lastActiveHours: 8 * 24,
+		firstSeenDays: 12,
+		sinceDays: 12,
+		risk: [0, 0, 1],
+	},
+	marlow: {
+		name: "Marlow & Finch",
+		domain: "marlowfinch.com",
+		plan: "Growth",
+		mrr: 760,
+		owner: MAYA,
+		contacts: 17,
+		active30d: 10,
+		trendPct: -12,
+		lastActiveHours: 20,
+		risk: [0, 1, 0],
+	},
+	vantablack: {
+		name: "Vantablack Studios",
+		domain: "vantablack.studio",
+		plan: "Scale",
+		mrr: 990,
+		stage: "past_due",
+		owner: DANA,
+		contacts: 11,
+		active30d: 7,
+		trendPct: -18,
+		lastActiveHours: 30,
+		risk: [1, 0, 0],
+	},
+	cobalt: {
+		name: "Cobalt Freight",
+		domain: "cobaltfreight.com",
+		plan: "Growth",
+		mrr: 520,
+		owner: MAYA,
+		contacts: 15,
+		active30d: 6,
+		trendPct: -36,
+		lastActiveHours: 50,
+	},
+	juniper: {
+		name: "Juniper AI",
+		domain: "juniper.ai",
+		plan: "Growth",
+		mrr: 690,
+		owner: MAYA,
+		contacts: 12,
+		active30d: 10,
+		trendPct: 3,
+		lastActiveHours: 4,
+	},
+	ridgeview: {
+		name: "Ridgeview Partners",
+		domain: "ridgeview.partners",
+		plan: "Starter",
+		mrr: 310,
+		owner: PRIYA,
+		contacts: 4,
+		active30d: 2,
+		trendPct: -10,
+		lastActiveHours: 15 * 24,
+	},
+	sable: {
+		name: "Sable Analytics",
+		domain: "sable.dev",
+		plan: "Starter",
+		mrr: 480,
+		owner: JONAS,
+		contacts: 9,
+		active30d: 7,
+		trendPct: 6,
+		lastActiveHours: 8,
+	},
+	// Environments of Acme and Halcyon (`ENVIRONMENTS`): each its own account with its own numbers.
+	acmeEu: {
+		name: "Acme Robotics",
+		domain: "acmerobotics.io",
+		plan: "Growth",
+		mrr: 640,
+		owner: JONAS,
+		contacts: 9,
+		active30d: 8,
+		trendPct: 6.5,
+		lastActiveHours: 5,
+		sinceDays: 120,
+		tags: ["enterprise-pilot"],
+	},
+	halcyonEu: {
+		name: "Halcyon Health",
+		domain: "halcyonhealth.com",
+		plan: "Enterprise",
+		mrr: 3_200,
+		owner: DANA,
+		contacts: 64,
+		active30d: 51,
+		trendPct: 9.1,
+		lastActiveHours: 2,
+		seats: [51, 80],
+		sinceDays: 400,
+		tags: ["enterprise"],
+	},
+	halcyonStaging: {
+		name: "Halcyon Health",
+		domain: "halcyonhealth.com",
+		plan: null,
+		mrr: 0,
+		stage: "lead",
+		owner: DANA,
+		contacts: 6,
+		active30d: 3,
+		trendPct: null,
+		lastActiveHours: 30,
+		firstSeenDays: 300,
+	},
+} satisfies Record<string, AccountSeed>
+
+export type NamedAccount = keyof typeof NAMED_SEEDS
+
+/**
+ * Customers with several environments: Acme (US primary, EU) and Halcyon (an unnamed primary, EU,
+ * Staging). Each account's environment, and the primary of the ones that are environments.
+ */
+const ENVIRONMENTS = [
+	["acme", "US", null],
+	["acmeEu", "EU", "acme"],
+	["halcyonEu", "EU", "halcyon"],
+	["halcyonStaging", "Staging", "halcyon"],
+] as const satisfies ReadonlyArray<readonly [NamedAccount, string, NamedAccount | null]>
+
+/** The named accounts, by key (`ACCOUNTS_BY_KEY.acme`). */
+export const ACCOUNTS_BY_KEY = (() => {
+	const built = Object.fromEntries(
+		Object.entries(NAMED_SEEDS).map(([key, seed], index) => [key, makeAccount(seed, index + 1)]),
+	) as Record<NamedAccount, Account>
+	for (const [key, environment, primary] of ENVIRONMENTS)
+		built[key] = {
+			...built[key],
+			environment,
+			primaryAccountId: primary === null ? null : built[primary].id,
+		}
+	return built as Readonly<Record<NamedAccount, Account>>
+})()
+
+const PREFIXES = [
+	"Atlas",
+	"Beacon",
+	"Cedar",
+	"Delta",
+	"Ember",
+	"Falcon",
+	"Granite",
+	"Harbor",
+	"Iris",
+	"Jasper",
+	"Keystone",
+	"Lattice",
+	"Meridian",
+	"Nimbus",
+	"Orchid",
+	"Prism",
+	"Quill",
+	"Redwood",
+	"Summit",
+	"Thistle",
+	"Umber",
+	"Vertex",
+	"Willow",
+	"Zephyr",
+	"Alder",
+	"Birch",
+	"Coral",
+	"Dune",
+	"Echo",
+	"Fjord",
+	"Glade",
+	"Helix",
+]
+const SUFFIXES = [
+	"Labs",
+	"Systems",
+	"Analytics",
+	"Health",
+	"Logistics",
+	"Software",
+	"Studio",
+	"Cloud",
+	"Works",
+	"Partners",
+	"AI",
+	"Bio",
+	"Data",
+	"Finance",
+	"Media",
+	"Robotics",
+]
+const PLANS_BY_MRR = (mrr: number): string | null =>
+	mrr === 0 ? null : mrr < 150 ? "Starter" : mrr < 700 ? "Growth" : mrr < 3_000 ? "Scale" : "Enterprise"
+
+/**
+ * The generated book by engagement: accounts, their MRR ($), the share of contacts active (null:
+ * never active), how far the trend leans down, the longest idle time, and the open risk they carry.
+ */
+const COHORTS: ReadonlyArray<
+	Readonly<{
+		count: number
+		mrr: number
+		activeShare: number | null
+		trendDown: number
+		idleHours: number
+		risk: readonly [high: number, medium: number, low: number]
+		hasFreeAccounts?: boolean
+		hasPastDue?: boolean
+	}>
+> = [
+	{ count: 135, mrr: 16_120, activeShare: 0.7, trendDown: 15, idleHours: 48, risk: [0, 0, 0] },
+	{
+		count: 35,
+		mrr: 2_870,
+		activeShare: 0.4,
+		trendDown: 40,
+		idleHours: 240,
+		risk: [0, 1, 0],
+		hasFreeAccounts: true,
+	},
+	{
+		count: 14,
+		mrr: 330,
+		activeShare: 0.15,
+		trendDown: 40,
+		idleHours: 600,
+		risk: [1, 0, 0],
+		hasFreeAccounts: true,
+		hasPastDue: true,
+	},
+	{
+		count: 9,
+		mrr: 780,
+		activeShare: null,
+		trendDown: 0,
+		idleHours: 0,
+		risk: [0, 0, 0],
+		hasFreeAccounts: true,
+	},
+]
+
+const generated = (() => {
+	const random = prng(214)
+	const seeds: Array<AccountSeed> = []
+	let nameIndex = 0
+	const nextName = () => {
+		const name = `${PREFIXES[nameIndex % PREFIXES.length]} ${SUFFIXES[Math.floor(nameIndex / PREFIXES.length) % SUFFIXES.length]}`
+		nameIndex += 1
+		return name
+	}
+	for (const cohort of COHORTS) {
+		const { activeShare } = cohort
+		// Weights skewed small (most accounts are small), some at $0 for leads.
+		const weights = Array.from({ length: cohort.count }, () => {
+			const roll = random()
+			return cohort.hasFreeAccounts === true && roll < 0.3 ? 0 : roll ** 2.2 + 0.05
+		})
+		const total = weights.reduce((sum, weight) => sum + weight, 0)
+		// Whole $10 steps rounded down; the biggest account takes the remainder, so the total is exact.
+		const mrrs = weights.map((weight) => Math.floor(((weight / total) * cohort.mrr) / 10) * 10)
+		const biggest = weights.indexOf(Math.max(...weights))
+		const remainder = cohort.mrr - mrrs.reduce((sum, value) => sum + value, 0)
+		const exact = mrrs.map((value, index) => (index === biggest ? value + remainder : value))
+		exact.forEach((accountMrr, index) => {
+			const name = nextName()
+			const contacts = 2 + Math.floor(random() * (accountMrr / 40 + 6))
+			const stage: LifecycleStage =
+				accountMrr > 0
+					? cohort.hasPastDue === true && index % 5 === 0
+						? "past_due"
+						: "active"
+					: index % 3 === 0
+						? "trialing"
+						: "lead"
+			seeds.push({
+				name,
+				domain: `${name.toLowerCase().replace(/[^a-z0-9]+/g, "")}.com`,
+				plan: stage === "trialing" ? "Trial" : PLANS_BY_MRR(accountMrr),
+				mrr: accountMrr,
+				stage,
+				contacts,
+				active30d: activeShare === null ? 0 : Math.max(1, Math.round(contacts * activeShare)),
+				trendPct:
+					activeShare === null ? null : Math.round((random() * 60 - cohort.trendDown) * 10) / 10,
+				lastActiveHours: activeShare === null ? null : Math.round(random() * cohort.idleHours),
+				risk: cohort.risk,
+				trialEndsInDays: stage === "trialing" ? 1 + Math.floor(random() * 13) : undefined,
+				trialListMrr: stage === "trialing" ? 290 : undefined,
+			})
+		})
+	}
+	const namedCount = Object.keys(NAMED_SEEDS).length
+	return seeds.map((seed, index) => makeAccount(seed, namedCount + index + 1))
+})()
+
+/** Every account: the named ones first, then the generated book. 214 in all. */
+export const ACCOUNTS: ReadonlyArray<Account> = [...Object.values(ACCOUNTS_BY_KEY), ...generated]
+
+// ---------------------------------------------------------------------------
+// Signals
+// ---------------------------------------------------------------------------
+
+const series = (values: ReadonlyArray<number>): ReadonlyArray<SeriesPoint> =>
+	values.map((value, index) => ({ day: dayOf(values.length - 1 - index), value }))
+
+/** A 35-day DAU series: steady around `baseline`, then the last 7 days around `recent`. */
+const dropSeries = (baseline: number, recent: number, seed: number): ReadonlyArray<SeriesPoint> => {
+	const random = prng(seed)
+	return series(
+		Array.from({ length: 35 }, (_, index) => {
+			const level = index < 28 ? baseline : recent
+			return Math.max(0, Math.round(level * (0.8 + random() * 0.4)))
+		}),
+	)
+}
+
+type SignalSeed = Readonly<{
+	account: NamedAccount
+	template: SignalTemplate
+	severity: SignalSeverity
+	status?: SignalStatus
+	title?: string
+	reason: string
+	evidence: SignalEvidence
+	priority: number
+	openedDaysAgo: number
+	assignee?: TeamMember | null
+	snoozedUntilDays?: number
+	resolvedDaysAgo?: number
+}>
+
+const RULE_IDS = Object.fromEntries(
+	Object.keys(TEMPLATES).map((template, index) => [
+		template,
+		Schema.decodeSync(CustomerSignalRuleId)(uuid(20, index + 1)),
+	]),
+) as Readonly<Record<SignalTemplate, CustomerSignalRuleId>>
+
+/** `n` is the signal's number (1-based): its id and opening order come from it. */
+const makeSignal = (seed: SignalSeed, n: number): SignalEntry => {
+	const account = ACCOUNTS_BY_KEY[seed.account]
+	const status = seed.status ?? "open"
+	const opened = ago(seed.openedDaysAgo * DAY + n * HOUR)
+	const resolved = seed.resolvedDaysAgo === undefined ? null : daysAgo(seed.resolvedDaysAgo)
+	const signal: Signal = {
+		id: Schema.decodeSync(CustomerSignalId)(uuid(21, n)),
+		organizationId: ORGANIZATION_ID,
+		accountId: account.id,
+		ruleId: RULE_IDS[seed.template],
+		template: seed.template,
+		kind: TEMPLATES[seed.template].kind,
+		severity: seed.severity,
+		status,
+		title: seed.title ?? TEMPLATES[seed.template].name,
+		reason: seed.reason,
+		evidence: seed.evidence,
+		openingEvidence: seed.evidence,
+		actionEvidence: status === "open" ? null : seed.evidence,
+		priorityScore: seed.priority,
+		firstDetectedAt: opened,
+		openedAt: opened,
+		lastEvaluatedAt: ago(HOUR),
+		assigneeUserId: seed.assignee === undefined ? account.ownerUserId : (seed.assignee?.id ?? null),
+		snoozedUntil:
+			seed.snoozedUntilDays === undefined
+				? null
+				: new Date(NOW.getTime() + seed.snoozedUntilDays * DAY),
+		snoozedByUserId: status === "snoozed" ? MAYA.id : null,
+		snoozedAt: status === "snoozed" ? daysAgo(1) : null,
+		snoozeNote: status === "snoozed" ? "Waiting on their Q4 planning" : null,
+		resolvedAt:
+			status === "done" || status === "dismissed" || status === "auto_resolved" ? resolved : null,
+		resolvedByUserId: status === "done" || status === "dismissed" ? MAYA.id : null,
+		outcome: status === "done" ? "contacted" : null,
+		resolutionNote: status === "done" ? "Called their CTO; they're rolling out to two more teams." : null,
+		dismissReason: status === "dismissed" ? "Seasonal dip, expected" : null,
+		reopenCount: 0,
+		closedAt: status === "auto_resolved" ? resolved : null,
+		createdAt: opened,
+		updatedAt: ago(HOUR),
+	}
+	return { signal, account }
+}
+
+/** Signals in priority order (the open queue is the `open` ones). */
+export type SignalEntry = Readonly<{ signal: Signal; account: Account }>
+
+const SIGNAL_SEEDS: ReadonlyArray<SignalSeed> = [
+	{
+		account: "acme",
+		template: "payment_failed",
+		severity: "high",
+		title: "Payment failed",
+		reason: "Invoice INV-2041 for $2,150 open 9 days past due, 3 retries",
+		priority: 13.4,
+		openedDaysAgo: 2,
+		evidence: {
+			_tag: "amount",
+			step: 1,
+			amountMinor: 215_000,
+			currency: CURRENCY,
+			invoiceId: Schema.decodeSync(CustomerInvoiceId)(uuid(33, 1)),
+			invoiceNumber: "INV-2041",
+			subscriptionStatus: "past_due",
+			dueAt: iso(daysAgo(9)),
+			daysOverdue: 9,
+			attemptCount: 3,
+			declineReason: "Card declined: insufficient funds",
+			nextRetryAt: iso(new Date(NOW.getTime() + 2 * DAY)),
+		},
+	},
+	{
+		account: "kestrel",
+		template: "inactive",
+		severity: "high",
+		title: "Stopped logging in",
+		reason: "No activity for 18 days; 12 weekly active users before",
+		priority: 12.1,
+		openedDaysAgo: 4,
+		evidence: {
+			_tag: "last_active",
+			step: 1,
+			lastActiveAt: iso(daysAgo(18)),
+			daysInactive: 18,
+			priorActiveUsers: 12,
+			contactId: null,
+			contactName: null,
+			contactEmail: null,
+		},
+	},
+	{
+		account: "northwind",
+		template: "near_limit",
+		severity: "medium",
+		title: "Near API request limit",
+		reason: "92% of 500K monthly requests used, resets in 11 days",
+		priority: 9.8,
+		openedDaysAgo: 1,
+		assignee: null,
+		evidence: {
+			_tag: "limit",
+			step: 0,
+			metricKey: "api_requests",
+			metricName: "API requests",
+			value: 461_000,
+			limit: 500_000,
+			pct: 92.2,
+			forecast: {
+				day: dayOf(-11),
+				periodEnd: true,
+				value: 560_500,
+				pct: 112.1,
+				perDay: 9_100,
+				days: 7,
+				limitDay: dayOf(-5),
+			},
+		},
+	},
+	{
+		account: "brightfield",
+		template: "trial_ending_low_activation",
+		severity: "medium",
+		title: "Trial ending, low activation",
+		reason: "Trial ends in 4 days; 1 active user in the last 7 days",
+		priority: 8.6,
+		openedDaysAgo: 0.25,
+		assignee: MAYA,
+		evidence: {
+			_tag: "ratio",
+			step: 0,
+			value: 1,
+			target: 2,
+			unit: "users",
+			deadline: iso(new Date(NOW.getTime() + 4 * DAY)),
+			daysLeft: 4,
+			ageDays: 10,
+		},
+	},
+	{
+		account: "vantablack",
+		template: "payment_failed",
+		severity: "high",
+		title: "Payment failed",
+		reason: "Subscription unpaid; invoice INV-1987 for $990 is 34 days past due",
+		priority: 8.2,
+		openedDaysAgo: 30,
+		evidence: {
+			_tag: "amount",
+			step: 2,
+			amountMinor: 99_000,
+			currency: CURRENCY,
+			invoiceId: Schema.decodeSync(CustomerInvoiceId)(uuid(33, 2)),
+			invoiceNumber: "INV-1987",
+			subscriptionStatus: "unpaid",
+			dueAt: iso(daysAgo(34)),
+			daysOverdue: 34,
+			attemptCount: 4,
+			declineReason: "Card expired",
+			nextRetryAt: null,
+		},
+	},
+	{
+		account: "lumen",
+		template: "cancel_scheduled",
+		severity: "high",
+		title: "Cancellation scheduled",
+		reason: "Growth ($890/mo) cancels at period end on Nov 16",
+		priority: 7.9,
+		openedDaysAgo: 3,
+		evidence: {
+			_tag: "delta",
+			step: 1,
+			unit: "minor",
+			from: 89_000,
+			to: 0,
+			changePct: -100,
+			currency: CURRENCY,
+			effectiveAt: iso(new Date(NOW.getTime() + 6 * DAY)),
+			fromLabel: null,
+			toLabel: null,
+			reason: "Too expensive for current usage",
+			series: [],
+		},
+	},
+	{
+		account: "consolidated",
+		template: "usage_drop",
+		severity: "medium",
+		reason: "Daily active users down 42% (7-day avg 7 vs 12 before)",
+		priority: 6.4,
+		openedDaysAgo: 5,
+		evidence: {
+			_tag: "series",
+			step: 0,
+			metricKey: "active_users",
+			recentAvg: 7,
+			baselineAvg: 12.2,
+			changePct: -42.5,
+			recentDays: 7,
+			baselineDays: 28,
+			series: dropSeries(12, 7, 7),
+		},
+	},
+	{
+		account: "fernway",
+		template: "usage_drop",
+		severity: "medium",
+		reason: "Daily active users down 55% (7-day avg 2 vs 4.4 before)",
+		priority: 5.8,
+		openedDaysAgo: 2,
+		evidence: {
+			_tag: "series",
+			step: 1,
+			metricKey: "active_users",
+			recentAvg: 2,
+			baselineAvg: 4.4,
+			changePct: -54.5,
+			recentDays: 7,
+			baselineDays: 28,
+			series: dropSeries(4.4, 2, 17),
+		},
+	},
+	{
+		account: "marlow",
+		template: "champion_inactive",
+		severity: "medium",
+		reason: "Eli Novak, the most active user, hasn't been seen for 16 days",
+		priority: 5.5,
+		openedDaysAgo: 2,
+		evidence: {
+			_tag: "last_active",
+			step: 0,
+			lastActiveAt: iso(daysAgo(16)),
+			daysInactive: 16,
+			priorActiveUsers: 10,
+			contactId: Schema.decodeSync(CustomerContactId)(uuid(30, 99)),
+			contactName: "Eli Novak",
+			contactEmail: "eli@marlowfinch.com",
+		},
+	},
+	{
+		account: "quarry",
+		template: "seat_growth",
+		severity: "low",
+		title: "Seat growth",
+		reason: "Active users up 150% in 30 days, from 8 to 20",
+		priority: 4.6,
+		openedDaysAgo: 6,
+		evidence: {
+			_tag: "delta",
+			step: 1,
+			unit: "users",
+			from: 8,
+			to: 20,
+			changePct: 150,
+			currency: null,
+			effectiveAt: null,
+			fromLabel: null,
+			toLabel: null,
+			reason: null,
+			series: series([8, 9, 9, 11, 12, 14, 15, 17, 18, 20]),
+		},
+	},
+	{
+		account: "tidewater",
+		template: "onboarding_stalled",
+		severity: "low",
+		reason: "Signed up 12 days ago; 1 of 5 contacts has ever been active",
+		priority: 3.1,
+		openedDaysAgo: 5,
+		evidence: {
+			_tag: "ratio",
+			step: 0,
+			value: 1,
+			target: 2,
+			unit: "contacts",
+			deadline: null,
+			daysLeft: null,
+			ageDays: 12,
+		},
+	},
+	// Not open: every other status.
+	{
+		account: "cobalt",
+		template: "usage_drop",
+		severity: "medium",
+		status: "snoozed",
+		reason: "Daily active users down 36% (7-day avg 4 vs 6.3 before)",
+		priority: 5.2,
+		openedDaysAgo: 8,
+		snoozedUntilDays: 3,
+		evidence: {
+			_tag: "series",
+			step: 0,
+			metricKey: "active_users",
+			recentAvg: 4,
+			baselineAvg: 6.3,
+			changePct: -36.5,
+			recentDays: 7,
+			baselineDays: 28,
+			series: dropSeries(6, 4, 11),
+		},
+	},
+	{
+		account: "ridgeview",
+		template: "inactive",
+		severity: "medium",
+		status: "snoozed",
+		title: "Stopped logging in",
+		reason: "No activity for 15 days; 2 weekly active users before",
+		priority: 3.4,
+		openedDaysAgo: 1,
+		snoozedUntilDays: 1,
+		evidence: {
+			_tag: "last_active",
+			step: 0,
+			lastActiveAt: iso(daysAgo(15)),
+			daysInactive: 15,
+			priorActiveUsers: 2,
+			contactId: null,
+			contactName: null,
+			contactEmail: null,
+		},
+	},
+	{
+		account: "juniper",
+		template: "usage_drop",
+		severity: "medium",
+		status: "done",
+		reason: "Daily active users down 33% (7-day avg 6 vs 9 before)",
+		priority: 4.1,
+		openedDaysAgo: 12,
+		resolvedDaysAgo: 3,
+		evidence: {
+			_tag: "series",
+			step: 0,
+			metricKey: "active_users",
+			recentAvg: 6,
+			baselineAvg: 9,
+			changePct: -33.3,
+			recentDays: 7,
+			baselineDays: 28,
+			series: dropSeries(9, 6, 13),
+		},
+	},
+	{
+		account: "ridgeview",
+		template: "usage_drop",
+		severity: "low",
+		status: "dismissed",
+		reason: "Daily active users down 29% (7-day avg 1.7 vs 2.4 before)",
+		priority: 2.2,
+		openedDaysAgo: 9,
+		resolvedDaysAgo: 6,
+		evidence: {
+			_tag: "series",
+			step: 0,
+			metricKey: "active_users",
+			recentAvg: 1.7,
+			baselineAvg: 2.4,
+			changePct: -29.2,
+			recentDays: 7,
+			baselineDays: 28,
+			series: dropSeries(2.4, 1.7, 19),
+		},
+	},
+	{
+		account: "sable",
+		template: "inactive",
+		severity: "medium",
+		status: "auto_resolved",
+		title: "Stopped logging in",
+		reason: "No activity for 14 days; 5 weekly active users before",
+		priority: 3.0,
+		openedDaysAgo: 10,
+		resolvedDaysAgo: 2,
+		evidence: {
+			_tag: "last_active",
+			step: 0,
+			lastActiveAt: iso(daysAgo(16)),
+			daysInactive: 14,
+			priorActiveUsers: 5,
+			contactId: null,
+			contactName: null,
+			contactEmail: null,
+		},
+	},
+	// A second open signal on Acme, last so the ids above stay put: the queue groups it under Acme's first.
+	{
+		account: "acme",
+		template: "usage_drop",
+		severity: "low",
+		reason: "Daily active users down 24% (7-day avg 19 vs 25 before)",
+		priority: 2.8,
+		openedDaysAgo: 3,
+		evidence: {
+			_tag: "series",
+			step: 0,
+			metricKey: "active_users",
+			recentAvg: 19,
+			baselineAvg: 25,
+			changePct: -24,
+			recentDays: 7,
+			baselineDays: 28,
+			series: dropSeries(25, 19, 7),
+		},
+	},
+]
+
+/** Every signal with its account, in priority order. */
+export const SIGNAL_ENTRIES: ReadonlyArray<SignalEntry> = SIGNAL_SEEDS.map((seed, index) =>
+	makeSignal(seed, index + 1),
+)
+/** The open queue, highest priority first. */
+export const OPEN_ENTRIES = SIGNAL_ENTRIES.filter((entry) => entry.signal.status === "open")
+export const SIGNALS: ReadonlyArray<Signal> = SIGNAL_ENTRIES.map((entry) => entry.signal)
+export const OPEN_SIGNALS = OPEN_ENTRIES.map((entry) => entry.signal)
+
+// ---------------------------------------------------------------------------
+// Rules and settings
+// ---------------------------------------------------------------------------
+
+export const SETTINGS: Settings = {
+	id: Schema.decodeSync(CustomerSettingsId)(uuid(22, 1)),
+	organizationId: ORGANIZATION_ID,
+	attention: DEFAULT_ATTENTION_SETTINGS,
+	reportingCurrency: CURRENCY,
+	addOnPlans: [],
+	overageInMrr: false,
+	businessHours: { ...DEFAULT_BUSINESS_HOURS, timeZone: "Europe/Berlin" },
+	supportTriage: { enabled: true, about: "Hazel: team chat with a shared support inbox." },
+	lastComputedAt: ago(HOUR),
+	updatedBy: null,
+	createdAt: daysAgo(120),
+	updatedAt: daysAgo(30),
+}
+
+// ---------------------------------------------------------------------------
+// Connections
+// ---------------------------------------------------------------------------
+
+const connection = (
+	n: number,
+	provider: Connection["provider"],
+	overrides: Partial<Connection>,
+): Connection => ({
+	id: Schema.decodeSync(CustomerConnectionId)(uuid(23, n)),
+	organizationId: ORGANIZATION_ID,
+	provider,
+	status: "active",
+	externalAccountId: null,
+	externalAccountName: null,
+	config: defaultConfigOf(provider),
+	connectedBy: MAYA.id,
+	connectedAt: daysAgo(120),
+	hasWebhookSecret: true,
+	lastSyncAt: ago(4 * 60_000),
+	lastSuccessAt: ago(4 * 60_000),
+	lastErrorAt: null,
+	lastError: null,
+	consecutiveFailures: 0,
+	nextSyncAt: new Date(NOW.getTime() + 56 * 60_000),
+	backfilledAt: daysAgo(119),
+	stats: EMPTY_SYNC_STATS,
+	disconnectedAt: null,
+	createdAt: daysAgo(120),
+	updatedAt: ago(4 * 60_000),
+	...overrides,
+})
+
+/** The directory connected, invoices syncing, activity failing; plans not connected (no row). */
+export const DIRECTORY_CONNECTION = connection(1, DIRECTORY.id, {
+	externalAccountName: "Hazel production",
+	stats: { ...EMPTY_SYNC_STATS, accounts: 214, contacts: 1_862, events: 48_210 },
+})
+export const INVOICES_CONNECTION = connection(2, INVOICES.id, {
+	externalAccountName: "Hazel Inc.",
+	lastSyncAt: ago(2 * 60_000),
+	stats: { ...EMPTY_SYNC_STATS, accounts: 198, subscriptions: 203, invoices: 1_204 },
+})
+/** When the activity source's sync last failed. */
+export const ACTIVITY_ERROR_AT = ago(2 * HOUR)
+export const ACTIVITY_CONNECTION = connection(4, ACTIVITY.id, {
+	status: "error",
+	lastSyncAt: ago(2 * HOUR),
+	lastSuccessAt: new Date("2026-11-09T18:42:00Z"),
+	lastErrorAt: ACTIVITY_ERROR_AT,
+	lastError: { code: "auth", message: "API key was revoked.", httpStatus: 401 },
+	consecutiveFailures: 3,
+})
+export const CONNECTIONS: ReadonlyArray<Connection> = [
+	DIRECTORY_CONNECTION,
+	INVOICES_CONNECTION,
+	ACTIVITY_CONNECTION,
+]
+
+// ---------------------------------------------------------------------------
+// Overview (`customers.overview`)
+// ---------------------------------------------------------------------------
+
+/** Oct 2026's bucket matches the design's tooltip: +$9,400 / +$3,600 / −$1,000 / −$2,600. */
+const MONTHLY_MOVEMENTS: ReadonlyArray<
+	readonly [newMrr: number, expansion: number, contraction: number, churn: number]
+> = [
+	[5_200, 2_300, -900, -2_400],
+	[4_400, 1_700, -1_300, -3_100],
+	[6_100, 2_400, -700, -1_800],
+	[5_800, 3_200, -1_400, -2_900],
+	[7_400, 2_200, -1_200, -3_400],
+	[6_800, 3_400, -800, -2_900],
+	[7_900, 3_100, -1_100, -2_600],
+	[6_200, 2_800, -1_500, -3_500],
+	[7_000, 2_900, -900, -2_200],
+	[6_600, 3_000, -1_200, -3_700],
+	[9_400, 3_600, -1_000, -2_600],
+	[8_600, 4_600, -1_400, -2_200],
+]
+
+const movement = (
+	start: string,
+	values: readonly [number, number, number, number],
+	seed: number,
+): MrrMovementBucket => {
+	const [newMrr, expansion, contraction, churn] = values
+	return {
+		start,
+		new: newMrr * 100,
+		expansion: expansion * 100,
+		reactivation: seed % 4 === 0 ? 29_000 : 0,
+		contraction: contraction * 100,
+		churn: churn * 100,
+		net: (newMrr + expansion + contraction + churn) * 100 + (seed % 4 === 0 ? 29_000 : 0),
+		accounts: {
+			new: Math.round(newMrr / 600),
+			expansion: Math.round(expansion / 400),
+			reactivation: seed % 4 === 0 ? 1 : 0,
+			contraction: Math.round(-contraction / 300),
+			churn: Math.round(-churn / 500),
+		},
+	}
+}
+
+const monthStart = (monthsAgo: number) => {
+	const date = new Date(Date.UTC(2026, 10 - monthsAgo, 1))
+	return date.toISOString().slice(0, 10)
+}
+
+/** Daily active users for the last `days` days, ending at the design's 444 / 978 / 1,611. */
+const activeUsersDaily = (days: number): ReadonlyArray<ActiveUsersPoint> => {
+	const random = prng(days)
+	return Array.from({ length: days }, (_, index) => {
+		const fromEnd = days - 1 - index
+		const weekday = new Date(NOW.getTime() - fromEnd * DAY).getUTCDay()
+		const weekend = weekday === 0 || weekday === 6
+		const drift = 1 - fromEnd * 0.0025
+		return {
+			day: dayOf(fromEnd),
+			dau: fromEnd === 0 ? 444 : Math.round((weekend ? 270 : 410 + random() * 30) * drift),
+			wau: fromEnd === 0 ? 978 : Math.round((900 + random() * 40) * drift),
+			mau: fromEnd === 0 ? 1_611 : Math.round(1_611 * (1 - fromEnd * 0.0026)),
+		}
+	})
+}
+
+const bucketed = (points: ReadonlyArray<ActiveUsersPoint>, every: number): ReadonlyArray<ActiveUsersPoint> =>
+	points.filter((_, index) => (points.length - 1 - index) % every === 0)
+
+const brief = (key: NamedAccount, at: Date) => {
+	const account = ACCOUNTS_BY_KEY[key]
+	return {
+		accountId: account.id,
+		name: account.name,
+		logoUrl: null,
+		planName: account.planName,
+		mrrMinor: account.mrrMinor,
+		at,
+	}
+}
+
+const mover = (
+	key: NamedAccount,
+	previousAvg: number,
+	currentAvg: number,
+	values: ReadonlyArray<number>,
+) => ({
+	accountId: ACCOUNTS_BY_KEY[key].id,
+	name: ACCOUNTS_BY_KEY[key].name,
+	logoUrl: null,
+	previousAvg,
+	currentAvg,
+	changePct: Math.round(((currentAvg - previousAvg) / previousAvg) * 1000) / 10,
+	series: series(values),
+})
+
+const kpi = (value: number, previous: number) => ({
+	value,
+	previous,
+	deltaPct: previous === 0 ? null : Math.round(((value - previous) / previous) * 1000) / 10,
+})
+
+/** `customers.overview` for a range; `partial` = no billing source yet. */
+export const overviewFixture = (
+	range: CustomersRange,
+	options: Readonly<{ partial?: boolean }> = {},
+): OverviewResult => {
+	const bucket = range === "12m" ? "month" : range === "90d" ? "week" : "day"
+	const days = range === "7d" ? 7 : range === "30d" ? 30 : 90
+	const daily = activeUsersDaily(range === "12m" ? 360 : days)
+	const activeUsers = range === "12m" ? bucketed(daily, 30) : range === "90d" ? bucketed(daily, 7) : daily
+	const mrrMovements =
+		range === "12m"
+			? MONTHLY_MOVEMENTS.map((values, index) => movement(monthStart(11 - index), values, index))
+			: Array.from({ length: bucket === "week" ? 13 : days }, (_, index) => {
+					const scale = bucket === "week" ? 0.25 : 1 / 30
+					const random = prng(index + days)
+					const scaled = (value: number) =>
+						Math.round((value * scale * (0.4 + random() * 1.2)) / 10) * 10
+					const [newMrr, expansion, contraction, churn] = MONTHLY_MOVEMENTS[(index + 3) % 12] ?? [
+						0, 0, 0, 0,
+					]
+					const values = [
+						scaled(newMrr),
+						scaled(expansion),
+						scaled(contraction),
+						scaled(churn),
+					] as const
+					return movement(
+						dayOf((bucket === "week" ? 7 : 1) * ((bucket === "week" ? 12 : days - 1) - index)),
+						values,
+						index + 1,
+					)
+				})
+	const billing = !options.partial
+	return {
+		range,
+		currency: CURRENCY,
+		bucket,
+		kpis: {
+			mrrMinor: kpi(billing ? 4_821_000 : 0, billing ? 4_539_600 : 0),
+			payingCustomers: kpi(billing ? 176 : 0, billing ? 171 : 0),
+			activeCustomers: kpi(168, 168),
+			wau: kpi(978, 951),
+			mau: kpi(1_611, 1_602),
+			revenueMinor: kpi(billing ? 5_310_400 : 0, billing ? 4_987_200 : 0),
+			logoChurn: { value: 2.8, previous: 1.9, deltaPct: 0.9 },
+			atRiskMrrMinor: kpi(billing ? 545_000 : 0, billing ? 612_000 : 0),
+			nrrPct: billing ? kpi(104.2, 101.8) : null,
+		},
+		mrrMovements: billing ? mrrMovements : [],
+		activeUsers,
+		topMovers: {
+			gainers: [
+				mover("quarry", 5.6, 14, [8, 9, 9, 11, 12, 14, 15, 17, 18, 20]),
+				mover("northwind", 35.2, 39.6, [36, 37, 37, 38, 39, 40, 40, 41, 42, 42]),
+				mover("halcyon", 157.8, 164.4, [158, 160, 161, 160, 163, 164, 165, 166, 167, 168]),
+			],
+			decliners: [
+				mover("kestrel", 19.4, 7, [12, 12, 11, 9, 7, 6, 5, 4, 3, 2]),
+				mover("fernway", 7.6, 3.4, [5, 5, 4, 4, 3, 3, 2, 2, 2, 2]),
+				mover("consolidated", 16.8, 9.7, [12, 13, 12, 11, 10, 9, 9, 8, 7, 7]),
+			],
+		},
+		recentChurn: [brief("oakridge", daysAgo(20))],
+		recentNew: [brief("tidewater", daysAgo(12)), brief("juniper", daysAgo(26))],
+		newTrials: [
+			{ ...brief("quarry", daysAgo(3)), status: "trialing" },
+			{ ...brief("tidewater", daysAgo(19)), status: "active" },
+		],
+		hasData: { activity: true, billing },
+	}
+}
+
+/** No sources connected yet. */
+// ---------------------------------------------------------------------------
+// One account (`customers.account.detail`): Acme Robotics, past due
+// ---------------------------------------------------------------------------
+
+const contactRow = (
+	n: number,
+	name: string,
+	email: string,
+	role: string,
+	lastSeenDays: number | null,
+	signIns: number,
+): ContactRow => ({
+	contact: {
+		id: Schema.decodeSync(CustomerContactId)(uuid(30, n)),
+		accountId: ACCOUNTS_BY_KEY.acme.id,
+		email,
+		name,
+		avatarUrl: null,
+		title: null,
+		role,
+		isBillingContact: role === "admin" && n === 1,
+		joinedAt: daysAgo(400),
+		firstActiveAt: daysAgo(399),
+		lastSeenAt: lastSeenDays === null ? null : daysAgo(lastSeenDays),
+		lastSignInAt: lastSeenDays === null ? null : daysAgo(lastSeenDays),
+		signInCount30d: signIns,
+		eventCount30d: signIns * 41,
+		attributes: {},
+		fieldSources: { email: DIRECTORY.id },
+		createdAt: daysAgo(400),
+		updatedAt: daysAgo(1),
+		deletedAt: null,
+	},
+	status: lastSeenDays === null ? "never_active" : lastSeenDays <= 30 ? "active" : "dormant",
+	activity: series(
+		Array.from({ length: 30 }, (_, index) =>
+			lastSeenDays !== null && 29 - index >= lastSeenDays ? (index * 7 + n * 3) % 9 : 0,
+		),
+	),
+	otherAccounts: [],
+})
+
+export const ACME_DETAIL: AccountDetail = {
+	account: ACCOUNTS_BY_KEY.acme,
+	refs: [
+		{
+			id: Schema.decodeSync(CustomerExternalRefId)(uuid(31, 1)),
+			connectionId: DIRECTORY_CONNECTION.id,
+			provider: DIRECTORY.id,
+			entityType: "account",
+			entityId: ACCOUNTS_BY_KEY.acme.id,
+			accountId: ACCOUNTS_BY_KEY.acme.id,
+			externalId: "org_2acmeRobotics",
+			name: "Acme Robotics",
+			externalUrl: DIRECTORY.demo.accountUrl("org_2acmeRobotics", "lab"),
+			matchMethod: "created",
+			matchedByUserId: null,
+			matchedAt: daysAgo(410),
+			lastSyncedAt: ago(4 * 60_000),
+			staleAt: null,
+			createdAt: daysAgo(410),
+			updatedAt: ago(4 * 60_000),
+		},
+		{
+			id: Schema.decodeSync(CustomerExternalRefId)(uuid(31, 2)),
+			connectionId: INVOICES_CONNECTION.id,
+			provider: INVOICES.id,
+			entityType: "account",
+			entityId: ACCOUNTS_BY_KEY.acme.id,
+			accountId: ACCOUNTS_BY_KEY.acme.id,
+			externalId: "cus_Q8f2Lk",
+			name: "Acme Robotics Inc.",
+			externalUrl: INVOICES.demo.customerUrl("cus_Q8f2Lk"),
+			matchMethod: "shared_id",
+			matchedByUserId: null,
+			matchedAt: daysAgo(400),
+			lastSyncedAt: ago(2 * 60_000),
+			staleAt: null,
+			createdAt: daysAgo(400),
+			updatedAt: ago(2 * 60_000),
+		},
+	],
+	subscriptions: [
+		{
+			id: Schema.decodeSync(CustomerSubscriptionId)(uuid(32, 1)),
+			accountId: ACCOUNTS_BY_KEY.acme.id,
+			provider: INVOICES.id,
+			externalId: "sub_1Q8f2LkAcme",
+			planName: "Growth",
+			status: "past_due",
+			mrrMinor: 215_000,
+			listMrrMinor: 215_000,
+			currency: CURRENCY,
+			interval: "month",
+			quantity: 1,
+			startedAt: daysAgo(410),
+			trialEndsAt: null,
+			currentPeriodEnd: new Date(NOW.getTime() + 21 * DAY),
+			cancelAtPeriodEnd: false,
+			canceledAt: null,
+			cancellationReason: null,
+			paymentMethod: { brand: "visa", last4: "4242", expMonth: 8, expYear: 2027 },
+			createdAt: daysAgo(410),
+			updatedAt: daysAgo(9),
+		},
+	],
+	upcomingInvoice: null,
+	openInvoices: [
+		{
+			id: Schema.decodeSync(CustomerInvoiceId)(uuid(33, 1)),
+			accountId: ACCOUNTS_BY_KEY.acme.id,
+			subscriptionId: Schema.decodeSync(CustomerSubscriptionId)(uuid(32, 1)),
+			provider: INVOICES.id,
+			externalId: "in_1Q8f2LkAcme",
+			number: "INV-2041",
+			status: "open",
+			amountDueMinor: 215_000,
+			amountPaidMinor: 0,
+			currency: CURRENCY,
+			issuedAt: daysAgo(39),
+			dueAt: daysAgo(9),
+			paidAt: null,
+			attemptCount: 3,
+			nextRetryAt: new Date(NOW.getTime() + 2 * DAY),
+			declineReason: "Card declined: insufficient funds",
+			hostedUrl: INVOICES.demo.invoiceUrl("in_1Q8f2LkAcme", "lab"),
+			createdAt: daysAgo(39),
+			updatedAt: daysAgo(1),
+		},
+	],
+	activeUsersSeries: series(
+		Array.from({ length: 30 }, (_, index) =>
+			Math.max(3, Math.round(14 - index * 0.25 + ((index * 7) % 5))),
+		),
+	),
+	contactsToReach: [
+		contactRow(1, "Hannah Weiss", "hannah@acmerobotics.io", "admin", 3, 22),
+		contactRow(2, "Omar Haddad", "omar@acmerobotics.io", "member", 1, 28),
+		contactRow(3, "Lena Fischer", "lena@acmerobotics.io", "admin", 12, 6),
+	],
+	recentEvents: [
+		{
+			id: Schema.decodeSync(CustomerEventId)(uuid(34, 1)),
+			accountId: ACCOUNTS_BY_KEY.acme.id,
+			contactId: null,
+			provider: INVOICES.id,
+			type: "invoice.payment_failed",
+			title: "Payment failed for INV-2041 ($2,150.00)",
+			data: { attempt: 3 },
+			occurredAt: daysAgo(2),
+			externalId: "evt_3",
+			actorUserId: null,
+			createdAt: daysAgo(2),
+		},
+		{
+			id: Schema.decodeSync(CustomerEventId)(uuid(34, 2)),
+			accountId: ACCOUNTS_BY_KEY.acme.id,
+			contactId: null,
+			provider: "hazel",
+			type: "signal.opened",
+			title: "Signal opened: Payment failed",
+			data: {},
+			occurredAt: daysAgo(2),
+			externalId: null,
+			actorUserId: null,
+			createdAt: daysAgo(2),
+		},
+		{
+			id: Schema.decodeSync(CustomerEventId)(uuid(34, 3)),
+			accountId: ACCOUNTS_BY_KEY.acme.id,
+			contactId: null,
+			provider: DIRECTORY.id,
+			type: "contact.joined",
+			title: "Omar Haddad joined",
+			data: {},
+			occurredAt: daysAgo(15),
+			externalId: `evt_${DIRECTORY.id}_1`,
+			actorUserId: null,
+			createdAt: daysAgo(15),
+		},
+	],
+}

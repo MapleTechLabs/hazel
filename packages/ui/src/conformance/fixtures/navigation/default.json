@@ -1,0 +1,73 @@
+{
+	"about": "A stack of two screens: only the top one shows, with its back button.",
+	"root": {
+		"tag": "navigation",
+		"events": ["pop"],
+		"children": [
+			{
+				"tag": "screen",
+				"key": "channels",
+				"props": {
+					"title": "Channels"
+				},
+				"children": [
+					{
+						"tag": "section",
+						"props": {
+							"title": "Channels"
+						},
+						"children": [
+							{
+								"tag": "item",
+								"key": "general",
+								"props": {
+									"title": "general",
+									"href": "#"
+								},
+								"events": ["press"],
+								"slots": [
+									{
+										"name": "leading",
+										"children": [
+											{
+												"tag": "icon",
+												"props": {
+													"name": "hashtag"
+												}
+											}
+										]
+									}
+								]
+							}
+						]
+					}
+				]
+			},
+			{
+				"tag": "screen",
+				"key": "general",
+				"props": {
+					"title": "general",
+					"back": true
+				},
+				"events": ["back"],
+				"children": [
+					{
+						"tag": "text",
+						"children": ["Messages in general"]
+					}
+				]
+			}
+		]
+	},
+	"aria": [
+		{
+			"role": "heading",
+			"name": "general"
+		},
+		{
+			"role": "button",
+			"name": "Back"
+		}
+	]
+}

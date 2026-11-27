@@ -14,17 +14,12 @@ import { catchCommon, errorToast, reasonToast } from "../data/actions"
 import type { ToastRequest } from "../overlay/toasts"
 import type { AccountRow } from "./queries"
 
-/** A new flag's key, as the server checks it (`customers.featureFlag.create`). */
-export const FEATURE_FLAG_KEY = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/
-
 /** The flags: the ones created in Hazel and every key a live account holds (on or off), sorted. */
 export const featureFlagKeysOf = (
 	created: ReadonlyArray<string>,
 	accounts: ReadonlyArray<AccountRow>,
 ): ReadonlyArray<string> =>
 	[...new Set([...created, ...accounts.flatMap((account) => Object.keys(account.featureFlags))])].sort()
-
-export const hasFlag = (account: AccountRow, key: string): boolean => account.featureFlags[key] === true
 
 /** Why a change failed: the server's own words (what the source refused), else a common reason. */
 export const FeatureFlagFailure = Schema.Union([

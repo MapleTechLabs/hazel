@@ -1,46 +1,21 @@
-import type { MessageId } from "@hazel/schema"
-import { TrackMessageKeys } from "./message-keys"
+import { hole } from "../../../app/holes"
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { cn } from "~/lib/utils"
-import { ariaButton, button } from "../../../ui/button"
-import { skeleton } from "../../../ui/skeleton"
 import { splitContentClassName, splitRootClassName } from "../../../ui/split-panel"
-import { getEffectivePresenceStatus } from "~/utils/presence"
 import { htmlRenderFullscreenView } from "../../../chat/embeds/html-render"
 import type * as HtmlRender from "../../../chat/html-render"
 import { imageViewerView } from "../../../chat/image-viewer"
-import { formatTime } from "../../../chat/message/parts"
-import { dateDividerView, messageRowView, type RowContext } from "../../../chat/message/row"
-import type * as Draft from "../../../composer/draft"
-import { draftView } from "../../../composer/draft-view"
-import * as MessageList from "../../../mount/message-list"
-import { mobileBackLink } from "../../../shell/mobile"
-import { joinBannerView, typingIndicatorView } from "../banners"
-import { attachmentInfoFrom, composerAreaView, replyPreviewOf } from "../composer-view"
-import { authorIdentity, toDeriveContext } from "../derive"
-import * as FilesPage from "../files/page"
-import * as FilesView from "../files/view"
-import { chatHeaderView } from "../header"
-import {
-	type ChannelLinks,
-	type ChannelLinksMap,
-	linksFor,
-	NO_CHANNEL_LINKS,
-	NO_CHANNEL_LINKS_MAP,
-} from "../../../ui/channel-icon"
+import type { RowContext } from "../../../chat/message/row"
+import { toDeriveContext } from "../derive"
 import { messageToolbarOverlay, reactionModalView, trackHoverAttribute } from "../overlay-views"
 import * as Overlays from "../overlays"
-import { pinnedPopoverView } from "../pinned"
-import { idleRowContext, rowContextFor, threadRowContextFor } from "../row-context"
-import type { DisplayRow, MessageRow } from "../rows"
-import * as CustomerCard from "../customer-card"
+import { threadRowContextFor } from "../row-context"
+import type { MessageRow } from "../rows"
 import { chatTabBarView } from "../tab-bar"
 import { threadPanelView } from "../thread-panel"
 import * as IssueControl from "../issue-control"
-import * as NotificationControl from "../notification-control"
-import { AppRoute, customerRoute, hrefOf } from "../../../route"
+import { AppRoute, hrefOf } from "../../../route"
 import { isMemberOf, Message, type Model, routeTabOf, type ThreadPanel } from "./page"
-import * as NewMessages from "./new-messages"
 import { threadPanelWidthOf } from "./thread-width"
 import { openViewerOf } from "./viewer-images"
 
@@ -51,231 +26,12 @@ type H = HtmlBuilder<Message>
 // The page's mappers, built once, so the lazy views that take them keep their memo.
 
 const toSelf = (message: Message) => message
-const toListMessage = (message: MessageList.Message) => Message.GotListMessage({ message })
-const toDraftMessage = (message: Draft.Message) => Message.GotDraftMessage({ message })
-const toThreadDraftMessage = (message: Draft.Message) => Message.GotThreadDraftMessage({ message })
-const toFilesMessage = (message: FilesPage.Message) => Message.GotFilesMessage({ message })
 const toOverlay = (message: Overlays.Message) => Message.GotOverlaysMessage({ message })
 const toHtmlRenderMessage = (message: HtmlRender.Message) => Message.GotHtmlRenderMessage({ message })
 const toPressEdge = (clientX: number, startWidth: number, maxWidth: number) =>
 	Message.PressedThreadPanelEdge({ clientX, startWidth, maxWidth })
 const toNudgeEdge = (delta: number) => Message.PressedThreadPanelEdgeKey({ delta })
 const toIssueControlMessage = (message: IssueControl.Message) => Message.GotIssueControlMessage({ message })
-const toCustomerCard = (message: CustomerCard.Message) => Message.GotCustomerCardMessage({ message })
-const toNotificationControl = (message: NotificationControl.Message) =>
-	Message.GotNotificationControlMessage({ message })
-const toPinnedMessage = (message: Parameters<typeof Overlays.Message.GotPinnedMessage>[0]["message"]) =>
-	toOverlay(Overlays.Message.GotPinnedMessage({ message }))
-const pinnedActions = {
-	toJump: (messageId: MessageId) => toOverlay(Overlays.Message.ClickedPinnedMessage({ messageId })),
-	toUnpin: (messageId: MessageId) => toOverlay(Overlays.Message.ClickedUnpin({ messageId })),
-}
-
-const rowView = (
-	row: DisplayRow,
-	isStuck: boolean,
-	isHovered: boolean,
-	context: RowContext<Message>,
-	h: H,
-): Html =>
-	row._tag === "DateHeader"
-		? dateDividerView(h, row.label, isStuck)
-		: messageRowView(h, row, context, isHovered)
-
-// One memo slot per row object, a pure view memo: a row derived again gets a fresh slot and the old
-// one goes with the old row (rows keep their identity while nothing they show changes).
-const rowSlots = new WeakMap<DisplayRow, ReturnType<typeof createLazy>>()
-
-const memoRow = (
-	h: H,
-	row: DisplayRow,
-	isStuck: boolean,
-	isHovered: boolean,
-	context: RowContext<Message>,
-): Html => {
-	let slot = rowSlots.get(row)
-	// Slots live with their row (a WeakMap), so a row's memo goes when the row does.
-	// oxlint-disable-next-line foldkit/lazy-view-stable-references
-	if (slot === undefined) rowSlots.set(row, (slot = createLazy()))
-	return slot(rowView, [row, isStuck, isHovered, context, h]) ?? h.div([])
-}
-
-/** "14:02", or "Mon, Mar 9 14:02" before today: the message rows' clock (`formatTime`). */
-const sinceLabel = (sinceMs: number, nowMs: number) => {
-	const since = new Date(sinceMs)
-	const time = formatTime(sinceMs)
-	return since.toDateString() === new Date(nowMs).toDateString()
-		? time
-		: `${since.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} ${time}`
-}
-
-/**
- * Discord's bar above the list: how many messages are new since the user last read; jump, or mark
- * read. It sits in the flow, not over the list, so the list's pinned date stays in view under it.
- */
-const newMessagesBarView = (h: H, model: Model, nowMs: number): Html => {
-	// A full page means older history may hold more new messages.
-	const hasOlder = model.messages.length >= model.limit
-	const bar = NewMessages.barOf(model.newMessages, model.messages, model.currentUserId, hasOlder)
-	if (bar === null) return h.empty
-	const count = `${bar.count}${bar.isAtLeast ? "+" : ""}`
-	const noun = bar.count === 1 && !bar.isAtLeast ? "new message" : "new messages"
-	return h.div(
-		[
-			h.Class(
-				"mx-3 flex h-7 shrink-0 items-center rounded-b-lg bg-primary text-primary-fg text-xs shadow-sm",
-			),
-			h.Attribute("role", "status"),
-		],
-		[
-			ariaButton(
-				h,
-				{
-					className:
-						"flex h-full min-w-0 flex-1 items-center gap-1 truncate rounded-bl-lg px-3 text-left font-medium outline-hidden hover:bg-fg/10 focus-visible:bg-fg/10",
-					onPress: Message.ClickedJumpToNew(),
-				},
-				[`${count} ${noun} since ${sinceLabel(bar.sinceMs, nowMs)}`],
-			),
-			ariaButton(
-				h,
-				{
-					className:
-						"flex h-full shrink-0 items-center rounded-br-lg px-3 font-semibold outline-hidden hover:bg-fg/10 focus-visible:bg-fg/10",
-					onPress: Message.ClickedMarkNewRead(),
-				},
-				["Mark as read"],
-			),
-		],
-	)
-}
-
-/** `MessageList`'s empty state. */
-const emptyStateView = (h: H): Html =>
-	h.div(
-		[h.Class("flex size-full flex-col items-center justify-center p-4 sm:p-8")],
-		[
-			h.div(
-				[h.Class("relative aspect-square w-full max-w-sm")],
-				[
-					h.img([
-						h.Attribute("src", "/images/squirrle_ocean.webp"),
-						h.Attribute("alt", "squirrel"),
-						h.Class(
-							"mask-size-[110%_90%] mask-linear-to-r mask-from-black mask-to-transparent mask-center mask-no-repeat mask-[url(/images/image-mask.webp)] h-full w-full rounded-md bg-center bg-cover bg-no-repeat object-cover opacity-50",
-						),
-					]),
-				],
-			),
-			h.p([h.Class("font-bold font-mono text-fg text-xl")], ["Quiet as an ocean gazing squirrel..."]),
-		],
-	)
-
-/** One placeholder message: avatar, name and `lines` of text of the given widths. */
-const skeletonMessage = (h: H, lines: ReadonlyArray<string>): Html =>
-	h.div(
-		[h.Class("flex gap-3 px-4 py-2")],
-		[
-			skeleton(h, "size-9 shrink-0 rounded-lg bg-wash"),
-			h.div(
-				[h.Class("flex min-w-0 flex-1 flex-col gap-2 pt-1")],
-				[
-					skeleton(h, "h-3 w-28 rounded bg-wash-strong"),
-					...lines.map((width) => skeleton(h, `h-3 rounded bg-wash ${width}`)),
-				],
-			),
-		],
-	)
-
-/** The list before its first snapshot: placeholders at the bottom, where messages will land. */
-const loadingView = (h: H): Html =>
-	h.div(
-		[
-			h.Class("flex size-full animate-skeleton-in flex-col justify-end pb-4"),
-			h.Attribute("aria-busy", "true"),
-			// The last screen's paint stays up while this shows (`app/paint.ts`).
-			h.Attribute("data-paint", "loading"),
-		],
-		[
-			h.span([h.Class("sr-only"), h.Attribute("role", "status")], ["Loading messages"]),
-			skeletonMessage(h, ["w-3/5"]),
-			skeletonMessage(h, ["w-4/5", "w-2/5"]),
-			skeletonMessage(h, ["w-1/2"]),
-			skeletonMessage(h, ["w-3/4", "w-1/3"]),
-		],
-	)
-
-/** Everything `listView` reads from the page, so a page that differs elsewhere keeps the list memo. */
-const isListInputEqual = (a: Model, b: Model) =>
-	a.hasLoadedMessages === b.hasLoadedMessages &&
-	a.messages === b.messages &&
-	a.rows === b.rows &&
-	a.overlays === b.overlays &&
-	a.lookups === b.lookups &&
-	a.currentUserId === b.currentUserId &&
-	a.channel === b.channel &&
-	MessageList.isViewEqual(a.list, b.list)
-
-/**
- * A view memo, not state: hands back the last page given while `isEqual` holds, so a lazy view
- * keyed on it keeps its memo when the page changed only in fields that view never reads.
- */
-const stableInput = (isEqual: (a: Model, b: Model) => boolean) => {
-	const last: { model: Model | null } = { model: null }
-	return (model: Model): Model => {
-		if (last.model !== null && isEqual(last.model, model)) return last.model
-		last.model = model
-		return model
-	}
-}
-
-// Scroll events change only the list's offset, so they no longer rebuild the list.
-const listInputOf = stableInput(isListInputEqual)
-const lazyList = createLazy()
-
-/** The presence clock only matters to an open profile popover; otherwise it is left out of the memo. */
-const popoverClockOf = (model: Model, nowMs: number) => (model.overlays.open._tag === "Popover" ? nowMs : 0)
-
-const messageListView = (h: H, model: Model, nowMs: number): Html =>
-	lazyList(listView, [listInputOf(model), popoverClockOf(model, nowMs), h]) ?? h.empty
-
-const listView = (model: Model, nowMs: number, h: H): Html => {
-	if (!model.hasLoadedMessages) return loadingView(h)
-	if (model.messages.length === 0) return emptyStateView(h)
-	const idle = idleRowContext(h, model)
-	const held = Overlays.heldMessageIdOf(model.overlays)
-	const list = MessageList.view(h, model.list, {
-		items: model.rows,
-		itemToKey: (row) => row.key,
-		itemToView: (row, { isStuck }) =>
-			memoRow(
-				h,
-				row,
-				isStuck,
-				row.key === held,
-				row._tag === "MessageRow" ? rowContextFor(h, model, row, idle, nowMs) : idle,
-			),
-		isStickyHeader: (row) => row._tag === "DateHeader",
-		toParentMessage: toListMessage,
-	})
-	// Keyed: the not-yet-loaded placeholder is also a div, and a reused element never runs OnMount.
-	return h.keyed("div")(
-		"message-list-container",
-		[
-			h.Class(
-				"isolate flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-2 transition-opacity duration-200 max-md:overflow-x-hidden",
-			),
-			h.Attribute("style", "overflow-anchor: auto; scroll-behavior: auto; opacity: 1;"),
-			trackHoverAttribute(h),
-		],
-		[
-			// The legacy hover highlight (injected `#message-<id>` CSS) is a class on the hovered row:
-			// rewriting a <style> invalidates every element's style, on each hover change while scrolling.
-			// The message keyboard listens around the list (an element holds one Mount): no box of its own.
-			h.div([h.Class("contents"), h.OnMount(TrackMessageKeys())], [list]),
-		],
-	)
-}
 
 /** `ImageViewerModal` for the message whose attachment was clicked. */
 const imageViewerOverlay = (h: H, model: Model): Html => {
@@ -306,175 +62,55 @@ const imageViewerOverlay = (h: H, model: Model): Html => {
 	})
 }
 
+/** The Files or All media page's place (`src/root/app.ts`), keyed by tab and channel. */
+const filesHole = (h: H, model: Model, view: "files" | "media"): Html =>
+	hole(h, "channel-files", `${view === "media" ? "ChatFilesMedia" : "ChatFiles"}:${model.channelId}`, [
+		h.Class(MESSAGE_LIST_HOLE),
+	])
+
+/** The shared message list's place (`src/root/portal.ts`): keyed by channel, so a switch starts fresh. */
+const messageListHole = (h: H, model: Model): Html | undefined =>
+	model.currentUserId === null
+		? undefined
+		: hole(h, "message-list", model.channelId, [h.Class(MESSAGE_LIST_HOLE)])
+
+/** The composer's padded area (`composer-view.ts`); the shared composer fills it. */
+const COMPOSER_HOLE = "relative shrink-0 px-4 pb-4 pt-2.5"
+
+/** The screen's root fills the hole, so its list scrolls inside it. */
+const MESSAGE_LIST_HOLE = "flex min-h-0 flex-1 flex-col"
+
 /** `$id/index.tsx`: the join banner for non-members, else the list and the composer. */
-const messagesOutlet = (h: H, model: Model, nowMs: number, channelLinks: ChannelLinksMap) => {
+const messagesOutlet = (h: H, model: Model, nowMs: number) => {
+	// The shared join banner (`src/root/app.ts`) fills its hole.
 	if (isMemberOf(model) === false)
-		return [
-			joinBannerView(h, model.channel, {
-				isJoining: model.isJoining,
-				onJoin: Message.ClickedJoinChannel(),
-				links: headerLinks(
-					linksFor(channelLinks, model.channelId),
-					model.customer,
-					model.lookups.syncProvider,
-				),
-			}),
-		]
-	// Passed to the lazy composer as strings, so an unchanged reply keeps its memo.
-	const reply = replyPreviewOf(model, model.draft)
+		return model.channel === null
+			? []
+			: [hole(h, "join-banner", model.channelId, [h.Class("flex flex-1 flex-col")])]
+	const list = messageListHole(h, model)
 	return [
 		h.div(
 			[h.Class("relative flex min-h-0 flex-1 flex-col overflow-hidden")],
-			[newMessagesBarView(h, model, nowMs), messageListView(h, model, nowMs)],
+			list === undefined ? [] : [list],
 		),
-		lazyComposer(composerView, [
-			model.typingNames,
-			model.draft,
-			reply?.authorName ?? null,
-			reply?.firstLine ?? null,
-			model.lookups.attachments,
-			h,
-		]) ?? h.empty,
+		hole(h, "composer", model.channelId, [h.Class(COMPOSER_HOLE)]),
 		imageViewerOverlay(h, model),
 		lazyToolbar(messageToolbarOverlay, [h, toolbarInputOf(model)]) ?? h.empty,
 		reactionModalView(h, model),
 	]
 }
 
-const composerView = (
-	typingNames: ReadonlyArray<string>,
-	draft: Draft.Model,
-	replyAuthorName: string | null,
-	replyFirstLine: string | null,
-	attachments: Model["lookups"]["attachments"],
-	h: H,
-) =>
-	composerAreaView(h, typingIndicatorView(h, typingNames), draft, {
-		toMessage: toDraftMessage,
-		replyPreview:
-			replyAuthorName === null || replyFirstLine === null
-				? null
-				: { authorName: replyAuthorName, firstLine: replyFirstLine },
-		attachmentInfo: attachmentInfoFrom(attachments),
-	})
-
 /**
- * The page's own customer and sync rows know about this channel before the org-wide lists do (and
- * for a channel the sidebar does not list), so they win; Connect partners come from the org's.
+ * A view memo, not state: hands back the last page given while `isEqual` holds, so a lazy view
+ * keyed on it keeps its memo when the page changed only in fields that view never reads.
  */
-const headerLinks = (
-	shared: ChannelLinks,
-	customer: Model["customer"],
-	syncProvider: Model["lookups"]["syncProvider"],
-): ChannelLinks => ({
-	customer:
-		customer === null
-			? shared.customer
-			: { name: customer.accountName, logoUrl: customer.accountLogoUrl ?? null },
-	partners: shared.partners,
-	syncProvider: syncProvider ?? shared.syncProvider,
-})
-
-/**
- * The header's clock: to the minute, so the 30 s ticks keep its memo, or the bell's mute end once it
- * has passed within the minute, so the bell unmutes when the sidebar row does.
- */
-const headerClockOf = (model: Model, nowMs: number): number => {
-	const minuteMs = Math.floor(nowMs / 60_000) * 60_000
-	const mutedUntilMs =
-		(model.members ?? []).find((member) => member.userId === model.currentUserId)?.mutedUntilMs ?? null
-	return mutedUntilMs !== null && mutedUntilMs > minuteMs && mutedUntilMs <= nowMs ? mutedUntilMs : minuteMs
-}
-
-const headerView = (
-	channel: Model["channel"],
-	parentChannel: Model["parentChannel"],
-	orgSlug: Model["orgSlug"],
-	members: Model["members"],
-	lookups: Model["lookups"],
-	currentUserId: Model["currentUserId"],
-	pinnedPopover: Model["overlays"]["pinned"],
-	pins: Model["pinned"],
-	customer: Model["customer"],
-	isCustomerCardOpen: boolean,
-	isMobile: boolean,
-	channelLinks: ChannelLinksMap,
-	notificationControl: Model["notificationControl"],
-	/** The clock to the minute, or the bell's mute end (`headerClockOf`). */
-	minuteMs: number,
-	h: H,
-): Html => {
-	const users = new Map(lookups.users.map((user) => [user.id, user]))
-	const botNames = new Map(lookups.bots.map((bot) => [bot.userId, bot.name]))
-	const others = (members ?? []).filter((member) => member.userId !== currentUserId)
-	const currentMember = (members ?? []).find((member) => member.userId === currentUserId)
-	const partner = channel?.type === "single" && others.length === 1 ? others[0] : undefined
-	const dmPresence =
-		partner === undefined || botNames.has(partner.userId)
-			? null
-			: getEffectivePresenceStatus(
-					lookups.presence.find((presence) => presence.userId === partner.userId),
-				)
-	return chatHeaderView(h, {
-		channel,
-		links: headerLinks(linksFor(channelLinks, channel?.id ?? ""), customer, lookups.syncProvider),
-		parentLinks: parentChannel === null ? NO_CHANNEL_LINKS : linksFor(channelLinks, parentChannel.id),
-		parentChannel,
-		orgSlug,
-		isMember: currentMember !== undefined,
-		otherMembers: [...others].reverse().flatMap((member) => {
-			const user = users.get(member.userId)
-			return user ? [authorIdentity(user, botNames.get(member.userId))] : []
-		}),
-		isHiddenDm: currentMember?.isHidden ?? false,
-		onUnhide: Message.ClickedUnhideConversation(),
-		dmPresence,
-		// A phone opens a conversation from the chat list, a DM from the DMs tab; a thread from its channel.
-		mobileBack:
-			isMobile && orgSlug !== null
-				? channel?.type === "thread" && channel.parentChannelId
-					? mobileBackLink(
-							h,
-							hrefOf(AppRoute.ChatChannel({ orgSlug, channelId: channel.parentChannelId })),
-							parentChannel?.name ?? "channel",
-							"-ml-3 -mr-1",
-						)
-					: channel?.type === "direct" || channel?.type === "single"
-						? // A DM leads back to the DMs tab's list.
-							mobileBackLink(h, hrefOf(AppRoute.ChatDms({ orgSlug })), "DMs", "-ml-3 -mr-1")
-						: mobileBackLink(h, hrefOf(AppRoute.ChatIndex({ orgSlug })), "Chats", "-ml-3 -mr-1")
-				: h.empty,
-		pinnedTrigger: pinnedPopoverView(h, pinnedPopover, pins, toPinnedMessage, pinnedActions),
-		notificationsTrigger:
-			channel === null
-				? h.empty
-				: currentMember === undefined
-					? // A thread you do not follow (its access is its parent's): follow it here.
-						channel.type === "thread"
-						? button(
-								h,
-								{ intent: "outline", size: "sm", onPress: Message.ClickedFollowThread() },
-								["Follow thread"],
-							)
-						: h.empty
-					: NotificationControl.view(
-							h,
-							notificationControl,
-							currentMember,
-							channel.type,
-							minuteMs,
-							toNotificationControl,
-						),
-		customerChip:
-			customer === null
-				? null
-				: CustomerCard.chip(h, {
-						customer,
-						isOpen: isCustomerCardOpen,
-						isMobile,
-						toMessage: toCustomerCard,
-					}),
-	})
+const stableInput = (isEqual: (a: Model, b: Model) => boolean) => {
+	const last: { model: Model | null } = { model: null }
+	return (model: Model): Model => {
+		if (last.model !== null && isEqual(last.model, model)) return last.model
+		last.model = model
+		return model
+	}
 }
 
 /** Everything `messageToolbarOverlay` reads from the page. */
@@ -491,17 +127,13 @@ const toolbarInputOf = stableInput(isToolbarInputEqual)
 const lazyToolbar = createLazy()
 
 // The chrome around the list only changes with the channel, not on every scroll frame.
-const lazyHeader = createLazy()
 const lazyTabBar = createLazy()
-const lazyComposer = createLazy()
 const lazyThreadPanel = createLazy()
 
 export interface ViewOptions {
 	readonly isMobile?: boolean
 	/** `Shared.nowMs`, the presence clock the profile popover and the Files dates read. */
 	readonly nowMs?: number
-	/** `Shared.channelLinks`: what the header's channel icon marks. */
-	readonly channelLinks?: ChannelLinksMap
 }
 
 /** `SplitPanelRoot` > `SplitPanelContent` with the channel's current tab inside. */
@@ -528,31 +160,13 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 			h.div(
 				[h.Class(splitContentClassName())],
 				[
-					lazyHeader(headerView, [
-						model.channel,
-						model.parentChannel,
-						model.orgSlug,
-						model.members,
-						model.lookups,
-						model.currentUserId,
-						model.overlays.pinned,
-						model.pinned,
-						model.customer,
-						CustomerCard.isOpenOf(model.customerCard, options.isMobile ?? false),
-						options.isMobile ?? false,
-						options.channelLinks ?? NO_CHANNEL_LINKS_MAP,
-						model.notificationControl,
-						headerClockOf(model, nowMs),
-						h,
-					]) ?? h.empty,
-					customerCardView(h, model, options.isMobile ?? false, nowMs),
+					// The channel header is the shared screen in its hole (`src/root/app.ts`); today's `h-14`
+					// is reserved so the header's first frame, before its data, never moves the list.
+					hole(h, "channel-header", model.channelId, [h.Class("min-h-14 shrink-0")]),
 					lazyTabBar(chatTabBarView, [routeTabOf(model.tab), toSelf, h]) ?? h.empty,
 					...(model.tab._tag === "Files"
-						? [
-								FilesView.view(h, model.tab.files, toFilesMessage, nowMs),
-								FilesView.imageViewerOverlay(h, model.tab.files, toFilesMessage),
-							]
-						: messagesOutlet(h, model, nowMs, options.channelLinks ?? NO_CHANNEL_LINKS_MAP)),
+						? [filesHole(h, model, model.tab.view)]
+						: messagesOutlet(h, model, nowMs)),
 				],
 			),
 			model.threadPanel === null
@@ -581,25 +195,6 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 			htmlRenderFullscreenView(h, model.htmlRender, toHtmlRenderMessage),
 		],
 	)
-}
-
-/** The customer chip's card (desktop) or sheet (phone); nothing while the channel has no customer. */
-const customerCardView = (h: H, model: Model, isMobile: boolean, nowMs: number): Html => {
-	const customer = model.customer
-	if (customer === null) return h.empty
-	const owner =
-		customer.ownerUserId === null
-			? undefined
-			: model.lookups.users.find((user) => user.id === customer.ownerUserId)
-	const context: CustomerCard.CardContext = {
-		customer,
-		ownerName: owner === undefined ? null : `${owner.firstName} ${owner.lastName}`.trim() || owner.email,
-		customerHref: hrefOf(customerRoute(model.orgSlug, customer.accountId)),
-		queueHref: hrefOf(AppRoute.CustomersAttention({ orgSlug: model.orgSlug })),
-		nowMs,
-	}
-	const inputs = { context, model: model.customerCard, toMessage: toCustomerCard }
-	return isMobile ? CustomerCard.sheet(h, inputs) : CustomerCard.card(h, inputs)
 }
 
 /** The thread's starter message as the channel list shows it; null outside the loaded window. */
@@ -667,13 +262,6 @@ const threadPanelOverlay = (
 					toMessage: toIssueControlMessage,
 				})
 			: h.empty,
-		composer: draftView(h, panel.draft, {
-			toMessage: toThreadDraftMessage,
-			replyPreview: replyPreviewOf(
-				{ lookups, currentUserId, messages, threadPanel: panel },
-				panel.draft,
-			),
-			attachmentInfo: attachmentInfoFrom(lookups.attachments),
-		}),
+		composer: hole(h, "thread-composer", panel.threadChannelId),
 	})
 }

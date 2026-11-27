@@ -1,0 +1,19 @@
+{
+	"about": "A round primary small icon button, against button-primary-small-circle.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"size": "small",
+			"label": "Add",
+			"icon": "plus",
+			"iconOnly": true,
+			"circle": true
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "button-primary-small-circle",
+		"target": "button"
+	}
+}

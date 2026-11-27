@@ -1,0 +1,56 @@
+{
+	"about": "A section with its header action: a press, and a menu (section.action with actionMenu).",
+	"root": {
+		"tag": "section",
+		"props": {
+			"title": "Projects"
+		},
+		"children": [
+			{
+				"tag": "action",
+				"props": {
+					"label": "New in Projects"
+				},
+				"events": ["press"],
+				"children": [
+					{
+						"tag": "icon",
+						"props": {
+							"name": "plus"
+						}
+					}
+				]
+			},
+			{
+				"tag": "item",
+				"key": "roadmap",
+				"props": {
+					"title": "roadmap",
+					"href": "#"
+				},
+				"events": ["press"],
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "icon",
+								"props": {
+									"name": "hashtag"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"aria": [
+		{
+			"role": "button",
+			"name": "New in Projects"
+		}
+	],
+	"cases": []
+}

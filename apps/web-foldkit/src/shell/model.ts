@@ -1,10 +1,7 @@
-import { ChannelId, OrganizationId } from "@hazel/schema"
+import { OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
-import * as Menu from "../ui/menu"
-import * as Modal from "../ui/modal"
 import * as ChannelsSidebar from "./channels-sidebar"
-import * as CustomersSidebar from "./customers-sidebar"
 import * as Notifications from "./notifications"
 
 /** The shell around every org page; it lives at the root, so it survives navigation. */
@@ -20,43 +17,12 @@ export const SwitcherOrg = Schema.Struct({
 })
 export type SwitcherOrg = typeof SwitcherOrg.Type
 
-export const ChannelSummary = Schema.Struct({
-	id: ChannelId,
-	name: Schema.String,
-	type: Schema.String,
-	icon: Schema.NullOr(Schema.String),
-})
-export type ChannelSummary = typeof ChannelSummary.Type
-
-/** The current user's custom status (`useCurrentUserStatus`): the user menu shows its emoji. */
-export const UserStatus = Schema.Struct({
-	emoji: Schema.NullOr(Schema.String),
-	message: Schema.NullOr(Schema.String),
-	expiresAtMs: Schema.NullOr(Schema.Finite),
-})
-export type UserStatus = typeof UserStatus.Type
-
 export const Model = Schema.Struct({
 	channelsSidebar: ChannelsSidebar.Model,
-	userMenu: Menu.Model,
-	orgSwitcher: Menu.Model,
-	/**
-	 * The menus' structure, which the views pass to the menus. Kept here (not rebuilt per render) so the
-	 * memoized sidebars see a stable reference; rebuilt where an input changes (`informContext`, the
-	 * user's organizations).
-	 */
-	userMenuEntries: Schema.Array(Menu.Entry),
-	orgSwitcherEntries: Schema.Array(Menu.Entry),
+	/** The user's organizations, for the next and previous organization keys. */
 	userOrganizations: Schema.Array(SwitcherOrg),
-	userStatus: Schema.NullOr(UserStatus),
 	/** Unread notification ids and the optimistic "Mark all as read" state. */
 	notifications: Notifications.Model,
-	/** The Customers sidebar's badge count and saved views. */
-	customersSidebar: CustomersSidebar.Model,
-	/** `channels/$channelId/settings/layout.tsx` header (name and icon). */
-	settingsChannel: Schema.NullOr(ChannelSummary),
-	/** `isOpenOnMobile`: the sidebar sheet opened from the header or the bottom nav. */
-	isSidebarOpen: Schema.Boolean,
 	/** Desktop: the sidebar docked to its nav rail (`sidebar.toggle`, Mod+B). */
 	isSidebarCollapsed: Schema.Boolean,
 })
@@ -66,16 +32,9 @@ export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
 	GotChannelsSidebarMessage: { message: ChannelsSidebar.Message },
-	GotUserMenuMessage: { message: Menu.Message },
-	GotOrgSwitcherMessage: { message: Menu.Message },
 	UpdatedUserOrganizations: { organizations: Schema.Array(SwitcherOrg) },
-	UpdatedUserStatus: { status: Schema.NullOr(UserStatus) },
 	GotNotificationsMessage: { message: Notifications.Message },
-	GotCustomersSidebarMessage: { message: CustomersSidebar.Message },
-	UpdatedSettingsChannel: { channel: Schema.NullOr(ChannelSummary) },
-	ToggledSidebar: { isOpen: Schema.Boolean },
 	/** Desktop: dock the sidebar to its nav rail, or expand it again (Mod+Shift+D). */
 	ToggledSidebarCollapsed: {},
-	GotMobileSidebarMessage: { message: Modal.Message },
 })
 export type Message = typeof Message.Type

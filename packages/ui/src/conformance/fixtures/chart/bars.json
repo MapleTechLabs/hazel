@@ -1,0 +1,182 @@
+{
+	"about": "W2b's full-width small kinds: the evidence bars (`evidenceBars`) with the last week highlighted and the dashed baseline at the prior average (`net`), at each size; and the 100% bar (`distributionBar`) of users by activity.",
+	"root": {
+		"tag": "chart",
+		"props": {
+			"kind": "barSparkline",
+			"label": "API calls by day: down 41% against the prior 23-day average",
+			"series": [
+				{
+					"key": "usage",
+					"label": "API calls",
+					"tone": "churn",
+					"values": [
+						42, 45, 40, 47, 44, 46, 43, 45, 48, 41, 44, 46, 45, 43, 47, 44, 46, 42, 45, 44, 47,
+						43, 46, 45, 31, 28, 24, 27, 22, 25
+					]
+				}
+			],
+			"labels": [
+				"Oct 1",
+				"Oct 2",
+				"Oct 3",
+				"Oct 4",
+				"Oct 5",
+				"Oct 6",
+				"Oct 7",
+				"Oct 8",
+				"Oct 9",
+				"Oct 10",
+				"Oct 11",
+				"Oct 12",
+				"Oct 13",
+				"Oct 14",
+				"Oct 15",
+				"Oct 16",
+				"Oct 17",
+				"Oct 18",
+				"Oct 19",
+				"Oct 20",
+				"Oct 21",
+				"Oct 22",
+				"Oct 23",
+				"Oct 24",
+				"Oct 25",
+				"Oct 26",
+				"Oct 27",
+				"Oct 28",
+				"Oct 29",
+				"Oct 30"
+			],
+			"highlightFrom": 23,
+			"net": true
+		}
+	},
+	"frame": "screen",
+	"aria": [
+		{
+			"role": "img",
+			"name": "API calls by day: down 41% against the prior 23-day average"
+		}
+	],
+	"axes": [
+		{
+			"prop": "size",
+			"values": ["small", "large"]
+		}
+	],
+	"cases": [
+		{
+			"name": "plain",
+			"props": {
+				"highlightFrom": null,
+				"net": null,
+				"series": [
+					{
+						"key": "usage",
+						"label": "API calls",
+						"tone": "series2",
+						"values": [
+							42, 45, 40, 47, 44, 46, 43, 45, 48, 41, 44, 46, 45, 43, 47, 44, 46, 42, 45, 44,
+							47, 43, 46, 45, 31, 28, 24, 27, 22, 25
+						]
+					}
+				]
+			}
+		},
+		{
+			"name": "distribution",
+			"props": {
+				"kind": "distribution",
+				"label": "Users by activity",
+				"series": [
+					{
+						"key": "active",
+						"label": "Active",
+						"tone": "new",
+						"values": [18]
+					},
+					{
+						"key": "dormant",
+						"label": "Dormant",
+						"tone": "contraction",
+						"values": [7]
+					},
+					{
+						"key": "never",
+						"label": "Never active",
+						"tone": "neutral",
+						"values": [3]
+					}
+				],
+				"labels": null,
+				"highlightFrom": null,
+				"net": null
+			}
+		},
+		{
+			"name": "distributionEmpty",
+			"props": {
+				"kind": "distribution",
+				"label": "Users by activity",
+				"series": [
+					{
+						"key": "active",
+						"label": "Active",
+						"tone": "new",
+						"values": [0]
+					},
+					{
+						"key": "dormant",
+						"label": "Dormant",
+						"tone": "contraction",
+						"values": [0]
+					},
+					{
+						"key": "never",
+						"label": "Never active",
+						"tone": "neutral",
+						"values": [0]
+					}
+				],
+				"labels": null,
+				"highlightFrom": null,
+				"net": null
+			}
+		},
+		{
+			"name": "distributionSmall",
+			"props": {
+				"kind": "distribution",
+				"size": "small",
+				"label": "Users by activity",
+				"series": [
+					{
+						"key": "active",
+						"label": "Active",
+						"tone": "new",
+						"values": [18]
+					},
+					{
+						"key": "dormant",
+						"label": "Dormant",
+						"tone": "contraction",
+						"values": [7]
+					},
+					{
+						"key": "never",
+						"label": "Never active",
+						"tone": "neutral",
+						"values": [3]
+					}
+				],
+				"labels": null,
+				"highlightFrom": null,
+				"net": null
+			}
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	}
+}

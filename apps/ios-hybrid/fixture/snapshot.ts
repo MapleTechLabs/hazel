@@ -346,7 +346,7 @@ export const notificationRows: ReadonlyArray<Wire<typeof Notification.Schema>> =
 		resourceType: "message",
 		createdAt: iso(-(n + 1) * 45 * MINUTE),
 		readAt: null,
-		reason: c.type === "single" ? "direct_message" : "mention",
+		reason: c.type === "single" ? "direct" : "mention",
 		silent: false,
 	})),
 )
@@ -354,6 +354,50 @@ export const notificationRows: ReadonlyArray<Wire<typeof Notification.Schema>> =
 // CHANNEL SOURCE ROWS: #general
 
 const mention = (p: Person) => `@[userId:${p.id}]`
+
+/** What each of Ada's notifications points at, by channel number: author and text, newest first. */
+const NOTIFIED = new Map<number, ReadonlyArray<readonly [Person, string]>>([
+	[
+		5,
+		[
+			[katherine, `${mention(ada)} can you look at the new sidebar spacing before Friday?`],
+			[margaret, `Icon set is in Figma, ${mention(ada)} the hashtag one is still too heavy.`],
+			[katherine, `${mention(ada)} the dark mode tokens are ready for review.`],
+		],
+	],
+	[7, [[alan, `${mention(ada)} release candidate 2 is tagged and on staging.`]]],
+	[
+		9,
+		[
+			[grace, "Are you free for a quick call about the roadmap?"],
+			[grace, "Sent the doc over, take a look when you can."],
+		],
+	],
+])
+
+/** The messages Ada's notifications name (`resourceId`), each in its channel's own source. */
+export const notificationMessageRows: ReadonlyArray<Wire<typeof Message.Schema>> = CHANNELS.flatMap((c) =>
+	notificationRows
+		.filter((row) => row.targetedResourceId === c.id)
+		.flatMap((row, n) => {
+			const [author, content] = NOTIFIED.get(c.n)?.[n] ?? [grace, "Ping"]
+			return [
+				{
+					id: Schema.decodeSync(MessageId)(row.resourceId ?? uuid(9, 0x1000 + c.n * 16 + n)),
+					channelId: c.id,
+					conversationId: null,
+					authorId: author.id,
+					content,
+					embeds: null,
+					replyToMessageId: null,
+					threadChannelId: null,
+					createdAt: row.createdAt,
+					updatedAt: null,
+					deletedAt: null,
+				},
+			]
+		}),
+)
 
 interface Extras {
 	readonly reactions?: ReadonlyArray<readonly [Person, string]>
@@ -570,6 +614,13 @@ export const SOURCE_TABLES = {
 		"connect_conversations",
 		"connect_conversation_channels",
 		"connect_participants",
+		"assistant_threads",
+		"assistant_items",
+		"user_groups",
+		"user_group_members",
+		// Unread state (`org-source.ts`); empty here, a page fixture seeds it (`pages/notifications-unreads.ts`).
+		"channel_activity",
+		"channel_read_state",
 	],
 	channel: [
 		"messages",
@@ -579,8 +630,27 @@ export const SOURCE_TABLES = {
 		"chat_sync_message_links",
 		"typing_indicators",
 	],
-	// The native app has no Customers area.
-	customers: [],
+	// The org's Customers area (`customers-source.ts`): empty unless a page fixture seeds it.
+	customers: [
+		"customer_accounts",
+		"customer_signals",
+		"customer_signal_rules",
+		"customer_sla_policies",
+		"customer_notes",
+		"customer_issues",
+		"customer_issue_slas",
+		"customer_channel_links",
+		"customer_chat_participants",
+		"customer_saved_views",
+		"customer_view_layouts",
+		"customer_settings",
+		"customer_metric_definitions",
+		"customer_connections",
+		"customer_feature_flags",
+		"customer_impersonators",
+		"customer_impersonations",
+		"customer_sync_runs",
+	],
 } as const satisfies Record<SyncSourceKind, ReadonlyArray<string>>
 
 /** Tables a source pages (`Begin.windows`): a channel's `messages`. */
@@ -616,6 +686,8 @@ export const snapshotFor = (kind: SyncSourceKind, sourceId: string): FixtureTabl
 						chat_sync_channel_links: chatSyncChannelLinkRows,
 					})
 				: undefined
+		case "customers":
+			return sourceId === orgId ? withEmpty("customers", {}) : undefined
 		case "channel":
 			if (sourceId === general.id)
 				return withEmpty("channel", {
@@ -623,7 +695,13 @@ export const snapshotFor = (kind: SyncSourceKind, sourceId: string): FixtureTabl
 					message_reactions: generalReactionRows,
 					pinned_messages: generalPinnedRows,
 				})
-			return CHANNELS.some((c) => c.id === sourceId) ? withEmpty("channel", {}) : undefined
+			return CHANNELS.some((c) => c.id === sourceId)
+				? withEmpty("channel", {
+						messages: notificationMessageRows.filter((row) => row.channelId === sourceId),
+					})
+				: undefined
+		case "customers":
+			return sourceId === orgId ? withEmpty("customers", {}) : undefined
 	}
 }
 

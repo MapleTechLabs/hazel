@@ -1,0 +1,58 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): a customer's attributes: plain text, a badge, a link.",
+	"root": {
+		"tag": "frame",
+		"children": [
+			{
+				"tag": "property",
+				"props": {
+					"label": "Plan"
+				},
+				"children": [
+					{
+						"tag": "badge",
+						"props": {
+							"label": "Pro",
+							"tone": "accent"
+						}
+					}
+				]
+			},
+			{
+				"tag": "property",
+				"props": {
+					"label": "Domain",
+					"description": "From enrichment"
+				},
+				"children": [
+					{
+						"tag": "link",
+						"props": {
+							"label": "acme.com",
+							"href": "https://acme.com"
+						}
+					}
+				]
+			},
+			{
+				"tag": "property",
+				"props": {
+					"label": "Seats"
+				},
+				"children": [
+					{
+						"tag": "text",
+						"children": ["42"],
+						"props": {
+							"numeric": true
+						}
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"pending": {
+		"ios": "S4"
+	}
+}

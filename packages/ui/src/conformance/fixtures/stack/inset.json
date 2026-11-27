@@ -1,0 +1,42 @@
+{
+	"about": "A page's gutter (`inset` `page`, today's `p-4`) and a page header's (`bar`, `px-4 py-3`), around a header row (`p4-page-gutter`).",
+	"root": {
+		"tag": "stack",
+		"props": {
+			"axis": "horizontal",
+			"align": "center",
+			"density": "compact",
+			"inset": "page"
+		},
+		"children": [
+			{
+				"tag": "text",
+				"children": ["Search files"]
+			},
+			{
+				"tag": "spacer"
+			},
+			{
+				"tag": "text",
+				"props": {
+					"role": "label",
+					"tone": "muted"
+				},
+				"children": ["6 files"]
+			}
+		]
+	},
+	"axes": [
+		{
+			"prop": "inset",
+			"values": ["bar"]
+		},
+		{
+			"prop": "density",
+			"values": ["snug", "cozy"]
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	}
+}

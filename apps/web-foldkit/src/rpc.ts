@@ -1,82 +1,20 @@
+import { HazelRpc, HazelRpcLayer } from "@hazel/client-data"
+import { HttpClientWeb } from "@hazel/client-data/web"
 import { HazelApi } from "@hazel/domain/http"
 import { Context, type Effect, Layer } from "effect"
-import { FetchHttpClient } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
-import { RpcClient, RpcSerialization } from "effect/rpc"
-import {
-	AssistantRpcs,
-	AttachmentRpcs,
-	BotRpcs,
-	ChannelMemberRpcs,
-	ChannelRpcs,
-	ChannelSectionRpcs,
-	ChannelWebhookRpcs,
-	ChatSyncRpcs,
-	ConnectShareRpcs,
-	CustomEmojiRpcs,
-	CustomerChatRpcs,
-	CustomerRpcs,
-	GitHubSubscriptionRpcs,
-	IntegrationRequestRpcs,
-	InvitationRpcs,
-	MessageReactionRpcs,
-	MessageRpcs,
-	NotificationRpcs,
-	OrganizationExportRpcs,
-	OrganizationMemberRpcs,
-	OrganizationRpcs,
-	PinnedMessageRpcs,
-	PushDeviceRpcs,
-	RssSubscriptionRpcs,
-	TypingIndicatorRpcs,
-	UserGroupRpcs,
-	UserPresenceStatusRpcs,
-	UserRpcs,
-} from "@hazel/domain/rpc"
-import { AuthMiddlewareClientLive, RpcCredentialsLive } from "~/lib/rpc-auth-middleware"
 import { CustomFetchLive, withSessionFetch } from "~/lib/services/common/api-client"
 import { HazelAuthClient, HazelAuthClientLive } from "./auth/client"
 import type { NotificationSinks } from "./app/notification-sinks"
 import { MessageWindows, MessageWindowsLive } from "./data/message-windows"
-import { EditorRegistry, EditorRegistryLive } from "./editor/registry"
 import { apiUrl } from "~/config/server"
+import { ClientDataConfigWeb, SessionWeb } from "~/db/platform"
 
-/** Same groups, transport and auth middleware as the legacy `HazelRpcClient`, as a plain Effect service. */
-const AllRpcs = MessageRpcs.merge(
-	NotificationRpcs,
-	IntegrationRequestRpcs,
-	ChannelRpcs,
-	ChannelMemberRpcs,
-	ChannelSectionRpcs,
-	ChannelWebhookRpcs,
-	CustomEmojiRpcs,
-	GitHubSubscriptionRpcs,
-	RssSubscriptionRpcs,
-	OrganizationRpcs,
-	OrganizationMemberRpcs,
-	UserRpcs,
-	MessageReactionRpcs,
-	TypingIndicatorRpcs,
-	PinnedMessageRpcs,
-	AttachmentRpcs,
-	UserPresenceStatusRpcs,
-	BotRpcs,
-	ConnectShareRpcs,
-	InvitationRpcs,
-	OrganizationExportRpcs,
-).merge(ChatSyncRpcs, CustomerRpcs, CustomerChatRpcs, PushDeviceRpcs, AssistantRpcs, UserGroupRpcs)
+export { HazelRpc }
 
-const makeClient = RpcClient.make(AllRpcs, { flatten: true })
-
-export class HazelRpc extends Context.Service<HazelRpc, Effect.Success<typeof makeClient>>()("HazelRpc") {}
-
-const ProtocolLive = RpcClient.layerProtocolHttp({ url: `${apiUrl()}/rpc` }).pipe(
-	Layer.provide(FetchHttpClient.layer.pipe(Layer.provide(RpcCredentialsLive))),
-	Layer.provide(RpcSerialization.layerNdjson),
-)
-
-export const HazelRpcLive = Layer.effect(HazelRpc, makeClient).pipe(
-	Layer.provide(Layer.mergeAll(ProtocolLive, AuthMiddlewareClientLive)),
+/** The RPC client (`@hazel/client-data`) over `fetch`, the session and the chosen server. */
+export const HazelRpcLive = HazelRpcLayer.pipe(
+	Layer.provide(Layer.mergeAll(HttpClientWeb, SessionWeb, ClientDataConfigWeb)),
 )
 
 const makeApiClient = HttpApiClient.make(HazelApi, {
@@ -99,7 +37,6 @@ export type Resources =
 	| HazelApiClient
 	| MessageWindows
 	| HazelAuthClient
-	| EditorRegistry
 	// Provided by `entry.ts`: building the sinks touches audio, which tests importing this module lack.
 	| NotificationSinks
 
@@ -108,5 +45,4 @@ export const ResourcesLive = Layer.mergeAll(
 	HazelApiClientLive,
 	MessageWindowsLive,
 	HazelAuthClientLive,
-	EditorRegistryLive,
 )

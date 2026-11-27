@@ -1,0 +1,16 @@
+{
+	"about": "A docked or phone panel (`surface` `panel`, G5: the assistant): the bar's title is 14/20 semibold and the screen paints no ground, so its host's surface shows through.",
+	"root": {
+		"tag": "screen",
+		"props": { "title": "Summarize #general", "surface": "panel" },
+		"children": [
+			{
+				"tag": "text",
+				"props": { "tone": "muted" },
+				"children": ["Ask about #general"]
+			}
+		]
+	},
+	"aria": [{ "role": "heading", "name": "Summarize #general" }],
+	"pending": { "ios": "S4" }
+}

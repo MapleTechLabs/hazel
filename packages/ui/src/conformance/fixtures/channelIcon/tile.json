@@ -1,0 +1,27 @@
+{
+	"about": "`tile` (G2, `p4-channel-settings-header`): the channel settings header's 40pt secondary tile around the `md` mark; a private channel and an emoji icon.",
+	"root": {
+		"tag": "channelIcon",
+		"props": {
+			"tile": true
+		}
+	},
+	"frame": "inline",
+	"cases": [
+		{
+			"name": "private",
+			"props": {
+				"private": true
+			}
+		},
+		{
+			"name": "emoji",
+			"props": {
+				"emoji": "🚀"
+			}
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	}
+}

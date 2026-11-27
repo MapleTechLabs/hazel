@@ -1,0 +1,22 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"include": ["src/**/*.ts", "scripts/**/*.ts", "*.config.ts"],
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"lib": ["ES2023", "DOM", "DOM.Iterable"],
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": true,
+		"verbatimModuleSyntax": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"types": ["node"],
+		// The parity gallery compiles today's kit (src/gallery/kit.ts) from apps/web-foldkit.
+		"paths": {
+			"~/*": ["../../apps/web-foldkit/src/core/*"],
+			"foldkit": ["../../apps/web-foldkit/node_modules/foldkit/dist/index.d.ts"],
+			"foldkit/html": ["../../apps/web-foldkit/node_modules/foldkit/dist/html/public.d.ts"]
+		}
+	}
+}

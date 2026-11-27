@@ -1,14 +1,10 @@
-import { ChannelId, MessageId, TypingIndicatorId } from "@hazel/schema"
+import { ChannelId, MessageId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
 import * as HtmlRender from "../../../chat/html-render"
 import * as Live from "../../../chat/live-state"
 import * as Unfurl from "../../../chat/unfurl"
-import * as Composer from "../../../composer/composer"
-import * as Draft from "../../../composer/draft"
-import * as EditorCommands from "../../../composer/editor-commands"
-import * as Typing from "../../../composer/typing"
 import * as MessageList from "../../../mount/message-list"
 import { chatMessageOf, imageAttachmentOf, liveEmbeds } from "../../../test/chat-messages"
 import { PageOutMessage } from "../../out-message"
@@ -44,8 +40,6 @@ vi.hoisted(() => {
 
 const overlays = (inner: Overlays.Message) => Message.GotOverlaysMessage({ message: inner })
 const list = (inner: MessageList.Message) => Message.GotListMessage({ message: inner })
-const draft = (inner: Draft.Message) => Message.GotDraftMessage({ message: inner })
-const threadDraft = (inner: Draft.Message) => Message.GotThreadDraftMessage({ message: inner })
 
 const isMessageRow = (row: DisplayRow): row is MessageRow => row._tag === "MessageRow"
 const rowOf = (current: Model, key: string) =>
@@ -172,7 +166,7 @@ describe("message window", () => {
 				MessageList.WaitForScrollSettle,
 				MessageList.Message.CompletedWaitForScrollSettle({ version: 1 }),
 			),
-			message(draft(Draft.Message.SucceededSendMessage())),
+			message(Message.ReceivedComposerNotice({ notice: { _tag: "Sent", channelId } })),
 			model((current) => {
 				expect(current.offset).toBe(0)
 				expect(current.limit).toBe(PAGE_SIZE)
@@ -248,91 +242,6 @@ describe("message window", () => {
 	})
 })
 
-describe("link unfurls", () => {
-	const url = "https://example.com/launch"
-
-	test("a link is fetched once for every message that shows it, then rendered", () => {
-		const first = chatMessageOf(10, { content: `See ${url}` })
-		const second = chatMessageOf(11, { content: `Again ${url}` })
-		story(
-			updateWithShared,
-			given(derived()),
-			message(
-				Message.ChangedMessages({
-					channelId,
-					order: [second.id, first.id, adaMessageId, graceMessageId],
-					upserts: [first, second],
-				}),
-			),
-			Command.expectExact(Unfurl.FetchLinkPreview({ url })),
-			model((current) => {
-				expect(current.unfurls[Unfurl.linkPreviewKey(url)]).toEqual(Unfurl.loading)
-				expect(rowOf(current, first.id)?.urlEmbeds).toEqual([
-					expect.objectContaining({ _tag: "LinkPreview", url, unfurl: Unfurl.loading }),
-				])
-			}),
-			Command.resolve(
-				Unfurl.FetchLinkPreview,
-				Unfurl.Message.SucceededFetchLinkPreview({ url, preview: { title: "Launch" } }),
-			),
-			model((current) => {
-				const unfurl = rowOf(current, first.id)?.urlEmbeds[0]
-				expect(unfurl?._tag === "LinkPreview" && Unfurl.linkPreviewOf(unfurl.unfurl)).toEqual({
-					title: "Launch",
-				})
-				expect(rowOf(current, second.id)?.urlEmbeds).toEqual(rowOf(current, first.id)?.urlEmbeds)
-			}),
-		)
-	})
-
-	test("a failed fetch is remembered and never retried by later updates", () => {
-		const linked = chatMessageOf(10, { content: url })
-		story(
-			updateWithShared,
-			given(derived()),
-			message(
-				Message.ChangedMessages({
-					channelId,
-					order: [linked.id, adaMessageId, graceMessageId],
-					upserts: [linked],
-				}),
-			),
-			Command.resolve(
-				Unfurl.FetchLinkPreview,
-				Unfurl.Message.FailedFetchLinkPreview({ url, reason: "TimedOut" }),
-			),
-			model((current) =>
-				expect(current.unfurls[Unfurl.linkPreviewKey(url)]).toEqual({
-					_tag: "Failure",
-					error: "TimedOut",
-				}),
-			),
-			message(Message.UpdatedReactions({ channelId, reactions: [] })),
-			Command.expectNone(),
-		)
-	})
-
-	test("a tweet link fetches the tweet by id", () => {
-		const tweet = chatMessageOf(10, { content: "https://x.com/hazel/status/1234567890" })
-		story(
-			updateWithShared,
-			given(derived()),
-			message(
-				Message.ChangedMessages({
-					channelId,
-					order: [tweet.id, adaMessageId, graceMessageId],
-					upserts: [tweet],
-				}),
-			),
-			Command.expectExact(Unfurl.FetchTweet({ tweetId: "1234567890" })),
-			Command.resolve(
-				Unfurl.FetchTweet,
-				Unfurl.Message.FailedFetchTweet({ tweetId: "1234567890", reason: "Unavailable" }),
-			),
-		)
-	})
-})
-
 describe("AI reply stream", () => {
 	const ai = chatMessageOf(10, { content: "", embeds: liveEmbeds, hasEmbeds: true })
 	const received = (event: Live.LiveEvent) =>
@@ -386,7 +295,7 @@ describe("threads", () => {
 	const otherThreadId = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-000000005555")
 	const action = (inner: ActionMessage) => Message.GotActionMessage({ message: inner })
 
-	test("a thread preview opens the panel with its own draft; closing drops it", () => {
+	test("a thread preview opens the panel on its thread; closing drops it", () => {
 		story(
 			updateWithShared,
 			given(derived()),
@@ -397,10 +306,8 @@ describe("threads", () => {
 					messageId: graceMessageId,
 					creation: "Created",
 				})
-				expect(current.threadPanel?.draft.channelId).toBe(threadChannelId)
 			}),
 			Command.resolve(LoadThreadPanelWidth, Message.LoadedThreadPanelWidth({ width: 520 })),
-			Command.resolve(EditorCommands.FocusEditor, Composer.Message.CompletedFocusEditor()),
 			model((current) => expect(current.threadPanelWidth).toBe(520)),
 			message(Message.ClickedCloseThread()),
 			model((current) => expect(current.threadPanel).toBeNull()),
@@ -580,35 +487,6 @@ describe("threads", () => {
 			action(ActionMessage.SucceededGenerateThreadName({ threadChannelId })),
 		)
 		expect(lateA.model.threadPanel?.isNaming).toBe(true)
-	})
-
-	const indicatorId = Schema.decodeSync(TypingIndicatorId)("00000000-0000-4000-8000-000000009999")
-	const indicator = { id: indicatorId, channelId: threadChannelId }
-
-	// Legacy `useTyping` deletes the indicator when the panel's composer unmounts.
-	test("closing the thread panel while typing deletes the thread's typing indicator", () => {
-		const opened = updateWithShared(derived(), preview).model
-		const panel = opened.threadPanel!
-		const typing = { ...panel.draft.typing, isTyping: true, sessionId: 1, indicator }
-		story(
-			updateWithShared,
-			given({ ...opened, threadPanel: { ...panel, draft: { ...panel.draft, typing } } }),
-			message(Message.ClickedCloseThread()),
-			Command.expectExact(Typing.DeleteTypingIndicator(indicator)),
-			Command.resolve(Typing.DeleteTypingIndicator, Typing.Message.CompletedDeleteTypingIndicator()),
-			model((current) => expect(current.threadPanel).toBeNull()),
-		)
-	})
-
-	test("thread typing heartbeats go through the thread draft", () => {
-		const opened = updateWithShared(derived(), preview).model
-		story(
-			updateWithShared,
-			given(opened),
-			message(threadDraft(Draft.Message.LeftWindow())),
-			Command.expectNone(),
-			model((current) => expect(current.threadPanel?.draft.typing.isTyping).toBe(false)),
-		)
 	})
 })
 

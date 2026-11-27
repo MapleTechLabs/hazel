@@ -1,0 +1,91 @@
+// Effect UI is a public preview: every API is experimental by design here.
+// @effect-diagnostics experimentalApiUsage:off
+/**
+ * Type-level checks, run by `bun run typecheck`: each `@ts-expect-error` must stay an error. They prove
+ * the closed sets and the closed escape hatches (`attr`, `attrs`, `prop`, `h.el`, text placement).
+ */
+import { MeshBackground } from "../demo/extensions.ts"
+import { actionMenu, type H } from "./Hazel.ts"
+
+export const closed = (h: H<"m">) => [
+	h.item.title("ok").badge(2).selected().href("#/x").leading(h.icon.name("hashtag")).on("press", "m"),
+	h.text.role("caption").tone("muted").strong().children("text goes here"),
+	h.extension(MeshBackground, { colors: ["brand.500"], speed: 1 }).on("Tapped", "m"),
+	// @ts-expect-error raw attributes are closed
+	h.item.attr("class", "p-4"),
+	// @ts-expect-error raw attributes are closed
+	h.item.attrs({ style: "color: red" }),
+	// @ts-expect-error raw props are closed
+	h.item.prop("color", "red"),
+	// @ts-expect-error `h.el` is closed in shared screens
+	h.el("div"),
+	// @ts-expect-error options come from closed sets
+	h.text.tone("purple"),
+	// @ts-expect-error icon names are a closed set
+	h.icon.name("unicorn"),
+	// @ts-expect-error a prop belongs to its tag: `badge` is an item's
+	h.section.badge(3),
+	// @ts-expect-error text goes inside `text`, not in a container
+	h.section.children("loose text"),
+	// @ts-expect-error extension props are typed by its Schema
+	h.extension(MeshBackground, { colors: ["#ff0000"], speed: 1 }),
+	// @ts-expect-error extension events are typed
+	h.extension(MeshBackground, { colors: [], speed: 1 }).on("Pressed", "m"),
+	// @ts-expect-error `press` is an item's and an action's event only
+	h.text.on("press", "m"),
+]
+
+/** C1: every tag's props, slots and events are typed from `spec.ts`. */
+export const contract = (h: H<"m">) => [
+	h.stack.axis("horizontal").density("compact").align("center").children(h.spacer, h.divider),
+	h.button.label("Save").icon("plus").variant("ghost").size("xsmall").iconOnly().on("press", "m"),
+	h.message
+		.row({
+			time: "14:05",
+			body: [[0, ["hi ", [1, "@Ada", "u1"]]]],
+			reactions: [{ emoji: "👍", count: 2, mine: true }],
+		})
+		.grouped()
+		.pinned()
+		.on("action", ({ action }) => (action === "reply" ? "m" : "m")),
+	h.list.anchor("end").stickToBottom().on("reachStart", "m").children(h.listDivider.kind("unread")),
+	h.textField.value({ text: "", rev: 0, edit: 0 }).on("change", ({ rev }) => (rev > 0 ? "m" : "m")),
+	h.menu.entries([{ entries: [{ id: "a", label: "A" }] }]).trigger(h.button.label("Open")),
+	h.section.title("S").action(h.icon.name("plus"), "m", "Add").children(h.item.title("x")),
+	h.section
+		.title("S")
+		.action(
+			h.icon.name("plus"),
+			actionMenu([{ entries: [{ id: "a", label: "A" }] }], () => "m"),
+		)
+		.reorderable()
+		.on("move", ({ before }) => (before === null ? "m" : "m")),
+	h.item.title("x").muted().nested("last").shortcut("⌘K"),
+	h.avatar.size("large").mark("slack").on("press", "m"),
+	h.list
+		.loading()
+		.overlay(h.text.children("2 new"))
+		.on("move", () => "m"),
+	h.progress.value(0.4),
+	h.emptyState.title("Nothing here").illustration("squirrel").action(h.button.label("Join")),
+	h.emojiPicker.open().on("select", ({ emoji }) => (emoji === "" ? "m" : "m")),
+	h.composer.on("key", ({ key }) => (key === "up" ? "m" : "m")).on("files", () => "m"),
+	h.popover.anchorTo({ key: "m1", run: 2 }),
+	h.textField.required().monospace(),
+	// @ts-expect-error a leaf takes no children
+	h.button.children(h.text.children("label")),
+	// @ts-expect-error options come from closed sets
+	h.stack.density("dense"),
+	// @ts-expect-error button variants are closed
+	h.button.variant("link"),
+	// @ts-expect-error structured props are typed: a reaction is [emoji, count, mine]
+	h.reactionBar.reactions([["👍", "2", 1]]),
+	// @ts-expect-error message actions are a closed set
+	h.message.on("action", ({ action }) => (action === "explode" ? "m" : "m")),
+	// @ts-expect-error slots belong to their tag
+	h.button.leading(h.icon.name("plus")),
+	// @ts-expect-error internal tags are not named in a screen
+	h.slot,
+	// @ts-expect-error a controlled value is the revision State, not a string
+	h.textField.value("text"),
+]

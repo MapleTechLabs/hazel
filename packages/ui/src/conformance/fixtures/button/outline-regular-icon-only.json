@@ -1,0 +1,24 @@
+{
+	"about": "A square outline regular icon button named by its label, against button-outline-regular-icon-only.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "outline",
+			"label": "Add",
+			"icon": "plus",
+			"iconOnly": true
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Add"
+		}
+	],
+	"kit": {
+		"specimen": "button-outline-regular-icon-only",
+		"target": "button"
+	}
+}

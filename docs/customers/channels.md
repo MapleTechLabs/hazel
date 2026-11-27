@@ -84,7 +84,7 @@ card (200 ms grace), and a click pins it until Escape or a click outside. On a p
 the same card in a bottom sheet. The card: logo, name (to the customer page), stage, revenue and
 plan, owner, seats, last active, open signals (count, top 3, "N more", the queue), then the customer page and provider links. The
 card takes a `support` slot between the signals and the links for support issues and SLAs
-(later sessions). Gallery: `customer-card.gallery.ts`.
+(later sessions).
 
 ## Client
 

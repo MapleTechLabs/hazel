@@ -1,0 +1,23 @@
+{
+	"about": "The message list's empty state: the masked squirrel at half opacity over its bold mono line, diffed against today's `emptyStateView`.",
+	"root": {
+		"tag": "emptyState",
+		"props": {
+			"title": "Quiet as an ocean gazing squirrel...",
+			"illustration": "squirrel"
+		}
+	},
+	"aria": [
+		{
+			"role": "img",
+			"name": "A squirrel gazing at the ocean"
+		}
+	],
+	"kit": {
+		"specimen": "empty-channel",
+		"target": "frame"
+	},
+	"pending": {
+		"ios": "S1"
+	}
+}

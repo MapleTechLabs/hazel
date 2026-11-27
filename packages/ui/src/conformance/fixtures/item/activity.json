@@ -1,0 +1,70 @@
+{
+	"about": "Today's activity row (`notificationItem`): the unread dot, a 40pt avatar, a two-line title with its time, the context, and \"Mark as read\" in `actions`.",
+	"root": {
+		"tag": "item",
+		"key": "n1",
+		"props": {
+			"title": "@Ada Lovelace can you look at the new sidebar spacing before Friday?",
+			"titleLines": "2",
+			"subtitle": "New message in #design",
+			"unread": "dot",
+			"emphasized": true,
+			"leadingSize": "large",
+			"href": "#"
+		},
+		"events": ["press"],
+		"slots": [
+			{
+				"name": "leading",
+				"children": [
+					{
+						"tag": "avatar",
+						"props": {
+							"size": "medium"
+						}
+					}
+				]
+			},
+			{
+				"name": "trailing",
+				"children": [
+					{
+						"tag": "text",
+						"props": {
+							"role": "caption",
+							"tone": "muted"
+						},
+						"children": ["20 days ago"]
+					}
+				]
+			},
+			{
+				"name": "actions",
+				"children": [
+					{
+						"tag": "button",
+						"props": {
+							"label": "Mark as read: New message in #design",
+							"icon": "check",
+							"variant": "ghost",
+							"size": "xsmall",
+							"iconOnly": true
+						},
+						"events": ["press"]
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Mark as read: New message in #design"
+		}
+	],
+	"kit": {
+		"specimen": "item-activity",
+		"target": "item"
+	}
+}

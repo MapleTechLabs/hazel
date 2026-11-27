@@ -12,26 +12,25 @@ import { Message } from "./message"
 import {
 	ALL_VIEW_KEY,
 	bestFilterToRemove,
-	countriesOf,
-	fundingStagesOf,
-	industriesOf,
 	isEdited,
-	matchesFilters,
 	type Model,
-	moveColumn,
-	nextSort,
 	orderedTabsOf,
 	ownerEntries,
-	sortLabel,
-	toggleColumn,
 	type ViewRow,
 	viewMenuEntries,
 	viewTabsOf,
 	visibleAccounts,
 } from "./model"
-import { chipOf } from "./controls"
+import { moveColumn, nextSort, sortLabel, toggleColumn } from "@hazel/shared-screens/customers/list/columns"
+import {
+	chipOf,
+	countriesOf,
+	fundingStagesOf,
+	industriesOf,
+	matchesFilters,
+} from "@hazel/shared-screens/customers/list/filters"
 import { listKeyOf } from "./subscription"
-import { toCsv } from "./table"
+import { toCsv } from "./csv"
 import { init, routeChanged, update, viewerOf } from "./update"
 
 // `ui/aria/*` names `document` when its modules load; the update loop never touches it.
@@ -225,13 +224,10 @@ describe("customers list: filters and views", () => {
 		expect(matches({ search: "north" })).toEqual(["Northwind Labs"])
 	})
 
-	test("the filter builder applies its pending filters; a chip removes one field", () => {
+	test("the controls' builder applies its filters; a chip removes one field", () => {
 		const applied = run(loaded(), [
-			Message.PressedEditFilter({ field: "plan" }),
-			Message.ChangedPendingFilters({ filters: { planNames: ["Scale"], lifecycleStages: ["active"] } }),
-			Message.AppliedFilter(),
+			Message.AppliedFilters({ filters: { planNames: ["Scale"], lifecycleStages: ["active"] } }),
 		])
-		expect(applied.builder).toBeNull()
 		expect(names(applied)).toEqual(["Acme Robotics", "Northwind Labs"])
 		expect(isEdited(applied)).toBe(true)
 		const cleared = run(applied, [Message.ClearedFilter({ field: "plan" })])
@@ -570,14 +566,8 @@ describe("customers list: selection and bulk actions", () => {
 	test("a search or filter keeps only the selected rows it still shows", () => {
 		const selected = run(loaded(), [Message.ToggledAllRows({ isSelected: true })])
 		expect(run(selected, [Message.ChangedSearch({ value: "acme" })]).selected).toEqual([acme.id])
-		const scale = run(selected, [Message.ChangedPendingFilters({ filters: { planNames: ["Scale"] } })])
-		expect(scale.selected).toHaveLength(4)
 		expect(
-			run(selected, [
-				Message.PressedEditFilter({ field: "plan" }),
-				Message.ChangedPendingFilters({ filters: { planNames: ["Scale"] } }),
-				Message.AppliedFilter(),
-			]).selected,
+			run(selected, [Message.AppliedFilters({ filters: { planNames: ["Scale"] } })]).selected,
 		).toEqual([acme.id, northwind.id])
 		// A sort shows the same rows.
 		expect(run(selected, [Message.ClickedSortHeader({ column: "mrr" })]).selected).toHaveLength(4)
@@ -724,8 +714,13 @@ describe("customers list: company columns and filters", () => {
 	test("the columns are opt-in: none is in the default columns", () => {
 		expect(model.draft.columns).not.toContain("industry")
 		const shown = run(model, [
-			Message.ToggledColumn({ column: "industry", isShown: true }),
-			Message.ToggledColumn({ column: "company_size", isShown: true }),
+			Message.ChangedColumns({
+				columns: toggleColumn(
+					toggleColumn(model.draft.columns, "industry", true),
+					"company_size",
+					true,
+				),
+			}),
 		])
 		expect(shown.draft.columns.slice(-2)).toEqual(["industry", "company_size"])
 		expect(isEdited(shown)).toBe(true)
@@ -760,11 +755,7 @@ describe("customers list: company columns and filters", () => {
 		expect(fundingStagesOf(enriched)).toEqual(["seed", "series_a", "series_b"])
 		// A saved pick no account has any more stays on offer, so it can be unpicked.
 		expect(industriesOf(enriched, ["Retail"])).toEqual(["Manufacturing", "Retail", "Technology"])
-		const applied = run(model, [
-			Message.PressedEditFilter({ field: "company_size" }),
-			Message.ChangedPendingFilters({ filters: { employeeRanges: ["1001-5000"] } }),
-			Message.AppliedFilter(),
-		])
+		const applied = run(model, [Message.AppliedFilters({ filters: { employeeRanges: ["1001-5000"] } })])
 		expect(names(applied)).toEqual(["Kestrel Systems"])
 		expect(chipOf("company_size", applied.draft.filters, [], "USD")).toEqual({
 			field: "Company size",

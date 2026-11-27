@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { STRONG_SUGGESTION, SUGGESTION_CHANNELS } from "../lab/fixtures/customers-suggestions"
+import { STRONG_SUGGESTION, SUGGESTION_CHANNELS } from "../test/fixtures/customers-suggestions"
 import { organizationId } from "../test/pages-fixtures"
 import { Message, type Model, request, shownSuggestion, update } from "./suggestion-prompt"
 import { SuggestionMessage } from "./suggestions"

@@ -1,0 +1,58 @@
+{
+	"about": "The stack's phase 4 densities on a grid (G2): `none`, `snug` (12px) and `loose` (20px) gaps between cards.",
+	"root": {
+		"tag": "grid",
+		"props": {
+			"columns": "2",
+			"density": "none"
+		},
+		"children": [
+			{
+				"tag": "frame",
+				"children": [
+					{
+						"tag": "text",
+						"children": ["MRR"]
+					}
+				]
+			},
+			{
+				"tag": "frame",
+				"children": [
+					{
+						"tag": "text",
+						"children": ["Accounts"]
+					}
+				]
+			},
+			{
+				"tag": "frame",
+				"children": [
+					{
+						"tag": "text",
+						"children": ["Churn"]
+					}
+				]
+			},
+			{
+				"tag": "frame",
+				"children": [
+					{
+						"tag": "text",
+						"children": ["Trials"]
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen",
+	"axes": [
+		{
+			"prop": "density",
+			"values": ["cozy", "loose"]
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	}
+}

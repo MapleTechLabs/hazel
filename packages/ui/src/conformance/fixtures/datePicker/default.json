@@ -1,0 +1,55 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): a snooze date, quiet hours as a time, and a date and time.",
+	"root": {
+		"tag": "datePicker",
+		"props": {
+			"label": "Snooze until",
+			"value": "2026-11-30",
+			"min": "2026-11-26",
+			"clearable": true
+		},
+		"events": ["change"]
+	},
+	"frame": "sidebar",
+	"cases": [
+		{
+			"name": "empty",
+			"props": {
+				"value": null,
+				"placeholder": "Pick a date",
+				"description": "We remind you that morning."
+			}
+		},
+		{
+			"name": "error",
+			"props": {
+				"error": "Pick a later date"
+			}
+		},
+		{
+			"name": "disabled",
+			"props": {
+				"disabled": true
+			}
+		},
+		{
+			"name": "time",
+			"props": {
+				"label": "Quiet hours start",
+				"granularity": "time",
+				"value": "22:00",
+				"min": null,
+				"clearable": null
+			}
+		},
+		{
+			"name": "dateTime",
+			"props": {
+				"granularity": "dateTime",
+				"value": "2026-11-30T09:00",
+				"max": "2026-12-31"
+			}
+		}
+	],
+	"aria": [{ "role": "group" }, { "role": "spinbutton" }]
+}

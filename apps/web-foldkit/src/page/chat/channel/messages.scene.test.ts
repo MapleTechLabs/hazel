@@ -3,232 +3,52 @@ import { ChannelId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
-import * as Composer from "../../../composer/composer"
-import * as EditorCommands from "../../../composer/editor-commands"
 import {
 	channelScene,
 	derivedModel,
-	composer,
+	listRequest,
 	mountedChannel,
-	mountedToolbar,
 	overlays,
-	draft,
 } from "../../../test/chat-fixtures"
 import * as Menu from "../../../ui/menu"
-import { inertHtml } from "foldkit/html"
-import {
-	IconCopy,
-	IconEdit,
-	IconEmojiAdd,
-	IconHashtag,
-	IconReply,
-	IconStar,
-	IconThread,
-	IconTrash,
-} from "../../../icons"
-import { iconOf } from "../../../platform/native-island"
-import * as Draft from "../../../composer/draft"
-import { DragState, DropEvent, TrackFileDrop } from "../../../composer/drop"
-import { MountEditor } from "../../../composer/composer"
-import { AwaitJumpTarget, HighlightMessage } from "./jump"
 import { Message } from "./model"
-import * as Popover from "../../../ui/popover"
 import { LoadThreadPanelWidth } from "./thread-width"
-import * as Picker from "../../../emoji-picker/picker"
-import * as EmojiDialog from "../../../emoji-picker/dialog"
-import { PopoverEvent, popoverId } from "../../../picker-popover/popover"
-import type { EmojiData } from "../../../emoji-picker/data"
+import { RequestComposer } from "./write"
 import * as Overlays from "../overlays"
-import { TOP_EMOJIS, TrackMessageHover } from "../../../chat/message/toolbar"
+import { TrackMessageHover } from "../../../chat/message/toolbar"
 import { imageAttachmentOf } from "../../../test/chat-messages"
 import { PageOutMessage } from "../../out-message"
-import {
-	ActionMessage,
-	CreateThread,
-	DownloadImage,
-	GenerateThreadChannelId,
-	JoinChannel,
-	PressEmbedAction,
-	ToggleReaction,
-} from "../message-actions"
+import { ActionMessage, CreateThread, DownloadImage, GenerateThreadChannelId } from "../message-actions"
 import {
 	ada,
 	adaMessageId,
 	channelId,
-	grace,
 	graceMessageId,
 	loadedModel,
 	updateWithShared,
 } from "./fixtures.test-support"
 
-/** The channel page through its view: reading, the hover toolbar's actions and the composer indicators. */
+/**
+ * The channel page through its view. The shell renders the shared message list in the page's hole;
+ * its row requests reach the page through `listRequests`, and the page shows the rest.
+ */
 
-const editorId = `composer-${channelId}`
 const threadChannelId = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-000000004444")
 
 describe("reading", () => {
-	test("the loaded messages render in the list", () => {
+	test("the shared message list's hole is where the Foldkit list was", () => {
 		Scene.scene(
 			channelScene,
 			Scene.given(derivedModel()),
 			mountedChannel(),
-			Scene.expect(Scene.text("Shipped the onboarding copy")).toExist(),
-			Scene.expect(Scene.text("Launch window confirmed")).toExist(),
-			Scene.expect(Scene.text("Loading messages")).toBeAbsent(),
-		)
-	})
-
-	// The messages carry no author: the header comes with the users lookup, in either order.
-	test("each message's header shows its author once the users lookup has them", () => {
-		const users = [
-			{
-				id: ada,
-				firstName: "Ada",
-				lastName: "Lovelace",
-				email: "ada@hazel.sh",
-				avatarUrl: null,
-				userType: "user",
-				timezone: null,
-			},
-		]
-		const base = loadedModel()
-		Scene.scene(
-			channelScene,
-			Scene.given(derivedModel({ ...base, lookups: { ...base.lookups, users } })),
-			mountedChannel(),
-			Scene.expect(Scene.text("Ada Lovelace")).toExist(),
-			Scene.expect(Scene.text("Shipped the onboarding copy")).toExist(),
-		)
-	})
-
-	// Ada's message replies to Grace's: the quote above it names Grace and her first line.
-	const replying = () => {
-		const base = loadedModel()
-		const user = (id: typeof ada, firstName: string, lastName: string) => ({
-			id,
-			firstName,
-			lastName,
-			email: `${firstName.toLowerCase()}@hazel.sh`,
-			avatarUrl: null,
-			userType: "user",
-			timezone: null,
-		})
-		const [adaMessage, graceMessage] = base.messages
-		return derivedModel({
-			...base,
-			messages: [{ ...adaMessage!, replyToMessageId: graceMessageId }, graceMessage!],
-			lookups: {
-				...base.lookups,
-				users: [user(ada, "Ada", "Lovelace"), user(grace, "Grace", "Hopper")],
-				replyTargets: [{ id: graceMessageId, authorId: grace, content: graceMessage!.content }],
-			},
-		})
-	}
-
-	test("a reply's quoted text jumps to the message it quotes", () => {
-		Scene.scene(
-			channelScene,
-			Scene.given(replying()),
-			mountedChannel(),
-			Scene.click(Scene.role("button", { name: "Jump to message" })),
-			Scene.Command.expectExact(AwaitJumpTarget({ messageId: graceMessageId })),
-			Scene.Command.resolve(AwaitJumpTarget, Message.RenderedJumpTarget({ messageId: graceMessageId })),
-			Scene.Command.resolve(HighlightMessage, Message.CompletedHighlightMessage()),
-		)
-	})
-
-	test("a reply's quoted author is their profile's trigger, apart from the jump", () => {
-		Scene.scene(
-			channelScene,
-			Scene.given(replying()),
-			mountedChannel(),
-			// The avatar's initial, then the name.
-			Scene.expect(
-				Scene.selector(`[id="${Popover.triggerId(Overlays.replyAuthorPopoverKey(adaMessageId))}"]`),
-			).toHaveText("GGrace Hopper"),
-			Scene.expect(Scene.role("button", { name: "Jump to message" })).toHaveText(
-				"Launch window confirmed",
-			),
-		)
-	})
-
-	test("before its first snapshot the list says it is loading, and shows no messages", () => {
-		Scene.scene(
-			channelScene,
-			Scene.given({ ...loadedModel(), hasLoadedMessages: false, messages: [], rows: [] }),
-			Scene.Mount.resolveAll(
-				// The header's notification bell.
-				[{ name: "FocusTriggerOnPress" }, Menu.Message.CompletedFocusTriggerOnPress()],
-				[
-					{ name: "MountEditor" },
-					composer(Composer.Message.UpdatedDraft({ markdown: "", isEmpty: true })),
-				],
-				[
-					{ name: "TrackFileDrop" },
-					draft(
-						Draft.Message.ReceivedDropEvent({
-							event: DropEvent.ChangedDragState({ drag: DragState.Idle() }),
-						}),
-					),
-				],
-			),
-			Scene.expect(Scene.text("Loading messages")).toExist(),
+			Scene.expect(Scene.selector('[data-hazel-hole="message-list"]')).toExist(),
 			Scene.expect(Scene.text("Shipped the onboarding copy")).toBeAbsent(),
 		)
 	})
 })
 
-describe("bot buttons", () => {
-	test("a button on a bot's message tells the bot; a stale one says so", () => {
-		const base = loadedModel()
-		const withButtons = {
-			...base,
-			messages: base.messages.map((message) =>
-				message.id === graceMessageId
-					? {
-							...message,
-							hasEmbeds: true,
-							embeds: [
-								{
-									description: "Restart checkout?",
-									actions: [
-										{ id: "approve:call_1", label: "Approve", style: "primary" as const },
-										{ id: "deny:call_1", label: "Deny", disabled: true },
-									],
-								},
-							],
-						}
-					: message,
-			),
-		}
-		Scene.scene(
-			channelScene,
-			Scene.given(derivedModel(withButtons)),
-			mountedChannel(),
-			Scene.expect(Scene.role("button", { name: "Deny" })).toBeDisabled(),
-			Scene.click(Scene.role("button", { name: "Approve" })),
-			Scene.Command.expectExact(
-				PressEmbedAction({ channelId, messageId: graceMessageId, actionId: "approve:call_1" }),
-			),
-			Scene.Command.resolve(
-				PressEmbedAction,
-				ActionMessage.FailedPressEmbedAction({ reason: "ActionUnavailable" }),
-			),
-			Scene.expectOutMessage(
-				PageOutMessage.RequestedToast({
-					toast: {
-						intent: "error",
-						title: "That button no longer works",
-						description: "The app may have already handled it.",
-					},
-				}),
-			),
-		)
-	})
-})
-
 describe("join banner", () => {
-	test("a non-member's Join #channel joins the channel", () => {
+	test("a non-member's channel leaves the shared join banner its hole", () => {
 		const base = loadedModel()
 		Scene.scene(
 			channelScene,
@@ -236,123 +56,55 @@ describe("join banner", () => {
 				...base,
 				members: base.members?.filter((member) => member.userId !== ada) ?? null,
 			}),
-			Scene.click(Scene.role("button", { name: "Join #general" })),
-			Scene.Command.expectExact(JoinChannel({ channelId, userId: ada })),
-			Scene.Command.resolve(JoinChannel, ActionMessage.SucceededJoinChannel()),
+			Scene.expect(Scene.selector('[data-hazel-hole="join-banner"]')).toExist(),
+			Scene.expect(Scene.selector('[data-hazel-hole="message-list"]')).toBeAbsent(),
 		)
 	})
 })
 
-describe("hover toolbar", () => {
-	test("react: the quick reaction toggles it", () => {
-		Scene.scene(
-			channelScene,
-			Scene.given(derivedModel()),
-			mountedChannel(graceMessageId),
-			mountedToolbar,
-			Scene.click(Scene.role("button", { name: "React with 👍" })),
-			Scene.Command.expectExact(
-				ToggleReaction({ messageId: graceMessageId, channelId, emoji: "👍", userId: ada }),
-			),
-			Scene.Command.resolve(ToggleReaction, ActionMessage.SucceededToggleReaction()),
-		)
-	})
+describe("row actions", () => {
+	const action = (messageId: typeof adaMessageId, value: "reply" | "edit" | "delete", content: string) =>
+		listRequest({ _tag: "Action", messageId, action: value, content })
 
-	// The contract with the iOS host's `context_menu.rs`: `items` as a `menu` island's, `quick` above.
-	test("a long press on a message opens its context menu natively, words, icons and quick reactions", () => {
-		// Each item also carries the icon the web's own item draws.
-		const icons = {
-			"add-reaction": IconEmojiAdd,
-			reply: IconReply,
-			edit: IconEdit,
-			thread: IconThread,
-			copy: IconCopy,
-			pin: IconStar,
-			delete: IconTrash,
-			"copy-id": IconHashtag,
-		} satisfies Record<string, typeof IconCopy>
-		const item = (key: keyof typeof icons, label: string, symbol: string) => ({
-			key,
-			label,
-			symbol,
-			icon: iconOf([icons[key](inertHtml, { attributes: { "data-slot": "icon" } })]),
-		})
-		const separator = { separator: true }
-		const props = (own: boolean) =>
-			JSON.stringify({
-				items: [
-					item("add-reaction", "Add reaction", "face.smiling"),
-					separator,
-					item("reply", "Reply", "arrowshape.turn.up.left"),
-					...(own ? [item("edit", "Edit message", "pencil")] : []),
-					item("thread", "Reply in thread", "bubble.left.and.bubble.right"),
-					separator,
-					item("copy", "Copy text", "doc.on.doc"),
-					item("pin", "Pin message", "pin"),
-					separator,
-					...(own ? [{ ...item("delete", "Delete message", "trash"), destructive: true }] : []),
-					item("copy-id", "Copy message ID", "number"),
-				],
-				quick: { choices: TOP_EMOJIS, prefix: Overlays.NATIVE_REACTION },
-			})
-		// Ada's own message, then Grace's: the island wraps each row.
-		const rows = Scene.all.selector('[data-native="context-menu"]')
-		const withProps = (own: boolean) => Scene.all.selector(`[data-native-props='${props(own)}']`)
+	// The fixture has no users loaded, so the author's name is empty here.
+	test("reply: asks the channel's composer (a shared screen) to reply to the message", () => {
 		Scene.scene(
 			channelScene,
 			Scene.given(derivedModel()),
 			mountedChannel(),
-			Scene.expectAll(rows).toHaveCount(2),
-			Scene.expectAll(withProps(true)).toHaveCount(1),
-			Scene.expectAll(withProps(false)).toHaveCount(1),
-			Scene.expect(Scene.selector('[data-native="context-menu"]')).toHaveHandler("change"),
-		)
-	})
-
-	test("another user's message offers neither Edit nor Delete", () => {
-		Scene.scene(
-			channelScene,
-			Scene.given(derivedModel()),
-			mountedChannel(graceMessageId),
-			mountedToolbar,
-			Scene.expect(Scene.role("button", { name: "Reply" })).toExist(),
-			Scene.expect(Scene.role("button", { name: "Edit message" })).toBeAbsent(),
-			Scene.expect(Scene.role("button", { name: "Delete message" })).toBeAbsent(),
-		)
-	})
-
-	test("reply: the composer shows who is being replied to, and Cancel reply drops it", () => {
-		Scene.scene(
-			channelScene,
-			Scene.given(derivedModel()),
-			mountedChannel(graceMessageId),
-			mountedToolbar,
-			Scene.click(Scene.role("button", { name: "Reply" })),
-			Scene.expect(Scene.text("Replying to")).toExist(),
-			Scene.click(Scene.role("button", { name: "Cancel reply" })),
-			Scene.expect(Scene.text("Replying to")).toBeAbsent(),
-		)
-	})
-
-	test("edit: the message loads into the editor under an Editing indicator", () => {
-		Scene.scene(
-			channelScene,
-			Scene.given(derivedModel()),
-			mountedChannel(adaMessageId),
-			mountedToolbar,
-			Scene.click(Scene.role("button", { name: "Edit message" })),
-			Scene.expect(Scene.text("Editing message")).toExist(),
+			...action(graceMessageId, "reply", "Launch window confirmed"),
 			Scene.Command.expectExact(
-				EditorCommands.SetEditorContent({ editorId, markdown: "Shipped the onboarding copy" }),
+				RequestComposer({
+					channelId,
+					request: {
+						_tag: "Reply",
+						messageId: graceMessageId,
+						author: "",
+						text: "Launch window confirmed",
+					},
+				}),
 			),
-			Scene.Command.resolve(
-				EditorCommands.SetEditorContent,
-				Composer.Message.CompletedSetEditorContent(),
+			Scene.Command.resolve(RequestComposer, Message.CompletedRequestComposer()),
+		)
+	})
+
+	test("edit: asks the channel's composer to edit the message with its text", () => {
+		Scene.scene(
+			channelScene,
+			Scene.given(derivedModel()),
+			mountedChannel(),
+			...action(adaMessageId, "edit", "Shipped the onboarding copy"),
+			Scene.Command.expectExact(
+				RequestComposer({
+					channelId,
+					request: {
+						_tag: "Edit",
+						messageId: adaMessageId,
+						content: "Shipped the onboarding copy",
+					},
+				}),
 			),
-			Scene.click(Scene.role("button", { name: "Cancel editing" })),
-			Scene.Command.expectExact(EditorCommands.ClearEditor({ editorId })),
-			Scene.Command.resolve(EditorCommands.ClearEditor, Composer.Message.CompletedClearEditor()),
-			Scene.expect(Scene.text("Editing message")).toBeAbsent(),
+			Scene.Command.resolve(RequestComposer, Message.CompletedRequestComposer()),
 		)
 	})
 
@@ -360,9 +112,8 @@ describe("hover toolbar", () => {
 		Scene.scene(
 			channelScene,
 			Scene.given(derivedModel()),
-			mountedChannel(adaMessageId),
-			mountedToolbar,
-			Scene.click(Scene.role("button", { name: "Delete message" })),
+			mountedChannel(),
+			...action(adaMessageId, "delete", "Shipped the onboarding copy"),
 			Scene.Command.expectNone(),
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedModal({ modal: { _tag: "DeleteMessage", messageId: adaMessageId } }),
@@ -372,19 +123,33 @@ describe("hover toolbar", () => {
 })
 
 describe("threads", () => {
-	const threadEditorId = `thread-composer-${threadChannelId}`
-	const threadDraft = (message: Draft.Message) => Message.GotThreadDraftMessage({ message })
+	/** The open panel's reply hover tracker (the pointer is not on a reply); its composer is a hole. */
+	const panelMounted = Scene.Mount.resolveAll([
+		{ name: "TrackMessageHover" },
+		overlays(Overlays.Message.PointerLeftList()),
+	])
+
+	test("an existing thread's preview opens the panel on it, with no thread to create", () => {
+		Scene.scene(
+			channelScene,
+			Scene.given(derivedModel()),
+			mountedChannel(),
+			...listRequest({ _tag: "OpenThread", messageId: graceMessageId, threadChannelId }),
+			Scene.expect(Scene.role("heading", { name: "Thread" })).toExist(),
+			Scene.expect(Scene.text("Creating thread...")).toBeAbsent(),
+			Scene.Command.resolve(LoadThreadPanelWidth, Message.LoadedThreadPanelWidth({ width: null })),
+			panelMounted,
+			Scene.Command.expectNone(),
+		)
+	})
 
 	test("Reply in thread opens the panel while the thread is created, then its composer; Close thread drops it", () => {
 		Scene.scene(
 			channelScene,
 			Scene.given(derivedModel()),
-			mountedChannel(graceMessageId),
-			mountedToolbar,
-			Scene.pointerDown(Scene.role("button", { name: "More actions" })),
-			Scene.Mount.resolve({ name: "PortalMenu" }, Menu.Message.CompletedPortalMenu()),
-			Scene.click(Scene.role("menuitem", { name: "Reply in thread" })),
-			Scene.Mount.expectEnded({ name: "PortalMenu" }),
+			mountedChannel(),
+			// A message without a thread yet: the page creates it.
+			...listRequest({ _tag: "OpenThread", messageId: graceMessageId, threadChannelId: null }),
 			Scene.Command.expectExact(GenerateThreadChannelId({ messageId: graceMessageId })),
 			Scene.Command.resolve(
 				GenerateThreadChannelId,
@@ -396,48 +161,13 @@ describe("threads", () => {
 			Scene.expect(Scene.role("heading", { name: "Thread" })).toExist(),
 			Scene.expect(Scene.text("Creating thread...")).toExist(),
 			Scene.Command.resolve(LoadThreadPanelWidth, Message.LoadedThreadPanelWidth({ width: null })),
-			Scene.Command.resolve(EditorCommands.FocusEditor, Composer.Message.CompletedFocusEditor()),
 			// The composer is there while the thread is created: typing never waits on it.
-			Scene.Mount.resolveAll(
-				[
-					MountEditor({
-						editorId: threadEditorId,
-						placeholder: "Reply in thread...",
-						initialMarkdown: "",
-					}),
-					threadDraft(
-						Draft.Message.GotComposerMessage({
-							message: Composer.Message.UpdatedDraft({ markdown: "", isEmpty: true }),
-						}),
-					),
-				],
-				[
-					{ name: "TrackFileDrop" },
-					threadDraft(
-						Draft.Message.ReceivedDropEvent({
-							event: DropEvent.ChangedDragState({ drag: DragState.Idle() }),
-						}),
-					),
-				],
-				// The panel's replies track hover like the list's: the pointer is still on the message.
-				[
-					{ name: "TrackMessageHover" },
-					overlays(Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId })),
-				],
-			),
+			panelMounted,
 			Scene.Command.resolve(CreateThread, ActionMessage.SucceededCreateThread({ threadChannelId })),
 			Scene.expect(Scene.text("Creating thread...")).toBeAbsent(),
 			Scene.click(Scene.role("button", { name: "Close thread" })),
 			Scene.expect(Scene.role("heading", { name: "Thread" })).toBeAbsent(),
-			Scene.Mount.expectEnded(
-				MountEditor({
-					editorId: threadEditorId,
-					placeholder: "Reply in thread...",
-					initialMarkdown: "",
-				}),
-				TrackFileDrop,
-				TrackMessageHover,
-			),
+			Scene.Mount.expectEnded(TrackMessageHover),
 		)
 	})
 })
@@ -451,6 +181,14 @@ describe("image viewer", () => {
 				attachments: [imageAttachmentOf(1, graceMessageId), imageAttachmentOf(2, graceMessageId)],
 			}),
 		).model
+	const openImage = (index: number) =>
+		listRequest({
+			_tag: "OpenAttachment",
+			messageId: graceMessageId,
+			attachmentId: `attachment-${index + 1}`,
+			url: `https://cdn.hazel.sh/photo-${index + 1}.png`,
+			index,
+		})
 	const viewerMounted = (index: number) =>
 		Scene.Mount.resolveAll(
 			[{ name: "ImageViewerPortal" }, overlays(Overlays.Message.SelectedViewerImage({ index }))],
@@ -464,7 +202,7 @@ describe("image viewer", () => {
 			channelScene,
 			Scene.given(withImages()),
 			mountedChannel(),
-			Scene.click(Scene.altText("photo-2.png")),
+			...openImage(1),
 			viewerMounted(1),
 			Scene.expect(Scene.text("2 of 2")).toExist(),
 			Scene.click(Scene.role("button", { name: "Previous image" })),
@@ -477,7 +215,7 @@ describe("image viewer", () => {
 			channelScene,
 			Scene.given(withImages()),
 			mountedChannel(),
-			Scene.click(Scene.altText("photo-1.png")),
+			...openImage(0),
 			viewerMounted(0),
 			Scene.click(Scene.role("button", { name: "photo-2.png" })),
 			Scene.expect(Scene.text("2 of 2")).toExist(),
@@ -491,7 +229,7 @@ describe("image viewer", () => {
 			channelScene,
 			Scene.given(withImages()),
 			mountedChannel(),
-			Scene.click(Scene.altText("photo-1.png")),
+			...openImage(0),
 			viewerMounted(0),
 			// Legacy nests the action Button inside its bare `TooltipTrigger` Button; the inner one acts.
 			Scene.click(Scene.selector(`button[aria-label="Download"]`)),
@@ -508,77 +246,6 @@ describe("image viewer", () => {
 				}),
 			),
 			Scene.Command.resolve(DownloadImage, ActionMessage.CompletedDownloadImage()),
-		)
-	})
-})
-
-describe("composer emoji picker", () => {
-	const data: EmojiData = {
-		locale: "en",
-		emojis: [
-			{ emoji: "🎉", category: 0, label: "party popper", version: 1, tags: ["party"] },
-			{ emoji: "👋", category: 0, label: "waving hand", version: 1, tags: ["wave"] },
-		],
-		categories: [{ index: 0, label: "Smileys & emotion" }],
-		skinTones: {
-			light: "Light",
-			"medium-light": "Medium-light",
-			medium: "Medium",
-			"medium-dark": "Medium-dark",
-			dark: "Dark",
-		},
-	}
-
-	const measured = Picker.Message.MeasuredPicker({
-		rowHeight: 40,
-		categoryHeaderHeight: 40,
-		viewportWidth: 376,
-		viewportHeight: 222,
-	})
-	const emojiDialog = (message: EmojiDialog.Message) =>
-		draft(Draft.Message.GotEmojiPickerMessage({ message }))
-
-	test("Emoji opens the picker dialog with its data; Escape closes it", () => {
-		Scene.scene(
-			channelScene,
-			Scene.given(derivedModel()),
-			mountedChannel(),
-			// Nucleo icons carry a <title>, so the button's accessible name is "<icon title> Emoji".
-			Scene.click(Scene.role("button", { name: /Emoji$/ })),
-			Scene.Command.expectExact(Picker.LoadEmojiData(), Picker.LoadRecentEmojis()),
-			Scene.Command.resolve(Picker.LoadEmojiData, Picker.Message.SucceededLoadEmojiData({ data })),
-			Scene.Command.resolve(Picker.LoadRecentEmojis, Picker.Message.LoadedRecentEmojis({ recent: [] })),
-			Scene.Mount.resolveAll(
-				[
-					{ name: "PortalPickerPopover" },
-					emojiDialog(
-						EmojiDialog.Message.ReceivedPopoverEvent({
-							event: PopoverEvent.CompletedPortalPickerPopover(),
-						}),
-					),
-				],
-				[
-					{ name: "MeasurePicker" },
-					emojiDialog(EmojiDialog.Message.GotPickerMessage({ message: measured })),
-				],
-				[
-					{ name: "TrackPickerFocusOut" },
-					emojiDialog(
-						EmojiDialog.Message.GotPickerMessage({ message: Picker.Message.BlurredPicker() }),
-					),
-				],
-			),
-			Scene.expect(Scene.role("dialog", { name: "Emoji picker" })).toExist(),
-			Scene.expect(Scene.role("gridcell", { name: "party popper" })).toExist(),
-			// The popover around the dialog owns the Escape key (React Aria's Popover).
-			Scene.keydown(Scene.selector(`#${popoverId(`${editorId}-emoji-picker`)}`), "Escape"),
-			Scene.Mount.expectEnded(
-				{ name: "PortalPickerPopover" },
-				{ name: "MeasurePicker" },
-				{ name: "TrackPickerFocusOut" },
-			),
-			Scene.expect(Scene.role("dialog", { name: "Emoji picker" })).toBeAbsent(),
-			Scene.Command.expectNone(),
 		)
 	})
 })

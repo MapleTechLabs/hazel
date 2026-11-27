@@ -325,7 +325,6 @@ describe("switching channels", () => {
 		expect(next.channelId).toBe(otherChannelId)
 		expect(next.messages).toEqual([])
 		expect(next.hasLoadedMessages).toBe(false)
-		expect(next.draft.channelId).toBe(otherChannelId)
 		expect(next.list.keys).toEqual([])
 		expect(next.list.viewportHeight).toBe(VIEWPORT)
 		expect(next.list.measuredHeights).toEqual({})

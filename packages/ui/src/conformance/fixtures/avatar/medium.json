@@ -1,0 +1,22 @@
+{
+	"about": "The kit's `md` avatar (40pt rounded square), tinted by its name as the seed, with presence.",
+	"root": {
+		"tag": "avatar",
+		"props": {
+			"name": "Grace Hopper",
+			"initials": "GH",
+			"size": "medium"
+		}
+	},
+	"frame": "inline",
+	"axes": [
+		{
+			"prop": "presence",
+			"values": ["online", "busy"]
+		}
+	],
+	"kit": {
+		"specimen": "avatar-medium",
+		"target": "avatar"
+	}
+}

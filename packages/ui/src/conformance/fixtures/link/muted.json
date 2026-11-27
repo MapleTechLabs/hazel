@@ -1,0 +1,23 @@
+{
+	"about": "`tone` `muted` with a leading `icon` (G2, `p4-channel-settings-header`): channel settings' \"Back to channel\", `text-muted-fg text-sm hover:text-fg`.",
+	"root": {
+		"tag": "link",
+		"props": {
+			"label": "Back to channel",
+			"href": "#channel",
+			"tone": "muted",
+			"icon": "arrow-left"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "link",
+			"name": "Back to channel"
+		}
+	],
+	"pending": {
+		"ios": "S2"
+	}
+}

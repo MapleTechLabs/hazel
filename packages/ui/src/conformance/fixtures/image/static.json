@@ -1,0 +1,19 @@
+{
+	"about": "An image no view presses: a plain picture named by its alt.",
+	"root": {
+		"tag": "image",
+		"props": {
+			"src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3Crect width='16' height='9' fill='%237f56d9'/%3E%3Ccircle cx='8' cy='4.5' r='2.5' fill='%23fff'/%3E%3C/svg%3E",
+			"alt": "Launch banner",
+			"width": 160,
+			"height": 90
+		}
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "img",
+			"name": "Launch banner"
+		}
+	]
+}

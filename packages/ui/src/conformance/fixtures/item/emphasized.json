@@ -1,0 +1,39 @@
+{
+	"about": "An unread row, against G6 item-emphasized.",
+	"root": {
+		"tag": "section",
+		"props": {
+			"title": "Channels"
+		},
+		"children": [
+			{
+				"tag": "item",
+				"key": "engineering",
+				"props": {
+					"title": "engineering",
+					"emphasized": true,
+					"href": "#"
+				},
+				"events": ["press"],
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "icon",
+								"props": {
+									"name": "hashtag"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"kit": {
+		"specimen": "item-emphasized",
+		"target": "item"
+	}
+}

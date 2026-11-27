@@ -1,0 +1,40 @@
+{
+	"about": "An empty state with an icon tile, title, description and an action slot.",
+	"root": {
+		"tag": "emptyState",
+		"props": {
+			"title": "No results",
+			"description": "Try a different name or check the spelling.",
+			"icon": "search"
+		},
+		"slots": [
+			{
+				"name": "action",
+				"children": [
+					{
+						"tag": "text",
+						"children": ["Clear the search"],
+						"props": {
+							"tone": "accent"
+						}
+					}
+				]
+			}
+		]
+	},
+	"aria": [
+		{
+			"role": "heading",
+			"name": "No results"
+		}
+	],
+	"cases": [
+		{
+			"name": "title-only",
+			"props": {
+				"description": null,
+				"icon": null
+			}
+		}
+	]
+}

@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
 import { Option } from "effect"
-import { fromString } from "foldkit/url"
 import { beforeAll, describe, expect, test } from "vitest"
-import { init, Message, update } from "../main"
-import { DEFAULT_SOUND_SETTINGS } from "../notification-sound"
+import type { HostOut } from "../app/context"
+import { Message, type ShellRequest } from "../app/message"
+import { update } from "../app/update"
 import { loadPages } from "../page/registry"
-import { defaultThemePreference } from "../theme"
+import { hostContextOf, update as shellUpdate } from "../root/logic"
+import { AppMessage } from "../root/message"
+import { hostBootReturn, hostRequestsOf, shellBoot } from "../test/root-fixtures"
 import * as Toast from "../ui/toast"
 import * as Toaster from "./toaster"
 
-/** `RequestedToast` → `Toaster.push`; a request `id` updates its toast in place. */
+/** `RequestedToast` → the host's `Toaster.push`; a request `id` updates its toast in place. */
 
 const available = {
 	intent: "info",
@@ -39,28 +41,20 @@ describe("root toaster", () => {
 		})
 	})
 
-	test("a page's RequestedToast goes through the root into the toaster", () => {
+	test("a page's toast goes through the shell and back into the host's toaster", () => {
 		const path =
 			"/hazel/my-settings/linked-accounts?connection_status=error&provider=discord&error_code=db_error"
-		const booted = Option.match(fromString(`http://localhost${path}`), {
-			onNone: () => expect.unreachable("url"),
-			onSome: (url) =>
-				init(
-					{
-						themePreference: defaultThemePreference(),
-						systemTheme: "light",
-						soundSettings: DEFAULT_SOUND_SETTINGS,
-						sessionStartMs: 0,
-						isMobile: false,
-						isCreateChannelHintDismissed: false,
-						rememberedUser: null,
-						aiPanel: { isOpen: false, width: null },
-						keybindingOverrides: {},
-						keyboardPlatform: "linux",
-					},
-					url,
-				),
-		})
+		const shell = shellBoot(path)
+		const host = hostBootReturn(hostContextOf(shell))
+		// The page cleans its URL with the toast; the host hands both to the shell.
+		const out = host.commands
+			?.map((command) => (command.args as { readonly out: HostOut }).out)
+			.find((candidate) => candidate._tag === "Page")
+		expect(out).toMatchObject({ outMessage: { _tag: "RequestedNavigation", replace: true } })
+		const [request] = hostRequestsOf(
+			shellUpdate(shell, AppMessage.ReceivedHostOut({ out: out! })).commands,
+		)
+		const booted = update(host.model, Message.ReceivedShellRequest({ request: request as ShellRequest }))
 		expect(booted.model.toasts.entries.map((entry) => entry.payload)).toMatchObject([
 			{
 				kind: "error",

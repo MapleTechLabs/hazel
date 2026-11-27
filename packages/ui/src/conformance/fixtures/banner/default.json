@@ -1,0 +1,66 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): a callout in each tone with the token shown once in its copy field.",
+	"root": {
+		"tag": "banner",
+		"props": {
+			"title": "Token created",
+			"description": "Copy it now: it is shown once.",
+			"tone": "success",
+			"icon": "check",
+			"dismissible": true
+		},
+		"events": ["dismiss"],
+		"slots": [
+			{
+				"name": "actions",
+				"children": [
+					{
+						"tag": "button",
+						"props": {
+							"label": "Done",
+							"variant": "secondary",
+							"size": "small"
+						}
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "textField",
+				"props": {
+					"label": "Token",
+					"value": {
+						"text": "hz_live_4f9a",
+						"rev": 0,
+						"edit": 0
+					},
+					"readOnly": true,
+					"monospace": true,
+					"copyable": true,
+					"secret": true
+				}
+			}
+		]
+	},
+	"frame": "screen",
+	"axes": [
+		{
+			"prop": "tone",
+			"values": ["neutral", "accent", "warning", "danger"]
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Dismiss"
+		},
+		{
+			"role": "button",
+			"name": "Done"
+		}
+	]
+}

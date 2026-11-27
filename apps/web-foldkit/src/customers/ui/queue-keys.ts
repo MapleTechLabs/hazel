@@ -1,4 +1,4 @@
-import { isInAssistantPanel } from "../../assistant/keyboard"
+import { isInAssistantPanel } from "../../page/assistant-context"
 
 /**
  * The keyboard of the Customers worklists (Needs attention, the Support inbox): which keydown is

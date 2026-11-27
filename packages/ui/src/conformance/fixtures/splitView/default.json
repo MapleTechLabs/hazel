@@ -1,0 +1,89 @@
+{
+	"about": "The sidebar slot beside the content at regular width, above it at compact.",
+	"root": {
+		"tag": "splitView",
+		"slots": [
+			{
+				"name": "sidebar",
+				"children": [
+					{
+						"tag": "section",
+						"props": {
+							"title": "Channels"
+						},
+						"children": [
+							{
+								"tag": "item",
+								"key": "general",
+								"props": {
+									"title": "general",
+									"href": "#"
+								},
+								"events": ["press"],
+								"slots": [
+									{
+										"name": "leading",
+										"children": [
+											{
+												"tag": "icon",
+												"props": {
+													"name": "hashtag"
+												}
+											}
+										]
+									}
+								]
+							},
+							{
+								"tag": "item",
+								"key": "design",
+								"props": {
+									"title": "design",
+									"selected": true
+								},
+								"events": ["press"],
+								"slots": [
+									{
+										"name": "leading",
+										"children": [
+											{
+												"tag": "icon",
+												"props": {
+													"name": "hashtag"
+												}
+											}
+										]
+									}
+								]
+							}
+						]
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "screen",
+				"props": {
+					"title": "design"
+				},
+				"children": [
+					{
+						"tag": "text",
+						"children": ["Pick a channel"]
+					}
+				]
+			}
+		]
+	},
+	"aria": [
+		{
+			"role": "region",
+			"name": "Channels"
+		},
+		{
+			"role": "heading",
+			"name": "design"
+		}
+	]
+}

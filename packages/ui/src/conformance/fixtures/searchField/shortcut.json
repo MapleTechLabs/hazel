@@ -1,0 +1,28 @@
+{
+	"about": "A search box at the `regular` width (`w-64`, the row's width on a phone) with its `/` key cap while empty (today's customers `searchBox`; the cap shows from the regular size class).",
+	"root": {
+		"tag": "searchField",
+		"props": {
+			"placeholder": "Search accounts",
+			"width": "regular",
+			"shortcut": "/"
+		},
+		"events": ["change"]
+	},
+	"frame": "sidebar",
+	"pending": {
+		"ios": "S2"
+	},
+	"aria": [
+		{
+			"role": "searchbox",
+			"name": "Search accounts"
+		}
+	],
+	"axes": [
+		{
+			"prop": "width",
+			"values": ["narrow"]
+		}
+	]
+}

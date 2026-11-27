@@ -1,0 +1,27 @@
+{
+	"about": "hz:sheet open: a title row with its close button over its children (bottom sheet when compact, form sheet when regular).",
+	"frame": "screen",
+	"root": {
+		"tag": "sheet",
+		"props": { "open": true, "title": "Channel details" },
+		"events": ["dismiss"],
+		"children": [
+			{
+				"tag": "stack",
+				"children": [
+					{ "tag": "text", "props": { "strong": true }, "children": ["#design"] },
+					{
+						"tag": "text",
+						"props": { "tone": "muted" },
+						"children": ["Mock-ups, reviews and the design system."]
+					}
+				]
+			}
+		]
+	},
+	"axes": [{ "prop": "title", "values": [null] }],
+	"aria": [
+		{ "role": "dialog", "name": "Channel details" },
+		{ "role": "button", "name": "Close" }
+	]
+}

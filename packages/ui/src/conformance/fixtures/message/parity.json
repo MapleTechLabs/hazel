@@ -1,0 +1,35 @@
+{
+	"about": "A row whose thread card leads with the thread's name, offering `selectText` (iOS only; the web toolbar leaves it out).",
+	"root": {
+		"tag": "message",
+		"props": {
+			"row": {
+				"author": "Ada Lovelace",
+				"initials": "AL",
+				"time": "14:05",
+				"body": [[0, ["Release notes are up for review."]]],
+				"thread": {
+					"name": "Release 2.4 notes",
+					"count": 4,
+					"author": "Grace Hopper",
+					"initials": "GH",
+					"preview": "Looks good to me",
+					"time": "14:20"
+				},
+				"actions": ["react", "reply", "copy", "selectText"]
+			}
+		},
+		"events": ["press", "longPress", "action", "pressThread"]
+	},
+	"frame": "screen",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Open thread Release 2.4 notes, 4 messages"
+		},
+		{
+			"role": "toolbar",
+			"name": "Message actions"
+		}
+	]
+}

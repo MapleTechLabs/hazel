@@ -39,8 +39,8 @@ Never import an area's page statically from the first chunk (`registry.ts`, the 
 that puts the page, and what it imports, back into the first download. A lazy page declares at
 most `SUBSCRIPTION_POOL_SIZE` Subscriptions (`registry.test.ts` checks).
 
-`page/settings/team/` is the minimal example; `page/chat/channel/` shows a page keyed by a route param,
-memoized views and a `sharedChanged` hook. `page/root/` shows a page that only redirects.
+`page/chat/channel/` shows a page keyed by a route param, memoized views and a `sharedChanged`
+hook.
 
 ## The contract (`page/contract.ts`)
 
@@ -92,9 +92,10 @@ memoized views and a `sharedChanged` hook. `page/root/` shows a page that only r
   (`RequestedDmCreation`, `RequestedSignOut`), or have the Command show its own toast
   (`showBackgroundToast`, `overlay/background-toasts.ts`).
 - **Layout.** Render only what the legacy route's own component renders (its `<Outlet />` content). The
-  root wraps it in the org shell and the route's section layout (`shell/layouts.ts`): `main` for
-  settings, my-settings and notifications, the column for integrations and chat sync, the channel
-  settings header and tabs, the centered auth layout. Unported routes render an empty
+  Effect UI root wraps it in the org shell and the route's section layout (`src/root/sections.ts`, the
+  sidebars and header from `shared-screens/src/shell/`): the scroll column for settings, my-settings
+  and notifications, the content column for integrations and chat sync, the channel settings header
+  and tabs. A native page in those sections gets the same layout. Unported routes render an empty
   `[data-page-placeholder=<RouteTag>]` element in that spot.
 - **Shell state** (sidebar data, menus, collapsed sections, panel widths) lives in `shell/`, not in pages.
 - **Performance.** The root re-renders on every Message. Memoize expensive subtrees with `createLazy`

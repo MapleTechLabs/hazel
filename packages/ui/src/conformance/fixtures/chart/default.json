@@ -1,0 +1,275 @@
+{
+	"about": "W2a's axis kinds (`docs/hazel-ui-phase4.md`): MRR movement as stacked bars around zero with the net line and a legend (today's `mrrMovementChart`), then line, area and grouped bars over the same data, the sizes and formats, active users as lines (`activeUsersChart`), the support report's daily durations with empty days, and loading.",
+	"root": {
+		"tag": "chart",
+		"props": {
+			"kind": "stackedBar",
+			"label": "MRR movement by month",
+			"series": [
+				{
+					"key": "new",
+					"label": "New",
+					"tone": "new",
+					"values": [
+						940000, 1210000, 870000, 1530000, 1120000, 980000, 1340000, 1460000, 1010000, 1250000,
+						1390000, 1620000
+					]
+				},
+				{
+					"key": "expansion",
+					"label": "Expansion",
+					"tone": "expansion",
+					"values": [
+						360000, 420000, 150000, 510000, 290000, 330000, 470000, 380000, 260000, 440000,
+						350000, 520000
+					]
+				},
+				{
+					"key": "contraction",
+					"label": "Contraction",
+					"tone": "contraction",
+					"values": [
+						-100000, -80000, -120000, -60000, -90000, -150000, -70000, -110000, -40000, -90000,
+						-130000, -80000
+					]
+				},
+				{
+					"key": "churn",
+					"label": "Churned",
+					"tone": "churn",
+					"values": [
+						-260000,
+						-310000,
+						null,
+						-180000,
+						-420000,
+						-220000,
+						-350000,
+						-190000,
+						-500000,
+						-240000,
+						-280000,
+						-160000
+					]
+				}
+			],
+			"labels": ["Dec", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov"],
+			"format": "currency",
+			"currency": "USD",
+			"legend": true,
+			"net": true
+		},
+		"events": ["hover"]
+	},
+	"frame": "screen",
+	"aria": [
+		{
+			"role": "img",
+			"name": "MRR movement by month"
+		}
+	],
+	"axes": [
+		{
+			"prop": "kind",
+			"values": ["area", "bar"]
+		},
+		{
+			"prop": "size",
+			"values": ["small", "large"]
+		},
+		{
+			"prop": "format",
+			"values": ["percent", "duration"]
+		}
+	],
+	"cases": [
+		{
+			"name": "activeUsers",
+			"props": {
+				"kind": null,
+				"format": null,
+				"currency": null,
+				"net": null,
+				"label": "Active users: MAU 1,611, WAU 1,016, DAU 444",
+				"series": [
+					{
+						"key": "mau",
+						"label": "MAU",
+						"tone": "series3",
+						"values": [
+							1450, 1461, 1472, 1481, 1489, 1494, 1498, 1499, 1499, 1497, 1496, 1494, 1494,
+							1496, 1500, 1505, 1513, 1523, 1534, 1546, 1557, 1568, 1577, 1584, 1589, 1592,
+							1593, 1593, 1591, 1590
+						]
+					},
+					{
+						"key": "wau",
+						"label": "WAU",
+						"tone": "series2",
+						"values": [
+							820, 843, 861, 871, 872, 863, 849, 833, 821, 817, 821, 835, 856, 880, 902, 917,
+							923, 919, 908, 892, 878, 868, 868, 876, 894, 917, 940, 960, 971, 973
+						]
+					},
+					{
+						"key": "dau",
+						"label": "DAU",
+						"tone": "series1",
+						"values": [
+							300, 340, 364, 363, 339, 303, 273, 262, 276, 310, 352, 385, 395, 380, 347, 312,
+							292, 295, 321, 363, 401, 422, 417, 390, 354, 325, 318, 335, 373, 414
+						]
+					}
+				],
+				"labels": [
+					"Oct 1",
+					"Oct 2",
+					"Oct 3",
+					"Oct 4",
+					"Oct 5",
+					"Oct 6",
+					"Oct 7",
+					"Oct 8",
+					"Oct 9",
+					"Oct 10",
+					"Oct 11",
+					"Oct 12",
+					"Oct 13",
+					"Oct 14",
+					"Oct 15",
+					"Oct 16",
+					"Oct 17",
+					"Oct 18",
+					"Oct 19",
+					"Oct 20",
+					"Oct 21",
+					"Oct 22",
+					"Oct 23",
+					"Oct 24",
+					"Oct 25",
+					"Oct 26",
+					"Oct 27",
+					"Oct 28",
+					"Oct 29",
+					"Oct 30"
+				]
+			}
+		},
+		{
+			"name": "support",
+			"props": {
+				"format": "duration",
+				"currency": null,
+				"net": null,
+				"legend": null,
+				"size": "small",
+				"label": "Median first response by day: 2h 10m over the range",
+				"series": [
+					{
+						"key": "value",
+						"label": "Median first response",
+						"tone": "series1",
+						"values": [
+							11520000,
+							null,
+							5400000,
+							2160000,
+							8640000,
+							14759999,
+							null,
+							null,
+							3960000,
+							10080000,
+							1440000,
+							12960000,
+							7920000,
+							null,
+							6840000,
+							2880000,
+							9360000,
+							18720000,
+							5040000,
+							null,
+							null,
+							7560000,
+							6120000,
+							3240000,
+							11880000,
+							9000000,
+							null,
+							4320000,
+							2520000,
+							10440000
+						]
+					}
+				],
+				"labels": [
+					"Oct 1",
+					"Oct 2",
+					"Oct 3",
+					"Oct 4",
+					"Oct 5",
+					"Oct 6",
+					"Oct 7",
+					"Oct 8",
+					"Oct 9",
+					"Oct 10",
+					"Oct 11",
+					"Oct 12",
+					"Oct 13",
+					"Oct 14",
+					"Oct 15",
+					"Oct 16",
+					"Oct 17",
+					"Oct 18",
+					"Oct 19",
+					"Oct 20",
+					"Oct 21",
+					"Oct 22",
+					"Oct 23",
+					"Oct 24",
+					"Oct 25",
+					"Oct 26",
+					"Oct 27",
+					"Oct 28",
+					"Oct 29",
+					"Oct 30"
+				]
+			}
+		},
+		{
+			"name": "grouped",
+			"props": {
+				"kind": "bar",
+				"net": null,
+				"format": null,
+				"currency": null,
+				"label": "Seats by plan",
+				"series": [
+					{
+						"key": "team",
+						"label": "Team",
+						"tone": "series1",
+						"values": [12, 18, 15, 22]
+					},
+					{
+						"key": "business",
+						"label": "Business",
+						"tone": "series2",
+						"values": [6, 9, 11, 14]
+					}
+				],
+				"labels": ["Q1", "Q2", "Q3", "Q4"]
+			}
+		},
+		{
+			"name": "loading",
+			"props": {
+				"loading": true
+			}
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	}
+}

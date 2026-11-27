@@ -1,0 +1,35 @@
+{
+	"about": "A search box, empty with a placeholder and holding a query.",
+	"root": {
+		"tag": "searchField",
+		"props": {
+			"placeholder": "Search channels"
+		},
+		"events": ["change", "submit"]
+	},
+	"frame": "sidebar",
+	"aria": [
+		{
+			"role": "searchbox",
+			"name": "Search channels"
+		}
+	],
+	"axes": [
+		{
+			"prop": "placeholder",
+			"values": [null]
+		}
+	],
+	"cases": [
+		{
+			"name": "typed",
+			"props": {
+				"value": {
+					"text": "design",
+					"rev": 0,
+					"edit": 0
+				}
+			}
+		}
+	]
+}

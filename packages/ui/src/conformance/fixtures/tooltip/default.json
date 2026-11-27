@@ -1,0 +1,19 @@
+{
+	"about": "hz:tooltip around an icon action: the label describes the trigger; a gallery frame shows it.",
+	"frame": "inline",
+	"root": {
+		"tag": "tooltip",
+		"props": { "label": "Pin message" },
+		"children": [
+			{
+				"tag": "action",
+				"props": { "label": "Pin" },
+				"children": [{ "tag": "icon", "props": { "name": "pin" } }]
+			}
+		]
+	},
+	"aria": [
+		{ "role": "tooltip", "name": "Pin message" },
+		{ "role": "button", "name": "Pin" }
+	]
+}

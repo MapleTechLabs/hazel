@@ -1,12 +1,14 @@
 import { Match, Option } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
-import { onboardingHref } from "../../route"
+import { AppRoute, onboardingHref } from "../../route"
+import { PageOutMessage } from "../out-message"
+import type { ToastRequest } from "../../overlay/toasts"
 import * as ChatMigration from "../shared/chat-migration"
 import type { Resources } from "../../rpc"
 import * as ChoiceBox from "../../ui/choice-box"
-import type { PageReturn, Shared } from "../contract"
-import { CompleteOnboarding, ReplaceOnboardingStepUrl, StoreOnboardingAnswers } from "./command"
+import type { PageReturn } from "../contract"
+import { CompleteOnboarding, StoreOnboardingAnswers } from "./command"
 import { type Direction, nextStep, previousStep, type Step, stepFromUrl } from "./flow"
 import { Message } from "./message"
 import {
@@ -24,17 +26,10 @@ import {
 
 export type Return = PageReturn<Model, Message>
 
-const stateFor = (step: Step, running: Running, shared: Shared): StepState =>
+const stateFor = (step: Step, running: Running): StepState =>
 	Match.value(step).pipe(
-		Match.when("welcome", () => StepState.Welcome()),
-		Match.when("profileInfo", () =>
-			StepState.Profile({
-				firstName: shared.currentUser?.firstName ?? "",
-				lastName: shared.currentUser?.lastName ?? "",
-				hasChanged: false,
-				isSubmitting: false,
-			}),
-		),
+		Match.when("welcome", () => StepState.Native({ step: "welcome" })),
+		Match.when("profileInfo", () => StepState.Native({ step: "profileInfo" })),
 		Match.when("timezoneSelection", () =>
 			StepState.Timezone({
 				selected: running.data.timezone ?? (running.flow.browserTimezone || "UTC"),
@@ -95,24 +90,36 @@ export const withPhase = (model: Model, phase: Running): Model => modifyFields(m
 export const setStep = (model: Model, running: Running, step: StepState): Model =>
 	withPhase(model, modifyFields(running, { step: () => step }))
 
-/** Enters `step`; `syncUrl` is false only for the first step, which came from the URL. */
+/** The step's URL, through the root; `toast` shows with it. */
+const navigationTo = (model: Model, step: Step, toast: ToastRequest | undefined) => {
+	const route = AppRoute.Onboarding({ orgId: Option.fromNullishOr(model.orgId), step: Option.some(step) })
+	return toast === undefined
+		? PageOutMessage.RequestedNavigation({ route, replace: true })
+		: PageOutMessage.RequestedNavigation({ route, replace: true, toast })
+}
+
+/**
+ * Enters `step`. `syncUrl` puts it in the URL through the root, so the native shell follows; it is
+ * false for a step that came from the URL (the first one, or the shell's own move).
+ */
 export const enterStep = (
 	model: Model,
 	running: Running,
 	step: Step,
-	options: { readonly direction: Direction; readonly shared: Shared; readonly syncUrl: boolean },
+	options: {
+		readonly direction: Direction
+		readonly syncUrl: boolean
+		readonly toast?: ToastRequest | undefined
+	},
 ): Return => {
 	const next = modifyFields(running, {
-		step: () => stateFor(step, running, options.shared),
+		step: () => stateFor(step, running),
 		direction: () => options.direction,
-		animatesStep: () => options.syncUrl,
 	})
 	return {
 		model: withPhase(model, next),
+		outMessage: options.syncUrl ? navigationTo(model, step, options.toast) : undefined,
 		commands: [
-			...(options.syncUrl
-				? [ReplaceOnboardingStepUrl({ href: onboardingHref(model.orgId, step) })]
-				: []),
 			...(step === "finalization" ? [completeOnboarding(next)] : []),
 			// Saved only when the step is reached by navigation: the URL's first step may be the OAuth
 			// return, whose saved answers are still being read back and must not be overwritten.
@@ -135,30 +142,25 @@ const migrationStart = (
 type DataTransform = Partial<{ readonly [K in keyof Data]: (value: Data[K]) => Data[K] }>
 
 /** `createStepHandler`: record the step's data and move forward. */
-export const advance = (
-	model: Model,
-	running: Running,
-	shared: Shared,
-	transform: DataTransform = {},
-): Return =>
+export const advance = (model: Model, running: Running, transform: DataTransform = {}): Return =>
 	enterStep(
 		model,
 		modifyFields(running, { data: (data) => modifyFields(data, transform) }),
 		nextStep(stepOf(running.step), running.flow.userType),
-		{ direction: "forward", shared, syncUrl: true },
+		{ direction: "forward", syncUrl: true },
 	)
 
 /** The invite step skips straight to finalization (`handleTeamInviteContinue` / `Skip`). */
-export const finalize = (model: Model, running: Running, shared: Shared): Return =>
-	enterStep(model, running, "finalization", { direction: "forward", shared, syncUrl: true })
+export const finalize = (model: Model, running: Running, toast?: ToastRequest): Return =>
+	enterStep(model, running, "finalization", { direction: "forward", syncUrl: true, toast })
 
 /** Back waits for a request in flight: its late result would otherwise land on a fresh form. */
-export const goBack = (model: Model, running: Running, shared: Shared): Return => {
+export const goBack = (model: Model, running: Running): Return => {
 	if (isBusy(running.step)) return { model }
 	const previous = previousStep(stepOf(running.step), running.flow.userType)
 	return previous === null
 		? { model }
-		: enterStep(model, running, previous, { direction: "backward", shared, syncUrl: true })
+		: enterStep(model, running, previous, { direction: "backward", syncUrl: true })
 }
 
 /**
@@ -171,7 +173,6 @@ export const startWhenReady = (
 		readonly membership: Option.Option<Membership | null>
 		readonly browserTimezone: Option.Option<string>
 	},
-	shared: Shared,
 ): Return =>
 	Option.match(Option.all({ membership: known.membership, browserTimezone: known.browserTimezone }), {
 		onNone: () => ({ model: modifyFields(model, { phase: () => Phase.Starting(known) }) }),
@@ -179,14 +180,12 @@ export const startWhenReady = (
 			const userType = membership?.slug ? "invited" : "creator"
 			const running = Phase.Running({
 				flow: { userType, membership, browserTimezone },
-				step: StepState.Welcome(),
+				step: StepState.Native({ step: "welcome" }),
 				direction: "forward",
-				animatesStep: false,
 				data: model.restoredData ?? { timezone: null, useCases: [], role: null },
 			})
 			return enterStep(model, running, stepFromUrl(model.urlStep, userType) ?? "welcome", {
 				direction: "forward",
-				shared,
 				syncUrl: false,
 			})
 		},

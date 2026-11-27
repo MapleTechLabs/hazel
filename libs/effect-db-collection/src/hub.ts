@@ -49,6 +49,14 @@ export interface SyncHubConfig {
 	/** Keeps the last state of the sources it names, shown on their next open (`./snapshot.ts`). */
 	readonly snapshots?: SourceSnapshotStore
 	readonly log?: SyncLogger
+	/** Calls back when the network comes back; returns the unsubscribe. Defaults to `window`'s `online`. */
+	readonly subscribeOnline?: (listener: () => void) => () => void
+}
+
+const windowOnline = (listener: () => void): (() => void) => {
+	if (typeof window === "undefined" || typeof window.addEventListener !== "function") return () => {}
+	window.addEventListener("online", listener)
+	return () => window.removeEventListener?.("online", listener)
 }
 
 /**
@@ -117,6 +125,7 @@ export class SyncHub {
 		for (const entry of this.entries.values()) entry.connection.retryNow()
 	}
 	private closed = false
+	private readonly unsubscribeOnline: () => void
 
 	constructor(config: SyncHubConfig) {
 		this.config = config
@@ -128,9 +137,7 @@ export class SyncHub {
 					log: this.log,
 				})
 			: undefined
-		if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-			window.addEventListener("online", this.onOnline)
-		}
+		this.unsubscribeOnline = (config.subscribeOnline ?? windowOnline)(this.onOnline)
 	}
 
 	/** Takes a lease on `<kind>:<id>`, opening its connection if none is open. */
@@ -237,9 +244,7 @@ export class SyncHub {
 	close(): void {
 		if (this.closed) return
 		this.closed = true
-		if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
-			window.removeEventListener("online", this.onOnline)
-		}
+		this.unsubscribeOnline()
 		for (const [source, entry] of this.entries) this.evict(source, entry)
 		this.mux?.close()
 		this.statusListeners.clear()

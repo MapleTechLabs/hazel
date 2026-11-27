@@ -1,0 +1,34 @@
+{
+	"about": "Every frame surface around a heading and a line of copy (the settings card by default).",
+	"root": {
+		"tag": "frame",
+		"children": [
+			{
+				"tag": "heading",
+				"props": {
+					"level": "3"
+				},
+				"children": ["Organization profile"]
+			},
+			{
+				"tag": "text",
+				"children": ["How your workspace appears to members."],
+				"props": {
+					"tone": "muted"
+				}
+			}
+		]
+	},
+	"axes": [
+		{
+			"prop": "surface",
+			"values": ["none", "inset", "muted", "overlay", "danger"]
+		}
+	],
+	"aria": [
+		{
+			"role": "heading",
+			"name": "Organization profile"
+		}
+	]
+}

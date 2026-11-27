@@ -1,0 +1,370 @@
+{
+	"about": "The native host mounting demo/Rows.ts, then a press, a keyed reorder and a removal (host.test.ts).",
+	"steps": [
+		{
+			"batch": {
+				"v": 2,
+				"seq": 1,
+				"ops": [
+					[
+						"create",
+						1,
+						"hz:section"
+					],
+					[
+						"create",
+						2,
+						"hz:item"
+					],
+					[
+						"create",
+						3,
+						"hz:slot"
+					],
+					[
+						"create",
+						4,
+						"hz:icon"
+					],
+					[
+						"props",
+						4,
+						{
+							"name": "hashtag"
+						}
+					],
+					[
+						"insert",
+						3,
+						4,
+						null
+					],
+					[
+						"props",
+						3,
+						{
+							"name": "leading"
+						}
+					],
+					[
+						"insert",
+						2,
+						3,
+						null
+					],
+					[
+						"props",
+						2,
+						{
+							"title": "A",
+							"href": "#/a",
+							"key": "a"
+						}
+					],
+					[
+						"events",
+						2,
+						[
+							"press"
+						]
+					],
+					[
+						"insert",
+						1,
+						2,
+						null
+					],
+					[
+						"create",
+						5,
+						"hz:item"
+					],
+					[
+						"create",
+						6,
+						"hz:slot"
+					],
+					[
+						"create",
+						7,
+						"hz:icon"
+					],
+					[
+						"props",
+						7,
+						{
+							"name": "hashtag"
+						}
+					],
+					[
+						"insert",
+						6,
+						7,
+						null
+					],
+					[
+						"props",
+						6,
+						{
+							"name": "leading"
+						}
+					],
+					[
+						"insert",
+						5,
+						6,
+						null
+					],
+					[
+						"props",
+						5,
+						{
+							"title": "B",
+							"href": "#/b",
+							"key": "b"
+						}
+					],
+					[
+						"events",
+						5,
+						[
+							"press"
+						]
+					],
+					[
+						"insert",
+						1,
+						5,
+						null
+					],
+					[
+						"create",
+						8,
+						"hz:item"
+					],
+					[
+						"create",
+						9,
+						"hz:slot"
+					],
+					[
+						"create",
+						10,
+						"hz:icon"
+					],
+					[
+						"props",
+						10,
+						{
+							"name": "hashtag"
+						}
+					],
+					[
+						"insert",
+						9,
+						10,
+						null
+					],
+					[
+						"props",
+						9,
+						{
+							"name": "leading"
+						}
+					],
+					[
+						"insert",
+						8,
+						9,
+						null
+					],
+					[
+						"props",
+						8,
+						{
+							"title": "C",
+							"href": "#/c",
+							"key": "c"
+						}
+					],
+					[
+						"events",
+						8,
+						[
+							"press"
+						]
+					],
+					[
+						"insert",
+						1,
+						8,
+						null
+					],
+					[
+						"props",
+						1,
+						{
+							"title": "Rows"
+						}
+					],
+					[
+						"insert",
+						0,
+						1,
+						null
+					]
+				]
+			},
+			"ops": [
+				"create 1 hz:section",
+				"create 2 hz:item",
+				"create 3 hz:slot",
+				"create 4 hz:icon",
+				"props 4 {name=\"hashtag\"}",
+				"insert 3 4 null",
+				"props 3 {name=\"leading\"}",
+				"insert 2 3 null",
+				"props 2 {href=\"#/a\",key=\"a\",title=\"A\"}",
+				"events 2 [press]",
+				"insert 1 2 null",
+				"create 5 hz:item",
+				"create 6 hz:slot",
+				"create 7 hz:icon",
+				"props 7 {name=\"hashtag\"}",
+				"insert 6 7 null",
+				"props 6 {name=\"leading\"}",
+				"insert 5 6 null",
+				"props 5 {href=\"#/b\",key=\"b\",title=\"B\"}",
+				"events 5 [press]",
+				"insert 1 5 null",
+				"create 8 hz:item",
+				"create 9 hz:slot",
+				"create 10 hz:icon",
+				"props 10 {name=\"hashtag\"}",
+				"insert 9 10 null",
+				"props 9 {name=\"leading\"}",
+				"insert 8 9 null",
+				"props 8 {href=\"#/c\",key=\"c\",title=\"C\"}",
+				"events 8 [press]",
+				"insert 1 8 null",
+				"props 1 {title=\"Rows\"}",
+				"insert 0 1 null"
+			],
+			"tree": [
+				"#root#0",
+				"  hz:section#1 {title=\"Rows\"}",
+				"    hz:item#2 {href=\"#/a\",key=\"a\",title=\"A\"} on[press]",
+				"      hz:slot#3 {name=\"leading\"}",
+				"        hz:icon#4 {name=\"hashtag\"}",
+				"    hz:item#5 {href=\"#/b\",key=\"b\",title=\"B\"} on[press]",
+				"      hz:slot#6 {name=\"leading\"}",
+				"        hz:icon#7 {name=\"hashtag\"}",
+				"    hz:item#8 {href=\"#/c\",key=\"c\",title=\"C\"} on[press]",
+				"      hz:slot#9 {name=\"leading\"}",
+				"        hz:icon#10 {name=\"hashtag\"}"
+			],
+			"count": 11,
+			"detached": []
+		},
+		{
+			"batch": {
+				"v": 2,
+				"seq": 2,
+				"ops": [
+					[
+						"props",
+						5,
+						{
+							"href": null,
+							"selected": true
+						}
+					]
+				]
+			},
+			"ops": [
+				"props 5 {href=null,selected=true}"
+			],
+			"tree": [
+				"#root#0",
+				"  hz:section#1 {title=\"Rows\"}",
+				"    hz:item#2 {href=\"#/a\",key=\"a\",title=\"A\"} on[press]",
+				"      hz:slot#3 {name=\"leading\"}",
+				"        hz:icon#4 {name=\"hashtag\"}",
+				"    hz:item#5 {key=\"b\",selected=true,title=\"B\"} on[press]",
+				"      hz:slot#6 {name=\"leading\"}",
+				"        hz:icon#7 {name=\"hashtag\"}",
+				"    hz:item#8 {href=\"#/c\",key=\"c\",title=\"C\"} on[press]",
+				"      hz:slot#9 {name=\"leading\"}",
+				"        hz:icon#10 {name=\"hashtag\"}"
+			],
+			"count": 11,
+			"detached": []
+		},
+		{
+			"batch": {
+				"v": 2,
+				"seq": 3,
+				"ops": [
+					[
+						"insert",
+						1,
+						5,
+						2
+					],
+					[
+						"insert",
+						1,
+						8,
+						5
+					]
+				]
+			},
+			"ops": [
+				"insert 1 5 2",
+				"insert 1 8 5"
+			],
+			"tree": [
+				"#root#0",
+				"  hz:section#1 {title=\"Rows\"}",
+				"    hz:item#8 {href=\"#/c\",key=\"c\",title=\"C\"} on[press]",
+				"      hz:slot#9 {name=\"leading\"}",
+				"        hz:icon#10 {name=\"hashtag\"}",
+				"    hz:item#5 {key=\"b\",selected=true,title=\"B\"} on[press]",
+				"      hz:slot#6 {name=\"leading\"}",
+				"        hz:icon#7 {name=\"hashtag\"}",
+				"    hz:item#2 {href=\"#/a\",key=\"a\",title=\"A\"} on[press]",
+				"      hz:slot#3 {name=\"leading\"}",
+				"        hz:icon#4 {name=\"hashtag\"}"
+			],
+			"count": 11,
+			"detached": []
+		},
+		{
+			"batch": {
+				"v": 2,
+				"seq": 4,
+				"ops": [
+					[
+						"remove",
+						2
+					]
+				]
+			},
+			"ops": [
+				"remove 2"
+			],
+			"tree": [
+				"#root#0",
+				"  hz:section#1 {title=\"Rows\"}",
+				"    hz:item#8 {href=\"#/c\",key=\"c\",title=\"C\"} on[press]",
+				"      hz:slot#9 {name=\"leading\"}",
+				"        hz:icon#10 {name=\"hashtag\"}",
+				"    hz:item#5 {key=\"b\",selected=true,title=\"B\"} on[press]",
+				"      hz:slot#6 {name=\"leading\"}",
+				"        hz:icon#7 {name=\"hashtag\"}"
+			],
+			"count": 8,
+			"detached": []
+		}
+	]
+}

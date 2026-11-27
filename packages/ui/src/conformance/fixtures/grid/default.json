@@ -1,0 +1,113 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): KPI cards in columns, one column on the compact size class; auto fits 16rem tracks.",
+	"root": {
+		"tag": "grid",
+		"props": {
+			"columns": "3"
+		},
+		"children": [
+			{
+				"tag": "frame",
+				"children": [
+					{
+						"tag": "text",
+						"props": {
+							"role": "caption",
+							"tone": "muted"
+						},
+						"children": ["MRR"]
+					},
+					{
+						"tag": "text",
+						"props": {
+							"role": "title",
+							"strong": true,
+							"numeric": true
+						},
+						"children": ["$48.2k"]
+					}
+				]
+			},
+			{
+				"tag": "frame",
+				"children": [
+					{
+						"tag": "text",
+						"props": {
+							"role": "caption",
+							"tone": "muted"
+						},
+						"children": ["Accounts"]
+					},
+					{
+						"tag": "text",
+						"props": {
+							"role": "title",
+							"strong": true,
+							"numeric": true
+						},
+						"children": ["312"]
+					}
+				]
+			},
+			{
+				"tag": "frame",
+				"children": [
+					{
+						"tag": "text",
+						"props": {
+							"role": "caption",
+							"tone": "muted"
+						},
+						"children": ["Churn"]
+					},
+					{
+						"tag": "text",
+						"props": {
+							"role": "title",
+							"strong": true,
+							"numeric": true
+						},
+						"children": ["1.8%"]
+					}
+				]
+			},
+			{
+				"tag": "frame",
+				"children": [
+					{
+						"tag": "text",
+						"props": {
+							"role": "caption",
+							"tone": "muted"
+						},
+						"children": ["Expansion"]
+					},
+					{
+						"tag": "text",
+						"props": {
+							"role": "title",
+							"strong": true,
+							"numeric": true
+						},
+						"children": ["$6.1k"]
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen",
+	"axes": [
+		{
+			"prop": "columns",
+			"values": [null, "2", "4"]
+		},
+		{
+			"prop": "density",
+			"values": ["tight", "snug", "compact", "cozy", "relaxed"]
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	}
+}

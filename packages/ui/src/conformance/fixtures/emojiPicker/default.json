@@ -1,0 +1,14 @@
+{
+	"about": "hz:emojiPicker open: the search field over the built-in categories (an island supplies the full set).",
+	"frame": "inline",
+	"root": { "tag": "emojiPicker", "props": { "open": true }, "events": ["select", "dismiss"] },
+	"aria": [
+		{ "role": "dialog", "name": "Emoji picker" },
+		{ "role": "searchbox", "name": "Search emoji" },
+		{ "role": "group", "name": "Smileys" },
+		{ "role": "button", "name": "thumbs up" }
+	],
+	"pending": {
+		"ios": "S3"
+	}
+}

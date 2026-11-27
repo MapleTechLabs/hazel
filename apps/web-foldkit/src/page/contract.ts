@@ -11,7 +11,7 @@ import type { AppKeys } from "~/lib/keybindings/app-keymap"
 import type { Platform } from "~/lib/keybindings/key-combo"
 import type { Overrides } from "~/lib/keybindings/keymap"
 import type { ThemeState } from "../theme"
-import { type ChannelLinks, type ChannelLinksMap, linksFor } from "../ui/channel-icon"
+import type { ChannelLinksMap } from "../ui/channel-icon"
 import type * as Updates from "../platform/updates"
 import type { PageOutMessage } from "./out-message"
 
@@ -47,17 +47,9 @@ export interface Shared {
 	readonly channelLinks?: ChannelLinksMap
 }
 
-/** The channel's customer, Connect partners and chat sync platform, as every channel icon marks them. */
-export const channelLinksOf = (shared: Shared, channelId: string): ChannelLinks =>
-	linksFor(shared.channelLinks, channelId)
-
 /** `usePermission().can(action)` */
 export const can = (shared: Shared, action: RpcActionName): boolean =>
 	shared.member !== null && canPerform(RPC_SCOPE_MAP, shared.member.role, action)
-
-/** `useAuth().isLoading`: the session check is pending, or signed in while `user.me` is pending. */
-export const isSessionLoading = (shared: Shared): boolean =>
-	shared.auth === "Loading" || (shared.auth === "SignedIn" && shared.currentUser === null)
 
 export interface PageViewInputs {
 	readonly shared: Shared

@@ -1,0 +1,34 @@
+{
+	"about": "A grouped row: no avatar or header, the time in the hover gutter; one that quotes a message keeps its header.",
+	"root": {
+		"tag": "message",
+		"props": {
+			"grouped": true,
+			"row": {
+				"time": "14:06",
+				"body": [[0, ["And one more thing, in the same group."]]],
+				"quick": ["👍", "❤️", "😂"],
+				"actions": ["react", "reply", "copy"]
+			}
+		},
+		"events": ["action", "pressReaction", "addReaction"]
+	},
+	"cases": [
+		{
+			"name": "reply",
+			"props": {
+				"row": {
+					"author": "Ada Lovelace",
+					"initials": "AL",
+					"time": "14:06",
+					"reply": {
+						"author": "Grace Hopper",
+						"initials": "GH",
+						"text": ""
+					},
+					"body": [[0, ["Grouped, but it quotes a message."]]]
+				}
+			}
+		}
+	]
+}

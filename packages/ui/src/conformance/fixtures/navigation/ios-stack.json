@@ -1,0 +1,69 @@
+{
+	"about": "iOS lane: a stack of two screens with no icons (draws before lane S1's icons); the top shows, with its back button.",
+	"root": {
+		"tag": "navigation",
+		"events": ["pop"],
+		"children": [
+			{
+				"tag": "screen",
+				"key": "channels",
+				"props": {
+					"title": "Channels"
+				},
+				"children": [
+					{
+						"tag": "section",
+						"props": {
+							"title": "Channels"
+						},
+						"children": [
+							{
+								"tag": "item",
+								"key": "general",
+								"props": {
+									"title": "general",
+									"href": "#"
+								},
+								"events": ["press"]
+							},
+							{
+								"tag": "item",
+								"key": "design",
+								"props": {
+									"title": "design",
+									"selected": true
+								},
+								"events": ["press"]
+							},
+							{
+								"tag": "item",
+								"key": "engineering",
+								"props": {
+									"title": "engineering",
+									"href": "#",
+									"badge": 3
+								},
+								"events": ["press"]
+							}
+						]
+					}
+				]
+			},
+			{
+				"tag": "screen",
+				"key": "general",
+				"props": {
+					"title": "general",
+					"back": true
+				},
+				"events": ["back"],
+				"children": [
+					{
+						"tag": "text",
+						"children": ["Messages in general"]
+					}
+				]
+			}
+		]
+	}
+}

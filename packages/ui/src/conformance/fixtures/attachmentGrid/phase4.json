@@ -1,0 +1,131 @@
+{
+	"about": "Phase 4 (`docs/hazel-ui-phase4.md`): the files page's grid, masonry and list (`media-view.ts`), a video's length, a failed upload that retries.",
+	"root": {
+		"tag": "attachmentGrid",
+		"props": {
+			"layout": "grid",
+			"attachments": [
+				{
+					"id": "i1",
+					"kind": "image",
+					"name": "a.png",
+					"width": 800,
+					"height": 600
+				},
+				{
+					"id": "v1",
+					"kind": "video",
+					"name": "demo.mp4",
+					"width": 1920,
+					"height": 1080,
+					"duration": "1:24"
+				},
+				{
+					"id": "f1",
+					"kind": "file",
+					"name": "report.pdf",
+					"size": "2.4 MB",
+					"failed": true
+				}
+			]
+		},
+		"events": ["press", "retry"]
+	},
+	"frame": "screen",
+	"axes": [
+		{
+			"prop": "layout",
+			"values": ["masonry", "list"]
+		}
+	],
+	"pending": {
+		"ios": "S5"
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Open a.png"
+		},
+		{
+			"role": "button",
+			"name": "Retry report.pdf"
+		}
+	],
+	"cases": [
+		{
+			"name": "mosaicFailed",
+			"props": {
+				"layout": "mosaic",
+				"attachments": [
+					{
+						"id": "i2",
+						"kind": "image",
+						"name": "photo.png",
+						"width": 800,
+						"height": 600,
+						"failed": true
+					},
+					{
+						"id": "f2",
+						"kind": "file",
+						"name": "notes.txt",
+						"size": "4 KB",
+						"failed": true
+					}
+				]
+			}
+		},
+		{
+			"name": "gridRemovable",
+			"props": {
+				"removable": true,
+				"attachments": [
+					{
+						"id": "i3",
+						"kind": "image",
+						"name": "upload.png",
+						"width": 800,
+						"height": 600,
+						"progress": 0.4
+					},
+					{
+						"id": "f3",
+						"kind": "file",
+						"name": "a-very-long-file-name-that-has-to-truncate-in-the-tile.zip",
+						"size": "1.2 GB"
+					}
+				]
+			}
+		},
+		{
+			"name": "masonryTall",
+			"props": {
+				"layout": "masonry",
+				"attachments": [
+					{
+						"id": "i4",
+						"kind": "image",
+						"name": "tall.png",
+						"width": 600,
+						"height": 900
+					},
+					{
+						"id": "i5",
+						"kind": "image",
+						"name": "wide.png",
+						"width": 1600,
+						"height": 900
+					},
+					{
+						"id": "v2",
+						"kind": "video",
+						"name": "clip.mov",
+						"width": 1080,
+						"height": 1920,
+						"duration": "0:12"
+					}
+				]
+			}
+		}
+	]
+}

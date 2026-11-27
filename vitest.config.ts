@@ -7,6 +7,7 @@ export default defineConfig({
 			"apps/backend",
 			"apps/link-preview-worker",
 			"apps/web-foldkit",
+			"apps/shared-screens",
 			"apps/ios-hybrid",
 			"libs/*",
 			"apps/bot-gateway",

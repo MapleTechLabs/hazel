@@ -1,0 +1,24 @@
+{
+	"about": "A hairline between two blocks of a column.",
+	"root": {
+		"tag": "stack",
+		"children": [
+			{
+				"tag": "text",
+				"children": ["Above the line"]
+			},
+			{
+				"tag": "divider"
+			},
+			{
+				"tag": "text",
+				"children": ["Below the line"]
+			}
+		]
+	},
+	"aria": [
+		{
+			"role": "separator"
+		}
+	]
+}

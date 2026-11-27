@@ -1,0 +1,31 @@
+{
+	"about": "The channel sidebar's section (`style` `tree`): the name inset 10pt in muted 12/20, its rows right under it.",
+	"root": {
+		"tag": "section",
+		"props": {
+			"style": "tree",
+			"title": "Favorites"
+		},
+		"children": [
+			{
+				"tag": "item",
+				"props": {
+					"title": "engineering",
+					"href": "#"
+				},
+				"key": "engineering"
+			},
+			{
+				"tag": "item",
+				"props": {
+					"title": "design",
+					"href": "#",
+					"badge": 3,
+					"emphasized": true
+				},
+				"key": "design"
+			}
+		]
+	},
+	"frame": "sidebar"
+}

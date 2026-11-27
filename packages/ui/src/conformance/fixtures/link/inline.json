@@ -1,0 +1,24 @@
+{
+	"about": "A link inside a sentence (`inline`): sign-in's `New to Hazel? Create an account`, the link in the sentence's size in `fg` ink and underlined; today's `switchLink`.",
+	"root": {
+		"tag": "text",
+		"props": { "role": "label", "tone": "muted" },
+		"children": [
+			"New to Hazel? ",
+			{
+				"tag": "link",
+				"props": { "label": "Create an account", "href": "/sign-up", "tone": "inline" }
+			}
+		]
+	},
+	"frame": "inline",
+	"pending": {
+		"ios": "S1"
+	},
+	"aria": [
+		{
+			"role": "link",
+			"name": "Create an account"
+		}
+	]
+}

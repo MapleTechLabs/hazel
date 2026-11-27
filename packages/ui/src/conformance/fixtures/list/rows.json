@@ -1,0 +1,135 @@
+{
+	"about": "A list of rows (no chat rows, so it draws before lane A5): every flag and the end anchor, one at a time.",
+	"root": {
+		"tag": "list",
+		"events": ["reachStart", "reachEnd", "move"],
+		"children": [
+			{
+				"tag": "item",
+				"key": "general",
+				"props": {
+					"title": "general",
+					"href": "#"
+				},
+				"events": ["press"],
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "icon",
+								"props": {
+									"name": "hashtag"
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"tag": "item",
+				"key": "design",
+				"props": {
+					"title": "design",
+					"selected": true
+				},
+				"events": ["press"],
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "icon",
+								"props": {
+									"name": "hashtag"
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"tag": "item",
+				"key": "engineering",
+				"props": {
+					"title": "engineering",
+					"href": "#",
+					"badge": 4
+				},
+				"events": ["press"],
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "icon",
+								"props": {
+									"name": "hashtag"
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"tag": "item",
+				"key": "launch",
+				"props": {
+					"title": "launch",
+					"href": "#"
+				},
+				"events": ["press"],
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "icon",
+								"props": {
+									"name": "hashtag"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"axes": [
+		{
+			"prop": "anchor",
+			"values": ["end"]
+		},
+		{
+			"prop": "stickToBottom",
+			"values": [true]
+		},
+		{
+			"prop": "loading",
+			"values": [true]
+		},
+		{
+			"prop": "loadingStart",
+			"values": [true]
+		},
+		{
+			"prop": "loadingEnd",
+			"values": [true]
+		},
+		{
+			"prop": "reorderable",
+			"values": [true]
+		}
+	],
+	"aria": [
+		{
+			"role": "link",
+			"name": "general"
+		},
+		{
+			"role": "button",
+			"name": "design"
+		}
+	]
+}

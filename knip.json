@@ -38,15 +38,30 @@
 			"entry": ["alchemy.run.ts"]
 		},
 		"apps/ios-hybrid": {
+			// The JavaScriptCore bundles (`build:effect-ui`, `build:effect-ui:live`) and the build scripts.
+			"entry": ["effect-ui/entry.ts", "effect-ui/live-entry.ts", "scripts/**/*.ts"],
 			// web-foldkit's Vite config (which this package's spreads) imports these, resolved here.
 			"ignoreDependencies": ["foldkit", "@foldkit/vite-plugin"]
+		},
+		"packages/ui": {
+			// Codegen and stub scripts run by hand or from package scripts.
+			"entry": ["scripts/**/*.ts"],
+			// The parity gallery draws today's kit through web-foldkit's own foldkit (tsconfig paths).
+			"ignoreDependencies": ["foldkit"]
 		},
 		"apps/raycast": {
 			// Raycast provides React to extensions at runtime.
 			"ignoreDependencies": ["react"]
 		},
 		"apps/web-foldkit": {
-			"entry": ["alchemy.run.ts", "src/main.ts", "**/*.gallery.ts", "public/sw.js"],
+			// `src/parity/pages/*.ts`: the parity harness's registry, loaded by `compare-pages.ts` from disk.
+			"entry": [
+				"alchemy.run.ts",
+				"src/main.ts",
+				"public/sw.js",
+				"scripts/*.ts",
+				"src/parity/pages/*.ts"
+			],
 			// @foldkit/devtools is loaded by @foldkit/vite-plugin's dev overlay; the oxlint plugin by
 			// path from the root .oxlintrc.json.
 			"ignoreDependencies": ["@foldkit/devtools", "@foldkit/oxlint-plugin"]

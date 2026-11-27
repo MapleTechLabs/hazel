@@ -1,0 +1,39 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): the assistant's reasoning, closed then open, and a running step.",
+	"root": {
+		"tag": "disclosure",
+		"props": {
+			"title": "Thought for 4s",
+			"subtitle": "Read 3 channels"
+		},
+		"events": ["toggle"],
+		"children": [
+			{
+				"tag": "text",
+				"children": ["Checked #support and the billing thread."],
+				"props": {
+					"tone": "muted"
+				}
+			}
+		]
+	},
+	"frame": "sidebar",
+	"cases": [
+		{
+			"name": "open",
+			"props": {
+				"open": true
+			}
+		},
+		{
+			"name": "running",
+			"props": {
+				"running": true,
+				"title": "Thinking"
+			}
+		}
+	],
+	"pending": {
+		"ios": "S4"
+	}
+}

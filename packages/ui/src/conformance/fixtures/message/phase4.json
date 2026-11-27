@@ -1,0 +1,30 @@
+{
+	"about": "Phase 4: a code block's copy button (`copyCode`, today's `markdown-view.ts:97`) and the row's actions, which a right click opens as a menu at the pointer (`message-menu-web`).",
+	"root": {
+		"tag": "message",
+		"props": {
+			"row": {
+				"author": "Ada Lovelace",
+				"initials": "AL",
+				"time": "10:02",
+				"body": [
+					[0, ["The fix:"]],
+					[1, "const answer = 42\nconsole.log(answer)", "ts"],
+					[1, "no language here", ""]
+				],
+				"quick": ["👍", "❤️", "😂"],
+				"actions": ["react", "reply", "thread", "copy", "edit", "pin", "issue", "delete"]
+			}
+		},
+		"events": ["copyCode", "action", "pressReaction", "addReaction"]
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Copy code"
+		}
+	],
+	"pending": {
+		"ios": "S5"
+	}
+}

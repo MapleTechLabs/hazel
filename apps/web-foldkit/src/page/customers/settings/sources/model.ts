@@ -1,10 +1,10 @@
 import { IntegrationConfig, type SettingsField } from "@hazel/customer-integrations"
+import { readField } from "@hazel/shared-screens/customers/settings/sources/config"
+import { ConnectFailure } from "@hazel/shared-screens/customers/settings/sources/status"
 import type { ConnectionConfig } from "@hazel/domain/customers"
 import * as Customers from "@hazel/domain/customers"
 import { CustomerConnectionId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
-import * as AsyncData from "foldkit/asyncData"
-import { CommonReason, failureMessage, type UserErrorMessage } from "~/lib/error-messages"
 import { providerOf } from "../../../../customers/providers"
 import { ImpersonatorRow, MemberRow } from "../../../../customers/queries"
 import * as Menu from "../../../../ui/menu"
@@ -12,65 +12,17 @@ import * as Modal from "../../../../ui/modal"
 import { ConnectionRow, ImpersonationRow, SyncRunRow, UnitMetricRow } from "./queries"
 
 /**
- * Data sources (`docs/customers/spec.md` §5): every provider's connection, its sync runs and
- * settings, the connect flow. One page for the overview and a source's detail (`provider` set).
+ * A data source's detail (`docs/customers/spec.md` §5): its connection, sync runs and settings.
+ * The overview and the connect modal are native (`shared-screens/customers/.../sources`).
  */
 
-/**
- * What a connect, a key rotation or a settings save can answer beyond the shared reasons: the
- * provider refused the key, could not be reached to check it, has no integration yet, the request
- * was refused as malformed, or the connection is gone.
- */
-export const ConnectFailure = Schema.Union([
-	Schema.Literals(["Refused", "Unreachable", "ComingSoon", "Invalid", "NotFound"]),
-	CommonReason,
-])
-export type ConnectFailure = typeof ConnectFailure.Type
-
-/** What a connect, a key rotation or a settings save says when it fails. */
-export const connectFailureMessage = (
-	reason: ConnectFailure,
-	provider: Customers.CustomerProvider,
-): UserErrorMessage => {
-	const name = providerOf(provider).name
-	return failureMessage(reason, {
-		Refused: {
-			title: "Key was refused",
-			description: `${name} did not accept this key. Check that it is live and has the permissions listed, then test again. Nothing was imported.`,
-		},
-		Unreachable: {
-			title: `Couldn't reach ${name}`,
-			description: "The key could not be checked right now. Try again in a moment.",
-		},
-		ComingSoon: {
-			title: `The ${name} integration is coming soon`,
-			description: "Hazel can't sync from it yet. Nothing was stored.",
-		},
-		Invalid: {
-			title: "Hazel couldn't use these settings",
-			description: "Check the fields and try again.",
-		},
-		NotFound: { title: "This connection is gone", description: "It was disconnected meanwhile." },
-	})
-}
-
-/** The connect modal: the key and matching options, then (once connected) the webhook step. */
-export const ConnectForm = Schema.Struct({
-	provider: Customers.CustomerProvider,
-	/** Rotating the key of this connection (`customers.connection.update`); null: a new connection. */
-	reconnectId: Schema.NullOr(CustomerConnectionId),
-	apiKey: Schema.String,
-	config: IntegrationConfig,
-	/** The connection the key opened: the webhook URL needs its id. */
-	connected: Schema.NullOr(
-		Schema.Struct({ connectionId: CustomerConnectionId, accountName: Schema.NullOr(Schema.String) }),
-	),
-	webhookSecret: Schema.String,
-	/** The connect (or, once connected, the secret's save) in flight, and how the last one failed. */
-	isPending: Schema.Boolean,
-	failure: Schema.NullOr(ConnectFailure),
-})
-export type ConnectForm = typeof ConnectForm.Type
+export { connectFailureMessage } from "@hazel/shared-screens/customers/settings/sources/status"
+export { ConnectFailure }
+export {
+	configFlag,
+	configText,
+	withConfigField,
+} from "@hazel/shared-screens/customers/settings/sources/config"
 
 /** "Update keys": a new API key, a new signing secret, or both; blank keeps the current one. */
 export const KeysForm = Schema.Struct({
@@ -85,25 +37,16 @@ export type KeysForm = typeof KeysForm.Type
 export const HistoryFilter = Schema.Literals(["all", "failed"])
 export type HistoryFilter = typeof HistoryFilter.Type
 
-export const UnmatchedCount = AsyncData.Schema(Schema.Int, CommonReason)
-export type UnmatchedCount = typeof UnmatchedCount.schema.Type
-
 export const Model = Schema.Struct({
-	/** The detail route's provider; null on the overview. */
-	provider: Schema.NullOr(Customers.CustomerProvider),
+	/** The detail route's provider. */
+	provider: Customers.CustomerProvider,
 	/** Live rows; null until each query answers. */
 	connections: Schema.NullOr(Schema.Array(ConnectionRow)),
 	syncRuns: Schema.NullOr(Schema.Array(SyncRunRow)),
-	accountCount: Schema.NullOr(Schema.Int),
 	members: Schema.Array(MemberRow),
-	/** Open unmatched records (`customers.unmatched.list`'s `openCount`). */
-	unmatched: UnmatchedCount.schema,
 	/** "Sync now" sent and not yet answered. */
 	syncing: Schema.Array(CustomerConnectionId),
-	isSeedingDemo: Schema.Boolean,
 	historyFilter: HistoryFilter,
-	connectModal: Modal.Model,
-	connectForm: Schema.NullOr(ConnectForm),
 	keysModal: Modal.Model,
 	keysForm: Schema.NullOr(KeysForm),
 	disconnectModal: Modal.Model,
@@ -126,7 +69,6 @@ export const Model = Schema.Struct({
 })
 export type Model = typeof Model.Type
 
-export const CONNECT_MODAL_ID = "customers-source-connect"
 export const KEYS_MODAL_ID = "customers-source-keys"
 export const DISCONNECT_MODAL_ID = "customers-source-disconnect"
 export const IMPERSONATOR_MENU_ID = "customers-impersonator-add"
@@ -190,17 +132,6 @@ export const settingsProblemOf = (config: IntegrationConfig): string | null =>
 
 export const isSettingsValid = (config: IntegrationConfig): boolean => settingsProblemOf(config) === null
 
-/**
- * `config` with one of its fields set, when the value fits the field: a descriptor's `ConfigField`
- * names the key, and the config's schema checks it.
- */
-export const withConfigField = (
-	config: IntegrationConfig,
-	key: string,
-	value: string | boolean,
-): IntegrationConfig =>
-	Option.getOrElse(Schema.decodeOption(IntegrationConfig)({ ...config, [key]: value }), () => config)
-
 /** `config` with a settings field replaced: a draft may hold what the schema refuses until saved. */
 export const withConfigValue = (
 	config: IntegrationConfig,
@@ -208,26 +139,8 @@ export const withConfigValue = (
 	value: ConfigRows | ReadonlyArray<string> | number,
 ): IntegrationConfig => ({ ...config, [key]: value })
 
-const readField = <A>(
-	config: ConnectionConfig,
-	key: string,
-	schema: Schema.Codec<A, unknown>,
-	empty: A,
-): A => {
-	const value = Object.entries(config).find(([field]) => field === key)?.[1]
-	return Schema.is(schema)(value) ? value : empty
-}
-
 const StringList = Schema.Array(Schema.String)
 const Rows = Schema.Array(Schema.Record(Schema.String, Schema.String))
-
-/** A descriptor's Toggle field in `config`. */
-export const configFlag = (config: IntegrationConfig, key: string): boolean =>
-	readField(config, key, Schema.Boolean, false)
-
-/** A descriptor's Text field in `config`. */
-export const configText = (config: IntegrationConfig, key: string): string =>
-	readField(config, key, Schema.String, "")
 
 /** A settings string list in `config`. */
 export const configList = (config: ConnectionConfig, key: string): ReadonlyArray<string> =>

@@ -1,0 +1,49 @@
+{
+	"about": "A labelled field with a description and a value, in each state.",
+	"root": {
+		"tag": "textField",
+		"props": {
+			"label": "Organization name",
+			"placeholder": "Acme",
+			"description": "Shown in the sidebar and in invitations.",
+			"value": {
+				"text": "Hazel",
+				"rev": 0,
+				"edit": 0
+			}
+		},
+		"events": ["change", "submit"]
+	},
+	"aria": [
+		{
+			"role": "textbox",
+			"name": "Organization name"
+		}
+	],
+	"axes": [
+		{
+			"prop": "disabled",
+			"values": [true]
+		},
+		{
+			"prop": "readOnly",
+			"values": [true]
+		},
+		{
+			"prop": "required",
+			"values": [true]
+		},
+		{
+			"prop": "monospace",
+			"values": [true]
+		}
+	],
+	"cases": [
+		{
+			"name": "error",
+			"props": {
+				"error": "A name is required."
+			}
+		}
+	]
+}

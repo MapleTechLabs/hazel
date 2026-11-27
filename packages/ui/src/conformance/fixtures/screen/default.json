@@ -1,0 +1,76 @@
+{
+	"about": "A screen with a title holding a section, with and without a back button.",
+	"root": {
+		"tag": "screen",
+		"props": {
+			"title": "Channels"
+		},
+		"events": ["back"],
+		"children": [
+			{
+				"tag": "section",
+				"props": {
+					"title": "Favorites"
+				},
+				"children": [
+					{
+						"tag": "item",
+						"key": "general",
+						"props": {
+							"title": "general",
+							"href": "#"
+						},
+						"events": ["press"],
+						"slots": [
+							{
+								"name": "leading",
+								"children": [
+									{
+										"tag": "icon",
+										"props": {
+											"name": "hashtag"
+										}
+									}
+								]
+							}
+						]
+					},
+					{
+						"tag": "item",
+						"key": "design",
+						"props": {
+							"title": "design",
+							"href": "#"
+						},
+						"events": ["press"],
+						"slots": [
+							{
+								"name": "leading",
+								"children": [
+									{
+										"tag": "icon",
+										"props": {
+											"name": "hashtag"
+										}
+									}
+								]
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"aria": [
+		{
+			"role": "heading",
+			"name": "Channels"
+		}
+	],
+	"axes": [
+		{
+			"prop": "back",
+			"values": [true]
+		}
+	]
+}

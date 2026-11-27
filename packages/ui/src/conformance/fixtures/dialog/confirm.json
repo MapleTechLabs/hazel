@@ -1,0 +1,27 @@
+{
+	"about": "hz:dialog as a destructive confirmation with real buttons in its actions slot (draws once lane A2's button lands).",
+	"frame": "screen",
+	"root": {
+		"tag": "dialog",
+		"props": {
+			"open": true,
+			"destructive": true,
+			"title": "Delete message?",
+			"description": "This cannot be undone."
+		},
+		"events": ["dismiss"],
+		"slots": [
+			{
+				"name": "actions",
+				"children": [
+					{ "tag": "button", "props": { "label": "Cancel", "variant": "outline" } },
+					{ "tag": "button", "props": { "label": "Delete", "variant": "danger" } }
+				]
+			}
+		]
+	},
+	"aria": [
+		{ "role": "alertdialog", "name": "Delete message?" },
+		{ "role": "button", "name": "Delete" }
+	]
+}

@@ -3,7 +3,7 @@
  * app, `host.ts`), or built `--mode offline` with the offline fixture (`../fixture`) as the page's `fetch` and
  * `WebSocket` (no backend); and the bridge to the SwiftUI shell.
  */
-import { forwardConsole, installBridge } from "./bridge"
+import { forwardConsole, inShell, installBridge } from "./bridge"
 import { installHost } from "./host"
 import { installPush } from "./push"
 import { installWorkerOrigin } from "./worker-origin"
@@ -51,56 +51,15 @@ const installOffline = async () => {
 			? undefined
 			: () => ({ url: `${render.url().url}?n=${++minted}`, expiresAt: render.url().expiresAt })
 	// A thread on #general's last message, with a few replies (the offline fixture has none).
-	const fixture = await import("../fixture/snapshot")
-	const threadId = "00000000-0000-4000-8000-0000000e0001"
-	const parent = fixture.generalMessageRows.at(-1)
-	const [template] = fixture.channelRows
-	const [membership] = fixture.channelMemberRows
-	if (parent !== undefined && template !== undefined && membership !== undefined) {
-		server.write("org", fixture.orgId, "channels", [
-			{
-				...template,
-				id: threadId,
-				name: "Benchmarks",
-				type: "thread",
-				parentChannelId: parent.channelId,
-				sectionId: null,
-			},
-		])
-		server.write("org", fixture.orgId, "channel_members", [
-			{
-				...membership,
-				id: "00000000-0000-4000-8000-0000000e0002",
-				channelId: threadId,
-				notificationCount: 0,
-			},
-		])
-		server.write("channel", parent.channelId, "messages", [{ ...parent, threadChannelId: threadId }])
-		const replies = [
-			"Which build should I use?",
-			"The release one from this morning.",
-			"Numbers in an hour.",
-		]
-		server.write(
-			"channel",
-			threadId,
-			"messages",
-			replies.map((content, index) => ({
-				...parent,
-				id: `00000000-0000-4000-8000-0000000e01${String(index).padStart(2, "0")}`,
-				channelId: threadId,
-				authorId:
-					(fixture.userRows[index % fixture.userRows.length] ?? fixture.userRows[0])?.id ??
-					parent.authorId,
-				content,
-				threadChannelId: null,
-				createdAt: new Date(Date.parse(parent.createdAt) + (index + 1) * 60_000).toISOString(),
-			})),
-		)
-	}
-	const emptyChannel = fixture.channelRows[1]?.id ?? ""
+	const { seedGeneralThread, snapshotWithThread } = await import("../fixture/thread-seed")
+	seedGeneralThread(server)
+	// The parity harness's page (`compare-pages.ts`): its own rows and RPC answers, if it has any.
+	const page = await (await import("../fixture/page-fixture")).loadPageFixture()
+	page?.seed?.(server)
 	const network = globalThis.fetch.bind(globalThis)
 	const offlineFetch = makeOfflineFetch({
+		rpcs: page?.rpcs,
+		http: page?.http,
 		htmlRenderUrl: renderUrl,
 		backendUrl: BACKEND_URL,
 		unfurls: network,
@@ -113,6 +72,8 @@ const installOffline = async () => {
 	globalThis.fetch = (input, init) => {
 		const url = new Request(input, init).url
 		if (new URL(url).origin === new URL(BACKEND_URL).origin) return offlineFetch(input, init)
+		const unfurl = page?.unfurls?.(new URL(url))
+		if (unfurl !== undefined) return Promise.resolve(Response.json(unfurl))
 		return network(input, init)
 	}
 	Object.assign(globalThis, {
@@ -120,11 +81,8 @@ const installOffline = async () => {
 			server,
 			latencyMs: 0,
 			// The thread's own source: a channel's tables, as an empty channel has them.
-			snapshot: (kind, sourceId) =>
-				fixture.snapshotFor(
-					kind,
-					kind === "channel" && sourceId === threadId ? emptyChannel : sourceId,
-				),
+			snapshot: snapshotWithThread,
+			live: page?.live,
 		}),
 	})
 	if (location.pathname === "/" || location.pathname === "/index.html")
@@ -141,5 +99,6 @@ else {
 	installHost()
 	installPush()
 }
-installBridge()
+// Only the shell draws the list, the tab bar and pictures natively; a browser keeps the web's own.
+if (inShell()) installBridge()
 await import("../../web-foldkit/src/entry")

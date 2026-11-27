@@ -1,0 +1,47 @@
+{
+	"about": "A phone tab's page (`surface` `page`, today's `mobileTopBar`): the 56pt bar with the section heading, the page ground, content that pads itself.",
+	"root": {
+		"tag": "screen",
+		"props": {
+			"title": "DMs",
+			"surface": "page"
+		},
+		"children": [
+			{
+				"tag": "section",
+				"props": {
+					"style": "list",
+					"title": "Everything else"
+				},
+				"children": [
+					{
+						"tag": "item",
+						"props": {
+							"title": "Alan Turing",
+							"subtitle": "You: The proofs are attached.",
+							"leadingSize": "conversation",
+							"href": "#"
+						},
+						"key": "alan",
+						"slots": [
+							{
+								"name": "leading",
+								"children": [
+									{
+										"tag": "avatar",
+										"props": {
+											"name": "Alan Turing",
+											"initials": "AT",
+											"size": "medium"
+										}
+									}
+								]
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen"
+}

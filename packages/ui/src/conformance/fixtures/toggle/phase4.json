@@ -1,0 +1,45 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): the checkbox look, checked and mixed.",
+	"root": {
+		"tag": "toggle",
+		"props": {
+			"label": "Pin to top",
+			"style": "checkbox",
+			"checked": true
+		},
+		"events": ["change"]
+	},
+	"frame": "sidebar",
+	"cases": [
+		{
+			"name": "indeterminate",
+			"props": {
+				"indeterminate": true,
+				"checked": null
+			}
+		},
+		{
+			"name": "unchecked-description",
+			"props": {
+				"checked": null,
+				"description": "Keeps it above the other notes."
+			}
+		},
+		{
+			"name": "disabled",
+			"props": {
+				"checked": null,
+				"disabled": true
+			}
+		}
+	],
+	"pending": {
+		"ios": "S2"
+	},
+	"aria": [
+		{
+			"role": "checkbox",
+			"name": "Pin to top"
+		}
+	]
+}

@@ -1,0 +1,176 @@
+{
+	"about": "Unmatched records (`page/customers/settings/unmatched/table.ts`): a group heading row spanning the columns over a row and a disabled row, in a selectable table.",
+	"root": {
+		"tag": "table",
+		"props": {
+			"label": "Unmatched",
+			"columns": [
+				{
+					"key": "name",
+					"label": "Customer",
+					"width": "fill",
+					"sortable": true
+				},
+				{
+					"key": "plan",
+					"label": "Plan",
+					"width": "narrow",
+					"optional": true
+				},
+				{
+					"key": "mrr",
+					"label": "MRR",
+					"align": "end",
+					"sortable": true,
+					"width": "regular"
+				}
+			],
+			"selectable": true
+		},
+		"events": ["selectAll"],
+		"children": [
+			{
+				"tag": "tableRow",
+				"key": "g",
+				"props": {
+					"title": "Stripe customers · 2",
+					"group": true
+				}
+			},
+			{
+				"tag": "tableRow",
+				"key": "a",
+				"props": {
+					"title": "Initech"
+				},
+				"events": ["press", "select"],
+				"children": [
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "name"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Initech"],
+								"props": {
+									"role": "label",
+									"strong": true
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "plan"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Free"],
+								"props": {
+									"role": "label",
+									"tone": "muted"
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "mrr"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["$0"],
+								"props": {
+									"role": "label",
+									"numeric": true
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"tag": "tableRow",
+				"key": "b",
+				"props": {
+					"disabled": true
+				},
+				"events": ["press", "select"],
+				"children": [
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "name"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Umbrella"],
+								"props": {
+									"role": "label",
+									"strong": true
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "plan"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Pro"],
+								"props": {
+									"role": "label",
+									"tone": "muted"
+								}
+							}
+						]
+					},
+					{
+						"tag": "tableCell",
+						"props": {
+							"column": "mrr"
+						},
+						"children": [
+							{
+								"tag": "text",
+								"children": ["$900"],
+								"props": {
+									"role": "label",
+									"numeric": true
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen",
+	"aria": [
+		{
+			"role": "grid",
+			"name": "Unmatched"
+		},
+		{
+			"role": "columnheader",
+			"name": "Stripe customers · 2"
+		},
+		{
+			"role": "checkbox",
+			"name": "Select Initech"
+		}
+	],
+	"pending": {
+		"ios": "S5"
+	}
+}

@@ -1,0 +1,44 @@
+{
+	"about": "The selected row (a button, not a link), against G6 item-selected.",
+	"root": {
+		"tag": "section",
+		"props": {
+			"title": "Channels"
+		},
+		"children": [
+			{
+				"tag": "item",
+				"key": "design",
+				"props": {
+					"title": "design",
+					"selected": true
+				},
+				"events": ["press"],
+				"slots": [
+					{
+						"name": "leading",
+						"children": [
+							{
+								"tag": "icon",
+								"props": {
+									"name": "hashtag"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar",
+	"aria": [
+		{
+			"role": "button",
+			"name": "design"
+		}
+	],
+	"kit": {
+		"specimen": "item-selected",
+		"target": "item"
+	}
+}

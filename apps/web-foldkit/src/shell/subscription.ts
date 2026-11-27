@@ -1,22 +1,19 @@
-import { ChannelId, NotificationId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
+import { NotificationId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { and, eq, isNull } from "@tanstack/db"
 import { Option, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import {
-	channelCollection,
 	notificationCollection,
 	organizationCollection,
 	organizationMemberCollection,
-	userPresenceStatusCollection,
 } from "~/db/collections"
 import { liveQueryStream } from "../data/live-query"
 import type { Shared } from "../page/contract"
-import { AppRoute, orgSectionOf } from "../route"
+import { type AppRoute, orgSectionOf } from "../route"
 import { isMentionReason } from "../platform/badge"
 import * as ChannelsSidebar from "./channels-sidebar"
-import * as CustomersSidebar from "./customers-sidebar"
 import * as Notifications from "./notifications"
-import { type ChannelSummary, Message, type Model } from "./model"
+import { Message, type Model } from "./model"
 
 /** What the shell's Subscriptions see: its Model plus the root's route and shared state. */
 export interface Input {
@@ -33,21 +30,6 @@ interface OrgRow {
 		readonly logoUrl?: string | null
 	}
 }
-
-interface PresenceRow {
-	readonly statusEmoji?: string | null
-	readonly customMessage?: string | null
-	readonly statusExpiresAt?: Date | null
-}
-
-/** The channel settings tabs, whose layout header shows the channel. */
-const isChannelSettingsTab = AppRoute.isAnyOf([
-	"ChannelSettingsOverview",
-	"ChannelSettingsIntegrations",
-	"ChannelSettingsConnect",
-])
-
-const settingsChannelId = (route: AppRoute) => (isChannelSettingsTab(route) ? route.channelId : null)
 
 const own = Subscription.make<Input, Message>()((entry) => ({
 	// `SwitchServerMenu`: every organization the user belongs to, oldest membership first.
@@ -76,37 +58,6 @@ const own = Subscription.make<Input, Message>()((entry) => ({
 										logoUrl: org.logoUrl ?? null,
 									})),
 								}),
-						),
-		},
-	),
-	// `useCurrentUserStatus`: the user's newest presence row (`currentUserPresenceAtomFamily`).
-	shellUserStatus: entry(
-		{ userId: Schema.NullOr(UserId) },
-		{
-			modelToDependencies: ({ shared }) => ({ userId: shared.currentUser?.id ?? null }),
-			dependenciesToStream: ({ userId }) =>
-				userId === null
-					? Stream.empty
-					: liveQueryStream<PresenceRow, Message>(
-							(q) =>
-								q
-									.from({ presence: userPresenceStatusCollection })
-									.where(({ presence }) => eq(presence.userId, userId))
-									.orderBy(({ presence }) => presence.updatedAt, "desc")
-									.findOne(),
-							(rows) => {
-								const row = rows[0]
-								return Message.UpdatedUserStatus({
-									status:
-										row === undefined
-											? null
-											: {
-													emoji: row.statusEmoji ?? null,
-													message: row.customMessage ?? null,
-													expiresAtMs: row.statusExpiresAt?.getTime() ?? null,
-												},
-								})
-							},
 						),
 		},
 	),
@@ -140,35 +91,6 @@ const own = Subscription.make<Input, Message>()((entry) => ({
 						),
 		},
 	),
-	shellSettingsChannel: entry(
-		{ channelId: Schema.NullOr(ChannelId) },
-		{
-			modelToDependencies: ({ route }) => ({ channelId: settingsChannelId(route) }),
-			dependenciesToStream: ({ channelId }) =>
-				channelId === null
-					? Stream.empty
-					: liveQueryStream<ChannelSummary, Message>(
-							(q) =>
-								q
-									.from({ channel: channelCollection })
-									.where(({ channel }) => eq(channel.id, channelId))
-									.findOne(),
-							(rows) => {
-								const channel = rows[0]
-								return Message.UpdatedSettingsChannel({
-									channel: channel
-										? {
-												id: channel.id,
-												name: channel.name,
-												type: channel.type,
-												icon: channel.icon ?? null,
-											}
-										: null,
-								})
-							},
-						),
-		},
-	),
 }))
 
 const channelsSidebar = Subscription.lift(ChannelsSidebar.subscriptions)<Input, Message>({
@@ -183,22 +105,4 @@ const channelsSidebarBadge = Subscription.lift(ChannelsSidebar.badgeSubscription
 	toParentMessage: (message) => Message.GotChannelsSidebarMessage({ message }),
 })
 
-/** Only on customers routes: entering the area opens the org's customers source (and keeps it). */
-const customersSidebar = Subscription.lift(CustomersSidebar.subscriptions)<Input, Message>({
-	read: ({ model, route, shared }) =>
-		orgSectionOf(route) === "Customers"
-			? Option.some({
-					organizationId: shared.organization?.id ?? null,
-					userId: shared.currentUser?.id ?? null,
-					drag: model.customersSidebar.drag,
-				})
-			: Option.none(),
-	toParentMessage: (message) => Message.GotCustomersSidebarMessage({ message }),
-})
-
-export const subscriptions = Subscription.aggregate(
-	own,
-	channelsSidebar,
-	channelsSidebarBadge,
-	customersSidebar,
-)
+export const subscriptions = Subscription.aggregate(own, channelsSidebar, channelsSidebarBadge)

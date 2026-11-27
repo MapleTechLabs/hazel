@@ -1,0 +1,34 @@
+{
+	"about": "A group DM's avatars overlapping, then how many more are in it.",
+	"root": {
+		"tag": "avatarStack",
+		"props": {
+			"overflow": 3
+		},
+		"children": [
+			{
+				"tag": "avatar",
+				"key": "AL",
+				"props": {
+					"initials": "AL"
+				}
+			},
+			{
+				"tag": "avatar",
+				"key": "GH",
+				"props": {
+					"initials": "GH"
+				}
+			}
+		]
+	},
+	"frame": "inline",
+	"cases": [
+		{
+			"name": "no-overflow",
+			"props": {
+				"overflow": null
+			}
+		}
+	]
+}

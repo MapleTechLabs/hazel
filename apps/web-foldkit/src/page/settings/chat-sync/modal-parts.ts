@@ -1,30 +1,8 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import * as Interaction from "../../../ui/aria/interaction"
-import { button } from "../../../ui/button"
 import { input, inputGroup, type InteractionTarget } from "../../../ui/input"
 
-/** Markup the chat sync modals repeat: the picked row, and the searchable list. */
-
-type Children = ReadonlyArray<Html | string>
-
-/** The chosen item with its "Change" button. */
-export const selectedRow = <Message>(h: HtmlBuilder<Message>, content: Children, onChange: Message): Html =>
-	h.div(
-		[
-			h.Class(
-				"flex items-center justify-between rounded-lg border border-border bg-bg-muted/30 px-3 py-2.5",
-			),
-		],
-		[
-			h.div([h.Class("flex items-center gap-2")], [...content]),
-			button(h, { intent: "plain", size: "xs", className: "text-muted-fg", onPress: onChange }, [
-				"Change",
-			]),
-		],
-	)
-
-export const selectedName = <Message>(h: HtmlBuilder<Message>, name: string): Html =>
-	h.span([h.Class("font-medium text-fg text-sm")], [name])
+/** Markup the chat sync modals repeat: the search input and the searchable list. */
 
 /** `<InputGroup><Input placeholder value onChange autoFocus? /></InputGroup>` */
 export const searchInput = <Message>(

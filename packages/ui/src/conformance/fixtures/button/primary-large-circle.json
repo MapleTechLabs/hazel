@@ -1,0 +1,19 @@
+{
+	"about": "A round primary large icon button, against button-primary-large-circle.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"size": "large",
+			"label": "Add",
+			"icon": "plus",
+			"iconOnly": true,
+			"circle": true
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "button-primary-large-circle",
+		"target": "button"
+	}
+}

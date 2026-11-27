@@ -1,0 +1,22 @@
+{
+	"about": "A primary large button with a label, against the kit's button-primary-large (G6).",
+	"root": {
+		"tag": "button",
+		"props": {
+			"size": "large",
+			"label": "Invite"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Invite"
+		}
+	],
+	"kit": {
+		"specimen": "button-primary-large",
+		"target": "button"
+	}
+}

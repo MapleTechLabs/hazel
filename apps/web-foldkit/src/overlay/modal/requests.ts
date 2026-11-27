@@ -1,4 +1,16 @@
-import { BotId, ChannelId, MessageId, OrganizationMemberId, UserId } from "@hazel/schema"
+import { IntegrationConfig } from "@hazel/customer-integrations"
+import { CustomerProvider, SignalSeverity } from "@hazel/domain/customers"
+import {
+	BotId,
+	ChannelId,
+	CustomerAccountId,
+	CustomerConnectionId,
+	CustomerSignalId,
+	MessageId,
+	OrganizationId,
+	OrganizationMemberId,
+	UserId,
+} from "@hazel/schema"
 import { Schema } from "effect"
 
 /**
@@ -48,6 +60,39 @@ export const RegenerateBotToken = Schema.TaggedStruct("RegenerateBotToken", {
 export const DeleteBot = Schema.TaggedStruct("DeleteBot", { botId: BotId, botName: Schema.String })
 export const DeleteMessage = Schema.TaggedStruct("DeleteMessage", { messageId: MessageId })
 export const KeyboardShortcuts = Schema.TaggedStruct("KeyboardShortcuts", {})
+/** Needs attention's dialogs (PK2): native only. */
+export const MarkSignalDone = Schema.TaggedStruct("MarkSignalDone", {
+	signalId: CustomerSignalId,
+	accountName: Schema.String,
+	accountLogoUrl: Schema.NullOr(Schema.String),
+	title: Schema.String,
+	reason: Schema.String,
+	severity: SignalSeverity,
+})
+export const SnoozeSignalUntil = Schema.TaggedStruct("SnoozeSignalUntil", {
+	signalId: CustomerSignalId,
+	title: Schema.String,
+})
+
+// The customer page's More menu (native only).
+export const CustomerRawData = Schema.TaggedStruct("CustomerRawData", { json: Schema.String })
+export const CustomerLink = Schema.TaggedStruct("CustomerLink", {
+	organizationId: OrganizationId,
+	accountId: CustomerAccountId,
+})
+export const CustomerEnvironment = Schema.TaggedStruct("CustomerEnvironment", {
+	organizationId: OrganizationId,
+	accountId: CustomerAccountId,
+	name: Schema.String,
+	environment: Schema.NullOr(Schema.String),
+})
+
+/** Connect a customers data source, or rotate the key of `reconnectId`, starting from `config`. */
+export const CustomerSourceConnect = Schema.TaggedStruct("CustomerSourceConnect", {
+	provider: CustomerProvider,
+	reconnectId: Schema.NullOr(CustomerConnectionId),
+	config: IntegrationConfig,
+})
 
 export const ModalRequest = Schema.Union([
 	NewChannel,
@@ -70,5 +115,11 @@ export const ModalRequest = Schema.Union([
 	DeleteBot,
 	DeleteMessage,
 	KeyboardShortcuts,
+	MarkSignalDone,
+	SnoozeSignalUntil,
+	CustomerRawData,
+	CustomerLink,
+	CustomerEnvironment,
+	CustomerSourceConnect,
 ])
 export type ModalRequest = typeof ModalRequest.Type

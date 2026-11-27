@@ -4,7 +4,8 @@
 	"jsPlugins": [
 		"./scripts/oxlint-plugins/anti-slop/index.ts",
 		"./scripts/oxlint-plugins/test-slop.mjs",
-		"./scripts/oxlint-plugins/hazel-ui.mjs"
+		"./scripts/oxlint-plugins/hazel-ui.mjs",
+		"./scripts/oxlint-plugins/hazel.mjs"
 	],
 	"options": {
 		"reportUnusedDisableDirectives": "deny"
@@ -54,6 +55,20 @@
 		]
 	},
 	"overrides": [
+		{
+			// Shared hazel screens (docs/hazel-ui.md, "Rules"): typed props only, no raw escape hatches.
+			"files": ["apps/shared-screens/src/**"],
+			"rules": {
+				"hazel/no-raw-escape": "error"
+			}
+		},
+		{
+			// Governed h.custom composites: only the user raises the cap.
+			"files": ["packages/ui/src/custom/*.ts"],
+			"rules": {
+				"hazel/custom-cap": ["error", { "cap": 1 }]
+			}
+		},
 		{
 			// The landing and docs sites are plain React (Astro islands, Fumadocs), outside the no-useEffect rule.
 			"files": ["apps/landing/**", "apps/docs/**"],
@@ -129,11 +144,10 @@
 			}
 		},
 		{
-			// The kit itself, the galleries that showcase it, and tests render raw elements.
+			// The kit itself and tests render raw elements.
 			"files": [
 				"apps/web-foldkit/src/ui/**",
 				"apps/web-foldkit/src/core/components/**",
-				"apps/web-foldkit/src/**/*.gallery.ts",
 				"apps/web-foldkit/src/**/*.test.ts"
 			],
 			"rules": {
@@ -143,8 +157,8 @@
 			}
 		},
 		{
-			// Tests and galleries build fixtures, not UI.
-			"files": ["apps/web-foldkit/src/**/*.test.ts", "apps/web-foldkit/src/**/*.gallery.ts"],
+			// Tests build fixtures, not UI.
+			"files": ["apps/web-foldkit/src/**/*.test.ts"],
 			"rules": {
 				"hazel-ui/no-arbitrary-radius": "off",
 				"hazel-ui/no-arbitrary-text-size": "off",
@@ -248,9 +262,7 @@
 				"apps/backend/src/worker/sync-route.ts",
 				"apps/bot-gateway/src/gateway/object-live.ts",
 				"apps/bot-gateway/src/gateway/workerd.ts",
-				"apps/web-foldkit/src/chat/messages.gallery.ts",
 				"apps/web-foldkit/src/core/lib/live-socket.ts",
-				"apps/web-foldkit/src/design.gallery.ts",
 				"apps/web-foldkit/src/test/editor-harness.ts",
 				"libs/effect-db-collection/src/collection.ts",
 				"libs/effect-db-collection/src/connection.ts",
@@ -464,7 +476,7 @@
 		{
 			"files": [
 				"apps/web-foldkit/src/chat/live-state.test.ts",
-				"apps/web-foldkit/src/core/db/local-cache.test.ts",
+				"packages/client-data/src/platform/web/local-cache.test.ts",
 				"apps/web-foldkit/src/core/lib/native-notifications.test.ts",
 				"apps/web-foldkit/src/core/lib/notification-sound-manager.test.ts",
 				"apps/web-foldkit/src/platform/desktop-auth.test.ts",
@@ -511,7 +523,6 @@
 				"apps/backend/src/worker/objects/effects/directory-effects.ts",
 				"apps/backend/src/worker/objects/testing.ts",
 				"apps/backend/src/worker/rate-limiter-object.ts",
-				"apps/web-foldkit/src/chat/messages.gallery.ts",
 				"apps/web-foldkit/src/editor/markdown.test.ts",
 				"apps/web-foldkit/src/editor/registry.ts",
 				"bots/hazel-bot/src/worker.ts",
@@ -554,8 +565,8 @@
 				"apps/backend/src/worker/objects/stubs.ts",
 				"apps/bot-gateway/src/gateway/object-live.ts",
 				"apps/bot-gateway/src/gateway/relay.ts",
-				"apps/web-foldkit/src/core/db/collections.ts",
-				"apps/web-foldkit/src/core/db/local-cache.test.ts",
+				"packages/client-data/src/collections.ts",
+				"packages/client-data/src/platform/web/local-cache.test.ts",
 				"libs/effect-db-collection/src/collection.ts",
 				"libs/effect-db-collection/src/persisted.test.ts",
 				"packages/db/src/services/database.ts",
@@ -598,9 +609,7 @@
 				"apps/bot-gateway/src/gateway/object-live.ts",
 				"apps/bot-gateway/src/gateway/relay.test.ts",
 				"apps/bot-gateway/src/gateway/workerd.ts",
-				"apps/web-foldkit/src/chat/messages.gallery.ts",
 				"apps/web-foldkit/src/core/lib/live-socket.ts",
-				"apps/web-foldkit/src/design.gallery.ts",
 				"apps/web-foldkit/src/test/editor-harness.ts",
 				"libs/bot-sdk/src/hazel-bot-sdk.test.ts",
 				"libs/effect-db-collection/src/collection.ts",
@@ -676,12 +685,10 @@
 				"apps/web-foldkit/src/chat/file-icons.ts",
 				"apps/web-foldkit/src/chat/image-mosaic.ts",
 				"apps/web-foldkit/src/chat/markdown/markdown-view.ts",
-				"apps/web-foldkit/src/chat/messages.gallery.ts",
 				"apps/web-foldkit/src/chat/unfurl.ts",
-				"apps/web-foldkit/src/core/db/collections.ts",
+				"packages/client-data/src/collections.ts",
 				"apps/web-foldkit/src/core/lib/theme/presets.ts",
-				"apps/web-foldkit/src/data/live-query.ts",
-				"apps/web-foldkit/src/design.gallery.ts",
+				"packages/client-data/src/live-query.ts",
 				"apps/web-foldkit/src/editor/markdown.ts",
 				"apps/web-foldkit/src/emoji-picker/data.ts",
 				"apps/web-foldkit/src/entry.ts",
@@ -690,7 +697,6 @@
 				"apps/web-foldkit/src/page/chat/channel/page.ts",
 				"apps/web-foldkit/src/page/chat/derive.ts",
 				"apps/web-foldkit/src/page/notifications/inbox/subscription.ts",
-				"apps/web-foldkit/src/page/settings/chat-sync/chat-sync.gallery.ts",
 				"apps/web-foldkit/src/ui/dither-avatar.ts",
 				"bots/t3code-bot/src/runner.ts",
 				"libs/effect-db-collection/src/collection.ts",

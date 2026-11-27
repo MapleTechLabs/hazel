@@ -1,0 +1,127 @@
+{
+	"about": "A chat list anchored at its end: a date divider, the unread divider, two rows, and the overlay bar.",
+	"root": {
+		"tag": "list",
+		"props": {
+			"anchor": "end",
+			"stickToBottom": true
+		},
+		"events": ["reachStart"],
+		"slots": [
+			{
+				"name": "overlay",
+				"children": [
+					{
+						"tag": "text",
+						"children": ["2 new messages since 14:00"]
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "listDivider",
+				"key": "d1",
+				"props": {
+					"label": "Today"
+				}
+			},
+			{
+				"tag": "message",
+				"key": "m1",
+				"props": {
+					"row": {
+						"author": "Ada Lovelace",
+						"initials": "AL",
+						"provider": "slack",
+						"time": "14:05",
+						"body": [
+							[
+								0,
+								[
+									"Ship it ",
+									[1, "@Grace", "u2"],
+									", see ",
+									[2, "the doc", "https://hazel.sh/d"]
+								]
+							],
+							[1, "bun run test", "sh"]
+						],
+						"reactions": [
+							{
+								"emoji": "👍",
+								"count": 3,
+								"mine": true,
+								"who": {
+									"names": ["Grace", "Alan"],
+									"others": 1
+								}
+							},
+							{
+								"emoji": "🎉",
+								"count": 1,
+								"mine": false
+							}
+						],
+						"quick": ["👍", "❤️", "😂"],
+						"edited": true,
+						"files": [
+							{
+								"id": "f1",
+								"kind": "image",
+								"name": "shot.png",
+								"width": 1280,
+								"height": 720
+							}
+						],
+						"thread": {
+							"count": 2,
+							"author": "Grace Hopper",
+							"initials": "GH",
+							"preview": "On it",
+							"time": "14:09"
+						},
+						"actions": ["react", "reply", "thread", "copy", "edit", "pin", "issue", "delete"]
+					}
+				}
+			},
+			{
+				"tag": "listDivider",
+				"key": "unread",
+				"props": {
+					"kind": "unread",
+					"label": "New"
+				}
+			},
+			{
+				"tag": "message",
+				"key": "m2",
+				"props": {
+					"row": {
+						"time": "14:06",
+						"body": [[0, ["And the tests pass."]]]
+					},
+					"grouped": true
+				}
+			}
+		]
+	},
+	"axes": [
+		{
+			"prop": "loading",
+			"values": [true]
+		},
+		{
+			"prop": "loadingStart",
+			"values": [true]
+		},
+		{
+			"prop": "loadingEnd",
+			"values": [true]
+		},
+		{
+			"prop": "reorderable",
+			"values": [true]
+		}
+	]
+}

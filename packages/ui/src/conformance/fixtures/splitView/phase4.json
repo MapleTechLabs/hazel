@@ -1,0 +1,56 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): the rail, a collapsed sidebar and a resizable detail panel (a thread). Compact: the rail and sidebar hide, the detail covers the content.",
+	"root": {
+		"tag": "splitView",
+		"props": {
+			"sidebarCollapsed": true,
+			"resizable": true,
+			"detailWidth": 380
+		},
+		"events": ["resize"],
+		"slots": [
+			{
+				"name": "rail",
+				"children": [
+					{
+						"tag": "button",
+						"props": {
+							"label": "Home",
+							"icon": "messages",
+							"iconOnly": true,
+							"variant": "ghost"
+						}
+					}
+				]
+			},
+			{
+				"name": "sidebar",
+				"children": [
+					{
+						"tag": "text",
+						"children": ["Sidebar"]
+					}
+				]
+			},
+			{
+				"name": "detail",
+				"children": [
+					{
+						"tag": "text",
+						"children": ["Thread"]
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "text",
+				"children": ["Channel"]
+			}
+		]
+	},
+	"frame": "screen",
+	"pending": {
+		"ios": "S4"
+	}
+}

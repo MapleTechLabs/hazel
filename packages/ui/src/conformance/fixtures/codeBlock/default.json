@@ -1,0 +1,32 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): the agents page's MCP URL with a copy button, then a wrapped JSON payload.",
+	"root": {
+		"tag": "codeBlock",
+		"props": {
+			"code": "https://mcp.hazel.sh/mcp",
+			"title": "MCP server URL",
+			"copyable": true
+		},
+		"events": ["copy"]
+	},
+	"frame": "inline",
+	"cases": [
+		{
+			"name": "json",
+			"props": {
+				"code": "{\n  \"event\": \"message.created\",\n  \"channel\": \"general\"\n}",
+				"language": "json",
+				"wrap": true
+			}
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Copy"
+		}
+	]
+}

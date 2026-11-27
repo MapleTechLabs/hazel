@@ -39,19 +39,3 @@ export const leaveToast = (entryId: string = FIRST_TOAST) =>
 			Animation.Message.EndedAnimation({ generation: LEAVE }),
 		],
 	)
-
-/** A shown toast's whole life: enter, its 4s lifetime running out, then exit. */
-export const drainToast = (entryId: string = FIRST_TOAST, version = 0) => [
-	enterToast(entryId),
-	Scene.Command.resolve(
-		UiToast.WaitBeforeDismissal,
-		UiToast.Message.CompletedWaitBeforeDismissal({ entryId, version }),
-	),
-	leaveToast(entryId),
-]
-
-/** A success, warning or error toast plays its haptic as it shows (`overlay/toaster.ts`). */
-export const playToastFeedback = Scene.Command.resolve(
-	Toaster.PlayToastFeedback,
-	Toaster.Message.CompletedToastFeedback(),
-)

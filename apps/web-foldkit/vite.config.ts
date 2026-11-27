@@ -161,6 +161,21 @@ const inlinePaintBoot = (): Plugin => ({
 })
 
 /**
+ * The native pages' lazy code, one chunk per area instead of one per page and modal: below the
+ * first-screen groups, so only code the first screen does not load lands here. Keeps the build
+ * within Cloudflare's `_headers` rule limit (`immutableAssetHeaders`).
+ */
+const lazyAreas = [
+	{
+		name: "settings-native",
+		test: /[\\/]shared-screens[\\/]src[\\/](settings|my-settings|channel-settings)[\\/]/,
+	},
+	{ name: "customers-native", test: /[\\/]shared-screens[\\/]src[\\/]customers[\\/]/ },
+	{ name: "auth-native", test: /[\\/]shared-screens[\\/]src[\\/](auth|onboarding)[\\/]/ },
+	{ name: "modals-native", test: /[\\/]shared-screens[\\/]src[\\/]modals[\\/]/ },
+].map((group, index, groups) => ({ ...group, priority: groups.length - index }))
+
+/**
  * What the app's first screen loads (`$initial`: reached by static imports from the entry), split
  * so that a deploy which changes only app code leaves the libraries' chunks, and their cached
  * copies, as they are. The last group keeps the app's own first-screen code in one chunk. Code
@@ -174,7 +189,11 @@ const initialChunks = [
 	// Not the font faces: their CSS stays in the app's one stylesheet.
 	{ name: "vendor", test: /^(?!.*[\\/]@fontsource[\\/]).*[\\/]node_modules[\\/]/ },
 	{ name: "app" },
-].map((group, index, groups) => ({ ...group, tags: ["$initial" as const], priority: groups.length - index }))
+].map((group, index, groups) => ({
+	...group,
+	tags: ["$initial" as const],
+	priority: lazyAreas.length + groups.length - index,
+}))
 
 export default defineConfig({
 	server: {
@@ -198,7 +217,7 @@ export default defineConfig({
 					)
 					return area ? `assets/${area[1]}-pages-[hash].js` : "assets/[name]-[hash].js"
 				},
-				codeSplitting: { groups: initialChunks },
+				codeSplitting: { groups: [...initialChunks, ...lazyAreas] },
 			},
 		},
 	},

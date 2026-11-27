@@ -1,0 +1,24 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): onboarding's step 2 of 6.",
+	"root": {
+		"tag": "stepper",
+		"props": {
+			"steps": 6,
+			"current": 2,
+			"label": "Step 2 of 6"
+		}
+	},
+	"frame": "inline",
+	"pending": {
+		"ios": "S4"
+	},
+	"cases": [
+		{
+			"name": "last",
+			"props": {
+				"current": 6,
+				"label": "Step 6 of 6"
+			}
+		}
+	]
+}

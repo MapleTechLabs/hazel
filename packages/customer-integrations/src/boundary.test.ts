@@ -21,10 +21,8 @@ const CORE_PATHS = [
 	`${PACKAGE_SOURCE}/kit`,
 	"apps/web-foldkit/src/customers",
 	"apps/web-foldkit/src/page/customers",
-	"apps/web-foldkit/src/page/chat/customer-card.gallery.ts",
-	"apps/web-foldkit/src/lab/entries/customers",
+	"apps/shared-screens/src/customers",
 ]
-const LAB_FIXTURES = "apps/web-foldkit/src/lab/fixtures"
 
 /** Every entry says why that exact text may stay on the core side. */
 const ALLOWED: ReadonlyArray<{ readonly file: string; readonly text: string; readonly reason: string }> = [
@@ -48,10 +46,7 @@ const filesUnder = (path: string): ReadonlyArray<string> =>
 		? readdirSync(join(ROOT, path)).flatMap((entry) => filesUnder(`${path}/${entry}`))
 		: [path]
 
-const coreFiles = [
-	...CORE_PATHS.flatMap(filesUnder),
-	...filesUnder(LAB_FIXTURES).filter((file) => file.startsWith(`${LAB_FIXTURES}/customers`)),
-].filter((file) => /\.(ts|md)$/.test(file) && !isExempt(file))
+const coreFiles = CORE_PATHS.flatMap(filesUnder).filter((file) => /\.(ts|md)$/.test(file) && !isExempt(file))
 
 const escaped = (word: string) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 const words = [

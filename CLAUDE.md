@@ -93,7 +93,7 @@ Local dev is `bun run alchemy:dev` (alias `bun run dev`): it runs every Worker i
 - **Routing**: Flat route union in `src/route.ts`
 - **Styling**: TailwindCSS v4, `tailwind-variants` styles in `src/core/components/ui/*.styles.ts`
 - **UI Components**: `src/ui/` on `@foldkit/ui`
-- **Data**: TanStack DB collections synced from the Durable Objects over WebSockets (`src/core/db/collections.ts`, `libs/effect-db-collection`)
+- **Data**: TanStack DB collections synced from the Durable Objects over WebSockets (`packages/client-data`, `libs/effect-db-collection`; the app's one instance is `src/core/db/client.ts`)
 - **Rich Text**: ProseMirror composer (`src/editor/`)
 - **Auth**: Hazel auth (`@yielded/auth`)
 
@@ -216,7 +216,7 @@ A table the client syncs needs all of:
 
 1. **The store**: add the table to its store's list in `packages/db/src/stores.ts` (and a projection's to each store it is copied into), then run `bun run db:generate-sqlite --name <name>`.
 2. **The sync source**: add a `SyncTableSpec` (the table, its per-principal `visible` condition, `dependsOn`) to the object's source in `apps/backend/src/worker/objects/sources/` (`org-source.ts`, `channel-source.ts`, `user-source.ts`). A table that is not listed there is never streamed.
-3. **The collection**: add it in `apps/web-foldkit/src/core/db/collections.ts` (`orgCollection`, `channelCollectionOf`, or a `userSources` collection).
+3. **The collection**: add it in `packages/client-data/src/collections.ts` (`orgCollection`, `channelCollectionOf`, or a `userSources` collection).
 
 ## Effect-TS Best Practices
 

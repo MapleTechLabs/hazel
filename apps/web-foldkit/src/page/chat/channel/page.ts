@@ -1,15 +1,10 @@
 import type { ChannelId, MessageId, UserId } from "@hazel/schema"
-import { Record, Struct } from "effect"
+import { Effect, Record, Struct } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import * as HtmlRender from "../../../chat/html-render"
 import * as Live from "../../../chat/live-state"
 import * as Unfurl from "../../../chat/unfurl"
-import * as Composer from "../../../composer/composer"
-import * as Draft from "../../../composer/draft"
-import * as EmojiDialog from "../../../emoji-picker/dialog"
-import * as GifPicker from "../../../gif-picker/picker"
-import { PopoverEvent } from "../../../picker-popover/popover"
 import * as Popover from "../../../ui/popover"
 import * as MessageList from "../../../mount/message-list"
 import { AppRoute } from "../../../route"
@@ -26,13 +21,8 @@ import {
 	unfurlRequestsOf,
 	isLiveReactionChange,
 } from "../derive"
-import { typingNamesOf, typingUsersOf } from "../banners"
 import { emptyLookups, type Lookups } from "../lookups"
-import * as FilesPage from "../files/page"
 import * as IssueControl from "../issue-control"
-import * as NotificationControl from "../notification-control"
-import { JoinChannel, UnhideConversation } from "../message-actions"
-import * as CustomerCard from "../customer-card"
 import * as Overlays from "../overlays"
 import { PAGE_SIZE } from "../queries"
 import {
@@ -54,6 +44,8 @@ import { liftList, loadWhenNearEdge } from "./window"
 import * as ThreadWidth from "./thread-width"
 import * as Write from "./write"
 import { errorToast, successToast } from "../../../data/actions"
+import type { ComposerRequest } from "@hazel/shared-screens/chat/composer/host"
+import { publish } from "../../../root/bus"
 
 /** Channel page (`routes/_app/$orgSlug/chat/$id.tsx` + `$id/index.tsx`), read path. */
 
@@ -82,7 +74,7 @@ export const init = (
 	options: InitOptions = {},
 ): Model => ({
 	channelId,
-	tab: tabFor(channelId, orgSlug, options.tab ?? "messages", Tab.Messages()),
+	tab: tabFor(options.tab ?? "messages", Tab.Messages()),
 	orgSlug,
 	currentUserId,
 	channel: null,
@@ -96,10 +88,6 @@ export const init = (
 	pinned: [],
 	customer: null,
 	issueRootIds: [],
-	customerCard: CustomerCard.init(),
-	typing: [],
-	typingNowMs: 0,
-	typingNames: [],
 	replyIds: [],
 	threadIds: [],
 	unfurls: {},
@@ -118,14 +106,11 @@ export const init = (
 	focusedMessageId: null,
 	pendingJump: null,
 	overlays: Overlays.init(),
-	draft: Draft.init(channelId, composerEditorId(channelId)),
 	threadPanel: null,
 	threadPanelWidth: options.carry?.threadPanelWidth ?? null,
 	threadPanelDrag: null,
 	notifications: NotificationClear.init({ isFocused: options.carry?.isWindowFocused ?? true }),
 	newMessages: NewMessages.init(),
-	notificationControl: NotificationControl.init(channelId),
-	isJoining: false,
 	heightsByChannel: Record.remove(options.carry?.heightsByChannel ?? {}, channelId),
 })
 
@@ -158,8 +143,6 @@ export const switchChannel = (
 	// The theme, users, presence and bots streams are not keyed by channel, so they keep running
 	// across the switch without emitting again: the new page keeps what they last sent.
 	return modifyFields(next, {
-		// Closed for the new channel; its timers keep counting, so the old channel's never match.
-		customerCard: () => CustomerCard.reset(model.customerCard),
 		htmlRender: (htmlRender) => modifyFields(htmlRender, { theme: () => model.htmlRender.theme }),
 		lookups: (lookups) =>
 			modifyFields(lookups, {
@@ -170,29 +153,20 @@ export const switchChannel = (
 	})
 }
 
-export const composerEditorId = (channelId: string) => `composer-${channelId}`
-
-/** The tab for a route: the Files Submodel is kept across `files` and `files/media`, dropped on Messages. */
-const tabFor = (channelId: ChannelId, orgSlug: string, routeTab: ChatTab, previous: Tab): Tab =>
+/** The tab for a route: Messages keeps its instance; Files and All media are hazel pages. */
+const tabFor = (routeTab: ChatTab, previous: Tab): Tab =>
 	routeTab === "messages"
 		? previous._tag === "Messages"
 			? previous
 			: Tab.Messages()
-		: Tab.Files({
-				files:
-					previous._tag === "Files"
-						? FilesPage.setView(previous.files, routeTab)
-						: FilesPage.init(channelId, orgSlug, routeTab),
-			})
+		: Tab.Files({ view: routeTab })
 
 /** The route tab the page shows (what the tab bar highlights). */
-export const routeTabOf = (tab: Tab): ChatTab => (tab._tag === "Messages" ? "messages" : tab.files.view)
+export const routeTabOf = (tab: Tab): ChatTab => (tab._tag === "Messages" ? "messages" : tab.view)
 
 /** The route moved between this channel's tabs. */
 export const setTab = (model: Model, routeTab: ChatTab): Model =>
-	routeTabOf(model.tab) === routeTab
-		? model
-		: modifyFields(model, { tab: (tab) => tabFor(model.channelId, model.orgSlug, routeTab, tab) })
+	routeTabOf(model.tab) === routeTab ? model : modifyFields(model, { tab: (tab) => tabFor(routeTab, tab) })
 
 // ROUTES
 
@@ -236,6 +210,17 @@ const liftHtmlRender = (model: Model, message: HtmlRender.Message, nowMs: number
 }
 
 const threadMessagesOf = (model: Model): ReadonlyArray<ChatMessage> => model.threadPanel?.messages ?? []
+
+/**
+ * What this page still draws rich content for: the thread panel's messages and its starter. The
+ * channel's list is the hazel `MessageList`, which unfurls and streams its own.
+ */
+const panelMessagesOf = (model: Model): ReadonlyArray<ChatMessage> => {
+	const panel = model.threadPanel
+	if (panel === null) return []
+	const starter = model.messages.find((message) => message.id === panel.messageId)
+	return starter === undefined ? panel.messages : [starter, ...panel.messages]
+}
 
 /**
  * Starts the unfurl fetches the loaded messages need and marks them loading (legacy runs one atom
@@ -282,7 +267,7 @@ const withThreadRows = (model: Model, isLiveReactions: boolean): Model => {
  * `isLiveReactions`: the reactions just changed live, so their pills animate the change.
  */
 const deriveRows = (current: Model, isLiveReactions = false): PageReturn => {
-	const requested = requestUnfurls(current, [...current.messages, ...threadMessagesOf(current)])
+	const requested = requestUnfurls(current, panelMessagesOf(current))
 	const model = withThreadRows(requested.model, isLiveReactions)
 	const rows = toDisplayRows(
 		model.messages,
@@ -318,26 +303,8 @@ const deriveRows = (current: Model, isLiveReactions = false): PageReturn => {
 
 /** The live replies, re-read only when the window's or the thread panel's messages change. */
 const withLiveReplies = (model: Model): Model => {
-	const liveReplies = Live.shareReplies(
-		model.liveReplies,
-		Live.connectedReplies([...model.messages, ...threadMessagesOf(model)]),
-	)
+	const liveReplies = Live.shareReplies(model.liveReplies, Live.connectedReplies(panelMessagesOf(model)))
 	return liveReplies === model.liveReplies ? model : modifyFields(model, { liveReplies: () => liveReplies })
-}
-
-/** Who is typing, re-read when the indicators, members, users or the clock change. */
-const withTypingNames = (model: Model): Model => {
-	const typingNames = typingNamesOf(
-		model.typingNames,
-		typingUsersOf(
-			model.typing,
-			model.members,
-			model.lookups.users,
-			model.currentUserId,
-			model.typingNowMs,
-		),
-	)
-	return typingNames === model.typingNames ? model : modifyFields(model, { typingNames: () => typingNames })
 }
 
 const withLookup = <K extends keyof Lookups>(model: Model, key: K, value: Lookups[K]): PageReturn =>
@@ -357,79 +324,30 @@ const liftOverlays = (model: Model, result: Overlays.OverlaysReturn): PageReturn
 		: Write.andThen(lifted, (current) => Write.handleOverlaysOut(current, result.outMessage!))
 }
 
-const liftFiles = (model: Model, result: FilesPage.FilesReturn): PageReturn => {
-	const lifted: PageReturn = {
-		model: modifyFields(model, { tab: () => Tab.Files({ files: result.model }) }),
-		commands: Command.mapMessages(result.commands ?? [], (message) =>
-			Message.GotFilesMessage({ message }),
-		),
-	}
-	return result.outMessage === undefined
-		? lifted
-		: Write.andThen(lifted, (current) =>
-				FilesPage.OutMessage.match<PageReturn>(result.outMessage!, {
-					RequestedViewerAction: ({ action, url, fileName }) =>
-						Write.viewerAction(current, action, url, fileName),
-				}),
-			)
-}
-
-/** `ChannelJoinBanner`'s `handleJoin`. */
-const joinChannel = (model: Model): PageReturn =>
-	model.isJoining || model.currentUserId === null
-		? { model }
-		: {
-				model: modifyFields(model, { isJoining: () => true }),
-				commands: Write.actionCommands([
-					JoinChannel({ channelId: model.channelId, userId: model.currentUserId }),
-				]),
-			}
-
-/** The header's "Unhide conversation": the signed-in user's hidden membership comes back. */
-const unhideConversation = (model: Model): PageReturn => {
-	const member = model.members?.find((candidate) => candidate.userId === model.currentUserId)
-	return member === undefined || !member.isHidden
-		? { model }
-		: { model, commands: Write.actionCommands([UnhideConversation({ memberId: member.id })]) }
-}
+/** The pins shortcut, for the shared channel header's pins (they own the popover now). */
+const PublishPinsHotkey = Command.define("PublishPinsHotkey", {
+	messages: [Message.CompletedPublishPinsHotkey],
+	execute: Effect.sync(() => publish({ _tag: "PinsHotkey" })).pipe(
+		Effect.as(Message.CompletedPublishPinsHotkey()),
+	),
+})
 
 /**
  * What a channel shortcut does. The pickers, the file picker and the pins are what their buttons send
  * (the emoji and GIF pickers and files go to the composer the keyboard is in: the thread's while one
  * is open); the page keys scroll the messages; Escape marks the channel read.
  */
-const pressedChannelHotkey = (model: Model, action: ChannelHotkey, shared: Shared | null): PageReturn => {
-	const toDraft =
-		Write.focusedDraft(model) === "thread"
-			? (message: Draft.Message) => Message.GotThreadDraftMessage({ message })
-			: (message: Draft.Message) => Message.GotDraftMessage({ message })
-	const pressedTrigger = PopoverEvent.ClickedTrigger()
-	const send = (message: Message) => update(model, message, shared)
+const pressedChannelHotkey = (model: Model, action: ChannelHotkey): PageReturn => {
+	const ask = (request: ComposerRequest) => Write.askComposer(model, Write.focusedComposer(model), request)
 	switch (action) {
 		case "EmojiPicker":
-			return send(
-				toDraft(
-					Draft.Message.GotEmojiPickerMessage({
-						message: EmojiDialog.Message.ReceivedPopoverEvent({ event: pressedTrigger }),
-					}),
-				),
-			)
+			return ask({ _tag: "OpenEmojiPicker" })
 		case "GifPicker":
-			return send(
-				toDraft(
-					Draft.Message.GotGifPickerMessage({
-						message: GifPicker.Message.ReceivedPopoverEvent({ event: pressedTrigger }),
-					}),
-				),
-			)
+			return ask({ _tag: "OpenGifPicker" })
 		case "Upload":
-			return send(toDraft(Draft.Message.ClickedAttach()))
+			return ask({ _tag: "Attach" })
 		case "Pins":
-			return send(
-				Message.GotOverlaysMessage({
-					message: Overlays.Message.GotPinnedMessage({ message: Popover.Message.ClickedButton() }),
-				}),
-			)
+			return { model, commands: [PublishPinsHotkey()] }
 		case "ScrollUp":
 			return loadWhenNearEdge(liftList(model, MessageList.scrollByPage(model.list, "Up")))
 		case "ScrollDown":
@@ -545,9 +463,6 @@ const pressedMessageKey = (model: Model, messageId: MessageId, key: MessageKey):
 	}
 }
 
-const isShiftTab = (message: Draft.Message) =>
-	message._tag === "GotComposerMessage" && message.message._tag === "PressedShiftTab"
-
 export const update = (model: Model, message: Message, shared: Shared | null = null): PageReturn =>
 	Message.match<PageReturn>(message, {
 		UpdatedChannel: ({ channelId, channel }) =>
@@ -562,15 +477,6 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 						outMessage: PageOutMessage.RequestedNavigation({
 							route: tabRoute(model.orgSlug, model.channelId, tab),
 							replace: false,
-						}),
-					},
-		UpdatedInheritedNotificationLevel: ({ channelId, level }) =>
-			channelId !== model.channelId
-				? { model }
-				: {
-						model: modifyFields(model, {
-							notificationControl: (control) =>
-								modifyFields(control, { inheritedLevel: () => level }),
 						}),
 					},
 		UpdatedParentChannel: ({ channel }) => ({
@@ -600,39 +506,11 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 						model.hasLoadedReactions && isLiveReactionChange(model.reactions, reactions),
 					)
 				: { model },
-		UpdatedUsers: ({ users }) => {
-			const result = withLookup(model, "users", users)
-			return { ...result, model: withTypingNames(result.model) }
-		},
-		UpdatedPresence: ({ presence }) =>
-			Write.andThen(withLookup(model, "presence", presence), (next) =>
-				Write.forwardComposerData(
-					next,
-					Composer.Message.UpdatedPresence({ presence: Write.toComposerPresence(presence) }),
-				),
-			),
+		UpdatedUsers: ({ users }) => withLookup(model, "users", users),
+		UpdatedPresence: ({ presence }) => withLookup(model, "presence", presence),
 		UpdatedBots: ({ bots }) => withLookup(model, "bots", bots),
-		UpdatedCustomEmojis: ({ customEmojis }) =>
-			Write.andThen(withLookup(model, "customEmojis", customEmojis), (next) =>
-				Write.forwardComposerData(
-					next,
-					Composer.Message.UpdatedCustomEmojis({ emojis: customEmojis }),
-				),
-			),
-		UpdatedUserGroups: ({ groups }) =>
-			Write.andThen(withLookup(model, "userGroups", groups), (next) =>
-				Write.forwardComposerData(
-					next,
-					Composer.Message.UpdatedUserGroups({
-						groups: groups.map((group) => ({
-							id: group.id,
-							handle: group.handle,
-							name: group.name,
-							memberCount: group.memberIds.length,
-						})),
-					}),
-				),
-			),
+		UpdatedCustomEmojis: ({ customEmojis }) => withLookup(model, "customEmojis", customEmojis),
+		UpdatedUserGroups: ({ groups }) => withLookup(model, "userGroups", groups),
 		// A late result from the channel just left must not replace the new channel's lookups.
 		UpdatedAttachments: ({ channelId, attachments }) =>
 			channelId === model.channelId ? withLookup(model, "attachments", attachments) : { model },
@@ -647,8 +525,7 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		UpdatedThreadChannels: ({ channels }) => withLookup(model, "threadChannels", channels),
 		UpdatedThreadMessages: ({ messages }) => withLookup(model, "threadMessages", messages),
 		UpdatedReplyTargets: ({ targets }) => withLookup(model, "replyTargets", targets),
-		UpdatedMembers: ({ members }) =>
-			syncUnread(withTypingNames(modifyFields(model, { members: () => members }))),
+		UpdatedMembers: ({ members }) => syncUnread(modifyFields(model, { members: () => members })),
 		UpdatedActivity: ({ channelId, activity }) =>
 			channelId !== model.channelId
 				? { model }
@@ -674,33 +551,13 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 						}),
 					),
 		ClickedJumpToNew: () => jumpToNew(model),
-		GotNotificationControlMessage: ({ message }) => {
-			const own = model.members?.find((member) => member.userId === model.currentUserId) ?? null
-			const result = NotificationControl.update(model.notificationControl, message, own)
-			const lifted: PageReturn = {
-				model: modifyFields(model, { notificationControl: () => result.model }),
-				commands: Command.mapMessages(result.commands ?? [], (inner) =>
-					Message.GotNotificationControlMessage({ message: inner }),
-				),
-			}
-			return result.toast === undefined
-				? lifted
-				: Write.andThen(lifted, (current) => Write.withToast(current, result.toast ?? null))
-		},
 		ClickedMarkNewRead: () => markRead(model),
 		// Focus back: the open thread's replies that came while away are read too.
 		ChangedWindowFocus: ({ isFocused }) =>
 			Write.andThen(stepNotifications(model, { _tag: "ChangedFocus", isFocused }), readOpenThread),
 		UpdatedPinned: ({ pins }) => ({ model: modifyFields(model, { pinned: () => pins }) }),
 		UpdatedCustomer: ({ channelId, customer }) => ({
-			model:
-				channelId !== model.channelId
-					? model
-					: modifyFields(model, {
-							customer: () => customer,
-							// Unlinked: nothing left to show.
-							customerCard: (card) => (customer === null ? CustomerCard.reset(card) : card),
-						}),
+			model: channelId !== model.channelId ? model : modifyFields(model, { customer: () => customer }),
 		}),
 		UpdatedIssueRoots: ({ channelId, rootMessageIds }) => ({
 			model:
@@ -709,15 +566,6 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 					: model,
 		}),
 		GotIssueControlMessage: ({ message: issueMessage }) => liftIssueControl(model, issueMessage),
-		GotCustomerCardMessage: ({ message }) => {
-			const result = CustomerCard.update(model.customerCard, message)
-			return {
-				model: modifyFields(model, { customerCard: () => result.model }),
-				commands: Command.mapMessages(result.commands ?? [], (inner) =>
-					Message.GotCustomerCardMessage({ message: inner }),
-				),
-			}
-		},
 		// A result for a thread the panel no longer shows is dropped.
 		UpdatedThreadPanelMessages: ({ threadChannelId, messages }) => {
 			const panel = model.threadPanel
@@ -741,12 +589,6 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 						}),
 					}
 				: { model },
-		UpdatedTyping: ({ typing }) => ({
-			model: withTypingNames(modifyFields(model, { typing: () => typing })),
-		}),
-		TickedTypingClock: ({ nowMs }) => ({
-			model: withTypingNames(modifyFields(model, { typingNowMs: () => nowMs })),
-		}),
 		GotUnfurlMessage: ({ message: unfurlMessage }) =>
 			deriveRows(
 				modifyFields(model, { unfurls: (unfurls) => Unfurl.applyMessage(unfurls, unfurlMessage) }),
@@ -770,21 +612,20 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			loadWhenNearEdge(liftList(model, MessageList.update(model.list, listMessage))),
 		GotOverlaysMessage: ({ message: overlaysMessage }) =>
 			liftOverlays(model, Overlays.update(model.overlays, overlaysMessage)),
-		GotDraftMessage: ({ message: draftMessage }) =>
-			isShiftTab(draftMessage)
-				? focusMessages(model)
-				: // A send dismisses the "New" line: the rows re-derive without it.
-					Write.andThen(Write.updateDraft(model, "channel", draftMessage, shared), (next) =>
+		// Shift+Tab out of the channel's composer moves to the messages; a send dismisses the "New"
+		// line, so the rows re-derive without it.
+		ReceivedComposerNotice: ({ notice }) =>
+			notice._tag === "Left"
+				? notice.channelId === model.channelId
+					? focusMessages(model)
+					: { model }
+				: Write.andThen(Write.composerNotice(model, notice), (next) =>
 						next.newMessages.sinceMs === model.newMessages.sinceMs
 							? { model: next }
 							: deriveRows(next),
 					),
-		GotThreadDraftMessage: ({ message: draftMessage }) =>
-			Write.updateDraft(model, "thread", draftMessage, shared),
-		GotActionMessage: ({ message: actionMessage }) =>
-			Write.andThen(Write.handleActionMessage(model, actionMessage), (next) =>
-				Write.playHeldThreadMessages(next, shared),
-			),
+		CompletedRequestComposer: () => ({ model }),
+		GotActionMessage: ({ message: actionMessage }) => Write.handleActionMessage(model, actionMessage),
 		// The membership can land after the thread's messages: a followed thread is read then.
 		UpdatedThreadMember: ({ threadChannelId, memberId }) =>
 			model.threadPanel?.threadChannelId === threadChannelId
@@ -797,6 +638,13 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				: { model },
 		ClickedThreadPreview: ({ threadChannelId, messageId }) =>
 			Write.openThread(model, threadChannelId, messageId, "Created"),
+		ClickedEditProfile: () => ({
+			model,
+			outMessage: PageOutMessage.RequestedNavigation({
+				route: AppRoute.MySettingsProfile({ orgSlug: model.orgSlug }),
+				replace: false,
+			}),
+		}),
 		ClickedReplyPreview: ({ fromMessageId, messageId }) =>
 			Jump.toMessage(model, fromMessageId, messageId),
 		LocatedJumpTarget: ({ messageId, newerCount }) => Jump.located(model, messageId, newerCount),
@@ -826,13 +674,6 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				],
 			}
 		},
-		ClickedFollowThread: () =>
-			model.channel?.type === "thread"
-				? {
-						model,
-						commands: [ToggleFollowThread({ threadChannelId: model.channelId, memberId: null })],
-					}
-				: { model },
 		CompletedToggleFollowThread: ({ isFollowing, isSuccess }) =>
 			Write.withToast(
 				model,
@@ -856,25 +697,20 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		PressedThreadPanelEdgeKey: ({ delta }) => ThreadWidth.nudgeEdge(model, delta),
 		LoadedThreadPanelWidth: ({ width }) => ThreadWidth.loadedWidth(model, width),
 		CompletedSaveThreadPanelWidth: () => ({ model }),
-		ClickedJoinChannel: () => joinChannel(model),
-		ClickedUnhideConversation: () => unhideConversation(model),
-		PressedGlobalKey: ({ key }) => Write.insertGlobalKey(model, key),
-		PastedGlobalFiles: ({ files }) => Write.pasteGlobalFiles(model, files, shared),
-		PastedGlobalText: ({ text }) => Write.pasteGlobalText(model, text),
-		PressedChannelHotkey: ({ action }) => pressedChannelHotkey(model, action, shared),
+		PressedGlobalKey: ({ key }) => Write.insertGlobalText(model, key),
+		PastedGlobalFiles: ({ files }) => Write.pasteGlobalFiles(model, files),
+		PastedGlobalText: ({ text }) => Write.insertGlobalText(model, text),
+		PressedChannelHotkey: ({ action }) => pressedChannelHotkey(model, action),
 		PressedMessageKey: ({ messageId, key }) => pressedMessageKey(model, messageId, key),
 		FocusedMessage: ({ messageId }) =>
 			model.focusedMessageId === messageId
 				? { model }
 				: { model: modifyFields(model, { focusedMessageId: () => messageId }) },
 		CompletedFocusMessage: () => ({ model }),
+		CompletedPublishPinsHotkey: () => ({ model }),
 		StartedMessageKeys: () => ({ model }),
 		SucceededDeleteMessageNow: () => ({ model }),
 		FailedDeleteMessageNow: ({ reason }) => Write.withToast(model, Write.messageNotFoundToast(reason)),
-		LeftWindow: () =>
-			Write.andThen(Write.updateDraft(model, "channel", Draft.Message.LeftWindow(), shared), (next) =>
-				Write.updateDraft(next, "thread", Draft.Message.LeftWindow(), shared),
-			),
 		// A result for the channel the page has since switched away from is dropped.
 		CompletedReadThread: () => ({ model }),
 		SucceededClearNotifications: ({ channelId }) =>
@@ -886,10 +722,6 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				: { model },
 		ElapsedClearNotificationsRetry: ({ channelId }) =>
 			channelId === model.channelId ? stepNotifications(model, { _tag: "ElapsedRetry" }) : { model },
-		GotFilesMessage: ({ message: filesMessage }) =>
-			model.tab._tag === "Files"
-				? liftFiles(model, FilesPage.update(model.tab.files, filesMessage))
-				: { model },
 	})
 
 /** A step of the thread panel's issue control; an issue for a thread no longer shown is dropped. */

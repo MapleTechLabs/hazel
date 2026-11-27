@@ -1,0 +1,23 @@
+{
+	"about": "A warning xsmall button with a label, against the kit's button-warning-xsmall (G6).",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "warning",
+			"size": "xsmall",
+			"label": "Invite"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Invite"
+		}
+	],
+	"kit": {
+		"specimen": "button-warning-xsmall",
+		"target": "button"
+	}
+}

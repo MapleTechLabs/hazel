@@ -1,19 +1,14 @@
-import { type ChannelId, type MessageId, PinnedMessageId, type UserId } from "@hazel/schema"
-import { Match, Option, Schema } from "effect"
-import { Command } from "foldkit"
+import { ChannelId, type MessageId, PinnedMessageId, type UserId } from "@hazel/schema"
+import { Effect, Match, Option, Schema } from "effect"
+import { Command, File } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
-import * as Composer from "../../../composer/composer"
-import * as Draft from "../../../composer/draft"
-import * as DraftUpdate from "../../../composer/draft-update"
-import * as EditorCommands from "../../../composer/editor-commands"
-import * as Typing from "../../../composer/typing"
-import type { EditorRegistry } from "../../../editor/registry"
+import { type ComposerNotice, ComposerRequest } from "@hazel/shared-screens/chat/composer/host"
+import { holdFiles, requestComposer } from "../../../root/composer"
 import { errorToast, errorToastOf, successToast } from "../../../data/actions"
 import * as MessageList from "../../../mount/message-list"
 import type { ToastRequest } from "../../../overlay/toasts"
 import type { HazelRpc } from "../../../rpc"
-import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import {
 	ActionMessage,
@@ -32,17 +27,11 @@ import {
 	ToggleReaction,
 	UnpinMessage,
 } from "../message-actions"
+import { identityOf, toDeriveContext } from "../derive"
 import * as IssueControl from "../issue-control"
 import * as Overlays from "../overlays"
 import type { ChatMessage } from "../rows"
-import {
-	type HeldThreadMessage,
-	Message,
-	type Model,
-	type PageReturn,
-	type ThreadCreation,
-	type ThreadPanel,
-} from "./model"
+import { Message, type Model, type PageReturn, type ThreadCreation, type ThreadPanel } from "./model"
 import * as Jump from "./jump"
 import { loadWidthCommands } from "./thread-width"
 import { ClearChannelNotifications } from "./clear-notifications"
@@ -50,9 +39,7 @@ import * as NewMessages from "./new-messages"
 import { resetWindow } from "./window"
 import { openViewerOf } from "./viewer-images"
 
-/** The channel page's write path: `ChatProvider`'s actions and the two drafts (channel and thread). */
-
-export type Which = "channel" | "thread"
+/** The channel page's write path: `ChatProvider`'s actions; the composers are shared screens (`root/composer.ts`). */
 
 const toast = (request: ToastRequest) => PageOutMessage.RequestedToast({ toast: request })
 
@@ -71,243 +58,53 @@ export const andThen = (first: PageReturn, second: (model: Model) => PageReturn)
 	}
 }
 
-const wrapDraft = (which: Which) => (message: Draft.Message) =>
-	which === "channel" ? Message.GotDraftMessage({ message }) : Message.GotThreadDraftMessage({ message })
-
 const wrapAction = (message: ActionMessage) => Message.GotActionMessage({ message })
 
 export const actionCommands = (commands: ReadonlyArray<Command.Command<ActionMessage, never, HazelRpc>>) =>
 	Command.mapMessages(commands, wrapAction)
 
-/** The draft that receives global typing: the thread's while one is open (legacy `disableGlobalKeyboardFocus`). */
-export const focusedDraft = (model: Model): Which => (model.threadPanel !== null ? "thread" : "channel")
+/** Asks the shared composer of `channelId` (`root/composer.ts`) over the bus. */
+export const RequestComposer = Command.define("RequestComposer", {
+	args: { channelId: ChannelId, request: ComposerRequest },
+	messages: [Message.CompletedRequestComposer],
+	execute: ({ channelId, request }) =>
+		Effect.sync(() => requestComposer(channelId, request)).pipe(
+			Effect.as(Message.CompletedRequestComposer()),
+		),
+})
 
-const draftOf = (model: Model, which: Which): Draft.Model | null =>
-	which === "channel" ? model.draft : (model.threadPanel?.draft ?? null)
+export const askComposer = (model: Model, channelId: ChannelId, request: ComposerRequest): PageReturn => ({
+	model,
+	commands: [RequestComposer({ channelId, request })],
+})
+
+/** The composer that receives global typing: the thread's while one is open (legacy `disableGlobalKeyboardFocus`). */
+export const focusedComposer = (model: Model): ChannelId =>
+	model.threadPanel?.threadChannelId ?? model.channelId
 
 const withPanel = (model: Model, change: (panel: ThreadPanel) => ThreadPanel): Model =>
 	model.threadPanel === null
 		? model
 		: modifyFields(model, { threadPanel: (panel) => (panel === null ? null : change(panel)) })
 
-const lastOwn = (messages: ReadonlyArray<ChatMessage>, currentUserId: string | null) =>
-	Option.fromNullishOr(messages.find((message) => message.authorId === currentUserId)).pipe(
-		Option.map((message) => ({ id: message.id, content: message.content })),
-		Option.getOrNull,
+/** A composer's notice: a send scrolls the channel's list to its end, Escape marks the channel read. */
+export const composerNotice = (model: Model, notice: ComposerNotice): PageReturn => {
+	if (notice._tag === "Escaped")
+		return { model, commands: [ClearChannelNotifications({ channelId: notice.channelId })] }
+	if (notice._tag !== "Sent" || notice.channelId !== model.channelId) return { model }
+	// A jump still on its way would pull the list back off the message just sent. Writing reads
+	// the channel, as in Discord: the "New" line goes (the rows re-derive with the message).
+	const present = resetWindow(
+		modifyFields(model, { pendingJump: () => null, newMessages: NewMessages.dismiss }),
 	)
-
-/** What a draft needs from the page: user, organization, membership, last own message. */
-export const contextFor = (model: Model, which: Which, shared: Shared | null): Draft.Context => ({
-	currentUserId: model.currentUserId,
-	organizationId: shared?.organization?.id ?? null,
-	memberId:
-		which === "channel"
-			? (model.members?.find((member) => member.userId === model.currentUserId)?.id ?? null)
-			: (model.threadPanel?.memberId ?? null),
-	// `messages` is newest first; the thread panel's are oldest first.
-	lastOwnMessage:
-		which === "channel"
-			? lastOwn(model.messages, model.currentUserId)
-			: lastOwn([...(model.threadPanel?.messages ?? [])].reverse(), model.currentUserId),
-})
-
-/** Folds a draft result back into the page: commands wrapped, toasts raised, sends scroll to the end. */
-export const liftDraft = (model: Model, which: Which, result: DraftUpdate.Return): PageReturn => {
-	const next =
-		which === "channel"
-			? modifyFields(model, { draft: () => result.model })
-			: withPanel(model, (panel) => modifyFields(panel, { draft: () => result.model }))
-	const commands = Command.mapMessages(result.commands ?? [], wrapDraft(which))
-	const out = result.outMessage
-	if (out === undefined) return { model: next, commands }
-	return Draft.OutMessage.match<PageReturn>(out, {
-		RequestedToast: ({ toast: request }) => ({ model: next, commands, outMessage: toast(request) }),
-		RequestedMarkRead: () => ({
-			model: next,
-			commands: [...commands, ClearChannelNotifications({ channelId: result.model.channelId })],
-		}),
-		RequestedDeleteMessage: ({ messageId }) => ({
-			model: next,
-			commands,
-			outMessage: PageOutMessage.RequestedModal({ modal: { _tag: "DeleteMessage", messageId } }),
-		}),
-		// `onMessageSent`: the channel's list scrolls to the bottom.
-		SentMessage: () => {
-			if (which === "thread") return { model: next, commands }
-			// A jump still on its way would pull the list back off the message just sent. Writing reads
-			// the channel, as in Discord: the "New" line goes (the rows re-derive with the message).
-			const present = resetWindow(
-				modifyFields(next, { pendingJump: () => null, newMessages: NewMessages.dismiss }),
-			)
-			const scrolled = MessageList.scrollToEnd(present.list)
-			return {
-				model: modifyFields(present, { list: () => scrolled.model }),
-				commands: [
-					...commands,
-					...Command.mapMessages(scrolled.commands ?? [], (message) =>
-						Message.GotListMessage({ message }),
-					),
-				],
-			}
-		},
-	})
-}
-
-/** Composer data both drafts share (legacy reads it per editor from the same queries). */
-const SHARED_COMPOSER_DATA: ReadonlyArray<string> = [
-	"UpdatedMentionMembers",
-	"UpdatedPresence",
-	"UpdatedMentionableBots",
-	"UpdatedUserGroups",
-	"UpdatedBotCommands",
-	"UpdatedCustomEmojis",
-]
-
-const isSharedComposerData = (message: Draft.Message) =>
-	message._tag === "GotComposerMessage" && SHARED_COMPOSER_DATA.includes(message.message._tag)
-
-const updateOneDraft = (
-	model: Model,
-	which: Which,
-	message: Draft.Message,
-	shared: Shared | null,
-): PageReturn => {
-	const draft = draftOf(model, which)
-	return draft === null
-		? { model }
-		: liftDraft(model, which, DraftUpdate.update(draft, message, contextFor(model, which, shared)))
-}
-
-/**
- * What needs the thread to exist: a send (a GIF, a bot command too), and files (their upload is
- * presigned for its channel). A held command keeps what was submitted (`HeldThreadMessage`).
- */
-const needsThread = (message: Draft.Message): boolean =>
-	message._tag === "SelectedFiles" ||
-	message._tag === "SelectedGif" ||
-	(message._tag === "ReceivedDropEvent" && message.event._tag === "DroppedFiles") ||
-	(message._tag === "GotComposerMessage" &&
-		(message.message._tag === "SubmittedDraft" ||
-			message.message._tag === "PastedFiles" ||
-			message.message._tag === "ClickedExecuteCommand" ||
-			(message.message._tag === "PressedCommandFieldKey" && message.message.key === "Enter")))
-
-/** The thread panel's sends and files, while its thread is still being created: held until it exists. */
-const isCommandRun = (message: Draft.Message) =>
-	message._tag === "GotComposerMessage" &&
-	(message.message._tag === "ClickedExecuteCommand" || message.message._tag === "PressedCommandFieldKey")
-
-const holdForThread = (model: Model, message: Draft.Message): PageReturn | undefined => {
-	const panel = model.threadPanel
-	if (panel?.creation !== "Creating" || !needsThread(message)) return undefined
-	const input = panel.draft.composer.commandInput
-	const held: HeldThreadMessage = {
-		message,
-		command:
-			isCommandRun(message) && input !== null
-				? { id: input.command.id, values: { ...input.values } }
-				: null,
-	}
-	// A held send's text stays in the editor until it really goes out.
-	return { model: withPanel(model, (current) => modifyFields(current, { held: (all) => [...all, held] })) }
-}
-
-const sameValues = (a: Readonly<Record<string, string>>, b: Readonly<Record<string, string>>) => {
-	const keys = Object.keys(a)
-	return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key])
-}
-
-const isHeldSend = (message: Draft.Message) =>
-	message._tag === "GotComposerMessage" && message.message._tag === "SubmittedDraft"
-
-/**
- * What waits for a running upload: a send (it would be ignored, or go out without the file) and a
- * dropped file (a drop during an upload is ignored). Picked and pasted files queue behind it.
- */
-const waitsForUpload = (message: Draft.Message) =>
-	isHeldSend(message) || (message._tag === "ReceivedDropEvent" && message.event._tag === "DroppedFiles")
-
-/**
- * A file the held sends were waiting on failed to upload: they would go out without it, so they
- * are dropped and their text stays in the editor, to send again.
- */
-const dropHeldSendsOnFailedUpload = (model: Model, message: Draft.Message): Model =>
-	message._tag === "ReceivedUploadEvent" && message.event._tag === "FailedUpload"
-		? withPanel(model, (panel) =>
-				modifyFields(panel, { held: (held) => held.filter((entry) => !isHeldSend(entry.message)) }),
-			)
-		: model
-
-/**
- * A held action still to go: a send whose text the editor still holds, a command whose field still
- * holds the command and arguments that were submitted (not edits, or another command, since).
- */
-const isStillWanted = (panel: ThreadPanel, { message, command }: HeldThreadMessage) => {
-	if (command !== null) {
-		const input = panel.draft.composer.commandInput
-		return input !== null && input.command.id === command.id && sameValues(input.values, command.values)
-	}
-	return (
-		message._tag !== "GotComposerMessage" ||
-		message.message._tag !== "SubmittedDraft" ||
-		panel.draft.composer.markdown.trim() === message.message.markdown.trim()
-	)
-}
-
-/**
- * Plays back what the composer did while the panel's thread was being created, now that it exists,
- * in order. A send waits while a file before it uploads (a send then would be ignored): playback
- * stops there and resumes on a later thread draft update, the upload's end among them.
- */
-export const playHeldThreadMessages = (model: Model, shared: Shared | null): PageReturn => {
-	let result: PageReturn = { model }
-	for (;;) {
-		const panel = result.model.threadPanel
-		if (panel === null || panel.creation !== "Created" || panel.held.length === 0) return result
-		const [held, ...rest] = panel.held
-		if (held === undefined || (waitsForUpload(held.message) && Draft.isUploading(panel.draft)))
-			return result
-		const next = withPanel(result.model, (current) => modifyFields(current, { held: () => rest }))
-		result = isStillWanted(panel, held)
-			? andThen({ ...result, model: next }, (current) =>
-					updateOneDraft(current, "thread", held.message, shared),
-				)
-			: { ...result, model: next }
+	const scrolled = MessageList.scrollToEnd(present.list)
+	return {
+		model: modifyFields(present, { list: () => scrolled.model }),
+		commands: Command.mapMessages(scrolled.commands ?? [], (message) =>
+			Message.GotListMessage({ message }),
+		),
 	}
 }
-
-export const updateDraft = (
-	model: Model,
-	which: Which,
-	message: Draft.Message,
-	shared: Shared | null,
-): PageReturn =>
-	(which === "thread"
-		? (holdForThread(model, message) ??
-			andThen(
-				updateOneDraft(dropHeldSendsOnFailedUpload(model, message), "thread", message, shared),
-				(next) => playHeldThreadMessages(next, shared),
-			))
-		: undefined) ??
-	(which === "channel" && isSharedComposerData(message)
-		? andThen(updateOneDraft(model, "channel", message, shared), (next) =>
-				updateOneDraft(next, "thread", message, shared),
-			)
-		: updateOneDraft(model, which, message, shared))
-
-/** Presence and custom emojis arrive as page lookups; the composers get their copy. */
-export const forwardComposerData = (model: Model, message: Composer.Message): PageReturn =>
-	updateDraft(model, "channel", Draft.Message.GotComposerMessage({ message }), null)
-
-export const toComposerPresence = (
-	presence: ReadonlyArray<{ readonly userId: UserId; readonly status: string }>,
-) =>
-	presence.map((row) => ({
-		userId: row.userId,
-		status: isPresenceStatus(row.status) ? row.status : ("offline" as const),
-	}))
-
-const isPresenceStatus = Schema.is(Composer.PresenceStatus)
 
 const findMessage = (model: Model, messageId: MessageId) =>
 	model.messages.find((message) => message.id === messageId) ??
@@ -327,34 +124,7 @@ export const react = (model: Model, messageId: MessageId, emoji: string): PageRe
 
 // THREAD PANEL
 
-const threadEditorId = (threadChannelId: ChannelId) => `thread-composer-${threadChannelId}`
-
-export const newThreadDraft = (model: Model, threadChannelId: ChannelId): Draft.Model => {
-	const draft = Draft.init(threadChannelId, threadEditorId(threadChannelId), "Reply in thread...")
-	const { members, presence, mentionableBots, userGroups, botCommands, customEmojis } = model.draft.composer
-	return {
-		...draft,
-		composer: {
-			...draft.composer,
-			members,
-			presence,
-			mentionableBots,
-			userGroups,
-			botCommands,
-			customEmojis,
-		},
-	}
-}
-
-/** `useTyping` deletes the indicator when the panel's composer unmounts. */
-const stopThreadTyping = (model: Model): ReadonlyArray<Command.Command<Message, never, HazelRpc>> =>
-	model.threadPanel === null
-		? []
-		: Command.mapMessages(Typing.stop(model.threadPanel.draft.typing).commands ?? [], (message) =>
-				Message.GotThreadDraftMessage({ message: Draft.Message.GotTypingMessage({ message }) }),
-			)
-
-/** The thread panel opens on a thread: a new panel (a new `ChatProvider`), with its own draft. */
+/** The thread panel opens on a thread: a new panel (a new `ChatProvider`); its composer focuses itself. */
 export const openThread = (
 	model: Model,
 	threadChannelId: ChannelId,
@@ -368,10 +138,8 @@ export const openThread = (
 					threadPanel: () => ({
 						threadChannelId,
 						messageId,
-						draft: newThreadDraft(model, threadChannelId),
 						memberId: null,
 						creation,
-						held: [],
 						isNaming: false,
 						messages: [],
 						rows: [],
@@ -380,24 +148,11 @@ export const openThread = (
 						readUpToMs: 0,
 					}),
 				}),
-				commands: [
-					...stopThreadTyping(model),
-					...loadWidthCommands(model),
-					// Reply at once: the panel's composer takes the focus as it mounts.
-					...Command.mapMessages(
-						[EditorCommands.FocusEditor({ editorId: threadEditorId(threadChannelId) })],
-						(message) =>
-							Message.GotThreadDraftMessage({
-								message: Draft.Message.GotComposerMessage({ message }),
-							}),
-					),
-				],
+				commands: loadWidthCommands(model),
 			}
 
 export const closeThread = (model: Model): PageReturn =>
-	model.threadPanel === null
-		? { model }
-		: { model: modifyFields(model, { threadPanel: () => null }), commands: stopThreadTyping(model) }
+	model.threadPanel === null ? { model } : { model: modifyFields(model, { threadPanel: () => null }) }
 
 /** `createThread`: open an existing thread, or create one with a fresh id. */
 const createThread = (model: Model, messageId: MessageId): PageReturn => {
@@ -433,20 +188,9 @@ const pinnedIdOf = (model: Model, messageId: MessageId) =>
 			?.pinnedId,
 	).pipe(Option.flatMap(Schema.decodeUnknownOption(PinnedMessageId)))
 
-/** The draft a message's actions (reply, edit) act in: the thread panel's for one of its replies. */
-const draftForMessage = (model: Model, messageId: MessageId): Which =>
-	model.threadPanel?.messages.some((message) => message.id === messageId) === true &&
-	!model.messages.some((message) => message.id === messageId)
-		? "thread"
-		: "channel"
-
-/** The pinned messages popover's unpin: never pins, so a second press on a leaving row does nothing. */
-const unpin = (model: Model, messageId: MessageId): PageReturn => {
-	const pinnedId = pinnedIdOf(model, messageId)
-	return Option.isSome(pinnedId)
-		? { model, commands: actionCommands([UnpinMessage({ pinnedMessageId: pinnedId.value })]) }
-		: { model }
-}
+/** A message author's display name, for the reply bar. */
+const authorNameOf = (model: Model, authorId: UserId) =>
+	identityOf(toDeriveContext(model.lookups, model.currentUserId ?? undefined), authorId)?.displayName ?? ""
 
 /** `handlePin`: unpin by the pin's id, else pin. */
 const togglePin = (model: Model, messageId: MessageId): PageReturn => {
@@ -519,25 +263,24 @@ const messageAction = (model: Model, messageId: MessageId, action: Overlays.Mess
 	return Match.value(action).pipe(
 		Match.withReturnType<PageReturn>(),
 		Match.when("reply", () =>
-			draftForMessage(model, messageId) === "thread"
-				? {
-						model: withPanel(model, (panel) =>
-							modifyFields(panel, { draft: (draft) => DraftUpdate.setReply(draft, messageId) }),
-						),
-					}
-				: {
-						model: modifyFields(model, {
-							draft: (draft) => DraftUpdate.setReply(draft, messageId),
-						}),
-					},
-		),
-		Match.when("edit", () => {
-			const which = draftForMessage(model, messageId)
-			const draft = draftOf(model, which)
-			return message === undefined || draft === null
+			message === undefined
 				? { model }
-				: liftDraft(model, which, DraftUpdate.startEditing(draft, messageId, message.content))
-		}),
+				: askComposer(model, message.channelId, {
+						_tag: "Reply",
+						messageId,
+						author: authorNameOf(model, message.authorId),
+						text: message.content.split("\n")[0] ?? "",
+					}),
+		),
+		Match.when("edit", () =>
+			message === undefined
+				? { model }
+				: askComposer(model, message.channelId, {
+						_tag: "Edit",
+						messageId,
+						content: message.content,
+					}),
+		),
 		Match.when("thread", () => createThread(model, messageId)),
 		Match.when("pin", () => togglePin(model, messageId)),
 		Match.when("copy", () => copy(model, message?.content ?? "", "MessageText")),
@@ -590,7 +333,6 @@ export const handleOverlaysOut = (model: Model, out: Overlays.OutMessage): PageR
 		},
 		RequestedMessageAction: ({ messageId, action }) => messageAction(model, messageId, action),
 		RequestedJump: ({ messageId }) => Jump.toMessage(model, messageId, messageId),
-		RequestedUnpin: ({ messageId }) => unpin(model, messageId),
 	})
 
 /** A reaction or pin on a message that is gone. */
@@ -773,84 +515,28 @@ export const handleActionMessage = (model: Model, message: ActionMessage): PageR
 					}),
 				),
 			),
-		SucceededUnhideConversation: () => withToast(model, successToast("Conversation unhidden")),
-		FailedUnhideConversation: ({ reason }) =>
-			withToast(
-				model,
-				errorToastOf(
-					failureMessage(reason, {
-						MemberNotFound: {
-							title: "Couldn't unhide the conversation",
-							description: "You may no longer be in this conversation.",
-						},
-					}),
-				),
-			),
-		// The members query brings the membership; the banner then gives way to the composer.
-		SucceededJoinChannel: () =>
-			withToast(
-				modifyFields(model, { isJoining: () => false }),
-				successToast("Successfully joined channel"),
-			),
-		FailedJoinChannel: ({ reason }) =>
-			withToast(
-				modifyFields(model, { isJoining: () => false }),
-				errorToastOf(
-					failureMessage(reason, {
-						NotFound: {
-							title: "Channel not found",
-							description: "This channel may have been deleted.",
-						},
-					}),
-				),
-			),
 	})
 
-/** `useGlobalKeyboardFocus`: the typed character goes into the focused draft's editor. */
 /** Puts the keyboard back in the channel's composer (Escape or ArrowDown past the newest message). */
-export const focusComposer = (model: Model): PageReturn => ({
-	model,
-	commands: Command.mapMessages(
-		Command.mapMessages(
-			[EditorCommands.FocusEditor({ editorId: model.draft.composer.editorId })],
-			(message) => Draft.Message.GotComposerMessage({ message }),
+export const focusComposer = (model: Model): PageReturn =>
+	askComposer(model, model.channelId, { _tag: "Focus" })
+
+/** `useGlobalKeyboardFocus`: a key typed, or text pasted, outside any field goes into the focused composer. */
+export const insertGlobalText = (model: Model, text: string): PageReturn =>
+	askComposer(model, focusedComposer(model), { _tag: "InsertText", text })
+
+/** Hands pasted files to the host (`root/composer.ts`), then to the composer of `channelId`. */
+export const AttachPastedFiles = Command.define("AttachPastedFiles", {
+	args: { channelId: ChannelId, files: Schema.Array(File.File) },
+	messages: [Message.CompletedRequestComposer],
+	execute: ({ channelId, files }) =>
+		Effect.sync(() => requestComposer(channelId, { _tag: "AddFiles", files: holdFiles(files) })).pipe(
+			Effect.as(Message.CompletedRequestComposer()),
 		),
-		wrapDraft("channel"),
-	),
 })
 
-const intoFocusedEditor = (
-	model: Model,
-	command: (editorId: string) => Command.Command<Composer.Message, never, EditorRegistry>,
-): PageReturn => {
-	const which = focusedDraft(model)
-	const draft = draftOf(model, which)
-	if (draft === null || draft.composer.commandInput !== null) return { model }
-	return {
-		model,
-		commands: Command.mapMessages(
-			Command.mapMessages([command(draft.composer.editorId)], (message) =>
-				Draft.Message.GotComposerMessage({ message }),
-			),
-			wrapDraft(which),
-		),
-	}
-}
-
-export const insertGlobalKey = (model: Model, key: string): PageReturn =>
-	intoFocusedEditor(model, (editorId) => EditorCommands.InsertEditorText({ editorId, text: key }))
-
-/** `useGlobalKeyboardFocus` for pastes: text pastes into the focused draft's editor. */
-export const pasteGlobalText = (model: Model, text: string): PageReturn =>
-	intoFocusedEditor(model, (editorId) => EditorCommands.PasteEditorText({ editorId, text }))
-
-/** Files pasted anywhere on the page attach to the focused draft, as a paste in its editor does. */
-export const pasteGlobalFiles = (
-	model: Model,
-	files: ReadonlyArray<File>,
-	shared: Shared | null,
-): PageReturn => {
-	const which = focusedDraft(model)
-	if (draftOf(model, which) === null) return { model }
-	return updateDraft(model, which, Draft.Message.SelectedFiles({ files }), shared)
-}
+/** Files pasted anywhere on the page attach to the focused composer, as a paste in its field does. */
+export const pasteGlobalFiles = (model: Model, files: ReadonlyArray<File>): PageReturn => ({
+	model,
+	commands: [AttachPastedFiles({ channelId: focusedComposer(model), files })],
+})

@@ -1,0 +1,52 @@
+{
+	"about": "A page's scrolling body padded as its gutter (`inset` `page`, today's `p-4`, `p4-page-gutter`).",
+	"root": {
+		"tag": "scroll",
+		"children": [
+			{
+				"tag": "stack",
+				"props": {
+					"density": "compact"
+				},
+				"children": [
+					{
+						"tag": "text",
+						"children": ["Line 1"]
+					},
+					{
+						"tag": "text",
+						"children": ["Line 2"]
+					},
+					{
+						"tag": "text",
+						"children": ["Line 3"]
+					},
+					{
+						"tag": "text",
+						"children": ["Line 4"]
+					},
+					{
+						"tag": "text",
+						"children": ["Line 5"]
+					},
+					{
+						"tag": "text",
+						"children": ["Line 6"]
+					}
+				]
+			}
+		],
+		"props": {
+			"inset": "page"
+		}
+	},
+	"axes": [
+		{
+			"prop": "inset",
+			"values": ["bar"]
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	}
+}

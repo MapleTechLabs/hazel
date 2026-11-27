@@ -1,79 +1,108 @@
+// Effect UI is a public preview: every API is experimental by design here.
+// @effect-diagnostics experimentalApiUsage:off
 import "@fontsource/inter/400.css"
 import "@fontsource/inter/400-italic.css"
 import "@fontsource/inter/500.css"
 import "@fontsource/inter/600.css"
 import "./styles.css"
+import "@hazel/ui/tokens.css"
 
-import { Layer } from "effect"
-import { Runtime } from "foldkit"
+import { Renderer, Router } from "@effect/ui"
+import { BrowserRouter } from "@effect/ui/html"
+import * as WebHost from "@hazel/ui/web/host"
+import { Clock, Effect, Layer } from "effect"
 import { setSessionBearerProvider } from "~/lib/session-bearer"
 import { initNativeNotifications } from "~/lib/native-notifications"
+import { detectPlatform } from "~/lib/keybindings/key-combo"
 import { desktopAuthClient } from "./platform/desktop"
 import { desktopSessionBearer } from "./platform/desktop-auth"
-import { Flags, flags, init, Message, Model, subscriptions, update, view } from "./main"
 import { NotificationSinks } from "./app/notification-sinks"
 import { handOffPaint, installPaintCapture, paintStorage } from "./app/paint"
-import { viewTransition } from "./app/view-transition"
+import { loadRememberedUser } from "./app/remembered-user"
+import * as AssistantPanel from "./root/assistant"
 import { installImageViewerMorph } from "./chat/viewer/morph"
 import { installChannelPrefetch } from "./core/db/channel-prefetch"
 import { localCacheHost } from "./core/db/local-cache-host"
-import { labPathOf } from "./lab/path"
+import { loadKeybindingOverrides } from "./keybindings"
+import { loadSoundSettings } from "./notification-sound"
 import { loadPages } from "./page/registry"
-import { ResourcesLive } from "./rpc"
-import * as PendingAnnouncement from "./ui/aria/pending-announcement"
+import { HazelRpcLive } from "./rpc"
+import { HazelAuthClientLive } from "./auth/client"
+import { App, type Boot } from "./root/app"
+import { commandsLayer } from "./root/commands"
+import { AppRoutes } from "./root/routes"
+import { loadIsCreateChannelHintDismissed } from "./root/hints"
+import { loadThemePreference, resolveSystemTheme } from "./theme"
+import { MOBILE_QUERY } from "./ui/viewport"
 
-const container = document.getElementById("app")!
+/** Read before the first render, so a stored theme, the viewport or a dismissed hint never flash. */
+const boot: Effect.Effect<Boot> = Effect.all({
+	themePreference: loadThemePreference,
+	systemTheme: Effect.sync(resolveSystemTheme),
+	soundSettings: loadSoundSettings,
+	keybindingOverrides: loadKeybindingOverrides,
+	keyboardPlatform: Effect.sync(detectPlatform),
+	sessionStartMs: Clock.currentTimeMillis,
+	isMobile: Effect.sync(() => globalThis.matchMedia?.(MOBILE_QUERY).matches ?? false),
+	isCreateChannelHintDismissed: loadIsCreateChannelHintDismissed,
+	rememberedUser: loadRememberedUser,
+	aiPanel: AssistantPanel.loadStored,
+})
 
-const startApplication = () =>
-	Runtime.run(
-		Runtime.makeApplication({
-			Model,
-			Flags,
-			init,
-			update,
-			view,
-			subscriptions,
-			// The sinks own audio and native notifications, so they are built here, in the browser only.
-			resources: Layer.mergeAll(ResourcesLive, NotificationSinks.layer, PendingAnnouncement.layer),
-			container,
-			routing: {
-				onUrlRequest: (request) => Message.ClickedLink({ request }),
-				onUrlChange: (url) => Message.ChangedUrl({ url }),
-			},
-			// An image viewer opening or closing morphs its image to and from the page.
-			viewTransition,
-			devTools: { Message },
-		}),
-		{ flags },
-	)
-
-// `/lab/<path>` boots that lab page's own program instead of the app (dev, or `VITE_HAZEL_LAB=on`). The
-// flags are inlined at build time, so a production build drops the import and every lab chunk.
-const labPath = labPathOf(location.pathname)
-if ((import.meta.env.DEV || import.meta.env.VITE_HAZEL_LAB === "on") && labPath !== undefined)
-	void import("./lab/boot").then(({ startLab }) => startLab(labPath, container))
-else {
-	// The desktop app has no API cookie: its requests carry its own session as a bearer.
-	if (desktopAuthClient !== null) setSessionBearerProvider(desktopSessionBearer)
-	installImageViewerMorph()
-	// The dev server loads every page area first: the Model it keeps across a reload names a page
-	// by that page's own schema, which exists once its area has loaded (`page/registry.ts`).
-	if (import.meta.env.DEV)
-		loadPages().then(startApplication, (error: unknown) => {
-			console.error("[dev] a page area did not load; reload to try again", error)
-			container.textContent = "A page area did not load. Reload to try again."
-		})
-	else startApplication()
-	// The last screen, drawn by `index.html` before this script loaded, until the app draws its own;
-	// and this screen, for the next load. The native apps draw no `index.html`.
-	if (localCacheHost() === undefined) {
-		handOffPaint(document)
-		const storage = paintStorage()
-		if (storage !== null) installPaintCapture(document, storage)
-	}
-	installChannelPrefetch()
-	// Desktop only: native notification permission (a no-op in the browser).
-	initNativeNotifications().catch((error: unknown) =>
-		console.error("[desktop] native notifications did not start:", error),
-	)
+/**
+ * `index.html`'s `#app` gives its place to the shell's mount point; the shell draws its own `#app`
+ * inside it (the paint and the native shells look it up by id).
+ */
+const mountPoint = (): HTMLElement => {
+	const placeholder = document.getElementById("app")!
+	const container = document.createElement("div")
+	container.style.display = "contents"
+	placeholder.replaceWith(container)
+	return container
 }
+
+/** The app's services, shared by the shell's Commands and its children. */
+const services = Layer.mergeAll(HazelRpcLive, HazelAuthClientLive, NotificationSinks.layer)
+
+const start = () => {
+	const container = mountPoint()
+	const main = Layer.effectDiscard(
+		Renderer.mount(App, Effect.all({ route: Router.currentRoute(AppRoutes), boot }), container),
+	).pipe(
+		Layer.provide(commandsLayer),
+		Layer.provide(
+			Layer.mergeAll(
+				WebHost.layer(),
+				// Today's navigation: no scroll restoration, announcement or focus move of the Router's own.
+				BrowserRouter.layer({ routes: AppRoutes, scroll: false, announce: false, focus: false }),
+			),
+		),
+		Layer.provide(services),
+	)
+	// The kit visuals converted from Foldkit widen the view's requirements to `any`; every service
+	// the tree needs is provided above.
+	Layer.launch(main as Layer.Layer<never>).pipe(Effect.runFork)
+}
+
+// The desktop app has no API cookie: its requests carry its own session as a bearer.
+if (desktopAuthClient !== null) setSessionBearerProvider(desktopSessionBearer)
+installImageViewerMorph()
+// The dev server loads every page area first, so a page's own chunk never shows its placeholder.
+if (import.meta.env.DEV)
+	loadPages().then(start, (error: unknown) => {
+		console.error("[dev] a page area did not load; reload to try again", error)
+		document.getElementById("app")!.textContent = "A page area did not load. Reload to try again."
+	})
+else start()
+// The last screen, drawn by `index.html` before this script loaded, until the app draws its own;
+// and this screen, for the next load. The native apps draw no `index.html`.
+if (localCacheHost() === undefined) {
+	handOffPaint(document)
+	const storage = paintStorage()
+	if (storage !== null) installPaintCapture(document, storage)
+}
+installChannelPrefetch()
+// Desktop only: native notification permission (a no-op in the browser).
+initNativeNotifications().catch((error: unknown) =>
+	console.error("[desktop] native notifications did not start:", error),
+)

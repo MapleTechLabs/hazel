@@ -9,15 +9,7 @@ import { accountLabelOf, nestedIdsOf } from "../../../customers/groups"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { environmentBadge, severityGlyph } from "../../../customers/ui/badges"
 import { connectCard } from "../../../customers/ui/connect-card"
-import { dataTable } from "../../../ui/data-table"
-import {
-	addFilterButton,
-	filterBar,
-	filterChip,
-	searchBox,
-	sortTrigger,
-	viewTabs,
-} from "../../../customers/ui/filter-bar"
+import { viewTabs } from "../../../customers/ui/filter-bar"
 import { namesLabel, PROVIDER_ORDER, sourceLabel, startingSource } from "../../../customers/providers"
 import { companyLogo, menuAvatar, personLabel } from "../../../customers/ui/identity"
 import { kbd } from "../../../customers/ui/shortcuts"
@@ -46,12 +38,13 @@ import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
 import type { PageViewInputs } from "../../contract"
 import { companyFacts } from "../../../customers/ui/company"
-import { LetModifierClicksThrough, PositionHoverCard, ScrollListRowIntoView } from "./commands"
-import { chipOf, columnPicker, filterBuilder } from "./controls"
+import { hole } from "../../../app/holes"
+import { activeFields, chipOf, type Viewer } from "@hazel/shared-screens/customers/list/filters"
+import { PositionHoverCard, ScrollListRowIntoView } from "./commands"
+import { encodeHoleState, nameCellSelector, STATE_ATTRIBUTE } from "./hole"
 import { Message } from "./message"
 import {
 	accountsPerOwner,
-	activeFields,
 	bestFilterToRemove,
 	ALL_VIEW_KEY,
 	currentTab,
@@ -63,29 +56,21 @@ import {
 	OWNER_ME,
 	OWNER_NONE,
 	ownerEntries,
-	parseSortKey,
 	ROW_PAGE,
-	SEARCH_ID,
 	TAB_LIST_ID,
-	shownColumns,
 	sidebarStateOf,
-	sortEntries,
-	sortLabel,
 	userIdOfOwnerKey,
 	viewMenuEntries,
-	type Viewer,
 	viewTabCounts,
 	visibleAccounts,
 } from "./model"
-import { type TableContext, tableColumns } from "./table"
 import { viewerOf } from "./update"
 import { menu } from "../shared-view"
 import { separator } from "../../../ui/separator"
 import { badge } from "../../../ui/badge"
 
-/** The customers list (Wonder: List — all, filter builder, columns, bulk, hover, no results, first run). */
+/** The customers list (Wonder: List): its controls and table are hazel, in the page's holes (`./hole.ts`). */
 
-const TABLE_ID = "customers-list-table"
 const icon = { attributes: { "data-slot": "icon" } }
 
 const SHARED_IDS = integrations
@@ -93,8 +78,6 @@ const SHARED_IDS = integrations
 		sharedIdLabel === undefined ? [] : [`${name} ${sharedIdLabel}`],
 	)
 	.join(", ")
-
-const nameAnchorId = (accountId: string) => `customers-list-name-${accountId}`
 
 // MENUS AND POPOVERS
 
@@ -256,75 +239,6 @@ const tabsRow = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html =>
 	})
 }
 
-// CONTROLS
-
-const controls = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, count: number): Html => {
-	const currency = model.reportingCurrency
-	return filterBar(h, {
-		start: [
-			searchBox(h, {
-				id: SEARCH_ID,
-				value: model.search,
-				placeholder: "Search name or domain…",
-				onInput: (value) => Message.ChangedSearch({ value }),
-				onClear: Message.ClearedSearch(),
-			}),
-			...activeFields(model.draft.filters).flatMap((field) => {
-				const chip = chipOf(field, model.draft.filters, model.members, currency)
-				return chip === null
-					? []
-					: [
-							filterChip(h, {
-								...chip,
-								attributes: [h.OnClick(Message.PressedEditFilter({ field }))],
-								onRemove: Message.ClearedFilter({ field }),
-							}),
-						]
-			}),
-			popover(h, model.filterPopover, {
-				trigger: (attributes) => addFilterButton(h, { attributes }),
-				content: (closeAttributes) =>
-					model.builder === null
-						? []
-						: filterBuilder(h, {
-								builder: model.builder,
-								accounts: model.accounts ?? [],
-								members: model.members,
-								search: model.search,
-								currency,
-								viewer,
-								closeAttributes,
-							}),
-				toMessage: (message) => Message.GotFilterPopoverMessage({ message }),
-			}),
-		],
-		end: [
-			h.span(
-				[h.Class("text-muted-fg text-sm tabular-nums max-lg:hidden")],
-				[`${formatCount(count)} ${count === 1 ? "customer" : "customers"}`],
-			),
-			menu(h, model.sortMenu, {
-				entries: sortEntries,
-				trigger: (attributes, overlay) =>
-					sortTrigger(h, { label: sortLabel(model.draft.sort), attributes, overlay }),
-				content: (key) => {
-					const sort = parseSortKey(key)
-					return [menuLabel(h, model.sortMenu.id, key, sort === null ? key : sortLabel(sort))]
-				},
-				toMessage: (message) => Message.GotSortMenuMessage({ message }),
-				className: "max-h-96 min-w-56",
-			}),
-			popover(h, model.columnsPopover, {
-				trigger: (attributes) =>
-					button(h, { intent: "outline", size: "sm", attributes }, ["Columns"]),
-				content: () => columnPicker(h, model.draft.columns),
-				toMessage: (message) => Message.GotColumnsPopoverMessage({ message }),
-				placement: "bottom end",
-			}),
-		],
-	})
-}
-
 // HOVER CARD
 
 /** The enriched company: two lines of its description and its key facts; nothing without one. */
@@ -377,7 +291,7 @@ const hoverCard = (h: HtmlBuilder<Message>, model: Model, account: AccountRow, v
 			h.Class(
 				"pointer-events-none invisible fixed z-50 flex w-84 flex-col overflow-hidden rounded-xl border border-border bg-overlay text-sm shadow-lg",
 			),
-			h.OnMount(PositionHoverCard({ anchorId: nameAnchorId(account.id) })),
+			h.OnMount(PositionHoverCard({ anchor: nameCellSelector(account.id) })),
 		],
 		[
 			h.div(
@@ -835,89 +749,43 @@ const noResults = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html 
 	})
 }
 
-const table = (
-	h: HtmlBuilder<Message>,
+// HOLES
+
+/** What the hazel controls and table show, written on their holes (`./hole.ts`). */
+const holeStateOf = (
 	model: Model,
 	viewer: Viewer,
 	rows: ReadonlyArray<AccountRow>,
-	orgSlug: string,
-): Html => {
-	const context: TableContext = {
-		orgSlug,
+	isMobile: boolean,
+): string =>
+	encodeHoleState({
+		filters: model.draft.filters,
+		search: model.search,
+		sort: model.draft.sort,
+		columns: model.draft.columns,
+		selected: model.selected,
+		focusedId: model.focusedId,
+		rowLimit: model.rowLimit,
 		currency: model.reportingCurrency,
 		nowMs: viewer.nowMs,
-		membersById: new Map(model.members.map((member) => [member.id, member])),
-		sparklines: model.sparklines,
-		nestedIds: nestedIdsOf(rows),
-		nameCell: (account, cell) =>
-			h.div(
-				[
-					h.Id(nameAnchorId(account.id)),
-					h.Class("min-w-0 max-w-72"),
-					h.OnMouseEnter(Message.HoveredRow({ accountId: account.id })),
-					h.OnMouseLeave(Message.UnhoveredRow()),
-				],
-				[cell],
-			),
-	}
-	const columns = tableColumns(h, shownColumns(model.draft.columns), rows, context)
-	const isLoading = model.accounts === null
-	return h.div(
-		[h.Id(TABLE_ID), h.OnMount(LetModifierClicksThrough())],
-		[
-			dataTable(h, {
-				ariaLabel: "Customers",
-				id: "customers-list",
-				columns,
-				rows: rows.slice(0, model.rowLimit),
-				rowKey: (account) => account.id,
-				sort: { key: model.draft.sort.column, direction: model.draft.sort.direction },
-				onSort: (column) => Message.ClickedSortHeader({ column }),
-				selection: {
-					selected: new Set(model.selected),
-					onToggle: (key, isSelected) =>
-						Message.ToggledRow({
-							accountId: Schema.decodeSync(CustomerAccountId)(key),
-							isSelected,
-						}),
-					onToggleAll: (isSelected) => Message.ToggledAllRows({ isSelected }),
-					rowLabel: (account) => accountLabelOf(account),
-				},
-				onRowPress: (account) => Message.ClickedRow({ accountId: account.id }),
-				focusedKey: model.focusedId,
-				stickyHeader: true,
-				// The frame is the container its columns drop by (`COLUMN_LAYOUT`).
-				className: "@container rounded-none border-x-0",
-				loadingRows: isLoading ? 12 : undefined,
+		isMobile,
+		sparklines: Object.fromEntries(
+			rows.slice(0, model.rowLimit).flatMap((account) => {
+				const values = model.sparklines[account.id]
+				return values === undefined ? [] : [[account.id, values]]
 			}),
-			...(rows.length > model.rowLimit
-				? [
-						h.div(
-							[h.Class("flex items-center justify-center gap-3 py-4 text-muted-fg text-sm")],
-							[
-								`Showing ${formatCount(model.rowLimit)} of ${formatCount(rows.length)}`,
-								button(
-									h,
-									{ intent: "outline", size: "sm", onPress: Message.PressedShowMoreRows() },
-									[
-										`Show ${formatCount(Math.min(ROW_PAGE, rows.length - model.rowLimit))} more`,
-									],
-								),
-							],
-						),
-					]
-				: []),
-			...(model.focusedId === null
-				? []
-				: [
-						h.keyed("span")(`scroll-${model.focusedId}`, [
-							h.Class("hidden"),
-							h.OnMount(ScrollListRowIntoView({ tableId: TABLE_ID })),
-						]),
-					]),
-		],
-	)
-}
+		),
+	})
+
+const keptInView = (h: HtmlBuilder<Message>, model: Model): ReadonlyArray<Html> =>
+	model.focusedId === null
+		? []
+		: [
+				h.keyed("span")(`scroll-${model.focusedId}`, [
+					h.Class("hidden"),
+					h.OnMount(ScrollListRowIntoView()),
+				]),
+			]
 
 // PAGE
 
@@ -943,6 +811,15 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	const hovered =
 		model.hoveredId === null ? undefined : rows.find((account) => account.id === model.hoveredId)
 	const hasNoResults = model.accounts !== null && rows.length === 0
+	const state = holeStateOf(model, viewer, rows, shared.isMobile)
+	// The hazel table reads the rows itself; the page keeps the keyboard row in view.
+	const listTable = h.div(
+		[],
+		[
+			hole(h, "customers-list-table", orgSlug, [h.Attribute(STATE_ATTRIBUTE, state)]),
+			...keptInView(h, model),
+		],
+	)
 	return h.div(
 		[h.Class("relative h-full overflow-y-auto")],
 		[
@@ -951,17 +828,13 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 				[
 					header(h, model, viewer, rows),
 					tabsRow(h, model, viewer),
-					controls(h, model, viewer, rows.length),
+					hole(h, "customers-list-controls", orgSlug, [h.Attribute(STATE_ATTRIBUTE, state)]),
 				],
 			),
 			h.div(
 				// Room under the last row for the bulk bar, which floats over the bottom.
 				[h.Class(model.selected.length > 0 ? "mt-3 pb-24" : "mt-3 pb-6")],
-				[
-					hasNoResults
-						? h.div([], [table(h, model, viewer, [], orgSlug), noResults(h, model, viewer)])
-						: table(h, model, viewer, rows, orgSlug),
-				],
+				[hasNoResults ? h.div([], [listTable, noResults(h, model, viewer)]) : listTable],
 			),
 			...(model.selected.length > 0 ? [bulkBar(h, model, viewer, rows.length)] : []),
 			// A tap fires mouseenter too; a phone has no hover to preview with.

@@ -1,0 +1,39 @@
+{
+	"about": "hz:commandPalette as a form page (today's `ui/command-menu-form.ts`): a header with Back, the title and Esc over the page's own children.",
+	"root": {
+		"tag": "commandPalette",
+		"props": {
+			"open": true,
+			"title": "Create channel",
+			"groups": []
+		},
+		"events": ["back", "dismiss"],
+		"children": [
+			{
+				"tag": "textField",
+				"props": {
+					"label": "Name",
+					"placeholder": "e.g. design"
+				}
+			}
+		]
+	},
+	"frame": "screen",
+	"aria": [
+		{
+			"role": "dialog",
+			"name": "Create channel"
+		},
+		{
+			"role": "button",
+			"name": "Back"
+		},
+		{
+			"role": "textbox",
+			"name": "Name"
+		}
+	],
+	"pending": {
+		"ios": "S3"
+	}
+}

@@ -1,0 +1,82 @@
+{
+	"about": "Phase 4 gap lane G4: the files page's documents rows with their type icon, upload time and uploader, each with its own download button (`p4-files-list-meta`, `p4-file-type-icons`, `p4-media-download`); the media strip's last tile reads \"+N See all\" (`p4-media-see-all`).",
+	"root": {
+		"tag": "attachmentGrid",
+		"props": {
+			"layout": "list",
+			"attachments": [
+				{
+					"id": "f1",
+					"kind": "file",
+					"name": "roadmap-q1.pdf",
+					"size": "1.1 MB",
+					"fileType": "pdf",
+					"meta": "Yesterday",
+					"uploader": { "name": "Grace Hopper" }
+				},
+				{
+					"id": "f2",
+					"kind": "file",
+					"name": "metrics.csv",
+					"size": "17.8 KB",
+					"fileType": "csv",
+					"meta": "1 week ago",
+					"uploader": { "name": "Katherine Johnson" }
+				},
+				{
+					"id": "f3",
+					"kind": "file",
+					"name": "notes.md",
+					"size": "2 KB",
+					"fileType": "empty",
+					"meta": "2 weeks ago",
+					"uploader": { "name": "Unknown" }
+				}
+			]
+		},
+		"events": ["press", "download", "pressMore"]
+	},
+	"frame": "screen",
+	"pending": {
+		"ios": "S5"
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Open roadmap-q1.pdf"
+		},
+		{
+			"role": "button",
+			"name": "Download roadmap-q1.pdf"
+		}
+	],
+	"cases": [
+		{
+			"name": "gridSeeAll",
+			"props": {
+				"layout": "grid",
+				"more": 4,
+				"attachments": [
+					{
+						"id": "i1",
+						"kind": "image",
+						"name": "a.png",
+						"url": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3Crect width='16' height='9' fill='%237f56d9'/%3E%3C/svg%3E"
+					},
+					{
+						"id": "i2",
+						"kind": "image",
+						"name": "b.png",
+						"url": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3Crect width='16' height='9' fill='%237f56d9'/%3E%3C/svg%3E"
+					},
+					{
+						"id": "i3",
+						"kind": "image",
+						"name": "c.png",
+						"url": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3Crect width='16' height='9' fill='%237f56d9'/%3E%3C/svg%3E"
+					}
+				]
+			}
+		}
+	]
+}

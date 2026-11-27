@@ -1,0 +1,37 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): custom emojis' drop target.",
+	"root": {
+		"tag": "dropZone",
+		"props": {
+			"label": "Drop images here or browse",
+			"description": "PNG, GIF or WebP up to 256 KB",
+			"accept": "image/png,image/gif,image/webp",
+			"multiple": true
+		},
+		"events": ["press", "files"]
+	},
+	"frame": "inline",
+	"cases": [
+		{
+			"name": "loading",
+			"props": {
+				"loading": true
+			}
+		},
+		{
+			"name": "disabled",
+			"props": {
+				"disabled": true
+			}
+		}
+	],
+	"pending": {
+		"ios": "S2"
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Drop images here or browse"
+		}
+	]
+}

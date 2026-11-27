@@ -1,0 +1,34 @@
+{
+	"about": "The kit's empty KPI tile: a dash for the value, a dashed edge, and the way out in `action` (`emptyAction`).",
+	"root": {
+		"tag": "statTile",
+		"props": {
+			"label": "MRR",
+			"definition": "Monthly recurring revenue: the sum of every active subscription, normalised to a month."
+		},
+		"slots": [
+			{
+				"name": "action",
+				"children": [
+					{
+						"tag": "link",
+						"props": {
+							"label": "Connect billing to track revenue",
+							"href": "#"
+						}
+					}
+				]
+			}
+		]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "link",
+			"name": "Connect billing to track revenue"
+		}
+	],
+	"pending": {
+		"ios": "S1"
+	}
+}

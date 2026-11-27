@@ -1,0 +1,81 @@
+{
+	"about": "Phase 4 contract addition (`docs/hazel-ui-phase4.md`): in-page tabs with counts that the user can reorder.",
+	"root": {
+		"tag": "tabBar",
+		"props": {
+			"style": "page",
+			"reorderable": true,
+			"selected": "open",
+			"tabs": [
+				{
+					"id": "open",
+					"label": "Open",
+					"badge": 12,
+					"href": "?tab=open"
+				},
+				{
+					"id": "snoozed",
+					"label": "Snoozed",
+					"badge": 3
+				},
+				{
+					"id": "done",
+					"label": "Done"
+				}
+			]
+		},
+		"events": ["change", "move"],
+		"children": [
+			{
+				"tag": "text",
+				"children": ["Twelve customers need a reply."],
+				"props": {
+					"tone": "muted"
+				}
+			}
+		]
+	},
+	"frame": "screen",
+	"pending": {
+		"ios": "S4"
+	},
+	"cases": [
+		{
+			"name": "icons",
+			"props": {
+				"reorderable": null,
+				"selected": "snoozed",
+				"tabs": [
+					{
+						"id": "open",
+						"label": "Open",
+						"icon": "bell",
+						"badge": 12
+					},
+					{
+						"id": "snoozed",
+						"label": "Snoozed",
+						"icon": "clock"
+					},
+					{
+						"id": "done",
+						"label": "Done",
+						"icon": "check"
+					}
+				]
+			}
+		}
+	],
+	"aria": [
+		{
+			"role": "tablist"
+		},
+		{
+			"role": "tab",
+			"name": "Open 12"
+		},
+		{
+			"role": "tabpanel"
+		}
+	]
+}

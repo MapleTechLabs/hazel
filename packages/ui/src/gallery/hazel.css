@@ -1,0 +1,11 @@
+/* The hazel side: only the generated tokens.css, plus the font files (a host asset, as on iOS). */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "../style/generated/tokens.css";
+@import "./chrome.css";
+
+:root {
+	--frame-page: var(--hz-color-bg);
+	--frame-sidebar: var(--hz-color-sidebar);
+}

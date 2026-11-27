@@ -1,0 +1,18 @@
+[
+	{
+		"case": "heatmap/default",
+		"lane": "A1",
+		"reason": "Cell edges: the renderer places each cell in percent of the calendar's box, today in px, so their rounded edges antialias differently. Same colours (`chart-series-1`), cells, labels, tooltip and legend"
+	},
+	{
+		"case": "button/filter",
+		"lane": "A2",
+		"reason": "Same box and runs (126.55 by 32); the remove half's divider sits at a fractional x (97.55) and rasters one device column differently (max delta 21, 0.25%)"
+	},
+	{
+		"case": "chart/distribution",
+		"lane": "A1",
+		"reason": "HAZEL-GAP(chart-distribution-ends): at phone width the bar's two rounded ends antialias one device pixel differently although both sides sit on whole pixels with the same widths (0.23 to 0.26%); 1180 passes",
+		"runs": ["light-compact", "dark-compact"]
+	}
+]

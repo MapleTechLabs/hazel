@@ -5,47 +5,21 @@ import type { Command } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import type { Resources } from "../rpc"
 import { AppRoute, isCustomersRoute, isMySettingsRoute, isSettingsRoute } from "../route"
-import * as Auth from "./auth"
-import * as BotInstall from "./bot-install"
-import * as OAuthAuthorize from "./oauth-authorize"
 import * as ChatChannel from "./chat/channel"
-import * as ChatIndex from "./chat-index"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
 import * as Lazy from "./lazy"
 import type { PageOutMessage } from "./out-message"
-import * as NotificationsInbox from "./notifications/inbox"
-import * as OrgHome from "./home"
-import * as OrgMore from "./more"
-import * as Profile from "./profile"
-import * as Root from "./root"
-import * as Invite from "./invite"
-import * as Join from "./join"
-import * as SelectOrganization from "./select-organization"
 
 /**
  * Every routed page, registered once. Routes without a page render their layout around an empty
- * placeholder (see README.md).
+ * placeholder (see README.md), unless the shell draws a native page for them (`root/native-pages.ts`).
  *
  * `pages` are in the app's first chunk: what a signed-in user's first screen (the chat) and a
  * signed-out one's (sign-in) can show. Adding one: import its module and append `X.page`.
  */
 export const pages = [
-	Root.page,
+	// Root, inbox, home, more, profile and the organization picker are native (`root/native-pages.ts`).
 	ChatChannel.page,
-	NotificationsInbox.page,
-	OrgHome.page,
-	OrgMore.page,
-	Profile.page,
-	ChatIndex.page,
-	Auth.signInPage,
-	Auth.registerPage,
-	Auth.continuePage,
-	Auth.desktopPage,
-	SelectOrganization.page,
-	Join.page,
-	Invite.page,
-	BotInstall.page,
-	OAuthAuthorize.page,
 ]
 
 type AreaPage =
@@ -67,12 +41,7 @@ export const areas: ReadonlyArray<Lazy.LazyArea<AreaPage>> = [
 	Lazy.lazyArea("MySettings", isMySettingsRoute, () => import("./my-settings/pages")),
 	Lazy.lazyArea(
 		"ChannelSettings",
-		AppRoute.isAnyOf([
-			"ChannelSettings",
-			"ChannelSettingsOverview",
-			"ChannelSettingsIntegrations",
-			"ChannelSettingsConnect",
-		]),
+		AppRoute.isAnyOf(["ChannelSettingsIntegrations"]),
 		() => import("./channel-settings/pages"),
 	),
 	Lazy.lazyArea(

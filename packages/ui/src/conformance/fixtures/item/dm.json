@@ -1,0 +1,49 @@
+{
+	"about": "Today's DM row (`mobile-dms.ts`, `leadingSize` `conversation`): a 40pt avatar 2pt down, the name with its time on one baseline, a two-line 14/19.25 preview and the unread count.",
+	"root": {
+		"tag": "item",
+		"key": "dm1",
+		"props": {
+			"title": "Grace Hopper",
+			"subtitle": "Sure, send it over. I will read the draft tonight and leave comments on the open questions.",
+			"subtitleLines": "2",
+			"badge": 2,
+			"emphasized": true,
+			"leadingSize": "conversation",
+			"href": "#"
+		},
+		"events": ["press"],
+		"slots": [
+			{
+				"name": "leading",
+				"children": [
+					{
+						"tag": "avatar",
+						"props": {
+							"size": "medium"
+						}
+					}
+				]
+			},
+			{
+				"name": "trailing",
+				"children": [
+					{
+						"tag": "text",
+						"props": {
+							"role": "caption",
+							"strong": true,
+							"numeric": true
+						},
+						"children": ["14:05"]
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen",
+	"kit": {
+		"specimen": "item-dm",
+		"target": "item"
+	}
+}

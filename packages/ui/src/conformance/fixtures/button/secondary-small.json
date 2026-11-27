@@ -1,0 +1,23 @@
+{
+	"about": "A secondary small button with a label, against the kit's button-secondary-small (G6).",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "secondary",
+			"size": "small",
+			"label": "Invite"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Invite"
+		}
+	],
+	"kit": {
+		"specimen": "button-secondary-small",
+		"target": "button"
+	}
+}

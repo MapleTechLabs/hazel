@@ -1,0 +1,108 @@
+{
+	"about": "Customers' connect card (`connectCard`): a tile with its mark and copy, and a footer under a hairline whose state line leads with the status dot (`pk0-card-footer`, `pk0-status-dot`, `pk0-inline-spinner`).",
+	"root": {
+		"tag": "frame",
+		"props": {
+			"surface": "tile"
+		},
+		"slots": [
+			{
+				"name": "footer",
+				"children": [
+					{
+						"tag": "stack",
+						"props": {
+							"density": "tight"
+						},
+						"children": [
+							{
+								"tag": "stack",
+								"props": {
+									"axis": "horizontal",
+									"density": "snug",
+									"align": "center"
+								},
+								"children": [
+									{
+										"tag": "text",
+										"children": ["Connected"],
+										"props": {
+											"tone": "success",
+											"strong": true,
+											"dot": true,
+											"role": "label"
+										}
+									},
+									{
+										"tag": "text",
+										"children": ["· Not synced yet"],
+										"props": {
+											"tone": "muted",
+											"role": "label"
+										}
+									}
+								]
+							},
+							{
+								"tag": "text",
+								"children": ["214 organizations · 1,862 users"],
+								"props": {
+									"tone": "muted",
+									"numeric": true,
+									"role": "label"
+								}
+							}
+						]
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "stack",
+				"props": {
+					"axis": "horizontal",
+					"align": "start",
+					"density": "cozy"
+				},
+				"children": [
+					{
+						"tag": "iconTile",
+						"props": {
+							"tone": "mark",
+							"image": "/icon.svg"
+						}
+					},
+					{
+						"tag": "stack",
+						"props": {
+							"density": "tight"
+						},
+						"children": [
+							{
+								"tag": "heading",
+								"children": ["Hazel"]
+							},
+							{
+								"tag": "text",
+								"children": ["Members and channels."],
+								"props": {
+									"tone": "muted",
+									"role": "label"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	},
+	"frame": "screen",
+	"kit": {
+		"specimen": "connect-card",
+		"target": "frame"
+	},
+	"pending": {
+		"ios": "S1"
+	}
+}

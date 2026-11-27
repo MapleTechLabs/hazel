@@ -1,0 +1,23 @@
+{
+	"about": "A ghost xsmall button with a label, against the kit's button-ghost-xsmall (G6).",
+	"root": {
+		"tag": "button",
+		"props": {
+			"variant": "ghost",
+			"size": "xsmall",
+			"label": "Invite"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "Invite"
+		}
+	],
+	"kit": {
+		"specimen": "button-ghost-xsmall",
+		"target": "button"
+	}
+}

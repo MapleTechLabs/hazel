@@ -13,8 +13,13 @@ import { channelMemberRows, generalMessageRows, notificationRows, orgId, presenc
  * The few HTTP calls the app makes outside the sync socket, answered locally: the session check,
  * the sync access token and `/rpc`. Everything else in the app runs as it does against the API.
  */
+/** Ada's notifications as changed so far, by id; `fixture-backend.ts` adds the ones it creates. */
+export const fixtureNotifications = new Map<string, (typeof notificationRows)[number]>(
+	notificationRows.map((row) => [row.id, row]),
+)
+
 /** An idle RPC's encoded success value. */
-type Responder = (payload: Record<string, unknown>) => Schema.Json | object
+export type Responder = (payload: Record<string, unknown>) => Schema.Json | object
 
 export const makeOfflineFetch = (options: {
 	readonly backendUrl: string
@@ -32,6 +37,10 @@ export const makeOfflineFetch = (options: {
 	 * they do live. Without it they fail like any other URL outside the backend.
 	 */
 	readonly unfurls?: typeof fetch
+	/** RPC answers by tag over the ones below (a page's fixture, `page-fixture.ts`). */
+	readonly rpcs?: Readonly<Record<string, Responder>>
+	/** HTTP API answers (encoded JSON) by `GET` path, e.g. `/integrations/resources/<org>/slack/channels`. */
+	readonly http?: Readonly<Record<string, () => object>>
 }): typeof fetch => {
 	const now = Date.now()
 	const session: typeof HazelAuthApi.sessions.Session.Type = Schema.decodeSync(
@@ -86,6 +95,18 @@ export const makeOfflineFetch = (options: {
 				return { transactionId: transactionId ?? `org:${orgId}:1` }
 			},
 		],
+		// The inbox's "Mark as read": the row streams back with its `readAt`.
+		[
+			"notification.update",
+			(payload) => {
+				const current = fixtureNotifications.get(String(payload.id))
+				if (current === undefined) return { data: null, transactionId: `user:${options.user.id}:1` }
+				const next = { ...current, readAt: String(payload.readAt ?? new Date().toISOString()) }
+				fixtureNotifications.set(next.id, next)
+				const transactionId = options.server?.write("user", options.user.id, "notifications", [next])
+				return { data: next, transactionId: transactionId ?? `user:${options.user.id}:1` }
+			},
+		],
 		["userPresenceStatus.heartbeat", () => ({ lastSeenAt: new Date().toISOString() })],
 		// A sent message is stored as the fixture stores its own: a full row, with this payload's content.
 		[
@@ -124,6 +145,7 @@ export const makeOfflineFetch = (options: {
 	])
 	const { htmlRenderUrl } = options
 	if (htmlRenderUrl !== undefined) responders.set("message.htmlRenderUrl", htmlRenderUrl)
+	for (const [tag, respond] of Object.entries(options.rpcs ?? {})) responders.set(tag, respond)
 
 	/**
 	 * Any other RPC: the first plausible answer its success schema accepts (nothing, a transaction
@@ -200,8 +222,10 @@ export const makeOfflineFetch = (options: {
 					headers: { "content-type": "application/ndjson" },
 				})
 			}
-			default:
-				return new Response(null, { status: 404 })
+			default: {
+				const answer = options.http?.[url.pathname.replace(/\/$/, "")]
+				return answer === undefined ? new Response(null, { status: 404 }) : json(answer())
+			}
 		}
 	}
 	return offlineFetch

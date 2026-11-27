@@ -12,22 +12,13 @@ import {
 	last,
 	role,
 	scene,
-	selector,
-	submit,
 	text,
 	type,
 } from "foldkit/scene"
 import { describe, test, vi, expect as vitestExpect } from "vitest"
 import type { Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
-import {
-	CompleteOnboarding,
-	ClearOnboardingAnswers,
-	LoadOnboardingHome,
-	ReplaceOnboardingStepUrl,
-	SendInvites,
-	UpdateProfile,
-} from "./command"
+import { CompleteOnboarding, ClearOnboardingAnswers, LoadOnboardingHome, SendInvites } from "./command"
 import { Message } from "./message"
 import type { Membership, Model } from "./model"
 import { EnterAnimation } from "./enter-animation"
@@ -36,9 +27,10 @@ import { DrawGlobePath, TwinkleStar } from "./timezone/globe"
 import { init, update } from "./update"
 import { view } from "./view"
 import { sharedDefaults } from "../test-shared"
-import { errorToast } from "../../data/actions"
+import { errorToast, successToast } from "../../data/actions"
+import { AppRoute } from "../../route"
 
-/** The onboarding flow's update loop, driven through the rendered steps. */
+/** The later onboarding steps (the native shell draws welcome and profile), driven through their views. */
 
 // Scenes render without a DOM; the interaction Submodel only needs `document` as an event target.
 vi.hoisted(() => {
@@ -96,53 +88,44 @@ const ready = (
 		...extra,
 	]
 	const route = { _tag: "Onboarding" as const, orgId: Option.none(), step: Option.fromNullishOr(urlStep) }
-	return steps.reduce((model, message) => update(model, message, shared).model, init(route, shared).model)
+	return steps.reduce((model, message) => update(model, message, shared).model, init(route).model)
 }
 
 const settled = Message.CompletedEnterAnimation()
 const focused = Message.CompletedAutoFocus()
 const started = Message.StartedGlobeAnimation()
 
-/** The timezone step's globe: seven grid lines, eight stars, the step transition and a badge. */
+/** The timezone step's globe: seven grid lines, eight stars and the selected city's badge. */
 const timezoneMounts = [
 	...Array.from({ length: 7 }, () => [DrawGlobePath, started] as const),
 	...Array.from({ length: 8 }, () => [TwinkleStar, started] as const),
 	[EnterAnimation, settled] as const,
-	[EnterAnimation, settled] as const,
 ]
 
+/** A step change: the URL through the root, which the native shell follows. */
+const nav = (step: string, toast?: ReturnType<typeof successToast>) => {
+	const route = AppRoute.Onboarding({ orgId: Option.none(), step: Option.some(step) })
+	return toast === undefined
+		? PageOutMessage.RequestedNavigation({ route, replace: true })
+		: PageOutMessage.RequestedNavigation({ route, replace: true, toast })
+}
+
 describe("onboarding flow", () => {
-	test("a new user starts at welcome and Get started moves to the profile step", () => {
+	test("welcome and profile are the shell's: this page draws nothing for them", () => {
 		scene(
 			config,
 			given(ready(null)),
-			expect(role("heading", { name: "Welcome to Hazel!" })).toExist(),
-			Mount.resolve(EnterAnimation, settled),
-			click(role("button", { name: /Get started/ })),
-			Command.expectExact(ReplaceOnboardingStepUrl),
-			Command.resolve(ReplaceOnboardingStepUrl, Message.CompletedReplaceStepUrl()),
-			expect(role("heading", { name: "Set up your profile" })).toExist(),
-			expect(role("textbox", { name: "First name" })).toHaveValue("Nora"),
-			Mount.resolveAll([EnterAnimation, settled], [AutoFocus, focused]),
+			expect(role("heading", { name: "Welcome to Hazel!" })).toBeAbsent(),
+			expect(role("button", { name: /Get started/ })).toBeAbsent(),
 		)
 	})
 
-	test("an empty first name disables Continue until it is filled again", () => {
+	test("the time zone step the shell moved to is drawn here", () => {
 		scene(
 			config,
-			given(ready("profileInfo")),
-			Mount.resolveAll([EnterAnimation, settled], [AutoFocus, focused]),
-			type(role("textbox", { name: "First name" }), ""),
-			expect(role("button", { name: /Continue/ })).toBeDisabled(),
-			type(role("textbox", { name: "First name" }), "Ada"),
-			expect(role("button", { name: /Continue/ })).toBeEnabled(),
-			click(role("button", { name: /Continue/ })),
-			Command.expectExact(UpdateProfile),
-			Command.resolve(UpdateProfile, Message.SucceededUpdateProfile()),
-			Command.resolve(ReplaceOnboardingStepUrl, Message.CompletedReplaceStepUrl()),
+			given(ready("timezoneSelection")),
 			expect(role("heading", { name: "Where are you located?" })).toExist(),
 			expect(role("button", { name: /Detect my time zone/ })).toExist(),
-			Mount.expectEnded(AutoFocus),
 			Mount.resolveAll(...timezoneMounts),
 		)
 	})
@@ -153,12 +136,9 @@ describe("onboarding flow", () => {
 			given(ready("themeSelection", membership)),
 			expect(role("heading", { name: "Choose your theme" })).toExist(),
 			expect(role("radio", { name: "Dark mode" })).toBeChecked(),
-			Mount.resolve(EnterAnimation, settled),
 			click(role("button", { name: /Continue/ })),
-			Command.resolve(ReplaceOnboardingStepUrl, Message.CompletedReplaceStepUrl()),
+			expectOutMessage(nav("role")),
 			expect(role("heading", { name: "What's your role?" })).toExist(),
-			expect(text(/Step\s*5\s*of\s*5/)).toExist(),
-			Mount.resolve(EnterAnimation, settled),
 		)
 	})
 
@@ -180,13 +160,12 @@ describe("onboarding flow", () => {
 		scene(
 			config,
 			given(ready("teamInvitation", null)),
-			Mount.resolveAll([EnterAnimation, settled], [AutoFocus, focused]),
+			Mount.resolve(AutoFocus, focused),
 			click(role("button", { name: /Skip for now/ })),
-			Command.expectExact(ReplaceOnboardingStepUrl, CompleteOnboarding),
-			Command.resolve(ReplaceOnboardingStepUrl, Message.CompletedReplaceStepUrl()),
+			Command.expectExact(CompleteOnboarding),
+			expectOutMessage(nav("finalization")),
 			expect(text("Setting up your workspace...")).toExist(),
 			Mount.expectEnded(AutoFocus),
-			Mount.resolve(EnterAnimation, settled),
 			Command.resolve(CompleteOnboarding, Message.FailedCompleteOnboarding({ reason: "Offline" })),
 			expect(text("Setting up your workspace...")).toBeAbsent(),
 			expect(role("alert")).toHaveText(
@@ -196,8 +175,8 @@ describe("onboarding flow", () => {
 			Command.expectExact(CompleteOnboarding),
 			expect(text("Setting up your workspace...")).toExist(),
 			Command.resolve(CompleteOnboarding, Message.SucceededCompleteOnboarding()),
+			expectOutMessage(nav("completed")),
 			Command.resolveAll(
-				[ReplaceOnboardingStepUrl, Message.CompletedReplaceStepUrl()],
 				[LoadOnboardingHome, Message.CompletedLoadHome()],
 				[ClearOnboardingAnswers, Message.CompletedStoreAnswers()],
 			),
@@ -208,7 +187,7 @@ describe("onboarding flow", () => {
 		scene(
 			config,
 			given(ready("teamInvitation", creator)),
-			Mount.resolveAll([EnterAnimation, settled], [AutoFocus, focused]),
+			Mount.resolve(AutoFocus, focused),
 			type(role("textbox", { name: "Email 1" }), "grace@"),
 			expect(role("button", { name: /Skip for now/ })).toExist(),
 			type(role("textbox", { name: "Email 1" }), "grace@hazel"),
@@ -224,56 +203,11 @@ describe("onboarding flow", () => {
 			expect(role("button", { name: /Send invites/ })).toBeEnabled(),
 		)
 	})
-
-	test("Back from the profile step returns to welcome", () => {
-		scene(
-			config,
-			given(ready("profileInfo")),
-			Mount.resolveAll([EnterAnimation, settled], [AutoFocus, focused]),
-			click(role("button", { name: /Back/ })),
-			Command.resolve(ReplaceOnboardingStepUrl, Message.CompletedReplaceStepUrl()),
-			expect(role("heading", { name: "Welcome to Hazel!" })).toExist(),
-			Mount.expectEnded(AutoFocus),
-			Mount.resolve(EnterAnimation, settled),
-		)
-	})
 })
 
-const firstMounts = Mount.resolveAll([EnterAnimation, settled], [AutoFocus, focused])
+const firstMounts = Mount.resolve(AutoFocus, focused)
 const errorOut = (title: string, description: string | null = null) =>
 	PageOutMessage.RequestedToast({ toast: errorToast(title, description) })
-
-describe("profile step validation", () => {
-	test("clearing a name marks only that input invalid, and Enter does not submit", () => {
-		scene(
-			config,
-			given(ready("profileInfo")),
-			firstMounts,
-			type(role("textbox", { name: "Last name" }), ""),
-			expect(role("textbox", { name: "Last name" })).toHaveAttr("aria-invalid", "true"),
-			expect(role("textbox", { name: "First name" })).toHaveAttr("aria-invalid", "false"),
-			expect(role("button", { name: /Continue/ })).toBeDisabled(),
-			// The form has no accessible name, so it is reached by tag.
-			submit(selector("form")),
-			Command.expectNone(),
-		)
-	})
-
-	test("a failed save shows a toast and lets the user try again", () => {
-		scene(
-			config,
-			given(ready("profileInfo")),
-			firstMounts,
-			click(role("button", { name: /Continue/ })),
-			expect(role("button", { name: /Continue/ })).toBeDisabled(),
-			expect(role("button", { name: /Back/ })).toBeDisabled(),
-			Command.resolve(UpdateProfile, Message.FailedUpdateProfile({ reason: "Unexpected" })),
-			expectOutMessage(errorOut("Something went wrong", "Please try again.")),
-			expect(role("heading", { name: "Set up your profile" })).toExist(),
-			expect(role("button", { name: /Continue/ })).toBeEnabled(),
-		)
-	})
-})
 
 describe("invite step", () => {
 	const removeButtons = all.role("button", { name: "Remove email" })
@@ -330,15 +264,10 @@ describe("invite step", () => {
 				SendInvites,
 				Message.SucceededSendInvites({ emails: ["grace@hazel.test"], failedCount: 0 }),
 			),
-			expectOutMessage(
-				PageOutMessage.RequestedToast({
-					toast: { intent: "success", title: "Sent 1 invitation", description: null },
-				}),
-			),
-			Command.resolve(ReplaceOnboardingStepUrl, Message.CompletedReplaceStepUrl()),
+			// One update, one OutMessage: the toast goes with the step's navigation.
+			expectOutMessage(nav("finalization", successToast("Sent 1 invitation"))),
 			expect(text("Setting up your workspace...")).toExist(),
 			Mount.expectEnded(AutoFocus),
-			Mount.resolve(EnterAnimation, settled),
 			Command.resolve(CompleteOnboarding, Message.FailedCompleteOnboarding({ reason: "Offline" })),
 		)
 	})

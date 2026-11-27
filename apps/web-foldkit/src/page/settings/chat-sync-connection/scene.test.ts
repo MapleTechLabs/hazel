@@ -10,7 +10,7 @@ import * as Modal from "../../../ui/modal"
 import { FetchChannelSuggestion } from "../../../customers/suggestion-prompt"
 import * as SuggestionPrompt from "../../../customers/suggestion-prompt"
 import { successToast } from "../../../data/actions"
-import { suggestionFor } from "../../../lab/fixtures/customers-suggestions"
+import { suggestionFor } from "../../../test/fixtures/customers-suggestions"
 import {
 	makeShared,
 	organizationId,

@@ -1,0 +1,86 @@
+{
+	"about": "Images in a mosaic and files as cards, one uploading; `removable` is the composer's previews.",
+	"root": {
+		"tag": "attachmentGrid",
+		"props": {
+			"attachments": [
+				{
+					"id": "i1",
+					"kind": "image",
+					"name": "one.png",
+					"width": 800,
+					"height": 600
+				},
+				{
+					"id": "i2",
+					"kind": "image",
+					"name": "two.png",
+					"width": 800,
+					"height": 600
+				},
+				{
+					"id": "i3",
+					"kind": "image",
+					"name": "three.png",
+					"width": 800,
+					"height": 600
+				},
+				{
+					"id": "f1",
+					"kind": "file",
+					"name": "design-review.fig",
+					"size": "18 MB",
+					"progress": 0.65
+				},
+				{
+					"id": "f2",
+					"kind": "file",
+					"name": "budget.xlsx",
+					"size": "88 KB"
+				}
+			]
+		},
+		"events": ["press", "remove"]
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Open one.png"
+		}
+	],
+	"axes": [
+		{
+			"prop": "removable",
+			"values": [true]
+		}
+	],
+	"cases": [
+		{
+			"name": "video",
+			"props": {
+				"attachments": [
+					{
+						"id": "v1",
+						"kind": "video",
+						"name": "clip.mov",
+						"width": 1920,
+						"height": 1080
+					}
+				]
+			}
+		},
+		{
+			"name": "files",
+			"props": {
+				"attachments": [
+					{
+						"id": "f3",
+						"kind": "file",
+						"name": "a-very-long-file-name-that-has-to-truncate-somewhere-in-the-card.zip",
+						"size": "1.2 GB"
+					}
+				]
+			}
+		}
+	]
+}

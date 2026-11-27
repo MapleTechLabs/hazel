@@ -1,0 +1,22 @@
+{
+	"about": "The composer's `GIF` action (`quiet`): no box or padding, muted semibold `text-xs` that turns `fg` on hover; today's `composer/view.ts` picker button.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"label": "GIF",
+			"icon": "gif",
+			"variant": "quiet"
+		},
+		"events": ["press"]
+	},
+	"frame": "inline",
+	"pending": {
+		"ios": "S2"
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "GIF"
+		}
+	]
+}

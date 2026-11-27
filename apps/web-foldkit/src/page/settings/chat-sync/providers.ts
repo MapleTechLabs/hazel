@@ -49,7 +49,6 @@ export const ResourceFailure = Schema.Union([
 ])
 export type ResourceFailure = typeof ResourceFailure.Type
 
-export const Workspaces = AsyncData.Schema(Schema.Array(Workspace), ResourceFailure)
 export const ExternalChannels = AsyncData.Schema(Schema.Array(ExternalChannel), ResourceFailure)
 
 type ResourceError = CommonError | IntegrationNotConnectedForPreviewError | IntegrationResourceError

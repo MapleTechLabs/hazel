@@ -1,0 +1,92 @@
+{
+	"about": "hz:commandPalette (today's `ui/command-menu-view.ts`): the palette's home, recent channels and people, then actions with a description and a key hint; loading swaps the search icon for a spinner; no results shows the empty line.",
+	"root": {
+		"tag": "commandPalette",
+		"props": {
+			"open": true,
+			"placeholder": "Search or run a command",
+			"query": {
+				"text": "",
+				"rev": 0,
+				"edit": 0
+			},
+			"groups": [
+				{
+					"title": "Recent",
+					"items": [
+						{
+							"id": "c1",
+							"label": "general",
+							"icon": "hashtag"
+						},
+						{
+							"id": "u1",
+							"label": "Ada Lovelace",
+							"face": {
+								"name": "Ada Lovelace",
+								"initials": "AL",
+								"presence": "online"
+							}
+						}
+					]
+				},
+				{
+					"title": "Actions",
+					"items": [
+						{
+							"id": "new",
+							"label": "New channel",
+							"icon": "plus",
+							"shortcut": "mod+shift+n"
+						},
+						{
+							"id": "invite",
+							"label": "Invite members",
+							"icon": "user-plus",
+							"description": "Send an email invite"
+						}
+					]
+				}
+			]
+		},
+		"events": ["change", "select", "dismiss"]
+	},
+	"frame": "screen",
+	"cases": [
+		{
+			"name": "loading",
+			"props": {
+				"loading": true
+			}
+		},
+		{
+			"name": "empty",
+			"props": {
+				"groups": [],
+				"empty": "No results",
+				"query": {
+					"text": "zzz",
+					"rev": 1,
+					"edit": 0
+				}
+			}
+		}
+	],
+	"pending": {
+		"ios": "S3"
+	},
+	"aria": [
+		{
+			"role": "dialog",
+			"name": "Command Menu"
+		},
+		{
+			"role": "searchbox",
+			"name": "Quick search"
+		},
+		{
+			"role": "menu",
+			"name": "Suggestions"
+		}
+	]
+}
