@@ -1,0 +1,25 @@
+{
+	"about": "The composer's context bar (draft-view.ts indicators): replying to a message, then editing one (Up in an empty composer).",
+	"root": {
+		"tag": "composer",
+		"props": {
+			"placeholder": "Message #general",
+			"context": { "kind": "reply", "author": "Maya Chen", "text": "Can we ship the sidebar today?" }
+		},
+		"events": ["change", "submit", "editLast", "cancelContext"]
+	},
+	"aria": [
+		{ "role": "textbox", "name": "Message #general" },
+		{ "role": "button", "name": "Cancel reply" }
+	],
+	"cases": [
+		{
+			"name": "editing",
+			"props": {
+				"value": { "text": "Shipping the new sidebar today", "rev": 0, "edit": 0 },
+				"canSend": true,
+				"context": { "kind": "edit", "text": "Shipping the new sidebar today" }
+			}
+		}
+	]
+}
