@@ -1,15 +1,13 @@
-import { BotId, ExternalChannelId, SyncConnectionId } from "@hazel/schema"
+import { ExternalChannelId, SyncConnectionId } from "@hazel/schema"
 import { Schema } from "effect"
 import type { Connection } from "../page/settings/chat-sync/model"
 import type { ExternalChannel } from "../page/settings/chat-sync/providers"
-import type { Bot } from "../page/settings/integrations/shared/bots"
 import { uuid } from "./pages-fixtures"
 
-/** Fixtures for the chat sync and integrations page tests. */
+/** Fixtures for the chat sync page tests. */
 
 export const syncConnectionId = Schema.decodeSync(SyncConnectionId)(uuid(20))
 export const slackSyncConnectionId = Schema.decodeSync(SyncConnectionId)(uuid(21))
-export const botId = Schema.decodeSync(BotId)(uuid(30))
 
 export const connection: Connection = {
 	id: syncConnectionId,
@@ -42,15 +40,3 @@ export const slackChannels: ReadonlyArray<ExternalChannel> = [
 	slackChannel("C02DESIGN", "design-reviews"),
 	slackChannel("C03LAUNCH", "launch-room"),
 ]
-
-export const bot: Bot = {
-	id: botId,
-	name: "Deploy Bot",
-	description: "Ships builds from chat.",
-	isPublic: true,
-	scopes: ["messages:write"],
-	allowedIntegrations: [],
-	installRedirectUris: [],
-	avatarUrl: null,
-	installCount: 12,
-}
