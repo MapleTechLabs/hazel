@@ -28,6 +28,8 @@ const CHIPS = 12
 // border-fg/15 bg-overlay shadow-lg`, chips as `toggleChip` `h-7 text-xs`, `columns-2 gap-2` tiles
 // `rounded-md bg-muted/60`, the footer `border-t px-3 py-1.5` with `text-3xs` attribution.
 const css = `
+/* The panel draws in the top layer, so its placeholder takes no room under the composer. */
+[data-hz=ext][data-ext=GifPicker] { margin: 0; }
 [data-hz-part=gifPanel] {
 	display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box;
 	width: min(calc(100vw - var(--hz-space-4)), calc(var(--hz-space-20) * 5)); height: min(var(--hz-space-105), 60dvh);

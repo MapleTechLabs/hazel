@@ -1093,70 +1093,73 @@ export const ChannelComposerNoDeps = Hazel.component({
 		return h.stack.density("compact").children(
 			// HAZEL-GAP(p4-composer-typing-float): today the line floats over the list's bottom edge.
 			typing.length === 0 ? null : h.typingIndicator.names(typing),
-			h.composer
-				.ref(FieldRef)
-				.placeholder(h.props.placeholder)
-				.value(model.draft)
-				.canSend(model.mode._tag === "Editing" ? !uploading : send || model.command !== null)
-				.suggestions(command === null ? options.map((option) => option.suggestion) : [])
-				.activeSuggestion(activeOf(options, model.active))
-				.emptyText(emptyTextOf(model.trigger))
-				.context(context)
-				.mentions(mentions)
-				.above(
-					// HAZEL-GAP(p4-composer-drop-overlay): today a dashed "Drop files here" covers the composer.
-					model.dragging && !uploading
-						? h.dropZone
-								.label("Drop files here")
-								.icon("paperclip")
-								.multiple()
-								.on("files", () => M.DroppedFiles())
-						: null,
-					model.uploads.length === 0
-						? null
-						: h.attachmentGrid
-								.attachments(attachmentsOf(model.uploads))
-								.layout("grid")
-								.removable()
-								.on("remove", ({ id }) => M.PressedRemoveAttachment({ id }))
-								.on("retry", ({ id }) => M.PressedRetryAttachment({ id })),
-					command === null ? null : commandPanel(h, command, model.fields),
-				)
-				.actions(
-					h.button
-						.icon("paperclip")
-						.label("Attach")
-						.variant("quiet")
-						.disabled(uploading)
-						.on("press", M.PressedAttach()),
-					h.button.icon("gif").label("GIF").variant("quiet").on("press", M.PressedGif()),
-					h.button.icon("emoji").label("Emoji").variant("quiet").on("press", M.PressedEmoji()),
-				)
-				.on("change", (payload) => M.ChangedDraft({ payload }))
-				.on("submit", (payload) => M.SubmittedDraft({ payload }))
-				.on("trigger", ({ kind, query }) => M.ChangedTrigger({ kind, query }))
-				.on("key", ({ key }) => M.PressedSuggestionKey({ key }))
-				.on("pressSuggestion", ({ id }) => M.PressedSuggestion({ id }))
-				.on("hoverSuggestion", ({ id }) => M.HoveredSuggestion({ id }))
-				.on("editLast", M.PressedEditLast())
-				.on("cancelContext", M.CancelledContext())
-				.on("escape", M.PressedEscape())
-				.on("leave", M.LeftComposer())
-				.on("files", () => M.DroppedFiles()),
-			EmojiPicker(h, {
-				props: { open: model.picker === "emoji", custom: model.customEmojis },
-				onEmit: {
-					Picked: ({ emoji }) => M.PickedEmojiPickerEmoji({ emoji }),
-					RequestedClose: () => M.RequestedCloseEmojiPicker(),
-				},
-			}),
-			GifPicker(h, {
-				props: { open: model.picker === "gif" },
-				onEmit: {
-					Picked: ({ url }) => M.PickedGifPickerGif({ url }),
-					RequestedClose: () => M.RequestedCloseGifPicker(),
-				},
-			}),
+			// The pickers draw in the top layer: no gap for them under the card (today's `pb-4` is the hole's).
+			h.stack.density("none").children(
+				h.composer
+					.ref(FieldRef)
+					.placeholder(h.props.placeholder)
+					.value(model.draft)
+					.canSend(model.mode._tag === "Editing" ? !uploading : send || model.command !== null)
+					.suggestions(command === null ? options.map((option) => option.suggestion) : [])
+					.activeSuggestion(activeOf(options, model.active))
+					.emptyText(emptyTextOf(model.trigger))
+					.context(context)
+					.mentions(mentions)
+					.above(
+						// HAZEL-GAP(p4-composer-drop-overlay): today a dashed "Drop files here" covers the composer.
+						model.dragging && !uploading
+							? h.dropZone
+									.label("Drop files here")
+									.icon("paperclip")
+									.multiple()
+									.on("files", () => M.DroppedFiles())
+							: null,
+						model.uploads.length === 0
+							? null
+							: h.attachmentGrid
+									.attachments(attachmentsOf(model.uploads))
+									.layout("grid")
+									.removable()
+									.on("remove", ({ id }) => M.PressedRemoveAttachment({ id }))
+									.on("retry", ({ id }) => M.PressedRetryAttachment({ id })),
+						command === null ? null : commandPanel(h, command, model.fields),
+					)
+					.actions(
+						h.button
+							.icon("paperclip")
+							.label("Attach")
+							.variant("quiet")
+							.disabled(uploading)
+							.on("press", M.PressedAttach()),
+						h.button.icon("gif").label("GIF").variant("quiet").on("press", M.PressedGif()),
+						h.button.icon("emoji").label("Emoji").variant("quiet").on("press", M.PressedEmoji()),
+					)
+					.on("change", (payload) => M.ChangedDraft({ payload }))
+					.on("submit", (payload) => M.SubmittedDraft({ payload }))
+					.on("trigger", ({ kind, query }) => M.ChangedTrigger({ kind, query }))
+					.on("key", ({ key }) => M.PressedSuggestionKey({ key }))
+					.on("pressSuggestion", ({ id }) => M.PressedSuggestion({ id }))
+					.on("hoverSuggestion", ({ id }) => M.HoveredSuggestion({ id }))
+					.on("editLast", M.PressedEditLast())
+					.on("cancelContext", M.CancelledContext())
+					.on("escape", M.PressedEscape())
+					.on("leave", M.LeftComposer())
+					.on("files", () => M.DroppedFiles()),
+				EmojiPicker(h, {
+					props: { open: model.picker === "emoji", custom: model.customEmojis },
+					onEmit: {
+						Picked: ({ emoji }) => M.PickedEmojiPickerEmoji({ emoji }),
+						RequestedClose: () => M.RequestedCloseEmojiPicker(),
+					},
+				}),
+				GifPicker(h, {
+					props: { open: model.picker === "gif" },
+					onEmit: {
+						Picked: ({ url }) => M.PickedGifPickerGif({ url }),
+						RequestedClose: () => M.RequestedCloseGifPicker(),
+					},
+				}),
+			),
 		)
 	},
 })
