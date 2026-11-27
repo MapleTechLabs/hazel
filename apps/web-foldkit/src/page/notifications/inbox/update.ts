@@ -200,13 +200,6 @@ export const update = (model: Model, message: Message, shared: Shared): PageRetu
 		SucceededMarkAllChannelsRead: () => ({
 			model: modifyFields(model, { isMarkingAllRead: () => false }),
 		}),
-		RequestedIslandNavigation: ({ orgSlug, channelId }) => ({
-			model,
-			outMessage: PageOutMessage.RequestedNavigation({
-				route: AppRoute.ChatChannel({ orgSlug, channelId }),
-				replace: false,
-			}),
-		}),
 		FailedMarkAllChannelsRead: ({ channelIds, reason }) => ({
 			model: modifyFields(unmarkChannels(model, channelIds), { isMarkingAllRead: () => false }),
 			outMessage: errorToast("Couldn't mark the channels as read", reason),

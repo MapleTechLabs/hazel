@@ -2,7 +2,7 @@
 
 Stateless Foldkit views for the Customers pages. Every view is `(h, options) → Html`; selection,
 hover and open state live in the page's Model and come in as options, Messages go out through `on*`
-callbacks. Try them all at `/lab/customers/kit/*`.
+callbacks.
 
 **Only domain views live here** (a lifecycle stage badge, a company logo, a severity chip, a queue
 row, a KPI tile, a connect card…), and each is built from the app kit in `src/ui`. Generic
@@ -68,9 +68,8 @@ The little text grammar the kit has no component for. Headings are the kit's `he
 ## Identity — `ui/identity.ts`
 
 - `companyLogo(h, { name, logoUrl?, size?: "2xs"|"xs"|"sm"|"md"|"lg" })` — 16/20/28/40/48px, initials tint by name hash (the theme's `*-subtle` pairs).
-- `personAvatar(h, person | null, { size? })` (on the kit `avatar`) — `null` = dashed "Unassigned"; `personLabel(h, person | null)`; `avatarStack(h, people, { max? })`.
-- `sourceLogo(h, source)`, `sourceMark(h, source, { size? })` (tile), `sourceChip(h, source)`, `sourceLinkChip(h, { source, label, href })`
-  (the chip itself is the link out; no arrow glyph, the accessible name and title say where it goes).
+- `personAvatar(h, person | null, { size? })` (on the kit `avatar`): `null` = dashed "Unassigned"; `personLabel(h, person | null)`.
+- `sourceLogo(h, source)`, `sourceMark(h, source, { size? })` (tile), `sourceChip(h, source)`.
 - `sourceLabel(source)` (`../providers`), `sourceLogoSrc(source)` (Brandfetch; Hazel uses `/icon.svg`), `initialsOf`, `tintIndex`.
 
 ## KPI and evidence — `ui/kpi-tile.ts`, `ui/evidence.ts`
@@ -84,9 +83,9 @@ The little text grammar the kit has no component for. Headings are the kit's `he
 
 ## Charts — `src/customers/charts/`
 
-- `sparkline.ts`: `sparkline(h, { values, ariaLabel, tone?, size?: "sm"|"md", area?, endDot? })`, `barSparkline`, `meter(h, { value, limit, ariaLabel })`, `evidenceBars(h, { values, highlightFrom, baseline, ariaLabel, tone? })`, `trendTone(values)`.
+- `sparkline.ts`: `sparkline(h, { values, ariaLabel, tone?, size?: "sm"|"md", area?, endDot? })`, `meter(h, { value, limit, ariaLabel })`, `evidenceBars(h, { values, highlightFrom, baseline, ariaLabel, tone? })`, `trendTone(values)`.
 - `line-chart.ts`: `lineChart(h, { ariaLabel, series, xLabels, headings, formatValue, formatAxis?, hoveredIndex, onHover, endLabels? })`;
-  `activeUsersChart(h, { points, bucket, hoveredIndex, onHover })` over `OverviewResult.activeUsers`; `ACTIVE_USERS_LEGEND`.
+  `activeUsersChart(h, { points, bucket, hoveredIndex, onHover })` over `OverviewResult.activeUsers`.
 - `stacked-bar-chart.ts`: `stackedBarChart(h, { ariaLabel, stacks, bars, netLabel?, formatValue, hoveredIndex, onHover })`;
   `mrrMovementChart(h, { buckets, bucket, currency, hoveredIndex, onHover })` over `OverviewResult.mrrMovements`; `mrrLegend(buckets)`.
 - `distribution.ts`: `distributionBar(h, { segments, ariaLabel })`.
@@ -111,16 +110,15 @@ Tables are the kit's `dataTable` and `primaryCell` (`src/ui/data-table.ts`).
 - `rangePicker(h, { selected, onSelect, caption? })` (on the kit `segmented`).
 - `searchBox(h, { id, value, placeholder, onInput, onClear })` (app search field + `/` hint).
 - `filterChip(h, { field, operator, value, onRemove, attributes?, overlay? })`, `addFilterButton(h, { attributes?, overlay?, onPress? })`, `sortTrigger(h, { label, attributes?, overlay? })`, `filterBar(h, { start, end? })`.
-- `kbd(h, key)`, `shortcutBar(h, shortcuts)`, `QUEUE_SHORTCUTS`.
+- `kbd(h, key)`, `shortcutBar(h, shortcuts)`.
 
 `attributes` / `overlay` are what `ui/menu-view` (or a popover) hands its `toTrigger`: spread them on the trigger, so the page's own Menu/Popover Submodel opens from these buttons.
 
 ## Menus — `ui/menus.ts` (for the app's `ui/menu` Submodel)
 
-- Snooze: `snoozeMenuEntries`, `snoozeMenuContent(h, menuId, now)`, `snoozeUntil(key, now)`, `SNOOZE_KEYS`, `PICK_DATE_KEY`.
+- Snooze: `snoozeMenuContent(h, menuId, now)`, `snoozeUntil(key, now)`, `SNOOZE_KEYS`, `PICK_DATE_KEY`.
 - Mute (a customer out of Needs attention): `muteLeaves` (a submenu), `MUTE_LABEL`, `isMuteKey`, `muteUntil(key, now)`.
-- Row actions: `rowActionsEntries({ championEmail })`, `rowActionsContent(h, menuId, now)` (Snooze is a submenu: leaf keys `snooze:<key>`),
-  `snoozeKeyOfLeaf(key)`, `snoozeInstantOf(key, now)`.
+- Snooze submenu leaves (keys `snooze:<key>`): `snoozeLeafKey(key)`, `snoozeKeyOfLeaf(key)`, `snoozeInstantOf(key, now)`.
 
 ```ts
 h.submodel({
@@ -128,7 +126,7 @@ h.submodel({
 	model: model.snoozeMenu,
 	view: MenuView.view,
 	viewInputs: {
-		entries: snoozeMenuEntries,
+		entries: [...SNOOZE_KEYS.map((key) => Menu.item(key)), Menu.separator, Menu.item(PICK_DATE_KEY)],
 		content: snoozeMenuContent(h, model.snoozeMenu.id, now),
 		toTrigger: (attributes, overlay) =>
 			queueAction(h, { label: "Snooze", icon: IconClock(h), attributes, overlay }),
@@ -139,9 +137,9 @@ h.submodel({
 
 ## Empty states and sources — `ui/empty-states.ts`, `ui/connect-card.ts`
 
-- `allClearState(h, { snoozedCount, onViewSnoozed? })`, `noSourcesState(h, { onConnect? | action? })`, `noResultsState(h, { onClear?, title?, description? })` — `framed: false` drops the border.
+- `noResultsState(h, { onClear?, title?, description? })`: `framed: false` drops the border.
 - `connectCard(h, { provider, now, status })` — `status._tag`: `NotConnected { onConnect }`, `Syncing { step, done, total, onCancel? }`, `Connected { syncedAt, summary, onSyncNow? }`, `Error { at, message, action }`. The line under the name is `providerOf(provider).blurb` unless `description` is given.
 
-## Lab
+## Fixtures
 
-Fixtures: `src/lab/fixtures/customers.ts` (fixed `NOW`, 214 accounts, overview result, signals with every evidence viz, connections). See `src/lab/README.md` for adding page entries.
+Test fixtures: `src/test/fixtures/customers.ts` (fixed `NOW`, 214 accounts, overview result, signals with every evidence viz, connections).

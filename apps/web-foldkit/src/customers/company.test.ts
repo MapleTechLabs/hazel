@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { RICH_COMPANY, SPARSE_COMPANY } from "../lab/fixtures/customers"
+import { RICH_COMPANY, SPARSE_COMPANY } from "../test/fixtures/customers"
 import {
 	addressLabel,
 	companyPages,

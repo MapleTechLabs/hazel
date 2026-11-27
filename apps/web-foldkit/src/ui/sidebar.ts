@@ -9,94 +9,6 @@ import { linkClassName } from "./link"
 
 export type SidebarState = "expanded" | "collapsed"
 
-export const sidebarProvider = <Message>(
-	h: HtmlBuilder<Message>,
-	options: { readonly width?: string; readonly className?: string },
-	children: Html[],
-): Html =>
-	h.div(
-		[
-			h.Class(
-				twMerge(
-					"@container **:data-[slot=icon]:shrink-0",
-					"flex w-full text-sidebar-fg",
-					// Legacy's `has-data-[intent=inset]:*` variants are dropped: no sidebar here is inset, and a
-					// `:has()` on the shell root restyles the whole page on every DOM insertion below it.
-					"group/sidebar-root peer/sidebar-root",
-					options.className,
-				),
-			),
-			h.Style({ "--sidebar-width": options.width ?? "17rem", "--sidebar-width-dock": "3.25rem" }),
-		],
-		children,
-	)
-
-/** `<Sidebar collapsible="dock">` (desktop): gap + fixed container. */
-export const sidebarDock = <Message>(
-	h: HtmlBuilder<Message>,
-	options: { readonly state: SidebarState; readonly className?: string },
-	children: Html[],
-): Html =>
-	h.div(
-		[
-			h.Attribute("data-state", options.state),
-			h.Attribute("data-collapsible", options.state === "collapsed" ? "dock" : ""),
-			h.Attribute("data-intent", "default"),
-			h.Attribute("data-side", "left"),
-			h.Attribute("data-slot", "sidebar"),
-			h.Class("group peer hidden text-sidebar-fg md:block"),
-		],
-		[
-			h.div([
-				h.Attribute("data-slot", "sidebar-gap"),
-				h.Attribute("aria-hidden", "true"),
-				h.Class(
-					twMerge([
-						"w-(--sidebar-width) group-data-[collapsible=hidden]:w-0",
-						"group-data-[side=right]:rotate-180",
-						"relative h-svh bg-transparent transition-[width] duration-200 ease-linear",
-						"group-data-[collapsible=dock]:w-(--sidebar-width-dock)",
-					]),
-				),
-			]),
-			h.div(
-				[
-					h.Attribute("data-slot", "sidebar-container"),
-					h.Class(
-						twMerge(
-							"fixed inset-y-0 z-10 hidden w-(--sidebar-width) bg-sidebar",
-							"not-has-data-[slot=sidebar-footer]:pb-2",
-							"transition-[left,right,width] duration-200 ease-linear",
-							"md:flex",
-							"left-0 group-data-[collapsible=hidden]:left-[calc(var(--sidebar-width)*-1)]",
-							[
-								"group-data-[collapsible=dock]:w-(--sidebar-width-dock)",
-								"border-sidebar-border group-data-[side=left]:border-r group-data-[side=right]:border-l",
-							],
-							options.className,
-						),
-					),
-				],
-				[
-					h.div(
-						[
-							h.Attribute("data-sidebar", "default"),
-							h.Attribute("data-slot", "sidebar-inner"),
-							h.Class(
-								twJoin(
-									"flex h-full w-full flex-col text-sidebar-fg",
-									"group-data-[intent=inset]:bg-sidebar dark:group-data-[intent=inset]:bg-bg",
-									"group-data-[intent=float]:rounded-lg group-data-[intent=float]:border group-data-[intent=float]:border-sidebar-border group-data-[intent=float]:bg-sidebar group-data-[intent=float]:shadow-xs",
-								),
-							),
-						],
-						children,
-					),
-				],
-			),
-		],
-	)
-
 /** `<Sidebar collapsible="none">` */
 export const sidebarStatic = <Message>(
 	h: HtmlBuilder<Message>,
@@ -332,21 +244,6 @@ export const sidebarLabel = <Message>(h: HtmlBuilder<Message>, children: Array<H
 			h.Attribute("data-slot", "sidebar-label"),
 			h.Attribute("tabindex", "-1"),
 			h.Attribute("slot", "label"),
-		],
-		children,
-	)
-
-export const sidebarInset = <Message>(h: HtmlBuilder<Message>, className: string, children: Html[]): Html =>
-	h.main(
-		[
-			h.Attribute("data-slot", "sidebar-inset"),
-			h.Class(
-				twMerge(
-					// The inset-only `group-has-*` variants are dropped like on `sidebarProvider` (never inset).
-					"relative flex w-full flex-1 flex-col bg-bg lg:min-w-0",
-					className,
-				),
-			),
 		],
 		children,
 	)

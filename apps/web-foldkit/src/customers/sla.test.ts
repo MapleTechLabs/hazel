@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
-import { NOW } from "../lab/fixtures/customers"
-import { ISSUE_SLAS, ISSUES } from "../lab/fixtures/issues"
+import { NOW } from "../test/fixtures/customers"
+import { ISSUE_SLAS, ISSUES } from "../test/fixtures/issues"
 import { formatSlaDuration, overdueByMs, slaChipCopy, slaDisplayOf } from "./sla"
 
 /** The SLA chip's copy over the fixtures, one per state (`docs/customers/sla.md` §3). */

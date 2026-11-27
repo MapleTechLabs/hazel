@@ -9,16 +9,6 @@ export const kbd = <M>(h: HtmlBuilder<M>, key: string, className?: string): Html
 
 export type Shortcut = Readonly<{ keys: ReadonlyArray<string>; label: string }>
 
-/** The queue's default keys (spec §2). */
-export const QUEUE_SHORTCUTS: ReadonlyArray<Shortcut> = [
-	{ keys: ["j", "k"], label: "Navigate" },
-	{ keys: ["a"], label: "Assign" },
-	{ keys: ["i"], label: "Assign to me" },
-	{ keys: ["h"], label: "Snooze" },
-	{ keys: ["d"], label: "Done" },
-	{ keys: ["Enter"], label: "Open" },
-]
-
 export const shortcutBar = <M>(
 	h: HtmlBuilder<M>,
 	shortcuts: ReadonlyArray<Shortcut>,

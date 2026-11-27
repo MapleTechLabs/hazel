@@ -1,308 +1,58 @@
-import { ChannelId, type NotificationId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
-import { eq, isNull } from "@tanstack/db"
-import { Clock, Duration, Option, Schema, Stream } from "effect"
-import { Dom, Subscription } from "foldkit"
-import {
-	notificationCollection,
-	organizationCollection,
-	organizationMemberCollection,
-} from "~/db/collections"
-import { appOrgSourcesSettled, syncSession } from "~/db/sync-manager"
-import { SESSION_REJECTED_EVENT } from "~/lib/access-token"
-import { liveQueryStream } from "../data/live-query"
-import { pageSubscriptions } from "../page/registry"
-import { SoundSettings } from "../notification-sound"
-import { type NotificationSinks, wireNotificationSinks } from "./notification-sinks"
-import { chatChannelIdOf, isChatRoute, orgSlugOf } from "../route"
-import type { Member, Organization } from "../session"
-import * as ShellSubscription from "../shell/subscription"
+import type { UserId } from "@hazel/schema"
+import { Option, Schema, Stream } from "effect"
+import { Port, Subscription } from "foldkit"
 import * as AiPanel from "../assistant"
 import * as CommandPalette from "../overlay/command-palette"
-import { LayoutKeys, layoutHotkeys, layoutKeysOf } from "../overlay/hotkeys"
 import * as Modal from "../overlay/modal"
-import * as Platform from "../platform"
-import { desktopMenuItems } from "../platform/desktop-menu"
-import { backgroundToasts } from "../overlay/background-toasts"
-import * as Updates from "../platform/updates"
 import * as Toasts from "../overlay/toaster"
-import { MOBILE_QUERY } from "../ui/viewport"
+import { pageSubscriptions } from "../page/registry"
+import * as Platform from "../platform"
+import * as Updates from "../platform/updates"
+import { chatChannelIdOf, orgSlugOf } from "../route"
+import { backgroundToasts } from "../overlay/background-toasts"
+import { messageOfIntent } from "../shell/channels-sidebar/intents"
+import * as Bus from "../root/bus"
+import * as ShellSubscription from "../shell/subscription"
+import { HostContextSchema } from "./context"
 import { Message } from "./message"
-import { REMEMBERED_USER_KEY } from "./remembered-user"
-import { Badge, isMentionReason } from "../platform/badge"
-import {
-	authOf,
-	badgeOfModel,
-	currentUserOf,
-	loadedOrgOf,
-	memberOf,
-	type Model,
-	pageHostOf,
-	sharedOf,
-} from "./model"
+import { type Model, pageHostOf, sharedOf } from "./model"
 
-export { MOBILE_QUERY } from "../ui/viewport"
+/** The host's one inbound port: the shell's context, sent on every change. */
+export const hostContext = Port.inbound(HostContextSchema)
 
-/** How often the root clock ticks (legacy `presenceNowSignal` and the sidebar's presence dots). */
-const CLOCK_INTERVAL = Duration.seconds(30)
+const shellSubscriptions = Subscription.make<Model, Message>()(() => ({
+	hostContext: Port.subscriptionEntry(hostContext, (context) => Message.ChangedContext({ context })),
+	// The keys, menu items and frame buttons whose work is still the host's.
+	shellRequests: Subscription.persistentEntry(
+		Bus.eventsOf("Shell").pipe(Stream.map(({ request }) => Message.ReceivedShellRequest({ request }))),
+	),
+}))
 
-/** The org shell is up: the session, its user and the route's organization have loaded. */
-const isShellReady = (model: Model): boolean =>
-	currentUserOf(model) !== null && Option.isSome(loadedOrgOf(model))
-
-const rootSubscriptions = Subscription.make<Model, Message>()((entry) => ({
-	// Toasts from Commands that outlive the page that sent them.
-	backgroundToasts: Subscription.persistentEntry(
-		backgroundToasts.pipe(Stream.map((toast) => Message.ReceivedBackgroundToast({ toast }))),
-	),
-	systemTheme: Subscription.persistentEntry(
-		Dom.streamFromMediaQuery({
-			query: "(prefers-color-scheme: dark)",
-			mapMatches: (isDark) => Message.ChangedSystemTheme({ theme: isDark ? "dark" : "light" }),
-		}),
-	),
-	// `useMediaQuery("(max-width: 767px)")` in `SidebarProvider`.
-	viewport: Subscription.persistentEntry(
-		Dom.streamFromMediaQuery({
-			query: MOBILE_QUERY,
-			mapMatches: (isMobile) => Message.ChangedViewport({ isMobile }),
-		}),
-	),
-	// The one wall clock (presence staleness, status expiry), ticking only while the org shell shows.
-	clock: entry(
-		{ isTicking: Schema.Boolean },
-		{
-			modelToDependencies: (model) => ({ isTicking: isShellReady(model) }),
-			dependenciesToStream: ({ isTicking }) =>
-				isTicking
-					? Stream.concat(Stream.succeed(undefined), Stream.tick(CLOCK_INTERVAL)).pipe(
-							Stream.mapEffect(() => Clock.currentTimeMillis),
-							Stream.map((nowMs) => Message.TickedClock({ nowMs })),
-						)
-					: Stream.empty,
-		},
-	),
-	// The sync sources of the signed-in user (`core/db/sync-manager.ts`), once `user.me` answered.
-	sync: entry(
-		{ userId: Schema.NullOr(UserId) },
-		{
-			modelToDependencies: (model) => ({ userId: currentUserOf(model)?.id ?? null }),
-			dependenciesToStream: ({ userId }) => (userId === null ? Stream.empty : syncSession(userId)),
-		},
-	),
-	// Every source retries a refused token at once; one session check covers them all.
-	sessionRejected: entry(
-		{ isSignedIn: Schema.Boolean },
-		{
-			modelToDependencies: (model) => ({ isSignedIn: authOf(model.session) === "SignedIn" }),
-			dependenciesToStream: ({ isSignedIn }) =>
-				isSignedIn
-					? Stream.fromEventListener(window, SESSION_REJECTED_EVENT).pipe(
-							Stream.throttle({
-								cost: () => 1,
-								units: 1,
-								duration: Duration.seconds(30),
-								strategy: "enforce",
-							}),
-							Stream.map(() => Message.RejectedSession()),
-						)
-					: Stream.empty,
-		},
-	),
-	// Another tab learned the session ended (or changed hands) and forgot the remembered user: this
-	// one checks the session, and deletes the cache it holds (which the other tab could not), and
-	// asks whose it is now (`user.me` starts over as someone else).
-	sessionEndedElsewhere: entry(
-		{ isSignedIn: Schema.Boolean },
-		{
-			modelToDependencies: (model) => ({ isSignedIn: authOf(model.session) === "SignedIn" }),
-			dependenciesToStream: ({ isSignedIn }) =>
-				isSignedIn
-					? Stream.fromEventListener<StorageEvent>(window, "storage").pipe(
-							Stream.filter(
-								(event) => event.key === REMEMBERED_USER_KEY && event.newValue === null,
-							),
-							Stream.flatMap(() =>
-								Stream.make(Message.RejectedSession(), Message.PressedRetryCurrentUser()),
-							),
-						)
-					: Stream.empty,
-		},
-	),
-	// `useOrganization()`: the org named by the route's slug.
-	organization: entry(
+/** The Effect UI channel sidebar's menu choices, run by this sidebar's menus (`intents.ts`). */
+const channelSidebarActions = Subscription.make<Model, Message>()((entry) => ({
+	channelSidebarActions: entry(
 		{ orgSlug: Schema.NullOr(Schema.String) },
 		{
-			modelToDependencies: (model) => ({ orgSlug: orgSlugOf(model.route) ?? null }),
+			modelToDependencies: (model) => ({ orgSlug: orgSlugOf(model.context.route) ?? null }),
 			dependenciesToStream: ({ orgSlug }) =>
 				orgSlug === null
 					? Stream.empty
-					: liveQueryStream<Organization, Message>(
-							(q) =>
-								q
-									.from({ org: organizationCollection })
-									.where(({ org }) => eq(org.slug, orgSlug))
-									.orderBy(({ org }) => org.createdAt, "asc")
-									.findOne(),
-							(rows) => {
-								const org = rows[0]
-								return Message.UpdatedOrganization({
-									orgSlug,
-									organization: org
-										? {
-												id: org.id,
-												name: org.name,
-												slug: org.slug ?? null,
-												logoUrl: org.logoUrl ?? null,
-											}
-										: null,
-								})
-							},
-							{
-								onStalled: () => Message.StalledOrganization({ orgSlug }),
-								// The org sources start as last load's set: an org joined since is
-								// missing until its own source answers, not "not found".
-								holdEmptyUntil: appOrgSourcesSettled,
-							},
+					: Bus.eventsOf("ChannelSidebarAct").pipe(
+							Stream.map(({ action }) => messageOfIntent(orgSlug, { _tag: "Act", action })),
+							Stream.filter((message) => message !== null),
+							Stream.map((message): Message => ({
+								_tag: "GotShellMessage",
+								message: { _tag: "GotChannelsSidebarMessage", message },
+							})),
 						),
 		},
 	),
-	// `usePermission()` / `useOrganizationMember()`: the user's row in that org.
-	member: entry(
-		{ organizationId: Schema.NullOr(OrganizationId), userId: Schema.NullOr(UserId) },
-		{
-			modelToDependencies: (model) => ({
-				organizationId: Option.getOrNull(
-					Option.map(loadedOrgOf(model), (org) => org.organization.id),
-				),
-				userId: currentUserOf(model)?.id ?? null,
-			}),
-			dependenciesToStream: ({ organizationId, userId }) =>
-				organizationId === null || userId === null
-					? Stream.empty
-					: liveQueryStream<Member, Message>(
-							(q) =>
-								q
-									.from({ m: organizationMemberCollection })
-									.where(({ m }) => eq(m.organizationId, organizationId))
-									.where(({ m }) => eq(m.userId, userId))
-									.findOne(),
-							(rows) => {
-								const member = rows[0]
-								return Message.UpdatedMember({
-									organizationId,
-									member: member ? { id: member.id, role: member.role } : null,
-								})
-							},
-						),
-		},
-	),
-}))
-
-const MAX_RECENT_NOTIFICATIONS = 250
-
-/** `NotificationSoundProvider` in `$orgSlug/layout.tsx`: sound and native notification sinks. */
-const notificationSubscriptions = Subscription.make<Model, Message, NotificationSinks>()((entry) => ({
-	notificationSinks: entry(
-		{
-			userId: Schema.NullOr(UserId),
-			settings: SoundSettings,
-			currentChannelId: Schema.NullOr(ChannelId),
-			sessionStartMs: Schema.Finite,
-		},
-		{
-			modelToDependencies: (model) => ({
-				userId: orgSlugOf(model.route) === undefined ? null : (currentUserOf(model)?.id ?? null),
-				settings: model.soundSettings,
-				currentChannelId: chatChannelIdOf(model.route),
-				sessionStartMs: model.sessionStartMs,
-			}),
-			dependenciesToStream: ({ userId, settings, currentChannelId, sessionStartMs }) =>
-				userId === null
-					? Stream.empty
-					: wireNotificationSinks({ userId, settings, currentChannelId, sessionStartMs }),
-		},
-	),
-	// Every unread notification of the user, in any organization: the badges' mention count.
-	unreadMentions: entry(
-		{ userId: Schema.NullOr(UserId) },
-		{
-			modelToDependencies: (model) => ({ userId: currentUserOf(model)?.id ?? null }),
-			dependenciesToStream: ({ userId }) =>
-				userId === null
-					? Stream.empty
-					: liveQueryStream<
-							{ readonly id: NotificationId; readonly reason: string | null },
-							Message
-						>(
-							(q) =>
-								q
-									.from({ notification: notificationCollection })
-									.where(({ notification }) => isNull(notification.readAt)),
-							(rows) =>
-								Message.UpdatedUnreadMentions({
-									ids: rows
-										.filter((row) => isMentionReason(row.reason))
-										.map((row) => row.id),
-								}),
-						),
-		},
-	),
-	// The favicon and desktop icon follow the badge: one ApplyBadge per change.
-	badge: entry(
-		{ badge: Badge },
-		{
-			modelToDependencies: (model) => ({ badge: badgeOfModel(model) }),
-			dependenciesToStream: ({ badge }) => Stream.succeed(Message.ChangedBadge({ badge })),
-		},
-	),
-	// The provider's `recentNotifications` query, for the membership in the route's organization.
-	recentNotifications: entry(
-		{ memberId: Schema.NullOr(OrganizationMemberId) },
-		{
-			modelToDependencies: (model) => ({ memberId: memberOf(model)?.id ?? null }),
-			dependenciesToStream: ({ memberId }) =>
-				memberId === null
-					? Stream.empty
-					: liveQueryStream<{ readonly id: NotificationId }, Message>(
-							(q) =>
-								q
-									.from({ notification: notificationCollection })
-									.where(({ notification }) => eq(notification.memberId, memberId))
-									.orderBy(({ notification }) => notification.createdAt, "desc")
-									.limit(MAX_RECENT_NOTIFICATIONS),
-							(rows) => Message.UpdatedRecentNotifications({ ids: rows.map((row) => row.id) }),
-						),
-		},
-	),
-}))
-
-const overlaySubscriptions = Subscription.make<Model, Message>()((entry) => ({
-	// `$orgSlug/layout.tsx` hotkeys: only inside the signed-in org shell.
-	layoutHotkeys: entry(
-		{
-			isEnabled: Schema.Boolean,
-			isChannelNavigationEnabled: Schema.Boolean,
-			isOverlayOpen: Schema.Boolean,
-			keys: LayoutKeys,
-		},
-		{
-			modelToDependencies: (model) => {
-				const isOverlayOpen = model.modal.current !== null || model.commandPalette.isOpen
-				return {
-					isEnabled: authOf(model.session) === "SignedIn" && orgSlugOf(model.route) !== undefined,
-					isChannelNavigationEnabled: isChatRoute(model.route) && !isOverlayOpen,
-					isOverlayOpen,
-					keys: layoutKeysOf(sharedOf(model).keys),
-				}
-			},
-			dependenciesToStream: ({ isEnabled, isChannelNavigationEnabled, isOverlayOpen, keys }) =>
-				isEnabled
-					? layoutHotkeys((actionId) => Message.PressedHotkey({ actionId }), keys, {
-							isChannelNavigationEnabled,
-							isOverlayOpen,
-						})
-					: Stream.empty,
-		},
+	backgroundToasts: Subscription.persistentEntry(
+		backgroundToasts.pipe(
+			Stream.map((toast) =>
+				Message.ReceivedShellRequest({ request: { _tag: "RequestedToast", toast } }),
+			),
+		),
 	),
 }))
 
@@ -313,10 +63,7 @@ const commandPaletteSubscriptions = Subscription.lift(CommandPalette.subscriptio
 
 const aiPanelSubscriptions = Subscription.lift(AiPanel.subscriptions)<Model, Message>({
 	read: (model) =>
-		Option.some({
-			model: model.aiPanel,
-			organizationId: Option.getOrNull(Option.map(loadedOrgOf(model), (org) => org.organization.id)),
-		}),
+		Option.some({ model: model.aiPanel, organizationId: model.context.organization?.id ?? null }),
 	// Literal wrapper: the constructor would re-validate every synced row.
 	toParentMessage: (message): Message => ({ _tag: "GotAiPanelMessage", message }),
 })
@@ -326,22 +73,22 @@ const modalSubscriptions = Subscription.lift(Modal.subscriptions)<Model, Message
 	toParentMessage: (message): Message => ({ _tag: "GotModalMessage", message }),
 })
 
-const shellSubscriptions = Subscription.lift(ShellSubscription.subscriptions)<Model, Message>({
-	read: (model) => Option.some({ model: model.shell, route: model.route, shared: sharedOf(model) }),
+const sidebarSubscriptions = Subscription.lift(ShellSubscription.subscriptions)<Model, Message>({
+	read: (model) => Option.some({ model: model.shell, route: model.context.route, shared: sharedOf(model) }),
 	// Literal wrappers: constructors would re-validate every row payload.
 	toParentMessage: (message): Message => ({ _tag: "GotShellMessage", message }),
 })
 
 /** `PresenceProvider` runs inside the loaded `$orgSlug` layout, once `user.me` answered. */
 const presenceUserIdOf = (model: Model): UserId | null =>
-	isShellReady(model) ? (currentUserOf(model)?.id ?? null) : null
+	model.context.isShellReady ? (model.context.currentUser?.id ?? null) : null
 
 const platformSubscriptions = Subscription.lift(Platform.subscriptions)<Model, Message>({
 	read: (model) =>
 		Option.some({
 			model: model.platform,
 			userId: presenceUserIdOf(model),
-			activeChannelId: chatChannelIdOf(model.route),
+			activeChannelId: chatChannelIdOf(model.context.route),
 		}),
 	toParentMessage: (message): Message => ({ _tag: "GotPlatformMessage", message }),
 })
@@ -350,12 +97,6 @@ const updateSubscriptions = Subscription.lift(Updates.subscriptions)<Model, Mess
 	read: (model) => Option.some(model.desktopUpdate),
 	toParentMessage: (message): Message => ({ _tag: "GotUpdatesMessage", message }),
 })
-
-const desktopMenuSubscriptions = Subscription.make<Model, Message>()(() => ({
-	desktopMenu: Subscription.persistentEntry(
-		desktopMenuItems.pipe(Stream.map((item) => Message.PressedDesktopMenuItem({ item }))),
-	),
-}))
 
 const toastSubscriptions = Subscription.lift(Toasts.subscriptions)<Model, Message>({
 	read: (model) => Option.some(model.toasts),
@@ -368,16 +109,14 @@ const pages = Subscription.lift(pageSubscriptions)<Model, Message>({
 })
 
 export const subscriptions = Subscription.aggregate(
-	rootSubscriptions,
-	notificationSubscriptions,
-	overlaySubscriptions,
+	shellSubscriptions,
+	channelSidebarActions,
 	commandPaletteSubscriptions,
 	aiPanelSubscriptions,
 	modalSubscriptions,
 	toastSubscriptions,
-	shellSubscriptions,
+	sidebarSubscriptions,
 	pages,
 	platformSubscriptions,
 	updateSubscriptions,
-	desktopMenuSubscriptions,
 )

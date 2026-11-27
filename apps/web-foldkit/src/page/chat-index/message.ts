@@ -1,4 +1,3 @@
-import { ChannelId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import * as Tabs from "../../ui/tabs"
@@ -11,7 +10,5 @@ export const Message = defineMessageUnion({
 	PressedCreateChannel: {},
 	PressedStartConversation: {},
 	PressedDmFilter: { filter: DmFilter },
-	/** The DMs island (`islands/dms.ts`) asked to open a DM. */
-	RequestedIslandNavigation: { orgSlug: Schema.String, channelId: ChannelId },
 })
 export type Message = typeof Message.Type

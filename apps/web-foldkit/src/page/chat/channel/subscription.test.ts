@@ -217,6 +217,7 @@ const STATELESS = [
 	"channelHotkeys",
 	"leftWindow",
 	"windowFocus",
+	"listRequests",
 	"filesBreakpoint",
 	"filesInteractionModality",
 	"filesInteractionPointerRelease",

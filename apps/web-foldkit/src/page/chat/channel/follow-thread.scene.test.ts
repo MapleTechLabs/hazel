@@ -19,7 +19,7 @@ describe("a thread page the user does not follow", () => {
 		Scene.scene(
 			channelScene,
 			Scene.given(thread),
-			mountedChannel(null, false),
+			mountedChannel(false),
 			Scene.expect(Scene.role("button", { name: "Follow thread" })).toExist(),
 			Scene.click(Scene.role("button", { name: "Follow thread" })),
 			Scene.Command.resolve(

@@ -18,15 +18,17 @@ import { describe, test } from "vitest"
 import * as CreateSection from "../overlay/modal/create-section"
 import { orgSwitcherEntries, userMenuEntries } from "../shell/menus"
 import * as Shell from "../shell/model"
-import { ada, after, hazelOrg, rootScene, signedIn } from "../test/root-fixtures"
+import { ada, after, hazelOrg, hotkey, rootScene, signedIn } from "../test/root-fixtures"
 import { drainToast, playToastFeedback } from "../test/toast-fixtures"
 import * as Menu from "../ui/menu"
 import { FocusTriggerOnPress } from "../ui/menu-view"
 import * as Modal from "../ui/modal"
 import * as Select from "../ui/select"
+import { emit } from "./command"
 import { Message } from "./message"
+import { reportOf } from "./model"
 
-/** The root modal slot: a modal opened by the shell, its result toast, and closing (legacy `useModal`). */
+/** The host's modal slot: a modal opened by the shell, its result toast, and closing (legacy `useModal`). */
 
 const orgSwitcher = (inner: Menu.Message): Message =>
 	Message.GotShellMessage({ message: Shell.Message.GotOrgSwitcherMessage({ message: inner }) })
@@ -53,6 +55,9 @@ const mounted = [
 	Mount.resolve(FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress()),
 	Mount.resolve(Modal.AcquireResources, Modal.Message.SucceededAcquireResources()),
 ] as const
+// Closing tells the frame no overlay is open any more.
+const closedReport = emit({ _tag: "Report", report: reportOf(signedIn("/hazel/chat")) })
+const reportedClosed = Command.resolve(closedReport, Message.CompletedEmit())
 
 describe("modal host", () => {
 	test("a modal requested by the shell opens in the root slot", () => {
@@ -72,6 +77,7 @@ describe("modal host", () => {
 			Command.expectExact(CreateSection.CreateSection({ name: "Design", organizationId: hazelOrg.id })),
 			sceneExpect(role("button", { name: "Creating..." })).toBeDisabled(),
 			Command.resolve(CreateSection.CreateSection, CreateSection.Message.SucceededCreateSection()),
+			reportedClosed,
 			sceneExpect(dialog).toBeAbsent(),
 			Mount.expectEnded(Modal.AcquireResources),
 			sceneExpect(text("Section created successfully")).toExist(),
@@ -108,7 +114,8 @@ describe("modal host", () => {
 			click(role("button", { name: "Cancel" })),
 			sceneExpect(dialog).toBeAbsent(),
 			Mount.expectEnded(Modal.AcquireResources),
-			Command.expectNone(),
+			Command.expectExact(closedReport),
+			reportedClosed,
 		)
 	})
 
@@ -138,7 +145,7 @@ describe("keyboard shortcuts (Mod+/)", () => {
 		const shortcuts = role("dialog", { name: "Keyboard shortcuts" })
 		scene(
 			rootScene,
-			given(after(signedIn("/hazel/chat"), [Message.PressedHotkey({ actionId: "shortcuts.open" })])),
+			given(after(signedIn("/hazel/chat"), [hotkey("shortcuts.open")])),
 			...mounted.slice(0, 2),
 			Mount.resolve(Modal.AcquireResources, Modal.Message.SucceededAcquireResources()),
 			sceneExpect(shortcuts).toExist(),
@@ -146,6 +153,7 @@ describe("keyboard shortcuts (Mod+/)", () => {
 			sceneExpect(within(shortcuts, text("Delete Without Confirming"))).toExist(),
 			sceneExpect(within(shortcuts, text("Alt+↑"))).toExist(),
 			click(within(shortcuts, role("button", { name: "Close" }))),
+			reportedClosed,
 			sceneExpect(shortcuts).toBeAbsent(),
 			Mount.expectEnded(Modal.AcquireResources),
 		)

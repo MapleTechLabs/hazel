@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest"
-import { ISSUE_SLAS, ISSUES } from "../../lab/fixtures/issues"
+import { ISSUE_SLAS, ISSUES } from "../../test/fixtures/issues"
 import * as IssueControl from "./issue-control"
 
 // `ui/aria/*` names `document` when its modules load; the update loop never touches it.

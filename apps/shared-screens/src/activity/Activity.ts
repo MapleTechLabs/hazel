@@ -298,6 +298,8 @@ export const Activity = Hazel.component({
 			retainedChannels(ids === "" ? [] : ids.split(",")),
 		),
 		Subscription.make("clock", [], () => clock),
+		// A parent passes the tab as props: each change arrives as `ChangedTab`, as a host's send.
+		Subscription.make("tab", [props.tab], ([tab]) => Stream.make(ActivityMessage.ChangedTab({ tab }))),
 	],
 	view: (h, model) => {
 		const leading = (item: ActivityItem) => {

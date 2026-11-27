@@ -6,7 +6,6 @@ import {
 	CHART_COLOR,
 	type ChartColor,
 	chartTooltip,
-	type LegendItem,
 	gridlines,
 	hoverBands,
 	percentSvg,
@@ -190,12 +189,6 @@ export const lineChart = <M>(h: HtmlBuilder<M>, options: LineChartOptions<M>): H
 }
 
 // ACTIVE USERS
-
-export const ACTIVE_USERS_LEGEND: ReadonlyArray<LegendItem> = [
-	{ label: "MAU", color: "series-3", mark: "line" },
-	{ label: "WAU", color: "series-2", mark: "line" },
-	{ label: "DAU", color: "series-1", mark: "line" },
-]
 
 /** DAU / WAU / MAU over `customers.overview`'s `activeUsers`. */
 export const activeUsersChart = <M>(

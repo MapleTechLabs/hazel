@@ -8,7 +8,6 @@
 		"typecheck": "effect-tsgo tsrs --noEmit",
 		"test": "vitest run",
 		"test:browser": "vitest run --config vitest.browser.config.ts",
-		"gallery": "vitest run --config vitest.gallery.config.ts",
 		"build:desktop": "bash ./scripts/build-desktop.sh"
 	},
 	"dependencies": {

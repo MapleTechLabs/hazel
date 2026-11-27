@@ -10,8 +10,8 @@ import {
 	overviewFixture,
 	SETTINGS,
 	SIGNALS,
-} from "../../../lab/fixtures/customers"
-import { SUPPORT_REPORT } from "../../../lab/fixtures/issues"
+} from "../../../test/fixtures/customers"
+import { SUPPORT_REPORT } from "../../../test/fixtures/issues"
 import { makeShared, pageScene } from "../../../test/pages-fixtures"
 import type { Model } from "./model"
 import { init, update } from "./update"

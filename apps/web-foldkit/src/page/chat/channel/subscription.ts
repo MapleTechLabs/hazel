@@ -4,6 +4,7 @@ import { Dom, Subscription } from "foldkit"
 import * as HtmlRender from "../../../chat/html-render"
 import * as Live from "../../../chat/live-state"
 import * as FilesSubscriptions from "../files/subscriptions"
+import { listRequestStream } from "./list-requests"
 import {
 	channelStream,
 	messageChangesStream,
@@ -699,6 +700,14 @@ const write = Subscription.make<Input, Message, HazelRpc | HazelApiClient>()((en
 			modelToDependencies: () => ({}),
 			dependenciesToStream: () =>
 				windowFocus.pipe(Stream.map((isFocused) => Message.ChangedWindowFocus({ isFocused }))),
+		},
+	),
+	// The shared message list's row requests (the shell renders it, `list-requests.ts`).
+	listRequests: entry(
+		{},
+		{
+			modelToDependencies: () => ({}),
+			dependenciesToStream: () => listRequestStream,
 		},
 	),
 	leftWindow: entry(

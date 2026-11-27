@@ -5,7 +5,7 @@ import { getBrandfetchIcon } from "~/lib/integrations/__data"
 import { IconUser } from "../../icons"
 import { avatar } from "../../ui/avatar"
 import { initialsOf as wordInitials } from "../../ui/semantic"
-import { providerOf, safeSourceUrl, sourceLabel } from "../providers"
+import { providerOf, sourceLabel } from "../providers"
 
 /**
  * Who and where (Foundations › Source Chips, Avatars And Company Logos): data source marks and
@@ -75,36 +75,6 @@ export const sourceChip = <M>(
 		[h.Class(twMerge(chipClassName, options.className))],
 		[logoImage(h, source, "size-4"), options.label ?? sourceLabel(source)],
 	)
-
-/**
- * `[mark] Name` as a link: opens the provider's record in a new tab (the accessible name says
- * so); a plain chip when `href` is not on the provider's hosts (`safeSourceUrl`).
- */
-export const sourceLinkChip = <M>(
-	h: HtmlBuilder<M>,
-	options: Readonly<{ source: CustomerSource; label: string; href: string; className?: string }>,
-): Html => {
-	const href = safeSourceUrl(options.source, options.href)
-	if (href === null)
-		return sourceChip(h, options.source, { label: options.label, className: options.className })
-	return h.a(
-		[
-			h.Href(href),
-			h.Target("_blank"),
-			h.Rel("noreferrer"),
-			h.AriaLabel(`${options.label} in ${sourceLabel(options.source)}`),
-			h.Title(`Open in ${sourceLabel(options.source)}`),
-			h.Class(
-				twMerge(
-					chipClassName,
-					"outline-hidden transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/70",
-					options.className,
-				),
-			),
-		],
-		[logoImage(h, options.source, "size-4"), options.label],
-	)
-}
 
 // TINTS
 
@@ -317,34 +287,3 @@ export const personLabel = <M>(
 			),
 		],
 	)
-
-/** Overlapping avatars, then `+N` past `max`. */
-export const avatarStack = <M>(
-	h: HtmlBuilder<M>,
-	people: ReadonlyArray<Readonly<{ name: string; avatarUrl?: string | null }>>,
-	options: Readonly<{ max?: number; className?: string }> = {},
-): Html => {
-	const max = options.max ?? 3
-	const shown = people.slice(0, people.length > max ? max - 1 : max)
-	const rest = people.length - shown.length
-	return h.span(
-		[h.Class(twMerge("inline-flex items-center -space-x-1.5", options.className))],
-		[
-			...shown.map((person) => personAvatar(h, person, { ring: true })),
-			...(rest > 0
-				? [
-						avatarBox(h, {
-							title: people
-								.slice(shown.length)
-								.map((person) => person.name)
-								.join(", "),
-							size: "sm",
-							ring: true,
-							placeholder: h.span([], [`+${rest}`]),
-							avatarClassName: "bg-secondary font-normal text-secondary-fg",
-						}),
-					]
-				: []),
-		],
-	)
-}

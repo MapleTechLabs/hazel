@@ -48,6 +48,7 @@ describe("Activity", () => {
 				`notifications:"${props.memberId}"`,
 				'previewChannels:""',
 				"clock:",
+				`tab:"${props.tab}"`,
 			])
 			const rows = [item(1), item(2, { targetedResourceId: "00000005-0000-4000-8000-000000000009" })]
 			s.send(ActivityMessage.UpdatedNotifications({ items: rows }))
@@ -56,6 +57,7 @@ describe("Activity", () => {
 				`notifications:"${props.memberId}"`,
 				'previewChannels:"00000005-0000-4000-8000-000000000005,00000005-0000-4000-8000-000000000009"',
 				"clock:",
+				`tab:"${props.tab}"`,
 			])
 		}),
 	)
