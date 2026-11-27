@@ -616,6 +616,8 @@ export const SOURCE_TABLES = {
 		"connect_participants",
 		"assistant_threads",
 		"assistant_items",
+		"user_groups",
+		"user_group_members",
 	],
 	channel: [
 		"messages",

@@ -87,6 +87,28 @@ export const SettingsDebugPage = Component.lazy("SettingsDebugPage", () =>
 	settingsPages().then((module) => module.SettingsDebugPage),
 )
 
+// Settings: Groups, Custom emojis, Connect invites (PS2), inside the native settings layout.
+export const SettingsGroupsPage = Component.lazy("SettingsGroupsPage", () =>
+	import("@hazel/shared-screens/settings/pages/groups/GroupsPage").then((module) =>
+		withClientData(module.GroupsPage),
+	),
+)
+
+export const SettingsCustomEmojisPage = Component.lazy("SettingsCustomEmojisPage", () =>
+	Promise.all([
+		import("@hazel/shared-screens/settings/pages/custom-emojis/CustomEmojisPage"),
+		import("./emoji-files"),
+	]).then(([module, files]) =>
+		withClientData(Component.provide(module.CustomEmojisPage, files.emojiFilesLayer)),
+	),
+)
+
+export const SettingsConnectInvitesPage = Component.lazy("SettingsConnectInvitesPage", () =>
+	import("@hazel/shared-screens/settings/pages/connect-invites/ConnectInvitesPage").then((module) =>
+		withClientData(module.ConnectInvitesPage),
+	),
+)
+
 /** The native app's install (`~/config/server`), which its sign-in page can change; `null` on the web. */
 const initialServer = () =>
 	canChooseServer() ? { label: serverLabel(currentServer()), isDefault: isBuildServer(), form: null } : null
@@ -268,6 +290,24 @@ const nativePages: Registry = {
 					props: { organizationId: session.organization.id, orgSlug: route.orgSlug },
 					fallback: (result) => fallback(result._tag === "Failure"),
 				}),
+	SettingsGroups: (h, { route, session, fallback }) =>
+		SettingsGroupsPage(h, {
+			key: route.orgSlug,
+			props: { session },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	SettingsCustomEmojis: (h, { route, session, nowMs, fallback }) =>
+		SettingsCustomEmojisPage(h, {
+			key: route.orgSlug,
+			props: { session, nowMs },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	SettingsConnectInvites: (h, { route, session, fallback }) =>
+		SettingsConnectInvitesPage(h, {
+			key: route.orgSlug,
+			props: { session },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
 }
 
 /** The parity flag of a route's native page: `"0"` draws today's Foldkit page instead (`compare-pages.ts`). */

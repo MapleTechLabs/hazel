@@ -44,8 +44,13 @@ export const makeFixtureServer = () => {
 	/** Writes so far per source and table, by row key: the row, or `null` once deleted. */
 	const applied = new Map<string, Map<string, Map<string, unknown>>>()
 	const keyOf = (kind: SyncSourceKind, sourceId: string) => `${kind}:${sourceId}`
+	// A row with no `id` of its own (a group membership) is keyed by its group and user.
 	const rowKey = (row: unknown) =>
-		typeof row === "object" && row !== null && "id" in row ? String(row.id) : undefined
+		typeof row === "object" && row !== null && "id" in row
+			? String(row.id)
+			: typeof row === "object" && row !== null && "groupId" in row && "userId" in row
+				? `${String(row.groupId)}:${String(row.userId)}`
+				: undefined
 	return {
 		seqOf: (kind: SyncSourceKind, sourceId: string) => seqs.get(keyOf(kind, sourceId)) ?? FIXTURE_SEQ,
 		subscribe: (kind: SyncSourceKind, sourceId: string, emit: (frame: ServerFrame) => void) => {
