@@ -1,90 +1,11 @@
 // @vitest-environment jsdom
-import { ChannelId } from "@hazel/schema"
-import { Schema } from "effect"
-import {
-	Command,
-	Mount,
-	Subscription,
-	click,
-	expect as sceneExpect,
-	given,
-	keydown,
-	placeholder,
-	role,
-	scene,
-	selector,
-	submit,
-	text,
-	type,
-	within,
-} from "foldkit/scene"
+import { Mount, Subscription, expect as sceneExpect, given, role, scene } from "foldkit/scene"
 import { describe, test } from "vitest"
 import { AutoFocusSearch } from "../page/home/commands"
 import { Message as HomeMessage } from "../page/home/message"
-import { PageOutMessage } from "../page/out-message"
-import * as ChannelsSidebar from "../shell/channels-sidebar"
-import * as Shell from "../shell/model"
-import {
-	ada,
-	after,
-	changedContext,
-	hazelOrg,
-	hotkey,
-	rootScene,
-	signedIn,
-	toShell,
-} from "../test/root-fixtures"
-import { drainToast, playToastFeedback } from "../test/toast-fixtures"
-import * as Modal from "../ui/modal"
-import { emit } from "./command"
-import { Message } from "./message"
-import { reportOf } from "./model"
+import { changedContext, rootScene, signedIn } from "../test/root-fixtures"
 
-/** The host's parts of the org shell: the sidebar's paint mark, and the sidebar sheet. */
-
-const navItem = (name: string) => role("link", { name })
-// The frame learns of each overlay opening or closing.
-const overlayReport = (isOverlayOpen: boolean) =>
-	emit({ _tag: "Report", report: { ...reportOf(signedIn("/hazel/chat")), isOverlayOpen } })
-const reported = (isOverlayOpen: boolean) =>
-	Command.resolve(overlayReport(isOverlayOpen), Message.CompletedEmit())
-
-describe("the last screen's paint", () => {
-	// The shell's `#app[data-paint="shell"]` holds the sidebar region (`root/frame.scene.test.ts`).
-	const waiting = selector('[data-foldkit-region="sidebar"] [data-paint="loading"]')
-	const toSidebar = (message: ChannelsSidebar.Message) =>
-		Message.GotShellMessage({ message: Shell.Message.GotChannelsSidebarMessage({ message }) })
-	const membershipsArrived = toSidebar(ChannelsSidebar.Message.UpdatedMemberChannelIds({ channelIds: [] }))
-	// Every list the sidebar draws: each comes from its own query.
-	const channelListsArrived = [
-		membershipsArrived,
-		toSidebar(ChannelsSidebar.Message.UpdatedSections({ sections: [] })),
-		toSidebar(ChannelsSidebar.Message.UpdatedFavorites({ channels: [] })),
-		toSidebar(ChannelsSidebar.Message.UpdatedChannelCustomers({ customers: [] })),
-		toSidebar(ChannelsSidebar.Message.UpdatedDmChannelIds({ channelIds: [] })),
-		toSidebar(ChannelsSidebar.Message.UpdatedSectionChannels({ sectionKey: "default", channels: [] })),
-	]
-
-	test("stays up while the sidebar's channel lists have yet to arrive", () => {
-		scene(rootScene, given(signedIn("/hazel/chat")), sceneExpect(waiting).toExist())
-	})
-
-	test("stays up while only the memberships have arrived, not the Channels list", () => {
-		scene(
-			rootScene,
-			given(after(signedIn("/hazel/chat"), [membershipsArrived])),
-			sceneExpect(waiting).toExist(),
-		)
-	})
-
-	test("goes once they have, empty or not", () => {
-		scene(
-			rootScene,
-			given(after(signedIn("/hazel/chat"), channelListsArrived)),
-			sceneExpect(waiting).toBeAbsent(),
-		)
-	})
-})
+/** The host's parts of the phone's org shell. */
 
 // The tab bar and top bars are the shell's (`root/frame.scene.test.ts`); the host draws the rest.
 describe("mobile", () => {
@@ -92,36 +13,8 @@ describe("mobile", () => {
 		const desktop = signedIn(path)
 		return { desktop, phone: changedContext(desktop, { isMobile: true }) }
 	}
-	const sheet = role("dialog", { name: "Sidebar" })
-
-	// Settings' and Activity's sheets are the shell's (`root/frame.scene.test.ts`); Customers' is still the host's.
-	test("a section's top bar menu opens its sidebar sheet", () => {
-		const { desktop, phone } = toPhone("/hazel/customers")
-		scene(
-			rootScene,
-			given(desktop),
-			Subscription.emit(phone),
-			sceneExpect(sheet).toBeAbsent(),
-			Subscription.emit(Message.ReceivedShellRequest({ request: { _tag: "PressedMobileMenu" } })),
-			sceneExpect(sheet).toExist(),
-			Mount.resolve(Modal.AcquireResources, Modal.Message.SucceededAcquireResources()),
-			sceneExpect(within(sheet, navItem("Overview"))).toExist(),
-		)
-	})
-
-	// The Effect UI channel sidebar fills the hole, with its Members link (`ChannelSidebar.test.ts`).
-	test("the Home tab's page is the chat list", () => {
-		const chat = toPhone("/hazel/chat")
-		scene(
-			rootScene,
-			given(chat.desktop),
-			// The channels sidebar moves from the dock into the page.
-			Subscription.emit(chat.phone),
-			sceneExpect(
-				selector('[data-foldkit-region="page"] [data-hazel-hole="channel-sidebar"]'),
-			).toExist(),
-			sceneExpect(sheet).toBeAbsent(),
-		)
+	// The chat list, the sidebar sheets and their paint are the shell's (`root/sections.scene.test.ts`).
+	test("a phone leaves the member search's keyboard down", () => {
 		const home = toPhone("/hazel")
 		scene(
 			rootScene,

@@ -27,7 +27,6 @@ export const ShellRequest = Schema.Union([
 	/** The update toast's "Install & Restart". */
 	Schema.TaggedStruct("PressedInstallUpdate", {}),
 	/** A phone section's top bar menu button: the sidebar sheet. */
-	Schema.TaggedStruct("PressedMobileMenu", {}),
 	/** The DMs screen's compose button: today's Create DM modal. */
 	Schema.TaggedStruct("PressedComposeDm", {}),
 	/** Activity's sidebar: every unread notification read. */

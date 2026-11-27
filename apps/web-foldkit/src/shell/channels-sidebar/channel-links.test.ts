@@ -15,7 +15,6 @@ const model: Model = {
 	...emptyData,
 	organizationId: us,
 	currentUserId: null,
-	isCreateChannelHintDismissed: false,
 	channelCustomers: [{ channelId: support, accountName: "Acme Corp", accountLogoUrl: null }],
 	syncedChannels: [
 		{ channelId: support, provider: "slack" },
@@ -67,7 +66,7 @@ describe("channelLinksOf", () => {
 
 	it("keeps the map, and each channel's links, while the rows are the same", () => {
 		const first = channelLinksOf(model)
-		expect(channelLinksOf({ ...model, threads: [] })).toBe(first)
+		expect(channelLinksOf({ ...model, unreadCounts: [] })).toBe(first)
 		const next = channelLinksOf({ ...model, syncedChannels: [] })
 		expect(next).not.toBe(first)
 		expect(linksFor(next, support).syncProvider).toBe(null)

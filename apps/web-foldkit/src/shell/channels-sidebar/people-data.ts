@@ -124,31 +124,6 @@ interface PresenceRow {
 	readonly lastSeenAt: Date | null
 }
 
-/** `currentUserPresenceAtomFamily` for each DM partner: newest presence row per user. */
-export const presenceStream = <M>(
-	userIds: ReadonlyArray<UserId>,
-	toMessage: (presence: Array<Presence>) => M,
-) =>
-	liveQueryStream<PresenceRow, M>(
-		(q) =>
-			q
-				.from({ presence: userPresenceStatusCollection })
-				.where(({ presence }) => inArray(presence.userId, [...userIds]))
-				.orderBy(({ presence }) => presence.updatedAt, "desc"),
-		(rows) => {
-			const seen = new Set<UserId>()
-			const latest = rows.filter((row) => !seen.has(row.userId) && seen.add(row.userId))
-			return toMessage(
-				latest.map((row) => ({
-					userId: row.userId,
-					status: row.status ?? null,
-					lastSeenMs: row.lastSeenAt ? new Date(row.lastSeenAt).getTime() : null,
-					statusEmoji: row.statusEmoji ?? null,
-				})),
-			)
-		},
-	)
-
 /** `useNotificationUnreadCountsByChannel`. */
 export const unreadCountsStream = <M>(
 	memberId: OrganizationMemberId,

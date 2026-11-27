@@ -53,32 +53,6 @@ const sent = (outMessage: PageOutMessage) => Command.resolve(toShell(outMessage)
 const presence = (inner: Presence.Message): Message =>
 	Message.GotPlatformMessage({ message: Platform.Message.GotPresenceMessage({ message: inner }) })
 
-describe("RequestedCommandPalette", () => {
-	// The palette is the shell's (`root/palette.ts`): the host passes every open on.
-	test("the sidebar's Browse channels asks the shell for the palette on its home page", () => {
-		const palette = PageOutMessage.RequestedCommandPalette({ page: "home" })
-		story(
-			update,
-			given(signedIn("/hazel/chat")),
-			message(sidebar(ChannelsSidebar.Message.ClickedBrowseChannels())),
-			Command.expectExact(toShell(palette)),
-			sent(palette),
-		)
-	})
-})
-
-describe("RequestedModal", () => {
-	test("a sidebar section action's modal goes to the shell, which draws it (`root/modals.ts`)", () => {
-		story(
-			update,
-			given(signedIn("/hazel/chat")),
-			message(sidebar(ChannelsSidebar.Message.ClickedSectionAction({ action: "create-channel" }))),
-			sent(PageOutMessage.RequestedModal({ modal: { _tag: "NewChannel" } })),
-			model((m) => expect(m.modal.current).toBeNull()),
-		)
-	})
-})
-
 describe("RequestedSignOut", () => {
 	// Log out in the account menu is a native request (`shared-screens/src/shell/Chrome.test.ts`).
 	test("a failed sign-out keeps the app up and says so", () => {

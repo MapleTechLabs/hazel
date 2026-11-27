@@ -47,7 +47,6 @@ const sidebar = (overrides: Partial<Model> = {}): Model => ({
 	},
 	favorites: [entry(favorite, "favorite")],
 	channelCustomers: [],
-	threads: [],
 	dmChannelIds: [dmGrace],
 	dmChannels: {
 		[dmGrace]: {
@@ -57,19 +56,12 @@ const sidebar = (overrides: Partial<Model> = {}): Model => ({
 			currentUser: entry(dmGrace, "grace").member,
 		},
 	},
-	presence: [],
 	unreadCounts: [],
 	unreadChannels: [],
-	sectionSettings: [],
-	organizationSetting: null,
 	connectMounts: [],
 	organizations: [],
 	syncedChannels: [],
-	memberChannelIds: null,
-	discoverableChannels: [],
 	loaded: { sections: true, favorites: true, channelCustomers: true, dmChannelIds: true },
-	isCreateChannelHintDismissed: false,
-	openMenu: null,
 	...overrides,
 })
 

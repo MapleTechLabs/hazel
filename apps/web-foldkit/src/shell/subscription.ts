@@ -12,7 +12,6 @@ import type { Shared } from "../page/contract"
 import { type AppRoute, orgSectionOf } from "../route"
 import { isMentionReason } from "../platform/badge"
 import * as ChannelsSidebar from "./channels-sidebar"
-import * as CustomersSidebar from "./customers-sidebar"
 import * as Notifications from "./notifications"
 import { Message, type Model } from "./model"
 
@@ -106,22 +105,4 @@ const channelsSidebarBadge = Subscription.lift(ChannelsSidebar.badgeSubscription
 	toParentMessage: (message) => Message.GotChannelsSidebarMessage({ message }),
 })
 
-/** Only on customers routes: entering the area opens the org's customers source (and keeps it). */
-const customersSidebar = Subscription.lift(CustomersSidebar.subscriptions)<Input, Message>({
-	read: ({ model, route, shared }) =>
-		orgSectionOf(route) === "Customers"
-			? Option.some({
-					organizationId: shared.organization?.id ?? null,
-					userId: shared.currentUser?.id ?? null,
-					drag: model.customersSidebar.drag,
-				})
-			: Option.none(),
-	toParentMessage: (message) => Message.GotCustomersSidebarMessage({ message }),
-})
-
-export const subscriptions = Subscription.aggregate(
-	own,
-	channelsSidebar,
-	channelsSidebarBadge,
-	customersSidebar,
-)
+export const subscriptions = Subscription.aggregate(own, channelsSidebar, channelsSidebarBadge)

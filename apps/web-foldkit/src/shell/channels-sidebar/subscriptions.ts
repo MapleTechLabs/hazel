@@ -2,7 +2,6 @@ import { ChannelId, ChannelSectionId, OrganizationId, OrganizationMemberId, User
 import { Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import * as Data from "./data"
-import { dmPartners } from "./items"
 import { Message, type Model } from "./model"
 import * as People from "./people-data"
 
@@ -30,15 +29,6 @@ const dmDetailIds = (model: Model): Array<ChannelId> => [
 		.map((entry) => entry.channel.id),
 ]
 
-const partnerUserIds = (model: Model): Array<UserId> =>
-	[
-		...new Set(
-			Object.values(model.dmChannels).flatMap((channel) =>
-				channel ? dmPartners(channel, model.currentUserId).map((member) => member.userId) : [],
-			),
-		),
-	].sort()
-
 export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 	sidebarMembership: entry(Scope, {
 		modelToDependencies: scopeOf,
@@ -57,30 +47,6 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 					? Stream.empty
 					: People.unreadCountsStream(memberId, (counts) =>
 							Message.UpdatedUnreadCounts({ counts }),
-						),
-		},
-	),
-	sidebarSectionSettings: entry(
-		{ organizationId: Schema.NullOr(OrganizationId) },
-		{
-			modelToDependencies: (model) => ({ organizationId: model.organizationId }),
-			dependenciesToStream: ({ organizationId }) =>
-				organizationId === null
-					? Stream.empty
-					: Data.sectionSettingsStream(organizationId, (settings) =>
-							Message.UpdatedSectionSettings({ settings }),
-						),
-		},
-	),
-	sidebarOrganizationSetting: entry(
-		{ organizationId: Schema.NullOr(OrganizationId) },
-		{
-			modelToDependencies: (model) => ({ organizationId: model.organizationId }),
-			dependenciesToStream: ({ organizationId }) =>
-				organizationId === null
-					? Stream.empty
-					: Data.organizationSettingStream(organizationId, (setting) =>
-							Message.UpdatedOrganizationSetting({ setting }),
 						),
 		},
 	),
@@ -139,12 +105,6 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 						),
 		},
 	),
-	sidebarThreads: entry(Scope, {
-		modelToDependencies: scopeOf,
-		dependenciesToStream: scoped((organizationId, userId) =>
-			Data.threadsStream(organizationId, userId, (threads) => Message.UpdatedThreads({ threads })),
-		),
-	}),
 	sidebarDmChannelIds: entry(Scope, {
 		modelToDependencies: scopeOf,
 		dependenciesToStream: scoped((organizationId, userId) =>
@@ -168,16 +128,6 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 						),
 		},
 	),
-	sidebarPresence: entry(
-		{ userIds: Schema.Array(UserId) },
-		{
-			modelToDependencies: (model) => ({ userIds: partnerUserIds(model) }),
-			dependenciesToStream: ({ userIds }) =>
-				userIds.length === 0
-					? Stream.empty
-					: People.presenceStream(userIds, (presence) => Message.UpdatedPresence({ presence })),
-		},
-	),
 	sidebarConnectMounts: entry(
 		{ organizationId: Schema.NullOr(OrganizationId) },
 		{
@@ -197,36 +147,6 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 							People.syncedChannelsStream((synced) =>
 								Message.UpdatedSyncedChannels({ synced }),
 							),
-						),
-		},
-	),
-	sidebarMemberChannelIds: entry(Scope, {
-		modelToDependencies: scopeOf,
-		dependenciesToStream: scoped((organizationId, userId) =>
-			Data.memberChannelIdsStream(organizationId, userId, (channelIds) =>
-				Message.UpdatedMemberChannelIds({ channelIds }),
-			),
-		),
-	}),
-	// The list is hidden at three or more memberships, so the query only runs below that.
-	sidebarDiscoverableChannels: entry(
-		{
-			organizationId: Schema.NullOr(OrganizationId),
-			memberChannelIds: Schema.NullOr(Schema.Array(ChannelId)),
-		},
-		{
-			modelToDependencies: (model) => ({
-				organizationId: model.organizationId,
-				memberChannelIds:
-					model.memberChannelIds !== null && model.memberChannelIds.length < 3
-						? model.memberChannelIds
-						: null,
-			}),
-			dependenciesToStream: ({ organizationId, memberChannelIds }) =>
-				organizationId === null || memberChannelIds === null
-					? Stream.empty
-					: Data.discoverableChannelsStream(organizationId, memberChannelIds, (channels) =>
-							Message.UpdatedDiscoverableChannels({ channels }),
 						),
 		},
 	),

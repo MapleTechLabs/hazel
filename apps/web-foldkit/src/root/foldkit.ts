@@ -23,7 +23,6 @@ export const RunFoldkitHost = Mount.makeStream(
 	{
 		args: {
 			context: HostContextSchema,
-			isCreateChannelHintDismissed: Schema.Boolean,
 		},
 	},
 	(node: HTMLElement, args, changes) =>

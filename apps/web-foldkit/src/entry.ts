@@ -31,7 +31,7 @@ import { HazelAuthClientLive } from "./auth/client"
 import { App, type Boot } from "./root/app"
 import { commandsLayer } from "./root/commands"
 import { AppRoutes } from "./root/routes"
-import { loadIsCreateChannelHintDismissed } from "./shell/channels-sidebar"
+import { loadIsCreateChannelHintDismissed } from "./root/hints"
 import { loadThemePreference, resolveSystemTheme } from "./theme"
 import { MOBILE_QUERY } from "./ui/viewport"
 

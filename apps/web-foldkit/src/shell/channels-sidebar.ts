@@ -1,426 +1,58 @@
-import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
-import { OrganizationId as OrganizationIdSchema, UserId as UserIdSchema } from "@hazel/schema"
-import { Effect, Schema, Stream } from "effect"
-import { Mount } from "foldkit"
-import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
+import type { OrganizationId, UserId } from "@hazel/schema"
 import { modifyFields } from "foldkit/struct"
-import { failureMessage } from "~/lib/error-messages"
-import { inheritedLevelOf, isMutedNow } from "~/lib/notification-settings"
-import { errorToastOf, successToast } from "../data/actions"
-import { AppRoute } from "../route"
-import {
-	sidebarContent,
-	sidebarFooter,
-	sidebarHeader,
-	sidebarSectionGroup,
-	sidebarStatic,
-} from "../ui/sidebar"
-import { sidebarHeaderHeightClass } from "../platform/desktop"
-import type { ShellContext } from "./context"
-import { emptyData, isLoading, Message, type Model, type SidebarOutcome } from "./channels-sidebar/model"
-import { PageOutMessage } from "../page/out-message"
-import { PersistDismissedHint } from "./channels-sidebar/hints"
-import {
-	requestedSectionAction,
-	sectionActionsOf,
-	sectionMenuOf,
-	type SidebarReturn,
-	updateRowMenu,
-	updateSectionMenu,
-} from "./channels-sidebar/menu-update"
-import {
-	sectionActionLabel,
-	sectionMenuEntries,
-	sectionMenuView,
-	type SectionNotifications,
-} from "./channels-sidebar/menus"
-import { dragDescription, sectionPlusButton } from "./channels-sidebar/tree"
-import { semantic } from "../ui/semantic"
-import { sectionGroupContent } from "./channels-sidebar/view"
-import { hole } from "../app/holes"
+import { emptyData, Message, type Model } from "./channels-sidebar/model"
 
 /**
- * Chat sidebar next to the nav rail (`components/sidebar/channels-sidebar.tsx`): channel
- * sections, favorites and direct messages. Shell state, so it survives navigation between channels.
+ * The organization's channel data the host still reads (`channels-sidebar/model.ts`): the list
+ * itself is the shell's (`shared-screens/src/channel-sidebar/`, docked by `root/sections.ts`).
  */
 
-// MODEL AND MESSAGE
+export { Message, Model } from "./channels-sidebar/model"
 
-export { Message, Model, OpenMenu } from "./channels-sidebar/model"
+export const init = (): Model => ({ organizationId: null, currentUserId: null, ...emptyData })
 
-// INIT
-
-/** `isCreateChannelHintDismissed` is read from storage at boot (`loadIsCreateChannelHintDismissed`). */
-export const init = (options: { readonly isCreateChannelHintDismissed: boolean }): Model => ({
-	organizationId: null,
-	currentUserId: null,
-	...emptyData,
-	isCreateChannelHintDismissed: options.isCreateChannelHintDismissed,
-})
-
-export { loadIsCreateChannelHintDismissed } from "./channels-sidebar/hints"
-
-// UPDATE
-
-export type { SidebarReturn } from "./channels-sidebar/menu-update"
-
-/** `null`: a silent success (hiding a DM only removes its row, as in legacy). */
-const outcomeTitles: { readonly [O in SidebarOutcome]: string | null } = {
-	Muted: "Channel muted",
-	Unmuted: "Channel unmuted",
-	NotificationLevelChanged: "Notification settings updated",
-	SectionMuted: "Section muted",
-	SectionUnmuted: "Section unmuted",
-	Favorited: "Added to favorites",
-	Unfavorited: "Removed from favorites",
-	Hidden: null,
-	Unhidden: "Conversation shown",
-	Left: "Left channel",
-	MovedToSection: "Channel moved to section",
-	MovedToDefault: "Channel moved to default",
-	SectionDeleted: "Section deleted",
-}
-
-export const update = (model: Model, message: Message): SidebarReturn =>
-	Message.match<SidebarReturn>(message, {
-		CompletedScrollActiveIntoView: () => ({ model }),
-		UpdatedMembership: ({ membership }) => ({
-			model: modifyFields(model, { membership: () => membership }),
-		}),
-		UpdatedSections: ({ sections }) => ({
-			model: modifyFields(model, {
+export const update = (model: Model, message: Message): Model =>
+	Message.match<Model>(message, {
+		UpdatedMembership: ({ membership }) => modifyFields(model, { membership: () => membership }),
+		UpdatedSections: ({ sections }) =>
+			modifyFields(model, {
 				sections: () => sections,
 				loaded: () => modifyFields(model.loaded, { sections: () => true }),
 			}),
-		}),
-		UpdatedSectionChannels: ({ sectionKey, channels }) => ({
-			model: modifyFields(model, {
-				sectionChannels: (previous) => ({ ...previous, [sectionKey]: channels }),
-			}),
-		}),
-		UpdatedFavorites: ({ channels }) => ({
-			model: modifyFields(model, {
+		UpdatedSectionChannels: ({ sectionKey, channels }) =>
+			modifyFields(model, { sectionChannels: (previous) => ({ ...previous, [sectionKey]: channels }) }),
+		UpdatedFavorites: ({ channels }) =>
+			modifyFields(model, {
 				favorites: () => channels,
 				loaded: () => modifyFields(model.loaded, { favorites: () => true }),
 			}),
-		}),
-		UpdatedChannelCustomers: ({ customers }) => ({
-			model: modifyFields(model, {
+		UpdatedChannelCustomers: ({ customers }) =>
+			modifyFields(model, {
 				channelCustomers: () => customers,
 				loaded: () => modifyFields(model.loaded, { channelCustomers: () => true }),
 			}),
-		}),
-		UpdatedThreads: ({ threads }) => ({ model: modifyFields(model, { threads: () => threads }) }),
-		UpdatedDmChannelIds: ({ channelIds }) => ({
-			model: modifyFields(model, {
+		UpdatedDmChannelIds: ({ channelIds }) =>
+			modifyFields(model, {
 				dmChannelIds: () => channelIds,
 				loaded: () => modifyFields(model.loaded, { dmChannelIds: () => true }),
 			}),
-		}),
-		UpdatedDmChannel: ({ channelId, channel }) => ({
-			model: modifyFields(model, { dmChannels: (previous) => ({ ...previous, [channelId]: channel }) }),
-		}),
-		UpdatedPresence: ({ presence }) => ({ model: modifyFields(model, { presence: () => presence }) }),
-		UpdatedUnreadCounts: ({ counts }) => ({ model: modifyFields(model, { unreadCounts: () => counts }) }),
-		UpdatedUnreadChannels: ({ channels }) => ({
-			model: modifyFields(model, { unreadChannels: () => channels }),
-		}),
-		UpdatedSectionSettings: ({ settings }) => ({
-			model: modifyFields(model, { sectionSettings: () => settings }),
-		}),
-		UpdatedOrganizationSetting: ({ setting }) => ({
-			model: modifyFields(model, { organizationSetting: () => setting }),
-		}),
-		UpdatedConnectMounts: ({ mounts }) => ({
-			model: modifyFields(model, { connectMounts: () => mounts }),
-		}),
-		UpdatedOrganizations: ({ organizations }) => ({
-			model: modifyFields(model, { organizations: () => organizations }),
-		}),
-		UpdatedSyncedChannels: ({ synced }) => ({
-			model: modifyFields(model, { syncedChannels: () => synced }),
-		}),
-		UpdatedMemberChannelIds: ({ channelIds }) => ({
-			model: modifyFields(model, { memberChannelIds: () => channelIds }),
-		}),
-		UpdatedDiscoverableChannels: ({ channels }) => ({
-			model: modifyFields(model, { discoverableChannels: () => channels }),
-		}),
-		ClickedDismissCreateChannelHint: () => ({
-			model: modifyFields(model, { isCreateChannelHintDismissed: () => true }),
-			commands: [PersistDismissedHint({ hintId: "create-channel" })],
-		}),
-		CompletedPersistDismissedHint: () => ({ model }),
-		// Storage is full or blocked: the hint is already hidden for this session, it only comes back next boot.
-		FailedPersistDismissedHint: () => ({ model }),
-		GotRowMenuMessage: ({ channelId, orgSlug, message }) =>
-			updateRowMenu(model, channelId, orgSlug, message),
-		GotSectionMenuMessage: ({ sectionId: sectionKey, message }) =>
-			updateSectionMenu(model, sectionKey, message),
-		// `openChannelsBrowser` passes `initialPage`, which the palette never reads: it opens home.
-		RequestedIslandNavigation: ({ orgSlug, channelId }) => ({
-			model,
-			outMessage: PageOutMessage.RequestedNavigation({
-				route: AppRoute.ChatChannel({ orgSlug, channelId }),
-				replace: false,
-			}),
-		}),
-		RequestedIslandMembers: ({ orgSlug }) => ({
-			model,
-			outMessage: PageOutMessage.RequestedNavigation({
-				route: AppRoute.OrgHome({ orgSlug }),
-				replace: false,
-			}),
-		}),
-		ClickedBrowseChannels: () => ({
-			model,
-			outMessage: PageOutMessage.RequestedCommandPalette({ page: "home" }),
-		}),
-		ClickedSectionAction: ({ action }) => requestedSectionAction(model, action),
-		SucceededSidebarAction: ({ outcome }) => {
-			const title = outcomeTitles[outcome]
-			return title === null
-				? { model }
-				: { model, outMessage: PageOutMessage.RequestedToast({ toast: successToast(title) }) }
-		},
-		FailedSidebarAction: ({ reason }) => ({
-			model,
-			outMessage: PageOutMessage.RequestedToast({
-				toast: errorToastOf(
-					failureMessage(reason, {
-						MemberNotFound: {
-							title: "Membership not found",
-							description: "You may no longer be a member of this item.",
-						},
-						ChannelNotFound: {
-							title: "Channel not found",
-							description: "This channel may have been deleted.",
-						},
-						SectionNotFound: {
-							title: "Section not found",
-							description: "This section may have been deleted.",
-						},
-						SectionAlreadyDeleted: {
-							title: "Section not found",
-							description: "This section may have already been deleted.",
-						},
-					}),
-				),
-			}),
-		}),
+		UpdatedDmChannel: ({ channelId, channel }) =>
+			modifyFields(model, { dmChannels: (previous) => ({ ...previous, [channelId]: channel }) }),
+		UpdatedUnreadCounts: ({ counts }) => modifyFields(model, { unreadCounts: () => counts }),
+		UpdatedUnreadChannels: ({ channels }) => modifyFields(model, { unreadChannels: () => channels }),
+		UpdatedConnectMounts: ({ mounts }) => modifyFields(model, { connectMounts: () => mounts }),
+		UpdatedOrganizations: ({ organizations }) =>
+			modifyFields(model, { organizations: () => organizations }),
+		UpdatedSyncedChannels: ({ synced }) => modifyFields(model, { syncedChannels: () => synced }),
 	})
 
-/** The root learned the organization or the signed-in user; the sidebar's queries depend on both. */
-/** The data the sidebar holds belongs to one organization and user; another pair starts it empty. */
+/** The data belongs to one organization and user; another pair starts it empty. */
 export const setContext = (
 	model: Model,
 	context: { readonly organizationId: OrganizationId | null; readonly currentUserId: UserId | null },
 ): Model =>
 	model.organizationId === context.organizationId && model.currentUserId === context.currentUserId
 		? model
-		: {
-				...model,
-				...emptyData,
-				organizationId: context.organizationId,
-				currentUserId: context.currentUserId,
-			}
-
-// SUBSCRIPTION
+		: { ...model, ...emptyData, ...context }
 
 export { badgeSubscriptions, subscriptions } from "./channels-sidebar/subscriptions"
-
-// VIEW
-
-/** `useScrollIntoViewOnActive`: the open channel's row scrolls into view when it becomes active. */
-/** The Effect UI channel sidebar's place, between the org switcher and the account card. */
-const channelSidebarHole = <ParentMessage>(
-	h: HtmlBuilder<ParentMessage>,
-	organizationId: OrganizationId,
-	userId: UserId,
-): Html => hole(h, "channel-sidebar", `${organizationId}:${userId}`)
-
-const ScrollActiveIntoView = Mount.define("ScrollActiveIntoView", {
-	messages: [Message.CompletedScrollActiveIntoView],
-	execute: ({ element }) =>
-		Effect.sync(() => {
-			// Mounted on a hidden marker inside the row (`treeRow`), inserted on activation.
-			;(element.closest('[role="row"]') ?? element).scrollIntoView({
-				block: "nearest",
-				behavior: "instant",
-			})
-			return Message.CompletedScrollActiveIntoView()
-		}),
-})
-
-export interface ViewContext<ParentMessage> {
-	readonly shell: ShellContext
-	/** `chatChannelIdOf(route)`: the channel whose chat or files are open, its row is active. */
-	readonly activeChannelId: ChannelId | null
-	/** The root's wall clock (`presenceNowSignal`), for deriving stale DM presence. */
-	readonly nowMs: number
-}
-
-/** The shell fields the sidebar reads, as primitives or stable refs so the lazy slot can compare them. */
-type ShellArgs = readonly [
-	orgSlug: string,
-	route: AppRoute,
-	orgName: string | undefined,
-	orgLogoUrl: string | null | undefined,
-	displayName: string | undefined,
-	email: string | undefined,
-	avatarUrl: string | null | undefined,
-	appVersion: string,
-	paletteKey: string | null,
-	createChannelKey: string | null,
-]
-
-const sidebarBody = <ParentMessage>(
-	h: HtmlBuilder<ParentMessage>,
-	model: Model,
-	activeChannelId: ChannelId | null,
-	nowMs: number,
-	toParentMessage: (message: Message) => ParentMessage,
-	...[
-		orgSlug,
-		route,
-		orgName,
-		orgLogoUrl,
-		displayName,
-		email,
-		avatarUrl,
-		appVersion,
-		paletteKey,
-		createChannelKey,
-	]: ShellArgs
-): Html => {
-	const shell: ShellContext = {
-		orgSlug,
-		route,
-		organization: orgName === undefined ? undefined : { name: orgName, logoUrl: orgLogoUrl ?? null },
-		currentUser:
-			displayName === undefined || email === undefined
-				? undefined
-				: { displayName, email, avatarUrl: avatarUrl ?? null },
-		appVersion,
-		paletteKey,
-		createChannelKey,
-	}
-	return sidebarStatic(
-		h,
-		"flex flex-1",
-		[
-			// Until the channel lists arrive, the last screen's paint stays up (`app/paint.ts`).
-			...(isLoading(model)
-				? [h.div([h.Attribute("data-paint", "loading"), h.Attribute("hidden", "")])]
-				: []),
-			// The org switcher and the account card are the shell's (`shared-screens/src/shell/Chrome.ts`).
-			sidebarHeader(h, { state: "expanded", className: `border-b ${sidebarHeaderHeightClass()}` }, [
-				hole(h, "org-switcher", orgSlug),
-			]),
-			sidebarContent(h, { state: "expanded" }, [
-				model.organizationId !== null && model.currentUserId !== null
-					? channelSidebarHole(h, model.organizationId, model.currentUserId)
-					: sidebarSectionGroup(
-							h,
-							sectionGroupContent(h, model, {
-								orgSlug,
-								route,
-								activeChannelId,
-								nowMs,
-								paletteKey,
-								createChannelKey,
-								onActiveMount: h.OnMount(
-									Mount.mapMessage(ScrollActiveIntoView(), toParentMessage),
-								),
-								onBrowseChannels: h.OnClick(toParentMessage(Message.ClickedBrowseChannels())),
-								onDismissCreateChannelHint: h.OnClick(
-									toParentMessage(Message.ClickedDismissCreateChannelHint()),
-								),
-								toParentMessage,
-								sectionAction: (sectionKey) =>
-									sectionActionView(h, model, sectionKey, nowMs, toParentMessage),
-							}),
-						),
-			]),
-			sidebarFooter(h, undefined, [hole(h, "account-menu", orgSlug, [h.Class("flex w-full min-w-0")])]),
-			dragDescription(h),
-		],
-		semantic(h, { kind: "screen", title: orgName ?? "Chats" }),
-	)
-}
-
-/** A real section's notification items' inputs; null for the default section and DMs. */
-const sectionNotificationsOf = (
-	model: Model,
-	sectionKey: string,
-	nowMs: number,
-): SectionNotifications | null => {
-	const section = model.sections.find((candidate) => candidate.id === sectionKey)
-	if (section === undefined) return null
-	const setting = model.sectionSettings.find((candidate) => candidate.sectionId === section.id)
-	return {
-		// Muted now, as the channel rows: a timed mute that ended offers "Mute" (for how long) again.
-		isMuted: setting !== undefined && isMutedNow(setting, nowMs),
-		notificationLevel: setting?.notificationLevel ?? null,
-		// A section's "Default" is the organization's level, else the channel type's default.
-		inheritedLevel: inheritedLevelOf("public", {
-			organizationLevel: model.organizationSetting?.notificationLevel,
-		}),
-	}
-}
-
-/** A single action is a plain "+" button; several actions or a deletable section open a menu. */
-const sectionActionView = <ParentMessage>(
-	h: HtmlBuilder<ParentMessage>,
-	model: Model,
-	sectionKey: string,
-	nowMs: number,
-	toParentMessage: (message: Message) => ParentMessage,
-): Html => {
-	const { actions, isEditable } = sectionActionsOf(model, sectionKey)
-	const notifications = sectionNotificationsOf(model, sectionKey, nowMs)
-	const [only] = actions
-	return only !== undefined && actions.length === 1 && !isEditable
-		? sectionPlusButton(h, sectionActionLabel(only), [
-				h.OnClick(toParentMessage(Message.ClickedSectionAction({ action: only }))),
-			])
-		: sectionMenuView(h, {
-				menu: sectionMenuOf(model, sectionKey),
-				entries: sectionMenuEntries(actions, isEditable, notifications),
-				notifications,
-				toMessage: (message) =>
-					toParentMessage(Message.GotSectionMenuMessage({ sectionId: sectionKey, message })),
-			})
-}
-
-/**
- * Memoized: the root re-runs every view on each Model change (list scrolls included), so the
- * sidebar rebuilds only when its Model or a shell field it shows changes. Args must be stable refs.
- */
-const sidebarSlot = createLazy()
-
-export const view = <ParentMessage>(
-	h: HtmlBuilder<ParentMessage>,
-	model: Model,
-	context: ViewContext<ParentMessage>,
-	toParentMessage: (message: Message) => ParentMessage,
-): Html => {
-	const { shell } = context
-	return sidebarSlot(sidebarBody<ParentMessage>, [
-		h,
-		model,
-		context.activeChannelId,
-		context.nowMs,
-		toParentMessage,
-		shell.orgSlug,
-		shell.route,
-		shell.organization?.name,
-		shell.organization?.logoUrl,
-		shell.currentUser?.displayName,
-		shell.currentUser?.email,
-		shell.currentUser?.avatarUrl,
-		shell.appVersion,
-		shell.paletteKey,
-		shell.createChannelKey,
-	])
-}

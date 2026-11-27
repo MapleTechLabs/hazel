@@ -157,7 +157,7 @@ export const hostRequestsOf = (commands: ReadonlyArray<AppCommand> | undefined) 
 // HOST
 
 /** The Foldkit host started from the shell's `context`. */
-export const hostBootReturn = (context: HostContext) => init(context, { isCreateChannelHintDismissed: false })
+export const hostBootReturn = (context: HostContext) => init(context)
 
 /** The host at `path` before the session is known (the shell's boot context). */
 export const boot = (path: string, options: BootOptions = {}): Model =>

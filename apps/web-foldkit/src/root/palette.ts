@@ -15,7 +15,7 @@ import { Clock, Effect, Layer, Option, Schema } from "effect"
 import { clientData } from "~/db/client"
 import type { Platform } from "~/lib/keybindings/key-combo"
 import { readStored, writeStored } from "../data/storage"
-import { hotkeyLabel } from "../shell/channels-sidebar/hotkey-label"
+import { comboLabel as hotkeyLabel } from "~/lib/keybindings/key-combo"
 import {
 	availableDestinations,
 	DESTINATION_GROUPS,

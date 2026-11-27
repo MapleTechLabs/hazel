@@ -2,26 +2,50 @@
 // @effect-diagnostics experimentalApiUsage:off
 /**
  * The section layouts in the frame (`settings/layout.tsx` and friends): a native sidebar beside the
- * nav rail, and the content column around the route's page, which is a native page or the Foldkit
- * host's page region. A settings page lane only registers its page; the layout stays.
+ * nav rail (the channel list, customers, settings, activity), a sheet on a phone, and the content
+ * column around the route's page, which is a native page or the Foldkit host's page region. A
+ * section's page lane only registers its page in `native-pages.ts`; the layout stays.
  */
 import type { View } from "@effect/ui"
 import type { Html } from "@effect/ui/html"
+import type { ChannelSidebarProps } from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
 import type { AccountMenuProps, OrgSwitcherProps } from "@hazel/shared-screens/shell/Chrome"
-import { AppRoute, channelSettingsTabOf, hasContentColumn, hrefOf, isChatRoute } from "../route"
+import { comboLabel } from "~/lib/keybindings/key-combo"
+import {
+	AppRoute,
+	channelSettingsTabOf,
+	chatChannelIdOf,
+	customersListRoute,
+	hasContentColumn,
+	hrefOf,
+	isChatRoute,
+} from "../route"
 import { type CurrentUser, displayNameOf, type Member, type Organization } from "../session"
-import { activityGroups, channelSettingsTabsOf, chromeHrefsOf, type SectionLayout } from "../shell/sections"
-import { settingsGroups } from "../shell/sections"
+import {
+	activityGroups,
+	channelSettingsTabsOf,
+	chromeHrefsOf,
+	customersPages,
+	customersSettings,
+	customersViewOf,
+	type DockSidebar,
+	dockSidebarOf,
+	type SectionLayout,
+	settingsGroups,
+} from "../shell/sections"
 import {
 	ShellAccountMenu,
 	ShellChannelSettingsHeader,
+	ShellChannelSidebar,
+	ShellChatSidebarSheet,
+	ShellCustomersSidebar,
 	ShellOrgSwitcher,
 	ShellSectionSidebar,
 } from "./children"
+import { isDismissedNow } from "./hints"
 import { sidebarHeaderHeightClass } from "../platform/desktop"
 import { AppMessage } from "./message"
-import type { AppModel } from "./logic"
-import { Hole } from "./portal"
+import { type AppModel, keysOf } from "./logic"
 
 type H = Html.H<AppMessage>
 type Content = View.Content<AppMessage, any>
@@ -31,6 +55,8 @@ export interface ChromeData {
 	readonly user: CurrentUser
 	readonly organization: Organization
 	readonly member: Member | null
+	/** The create-channel hint was dismissed before this load (`entry.ts`). */
+	readonly isHintDismissedAtBoot: boolean
 }
 
 const switcherOf = (model: AppModel, data: ChromeData): OrgSwitcherProps => ({
@@ -53,13 +79,55 @@ const accountOf = (data: ChromeData): AccountMenuProps => ({
 	hrefs: chromeHrefsOf(data.orgSlug, data.user.id),
 })
 
-/**
- * Settings' or Activity's sidebar: docked beside the rail on a wide screen, a sheet on a phone. Null
- * for channel settings, which keeps the chat sidebar (the Foldkit host's, until PH2).
- */
-export const sectionSidebar = (h: H, model: AppModel, layout: SectionLayout, data: ChromeData) => {
-	if (layout === "channelSettings") return null
-	const sidebar = ShellSectionSidebar(h, {
+/** Whose channel list this is: a switch of org or user mounts a fresh one. */
+export const channelListKeyOf = (data: ChromeData) => `${data.organization.id}:${data.user.id}`
+
+const channelSidebarPropsOf = (model: AppModel, data: ChromeData): ChannelSidebarProps => {
+	const paletteKey = keysOf(model)["commandPalette.open"]
+	return {
+		organizationId: data.organization.id,
+		userId: data.user.id,
+		orgSlug: data.orgSlug,
+		activeChannelId: chatChannelIdOf(model.route),
+		membersActive: model.route._tag === "OrgHome",
+		hintDismissed: data.isHintDismissedAtBoot || isDismissedNow("create-channel"),
+		paletteKey: paletteKey === null ? null : comboLabel(paletteKey, model.keyboardPlatform),
+		chrome: false,
+	}
+}
+
+const channelSidebar = (h: H, model: AppModel, data: ChromeData) => {
+	const key = channelListKeyOf(data)
+	return ShellChannelSidebar(h, {
+		key,
+		props: channelSidebarPropsOf(model, data),
+		onEmit: { Loaded: () => AppMessage.LoadedChannelList({ key }) },
+	})
+}
+
+const customersSidebar = (
+	h: H,
+	model: AppModel,
+	data: ChromeData,
+	sheet: { readonly open: boolean } | null,
+) =>
+	ShellCustomersSidebar(h, {
+		key: `customers:${channelListKeyOf(data)}`,
+		props: {
+			organizationId: data.organization.id,
+			userId: data.user.id,
+			pages: customersPages(data.orgSlug, model.route),
+			settings: customersSettings(data.orgSlug, model.route),
+			listHref: hrefOf(customersListRoute(data.orgSlug)),
+			currentView: customersViewOf(model.route),
+			account: accountOf(data),
+			sheet,
+		},
+		onEmit: { RequestedClose: () => AppMessage.DismissedSectionSheet() },
+	})
+
+const sectionSidebarOf = (h: H, model: AppModel, layout: "settings" | "activity", data: ChromeData) =>
+	ShellSectionSidebar(h, {
 		key: `${layout}:${data.organization.id}`,
 		props: {
 			kind: layout,
@@ -75,34 +143,140 @@ export const sectionSidebar = (h: H, model: AppModel, layout: SectionLayout, dat
 		},
 		onEmit: { RequestedClose: () => AppMessage.DismissedSectionSheet() },
 	})
-	if (model.isMobile) return sidebar
-	// Docked: today's `sidebarStatic` column (`ui/sidebar.ts`), a fixed header and account card around
-	// the rows, which scroll between them.
-	return h.div
+
+/**
+ * Today's `sidebarStatic` column (`ui/sidebar.ts`): a fixed header and account card around the rows,
+ * which scroll between them. `waiting` keeps the last screen's paint up (`app/paint.ts`).
+ */
+const column = (
+	h: H,
+	options: {
+		readonly header: Content
+		readonly headerClass: string
+		readonly waiting: boolean
+		/** The chat and customers cards sat in a full-width hole; settings' sits in the footer itself. */
+		readonly wrapAccount: boolean
+	},
+	body: Content,
+	data: ChromeData,
+	className = "flex h-full min-w-0 flex-1 flex-col bg-sidebar text-sidebar-fg",
+) =>
+	h.div
 		.attrs({ "data-slot": "sidebar", "data-intent": "default", "data-collapsible": "none" })
-		.class("flex h-full min-w-0 flex-1 flex-col bg-sidebar text-sidebar-fg")
+		.class(className)
 		.children(
+			options.waiting ? h.div.key("waiting").attrs({ "data-paint": "loading", hidden: "" }) : null,
 			h.div
+				.key("header")
 				.attrs({ "data-slot": "sidebar-header", "data-tauri-drag-region": "true" })
 				.class(
-					`flex flex-col gap-2 border-b border-sidebar-border p-4 ${layout === "activity" ? "py-4 " : ""}${sidebarHeaderHeightClass()}`,
+					`flex flex-col gap-2 border-b border-sidebar-border p-4 ${options.headerClass}${sidebarHeaderHeightClass()}`,
 				)
-				.children(
-					layout === "settings"
-						? ShellOrgSwitcher(h, { key: data.organization.id, props: switcherOf(model, data) })
-						: h.span
-								.class("text-muted-fg text-xs font-medium uppercase tracking-wider")
-								.children("Activity"),
-				),
+				.children(options.header),
 			h.div
+				.key("content")
 				.attr("data-slot", "sidebar-content")
 				.class("flex min-h-0 flex-1 flex-col overflow-auto overscroll-none mask-b-from-95%")
-				.children(sidebar),
+				.children(body),
 			h.div
+				.key("footer")
 				.attr("data-slot", "sidebar-footer")
 				.class("mt-auto flex shrink-0 items-center justify-center p-4")
-				.children(ShellAccountMenu(h, { key: data.user.id, props: accountOf(data) })),
+				.children(
+					options.wrapAccount
+						? h.div
+								.class("flex w-full min-w-0")
+								.children(ShellAccountMenu(h, { key: data.user.id, props: accountOf(data) }))
+						: ShellAccountMenu(h, { key: data.user.id, props: accountOf(data) }),
+				),
 		)
+
+const sectionLabel = (h: H, label: string) =>
+	h.span.class("text-muted-fg text-xs font-medium uppercase tracking-wider").children(label)
+
+/** The channel list's column: the org switcher over the list over the account card. */
+const chatColumn = (h: H, model: AppModel, data: ChromeData, className?: string) =>
+	column(
+		h,
+		{
+			header: ShellOrgSwitcher(h, { key: data.organization.id, props: switcherOf(model, data) }),
+			headerClass: "",
+			waiting: model.channelListLoaded !== channelListKeyOf(data),
+			wrapAccount: true,
+		},
+		channelSidebar(h, model, data),
+		data,
+		className,
+	)
+
+/** The dock's sidebar for the route, beside the rail on a wide screen. */
+export const dockSidebar = (h: H, model: AppModel, data: ChromeData): Content | null => {
+	const dock = dockSidebarOf(model.route)
+	if (dock === null) return null
+	return dockColumns[dock](h, model, data)
+}
+
+const dockColumns = {
+	chat: (h, model, data) => chatColumn(h, model, data),
+	customers: (h, model, data) =>
+		column(
+			h,
+			{ header: sectionLabel(h, "Customers"), headerClass: "py-4 ", waiting: false, wrapAccount: true },
+			customersSidebar(h, model, data, null),
+			data,
+		),
+	settings: (h, model, data) =>
+		column(
+			h,
+			{
+				header: ShellOrgSwitcher(h, { key: data.organization.id, props: switcherOf(model, data) }),
+				headerClass: "",
+				waiting: false,
+				wrapAccount: false,
+			},
+			sectionSidebarOf(h, model, "settings", data),
+			data,
+		),
+	activity: (h, model, data) =>
+		column(
+			h,
+			{ header: sectionLabel(h, "Activity"), headerClass: "py-4 ", waiting: false, wrapAccount: false },
+			sectionSidebarOf(h, model, "activity", data),
+			data,
+		),
+} satisfies { readonly [D in DockSidebar]: (h: H, model: AppModel, data: ChromeData) => Content }
+
+/** The phone's chat list (the Chats tab's page): the channel list's column, full screen. */
+export const phoneChatList = (h: H, model: AppModel, data: ChromeData): Content =>
+	h.main
+		.class("contents")
+		.children(
+			chatColumn(
+				h,
+				model,
+				data,
+				"flex h-full min-h-0 w-full flex-col bg-sidebar text-sidebar-fg [--sidebar-width:100%]",
+			),
+		)
+
+export const isPhoneChatList = (model: AppModel) => model.isMobile && model.route._tag === "ChatIndex"
+
+/** A phone's sidebar sheet, opened from its top bar (none over the chat list, which is the sidebar). */
+export const phoneSheet = (h: H, model: AppModel, data: ChromeData): Content | null => {
+	const dock = dockSidebarOf(model.route)
+	if (dock === null || isPhoneChatList(model)) return null
+	if (dock === "settings" || dock === "activity") return sectionSidebarOf(h, model, dock, data)
+	if (dock === "customers") return customersSidebar(h, model, data, { open: model.isSectionSheetOpen })
+	return ShellChatSidebarSheet(h, {
+		key: channelListKeyOf(data),
+		props: {
+			open: model.isSectionSheetOpen,
+			sidebar: channelSidebarPropsOf(model, data),
+			switcher: switcherOf(model, data),
+			account: accountOf(data),
+		},
+		onEmit: { RequestedClose: () => AppMessage.DismissedSectionSheet() },
+	})
 }
 
 // HAZEL-GAP(p4-section-scroll-column): no primitive scrolls a section's page under the frame with its
@@ -122,9 +296,17 @@ const scrollColumn = (
 				.children(...children),
 		)
 
-/** The section's content around `page`: the scroll column, the integrations column, channel settings' header. */
+/**
+ * The section's content around `page`: the scroll column, the integrations column, channel settings'
+ * header, or customers' full-height column (its pages own their scrolling: the queue's preview spans it).
+ */
 export const sectionContent = (h: H, model: AppModel, layout: SectionLayout, page: Content): Content => {
 	const { route } = model
+	if (layout === "customers")
+		return h.main
+			.class("h-full w-full min-w-0 overflow-hidden bg-bg")
+			.attr("data-section-layout", layout)
+			.children(page)
 	if (layout !== "channelSettings")
 		return scrollColumn(
 			h,
@@ -154,13 +336,3 @@ export const sectionContent = (h: H, model: AppModel, layout: SectionLayout, pag
 		page,
 	)
 }
-
-/** The chrome inside the Foldkit chat and customers sidebars, placed in their holes. */
-export const chromeHoles = (h: H, model: AppModel, data: ChromeData) => [
-	Hole(h, { hole: "org-switcher", key: data.orgSlug }, [
-		ShellOrgSwitcher(h, { key: data.organization.id, props: switcherOf(model, data) }),
-	]),
-	Hole(h, { hole: "account-menu", key: data.orgSlug, className: "flex w-full" }, [
-		ShellAccountMenu(h, { key: data.user.id, props: accountOf(data) }),
-	]),
-]

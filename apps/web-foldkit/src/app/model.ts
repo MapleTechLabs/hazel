@@ -12,7 +12,6 @@ import * as Updates from "../platform/updates"
 import * as Shell from "../shell/model"
 import * as Notifications from "../shell/notifications"
 import { channelLinksOf } from "../shell/channels-sidebar/channel-links"
-import type { Context as ShellUpdateContext } from "../shell/update"
 import { HostContextSchema, type HostReport } from "./context"
 import type { OrganizationId, UserId } from "@hazel/schema"
 
@@ -109,12 +108,3 @@ export const pageHostOf = (model: Model): PageHost => {
 	pageHostCache.set(model, host)
 	return host
 }
-
-export const shellContextOf = (model: Model): ShellUpdateContext => ({
-	orgSlug: orgSlugOf(model.context.route) ?? null,
-	isChatSection: orgSectionOf(model.context.route) === "Chat",
-	canCreateChannel: can(sharedOf(model), "channel.create"),
-	organizationId: model.context.organization?.id ?? null,
-	currentUserId: model.context.currentUser?.id ?? null,
-	isMobile: model.context.isMobile,
-})

@@ -27,7 +27,7 @@ import { isNativeModal } from "../root/modals"
 import { CreateDm, emit } from "./command"
 import type { HostContext } from "./context"
 import { type Message, type ShellRequest } from "./message"
-import { dmRequestKey, type Model, reportOf, sharedOf, shellContextOf } from "./model"
+import { dmRequestKey, type Model, reportOf, sharedOf } from "./model"
 import { toPageMessage } from "./view"
 
 type Return = Update.Return<Model, Message, Resources>
@@ -179,7 +179,13 @@ const foldShell = Update.foldChild({
 
 /** The shell's menus and sidebar follow the route, organization, user, role and viewport. */
 const informShell: Step = setModel((model) =>
-	modifyFields(model, { shell: (shell) => Shell.informContext(shell, shellContextOf(model)) }),
+	modifyFields(model, {
+		shell: (shell) =>
+			Shell.informContext(shell, {
+				organizationId: model.context.organization?.id ?? null,
+				currentUserId: model.context.currentUser?.id ?? null,
+			}),
+	}),
 )
 
 /** The page slot; its OutMessages are facts the host or the shell acts on. */
@@ -251,29 +257,13 @@ const markOrganizationRead: Step = (model) => {
 					ShellMessage.GotNotificationsMessage({
 						message: Notifications.Message.PressedMarkOrganizationRead({ organizationId }),
 					}),
-					shellContextOf(model),
 				),
 			)
 }
 
-/** Mod+Shift+D: docks the desktop sidebar to its nav rail and back; on mobile, opens or closes the sheet. */
+/** Mod+Shift+D: docks the desktop sidebar to its nav rail and back (a phone's sheet is the root's). */
 const toggleSidebar: Step = (model) =>
-	model.context.isMobile
-		? foldShell(model, (shell) =>
-				Shell.update(
-					shell,
-					ShellMessage.ToggledSidebar({ isOpen: !shell.isSidebarOpen }),
-					shellContextOf(model),
-				),
-			)
-		: foldShell(model, (shell) =>
-				Shell.update(shell, ShellMessage.ToggledSidebarCollapsed(), shellContextOf(model)),
-			)
-
-const openMobileSidebar: Step = (model) =>
-	foldShell(model, (shell) =>
-		Shell.update(shell, ShellMessage.ToggledSidebar({ isOpen: true }), shellContextOf(model)),
-	)
+	foldShell(model, (shell) => Shell.update(shell, ShellMessage.ToggledSidebarCollapsed()))
 
 /**
  * The `$orgSlug/layout.tsx` hotkeys whose work is here; the shell listens for every key and sends
@@ -334,7 +324,6 @@ const receivedShellRequest = (request: ShellRequest): Step =>
 		PressedHotkey: ({ actionId }) => pressedHotkey(actionId),
 		PressedDesktopMenuItem: ({ item }) => pressedDesktopMenuItem(item),
 		PressedInstallUpdate: () => stepUpdates(Updates.install),
-		PressedMobileMenu: () => openMobileSidebar,
 		RequestedToast: ({ toast }) => showToast(toast),
 		PressedComposeDm: () => openModal({ _tag: "CreateDm" }),
 		PressedMarkAllRead: () => (model: Model) =>
@@ -344,7 +333,6 @@ const receivedShellRequest = (request: ShellRequest): Step =>
 					ShellMessage.GotNotificationsMessage({
 						message: Notifications.Message.ClickedMarkAllRead(),
 					}),
-					shellContextOf(model),
 				),
 			),
 		RequestedPageOut: ({ outMessage }) => handleOutMessage(outMessage),
@@ -434,15 +422,12 @@ const changedContext =
 
 // INIT
 
-export const init = (
-	context: HostContext,
-	options: { readonly isCreateChannelHintDismissed: boolean },
-): Return => {
+export const init = (context: HostContext): Return => {
 	const model: Model = {
 		context,
 		page: null,
 		pageInstances: 0,
-		shell: Shell.init({ isCreateChannelHintDismissed: options.isCreateChannelHintDismissed }),
+		shell: Shell.init(),
 		modal: Modal.initialModel,
 		toasts: Toasts.init(),
 		platform: Platform.init(),
@@ -482,8 +467,7 @@ const step = (model: Model, message: Message): Return =>
 		ClickedLayoutTab: ({ route }) => navigateTo(route)(model),
 		GotPageMessage: ({ message }) =>
 			foldPage(model, (page) => updatePage(page, message, sharedOf(model))),
-		GotShellMessage: ({ message }) =>
-			foldShell(model, (shell) => Shell.update(shell, message, shellContextOf(model))),
+		GotShellMessage: ({ message }) => foldShell(model, (shell) => Shell.update(shell, message)),
 		GotModalMessage: ({ message }) =>
 			foldModal(model, (modal) => Modal.update(modal, message, modalContextOf(model))),
 		GotToastsMessage: ({ message }) => foldToastsWithAction(model, message),

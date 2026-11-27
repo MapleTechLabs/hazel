@@ -1,18 +1,15 @@
 /**
  * Requests the Effect UI shell's children make of the Foldkit parts that still own their effect
- * (a channel page's overlays, the sidebar's menus, the DM modal), and native pages' requests of the
+ * (a channel page's overlays, the DM modal), and native pages' requests of the
  * shell. Part of the adapter.
  */
 import type { AppRequest } from "@hazel/shared-screens/app/requests"
 import type { HostRequest as MessageListRequest } from "@hazel/shared-screens/chat/messages"
 import type { MessageId } from "@hazel/schema"
-import type { SidebarAction } from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
 import { Effect, Queue, Stream } from "effect"
 import type { ShellRequest } from "../app/message"
 
 export type BusEvent =
-	/** A menu choice in the channel sidebar, by today's keys. */
-	| { readonly _tag: "ChannelSidebarAct"; readonly action: SidebarAction }
 	/** What a message list row asks the channel page for (its overlays, the thread panel). */
 	| { readonly _tag: "MessageList"; readonly request: MessageListRequest }
 	/** A key, menu item or frame button whose work is still the Foldkit host's. */

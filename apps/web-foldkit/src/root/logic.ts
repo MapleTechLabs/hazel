@@ -26,7 +26,6 @@ import { authRedirect, routeRedirect } from "../redirect"
 import { AppRoute, chatChannelIdOf, hrefOf, isPublicRoute } from "../route"
 import { CurrentUser, type Member, type Organization } from "../session"
 import { SoundSettings } from "../notification-sound"
-import { sectionLayoutOf } from "../shell/sections"
 import { ResolvedTheme, resolveTheme, type ThemeCustomization, ThemePreference } from "../theme"
 import {
 	initialStored,
@@ -77,8 +76,10 @@ export const AppModel = Schema.Struct({
 	unreadMentionIds: Schema.Array(Schema.String),
 	/** The Foldkit host's state the frame shows (the dock, the bell, the badge, the page's context). */
 	report: Schema.NullOr(HostReportSchema),
-	/** A phone's sidebar sheet of a native section (settings, activity), opened from its top bar. */
+	/** A phone's sidebar sheet (chat, customers, settings, activity), opened from its top bar. */
 	isSectionSheetOpen: Schema.Boolean,
+	/** The org and user (`org:user`) whose channel list has loaded: until then the last screen's paint stays. */
+	channelListLoaded: Schema.NullOr(Schema.String),
 	/** The AI panel: open, and its width (null: the default). Stored on a wide screen. */
 	assistant: AssistantStored,
 	/** The open native modal (`modals.ts`); at most one, a new opening replaces it. */
@@ -575,6 +576,7 @@ export const init = (route: AppRoute, flags: AppFlags): Next => {
 		unreadMentionIds: [],
 		report: null,
 		isSectionSheetOpen: false,
+		channelListLoaded: null,
 		assistant: initialStored(flags.aiPanel, flags.isMobile),
 		modal: null,
 		modalOpenings: 0,
@@ -609,12 +611,18 @@ export const init = (route: AppRoute, flags: AppFlags): Next => {
 
 /** The hotkeys the shell follows itself; the rest go to the Foldkit host, whose work they are. */
 const pressedHotkey = (actionId: LayoutHotkeyActionId): Step =>
-	actionId === "commandPalette.open"
-		? openPalette("home")
-		: // Straight into message search, as the hotkey's description says.
-			actionId === "search.open"
-			? openPalette("search")
-			: toHost({ _tag: "PressedHotkey", actionId })
+	// A phone's sidebar is the root's sheet; a wide screen's dock is still collapsed by the host.
+	actionId === "sidebar.toggle"
+		? (model) =>
+				model.isMobile
+					? unchanged({ ...model, isSectionSheetOpen: !model.isSectionSheetOpen })
+					: toHost({ _tag: "PressedHotkey", actionId })(model)
+		: actionId === "commandPalette.open"
+			? openPalette("home")
+			: // Straight into message search, as the hotkey's description says.
+				actionId === "search.open"
+				? openPalette("search")
+				: toHost({ _tag: "PressedHotkey", actionId })
 
 const pressedDesktopMenuItem = (item: DesktopMenuItem): Step =>
 	toHost({ _tag: "PressedDesktopMenuItem", item })
@@ -667,10 +675,8 @@ export const update = (model: AppModel, message: AppMessage): Next =>
 		RequestedCloseModal: ({ instance }) =>
 			model.modal?.instance === instance ? unchanged({ ...model, modal: null }) : unchanged(model),
 		PressedMobileSearch: () => openPalette("search")(model),
-		PressedMobileMenu: () =>
-			sectionLayoutOf(model.route) === "settings" || sectionLayoutOf(model.route) === "activity"
-				? unchanged({ ...model, isSectionSheetOpen: true })
-				: toHost({ _tag: "PressedMobileMenu" })(model),
+		PressedMobileMenu: () => unchanged({ ...model, isSectionSheetOpen: true }),
+		LoadedChannelList: ({ key }) => unchanged({ ...model, channelListLoaded: key }),
 		DismissedSectionSheet: () => unchanged({ ...model, isSectionSheetOpen: false }),
 		PressedAiPanelToggle: () => toggleAssistant(model),
 		ResizedAssistantPanel: ({ width }) =>
