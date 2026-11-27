@@ -254,6 +254,23 @@ const initialServer = () =>
 
 const signInRoute = AppRoute.SignIn({ redirectUrl: Option.none(), error: Option.none() })
 
+// The Customers settings pages (PK8), each on the app's data.
+export const CustomersSettingsPlansPage = Component.lazy("CustomersSettingsPlansPage", () =>
+	import("@hazel/shared-screens/customers/pages/settings/plans/PlansPage").then((module) =>
+		withClientData(module.PlansPage),
+	),
+)
+export const CustomersSettingsFeatureFlagsPage = Component.lazy("CustomersSettingsFeatureFlagsPage", () =>
+	import("@hazel/shared-screens/customers/pages/settings/feature-flags/FeatureFlagsPage").then((module) =>
+		withClientData(module.FeatureFlagsPage),
+	),
+)
+export const CustomersSettingsSlaPage = Component.lazy("CustomersSettingsSlaPage", () =>
+	import("@hazel/shared-screens/customers/pages/settings/sla/SlaPage").then((module) =>
+		withClientData(module.SlaPage),
+	),
+)
+
 /** What a native page reads: its route and the session, from the shell's Model. */
 export interface NativeInputs<Tag extends AppRoute["_tag"]> {
 	readonly route: RouteOf<Tag>
@@ -299,6 +316,19 @@ const sectionGutter =
 	<Tag extends AppRoute["_tag"]>(page: NativePage<Tag>): NativePage<Tag> =>
 	(h, inputs) =>
 		h.div.class("px-4 lg:px-8").children(page(h, inputs))
+
+// HAZEL-GAP(p4-section-scroll-column): today's customers settings page scrolls itself in a centred
+// `max-w-6xl` column (`settingsPage`); PH2's customers layout takes this over.
+const customersSettingsColumn =
+	<Tag extends AppRoute["_tag"]>(page: NativePage<Tag>): NativePage<Tag> =>
+	(h, inputs) =>
+		h.div
+			.class("h-full overflow-y-auto")
+			.children(
+				h.div
+					.class("mx-auto flex w-full max-w-6xl flex-col px-4 py-6 lg:px-8")
+					.children(page(h, inputs)),
+			)
 
 /** Keyed by what makes a new instance (Foldkit's page `key`): a new token mounts a fresh page. */
 const nativePages: Registry = {
@@ -398,6 +428,29 @@ const nativePages: Registry = {
 			props: { session, ruleId: route.ruleId, template: null, nowMs },
 			fallback: (result) => fallback(result._tag === "Failure"),
 		}),
+	CustomersSettingsPlans: customersSettingsColumn<"CustomersSettingsPlans">(
+		(h, { route, session, fallback }) =>
+			CustomersSettingsPlansPage(h, {
+				key: route.orgSlug,
+				props: { session },
+				fallback: (result) => fallback(result._tag === "Failure"),
+			}),
+	),
+	CustomersSettingsFeatureFlags: customersSettingsColumn<"CustomersSettingsFeatureFlags">(
+		(h, { route, session, fallback }) =>
+			CustomersSettingsFeatureFlagsPage(h, {
+				key: route.orgSlug,
+				props: { session },
+				fallback: (result) => fallback(result._tag === "Failure"),
+			}),
+	),
+	CustomersSettingsSla: customersSettingsColumn<"CustomersSettingsSla">((h, { route, session, fallback }) =>
+		CustomersSettingsSlaPage(h, {
+			key: route.orgSlug,
+			props: { session },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	),
 	// One instance per mode, as today's page keyed by route tag.
 	SignIn: fillWindow<"SignIn">((h, { route, fallback }) => {
 		const redirectUrl = safeReturnTo(Option.getOrNull(route.redirectUrl))

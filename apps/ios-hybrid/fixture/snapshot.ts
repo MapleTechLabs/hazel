@@ -697,6 +697,8 @@ export const snapshotFor = (kind: SyncSourceKind, sourceId: string): FixtureTabl
 						messages: notificationMessageRows.filter((row) => row.channelId === sourceId),
 					})
 				: undefined
+		case "customers":
+			return sourceId === orgId ? withEmpty("customers", {}) : undefined
 	}
 }
 
