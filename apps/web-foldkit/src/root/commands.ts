@@ -5,6 +5,7 @@
  * each the same Effect, as Effect UI Commands. I/O that needs a service is a `Command.Service`.
  */
 import { Command, Component } from "@effect/ui"
+import { appRequestsLayer } from "@hazel/shared-screens/app/requests"
 import { ChannelId, NotificationId, OrganizationId, UserId } from "@hazel/schema"
 import { Duration, Effect, Layer, Schedule, Schema } from "effect"
 import { warmSyncObjects } from "~/db/warm"
@@ -24,6 +25,7 @@ import { HazelAuthClient } from "../auth/client"
 import { HazelRpc } from "../rpc"
 import type { CurrentUser } from "../session"
 import { applyTheme, ResolvedTheme, saveThemePreference, ThemeCustomization, ThemePreference } from "../theme"
+import { publish } from "./bus"
 import { AppMessage } from "./message"
 
 /** How long the app waits before asking again after the API did not answer. */
@@ -202,5 +204,13 @@ export class FetchCurrentUser extends Command.Service<FetchCurrentUser>()("shell
 	)
 }
 
-/** The Layers the shell's Commands need, on the app's RPC and auth clients. */
-export const commandsLayer = Layer.mergeAll(CheckSession.layer, SignOut.layer, FetchCurrentUser.layer)
+/** Native pages' requests, each sent on the bus to the shell's `ReceivedAppRequest`. */
+const appRequests = appRequestsLayer((request) => publish({ _tag: "AppRequest", request }))
+
+/** The Layers the shell's Commands and native pages need, on the app's RPC and auth clients. */
+export const commandsLayer = Layer.mergeAll(
+	CheckSession.layer,
+	SignOut.layer,
+	FetchCurrentUser.layer,
+	appRequests,
+)

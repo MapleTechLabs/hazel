@@ -1,6 +1,7 @@
 // Effect UI is a public preview: every API is experimental by design here.
 // @effect-diagnostics experimentalApiUsage:off
 import { UiSchema } from "@effect/ui"
+import { AppRequest } from "@hazel/shared-screens/app/requests"
 import { NotificationId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { CommonReason } from "~/lib/error-messages"
@@ -53,6 +54,8 @@ export const AppMessage = UiSchema.TaggedEnum({
 	PressedHotkey: { actionId: LayoutHotkeyActionId },
 	/** What the Foldkit host asked for, or its state for the frame. */
 	ReceivedHostOut: { out: HostOutSchema },
+	/** A native page asked the app for something (`native-pages.ts`). */
+	ReceivedAppRequest: { request: AppRequest },
 	/** The tab bar's search, a section's top bar menu and the nav rail's AI button. */
 	PressedMobileSearch: {},
 	PressedMobileMenu: {},

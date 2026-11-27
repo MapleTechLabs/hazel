@@ -378,6 +378,7 @@ const receivedShellRequest = (request: ShellRequest): Step =>
 		PressedMobileSearch: () => openCommandPalette("search"),
 		RequestedToast: ({ toast }) => showToast(toast),
 		PressedComposeDm: () => openModal({ _tag: "CreateDm" }),
+		RequestedPageOut: ({ outMessage }) => handleOutMessage(outMessage),
 	})
 
 /** Each request's toasts share an id, so each replaces the previous: loading, then success or error. */
