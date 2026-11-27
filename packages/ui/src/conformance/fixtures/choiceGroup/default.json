@@ -78,10 +78,110 @@
 			"props": {
 				"disabled": true
 			}
+		},
+		{
+			"name": "checkbox-rows",
+			"props": {
+				"multiple": true,
+				"selected": ["light", "system"]
+			}
+		},
+		{
+			"name": "cards-grid",
+			"props": {
+				"style": "cards",
+				"columns": "2",
+				"options": [
+					{
+						"value": "chat",
+						"label": "Team chat",
+						"description": "Channels, threads and DMs",
+						"icon": "chat"
+					},
+					{
+						"value": "support",
+						"label": "Customer support",
+						"description": "Shared inboxes and SLAs",
+						"icon": "bell"
+					},
+					{
+						"value": "eng",
+						"label": "Engineering",
+						"description": "Incidents and on-call",
+						"icon": "code"
+					}
+				],
+				"selected": ["support"]
+			}
+		},
+		{
+			"name": "cards-multiple",
+			"props": {
+				"style": "cards",
+				"columns": "3",
+				"multiple": true,
+				"selected": ["light", "system"]
+			}
+		},
+		{
+			"name": "segmented-badges",
+			"props": {
+				"style": "segmented",
+				"label": null,
+				"options": [
+					{
+						"value": "open",
+						"label": "Open",
+						"badge": 12
+					},
+					{
+						"value": "snoozed",
+						"label": "Snoozed",
+						"badge": 3
+					},
+					{
+						"value": "done",
+						"label": "Done"
+					}
+				],
+				"selected": ["open"]
+			}
+		},
+		{
+			"name": "option-disabled",
+			"props": {
+				"style": "chips",
+				"options": [
+					{
+						"value": "mon",
+						"label": "Mon"
+					},
+					{
+						"value": "tue",
+						"label": "Tue",
+						"disabled": true
+					},
+					{
+						"value": "wed",
+						"label": "Wed"
+					}
+				],
+				"selected": ["mon"],
+				"multiple": true
+			}
 		}
 	],
 	"pending": {
-		"web": "A2",
 		"ios": "S2"
-	}
+	},
+	"aria": [
+		{
+			"role": "radiogroup",
+			"name": "Theme"
+		},
+		{
+			"role": "radio",
+			"name": "Dark"
+		}
+	]
 }

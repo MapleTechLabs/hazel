@@ -17,10 +17,29 @@
 				"indeterminate": true,
 				"checked": null
 			}
+		},
+		{
+			"name": "unchecked-description",
+			"props": {
+				"checked": null,
+				"description": "Keeps it above the other notes."
+			}
+		},
+		{
+			"name": "disabled",
+			"props": {
+				"checked": null,
+				"disabled": true
+			}
 		}
 	],
 	"pending": {
-		"web": "A2",
 		"ios": "S2"
-	}
+	},
+	"aria": [
+		{
+			"role": "checkbox",
+			"name": "Pin to top"
+		}
+	]
 }

@@ -18,10 +18,26 @@
 			"props": {
 				"disabled": true
 			}
+		},
+		{
+			"name": "range",
+			"props": {
+				"min": 10,
+				"max": 90,
+				"step": 5,
+				"value": 40,
+				"valueText": "40 minutes",
+				"label": "Snooze"
+			}
 		}
 	],
 	"pending": {
-		"web": "A2",
 		"ios": "S2"
-	}
+	},
+	"aria": [
+		{
+			"role": "slider",
+			"name": "Volume"
+		}
+	]
 }

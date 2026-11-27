@@ -12,7 +12,20 @@
 	},
 	"frame": "inline",
 	"pending": {
-		"web": "A2",
 		"ios": "S2"
-	}
+	},
+	"aria": [
+		{
+			"role": "button",
+			"name": "Plan: Pro"
+		}
+	],
+	"cases": [
+		{
+			"name": "unselected",
+			"props": {
+				"selected": null
+			}
+		}
+	]
 }
