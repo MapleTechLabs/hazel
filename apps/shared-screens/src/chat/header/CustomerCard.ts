@@ -241,6 +241,7 @@ export const CustomerCard = Hazel.component({
 				chip,
 				h.sheet
 					.open(model.isSheetOpen)
+					.style("card")
 					.title(`${customer.accountName} at a glance`)
 					.on("dismiss", CustomerCardMessage.DismissedSheet())
 					.children(body()),

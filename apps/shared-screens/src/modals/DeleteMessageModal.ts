@@ -77,7 +77,8 @@ export const DeleteMessageModalNoDeps = Hazel.component({
 	view: (h) =>
 		h.dialog
 			.open(true)
-			// HAZEL-GAP(p4-dialog-icon): today's header leads with a danger icon tile (warning) above the title.
+			.icon("warning")
+			.iconTone("danger")
 			.title("Delete message")
 			.description("Are you sure you want to delete this message? This action cannot be undone.")
 			.on("dismiss", DeleteMessageMessage.DismissedDialog())

@@ -325,6 +325,7 @@ export const SetStatusModalNoDeps = Hazel.component({
 		return (
 			h.dialog
 				.open(true)
+				.size("large")
 				.title("Set a status")
 				.description("Let others know what you're up to.")
 				.on("dismiss", SetStatusMessage.DismissedDialog())
@@ -405,8 +406,7 @@ export const SetStatusModalNoDeps = Hazel.component({
 						)
 						.on("change", ({ selected }) => SetStatusMessage.PickedPreset({ selected })),
 				)
-				// HAZEL-GAP(p4-dialog-actions-leading): today "Clear status" sits at the footer's start, apart.
-				.actions(
+				.secondaryActions(
 					hasExistingStatus(model)
 						? h.button
 								.label("Clear status")
@@ -414,6 +414,8 @@ export const SetStatusModalNoDeps = Hazel.component({
 								.disabled(model.submitting)
 								.on("press", SetStatusMessage.PressedClear())
 						: null,
+				)
+				.actions(
 					h.button.label("Cancel").variant("outline").on("press", SetStatusMessage.PressedCancel()),
 					h.button
 						.label(model.submitting ? "Saving..." : "Save")

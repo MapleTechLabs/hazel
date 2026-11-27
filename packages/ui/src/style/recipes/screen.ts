@@ -96,6 +96,16 @@ export const screen = defineRecipe<
 						content: { paddingY: "0", grow: true },
 					},
 				},
+				// A docked or phone panel (the assistant): the host's surface shows through (today's split
+				// panel, or `bg-overlay` on a phone), and the bar's title is `heading` `subsection` (14/20).
+				panel: {
+					root: { background: "transparent" },
+					parts: {
+						header: { gap: "1", paddingX: "4", divider: "border" },
+						title: { text: "label", weight: "semibold", opacity: 1 },
+						content: { paddingY: "0", grow: true },
+					},
+				},
 				// `auth/layout.ts`: one card (`max-w-sm`) centred beside the `aside` brand panel; the
 				// header is `authHeading` (display title, muted `text-sm` subtitle, `mb-8 space-y-2`).
 				// The two columns and the card's width are the web renderer's grid.

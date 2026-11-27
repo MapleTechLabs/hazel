@@ -1,7 +1,15 @@
 import { defineRecipe } from "../recipe.ts"
+import type { SheetStyle } from "../schema.ts"
 
-/** `hz:sheet`: a panel with a title row and a close button; the renderer places it by size class. */
-export const sheet = defineRecipe<{}, never, "panel" | "header" | "title" | "close" | "content">({
+/**
+ * `hz:sheet`: a panel with a title row and a close button (the kit's `dialogCloseIconBase`); the
+ * renderer places it by size class and style.
+ */
+export const sheet = defineRecipe<
+	{ readonly style: SheetStyle },
+	never,
+	"panel" | "header" | "title" | "close" | "content"
+>({
 	primitive: "sheet",
 	parts: {
 		panel: "part",
@@ -32,16 +40,40 @@ export const sheet = defineRecipe<{}, never, "panel" | "header" | "title" | "clo
 				align: "center",
 				justify: "center",
 				size: "8",
-				radius: "md",
-				color: "muted-fg",
+				radius: "lg",
+				color: "fg-2",
 				shrink: false,
 				transition: "fast",
 			},
 			content: { layout: "column", rowGap: "4" },
 		},
-		regular: { parts: { panel: { paddingX: "6", paddingY: "6" }, close: { size: "7" } } },
+		regular: { parts: { panel: { paddingX: "6", paddingY: "6" }, close: { size: "7", radius: "md" } } },
 	},
-	options: {},
+	options: {
+		style: {
+			default: "panel",
+			values: {
+				panel: {},
+				// Today's floating sheet: 16px in, `rounded-lg`, a ring over `bg-overlay` (the close
+				// button and the hidden title are the renderer's).
+				card: {
+					parts: {
+						panel: {
+							rowGap: "0",
+							paddingX: "4",
+							paddingY: "4",
+							radius: "lg",
+							borderWidth: "none",
+							background: "overlay",
+							color: "overlay-fg",
+							shadow: "sheet-card",
+						},
+					},
+					regular: { parts: { panel: { paddingX: "4", paddingY: "4" } } },
+				},
+			},
+		},
+	},
 	motion: {
 		enter: [
 			{ motion: "slideUpIn", part: "panel", regular: "scaleIn" },

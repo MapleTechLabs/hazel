@@ -113,7 +113,6 @@ export const CreateSectionModalNoDeps = CreateSectionDef.make({
 		return (
 			h.dialog
 				.open(true)
-				// HAZEL-GAP(p4-dialog-size): today's panel is `md` (28rem); the dialog has one width.
 				.title("Create section")
 				.on("dismiss", CreateSectionMessage.DismissedDialog())
 				.children(

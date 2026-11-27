@@ -273,7 +273,8 @@ export const CreateDmModalNoDeps = Hazel.component({
 		return (
 			h.dialog
 				.open(true)
-				// HAZEL-GAP(p4-dialog-icon): today's header leads with a primary icon tile (messages) beside the title.
+				.size("large")
+				.icon("messages")
 				.title("Start a conversation")
 				.description("Select one or more team members to start a conversation")
 				.on("dismiss", CreateDmMessage.DismissedDialog())

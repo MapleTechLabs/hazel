@@ -151,6 +151,7 @@ export const CreateChannelModalNoDeps = CreateChannelDef.make({
 		const error = errorOf(model)
 		return h.dialog
 			.open(true)
+			.size("large")
 			.title("Create channel")
 			.description("Give your channel a name and type to create a new channel.")
 			.on("dismiss", CreateChannelMessage.DismissedDialog())

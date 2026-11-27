@@ -153,13 +153,54 @@ dialog[data-hz-layer]::backdrop { background: var(--hz-color-scrim); }
 	outline: 2px solid var(--hz-color-ring);
 	outline-offset: 1px;
 }
+/* The kit's modal layout: a bottom card on phones; from \`sm\` a column a quarter of the way down
+   (\`grid-rows-[1fr_auto_3fr]\`, \`md:p-4\`), so its top is 25% of the room less a quarter of its height. */
 [data-hz=dialog] > [data-hz-part="panel"] {
-	inset: 0;
-	margin: auto;
-	width: min(100% - 2 * var(--hz-space-4), 28rem);
-	max-height: calc(100% - 2 * var(--hz-space-4));
+	inset: auto 0 0 0;
+	width: 100%;
+	max-height: calc(100dvh - var(--hz-space-4));
 	overflow: auto;
+	border-bottom-left-radius: 0;
+	border-bottom-right-radius: 0;
 }
+@media (width >= 40rem) {
+	[data-hz=dialog] > [data-hz-part="panel"] {
+		--hz-dialog-pad: 0px;
+		inset: calc(25dvh + var(--hz-dialog-pad) / 2) 0 auto 0;
+		margin: 0 auto;
+		transform: translateY(-25%);
+		width: min(100% - 2 * var(--hz-dialog-pad), 28rem);
+		max-height: calc(100dvh - var(--hz-space-8));
+		border-radius: var(--hz-radius-xl);
+	}
+	[data-hz=dialog][data-size="large"] > [data-hz-part="panel"] { width: min(100% - 2 * var(--hz-dialog-pad), 32rem); }
+	[data-hz=dialog][data-size="fullscreen"] > [data-hz-part="panel"] {
+		inset: var(--hz-dialog-pad);
+		transform: none;
+		width: auto;
+		max-height: none;
+		border-radius: var(--hz-radius-md);
+	}
+}
+@media (width >= 48rem) {
+	[data-hz=dialog] > [data-hz-part="panel"] { --hz-dialog-pad: var(--hz-space-4); }
+	[data-hz=dialog][data-size="fullscreen"] > [data-hz-part="panel"] { --hz-dialog-pad: var(--hz-space-3); }
+}
+[data-hz=dialog] [data-hz-part="close"] {
+	position: absolute;
+	top: var(--hz-space-1);
+	right: var(--hz-space-1);
+	appearance: none;
+	border: 0;
+	background: transparent;
+	padding: 0;
+}
+@media (width >= 40rem) { [data-hz=dialog] [data-hz-part="close"] { top: var(--hz-space-2); right: var(--hz-space-2); } }
+[data-hz=dialog] [data-hz-part="close"] > svg { display: block; width: 1rem; height: 1rem; }
+[data-hz=dialog] [data-hz-part="close"]:hover { color: var(--hz-color-fg); }
+[data-hz=dialog] [data-hz-part="icon"] > svg { display: block; width: 1.25rem; height: 1.25rem; }
+[data-hz=dialog][data-icon-tone="danger"] [data-hz-part="icon"] > svg { width: 1.5rem; height: 1.5rem; }
+[data-hz=dialog] [data-hz-part="heading"] { min-width: 0; }
 [data-hz=sheet] > [data-hz-part="panel"] {
 	inset: auto 0 0 0;
 	width: 100%;
@@ -169,13 +210,45 @@ dialog[data-hz-layer]::backdrop { background: var(--hz-color-scrim); }
 @media (width >= 40rem) {
 	[data-hz=sheet] > [data-hz-part="panel"] { inset: 0; margin: auto; width: min(100% - 2 * var(--hz-space-8), 34rem); max-height: 80%; }
 }
-[data-hz=dialog] [data-hz-part="content"], [data-hz=sheet] [data-hz-part="content"] { display: flex; flex-direction: column; }
-[data-hz=dialog] [data-hz-part="content"] > [data-hz-slot="actions"] {
+[data-hz=sheet] [data-hz-part="close"] { appearance: none; border: 0; background: transparent; padding: 0; }
+[data-hz=sheet] [data-hz-part="close"]:hover { color: var(--hz-color-fg); }
+[data-hz=sheet] [data-hz-part="close"] > svg { width: 1rem; height: 1rem; }
+/* \`card\`: today's floating sheet (\`inset-x-2\`, \`bottom-[max(0.5rem,env(safe-area-inset-bottom))]\`,
+   \`max-h-[85dvh]\`), its close button at \`top-2.5 right-2.5\`, its title for assistive tech only. */
+[data-hz=sheet][data-style="card"] > [data-hz-part="panel"] {
+	inset: auto var(--hz-space-2) max(var(--hz-space-2), env(safe-area-inset-bottom)) var(--hz-space-2);
+	width: auto;
+	max-height: 85dvh;
+}
+[data-hz=sheet][data-style="card"] [data-hz-part="close"] { position: absolute; top: var(--hz-space-2_5); right: var(--hz-space-2_5); }
+[data-hz=sheet][data-style="card"] [data-hz-part="title"] {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+[data-hz=sheet] [data-hz-part="content"] { display: flex; flex-direction: column; }
+/* The footer (\`dialogFooterBase\`): stacked, primary first, on phones; from \`sm\` one row, the
+   secondary actions at the start and the actions at the end. */
+[data-hz=dialog] [data-hz-part="content"] { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--hz-space-3); }
+[data-hz=dialog] [data-hz-part="content"] > * { grid-column: 1 / -1; min-width: 0; }
+[data-hz=dialog] [data-hz-part="content"] > :is([data-hz-slot="actions"], [data-hz-slot="secondaryActions"]) {
 	order: 1;
 	display: flex;
-	flex-wrap: wrap;
-	justify-content: flex-end;
-	gap: var(--hz-space-2);
+	flex-direction: column-reverse;
+}
+[data-hz=dialog] [data-hz-part="content"] > [data-hz-slot="secondaryActions"] { order: 2; }
+@media (width >= 40rem) {
+	[data-hz=dialog] [data-hz-part="content"] > :is([data-hz-slot="actions"], [data-hz-slot="secondaryActions"]) {
+		flex-direction: row;
+		flex-wrap: wrap;
+		align-items: center;
+	}
+	[data-hz=dialog] [data-hz-part="content"] > [data-hz-slot="secondaryActions"] { order: 1; grid-column: 1; }
+	[data-hz=dialog] [data-hz-part="content"] > [data-hz-slot="actions"] { order: 2; grid-column: 2; justify-content: flex-end; }
+	[data-hz=dialog] [data-hz-part="content"]:not(:has(> [data-hz-slot="secondaryActions"])) > [data-hz-slot="actions"] { grid-column: 1 / -1; }
 }
 [data-hz=popover] > [data-hz-part="panel"]:not([data-open]) { display: contents; }
 [data-hz=popover] > [data-hz-part="panel"]:not([data-open]) > :not([data-hz-slot="anchor"]) { display: none; }
@@ -218,6 +291,8 @@ dialog[data-hz-layer]::backdrop { background: var(--hz-color-scrim); }
 	background: var(--hz-color-scrim);
 }
 [data-hz=sheet][data-specimen] { place-items: end stretch; padding-bottom: 0; }
+[data-hz=dialog][data-specimen] > [data-hz-part="panel"] { transform: none; width: min(100%, 28rem); }
+[data-hz=dialog][data-specimen][data-size="large"] > [data-hz-part="panel"] { width: min(100%, 32rem); }
 [data-hz=popover][data-specimen], [data-hz=menu][data-specimen], [data-hz=contextMenu][data-specimen],
 [data-hz=emojiPicker][data-specimen], [data-hz=tooltip][data-specimen] {
 	display: inline-flex;

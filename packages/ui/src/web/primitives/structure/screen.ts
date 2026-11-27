@@ -102,7 +102,7 @@ ${ROOT} > [data-hz-part="header"] > [data-hz-part="back"]:focus-visible {
 }
 /* A phone tab's page (\`surface\` \`page\`): at least its container's height, so the floating action
    reaches the bottom, under a bar that sticks (\`sticky top-0 z-10\`). */
-${ROOT}[data-surface="page"] { min-height: 100%; flex: 1 0 auto; }
+${ROOT}:is([data-surface="page"], [data-surface="panel"]) { min-height: 100%; flex: 1 0 auto; }
 ${ROOT}[data-surface="page"] > [data-hz-part="header"] { position: sticky; top: 0; z-index: 10; background: inherit; }
 ${headingCss}
 ${centeredCss}

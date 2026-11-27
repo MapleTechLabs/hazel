@@ -767,7 +767,8 @@ export const tags = {
 		web: "A3",
 		ios: "S3",
 		content: "elements",
-		props: { open: flag, title: text },
+		// Phase 4: `style` `card` is today's floating phone sheet (the customer card).
+		props: { open: flag, title: text, style: option(O.SheetStyle, "panel") },
 		events: { dismiss: none },
 	}),
 	dialog: tag({
@@ -775,8 +776,18 @@ export const tags = {
 		web: "A3",
 		ios: "S3",
 		content: "elements",
-		props: { open: flag, title: text, description: text, destructive: flag },
-		slots: ["actions"],
+		// Phase 4: `size` is the kit's modal width; `icon` heads the dialog as an icon tile (beside the
+		// title, or above it in `danger`); `secondaryActions` sit at the footer's start.
+		props: {
+			open: flag,
+			title: text,
+			description: text,
+			destructive: flag,
+			size: option(O.DialogSize, "regular"),
+			icon: value(O.IconName),
+			iconTone: option(O.DialogIconTone, "accent"),
+		},
+		slots: ["actions", "secondaryActions"],
 		events: { dismiss: none },
 	}),
 	popover: tag({

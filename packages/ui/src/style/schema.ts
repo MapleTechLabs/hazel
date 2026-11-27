@@ -127,7 +127,7 @@ export type FrameSurface = (typeof frameSurfaces)[number]
  * A screen's surface (`screen-surface`): `sidebar` is the sidebar's column under its own title;
  * `page` a phone tab's page (`mobileTopBar`: a 56pt sticky bar, the section heading, the page ground).
  */
-export const screenSurfaces = ["sidebar", "page", "centered"] as const
+export const screenSurfaces = ["sidebar", "page", "centered", "panel"] as const
 export type ScreenSurface = (typeof screenSurfaces)[number]
 
 export const sectionStyles = ["sidebar", "tree", "list", "sticky"] as const
@@ -158,6 +158,22 @@ export type AvatarStackLayout = (typeof avatarStackLayouts)[number]
 /** A tinted square behind a glyph (the kit's `iconTile`); tones are the kit's intents. */
 export const iconTileTones = ["neutral", "accent", "success", "warning", "danger"] as const
 export type IconTileTone = (typeof iconTileTones)[number]
+
+/**
+ * A sheet's look: `panel` a bottom panel with its title row (a centred form sheet from `sm`);
+ * `card` today's floating sheet (`ui/sheet.ts` `isFloat`): 8px from the edges, the close button in
+ * its corner and the title only named to assistive tech.
+ */
+export const sheetStyles = ["panel", "card"] as const
+export type SheetStyle = (typeof sheetStyles)[number]
+
+/** A dialog's width (the kit's modal sizes): `regular` 28rem, `large` 32rem, `fullscreen` the window. */
+export const dialogSizes = ["regular", "large", "fullscreen"] as const
+export type DialogSize = (typeof dialogSizes)[number]
+
+/** A dialog's icon tile: `accent` beside the title (today's create DM), `danger` above it (a warning). */
+export const dialogIconTones = ["accent", "danger"] as const
+export type DialogIconTone = (typeof dialogIconTones)[number]
 
 /** An unread row's mark at its start: the sidebar's edge `pip`, or activity's brand `dot`. */
 export const itemUnreadMarks = ["none", "pip", "dot"] as const
@@ -291,7 +307,7 @@ export interface Shadow {
  * Type steps only recipes use (a count badge's 11px), never a view's `text.role`. `reading` is chat
  * text, 16/24 at every width (a message row does not step down like `body`); `snug` a DM preview, 14/19.25.
  */
-export const recipeTextSteps = ["tiny", "micro", "reading", "snug"] as const
+export const recipeTextSteps = ["tiny", "micro", "reading", "snug", "modalTitle", "modalText"] as const
 export type RecipeTextStep = (typeof recipeTextSteps)[number]
 export type TextStep = TextRole | RecipeTextStep
 

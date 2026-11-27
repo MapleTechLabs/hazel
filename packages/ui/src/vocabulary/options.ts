@@ -173,6 +173,15 @@ export type DateGranularity = typeof DateGranularity.Type
 export const PopoverTrigger = Schema.Literals(["press", "hover"])
 export type PopoverTrigger = typeof PopoverTrigger.Type
 
+export const SheetStyle = Schema.Literals(Sets.sheetStyles)
+export type SheetStyle = typeof SheetStyle.Type
+
+export const DialogSize = Schema.Literals(Sets.dialogSizes)
+export type DialogSize = typeof DialogSize.Type
+
+export const DialogIconTone = Schema.Literals(Sets.dialogIconTones)
+export type DialogIconTone = typeof DialogIconTone.Type
+
 /**
  * Icon names both hosts draw, each the web's own icon (`web-foldkit/src/icons`, `iconSources`). C1 added
  * what the phase 1 screens draw; phase 4 adds every other web icon, so the web pages need no icon of
