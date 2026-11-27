@@ -40,7 +40,7 @@ export interface RootMembership {
 
 /** `_app/index.tsx`: where `/` sends a signed-in user once their membership is known. */
 export const rootRedirect = (
-	user: CurrentUser,
+	user: Pick<CurrentUser, "isOnboarded">,
 	membership: Option.Option<RootMembership>,
 	options: { readonly isMobile: boolean } = { isMobile: false },
 ): AppRoute => {

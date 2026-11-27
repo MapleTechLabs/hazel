@@ -5,19 +5,22 @@
  * shows the page, and the Foldkit host has no page for it. Converting a page is one entry here and
  * deleting its Foldkit page. Each page is `Component.lazy`, so it loads as its own chunk.
  */
-import { Component, type View } from "@effect/ui"
+import { Component, Router, type View } from "@effect/ui"
 import type { Html } from "@effect/ui/html"
-import { ClientData } from "@hazel/client-data"
+import { ClientData, HazelRpc } from "@hazel/client-data"
 import { Clipboard, ClipboardError } from "@hazel/client-data/platform"
 import type { Session } from "@hazel/shared-screens/app/session"
+import type { ChannelId } from "@hazel/schema"
 import { Effect, Layer, Option } from "effect"
 import { canChooseServer, currentServer, isBuildServer, serverLabel } from "~/config/server"
 import { clientData } from "~/db/client"
-import { shareOrigin } from "~/utils/share-origin"
+import { shareHost, shareOrigin } from "~/utils/share-origin"
 import { agentRequestOf, installRequestOf } from "../auth/consent-requests"
-import { safeReturnTo } from "../auth/return-to"
+import { forgetReturnTo, readReturnTo, safeReturnTo } from "../auth/return-to"
+import { readLastOrganization } from "../data/last-organization"
 import { hasUpdater, isDesktop } from "../platform/desktop"
-import { AppRoute, hrefOf, type RouteOf, signInHref } from "../route"
+import { rootRedirect } from "../redirect"
+import { AppRoute, hrefOf, organizationRoute, type RouteOf, routeOfPath, signInHref } from "../route"
 import { ShellDms } from "./children"
 import { pickersWebLayer } from "./pickers"
 import { AdoptRegion } from "./foldkit"
@@ -285,6 +288,136 @@ const legacyOnboardingStep = (h: Html.H<AppMessage>) =>
 		.attr("data-foldkit-slot", "page")
 		.onMount(AdoptRegion({ region: "page" }))
 
+/** A push of `route` on the shell's Router, from a page's host callback. */
+const withPush = <A, E, R>(build: (push: (route: AppRoute) => void) => Layer.Layer<A, E, R>) =>
+	Layer.unwrap(
+		Effect.map(Effect.service(Router.Router), (router) =>
+			build((route) => {
+				Effect.runFork(router.push(route))
+			}),
+		),
+	)
+
+// The inbox (PA5): Activity's rows open their channel on the Router; Unreads marks read over RPC.
+export const NotificationsPage = Component.lazy("NotificationsPage", () =>
+	Promise.all([
+		import("@hazel/shared-screens/notifications/pages/NotificationsPage"),
+		import("@hazel/shared-screens/activity/Activity"),
+	]).then(([page, activity]) =>
+		Component.provide(page.NotificationsPage, (props) =>
+			Layer.unwrap(
+				Effect.map(Effect.service(HazelRpc), (rpc) =>
+					withPush((push) =>
+						Layer.mergeAll(page.MarkChannelRead.layer, page.MarkAllChannelsRead.layer).pipe(
+							Layer.provideMerge(
+								activity.activityLayer(clientData, rpc, (channelId: ChannelId) =>
+									push(
+										AppRoute.ChatChannel({
+											orgSlug: props.session.orgSlug ?? "",
+											channelId,
+										}),
+									),
+								),
+							),
+						),
+					),
+				),
+			),
+		),
+	),
+)
+
+/** `/` (PA5): this device's remembered page and organization, and the redirect on the shell's Router. */
+export const RootPage = Component.lazy("RootPage", () =>
+	import("@hazel/shared-screens/org/pages/RootPage").then((page) =>
+		Component.provide(
+			page.RootPage,
+			Layer.mergeAll(
+				Layer.succeed(ClientData, clientData),
+				page.ReadRootRemembered.layerWith(
+					Effect.all({ returnTo: readReturnTo, lastOrganizationId: readLastOrganization }),
+				),
+				Layer.unwrap(
+					Effect.map(Effect.service(Router.Router), (router) =>
+						page.RedirectFromRoot.toLayer(
+							Effect.succeed(({ returnTo, isOnboarded, membership, isMobile }) => {
+								const isReturn = returnTo !== null && isOnboarded
+								const route = isReturn
+									? routeOfPath(returnTo)
+									: rootRedirect({ isOnboarded }, Option.fromNullishOr(membership), {
+											isMobile,
+										})
+								return (isReturn ? forgetReturnTo : Effect.void).pipe(
+									Effect.andThen(router.replace(route)),
+									Effect.as(Component.noop),
+								)
+							}),
+						),
+					),
+				),
+			),
+		),
+	),
+)
+
+export const MorePage = Component.lazy("MorePage", () =>
+	import("@hazel/shared-screens/org/pages/more/MorePage").then((module) => module.MorePage),
+)
+
+export const ProfilePage = Component.lazy("ProfilePage", () =>
+	import("@hazel/shared-screens/org/pages/profile/ProfilePage").then((module) =>
+		withClientData(module.ProfilePage),
+	),
+)
+
+// The organization picker (PA5): PH1's switcher query and `SwitchOrganization`, and the create form.
+export const SelectOrganizationPage = Component.lazy("SelectOrganizationPage", () =>
+	Promise.all([
+		import("@hazel/shared-screens/org/pages/select-organization/SelectOrganizationPage"),
+		import("@hazel/shared-screens/org/components/CreateWorkspace"),
+		import("@hazel/shared-screens/shell/Chrome"),
+	]).then(([page, create, chrome]) =>
+		Component.provide(page.SelectOrganizationPage, (props) =>
+			Layer.mergeAll(
+				Layer.succeed(ClientData, clientData),
+				create.CreateOrganization.layer,
+				withPush((push) =>
+					chrome.SwitchOrganization.layerWith((id, slug) =>
+						push(organizationRoute({ id, slug }, { isMobile: props.isMobile })),
+					),
+				),
+			),
+		),
+	),
+)
+
+// The member directory (PA5): DMs are found in the synced rows; email copies through the clipboard.
+export const HomePage = Component.lazy("HomePage", () =>
+	Promise.all([
+		import("@hazel/shared-screens/org/pages/HomePage"),
+		import("@hazel/client-data/web/ui-services"),
+	]).then(([page, web]) =>
+		Component.provide(
+			page.HomePage,
+			Layer.mergeAll(page.FindMemberDm.layer, page.CopyEmail.layer).pipe(
+				Layer.provideMerge(Layer.mergeAll(Layer.succeed(ClientData, clientData), web.ClipboardWeb)),
+			),
+		),
+	),
+)
+
+/** The More tab's rows (PA5). */
+const moreHrefsOf = (orgSlug: string) => ({
+	profile: hrefOf(AppRoute.MySettingsProfile({ orgSlug })),
+	customers: hrefOf(AppRoute.CustomersOverview({ orgSlug })),
+	members: hrefOf(AppRoute.OrgHome({ orgSlug })),
+	invite: hrefOf(AppRoute.SettingsInvitations({ orgSlug })),
+	workspaceSettings: hrefOf(AppRoute.SettingsGeneral({ orgSlug })),
+	notifications: hrefOf(AppRoute.MySettingsNotifications({ orgSlug })),
+	appearance: hrefOf(AppRoute.MySettingsAppearance({ orgSlug })),
+	switchWorkspace: hrefOf(AppRoute.SelectOrganization()),
+})
+
 /** The native app's install (`~/config/server`), which its sign-in page can change; `null` on the web. */
 const initialServer = () =>
 	canChooseServer() ? { label: serverLabel(currentServer()), isDefault: isBuildServer(), form: null } : null
@@ -367,6 +500,16 @@ const customersSettingsColumn =
 					.children(page(h, inputs)),
 			)
 
+/** The inbox's tabs share one instance per org; the former per-source tabs show All until redirected. */
+const inbox =
+	<Tag extends AppRoute["_tag"]>(tab: "mentions" | "unreads" | "all"): NativePage<Tag> =>
+	(h, { route, session, isMobile, nowMs, fallback }) =>
+		NotificationsPage(h, {
+			key: "orgSlug" in route ? String(route.orgSlug) : route._tag,
+			props: { session, tab, nowMs, isMobile },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		})
+
 /** Keyed by what makes a new instance (Foldkit's page `key`): a new token mounts a fresh page. */
 const nativePages: Registry = {
 	ChannelSettings: (h, { route }) =>
@@ -390,6 +533,24 @@ const nativePages: Registry = {
 			fallback: (result) => fallback(result._tag === "Failure"),
 		}),
 	),
+	OrgHome: (h, { route, session, isMobile, fallback }) =>
+		HomePage(h, {
+			key: route.orgSlug,
+			props: { session, isMobile },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	SelectOrganization: fillWindow<"SelectOrganization">((h, { session, isMobile, fallback }) =>
+		SelectOrganizationPage(h, {
+			key: "select-organization",
+			props: {
+				session,
+				isMobile,
+				createHref: hrefOf(AppRoute.OnboardingSetupOrganization({ orgId: Option.none() })),
+				shareHost: shareHost(),
+			},
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	),
 	ChannelSettingsConnect: sectionGutter<"ChannelSettingsConnect">((h, { route, session, fallback }) =>
 		ChannelSettingsConnectPage(h, {
 			key: route.channelId,
@@ -397,6 +558,34 @@ const nativePages: Registry = {
 			fallback: (result) => fallback(result._tag === "Failure"),
 		}),
 	),
+	Profile: (h, { route, session, fallback }) =>
+		ProfilePage(h, {
+			key: route.userId,
+			props: {
+				userId: route.userId,
+				session,
+				editHref: hrefOf(AppRoute.MySettingsProfile({ orgSlug: route.orgSlug })),
+			},
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	OrgMore: (h, { route, session, fallback }) =>
+		MorePage(h, {
+			key: route.orgSlug,
+			props: { session, hrefs: moreHrefsOf(route.orgSlug) },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	Root: (h, { session, isMobile, fallback }) =>
+		RootPage(h, {
+			key: "root",
+			props: { session, isMobile },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	NotificationsMentions: inbox("mentions"),
+	NotificationsUnreads: inbox("unreads"),
+	NotificationsAll: inbox("all"),
+	NotificationsGeneral: inbox("all"),
+	NotificationsThreads: inbox("all"),
+	NotificationsDms: inbox("all"),
 	Invite: fillWindow<"Invite">((h, { route, session, fallback }) =>
 		InvitePage(h, {
 			key: route.token,

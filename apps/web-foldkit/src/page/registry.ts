@@ -9,12 +9,6 @@ import * as ChatChannel from "./chat/channel"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
 import * as Lazy from "./lazy"
 import type { PageOutMessage } from "./out-message"
-import * as NotificationsInbox from "./notifications/inbox"
-import * as OrgHome from "./home"
-import * as OrgMore from "./more"
-import * as Profile from "./profile"
-import * as Root from "./root"
-import * as SelectOrganization from "./select-organization"
 
 /**
  * Every routed page, registered once. Routes without a page render their layout around an empty
@@ -24,13 +18,8 @@ import * as SelectOrganization from "./select-organization"
  * signed-out one's (sign-in) can show. Adding one: import its module and append `X.page`.
  */
 export const pages = [
-	Root.page,
+	// Root, inbox, home, more, profile and the organization picker are native (`root/native-pages.ts`).
 	ChatChannel.page,
-	NotificationsInbox.page,
-	OrgHome.page,
-	OrgMore.page,
-	Profile.page,
-	SelectOrganization.page,
 ]
 
 type AreaPage =

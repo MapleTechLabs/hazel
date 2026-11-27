@@ -312,7 +312,10 @@ export const sectionContent = (h: H, model: AppModel, layout: SectionLayout, pag
 			h,
 			layout,
 			"pt-6",
-			hasContentColumn(route) ? h.div.class("flex flex-col gap-6 px-4 lg:px-8").children(page) : page,
+			// The inbox (PA5) sits in the content column too, as its Foldkit page drew its own.
+			hasContentColumn(route) || layout === "activity"
+				? h.div.class("flex flex-col gap-6 px-4 lg:px-8").children(page)
+				: page,
 		)
 	const tab = channelSettingsTabOf(route) ?? "overview"
 	if (!("channelId" in route) || !("orgSlug" in route)) return page

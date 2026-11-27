@@ -20,7 +20,6 @@ import { appError, appLoader, organizationNotFound } from "../shell/layouts"
 import { LINK_PREVIEW_URL } from "../chat/unfurl"
 import { assistantContextOf, column, setupHrefOf, toggleButton } from "./assistant"
 import {
-	ShellActivity,
 	ShellAssistantPanel,
 	ShellChannelHeader,
 	ShellChannelComposer,
@@ -164,9 +163,6 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 	const { route } = model
 	const keys = keysOf(model)
 	const channelId = chatChannelIdOf(route)
-	const memberId = hostContextOf(model).member?.id ?? null
-	const tab =
-		route._tag === "NotificationsAll" ? "all" : route._tag === "NotificationsMentions" ? "mentions" : null
 	return [
 		route._tag === "ChatChannel" && channelId !== null
 			? Hole(
@@ -255,14 +251,6 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 				])
 			: null,
 		...customersListHoles(h, route, data.organization.id, data.user.id),
-		tab !== null && memberId !== null
-			? Hole(h, { hole: "activity", key: memberId }, [
-					ShellActivity(h, {
-						key: memberId,
-						props: { memberId, orgSlug: data.orgSlug, tab, nowMs: model.nowMs, titled: false },
-					}),
-				])
-			: null,
 		model.palette === null
 			? null
 			: ShellCommandPalette(h, {

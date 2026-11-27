@@ -6,7 +6,6 @@ import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
  */
 export type HoleName =
 	| "message-list"
-	| "activity"
 	| "dms"
 	| "channel-files"
 	| "channel-header"

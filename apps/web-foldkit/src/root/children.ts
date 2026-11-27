@@ -7,7 +7,6 @@
 import { Component, Router } from "@effect/ui"
 import { ClientData, HazelRpc } from "@hazel/client-data"
 import { AssistantPanel } from "@hazel/shared-screens/assistant/AssistantPanel"
-import { Activity, activityLayer } from "@hazel/shared-screens/activity/Activity"
 import { sidebarWritesLayer } from "@hazel/shared-screens/channel-sidebar/actions"
 import {
 	ChannelSidebar,
@@ -90,16 +89,6 @@ export const ShellMessageList = Component.provide(
 			),
 		),
 	).pipe(Layer.provideMerge(pickersWebLayer)),
-)
-
-export const ShellActivity = Component.provide(Activity, (props) =>
-	Layer.unwrap(
-		Effect.map(Effect.service(HazelRpc), (rpc) =>
-			withRouter((push) =>
-				activityLayer(clientData, rpc, (channelId) => push(channelOf(props.orgSlug)(channelId))),
-			),
-		),
-	),
 )
 
 /** The AI panel on the app's data; its RPCs, `Navigate` and `Hazel.Host` come from the shell. */
