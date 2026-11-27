@@ -1,17 +1,20 @@
 // Owned by lane A1 (`docs/hazel-ui-phase4.md`, W2a and W2b). `hz:chart`: today's hand-drawn SVG
-// charts (`customers/charts`). W2a draws the axis kinds; the small kinds (sparkline, barSparkline,
-// distribution) are W2b's and draw a stub until then. Shared code: `chart/{scale,format,frame}.ts`.
+// charts (`customers/charts`): the axis kinds (`chart/axes.ts`, W2a) and the small kinds without
+// axes (`chart/small.ts`, W2b). Shared code: `chart/{scale,format,frame}.ts`.
 import type { ChartSeries } from "../../../vocabulary/content.ts"
-import type { ChartFormat } from "../../../vocabulary/options.ts"
+import type { ChartFormat, ChartSize } from "../../../vocabulary/options.ts"
 import { loop } from "../../motion.ts"
 import { definePrimitive, flag, option, part, type Primitive } from "../define.ts"
 import { type AxisKind, type AxisLayout, drawHover, drawPlot, indexAt, layout } from "./chart/axes.ts"
 import { legendEntries, xTicks, yTicks } from "./chart/frame.ts"
+import { drawSmall, type SmallKind, smallKinds } from "./chart/small.ts"
 import { ensureChartStyles } from "./chart/styles.ts"
 
 const axisKinds: ReadonlySet<string> = new Set<AxisKind>(["line", "area", "bar", "stackedBar"])
 const formats: ReadonlyArray<ChartFormat> = ["number", "currency", "percent", "duration"]
 const isFormat = (value: unknown): value is ChartFormat => formats.some((format) => format === value)
+const sizes: ReadonlyArray<ChartSize> = ["regular", "small", "large"]
+const isSize = (value: unknown): value is ChartSize => sizes.some((size) => size === value)
 
 const isSeries = (value: unknown): value is ChartSeries =>
 	typeof value === "object" &&
@@ -56,6 +59,8 @@ export const primitive = definePrimitive("chart", ({ document, tag, outer }) => 
 	let format: ChartFormat = "number"
 	let currency = "USD"
 	let net = false
+	let size: ChartSize = "regular"
+	let highlightFrom: number | undefined
 	let plan: AxisLayout | undefined
 	let resting: ReadonlyArray<Element> = []
 	let hovered: number | null = null
@@ -74,13 +79,13 @@ export const primitive = definePrimitive("chart", ({ document, tag, outer }) => 
 
 	const draw = () => {
 		if (!axisKinds.has(kind)) {
-			// W2b's kinds: a stub the runner reports as not implemented, until that lane draws them.
+			// The small kinds: no axes, legend, hover or tooltip, as today.
 			plan = undefined
-			const stub = part(document, "span", "stub")
-			stub.dataset.hzStub = "A1"
-			stub.textContent = `hz:chart ${kind}: lane W2b`
-			resting = [stub]
+			hovered = null
 			for (const axis of [legend, yAxis, endAxis, xAxis]) axis.replaceChildren()
+			// SAFETY: a kind that is not an axis kind is a small kind (`ChartKind`); an unknown one draws a sparkline.
+			const small = (smallKinds.has(kind) ? kind : "sparkline") as SmallKind
+			resting = drawSmall(document, { kind: small, series, size, highlightFrom, net })
 			drawHovered()
 			return
 		}
@@ -148,7 +153,11 @@ export const primitive = definePrimitive("chart", ({ document, tag, outer }) => 
 				if (typeof value === "string" && value !== "") node.setAttribute("aria-label", value)
 				else node.removeAttribute("aria-label")
 				return
-			} else if (name === "size") return option(node, "size", value)
+			} else if (name === "size") {
+				size = isSize(value) ? value : "regular"
+				option(node, "size", value)
+			} else if (name === "highlightFrom")
+				highlightFrom = typeof value === "number" && Number.isFinite(value) ? value : undefined
 			else if (name === "legend") return flag(node, "legend", value)
 			else if (name === "loading") {
 				flag(node, "loading", value)

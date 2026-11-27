@@ -1,0 +1,28 @@
+{
+	"about": "The kit's card sparkline (`sparkline(h, { size: \"md\", area: true })`, a KPI tile's trend), diffed against today's (`chart-tone-tokens`).",
+	"root": {
+		"tag": "chart",
+		"props": {
+			"kind": "sparkline",
+			"size": "large",
+			"label": "MRR, last 8 weeks",
+			"series": [
+				{
+					"key": "mrr",
+					"label": "MRR",
+					"tone": "new",
+					"values": [40, 42, 41, 45, 44, 47, 46, 48]
+				}
+			],
+			"labels": ["W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8"]
+		}
+	},
+	"frame": "inline",
+	"kit": {
+		"specimen": "chart-sparkline-card",
+		"target": "chart"
+	},
+	"pending": {
+		"ios": "S1"
+	}
+}
