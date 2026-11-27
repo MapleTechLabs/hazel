@@ -13,6 +13,7 @@
 		"typecheck": "effect-tsgo tsrs --noEmit",
 		"test": "vitest run",
 		"test:browser": "vitest run --config vitest.browser.config.ts",
+		"test:channel-shift": "bun scripts/test-channel-shift.ts",
 		"ui:generate": "bun scripts/generate.ts",
 		"ui:check": "bun scripts/generate.ts --check",
 		"gallery:shots": "bun scripts/shoot.ts",
