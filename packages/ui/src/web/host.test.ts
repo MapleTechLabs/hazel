@@ -53,7 +53,49 @@ const Presses = Hazel.component({
 		),
 })
 
+const RowMessage = UiSchema.TaggedEnum({ PressedRow: {}, PressedOptions: {} })
+
+/** A linked row with an options button in its actions slot, logging which press each click raises. */
+const RowWithActions = Hazel.component({
+	name: "RowWithActions",
+	props: Schema.Struct({}),
+	model: Schema.Struct({ log: Schema.Array(Schema.String) }),
+	message: RowMessage,
+}).make({
+	init: () => ({ log: [] }),
+	update: {
+		PressedRow: ($) => $.evolve({ log: (log) => [...log, "row"] }),
+		PressedOptions: ($) => $.evolve({ log: (log) => [...log, "options"] }),
+	},
+	view: (h) =>
+		h.item
+			.title("design")
+			.href("#/design")
+			.on("press", () => RowMessage.PressedRow())
+			.actions(
+				h.menu
+					.label("Channel options")
+					.entries([{ entries: [{ id: "mute", label: "Mute" }] }])
+					.on("select", () => RowMessage.PressedOptions())
+					.trigger(h.button.icon("dots").iconOnly().label("Channel options")),
+			),
+})
+
 describe("web host", () => {
+	it("keeps a menu trigger in an item's actions slot from pressing the row", async () => {
+		const root = container()
+		await Effect.gen(function* () {
+			const app = yield* Renderer.mount(RowWithActions, {}, root)
+			yield* Effect.promise(settle)
+			;(root.querySelector("[data-hz-slot=actions] button") as HTMLElement).click()
+			yield* Effect.promise(settle)
+			expect(app.model()?.log).toEqual([])
+			;(root.querySelector("[data-hz=item] [data-hz-part=title]") as HTMLElement).click()
+			yield* Effect.promise(settle)
+			expect(app.model()?.log).toEqual(["row"])
+		}).pipe(Effect.provide(WebHost.layer()), Effect.scoped, Effect.runPromise)
+	})
+
 	it("keeps an inner control's click and a chart's own press from raising a bare press", async () => {
 		const root = container()
 		await Effect.gen(function* () {

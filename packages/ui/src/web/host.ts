@@ -36,12 +36,27 @@ const watchClicks = (document: Document) => {
 	win?.addEventListener("click", () => (current.target = null))
 }
 
-/** A click from an inner control the renderer marked `data-hz-inner` (a statTile's definition label). */
+const INTERACTIVE =
+	'a[href], button, input, select, textarea, [role="button"], [role="menuitem"], [role="checkbox"], [role="switch"]'
+
+/**
+ * A click from an inner control: one the renderer marked `data-hz-inner` (a statTile's definition
+ * label), or an interactive control the view placed in one of the primitive's slots (`item`'s actions).
+ */
 const fromInnerControl = (primitive: Primitive) => {
 	const target = clickTargets.get(primitive.outer.ownerDocument)?.target
 	if (!(target instanceof Element)) return false
 	const inner = target.closest("[data-hz-inner]")
-	return inner !== null && inner.parentElement?.closest("[data-hz]") === primitive.outer
+	if (inner !== null && inner.parentElement?.closest("[data-hz]") === primitive.outer) return true
+	// Walk out through nested slots (a menu's trigger inside an item's actions) to one of ours.
+	let slot = target.closest(INTERACTIVE)?.closest("[data-hz-slot]") ?? null
+	while (slot !== null) {
+		// A slot is itself `data-hz="slot"`; its owner is the nearest primitive above it.
+		const owner = slot.parentElement?.closest('[data-hz]:not([data-hz="slot"])') ?? null
+		if (owner === primitive.outer) return true
+		slot = owner?.closest("[data-hz-slot]") ?? null
+	}
+	return false
 }
 
 /** The link a primitive draws as its own box (`item`'s control, `link`), if it draws one now. */
