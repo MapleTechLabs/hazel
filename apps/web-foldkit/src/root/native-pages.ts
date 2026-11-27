@@ -136,6 +136,22 @@ export const RootPage = Component.lazy("RootPage", () =>
 	),
 )
 
+export const MorePage = Component.lazy("MorePage", () =>
+	import("@hazel/shared-screens/org/pages/more/MorePage").then((module) => module.MorePage),
+)
+
+/** The More tab's rows (PA5). */
+const moreHrefsOf = (orgSlug: string) => ({
+	profile: hrefOf(AppRoute.MySettingsProfile({ orgSlug })),
+	customers: hrefOf(AppRoute.CustomersOverview({ orgSlug })),
+	members: hrefOf(AppRoute.OrgHome({ orgSlug })),
+	invite: hrefOf(AppRoute.SettingsInvitations({ orgSlug })),
+	workspaceSettings: hrefOf(AppRoute.SettingsGeneral({ orgSlug })),
+	notifications: hrefOf(AppRoute.MySettingsNotifications({ orgSlug })),
+	appearance: hrefOf(AppRoute.MySettingsAppearance({ orgSlug })),
+	switchWorkspace: hrefOf(AppRoute.SelectOrganization()),
+})
+
 /** The native app's install (`~/config/server`), which its sign-in page can change; `null` on the web. */
 const initialServer = () =>
 	canChooseServer() ? { label: serverLabel(currentServer()), isDefault: isBuildServer(), form: null } : null
@@ -178,6 +194,12 @@ const inbox =
 
 /** Keyed by what makes a new instance (Foldkit's page `key`): a new token mounts a fresh page. */
 const nativePages: Registry = {
+	OrgMore: (h, { route, session, fallback }) =>
+		MorePage(h, {
+			key: route.orgSlug,
+			props: { session, hrefs: moreHrefsOf(route.orgSlug) },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
 	Root: (h, { session, isMobile, fallback }) =>
 		RootPage(h, {
 			key: "root",
