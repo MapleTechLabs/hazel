@@ -1,7 +1,5 @@
-import type { MrrMovementBucket } from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { bucketLabels, formatMoney, formatMoneyCompact } from "../format"
 import {
 	CHART_COLOR,
 	type ChartColor,
@@ -220,67 +218,3 @@ export const stackedBarChart = <M>(h: HtmlBuilder<M>, options: StackedBarChartOp
 }
 
 // MRR MOVEMENT
-
-export const MRR_STACKS: ReadonlyArray<Stack> = [
-	{ key: "new", label: "New", color: "new" },
-	{ key: "reactivation", label: "Reactivation", color: "series-2" },
-	{ key: "expansion", label: "Expansion", color: "expansion" },
-	{ key: "contraction", label: "Contraction", color: "contraction" },
-	{ key: "churn", label: "Churned", color: "churn" },
-]
-
-/** `customers.overview` movement buckets as bars (`contraction` and `churn` arrive negative). */
-export const mrrMovementBars = (
-	buckets: ReadonlyArray<MrrMovementBucket>,
-	bucket: "day" | "week" | "month",
-): ReadonlyArray<StackedBar> =>
-	buckets.map((entry) => {
-		const labels = bucketLabels(bucket, entry.start)
-		return {
-			tick: labels.tick,
-			heading: labels.heading,
-			values: {
-				new: entry.new,
-				reactivation: entry.reactivation,
-				expansion: entry.expansion,
-				contraction: entry.contraction,
-				churn: entry.churn,
-			},
-			net: entry.net,
-		}
-	})
-
-/** The legend for the MRR chart: reactivation only when the range has any. */
-export const mrrLegend = (buckets: ReadonlyArray<MrrMovementBucket>): ReadonlyArray<LegendItem> => [
-	...MRR_STACKS.filter(
-		(stack) => stack.key !== "reactivation" || buckets.some((entry) => entry.reactivation !== 0),
-	).map((stack) => ({ label: stack.label, color: stack.color })),
-	{ label: "Net", color: "net", mark: "line" },
-]
-
-/** The MRR chart over `customers.overview`'s movements, money in `currency`. */
-export const mrrMovementChart = <M>(
-	h: HtmlBuilder<M>,
-	options: Readonly<{
-		buckets: ReadonlyArray<MrrMovementBucket>
-		bucket: "day" | "week" | "month"
-		currency: string
-		hoveredIndex: number | null
-		onHover: (index: number | null) => M
-		className?: string
-	}>,
-): Html => {
-	const net = options.buckets.reduce((sum, entry) => sum + entry.net, 0)
-	return stackedBarChart(h, {
-		ariaLabel: `MRR movement by ${options.bucket}: net ${formatMoney(net, options.currency, { signed: true })} over ${options.buckets.length} ${options.bucket}s`,
-		stacks: MRR_STACKS,
-		bars: mrrMovementBars(options.buckets, options.bucket),
-		netLabel: "Net",
-		formatValue: (value) => formatMoney(value, options.currency, { signed: true }),
-		formatAxis: (value) => formatMoneyCompact(value, options.currency),
-		hoveredIndex: options.hoveredIndex,
-		onHover: options.onHover,
-		maxXTicks: options.bucket === "day" ? 6 : 12,
-		className: options.className,
-	})
-}

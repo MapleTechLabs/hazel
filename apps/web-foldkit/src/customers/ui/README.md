@@ -33,10 +33,8 @@ The little text grammar the kit has no component for. Headings are the kit's `he
 (`display` for a page's title, `section` for a panel's, `subsection` for a group); `pageHeader` and
 `panelHeader` render them for you.
 
-- `descriptionClass` (14px muted). Labels are
-  sentence case; nothing is uppercase. A table head is `dataTable`'s.
-- Links: `moreLink(h, href, "View queue")` (a panel's way out, with `›`, on the kit `link`);
-  `linkClass` (the kit link's classes in primary, for an element `link` can't render).
+- Labels are sentence case; nothing is uppercase. A table head is `dataTable`'s.
+- Links: `linkClass` (the kit link's classes in primary, for an element `link` can't render).
   A link that leaves Hazel is a plain text link (`Open`, `View`) or a chip; never an external-link arrow.
 - Text takes the `*-subtle-fg` semantic colors (`text-danger-subtle-fg`), not the raw `text-danger`.
 
@@ -84,8 +82,6 @@ The little text grammar the kit has no component for. Headings are the kit's `he
 ## Charts — `src/customers/charts/`
 
 - `sparkline.ts`: `sparkline(h, { values, ariaLabel, tone?, size?: "sm"|"md", area?, endDot? })`, `meter(h, { value, limit, ariaLabel })`, `evidenceBars(h, { values, highlightFrom, baseline, ariaLabel, tone? })`, `trendTone(values)`.
-- `line-chart.ts`: `lineChart(h, { ariaLabel, series, xLabels, headings, formatValue, formatAxis?, hoveredIndex, onHover, endLabels? })`;
-  `activeUsersChart(h, { points, bucket, hoveredIndex, onHover })` over `OverviewResult.activeUsers`.
 - `stacked-bar-chart.ts`: `stackedBarChart(h, { ariaLabel, stacks, bars, netLabel?, formatValue, hoveredIndex, onHover })`;
   `mrrMovementChart(h, { buckets, bucket, currency, hoveredIndex, onHover })` over `OverviewResult.mrrMovements`; `mrrLegend(buckets)`.
 - `distribution.ts`: `distributionBar(h, { segments, ariaLabel })`.

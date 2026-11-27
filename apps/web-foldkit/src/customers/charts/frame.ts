@@ -1,7 +1,5 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { descriptionClass } from "../ui/surface"
-import { cardClassName } from "../../ui/card"
 import { clamp } from "./scale"
 import { heading } from "../../ui/heading"
 
@@ -52,51 +50,6 @@ const swatch = <M>(h: HtmlBuilder<M>, color: ChartColor, mark: "line" | "square"
 			),
 		),
 	])
-
-export const chartLegend = <M>(h: HtmlBuilder<M>, items: ReadonlyArray<LegendItem>): Html =>
-	h.ul(
-		[h.Class("flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-fg text-sm")],
-		items.map((item) =>
-			h.li(
-				[h.Class("inline-flex items-center gap-1.5")],
-				[swatch(h, item.color, item.mark ?? "square"), item.label],
-			),
-		),
-	)
-
-/** The chart's card: title, description and legend over the chart. */
-export const chartCard = <M>(
-	h: HtmlBuilder<M>,
-	options: Readonly<{
-		title: string
-		description?: string
-		/** Right of the title: a legend, a toggle. */
-		aside?: Html
-		className?: string
-	}>,
-	children: ReadonlyArray<Html>,
-): Html =>
-	h.section(
-		[h.Class(cardClassName(twMerge("flex min-w-0 flex-col gap-4 p-4 sm:p-5", options.className)))],
-		[
-			h.header(
-				[h.Class("flex flex-wrap items-start justify-between gap-x-6 gap-y-2")],
-				[
-					h.div(
-						[h.Class("flex min-w-0 flex-col")],
-						[
-							heading(h, { variant: "section" }, [options.title]),
-							...(options.description
-								? [h.p([h.Class(descriptionClass)], [options.description])]
-								: []),
-						],
-					),
-					...(options.aside ? [options.aside] : []),
-				],
-			),
-			...children,
-		],
-	)
 
 /** One tooltip row: swatch, label, value. */
 export type TooltipRow = Readonly<{

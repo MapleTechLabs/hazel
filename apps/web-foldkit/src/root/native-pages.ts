@@ -178,6 +178,35 @@ export const MySettingsDesktopPage = Component.lazy("MySettingsDesktopPage", () 
 	),
 )
 
+// The Customers pages (PK1), each on the app's data instance.
+export const CustomersOverviewPage = Component.lazy("CustomersOverviewPage", () =>
+	import("@hazel/shared-screens/customers/pages/OverviewPage").then((module) =>
+		withClientData(module.OverviewPage),
+	),
+)
+export const SupportReportPage = Component.lazy("SupportReportPage", () =>
+	import("@hazel/shared-screens/customers/pages/support/SupportReportPage").then(
+		(module) => module.SupportReportPage,
+	),
+)
+
+/**
+ * A Customers page's column, as today's page drew it (`h-full overflow-y-auto`, then a centred
+ * `max-w-*` column with `px-4 py-6 lg:px-8`): the frame's markup until a screen surface says it.
+ */
+// HAZEL-GAP(p4-screen-page-column): no primitive scrolls a page under a centred, padded column.
+const customersColumn =
+	<Tag extends AppRoute["_tag"]>(
+		id: string,
+		width: "max-w-6xl" | "max-w-7xl",
+		page: NativePage<Tag>,
+	): NativePage<Tag> =>
+	(h, inputs) =>
+		h.div
+			.attr("data-native-page", id)
+			.class("h-full overflow-y-auto")
+			.children(h.div.class(`mx-auto w-full ${width} px-4 py-6 lg:px-8`).children(page(h, inputs)))
+
 /** The native app's install (`~/config/server`), which its sign-in page can change; `null` on the web. */
 const initialServer = () =>
 	canChooseServer() ? { label: serverLabel(currentServer()), isDefault: isBuildServer(), form: null } : null
@@ -459,6 +488,27 @@ const nativePages: Registry = {
 			props: { hasAutostart: isDesktop, hasUpdates: hasUpdater, update: desktopUpdate },
 			fallback: (result) => fallback(result._tag === "Failure"),
 		}),
+	// Customers (PK1): one instance per org, inside the Customers layout's page region.
+	CustomersOverview: customersColumn<"CustomersOverview">(
+		"customers-overview",
+		"max-w-6xl",
+		(h, { route, session, isMobile, nowMs, fallback }) =>
+			CustomersOverviewPage(h, {
+				key: route.orgSlug,
+				props: { session, isMobile, nowMs },
+				fallback: (result) => fallback(result._tag === "Failure"),
+			}),
+	),
+	CustomersSupportReport: customersColumn<"CustomersSupportReport">(
+		"customers-support",
+		"max-w-7xl",
+		(h, { route, session, isMobile, fallback }) =>
+			SupportReportPage(h, {
+				key: route.orgSlug,
+				props: { session, isMobile },
+				fallback: (result) => fallback(result._tag === "Failure"),
+			}),
+	),
 }
 
 /** The parity flag of a route's native page: `"0"` draws today's Foldkit page instead (`compare-pages.ts`). */

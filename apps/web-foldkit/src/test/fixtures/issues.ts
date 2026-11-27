@@ -307,20 +307,3 @@ export const SUPPORT_REPORT: Customers.SupportReport = {
 		}
 	}),
 }
-
-/** A range with nothing in it: the report's empty state. */
-export const EMPTY_SUPPORT_REPORT: Customers.SupportReport = {
-	issues: 0,
-	firstResponse: stats(0, 0, 0, 0),
-	resolution: stats(0, 0, 0, 0),
-	breaches: 0,
-	overdueNow: 0,
-	byAccount: [],
-	byPolicy: [],
-	daily: SUPPORT_REPORT.daily.map((day) => ({
-		...day,
-		issues: 0,
-		firstResponseMedianMs: null,
-		withinPct: null,
-	})),
-}
