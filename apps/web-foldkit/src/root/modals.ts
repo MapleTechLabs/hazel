@@ -81,6 +81,22 @@ const SnoozeUntilModal = Component.lazy("SnoozeUntilModal", () =>
 	),
 )
 
+const CustomerRawDataModal = Component.lazy("CustomerRawDataModal", () =>
+	import("@hazel/shared-screens/customers/modals/CustomerRawDataModal").then(
+		(module) => module.CustomerRawDataModal,
+	),
+)
+const CustomerLinkModal = Component.lazy("CustomerLinkModal", () =>
+	import("@hazel/shared-screens/customers/modals/CustomerLinkModal").then((module) =>
+		module.CustomerLinkModal.pipe(Component.provide(dataLayer)),
+	),
+)
+const CustomerEnvironmentModal = Component.lazy("CustomerEnvironmentModal", () =>
+	import("@hazel/shared-screens/customers/modals/CustomerEnvironmentModal").then((module) =>
+		module.CustomerEnvironmentModal.pipe(Component.provide(dataLayer)),
+	),
+)
+
 /** What a modal reads: its request, the session and route it opened over, and the clock. */
 export interface ModalInputs<Tag extends ModalTag> {
 	readonly request: RequestOf<Tag>
@@ -156,6 +172,23 @@ const nativeModals: Registry = {
 		SnoozeUntilModal(h, {
 			...placement,
 			props: { session, signalId: request.signalId, title: request.title, nowMs },
+		}),
+	CustomerRawData: (h, { request }, placement) =>
+		CustomerRawDataModal(h, { ...placement, props: { json: request.json } }),
+	CustomerLink: (h, { request }, placement) =>
+		CustomerLinkModal(h, {
+			...placement,
+			props: { organizationId: request.organizationId, accountId: request.accountId },
+		}),
+	CustomerEnvironment: (h, { request }, placement) =>
+		CustomerEnvironmentModal(h, {
+			...placement,
+			props: {
+				organizationId: request.organizationId,
+				accountId: request.accountId,
+				name: request.name,
+				environment: request.environment,
+			},
 		}),
 }
 

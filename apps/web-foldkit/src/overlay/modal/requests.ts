@@ -1,5 +1,14 @@
 import { SignalSeverity } from "@hazel/domain/customers"
-import { BotId, ChannelId, CustomerSignalId, MessageId, OrganizationMemberId, UserId } from "@hazel/schema"
+import {
+	BotId,
+	ChannelId,
+	CustomerAccountId,
+	CustomerSignalId,
+	MessageId,
+	OrganizationId,
+	OrganizationMemberId,
+	UserId,
+} from "@hazel/schema"
 import { Schema } from "effect"
 
 /**
@@ -63,6 +72,19 @@ export const SnoozeSignalUntil = Schema.TaggedStruct("SnoozeSignalUntil", {
 	title: Schema.String,
 })
 
+// The customer page's More menu (native only).
+export const CustomerRawData = Schema.TaggedStruct("CustomerRawData", { json: Schema.String })
+export const CustomerLink = Schema.TaggedStruct("CustomerLink", {
+	organizationId: OrganizationId,
+	accountId: CustomerAccountId,
+})
+export const CustomerEnvironment = Schema.TaggedStruct("CustomerEnvironment", {
+	organizationId: OrganizationId,
+	accountId: CustomerAccountId,
+	name: Schema.String,
+	environment: Schema.NullOr(Schema.String),
+})
+
 export const ModalRequest = Schema.Union([
 	NewChannel,
 	CreateDm,
@@ -86,5 +108,8 @@ export const ModalRequest = Schema.Union([
 	KeyboardShortcuts,
 	MarkSignalDone,
 	SnoozeSignalUntil,
+	CustomerRawData,
+	CustomerLink,
+	CustomerEnvironment,
 ])
 export type ModalRequest = typeof ModalRequest.Type

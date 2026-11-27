@@ -8,8 +8,9 @@
 import { Component, type View } from "@effect/ui"
 import type { Html } from "@effect/ui/html"
 import { ClientData } from "@hazel/client-data"
+import { Clipboard, ClipboardError } from "@hazel/client-data/platform"
 import type { Session } from "@hazel/shared-screens/app/session"
-import { Layer, Option } from "effect"
+import { Effect, Layer, Option } from "effect"
 import { canChooseServer, currentServer, isBuildServer, serverLabel } from "~/config/server"
 import { clientData } from "~/db/client"
 import { shareOrigin } from "~/utils/share-origin"
@@ -18,6 +19,7 @@ import { hasUpdater, isDesktop } from "../platform/desktop"
 import { AppRoute, hrefOf, type RouteOf, signInHref } from "../route"
 import { ShellDms } from "./children"
 import { pickersWebLayer } from "./pickers"
+import { AdoptRegion } from "./foldkit"
 import type { AppMessage } from "./message"
 import type { ThemePreference } from "../theme"
 import type { SoundSettings } from "../notification-sound"
@@ -217,6 +219,21 @@ export const AttentionPage = Component.lazy("AttentionPage", () =>
 		import("@hazel/shared-screens/customers/pages/attention/AttentionPage"),
 		customersQueueLayers(),
 	]).then(([module, layers]) => withClientData(module.AttentionPage).pipe(Component.provide(layers))),
+)
+
+/** The browser's clipboard, for pages that copy (PK5's customer page). */
+const webClipboard = Layer.succeed(Clipboard, {
+	write: (text) =>
+		Effect.tryPromise({
+			try: () => navigator.clipboard.writeText(text),
+			catch: () => new ClipboardError({ reason: "denied" }),
+		}),
+})
+
+export const CustomerDetailPage = Component.lazy("CustomerDetailPage", () =>
+	import("@hazel/shared-screens/customers/pages/CustomerDetailPage").then((module) =>
+		withClientData(module.CustomerDetailPage).pipe(Component.provide(webClipboard)),
+	),
 )
 
 /** The native app's install (`~/config/server`), which its sign-in page can change; `null` on the web. */
@@ -425,6 +442,21 @@ const nativePages: Registry = {
 		AttentionPage(h, {
 			key: route.orgSlug,
 			props: { session, nowMs },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		}),
+	// The shell is native; until PK6a and PK6b the tab's content is the Foldkit page's, adopted
+	// into the page's `tab` slot. One instance per account: a tab change keeps it.
+	CustomerDetail: (h, { route, session, isMobile, nowMs, fallback }) =>
+		CustomerDetailPage(h, {
+			key: `${route.orgSlug}:${route.accountId}`,
+			props: {
+				accountId: route.accountId,
+				tab: Option.getOrElse(route.tab, () => "overview" as const),
+				session,
+				isMobile,
+				nowMs,
+			},
+			slots: { tab: h.div.class("contents").onMount(AdoptRegion({ region: "page" })) },
 			fallback: (result) => fallback(result._tag === "Failure"),
 		}),
 	AuthDesktop: fillWindow<"AuthDesktop">((h, { route, session, fallback }) =>
