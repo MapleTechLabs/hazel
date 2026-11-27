@@ -9,7 +9,6 @@ import * as Auth from "./auth"
 import * as BotInstall from "./bot-install"
 import * as OAuthAuthorize from "./oauth-authorize"
 import * as ChatChannel from "./chat/channel"
-import * as ChatIndex from "./chat-index"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
 import * as Lazy from "./lazy"
 import type { PageOutMessage } from "./out-message"
@@ -35,7 +34,6 @@ export const pages = [
 	OrgHome.page,
 	OrgMore.page,
 	Profile.page,
-	ChatIndex.page,
 	Auth.signInPage,
 	Auth.registerPage,
 	Auth.continuePage,

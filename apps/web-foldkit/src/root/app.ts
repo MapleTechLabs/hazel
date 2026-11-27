@@ -18,7 +18,7 @@ import { chatChannelIdOf, isPublicRoute, orgSectionOf, orgSlugOf, titleOf } from
 import type { CurrentUser, Organization } from "../session"
 import { hotkeyLabel } from "../shell/channels-sidebar/hotkey-label"
 import { appError, appLoader, organizationNotFound } from "../shell/layouts"
-import { ShellActivity, ShellChannelSidebar, ShellDms, ShellMessageList } from "./children"
+import { ShellActivity, ShellChannelSidebar, ShellMessageList } from "./children"
 import { AdoptRegion, RunFoldkitHost } from "./foldkit"
 import {
 	mobileChromeOf,
@@ -164,19 +164,6 @@ const children = (h: H, model: AppModel, data: ShellData) => {
 					ShellActivity(h, {
 						key: memberId,
 						props: { memberId, orgSlug: data.orgSlug, tab, nowMs: model.nowMs, titled: false },
-					}),
-				])
-			: null,
-		model.isMobile && route._tag === "ChatDms"
-			? Hole(h, { hole: "dms", key: orgUser, className: "flex min-h-full flex-col" }, [
-					ShellDms(h, {
-						key: orgUser,
-						props: {
-							organizationId: data.organization.id,
-							userId: data.user.id,
-							orgSlug: data.orgSlug,
-							nowMs: model.nowMs,
-						},
 					}),
 				])
 			: null,
