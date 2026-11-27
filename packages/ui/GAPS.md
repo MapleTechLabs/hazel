@@ -341,6 +341,15 @@ Kept apart from "Open" so parallel lanes only add lines. The modals' parity resi
 | `p4-palette-row-height`        | W6 `commandPalette`           | a result row is 36.5px against today's 35.5px (field and group titles 1px lower too), so rows drift by a pixel each                                                                                                                                                      | the recipe's `item` and `groupTitle` spacing as today's                                                       | renderer |
 | `p4-palette-late-highlight`    | W6 `commandPalette`           | after typing, today's first result is selected whenever results arrive; the renderer highlights the first item only on the draw right after the edit, so results that land later (a debounced query) leave nothing highlighted and Enter does nothing until an arrow key | keep the edit's "highlight the first" until the next draw that has items                                      | renderer |
 
+## Open from lane PA5 (inbox, home, profile, more, select organization, root)
+
+Kept apart from "Open" so parallel lanes only add lines.
+
+| Id                         | Screen or lane                               | Need                                                                                                                                                                                                     | Proposed resolution                                                                           | Kind   |
+| -------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------ |
+| `p4-item-badge-title-line` | PA5 notifications (Unreads)                  | today's unread count sits on the title line after the time (`countBadge`, 12px after the text column); a `large` item draws `badge` on the subtitle line under the time, so each row is about 4px taller | an `item` option placing a `large` row's badge on the title line beside `trailing`            | option |
+| `p4-empty-state-padding`   | PA5 notifications (Unreads), W1 `emptyState` | today's empty state pads `py-16` (64px); the recipe pads 56px (`paddingY: "14"`), so the tile and text sit 8px higher                                                                                    | recipe: `paddingY: "16"` on `emptyState`'s root (check the screens that already pass with it) | recipe |
+
 ## Phase 4 contract wave (proposed 2026-11-27, awaiting the user)
 
 Written into `spec.ts`, `options.ts`, `content.ts` and `src/style/schema.ts` by the phase 4 plan

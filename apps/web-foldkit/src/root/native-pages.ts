@@ -5,11 +5,12 @@
  * shows the page, and the Foldkit host has no page for it. Converting a page is one entry here and
  * deleting its Foldkit page. Each page is `Component.lazy`, so it loads as its own chunk.
  */
-import { Component, type View } from "@effect/ui"
+import { Component, Router, type View } from "@effect/ui"
 import type { Html } from "@effect/ui/html"
-import { ClientData } from "@hazel/client-data"
+import { ClientData, HazelRpc } from "@hazel/client-data"
 import type { Session } from "@hazel/shared-screens/app/session"
-import { Layer, Option } from "effect"
+import type { ChannelId } from "@hazel/schema"
+import { Effect, Layer, Option } from "effect"
 import { canChooseServer, currentServer, isBuildServer, serverLabel } from "~/config/server"
 import { clientData } from "~/db/client"
 import { safeReturnTo } from "../auth/return-to"
@@ -61,6 +62,45 @@ export const DesktopPage = Component.lazy("DesktopPage", () =>
 	),
 )
 
+/** A push of `route` on the shell's Router, from a page's host callback. */
+const withPush = <A, E, R>(build: (push: (route: AppRoute) => void) => Layer.Layer<A, E, R>) =>
+	Layer.unwrap(
+		Effect.map(Effect.service(Router.Router), (router) =>
+			build((route) => {
+				Effect.runFork(router.push(route))
+			}),
+		),
+	)
+
+// The inbox (PA5): Activity's rows open their channel on the Router; Unreads marks read over RPC.
+export const NotificationsPage = Component.lazy("NotificationsPage", () =>
+	Promise.all([
+		import("@hazel/shared-screens/notifications/pages/NotificationsPage"),
+		import("@hazel/shared-screens/activity/Activity"),
+	]).then(([page, activity]) =>
+		Component.provide(page.NotificationsPage, (props) =>
+			Layer.unwrap(
+				Effect.map(Effect.service(HazelRpc), (rpc) =>
+					withPush((push) =>
+						Layer.mergeAll(page.MarkChannelRead.layer, page.MarkAllChannelsRead.layer).pipe(
+							Layer.provideMerge(
+								activity.activityLayer(clientData, rpc, (channelId: ChannelId) =>
+									push(
+										AppRoute.ChatChannel({
+											orgSlug: props.session.orgSlug ?? "",
+											channelId,
+										}),
+									),
+								),
+							),
+						),
+					),
+				),
+			),
+		),
+	),
+)
+
 /** The native app's install (`~/config/server`), which its sign-in page can change; `null` on the web. */
 const initialServer = () =>
 	canChooseServer() ? { label: serverLabel(currentServer()), isDefault: isBuildServer(), form: null } : null
@@ -91,8 +131,24 @@ const fillWindow =
 	(h, inputs) =>
 		h.div.class("h-dvh").children(page(h, inputs))
 
+/** The inbox's tabs share one instance per org; the former per-source tabs show All until redirected. */
+const inbox =
+	<Tag extends AppRoute["_tag"]>(tab: "mentions" | "unreads" | "all"): NativePage<Tag> =>
+	(h, { route, session, isMobile, nowMs, fallback }) =>
+		NotificationsPage(h, {
+			key: "orgSlug" in route ? String(route.orgSlug) : route._tag,
+			props: { session, tab, nowMs, isMobile },
+			fallback: (result) => fallback(result._tag === "Failure"),
+		})
+
 /** Keyed by what makes a new instance (Foldkit's page `key`): a new token mounts a fresh page. */
 const nativePages: Registry = {
+	NotificationsMentions: inbox("mentions"),
+	NotificationsUnreads: inbox("unreads"),
+	NotificationsAll: inbox("all"),
+	NotificationsGeneral: inbox("all"),
+	NotificationsThreads: inbox("all"),
+	NotificationsDms: inbox("all"),
 	Invite: fillWindow<"Invite">((h, { route, session, fallback }) =>
 		InvitePage(h, {
 			key: route.token,

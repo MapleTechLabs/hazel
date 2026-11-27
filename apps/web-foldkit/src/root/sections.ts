@@ -21,6 +21,7 @@ import {
 import { sidebarHeaderHeightClass } from "../platform/desktop"
 import { AppMessage } from "./message"
 import type { AppModel } from "./logic"
+import { isNativeRoute } from "./native-pages"
 import { Hole } from "./portal"
 
 type H = Html.H<AppMessage>
@@ -130,7 +131,10 @@ export const sectionContent = (h: H, model: AppModel, layout: SectionLayout, pag
 			h,
 			layout,
 			"pt-6",
-			hasContentColumn(route) ? h.div.class("flex flex-col gap-6 px-4 lg:px-8").children(page) : page,
+			// The native inbox (PA5) sits in the content column too, as today's page draws its own.
+			hasContentColumn(route) || (layout === "activity" && isNativeRoute(route))
+				? h.div.class("flex flex-col gap-6 px-4 lg:px-8").children(page)
+				: page,
 		)
 	const tab = channelSettingsTabOf(route) ?? "overview"
 	if (!("channelId" in route) || !("orgSlug" in route)) return page

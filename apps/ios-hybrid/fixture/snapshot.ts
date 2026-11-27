@@ -616,6 +616,9 @@ export const SOURCE_TABLES = {
 		"connect_participants",
 		"assistant_threads",
 		"assistant_items",
+		// Unread state (`org-source.ts`); empty here, a page fixture seeds it (`pages/notifications-unreads.ts`).
+		"channel_activity",
+		"channel_read_state",
 	],
 	channel: [
 		"messages",
