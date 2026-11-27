@@ -8,9 +8,11 @@
 import { Component, type View } from "@effect/ui"
 import type { Html } from "@effect/ui/html"
 import { ClientData } from "@hazel/client-data"
+import { ClipboardWeb } from "@hazel/client-data/web/ui-services"
 import type { ChannelId } from "@hazel/schema"
 import type { Session } from "@hazel/shared-screens/app/session"
 import { Layer, Schema } from "effect"
+import { apiUrl } from "~/config/server"
 import { clientData } from "~/db/client"
 import { ModalRequest } from "../overlay/modal/requests"
 import { AppRoute } from "../route"
@@ -94,6 +96,12 @@ const CustomerLinkModal = Component.lazy("CustomerLinkModal", () =>
 const CustomerEnvironmentModal = Component.lazy("CustomerEnvironmentModal", () =>
 	import("@hazel/shared-screens/customers/modals/CustomerEnvironmentModal").then((module) =>
 		module.CustomerEnvironmentModal.pipe(Component.provide(dataLayer)),
+	),
+)
+
+const ConnectSourceModal = Component.lazy("ConnectSourceModal", () =>
+	import("@hazel/shared-screens/customers/settings/sources/ConnectSourceModal").then((module) =>
+		module.ConnectSourceModal.pipe(Component.provide(Layer.mergeAll(dataLayer, ClipboardWeb))),
 	),
 )
 
@@ -188,6 +196,17 @@ const nativeModals: Registry = {
 				accountId: request.accountId,
 				name: request.name,
 				environment: request.environment,
+			},
+		}),
+	CustomerSourceConnect: (h, { request, session }, placement) =>
+		ConnectSourceModal(h, {
+			...placement,
+			props: {
+				session,
+				provider: request.provider,
+				reconnectId: request.reconnectId,
+				config: request.config,
+				backendUrl: apiUrl(),
 			},
 		}),
 }

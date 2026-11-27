@@ -1,8 +1,5 @@
-import type * as Customers from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import type { UserErrorMessage } from "~/lib/error-messages"
-import { formatCount } from "../../../../customers/format"
-
 import { badge } from "../../../../ui/badge"
 import { callout } from "../../../../ui/callout"
 import { copyButton } from "../../../../ui/copy-button"
@@ -36,87 +33,15 @@ export const statusBadge = (h: H, status: SourceStatus): Html => {
 	])
 }
 
-export const comingSoonBadge = (h: H): Html =>
-	badge(h, { intent: "secondary", isPill: true }, ["Coming soon"])
+// RECORDS, TIME, ERRORS (shared with the native Data sources page)
 
-// RECORDS
-
-const STAT_LABELS = [
-	["accounts", "account", "accounts"],
-	["contacts", "contact", "contacts"],
-	["subscriptions", "subscription", "subscriptions"],
-	["invoices", "invoice", "invoices"],
-	["events", "event", "events"],
-	["activityDays", "activity day", "activity days"],
-	["metricDays", "metric day", "metric days"],
-	["unmatched", "unmatched", "unmatched"],
-] as const satisfies ReadonlyArray<readonly [keyof Customers.SyncStats, string, string]>
-
-/** `412 accounts`, `3,180 contacts`, …: the counts a sync wrote, zeros left out. */
-export const statParts = (stats: Customers.SyncStats): ReadonlyArray<string> =>
-	STAT_LABELS.filter(([key]) => stats[key] > 0).map(
-		([key, one, many]) => `${formatCount(stats[key])} ${stats[key] === 1 ? one : many}`,
-	)
-
-// TIME
-
-/** `11:20`, local. */
-export const formatClock = (ms: number): string =>
-	new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(ms)
-
-/** `0.4s`, `41s`, `6m 12s`, `1h 4m`. */
-export const formatDuration = (ms: number): string => {
-	const seconds = ms / 1000
-	if (seconds < 1) return `${Math.max(0.1, Math.round(seconds * 10) / 10)}s`
-	if (seconds < 60) return `${Math.round(seconds)}s`
-	const minutes = Math.floor(seconds / 60)
-	if (minutes < 60) return `${minutes}m ${Math.round(seconds % 60)}s`
-	return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
-}
-
-export const TRIGGER_LABEL = {
-	schedule: "Schedule",
-	webhook: "Webhook",
-	manual: "Manual",
-	backfill: "Backfill",
-} as const satisfies Record<Customers.SyncTrigger, string>
-
-// ERRORS
-
-/**
- * A failed sync in our words, from its code and HTTP status. The error's `message` is the
- * provider's text and is never shown.
- */
-export const syncErrorMessage = (error: Customers.SyncError, name: string): UserErrorMessage => {
-	const status = error.httpStatus === null ? "" : ` (HTTP ${error.httpStatus})`
-	switch (error.code) {
-		case "auth":
-			return {
-				title: "API key revoked or invalid",
-				description: `${name} refused the key${status}. Syncing is paused until you reconnect.`,
-			}
-		case "rate_limited":
-			return {
-				title: `Rate limited by ${name}`,
-				description: `${name} asked Hazel to slow down${status}. Syncs retry with backoff.`,
-			}
-		case "provider":
-			return {
-				title: `${name} returned an error`,
-				description: `The request failed on ${name}'s side${status}. Syncs retry with backoff.`,
-			}
-		case "network":
-			return {
-				title: `Couldn't reach ${name}`,
-				description: "The connection failed before an answer. Syncs retry with backoff.",
-			}
-		case "internal":
-			return {
-				title: "Sync failed in Hazel",
-				description: "Something broke on our side. Syncs retry with backoff.",
-			}
-	}
-}
+export {
+	formatClock,
+	formatDuration,
+	statParts,
+	syncErrorMessage,
+	TRIGGER_LABEL,
+} from "@hazel/shared-screens/customers/settings/sources/status"
 
 /** A sync or connect failure (`UserErrorMessage`) as the kit callout's title and text. */
 export const messageCallout = (

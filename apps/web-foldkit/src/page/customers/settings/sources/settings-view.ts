@@ -17,7 +17,7 @@ import { button, iconButton } from "../../../../ui/button"
 import { label } from "../../../../ui/field"
 import { input } from "../../../../ui/input"
 import { switchControl } from "../../../../ui/switch"
-import { type ConfigTarget, Message } from "./message"
+import { Message } from "./message"
 import {
 	cellOf,
 	configFlag,
@@ -49,12 +49,11 @@ export const configFieldView = (
 	options: Readonly<{
 		field: ConfigField
 		config: IntegrationConfig
-		target: ConfigTarget
 		isDisabled: boolean
 	}>,
 ): Html => {
-	const { field, config, target, isDisabled } = options
-	const id = `customers-${target}-${field.key}`
+	const { field, config, isDisabled } = options
+	const id = `customers-settings-${field.key}`
 	if (field._tag === "Toggle")
 		return h.div(
 			[h.Class("flex items-start justify-between gap-4")],
@@ -72,8 +71,7 @@ export const configFieldView = (
 						id,
 						isSelected: configFlag(config, field.key),
 						isDisabled,
-						onChange: (isSelected) =>
-							Message.ToggledConfigField({ target, key: field.key, isSelected }),
+						onChange: (isSelected) => Message.ToggledConfigField({ key: field.key, isSelected }),
 					},
 					[],
 				),
@@ -94,7 +92,7 @@ export const configFieldView = (
 					ariaLabel: field.label,
 					segments: field.options.map((option) => ({ key: option.value, label: option.label })),
 					selected: configText(config, field.key),
-					onSelect: (value: string) => Message.ChangedConfigText({ target, key: field.key, value }),
+					onSelect: (value: string) => Message.ChangedConfigText({ key: field.key, value }),
 					className: isDisabled ? "pointer-events-none opacity-60" : undefined,
 				}),
 			],
@@ -107,7 +105,7 @@ export const configFieldView = (
 		placeholder: field.placeholder,
 		isCode: field.isCode,
 		isDisabled,
-		onInput: (value) => Message.ChangedConfigText({ target, key: field.key, value }),
+		onInput: (value) => Message.ChangedConfigText({ key: field.key, value }),
 	})
 }
 
@@ -403,7 +401,7 @@ export const settingsCard = (h: H, model: Model, connection: ConnectionRow, isAd
 					h.div(
 						[h.Class("flex flex-col gap-4")],
 						descriptor.configFields.map((field) =>
-							configFieldView(h, { field, config, target: "settings", isDisabled }),
+							configFieldView(h, { field, config, isDisabled }),
 						),
 					),
 				]),

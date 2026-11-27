@@ -1,8 +1,10 @@
-import { SignalSeverity } from "@hazel/domain/customers"
+import { IntegrationConfig } from "@hazel/customer-integrations"
+import { CustomerProvider, SignalSeverity } from "@hazel/domain/customers"
 import {
 	BotId,
 	ChannelId,
 	CustomerAccountId,
+	CustomerConnectionId,
 	CustomerSignalId,
 	MessageId,
 	OrganizationId,
@@ -85,6 +87,13 @@ export const CustomerEnvironment = Schema.TaggedStruct("CustomerEnvironment", {
 	environment: Schema.NullOr(Schema.String),
 })
 
+/** Connect a customers data source, or rotate the key of `reconnectId`, starting from `config`. */
+export const CustomerSourceConnect = Schema.TaggedStruct("CustomerSourceConnect", {
+	provider: CustomerProvider,
+	reconnectId: Schema.NullOr(CustomerConnectionId),
+	config: IntegrationConfig,
+})
+
 export const ModalRequest = Schema.Union([
 	NewChannel,
 	CreateDm,
@@ -111,5 +120,6 @@ export const ModalRequest = Schema.Union([
 	CustomerRawData,
 	CustomerLink,
 	CustomerEnvironment,
+	CustomerSourceConnect,
 ])
 export type ModalRequest = typeof ModalRequest.Type
