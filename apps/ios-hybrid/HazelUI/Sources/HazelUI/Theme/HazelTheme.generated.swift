@@ -1132,6 +1132,13 @@ public enum HazelTheme {
             inert: [],
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "months", style: Style(color: Colors.mutedFg, text: .caption, leading: 12)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "weekdays", style: Style(color: Colors.mutedFg, text: .caption, leading: 12)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "tooltip", style: Style(background: Colors.overlay, color: Colors.overlayFg, borderColor: Colors.overlayBorder, borderWidth: 1, radius: 8, paddingX: 10, paddingY: 6, text: .caption, shadow: "md")),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "tooltipValue", style: Style(color: Colors.fg, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "tooltipDate", style: Style(color: Colors.mutedFg)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "legend", style: Style(layout: .row, align: .center, color: Colors.mutedFg, gap: 4, text: .caption)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "swatch", style: Style(radius: 2, size: 10)),
             ]
         )
 
@@ -1600,7 +1607,19 @@ public enum HazelTheme {
             defaults: ["trend": "none", "deltaTone": "neutral"],
             inert: [],
             layers: [
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style()),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.bg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 12, paddingY: 12, rowGap: 6, shadow: "xs")),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "label", style: Style(color: Colors.mutedFg, text: .caption, leading: 20, strong: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "definition", style: Style(background: Colors.overlay, color: Colors.overlayFg, borderColor: Colors.overlayBorder, borderWidth: 1, radius: 8, paddingX: 12, paddingY: 8, text: .caption, leading: 20, shadow: "md")),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "value", style: Style(color: Colors.fg, text: .display, numeric: true, weight: 600)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "detail", style: Style(color: Colors.mutedFg, text: .label, numeric: true, truncate: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "footer", style: Style(layout: .row, align: .center, gap: 6, text: .caption, leading: 20)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "delta", style: Style(layout: .inlineRow, align: .center, color: Colors.mutedFg, gap: 2, strong: true, numeric: true, nowrap: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "comparison", style: Style(color: Colors.mutedFg, truncate: true)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "skeleton", style: Style(background: Colors.secondary, radius: 6)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "skeletonLine", style: Style(background: Colors.secondary, radius: 4)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(paddingX: 16, paddingY: 16)),
+                Layer(when: When(options: ["deltaTone": "success"], flags: [], states: [], sizeClass: nil), part: "delta", style: Style(color: Colors.successSubtleFg)),
+                Layer(when: When(options: ["deltaTone": "danger"], flags: [], states: [], sizeClass: nil), part: "delta", style: Style(color: Colors.dangerSubtleFg)),
             ]
         )
 
@@ -1897,6 +1916,7 @@ public enum HazelTheme {
             "reactionBar": [Use(trigger: .enter, motion: reactionIn, part: "reaction", backdrop: false, regular: nil), Use(trigger: .pop, motion: reactionPop, part: "emoji", backdrop: false, regular: nil), Use(trigger: .countUp, motion: countUp, part: "count", backdrop: false, regular: nil), Use(trigger: .countDown, motion: countDown, part: "count", backdrop: false, regular: nil)],
             "select": [Use(trigger: .enter, motion: fadeIn, part: "panel", backdrop: false, regular: nil)],
             "sheet": [Use(trigger: .enter, motion: slideUpIn, part: "panel", backdrop: false, regular: scaleIn), Use(trigger: .enter, motion: scrimIn, part: "panel", backdrop: true, regular: nil)],
+            "statTile": [Use(trigger: .loop, motion: skeletonPulse, part: "skeleton", backdrop: false, regular: nil), Use(trigger: .loop, motion: skeletonPulse, part: "skeletonLine", backdrop: false, regular: nil)],
             "textArea": [Use(trigger: .enter, motion: fieldErrorIn, part: "error", backdrop: false, regular: nil)],
             "textField": [Use(trigger: .enter, motion: fieldErrorIn, part: "error", backdrop: false, regular: nil)],
             "toast": [Use(trigger: .enter, motion: toastIn, part: "panel", backdrop: false, regular: nil), Use(trigger: .exit, motion: toastOut, part: "panel", backdrop: false, regular: nil)],

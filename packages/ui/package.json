@@ -12,6 +12,7 @@
 	"scripts": {
 		"typecheck": "effect-tsgo tsrs --noEmit",
 		"test": "vitest run",
+		"test:browser": "vitest run --config vitest.browser.config.ts",
 		"ui:generate": "bun scripts/generate.ts",
 		"ui:check": "bun scripts/generate.ts --check",
 		"gallery:shots": "bun scripts/shoot.ts",
@@ -37,6 +38,7 @@
 	},
 	"devDependencies": {
 		"@types/node": "^24.19.2",
+		"@vitest/browser-playwright": "5.1.1",
 		"happy-dom": "^20.0.0",
 		"playwright": "^1.56.0",
 		"vite": "8.3.8",
