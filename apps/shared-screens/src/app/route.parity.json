@@ -1,0 +1,817 @@
+[
+	{
+		"path": "/",
+		"route": {
+			"_tag": "Root"
+		},
+		"href": "/"
+	},
+	{
+		"path": "/sign-in",
+		"route": {
+			"_tag": "SignIn",
+			"redirectUrl": {
+				"_id": "Option",
+				"_tag": "None"
+			},
+			"error": {
+				"_id": "Option",
+				"_tag": "None"
+			}
+		},
+		"href": "/sign-in"
+	},
+	{
+		"path": "/sign-in?redirect_url=%2Fhazel%2Fchat&error=denied",
+		"route": {
+			"_tag": "SignIn",
+			"redirectUrl": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "/hazel/chat"
+			},
+			"error": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "denied"
+			}
+		},
+		"href": "/sign-in?redirect_url=%2Fhazel%2Fchat&error=denied"
+	},
+	{
+		"path": "/sign-up?redirect_url=/x",
+		"route": {
+			"_tag": "SignUp",
+			"redirectUrl": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "/x"
+			}
+		},
+		"href": "/sign-up?redirect_url=%2Fx"
+	},
+	{
+		"path": "/auth/register?flowId=f&reference=r",
+		"route": {
+			"_tag": "AuthRegister",
+			"flowId": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "f"
+			},
+			"reference": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "r"
+			}
+		},
+		"href": "/auth/register?flowId=f&reference=r"
+	},
+	{
+		"path": "/auth/continue?provider=github",
+		"route": {
+			"_tag": "AuthContinue",
+			"provider": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "github"
+			}
+		},
+		"href": "/auth/continue?provider=github"
+	},
+	{
+		"path": "/auth/desktop?attempt=a1",
+		"route": {
+			"_tag": "AuthDesktop",
+			"attempt": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "a1"
+			}
+		},
+		"href": "/auth/desktop?attempt=a1"
+	},
+	{
+		"path": "/join/acme",
+		"route": {
+			"_tag": "Join",
+			"slug": "acme"
+		},
+		"href": "/join/acme"
+	},
+	{
+		"path": "/invite/tok123",
+		"route": {
+			"_tag": "Invite",
+			"token": "tok123"
+		},
+		"href": "/invite/tok123"
+	},
+	{
+		"path": "/oauth/bot-install?bot_id=b&redirect_uri=https%3A%2F%2Fx.test&state=s",
+		"route": {
+			"_tag": "BotInstall",
+			"botId": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "b"
+			},
+			"redirectUri": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "https://x.test"
+			},
+			"state": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "s"
+			}
+		},
+		"href": "/oauth/bot-install?bot_id=b&redirect_uri=https%3A%2F%2Fx.test&state=s"
+	},
+	{
+		"path": "/oauth/authorize?client_id=c&redirect_uri=r&response_type=code&code_challenge=cc&code_challenge_method=S256&scope=a%20b&state=s&resource=res",
+		"route": {
+			"_tag": "OAuthAuthorize",
+			"clientId": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "c"
+			},
+			"redirectUri": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "r"
+			},
+			"responseType": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "code"
+			},
+			"codeChallenge": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "cc"
+			},
+			"codeChallengeMethod": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "S256"
+			},
+			"scope": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "a b"
+			},
+			"state": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "s"
+			},
+			"resource": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "res"
+			}
+		},
+		"href": "/oauth/authorize?client_id=c&redirect_uri=r&response_type=code&code_challenge=cc&code_challenge_method=S256&scope=a+b&state=s&resource=res"
+	},
+	{
+		"path": "/onboarding",
+		"route": {
+			"_tag": "Onboarding",
+			"orgId": {
+				"_id": "Option",
+				"_tag": "None"
+			},
+			"step": {
+				"_id": "Option",
+				"_tag": "None"
+			}
+		},
+		"href": "/onboarding"
+	},
+	{
+		"path": "/onboarding?orgId=00000001-0000-4000-8000-000000000001&step=invite",
+		"route": {
+			"_tag": "Onboarding",
+			"orgId": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "00000001-0000-4000-8000-000000000001"
+			},
+			"step": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "invite"
+			}
+		},
+		"href": "/onboarding?orgId=00000001-0000-4000-8000-000000000001&step=invite"
+	},
+	{
+		"path": "/onboarding/setup-organization",
+		"route": {
+			"_tag": "OnboardingSetupOrganization",
+			"orgId": {
+				"_id": "Option",
+				"_tag": "None"
+			}
+		},
+		"href": "/onboarding/setup-organization"
+	},
+	{
+		"path": "/select-organization",
+		"route": {
+			"_tag": "SelectOrganization"
+		},
+		"href": "/select-organization"
+	},
+	{
+		"path": "/hazel",
+		"route": {
+			"_tag": "OrgHome",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel"
+	},
+	{
+		"path": "/hazel/chat",
+		"route": {
+			"_tag": "ChatIndex",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/chat"
+	},
+	{
+		"path": "/hazel/chat/dms",
+		"route": {
+			"_tag": "ChatDms",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/chat/dms"
+	},
+	{
+		"path": "/hazel/more",
+		"route": {
+			"_tag": "OrgMore",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/more"
+	},
+	{
+		"path": "/hazel/chat/00000003-0000-4000-8000-000000000001",
+		"route": {
+			"_tag": "ChatChannel",
+			"orgSlug": "hazel",
+			"channelId": "00000003-0000-4000-8000-000000000001"
+		},
+		"href": "/hazel/chat/00000003-0000-4000-8000-000000000001"
+	},
+	{
+		"path": "/hazel/chat/00000003-0000-4000-8000-000000000001/files",
+		"route": {
+			"_tag": "ChatFiles",
+			"orgSlug": "hazel",
+			"channelId": "00000003-0000-4000-8000-000000000001"
+		},
+		"href": "/hazel/chat/00000003-0000-4000-8000-000000000001/files"
+	},
+	{
+		"path": "/hazel/chat/00000003-0000-4000-8000-000000000001/files/media",
+		"route": {
+			"_tag": "ChatFilesMedia",
+			"orgSlug": "hazel",
+			"channelId": "00000003-0000-4000-8000-000000000001"
+		},
+		"href": "/hazel/chat/00000003-0000-4000-8000-000000000001/files/media"
+	},
+	{
+		"path": "/hazel/chat/not-a-uuid",
+		"route": {
+			"_tag": "NotFound",
+			"path": "/hazel/chat/not-a-uuid"
+		},
+		"href": "/hazel/chat/not-a-uuid"
+	},
+	{
+		"path": "/hazel/channels/00000003-0000-4000-8000-000000000001/settings",
+		"route": {
+			"_tag": "ChannelSettings",
+			"orgSlug": "hazel",
+			"channelId": "00000003-0000-4000-8000-000000000001"
+		},
+		"href": "/hazel/channels/00000003-0000-4000-8000-000000000001/settings"
+	},
+	{
+		"path": "/hazel/channels/00000003-0000-4000-8000-000000000001/settings/overview",
+		"route": {
+			"_tag": "ChannelSettingsOverview",
+			"orgSlug": "hazel",
+			"channelId": "00000003-0000-4000-8000-000000000001"
+		},
+		"href": "/hazel/channels/00000003-0000-4000-8000-000000000001/settings/overview"
+	},
+	{
+		"path": "/hazel/channels/00000003-0000-4000-8000-000000000001/settings/integrations",
+		"route": {
+			"_tag": "ChannelSettingsIntegrations",
+			"orgSlug": "hazel",
+			"channelId": "00000003-0000-4000-8000-000000000001"
+		},
+		"href": "/hazel/channels/00000003-0000-4000-8000-000000000001/settings/integrations"
+	},
+	{
+		"path": "/hazel/channels/00000003-0000-4000-8000-000000000001/settings/connect",
+		"route": {
+			"_tag": "ChannelSettingsConnect",
+			"orgSlug": "hazel",
+			"channelId": "00000003-0000-4000-8000-000000000001"
+		},
+		"href": "/hazel/channels/00000003-0000-4000-8000-000000000001/settings/connect"
+	},
+	{
+		"path": "/hazel/my-settings",
+		"route": {
+			"_tag": "MySettingsAppearance",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/my-settings"
+	},
+	{
+		"path": "/hazel/my-settings/profile",
+		"route": {
+			"_tag": "MySettingsProfile",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/my-settings/profile"
+	},
+	{
+		"path": "/hazel/my-settings/agents",
+		"route": {
+			"_tag": "MySettingsAgents",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/my-settings/agents"
+	},
+	{
+		"path": "/hazel/my-settings/linked-accounts?connection_status=ok&provider=github&error_code=e",
+		"route": {
+			"_tag": "MySettingsLinkedAccounts",
+			"orgSlug": "hazel",
+			"connectionStatus": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "ok"
+			},
+			"provider": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "github"
+			},
+			"errorCode": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "e"
+			}
+		},
+		"href": "/hazel/my-settings/linked-accounts?connection_status=ok&provider=github&error_code=e"
+	},
+	{
+		"path": "/hazel/my-settings/notifications",
+		"route": {
+			"_tag": "MySettingsNotifications",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/my-settings/notifications"
+	},
+	{
+		"path": "/hazel/my-settings/desktop",
+		"route": {
+			"_tag": "MySettingsDesktop",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/my-settings/desktop"
+	},
+	{
+		"path": "/hazel/my-settings/keybinds",
+		"route": {
+			"_tag": "MySettingsKeybinds",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/my-settings/keybinds"
+	},
+	{
+		"path": "/hazel/notifications",
+		"route": {
+			"_tag": "NotificationsMentions",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/notifications"
+	},
+	{
+		"path": "/hazel/notifications/unreads",
+		"route": {
+			"_tag": "NotificationsUnreads",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/notifications/unreads"
+	},
+	{
+		"path": "/hazel/notifications/all",
+		"route": {
+			"_tag": "NotificationsAll",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/notifications/all"
+	},
+	{
+		"path": "/hazel/notifications/general",
+		"route": {
+			"_tag": "NotificationsGeneral",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/notifications/general"
+	},
+	{
+		"path": "/hazel/notifications/threads",
+		"route": {
+			"_tag": "NotificationsThreads",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/notifications/threads"
+	},
+	{
+		"path": "/hazel/notifications/dms",
+		"route": {
+			"_tag": "NotificationsDms",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/notifications/dms"
+	},
+	{
+		"path": "/hazel/profile/00000002-0000-4000-8000-000000000001",
+		"route": {
+			"_tag": "Profile",
+			"orgSlug": "hazel",
+			"userId": "00000002-0000-4000-8000-000000000001"
+		},
+		"href": "/hazel/profile/00000002-0000-4000-8000-000000000001"
+	},
+	{
+		"path": "/hazel/settings",
+		"route": {
+			"_tag": "SettingsGeneral",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/settings"
+	},
+	{
+		"path": "/hazel/settings/team",
+		"route": {
+			"_tag": "TeamSettings",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/settings/team"
+	},
+	{
+		"path": "/hazel/settings/groups",
+		"route": {
+			"_tag": "SettingsGroups",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/settings/groups"
+	},
+	{
+		"path": "/hazel/settings/invitations",
+		"route": {
+			"_tag": "SettingsInvitations",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/settings/invitations"
+	},
+	{
+		"path": "/hazel/settings/custom-emojis",
+		"route": {
+			"_tag": "SettingsCustomEmojis",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/settings/custom-emojis"
+	},
+	{
+		"path": "/hazel/settings/debug",
+		"route": {
+			"_tag": "SettingsDebug",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/settings/debug"
+	},
+	{
+		"path": "/hazel/settings/connect-invites",
+		"route": {
+			"_tag": "SettingsConnectInvites",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/settings/connect-invites"
+	},
+	{
+		"path": "/hazel/settings/chat-sync",
+		"route": {
+			"_tag": "SettingsChatSync",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/settings/chat-sync"
+	},
+	{
+		"path": "/hazel/settings/chat-sync/00000004-0000-4000-8000-000000000001",
+		"route": {
+			"_tag": "SettingsChatSyncConnection",
+			"orgSlug": "hazel",
+			"connectionId": "00000004-0000-4000-8000-000000000001"
+		},
+		"href": "/hazel/settings/chat-sync/00000004-0000-4000-8000-000000000001"
+	},
+	{
+		"path": "/hazel/settings/integrations",
+		"route": {
+			"_tag": "SettingsIntegrations",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/settings/integrations"
+	},
+	{
+		"path": "/hazel/settings/integrations/installed",
+		"route": {
+			"_tag": "SettingsIntegrationsInstalled",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/settings/integrations/installed"
+	},
+	{
+		"path": "/hazel/settings/integrations/marketplace",
+		"route": {
+			"_tag": "SettingsIntegrationsMarketplace",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/settings/integrations/marketplace"
+	},
+	{
+		"path": "/hazel/settings/integrations/your-apps",
+		"route": {
+			"_tag": "SettingsIntegrationsYourApps",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/settings/integrations/your-apps"
+	},
+	{
+		"path": "/hazel/settings/integrations/linear?connection_status=connected&error_code=x&provider=linear",
+		"route": {
+			"_tag": "SettingsIntegration",
+			"orgSlug": "hazel",
+			"integrationId": "linear",
+			"connectionStatus": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "connected"
+			},
+			"errorCode": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "x"
+			}
+		},
+		"href": "/hazel/settings/integrations/linear?connection_status=connected&error_code=x"
+	},
+	{
+		"path": "/hazel/customers",
+		"route": {
+			"_tag": "CustomersOverview",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/customers"
+	},
+	{
+		"path": "/hazel/customers/attention",
+		"route": {
+			"_tag": "CustomersAttention",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/customers/attention"
+	},
+	{
+		"path": "/hazel/customers/inbox",
+		"route": {
+			"_tag": "CustomersInbox",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/customers/inbox"
+	},
+	{
+		"path": "/hazel/customers/support",
+		"route": {
+			"_tag": "CustomersSupportReport",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/customers/support"
+	},
+	{
+		"path": "/hazel/customers/list",
+		"route": {
+			"_tag": "CustomersList",
+			"orgSlug": "hazel",
+			"view": {
+				"_id": "Option",
+				"_tag": "None"
+			}
+		},
+		"href": "/hazel/customers/list"
+	},
+	{
+		"path": "/hazel/customers/list?view=paying",
+		"route": {
+			"_tag": "CustomersList",
+			"orgSlug": "hazel",
+			"view": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "paying"
+			}
+		},
+		"href": "/hazel/customers/list?view=paying"
+	},
+	{
+		"path": "/hazel/customers/00000005-0000-4000-8000-000000000001",
+		"route": {
+			"_tag": "CustomerDetail",
+			"orgSlug": "hazel",
+			"accountId": "00000005-0000-4000-8000-000000000001",
+			"tab": {
+				"_id": "Option",
+				"_tag": "None"
+			}
+		},
+		"href": "/hazel/customers/00000005-0000-4000-8000-000000000001"
+	},
+	{
+		"path": "/hazel/customers/00000005-0000-4000-8000-000000000001?tab=billing",
+		"route": {
+			"_tag": "CustomerDetail",
+			"orgSlug": "hazel",
+			"accountId": "00000005-0000-4000-8000-000000000001",
+			"tab": {
+				"_id": "Option",
+				"_tag": "Some",
+				"value": "billing"
+			}
+		},
+		"href": "/hazel/customers/00000005-0000-4000-8000-000000000001?tab=billing"
+	},
+	{
+		"path": "/hazel/customers/00000005-0000-4000-8000-000000000001?tab=bogus",
+		"route": {
+			"_tag": "NotFound",
+			"path": "/hazel/customers/00000005-0000-4000-8000-000000000001"
+		},
+		"href": "/hazel/customers/00000005-0000-4000-8000-000000000001"
+	},
+	{
+		"path": "/hazel/customers/settings/signals",
+		"route": {
+			"_tag": "CustomersSettingsSignals",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/customers/settings/signals"
+	},
+	{
+		"path": "/hazel/customers/settings/signals/new",
+		"route": {
+			"_tag": "CustomersSettingsSignalNew",
+			"orgSlug": "hazel",
+			"template": {
+				"_id": "Option",
+				"_tag": "None"
+			}
+		},
+		"href": "/hazel/customers/settings/signals/new"
+	},
+	{
+		"path": "/hazel/customers/settings/signals/new?template=churn_risk",
+		"route": {
+			"_tag": "NotFound",
+			"path": "/hazel/customers/settings/signals/new"
+		},
+		"href": "/hazel/customers/settings/signals/new"
+	},
+	{
+		"path": "/hazel/customers/settings/signals/00000006-0000-4000-8000-000000000001",
+		"route": {
+			"_tag": "CustomersSettingsSignalRule",
+			"orgSlug": "hazel",
+			"ruleId": "00000006-0000-4000-8000-000000000001"
+		},
+		"href": "/hazel/customers/settings/signals/00000006-0000-4000-8000-000000000001"
+	},
+	{
+		"path": "/hazel/customers/settings/plans",
+		"route": {
+			"_tag": "CustomersSettingsPlans",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/customers/settings/plans"
+	},
+	{
+		"path": "/hazel/customers/settings/sla",
+		"route": {
+			"_tag": "CustomersSettingsSla",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/customers/settings/sla"
+	},
+	{
+		"path": "/hazel/customers/settings/feature-flags",
+		"route": {
+			"_tag": "CustomersSettingsFeatureFlags",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/customers/settings/feature-flags"
+	},
+	{
+		"path": "/hazel/customers/settings/sources",
+		"route": {
+			"_tag": "CustomersSettingsSources",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/customers/settings/sources"
+	},
+	{
+		"path": "/hazel/customers/settings/sources/stripe",
+		"route": {
+			"_tag": "CustomersSourceDetail",
+			"orgSlug": "hazel",
+			"provider": "stripe"
+		},
+		"href": "/hazel/customers/settings/sources/stripe"
+	},
+	{
+		"path": "/hazel/customers/settings/sources/unmatched",
+		"route": {
+			"_tag": "CustomersUnmatched",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/customers/settings/sources/unmatched"
+	},
+	{
+		"path": "/hazel/customers/settings/sources/not-a-provider",
+		"route": {
+			"_tag": "NotFound",
+			"path": "/hazel/customers/settings/sources/not-a-provider"
+		},
+		"href": "/hazel/customers/settings/sources/not-a-provider"
+	},
+	{
+		"path": "/nope/deep/path",
+		"route": {
+			"_tag": "NotFound",
+			"path": "/nope/deep/path"
+		},
+		"href": "/nope/deep/path"
+	},
+	{
+		"path": "/hazel/chat/",
+		"route": {
+			"_tag": "ChatIndex",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/chat"
+	},
+	{
+		"path": "/hazel/unknown",
+		"route": {
+			"_tag": "NotFound",
+			"path": "/hazel/unknown"
+		},
+		"href": "/hazel/unknown"
+	},
+	{
+		"path": "/sign-in?unknown=1",
+		"route": {
+			"_tag": "SignIn",
+			"redirectUrl": {
+				"_id": "Option",
+				"_tag": "None"
+			},
+			"error": {
+				"_id": "Option",
+				"_tag": "None"
+			}
+		},
+		"href": "/sign-in"
+	},
+	{
+		"path": "/hazel/chat?x=1",
+		"route": {
+			"_tag": "ChatIndex",
+			"orgSlug": "hazel"
+		},
+		"href": "/hazel/chat"
+	}
+]
