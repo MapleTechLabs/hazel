@@ -40,6 +40,23 @@ const notifiedChannels = (
 	)
 
 /**
+ * The channels from `notified` and `unread`, held through `retain` once they have settled: the set
+ * is swapped (the old one let go) each time it changes.
+ */
+export const holdLikelyNext = <R>(
+	notified: Stream.Stream<ReadonlyArray<string>, never, R>,
+	unread: Stream.Stream<ReadonlyArray<string>, never, R>,
+	retain: (channelIds: ReadonlyArray<string>) => Stream.Stream<never>,
+	settle: Duration.Input = SETTLE,
+): Stream.Stream<never, never, R> =>
+	Stream.zipLatest(notified, unread).pipe(
+		Stream.map(([notifiedIds, unreadIds]) => prefetchKey(notifiedIds, unreadIds)),
+		Stream.debounce(settle),
+		Stream.changes,
+		Stream.switchMap((key) => retain(key === "" ? [] : key.split(","))),
+	)
+
+/**
  * Holds the org's likely-next channels open while it runs (muted ones are never unread). A channel
  * read meanwhile is let go; the one on screen stays open through its own conversation.
  */
@@ -51,17 +68,10 @@ export const prefetchChannels = (
 		Effect.map(
 			ClientData.useSync((data) => data),
 			(data) =>
-				Stream.zipLatest(
+				holdLikelyNext(
 					notifiedChannels(organizationId, userId),
 					unreadStream(organizationId, userId, (rows) => rows.map((row): string => row.channelId)),
-				).pipe(
-					Stream.map(([notified, unread]) => prefetchKey(notified, unread)),
-					Stream.debounce(SETTLE),
-					Stream.changes,
-					Stream.switchMap(
-						(key) =>
-							data.retainChannels(key === "" ? [] : key.split(",")) as Stream.Stream<never>,
-					),
+					(channelIds) => data.retainChannels(channelIds) as Stream.Stream<never>,
 				),
 		),
 	)
