@@ -225,7 +225,15 @@ export const appRequestsOn = (handlers: AppRequestHandlers) =>
 			appRequestsLayer((request) => {
 				const effect = Match.valueTags(request, {
 					...handlers,
-					Navigate: ({ href }) => navigator.open(href),
+					// A navigation's toast shows with it (`ShowToast`, the host's).
+					Navigate: ({ href, replace, toast }) =>
+						Effect.andThen(
+							replace ? navigator.replace(href) : navigator.open(href),
+							toast === undefined
+								? Effect.void
+								: handlers.ShowToast(AppRequest.ShowToast({ toast })),
+						),
+					// No forward history on a stack: only back moves.
 					History: ({ direction }) => (direction === "Back" ? navigator.back : Effect.void),
 				})
 				Effect.runFork(effect)

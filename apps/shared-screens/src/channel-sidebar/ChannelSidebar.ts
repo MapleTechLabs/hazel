@@ -12,7 +12,9 @@ import { ClientData } from "@hazel/client-data"
 import { ChannelId, ChannelSectionId, OrganizationId, UserId } from "@hazel/schema"
 import { type Content, Hazel } from "@hazel/ui/vocabulary/index"
 import { Clock, Effect, Layer, Match, Schema, Stream } from "effect"
-import { AppToast, Navigate, OpenCommandPalette, OpenModal, ShowToast } from "../app/requests"
+import { AppToast, Navigate, OpenCommandPalette, OpenModal, ShowToast, SignOut } from "../app/requests"
+import { AppRoute, hrefOf } from "../app/route"
+import { SwitchOrganization } from "../shell/Chrome"
 import { type MenuOutcome, rowOutcome, sectionOutcome, WriteSidebar } from "./actions"
 import {
 	channelMenu,
@@ -56,9 +58,8 @@ export type NavTarget = typeof NavTarget.Type
 
 /** What only the host can do: keep the hint dismissed, and (with `chrome`) its switcher's and account's choices. */
 export const SidebarAction = UiSchema.TaggedEnum({
+	/** The create-channel hint's close: the host keeps that it was dismissed. */
 	DismissHint: {},
-	OrgMenu: { key: Schema.String },
-	AccountMenu: { key: Schema.String },
 })
 export type SidebarAction = typeof SidebarAction.Type
 
@@ -104,15 +105,8 @@ export class RequestNavigation extends Command.Service<RequestNavigation>()(
 		success: SidebarMessage,
 	},
 ) {
-	static readonly layerWith = (navigate: (to: NavTarget) => void) =>
-		this.toLayer(
-			Effect.succeed(({ to }) =>
-				Effect.sync(() => {
-					navigate(to)
-					return SidebarMessage.CompletedRequest()
-				}),
-			),
-		)
+	static readonly layerWith = (navigate: (to: NavTarget) => Effect.Effect<void>) =>
+		this.toLayer(Effect.succeed(({ to }) => Effect.as(navigate(to), SidebarMessage.CompletedRequest())))
 }
 
 /** A menu choice or a press the host acts on (writes, modals, the palette, toasts). */
@@ -295,8 +289,41 @@ export const ChannelSidebar = Hazel.component({
 				),
 			),
 		DismissedHint: ($) => $.evolve({ hintDismissed: () => true }).run(act(SidebarAction.DismissHint())),
-		SelectedOrgMenu: ($, { entry }) => $.run(act(SidebarAction.OrgMenu({ key: entry }))),
-		SelectedAccountMenu: ($, { entry }) => $.run(act(SidebarAction.AccountMenu({ key: entry }))),
+		// The chrome's menus (a phone's org switcher and account card) act here, the same on any host.
+		SelectedOrgMenu: ($, { entry }) => {
+			const org = $.model.orgs.find((candidate) => `org:${candidate.id}` === entry)
+			if (org !== undefined)
+				return org.id === $.props.organizationId
+					? $.model
+					: $.run(
+							SwitchOrganization.make({ organizationId: org.id, slug: org.slug }).pipe(
+								Command.map(() => SidebarMessage.CompletedRequest()),
+							),
+						)
+			return entry === "org-settings"
+				? $.run(
+						...runOutcome({
+							_tag: "Navigate",
+							href: hrefOf(AppRoute.SettingsGeneral({ orgSlug: $.props.orgSlug })),
+						}),
+					)
+				: $.model
+		},
+		SelectedAccountMenu: ($, { entry }) =>
+			Match.value(entry).pipe(
+				Match.when("settings", () =>
+					$.run(
+						...runOutcome({
+							_tag: "Navigate",
+							href: hrefOf(AppRoute.MySettingsProfile({ orgSlug: $.props.orgSlug })),
+						}),
+					),
+				),
+				Match.when("sign-out", () =>
+					$.run(SignOut.make({}).pipe(Command.map(() => SidebarMessage.CompletedRequest()))),
+				),
+				Match.orElse(() => $.model),
+			),
 		CompletedRequest: ($) => $.model,
 		CompletedWrite: ($, { toast }) =>
 			toast === null
@@ -831,7 +858,7 @@ export const ChannelSidebar = Hazel.component({
 /** What a host provides: the data instance, its navigation and its sidebar actions. */
 export const channelSidebarLayer = (
 	data: ClientData["Service"],
-	navigate: (to: NavTarget) => void,
+	navigate: (to: NavTarget) => Effect.Effect<void>,
 	act: (action: SidebarAction) => Effect.Effect<void>,
 ) =>
 	Layer.mergeAll(

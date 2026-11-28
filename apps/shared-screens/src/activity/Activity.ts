@@ -88,13 +88,10 @@ export class RequestActivityNavigation extends Command.Service<RequestActivityNa
 	"hazel/activity/RequestNavigation",
 	{ args: { channelId: ChannelId }, success: ActivityMessage },
 ) {
-	static readonly layerWith = (navigate: (channelId: ChannelId) => void) =>
+	static readonly layerWith = (navigate: (channelId: ChannelId) => Effect.Effect<void>) =>
 		this.toLayer(
 			Effect.succeed(({ channelId }) =>
-				Effect.sync(() => {
-					navigate(channelId)
-					return ActivityMessage.CompletedRequestNavigation()
-				}),
+				Effect.as(navigate(channelId), ActivityMessage.CompletedRequestNavigation()),
 			),
 		)
 }
@@ -403,7 +400,7 @@ export const Activity = Hazel.component({
 export const activityLayer = (
 	data: ClientData["Service"],
 	rpc: HazelRpc["Service"],
-	navigate: (channelId: ChannelId) => void,
+	navigate: (channelId: ChannelId) => Effect.Effect<void>,
 ) =>
 	Layer.mergeAll(MarkNotificationRead.layer, RequestActivityNavigation.layerWith(navigate)).pipe(
 		Layer.provideMerge(Layer.mergeAll(Layer.succeed(ClientData, data), Layer.succeed(HazelRpc, rpc))),

@@ -17,9 +17,6 @@ import { type Json, WIRE_VERSION } from "../../../packages/ui/src/native/wire.ts
 import { Dms, dmsLayer } from "../../shared-screens/src/dms/Dms.ts"
 import { makeLiveChannelList } from "./live-channel-list"
 import { type SidebarRows, sidebarSections } from "./live-sections"
-import { mountChannelSidebarNative } from "../../shared-screens/src/channel-sidebar/native.ts"
-import { mountActivityLive } from "../../shared-screens/src/activity/live.ts"
-import { mountMessageListNative } from "../../shared-screens/src/chat/native.ts"
 
 declare const __native: { post: (json: string) => void; screen?: string }
 
@@ -35,26 +32,8 @@ const program = Effect.gen(function* () {
 	console.log(`[live] user.me over HTTP: ${me.id} (${since()})`)
 	yield* Stream.runDrain(client.syncSession(me.id)).pipe(Effect.forkScoped)
 
-	// The Phase 3 screens, by launch arg (`-HazelScreen <name>`); the G3 list otherwise.
-	// `channel` or `channel:<name>`: a channel's message list (#general unless named).
-	if (__native.screen?.startsWith("channel") === true) {
-		const name = __native.screen.slice("channel:".length) || "general"
-		yield* mountMessageListNative(native.container, me.id, name, "https://cdn.hazel.sh")
-		console.log(`[live] channel mounted (${since()})`)
-		return yield* Effect.never
-	}
-	switch (__native.screen) {
-		case "sidebar":
-			yield* mountChannelSidebarNative(native.container, me.id)
-			return yield* Effect.never
-		case "activity":
-			yield* mountActivityLive(me.id, native.container, (id) =>
-				console.log(`[live] open channel ${id}`),
-			)
-			console.log(`[live] activity mounted (${since()})`)
-			return yield* Effect.never
-	}
-
+	// The screens themselves run in the native app (`script/entry.ts`); this spike keeps the G3 list
+	// and the DMs screen (`-HazelScreen dms`).
 	const { collections: c } = client
 	const sections = Stream.zipLatestAll(
 		client.liveQueryStream(
@@ -106,8 +85,8 @@ const program = Effect.gen(function* () {
 			Effect.provide(
 				dmsLayer(
 					client,
-					(id) => console.log(`[live] open DM ${id}`),
-					() => console.log("[live] compose"),
+					(id) => Effect.sync(() => console.log(`[live] open DM ${id}`)),
+					Effect.sync(() => console.log("[live] compose")),
 				),
 			),
 		)

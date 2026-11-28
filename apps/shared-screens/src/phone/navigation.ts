@@ -22,6 +22,10 @@ export const makePhoneNavigation = Effect.map(Queue.unbounded<ShellIntent>(), (q
 						isAppHref(href)
 							? Effect.sync(() => intend(ShellIntent.Open({ href })))
 							: openExternal(href),
+					replace: (href) =>
+						isAppHref(href)
+							? Effect.sync(() => intend(ShellIntent.Replace({ href })))
+							: openExternal(href),
 					back: Effect.sync(() => intend(ShellIntent.Back())),
 				}),
 			),

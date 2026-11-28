@@ -527,13 +527,10 @@ export class RequestHost extends Command.Service<RequestHost>()("hazel/chat/Requ
 	args: { request: HostRequest },
 	success: MessageListMessage,
 }) {
-	static readonly layerWith = (handle: (request: HostRequest) => void) =>
+	static readonly layerWith = (handle: (request: HostRequest) => Effect.Effect<void>) =>
 		this.toLayer(
 			Effect.succeed(({ request }) =>
-				Effect.sync(() => {
-					handle(request)
-					return MessageListMessage.CompletedCommand()
-				}),
+				Effect.as(handle(request), MessageListMessage.CompletedCommand()),
 			),
 		)
 }
@@ -586,7 +583,7 @@ export class SelectRowText extends Command.Service<SelectRowText>()("hazel/chat/
 export const messageListLayer = (
 	data: ClientData["Service"],
 	rpc: HazelRpc["Service"],
-	handle: (request: HostRequest) => void,
+	handle: (request: HostRequest) => Effect.Effect<void>,
 	live: LiveConnection["Service"],
 ) =>
 	Layer.mergeAll(

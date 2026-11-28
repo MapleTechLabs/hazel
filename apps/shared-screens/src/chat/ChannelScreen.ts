@@ -3,7 +3,7 @@
 /**
  * A conversation on a phone (`docs/ios-native.md`, N2): the shared message list over the shared
  * composer, under the channel's name in the system bar. A DM is titled by its name as the sidebar
- * shows it. The list and the composer are the hosted ones (`../app/hosted`).
+ * shows it. `./hosted` gives it its wiring (`HostedChannelScreen`).
  */
 import { Subscription, UiSchema } from "@effect/ui"
 import { ClientData } from "@hazel/client-data"
@@ -11,9 +11,12 @@ import { Hazel } from "@hazel/ui/vocabulary/index"
 import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { eq } from "@tanstack/db"
 import { Effect, Schema, Stream } from "effect"
-import { HostedChannelComposer, HostedMessageList } from "../app/hosted"
+import { ChannelComposer } from "./composer/ChannelComposer"
+import { MessageList } from "./MessageList"
 
 export const ChannelScreenProps = Schema.Struct({
+	/** For the routes its rows open (a thread, a profile). */
+	orgSlug: Schema.String,
 	channelId: ChannelId,
 	organizationId: OrganizationId,
 	userId: UserId,
@@ -85,7 +88,7 @@ export const ChannelScreen = Hazel.component({
 				// The list over the composer, or the page, has the whole height and scrolls itself.
 				.fill(true)
 				.children(
-					HostedMessageList(h, {
+					MessageList(h, {
 						key: props.channelId,
 						props: {
 							channelId: props.channelId,
@@ -95,7 +98,7 @@ export const ChannelScreen = Hazel.component({
 							nowMs: props.nowMs,
 						},
 					}),
-					HostedChannelComposer(h, {
+					ChannelComposer(h, {
 						key: props.channelId,
 						props: {
 							channelId: props.channelId,

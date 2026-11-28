@@ -485,7 +485,10 @@ export const chromeStream = <M>(userId: UserId, to: (orgs: Array<Org>, me: Me | 
 	withData((data) => {
 		const c = data.collections
 		return Stream.zipLatest(
-			data.liveQueryStream<{ id: Org["id"]; name: string; logoUrl?: string | null }, Array<Org>>(
+			data.liveQueryStream<
+				{ id: Org["id"]; name: string; slug?: string | null; logoUrl?: string | null },
+				Array<Org>
+			>(
 				(q) =>
 					q
 						.from({ org: c.organizationCollection })
@@ -493,8 +496,19 @@ export const chromeStream = <M>(userId: UserId, to: (orgs: Array<Org>, me: Me | 
 							eq(member.organizationId, org.id),
 						)
 						.where(({ member, org }) => and(eq(member.userId, userId), isNull(org.deletedAt)))
-						.select(({ org }) => ({ id: org.id, name: org.name, logoUrl: org.logoUrl })),
-				(rows) => rows.map((row) => ({ id: row.id, name: row.name, logoUrl: row.logoUrl ?? null })),
+						.select(({ org }) => ({
+							id: org.id,
+							name: org.name,
+							slug: org.slug,
+							logoUrl: org.logoUrl,
+						})),
+				(rows) =>
+					rows.map((row) => ({
+						id: row.id,
+						name: row.name,
+						slug: row.slug ?? null,
+						logoUrl: row.logoUrl ?? null,
+					})),
 			),
 			data.liveQueryStream<
 				{ firstName: string; lastName: string; email: string; avatarUrl?: string | null },

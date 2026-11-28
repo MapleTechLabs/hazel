@@ -86,6 +86,7 @@ export type Discoverable = typeof Discoverable.Type
 export const Org = Schema.Struct({
 	id: OrganizationId,
 	name: Schema.String,
+	slug: Schema.NullOr(Schema.String),
 	logoUrl: Schema.NullOr(Schema.String),
 })
 export type Org = typeof Org.Type

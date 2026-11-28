@@ -125,18 +125,23 @@ const root = (signOut: Effect.Effect<void>) =>
 		const me = yield* currentUser(signOut)
 		yield* Stream.runDrain(data.syncSession(me.id)).pipe(Effect.forkScoped)
 		const membership = yield* firstMembership(me.id)
-		const context = {
-			userId: me.id,
-			organizationId: membership.member.organizationId,
-			orgSlug: membership.organization.slug ?? "",
-			cdnUrl: appShell().server.cdn ?? "",
-			linkPreviewUrl: LINK_PREVIEW_URL,
-		}
 		yield* Renderer.mount(
 			PhoneShell,
-			{ ...context, memberId: membership.member.id, nowMs: Date.now() },
+			{ cdnUrl: appShell().server.cdn ?? "", linkPreviewUrl: LINK_PREVIEW_URL },
 			native.container,
-		).pipe(Effect.provide(phoneHostLayer(context, signOut)))
+		).pipe(
+			Effect.provide(
+				phoneHostLayer(
+					{
+						me,
+						organizationId: membership.member.organizationId,
+						cdnUrl: appShell().server.cdn ?? "",
+						linkPreviewUrl: LINK_PREVIEW_URL,
+					},
+					signOut,
+				),
+			),
+		)
 		console.log(`[hazel] root mounted for ${me.id}`)
 		return yield* Effect.never
 	})

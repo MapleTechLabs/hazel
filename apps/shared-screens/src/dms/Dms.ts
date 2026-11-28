@@ -87,13 +87,10 @@ export class RequestNavigation extends Command.Service<RequestNavigation>()("haz
 	args: { channelId: ChannelId },
 	success: DmsMessage,
 }) {
-	static readonly layerWith = (navigate: (channelId: ChannelId) => void) =>
+	static readonly layerWith = (navigate: (channelId: ChannelId) => Effect.Effect<void>) =>
 		this.toLayer(
 			Effect.succeed(({ channelId }) =>
-				Effect.sync(() => {
-					navigate(channelId)
-					return DmsMessage.CompletedRequestNavigation()
-				}),
+				Effect.as(navigate(channelId), DmsMessage.CompletedRequestNavigation()),
 			),
 		)
 }
@@ -103,15 +100,8 @@ export class RequestCompose extends Command.Service<RequestCompose>()("hazel/dms
 	args: {},
 	success: DmsMessage,
 }) {
-	static readonly layerWith = (compose: () => void) =>
-		this.toLayer(
-			Effect.succeed(() =>
-				Effect.sync(() => {
-					compose()
-					return DmsMessage.CompletedRequestCompose()
-				}),
-			),
-		)
+	static readonly layerWith = (compose: Effect.Effect<void>) =>
+		this.toLayer(Effect.succeed(() => Effect.as(compose, DmsMessage.CompletedRequestCompose())))
 }
 
 interface DmRow {
@@ -446,8 +436,8 @@ export const Dms = Hazel.component({
 /** What a host provides: its data instance, navigation and compose. */
 export const dmsLayer = (
 	data: ClientData["Service"],
-	navigate: (channelId: ChannelId) => void,
-	compose: () => void,
+	navigate: (channelId: ChannelId) => Effect.Effect<void>,
+	compose: Effect.Effect<void>,
 ) =>
 	Layer.mergeAll(
 		Layer.succeed(ClientData, data),

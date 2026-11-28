@@ -13,6 +13,8 @@ export class Navigator extends Context.Service<
 	{
 		/** An in-app href (`/acme/chat/c1`) opens in the app; any other URL with the system. */
 		readonly open: (href: string) => Effect.Effect<void>
+		/** `href` takes the current screen's place (a redirect), so back skips the one it leaves. */
+		readonly replace: (href: string) => Effect.Effect<void>
 		/** One screen back. */
 		readonly back: Effect.Effect<void>
 	}

@@ -8,12 +8,12 @@ import { Component, Router } from "@effect/ui"
 import { ClientData, HazelRpc } from "@hazel/client-data"
 import { AssistantPanel } from "@hazel/shared-screens/assistant/AssistantPanel"
 import {
-	ChatHost,
 	HostedChannelSidebar,
-	HostedDms,
 	hostedSidebarLayer,
-} from "@hazel/shared-screens/app/hosted"
-import { isAppHref, Navigator } from "@hazel/shared-screens/app/navigator"
+	SidebarHost,
+} from "@hazel/shared-screens/channel-sidebar/hosted"
+import { DmsHost, HostedDms } from "@hazel/shared-screens/dms/hosted"
+import { navigatorWeb } from "./navigator"
 import { CustomersSidebar, customersSidebarLayer } from "@hazel/shared-screens/customers/CustomersSidebar"
 import { ChatSidebarSheet } from "@hazel/shared-screens/shell/ChatSidebarSheet"
 import { ChannelComposer } from "@hazel/shared-screens/chat/composer/ChannelComposer"
@@ -47,36 +47,16 @@ const withRouter = <A, E, R>(build: (push: (route: AppRoute) => void) => Layer.L
 
 const channelOf = (orgSlug: string) => (channelId: ChannelId) => AppRoute.ChatChannel({ orgSlug, channelId })
 
-/** The app's `Navigator` on the shell's Router: an in-app href is a push, any other URL a new tab. */
-const navigatorWeb = Layer.effect(
-	Navigator,
-	Effect.map(Effect.service(Router.Router), (router) =>
-		Navigator.of({
-			open: (href) =>
-				isAppHref(href)
-					? Effect.asVoid(router.push(routeOfPath(href)))
-					: Effect.sync(() => void window.open(href, "_blank", "noopener")),
-			back: Effect.asVoid(router.back),
-		}),
-	),
+/** The web's own side of the sidebar and DMs: the hint's storage, and compose's dialog. */
+const featureHostsWeb = Layer.mergeAll(
+	Layer.succeed(SidebarHost, { dismissHint: persistDismissedHint("create-channel") }),
+	Layer.succeed(DmsHost, {
+		compose: Effect.sync(() => publish({ _tag: "Shell", request: { _tag: "PressedComposeDm" } })),
+	}),
 )
 
-/** The web's own side of the chat screens: the hint's storage, compose, and the Foldkit page's list. */
-const chatHostWeb = Layer.succeed(ChatHost, {
-	sidebarAction: (action) =>
-		Match.valueTags(action, {
-			DismissHint: () => persistDismissedHint("create-channel"),
-			// The web app draws its own org switcher and account card (`chrome: false`).
-			OrgMenu: () => Effect.void,
-			AccountMenu: () => Effect.void,
-		}),
-	messageRequest: (_channelId, request) => Effect.sync(() => publish({ _tag: "MessageList", request })),
-	composeDm: Effect.sync(() => publish({ _tag: "Shell", request: { _tag: "PressedComposeDm" } })),
-	live: liveConnection,
-})
-
 /** What the hosted chat screens (`app/hosted`) take from the web: its data, Router and host. */
-const hostedWebLayer = Layer.mergeAll(navigatorWeb, chatHostWeb, Layer.succeed(ClientData, clientData))
+const hostedWebLayer = Layer.mergeAll(navigatorWeb, featureHostsWeb, Layer.succeed(ClientData, clientData))
 
 export const ShellChannelSidebar = Component.provide(HostedChannelSidebar, hostedWebLayer)
 
@@ -88,7 +68,7 @@ export const ShellMessageList = Component.provide(
 			messageListLayer(
 				clientData,
 				rpc,
-				(request) => publish({ _tag: "MessageList", request }),
+				(request) => Effect.sync(() => publish({ _tag: "MessageList", request })),
 				liveConnection,
 			),
 		),
