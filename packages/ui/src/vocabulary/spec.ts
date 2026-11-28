@@ -236,6 +236,8 @@ export const tags = {
 			strong: flag,
 			numeric: flag,
 			truncate: flag,
+			// Three lines, then an ellipsis (`pk5-text-clamp`: a company's description).
+			clamp: flag,
 			// Phase 4 (`pk0-status-dot`): the kit's 6pt status dot before the text, in its tone.
 			dot: flag,
 		},
@@ -253,7 +255,9 @@ export const tags = {
 		web: "A1",
 		ios: "S1",
 		content: "none",
-		props: { name: value(O.IconName) },
+		// Phase 4 (`ph2-view-glyph`): `tint` colours the glyph (a saved view's colour, as `Tab.tint`);
+		// `dot` draws a round mark in the icon's box instead of a glyph (a view with no icon).
+		props: { name: value(O.IconName), tint: value(O.TabTint), dot: flag },
 	}),
 	image: tag({
 		group: "content",

@@ -1,0 +1,19 @@
+{
+	"about": "A customer's tag (`tag`): a small grey chip, `text-xs`, with its muted remove mark.",
+	"root": {
+		"tag": "button",
+		"props": {
+			"label": "enterprise",
+			"variant": "tag",
+			"removable": true
+		},
+		"events": ["press", "remove"]
+	},
+	"frame": "inline",
+	"aria": [
+		{
+			"role": "button",
+			"name": "enterprise"
+		}
+	]
+}

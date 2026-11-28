@@ -38,6 +38,7 @@ public enum HazelTheme {
         case filter = "filter"
         case dashed = "dashed"
         case quiet = "quiet"
+        case tag = "tag"
     }
 
     public enum TextStep: String, CaseIterable, Sendable {
@@ -887,6 +888,9 @@ public enum HazelTheme {
                 Layer(when: When(options: ["variant": "quiet"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.clear, color: Colors.mutedFg, radius: 2, weight: 600)),
                 Layer(when: When(options: ["variant": "quiet"], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(color: Colors.mutedFg)),
                 Layer(when: When(options: ["variant": "quiet"], flags: [], states: [.hover], sizeClass: nil), part: nil, style: Style(color: Colors.fg)),
+                Layer(when: When(options: ["variant": "tag"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.secondary, color: Colors.secondaryFg, radius: 4, strong: false)),
+                Layer(when: When(options: ["variant": "tag"], flags: [], states: [], sizeClass: nil), part: "remove", style: Style(color: Colors.mutedFg, bleedX: 0, size: 10)),
+                Layer(when: When(options: ["variant": "tag"], flags: [], states: [.hover], sizeClass: nil), part: "remove", style: Style(color: Colors.fg)),
                 Layer(when: When(options: ["variant": "dashed"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.clear, color: Colors.fg3, borderColor: Colors.border, borderStyle: .dashed)),
                 Layer(when: When(options: ["variant": "dashed"], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(color: Colors.mutedFg)),
                 Layer(when: When(options: ["variant": "dashed"], flags: [], states: [.hover], sizeClass: nil), part: nil, style: Style(background: Colors.secondary, color: Colors.fg)),
@@ -930,6 +934,8 @@ public enum HazelTheme {
                 Layer(when: When(options: ["variant": "chip"], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(paddingX: 14, paddingY: 0, minHeight: 28, text: .label)),
                 Layer(when: When(options: ["variant": "filter"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(paddingX: 0, paddingStart: 10, gap: 4, text: .label)),
                 Layer(when: When(options: ["variant": "filter"], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(paddingX: 0, paddingStart: 10, gap: 4, text: .label)),
+                Layer(when: When(options: ["variant": "tag"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(paddingX: 4, paddingY: 2, paddingStart: 6, gap: 4, minHeight: 20, text: .caption, leading: 16)),
+                Layer(when: When(options: ["variant": "tag"], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(paddingX: 4, paddingY: 2, paddingStart: 6, gap: 4, minHeight: 20, text: .caption, leading: 16)),
                 Layer(when: When(options: ["variant": "quiet"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(paddingX: 0, paddingY: 0, gap: 6, minHeight: 0, text: .caption)),
                 Layer(when: When(options: ["variant": "quiet"], flags: [], states: [], sizeClass: nil), part: "icon", style: Style(size: 16)),
                 Layer(when: When(options: ["variant": "quiet"], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(paddingX: 0, paddingY: 0, gap: 6, minHeight: 0, text: .caption)),
@@ -1416,9 +1422,10 @@ public enum HazelTheme {
                 Layer(when: When(options: ["surface": "danger"], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(paddingX: 24, paddingY: 24)),
                 Layer(when: When(options: ["surface": "muted"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.muted, radius: 8, paddingX: 12, paddingY: 6, rowGap: 8)),
                 Layer(when: When(options: ["surface": "inset"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(radius: 8, ring: Colors.border, paddingX: 12, paddingY: 10, rowGap: 12)),
+                Layer(when: When(options: ["surface": "row"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(justify: .center, radius: 8, ring: Colors.border, paddingX: 12, paddingY: 4, rowGap: 4, minHeight: 32)),
                 Layer(when: When(options: ["surface": "flush"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.bg, borderColor: Colors.border, borderWidth: 1, radius: 12, rowGap: 0, shadow: "xs")),
                 Layer(when: When(options: ["surface": "hint"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.secondaryHalf, radius: 6, paddingX: 10, paddingY: 6, rowGap: 8, marginBottom: 4, marginX: 8)),
-                Layer(when: When(options: ["surface": "overlay"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.bg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 12, paddingY: 12, rowGap: 8, shadow: "xs")),
+                Layer(when: When(options: ["surface": "overlay"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(rowGap: 8)),
             ]
         )
 
@@ -2131,6 +2138,7 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: ["strong"], states: [], sizeClass: nil), part: nil, style: Style(strong: true)),
                 Layer(when: When(options: [:], flags: ["numeric"], states: [], sizeClass: nil), part: nil, style: Style(numeric: true)),
                 Layer(when: When(options: [:], flags: ["truncate"], states: [], sizeClass: nil), part: nil, style: Style(truncate: true)),
+                Layer(when: When(options: [:], flags: ["clamp"], states: [], sizeClass: nil), part: nil, style: Style(lineClamp: 3)),
                 Layer(when: When(options: ["role": "kbd", "tone": "default"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(color: Colors.fg3)),
             ]
         )

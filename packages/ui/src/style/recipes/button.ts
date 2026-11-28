@@ -158,6 +158,13 @@ export const button = defineRecipe<
 					parts: { icon: { color: "muted-fg" } },
 					states: { hover: { root: { color: "fg" } } },
 				},
+				// A customer's tag (`pk5-tag-chip`): `rounded bg-secondary text-secondary-fg text-xs`, its
+				// remove mark `size-2.5` and muted until hovered.
+				tag: {
+					root: { background: "secondary", color: "secondary-fg", radius: "sm", strong: false },
+					parts: { remove: { size: "2.5", bleedX: "0", color: "muted-fg" } },
+					states: { hover: { parts: { remove: { color: "fg" } } } },
+				},
 				// `+ Filter`: the plain intent with `border-border border-dashed text-fg-3 hover:text-fg`.
 				dashed: {
 					root: {
@@ -315,6 +322,33 @@ export const button = defineRecipe<
 			style: {
 				root: { paddingStart: "2.5", paddingX: "0", gap: "1", text: "label" },
 				regular: { root: { paddingStart: "2.5", paddingX: "0", gap: "1", text: "label" } },
+			},
+		},
+		// A tag has one size: `gap-1 py-0.5 pr-1 pl-1.5 text-xs` on the caption's 16px line, whatever
+		// line height its `size` would set (`regular` is 24px at the regular size class).
+		{
+			when: { variant: "tag" },
+			style: {
+				root: {
+					minHeight: "5",
+					gap: "1",
+					paddingStart: "1.5",
+					paddingX: "1",
+					paddingY: "0.5",
+					text: "caption",
+					leading: "4",
+				},
+				regular: {
+					root: {
+						minHeight: "5",
+						gap: "1",
+						paddingStart: "1.5",
+						paddingX: "1",
+						paddingY: "0.5",
+						text: "caption",
+						leading: "4",
+					},
+				},
 			},
 		},
 		// The quiet action has one size: no padding or minimum height, `gap-1.5 text-xs`.

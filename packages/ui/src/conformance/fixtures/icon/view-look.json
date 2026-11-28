@@ -1,0 +1,34 @@
+{
+	"about": "A saved view's look (`ph2-view-glyph`): its icon in its colour, or a dot in it.",
+	"root": {
+		"tag": "stack",
+		"props": {
+			"axis": "horizontal",
+			"align": "center",
+			"density": "compact"
+		},
+		"children": [
+			{
+				"tag": "icon",
+				"props": {
+					"name": "user",
+					"tint": "blue"
+				}
+			},
+			{
+				"tag": "icon",
+				"props": {
+					"dot": true,
+					"tint": "purple"
+				}
+			},
+			{
+				"tag": "icon",
+				"props": {
+					"dot": true
+				}
+			}
+		]
+	},
+	"frame": "inline"
+}

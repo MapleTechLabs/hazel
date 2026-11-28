@@ -197,7 +197,8 @@ export const kpiTile = <M>(h: HtmlBuilder<M>, options: KpiTileOptions): Html => 
 			h.Class(
 				cardClassName(
 					twMerge(
-						"flex min-w-0 flex-col gap-1.5 overflow-visible p-4 max-md:p-3",
+						// `surface`: one ink step over the page in dark, white in light (Ink, #680).
+						"flex min-w-0 flex-col gap-1.5 overflow-visible bg-surface p-4 max-md:p-3",
 						state === "empty" && "border-dashed shadow-none",
 						href !== undefined && "relative transition-colors hover:bg-wash",
 						options.className,
