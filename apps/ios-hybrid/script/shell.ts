@@ -17,6 +17,8 @@ export interface AppShell {
 	readonly server: ShellServer
 	/** Keeps another install's discovery JSON, or Hazel's (`null`); the shell then starts over on it. */
 	readonly setServer: (document: string | null) => void
+	/** Starts the script over (after a sign-out: the sign-in screen). */
+	readonly restart: () => void
 	/** The web app at `path`, pushed in a web view: a route with no native screen yet. */
 	readonly openFallback: (path: string) => void
 }

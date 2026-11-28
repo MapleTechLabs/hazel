@@ -41,7 +41,8 @@ final class AppModel: PathOpener {
             setServer: { [weak self] document in
                 ChosenServer.set(document)
                 self?.restart()
-            }
+            },
+            restart: { [weak self] in self?.restart() }
         ))
     }
 

@@ -9,6 +9,8 @@ import { makeFakeBridge } from "./fake-bridge"
 const g = globalThis as Record<string, unknown>
 
 /** The host's `auth`: SHA-256 as CryptoKit answers it, and a sheet the test answers. */
+const cancelled = { count: 0 }
+
 const install = (answer: (done: (url: string | null, error: string | null) => void) => void) => {
 	const opened: Array<{ url: string; scheme: string; ephemeral: boolean }> = []
 	g.__native = {
@@ -24,6 +26,9 @@ const install = (answer: (done: (url: string | null, error: string | null) => vo
 			) => {
 				opened.push({ url, scheme, ephemeral })
 				answer(done)
+			},
+			cancelSignIn: () => {
+				cancelled.count++
 			},
 		},
 	}
@@ -53,6 +58,17 @@ describe("CryptoJsc", () => {
 })
 
 describe("openSignInSheet", () => {
+	it("dismisses the sheet when the wait is interrupted", async () => {
+		install(() => {})
+		cancelled.count = 0
+		await Effect.runPromise(
+			openSignInSheet("https://app.hazel.sh/auth/desktop", "com.hazel.native", true).pipe(
+				Effect.timeoutOption("10 millis"),
+			),
+		)
+		expect(cancelled.count).toBe(1)
+	})
+
 	it("answers the callback URL", async () => {
 		const opened = install((done) => done("com.hazel.native://auth/callback?code=c&state=s", null))
 		const url = await Effect.runPromise(

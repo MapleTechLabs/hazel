@@ -43,8 +43,11 @@ export type SignInSheetError = "cancelled" | "unavailable"
 /** Opens the sign-in sheet at `url` and waits for the callback to `callbackScheme`. */
 export const openSignInSheet = (url: string, callbackScheme: string, ephemeral: boolean) =>
 	Effect.callback<string, SignInSheetError>((resume) => {
-		auth().auth.openSignIn(url, callbackScheme, ephemeral, (callbackUrl, error) => {
+		const { auth: host } = auth()
+		host.openSignIn(url, callbackScheme, ephemeral, (callbackUrl, error) => {
 			if (callbackUrl !== null) resume(Effect.succeed(callbackUrl))
 			else resume(Effect.fail(error === "cancelled" ? "cancelled" : "unavailable"))
 		})
+		// The app stopped waiting (Cancel): the sheet goes too.
+		return Effect.sync(() => host.cancelSignIn())
 	})

@@ -27,8 +27,12 @@ final class NativeAuth: @unchecked Sendable {
                 MainActor.assumeIsolated { SignInSheet.shared.open(target, scheme: scheme, ephemeral: ephemeral, callback: callback) }
             }
         }
+        let cancelSignIn: @convention(block) () -> Void = {
+            DispatchQueue.main.async { MainActor.assumeIsolated { SignInSheet.shared.cancel() } }
+        }
         let object = JSValue(newObjectIn: context)!
         object.setObject(sha256, forKeyedSubscript: "sha256" as NSString)
+        object.setObject(cancelSignIn, forKeyedSubscript: "cancelSignIn" as NSString)
         object.setObject(openSignIn, forKeyedSubscript: "openSignIn" as NSString)
         return object
     }
@@ -56,6 +60,12 @@ final class SignInSheet: NSObject, ASWebAuthenticationPresentationContextProvidi
         session.prefersEphemeralWebBrowserSession = ephemeral
         self.session = session
         if !session.start() { callback.call([NSNull(), "unavailable"]) }
+    }
+
+    /// Dismisses the open sheet (its caller stopped waiting); its callback still answers `cancelled`.
+    func cancel() {
+        session?.cancel()
+        session = nil
     }
 
     nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {

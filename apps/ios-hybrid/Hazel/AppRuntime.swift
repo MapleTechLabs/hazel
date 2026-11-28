@@ -81,10 +81,12 @@ struct AppServer: Sendable {
     }
 }
 
-/// What the script asks of the app (`script/shell.ts`): the web fallback and the install.
+/// What the script asks of the app (`script/shell.ts`): the web fallback, the install, and a fresh
+/// start (after a sign-out).
 struct ShellCommands: Sendable {
     let openFallback: @MainActor @Sendable (String) -> Void
     let setServer: @MainActor @Sendable (String?) -> Void
+    let restart: @MainActor @Sendable () -> Void
 
     func object(in context: JSContext, server: AppServer) -> JSValue {
         let object = JSValue(newObjectIn: context)!
@@ -101,7 +103,11 @@ struct ShellCommands: Sendable {
             let value = document.isString ? document.toString() : nil
             DispatchQueue.main.async { MainActor.assumeIsolated { setServer(value) } }
         }
+        let restart: @convention(block) () -> Void = { [restart] in
+            DispatchQueue.main.async { MainActor.assumeIsolated { restart() } }
+        }
         object.setObject(open, forKeyedSubscript: "openFallback" as NSString)
+        object.setObject(restart, forKeyedSubscript: "restart" as NSString)
         object.setObject(set, forKeyedSubscript: "setServer" as NSString)
         return object
     }

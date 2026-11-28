@@ -17,11 +17,16 @@ import {
 } from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
 import { appRequestsLayer } from "@hazel/shared-screens/app/requests"
 import type { OrganizationId } from "@hazel/schema"
-import { Deferred, Effect, Layer, Option, Stream } from "effect"
-import { NativeSessionControls, PlatformJsc } from "../../../packages/client-data/src/platform/jsc/index.ts"
+import { Deferred, Effect, Layer, Match, Option, Stream } from "effect"
+import type { HttpClient } from "effect/http"
+import {
+	NativeSessionControls,
+	onSessionRejected,
+	PlatformJsc,
+} from "../../../packages/client-data/src/platform/jsc/index.ts"
 import { makeNativeHost } from "../../../packages/ui/src/native/host.ts"
 import { type Json, WIRE_VERSION } from "../../../packages/ui/src/native/wire.ts"
-import { authFlowsJsc } from "./auth"
+import { authFlowsJsc, signOutJsc } from "./auth"
 import { appShell, serverLabel } from "./shell"
 
 declare const __native: { post: (json: string) => void }
@@ -51,65 +56,105 @@ const signIn = Effect.gen(function* () {
 	console.log("[hazel] signed in")
 }).pipe(Effect.scoped)
 
-/** N0's root: the shared sidebar; a channel opens in the web fallback until N2 makes it native. */
-const root = Effect.gen(function* () {
-	const data = yield* ClientData
-	const rpc = yield* HazelRpc
-	const me = yield* rpc("user.me", undefined)
-	yield* Stream.runDrain(data.syncSession(me.id)).pipe(Effect.forkScoped)
-	const org = yield* data
-		.liveQueryStream(
-			(q) => q.from({ org: data.collections.organizationCollection }),
-			(rows: ReadonlyArray<{ id: OrganizationId; slug: string | null }>) => rows[0],
-		)
-		.pipe(
-			Stream.filter((row) => row !== undefined),
-			Stream.runHead,
-			Effect.map(Option.getOrThrow),
-		)
-	const slug = org.slug ?? ""
-	const shell = appShell()
-	yield* Renderer.mount(
-		ChannelSidebar,
-		{
-			organizationId: org.id,
-			userId: me.id,
-			orgSlug: slug,
-			activeChannelId: null,
-			membersActive: false,
-			hintDismissed: false,
-			paletteKey: null,
-			chrome: true,
-		},
-		native.container,
-	).pipe(
-		Effect.provide(
-			Layer.mergeAll(
-				channelSidebarLayer(
-					data,
-					(to) =>
-						shell.openFallback(
-							matchTarget(to, {
-								Channel: (id) => `/${slug}/chat/${id}`,
-								Members: () => `/${slug}/settings/team`,
-							}),
-						),
-					(action) => Effect.sync(() => console.log(`[hazel] sidebar action ${action._tag}`)),
-				),
-				sidebarWritesLayer(data, rpc),
-				appRequestsLayer((request) => console.log(`[hazel] request ${request._tag}`)),
-			),
-		),
-	)
-	console.log(`[hazel] root mounted for ${me.id}`)
-	return yield* Effect.never
+/** How long a signed-in account's organizations may take to sync before it counts as having none. */
+const NO_ORGANIZATION_AFTER = "10 seconds"
+
+/**
+ * Ends the session (on the API, best effort, and in the keychain) and starts the script over, at
+ * the sign-in screen.
+ */
+const signOutAndRestart = Effect.gen(function* () {
+	const controls = yield* NativeSessionControls
+	yield* signOutJsc(appShell().server).pipe(Effect.ignore)
+	controls.signOut()
+	appShell().restart()
 })
+
+/** N0's root: the shared sidebar; a channel opens in the web fallback until N2 makes it native. */
+const root = (signOut: Effect.Effect<void>) =>
+	Effect.gen(function* () {
+		const data = yield* ClientData
+		const rpc = yield* HazelRpc
+		const shell = appShell()
+		// A session the API refuses is signed out here too, so the next start signs in.
+		const me = yield* rpc("user.me", undefined).pipe(
+			Effect.catchTag("UnauthorizedError", () => Effect.andThen(signOut, Effect.never)),
+		)
+		yield* Stream.runDrain(data.syncSession(me.id)).pipe(Effect.forkScoped)
+		const found = yield* data
+			.liveQueryStream(
+				(q) => q.from({ org: data.collections.organizationCollection }),
+				(rows: ReadonlyArray<{ id: OrganizationId; slug: string | null }>) => rows[0],
+			)
+			.pipe(
+				Stream.filter((row) => row !== undefined),
+				Stream.runHead,
+				Effect.timeoutOption(NO_ORGANIZATION_AFTER),
+				Effect.map(Option.flatten),
+			)
+		// No organization (a new account): the web's onboarding, until it is a shared screen.
+		if (Option.isNone(found)) {
+			shell.openFallback("/onboarding")
+			return yield* Effect.never
+		}
+		const org = found.value
+		const slug = org.slug ?? ""
+		yield* Renderer.mount(
+			ChannelSidebar,
+			{
+				organizationId: org.id,
+				userId: me.id,
+				orgSlug: slug,
+				activeChannelId: null,
+				membersActive: false,
+				hintDismissed: false,
+				paletteKey: null,
+				chrome: true,
+			},
+			native.container,
+		).pipe(
+			Effect.provide(
+				Layer.mergeAll(
+					channelSidebarLayer(
+						data,
+						(to) =>
+							shell.openFallback(
+								matchTarget(to, {
+									Channel: (id) => `/${slug}/chat/${id}`,
+									Members: () => `/${slug}/settings/team`,
+								}),
+							),
+						(action) =>
+							Match.valueTags(action, {
+								AccountMenu: ({ key }) =>
+									key === "sign-out"
+										? signOut
+										: Effect.sync(() => console.log(`[hazel] account menu ${key}`)),
+								// The org switcher and the hint arrive with the More tab (N3).
+								OrgMenu: ({ key }) =>
+									Effect.sync(() => console.log(`[hazel] org menu ${key}`)),
+								DismissHint: () => Effect.void,
+							}),
+					),
+					sidebarWritesLayer(data, rpc),
+					appRequestsLayer((request) => console.log(`[hazel] request ${request._tag}`)),
+				),
+			),
+		)
+		console.log(`[hazel] root mounted for ${me.id}`)
+		return yield* Effect.never
+	})
 
 const program = Effect.gen(function* () {
 	console.log(`[hazel] shims installed: ${shimmed.join(", ") || "none"}`)
 	const controls = yield* NativeSessionControls
 	if (!controls.hasCredential()) yield* signIn
-	return yield* root
+	const signOut = signOutAndRestart.pipe(
+		Effect.provide(yield* Effect.context<NativeSessionControls | HttpClient.HttpClient>()),
+	)
+	// The API refused the session (a 401 on the sync token): back to sign-in.
+	onSessionRejected(() => Effect.runFork(signOut))
+	return yield* root(signOut)
 })
 
 program.pipe(

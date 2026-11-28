@@ -24,7 +24,7 @@ final class FallbackPage: NSObject, WKScriptMessageHandler, Identifiable {
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
         // Only the page's console: the hybrid's native islands are not drawn here.
-        configuration.userContentController.add(self, name: "hazel")
+        configuration.userContentController.add(WeakMessages(self), name: "hazel")
         webView.isInspectable = true
         webView.isOpaque = false
         webView.backgroundColor = .systemBackground
@@ -40,6 +40,17 @@ final class FallbackPage: NSObject, WKScriptMessageHandler, Identifiable {
         guard let body = message.body as? [String: Any], body["type"] as? String == "console" else { return }
         let text = body["text"] as? String ?? ""
         Self.log.log("[page] \(text, privacy: .public)")
+    }
+}
+
+/// The content controller keeps its handlers: through this, the page it serves can still go away.
+private final class WeakMessages: NSObject, WKScriptMessageHandler {
+    weak var target: (any WKScriptMessageHandler)?
+
+    init(_ target: any WKScriptMessageHandler) { self.target = target }
+
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        target?.userContentController(controller, didReceive: message)
     }
 }
 

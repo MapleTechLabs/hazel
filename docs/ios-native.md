@@ -52,11 +52,11 @@ Every phase is a PR in a stack against `main`. Verify on the simulator through T
 (screenshots, recordings for gestures), record snapshot tests for each renderer touched, and keep
 `bun run --cwd packages/ui test:web` green when a shared recipe moves.
 
-| Phase | Work | Proof |
-| --- | --- | --- |
-| N0 | `Hazel` target: HazelUI, the JavaScriptCore runtime, sign-in and the keychain session from the hybrid, a web fallback view | Sign-in reaches the native root; a fallback route shows |
-| N1 | Route table in shared code; the native root: `hz:tabBar`, one `hz:navigation` per tab, route and stack in sync, deep links | Recordings: tabs, push, swipe back, a cancelled swipe, a deep link |
-| N2 | Chat: channel list, DMs, Activity as tab roots; the conversation and thread as shared screens (lanes PC8, PC9); native message and row menus; emoji picker; composer | Screenshots against the web; 120 Hz scroll logs; typing, sending, reactions, threads |
-| N3 | Notifications, profile, More, the phone's settings pages; the stubs they need (choiceGroup, slider, banner, property, disclosure, ...); customers in the fallback | Snapshot tests per renderer; screenshots per flow |
-| N4 | Push opening its screen, photo picker and uploads, share, lightbox | A device run with G4 and G7 numbers |
-| N5 | Walkthrough, delete `HazelHybrid`, TestFlight when the user asks | |
+| Phase | Work                                                                                                                                                                 | Proof                                                                                |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| N0    | `Hazel` target: HazelUI, the JavaScriptCore runtime, sign-in and the keychain session from the hybrid, a web fallback view                                           | Sign-in reaches the native root; a fallback route shows                              |
+| N1    | Route table in shared code; the native root: `hz:tabBar`, one `hz:navigation` per tab, route and stack in sync, deep links                                           | Recordings: tabs, push, swipe back, a cancelled swipe, a deep link                   |
+| N2    | Chat: channel list, DMs, Activity as tab roots; the conversation and thread as shared screens (lanes PC8, PC9); native message and row menus; emoji picker; composer | Screenshots against the web; 120 Hz scroll logs; typing, sending, reactions, threads |
+| N3    | Notifications, profile, More, the phone's settings pages; the stubs they need (choiceGroup, slider, banner, property, disclosure, ...); customers in the fallback    | Snapshot tests per renderer; screenshots per flow                                    |
+| N4    | Push opening its screen, photo picker and uploads, share, lightbox                                                                                                   | A device run with G4 and G7 numbers                                                  |
+| N5    | Walkthrough, delete `HazelHybrid`, TestFlight when the user asks                                                                                                     |                                                                                      |

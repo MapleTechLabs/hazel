@@ -157,6 +157,8 @@ export interface NativeBridge {
 			ephemeral: boolean,
 			done: (callbackUrl: string | null, error: string | null) => void,
 		) => void
+		/** Dismisses the open sheet, if any. */
+		readonly cancelSignIn: () => void
 	}
 	/**
 	 * The server this build talks to. `token` is a stand-in session for a local fixture server

@@ -67,6 +67,18 @@ const fetchOver =
 			// SAFETY: `discoverServer` reads only `ok` and `json()` of the response.
 		) as unknown as Promise<Response>
 
+/** `@hazel/auth/desktop` for the native client on `server`, its session in the keychain record. */
+const desktopAuthOn = (server: ShellServer) =>
+	makeDesktopAuth({
+		apiOrigin: server.api,
+		hostedUrl: `${server.app}/auth/desktop`,
+		client: nativeClient,
+	}).pipe(Effect.provide(Layer.mergeAll(BrowserJsc, layerVault(KeychainStore), CryptoJsc)))
+
+/** Ends the session on the API and forgets it in the keychain (the vault's own sign-out). */
+export const signOutJsc = (server: ShellServer) =>
+	Effect.flatMap(desktopAuthOn(server), (auth) => auth.signOut)
+
 /**
  * `AuthFlows` for the native app on `server`. `signedIn` runs once a browser sign-in has stored its
  * session: the app then leaves the sign-in screen.
@@ -76,11 +88,7 @@ export const authFlowsJsc = (server: ShellServer, signedIn: Effect.Effect<void>)
 		AuthFlows,
 		Effect.gen(function* () {
 			const http = yield* HttpClient.HttpClient
-			const auth = yield* makeDesktopAuth({
-				apiOrigin: server.api,
-				hostedUrl: `${server.app}/auth/desktop`,
-				client: nativeClient,
-			}).pipe(Effect.provide(Layer.mergeAll(BrowserJsc, layerVault(KeychainStore), CryptoJsc)))
+			const auth = yield* desktopAuthOn(server)
 			// The native app signs in only through the sheet: the web's own flows never run here.
 			const webOnly = Effect.fail(new AuthFlowError({ reason: "Unavailable" }))
 			const handoffOnly = Effect.fail(new HandoffError({ reason: "Unavailable" }))
