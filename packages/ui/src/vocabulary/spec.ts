@@ -320,6 +320,8 @@ export const tags = {
 			sync: option(O.ProviderMark, "none"),
 			// On a 40pt secondary tile, the header's size (`p4-channel-settings-header`).
 			tile: flag,
+			// With `tile`: the neutral `iconTile`'s hairline border (the chat index cards).
+			tileBorder: flag,
 		},
 	}),
 	// A snapping, edge-to-edge horizontal row of avatar-over-label tiles (`people-strip`).

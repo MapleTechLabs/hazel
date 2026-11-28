@@ -201,6 +201,7 @@ export const channelCard = <Msg>(
 			.leading(
 				h.channelIcon
 					.tile(true)
+					.tileBorder(true)
 					.private(channel.type === "private")
 					.emoji(channel.icon ?? undefined)
 					.customer(
