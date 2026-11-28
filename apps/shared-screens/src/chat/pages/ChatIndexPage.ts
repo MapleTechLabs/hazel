@@ -139,9 +139,10 @@ export const ChatIndexPage = ChatIndexDef.make({
 	view: (h, model) => {
 		const scope = scopeOf(h.props.session)
 		if (scope === null || !model.loaded)
-			return h.screen
+			return h.stack
 				.key("chat-index")
-				.surface("page")
+				.density("relaxed")
+				.inset("page")
 				.children(h.progress.style("spinner").label("Loading..."))
 		const { member } = h.props.session
 		const canCreate = member !== null && canPerform(RPC_SCOPE_MAP, member.role, "channel.create")

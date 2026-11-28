@@ -57,9 +57,10 @@ export const ChatDmsPage = Hazel.component({
 	view: (h, model) => {
 		const scope = scopeOf(h.props.session)
 		if (scope === null || !model.loaded)
-			return h.screen
+			return h.stack
 				.key("chat-dms")
-				.surface("page")
+				.density("relaxed")
+				.inset("page")
 				.children(h.progress.style("spinner").label("Loading..."))
 		const dms = model.groups.dmChannels
 		const newMessage = h.button
