@@ -129,7 +129,8 @@ private struct ScreenContent: View {
 }
 
 /// The screen's children inside its margins (`screen-margins`): 16pt each side, except rows and
-/// containers that inset themselves or run edge to edge (sections, items, lists, the people strip).
+/// containers that run edge to edge (sections, items, lists, the people strip) or inset themselves
+/// (a stack or scroll with an `inset`).
 private struct ScreenChildren: View {
     let tree: Tree
     let node: Node
@@ -138,13 +139,17 @@ private struct ScreenChildren: View {
         "hz:section", "hz:item", "hz:list", "hz:listDivider", "hz:scroll", "hz:peopleStrip", "hz:divider", "hz:ext",
     ]
 
+    static func bleeds(_ child: Node) -> Bool {
+        fullBleed.contains(child.tag) || (child[prop: "inset"]?.string).map { $0 != "none" } == true
+    }
+
     var body: some View {
         let _ = RenderCounter.recordList(node.id)
         let margin = HazelTheme.space["4"] ?? 0
         ForEach(node.children, id: \.self) { id in
             if let child = tree.node(id), child.tag != "hz:slot" {
                 NodeView(tree: tree, node: child)
-                    .padding(.horizontal, Self.fullBleed.contains(child.tag) ? 0 : margin)
+                    .padding(.horizontal, Self.bleeds(child) ? 0 : margin)
             }
         }
     }

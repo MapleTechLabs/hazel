@@ -1,15 +1,24 @@
 // @effect-diagnostics experimentalApiUsage:off
 import { describe, expect, it } from "vitest"
 import type { Session } from "../app/session"
-import { initialModel, open, pop, receiveSession, replace, showToast } from "./PhoneShell"
+import type { OrganizationId } from "@hazel/schema"
+import {
+	initialModel,
+	open,
+	otherOrganizationOf,
+	pop,
+	receiveSession,
+	replace,
+	showToast,
+} from "./PhoneShell"
 
 const C = "00000003-0000-4000-8000-000000000001"
 const empty = initialModel(0)
 
-const sessionOf = (orgSlug: string): Session => ({
+const sessionOf = (orgSlug: string, name = orgSlug): Session => ({
 	auth: "SignedIn",
 	user: null,
-	organization: null,
+	organization: { id: `org-${name}` as OrganizationId, name, slug: orgSlug, logoUrl: null },
 	member: null,
 	orgSlug,
 })
@@ -59,6 +68,21 @@ describe("PhoneShell navigation", () => {
 		expect(same.stacks.home).toEqual([`/hazel/chat/${C}`])
 		const other = receiveSession({ ...same, tab: "dms" }, sessionOf("acme"))
 		expect(other).toMatchObject({ tab: "home", stacks: { home: [], dms: [] } })
+	})
+
+	it("keeps the tabs when the organization is renamed (its slug changes, its id does not)", () => {
+		const deep = open(receiveSession(empty, sessionOf("hazel")), `/hazel/chat/${C}`)
+		const renamed = receiveSession(deep, sessionOf("hazel-hq", "hazel"))
+		expect(renamed.stacks.home).toEqual([`/hazel/chat/${C}`])
+	})
+
+	it("asks for another organization by a link's slug, then opens the link there", () => {
+		const atHazel = receiveSession(empty, sessionOf("hazel"))
+		expect(otherOrganizationOf(atHazel, `/hazel/chat/${C}`)).toBeNull()
+		expect(otherOrganizationOf(atHazel, `/acme/chat/${C}`)).toBe("acme")
+		// The link is pending before the switch runs, so the session that answers it opens it.
+		const moved = receiveSession({ ...atHazel, pendingHref: `/acme/chat/${C}` }, sessionOf("acme"))
+		expect(moved).toMatchObject({ pendingHref: null, tab: "home", stacks: { home: [`/acme/chat/${C}`] } })
 	})
 
 	it("shows toasts, a toast with a shown one's id replacing it", () => {

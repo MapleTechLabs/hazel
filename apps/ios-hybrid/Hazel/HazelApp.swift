@@ -46,7 +46,7 @@ final class AppModel: PathOpener {
                 ChosenServer.set(document)
                 self?.restart()
             },
-            restart: { [weak self] in self?.restart() }
+            restart: { [weak self] path in self?.restart(opening: path) }
         ))
     }
 
@@ -56,11 +56,13 @@ final class AppModel: PathOpener {
         runtime.openPath(path)
     }
 
-    /// Starts over on another install (or Hazel's again): a fresh script, no pages kept.
-    func restart() {
+    /// Starts over on another install (or Hazel's again): a fresh script, no pages kept. `path`
+    /// waits in the new runtime until its script has started.
+    func restart(opening path: String? = nil) {
         FallbackPages.forget()
         runtime.stop()
         runtime = makeRuntime()
+        if let path { openPath(path) }
         runtime.start()
     }
 }

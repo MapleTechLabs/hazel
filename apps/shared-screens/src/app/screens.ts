@@ -18,6 +18,9 @@ import { HostedHomePage } from "../org/hosted"
 import { moreHrefsOf } from "../org/pages/more/hrefs"
 import { MorePage } from "../org/pages/more/MorePage"
 import { ProfilePage } from "../org/pages/profile/ProfilePage"
+import { GeneralPage } from "../settings/pages/general/GeneralPage"
+import { InvitationsPage } from "../settings/pages/invitations/InvitationsPage"
+import { TeamPage } from "../settings/pages/team/TeamPage"
 import { AppRoute, hrefOf, type RouteOf, type RouteTag } from "./route"
 import type { Session } from "./session"
 
@@ -60,6 +63,8 @@ export interface ScreenInputs<Tag extends RouteTag> {
 	readonly key: string
 	readonly cdnUrl: string
 	readonly linkPreviewUrl: string
+	/** The install's web app, where shared links point. */
+	readonly appOrigin: string
 	readonly nowMs: number
 }
 
@@ -67,8 +72,7 @@ export interface ScreenInputs<Tag extends RouteTag> {
  * What the registry's screens need from a host, checked here: a screen that needs another service
  * fails to compile until the host's set grows with it.
  */
-export type ScreenServices = View.Child<never, unknown> extends infer _ ? ScreenRequirements : never
-type ScreenRequirements = Requirement<typeof screenParts>[number]
+export type ScreenServices = Requirement<typeof screenParts>[number]
 
 type Requirement<T> = { readonly [K in keyof T]: T[K] extends View.Child<never, infer R> ? R : never }
 declare const screenParts: readonly [
@@ -79,6 +83,9 @@ declare const screenParts: readonly [
 	ReturnType<typeof MorePage<never>>,
 	ReturnType<typeof HostedHomePage<never>>,
 	ReturnType<typeof ProfilePage<never>>,
+	ReturnType<typeof TeamPage<never>>,
+	ReturnType<typeof InvitationsPage<never>>,
+	ReturnType<typeof GeneralPage<never>>,
 ]
 
 interface Entry<Tag extends RouteTag> {
@@ -176,6 +183,7 @@ export const screens: Registry = {
 	},
 	Profile: {
 		title: "Profile",
+		framed: true,
 		screen: (h, { key, route, session }) =>
 			ProfilePage(h, {
 				key,
@@ -188,7 +196,23 @@ export const screens: Registry = {
 	},
 	ChatFiles: { title: "Files" },
 	ChatFilesMedia: { title: "Media" },
-	TeamSettings: { title: "Members" },
+	// Workspace settings (`settings/pages`): the app's data, the clipboard, image uploads.
+	SettingsGeneral: {
+		title: "Workspace",
+		framed: true,
+		screen: (h, { key, route, session, appOrigin, nowMs }) =>
+			GeneralPage(h, { key, props: { session, orgSlug: route.orgSlug, origin: appOrigin, nowMs } }),
+	},
+	TeamSettings: {
+		title: "Team",
+		framed: true,
+		screen: (h, { key, session }) => TeamPage(h, { key, props: { session } }),
+	},
+	SettingsInvitations: {
+		title: "Invitations",
+		framed: true,
+		screen: (h, { key, session }) => InvitationsPage(h, { key, props: { session } }),
+	},
 }
 
 /** A route's entry. */

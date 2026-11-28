@@ -117,7 +117,8 @@ struct AppServer: Sendable {
 /// sign-out).
 struct ShellCommands: Sendable {
     let setServer: @MainActor @Sendable (String?) -> Void
-    let restart: @MainActor @Sendable () -> Void
+    /// A fresh script; a path (a full load's) opens in it once it has started.
+    let restart: @MainActor @Sendable (String?) -> Void
 
     func object(in context: JSContext, server: AppServer) -> JSValue {
         let object = JSValue(newObjectIn: context)!
@@ -131,8 +132,9 @@ struct ShellCommands: Sendable {
             let value = document.isString ? document.toString() : nil
             DispatchQueue.main.async { MainActor.assumeIsolated { setServer(value) } }
         }
-        let restart: @convention(block) () -> Void = { [restart] in
-            DispatchQueue.main.async { MainActor.assumeIsolated { restart() } }
+        let restart: @convention(block) (JSValue) -> Void = { [restart] path in
+            let value = path.isString ? path.toString() : nil
+            DispatchQueue.main.async { MainActor.assumeIsolated { restart(value) } }
         }
         // Not the app's own: the system opens it (Safari, another app).
         let openUrl: @convention(block) (String) -> Void = { url in

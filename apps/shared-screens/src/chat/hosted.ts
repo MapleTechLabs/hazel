@@ -95,6 +95,8 @@ const composerHostLayer = Layer.effect(
 	Effect.map(Effect.service(ComposerRequests), (requests) =>
 		ComposerHost.of({
 			requests: requests.of,
+			// Each notice is a desktop key's (Escape, Shift+Tab) or the list's own: a sent message
+			// already scrolls the phone's list to its end (it follows the bottom).
 			notify: () => Effect.void,
 			dragging: Stream.make(false),
 			thread: Stream.make(null),

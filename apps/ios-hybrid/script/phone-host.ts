@@ -2,13 +2,12 @@
 // @effect-diagnostics experimentalApiUsage:off
 /**
  * What the phone app alone decides, as the services the shared screens ask for: the session, the
- * install, the app's requests, each feature's host (`SidebarHost`, `DmsHost`, `MessageListHost`) and
+ * app's requests, each feature's host (`SidebarHost`, `DmsHost`, `MessageListHost`) and
  * the platform's ports. Everything else is shared (`shared-screens/src/*\/hosted.ts`, `phone/`).
  */
 import { HazelApiClientLayer } from "@hazel/client-data"
 import type { CurrentUser } from "@hazel/domain"
 import type { OrganizationId } from "@hazel/schema"
-import { Install } from "@hazel/shared-screens/app/install"
 import { type AppRequestHandlers, appRequestsOn } from "@hazel/shared-screens/app/requests"
 import { SidebarHost } from "@hazel/shared-screens/channel-sidebar/hosted"
 import { MessageListHost } from "@hazel/shared-screens/chat/hosted"
@@ -18,6 +17,7 @@ import { DmsHost } from "@hazel/shared-screens/dms/hosted"
 import { makePhoneNavigation } from "@hazel/shared-screens/phone/navigation"
 import { ShellIntent } from "@hazel/shared-screens/phone/PhoneShell"
 import { makePhoneSession } from "@hazel/shared-screens/phone/session"
+import { ImageUploads, UploadFailedError } from "@hazel/shared-screens/settings/shared/upload"
 import { Effect, Layer, Stream } from "effect"
 import { ClipboardJsc } from "../../../packages/client-data/src/platform/jsc/index.ts"
 import { appShell } from "./shell"
@@ -35,10 +35,13 @@ const notYet = (what: string) =>
 		),
 	)
 
-const requests = (signOut: Effect.Effect<void>, refreshUser: Effect.Effect<void>): AppRequestHandlers => ({
+const toast = (title: string, intent: "info" | "error" = "info") =>
+	Effect.sync(() => navigation.intend(ShellIntent.Toast({ toast: { intent, title, description: null } })))
+
+const requests = (signOut: Effect.Effect<void>, refreshUser: Effect.Effect<boolean>): AppRequestHandlers => ({
 	ShowToast: ({ toast }) => Effect.sync(() => navigation.intend(ShellIntent.Toast({ toast }))),
-	// A full load (after joining a workspace): the app starts over, with every query and sync.
-	LoadPage: () => Effect.sync(() => appShell().restart()),
+	// A full load (after joining a workspace): the app starts over, with every query and sync, on `href`.
+	LoadPage: ({ href }) => Effect.sync(() => appShell().restart(href)),
 	OpenModal: ({ modal }) => notYet(modal._tag),
 	OpenCommandPalette: () => notYet("Search"),
 	SignOut: () => signOut,
@@ -46,10 +49,19 @@ const requests = (signOut: Effect.Effect<void>, refreshUser: Effect.Effect<void>
 	SetTheme: () => notYet("Themes"),
 	SetSoundSettings: () => notYet("Notification sounds"),
 	SetKeybindings: () => notYet("Keyboard shortcuts"),
-	RefreshCurrentUser: () => refreshUser,
+	RefreshCurrentUser: () =>
+		Effect.flatMap(refreshUser, (ok) =>
+			ok ? Effect.void : toast("Couldn't refresh your profile", "error"),
+		),
 	// The App Store updates the app.
 	CheckForUpdate: () => Effect.void,
 	InstallUpdate: () => Effect.void,
+})
+
+/** No image uploads until the photo picker (N4): a pick says so and picks nothing. */
+const noImageUploads = Layer.succeed(ImageUploads, {
+	pick: () => Effect.as(notYet("Uploading images"), null),
+	upload: () => Effect.fail(new UploadFailedError({ failure: "NotConfigured" })),
 })
 
 /** No files until the photo picker (N4): a pick is empty, nothing uploads. */
@@ -69,7 +81,7 @@ const featureHosts = Layer.mergeAll(
 		createIssue: () => notYet("Creating an issue"),
 		openAttachment: () => notYet("Opening attachments"),
 		retry: () => notYet("Retrying a message"),
-		jumpToReply: () => Effect.void,
+		jumpToReply: () => notYet("Jumping to a reply"),
 	}),
 	Layer.succeed(LiveConnection, noLiveConnection),
 )
@@ -77,8 +89,6 @@ const featureHosts = Layer.mergeAll(
 export interface PhoneContext {
 	readonly me: CurrentUser.Schema
 	readonly organizationId: OrganizationId
-	readonly cdnUrl: string
-	readonly linkPreviewUrl: string
 }
 
 /** Every service the phone's screens need beyond the data platform (`PlatformJsc`, `ClientData`). */
@@ -87,7 +97,7 @@ export const phoneHostLayer = (context: PhoneContext, signOut: Effect.Effect<voi
 		Effect.map(makePhoneSession(context.me, context.organizationId), (session) =>
 			Layer.mergeAll(
 				session.layer,
-				Layer.succeed(Install, { cdnUrl: context.cdnUrl, linkPreviewUrl: context.linkPreviewUrl }),
+				noImageUploads,
 				appRequestsOn(requests(signOut, session.refreshUser)),
 				featureHosts,
 				ClipboardJsc,

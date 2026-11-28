@@ -11,14 +11,14 @@ struct HzScroll: View {
 
     var body: some View {
         let _ = RenderCounter.record(node.id)
-        let axis = node[prop: "axis"]?.string
-        let style = HazelTheme.Recipes.scroll.style(options: axis.map { ["axis": $0] } ?? [:], sizeClass: HazelTheme.SizeClass(horizontal))
+        let style = HazelTheme.Recipes.scroll.style(options: node.options(["axis", "inset"]), sizeClass: HazelTheme.SizeClass(horizontal))
         let row = style.scrollAxes.map { $0 == .horizontal } ?? (style.layout == .row)
         let tree = tree, node = node
         ScrollViewReader { proxy in
             ViewThatFits(in: row ? .horizontal : .vertical) {
-                content(row)
-                ScrollView(row ? .horizontal : .vertical) { content(row) }
+                content(row).hzInset(style)
+                // The gutter scrolls with the content, as the web's padding does.
+                ScrollView(row ? .horizontal : .vertical) { content(row).hzInset(style) }
             }
             .hazelCommands(tree, node) { name, args in
                 guard name == .scrollTo else { throw CommandError("scroll does not handle \(name.rawValue)") }

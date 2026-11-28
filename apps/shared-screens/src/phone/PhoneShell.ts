@@ -8,12 +8,12 @@
  * shows. It follows the session as it changes (`CurrentSession`): another organization starts its
  * tabs over, with no restart. Navigation, toasts included, reaches it as `ShellIntents`.
  */
-import { Subscription, UiSchema } from "@effect/ui"
+import { Command, Component, Subscription, UiSchema } from "@effect/ui"
 import { Hazel } from "@hazel/ui/vocabulary/index"
-import { Context, Duration, Match, Schema, Stream } from "effect"
+import { Context, Duration, Effect, Layer, Match, Schema, Stream } from "effect"
 import { CurrentSession } from "../app/current-session"
 import { AppToast } from "../app/requests"
-import { hrefOf, routeOfPath } from "../app/route"
+import { AppRoute, hrefOf, routeOfPath } from "../app/route"
 import { AppTab, frameOf, screenOf, TABS, tabOf, titleOf } from "../app/screens"
 import { Session } from "../app/session"
 import { FallbackScreen } from "./FallbackScreen"
@@ -38,6 +38,7 @@ export const PhoneShellProps = Schema.Struct({
 	/** The install's uploads and link previews (fixed for a run: another install restarts the app). */
 	cdnUrl: Schema.String,
 	linkPreviewUrl: Schema.String,
+	appOrigin: Schema.String,
 })
 export type PhoneShellProps = typeof PhoneShellProps.Type
 
@@ -55,6 +56,8 @@ export const PhoneShellModel = Schema.Struct({
 	nowMs: Schema.Finite,
 	toasts: Schema.Array(ShownToast),
 	nextToastId: Schema.Finite,
+	/** A link into another organization, opened once the session has moved there. */
+	pendingHref: Schema.NullOr(Schema.String),
 })
 export type PhoneShellModel = typeof PhoneShellModel.Type
 
@@ -66,6 +69,8 @@ export const PhoneShellMessage = UiSchema.TaggedEnum({
 	ReceivedSession: { session: Session },
 	Ticked: { nowMs: Schema.Finite },
 	DismissedToast: { id: Schema.Finite },
+	/** `SwitchToOrganization`'s answer for the link it was asked for. */
+	Switched: { ok: Schema.Boolean },
 })
 export type PhoneShellMessage = typeof PhoneShellMessage.Type
 
@@ -79,6 +84,7 @@ export const initialModel = (nowMs: number): PhoneShellModel => ({
 	nowMs,
 	toasts: [],
 	nextToastId: 1,
+	pendingHref: null,
 })
 
 const withStack = (
@@ -109,11 +115,36 @@ export const pop = (model: PhoneShellModel, depth: number): PhoneShellModel => (
 export const replace = (model: PhoneShellModel, href: string): PhoneShellModel =>
 	model.stacks[model.tab].length === 0 ? open(model, href) : open(pop(model, 1), href)
 
-/** The session now: another organization starts the tabs over at their roots. */
-export const receiveSession = (model: PhoneShellModel, session: Session): PhoneShellModel =>
-	model.session !== null && model.session.orgSlug === session.orgSlug
-		? { ...model, session }
-		: { ...model, session, tab: "home", stacks: emptyStacks }
+/** The session now: another organization starts the tabs over at their roots (by its id). */
+export const receiveSession = (model: PhoneShellModel, session: Session): PhoneShellModel => {
+	if (model.session !== null && model.session.organization?.id === session.organization?.id)
+		return { ...model, session }
+	const moved: PhoneShellModel = { ...model, session, tab: "home", stacks: emptyStacks, pendingHref: null }
+	// The link that asked for this organization opens in it now.
+	return model.pendingHref === null ? moved : open(moved, model.pendingHref)
+}
+
+/** The organization a route belongs to, when it is not the session's (a link into another one). */
+export const otherOrganizationOf = (model: PhoneShellModel, href: string): string | null => {
+	const route = routeOfPath(href)
+	const slug = "orgSlug" in route ? route.orgSlug : null
+	return slug !== null && model.session !== null && slug !== model.session.orgSlug ? slug : null
+}
+
+/** Moves the session to the organization at `orgSlug` (`CurrentSession.switchTo`). */
+export class SwitchToOrganization extends Command.Service<SwitchToOrganization>()(
+	"hazel/phone/SwitchToOrganization",
+	{ args: { orgSlug: Schema.String }, success: PhoneShellMessage },
+) {
+	static readonly layer = this.toLayer(
+		Effect.map(
+			Effect.service(CurrentSession),
+			(session) =>
+				({ orgSlug }) =>
+					Effect.map(session.switchTo(orgSlug), (ok) => PhoneShellMessage.Switched({ ok })),
+		),
+	)
+}
 
 /** Shows `toast`; one with the `id` of a shown toast replaces it in place. */
 export const showToast = (model: PhoneShellModel, toast: AppToast): PhoneShellModel => ({
@@ -124,6 +155,23 @@ export const showToast = (model: PhoneShellModel, toast: AppToast): PhoneShellMo
 	],
 	nextToastId: model.nextToastId + 1,
 })
+
+/** How long a toast stays up; a sticky or loading one stays until it is dismissed or replaced. */
+const TOAST_DURATION = Duration.seconds(4)
+
+const expires = (toast: AppToast) => toast.isSticky !== true && toast.intent !== "loading"
+
+/** Closes the toast shown as `id` once `TOAST_DURATION` has passed (the renderer leaves it to the view). */
+export class ExpireToast extends Command.Service<ExpireToast>()("hazel/phone/ExpireToast", {
+	args: { id: Schema.Finite },
+	success: PhoneShellMessage,
+}) {
+	static readonly layer = this.toLayer(
+		Effect.succeed(({ id }) =>
+			Effect.as(Effect.sleep(TOAST_DURATION), PhoneShellMessage.DismissedToast({ id })),
+		),
+	)
+}
 
 /** A screen stays alive while it is a tab's root or in a tab's stack (`h.keepAlive`'s predicate). */
 const isLive = ({ key, model }: { readonly key: string; readonly model: PhoneShellModel }) =>
@@ -140,12 +188,26 @@ const toneOf = (intent: AppToast["intent"]) =>
 		Match.orElse(() => "neutral" as const),
 	)
 
-export const PhoneShell = Hazel.component({
+const PhoneShellDef = Hazel.component({
 	name: "PhoneShell",
 	props: PhoneShellProps,
 	model: PhoneShellModel,
 	message: PhoneShellMessage,
-}).make({
+})
+
+/** Shows `shown` over `base` (the model now by default) and, unless it stays, closes it later. */
+const show =
+	(shown: AppToast, base?: PhoneShellModel) =>
+	($: Parameters<ReturnType<typeof PhoneShellDef.update>>[0]) => {
+		const model = base ?? $.model
+		const next = $.set(showToast(model, shown))
+		return expires(shown) ? next.run(ExpireToast.make({ id: model.nextToastId })) : next
+	}
+
+const toast = (title: string, base?: PhoneShellModel) =>
+	show({ intent: "info", title, description: null }, base)
+
+const PhoneShellNoDeps = PhoneShellDef.make({
 	init: () => initialModel(Date.now()),
 	update: {
 		// The selected tab again goes back to its root, as every iOS app's tab bar does.
@@ -157,13 +219,22 @@ export const PhoneShell = Hazel.component({
 		Popped: ($, { depth }) => pop($.model, depth),
 		Intended: ($, { intent }) =>
 			Match.valueTags(intent, {
-				Open: ({ href }) => open($.model, href),
+				Open: ({ href }) => {
+					if (routeOfPath(href)._tag === "NotFound") return toast("This page isn't in the app")($)
+					const orgSlug = otherOrganizationOf($.model, href)
+					// Pending before the switch, so the session that answers it finds the link.
+					return orgSlug === null
+						? open($.model, href)
+						: $.set({ ...$.model, pendingHref: href }).run(SwitchToOrganization.make({ orgSlug }))
+				},
 				Replace: ({ href }) => replace($.model, href),
 				Back: () => pop($.model, 1),
-				Toast: ({ toast }) => showToast($.model, toast),
+				Toast: ({ toast: shown }) => show(shown)($),
 			}),
 		ReceivedSession: ($, { session }) => receiveSession($.model, session),
 		Ticked: ($, { nowMs }) => ({ ...$.model, nowMs }),
+		Switched: ($, { ok }) =>
+			ok ? $.model : toast("You're not in that workspace", { ...$.model, pendingHref: null })($),
 		DismissedToast: ($, { id }) => ({
 			...$.model,
 			toasts: $.model.toasts.filter((shown) => shown.id !== id),
@@ -194,11 +265,17 @@ export const PhoneShell = Hazel.component({
 	view: (h, model) => {
 		const session = model.session
 		if (session === null) return h.screen.surface("page").children(h.progress.style("spinner"))
+		// No membership here any more: the user's organizations (the web's page, until it is shared).
+		if (session.organization === null) {
+			const href = hrefOf(AppRoute.SelectOrganization())
+			return FallbackScreen(h, { key: href, props: { path: href, title: "Workspaces" } })
+		}
 		const inputs = {
 			session,
 			nowMs: model.nowMs,
 			cdnUrl: h.props.cdnUrl,
 			linkPreviewUrl: h.props.linkPreviewUrl,
+			appOrigin: h.props.appOrigin,
 		}
 		// A route's screen from the registry, or its fallback; kept alive while it is in a stack or a
 		// tab's root, so another tab, or a screen pushed over it, finds it as it was left.
@@ -244,3 +321,7 @@ export const PhoneShell = Hazel.component({
 			)
 	},
 })
+
+export const PhoneShell = PhoneShellNoDeps.pipe(
+	Component.provide(Layer.mergeAll(SwitchToOrganization.layer, ExpireToast.layer)),
+)

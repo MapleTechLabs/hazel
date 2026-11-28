@@ -127,20 +127,14 @@ const root = (signOut: Effect.Effect<void>) =>
 		const membership = yield* firstMembership(me.id)
 		yield* Renderer.mount(
 			PhoneShell,
-			{ cdnUrl: appShell().server.cdn ?? "", linkPreviewUrl: LINK_PREVIEW_URL },
+			{
+				cdnUrl: appShell().server.cdn ?? "",
+				linkPreviewUrl: LINK_PREVIEW_URL,
+				appOrigin: appShell().server.app,
+			},
 			native.container,
 		).pipe(
-			Effect.provide(
-				phoneHostLayer(
-					{
-						me,
-						organizationId: membership.member.organizationId,
-						cdnUrl: appShell().server.cdn ?? "",
-						linkPreviewUrl: LINK_PREVIEW_URL,
-					},
-					signOut,
-				),
-			),
+			Effect.provide(phoneHostLayer({ me, organizationId: membership.member.organizationId }, signOut)),
 		)
 		console.log(`[hazel] root mounted for ${me.id}`)
 		return yield* Effect.never

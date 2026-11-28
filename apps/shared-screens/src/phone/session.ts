@@ -9,7 +9,7 @@ import { ClientData, HazelRpc } from "@hazel/client-data"
 import type { CurrentUser } from "@hazel/domain"
 import type { OrganizationId } from "@hazel/schema"
 import { and, eq } from "@tanstack/db"
-import { Effect, Layer, Stream, SubscriptionRef } from "effect"
+import { Effect, Layer, Option, Stream, SubscriptionRef } from "effect"
 import { CurrentSession } from "../app/current-session"
 import type { Session, SessionMember, SessionOrganization, SessionUser } from "../app/session"
 import { SwitchOrganization } from "../shell/Chrome"
@@ -58,11 +58,12 @@ export const makePhoneSession = (me: CurrentUser.Schema, organizationId: Organiz
 						})),
 				(rows) => rows[0],
 			)
+		// A membership that is gone (removed, the organization deleted) is a session with none: the
+		// shell then offers the user's organizations, never a dead one.
 		const changes = Stream.zipLatest(
 			SubscriptionRef.changes(user),
 			SubscriptionRef.changes(organization).pipe(Stream.switchMap(membershipIn)),
 		).pipe(
-			Stream.filter(([, row]) => row !== undefined),
 			Stream.map(([sessionUser, row]): Session => ({
 				auth: "SignedIn",
 				user: sessionUser,
@@ -71,15 +72,42 @@ export const makePhoneSession = (me: CurrentUser.Schema, organizationId: Organiz
 				orgSlug: row?.organization.slug ?? null,
 			})),
 		)
+		/** The user's membership in the organization at `orgSlug`, from the synced rows. */
+		const organizationAt = (orgSlug: string) =>
+			data
+				.liveQueryStream<{ readonly id: OrganizationId }, OrganizationId | undefined>(
+					(q) =>
+						q
+							.from({ member: organizationMemberCollection })
+							.innerJoin({ org: organizationCollection }, ({ member, org }) =>
+								eq(org.id, member.organizationId),
+							)
+							.where(({ member, org }) => and(eq(member.userId, me.id), eq(org.slug, orgSlug)))
+							.select(({ org }) => ({ id: org.id })),
+					(rows) => rows[0]?.id,
+				)
+				.pipe(Stream.runHead, Effect.map(Option.flatMap(Option.fromNullishOr)))
 		return {
 			layer: Layer.mergeAll(
-				Layer.succeed(CurrentSession, { changes }),
+				Layer.succeed(CurrentSession, {
+					changes,
+					switchTo: (orgSlug) =>
+						organizationAt(orgSlug).pipe(
+							Effect.flatMap(
+								Option.match({
+									onNone: () => Effect.succeed(false),
+									onSome: (id) => Effect.as(SubscriptionRef.set(organization, id), true),
+								}),
+							),
+						),
+				}),
 				SwitchOrganization.layerWith((id) => Effect.runSync(SubscriptionRef.set(organization, id))),
 			),
-			/** `user.me` again, into the session (a changed name or avatar). */
+			/** `user.me` again, into the session (a changed name or avatar); whether it answered. */
 			refreshUser: rpc("user.me", undefined).pipe(
 				Effect.flatMap((fresh) => SubscriptionRef.set(user, userOf(fresh))),
-				Effect.ignore,
+				Effect.as(true),
+				Effect.orElseSucceed(() => false),
 			),
 		}
 	})

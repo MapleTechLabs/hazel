@@ -88,6 +88,11 @@ extension View {
             .frame(minHeight: style.lineHeight(sizeClass))
     }
 
+    /// A layout's gutter (`inset`): the style's padding alone, no box.
+    public func hzInset(_ style: HazelTheme.Style) -> some View {
+        padding(.horizontal, style.paddingX ?? 0).padding(.vertical, style.paddingY ?? 0)
+    }
+
     /// A style's box: padding, minimum size, fill, ring, corner radius, bottom divider, opacity.
     public func hzBox(_ style: HazelTheme.Style) -> some View {
         let shape = RoundedRectangle(cornerRadius: min(style.radius ?? 0, 1000), style: .continuous)
