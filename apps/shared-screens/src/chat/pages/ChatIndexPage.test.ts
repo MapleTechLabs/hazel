@@ -110,6 +110,19 @@ describe("chat index page", () => {
 		})
 	})
 
+	test("every channel card draws its icon on the bordered tile, an emoji channel's too", () => {
+		const s = Scene.start(ChatIndexPage, { session: session() }).subscription(
+			CHANNELS,
+			ChatIndexMessage.UpdatedChannels({
+				groups: { ...groups, publicChannels: [...groups.publicChannels, channel(6, { icon: "🚀" })] },
+			}),
+		)
+		const icons = Locator.all(s.root, Locator.tag("hz:channelIcon"))
+		expect(icons).toHaveLength(2)
+		for (const icon of icons) expect(icon.props).toMatchObject({ tile: true, tileBorder: true })
+		expect(icons.map((icon) => icon.props?.["emoji"])).toContain("🚀")
+	})
+
 	test("the private tab dims a muted channel; the DMs tab names partners and groups", () => {
 		const s = Scene.start(ChatIndexPage, { session: session() })
 			.subscription(CHANNELS, ChatIndexMessage.UpdatedChannels({ groups }))
