@@ -206,12 +206,15 @@ const defs = {
 	NotFound: def("/*", { path: Schema.String }),
 }
 
-type Defs = typeof defs
-type FieldsOf = { readonly [Tag in keyof Defs]: Defs[Tag]["fields"] }
+/** Each tag's fields, by tag. */
+const fieldsOf = <D extends Record<string, Def<Schema.Struct.Fields>>>(all: D) => {
+	const out: Partial<{ [K in keyof D]: D[K]["fields"] }> = {}
+	for (const [tag, route] of Object.entries(all)) Object.assign(out, { [tag]: route.fields })
+	// SAFETY: the loop wrote every tag of `all`, each with its own definition's fields.
+	return out as { readonly [K in keyof D]: D[K]["fields"] }
+}
 
-const fieldsByTag = Object.fromEntries(
-	Object.entries(defs).map(([tag, route]) => [tag, route.fields]),
-) as unknown as FieldsOf
+const fieldsByTag = fieldsOf(defs)
 
 /** Every route: a constructor per tag (`AppRoute.ChatChannel({ orgSlug, channelId })`), `match`, `isAnyOf`. */
 export const AppRoute = UiSchema.TaggedEnum(fieldsByTag)
@@ -284,30 +287,39 @@ export const routeOfPath = (href: string): AppRoute => {
 	const notFound = AppRoute.NotFound({ path: pathnameOf(path) })
 	const resolved = Option.getOrUndefined(table.resolve(path))
 	if (resolved === undefined || resolved.invalid.length > 0) return notFound
-	// SAFETY: the union's values are `{ _tag, params, search }` (Effect UI's route value).
-	const route = resolved.route as unknown as TableRoute
+	const route: TableRoute = resolved.route
 	if (route._tag === "NotFound") return notFound
-	const flat: Record<string, unknown> = { _tag: route._tag }
-	for (const slot of slots[route._tag] ?? []) {
-		flat[slot.field] = slot.isQuery
-			? Option.fromNullishOr(route.search[slot.key])
-			: route.params[slot.key]
-	}
-	// SAFETY: built field by field from the tag's own slots, decoded by its schemas.
-	return flat as AppRoute
+	const params = new Map(Object.entries(route.params))
+	const search = new Map(Object.entries(route.search))
+	// The flat value, field by field from the tag's slots, then decoded as the route it is.
+	const flat = Object.fromEntries([
+		["_tag", route._tag],
+		...(slots[route._tag] ?? []).map((slot) => [
+			slot.field,
+			slot.isQuery ? Option.fromNullishOr(search.get(slot.key)) : params.get(slot.key),
+		]),
+	])
+	return Option.getOrElse(decodeRoute(flat), () => notFound)
 }
+
+const decodeRoute = Schema.decodeUnknownOption(AppRoute)
 
 /** The URL a route value prints to; `routeOfPath(hrefOf(route))` gives the route back. */
 export const hrefOf = (route: AppRoute): string => {
 	if (route._tag === "NotFound") return route.path
-	const values = route as unknown as Readonly<Record<string, unknown>>
-	const params: Record<string, unknown> = {}
-	const search: Record<string, unknown> = {}
-	for (const slot of slots[route._tag] ?? []) {
-		const value = values[slot.field]
-		if (!slot.isQuery) params[slot.key] = value
-		else if (Option.isOption(value) && Option.isSome(value)) search[slot.key] = value.value
-	}
+	const values = new Map(Object.entries(route))
+	const tagSlots = slots[route._tag] ?? []
+	const params = Object.fromEntries(
+		tagSlots.filter((slot) => !slot.isQuery).map((slot) => [slot.key, values.get(slot.field)]),
+	)
+	const search = Object.fromEntries(
+		tagSlots.flatMap((slot) => {
+			const value = values.get(slot.field)
+			return slot.isQuery && Option.isOption(value) && Option.isSome(value)
+				? [[slot.key, value.value]]
+				: []
+		}),
+	)
 	// SAFETY: the table's own value shape for this tag (`TableRoute`).
 	const href = table.print({ _tag: route._tag, params, search } as never)
 	// A space in the query prints as `+`, as `URLSearchParams` (and the web's links) always did; a

@@ -8,6 +8,7 @@
  * through `pop`, and every way a screen navigates (links, requests) reaches `ShellIntents`.
  */
 import { Subscription, UiSchema } from "@effect/ui"
+import { WebFallback } from "@hazel/ui/extensions/WebFallback"
 import { Hazel } from "@hazel/ui/vocabulary/index"
 import { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Context, Match, Schema, Stream } from "effect"
@@ -31,13 +32,6 @@ export class ShellIntents extends Context.Service<
 	ShellIntents,
 	{ readonly intents: Stream.Stream<ShellIntent> }
 >()("hazel/phone/ShellIntents") {}
-
-/** A route the host draws itself until its screen is shared: the web app at `path`. */
-export const WebFallback = Hazel.extension({
-	name: "WebFallback",
-	props: Schema.Struct({ path: Schema.String }),
-	platforms: ["ios"],
-})
 
 export const PhoneShellProps = Schema.Struct({
 	organizationId: OrganizationId,
