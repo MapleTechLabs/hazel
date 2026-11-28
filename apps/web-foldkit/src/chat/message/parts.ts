@@ -67,6 +67,23 @@ export const syncBadge = <M>(h: HtmlBuilder<M>, provider: SyncProvider): Html =>
 	)
 }
 
+/** The provider's logo for an avatar's corner (`avatar`'s `badge`): a Slack or Discord person. */
+export const syncMark = <M>(h: HtmlBuilder<M>, provider: SyncProvider): Html => {
+	const { label, icon, iconClassName } = SYNC_PROVIDERS[provider]
+	const title = `${label} member`
+	return h.span(
+		[
+			h.Class(
+				"flex size-4.5 translate-x-1/4 translate-y-1/4 items-center justify-center rounded-sm bg-bg",
+			),
+			h.Role("img"),
+			h.AriaLabel(title),
+			h.Attribute("title", title),
+		],
+		[icon(h, { className: cx("size-3.5", iconClassName) })],
+	)
+}
+
 /** On a customer's message in a linked channel: the one tinted tag; its title says why. */
 const customerTag = <M>(h: HtmlBuilder<M>, title: string): Html =>
 	badge(h, { intent: "primary", className: "self-center", attributes: [h.Attribute("title", title)] }, [

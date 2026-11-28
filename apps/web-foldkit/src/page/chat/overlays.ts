@@ -158,6 +158,10 @@ export const reactionModalOf = (model: Model) => (model.open._tag === "ReactionM
 export const contextMenuOf = (model: Model) => (model.open._tag === "ContextMenu" ? model.open : null)
 
 /** The open popover in the shape the popover host takes. */
+/** Closes an open profile popover (its action ran); any other overlay stays. */
+export const closePopover = (model: Model): Model =>
+	model.open._tag === "Popover" ? { ...model, open: OpenOverlay.None() } : model
+
 export const activePopoverOf = (model: Model) =>
 	model.open._tag === "Popover" ? { key: model.open.key, popover: model.open.popover } : null
 

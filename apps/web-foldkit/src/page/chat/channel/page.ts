@@ -55,6 +55,10 @@ export { MAX_WINDOW } from "./window"
 
 // INIT
 
+/** The thread panel's profile card closes once one of its actions runs. */
+const withoutProfilePopover = (model: Model): Model =>
+	modifyFields(model, { overlays: Overlays.closePopover })
+
 export const listId = (channelId: string) => `message-list-${channelId}`
 
 export interface InitOptions {
@@ -647,11 +651,12 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			}),
 		}),
 		ClickedMessageUser: ({ userId, viewerId, name }) => {
+			const closed = withoutProfilePopover(model)
 			const organizationId = model.channel?.organizationId
 			return organizationId === undefined
-				? { model }
+				? { model: closed }
 				: {
-						model,
+						model: closed,
 						commands: [
 							FindUserDm({
 								fromChannelId: model.channelId,
@@ -682,16 +687,19 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			}
 		},
 		ClickedViewProfile: ({ userId }) => ({
-			model,
+			model: withoutProfilePopover(model),
 			outMessage: PageOutMessage.RequestedNavigation({
 				route: AppRoute.Profile({ orgSlug: model.orgSlug, userId }),
 				replace: false,
 			}),
 		}),
 		ClickedMentionUser: ({ userId }) =>
-			Write.askComposer(model, Write.focusedComposer(model), { _tag: "InsertMention", userId }),
+			Write.askComposer(withoutProfilePopover(model), Write.focusedComposer(model), {
+				_tag: "InsertMention",
+				userId,
+			}),
 		ClickedCopyProfileField: ({ field, text }) =>
-			Write.copy(model, text, field === "email" ? "Email" : "UserId"),
+			Write.copy(withoutProfilePopover(model), text, field === "email" ? "Email" : "UserId"),
 		ClickedReplyPreview: ({ fromMessageId, messageId }) =>
 			Jump.toMessage(model, fromMessageId, messageId),
 		LocatedJumpTarget: ({ messageId, newerCount }) => Jump.located(model, messageId, newerCount),
