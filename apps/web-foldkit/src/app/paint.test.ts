@@ -129,6 +129,24 @@ describe("drawing the paint on the next load", () => {
 		expect(document.documentElement.classList.contains("dark")).toBe(true)
 	})
 
+	test("carries the stylesheets the kit added at runtime, and they go with the paint", () => {
+		const sheet = document.createElement("style")
+		sheet.id = "hz-chat-styles"
+		sheet.textContent = "[data-hz-part=row]{display:flex}"
+		document.head.append(sheet)
+		try {
+			savePaint(document, localStorage)
+		} finally {
+			sheet.remove()
+		}
+		const paint = load()!
+		const styles = paint.querySelectorAll("style")
+		expect(styles).toHaveLength(1)
+		expect(styles[0]!.textContent).toBe("[data-hz-part=row]{display:flex}")
+		// The saved markup carries no id, so the kit's `getElementById` check still adds its own.
+		expect(JSON.parse(localStorage.getItem(PAINT_KEY)!).html).not.toContain('id="hz-chat-styles"')
+	})
+
 	test("`/` resumes the painted page", () => {
 		savePaint(document, localStorage)
 		window.history.replaceState(null, "", "/?from=pwa")

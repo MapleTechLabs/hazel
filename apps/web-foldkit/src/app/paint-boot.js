@@ -11,7 +11,7 @@ export function hazelPaintBoot(win) {
 	var USER_KEY = "hazel:last-user"
 	// A sign-in that started elsewhere lands on `/` to go back there (`auth/return-to.ts`): not resumed.
 	var RETURN_TO_KEY = "hazel:auth:return-to"
-	var VERSION = 1
+	var VERSION = 2
 	var MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 	// The longest the paint stays up, from when it appears: whatever the app's script does, a slow
 	// or failed load never leaves the page covered by an inert copy (`paint.ts`, `MAX_PAINT_MS`).
