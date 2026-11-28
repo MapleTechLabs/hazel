@@ -11,7 +11,6 @@ import { Model } from "./app/model"
 import { hostContext, subscriptions } from "./app/subscription"
 import { init, update } from "./app/update"
 import { view } from "./app/view"
-import { viewTransition } from "./app/view-transition"
 import { NotificationSinks } from "./app/notification-sinks"
 import { ResourcesLive } from "./rpc"
 import * as PendingAnnouncement from "./ui/aria/pending-announcement"
@@ -39,7 +38,5 @@ export const makeHost = (container: HTMLElement, flags: HostFlags) =>
 		ports: hostPorts,
 		resources: Layer.mergeAll(ResourcesLive, NotificationSinks.layer, PendingAnnouncement.layer),
 		container,
-		// An image viewer opening or closing morphs its image to and from the page.
-		viewTransition,
 		devTools: { Message },
 	})
