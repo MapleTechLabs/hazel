@@ -103,20 +103,23 @@ export interface PhoneContext {
 	readonly organizationId: OrganizationId
 }
 
-/** Every service the phone's screens need beyond the data platform (`PlatformJsc`, `ClientData`). */
-export const phoneHostLayer = (context: PhoneContext, signOut: Effect.Effect<void>) =>
-	Layer.unwrap(
-		Effect.map(makePhoneSession(context.me, context.organizationId), (session) =>
-			Layer.mergeAll(
-				session.layer,
-				noImageUploads,
-				appRequestsOn(requests(signOut, session.refreshUser)),
-				featureHosts,
-				ClipboardJsc,
-				ComposerRequests.layer,
-				Drafts.layer,
-				noFiles,
-				HazelApiClientLayer,
-			),
-		),
-	).pipe(Layer.provideMerge(navigation.layer((url) => Effect.sync(() => appShell().openUrl(url)))))
+/**
+ * Every service the phone's screens need beyond the data platform (`PlatformJsc`, `ClientData`),
+ * and the session's background work (`prefetch`), which the caller runs for as long as the shell
+ * lives: a fiber forked while the layer builds would end with `Renderer.mount`, not with the shell.
+ */
+export const makePhoneHost = (context: PhoneContext, signOut: Effect.Effect<void>) =>
+	Effect.map(makePhoneSession(context.me, context.organizationId), (session) => ({
+		prefetch: session.prefetch,
+		layer: Layer.mergeAll(
+			session.layer,
+			noImageUploads,
+			appRequestsOn(requests(signOut, session.refreshUser)),
+			featureHosts,
+			ClipboardJsc,
+			ComposerRequests.layer,
+			Drafts.layer,
+			noFiles,
+			HazelApiClientLayer,
+		).pipe(Layer.provideMerge(navigation.layer((url) => Effect.sync(() => appShell().openUrl(url))))),
+	}))

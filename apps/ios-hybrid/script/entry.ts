@@ -24,7 +24,7 @@ import { makeNativeHost } from "../../../packages/ui/src/native/host.ts"
 import { type Json, WIRE_VERSION } from "../../../packages/ui/src/native/wire.ts"
 import { authFlowsJsc, signOutJsc } from "./auth"
 import { installDemo } from "./demo"
-import { navigation, phoneHostLayer } from "./phone-host"
+import { makePhoneHost, navigation } from "./phone-host"
 import { appShell, serverLabel } from "./shell"
 
 declare const __native: { post: (json: string) => void }
@@ -131,6 +131,9 @@ const root = (signOut: Effect.Effect<void>) =>
 		const me = yield* currentUser(signOut)
 		yield* Stream.runDrain(data.syncSession(me.id)).pipe(Effect.forkScoped)
 		const membership = yield* firstMembership(me.id)
+		const host = yield* makePhoneHost({ me, organizationId: membership.member.organizationId }, signOut)
+		// The unread channels sync in the background, so opening one finds its messages in.
+		yield* Effect.forkScoped(host.prefetch)
 		yield* Renderer.mount(
 			PhoneShell,
 			{
@@ -139,9 +142,7 @@ const root = (signOut: Effect.Effect<void>) =>
 				appOrigin: appShell().server.app,
 			},
 			native.container,
-		).pipe(
-			Effect.provide(phoneHostLayer({ me, organizationId: membership.member.organizationId }, signOut)),
-		)
+		).pipe(Effect.provide(host.layer))
 		console.log(`[hazel] root mounted for ${me.id}`)
 		return yield* Effect.never
 	})
