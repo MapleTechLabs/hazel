@@ -406,9 +406,9 @@ export const Activity = Hazel.component({
 			)
 
 		const copy = COPY[model.tab]
-		// The first rows wait for their previews, so each draws once at its final height.
-		const ready = model.items !== null && (model.previewsSettled || !model.items.some(previewPending))
-		const listed = model.items === null || !ready ? null : itemsOfTab(model.items, model.tab)
+		// The first rows wait for the previews of the tab's own rows, so each draws once at its final height.
+		const shown = model.items === null ? null : itemsOfTab(model.items, model.tab)
+		const listed = shown !== null && (model.previewsSettled || !shown.some(previewPending)) ? shown : null
 		const body =
 			listed === null
 				? [h.list.loading()]

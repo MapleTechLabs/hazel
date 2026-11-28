@@ -57,7 +57,9 @@ declare const Bun: {
 	}): { readonly port: number; stop(): void }
 }
 
-const port = Number(process.argv[2] ?? 4320)
+// The optional port comes first; a flag in its place (`--latency 1200`) leaves the default.
+const portArg = process.argv[2]
+const port = portArg !== undefined && /^\d+$/.test(portArg) ? Number(portArg) : 4320
 const backendUrl = `http://127.0.0.1:${port}`
 const server = makeFixtureServer()
 // `--latency <ms>`: each sync frame reaches the app that much later, as on a real network (first-load layout).
