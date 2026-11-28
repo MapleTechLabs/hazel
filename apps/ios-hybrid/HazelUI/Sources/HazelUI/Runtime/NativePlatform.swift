@@ -5,7 +5,7 @@ import Security
 
 /// The data layer's platform services for a JavaScriptCore context (`docs/hazel-ui.md`, "Platform
 /// services"): installs `__native.{uuid, kv, socket, http, connectivity, session, sqlite, files,
-/// clipboard, config}`. The contract is `packages/client-data/src/platform/jsc/bridge.ts`.
+/// clipboard, config, auth}`. The contract is `packages/client-data/src/platform/jsc/bridge.ts`.
 public final class NativePlatform: @unchecked Sendable {
     public static let log = Logger(subsystem: "sh.hazel.ui", category: "platform")
 
@@ -20,6 +20,7 @@ public final class NativePlatform: @unchecked Sendable {
     let session: NativeSession
     let sqlite: NativeSQLite
     let files: NativeFiles
+    let auth: NativeAuth
 
     private init(perform: @escaping Perform, config: NativePlatformConfig) {
         self.config = config
@@ -30,10 +31,19 @@ public final class NativePlatform: @unchecked Sendable {
         session = NativeSession()
         sqlite = NativeSQLite(pump: pump)
         files = NativeFiles(pump: pump)
+        auth = NativeAuth(pump: pump)
     }
 
     /// Kept for the app's lifetime, as the context is.
     nonisolated(unsafe) private static var installed: [NativePlatform] = []
+
+    /// Lets go of this platform: its sockets close and its requests stop, so the context it served
+    /// can end (`JSEngine.stop`).
+    public func shutdown() {
+        sockets.shutdown()
+        http.shutdown()
+        Self.installed.removeAll { $0 === self }
+    }
 
     /// Adds the services to `context`'s `__native` (created if missing). Call on the JS thread
     /// (`JSEngine`'s ready hooks); `perform` hops back onto it.
@@ -70,6 +80,7 @@ public final class NativePlatform: @unchecked Sendable {
         native.setObject(platform.sqlite.object(in: context), forKeyedSubscript: "sqlite" as NSString)
         native.setObject(platform.files.object(in: context), forKeyedSubscript: "files" as NSString)
         native.setObject(NativeClipboard.object(in: context), forKeyedSubscript: "clipboard" as NSString)
+        native.setObject(platform.auth.object(in: context), forKeyedSubscript: "auth" as NSString)
         native.setObject(config.object(in: context), forKeyedSubscript: "config" as NSString)
         log.log("[platform] installed, api \(config.apiUrl, privacy: .public)")
         return platform

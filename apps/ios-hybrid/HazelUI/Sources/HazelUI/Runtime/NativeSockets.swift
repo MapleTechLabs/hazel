@@ -23,6 +23,17 @@ final class NativeSockets: NSObject, URLSessionWebSocketDelegate, @unchecked Sen
         session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
     }
 
+    /// Closes every socket and stops taking new ones (the runtime is being replaced).
+    func shutdown() {
+        lock.lock()
+        let open = entries.values.map(\.task)
+        entries = [:]
+        byTask = [:]
+        lock.unlock()
+        for task in open { task.cancel(with: .goingAway, reason: nil) }
+        session.invalidateAndCancel()
+    }
+
     func object(in context: JSContext) -> JSValue {
         let open: @convention(block) (String, [String], JSValue) -> Int = { [weak self] url, protocols, onEvent in
             guard let self else { return 0 }
@@ -162,6 +173,18 @@ final class NativeHttp: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
     }
 
+    /// Cancels every request in flight; none answers (the runtime is being replaced).
+    func shutdown() {
+        lock.lock()
+        let running = Array(tasks.values)
+        tasks = [:]
+        byTask = [:]
+        callbacks = [:]
+        lock.unlock()
+        for task in running { task.cancel() }
+        session.invalidateAndCancel()
+    }
+
     func object(in context: JSContext) -> JSValue {
         let start: @convention(block) (String, String, [String: String], JSValue, JSValue) -> Int = {
             [weak self] method, url, headers, body, onEvent in
@@ -234,6 +257,17 @@ final class NativeHttp: NSObject, URLSessionDataDelegate, @unchecked Sendable {
             ])
         }
         completionHandler(.allow)
+    }
+
+    /// A redirect is answered as it is, never followed, as a fetch with `redirect: "error"`: the
+    /// auth API's native mode and the RPC endpoints never redirect a request that is right.
+    func urlSession(
+        _: URLSession,
+        task _: URLSessionTask,
+        willPerformHTTPRedirection _: HTTPURLResponse,
+        newRequest _: URLRequest
+    ) async -> URLRequest? {
+        nil
     }
 
     func urlSession(_: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {

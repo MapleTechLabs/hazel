@@ -22,24 +22,15 @@ import { type DesktopAuthUnavailableError, runDesktopAuth } from "../platform/de
 import { switchServer } from "../platform/server-switch"
 import { fetchSignInMethods, HazelAuthClient } from "./client"
 import { authorizeAttempt, describeAttempt } from "./desktop-handoff"
-import { operationReasons, register, signInWithPasskey, startOAuthSignIn } from "./flows"
+import { register, signInWithPasskey, startOAuthSignIn } from "./flows"
+import { browserSignInReasons } from "@hazel/shared-screens/auth/domain/classify"
 
 type BrowserError = Effect.Error<DesktopAuth["signIn"]> | DesktopAuthUnavailableError
 
-/** Exhaustive over the desktop client's sign-in failures (the library's `PlatformError` reasons first). */
+/** Exhaustive over the desktop client's sign-in failures (the library's, then the runtime's own). */
 const browserSignInReason = (error: BrowserError): SignInFailure =>
 	Match.valueTags(error, {
-		...operationReasons,
-		BrowserLoginPlatformError: ({ reason }): SignInFailure =>
-			Match.value(reason).pipe(
-				Match.when("expired", (): SignInFailure => "BrowserTimedOut"),
-				Match.when("busy", (): SignInFailure => "BrowserBusy"),
-				Match.when("cancelled", (): SignInFailure => "Cancelled"),
-				Match.orElse((): SignInFailure => "Unavailable"),
-			),
-		BrowserLoginIndeterminate: (): SignInFailure => "BrowserIndeterminate",
-		BrowserLoginInvalid: (): SignInFailure => "Expired",
-		BrowserLoginUnavailable: (): SignInFailure => "Unavailable",
+		...browserSignInReasons,
 		// The desktop auth runtime (keychain, deep link) could not start.
 		DesktopAuthUnavailableError: (): SignInFailure => "Unavailable",
 	})

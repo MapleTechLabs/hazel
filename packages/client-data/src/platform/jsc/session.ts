@@ -162,6 +162,8 @@ export const makeNativeSession = (options: NativeSessionOptions) => {
 
 	return {
 		service,
+		/** Whether there is a session to use (the keychain's, or a fixture's stand-in); no API call. */
+		hasCredential: (): boolean => credential() !== null,
 		/** Keeps a sign-in's vault record (the desktop sign-in's JSON); whether the keychain took it. */
 		signIn: (record: string): boolean => {
 			generation++
@@ -182,7 +184,7 @@ export const makeNativeSession = (options: NativeSessionOptions) => {
 /** A sign-in or sign-out screen's hold on the native session. */
 export class NativeSessionControls extends Context.Service<
 	NativeSessionControls,
-	Pick<ReturnType<typeof makeNativeSession>, "signIn" | "signOut">
+	Pick<ReturnType<typeof makeNativeSession>, "hasCredential" | "signIn" | "signOut">
 >()("@hazel/client-data/jsc/NativeSessionControls") {}
 
 /** `Session` over the keychain and URLSession, with its `NativeSessionControls`. */
@@ -190,11 +192,13 @@ export const SessionJsc = Layer.effectContext(
 	Effect.gen(function* () {
 		const http = yield* HttpClient.HttpClient
 		const config = yield* ClientDataConfig
-		const { service, signIn, signOut } = makeNativeSession({
+		const { service, hasCredential, signIn, signOut } = makeNativeSession({
 			bridge: nativeBridge(),
 			http,
 			apiUrl: config.apiUrl,
 		})
-		return Context.make(Session, service).pipe(Context.add(NativeSessionControls, { signIn, signOut }))
+		return Context.make(Session, service).pipe(
+			Context.add(NativeSessionControls, { hasCredential, signIn, signOut }),
+		)
 	}),
 )

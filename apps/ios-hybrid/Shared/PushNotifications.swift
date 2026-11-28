@@ -1,5 +1,12 @@
+import os
 import UIKit
 import UserNotifications
+
+/// Opens one of the app's paths (`/<org>/chat/<channel>`): the hybrid's page, the native router.
+@MainActor
+protocol PathOpener: AnyObject {
+    func openPath(_ path: String)
+}
 
 /// Push notifications, as in Discord:
 ///
@@ -53,6 +60,7 @@ enum PushError: LocalizedError {
 @MainActor
 final class PushCenter: NSObject {
     static let shared = PushCenter()
+    static let log = Logger(subsystem: "sh.hazel.app", category: "push")
 
     static let messageCategory = "MESSAGE"
     static let replyAction = "REPLY"
@@ -65,8 +73,8 @@ final class PushCenter: NSObject {
     static let environment = "production"
     #endif
 
-    /// The page, for a tap's path.
-    weak var bridge: WebBridge?
+    /// Whatever shows the app's screens, for a tap's path.
+    weak var bridge: (any PathOpener)?
     private var token: String?
     private var waiting: [CheckedContinuation<String, any Error>] = []
 
@@ -117,7 +125,7 @@ final class PushCenter: NSObject {
     }
 
     func registrationFailed(_ error: any Error) {
-        WebBridge.log.error("[push] no APNs token: \(error.localizedDescription, privacy: .public)")
+        PushCenter.log.error("[push] no APNs token: \(error.localizedDescription, privacy: .public)")
         finish(.failure(error))
     }
 
@@ -139,7 +147,7 @@ final class PushCenter: NSObject {
             do {
                 try await PushActions.reply(text, to: push)
             } catch {
-                WebBridge.log.error("[push] reply failed: \(error.localizedDescription, privacy: .public)")
+                PushCenter.log.error("[push] reply failed: \(error.localizedDescription, privacy: .public)")
                 await Self.tellReplyFailed(push)
                 return
             }
@@ -158,7 +166,7 @@ final class PushCenter: NSObject {
             try await PushActions.markRead(push)
             await Self.clearDelivered(push)
         } catch {
-            WebBridge.log.error("[push] markRead failed: \(error.localizedDescription, privacy: .public)")
+            PushCenter.log.error("[push] markRead failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 

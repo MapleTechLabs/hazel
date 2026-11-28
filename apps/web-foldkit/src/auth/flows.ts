@@ -1,10 +1,12 @@
-import type { OperationHttpError } from "@yielded/auth/OperationHttp"
 import * as PasskeyBrowser from "@yielded/auth-simplewebauthn/Browser"
 import { type Context, Effect, Match, Redacted, Schema } from "effect"
 import { load } from "foldkit/navigation"
 import { CommonReason } from "~/lib/error-messages"
 import { HazelAuthClient, type Provider } from "./client"
 import { rememberReturnTo, takeReturnTo } from "./return-to"
+import { operationReasons } from "@hazel/shared-screens/auth/domain/classify"
+
+export { operationHttpReason, operationReasons } from "@hazel/shared-screens/auth/domain/classify"
 
 /**
  * The sign-in flows the auth pages run: OAuth (leaves for the provider), passkeys and
@@ -46,41 +48,11 @@ type AuthError =
 	| Effect.Error<ReturnType<AuthApi["register"]>>
 	| PasskeyBrowser.PasskeyBrowserFailure
 
-/** The transport's own reasons: offline and timeouts are worth another try, the rest is a bug. */
-export const operationHttpReason = (error: OperationHttpError): CommonReason =>
-	error.reason === "network"
-		? "Offline"
-		: error.reason === "timeout"
-			? "Timeout"
-			: error.reason === "unavailable"
-				? "Unavailable"
-				: "Unexpected"
-
 const cancelled = (): AuthFailure => "Cancelled"
 const rejected = (): AuthFailure => "Rejected"
 const expired = (): AuthFailure => "Expired"
 const unavailable = (): AuthFailure => "Unavailable"
 const unexpected = (): AuthFailure => "Unexpected"
-
-/** The failures every auth operation shares: the transport, the session and the server's hooks. */
-export const operationReasons = {
-	OperationHttpError: operationHttpReason,
-	PendingAuthenticationInvalid: expired,
-	StaleAuthentication: expired,
-	SessionInvalid: expired,
-	SessionStepUpInvalid: expired,
-	AuthenticationRequired: expired,
-	AssuranceRequired: expired,
-	HookDenied: (): AuthFailure => "Denied",
-	SessionUnavailable: unavailable,
-	SessionSignOutUnavailable: unavailable,
-	SessionCapabilityUnsupported: unavailable,
-	InvalidOperationInput: unexpected,
-	OperationForbidden: unexpected,
-	OperationPrivateOutputUnsupported: unexpected,
-	SessionConflict: unexpected,
-	SessionRenewalTooEarly: unexpected,
-} as const
 
 /** Exhaustive: a new error in the client's contract must be classified here. */
 export const authFailureOf = (error: AuthError): AuthFailure =>

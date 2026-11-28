@@ -29,6 +29,14 @@ public final class JSThread: Thread, @unchecked Sendable {
         }
     }
 
+    /// Ends the thread: its run loop stops, and its timers and queued blocks go with it.
+    public func stop() {
+        cancel()
+        guard let runLoop else { return }
+        CFRunLoopStop(runLoop)
+        CFRunLoopWakeUp(runLoop)
+    }
+
     /// Queues `block` on the JS thread's run loop and returns at once.
     public func perform(_ block: @escaping @Sendable () -> Void) {
         guard let runLoop else { return }

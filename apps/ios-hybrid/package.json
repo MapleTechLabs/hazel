@@ -18,14 +18,18 @@
 		"verify:S2": "bash scripts/test-hazelui.sh S2",
 		"verify:S3": "bash scripts/test-hazelui.sh S3",
 		"verify:S4": "bash scripts/test-hazelui.sh S4",
-		"verify:S5": "bash scripts/test-hazelui.sh S5"
+		"verify:S5": "bash scripts/test-hazelui.sh S5",
+		"build:hazel": "bun build script/entry.ts --target=browser --format=iife --minify --outfile=build/script/hazel.js"
 	},
 	"dependencies": {
 		"@effect/ui": "https://pkg.pr.new/Effect-TS/ui/@effect/ui@4d6d7ec",
 		"@hazel/auth": "workspace:*",
+		"@hazel/client-data": "workspace:*",
 		"@hazel/domain": "workspace:*",
 		"@hazel/effect-db-collection": "workspace:*",
 		"@hazel/schema": "workspace:*",
+		"@hazel/shared-screens": "workspace:*",
+		"@yielded/auth": "0.1.0-beta.47",
 		"effect": "catalog:effect",
 		"foldkit": "0.171.0"
 	},
