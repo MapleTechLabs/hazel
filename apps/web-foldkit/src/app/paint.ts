@@ -13,7 +13,7 @@ import { Option, Schema } from "effect"
 
 export const PAINT_KEY = "hazel:paint"
 const USER_KEY = "hazel:last-user"
-const VERSION = 1
+const VERSION = 2
 
 /** A paint larger than this is not kept: reading it would cost the load more than it saves. */
 export const MAX_PAINT_CHARS = 1_500_000
@@ -32,6 +32,13 @@ const SCROLLERS =
 /** What the paint never keeps: overlays, menus, toasts and the like. */
 const TRANSIENT =
 	'dialog,[role="dialog"],[role="alertdialog"],[role="menu"],[role="listbox"],[role="tooltip"],[popover],[data-paint-skip]'
+
+/**
+ * The stylesheets the UI kit adds to the head as its parts first draw (`@hazel/ui`'s chat, list,
+ * controls, ...): the paint carries copies, or it draws before them, half styled. Not the dev
+ * server's (the paint is a build's only).
+ */
+const RUNTIME_STYLES = "head style:not([data-vite-dev-id])"
 
 /**
  * The marks the app's view sets: the org shell, its loader, and a message list still loading; and
@@ -80,6 +87,12 @@ export const takePaint = (doc: Document, storage: Storage, nowMs: number): Store
 			copies[index]?.setAttribute("data-paint-scroll", `${element.scrollTop} ${element.scrollLeft}`)
 	})
 	for (const element of copy.querySelectorAll(TRANSIENT)) element.remove()
+	// Inside the paint, so they go with it; without ids, which the kit checks before adding its own.
+	for (const style of Array.from(doc.querySelectorAll(RUNTIME_STYLES)).reverse()) {
+		const sheet = doc.createElement("style")
+		sheet.textContent = style.textContent
+		copy.prepend(sheet)
+	}
 	const html = copy.outerHTML
 	if (html.length > MAX_PAINT_CHARS) return null
 	const root = doc.documentElement
