@@ -18,6 +18,7 @@ const channelId = ChannelId.make("00000005-0000-4000-8000-000000000001")
 const ada = UserId.make("00000001-0000-4000-8000-000000000001")
 const grace = UserId.make("00000001-0000-4000-8000-000000000002")
 const linus = UserId.make("00000001-0000-4000-8000-000000000003")
+const fiws = UserId.make("00000001-0000-4000-8000-000000000004")
 const id = (n: number) => MessageId.make(`00000009-0000-4000-8000-${n.toString(16).padStart(12, "0")}`)
 
 const message = (n: number, authorId: UserId, atMs: number): ChatMessage => ({
@@ -66,6 +67,12 @@ const loaded = () => {
 				person(ada, "Ada", "Lovelace"),
 				person(grace, "Grace", "Hopper", "America/New_York"),
 				person(linus, "Linus", "Torvalds"),
+				// A Discord person (a chat sync shadow user).
+				{
+					...person(fiws, "fiws", ""),
+					userType: "machine",
+					email: "discord-user-1@discord.internal",
+				},
 			],
 		}),
 	)
@@ -230,6 +237,18 @@ describe("message overlays", () => {
 				.expectExact(RequestHost.make({ request }))
 				.resolve(RequestHost, MessageListMessage.CompletedCommand())
 		}
+	})
+
+	test("a Discord person's card leads with Mention and does not repeat it in the menu", () => {
+		const s = loaded().fire(row(1), "pressMention", { userId: fiws, run: 0 })
+		s.expect(inPopover(byProp("button", "label", "Message")))
+			.toBeAbsent()
+			.expect(inPopover(byProp("button", "label", "Mention")))
+			.toExist()
+		const entries = s.get(inPopover(byProp("menu", "label", "More options"))).props?.["entries"] as
+			| ReadonlyArray<{ readonly entries: ReadonlyArray<{ readonly id: string }> }>
+			| undefined
+		expect(entries?.map((group) => group.entries.map((entry) => entry.id))).toEqual([["copyId"]])
 	})
 
 	test("reaction pills carry who reacted, three names and a count of the rest", () => {

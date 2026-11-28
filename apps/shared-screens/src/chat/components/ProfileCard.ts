@@ -77,26 +77,27 @@ const subtitleOf = (person: ProfilePerson): string | null =>
 
 const isProfileAction = Schema.is(ProfileAction)
 
-/** The overflow menu: what the buttons do not already offer. */
-const moreEntries = (person: ProfilePerson, canMessage: boolean) => [
-	{
-		entries: [
-			// A Slack or Discord person's card leads with Mention already.
-			...(canMessage ? [{ id: "mention", label: "Mention", icon: "message-pen" as const }] : []),
-			...(canMessage || person.isOwn
-				? [{ id: "viewProfile", label: "View profile", icon: "user" as const }]
-				: []),
-		],
-	},
-	{
-		entries: [
-			...(person.provider === undefined && !person.isBot && isPresent(person.email)
-				? [{ id: "copyEmail", label: "Copy email", icon: "envelope" as const }]
-				: []),
-			{ id: "copyId", label: "Copy user ID", icon: "copy" as const },
-		],
-	},
-]
+/** The overflow menu: what the buttons do not already offer, with no empty group (a stray separator). */
+const moreEntries = (person: ProfilePerson, canMessage: boolean) =>
+	[
+		{
+			entries: [
+				// A Slack or Discord person's card leads with Mention already.
+				...(canMessage ? [{ id: "mention", label: "Mention", icon: "message-pen" as const }] : []),
+				...(canMessage || person.isOwn
+					? [{ id: "viewProfile", label: "View profile", icon: "user" as const }]
+					: []),
+			],
+		},
+		{
+			entries: [
+				...(person.provider === undefined && !person.isBot && isPresent(person.email)
+					? [{ id: "copyEmail", label: "Copy email", icon: "envelope" as const }]
+					: []),
+				{ id: "copyId", label: "Copy user ID", icon: "copy" as const },
+			],
+		},
+	].filter((group) => group.entries.length > 0)
 
 /**
  * The card's actions. Your own: "Edit profile". A Hazel person or an app: "Message" (their DM).
