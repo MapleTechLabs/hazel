@@ -1,7 +1,7 @@
 import { CurrentUser, InvalidBearerTokenError } from "@hazel/domain"
 import { Effect, Layer, Option, Redacted } from "effect"
 import { HttpServerRequest } from "effect/http"
-import { HazelSession } from "./hazel-session"
+import { HazelSession, looksLikeAccessToken } from "./hazel-session"
 
 export const AuthorizationLive = Layer.effect(
 	CurrentUser.Authorization,
@@ -13,9 +13,24 @@ export const AuthorizationLive = Layer.effect(
 		return CurrentUser.Authorization.of({
 			bearer: (httpEffect, { credential: bearerToken }) =>
 				Effect.gen(function* () {
-					// Hazel session cookie (browser)
 					const request = yield* HttpServerRequest.HttpServerRequest
 					const token = Redacted.value(bearerToken)
+					const isAccessToken = looksLikeAccessToken(token)
+
+					// The API's access token (`POST /auth/token`), verified locally; as in the RPC
+					// middleware. Invalid or expired: the cookie below, if any.
+					if (isAccessToken) {
+						const tokenUser = yield* hazelSession.verifyAccessToken(token)
+						if (Option.isSome(tokenUser)) {
+							return yield* Effect.provideService(
+								httpEffect,
+								CurrentUser.Context,
+								tokenUser.value,
+							)
+						}
+					}
+
+					// Hazel session cookie (browser)
 					const cookieUser = yield* hazelSession
 						.fromCookie(request.headers, request.method)
 						.pipe(
@@ -28,7 +43,8 @@ export const AuthorizationLive = Layer.effect(
 					}
 
 					// Hazel session credential (native clients)
-					const sessionUser = token === "" ? Option.none() : yield* hazelSession.verify(token)
+					const sessionUser =
+						token === "" || isAccessToken ? Option.none() : yield* hazelSession.verify(token)
 					if (Option.isSome(sessionUser)) {
 						return yield* Effect.provideService(
 							httpEffect,

@@ -75,6 +75,7 @@ const makeHazelSessionLayer = (overrides: Partial<HazelSessionShape> = {}) =>
 		serviceShape<typeof HazelSession>({
 			enabled: false,
 			verify: () => Effect.succeedNone,
+			verifyAccessToken: () => Effect.succeedNone,
 			fromCookie: () => Effect.succeedNone,
 			...overrides,
 		}),
@@ -300,6 +301,109 @@ describe("AuthMiddlewareLive", () => {
 			Result.isFailure(cookieOnly) &&
 				("_tag" in cookieOnly.failure ? cookieOnly.failure._tag : "unhandled"),
 		).toBe("InvalidBearerTokenError")
+	})
+
+	describe("access tokens", () => {
+		const ACCESS_TOKEN = "header.claims.signature"
+
+		it("authenticates the API's access token without the session store, cookie or bot lookup", async () => {
+			const checked: Array<string> = []
+			const result = await runAuth(Headers.fromInput({ authorization: `Bearer ${ACCESS_TOKEN}` }), {
+				hazelSession: makeHazelSessionLayer({
+					enabled: true,
+					verifyAccessToken: (token) =>
+						Effect.succeed(
+							token === ACCESS_TOKEN
+								? Option.some(makeCurrentUser({ email: "token@example.com" }))
+								: Option.none(),
+						),
+					fromCookie: () => {
+						checked.push("cookie")
+						return Effect.succeedNone
+					},
+					verify: () => {
+						checked.push("session")
+						return Effect.succeedNone
+					},
+				}),
+				botRepo: makeBotRepoLayer(() => {
+					checked.push("bot")
+					return Effect.succeedNone
+				}),
+			})
+
+			expect(Result.isSuccess(result) && Option.getOrNull(result.success)?.email).toBe(
+				"token@example.com",
+			)
+			expect(checked).toEqual([])
+		})
+
+		it("prefers a valid access token over the cookie, so the cookie's Origin is not consulted", async () => {
+			const result = await runAuth(Headers.fromInput({ authorization: `Bearer ${ACCESS_TOKEN}` }), {
+				hazelSession: makeHazelSessionLayer({
+					enabled: true,
+					verifyAccessToken: () =>
+						Effect.succeedSome(makeCurrentUser({ email: "token@example.com" })),
+					fromCookie: () =>
+						Effect.fail(new InvalidBearerTokenError({ message: "origin", detail: "untrusted" })),
+				}),
+			})
+
+			expect(Result.isSuccess(result) && Option.getOrNull(result.success)?.email).toBe(
+				"token@example.com",
+			)
+		})
+
+		it("falls back to the cookie when the access token is expired or invalid", async () => {
+			const result = await runAuth(Headers.fromInput({ authorization: `Bearer ${ACCESS_TOKEN}` }), {
+				hazelSession: makeHazelSessionLayer({
+					enabled: true,
+					verifyAccessToken: () => Effect.succeedNone,
+					fromCookie: () => Effect.succeedSome(makeCurrentUser({ email: "cookie@example.com" })),
+				}),
+			})
+
+			expect(Result.isSuccess(result) && Option.getOrNull(result.success)?.email).toBe(
+				"cookie@example.com",
+			)
+		})
+
+		it("rejects an invalid access token alone without trying it as a session or bot token", async () => {
+			const checked: Array<string> = []
+			const result = await runAuth(Headers.fromInput({ authorization: `Bearer ${ACCESS_TOKEN}` }), {
+				hazelSession: makeHazelSessionLayer({
+					enabled: true,
+					verify: () => {
+						checked.push("session")
+						return Effect.succeedNone
+					},
+				}),
+				botRepo: makeBotRepoLayer(() => {
+					checked.push("bot")
+					return Effect.succeedNone
+				}),
+			})
+
+			expect(
+				Result.isFailure(result) && ("_tag" in result.failure ? result.failure._tag : "unhandled"),
+			).toBe("InvalidBearerTokenError")
+			expect(checked).toEqual([])
+		})
+
+		it("refuses a valid access token whose user is gone, without falling back to the cookie", async () => {
+			const result = await runAuth(Headers.fromInput({ authorization: `Bearer ${ACCESS_TOKEN}` }), {
+				hazelSession: makeHazelSessionLayer({
+					enabled: true,
+					verifyAccessToken: () =>
+						Effect.fail(
+							new InvalidBearerTokenError({ message: "Invalid session", detail: "deleted" }),
+						),
+					fromCookie: () => Effect.succeedSome(makeCurrentUser()),
+				}),
+			})
+
+			expect(Result.isFailure(result)).toBe(true)
+		})
 	})
 
 	it("never checks bot tokens as Hazel sessions", async () => {

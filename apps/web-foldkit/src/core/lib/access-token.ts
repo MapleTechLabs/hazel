@@ -1,8 +1,9 @@
 /**
  * Short-lived access token for what cannot carry the API's session cookie: the sync sockets
  * and the live message sockets (`Sec-WebSocket-Protocol`). The backend exchanges the HttpOnly session
- * cookie for an ES256 JWT at `POST /auth/token`. Requests to the API itself authenticate with
- * the cookie and need no token.
+ * cookie for an ES256 JWT at `POST /auth/token`. Requests to the API itself send the token too
+ * when one is at hand (`peekAccessToken`): the API verifies it without the session store's round
+ * trips, and falls back to the cookie when it is missing or expired.
  *
  * The exchange is an Effect; the exports stay Promise functions because their callers live outside
  * any runtime (the sync hub, the live sockets).
@@ -148,6 +149,22 @@ export const readAccessToken = async (): Promise<AccessTokenResult> => {
 		pending = request
 	}
 	return pending
+}
+
+/** A token with less left than this is not sent: it could expire on the way. */
+const PEEK_MIN_REMAINING_MS = 15_000
+
+/**
+ * The cached token, without waiting: `null` when there is none (or it is nearly expired), and the
+ * request goes with the cookie alone. Starts the renewal when the token is due for one, so the
+ * next request has a fresh token. Never starts a first exchange: that is the session's to start.
+ */
+export const peekAccessToken = (): string | null => {
+	const current = cached
+	if (current === null) return null
+	const remainingMs = current.expiresAtMs - Date.now()
+	if (remainingMs <= RENEW_BEFORE_MS) void readAccessToken().catch(() => undefined)
+	return remainingMs > PEEK_MIN_REMAINING_MS ? current.token : null
 }
 
 /** The current access token; `null` when signed out or the API did not answer. */

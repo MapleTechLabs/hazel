@@ -107,18 +107,22 @@ const ProbeRoutes = Layer.unwrap(
 			HttpRouter.add(
 				"GET",
 				"/probe/api",
-				apiAuth
-					.bearer(
+				Effect.gen(function* () {
+					// As HttpApi's bearer security reads it: the `Authorization: Bearer` value, or "".
+					const authorization =
+						(yield* HttpServerRequest.HttpServerRequest).headers.authorization ?? ""
+					const credential = authorization.startsWith("Bearer ") ? authorization.slice(7) : ""
+					return yield* apiAuth.bearer(
 						Effect.flatMap(whoAmI, (email) =>
 							HttpServerResponse.json({ email }).pipe(Effect.orDie),
 						),
-						{ credential: Redacted.make(""), endpoint: {} as never, group: {} as never },
+						{ credential: Redacted.make(credential), endpoint: {} as never, group: {} as never },
 					)
-					.pipe(
-						Effect.catch((error) =>
-							HttpServerResponse.json({ error: tagOf(error) }, { status: 401 }),
-						),
+				}).pipe(
+					Effect.catch((error) =>
+						HttpServerResponse.json({ error: tagOf(error) }, { status: 401 }),
 					),
+				),
 			),
 		)
 	}),
@@ -274,6 +278,39 @@ describe("Hazel sign-in in the backend", () => {
 		const me = await (await send("/probe/api")).json()
 		expect(me.email).toBe("octo@example.com")
 		expect(verified.claims.iss).toBe(api)
+	})
+
+	it("accepts the access token as a bearer on RPC and HttpApi, and refuses a tampered one", async () => {
+		const { token } = await (await post("/auth/token")).json()
+		const saved = new Map(cookies)
+		cookies.clear()
+		try {
+			const bearer = (value: string) => ({
+				origin: null,
+				headers: { authorization: `Bearer ${value}` },
+			})
+			const rpc = await send("/probe/rpc", { method: "POST", ...bearer(token) })
+			expect(await rpc.json()).toEqual({ email: "octo@example.com" })
+			const httpApi = await send("/probe/api", bearer(token))
+			expect(await httpApi.json()).toEqual({ email: "octo@example.com" })
+
+			const [header, claims, signature] = token.split(".")
+			const forged = Base64Url.encode(
+				new TextEncoder().encode(
+					JSON.stringify({ ...JSON.parse(atob(claims!)), sub: "someone-else" }),
+				),
+			)
+			for (const bad of [
+				`${header}.${forged}.${signature}`,
+				`${header}.${claims}.${signature!.slice(0, -4)}AAAA`,
+			]) {
+				const refused = await send("/probe/rpc", { method: "POST", ...bearer(bad) })
+				expect(refused.status).toBe(401)
+				expect((await send("/probe/api", bearer(bad))).status).toBe(401)
+			}
+		} finally {
+			for (const [name, value] of saved) cookies.set(name, value)
+		}
 	})
 
 	it("signing out ends the session for the middleware too", async () => {

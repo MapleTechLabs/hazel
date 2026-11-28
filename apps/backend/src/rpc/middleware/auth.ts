@@ -11,7 +11,7 @@ import { Cause, Context, Effect, Layer, Option } from "effect"
 import { AuthMiddleware } from "@hazel/domain/rpc"
 import { type ApiScope, CurrentBotScopes, RequiredScopes } from "@hazel/domain/scopes"
 import { AgentAccess, agentMayCallRpc, isAgentToken } from "../../services/agent-access"
-import { HazelSession } from "../../services/hazel-session"
+import { HazelSession, looksLikeAccessToken } from "../../services/hazel-session"
 import { CurrentAgent } from "../../worker/objects/principal"
 
 export { AuthMiddleware } from "@hazel/domain/rpc"
@@ -37,12 +37,27 @@ export const AuthMiddlewareLive = Layer.effect(
 
 		return AuthMiddleware.of((effect, { headers, rpc }) =>
 			Effect.gen(function* () {
-				// Hazel session cookie (browser). RPC calls are POSTs, so the Origin is checked.
 				const authHeader = Headers.get(headers, "authorization")
 				const hasBearer =
 					Option.isSome(authHeader) &&
 					authHeader.value.startsWith("Bearer ") &&
 					authHeader.value.length > 7
+				const accessToken =
+					hasBearer && looksLikeAccessToken(authHeader.value.slice(7))
+						? Option.some(authHeader.value.slice(7))
+						: Option.none<string>()
+
+				// The API's access token (`POST /auth/token`, the web app's): signature, issuer,
+				// audience and expiry are checked locally, so only the user is read. Not ambient like
+				// the cookie, so no Origin check. Invalid or expired: the cookie below, if any.
+				if (Option.isSome(accessToken)) {
+					const tokenUser = yield* hazelSession.verifyAccessToken(accessToken.value)
+					if (Option.isSome(tokenUser)) {
+						return yield* Effect.provideService(effect, CurrentUser.Context, tokenUser.value)
+					}
+				}
+
+				// Hazel session cookie (browser). RPC calls are POSTs, so the Origin is checked.
 				const cookieUser = yield* hazelSession
 					.fromCookie(headers, "POST")
 					.pipe(
@@ -52,6 +67,14 @@ export const AuthMiddlewareLive = Layer.effect(
 					)
 				if (Option.isSome(cookieUser)) {
 					return yield* Effect.provideService(effect, CurrentUser.Context, cookieUser.value)
+				}
+
+				// A JWT is never a session credential, bot token or agent token.
+				if (Option.isSome(accessToken)) {
+					return yield* new InvalidBearerTokenError({
+						message: "Invalid access token",
+						detail: "The token is invalid or expired",
+					})
 				}
 
 				// Bearer token: Hazel session credential (native clients) or bot token

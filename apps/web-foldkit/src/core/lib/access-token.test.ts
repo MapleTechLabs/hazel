@@ -4,6 +4,7 @@ import {
 	clearAccessToken,
 	getAccessToken,
 	invalidateAccessToken,
+	peekAccessToken,
 	readAccessToken,
 	SESSION_REJECTED_EVENT,
 } from "./access-token"
@@ -173,5 +174,52 @@ describe("the exchange index.html starts early", () => {
 		early(Response.json({ token: "early", expiresIn: 300 }))
 		clearAccessToken()
 		expect(await getAccessToken()).toBe("fresh")
+	})
+})
+
+describe("peekAccessToken", () => {
+	it("has nothing before an exchange, and starts none", () => {
+		const fetch = vi.fn<typeof globalThis.fetch>()
+		vi.stubGlobal("fetch", fetch)
+		expect(peekAccessToken()).toBeNull()
+		expect(fetch).not.toHaveBeenCalled()
+	})
+
+	it("hands out the cached token without waiting, and renews it when due", async () => {
+		vi.useFakeTimers()
+		const fetch = vi
+			.fn<typeof globalThis.fetch>()
+			.mockResolvedValueOnce(Response.json({ token: "first", expiresIn: 300 }))
+			.mockResolvedValue(Response.json({ token: "second", expiresIn: 300 }))
+		vi.stubGlobal("fetch", fetch)
+		expect(await getAccessToken()).toBe("first")
+		expect(peekAccessToken()).toBe("first")
+		expect(fetch).toHaveBeenCalledTimes(1)
+
+		// Due for renewal (under a minute left): still sent, and the renewal starts.
+		vi.advanceTimersByTime(250_000)
+		expect(peekAccessToken()).toBe("first")
+		await vi.waitFor(() => expect(peekAccessToken()).toBe("second"))
+		expect(fetch).toHaveBeenCalledTimes(2)
+	})
+
+	it("does not send a token about to expire", async () => {
+		vi.useFakeTimers()
+		vi.stubGlobal(
+			"fetch",
+			vi.fn<typeof globalThis.fetch>(async () => Response.json({ token: "short", expiresIn: 10 })),
+		)
+		expect(await getAccessToken()).toBe("short")
+		expect(peekAccessToken()).toBeNull()
+	})
+
+	it("forgets the token on sign-out", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn<typeof globalThis.fetch>(async () => Response.json({ token: "t", expiresIn: 300 })),
+		)
+		expect(await getAccessToken()).toBe("t")
+		clearAccessToken()
+		expect(peekAccessToken()).toBeNull()
 	})
 })
