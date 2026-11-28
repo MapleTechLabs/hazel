@@ -25,7 +25,8 @@ struct HzExt: View {
                     .hzBox(HazelTheme.Recipes.ext.style(part: "content", sizeClass: sizeClass))
             }
         }
-        .padding(.horizontal, root.marginX ?? 0)
-        .padding(.bottom, root.marginBottom ?? 0)
+        // One that fills its screen (`HazelExtensions.fills`) runs edge to edge.
+        .padding(.horizontal, HazelExtensions.fills(name) ? 0 : root.marginX ?? 0)
+        .padding(.bottom, HazelExtensions.fills(name) ? 0 : root.marginBottom ?? 0)
     }
 }

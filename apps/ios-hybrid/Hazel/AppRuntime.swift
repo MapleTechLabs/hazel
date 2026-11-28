@@ -47,6 +47,15 @@ final class AppRuntime {
         }
     }
 
+    /// Paths that arrived before the script ran (a cold start's deep link or push).
+    private var pendingPaths: [String] = []
+
+    /// Hands an in-app path to the script (`__hazel.openPath`, `script/entry.ts`).
+    func openPath(_ path: String) {
+        guard started else { return pendingPaths.append(path) }
+        engine.perform("openPath") { engine in _ = engine.call("openPath", with: [path]) }
+    }
+
     func start() {
         guard !started else { return }
         started = true
@@ -57,10 +66,13 @@ final class AppRuntime {
             return
         }
         let hooks = self.hooks
+        let paths = pendingPaths
+        pendingPaths = []
         engine.perform("mount") { engine in
             let began = CACurrentMediaTime()
             engine.boot(ready: hooks)
             engine.evaluate(script, url: url)
+            for path in paths { _ = engine.call("openPath", with: [path]) }
             Self.log.log("[app] script eval \(String(format: "%.1f", (CACurrentMediaTime() - began) * 1000), privacy: .public)ms")
         }
     }
@@ -100,10 +112,9 @@ struct AppServer: Sendable {
     }
 }
 
-/// What the script asks of the app (`script/shell.ts`): the web fallback, the install, and a fresh
-/// start (after a sign-out).
+/// What the script asks of the app (`script/shell.ts`): the install, and a fresh start (after a
+/// sign-out).
 struct ShellCommands: Sendable {
-    let openFallback: @MainActor @Sendable (String) -> Void
     let setServer: @MainActor @Sendable (String?) -> Void
     let restart: @MainActor @Sendable () -> Void
 
@@ -115,9 +126,6 @@ struct ShellCommands: Sendable {
         serverObject.setObject(server.cdn.map { $0 as Any } ?? NSNull(), forKeyedSubscript: "cdn" as NSString)
         serverObject.setObject(server.isDefault, forKeyedSubscript: "isDefault" as NSString)
         object.setObject(serverObject, forKeyedSubscript: "server" as NSString)
-        let open: @convention(block) (String) -> Void = { [openFallback] path in
-            DispatchQueue.main.async { MainActor.assumeIsolated { openFallback(path) } }
-        }
         let set: @convention(block) (JSValue) -> Void = { [setServer] document in
             let value = document.isString ? document.toString() : nil
             DispatchQueue.main.async { MainActor.assumeIsolated { setServer(value) } }
@@ -125,9 +133,8 @@ struct ShellCommands: Sendable {
         let restart: @convention(block) () -> Void = { [restart] in
             DispatchQueue.main.async { MainActor.assumeIsolated { restart() } }
         }
-        object.setObject(open, forKeyedSubscript: "openFallback" as NSString)
-        object.setObject(restart, forKeyedSubscript: "restart" as NSString)
         object.setObject(set, forKeyedSubscript: "setServer" as NSString)
+        object.setObject(restart, forKeyedSubscript: "restart" as NSString)
         return object
     }
 }

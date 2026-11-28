@@ -270,7 +270,8 @@ compact tuples. `MenuEntry.entries` is a one-level submenu.
 
 Extensions: `GifPicker` (`src/extensions/GifPicker.ts`, web only, lane A3); `HtmlRender` (`src/extensions/HtmlRender.ts`, web only, lane PC6: a bot's sandboxed page from a signed URL, drawn by the app in `apps/web-foldkit/src/chat/html-render-extension.ts` because it speaks the domain's frame protocol); `BrandPanel`
 (`src/extensions/BrandPanel.ts`, web only, lane PA1: the auth frame's picture, logo and tagline in
-`screen`'s `aside`). Services (interfaces in
+`screen`'s `aside`); `WebFallback` (`src/extensions/WebFallback.ts`, iOS only: the native app's web
+view for a route with no shared screen yet, `docs/ios-native.md`). Services (interfaces in
 Extensions: `GifPicker` (`src/extensions/GifPicker.ts`, web only, lane A3); G3 gave it the screen's
 data (`gifs`, `categories`, `category`, `categoriesFailed`, `status`, `failure`, `paging`) and the
 events `query`, `category`, `reachEnd`, `retry`, `retryCategories`. Services (interfaces in

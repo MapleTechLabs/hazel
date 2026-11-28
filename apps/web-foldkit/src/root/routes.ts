@@ -6,27 +6,16 @@
  */
 import type { Router } from "@effect/ui"
 import { Option } from "effect"
-import * as Url from "foldkit/url"
-import { AppRoute, hrefOf, urlToAppRoute } from "../route"
+import { AppRoute, hrefOf, pathOf, routeOfPath } from "../route"
 
 // SAFETY: a type-only field (`Router.Routes["Type"]`): the Router never reads its value.
 const phantom = <A>(): A => undefined as A
 
-/** Any absolute origin: only the path and search of a same-origin href reach the table. */
-const ORIGIN = "https://hazel.invalid"
-
 /** The route an href names (`/x?y`), or none when it is not a same-origin path. */
-export const routeOfHref = (href: string): Option.Option<AppRoute> => {
-	if (!href.startsWith("/") || href.startsWith("//")) return Option.none()
-	return Option.map(Url.fromString(`${ORIGIN}${href}`), urlToAppRoute)
-}
+export const routeOfHref = (href: string): Option.Option<AppRoute> =>
+	!href.startsWith("/") || href.startsWith("//") ? Option.none() : Option.some(routeOfPath(href))
 
-/** The printed path of a route, without its search. */
-export const pathOf = (route: AppRoute): string => {
-	const href = hrefOf(route)
-	const at = href.indexOf("?")
-	return at < 0 ? href : href.slice(0, at)
-}
+export { pathOf }
 
 /**
  * Every same-origin path resolves (unknown ones to `NotFound`, as today), so every in-app link is

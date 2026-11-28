@@ -1,7 +1,6 @@
 /**
  * What the native app's shell (`Hazel/AppRuntime.swift`) gives its script, on `__native.shell`:
- * the install it talks to, the way to change it, and the web fallback for a route that has no
- * native screen yet.
+ * the install it talks to and the way to change it.
  */
 
 /** The install the app talks to (`ChosenServer`, else the build's own). */
@@ -19,8 +18,6 @@ export interface AppShell {
 	readonly setServer: (document: string | null) => void
 	/** Starts the script over (after a sign-out: the sign-in screen). */
 	readonly restart: () => void
-	/** The web app at `path`, pushed in a web view: a route with no native screen yet. */
-	readonly openFallback: (path: string) => void
 }
 
 declare const __native: { readonly shell?: AppShell } | undefined
