@@ -1,25 +1,23 @@
 // Effect UI is a public preview: every API is experimental by design here.
 // @effect-diagnostics experimentalApiUsage:off
 /**
- * The phone app (`docs/ios-native.md`, N1, N2): the system tab bar (Home, DMs, Activity, More) over one
+ * The phone app (`docs/ios-native.md`): the system tab bar (Home, DMs, Activity, More) over one
  * navigation stack per tab. A route opens as a push on the current tab, except a tab's own root,
- * which selects that tab. A conversation is the shared `ChannelScreen`; a route with no shared screen yet is the host's web fallback
- * (`WebFallback`), pushed like any screen. The stacks follow the system's back (swipe or button)
- * through `pop`, and every way a screen navigates (links, requests) reaches `ShellIntents`.
+ * which selects that tab. Each route draws its screen from the app's registry (`app/screens`); one
+ * with none yet is the web fallback (`FallbackScreen`). Every tab's screens stay alive while another
+ * tab shows. The stacks follow the system's back (swipe or button) through `pop`, and every way a
+ * screen navigates reaches `ShellIntents` (`./navigation`).
  */
 import { Subscription, UiSchema } from "@effect/ui"
-import { WebFallback } from "@hazel/ui/extensions/WebFallback"
 import { Hazel } from "@hazel/ui/vocabulary/index"
 import { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Context, Match, Schema, Stream } from "effect"
-import { Activity } from "../activity/Activity"
-import { AppRoute, hrefOf, routeOfPath } from "../app/route"
-import { ChannelSidebar } from "../channel-sidebar/ChannelSidebar"
-import { Dms } from "../dms/Dms"
-import { ChannelScreen } from "./ChannelScreen"
+import { hrefOf, routeOfPath } from "../app/route"
+import { AppTab, screenOf, tabOf, tabRoot, titleOf } from "../app/screens"
+import { FallbackScreen } from "./FallbackScreen"
 
-export const PhoneTab = Schema.Literals(["home", "dms", "activity", "more"])
-export type PhoneTab = typeof PhoneTab.Type
+export const PhoneTab = AppTab
+export type PhoneTab = AppTab
 
 /** What the app asks of the shell: open an in-app href, or go back one screen. */
 export const ShellIntent = UiSchema.TaggedEnum({
@@ -75,22 +73,6 @@ const TABS = [
 
 const isTab = Schema.is(PhoneTab)
 
-/** The tab whose root a route is, if it is one. */
-const rootTabOf = (route: AppRoute): PhoneTab | null =>
-	AppRoute.matchOrElse(
-		route,
-		{
-			OrgHome: () => "home" as const,
-			ChatIndex: () => "home" as const,
-			ChatDms: () => "dms" as const,
-			NotificationsMentions: () => "activity" as const,
-			NotificationsUnreads: () => "activity" as const,
-			NotificationsAll: () => "activity" as const,
-			OrgMore: () => "more" as const,
-		},
-		() => null,
-	)
-
 const withStack = (
 	stacks: Stacks,
 	tab: PhoneTab,
@@ -101,7 +83,7 @@ const withStack = (
 export const open = (model: PhoneShellModel, href: string): PhoneShellModel => {
 	const route = routeOfPath(href)
 	if (route._tag === "NotFound") return model
-	const tab = rootTabOf(route)
+	const tab = tabOf(route)
 	if (tab !== null) return { tab, stacks: withStack(model.stacks, tab, () => []) }
 	const path = hrefOf(route)
 	const stack = model.stacks[model.tab]
@@ -115,19 +97,9 @@ export const pop = (model: PhoneShellModel, depth: number): PhoneShellModel => (
 	stacks: withStack(model.stacks, model.tab, (stack) => stack.slice(0, Math.max(0, stack.length - depth))),
 })
 
-/** The title a fallback screen's bar shows (its page draws its own heading under it). */
-const titleOf = (route: AppRoute): string =>
-	AppRoute.matchOrElse(
-		route,
-		{
-			ChatFiles: () => "Files",
-			ChatFilesMedia: () => "Media",
-			Profile: () => "Profile",
-			TeamSettings: () => "Members",
-			OrgMore: () => "More",
-		},
-		() => "",
-	)
+/** A screen stays alive while it is a tab's root or in a tab's stack (`h.keepAlive`'s predicate). */
+const isLive = ({ key, model }: { readonly key: string; readonly model: PhoneShellModel }) =>
+	tabOf(routeOfPath(key)) !== null || TABS.some((tab) => model.stacks[tab.id].includes(key))
 
 export const PhoneShell = Hazel.component({
 	name: "PhoneShell",
@@ -162,70 +134,18 @@ export const PhoneShell = Hazel.component({
 	],
 	view: (h, model) => {
 		const { props } = h
-		const fallback = (title: string, href: string) =>
-			h.screen
-				.key(href)
-				.title(title)
-				.surface("page")
-				.children(h.extension(WebFallback, { path: href }))
-		const root = Match.value(model.tab).pipe(
-			Match.when("home", () =>
-				ChannelSidebar(h, {
-					key: "home",
-					props: {
-						organizationId: props.organizationId,
-						userId: props.userId,
-						orgSlug: props.orgSlug,
-						activeChannelId: null,
-						membersActive: false,
-						hintDismissed: true,
-						paletteKey: null,
-						chrome: true,
-					},
-				}),
-			),
-			Match.when("dms", () =>
-				Dms(h, {
-					key: "dms",
-					props: {
-						organizationId: props.organizationId,
-						userId: props.userId,
-						orgSlug: props.orgSlug,
-						nowMs: props.nowMs,
-					},
-				}),
-			),
-			Match.when("activity", () =>
-				Activity(h, {
-					key: "activity",
-					props: {
-						memberId: props.memberId,
-						orgSlug: props.orgSlug,
-						tab: "mentions",
-						nowMs: props.nowMs,
-						titled: true,
-					},
-				}),
-			),
-			Match.when("more", () => fallback("More", hrefOf(AppRoute.OrgMore({ orgSlug: props.orgSlug })))),
-			Match.exhaustive,
-		)
-		const pushed = model.stacks[model.tab].map((href) => {
-			const route = routeOfPath(href)
-			return route._tag === "ChatChannel"
-				? ChannelScreen(h, {
-						key: href,
-						props: {
-							channelId: route.channelId,
-							organizationId: props.organizationId,
-							userId: props.userId,
-							cdnUrl: props.cdnUrl,
-							linkPreviewUrl: props.linkPreviewUrl,
-							nowMs: props.nowMs,
-						},
-					})
-				: fallback(titleOf(route), href)
-		})
+		const context = { ...props }
+		// A route's screen from the registry, or its fallback; kept alive while it is in a stack or a
+		// tab's root, so another tab, or a screen pushed over it, finds it as it was left.
+		const screen = (href: string) =>
+			h.keepAlive(isLive, (s) => {
+				const route = routeOfPath(href)
+				return (
+					screenOf(s, context, route) ??
+					FallbackScreen(s, { key: href, props: { path: href, title: titleOf(route) } })
+				)
+			})
+		const root = hrefOf(tabRoot(model.tab, props.orgSlug))
 		return h.tabBar
 			.tabs(TABS.map((tab) => ({ id: tab.id, label: tab.label, icon: tab.icon })))
 			.selected(model.tab)
@@ -233,8 +153,9 @@ export const PhoneShell = Hazel.component({
 			.children(
 				h.navigation
 					.key(model.tab)
+					.pushedTabBar("hidden")
 					.on("pop", ({ depth }) => PhoneShellMessage.Popped({ depth }))
-					.children(root, ...pushed),
+					.children(screen(root), ...model.stacks[model.tab].map(screen)),
 			)
 	},
 })

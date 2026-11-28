@@ -8,8 +8,9 @@
 import { Command, Component, UiSchema } from "@effect/ui"
 import { Theme } from "@hazel/domain/models"
 import { OrganizationId, UserId } from "@hazel/schema"
-import { Context, Effect, Layer, Schema } from "effect"
+import { Context, Effect, Layer, Match, Schema } from "effect"
 import { Overrides } from "../lib/keybindings/keymap"
+import { Navigator } from "./navigator"
 
 /** A toast (sonner's options): a later one with the same `id` replaces it in place. */
 export const AppToast = Schema.Struct({
@@ -206,3 +207,28 @@ export const appRequestsLayer = (send: (request: AppRequest) => void) => {
 		Layer.succeed(AppRequests, { send: (request) => Effect.sync(() => send(request)) }),
 	)
 }
+
+/** How a host answers each request but navigation (which `Navigator` answers); exhaustive. */
+export type AppRequestHandlers = {
+	readonly [Tag in Exclude<AppRequest["_tag"], "Navigate" | "History">]: (
+		request: Extract<AppRequest, { readonly _tag: Tag }>,
+	) => Effect.Effect<void>
+}
+
+/**
+ * The app's requests on `Navigator` (`Navigate`, `History`) and the host's `handlers` for the rest:
+ * a request a host has not decided on is a type error, not a silent drop.
+ */
+export const appRequestsOn = (handlers: AppRequestHandlers) =>
+	Layer.unwrap(
+		Effect.map(Effect.service(Navigator), (navigator) =>
+			appRequestsLayer((request) => {
+				const effect = Match.valueTags(request, {
+					...handlers,
+					Navigate: ({ href }) => navigator.open(href),
+					History: ({ direction }) => (direction === "Back" ? navigator.back : Effect.void),
+				})
+				Effect.runFork(effect)
+			}),
+		),
+	)

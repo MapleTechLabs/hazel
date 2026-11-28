@@ -1,4 +1,5 @@
 export * from "./actions"
+export * from "./api"
 export * from "./client"
 export * from "./collections"
 export * from "./connect-shared-channels"

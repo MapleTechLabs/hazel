@@ -37,6 +37,7 @@ final class AppModel: PathOpener {
     init() {
         runtime = makeRuntime()
         FallbackPages.register()
+        FallbackPages.open = { [weak self] path in self?.openPath(path) }
     }
 
     private func makeRuntime() -> AppRuntime {

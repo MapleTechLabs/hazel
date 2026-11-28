@@ -52,6 +52,9 @@ export type FrameSurface = typeof FrameSurface.Type
 export const ScreenSurface = Schema.Literals(Sets.screenSurfaces)
 export type ScreenSurface = typeof ScreenSurface.Type
 
+export const PushedTabBar = Schema.Literals(Sets.pushedTabBars)
+export type PushedTabBar = typeof PushedTabBar.Type
+
 export const SectionStyle = Schema.Literals(Sets.sectionStyles)
 export type SectionStyle = typeof SectionStyle.Type
 

@@ -959,6 +959,9 @@ export const tags = {
 			title: text,
 			back: flag,
 			surface: option(O.ScreenSurface, "sidebar"),
+			// `fill`: the content runs edge to edge at the screen's whole height and scrolls itself (a
+			// conversation's list over its composer, a web view); otherwise the screen scrolls it.
+			fill: flag,
 			// Phase 4: a line under the title; breadcrumbs over it (`crumb` reports the one pressed).
 			subtitle: text,
 			crumbs: value(Schema.Array(Content.Crumb)),
@@ -975,6 +978,8 @@ export const tags = {
 		web: "A4",
 		ios: "S4",
 		content: "elements",
+		// `hidden`: a pushed screen has the whole height, the tab bar around this shows at the root.
+		props: { pushedTabBar: option(O.PushedTabBar, "visible") },
 		events: { pop: Schema.Struct({ depth: Schema.Finite }) },
 	}),
 	tabBar: tag({

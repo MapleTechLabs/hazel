@@ -46,11 +46,24 @@ offline web build). Against the local fixture (`bun apps/ios-hybrid/scripts/fixt
 launch with `-HazelApiUrl http://127.0.0.1:4320 -HazelToken fixture`; without them it signs in to
 Hazel's install through the system sheet. The script is `apps/ios-hybrid/script/entry.ts`.
 
-The root is the shared `PhoneShell` (`apps/shared-screens/src/phone/`): the system tab bar over one
-`hz:navigation` per tab, on the shared route table (`apps/shared-screens/src/app/route.ts`). Every
-way to navigate reaches it as a `ShellIntent`: links (`openURL`), the screens' requests, a push's
-path, and deep links (`hazelchat:///<org>/chat/<channel>`). A route with no shared screen yet is
-pushed as the `WebFallback` extension, which the app draws as the bundled web app at that path.
+### How the app is put together (one codebase, a host per platform)
+
+- **Screens** are shared `hazel` components (`apps/shared-screens`). Which screen a route draws, the
+  tab it is the root of and its title live in one registry, `app/screens.ts`. Bringing a screen to
+  the phone is one entry there; a route with none is the web fallback (`phone/FallbackScreen`,
+  the `WebFallback` extension the app draws as the bundled web app).
+- **Wiring** is shared too: `app/hosted.ts` provides each chat screen's services from `Navigator`
+  (`app/navigator.ts`: the web's Router, the phone's stacks), `ClientData`, `HazelRpc`,
+  `AppContext` and `ChatHost` (only what truly differs per platform). App requests are exhaustive
+  (`appRequestsOn`): a request a host has not decided on is a type error.
+- **The phone** is `phone/PhoneShell` (the system tab bar over a `hz:navigation` per tab, every
+  tab's screens kept alive), its navigation queue (`phone/navigation.ts`) and the script
+  (`apps/ios-hybrid/script/`): `entry.ts` boots, signs in and mounts; `phone-host.ts` holds the
+  phone's own decisions and ports. Swift-backed ports live in `packages/client-data/src/platform/jsc`.
+- **Layout is vocabulary**, not renderer guesses: `screen.fill` (the content scrolls itself, edge to
+  edge) and `navigation.pushedTabBar` (`hidden` on the phone).
+- Every link reaches the shell as a `ShellIntent`: `Navigator`, `openURL` in SwiftUI, a push's or a
+  deep link's path (`hazelchat:///...`), and a fallback page's own links (pushed natively).
 
 ## Phases
 

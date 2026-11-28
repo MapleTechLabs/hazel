@@ -3,7 +3,7 @@
 /**
  * A conversation on a phone (`docs/ios-native.md`, N2): the shared message list over the shared
  * composer, under the channel's name in the system bar. A DM is titled by its name as the sidebar
- * shows it. The host provides the list's, the composer's and the data's services.
+ * shows it. The list and the composer are the hosted ones (`../app/hosted`).
  */
 import { Subscription, UiSchema } from "@effect/ui"
 import { ClientData } from "@hazel/client-data"
@@ -11,8 +11,7 @@ import { Hazel } from "@hazel/ui/vocabulary/index"
 import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { eq } from "@tanstack/db"
 import { Effect, Schema, Stream } from "effect"
-import { ChannelComposer } from "../chat/composer/ChannelComposer"
-import { MessageList } from "../chat/MessageList"
+import { HostedChannelComposer, HostedMessageList } from "../app/hosted"
 
 export const ChannelScreenProps = Schema.Struct({
 	channelId: ChannelId,
@@ -78,33 +77,39 @@ export const ChannelScreen = Hazel.component({
 	view: (h, model) => {
 		const { props } = h
 		const isChannel = model.kind === "public" || model.kind === "private"
-		return h.screen
-			.key(props.channelId)
-			.title(titleOf(model.name, model.kind))
-			.surface("page")
-			.children(
-				MessageList(h, {
-					key: props.channelId,
-					props: {
-						channelId: props.channelId,
-						userId: props.userId,
-						cdnUrl: props.cdnUrl,
-						linkPreviewUrl: props.linkPreviewUrl,
-						nowMs: props.nowMs,
-					},
-				}),
-				ChannelComposer(h, {
-					key: props.channelId,
-					props: {
-						channelId: props.channelId,
-						organizationId: props.organizationId,
-						userId: props.userId,
-						placeholder:
-							model.name === null ? "Message" : `Message ${isChannel ? "#" : ""}${model.name}`,
-						ready: true,
-						autoFocus: false,
-					},
-				}),
-			)
+		return (
+			h.screen
+				.key(props.channelId)
+				.title(titleOf(model.name, model.kind))
+				.surface("page")
+				// The list over the composer, or the page, has the whole height and scrolls itself.
+				.fill(true)
+				.children(
+					HostedMessageList(h, {
+						key: props.channelId,
+						props: {
+							channelId: props.channelId,
+							userId: props.userId,
+							cdnUrl: props.cdnUrl,
+							linkPreviewUrl: props.linkPreviewUrl,
+							nowMs: props.nowMs,
+						},
+					}),
+					HostedChannelComposer(h, {
+						key: props.channelId,
+						props: {
+							channelId: props.channelId,
+							organizationId: props.organizationId,
+							userId: props.userId,
+							placeholder:
+								model.name === null
+									? "Message"
+									: `Message ${isChannel ? "#" : ""}${model.name}`,
+							ready: true,
+							autoFocus: false,
+						},
+					}),
+				)
+		)
 	},
 })

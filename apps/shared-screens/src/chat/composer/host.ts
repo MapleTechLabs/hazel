@@ -6,7 +6,7 @@
  * drafts kept per channel. The web's implementations are `web-foldkit/src/root/composer.ts`.
  */
 import { AttachmentId, BotId, ChannelId, MessageId, OrganizationId } from "@hazel/schema"
-import { Context, Effect, Layer, Schema, Stream } from "effect"
+import { Context, Effect, Layer, PubSub, Schema, Stream } from "effect"
 import { HeldFile, Mode } from "./model"
 
 /** What the page around the composer asks of it. */
@@ -103,6 +103,34 @@ export class BotCommands extends Context.Service<
 		}) => Effect.Effect<void, BotCommandFailure>
 	}
 >()("hazel/composer/BotCommands") {}
+
+/**
+ * The requests of the screens around a composer (reply, edit, focus), by channel: one hub per app,
+ * so a list asks the composer of its own channel and two composers never share one.
+ */
+export class ComposerRequests extends Context.Service<
+	ComposerRequests,
+	{
+		readonly send: (channelId: ChannelId, request: ComposerRequest) => Effect.Effect<void>
+		readonly of: (channelId: ChannelId) => Stream.Stream<ComposerRequest>
+	}
+>()("hazel/composer/ComposerRequests") {
+	static readonly layer = Layer.effect(
+		this,
+		Effect.map(
+			PubSub.unbounded<{ readonly channelId: ChannelId; readonly request: ComposerRequest }>(),
+			(hub) => ({
+				send: (channelId: ChannelId, request: ComposerRequest) =>
+					Effect.asVoid(PubSub.publish(hub, { channelId, request })),
+				of: (channelId: ChannelId) =>
+					Stream.fromPubSub(hub).pipe(
+						Stream.filter((entry) => entry.channelId === channelId),
+						Stream.map((entry) => entry.request),
+					),
+			}),
+		),
+	)
+}
 
 /** What a channel's draft keeps while the user is elsewhere. */
 export const SavedDraft = Schema.Struct({ text: Schema.String, mode: Mode })

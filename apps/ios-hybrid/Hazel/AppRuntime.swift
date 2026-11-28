@@ -2,6 +2,7 @@ import Foundation
 import JavaScriptCore
 import os
 import QuartzCore
+import UIKit
 import HazelUI
 
 /// The app's script (`script/entry.ts`) in a bare JavaScriptCore context on its own thread
@@ -133,7 +134,13 @@ struct ShellCommands: Sendable {
         let restart: @convention(block) () -> Void = { [restart] in
             DispatchQueue.main.async { MainActor.assumeIsolated { restart() } }
         }
+        // Not the app's own: the system opens it (Safari, another app).
+        let openUrl: @convention(block) (String) -> Void = { url in
+            guard let target = URL(string: url) else { return }
+            DispatchQueue.main.async { MainActor.assumeIsolated { UIApplication.shared.open(target) } }
+        }
         object.setObject(set, forKeyedSubscript: "setServer" as NSString)
+        object.setObject(openUrl, forKeyedSubscript: "openUrl" as NSString)
         object.setObject(restart, forKeyedSubscript: "restart" as NSString)
         return object
     }
