@@ -68,6 +68,8 @@ export const HostRequest = Schema.Union([
 		messageId: MessageId,
 		action: MessageAction,
 		content: Schema.String,
+		/** The author's name as the list shows it (a reply's "Replying to"), "" when unknown. */
+		author: Schema.String,
 		image: Schema.optional(Schema.String),
 	}),
 	Schema.TaggedStruct("OpenThread", { messageId: MessageId, threadChannelId: Schema.NullOr(ChannelId) }),

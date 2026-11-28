@@ -11,6 +11,7 @@ import { Clipboard } from "@hazel/client-data/platform"
 import type { ChannelId, MessageId } from "@hazel/schema"
 import { Context, Effect, Layer, Match, Stream } from "effect"
 import { Navigator, openRoute } from "../app/navigator"
+import { AppRequest, AppRequests } from "../app/requests"
 import { AppRoute } from "../app/route"
 import { ChannelScreen } from "./ChannelScreen"
 import { botCommandsLayer } from "./composer/bot-commands"
@@ -47,16 +48,27 @@ const messageListHostLayer = (orgSlug: string, channelId: ChannelId) =>
 			const composer = yield* ComposerRequests
 			const host = yield* MessageListHost
 			const live = yield* LiveConnection
-			const copy = (text: string) => Effect.ignore(clipboard.write(text))
+			const requests = yield* AppRequests
+			// A refused clipboard says so (as the web's copies do), never a silent no-op.
+			const copy = (text: string) =>
+				clipboard.write(text).pipe(
+					Effect.catchTag("ClipboardError", () =>
+						requests.send(
+							AppRequest.ShowToast({
+								toast: { intent: "error", title: "Couldn't copy", description: null },
+							}),
+						),
+					),
+				)
 			const handle = (request: HostRequest): Effect.Effect<void> =>
 				Match.valueTags(request, {
-					Action: ({ messageId, action, content, image }) =>
+					Action: ({ messageId, action, content, author, image }) =>
 						Match.value(action).pipe(
 							Match.when("reply", () =>
 								composer.send(channelId, {
 									_tag: "Reply",
 									messageId,
-									author: "",
+									author,
 									text: content,
 								}),
 							),
