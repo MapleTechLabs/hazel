@@ -54,6 +54,14 @@ public final class RowImages: @unchecked Sendable {
         return nil
     }
 
+    /// The smallest picture decoded for `url` (a tile's), to stand in for a page out of view.
+    public func small(_ url: String) -> UIImage? {
+        for bucket in [256, 512, 1024] {
+            if let hit = decoded.object(forKey: Self.key(url, bucket) as NSString) { return hit }
+        }
+        return nil
+    }
+
     /// Loads `url` decoded for `pixels`, then calls `done` on the main queue (nil when it failed).
     public func load(_ url: String, pixels: Int, _ done: @escaping @MainActor @Sendable (UIImage?) -> Void) {
         load(url, bucket: Self.bucket(pixels)) { image in DispatchQueue.main.async { done(image) } }

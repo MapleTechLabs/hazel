@@ -183,6 +183,11 @@ final class LightboxController: UIViewController, UIScrollViewDelegate, UIGestur
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
         let doubleTap = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
+        // The bar's button and the thumbnails take their own taps, whole.
+        for each in [tap, doubleTap] {
+            each.delegate = self
+            each.cancelsTouchesInView = false
+        }
         doubleTap.numberOfTapsRequired = 2
         tap.require(toFail: doubleTap)
         view.addGestureRecognizer(tap)
@@ -240,8 +245,12 @@ final class LightboxController: UIViewController, UIScrollViewDelegate, UIGestur
         loadAround(index)
     }
 
+    /// The open page and its neighbours hold their full pictures; the others give theirs back, so a
+    /// long gallery keeps three full decodes, not one per photo.
     private func loadAround(_ i: Int) {
-        for (j, page) in pages.enumerated() where abs(j - i) <= 1 { page.loadFull() }
+        for (j, page) in pages.enumerated() {
+            if abs(j - i) <= 1 { page.loadFull() } else { page.unloadFull() }
+        }
     }
 
     /// The node's items or page changed while open (another message's media, or its echo of a swipe).
@@ -325,6 +334,11 @@ final class LightboxController: UIViewController, UIScrollViewDelegate, UIGestur
     @objc private func pressedClose() { close() }
 
     // MARK: pull to dismiss
+
+    func gestureRecognizer(_ gesture: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard gesture !== pull, let touched = touch.view else { return true }
+        return !touched.isDescendant(of: bar) && !touched.isDescendant(of: strip)
+    }
 
     func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
         guard gesture === pull, let page = current else { return true }
@@ -483,6 +497,15 @@ final class LightboxPage: UIScrollView, UIScrollViewDelegate {
 
     var isZoomed: Bool { zoomScale > minimumZoomScale + 0.01 }
 
+    /// Out of reach: the full picture goes back for the tile's (or none), and loads again on return.
+    func unloadFull() {
+        guard loadingFull else { return }
+        loadingFull = false
+        arrival = nil
+        if isZoomed { setZoomScale(minimumZoomScale, animated: false) }
+        imageView.image = RowImages.shared.small(item.url)
+    }
+
     /// Decodes the photo for this screen (its longest side in pixels), once.
     func loadFull() {
         guard !loadingFull else { return }
@@ -491,12 +514,13 @@ final class LightboxPage: UIScrollView, UIScrollViewDelegate {
         let pixels = Int(max(screen.bounds.width, screen.bounds.height) * screen.scale * 1.5)
         let url = item.url
         RowImages.shared.load(url, pixels: pixels) { [weak self] image in
-            guard let self else { return }
+            // Given back meanwhile (swiped far away): it stays out.
+            guard let self, self.loadingFull else { return }
             if let image { self.setImage(image); return }
             // Another load of the same size is in flight: take it when it lands.
             self.arrival = ObserverToken(NotificationCenter.default.addObserver(forName: RowImages.loaded, object: url, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    guard let self, let best = RowImages.shared.best(url) else { return }
+                    guard let self, self.loadingFull, let best = RowImages.shared.best(url) else { return }
                     self.setImage(best)
                 }
             })
