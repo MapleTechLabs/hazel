@@ -172,3 +172,27 @@ export const retainChannels = (
 					(retention) => Effect.sync(() => retention.release()),
 				).pipe(Effect.flatMap(() => Effect.never)),
 			)
+
+/**
+ * `retainChannels` that also says when their rows are in: one `void` once every channel has
+ * settled (its snapshot, or the rows kept from an earlier load), or at once for no channels, then
+ * holds them open as `retainChannels` does. A screen waits for it to draw rows that join on a
+ * channel's messages in their final form, instead of redrawing each as its preview arrives.
+ */
+export const retainChannelsSettled = (
+	syncHub: Pick<SyncHub, "retain">,
+	channelIds: ReadonlyArray<string>,
+): Stream.Stream<void> =>
+	channelIds.length === 0
+		? Stream.concat(Stream.succeed(undefined), Stream.never)
+		: Stream.callback<void>((queue) =>
+				Effect.acquireRelease(
+					Effect.sync(() => {
+						const retention = syncHub.retain(channelIds.map((id) => sourceKey("channel", id)))
+						// A refused channel settles too: its row keeps its fallback text.
+						void retention.settled.then(() => Queue.offerUnsafe(queue, undefined))
+						return retention
+					}),
+					(retention) => Effect.sync(() => retention.release()),
+				).pipe(Effect.flatMap(() => Effect.never)),
+			)

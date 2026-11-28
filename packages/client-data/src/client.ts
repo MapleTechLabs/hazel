@@ -7,7 +7,7 @@ import type { UserId } from "@hazel/schema"
 import { Context, Effect, Layer, Stream } from "effect"
 import { makeActions } from "./actions"
 import { makeCollections } from "./collections"
-import { liveQueryStream, retainChannels, watchStall } from "./live-query"
+import { liveQueryStream, retainChannels, retainChannelsSettled, watchStall } from "./live-query"
 import {
 	ClientDataConfig,
 	Connectivity,
@@ -105,6 +105,8 @@ export class ClientData extends Context.Service<ClientData>()("@hazel/client-dat
 			liveQueryStream,
 			watchStall,
 			retainChannels: (channelIds: ReadonlyArray<string>) => retainChannels(sync.syncHub, channelIds),
+			retainChannelsSettled: (channelIds: ReadonlyArray<string>) =>
+				retainChannelsSettled(sync.syncHub, channelIds),
 		}
 	}),
 }) {

@@ -10,6 +10,7 @@ import type { CurrentUser } from "@hazel/domain"
 import type { OrganizationId } from "@hazel/schema"
 import { and, eq } from "@tanstack/db"
 import { Effect, Layer, Option, Stream, SubscriptionRef } from "effect"
+import { prefetchChannels } from "./prefetch"
 import { CurrentSession } from "../app/current-session"
 import type { Session, SessionMember, SessionOrganization, SessionUser } from "../app/session"
 import { SwitchOrganization } from "../shell/Chrome"
@@ -102,6 +103,12 @@ export const makePhoneSession = (me: CurrentUser.Schema, organizationId: Organiz
 						),
 				}),
 				SwitchOrganization.layerWith((id) => Effect.runSync(SubscriptionRef.set(organization, id))),
+			),
+			/** The current organization's likely-next channels kept syncing while it runs (`./prefetch`). */
+			prefetch: SubscriptionRef.changes(organization).pipe(
+				Stream.switchMap((orgId) => prefetchChannels(orgId, me.id)),
+				Stream.provideService(ClientData, data),
+				Stream.runDrain,
 			),
 			/** `user.me` again, into the session (a changed name or avatar); whether it answered. */
 			refreshUser: rpc("user.me", undefined).pipe(
