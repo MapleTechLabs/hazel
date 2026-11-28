@@ -23,10 +23,16 @@ import {
 import { makeNativeHost } from "../../../packages/ui/src/native/host.ts"
 import { type Json, WIRE_VERSION } from "../../../packages/ui/src/native/wire.ts"
 import { authFlowsJsc, signOutJsc } from "./auth"
+import { installDemo } from "./demo"
 import { navigation, phoneHostLayer } from "./phone-host"
 import { appShell, serverLabel } from "./shell"
 
 declare const __native: { post: (json: string) => void }
+/** Set by the demo bundle (`build:hazel:demo`): the offline fixture in-process (`./demo.ts`). */
+declare const __HAZEL_DEMO__: boolean
+
+// A constant at build time: the app's own bundle leaves the fixture out.
+if (__HAZEL_DEMO__) installDemo()
 
 const native = makeNativeHost((batch) => __native.post(JSON.stringify(batch)))
 

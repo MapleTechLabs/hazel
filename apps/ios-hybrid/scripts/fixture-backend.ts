@@ -16,6 +16,7 @@ import type { WebSocketLike } from "@hazel/effect-db-collection"
 import { fixtureNotifications, makeOfflineFetch } from "../fixture/offline-backend"
 import { currentUser } from "../fixture/offline-session"
 import { makeFixtureServer, makeFixtureWebSocket } from "../fixture/fixture-socket"
+import { seedDms } from "../fixture/dm-seed"
 import { seedGeneralThread, snapshotWithThread } from "../fixture/thread-seed"
 import { bigChannel } from "../web/big-channel"
 import {
@@ -75,77 +76,11 @@ const offlineFetch = makeOfflineFetch({
 const members = new Map(channelMemberRows.map((row) => [row.id, row]))
 const channels = new Map(channelRows.map((row) => [row.id, row]))
 
-/**
- * `--dms`: four more DMs for the DMs screen, written before any client connects so they are part of
- * the snapshot: Katherine (unread), Alan (Ada wrote last), a group with Margaret and Dennis, and
- * Dennis with no message yet. Times are relative to now, so rows read `2h`, `Yesterday`, `Mon`.
- */
-const seedDms = () => {
-	const userNamed = (firstName: string) =>
-		userRows.find((row) => row.firstName === firstName)?.id ?? adaUserId
-	const uuid = (group: number, index: number) =>
-		`${group.toString(16).padStart(8, "0")}-0000-4000-8000-${index.toString(16).padStart(12, "0")}`
-	const now = Date.now()
-	const base = channelRows[0]
-	const memberBase = channelMemberRows[0]
-	if (base === undefined || memberBase === undefined) return
-	const seeds = [
-		{
-			n: 10,
-			type: "single",
-			with: ["Katherine"],
-			at: 2 * 3_600_000,
-			from: "Katherine",
-			text: "Deck is ready for review 🚀",
-			unread: 1,
-		},
-		{
-			n: 11,
-			type: "single",
-			with: ["Alan"],
-			at: 26 * 3_600_000,
-			from: "Ada",
-			text: "Pushed the fix, can you take a look when you have a minute?",
-			unread: 0,
-		},
-		{
-			n: 12,
-			type: "direct",
-			with: ["Margaret", "Dennis"],
-			at: 4 * 86_400_000,
-			from: "Margaret",
-			text: "Lunch on Friday?",
-			unread: 0,
-		},
-		{ n: 13, type: "single", with: ["Dennis"], at: null, from: null, text: null, unread: 0 },
-	] as const
-	for (const seed of seeds) {
-		const id = uuid(5, seed.n) as (typeof base)["id"]
-		const row = {
-			...base,
-			id,
-			name: "",
-			type: seed.type,
-			sectionId: null,
-			lastMessageAt: seed.at === null ? null : new Date(now - seed.at).toISOString(),
-			lastMessageAuthorId: seed.from === null ? null : userNamed(seed.from),
-			lastMessagePreview: seed.text,
-		}
-		channels.set(id, row)
-		server.write("org", orgId, "channels", [row])
-		const rows = [adaUserId, ...seed.with.map(userNamed)].map((userId, index) => ({
-			...memberBase,
-			id: uuid(7, seed.n * 16 + index + 1),
-			channelId: id,
-			userId,
-			isFavorite: false,
-			notificationCount: userId === adaUserId ? seed.unread : 0,
-		}))
-		for (const member of rows) members.set(member.id, member)
-		server.write("org", orgId, "channel_members", rows)
-	}
+if (process.argv.includes("--dms")) {
+	const seeded = seedDms(server)
+	for (const row of seeded.channels) channels.set(row.id, row)
+	for (const row of seeded.members) members.set(row.id, row)
 }
-if (process.argv.includes("--dms")) seedDms()
 // `--thread`: the Benchmarks thread on #general's last message, as the web offline build has it.
 if (process.argv.includes("--thread")) seedGeneralThread(server)
 // `--big`: #engineering with 3,000 messages (`web/big-channel.ts`), the performance bar's channel.

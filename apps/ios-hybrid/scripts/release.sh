@@ -4,6 +4,8 @@
 #   BUILD=3186.7 bash scripts/release.sh           (BUILD: above the app's latest TestFlight build)
 #   PROFILE=… IDENTITY=… UPLOAD=0                  (defaults: ~/.asc/signing's App Store profile,
 #                                                   "Apple Distribution", upload on)
+#   DEMO=1 BUILD=… bash scripts/release.sh         (a demo: the offline fixture in-process, no server
+#                                                   or account; `script/demo.ts`)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -14,19 +16,29 @@ PROFILE="${PROFILE:-$HOME/.asc/signing/hazel_appstore.mobileprovision}"
 IDENTITY="${IDENTITY:-Apple Distribution}"
 OUT=build/release
 
-# The web build is online (production), whatever a simulator run left (`build/web.mode`).
-bun run build:web >/dev/null
-echo online >build/web.mode
+# The web build is online (production), whatever a simulator run left (`build/web.mode`); a demo's
+# fallback pages are the offline web build, served from the app's own origin.
+if [ "${DEMO:-0}" = "1" ]; then
+	bun run build:web:offline >/dev/null
+	echo offline >build/web.mode
+	SCRIPT=build:hazel:demo
+	PAGE_ORIGIN=http://localhost
+else
+	bun run build:web >/dev/null
+	echo online >build/web.mode
+	SCRIPT=build:hazel
+	PAGE_ORIGIN=https://app.hazel.sh
+fi
 python3 scripts/fonts.py >/dev/null
-# The app's script and the web's icons (`build-hazel.sh`).
-bun run build:hazel >/dev/null
+# The app's script (the demo's, with the fixture) and the web's icons (`build-hazel.sh`).
+bun run "$SCRIPT" >/dev/null
 bun scripts/export-icons.ts build/icons/Icons.xcassets >/dev/null
 xcodegen generate --quiet
 rm -rf "$OUT" && mkdir -p "$OUT"
 xcodebuild -project Hazel.xcodeproj -scheme Hazel -configuration Release \
 	-destination 'generic/platform=iOS' -derivedDataPath build/derived-release \
 	PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
-	CODE_SIGNING_ALLOWED=NO -quiet build
+	CODE_SIGNING_ALLOWED=NO HAZEL_PAGE_ORIGIN="$PAGE_ORIGIN" -quiet build
 APP="$OUT/Payload/Hazel.app"
 mkdir -p "$OUT/Payload"
 cp -R build/derived-release/Build/Products/Release-iphoneos/Hazel.app "$APP"
