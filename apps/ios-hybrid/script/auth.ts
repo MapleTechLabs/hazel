@@ -51,21 +51,19 @@ const BrowserJsc = Layer.succeed(
 	}),
 )
 
-/** A browser fetch's shape over the native `HttpClient`, for the web's server discovery. */
-const fetchOver =
-	(http: HttpClient.HttpClient) =>
-	(url: string): Promise<Response> =>
-		Effect.runPromise(
-			http.get(url, { headers: { accept: "application/json" } }).pipe(
-				Effect.flatMap((response) =>
-					Effect.map(response.text, (text) => ({
-						ok: response.status >= 200 && response.status < 300,
-						json: async (): Promise<unknown> => JSON.parse(text),
-					})),
-				),
+/** What the web's server discovery reads of a response, over the native `HttpClient`. */
+const fetchOver = (http: HttpClient.HttpClient) => (url: string) =>
+	Effect.runPromise(
+		http.get(url, { headers: { accept: "application/json" } }).pipe(
+			Effect.flatMap((response) =>
+				Effect.map(response.text, (text) => ({
+					ok: response.status >= 200 && response.status < 300,
+					// The discovery document parses it (`parseServer`), as it does a browser's.
+					json: () => Promise.resolve(JSON.parse(text)),
+				})),
 			),
-			// SAFETY: `discoverServer` reads only `ok` and `json()` of the response.
-		) as unknown as Promise<Response>
+		),
+	)
 
 /** `@hazel/auth/desktop` for the native client on `server`, its session in the keychain record. */
 const desktopAuthOn = (server: ShellServer) =>

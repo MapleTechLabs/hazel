@@ -112,7 +112,8 @@ export class ServerDiscoveryError extends Schema.TaggedError<
 	reason: Schema.Literals(["Empty", "Invalid", "Insecure", "Unreachable", "NotHazel"]),
 }) {}
 
-type Fetch = (input: string, init?: RequestInit) => Promise<Response>
+/** What discovery reads of a response; a browser's `fetch` is one, the native app's HTTP another. */
+type Fetch = (input: string, init?: RequestInit) => Promise<Pick<Response, "ok" | "json">>
 
 /** The discovery document at `origin`, or `null` when there is none (or it isn't Hazel's). */
 const fetchDocument = (origin: string, fetchImpl: Fetch) =>
