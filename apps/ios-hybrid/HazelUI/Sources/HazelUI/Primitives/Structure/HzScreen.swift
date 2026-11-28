@@ -105,7 +105,7 @@ private struct ScreenContent: View {
         let style = HazelTheme.Recipes.screen.style(part: "content", sizeClass: sizeClass)
         let content = tree.content(of: node)
         let fills = content.contains { $0.tag == "hz:ext" && HazelExtensions.fills($0[prop: "ext"]?.string ?? "") }
-        let scrolls = fills || content.contains { $0.tag == "hz:list" || $0.tag == "hz:scroll" }
+        let scrolls = fills || content.contains { Self.scrollsItself($0, in: tree, depth: 2) }
         // As the web's sticky slot after the last row: 16pt, the 56pt action, then the content's padding.
         let floating = tree.slot("floatingAction", of: node) != nil
         let reserve = floating ? (HazelTheme.space["4"] ?? 0) + (HazelTheme.space["14"] ?? 0) : 0
@@ -126,6 +126,16 @@ private struct ScreenContent: View {
         .overlay(alignment: .bottomTrailing) {
             FloatingAction(tree: tree, node: node).padding(.bottom, style.paddingY ?? 0)
         }
+    }
+}
+
+extension ScreenContent {
+    /// A list or scroll view, or a stack around one (a component's root, as the message list's):
+    /// the screen gives it its height instead of scrolling it inside its own scroll view.
+    static func scrollsItself(_ node: Node, in tree: Tree, depth: Int) -> Bool {
+        if node.tag == "hz:list" || node.tag == "hz:scroll" { return true }
+        guard depth > 0, node.tag == "hz:stack" else { return false }
+        return tree.content(of: node).contains { scrollsItself($0, in: tree, depth: depth - 1) }
     }
 }
 

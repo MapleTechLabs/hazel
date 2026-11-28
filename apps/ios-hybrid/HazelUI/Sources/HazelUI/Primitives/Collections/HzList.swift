@@ -40,12 +40,14 @@ struct HzList: View {
     /// `scrollTo` targets: `{to: "start" | "end"}` or `{key}`, a row's wire key (`row-key`).
     enum Target {
         case edge(end: Bool)
-        case row(key: String)
+        /// `selectText`: the row's text is selected too (a message menu's "Select Text").
+        case row(key: String, selectText: Bool)
 
         init?(_ args: JSONValue) {
             if let to = args.object?["to"]?.string { self = .edge(end: to == "end") }
-            else if let key = args.object?["key"]?.string { self = .row(key: key) }
-            else { return nil }
+            else if let key = args.object?["key"]?.string {
+                self = .row(key: key, selectText: args.object?["selectText"]?.bool == true)
+            } else { return nil }
         }
     }
 
@@ -135,11 +137,12 @@ final class ListBridge {
             let animated = !UIAccessibility.isReduceMotionEnabled
             switch target {
             case let .edge(end): view.scroll(toEdge: end, animated: animated)
-            case let .row(key):
+            case let .row(key, selectText):
                 let rows = self.source.keys.map { self.tree.node($0) }
                 guard let index = rows.indices.first(where: { i in rows[i].map { HzList.key($0, at: i) == key } ?? false })
                 else { throw CommandError("hz:list has no row \(key)") }
-                view.scroll(toRow: index, animated: animated)
+                // "Select Text" comes from the row's own menu, so the row is on screen: no scroll.
+                if selectText { view.selectText(self.source.keys[index]) } else { view.scroll(toRow: index, animated: animated) }
             }
             return .null
         }
@@ -273,7 +276,8 @@ private struct StackList: View {
                 withAnimation(motion) {
                     switch target {
                     case let .edge(end): position.scrollTo(edge: end ? .bottom : .top)
-                    case let .row(key):
+                    // A plain list has no native text selection: it only scrolls.
+                    case let .row(key, _):
                         guard let index = HzList.index(of: key, in: tree.content(of: node)) else { return }
                         position.scrollTo(id: index)
                     }

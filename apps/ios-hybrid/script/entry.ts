@@ -15,18 +15,28 @@ import { AppRoute, hrefOf } from "@hazel/shared-screens/app/route"
 import { sidebarWritesLayer } from "@hazel/shared-screens/channel-sidebar/actions"
 import { channelSidebarLayer, matchTarget } from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
 import { dmsLayer } from "@hazel/shared-screens/dms/Dms"
+import {
+	BotCommands,
+	ComposerFiles,
+	ComposerHost,
+	type ComposerRequest,
+	Drafts,
+} from "@hazel/shared-screens/chat/composer/host"
+import { messageListLayer } from "@hazel/shared-screens/chat/live"
+import { noLiveConnection } from "@hazel/shared-screens/chat/rich/live-replies"
 import { PhoneShell, ShellIntent, ShellIntents } from "@hazel/shared-screens/phone/PhoneShell"
 import { WebFallback } from "../../../packages/ui/src/extensions/WebFallback.ts"
 import { Hazel } from "../../../packages/ui/src/vocabulary/index.ts"
-import type { ChannelId, OrganizationId, OrganizationMemberId } from "@hazel/schema"
+import type { ChannelId, MessageId, OrganizationId, OrganizationMemberId } from "@hazel/schema"
 import { eq } from "@tanstack/db"
-import { Deferred, Effect, Layer, Match, Option, Queue, Schedule, Schema, Stream } from "effect"
+import { Deferred, Effect, Layer, Match, Option, PubSub, Queue, Schedule, Schema, Stream } from "effect"
 import type { HttpClient } from "effect/http"
 import {
 	NativeSessionControls,
 	onSessionRejected,
 	PlatformJsc,
 } from "../../../packages/client-data/src/platform/jsc/index.ts"
+import { nativeBridge } from "../../../packages/client-data/src/platform/jsc/bridge.ts"
 import { makeNativeHost } from "../../../packages/ui/src/native/host.ts"
 import { type Json, WIRE_VERSION } from "../../../packages/ui/src/native/wire.ts"
 import { authFlowsJsc, signOutJsc } from "./auth"
@@ -63,6 +73,53 @@ interface Membership {
 	readonly member: { readonly id: OrganizationMemberId; readonly organizationId: OrganizationId }
 	readonly organization: { readonly slug: string | null }
 }
+
+/** The install's link-preview worker (Hazel's; another install's arrives with its discovery). */
+const LINK_PREVIEW_URL = "https://link-preview.hazel.sh"
+
+/** What the screens around a composer ask of it (reply, edit), per channel. */
+const composerRequests = Effect.runSync(PubSub.unbounded<{ channelId: string; request: ComposerRequest }>())
+let activeComposerChannel: string | null = null
+const composerRequest = (request: ComposerRequest) => {
+	if (activeComposerChannel !== null)
+		void PubSub.publishUnsafe(composerRequests, { channelId: activeComposerChannel, request })
+}
+const ComposerRequestOf = {
+	Reply: (messageId: MessageId, text: string): ComposerRequest => ({
+		_tag: "Reply",
+		messageId,
+		author: "",
+		text,
+	}),
+	Edit: (messageId: MessageId, content: string): ComposerRequest => ({ _tag: "Edit", messageId, content }),
+}
+
+/**
+ * The composer's host on a phone: requests from the list, no drag and drop, no thread panel (a
+ * thread is pushed as its own conversation). Picking and uploading files arrive in N4.
+ */
+const composerLayer = Layer.mergeAll(
+	Layer.succeed(ComposerHost, {
+		requests: (channelId) => {
+			activeComposerChannel = channelId
+			return Stream.fromPubSub(composerRequests).pipe(
+				Stream.filter((entry) => entry.channelId === channelId),
+				Stream.map((entry) => entry.request),
+			)
+		},
+		notify: (notice) => Effect.sync(() => console.log(`[hazel] composer ${notice._tag}`)),
+		dragging: Stream.make(false),
+		thread: Stream.make(null),
+	}),
+	Layer.succeed(ComposerFiles, {
+		pick: Effect.succeed([]),
+		dropped: Effect.succeed([]),
+		upload: () => Stream.empty,
+		release: () => Effect.void,
+	}),
+	Layer.succeed(BotCommands, { execute: () => Effect.fail("Unavailable" as const) }),
+	Drafts.layer,
+)
 
 /** Every navigation the screens, the app's requests and the host ask for (`ShellIntents`). */
 const intents = Effect.runSync(Queue.unbounded<ShellIntent>())
@@ -145,6 +202,8 @@ const root = (signOut: Effect.Effect<void>) =>
 				memberId: membership.member.id,
 				userId: me.id,
 				orgSlug: slug,
+				cdnUrl: appShell().server.cdn ?? "",
+				linkPreviewUrl: LINK_PREVIEW_URL,
 				nowMs: Date.now(),
 			},
 			native.container,
@@ -178,6 +237,45 @@ const root = (signOut: Effect.Effect<void>) =>
 					),
 					sidebarWritesLayer(data, rpc),
 					dmsLayer(data, openChannel, () => console.log("[hazel] compose")),
+					messageListLayer(
+						data,
+						rpc,
+						(request) =>
+							Match.valueTags(request, {
+								Action: ({ messageId, action, content }) =>
+									Match.value(action).pipe(
+										Match.when("reply", () =>
+											composerRequest(ComposerRequestOf.Reply(messageId, content)),
+										),
+										Match.when("edit", () =>
+											composerRequest(ComposerRequestOf.Edit(messageId, content)),
+										),
+										Match.when(
+											"copy",
+											() => void nativeBridge().clipboard?.write(content),
+										),
+										Match.orElse((other) =>
+											console.log(`[hazel] message action ${other}`),
+										),
+									),
+								// A thread is a channel of its own: pushed as a conversation.
+								OpenThread: ({ threadChannelId }) => {
+									if (threadChannelId !== null) openChannel(threadChannelId)
+								},
+								OpenLink: ({ url }) => intend(ShellIntent.Open({ href: url })),
+								OpenAttachment: ({ url }) => console.log(`[hazel] attachment ${url}`),
+								EditProfile: () =>
+									intend(
+										ShellIntent.Open({
+											href: hrefOf(AppRoute.MySettingsProfile({ orgSlug: slug })),
+										}),
+									),
+								JumpToReply: () => {},
+								Retry: () => {},
+							}),
+						noLiveConnection,
+					),
+					composerLayer,
 					activityLayer(data, rpc, openChannel),
 					appRequestsLayer((request) =>
 						Match.valueTags(request, {
@@ -228,6 +326,9 @@ program.pipe(
 	),
 	Effect.scoped,
 	Effect.tapCause((cause) => Effect.sync(() => console.error(`[hazel] failed: ${String(cause)}`))),
+	// SAFETY: `ChannelComposer`'s requirement type is `any` (shared-screens), which reaches this
+	// program through the shell; every service it uses is provided (`composerLayer`, `native.layer`).
+	(effect) => effect as Effect.Effect<never, unknown>,
 	Effect.runFork,
 )
 

@@ -633,13 +633,9 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
 
     @objc private func held(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began, let (i, local) = row(at: gesture.location(in: self)) else { return }
-        // A row offering `selectText` selects when held on its text; held elsewhere it opens its menu.
-        if let layout = layouts[keys[i]], layout.offersSelectText,
-           layout.selectable.contains(where: { $0.rect.insetBy(dx: -8, dy: -4).contains(local) }) {
-            beginSelection(i, at: local)
-            onAccessibilityEvent?(keys[i], "action", ["action": .string("selectText")])
-            return
-        }
+        // A hold opens the row's menu wherever it lands; text is selected only through the menu's
+        // "Select Text" (`selectText`), as in Messages. A row with no menu selects its text.
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         if onLongPress?(keys[i]) == true { return }
         beginSelection(i, at: local)
     }

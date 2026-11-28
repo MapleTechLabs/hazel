@@ -1,9 +1,9 @@
 // Effect UI is a public preview: every API is experimental by design here.
 // @effect-diagnostics experimentalApiUsage:off
 /**
- * The phone app (`docs/ios-native.md`, N1): the system tab bar (Home, DMs, Activity, More) over one
+ * The phone app (`docs/ios-native.md`, N1, N2): the system tab bar (Home, DMs, Activity, More) over one
  * navigation stack per tab. A route opens as a push on the current tab, except a tab's own root,
- * which selects that tab. A route with no shared screen yet is the host's web fallback
+ * which selects that tab. A conversation is the shared `ChannelScreen`; a route with no shared screen yet is the host's web fallback
  * (`WebFallback`), pushed like any screen. The stacks follow the system's back (swipe or button)
  * through `pop`, and every way a screen navigates (links, requests) reaches `ShellIntents`.
  */
@@ -16,6 +16,7 @@ import { Activity } from "../activity/Activity"
 import { AppRoute, hrefOf, routeOfPath } from "../app/route"
 import { ChannelSidebar } from "../channel-sidebar/ChannelSidebar"
 import { Dms } from "../dms/Dms"
+import { ChannelScreen } from "./ChannelScreen"
 
 export const PhoneTab = Schema.Literals(["home", "dms", "activity", "more"])
 export type PhoneTab = typeof PhoneTab.Type
@@ -38,6 +39,9 @@ export const PhoneShellProps = Schema.Struct({
 	memberId: OrganizationMemberId,
 	userId: UserId,
 	orgSlug: Schema.String,
+	/** The install's uploads and link previews (`ChannelScreen`'s message list). */
+	cdnUrl: Schema.String,
+	linkPreviewUrl: Schema.String,
 	nowMs: Schema.Finite,
 })
 export type PhoneShellProps = typeof PhoneShellProps.Type
@@ -206,7 +210,22 @@ export const PhoneShell = Hazel.component({
 			Match.when("more", () => fallback("More", hrefOf(AppRoute.OrgMore({ orgSlug: props.orgSlug })))),
 			Match.exhaustive,
 		)
-		const pushed = model.stacks[model.tab].map((href) => fallback(titleOf(routeOfPath(href)), href))
+		const pushed = model.stacks[model.tab].map((href) => {
+			const route = routeOfPath(href)
+			return route._tag === "ChatChannel"
+				? ChannelScreen(h, {
+						key: href,
+						props: {
+							channelId: route.channelId,
+							organizationId: props.organizationId,
+							userId: props.userId,
+							cdnUrl: props.cdnUrl,
+							linkPreviewUrl: props.linkPreviewUrl,
+							nowMs: props.nowMs,
+						},
+					})
+				: fallback(titleOf(route), href)
+		})
 		return h.tabBar
 			.tabs(TABS.map((tab) => ({ id: tab.id, label: tab.label, icon: tab.icon })))
 			.selected(model.tab)

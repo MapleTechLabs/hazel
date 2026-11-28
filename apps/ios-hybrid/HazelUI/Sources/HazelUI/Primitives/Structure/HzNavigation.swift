@@ -23,7 +23,9 @@ struct HzNavigation: View {
                 if let root = screens.first.flatMap({ tree.node($0) }) { NodeView(tree: tree, node: root) }
             }
             .navigationDestination(for: NodeId.self) { id in
-                if let screen = tree.node(id) { NodeView(tree: tree, node: screen) }
+                // A pushed screen has the whole height, as iOS apps' pushed screens do: the tab bar
+                // (`hz:tabBar` around this) shows again at the root.
+                if let screen = tree.node(id) { NodeView(tree: tree, node: screen).toolbar(.hidden, for: .tabBar) }
             }
         }
         .frame(maxWidth: recipe.fill == true ? .infinity : nil)

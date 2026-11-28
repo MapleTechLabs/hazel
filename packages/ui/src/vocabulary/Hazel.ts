@@ -353,7 +353,13 @@ export interface Rect {
 export interface HostNode {}
 
 /** Where `scrollTo` goes: an edge, or a keyed child. */
-export type ScrollTarget = { readonly to: "start" | "end" } | { readonly key: string }
+/**
+ * An edge, or a keyed row. `selectText` also selects the row's text (iOS's "Select Text" from a
+ * message's menu); a host without native selection only scrolls.
+ */
+export type ScrollTarget =
+	| { readonly to: "start" | "end" }
+	| { readonly key: string; readonly selectText?: boolean }
 
 /**
  * Imperative element operations for Commands (`spec.commandNames`), by `Renderer.Refs` node. The
