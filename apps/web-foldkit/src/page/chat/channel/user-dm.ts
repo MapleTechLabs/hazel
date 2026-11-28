@@ -1,4 +1,4 @@
-import { OrganizationId, UserId } from "@hazel/schema"
+import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import { clientData } from "~/db/client"
@@ -10,12 +10,20 @@ import { Message } from "./model"
  * the lookup, so the channel page's chunk does not carry it.
  */
 export const FindUserDm = Command.define("FindUserDm", {
-	args: { organizationId: OrganizationId, viewerId: UserId, userId: UserId, name: Schema.String },
+	args: {
+		fromChannelId: ChannelId,
+		organizationId: OrganizationId,
+		viewerId: UserId,
+		userId: UserId,
+		name: Schema.String,
+	},
 	messages: [Message.FoundUserDm],
-	execute: ({ organizationId, viewerId, userId, name }) =>
+	execute: ({ fromChannelId, organizationId, viewerId, userId, name }) =>
 		Effect.promise(() => import("@hazel/shared-screens/modals/CreateDmModal")).pipe(
 			Effect.map(({ existingDm }) =>
 				Message.FoundUserDm({
+					fromChannelId,
+					organizationId,
 					userId,
 					name,
 					channelId: existingDm(clientData, organizationId, viewerId, [userId]),

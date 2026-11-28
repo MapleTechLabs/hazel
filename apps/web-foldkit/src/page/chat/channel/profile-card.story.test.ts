@@ -46,11 +46,23 @@ describe("Message", () => {
 			given(loadedModel()),
 			message(Message.ClickedMessageUser({ userId: grace, viewerId: ada, name: "Grace Hopper" })),
 			Command.expectExact(
-				FindUserDm({ organizationId, viewerId: ada, userId: grace, name: "Grace Hopper" }),
+				FindUserDm({
+					fromChannelId: channelId,
+					organizationId,
+					viewerId: ada,
+					userId: grace,
+					name: "Grace Hopper",
+				}),
 			),
 			Command.resolve(
 				FindUserDm,
-				Message.FoundUserDm({ userId: grace, name: "Grace Hopper", channelId: dmId }),
+				Message.FoundUserDm({
+					fromChannelId: channelId,
+					organizationId,
+					userId: grace,
+					name: "Grace Hopper",
+					channelId: dmId,
+				}),
 			),
 			expectOutMessage(
 				PageOutMessage.RequestedNavigation({
@@ -68,7 +80,13 @@ describe("Message", () => {
 			message(Message.ClickedMessageUser({ userId: grace, viewerId: ada, name: "Grace Hopper" })),
 			Command.resolve(
 				FindUserDm,
-				Message.FoundUserDm({ userId: grace, name: "Grace Hopper", channelId: null }),
+				Message.FoundUserDm({
+					fromChannelId: channelId,
+					organizationId,
+					userId: grace,
+					name: "Grace Hopper",
+					channelId: null,
+				}),
 			),
 			expectOutMessage(
 				PageOutMessage.RequestedDmCreation({
@@ -78,6 +96,23 @@ describe("Message", () => {
 					name: "Grace Hopper",
 				}),
 			),
+		)
+	})
+
+	test("an answer for a channel the user has left is dropped", () => {
+		story(
+			updateWithShared,
+			given(loadedModel()),
+			message(
+				Message.FoundUserDm({
+					fromChannelId: dmId,
+					organizationId,
+					userId: grace,
+					name: "Grace Hopper",
+					channelId: null,
+				}),
+			),
+			Command.expectNone(),
 		)
 	})
 

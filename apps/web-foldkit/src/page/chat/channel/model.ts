@@ -2,7 +2,7 @@ import { ChannelHotkey } from "./hotkeys"
 import { ChannelCustomerRow } from "../../../customers/channels"
 import { CustomerAuthorInfo } from "../../../customers/chat-authors"
 import { ChannelMember } from "@hazel/domain/models"
-import { ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
+import { ChannelId, ChannelMemberId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { ComposerNotice } from "@hazel/shared-screens/chat/composer/host"
 import { Schema } from "effect"
 import { File, type Update } from "foldkit"
@@ -245,8 +245,17 @@ export const Message = defineMessageUnion({
 	ClickedEditProfile: {},
 	/** The list's profile card: open the viewer's DM with `userId`, after looking for an existing one. */
 	ClickedMessageUser: { userId: UserId, viewerId: UserId, name: Schema.String },
-	/** The viewer's DM with `userId` in the channel's org, as the synced rows have it; null when none. */
-	FoundUserDm: { userId: UserId, name: Schema.String, channelId: Schema.NullOr(ChannelId) },
+	/**
+	 * The viewer's DM with `userId` in the channel's org, as the synced rows have it; null when none.
+	 * Tagged with the channel it was asked from: a late answer after leaving that channel is dropped.
+	 */
+	FoundUserDm: {
+		fromChannelId: ChannelId,
+		organizationId: OrganizationId,
+		userId: UserId,
+		name: Schema.String,
+		channelId: Schema.NullOr(ChannelId),
+	},
 	/** The list's profile card: the person's profile page. */
 	ClickedViewProfile: { userId: UserId },
 	/** The list's profile card: `@person` into the focused composer. */

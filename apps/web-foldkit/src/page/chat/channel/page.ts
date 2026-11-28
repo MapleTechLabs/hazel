@@ -650,11 +650,21 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			const organizationId = model.channel?.organizationId
 			return organizationId === undefined
 				? { model }
-				: { model, commands: [FindUserDm({ organizationId, viewerId, userId, name })] }
+				: {
+						model,
+						commands: [
+							FindUserDm({
+								fromChannelId: model.channelId,
+								organizationId,
+								viewerId,
+								userId,
+								name,
+							}),
+						],
+					}
 		},
-		FoundUserDm: ({ userId, name, channelId }) => {
-			const organizationId = model.channel?.organizationId
-			if (organizationId === undefined) return { model }
+		FoundUserDm: ({ fromChannelId, organizationId, userId, name, channelId }) => {
+			if (fromChannelId !== model.channelId) return { model }
 			return {
 				model,
 				outMessage:
