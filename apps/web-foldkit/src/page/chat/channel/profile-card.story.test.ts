@@ -1,11 +1,21 @@
 import { ChannelId } from "@hazel/schema"
 import { Schema } from "effect"
-import { Command, expectNoOutMessage, expectOutMessage, given, message, story } from "foldkit/story"
+import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
 import { AppRoute } from "../../../route"
 import { PageOutMessage } from "../../out-message"
 import { ActionMessage, CopyText } from "../message-actions"
-import { ada, channelId, grace, loadedModel, organizationId, updateWithShared } from "./fixtures.test-support"
+import * as Overlays from "../overlays"
+import * as Popover from "../../../ui/popover"
+import {
+	ada,
+	channelId,
+	grace,
+	graceMessageId,
+	loadedModel,
+	organizationId,
+	updateWithShared,
+} from "./fixtures.test-support"
 import { listRequests } from "./list-requests"
 import { Message } from "./model"
 import { FindUserDm } from "./user-dm"
@@ -185,6 +195,67 @@ describe("the menu", () => {
 						title: "User ID copied",
 						description: "The user ID has been copied to your clipboard.",
 					},
+				}),
+			),
+		)
+	})
+})
+
+describe("the thread panel's card", () => {
+	/** The page with Grace's profile card open from her avatar (the thread panel's own popover). */
+	const withCardOpen = () => {
+		const page = loadedModel()
+		const key = Overlays.avatarPopoverKey(graceMessageId)
+		return {
+			...page,
+			overlays: {
+				...page.overlays,
+				open: Overlays.OpenOverlay.Popover({
+					messageId: graceMessageId,
+					key,
+					popover: Popover.init(key),
+				}),
+			},
+		}
+	}
+	const isClosed = model<ReturnType<typeof loadedModel>>((current) =>
+		expect(current.overlays.open._tag).toBe("None"),
+	)
+
+	test("an action closes the card", () => {
+		story(
+			updateWithShared,
+			given(withCardOpen()),
+			message(Message.ClickedViewProfile({ userId: grace })),
+			isClosed,
+		)
+		story(
+			updateWithShared,
+			given(withCardOpen()),
+			message(Message.ClickedMentionUser({ userId: grace })),
+			isClosed,
+			Command.resolve(RequestComposer, Message.CompletedRequestComposer()),
+		)
+		story(
+			updateWithShared,
+			given(withCardOpen()),
+			message(Message.ClickedCopyProfileField({ field: "userId", text: grace })),
+			isClosed,
+			Command.resolve(CopyText, ActionMessage.SucceededCopyText({ content: "UserId" })),
+		)
+		story(
+			updateWithShared,
+			given(withCardOpen()),
+			message(Message.ClickedMessageUser({ userId: grace, viewerId: ada, name: "Grace Hopper" })),
+			isClosed,
+			Command.resolve(
+				FindUserDm,
+				Message.FoundUserDm({
+					fromChannelId: channelId,
+					organizationId,
+					userId: grace,
+					name: "Grace Hopper",
+					channelId: null,
 				}),
 			),
 		)
