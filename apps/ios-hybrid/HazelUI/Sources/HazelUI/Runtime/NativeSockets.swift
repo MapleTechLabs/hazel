@@ -23,6 +23,17 @@ final class NativeSockets: NSObject, URLSessionWebSocketDelegate, @unchecked Sen
         session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
     }
 
+    /// Closes every socket and stops taking new ones (the runtime is being replaced).
+    func shutdown() {
+        lock.lock()
+        let open = entries.values.map(\.task)
+        entries = [:]
+        byTask = [:]
+        lock.unlock()
+        for task in open { task.cancel(with: .goingAway, reason: nil) }
+        session.invalidateAndCancel()
+    }
+
     func object(in context: JSContext) -> JSValue {
         let open: @convention(block) (String, [String], JSValue) -> Int = { [weak self] url, protocols, onEvent in
             guard let self else { return 0 }
@@ -160,6 +171,18 @@ final class NativeHttp: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         configuration.httpCookieStorage = nil
         configuration.httpShouldSetCookies = false
         session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+    }
+
+    /// Cancels every request in flight; none answers (the runtime is being replaced).
+    func shutdown() {
+        lock.lock()
+        let running = Array(tasks.values)
+        tasks = [:]
+        byTask = [:]
+        callbacks = [:]
+        lock.unlock()
+        for task in running { task.cancel() }
+        session.invalidateAndCancel()
     }
 
     func object(in context: JSContext) -> JSValue {

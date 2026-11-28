@@ -15,13 +15,16 @@ final class AppRuntime {
     let host: TreeHost
     var tree: Tree { host.tree }
     private var started = false
+    /// The platform the JS thread installed, for `stop`.
+    private let installed = InstalledPlatform()
 
     init(shell: ShellCommands) {
         host = TreeHost(engine: engine)
         let engine = self.engine
         let server = AppServer.current
+        let installed = self.installed
         hooks.append { context in
-            _ = NativePlatform.install(
+            installed.platform = NativePlatform.install(
                 in: context,
                 config: NativePlatformConfig(apiUrl: server.api, standInToken: AppServer.standInToken),
                 perform: { block in engine.perform("platform") { _ in block() } }
@@ -32,6 +35,17 @@ final class AppRuntime {
     }
 
     private var hooks: [@Sendable (JSContext) -> Void] = []
+
+    /// Ends this runtime: its sockets and requests stop and its JS thread ends (a sign-out, another
+    /// install). The tree it drew is dropped with it.
+    func stop() {
+        let installed = self.installed
+        engine.perform("stop") { engine in
+            installed.platform?.shutdown()
+            installed.platform = nil
+            engine.stop()
+        }
+    }
 
     func start() {
         guard !started else { return }
@@ -50,6 +64,11 @@ final class AppRuntime {
             Self.log.log("[app] script eval \(String(format: "%.1f", (CACurrentMediaTime() - began) * 1000), privacy: .public)ms")
         }
     }
+}
+
+/// Written once on the JS thread (the install hook), then read there by `stop`.
+private final class InstalledPlatform: @unchecked Sendable {
+    var platform: NativePlatform?
 }
 
 /// The install the app talks to: the one chosen on the sign-in screen (`ChosenServer`), else the

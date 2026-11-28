@@ -31,6 +31,9 @@ public final class JSEngine: @unchecked Sendable {
 
     public init() { thread.launch() }
 
+    /// Ends the engine's thread, with its context and timers (the app replaced this runtime).
+    public func stop() { thread.stop() }
+
     /// Queues `body` as a JS turn whose batches are traced as `kind` from `origin` (default: now, on
     /// the caller's thread, so the hop to JS counts).
     public func perform(_ kind: String, origin: CFTimeInterval? = nil, _ body: @escaping @Sendable (JSEngine) -> Void) {

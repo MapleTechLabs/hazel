@@ -37,6 +37,14 @@ public final class NativePlatform: @unchecked Sendable {
     /// Kept for the app's lifetime, as the context is.
     nonisolated(unsafe) private static var installed: [NativePlatform] = []
 
+    /// Lets go of this platform: its sockets close and its requests stop, so the context it served
+    /// can end (`JSEngine.stop`).
+    public func shutdown() {
+        sockets.shutdown()
+        http.shutdown()
+        Self.installed.removeAll { $0 === self }
+    }
+
     /// Adds the services to `context`'s `__native` (created if missing). Call on the JS thread
     /// (`JSEngine`'s ready hooks); `perform` hops back onto it.
     @discardableResult

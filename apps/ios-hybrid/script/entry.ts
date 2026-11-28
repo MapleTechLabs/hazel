@@ -17,7 +17,7 @@ import {
 } from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
 import { appRequestsLayer } from "@hazel/shared-screens/app/requests"
 import type { OrganizationId } from "@hazel/schema"
-import { Deferred, Effect, Layer, Match, Option, Stream } from "effect"
+import { Deferred, Effect, Layer, Match, Option, Schedule, Stream } from "effect"
 import type { HttpClient } from "effect/http"
 import {
 	NativeSessionControls,
@@ -56,7 +56,7 @@ const signIn = Effect.gen(function* () {
 	console.log("[hazel] signed in")
 }).pipe(Effect.scoped)
 
-/** How long a signed-in account's organizations may take to sync before it counts as having none. */
+/** How long a signed-in account's organizations may take to sync before onboarding shows. */
 const NO_ORGANIZATION_AFTER = "10 seconds"
 
 /**
@@ -77,11 +77,16 @@ const root = (signOut: Effect.Effect<void>) =>
 		const rpc = yield* HazelRpc
 		const shell = appShell()
 		// A session the API refuses is signed out here too, so the next start signs in.
+		// Offline or a failing API at launch: tried again, backing off to every 30 seconds.
 		const me = yield* rpc("user.me", undefined).pipe(
+			Effect.retry({
+				schedule: Schedule.min([Schedule.exponential("1 second"), Schedule.spaced("30 seconds")]),
+				while: (error) => error._tag !== "UnauthorizedError",
+			}),
 			Effect.catchTag("UnauthorizedError", () => Effect.andThen(signOut, Effect.never)),
 		)
 		yield* Stream.runDrain(data.syncSession(me.id)).pipe(Effect.forkScoped)
-		const found = yield* data
+		const firstOrg = data
 			.liveQueryStream(
 				(q) => q.from({ org: data.collections.organizationCollection }),
 				(rows: ReadonlyArray<{ id: OrganizationId; slug: string | null }>) => rows[0],
@@ -89,15 +94,17 @@ const root = (signOut: Effect.Effect<void>) =>
 			.pipe(
 				Stream.filter((row) => row !== undefined),
 				Stream.runHead,
-				Effect.timeoutOption(NO_ORGANIZATION_AFTER),
-				Effect.map(Option.flatten),
+				Effect.map(Option.getOrThrow),
 			)
-		// No organization (a new account): the web's onboarding, until it is a shared screen.
-		if (Option.isNone(found)) {
-			shell.openFallback("/onboarding")
-			return yield* Effect.never
-		}
-		const org = found.value
+		const early = yield* firstOrg.pipe(Effect.timeoutOption(NO_ORGANIZATION_AFTER))
+		// None yet (a new account, or a slow sync): the web's onboarding, while the app keeps waiting
+		// for one, which mounts the root as soon as it syncs.
+		const org = Option.isSome(early)
+			? early.value
+			: yield* Effect.andThen(
+					Effect.sync(() => shell.openFallback("/onboarding")),
+					firstOrg,
+				)
 		const slug = org.slug ?? ""
 		yield* Renderer.mount(
 			ChannelSidebar,

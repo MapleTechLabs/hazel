@@ -55,6 +55,7 @@ final class AppModel: PathOpener {
     /// Starts over on another install (or Hazel's again): a fresh script, nothing pushed.
     func restart() {
         fallbacks = []
+        runtime.stop()
         runtime = makeRuntime()
         runtime.start()
     }
