@@ -9,6 +9,9 @@ import type { View } from "@effect/ui"
 import type { Hazel } from "@hazel/ui/vocabulary/index"
 import type { IconName } from "@hazel/ui/vocabulary/options"
 import { Schema } from "effect"
+import { ChannelDetails } from "../channel-settings/ChannelDetails"
+import { ConnectPage } from "../channel-settings/pages/connect/ConnectPage"
+import { OverviewPage } from "../channel-settings/pages/overview/OverviewPage"
 import { HostedChannelSidebar } from "../channel-sidebar/hosted"
 import { HostedChannelScreen } from "../chat/hosted"
 import { HostedDms } from "../dms/hosted"
@@ -86,6 +89,9 @@ declare const screenParts: readonly [
 	ReturnType<typeof TeamPage<never>>,
 	ReturnType<typeof InvitationsPage<never>>,
 	ReturnType<typeof GeneralPage<never>>,
+	ReturnType<typeof ChannelDetails<never>>,
+	ReturnType<typeof OverviewPage<never>>,
+	ReturnType<typeof ConnectPage<never>>,
 ]
 
 interface Entry<Tag extends RouteTag> {
@@ -193,6 +199,33 @@ export const screens: Registry = {
 					editHref: hrefOf(AppRoute.MySettingsProfile({ orgSlug: route.orgSlug })),
 				},
 			}),
+	},
+	// Channel settings as a phone's details list, each page pushed (the web's tabs and header).
+	ChannelSettings: {
+		title: "Details",
+		framed: true,
+		screen: (h, { key, route }) =>
+			ChannelDetails(h, { key, props: { orgSlug: route.orgSlug, channelId: route.channelId } }),
+	},
+	ChannelSettingsOverview: {
+		title: "Overview",
+		framed: true,
+		screen: (h, { key, route, session }) =>
+			OverviewPage(h, {
+				key,
+				props: {
+					channelId: route.channelId,
+					session,
+					customerHrefPrefix: `${hrefOf(AppRoute.CustomersOverview({ orgSlug: route.orgSlug }))}/`,
+				},
+			}),
+	},
+	ChannelSettingsIntegrations: { title: "Integrations" },
+	ChannelSettingsConnect: {
+		title: "Connect",
+		framed: true,
+		screen: (h, { key, route, session }) =>
+			ConnectPage(h, { key, props: { channelId: route.channelId, session } }),
 	},
 	ChatFiles: { title: "Files" },
 	ChatFilesMedia: { title: "Media" },

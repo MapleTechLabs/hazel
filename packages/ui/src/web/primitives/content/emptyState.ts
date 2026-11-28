@@ -26,8 +26,10 @@ export const primitive = definePrimitive("emptyState", ({ document, tag, outer }
 	const node = outer("div")
 	const illustration = part(document, "img", "illustration")
 	illustration.hidden = true
-	// Renderer-owned asset sizing: the kit's `aspect-square w-full max-w-sm`, cropped to cover.
-	illustration.style.width = "min(100%, 24rem)"
+	// The recipe's `size` is its width (a phone's small, a desk's 24rem); square, never wider than
+	// the column, cropped to cover.
+	illustration.style.maxWidth = "min(100%, 24rem)"
+	illustration.style.height = "auto"
 	illustration.style.aspectRatio = "1"
 	illustration.style.objectFit = "cover"
 	illustration.style.maskSize = "110% 90%"

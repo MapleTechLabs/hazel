@@ -1377,10 +1377,12 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "title", style: Style(color: Colors.fg, text: .body, weight: 600)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "description", style: Style(color: Colors.mutedFg, marginBottom: 12, text: .label)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "content", style: Style(layout: .row, align: .center, gap: 8)),
-                Layer(when: When(options: ["illustration": "squirrel"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(paddingX: 16, paddingY: 16, rowGap: 0)),
-                Layer(when: When(options: ["illustration": "squirrel"], flags: [], states: [], sizeClass: nil), part: "illustration", style: Style(marginBottom: 0)),
-                Layer(when: When(options: ["illustration": "squirrel"], flags: [], states: [], sizeClass: nil), part: "title", style: Style(text: .hero, weight: 700, textAlign: .start, mono: true)),
-                Layer(when: When(options: ["illustration": "squirrel"], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(paddingX: 32, paddingY: 32)),
+                Layer(when: When(options: ["illustration": "squirrel"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(paddingX: 16, paddingY: 16, rowGap: 12)),
+                Layer(when: When(options: ["illustration": "squirrel"], flags: [], states: [], sizeClass: nil), part: "illustration", style: Style(marginBottom: 0, size: 144)),
+                Layer(when: When(options: ["illustration": "squirrel"], flags: [], states: [], sizeClass: nil), part: "title", style: Style(text: .hero, weight: 700, textAlign: .center, mono: true)),
+                Layer(when: When(options: ["illustration": "squirrel"], flags: [], states: [], sizeClass: .regular), part: nil, style: Style(paddingX: 32, paddingY: 32, rowGap: 0)),
+                Layer(when: When(options: ["illustration": "squirrel"], flags: [], states: [], sizeClass: .regular), part: "illustration", style: Style(size: 420)),
+                Layer(when: When(options: ["illustration": "squirrel"], flags: [], states: [], sizeClass: .regular), part: "title", style: Style(textAlign: .start)),
             ]
         )
 
