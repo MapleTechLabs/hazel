@@ -236,6 +236,17 @@ final class NativeHttp: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         completionHandler(.allow)
     }
 
+    /// A redirect is answered as it is, never followed, as a fetch with `redirect: "error"`: the
+    /// auth API's native mode and the RPC endpoints never redirect a request that is right.
+    func urlSession(
+        _: URLSession,
+        task _: URLSessionTask,
+        willPerformHTTPRedirection _: HTTPURLResponse,
+        newRequest _: URLRequest
+    ) async -> URLRequest? {
+        nil
+    }
+
     func urlSession(_: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         callback(for: dataTask)?.call { context in
             [jsEvent("chunk", in: context, ["data": JSBytes.uint8Array(data, in: context)])]

@@ -4,6 +4,7 @@
 		"fixture/**/*.ts",
 		"web/big-channel.ts",
 		"effect-ui/**/*.ts",
+		"script/**/*.ts",
 		"scripts/**/*.ts",
 		"vitest.config.ts",
 		"../web-foldkit/src/vite-env.d.ts"

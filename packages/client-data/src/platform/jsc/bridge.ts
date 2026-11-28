@@ -145,6 +145,19 @@ export interface NativeBridge {
 		/** Whether the pasteboard took it. */
 		readonly write: (text: string) => boolean
 	}
+	/** Browser sign-in's host half (`HazelUI/Runtime/NativeAuth.swift`, `./auth.ts`). */
+	readonly auth?: {
+		/** SHA-256 with CryptoKit: a bare JSContext has no `crypto.subtle`. */
+		readonly sha256: (bytes: Uint8Array) => Uint8Array
+		/** The system's sign-in sheet at `url`; answers the callback URL, or `cancelled`. */
+		readonly openSignIn: (
+			url: string,
+			callbackScheme: string,
+			/** No cookies shared with Safari: the sheet signs in afresh. */
+			ephemeral: boolean,
+			done: (callbackUrl: string | null, error: string | null) => void,
+		) => void
+	}
 	/**
 	 * The server this build talks to. `token` is a stand-in session for a local fixture server
 	 * only (the shell sends `null` for any other), used while the keychain holds no session.

@@ -39,6 +39,13 @@ shell never pushes (`ShellView.swift` `follow`), and everything is the web view 
 - Keyboard: the composer rides it, interactive dismiss, hardware keyboard Return sends.
 - Safe areas, Dynamic Type where the recipes allow it, dark mode from the tokens.
 
+## Running it
+
+`bash apps/ios-hybrid/scripts/build-hazel.sh` builds `Hazel.app` (`OFFLINE=1` for the fallback's
+offline web build). Against the local fixture (`bun apps/ios-hybrid/scripts/fixture-backend.ts`),
+launch with `-HazelApiUrl http://127.0.0.1:4320 -HazelToken fixture`; without them it signs in to
+Hazel's install through the system sheet. The script is `apps/ios-hybrid/script/entry.ts`.
+
 ## Phases
 
 Every phase is a PR in a stack against `main`. Verify on the simulator through T3's device tools

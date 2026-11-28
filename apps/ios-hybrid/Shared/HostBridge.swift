@@ -167,7 +167,7 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate {
 
 /// The install the user chose on the sign-in page (`server_set`): its discovery document
 /// (`/.well-known/hazel.json`) as the page handed it, kept across launches and handed back to every
-/// page load (`window.__hazelServer`, `WebBridge.loadPage`). None: Hazel's own.
+/// page load (`window.__hazelServer`, `PageNavigation.loadBundledPage`). None: Hazel's own.
 enum ChosenServer {
     private static let key = "sh.hazel.server"
 
@@ -180,6 +180,17 @@ enum ChosenServer {
     /// The chosen install's web app origin.
     static var appOrigin: URL? {
         UserDefaults.standard.string(forKey: key).flatMap(origin(of:))
+    }
+
+    /// The chosen install's API base URL and uploads base, from its document (https only).
+    static var apiURL: String? { document.flatMap { https(field: "api", of: $0) } }
+    static var cdnURL: String? { document.flatMap { https(field: "cdn", of: $0) } }
+
+    private static func https(field: String, of document: String) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: Data(document.utf8)) as? [String: Any],
+              let value = object[field] as? String, let url = URL(string: value), url.scheme == "https"
+        else { return nil }
+        return value.hasSuffix("/") ? String(value.dropLast()) : value
     }
 
     static func set(_ document: String?) {
@@ -254,9 +265,24 @@ enum Vault {
 /// the browser.
 @MainActor
 final class PageNavigation: NSObject, WKNavigationDelegate, WKUIDelegate {
-    /// The next navigation is the bundled page itself (`WebBridge.loadPage`).
+    /// The next navigation is the bundled page itself (`loadBundledPage`).
     static var isLoadingPage = false
     var load: ((URL) -> Void)?
+
+    /// The bundled page at `url` on the web app's origin: its own origin is the web app's, so the
+    /// API's CORS and the sign-in flow take it, while every file comes from the bundle (`hazel://`).
+    /// A chosen install (`ChosenServer`) is handed to the page before its scripts run.
+    static func loadBundledPage(_ webView: WKWebView, at url: URL) {
+        let index = Bundle.main.resourceURL!.appendingPathComponent("web/index.html")
+        guard var html = try? String(contentsOf: index, encoding: .utf8) else { return }
+        if let server = ChosenServer.document, let head = html.range(of: "<head>") {
+            // JSON is a script literal; `<` escaped so nothing in it can close the tag.
+            let literal = server.replacingOccurrences(of: "<", with: "\\u003c")
+            html.insert(contentsOf: "<script>window.__hazelServer=\(literal)</script>", at: head.upperBound)
+        }
+        PageNavigation.isLoadingPage = true
+        webView.loadHTMLString(html, baseURL: url)
+    }
 
     func webView(
         _ webView: WKWebView,
