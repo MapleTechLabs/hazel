@@ -12,10 +12,11 @@ import { Command, Component, Subscription, UiSchema } from "@effect/ui"
 import { Hazel } from "@hazel/ui/vocabulary/index"
 import { Context, Duration, Effect, Layer, Match, Schema, Stream } from "effect"
 import { CurrentSession } from "../app/current-session"
-import { AppToast } from "../app/requests"
+import { AppToast, SignOut } from "../app/requests"
 import { AppRoute, hrefOf, routeOfPath } from "../app/route"
 import { AppTab, frameOf, screenOf, TABS, tabOf, titleOf } from "../app/screens"
 import { Session } from "../app/session"
+import { initialsOf } from "../channel-sidebar/model"
 import { FallbackScreen } from "./FallbackScreen"
 
 /** What the app asks of the shell: open, replace or leave a screen, or show a toast. */
@@ -71,6 +72,9 @@ export const PhoneShellMessage = UiSchema.TaggedEnum({
 	DismissedToast: { id: Schema.Finite },
 	/** `SwitchToOrganization`'s answer for the link it was asked for. */
 	Switched: { ok: Schema.Boolean },
+	/** A choice in the account menu (the avatar at every tab's bar end). */
+	SelectedAccount: { entry: Schema.String },
+	CompletedSignOut: {},
 })
 export type PhoneShellMessage = typeof PhoneShellMessage.Type
 
@@ -235,6 +239,22 @@ const PhoneShellNoDeps = PhoneShellDef.make({
 		Ticked: ($, { nowMs }) => ({ ...$.model, nowMs }),
 		Switched: ($, { ok }) =>
 			ok ? $.model : toast("You're not in that workspace", { ...$.model, pendingHref: null })($),
+		SelectedAccount: ($, { entry }) =>
+			Match.value(entry).pipe(
+				Match.when("settings", () =>
+					$.model.session?.orgSlug == null
+						? $.model
+						: open(
+								$.model,
+								hrefOf(AppRoute.MySettingsProfile({ orgSlug: $.model.session.orgSlug })),
+							),
+				),
+				Match.when("sign-out", () =>
+					$.run(SignOut.make({}).pipe(Command.map(() => PhoneShellMessage.CompletedSignOut()))),
+				),
+				Match.orElse(() => $.model),
+			),
+		CompletedSignOut: ($) => $.model,
 		DismissedToast: ($, { id }) => ({
 			...$.model,
 			toasts: $.model.toasts.filter((shown) => shown.id !== id),
@@ -294,6 +314,31 @@ const PhoneShellNoDeps = PhoneShellDef.make({
 				: h.screen.key(`${href}:frame`).title(frame).surface("page").children(kept)
 		}
 		const tab = TABS.find((candidate) => candidate.id === model.tab) ?? TABS[0]
+		// Slack's: the signed-in user's avatar at every tab's bar end, their settings and sign-out.
+		const me = session.user
+		const myName = me === null ? "" : `${me.firstName} ${me.lastName}`.trim()
+		const account =
+			me === null
+				? null
+				: h.menu
+						.key("account")
+						.label("Account")
+						.entries([
+							{ entries: [{ id: "settings", label: "Settings", icon: "gear" }] },
+							{
+								entries: [
+									{ id: "sign-out", label: "Sign out", icon: "leave", destructive: true },
+								],
+							},
+						])
+						.on("select", ({ id }) => PhoneShellMessage.SelectedAccount({ entry: id }))
+						.trigger(
+							h.avatar
+								.name(myName)
+								.initials(initialsOf(myName))
+								.src(me.avatarUrl ?? undefined)
+								.size("small"),
+						)
 		const toasts = model.toasts.map(({ id, toast }) =>
 			h.toast
 				.key(`toast:${id}`)
@@ -312,6 +357,7 @@ const PhoneShellNoDeps = PhoneShellDef.make({
 				h.navigation
 					.key(model.tab)
 					.pushedTabBar("hidden")
+					.rootToolbar(account)
 					.on("pop", ({ depth }) => PhoneShellMessage.Popped({ depth }))
 					.children(
 						screen(hrefOf(tab.root(session.orgSlug ?? ""))),

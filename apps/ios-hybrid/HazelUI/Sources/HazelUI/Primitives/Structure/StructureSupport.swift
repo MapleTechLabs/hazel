@@ -16,6 +16,8 @@ extension EnvironmentValues {
     @Entry var hzScrollProxy: ScrollViewProxy? = nil
     /// Set inside `navigation` and `splitView`: a screen there uses the system navigation bar.
     @Entry var hzNavigationBar: Bool = false
+    /// Set on a navigation stack's root screen (a tab's own page): its title sits at the bar's start.
+    @Entry var hzStackRoot: Bool = false
     /// Inside a `screen` whose `content` is `fill`: content runs edge to edge, without its margins.
     @Entry var hzScreenFills: Bool = false
     /// Set on a collapsible section's header actions: today's round, muted "+" (`sectionPlusButton`).

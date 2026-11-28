@@ -1,13 +1,15 @@
 import SwiftUI
 
 // Owned by lane S4. `hz:screen`: a title bar over its content, a back button (`back` raises `back`)
-// and a `toolbar` slot at the bar's end. Inside `navigation` or `splitView` the bar is the system one.
+// and a `toolbar` slot at the bar's end, `barLeading` at its start. Inside `navigation` or `splitView`
+// the bar is the system one, each slot one of its (glass) items.
 struct HzScreen: View {
     let tree: Tree
     let node: Node
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.hzNavigationBar) private var navigationBar
+    @Environment(\.hzStackRoot) private var stackRoot
 
     var body: some View {
         let _ = RenderCounter.record(node.id)
@@ -15,16 +17,40 @@ struct HzScreen: View {
         let root = HazelTheme.Recipes.screen.style(sizeClass: sizeClass)
         let title = node[prop: "title"]?.string ?? ""
         if navigationBar {
+            let lead = tree.slot("barLeading", of: node).flatMap { $0.children.isEmpty ? nil : $0 }
+            // A tab's own page names itself at the bar's start (Slack's), unless its start is taken.
+            let leadingTitle = stackRoot && !title.isEmpty && lead == nil
+            let titleStyle = HazelTheme.Recipes.screen.style(part: "title", options: ["surface": "page"], sizeClass: sizeClass)
             // The system bar keeps the swipe back; its back button belongs to the stack (`pop`).
             ScreenContent(tree: tree, node: node, sizeClass: sizeClass)
+                // A screen inside this one (a framed page's own) is not the stack's root.
+                .environment(\.hzStackRoot, false)
                 .background(root.background?.color ?? .clear)
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
                 // The web's header: the screen's own fill under the bar, not glass.
                 .toolbarBackground(root.background?.color ?? .clear, for: .navigationBar)
                 .toolbarBackground(.visible, for: .navigationBar)
+                .toolbar(removing: leadingTitle ? .title : nil)
                 .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) { SlotView(tree: tree, node: node, name: "toolbar") }
+                    if leadingTitle {
+                        ToolbarItem(placement: .topBarLeading) {
+                            // iOS's root-title size (Slack's), in the theme's ink.
+                            Text(title)
+                                .font(.title2.weight(.bold))
+                                .foregroundStyle(titleStyle.color?.color ?? Color.primary)
+                                .fixedSize()
+                        }
+                        .sharedBackgroundVisibility(.hidden)
+                    }
+                    // An empty slot is no item: the system would draw an empty glass capsule.
+                    // The web's ink for the bar's glyphs (`fg`), not the system's accent tint.
+                    if let lead {
+                        ToolbarItem(placement: .topBarLeading) { ChildrenView(tree: tree, node: lead).tint(.primary) }
+                    }
+                    if let tools = tree.slot("toolbar", of: node), !tools.children.isEmpty {
+                        ToolbarItem(placement: .topBarTrailing) { ChildrenView(tree: tree, node: tools).tint(.primary) }
+                    }
                 }
         } else {
             VStack(alignment: .leading, spacing: 0) {

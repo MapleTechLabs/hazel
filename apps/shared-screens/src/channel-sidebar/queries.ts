@@ -10,7 +10,6 @@ import type {
 	Customer,
 	Discoverable,
 	Entry,
-	Me,
 	NotificationLevel,
 	Org,
 	Person,
@@ -480,12 +479,12 @@ export const discoverStream = <M>(
 		)
 	})
 
-/** The organizations the user belongs to, and the signed-in user (the header and account card). */
-export const chromeStream = <M>(userId: UserId, to: (orgs: Array<Org>, me: Me | null) => M) =>
+/** The organizations the user belongs to (the phone's workspace switcher). */
+export const chromeStream = <M>(userId: UserId, to: (orgs: Array<Org>) => M) =>
 	withData((data) => {
 		const c = data.collections
-		return Stream.zipLatest(
-			data.liveQueryStream<
+		return data
+			.liveQueryStream<
 				{ id: Org["id"]; name: string; slug?: string | null; logoUrl?: string | null },
 				Array<Org>
 			>(
@@ -509,21 +508,6 @@ export const chromeStream = <M>(userId: UserId, to: (orgs: Array<Org>, me: Me | 
 						slug: row.slug ?? null,
 						logoUrl: row.logoUrl ?? null,
 					})),
-			),
-			data.liveQueryStream<
-				{ firstName: string; lastName: string; email: string; avatarUrl?: string | null },
-				Me | null
-			>(
-				(q) => q.from({ user: c.userCollection }).where(({ user }) => eq(user.id, userId)),
-				(rows) =>
-					rows[0] === undefined
-						? null
-						: {
-								firstName: rows[0].firstName,
-								lastName: rows[0].lastName,
-								email: rows[0].email,
-								avatarUrl: rows[0].avatarUrl ?? null,
-							},
-			),
-		).pipe(Stream.map(([orgs, me]) => to(orgs, me)))
+			)
+			.pipe(Stream.map(to))
 	})
