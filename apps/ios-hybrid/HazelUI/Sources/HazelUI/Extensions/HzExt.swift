@@ -6,6 +6,7 @@ struct HzExt: View {
     let tree: Tree
     let node: Node
     @Environment(\.horizontalSizeClass) private var horizontal
+    @Environment(\.hzScreenFills) private var screenFills
 
     var body: some View {
         let _ = RenderCounter.record(node.id)
@@ -25,8 +26,8 @@ struct HzExt: View {
                     .hzBox(HazelTheme.Recipes.ext.style(part: "content", sizeClass: sizeClass))
             }
         }
-        // One that fills its screen (`HazelExtensions.fills`) runs edge to edge.
-        .padding(.horizontal, HazelExtensions.fills(name) ? 0 : root.marginX ?? 0)
-        .padding(.bottom, HazelExtensions.fills(name) ? 0 : root.marginBottom ?? 0)
+        // In a screen whose content fills it, the extension is the content: edge to edge.
+        .padding(.horizontal, screenFills ? 0 : root.marginX ?? 0)
+        .padding(.bottom, screenFills ? 0 : root.marginBottom ?? 0)
     }
 }

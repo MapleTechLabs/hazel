@@ -8,7 +8,7 @@
 import { Command, Component, UiSchema } from "@effect/ui"
 import { Hazel } from "@hazel/ui/vocabulary/index"
 import { Effect, Layer, Match, Schema } from "effect"
-import { LoadPage } from "../../../../app/requests"
+import { Leave } from "../../../../app/requests"
 import { isSessionLoading, Session } from "../../../../app/session"
 import { authFrame, authWaiting, messageText, textLink } from "../../../components/AuthFrame"
 import {
@@ -217,7 +217,7 @@ export const DesktopPageNoDeps = DesktopDef.make({
 					).run(AuthorizeAttempt.make({ attemptId: $.model.attemptId }))
 				: $.model,
 		PressedSignIn: ($) =>
-			attemptIdOf($.model) === null ? $.model : $.run(LoadPage.make({ href: $.props.signInHref })),
+			attemptIdOf($.model) === null ? $.model : $.run(Leave.make({ href: $.props.signInHref })),
 		PressedRetry: ($) =>
 			$.model._tag === "Failed" && isRetryableHandoff($.model.reason)
 				? $.set(DesktopModel.Loading({ attemptId: $.model.attemptId })).run(

@@ -8,8 +8,9 @@
 import { Command, Component, UiSchema } from "@effect/ui"
 import { Theme } from "@hazel/domain/models"
 import { OrganizationId, UserId } from "@hazel/schema"
-import { Context, Effect, Layer, Schema } from "effect"
+import { Context, Effect, Layer, Match, Schema } from "effect"
 import { Overrides } from "../lib/keybindings/keymap"
+import { Navigator } from "./navigator"
 
 /** A toast (sonner's options): a later one with the same `id` replaces it in place. */
 export const AppToast = Schema.Struct({
@@ -68,8 +69,10 @@ export const ModalRequest = Schema.declare(
 const fields = {
 	/** An in-app href (`/acme/chat/c1`); `toast` shows with the navigation. */
 	Navigate: { href: Schema.String, replace: Schema.Boolean, toast: Schema.optionalKey(AppToast) },
-	/** A full load of `href`, so every query and sync starts over (after joining a workspace). */
-	LoadPage: { href: Schema.String },
+	/** The app starts over at one of its own paths (`/`, `/acme`), every query and sync anew (after joining a workspace). */
+	Reload: { href: Schema.String },
+	/** Leaves the app for another page: a download, an OAuth redirect, the server's sign-in. */
+	Leave: { href: Schema.String },
 	History: { direction: Schema.Literals(["Back", "Forward"]) },
 	ShowToast: { toast: AppToast },
 	OpenModal: { modal: ModalRequest },
@@ -95,8 +98,13 @@ export class Navigate extends Command.Service<Navigate>()("hazel/app/Navigate", 
 	success: Component.Noop,
 }) {}
 
-export class LoadPage extends Command.Service<LoadPage>()("hazel/app/LoadPage", {
-	args: fields.LoadPage,
+export class Reload extends Command.Service<Reload>()("hazel/app/Reload", {
+	args: fields.Reload,
+	success: Component.Noop,
+}) {}
+
+export class Leave extends Command.Service<Leave>()("hazel/app/Leave", {
+	args: fields.Leave,
 	success: Component.Noop,
 }) {}
 
@@ -190,7 +198,8 @@ export const appRequestsLayer = (send: (request: AppRequest) => void) => {
 	const to = sending(send)
 	return Layer.mergeAll(
 		Navigate.toLayer(Effect.succeed(to(AppRequest.Navigate))),
-		LoadPage.toLayer(Effect.succeed(to(AppRequest.LoadPage))),
+		Reload.toLayer(Effect.succeed(to(AppRequest.Reload))),
+		Leave.toLayer(Effect.succeed(to(AppRequest.Leave))),
 		History.toLayer(Effect.succeed(to(AppRequest.History))),
 		ShowToast.toLayer(Effect.succeed(to(AppRequest.ShowToast))),
 		OpenModal.toLayer(Effect.succeed(to(AppRequest.OpenModal))),
@@ -206,3 +215,36 @@ export const appRequestsLayer = (send: (request: AppRequest) => void) => {
 		Layer.succeed(AppRequests, { send: (request) => Effect.sync(() => send(request)) }),
 	)
 }
+
+/** How a host answers each request but navigation (which `Navigator` answers); exhaustive. */
+export type AppRequestHandlers = {
+	readonly [Tag in Exclude<AppRequest["_tag"], "Navigate" | "History">]: (
+		request: Extract<AppRequest, { readonly _tag: Tag }>,
+	) => Effect.Effect<void>
+}
+
+/**
+ * The app's requests on `Navigator` (`Navigate`, `History`) and the host's `handlers` for the rest:
+ * a request a host has not decided on is a type error, not a silent drop.
+ */
+export const appRequestsOn = (handlers: AppRequestHandlers) =>
+	Layer.unwrap(
+		Effect.map(Effect.service(Navigator), (navigator) =>
+			appRequestsLayer((request) => {
+				const effect = Match.valueTags(request, {
+					...handlers,
+					// A navigation's toast shows with it (`ShowToast`, the host's).
+					Navigate: ({ href, replace, toast }) =>
+						Effect.andThen(
+							replace ? navigator.replace(href) : navigator.open(href),
+							toast === undefined
+								? Effect.void
+								: handlers.ShowToast(AppRequest.ShowToast({ toast })),
+						),
+					// No forward history on a stack: only back moves.
+					History: ({ direction }) => (direction === "Back" ? navigator.back : Effect.void),
+				})
+				Effect.runFork(effect)
+			}),
+		),
+	)

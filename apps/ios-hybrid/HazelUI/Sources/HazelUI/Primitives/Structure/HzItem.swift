@@ -14,6 +14,7 @@ struct HzItem: View {
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.hzScrollProxy) private var scrollProxy
+    @Environment(\.openURL) private var openURL
     @State private var hovering = false
     @State private var pressing = false
 
@@ -45,7 +46,15 @@ struct HzItem: View {
             }
     }
 
-    private func press() { tree.fire(node.id, "press") }
+    /// A press the view handles goes to the Model; with none, an `href` opens (as `hz:link`), which
+    /// the app routes (its own paths into its screens, others to the system).
+    private func press() {
+        if tree.handles(node.id, "press") {
+            tree.fire(node.id, "press")
+        } else if let href = node[prop: "href"]?.string, let url = URL(string: href) {
+            openURL(url)
+        }
+    }
 }
 
 /// The row's look for one interaction state. Reads the node's props; slots and children are their

@@ -46,11 +46,27 @@ offline web build). Against the local fixture (`bun apps/ios-hybrid/scripts/fixt
 launch with `-HazelApiUrl http://127.0.0.1:4320 -HazelToken fixture`; without them it signs in to
 Hazel's install through the system sheet. The script is `apps/ios-hybrid/script/entry.ts`.
 
-The root is the shared `PhoneShell` (`apps/shared-screens/src/phone/`): the system tab bar over one
-`hz:navigation` per tab, on the shared route table (`apps/shared-screens/src/app/route.ts`). Every
-way to navigate reaches it as a `ShellIntent`: links (`openURL`), the screens' requests, a push's
-path, and deep links (`hazelchat:///<org>/chat/<channel>`). A route with no shared screen yet is
-pushed as the `WebFallback` extension, which the app draws as the bundled web app at that path.
+### How the app is put together (one codebase, a host per platform)
+
+- **Screens** are shared `hazel` components (`apps/shared-screens`). One registry, `app/screens.ts`,
+  holds each route's tab, title and screen (drawn from the `Session`, the install and the clock);
+  the tabs are one table there (`TABS`). Bringing a screen to the phone is one entry. A route with
+  no screen is the web fallback (`phone/FallbackScreen`); a page the web frames in its shell is
+  `framed` (the phone puts it in a titled screen).
+- **Wiring** belongs to each feature (`channel-sidebar/hosted.ts`, `chat/hosted.ts`,
+  `dms/hosted.ts`, `activity/hosted.ts`, `notifications/hosted.ts`, `org/hosted.ts`): screens get
+  `Navigator` (`app/navigator.ts`: open, replace, back), the data, and only what truly differs per
+  platform as a named host service (`SidebarHost`, `DmsHost`, `MessageListHost`). The web uses the
+  same modules for the sidebar, DMs and the inbox. App requests are exhaustive (`appRequestsOn`).
+- **Who and where** is one live `Session` (`app/current-session.ts`; the phone's is
+  `phone/session.ts`): switching organization or refreshing the user redraws the shell, with no
+  restart. The install is `app/install.ts`.
+- **The phone** is `phone/PhoneShell` (the system tab bar over a `hz:navigation` per tab, every tab's
+  screens kept alive, native toasts) and its navigation queue (`phone/navigation.ts`). The script
+  (`apps/ios-hybrid/script/`) boots, signs in and mounts (`entry.ts`); `phone-host.ts` holds the
+  phone's own decisions. What the phone does not do yet shows a "not on iPhone yet" toast.
+- **Layout is vocabulary**: `screen.fill` and `navigation.pushedTabBar`. An `item` or `link` with an
+  `href` and no press handler opens it, and the app routes it.
 
 ## Phases
 

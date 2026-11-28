@@ -13,7 +13,7 @@ import { Hazel } from "@hazel/ui/vocabulary/index"
 import { eq } from "@tanstack/db"
 import { Cause, Effect, Layer, Match, Option, Schema } from "effect"
 import { liveQuery } from "../../../../app/live"
-import { LoadPage } from "../../../../app/requests"
+import { Leave } from "../../../../app/requests"
 import { isSessionLoading, Session } from "../../../../app/session"
 import { reasonOf } from "../../../../modals/feedback"
 import { authFrame, authWaiting, homeLink, messageText } from "../../../components/AuthFrame"
@@ -362,9 +362,7 @@ export const BotInstallPageNoDeps = BotInstallDef.make({
 				: $.evolve({ selectedOrganizationId: () => picked.id, approval: () => Approval.Idle() })
 		},
 		PressedSignIn: ($) =>
-			$.set({ ...$.model, approval: Approval.Leaving() }).run(
-				LoadPage.make({ href: $.props.signInHref }),
-			),
+			$.set({ ...$.model, approval: Approval.Leaving() }).run(Leave.make({ href: $.props.signInHref })),
 		PressedApprove: ($) => {
 			const { request } = $.props
 			const organizationId = $.model.selectedOrganizationId
@@ -380,7 +378,7 @@ export const BotInstallPageNoDeps = BotInstallDef.make({
 			return isBusy($.model.approval) || request === null || $.queries.bot._tag !== "Success"
 				? $.model
 				: $.set({ ...$.model, approval: Approval.Leaving() }).run(
-						LoadPage.make({
+						Leave.make({
 							href: installRedirectUrl(request.redirectUri, {
 								error: "access_denied",
 								state: request.state,
@@ -389,7 +387,7 @@ export const BotInstallPageNoDeps = BotInstallDef.make({
 					)
 		},
 		SucceededApprove: ($, { href }) =>
-			$.set({ ...$.model, approval: Approval.Leaving() }).run(LoadPage.make({ href })),
+			$.set({ ...$.model, approval: Approval.Leaving() }).run(Leave.make({ href })),
 		FailedApprove: ($, { reason }) => $.evolve({ approval: () => Approval.Failed({ reason }) }),
 	},
 	subscriptions: ({ props }) => {

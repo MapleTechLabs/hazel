@@ -21,10 +21,10 @@ export interface CardHeader<Msg> {
 }
 
 /** The page's cards, 24px apart; the frame gives the column its gutter (`root/native-pages.ts`). */
-export const settingsColumn = <Msg>(
+export const settingsColumn = <Msg, R = never>(
 	h: Hazel.H<Msg>,
 	key: string,
-	...cards: ReadonlyArray<Hazel.NoTextInput<Msg>>
+	...cards: ReadonlyArray<Hazel.NoTextInput<Msg, R>>
 ) =>
 	h.stack
 		.key(key)
@@ -92,11 +92,11 @@ const header = <Msg>(h: Hazel.H<Msg>, options: CardHeader<Msg>) =>
  */
 // HAZEL-GAP(p4-settings-card): today's header and body pad `px-4 md:px-6` (`md:p-6` for the body), and
 // the danger zone tints its header (`bg-danger/5`, `border-danger/20`); `frame` `flush` has neither.
-export const settingsCard = <Msg>(
+export const settingsCard = <Msg, R = never>(
 	h: Hazel.H<Msg>,
 	key: string,
 	options: CardHeader<Msg>,
-	...body: ReadonlyArray<Hazel.NoTextInput<Msg>>
+	...body: ReadonlyArray<Hazel.NoTextInput<Msg, R>>
 ) =>
 	h.frame
 		.key(key)
@@ -104,7 +104,10 @@ export const settingsCard = <Msg>(
 		.children(header(h, options), h.divider.key("card:rule"), ...body)
 
 /** A card's padded body (`cardBody`), its children 24px apart. */
-export const cardBody = <Msg>(h: Hazel.H<Msg>, ...children: ReadonlyArray<Hazel.NoTextInput<Msg>>) =>
+export const cardBody = <Msg, R = never>(
+	h: Hazel.H<Msg>,
+	...children: ReadonlyArray<Hazel.NoTextInput<Msg, R>>
+) =>
 	h.stack
 		.key("card:body")
 		.inset("page")

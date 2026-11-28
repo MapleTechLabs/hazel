@@ -13,6 +13,8 @@ import { initialsOf } from "../../../activity/format"
 import { Session } from "../../../app/session"
 
 /** Each row's page, as the host's routes name it. */
+export { moreHrefsOf } from "./hrefs"
+
 export const MoreHrefs = Schema.Struct({
 	profile: Schema.String,
 	customers: Schema.String,

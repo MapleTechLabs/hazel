@@ -10,7 +10,7 @@ import { Command, UiSchema } from "@effect/ui"
 import { HazelRpc } from "@hazel/client-data"
 import { Hazel, TextField } from "@hazel/ui/vocabulary/index"
 import { Effect, Match, Schema } from "effect"
-import { LoadPage } from "../../app/requests"
+import { Reload } from "../../app/requests"
 
 /** Why `organization.create` failed: the URL is taken, or anything else. */
 export const CreateWorkspaceFailure = Schema.Literals(["SlugTaken", "Other"])
@@ -158,7 +158,7 @@ export const CreateWorkspace = Hazel.component({
 			)
 		},
 		// A full load, so `user.me` and the membership queries start from the new workspace.
-		SucceededCreate: ($) => $.run(LoadPage.make({ href: "/" })),
+		SucceededCreate: ($) => $.run(Reload.make({ href: "/" })),
 		FailedCreate: ($, { reason }) => $.evolve({ submission: () => Submission.Failed({ reason }) }),
 	},
 	view: (h, model) => {

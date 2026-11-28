@@ -183,6 +183,10 @@ export type FrameSurface = (typeof frameSurfaces)[number]
 export const screenSurfaces = ["sidebar", "page", "centered", "detail", "panel"] as const
 export type ScreenSurface = (typeof screenSurfaces)[number]
 
+/** A navigation's tab bar while a screen is pushed: kept, or hidden as iOS apps' pushed screens do. */
+export const pushedTabBars = ["visible", "hidden"] as const
+export type PushedTabBar = (typeof pushedTabBars)[number]
+
 /** `eyebrow`: settings' "Account" and "Workspace" (a `heading` `label` inset `px-3 pt-3 pb-1` over its rows). */
 export const sectionStyles = ["sidebar", "tree", "list", "sticky", "eyebrow"] as const
 export type SectionStyle = (typeof sectionStyles)[number]

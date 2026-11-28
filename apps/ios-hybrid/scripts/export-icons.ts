@@ -1,13 +1,17 @@
 /**
- * HazelUI's checked-in resources (`icon-catalog`, `illustration-asset`): every `IconName` as a template
- * image in `Resources/Icons.xcassets` (the web's own SVG, `packages/ui/src/web/icons.generated.ts`; `currentColor`
- * becomes black, its opacities stay; an icon with no `currentColor`, the Slack mark, keeps its colours),
- * and the empty state's illustrations in `Resources/Illustrations`.
+ * HazelUI's checked-in resources (`icon-catalog`, `illustration-asset`): every `IconName` as a 96px PNG
+ * in `Resources/Icons` (the web's own SVG, `packages/ui/src/web/icons.generated.ts`, drawn by CoreSVG
+ * through `rasterize-icons.swift`; `currentColor` becomes black, its opacities stay; an icon with no
+ * `currentColor`, the Slack mark, keeps its colours as `<name>.original.png`), and the empty state's
+ * illustrations in `Resources/Illustrations`. Plain files, not an asset catalog: the catalog's packed
+ * renditions drew nothing on a device (TestFlight 3186.6).
  *   bun scripts/export-icons.ts            rewrite the resources
  *   bun scripts/export-icons.ts --check    fail when they are stale
  *   bun scripts/export-icons.ts <out>      the spike app's catalog (`hazel.<name>`, `build-effect-ui.sh`)
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { spawnSync } from "node:child_process"
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { dirname, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
 import { iconNames, type IconName } from "../../../packages/ui/src/vocabulary/options.ts"
@@ -91,10 +95,35 @@ const catalog = (prefix: string) => {
 	return files
 }
 
+/** Each icon's pixels: four times the 24pt an icon is drawn at most, at 3x. */
+const ICON_PIXELS = 96
+
+/** Every icon as a PNG, drawn by CoreSVG (`rasterize-icons.swift`), by file name. */
+const iconPngs = () => {
+	const work = mkdtempSync(join(tmpdir(), "hazel-icons-"))
+	try {
+		const svgs = join(work, "svg"), pngs = join(work, "png")
+		mkdirSync(svgs)
+		for (const name of iconNames) writeFileSync(join(svgs, `${name}.svg`), catalogSvg(name))
+		const run = spawnSync("swift", [join(here, "rasterize-icons.swift"), svgs, pngs, String(ICON_PIXELS)], {
+			encoding: "utf8",
+		})
+		if (run.status !== 0) throw new Error(`rasterize-icons failed: ${run.stderr}`)
+		return new Map(
+			iconNames.map((name) => [
+				isOriginal(name) ? `${name}.original.png` : `${name}.png`,
+				readFileSync(join(pngs, `${name}.png`)),
+			]),
+		)
+	} finally {
+		rmSync(work, { recursive: true, force: true })
+	}
+}
+
 /** HazelUI's resources, by path inside `Resources/`. */
 const resourceFiles = () => {
 	const files = new Map<string, string | Buffer>()
-	for (const [path, content] of catalog("")) files.set(`Icons.xcassets/${path}`, content)
+	for (const [file, content] of iconPngs()) files.set(`Icons/${file}`, content)
 	for (const [name, source] of Object.entries(illustrations))
 		files.set(`Illustrations/${name}.webp`, readFileSync(join(images, source)))
 	return files

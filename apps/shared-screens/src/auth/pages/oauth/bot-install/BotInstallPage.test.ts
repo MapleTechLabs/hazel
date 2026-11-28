@@ -4,7 +4,7 @@ import { Component } from "@effect/ui"
 import { Scene } from "@effect/ui/testing"
 import { BotId, OrganizationId, UserId } from "@hazel/schema"
 import { describe, expect, test } from "vitest"
-import { LoadPage } from "../../../../app/requests"
+import { Leave } from "../../../../app/requests"
 import type { Session } from "../../../../app/session"
 import { button, byProp, screenTitled, textOf } from "../../../testing/locators"
 import {
@@ -87,8 +87,8 @@ describe("bot install page", () => {
 				ApproveInstall,
 				BotInstallMessage.SucceededApprove({ href: "https://maple.dev/callback?code=c" }),
 			)
-			.expectExact(LoadPage.make({ href: "https://maple.dev/callback?code=c" }))
-			.resolve(LoadPage, Component.noop)
+			.expectExact(Leave.make({ href: "https://maple.dev/callback?code=c" }))
+			.resolve(Leave, Component.noop)
 	})
 
 	test("cancelling tells the bot it was declined", () => {
@@ -98,8 +98,8 @@ describe("bot install page", () => {
 			.expect(textOf("You need to be an owner or admin of a workspace to install apps."))
 			.toExist()
 			.fire(button("Cancel"), "press")
-			.expectExact(LoadPage.make({ href: "https://maple.dev/callback?error=access_denied&state=s+t" }))
-			.resolve(LoadPage, Component.noop)
+			.expectExact(Leave.make({ href: "https://maple.dev/callback?error=access_denied&state=s+t" }))
+			.resolve(Leave, Component.noop)
 	})
 
 	test("a signed-out visitor signs in; a bad link never follows its redirect", () => {
@@ -108,8 +108,8 @@ describe("bot install page", () => {
 			.expect(screenTitled("Sign in to install this app"))
 			.toExist()
 			.fire(button("Sign in to continue"), "press")
-			.expectExact(LoadPage.make({ href: SIGN_IN }))
-			.resolve(LoadPage, Component.noop)
+			.expectExact(Leave.make({ href: SIGN_IN }))
+			.resolve(Leave, Component.noop)
 		start(signedIn, null).expect(screenTitled("This install link isn't valid")).toExist()
 		start(signedIn)
 			.loadFailed("bot", "Invalid")

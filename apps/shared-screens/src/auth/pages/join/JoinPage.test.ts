@@ -4,7 +4,7 @@ import { Component } from "@effect/ui"
 import { Scene } from "@effect/ui/testing"
 import { UserId } from "@hazel/schema"
 import { describe, expect, test } from "vitest"
-import { LoadPage, Navigate, ShowToast } from "../../../app/requests"
+import { Leave, Navigate, ShowToast } from "../../../app/requests"
 import type { Session } from "../../../app/session"
 import { button, byProp, textOf } from "../../testing/locators"
 import { JoinMessage, JoinPageNoDeps, JoinWorkspace, type PublicOrganization } from "./JoinPage"
@@ -50,8 +50,8 @@ describe("join page", () => {
 			.expect(button("Join workspace"))
 			.toBeAbsent()
 			.fire(button("Sign in to join"), "press")
-			.expectExact(LoadPage.make({ href: "/sign-in?redirect_url=%2Fjoin%2Fhazel" }))
-			.resolve(LoadPage, Component.noop)
+			.expectExact(Leave.make({ href: "/sign-in?redirect_url=%2Fjoin%2Fhazel" }))
+			.resolve(Leave, Component.noop)
 	})
 
 	test("joining opens the workspace with the success toast", () => {

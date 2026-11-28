@@ -4,7 +4,7 @@
  * The chat sidebar (`web-foldkit/src/shell/channels-sidebar/`) as one shared `hazel` screen over
  * `@hazel/client-data`: goto rows, favorites, the default and user sections, discover, customers and
  * DMs, threads under their channel, each row's and section's menu, and (with `chrome`) the org
- * switcher and account card. Navigation goes to the host; each menu choice runs its own write
+ * switcher. Navigation goes to the host; each menu choice runs its own write
  * (`actions.ts`), modal or toast through the app's requests.
  */
 import { Command, Subscription, UiSchema } from "@effect/ui"
@@ -13,6 +13,8 @@ import { ChannelId, ChannelSectionId, OrganizationId, UserId } from "@hazel/sche
 import { type Content, Hazel } from "@hazel/ui/vocabulary/index"
 import { Clock, Effect, Layer, Match, Schema, Stream } from "effect"
 import { AppToast, Navigate, OpenCommandPalette, OpenModal, ShowToast } from "../app/requests"
+import { AppRoute, hrefOf } from "../app/route"
+import { SwitchOrganization } from "../shell/Chrome"
 import { type MenuOutcome, rowOutcome, sectionOutcome, WriteSidebar } from "./actions"
 import {
 	channelMenu,
@@ -28,7 +30,6 @@ import {
 	isMutedNow,
 	listedThreads,
 	MAX_DISCOVERABLE,
-	Me,
 	Org,
 	Person,
 	Presence,
@@ -54,11 +55,10 @@ export const NavTarget = UiSchema.TaggedEnum({
 })
 export type NavTarget = typeof NavTarget.Type
 
-/** What only the host can do: keep the hint dismissed, and (with `chrome`) its switcher's and account's choices. */
+/** What only the host can do: keep the hint dismissed, and (with `chrome`) its switcher's choices. */
 export const SidebarAction = UiSchema.TaggedEnum({
+	/** The create-channel hint's close: the host keeps that it was dismissed. */
 	DismissHint: {},
-	OrgMenu: { key: Schema.String },
-	AccountMenu: { key: Schema.String },
 })
 export type SidebarAction = typeof SidebarAction.Type
 
@@ -74,7 +74,7 @@ export const SidebarMessage = UiSchema.TaggedEnum({
 	UpdatedCustomers: { customers: Schema.Array(Customer) },
 	UpdatedSynced: { synced: Schema.Array(Synced) },
 	UpdatedDiscover: { channels: Schema.Array(Discoverable), memberCount: Schema.Finite },
-	UpdatedChrome: { orgs: Schema.Array(Org), me: Schema.NullOr(Me) },
+	UpdatedChrome: { orgs: Schema.Array(Org) },
 	Ticked: { nowMs: Schema.Finite },
 	ChangedRoute: { activeChannelId: Schema.NullOr(ChannelId), membersActive: Schema.Boolean },
 	PressedRow: { id: ChannelId },
@@ -85,7 +85,6 @@ export const SidebarMessage = UiSchema.TaggedEnum({
 	SelectedSectionMenu: { key: Schema.String, entry: Schema.String },
 	DismissedHint: {},
 	SelectedOrgMenu: { entry: Schema.String },
-	SelectedAccountMenu: { entry: Schema.String },
 	CompletedRequest: {},
 	/** A write answered: its toast, none for a silent success. */
 	CompletedWrite: { toast: Schema.NullOr(AppToast) },
@@ -104,15 +103,8 @@ export class RequestNavigation extends Command.Service<RequestNavigation>()(
 		success: SidebarMessage,
 	},
 ) {
-	static readonly layerWith = (navigate: (to: NavTarget) => void) =>
-		this.toLayer(
-			Effect.succeed(({ to }) =>
-				Effect.sync(() => {
-					navigate(to)
-					return SidebarMessage.CompletedRequest()
-				}),
-			),
-		)
+	static readonly layerWith = (navigate: (to: NavTarget) => Effect.Effect<void>) =>
+		this.toLayer(Effect.succeed(({ to }) => Effect.as(navigate(to), SidebarMessage.CompletedRequest())))
 }
 
 /** A menu choice or a press the host acts on (writes, modals, the palette, toasts). */
@@ -136,7 +128,7 @@ export const ChannelSidebarProps = Schema.Struct({
 	hintDismissed: Schema.Boolean,
 	/** The command palette's key, shown on "Browse channels" (web only). */
 	paletteKey: Schema.NullOr(Schema.String),
-	/** Draw the org switcher and the account card; the web app keeps its own. */
+	/** Draw the org switcher in the bar (a phone's Home); the web app keeps its own. */
 	chrome: Schema.Boolean,
 })
 export type ChannelSidebarProps = typeof ChannelSidebarProps.Type
@@ -162,7 +154,6 @@ export const Model = Schema.Struct({
 	discover: Schema.Array(Discoverable),
 	memberCount: Schema.Finite,
 	orgs: Schema.Array(Org),
-	me: Schema.NullOr(Me),
 	/** Section keys the user folded. */
 	collapsed: Schema.Array(Schema.String),
 })
@@ -189,7 +180,6 @@ export const initModel = (props: ChannelSidebarProps): Model => ({
 	discover: [],
 	memberCount: 0,
 	orgs: [],
-	me: null,
 	collapsed: [],
 })
 
@@ -249,7 +239,7 @@ export const ChannelSidebar = Hazel.component({
 		UpdatedSynced: ($, { synced }) => $.evolve({ synced: () => synced }),
 		UpdatedDiscover: ($, { channels, memberCount }) =>
 			$.evolve({ discover: () => channels, memberCount: () => memberCount }),
-		UpdatedChrome: ($, { orgs, me }) => $.evolve({ orgs: () => orgs, me: () => me }),
+		UpdatedChrome: ($, { orgs }) => $.evolve({ orgs: () => orgs }),
 		Ticked: ($, { nowMs }) => $.evolve({ nowMs: () => nowMs }),
 		ChangedRoute: ($, { activeChannelId, membersActive }) =>
 			$.evolve({ activeChannelId: () => activeChannelId, membersActive: () => membersActive }),
@@ -295,8 +285,26 @@ export const ChannelSidebar = Hazel.component({
 				),
 			),
 		DismissedHint: ($) => $.evolve({ hintDismissed: () => true }).run(act(SidebarAction.DismissHint())),
-		SelectedOrgMenu: ($, { entry }) => $.run(act(SidebarAction.OrgMenu({ key: entry }))),
-		SelectedAccountMenu: ($, { entry }) => $.run(act(SidebarAction.AccountMenu({ key: entry }))),
+		// The chrome's switcher (a phone's Home bar) acts here, the same on any host.
+		SelectedOrgMenu: ($, { entry }) => {
+			const org = $.model.orgs.find((candidate) => `org:${candidate.id}` === entry)
+			if (org !== undefined)
+				return org.id === $.props.organizationId
+					? $.model
+					: $.run(
+							SwitchOrganization.make({ organizationId: org.id, slug: org.slug }).pipe(
+								Command.map(() => SidebarMessage.CompletedRequest()),
+							),
+						)
+			return entry === "org-settings"
+				? $.run(
+						...runOutcome({
+							_tag: "Navigate",
+							href: hrefOf(AppRoute.SettingsGeneral({ orgSlug: $.props.orgSlug })),
+						}),
+					)
+				: $.model
+		},
 		CompletedRequest: ($) => $.model,
 		CompletedWrite: ($, { toast }) =>
 			toast === null
@@ -384,7 +392,7 @@ export const ChannelSidebar = Hazel.component({
 			...(props.chrome
 				? [
 						Subscription.make("chrome", [user], ([u]) =>
-							Q.chromeStream(u, (orgs, me) => SidebarMessage.UpdatedChrome({ orgs, me })),
+							Q.chromeStream(u, (orgs) => SidebarMessage.UpdatedChrome({ orgs })),
 						),
 					]
 				: []),
@@ -501,7 +509,8 @@ export const ChannelSidebar = Hazel.component({
 				.badge(count)
 				.unread(isUnread && !selected ? "pip" : "none")
 				.emphasized(emphasized)
-				.actions(dotsMenu(entry.id, "Channel options", menu))
+				// A phone opens the row's menu with a long press (`withMenu`), so it draws no dots.
+				.actions(h.props.chrome ? null : dotsMenu(entry.id, "Channel options", menu))
 				.selected(selected)
 				.muted((ownMuted || scopeMuted) && !emphasized)
 				.href(selected ? undefined : hrefOf(entry.id))
@@ -785,53 +794,29 @@ export const ChannelSidebar = Hazel.component({
 			])
 			.on("select", ({ id }) => SidebarMessage.SelectedOrgMenu({ entry: id }))
 			.trigger(
-				h.item
-					.title(orgName)
-					.leading(
+				h.stack
+					.axis("horizontal")
+					.align("center")
+					.density("compact")
+					.children(
 						h.avatar
 							.name(orgName)
 							.initials(initialsOf(orgName))
-							.src(org?.logoUrl ?? undefined),
-					)
-					.trailing(h.icon.name("chevron-down")),
+							.src(org?.logoUrl ?? undefined)
+							.size("small"),
+						h.text.role("label").strong().children(orgName),
+						h.icon.name("chevron-down"),
+					),
 			)
-		const me = model.me
-		const myName = me === null ? "" : `${me.firstName} ${me.lastName}`.trim()
-		const account =
-			me === null
-				? null
-				: h.menu
-						.key("account")
-						.label("Account")
-						.entries([
-							{ entries: [{ id: "settings", label: "Settings", icon: "gear" }] },
-							{
-								entries: [
-									{ id: "sign-out", label: "Sign out", icon: "leave", destructive: true },
-								],
-							},
-						])
-						.on("select", ({ id }) => SidebarMessage.SelectedAccountMenu({ entry: id }))
-						.trigger(
-							h.item
-								.title(myName)
-								.subtitle(me.email)
-								.leading(
-									h.avatar
-										.name(myName)
-										.initials(initialsOf(myName))
-										.src(me.avatarUrl ?? undefined)
-										.presence("online"),
-								),
-						)
-		return h.screen.title(orgName).children(orgSwitcher, ...body, account)
+		// Slack's bar: the workspace at its start (the phone shell puts the account at its end).
+		return h.screen.barLeading(orgSwitcher).children(...body)
 	},
 })
 
 /** What a host provides: the data instance, its navigation and its sidebar actions. */
 export const channelSidebarLayer = (
 	data: ClientData["Service"],
-	navigate: (to: NavTarget) => void,
+	navigate: (to: NavTarget) => Effect.Effect<void>,
 	act: (action: SidebarAction) => Effect.Effect<void>,
 ) =>
 	Layer.mergeAll(

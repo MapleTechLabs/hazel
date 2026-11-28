@@ -16,8 +16,10 @@ export interface AppShell {
 	readonly server: ShellServer
 	/** Keeps another install's discovery JSON, or Hazel's (`null`); the shell then starts over on it. */
 	readonly setServer: (document: string | null) => void
-	/** Starts the script over (after a sign-out: the sign-in screen). */
-	readonly restart: () => void
+	/** Opens a URL that is not the app's own with the system (Safari, another app). */
+	readonly openUrl: (url: string) => void
+	/** Starts the script over (after a sign-out: the sign-in screen); `path` opens in the new one. */
+	readonly restart: (path?: string) => void
 }
 
 declare const __native: { readonly shell?: AppShell } | undefined

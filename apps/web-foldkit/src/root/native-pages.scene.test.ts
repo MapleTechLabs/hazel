@@ -113,7 +113,7 @@ describe("a native page's requests", () => {
 		expect(
 			navigationsOf(request(AppRequest.Navigate({ href: "/hazel/settings", replace: true })).commands),
 		).toEqual(["replace /hazel/settings"])
-		expect(callsOf(request(AppRequest.LoadPage({ href: "/hazel" })).commands)).toEqual([
+		expect(callsOf(request(AppRequest.Reload({ href: "/hazel" })).commands)).toEqual([
 			{ name: "LoadExternal", args: { href: "/hazel" } },
 		])
 		const away = request(AppRequest.Navigate({ href: "https://example.com", replace: false, toast }))

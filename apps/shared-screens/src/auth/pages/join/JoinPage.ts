@@ -8,7 +8,7 @@ import { Command, Component, Query, UiSchema } from "@effect/ui"
 import { HazelRpc } from "@hazel/client-data"
 import { Hazel } from "@hazel/ui/vocabulary/index"
 import { Cause, Effect, Layer, Match, Option, Schema } from "effect"
-import { Navigate, LoadPage, ShowToast } from "../../../app/requests"
+import { Navigate, Leave, ShowToast } from "../../../app/requests"
 import { isSessionLoading, Session } from "../../../app/session"
 import { errorToast, reasonOf } from "../../../modals/feedback"
 import { authWaiting, brandPanel, HOME_HREF, textLink } from "../../components/AuthFrame"
@@ -249,7 +249,7 @@ export const JoinPageNoDeps = JoinDef.make({
 	init: () => ({ attempt: 0, isJoining: false, isGone: false }),
 	update: {
 		PressedRetryLookup: ($) => $.evolve({ attempt: (attempt) => attempt + 1, isGone: () => false }),
-		PressedSignIn: ($) => $.run(LoadPage.make({ href: $.props.signInHref })),
+		PressedSignIn: ($) => $.run(Leave.make({ href: $.props.signInHref })),
 		PressedHome: ($) => $.run(Navigate.make({ href: HOME_HREF, replace: false })),
 		PressedJoin: ($) =>
 			$.model.isJoining

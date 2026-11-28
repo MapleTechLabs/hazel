@@ -19,7 +19,7 @@ struct HzEmptyState: View {
         let descriptionText = node[prop: "description"]?.string ?? ""
         VStack(alignment: .center, spacing: root.rowGap ?? 0) {
             if let illustration, illustration != "none" {
-                Illustration(name: illustration)
+                Illustration(name: illustration, size: picture.size)
                     .clipShape(RoundedRectangle(cornerRadius: picture.radius ?? 0, style: .continuous))
                     .opacity(picture.opacity ?? 1)
                     .padding(.bottom, picture.marginBottom ?? 0)
@@ -52,8 +52,10 @@ struct HzEmptyState: View {
                 .environment(\.hzInRow, true)
             }
         }
-        .frame(maxWidth: .infinity)
         .padding(.vertical, root.paddingY ?? 0)
+        // `fill`: the whole space it is given, its column centred in it (a chat's empty list over
+        // its composer).
+        .frame(maxWidth: .infinity, maxHeight: root.fill == true ? .infinity : nil)
     }
 
     /// A text part with the root's `textAlign` when the part sets none (CSS inherits it).
@@ -65,9 +67,11 @@ struct HzEmptyState: View {
 }
 
 /// An `emptyIllustrations` picture from HazelUI's resources (`Resources/Illustrations`, copied from the
-/// web app's `public/images` by `scripts/export-icons.ts`), over the muted fill. Square, at most 384pt.
+/// web app's `public/images` by `scripts/export-icons.ts`), over the muted fill. Square, the recipe's
+/// `size` wide, at most 384pt.
 private struct Illustration: View {
     let name: String
+    let size: CGFloat?
 
     @MainActor private static var cache: [String: UIImage] = [:]
 
@@ -84,7 +88,7 @@ private struct Illustration: View {
         HazelTheme.Colors.muted.color
             .overlay { if let image { Image(uiImage: image).resizable().scaledToFill() } }
             .aspectRatio(1, contentMode: .fit)
-            .frame(maxWidth: 384)
+            .frame(maxWidth: min(size ?? 384, 384))
             .accessibilityLabel(name == "squirrel" ? "A squirrel gazing at the ocean" : "")
     }
 }

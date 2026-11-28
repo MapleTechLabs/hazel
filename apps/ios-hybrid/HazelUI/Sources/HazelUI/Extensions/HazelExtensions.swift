@@ -12,12 +12,6 @@ public enum HazelExtensions {
 
     static let log = Logger(subsystem: "sh.hazel.ui", category: "extensions")
     private static var registry: [String: Draw] = [:]
-    /// Extensions that fill their screen and scroll themselves (a web view, a map): a screen lays
-    /// them out as it does a list, not inside its own scroll view.
-    private static var filling: Set<String> = []
-
-    /// Whether `name` fills its screen (`register(_:props:fills:draw:)`).
-    public static func fills(_ name: String) -> Bool { filling.contains(name) }
 
     /// Every name registered on this platform.
     public static var registered: Set<String> { Set(registry.keys) }
@@ -31,9 +25,8 @@ public enum HazelExtensions {
     /// Registers `name` with its props decoded into `P` (codegen's struct for the props Schema). Props
     /// that do not decode draw the fallback and log once per value.
     public static func register<P: Decodable, V: View>(
-        _ name: String, props: P.Type, fills: Bool = false, draw: @escaping @MainActor (P, @escaping Send) -> V
+        _ name: String, props: P.Type, draw: @escaping @MainActor (P, @escaping Send) -> V
     ) {
-        if fills { filling.insert(name) } else { filling.remove(name) }
         registry[name] = { args, send in
             do {
                 return AnyView(draw(try args.decode(P.self), send))
@@ -44,10 +37,7 @@ public enum HazelExtensions {
         }
     }
 
-    public static func unregister(_ name: String) {
-        registry.removeValue(forKey: name)
-        filling.remove(name)
-    }
+    public static func unregister(_ name: String) { registry.removeValue(forKey: name) }
 
     /// The registered view for `name`, or nil (not registered, or its props did not decode).
     static func view(_ name: String, args: JSONValue, send: @escaping Send) -> AnyView? {

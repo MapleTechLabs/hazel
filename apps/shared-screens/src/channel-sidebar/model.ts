@@ -86,17 +86,10 @@ export type Discoverable = typeof Discoverable.Type
 export const Org = Schema.Struct({
 	id: OrganizationId,
 	name: Schema.String,
+	slug: Schema.NullOr(Schema.String),
 	logoUrl: Schema.NullOr(Schema.String),
 })
 export type Org = typeof Org.Type
-
-export const Me = Schema.Struct({
-	firstName: Schema.String,
-	lastName: Schema.String,
-	email: Schema.String,
-	avatarUrl: Schema.NullOr(Schema.String),
-})
-export type Me = typeof Me.Type
 
 /** Roles with `channels:write`, which `channel.create` and `channel.delete` need (`role-scopes.ts`). */
 export const canManageChannels = (role: string | null) => role === "owner" || role === "admin"

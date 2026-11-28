@@ -1,13 +1,15 @@
 import SwiftUI
 
 // Owned by lane S4. `hz:screen`: a title bar over its content, a back button (`back` raises `back`)
-// and a `toolbar` slot at the bar's end. Inside `navigation` or `splitView` the bar is the system one.
+// and a `toolbar` slot at the bar's end, `barLeading` at its start. Inside `navigation` or `splitView`
+// the bar is the system one, each slot one of its (glass) items.
 struct HzScreen: View {
     let tree: Tree
     let node: Node
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.hzNavigationBar) private var navigationBar
+    @Environment(\.hzStackRoot) private var stackRoot
 
     var body: some View {
         let _ = RenderCounter.record(node.id)
@@ -15,16 +17,44 @@ struct HzScreen: View {
         let root = HazelTheme.Recipes.screen.style(sizeClass: sizeClass)
         let title = node[prop: "title"]?.string ?? ""
         if navigationBar {
+            let lead = tree.slot("barLeading", of: node).flatMap { $0.children.isEmpty ? nil : $0 }
+            // A tab's own page names itself at the bar's start (Slack's), unless its start is taken.
+            let leadingTitle = stackRoot && !title.isEmpty && lead == nil
+            let titleStyle = HazelTheme.Recipes.screen.style(part: "title", options: ["surface": "page"], sizeClass: sizeClass)
             // The system bar keeps the swipe back; its back button belongs to the stack (`pop`).
             ScreenContent(tree: tree, node: node, sizeClass: sizeClass)
+                // A screen inside this one (a framed page's own) is not the stack's root.
+                .environment(\.hzStackRoot, false)
                 .background(root.background?.color ?? .clear)
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
                 // The web's header: the screen's own fill under the bar, not glass.
                 .toolbarBackground(root.background?.color ?? .clear, for: .navigationBar)
                 .toolbarBackground(.visible, for: .navigationBar)
+                // The start's own title (a bubble, the root's name) replaces the centred one.
+                .toolbar(removing: leadingTitle || lead != nil ? .title : nil)
                 .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) { SlotView(tree: tree, node: node, name: "toolbar") }
+                    if leadingTitle {
+                        ToolbarItem(placement: .topBarLeading) {
+                            // iOS's root-title size (Slack's), in the theme's ink.
+                            Text(title)
+                                .font(.title2.weight(.bold))
+                                .foregroundStyle(titleStyle.color?.color ?? Color.primary)
+                                .fixedSize()
+                        }
+                        .sharedBackgroundVisibility(.hidden)
+                    }
+                    // An empty slot is no item: the system would draw an empty glass capsule.
+                    // The web's ink for the bar's glyphs (`fg`), not the system's accent tint.
+                    if let lead {
+                        // Its natural width: a bar item is offered none of its own (a row would collapse).
+                        ToolbarItem(placement: .topBarLeading) {
+                            ChildrenView(tree: tree, node: lead).tint(.primary).fixedSize(horizontal: true, vertical: false)
+                        }
+                    }
+                    if let tools = tree.slot("toolbar", of: node), !tools.children.isEmpty {
+                        ToolbarItem(placement: .topBarTrailing) { ChildrenView(tree: tree, node: tools).tint(.primary) }
+                    }
                 }
         } else {
             VStack(alignment: .leading, spacing: 0) {
@@ -103,20 +133,19 @@ private struct ScreenContent: View {
 
     var body: some View {
         let style = HazelTheme.Recipes.screen.style(part: "content", sizeClass: sizeClass)
-        let content = tree.content(of: node)
-        let fills = content.contains { $0.tag == "hz:ext" && HazelExtensions.fills($0[prop: "ext"]?.string ?? "") }
-        let scrolls = fills || content.contains { Self.scrollsItself($0, in: tree, depth: 2) }
+        // `fill`: the content has the whole height and scrolls itself.
+        let fills = node[prop: "fill"]?.bool == true
+        let scrolls = fills || tree.content(of: node).contains { $0.tag == "hz:list" || $0.tag == "hz:scroll" }
         // As the web's sticky slot after the last row: 16pt, the 56pt action, then the content's padding.
         let floating = tree.slot("floatingAction", of: node) != nil
         let reserve = floating ? (HazelTheme.space["4"] ?? 0) + (HazelTheme.space["14"] ?? 0) : 0
         let column = VStack(alignment: .leading, spacing: 0) { ScreenChildren(tree: tree, node: node) }
-            // An extension that fills the screen runs from the bar to the bottom edge.
             .padding(.vertical, fills ? 0 : style.paddingY ?? 0)
             .padding(.bottom, reserve)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         Group {
             if scrolls {
-                column.frame(maxHeight: .infinity, alignment: .top)
+                column.frame(maxHeight: .infinity, alignment: .top).environment(\.hzScreenFills, fills)
             } else {
                 ScrollViewReader { proxy in
                     ScrollView { column }.environment(\.hzScrollProxy, proxy)
@@ -129,18 +158,9 @@ private struct ScreenContent: View {
     }
 }
 
-extension ScreenContent {
-    /// A list or scroll view, or a stack around one (a component's root, as the message list's):
-    /// the screen gives it its height instead of scrolling it inside its own scroll view.
-    static func scrollsItself(_ node: Node, in tree: Tree, depth: Int) -> Bool {
-        if node.tag == "hz:list" || node.tag == "hz:scroll" { return true }
-        guard depth > 0, node.tag == "hz:stack" else { return false }
-        return tree.content(of: node).contains { scrollsItself($0, in: tree, depth: depth - 1) }
-    }
-}
-
 /// The screen's children inside its margins (`screen-margins`): 16pt each side, except rows and
-/// containers that inset themselves or run edge to edge (sections, items, lists, the people strip).
+/// containers that run edge to edge (sections, items, lists, the people strip) or inset themselves
+/// (a stack or scroll with an `inset`).
 private struct ScreenChildren: View {
     let tree: Tree
     let node: Node
@@ -149,13 +169,17 @@ private struct ScreenChildren: View {
         "hz:section", "hz:item", "hz:list", "hz:listDivider", "hz:scroll", "hz:peopleStrip", "hz:divider", "hz:ext",
     ]
 
+    static func bleeds(_ child: Node) -> Bool {
+        fullBleed.contains(child.tag) || (child[prop: "inset"]?.string).map { $0 != "none" } == true
+    }
+
     var body: some View {
         let _ = RenderCounter.recordList(node.id)
         let margin = HazelTheme.space["4"] ?? 0
         ForEach(node.children, id: \.self) { id in
             if let child = tree.node(id), child.tag != "hz:slot" {
                 NodeView(tree: tree, node: child)
-                    .padding(.horizontal, Self.fullBleed.contains(child.tag) ? 0 : margin)
+                    .padding(.horizontal, Self.bleeds(child) ? 0 : margin)
             }
         }
     }
