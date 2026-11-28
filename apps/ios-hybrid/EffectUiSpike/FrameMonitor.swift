@@ -3,7 +3,7 @@ import QuartzCore
 import UIKit
 
 /// Every display frame at up to 120 Hz, a dropped frame being one that took longer than its slot
-/// (ported from `HazelHybrid/FrameMonitor.swift`). Logs `[frames]` per second with drops or batches,
+/// (ported from the hybrid app's, deleted). Logs `[frames]` per second with drops or batches,
 /// and totals per named window (`begin` / `end`) for the G4 frame test.
 @MainActor
 final class FrameMonitor {

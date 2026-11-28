@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Builds the app for iPhones, signed for the App Store as HazelChat (`hazel.app`), and uploads it
-# to TestFlight with the `asc` CLI's stored credentials.
-#   BUILD=3126.1 bash scripts/release.sh           (BUILD: above the app's latest TestFlight build)
-#   TARGET=Hazel BUILD=… bash scripts/release.sh   (the native app, `Hazel/`; default HazelHybrid)
+# Builds the native app (`Hazel/`) for iPhones, signed for the App Store as HazelChat (`hazel.app`),
+# and uploads it to TestFlight with the `asc` CLI's stored credentials.
+#   BUILD=3186.7 bash scripts/release.sh           (BUILD: above the app's latest TestFlight build)
 #   PROFILE=… IDENTITY=… UPLOAD=0                  (defaults: ~/.asc/signing's App Store profile,
 #                                                   "Apple Distribution", upload on)
 set -euo pipefail
@@ -13,27 +12,24 @@ VERSION="${VERSION:-0.1.0}"
 BUNDLE_ID="${BUNDLE_ID:-hazel.app}"
 PROFILE="${PROFILE:-$HOME/.asc/signing/hazel_appstore.mobileprovision}"
 IDENTITY="${IDENTITY:-Apple Distribution}"
-TARGET="${TARGET:-HazelHybrid}"
 OUT=build/release
 
 # The web build is online (production), whatever a simulator run left (`build/web.mode`).
 bun run build:web >/dev/null
 echo online >build/web.mode
 python3 scripts/fonts.py >/dev/null
-if [ "$TARGET" = "Hazel" ]; then
-	# The native app's script and the web's icons (`build-hazel.sh`).
-	bun run build:hazel >/dev/null
-	bun scripts/export-icons.ts build/icons/Icons.xcassets >/dev/null
-fi
+# The app's script and the web's icons (`build-hazel.sh`).
+bun run build:hazel >/dev/null
+bun scripts/export-icons.ts build/icons/Icons.xcassets >/dev/null
 xcodegen generate --quiet
 rm -rf "$OUT" && mkdir -p "$OUT"
-xcodebuild -project HazelHybrid.xcodeproj -scheme "$TARGET" -configuration Release \
+xcodebuild -project Hazel.xcodeproj -scheme Hazel -configuration Release \
 	-destination 'generic/platform=iOS' -derivedDataPath build/derived-release \
 	PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
 	CODE_SIGNING_ALLOWED=NO -quiet build
-APP="$OUT/Payload/$TARGET.app"
+APP="$OUT/Payload/Hazel.app"
 mkdir -p "$OUT/Payload"
-cp -R "build/derived-release/Build/Products/Release-iphoneos/$TARGET.app" "$APP"
+cp -R build/derived-release/Build/Products/Release-iphoneos/Hazel.app "$APP"
 
 # Signed with what the profile grants: its team's identifier for this app.
 cp "$PROFILE" "$APP/embedded.mobileprovision"
