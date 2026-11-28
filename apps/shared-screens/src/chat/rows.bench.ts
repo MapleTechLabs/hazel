@@ -6,6 +6,8 @@
  * 50/200/500/1000 messages. `bun run bench` in `apps/shared-screens`.
  */
 import { ChannelId, MessageId, UserId } from "@hazel/schema"
+// The bench measures the host primitive's redraws; it never ships in the screen.
+// oxlint-disable-next-line hazel/no-raw-escape
 import { primitive as messagePrimitive } from "@hazel/ui/web/primitives/chat/message"
 import type { Content } from "@hazel/ui/vocabulary/index"
 import { Window } from "happy-dom"
@@ -185,6 +187,7 @@ const quantile = (sorted: ReadonlyArray<number>, q: number) =>
 	sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] ?? 0
 
 const window = new Window()
+// SAFETY: happy-dom's Document implements the DOM Document the primitive draws into.
 const document = window.document as unknown as Document
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 

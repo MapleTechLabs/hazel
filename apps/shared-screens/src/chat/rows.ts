@@ -234,10 +234,11 @@ const same = (a: unknown, b: unknown): boolean => {
 			a.length === b.length &&
 			a.every((item, index) => same(item, b[index]))
 		)
-	const keys = Object.keys(a)
+	const left = Object.entries(a)
+	const right = new Map<string, unknown>(Object.entries(b))
 	return (
-		keys.length === Object.keys(b).length &&
-		keys.every((key) => same(Reflect.get(a, key), Reflect.get(b, key)))
+		left.length === right.size &&
+		left.every(([key, value]) => right.has(key) && same(value, right.get(key)))
 	)
 }
 
