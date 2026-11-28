@@ -82,6 +82,8 @@ const intentOf = {
 	dashed: "plain",
 	// The composer's picker buttons are a plain `ariaButton` with their own classes, not a kit button.
 	quiet: "plain",
+	// A customer's tag was a plain span (`page/customers/detail/view.ts` `tags`), not a kit button.
+	tag: "secondary",
 } as const satisfies Record<ButtonSpec["variant"], ButtonVariants["intent"]>
 
 const sizeOf = (spec: ButtonSpec): ButtonVariants["size"] => {

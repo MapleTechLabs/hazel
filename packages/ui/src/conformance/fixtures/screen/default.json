@@ -72,5 +72,13 @@
 			"prop": "back",
 			"values": [true]
 		}
+	],
+	"cases": [
+		{
+			"name": "fill",
+			"props": {
+				"fill": true
+			}
+		}
 	]
 }

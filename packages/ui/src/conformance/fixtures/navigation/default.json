@@ -69,5 +69,13 @@
 			"role": "button",
 			"name": "Back"
 		}
+	],
+	"cases": [
+		{
+			"name": "pushed-tab-bar-hidden",
+			"props": {
+				"pushedTabBar": "hidden"
+			}
+		}
 	]
 }

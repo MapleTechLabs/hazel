@@ -148,10 +148,10 @@ describe("CustomersSidebar", () => {
 			layout: { order: [enterprise, "current"], sidebarHidden: ["all"] },
 		}
 		assert.deepStrictEqual(
-			sidebarViewsOf(model).map((view) => [view.key, view.icon]),
+			sidebarViewsOf(model).map((view) => [view.key, view.look]),
 			[
-				[enterprise, "star"],
-				["current", null],
+				[enterprise, { icon: "star", color: "blue" }],
+				["current", { icon: null, color: "purple" }],
 			],
 		)
 	})

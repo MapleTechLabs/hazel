@@ -60,6 +60,18 @@ export const frame = defineRecipe<{ readonly surface: FrameSurface }, never, "fo
 				inset: {
 					root: { rowGap: "3", radius: "lg", ring: "border", paddingX: "3", paddingY: "2.5" },
 				},
+				// One line in a list of hairline rows (a customer's feature flag, `min-h-8 px-3 py-1`).
+				row: {
+					root: {
+						justify: "center",
+						rowGap: "1",
+						minHeight: "8",
+						radius: "lg",
+						ring: "border",
+						paddingX: "3",
+						paddingY: "1",
+					},
+				},
 				// The card with no padding: its dividers run edge to edge (`frame-flush`, the inbox's card).
 				flush: {
 					root: {
