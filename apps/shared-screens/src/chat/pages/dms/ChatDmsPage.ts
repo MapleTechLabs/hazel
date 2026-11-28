@@ -9,6 +9,7 @@ import { Hazel } from "@hazel/ui/vocabulary/index"
 import { Schema } from "effect"
 import { OpenModal } from "../../../app/requests"
 import { Session } from "../../../app/session"
+import { pageHeader } from "../../../org/components/PageHeader"
 import {
 	cardList,
 	ChannelGroups,
@@ -67,13 +68,14 @@ export const ChatDmsPage = Hazel.component({
 			.variant("secondary")
 			.size("small")
 			.on("press", ChatDmsMessage.PressedNewMessage())
-		// HAZEL-GAP(p4-screen-page-column): today is a padded column under a display title; `page` is the phone bar.
-		return h.screen
+		// HAZEL-GAP(p4-screen-page-column): `screen` `page` is the phone bar, so the wide page composes
+		// today's padded column under a display title, as the members page does.
+		return h.stack
 			.key("chat-dms")
-			.surface("page")
-			.title("Direct messages")
-			.toolbar(newMessage)
+			.density("relaxed")
+			.inset("page")
 			.children(
+				pageHeader(h, { title: "Direct messages" }, newMessage),
 				dms.length === 0
 					? h.emptyState
 							.icon("messages")

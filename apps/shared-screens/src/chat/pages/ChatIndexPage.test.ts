@@ -93,7 +93,7 @@ describe("chat index page", () => {
 		const s = Scene.start(ChatIndexPage, { session: session() })
 		s.expect(byProp("progress", "label", "Loading...")).toExist()
 		s.subscription(CHANNELS, ChatIndexMessage.UpdatedChannels({ groups }))
-			.expect(byProp("screen", "title", "All channels"))
+			.expect(Locator.text("All channels"))
 			.toExist()
 			.expect(item("general"))
 			.toExist()
@@ -164,7 +164,7 @@ describe("wide DMs page", () => {
 	test("lists the DMs and starts a new one", () => {
 		Scene.start(ChatDmsPage, { session: session() })
 			.subscription(CHANNELS, ChatDmsMessage.UpdatedChannels({ groups }))
-			.expect(byProp("screen", "title", "Direct messages"))
+			.expect(Locator.text("Direct messages"))
 			.toExist()
 			.expect(item("Grace Hopper"))
 			.toExist()

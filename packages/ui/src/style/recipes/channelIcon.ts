@@ -90,10 +90,18 @@ export const channelIcon = defineRecipe<
 	},
 	flags: {
 		private: {},
-		// Channel settings' header (`p4-channel-settings-header`): a `size-10 rounded-lg bg-secondary`
-		// tile around the `md` icon (`size-5`, the emoji `text-lg/none`) in muted ink.
+		// Channel settings' header (`p4-channel-settings-header`) and the chat index cards: `iconTile`'s
+		// neutral `size-10 rounded-lg border bg-secondary` tile around the `md` icon (`size-5`, the
+		// emoji `text-lg/none`) in muted ink.
 		tile: {
-			root: { size: "10", radius: "lg", background: "secondary", color: "muted-fg" },
+			root: {
+				size: "10",
+				radius: "lg",
+				borderWidth: "hairline",
+				borderColor: "border",
+				background: "secondary",
+				color: "muted-fg",
+			},
 			parts: {
 				glyph: { size: "5" },
 				emoji: { size: "5", text: "title", leading: "4.5" },

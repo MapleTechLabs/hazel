@@ -11,6 +11,7 @@ import { Hazel } from "@hazel/ui/vocabulary/index"
 import { Match, Schema } from "effect"
 import { OpenModal } from "../../app/requests"
 import { Session } from "../../app/session"
+import { pageHeader } from "../../org/components/PageHeader"
 import {
 	ChannelGroups,
 	ChannelMarks,
@@ -149,13 +150,17 @@ export const ChatIndexPage = ChatIndexDef.make({
 			model.tab === "dms"
 				? dmCard(h, scope.orgSlug, channel, scope.userId, model.presence)
 				: channelCard(h, scope.orgSlug, channel, model.marks)
-		// HAZEL-GAP(p4-screen-page-column): today is a padded column under a display title; `page` is the phone bar.
-		return h.screen
+		// HAZEL-GAP(p4-screen-page-column): `screen` `page` is the phone bar, so the wide page composes
+		// today's padded column under a display title, as the members page does.
+		return h.stack
 			.key("chat-index")
-			.surface("page")
-			.title("All channels")
-			.subtitle("Discover communities and join the discussions that matter to you.")
+			.density("relaxed")
+			.inset("page")
 			.children(
+				pageHeader(h, {
+					title: "All channels",
+					subtitle: "Discover communities and join the discussions that matter to you.",
+				}),
 				h.tabBar
 					.style("page")
 					.tabs(

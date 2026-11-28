@@ -9,7 +9,7 @@ import type { Hazel } from "@hazel/ui/vocabulary/index"
 
 export const pageHeader = <Msg>(
 	h: Hazel.H<Msg>,
-	options: { readonly title: string; readonly subtitle: string },
+	options: { readonly title: string; readonly subtitle?: string },
 	...actions: ReadonlyArray<unknown>
 ) =>
 	// Today's actions wrap under the title when the page is narrow.
@@ -23,7 +23,9 @@ export const pageHeader = <Msg>(
 				.density("tight")
 				.children(
 					h.heading.level("1").children(options.title),
-					h.text.role("label").tone("muted").children(options.subtitle),
+					options.subtitle === undefined
+						? undefined
+						: h.text.role("label").tone("muted").children(options.subtitle),
 				),
 			h.spacer,
 			...(actions as Array<never>),

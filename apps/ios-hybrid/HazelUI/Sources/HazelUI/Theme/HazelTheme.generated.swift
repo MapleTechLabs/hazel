@@ -971,7 +971,7 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "emoji", style: Style(size: 16, leading: 14)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: .regular), part: "logo", style: Style(size: 16)),
                 Layer(when: When(options: ["sync": "discord"], flags: [], states: [], sizeClass: nil), part: "syncLogo", style: Style(color: Colors.discord)),
-                Layer(when: When(options: [:], flags: ["tile"], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.secondary, color: Colors.mutedFg, radius: 8, size: 40)),
+                Layer(when: When(options: [:], flags: ["tile"], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.secondary, color: Colors.mutedFg, borderColor: Colors.border, borderWidth: 1, radius: 8, size: 40)),
                 Layer(when: When(options: [:], flags: ["tile"], states: [], sizeClass: nil), part: "glyph", style: Style(size: 20)),
                 Layer(when: When(options: [:], flags: ["tile"], states: [], sizeClass: nil), part: "emoji", style: Style(size: 20, text: .title, leading: 18)),
                 Layer(when: When(options: [:], flags: ["tile"], states: [], sizeClass: nil), part: "logo", style: Style(size: 20)),
