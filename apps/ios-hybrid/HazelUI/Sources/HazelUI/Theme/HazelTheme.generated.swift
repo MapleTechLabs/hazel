@@ -134,8 +134,8 @@ public enum HazelTheme {
         public static let clear = ThemedColor(light: RGBA(0, 0, 0, 0), dark: RGBA(0, 0, 0, 0))
         /// `bg`: #ffffffff / #131313ff
         public static let bg = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.073002, 0.073002, 0.073002, 1))
-        /// `surface`: #ffffffff / #171717ff
-        public static let surface = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.090527, 0.090527, 0.090527, 1))
+        /// `surface`: #ffffffff / #191919ff
+        public static let surface = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.096765, 0.096765, 0.096765, 1))
         /// `fg`: #09090bff / #fafafaff
         public static let fg = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 1), dark: RGBA(0.980256, 0.980256, 0.980256, 1))
         /// `fg-4`: #09090bff / #fafafaff
@@ -152,8 +152,8 @@ public enum HazelTheme {
         public static let washStrong = ThemedColor(light: RGBA(0, 0, 0, 0.06), dark: RGBA(1, 1, 1, 0.08))
         /// `wash-stacked`: #00000018 / #ffffff1f
         public static let washStacked = ThemedColor(light: RGBA(0, 0, 0, 0.0929), dark: RGBA(1, 1, 1, 0.1214))
-        /// `input-card`: #ffffffff / #171717ff
-        public static let inputCard = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.090527, 0.090527, 0.090527, 1))
+        /// `input-card`: #ffffffff / #191919ff
+        public static let inputCard = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.096765, 0.096765, 0.096765, 1))
         /// `separator`: #09090b12 / #ffffff12
         public static let separator = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 0.07), dark: RGBA(1, 1, 1, 0.07))
         /// `bar-divider`: #09090b12 / #00000000

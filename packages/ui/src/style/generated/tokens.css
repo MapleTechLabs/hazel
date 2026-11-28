@@ -41,7 +41,7 @@
 	--hz-palette-brand-900: var(--color-brand-900, rgb(66 48 125));
 	--hz-palette-ink-0: var(--color-ink-0, oklch(0.16 0 0));
 	--hz-palette-ink-1: var(--color-ink-1, oklch(0.185 0 0));
-	--hz-palette-ink-2: var(--color-ink-2, oklch(0.205 0 0));
+	--hz-palette-ink-2: var(--color-ink-2, oklch(0.212 0 0));
 	--hz-palette-ink-3: var(--color-ink-3, oklch(0.22 0 0));
 	--hz-palette-ink-4: var(--color-ink-4, oklch(0.235 0 0));
 	--hz-palette-ink-5: var(--color-ink-5, oklch(0.25 0 0));

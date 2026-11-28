@@ -60,7 +60,7 @@ const palette = {
 	 */
 	"ink-0": "oklch(0.16 0 0)",
 	"ink-1": "oklch(0.185 0 0)",
-	"ink-2": "oklch(0.205 0 0)",
+	"ink-2": "oklch(0.212 0 0)",
 	"ink-3": "oklch(0.22 0 0)",
 	"ink-4": "oklch(0.235 0 0)",
 	"ink-5": "oklch(0.25 0 0)",
