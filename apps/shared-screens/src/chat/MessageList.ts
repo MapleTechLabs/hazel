@@ -531,6 +531,7 @@ export const MessageList = Hazel.component({
 						attachmentId,
 						url: file.url ?? "",
 						index: file.kind === "file" ? -1 : media.indexOf(file),
+						media,
 					},
 				}),
 			)

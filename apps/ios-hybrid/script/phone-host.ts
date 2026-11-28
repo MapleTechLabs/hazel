@@ -81,7 +81,16 @@ const featureHosts = Layer.mergeAll(
 	Layer.succeed(MessageListHost, {
 		deleteMessage: () => notYet("Deleting a message"),
 		createIssue: () => notYet("Creating an issue"),
-		openAttachment: () => notYet("Opening attachments"),
+		// Photos open in the lightbox; a file (or a video, until the player) opens in the system's viewer.
+		openAttachment: ({ media, index, url }) => {
+			const photos = (media ?? []).filter((each) => each.kind === "image")
+			const at = photos.findIndex((each) => each === media?.[index])
+			return at >= 0
+				? Effect.sync(() => navigation.intend(ShellIntent.ShowMedia({ items: photos, index: at })))
+				: url === ""
+					? Effect.void
+					: Effect.sync(() => appShell().openUrl(url))
+		},
 		retry: () => notYet("Retrying a message"),
 		jumpToReply: () => notYet("Jumping to a reply"),
 	}),

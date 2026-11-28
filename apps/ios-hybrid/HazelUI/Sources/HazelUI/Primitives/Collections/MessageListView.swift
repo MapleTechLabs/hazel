@@ -117,6 +117,11 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
         let hold = UILongPressGestureRecognizer(target: self, action: #selector(held(_:)))
         hold.minimumPressDuration = 0.4
         addGestureRecognizer(hold)
+        MediaFrames.register(self)
+        NotificationCenter.default.addObserver(forName: RowImages.loaded, object: nil, queue: .main) { [weak self] note in
+            let url = note.object as? String
+            MainActor.assumeIsolated { self?.mediaArrived(url) }
+        }
         registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitHorizontalSizeClass.self]) { (view: MessageListView, _) in
             view.applyBackground()
             view.remeasureAll()
@@ -760,6 +765,33 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
         scroll.contentOffset.y = min(max(-scroll.contentInset.top, scroll.contentOffset.y + dy), max(-scroll.contentInset.top, maxY))
         UIAccessibility.post(notification: .pageScrolled, argument: nil)
         return true
+    }
+
+    // MARK: media
+
+    /// A picture arrived: rows that drew its placeholder draw again. The old bitmap stays on screen
+    /// until the new one is ready, so nothing blinks; the row keeps its height (the tile's is fixed).
+    private func mediaArrived(_ url: String?) {
+        guard let url else { return }
+        let c = context
+        for (key, layout) in layouts where layout.pendingMedia.contains(url) {
+            layouts[key] = nil
+            dropImage(key)
+            if layers[key] != nil, let i = indexOf[key] { render(key, index: i, context: c, urgent: true) }
+        }
+    }
+
+    /// Where the tile of attachment `id` is on screen (window coordinates), among the rows in view.
+    public func windowFrame(ofMedia id: String) -> CGRect? {
+        guard window != nil else { return nil }
+        for key in layers.keys {
+            guard let i = indexOf[key], let layout = layouts[key],
+                  let target = layout.targets.first(where: { $0.role == .image && $0.payload.object?["id"]?.string == id })
+            else { continue }
+            let row = screenRect(i)
+            return convert(target.rect.offsetBy(dx: row.minX, dy: row.minY), to: nil)
+        }
+        return nil
     }
 
     // MARK: tests
