@@ -5,7 +5,7 @@
  */
 import { HazelApi } from "@hazel/domain/http"
 import { Context, Effect, Layer } from "effect"
-import { HttpClient, HttpClientRequest } from "effect/http"
+import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
 import { ClientDataConfig, Session } from "./platform/services"
 
@@ -14,12 +14,26 @@ const make = Effect.gen(function* () {
 	const session = yield* Session
 	return yield* HttpApiClient.make(HazelApi, {
 		baseUrl: config.apiUrl,
-		// The session's header on every request, when there is one.
+		// The session's header on every request, when there is one; a session that cannot be read
+		// fails the request with that cause (as the RPC client's), never a header-less 401.
 		transformClient: HttpClient.mapRequestEffect((request) =>
-			Effect.map(session.authorization.pipe(Effect.orElseSucceed(() => null)), (authorization) =>
-				authorization === null
-					? request
-					: HttpClientRequest.setHeader(request, "authorization", authorization),
+			session.authorization.pipe(
+				Effect.map((authorization) =>
+					authorization === null
+						? request
+						: HttpClientRequest.setHeader(request, "authorization", authorization),
+				),
+				Effect.catchTag("SessionLoadError", (cause) =>
+					Effect.fail(
+						new HttpClientError.HttpClientError({
+							reason: new HttpClientError.TransportError({
+								request,
+								cause,
+								description: "the session could not be read",
+							}),
+						}),
+					),
+				),
 			),
 		),
 	})

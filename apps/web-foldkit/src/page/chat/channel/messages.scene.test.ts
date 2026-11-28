@@ -64,7 +64,7 @@ describe("join banner", () => {
 
 describe("row actions", () => {
 	const action = (messageId: typeof adaMessageId, value: "reply" | "edit" | "delete", content: string) =>
-		listRequest({ _tag: "Action", messageId, action: value, content })
+		listRequest({ _tag: "Action", messageId, action: value, content, author: "" })
 
 	// The fixture has no users loaded, so the author's name is empty here.
 	test("reply: asks the channel's composer (a shared screen) to reply to the message", () => {

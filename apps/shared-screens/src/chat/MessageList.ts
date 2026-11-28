@@ -281,6 +281,7 @@ const SHEET_SKIPS: ReadonlyArray<MessageAction> = ["copyImage", "copyImageUrl"]
 /** What a row action does: open the picker, run a Command, or nothing (`selectText` is the host's). */
 const actionStep = (
 	props: MessageListProps,
+	model: MessageListModel,
 	message: typeof ChatMessage.Type,
 	action: MessageAction,
 	image?: string,
@@ -312,6 +313,7 @@ const actionStep = (
 				messageId: message.id,
 				action,
 				content: message.content,
+				author: displayNameOf(lookupsOf(model, props.userId), message.authorId) ?? "",
 			} as const
 			// The image under the pointer, for the web menu's `copyImage` and `copyImageUrl`.
 			return RequestHost.make({ request: image === undefined ? request : { ...request, image } })
@@ -446,7 +448,7 @@ export const MessageList = Hazel.component({
 		ReachedEnd: ($) => $.model,
 		PressedAction: ($, { id, action, image }) => {
 			const message = messageOf($.model, id)
-			const step = message === undefined ? null : actionStep($.props, message, action, image)
+			const step = message === undefined ? null : actionStep($.props, $.model, message, action, image)
 			return step === null ? $.model : step === "picker" ? $.evolve({ picker: () => id }) : $.run(step)
 		},
 		PressedReaction: ($, { id, emoji }) =>
@@ -468,7 +470,7 @@ export const MessageList = Hazel.component({
 			if (action === "selectText")
 				return $.evolve({ menu: () => null }).run(SelectRowText.make({ key: id }))
 			const message = messageOf($.model, id)
-			const step = message === undefined ? null : actionStep($.props, message, action)
+			const step = message === undefined ? null : actionStep($.props, $.model, message, action)
 			return step === null
 				? $.evolve({ menu: () => null })
 				: step === "picker"

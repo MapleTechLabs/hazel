@@ -126,6 +126,8 @@ const reportLocation = () => {
 		// The first report is where the page landed (a redirect at start included), not a link.
 		const replaced = last === "" || replacedTo === location.pathname
 		last = location.pathname
+		// Consumed: a later link to this same path is a link again.
+		replacedTo = null
 		post({ type: "location", text: location.pathname, replaced })
 	}
 	const pushState = history.pushState.bind(history)
