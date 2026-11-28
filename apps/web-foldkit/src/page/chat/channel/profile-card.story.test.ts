@@ -1,6 +1,6 @@
 import { ChannelId } from "@hazel/schema"
 import { Schema } from "effect"
-import { Command, expectOutMessage, given, message, story } from "foldkit/story"
+import { Command, expectNoOutMessage, expectOutMessage, given, message, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
 import { AppRoute } from "../../../route"
 import { PageOutMessage } from "../../out-message"
@@ -113,6 +113,7 @@ describe("Message", () => {
 				}),
 			),
 			Command.expectNone(),
+			expectNoOutMessage(),
 		)
 	})
 
@@ -122,6 +123,7 @@ describe("Message", () => {
 			given({ ...loadedModel(), channel: null }),
 			message(Message.ClickedMessageUser({ userId: grace, viewerId: ada, name: "Grace Hopper" })),
 			Command.expectNone(),
+			expectNoOutMessage(),
 		)
 	})
 })
