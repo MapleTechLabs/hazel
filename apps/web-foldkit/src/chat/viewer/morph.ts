@@ -188,6 +188,8 @@ export const morphOpen = (viewer: Element, media: HTMLImageElement | null): (() 
 	let isCancelled = false
 	const plate = originPlate()
 	const fade = () => {
+		// The plate of the slide on view now (it may have changed while the entrance waited).
+		hidePlate(originPlate())
 		viewer.setAttribute(SHOWN_ATTRIBUTE, "")
 		animations.push(
 			viewer.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_MS, easing: "ease-out" }),
@@ -220,13 +222,17 @@ export const morphOpen = (viewer: Element, media: HTMLImageElement | null): (() 
 	}
 	if (isReducedMotion() || media === null || plate === null || !isPainted(plate) || !isInView(plate)) fade()
 	else if (isPainted(media)) grow(plate, media)
-	else
-		// Not drawn yet: the viewer stays transparent for the wait, then grows, or fades if it never came.
+	else {
+		// Not drawn yet: the viewer stays transparent for the wait and the plate stays on the page, then
+		// the image grows, or the viewer fades if it never came or another slide was chosen meanwhile.
+		hidePlate(null)
 		void whenDecoded(media, 200).then((isDecoded) => {
 			if (isCancelled) return
-			if (isDecoded && isInView(plate)) grow(plate, media)
+			const isStillOnView = media.isConnected && media.hasAttribute("data-active")
+			if (isDecoded && isStillOnView && originPlate() === plate && isInView(plate)) grow(plate, media)
 			else fade()
 		})
+	}
 	return () => {
 		isCancelled = true
 		for (const animation of animations) animation.cancel()
@@ -282,6 +288,17 @@ export const morphClose = (viewer: Element, media: HTMLImageElement | null): Pro
 			)
 	}
 	const box = media.getBoundingClientRect()
+	// Closed mid-entrance, the image is still cropped toward its plate: the copy starts from that crop,
+	// which is in the image's own pixels, so scaled to the copy's (the transformed box).
+	const scale = media.offsetWidth > 0 ? box.width / media.offsetWidth : 1
+	const crop = getComputedStyle(media).clipPath
+	const from: Keyframe = crop.startsWith("inset(")
+		? {
+				transform: "translate(0px, 0px) scale(1)",
+				clipPath: crop.replace(/(-?[\d.]+)px/g, (_, value: string) => `${Number(value) * scale}px`),
+			}
+		: AT_REST
+	for (const animation of media.getAnimations()) animation.cancel()
 	const copy = media.cloneNode(false) as HTMLImageElement
 	for (const name of copy.getAttributeNames())
 		if (name !== "src" && name !== "alt" && name !== "srcset" && name !== "sizes")
@@ -306,7 +323,7 @@ export const morphClose = (viewer: Element, media: HTMLImageElement | null): Pro
 	media.style.opacity = "0"
 	const isLanding = plate !== null && isPainted(plate) && isInView(plate)
 	const flight = isLanding
-		? copy.animate([AT_REST, onPlate(plate.getBoundingClientRect(), box, radiusOf(plate))], {
+		? copy.animate([from, onPlate(plate.getBoundingClientRect(), box, radiusOf(plate))], {
 				duration: CLOSE_MS,
 				easing: EASE_OUT,
 				fill: "forwards",

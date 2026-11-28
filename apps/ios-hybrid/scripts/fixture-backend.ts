@@ -162,10 +162,14 @@ if (process.argv.includes("--big")) {
 // `--photos <dir>`: the dir's JPEGs, served at `/__fixture/photo/<name>`, on #general's last message.
 const photosIndex = process.argv.indexOf("--photos")
 const photosDir = photosIndex === -1 ? undefined : process.argv[photosIndex + 1]
+const photoNames =
+	photosDir === undefined
+		? []
+		: readdirSync(photosDir)
+				.filter((name) => /\.(jpe?g|png)$/i.test(name))
+				.sort()
 if (photosDir !== undefined) {
-	const names = readdirSync(photosDir)
-		.filter((name) => /\.(jpe?g|png)$/i.test(name))
-		.sort()
+	const names = photoNames
 	const last = generalMessageRows.at(-1)
 	if (last !== undefined)
 		server.write(
@@ -179,7 +183,7 @@ if (photosDir !== undefined) {
 				messageId: last.id,
 				fileName: name,
 				fileSize: statSync(`${photosDir}/${name}`).size,
-				externalUrl: `http://127.0.0.1:${port}/__fixture/photo/${name}`,
+				externalUrl: `http://127.0.0.1:${port}/__fixture/photo/${encodeURIComponent(name)}`,
 				uploadedBy: last.authorId,
 				status: "complete",
 				uploadedAt: last.createdAt,
@@ -293,8 +297,12 @@ Bun.serve<SocketData>({
 		}
 		if (request.method === "POST" && url.pathname.startsWith("/__fixture/")) return change(url)
 		if (url.pathname === "/health") return new Response("ok\n")
-		if (photosDir !== undefined && url.pathname.startsWith("/__fixture/photo/"))
-			return new Response(readFileSync(`${photosDir}/${basename(url.pathname)}`))
+		if (photosDir !== undefined && url.pathname.startsWith("/__fixture/photo/")) {
+			const name = basename(decodeURIComponent(url.pathname))
+			return photoNames.includes(name)
+				? new Response(readFileSync(`${photosDir}/${name}`))
+				: new Response("no such photo\n", { status: 404 })
+		}
 		return offlineFetch(request)
 	},
 	websocket: {

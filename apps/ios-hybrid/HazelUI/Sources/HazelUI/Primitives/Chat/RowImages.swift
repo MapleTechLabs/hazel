@@ -13,8 +13,8 @@ public final class RowImages: @unchecked Sendable {
     private let lock = NSLock()
     private let decoded = NSCache<NSString, UIImage>()
     private let bytes = NSCache<NSString, NSData>()
-    /// Decodes in flight, by cache key; downloads in flight, by url, with what waits on them.
-    private var decoding: Set<String> = []
+    /// Decodes in flight, by cache key, and downloads in flight, by url, each with what waits on it.
+    private var decoding: [String: [@Sendable (UIImage?) -> Void]] = [:]
     private var downloading: [String: [@Sendable (Data?) -> Void]] = [:]
     private let session: URLSession
     private let queue = DispatchQueue(label: "sh.hazel.ui.images", qos: .userInitiated, attributes: .concurrent)
@@ -71,10 +71,11 @@ public final class RowImages: @unchecked Sendable {
         let key = Self.key(url, bucket)
         if let hit = decoded.object(forKey: key as NSString) { return done(hit) }
         lock.lock()
-        let fresh = decoding.insert(key).inserted
+        let fresh = decoding[key] == nil
+        decoding[key, default: []].append(done)
         lock.unlock()
-        // Another caller's decode will post `loaded`; only the first one decodes.
-        guard fresh else { return done(nil) }
+        // Only the first caller decodes; the others wait on it and get its picture too.
+        guard fresh else { return }
         fetch(url) { [weak self] data in
             guard let self else { return }
             self.queue.async {
@@ -84,9 +85,9 @@ public final class RowImages: @unchecked Sendable {
                     self.decoded.setObject(image, forKey: key as NSString, cost: cost)
                 }
                 self.lock.lock()
-                self.decoding.remove(key)
+                let waiting = self.decoding.removeValue(forKey: key) ?? []
                 self.lock.unlock()
-                done(image)
+                for wait in waiting { wait(image) }
                 if image != nil {
                     DispatchQueue.main.async { NotificationCenter.default.post(name: Self.loaded, object: url) }
                 }

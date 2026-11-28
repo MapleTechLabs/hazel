@@ -83,7 +83,8 @@ const featureHosts = Layer.mergeAll(
 		createIssue: () => notYet("Creating an issue"),
 		// Photos open in the lightbox; a file (or a video, until the player) opens in the system's viewer.
 		openAttachment: ({ media, index, url }) => {
-			const photos = (media ?? []).filter((each) => each.kind === "image")
+			// As the viewer reads them: a photo without a url is left out of the list and its index.
+			const photos = (media ?? []).filter((each) => each.kind === "image" && (each.url ?? "") !== "")
 			const at = photos.findIndex((each) => each === media?.[index])
 			return at >= 0
 				? Effect.sync(() => navigation.intend(ShellIntent.ShowMedia({ items: photos, index: at })))

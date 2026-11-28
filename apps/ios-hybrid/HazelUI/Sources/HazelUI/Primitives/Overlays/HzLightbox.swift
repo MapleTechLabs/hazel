@@ -471,7 +471,6 @@ final class LightboxPage: UIScrollView, UIScrollViewDelegate {
     let item: LightboxItem
     let imageView = UIImageView()
     private var loadingFull = false
-    private var arrival: ObserverToken?
     private var laidOutFor: CGSize = .zero
 
     init(item: LightboxItem) {
@@ -501,7 +500,6 @@ final class LightboxPage: UIScrollView, UIScrollViewDelegate {
     func unloadFull() {
         guard loadingFull else { return }
         loadingFull = false
-        arrival = nil
         if isZoomed { setZoomScale(minimumZoomScale, animated: false) }
         imageView.image = RowImages.shared.small(item.url)
     }
@@ -516,14 +514,12 @@ final class LightboxPage: UIScrollView, UIScrollViewDelegate {
         RowImages.shared.load(url, pixels: pixels) { [weak self] image in
             // Given back meanwhile (swiped far away): it stays out.
             guard let self, self.loadingFull else { return }
-            if let image { self.setImage(image); return }
-            // Another load of the same size is in flight: take it when it lands.
-            self.arrival = ObserverToken(NotificationCenter.default.addObserver(forName: RowImages.loaded, object: url, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    guard let self, self.loadingFull, let best = RowImages.shared.best(url) else { return }
-                    self.setImage(best)
-                }
-            })
+            // Failed (offline): the next time the page comes near, it tries again.
+            guard let image else {
+                self.loadingFull = false
+                return
+            }
+            self.setImage(image)
         }
     }
 

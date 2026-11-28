@@ -795,7 +795,10 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
                   let target = layout.targets.first(where: { $0.role == .image && $0.payload.object?["id"]?.string == id })
             else { continue }
             let row = screenRect(i)
-            return convert(target.rect.offsetBy(dx: row.minX, dy: row.minY), to: nil)
+            let tile = target.rect.offsetBy(dx: row.minX, dy: row.minY)
+            // A tile scrolled out of the list's view is not on screen, however much of its row is.
+            guard tile.intersects(bounds) else { return nil }
+            return convert(tile, to: nil)
         }
         return nil
     }
