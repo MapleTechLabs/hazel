@@ -15,6 +15,6 @@ mkdir -p build/effect-ui build/fonts
 bun scripts/export-icons.ts build/icons/Icons.xcassets >/dev/null
 python3 scripts/fonts.py >/dev/null
 xcodegen generate --quiet
-xcodebuild -project HazelHybrid.xcodeproj -scheme Hazel -configuration Debug \
+xcodebuild -project Hazel.xcodeproj -scheme Hazel -configuration Debug \
 	-destination 'generic/platform=iOS Simulator' -derivedDataPath build/derived CODE_SIGNING_ALLOWED=NO \
 	${OFFLINE:+HAZEL_PAGE_ORIGIN=http://localhost} -quiet build

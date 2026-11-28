@@ -1,6 +1,7 @@
 # iOS fully native
 
-Status: plan v1 (2026-11-27), decided with the user. Builds on `docs/hazel-ui.md` (goal 2: iOS
+Status: plan v1 (2026-11-27), decided with the user. 2026-11-28: the hybrid app (`HazelHybrid`, its
+capture code and its half of the page bridge) is deleted; `Hazel` ships to TestFlight (3186.6 on). Builds on `docs/hazel-ui.md` (goal 2: iOS
 screens fully native) and `docs/hazel-ui-phase4.md`.
 
 ## Why

@@ -1,4 +1,3 @@
 build/
-HazelHybrid.xcodeproj/
-HazelHybrid/Info.plist
+Hazel.xcodeproj/
 Hazel/Info.plist

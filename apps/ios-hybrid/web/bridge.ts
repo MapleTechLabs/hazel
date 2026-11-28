@@ -1,140 +1,42 @@
 /**
- * The page's side of the SwiftUI shell (`HazelHybrid/WebBridge.swift`):
- *
- * - The tab bar island (`data-native="tab-bar"`, `web-foldkit/src/shell/mobile.ts`) goes to the shell
- *   as data; the shell draws it as a Liquid Glass bar, and a press there clicks the item it stands for.
- * - `__HAZEL_SYSTEM_UI__` (`web-foldkit/src/platform/system-ui.ts`): haptics, and the swipe from the
- *   left edge that goes back, both done natively.
+ * The page's side of the native app's web fallback (`Hazel/FallbackPage.swift`): a route with no
+ * native screen yet is the web app in a web view, pushed like any screen. The page forwards its
+ * console, sends its pictures from fussy hosts through the app, hides its own tab bar (the app's
+ * are native), and reports where it went, so a link opens as a screen of its own.
  */
-import type { SystemUi } from "../../web-foldkit/src/platform/system-ui"
-import { hex, iconKey, iconsRendering, takeNewIcons, whenIconsRasterize } from "./look"
-import { type ComposerLook, pressAction, readComposer, send, setDraft } from "./composer-capture"
-import { chooseRowMenu, noteMutations, pressHit, readList, steer } from "./list-capture"
-import { chooseFromMenu, press, readScreen, type TreeNode } from "./semantic-tree"
-
-type Tab = {
-	id: string
-	title: string
-	symbol: string | null
-	selected: boolean
-	badge: number | null
-	/** The tab's own icon as the web draws it (`look.ts` `iconKey`), and its text colour. */
-	image: string | null
-	color: string | null
-	/** `search`: drawn apart from the tabs, as its own glass circle. */
-	role: string | null
-}
-
-/** A screen's primary action (`data-native="screen-action"`): the shell's floating button. */
-type ScreenAction = { label: string; symbol: string }
 
 type ShellMessage =
-	| { type: "tabs"; tabs: Array<Tab> }
-	| { type: "action"; action: ScreenAction | null }
-	| { type: "haptic"; kind: string }
-	| { type: "swipeBack"; enabled: boolean }
-	| { type: "overlay"; open: boolean }
-	| { type: "thread"; open: boolean }
 	/** `replaced`: where the page landed or a redirect put it (`history.replaceState`), not a link. */
-	| { type: "location"; text: string; replaced: boolean }
-	| { type: "ready" }
-	/** `loading`: shown before the app had drawn anything but its loader (`MAX_LOADING_MS`). */
-	| { type: "screen"; screen: TreeNode | null; loading?: boolean }
-	| { type: "icons"; icons: Record<string, string> }
-	| { type: "composer"; composer: ComposerLook | null }
-	/** The message list, as a JSON string: the shell decodes it off its main thread. */
-	| { type: "list"; json: string | null }
-	| { type: "log"; level: string; text: string }
+	{ type: "location"; text: string; replaced: boolean } | { type: "log"; level: string; text: string }
 
-/** A command for the shell (`web/host.ts`): its name and arguments. */
+/** A command for the app (`web/host.ts`): its name and arguments. */
 export type HostRequest = { command: string; args: Record<string, unknown> }
-/** The shell's answer: `{ value }`, or `{ error }` when the command failed. */
+/** The app's answer: `{ value }`, or `{ error }` when the command failed. */
 export type HostAnswer = { value?: unknown; error?: string }
 
 type Webkit = {
 	messageHandlers?: {
 		hazel?: { postMessage: (message: ShellMessage) => void }
-		/** Asks the shell and answers (`HostBridge.swift`, `web/host.ts`). */
+		/** Asks the app and answers (`HostBridge.swift`, `web/host.ts`). */
 		host?: { postMessage: (body: HostRequest) => Promise<HostAnswer> }
 	}
 }
 
 declare global {
 	interface Window {
-		/** WebKit's script message handlers, in a `WKWebView` (the shell's `WebBridge`). */
+		/** WebKit's script message handlers, in a `WKWebView` (the app's `FallbackPage`). */
 		webkit?: Webkit
 	}
 }
 
 const post = (message: ShellMessage) => window.webkit?.messageHandlers?.hazel?.postMessage(message)
 
-/** Whether the page runs in the iOS shell's web view; a browser (the offline build opened on a Mac) has no shell. */
+/** Whether the page runs in the app's web view; a browser (the offline build opened on a Mac) has none. */
 export const inShell = () => window.webkit?.messageHandlers?.hazel !== undefined
 
+/** The web's phone tab bar (`web-foldkit/src/shell/mobile.ts`): the app draws its own. */
 const TAB_BAR = '[data-native="tab-bar"]'
-const SCREEN_ACTION = '[data-native="screen-action"]'
 
-/** How long the page's semantic tree must stay unchanged before its first native frame. */
-const SETTLE_MS = 250
-/** How long a page with no native screen (an unconverted one: sign-in, say) waits before it shows as itself. */
-const UNCONVERTED_SETTLE_MS = 400
-/**
- * The longest the page's first frame waits on the app's loader, after which the loader shows (with
- * its reload button once loading has stalled). Until then the shell keeps showing the screen the app
- * last started on (`KeptScreen.swift`) or its launch colour.
- */
-const MAX_LOADING_MS = 6000
-
-/**
- * The app has drawn nothing yet, or only its loaders: the full-page one while the session and user
- * load, a list still loading, or a page whose code has not arrived (`web-foldkit/src/app/paint.ts`).
- */
-const STILL_LOADING = '[data-paint="loader"],[data-paint="loading"],[data-page-placeholder]'
-const isStillLoading = () => {
-	const app = document.getElementById("app")
-	return app === null || app.firstElementChild === null || app.querySelector(STILL_LOADING) !== null
-}
-
-const readTabs = (): Array<Tab> => {
-	const bar = document.querySelector(TAB_BAR)
-	if (bar === null) return []
-	return Array.from(bar.querySelectorAll<HTMLElement>("[data-native-item]")).map((item) => ({
-		id: item.dataset.nativeItem ?? "",
-		title: item.dataset.nativeItem ?? "",
-		symbol: item.dataset.nativeSymbol ?? null,
-		selected: item.dataset.nativeSelected === "true",
-		badge: item.dataset.nativeBadge === undefined ? null : Number(item.dataset.nativeBadge),
-		image: tabIcon(item),
-		color: hex(getComputedStyle(item).color),
-		role: item.dataset.nativeRole ?? null,
-	}))
-}
-
-const readScreenAction = (): ScreenAction | null => {
-	const element = document.querySelector<HTMLElement>(SCREEN_ACTION)
-	if (element === null) return null
-	// SAFETY: `nativeIsland` writes these props as JSON of `{ label, symbol }`; every field is optional here.
-	const props = JSON.parse(element.dataset.nativeProps ?? "{}") as Partial<ScreenAction>
-	return { label: props.label ?? "", symbol: props.symbol ?? "plus" }
-}
-
-/** A tab's icon: its first SVG (not the unread badge), rasterized in the tab's own colour. */
-const tabIcon = (item: HTMLElement): string | null => {
-	const svg = item.querySelector("svg")
-	return svg === null ? null : (iconKey(svg) ?? null)
-}
-
-/** Follows `href` as a press on a link in the app would, so Foldkit's router takes it. */
-const follow = (href: string) => {
-	const link = document.createElement("a")
-	link.href = href
-	link.style.display = "none"
-	document.getElementById("app")?.appendChild(link)
-	link.click()
-	link.remove()
-}
-
-/** The page's console, in the app's log (`log stream --predicate 'subsystem == "sh.hazel.hybrid"'`). */
 export const forwardConsole = () => {
 	const text = (args: ReadonlyArray<unknown>) =>
 		args
@@ -208,234 +110,38 @@ const proxyPictures = () => {
 	}).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ["src"] })
 }
 
-/**
- * A web overlay is open (the command palette, a dialog, a popover): it draws in the page, so the
- * shell shows the page while it is (`ShellView`), not the native screen over it.
- */
-const overlayIsOpen = () =>
-	Array.from(document.querySelectorAll('dialog[open], [role="dialog"]')).some((element) =>
-		element.checkVisibility({ checkVisibilityCSS: true }),
-	)
-
-/** The thread panel covers its channel (on a phone it is the whole page). */
-const threadIsOpen = () =>
-	Array.from(document.querySelectorAll("[data-thread-panel]")).some((element) =>
-		element.checkVisibility({ checkVisibilityCSS: true }),
-	)
-
-export const installBridge = () => {
-	proxyPictures()
-	// The island keeps its room (the page lays out as it would with its own bar), the shell's
-	// glass bar is drawn over it.
-	const style = document.createElement("style")
-	// The message list is drawn natively over its own place (`list-capture.ts`): the web's stays
-	// laid out underneath, unseen.
-	style.textContent = `${TAB_BAR}, ${SCREEN_ACTION} { visibility: hidden !important; }
-		:root:not([data-shell-overlay]) [data-list-count] { visibility: hidden !important; }
-		:root:not([data-shell-overlay]) [data-ui="composer"]:not([data-thread-panel] *) { opacity: 0 !important; pointer-events: none !important; }
-		* { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }`
-	document.head.appendChild(style)
-
-	// Launch timing: the first message row on screen (`[shell] launch` is the app's own start).
-	let sawFirstRow = false
-	new MutationObserver((_, observer) => {
-		if (sawFirstRow || document.querySelector("[data-id]") === null) return
-		sawFirstRow = true
-		observer.disconnect()
-		post({
-			type: "log",
-			level: "info",
-			text: `[timing] first message row at ${Math.round(performance.now())}ms after navigation start`,
-		})
-	}).observe(document.documentElement, { subtree: true, childList: true })
-
-	let lastTabs = ""
-	let lastAction = ""
-	let lastListFrame = ""
-	let lastComposer = ""
-	let lastListCount = -1
-	let lastScreen = ""
-	let wasOverlayOpen = false
-	let wasThreadOpen = false
-	let lastLocation = ""
+/** Where the page is: each new path once, with whether a redirect put it there. */
+const reportLocation = () => {
+	let last = ""
 	// The path a redirect last put in place: the page is still the same screen.
 	let replacedTo: string | null = null
 	const replaceState = history.replaceState.bind(history)
 	history.replaceState = (data: unknown, unused: string, url?: string | URL | null) => {
 		replaceState(data, unused, url)
 		replacedTo = location.pathname
+		report()
 	}
-	let hasShown = false
-	let hasWaitedLongEnough = false
-	let settle: ReturnType<typeof setTimeout> | undefined
-	let scheduled = false
-	const schedule = () => {
-		if (scheduled) return
-		scheduled = true
-		requestAnimationFrame(sync)
+	const report = () => {
+		if (location.pathname === last) return
+		// The first report is where the page landed (a redirect at start included), not a link.
+		const replaced = last === "" || replacedTo === location.pathname
+		last = location.pathname
+		post({ type: "location", text: location.pathname, replaced })
 	}
-	setTimeout(() => {
-		hasWaitedLongEnough = true
-		schedule()
-	}, MAX_LOADING_MS)
-	const sync = () => {
-		scheduled = false
-		const tabs = JSON.stringify(readTabs())
-		const action = JSON.stringify(readScreenAction())
-		const screen = readScreen()
-		const list = readList()
-		const composer = JSON.stringify(readComposer())
-		if (location.pathname !== lastLocation) {
-			// The first report is where the page landed (a redirect at start included), not a link.
-			const replaced = lastLocation === "" || replacedTo === location.pathname
-			lastLocation = location.pathname
-			post({ type: "location", text: location.pathname, replaced })
-		}
-		// A thread over its channel: the shell shows it as a page of its own (pushed, swiped back).
-		const isThreadOpen = threadIsOpen()
-		if (isThreadOpen !== wasThreadOpen) {
-			wasThreadOpen = isThreadOpen
-			post({ type: "thread", open: isThreadOpen })
-		}
-		const isOverlayOpen = overlayIsOpen()
-		if (isOverlayOpen !== wasOverlayOpen) {
-			wasOverlayOpen = isOverlayOpen
-			// Under a web overlay the shell shows the page, so the page shows its own list and
-			// composer again (the native ones step aside).
-			document.documentElement.toggleAttribute("data-shell-overlay", isOverlayOpen)
-			post({ type: "overlay", open: isOverlayOpen })
-		}
-		// Icons first: the tabs and the tree that name them come after.
-		const icons = takeNewIcons()
-		if (Object.keys(icons).length > 0) post({ type: "icons", icons })
-		if (tabs !== lastTabs) {
-			lastTabs = tabs
-			post({ type: "tabs", tabs: JSON.parse(tabs) })
-		}
-		if (action !== lastAction) {
-			lastAction = action
-			post({ type: "action", action: JSON.parse(action) })
-		}
-		if (composer !== lastComposer) {
-			lastComposer = composer
-			post({ type: "composer", composer: JSON.parse(composer) })
-		}
-		if (list === "gone") post({ type: "list", json: null })
-		else if (list !== null) {
-			const frame = JSON.stringify(list.frame)
-			if (
-				list.rows.length > 0 ||
-				list.order !== undefined ||
-				frame !== lastListFrame ||
-				list.count !== lastListCount
-			) {
-				lastListFrame = frame
-				lastListCount = list.count
-				post({ type: "list", json: JSON.stringify(list) })
-			}
-		}
-		const json = JSON.stringify(screen)
-		// Before the first frame, the app's loader is no screen to show: it waits for what comes
-		// after it (the shell shows its kept screen meanwhile), up to `MAX_LOADING_MS`.
-		const isLoading = !hasShown && isStillLoading()
-		const state = isLoading && !hasWaitedLongEnough ? "loading" : json
-		if (state === lastScreen) return
-		lastScreen = state
-		if (hasShown) {
-			post({ type: "screen", screen })
-			return
-		}
-		clearTimeout(settle)
-		if (state === "loading") return
-		// The first native frame waits for the page to settle: its fonts loaded (the looks are
-		// measured in them) and no change for a moment (the lists arrive in a few steps), so the
-		// screen does not draw half-filled and then jump.
-		settle = setTimeout(
-			() => {
-				void Promise.all([document.fonts.ready, iconsRendering()]).then(() => {
-					hasShown = true
-					if (isLoading) {
-						// Shown as it is, marked: the shell keeps its kept screen for the next launch.
-						const shown = readScreen()
-						lastScreen = JSON.stringify(shown)
-						post({ type: "screen", screen: shown, loading: true })
-						return
-					}
-					lastScreen = ""
-					sync()
-				})
-			},
-			screen === null ? UNCONVERTED_SETTLE_MS : SETTLE_MS,
-		)
+	const pushState = history.pushState.bind(history)
+	history.pushState = (data: unknown, unused: string, url?: string | URL | null) => {
+		pushState(data, unused, url)
+		report()
 	}
-	// A rasterized icon changes the tree that names it.
-	whenIconsRasterize(schedule)
-	new MutationObserver((records) => {
-		noteMutations(records)
-		schedule()
-	}).observe(document.documentElement, {
-		subtree: true,
-		childList: true,
-		attributes: true,
-		characterData: true,
-	})
+	addEventListener("popstate", report)
+	report()
+}
 
-	// A press's own haptic (`pressFeedback`), as the finger lifts.
-	document.addEventListener(
-		"pointerup",
-		(event) => {
-			const target = event.target instanceof Element ? event.target : null
-			const kind = target?.closest<HTMLElement>("[data-native-feedback]")?.dataset.nativeFeedback
-			if (kind !== undefined) post({ type: "haptic", kind })
-		},
-		{ capture: true, passive: true },
-	)
-
-	// The swipe back:the latest `setSwipeBack` wins, and an `onBack` one before plain chevrons.
-	type Back = { id: number; href: string; onBack?: () => void }
-	let backs: Array<Back> = []
-	let nextId = 0
-	const current = () => backs.findLast((b) => b.onBack !== undefined) ?? backs.at(-1)
-	const announce = () => post({ type: "swipeBack", enabled: backs.length > 0 })
-
-	const systemUi: SystemUi = {
-		feedback: (kind) => post({ type: "haptic", kind }),
-		setSwipeBack: (href, onBack) => {
-			const back = { id: nextId++, href, onBack }
-			backs.push(back)
-			announce()
-			return () => {
-				backs = backs.filter((b) => b.id !== back.id)
-				announce()
-			}
-		},
-	}
-	Object.assign(globalThis, {
-		// The native list draws the message list from every row the page lays out.
-		__HAZEL_SYSTEM_UI__: { ...systemUi, drawsLists: true },
-		__hazelHybrid: {
-			press,
-			chooseFromMenu,
-			listSteer: steer,
-			composerDraft: setDraft,
-			composerSend: send,
-			composerAction: pressAction,
-			listPress: pressHit,
-			listChoose: chooseRowMenu,
-			selectTab: (id: string) => {
-				const item = document.querySelector<HTMLElement>(
-					`${TAB_BAR} [data-native-item="${CSS.escape(id)}"]`,
-				)
-				item?.click()
-			},
-			screenAction: () => document.querySelector<HTMLElement>(SCREEN_ACTION)?.click(),
-			swipeBack: () => {
-				const back = current()
-				if (back === undefined) return
-				if (back.onBack !== undefined) back.onBack()
-				else follow(back.href)
-			},
-		},
-	})
-	post({ type: "ready" })
+export const installBridge = () => {
+	proxyPictures()
+	const style = document.createElement("style")
+	style.textContent = `${TAB_BAR} { display: none !important; }
+		* { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }`
+	document.head.appendChild(style)
+	reportLocation()
 }

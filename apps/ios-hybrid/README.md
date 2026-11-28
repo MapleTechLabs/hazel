@@ -1,35 +1,25 @@
-# Hazel for iOS (hybrid)
+# Hazel for iOS
 
-The web app (`apps/web-foldkit`) as the one source of the UI, in a SwiftUI shell that draws its hot
-paths natively (see `docs/cross-platform-ui.md`):
+The native app (`Hazel/`): the shared `hazel` screens (`apps/shared-screens`) drawn by HazelUI's
+SwiftUI renderers (`HazelUI/`), their script (`script/`, bundled to `build/script/hazel.js`) running in
+JavaScriptCore. See `docs/ios-native.md`.
 
-- **Screens** the page annotates (`data-ui`, `ui/semantic.ts`), like the channel list, are drawn as native
-  views in the web's own look (`web/semantic-tree.ts`, `web/look.ts`, `NativeScreen.swift`).
-  Everything else shows the page itself.
-- **The message list** is native: the page lays out every row (`SystemUi.drawsLists`), each is
-  captured as a display list (`web/list-capture.ts`) and drawn into a bitmap off the main thread
-  (`ListModel.swift`, `NativeList.swift`). HTML renders show live over their rows (`FramePool.swift`).
-- **The composer** is a native Liquid Glass input that writes into the web's editor
-  (`web/composer-capture.ts`, `NativeComposer.swift`).
-- **Menus, tab bar, swipe-back, haptics** are the system's, from the page's islands and
-  `__HAZEL_SYSTEM_UI__`.
-
-The page is one inlined `index.html` loaded on the web app's origin (`https://app.hazel.sh`, or the
-install chosen on the sign-in page: `ChosenServer` in `HostBridge.swift`, handed to the page as
-`window.__hazelServer`), so the API's CORS and sign-in take it. WebKit loads nothing from the bundle's own scheme into an https page.
-It signs in as the native client through the system's sign-in sheet; the session is kept in the
-keychain (`web/host.ts`, `HostBridge.swift`).
+- **Screens** are the shared ones, one registry (`shared-screens/src/app/screens.ts`), in the phone
+  shell (`shared-screens/src/phone/PhoneShell.ts`): system tabs, a navigation stack per tab, deep links
+  (`hazelchat:///<org>/chat/<channel>`).
+- **A route with no native screen yet** is the web app in a web view, pushed like any screen
+  (`Hazel/FallbackPage.swift`, the page's side in `web/`). It signs in through the same keychain record
+  (`Shared/HostBridge.swift`), and a link in it opens as a screen of its own.
+- **Icons** are plain PNGs in HazelUI's resources (`scripts/export-icons.ts`), not an asset catalog.
 
 ```sh
-bun run ios                                  # live: web build, Xcode project (xcodegen), install, launch
-OFFLINE=1 bash scripts/build.sh && OFFLINE=1 bash scripts/run.sh
-                                             # the offline fixture (3,000-message #engineering)
+OFFLINE=1 bash scripts/build-hazel.sh        # the simulator app against the offline fixture
+bun scripts/fixture-backend.ts               # the fixture API (port 4320); launch with
+                                             #   -HazelApiUrl http://127.0.0.1:4320 -HazelToken fixture
+bun run test:hazelui S1                      # HazelUI's snapshot lanes (S0 to S5)
 BUILD=<n> bash scripts/release.sh            # TestFlight (HazelChat, `hazel.app`); BUILD above the latest
 ```
 
-An HTML render in the offline #general: serve a page with
-`bun run serve-fixture-html page.html 4310` and build with
-`VITE_FIXTURE_HTML=http://127.0.0.1:4310/html-renders/fixture`.
-
-Debug the page with Safari's Develop menu (the web view is inspectable); the page's console is in
-the app's log (subsystem `sh.hazel.hybrid`), as are frame drops (`[frames]`).
+`EffectUiSpike/` is the Effect UI gallery app the renderers were built against (`build-effect-ui.sh`).
+Debug a fallback page with Safari's Develop menu (its web view is inspectable); its console is in the
+app's log (subsystem `sh.hazel.app`, category `fallback`).
