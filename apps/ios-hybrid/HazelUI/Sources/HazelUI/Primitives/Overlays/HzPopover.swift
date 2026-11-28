@@ -11,6 +11,9 @@ struct HzPopover: View {
     /// The anchor view's frame on screen, so a run's global frame can be made local to it.
     @State private var origin: CGRect = .zero
 
+    /// The narrowest a presented popover is on a phone (fits a 375pt-wide screen with its margins).
+    private static let compactMinWidth: CGFloat = 340
+
     var body: some View {
         let sizeClass = HazelTheme.SizeClass(horizontal)
         let panel = HazelTheme.Recipes.popover.style(part: "panel", sizeClass: sizeClass)
@@ -33,6 +36,9 @@ struct HzPopover: View {
                 .popover(isPresented: overlayDismissBinding(tree, node, open), attachmentAnchor: attachment) {
                     PopoverBody(tree: tree, node: node, style: panel)
                         .hzBox(panel.merged(HazelTheme.Style(background: HazelTheme.Colors.clear, radius: 0)))
+                        // A phone's popover is a card (Slack's channel menu), not its content's ideal
+                        // width: rows would truncate their titles to fit beside a trailing value.
+                        .frame(minWidth: sizeClass == .compact ? Self.compactMinWidth : nil, alignment: .leading)
                         .presentationCompactAdaptation(.popover)
                         .presentationBackground(HazelTheme.Colors.bg.color)
                 }
