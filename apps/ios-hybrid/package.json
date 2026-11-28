@@ -19,7 +19,7 @@
 		"verify:S3": "bash scripts/test-hazelui.sh S3",
 		"verify:S4": "bash scripts/test-hazelui.sh S4",
 		"verify:S5": "bash scripts/test-hazelui.sh S5",
-		"build:hazel": "bun build script/entry.ts --target=browser --format=iife --minify --outfile=build/script/hazel.js"
+		"build:hazel": "bun build script/entry.ts --target=browser --format=iife --minify --define 'import.meta={}' --outfile=build/script/hazel.js"
 	},
 	"dependencies": {
 		"@effect/ui": "https://pkg.pr.new/Effect-TS/ui/@effect/ui@4d6d7ec",
@@ -29,6 +29,7 @@
 		"@hazel/effect-db-collection": "workspace:*",
 		"@hazel/schema": "workspace:*",
 		"@hazel/shared-screens": "workspace:*",
+		"@tanstack/db": "1.0.0-rc.1.5",
 		"@yielded/auth": "0.1.0-beta.47",
 		"effect": "catalog:effect",
 		"foldkit": "0.171.0"

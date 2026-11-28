@@ -24,6 +24,8 @@ struct HzTabBar: View {
                 .badge(Int(tab.badge ?? 0))
             }
         }
+        // The selected tab in the brand colour, as the web's bar.
+        .tint(HazelTheme.Colors.primary.color)
         .hzScreenIdealHeight()
     }
 }

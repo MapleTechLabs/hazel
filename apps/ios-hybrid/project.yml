@@ -93,6 +93,11 @@ targets:
                 ITSAppUsesNonExemptEncryption: false
                 HazelPageOrigin: $(HAZEL_PAGE_ORIGIN)
                 HazelApiUrl: $(HAZEL_API_URL)
+                # Deep links: `hazelchat:///<org>/chat/<channel>` opens that page (`AppLinks`).
+                CFBundleURLTypes:
+                    - CFBundleURLName: sh.hazel.native.links
+                      CFBundleURLSchemes:
+                          - hazelchat
                 NSAppTransportSecurity:
                     NSAllowsLocalNetworking: true
                 UILaunchScreen:

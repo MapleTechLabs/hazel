@@ -179,6 +179,19 @@ extension GoldenTests {
         #expect(ManifestReport(manifest: manifest, registered: HazelExtensions.registered.subtracting(others), platform: "ios").ok)
     }
 
+    /// An extension registered with `fills` is laid out as its screen's whole content; registering
+    /// it again without, or unregistering it, takes that back.
+    @Test func fillingExtension() {
+        struct Page: Decodable { let path: String }
+        HazelExtensions.register("TestPage", props: Page.self, fills: true) { _, _ in EmptyViewMarker(colors: []) }
+        #expect(HazelExtensions.fills("TestPage"))
+        HazelExtensions.register("TestPage", props: Page.self) { _, _ in EmptyViewMarker(colors: []) }
+        #expect(!HazelExtensions.fills("TestPage"))
+        HazelExtensions.register("TestPage", props: Page.self, fills: true) { _, _ in EmptyViewMarker(colors: []) }
+        HazelExtensions.unregister("TestPage")
+        #expect(!HazelExtensions.fills("TestPage"))
+    }
+
     @Test func jsonValueCodableRoundTrip() throws {
         let value: JSONValue = ["a": [1, 2.5, "x", true, nil], "b": ["c": false]]
         #expect(try value.decode(JSONValue.self) == value)

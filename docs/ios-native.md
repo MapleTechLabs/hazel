@@ -46,6 +46,12 @@ offline web build). Against the local fixture (`bun apps/ios-hybrid/scripts/fixt
 launch with `-HazelApiUrl http://127.0.0.1:4320 -HazelToken fixture`; without them it signs in to
 Hazel's install through the system sheet. The script is `apps/ios-hybrid/script/entry.ts`.
 
+The root is the shared `PhoneShell` (`apps/shared-screens/src/phone/`): the system tab bar over one
+`hz:navigation` per tab, on the shared route table (`apps/shared-screens/src/app/route.ts`). Every
+way to navigate reaches it as a `ShellIntent`: links (`openURL`), the screens' requests, a push's
+path, and deep links (`hazelchat:///<org>/chat/<channel>`). A route with no shared screen yet is
+pushed as the `WebFallback` extension, which the app draws as the bundled web app at that path.
+
 ## Phases
 
 Every phase is a PR in a stack against `main`. Verify on the simulator through T3's device tools

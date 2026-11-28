@@ -1,3 +1,4 @@
+import HazelUI
 import os
 import SwiftUI
 import WebKit
@@ -41,6 +42,39 @@ final class FallbackPage: NSObject, WKScriptMessageHandler, Identifiable {
         let text = body["text"] as? String ?? ""
         Self.log.log("[page] \(text, privacy: .public)")
     }
+}
+
+/// The `WebFallback` extension (`shared-screens/src/phone/PhoneShell.ts`): one page per path, kept
+/// while recent so going back to it shows it as it was.
+@MainActor
+enum FallbackPages {
+    private static var pages: [(path: String, page: FallbackPage)] = []
+    private static let kept = 6
+
+    static func register() {
+        // The page scrolls itself: the screen gives it its whole height (`fills`).
+        HazelExtensions.register("WebFallback", props: WebFallbackProps.self, fills: true) { props, _ in
+            FallbackView(page: page(for: props.path)).frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    static func page(for path: String) -> FallbackPage {
+        if let index = pages.firstIndex(where: { $0.path == path }) {
+            let entry = pages.remove(at: index)
+            pages.append(entry)
+            return entry.page
+        }
+        let page = FallbackPage(path: path)
+        pages.append((path, page))
+        if pages.count > kept { pages.removeFirst() }
+        return page
+    }
+
+    static func forget() { pages = [] }
+}
+
+struct WebFallbackProps: Decodable {
+    let path: String
 }
 
 /// The content controller keeps its handlers: through this, the page it serves can still go away.

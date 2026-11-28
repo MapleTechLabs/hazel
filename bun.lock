@@ -114,6 +114,7 @@
         "@hazel/effect-db-collection": "workspace:*",
         "@hazel/schema": "workspace:*",
         "@hazel/shared-screens": "workspace:*",
+        "@tanstack/db": "1.0.0-rc.1.5",
         "@yielded/auth": "0.1.0-beta.47",
         "effect": "catalog:effect",
         "foldkit": "0.171.0",
