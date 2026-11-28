@@ -6,10 +6,10 @@ import { defineMessageUnion } from "foldkit/message"
 import { afterEach, beforeAll, describe, expect, test } from "vitest"
 import { page, userEvent } from "vitest/browser"
 import { imageViewerView, type ImageViewerImage } from "./image-viewer"
-import { installImageViewerMorph, VIEW_TRANSITION_TYPE } from "./viewer/morph"
+import { installImageViewerMorph } from "./viewer/morph"
 
 /**
- * The image viewer in Chromium: the real Mounts, gestures and View Transitions, in a small Foldkit
+ * The image viewer in Chromium: the real Mounts, gestures and morph, in a small Foldkit
  * element shaped like the channel (plates on the page, the viewer over them).
  */
 
@@ -83,16 +83,10 @@ const update = (model: Model, message: Message) =>
 		Selected: ({ index }) => ({ model: model.openIndex === null ? model : { openIndex: index } }),
 	})
 
-const transitions: Array<ReadonlyArray<string>> = []
 let releaseMorph = () => {}
 
 const start = async () => {
 	await page.viewport(1280, 800)
-	const native = document.startViewTransition.bind(document)
-	document.startViewTransition = ((options: StartViewTransitionOptions) => {
-		transitions.push([...(options.types ?? [])])
-		return native(options)
-	}) as typeof document.startViewTransition
 	releaseMorph = installImageViewerMorph()
 	const container = document.createElement("div")
 	container.id = "image-viewer-test"
@@ -104,10 +98,6 @@ const start = async () => {
 			update,
 			view,
 			container,
-			viewTransition: ({ previousModel, model }) =>
-				(previousModel.openIndex === null) !== (model.openIndex === null)
-					? { types: [VIEW_TRANSITION_TYPE] }
-					: false,
 		}),
 	)
 	await waitFor(() => document.querySelectorAll("img[data-plate]").length === 3)
@@ -140,7 +130,7 @@ const open = async (index: number) => {
 	if (target === undefined) throw new Error("no plate")
 	await userEvent.click(target)
 	await waitFor(() => viewer() !== null && activeMedia() !== null)
-	// The opening View Transition.
+	// The entrance.
 	await sleep(450)
 }
 
@@ -149,15 +139,27 @@ afterEach(() => {
 })
 
 describe("image viewer in a real browser", () => {
-	test("opens on the pressed image, morphing out of it, with focus in the dialog", async () => {
+	test("opens on the pressed image, growing out of it, with focus in the dialog", async () => {
 		await start()
-		await open(1)
+		const target = plate(1) as HTMLImageElement
+		await userEvent.click(target)
+		await waitFor(() => viewer() !== null && activeMedia() !== null)
+		// Mid-entrance the image is still near the plate, cropped to it.
+		const grow = activeMedia()?.getAnimations()[0]
+		expect(grow).toBeDefined()
+		grow?.pause()
+		if (grow !== undefined) grow.currentTime = 0
+		const start0 = (activeMedia() as HTMLElement).getBoundingClientRect()
+		const from = target.getBoundingClientRect()
+		expect(Math.abs(start0.left + start0.width / 2 - (from.left + from.width / 2))).toBeLessThan(2)
+		expect(Math.abs(start0.top + start0.height / 2 - (from.top + from.height / 2))).toBeLessThan(2)
+		grow?.play()
+		await sleep(450)
+		expect(activeMedia()?.getAnimations()).toHaveLength(0)
 		expect(counter()).toBe("2 of 3")
-		expect(transitions.at(-1)).toEqual([VIEW_TRANSITION_TYPE])
 		expect(plate(1)?.hasAttribute("data-image-viewer-origin")).toBe(true)
-		expect(getComputedStyle(activeMedia() as HTMLElement).viewTransitionName).toBe("image-viewer-media")
-		// The plate stays on the page, hidden behind the backdrop.
-		expect(getComputedStyle(plate(1) as HTMLElement).opacity).toBe("0")
+		// The plate stays on the page, hidden, so the image is never on screen twice.
+		expect(getComputedStyle(plate(1) as HTMLElement).visibility).toBe("hidden")
 		expect(document.activeElement).toBe(content())
 		expect(content()?.getAttribute("role")).toBe("dialog")
 		// The track sits on the open slide.
@@ -238,12 +240,12 @@ describe("image viewer in a real browser", () => {
 			media.dispatchEvent(new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 30 }))
 			await sleep(10)
 		}
+		// The image flies back from where the pull let go, then the viewer closes.
 		await waitFor(() => viewer() === null)
-		expect(transitions.at(-1)).toEqual([VIEW_TRANSITION_TYPE])
-		await sleep(450)
+		await sleep(50)
 		expect(document.activeElement).toBe(plate(0)?.closest("button"))
-		// The plate keeps its name through the closing transition, then gives it back.
-		await sleep(400)
+		expect(getComputedStyle(plate(0) as HTMLElement).visibility).toBe("visible")
+		expect(document.querySelectorAll("img").length).toBe(3)
 		expect(document.querySelector("[data-image-viewer-origin]")).toBeNull()
 	})
 
@@ -267,6 +269,19 @@ describe("image viewer in a real browser", () => {
 		await waitFor(() => viewer() === null)
 		await sleep(450)
 		expect(document.activeElement).toBe(plate(2)?.closest("button"))
+	})
+
+	test("the close button flies the image back into its plate before closing", async () => {
+		await open(1)
+		document.querySelector<HTMLElement>('button[aria-label="Close"]')?.click()
+		// The exit runs first: the viewer is still there, and a copy of the image is in flight.
+		await sleep(60)
+		expect(viewer()).not.toBeNull()
+		const copy = [...document.querySelectorAll<HTMLImageElement>("body > img")].at(-1)
+		expect(copy?.getAnimations().length).toBe(1)
+		await waitFor(() => viewer() === null)
+		expect(document.querySelectorAll("body > img").length).toBe(0)
+		expect(getComputedStyle(plate(1) as HTMLElement).visibility).toBe("visible")
 	})
 
 	test("the step buttons and thumbnails select an image", async () => {

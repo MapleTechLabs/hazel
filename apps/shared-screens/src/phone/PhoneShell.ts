@@ -9,7 +9,7 @@
  * tabs over, with no restart. Navigation, toasts included, reaches it as `ShellIntents`.
  */
 import { Command, Component, Subscription, UiSchema } from "@effect/ui"
-import { Hazel } from "@hazel/ui/vocabulary/index"
+import { Content, Hazel } from "@hazel/ui/vocabulary/index"
 import { Context, Duration, Effect, Layer, Match, Schema, Stream } from "effect"
 import { CurrentSession } from "../app/current-session"
 import { AppToast, SignOut } from "../app/requests"
@@ -26,6 +26,8 @@ export const ShellIntent = UiSchema.TaggedEnum({
 	Replace: { href: Schema.String },
 	Back: {},
 	Toast: { toast: AppToast },
+	/** A message's photos, over everything, on the one at `index` (the lightbox). */
+	ShowMedia: { items: Schema.Array(Content.Attachment), index: Schema.Finite },
 })
 export type ShellIntent = typeof ShellIntent.Type
 
@@ -49,6 +51,8 @@ type Stacks = typeof Stacks.Type
 
 const ShownToast = Schema.Struct({ id: Schema.Finite, toast: AppToast })
 
+const ShownMedia = Schema.Struct({ items: Schema.Array(Content.Attachment), index: Schema.Finite })
+
 export const PhoneShellModel = Schema.Struct({
 	tab: AppTab,
 	stacks: Stacks,
@@ -57,6 +61,8 @@ export const PhoneShellModel = Schema.Struct({
 	nowMs: Schema.Finite,
 	toasts: Schema.Array(ShownToast),
 	nextToastId: Schema.Finite,
+	/** The photos the lightbox shows, while it is open. */
+	media: Schema.NullOr(ShownMedia),
 	/** A link into another organization, opened once the session has moved there. */
 	pendingHref: Schema.NullOr(Schema.String),
 })
@@ -70,6 +76,9 @@ export const PhoneShellMessage = UiSchema.TaggedEnum({
 	ReceivedSession: { session: Session },
 	Ticked: { nowMs: Schema.Finite },
 	DismissedToast: { id: Schema.Finite },
+	/** The lightbox turned to another photo, or closed (after its closing motion). */
+	ChangedMedia: { index: Schema.Finite },
+	ClosedMedia: {},
 	/** `SwitchToOrganization`'s answer for the link it was asked for. */
 	Switched: { ok: Schema.Boolean },
 	/** A choice in the account menu (the avatar at every tab's bar end). */
@@ -88,6 +97,7 @@ export const initialModel = (nowMs: number): PhoneShellModel => ({
 	nowMs,
 	toasts: [],
 	nextToastId: 1,
+	media: null,
 	pendingHref: null,
 })
 
@@ -242,6 +252,7 @@ const PhoneShellNoDeps = PhoneShellDef.make({
 						: replace($.model, href),
 				Back: () => pop($.model, 1),
 				Toast: ({ toast: shown }) => show(shown)($),
+				ShowMedia: ({ items, index }) => ({ ...$.model, media: { items, index } }),
 			}),
 		ReceivedSession: ($, { session }) => receiveSession($.model, session),
 		Ticked: ($, { nowMs }) => ({ ...$.model, nowMs }),
@@ -263,6 +274,9 @@ const PhoneShellNoDeps = PhoneShellDef.make({
 				Match.orElse(() => $.model),
 			),
 		CompletedSignOut: ($) => $.model,
+		ChangedMedia: ($, { index }) =>
+			$.model.media === null ? $.model : { ...$.model, media: { ...$.model.media, index } },
+		ClosedMedia: ($) => ({ ...$.model, media: null }),
 		DismissedToast: ($, { id }) => ({
 			...$.model,
 			toasts: $.model.toasts.filter((shown) => shown.id !== id),
@@ -358,6 +372,18 @@ const PhoneShellNoDeps = PhoneShellDef.make({
 				.loading(toast.intent === "loading")
 				.on("dismiss", PhoneShellMessage.DismissedToast({ id })),
 		)
+		const media =
+			model.media === null
+				? []
+				: [
+						h.lightbox
+							.key("media")
+							.open(true)
+							.items(model.media.items)
+							.index(model.media.index)
+							.on("change", ({ index }) => PhoneShellMessage.ChangedMedia({ index }))
+							.on("dismiss", PhoneShellMessage.ClosedMedia()),
+					]
 		return h.tabBar
 			.tabs(TABS.map((each) => ({ id: each.id, label: each.label, icon: each.icon })))
 			.selected(model.tab)
@@ -372,6 +398,7 @@ const PhoneShellNoDeps = PhoneShellDef.make({
 						screen(hrefOf(tab.root(session.orgSlug))),
 						...model.stacks[model.tab].map(screen),
 					),
+				...media,
 				...toasts,
 			)
 	},

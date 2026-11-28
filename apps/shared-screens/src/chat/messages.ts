@@ -74,12 +74,16 @@ export const HostRequest = Schema.Union([
 	}),
 	Schema.TaggedStruct("OpenThread", { messageId: MessageId, threadChannelId: Schema.NullOr(ChannelId) }),
 	Schema.TaggedStruct("OpenLink", { url: Schema.String }),
-	/** `index` counts the message's images and videos, as the image viewer does; -1 for a file. */
+	/**
+	 * `index` counts the message's images and videos, as the image viewer does; -1 for a file.
+	 * `media`: those images and videos, for a host that shows them itself (the phone's lightbox).
+	 */
 	Schema.TaggedStruct("OpenAttachment", {
 		messageId: MessageId,
 		attachmentId: Schema.String,
 		url: Schema.String,
 		index: Schema.Finite,
+		media: Schema.optional(Schema.Array(Content.Attachment)),
 	}),
 	/** The profile card's "Edit profile": the host opens the viewer's profile settings. */
 	Schema.TaggedStruct("EditProfile", {}),

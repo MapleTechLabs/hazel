@@ -633,6 +633,14 @@ public enum RowRenderer {
             for (a, rect) in zip(visual, rects) {
                 let radius = media.style.radius ?? Token.radius("lg")
                 b.items.append(.fill(rect, radius: radius, color: media.fill ?? .clear))
+                if a.kind == .image, let url = a.url, !url.isEmpty {
+                    let pixels = Int(ceil(max(rect.width, rect.height) * c.scale))
+                    if let image = RowImages.shared.image(url, pixels: pixels) {
+                        b.items.append(.media(image, rect, radius: radius))
+                    } else {
+                        b.pendingMedia.insert(url)
+                    }
+                }
                 if a.kind == .video {
                     let title = HazelTheme.text(HazelTheme.TextStep.title, c.sizeClass)
                     let play = RowText.string("▶", RowFont.inter(title.size, weight: HazelTheme.Font.weightRegular), HazelTheme.Colors.primaryFg.ui(c.dark), lineHeight: title.lineHeight, wrap: false)
@@ -850,6 +858,7 @@ struct Builder {
     var actions: [RowLayout.Action] = []
     var selectable: [RowLayout.Selectable] = []
     var motionParts: [RowLayout.MotionPart] = []
+    var pendingMedia: Set<String> = []
 
     init(_ c: RowContext, opaque: Bool = true) {
         self.c = c
@@ -864,7 +873,7 @@ struct Builder {
         RowLayout(
             width: c.width, height: ceil(height), usedWidth: usedWidth.map(ceil), items: items, targets: targets, actions: actions,
             selectable: selectable, label: label, background: opaque ? RowRenderer.background(c) : nil, entering: entering,
-            motionParts: motionParts
+            motionParts: motionParts, pendingMedia: pendingMedia
         )
     }
 }

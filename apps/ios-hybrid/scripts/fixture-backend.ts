@@ -4,7 +4,8 @@
  * `fixture/fixture-socket.ts`, over Bun's HTTP and WebSocket server. For the G3 gate (iOS, JSC).
  *
  *   bun scripts/fixture-backend.ts [port] [--dms] [--big] [--thread]   (default 4320; --dms seeds
- *   more DMs, --big gives #engineering 3,000 messages, --thread a thread on #general)
+ *   more DMs, --big gives #engineering 3,000 messages, --thread a thread on #general,
+ *   --photos <dir> the dir's .jpg files as image attachments on #general's last message)
  *
  * Server-side changes, to prove liveness (each prints the transaction id):
  *   curl -X POST '127.0.0.1:4320/__fixture/unread?channel=<channel id>'        one more unread
@@ -12,6 +13,8 @@
  *   curl -X POST '127.0.0.1:4320/__fixture/dm?channel=<channel id>&text=hi'       a DM's new last message
  *   curl -X POST '127.0.0.1:4320/__fixture/notify?channel=<channel id>&text=hi'  a new mention of Ada
  */
+import { readdirSync, readFileSync, statSync } from "node:fs"
+import { basename } from "node:path"
 import type { WebSocketLike } from "@hazel/effect-db-collection"
 import { fixtureNotifications, makeOfflineFetch } from "../fixture/offline-backend"
 import { currentUser } from "../fixture/offline-session"
@@ -24,6 +27,7 @@ import {
 	adaUserId,
 	channelMemberRows,
 	channelRows,
+	generalMessageRows,
 	notificationRows,
 	orgId,
 	userRows,
@@ -88,6 +92,39 @@ if (process.argv.includes("--big")) {
 	const big = bigChannel(3000)
 	server.write("channel", big.channelId, "messages", big.messages)
 	server.write("channel", big.channelId, "message_reactions", big.reactions)
+}
+
+// `--photos <dir>`: the dir's JPEGs, served at `/__fixture/photo/<name>`, on #general's last message.
+const photosIndex = process.argv.indexOf("--photos")
+const photosDir = photosIndex === -1 ? undefined : process.argv[photosIndex + 1]
+const photoNames =
+	photosDir === undefined
+		? []
+		: readdirSync(photosDir)
+				.filter((name) => /\.(jpe?g|png)$/i.test(name))
+				.sort()
+if (photosDir !== undefined) {
+	const names = photoNames
+	const last = generalMessageRows.at(-1)
+	if (last !== undefined)
+		server.write(
+			"channel",
+			last.channelId,
+			"attachments",
+			names.map((name, index) => ({
+				id: `00000000-0000-4000-8000-0000000d${String(index).padStart(4, "0")}`,
+				organizationId: orgId,
+				channelId: last.channelId,
+				messageId: last.id,
+				fileName: name,
+				fileSize: statSync(`${photosDir}/${name}`).size,
+				externalUrl: `http://127.0.0.1:${port}/__fixture/photo/${encodeURIComponent(name)}`,
+				uploadedBy: last.authorId,
+				status: "complete",
+				uploadedAt: last.createdAt,
+				deletedAt: null,
+			})),
+		)
 }
 
 const change = (url: URL): Response => {
@@ -195,6 +232,12 @@ Bun.serve<SocketData>({
 		}
 		if (request.method === "POST" && url.pathname.startsWith("/__fixture/")) return change(url)
 		if (url.pathname === "/health") return new Response("ok\n")
+		if (photosDir !== undefined && url.pathname.startsWith("/__fixture/photo/")) {
+			const name = basename(decodeURIComponent(url.pathname))
+			return photoNames.includes(name)
+				? new Response(readFileSync(`${photosDir}/${name}`))
+				: new Response("no such photo\n", { status: 404 })
+		}
 		return offlineFetch(request)
 	},
 	websocket: {

@@ -22,14 +22,24 @@ import { systemUi } from "../platform/system-ui"
 import type { ChatAttachmentView } from "./attachments"
 import { embedMarkdownView } from "./embeds/embed-markdown"
 import { attachViewer, PART, type Viewer } from "./viewer/gestures"
-import { followSlide, originPlate, releaseOrigin, VIEWER_ATTRIBUTE } from "./viewer/morph"
+import {
+	followSlide,
+	morphClose,
+	morphOpen,
+	originPlate,
+	releaseOrigin,
+	SHOWN_ATTRIBUTE,
+	VIEWER_ATTRIBUTE,
+} from "./viewer/morph"
 
 /**
  * The image viewer (legacy `ImageViewerModal`), a modal over the page. Its gestures follow Maple's
  * docs screenshot viewer, a port of ramka: a native scroll-snap track, zoom (click, double tap,
  * pinch, ctrl + wheel, the buttons, `+` `-` `0`) and pan with momentum up to the bitmap's own
  * pixels, and pull to dismiss. Opening and closing morph between the image on the page and the
- * viewer (`viewer/morph.ts`). The Model holds what is open and which image; zoom is the view's own.
+ * viewer (`viewer/morph.ts`), on the viewer's Mount: every close (Escape, the button, a tap beside
+ * the image, a pull) plays its exit before the Model hears of it. The Model holds what is open and
+ * which image; zoom is the view's own.
  */
 
 export type ImageViewerAction = "download" | "copyImage" | "copyUrl" | "openInBrowser"
@@ -95,6 +105,8 @@ type Intent = typeof Intent.Type
 // The selected slide as the Model has it, which the track and the thumbnails follow.
 const SELECTED_ATTRIBUTE = "data-selected-index"
 const ZOOM_STEP_ATTRIBUTE = "data-viewer-zoom-step"
+// The close button: the Mount closes, so the exit plays first.
+const CLOSE_ATTRIBUTE = "data-viewer-close"
 
 /** Slides this far from the open one keep their image mounted, so a swipe lands on pixels. */
 const PRELOAD = 1
@@ -203,8 +215,19 @@ const ImageViewerMount = Mount.defineStream("ImageViewerPortal", {
 			Effect.gen(function* () {
 				const content = element.querySelector(`[${PART.content}]`)
 				const track = element.querySelector(`[${PART.slides}]`)
-				if (!(content instanceof HTMLElement) || track === null) return yield* Effect.never
-				const close = () => Queue.offerUnsafe(queue, Intent.PressedClose())
+				if (!(content instanceof HTMLElement) || track === null) {
+					element.setAttribute(SHOWN_ATTRIBUTE, "")
+					return yield* Effect.never
+				}
+				// The exit plays, then the Model closes the viewer; a second request meanwhile is the same close.
+				let isClosing = false
+				const close = () => {
+					if (isClosing) return
+					isClosing = true
+					void morphClose(element, activeMedia(content)).then(() => {
+						Queue.offerUnsafe(queue, Intent.PressedClose())
+					})
+				}
 				yield* acquire(() => portalOverlay(element))
 				const viewer = yield* Effect.acquireRelease(
 					Effect.sync(() =>
@@ -219,6 +242,8 @@ const ImageViewerMount = Mount.defineStream("ImageViewerPortal", {
 				)
 				showZoom(element, content, false, true)
 				followSlide(element, activeMedia(content))
+				// Portalled and on its slide, so the image's box is final: it grows out of the plate.
+				yield* acquire(() => morphOpen(element, activeMedia(content)))
 				// The Model's selection, once rendered: one from the step buttons or thumbnails moves
 				// the track, and whichever moved it, the morph's plate follows the slide on view.
 				yield* acquire(() => {
@@ -251,6 +276,8 @@ const ImageViewerMount = Mount.defineStream("ImageViewerPortal", {
 								: null
 						const step = control?.getAttribute(ZOOM_STEP_ATTRIBUTE)
 						if (step === "in" || step === "out") viewer.zoomBy(step)
+						if (event.target instanceof Element && event.target.closest(`[${CLOSE_ATTRIBUTE}]`))
+							close()
 					}
 					element.addEventListener("click", onClick)
 					return () => element.removeEventListener("click", onClick)
@@ -280,7 +307,7 @@ const toolbarButton = <M>(
 	onPress: M | undefined,
 	label: string,
 	icon: Html,
-	zoomStep?: "in" | "out",
+	control?: "in" | "out" | "close",
 ): Html =>
 	// `TooltipTrigger` is a bare React Aria Button wrapping the action Button; the tooltip shows on hover only.
 	ariaButton(h, {}, [
@@ -293,7 +320,11 @@ const toolbarButton = <M>(
 				className: "text-white [--btn-overlay:rgb(255_255_255/0.1)]",
 				attributes: [
 					h.AriaLabel(label),
-					...(zoomStep === undefined ? [] : [h.Attribute(ZOOM_STEP_ATTRIBUTE, zoomStep)]),
+					...(control === undefined
+						? []
+						: control === "close"
+							? [h.Attribute(CLOSE_ATTRIBUTE, "")]
+							: [h.Attribute(ZOOM_STEP_ATTRIBUTE, control)]),
 				],
 			},
 			[icon],
@@ -461,14 +492,14 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 		inputs.toSelect(Math.min(Math.max(index, 0), Math.max(images.length - 1, 0)))
 	const act = (action: ImageViewerAction) =>
 		inputs.toAction && current ? inputs.toAction(action, current) : undefined
-	const actions: ReadonlyArray<readonly [M | undefined, string, Html, ("in" | "out")?]> = [
+	const actions: ReadonlyArray<readonly [M | undefined, string, Html, ("in" | "out" | "close")?]> = [
 		[undefined, "Zoom out", IconMinus(h, { className: "size-4" }), "out"],
 		[undefined, "Zoom in", IconPlus(h, { className: "size-4" }), "in"],
 		[act("download"), "Download", IconDownload(h, { className: "size-4" })],
 		[act("copyImage"), "Copy image", IconImage(h, { className: "size-4" })],
 		[act("copyUrl"), "Copy image URL", IconLink(h, { className: "size-4" })],
 		[act("openInBrowser"), "Open in browser", IconExternalLink(h, { className: "size-4" })],
-		[inputs.toClose(), "Close", IconClose(h, { className: "size-4" })],
+		[undefined, "Close", IconClose(h, { className: "size-4" }), "close"],
 	]
 	const menuInputs = inputs.menu
 	const menu =
@@ -603,8 +634,8 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 								),
 								h.DataAttribute("viewer-chrome", ""),
 							],
-							actions.map(([onPress, label, icon, zoomStep]) =>
-								toolbarButton(h, onPress, label, icon, zoomStep),
+							actions.map(([onPress, label, icon, control]) =>
+								toolbarButton(h, onPress, label, icon, control),
 							),
 						),
 						...(hasMany

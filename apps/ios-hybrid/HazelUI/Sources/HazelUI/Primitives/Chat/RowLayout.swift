@@ -14,6 +14,8 @@ public final class RowLayout: @unchecked Sendable {
         case strokePath(UIBezierPath, color: UIColor, width: CGFloat)
         case shadow(CGRect, radius: CGFloat, shadow: HazelTheme.Shadow, fill: UIColor)
         case image(UIImage, CGRect)
+        /// A photo filling its box and cropped to it, with rounded corners (`object-fit: cover`).
+        case media(UIImage, CGRect, radius: CGFloat)
         /// Everything until the matching `.end` is drawn at this opacity (a pending message's body).
         case begin(alpha: CGFloat)
         case end
@@ -61,6 +63,8 @@ public final class RowLayout: @unchecked Sendable {
     public let entering: Bool
     /// The pieces a reaction motion moves (pill, emoji, count), by the items that draw them.
     public let motionParts: [MotionPart]
+    /// Pictures the row drew as placeholders because they were still loading (`RowImages`).
+    public let pendingMedia: Set<String>
 
     /// A piece of the row that moves on its own: a reaction's pill, its emoji or its count.
     public struct MotionPart: Sendable, Equatable {
@@ -81,8 +85,9 @@ public final class RowLayout: @unchecked Sendable {
     init(
         width: CGFloat, height: CGFloat, usedWidth: CGFloat? = nil, items: [Item], targets: [Target] = [],
         actions: [Action] = [], selectable: [Selectable] = [], label: String = "", background: UIColor? = nil,
-        entering: Bool = false, motionParts: [MotionPart] = []
+        entering: Bool = false, motionParts: [MotionPart] = [], pendingMedia: Set<String> = []
     ) {
+        self.pendingMedia = pendingMedia
         self.width = width
         self.height = height
         self.usedWidth = usedWidth ?? width
@@ -214,6 +219,13 @@ extension RowLayout {
                 cg.restoreGState()
             case let .image(image, rect):
                 image.draw(in: rect)
+            case let .media(image, rect, radius):
+                cg.saveGState()
+                UIBezierPath(roundedRect: rect, cornerRadius: min(radius, rect.height / 2, rect.width / 2)).addClip()
+                let scale = max(rect.width / max(image.size.width, 1), rect.height / max(image.size.height, 1))
+                let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+                image.draw(in: CGRect(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2, width: size.width, height: size.height))
+                cg.restoreGState()
             case let .begin(alpha):
                 cg.saveGState()
                 cg.setAlpha(alpha)

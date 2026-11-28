@@ -89,6 +89,8 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
     private var motions = 0
     private var selection: UITextView?
     private var accessibilityCache: [Int: [UIAccessibilityElement]] = [:]
+    /// Rows waiting on a picture draw again when it arrives (`mediaArrived`); removed with the list.
+    private var mediaObserver: ObserverToken?
     /// Rows draw in parallel; on-screen ones jump the queue, ones scrolled past are cancelled.
     private let renderQueue: OperationQueue = {
         let q = OperationQueue()
@@ -117,6 +119,11 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
         let hold = UILongPressGestureRecognizer(target: self, action: #selector(held(_:)))
         hold.minimumPressDuration = 0.4
         addGestureRecognizer(hold)
+        MediaFrames.register(self)
+        mediaObserver = ObserverToken(NotificationCenter.default.addObserver(forName: RowImages.loaded, object: nil, queue: .main) { [weak self] note in
+            let url = note.object as? String
+            MainActor.assumeIsolated { self?.mediaArrived(url) }
+        })
         registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitHorizontalSizeClass.self]) { (view: MessageListView, _) in
             view.applyBackground()
             view.remeasureAll()
@@ -517,7 +524,9 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
             let image = made.surface(scale: c.scale)
             DispatchQueue.main.async {
                 guard let self else { return }
-                if self.rendering[key] === work { self.rendering[key] = nil }
+                // A newer render of this row took over (a picture arrived meanwhile): this one is stale.
+                if let current = self.rendering[key], current !== work { return }
+                self.rendering[key] = nil
                 guard self.indexOf[key] != nil, self.context == c, let image else { return }
                 if self.layouts[key] == nil { self.layouts[key] = made }
                 self.stats.renders += 1
@@ -760,6 +769,38 @@ public final class MessageListView: UIView, UIScrollViewDelegate, UIGestureRecog
         scroll.contentOffset.y = min(max(-scroll.contentInset.top, scroll.contentOffset.y + dy), max(-scroll.contentInset.top, maxY))
         UIAccessibility.post(notification: .pageScrolled, argument: nil)
         return true
+    }
+
+    // MARK: media
+
+    /// A picture arrived: rows that drew its placeholder draw again. The old bitmap stays on screen
+    /// until the new one is ready, so nothing blinks; the row keeps its height (the tile's is fixed).
+    private func mediaArrived(_ url: String?) {
+        guard let url else { return }
+        let c = context
+        for (key, layout) in layouts where layout.pendingMedia.contains(url) {
+            layouts[key] = nil
+            dropImage(key)
+            // A render already under way drew without the picture: it gives way to a new one.
+            if let pending = rendering.removeValue(forKey: key) { pending.cancel() }
+            if layers[key] != nil, let i = indexOf[key] { render(key, index: i, context: c, urgent: true) }
+        }
+    }
+
+    /// Where the tile of attachment `id` is on screen (window coordinates), among the rows in view.
+    public func windowFrame(ofMedia id: String) -> CGRect? {
+        guard window != nil else { return nil }
+        for key in layers.keys {
+            guard let i = indexOf[key], let layout = layouts[key],
+                  let target = layout.targets.first(where: { $0.role == .image && $0.payload.object?["id"]?.string == id })
+            else { continue }
+            let row = screenRect(i)
+            let tile = target.rect.offsetBy(dx: row.minX, dy: row.minY)
+            // A tile scrolled out of the list's view is not on screen, however much of its row is.
+            guard tile.intersects(bounds) else { return nil }
+            return convert(tile, to: nil)
+        }
+        return nil
     }
 
     // MARK: tests
