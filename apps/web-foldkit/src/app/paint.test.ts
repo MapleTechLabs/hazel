@@ -143,8 +143,8 @@ describe("drawing the paint on the next load", () => {
 		const styles = paint.querySelectorAll("style")
 		expect(styles).toHaveLength(1)
 		expect(styles[0]!.textContent).toBe("[data-hz-part=row]{display:flex}")
-		// The kit adds its own once it draws, and finds none of the paint's by id.
-		expect(document.getElementById("hz-chat-styles")).toBeNull()
+		// The saved markup carries no id, so the kit's `getElementById` check still adds its own.
+		expect(JSON.parse(localStorage.getItem(PAINT_KEY)!).html).not.toContain('id="hz-chat-styles"')
 	})
 
 	test("`/` resumes the painted page", () => {
