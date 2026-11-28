@@ -7,6 +7,13 @@ import { Cause, Context, DateTime, Effect, Layer, Option, Redacted } from "effec
 import { Cookies, Headers } from "effect/http"
 import { HazelAuthInstance } from "./hazel-auth"
 
+/**
+ * Whether a bearer is shaped like the API's access token (a JWT: three dot-separated parts). Session
+ * credentials, bot tokens and agent tokens never are, so a JWT bearer is checked as an access
+ * token only.
+ */
+export const looksLikeAccessToken = (token: string) => token.split(".").length === 3
+
 /** A verified credential's user and when the credential stops being valid (epoch ms). */
 export interface VerifiedUser {
 	readonly user: CurrentUser.Schema
@@ -140,7 +147,8 @@ export class HazelSession extends Context.Service<HazelSession>()("@hazel/backen
 				)
 				if (Option.isNone(access)) return Option.none()
 				return Option.some({
-					user: yield* loadUser(access.value.userId),
+					// The session it was minted from required an active sign-in; so does the token.
+					user: yield* loadUser(access.value.userId, { requireActive: true }),
 					expiresAt: access.value.expiresAt,
 				})
 			})

@@ -22,8 +22,8 @@ const recordingBinding = (name: string, calls: Array<string>) =>
 		},
 	)
 
-/** The directory D1 over node SQLite, migrated; every call is recorded and takes `latencyMs`. */
-const fakeDirectoryDb = (calls: Array<string>, latencyMs: number) => {
+/** The directory D1 over node SQLite, migrated; every call is recorded and takes `latency.ms`. */
+const fakeDirectoryDb = (calls: Array<string>, latency: { ms: number }) => {
 	const db = new DatabaseSync(":memory:")
 	for (const migration of storeMigrations.directory) {
 		for (const statement of migration.statements) db.exec(statement)
@@ -36,7 +36,7 @@ const fakeDirectoryDb = (calls: Array<string>, latencyMs: number) => {
 				} catch (error) {
 					reject(error)
 				}
-			}, latencyMs),
+			}, latency.ms),
 		)
 	const statement = (sql: string, params: ReadonlyArray<SQLInputValue> = []) => {
 		const rows = () => db.prepare(sql).all(...params) as Array<Record<string, unknown>>
@@ -72,8 +72,15 @@ export interface FakeApiEnvOptions {
 
 export const makeFakeApiEnv = async (options: FakeApiEnvOptions = {}) => {
 	const calls: Array<string> = []
+	// Mutable, so a bench can set up at no latency and then measure at some.
+	const d1Latency = { ms: options.d1LatencyMs ?? 0 }
 	const signing = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign"])
-	const privateJwk = await crypto.subtle.exportKey("jwk", signing.privateKey)
+	// As `generateSigningKey` writes it: no `key_ops`, which would keep the public half from verifying.
+	const {
+		key_ops: _ops,
+		ext: _ext,
+		...privateJwk
+	} = await crypto.subtle.exportKey("jwk", signing.privateKey)
 	const key = Buffer.alloc(32, 7).toString("base64url")
 	const env = {
 		S3_BUCKET: "test",
@@ -93,10 +100,10 @@ export const makeFakeApiEnv = async (options: FakeApiEnvOptions = {}) => {
 		AUTH_BINDING_KEY: key,
 		AUTH_TRANSACTION_KEY: key,
 		AUTH_ACCESS_TOKEN_PRIVATE_JWK: JSON.stringify(privateJwk),
-		[DIRECTORY_DB_BINDING]: fakeDirectoryDb(calls, options.d1LatencyMs ?? 0),
+		[DIRECTORY_DB_BINDING]: fakeDirectoryDb(calls, d1Latency),
 		[CACHE_BINDING]: recordingBinding("kv", calls),
 		[HTML_RENDERS_BINDING]: recordingBinding("r2", calls),
 		[ORG_EXPORTS_BINDING]: recordingBinding("r2", calls),
 	}
-	return { env, calls }
+	return { env, calls, d1Latency }
 }
