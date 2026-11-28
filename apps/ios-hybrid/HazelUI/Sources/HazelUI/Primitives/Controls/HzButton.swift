@@ -2,6 +2,8 @@ import SwiftUI
 
 // Owned by lane S2. `hz:button`: a SwiftUI `Button` drawn from the button recipe (variant, size,
 // iconOnly, circle; selected, pressed and hover states). `loading` keeps it focusable but swallows presses.
+// `removable` adds the trailing remove mark (a filter chip, a tag): a tap on it, or the accessibility
+// action Remove, raises `remove` instead of `press`.
 struct HzButton: View {
     let tree: Tree
     let node: Node
@@ -24,6 +26,8 @@ struct HzButton: View {
         // `chip`'s on state (`filter-chip`), the web's `aria-pressed`.
         let selected = node.flag("selected")
         if selected { states.insert(.selected) }
+        let removable = node.flag("removable")
+        let remove = { if !loading, !disabled { tree.fire(node.id, "remove") } }
 
         return Button {
             if !loading { tree.fire(node.id, "press") }
@@ -32,16 +36,31 @@ struct HzButton: View {
         }
         .buttonStyle(ButtonFace(
             label: label, icon: node.string("icon"), options: options, flags: flags, states: states,
-            sizeClass: HazelTheme.SizeClass(horizontalSizeClass), scheme: scheme))
+            sizeClass: HazelTheme.SizeClass(horizontalSizeClass), scheme: scheme,
+            onRemove: removable ? remove : nil))
         .disabled(disabled)
         .focused($focused)
         .accessibilityLabel(label)
         .accessibilityAddTraits(loading ? [.updatesFrequently] : [])
         .accessibilityAddTraits(selected ? [.isSelected] : [])
+        .modifier(RemoveAction(action: removable ? remove : nil))
         .hazelCommands(tree, node) { name, _ in
             guard name == .focus else { throw CommandError("hz:button does not handle \(name.rawValue)") }
             focused = true
             return nil
+        }
+    }
+}
+
+/// A removable button's accessibility action Remove (the mark itself is hidden from VoiceOver).
+private struct RemoveAction: ViewModifier {
+    let action: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let action {
+            content.accessibilityAction(named: "Remove", action)
+        } else {
+            content
         }
     }
 }
@@ -55,6 +74,8 @@ struct ButtonFace: ButtonStyle {
     let states: Set<HazelTheme.State>
     let sizeClass: HazelTheme.SizeClass
     let scheme: ColorScheme
+    /// Set when the button is `removable`: its trailing mark raises this, not the press.
+    var onRemove: (() -> Void)? = nil
 
     func makeBody(configuration: Configuration) -> some View {
         Face(face: self, pressed: configuration.isPressed)
@@ -71,8 +92,9 @@ struct ButtonFace: ButtonStyle {
             if pressed { states.insert(.pressed) }
             if hovering { states.insert(.hover) }
             let s = HazelTheme.Recipes.button.styles(
-                ["icon"], options: face.options, flags: face.flags, states: states, sizeClass: face.sizeClass)
-            let root = s[""]!, icon = s["icon"]!
+                ["icon", "remove"], options: face.options, flags: face.flags, states: states,
+                sizeClass: face.sizeClass)
+            let root = s[""]!, icon = s["icon"]!, remove = s["remove"]!
             let iconOnly = face.flags.contains("iconOnly")
             return HStack(spacing: root.gap ?? 0) {
                 if let name = face.icon {
@@ -81,6 +103,13 @@ struct ButtonFace: ButtonStyle {
                 }
                 if !iconOnly, !face.label.isEmpty {
                     Text(face.label).hzText(root, face.sizeClass).lineLimit(1).fixedSize()
+                }
+                if let onRemove = face.onRemove {
+                    ControlIcon(name: "close", size: remove.size ?? 16, color: (remove.color ?? root.color)?.color ?? .primary)
+                        .padding(.horizontal, -(remove.bleedX ?? 0))
+                        .contentShape(Rectangle())
+                        .highPriorityGesture(TapGesture().onEnded { onRemove() })
+                        .accessibilityHidden(true)
                 }
             }
             .hzSize(root)

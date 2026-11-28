@@ -76,7 +76,8 @@ export type TextStrong = boolean
 /**
  * `chip` is a fully round filter chip: filled while `pressed`, quiet otherwise (`filter-chip`).
  * `filter` an applied filter: a square tinted box with a divided remove half (`pk0-filter-chip`);
- * `dashed` a quiet add control with a dashed edge (`+ Filter`, `pk0-dashed-button`).
+ * `dashed` a quiet add control with a dashed edge (`+ Filter`, `pk0-dashed-button`); `tag` a small
+ * grey label chip with its remove mark (a customer's tags, `pk5-tag-chip`).
  */
 export const buttonVariants = [
 	"primary",
@@ -89,6 +90,7 @@ export const buttonVariants = [
 	"filter",
 	"dashed",
 	"quiet",
+	"tag",
 ] as const
 export type ButtonVariant = (typeof buttonVariants)[number]
 
@@ -154,7 +156,8 @@ export type StackInset = (typeof stackInsets)[number]
  * `danger` is the danger zone's card with a tinted header (`frame-danger`); `flush` the card with no
  * padding, its dividers running edge to edge (`frame-flush`); `hint` a sidebar's quiet
  * tip, inset by the rows' margin (`frame-hint`); `tile` a card in a grid of cards (customers'
- * `connectCard`: `p-4 sm:p-5`).
+ * `connectCard`: `p-4 sm:p-5`); `row` a one-line hairline row in a list of them (a customer's feature
+ * flag: `min-h-8 rounded-lg border px-3 py-1`).
  */
 export const frameSurfaces = [
 	"none",
@@ -166,6 +169,7 @@ export const frameSurfaces = [
 	"flush",
 	"hint",
 	"tile",
+	"row",
 ] as const
 export type FrameSurface = (typeof frameSurfaces)[number]
 
@@ -606,7 +610,7 @@ export interface Declarations<T extends TokenNames = TokenNames> {
 	/** Centred text (`recipe-text-align`), `start` back from an inherited centre, or `end` (a stack aligned end). */
 	readonly textAlign?: "center" | "start" | "end"
 	/** Lines before the text truncates with an ellipsis (`item-title-lines`); 1 is `truncate`. */
-	readonly lineClamp?: 2
+	readonly lineClamp?: 2 | 3
 	/** Scrolls its overflow along one axis (`recipe-overflow`). */
 	readonly overflow?: "scrollX" | "scrollY"
 	/** A hairline text stroke over the weight (`faux-medium`); the web only, iOS draws the weight. */

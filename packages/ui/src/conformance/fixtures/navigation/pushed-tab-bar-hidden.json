@@ -1,0 +1,97 @@
+{
+	"about": "A pushed screen inside a tab (`pushedTabBar` `hidden`): the phone's tab bar steps aside while `general` is pushed over Channels, as iOS apps' pushed screens do.",
+	"root": {
+		"tag": "tabBar",
+		"props": {
+			"tabs": [
+				{
+					"id": "home",
+					"label": "Home",
+					"icon": "hashtag"
+				},
+				{
+					"id": "activity",
+					"label": "Activity",
+					"icon": "bell"
+				}
+			],
+			"selected": "home"
+		},
+		"events": ["change"],
+		"children": [
+			{
+				"tag": "navigation",
+				"events": ["pop"],
+				"children": [
+					{
+						"tag": "screen",
+						"key": "channels",
+						"props": {
+							"title": "Channels"
+						},
+						"children": [
+							{
+								"tag": "section",
+								"props": {
+									"title": "Channels"
+								},
+								"children": [
+									{
+										"tag": "item",
+										"key": "general",
+										"props": {
+											"title": "general",
+											"href": "#"
+										},
+										"events": ["press"],
+										"slots": [
+											{
+												"name": "leading",
+												"children": [
+													{
+														"tag": "icon",
+														"props": {
+															"name": "hashtag"
+														}
+													}
+												]
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"tag": "screen",
+						"key": "general",
+						"props": {
+							"title": "general",
+							"back": true
+						},
+						"events": ["back"],
+						"children": [
+							{
+								"tag": "text",
+								"children": ["Messages in general"]
+							}
+						]
+					}
+				],
+				"props": {
+					"pushedTabBar": "hidden"
+				}
+			}
+		]
+	},
+	"aria": [
+		{
+			"role": "heading",
+			"name": "general"
+		},
+		{
+			"role": "button",
+			"name": "Back"
+		}
+	]
+}

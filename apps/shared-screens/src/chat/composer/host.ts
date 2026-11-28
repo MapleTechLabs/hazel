@@ -5,7 +5,7 @@
  * typing from outside the field), the files it holds and uploads, the bot command endpoint, and the
  * drafts kept per channel. The web's implementations are `web-foldkit/src/root/composer.ts`.
  */
-import { AttachmentId, BotId, ChannelId, MessageId, OrganizationId } from "@hazel/schema"
+import { AttachmentId, BotId, ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { Context, Effect, Layer, PubSub, Schema, Stream } from "effect"
 import { HeldFile, Mode } from "./model"
 
@@ -16,6 +16,8 @@ export const ComposerRequest = Schema.Union([
 	Schema.TaggedStruct("Focus", {}),
 	/** A key typed, or text pasted, outside any field: it goes into the draft. */
 	Schema.TaggedStruct("InsertText", { text: Schema.String }),
+	/** `@person` into the draft (a profile card's Mention), spaced from the draft's last word. */
+	Schema.TaggedStruct("InsertMention", { userId: UserId }),
 	/** Files pasted outside any field, held by the host. */
 	Schema.TaggedStruct("AddFiles", { files: Schema.Array(HeldFile) }),
 	Schema.TaggedStruct("OpenEmojiPicker", {}),

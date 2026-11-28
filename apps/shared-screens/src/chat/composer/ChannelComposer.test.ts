@@ -140,6 +140,19 @@ describe("ChannelComposer", () => {
 		}),
 	)
 
+	it.effect("a profile card's Mention puts the mention after the draft, spaced from its last word", () =>
+		Effect.gen(function* () {
+			const mention = M.ReceivedRequest({ request: { _tag: "InsertMention", userId: grace } })
+			const empty = yield* make()
+			empty.send(mention)
+			assert.strictEqual(empty.s.model.draft.text, `@[userId:${grace}] `)
+			const drafted = yield* make()
+			drafted.send(typed("cc", 1))
+			drafted.send(mention)
+			assert.strictEqual(drafted.s.model.draft.text, `cc @[userId:${grace}] `)
+		}),
+	)
+
 	it.effect("Up in the empty field edits the last own message; emptied, Enter asks to delete it", () =>
 		Effect.gen(function* () {
 			const { s, ran, send } = yield* make()

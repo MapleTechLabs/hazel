@@ -78,6 +78,13 @@ const panelSection = (h: H, key: string, title: string, aside: string | null, ..
 			h.stack.density("none").children(...(rows as Array<never>)),
 		)
 
+/** Rows that sit together inside a section (a list of hairline rows, the company's profile). */
+const group = (h: H, key: string, density: "none" | "snug" | "compact" | "cozy", ...rows: Array<unknown>) =>
+	h.stack
+		.key(key)
+		.density(density)
+		.children(...(rows as Array<never>))
+
 const note = (h: H, text: string) => h.text.key(text).tone("muted").children(text)
 
 const property = (h: H, label: string, ...value: Array<unknown>) =>
@@ -98,7 +105,6 @@ const copyButton = (h: H, text: string, label: string) =>
 
 // DETAILS
 
-// HAZEL-GAP(pk5-tag-chip): today's tags are small secondary chips and add is a 20px bordered "+".
 const tagsRow = (h: H, model: CustomerDetailModel, account: AccountRow) =>
 	h.stack
 		.axis("horizontal")
@@ -110,8 +116,7 @@ const tagsRow = (h: H, model: CustomerDetailModel, account: AccountRow) =>
 				h.button
 					.key(tag)
 					.label(tag)
-					.variant("chip")
-					.size("xsmall")
+					.variant("tag")
 					.removable()
 					.on("remove", CustomerDetailMessage.PressedRemoveTag({ tag })),
 			),
@@ -129,21 +134,17 @@ const tagsRow = (h: H, model: CustomerDetailModel, account: AccountRow) =>
 				)
 				.on("dismiss", CustomerDetailMessage.DismissedTagPicker())
 				.children(
-					h.frame.surface("overlay").children(
-						h.stack.density("compact").children(
-							h.textField
-								.label("Tag name")
-								.placeholder("Tag name")
-								.value(model.tagInput)
-								.on("change", (payload) => CustomerDetailMessage.ChangedTagInput({ payload }))
-								.on("submit", (payload) => CustomerDetailMessage.SubmittedTag({ payload })),
-							h.button
-								.label("Add tag")
-								.size("small")
-								.disabled(model.tagInput.text.trim() === "")
-								.on("press", CustomerDetailMessage.PressedSaveTag()),
-						),
-					),
+					h.textField
+						.label("Tag name")
+						.placeholder("enterprise")
+						.value(model.tagInput)
+						.on("change", (payload) => CustomerDetailMessage.ChangedTagInput({ payload }))
+						.on("submit", (payload) => CustomerDetailMessage.SubmittedTag({ payload })),
+					h.button
+						.label("Add tag")
+						.size("small")
+						.disabled(model.tagInput.text.trim() === "")
+						.on("press", CustomerDetailMessage.PressedSaveTag()),
 				),
 		)
 
@@ -374,22 +375,28 @@ const companySection = (h: H, inputs: SidebarInputs) => {
 	].filter((tile) => tile !== null)
 	const status = isPending ? "Looking up…" : isUnanswered ? "Refresh failed, retrying soon" : checked
 	const pages = companyPages(company).filter((page) => page.url.startsWith("https://"))
-	return panelSection(
+	const profile =
+		company.description === null && figures.length === 0
+			? null
+			: group(
+					h,
+					"profile",
+					"cozy",
+					company.description === null
+						? null
+						: h.text.key("description").tone("subtle").clamp().children(company.description),
+					figures.length === 0
+						? null
+						: h.grid
+								.key("figures")
+								.columns("2")
+								.density("compact")
+								.children(...figures),
+				)
+	const facts = group(
 		h,
-		"company",
-		"Company",
-		null,
-		company.description === null
-			? null
-			: // HAZEL-GAP(pk5-text-clamp): today's description is clamped to three lines.
-				h.text.key("description").tone("subtle").children(company.description),
-		figures.length === 0
-			? null
-			: h.grid
-					.key("figures")
-					.columns("2")
-					.density("compact")
-					.children(...figures),
+		"facts",
+		"none",
 		domain === null ? null : domainRow(h, inputs, domain),
 		property(
 			h,
@@ -429,31 +436,44 @@ const companySection = (h: H, inputs: SidebarInputs) => {
 							h.text.role("caption").tone("muted").truncate().children(latestParts.join(" · ")),
 						),
 				),
-		pages.length === 0
-			? null
-			: h.stack
-					.key("pages")
-					.axis("horizontal")
-					.density("compact")
-					.wrap()
-					.children(
-						...pages.map((page) =>
-							h.link.key(page.url).tone("muted").label(linkLabel(page)).href(page.url),
+	)
+	return panelSection(
+		h,
+		"company",
+		"Company",
+		null,
+		group(
+			h,
+			"company-body",
+			"cozy",
+			profile,
+			facts,
+			pages.length === 0
+				? null
+				: h.stack
+						.key("pages")
+						.axis("horizontal")
+						.density("compact")
+						.wrap()
+						.children(
+							...pages.map((page) =>
+								h.link.key(page.url).tone("muted").label(linkLabel(page)).href(page.url),
+							),
 						),
-					),
-		h.stack
-			.key("source")
-			.axis("horizontal")
-			.align("center")
-			.children(
-				h.text
-					.role("caption")
-					.tone("muted")
-					.truncate()
-					.children(status === null ? "From context.dev" : `From context.dev · ${status}`),
-				h.spacer,
-				refreshButton(h, "Refresh company profile", isPending, true),
-			),
+			h.stack
+				.key("source")
+				.axis("horizontal")
+				.align("center")
+				.children(
+					h.text
+						.role("caption")
+						.tone("muted")
+						.truncate()
+						.children(status === null ? "From context.dev" : `From context.dev · ${status}`),
+					h.spacer,
+					refreshButton(h, "Refresh company profile", isPending, true),
+				),
+		),
 	)
 }
 
@@ -528,39 +548,37 @@ const channelPicker = (h: H, inputs: SidebarInputs, linkedHere: ReadonlySet<stri
 		)
 		.on("dismiss", CustomerDetailMessage.DismissedChannelPicker())
 		.children(
-			h.frame.surface("overlay").children(
-				h.stack.density("tight").children(
-					h.searchField
-						.placeholder("Search channels")
-						.value(model.channelSearch)
-						.on("change", (payload) => CustomerDetailMessage.ChangedChannelSearch({ payload })),
-					...(candidates.length === 0
-						? [
-								note(
-									h,
-									model.channelOptions.length === 0
-										? "No channels to link yet."
-										: "No channel matches.",
-								),
-							]
-						: candidates.map((channel) => {
-								const owner = owners.get(channel.id)
-								const ownerName = owner === undefined ? undefined : names.get(owner)
-								return h.item
-									.key(channel.id)
-									.title(channel.name)
-									.subtitle(
-										owner === undefined
-											? ORIGIN_LABEL[channel.origin]
-											: `Linked to ${ownerName ?? "another customer"}`,
-									)
-									.leading(h.icon.name(channel.isPrivate ? "lock" : "hashtag"))
-									.on(
-										"press",
-										CustomerDetailMessage.PressedLinkChannel({ channelId: channel.id }),
-									)
-							})),
-				),
+			h.stack.density("tight").children(
+				h.searchField
+					.placeholder("Search channels")
+					.value(model.channelSearch)
+					.on("change", (payload) => CustomerDetailMessage.ChangedChannelSearch({ payload })),
+				...(candidates.length === 0
+					? [
+							note(
+								h,
+								model.channelOptions.length === 0
+									? "No channels to link yet."
+									: "No channel matches.",
+							),
+						]
+					: candidates.map((channel) => {
+							const owner = owners.get(channel.id)
+							const ownerName = owner === undefined ? undefined : names.get(owner)
+							return h.item
+								.key(channel.id)
+								.title(channel.name)
+								.subtitle(
+									owner === undefined
+										? ORIGIN_LABEL[channel.origin]
+										: `Linked to ${ownerName ?? "another customer"}`,
+								)
+								.leading(h.icon.name(channel.isPrivate ? "lock" : "hashtag"))
+								.on(
+									"press",
+									CustomerDetailMessage.PressedLinkChannel({ channelId: channel.id }),
+								)
+						})),
 			),
 		)
 }
@@ -584,48 +602,63 @@ const channelsSection = (h: H, inputs: SidebarInputs) => {
 		"channels",
 		"Channels",
 		linked.length === 0 ? null : formatCount(linked.length),
-		...(linked.length === 0
-			? [note(h, "Link the Slack, Discord, Connect or Hazel channels you talk to this customer in.")]
-			: linked.map((entry) => linkedChannelRow(h, inputs, entry, options.get(entry.channelId)))),
-		suggested.length === 0
-			? null
-			: h.stack
-					.key("suggested")
-					.density("tight")
-					.children(
-						h.text.role("label").tone("muted").children("Suggested"),
-						...suggested.map(({ suggestion, channel }) =>
-							h.item
-								.key(suggestion.id)
-								.title(channel.name)
-								.leading(h.icon.name(channel.isPrivate ? "lock" : "hashtag"))
-								.trailing(
-									h.button
-										.label("Link")
-										.variant("outline")
-										.size("xsmall")
-										.on(
-											"press",
-											CustomerDetailMessage.PressedAcceptSuggestion({
-												suggestionId: suggestion.id,
-											}),
-										),
-									h.button
-										.label(`Dismiss ${channel.name}`)
-										.icon("close")
-										.iconOnly()
-										.variant("ghost")
-										.size("xsmall")
-										.on(
-											"press",
-											CustomerDetailMessage.PressedDismissSuggestion({
-												suggestionId: suggestion.id,
-											}),
-										),
-								),
+		group(
+			h,
+			"channels-body",
+			"compact",
+			linked.length === 0
+				? note(h, "Link the Slack, Discord, Connect or Hazel channels you talk to this customer in.")
+				: group(
+						h,
+						"linked",
+						"snug",
+						...linked.map((entry) =>
+							linkedChannelRow(h, inputs, entry, options.get(entry.channelId)),
 						),
 					),
-		channelPicker(h, inputs, linkedHere),
+			suggested.length === 0
+				? null
+				: h.stack
+						.key("suggested")
+						.density("tight")
+						.children(
+							h.text.role("label").tone("muted").children("Suggested"),
+							...suggested.map(({ suggestion, channel }) =>
+								h.item
+									.key(suggestion.id)
+									.title(channel.name)
+									.leading(h.icon.name(channel.isPrivate ? "lock" : "hashtag"))
+									.trailing(
+										h.button
+											.label("Link")
+											.variant("outline")
+											.size("xsmall")
+											.on(
+												"press",
+												CustomerDetailMessage.PressedAcceptSuggestion({
+													suggestionId: suggestion.id,
+												}),
+											),
+										h.button
+											.label(`Dismiss ${channel.name}`)
+											.icon("close")
+											.iconOnly()
+											.variant("ghost")
+											.size("xsmall")
+											.on(
+												"press",
+												CustomerDetailMessage.PressedDismissSuggestion({
+													suggestionId: suggestion.id,
+												}),
+											),
+									),
+							),
+						),
+			h.stack
+				.key("link")
+				.axis("horizontal")
+				.children(channelPicker(h, inputs, linkedHere)),
+		),
 	)
 }
 
@@ -702,35 +735,33 @@ const flagPicker = (h: H, inputs: SidebarInputs, candidates: ReadonlyArray<strin
 		)
 		.on("dismiss", CustomerDetailMessage.DismissedFlagPicker())
 		.children(
-			h.frame.surface("overlay").children(
-				h.stack.density("tight").children(
-					...(candidates.length === 0
-						? [
-								note(
-									h,
-									holdsAny
-										? "It has every flag. Create new ones under Settings → Feature flags."
-										: "No flags to add yet. Create one under Settings → Feature flags.",
-								),
-							]
-						: [
-								...candidates.map((key) =>
-									h.toggle
-										.key(key)
-										.style("checkbox")
-										.label(key)
-										.checked(model.flagSelection.includes(key))
-										.on("change", ({ checked }) =>
-											CustomerDetailMessage.ToggledFlag({ key, checked }),
-										),
-								),
-								h.button
-									.label(count <= 1 ? "Add flag" : `Add ${formatCount(count)} flags`)
-									.size("small")
-									.disabled(count === 0)
-									.on("press", CustomerDetailMessage.PressedAddFlags()),
-							]),
-				),
+			h.stack.density("tight").children(
+				...(candidates.length === 0
+					? [
+							note(
+								h,
+								holdsAny
+									? "It has every flag. Create new ones under Settings → Feature flags."
+									: "No flags to add yet. Create one under Settings → Feature flags.",
+							),
+						]
+					: [
+							...candidates.map((key) =>
+								h.toggle
+									.key(key)
+									.style("checkbox")
+									.label(key)
+									.checked(model.flagSelection.includes(key))
+									.on("change", ({ checked }) =>
+										CustomerDetailMessage.ToggledFlag({ key, checked }),
+									),
+							),
+							h.button
+								.label(count <= 1 ? "Add flag" : `Add ${formatCount(count)} flags`)
+								.size("small")
+								.disabled(count === 0)
+								.on("press", CustomerDetailMessage.PressedAddFlags()),
+						]),
 			),
 		)
 }
@@ -749,32 +780,50 @@ const flagsSection = (h: H, inputs: SidebarInputs) => {
 		"flags",
 		"Feature flags",
 		on.length === 0 ? null : formatCount(on.length),
-		...(on.length === 0
-			? [note(h, "No feature flags on.")]
-			: on.map((key) =>
-					h.frame
-						.key(key)
-						.surface("inset")
-						.children(
-							h.stack
-								.axis("horizontal")
-								.align("center")
+		group(
+			h,
+			"flags-body",
+			"compact",
+			on.length === 0
+				? note(h, "No feature flags on.")
+				: group(
+						h,
+						"on",
+						"snug",
+						...on.map((key) =>
+							h.frame
+								.key(key)
+								.surface("row")
 								.children(
-									h.text.role("code").truncate().children(key),
-									h.spacer,
-									inputs.isAdmin
-										? h.button
-												.label(`Turn off ${key}`)
-												.icon("close")
-												.iconOnly()
-												.variant("ghost")
-												.size("xsmall")
-												.on("press", CustomerDetailMessage.PressedRemoveFlag({ key }))
-										: null,
+									h.stack
+										.axis("horizontal")
+										.align("center")
+										.children(
+											h.text.role("code").truncate().children(key),
+											h.spacer,
+											inputs.isAdmin
+												? h.button
+														.label(`Turn off ${key}`)
+														.icon("close")
+														.iconOnly()
+														.variant("ghost")
+														.size("xsmall")
+														.on(
+															"press",
+															CustomerDetailMessage.PressedRemoveFlag({ key }),
+														)
+												: null,
+										),
 								),
 						),
-				)),
-		inputs.isAdmin ? flagPicker(h, inputs, candidates, on.length > 0) : null,
+					),
+			inputs.isAdmin
+				? h.stack
+						.key("add")
+						.axis("horizontal")
+						.children(flagPicker(h, inputs, candidates, on.length > 0))
+				: null,
+		),
 	)
 }
 
@@ -865,11 +914,14 @@ const recordsSection = (h: H, inputs: SidebarInputs) => {
 				.density("compact")
 				.children(
 					sourceLogo(h, ref.provider),
-					h.text.children(recordLabel(ref.provider)),
-					h.text
-						.tone("muted")
-						.truncate()
-						.children(ref.name ?? title),
+					h.stack.density("none").children(
+						h.text.truncate().children(recordLabel(ref.provider)),
+						h.text
+							.role("caption")
+							.tone("muted")
+							.truncate()
+							.children(ref.name ?? title),
+					),
 					h.spacer,
 					href === null ? null : h.link.label("Open").href(href),
 					copyButton(h, ref.externalId, `${recordLabel(ref.provider)} ID`),

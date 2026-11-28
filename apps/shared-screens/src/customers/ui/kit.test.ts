@@ -25,6 +25,7 @@ import { companyLogo, initialsOf, personAvatar, safeLogoUrl, sourceLogoSrc, tint
 import { deltaLook, kpiTile } from "./kpi-tile"
 import { planLine, queueAction, queueRow, queueTable } from "./queue-row"
 import { slaChip } from "./sla-chip"
+import { lookOf, viewGlyph } from "./view-look"
 
 /** The customers kit, drawn by a harness that logs every message it gets (plain props in, events out). */
 
@@ -375,5 +376,32 @@ describe("cards and tiles", () => {
 		})
 		const after = s.fire(byProp("button", "label", "Clear filters"), "press")
 		expect(logOf(after)).toEqual(["clear"])
+	})
+})
+
+describe("view look", () => {
+	test("a view's own look wins; with none set, its key's shipped look, else a muted dot", () => {
+		expect(lookOf("paying", { icon: "star", color: null })).toEqual({ icon: "star", color: null })
+		expect(lookOf("paying", { icon: null, color: null })).toEqual({ icon: null, color: "green" })
+		expect(lookOf("current", null)).toEqual({ icon: null, color: "purple" })
+		expect(lookOf("my_customers", null)).toEqual({ icon: "user", color: null })
+		expect(lookOf("a-saved-view", null)).toEqual({ icon: null, color: null })
+	})
+
+	test("the glyph is the icon in the view's colour, or a dot in it; muted when it has none", () => {
+		const s = draw((h) =>
+			h.stack.children(
+				viewGlyph(h, { icon: "star", color: "blue" }),
+				viewGlyph(h, { icon: "user", color: null }),
+				viewGlyph(h, { icon: null, color: "purple" }),
+				viewGlyph(h, { icon: null, color: null }),
+			),
+		)
+		expect(s.all(tagged("icon")).map((node) => node.props)).toEqual([
+			{ name: "star", tint: "blue" },
+			{ name: "user", tint: "muted" },
+			{ dot: true, tint: "purple" },
+			{ dot: true, tint: "muted" },
+		])
 	})
 })

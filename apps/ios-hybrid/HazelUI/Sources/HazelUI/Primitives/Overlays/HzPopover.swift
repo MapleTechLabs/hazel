@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // `hz:popover` on iOS (lane S3): a system popover (kept a popover on iPhone too) attached to the
 // run `anchorTo` names (a keyed leaf's run, from `RunAnchors`), else the `anchor` slot, else the
@@ -10,6 +11,12 @@ struct HzPopover: View {
     @Environment(\.horizontalSizeClass) private var horizontal
     /// The anchor view's frame on screen, so a run's global frame can be made local to it.
     @State private var origin: CGRect = .zero
+
+    /// A presented popover's width on a phone: the screen's, less a margin each side.
+    private static var compactWidth: CGFloat {
+        let screen = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.screen.bounds.width
+        return (screen ?? 390) - 2 * 12
+    }
 
     var body: some View {
         let sizeClass = HazelTheme.SizeClass(horizontal)
@@ -33,6 +40,9 @@ struct HzPopover: View {
                 .popover(isPresented: overlayDismissBinding(tree, node, open), attachmentAnchor: attachment) {
                     PopoverBody(tree: tree, node: node, style: panel)
                         .hzBox(panel.merged(HazelTheme.Style(background: HazelTheme.Colors.clear, radius: 0)))
+                        // A phone's popover is a card across the screen (Slack's channel menu), not its
+                        // content's ideal width: rows would truncate their titles beside a trailing value.
+                        .frame(width: sizeClass == .compact ? Self.compactWidth : nil, alignment: .leading)
                         .presentationCompactAdaptation(.popover)
                         .presentationBackground(HazelTheme.Colors.bg.color)
                 }

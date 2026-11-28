@@ -1,5 +1,5 @@
 import type { ChannelId, MessageId } from "@hazel/schema"
-import { Option } from "effect"
+import { Match, Option } from "effect"
 import { type ChildAttribute, childAttributes, type Html, type HtmlBuilder } from "foldkit/html"
 import {
 	IconCopy,
@@ -267,6 +267,7 @@ const buildOwnerContext = (h: H, model: Model, nowMs: number): RowContext<Messag
 	const names = userNamesOf(users)
 	const overlays = model.overlays
 	const contextMenu = Overlays.contextMenuOf(overlays)
+	const viewerId = model.currentUserId
 	const profileOf = (userId: string): ReadonlyArray<Html> => {
 		const user = users.find((candidate) => candidate.id === userId)
 		if (user === undefined) return []
@@ -278,6 +279,30 @@ const buildOwnerContext = (h: H, model: Model, nowMs: number): RowContext<Messag
 			isOwnProfile: model.currentUserId === user.id,
 			editProfileHref: hrefOf(AppRoute.MySettingsProfile({ orgSlug: model.orgSlug })),
 			nowMs,
+			toAction:
+				viewerId === null
+					? null
+					: (action) =>
+							Match.value(action).pipe(
+								Match.when("message", () =>
+									Message.ClickedMessageUser({
+										userId: user.id,
+										viewerId,
+										name: identity.displayName,
+									}),
+								),
+								Match.when("mention", () => Message.ClickedMentionUser({ userId: user.id })),
+								Match.when("viewProfile", () =>
+									Message.ClickedViewProfile({ userId: user.id }),
+								),
+								Match.when("copyEmail", () =>
+									Message.ClickedCopyProfileField({ field: "email", text: user.email }),
+								),
+								Match.when("copyId", () =>
+									Message.ClickedCopyProfileField({ field: "userId", text: user.id }),
+								),
+								Match.exhaustive,
+							),
 		})
 	}
 	return {

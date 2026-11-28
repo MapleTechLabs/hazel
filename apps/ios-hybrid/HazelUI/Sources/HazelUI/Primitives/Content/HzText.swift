@@ -26,7 +26,7 @@ struct HzText: View {
 
     static func style(_ node: Node, _ sizeClass: HazelTheme.SizeClass) -> HazelTheme.Style {
         let options = node.options(["role", "tone"])
-        let flags = Set(["strong", "numeric", "truncate"].filter { node[prop: $0]?.bool == true })
+        let flags = Set(["strong", "numeric", "truncate", "clamp"].filter { node[prop: $0]?.bool == true })
         return HazelTheme.Recipes.text.style(options: options, flags: flags, sizeClass: sizeClass)
     }
 

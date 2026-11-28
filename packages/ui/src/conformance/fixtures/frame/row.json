@@ -1,0 +1,43 @@
+{
+	"about": "A one-line hairline row in a list of them (`surface` `row`): a customer's feature flag, its key in code and a remove button.",
+	"root": {
+		"tag": "frame",
+		"props": {
+			"surface": "row"
+		},
+		"children": [
+			{
+				"tag": "stack",
+				"props": {
+					"axis": "horizontal",
+					"align": "center"
+				},
+				"children": [
+					{
+						"tag": "text",
+						"props": {
+							"role": "code",
+							"truncate": true
+						},
+						"children": ["beta_routing"]
+					},
+					{
+						"tag": "spacer"
+					},
+					{
+						"tag": "button",
+						"props": {
+							"icon": "close",
+							"iconOnly": true,
+							"variant": "ghost",
+							"size": "xsmall",
+							"label": "Turn off beta_routing"
+						},
+						"events": ["press"]
+					}
+				]
+			}
+		]
+	},
+	"frame": "sidebar"
+}

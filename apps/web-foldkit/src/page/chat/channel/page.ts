@@ -43,6 +43,7 @@ import * as Jump from "./jump"
 import { liftList, loadWhenNearEdge } from "./window"
 import * as ThreadWidth from "./thread-width"
 import * as Write from "./write"
+import { FindUserDm } from "./user-dm"
 import { errorToast, successToast } from "../../../data/actions"
 import type { ComposerRequest } from "@hazel/shared-screens/chat/composer/host"
 import { publish } from "../../../root/bus"
@@ -53,6 +54,10 @@ export { ChatTab, Message, Model, type PageReturn, Tab, type ThreadPanel } from 
 export { MAX_WINDOW } from "./window"
 
 // INIT
+
+/** The thread panel's profile card closes once one of its actions runs. */
+const withoutProfilePopover = (model: Model): Model =>
+	modifyFields(model, { overlays: Overlays.closePopover })
 
 export const listId = (channelId: string) => `message-list-${channelId}`
 
@@ -645,6 +650,56 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				replace: false,
 			}),
 		}),
+		ClickedMessageUser: ({ userId, viewerId, name }) => {
+			const closed = withoutProfilePopover(model)
+			const organizationId = model.channel?.organizationId
+			return organizationId === undefined
+				? { model: closed }
+				: {
+						model: closed,
+						commands: [
+							FindUserDm({
+								fromChannelId: model.channelId,
+								organizationId,
+								viewerId,
+								userId,
+								name,
+							}),
+						],
+					}
+		},
+		FoundUserDm: ({ fromChannelId, organizationId, userId, name, channelId }) => {
+			if (fromChannelId !== model.channelId) return { model }
+			return {
+				model,
+				outMessage:
+					channelId === null
+						? PageOutMessage.RequestedDmCreation({
+								organizationId,
+								orgSlug: model.orgSlug,
+								userId,
+								name,
+							})
+						: PageOutMessage.RequestedNavigation({
+								route: AppRoute.ChatChannel({ orgSlug: model.orgSlug, channelId }),
+								replace: false,
+							}),
+			}
+		},
+		ClickedViewProfile: ({ userId }) => ({
+			model: withoutProfilePopover(model),
+			outMessage: PageOutMessage.RequestedNavigation({
+				route: AppRoute.Profile({ orgSlug: model.orgSlug, userId }),
+				replace: false,
+			}),
+		}),
+		ClickedMentionUser: ({ userId }) =>
+			Write.askComposer(withoutProfilePopover(model), Write.focusedComposer(model), {
+				_tag: "InsertMention",
+				userId,
+			}),
+		ClickedCopyProfileField: ({ field, text }) =>
+			Write.copy(withoutProfilePopover(model), text, field === "email" ? "Email" : "UserId"),
 		ClickedReplyPreview: ({ fromMessageId, messageId }) =>
 			Jump.toMessage(model, fromMessageId, messageId),
 		LocatedJumpTarget: ({ messageId, newerCount }) => Jump.located(model, messageId, newerCount),

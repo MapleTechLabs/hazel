@@ -1,0 +1,14 @@
+{
+	"about": "A company's description (`clamp`): three lines, then an ellipsis.",
+	"root": {
+		"tag": "text",
+		"props": {
+			"tone": "subtle",
+			"clamp": true
+		},
+		"children": [
+			"Superwall provides an AI-powered monetization platform for mobile apps. Its tools help teams create and test paywalls, manage subscriptions and in-app purchases, personalize offers for different audiences, and analyze revenue and conversion performance."
+		]
+	},
+	"frame": "sidebar"
+}

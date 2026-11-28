@@ -3,11 +3,12 @@ import type { TextRole, TextTone } from "../schema.ts"
 
 /**
  * `text`: a role's type, a tone's ink, and `strong`, the one weight choice a view has. `numeric` sets
- * tabular figures (counts, times), `truncate` ends one line with an ellipsis.
+ * tabular figures (counts, times), `truncate` ends one line with an ellipsis, `clamp` three lines
+ * (a company's description, `line-clamp-3`).
  */
 export const text = defineRecipe<
 	{ readonly role: TextRole; readonly tone: TextTone },
-	"strong" | "numeric" | "truncate"
+	"strong" | "numeric" | "truncate" | "clamp"
 >({
 	primitive: "text",
 	parts: {},
@@ -63,6 +64,7 @@ export const text = defineRecipe<
 		strong: { root: { strong: true } },
 		numeric: { root: { numeric: true } },
 		truncate: { root: { truncate: true } },
+		clamp: { root: { lineClamp: 3 } },
 	},
 	// A key cap's default ink is `fg-3`, under the tone layer.
 	compounds: [{ when: { role: "kbd", tone: "default" }, style: { root: { color: "fg-3" } } }],

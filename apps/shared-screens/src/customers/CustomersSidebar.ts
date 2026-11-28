@@ -11,7 +11,6 @@ import { ClientData, HazelRpc } from "@hazel/client-data"
 import * as Customers from "@hazel/domain/customers"
 import { CustomerViewLayoutId, OrganizationId, UserId } from "@hazel/schema"
 import { Hazel } from "@hazel/ui/vocabulary/index"
-import type { IconName } from "@hazel/ui/vocabulary/options"
 import { Effect, Layer, Schema } from "effect"
 import { AppToast, ShowToast } from "../app/requests"
 import { withData } from "../app/live"
@@ -20,6 +19,7 @@ import { AccountMenu, AccountMenuProps } from "../shell/Chrome"
 import { NavRow } from "../shell/SectionSidebar"
 import { makeCustomerQueries, SavedViewRow, ViewLayoutRow } from "./data/queries"
 import { makeIssueData } from "./data/issues"
+import { lookOf, type ViewLook, viewGlyph } from "./ui/view-look"
 import {
 	ALL_KEY,
 	arrange,
@@ -117,27 +117,24 @@ const BUILT_IN_VIEWS: ReadonlyArray<{ readonly key: Customers.BuiltInViewKey; re
 	{ key: "churned", name: "Churned" },
 ]
 
-/** The icon a built-in view ships with (the rest ship a colour only). */
-const shippedIconOf = (key: string): Customers.ViewIcon | null => (key === "my_customers" ? "user" : null)
-
 export interface SidebarView {
 	readonly key: string
 	readonly name: string
-	readonly icon: Customers.ViewIcon | null
+	readonly look: ViewLook
 }
 
 /** Every view in my order: Current, the synced views (or the built-ins until they sync), All. */
 export const allViewsOf = (model: Model): ReadonlyArray<SidebarView> =>
 	arrange(
 		[
-			{ key: CURRENT_KEY, name: "Current customers", icon: null },
+			{ key: CURRENT_KEY, name: "Current customers", look: lookOf(CURRENT_KEY, null) },
 			...(model.views === null
-				? BUILT_IN_VIEWS.map(({ key, name }) => ({ key, name, icon: shippedIconOf(key) }))
+				? BUILT_IN_VIEWS.map(({ key, name }) => ({ key, name, look: lookOf(key, null) }))
 				: model.views.map((view) => {
 						const key = view.builtInKey ?? view.id
-						return { key, name: view.name, icon: view.icon ?? shippedIconOf(key) }
+						return { key, name: view.name, look: lookOf(key, view) }
 					})),
-			{ key: ALL_KEY, name: "All customers", icon: null },
+			{ key: ALL_KEY, name: "All customers", look: lookOf(ALL_KEY, null) },
 		],
 		(view) => view.key,
 		layoutOf(model.layout).order,
@@ -278,8 +275,7 @@ export const CustomersSidebar = Hazel.component({
 				.key(view.key)
 				.title(view.name)
 				.style("nav")
-				// HAZEL-GAP(ph2-view-glyph): no tinted glyph or colour dot leads a row; the view's icon shows untinted.
-				.leading(view.icon === null ? null : h.icon.name(view.icon satisfies IconName))
+				.leading(viewGlyph(h, view.look))
 				.selected(props.currentView === view.key)
 				.href(viewHref(view.key))
 				.actions(
