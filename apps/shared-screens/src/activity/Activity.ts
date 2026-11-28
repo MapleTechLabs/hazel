@@ -61,6 +61,8 @@ export const ActivityMessage = UiSchema.TaggedEnum({
 	FailedMarkRead: { id: NotificationId, reason: Schema.Literals(["NotFound", "Other"]) },
 	DismissedError: {},
 	CompletedRequestNavigation: {},
+	/** The preview channels' messages are in (or the wait ran out): the rows can show. */
+	SettledPreviews: {},
 })
 export type ActivityMessage = typeof ActivityMessage.Type
 
@@ -80,6 +82,11 @@ export const ActivityModel = Schema.Struct({
 	/** Null until the live query first emits. */
 	items: Schema.NullOr(Schema.Array(ActivityItem)),
 	showError: Schema.Boolean,
+	/**
+	 * Set once the first preview channels settled: until then a message row would draw its fallback
+	 * ("View notification") and then grow into its preview, pushing every row under it down.
+	 */
+	previewsSettled: Schema.Boolean,
 })
 export type ActivityModel = typeof ActivityModel.Type
 
@@ -211,14 +218,30 @@ const notificationsStream = (memberId: OrganizationMemberId) =>
 		),
 	)
 
-/** Holds the preview channels' sources open while subscribed (messages sync per channel). */
+/** The longest the list waits for its previews before it shows rows with what it has. */
+const PREVIEW_WAIT = Duration.seconds(3)
+
+/**
+ * Holds the preview channels' sources open while subscribed (messages sync per channel), and says
+ * once they have settled, or once `PREVIEW_WAIT` has passed (a slow or refused channel).
+ */
 const retainedChannels = (ids: ReadonlyArray<string>) =>
-	Stream.unwrap(
-		Effect.map(
-			ClientData.useSync((data) => data),
-			(data) => data.retainChannels(ids) as Stream.Stream<never>,
+	Stream.merge(
+		Stream.unwrap(
+			Effect.map(
+				ClientData.useSync((data) => data),
+				(data) => data.retainChannelsSettled(ids),
+			),
 		),
-	)
+		Stream.fromEffect(Effect.sleep(PREVIEW_WAIT)),
+	).pipe(Stream.map(() => ActivityMessage.SettledPreviews()))
+
+/** A message row whose message has not synced yet: it would show its fallback text. */
+const previewPending = (item: ActivityItem) =>
+	item.resourceType === "message" &&
+	item.messageContent === null &&
+	!isSupportAlert(item) &&
+	targetOf(item) !== null
 
 /** The relative times move on once a minute. */
 const clock = Stream.fromEffectSchedule(
@@ -267,7 +290,13 @@ export const Activity = Hazel.component({
 	model: ActivityModel,
 	message: ActivityMessage,
 }).make({
-	init: ({ props }) => ({ tab: props.tab, nowMs: props.nowMs, items: null, showError: false }),
+	init: ({ props }) => ({
+		tab: props.tab,
+		nowMs: props.nowMs,
+		items: null,
+		showError: false,
+		previewsSettled: false,
+	}),
 	update: {
 		UpdatedNotifications: ($, { items }) => $.evolve({ items: () => items }),
 		ChangedTab: ($, { tab }) => $.evolve({ tab: () => tab }),
@@ -288,6 +317,9 @@ export const Activity = Hazel.component({
 			reason === "NotFound" ? $.model : $.evolve({ showError: () => true }),
 		DismissedError: ($) => $.evolve({ showError: () => false }),
 		CompletedRequestNavigation: ($) => $.model,
+		// Only for the rows' channels: the empty set before the first rows settles at once.
+		SettledPreviews: ($) =>
+			$.model.items === null ? $.model : $.evolve({ previewsSettled: () => true }),
 	},
 	subscriptions: ({ props, model }) => [
 		Subscription.make("notifications", [props.memberId], ([memberId]) => notificationsStream(memberId)),
@@ -374,7 +406,9 @@ export const Activity = Hazel.component({
 			)
 
 		const copy = COPY[model.tab]
-		const listed = model.items === null ? null : itemsOfTab(model.items, model.tab)
+		// The first rows wait for their previews, so each draws once at its final height.
+		const ready = model.items !== null && (model.previewsSettled || !model.items.some(previewPending))
+		const listed = model.items === null || !ready ? null : itemsOfTab(model.items, model.tab)
 		const body =
 			listed === null
 				? [h.list.loading()]

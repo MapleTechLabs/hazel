@@ -60,6 +60,9 @@ declare const Bun: {
 const port = Number(process.argv[2] ?? 4320)
 const backendUrl = `http://127.0.0.1:${port}`
 const server = makeFixtureServer()
+// `--latency <ms>`: each sync frame reaches the app that much later, as on a real network (first-load layout).
+const latencyIndex = process.argv.indexOf("--latency")
+const latencyMs = latencyIndex === -1 ? 0 : Number(process.argv[latencyIndex + 1] ?? 0)
 // With `--thread`, the thread's own source answers as an empty channel's (`thread-seed.ts`).
 const FixtureWebSocket = makeFixtureWebSocket({
 	server,
@@ -244,7 +247,10 @@ Bun.serve<SocketData>({
 		open: (ws: ServerWebSocket<SocketData>) => {
 			console.log(`[ws] open ${ws.data.url} [${ws.data.protocols[0] ?? ""}]`)
 			const fixture = new FixtureWebSocket(ws.data.url, ws.data.protocols)
-			fixture.onmessage = ({ data }) => void ws.send(String(data))
+			fixture.onmessage = ({ data }) =>
+				latencyMs > 0
+					? void setTimeout(() => ws.send(String(data)), latencyMs)
+					: void ws.send(String(data))
 			fixture.onclose = ({ code, reason }) => ws.close(code, reason)
 			ws.data.fixture = fixture
 		},

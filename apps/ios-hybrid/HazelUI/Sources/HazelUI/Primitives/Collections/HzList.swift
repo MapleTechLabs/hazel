@@ -333,7 +333,9 @@ private struct ListSkeleton: View {
             }
         }
         .padding(Token.space("4"))
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        // The whole height, as the loaded list's scroller takes it: what follows the list (a chat's
+        // composer) stays where it will be, rather than sitting under the skeleton until rows arrive.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .hzEnter("list", part: "skeleton", sizeClass: .compact)
     }
 

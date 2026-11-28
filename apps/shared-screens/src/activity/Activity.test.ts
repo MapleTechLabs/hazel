@@ -62,6 +62,20 @@ describe("Activity", () => {
 		}),
 	)
 
+	it.effect("the first rows wait for their message previews, so none grows once shown", () =>
+		Effect.gen(function* () {
+			const s = yield* Story.make(Activity, props)
+			// Settling before any rows (the empty channel set) does not count.
+			s.send(ActivityMessage.SettledPreviews())
+			assert.isFalse(s.model.previewsSettled)
+			const pending = item(1, { messageContent: null, author: null })
+			s.send(ActivityMessage.UpdatedNotifications({ items: [pending] }))
+			assert.isFalse(s.model.previewsSettled)
+			s.send(ActivityMessage.SettledPreviews())
+			assert.isTrue(s.model.previewsSettled)
+		}),
+	)
+
 	it.effect("a press on an unread row marks it read and opens its channel", () =>
 		Effect.gen(function* () {
 			const s = yield* Story.make(Activity, props)
