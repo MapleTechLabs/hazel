@@ -1,19 +1,25 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
+import { formatTimezoneDelta } from "@hazel/shared-screens/lib/utils/timezone"
+import type { ProfileAction } from "@hazel/shared-screens/chat/components/ProfileCard"
 import { cn } from "~/lib/utils"
-import { getEffectivePresenceStatus, type PresenceStatus } from "~/utils/presence"
-import { formatStatusExpiration, getStatusDotColor, getStatusLabel } from "~/utils/status"
+import { getEffectivePresenceStatus } from "~/utils/presence"
+import { formatStatusExpiration } from "~/utils/status"
 import { formatUserLocalTime, getTimezoneAbbreviation } from "~/utils/timezone"
-import { IconChatBubble, IconClock, IconDotsVertical, IconPhone } from "../icons"
+import { IconChatBubble, IconClock, IconCopy, IconEdit, IconEnvelope, IconMsgPen, IconUser } from "../icons"
 import type { PresenceInfo, SyncProvider, UserInfo } from "../page/chat/lookups"
-import { syncBadge } from "./message/parts"
 import { avatar } from "../ui/avatar"
 import { badge } from "../ui/badge"
-import { ariaButton, button, buttonClassName } from "../ui/button"
-import { menuTriggerClassName } from "../ui/menu-view"
+import { button, buttonClassName } from "../ui/button"
+import { presenceDot } from "../ui/presence-dot"
+import { syncMark } from "./message/parts"
 
-/** `UserProfilePopover`'s `PopoverBody` (the trigger is the message avatar). */
+/**
+ * `UserProfilePopover`'s `PopoverBody` (the trigger is the message avatar), as the thread panel's
+ * rows draw it. The shared message list draws the same card (`shared-screens` `ProfileCard`): who
+ * they are, their custom status and clock, and what you can do.
+ */
 
-export interface ProfileInputs {
+export interface ProfileInputs<M> {
 	readonly user: UserInfo
 	readonly displayName: string
 	readonly avatarUrl: string | null
@@ -25,199 +31,176 @@ export interface ProfileInputs {
 	/** Where "Edit profile" (own profile only) leads: the settings profile page. */
 	readonly editProfileHref: string
 	readonly nowMs: number
+	/** A card action's message; null while there is no viewer to act as. */
+	readonly toAction: ((action: ProfileAction) => M) | null
 }
 
-const statusIntent = (status: PresenceStatus) =>
-	status === "online"
-		? "success"
-		: status === "away"
-			? "warning"
-			: status === "dnd"
-				? "danger"
-				: "secondary"
+const providerLabel = (provider: SyncProvider) => (provider === "discord" ? "Discord" : "Slack")
 
-const actionBar = <M>(h: HtmlBuilder<M>, inputs: ProfileInputs): ReadonlyArray<Html> =>
-	inputs.isOwnProfile
-		? [
-				h.a(
-					[
-						h.Class(buttonClassName({ size: "sm", intent: "primary" }, "flex-1")),
-						h.Href(inputs.editProfileHref),
-					],
-					["Edit profile"],
-				),
-			]
-		: [
-				button(h, { size: "sm", intent: "primary", className: "flex-1" }, [
-					IconChatBubble(h, { attributes: { "data-slot": "icon" } }),
-					"Message",
-				]),
-				...(inputs.isBot || inputs.syncProvider !== null
-					? []
-					: [
-							button(
-								h,
-								{
-									size: "sq-sm",
-									intent: "secondary",
-									attributes: [h.Attribute("aria-label", "Call")],
-								},
-								[IconPhone(h, { attributes: { "data-slot": "icon" } })],
-							),
-						]),
-				// MenuTrigger renders its own button around the Button child.
-				ariaButton(
-					h,
-					{
-						className: menuTriggerClassName(),
-						attributes: [
-							h.Attribute("aria-expanded", "false"),
-							h.Attribute("aria-haspopup", "true"),
-							h.Attribute("data-slot", "menu-trigger"),
-						],
-					},
-					[
-						button(
-							h,
-							{
-								size: "sq-sm",
-								intent: "secondary",
-								attributes: [
-									h.Attribute("aria-expanded", "false"),
-									h.Attribute("aria-haspopup", "true"),
-									h.Attribute("aria-label", "More options"),
-								],
-							},
-							[IconDotsVertical(h, { attributes: { "data-slot": "icon" } })],
-						),
-					],
-				),
-			]
+/** Under the name: the email for a person, the platform for a synced person, "App" for a bot. */
+const subtitleOf = <M>({ user, isBot, syncProvider }: ProfileInputs<M>): string | null =>
+	syncProvider !== null ? `${providerLabel(syncProvider)} member` : isBot ? "App" : user.email || null
 
-export const profilePopoverContent = <M>(h: HtmlBuilder<M>, inputs: ProfileInputs): ReadonlyArray<Html> => {
+/** A quiet icon button with its name as the tooltip. */
+const iconAction = <M>(h: HtmlBuilder<M>, label: string, icon: Html, onPress: M): Html =>
+	button(
+		h,
+		{
+			size: "sq-sm",
+			intent: "plain",
+			onPress,
+			attributes: [h.Attribute("aria-label", label), h.Attribute("title", label)],
+		},
+		[icon],
+	)
+
+/**
+ * Your own card: "Edit profile". A Hazel person or an app: "Message". A Slack or Discord person has
+ * no Hazel DM, so "Mention" leads. The rest are icon buttons at the end.
+ */
+const actionBar = <M>(h: HtmlBuilder<M>, inputs: ProfileInputs<M>): ReadonlyArray<Html> => {
+	const { toAction, isOwnProfile, isBot, syncProvider, user } = inputs
+	const canMessage = !isOwnProfile && syncProvider === null
+	const slot = { attributes: { "data-slot": "icon" } }
+	const primary = isOwnProfile
+		? h.a(
+				[h.Class(buttonClassName({ size: "sm", intent: "primary" })), h.Href(inputs.editProfileHref)],
+				[IconEdit(h, slot), "Edit profile"],
+			)
+		: toAction === null
+			? h.empty
+			: canMessage
+				? button(h, { size: "sm", intent: "primary", onPress: toAction("message") }, [
+						IconChatBubble(h, slot),
+						"Message",
+					])
+				: button(h, { size: "sm", intent: "secondary", onPress: toAction("mention") }, [
+						IconMsgPen(h, slot),
+						"Mention",
+					])
+	const hasEmail = syncProvider === null && !isBot && user.email !== ""
+	const secondary =
+		toAction === null
+			? []
+			: [
+					canMessage ? iconAction(h, "Mention", IconMsgPen(h, slot), toAction("mention")) : h.empty,
+					canMessage || isOwnProfile
+						? iconAction(h, "View profile", IconUser(h, slot), toAction("viewProfile"))
+						: h.empty,
+					hasEmail
+						? iconAction(h, "Copy email", IconEnvelope(h, slot), toAction("copyEmail"))
+						: h.empty,
+					iconAction(h, "Copy user ID", IconCopy(h, slot), toAction("copyId")),
+				]
+	return [primary, h.div([h.Class("flex-1")]), ...secondary]
+}
+
+export const profilePopoverContent = <M>(
+	h: HtmlBuilder<M>,
+	inputs: ProfileInputs<M>,
+): ReadonlyArray<Html> => {
 	const { user, presence, isBot, syncProvider } = inputs
-	// Neither an app nor a Slack or Discord person has Hazel presence, a status or a reachable email.
+	// Neither an app nor a Slack or Discord person has Hazel presence, a status or a local time.
 	const isExternal = isBot || syncProvider !== null
 	const status = getEffectivePresenceStatus(presence)
-	const localTime = user.timezone ? formatUserLocalTime(user.timezone) : ""
+	const localTime = !isExternal && user.timezone ? formatUserLocalTime(user.timezone) : ""
+	const delta = localTime === "" ? "" : formatTimezoneDelta(user.timezone, new Date(inputs.nowMs))
 	const expiration =
 		presence?.statusExpiresAtMs != null
 			? formatStatusExpiration(new Date(presence.statusExpiresAtMs))
 			: null
+	const subtitle = subtitleOf(inputs)
 	return [
-		h.div([
-			h.Class(
-				cn(
-					"relative h-20 overflow-hidden rounded-t-xl",
-					"bg-gradient-to-br from-primary/20 via-accent/10 to-transparent",
-					"before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_30%_20%,var(--color-primary)/15_0%,transparent_50%)]",
-				),
-			),
-		]),
 		h.div(
-			[h.Class("relative rounded-t-xl border border-border bg-bg shadow-md")],
+			[h.Class("flex flex-col gap-3 p-3")],
 			[
+				// Who: the avatar beside the name, read left to right like a message row; presence is
+				// the avatar's dot.
 				h.div(
-					[h.Class("absolute left-1/2 -top-10 -translate-x-1/2")],
+					[h.Class("flex items-center gap-3")],
 					[
-						h.div(
-							[h.Class("relative")],
-							[
-								avatar(h, {
-									size: "3xl",
-									className: "shadow-lg shadow-black/5 ring-[5px] ring-bg",
-									alt: inputs.displayName,
-									src: inputs.avatarUrl,
-									seed: inputs.displayName || undefined,
-									isSquare: isBot,
-								}),
-								isExternal
-									? h.empty
-									: h.span([
-											h.Class(
-												cn(
-													"absolute right-1 bottom-1 size-4 rounded-full border-[3px] border-bg",
-													getStatusDotColor(status),
-												),
-											),
-										]),
-							],
-						),
-					],
-				),
-				h.div(
-					[h.Class("flex flex-col items-center gap-1 pt-12 text-center")],
-					[
-						h.div(
-							[h.Class("flex items-center gap-2")],
-							[
-								h.span([h.Class("text-lg font-semibold text-fg")], [inputs.displayName]),
+						avatar(h, {
+							size: "lg",
+							alt: inputs.displayName,
+							src: inputs.avatarUrl,
+							seed: inputs.displayName || undefined,
+							isSquare: true,
+							badge:
 								syncProvider !== null
-									? syncBadge(h, syncProvider)
-									: isBot
-										? badge(h, { intent: "primary", size: "sm" }, ["APP"])
-										: h.empty,
+									? syncMark(h, syncProvider)
+									: isExternal
+										? undefined
+										: presenceDot(h, status, "sm"),
+						}),
+						h.div(
+							[h.Class("flex min-w-0 flex-col")],
+							[
+								h.div(
+									[h.Class("flex min-w-0 items-center gap-2")],
+									[
+										h.span(
+											[h.Class("truncate font-semibold text-base text-fg")],
+											[inputs.displayName],
+										),
+										isBot
+											? badge(h, { intent: "primary", size: "sm" }, ["APP"])
+											: h.empty,
+									],
+								),
+								subtitle === null
+									? h.empty
+									: h.span([h.Class("truncate text-muted-fg text-sm")], [subtitle]),
 							],
 						),
-						isExternal ? h.empty : h.span([h.Class("text-sm text-muted-fg")], [user.email]),
-						!isExternal && status !== "online"
-							? badge(h, { intent: statusIntent(status), size: "sm", className: "mt-1" }, [
-									getStatusLabel(status),
-								])
-							: h.empty,
 					],
 				),
+				// Their custom status, as they wrote it.
 				!isExternal && (presence?.statusEmoji || presence?.customMessage)
 					? h.div(
-							[h.Class("mx-4 mt-3 rounded-lg bg-secondary/50 p-3")],
+							[h.Class("flex items-center gap-2 rounded-lg bg-secondary/50 px-3 py-2")],
 							[
+								presence.statusEmoji
+									? h.span([h.Class("text-lg")], [presence.statusEmoji])
+									: h.empty,
 								h.div(
-									[h.Class("flex items-start gap-2")],
+									[h.Class("flex min-w-0 flex-col")],
 									[
-										presence.statusEmoji
-											? h.span([h.Class("text-lg")], [presence.statusEmoji])
+										presence.customMessage
+											? h.span([h.Class("text-fg text-sm")], [presence.customMessage])
 											: h.empty,
-										h.div(
-											[h.Class("flex flex-col gap-0.5")],
-											[
-												presence.customMessage
-													? h.span(
-															[h.Class("text-sm text-fg")],
-															[presence.customMessage],
-														)
-													: h.empty,
-												presence.statusExpiresAtMs !== null
-													? h.span(
-															[h.Class("text-xs text-muted-fg")],
-															["Until ", expiration ?? ""],
-														)
-													: h.empty,
-											],
-										),
+										presence.statusExpiresAtMs !== null
+											? h.span(
+													[h.Class("text-muted-fg text-xs")],
+													["Until ", expiration ?? ""],
+												)
+											: h.empty,
 									],
 								),
 							],
 						)
 					: h.empty,
-				!isExternal && user.timezone && localTime
-					? h.div(
-							[h.Class("mt-3 px-4")],
+				// Their clock: how far it is from yours, else (same clock) its zone.
+				localTime === ""
+					? h.empty
+					: h.div(
+							[h.Class("flex items-center gap-2 text-muted-fg text-sm")],
 							[
-								h.div(
-									[h.Class("flex items-center justify-center gap-2 text-sm text-muted-fg")],
+								IconClock(h, { className: "size-4 shrink-0 opacity-60" }),
+								h.span(
+									[],
 									[
-										IconClock(h, { className: "size-4 opacity-60" }),
-										h.span(
-											[],
-											[localTime, " (", getTimezoneAbbreviation(user.timezone), ")"],
-										),
+										[
+											localTime,
+											delta === "" ? getTimezoneAbbreviation(user.timezone) : delta,
+										]
+											.filter(Boolean)
+											.join(" · "),
 									],
 								),
 							],
-						)
-					: h.empty,
+						),
 				h.div(
-					[h.Class("mt-4 flex items-center gap-2 border-t border-border px-4 py-3")],
+					[h.Class(cn("flex items-center gap-1 border-border border-t pt-3"))],
 					[...actionBar(h, inputs)],
 				),
 			],

@@ -18,6 +18,7 @@ const channelId = ChannelId.make("00000005-0000-4000-8000-000000000001")
 const ada = UserId.make("00000001-0000-4000-8000-000000000001")
 const grace = UserId.make("00000001-0000-4000-8000-000000000002")
 const linus = UserId.make("00000001-0000-4000-8000-000000000003")
+const fiws = UserId.make("00000001-0000-4000-8000-000000000004")
 const id = (n: number) => MessageId.make(`00000009-0000-4000-8000-${n.toString(16).padStart(12, "0")}`)
 
 const message = (n: number, authorId: UserId, atMs: number): ChatMessage => ({
@@ -66,6 +67,12 @@ const loaded = () => {
 				person(ada, "Ada", "Lovelace"),
 				person(grace, "Grace", "Hopper", "America/New_York"),
 				person(linus, "Linus", "Torvalds"),
+				// A Discord person (a chat sync shadow user).
+				{
+					...person(fiws, "fiws", ""),
+					userType: "machine",
+					email: "discord-user-1@discord.internal",
+				},
 			],
 		}),
 	)
@@ -169,11 +176,10 @@ describe("message overlays", () => {
 			.toExist()
 			.expect(inPopover(Locator.text("grace@hazel.test")))
 			.toExist()
-			// No presence row yet: offline, as today's card says.
-			.expect(inPopover(byProp("badge", "label", "Offline")))
-			.toExist()
 			.expect(inPopover(byProp("button", "label", "Message")))
 			.toExist()
+		// No presence row yet: the avatar's dot says offline.
+		expect(s.get(inPopover(Locator.tag("hz:avatar"))).props?.["presence"]).toBe("offline")
 		deliver(
 			s,
 			"profilePresence",
@@ -186,8 +192,6 @@ describe("message overlays", () => {
 				},
 			}),
 		)
-			.expect(inPopover(byProp("badge", "label", "Away")))
-			.toExist()
 			.expect(inPopover(Locator.text("On holiday")))
 			.toExist()
 		expect(s.get(inPopover(Locator.tag("hz:avatar"))).props?.["presence"]).toBe("away")
@@ -205,6 +209,46 @@ describe("message overlays", () => {
 			.expectExact(RequestHost.make({ request: { _tag: "EditProfile" } }))
 			.resolve(RequestHost, MessageListMessage.CompletedCommand())
 		expect(s.get(popover).props?.["open"]).toBeFalsy()
+	})
+
+	test("the card's Message opens a DM with the person, and closes the card", () => {
+		const s = loaded().fire(row(0), "pressAuthor")
+		s.fire(inPopover(byProp("button", "label", "Message")), "press")
+			.expectExact(
+				RequestHost.make({
+					request: { _tag: "MessageUser", userId: grace, viewerId: ada, name: "Grace Hopper" },
+				}),
+			)
+			.resolve(RequestHost, MessageListMessage.CompletedCommand())
+		expect(s.get(popover).props?.["open"]).toBeFalsy()
+	})
+
+	test("the card's menu mentions, opens the profile and copies the email or id", () => {
+		const cases = [
+			["mention", { _tag: "MentionUser", userId: grace }],
+			["viewProfile", { _tag: "ViewProfile", userId: grace }],
+			["copyEmail", { _tag: "CopyProfileField", field: "email", text: "grace@hazel.test" }],
+			["copyId", { _tag: "CopyProfileField", field: "userId", text: grace }],
+		] as const
+		for (const [id, request] of cases) {
+			loaded()
+				.fire(row(0), "pressAuthor")
+				.fire(inPopover(byProp("menu", "label", "More options")), "select", { id })
+				.expectExact(RequestHost.make({ request }))
+				.resolve(RequestHost, MessageListMessage.CompletedCommand())
+		}
+	})
+
+	test("a Discord person's card leads with Mention and does not repeat it in the menu", () => {
+		const s = loaded().fire(row(1), "pressMention", { userId: fiws, run: 0 })
+		s.expect(inPopover(byProp("button", "label", "Message")))
+			.toBeAbsent()
+			.expect(inPopover(byProp("button", "label", "Mention")))
+			.toExist()
+		const entries = s.get(inPopover(byProp("menu", "label", "More options"))).props?.["entries"] as
+			| ReadonlyArray<{ readonly entries: ReadonlyArray<{ readonly id: string }> }>
+			| undefined
+		expect(entries?.map((group) => group.entries.map((entry) => entry.id))).toEqual([["copyId"]])
 	})
 
 	test("reaction pills carry who reacted, three names and a count of the rest", () => {

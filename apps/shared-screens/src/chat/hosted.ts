@@ -8,9 +8,10 @@
 import { Component } from "@effect/ui"
 import { ClientData, HazelRpc } from "@hazel/client-data"
 import { Clipboard } from "@hazel/client-data/platform"
-import type { ChannelId, MessageId } from "@hazel/schema"
+import type { ChannelId, MessageId, UserId } from "@hazel/schema"
 import { Context, Effect, Layer, Match, Stream } from "effect"
 import { Navigator, openRoute } from "../app/navigator"
+import { existingDm } from "../modals/CreateDmModal"
 import { AppRequest, AppRequests } from "../app/requests"
 import { AppRoute } from "../app/route"
 import { ChannelScreen } from "./ChannelScreen"
@@ -50,9 +51,11 @@ const messageListHostLayer = (orgSlug: string, channelId: ChannelId) =>
 			const host = yield* MessageListHost
 			const live = yield* LiveConnection
 			const requests = yield* AppRequests
-			// A refused clipboard says so (as the web's copies do), never a silent no-op.
-			const copy = (text: string) =>
+			// A refused clipboard says so (as the web's copies do), never a silent no-op; `copied`
+			// is the success toast, for copies that confirm.
+			const copy = (text: string, copied: Effect.Effect<void> = Effect.void) =>
 				clipboard.write(text).pipe(
+					Effect.andThen(copied),
 					Effect.catchTag("ClipboardError", () =>
 						requests.send(
 							AppRequest.ShowToast({
@@ -61,6 +64,19 @@ const messageListHostLayer = (orgSlug: string, channelId: ChannelId) =>
 						),
 					),
 				)
+			const toast = (title: string) =>
+				requests.send(
+					AppRequest.ShowToast({ toast: { intent: "success", title, description: null } }),
+				)
+			/** The viewer's DM with `userId`: open it, or have the app create it (its toast and link). */
+			const messageUser = (userId: UserId, viewerId: UserId, name: string) => {
+				const organizationId = data.collections.channelCollection.state.get(channelId)?.organizationId
+				if (organizationId === undefined) return Effect.void
+				const dm = existingDm(data, organizationId, viewerId, [userId])
+				return dm !== null
+					? openRoute(navigator, AppRoute.ChatChannel({ orgSlug, channelId: dm }))
+					: requests.send(AppRequest.CreateDm({ organizationId, orgSlug, userId, name }))
+			}
 			const handle = (request: HostRequest): Effect.Effect<void> =>
 				Match.valueTags(request, {
 					Action: ({ messageId, action, content, author, image }) =>
@@ -94,6 +110,11 @@ const messageListHostLayer = (orgSlug: string, channelId: ChannelId) =>
 								),
 					OpenLink: ({ url }) => navigator.open(url),
 					EditProfile: () => openRoute(navigator, AppRoute.MySettingsProfile({ orgSlug })),
+					MessageUser: ({ userId, viewerId, name }) => messageUser(userId, viewerId, name),
+					ViewProfile: ({ userId }) => openRoute(navigator, AppRoute.Profile({ orgSlug, userId })),
+					MentionUser: ({ userId }) => composer.send(channelId, { _tag: "InsertMention", userId }),
+					CopyProfileField: ({ field, text }) =>
+						copy(text, toast(field === "email" ? "Email copied" : "User ID copied")),
 					OpenAttachment: (open) => host.openAttachment(open),
 					JumpToReply: ({ messageId }) => host.jumpToReply(channelId, messageId),
 					Retry: ({ messageId }) => host.retry(channelId, messageId),
