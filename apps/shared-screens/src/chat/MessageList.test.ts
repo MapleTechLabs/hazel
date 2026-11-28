@@ -72,6 +72,25 @@ const tags = (entries: ReadonlyArray<Entry>) =>
 	entries.map((entry) => (entry._tag === "Row" ? `${entry.grouped ? "+" : "R"}` : entry._tag[0]))
 
 describe("toEntries", () => {
+	it("keeps every row an unrelated change leaves alone, by reference", () => {
+		const newestFirst = [message(2, grace, NOW - MINUTE), message(1, ada, NOW - 10 * MINUTE)]
+		const first = toEntries(newestFirst, lookups(), [], null)
+		const reacted = toEntries(
+			newestFirst,
+			lookups({
+				reactions: new Map([[id(2), [{ messageId: id(2), userId: grace, emoji: "👍" }]]]),
+				users: new Map(users),
+				nowMs: NOW + MINUTE,
+			}),
+			first,
+			null,
+		)
+		const rowOf = (entries: ReadonlyArray<Entry>, n: number) =>
+			entries.find((entry) => entry._tag === "Row" && entry.key === id(n))
+		assert.strictEqual(rowOf(reacted, 1), rowOf(first, 1))
+		assert.notStrictEqual(rowOf(reacted, 2), rowOf(first, 2))
+	})
+
 	it("groups one author's messages within three minutes, oldest first, a date divider per day", () => {
 		const day = Date.parse("2026-11-25T10:00:00")
 		const newestFirst = [

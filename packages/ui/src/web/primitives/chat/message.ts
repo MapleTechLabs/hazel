@@ -506,8 +506,13 @@ export const primitive = definePrimitive("message", ({ document, tag, outer }) =
 		outer: node,
 		content: node,
 		set: (name, value) => {
-			if (name === "row") row = isRow(value) ? value : undefined
-			else if (isFlag(name)) {
+			// An unchanged prop leaves the row's DOM (and any open toolbar or selection) as it is.
+			if (name === "row") {
+				const next = isRow(value) ? value : undefined
+				if (next === row) return
+				row = next
+			} else if (isFlag(name)) {
+				if ((value === true) === on.has(name)) return
 				// A live arrival rises in once (`recipe.motion` enter, today's `animate-message-enter`).
 				if (name === "entering" && value === true && !on.has(name)) mark(node, "enter")
 				if (value === true) on.add(name)

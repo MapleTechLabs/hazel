@@ -206,6 +206,9 @@
         "@tanstack/db": "1.0.0-rc.1.5",
         "effect": "catalog:effect",
       },
+      "devDependencies": {
+        "happy-dom": "^20.0.0",
+      },
     },
     "apps/web-foldkit": {
       "name": "web-foldkit",
