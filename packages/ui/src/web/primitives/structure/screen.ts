@@ -61,6 +61,9 @@ ${CONTENT} > [data-hz-slot="meta"] { position: absolute; z-index: 11; }
 ${ROOT}[data-toolbar] > [data-hz-part="header"] {
 	padding-inline-end: calc(var(--hz-screen-toolbar) + var(--hz-space-4) + var(--hz-space-2));
 }
+${ROOT}[data-bar-leading] > [data-hz-part="header"] {
+	padding-inline-start: calc(var(--hz-screen-bar-leading) + var(--hz-space-4) + var(--hz-space-2));
+}
 `
 
 // `centered` (`auth/layout.ts` `authShell`): one column at the compact size; from the regular size
@@ -89,6 +92,10 @@ const css = `
 ${ROOT} { position: relative; }
 ${CONTENT} > [data-hz-slot="toolbar"] {
 	position: absolute; top: 0; inset-inline-end: var(--hz-space-4); height: var(--hz-space-14);
+	display: flex; align-items: center; gap: var(--hz-space-1); z-index: 11;
+}
+${CONTENT} > [data-hz-slot="barLeading"] {
+	position: absolute; top: 0; inset-inline-start: var(--hz-space-4); height: var(--hz-space-14);
 	display: flex; align-items: center; gap: var(--hz-space-1); z-index: 11;
 }
 ${CONTENT} > [data-hz-slot="toolbar"] > [data-hz="icon"] {
@@ -143,11 +150,16 @@ export const primitive = definePrimitive("screen", ({ document, tag, outer }) =>
 	const slotOf = (name: string) => content.querySelector<HTMLElement>(`:scope > [data-hz-slot="${name}"]`)
 	let meta: HTMLElement | null = null
 	let toolbar: HTMLElement | null = null
+	let barLeading: HTMLElement | null = null
 	const place = () => {
 		const tools = toolbar !== null && toolbar.childElementCount > 0 ? toolbar : null
 		flag(node, "toolbar", tools !== null)
 		if (tools !== null)
 			node.style.setProperty("--hz-screen-toolbar", `${tools.getBoundingClientRect().width}px`)
+		const lead = barLeading !== null && barLeading.childElementCount > 0 ? barLeading : null
+		flag(node, "bar-leading", lead !== null)
+		if (lead !== null)
+			node.style.setProperty("--hz-screen-bar-leading", `${lead.getBoundingClientRect().width}px`)
 		const has = meta !== null && meta.childElementCount > 0
 		metaRoom.hidden = !has
 		if (!has || meta === null) return
@@ -174,6 +186,7 @@ export const primitive = definePrimitive("screen", ({ document, tag, outer }) =>
 		new win.MutationObserver(() => {
 			meta = follow(meta, slotOf("meta"))
 			toolbar = follow(toolbar, slotOf("toolbar"))
+			barLeading = follow(barLeading, slotOf("barLeading"))
 			place()
 		}).observe(content, { childList: true })
 

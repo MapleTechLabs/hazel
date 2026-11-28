@@ -41,22 +41,28 @@ type Setter<P, Self> = P extends { readonly kind: "flag" }
 			? (value: SchemaType<S> | undefined) => Self
 			: never
 
-type NoTextContent<Msg> =
-	| View.Element<Msg, any>
-	| View.Child<Msg, any>
+/**
+ * Element content (no text). `R` is what the children need from the host: a helper that takes
+ * children is generic in it (`<Msg, R>(..., ...cards: ReadonlyArray<NoTextInput<Msg, R>>)`), so a
+ * page's requirements reach its mount. Without it, content needs nothing (`never`).
+ */
+type NoTextContent<Msg, R = never> =
+	| View.Element<Msg, R>
+	| View.Child<Msg, R>
 	| View.Outlet
-	| View.ElementBuilder<Msg, any, any, any>
-export type NoTextInput<Msg> =
-	| NoTextContent<Msg>
+	| View.ElementBuilder<Msg, R, any, any>
+export type NoTextInput<Msg, R = never> =
+	| NoTextContent<Msg, R>
 	| false
 	| null
 	| undefined
-	| ReadonlyArray<NoTextContent<Msg> | false | null | undefined>
+	| ReadonlyArray<NoTextContent<Msg, R> | false | null | undefined>
 
 type ChildInput<Msg, K extends TagKey> = Tags[K]["content"] extends "text"
 	? View.Input<Msg, any>
 	: Tags[K]["content"] extends "elements"
-		? NoTextInput<Msg>
+		? // Any requirement here: `children` infers the inputs' own (`View.Requirements<C>`).
+			NoTextInput<Msg, any>
 		: never
 
 /** A header action that opens a menu: its entries and the message for the chosen entry's id. */
@@ -92,7 +98,10 @@ type Extra<Msg, R, K extends TagKey> = K extends "section"
 type Chain<Msg, R, K extends TagKey> = Extra<Msg, R, K> & {
 	readonly [P in keyof Tags[K]["props"]]: Setter<Tags[K]["props"][P], Hz<Msg, R, K>>
 } & {
-	readonly [S in Tags[K]["slots"][number]]: (...content: ReadonlyArray<NoTextInput<Msg>>) => Hz<Msg, R, K>
+	// A slot's content adds its own requirements to the element's, as `children` does.
+	readonly [S in Tags[K]["slots"][number]]: <const C extends ReadonlyArray<NoTextInput<Msg, any>>>(
+		...content: C
+	) => Hz<Msg, R | View.Requirements<C[number]>, K>
 }
 
 /** A `hazel` element of tag `K`: its chain methods are its props and slots from `spec.ts`. */
@@ -289,7 +298,7 @@ export class HzExtension<out Msg, out R, in out Ev> extends View.ElementBuilder<
 		throw new Error("hz:ext takes no children: use .fallback(...)")
 	}
 	/** What a platform that does not implement it draws, as an `hz:slot` named `fallback`. */
-	fallback(...content: ReadonlyArray<NoTextInput<Msg>>): this {
+	fallback(...content: ReadonlyArray<NoTextInput<Msg, any>>): this {
 		return View.withContent(this, [
 			slot("fallback", content as ReadonlyArray<View.Input<any, any>>),
 		]) as this
@@ -353,7 +362,13 @@ export interface Rect {
 export interface HostNode {}
 
 /** Where `scrollTo` goes: an edge, or a keyed child. */
-export type ScrollTarget = { readonly to: "start" | "end" } | { readonly key: string }
+/**
+ * An edge, or a keyed row. `selectText` also selects the row's text (iOS's "Select Text" from a
+ * message's menu); a host without native selection only scrolls.
+ */
+export type ScrollTarget =
+	| { readonly to: "start" | "end" }
+	| { readonly key: string; readonly selectText?: boolean }
 
 /**
  * Imperative element operations for Commands (`spec.commandNames`), by `Renderer.Refs` node. The

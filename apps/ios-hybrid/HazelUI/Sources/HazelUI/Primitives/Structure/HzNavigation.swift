@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Owned by lane S4. `hz:navigation`: a `NavigationStack` over its children, the first the root and
-// each later one pushed. The route and the stack follow each other (`NavigationRoute`).
+// each later one pushed; `rootToolbar` joins the root's bar. The route and the stack follow each other (`NavigationRoute`).
 struct HzNavigation: View {
     let tree: Tree
     let node: Node
@@ -20,10 +20,24 @@ struct HzNavigation: View {
         let recipe = HazelTheme.Recipes.navigation.style(sizeClass: .compact)
         NavigationStack(path: $path) {
             Group {
-                if let root = screens.first.flatMap({ tree.node($0) }) { NodeView(tree: tree, node: root) }
+                if let root = screens.first.flatMap({ tree.node($0) }) {
+                    NodeView(tree: tree, node: root)
+                        .environment(\.hzStackRoot, true)
+                        .toolbar {
+                            // `rootToolbar`: the root's bar end, after the screen's own items.
+                            if let items = tree.slot("rootToolbar", of: node), !items.children.isEmpty {
+                                ToolbarItem(placement: .topBarTrailing) { ChildrenView(tree: tree, node: items).tint(.primary) }
+                            }
+                        }
+                }
             }
             .navigationDestination(for: NodeId.self) { id in
-                if let screen = tree.node(id) { NodeView(tree: tree, node: screen) }
+                // `pushedTabBar: hidden`: a pushed screen has the whole height; the tab bar around this
+                // shows again at the root.
+                if let screen = tree.node(id) {
+                    NodeView(tree: tree, node: screen)
+                        .toolbar(node[prop: "pushedTabBar"]?.string == "hidden" ? .hidden : .automatic, for: .tabBar)
+                }
             }
         }
         .frame(maxWidth: recipe.fill == true ? .infinity : nil)

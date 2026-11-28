@@ -118,7 +118,12 @@ final class RevisionedText {
     var caret: Int? {
         guard let selection else { return text.utf16.count }
         guard case let .selection(range) = selection.indices, range.isEmpty else { return nil }
-        return range.lowerBound.utf16Offset(in: text)
+        // The Model may have replaced the text since (a draft restored, a send): an index from the
+        // old text is not this one's, and counts as the end.
+        guard range.lowerBound <= text.endIndex, let unit = range.lowerBound.samePosition(in: text.utf16) else {
+            return text.utf16.count
+        }
+        return text.utf16.distance(from: text.utf16.startIndex, to: unit)
     }
 
     private func fire(_ event: String, _ change: TextRevisions.Change) {

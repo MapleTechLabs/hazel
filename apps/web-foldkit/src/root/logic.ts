@@ -480,7 +480,9 @@ const appRequest = (request: AppRequest): Step =>
 					onSome: (route) => navigateTo(route, { replace }),
 				}),
 			]),
-		LoadPage: ({ href }) => command(Commands.LoadExternal.make({ href })),
+		// The web reloads and leaves alike: the browser loads `href`.
+		Reload: ({ href }) => command(Commands.LoadExternal.make({ href })),
+		Leave: ({ href }) => command(Commands.LoadExternal.make({ href })),
 		History: ({ direction }) => handleOutMessage(PageOutMessage.RequestedHistory({ direction })),
 		ShowToast: ({ toast }) => showToast(toast),
 		// A kind the registry does not know is a page bug, not the user's: nothing opens.

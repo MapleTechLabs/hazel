@@ -35,7 +35,8 @@ type ShellMessage =
 	| { type: "swipeBack"; enabled: boolean }
 	| { type: "overlay"; open: boolean }
 	| { type: "thread"; open: boolean }
-	| { type: "location"; text: string }
+	/** `replaced`: where the page landed or a redirect put it (`history.replaceState`), not a link. */
+	| { type: "location"; text: string; replaced: boolean }
 	| { type: "ready" }
 	/** `loading`: shown before the app had drawn anything but its loader (`MAX_LOADING_MS`). */
 	| { type: "screen"; screen: TreeNode | null; loading?: boolean }
@@ -257,6 +258,13 @@ export const installBridge = () => {
 	let wasOverlayOpen = false
 	let wasThreadOpen = false
 	let lastLocation = ""
+	// The path a redirect last put in place: the page is still the same screen.
+	let replacedTo: string | null = null
+	const replaceState = history.replaceState.bind(history)
+	history.replaceState = (data: unknown, unused: string, url?: string | URL | null) => {
+		replaceState(data, unused, url)
+		replacedTo = location.pathname
+	}
 	let hasShown = false
 	let hasWaitedLongEnough = false
 	let settle: ReturnType<typeof setTimeout> | undefined
@@ -278,8 +286,10 @@ export const installBridge = () => {
 		const list = readList()
 		const composer = JSON.stringify(readComposer())
 		if (location.pathname !== lastLocation) {
+			// The first report is where the page landed (a redirect at start included), not a link.
+			const replaced = lastLocation === "" || replacedTo === location.pathname
 			lastLocation = location.pathname
-			post({ type: "location", text: location.pathname })
+			post({ type: "location", text: location.pathname, replaced })
 		}
 		// A thread over its channel: the shell shows it as a page of its own (pushed, swiped back).
 		const isThreadOpen = threadIsOpen()

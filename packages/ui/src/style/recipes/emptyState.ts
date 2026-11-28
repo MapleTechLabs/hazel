@@ -58,13 +58,20 @@ export const emptyState = defineRecipe<
 			values: {
 				none: {},
 				squirrel: {
-					root: { paddingX: "4", paddingY: "4", rowGap: "0" },
+					// A phone's: a small picture over a centred title, the composer below at the bottom.
+					root: { paddingX: "4", paddingY: "4", rowGap: "3" },
 					parts: {
-						illustration: { marginBottom: "0" },
-						// A plain block today: a wrapped line starts at its left edge.
-						title: { text: "hero", weight: "bold", mono: true, textAlign: "start" },
+						illustration: { marginBottom: "0", size: "36" },
+						title: { text: "hero", weight: "bold", mono: true, textAlign: "center" },
 					},
-					regular: { root: { paddingX: "8", paddingY: "8" } },
+					// A desk's: the picture at up to 24rem right over the line, which starts at its left edge.
+					regular: {
+						root: { paddingX: "8", paddingY: "8", rowGap: "0" },
+						parts: {
+							illustration: { size: "105" },
+							title: { textAlign: "start" },
+						},
+					},
 				},
 			},
 		},

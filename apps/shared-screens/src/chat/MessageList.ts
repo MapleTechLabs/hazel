@@ -31,6 +31,7 @@ import {
 	replyTargetsStream,
 	RequestHost,
 	ScrollToRow,
+	SelectRowText,
 	threadMessagesStream,
 	threadNamesStream,
 	ToggleReaction,
@@ -275,7 +276,7 @@ const ACTION_LOOK = {
 } as const satisfies Record<MessageAction, { readonly label: string; readonly icon: IconName }>
 
 /** Holding already selects the text natively, and the sheet has no image under a pointer. */
-const SHEET_SKIPS: ReadonlyArray<MessageAction> = ["selectText", "copyImage", "copyImageUrl"]
+const SHEET_SKIPS: ReadonlyArray<MessageAction> = ["copyImage", "copyImageUrl"]
 
 /** What a row action does: open the picker, run a Command, or nothing (`selectText` is the host's). */
 const actionStep = (
@@ -463,6 +464,9 @@ export const MessageList = Hazel.component({
 		PressedMenuAction: ($, { action }) => {
 			const id = $.model.menu
 			if (id === null) return $.model
+			// "Select Text": the sheet closes and the row's text is selected natively, as in Messages.
+			if (action === "selectText")
+				return $.evolve({ menu: () => null }).run(SelectRowText.make({ key: id }))
 			const message = messageOf($.model, id)
 			const step = message === undefined ? null : actionStep($.props, message, action)
 			return step === null

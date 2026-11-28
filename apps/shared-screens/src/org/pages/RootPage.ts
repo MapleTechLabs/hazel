@@ -11,7 +11,7 @@ import { Hazel } from "@hazel/ui/vocabulary/index"
 import { eq } from "@tanstack/db"
 import { Effect, Queue, Schema, Stream } from "effect"
 import { withData } from "../../app/live"
-import { LoadPage } from "../../app/requests"
+import { Reload } from "../../app/requests"
 import { Session } from "../../app/session"
 
 export const RootMembership = Schema.Struct({
@@ -204,7 +204,7 @@ export const RootPage = RootDef.make({
 			return next.commands.length === 0 ? $.model : $.set(next.model).run(...next.commands)
 		},
 		StalledMemberships: ($) => $.evolve({ isStalled: () => true }),
-		PressedReload: ($) => $.run(LoadPage.make({ href: "/" })),
+		PressedReload: ($) => $.run(Reload.make({ href: "/" })),
 	},
 	subscriptions: ({ props }) => {
 		const userId = props.session.user?.id ?? null

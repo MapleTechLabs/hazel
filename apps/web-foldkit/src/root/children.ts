@@ -7,12 +7,13 @@
 import { Component, Router } from "@effect/ui"
 import { ClientData, HazelRpc } from "@hazel/client-data"
 import { AssistantPanel } from "@hazel/shared-screens/assistant/AssistantPanel"
-import { sidebarWritesLayer } from "@hazel/shared-screens/channel-sidebar/actions"
 import {
-	ChannelSidebar,
-	channelSidebarLayer,
-	matchTarget,
-} from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
+	HostedChannelSidebar,
+	hostedSidebarLayer,
+	SidebarHost,
+} from "@hazel/shared-screens/channel-sidebar/hosted"
+import { DmsHost, HostedDms } from "@hazel/shared-screens/dms/hosted"
+import { navigatorWeb } from "./navigator"
 import { CustomersSidebar, customersSidebarLayer } from "@hazel/shared-screens/customers/CustomersSidebar"
 import { ChatSidebarSheet } from "@hazel/shared-screens/shell/ChatSidebarSheet"
 import { ChannelComposer } from "@hazel/shared-screens/chat/composer/ChannelComposer"
@@ -21,7 +22,6 @@ import { ChannelHeader, channelHeaderLayer } from "@hazel/shared-screens/chat/he
 import { JoinBanner, joinBannerLayer } from "@hazel/shared-screens/chat/header/JoinBanner"
 import { MessageList } from "@hazel/shared-screens/chat/MessageList"
 import { messageListLayer } from "@hazel/shared-screens/chat/live"
-import { Dms, dmsLayer } from "@hazel/shared-screens/dms/Dms"
 import { ChannelSettingsHeader } from "@hazel/shared-screens/shell/ChannelSettingsHeader"
 import { AccountMenu, OrgSwitcher, SwitchOrganization } from "@hazel/shared-screens/shell/Chrome"
 import { MarkAllNotificationsRead, SectionSidebar } from "@hazel/shared-screens/shell/SectionSidebar"
@@ -31,7 +31,7 @@ import { clientData } from "~/db/client"
 // The list's HTML renders draw through this web extension.
 import "../chat/html-render-extension"
 import { liveConnection } from "../chat/live-state"
-import { AppRoute, organizationRoute } from "../route"
+import { AppRoute, organizationRoute, routeOfPath } from "../route"
 import { eventsOf, publish } from "./bus"
 import { persistDismissedHint } from "./hints"
 import { composerWebLayer } from "./composer"
@@ -47,34 +47,18 @@ const withRouter = <A, E, R>(build: (push: (route: AppRoute) => void) => Layer.L
 
 const channelOf = (orgSlug: string) => (channelId: ChannelId) => AppRoute.ChatChannel({ orgSlug, channelId })
 
-/** The channel list's Layers: its routes on the Router, its writes on the app's data, the hint's storage. */
-const channelListLayer = (orgSlug: string) =>
-	Layer.mergeAll(
-		withRouter((push) =>
-			channelSidebarLayer(
-				clientData,
-				(to) =>
-					push(
-						matchTarget<AppRoute>(to, {
-							Channel: (channelId) => AppRoute.ChatChannel({ orgSlug, channelId }),
-							Members: () => AppRoute.OrgHome({ orgSlug }),
-						}),
-					),
-				(action) =>
-					Match.valueTags(action, {
-						DismissHint: () => persistDismissedHint("create-channel"),
-						// The web app draws its own org switcher and account card (`chrome: false`).
-						OrgMenu: () => Effect.void,
-						AccountMenu: () => Effect.void,
-					}),
-			),
-		),
-		Layer.unwrap(Effect.map(Effect.service(HazelRpc), (rpc) => sidebarWritesLayer(clientData, rpc))),
-	)
-
-export const ShellChannelSidebar = Component.provide(ChannelSidebar, (props) =>
-	channelListLayer(props.orgSlug),
+/** The web's own side of the sidebar and DMs: the hint's storage, and compose's dialog. */
+const featureHostsWeb = Layer.mergeAll(
+	Layer.succeed(SidebarHost, { dismissHint: persistDismissedHint("create-channel") }),
+	Layer.succeed(DmsHost, {
+		compose: Effect.sync(() => publish({ _tag: "Shell", request: { _tag: "PressedComposeDm" } })),
+	}),
 )
+
+/** What the hosted chat screens (`app/hosted`) take from the web: its data, Router and host. */
+const hostedWebLayer = Layer.mergeAll(navigatorWeb, featureHostsWeb, Layer.succeed(ClientData, clientData))
+
+export const ShellChannelSidebar = Component.provide(HostedChannelSidebar, hostedWebLayer)
 
 /** A row's request goes to the Foldkit channel page that still owns its overlays and threads. */
 export const ShellMessageList = Component.provide(
@@ -84,7 +68,7 @@ export const ShellMessageList = Component.provide(
 			messageListLayer(
 				clientData,
 				rpc,
-				(request) => publish({ _tag: "MessageList", request }),
+				(request) => Effect.sync(() => publish({ _tag: "MessageList", request })),
 				liveConnection,
 			),
 		),
@@ -94,15 +78,7 @@ export const ShellMessageList = Component.provide(
 /** The AI panel on the app's data; its RPCs, `Navigate` and `Hazel.Host` come from the shell. */
 export const ShellAssistantPanel = Component.provide(AssistantPanel, Layer.succeed(ClientData, clientData))
 
-export const ShellDms = Component.provide(Dms, (props) =>
-	withRouter((push) =>
-		dmsLayer(
-			clientData,
-			(channelId) => push(channelOf(props.orgSlug)(channelId)),
-			() => publish({ _tag: "Shell", request: { _tag: "PressedComposeDm" } }),
-		),
-	),
-)
+export const ShellDms = Component.provide(HostedDms, hostedWebLayer)
 
 /** Another organization from the switcher: its home (a phone's chat list), or its setup. */
 const switchLayer = (isMobile: boolean) =>
@@ -122,7 +98,10 @@ const chromeLayer = (isMobile: boolean) =>
 
 /** A phone's chat sidebar sheet: the channel list with the switcher and the account card. */
 export const ShellChatSidebarSheet = Component.provide(ChatSidebarSheet, (props) =>
-	Layer.mergeAll(channelListLayer(props.sidebar.orgSlug), chromeLayer(props.switcher.compact)),
+	Layer.mergeAll(
+		hostedSidebarLayer(props.sidebar.orgSlug).pipe(Layer.provide(hostedWebLayer)),
+		chromeLayer(props.switcher.compact),
+	),
 )
 
 /** The customers sidebar: its layout save on the app's data; its account card's chrome. */

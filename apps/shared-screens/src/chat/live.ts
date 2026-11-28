@@ -527,13 +527,10 @@ export class RequestHost extends Command.Service<RequestHost>()("hazel/chat/Requ
 	args: { request: HostRequest },
 	success: MessageListMessage,
 }) {
-	static readonly layerWith = (handle: (request: HostRequest) => void) =>
+	static readonly layerWith = (handle: (request: HostRequest) => Effect.Effect<void>) =>
 		this.toLayer(
 			Effect.succeed(({ request }) =>
-				Effect.sync(() => {
-					handle(request)
-					return MessageListMessage.CompletedCommand()
-				}),
+				Effect.as(handle(request), MessageListMessage.CompletedCommand()),
 			),
 		)
 }
@@ -561,11 +558,32 @@ export class ScrollToRow extends Command.Service<ScrollToRow>()("hazel/chat/Scro
 	)
 }
 
+/** Selects a row's text natively (a message menu's "Select Text"; iOS). */
+export class SelectRowText extends Command.Service<SelectRowText>()("hazel/chat/SelectRowText", {
+	args: { key: Schema.String },
+	success: MessageListMessage,
+}) {
+	static readonly layer = this.toLayer(
+		Effect.gen(function* () {
+			const host = yield* Hazel.Host
+			return ({ key }) =>
+				Effect.gen(function* () {
+					const refs = yield* Renderer.Refs
+					const node = yield* refs.lookup(ListRef)
+					// SAFETY: a ref resolves to the node its host created (`Hazel.HostNode`).
+					if (Option.isSome(node))
+						yield* host.scrollTo(node.value as Hazel.HostNode, { key, selectText: true })
+					return MessageListMessage.CompletedCommand()
+				})
+		}),
+	)
+}
+
 /** What a host provides: its data instance, its RPC client, and what it does with row requests. */
 export const messageListLayer = (
 	data: ClientData["Service"],
 	rpc: HazelRpc["Service"],
-	handle: (request: HostRequest) => void,
+	handle: (request: HostRequest) => Effect.Effect<void>,
 	live: LiveConnection["Service"],
 ) =>
 	Layer.mergeAll(
@@ -573,6 +591,7 @@ export const messageListLayer = (
 		ToggleReaction.layer,
 		TogglePin.layer,
 		ScrollToRow.layer,
+		SelectRowText.layer,
 		RequestHost.layerWith(handle),
 		unfurlLayer,
 		GetHtmlRenderUrl.layer,

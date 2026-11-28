@@ -485,7 +485,25 @@ export class WaitForTypingTimeout extends Command.Service<WaitForTypingTimeout>(
 
 type Model = ChannelComposerModel
 type Props = ChannelComposerProps
-type Step = Command.Command<ChannelComposerMessage | Component.Noop, any>
+/** Every Command this component runs: what its host must provide, checked at the mount. */
+type Commands =
+	| FocusField
+	| BlurField
+	| PickFiles
+	| TakeDroppedFiles
+	| ReleaseFiles
+	| SaveDraft
+	| NotifyHost
+	| SendMessage
+	| EditMessage
+	| ExecuteBotCommand
+	| SendTypingHeartbeat
+	| DeleteTypingIndicator
+	| WaitForHeartbeatInterval
+	| WaitForTypingTimeout
+	| OpenModal
+	| ShowToast
+type Step = Command.Command<ChannelComposerMessage | Component.Noop, Commands>
 
 const toast = (intent: AppToast["intent"], title: string, description: string | null = null) =>
 	ShowToast.make({ toast: { intent, title, description } })
@@ -566,7 +584,7 @@ const notSent = (text: string) => {
 // ---------------------------------------------------------------------------
 
 /** A step of this component's update; helpers read `s.model`, the Model so far. */
-type S = Component.Step<ChannelComposerModel, ChannelComposerMessage, never, any>
+type S = Component.Step<ChannelComposerModel, ChannelComposerMessage, never, Commands>
 
 const emptyCommand = { command: null, fields: {} }
 

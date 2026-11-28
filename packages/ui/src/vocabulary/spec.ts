@@ -961,6 +961,9 @@ export const tags = {
 			title: text,
 			back: flag,
 			surface: option(O.ScreenSurface, "sidebar"),
+			// `fill`: the content runs edge to edge at the screen's whole height and scrolls itself (a
+			// conversation's list over its composer, a web view); otherwise the screen scrolls it.
+			fill: flag,
 			// Phase 4: a line under the title; breadcrumbs over it (`crumb` reports the one pressed).
 			subtitle: text,
 			crumbs: value(Schema.Array(Content.Crumb)),
@@ -968,8 +971,9 @@ export const tags = {
 		// `floatingAction`: the screen's primary action, a round button over the content's end corner.
 		// Phase 4: `aside` is `centered`'s brand panel beside the card (regular size class only);
 		// `meta` holds badges after the title; `leading` a mark over the title in `centered` (an
-		// invitation's workspace logo, `p4-avatar-xl`), elsewhere at the content's start.
-		slots: ["toolbar", "floatingAction", "aside", "meta", "leading"],
+		// invitation's workspace logo, `p4-avatar-xl`), elsewhere at the content's start. `barLeading`
+		// is the bar's start, as `toolbar` is its end (a phone tab's workspace switcher).
+		slots: ["toolbar", "floatingAction", "aside", "meta", "leading", "barLeading"],
 		events: { back: none, crumb: Schema.Struct({ index: Schema.Finite }) },
 	}),
 	navigation: tag({
@@ -977,6 +981,11 @@ export const tags = {
 		web: "A4",
 		ios: "S4",
 		content: "elements",
+		// `hidden`: a pushed screen has the whole height, the tab bar around this shows at the root.
+		props: { pushedTabBar: option(O.PushedTabBar, "visible") },
+		// `rootToolbar`: items at the end of the root screen's bar, whatever screen is the root (a
+		// phone's account button on every tab).
+		slots: ["rootToolbar"],
 		events: { pop: Schema.Struct({ depth: Schema.Finite }) },
 	}),
 	tabBar: tag({

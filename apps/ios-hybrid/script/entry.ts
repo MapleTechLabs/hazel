@@ -6,21 +6,14 @@
  * then mounts the root. A route with no native screen yet opens in the shell's web fallback.
  */
 import { shimmed } from "../effect-ui/live-globals"
-import { Renderer, UiSchema } from "@effect/ui"
+import { Renderer } from "@effect/ui"
 import { ClientData, HazelRpc, HazelRpcLayer } from "@hazel/client-data"
 import { SignInPage } from "@hazel/shared-screens/auth/pages/sign-in/SignInPage"
-import { activityLayer } from "@hazel/shared-screens/activity/Activity"
-import { appRequestsLayer } from "@hazel/shared-screens/app/requests"
-import { AppRoute, hrefOf } from "@hazel/shared-screens/app/route"
-import { sidebarWritesLayer } from "@hazel/shared-screens/channel-sidebar/actions"
-import { channelSidebarLayer, matchTarget } from "@hazel/shared-screens/channel-sidebar/ChannelSidebar"
-import { dmsLayer } from "@hazel/shared-screens/dms/Dms"
-import { PhoneShell, ShellIntent, ShellIntents } from "@hazel/shared-screens/phone/PhoneShell"
-import { WebFallback } from "../../../packages/ui/src/extensions/WebFallback.ts"
-import { Hazel } from "../../../packages/ui/src/vocabulary/index.ts"
-import type { ChannelId, OrganizationId, OrganizationMemberId } from "@hazel/schema"
+import { FallbackScreen } from "@hazel/shared-screens/phone/FallbackScreen"
+import { PhoneShell, ShellIntent } from "@hazel/shared-screens/phone/PhoneShell"
+import type { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { eq } from "@tanstack/db"
-import { Deferred, Effect, Layer, Match, Option, Queue, Schedule, Schema, Stream } from "effect"
+import { Deferred, Effect, Layer, Option, Schedule, Stream } from "effect"
 import type { HttpClient } from "effect/http"
 import {
 	NativeSessionControls,
@@ -30,6 +23,7 @@ import {
 import { makeNativeHost } from "../../../packages/ui/src/native/host.ts"
 import { type Json, WIRE_VERSION } from "../../../packages/ui/src/native/wire.ts"
 import { authFlowsJsc, signOutJsc } from "./auth"
+import { navigation, phoneHostLayer } from "./phone-host"
 import { appShell, serverLabel } from "./shell"
 
 declare const __native: { post: (json: string) => void }
@@ -64,9 +58,8 @@ interface Membership {
 	readonly organization: { readonly slug: string | null }
 }
 
-/** Every navigation the screens, the app's requests and the host ask for (`ShellIntents`). */
-const intents = Effect.runSync(Queue.unbounded<ShellIntent>())
-const intend = (intent: ShellIntent) => void Queue.offerUnsafe(intents, intent)
+/** The install's link-preview worker (Hazel's; another install's arrives with its discovery). */
+const LINK_PREVIEW_URL = "https://link-preview.hazel.sh"
 
 /** How long a signed-in account's organizations may take to sync before onboarding shows. */
 const NO_ORGANIZATION_AFTER = "10 seconds"
@@ -82,37 +75,24 @@ const signOutAndRestart = Effect.gen(function* () {
 	appShell().restart()
 })
 
-const PhoneScreen = Hazel.component({
-	name: "Onboarding",
-	props: Schema.Struct({}),
-	model: Schema.Struct({}),
-	message: UiSchema.TaggedEnum({ Noop: {} }),
-})
-
-/** A new account's onboarding: the web's, until it is a shared screen. */
-const Onboarding = PhoneScreen.make({
-	init: () => ({}),
-	update: { Noop: ($) => $.model },
-	view: (h) => h.screen.surface("page").children(h.extension(WebFallback, { path: "/onboarding" })),
-})
-
-/** The phone shell (`PhoneShell`): tabs over a native stack each, for the first organization. */
-const root = (signOut: Effect.Effect<void>) =>
-	Effect.gen(function* () {
-		const data = yield* ClientData
-		const rpc = yield* HazelRpc
-		// A session the API refuses is signed out here too, so the next start signs in.
-		// Offline or a failing API at launch: tried again, backing off to every 30 seconds.
-		const me = yield* rpc("user.me", undefined).pipe(
+/** The signed-in user, retried while offline; a session the API refuses signs out. */
+const currentUser = (signOut: Effect.Effect<void>) =>
+	Effect.flatMap(Effect.service(HazelRpc), (rpc) =>
+		rpc("user.me", undefined).pipe(
 			Effect.retry({
 				schedule: Schedule.min([Schedule.exponential("1 second"), Schedule.spaced("30 seconds")]),
 				while: (error) => error._tag !== "UnauthorizedError",
 			}),
 			Effect.catchTag("UnauthorizedError", () => Effect.andThen(signOut, Effect.never)),
-		)
-		yield* Stream.runDrain(data.syncSession(me.id)).pipe(Effect.forkScoped)
+		),
+	)
+
+/** The user's first organization; onboarding (the web's) shows while there is none yet. */
+const firstMembership = (userId: UserId) =>
+	Effect.gen(function* () {
+		const data = yield* ClientData
 		const { organizationMemberCollection, organizationCollection } = data.collections
-		const firstMembership = data
+		const first = data
 			.liveQueryStream<Membership, Membership | undefined>(
 				(q) =>
 					q
@@ -120,7 +100,7 @@ const root = (signOut: Effect.Effect<void>) =>
 						.innerJoin({ organization: organizationCollection }, ({ member, organization }) =>
 							eq(organization.id, member.organizationId),
 						)
-						.where(({ member }) => eq(member.userId, me.id)),
+						.where(({ member }) => eq(member.userId, userId)),
 				(rows) => rows[0],
 			)
 			.pipe(
@@ -128,80 +108,33 @@ const root = (signOut: Effect.Effect<void>) =>
 				Stream.runHead,
 				Effect.map(Option.getOrThrow),
 			)
-		const early = yield* firstMembership.pipe(Effect.timeoutOption(NO_ORGANIZATION_AFTER))
-		// None yet (a new account, or a slow sync): onboarding shows until one syncs, then the shell.
-		const membership = Option.isSome(early)
-			? early.value
-			: yield* Effect.scoped(
-					Effect.andThen(Renderer.mount(Onboarding, {}, native.container), firstMembership),
-				)
-		const slug = membership.organization.slug ?? ""
-		const openChannel = (id: ChannelId) =>
-			intend(ShellIntent.Open({ href: hrefOf(AppRoute.ChatChannel({ orgSlug: slug, channelId: id })) }))
+		const early = yield* first.pipe(Effect.timeoutOption(NO_ORGANIZATION_AFTER))
+		if (Option.isSome(early)) return early.value
+		return yield* Effect.scoped(
+			Effect.andThen(
+				Renderer.mount(FallbackScreen, { path: "/onboarding", title: "" }, native.container),
+				first,
+			),
+		)
+	})
+
+/** The phone shell for the user's first organization, on the phone's host services. */
+const root = (signOut: Effect.Effect<void>) =>
+	Effect.gen(function* () {
+		const data = yield* ClientData
+		const me = yield* currentUser(signOut)
+		yield* Stream.runDrain(data.syncSession(me.id)).pipe(Effect.forkScoped)
+		const membership = yield* firstMembership(me.id)
 		yield* Renderer.mount(
 			PhoneShell,
 			{
-				organizationId: membership.member.organizationId,
-				memberId: membership.member.id,
-				userId: me.id,
-				orgSlug: slug,
-				nowMs: Date.now(),
+				cdnUrl: appShell().server.cdn ?? "",
+				linkPreviewUrl: LINK_PREVIEW_URL,
+				appOrigin: appShell().server.app,
 			},
 			native.container,
 		).pipe(
-			Effect.provide(
-				Layer.mergeAll(
-					Layer.succeed(ShellIntents, { intents: Stream.fromQueue(intents) }),
-					channelSidebarLayer(
-						data,
-						(to) =>
-							matchTarget(to, {
-								Channel: openChannel,
-								Members: () =>
-									intend(
-										ShellIntent.Open({
-											href: hrefOf(AppRoute.TeamSettings({ orgSlug: slug })),
-										}),
-									),
-							}),
-						(action) =>
-							Match.valueTags(action, {
-								AccountMenu: ({ key }) =>
-									key === "sign-out"
-										? signOut
-										: Effect.sync(() => console.log(`[hazel] account menu ${key}`)),
-								// The org switcher and the hint arrive with the More tab (N3).
-								OrgMenu: ({ key }) =>
-									Effect.sync(() => console.log(`[hazel] org menu ${key}`)),
-								DismissHint: () => Effect.void,
-							}),
-					),
-					sidebarWritesLayer(data, rpc),
-					dmsLayer(data, openChannel, () => console.log("[hazel] compose")),
-					activityLayer(data, rpc, openChannel),
-					appRequestsLayer((request) =>
-						Match.valueTags(request, {
-							Navigate: ({ href }) => intend(ShellIntent.Open({ href })),
-							History: ({ direction }) => {
-								if (direction === "Back") intend(ShellIntent.Back())
-							},
-							// The rest arrive with the screens that need them (N2, N3).
-							LoadPage: () => console.log("[hazel] request LoadPage"),
-							ShowToast: () => console.log("[hazel] request ShowToast"),
-							OpenModal: () => console.log("[hazel] request OpenModal"),
-							OpenCommandPalette: () => console.log("[hazel] request OpenCommandPalette"),
-							SignOut: () => void Effect.runFork(signOut),
-							CreateDm: () => console.log("[hazel] request CreateDm"),
-							SetTheme: () => console.log("[hazel] request SetTheme"),
-							SetSoundSettings: () => console.log("[hazel] request SetSoundSettings"),
-							SetKeybindings: () => console.log("[hazel] request SetKeybindings"),
-							RefreshCurrentUser: () => console.log("[hazel] request RefreshCurrentUser"),
-							CheckForUpdate: () => console.log("[hazel] request CheckForUpdate"),
-							InstallUpdate: () => console.log("[hazel] request InstallUpdate"),
-						}),
-					),
-				),
-			),
+			Effect.provide(phoneHostLayer({ me, organizationId: membership.member.organizationId }, signOut)),
 		)
 		console.log(`[hazel] root mounted for ${me.id}`)
 		return yield* Effect.never
@@ -234,13 +167,16 @@ program.pipe(
 Object.assign(globalThis, {
 	__hazel: {
 		version: WIRE_VERSION,
+		// Swift's inbound messages: events, and the replies to `Hazel.Host` commands (focus, scrollTo).
+		receive: native.receive,
+		receiveMany: native.receiveMany,
 		fire: (id: number, event: string, payload: string) =>
 			// SAFETY: the shell sends `payload` as JSON.stringify of a plain object (`TreeHost`).
 			native.fire(id, event, JSON.parse(payload) as Json),
 		/** An in-app path from the host: a tapped link, a push, a deep link. */
 		openPath: (path: string) => {
 			console.log(`[hazel] open ${path}`)
-			intend(ShellIntent.Open({ href: path }))
+			navigation.intend(ShellIntent.Open({ href: path }))
 		},
 	},
 })

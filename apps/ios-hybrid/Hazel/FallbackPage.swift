@@ -38,9 +38,28 @@ final class FallbackPage: NSObject, WKScriptMessageHandler, Identifiable {
     }
 
     nonisolated func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard let body = message.body as? [String: Any], body["type"] as? String == "console" else { return }
+        guard let body = message.body as? [String: Any] else { return }
+        let type = body["type"] as? String
         let text = body["text"] as? String ?? ""
-        Self.log.log("[page] \(text, privacy: .public)")
+        MainActor.assumeIsolated {
+            switch type {
+            // A redirect keeps this screen (its own route, canonical); only a link opens another.
+            case "location": if body["replaced"] as? Bool != true { followed(text) }
+            case "log": Self.log.log("[page] \(text, privacy: .public)")
+            default: break
+            }
+        }
+    }
+
+    /// The page went to another of the app's routes (a link in it): the app pushes that route as a
+    /// screen of its own, and this page goes back to its own.
+    private func followed(_ pathname: String) {
+        guard pathname != (URLComponents(string: path)?.path ?? path), pathname.hasPrefix("/") else { return }
+        FallbackPages.open(pathname)
+        // Under the screen just pushed, this page loads its own route again (the web app's router
+        // keeps no history the web view can step back through).
+        let own = URL(string: path, relativeTo: HostBridge.pageOrigin)?.absoluteURL ?? HostBridge.pageOrigin
+        PageNavigation.loadBundledPage(webView, at: own)
     }
 }
 
@@ -50,10 +69,12 @@ final class FallbackPage: NSObject, WKScriptMessageHandler, Identifiable {
 enum FallbackPages {
     private static var pages: [(path: String, page: FallbackPage)] = []
     private static let kept = 6
+    /// Opens one of the app's paths natively (`AppModel.openPath`): a fallback page's own links.
+    static var open: (String) -> Void = { _ in }
 
     static func register() {
-        // The page scrolls itself: the screen gives it its whole height (`fills`).
-        HazelExtensions.register("WebFallback", props: WebFallbackProps.self, fills: true) { props, _ in
+        // Its screen's `content` is `fill`: the page has the whole height and scrolls itself.
+        HazelExtensions.register("WebFallback", props: WebFallbackProps.self) { props, _ in
             FallbackView(page: page(for: props.path)).frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }

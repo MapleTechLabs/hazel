@@ -11,14 +11,13 @@ struct HzScroll: View {
 
     var body: some View {
         let _ = RenderCounter.record(node.id)
-        let axis = node[prop: "axis"]?.string
-        let style = HazelTheme.Recipes.scroll.style(options: axis.map { ["axis": $0] } ?? [:], sizeClass: HazelTheme.SizeClass(horizontal))
+        let style = HazelTheme.Recipes.scroll.style(options: node.options(["axis", "inset"]), sizeClass: HazelTheme.SizeClass(horizontal))
         let row = style.scrollAxes.map { $0 == .horizontal } ?? (style.layout == .row)
         let tree = tree, node = node
         ScrollViewReader { proxy in
             ViewThatFits(in: row ? .horizontal : .vertical) {
-                content(row)
-                ScrollView(row ? .horizontal : .vertical) { content(row) }
+                content(row, style)
+                ScrollView(row ? .horizontal : .vertical) { content(row, style) }
             }
             .hazelCommands(tree, node) { name, args in
                 guard name == .scrollTo else { throw CommandError("scroll does not handle \(name.rawValue)") }
@@ -39,18 +38,22 @@ struct HzScroll: View {
 
     static let start = "hz-scroll-start", end = "hz-scroll-end"
 
-    @ViewBuilder private func content(_ row: Bool) -> some View {
+    /// The children in the gutter (`inset`), between the edge anchors: `scrollTo` an edge shows the gutter too.
+    @ViewBuilder private func content(_ row: Bool, _ style: HazelTheme.Style) -> some View {
         if row {
             HStack(spacing: 0) {
                 Color.clear.frame(width: 0, height: 0).id(Self.start)
-                ChildrenView(tree: tree, node: node)
+                HStack(spacing: 0) { ChildrenView(tree: tree, node: node) }.hzInset(style)
                 Color.clear.frame(width: 0, height: 0).id(Self.end)
             }
             .environment(\.hzInRow, true)
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 Color.clear.frame(width: 0, height: 0).id(Self.start)
-                ChildrenView(tree: tree, node: node).frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 0) {
+                    ChildrenView(tree: tree, node: node).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .hzInset(style)
                 Color.clear.frame(width: 0, height: 0).id(Self.end)
             }
             .environment(\.hzInRow, false)

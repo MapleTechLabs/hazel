@@ -24,6 +24,7 @@ import { AppRoute, hrefOf, organizationRoute, type RouteOf, routeOfPath, signInH
 import { ShellDms } from "./children"
 import { pickersWebLayer } from "./pickers"
 import { AdoptRegion } from "./foldkit"
+import { moreHrefsOf as moreHrefsOfShared } from "@hazel/shared-screens/org/pages/more/hrefs"
 import type { AppMessage } from "./message"
 import type { ThemePreference } from "../theme"
 import type { SoundSettings } from "../notification-sound"
@@ -298,32 +299,14 @@ const withPush = <A, E, R>(build: (push: (route: AppRoute) => void) => Layer.Lay
 		),
 	)
 
-// The inbox (PA5): Activity's rows open their channel on the Router; Unreads marks read over RPC.
+// The inbox (PA5): its shared wiring (`notifications/hosted`) on the web's Router and data.
 export const NotificationsPage = Component.lazy("NotificationsPage", () =>
-	Promise.all([
-		import("@hazel/shared-screens/notifications/pages/NotificationsPage"),
-		import("@hazel/shared-screens/activity/Activity"),
-	]).then(([page, activity]) =>
-		Component.provide(page.NotificationsPage, (props) =>
-			Layer.unwrap(
-				Effect.map(Effect.service(HazelRpc), (rpc) =>
-					withPush((push) =>
-						Layer.mergeAll(page.MarkChannelRead.layer, page.MarkAllChannelsRead.layer).pipe(
-							Layer.provideMerge(
-								activity.activityLayer(clientData, rpc, (channelId: ChannelId) =>
-									push(
-										AppRoute.ChatChannel({
-											orgSlug: props.session.orgSlug ?? "",
-											channelId,
-										}),
-									),
-								),
-							),
-						),
-					),
-				),
+	Promise.all([import("@hazel/shared-screens/notifications/hosted"), import("./navigator")]).then(
+		([page, navigator]) =>
+			Component.provide(
+				page.HostedNotificationsPage,
+				Layer.mergeAll(navigator.navigatorWeb, Layer.succeed(ClientData, clientData)),
 			),
-		),
 	),
 )
 
@@ -405,18 +388,6 @@ export const HomePage = Component.lazy("HomePage", () =>
 		),
 	),
 )
-
-/** The More tab's rows (PA5). */
-const moreHrefsOf = (orgSlug: string) => ({
-	profile: hrefOf(AppRoute.MySettingsProfile({ orgSlug })),
-	customers: hrefOf(AppRoute.CustomersOverview({ orgSlug })),
-	members: hrefOf(AppRoute.OrgHome({ orgSlug })),
-	invite: hrefOf(AppRoute.SettingsInvitations({ orgSlug })),
-	workspaceSettings: hrefOf(AppRoute.SettingsGeneral({ orgSlug })),
-	notifications: hrefOf(AppRoute.MySettingsNotifications({ orgSlug })),
-	appearance: hrefOf(AppRoute.MySettingsAppearance({ orgSlug })),
-	switchWorkspace: hrefOf(AppRoute.SelectOrganization()),
-})
 
 /** The native app's install (`~/config/server`), which its sign-in page can change; `null` on the web. */
 const initialServer = () =>
@@ -571,7 +542,7 @@ const nativePages: Registry = {
 	OrgMore: (h, { route, session, fallback }) =>
 		MorePage(h, {
 			key: route.orgSlug,
-			props: { session, hrefs: moreHrefsOf(route.orgSlug) },
+			props: { session, hrefs: moreHrefsOfShared(route.orgSlug) },
 			fallback: (result) => fallback(result._tag === "Failure"),
 		}),
 	Root: (h, { session, isMobile, fallback }) =>

@@ -14,5 +14,11 @@
 		"lane": "A1",
 		"reason": "HAZEL-GAP(chart-distribution-ends): at phone width the bar's two rounded ends antialias one device pixel differently although both sides sit on whole pixels with the same widths (0.23 to 0.26%); 1180 passes",
 		"runs": ["light-compact", "dark-compact"]
+	},
+	{
+		"case": "emptyState/squirrel",
+		"lane": "A1",
+		"reason": "A deliberate phone design (iOS N3): at the compact size the picture is 144px and the title centred under it, where the kit keeps its desk layout (a 24rem picture over a left-aligned line). The regular size still matches the kit",
+		"runs": ["light-compact", "dark-compact"]
 	}
 ]

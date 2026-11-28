@@ -9,7 +9,7 @@ import { eq } from "@tanstack/db"
 import { Hazel, TextField } from "@hazel/ui/vocabulary/index"
 import { Layer } from "effect"
 import { withData } from "../../../app/live"
-import { LoadPage, Navigate, ShowToast } from "../../../app/requests"
+import { Leave, Navigate, ShowToast } from "../../../app/requests"
 import type { SessionOrganization } from "../../../app/session"
 import { copyOf, type ErrorCopy, errorToast, successToast } from "../../../modals/feedback"
 import { cardBody, settingsCard, settingsColumn } from "../../shared/card"
@@ -455,7 +455,7 @@ export const GeneralPageNoDeps = GeneralDef.make({
 		},
 		// Served as an attachment: the browser saves it and stays on the page.
 		SucceededExportLink: ($, { url }) =>
-			$.set({ ...$.model, downloadingExportId: null }).run(LoadPage.make({ href: url })),
+			$.set({ ...$.model, downloadingExportId: null }).run(Leave.make({ href: url })),
 		FailedExportLink: ($, { reason }) =>
 			$.set({ ...$.model, downloadingExportId: null }).run(failure(copyOf(reason, exportCopy))),
 	},

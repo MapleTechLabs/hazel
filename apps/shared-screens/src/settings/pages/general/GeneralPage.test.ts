@@ -4,7 +4,7 @@ import { Component } from "@effect/ui"
 import { Locator, Scene } from "@effect/ui/testing"
 import { OrganizationExportId } from "@hazel/schema"
 import { describe, expect, test } from "vitest"
-import { LoadPage, Navigate, ShowToast } from "../../../app/requests"
+import { Leave, Navigate, ShowToast } from "../../../app/requests"
 import type { Session } from "../../../app/session"
 import { button, byProp, orgId, sessionAs } from "../../testing"
 import {
@@ -166,8 +166,8 @@ describe("general settings", () => {
 				GetExportLink,
 				GeneralMessage.SucceededExportLink({ url: "https://files.hazel.test/export.zip" }),
 			)
-			.expectExact(LoadPage.make({ href: "https://files.hazel.test/export.zip" }))
-			.resolve(LoadPage, Component.noop)
+			.expectExact(Leave.make({ href: "https://files.hazel.test/export.zip" }))
+			.resolve(Leave, Component.noop)
 	})
 
 	test("an export's line says how far it got", () => {

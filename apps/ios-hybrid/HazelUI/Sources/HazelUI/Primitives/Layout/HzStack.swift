@@ -11,7 +11,7 @@ struct HzStack: View {
     var body: some View {
         let _ = RenderCounter.record(node.id)
         let sizeClass = HazelTheme.SizeClass(horizontal)
-        let options = node.options(["axis", "density", "align"])
+        let options = node.options(["axis", "density", "align", "inset"])
         let style = HazelTheme.Recipes.stack.style(options: options, sizeClass: sizeClass)
         // The recipe's `align`; `stretch` leaves it unset.
         let align = style.align.map(Self.name) ?? "stretch"
@@ -19,12 +19,14 @@ struct HzStack: View {
             HStack(alignment: Self.vertical(align), spacing: style.gap ?? 0) {
                 ChildrenView(tree: tree, node: node)
             }
+            .hzInset(style)
             .environment(\.hzInRow, true)
             .hzFillWidth(!inRow)
         } else {
             VStack(alignment: Self.horizontal(align), spacing: style.rowGap ?? 0) {
                 ChildrenView(tree: tree, node: node).hzFillWidth(align == "stretch")
             }
+            .hzInset(style)
             .environment(\.hzInRow, false)
             .hzFillWidth(!inRow, alignment: Self.frameAlignment(align))
         }
