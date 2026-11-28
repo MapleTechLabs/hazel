@@ -111,9 +111,7 @@ const messageListHostLayer = (orgSlug: string, channelId: ChannelId) =>
 					EditProfile: () => openRoute(navigator, AppRoute.MySettingsProfile({ orgSlug })),
 					MessageUser: ({ userId, viewerId, name }) => messageUser(userId, viewerId, name),
 					ViewProfile: ({ userId }) => openRoute(navigator, AppRoute.Profile({ orgSlug, userId })),
-					// The composer's own mention markup, as picking the person from `@` writes it.
-					MentionUser: ({ userId }) =>
-						composer.send(channelId, { _tag: "InsertText", text: `@[userId:${userId}] ` }),
+					MentionUser: ({ userId }) => composer.send(channelId, { _tag: "InsertMention", userId }),
 					CopyProfileField: ({ field, text }) =>
 						copy(text, toast(field === "email" ? "Email copied" : "User ID copied")),
 					OpenAttachment: (open) => host.openAttachment(open),

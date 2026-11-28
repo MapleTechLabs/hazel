@@ -81,7 +81,8 @@ const isProfileAction = Schema.is(ProfileAction)
 const moreEntries = (person: ProfilePerson, canMessage: boolean) => [
 	{
 		entries: [
-			...(person.isOwn ? [] : [{ id: "mention", label: "Mention", icon: "message-pen" as const }]),
+			// A Slack or Discord person's card leads with Mention already.
+			...(canMessage ? [{ id: "mention", label: "Mention", icon: "message-pen" as const }] : []),
 			...(canMessage || person.isOwn
 				? [{ id: "viewProfile", label: "View profile", icon: "user" as const }]
 				: []),

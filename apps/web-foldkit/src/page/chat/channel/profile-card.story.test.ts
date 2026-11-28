@@ -141,13 +141,13 @@ describe("the menu", () => {
 		)
 	})
 
-	test("Mention writes the composer's mention markup into the channel's draft", () => {
+	test("Mention asks the focused composer for the person's mention", () => {
 		story(
 			updateWithShared,
 			given(loadedModel()),
 			message(Message.ClickedMentionUser({ userId: grace })),
 			Command.expectExact(
-				RequestComposer({ channelId, request: { _tag: "InsertText", text: `@[userId:${grace}] ` } }),
+				RequestComposer({ channelId, request: { _tag: "InsertMention", userId: grace } }),
 			),
 			Command.resolve(RequestComposer, Message.CompletedRequestComposer()),
 		)

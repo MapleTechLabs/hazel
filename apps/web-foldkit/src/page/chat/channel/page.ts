@@ -688,8 +688,8 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				replace: false,
 			}),
 		}),
-		// The composer's own mention markup, as picking the person from `@` writes it.
-		ClickedMentionUser: ({ userId }) => Write.insertGlobalText(model, `@[userId:${userId}] `),
+		ClickedMentionUser: ({ userId }) =>
+			Write.askComposer(model, Write.focusedComposer(model), { _tag: "InsertMention", userId }),
 		ClickedCopyProfileField: ({ field, text }) =>
 			Write.copy(model, text, field === "email" ? "Email" : "UserId"),
 		ClickedReplyPreview: ({ fromMessageId, messageId }) =>

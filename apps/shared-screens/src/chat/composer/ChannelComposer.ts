@@ -956,6 +956,15 @@ export const ChannelComposerNoDeps = Hazel.component({
 						.run(save($.props, text, $.model.mode))
 						.run(FocusField.make({ end: text.length }))
 				}
+				case "InsertMention": {
+					if ($.model.command !== null) return $.model
+					const draft = $.model.draft.text
+					const gap = draft === "" || /\s$/.test(draft) ? "" : " "
+					const text = `${draft}${gap}@[userId:${request.userId}] `
+					return $.evolve({ draft: TextField.set($.model.draft, text) })
+						.run(save($.props, text, $.model.mode))
+						.run(FocusField.make({ end: text.length }))
+				}
 				case "AddFiles":
 					return $.evolve({ uploads: (all) => [...all, ...request.files.map(uploadOf)] })
 				case "OpenEmojiPicker":
