@@ -4871,15 +4871,7 @@
 }
 
 [data-hz="frame"][data-surface="overlay"] {
-	background-color: var(--hz-color-bg);
-	border-style: solid;
-	border-width: 1px;
-	border-color: var(--hz-color-border);
-	border-radius: var(--hz-radius-xl);
-	padding-inline: var(--hz-space-3);
-	padding-block: var(--hz-space-3);
 	row-gap: var(--hz-space-2);
-	box-shadow: var(--hz-shadow-xs);
 }
 
 /* grid */

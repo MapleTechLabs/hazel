@@ -1425,7 +1425,7 @@ public enum HazelTheme {
                 Layer(when: When(options: ["surface": "row"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(justify: .center, radius: 8, ring: Colors.border, paddingX: 12, paddingY: 4, rowGap: 4, minHeight: 32)),
                 Layer(when: When(options: ["surface": "flush"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.bg, borderColor: Colors.border, borderWidth: 1, radius: 12, rowGap: 0, shadow: "xs")),
                 Layer(when: When(options: ["surface": "hint"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.secondaryHalf, radius: 6, paddingX: 10, paddingY: 6, rowGap: 8, marginBottom: 4, marginX: 8)),
-                Layer(when: When(options: ["surface": "overlay"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.bg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 12, paddingY: 12, rowGap: 8, shadow: "xs")),
+                Layer(when: When(options: ["surface": "overlay"], flags: [], states: [], sizeClass: nil), part: nil, style: Style(rowGap: 8)),
             ]
         )
 

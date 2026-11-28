@@ -4,15 +4,12 @@ import { definePrimitive, flag, option } from "../define.ts"
 import { ensureSheet } from "../list/runtime.ts"
 import { ensureStyles } from "./styles.ts"
 
-// `dot` (`ph2-view-glyph`, `view-look.ts` `viewGlyph`): a `size-2` round mark centred in the icon's
-// box, in its ink. `tint` is a `tint-*` colour token; with none the dot is the muted tint.
-const css = `
-[data-hz="icon"][data-dot] { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
-[data-hz="icon"][data-dot]:not([data-tint]) { color: var(--hz-color-tint-muted); }
-[data-hz="icon"] > [data-hz-part="dot"] {
-	width: var(--hz-space-2); height: var(--hz-space-2); border-radius: 9999px; background: currentColor;
-}
-`
+// `dot` (`ph2-view-glyph`, `view-look.ts` `viewGlyph`): a glyph like any other on the icons' 18pt
+// grid, so it sizes and aligns wherever an icon does: a round mark half the box wide (`size-2` in a
+// `size-4` box), in the icon's ink. `tint` is a `tint-*` colour token; with none the dot is muted.
+const DOT =
+	'<svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="9" cy="9" r="4.5" fill="currentColor"/></svg>'
+const css = `[data-hz="icon"][data-dot]:not([data-tint]) { color: var(--hz-color-tint-muted); }`
 
 // An icon outside an owner's slot or part draws at the icon size (`icon-standalone-size`).
 export const primitive = definePrimitive("icon", ({ document, outer, self }) => {
@@ -23,11 +20,7 @@ export const primitive = definePrimitive("icon", ({ document, outer, self }) => 
 	let name: string | undefined
 	let dot = false
 	const draw = () => {
-		if (dot) {
-			const mark = document.createElement("span")
-			mark.dataset.hzPart = "dot"
-			node.replaceChildren(mark)
-		} else node.innerHTML = name === undefined ? "" : svg(name)
+		node.innerHTML = dot ? DOT : name === undefined ? "" : svg(name)
 	}
 	return self(node, (prop, value) => {
 		if (prop === "name") {

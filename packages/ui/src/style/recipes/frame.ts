@@ -5,7 +5,8 @@ import type { FrameSurface } from "../schema.ts"
  * `hz:frame` (`card.styles.ts`): a box that spaces its children as a column. `card` is the settings
  * card (`rounded-xl border bg-bg shadow-xs`, `p-4`, `p-6` from the regular size class); `danger` the
  * danger zone (`border-danger/20`; the kit's `bg-danger/5` wash has no token yet, so it stays clear);
- * `muted` a quiet bar (the unread bar); `inset` a hairline well; `overlay` a floating panel.
+ * `muted` a quiet bar (the unread bar); `inset` a hairline well; `overlay` a floating panel's
+ * contents (no box: the popover is the panel).
  */
 export const frame = defineRecipe<{ readonly surface: FrameSurface }, never, "footer">({
 	primitive: "frame",
@@ -96,18 +97,9 @@ export const frame = defineRecipe<{ readonly surface: FrameSurface }, never, "fo
 						paddingY: "1.5",
 					},
 				},
-				overlay: {
-					root: {
-						rowGap: "2",
-						radius: "xl",
-						borderWidth: "hairline",
-						borderColor: "border",
-						background: "bg",
-						shadow: "xs",
-						paddingX: "3",
-						paddingY: "3",
-					},
-				},
+				// A floating panel's contents: the popover or sheet around it is the panel (its edge,
+				// ground and padding), so this draws no box of its own, only the panel's `gap-2` rhythm.
+				overlay: { root: { rowGap: "2" } },
 			},
 		},
 	},
