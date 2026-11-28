@@ -132,28 +132,32 @@ public enum HazelTheme {
 
     public enum Colors {
         public static let clear = ThemedColor(light: RGBA(0, 0, 0, 0), dark: RGBA(0, 0, 0, 0))
-        /// `bg`: #ffffffff / #131316ff
-        public static let bg = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.076194, 0.076176, 0.087912, 1))
+        /// `bg`: #ffffffff / #131313ff
+        public static let bg = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.073002, 0.073002, 0.073002, 1))
+        /// `surface`: #ffffffff / #171717ff
+        public static let surface = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.090527, 0.090527, 0.090527, 1))
         /// `fg`: #09090bff / #fafafaff
         public static let fg = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 1), dark: RGBA(0.980256, 0.980256, 0.980256, 1))
         /// `fg-4`: #09090bff / #fafafaff
         public static let fg4 = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 1), dark: RGBA(0.980256, 0.980256, 0.980256, 1))
-        /// `fg-3`: #424245ff / #b2b2b3ff
-        public static let fg3 = ThemedColor(light: RGBA(0.260481, 0.260555, 0.268974, 1), dark: RGBA(0.696115, 0.696163, 0.700843, 1))
-        /// `fg-2`: #68686aff / #8a8a8cff
-        public static let fg2 = ThemedColor(light: RGBA(0.408974, 0.409047, 0.416126, 1), dark: RGBA(0.542549, 0.542616, 0.549639, 1))
-        /// `fg-1`: #b1b1b2ff / #4b4b4dff
-        public static let fg1 = ThemedColor(light: RGBA(0.692594, 0.69264, 0.696536, 1), dark: RGBA(0.292835, 0.292907, 0.303208, 1))
+        /// `fg-3`: #424245ff / #b1b1b1ff
+        public static let fg3 = ThemedColor(light: RGBA(0.260481, 0.260555, 0.268974, 1), dark: RGBA(0.694865, 0.694865, 0.694865, 1))
+        /// `fg-2`: #68686aff / #8a8a8aff
+        public static let fg2 = ThemedColor(light: RGBA(0.408974, 0.409047, 0.416126, 1), dark: RGBA(0.540672, 0.540672, 0.540672, 1))
+        /// `fg-1`: #b1b1b2ff / #4a4a4aff
+        public static let fg1 = ThemedColor(light: RGBA(0.692594, 0.69264, 0.696536, 1), dark: RGBA(0.29007, 0.29007, 0.290069, 1))
         /// `wash`: #00000009 / #ffffff0b
         public static let wash = ThemedColor(light: RGBA(0, 0, 0, 0.035), dark: RGBA(1, 1, 1, 0.045))
         /// `wash-strong`: #0000000f / #ffffff14
         public static let washStrong = ThemedColor(light: RGBA(0, 0, 0, 0.06), dark: RGBA(1, 1, 1, 0.08))
         /// `wash-stacked`: #00000018 / #ffffff1f
         public static let washStacked = ThemedColor(light: RGBA(0, 0, 0, 0.0929), dark: RGBA(1, 1, 1, 0.1214))
-        /// `input-card`: #ffffffff / #ffffff0b
-        public static let inputCard = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(1, 1, 1, 0.045))
+        /// `input-card`: #ffffffff / #171717ff
+        public static let inputCard = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.090527, 0.090527, 0.090527, 1))
         /// `separator`: #09090b12 / #ffffff12
         public static let separator = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 0.07), dark: RGBA(1, 1, 1, 0.07))
+        /// `bar-divider`: #09090b12 / #00000000
+        public static let barDivider = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 0.07), dark: RGBA(0, 0, 0, 0))
         /// `border`: #e4e4e7ff / #ffffff16
         public static let border = ThemedColor(light: RGBA(0.894477, 0.894477, 0.906151, 1), dark: RGBA(1, 1, 1, 0.085))
         /// `border-hover`: #d4d4d8ff / #ffffff24
@@ -178,8 +182,8 @@ public enum HazelTheme {
         public static let invalidBorderHover = ThemedColor(light: RGBA(0.756885, -0.062395, 0.028754, 0.8), dark: RGBA(1.005562, 0.391153, 0.403857, 0.8))
         /// `invalid-halo`: #c1000733 / #ff646733
         public static let invalidHalo = ThemedColor(light: RGBA(0.756885, -0.062395, 0.028754, 0.2), dark: RGBA(1.005562, 0.391153, 0.403857, 0.2))
-        /// `overlay`: #ffffffff / #1d1d21ff
-        public static let overlay = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.115511, 0.115483, 0.127859, 1))
+        /// `overlay`: #ffffffff / #1e1e1eff
+        public static let overlay = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.117618, 0.117618, 0.117618, 1))
         /// `overlay-fg`: #09090bff / #fafafaff
         public static let overlayFg = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 1), dark: RGBA(0.980256, 0.980256, 0.980256, 1))
         /// `overlay-border`: #09090b1a / #fafafa1a
@@ -208,28 +212,28 @@ public enum HazelTheme {
         public static let overlayBackdrop = ThemedColor(light: RGBA(0.084263, 0.08403, 0.103791, 0.2), dark: RGBA(0, 0, 0, 0.5))
         /// `inverse`: #09090bff / #fafafaff
         public static let inverse = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 1), dark: RGBA(0.980256, 0.980256, 0.980256, 1))
-        /// `inverse-fg`: #ffffffff / #131316ff
-        public static let inverseFg = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.076194, 0.076176, 0.087912, 1))
-        /// `inverse-muted`: #ffffff99 / #13131699
-        public static let inverseMuted = ThemedColor(light: RGBA(1, 1, 1, 0.6), dark: RGBA(0.076194, 0.076176, 0.087912, 0.6))
-        /// `navbar`: #fbfbfbff / #0f0f12ff
-        public static let navbar = ThemedColor(light: RGBA(0.984199, 0.984199, 0.984199, 1), dark: RGBA(0.059055, 0.05902, 0.070426, 1))
+        /// `inverse-fg`: #ffffffff / #131313ff
+        public static let inverseFg = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.073002, 0.073002, 0.073002, 1))
+        /// `inverse-muted`: #ffffff99 / #13131399
+        public static let inverseMuted = ThemedColor(light: RGBA(1, 1, 1, 0.6), dark: RGBA(0.073002, 0.073002, 0.073002, 0.6))
+        /// `navbar`: #fbfbfbff / #131313ff
+        public static let navbar = ThemedColor(light: RGBA(0.984199, 0.984199, 0.984199, 1), dark: RGBA(0.073002, 0.073002, 0.073002, 1))
         /// `navbar-fg`: #09090bff / #fafafaff
         public static let navbarFg = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 1), dark: RGBA(0.980256, 0.980256, 0.980256, 1))
         /// `selection-bg`: #f4ebffff / #42307dff
         public static let selectionBg = ThemedColor(light: RGBA(0.956863, 0.921569, 1, 1), dark: RGBA(0.258824, 0.188235, 0.490196, 1))
         /// `selection-fg`: #6941c6ff / #e9d7feff
         public static let selectionFg = ThemedColor(light: RGBA(0.411765, 0.254902, 0.776471, 1), dark: RGBA(0.913725, 0.843137, 0.996078, 1))
-        /// `muted`: #f4f4f5ff / #18181bff
-        public static let muted = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 1), dark: RGBA(0.093796, 0.093793, 0.105832, 1))
+        /// `muted`: #f4f4f5ff / #1b1b1bff
+        public static let muted = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 1), dark: RGBA(0.103957, 0.103957, 0.103957, 1))
         /// `muted-fg`: #52525cff / #9f9fa9ff
         public static let mutedFg = ThemedColor(light: RGBA(0.321182, 0.32109, 0.362108, 1), dark: RGBA(0.622613, 0.622562, 0.66336, 1))
         /// `primary`: #7f56d9ff / #7f56d9ff
         public static let primary = ThemedColor(light: RGBA(0.498039, 0.337255, 0.85098, 1), dark: RGBA(0.498039, 0.337255, 0.85098, 1))
         /// `primary-fg`: #ffffffff / #ffffffff
         public static let primaryFg = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(1, 1, 1, 1))
-        /// `secondary`: #f4f4f5ff / #27272aff
-        public static let secondary = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 1), dark: RGBA(0.152897, 0.152887, 0.16577, 1))
+        /// `secondary`: #f4f4f5ff / #262626ff
+        public static let secondary = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 1), dark: RGBA(0.150332, 0.150332, 0.150332, 1))
         /// `secondary-fg`: #09090bff / #fafafaff
         public static let secondaryFg = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 1), dark: RGBA(0.980256, 0.980256, 0.980256, 1))
         /// `success`: #009966ff / #009966ff
@@ -278,16 +282,16 @@ public enum HazelTheme {
         public static let chipSelectedBorder = ThemedColor(light: RGBA(0.498039, 0.337255, 0.85098, 0.5), dark: RGBA(0.498039, 0.337255, 0.85098, 0.5))
         /// `primary-focus`: #7f56d966 / #7f56d966
         public static let primaryFocus = ThemedColor(light: RGBA(0.498039, 0.337255, 0.85098, 0.4), dark: RGBA(0.498039, 0.337255, 0.85098, 0.4))
-        /// `secondary-band`: #f4f4f566 / #27272a66
-        public static let secondaryBand = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 0.4), dark: RGBA(0.152897, 0.152887, 0.16577, 0.4))
-        /// `secondary-soft`: #f4f4f5cc / #27272acc
-        public static let secondarySoft = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 0.8), dark: RGBA(0.152897, 0.152887, 0.16577, 0.8))
-        /// `secondary-half`: #f4f4f580 / #27272a80
-        public static let secondaryHalf = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 0.5), dark: RGBA(0.152897, 0.152887, 0.16577, 0.5))
-        /// `secondary-track`: #f4f4f5b3 / #27272ab3
-        public static let secondaryTrack = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 0.7), dark: RGBA(0.152897, 0.152887, 0.16577, 0.7))
-        /// `secondary-faint`: #f4f4f533 / #27272a33
-        public static let secondaryFaint = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 0.2), dark: RGBA(0.152897, 0.152887, 0.16577, 0.2))
+        /// `secondary-band`: #f4f4f566 / #26262666
+        public static let secondaryBand = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 0.4), dark: RGBA(0.150332, 0.150332, 0.150332, 0.4))
+        /// `secondary-soft`: #f4f4f5cc / #262626cc
+        public static let secondarySoft = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 0.8), dark: RGBA(0.150332, 0.150332, 0.150332, 0.8))
+        /// `secondary-half`: #f4f4f580 / #26262680
+        public static let secondaryHalf = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 0.5), dark: RGBA(0.150332, 0.150332, 0.150332, 0.5))
+        /// `secondary-track`: #f4f4f5b3 / #262626b3
+        public static let secondaryTrack = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 0.7), dark: RGBA(0.150332, 0.150332, 0.150332, 0.7))
+        /// `secondary-faint`: #f4f4f533 / #26262633
+        public static let secondaryFaint = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 0.2), dark: RGBA(0.150332, 0.150332, 0.150332, 0.2))
         /// `warning-tint`: #ffb9001a / #ffb9001a
         public static let warningTint = ThemedColor(light: RGBA(1.000316, 0.727256, -0.229846, 0.1), dark: RGBA(1.000316, 0.727256, -0.229846, 0.1))
         /// `warning-chip`: #ffb90033 / #ffb90033
@@ -372,12 +376,12 @@ public enum HazelTheme {
         public static let severityMedium = ThemedColor(light: RGBA(0.731789, 0.301023, -0.103752, 1), dark: RGBA(1.000316, 0.727256, -0.229846, 1))
         /// `severity-low`: #52525cff / #9f9fa9ff
         public static let severityLow = ThemedColor(light: RGBA(0.321182, 0.32109, 0.362108, 1), dark: RGBA(0.622613, 0.622562, 0.66336, 1))
-        /// `severity-off`: #f4f4f5ff / #27272aff
-        public static let severityOff = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 1), dark: RGBA(0.152897, 0.152887, 0.16577, 1))
+        /// `severity-off`: #f4f4f5ff / #262626ff
+        public static let severityOff = ThemedColor(light: RGBA(0.956385, 0.956385, 0.959343, 1), dark: RGBA(0.150332, 0.150332, 0.150332, 1))
         /// `placeholder-edge`: #52525c99 / #9f9fa999
         public static let placeholderEdge = ThemedColor(light: RGBA(0.321182, 0.32109, 0.362108, 0.6), dark: RGBA(0.622613, 0.622562, 0.66336, 0.6))
-        /// `presence-cutout`: #ffffffff / #131316ff
-        public static let presenceCutout = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.076194, 0.076176, 0.087912, 1))
+        /// `presence-cutout`: #ffffffff / #131313ff
+        public static let presenceCutout = ThemedColor(light: RGBA(1, 1, 1, 1), dark: RGBA(0.073002, 0.073002, 0.073002, 1))
         /// `toggle-track`: #09090b26 / #fafafa26
         public static let toggleTrack = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 0.15), dark: RGBA(0.980256, 0.980256, 0.980256, 0.15))
         /// `toggle-track-hover`: #09090b33 / #fafafa33
@@ -398,16 +402,16 @@ public enum HazelTheme {
         public static let slack = ThemedColor(light: RGBA(0.290196, 0.082353, 0.294118, 1), dark: RGBA(0.290196, 0.082353, 0.294118, 1))
         /// `discord`: #5865f2ff / #5865f2ff
         public static let discord = ThemedColor(light: RGBA(0.345098, 0.396078, 0.94902, 1), dark: RGBA(0.345098, 0.396078, 0.94902, 1))
-        /// `sidebar`: #fafafaff / #111114ff
-        public static let sidebar = ThemedColor(light: RGBA(0.980256, 0.980256, 0.980256, 1), dark: RGBA(0.067564, 0.067538, 0.079113, 1))
+        /// `sidebar`: #fafafaff / #0d0d0dff
+        public static let sidebar = ThemedColor(light: RGBA(0.980256, 0.980256, 0.980256, 1), dark: RGBA(0.051758, 0.051758, 0.051758, 1))
         /// `sidebar-fg`: #09090bff / #fafafaff
         public static let sidebarFg = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 1), dark: RGBA(0.980256, 0.980256, 0.980256, 1))
         /// `sidebar-primary`: #9e77ed26 / #9e77ed33
         public static let sidebarPrimary = ThemedColor(light: RGBA(0.619608, 0.466667, 0.929412, 0.15), dark: RGBA(0.619608, 0.466667, 0.929412, 0.2))
         /// `sidebar-primary-fg`: #6941c6ff / #d6bbfbff
         public static let sidebarPrimaryFg = ThemedColor(light: RGBA(0.411765, 0.254902, 0.776471, 1), dark: RGBA(0.839216, 0.733333, 0.984314, 1))
-        /// `sidebar-accent`: #e4e4e7ff / #27272aff
-        public static let sidebarAccent = ThemedColor(light: RGBA(0.894477, 0.894477, 0.906151, 1), dark: RGBA(0.152897, 0.152887, 0.16577, 1))
+        /// `sidebar-accent`: #e4e4e7ff / #1e1e1eff
+        public static let sidebarAccent = ThemedColor(light: RGBA(0.894477, 0.894477, 0.906151, 1), dark: RGBA(0.117618, 0.117618, 0.117618, 1))
         /// `sidebar-accent-fg`: #09090bff / #fafafaff
         public static let sidebarAccentFg = ThemedColor(light: RGBA(0.035374, 0.035359, 0.044318, 1), dark: RGBA(0.980256, 0.980256, 0.980256, 1))
         /// `sidebar-border`: #dedee2ff / #ffffff12
@@ -428,8 +432,8 @@ public enum HazelTheme {
         public static let primaryIcon = ThemedColor(light: RGBA(1, 1, 1, 0.6), dark: RGBA(1, 1, 1, 0.6))
         /// `primary-hover`: #8a69deff / #8a69deff
         public static let primaryHover = ThemedColor(light: RGBA(0.541542, 0.410139, 0.871337, 1), dark: RGBA(0.541542, 0.410139, 0.871337, 1))
-        /// `secondary-hover`: #d9d9daff / #39393cff
-        public static let secondaryHover = ThemedColor(light: RGBA(0.84943, 0.849447, 0.853495, 1), dark: RGBA(0.222853, 0.222874, 0.235173, 1))
+        /// `secondary-hover`: #d9d9daff / #383838ff
+        public static let secondaryHover = ThemedColor(light: RGBA(0.84943, 0.849447, 0.853495, 1), dark: RGBA(0.220417, 0.220417, 0.220417, 1))
         /// `warning-icon`: #46190199 / #46190199
         public static let warningIcon = ThemedColor(light: RGBA(0.274067, 0.098493, 0.004667, 0.6), dark: RGBA(0.274067, 0.098493, 0.004667, 0.6))
         /// `warning-hover`: #ffc116ff / #ffc116ff
@@ -1525,7 +1529,7 @@ public enum HazelTheme {
                 Layer(when: When(options: ["leadingSize": "conversation"], flags: [], states: [.emphasized], sizeClass: nil), part: "title", style: Style(weight: 600)),
                 Layer(when: When(options: ["leadingSize": "conversation"], flags: [], states: [.emphasized], sizeClass: nil), part: "subtitle", style: Style(color: Colors.fg)),
                 Layer(when: When(options: ["style": "nav"], flags: [], states: [.selected], sizeClass: nil), part: "control", style: Style(background: Colors.sidebarAccent, color: Colors.sidebarAccentFg, strong: true)),
-                Layer(when: When(options: ["style": "nav"], flags: [], states: [.selected], sizeClass: nil), part: "leading", style: Style(color: Colors.sidebarPrimaryFg)),
+                Layer(when: When(options: ["style": "nav"], flags: [], states: [.selected], sizeClass: nil), part: "leading", style: Style(color: Colors.sidebarAccentFg)),
                 Layer(when: When(options: ["style": "switcher"], flags: [], states: [], sizeClass: nil), part: "control", style: Style(color: Colors.switcherFg, radius: 0, paddingX: 0, paddingY: 0, text: .label, leading: 24, strong: true)),
                 Layer(when: When(options: ["style": "switcher"], flags: [], states: [], sizeClass: nil), part: "leading", style: Style(color: Colors.fg, size: 32)),
                 Layer(when: When(options: ["style": "switcher"], flags: [], states: [], sizeClass: nil), part: "trailing", style: Style(color: Colors.mutedFg)),
@@ -1798,7 +1802,7 @@ public enum HazelTheme {
             inert: [],
             layers: [
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(layout: .column, background: Colors.sidebar)),
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "header", style: Style(layout: .row, align: .center, divider: Colors.separator, paddingX: 24, paddingY: 8, gap: 8, minHeight: 56)),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "header", style: Style(layout: .row, align: .center, divider: Colors.barDivider, paddingX: 24, paddingY: 8, gap: 8, minHeight: 56)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "back", style: Style(color: Colors.fg3, radius: 8, paddingX: 8, bleedX: 8, size: 32, shrink: false, transition: 0.15)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "crumbs", style: Style(layout: .row, align: .center, color: Colors.mutedFg, gap: 6, text: .label, minWidth: 0)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "crumb", style: Style(radius: 4, truncate: true, transition: 0.15)),
@@ -2007,7 +2011,7 @@ public enum HazelTheme {
             defaults: ["trend": "none", "deltaTone": "neutral"],
             inert: [],
             layers: [
-                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.bg, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 12, paddingY: 12, rowGap: 6, shadow: "xs")),
+                Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: nil, style: Style(background: Colors.surface, borderColor: Colors.border, borderWidth: 1, radius: 12, paddingX: 12, paddingY: 12, rowGap: 6, shadow: "xs")),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "label", style: Style(color: Colors.mutedFg, text: .caption, leading: 20, strong: true)),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "definition", style: Style(background: Colors.overlay, color: Colors.overlayFg, borderColor: Colors.overlayBorder, borderWidth: 1, radius: 8, paddingX: 12, paddingY: 8, text: .caption, leading: 20, shadow: "md")),
                 Layer(when: When(options: [:], flags: [], states: [], sizeClass: nil), part: "value", style: Style(color: Colors.fg, text: .stat, numeric: true, weight: 600)),

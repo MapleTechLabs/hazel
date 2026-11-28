@@ -53,13 +53,28 @@ const palette = {
 	"brand-600": "rgb(127 86 217)",
 	"brand-700": "rgb(105 65 198)",
 	"brand-900": "rgb(66 48 125)",
+	/*
+	 * Ink: dark mode's surfaces, a ladder of near-blacks that layers by lightness, not by border:
+	 * the sidebar sits darkest, then the page, cards, insets, popovers, controls. Achromatic here; the
+	 * app's gray palette tints the whole ladder at once (`--color-ink-*`, `core/lib/theme/apply.ts`).
+	 */
+	"ink-0": "oklch(0.16 0 0)",
+	"ink-1": "oklch(0.185 0 0)",
+	"ink-2": "oklch(0.205 0 0)",
+	"ink-3": "oklch(0.22 0 0)",
+	"ink-4": "oklch(0.235 0 0)",
+	"ink-5": "oklch(0.25 0 0)",
+	"ink-6": "oklch(0.27 0 0)",
+	"ink-7": "oklch(0.3 0 0)",
 } as const
 
 const p = (name: keyof typeof palette): ColorExpr => ({ ref: `palette.${name}` })
 
 const color = {
 	// Surfaces and ink (styles.css `:root` / `.dark`).
-	bg: themed(p("white"), lit("oklch(0.19 0.006 285.885)")),
+	bg: themed(p("white"), p("ink-1")),
+	/** A card on the page: one ink step up in dark, so it reads as raised without a border. */
+	surface: themed(p("white"), p("ink-2")),
 	fg: themed(p("zinc-950"), p("zinc-50")),
 	/** The text ladder, mixed from fg into bg (styles.css `--fg-1`..`--fg-4`). */
 	"fg-4": same(ref("fg")),
@@ -70,10 +85,12 @@ const color = {
 	"wash-strong": themed(lit("oklch(0 0 0 / 0.06)"), lit("oklch(1 0 0 / 0.08)")),
 	/** `wash` under `wash-strong`: the active channel row under the pointer (two layers, one colour). */
 	"wash-stacked": themed(lit("oklch(0 0 0 / 0.0929)"), lit("oklch(1 0 0 / 0.1214)")),
-	/** A card that takes input: the page in light, `wash` over it in dark (the composer's `bg-bg dark:bg-wash`). */
-	"input-card": themed(ref("bg"), ref("wash")),
+	/** A card that takes input: the page in light, the raised `surface` in dark (the composer). */
+	"input-card": themed(ref("bg"), ref("surface")),
 	/** A bar's bottom edge (the hybrid's measured band, `Theme.bandBorder`). */
 	separator: themed(alpha(p("zinc-950"), 0.07), alpha(p("white"), 0.07)),
+	/** A page header's bottom edge: the separator in light, nothing in dark (surfaces separate by ink). */
+	"bar-divider": themed(alpha(p("zinc-950"), 0.07), lit("oklch(0 0 0 / 0)")),
 	border: themed(p("zinc-200"), lit("oklch(1 0 0 / 0.085)")),
 	"border-hover": themed(p("zinc-300"), lit("oklch(1 0 0 / 0.14)")),
 	/** An outlined control's edge (`--input`). */
@@ -92,7 +109,7 @@ const color = {
 	"invalid-halo": same(alpha(ref("danger-subtle-fg"), 0.2)),
 
 	// Raised surfaces: menus, popovers, dialogs, sheets, toasts (styles.css `--overlay*`).
-	overlay: themed(p("white"), lit("oklch(0.234 0.006 286.033)")),
+	overlay: themed(p("white"), p("ink-4")),
 	"overlay-fg": themed(p("zinc-950"), p("zinc-50")),
 	/** A popover's, toast's or tooltip's edge (`border-fg/10`). */
 	"overlay-border": same(alpha(ref("fg"), 0.1)),
@@ -115,16 +132,16 @@ const color = {
 	inverse: same(ref("fg")),
 	"inverse-fg": same(ref("bg")),
 	"inverse-muted": same(alpha(ref("bg"), 0.6)),
-	navbar: themed(lit("oklch(0.988 0 0)"), lit("oklch(0.17 0.006 285.885)")),
+	navbar: themed(lit("oklch(0.988 0 0)"), p("ink-1")),
 	"navbar-fg": themed(p("zinc-950"), p("zinc-50")),
 	"selection-bg": themed(p("brand-100"), p("brand-900")),
 	"selection-fg": themed(p("brand-700"), p("brand-200")),
-	muted: themed(p("zinc-100"), p("zinc-900")),
+	muted: themed(p("zinc-100"), p("ink-3")),
 	"muted-fg": themed(p("zinc-600"), p("zinc-400")),
 
 	primary: same(p("brand-600")),
 	"primary-fg": same(lit("oklch(1 0 0)")),
-	secondary: themed(p("zinc-100"), p("zinc-800")),
+	secondary: themed(p("zinc-100"), p("ink-6")),
 	"secondary-fg": themed(p("zinc-950"), p("zinc-50")),
 	success: same(p("emerald-600")),
 	"success-fg": same(p("white")),
@@ -242,11 +259,11 @@ const color = {
 	discord: same(lit("#5865f2")),
 
 	// The sidebar (styles.css `--sidebar-*`).
-	sidebar: themed(lit("oklch(0.985 0 0)"), lit("oklch(0.18 0.006 285.885)")),
+	sidebar: themed(lit("oklch(0.985 0 0)"), p("ink-0")),
 	"sidebar-fg": themed(lit("oklch(0.141 0.005 285.823)"), lit("oklch(0.985 0 0)")),
 	"sidebar-primary": themed(alpha(p("brand-500"), 0.15), alpha(p("brand-500"), 0.2)),
 	"sidebar-primary-fg": themed(p("brand-700"), p("brand-300")),
-	"sidebar-accent": themed(lit("oklch(0.92 0.004 286.32)"), lit("oklch(0.274 0.006 286.033)")),
+	"sidebar-accent": themed(lit("oklch(0.92 0.004 286.32)"), p("ink-4")),
 	"sidebar-accent-fg": themed(lit("oklch(0.141 0.005 285.823)"), lit("oklch(0.985 0 0)")),
 	"sidebar-border": themed(lit("oklch(0.901 0.006 286.286)"), lit("oklch(1 0 0 / 0.07)")),
 	"sidebar-ring": same(p("brand-500")),
@@ -538,8 +555,14 @@ export const tokens = {
 		spinnerPulse: { keyframes: "pulse", duration: "spinnerPulse", easing: "inOut", repeat: "forever" },
 	},
 	reducedMotion: "instant",
-	/** The app's theme presets set `--color-brand-*` on the page (`core/lib/theme/apply.ts`). */
-	hostPalette: { prefix: "brand-", cssPrefix: "--color-brand-" },
+	/**
+	 * The app's theme sets `--color-brand-*` (the brand preset) and `--color-ink-*` (the gray
+	 * palette's tint of dark mode's surfaces) on the page (`core/lib/theme/apply.ts`).
+	 */
+	hostPalette: [
+		{ prefix: "brand-", cssPrefix: "--color-brand-" },
+		{ prefix: "ink-", cssPrefix: "--color-ink-" },
+	],
 } as const satisfies Tokens
 
 export interface HazelTokenNames {

@@ -51,7 +51,8 @@ export const screen = defineRecipe<
 				paddingX: "6",
 				// Room for crumbs and a subtitle; a one-line bar stays 56pt tall (border-box).
 				paddingY: "2",
-				divider: "separator",
+				// A hairline in light; none in dark, where the page under it is its own ink step.
+				divider: "bar-divider",
 			},
 			// The back button: a quiet square, as a section's header action.
 			back: {

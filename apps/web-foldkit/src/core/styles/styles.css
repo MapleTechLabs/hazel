@@ -64,6 +64,7 @@ If you want to use the typography plugin, uncomment the line below.
 	--text-3xs: 0.625rem;
 
 	--color-bg-muted: var(--muted);
+	--color-surface: var(--surface);
 	--color-border-hover: var(--border-hover);
 
 	--color-primary: var(--primary);
@@ -341,6 +342,8 @@ If you want to use the typography plugin, uncomment the line below.
 
 	--bg: var(--color-white);
 	--fg: var(--color-zinc-950);
+	/* A card on the page: the page itself in light, one ink step up in dark. */
+	--surface: var(--bg);
 
 	/*
 	 * The text ladder, mixed from --fg so every gray palette gets its own: fg-4 titles, values and
@@ -448,7 +451,9 @@ If you want to use the typography plugin, uncomment the line below.
 }
 
 .dark {
-	--bg: oklch(0.19 0.006 285.885);
+	/* Surfaces climb the ink ladder (theme.css): sidebar under page under card under popover. */
+	--bg: var(--color-ink-1);
+	--surface: var(--color-ink-2);
 	--fg: var(--color-zinc-50);
 
 	--wash: oklch(1 0 0 / 0.045);
@@ -475,16 +480,16 @@ If you want to use the typography plugin, uncomment the line below.
 	--primary-subtle: rgb(from var(--color-brand-500) r g b / 15%);
 	--primary-subtle-fg: var(--color-brand-300);
 
-	--secondary: var(--color-zinc-800);
+	--secondary: var(--color-ink-6);
 	--secondary-fg: var(--color-zinc-50);
 
-	--accent: oklch(0.32 0.013 285.805);
+	--accent: var(--color-ink-7);
 	--accent-fg: oklch(0.985 0 0);
 
-	--muted: var(--color-zinc-900);
+	--muted: var(--color-ink-3);
 	--muted-fg: var(--color-zinc-400);
 
-	--overlay: oklch(0.234 0.006 286.033);
+	--overlay: var(--color-ink-4);
 	--overlay-fg: var(--color-zinc-50);
 
 	--success: var(--color-emerald-600);
@@ -511,14 +516,14 @@ If you want to use the typography plugin, uncomment the line below.
 	--border-hover: oklch(1 0 0 / 0.14);
 	--input: oklch(1 0 0 / 0.1);
 
-	--navbar: oklch(0.17 0.006 285.885);
+	--navbar: var(--color-ink-1);
 	--navbar-fg: var(--color-zinc-50);
 
-	--sidebar: oklch(0.18 0.006 285.885);
+	--sidebar: var(--color-ink-0);
 	--sidebar-fg: oklch(0.985 0 0);
 	--sidebar-primary: rgb(from var(--color-brand-500) r g b / 20%);
 	--sidebar-primary-fg: var(--color-brand-300);
-	--sidebar-accent: oklch(0.274 0.006 286.033);
+	--sidebar-accent: var(--color-ink-4);
 	--sidebar-accent-fg: oklch(0.985 0 0);
 	--sidebar-border: oklch(1 0 0 / 0.07);
 	--sidebar-ring: var(--color-brand-500);

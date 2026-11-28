@@ -53,7 +53,8 @@ export const statTile = defineRecipe<
 			radius: "xl",
 			borderWidth: "hairline",
 			borderColor: "border",
-			background: "bg",
+			// One ink step over the page in dark (the page itself in light), so a tile reads as raised.
+			background: "surface",
 			shadow: "xs",
 			paddingX: "3",
 			paddingY: "3",

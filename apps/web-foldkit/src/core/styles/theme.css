@@ -378,6 +378,27 @@
 }
 
 /*
+ * Ink: dark mode's surfaces, a ladder of near-blacks that layers by lightness instead of borders
+ * (sidebar ink-0, page ink-1, card ink-2, inset ink-3, popover and current row ink-4, controls
+ * ink-6). Achromatic by default; a gray palette tints the whole ladder by setting `--ink-h`/`--ink-c`
+ * and may lift it with `--ink-lift` (`lib/theme/apply.ts`). The UI kit reads the same steps
+ * (`packages/ui` `hostPalette`).
+ */
+:root {
+	--ink-h: 0;
+	--ink-c: 0;
+	--ink-lift: 0;
+	--color-ink-0: oklch(calc(0.16 + var(--ink-lift)) var(--ink-c) var(--ink-h));
+	--color-ink-1: oklch(calc(0.185 + var(--ink-lift)) var(--ink-c) var(--ink-h));
+	--color-ink-2: oklch(calc(0.205 + var(--ink-lift)) var(--ink-c) var(--ink-h));
+	--color-ink-3: oklch(calc(0.22 + var(--ink-lift)) var(--ink-c) var(--ink-h));
+	--color-ink-4: oklch(calc(0.235 + var(--ink-lift)) var(--ink-c) var(--ink-h));
+	--color-ink-5: oklch(calc(0.25 + var(--ink-lift)) var(--ink-c) var(--ink-h));
+	--color-ink-6: oklch(calc(0.27 + var(--ink-lift)) var(--ink-c) var(--ink-h));
+	--color-ink-7: oklch(calc(0.3 + var(--ink-lift)) var(--ink-c) var(--ink-h));
+}
+
+/*
  * Customers: chart and severity colors (Wonder "Maple Design System" › Foundations › Color Token
  * Reference). Chart hues fill marks only; text never takes a chart color, and every color is paired
  * with a label or legend. Severity marks reuse the semantic tokens badges use (`*-subtle-fg`,

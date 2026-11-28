@@ -11,7 +11,7 @@ export const DEFAULT_BRAND_COLOR = "#6938EF" as Theme.HexColor
 const DEFAULT_PRESET: Theme.ThemePreset = {
 	id: "default",
 	name: "Default",
-	description: "The default Hazel theme",
+	description: "The default Hazel theme, on a ladder of neutral blacks in dark mode",
 	isBuiltIn: true,
 	customization: {
 		primary: "#6938EF" as Theme.HexColor,
@@ -25,6 +25,17 @@ const DEFAULT_PRESET: Theme.ThemePreset = {
  */
 export const BUILT_IN_PRESETS: Theme.ThemePreset[] = [
 	DEFAULT_PRESET,
+	{
+		id: "classic",
+		name: "Classic",
+		description: "Hazel's original zinc-tinted dark theme",
+		isBuiltIn: true,
+		customization: {
+			primary: "#6938EF" as Theme.HexColor,
+			grayPalette: "gray-zinc",
+			radius: "normal",
+		},
+	},
 	{
 		id: "ocean",
 		name: "Ocean",
@@ -103,6 +114,7 @@ export const GRAY_PALETTE_LABELS = {
 	"gray-iron": "Iron Gray",
 	"gray-true": "True Gray",
 	"gray-warm": "Warm Gray",
+	"gray-zinc": "Zinc (Classic)",
 } satisfies Record<Theme.GrayPalette, string>
 
 /**
