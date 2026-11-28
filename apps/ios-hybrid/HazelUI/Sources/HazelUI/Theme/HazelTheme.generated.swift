@@ -978,6 +978,7 @@ public enum HazelTheme {
                 Layer(when: When(options: [:], flags: ["tile"], states: [], sizeClass: .regular), part: "glyph", style: Style(size: 20)),
                 Layer(when: When(options: [:], flags: ["tile"], states: [], sizeClass: .regular), part: "emoji", style: Style(size: 20, leading: 18)),
                 Layer(when: When(options: [:], flags: ["tile"], states: [], sizeClass: .regular), part: "logo", style: Style(size: 20)),
+                Layer(when: When(options: [:], flags: ["tileBorder"], states: [], sizeClass: nil), part: nil, style: Style(borderColor: Colors.border, borderWidth: 1)),
             ]
         )
 

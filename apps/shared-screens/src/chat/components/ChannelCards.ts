@@ -197,24 +197,23 @@ export const channelCard = <Msg>(
 			// HAZEL-GAP(p4-item-subtitle-icons): today's meta line is a users glyph and the bare count, and a muted glyph.
 			.subtitle(`${members} member${members === 1 ? "" : "s"}${channel.isMuted ? " · Muted" : ""}`)
 			.leadingSize("large")
+			// Today's neutral 40pt tile around every channel's icon: `#`, a lock, an emoji or a customer's logo.
 			.leading(
-				// Today's neutral tile; an emoji or a customer or sync mark needs the channel icon.
-				// HAZEL-GAP(p4-channel-icon-tile): `iconTile` takes only a glyph, so a marked channel's icon has no tile.
-				customer === undefined && channel.icon === null && sync === "none"
-					? h.iconTile.name(channel.type === "private" ? "lock" : "hashtag")
-					: h.channelIcon
-							.private(channel.type === "private")
-							.emoji(channel.icon ?? undefined)
-							.customer(
-								customer === undefined
-									? undefined
-									: {
-											name: customer.accountName,
-											initials: initialsOf(customer.accountName),
-											src: customer.accountLogoUrl ?? undefined,
-										},
-							)
-							.sync(sync),
+				h.channelIcon
+					.tile(true)
+					.tileBorder(true)
+					.private(channel.type === "private")
+					.emoji(channel.icon ?? undefined)
+					.customer(
+						customer === undefined
+							? undefined
+							: {
+									name: customer.accountName,
+									initials: initialsOf(customer.accountName),
+									src: customer.accountLogoUrl ?? undefined,
+								},
+					)
+					.sync(sync),
 			)
 			// HAZEL-GAP(p4-item-title-mark): today's favorite star sits right after the name, not at the row's end.
 			.trailing(channel.isFavorite ? h.text.tone("warning").children("★") : undefined)

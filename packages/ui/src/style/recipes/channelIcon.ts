@@ -9,7 +9,7 @@ import type { ProviderMark } from "../schema.ts"
  */
 export const channelIcon = defineRecipe<
 	{ readonly sync: ProviderMark },
-	"private" | "tile",
+	"private" | "tile" | "tileBorder",
 	"glyph" | "emoji" | "logo" | "lock" | "lockIcon" | "partners" | "partner" | "sync" | "syncLogo"
 >({
 	primitive: "channelIcon",
@@ -103,5 +103,7 @@ export const channelIcon = defineRecipe<
 				parts: { glyph: { size: "5" }, emoji: { size: "5", leading: "4.5" }, logo: { size: "5" } },
 			},
 		},
+		// The chat index cards' tile is `iconTile`'s neutral one, which adds a hairline `border`.
+		tileBorder: { root: { borderWidth: "hairline", borderColor: "border" } },
 	},
 })

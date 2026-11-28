@@ -1,5 +1,5 @@
 {
-	"about": "`tile` (G2, `p4-channel-settings-header`): the channel settings header's 40pt secondary tile around the `md` mark; a private channel and an emoji icon.",
+	"about": "`tile` (G2, `p4-channel-settings-header`): the channel settings header's 40pt secondary tile around the `md` mark; a private channel and an emoji icon; `tileBorder` adds the chat index cards' hairline border.",
 	"root": {
 		"tag": "channelIcon",
 		"props": {
@@ -18,6 +18,12 @@
 			"name": "emoji",
 			"props": {
 				"emoji": "🚀"
+			}
+		},
+		{
+			"name": "bordered",
+			"props": {
+				"tileBorder": true
 			}
 		}
 	],

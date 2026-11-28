@@ -2375,6 +2375,12 @@
 	}
 }
 
+[data-hz="channelIcon"][data-tile-border] {
+	border-style: solid;
+	border-width: 1px;
+	border-color: var(--hz-color-border);
+}
+
 /* chart */
 [data-hz="chart"] > [data-hz-part="axis"] {
 	color: var(--hz-color-muted-fg);

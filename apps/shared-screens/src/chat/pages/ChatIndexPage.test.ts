@@ -93,7 +93,7 @@ describe("chat index page", () => {
 		const s = Scene.start(ChatIndexPage, { session: session() })
 		s.expect(byProp("progress", "label", "Loading...")).toExist()
 		s.subscription(CHANNELS, ChatIndexMessage.UpdatedChannels({ groups }))
-			.expect(byProp("screen", "title", "All channels"))
+			.expect(Locator.text("All channels"))
 			.toExist()
 			.expect(item("general"))
 			.toExist()
@@ -108,6 +108,19 @@ describe("chat index page", () => {
 			href: "/hazel/chat/00000005-0000-4000-8000-000000000001",
 			badge: 3,
 		})
+	})
+
+	test("every channel card draws its icon on the bordered tile, an emoji channel's too", () => {
+		const s = Scene.start(ChatIndexPage, { session: session() }).subscription(
+			CHANNELS,
+			ChatIndexMessage.UpdatedChannels({
+				groups: { ...groups, publicChannels: [...groups.publicChannels, channel(6, { icon: "🚀" })] },
+			}),
+		)
+		const icons = Locator.all(s.root, Locator.tag("hz:channelIcon"))
+		expect(icons).toHaveLength(2)
+		for (const icon of icons) expect(icon.props).toMatchObject({ tile: true, tileBorder: true })
+		expect(icons.map((icon) => icon.props?.["emoji"])).toContain("🚀")
 	})
 
 	test("the private tab dims a muted channel; the DMs tab names partners and groups", () => {
@@ -164,7 +177,7 @@ describe("wide DMs page", () => {
 	test("lists the DMs and starts a new one", () => {
 		Scene.start(ChatDmsPage, { session: session() })
 			.subscription(CHANNELS, ChatDmsMessage.UpdatedChannels({ groups }))
-			.expect(byProp("screen", "title", "Direct messages"))
+			.expect(Locator.text("Direct messages"))
 			.toExist()
 			.expect(item("Grace Hopper"))
 			.toExist()
