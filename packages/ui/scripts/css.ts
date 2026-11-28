@@ -35,12 +35,10 @@ export const colorCss = (expr: ColorExpr): string => {
 	return `color-mix(in oklab, ${colorCss(expr.alpha[0])} ${expr.alpha[1] * 100}%, transparent)`
 }
 
-/** A palette step the host may set at runtime (the app's brand preset) reads the host's variable first. */
+/** A palette step the host may set at runtime (brand preset, ink tint) reads the host's variable first. */
 const paletteValue = (tokens: Tokens, name: string, value: string) => {
-	const host = tokens.hostPalette
-	return host !== undefined && name.startsWith(host.prefix)
-		? `var(${host.cssPrefix}${name.slice(host.prefix.length)}, ${value})`
-		: value
+	const host = tokens.hostPalette?.find((entry) => name.startsWith(entry.prefix))
+	return host === undefined ? value : `var(${host.cssPrefix}${name.slice(host.prefix.length)}, ${value})`
 }
 
 const sameExpr = (a: ColorExpr, b: ColorExpr) => JSON.stringify(a) === JSON.stringify(b)

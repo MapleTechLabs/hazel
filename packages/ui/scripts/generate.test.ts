@@ -14,14 +14,14 @@ describe("ui:generate", () => {
 	it("resolves colours to the values the hybrid measured on the live page (Theme.swift seed)", () => {
 		// apps/ios-hybrid/EffectUiSpike/Theme.swift: Row.label is fg-3, Row.selectedFg is sidebar-primary-fg.
 		const swift = generateSwift(tokens, recipes)
-		expect(swift).toContain("/// `fg-3`: #424245ff / #b2b2b3ff")
+		expect(swift).toContain("/// `fg-3`: #424245ff / #b1b1b1ff")
 		expect(swift).toContain("/// `sidebar-primary-fg`: #6941c6ff / #d6bbfbff")
 		expect(toHex(parseColor("oklch(98.5% 0 none)"))).toBe("#fafafaff")
 	})
 
 	it("keeps the seeds' surfaces (styles.css `--overlay`, `--field`) in both themes", () => {
 		const swift = generateSwift(tokens, recipes)
-		expect(swift).toContain("/// `overlay`: #ffffffff / #1d1d21ff")
+		expect(swift).toContain("/// `overlay`: #ffffffff / #1e1e1eff")
 		expect(swift).toContain("/// `accent-fg`: #6941c6ff / #d6bbfbff")
 	})
 

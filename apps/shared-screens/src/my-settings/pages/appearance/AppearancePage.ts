@@ -34,6 +34,7 @@ export const GRAY_PALETTES: ReadonlyArray<Theme.GrayPalette> = [
 	"gray-iron",
 	"gray-true",
 	"gray-warm",
+	"gray-zinc",
 ]
 
 export const AppearanceMessage = UiSchema.TaggedEnum({

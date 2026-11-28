@@ -39,7 +39,16 @@
 	--hz-palette-brand-600: var(--color-brand-600, rgb(127 86 217));
 	--hz-palette-brand-700: var(--color-brand-700, rgb(105 65 198));
 	--hz-palette-brand-900: var(--color-brand-900, rgb(66 48 125));
+	--hz-palette-ink-0: var(--color-ink-0, oklch(0.16 0 0));
+	--hz-palette-ink-1: var(--color-ink-1, oklch(0.185 0 0));
+	--hz-palette-ink-2: var(--color-ink-2, oklch(0.212 0 0));
+	--hz-palette-ink-3: var(--color-ink-3, oklch(0.22 0 0));
+	--hz-palette-ink-4: var(--color-ink-4, oklch(0.235 0 0));
+	--hz-palette-ink-5: var(--color-ink-5, oklch(0.25 0 0));
+	--hz-palette-ink-6: var(--color-ink-6, oklch(0.27 0 0));
+	--hz-palette-ink-7: var(--color-ink-7, oklch(0.3 0 0));
 	--hz-color-bg: var(--hz-palette-white);
+	--hz-color-surface: var(--hz-palette-white);
 	--hz-color-fg: var(--hz-palette-zinc-950);
 	--hz-color-fg-4: var(--hz-color-fg);
 	--hz-color-fg-3: color-mix(in oklab, var(--hz-color-fg) 72%, var(--hz-color-bg));
@@ -50,6 +59,7 @@
 	--hz-color-wash-stacked: oklch(0 0 0 / 0.0929);
 	--hz-color-input-card: var(--hz-color-bg);
 	--hz-color-separator: color-mix(in oklab, var(--hz-palette-zinc-950) 7.000000000000001%, transparent);
+	--hz-color-bar-divider: color-mix(in oklab, var(--hz-palette-zinc-950) 7.000000000000001%, transparent);
 	--hz-color-border: var(--hz-palette-zinc-200);
 	--hz-color-border-hover: var(--hz-palette-zinc-300);
 	--hz-color-input: var(--hz-palette-zinc-300);
@@ -335,31 +345,33 @@
 }
 
 .dark {
-	--hz-color-bg: oklch(0.19 0.006 285.885);
+	--hz-color-bg: var(--hz-palette-ink-1);
+	--hz-color-surface: var(--hz-palette-ink-2);
 	--hz-color-fg: var(--hz-palette-zinc-50);
 	--hz-color-wash: oklch(1 0 0 / 0.045);
 	--hz-color-wash-strong: oklch(1 0 0 / 0.08);
 	--hz-color-wash-stacked: oklch(1 0 0 / 0.1214);
-	--hz-color-input-card: var(--hz-color-wash);
+	--hz-color-input-card: var(--hz-color-surface);
 	--hz-color-separator: color-mix(in oklab, var(--hz-palette-white) 7.000000000000001%, transparent);
+	--hz-color-bar-divider: oklch(0 0 0 / 0);
 	--hz-color-border: oklch(1 0 0 / 0.085);
 	--hz-color-border-hover: oklch(1 0 0 / 0.14);
 	--hz-color-input: oklch(1 0 0 / 0.1);
 	--hz-color-field: oklch(1 0 0 / 0.05);
 	--hz-color-field-hover: oklch(1 0 0 / 0.08);
-	--hz-color-overlay: oklch(0.234 0.006 286.033);
+	--hz-color-overlay: var(--hz-palette-ink-4);
 	--hz-color-overlay-fg: var(--hz-palette-zinc-50);
 	--hz-color-dialog-ring: color-mix(in oklab, var(--hz-color-fg) 10%, transparent);
 	--hz-color-sheet-border: var(--hz-color-border);
 	--hz-color-scrim: oklch(0 0 0 / 0.5);
 	--hz-color-overlay-backdrop: oklch(0 0 0 / 0.5);
-	--hz-color-navbar: oklch(0.17 0.006 285.885);
+	--hz-color-navbar: var(--hz-palette-ink-1);
 	--hz-color-navbar-fg: var(--hz-palette-zinc-50);
 	--hz-color-selection-bg: var(--hz-palette-brand-900);
 	--hz-color-selection-fg: var(--hz-palette-brand-200);
-	--hz-color-muted: var(--hz-palette-zinc-900);
+	--hz-color-muted: var(--hz-palette-ink-3);
 	--hz-color-muted-fg: var(--hz-palette-zinc-400);
-	--hz-color-secondary: var(--hz-palette-zinc-800);
+	--hz-color-secondary: var(--hz-palette-ink-6);
 	--hz-color-secondary-fg: var(--hz-palette-zinc-50);
 	--hz-color-success-subtle-fg: var(--hz-palette-emerald-400);
 	--hz-color-success-subtle: color-mix(in oklab, var(--hz-palette-emerald-500) 10%, transparent);
@@ -386,11 +398,11 @@
 	--hz-color-chart-series-1: rgb(105 56 239);
 	--hz-color-chart-series-2: rgb(155 138 251);
 	--hz-color-chart-series-3: rgb(217 214 254);
-	--hz-color-sidebar: oklch(0.18 0.006 285.885);
+	--hz-color-sidebar: var(--hz-palette-ink-0);
 	--hz-color-sidebar-fg: oklch(0.985 0 0);
 	--hz-color-sidebar-primary: color-mix(in oklab, var(--hz-palette-brand-500) 20%, transparent);
 	--hz-color-sidebar-primary-fg: var(--hz-palette-brand-300);
-	--hz-color-sidebar-accent: oklch(0.274 0.006 286.033);
+	--hz-color-sidebar-accent: var(--hz-palette-ink-4);
 	--hz-color-sidebar-accent-fg: oklch(0.985 0 0);
 	--hz-color-sidebar-border: oklch(1 0 0 / 0.07);
 	--hz-color-account-card: oklch(0.32 0.013 285.805 / 0.2);
@@ -5219,7 +5231,7 @@
 }
 
 [data-hz="item"][data-style="nav"][data-selected] > [data-hz-part="control"] > [data-hz-part="content"] > [data-hz-slot="leading"] {
-	color: var(--hz-color-sidebar-primary-fg);
+	color: var(--hz-color-sidebar-accent-fg);
 }
 
 [data-hz="item"][data-style="switcher"] > [data-hz-part="control"] {
@@ -6487,7 +6499,7 @@
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	border-bottom: 1px solid var(--hz-color-separator);
+	border-bottom: 1px solid var(--hz-color-bar-divider);
 	padding-inline: var(--hz-space-6);
 	padding-block: var(--hz-space-2);
 	column-gap: var(--hz-space-2);
@@ -7449,7 +7461,7 @@
 
 /* statTile */
 [data-hz="statTile"] {
-	background-color: var(--hz-color-bg);
+	background-color: var(--hz-color-surface);
 	border-style: solid;
 	border-width: 1px;
 	border-color: var(--hz-color-border);

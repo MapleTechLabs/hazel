@@ -12,6 +12,8 @@ export const GrayPalette = Schema.Literals([
 	"gray-iron",
 	"gray-true",
 	"gray-warm",
+	/** Hazel's original zinc-tinted dark theme, lifted a step above Ink (the "Classic" preset). */
+	"gray-zinc",
 ])
 export type GrayPalette = Schema.Schema.Type<typeof GrayPalette>
 

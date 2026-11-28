@@ -10,6 +10,7 @@ import type {
 	NativeHttpEvent,
 	NativeSocketEvent,
 } from "../../../packages/client-data/src/platform/jsc/bridge.ts"
+import type { WebSocketLike } from "@hazel/effect-db-collection"
 import { seedDms } from "../fixture/dm-seed"
 import { makeFixtureServer, makeFixtureWebSocket } from "../fixture/fixture-socket"
 import { makeOfflineFetch } from "../fixture/offline-backend"
@@ -121,9 +122,13 @@ export const installDemo = () => {
 			const id = nextId++
 			offlineFetch(url, { method, headers, body: body ?? undefined } as RequestInit)
 				.then(async (response) => {
-					const head = response as unknown as DemoResponse
-					onEvent({ type: "head", status: head.status, url, headers: head.headers.record() })
-					onEvent({ type: "chunk", data: new TextEncoder().encode(await head.text()) })
+					// `forEach` is on both the real `Headers` and the demo's own (`installDemo`'s under JSC).
+					const responseHeaders: Record<string, string> = {}
+					response.headers.forEach((value, name) => {
+						responseHeaders[name] = value
+					})
+					onEvent({ type: "head", status: response.status, url, headers: responseHeaders })
+					onEvent({ type: "chunk", data: new TextEncoder().encode(await response.text()) })
 					onEvent({ type: "end" })
 				})
 				.catch((error: unknown) => onEvent({ type: "error", message: String(error) }))
@@ -131,13 +136,17 @@ export const installDemo = () => {
 		},
 		cancel: () => {},
 	}
-	const sockets = new Map<number, WebSocket>()
+	const sockets = new Map<number, WebSocketLike>()
 	const socket: NativeBridge["socket"] = {
 		open: (url, protocols, onEvent: (event: NativeSocketEvent) => void) => {
 			const id = nextId++
-			const ws = new FixtureWebSocket(url, protocols) as unknown as WebSocket
+			const ws = new FixtureWebSocket(url, protocols)
 			ws.onopen = () => onEvent({ type: "open", protocol: "" })
-			ws.onmessage = (event) => onEvent({ type: "message", data: event.data as string | ArrayBuffer })
+			ws.onmessage = ({ data }) =>
+				onEvent({
+					type: "message",
+					data: typeof data === "string" || data instanceof ArrayBuffer ? data : String(data),
+				})
 			ws.onclose = (event) => {
 				sockets.delete(id)
 				onEvent({ type: "close", code: event.code, reason: event.reason })

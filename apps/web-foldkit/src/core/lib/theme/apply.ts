@@ -32,24 +32,29 @@ const LIGHT_MODE_GRAY_TOKENS = {
 	"--sidebar-border": "200",
 } as const
 
-const DARK_MODE_GRAY_TOKENS = {
-	"--fg": "50",
-	"--secondary": "800",
-	"--secondary-fg": "50",
-	"--overlay": "900",
-	"--overlay-fg": "50",
-	"--muted": "900",
-	"--muted-fg": "400",
-	"--border": "800",
-	"--input": "800",
-	"--navbar": "950",
-	"--navbar-fg": "50",
-	"--sidebar": "950",
-	"--sidebar-fg": "50",
-	"--sidebar-accent": "900",
-	"--sidebar-accent-fg": "50",
-	"--sidebar-border": "900",
-} as const
+/**
+ * Dark mode's tint per gray palette: the hue and chroma laid over the whole ink ladder (theme.css
+ * `--color-ink-*`), measured from each palette's darkest shades and kept a little under them so a
+ * tint reads as an undertone, not a colour. `lift` raises every step, for a lighter dark theme.
+ *
+ * Dark mode tints the ladder instead of swapping surfaces for the palette's fixed shades, so every
+ * palette keeps Ink's layering (sidebar under page under card under popover) and its alpha hairlines,
+ * and the UI kit, which reads the same `--color-ink-*`, follows the pick too.
+ */
+const DARK_MODE_TINTS = {
+	gray: { h: 262, c: 0.012, lift: 0 },
+	"gray-blue": { h: 275, c: 0.024, lift: 0 },
+	"gray-cool": { h: 276, c: 0.02, lift: 0 },
+	"gray-modern": { h: 263, c: 0.016, lift: 0 },
+	"gray-neutral": { h: 0, c: 0, lift: 0 },
+	"gray-iron": { h: 286, c: 0.006, lift: 0 },
+	"gray-true": { h: 0, c: 0, lift: 0 },
+	"gray-warm": { h: 56, c: 0.007, lift: 0 },
+	/** Hazel's first dark theme: zinc's undertone with the page back at 0.19. */
+	"gray-zinc": { h: 285.9, c: 0.006, lift: 0.005 },
+} satisfies Record<Theme.GrayPalette, { h: number; c: number; lift: number }>
+
+const TINT_PROPERTIES = ["--ink-h", "--ink-c", "--ink-lift"] as const
 
 /**
  * Apply brand/primary color to CSS variables
@@ -86,30 +91,30 @@ export function applyBrandColor(hexColor: Theme.HexColor): void {
 }
 
 /**
- * Apply gray palette by overriding semantic tokens.
+ * Apply a gray palette.
  *
- * The default CSS uses Tailwind's zinc palette. When a different gray palette
- * is selected, we override the semantic tokens (--secondary, --muted, etc.)
- * to use the selected palette's color values.
- *
- * "gray-neutral" is treated as the default - it removes any overrides so the
- * original CSS (using zinc) takes effect.
+ * Dark mode tints the ink ladder (`DARK_MODE_TINTS`). Light mode overrides the semantic tokens
+ * (--secondary, --muted, etc.) with the palette's shades; "gray-neutral" and "gray-zinc" are the
+ * CSS defaults (zinc), so they clear the overrides.
  */
 export function applyGrayPalette(palette: Theme.GrayPalette, isDarkMode: boolean): void {
 	if (typeof document === "undefined") return
 
 	const root = document.documentElement
+	resetGrayPalette()
 
-	// "gray-neutral" = default, remove any overrides to use original CSS (zinc-based)
-	if (palette === "gray-neutral") {
-		resetGrayPalette()
+	if (isDarkMode) {
+		const tint = DARK_MODE_TINTS[palette]
+		root.style.setProperty("--ink-h", String(tint.h))
+		root.style.setProperty("--ink-c", String(tint.c))
+		root.style.setProperty("--ink-lift", String(tint.lift))
 		return
 	}
 
-	// Apply the selected palette by overriding semantic tokens
-	const tokens = isDarkMode ? DARK_MODE_GRAY_TOKENS : LIGHT_MODE_GRAY_TOKENS
-
-	for (const [token, shade] of Object.entries(tokens)) {
+	// Light mode: "gray-neutral" (and the classic zinc) are the CSS defaults; any other palette
+	// swaps the semantic tokens for its shades.
+	if (palette === "gray-neutral" || palette === "gray-zinc") return
+	for (const [token, shade] of Object.entries(LIGHT_MODE_GRAY_TOKENS)) {
 		root.style.setProperty(token, `var(--color-${palette}-${shade})`)
 	}
 }
@@ -121,10 +126,7 @@ export function resetGrayPalette(): void {
 	if (typeof document === "undefined") return
 
 	const root = document.documentElement
-
-	// Remove all gray token overrides
-	const allTokens = { ...LIGHT_MODE_GRAY_TOKENS, ...DARK_MODE_GRAY_TOKENS }
-	for (const token of Object.keys(allTokens)) {
+	for (const token of [...Object.keys(LIGHT_MODE_GRAY_TOKENS), ...TINT_PROPERTIES]) {
 		root.style.removeProperty(token)
 	}
 }

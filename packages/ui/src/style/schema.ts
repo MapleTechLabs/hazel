@@ -497,8 +497,11 @@ export interface Tokens {
 	readonly motion: Readonly<Record<string, Motion>>
 	/** What Reduce Motion does: today every motion and transition completes at once, loops play once. */
 	readonly reducedMotion: "instant"
-	/** Palette steps the web host may set at runtime (the app's brand preset): `brand-` reads `--color-brand-*`. */
-	readonly hostPalette?: { readonly prefix: string; readonly cssPrefix: string }
+	/**
+	 * Palette steps the web host may set at runtime: `brand-` reads `--color-brand-*` (the brand
+	 * preset), `ink-` reads `--color-ink-*` (the gray palette's dark surfaces).
+	 */
+	readonly hostPalette?: ReadonlyArray<{ readonly prefix: string; readonly cssPrefix: string }>
 }
 
 // Motion (MOTION.md)

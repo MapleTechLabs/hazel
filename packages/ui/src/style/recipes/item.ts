@@ -140,7 +140,8 @@ export const item = defineRecipe<
 			values: {
 				row: {},
 				// A section sidebar's page (`sidebars.ts` before PH1): the current one is `SECTION_ACTIVE`
-				// (`bg-sidebar-accent font-medium`), its icon in the brand ink (`--sidebar-current-fg`).
+				// (`bg-sidebar-accent font-medium`), its icon in the row's own ink: the brand is kept for
+				// what asks for attention (unread counts, mentions, Send), not for where you are.
 				nav: {
 					states: {
 						selected: {
@@ -151,7 +152,7 @@ export const item = defineRecipe<
 									strong: true,
 									stroke: false,
 								},
-								leading: { color: "sidebar-primary-fg" },
+								leading: { color: "sidebar-accent-fg" },
 							},
 						},
 					},

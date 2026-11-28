@@ -6,7 +6,7 @@ import { HazelAuthClient, type Provider } from "./client"
 import { rememberReturnTo, takeReturnTo } from "./return-to"
 import { operationReasons } from "@hazel/shared-screens/auth/domain/classify"
 
-export { operationHttpReason, operationReasons } from "@hazel/shared-screens/auth/domain/classify"
+export { operationHttpReason } from "@hazel/shared-screens/auth/domain/classify"
 
 /**
  * The sign-in flows the auth pages run: OAuth (leaves for the provider), passkeys and

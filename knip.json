@@ -38,8 +38,11 @@
 			"entry": ["alchemy.run.ts"]
 		},
 		"apps/ios-hybrid": {
-			// The JavaScriptCore bundles (`build:effect-ui`, `build:effect-ui:live`) and the build scripts.
-			"entry": ["effect-ui/entry.ts", "effect-ui/live-entry.ts", "scripts/**/*.ts"],
+			// The JavaScriptCore bundles (`build:effect-ui`, `build:effect-ui:live`, `build:hazel`) and the
+			// build scripts.
+			"entry": ["effect-ui/entry.ts", "effect-ui/live-entry.ts", "script/entry.ts", "scripts/**/*.ts"],
+			// `export-icons.ts` rasterizes through Xcode's `swift`, a system tool, not a package.
+			"ignoreBinaries": ["swift"],
 			// web-foldkit's Vite config (which this package's spreads) imports these, resolved here.
 			"ignoreDependencies": ["foldkit", "@foldkit/vite-plugin"]
 		},
