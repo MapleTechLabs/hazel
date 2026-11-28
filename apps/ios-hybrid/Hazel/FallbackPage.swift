@@ -43,7 +43,8 @@ final class FallbackPage: NSObject, WKScriptMessageHandler, Identifiable {
         let text = body["text"] as? String ?? ""
         MainActor.assumeIsolated {
             switch type {
-            case "location": followed(text)
+            // A redirect keeps this screen (its own route, canonical); only a link opens another.
+            case "location": if body["replaced"] as? Bool != true { followed(text) }
             case "log": Self.log.log("[page] \(text, privacy: .public)")
             default: break
             }

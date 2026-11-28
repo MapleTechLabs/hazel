@@ -31,7 +31,8 @@ struct HzScreen: View {
                 // The web's header: the screen's own fill under the bar, not glass.
                 .toolbarBackground(root.background?.color ?? .clear, for: .navigationBar)
                 .toolbarBackground(.visible, for: .navigationBar)
-                .toolbar(removing: leadingTitle ? .title : nil)
+                // The start's own title (a bubble, the root's name) replaces the centred one.
+                .toolbar(removing: leadingTitle || lead != nil ? .title : nil)
                 .toolbar {
                     if leadingTitle {
                         ToolbarItem(placement: .topBarLeading) {
@@ -46,7 +47,10 @@ struct HzScreen: View {
                     // An empty slot is no item: the system would draw an empty glass capsule.
                     // The web's ink for the bar's glyphs (`fg`), not the system's accent tint.
                     if let lead {
-                        ToolbarItem(placement: .topBarLeading) { ChildrenView(tree: tree, node: lead).tint(.primary) }
+                        // Its natural width: a bar item is offered none of its own (a row would collapse).
+                        ToolbarItem(placement: .topBarLeading) {
+                            ChildrenView(tree: tree, node: lead).tint(.primary).fixedSize(horizontal: true, vertical: false)
+                        }
                     }
                     if let tools = tree.slot("toolbar", of: node), !tools.children.isEmpty {
                         ToolbarItem(placement: .topBarTrailing) { ChildrenView(tree: tree, node: tools).tint(.primary) }
