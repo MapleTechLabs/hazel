@@ -47,6 +47,7 @@ describe("Activity", () => {
 			assert.deepStrictEqual(s.subscriptions, [
 				`notifications:"${props.memberId}"`,
 				'previewChannels:""',
+				"previewWait:false",
 				"clock:",
 				`tab:"${props.tab}"`,
 			])
@@ -56,6 +57,7 @@ describe("Activity", () => {
 			assert.deepStrictEqual(s.subscriptions, [
 				`notifications:"${props.memberId}"`,
 				'previewChannels:"00000005-0000-4000-8000-000000000005,00000005-0000-4000-8000-000000000009"',
+				"previewWait:false",
 				"clock:",
 				`tab:"${props.tab}"`,
 			])
@@ -70,9 +72,35 @@ describe("Activity", () => {
 			assert.isFalse(s.model.previewsSettled)
 			const pending = item(1, { messageContent: null, author: null })
 			s.send(ActivityMessage.UpdatedNotifications({ items: [pending] }))
-			assert.isFalse(s.model.previewsSettled)
+			assert.isFalse(s.model.revealed)
+			assert.include(s.subscriptions, "previewWait:true")
 			s.send(ActivityMessage.SettledPreviews())
-			assert.isTrue(s.model.previewsSettled)
+			assert.isTrue(s.model.revealed)
+			assert.include(s.subscriptions, "previewWait:false")
+		}),
+	)
+
+	it.effect("rows with nothing pending show at once, and stay shown when one turns pending", () =>
+		Effect.gen(function* () {
+			const s = yield* Story.make(Activity, props)
+			s.send(ActivityMessage.UpdatedNotifications({ items: [item(1)] }))
+			assert.isTrue(s.model.revealed)
+			s.send(
+				ActivityMessage.UpdatedNotifications({
+					items: [item(2, { messageContent: null, author: null }), item(1)],
+				}),
+			)
+			assert.isTrue(s.model.revealed)
+		}),
+	)
+
+	it.effect("a pending row on the other tab does not hold this one back", () =>
+		Effect.gen(function* () {
+			const s = yield* Story.make(Activity, props)
+			// A plain `message` notification is on All, not Mentions.
+			const elsewhere = item(2, { reason: "message", messageContent: null, author: null })
+			s.send(ActivityMessage.UpdatedNotifications({ items: [item(1), elsewhere] }))
+			assert.isTrue(s.model.revealed)
 		}),
 	)
 
