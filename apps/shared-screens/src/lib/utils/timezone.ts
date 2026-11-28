@@ -109,3 +109,43 @@ const ALL_TIMEZONES_CACHED: TimezoneCity[] = Intl.supportedValuesOf("timeZone").
 export function getAllTimezoneCities(): TimezoneCity[] {
 	return ALL_TIMEZONES_CACHED
 }
+
+/** The UTC offset of `timezone` at `at`, in minutes (east positive); null for an unknown zone. */
+const utcOffsetMinutes = (timezone: string, at: Date): number | null => {
+	try {
+		const parts = new Intl.DateTimeFormat("en-US", {
+			timeZone: timezone,
+			hourCycle: "h23",
+			year: "numeric",
+			month: "numeric",
+			day: "numeric",
+			hour: "numeric",
+			minute: "numeric",
+		}).formatToParts(at)
+		const part = (type: Intl.DateTimeFormatPartTypes) =>
+			Number(parts.find((each) => each.type === type)?.value ?? Number.NaN)
+		const wall = Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"))
+		const minute = Math.floor(at.getTime() / 60_000) * 60_000
+		const offset = Math.round((wall - minute) / 60_000)
+		return Number.isFinite(offset) ? offset : null
+	} catch {
+		return null
+	}
+}
+
+/**
+ * How far `timezone`'s clock is from the viewer's: "3h ahead", "1h 30m behind", or "" when they
+ * match (or either is unknown).
+ */
+export function formatTimezoneDelta(timezone: string | null | undefined, at: Date = new Date()): string {
+	if (!timezone) return ""
+	const theirs = utcOffsetMinutes(timezone, at)
+	if (theirs === null) return ""
+	const delta = theirs + at.getTimezoneOffset()
+	if (delta === 0) return ""
+	const total = Math.abs(delta)
+	const hours = Math.floor(total / 60)
+	const minutes = total % 60
+	const amount = [hours > 0 ? `${hours}h` : "", minutes > 0 ? `${minutes}m` : ""].filter(Boolean).join(" ")
+	return `${amount} ${delta > 0 ? "ahead" : "behind"}`
+}

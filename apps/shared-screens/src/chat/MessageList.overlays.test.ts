@@ -169,11 +169,10 @@ describe("message overlays", () => {
 			.toExist()
 			.expect(inPopover(Locator.text("grace@hazel.test")))
 			.toExist()
-			// No presence row yet: offline, as today's card says.
-			.expect(inPopover(byProp("badge", "label", "Offline")))
-			.toExist()
 			.expect(inPopover(byProp("button", "label", "Message")))
 			.toExist()
+		// No presence row yet: the avatar's dot says offline.
+		expect(s.get(inPopover(Locator.tag("hz:avatar"))).props?.["presence"]).toBe("offline")
 		deliver(
 			s,
 			"profilePresence",
@@ -186,8 +185,6 @@ describe("message overlays", () => {
 				},
 			}),
 		)
-			.expect(inPopover(byProp("badge", "label", "Away")))
-			.toExist()
 			.expect(inPopover(Locator.text("On holiday")))
 			.toExist()
 		expect(s.get(inPopover(Locator.tag("hz:avatar"))).props?.["presence"]).toBe("away")
@@ -205,6 +202,34 @@ describe("message overlays", () => {
 			.expectExact(RequestHost.make({ request: { _tag: "EditProfile" } }))
 			.resolve(RequestHost, MessageListMessage.CompletedCommand())
 		expect(s.get(popover).props?.["open"]).toBeFalsy()
+	})
+
+	test("the card's Message opens a DM with the person, and closes the card", () => {
+		const s = loaded().fire(row(0), "pressAuthor")
+		s.fire(inPopover(byProp("button", "label", "Message")), "press")
+			.expectExact(
+				RequestHost.make({
+					request: { _tag: "MessageUser", userId: grace, viewerId: ada, name: "Grace Hopper" },
+				}),
+			)
+			.resolve(RequestHost, MessageListMessage.CompletedCommand())
+		expect(s.get(popover).props?.["open"]).toBeFalsy()
+	})
+
+	test("the card's menu mentions, opens the profile and copies the email or id", () => {
+		const cases = [
+			["mention", { _tag: "MentionUser", userId: grace }],
+			["viewProfile", { _tag: "ViewProfile", userId: grace }],
+			["copyEmail", { _tag: "CopyProfileField", field: "email", text: "grace@hazel.test" }],
+			["copyId", { _tag: "CopyProfileField", field: "userId", text: grace }],
+		] as const
+		for (const [id, request] of cases) {
+			loaded()
+				.fire(row(0), "pressAuthor")
+				.fire(inPopover(byProp("menu", "label", "More options")), "select", { id })
+				.expectExact(RequestHost.make({ request }))
+				.resolve(RequestHost, MessageListMessage.CompletedCommand())
+		}
 	})
 
 	test("reaction pills carry who reacted, three names and a count of the rest", () => {

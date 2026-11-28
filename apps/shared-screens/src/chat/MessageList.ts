@@ -44,6 +44,7 @@ import {
 	ChatReaction,
 	ChatUser,
 	Activity,
+	type HostRequest,
 	MessageListMessage,
 	Named,
 	ReplyTarget,
@@ -549,6 +550,34 @@ export const MessageList = Hazel.component({
 			$.model.profile === null ? $.model : $.evolve({ profilePresence: () => presence }),
 		PressedEditProfile: ($) =>
 			$.evolve({ profile: () => null }).run(RequestHost.make({ request: { _tag: "EditProfile" } })),
+		PressedProfileAction: ($, { action }) => {
+			const profile = $.model.profile
+			const person = profile === null ? undefined : personOf($.model, $.props.userId, profile.userId)
+			if (profile === null || person === undefined) return $.model
+			const userId = UserId.make(profile.userId)
+			const request: HostRequest = Match.value(action).pipe(
+				Match.when("message", () => ({
+					_tag: "MessageUser" as const,
+					userId,
+					viewerId: $.props.userId,
+					name: person.name,
+				})),
+				Match.when("mention", () => ({ _tag: "MentionUser" as const, userId })),
+				Match.when("viewProfile", () => ({ _tag: "ViewProfile" as const, userId })),
+				Match.when("copyEmail", () => ({
+					_tag: "CopyProfileField" as const,
+					field: "email" as const,
+					text: person.email ?? "",
+				})),
+				Match.when("copyId", () => ({
+					_tag: "CopyProfileField" as const,
+					field: "userId" as const,
+					text: userId,
+				})),
+				Match.exhaustive,
+			)
+			return $.evolve({ profile: () => null }).run(RequestHost.make({ request }))
+		},
 		// A bot card without a link has an empty url: nothing to open.
 		PressedLink: ($, { url }) =>
 			url === "" ? $.model : $.run(RequestHost.make({ request: { _tag: "OpenLink", url } })),
@@ -872,6 +901,7 @@ export const MessageList = Hazel.component({
 								person,
 								presence: model.profilePresence,
 								onEditProfile: MessageListMessage.PressedEditProfile(),
+								onAction: (action) => MessageListMessage.PressedProfileAction({ action }),
 							}),
 				),
 			menuSheet(),

@@ -210,7 +210,7 @@ const togglePin = (model: Model, messageId: MessageId): PageReturn => {
 	}
 }
 
-const copy = (model: Model, text: string, content: CopiedContent): PageReturn => ({
+export const copy = (model: Model, text: string, content: CopiedContent): PageReturn => ({
 	model,
 	commands: actionCommands([CopyText({ text, content })]),
 })
@@ -224,6 +224,12 @@ const copiedToast = (content: CopiedContent): ToastRequest =>
 			successToast("Copied!", "Message ID has been copied to your clipboard."),
 		),
 		Match.when("ImageUrl", () => successToast("URL copied", "Image URL has been copied to clipboard.")),
+		Match.when("Email", () =>
+			successToast("Email copied", "The email has been copied to your clipboard."),
+		),
+		Match.when("UserId", () =>
+			successToast("User ID copied", "The user ID has been copied to your clipboard."),
+		),
 		Match.exhaustive,
 	)
 

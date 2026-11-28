@@ -43,6 +43,7 @@ import * as Jump from "./jump"
 import { liftList, loadWhenNearEdge } from "./window"
 import * as ThreadWidth from "./thread-width"
 import * as Write from "./write"
+import { FindUserDm } from "./user-dm"
 import { errorToast, successToast } from "../../../data/actions"
 import type { ComposerRequest } from "@hazel/shared-screens/chat/composer/host"
 import { publish } from "../../../root/bus"
@@ -645,6 +646,42 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				replace: false,
 			}),
 		}),
+		ClickedMessageUser: ({ userId, viewerId, name }) => {
+			const organizationId = model.channel?.organizationId
+			return organizationId === undefined
+				? { model }
+				: { model, commands: [FindUserDm({ organizationId, viewerId, userId, name })] }
+		},
+		FoundUserDm: ({ userId, name, channelId }) => {
+			const organizationId = model.channel?.organizationId
+			if (organizationId === undefined) return { model }
+			return {
+				model,
+				outMessage:
+					channelId === null
+						? PageOutMessage.RequestedDmCreation({
+								organizationId,
+								orgSlug: model.orgSlug,
+								userId,
+								name,
+							})
+						: PageOutMessage.RequestedNavigation({
+								route: AppRoute.ChatChannel({ orgSlug: model.orgSlug, channelId }),
+								replace: false,
+							}),
+			}
+		},
+		ClickedViewProfile: ({ userId }) => ({
+			model,
+			outMessage: PageOutMessage.RequestedNavigation({
+				route: AppRoute.Profile({ orgSlug: model.orgSlug, userId }),
+				replace: false,
+			}),
+		}),
+		// The composer's own mention markup, as picking the person from `@` writes it.
+		ClickedMentionUser: ({ userId }) => Write.insertGlobalText(model, `@[userId:${userId}] `),
+		ClickedCopyProfileField: ({ field, text }) =>
+			Write.copy(model, text, field === "email" ? "Email" : "UserId"),
 		ClickedReplyPreview: ({ fromMessageId, messageId }) =>
 			Jump.toMessage(model, fromMessageId, messageId),
 		LocatedJumpTarget: ({ messageId, newerCount }) => Jump.located(model, messageId, newerCount),

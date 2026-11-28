@@ -52,7 +52,7 @@ export const CopyTextFailure = Schema.Literals(["ClipboardDenied"])
 export type CopyTextFailure = typeof CopyTextFailure.Type
 
 /** What a copy was of: the success toast names it. */
-export const CopiedContent = Schema.Literals(["MessageText", "MessageId", "ImageUrl"])
+export const CopiedContent = Schema.Literals(["MessageText", "MessageId", "ImageUrl", "Email", "UserId"])
 export type CopiedContent = typeof CopiedContent.Type
 
 /** What can go wrong reacting to or pinning a message, beyond the shared reasons. */

@@ -8,7 +8,7 @@ import { UiSchema } from "@effect/ui"
 import { ChannelId, HtmlRenderId, MessageId, UserId } from "@hazel/schema"
 import { Content, MessageAction } from "@hazel/ui/vocabulary/index"
 import { Schema } from "effect"
-import { ProfilePresence } from "./components/ProfileCard"
+import { ProfileAction, ProfilePresence } from "./components/ProfileCard"
 import { RichParts } from "./rich/embeds"
 import { LiveEvent } from "./rich/live-replies"
 
@@ -83,6 +83,17 @@ export const HostRequest = Schema.Union([
 	}),
 	/** The profile card's "Edit profile": the host opens the viewer's profile settings. */
 	Schema.TaggedStruct("EditProfile", {}),
+	/** The profile card's "Message": the host opens the viewer's DM with `userId`, creating it if none. */
+	Schema.TaggedStruct("MessageUser", { userId: UserId, viewerId: UserId, name: Schema.String }),
+	/** The profile card's "View profile": the host opens the person's profile page. */
+	Schema.TaggedStruct("ViewProfile", { userId: UserId }),
+	/** The profile card's "Mention": the host puts `@person` into the conversation's draft. */
+	Schema.TaggedStruct("MentionUser", { userId: UserId }),
+	/** The profile card's copies: the host writes `text` to the clipboard and says what it was. */
+	Schema.TaggedStruct("CopyProfileField", {
+		field: Schema.Literals(["email", "userId"]),
+		text: Schema.String,
+	}),
 	Schema.TaggedStruct("JumpToReply", { fromMessageId: MessageId, messageId: MessageId }),
 	Schema.TaggedStruct("Retry", { messageId: MessageId }),
 ])
@@ -122,6 +133,8 @@ export const MessageListMessage = UiSchema.TaggedEnum({
 	/** The open profile's presence row; null when the person has none. */
 	UpdatedProfilePresence: { presence: Schema.NullOr(ProfilePresence) },
 	PressedEditProfile: {},
+	/** A button or menu entry of the open profile card, other than "Edit profile". */
+	PressedProfileAction: { action: ProfileAction },
 	PressedLink: { url: Schema.String },
 	PressedAttachment: { id: MessageId, attachmentId: Schema.String },
 	PressedReply: { id: MessageId },

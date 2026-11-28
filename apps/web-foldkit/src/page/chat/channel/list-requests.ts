@@ -11,6 +11,10 @@ type ListMessage = ReturnType<
 	| typeof Message.GotOverlaysMessage
 	| typeof Message.ClickedThreadPreview
 	| typeof Message.ClickedEditProfile
+	| typeof Message.ClickedMessageUser
+	| typeof Message.ClickedViewProfile
+	| typeof Message.ClickedMentionUser
+	| typeof Message.ClickedCopyProfileField
 >
 
 export const listRequests = (request: HostRequest): ReadonlyArray<ListMessage> =>
@@ -51,6 +55,10 @@ export const listRequests = (request: HostRequest): ReadonlyArray<ListMessage> =
 			return []
 		},
 		EditProfile: () => [Message.ClickedEditProfile()],
+		MessageUser: ({ userId, viewerId, name }) => [Message.ClickedMessageUser({ userId, viewerId, name })],
+		ViewProfile: ({ userId }) => [Message.ClickedViewProfile({ userId })],
+		MentionUser: ({ userId }) => [Message.ClickedMentionUser({ userId })],
+		CopyProfileField: ({ field, text }) => [Message.ClickedCopyProfileField({ field, text })],
 		// The jump to an unloaded reply lived in the Foldkit list.
 		JumpToReply: () => [],
 		Retry: () => [],
