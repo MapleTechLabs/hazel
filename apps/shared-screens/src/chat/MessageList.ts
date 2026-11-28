@@ -55,6 +55,7 @@ import {
 	firstNewIdOf,
 	newCountOf,
 	type RowEntry,
+	rowWithCards,
 	toEntries,
 	displayNameOf,
 	providerOf,
@@ -159,29 +160,60 @@ const byKey = <A, K extends string>(items: ReadonlyArray<A>, key: (item: A) => K
 	return map
 }
 
-/** The lookups a derivation reads, indexed once. */
-export const lookupsOf = (model: MessageListModel, userId: UserId): Lookups => {
-	const threadNames = new Map(model.threadNames.map((thread) => [thread.id, thread.name]))
-	const threadMessages = byKey(model.threadMessages, (message) => message.channelId)
-	return {
-		currentUserId: userId,
-		users: new Map(model.users.map((user) => [user.id, user])),
-		botNames: new Map(model.bots.map((bot) => [bot.id, bot.name])),
-		groupHandles: new Map(),
-		reactions: byKey(model.reactions, (reaction) => reaction.messageId),
-		attachments: byKey(model.attachments, (attachment) => attachment.messageId),
-		threads: new Map(
+/** `build` once per source: a change elsewhere in the model keeps this index, and its entries, `===`. */
+const indexOnce = <K extends object, A>(build: (source: K) => A) => {
+	const built = new WeakMap<K, A>()
+	return (source: K): A => {
+		let index = built.get(source)
+		if (index === undefined) built.set(source, (index = build(source)))
+		return index
+	}
+}
+
+const usersIndex = indexOnce(
+	(users: MessageListModel["users"]) => new Map(users.map((user) => [user.id, user])),
+)
+const botsIndex = indexOnce(
+	(bots: MessageListModel["bots"]) => new Map(bots.map((bot) => [bot.id, bot.name])),
+)
+const reactionsIndex = indexOnce((reactions: MessageListModel["reactions"]) =>
+	byKey(reactions, (reaction) => reaction.messageId),
+)
+const attachmentsIndex = indexOnce((attachments: MessageListModel["attachments"]) =>
+	byKey(attachments, (attachment) => attachment.messageId),
+)
+const threadsIndex = indexOnce((names: MessageListModel["threadNames"]) =>
+	indexOnce((messages: MessageListModel["threadMessages"]) => {
+		const threadNames = new Map(names.map((thread) => [thread.id, thread.name]))
+		const threadMessages = byKey(messages, (message) => message.channelId)
+		return new Map(
 			[...threadNames.keys(), ...threadMessages.keys()].map((id) => [
 				id,
 				{ name: threadNames.get(id) ?? "", messages: threadMessages.get(id) ?? [] },
 			]),
-		),
-		replyTargets: new Map(model.replyTargets.map((target) => [target.id, target])),
-		emojiUrls: new Map(),
-		live: new Map(Object.entries(model.live)),
-		nowMs: model.nowMs,
-	}
-}
+		)
+	}),
+)
+const replyTargetsIndex = indexOnce(
+	(targets: MessageListModel["replyTargets"]) => new Map(targets.map((target) => [target.id, target])),
+)
+const liveIndex = indexOnce((live: MessageListModel["live"]) => new Map(Object.entries(live)))
+const NONE: ReadonlyMap<string, string> = new Map()
+
+/** The lookups a derivation reads, each indexed once per source. */
+export const lookupsOf = (model: MessageListModel, userId: UserId): Lookups => ({
+	currentUserId: userId,
+	users: usersIndex(model.users),
+	botNames: botsIndex(model.bots),
+	groupHandles: NONE,
+	reactions: reactionsIndex(model.reactions),
+	attachments: attachmentsIndex(model.attachments),
+	threads: threadsIndex(model.threadNames)(model.threadMessages),
+	replyTargets: replyTargetsIndex(model.replyTargets),
+	emojiUrls: NONE,
+	live: liveIndex(model.live),
+	nowMs: model.nowMs,
+})
 
 /** The window's entries again, after any of their inputs changed. */
 export const derive = (model: MessageListModel, userId: UserId): MessageListModel => {
@@ -661,9 +693,7 @@ export const MessageList = Hazel.component({
 				const card = unfurlCardOf(request, result)
 				return card === undefined ? [] : [card]
 			})
-			return cards.length === 0
-				? entry.row
-				: { ...entry.row, embeds: [...cards, ...(entry.row.embeds ?? [])] }
+			return rowWithCards(entry, cards)
 		}
 
 		/** One HTML render's frame: its signed URL as the query has it. */

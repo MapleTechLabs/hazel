@@ -223,11 +223,154 @@ export const actionsOf = (
 	"copyId",
 ]
 
+/** Structural equality over plain data (the lookups' records), `===` first. */
+const same = (a: unknown, b: unknown): boolean => {
+	if (a === b) return true
+	if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false
+	if (Array.isArray(a) || Array.isArray(b))
+		return (
+			Array.isArray(a) &&
+			Array.isArray(b) &&
+			a.length === b.length &&
+			a.every((item, index) => same(item, b[index]))
+		)
+	const keys = Object.keys(a)
+	return (
+		keys.length === Object.keys(b).length &&
+		keys.every((key) => same(Reflect.get(a, key), Reflect.get(b, key)))
+	)
+}
+
+type LookupName = keyof Lookups
+
+/** One thing a row read from its lookups: a map's entry (`key`), or a whole field (`key` null, by `===`). */
+interface Read {
+	readonly name: LookupName
+	readonly key: string | null
+	readonly value: unknown
+}
+
+/** A map that notes every read into `reads`. */
+class Recording<V> implements ReadonlyMap<string, V> {
+	constructor(
+		private readonly map: ReadonlyMap<string, V>,
+		private readonly name: LookupName,
+		private readonly reads: Array<Read>,
+	) {}
+	get(key: string) {
+		const value = this.map.get(key)
+		this.reads.push({ name: this.name, key, value })
+		return value
+	}
+	has(key: string) {
+		return this.get(key) !== undefined
+	}
+	/** Anything past a keyed read depends on the whole map. */
+	private all() {
+		this.reads.push({ name: this.name, key: null, value: this.map })
+		return this.map
+	}
+	get size() {
+		return this.all().size
+	}
+	forEach(each: (value: V, key: string, map: ReadonlyMap<string, V>) => void) {
+		this.all().forEach(each)
+	}
+	entries() {
+		return this.all().entries()
+	}
+	keys() {
+		return this.all().keys()
+	}
+	values() {
+		return this.all().values()
+	}
+	[Symbol.iterator]() {
+		return this.all()[Symbol.iterator]()
+	}
+}
+
+/** `lookups`, noting every read into `reads`. */
+const recording = (lookups: Lookups, reads: Array<Read>): Lookups => {
+	const scalar = <K extends "currentUserId" | "nowMs">(name: K): Lookups[K] => {
+		reads.push({ name, key: null, value: lookups[name] })
+		return lookups[name]
+	}
+	return {
+		get currentUserId() {
+			return scalar("currentUserId")
+		},
+		get nowMs() {
+			return scalar("nowMs")
+		},
+		users: new Recording(lookups.users, "users", reads),
+		botNames: new Recording(lookups.botNames, "botNames", reads),
+		groupHandles: new Recording(lookups.groupHandles, "groupHandles", reads),
+		reactions: new Recording(lookups.reactions, "reactions", reads),
+		attachments: new Recording(lookups.attachments, "attachments", reads),
+		threads: new Recording(lookups.threads, "threads", reads),
+		replyTargets: new Recording(lookups.replyTargets, "replyTargets", reads),
+		emojiUrls: new Recording(lookups.emojiUrls, "emojiUrls", reads),
+		live: new Recording(lookups.live, "live", reads),
+	}
+}
+
+/** `lookups` still give what `read` saw (reading through `lookups`, so an outer recording notes it). */
+const stillReads = (lookups: Lookups, read: Read) => {
+	const field = lookups[read.name]
+	if (read.key === null) return field === read.value
+	return typeof field === "object" && same(field.get(read.key), read.value)
+}
+
+interface Memo<A> {
+	readonly grouped: boolean
+	readonly reads: ReadonlyArray<Read>
+	value: A
+}
+
+/**
+ * `compute`'s value for `message`, kept while everything it read from the lookups is unchanged: an
+ * unrelated change (a reaction elsewhere, the clock, a stream chunk) reuses it, `===`.
+ */
+const remember = <A>(
+	memos: WeakMap<ChatMessage, Memo<A>>,
+	message: ChatMessage,
+	grouped: boolean,
+	lookups: Lookups,
+	compute: (lookups: Lookups) => A,
+): A => {
+	const memo = memos.get(message)
+	if (
+		memo !== undefined &&
+		memo.grouped === grouped &&
+		memo.reads.every((read) => stillReads(lookups, read))
+	)
+		return memo.value
+	const reads: Array<Read> = []
+	const value = compute(recording(lookups, reads))
+	memos.set(message, { grouped, reads, value })
+	return value
+}
+
+const bodies = new WeakMap<ChatMessage, Memo<Content.MessageRow["body"]>>()
+const rows = new WeakMap<ChatMessage, Memo<Content.MessageRow>>()
+const dates = new WeakMap<ChatMessage, string>()
+
+const dateOf = (message: ChatMessage) => {
+	let date = dates.get(message)
+	if (date === undefined) dates.set(message, (date = dateLabel(message.createdAtMs)))
+	return date
+}
+
 /**
  * The body: the text without the URLs that embed, or a live reply's text so far (it stands in for
- * the content, as today); its loading line until the reply says anything, then its error.
+ * the content, as today); its loading line until the reply says anything, then its error. Parsed
+ * once per message and the names it shows.
  */
-const bodyOf = (message: ChatMessage, lookups: Lookups, names: Names): Content.MessageRow["body"] => {
+const bodyOf = (message: ChatMessage, lookups: Lookups): Content.MessageRow["body"] =>
+	remember(bodies, message, false, lookups, (tracked) => parseBody(message, tracked, namesOf(tracked)))
+
+const parseBody = (message: ChatMessage, lookups: Lookups, names: Names): Content.MessageRow["body"] => {
 	const live = message.rich.live
 	if (live === null) return parseMarkdown(message.rich.displayContent, names)
 	const state = liveStateOf(live.cached, lookups.live.get(message.id))
@@ -254,7 +397,7 @@ export const messageRow = (message: ChatMessage, grouped: boolean, lookups: Look
 		avatar: showHeader ? (user?.avatarUrl ?? undefined) : undefined,
 		provider: showHeader && user !== undefined ? providerOf(user) : undefined,
 		time: formatTime(message.createdAtMs),
-		body: bodyOf(message, lookups, names),
+		body: bodyOf(message, lookups),
 		reactions: reactionsOf(lookups, message.id),
 		quick: [...QUICK_EMOJIS],
 		edited:
@@ -328,7 +471,7 @@ export const toEntries = (
 			message.authorId === before.authorId &&
 			message.createdAtMs - before.createdAtMs <= GROUP_THRESHOLD_MS &&
 			before.replyToMessageId === null
-		const date = dateLabel(message.createdAtMs)
+		const date = dateOf(message)
 		if (date !== lastDate) {
 			const key = `date:${date}`
 			entries.push(previousOther.get(key) ?? { _tag: "Date", key, label: date })
@@ -346,21 +489,44 @@ export const toEntries = (
 			isOwn: message.authorId === lookups.currentUserId,
 			grouped,
 			entering: old?.entering ?? entering.has(message.id),
-			row: messageRow(message, grouped, lookups),
+			row: remember(rows, message, grouped, lookups, (tracked) =>
+				messageRow(message, grouped, tracked),
+			),
 			previews: message.rich.previews,
 			renders: message.rich.renders,
 		}
-		entries.push(
+		const kept =
 			old === undefined
 				? next
 				: isSameRow(old, next)
 					? old
 					: sameJson(old.row, next.row)
 						? { ...next, row: old.row }
-						: next,
-		)
+						: next
+		// The memo holds the row the entry kept, so the next derive compares it by reference.
+		const memo = rows.get(message)
+		if (memo !== undefined) memo.value = kept.row
+		entries.push(kept)
 	}
 	return entries
+}
+
+const withCards = new WeakMap<
+	Content.MessageRow,
+	{ readonly cards: ReadonlyArray<Content.Embed>; readonly row: Content.MessageRow }
+>()
+
+/**
+ * The row with its unfurled links' cards before its own, as today's URL embeds come first. The
+ * same object while the row and its cards are, so the renderer (which skips a `===` prop) leaves it.
+ */
+export const rowWithCards = (entry: RowEntry, cards: ReadonlyArray<Content.Embed>): Content.MessageRow => {
+	if (cards.length === 0) return entry.row
+	const cached = withCards.get(entry.row)
+	if (cached !== undefined && same(cached.cards, cards)) return cached.row
+	const row = { ...entry.row, embeds: [...cards, ...(entry.row.embeds ?? [])] }
+	withCards.set(entry.row, { cards, row })
+	return row
 }
 
 /** The oldest loaded message newer than the read position and not the user's own. */
