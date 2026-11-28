@@ -14,6 +14,7 @@ import { Navigator, openRoute } from "../app/navigator"
 import { AppRequest, AppRequests } from "../app/requests"
 import { AppRoute } from "../app/route"
 import { ChannelScreen } from "./ChannelScreen"
+import { WriteNotificationChoice } from "./header/ChannelHeader"
 import { botCommandsLayer } from "./composer/bot-commands"
 import { ComposerHost, ComposerRequests } from "./composer/host"
 import { messageListLayer } from "./live"
@@ -123,5 +124,7 @@ export const HostedChannelScreen = Component.provide(ChannelScreen, (props) =>
 		composerHostLayer,
 		botCommandsLayer,
 		klipyGifsLayer,
+		// The channel menu's mute and notification level.
+		WriteNotificationChoice.layer,
 	),
 )

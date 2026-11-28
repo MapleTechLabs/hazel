@@ -2,8 +2,8 @@
 // @effect-diagnostics experimentalApiUsage:off
 /**
  * A conversation on a phone (`docs/ios-native.md`, N2): the shared message list over the shared
- * composer. Slack's bar: a bubble with the channel and its member count (its settings open), or a
- * DM's person (their profile). `./hosted` gives it its wiring (`HostedChannelScreen`).
+ * composer. Slack's bar: a bubble with the channel and its member count (its menu, `ChannelMenu`,
+ * drops under it), or a DM's person (their profile). `./hosted` gives it its wiring (`HostedChannelScreen`).
  */
 import { Subscription, UiSchema } from "@effect/ui"
 import { ClientData } from "@hazel/client-data"
@@ -13,6 +13,7 @@ import { and, eq, isNull } from "@tanstack/db"
 import { AppRoute, hrefOf } from "../app/route"
 import { initialsOf } from "../channel-sidebar/model"
 import { Effect, Schema, Stream } from "effect"
+import { ChannelMenu } from "./ChannelMenu"
 import { ChannelComposer } from "./composer/ChannelComposer"
 import { MessageList } from "./MessageList"
 
@@ -143,7 +144,7 @@ export const ChannelScreen = Hazel.component({
 		const { props } = h
 		const isChannel = model.kind === "public" || model.kind === "private"
 		const partner = model.kind === "single" ? model.partner : null
-		// Slack's bubble: a channel's glyph, name and members (its settings), or the DM's person (their profile).
+		// Slack's bubble: a channel's glyph, name and members (its menu), or the DM's person (their profile).
 		const bubble =
 			model.name === null
 				? null
@@ -162,28 +163,26 @@ export const ChannelScreen = Hazel.component({
 							.href(
 								hrefOf(AppRoute.Profile({ orgSlug: props.orgSlug, userId: partner.userId })),
 							)
-					: h.item
-							.key("bar:channel")
-							.emphasized(true)
-							.title(model.name)
-							.subtitle(model.members === 1 ? "1 member" : `${model.members} members`)
-							.leading(
-								isChannel
-									? h.channelIcon
-											.private(model.kind === "private")
-											.emoji(model.icon ?? undefined)
-									: h.icon.name("message-user"),
-							)
-							.href(
-								isChannel
-									? hrefOf(
-											AppRoute.ChannelSettings({
-												orgSlug: props.orgSlug,
-												channelId: props.channelId,
-											}),
-										)
-									: undefined,
-							)
+					: isChannel
+						? ChannelMenu(h, {
+								key: props.channelId,
+								props: {
+									orgSlug: props.orgSlug,
+									channelId: props.channelId,
+									userId: props.userId,
+									name: model.name,
+									kind: model.kind,
+									icon: model.icon,
+									members: model.members,
+									nowMs: props.nowMs,
+								},
+							})
+						: h.item
+								.key("bar:channel")
+								.emphasized(true)
+								.title(model.name)
+								.subtitle(model.members === 1 ? "1 member" : `${model.members} members`)
+								.leading(h.icon.name("message-user"))
 		return (
 			h.screen
 				.key(props.channelId)
