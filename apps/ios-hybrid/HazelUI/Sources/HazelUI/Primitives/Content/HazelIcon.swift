@@ -2,18 +2,33 @@ import SwiftUI
 import UIKit
 
 // The shared icon (`swift-icon-view`, `native-icon-image`, `row-icons`): every `IconName` from HazelUI's
-// catalog (`Resources/Icons.xcassets`, `scripts/export-icons.ts`). Tinted icons are template images in
-// the current foreground; a brand mark with its own colours (Slack) is an original image.
+// resources (`Resources/Icons`, 96px PNGs from `scripts/export-icons.ts`). Tinted icons are template
+// images in the current foreground; a brand mark with its own colours (Slack) is an original image.
 
 enum HazelIcons {
     /// The icons' own grid: an icon with no size from its container draws at 18pt.
     static let naturalSize: CGFloat = 18
 
-    /// The catalog's image for `name` in its set's rendering mode (template, or original for a mark),
-    /// nil for a name it lacks.
+    /// Thread-safe: bitmap rows draw icons off the main thread (`RowStyle`).
+    nonisolated(unsafe) private static let cache = NSCache<NSString, UIImage>()
+
+    /// The image for `name` at its natural size (template, or original for a mark), nil for a name the
+    /// resources lack. Plain PNGs: an asset catalog's packed renditions drew nothing on a device.
     static func uiImage(_ name: String) -> UIImage? {
         guard !name.isEmpty else { return nil }
-        return UIImage(named: name, in: .module, with: nil)
+        if let hit = cache.object(forKey: name as NSString) { return hit }
+        let image = load(name, original: false) ?? load(name, original: true)
+        if let image { cache.setObject(image, forKey: name as NSString) }
+        return image
+    }
+
+    private static func load(_ name: String, original: Bool) -> UIImage? {
+        let file = original ? "\(name).original" : name
+        guard let url = Bundle.module.url(forResource: file, withExtension: "png", subdirectory: "Icons"),
+              let cg = UIImage(contentsOfFile: url.path)?.cgImage else { return nil }
+        // Its point size is the icons' grid (18pt), so a draw at any size scales down from 96px.
+        let image = UIImage(cgImage: cg, scale: CGFloat(cg.width) / naturalSize, orientation: .up)
+        return image.withRenderingMode(original ? .alwaysOriginal : .alwaysTemplate)
     }
 
     static func isTemplate(_ image: UIImage) -> Bool { image.renderingMode != .alwaysOriginal }
