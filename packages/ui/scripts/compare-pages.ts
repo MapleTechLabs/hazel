@@ -10,9 +10,9 @@ import { CHANNEL_TOLERANCE, diffInPage } from "./shoot.ts"
 /**
  * `bun packages/ui/scripts/compare-pages.ts [--build] [--only <id,...>] [--out <dir>] [--probe] [--strict]
  * [--baseline [--from <dir>]]`: each hazel page against the Foldkit screen it replaces, over the offline
- * web build (`apps/ios-hybrid/build/web`; `--build` runs `build:web:offline` first). Pages come from
+ * web build (`apps/ios/build/web`; `--build` runs `build:web:offline` first). Pages come from
  * `apps/web-foldkit/src/parity/pages/<id>.ts` (a `ComparePage`); a page's own fixture data from
- * `apps/ios-hybrid/fixture/pages/<id>.ts` (`page-fixture.ts`), applied on both sides.
+ * `apps/ios/fixture/pages/<id>.ts` (`page-fixture.ts`), applied on both sides.
  *
  * Live: opens `href` with the flag off (today) and on (hazel), runs the steps, and writes
  * `<out>/<id>/<theme>-<width>.png` strips (today | hazel | diff), 390 and 1180 wide, light and dark.
@@ -22,12 +22,12 @@ import { CHANNEL_TOLERANCE, diffInPage } from "./shoot.ts"
  */
 
 const repo = resolve(import.meta.dirname, "../../..")
-const webRoot = resolve(repo, "apps/ios-hybrid/build/web")
+const webRoot = resolve(repo, "apps/ios/build/web")
 const pagesDir = resolve(repo, "apps/web-foldkit/src/parity/pages")
-const fixturePagesDir = resolve(repo, "apps/ios-hybrid/fixture/pages")
+const fixturePagesDir = resolve(repo, "apps/ios/fixture/pages")
 const storedDir = resolve(repo, "docs/hazel-ui-screens/phase4")
 const FIXED_NOW = new Date("2026-11-26T15:00:00Z")
-/** `PAGE_FIXTURE_KEY` in `apps/ios-hybrid/fixture/page-fixture.ts` (Vite-only, not importable here). */
+/** `PAGE_FIXTURE_KEY` in `apps/ios/fixture/page-fixture.ts` (Vite-only, not importable here). */
 const PAGE_FIXTURE_KEY = "hazel:fixture:page"
 /** The tolerance (`docs/hazel-ui-phase4.md`, "Pixel parity method"): residue up to a channel delta of 5. */
 const MAX_DELTA = 5
@@ -333,7 +333,7 @@ const todayFromStrip = (page: Page, stored: Buffer, hazel: Buffer): Promise<Buff
 
 const main = async () => {
 	if (process.argv.includes("--build")) {
-		const build = spawnSync("bun", ["run", "--cwd", "apps/ios-hybrid", "build:web:offline"], {
+		const build = spawnSync("bun", ["run", "--cwd", "apps/ios", "build:web:offline"], {
 			cwd: repo,
 			stdio: "inherit",
 		})

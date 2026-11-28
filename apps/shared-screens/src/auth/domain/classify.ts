@@ -1,6 +1,6 @@
 /**
  * How the auth client's errors read as `AuthFailure`s, shared by every app that signs in (the web's
- * `auth/flows.ts`, the native app's `apps/ios-hybrid/script/auth.ts`). Spread into an exhaustive
+ * `auth/flows.ts`, the native app's `apps/ios/script/auth.ts`). Spread into an exhaustive
  * `Match.valueTags`, so a new error in the client's contract fails to compile until it is classified.
  */
 import { Match } from "effect"

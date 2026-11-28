@@ -37,7 +37,7 @@
 		"apps/link-preview-worker": {
 			"entry": ["alchemy.run.ts"]
 		},
-		"apps/ios-hybrid": {
+		"apps/ios": {
 			// The JavaScriptCore bundles (`build:effect-ui`, `build:effect-ui:live`, `build:hazel`) and the
 			// build scripts.
 			"entry": ["effect-ui/entry.ts", "effect-ui/live-entry.ts", "script/entry.ts", "scripts/**/*.ts"],

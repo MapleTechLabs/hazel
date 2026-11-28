@@ -3,7 +3,7 @@
 /** The browser demo (G1): the same ChannelList the iOS app runs, on the web host, with the spike's fixture. */
 import "../style/generated/tokens.css"
 import { Effect, Layer } from "effect"
-import { sections } from "../../../../apps/ios-hybrid/effect-ui/sections.ts"
+import { sections } from "../../../../apps/ios/effect-ui/sections.ts"
 import { Renderer } from "@effect/ui"
 import { withWebHost } from "../web/mount.ts"
 import { ChannelList } from "./ChannelList.ts"

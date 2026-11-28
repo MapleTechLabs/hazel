@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # HazelUI's tests on the pinned simulator (phase 1.5):
-#   bun run --cwd apps/ios-hybrid test:hazelui [S0|S1|S2|S3|S4|S5|F]
+#   bun run --cwd apps/ios test:hazelui [S0|S1|S2|S3|S4|S5|F]
 # No lane runs everything. A lane runs its own tests; snapshots only for the tags it owns.
 # HAZELUI_RECORD=1 writes snapshot references (Tests/HazelUITests/__snapshots__) instead of comparing.
 set -euo pipefail
@@ -47,5 +47,5 @@ TEST_RUNNER_HAZELUI_LANES="${lane#F}" TEST_RUNNER_HAZELUI_RECORD="${HAZELUI_RECO
 	xcodebuild "$action" -scheme HazelUI -destination "platform=iOS Simulator,id=$udid" \
 	-derivedDataPath .build/xcode "${only[@]+"${only[@]}"}" >"$log" 2>&1 || status=$?
 grep -E "HAZELUI_SNAPSHOT|error:|failed|Executed|passed after|\*\* (TEST|BUILD)" "$log" | grep -v "^\s*$" | tail -60 || true
-[ "$status" -eq 0 ] || echo "xcodebuild exited $status; full log: apps/ios-hybrid/HazelUI/$log"
+[ "$status" -eq 0 ] || echo "xcodebuild exited $status; full log: apps/ios/HazelUI/$log"
 exit "$status"

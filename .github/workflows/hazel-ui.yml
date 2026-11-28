@@ -8,7 +8,7 @@ on:
             - "packages/ui/**"
             - "packages/client-data/**"
             - "apps/shared-screens/**"
-            - "apps/ios-hybrid/**"
+            - "apps/ios/**"
             - ".github/workflows/hazel-ui.yml"
     push:
         branches: [main]
@@ -16,7 +16,7 @@ on:
             - "packages/ui/**"
             - "packages/client-data/**"
             - "apps/shared-screens/**"
-            - "apps/ios-hybrid/**"
+            - "apps/ios/**"
             - ".github/workflows/hazel-ui.yml"
 
 concurrency:
@@ -55,7 +55,7 @@ jobs:
                   bun run --cwd packages/ui typecheck
                   bun run --cwd packages/client-data typecheck
                   bun run --cwd apps/shared-screens typecheck
-                  bun run --cwd apps/ios-hybrid typecheck
+                  bun run --cwd apps/ios typecheck
 
             - name: Generated files are current
               run: bun run --cwd packages/ui ui:check
@@ -103,7 +103,7 @@ jobs:
               run: python -m pip install --quiet fonttools brotli
 
             - name: HazelUI tests and snapshots
-              run: bun run --cwd apps/ios-hybrid test:hazelui
+              run: bun run --cwd apps/ios test:hazelui
 
             # The kit pixel diffs run here, not on Linux: Linux Chromium draws the same text at a different
             # sub-pixel phase on the kit and hazel sides, and the references were authored on macOS.
@@ -134,6 +134,6 @@ jobs:
               with:
                   name: hazel-ui-ios-${{ github.run_id }}
                   path: |
-                      apps/ios-hybrid/HazelUI/.build/snapshot-failures
-                      apps/ios-hybrid/HazelUI/.build/test-hazelui.log
+                      apps/ios/HazelUI/.build/snapshot-failures
+                      apps/ios/HazelUI/.build/test-hazelui.log
                   if-no-files-found: ignore

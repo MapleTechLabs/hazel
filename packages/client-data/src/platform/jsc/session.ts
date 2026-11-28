@@ -1,6 +1,6 @@
 // @effect-diagnostics experimentalApiUsage:off
 /**
- * `Session` on iOS, as the hybrid app signs in (`apps/ios-hybrid/web/host.ts`, `HostBridge.swift`):
+ * `Session` on iOS, as the hybrid app signs in (`apps/ios/web/host.ts`, `HostBridge.swift`):
  * the session credential lives in the keychain's one vault record (`@hazel/auth/desktop`'s JSON,
  * the same item the hybrid writes), RPCs send it as `Authorization: Bearer`, and the sync sockets'
  * access token is exchanged for it at `POST <api>/auth/token`, as the web app's `access-token.ts`.

@@ -8,7 +8,7 @@ import { CHANNEL_TOLERANCE, diffInPage } from "../../../packages/ui/scripts/shoo
 /**
  * `bun apps/web-foldkit/scripts/compare-shell.ts --before <web root> [--after <web root>] [--out <dir>] [--only <id>]`:
  * the app's frame before and after the Effect UI shell (phase 4). Serves each offline build
- * (`bun run --cwd apps/ios-hybrid build:web:offline`, `apps/ios-hybrid/build/web` by default for
+ * (`bun run --cwd apps/ios build:web:offline`, `apps/ios/build/web` by default for
  * `--after`) with an `index.html` fallback, opens each screen at 390 and 1180 wide in both themes,
  * and writes `<out>/<screen>/<theme>-<width>.png` strips (before | after | diff) and the share of
  * pixels that differ. With `--after` only, it shoots one build and prints its console errors.
@@ -151,7 +151,7 @@ const strip = async (page: Page, before: Buffer, after: Buffer) => {
 
 const main = async () => {
 	const beforeRoot = argument("--before")
-	const afterRoot = resolve(repo, argument("--after") ?? "apps/ios-hybrid/build/web")
+	const afterRoot = resolve(repo, argument("--after") ?? "apps/ios/build/web")
 	const out = resolve(repo, argument("--out") ?? "docs/hazel-ui-screens/phase4/shell")
 	const only = argument("--only")
 	const browser = await chromium.launch()

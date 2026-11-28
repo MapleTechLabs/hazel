@@ -1,6 +1,6 @@
 import type { ComparePage } from "../compare-entry"
 
-/** `/hazel/settings/invitations`: three pending invitations (`apps/ios-hybrid/fixture/pages/settings-invitations.ts`). */
+/** `/hazel/settings/invitations`: three pending invitations (`apps/ios/fixture/pages/settings-invitations.ts`). */
 export default {
 	flag: "hazel:native:SettingsInvitations",
 	href: "/hazel/settings/invitations",

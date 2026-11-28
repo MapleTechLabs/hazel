@@ -4,7 +4,7 @@ import type { ComparePage } from "../compare-entry"
 export default {
 	// ChatChannel has no native page: the list has been hazel since phase 3, so both sides draw it.
 	flag: "hazel:native:ChatChannel",
-	// `generalChannelId` in `apps/ios-hybrid/fixture/snapshot.ts`.
+	// `generalChannelId` in `apps/ios/fixture/snapshot.ts`.
 	href: "/hazel/chat/00000005-0000-4000-8000-000000000001",
 	island: '[data-hazel-hole="message-list"]',
 	wide: true,

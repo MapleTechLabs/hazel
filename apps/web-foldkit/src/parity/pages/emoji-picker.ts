@@ -7,7 +7,7 @@ import type { ComparePage } from "../compare-entry"
  */
 export default {
 	flag: "hazel:native:ReactionPicker",
-	// `generalChannelId` in `apps/ios-hybrid/fixture/snapshot.ts`.
+	// `generalChannelId` in `apps/ios/fixture/snapshot.ts`.
 	href: "/hazel/chat/00000005-0000-4000-8000-000000000001",
 	island: '[data-hazel-hole="message-list"]',
 	wide: true,

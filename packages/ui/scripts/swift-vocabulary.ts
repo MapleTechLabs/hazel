@@ -8,7 +8,7 @@ import { type Group, type TagKey, tagKeys, tags } from "../src/vocabulary/spec.t
  * (`--stubs`), which its lane then owns. A lane never edits the registry.
  */
 
-export const hazelUI = resolve(import.meta.dirname, "../../../apps/ios-hybrid/HazelUI/Sources/HazelUI")
+export const hazelUI = resolve(import.meta.dirname, "../../../apps/ios/HazelUI/Sources/HazelUI")
 
 const folders = {
 	layout: "Layout",

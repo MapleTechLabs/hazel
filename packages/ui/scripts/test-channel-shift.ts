@@ -5,7 +5,7 @@ import { chromium, type Page } from "playwright"
 
 /**
  * `bun run --cwd packages/ui test:channel-shift [--frames] [--cold N] [--throttle X] [--only ID]`:
- * serves the offline build (run `bun run --cwd apps/ios-hybrid build:web:offline` first; this builds
+ * serves the offline build (run `bun run --cwd apps/ios build:web:offline` first; this builds
  * nothing) and switches to every fixture channel from the sidebar: N times (default COLD_RUNS) as the
  * first switch after a fresh page load, then twice round on one page (warm). Fails when one switch's summed
  * layout-shift score passes MAX_SCORE, printing each shift's sources. `--throttle` slows the CPU by X
@@ -19,9 +19,9 @@ export const MAX_SCORE = 0.01
 const WATCH_MS = 1500
 const VIEWPORT = { width: 1280, height: 800 }
 
-const root = resolve(import.meta.dirname, "../../../apps/ios-hybrid/build/web")
+const root = resolve(import.meta.dirname, "../../../apps/ios/build/web")
 if (!existsSync(`${root}/index.html`))
-	throw new Error(`no offline build at ${root}: run bun run --cwd apps/ios-hybrid build:web:offline`)
+	throw new Error(`no offline build at ${root}: run bun run --cwd apps/ios build:web:offline`)
 const showFrames = process.argv.includes("--frames")
 /** A race must lose every time to pass: each channel's cold switch runs this many times. */
 const COLD_RUNS = 5

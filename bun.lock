@@ -104,8 +104,8 @@
         "vite-tsconfig-paths": "^6.0.3",
       },
     },
-    "apps/ios-hybrid": {
-      "name": "@hazel/ios-hybrid",
+    "apps/ios": {
+      "name": "@hazel/ios",
       "dependencies": {
         "@effect/ui": "https://pkg.pr.new/Effect-TS/ui/@effect/ui@4d6d7ec",
         "@hazel/auth": "workspace:*",
@@ -921,7 +921,7 @@
 
     "@hazel/integrations": ["@hazel/integrations@workspace:packages/integrations"],
 
-    "@hazel/ios-hybrid": ["@hazel/ios-hybrid@workspace:apps/ios-hybrid"],
+    "@hazel/ios": ["@hazel/ios@workspace:apps/ios"],
 
     "@hazel/link-preview-worker": ["@hazel/link-preview-worker@workspace:apps/link-preview-worker"],
 

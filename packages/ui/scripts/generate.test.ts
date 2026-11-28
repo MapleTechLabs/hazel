@@ -12,7 +12,7 @@ describe("ui:generate", () => {
 	})
 
 	it("resolves colours to the values the hybrid measured on the live page (Theme.swift seed)", () => {
-		// apps/ios-hybrid/EffectUiSpike/Theme.swift: Row.label is fg-3, Row.selectedFg is sidebar-primary-fg.
+		// apps/ios/EffectUiSpike/Theme.swift: Row.label is fg-3, Row.selectedFg is sidebar-primary-fg.
 		const swift = generateSwift(tokens, recipes)
 		expect(swift).toContain("/// `fg-3`: #424245ff / #b1b1b1ff")
 		expect(swift).toContain("/// `sidebar-primary-fg`: #6941c6ff / #d6bbfbff")

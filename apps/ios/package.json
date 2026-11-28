@@ -1,5 +1,5 @@
 {
-	"name": "@hazel/ios-hybrid",
+	"name": "@hazel/ios",
 	"private": true,
 	"type": "module",
 	"scripts": {

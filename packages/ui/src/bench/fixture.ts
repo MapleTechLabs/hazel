@@ -1,5 +1,5 @@
 /**
- * G7's big channel: the kinds of `apps/ios-hybrid/web/big-channel.ts` (one-liners, paragraphs, code,
+ * G7's big channel: the kinds of `apps/ios/web/big-channel.ts` (one-liners, paragraphs, code,
  * lists, mentions, reactions) plus links, inline code and image attachments. Deterministic, no domain
  * imports, so it bundles small into JavaScriptCore.
  */

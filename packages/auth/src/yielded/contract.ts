@@ -71,7 +71,7 @@ export const desktopClient = {
 } as const
 
 /**
- * The native iOS shell (apps/ios-hybrid): the same browser sign-in under its own scheme, so each
+ * The native iOS shell (apps/ios): the same browser sign-in under its own scheme, so each
  * callback reaches the app that asked for it.
  */
 export const nativeClient = {

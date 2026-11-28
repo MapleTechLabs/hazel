@@ -42,10 +42,10 @@ shell never pushes (`ShellView.swift` `follow`), and everything is the web view 
 
 ## Running it
 
-`bash apps/ios-hybrid/scripts/build-hazel.sh` builds `Hazel.app` (`OFFLINE=1` for the fallback's
-offline web build). Against the local fixture (`bun apps/ios-hybrid/scripts/fixture-backend.ts`),
+`bash apps/ios/scripts/build-hazel.sh` builds `Hazel.app` (`OFFLINE=1` for the fallback's
+offline web build). Against the local fixture (`bun apps/ios/scripts/fixture-backend.ts`),
 launch with `-HazelApiUrl http://127.0.0.1:4320 -HazelToken fixture`; without them it signs in to
-Hazel's install through the system sheet. The script is `apps/ios-hybrid/script/entry.ts`.
+Hazel's install through the system sheet. The script is `apps/ios/script/entry.ts`.
 
 ### How the app is put together (one codebase, a host per platform)
 
@@ -64,7 +64,7 @@ Hazel's install through the system sheet. The script is `apps/ios-hybrid/script/
   restart. The install is `app/install.ts`.
 - **The phone** is `phone/PhoneShell` (the system tab bar over a `hz:navigation` per tab, every tab's
   screens kept alive, native toasts) and its navigation queue (`phone/navigation.ts`). The script
-  (`apps/ios-hybrid/script/`) boots, signs in and mounts (`entry.ts`); `phone-host.ts` holds the
+  (`apps/ios/script/`) boots, signs in and mounts (`entry.ts`); `phone-host.ts` holds the
   phone's own decisions. What the phone does not do yet shows a "not on iPhone yet" toast.
 - **Layout is vocabulary**: `screen.fill` and `navigation.pushedTabBar`. An `item` or `link` with an
   `href` and no press handler opens it, and the app routes it.

@@ -30,7 +30,7 @@ const installOffline = async () => {
 		])
 	}
 	// An HTML render in #general, when the build names a page (`VITE_FIXTURE_HTML`, as served by
-	// `apps/ios-hybrid/scripts/serve-fixture-html.ts`).
+	// `apps/ios/scripts/serve-fixture-html.ts`).
 	const fixtureHtml = import.meta.env.VITE_FIXTURE_HTML
 	const render =
 		fixtureHtml === undefined

@@ -32,7 +32,7 @@ export const PROVIDER_TOKEN_TTL_MS = 50 * 60 * 1000
 
 /**
  * The notification category of a push about a message: the app registers its actions (Reply, Mark
- * as read) under this identifier (`apps/ios-hybrid/Shared/PushNotifications.swift`).
+ * as read) under this identifier (`apps/ios/Shared/PushNotifications.swift`).
  */
 export const APNS_MESSAGE_CATEGORY = "MESSAGE"
 export type ApnsCategory = typeof APNS_MESSAGE_CATEGORY

@@ -2,7 +2,7 @@ import type { Feedback } from "./feedback"
 
 /**
  * The phone's own controls, where the app runs in a native shell that has them: the iOS app
- * (`apps/ios-hybrid/web/bridge.ts`) installs them on the global object before the app starts, as the
+ * (`apps/ios/web/bridge.ts`) installs them on the global object before the app starts, as the
  * desktop shells install `window.__TAURI__`: a tap of the finger, and the swipe from the screen's
  * left edge that goes back. A browser has none. (Native views that stand in for the app's own
  * elements are islands: `platform/native-island.ts`.)

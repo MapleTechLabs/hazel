@@ -1,7 +1,7 @@
 // Effect UI is a public preview: every API is experimental by design here.
 // @effect-diagnostics experimentalApiUsage:off
 /**
- * The spike's channel list (`apps/ios-hybrid/effect-ui/ChannelList.ts`) in the `hazel` vocabulary:
+ * The spike's channel list (`apps/ios/effect-ui/ChannelList.ts`) in the `hazel` vocabulary:
  * one component that the web host draws as DOM and the native host sends to SwiftUI.
  */
 import { Subscription, UiSchema } from "@effect/ui"

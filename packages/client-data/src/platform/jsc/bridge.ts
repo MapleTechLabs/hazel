@@ -1,6 +1,6 @@
 /**
  * The `__native` bridge a JavaScriptCore host installs before the package loads
- * (`apps/ios-hybrid/HazelUI/Sources/HazelUI/Runtime/NativePlatform.swift`). Calls are synchronous
+ * (`apps/ios/HazelUI/Sources/HazelUI/Runtime/NativePlatform.swift`). Calls are synchronous
  * into Swift; Swift answers asynchronous work through the callbacks given here, on the JS thread,
  * with the callbacks that are due in one turn coalesced into one.
  *

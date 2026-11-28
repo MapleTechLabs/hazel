@@ -13,7 +13,7 @@ export const hasUpdater: boolean = typeof window !== "undefined" && getTauriUpda
 /**
  * The app this build signs in as through the system browser, keeping its session in the OS
  * keychain (`desktop-auth.ts`); `null` when it uses the API's cookie. The iOS shell
- * replaces this line with its own client (`apps/ios-hybrid/web/vite.config.mts`).
+ * replaces this line with its own client (`apps/ios/web/vite.config.mts`).
  */
 export const desktopAuthClient: BrowserLoginClient | null = isDesktop ? desktopClient : null
 

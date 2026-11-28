@@ -199,7 +199,7 @@ const DesktopAuthLive = Layer.effect(
 	Layer.provide(
 		Layer.sync(FetchHttpClient.Fetch, () => {
 			const core = getTauriCore()
-			// Only Tauri's host answers `auth_http`; the iOS shell replaces this line (`apps/ios-hybrid`).
+			// Only Tauri's host answers `auth_http`; the iOS shell replaces this line (`apps/ios`).
 			return core === undefined || !isTauri() ? globalThis.fetch : hostFetch(core)
 		}),
 	),

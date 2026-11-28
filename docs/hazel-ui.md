@@ -3,8 +3,8 @@
 Status: draft v2 (2026-11-26), revised after two independent reviews (technical feasibility against
 the Effect UI source, and swarm executability against the Hazel codebase). Builds on
 `docs/cross-platform-ui.md` and changes three of its decisions (see "What changes from
-cross-platform-ui.md"). Spike: branch `t3/effect-ui-native-spike`, `apps/ios-hybrid/effect-ui/` and
-`apps/ios-hybrid/EffectUiSpike/`.
+cross-platform-ui.md"). Spike: branch `t3/effect-ui-native-spike`, `apps/ios/effect-ui/` and
+`apps/ios/EffectUiSpike/`.
 
 ## Summary
 
@@ -123,7 +123,7 @@ Foldkit or `Html`.
 | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/ui` (`@hazel/ui`)                   | the vocabulary (`src/vocabulary/`), tokens (`src/style/tokens.ts`) and one recipe file per primitive (`src/style/recipes/<primitive>.ts`), codegen (`scripts/`), the web host (`src/web/`), the native host and wire (`src/native/`), conformance fixtures and the gallery (`src/conformance/`) |
 | `packages/client-data` (`@hazel/client-data`) | collections, live queries, the sync client and RPC, moved out of `apps/web-foldkit/src/core/db` and `src/data`, with every browser API behind a platform service                                                                                                                                |
-| `apps/ios-hybrid/HazelUI/`                    | Swift package: wire decoding, `Tree`, one view per primitive, generated `Theme.swift`, the JavaScriptCore runtime, platform services, the extension registry                                                                                                                                    |
+| `apps/ios/HazelUI/`                           | Swift package: wire decoding, `Tree`, one view per primitive, generated `Theme.swift`, the JavaScriptCore runtime, platform services, the extension registry                                                                                                                                    |
 | `apps/web-foldkit/src/root/`                  | the web app's Effect UI root: the shell, the frame and the Foldkit adapter                                                                                                                                                                                                                      |
 | `apps/shared-screens`                         | the screens, with their queries and Commands                                                                                                                                                                                                                                                    |
 | `packages/ui/src/custom/`                     | governed `h.custom` composites, capped by `hazel/custom-cap`                                                                                                                                                                                                                                    |

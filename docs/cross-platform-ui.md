@@ -23,7 +23,7 @@ that describes _what_ it shows rather than _how the web draws it_ can.
    and `UIMenu` on iOS; `tabBar` is the rail on wide web and a Liquid Glass bar on iOS. A page never
    asks which platform it is on. One counted escape hatch: `webOnly(...)`.
 3. **Unconverted screens fall back to the web view** inside the native navigation stack
-   (`apps/ios-hybrid`), so the whole app works on iOS from the start and screens convert one by one.
+   (`apps/ios`), so the whole app works on iOS from the start and screens convert one by one.
 4. **One wire for native renderers.** Generalize the wire Rune used (`packages/foldkit-rune`, removed: see git history; stable paths,
    handler ids, unchanged subtrees by reference) into `packages/foldkit-native`, carrying semantic
    nodes instead of CSS, fed by Foldkit's `RenderTarget`, for the SwiftUI host.
@@ -75,7 +75,7 @@ What was built:
 - The channel list annotated where it is built (sidebar screen, sections, channel/DM/thread rows,
   the "+" actions): about 60 lines over five files, no markup or class changed. All 2716 web tests
   pass.
-- `apps/ios-hybrid`: the web app in a `WKWebView` (offline fixture), `web/semantic-tree.ts` reads the
+- `apps/ios`: the web app in a `WKWebView` (offline fixture), `web/semantic-tree.ts` reads the
   semantic tree, `NativeScreen.swift` draws it as a SwiftUI `List` in a `NavigationStack`.
 
 What it showed (iPhone 17 Pro simulator, iOS 26.4):
@@ -102,7 +102,7 @@ Lessons:
 ### Round 2: the web's look, natively
 
 Stock SwiftUI styling made the native screen look like a different app. The renderer now takes its
-look from the page (`apps/ios-hybrid/web/look.ts`): for each node, the computed colours (any CSS
+look from the page (`apps/ios/web/look.ts`): for each node, the computed colours (any CSS
 colour, resolved to sRGB), font size, weight and tracking, the row's box, radius and border, where
 its icon, label, badge and trailing glyph sit, the pressed wash, and the band a pinned header or
 footer sits in. Native views draw with those values in Inter (the web's own `@fontsource` files,
