@@ -99,6 +99,6 @@ else {
 	installHost()
 	installPush()
 }
-// Only the shell draws the list, the tab bar and pictures natively; a browser keeps the web's own.
+// In the app's web view (a fallback page), not in a browser.
 if (inShell()) installBridge()
 await import("../../web-foldkit/src/entry")

@@ -1,5 +1,5 @@
 /**
- * Push notifications in the iOS shell (`HazelHybrid/PushNotifications.swift`):
+ * Push notifications in the iOS app's web view (`Shared/PushNotifications.swift`):
  *
  * - Registration: while a user is signed in, the page asks the shell for this device's APNs token
  *   (`push_register`, which also asks for permission and keeps the API's address and the user's id

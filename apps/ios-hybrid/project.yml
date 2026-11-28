@@ -1,4 +1,4 @@
-name: HazelHybrid
+name: Hazel
 options:
     bundleIdPrefix: sh.hazel
     deploymentTarget:
@@ -13,53 +13,6 @@ settings:
         DEVELOPMENT_TEAM: ""
         CODE_SIGN_STYLE: Automatic
 targets:
-    HazelHybrid:
-        type: application
-        platform: iOS
-        sources:
-            - path: HazelHybrid
-            - path: Shared
-            # The web build (`bun run build:web`), copied as a folder: `SchemeHandler` serves it.
-            - path: build/web
-              type: folder
-              buildPhase: resources
-            # Inter, from the web's own font files (`scripts/fonts.py`).
-            - path: build/fonts
-              type: folder
-              buildPhase: resources
-        info:
-            path: HazelHybrid/Info.plist
-            properties:
-                CFBundleDisplayName: Hazel
-                CFBundleShortVersionString: $(MARKETING_VERSION)
-                CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-                # Only HTTPS, which is exempt: no export compliance question per build.
-                ITSAppUsesNonExemptEncryption: false
-                HazelPageOrigin: $(HAZEL_PAGE_ORIGIN)
-                # A page on this Mac in the simulator (the fixture's HTML render); the internet stays HTTPS.
-                NSAppTransportSecurity:
-                    NSAllowsLocalNetworking: true
-                # The page's own background (`--bg`, light and dark): the launch screen fades into the
-                # kept screen (`KeptScreen`) with no black or white between.
-                UILaunchScreen:
-                    UIColorName: LaunchBackground
-                # 120 Hz on ProMotion iPhones (otherwise capped at 60).
-                CADisableMinimumFrameDurationOnPhone: true
-                UIApplicationSceneManifest:
-                    UIApplicationSupportsMultipleScenes: false
-                UISupportedInterfaceOrientations:
-                    - UIInterfaceOrientationPortrait
-        settings:
-            base:
-                PRODUCT_BUNDLE_IDENTIFIER: sh.hazel.hybrid-spike
-                HAZEL_PAGE_ORIGIN: "https://app.hazel.sh"
-                MARKETING_VERSION: "0.1.0"
-                CURRENT_PROJECT_VERSION: "1"
-                ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-                TARGETED_DEVICE_FAMILY: "1"
-                GENERATE_INFOPLIST_FILE: YES
-    # The native app (`docs/ios-native.md`): the shared `hazel` screens drawn by HazelUI, the script
-    # (`script/entry.ts`) in JavaScriptCore, the bundled web app only as the fallback for a route.
     Hazel:
         type: application
         platform: iOS
@@ -68,9 +21,6 @@ targets:
         sources:
             - path: Hazel
             - path: Shared
-            # The app icon and launch colour, the hybrid's.
-            - path: HazelHybrid/Assets.xcassets
-            - path: HazelHybrid/PrivacyInfo.xcprivacy
             # The script (`bun run build:hazel`), copied as a folder.
             - path: build/script
               type: folder

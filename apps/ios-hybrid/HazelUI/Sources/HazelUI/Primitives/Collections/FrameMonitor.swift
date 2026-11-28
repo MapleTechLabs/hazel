@@ -1,7 +1,7 @@
 import QuartzCore
 import UIKit
 
-/// Every display frame at up to 120 Hz (after `apps/ios-hybrid/HazelHybrid/FrameMonitor.swift`). A
+/// Every display frame at up to 120 Hz (after the hybrid app's, deleted). A
 /// dropped frame is a gap longer than one and a half slots; totals accumulate until `reset()`.
 @MainActor
 public final class FrameMonitor {
