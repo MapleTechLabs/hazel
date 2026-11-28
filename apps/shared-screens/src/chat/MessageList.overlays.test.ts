@@ -127,7 +127,13 @@ describe("message overlays", () => {
 			.fire(row(1), "action", { action: "edit" })
 			.expectExact(
 				RequestHost.make({
-					request: { _tag: "Action", messageId: id(2), action: "edit", content: "message 2", author: "Ada Lovelace" },
+					request: {
+						_tag: "Action",
+						messageId: id(2),
+						action: "edit",
+						content: "message 2",
+						author: "Ada Lovelace",
+					},
 				}),
 			)
 			.resolve(RequestHost, MessageListMessage.CompletedCommand())

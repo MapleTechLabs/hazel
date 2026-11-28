@@ -102,12 +102,17 @@ const ICON_PIXELS = 96
 const iconPngs = () => {
 	const work = mkdtempSync(join(tmpdir(), "hazel-icons-"))
 	try {
-		const svgs = join(work, "svg"), pngs = join(work, "png")
+		const svgs = join(work, "svg"),
+			pngs = join(work, "png")
 		mkdirSync(svgs)
 		for (const name of iconNames) writeFileSync(join(svgs, `${name}.svg`), catalogSvg(name))
-		const run = spawnSync("swift", [join(here, "rasterize-icons.swift"), svgs, pngs, String(ICON_PIXELS)], {
-			encoding: "utf8",
-		})
+		const run = spawnSync(
+			"swift",
+			[join(here, "rasterize-icons.swift"), svgs, pngs, String(ICON_PIXELS)],
+			{
+				encoding: "utf8",
+			},
+		)
 		if (run.status !== 0) throw new Error(`rasterize-icons failed: ${run.stderr}`)
 		return new Map(
 			iconNames.map((name) => [
