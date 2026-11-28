@@ -67,7 +67,7 @@ struct HzScreen: View {
     }
 }
 
-/// The web's title bar: back button, title, toolbar slot, over a hairline.
+/// The web's title bar: back button, the `barLeading` slot, title, toolbar slot, over a hairline.
 private struct ScreenHeader: View {
     let tree: Tree
     let node: Node
@@ -88,6 +88,12 @@ private struct ScreenHeader: View {
                     .buttonStyle(PressStyle { pressed in backFace(pressed: pressed) })
                     .onHover { hovering = $0 }
                     .accessibilityLabel("Back")
+            }
+            // As the web draws it: before the title, at its natural width.
+            if let lead = tree.slot("barLeading", of: node), !lead.children.isEmpty {
+                HStack(spacing: toolbar.gap ?? 0) { ChildrenView(tree: tree, node: lead) }
+                    .fixedSize(horizontal: true, vertical: false)
+                    .environment(\.hzInRow, true)
             }
             Text(title)
                 .lineLimit(1)

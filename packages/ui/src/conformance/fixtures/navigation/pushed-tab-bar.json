@@ -1,0 +1,54 @@
+{
+	"about": "A tab's stack whose pushed screens take the whole height (`pushedTabBar` `hidden`), with the account at the root's bar end (`rootToolbar`).",
+	"root": {
+		"tag": "navigation",
+		"props": {
+			"pushedTabBar": "hidden"
+		},
+		"events": ["pop"],
+		"slots": [
+			{
+				"name": "rootToolbar",
+				"children": [
+					{
+						"tag": "avatar",
+						"props": {
+							"name": "Ada Lovelace",
+							"initials": "AL",
+							"size": "small"
+						}
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "screen",
+				"key": "dms",
+				"props": {
+					"title": "DMs",
+					"surface": "page"
+				},
+				"children": [
+					{
+						"tag": "section",
+						"props": {
+							"style": "list"
+						},
+						"children": [
+							{
+								"tag": "item",
+								"key": "grace",
+								"props": {
+									"title": "Grace Hopper",
+									"subtitle": "Sent it to you directly.",
+									"href": "#"
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	}
+}

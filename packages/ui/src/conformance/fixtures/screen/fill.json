@@ -1,0 +1,36 @@
+{
+	"about": "A conversation's screen (`fill`): its content runs edge to edge at the whole height and scrolls itself; the bar's start holds the channel's bubble (`barLeading`).",
+	"root": {
+		"tag": "screen",
+		"props": {
+			"title": "# general",
+			"surface": "page",
+			"fill": true
+		},
+		"slots": [
+			{
+				"name": "barLeading",
+				"children": [
+					{
+						"tag": "item",
+						"props": {
+							"title": "general",
+							"subtitle": "6 members",
+							"emphasized": true,
+							"href": "#"
+						}
+					}
+				]
+			}
+		],
+		"children": [
+			{
+				"tag": "emptyState",
+				"props": {
+					"illustration": "squirrel",
+					"title": "Quiet as an ocean gazing squirrel..."
+				}
+			}
+		]
+	}
+}

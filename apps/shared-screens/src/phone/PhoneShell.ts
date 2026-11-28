@@ -178,8 +178,12 @@ export class ExpireToast extends Command.Service<ExpireToast>()("hazel/phone/Exp
 }
 
 /** A screen stays alive while it is a tab's root or in a tab's stack (`h.keepAlive`'s predicate). */
-const isLive = ({ key, model }: { readonly key: string; readonly model: PhoneShellModel }) =>
-	tabOf(routeOfPath(key)) !== null || TABS.some((tab) => model.stacks[tab.id].includes(key))
+const isLive = ({ key, model }: { readonly key: string; readonly model: PhoneShellModel }) => {
+	const route = routeOfPath(key)
+	// A tab root of this organization only: another's (before a switch) goes with its queries.
+	const isOwnRoot = tabOf(route) !== null && "orgSlug" in route && route.orgSlug === model.session?.orgSlug
+	return isOwnRoot || TABS.some((tab) => model.stacks[tab.id].includes(key))
+}
 
 /** How often relative times move on. */
 const TICK = Duration.seconds(30)
@@ -231,7 +235,11 @@ const PhoneShellNoDeps = PhoneShellDef.make({
 						? open($.model, href)
 						: $.set({ ...$.model, pendingHref: href }).run(SwitchToOrganization.make({ orgSlug }))
 				},
-				Replace: ({ href }) => replace($.model, href),
+				// As `Open`: a path the table lacks says so, never just drops the screen it replaces.
+				Replace: ({ href }) =>
+					routeOfPath(href)._tag === "NotFound"
+						? toast("This page isn't in the app")($)
+						: replace($.model, href),
 				Back: () => pop($.model, 1),
 				Toast: ({ toast: shown }) => show(shown)($),
 			}),
@@ -285,8 +293,9 @@ const PhoneShellNoDeps = PhoneShellDef.make({
 	view: (h, model) => {
 		const session = model.session
 		if (session === null) return h.screen.surface("page").children(h.progress.style("spinner"))
-		// No membership here any more: the user's organizations (the web's page, until it is shared).
-		if (session.organization === null) {
+		// No membership here any more, or an organization with no slug yet (its routes need one): the
+		// user's organizations (the web's page, until it is shared).
+		if (session.organization === null || session.orgSlug === null) {
 			const href = hrefOf(AppRoute.SelectOrganization())
 			return FallbackScreen(h, { key: href, props: { path: href, title: "Workspaces" } })
 		}
@@ -360,7 +369,7 @@ const PhoneShellNoDeps = PhoneShellDef.make({
 					.rootToolbar(account)
 					.on("pop", ({ depth }) => PhoneShellMessage.Popped({ depth }))
 					.children(
-						screen(hrefOf(tab.root(session.orgSlug ?? ""))),
+						screen(hrefOf(tab.root(session.orgSlug))),
 						...model.stacks[model.tab].map(screen),
 					),
 				...toasts,
