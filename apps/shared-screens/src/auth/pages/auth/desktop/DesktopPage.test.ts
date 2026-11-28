@@ -4,7 +4,7 @@ import { Component } from "@effect/ui"
 import { Scene } from "@effect/ui/testing"
 import { UserId } from "@hazel/schema"
 import { describe, expect, test } from "vitest"
-import { LoadPage } from "../../../../app/requests"
+import { Leave } from "../../../../app/requests"
 import type { Session } from "../../../../app/session"
 import { button, byProp, link, screenTitled, textOf } from "../../../testing/locators"
 import { AuthorizeAttempt, DescribeAttempt, DesktopMessage, DesktopPageNoDeps } from "./DesktopPage"
@@ -56,8 +56,8 @@ describe("desktop sign-in page", () => {
 		start(signedOut)
 			.resolve(DescribeAttempt, DesktopMessage.DescribedAttempt({ appName: "Hazel Desktop" }))
 			.fire(button("Sign in"), "press")
-			.expectExact(LoadPage.make({ href: SIGN_IN }))
-			.resolve(LoadPage, Component.noop)
+			.expectExact(Leave.make({ href: SIGN_IN }))
+			.resolve(Leave, Component.noop)
 	})
 
 	test("a stale session asks for a fresh sign-in; a transient failure retries", () => {

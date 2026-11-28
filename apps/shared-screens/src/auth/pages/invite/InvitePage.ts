@@ -8,7 +8,7 @@ import { Command, Component, Query, UiSchema } from "@effect/ui"
 import { HazelRpc } from "@hazel/client-data"
 import { Hazel } from "@hazel/ui/vocabulary/index"
 import { Cause, Effect, Layer, Match, Option, Schema } from "effect"
-import { LoadPage, SignOut } from "../../../app/requests"
+import { Leave, Reload, SignOut } from "../../../app/requests"
 import { authFrame, homeLink } from "../../components/AuthFrame"
 import { isSessionLoading, Session } from "../../../app/session"
 
@@ -224,7 +224,7 @@ export const InvitePageNoDeps = InviteDef.make({
 	init: () => ({ attempt: 0, acceptance: Acceptance.Idle() }),
 	update: {
 		PressedRetryPreview: ($) => $.evolve({ attempt: (attempt) => attempt + 1 }),
-		PressedSignIn: ($) => $.run(LoadPage.make({ href: $.props.signInHref })),
+		PressedSignIn: ($) => $.run(Leave.make({ href: $.props.signInHref })),
 		PressedAccept: ($) =>
 			$.model.acceptance._tag === "Accepting"
 				? $.model
@@ -233,7 +233,7 @@ export const InvitePageNoDeps = InviteDef.make({
 					),
 		PressedSignOut: ($) => $.run(SignOut.make({})),
 		// The page stays on "Joining..." until the workspace loads.
-		SucceededAccept: ($, { href }) => $.run(LoadPage.make({ href })),
+		SucceededAccept: ($, { href }) => $.run(Reload.make({ href })),
 		FailedAccept: ($, { reason }) => $.evolve({ acceptance: () => Acceptance.Failed({ reason }) }),
 	},
 	view: (h, model) => {

@@ -4,7 +4,7 @@ import { Component } from "@effect/ui"
 import { Scene } from "@effect/ui/testing"
 import { AgentClientId, UserId } from "@hazel/schema"
 import { describe, expect, test } from "vitest"
-import { LoadPage } from "../../../../app/requests"
+import { Leave } from "../../../../app/requests"
 import type { Session } from "../../../../app/session"
 import { button, byProp, link, screenTitled, textOf } from "../../../testing/locators"
 import {
@@ -86,8 +86,8 @@ describe("OAuth consent page", () => {
 					redirectTo: "https://raycast.com/callback?error=x",
 				}),
 			)
-			.expectExact(LoadPage.make({ href: "https://raycast.com/callback?error=x" }))
-			.resolve(LoadPage, Component.noop)
+			.expectExact(Leave.make({ href: "https://raycast.com/callback?error=x" }))
+			.resolve(Leave, Component.noop)
 	})
 
 	test("a signed-out visitor signs in and comes back", () => {
@@ -96,8 +96,8 @@ describe("OAuth consent page", () => {
 			.expect(screenTitled("Sign in to connect your agent"))
 			.toExist()
 			.fire(button("Sign in to continue"), "press")
-			.expectExact(LoadPage.make({ href: SIGN_IN }))
-			.resolve(LoadPage, Component.noop)
+			.expectExact(Leave.make({ href: SIGN_IN }))
+			.resolve(Leave, Component.noop)
 	})
 
 	test("a bad link never follows its redirect; a failed lookup retries", () => {

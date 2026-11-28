@@ -10,7 +10,7 @@ import { AgentScope } from "@hazel/domain/http"
 import { AgentClientId } from "@hazel/schema"
 import { Hazel } from "@hazel/ui/vocabulary/index"
 import { Cause, Match, Option, Schema } from "effect"
-import { LoadPage } from "../../../../app/requests"
+import { Leave } from "../../../../app/requests"
 import { isSessionLoading, Session } from "../../../../app/session"
 import { authFrame, authWaiting, homeLink, messageText } from "../../../components/AuthFrame"
 import { CommonReason, failureMessage, type UserErrorMessage } from "../../../domain/AuthFailure"
@@ -268,9 +268,7 @@ export const OAuthAuthorizePage = OAuthAuthorizeDef.make({
 	update: {
 		PressedRetryRequest: ($) => $.evolve({ attempt: (attempt) => attempt + 1 }),
 		PressedSignIn: ($) =>
-			$.set({ ...$.model, approval: Approval.Leaving() }).run(
-				LoadPage.make({ href: $.props.signInHref }),
-			),
+			$.set({ ...$.model, approval: Approval.Leaving() }).run(Leave.make({ href: $.props.signInHref })),
 		// Only once the client checked out: an unverified redirect is never followed.
 		PressedApprove: ($) => {
 			const request = authorizable($.model, $.props, $.queries.client._tag)
@@ -289,7 +287,7 @@ export const OAuthAuthorizePage = OAuthAuthorizeDef.make({
 					)
 		},
 		SucceededAuthorize: ($, { redirectTo }) =>
-			$.set({ ...$.model, approval: Approval.Leaving() }).run(LoadPage.make({ href: redirectTo })),
+			$.set({ ...$.model, approval: Approval.Leaving() }).run(Leave.make({ href: redirectTo })),
 		FailedAuthorize: ($, { reason }) => $.evolve({ approval: () => Approval.Failed({ reason }) }),
 	},
 	view: (h, model) => {

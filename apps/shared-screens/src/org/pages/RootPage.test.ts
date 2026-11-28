@@ -5,7 +5,7 @@ import { Story } from "@effect/ui/testing"
 import { assert, describe, it } from "@effect/vitest"
 import { OrganizationId, UserId } from "@hazel/schema"
 import { Effect } from "effect"
-import { LoadPage } from "../../app/requests"
+import { Reload } from "../../app/requests"
 import type { Session } from "../../app/session"
 import { ReadRootRemembered, RedirectFromRoot, RootMessage, RootPage } from "./RootPage"
 
@@ -112,8 +112,8 @@ describe("root page", () => {
 			s.resolve(ReadRootRemembered, remembered(null, null)).send(RootMessage.StalledMemberships())
 			assert.isTrue(s.model.isStalled)
 			s.send(RootMessage.PressedReload())
-				.expectExact(LoadPage.make({ href: "/" }))
-				.resolve(LoadPage, Component.noop)
+				.expectExact(Reload.make({ href: "/" }))
+				.resolve(Reload, Component.noop)
 				.send(RootMessage.UpdatedMemberships({ memberships: [hazel] }))
 				.expectExact(redirect())
 			assert.isFalse(s.model.isStalled)

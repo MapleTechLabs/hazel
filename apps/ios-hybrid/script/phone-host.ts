@@ -40,8 +40,10 @@ const toast = (title: string, intent: "info" | "error" = "info") =>
 
 const requests = (signOut: Effect.Effect<void>, refreshUser: Effect.Effect<boolean>): AppRequestHandlers => ({
 	ShowToast: ({ toast }) => Effect.sync(() => navigation.intend(ShellIntent.Toast({ toast }))),
-	// A full load (after joining a workspace): the app starts over, with every query and sync, on `href`.
-	LoadPage: ({ href }) => Effect.sync(() => appShell().restart(href)),
+	// The app starts over at `href`, with every query and sync (after joining a workspace).
+	Reload: ({ href }) => Effect.sync(() => appShell().restart(href)),
+	// Another page (a download, an OAuth redirect): the system opens it.
+	Leave: ({ href }) => Effect.sync(() => appShell().openUrl(href)),
 	OpenModal: ({ modal }) => notYet(modal._tag),
 	OpenCommandPalette: () => notYet("Search"),
 	SignOut: () => signOut,

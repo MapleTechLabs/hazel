@@ -5,7 +5,7 @@ import { Locator, Scene } from "@effect/ui/testing"
 import { OrganizationId, UserId } from "@hazel/schema"
 import { TextField } from "@hazel/ui/vocabulary/index"
 import { describe, expect, test } from "vitest"
-import { LoadPage, Navigate } from "../../../app/requests"
+import { Reload, Navigate } from "../../../app/requests"
 import type { Session } from "../../../app/session"
 import { SwitchOrganization } from "../../../shell/Chrome"
 import type { UserOrganization } from "../../../shell/queries"
@@ -142,8 +142,8 @@ describe("create workspace form", () => {
 		s.fire(button("Create workspace"), "press")
 			.expectExact(CreateOrganization.make({ name: "Acme", slug: "acme" }))
 			.resolve(CreateOrganization, CreateWorkspaceMessage.SucceededCreate())
-			.expectExact(LoadPage.make({ href: "/" }))
-			.resolve(LoadPage, Component.noop)
+			.expectExact(Reload.make({ href: "/" }))
+			.resolve(Reload, Component.noop)
 			.expect(button("Creating workspace..."))
 			.toExist()
 	})

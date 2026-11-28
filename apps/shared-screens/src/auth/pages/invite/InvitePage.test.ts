@@ -4,7 +4,7 @@ import { Component } from "@effect/ui"
 import { Locator, Scene } from "@effect/ui/testing"
 import { UserId } from "@hazel/schema"
 import { describe, expect, test } from "vitest"
-import { LoadPage, SignOut } from "../../../app/requests"
+import { Leave, Reload, SignOut } from "../../../app/requests"
 import type { Session } from "../../../app/session"
 import { AcceptInvitation, InviteMessage, InvitePageNoDeps, type Preview } from "./InvitePage"
 
@@ -57,8 +57,8 @@ describe("invite page", () => {
 			.expect(screenTitled("Join Hazel Labs"))
 			.toExist()
 			.fire(button("Sign in to accept"), "press")
-			.expectExact(LoadPage.make({ href: "/sign-in?redirect_url=%2Finvite" }))
-			.resolve(LoadPage, Component.noop)
+			.expectExact(Leave.make({ href: "/sign-in?redirect_url=%2Finvite" }))
+			.resolve(Leave, Component.noop)
 	})
 
 	test("the invited account accepts; a failure says why and allows a retry", () => {
@@ -78,8 +78,8 @@ describe("invite page", () => {
 			.loaded("preview", preview())
 			.fire(button("Accept invitation"), "press")
 			.resolve(AcceptInvitation, InviteMessage.SucceededAccept({ href: "/hazel" }))
-			.expectExact(LoadPage.make({ href: "/hazel" }))
-			.resolve(LoadPage, Component.noop)
+			.expectExact(Reload.make({ href: "/hazel" }))
+			.resolve(Reload, Component.noop)
 			.expect(button("Joining..."))
 			.toExist()
 	})

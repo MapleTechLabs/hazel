@@ -69,8 +69,10 @@ export const ModalRequest = Schema.declare(
 const fields = {
 	/** An in-app href (`/acme/chat/c1`); `toast` shows with the navigation. */
 	Navigate: { href: Schema.String, replace: Schema.Boolean, toast: Schema.optionalKey(AppToast) },
-	/** A full load of `href`, so every query and sync starts over (after joining a workspace). */
-	LoadPage: { href: Schema.String },
+	/** The app starts over at one of its own paths (`/`, `/acme`), every query and sync anew (after joining a workspace). */
+	Reload: { href: Schema.String },
+	/** Leaves the app for another page: a download, an OAuth redirect, the server's sign-in. */
+	Leave: { href: Schema.String },
 	History: { direction: Schema.Literals(["Back", "Forward"]) },
 	ShowToast: { toast: AppToast },
 	OpenModal: { modal: ModalRequest },
@@ -96,8 +98,13 @@ export class Navigate extends Command.Service<Navigate>()("hazel/app/Navigate", 
 	success: Component.Noop,
 }) {}
 
-export class LoadPage extends Command.Service<LoadPage>()("hazel/app/LoadPage", {
-	args: fields.LoadPage,
+export class Reload extends Command.Service<Reload>()("hazel/app/Reload", {
+	args: fields.Reload,
+	success: Component.Noop,
+}) {}
+
+export class Leave extends Command.Service<Leave>()("hazel/app/Leave", {
+	args: fields.Leave,
 	success: Component.Noop,
 }) {}
 
@@ -191,7 +198,8 @@ export const appRequestsLayer = (send: (request: AppRequest) => void) => {
 	const to = sending(send)
 	return Layer.mergeAll(
 		Navigate.toLayer(Effect.succeed(to(AppRequest.Navigate))),
-		LoadPage.toLayer(Effect.succeed(to(AppRequest.LoadPage))),
+		Reload.toLayer(Effect.succeed(to(AppRequest.Reload))),
+		Leave.toLayer(Effect.succeed(to(AppRequest.Leave))),
 		History.toLayer(Effect.succeed(to(AppRequest.History))),
 		ShowToast.toLayer(Effect.succeed(to(AppRequest.ShowToast))),
 		OpenModal.toLayer(Effect.succeed(to(AppRequest.OpenModal))),
