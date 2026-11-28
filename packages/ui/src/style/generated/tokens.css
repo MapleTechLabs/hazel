@@ -2106,6 +2106,7 @@
 	min-height: var(--hz-space-5);
 	font-size: var(--hz-text-caption-size);
 	line-height: var(--hz-text-caption-leading);
+	line-height: var(--hz-space-4);
 }
 
 @media (width >= 40rem) {
@@ -2117,6 +2118,7 @@
 		min-height: var(--hz-space-5);
 		font-size: var(--hz-text-caption-size);
 		line-height: var(--hz-text-caption-leading);
+		line-height: var(--hz-space-4);
 	}
 }
 

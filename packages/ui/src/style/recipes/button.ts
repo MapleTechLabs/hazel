@@ -324,7 +324,8 @@ export const button = defineRecipe<
 				regular: { root: { paddingStart: "2.5", paddingX: "0", gap: "1", text: "label" } },
 			},
 		},
-		// A tag has one size: `gap-1 py-0.5 pr-1 pl-1.5 text-xs`.
+		// A tag has one size: `gap-1 py-0.5 pr-1 pl-1.5 text-xs` on the caption's 16px line, whatever
+		// line height its `size` would set (`regular` is 24px at the regular size class).
 		{
 			when: { variant: "tag" },
 			style: {
@@ -335,6 +336,7 @@ export const button = defineRecipe<
 					paddingX: "1",
 					paddingY: "0.5",
 					text: "caption",
+					leading: "4",
 				},
 				regular: {
 					root: {
@@ -344,6 +346,7 @@ export const button = defineRecipe<
 						paddingX: "1",
 						paddingY: "0.5",
 						text: "caption",
+						leading: "4",
 					},
 				},
 			},
